@@ -36,7 +36,13 @@ let pp ?(atomic=false) =
   Terms.pp ~atomic
 
 
-
+let rec bound_by_pattern = function
+  | PSym s -> SymSet.singleton s
+  | PWild -> SymSet.empty
+  | PConstructor (_s, args) -> 
+     List.fold_right SymSet.union 
+       (List.map (fun (_id, pat) -> bound_by_pattern pat) args)
+       SymSet.empty
 
 let rec free_vars_ = function
   | Const _ -> SymSet.empty
@@ -68,6 +74,7 @@ let rec free_vars_ = function
   | ArrayToList (arr, i, len) -> free_vars_list [arr; i; len]
   | Representable (_sct, t) -> free_vars t
   | Good (_sct, t) -> free_vars t
+  | WrapI (_ity, t) -> free_vars t
   | Aligned {t; align} -> free_vars_list [t; align]
   | MapConst (_bt, t) -> free_vars t
   | MapSet (t1, t2, t3) -> free_vars_list [t1; t2; t3]
@@ -75,6 +82,11 @@ let rec free_vars_ = function
   | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
   | Apply (_pred, ts) -> free_vars_list ts
   | Let ((nm, t1), t2) -> SymSet.union (free_vars t1) (SymSet.remove nm (free_vars t2))
+  | Match (e, cases) ->
+     List.fold_right (fun (pattern, body) acc ->
+         SymSet.union acc (SymSet.diff (free_vars body) (bound_by_pattern pattern))
+       ) cases (free_vars e)
+  | Constructor (_s, args) -> free_vars_list (List.map snd args)
 
 and free_vars (IT (term_, _bt)) =
   free_vars_ term_
@@ -116,6 +128,7 @@ let rec fold_ f binders acc = function
   | ArrayToList (arr, i, len) -> fold_list f binders acc [arr; i; len]
   | Representable (_sct, t) -> fold f binders acc t
   | Good (_sct, t) -> fold f binders acc t
+  | WrapI (_ity, t) -> fold f binders acc t
   | Aligned {t; align} -> fold_list f binders acc [t; align]
   | MapConst (_bt, t) -> fold f binders acc t
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
@@ -125,6 +138,8 @@ let rec fold_ f binders acc = function
   | Let ((nm, IT (t1_, bt)), t2) ->
     let acc' = fold f binders acc (IT (t1_, bt)) in
     fold f (binders @ [(nm, bt)]) acc' t2
+  | Match _ -> failwith "todo"
+  | Constructor _ -> failwith "todo"
 
 and fold f binders acc (IT (term_, _bt)) =
   let acc' = fold_ f binders acc term_ in
@@ -233,6 +248,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Representable (rt, subst su t), bt)
   | Good (rt, t) -> 
      IT (Good (rt, subst su t), bt)
+  | WrapI (ity, t) ->
+     IT (WrapI (ity, subst su t), bt)
   | Nil -> 
      IT (Nil, bt)
   | Cons (it1,it2) -> 
@@ -261,6 +278,10 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | Let ((name, t1), t2) ->
      let name, t2 = suitably_alpha_rename su.relevant (name, basetype t1) t2 in
      IT (Let ((name, subst su t1), subst su t2), bt)
+  | Match _ ->
+     failwith "todo"
+  | Constructor _ ->
+     failwith "todo"
 
 and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
@@ -435,6 +456,8 @@ let max_ (it, it') = IT (Binop (Max,it, it'), bt it)
 let intToReal_ it = IT (Cast (Real, it), BT.Real)
 let realToInt_ it = IT (Cast (Integer, it), BT.Integer)
 let xor_no_smt_ (it, it') = IT (Binop (XORNoSMT,it, it'), bt it)
+let bw_and_no_smt_ (it, it') = IT (Binop (BWAndNoSMT,it, it'), bt it)
+let bw_or_no_smt_ (it, it') = IT (Binop (BWOrNoSMT,it, it'), bt it)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
@@ -464,13 +487,13 @@ let member_ ~member_bt (tag, it, member) =
 let (%.) struct_decls t member =
   let tag = match bt t with
     | BT.Struct tag -> tag
-    | _ -> Debug_ocaml.error "illtyped index term. not a struct"
+    | _ -> Cerb_debug.error "illtyped index term. not a struct"
   in
   let member_bt = match List.assoc_opt Id.equal member
          (Memory.member_types (SymMap.find tag struct_decls))
   with
     | Some sct -> BT.of_sct sct
-    | None -> Debug_ocaml.error ("struct " ^ Sym.pp_string tag ^
+    | None -> Cerb_debug.error ("struct " ^ Sym.pp_string tag ^
         " does not have member " ^ (Id.pp_string member))
   in
   member_ ~member_bt (tag, t, member)
@@ -608,6 +631,8 @@ let representable_ (t, it) =
   IT (Representable (t, it), BT.Bool)
 let good_ (sct, it) =
   IT (Good (sct, it), BT.Bool)
+let wrapI_ (ity, arg) = 
+  IT (WrapI (ity, arg), BT.Integer)
 let alignedI_ ~t ~align =
   IT (Aligned {t; align}, BT.Bool)
 let aligned_ (t, ct) =
@@ -622,7 +647,7 @@ let map_get_ v arg =
   match bt v with
   | BT.Map (_, rbt) ->
      IT (MapGet (v, arg), rbt)
-  | _ -> Debug_ocaml.error "illtyped index term"
+  | _ -> Cerb_debug.error "illtyped index term"
 let map_def_ (s, abt) body =
   IT (MapDef ((s, abt), body), BT.Map (abt, bt body))
 
@@ -671,11 +696,12 @@ let in_range within (min, max) =
   and_ [le_ (min, within); le_ (within, max)]
 
 let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) =
-  let (ret_ct, arg_cts, variadic, has_proto) = c_sig in
-  Option.bind (Sctypes.of_ctype ret_ct) (fun ret_ct ->
-  Option.bind (Option.ListM.mapM Sctypes.of_ctype arg_cts) (fun arg_cts ->
+  let open Sctypes in
+  Option.bind (Sctypes.of_ctype c_sig.sig_return_ty) (fun ret_ct ->
+  Option.bind (Option.ListM.mapM Sctypes.of_ctype c_sig.sig_arg_tys) (fun arg_cts ->
   let arg_v = list_ ~item_bt:BT.CType (List.map const_ctype_ arg_cts) in
-  Some (tuple_ [const_ctype_ ret_ct; arg_v; bool_ variadic; bool_ has_proto])))
+  Some (tuple_ [const_ctype_ ret_ct; arg_v;
+    bool_ c_sig.sig_variadic; bool_ c_sig.sig_has_proto])))
 
 
 let value_check_pointer alignment ~pointee_ct about =
@@ -699,7 +725,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Integer it ->
        in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
     | Array (it, None) ->
-       Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
+       Cerb_debug.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) ->
        (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
        let i_s, i = fresh BT.Integer in
@@ -720,7 +746,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
              ) (SymMap.find tag struct_layouts)
          end
     | Function _ ->
-       Debug_ocaml.error "todo: function types"
+       Cerb_debug.error "todo: function types"
   in
   aux ct about
 

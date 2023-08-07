@@ -46,11 +46,15 @@ let specifiers_of_external_declaration = function
       Just specifs
   | EDecl_decl (Declaration_static_assert _) ->
       Nothing
+  | EDecl_magic _ ->
+      Nothing
   | EDecl_predCN _ ->
       Nothing
   | EDecl_funcCN _ ->
       Nothing
   | EDecl_lemmaCN _ ->
+      Nothing
+  | EDecl_fun_specCN _ ->
       Nothing
   | EDecl_datatypeCN _ ->
       Nothing
@@ -84,8 +88,6 @@ let string_of_storageDuration = function
       "thread"
   | A.Automatic ->
       "automatic"
-  | A.Allocated ->
-      "allocated"
 end
 
 val desug_get_structDefs: map Symbol.sym tag_definition -> Symbol.sym -> Annot.attributes * bool * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member

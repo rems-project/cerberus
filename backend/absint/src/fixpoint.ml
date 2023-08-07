@@ -1,7 +1,7 @@
 open Pgraph
 open Nested_list
 
-let debug msg = Debug_ocaml.print_debug 5 [] (fun _ -> msg)
+let debug msg = Cerb_debug.print_debug 5 [] (fun _ -> msg)
 
 module type FIXPOINT = sig
   type 'a absstate

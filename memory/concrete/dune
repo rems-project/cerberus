@@ -1,5 +1,5 @@
 (library
  (name mem_concrete)
- (public_name cerberus.mem.concrete)
- (flags (:standard -w -27-32))
+ (public_name cerberus-lib.mem.concrete)
+ (flags (:standard -w -27-32-69))
  (implements cerb_frontend))

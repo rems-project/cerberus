@@ -22,7 +22,7 @@ type result =
   | Rstd  of (string, Symbol.sym) Pmap.map (* Map of ailnames *) * unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
 
-exception Core_error of (Location_ocaml.t * Errors.core_parser_cause)
+exception Core_error of (Cerb_location.t * Errors.core_parser_cause)
 
 type token =
   | CONST
@@ -56,14 +56,15 @@ type token =
   
   | SIZE_T
   | PTRDIFF_T
+  | IVMAX_ALIGNMENT
   
   | ATOMIC
   | STRUCT (* TODO *)
   | UNION (* TODO *)
-  | ENUM (* TODO *)
-  | WCHAR_T (* TODO *)
-  | CHAR16_T (* TODO *)
-  | CHAR32_T (* TODO *)
+(*  | ENUM (* TODO *) *)
+(*  | WCHAR_T (* TODO *) *)
+(*  | CHAR16_T (* TODO *) *)
+(*  | CHAR32_T (* TODO *) *)
   | INTEGER
   | FLOATING
   | BOOLEAN
@@ -88,8 +89,6 @@ type token =
   | STRONG
   | SAVE (* TODO *)
   | RUN (* TODO *)
-  | RAISE (* TODO *)
-  | REGISTER (* TODO *)
 (*
   | TRY
   | WITH
@@ -124,7 +123,6 @@ type token =
   | IS_INTEGER
   | IS_SIGNED
   | IS_UNSIGNED
-  | IS_UNSPEC
   | ARE_COMPATIBLE
   | UNSPECIFIED
   
@@ -176,7 +174,6 @@ type token =
   
   | PAR
   | ND
-  | WAIT (* TODO *)
   | ARRAY_SHIFT
   | MEMBER_SHIFT
   
@@ -204,7 +201,9 @@ type token =
   | PURE
   
   | MEMOP
-  | MEMOP_OP of Mem_common.memop
+  | PURE_MEMOP_OP of Mem_common.pure_memop
+  | MEMOP_OP of _sym Mem_common.generic_memop
+  | PTRMEMBERSHIFT
   
   | AILNAME
 

@@ -13,7 +13,7 @@ instance (Default unit)
 end
 
 val error: forall 'a. string -> 'a
-declare ocaml target_rep function error = `Debug_ocaml.error`
+declare ocaml target_rep function error = `Cerb_debug.error`
 declare hol target_rep function error = `ARB`
 
 val list_init : forall 'a. nat -> (nat -> 'a) -> list 'a
@@ -69,7 +69,7 @@ let rec map2_ f xs ys acc =
     | (x::xs', y::ys') ->
         map2_ f xs' ys' (f x y :: acc)
     | ([],[]) ->
-        acc
+        List.reverse acc
     | _ ->
         error "[Global.foldl2] the twos weren't of same length"
   end
@@ -300,7 +300,7 @@ let list_unfoldr x = list_unfoldr_aux [] x
 val     maybe_mapM: forall 'a 'b. ('a -> maybe 'b) -> list 'a -> maybe (list 'b)
 let rec maybe_mapM_aux acc f = function
   | [] ->
-      Just acc
+      Just (List.reverse acc)
   | x::xs' ->
       match f x with
         | Just x' ->
@@ -318,4 +318,4 @@ let product_list xs ys =
   List.concatMap (fun x -> List.map (fun y -> (x,y)) ys) xs
 
 val is_power_of_two: integer -> bool
-declare ocaml target_rep function is_power_of_two = `Util.is_power_of_two`
+declare ocaml target_rep function is_power_of_two = `Cerb_util.is_power_of_two`

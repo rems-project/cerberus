@@ -82,6 +82,8 @@ let rec simplify_integer_value_base ival_ =
                 | None ->
                     Right ival_
               end
+          | Ptraddr_t ->
+              Left (of_int 0)
 
           | Signed ibty ->
               if not simple_fromptr && ibty = Intptr_t then
@@ -126,6 +128,8 @@ let rec simplify_integer_value_base ival_ =
                 | Ptrdiff_t
                 | Signed _ ->
                     Left signed_max
+                | Ptraddr_t ->
+                    Left unsigned_max
                 | Enum _ ->
                     failwith "IVmax Enum"
                 | Wchar_t

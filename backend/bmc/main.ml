@@ -1,6 +1,6 @@
 open Cerb_frontend
 open Cerb_backend
-open Global_ocaml
+open Cerb_global
 open Cerb_runtime
 open Pipeline
 
@@ -10,34 +10,7 @@ let return = Exception.except_return
 
 let io, get_progress =
   let open Pipeline in
-  let progress = ref 0 in
-  { pass_message = begin
-        let ref = ref 0 in
-        fun str -> Debug_ocaml.print_success (string_of_int !ref ^ ". " ^ str);
-                   incr ref;
-                   return ()
-      end;
-    set_progress = begin
-      fun _   -> incr progress;
-                 return ()
-      end;
-    run_pp = begin
-      fun opts doc -> run_pp opts doc;
-                      return ()
-      end;
-    print_endline = begin
-      fun str -> print_endline str;
-                 return ();
-      end;
-    print_debug = begin
-      fun n mk_str -> Debug_ocaml.print_debug n [] mk_str;
-                      return ()
-      end;
-    warn = begin
-      fun mk_str -> Debug_ocaml.warn [] mk_str;
-                    return ()
-      end;
-  }, fun () -> !progress
+  default_io_helpers, get_progress
 
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
@@ -45,13 +18,13 @@ let frontend (conf, io) filename core_std =
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
+    c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
     >>= core_passes (conf, io) ~filename
   else
-    Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
+    Exception.fail (Cerb_location.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
@@ -115,7 +88,7 @@ let cerberus debug_level progress core_obj
              ocaml ocaml_corestd
              output_name
              files args_opt =
-  Debug_ocaml.debug_level := debug_level;
+  Cerb_debug.debug_level := debug_level;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
@@ -127,7 +100,7 @@ let cerberus debug_level progress core_obj
   (* TODO: add bmc flags *)
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
       bmc_all_execs bmc_output_model bmc_cat bmc_mode;
-  set_cerb_conf "Bmc" exec exec_mode concurrency QuoteStd defacto false false bmc;
+  set_cerb_conf "Bmc" exec exec_mode concurrency QuoteStd defacto false false false bmc;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -186,7 +159,7 @@ let cerberus debug_level progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                      Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->
@@ -231,7 +204,7 @@ let cerberus debug_level progress core_obj
         begin match files with
           | [filename] ->
             prelude >>= fun core_std ->
-            c_frontend (conf, io) core_std ~filename >>= fun (_, ail_opt, core) ->
+            c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, ail_opt, core) ->
             core_passes (conf, io) ~filename core >>= fun core ->
             ignore @@ Bmc.bmc core (Option.map snd ail_opt);
             return success
@@ -244,7 +217,7 @@ let cerberus debug_level progress core_obj
         begin match files with
           | [filename] ->
             prelude >>= fun core_std ->
-            c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
+            c_frontend_and_elaboration (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             typed_core_passes (conf, io) core >>= fun (core, _) ->
             ignore (Absint.solve absdomain core);
             return success

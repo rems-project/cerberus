@@ -3,7 +3,7 @@
 
 (library
  (name sibylfs)
- (public_name cerberus.sibylfs)
+ (public_name cerberus-lib.sibylfs)
  (synopsis "Sibylfs")
  (flags (:standard -w -3-8-9-27-33-39))
  (preprocess (pps ppx_sexp_conv))

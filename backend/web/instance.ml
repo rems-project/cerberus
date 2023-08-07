@@ -1,11 +1,11 @@
 open Cerb_frontend
 open Cerb_backend
 open Cerb_runtime
-open Util
+open Cerb_util
 open Instance_api
 open Pipeline
 
-let time label f =
+let _time label f =
   let t = Unix.gettimeofday () in
   let res = f () in
   let delta = string_of_float @@ Unix.gettimeofday () -. t in
@@ -27,7 +27,7 @@ let dummy_io =
     run_pp=         (fun _ -> skip);
     print_endline=  skip;
     print_debug=    (fun _ -> skip);
-    warn=           skip;
+    warn=           (fun ?(always=false) -> skip);
   }
 
 let setup conf =
@@ -65,15 +65,16 @@ let add_bmc_macro ~bmc_model conf =
 
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack ?(is_bmc=false) ~conf mode =
-  let open Global_ocaml in
+  let open Cerb_global in
   let conf =
    {  backend_name= if is_bmc then "Bmc" else "Web_instance";
       exec_mode_opt=    Some (mode);
       concurrency=      false;
-      error_verbosity=  Global_ocaml.QuoteStd;
+      error_verbosity=  Cerb_global.QuoteStd;
       defacto=          false;
       permissive=       false;
       agnostic=         false;
+      ignore_bitfields= false;
       n1570=            Some conf.instance.n1570;
     }
   in cerb_conf := fun () -> conf
@@ -96,7 +97,7 @@ let elaborate ~is_bmc ~conf ~filename =
   try
     load_core_stdlib () >>= fun core_stdlib ->
     load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
-    c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
+    c_frontend_and_elaboration (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
     >>= function
     | (Some cabs, Some (_, ail), core) ->
       core_passes (conf.pipeline, conf.io) ~filename core
@@ -111,7 +112,7 @@ let elaborate ~is_bmc ~conf ~filename =
 
 let string_of_doc d =
   let buf = Buffer.create 1024 in
-  Colour.do_colour := false;
+  Cerb_colour.do_colour := false;
   PPrint.ToBuffer.pretty 1.0 80 buf d;
   Buffer.contents buf
 
@@ -122,7 +123,7 @@ let pp_core core =
       let show_include = false
       let show_locations = false
       let handle_location c_loc core_range =
-        match Location_ocaml.to_cartesian c_loc with
+        match Cerb_location.to_cartesian c_loc with
         | Some c_range ->
           locs := (c_range, core_range)::!locs
         | None -> ()
@@ -205,7 +206,7 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
     raise e
 
 (* execution *)
-let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
+let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack ~conf mode;
@@ -262,6 +263,7 @@ let set_uid file =
                                       List.mapi (fun i (pat, pe) -> (pat, set_pe pe)) cases)
       | PEarray_shift (pe, cty, pes) -> PEarray_shift (set_pe pe, cty, set_pe pes)
       | PEmember_shift (pe, sym, cid) -> PEmember_shift (set_pe pe, sym, cid)
+      | PEmemop (mop, pes) -> PEmemop (mop, List.map set_pe pes)
       | PEnot pe -> PEnot (set_pe pe)
       | PEop (bop, pe1, pe2) -> PEop (bop, set_pe pe1, set_pe pe2)
       | PEstruct (sym, fields) ->
@@ -357,7 +359,7 @@ let get_state_details st =
     let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
     (loc, maybe_uid, arena, string_of_env ts.env, stdout, stderr)
   | _ ->
-    (Location_ocaml.unknown, None, "", "", stdout, stderr)
+    (Cerb_location.unknown, None, "", "", stdout, stderr)
 
 let get_file_hash core =
   match core.Core.main with
@@ -451,7 +453,7 @@ let multiple_steps step_state (m, st) =
                   | AtomicMemberof -> "member access to atomic"
                 in
                 let string_of_free_error = function
-                  | Free_static_allocation -> "static allocated region"
+                  | Free_non_matching -> "address that does not match any existing dynamic allocation"
                   | Free_dead_allocation -> "dead allocation"
                   | Free_out_of_bound -> "out of bound"
                 in
@@ -480,8 +482,8 @@ let multiple_steps step_state (m, st) =
                     None, "storing a trap representation"  
                   | MerrUndefinedFree err ->
                     None, "freeing " ^ string_of_free_error err
-                  | MerrUndefinedRealloc ->
-                    None, "undefined behaviour in realloc"
+                  | MerrUndefinedRealloc err ->
+                    None, "undefined behaviour in realloc (" ^ string_of_free_error err ^ ")"
                   | MerrIntFromPtr ->
                     None, "invalid cast integer from pointer"
                   | MerrPtrComparison ->
@@ -528,7 +530,9 @@ let multiple_steps step_state (m, st) =
                         | VIP_copy_alloc_id_invalid ->
                             None, "copy_alloc_id () on invalid pointer"
                       end
-                    end
+                  | MerrCHERI err ->
+                      None, "CHERI error"
+                end
             | Driver.DErr_concurrency str ->
                 None, "Concurrency error: " ^ str
             | Driver.DErr_other str ->

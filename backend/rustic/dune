@@ -5,5 +5,4 @@
  (public_name rustic)
  (package rustic)
  (flags (:standard -w -27))
- (libraries cmdliner str unix
-  cerb_frontend cerb_backend mem_concrete util))
+ (libraries cmdliner camlp-streams str unix mem_concrete cerberus-lib.backend_common))

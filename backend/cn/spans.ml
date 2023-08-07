@@ -183,15 +183,11 @@ let rec get_packing_ft_owned_resources = function
 
 let rec model_res_spans m_g (res : ResourceTypes.t) =
   match res with
-  | (RET.P ({name = Owned ct; _} as pt)) ->
-      let perm = eval_extract "resource permission" m_g is_bool pt.permission in
-      let _ = perm || raise NoResult in
+  | (RET.P ({name = Owned (ct, _); _} as pt)) ->
       let ptr = eval_extract "resource pointer" m_g is_pointer pt.pointer in
       let sz = Memory.size_of_ctype ct in
       [((ptr, Z.add ptr (Z.of_int sz)), (res, res))]
   | (RET.P ({name = PName pname; _} as r_pt)) ->
-      let perm = eval_extract "resource permission" m_g is_bool r_pt.permission in
-      let _ = perm || raise NoResult in
       let rpreds = (snd m_g).Global.resource_predicates in
       let def = SymMap.find_opt pname rpreds |> some_result in
       let clauses = ResourcePredicates.instantiate_clauses def r_pt.pointer r_pt.iargs
@@ -201,7 +197,7 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
       ress |> List.map (note_failure_empty (model_res_spans m_g))
 	|> List.concat
         |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))
-  | (RET.Q ({name = Owned ct; _} as qpt)) ->
+  | (RET.Q ({name = Owned (ct, _); _} as qpt)) ->
       assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
       let ispans = perm_spans m_g qpt.q qpt.permission in
       let _ = List.length ispans > 0 || raise NoResult in
@@ -261,8 +257,8 @@ let compare_enclosing_ct g ct1 ct2 =
   else Int.compare (enclosing_count g ct1) (enclosing_count g ct2)
 
 let req_ctype = function
-  | RET.P ({name = Owned ct; _}) -> ct
-  | RET.Q ({name = Owned ct; _}) -> ct
+  | RET.P ({name = Owned (ct, _); _}) -> ct
+  | RET.Q ({name = Owned (ct, _); _}) -> ct
   | _ -> assert false
 
 let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
@@ -271,8 +267,8 @@ let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
 
 (* get concrete objects that (probably) exist in this resource/request *)
 let get_witnesses = function
-  | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, pt.permission)]
-  | RET.Q ({name = Owned ct; _} as qpt) ->
+  | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, bool_ true)]
+  | RET.Q ({name = Owned (ct, _); _} as qpt) ->
      assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
      let i = sym_ (qpt.q, BT.Integer) in
      let lbs = scan_subterms is_le qpt.permission
@@ -293,10 +289,10 @@ let get_witnesses = function
        (fun i -> (arrayShift_ (qpt.pointer, ct, add_ (lb, z_ (Z.of_int i))),
            subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
   | _ -> []
-
+(*
 let narrow_quantified_to_witness ptr (q_pt : RET.qpredicate_type) =
   let ct = match q_pt.name with
-    | Owned ct -> ct
+    | Owned (ct, _) -> ct
     | _ -> assert false
   in
   assert (IT.equal q_pt.step (IT.int_ (Memory.size_of_ctype ct)));
@@ -346,7 +342,7 @@ let intersection_action m g ((orig_req, req), req_span) ((orig_res, res), res_sp
     | _ -> assert false
   in
   let (target_lb, target_ub_inclusive, target_perm) = match target_owned_pt with
-    | {name = Owned ctype; _} ->
+    | {name = Owned (ctype, _); _} ->
       let sz = Memory.size_of_ctype ctype in
       let ptr = target_pt.pointer in
       (ptr, IT.pointer_offset_ (ptr, IT.z_ (Z.of_int (sz - 1))), target_pt.permission)
@@ -371,7 +367,7 @@ let rec gather_same_actions opts = match opts with
     (action, or_ oks) :: gather_same_actions others
 
 let is_unknown_array_size = function
-  | RET.P ({name = Owned ct; _}) -> begin match ct with
+  | RET.P ({name = Owned (ct, _); _}) -> begin match ct with
       | Sctypes.Array (_, None) -> true
       | _ -> false
   end
@@ -508,13 +504,8 @@ let perm_upper_bound qnm (permission : IT.t) =
 
 
 let req_pt_ct_count req = match req with
-    | RET.P ({name = Owned ct; pointer; _}) -> (pointer, ct, None)
-    | RET.P ({name = Block ct; pointer; _}) -> (pointer, ct, None)
-    | RET.Q ({name = Owned ct; pointer; q; permission; step; _}) ->
-      let sz = Memory.size_of_ctype ct in
-      assert (IT.equal step (IT.int_ sz));
-      (pointer, ct, Some (perm_upper_bound q permission))
-    | RET.Q ({name = Block ct; pointer; q; permission; step; _}) ->
+    | RET.P ({name = Owned (ct, _); pointer; _}) -> (pointer, ct, None)
+    | RET.Q ({name = Owned (ct, _); pointer; q; permission; step; _}) ->
       let sz = Memory.size_of_ctype ct in
       assert (IT.equal step (IT.int_ sz));
       (pointer, ct, Some (perm_upper_bound q permission))
@@ -584,3 +575,4 @@ let trace_guess_path_eqs ress req m g =
 
 
 
+*)

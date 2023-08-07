@@ -42,7 +42,7 @@ let subst_expr pat cval e =
 let test file expr : unit expr =
   let eval_pexpr pexpr =
     let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
-    Core_eval.eval_pexpr Location_ocaml.unknown emp [] None file pexpr in
+    Core_eval.eval_pexpr Cerb_location.unknown emp [] None file pexpr in
   
   let rec simpl =
     let open RW in {

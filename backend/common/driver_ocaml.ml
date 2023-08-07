@@ -1,5 +1,5 @@
 open Cerb_frontend
-open Global_ocaml
+open Cerb_global
 
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
@@ -36,7 +36,7 @@ type batch_exit =
 
 type batch_output =
   | Defined of { exit: batch_exit; stdout: string; stderr: string; blocked: bool }
-  | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Location_ocaml.t }
+  | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Cerb_location.t }
   | Error of { msg: string; stderr: string; }
 
 let string_of_batch_exit exit =
@@ -54,12 +54,12 @@ let string_of_batch_exit exit =
 let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec) =
   let buf = Buffer.create 16 in
   let constrs_str =
-    if !Debug_ocaml.debug_level > 0 then begin
+    if !Cerb_debug.debug_level > 0 then begin
       match z3_strs with
         | [] ->
             "EMPTY CONSTRAINTS\n"
         | _ ->
-          Colour.(without_colour (fun z ->
+          Cerb_colour.(without_colour (fun z ->
             ansi_format [Blue] (String.concat "\n" z)
           )) z3_strs
             |> Printf.sprintf "BEGIN CONSTRAINTS\n%s\nEND CONSTRAINTS\n"
@@ -76,7 +76,7 @@ let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec
           false in
   begin match exec with
     | Defined { exit; stdout; stderr; blocked } ->
-        let exit_str = Colour.without_colour string_of_batch_exit exit in
+        let exit_str = Cerb_colour.without_colour string_of_batch_exit exit in
         if is_charon then begin
           if has_multiple then begin
             Printf.bprintf buf " (exit = %s):\n" exit_str;
@@ -110,20 +110,20 @@ let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec
           prerr_string stderr;
           Printf.bprintf buf "Undefined {ub: \"%s\", loc: \"%s\"}%s"
           (Undefined.stringFromUndefined_behaviour ub)
-          (Location_ocaml.simple_location loc)
+          (Cerb_location.simple_location loc)
           (if is_charon then "\n" else "")
         end else if json then begin
           Yojson.to_buffer buf begin
             `Assoc [ "status", `String "Undefined"
                    ; "details", `Assoc [ "ub", `String (Undefined.stringFromUndefined_behaviour ub)
                                        ; "stderr", `String (String.escaped stderr)
-                                       ; "loc", Location_ocaml.to_json loc ] ]
+                                       ; "loc", Cerb_location.to_json loc ] ]
           end
         end else
           Printf.bprintf buf "Undefined {ub: \"%s\", stderr: \"%s\", loc: \"%s\"}%s"
           (Undefined.stringFromUndefined_behaviour ub)
           (String.escaped stderr)
-          (Location_ocaml.simple_location loc)
+          (Cerb_location.simple_location loc)
           (if is_charon then "\n" else "")
     | Error { msg; stderr } ->
         if is_charon then
@@ -196,11 +196,11 @@ let drive file args fs_state conf : execution_result =
       (Driver.drive conf.concurrency file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
-  Debug_ocaml.print_debug 1 [] (fun () ->
+  Cerb_debug.print_debug 2 [] (fun () ->
     Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives)
   );
   if n_actives = 0 && (n_execs - n_actives) = 0 then begin
-    print_endline Colour.(ansi_format [Red]
+    print_endline Cerb_colour.(ansi_format [Red]
       (Printf.sprintf "FOUND NO ACTIVE EXECUTION (with %d killed)\n" (n_execs - n_actives))
     );
     List.iteri (fun n exec ->
@@ -211,22 +211,22 @@ let drive file args fs_state conf : execution_result =
           (*
             let reason_str = match reason with
               | ND.Undef0 (loc, ubs) ->
-                  "undefined behaviour[" ^ Location_ocaml.location_to_string loc ^ "]: "
+                  "undefined behaviour[" ^ Cerb_location.location_to_string loc ^ "]: "
                   ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
               | ND.Error0 (loc , str) ->
-                  "static error[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str
+                  "static error[" ^ Cerb_location.location_to_string loc ^ "]: " ^ str
               | ND.Other str ->
                   string_of_driver_error str in
              *)
             begin
 (*
       if reason_str = "reached unsatisfiable constraints" then
-      print_endline Colour.(ansi_format [Red] 
+      print_endline Cerb_colour.(ansi_format [Red] 
         (Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason_str (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
       )
 else
-        Debug_ocaml.print_debug 2 [] (fun () -> Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
+        Cerb_debug.print_debug 2 [] (fun () -> Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason_str (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
 *)
             end
@@ -242,10 +242,10 @@ else
           let str_v = String_core.string_of_value dres.Driver.dres_core_value in
           let str_v_ = str_v ^ dres.Driver.dres_stdout in
           if true (* not (List.mem str_v_ !ky) *) then (
-            if Debug_ocaml.get_debug_level () = 0 then
+            if Cerb_debug.get_debug_level () = 0 then
               (print_string dres.Driver.dres_stdout; prerr_string dres.Driver.dres_stderr; flush_all());
             
-            Debug_ocaml.print_debug 1 [] (fun () ->
+            Cerb_debug.print_debug 2 [] (fun () ->
 (*              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^*)
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" dres.Driver.dres_stdout ^
               Printf.sprintf "driver steps: %d\n" dres.Driver.dres_driver_steps (* ^ 
@@ -258,12 +258,12 @@ else
           if not (List.mem str_v_ !ky) && not dres.Driver.dres_blocked then (
 (*
             if conf.concurrency then
-              Debug_ocaml.print_debug 2 [] (fun () -> Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_old_constraints st.ND.eqs)); *)
+              Cerb_debug.print_debug 2 [] (fun () -> Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_old_constraints st.ND.eqs)); *)
             
             ky := str_v_ :: !ky;
             ret := dres.Driver.dres_core_value :: !ret;
         ) else
-          Debug_ocaml.print_debug 4 [] (fun () ->
+          Cerb_debug.print_debug 4 [] (fun () ->
             "SKIPPING: " ^ if dres.Driver.dres_blocked then "(blocked)" else "" ^
             "eqs= " ^ "Pp_cmm.pp_old_constraints st.ND.eqs"
           );
@@ -285,12 +285,12 @@ else
             PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace)
 
      (*
-          let str_v = Location_ocaml.location_to_string loc ^
+          let str_v = Cerb_location.location_to_string loc ^
             (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs)) in
           
           if not (List.mem str_v !ky) then (
             print_endline (
-              Colour.(ansi_format [Red] ("UNDEFINED BEHAVIOUR[" ^ Location_ocaml.location_to_string loc ^ "]:\n" ^
+              Cerb_colour.(ansi_format [Red] ("UNDEFINED BEHAVIOUR[" ^ Cerb_location.location_to_string loc ^ "]:\n" ^
                 (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs))
               ))
            );
@@ -300,9 +300,9 @@ else
         *)
       
       | (ND.Killed (_, ND.Error0 (loc, str)), _, _) ->
-          print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str)))
+          print_endline (Cerb_colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Cerb_location.location_to_string loc ^ "]: " ^ str)))
       
       | (ND.Killed (_, ND.Other reason), _, st) ->
-          print_endline (Colour.(ansi_format [Red] ("OTHER ERROR: " ^ string_of_driver_error reason)))
+          print_endline (Cerb_colour.(ansi_format [Red] ("OTHER ERROR: " ^ string_of_driver_error reason)))
   ) values;
   Exception.except_return !ret

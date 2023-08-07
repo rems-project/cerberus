@@ -85,7 +85,7 @@ type rc_change =
 
 (* TODO: this is super brittle, but I don't know how else to do it *)
 let string_of_sym (Symbol.Symbol (_, _, id_opt)) =
-  match id_opt with Some id -> id | None -> assert false (* FIXME? *)
+  match id_opt with Symbol.SD_Id id -> id | _ -> assert false (* FIXME? *)
 
 let string_of_scoping = function
 | RCS_scoped s -> s

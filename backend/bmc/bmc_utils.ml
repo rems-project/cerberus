@@ -13,7 +13,7 @@ open Z3.Arithmetic
 type sym_ty = Sym.sym
 
 type vc_debug =
-| VcDebugUndef of Location_ocaml.t * Undefined.undefined_behaviour
+| VcDebugUndef of Cerb_location.t * Undefined.undefined_behaviour
 | VcDebugStr of string
 
 type bmc_vc = Expr.expr * vc_debug
@@ -160,6 +160,7 @@ let prefix_to_string (prefix: Sym.prefix) =
   | PrefSource (_, l) -> "[" ^ (String.concat "," (List.map symbol_to_string_simple l)) ^ "]"
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
+  | PrefTemporaryLifetime _ -> "rvalue temporary"
   | PrefCompoundLiteral _ -> "compound literal"
   | PrefFunArg (_, _, n) -> "arg" ^ string_of_int n
   | PrefMalloc -> "malloc"
@@ -170,6 +171,7 @@ let prefix_to_string_short (prefix: Sym.prefix) =
   | PrefSource (_, l) ->  symbol_to_string_simple (List.hd (List.rev l))
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
+  | PrefTemporaryLifetime _ -> "rvalue temporary"
   | PrefCompoundLiteral _ -> "compound literal"
   | PrefFunArg (_, _, n) -> "arg" ^ string_of_int n
   | PrefMalloc -> "malloc"
@@ -191,7 +193,7 @@ let ident_cmp = fun ident1 ident2 ->
 (* ========== Core memory functions ============= *)
 let is_null (ptr: Impl_mem.pointer_value) : bool =
   let (Nondeterminism.ND f) =
-    Impl_mem.eq_ptrval Location_ocaml.unknown ptr (Impl_mem.null_ptrval Ctype.void) in
+    Impl_mem.eq_ptrval Cerb_location.unknown ptr (Impl_mem.null_ptrval Ctype.void) in
   match f (Impl_mem.initial_mem_state) with
   | (Nondeterminism.NDactive b,_) -> b
   | _ -> assert false
@@ -246,7 +248,7 @@ let cartesian_product (xs: 'a list) (ys: 'b list) : ('a * 'b) list =
 
 (* ========== Debug ========== *)
 let debug_print level str =
-  Debug_ocaml.print_debug level [] (fun () -> str)
+  Cerb_debug.print_debug level [] (fun () -> str)
 
 let dprintf = Printf.printf
 
@@ -310,7 +312,7 @@ let read_file filename =
 let vc_debug_to_str (dbg: vc_debug) =
   match dbg with
   | VcDebugUndef (loc, ub) ->
-      Printf.sprintf "(%s,%s)" (Location_ocaml.location_to_string loc)
+      Printf.sprintf "(%s,%s)" (Cerb_location.location_to_string loc)
                                (Undefined.stringFromUndefined_behaviour ub)
   | VcDebugStr str -> str
 
@@ -334,6 +336,7 @@ let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
                         (Lem_list.mapi (fun i (pat, pe) -> (pat, self (i+ 1) pe)) cases))
   | PEarray_shift( pe, cty, pes) -> PEarray_shift( (self( 1) pe), cty, (self( 2) pes))
   | PEmember_shift( pe, sym2, cid) -> PEmember_shift( (self( 1) pe), sym2, cid)
+  | PEmemop( mop, pes) -> PEmemop ( mop, (selfs pes))
   | PEnot pe -> PEnot (self( 1) pe)
   | PEop( bop, pe1, pe2) -> PEop( bop, (self( 1) pe1), (self( 2) pe2))
   | PEstruct( sym2, fields) -> PEstruct( sym2,

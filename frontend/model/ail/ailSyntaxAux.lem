@@ -25,6 +25,8 @@ let rec is_null_pointer_constant expr =
         n = 0
     | AilEcast cast_qs (Ctype _ (Pointer referenced_qs (Ctype _ Void))) e ->
         is_null_pointer_constant e && is_unqualified cast_qs && is_unqualified referenced_qs
+    | AilEatomic e ->
+        is_null_pointer_constant e
     | _ ->
         false
   end
@@ -36,4 +38,10 @@ let memory_order_of_expr (AnnotatedExpression _ _ _ expr) =
     | _ -> Nothing
   end
 
-
+val sigma_fresh_bindings: forall 'a. bindings -> sigma 'a -> bool
+let sigma_fresh_bindings bs S =
+  List.all (fun (ident, _) ->
+    match List.lookup ident S.declarations with
+      | Just _ -> false
+      | Nothing -> true
+    end) bs

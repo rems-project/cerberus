@@ -204,6 +204,8 @@ let export_ctor loc = function
      E.return Cfvfromint
  | Civfromfloat ->
      E.return Civfromfloat
+ | CivNULLcap is_signed ->
+     E.return (CivNULLcap is_signed)
 end
 
 val     export_pattern: Loc.t -> inferred_pattern -> E.eff typed_pattern
@@ -256,6 +258,8 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
         PEmember_shift <$> export_pexpr pe1
                        <*> E.return sym
                        <*> E.return member_ident
+    | PEmemop mop pes ->
+      PEmemop mop <$> E.mapM (export_pexpr) pes
     | PEnot pe ->
         PEnot <$> export_pexpr pe
     | PEop binop pe1 pe2 ->

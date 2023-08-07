@@ -13,15 +13,9 @@ struct node {
   tree nodes[NUM_NODES];
 };
 
-#ifdef CN_MODE
-#define CN(foo) foo
-#else
-#define CN(foo)
-#endif
-
-#ifdef CN_MODE
-
+/*@
 function (integer) num_nodes ()
+@*/
 
 int cn_get_num_nodes (void)
 /*@ cn_function num_nodes @*/
@@ -29,6 +23,7 @@ int cn_get_num_nodes (void)
   return NUM_NODES;
 }
 
+/*@
 datatype tree_arc {
   Arc_End {},
   Arc_Step {integer i, datatype tree_arc tail}
@@ -128,7 +123,7 @@ lemma construct_lemma (integer v,
   ensures
     ((construct(v, ns))[arc]) == (construct_app_rhs(v, ns, arc))
 
-#endif
+@*/
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
@@ -151,7 +146,6 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 {
   int idx = 0;
   int r = 0;
-  void *ptr;
   if (! t) {
     /*@ unpack Tree(t); @*/
     /*@ apply empty_lemma(arc); @*/
@@ -164,13 +158,11 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
     return 1;
   }
   /*@ apply mk_arc_lemma(Xs, i, path_len); @*/
+  /*@ extract Owned<int>, i; @*/
   /*@ instantiate i; @*/
   idx = path[i];
-  /*@ unpack Tree(t); @*/
-  ptr = &(t->nodes[idx]);
-  /*@ unpack Indirect_Tree(ptr); @*/
+  /*@ extract Indirect_Tree, idx; @*/
   r = lookup_rec(t->nodes[idx], path, i + 1, path_len, v);
-  /*@ pack Indirect_Tree(ptr); @*/
   /*@ apply construct_lemma (T.v, T.ns, arc); @*/
   return r;
 }

@@ -89,7 +89,7 @@ type cabs_expression_ =
   | CabsEprint_type of cabs_expression (* Cerberus extension *)
   | CabsEbmc_assume of cabs_expression (* Cerberus-bmc extension *)
   (* GNU C extensions *)
-  | CabsEgcc_statement of cabs_statement (* GCC extension: https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html *)
+  | CabsEgcc_statement of list cabs_statement (* GCC extension: https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html *)
   | CabsEcondGNU of cabs_expression * cabs_expression (* ?: operator *)
   | CabsEbuiltinGNU of gnu_builtin_function
 
@@ -321,7 +321,6 @@ and cabs_statement_ =
   (* GCC inline assembly extension *)
   | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
   | CabsScaseGNU of cabs_expression * cabs_expression * cabs_statement
-
   (* for CN *)
   | CabsSmarker of cabs_statement
 
@@ -345,10 +344,12 @@ type translation_unit =
 and external_declaration =
   | EDecl_func of function_definition
   | EDecl_decl of cabs_declaration
+  | EDecl_magic of (Loc.t * string) (* magic comment at top level *)
   | EDecl_funcCN of Cn.cn_function Symbol.identifier type_name (* CN backend *)
   | EDecl_lemmaCN of Cn.cn_lemma Symbol.identifier type_name (* CN backend *)
   | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)
   | EDecl_datatypeCN of Cn.cn_datatype Symbol.identifier type_name (* CN backend *)
+  | EDecl_fun_specCN of Cn.cn_fun_spec Symbol.identifier type_name (* CN backend *)
 
 (* §6.9.1 Function definitions, Syntax *)
 and function_definition =
@@ -426,16 +427,21 @@ instance (Located external_declaration)
           end
       | EDecl_decl (Declaration_static_assert (Static_assert e _)) ->
           locOf e
+      | EDecl_magic (loc, _) -> loc
       | EDecl_funcCN func ->
           locOf (func.Cn.cn_func_name)
       | EDecl_lemmaCN lmma ->
           locOf (lmma.Cn.cn_lemma_name)
+      | EDecl_fun_specCN s ->
+          locOf (s.Cn.cn_spec_name)
       | EDecl_predCN pred ->
           locOf (pred.Cn.cn_pred_name)
       | EDecl_datatypeCN dt ->
           locOf (dt.Cn.cn_dt_name)
     end
 end
+
+let loc_of_edecl (edecl : external_declaration) = locOf edecl
 
 instance (SetType cabs_base_type_specifier)
   let setElemCompare bspecif1 bspecif2 =

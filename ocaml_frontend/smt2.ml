@@ -1,6 +1,6 @@
 open Nondeterminism
 open Memory_model
-open Global_ocaml
+open Cerb_global
 
 let pad = ref 0
 
@@ -10,7 +10,7 @@ let do_red str= "\x1b[31m" ^ str ^ "\x1b[0m"
 
 let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st) ndM) (st0: 'st) =
   prerr "ENTERING runND";
-  Debug_ocaml.print_debug 1 [] (fun () ->
+  Cerb_debug.print_debug 2 [] (fun () ->
     "HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
       | Exhaustive ->
           "exhaustive"

@@ -2,12 +2,12 @@
 open Core_rewriter
 open Core
 
-open Debug_ocaml
+open Cerb_debug
 
 
 (* TODO: move this to Core_aux *)
 let rec match_pattern_pexpr loc_opt (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_pe, bTy, pexpr_) as pexpr)
-  : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+  : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * Cerb_location.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_pexpr z = Pexpr (annots_pe, bTy, z) in
   match pat_, pexpr_ with
@@ -88,7 +88,7 @@ Vloaded (LVspecified oval)) ->
 
 
 let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
-   : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+   : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Cerb_location.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_expr z = Expr (annots_e, z) in
   match pat_, expr_ with
@@ -272,6 +272,8 @@ let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
         wrap (PEarray_shift (subst_sym_pexpr2 sym z pe1, ty, subst_sym_pexpr2 sym z pe2))
     | PEmember_shift (pe, tag_sym, memb_ident) ->
         wrap (PEmember_shift (subst_sym_pexpr2 sym z pe, tag_sym, memb_ident))
+    | PEmemop (mop, pes) ->
+        wrap (PEmemop (mop, List.map (subst_sym_pexpr2 sym z) pes))
     | PEnot pe ->
         wrap (PEnot (subst_sym_pexpr2 sym z pe))
     | PEop (bop, pe1, pe2) ->
@@ -428,21 +430,15 @@ let apply_substs_expr xs e =
   ) e xs
 
 
+(* FIXME: probably this should be passed like a proper parameter *)
+let config_unfold_stdlib : (Symbol.sym -> bool) ref =
+  ref (fun _ -> false)
+
 
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
 let core_peval file : 'bty RW.rewriter =
 
-  let module StringSet = Set.Make(String) in
-
-  let stdlib_unfold_pred fsym fdecl =
-    match Symbol.symbol_description fsym, fdecl with
-    (* | SD_Id "is_representable_integer", _ *)
-    (* | SD_Id "catch_exceptional_condition", _  *)
-    (*   -> *)
-    (*    true *)
-    | _ ->
-       false
-  in
+  let stdlib_unfold_pred fsym fdecl = (! config_unfold_stdlib) fsym in
 
   let impl_unfold_pred _ fdecl =
     match fdecl with
@@ -453,7 +449,7 @@ let core_peval file : 'bty RW.rewriter =
 
   let eval_pexpr pexpr =
     let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
-    Core_eval.eval_pexpr Location_ocaml.unknown None emp [] None file pexpr in
+    Core_eval.eval_pexpr Cerb_location.unknown None emp [] None file pexpr in
   
   let to_unfold_funs =
     (* The list of stdlib functions to be unfolded (see PEcall) *)
@@ -462,7 +458,7 @@ let core_peval file : 'bty RW.rewriter =
   let to_unfold_impls =
     (* The list of impl-def functions to be unfolded (see PEcall) *)
     Pmap.filter impl_unfold_pred file.impl in
-  
+
   let check_unfold = function
     | Sym sym ->
         begin match Pmap.lookup sym to_unfold_funs with
@@ -575,7 +571,7 @@ let core_peval file : 'bty RW.rewriter =
                     end
                 
                 | PEcall (nm, pes) ->
-                    (* UNFOLD CALLS TO STDLIB and IMPL-DEF FUNCTIONS TAKING A CTYPE AS PARAMETER *)
+                    (* unfold some calls to stdlib functions *)
                     begin match check_unfold nm with
                       | Some (sym_bTys, body_pe) ->
                           let pats =

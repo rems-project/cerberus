@@ -1,6 +1,6 @@
 open Cerb_frontend
 open Cerb_backend
-open Global_ocaml
+open Cerb_global
 open Cerb_runtime
 open Pipeline
 
@@ -10,34 +10,16 @@ let return = Exception.except_return
 
 let io, get_progress =
   let open Pipeline in
-  let progress = ref 0 in
-  { pass_message = begin
-        let ref = ref 0 in
-        fun str -> Debug_ocaml.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
-                   incr ref;
-                   return ()
-      end;
-    set_progress = begin
-      fun _   -> incr progress;
-                 return ()
-      end;
-    run_pp = begin
-      fun opts doc -> run_pp opts doc;
-                      return ()
-      end;
-    print_endline = begin
-      fun str -> print_endline str;
-                 return ();
-      end;
-    print_debug = begin
-      fun n mk_str -> Debug_ocaml.print_debug n [] mk_str;
-                      return ()
-      end;
-    warn = begin
-      fun mk_str -> Debug_ocaml.warn [] mk_str;
-                    return ()
-      end;
-  }, fun () -> !progress
+  default_io_helpers, get_progress
+
+let is_cheri_memory () =
+  (* for compability with OCaml 4.12.0 using a local implementation of String.starts_with *)
+  let starts_with ~prefix str =
+    try
+      String.(equal prefix (sub str 0 (length prefix)))
+    with
+      | Invalid_argument _ -> false in
+  starts_with ~prefix:"cheri" Impl_mem.name
 
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
@@ -45,19 +27,20 @@ let frontend (conf, io) filename core_std =
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
+    c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
     >>= core_passes (conf, io) ~filename
   else
-    Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
+    Exception.fail (Cerb_location.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
   let libc_dirs = [in_runtime "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
+  let macros_def = if is_cheri_memory () then ("__CHERI__", None) :: macros_def else macros_def in
   String.concat " " begin
     cpp_cmd ::
     List.map (function
@@ -71,7 +54,16 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
 
 let core_libraries incl lib_paths libs =
   let lib_paths = if incl then in_runtime "libc" :: lib_paths else lib_paths in
-  let libs = if incl then "c" :: libs else libs in
+  let libs =
+    if incl then
+      if Switches.is_CHERI () then
+        let mname = Impl_mem.name in
+        ("c-" ^ mname) :: libs
+      else if Switches.(has_switch SW_inner_arg_temps) then
+        "c_inner_arg_temps" :: libs
+      else
+        "c" :: libs
+    else libs in
   List.map (fun lib ->
       match List.fold_left (fun acc path ->
           match acc with
@@ -100,17 +92,21 @@ let create_executable out =
   Unix.chmod out 0o755
 
 let cerberus debug_level progress core_obj
-             cpp_cmd nostdinc nolibc agnostic macros macros_undef
-             incl_dirs incl_files cpp_only
+             cpp_cmd syntax_only nostdinc nolibc agnostic macros macros_undef
+             runtime_path_opt incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
              exec exec_mode iso_switches switches batch concurrency
              astprints pprints ppflags
-             sequentialise_core rewrite_core typecheck_core defacto permissive
+             sequentialise_core rewrite_core typecheck_core defacto permissive ignore_bitfields
              fs_dump fs trace
              output_name
              files args_opt =
-  Debug_ocaml.debug_level := debug_level;
+  Cerb_debug.debug_level := debug_level;
+  begin if is_cheri_memory () then
+    Cerb_runtime.set_package "cerberus-cheri"
+  end;
+  Cerb_runtime.specified_runtime := runtime_path_opt;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
@@ -119,17 +115,27 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
-  set_cerb_conf "Driver" exec exec_mode concurrency QuoteStd defacto permissive agnostic false;
+  set_cerb_conf "Driver" exec exec_mode concurrency QuoteStd defacto permissive agnostic ignore_bitfields false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
-    if iso_switches then begin
+    let switches =
+      if is_cheri_memory () then begin
+        Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
+        if not (List.mem "CHERI" switches) then
+          "CHERI" :: switches
+        else
+          switches
+      end else switches in
+    begin if iso_switches then begin
       if switches <> [] then
-        Debug_ocaml.warn [] (fun () -> "The --iso argument overrides --switches");
+        Cerb_debug.warn ~always:true [] (fun () -> "the --iso argument overrides --switches");
       Switches.set_iso_switches ()
     end else
-      Switches.set switches;
+      Switches.set switches
+    end;
+    io.pass_message (Printf.sprintf "Using '%s'" Impl_mem.name) >>
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
@@ -184,7 +190,7 @@ let cerberus debug_level progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                      Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->
@@ -236,8 +242,20 @@ let cerberus debug_level progress core_obj
           return ()
           ) () files >>= fun () ->
         return success
-      (* Link and execute *)
+      (* Parsing, Ail typing and stopping there *)
+      else if syntax_only && List.for_all (fun z -> Filename.check_suffix z ".c") files then
+        prelude >>= fun core_std ->
+        Exception.except_mapM (fun filename ->
+          c_frontend (conf, io) core_std ~filename
+        ) files >>= fun _ ->
+        return success
+        (* Link and execute *)
       else
+        begin if syntax_only then
+          io.warn ~always:true (fun () -> "some of the translation units are Core or object files: ignoring --syntax-only")
+        else
+          return ()
+        end >>= fun () ->
         prelude >>= main >>= begin function
           | [] -> assert false
           | f::fs ->
@@ -318,6 +336,10 @@ let cpp_only =
   let doc = "Run only the preprocessor stage." in
   Arg.(value & flag & info ["E"] ~doc)
 
+let syntax_only =
+  let doc = "Stop the pipeline after the Ail typechecking (only supported when called on .c files)" in
+  Arg.(value & flag & info ["syntax-only"] ~doc)
+
 let incl_dir =
   let doc = "Add the specified directory to the search path for the\
              C preprocessor." in
@@ -348,10 +370,22 @@ let nolibc =
   let doc = "Do not search the standard system directories for include files." in
   Arg.(value & flag & info ["nolibc"] ~doc)
 
+let runtime_path =
+  let doc = "custom Cerberus runtime directory" in
+  Arg.(value & opt (some string) None & info ["r";"runtime"] ~docv:"DIR" ~doc)
+
 let agnostic =
   let doc = "Asks Cerberus to delay looking at implementation settings until as late \
              as possible. This makes the pipeline somewhat implementation agnostic." in
   Arg.(value & flag & info ["agnostic"] ~doc)
+
+ let ignore_bitfields =
+  let doc = "(DEBUG) accept and ignore bit-field width specifiers. \
+             CAUTION: the constraints relating to bit-fields are NOT checked, \
+             and the desugaring produces Ail struct/union types with \
+             normal members. This flag will be removed when support \
+             for bit-fields is added." in
+  Arg.(value & flag & info ["dignore-bitfields"] ~doc)
 
 let exec =
   let doc = "Execute the Core program after the elaboration." in
@@ -453,14 +487,14 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(const cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
-                         incl_dir $ incl_file $ cpp_only $
+                         cpp_cmd $ syntax_only $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
+                         runtime_path $ incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $
                          exec $ exec_mode $ iso $ switches $ batch $
                          concurrency $
                          astprints $ pprints $ ppflags $
-                         sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $
+                         sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $ ignore_bitfields $
                          fs_dump $ fs $ trace $
                          output_file $
                          files $ args) in

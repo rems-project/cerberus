@@ -1,5 +1,5 @@
 int printf(const char *, ...);
-char t[] = "012345678";
+_Alignas(unsigned) char t[] = "012345678";
 
 int main(void)
 {

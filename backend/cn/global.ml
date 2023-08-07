@@ -12,7 +12,7 @@ type t =
   { struct_decls : Memory.struct_decls; 
     datatypes : BaseTypes.datatype_info SymMap.t;
     datatype_constrs : BaseTypes.constr_info SymMap.t;
-    fun_decls : (Locations.t * AT.ft * Sctypes.c_concrete_sig) SymMap.t;
+    fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
     logical_functions : LogicalFunctions.definition SymMap.t;
     lemmata : (Locations.t * AT.lemmat) SymMap.t;
@@ -59,7 +59,7 @@ let pp_struct_layout (tag,layout) =
 let pp_struct_decls decls = 
   Pp.list pp_struct_layout (SymMap.bindings decls) 
 
-let pp_fun_decl (sym, (_, t, _)) = item (plain (Sym.pp sym)) (AT.pp RT.pp t)
+let pp_fun_decl (sym, (_, t, _)) = item (plain (Sym.pp sym)) (Pp.option (AT.pp RT.pp) "(no spec)" t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
 
 let pp_resource_predicate_definitions defs =

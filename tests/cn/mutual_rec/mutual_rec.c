@@ -25,16 +25,9 @@ struct b_node {
   struct a_node *odd;
 };
 
-#ifdef CN_MODE
-#define CN(foo) foo
-#else
-#define CN(foo)
-#endif
-
-#ifdef CN_MODE
-
 /* The A/B tree types as datatypes. */
 
+/*@
 datatype a_tree {
   A_Leaf {},
   A_Node {integer k, integer v, datatype b_tree left, datatype b_tree right}
@@ -44,9 +37,11 @@ datatype b_tree {
   B_Leaf {},
   B_Node {datatype a_tree even, datatype a_tree odd}
 }
+@*/
 
 /* The predicates relating A/B trees to their C encoding. */
 
+/*@
 predicate {datatype a_tree t} A_Tree (pointer p) {
   if (p == ((pointer) 0)) {
     return {t: A_Leaf {}};
@@ -70,9 +65,8 @@ predicate {datatype b_tree t} B_Tree (pointer p) {
     return {t: B_Node {even: E.t, odd: O.t}};
   }
 }
+@*/
 
-
-#endif
 
 unsigned int global_val;
 
@@ -132,10 +126,9 @@ predef_a_tree (struct a_node *p)
   return p;
 }
 
-#ifdef CN_MODE
-
 /* Setup for reasoning about the list of keys of an A/B tree. */
 
+/*@
 datatype key_list {
   K_Nil {},
   K_Cons {integer k, datatype key_list tail}
@@ -152,9 +145,11 @@ function (datatype key_list) concat (datatype key_list xs, datatype key_list ys)
 function (datatype key_list) double_list (datatype key_list xs)
 
 function (datatype key_list) merge (datatype key_list xs, datatype key_list ys)
+@*/
 
 /* Lemmas that boil down to the definitions of the above. */
 
+/*@
 lemma inc_list_lemma (datatype key_list xs)
   requires true
   ensures (inc_list (xs)) == (match xs {
@@ -177,6 +172,7 @@ lemma b_tree_keys_lemma (datatype b_tree btree)
     B_Node {even: e, odd: o} => {
         merge (double_list (a_tree_keys (e)), inc_list (double_list (a_tree_keys (o))))}
   })
+@*/
 
 void
 a_tree_keys_node_lemma (int k, int v, struct b_node *left, struct b_node *right)
@@ -209,9 +205,11 @@ b_tree_keys_node_lemma (struct a_node *even, struct a_node *odd)
 }
 
 /* A lemma about increment of concat. */
+/*@
 lemma inc_concat_lemma (datatype key_list xs, datatype key_list ys)
   requires true
   ensures inc_list (concat (xs, ys)) == concat (inc_list (xs), inc_list (ys))
+@*/
 
 void
 a_tree_keys_node_concat_inc_lemma (int k, struct b_node *left, struct b_node *right)
@@ -242,10 +240,12 @@ a_tree_keys_node_concat_cons_inc_lemma (int k, struct b_node *right)
 }
 
 /* A lemma about increment of cons. */
+/*@
 lemma inc_merge_double_lemma (datatype key_list xs, datatype key_list ys)
   requires true
   ensures inc_list (merge (double_list (xs), inc_list (double_list (ys))))
     == merge (inc_list (double_list (xs)), inc_list (inc_list (double_list (ys))))
+@*/
 
 void
 b_tree_keys_node_merge_inc_lemma (struct a_node *even, struct a_node *odd)
@@ -267,10 +267,12 @@ b_tree_keys_node_merge_inc_lemma (struct a_node *even, struct a_node *odd)
 
 /* A lemma about flipping a merge. The merge has to sort, to some degree, to
    allow us to prove list equality rather than weaker multiset equality. */
+/*@
 lemma flip_merge_lemma (datatype key_list xs, datatype key_list ys)
   requires true
   ensures merge (inc_list (double_list (xs)), inc_list (inc_list (double_list (ys))))
     == merge (inc_list (inc_list (double_list (ys))), inc_list (double_list (xs)))
+@*/
 
 void
 b_tree_keys_node_merge_flip_lemma (struct a_node *even, struct a_node *odd)
@@ -290,9 +292,11 @@ b_tree_keys_node_merge_flip_lemma (struct a_node *even, struct a_node *odd)
 }
 
 /* A lemma about composing increments and multiplies. */
+/*@
 lemma inc_double_lemma (datatype key_list xs)
   requires true
   ensures double_list (inc_list (xs)) == inc_list (inc_list (double_list (xs)))
+@*/
 
 void
 b_tree_keys_node_inc_inc_double_lemma (struct a_node *odd)
@@ -305,8 +309,6 @@ b_tree_keys_node_inc_inc_double_lemma (struct a_node *odd)
   /*@ apply inc_double_lemma (a_tree_keys (O.t)); @*/
   return;
 }
-
-#endif
 
 /* unannotated versions
 int
@@ -375,6 +377,7 @@ inc_b_tree (struct b_node *p)
     /*@ apply inc_list_lemma(K_Nil {}); @*/
     return 1;
   }
+  /*@ unpack B_Tree(p); @*/
   b_tree_keys_node_lemma(p->even, p->odd);
   b_tree_keys_node_merge_inc_lemma(p->even, p->odd);
   b_tree_keys_node_merge_flip_lemma(p->even, p->odd);

@@ -4,6 +4,7 @@ type genIntegerType [name="git*"] =
  | Concrete of integerType
  | SizeT
  | PtrdiffT
+ | PtraddrT
  | Unknown of integerConstant
  | Promote of genIntegerType
  | Usual of genIntegerType * genIntegerType
@@ -24,7 +25,7 @@ type genType =
  | GenPointer of qualifiers * ctype
  | GenStruct of ail_identifier
  | GenUnion of ail_identifier
- | GenAtomic of ctype (* TODO: check *)
+ | GenAtomic of genType
 
 val signedInt_gty: genType
 let signedInt_gty =
@@ -61,12 +62,14 @@ let rec eq_genIntegerType gity1 gity2 =
         1
     | PtrdiffT ->
         2
-    | Unknown _ ->
+    | PtraddrT ->
         3
-    | Promote _ ->
+    | Unknown _ ->
         4
-    | Usual _ _ ->
+    | Promote _ ->
         5
+    | Usual _ _ ->
+        6
   end in
   match (gity1, gity2) with
     | (Concrete ity1, Concrete ity2) ->
@@ -103,7 +106,7 @@ instance (Eq genBasicType)
 end
 
 
-let eq_genType gty1 gty2 =
+let rec eq_genType gty1 gty2 =
   let ord = function
     | GenVoid ->
         (0 : nat)
@@ -140,8 +143,8 @@ let eq_genType gty1 gty2 =
         tag1 = tag2
     | (GenUnion tag1, GenUnion tag2) ->
         tag1 = tag2
-    | (GenAtomic ty1, GenAtomic ty2) ->
-        ty1 = ty2
+    | (GenAtomic gty1, GenAtomic gty2) ->
+        eq_genType gty1 gty2
     | _ ->
         ord gty1 = ord gty2
   end
@@ -186,8 +189,8 @@ let inject_basicType = function
       GenFloating fty
 end
 
-val inject_type: ctype -> genType
-let inject_type (Ctype _ ty) =
+val     inject_type: ctype -> genType
+let rec inject_type (Ctype _ ty) =
 match ty with
   | Void -> GenVoid
   | Basic bty ->
@@ -201,7 +204,7 @@ match ty with
   | FunctionNoParams qs_ty ->
       GenFunctionNoParams qs_ty
   | Atomic ty ->
-      GenAtomic ty
+      GenAtomic (inject_type ty)
   | Struct tag ->
       GenStruct tag
   | Union  tag ->

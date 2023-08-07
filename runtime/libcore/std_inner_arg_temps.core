@@ -1,0 +1,798 @@
+------------------------------------------------------------------------------
+-- CORE STDLIB
+------------------------------------------------------------------------------
+
+fun is_representable_integer (n: integer, ty: ctype): boolean :=
+  Ivmin(ty) <= n /\ n <= Ivmax(ty)
+
+fun is_representable_floating (f: floating, ty: ctype): boolean :=
+  True
+  -- FIXME: error(<<<is_representable_floating>>>, Unit)
+
+
+fun all_values_representable_in (ty1: ctype, ty2: ctype): boolean :=
+  Ivmin(ty2) <= Ivmin(ty1) /\ Ivmax(ty1) <= Ivmax(ty2)
+
+
+-- STD §6.5#5
+fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
+  if is_representable_integer(n, ty) then
+    n
+  else
+    undef(<<UB036_exceptional_condition>>)
+
+-- [conv_int ty n] returns the value [n] converted to the integer type [ty]
+fun conv_int (ty: ctype, n: integer): integer :=
+{-
+  if is_unspec(n) then
+    unspecified(ty)
+  else
+-}
+  -- (STD §6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
+  -- equal to 0; otherwise, the result is 1.
+  if ty = '_Bool' then
+    if n = 0 then 0 else 1
+  
+  -- (STD §6.3.1.3#1) When a value with integer type is converted to another integer
+  -- type other than _Bool, if the value can be represented by the new type, it
+  -- is unchanged.
+  else
+    if is_representable_integer(n, ty) then
+      n
+  
+  -- (STD §6.3.1.3#2) Otherwise, if the new type is unsigned, the value is converted
+  -- by repeatedly adding or subtracting one more than the maximum value that
+  -- can be represented in the new type until the value is in the range of the
+  -- new type.
+    else
+      if is_unsigned(ty) then
+        wrapI(ty, n)
+  
+  -- (STD §6.3.1.3#3) Otherwise, the new type is signed and the value cannot be
+  -- represented in it; either the result is implementation-defined or an
+  -- implementation-defined signal is raised.
+      else
+        <Integer.conv_nonrepresentable_signed_integer>(ty, n)
+
+-- auxiliary function for the [conv] (see §6.3.1.3#1)
+fun conv_aux (ty: ctype, n: integer) : integer :=
+  n rem_f (Ivmax(ty) - Ivmin(ty) + 1)
+
+fun conv_loaded_int (ty: ctype, _n: loaded integer): loaded integer :=
+  case _n of
+    | Specified(n:integer) =>
+        Specified(conv_int(ty, n))
+    | Unspecified(_: ctype) =>
+        Unspecified(ty)
+  end
+
+fun loaded_fvfromint (ty: ctype, _n: loaded integer) : loaded floating :=
+  case _n of
+    | Specified(n:integer) =>
+        -- TODO: this is NOT modelling the undefined behaviour for out of range values
+        Specified(Fvfromint(n))
+    | Unspecified(_: ctype) =>
+        Unspecified(ty)
+  end
+
+-- TODO: we are not dealing with non-finite floating values
+fun loaded_ivfromfloat (ty: ctype, _f: loaded floating) : loaded integer :=
+  case _f of
+    | Specified(f:floating) =>
+        let n: integer = Ivfromfloat(ty, f) in
+        if ty = '_Bool' /\ not (n = 0) then
+          -- STD §6.3.1.2#1
+          Specified(1)
+        else if is_representable_integer(n, ty) then
+          Specified(n)
+        else
+          -- STD §6.3.1.4#1, sentence 1
+          undef(<<UB017_out_of_range_floating_integer_conversion>>)
+    | Unspecified(_: ctype) =>
+        Unspecified(ty)
+  end
+
+proc loaded_pointer_to_Bool (_ptr: loaded pointer) : eff loaded integer :=
+  case _ptr of
+    | Specified(ptr: pointer) =>
+        let weak is_null: boolean = memop(PtrEq, ptr, NULL(void*)) in
+        pure(Specified(if is_null then 0 else 1))
+    | Unspecified(_: ctype) =>
+        -- TODO: check
+        pure(Unspecified('_Bool'))
+  end
+
+fun is_floating(ty: ctype): boolean :=
+  ty = 'float' \/ ty = 'double' \/ ty = 'long_double'
+
+fun params_length_aux (acc: integer, cs: [ctype]): integer :=
+  case cs of
+    | [] : [ctype] => acc
+    | _:ctype :: xs:[ctype] => params_length_aux (acc+1, xs)
+  end
+
+fun params_length (cs: [ctype]): integer :=
+  params_length_aux(0, cs)
+
+fun params_nth (cs: [ctype], n: integer): ctype :=
+  case cs of
+    | [] : [ctype] =>
+      error(<<<params_nth>>>, (cs, n))
+    | x:ctype :: xs:[ctype] =>
+      if n = 0 then
+        x
+      else if n > 0 then
+        params_nth(xs, n-1)
+      else
+        error(<<<params_nth>>>, (cs, n))
+  end
+
+fun ctype_width (ty: ctype): integer :=
+  Ivsizeof(ty) * <bits_in_byte>
+
+
+-- encode an element of Z into an element of N following the
+-- two's complement encoding
+fun encodeTwos (ty : ctype, n: integer) : integer :=
+  -- TODO: this assumes no padding bits
+  let width: integer = ctype_width(ty) in
+  if n < Ivmin(ty) \/ Ivmax(ty) < n then
+    error(<<<encodeTwos>>>, (width, ty, n))
+  else if 0 <= n then
+    n
+  else
+    2^width + n
+
+
+-- the inverse of the previous function
+fun decodeTwos (ty: ctype, n: integer) : integer :=
+  -- TODO: this assumes no padding bits
+  let width: integer = ctype_width(ty) in
+  if (n < 0) \/ (2^width <= n) then
+    error(<<<decodeTwos>>>, (ty, n))
+  else if n <= 2^(width - 1) - 1 then
+    n
+  else
+    n - 2^width
+
+-- bitwise complement of a two's complement encoded integer
+fun complementTwos_aux (n: integer, w: integer) : integer :=
+  if w = 0 then
+    n
+  else
+    let n_: integer = n / 2 in
+    (1 - (n rem_f 2)) + 2 * complementTwos_aux(n_, w - 1)
+
+fun complementTwos (ty:ctype, n: integer) : integer :=
+  complementTwos_aux(n, ctype_width(ty))
+
+-- ones_prefix(0, k, width) returns an positive integer whose binary
+-- representation is 1    ...   1 0      ...       0
+--                     k times     width - k times
+fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
+  if (0 <= i) /\ (i < k) then
+    2^(width - 1 - i) + ones_prefix(i+1, k, width)
+  else
+    0
+
+fun reverse_aux (xs: [integer], acc: [integer]): [integer] :=
+  case xs of
+    | [] : [integer] => acc
+    | x: integer :: xs: [integer] => reverse_aux (xs, x :: acc)
+  end
+
+fun reverse (xs: [integer]): [integer] :=
+  reverse_aux (xs, [] : [integer])
+
+proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
+  let strong shifted: pointer = memop(PtrArrayShift, str, 'char', 0) in
+  let strong c_: loaded integer = load('char', shifted) in
+--  let strong c_: loaded integer = load('char', array_shift(str, 'char', 0)) in
+  case c_ of
+    | Specified(c: integer) =>
+        if c = 0 then
+          pure(acc)
+        else
+          let strong shifted: pointer = memop(PtrArrayShift, str, 'char', 1) in
+          let strong ret: [integer] = pcall(rev_listFromStr_aux, shifted, c :: acc) in
+--          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, 'char', 1), c :: acc) in
+          pure(ret)
+    | Unspecified(_: ctype) =>
+        pure (undef(<<DUMMY(rev_listFromStr_aux)>>)) -- TODO think about that
+  end
+
+proc listFromStr(str: pointer): eff [integer] :=
+  let strong rev_xs: [integer] = pcall(rev_listFromStr_aux, str, [] : [integer]) in
+  pure(reverse(rev_xs))
+
+proc rev_listFromArray_aux (ptr: pointer, acc: [integer], n: integer): eff [integer] :=
+  if n = 0 then
+    pure(acc)
+  else
+    let strong shifted: pointer = memop(PtrArrayShift, ptr, 'char', 0) in
+    let strong c_loaded: loaded integer = load('char', shifted) in
+--    let strong c_loaded: loaded integer = load('char', array_shift(ptr, 'char', 0)) in
+    case c_loaded of
+      | Specified (c: integer) =>
+          let strong shifted: pointer = memop(PtrArrayShift, ptr, 'char', 1) in
+          pcall(rev_listFromArray_aux, shifted, c :: acc, n - 1)
+--          pcall(rev_listFromArray_aux, array_shift(ptr, 'char', 1), c :: acc, n - 1)
+      | Unspecified (_: ctype) =>
+        pure (undef(<<DUMMY(rev_listFromPtr_aux)>>))
+    end
+
+proc listFromArray (ptr: pointer, n: integer): eff [integer] :=
+  let strong rev_xs: [integer] = pcall(rev_listFromArray_aux, ptr, [] : [integer], n) in
+  pure(reverse(rev_xs))
+
+-- see §5.1.2 from ISO/IEC 10967-1:1994(E)
+fun wrapI(ty: ctype, n: integer) : integer :=
+{-
+  -- TODO: this is a temporary hack to prune executions with overflow on unsigned types
+  if Ivmin(ty) <= n /\ n <= Ivmax(ty) then
+    n
+  else
+    error(<<<wrapI>>>, Unit)
+-}
+    let dlt: integer = Ivmax(ty) - Ivmin(ty) + 1 in
+    let r: integer = n rem_f dlt in
+    if r <= Ivmax(ty) then
+      r
+    else
+      r - dlt
+
+proc create_and_store (ty: ctype, x: storable) : eff pointer :=
+  let weak p: pointer = create(Ivalignof(ty), ty) in
+  let weak _: unit = store(ty, p, x) in
+  pure(p)
+
+------------------------------------------------------------------------------
+-- RANDOM
+------------------------------------------------------------------------------
+
+builtin any_bounded_int(integer, integer): eff loaded integer
+
+-- int __any_bounded_int (int min, int max)
+proc [ailname = "__any_bounded_int"] bounded_int (min_: loaded integer, max_: loaded integer): eff loaded integer :=
+  case (min_, max_) of
+    | (Specified (min: integer), Specified (max: integer)) =>
+      pcall(<builtin_any_bounded_int>, min, max)
+    | _: (loaded integer, loaded integer) =>
+      pure (undef(<<DUMMY(any_bounded_int)>>))
+  end
+
+------------------------------------------------------------------------------
+-- LIBC
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+-- <errno.h>
+------------------------------------------------------------------------------
+
+builtin errno (): eff loaded pointer
+
+proc [ailname = "__builtin_errno"] errno_proxy (): eff loaded pointer :=
+  pcall(<builtin_errno>)
+
+------------------------------------------------------------------------------
+-- <stdio.h>
+------------------------------------------------------------------------------
+
+builtin printf   ([integer], [(ctype, pointer)]): eff loaded integer
+builtin vprintf   (integer, [integer], integer) : eff loaded integer
+builtin vsnprintf (pointer, integer, [integer], integer) : eff loaded integer
+builtin rename    ([integer], [integer]) : eff loaded integer
+
+-- int printf(const char * restrict format, ...);
+proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
+  let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
+  case frmt_ptr_ of
+    | Specified(frmt_ptr: pointer) =>
+        let strong xs: [integer] = pcall(listFromStr, frmt_ptr) in
+        let strong ret: loaded integer = pcall(<builtin_printf>, xs, args) in
+        pure(ret)
+    | Unspecified(_: ctype) =>
+        pure (undef(<<DUMMY(printf_proxy)>>)) -- TODO think about that
+  end
+
+-- int vprintf (int fd, char * restrict format, va_list ap)
+proc [ailname = "__builtin_vprintf"] vprintf_proxy (fd_ptr: pointer, fmt_ptr: pointer, ap_ptr: pointer) : eff loaded integer :=
+  let strong fd_ptr_: loaded integer = load('signed int', fd_ptr) in
+  let strong fmt_ptr_: loaded pointer = load('char*', fmt_ptr) in
+  let strong ap_ptr_: loaded integer = load('signed int', ap_ptr) in
+  case (fd_ptr_, fmt_ptr_, ap_ptr_) of
+    | (Specified (fd: integer), Specified (fmt: pointer), Specified(ap: integer)) =>
+        let strong xs: [integer] = pcall(listFromStr, fmt) in
+        pcall(<builtin_vprintf>, fd, xs, ap)
+    | _: (loaded integer, loaded pointer, loaded integer) =>
+        pure (undef(<<DUMMY(vprintf_proxy)>>))
+  end
+
+-- int vsnprintf(int fd, size_t n, const char * restrict fmt, va_list arg);
+proc [ailname = "__builtin_vsnprintf"] vsnprintf_proxy (s_ptr: pointer, size_ptr: pointer, fmt_ptr: pointer, ap_ptr: pointer) : eff loaded integer :=
+  let strong s_ptr_: loaded pointer = load('char*', s_ptr) in
+  let strong size_ptr_: loaded integer = load('size_t', size_ptr) in
+  let strong fmt_ptr_: loaded pointer = load('char*', fmt_ptr) in
+  let strong ap_ptr_: loaded integer = load('signed int', ap_ptr) in
+  case (s_ptr_, size_ptr_, fmt_ptr_, ap_ptr_) of
+    | (Specified (s: pointer), Specified (size: integer), Specified (fmt: pointer), Specified(ap: integer)) =>
+        let strong xs: [integer] = pcall(listFromStr, fmt) in
+        pcall(<builtin_vsnprintf>, s, size, xs, ap)
+    | _: (loaded pointer, loaded integer, loaded pointer, loaded integer) =>
+        pure (undef(<<DUMMY(vsnprintf_proxy)>>))
+  end
+
+-- int rename(const char *oldpath, const char *newpath);
+proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: pointer): eff loaded integer :=
+  let strong oldpath_loaded: loaded pointer = load('char*', oldpath_ptr) in
+  let strong newpath_loaded: loaded pointer = load('char*', newpath_ptr) in
+  case (oldpath_loaded, newpath_loaded) of
+    | (Specified (oldpath: pointer), Specified (newpath: pointer)) =>
+      let strong cs1: [integer] = pcall(listFromStr, oldpath) in
+      let strong cs2: [integer] = pcall(listFromStr, newpath) in
+      pcall(<builtin_rename>, cs1, cs2)
+    | (_: loaded pointer, _: loaded pointer) =>
+      pure (undef(<<DUMMY(rename_proxy)>>))
+  end
+
+------------------------------------------------------------------------------
+-- <stdlib.h>
+------------------------------------------------------------------------------
+
+builtin exit (loaded integer) : eff unit
+
+proc [ailname = "__builtin_exit"] exit_proxy (x_: loaded integer) : eff unit :=
+  pcall(<builtin_exit>, x_)
+
+proc [ailname = "malloc"] malloc_proxy (size_: loaded integer) : eff loaded pointer :=
+  case size_ of
+    | Specified(size: integer) =>
+        let strong ptr: pointer = alloc(IvMaxAlignment, size) in
+        pure(Specified(ptr))
+    | Unspecified(_: ctype) =>
+        pure(error(<<<malloc_proxy>>>, False))
+  end
+
+proc [ailname = "realloc"] realloc_proxy (old_ptrptr: pointer, size_ptr: pointer) : eff loaded pointer :=
+  let strong size_: loaded integer = load('size_t', size_ptr) in
+  let strong old_ptrptr_: loaded pointer = load('void *', old_ptrptr) in
+  case (size_, old_ptrptr_) of
+    | (Specified(size: integer), Specified(old_ptr: pointer)) =>
+        let strong ptr: pointer = memop(Realloc, IvMaxAlignment, old_ptr, size) in
+        pure(Specified(ptr))
+    | (_: loaded integer, _: loaded pointer) =>
+        pure(error(<<<malloc_proxy>>>, False))
+  end
+
+proc [ailname = "free"] free_proxy (p_: loaded pointer) : eff unit :=
+  case p_ of
+    | Specified(p: pointer) =>
+        free(p)
+    | _: loaded pointer =>
+        pure(undef(<<DUMMY(kill_proxy_1)>>)) -- TODO check that
+  end
+
+proc [ailname = "aligned_alloc"] aligned_alloc_proxy (align_ptr: pointer, size_ptr: pointer) : eff loaded pointer :=
+  let strong align_: loaded integer = load('size_t', align_ptr) in
+  let strong size_: loaded integer = load('size_t', size_ptr) in
+  case (align_, size_) of
+    | (Specified(align: integer), Specified(size: integer)) =>
+        if size rem_t align = 0 then
+          let strong ptr: pointer = alloc(align, size) in
+          pure(Specified(ptr))
+        else
+          pure(undef(<<DUMMY(align_alloc)>>))
+    | (_: loaded integer, _: loaded integer) =>
+        pure(error(<<<align_alloc_proxy>>>, False))
+  end
+
+------------------------------------------------------------------------------
+-- <string.h>
+------------------------------------------------------------------------------
+
+proc [ailname= "memcpy"] memcpy_proxy (s1_: loaded pointer, s2_: loaded pointer, n_: loaded integer) : eff loaded pointer :=
+  case (s1_, s2_, n_) of
+    | (Specified(s1: pointer), Specified(s2: pointer), Specified(n: integer)) =>
+        let strong res: pointer = memop(Memcpy, s1, s2, n) in
+        pure(Specified(res))
+    | _: (loaded pointer, loaded pointer, loaded integer) =>
+        pure(undef(<<DUMMY(memcpy_proxy)>>)) -- TODO check that
+  end
+
+proc [ailname = "memcmp"] memcmp_proxy (p_: loaded pointer, q_: loaded pointer, size_: loaded integer) : eff loaded integer :=
+  case (p_, q_, size_) of
+    | (Specified(p: pointer), Specified(q: pointer), Specified(size: integer)) =>
+        let strong res: integer = memop(Memcmp, p, q, size) in
+        pure(Specified(res))
+    | _: (loaded pointer, loaded pointer, loaded integer) =>
+        pure(undef(<<DUMMY(memcmp_proxy)>>)) -- TODO check that
+  end
+
+
+------------------------------------------------------------------------------
+-- POSIX
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+-- <sys/stat.h>
+------------------------------------------------------------------------------
+
+builtin mkdir ([integer], integer): eff loaded integer
+builtin stat  ([integer], pointer): eff loaded integer
+builtin lstat ([integer], pointer): eff loaded integer
+builtin umask (integer)           : eff loaded integer
+builtin chmod ([integer], integer): eff loaded integer
+builtin chdir ([integer])         : eff loaded integer
+builtin chown ([integer], integer, integer): eff loaded integer
+
+-- int mkdir(const char *, mode_t);
+proc [ailname = "mkdir"] mkdir_proxy (path_: loaded pointer, mode_: loaded integer) : eff loaded integer :=
+  case (path_, mode_) of
+    | (Specified (path: pointer), Specified (mode: integer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_mkdir>, cs, mode)
+    | (_: loaded pointer, _: loaded integer) =>
+      pure (undef(<<DUMMY(mkdir_proxy)>>))
+  end
+
+-- int stat(const char *pathname, struct stat *statbuf);
+proc [ailname = "stat"] stat_proxy (path_: loaded pointer, buf_: loaded pointer) : eff loaded integer :=
+  case (path_, buf_) of
+    | (Specified (path: pointer), Specified (buf: pointer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_stat>, cs, buf)
+    | (_: loaded pointer, _: loaded pointer) =>
+      pure (undef(<<DUMMY(stat_proxy)>>))
+  end
+
+-- int lstat(const char *pathname, struct stat *statbuf);
+proc [ailname = "lstat"] lstat_proxy (path_: loaded pointer, buf_: loaded pointer) : eff loaded integer :=
+  case (path_, buf_) of
+    | (Specified (path: pointer), Specified (buf: pointer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_lstat>, cs, buf)
+    | (_: loaded pointer, _: loaded pointer) =>
+      pure (undef(<<DUMMY(lstat_proxy)>>))
+  end
+
+-- mode_t umask(mode_t mask);
+proc [ailname = "umask"] umask_proxy (mask_: loaded integer) : eff loaded integer :=
+  case mask_ of
+    | Specified (mask: integer) =>
+      pcall(<builtin_umask>, mask)
+    | _: loaded integer =>
+      pure (undef(<<DUMMY(umask_proxy)>>))
+  end
+
+-- int chmod(const char *pathname, mode_t mode);
+proc [ailname = "chmod"] chmod_proxy (path_: loaded pointer, mode_: loaded integer) : eff loaded integer :=
+  case (path_, mode_) of
+    | (Specified (path: pointer), Specified (mode: integer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_chmod>, cs, mode)
+    | (_: loaded pointer, _: loaded integer) =>
+      pure (undef(<<DUMMY(chmod_proxy)>>))
+  end
+
+-- int chdir(const char *path);
+proc [ailname = "chdir"] chdir_proxy (path_: loaded pointer) : eff loaded integer :=
+  case path_ of
+    | Specified (path: pointer) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_chdir>, cs)
+    | _: loaded pointer =>
+      pure (undef(<<DUMMY(chdir_proxy)>>))
+  end
+
+-- int chown(const char *pathname, uid_t owner, gid_t group);
+proc [ailname = "chown"] chown_proxy (path_: loaded pointer, owner_: loaded integer, group_: loaded integer) : eff loaded integer :=
+  case (path_, owner_, group_) of
+    | (Specified (path: pointer), Specified (owner: integer), Specified (group: integer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_chown>, cs, owner, group)
+    | (_: loaded pointer, _: loaded integer, _: loaded integer) =>
+      pure (undef(<<DUMMY(chown_proxy)>>))
+  end
+
+------------------------------------------------------------------------------
+-- <dirent.h>
+------------------------------------------------------------------------------
+
+builtin opendir ([integer]): eff loaded integer
+builtin readdir (integer): eff loaded pointer
+builtin rewinddir (integer): eff unit
+builtin closedir (integer): eff loaded integer
+
+-- DIR *opendir(const char *filename);
+proc [ailname = "opendir"] opendir_proxy (fname_: loaded pointer): eff loaded pointer :=
+  case fname_ of
+    | Specified (fname: pointer) =>
+      let strong cs: [integer] = pcall(listFromStr, fname) in
+      let strong n: loaded integer = pcall(<builtin_opendir>, cs) in
+      let strong p: pointer = pcall(create_and_store, 'signed int', n) in
+      pure(Specified(p))
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(opendir)>>))
+  end
+
+-- struct dirent *readdir(DIR *dirp);
+proc [ailname = "readdir"] readdir_proxy (dirp_: loaded pointer): eff loaded pointer :=
+  case dirp_ of
+    | Specified (dirp: pointer) =>
+        let strong dir_loaded: loaded integer = load('signed int', dirp) in
+        case dir_loaded of
+          | Specified (dir: integer) =>
+            pcall(<builtin_readdir>, dir)
+          | _: loaded integer =>
+            pure(undef(<<DUMMY(readdir)>>))
+        end
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(readdir)>>))
+  end
+
+-- void rewinddir(DIR *dirp);
+proc [ailname = "rewinddir"] rewinddir_proxy (dirp_: loaded pointer): eff unit :=
+  case dirp_ of
+    | Specified (dirp: pointer) =>
+        let strong dir_loaded: loaded integer = load('signed int', dirp) in
+        case dir_loaded of
+          | Specified (dir: integer) =>
+            pcall(<builtin_rewinddir>, dir)
+          | _: loaded integer =>
+            pure(undef(<<DUMMY(rewinddir)>>))
+        end
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(rewinddir)>>))
+  end
+
+-- int closedir(DIR *dirp);
+proc [ailname = "closedir"] closedir_proxy (dirp_: loaded pointer): eff loaded integer :=
+  case dirp_ of
+    | Specified (dirp: pointer) =>
+        let strong dir_loaded: loaded integer = load('signed int', dirp) in
+        case dir_loaded of
+          | Specified (dir: integer) =>
+            pcall(<builtin_closedir>, dir)
+          | _: loaded integer =>
+            pure(undef(<<DUMMY(closedir)>>))
+        end
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(closedir)>>))
+  end
+
+
+------------------------------------------------------------------------------
+-- <fcntl.h>
+------------------------------------------------------------------------------
+
+builtin open ([integer], integer): eff loaded pointer
+
+-- int open(const char *path, int oflag, ...);
+proc [ailname = "open"] open_proxy (path_ptr: pointer, oflag_ptr: pointer, args: [(ctype, pointer)]): eff loaded pointer :=
+  let strong path_loaded: loaded pointer = load('char*', path_ptr) in
+  let strong oflag_loaded: loaded integer = load('signed int', oflag_ptr) in
+  -- TODO: i'm ignoring the args!!
+  case (path_loaded, oflag_loaded) of
+    | (Specified (path: pointer), Specified (oflag: integer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_open>, cs, oflag)
+    | (_: loaded pointer, _: loaded integer) =>
+      pure (undef(<<DUMMY(open_proxy)>>))
+  end
+
+------------------------------------------------------------------------------
+-- <unistd.h>
+------------------------------------------------------------------------------
+
+builtin write    (integer, [integer], integer): eff loaded pointer
+builtin read     (integer, pointer, integer)  : eff loaded pointer
+builtin close    (integer)                    : eff loaded pointer
+builtin pwrite   (integer, [integer], integer): eff loaded pointer
+builtin pread    (integer, pointer, integer)  : eff loaded pointer
+builtin link     ([integer], [integer])       : eff loaded pointer
+builtin readlink ([integer], pointer, integer): eff loaded pointer
+builtin symlink  ([integer], [integer])       : eff loaded pointer
+builtin rmdir    ([integer])                  : eff loaded pointer
+builtin truncate ([integer], integer)         : eff loaded pointer
+builtin unlink   ([integer])                  : eff loaded pointer
+builtin lseek    (integer, integer, integer)  : eff loaded pointer
+
+-- ssize_t write(int, const void *, size_t);
+proc [ailname = "write"] write_proxy (fd_: loaded integer, buf_: loaded pointer, size_: loaded integer): eff loaded pointer :=
+  case (fd_, buf_, size_) of
+    | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer)) =>
+      let strong cs: [integer] = pcall(listFromArray, buf, size) in
+      pcall(<builtin_write>, fd, cs, size)
+    | (_: loaded integer, _: loaded pointer, _: loaded integer) =>
+      pure (undef(<<DUMMY(write_proxy)>>))
+  end
+
+-- ssize_t read(int fd, void *buf, size_t count);
+proc [ailname = "read"] read_proxy (fd_: loaded integer, buf_: loaded pointer, size_: loaded integer): eff loaded pointer :=
+  case (fd_, buf_, size_) of
+    | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer)) =>
+      pcall(<builtin_read>, fd, buf, size)
+    | (_: loaded integer, _: loaded pointer, _: loaded integer) =>
+      pure (undef(<<DUMMY(read_proxy)>>))
+  end
+
+
+-- int close(int fd);
+proc [ailname = "close"] close_proxy (fd_: loaded integer): eff loaded pointer :=
+  case (fd_) of
+    | Specified (fd: integer) =>
+      pcall(<builtin_close>, fd)
+    | _: loaded integer =>
+      pure (undef(<<DUMMY(close_proxy)>>))
+  end
+
+-- ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
+proc [ailname = "pwrite"] pwrite_proxy (fd_: loaded integer, buf_: loaded pointer, size_: loaded integer, off_: loaded integer): eff loaded pointer :=
+  case (fd_, buf_, size_, off_) of
+    | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer), Specified (off: integer)) =>
+      let strong cs: [integer] = pcall(listFromArray, buf, size) in
+      pcall(<builtin_pwrite>, fd, cs, size, off)
+    | (_: loaded integer, _: loaded pointer, _: loaded integer, _: loaded integer) =>
+      pure (undef(<<DUMMY(pwrite_proxy)>>))
+  end
+
+-- ssize_t pread(int fd, void *buf, size_t count, off_t offset);
+proc [ailname = "pread"] pread_proxy (fd_: loaded integer, buf_: loaded pointer, size_: loaded integer, off_: loaded integer): eff loaded pointer :=
+  case (fd_, buf_, size_, off_) of
+    | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer), Specified (off: integer)) =>
+      pcall(<builtin_pread>, fd, buf, size, off)
+    | (_: loaded integer, _: loaded pointer, _: loaded integer, _: loaded integer) =>
+      pure (undef(<<DUMMY(pread_proxy)>>))
+  end
+
+
+-- int link(const char *oldpath, const char *newpath);
+proc [ailname = "link"] link_proxy (path1_: loaded pointer, path2_: loaded pointer): eff loaded pointer :=
+  case (path1_, path2_) of
+    | (Specified (path1: pointer), Specified (path2: pointer)) =>
+      let strong cs1: [integer] = pcall(listFromStr, path1) in
+      let strong cs2: [integer] = pcall(listFromStr, path2) in
+      pcall(<builtin_link>, cs1, cs2)
+    | (_: loaded pointer, _: loaded pointer) =>
+      pure (undef(<<DUMMY(link_proxy)>>))
+  end
+
+-- ssize_t readlink(const char *pathname, char *buf, size_t bufsiz);
+proc [ailname = "readlink"] readlink_proxy (path_: loaded pointer, buf_: loaded pointer, size_: loaded integer): eff loaded pointer :=
+  case (path_, buf_, size_) of
+    | (Specified (path: pointer), Specified (buf: pointer), Specified (size: integer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_readlink>, cs, buf, size)
+    | (_: loaded pointer, _: loaded pointer, _: loaded integer) =>
+      pure (undef(<<DUMMY(readlink_proxy)>>))
+  end
+
+-- int symlink(const char *target, const char *linkpath);
+proc [ailname = "symlink"] symlink_proxy (target_: loaded pointer, lpath_: loaded pointer): eff loaded pointer :=
+  case (target_, lpath_) of
+    | (Specified (target: pointer), Specified (lpath: pointer)) =>
+      let strong cs1: [integer] = pcall(listFromStr, target) in
+      let strong cs2: [integer] = pcall(listFromStr, lpath) in
+      pcall(<builtin_symlink>, cs1, cs2)
+    | (_: loaded pointer, _: loaded pointer) =>
+      pure (undef(<<DUMMY(symlink_proxy)>>))
+  end
+
+-- int rmdir(const char *pathname);
+proc [ailname = "rmdir"] rmdir_proxy (path_: loaded pointer) : eff loaded pointer :=
+  case (path_) of
+    | Specified (path: pointer) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_rmdir>, cs)
+    | _: loaded pointer =>
+      pure (undef(<<DUMMY(rmdir_proxy)>>))
+  end
+
+-- int truncate(const char *path, off_t length);
+proc [ailname = "truncate"] truncate_proxy (path_: loaded pointer, off_: loaded integer) : eff loaded pointer :=
+  case (path_, off_) of
+    | (Specified (path: pointer), Specified (off: integer)) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_truncate>, cs, off)
+    | (_: loaded pointer, _: loaded integer) =>
+      pure (undef(<<DUMMY(truncate_proxy)>>))
+  end
+
+-- int unlink(const char *pathname);
+proc [ailname = "unlink"] unlink_proxy (path_: loaded pointer) : eff loaded pointer :=
+  case path_ of
+    | Specified (path: pointer) =>
+      let strong cs: [integer] = pcall(listFromStr, path) in
+      pcall(<builtin_unlink>, cs)
+    | _: loaded pointer =>
+      pure (undef(<<DUMMY(unlink_proxy)>>))
+  end
+
+
+-- off_t lseek(int fd, off_t offset, int whence);
+proc [ailname = "lseek"] lseek_proxy (fd_: loaded integer, off_: loaded integer, whence_: loaded integer): eff loaded pointer :=
+  case (fd_, off_, whence_) of
+    | (Specified (fd: integer), Specified (off: integer), Specified (whence: integer)) =>
+      pcall(<builtin_lseek>, fd, off, whence)
+    | (_: loaded integer, _: loaded integer, _: loaded integer) =>
+      pure (undef(<<DUMMY(lseek_proxy)>>))
+  end
+
+
+-- Some GCC builtins
+builtin generic_ffs (integer): eff loaded integer
+
+proc [ailname = "__builtin_ffs"] ffs_proxy (n_: loaded integer): eff loaded integer :=
+  case n_ of
+    | Specified (n: integer) =>
+        pcall(<builtin_generic_ffs>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ffs_proxy)>>))
+  end
+
+proc [ailname = "__builtin_ffsl"] ffsl_proxy (n_: loaded integer): eff loaded integer :=
+  case n_ of
+    | Specified (n: integer) =>
+        pcall(<builtin_generic_ffs>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ffsl_proxy)>>))
+  end
+
+proc [ailname = "__builtin_ffsll"] ffsll_proxy (n_: loaded integer): eff loaded integer :=
+  case n_ of
+    | Specified (n: integer) =>
+        pcall(<builtin_generic_ffs>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ffsll_proxy)>>))
+  end
+
+builtin ctz (integer): eff loaded integer
+builtin bswap16 (integer): eff loaded integer
+builtin bswap32 (integer): eff loaded integer
+builtin bswap64 (integer): eff loaded integer
+
+proc [ailname = " "] ctz_proxy (n_: loaded integer): eff loaded integer :=
+  case n_ of
+    | Specified (n: integer) =>
+        if n = 0 then
+          pure(undef(<<DUMMY(__builtin_ctz)>>))
+        else
+          pcall(<builtin_ctz>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ctz_proxy)>>))
+  end
+
+proc [ailname = "__builtin_bswap16"] bswap16_proxy (x_: loaded integer): eff loaded integer :=
+  case x_ of
+    | Specified (x: integer) =>
+        pcall(<builtin_bswap16>, x)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(bswap16_proxy)>>))
+  end
+
+proc [ailname = "__builtin_bswap32"] bswap32_proxy (x_: loaded integer): eff loaded integer :=
+  case x_ of
+    | Specified (x: integer) =>
+        pcall(<builtin_bswap32>, x)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(bswap32_proxy)>>))
+  end
+
+proc [ailname = "__builtin_bswap64"] bswap64_proxy (x_: loaded integer): eff loaded integer :=
+  case x_ of
+    | Specified (x: integer) =>
+        pcall(<builtin_bswap64>, x)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(bswap64_proxy)>>))
+  end
+
+proc [ailname = "__builtin_unreachable"] unreachable_proxy (): eff unit :=
+  pure(undef(<<DUMMY(__builtin_unreachable)>>))
+
+proc [ailname = "__builtin_unspec_byte_to_zero"] unspec_to_zero_proxy (x: loaded integer): eff loaded integer :=
+  case x of
+    | Specified (_: integer) =>
+        pure(x)
+    | _: loaded integer =>
+        pure(Specified(0))
+  end

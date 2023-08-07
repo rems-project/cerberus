@@ -6,7 +6,7 @@ open Apron
 
 module N = Nat_big_num
 
-let debug msg = Debug_ocaml.print_debug 2 [] (fun _ -> msg)
+let debug msg = Cerb_debug.print_debug 2 [] (fun _ -> msg)
 
 let empty_env = Environment.make [||] [||]
 
@@ -235,7 +235,7 @@ let rec absvalue_of_texpr ~with_sym core man = function
       | Vloaded (LVspecified (OVpointer p)) ->
         Impl_mem.case_ptrval p
           (fun _ -> assert false (* null pointer *))
-          (fun sym -> return @@ ATpointer (APfunction sym) (* function *))
+          (function Some sym -> return @@ ATpointer (APfunction sym) (* function *) | None -> assert false)
           (fun prov addr -> assert false)
       | Vunit ->
         return @@ ATunit

@@ -5,9 +5,9 @@ open Annot
 
 open Either
 
-open Colour
+open Cerb_colour
 
-open Pp_prelude
+open Cerb_pp_prelude
 
 module type CONFIG =
 sig
@@ -15,7 +15,7 @@ sig
   val show_include: bool
   val show_locations: bool
   val show_explode_annot: bool
-  val handle_location: Location_ocaml.t -> P.range -> unit
+  val handle_location: Cerb_location.t -> P.range -> unit
   val handle_uid: string -> P.range -> unit
 end
 
@@ -32,8 +32,8 @@ sig
   val pp_file: ('a, 'b) generic_file -> PPrint.document
   val pp_ctor : ctor -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
@@ -61,7 +61,7 @@ let maybe_print_location (annot: Annot.annot list) : P.document =
   else
     match Annot.get_loc annot with
       | Some loc ->
-          P.parens (Location_ocaml.pp_location loc) ^^ P.space
+          P.parens (Cerb_location.pp_location loc) ^^ P.space
       | _ ->
           P.empty
 
@@ -87,6 +87,7 @@ let precedence_pexpr = function
   | PEcase _
   | PEarray_shift _
   | PEmember_shift _
+  | PEmemop _
   | PEnot _
   | PEstruct _
   | PEunion _
@@ -335,7 +336,7 @@ let rec pp_value = function
   | Vtuple cvals ->
       P.parens (comma_list pp_value cvals)
   | Vctype ty ->
-      P.squotes (Colour.without_colour (Pp_ail.pp_ctype Ctype.no_qualifiers) ty)
+      P.squotes (Cerb_colour.without_colour (Pp_ail.pp_ctype Ctype.no_qualifiers) ty)
   | Vobject oval ->
       pp_object_value oval
   | Vloaded lval ->
@@ -374,6 +375,8 @@ let pp_ctor = function
       pp_datactor "Cfvfromint"
   | Civfromfloat ->
       pp_datactor "Civfromfloat"
+  | CivNULLcap is_signed ->
+      pp_datactor "CivNULLcap" ^^ P.parens (!^ (if is_signed then "signed" else "unsigned"))
 
 
 let rec pp_pattern (Pattern (_, pat)) =
@@ -441,7 +444,7 @@ let pp_pexpr pe =
           pp_impl iCst
       | PEctor (Cnil bTy, pes) ->
           if not (pes <> []) then
-            Debug_ocaml.warn [] (fun () ->
+            Cerb_debug.warn [] (fun () ->
               "Pp_core found a Cnil with pes <> []"
             );
           P.brackets P.empty ^^ P.colon ^^^ pp_core_base_type bTy
@@ -476,6 +479,8 @@ let pp_pexpr pe =
           pp_keyword "member_shift" ^^ P.parens (
             pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
           )
+      | PEmemop (pure_memop, pes) ->
+          pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
       | PEnot pe ->
           pp_keyword "not" ^^ P.parens (pp pe)
       | PEop (bop, pe1, pe2) ->
@@ -552,7 +557,7 @@ let rec pp_expr expr =
             | Atypedef sym ->
               in_comment (pp_symbol sym) ^^ acc
             | Aattrs (Attrs attrs) ->
-                if Debug_ocaml.get_debug_level () > 3 then
+                if Cerb_debug.get_debug_level () > 3 then
                   in_comment begin
                     !^ "ATTRS" ^^ P.brackets (
                       comma_list (fun attr -> 
@@ -739,7 +744,7 @@ let pp_params params =
 
 let pp_fun_map funs =
   let pp_cond loc d =
-    if show_include || Location_ocaml.from_main_file loc then d else P.empty
+    if show_include || Cerb_location.from_main_file loc then d else P.empty
   in
   Pmap.fold (fun sym decl acc ->
     acc ^^
@@ -794,7 +799,7 @@ let pp_funinfo_with_attributes finfos =
   Pmap.fold (fun sym (loc, attrs, ret_ty, params, is_variadic, has_proto) acc ->
     acc ^^ pp_raw_symbol sym ^^ P.colon
     ^^^ pp_ctype (Ctype ([], Function ((Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
-        ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
+        ^^^ (* P.at ^^^ Cerb_location.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
         ^^ P.hardline) finfos P.empty
 
 let pp_globs globs =
@@ -814,7 +819,7 @@ let pp_file file =
   let guard b doc = if b then doc else P.empty in
 
   begin
-    if Debug_ocaml.get_debug_level () > 1 then
+    if Cerb_debug.get_debug_level () > 1 then
       fun z ->
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
         pp_fun_map file.stdlib ^^ P.break 1 ^^
@@ -833,7 +838,7 @@ let pp_file file =
       P.break 1 ^^ P.break 1
     end ^^
 
-    guard (show_include || Debug_ocaml.get_debug_level () > 1) begin
+    guard (show_include || Cerb_debug.get_debug_level () > 1) begin
       !^ "-- C function types" ^^ P.break 1 ^^
       pp_funinfo file.funinfo
     end ^^

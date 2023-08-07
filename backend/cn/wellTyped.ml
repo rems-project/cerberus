@@ -22,13 +22,9 @@ open Effectful.Make(Typing)
 
 
 
-let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit) m =
-  if LS.equal has expect 
-  then return () 
-  else fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = BT.pp expect}})
 
-let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit) m =
-  ensure_logical_sort loc ~expect has
+let ensure_base_type = Typing.ensure_base_type
+
 
 
 (* let check_bound_l loc s =  *)
@@ -238,10 +234,15 @@ module WIT = struct
                let hint = "Only exponentiation of two constants is allowed" in
                fail (fun ctxt -> {loc; msg = NIA {it = exp_ (t, t'); ctxt; hint}})
             end
-           | ExpNoSMT ->
+           | ExpNoSMT
+           | RemNoSMT
+           | ModNoSMT
+           | XORNoSMT
+           | BWAndNoSMT
+           | BWOrNoSMT ->
               let@ t = check loc Integer t in
               let@ t' = check loc Integer t' in
-              return (exp_no_smt_ (t, t'))
+              return (IT (Binop (arith_op, t, t'), Integer))
            | Rem ->
               let@ simp_ctxt = simp_ctxt () in
               let@ t = check loc Integer t in
@@ -253,10 +254,6 @@ module WIT = struct
               | Some z' ->
                  return (IT (Binop (Rem, t, z_ z'), Integer))
               end
-           | RemNoSMT ->
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              return (IT (Binop (RemNoSMT, t, t'), Integer))
            | Mod ->
               let@ simp_ctxt = simp_ctxt () in
               let@ t = check loc Integer t in
@@ -268,10 +265,6 @@ module WIT = struct
               | Some z' ->
                  return (IT (Binop (Mod, t, z_ z'), Integer))
               end
-           | ModNoSMT ->
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              return (IT (Binop (ModNoSMT, t, t'), Integer))
            | LT ->
               let@ t = infer loc t in
               let@ () = ensure_integer_or_real_type loc t in
@@ -292,10 +285,6 @@ module WIT = struct
               let@ () = ensure_integer_or_real_type loc t in
               let@ t' = check loc (IT.bt t) t' in
               return (IT (Binop (Max, t, t'), IT.bt t))
-           | XORNoSMT ->
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              return (IT (Binop (XORNoSMT, t, t'), BT.Integer))
            | EQ ->
               let@ t = infer loc t in
               let@ t' = check loc (IT.bt t) t' in
@@ -518,6 +507,10 @@ module WIT = struct
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc (BT.of_sct ct) t in
           return (IT (Good (ct, t),BT.Bool))
+       | WrapI (ity, t) ->
+          let@ () = WCT.is_ct loc (Integer ity) in
+          let@ t = check loc Integer t in
+          return (IT (WrapI (ity, t), BT.Integer))
        | Nil -> 
           fail (fun _ -> {loc; msg = Polymorphic_it it_})
        | Cons (t1,t2) ->
@@ -589,10 +582,12 @@ module WIT = struct
          let@ t1 = infer loc t1 in
          pure begin
             let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
-            let@ () = add_c (LC.t_ (IT.def_ name t1)) in
+            let@ () = add_c loc (LC.t_ (IT.def_ name t1)) in
             let@ t2 = infer loc t2 in
             return (IT (Let ((name, t1), t2), IT.bt t2))
             end
+      | Match _ -> failwith "todo"
+      | Constructor _ -> failwith "todo"
 
     and check =
       fun loc ls it ->
@@ -625,9 +620,7 @@ module WRET = struct
 
   let welltyped loc r = 
     let@ spec_iargs = match RET.predicate_name r with
-      | Block _ ->
-         return []
-      | Owned ct ->
+      | Owned (_ct,_init) ->
          return []
       | PName name -> 
          let@ def = Typing.get_resource_predicate_def loc name in
@@ -636,12 +629,11 @@ module WRET = struct
     match r with
     | P p -> 
        let@ pointer = WIT.check loc BT.Loc p.pointer in
-       let@ permission = WIT.check loc BT.Bool p.permission in
        let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
        let@ iargs = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) spec_iargs p.iargs in
-       return (RET.P {name = p.name; pointer; permission; iargs})
+       return (RET.P {name = p.name; pointer; iargs})
     | Q p ->
        (* no need to alpha-rename, because context.ml ensures
           there's no name clashes *)
@@ -660,7 +652,7 @@ module WRET = struct
            fail (fun ctxt -> {loc; msg = NIA {it = p.step; ctxt; hint}})
        in
        let@ () = match p.name with
-         | Owned ct ->
+         | (Owned (ct, _init)) ->
            let sz = Memory.size_of_ctype ct in
            if IT.equal step (IT.int_ sz) then return ()
            else fail (fun _ -> {loc; msg = Generic
@@ -698,9 +690,7 @@ end
 
 
 let oarg_bt_of_pred loc = function
-  | RET.Block _ct -> 
-      return (BT.Unit)
-  | RET.Owned ct -> 
+  | RET.Owned (ct,_init) -> 
       return (BT.of_sct ct)
   | RET.PName pn ->
       let@ def = Typing.get_resource_predicate_def loc pn in
@@ -768,7 +758,7 @@ module WLRT = struct
          (* let s, lrt = LRT.alpha_rename (s, IT.bt it) lrt in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_c (LC.t_ (IT.def_ s it)) in
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it)) in
          let@ lrt = aux lrt in
          return (Define ((s, it), info, lrt))
       | Resource ((s, (re, re_oa_spec)), info, lrt) -> 
@@ -777,12 +767,12 @@ module WLRT = struct
          (* let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
          let@ lrt = aux lrt in
          return (Resource ((s, (re, re_oa_spec)), info, lrt))
       | Constraint (lc, info, lrt) ->
          let@ lc = WLC.welltyped (fst info) lc in
-         let@ () = add_c lc in
+         let@ () = add_c (fst info) lc in
          let@ lrt = aux lrt in
          return (Constraint (lc, info, lrt))
       | I -> 
@@ -840,7 +830,7 @@ module WLAT = struct
          (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_c (LC.t_ (IT.def_ s it)) in
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it)) in
          let@ at = aux at in
          return (LAT.Define ((s, it), info, at))
       | LAT.Resource ((s, (re, re_oa_spec)), info, at) -> 
@@ -849,12 +839,12 @@ module WLAT = struct
          (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
          let@ at = aux at in
          return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
       | LAT.Constraint (lc, info, at) ->
          let@ lc = WLC.welltyped (fst info) lc in
-         let@ () = add_c lc in
+         let@ () = add_c (fst info) lc in
          let@ at = aux at in
          return (LAT.Constraint (lc, info, at))
       | LAT.I i -> 
@@ -938,7 +928,7 @@ module WLArgs = struct
          (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_c (LC.t_ (IT.def_ s it)) in
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it)) in
          let@ at, typ = aux at in
          return (Mu.M_Define ((s, it), info, at), 
                  LAT.Define ((s, it), info, typ))
@@ -948,13 +938,13 @@ module WLArgs = struct
          (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
          let@ at, typ = aux at in
          return (Mu.M_Resource ((s, (re, re_oa_spec)), info, at),
                  LAT.Resource ((s, (re, re_oa_spec)), info, typ))
       | Mu.M_Constraint (lc, info, at) ->
          let@ lc = WLC.welltyped (fst info) lc in
-         let@ () = add_c lc in
+         let@ () = add_c (fst info) lc in
          let@ at, typ = aux at in
          return (Mu.M_Constraint (lc, info, at),
                  LAT.Constraint (lc, info, typ))
@@ -1051,8 +1041,8 @@ module WRPD = struct
                    let@ guard = WIT.check loc BT.Bool guard in
                    let negated_guards = List.map (fun clause -> IT.not_ clause.guard) acc in
                    pure begin 
-                       let@ () = add_c (LC.t_ guard) in
-                       let@ () = add_c (LC.t_ (IT.and_ negated_guards)) in
+                       let@ () = add_c loc (LC.t_ guard) in
+                       let@ () = add_c loc (LC.t_ (IT.and_ negated_guards)) in
                        let@ packing_ft = 
                          WLAT.welltyped IT.subst (fun loc it -> WIT.check loc pd.oarg_bt it)
                            "clause" loc packing_ft

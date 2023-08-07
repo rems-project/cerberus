@@ -96,7 +96,7 @@ let dest : type a. a dest -> CF.GenTypes.genTypeCategory A.statement_ list * CF.
       let return_stmt = A.(AilSreturn (mk_expr e)) in
       s @ [return_stmt]
     | AssignVar x -> 
-      let assign_stmt = A.(AilSdeclaration [(x, mk_expr e)]) in
+      let assign_stmt = A.(AilSdeclaration [(x, Some (mk_expr e))]) in
       s @ [assign_stmt]
     | PassBack -> (s, e)
 
@@ -255,7 +255,7 @@ let rec cn_to_ail_expr_aux
       (* PATTERN COMPILER *)
 
       (* let create_binding sym ctype =  *)
-        (* A.(sym, ((Location_ocaml.unknown, Automatic, false), None, empty_qualifiers, ctype)) *)
+        (* A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype)) *)
       (* in *)
 
 
@@ -365,14 +365,14 @@ let rec cn_to_ail_expr_aux
                             let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 
                             let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in (* TODO: Remove hack *)
                             let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym)) in
-                            let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, mk_expr rhs_memberof)]) in
+                            let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
                             let (_bindings, member_stats) = translate (count + 1) ((CNExpr_var count_sym, record_tp) :: vs) cases' in
                             (* TODO: Add real bindings instead of [] *)
                             let stat_block = A.AilSblock ([], constructor_var_assign :: (List.map mk_stmt member_stats)) in
                             let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym in
-                            let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Location_ocaml.unknown, Sym.pp_string tag_sym); attr_args = []} in
+                            let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, Sym.pp_string tag_sym); attr_args = []} in
                             let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
-                            let ail_case_stmt = A.(AnnotatedStatement (Location_ocaml.unknown, CF.Annot.Attrs [attribute], ail_case)) in
+                            let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
                             ail_case_stmt
                           in 
                           let e1_transformed = transform_switch_expr e1 in
@@ -416,7 +416,7 @@ let rec cn_to_ail_expr_aux
 
     | CNExpr_let (s, e, body) -> 
       let s1, e1 = cn_to_ail_expr_aux const_prop dts e PassBack in
-      let ail_assign = A.(AilSdeclaration [(s, mk_expr e1)]) in
+      let ail_assign = A.(AilSdeclaration [(s, Some (mk_expr e1))]) in
       prefix d (s1 @ [ail_assign]) (cn_to_ail_expr_aux const_prop dts body d)
 
     | CNExpr_deref expr -> 
@@ -519,16 +519,16 @@ let cn_to_ail_function cn_function cn_datatypes =
       List.map mk_stmt ss
     | None -> []
   in
-  (* let var_decls = List.map (fun (sym, decl) -> (sym, (Location_ocaml.unknown, empty_attributes, decl))) var_decls in *)
+  (* let var_decls = List.map (fun (sym, decl) -> (sym, (Cerb_location.unknown, empty_attributes, decl))) var_decls in *)
   let ret_type = cn_to_ail_base_type cn_function.cn_func_return_bty in
   let params = List.map (fun (cn_bt, cn_nm) -> (mk_ctype (cn_to_ail_base_type cn_bt), cn_nm)) cn_function.cn_func_args in
   let (param_types, param_names) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let func_name = cn_function.cn_func_name in
   (* Generating function declaration *)
-  let decl = (func_name, (Location_ocaml.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
+  let decl = (func_name, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (func_name, (Location_ocaml.unknown, 0, empty_attributes, param_names, mk_stmt A.(AilSblock ([], ail_func_body)))) in
+  let def = (func_name, (Cerb_location.unknown, 0, empty_attributes, param_names, mk_stmt A.(AilSblock ([], ail_func_body)))) in
   (decl, def)
 
 let cn_to_ail_assertion assertion cn_datatypes = 

@@ -82,7 +82,7 @@ exception ConversionFailed
 
 let assert_error loc msg = 
   Print.error loc msg []; 
-  if ! Debug_ocaml.debug_level > 0
+  if ! Cerb_debug.debug_level > 0
   then assert false
   else raise ConversionFailed
 
@@ -303,6 +303,10 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEmember_shift(e', sym1, id1) ->
      let e' = n_pexpr loc e' in
      annotate (M_PEmember_shift(e', sym1, id1))
+  | PEmemop(mop, pes) ->
+      (* FIXME(CHERI merge) *)
+      (* this construct is currently only used by the CHERI switch *)
+      assert_error loc !^"PEmemop"
   | PEnot e' -> 
      let e' = n_pexpr loc e' in
      annotate (M_PEnot e')
@@ -525,7 +529,7 @@ let n_paction loc (Paction(pol, a)) =
 
 
 let show_n_memop = 
-  Mem_common.instance_Show_Show_Mem_common_memop_dict.show_method
+  Mem_common.(instance_Show_Show_Mem_common_generic_memop_dict Symbol.instance_Show_Show_Symbol_sym_dict).show_method
 
 let n_memop loc memop pexprs =
   match (memop, pexprs) with
@@ -717,7 +721,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
                ( fun ct -> err ())
-               ( fun sym -> M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym))) )
+               ( function
+                   | None -> (* FIXME(CHERI merge) *)err ()
+                   | Some sym -> M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym))) )
                ( fun _prov _ -> err () )
           | _ -> err ()
           end
@@ -736,9 +742,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e2 = n_expr e2 in
      return (wrap (M_Ewseq(pat, e1, e2)))
   | Esseq(pat, e1, e2) ->
-     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:" (CF.Pp_core_ast.pp_expr e1))) in
+     (* let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:" (CF.Pp_core_ast.pp_expr e1))) in
      let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e2:" (CF.Pp_core_ast.pp_expr e2))) in
-     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. p:" (CF.Pp_core.Basic.pp_pattern pat))) in
+     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. p:" (CF.Pp_core.Basic.pp_pattern pat))) in *)
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
@@ -758,16 +764,16 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                   global_types @
                   Pmap.find marker_id_object_types visible_objects_env 
                 in
-                debug 6 (lazy (!^"CN statement before translation"));
-                debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt)));
+                (* debug 6 (lazy (!^"CN statement before translation"));
+                debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt))); *)
 
                 let@ stmt = 
                   Compile.translate_cn_statement 
                     (fun sym -> List.assoc Sym.equal sym visible_objects) 
                     old_states env desugared_stmt 
                 in
-                debug 6 (lazy (!^"CN statement after translation"));
-                debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt)));
+                (* debug 6 (lazy (!^"CN statement after translation"));
+                debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
                 return (desugared_stmt, stmt)
             ) (get_cerb_magic_attr annots)
           in
@@ -827,7 +833,21 @@ let rec at_of_arguments f_i = function
      AT.L (lat_of_arguments f_i l)
 
 
-
+let rec arguments_of_lat f_i = function
+  | LAT.Define (def, info, lat) ->
+     M_Define (def, info, arguments_of_lat f_i lat)
+  | LAT.Resource (bound, info, lat) ->
+     M_Resource (bound, info, arguments_of_lat f_i lat)
+  | LAT.Constraint (c, info, lat) ->
+     M_Constraint (c, info, arguments_of_lat f_i lat)
+  | LAT.I i -> 
+     M_I (f_i i)
+     
+let rec arguments_of_at f_i = function
+  | AT.Computational (bound, info, at) ->
+     M_Computational (bound, info, arguments_of_at f_i at)
+  | AT.L lat ->
+     M_L (arguments_of_lat f_i lat)
 
 
 
@@ -951,8 +971,29 @@ let make_function_args f_i loc env args (accesses, requires) =
   in
   aux [] [] env (C.LocalState.init_st) args
 
-
-
+let make_fun_with_spec_args f_i loc env args requires =
+  let rec aux good_lcs env st = function
+    | ((cn_bt, pure_arg), ct_ct) :: rest ->
+       let ct = convert_ct loc ct_ct in
+       let sbt = SBT.of_sct ct in
+       let bt = SBT.to_basetype sbt in
+       let sbt2 = C.translate_cn_base_type cn_bt in
+       let@ () = if BT.equal bt (SBT.to_basetype sbt2) then return ()
+         else fail {loc; msg = Generic (!^"Argument-type mismatch between" ^^^
+           (BT.pp bt) ^^^ Print.parens (!^"from" ^^^ Sctypes.pp ct) ^^^ !^ "and" ^^^
+           BT.pp (SBT.to_basetype sbt2))} in
+       let env = C.add_computational pure_arg sbt env in
+       let good_lc =
+         let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
+         (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt))), info)
+       in
+       let@ at = aux (good_lc :: good_lcs) env st rest in
+       return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
+    | [] ->
+       let@ lat = make_largs_with_accesses f_i env st ([], requires) in
+       return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
+  in
+  aux [] env (C.LocalState.init_st) args
 
 
 let desugar_access d_st global_types (loc, id) =
@@ -1077,13 +1118,16 @@ let normalise_label
      end
 
 
-
-
+let add_spec_arg_renames loc args (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec) env =
+  List.fold_right (fun ((fun_sym, bt), (_, spec_sym)) env ->
+      C.add_renamed_computational spec_sym fun_sym (SBT.of_basetype (convert_bt loc bt)) env)
+    (List.combine args spec.cn_spec_args) env
 
 let normalise_fun_map_decl 
       (markers_env, ail_prog) 
       (global_types, visible_objects_env)
       env 
+      fun_specs
       (funinfo: mi_funinfo)
       loop_attributes
       fname
@@ -1114,6 +1158,8 @@ let normalise_fun_map_decl
            return (loc, logical_fun_sym)
          ) mk_functions
      in
+     let defn_spec_sites = List.map fst requires @ List.map fst ensures @
+       List.map fst accesses in
      let@ accesses = ListM.mapM (desugar_access d_st global_types) accesses in
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      Print.debug 6 (lazy (Print.string "desugared requires conds"));
@@ -1124,12 +1170,28 @@ let normalise_fun_map_decl
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
 
+     let@ (spec_req, spec_ens, env) = match SymMap.find_opt fname fun_specs with
+     | Some (_, spec) ->
+        let@ () = match defn_spec_sites with
+          | [] -> return ()
+          | (loc2 :: _) -> fail {loc = loc2; msg = Generic (Sym.pp fname ^^ P.colon ^^^
+              !^"re-specification of CN annotations from:" ^^ P.break 1 ^^^
+              Locations.pp spec.cn_spec_loc)}
+        in
+        let env = add_spec_arg_renames loc args spec env in
+        let env = C.add_renamed_computational spec.cn_spec_ret_name ret_s
+            (SBT.of_sct (convert_ct loc ret_ct)) env in
+        return (spec.cn_spec_requires, spec.cn_spec_ensures, env)
+     | _ -> return ([], [], env)
+     in
+
+     let requires = requires @ spec_req in
+     let ensures = ensures @ spec_ens in
+
      debug 6 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
      debug 6 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
      debug 6 (lazy (pp_doc_tree (dtree_of_requires requires)));
      debug 6 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
-
-
 
      let@ args_and_body = 
        make_function_args (fun arg_states env st ->
@@ -1157,22 +1219,28 @@ let normalise_fun_map_decl
      let desugared_spec = { accesses = List.map snd accesses; requires; ensures } in
 
      return (Some (M_Proc(loc, args_and_body, trusted, desugared_spec), mk_functions))
+
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
-     return None
-     (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)
-     (* let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in *)
-     (* let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st2 in *)
-     (* let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in *)
-     (* let arg_protos = List.mapi (fun i -> function *)
-     (*    | (Some sym, ct) -> (sym, ct) *)
-     (*    | (None, ct) -> (Sym.fresh_named ("default_" ^ Int.to_string i), ct)) arg_cts in *)
-     (* let@ args_and_rt = *)
-     (*   make_args (fun env -> *)
-     (*       make_rt loc env ret ensures *)
-     (*     ) loc env arg_protos requires *)
-     (* in *)
-     (* let ft = at_of_arguments Tools.id args_and_rt in *)
-     (* return (Some (M_ProcDecl(loc, ft))) *)
+     begin match SymMap.find_opt fname fun_specs with
+     | None -> return (Some (M_ProcDecl (loc, None), []))
+     | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
+       assertl loc (BT.equal (convert_bt loc ret_bt)
+                    (BT.of_sct (convert_ct loc ret_ct)))
+         !^"function return type mismatch";
+       (* let@ (requires, d_st2) = desugar_conds d_st spec.cn_spec_requires in *)
+       (* FIXME: do we need to note the return var somehow? *)
+       (* let@ (ensures, _) = desugar_conds d_st spec.cn_spec_ensures in *)
+       let@ args_and_rt = make_fun_with_spec_args (fun env st ->
+           let@ returned =
+             C.make_rt loc env st
+               (spec.cn_spec_ret_name, ret_ct) ([], spec.cn_spec_ensures)
+           in
+           return returned
+         ) loc env (List.combine spec.cn_spec_args (List.map snd arg_cts)) spec.cn_spec_requires
+       in
+       let ft = at_of_arguments Tools.id args_and_rt in
+       return (Some (M_ProcDecl (loc, Some ft), []))
+     end
   | Mi_BuiltinDecl(loc, bt, bts) -> 
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
@@ -1181,6 +1249,7 @@ let normalise_fun_map
       (markers_env, ail_prog)
       (global_types, visible_objects_env)
       env
+      fun_specs
       funinfo
       loop_attributes
       fmap
@@ -1190,7 +1259,7 @@ let normalise_fun_map
       try begin
       let@ r = normalise_fun_map_decl (markers_env, ail_prog) 
                  (global_types, visible_objects_env)
-                 env funinfo loop_attributes fsym fdecl in
+                 env fun_specs funinfo loop_attributes fsym fdecl in
       match r with
       | Some (fdecl, more_mk_functions) ->
          let mk_functions' = 
@@ -1329,16 +1398,24 @@ let normalise_file (markers_env, ail_prog) file =
 
   let env = List.fold_left register_glob env globs in
 
+  let fun_specs_map = List.fold_right (fun (id, spec) acc ->
+      SymMap.add spec.cn_spec_name (id, spec) acc)
+    ail_prog.cn_fun_specs SymMap.empty in
+
   let@ (funs, mk_functions) = 
     normalise_fun_map (markers_env, ail_prog) (global_types, file.mi_visible_objects_env) 
-      env 
-      file.mi_funinfo file.mi_loop_attributes file.mi_funs 
+      env fun_specs_map
+      file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in
 
   let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mk_functions in
 
-  let mu_call_funinfo = Pmap.map (fun (_, _, ret, args, variadic, has_proto) ->
-    (ret, List.map snd args, variadic, has_proto)) file.mi_funinfo in
+  let mu_call_funinfo = Pmap.mapi (fun fsym (_, _, ret, args, variadic, has_proto) ->
+    Sctypes.{ sig_return_ty = ret; sig_arg_tys = List.map snd args;
+      sig_variadic = variadic; sig_has_proto = has_proto;
+    }) file.mi_funinfo in
+
+  let stdlib_syms = SymSet.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
 
   let file = {
       mu_main = file.mi_main;
@@ -1346,6 +1423,7 @@ let normalise_file (markers_env, ail_prog) file =
       mu_globs = globs;
       mu_funs = funs;
       mu_extern = file.mi_extern;
+      mu_stdlib_syms = stdlib_syms;
       mu_resource_predicates = preds;
       mu_logical_predicates = lfuns;
       mu_datatypes = SymMap.bindings env.datatypes;
@@ -1354,86 +1432,136 @@ let normalise_file (markers_env, ail_prog) file =
       mu_call_funinfo = mu_call_funinfo;
     }
   in
+  Print.debug 3 (lazy (Print.headline "done core_to_mucore normalising file"));
   return file
 
 
 
-type instrumentation = {
-    fn: Sym.t;
-    fn_loc: Loc.t;
+type surface = {
     accesses : (Sym.t * Ctype.ctype) list;
     requires: (Sym.t, Ctype.ctype) Cn.cn_condition list;
     ensures: (Sym.t, Ctype.ctype) Cn.cn_condition list;
     statements: (Sym.t, Ctype.ctype) cn_statement list;
   }
 
-  
+type internal = {
+    pre: unit mu_arguments;
+    post: ReturnTypes.t;
+    (* inv: (Loc.t * unit mu_arguments); *) (* TODO *)
+    statements: Cnprog.cn_prog list;
+  }
 
-let collect_instrumentation file =
+type instrumentation = {
+    fn: Sym.t;
+    fn_loc: Loc.t;
+    surface: surface;
+    internal : internal;
+  }
 
-  let rec in_expr (M_Expr (_, _, e_)) =
-    match e_ with
-    | M_Epure _ -> []
-    | M_Ememop _ -> []
-    | M_Eaction _ -> []
-    | M_Eskip -> []
-    | M_Eccall _ -> []
-    | M_Elet (_, _, e) -> in_expr e
-    | M_Eunseq es -> List.concat_map in_expr es
-    | M_Ewseq (_, e1, e2) -> in_expr e1 @ in_expr e2
-    | M_Esseq (_, e1, e2) -> in_expr e1 @ in_expr e2
-    | M_Eif (_, e1, e2) -> in_expr e1 @ in_expr e2
-    | M_Ebound e -> in_expr e
-    | M_End es -> List.concat_map in_expr es
-    | M_Erun _ -> []
-    | M_CN_progs (stmts, _) -> stmts
+
+let concat2 (x : ('a list * 'b list)) (y : ('a list * 'b list)) : 'a list * 'b list =
+  let a1, b1 = x in
+  let a2, b2 = y in
+  (a1 @ a2, b1 @ b2)
+
+let concat2_map (f : 'a -> ('b list * 'c list)) (xs : 'a list) : ('b list * 'c list) =
+  List.fold_right (fun x acc ->
+      concat2 (f x) acc
+    ) xs ([], [])
+
+let rec stmts_in_expr (M_Expr (_, _, e_)) =
+  match e_ with
+  | M_Epure _ -> ([], [])
+  | M_Ememop _ -> ([], [])
+  | M_Eaction _ -> ([], [])
+  | M_Eskip -> ([], [])
+  | M_Eccall _ -> ([], [])
+  | M_Elet (_, _, e) -> stmts_in_expr e
+  | M_Eunseq es -> concat2_map stmts_in_expr es
+  | M_Ewseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | M_Esseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | M_Eif (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | M_Ebound e -> stmts_in_expr e
+  | M_End es -> concat2_map stmts_in_expr es
+  | M_Erun _ -> ([], [])
+  | M_CN_progs (stmts_s, stmts_i) -> (stmts_s, stmts_i)
+
+let rec stmts_in_largs f_i = function
+  | M_Define (_, _, a) -> stmts_in_largs f_i a
+  | M_Resource (_, _, a) -> stmts_in_largs f_i a
+  | M_Constraint (_, _, a) -> stmts_in_largs f_i a
+  | M_I i -> f_i i
+
+let rec stmts_in_args f_i = function
+  | M_Computational (_, _, a) -> stmts_in_args f_i a
+  | M_L a -> stmts_in_largs f_i a
+
+let stmts_in_labels labels = 
+  Pmap.fold (fun s def acc ->
+      match def with
+      | M_Return _ -> acc
+      | M_Label (_, a, _, _) -> concat2 (stmts_in_args stmts_in_expr a) acc
+    ) labels ([], [])
+
+let stmts_in_function args_and_body = 
+  stmts_in_args (fun (body, labels, _rt) ->
+      concat2 (stmts_in_expr body) (stmts_in_labels labels)
+    ) args_and_body
+
+
+let pre_post_of_function args_and_body = 
+
+  let rec of_args_l = function
+    | M_Define (bound, info, a_l) ->
+       let pre, post = of_args_l a_l in
+       (M_Define (bound, info, pre), post)
+    | M_Resource (bound, info, a_l) ->
+       let pre, post = of_args_l a_l in
+       (M_Resource (bound, info, pre), post)
+    | M_Constraint (lc, info, a_l) ->
+       let pre, post = of_args_l a_l in
+       (M_Constraint (lc, info, pre), post)
+    | M_I (_, _labels, rt) ->
+       (M_I (), rt)
   in
 
-  let rec in_largs f_i = function
-    | M_Define (_, _, a) -> in_largs f_i a
-    | M_Resource (_, _, a) -> in_largs f_i a
-    | M_Constraint (_, _, a) -> in_largs f_i a
-    | M_I i -> f_i i
+  let rec of_args = function
+    | M_Computational (bound, info, a) ->
+       let pre, post = of_args a in
+       (M_Computational (bound, info, pre), post)
+    | M_L a_l ->
+       let pre, post = of_args_l a_l in
+       (M_L pre, post)
   in
 
-  let rec in_args f_i = function
-    | M_Computational (_, _, a) -> in_args f_i a
-    | M_L a -> in_largs f_i a
-  in
+  of_args args_and_body
 
-  let in_labels labels = 
-    Pmap.fold (fun s def acc ->
-        match def with
-        | M_Return _ -> acc
-        | M_Label (_, a, _, _) -> in_args in_expr a @ acc
-      ) labels []
-  in
 
-  let in_function = 
-    in_args (fun (body, labels, _rt) ->
-        in_expr body @ in_labels labels
-      )
-  in
 
+let collect_instrumentation (file : _ mu_file) =
   let instrs = 
   Pmap.fold (fun fn decl acc ->
       match decl with
       | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
-         { fn = fn;
-           fn_loc = fn_loc; 
-           accesses = spec.accesses;
-           requires = spec.requires;
-           ensures = spec.ensures;
-           statements = in_function args_and_body
-         } :: acc
+         let stmts_s, stmts_i = stmts_in_function args_and_body in
+         let surface = { 
+             accesses = spec.accesses;
+             requires = spec.requires;
+             ensures = spec.ensures;
+             statements = stmts_s;
+           }
+         in
+         let pre, post = pre_post_of_function args_and_body in
+         let internal = {
+             pre = pre;
+             post = post;
+             statements = stmts_i;
+           } 
+         in
+         { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
       | M_ProcDecl (fn_loc, _ft) ->
-         { fn = fn;
-           fn_loc = fn_loc;
-           accesses = [];
-           requires = [];
-           ensures = [];
-           statements = [];
-         } :: acc
+         failwith "todo: support function prototypes"
     ) file.mu_funs []
    in
    (instrs, C.symtable)
+

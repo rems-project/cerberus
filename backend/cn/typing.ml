@@ -3,6 +3,7 @@ module IT = IndexTerms
 module ITSet = Set.Make(IT)
 module SymMap = Map.Make(Sym)
 module RET = ResourceTypes
+module RE = Resources
 open TypeErrors
 
 
@@ -14,6 +15,7 @@ type s = {
     past_models : (Solver.model_with_q * Context.t) list;
     step_trace : Trace.t;
     found_equalities : EqTable.table;
+    movable_indices: (RET.predicate_name * IT.t) list;
   }
 
 type 'a t = s -> ('a * s, TypeErrors.t) Result.t
@@ -33,6 +35,7 @@ let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
       past_models = []; 
       step_trace = Trace.empty;
       found_equalities = EqTable.empty;
+      movable_indices = [];
     } 
   in
   let outcome = m s in
@@ -78,13 +81,13 @@ let pure (m : ('a) t) : ('a) t =
   outcome
 
 
-(* not clear whether Effectful.Make should be used here instead *)
-let rec iterM f xs = match xs with
-  | [] -> return ()
-  | x :: xs ->
-    let@ () = f x in
-    iterM f xs
+module Eff = Effectful.Make(struct
+  type 'a m = 'a t
+  let bind = bind
+  let return = return
+  end)
 
+let iterM = Eff.ListM.iterM
 
 
 let get_models () = fun s -> Ok (s.past_models, s)
@@ -277,7 +280,7 @@ let add_found_equalities lc =
   upd_found_eqs (EqTable.add_lc_eqs eqs lc)
 
 
-let add_c lc = 
+let add_c_internal lc = 
   let@ _ = drop_models () in
   let@ s = get () in
   let@ solver = solver () in
@@ -288,65 +291,184 @@ let add_c lc =
   let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
   let@ _ = add_equalities (List.filter_map LC.is_equality [lc]) in
   let@ _ = add_found_equalities lc in
-  set s
-
-let add_cs = iterM add_c
-
-
-
-
-let add_r (r, RE.O oargs) = 
+  let@ () = set s in
+  return ()
+  
+let add_r_internal loc (r, RE.O oargs) =
   let@ s = get () in
   let@ simp_ctxt = simp_ctxt () in
-  match Simplify.ResourceTypes.simp_or_empty simp_ctxt r with
-  | None -> return ()
-  | Some r ->
-    let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
-    set (Context.add_r (r, O oargs) s)
-
-let add_rs = iterM add_r
-
-
+  let r = Simplify.ResourceTypes.simp simp_ctxt r in
+  let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
+  set (Context.add_r loc (r, O oargs) s)  
+  
+  
 type changed = 
   | Deleted
   | Unchanged
-  | Unfolded of RE.t list
   | Changed of RE.t
 
-let map_and_fold_resources_adj loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) =
-  fun s ->
-  let provable = make_provable loc s in
-  let (resources, orig_ix) = s.typing_context.resources in
-  let resources, ix, acc =
-    List.fold_right (fun (re, i) (resources, ix, acc) ->
+  
+
+  
+let map_and_fold_resources loc
+    (f : RE.t -> 'acc -> changed * 'acc)
+    (acc : 'acc) =
+  let@ s = get () in
+  let@ provable_f = provable loc in
+  let (resources, orig_ix) = s.resources in
+  let orig_hist = s.resource_history in
+  let resources, ix, hist, changed_or_deleted, acc =
+    List.fold_right (fun (re, i) (resources, ix, hist, changed_or_deleted, acc) ->
         let (changed, acc) = f re acc in
         match changed with
         | Deleted ->
-           (resources, ix, acc)
-        | Unchanged -> 
-           ((re, i) :: resources, ix, acc)
-        | Unfolded res ->
-           let tagged = List.mapi (fun j re -> (re, ix + j)) res in
-           (tagged @ resources, ix + List.length res, acc)
+           let (ix, hist) = Context.res_written loc i "deleted" (ix, hist) in
+           (resources, ix, hist, i::changed_or_deleted, acc)
+        | Unchanged ->
+           ((re, i) :: resources, ix, hist, changed_or_deleted, acc)
         | Changed re ->
-           match re with
+           let (ix, hist) = Context.res_written loc i "changed" (ix, hist) in
+           begin match re with
            | (Q {q; permission; _}, _) ->
-              begin match provable (LC.forall_ (q, Integer) (IT.not_ permission)) with
-              | `True -> (resources, ix, acc)
-              | `False -> ((re, ix) :: resources, ix + 1, acc)
+              begin match provable_f (LC.forall_ (q, Integer) (IT.not_ permission)) with
+              | `True -> (resources, ix, hist, i::changed_or_deleted, acc)
+              | `False ->
+                 let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in
+                 ((re, ix) :: resources, ix + 1, hist, i::changed_or_deleted, acc)
               end
            | _ -> 
-              ((re, ix) :: resources, ix + 1, acc)
-      ) resources ([], orig_ix, acc)
+              let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in
+              ((re, ix) :: resources, ix + 1, hist, i::changed_or_deleted, acc)
+           end
+      ) resources ([], orig_ix, orig_hist, [], acc)
   in
-  Ok ((acc, orig_ix),
-    {s with typing_context = {s.typing_context with resources = (resources, ix)}})
+  let@ () = set {s with resources = (resources, ix); resource_history = hist} in
+  return (acc, changed_or_deleted)  
+  
+
+
+  
+let ensure_logical_sort (loc : Loc.loc) ~(expect : LS.t) (has : LS.t) : (unit) m =
+  if LS.equal has expect 
+  then return () 
+  else fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = BT.pp expect}})
+
+let ensure_base_type (loc : Loc.loc) ~(expect : BT.t) (has : BT.t) : (unit) m =
+  ensure_logical_sort loc ~expect has  
+
+
+let make_return_record loc (record_name:string) record_members = 
+  let record_s = Sym.fresh_make_uniq record_name in
+  (* let record_s = Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation) in *)
+  let record_bt = BT.Record record_members in
+  let@ () = add_l record_s record_bt (loc, lazy (Sym.pp record_s)) in
+  let record_it = IT.sym_ (record_s, record_bt) in
+  let member_its = 
+    List.map (fun (s, member_bt) -> 
+        IT.recordMember_ ~member_bt (record_it, s)
+      ) record_members 
+  in
+  return (record_it, member_its)
 
 
 
-let map_and_fold_resources loc f acc =
-  let@ (acc, orig_ix) = map_and_fold_resources_adj loc f acc in
-  return acc
+  
+
+
+(* This essentially pattern-matches a logical return type against a
+   record pattern. `record_it` is the index term for the record,
+   `members` the pattern for its members. *)
+let bind_logical_return_internal loc = 
+  let rec aux members lrt = 
+    match members, lrt with
+    | member :: members, 
+      LogicalReturnTypes.Define ((s, it), _, lrt) ->
+       let@ () = ensure_base_type loc ~expect:(IT.bt it) (IT.bt member) in
+       let@ () = add_c_internal (LC.t_ (IT.eq__ member it)) in
+       aux members (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt)
+    | member :: members,
+      Resource ((s, (re, bt)), _, lrt) -> 
+       let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
+       let@ () = add_r_internal loc (re, RE.O member) in
+       aux members (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt)
+    | members,
+      Constraint (lc, _, lrt) -> 
+       let@ () = add_c_internal lc in
+       aux members lrt
+    | [],
+      I -> 
+       return ()
+    | _ ->
+       assert false
+  in
+  fun members lrt -> aux members lrt
+
+let get_movable_indices () = 
+  fun s ->
+  Ok (s.movable_indices, s)  
+  
+
+(* copying and adjusting map_and_fold_resources *)
+let unfold_resources loc = 
+  let rec aux () =
+    let@ s = get () in
+    let@ movable_indices = get_movable_indices () in
+    let@ provable_f = provable Locations.unknown in
+    let (resources, orig_ix) = s.resources in
+    let _orig_hist = s.resource_history in
+    match provable_f (LC.t_ (IT.bool_ false)) with
+    | `True -> return ()
+    | `False ->
+    let keep, unpack, extract =
+      List.fold_right (fun (re, i) (keep, unpack, extract) ->
+          match Pack.unpack loc s.global provable_f re with
+          | Some unpackable -> 
+              let pname = RET.pp_predicate_name (RET.predicate_name (fst re)) in
+              (keep, (i, pname, unpackable) :: unpack, extract)
+          | None -> 
+              let re_reduced, extracted =
+                Pack.extractable_multiple loc provable_f movable_indices re in
+              let keep' = match extracted with
+               | [] -> (re_reduced, i) :: keep
+               | _ ->
+                  match Pack.resource_empty provable_f re_reduced with
+                  | `Empty -> keep
+                  | `NonEmpty _ -> (re_reduced, i) :: keep
+              in
+              (keep', unpack, extracted @ extract)
+        ) resources ([], [], [])
+    in
+    let@ () = set {s with resources = (keep, orig_ix)} in
+    let do_unpack = function
+      | (_i, pname, `LRT lrt) ->
+          let@ _, members = make_return_record loc ("unpack_" ^ Pp.plain pname) (LogicalReturnTypes.binders lrt) in
+          bind_logical_return_internal loc members lrt
+      | (_i, _pname, `RES res) ->
+          iterM (add_r_internal loc) res
+    in
+    let@ () = iterM do_unpack unpack in
+    let@ () = iterM (add_r_internal loc) extract in
+    match unpack, extract with
+    | [], [] -> return ()
+    | _ -> 
+      aux () 
+  in
+  aux ()
+
+
+
+
+
+
+
+
+
+let res_history i =
+  let@ s = get () in
+  return (Context.res_history s i)
+
+
+
 
 let get_loc_trace () =
   let@ c = get () in
@@ -529,3 +651,50 @@ let embed_resultat (m : ('a) Resultat.t) : ('a) m =
   match m with
   | Ok r -> Ok (r , s)
   | Error e -> Error e
+
+
+let add_movable_index_internal e : unit m =
+  fun s ->
+  Ok ((), {s with movable_indices = e :: s.movable_indices})
+
+
+let add_movable_index loc e = 
+  let@ () = add_movable_index_internal e in
+  unfold_resources loc
+
+let add_r loc re = 
+   let@ () = add_r_internal loc re in
+   unfold_resources loc
+
+let add_rs loc rs =
+  let@ () = iterM (add_r_internal loc) rs in
+  unfold_resources loc
+
+let add_c loc c =
+  let@ () = add_c_internal c in
+  unfold_resources loc
+
+let add_cs loc cs = 
+  let@ () = iterM add_c_internal cs in
+  unfold_resources loc
+  
+
+let bind_logical_return loc members lrt = 
+  let@ () = bind_logical_return_internal loc members lrt in
+  unfold_resources loc
+
+(* Same for return types *)
+let bind_return loc members (rt : ReturnTypes.t) =
+  match members, rt with
+  | member :: members,
+    Computational ((s, bt), _, lrt) ->
+     let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
+     let@ () = bind_logical_return loc members 
+                 (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt) in
+     return member
+  | _ ->
+     assert false
+
+
+  
+

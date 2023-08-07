@@ -68,7 +68,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         sizeof ~tagDefs atom_ty
     | Struct tag_sym ->
         (* TODO: need to add trailing padding for structs with a flexible array member *)
-        Debug_ocaml.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
+        Cerb_debug.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
         let (_, max_offset) = offsetsof tagDefs tag_sym in
         let align = alignof ~tagDefs cty in
         let x = max_offset mod align in
@@ -198,6 +198,8 @@ let ity_max ity =
           | Wint_t (* TODO *)
           | Signed _ ->
               signed_max
+          |  Ptraddr_t ->
+              unsigned_max
           | Enum _ ->
               (* TODO: hack, assuming like int *)
               sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
@@ -229,6 +231,7 @@ let ity_min ity =
           | None ->
               failwith "the VIP memory model requires a complete implementation MIN"
         end
+    | Ptraddr_t -> zero
     | Enum _ ->
         (* TODO: hack, assuming like int *)
         negate (pow_int (of_int 2) (8*4-1))

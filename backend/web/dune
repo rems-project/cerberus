@@ -12,7 +12,7 @@
  (flags (:standard -w -27))
  (modules instance)
  (libraries str lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_concrete util instance_api))
+  cerb_frontend cerb_backend mem_concrete cerb_util instance_api))
 
 (executable
  (name instance_vip)
@@ -21,7 +21,7 @@
  (flags (:standard -w -27))
  (modules instance_vip)
  (libraries str lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_vip util instance_api))
+  cerb_frontend cerb_backend mem_vip cerb_util instance_api))
 
 (executable
  (name instance_symbolic)
@@ -30,16 +30,16 @@
  (flags (:standard -w -27))
  (modules instance_symbolic)
  (libraries str lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_symbolic util instance_api))
+  cerb_frontend cerb_backend mem_symbolic cerb_util instance_api))
 
 (executable
  (name web)
  (public_name web)
  (package cerberus-web)
- (flags (:standard -w -27))
+ (flags (:standard -w -27-69))
  (modules web)
- (libraries lwt cohttp-lwt-unix ezgzip fpath
-  cerb_frontend cerb_backend mem_concrete util instance_api))
+ (libraries str lwt cohttp-lwt-unix ezgzip fpath
+  cerb_frontend cerb_backend mem_concrete cerb_util instance_api))
 
 (rule
  (target instance_symbolic.ml)

@@ -1,7 +1,7 @@
 open Core
 open Milicore
 open List
-open Pp_prelude
+open Cerb_pp_prelude
 open PPrint
 
 let inline_label oannots (label_sym, label_arg_syms_bts, label_body) args =
@@ -60,7 +60,7 @@ let rewrite_expr label expr =
 
 (* todo: ensure CN does not loop when inlining *)
 let should_be_inlined annots = 
-  let warn lk = Debug_ocaml.warn [] (fun () -> "inlining"^lk^"label") in
+  let warn lk = Cerb_debug.warn [] (fun () -> "inlining"^lk^"label") in
   match Annot.get_label_annot annots with
   | Some (LAloop_break _) -> true
   | Some (LAloop_continue _) -> true

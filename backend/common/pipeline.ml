@@ -1,7 +1,5 @@
 open Cerb_frontend
-open Global_ocaml
-
-external terminal_size: unit -> (int * int) option = "terminal_size"
+open Cerb_global
 
 (* Pipeline *)
 
@@ -22,16 +20,16 @@ let run_pp ?(remove_path = true) with_ext doc =
          (true, Stdlib.open_out filename)
       | None ->
           (false, Stdlib.stdout) in
-  let saved = !Colour.do_colour in
-  Colour.do_colour := not is_fout;
-  let term_col = match terminal_size () with
+  let saved = !Cerb_colour.do_colour in
+  Cerb_colour.do_colour := not is_fout;
+  let term_col = match Cerb_util.terminal_size () with
     | Some (_, col) -> col
     | _ -> 80
   in
   PPrint.ToChannel.pretty 1.0 term_col oc doc;
   if is_fout then
     close_out oc;
-  Colour.do_colour := saved
+  Cerb_colour.do_colour := saved
 
 (* The path to the Core standard library *)
 let core_stdlib_path () =
@@ -39,7 +37,9 @@ let core_stdlib_path () =
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
-  let filepath = Filename.concat (core_stdlib_path ()) "std.core" in
+  let filename =
+      if Switches.(has_switch SW_inner_arg_temps) then "std_inner_arg_temps.core" else "std.core" in
+  let filepath = Filename.concat (core_stdlib_path ()) filename in
   if not (Sys.file_exists filepath) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
@@ -93,8 +93,38 @@ type io_helpers = {
   run_pp: (string * string) option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
   print_endline: string -> (unit, Errors.error) Exception.exceptM;
   print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
-  warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
+  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
+
+let (default_io_helpers, get_progress) =
+  let progress = ref 0 in
+  { pass_message = begin
+        let ref = ref 0 in
+        fun str -> Cerb_debug.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
+                   incr ref;
+                   return ()
+      end;
+    set_progress = begin
+      fun _   -> incr progress;
+                 return ()
+      end;
+    run_pp = begin
+      fun opts doc -> run_pp opts doc;
+                      return ()
+      end;
+    print_endline = begin
+      fun str -> print_endline str;
+                 return ();
+      end;
+    print_debug = begin
+      fun n mk_str -> Cerb_debug.print_debug n [] mk_str;
+                      return ()
+      end;
+    warn = begin
+      fun ?(always=false) mk_str -> Cerb_debug.warn ~always [] mk_str;
+                                    return ()
+      end;
+  }, fun () -> !progress
 
 let cpp (conf, io) ~filename =
   io.print_debug 5 (fun () -> "C prepocessor") >>= fun () ->
@@ -136,13 +166,13 @@ let cpp (conf, io) ~filename =
     | _, WSIGNALED n
     | _, WSTOPPED n ->
       if n <> 0 then
-        Exception.fail (Location_ocaml.unknown, Errors.CPP (String.concat "\n" err))
+        Exception.fail (Cerb_location.unknown, Errors.CPP (String.concat "\n" err))
       else
         return @@ String.concat "\n" out
   end ()
 
 let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
-  Fresh.set_digest filename;
+  Cerb_fresh.set_digest filename;
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
   let parse filename file_content =
@@ -199,6 +229,10 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
   parse filename file_content >>= fun cabs_tunit              ->
   desugar cabs_tunit          >>= fun (markers_env, ail_prog) ->
   ail_typechecking ail_prog   >>= fun ailtau_prog             ->
+  return (cabs_tunit, (markers_env, ailtau_prog))
+
+let c_frontend_and_elaboration ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
+  c_frontend ~cnnames (conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
   (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
      used more than once, we need to do reset here *)
   (* TODO(someday): find a better way *)
@@ -209,7 +243,7 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
   return (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
-  Fresh.set_digest filename;
+  Cerb_fresh.set_digest filename;
   io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
@@ -313,6 +347,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           PEarray_shift (untype_pexpr pe1, ty, untype_pexpr pe2)
       | PEmember_shift (pe1, tag_sym, membr_ident) ->
           PEmember_shift (untype_pexpr pe1, tag_sym, membr_ident)
+      | PEmemop (mop, pes) ->
+          PEmemop (mop, List.map untype_pexpr pes)
       | PEnot pe ->
           PEnot (untype_pexpr pe)
       | PEop (binop, pe1, pe2) ->
@@ -515,7 +551,6 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
     let open Core in
     D.drive core_file ("cmdname" :: args) fs_state driver_conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
-          (* TODO: yuck *)
           return (Either.Right begin
             match Mem.eval_integer_value ival with
               | Some n ->
@@ -523,11 +558,11 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
                     Z.to_int n
                   with
                     | Z.Overflow ->
-                        Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                        Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
                         Z .(to_int (n mod (of_int 256)))
                   end 
               | None ->
-                  Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
+                  Cerb_debug.warn [] (fun () -> "Return value was not a (simple) specified integer");
                   0
           end)
       | (cval :: _) ->
@@ -547,9 +582,9 @@ type 'a core_dump =
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
     dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
-    dump_funinfo: (Symbol.sym * (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
+    dump_funinfo: (Symbol.sym * (Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
     dump_loop_attributes: (int * Annot.attributes) list;
-  }
+  } [@@warning "-unused-field"]
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
   if d1 = d2 then compare n1 n2
@@ -561,12 +596,19 @@ let cabsid_compare (Symbol.Identifier (_, s1)) (Symbol.Identifier (_, s2)) =
 let map_from_assoc compare =
   List.fold_left (fun acc (k, v) -> Pmap.add k v acc) (Pmap.empty compare)
 
+let version_info =
+  Printf.sprintf "ocaml:%s+cerb:%s+mem:%s"
+    (Sys.ocaml_version)
+    (Version.version)
+    (Impl_mem.name)
+
 let read_core_object (core_stdlib, core_impl) fname =
   let open Core in
   let ic = open_in_bin fname in
   let v = input_line ic in
-  if v <> Version.version then
-    Debug_ocaml.warn [] (fun () -> "WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
+  if v <> version_info
+  then
+    Cerb_debug.warn [] (fun () -> "read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;
   { main=    dump.main;
@@ -594,7 +636,7 @@ let write_core_object core_file fname =
     }
   in
   let oc = open_out_bin fname in
-  output_string oc (Version.version ^ "+" ^ Impl_mem.name ^ "\n");
+  output_string oc (version_info ^ "\n");
   Marshal.to_channel oc dump [];
   close_out oc
 

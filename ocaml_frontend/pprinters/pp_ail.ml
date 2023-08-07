@@ -5,7 +5,7 @@ open AilSyntax
 open Ctype
 open GenTypes
 
-open Colour
+open Cerb_colour
 
 open Pp_ail_raw
 
@@ -100,7 +100,6 @@ let pp_storageDuration = function
   | Static    -> pp_keyword "static"
   | Thread    -> pp_keyword "thread"
   | Automatic -> pp_keyword "automatic"
-  | Allocated -> pp_keyword "allocated"
 
 
 let pp_cond switch str =
@@ -174,6 +173,8 @@ let pp_integerType ?(executable_spec=false) = function
      pp_type_keyword "wint_t"
  | Ptrdiff_t ->
      pp_type_keyword "ptrdiff_t"
+ | Ptraddr_t ->
+     pp_type_keyword "ptraddr_t"
  | Signed ibty ->
      pp_type_keyword "signed" ^^^ !^ (string_of_integerBaseType ibty)
  | Unsigned ibty ->
@@ -199,6 +200,8 @@ let macro_string_of_integerType = function
      "WINT"
  | Ptrdiff_t ->
      "PTRDIFF"
+ | Ptraddr_t ->
+     "PTRADDR"
  | Enum sym ->
      (* NOTE: this is hackish, these don't exists in C11 *)
      "ENUM_" ^ Pp_symbol.to_string_pretty sym
@@ -479,6 +482,17 @@ let pp_ail_builtin = function
     end
   | AilBcopy_alloc_id ->
       !^"copy_alloc_id"
+  | AilBCHERI str ->
+      !^ str
+
+let pp_alignment = function
+  | AlignInteger n ->
+      pp_keyword "_Alignas" ^^ P.parens (!^ (String_nat_big_num.string_of_decimal n))
+  | AlignType ty ->
+      pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
+
+let pp_alignment_opt align_opt =
+  P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
 
 let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
   let rec pp ?(executable_spec=false) p (AnnotatedExpression (annot, _, loc, expr)) =
@@ -508,7 +522,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEcond (e1, Some e2, e3) ->
             P.group (pp ~executable_spec e1 ^^^ P.qmark ^^^ pp ~executable_spec e2 ^^^ P.colon ^^^ pp ~executable_spec e3)
         | AilEcast (qs, ty, e) ->
-            if !Debug_ocaml.debug_level > 5 then
+            if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
               P.parens (pp_ctype_human qs ty) ^^^ pp ~executable_spec e
             else
@@ -553,7 +567,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEident x ->
             pp_id ~executable_spec x
         | AilEsizeof (qs, ty) ->
-            if !Debug_ocaml.debug_level > 5 then
+            if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
               pp_keyword "sizeof" ^^ P.parens (pp_ctype_human qs ty)
             else
@@ -561,7 +575,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEsizeof_expr e ->
             pp_keyword "sizeof" ^^^ pp ~executable_spec e
         | AilEalignof (qs, ty) ->
-            if !Debug_ocaml.debug_level > 5 then
+            if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
               pp_keyword "_Alignof" ^^ P.parens (pp_ctype_human qs ty)
             else
@@ -592,17 +606,13 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
             pp_ail_keyword "array_decay" ^^ P.parens (pp ~executable_spec e)
         | AilEfunction_decay e ->
             pp_ail_keyword "function_decay" ^^ P.parens (pp ~executable_spec e)
+        | AilEatomic e ->
+            pp_ail_keyword "atomic" ^^ P.parens (pp ~executable_spec e)
         
         | AilEprint_type e ->
-(*            if !Debug_ocaml.debug_level > 5 then
-*)
               pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp ~executable_spec e)
-(*
-            else
-              pp e
-*)
-        | AilEgcc_statement ->
-            pp_keyword "gcc_statement" (* TODO *)
+        | AilEgcc_statement (bs, ss) ->
+            P.parens (pp_statement_aux ~executable_spec mk_pp_annot ~bs:[] (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
       )) in
   pp ~executable_spec None a_expr
 
@@ -613,8 +623,8 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-let rec pp_statement_aux ?(executable_spec=false) pp_annot (AnnotatedStatement (_, Annot.Attrs attrs, stmt_)) =
-  let pp_statement ?(executable_spec=false) ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
+and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (_, Annot.Attrs attrs, stmt_)) =
+  let pp_statement ?(executable_spec=false) ?(is_control=false) ?(bs=bs) (AnnotatedStatement (_, _, stmt_) as stmt) =
     begin match stmt_ with
       | AilSblock _ ->
           P.empty
@@ -624,7 +634,7 @@ let rec pp_statement_aux ?(executable_spec=false) pp_annot (AnnotatedStatement (
           else
             P.empty
     end ^^
-    pp_statement_aux ~executable_spec pp_annot stmt in
+    pp_statement_aux ~executable_spec pp_annot ~bs stmt in
   let executable_spec_pp_statement = fun s -> pp_statement ~executable_spec s in
   match stmt_ with
     | AilSskip ->
@@ -640,22 +650,7 @@ let rec pp_statement_aux ?(executable_spec=false) pp_annot (AnnotatedStatement (
         P.rbrace
     | AilSblock (bindings, ss) ->
         let block =
-          P.separate_map
-            (P.semi ^^ P.break 1)
-            (fun (id, (dur_reg_opt,  _align, qs, ty)) ->
-              if !Debug_ocaml.debug_level > 5 then
-                (* printing the types in a human readable format *)
-                P.parens ( P.empty
-                             (* TODO
-                  P.optional (fun (dur, isRegister) ->
-                    (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-                      (pp_storageDuration dur)
-                  ) dur_reg_opt ^^^ pp_ctype_human qs ty
-                ) ^^^ pp_id_obj id *) )
-              else
-                pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
-               ) bindings ^^ P.semi ^^ P.break 1 ^^
-          P.separate_map (P.break 1) executable_spec_pp_statement ss in
+          P.separate_map (P.break 1) (pp_statement ~executable_spec ~bs:(bindings@bs)) ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
         (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
     | AilSif (e, s1, s2) ->
@@ -697,12 +692,18 @@ let rec pp_statement_aux ?(executable_spec=false) pp_annot (AnnotatedStatement (
         pp_keyword "goto" ^^^ pp_id_label ~executable_spec l ^^ P.semi
     | AilSdeclaration [] ->
         pp_comment "// empty decl"
-    (* TODO: looks odd *)
     | AilSdeclaration defs ->
-        comma_list (fun (id, e) -> pp_id_obj ~executable_spec id ^^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) defs ^^
-        P.semi ^^^ 
-        if executable_spec then P.empty else
-        pp_comment "// decl"
+        comma_list (fun (id, e_opt) ->
+          begin match List.assoc_opt id bs with
+            | Some (_, align_opt, qs, ty) ->
+                pp_alignment_opt align_opt ^^
+                pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
+            | None ->
+                !^ "BINDING_NO_FOUND"
+          end
+          (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) e_opt
+        ) defs ^^
+        P.semi
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) executable_spec_pp_statement ss
@@ -805,7 +806,7 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
           ) ^^
           P.hardline ^^
           
-          (if !Debug_ocaml.debug_level > 5 then
+          (if !Cerb_debug.debug_level > 5 then
             (* printing the types in a human readable format *)
             pp_id_obj ~executable_spec sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
           else
@@ -831,7 +832,7 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
             (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
               begin
-                if !Debug_ocaml.debug_level > 5 then
+                if !Cerb_debug.debug_level > 5 then
                   (* printing the types in a human readable format *)
                   pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
                 else
@@ -841,7 +842,7 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
                 | Some (_, _, _, param_syms, stmt) ->
                     P.parens (
                       comma_list (fun (sym, (qs, ty, isRegister)) ->
-                        if !Debug_ocaml.debug_level > 5 then
+                        if !Cerb_debug.debug_level > 5 then
                           (* printing the types in a human readable format *)
                           pp_id_obj sym ^^ P.colon ^^^
                           P.parens (
@@ -856,11 +857,11 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
                       else
                         P.empty
                     ) ^^^ P.break 1 ^^
-                    pp_statement_aux ~executable_spec pp_annot stmt
+                    pp_statement_aux ~executable_spec pp_annot ~bs:[] stmt
                 | None ->
                     P.parens (
                       comma_list (fun (qs, ty, isRegister) ->
-                        if !Debug_ocaml.debug_level > 5 then
+                        if !Cerb_debug.debug_level > 5 then
                           (* printing the types in a human readable format *)
                           P.parens (
                             (fun z -> if isRegister then !^ "register" ^^^ z else z)
@@ -889,6 +890,8 @@ let rec pp_genIntegerType = function
       !^ "size_t"
   | PtrdiffT ->
       !^ "ptrdiff_t"
+  | PtraddrT ->
+      !^ "ptraddr_t"
   | Unknown iCst ->
       !^ "unknown constant" ^^^ P.brackets (pp_integerConstant iCst)
   | Promote gity ->
@@ -902,7 +905,7 @@ let pp_genBasicType = function
   | GenFloating fty ->
       pp_floatingType fty
 
-let pp_genType = function
+let rec pp_genType = function
   | GenVoid ->
       !^ "void"
   | GenBasic gbty ->
@@ -920,8 +923,8 @@ let pp_genType = function
       !^ "struct" ^^^ pp_id ~is_human:true tag_sym
   | GenUnion tag_sym ->
       !^ "union" ^^^ pp_id ~is_human:true tag_sym
-  | GenAtomic ty ->
-      !^ "atomic" ^^^ pp_ctype ~is_human:true no_qualifiers ty
+  | GenAtomic gty ->
+      !^ "atomic" ^^^ pp_genType gty
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->
@@ -933,7 +936,7 @@ let pp_genTypeCategory = function
 
 let pp_expression ?(executable_spec=false) e = pp_expression_aux ~executable_spec (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
-let pp_statement ?(executable_spec=false) s = pp_statement_aux ~executable_spec (fun _ d -> d) s
+let pp_statement ?(executable_spec=false) s = pp_statement_aux ~executable_spec (fun _ d -> d) ~bs:[] s
 
 
 
@@ -945,11 +948,11 @@ let _pp_annot gtc doc =
         P.parens (!^ "/*" ^^^ pp_genType gty ^^^ !^ "*/" ^^^ doc)
 
 let filter_external_decl (id, sigma) =
-  let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in
+  let pred (_, (loc, _, _)) = Cerb_location.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
 let pp_program ?(executable_spec=false) do_colour show_include ail_prog =
-  Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
+  Cerb_colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
   pp_program_aux ~executable_spec (fun _ doc -> doc) filtered_ail_prog
 

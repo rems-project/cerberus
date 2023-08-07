@@ -1,7 +1,7 @@
 open Lwt
 open Cohttp_lwt_unix
 open Instance_api
-open Util
+open Cerb_util
 
 (* Web server configuration *)
 
@@ -169,7 +169,7 @@ let write_tmp_file content =
     Debug.warn "Error when writing the contents in disk.";
     failwith "write_tmp_file"
 
-let string_of_doc d =
+let _string_of_doc d =
   let buf = Buffer.create 1024 in
   PPrint.ToBuffer.pretty 1.0 80 buf d;
   Buffer.contents buf
@@ -322,7 +322,7 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
       | `Error (loc_opt, reason) ->
         `Assoc [("kind", `String "error");
                 ("reason", `String reason);
-                ("loc", Json.of_option Location_ocaml.to_json loc_opt)]
+                ("loc", Cerb_json.of_option Cerb_location.to_json loc_opt)]
       | `Branch ->
         `Assoc [("kind", `String "branch")]
       | `Step args ->
@@ -333,8 +333,8 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   in
   let json_of_node n =
     let json_of_loc (loc, uid) =
-      `Assoc [("c", Location_ocaml.to_json loc);
-              ("core", Json.of_opt_string uid) ]
+      `Assoc [("c", Cerb_location.to_json loc);
+              ("core", Cerb_json.of_opt_string uid) ]
     in
     `Assoc [("id", `Int n.node_id);
             ("info", json_of_info n.node_info);
@@ -381,14 +381,14 @@ let json_of_result = function
     `Assoc [
       ("status", `String "elaboration");
       ("pp", `Assoc [
-          ("cabs", Json.of_opt_string r.pp.cabs);
-          ("ail",  Json.of_opt_string r.pp.ail);
-          ("core", Json.of_opt_string r.pp.core);
+          ("cabs", Cerb_json.of_opt_string r.pp.cabs);
+          ("ail",  Cerb_json.of_opt_string r.pp.ail);
+          ("core", Cerb_json.of_opt_string r.pp.core);
         ]);
       ("ast", `Assoc [
-          ("cabs", Json.of_opt_string r.ast.cabs);
-          ("ail",  Json.of_opt_string r.ast.ail);
-          ("core", Json.of_opt_string r.ast.core);
+          ("cabs", Cerb_json.of_opt_string r.ast.cabs);
+          ("ail",  Cerb_json.of_opt_string r.ast.ail);
+          ("core", Cerb_json.of_opt_string r.ast.core);
         ]);
       ("locs", json_of_locs r.locs);
       ("console", `String "");
@@ -414,7 +414,7 @@ let json_of_result = function
       ("steps", json_of_exec_tree t);
       ("activeId", `Int activeId);
       ("status", `String "stepping");
-      ("result", Json.of_opt_string res);
+      ("result", Cerb_json.of_opt_string res);
     ]
   | BMC (`Unsatisfiable (res, dots) | `Satisfiable (res, dots)) ->
     `Assoc [
@@ -771,7 +771,7 @@ let post ~conf ~rheader ~flow uri path content =
 
 let parse_req_header header =
   let get k = match Cohttp.Header.get header k with Some v -> v | None -> "" in
-  { accept_gzip= contains (get "accept-encoding") "gzip";
+  { accept_gzip= starts_with ~prefix:"gzip" (get "accept-encoding");
     if_none_match= get "if-none-match";
     referer= get "referer";
     user_agent= get "user-agent";
@@ -798,7 +798,7 @@ let request ~conf (flow, conn) req body =
   begin
     let try_with () =
       let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
-        | Some enc -> contains enc "gzip"
+        | Some enc -> starts_with ~prefix:"gzip" enc
         | None -> false
       in
       if accept_gzip then Debug.print 10 "accepts gzip";
@@ -818,7 +818,7 @@ let request ~conf (flow, conn) req body =
     Server.respond ~headers ~status:`Moved_permanently ~body:Cohttp_lwt__.Body.empty ()
   end
 
-let redirect ~conf conn req body =
+let _redirect ~conf conn req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   match meth, Uri.path uri with

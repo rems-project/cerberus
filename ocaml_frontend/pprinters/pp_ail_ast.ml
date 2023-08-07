@@ -2,11 +2,11 @@ open AilSyntax
 open Ctype
 open GenTypes
 
-open Pp_prelude
+open Cerb_pp_prelude
 (*open Pp_ail*)
 
 open Pp_ast
-open Colour
+open Cerb_colour
 
 module P = PPrint
 
@@ -92,6 +92,8 @@ let rec pp_genIntegerType_raw = function
      !^ "SizeT"
  | PtrdiffT ->
      !^ "PtrdiffT"
+ | PtraddrT ->
+     !^ "PtraddrT"
  | Unknown iCst ->
      !^ "Unknown" ^^ P.brackets (Pp_ail.pp_integerConstant iCst)
  | Promote gity ->
@@ -105,7 +107,7 @@ let pp_genBasicType_raw = function
  | GenFloating fty ->
      Pp_ail.pp_floatingType fty
 
-let pp_genType = function
+let rec pp_genType = function
  | GenVoid ->
      !^ "void"
  | GenBasic gbty ->
@@ -131,8 +133,8 @@ let pp_genType = function
       !^ "GenStruct" ^^ Pp_ail.pp_id ~is_human:true sym
   | GenUnion sym ->
       !^ "GenUnion" ^^ Pp_ail.pp_id ~is_human:true sym
-  | GenAtomic ty ->
-      !^ "GenAtomic" ^^ pp_ctype_human no_qualifiers ty
+  | GenAtomic gty ->
+      !^ "GenAtomic" ^^ pp_genType gty
 
 
 let pp_ctype qs ty =
@@ -241,32 +243,22 @@ let pp_alignment = function
   | AlignType ty ->
       !^ "align as" ^^ P.colon ^^^ P.squotes (pp_ctype no_qualifiers ty)
 
-let dtree_of_expression pp_annot expr =
+let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
+  Dleaf (Pp_ail.pp_id i
+         ^^^ Pp_ail.pp_storageDuration sd
+         ^^^ pp_cond is_reg (pp_type_keyword "register") (P.squotes (pp_ctype qs ty))
+         ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
+
+let rec dtree_of_expression pp_annot expr =
   let rec self (AnnotatedExpression (annot, std_annots, loc, expr_)) =
     let pp_std_annot =
       match std_annots with
         | [] -> P.empty
         | _  -> pp_ansi_format [Bold] (fun () -> P.brackets (semi_list P.string std_annots)) in
-
-(*
-    let dleaf_std_annot =
-      Dleaf (pp_ctor "STD" ^^^ P.brackets (semi_list P.string std_annots))
-    in
-    let add_std_annot ds =
-      match std_annots with
-      | [] -> ds
-      | _  -> dleaf_std_annot :: ds
-    in
-    let add_std_to_leaf pp =
-      match std_annots with
-      | [] -> Dleaf pp
-      | _ -> Dnode (pp, [dleaf_std_annot])
-    in
-*)
     let pp_expr_ctor str =
-      pp_std_annot ^^^ pp_stmt_ctor str ^^^ Location_ocaml.pp_location ~clever:true loc ^^^ pp_annot annot in
+      pp_std_annot ^^^ pp_stmt_ctor str ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
     let pp_implicit_ctor str =
-      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ Location_ocaml.pp_location ~clever:true loc ^^^ pp_annot annot in
+      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
     
     let pp_cabs_id = Pp_symbol.pp_identifier in
     let dtree_of_generic_association = function
@@ -427,20 +419,17 @@ let dtree_of_expression pp_annot expr =
           let d_ctor = pp_implicit_ctor "AilEfunction_decay" in
           Dnode ( d_ctor
                 , (*add_std_annot*) [self e] )
-      | AilEgcc_statement ->
-          Dleaf ( pp_expr_ctor "AilEgcc_statement" )
+      | AilEatomic e ->
+          let d_ctor = pp_implicit_ctor "AilEatomic" in
+          Dnode ( d_ctor
+                , (*add_std_annot*) [self e] )
+      | AilEgcc_statement (bs, ss) ->
+          Dnode ( pp_expr_ctor "AilEgcc_statement"
+                , Dnode (pp_ctor "Bindings", List.map dtree_of_binding bs) :: List.map (dtree_of_statement pp_annot) ss )
     end in
   self expr
 
-let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
-  Dleaf (Pp_ail.pp_id i
-         ^^^ Pp_ail.pp_storageDuration sd
-         ^^^ pp_cond is_reg (pp_type_keyword "register") (P.squotes (pp_ctype qs ty))
-         ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
-
-
-
-let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
+and dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
   let dtree_of_expression = dtree_of_expression pp_annot in
   let dtree_of_statement = dtree_of_statement pp_annot in
   with_attributes attrs
@@ -494,9 +483,9 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
         Dleaf ( pp_stmt_ctor "AilSgoto" ^^^ Pp_ail.pp_id sym )
     | AilSdeclaration xs ->
         Dnode ( pp_stmt_ctor "AilSdeclaration"
-              , List.map (fun (sym, e) ->
+              , List.map (fun (sym, e_opt) ->
                     Dnode (pp_stmt_ctor "Symbol" ^^^ Pp_ail.pp_id sym
-                          , [dtree_of_expression e])
+                          , [Option.fold ~none:(Dleaf !^ "NOINIT") ~some:dtree_of_expression e_opt])
                 ) xs )
     | AilSpar ss ->
         Dnode (pp_stmt_ctor "AilSpar"
@@ -511,7 +500,7 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, _, attrs, param_syms, stmt)) =
   let param_dtrees = [] in
-  let pp_loc = Location_ocaml.pp_location ~clever:true loc in
+  let pp_loc = Cerb_location.pp_location ~clever:true loc in
   Dnode ( pp_decl_ctor "FunctionDecl" ^^^ pp_loc ^^^ Pp_ail.pp_id fun_sym
         , add_dtree_of_attributes attrs (param_dtrees @ [dtree_of_statement pp_annot stmt]) )
 
@@ -519,7 +508,6 @@ let pp_storageDuration = function
   | Static    -> pp_type_keyword "static"
   | Thread    -> pp_type_keyword "thread"
   | Automatic -> pp_type_keyword "automatic"
-  | Allocated -> pp_type_keyword "allocated"
 
 let dtree_of_typedef_attributes (sym, attrs) =
   with_attributes attrs begin
@@ -542,7 +530,7 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
     | Decl_function (_, (qs, cty), params, is_var, is_inline, is_noreturn) ->
         Dleaf (pp_decl_ctor "Decl_function" ^^^
                Pp_ail.pp_id_func i ^^^
-               Colour.pp_ansi_format [Green] begin fun () -> 
+               Cerb_colour.pp_ansi_format [Green] begin fun () -> 
                  P.squotes (
                    (pp_cond is_inline !^"inline"
                    (pp_cond is_noreturn !^"_Noreturn"
@@ -605,14 +593,24 @@ let dtree_of_program pp_annot (_, sigm) =
           ] )
 
 let pp_annot gtc =
+  let mk_pp_alias (Ctype (_, ty_)) =
+    match ty_ with
+      | Basic (Integer ity) ->
+          let ity' = Ocaml_implementation.(normalise_integerType (get ()) ity) in
+          begin if not (Ctype.integerTypeEqual ity ity') then
+            fun z -> z ^^ P.colon ^^ P.squotes (Pp_ail.pp_basicType (Integer ity'))
+          else
+            Fun.id
+          end
+     | _ -> Fun.id in
   match gtc with
     | GenLValueType (qs, ty, isRegister) ->
         let qs_ty_doc =
           (* TODO: do the colour turn off in pp_ansi_format *)
-          let saved = !Colour.do_colour in
-          Colour.do_colour := false;
-          let ret = P.squotes (pp_ctype_human qs ty) in
-          Colour.do_colour := saved;
+          let saved = !Cerb_colour.do_colour in
+          Cerb_colour.do_colour := false;
+          let ret = mk_pp_alias ty (P.squotes (pp_ctype_human qs ty)) in
+          Cerb_colour.do_colour := saved;
           ret in
         pp_ansi_format [Green] (fun () -> qs_ty_doc) ^^^
         !^ (ansi_format [Cyan] "lvalue") ^^
@@ -623,7 +621,7 @@ let pp_annot gtc =
         )
 
 let filter_external_decl (id, sigma) =
-  let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in
+  let pred (_, (loc, _, _)) = Cerb_location.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
 (* let pp_loop_attributes xs =
@@ -636,7 +634,7 @@ let filter_external_decl (id, sigma) =
   ) xs P.empty *)
 
 let pp_program do_colour show_include ail_prog =
-  Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
+  Cerb_colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
   (* pp_loop_attributes (snd ail_prog).loop_attributes ^^ P.break 1 ^^ *)
   pp_doc_tree (dtree_of_program (fun _ -> P.empty) filtered_ail_prog)

@@ -4,8 +4,8 @@ open Core
 
 
 let debug_print pp =
-  Debug_ocaml.print_debug 3
-    [Debug_ocaml.DB_core_rewriting] 
+  Cerb_debug.print_debug 3
+    [Cerb_debug.DB_core_rewriting] 
     pp
 
 
@@ -173,7 +173,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
   let rec names_in_pointer_value pv : unit m = 
     Impl_mem.case_ptrval pv
       (fun ct -> names_in_ctype ct)
-      (fun sym -> record_dep (Sym sym))
+      (function Some sym -> record_dep (Sym sym) | None -> return ())
       (fun _ _ -> return ())
 
   and names_in_memory_value mv : unit m = 

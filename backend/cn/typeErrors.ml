@@ -17,8 +17,8 @@ type label_kind =
 
 
 type access =
-  | Load of Id.t option
-  | Store of Id.t option
+  | Load
+  | Store
   | Deref
   | Kill
   | Free
@@ -30,10 +30,6 @@ type call_situation =
   | LemmaApplication of Sym.t
   | LabelCall of label_kind
   | Subtyping
-  | PackPredicate of Sym.t
-  | PackStruct of Sym.t
-  | UnpackPredicate of automatic * Sym.t
-  | UnpackStruct of Sym.t
 
 let call_prefix = function
   | FunctionCall fsym -> "call_" ^ Sym.pp_string fsym
@@ -42,11 +38,6 @@ let call_prefix = function
   | LabelCall Loop -> "loop"
   | LabelCall Other -> "goto"
   | Subtyping -> "return"
-  | PackPredicate _ -> "pack"
-  | PackStruct _ -> "pack_struct"
-  | UnpackPredicate (Auto, _) -> "auto_unpack"
-  | UnpackPredicate (Manual, _) -> "unpack"
-  | UnpackStruct _ -> "unpack_struct"
 
 type situation =
   | Access of access
@@ -60,11 +51,6 @@ let call_situation = function
   | LabelCall Loop -> !^"checking loop entry"
   | LabelCall Other -> !^"checking label call"
   | Subtyping -> !^"checking subtyping"
-  | PackPredicate name -> !^"packing predicate" ^^^ Sym.pp name
-  | PackStruct tag -> !^"packing struct" ^^^ Sym.pp tag
-  | UnpackPredicate (Auto, name) -> !^"automatically unpacking predicate" ^^^ Sym.pp name
-  | UnpackPredicate (Manual, name) -> !^"unpacking predicate" ^^^ Sym.pp name
-  | UnpackStruct tag -> !^"unpacking struct" ^^^ Sym.pp tag
 
 let checking_situation = function
   | Access access -> !^"checking access"
@@ -74,10 +60,8 @@ let checking_situation = function
 let for_access = function
   | Kill -> !^"for de-allocating"
   | Deref -> !^"for dereferencing"
-  | Load None ->  !^"for reading"
-  | Load (Some m) -> !^"for reading struct member" ^^^ Id.pp m
-  | Store None ->  !^"for writing"
-  | Store (Some m) -> !^"struct member" ^^^ Id.pp m
+  | Load ->  !^"for reading"
+  | Store ->  !^"for writing"
   | Free -> !^"for free-ing"
 
 let for_situation = function
@@ -88,11 +72,6 @@ let for_situation = function
   | Call LabelCall Loop -> !^"for loop"
   | Call LabelCall Other -> !^"for calling label"
   | Call Subtyping -> !^"for subtyping"
-  | Call PackPredicate name -> !^"for packing predicate" ^^^ Sym.pp name
-  | Call PackStruct tag -> !^"for packing struct" ^^^ Sym.pp tag
-  | Call UnpackPredicate (Auto, name) -> !^"for (automatically) unpacking predicate" ^^^ Sym.pp name
-  | Call UnpackPredicate (Manual, name) -> !^"for unpacking predicate" ^^^ Sym.pp name
-  | Call UnpackStruct tag -> !^"for unpacking struct" ^^^ Sym.pp tag
 
 
 
@@ -124,7 +103,7 @@ type message =
   | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
 
 
-  | Missing_resource_request of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
+  | Missing_resource of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
   | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
   | Number_members of {has: int; expect: int}
@@ -244,7 +223,7 @@ let pp_message te =
         Pp.squotes (BaseTypes.(pp found_bty))
      in
      { short; descr = Some descr; state = None; trace = None }
-  | Missing_resource_request {orequest; situation; oinfo; ctxt; model; trace} ->
+  | Missing_resource {orequest; situation; oinfo; ctxt; model; trace} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = missing_or_bad_request_description oinfo orequest in
      let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in

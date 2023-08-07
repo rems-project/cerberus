@@ -3,6 +3,7 @@ struct int_list {
   struct int_list* tail;
 };
 
+/*@
 datatype seq { 
   Seq_Nil {},
   Seq_Cons {integer head, datatype seq tail}
@@ -28,6 +29,7 @@ predicate (datatype seq) IntList(pointer p) {
     return (Seq_Cons { head: H.head, tail: tl });
   }
 }
+@*/
 
 struct int_list* IntList_append(struct int_list* xs, struct int_list* ys) 
 /*@ requires take L1 = IntList(xs) @*/
@@ -48,6 +50,7 @@ struct int_list* IntList_append(struct int_list* xs, struct int_list* ys)
   }
 }
 
+/*@
 function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs) 
 {
   match xs {
@@ -64,6 +67,7 @@ function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs)
     }
   }
 }
+@*/
 
 
 struct int_list_pair { 

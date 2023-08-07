@@ -32,3 +32,9 @@ public/dist/main.bundle.js.map
 public/dist/style.bundle.css
 public/dist/style.bundle.css.map
 public/package-lock.json
+/.ignore
+/backend/cheri/cerb.prof
+/cerb.prof
+
+# debug stuff
+log*.txt

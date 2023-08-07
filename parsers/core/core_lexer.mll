@@ -1,7 +1,7 @@
 {
 open Cerb_frontend
 
-exception Error
+exception Error of Errors.core_lexer_cause
 
 module T = Core_parser_util
 type token = T.token
@@ -17,7 +17,7 @@ let keywords =
       ("_Bool",       T.BOOL       );
       ("char",        T.CHAR       );
       ("double",      T.DOUBLE     );
-      ("enum",        T.ENUM       );
+      (* ("enum",        T.ENUM       ); *)
       ("float",       T.FLOAT      );
       ("int",         T.INT        );
       ("ichar",       T.ICHAR      );
@@ -82,6 +82,10 @@ let keywords =
 
       ("Fvfromint",   T.FVFROMINT      );
       ("Ivfromfloat", T.IVFROMFLOAT    );
+
+      (* this is a fake constructor at the syntax level *)
+      (* NOTE: it would be better to pass to the Core parser an env with the C types symbols (to resolve max_align_t) *)
+      ("IvMaxAlignment", T.IVMAX_ALIGNMENT);
       
       (* for Core (pure) expressions *)
       ("not",          T.NOT         );
@@ -99,11 +103,8 @@ let keywords =
       ("save",         T.SAVE        );
       ("run",          T.RUN         );
       ("bound",        T.BOUND       );
-      ("raise",        T.RAISE       );
-      ("register",     T.REGISTER    );
       ("nd",           T.ND          );
       ("par",          T.PAR         );
-      ("wait",         T.WAIT        );
       ("array_shift",  T.ARRAY_SHIFT );
       ("member_shift", T.MEMBER_SHIFT);
       ("case",         T.CASE        );
@@ -160,12 +161,18 @@ let keywords =
       ("IntFromPtr",       T.MEMOP_OP Mem_common.IntFromPtr      );
       ("PtrFromInt",       T.MEMOP_OP Mem_common.PtrFromInt      );
       ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref);
-      ("PtrWellAligned",   T.MEMOP_OP Mem_common.PtrWellAligned);
+      ("PtrWellAligned",   T.MEMOP_OP Mem_common.PtrWellAligned  );
+      ("PtrArrayShift",    T.MEMOP_OP Mem_common.PtrArrayShift   );
+      ("PtrMemberShift",   T.PTRMEMBERSHIFT);
       
-      ("Memcpy", T.MEMOP_OP Mem_common.Memcpy);
-      ("Memcmp", T.MEMOP_OP Mem_common.Memcmp);
-      ("Realloc", T.MEMOP_OP Mem_common.Realloc);
-      ("Va_start", T.MEMOP_OP Mem_common.Va_start);
+      ("Memcpy",        T.MEMOP_OP Mem_common.Memcpy       );
+      ("Memcmp",        T.MEMOP_OP Mem_common.Memcmp       );
+      ("Realloc",       T.MEMOP_OP Mem_common.Realloc      );
+      ("Va_start",      T.MEMOP_OP Mem_common.Va_start     );
+      ("Va_copy",       T.MEMOP_OP Mem_common.Va_copy      );
+      ("Va_arg",        T.MEMOP_OP Mem_common.Va_arg       );
+      ("Va_end",        T.MEMOP_OP Mem_common.Va_end       );
+      ("Copy_alloc_id", T.MEMOP_OP Mem_common.Copy_alloc_id);
       
       (* for source attributes *)
       ("ailname", T.AILNAME);
@@ -190,10 +197,11 @@ let scan_impl lexbuf =
   try
     T.IMPL (Pmap.find id Implementation.impl_map)
   with Not_found ->
-    if String.compare (String.sub id 0 9) "<builtin_" = 0 then
-      T.IMPL (Implementation.BuiltinFunction (String.sub id 9 (String.length id - 10)))
-    else
-      failwith ("Found an invalid impl_name: " ^ id)
+    match Cerb_util.remove_prefix ~prefix:"<builtin_" ~trim_end:1 id with
+      | Some str ->
+          T.IMPL (Implementation.BuiltinFunction str)
+      | None ->
+          raise (Error (Core_lexer_invalid_implname id))
 
 
 let scan_ub lexbuf =
@@ -202,12 +210,14 @@ let scan_ub lexbuf =
     | Some ub ->
         T.UB ub
     | None ->
-        (* TODO: hack *)
-        if String.sub id 0 8 = "<<DUMMY(" then
-          T.UB (Undefined.DUMMY (String.sub id 8 (String.length id - 11)))
-        else
-          failwith ("Found an invalid undefined-behaviour: " ^ id)
-
+        begin match Cerb_util.remove_prefix ~prefix:"<<DUMMY(" ~trim_end:3 id with
+          | Some str ->
+              T.UB (Undefined.DUMMY str)
+          | None ->
+              raise (Error (Core_lexer_invalid_ubname id))
+        end
+    | exception _ ->
+        raise (Error (Core_lexer_invalid_ubname id))
 
 
 
@@ -271,8 +281,9 @@ and main = parse
         (* TODO: check this *)
         T.CSTRING (String.concat "" strs) }
 
-  | error_name { let str = Lexing.lexeme lexbuf in
-             T.STRING (String.sub str 3 (String.length str - 6))  }
+  | error_name
+      { let str = Lexing.lexeme lexbuf in
+        T.STRING (String.sub str 3 (String.length str - 6))  }
   | ub_name { scan_ub lexbuf }
   | impl_name { scan_impl lexbuf }
   
@@ -322,8 +333,8 @@ and main = parse
   | symbolic_name { scan_sym lexbuf }
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
   | eof  {T.EOF}
-  | _
-    { raise Error }
+  | _ as c
+    { raise (Error (Core_lexer_invalid_symbol c)) }
 
 
 and comment = parse

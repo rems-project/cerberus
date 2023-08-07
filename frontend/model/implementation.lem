@@ -1,6 +1,7 @@
 open import Pervasives Utils
-import AilSyntax Ctype
+import AilSyntax Ctype IntegerImpl
 
+val max_alignment: nat
 val is_signed_ity: Ctype.integerType -> bool
 val sizeof_ity: Ctype.integerType -> maybe nat
 val precision_ity: Ctype.integerType -> maybe nat
@@ -10,7 +11,9 @@ val alignof_fty: Ctype.floatingType -> maybe nat
 
 val register_enum: Symbol.sym -> list integer -> bool
 val typeof_enum: Symbol.sym -> Ctype.integerType
+val normalise_integerType: Ctype.integerType -> Ctype.integerType
 
+declare ocaml target_rep function max_alignment = `(Ocaml_implementation.get()).max_alignment`
 declare ocaml target_rep function is_signed_ity = `(Ocaml_implementation.get()).is_signed_ity`
 declare ocaml target_rep function sizeof_ity = `(Ocaml_implementation.get()).sizeof_ity`
 declare ocaml target_rep function precision_ity = `(Ocaml_implementation.get()).precision_ity`
@@ -19,9 +22,25 @@ declare ocaml target_rep function alignof_ity = `(Ocaml_implementation.get()).al
 declare ocaml target_rep function alignof_fty = `(Ocaml_implementation.get()).alignof_fty`
 declare ocaml target_rep function register_enum = `(Ocaml_implementation.get()).register_enum`
 declare ocaml target_rep function typeof_enum = `(Ocaml_implementation.get()).typeof_enum`
+declare ocaml target_rep function normalise_integerType = `Ocaml_implementation.normalise_integerType (Ocaml_implementation.get())`
 
 val alignof_ty: map AilSyntax.ail_identifier (list (maybe Ctype.alignment * Ctype.ctype)) ->  Ctype.ctype -> maybe nat
 declare ocaml target_rep function alignof_ty = `Ocaml_implementation.alignof_proxy`
+
+val integerImpl: unit -> IntegerImpl.implementation
+let integerImpl () =
+  IntegerImpl.make_implementation
+    IntegerImpl.Two'sComplement
+    is_signed_ity
+    (fun ity ->
+      match precision_ity ity with
+        | Just n -> n
+        | Nothing -> error "Implemetation.integerImpl, is_precision_ity Nothing"
+      end
+    )
+    (Ctype.Size_t)
+    (Ctype.Ptrdiff_t)
+    (Ctype.Ptraddr_t)
 
 type implementation_constant =
   (* J.3.2 Environment *)
@@ -631,30 +650,28 @@ end
 
 *)
 open Ctype
-let rec normalise_enum (Ctype annots ty_) =
+let rec normalise_ctype (Ctype annots ty_) =
   Ctype annots match ty_ with
     | Void ->
         ty_
-    | Basic (Integer (Enum sym)) ->
-        (* replacing Enum with the implementtion-defined corresponding integer type *)
-        Basic (Integer (typeof_enum sym))
-    | Basic (Integer _) ->
-        ty_
+    | Basic (Integer ity) ->
+        (* replacing alias type or Enum with the implementtion-defined corresponding integer type *)
+        Basic (Integer (normalise_integerType ity))
     | Basic (Floating _) ->
         ty_
     | Array elem_ty n_opt ->
-        Array (normalise_enum elem_ty) n_opt
+        Array (normalise_ctype elem_ty) n_opt
 
     | Function (qs, ret_ty) params is_variadic  ->
-        Function (qs, normalise_enum ret_ty)
-          (List.map (fun (qs, ty, b) -> (qs, normalise_enum ty, b)) params)
+        Function (qs, normalise_ctype ret_ty)
+          (List.map (fun (qs, ty, b) -> (qs, normalise_ctype ty, b)) params)
           is_variadic
     | FunctionNoParams (qs, ret_ty) ->
-        FunctionNoParams (qs, normalise_enum ret_ty)
+        FunctionNoParams (qs, normalise_ctype ret_ty)
     | Pointer qs ref_ty ->
-        Pointer qs (normalise_enum ref_ty)
+        Pointer qs (normalise_ctype ref_ty)
     | Atomic atom_ty ->
-        Atomic (normalise_enum atom_ty)
+        Atomic (normalise_ctype atom_ty)
     | Struct _ ->
         ty_
     | Union _ ->
@@ -711,4 +728,4 @@ let is_signed_or_unsigned_aux ibty =
 
 val is_signed_or_unsigned: integerBaseType -> ctype -> bool
 let is_signed_or_unsigned ibty =
-  fun ty -> is_signed_or_unsigned_aux ibty (normalise_enum ty)
+  fun ty -> is_signed_or_unsigned_aux ibty (normalise_ctype ty)

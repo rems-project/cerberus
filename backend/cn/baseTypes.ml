@@ -67,12 +67,12 @@ let json bt : Yojson.Safe.t =
 
 let struct_bt = function
   | Struct tag -> tag 
-  | bt -> Debug_ocaml.error 
+  | bt -> Cerb_debug.error 
            ("illtyped index term: not a struct type: " ^ Pp.plain (pp bt))
 
 let record_bt = function
   | Record members -> members
-  | bt -> Debug_ocaml.error 
+  | bt -> Cerb_debug.error 
            ("illtyped index term: not a member type: " ^ Pp.plain (pp bt))
 
 let is_map_bt = function
@@ -81,7 +81,7 @@ let is_map_bt = function
 
 let map_bt = function
   | Map (abt, rbt) -> (abt, rbt) 
-  | bt -> Debug_ocaml.error 
+  | bt -> Cerb_debug.error 
            ("illtyped index term: not a map type: " ^ Pp.plain (pp bt))
 
 let is_datatype_bt = function
@@ -97,7 +97,7 @@ let make_map_bt abt rbt = Map (abt, rbt)
 
 (* let option_bt = function *)
 (*   | Option bt -> bt  *)
-(*   | bt -> Debug_ocaml.error  *)
+(*   | bt -> Cerb_debug.error  *)
 (*            ("illtyped index term: not an option type: " ^ Pp.plain (pp bt)) *)
 
 
@@ -108,7 +108,7 @@ let rec of_sct = function
   | Array (sct, _) -> Map (Integer, of_sct sct)
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
-  | Function _ -> Debug_ocaml.error "todo: function types"
+  | Function _ -> Cerb_debug.error "todo: function types"
 
 
 

@@ -35,7 +35,7 @@ let plop2 = function
 | _ :: _ as l -> "(" ^ String.concat ", " l ^ ")"
 
 let string_of_attr attr =
-  let attr_args = List.map snd attr.Annot.attr_args in
+  let attr_args = List.map (fun (_, z, _) -> z) attr.Annot.attr_args in
   string_of_identifier attr.Annot.attr_id ^ plop2 attr_args
 
 let string_of_attrs attrs =
@@ -54,9 +54,14 @@ let string_of_annots annots =
       | Astd x -> None
       | Aloc loc -> None
       | Auid _ -> None
+      | Amarker _ -> None
+      | Amarker_object_types _ -> None
       | Abmc _ -> None
       | Aattrs (Attrs attrs) -> Some attrs
-      | Atypedef _ -> failwith "?")
+      | Atypedef _ -> failwith "?"
+      | Anot_explode -> None
+      | Alabel _ -> None
+      | Acerb _ -> None)
       annots in
   let annots = List.concat annots in
   String.concat " " (List.map string_of_attr annots)
@@ -69,6 +74,7 @@ and string_of_ctype_ = function
 | Basic x -> "int" (* TODO: lies *)
 | Array (cty, sz) -> "array(" ^ string_of_ctype cty ^ ")"
 | Function _ -> "function"
+| FunctionNoParams _ -> "function_no_params"
 | Pointer (qls, cty) -> string_of_ctype cty ^ "*"
 | Atomic cty -> "atomic(" ^ string_of_ctype cty ^ ")"
 | Struct name -> string_of_sym name
@@ -224,15 +230,15 @@ module Type_error = struct
 type t =
 | TE_general of string
 | TE_todo of string
-| TE_expected_but_got of Location_ocaml.t * rc_type * rc_type
-| TE_function_expected_but_got of Location_ocaml.t * rc_type * rc_type
+| TE_expected_but_got of Cerb_location.t * rc_type * rc_type
+| TE_function_expected_but_got of Cerb_location.t * rc_type * rc_type
 | TE_internal_error of string
 
 let string_of = function
 | TE_general s -> s
 | TE_todo s -> "TODO: " ^ s
-| TE_expected_but_got (loc, t1, t2) -> Location_ocaml.location_to_string loc ^ ": expected `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
-| TE_function_expected_but_got (loc, t1, t2) -> Location_ocaml.location_to_string loc ^ ": function expected `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
+| TE_expected_but_got (loc, t1, t2) -> Cerb_location.location_to_string loc ^ ": expected `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
+| TE_function_expected_but_got (loc, t1, t2) -> Cerb_location.location_to_string loc ^ ": function expected `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
 | TE_internal_error s -> "internal error: " ^ s
 end
 module TE_either = Either_fixed.Make(Type_error)
@@ -328,7 +334,7 @@ let rec check_statements stys (ftys : fun_spec_t Rustic_types.String_map.t) (gam
       String_map.map
         (fun (_, _, cty) ->
           if is_scalar cty then (RC_scalar, RC_scalar)
-          else failwith ("TODO: need annotations at " ^ Location_ocaml.location_to_string loc))
+          else failwith ("TODO: need annotations at " ^ Cerb_location.location_to_string loc))
         bds in
     check_statements stys ftys ((bds, sts) :: gamma) sts1)
 | AnnotatedStatement (_, _, AilSif (_, s1, s2)) :: sts ->
@@ -356,7 +362,7 @@ let should_typecheck_of (def : 'a fn_def) =
   not should_not_typecheck
 
 let failwith_id id =
-  failwith ("TODO: take into account annotations for field `" ^ string_of_identifier id ^ "` at " ^ Location_ocaml.location_to_string (loc_of_identifier id))
+  failwith ("TODO: take into account annotations for field `" ^ string_of_identifier id ^ "` at " ^ Cerb_location.location_to_string (loc_of_identifier id))
 
 (* TODO: fail more gracefully *)
 let collect_structs s =

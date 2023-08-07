@@ -1,0 +1,21 @@
+opam-version: "2.0"
+synopsis: "Cerberus-BMC"
+description: "Cerberus-BMC: a Principled Reference Semantics and Exploration Tool for Concurrent and Sequential C"
+license: "BSD-2-Clause"
+maintainer: ["Kayvan Memarian <kayvan.memarian@cl.cam.ac.uk>"]
+authors: [
+  "Stella Lau"
+  "Jean Pichon-Pharabod"
+  "Victor Gomes"
+  "Kayvan Memarian"
+  "Peter Sewell"
+]
+homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
+bug-reports: "https://github.com/rems-project/cerberus/issues"
+depends: [
+  "cerberus-lib"
+  "angstrom" {>= "0.14.0"}
+  "z3"
+  "cmdliner"
+  "lem"
+]

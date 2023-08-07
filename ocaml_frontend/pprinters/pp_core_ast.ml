@@ -1,10 +1,10 @@
 open Core
 
-open Pp_prelude
+open Cerb_pp_prelude
 (*open Pp_ail*)
 
 open Pp_ast
-open Colour
+open Cerb_colour
 
 module P = PPrint
 
@@ -120,7 +120,7 @@ let dtree_of_pexpr pexpr =
     let pp_ctor str =
       match Annot.get_loc annot with
         | Some loc ->
-            pp_pure_ctor str ^^^ Location_ocaml.pp_location ~clever:true loc
+            pp_pure_ctor str ^^^ Cerb_location.pp_location ~clever:true loc
         | None ->
             pp_pure_ctor str in
     
@@ -147,6 +147,9 @@ let dtree_of_pexpr pexpr =
           Dleaf (pp_ctor "PEarray_shift" ^^^ !^ (ansi_format [Red] "TODO"))
       | PEmember_shift (pe, sym, ident) ->
           Dleaf (pp_ctor "PEmember_shift" ^^^ !^ (ansi_format [Red] "TODO"))
+      | PEmemop (memop, pes) ->
+          Dnode (pp_ctor "PEmemop" ^^^ Pp_mem.pp_pure_memop memop
+                , List.map self pes)
       | PEnot pe ->
           Dnode (pp_ctor "PEnot", [self pe])
       | PEop (bop, pe1, pe2) ->
@@ -196,7 +199,7 @@ let dtree_of_pexpr pexpr =
       (* | _ ->
           Dleaf (pp_ctor ("Pexpr(TODO): " ^ Pp_utils.to_plain_pretty_string (Pp_core.WithLocations.pp_pexpr pexpr))) *)
   in
-  self Location_ocaml.unknown pexpr
+  self Cerb_location.unknown pexpr
 
 let pp_action_ctor act =
   pp_keyword begin match act with
@@ -304,7 +307,7 @@ let dtree_of_expr expr =
     let pp_ctor str =
       match Annot.get_loc annot with
         | Some loc ->
-            pp_eff_ctor str ^^^ Location_ocaml.pp_location ~clever:true loc
+            pp_eff_ctor str ^^^ Cerb_location.pp_location ~clever:true loc
         | None ->
             pp_eff_ctor str in
 
@@ -363,7 +366,7 @@ let dtree_of_expr expr =
       | _ ->
           Dleaf (pp_ctor ("TODO_expr ==> " ^ String_core.string_of_expr expr))
   in
-  self Location_ocaml.unknown expr
+  self Cerb_location.unknown expr
 
 
 (*
@@ -391,7 +394,7 @@ let dtree_of_funinfo xs =
 (
   Symbol.sym
 ,
- Location_ocaml.t * Annot.attributes * Ctype.ctype *
+ Cerb_location.t * Annot.attributes * Ctype.ctype *
    (Symbol.sym option * Ctype.ctype) list * bool * bool
 )
 Pmap.map

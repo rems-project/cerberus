@@ -9,15 +9,21 @@ module LCSet = Set.Make(LC)
 
 
 
+type init = Init | Uninit
+[@@deriving eq, ord]
+
 type predicate_name = 
-  | Block of Sctypes.t
-  | Owned of Sctypes.t
+  | Owned of Sctypes.t * init
   | PName of Sym.t
 [@@deriving eq, ord]
 
+let pp_init = function
+  | Init -> !^"Init"
+  | Uninit -> !^"Uninit"
+
 let pp_predicate_name = function
-  | Block ct -> !^"Block" ^^ angles (Sctypes.pp ct)
-  | Owned ct -> !^"Owned" ^^ angles (Sctypes.pp ct)
+  | Owned (ct, Init) -> !^"Owned" ^^ angles (Sctypes.pp ct)
+  | Owned (ct, Uninit) -> !^"Block" ^^ angles (Sctypes.pp ct)
   | PName pn -> Sym.pp pn
 
 
@@ -26,7 +32,6 @@ let pp_predicate_name = function
 type predicate_type = {
     name : predicate_name; 
     pointer: IT.t;            (* I *)
-    permission: IT.t;         (* I *)
     iargs: IT.t list;         (* I *)
   }
 [@@deriving eq, ord]
@@ -43,6 +48,11 @@ type qpredicate_type = {
 [@@deriving eq, ord]
 
 
+let subsumed p1 p2 = (* p1 subsumed by p2 *)
+  equal_predicate_name p1 p2 ||
+  match p1, p2 with
+  | Owned (ct, Uninit), Owned (ct', Init) when Sctypes.equal ct ct' -> true
+  | _ -> false
 
 
 type resource_type =
@@ -69,10 +79,7 @@ let pp_predicate_type_aux (p : predicate_type) oargs =
   let args = List.map IT.pp (p.pointer :: p.iargs) in
   c_app (pp_predicate_name p.name) args 
   ^^ pp_maybe_oargs oargs
-  ^^ begin match IT.is_true p.permission with
-     | true -> Pp.empty
-     | false -> space ^^ !^"if" ^^^ IT.pp p.permission
-     end
+
 
 let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
   let pointer = 
@@ -130,7 +137,6 @@ let subst_predicate_type substitution (p : predicate_type) =
   {
     name = p.name;
     pointer = IT.subst substitution p.pointer;
-    permission = IT.subst substitution p.permission;
     iargs = List.map (IT.subst substitution) p.iargs;
   }
 
@@ -159,7 +165,7 @@ let subst (substitution : IT.t Subst.t) = function
 
 let free_vars = function
   | P p -> 
-     IT.free_vars_list (p.pointer :: p.permission :: p.iargs)
+     IT.free_vars_list (p.pointer :: p.iargs)
   | Q p -> 
      SymSet.union
        (SymSet.union (IT.free_vars p.pointer) (IT.free_vars p.step))
@@ -205,13 +211,11 @@ open Cerb_frontend.Pp_ast
 open Pp
 
 let dtree_of_predicate_name = function
-  | Block ty -> Dleaf (!^"Block" ^^ angles (Sctypes.pp ty))
-  | Owned ty -> Dleaf (!^"Owned" ^^ angles (Sctypes.pp ty))
+  | Owned (ty, init) -> Dleaf (!^"Owned" ^^ angles (Sctypes.pp ty ^^ comma ^^ pp_init init))
   | PName s -> Dleaf (Sym.pp s)
 
 let dtree_of_predicate_type (pred : predicate_type) =
   Dnode (pp_ctor "pred", 
-        IT.dtree pred.permission ::
         dtree_of_predicate_name pred.name ::
         IT.dtree pred.pointer ::
         List.map IT.dtree pred.iargs)

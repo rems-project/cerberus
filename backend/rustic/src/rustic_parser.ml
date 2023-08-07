@@ -23,7 +23,7 @@ let scoping =
   (var >>= fun s -> return (RCS_scoped s))
 
 let make_sym s =
-  Symbol.Symbol (Fresh.digest (), 0, Some s) (* TODO: is this the right thing? *)
+  Symbol.Symbol (Cerb_fresh.digest (), 0, Symbol.SD_Id s) (* TODO: is this the right thing? *)
 
 let rec ty s =
   (spaces >>

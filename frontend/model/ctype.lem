@@ -3,7 +3,7 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Utils Loc Show Symbol
+open import Pervasives Utils Loc Show Symbol Global
 import Annot
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
@@ -31,6 +31,7 @@ type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Wint_t
  | Size_t
  | Ptrdiff_t
+ | Ptraddr_t (* CHERI-specific *)
 
 (* STD §6.2.5#10, sentence 1 *)
 type realFloatingType =
@@ -169,6 +170,8 @@ let integerTypeEqual ity1 ity2 =
         7
     | Ptrdiff_t ->
         8
+    | Ptraddr_t ->
+        9
   end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
@@ -339,7 +342,9 @@ let setElemCompare_integerType ity1 ity2 =
         7
     | Ptrdiff_t ->
         8
-  end in
+    | Ptraddr_t ->
+       9
+end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
         setElemCompare ibty1 ibty2
@@ -407,7 +412,7 @@ end
 val proj_ctype_: ctype -> ctype_
 let proj_ctype_ (Ctype _ ty_) = ty_
 
-(* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
+(* NOTE: a well-formed ctype cannot have an Atomic directly inside another one *)
 let unatomic (Ctype annots ty_ as ty) =
 match ty_ with
   | Atomic ty ->
@@ -556,3 +561,20 @@ val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
 
+val ptraddr_t: unit -> ctype
+let ptraddr_t _ =
+  if Global.is_CHERI() then
+    Ctype [] (Basic (Integer Ptraddr_t))
+  else
+    error "ptraddr_t is CHERI-specific"
+
+val is_ptr_t: ctype -> bool
+let is_ptr_t (Ctype _ ty_) =
+  match ty_ with
+    | Basic (Integer (Signed Intptr_t)) ->
+        true
+    | Basic (Integer (Unsigned Intptr_t)) ->
+        true
+    | _ ->
+        false
+  end

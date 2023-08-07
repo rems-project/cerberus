@@ -103,7 +103,7 @@ type cn_pred 'a 'ty =
   | CN_named of 'a
 
 type cn_resource 'a 'ty =
-  | CN_pred of Loc.t * maybe (cn_expr 'a 'ty) * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
+  | CN_pred of Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_each of 'a * cn_base_type 'a * cn_expr 'a 'ty * Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
 
 type cn_assertion 'a 'ty =
@@ -142,6 +142,15 @@ type cn_lemma 'a 'ty = <|
   cn_lemma_args: list (cn_base_type 'a * 'a);
   cn_lemma_requires: list (cn_condition 'a 'ty);
   cn_lemma_ensures: list (cn_condition 'a 'ty);
+|>
+
+type cn_fun_spec 'a 'ty = <|
+  cn_spec_loc: Loc.t;
+  cn_spec_name: 'a;
+  cn_spec_args: list (cn_base_type 'a * 'a);
+  cn_spec_requires: list (cn_condition 'a 'ty);
+  cn_spec_ret_name: 'a;
+  cn_spec_ensures: list (cn_condition 'a 'ty);
 |>
 
 
@@ -184,10 +193,15 @@ type cn_to_instantiate 'a 'ty =
   | I_Good of 'ty
   | I_Everything
 
+type cn_to_extract 'a 'ty =
+  | E_Pred of cn_pred 'a 'ty
+  | E_Everything
+
 type cn_statement_ 'a 'ty =
   | CN_pack_unpack of pack_unpack * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_have of cn_assertion 'a 'ty
   | CN_instantiate of cn_to_instantiate 'a 'ty * (cn_expr 'a 'ty)
+  | CN_extract of cn_to_extract 'a 'ty * (cn_expr 'a 'ty)
   | CN_unfold of 'a * list (cn_expr 'a 'ty)
   | CN_assert_stmt of cn_assertion 'a 'ty
   | CN_apply of 'a * list (cn_expr 'a 'ty)
@@ -202,6 +216,7 @@ type cn_namespace =
   | CN_predicate
   | CN_function
   | CN_lemma
+  | CN_fun_spec
   | CN_datatype_nm
   | CN_constructor
   | CN_vars
@@ -213,6 +228,7 @@ instance (Show cn_namespace)
       | CN_predicate -> "predicate"
       | CN_function -> "function"
       | CN_lemma -> "lemma"
+      | CN_fun_spec -> "fun_spec"
       | CN_datatype_nm -> "datatype"
       | CN_constructor -> "constructor"
       | CN_vars   -> "vars"

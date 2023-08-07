@@ -1,10 +1,10 @@
 open Cn
 
-open Pp_prelude
+open Cerb_pp_prelude
 open Pp_ast
 open Pp_symbol
 
-open Location_ocaml
+open Cerb_location
 
 
 module P = PPrint
@@ -19,6 +19,7 @@ let string_of_ns = function
   | CN_vars -> "variable"
   | CN_predicate -> "predicate"
   | CN_lemma -> "lemma"
+  | CN_fun_spec -> "fun_spec"
   | CN_function -> "specification function"
   | CN_datatype_nm -> "datatype"
   | CN_constructor -> "constructor"
@@ -203,9 +204,8 @@ module MakePp (Conf: PP_CN) = struct
         Dleaf (pp_stmt_ctor "CN_named" ^^^ P.squotes (Conf.pp_ident ident))
 
   let dtree_of_cn_resource = function
-    | CN_pred (_, cond, pred, es) ->
-        Dnode (pp_stmt_ctor "CN_pred", dtree_of_option dtree_of_cn_expr cond 
-                                       :: dtree_of_cn_pred pred 
+    | CN_pred (_, pred, es) ->
+        Dnode (pp_stmt_ctor "CN_pred", dtree_of_cn_pred pred 
                                        :: List.map dtree_of_cn_expr es)
     | CN_each (ident, bTy, e, _, pred, es) ->
         Dnode ( pp_stmt_ctor "CN_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy
@@ -284,6 +284,14 @@ module MakePp (Conf: PP_CN) = struct
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
             ] ) 
 
+  let dtree_of_cn_spec s =
+    Dnode ( pp_ctor "[CN]spec of" ^^^ P.squotes (Conf.pp_ident s.cn_spec_name)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args s.cn_spec_args)
+            ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition s.cn_spec_requires)
+            ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition s.cn_spec_ensures)
+            ] )
+
+
 (* copying and adjusting dtrees_of_args *)
  let dtrees_of_oargs xs =
     List.map (fun (bTy, ident) ->
@@ -318,6 +326,10 @@ module MakePp (Conf: PP_CN) = struct
     | I_Function f -> Dnode (pp_ctor "[CN]function", [Dleaf (Conf.pp_ident f)])
     | I_Good ty -> Dnode(pp_ctor "[CN]good", [Dleaf (Conf.pp_ty ty)])
     | I_Everything -> Dleaf !^"[CN]everything"
+    
+  let dtree_of_to_extract = function
+    | E_Everything -> Dleaf !^"[CN]everything"
+    | E_Pred pred -> Dnode (pp_ctor "[CN]pred", [dtree_of_cn_pred pred])
 
   let dtree_of_cn_statement (CN_statement (_loc, stmt_)) =
     match stmt_ with
@@ -329,6 +341,8 @@ module MakePp (Conf: PP_CN) = struct
        Dnode (pp_ctor "[CN]have", [dtree_of_cn_assertion assrt])
     | CN_instantiate (to_instantiate, arg) ->
        Dnode (pp_ctor "[CN]instantiate", [dtree_of_to_instantiate to_instantiate; dtree_of_cn_expr arg])
+    | CN_extract (to_extract, arg) ->
+       Dnode (pp_ctor "[CN]extract", [dtree_of_to_extract to_extract; dtree_of_cn_expr arg])
     | CN_unfold (s, args) ->
        Dnode (pp_ctor "[CN]unfold", Dleaf (Conf.pp_ident s) :: List.map dtree_of_cn_expr args)
     | CN_assert_stmt assrt ->
@@ -348,7 +362,7 @@ end)
 module PpAil = MakePp (struct
   type ident = Symbol.sym
   type ty = Ctype.ctype
-  let pp_ident ?(clever=false) sym = !^ (Colour.ansi_format [Yellow] (Pp_symbol.to_string_pretty_cn sym))
+  let pp_ident ?(clever=false) sym = !^ (Cerb_colour.ansi_format [Yellow] (Pp_symbol.to_string_pretty_cn sym))
   let pp_ty ty = Pp_ail.pp_ctype Ctype.no_qualifiers ty
 end)
 

@@ -63,19 +63,19 @@ let rec mk_list_pat bTy = function
 
 let ensure_list_core_base_type loc = function
   | BTy_list cbt -> cbt
-  | _ -> failwith ((Location_ocaml.location_to_string loc) ^ 
+  | _ -> failwith ((Cerb_location.location_to_string loc) ^ 
                      ": list given non-list type")
 
 
 type symbolify_state = {
-  labels: (Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map;
-  sym_scopes: ((Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map) list;
+  labels: (Core_parser_util._sym, Symbol.sym * Cerb_location.t) Pmap.map;
+  sym_scopes: ((Core_parser_util._sym, Symbol.sym * Cerb_location.t) Pmap.map) list;
   ailnames: (string, Symbol.sym) Pmap.map
 }
 
 let initial_symbolify_state = {
   labels= Pmap.empty Core_parser_util._sym_compare;
-  sym_scopes= [Pmap.map (fun sym -> (sym, Location_ocaml.unknown)) M.std];
+  sym_scopes= [Pmap.map (fun sym -> (sym, Cerb_location.unknown)) M.std];
   ailnames= Pmap.empty Stdlib.compare;
 }
 
@@ -88,13 +88,13 @@ module Eff : sig
   val mapM: ('a -> 'b t) -> 'a list -> ('b list) t
   val mapM_: ('a -> 'b t) -> 'a list -> unit t
   val foldrM: ('a -> 'b -> 'b t) -> 'b -> 'a list -> 'b t
-  val fail: Location_ocaml.t -> core_parser_cause -> 'a t
-  val runM: 'a t -> symbolify_state -> (Location_ocaml.t * core_parser_cause, 'a * symbolify_state) either
+  val fail: Cerb_location.t -> core_parser_cause -> 'a t
+  val runM: 'a t -> symbolify_state -> (Cerb_location.t * core_parser_cause, 'a * symbolify_state) either
   val get: symbolify_state t
   val put: symbolify_state -> unit t
 end = struct
   open Either
-  type 'a t = symbolify_state -> (Location_ocaml.t * core_parser_cause, 'a * symbolify_state) either
+  type 'a t = symbolify_state -> (Cerb_location.t * core_parser_cause, 'a * symbolify_state) either
   
   let return z =
     fun st -> Right (z, st)
@@ -159,7 +159,7 @@ let open_scope : unit Eff.t =
   Eff.put {st with sym_scopes= Pmap.empty Core_parser_util._sym_compare :: st.sym_scopes} >>= fun () ->
   Eff.return ()
   
-let close_scope : ((Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map) Eff.t =
+let close_scope : ((Core_parser_util._sym, Symbol.sym * Cerb_location.t) Pmap.map) Eff.t =
   Eff.get >>= fun st ->
   match st.sym_scopes with
     | [] ->
@@ -177,19 +177,19 @@ let under_scope (m: 'a Eff.t) : 'a Eff.t =
 
 let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
   Eff.get >>= fun st ->
-  let sym = Symbol.Symbol (Fresh.digest(), Fresh.int(), SD_Id (fst _sym)) in
-(*  let sym = Symbol.Symbol (Global_ocaml.new_int (), Some (fst _sym)) in *)
+  let sym = Symbol.Symbol (Cerb_fresh.digest(), Cerb_fresh.int(), SD_Id (fst _sym)) in
+(*  let sym = Symbol.Symbol (Cerb_global.new_int (), Some (fst _sym)) in *)
   Eff.put {st with
     sym_scopes=
       match st.sym_scopes with
         | [] ->
             failwith "Core_parser.register_sym: found open scope"
         | scope::scopes ->
-            Pmap.add _sym (sym, Location_ocaml.(region (start_p, end_p) NoCursor)) scope :: scopes
+            Pmap.add _sym (sym, Cerb_location.(region (start_p, end_p) NoCursor)) scope :: scopes
   } >>= fun () ->
   Eff.return sym
 
-let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
+let lookup_sym _sym : ((Symbol.sym * Cerb_location.t) option) Eff.t =
   Eff.get >>= fun st ->
   Eff.return (match st.sym_scopes with
     | [] ->
@@ -211,14 +211,14 @@ let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
 
 
 let register_label ((_, (start_p, end_p)) as _sym) : unit Eff.t =
-  let loc = Location_ocaml.(region (start_p, end_p) NoCursor) in
+  let loc = Cerb_location.(region (start_p, end_p) NoCursor) in
   Eff.get >>= fun st ->
-  let sym = Symbol.Symbol (Fresh.digest(), Fresh.int(), SD_Id (fst _sym)) in
+  let sym = Symbol.Symbol (Cerb_fresh.digest(), Cerb_fresh.int(), SD_Id (fst _sym)) in
   Eff.put {st with
     labels= Pmap.add _sym (sym, loc) st.labels
   }
 
-let lookup_label _sym: ((Symbol.sym * Location_ocaml.t) option) Eff.t =
+let lookup_label _sym: ((Symbol.sym * Cerb_location.t) option) Eff.t =
   Eff.get >>= fun st ->
   Eff.return (Pmap.lookup _sym st.labels)
 
@@ -229,7 +229,7 @@ let symbolify_name = function
        | Some (sym, _) ->
            Eff.return (Sym sym)
        | None ->
-           Eff.fail (Location_ocaml.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym)))
+           Eff.fail (Cerb_location.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym)))
  | Impl iCst ->
      Eff.return (Impl iCst)
 
@@ -238,7 +238,7 @@ let symbolify_sym _sym =
     | Some (sym, _) ->
         Eff.return sym
     | None ->
-       Eff.fail (Location_ocaml.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
+       Eff.fail (Cerb_location.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
 
 let rec symbolify_ctype (Ctype (annots, ty)) =
   let symbolify_symbol = function
@@ -248,7 +248,7 @@ let rec symbolify_ctype (Ctype (annots, ty)) =
             Eff.return sym
         | None ->
             (* TODO: location *)
-            Eff.fail Location_ocaml.unknown (Core_parser_unresolved_symbol str)
+            Eff.fail Cerb_location.unknown (Core_parser_unresolved_symbol str)
       end
     | _ -> failwith "symbolify_ctype"
   in
@@ -319,7 +319,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | Some (sym, _) ->
               Eff.return (Pexpr (annot, (), PEsym sym))
           | None ->
-              Eff.fail (Location_ocaml.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
+              Eff.fail (Cerb_location.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
         )
     | PEimpl iCst ->
         Eff.return (Pexpr (annot, (), PEimpl iCst))
@@ -472,11 +472,19 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         end
     | PEctor (Civfromfloat, _pes) ->
         begin match _pes with
-          | [_pe] ->
-              symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr (annot, (), PEctor (Civfromfloat, [pe])))
+          | [_pe1; _pe2] ->
+              symbolify_pexpr _pe1 >>= fun pe1 ->
+              symbolify_pexpr _pe2 >>= fun pe2 ->
+              Eff.return (Pexpr (annot, (), PEctor (Civfromfloat, [pe1; pe2])))
           | _ ->
-              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (2, List.length _pes))
+        end
+    | PEctor (CivNULLcap is_signed, _pes) ->
+        begin match _pes with
+          | [] ->
+              Eff.return (Pexpr (annot, (), PEctor (CivNULLcap is_signed, [])))
+          | _ ->
+              Eff.fail loc (Core_parser_ctor_wrong_application (0, List.length _pes))
         end
     | PEcase (_pe, _pat_pes) ->
         symbolify_pexpr _pe >>= fun pe ->
@@ -498,8 +506,11 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | Some (tag_sym, _) ->
               Eff.return (Pexpr (annot, (), PEmember_shift (pe, tag_sym, member_ident)))
           | None ->
-             Eff.fail (Location_ocaml.(region (snd _tag_sym) NoCursor))
+             Eff.fail (Cerb_location.(region (snd _tag_sym) NoCursor))
                (Core_parser_unresolved_symbol (fst _tag_sym)))
+    | PEmemop (mop, _pes) ->
+        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+        Eff.return (Pexpr (annot, (), PEmemop (mop, pes)))
     | PEnot _pe ->
         Caux.mk_not_pe <$> symbolify_pexpr _pe
     | PEop (bop, _pe1, _pe2) ->
@@ -561,7 +572,60 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | Epure _pe ->
        symbolify_pexpr _pe >>= fun pe ->
        Eff.return (Epure pe)
-   | Ememop (memop, _pes) ->
+   | Ememop (_memop, _pes) ->
+       begin
+         let open Mem_common in
+         match _memop with
+          | PtrMemberShift (_tag_sym, membr_ident) ->
+              lookup_sym _tag_sym >>= (function
+                | Some (tag_sym, _) ->
+                    Eff.return (PtrMemberShift (tag_sym, membr_ident))
+                | None ->
+                    Eff.fail (Cerb_location.(region (snd _tag_sym) NoCursor))
+                      (Core_parser_unresolved_symbol (fst _tag_sym)))
+          | PtrEq ->
+               Eff.return PtrEq
+          | PtrNe ->
+              Eff.return PtrNe
+          | PtrLt ->
+              Eff.return PtrLt
+          | PtrGt ->
+              Eff.return PtrGt
+          | PtrLe ->
+              Eff.return PtrLe
+          | PtrGe ->
+              Eff.return PtrGe
+          | Ptrdiff ->
+              Eff.return Ptrdiff
+          | IntFromPtr ->
+              Eff.return IntFromPtr
+          | PtrFromInt ->
+              Eff.return PtrFromInt
+          | PtrValidForDeref ->
+              Eff.return PtrValidForDeref
+          | PtrWellAligned ->
+              Eff.return PtrWellAligned
+          | PtrArrayShift ->
+              Eff.return PtrArrayShift
+          | Memcpy ->
+              Eff.return Memcpy
+          | Memcmp ->
+              Eff.return Memcmp
+          | Realloc ->
+              Eff.return Realloc
+          | Va_start ->
+              Eff.return Va_start
+          | Va_copy ->
+              Eff.return Va_copy
+          | Va_arg ->
+              Eff.return Va_arg
+          | Va_end ->
+              Eff.return Va_end
+          | Copy_alloc_id ->
+              Eff.return Copy_alloc_id
+          | CHERI_intrinsic _ ->
+              assert false
+       end >>= fun memop ->
        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
        Eff.return (Ememop (memop, pes))
    | Eaction _pact ->
@@ -628,7 +692,7 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
           therefore registered in a preliminary pass *)
        lookup_label _sym >>= begin function
          | None ->
-             Eff.fail (Location_ocaml.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
+             Eff.fail (Cerb_location.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
          | Some (sym, _) ->
              under_scope begin
                Eff.mapM (fun (_sym, ((bTy,mct), _pe)) ->
@@ -646,7 +710,7 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | Erun ((), _sym, _pes) ->
        lookup_label _sym >>= begin function
          | None ->
-             Eff.fail (Location_ocaml.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
+             Eff.fail (Cerb_location.(region (snd _sym) NoCursor)) (Core_parser_unresolved_symbol (fst _sym))
          | Some (sym, _) ->
              Eff.mapM symbolify_pexpr _pes >>= fun pes ->
              Eff.return (Erun ((), sym, pes))
@@ -893,7 +957,7 @@ let symbolify_impl_or_file decls : ((Core.impl, parsed_core_file) either) Eff.t 
       | Some sym ->
           Eff.return (Right (sym, globs, fun_map, tagDefs))
       | None ->
-          Eff.fail Location_ocaml.unknown Core_parser_undefined_startup
+          Eff.fail Cerb_location.unknown Core_parser_undefined_startup
 
 let symbolify_std decls : (unit Core.fun_map) Eff.t =
   (* Registering all the declaration symbol in first pass (and looking for the startup symbol) *)
@@ -919,7 +983,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
       let loc = Annot.get_loc_ annots in
        Eff.fail loc Core_parser_wrong_decl_in_std
     | Glob_decl (_sym, _, _)  ->
-       Eff.fail (Location_ocaml.(region (snd _sym) NoCursor)) Core_parser_wrong_decl_in_std
+       Eff.fail (Cerb_location.(region (snd _sym) NoCursor)) Core_parser_wrong_decl_in_std
     | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
         lookup_sym _sym >>= (function
           | Some (decl_sym, _) ->
@@ -962,7 +1026,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
               assert false
         )
       | Aggregate_decl ((_, p), _tags) ->
-          Eff.fail (Location_ocaml.(region p NoCursor)) Core_parser_wrong_decl_in_std
+          Eff.fail (Cerb_location.(region p NoCursor)) Core_parser_wrong_decl_in_std
   ) (Pmap.empty sym_compare) decls
 
 let symbolify_impl decls : impl Eff.t =
@@ -1002,7 +1066,9 @@ let mk_file decls =
 %token <Core_parser_util._sym> SYM
 %token <Implementation.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
-%token <Mem_common.memop> MEMOP_OP
+%token <Mem_common.pure_memop> PURE_MEMOP_OP
+%token <Core_parser_util._sym Mem_common.generic_memop> MEMOP_OP
+%token PTRMEMBERSHIFT
 
 (* ctype tokens *)
 %token CONST
@@ -1079,6 +1145,7 @@ let mk_file decls =
 (* integer values *)
 %token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE ARRAYCTOR
 %token IVCOMPL IVAND IVOR IVXOR
+%token IVMAX_ALIGNMENT
 %token ARRAY SPECIFIED UNSPECIFIED
 
 %token FVFROMINT IVFROMFLOAT
@@ -1245,7 +1312,8 @@ ctype:
         | Some ty ->
             ty
         | None ->
-            $syntaxerror
+            let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
+            raise (Core_parser_util.Core_error (loc, Errors.Core_parser_unknown_ctype (fst str)))
     }
 | STRUCT tag= SYM
     (* NOTE: we only collect the string name here *)
@@ -1351,7 +1419,7 @@ name:
 
 cabs_id:
 | n= SYM
-  { Symbol.Identifier (Location_ocaml.(region (snd n) NoCursor), fst n) }
+  { Symbol.Identifier (Cerb_location.(region (snd n) NoCursor), fst n) }
 ;
 
 memory_order:
@@ -1394,26 +1462,26 @@ ctor:
 
 list_pattern:
 | BRACKETS COLON bTy= core_base_type
-  { let loc = (Location_ocaml.(region ($startpos, $endpos) NoCursor)) in
+  { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
     Pattern ([Aloc loc], CaseCtor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pat1= pattern COLON_COLON _pat2= pattern
-  { Pattern ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ccons, [_pat1; _pat2])) }
+  { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ccons, [_pat1; _pat2])) }
 | _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET) COLON bTy= core_base_type
-    { let loc = (Location_ocaml.(region ($startpos, $endpos) NoCursor)) in
+    { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
       mk_list_pat (ensure_list_core_base_type loc bTy) _pats }
 
 pattern:
 | _sym= SYM COLON bTy= core_base_type
-    { Pattern ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], CaseBase (Some _sym, bTy)) }
+    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseBase (Some _sym, bTy)) }
 | UNDERSCORE COLON bTy= core_base_type
-    { Pattern ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], CaseBase (None, bTy)) }
+    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseBase (None, bTy)) }
 (* Syntactic sugar for tuples and lists *)
 | _pat= list_pattern
     { _pat }
 | LPAREN _pat= pattern COMMA _pats= separated_nonempty_list(COMMA, pattern) RPAREN
-    { Pattern ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ctuple, _pat :: _pats)) }
+    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ctuple, _pat :: _pats)) }
 | ctor=ctor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
-    { Pattern ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], CaseCtor (ctor, _pats)) }
+    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (ctor, _pats)) }
 ;
 
 pattern_pair(X):
@@ -1440,6 +1508,8 @@ value:
 *)
 | n= INT_CONST
     { Vobject (OVinteger (Impl_mem.integer_ival n)) }
+| IVMAX_ALIGNMENT
+    { Vobject (OVinteger (Impl_mem.integer_ival (Z.of_int (Ocaml_implementation.(get ()).max_alignment)))) }
 | NULL ty= delimited(LPAREN, ctype, RPAREN)
     { Vobject (OVpointer (Impl_mem.null_ptrval ty)) }
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
@@ -1456,12 +1526,12 @@ value:
 
 list_pexpr:
 | BRACKETS COLON bTy= core_base_type
-    { let loc = (Location_ocaml.(region ($startpos, $endpos) NoCursor)) in
+    { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
       Pexpr ([Aloc loc], (), PEctor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pe1= pexpr COLON_COLON _pe2= pexpr
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEctor (Ccons, [_pe1; _pe2])) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEctor (Ccons, [_pe1; _pe2])) }
 | _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET) COLON bTy= core_base_type
-    { let loc = (Location_ocaml.(region ($startpos, $endpos) NoCursor)) in
+    { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
       mk_list_pe (ensure_list_core_base_type loc bTy) _pes }
 
 member:
@@ -1473,125 +1543,130 @@ pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
 | UNDEF LPAREN ub= UB RPAREN
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEundef (Location_ocaml.(region ($startpos, $endpos) NoCursor), ub)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEundef (Cerb_location.(region ($startpos, $endpos) NoCursor), ub)) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEerror (str, _pe))  }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEerror (str, _pe))  }
 | _cval= value
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEval _cval) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEval _cval) }
 | _sym= SYM
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEsym _sym) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEsym _sym) }
 | iCst= IMPL
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEimpl iCst) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEimpl iCst) }
 (* Syntactic sugar for tuples and lists *)
 | LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEctor (Ctuple, _pe :: _pes)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEctor (Ctuple, _pe :: _pes)) }
 | _pe= list_pexpr
   { _pe }
 | ctor= ctor _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEctor (ctor, _pes)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEctor (ctor, _pes)) }
 | CASE _pe= pexpr OF _pat_pes= list(pattern_pair(pexpr)) END
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PEcase (_pe, _pat_pes)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PEcase (_pe, _pat_pes)) }
 | ARRAY_SHIFT LPAREN _pe1= pexpr COMMA ty= core_ctype COMMA _pe2= pexpr RPAREN
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEarray_shift (_pe1, ty, _pe2)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEarray_shift (_pe1, ty, _pe2)) }
 | MEMBER_SHIFT LPAREN _pe1= pexpr COMMA _sym= SYM COMMA DOT cid= cabs_id RPAREN
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEmember_shift (_pe1, _sym, cid)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEmember_shift (_pe1, _sym, cid)) }
 | NOT _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEnot _pe) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEnot _pe) }
 | MINUS _pe= pexpr
-    { let loc = Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1))) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))) in
       Pexpr ([Aloc loc], (), PEop (OpSub, Pexpr ([Aloc loc], (), PEval (Vobject (OVinteger (Impl_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
 | CFUNCTION _pe = delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEcfunction _pe) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEcfunction _pe) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(bop))))], (), PEop (bop, _pe1, _pe2)) }
-(*
-  | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
-*)
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(bop))))], (), PEop (bop, _pe1, _pe2)) }
+| MEMOP LPAREN memop= PURE_MEMOP_OP COMMA _pes= separated_list(COMMA, pexpr) RPAREN
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEmemop (memop, _pes)) }
 | LPAREN STRUCT _sym=SYM RPAREN _mems= delimited(LBRACE,separated_list (COMMA, member), RBRACE)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEstruct (_sym, _mems)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEstruct (_sym, _mems)) }
 | LPAREN UNION _sym=SYM RPAREN LBRACE m=member RBRACE
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEunion (_sym, fst m, snd m)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEunion (_sym, fst m, snd m)) }
 | nm= name _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEcall (nm, _pes)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEcall (nm, _pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _pe2= pexpr
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PElet (_pat, _pe1, _pe2)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PElet (_pat, _pe1, _pe2)) }
 | IF _pe1= pexpr THEN _pe2= pexpr ELSE _pe3= pexpr
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PEif (_pe1, _pe2, _pe3)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor($startpos($1)))))], (), PEif (_pe1, _pe2, _pe3)) }
 | IS_SCALAR _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEis_scalar _pe) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_scalar _pe) }
 | IS_INTEGER _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEis_integer _pe) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_integer _pe) }
 | IS_SIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEis_signed _pe) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_signed _pe) }
 | IS_UNSIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEis_unsigned _pe) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEis_unsigned _pe) }
 | ARE_COMPATIBLE LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
-    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEare_compatible (_pe1, _pe2)) }
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEare_compatible (_pe1, _pe2)) }
 ;
 
+memop_op:
+| memop= MEMOP_OP
+    { memop }
+| PTRMEMBERSHIFT _sym_cid= delimited(LBRACKET, separated_pair(SYM, COMMA, preceded(DOT, cabs_id)), RBRACKET)
+    { let (_sym, cid) = _sym_cid in
+      Mem_common.PtrMemberShift (_sym, cid) }
 
 expr:
 | e_= delimited(LPAREN, expr, RPAREN)
     { let Expr (annot, expr_) = e_ in
-      Expr (Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor)) :: annot, expr_) }
+      Expr (Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor)) :: annot, expr_) }
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
-    { Expr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], Epure pe_) }
-| MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
-    { Expr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], Ememop (memop, pes)) }
+    { Expr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], Epure pe_) }
+| MEMOP LPAREN memop= memop_op COMMA pes= separated_list(COMMA, pexpr) RPAREN
+    { Expr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], Ememop (memop, pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Elet (_pat, _pe1, _e2) ) }
 | IF _pe1= pexpr THEN _e2= expr ELSE _e3= expr
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Eif (_pe1, _e2, _e3) ) }
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Ecase (_pe, _pat_es) ) }
 | PCALL LPAREN _nm= name RPAREN
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Eproc ((), _nm, []) ) }
 | PCALL LPAREN _nm= name COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Eproc ((), _nm, _pes) ) }
 | CCALL LPAREN  _pe_ty= pexpr COMMA _pe= pexpr RPAREN
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Eccall ((), _pe_ty, _pe, []) ) }
 | CCALL LPAREN  _pe_ty= pexpr COMMA _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Eccall ((), _pe_ty, _pe, _pes) ) }
 | _pact= paction
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Eaction _pact ) }
 | UNSEQ _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Eunseq _es ) }
 | LET WEAK _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Ewseq (_pat, _e1, _e2) ) }
 | _e1= expr SEMICOLON _e2= expr
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Esseq (Pattern ([], CaseBase (None, BTy_unit)), _e1, _e2)) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Esseq (_pat, _e1, _e2) ) }
 | BOUND _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Ebound _e ) }
 | SAVE _sym= SYM COLON bTy= core_base_type
        _xs= delimited(LPAREN,
               separated_list(COMMA,
                 separated_pair(SYM, COLON, separated_pair(core_base_type, COLON_EQ, pexpr))),
             RPAREN) IN _e= expr
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Esave ((_sym, bTy), map do_esave_arg _xs, _e) ) }
 | RUN _sym= SYM _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Erun ((), _sym, _pes) ) }
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , End _es ) }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
+    { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]
            , Epar _es ) }
 ;
 
@@ -1635,9 +1710,9 @@ action:
 
 paction:
 | _act= action
-    { Paction (Pos, Action (Location_ocaml.(region ($startpos, $endpos) NoCursor), (), _act)) }
+    { Paction (Pos, Action (Cerb_location.(region ($startpos, $endpos) NoCursor), (), _act)) }
 | NEG _act= delimited(LPAREN, action, RPAREN)
-    { Paction (Neg, Action (Location_ocaml.(region ($startpos, $endpos) NoCursor), (), _act)) }
+    { Paction (Neg, Action (Cerb_location.(region ($startpos, $endpos) NoCursor), (), _act)) }
 ;
 
 def_declaration:

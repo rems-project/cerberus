@@ -1,11 +1,11 @@
 open Cabs
 
-open Pp_prelude
+open Cerb_pp_prelude
 open Pp_ast
-open Colour
+open Cerb_colour
 open Pp_symbol
 
-open Location_ocaml
+open Cerb_location
 
 module P = PPrint
 
@@ -273,8 +273,8 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEbmc_assume e ->
         Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ d_loc, [dtree_of_cabs_expression e])
-    | CabsEgcc_statement s ->
-        Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, [dtree_of_cabs_statement s])
+    | CabsEgcc_statement ss ->
+        Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, List.map dtree_of_cabs_statement ss)
     | CabsEcondGNU (e1, e2) ->
         Dnode ( pp_stmt_ctor "CabsEcondGNU" ^^^ d_loc
               , let d_e1 = dtree_of_cabs_expression e1 in
@@ -743,10 +743,14 @@ let dtree_of_external_declaration = function
   | EDecl_decl decl ->
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_cabs_declaration decl])
 (* BEGIN CN *)
+  | EDecl_magic (_, str) ->
+      Dleaf (pp_stmt_ctor "EDecl_magic" ^^^ !^ str)
   | EDecl_funcCN func ->
       Dnode (pp_decl_ctor "EDecl_funcCN", [Cn_ocaml.PpCabs.dtree_of_cn_function func])
   | EDecl_lemmaCN lmma ->
       Dnode (pp_decl_ctor "EDecl_lemmaCN", [Cn_ocaml.PpCabs.dtree_of_cn_lemma lmma])
+  | EDecl_fun_specCN lmma ->
+      Dnode (pp_decl_ctor "EDecl_fun_specCN", [Cn_ocaml.PpCabs.dtree_of_cn_spec lmma])
   | EDecl_predCN pred ->
       Dnode (pp_decl_ctor "EDecl_predCN", [Cn_ocaml.PpCabs.dtree_of_cn_predicate pred])
   | EDecl_datatypeCN dt ->
@@ -758,18 +762,20 @@ let filter_external_decl =
     | EDecl_func (FunDef (loc, _, _, _, _))
     | EDecl_decl (Declaration_static_assert (Static_assert (CabsExpression (loc, _), _)))
     | EDecl_decl (Declaration_base (_, _, InitDecl(loc, _, _)::_)) ->
-        Location_ocaml.from_main_file loc
+        Cerb_location.from_main_file loc
     | EDecl_decl (Declaration_base (_, _, [])) -> true
+    | EDecl_magic _ -> true
     | EDecl_predCN _ -> true
     | EDecl_funcCN _ -> true
     | EDecl_lemmaCN _ -> true
+    | EDecl_fun_specCN _ -> true
     | EDecl_datatypeCN _ -> true
   in List.filter pred
 
 let filter_hidden =
   (* hidden declarations marked with the attribute [[cerb::hidden]] *)
   let is_hidden attrs =
-    if Debug_ocaml.get_debug_level () < 4 then
+    if Cerb_debug.get_debug_level () < 4 then
       let open Cerb_attributes in
       match decode_hidden attrs with
         | CAttr_valid (_, cerb_attrs) ->
@@ -787,6 +793,6 @@ let filter_hidden =
   in List.filter pred
 
 let pp_translation_unit show_include do_colour (TUnit edecls) =
-  Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
+  Cerb_colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_edecls = filter_hidden (if show_include then edecls else filter_external_decl edecls) in
   pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration filtered_edecls)) ^^ P.hardline

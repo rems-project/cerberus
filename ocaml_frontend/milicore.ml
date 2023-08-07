@@ -4,7 +4,7 @@ type symbol = Symbol.sym
 (* copying some types and logic from an earlier version of mucore.ml
    and from the Core module *)
 
-type loc = Location_ocaml.t
+type loc = Cerb_location.t
 
 type bt = Core.core_base_type
 type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
@@ -18,14 +18,14 @@ type 'TY mi_label_defs = (symbol, ('TY mi_label_def)) Pmap.map
 
 type 'TY mi_fun_map_decl =
   | Mi_Fun of bt * (symbol * bt) list * Core.pexpr
-  | Mi_Proc of Location_ocaml.t * int option * bt * (symbol * bt) list * 'TY Core.expr * 'TY mi_label_defs
-  | Mi_ProcDecl of Location_ocaml.t * bt * bt list
-  | Mi_BuiltinDecl of Location_ocaml.t * bt * bt list
+  | Mi_Proc of Cerb_location.t * int option * bt * (symbol * bt) list * 'TY Core.expr * 'TY mi_label_defs
+  | Mi_ProcDecl of Cerb_location.t * bt * bt list
+  | Mi_BuiltinDecl of Cerb_location.t * bt * bt list
 
 type 'TY mi_fun_map = (symbol, ('TY mi_fun_map_decl)) Pmap.map
 
 
-type mi_funinfo = (Symbol.sym, (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) Pmap.map
+type mi_funinfo = (Symbol.sym, (Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) Pmap.map
 
 (* a Core file is just a set of named functions *)
 type ('a, 'TY) mi_file = {
@@ -100,7 +100,7 @@ let core_to_micore__funmap_decl update_loc = function
                   (match mctb with
                    | Some (ct1,b) -> (Some sym1, (ct1,b))
                    | None -> 
-                      Debug_ocaml.error "core_to_micore: label without c-type argument annotation"
+                      Cerb_debug.error "core_to_micore: label without c-type argument annotation"
                   )
                 ) params) 
            in
@@ -111,7 +111,7 @@ let core_to_micore__funmap_decl update_loc = function
              (* bogus: *)
              (* let () =  *)
              (*   if not (List.equal Core.eq_core_base_type (List.map snd args) (List.map snd params)) then *)
-             (*     let open Pp_prelude.P in *)
+             (*     let open Cerb_pp_prelude.P in *)
              (*     let err =  *)
              (*       string *)
              (*       string "mismatch:" ^^ space ^^ *)
@@ -119,7 +119,7 @@ let core_to_micore__funmap_decl update_loc = function
              (*       string "vs" ^^ space ^^ *)
              (*       Pp_core.Basic.pp_params params *)
              (*     in *)
-             (*     Debug_ocaml.error (Pp_utils.to_plain_pretty_string err) *)
+             (*     Cerb_debug.error (Pp_utils.to_plain_pretty_string err) *)
              (* in *)
              Mi_Return (lloc(* , param_tys *))
            else Mi_Label (lloc, param_tys, params, remove_save body, annots)

@@ -46,6 +46,7 @@ let empty_sigma = <|
   A.cn_functions= [];
   A.cn_lemmata= [];
   A.cn_datatypes= [];
+  A.cn_fun_specs= [];
   A.cn_idents= Map.empty;
 |>
 
@@ -63,7 +64,7 @@ val evalConstantExpressionAux:
 
 let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm typing_guard ty_opt expr =
   let toAilTau: A.expression unit -> ErrorMonad.errorM (A.expression GenTypes.genTypeCategory) =
-    GenTyping.annotate_expression sigm [] (*TODO: check*)GenTyping.CTXother in
+    GenTyping.annotate_expression (GenTyping.annotate_block Nothing) sigm [] (*TODO: check*)GenTyping.CTXother in
   
   let toCore (a_e: A.expression GenTypes.genTypeCategory) : TranslateEff.elabM (Core.expr unit) =
     (* STD §6.6#4 *)
@@ -201,7 +202,7 @@ let evalIntegerConstantExpression loc core_env sigm ty_opt expr =
 
 val typecheckAil: A.sigma unit -> A.gamma -> A.expression unit -> either (Loc.t * TypingError.typing_error) Ctype.ctype
 let typecheckAil sigm gamm expr =
-  match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm gamm (*TODO: check*)GenTyping.CTXother expr) with
+  match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (GenTyping.annotate_block Nothing) sigm gamm (*TODO: check*)GenTyping.CTXother expr) with
     | Left z ->
         Left z
     | Right a_expr ->

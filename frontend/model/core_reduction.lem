@@ -1332,30 +1332,34 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 full_eval_pexpr' pe >>= function
                   | Vloaded (LVspecified (OVpointer pv)) ->
                       E.mapM full_eval_pexpr' pes >>= fun cvals ->
-                      let case_funptrval psym =
-                        SEU.runEU (
-                          Exception.bind (Core_run.call_proc core_extern file psym cvals)
-                            EU.return
-                        ) >>= fun (proc_env, expr) ->
-                        E.return <| th_st with
-                          arena= expr;
-                          stack= Stack_cons2 th_st.current_proc_opt ctx th_st.stack;
-                          exec_loc= push_exec_loc psym th_st.current_loc th_st.exec_loc;
-                          env= proc_env :: th_st.env;
-                          current_proc_opt= Just psym;
-                        |>
-                      in
+                      let case_funptrval = function
+                        | Nothing ->
+                            E.undef th_st.current_loc [Undefined.UB_CERB003_invalid_function_pointer]
+                        | Just psym ->
+                            SEU.runEU (
+                              Exception.bind (Core_run.call_proc core_extern file psym cvals)
+                                EU.return
+                            ) >>= fun (proc_env, expr) ->
+                            E.return <| th_st with
+                              arena= expr;
+                              stack= Stack_cons2 th_st.current_proc_opt ctx th_st.stack;
+                              exec_loc= push_exec_loc psym th_st.current_loc th_st.exec_loc;
+                              env= proc_env :: th_st.env;
+                              current_proc_opt= Just psym;
+                            |>
+                      end in
                       Mem.case_ptrval pv
                         (fun _ -> error "null function pointer")
                         case_funptrval
                       (fun _ addr ->
                         (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
-                        match Mem.case_funsym_opt mem_st pv with
+                        case_funptrval (Mem.case_funsym_opt mem_st pv)
+                        (* match Mem.case_funsym_opt mem_st pv with
                           | Just sym ->
                               case_funptrval sym
                           | None ->
                               error (show addr ^ " does not point to a function (Eccall)")
-                        end)
+                        end *) )
                   | _ ->
                       error "TODO(use core_runM) Eccall illtyped first operand"
                 end

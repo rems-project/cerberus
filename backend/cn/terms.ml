@@ -31,6 +31,8 @@ type binop =
   | Mod
   | ModNoSMT
   | XORNoSMT
+  | BWAndNoSMT
+  | BWOrNoSMT
   | LT
   | LE
   | Min
@@ -44,6 +46,12 @@ type binop =
   | SetMember
   | Subset
 [@@deriving eq, ord, show]
+
+type pattern = 
+  | PSym of Sym.t
+  | PWild
+  | PConstructor of Sym.t * (Id.t * pattern) list
+[@@deriving eq, ord, map]
 
 (* over integers and reals *)
 type 'bt term_ =
@@ -62,9 +70,10 @@ type 'bt term_ =
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
-  | DatatypeCons of Sym.t * 'bt term
-  | DatatypeMember of 'bt term * Id.t
-  | DatatypeIsCons of Sym.t * 'bt term
+  | DatatypeCons of Sym.t * 'bt term (* TODO: will be removed *)
+  | DatatypeMember of 'bt term * Id.t (* TODO: will be removed *)
+  | DatatypeIsCons of Sym.t * 'bt term (* TODO: will be removed *)
+  | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
   | Nil
@@ -77,12 +86,14 @@ type 'bt term_ =
   | Representable of Sctypes.t * 'bt term
   | Good of Sctypes.t * 'bt term
   | Aligned of {t : 'bt term; align : 'bt term}
+  | WrapI of Sctypes.IntegerTypes.t * 'bt term
   | MapConst of BaseTypes.t * 'bt term
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
   | MapDef of (Sym.t * 'bt) * 'bt term
   | Apply of Sym.t * ('bt term) list
   | Let of (Sym.t * 'bt term) * 'bt term
+  | Match of 'bt term * (pattern * 'bt term) list
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
@@ -93,17 +104,31 @@ and 'bt term =
 let equal = equal_term
 let compare = compare_term
 
+
+
+let rec pp_pattern = function
+  | PSym s -> 
+     Sym.pp s
+  | PWild -> 
+     underscore
+  | PConstructor (c, args) ->
+     Sym.pp c ^^^ 
+       braces (separate_map (comma ^^ space) (fun (id, pat) ->
+                   Id.pp id ^^ colon ^^^ pp_pattern pat
+                 ) args)
+
 let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -> Pp.doc =
   fun ?(atomic=false) ?(f=fun _ x -> x) ->
   let rec aux atomic (IT (it, _)) =
     let aux b x = f x (aux b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
        by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
+    let parens pped = 
+      Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen) in
+    let braces pped = 
+      Pp.group ((nest 2 @@ lbrace ^^ break 0 ^^ pped) ^^ break 0 ^^ rbrace) in
     let mparens pped =
-      if atomic then
-        Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen)
-      else
-        Pp.group pped in
+      if atomic then parens pped else Pp.group pped in
     let break_op x = break 1 ^^ x ^^ space in
     match it with
     | Const const ->
@@ -173,6 +198,10 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"max" [aux false it1; aux false it2]
        | XORNoSMT ->
           c_app !^"xor_uf" [aux false it1; aux false it2]
+       | BWAndNoSMT ->
+          c_app !^"bw_and_uf" [aux false it1; aux false it2]
+       | BWOrNoSMT ->
+          c_app !^"bw_or_uf" [aux false it1; aux false it2]
        | SetMember ->
           c_app !^"member" [aux false it1; aux false it2]
        | SetUnion ->
@@ -241,9 +270,11 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Aligned t ->
           c_app !^"aligned" [aux false t.t; aux false t.align]
        | Representable (rt, t) ->
-          c_app !^"repr" [CT.pp rt; aux false t]
+          c_app (!^"repr" ^^ angles (CT.pp rt)) [aux false t]
        | Good (rt, t) ->
-          c_app !^"good" [CT.pp rt; aux false t]
+          c_app (!^"good" ^^ angles (CT.pp rt)) [aux false t]
+       | WrapI (ity, t) ->
+          c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [aux false t]
        (* end *)
     (* | List_op list_op -> *)
     (*    begin match list_op with *)
@@ -299,6 +330,17 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        c_app (Sym.pp name) (List.map (aux false) args)
     | Let ((name, x1), x2) -> parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
         aux false x1 ^^^ !^ "in" ^^^ aux false x2)
+    | Match (e, cases) ->
+        !^"match" ^^^ aux false e ^^^ braces (
+          (* copying from mparens *)
+          Pp.group (nest 2 @@ (
+            separate_map (break 0) (fun (pattern, body) ->
+                pp_pattern pattern ^^^ !^"=>" ^^^ 
+                  braces (aux false body)
+              ) cases))
+        )
+    | Constructor (s, args) ->
+       Sym.pp s ^^^ braces (separate_map (comma ^^ space) (fun (id, e) -> Id.pp id ^^ colon ^^^ aux false e) args)
   in
   fun (it : 'bt term) -> aux atomic it
 
@@ -313,7 +355,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
 
 
 
-open Pp_prelude 
+open Cerb_pp_prelude 
 open Cerb_frontend.Pp_ast
 
 let rec dtree (IT (it_, bt)) =

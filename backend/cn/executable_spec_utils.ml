@@ -17,17 +17,17 @@ let mk_ctype ctype_ =
 let mk_expr expr_ = 
   A.AnnotatedExpression (
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
-     [], Location_ocaml.unknown, expr_)
+     [], Cerb_location.unknown, expr_)
 
 let mk_cn_expr cn_expr_ = 
-  Cn.CNExpr (Location_ocaml.unknown, cn_expr_)
+  Cn.CNExpr (Cerb_location.unknown, cn_expr_)
 
 let rm_cn_expr (Cn.CNExpr (_, cn_expr_))
   = cn_expr_
 
 
 let mk_stmt stmt_ = 
-  A.AnnotatedStatement (Location_ocaml.unknown, CF.Annot.Attrs [], stmt_)
+  A.AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [], stmt_)
 
 let rm_expr (A.AnnotatedExpression (_, _, _, expr_)) = expr_
 

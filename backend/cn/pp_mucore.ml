@@ -10,9 +10,9 @@ open Annot
 
 open Either
 
-open Colour
+open Cerb_colour
 
-open Pp_prelude
+open Cerb_pp_prelude
 
 type budget = int option
 
@@ -20,7 +20,7 @@ type budget = int option
 let pp_ctype ty =
   P.squotes (Pp_core_ctype.pp_ctype ty)
 
-module Loc = Location_ocaml
+module Loc = Cerb_location
 
 
 
@@ -30,7 +30,7 @@ module type CONFIG = sig
   val show_std: bool
   val show_include: bool
   val show_locations: bool
-  val handle_location: Location_ocaml.t -> P.range -> unit
+  val handle_location: Cerb_location.t -> P.range -> unit
   val handle_uid: string -> P.range -> unit
 end
 
@@ -78,7 +78,7 @@ module Make (Config: CONFIG) = struct
       fun loc -> P.empty
     else 
       fun loc -> 
-      P.parens (Location_ocaml.pp_location ~clever:true loc) ^^ P.space
+      P.parens (Cerb_location.pp_location ~clever:true loc) ^^ P.space
 
 
 
@@ -711,6 +711,9 @@ module Make (Config: CONFIG) = struct
                | M_PtrArrayShift (sym1,ct1,sym2) ->
                   (PtrArrayShift, 
                    [msym sym1; mctype ct1; msym sym2])
+               | M_PtrMemberShift (tag_sym, memb_ident, sym) ->
+                  (PtrMemberShift (tag_sym, memb_ident),
+                   [msym sym])
                | M_Memcpy (sym1,sym2,sym3) ->
                   (Memcpy, 
                    [msym sym1; msym sym2; msym sym3])
@@ -904,7 +907,7 @@ module Make (Config: CONFIG) = struct
 
   let pp_fun_map budget funs =
     let pp_cond loc d =
-      if show_include || Location_ocaml.from_main_file loc then d else P.empty
+      if show_include || Cerb_location.from_main_file loc then d else P.empty
     in
     Pmap.fold (fun sym decl acc ->
       acc ^^
@@ -915,7 +918,7 @@ module Make (Config: CONFIG) = struct
         (*     P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) *)
         | M_ProcDecl (loc, ft) ->
             pp_cond loc @@
-            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ pp_ft ft
+            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ Pp.option pp_ft "(no spec)" ft
         (* | M_BuiltinDecl (loc, bTy, bTys) -> *)
         (*     pp_cond loc @@ *)
         (*     pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) *)
@@ -983,7 +986,7 @@ module Make (Config: CONFIG) = struct
     let guard b doc = if b then doc else P.empty in
 
     (* begin *)
-    (*   if Debug_ocaml.get_debug_level () > 1 then *)
+    (*   if Cerb_debug.get_debug_level () > 1 then *)
     (*     fun z -> *)
     (*       !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^ *)
     (*       (pp_fun_map budget file.mu_stdlib) ^^ P.break 1 ^^ *)
@@ -1135,7 +1138,7 @@ end)
 
 
 module Basic = Make(struct
-  (* let ansi_format = Colour.ansi_format *)
+  (* let ansi_format = Cerb_colour.ansi_format *)
   let ansi_format _ s = s
   let show_std = false
   let show_include = true
@@ -1145,7 +1148,7 @@ module Basic = Make(struct
 end)
 
 module All = Make(struct
-  (* let ansi_format = Colour.ansi_format *)
+  (* let ansi_format = Cerb_colour.ansi_format *)
   let ansi_format _ s = s
   let show_std = true
   let show_include = true
@@ -1156,7 +1159,7 @@ end)
 
 module WithLocations = Make(struct
   let ansi_format _ s = s
-  (* let ansi_format = Colour.ansi_format *)
+  (* let ansi_format = Cerb_colour.ansi_format *)
   let show_std = false
   let show_include = true
   let show_locations = true
@@ -1165,7 +1168,7 @@ module WithLocations = Make(struct
 end)
 
 
-let pp_budget () = Some ((! Pp.print_level) + 5)
+let pp_budget () = Some ((! Cerb_debug.debug_level) + (! Pp.print_level))
 let pp_pexpr_w b e = Basic.pp_pexpr b e
 let pp_pexpr e = pp_pexpr_w (pp_budget ()) e
 let pp_expr_w b e = Basic.pp_expr b e

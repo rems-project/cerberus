@@ -2,7 +2,7 @@ open Cerb_frontend
 
 type driver_conf = {
 (* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
-  exec_mode: Global_ocaml.execution_mode;
+  exec_mode: Cerb_global.execution_mode;
   concurrency: bool;
   fs_dump: bool;
   trace: bool;
@@ -17,7 +17,7 @@ type batch_exit =
 
 type batch_output =
   | Defined of { exit: batch_exit; stdout: string; stderr: string; blocked: bool }
-  | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Location_ocaml.t }
+  | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Cerb_location.t }
   | Error of { msg: string; stderr: string }
 
 val string_of_batch_exit: batch_exit -> string

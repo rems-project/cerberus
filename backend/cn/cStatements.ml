@@ -14,14 +14,14 @@ let lex_to_cmp l =
   (l.pos_lnum, l.pos_bol, l.pos_cnum, l.pos_fname)
 
 let to_pre_cmp = function
-  | Location_ocaml.Loc_unknown -> (0, [], [])
-  | Location_ocaml.Loc_other nm -> (1, [], [nm])
-  | Location_ocaml.Loc_point p -> (2, [lex_to_cmp p], [])
-  | Location_ocaml.Loc_region (x, y, _) -> (3, [lex_to_cmp x; lex_to_cmp y], [])
-  | Location_ocaml.Loc_regions (xs, _) -> (4,
+  | Cerb_location.Loc_unknown -> (0, [], [])
+  | Cerb_location.Loc_other nm -> (1, [], [nm])
+  | Cerb_location.Loc_point p -> (2, [lex_to_cmp p], [])
+  | Cerb_location.Loc_region (x, y, _) -> (3, [lex_to_cmp x; lex_to_cmp y], [])
+  | Cerb_location.Loc_regions (xs, _) -> (4,
         List.map lex_to_cmp (List.concat (List.map (fun (x, y) -> [x; y]) xs)), [])
 
-let mk_cmp (x : t) = to_pre_cmp (Location_ocaml.to_raw x)
+let mk_cmp (x : t) = to_pre_cmp (Cerb_location.to_raw x)
 
 let compare x y = compare_pre_cmp (mk_cmp x) (mk_cmp y)
 let equal x y = equal_pre_cmp (mk_cmp x) (mk_cmp y)
@@ -101,7 +101,7 @@ let add_map_stmt (stmt : 'a statement) m =
     | AilSpar ss2 -> f (ss2 @ ss) m
     | AilSexpr e -> f ss (do_x l m e)
     | AilSreturn e -> f ss (do_x l m e)
-    | AilSdeclaration xs -> f ss (do_xs l m (List.map snd xs))
+    | AilSdeclaration xs -> f ss (do_xs l m (List.filter_map snd xs))
     | AilSreg_store (_, x) -> f ss (do_x l m x)
     | _ -> f ss m
     end

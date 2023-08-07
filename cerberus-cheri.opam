@@ -1,0 +1,51 @@
+opam-version: "2.0"
+synopsis: "The Cerberus CHERI C semantics"
+description: "The Cerberus C semantics and related tools."
+maintainer: ["Kayvan Memarian <kayvan.memarian@cl.cam.ac.uk>"]
+authors: [
+  "Kayvan Memarian"
+  "Victor Gomes"
+  "Justus Matthiesen"
+  "Peter Sewell"
+  "Kyndylan Nienhuis"
+  "Stella Lau"
+  "Jean Pichon-Pharabod"
+  "Christopher Pulte"
+  "Rodolphe Lepigre"
+  "James Lingard"
+  "Vadim Zaliva"
+]
+license: "BSD-2-Clause"
+homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
+bug-reports: "https://github.com/rems-project/cerberus/issues"
+depends: [
+  "ocaml" {>= "4.13.0"}
+  "dune" {>= "3.8.0"}
+  "sha" {>= "1.12"}
+  "pprint" {>= "20180528"}
+  "ppx_sexp_conv" {>= "v0.14.3" }
+  "sexplib" {>= "v0.14.0"}
+  "z3" {>= "4.8.9-1"}
+  "cmdliner" {>= "1.1.0"}
+  "yojson" {>= "2.0.0"}
+  "lem" {>= "2020-06-03"}
+  "menhir" {>= "20181006"}
+  "result" {>= "1.5"}
+  "cerberus-lib"
+  "ounit2"
+  "ppx_deriving"
+  "zarith"
+  "coq" {< "8.17.0"}
+  "coq-sail"
+  "coq-ext-lib"
+  "coq-struct-tact"
+  "coq-cheri-capabilities"
+  "landmarks"
+  "landmarks-ppx"
+]
+
+build: [
+  ["dune" "subst"] {pinned}
+  [ make "-j" jobs "install-cheri" ]
+]
+dev-repo: "git+https://github.com/rems-project/cerberus.git"

@@ -115,7 +115,6 @@ let eval_in_pred model global res =
   match res with
   | P p -> P {p with
     pointer = try_eval model global p.pointer;
-    permission = try_eval model global p.permission;
     iargs = List.map (try_eval model global) p.iargs
   }
   | _ -> res

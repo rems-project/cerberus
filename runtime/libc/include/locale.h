@@ -28,7 +28,9 @@ struct lconv {
   char int_n_sign_posn;
 };
 
-#define NULL ((void*)0)
+#ifndef NULL
+#define NULL __cerbvar_NULL
+#endif
 #define LC_CTYPE    0
 #define LC_NUMERIC  1
 #define LC_TIME     2

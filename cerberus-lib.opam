@@ -1,0 +1,52 @@
+opam-version: "2.0"
+name: "cerberus-lib"
+synopsis: "Frontend and pipeline of Cerberus as a library"
+description: "Frontend and pipeline of Cerberus as a library"
+maintainer: ["Kayvan Memarian <kayvan.memarian@cl.cam.ac.uk>"]
+authors: [
+  "Kayvan Memarian"
+  "Victor Gomes"
+  "Justus Matthiesen"
+  "Peter Sewell"
+  "Kyndylan Nienhuis"
+  "Stella Lau"
+  "Jean Pichon-Pharabod"
+  "Christopher Pulte"
+  "Rodolphe Lepigre"
+  "James Lingard"
+]
+license: "BSD-2-Clause"
+homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
+bug-reports: "https://github.com/rems-project/cerberus/issues"
+depends: [
+  "ocaml" {>= "4.12.0"}
+  "dune" {>= "3.8.0"}
+  "sha" {>= "1.12"}
+  "pprint" {>= "20180528"}
+  "ppx_sexp_conv" {>= "v0.14.3" }
+  "sexplib" {>= "v0.14.0"}
+  "z3" {>= "4.8.14"}
+  "cmdliner" {>= "1.1.0"}
+  "yojson" {>= "2.0.0"}
+  "lem" {>= "2020-06-03"}
+  "menhir" {>= "20211230"}
+  "result" {>= "1.5"}
+  "ppx_deriving"
+  "zarith"
+]
+build: [
+  ["dune" "subst"] {pinned}
+  [make "prelude-src"]
+  ["dune"
+    "build"
+    "-p"
+    name
+    "--profile=release"
+    "-j"
+    jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+]
+dev-repo: "git+https://github.com/rems-project/cerberus.git"

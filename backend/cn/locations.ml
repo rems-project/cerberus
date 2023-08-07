@@ -2,7 +2,7 @@
 
 module StringSet = Set.Make(String)
 
-type t = Location_ocaml.t
+type t = Cerb_location.t
 
 type loc = t
 
@@ -10,16 +10,16 @@ type info = loc * string option
 
 type path = t list
 
-let unknown = Location_ocaml.unknown
+let unknown = Cerb_location.unknown
 
-let is_unknown_location = Location_ocaml.is_unknown_location
+let is_unknown_location = Cerb_location.is_unknown_location
 
 
-let pp loc = Location_ocaml.pp_location ~clever:false loc
+let pp loc = Cerb_location.pp_location ~clever:false loc
 
-let to_string loc = Location_ocaml.location_to_string loc
+let to_string loc = Cerb_location.location_to_string loc
 
-let other str = Location_ocaml.other str
+let other str = Cerb_location.other str
 
 
 let dirs_to_ignore = 
@@ -31,28 +31,28 @@ let dirs_to_ignore =
        ]
     )
 
-let good_location (loc : Location_ocaml.t) = 
-  match Location_ocaml.get_filename loc, Location_ocaml.is_other loc with
+let good_location (loc : Cerb_location.t) = 
+  match Cerb_location.get_filename loc, Cerb_location.is_other loc with
   | Some file, _ -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
   | _, Some other -> true
   | None, _ -> false
 
 
-let updateB (loc : t) (loc2 : Location_ocaml.t) = 
+let updateB (loc : t) (loc2 : Cerb_location.t) = 
   if good_location loc2 then (loc2, true) 
   else (loc, false)
 
-let update (loc : t) (loc2 : Location_ocaml.t) = 
+let update (loc : t) (loc2 : Cerb_location.t) = 
   if good_location loc2 then loc2 
   else loc
 
 
-let log (locs : path) (loc' : Location_ocaml.t) : path =
+let log (locs : path) (loc' : Cerb_location.t) : path =
   if good_location loc' then loc' :: locs else locs
 
 
 let head_pos_of_location = 
-  Location_ocaml.head_pos_of_location
+  Cerb_location.head_pos_of_location
 
 
 let unpack l = l
@@ -73,7 +73,7 @@ let json_lexing_position p =
           ("char", `Int (p.pos_cnum - p.pos_bol))]
 
 let json_raw_loc loc : Yojson.Safe.t = 
-  let open Location_ocaml in
+  let open Cerb_location in
   let json = match loc with
     | Loc_unknown -> 
        `Variant ("Unknown", None)
@@ -126,7 +126,7 @@ let json_raw_loc loc : Yojson.Safe.t =
   json
 
 let json_loc loc : Yojson.Safe.t =
-  json_raw_loc (Location_ocaml.to_raw loc)
+  json_raw_loc (Cerb_location.to_raw loc)
 
 
 let json_path locs : Yojson.Safe.t = 
@@ -139,18 +139,18 @@ let json_path locs : Yojson.Safe.t =
 type region = Lexing.position * Lexing.position
 
 
-let point = Location_ocaml.point
-let region = Location_ocaml.region
-let regions = Location_ocaml.regions
+let point = Cerb_location.point
+let region = Cerb_location.region
+let regions = Cerb_location.regions
 
 
 
-let simple_location = Location_ocaml.simple_location
+let simple_location = Cerb_location.simple_location
 
-let line_numbers = Location_ocaml.line_numbers
+let line_numbers = Cerb_location.line_numbers
 
-let is_region x = match Location_ocaml.to_raw x with
-    | Location_ocaml.Loc_region (l, r, _) -> Some (l, r)
+let is_region x = match Cerb_location.to_raw x with
+    | Cerb_location.Loc_region (l, r, _) -> Some (l, r)
     | _ -> None
 
 

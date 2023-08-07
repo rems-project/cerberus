@@ -29,7 +29,7 @@ let max_pointer =
 
 
 let size_of_ctype = function
-  | Void -> Debug_ocaml.error "size_of_ctype applied to void"
+  | Void -> Cerb_debug.error "size_of_ctype applied to void"
   | ct -> int_of_ival (IM.sizeof_ival (to_ctype ct))
 
 let align_of_ctype = function

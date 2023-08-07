@@ -36,6 +36,8 @@ let power_uf_def = ("power_uf", Sym.fresh_named "power_uf", mk_arg2 exp_no_smt_)
 let rem_uf_def = ("rem_uf", Sym.fresh_named "rem_uf", mk_arg2 rem_no_smt_)
 let mod_uf_def = ("mod_uf", Sym.fresh_named "mod_uf", mk_arg2 mod_no_smt_)
 let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 xor_no_smt_)
+let bw_and_uf_def = ("bw_and_uf", Sym.fresh_named "bw_and_uf", mk_arg2 bw_and_no_smt_)
+let bw_or_uf_def = ("bw_or_uf", Sym.fresh_named "bw_or_uf", mk_arg2 bw_or_no_smt_)
 
 let power_def = ("power", Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = ("rem", Sym.fresh_named "rem", mk_arg2 rem_)
@@ -77,6 +79,8 @@ let builtin_funs =
       rem_uf_def;  
       mod_uf_def;
       xor_uf_def;
+      bw_and_uf_def;
+      bw_or_uf_def;
 
       power_def;
       rem_def;

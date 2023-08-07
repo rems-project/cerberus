@@ -263,52 +263,52 @@ module InferenceEqs :
       (BT.basetype Terms.term * bool) list -> BT.basetype Terms.term option
     val upd_ptr_gps_for_model :
       Global.t -> S.model -> (lvt * 'a) list list -> (lvt * 'a) list list
-    val add_eqs_for_infer : Location_ocaml.t -> 'a LAT.t -> unit Typing.t
+    val add_eqs_for_infer : Cerb_location.t -> 'a LAT.t -> unit Typing.t
   end
 val check_computational_bound :
-  Location_ocaml.t -> BaseTypes.tag -> unit Typing.t
+  Cerb_location.t -> BaseTypes.tag -> unit Typing.t
 val check_computational_bound :
-  Location_ocaml.t -> BaseTypes.tag -> unit Typing.t
+  Cerb_location.t -> BaseTypes.tag -> unit Typing.t
 val check_ptrval :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype -> pointer_value -> lvt Typing.t
 val check_ptrval :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype -> pointer_value -> lvt Typing.t
 val check_mem_value :
-  Location_ocaml.t -> expect:BaseTypes.basetype -> mem_value -> lvt Typing.t
+  Cerb_location.t -> expect:BaseTypes.basetype -> mem_value -> lvt Typing.t
 val check_struct :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   BaseTypes.tag ->
   (BaseTypes.member * Cerb_frontend.Impl_mem.mem_value) list -> lvt Typing.t
 val check_union :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   BaseTypes.tag ->
   BaseTypes.member -> Cerb_frontend.Impl_mem.mem_value -> lvt Typing.t
 val check_mem_value :
-  Location_ocaml.t -> expect:BaseTypes.basetype -> mem_value -> lvt Typing.t
+  Cerb_location.t -> expect:BaseTypes.basetype -> mem_value -> lvt Typing.t
 val check_struct :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   BaseTypes.tag ->
   (BaseTypes.member * Cerb_frontend.Impl_mem.mem_value) list -> lvt Typing.t
 val check_union :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   BaseTypes.tag ->
   BaseTypes.member -> Cerb_frontend.Impl_mem.mem_value -> lvt Typing.t
 val check_object_value :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype -> 'bty Mucore.mu_object_value -> lvt Typing.t
 val check_object_value :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype -> 'a Mucore.mu_object_value -> lvt Typing.t
 val check_value :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype -> 'bty Mucore.mu_value -> lvt Typing.t
 val check_value :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype -> 'a Mucore.mu_value -> lvt Typing.t
-val warn_uf : Location_ocaml.t -> string -> unit
-val warn_uf : Location_ocaml.t -> string -> unit
+val warn_uf : Cerb_location.t -> string -> unit
+val warn_uf : Cerb_location.t -> string -> unit
 val wrapI :
   'a ->
   Cerb_frontend.Ctype.integerType ->
@@ -324,24 +324,24 @@ val is_representable_integer :
   IT.BT.basetype IT.term ->
   Cerb_frontend.Ctype.integerType -> IT.BT.basetype IT.term
 val check_conv_int :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype ->
   'a Mucore.act -> IndexTerms.t -> IT.BT.basetype IT.term Typing.t
 val check_conv_int :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype ->
   'a Mucore.act -> IndexTerms.t -> IT.BT.basetype IT.term Typing.t
 val check_array_shift :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype ->
   IT.BT.basetype IT.term ->
-  Location_ocaml.t * Sctypes.ctype ->
+  Cerb_location.t * Sctypes.ctype ->
   IT.BT.basetype IT.term -> IT.BT.basetype IT.term Typing.t
 val check_array_shift :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   expect:BaseTypes.basetype ->
   IT.BT.basetype IT.term ->
-  Location_ocaml.t * Sctypes.ctype ->
+  Cerb_location.t * Sctypes.ctype ->
   IT.BT.basetype IT.term -> IT.BT.basetype IT.term Typing.t
 val check_pexpr :
   'bty Mucore.mu_pexpr ->
@@ -358,52 +358,52 @@ val check_pexprs :
 module Spine :
   sig
     val calltype_ft :
-      Location_ocaml.t ->
+      Cerb_location.t ->
       fsym:BT.tag ->
       'a Mu.mu_pexpr list ->
       AT.ft -> (RT.t -> unit Typing.t) -> unit Typing.t
     val calltype_lt :
-      Location_ocaml.t ->
+      Cerb_location.t ->
       'a Mu.mu_pexpr list ->
       AT.lt * TE.label_kind -> (False.t -> unit Typing.t) -> unit Typing.t
     val calltype_lemma :
-      Location_ocaml.t ->
+      Cerb_location.t ->
       lemma:BT.tag ->
-      (Location_ocaml.t * lvt) list ->
+      (Cerb_location.t * lvt) list ->
       AT.lemmat -> (LRT.t -> unit Typing.t) -> unit Typing.t
     val calltype_packing :
-      Location_ocaml.t ->
+      Cerb_location.t ->
       BT.tag -> LAT.packing_ft -> (lvt -> unit Typing.t) -> unit Typing.t
     val subtype :
-      Location_ocaml.t -> LRT.t -> (unit -> unit Typing.t) -> unit Typing.t
+      Cerb_location.t -> LRT.t -> (unit -> unit Typing.t) -> unit Typing.t
   end
 type 'a orFalse = Normal of 'a | False
 val pp_or_false : ('a -> PPrint.document) -> 'a orFalse -> PPrint.document
 val pp_or_false : ('a -> PPrint.document) -> 'a orFalse -> PPrint.document
 val filter_empty_resources :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   (Resources.resource * LogicalConstraints.logical_constraint *
    Solver.model_with_q)
   list Typing.t
 val filter_empty_resources :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   (Resources.resource * LogicalConstraints.logical_constraint *
    Solver.model_with_q)
   list Typing.t
 val all_empty :
-  Location_ocaml.t -> (Resources.resource * int) list * int -> unit Typing.t
+  Cerb_location.t -> (Resources.resource * int) list * int -> unit Typing.t
 val all_empty :
-  Location_ocaml.t -> (Resources.resource * int) list * int -> unit Typing.t
+  Cerb_location.t -> (Resources.resource * int) list * int -> unit Typing.t
 type labels = (AT.lt * TE.label_kind) SymMap.t
 val load :
-  Location_ocaml.t -> IndexTerms.t -> Sctypes.ctype -> IndexTerms.t Typing.t
+  Cerb_location.t -> IndexTerms.t -> Sctypes.ctype -> IndexTerms.t Typing.t
 val load :
-  Location_ocaml.t -> IndexTerms.t -> Sctypes.ctype -> IndexTerms.t Typing.t
+  Cerb_location.t -> IndexTerms.t -> Sctypes.ctype -> IndexTerms.t Typing.t
 val instantiate :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   (IndexTerms.t -> bool) -> BaseTypes.basetype Terms.term -> unit Typing.t
 val instantiate :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   (IndexTerms.t -> bool) -> BaseTypes.basetype Terms.term -> unit Typing.t
 val check_expr :
   (ArgumentTypes.lt * TypeErrors.label_kind) Context.SymMap.t ->
@@ -414,30 +414,30 @@ val check_expr :
   typ:BaseTypes.basetype orFalse ->
   'a Mucore.mu_expr -> (lvt -> unit Typing.t) -> unit Typing.t
 val check_expr_rt :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   (ArgumentTypes.lt * TypeErrors.label_kind) Context.SymMap.t ->
   typ:ReturnTypes.t orFalse -> 'a Mucore.mu_expr -> unit Typing.t
 val check_expr_rt :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   (ArgumentTypes.lt * TypeErrors.label_kind) Context.SymMap.t ->
   typ:ReturnTypes.t orFalse -> 'a Mucore.mu_expr -> unit Typing.t
 val check_pexpr_rt :
-  Location_ocaml.t -> 'a Mucore.mu_pexpr -> ReturnTypes.t -> unit Typing.t
+  Cerb_location.t -> 'a Mucore.mu_pexpr -> ReturnTypes.t -> unit Typing.t
 val check_pexpr_rt :
-  Location_ocaml.t -> 'a Mucore.mu_pexpr -> ReturnTypes.t -> unit Typing.t
+  Cerb_location.t -> 'a Mucore.mu_pexpr -> ReturnTypes.t -> unit Typing.t
 val bind_arguments :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   'a Mucore.mu_arguments ->
   ('a * (ResourceTypes.resource_type * Resources.oargs) list) Typing.t
 val bind_arguments :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   'a Mucore.mu_arguments ->
   ('a * (ResourceTypes.resource_type * Resources.oargs) list) Typing.t
 val check_procedure :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   BaseTypes.tag -> 'bty Mucore.mu_proc_args_and_body -> unit Typing.t
 val check_procedure :
-  Location_ocaml.t ->
+  Cerb_location.t ->
   BaseTypes.tag -> 'a Mucore.mu_proc_args_and_body -> unit Typing.t
 val record_tagdefs :
   (BaseTypes.tag, Mucore.mu_tag_definition) Pmap.map -> unit Typing.t
@@ -459,37 +459,37 @@ val record_globals :
   (BaseTypes.tag * 'a Mucore.mu_globs) list -> unit Typing.t
 val wf_check_and_record_functions :
   (BaseTypes.tag, 'a Mucore.mu_fun_map_decl) Pmap.map ->
-  ((BaseTypes.tag * (Location_ocaml.t * ArgumentTypes.ft)) list *
-   (BaseTypes.tag * (Location_ocaml.t * 'a Mucore.mu_proc_args_and_body))
+  ((BaseTypes.tag * (Cerb_location.t * ArgumentTypes.ft)) list *
+   (BaseTypes.tag * (Cerb_location.t * 'a Mucore.mu_proc_args_and_body))
    list)
   Typing.t
 val wf_check_and_record_functions :
   (BaseTypes.tag, 'a Mucore.mu_fun_map_decl) Pmap.map ->
-  ((BaseTypes.tag * (Location_ocaml.t * ArgumentTypes.ft)) list *
-   (BaseTypes.tag * (Location_ocaml.t * 'a Mucore.mu_proc_args_and_body))
+  ((BaseTypes.tag * (Cerb_location.t * ArgumentTypes.ft)) list *
+   (BaseTypes.tag * (Cerb_location.t * 'a Mucore.mu_proc_args_and_body))
    list)
   Typing.t
 val check_c_functions :
-  (BaseTypes.tag * (Location_ocaml.t * 'a Mucore.mu_proc_args_and_body)) list ->
+  (BaseTypes.tag * (Cerb_location.t * 'a Mucore.mu_proc_args_and_body)) list ->
   unit Typing.t
 val check_c_functions :
-  (BaseTypes.tag * (Location_ocaml.t * 'a Mucore.mu_proc_args_and_body)) list ->
+  (BaseTypes.tag * (Cerb_location.t * 'a Mucore.mu_proc_args_and_body)) list ->
   unit Typing.t
 val wf_check_and_record_lemma :
-  BaseTypes.tag * (Location_ocaml.t * LogicalReturnTypes.t ArgumentTypes.t) ->
-  (BaseTypes.tag * (Location_ocaml.t * LogicalReturnTypes.t ArgumentTypes.t))
+  BaseTypes.tag * (Cerb_location.t * LogicalReturnTypes.t ArgumentTypes.t) ->
+  (BaseTypes.tag * (Cerb_location.t * LogicalReturnTypes.t ArgumentTypes.t))
   Typing.t
 val wf_check_and_record_lemma :
-  BaseTypes.tag * (Location_ocaml.t * LogicalReturnTypes.t ArgumentTypes.t) ->
-  (BaseTypes.tag * (Location_ocaml.t * LogicalReturnTypes.t ArgumentTypes.t))
+  BaseTypes.tag * (Cerb_location.t * LogicalReturnTypes.t ArgumentTypes.t) ->
+  (BaseTypes.tag * (Cerb_location.t * LogicalReturnTypes.t ArgumentTypes.t))
   Typing.t
 val check :
   'a Mucore.mu_file ->
-  Location_ocaml.t CStatements.LocMap.t -> string option -> unit Typing.t
+  Cerb_location.t CStatements.LocMap.t -> string option -> unit Typing.t
   *)
-  val use_model_eqs : bool ref
+  (*val use_model_eqs : bool ref*)
   val only : string option ref
 
   val check :
   'a Mucore.mu_file ->
-  Location_ocaml.t CStatements.LocMap.t -> string option -> unit Typing.t
+  Cerb_location.t CStatements.LocMap.t -> string option -> unit Typing.t

@@ -1,7 +1,8 @@
 open Symbol
-open Pp_prelude
-open Location_ocaml
+open Cerb_pp_prelude
+open Cerb_location
 
+let pp_cn_sym_nums = ref false
 
 let to_string (Symbol (_, n, sd)) =
   match sd with
@@ -13,7 +14,7 @@ let to_string (Symbol (_, n, sd)) =
 let to_string_pretty ?(is_human=false) ?(executable_spec=false) (Symbol (_, n, sd)) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
   let maybe_add_number name = 
-   if !Debug_ocaml.debug_level > 4 then
+   if !Cerb_debug.debug_level > 4 then
       add_number name
      else
       name
@@ -25,7 +26,7 @@ let to_string_pretty ?(is_human=false) ?(executable_spec=false) (Symbol (_, n, s
         maybe_add_number str
     | SD_unnamed_tag loc ->
         if is_human then
-          "(unnamed tag at " ^ Location_ocaml.location_to_string loc ^ ")"
+          "(unnamed tag at " ^ Cerb_location.location_to_string loc ^ ")"
         else
           "__cerbty_unnamed_tag_" ^ string_of_int n
     | SD_CN_Id str -> 
@@ -69,7 +70,7 @@ let to_string_cn (Symbol (dig, n, sd)) =
 let to_string_pretty_cn (Symbol (_, n, sd) as s) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
   let maybe_add_number name = 
-      if !Debug_ocaml.debug_level > 4 
+      if (!pp_cn_sym_nums) || (!Cerb_debug.debug_level > 4)
       then add_number name
       else name
   in
@@ -108,7 +109,7 @@ let to_string_id (n, _) = string_of_int n
 
 
 let pp_colour_identifier id =
-  !^(Colour.ansi_format [Yellow] id)
+  !^(Cerb_colour.ansi_format [Yellow] id)
 
 
 let pp_prefix = function
@@ -118,6 +119,8 @@ let pp_prefix = function
       P.braces (!^ str)
   | PrefStringLiteral _ ->
       P.braces (!^ "string literal")
+  | PrefTemporaryLifetime _ ->
+      P.braces (!^ "rvalue temporary")
   | PrefFunArg (_, _, n) ->
       P.braces (!^ ("arg" ^ string_of_int n))
   | PrefMalloc ->
@@ -127,7 +130,7 @@ let pp_prefix = function
 
 
 let pp_identifier ?(clever=false) (Symbol.Identifier (loc, str)) =
-  begin if Debug_ocaml.get_debug_level () >= 5 then
+  begin if Cerb_debug.get_debug_level () >= 5 then
     pp_location ~clever loc ^^ P.space
   else
     P.empty

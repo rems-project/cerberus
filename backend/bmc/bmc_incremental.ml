@@ -12,7 +12,7 @@ open Core
 open Core_aux
 open Impl_mem
 open Printf
-open Util
+open Cerb_util
 open Z3
 
 module Caux = Core_aux
@@ -223,6 +223,9 @@ module BmcInline = struct
     | PEmember_shift (pe, sym, cid) ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEmember_shift(inlined_pe, sym, cid))
+    | PEmemop (mop, pes) ->
+        mapM inline_pe pes >>= fun inlined_pes ->
+        return (PEmemop (mop, inlined_pes))
     | PEnot pe ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEnot(inlined_pe))
@@ -800,6 +803,9 @@ module BmcSSA = struct
     | PEmember_shift (ptr, name, member) ->
         ssa_pe ptr >>= fun ssad_ptr ->
         return (PEmember_shift(ssad_ptr, name, member))
+    | PEmemop (mop, pelist) ->
+        mapM ssa_pe pelist >>= fun ssad_pelist ->
+        return (PEmemop(mop, ssad_pelist))
     | PEnot pe ->
         ssa_pe pe >>= fun ssad_pe ->
         return (PEnot ssad_pe)
@@ -1367,6 +1373,9 @@ module BmcZ3 = struct
             )
         | _ -> assert false
         end
+    | PEmemop _ ->
+        (* FIXME: this is only used by CHERI *)
+        failwith "PEmemop is not supported"
     | PEnot pe ->
         z3_pe pe >>= fun z3d_pe ->
         return (mk_not z3d_pe)
@@ -1883,7 +1892,7 @@ module BmcZ3 = struct
         return None
       else begin
         mk_create ctype ctype (* TODO: alignment *)
-            (PrefSource(Location_ocaml.other "param", [fn_to_check; sym]))
+            (PrefSource(Cerb_location.other "param", [fn_to_check; sym]))
             >>= fun (_,action) ->
         return (Some action)
       end
@@ -2119,7 +2128,7 @@ module BmcBind = struct
 
   type binding =
   | BindLet of Expr.expr (* Normal let binding *)
-  | BindAssume of Location_ocaml.t option * Expr.expr
+  | BindAssume of Cerb_location.t option * Expr.expr
 
   (*let is_bind_let = function
     | BindLet _ -> true
@@ -2266,6 +2275,9 @@ module BmcBind = struct
         return (bound_ptr @ bound_index)
     | PEmember_shift (ptr, _, _) ->
         bind_pe ptr
+    | PEmemop (_, pes) ->
+        mapM bind_pe pes >>= fun bound_pes ->
+        return (List.concat bound_pes)
     | PEnot pe ->
         bind_pe pe
     | PEop (_, pe1, pe2) ->
@@ -2312,7 +2324,7 @@ module BmcBind = struct
     | PEbmc_assume pe ->
         let loc = Annot.get_loc annots in
         (*assert (is_some loc);
-        print_endline ((Location_ocaml.location_to_string (Option.get loc)));*)
+        print_endline ((Cerb_location.location_to_string (Option.get loc)));*)
 
         bind_pe pe >>= fun bound_pe ->
         (* TODO: move this to a separate phase for easier debugging *)
@@ -2508,7 +2520,7 @@ module BmcBind = struct
           return []
 
     let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
-                  : (Expr.expr list * (Location_ocaml.t option * Expr.expr) list) eff =
+                  : (Expr.expr list * (Cerb_location.t option * Expr.expr) list) eff =
       mapM bind_globs file.globs >>= fun bound_globs ->
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, _, bTy, params, e)) ->
@@ -2644,6 +2656,7 @@ module BmcVC = struct
         vcs_pe ptr                  >>= fun vcs_ptr ->
         let dbg = VcDebugStr (string_of_int uid ^ "_PEmember_shift_notNull") in
         return ((mk_not (PointerSort.is_null ptr_z3), dbg) :: vcs_ptr)
+    | PEmemop _ -> (* FIXME: CHERI *) failwith "PEmemop"
     | PEnot pe         -> vcs_pe pe
     | PEop (_, pe1, pe2) ->
         vcs_pe    pe1 >>= fun vc1s ->
@@ -5112,6 +5125,9 @@ module BmcConcActions = struct
         return (Pset.union taint_ptr taint_index)
     | PEmember_shift (ptr, _, _) ->
         do_taint_pe ptr
+    | PEmemop (_, pes) ->
+        mapM do_taint_pe pes >>= fun taint_pes ->
+        return (union_taints taint_pes)
     | PEnot pe ->
         do_taint_pe pe
     | PEop (_, pe1, pe2) ->

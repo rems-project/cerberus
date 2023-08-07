@@ -5,6 +5,7 @@ struct node {
   int v;
 };
 
+/*@
 predicate {integer len} List (pointer p) {
   if ( p == NULL ) {
     return { len: 0 };
@@ -15,6 +16,7 @@ predicate {integer len} List (pointer p) {
     return { len: R.len + 1 };
   }
 }
+@*/
 
 #define NULL ((void *)0)
 

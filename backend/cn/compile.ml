@@ -38,7 +38,7 @@ type predicate_sig = {
 
 
 type env = {
-  computationals: SBT.t SymMap.t;
+  computationals: (SBT.t * Sym.t option) SymMap.t;
   logicals: SBT.t SymMap.t;
   predicates: predicate_sig SymMap.t;
   functions: function_sig SymMap.t;
@@ -64,7 +64,11 @@ let symtable = SymTable.create 10000
 
 let add_computational sym bTy env =
   SymTable.add symtable sym bTy;
-  {env with computationals= SymMap.add sym bTy env.computationals }
+  {env with computationals= SymMap.add sym (bTy, None) env.computationals }
+
+let add_renamed_computational sym sym2 bTy env =
+  SymTable.add symtable sym bTy;
+  {env with computationals= SymMap.add sym (bTy, Some sym2) env.computationals }
 
 let add_logical sym bTy env =
   SymTable.add symtable sym bTy;
@@ -76,7 +80,7 @@ let add_predicate sym pred_sig env =
 
 let lookup_computational_or_logical sym env =
   match SymMap.find_opt sym env.logicals with
-  | Some bt -> Some bt
+  | Some bt -> Some (bt, None)
   | None -> 
      SymMap.find_opt sym env.computationals
 
@@ -573,13 +577,15 @@ module EffectfulTranslation = struct
         | CNExpr_const CNConst_unit ->
             return (IT (Const Unit, SBT.Unit))
         | CNExpr_var sym ->
-            let@ bTy = match lookup_computational_or_logical sym env with
+            let@ (sym, bTy) = match lookup_computational_or_logical sym env with
               | None ->
                  Pp.debug 2 (lazy (Pp.item ("failed lookup of CNExpr_var " ^ Sym.pp_string sym)
                                      (Pp.list (fun (nm, _) -> Sym.pp nm) (SymMap.bindings env.computationals))));
                  fail {loc; msg= Unknown_variable sym}
-              | Some bt ->
-                 return bt
+              | Some (bt, None) ->
+                 return (sym, bt)
+              | Some (bt, Some renamed_sym) ->
+                 return (renamed_sym, bt)
             in
             return (IT ((Sym sym), bTy))
         | CNExpr_list es_ ->
@@ -825,10 +831,10 @@ module EffectfulTranslation = struct
          (* we don't take Resources.owned_oargs here because we want to
             maintain the C-type information *)
          let oargs_ty = SBT.of_sct scty in
-         return (Owned scty, oargs_ty)
+         return (Owned (scty, Init), oargs_ty)
       | CN_block ty ->
         let scty = Sctypes.of_ctype_unsafe res_loc ty in
-        return (Block scty, SBT.Unit)
+        return (Owned (scty, Uninit), SBT.of_sct scty)
       | CN_named pred ->
         let@ pred_sig = match lookup_predicate pred env with
           | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
@@ -865,11 +871,11 @@ module EffectfulTranslation = struct
 
   let owned_good loc sym (res_t, oargs_ty) = 
     match res_t with
-    | RET.P { name = Owned scty ; permission; _} ->
+    | RET.P { name = Owned (scty, Init); _} ->
        let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
-       [(LC.T (IT.impl_ (permission, IT.good_ (scty, v))), 
+       [(LC.T ((IT.good_ (scty, v))), 
          (loc, Some "default value constraint"))]
-    | RET.Q { name = Owned scty ; q; permission; _} ->
+    | RET.Q { name = Owned (scty, Init); q; permission; _} ->
        let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
        let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
        [(LC.forall_ (q, BT.Integer)
@@ -879,25 +885,17 @@ module EffectfulTranslation = struct
         []
 
 
-  let translate_cn_let_resource__pred env res_loc sym (cond, pred_loc, res, args) =
+  let translate_cn_let_resource__pred env res_loc sym (pred_loc, res, args) =
     let@ args = ListM.mapM (translate_cn_expr SymSet.empty env) args in
     let@ (pname, ptr_expr, iargs, oargs_ty) =
            translate_cn_res_info res_loc pred_loc env res args in
-    let@ permission = match cond with 
-      | None -> 
-         return (IT.bool_ true)
-      | Some c -> 
-         let@ c = translate_cn_expr SymSet.empty env c in
-         return (IT.term_of_sterm c)
-    in
     let pt = (RET.P { name = pname
               ; pointer= IT.term_of_sterm ptr_expr
-              ; permission= permission
               ; iargs = List.map IT.term_of_sterm iargs},
            oargs_ty)
     in
     let pointee_value = match pname with
-      | Owned _ -> [(ptr_expr, (IT.sym_ (sym, oargs_ty)))]
+      | Owned (_, Init) -> [(ptr_expr, (IT.sym_ (sym, oargs_ty)))]
       | _ -> []
     in
     return (pt, pointee_value)
@@ -928,9 +926,9 @@ module EffectfulTranslation = struct
 
   let translate_cn_let_resource env (res_loc, sym, the_res) =
     let@ pt, pointee_values = match the_res with
-      | CN_pred (pred_loc, cond, res, args) ->
+      | CN_pred (pred_loc, res, args) ->
          translate_cn_let_resource__pred env res_loc sym
-           (cond, pred_loc, res, args)
+           (pred_loc, res, args)
       | CN_each (q, bt, guard, pred_loc, res, args) ->
          translate_cn_let_resource__each env res_loc sym
            (q, bt, guard, pred_loc, res, args)  
@@ -1027,7 +1025,7 @@ let ownership (loc, (addr_s, ct)) env =
        Sym.fresh_make_uniq ("O_"^obj_name)
     | _ -> assert false
   in
-  let resource = CN_pred (loc, None, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
+  let resource = CN_pred (loc, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
 
   let@ (pt_ret, oa_bt), lcs, _ = 
     Pure.handle "'Accesses'"
@@ -1378,7 +1376,6 @@ let translate_cn_statement
              (pack_unpack, { 
                name = name; 
                pointer = IT.term_of_sterm pointer; 
-               permission = IT.bool_ true; 
                iargs = List.map IT.term_of_sterm iargs;
              })
          in
@@ -1395,6 +1392,16 @@ let translate_cn_statement
            | I_Good ct -> I_Good (Sctypes.of_ctype_unsafe loc ct)
          in
          return (M_CN_statement (loc, M_CN_instantiate (to_instantiate, expr)))
+      | CN_extract (to_extract, expr) ->
+          let@ expr = ET.translate_cn_expr SymSet.empty env expr in
+          let expr = IT.term_of_sterm expr in
+          let to_extract = match to_extract with
+           | E_Everything -> E_Everything
+           | E_Pred (CN_owned oty) -> E_Pred (CN_owned (Option.map (Sctypes.of_ctype_unsafe loc) oty))
+           | E_Pred (CN_block ty) -> E_Pred (CN_block (Sctypes.of_ctype_unsafe loc ty))
+           | E_Pred (CN_named pn) -> E_Pred (CN_named pn)
+          in
+          return (M_CN_statement (loc, M_CN_extract (to_extract, expr)))
       | CN_unfold (s, args) ->
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
          let args = List.map IT.term_of_sterm args in

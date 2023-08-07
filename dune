@@ -1,4 +1,4 @@
-; Add project-wide flags here.
+; Profiles
 (env
  (dev     (flags :standard -bin-annot -I +unix -I +str))
  (release (flags :standard -bin-annot -I +unix -I +str)))

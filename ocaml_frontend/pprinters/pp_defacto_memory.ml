@@ -1,5 +1,5 @@
 open Defacto_memory_types
-open Pp_prelude
+open Cerb_pp_prelude
 
 (* Use this to pprint things not yet recognised by the Core parser *)
 (* let nonvalid =
@@ -42,7 +42,7 @@ let pp_provenance = function
       !^ "Prov_some" ^^ pp_provenance_id id ^^ Pp_symbol.pp_prefix pref
 
 
-let rec pp_pointer_value (PV (prov, ptr_val_, sh)) =
+let rec pp_pointer_value ?(is_verbose=false) (PV (prov, ptr_val_, sh)) =
   !^ "PV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_pointer_value_base ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
 
 and pp_pointer_value_base = function

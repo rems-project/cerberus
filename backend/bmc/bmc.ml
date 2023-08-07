@@ -9,7 +9,7 @@ open Z3
 open Cerb_frontend
 open Core
 open Printf
-open Util
+open Cerb_util
 
 open Bmc_incremental
 
@@ -35,7 +35,7 @@ module BmcM = struct
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
 
     bindings         : (Expr.expr list) option;
-    assumes          : ((Location_ocaml.t option * Expr.expr) list) option;
+    assumes          : ((Cerb_location.t option * Expr.expr) list) option;
     vcs              : (bmc_vc list) option;
 
     ret_expr         : Expr.expr option;
@@ -369,7 +369,7 @@ let bmc_file (file              : unit typed_file)
     (List.map snd assumes
     ,List.map (fun (loc_opt,_) ->
         let loc_string = match loc_opt with
-                         | Some loc -> Location_ocaml.location_to_string loc
+                         | Some loc -> Cerb_location.location_to_string loc
                          | None -> "unknown_location"  in
         mk_fresh_const loc_string boolean_sort) assumes
     ) in

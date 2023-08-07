@@ -39,6 +39,8 @@ let translate_builtin_typenames = function
       Just intptr_t
   | "__cerbty_ptrdiff_t" ->
       Just ptrdiff_t
+  | "__cerbty_ptraddr_t" ->
+      Just (ptraddr_t ())
   | "__cerbty_uint8_t" ->
       Just (mk_ctype_integer (Unsigned (IntN_t 8)))
   | "__cerbty_uint16_t" ->
@@ -73,8 +75,6 @@ let translate_builtin_typenames = function
   | "__cerbty_jmp_buf" ->
       Nothing
   (* stddef.h *)
-  | "__cerbty_max_align_t" ->
-      Nothing
   | "__cerbty_size_t" ->
       Just size_t
   | "__cerbty_wchar_t" ->
@@ -202,6 +202,7 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
   match str with
     (* stddef.h *)
     | "__cerbvar_NULL" -> Just (AilEconst ConstantNull)
+    | "__cerbvar_MAX_ALIGNMENT" -> const_ic (integerFromNat Implementation.max_alignment)
     
     (* errno.h *)
     | "__cerbvar_EDOM" -> const_ic $ translate_errno str
@@ -402,6 +403,10 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
         const_int $ IConstantMin Ptrdiff_t
     | "__cerbvar_PTRDIFF_MAX" ->
         const_int $ IConstantMax Ptrdiff_t
+    | "__cerbvar_PTRADDR_MIN" ->
+        const_int $ IConstantMin Ptraddr_t
+    | "__cerbvar_PTRADDR_MAX" ->
+        const_int $ IConstantMax Ptraddr_t
     | "__cerbvar_INT_LEAST8_MIN" ->
         const_int $ IConstantMin (Signed (Int_leastN_t 8))
     | "__cerbvar_INT_LEAST16_MIN" ->
@@ -465,6 +470,31 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
     | "__cerbvar_copy_alloc_id" ->
         Just (AilEbuiltin AilBcopy_alloc_id)
     
+    (* CHERI intrinsics *)
+    | "__cerbvar_strfcap" ->
+        Just (AilEbuiltin (AilBCHERI "strfcap"))
+    | "__cerbvar_cheri_bounds_set" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_bounds_set"))
+    | "__cerbvar_cheri_perms_and" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_perms_and"))
+    | "__cerbvar_cheri_address_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_address_get"))
+    | "__cerbvar_cheri_base_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_base_get"))
+    | "__cerbvar_cheri_offset_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_offset_get"))
+    | "__cerbvar_cheri_length_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_length_get"))
+    | "__cerbvar_cheri_tag_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_tag_get"))
+    | "__cerbvar_cheri_tag_clear" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_tag_clear"))
+    | "__cerbvar_cheri_is_equal_exact" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_is_equal_exact"))
+    | "__cerbvar_cheri_representable_length" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_representable_length"))
+    | "__cerbvar_cheri_representable_alignment_mask" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_representable_alignment_mask"))
     | _ ->
       Nothing
 end

@@ -2,8 +2,8 @@
 (* It generates an Ocaml file from CPS-Core AST *)
 
 open Cerb_frontend
-open Util
-open Pp_prelude
+open Cerb_util
+open Cerb_pp_prelude
 open Core
 open Cps_core
 open Ctype
@@ -142,7 +142,7 @@ let print_impl_name i =
 
 (* FIXME FIXME FIXME
 let print_cabs_id (Cabs.CabsIdentifier (loc, str)) =
-  !^"RT.cabsid" ^^^ P.parens (Location_ocaml.print_location loc) ^^^ P.dquotes !^str
+  !^"RT.cabsid" ^^^ P.parens (Cerb_location.print_location loc) ^^^ P.dquotes !^str
 *)
 
 let print_name = function

@@ -24,34 +24,39 @@ let serialise_prefix = function
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
               ("name", `String "literal");
-              ("loc", Location_ocaml.to_json loc)]
+              ("loc", Cerb_location.to_json loc)]
   | Symbol.PrefCompoundLiteral (loc, _) ->
       `Assoc [("kind", `String "compound literal");
               ("scope", `Null);
               ("name", `String "literal");
-              ("loc", Location_ocaml.to_json loc)]
+              ("loc", Cerb_location.to_json loc)]
+  | Symbol.PrefTemporaryLifetime (loc, _) ->
+      `Assoc [("kind", `String "rvalue temporary");
+              ("scope", `Null);
+              ("name", `String "temporary");
+              ("loc", Cerb_location.to_json loc)]
   | Symbol.PrefFunArg (loc, _, n) ->
       `Assoc [("kind", `String "arg");
               ("scope", `Null);
               ("name", `String ("arg" ^ string_of_int n));
-              ("loc", Location_ocaml.to_json loc)]
+              ("loc", Cerb_location.to_json loc)]
   | Symbol.PrefSource (_, []) ->
       failwith "serialise_prefix: PrefSource with an empty list"
   | Symbol.PrefSource (loc, [name]) ->
         `Assoc [("kind", `String "source");
                 ("name", `String (Pp_symbol.to_string_pretty name));
                 ("scope", `Null);
-                ("loc", Location_ocaml.to_json loc);]
+                ("loc", Cerb_location.to_json loc);]
   | Symbol.PrefSource (loc, [scope; name]) ->
       `Assoc [("kind", `String "source");
               ("name", `String (Pp_symbol.to_string_pretty name));
               ("scope", `String (Pp_symbol.to_string_pretty scope));
-              ("loc", Location_ocaml.to_json loc);]
+              ("loc", Cerb_location.to_json loc);]
   | Symbol.PrefSource (_, _) ->
       failwith "serialise_prefix: PrefSource with more than one scope"
 
 
-let serialise_int_map (f: int -> 'a -> Json.json) (m: 'a IntMap.t) : Json.json =
+let serialise_int_map (f: int -> 'a -> Cerb_json.json) (m: 'a IntMap.t) : Cerb_json.json =
   let serialise_entry (k, v) = (Z.to_string k, f (Z.to_int k) v) in
   `Assoc (List.map serialise_entry (IntMap.bindings m))
  

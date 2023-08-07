@@ -13,12 +13,10 @@ module Loc = Locations
    legacy syntax requires special hacks *)
 let fiddle_at_hack string =
   let ss = String.split_on_char '@' string in
-  let starts_start s = String.length s >= String.length "start"
-    && String.equal (String.sub s 0 (String.length "start")) "start" in
   let rec fix = function
     | [] -> ""
     | [s] -> s
-    | (s1 :: s2 :: ss) -> if starts_start s2
+    | (s1 :: s2 :: ss) -> if Tools.starts_with "start" s2
         then fix ((s1 ^ "%" ^ s2) :: ss)
         else fix ((s1 ^ "@" ^ s2) :: ss)
   in
@@ -34,42 +32,64 @@ let diagnostic_get_tokens string =
   in
   f []
 
+
 (* adapting from core_parser_driver.ml *)
 
 let parse parser_start (loc, string) =
   let string = fiddle_at_hack string in
   C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
-  let () = 
-    let open Location_ocaml in
+  let () =
+    let open Cerb_location in
     Lexing.set_position lexbuf
       (* revisit *)
-      begin match Location_ocaml.to_raw loc with
+      begin match Cerb_location.to_raw loc with
       | Loc_unknown -> lexbuf.lex_curr_p
       | Loc_other _ -> lexbuf.lex_curr_p
       | Loc_point pos -> pos
       (* start, end, cursor *)
       | Loc_region (pos, _, _ ) -> pos
-      | Loc_regions ([],_) -> lexbuf.lex_curr_p 
+      | Loc_regions ([],_) -> lexbuf.lex_curr_p
       | Loc_regions ((pos,_) :: _, _) -> pos
       end
   in
-  let () = match Location_ocaml.get_filename loc with
+  let () = match Cerb_location.get_filename loc with
     | Some filename -> lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname= filename }
-    | None -> () 
+    | None -> ()
   in
+  let buffer, lexer = MenhirLib.ErrorReports.wrap C_lexer.lexer in
   let@ parsed_spec =
-    try return (parser_start C_lexer.lexer lexbuf) with
+    try return (parser_start lexer lexbuf) with
     | C_lexer.Error err ->
-       let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
+       let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
        fail {loc; msg = Parser err}
-    | C_parser.Error ->
-       let loc = Location_ocaml.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
+    | C_parser.Error state ->
+       let message =
+         try
+           let msg = C_parser_error.message state in
+           if String.equal msg "<YOUR SYNTAX ERROR MESSAGE HERE>\n" then raise Not_found else msg
+         with Not_found ->
+           Printf.sprintf "Please add error message for state %d to parsers/c/c_parser_error.messages\n" state
+       in
+       let message = String.sub message 0 (String.length message - 1) in
+       (* the two tokens between which the error occurred *)
+       let where =  MenhirLib.ErrorReports.show (fun (start, curr) ->
+           Lexing.lexeme {
+             lexbuf with
+             lex_start_pos = start.Lexing.pos_cnum - start.pos_bol;
+             lex_curr_pos = curr.Lexing.pos_cnum - curr.pos_bol;
+           }
+         ) buffer in
+       (* fix caret pointing *)
+       let plus_3 (l : Lexing.position) = { l with pos_cnum = l.pos_cnum + 3 } in
+       let start = Lexing.lexeme_start_p lexbuf in
+       let end_ = Lexing.lexeme_end_p lexbuf in
+       let loc = Cerb_location.(region (plus_3 start , plus_3 end_) NoCursor) in
        Pp.debug 6 (lazy (
            let toks = try diagnostic_get_tokens string
              with C_lexer.Error _ -> ["(re-parse error)"] in
            Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))));
-       fail {loc; msg = Generic (Pp.string ("Unexpected token " ^ Lexing.lexeme lexbuf))}
+       fail {loc; msg = Parser (Cparser_unexpected_token (where ^ "\n" ^ message))}
   in
   return parsed_spec
 

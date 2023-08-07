@@ -101,11 +101,11 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
         ^^ (if same then !^" - same-type" else !^"")
     }
   in
-
+(*
   begin match extras.request with
     | None -> ()
     | Some req -> Spans.diag_req (get_rs ctxt) req model ctxt.global
-  end;
+  end;*)
 
 
   let resources = 

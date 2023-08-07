@@ -646,7 +646,6 @@ module ResourceTypes = struct
   let simp_predicate_type simp_ctxt (p : predicate_type) = {
       name = p.name; 
       pointer = simp simp_ctxt p.pointer;
-      permission = simp simp_ctxt p.permission;
       iargs = List.map (simp simp_ctxt) p.iargs;
     }
 
@@ -670,10 +669,5 @@ module ResourceTypes = struct
 
 
 
-  let simp_or_empty simp_ctxt resource =
-    match simp simp_ctxt resource with
-    | P p when IT.is_false p.permission -> None
-    | Q p when IT.is_false p.permission -> None
-    | re -> Some re
 
 end

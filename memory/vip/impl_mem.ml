@@ -37,10 +37,10 @@ module AbsByte = struct
     ptrfrag_idx: int option; (* None case is 'none' from the paper *)
   }
 
-  let to_json json_of_prov b : Json.json =
+  let to_json json_of_prov b : Cerb_json.json =
     `Assoc [ ("prov", json_of_prov b. prov)
-           ; ("value", Json.of_option Json.of_char b.value)
-           ; ("ptrfrag_idx", Json.of_option Json.of_int b.ptrfrag_idx) ]
+           ; ("value", Cerb_json.of_option Cerb_json.of_char b.value)
+           ; ("ptrfrag_idx", Cerb_json.of_option Cerb_json.of_int b.ptrfrag_idx) ]
 end
 
 
@@ -157,7 +157,7 @@ type mem_state = {
 
   (* Web user-interface stuff *)
   last_used: allocation_id option;
-}
+} [@@warning "-unused-field"]
 
 let initial_mem_state: mem_state =
   { allocations= IntMap.empty
@@ -180,11 +180,11 @@ let get = Nondeterminism.nd_get
 let put = Nondeterminism.nd_put
 let update = Nondeterminism.nd_update
 
-let fail ?(loc=Location_ocaml.other "VIP") err =
+let fail ?(loc=Cerb_location.other "VIP") err =
   let open Nondeterminism in
   match MC.undefinedFromMem_error err with
-    | Some ubs ->
-        kill (Undef0 (loc, ubs))
+    | Some ub ->
+        kill (Undef0 (loc, [ub]))
     | None ->
         kill (Other err)
 
@@ -318,7 +318,7 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
           (Common.sizeof (Ctype ([], Basic (Floating fty)))) (N.of_int64 (Int64.bits_of_float fval))
       end
     | MVpointer (_, ptrval) ->
-        Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
+        Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
         let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
           | None ->
               failwith "INTERNAL ERROR: the VIP memory model requires a complete implementation"
@@ -326,7 +326,7 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
               z in
         begin match ptrval with
           | PVnull ->
-              Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
+              Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
               ret @@ List.init ptr_size
                 (fun _ -> AbsByte.{prov= Prov_empty; value= (Some '\000'); ptrfrag_idx= None})
           | PVfunptr (Symbol.Symbol (file_dig, n, opt_name)) ->
@@ -623,7 +623,7 @@ let case_ptrval ptrval f_null f_funptr f_concrete =
     | PVloc (Prov_some alloc_id, addr) ->
         f_concrete (Some alloc_id) addr
     | PVfunptr sym ->
-        f_funptr sym
+        f_funptr (Some sym)
 
 let case_funsym_opt _ ptrval : Symbol.sym option =
   match ptrval with
@@ -788,6 +788,27 @@ let intfromptr _ ref_ty ity ptrval : integer_value memM =
     | PVfunptr sym ->
       fail (MerrVIP (VIP_intcast VIP_funptr))
 
+let derive_cap _ _ _ _ : integer_value =
+  assert false (* CHERI only *)
+
+let cap_assign_value _ _ _ : integer_value =
+  assert false (* CHERI only *)
+
+let ptr_t_int_value ival =
+  ival
+
+let null_cap _ : integer_value =
+  assert false (* CHERI only *)
+
+let get_intrinsic_type_spec _ =
+  assert false (* CHERI only *)
+
+let call_intrinsic _ _ _ =
+  assert false (* CHERI only *)
+
+let intcast _ _ ival =
+  Either.Right ival
+
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival : pointer_value =
   (* TODO: "VIP memory model should be called SWITCH strict_pointer_arith" *)
@@ -860,7 +881,9 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
           return (PVloc (Prov_some alloc_id, addr'))
     | PVfunptr sym ->
         fail (MerrVIP (VIP_array_shift VIP_funptr))
-      
+
+let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
+  return (member_shift_ptrval tag_sym membr_ident ptrval)
 
 let memcpy loc ptrval1 ptrval2 sz_ival : pointer_value memM =
   let sz = ival_to_int sz_ival in
@@ -882,7 +905,7 @@ let memcmp ptrval1 ptrval2 sz_ival : integer_value memM =
   | 0 ->
       return (List.rev acc)
   | size ->
-      load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= function
+      load Cerb_location.unknown Ctype.unsigned_char ptrval >>= function
         | (_, MVinteger (_, byte_ival)) ->
             let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IVint N.(succ zero)) in
             get_bytes ptr' (ival_to_int byte_ival :: acc) (size-1)
@@ -1020,7 +1043,7 @@ let fvfromint ival =
   (* NOTE: if n is too big, the float will be truncated *)
   float_of_string (N.to_string (ival_to_int ival))
 
-  let ivfromfloat fval =
+  let ivfromfloat _ fval =
     IVint (N.of_float fval)
 
 
@@ -1065,7 +1088,7 @@ let sequencePoint : unit memM =
 
 (* pretty printing *)
 open PPrint
-open Pp_prelude
+open Cerb_pp_prelude
 
 let string_of_provenance = function
   | Prov_empty ->
@@ -1073,7 +1096,7 @@ let string_of_provenance = function
   | Prov_some alloc_id ->
       "@" ^ Nat_big_num.to_string alloc_id
 
-let pp_pointer_value = function
+let pp_pointer_value ?(is_verbose=false) = function
   | PVnull ->
       !^ "NULL"
   | PVloc (prov, addr) ->
@@ -1120,7 +1143,7 @@ let rec pp_mem_value = function
         pp_mem_value mval
       )
 
-let pp_pretty_pointer_value = pp_pointer_value
+let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
 let pp_pretty_integer_value _ = pp_integer_value
 let pp_pretty_mem_value _ = pp_mem_value
 
@@ -1130,10 +1153,10 @@ let string_of_integer_value ival =
 let string_of_mem_value mval =
   Pp_utils.to_plain_string begin
     (* TODO: factorise *)
-    let saved = !Colour.do_colour in
-    Colour.do_colour := false;
+    let saved = !Cerb_colour.do_colour in
+    Cerb_colour.do_colour := false;
     let ret = pp_mem_value mval in
-    Colour.do_colour := saved;
+    Cerb_colour.do_colour := saved;
     ret
   end
 
@@ -1269,7 +1292,7 @@ let serialise_prov = function
       `Assoc [ ("kind", `String "prov")
              ; ("value", `Int (N.to_int n)) ]
 
-  let serialise_ui_values (v:ui_value) : Json.json =
+  let serialise_ui_values (v:ui_value) : Cerb_json.json =
     let string_of_kind = function
       | `Unspec -> "unspecified"
       | `Basic -> "basic"
@@ -1282,13 +1305,13 @@ let serialise_prov = function
     in
     `Assoc [("kind"), `String (string_of_kind v.kind);
             ("size", `Int v.size);
-            ("path", `List (List.map Json.of_string v.path));
+            ("path", `List (List.map Cerb_json.of_string v.path));
             ("value", `String v.value);
             ("prov", serialise_prov v.prov);
-            ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
-            ("bytes", Json.of_option (fun bs -> `List (List.map (AbsByte.to_json serialise_prov) bs)) v.bytes); ]
+            ("type", Cerb_json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
+            ("bytes", Cerb_json.of_option (fun bs -> `List (List.map (AbsByte.to_json serialise_prov) bs)) v.bytes); ]
 
-let serialise_ui_alloc (a:ui_alloc) : Json.json =
+let serialise_ui_alloc (a:ui_alloc) : Cerb_json.json =
   `Assoc [ ("id", `Int a.id)
          ; ("base", `String a.base)
          ; ("prefix", serialise_prefix a.prefix)
@@ -1298,7 +1321,7 @@ let serialise_ui_alloc (a:ui_alloc) : Json.json =
          ; ("values", `List (List.map serialise_ui_values a.values))
          ; ("exposed", `Bool false); (* TODO *) ]
 
-let serialise_mem_state dig (st: mem_state) : Json.json =
+let serialise_mem_state dig (st: mem_state) : Cerb_json.json =
   let allocs =
     IntMap.filter (fun _ (alloc : allocation) ->
       match alloc.prefix with
@@ -1310,5 +1333,5 @@ let serialise_mem_state dig (st: mem_state) : Json.json =
         | _ -> false
     ) st.allocations in
   `Assoc [ ("map", serialise_int_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs)
-         ; ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used); ]
+         ; ("last_used", Cerb_json.of_option (fun v -> `Int (N.to_int v)) st.last_used); ]
   (* not_implemented "VIP.serialise_mem_state" *)

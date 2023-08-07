@@ -3,8 +3,23 @@ synopsis: "The CN type system"
 description: "The CN type system"
 maintainer: ["Christopher Pulte <cp526@cl.cam.ac.uk>"]
 depends: [
+  "cerberus-lib"
   "ppx_tools"
   "monomorphic"
   "ppx_deriving"
   "z3" {>= "4.8.14"}
+]
+build: [
+  ["dune" "subst"] {pinned}
+  ["dune"
+    "build"
+    "-p"
+    name
+    "--profile=release"
+    "-j"
+    jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
 ]

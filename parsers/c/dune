@@ -1,13 +1,46 @@
 (library
  (name c_parser)
- (public_name cerberus.c_parser)
+ (public_name cerberus-lib.c_parser)
  (synopsis "C parser")
  (flags (:standard -w -27-32))
  (modules :standard)
  (wrapped false)
- (libraries cerb_frontend))
+ (libraries menhirLib cerb_frontend))
 
 (ocamllex c_lexer)
 (menhir
- (flags (--external-tokens Tokens --explain))
+ (flags (--external-tokens Tokens --explain --exn-carries-state))
  (modules c_parser))
+
+;; integrating and checking .messages file
+;; based on https://gitlab.inria.fr/fpottier/menhir/-/blob/master/demos/calc-syntax-errors/dune
+
+; generate "c_parser_error.ml" based on programmer-provided "c_parser_error.messages"
+; it requires the completeness check to have been run
+
+(rule
+  (deps c_parser_error.check)
+  (action (with-stdout-to c_parser_error.ml
+    (run menhir
+      %{dep:c_parser.mly}
+      --compile-errors %{dep:c_parser_error.messages}))))
+
+; check completeness, i.e. every error state listed in the auto-generated file
+; "c_parser_error.auto.messages" is also listed in programmer-provided
+; "c_parser_error.messages"
+
+(rule
+  (with-stdout-to c_parser_error.check
+  (run menhir
+    %{dep:c_parser.mly}
+    --compare-errors %{dep:c_parser_error.auto.messages}
+    --compare-errors %{dep:c_parser_error.messages})))
+
+; generate "c_parser_error.auto.messages" file used for completeness check above
+
+(rule
+  (with-stdout-to c_parser_error.auto.messages
+    (run menhir
+       %{dep:c_parser.mly}
+       --list-errors)))
+

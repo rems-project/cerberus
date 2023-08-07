@@ -1,4 +1,5 @@
 
+/*@
 datatype tree {
   Tree_Empty {},
   Tree_Node {integer k, integer v, datatype tree l, datatype tree r}
@@ -10,7 +11,7 @@ function (integer) foo (datatype tree t) {
     Tree_Node {k: k, v: v} => {k + v}
   }
 }
-
+@*/
 
 void
 check_foo (int x)

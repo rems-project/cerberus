@@ -10,7 +10,7 @@ module Pos = struct
     { line; col }
 
   let of_location loc =
-    match Location_ocaml.to_cartesian loc with
+    match Cerb_location.to_cartesian loc with
       | None ->
           Error (__FUNCTION__ ^ ": failed to get line/col positions")
       | Some ((start_line, start_col), (end_line, end_col)) ->
@@ -280,11 +280,11 @@ type 'a cn_injection = {
   filename: string;
   sigm: 'a A.sigma;
   pre_post: (Symbol.sym * (string list * string list)) list;
-  in_stmt: (Location_ocaml.t * string) list;
+  in_stmt: (Cerb_location.t * string) list;
 }
 
 let output_injections oc cn_inj =
-  Colour.without_colour begin fun () ->
+  Cerb_colour.without_colour begin fun () ->
   let* injs =
     List.fold_left (fun acc_ (fun_sym, (_, _, _, _, stmt)) ->
       match List.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
@@ -312,7 +312,7 @@ let output_injections oc cn_inj =
 open Cerb_frontend
 let get_magics_of_statement stmt =
   let open AilSyntax in
-  let rec aux acc (AnnotatedStatement (_, Annot.Attrs xs, stmt_)) =
+  let rec aux acc (AnnotatedStatement (loc, Annot.Attrs xs, stmt_)) =
     let acc =
       List.fold_left (fun acc attr ->
         let open Annot in

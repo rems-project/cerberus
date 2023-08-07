@@ -1,0 +1,6 @@
+(coq.theory
+ (name Morello)
+ (package cerberus-cheri)
+ (modules CapabilitiesGS MorelloCapsGS)
+ (theories Common CheriCaps Sail bbv stdpp)
+)

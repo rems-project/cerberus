@@ -10,6 +10,7 @@
 open Cerb_frontend
 
 open Cabs
+open Cn
 
 module LF = Lexer_feedback
 
@@ -66,15 +67,10 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   let Annot.Attrs xs' = to_attrs attr_opt in
   CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
 
-let magic_to_pre_attr magik =
-  ( ( Some (Symbol.Identifier (Location_ocaml.unknown, "cerb"))
-    , Symbol.Identifier (Location_ocaml.unknown, "magic") )
-  , Some (List.map (fun (loc, str) -> (loc, str, [loc, str])) magik) )
-
 let magic_to_attr magik : Annot.attribute =
   let open Annot in
-  { attr_ns= Some (Symbol.Identifier (Location_ocaml.unknown, "cerb"))
-  ; attr_id= Symbol.Identifier (Location_ocaml.unknown, "magic")
+  { attr_ns= Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
+  ; attr_id= Symbol.Identifier (Cerb_location.unknown, "magic")
   ; attr_args= List.map (fun (loc, str) -> (loc, str, [loc, str])) magik }
 
 let magic_to_attrs = function
@@ -83,24 +79,24 @@ let magic_to_attrs = function
   | magic ->
       Annot.Attrs [magic_to_attr magic]
 
-let append_magic loc magic stmt =
-  match magic with
-    | [] -> stmt
-    | _  -> (* let loc = Location_ocaml.bbox_location (List.map fst magic) in *)
-            CabsStatement (loc, magic_to_attrs magic, CabsSmarker stmt)
-
-let mk_statement magic (loc, attrs, stmt_) =
-  append_magic loc magic (CabsStatement (loc, attrs, stmt_))
+let magic_to_opt_attrs = function
+  | [] -> None
+  | magic -> Some (magic_to_attrs magic)
 
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
-  if not (Global_ocaml.isPermissive ()) then
+  if not (Cerb_global.isPermissive ()) then
     prerr_endline (Pp_errors.make_message
-                    (Location_ocaml.point pos)
+                    (Cerb_location.point pos)
                     Errors.(CPARSER (Cparser_extra_semi ctx))
                     Warning)
   else
     ()
+
+type asm_qualifier =
+  | ASM_VOLATILE
+  | ASM_INLINE
+  | ASM_GOTO
 %}
 
 (* §6.4.1 keywords *)
@@ -109,8 +105,7 @@ let warn_extra_semicolon pos ctx =
   STATIC STRUCT (*SWITCH*) TYPEDEF UNION UNSIGNED VOID VOLATILE (*WHILE*) ALIGNAS
   ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
   THREAD_LOCAL
-
-%token<Tokens.magic_comment> BREAK CASE CONTINUE DEFAULT DO FOR GOTO IF RETURN SWITCH WHILE
+%token BREAK CASE CONTINUE DEFAULT DO FOR GOTO IF RETURN SWITCH WHILE
 
 (* §6.4.2 Identifiers *)
 %token<string> UNAME (* Uppercase. UNAME is either a variable identifier or a type name *)
@@ -131,6 +126,7 @@ let warn_extra_semicolon pos ctx =
   QUESTION COLON (*SEMICOLON*) ELLIPSIS EQ STAR_EQ SLASH_EQ PERCENT_EQ COLON_COLON
   PLUS_EQ MINUS_EQ LT_LT_EQ GT_GT_EQ AMPERSAND_EQ CARET_EQ PIPE_EQ COMMA
   LBRACK_LBRACK (*RBRACK_RBRACK*)
+%token LBRACE RBRACE SEMICOLON
 
 (* NON-STD: *)
   ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
@@ -138,19 +134,20 @@ let warn_extra_semicolon pos ctx =
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token<Tokens.magic_comment> LBRACE RBRACE SEMICOLON
-
 %token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
 
 (* BMC syntax *)
 %token BMC_ASSUME
 
+(* magic comment token *)
+%token<Cerb_location.t * string> CERB_MAGIC
+
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
+%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE
+%token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE CN_SPEC
 %token CN_UNCHANGED
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
@@ -194,10 +191,10 @@ let warn_extra_semicolon pos ctx =
 %type<Cabs.cabs_assignment_operator>
   assignment_operator
 
-%type<Tokens.magic_comment * Cabs.cabs_declaration>
+%type<Cabs.cabs_declaration>
   no_leading_attribute_declaration
 
-%type<Tokens.magic_comment * Cabs.cabs_declaration>
+%type<Cabs.cabs_declaration>
   declaration
 
 %type<Cabs.specifiers>
@@ -306,19 +303,20 @@ let warn_extra_semicolon pos ctx =
 %type<Cabs.function_definition>
   function_definition
 
-%type<Cabs.cabs_encoding_prefix option * (Location_ocaml.t * string list)>
+%type<Cabs.cabs_encoding_prefix option * (Cerb_location.t * string list)>
   string_literal_component
 
 %type<Cabs.cabs_string_literal>
   string_literal
 
-%type<Location_ocaml.t * string * (Location_ocaml.t * string) list>
+%type<Cerb_location.t * string * (Cerb_location.t * string) list>
   located_string_literal
 
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
 %start function_spec
 %start loop_spec
 %start cn_statement
+%start cn_toplevel
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_function> cn_function
@@ -332,6 +330,9 @@ let warn_extra_semicolon pos ctx =
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec> function_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
+
+%type<Cerb_frontend.Cabs.external_declaration> cn_toplevel_elem
+%type<Cerb_frontend.Cabs.external_declaration list> cn_toplevel 
 
 
 
@@ -439,14 +440,14 @@ var_name:
    resolved using it. *)
 typedef_name_spec:
 | i= typedef_name
-    { TSpec ((Location_ocaml.(region ($startpos, $endpos) NoCursor)),
-             TSpec_name (Identifier (Location_ocaml.point $startpos, i))) }
+    { TSpec ((Cerb_location.(region ($startpos, $endpos) NoCursor)),
+             TSpec_name (Identifier (Cerb_location.point $startpos, i))) }
 ;
 
 general_identifier:
 | i= typedef_name
 | i= var_name
-    { Symbol.Identifier (Location_ocaml.(region ($startpos, $endpos) NoCursor), i) }
+    { Symbol.Identifier (Cerb_location.(region ($startpos, $endpos) NoCursor), i) }
 ;
 
 save_context:
@@ -469,20 +470,6 @@ declarator_typedefname:
     { LF.declare_typedefname (LF.identifier decl); decl }
 ;
 
-(*
-fetch_magic:
-| (* empty *)
-  { let xs = C_lexer.internal_state.magic_acc in
-    C_lexer.internal_state.magic_acc <- [];
-    List.rev xs }
-;
-*)
-
-clear_magic:
-| (* empty *)
-  { C_lexer.internal_state.magic_acc <- [] }
-;
-
 start_ignore:
 | (* empty *)
   { (*C_lexer.internal_state.ignore_magic <- true*) }
@@ -502,29 +489,30 @@ enumeration_constant:
 (* §6.5.1 Primary expressions *)
 primary_expression:
 | str= var_name start_ignore
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-        CabsEident (Symbol.Identifier (Location_ocaml.point $startpos(str), str))) }
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
+        CabsEident (Symbol.Identifier (Cerb_location.point $startpos(str), str))) }
 | cst= CONSTANT start_ignore
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEconst cst) }
 | lit= string_literal start_ignore
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
     { let CabsExpression (_, expr_) = expr in
-      CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor), expr_ ) }
+      CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor), expr_ ) }
 | gs= generic_selection
     { gs }
 (* GCC extension: Statement Exprs *)
-| LPAREN stmt= scoped(compound_statement) RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(stmt)))
-                     , CabsEgcc_statement stmt ) }
+// | LPAREN stmt= scoped(compound_statement) RPAREN
+| LPAREN LBRACE bis_opt= block_item_list? RBRACE RPAREN
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEgcc_statement (option [] List.rev bis_opt) ) }
 ;
 
 (* §6.5.1.1 Generic selection *)
 generic_selection:
 | GENERIC LPAREN expr= assignment_expression COMMA gas= generic_assoc_list RPAREN
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
         CabsEgeneric (expr, gas)) }
 ;
 
@@ -547,59 +535,58 @@ postfix_expression:
 | expr= primary_expression
     { expr }
 | expr1= postfix_expression LBRACK expr2= expression RBRACK
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                      , CabsEsubscript (expr1, expr2) ) }
 | expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                      , CabsEcall (expr, option [] List.rev exprs_opt) ) }
 | expr= postfix_expression DOT i= general_identifier 
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEmemberof (expr, i) ) }
 | expr= postfix_expression MINUS_GT i= general_identifier
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEmemberofptr (expr, i) ) }
 | expr= postfix_expression PLUS_PLUS
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEpostincr expr ) }
 | expr= postfix_expression MINUS_MINUS
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEpostdecr expr ) }
-| LPAREN ty= type_name RPAREN unused_magic= LBRACE inits= initializer_list COMMA? RBRACE
-    { C_lexer.restore_magic unused_magic;
-      CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+| LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA? RBRACE
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEcompound (ty, List.rev inits)) }
 (* NOTE: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEassert expr) }
 | VA_START LPAREN expr= assignment_expression COMMA i= general_identifier RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEva_start(expr, i) ) }
 | VA_COPY LPAREN e1= assignment_expression COMMA e2= assignment_expression RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEva_copy(e1, e2) ) }
 | VA_ARG LPAREN expr= assignment_expression COMMA ty= type_name RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEva_arg(expr, ty) ) }
 | VA_END LPAREN expr= assignment_expression RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEva_end(expr) ) }
 | OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                      , CabsEoffsetof (ty, i) ) }
 | BUILTIN_TYPES_COMPATIBLE_P LPAREN ty1= type_name COMMA ty2= type_name RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                      , CabsEbuiltinGNU (GNUbuiltin_types_compatible_p (ty1, ty2)) ) }
 | BUILTIN_CHOOSE_EXPR LPAREN const_e= assignment_expression COMMA e1= assignment_expression COMMA e2= assignment_expression RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                      , CabsEbuiltinGNU (GNUbuiltin_choose_expr (const_e, e1, e2)) ) }
 (* NOTE: the following is a cerb extension allowing the user to the
    query the type of an expression  *)
 | PRINT_TYPE LPAREN expr= expression RPAREN
-   { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+   { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
         CabsEprint_type expr) }
 | BMC_ASSUME LPAREN expr= assignment_expression RPAREN
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEbmc_assume expr) }
 ;
 
@@ -615,22 +602,22 @@ unary_expression:
 | expr= postfix_expression
     { expr }
 | PLUS_PLUS expr= unary_expression
-    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+    { CabsExpression ( Cerb_location.region ($startpos, $endpos) (PointCursor $startpos($1))
                      , CabsEpreincr expr ) }
 | MINUS_MINUS expr= unary_expression
-    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+    { CabsExpression ( Cerb_location.region ($startpos, $endpos) (PointCursor $startpos($1))
                      , CabsEpredecr expr ) }
 | op= unary_operator expr= cast_expression
-    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos(op))
+    { CabsExpression ( Cerb_location.region ($startpos, $endpos) (PointCursor $startpos(op))
                      , CabsEunary (op, expr) ) }
 | SIZEOF expr= unary_expression
-    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+    { CabsExpression ( Cerb_location.region ($startpos, $endpos) (PointCursor $startpos($1))
                      , CabsEsizeof_expr expr ) }
 | SIZEOF LPAREN ty= type_name RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                      , CabsEsizeof_type ty ) }
 | ALIGNOF LPAREN ty= type_name RPAREN
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                      , CabsEalignof ty ) }
 ;
 
@@ -654,7 +641,7 @@ cast_expression:
 | expr= unary_expression
     { expr }
 | LPAREN ty= type_name RPAREN expr= cast_expression
-    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+    { CabsExpression ( Cerb_location.region ($startpos, $endpos) (PointCursor $startpos($1))
                      , CabsEcast (ty, expr) ) }
 ;
 
@@ -663,13 +650,13 @@ multiplicative_expression:
 | expr= cast_expression
     { expr }
 | expr1= multiplicative_expression STAR expr2= cast_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsMul, expr1, expr2) ) }
 | expr1= multiplicative_expression SLASH expr2= cast_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsDiv, expr1, expr2) ) }
 | expr1= multiplicative_expression PERCENT expr2= cast_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsMod, expr1, expr2) ) }
 ;
 
@@ -678,10 +665,10 @@ additive_expression:
 | expr= multiplicative_expression
     { expr }
 | expr1= additive_expression PLUS expr2= multiplicative_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsAdd, expr1, expr2) ) }
 | expr1= additive_expression MINUS expr2= multiplicative_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsSub, expr1, expr2) ) }
 ;
 
@@ -690,10 +677,10 @@ shift_expression:
 | expr= additive_expression
     { expr }
 | expr1= shift_expression LT_LT expr2= additive_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsShl, expr1, expr2) ) }
 | expr1= shift_expression GT_GT expr2= additive_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsShr, expr1, expr2) ) }
 ;
 
@@ -702,16 +689,16 @@ relational_expression:
 | expr= shift_expression
     { expr }
 | expr1= relational_expression LT expr2= shift_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsLt, expr1, expr2) ) }
 | expr1= relational_expression GT expr2= shift_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsGt, expr1, expr2) ) }
 | expr1= relational_expression LT_EQ expr2= shift_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsLe, expr1, expr2) ) }
 | expr1= relational_expression GT_EQ expr2= shift_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsGe, expr1, expr2) ) }
 ;
 
@@ -720,10 +707,10 @@ equality_expression:
 | expr= relational_expression
     { expr }
 | expr1= equality_expression EQ_EQ expr2= relational_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsEq, expr1, expr2) ) }
 | expr1= equality_expression BANG_EQ expr2= relational_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsNe, expr1, expr2) ) }
 ;
 
@@ -732,7 +719,7 @@ _AND_expression:
 | expr= equality_expression
     { expr }
 | expr1= _AND_expression AMPERSAND expr2= equality_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsBand, expr1, expr2) ) }
 ;
 
@@ -741,7 +728,7 @@ exclusive_OR_expression:
 | expr= _AND_expression
     { expr }
 | expr1= exclusive_OR_expression CARET expr2= _AND_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsBxor, expr1, expr2) ) }
 ;
 
@@ -750,7 +737,7 @@ inclusive_OR_expression:
 | expr= exclusive_OR_expression
     { expr }
 | expr1= inclusive_OR_expression PIPE expr2= exclusive_OR_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsBor, expr1, expr2) ) }
 ;
 
@@ -759,7 +746,7 @@ logical_AND_expression:
 | expr= inclusive_OR_expression
     { expr }
 | expr1=logical_AND_expression AMPERSAND_AMPERSAND expr2=inclusive_OR_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsAnd, expr1, expr2) ) }
 ;
 
@@ -768,7 +755,7 @@ logical_OR_expression:
 | expr= logical_AND_expression
     { expr }
 | expr1= logical_OR_expression PIPE_PIPE expr2= logical_AND_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEbinary (CabsOr, expr1, expr2) ) }
 ;
 
@@ -778,10 +765,10 @@ conditional_expression:
     { expr }
 | expr1= logical_OR_expression QUESTION expr2= expression
                                COLON    expr3= conditional_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEcond (expr1, expr2, expr3) ) }
 | expr1= logical_OR_expression QUESTION_COLON expr2= conditional_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEcondGNU (expr1, expr2) ) }
 ;
 
@@ -790,7 +777,7 @@ assignment_expression:
 | expr= conditional_expression
     { expr }
 | expr1= unary_expression op= assignment_operator expr2= assignment_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(op)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(op)))
                      , CabsEassign (op, expr1, expr2) ) }
 ;
 
@@ -824,7 +811,7 @@ expression:
 | expr= assignment_expression
     { expr }
 | expr1= expression COMMA expr2= assignment_expression
-    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEcomma (expr1, expr2) ) }
 ;
 
@@ -841,28 +828,28 @@ constant_expression:
 (* §6.7 Declarations *)
 no_leading_attribute_declaration:
 | decspecs= declaration_specifiers
-    idecls_opt= init_declarator_list(declarator_varname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
+    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
 | decspecs= declaration_specifiers_typedef
-    idecls_opt= init_declarator_list(declarator_typedefname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
+    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
 | sa= static_assert_declaration
-    { ([], Declaration_static_assert sa) }
+    { Declaration_static_assert sa }
 ;
 
 declaration:
 | xs_decl= no_leading_attribute_declaration
     { xs_decl }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers
-    idecls_opt= init_declarator_list(declarator_varname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
+    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers_typedef
-    idecls_opt= init_declarator_list(declarator_typedefname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
+    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
-      let loc = Location_ocaml.(region($startpos, $endpos) (PointCursor $startpos)) in
-      ([], Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)])) }
+      let loc = Cerb_location.(region($startpos, $endpos) (PointCursor $startpos)) in
+      Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
 declaration_specifier:
@@ -904,10 +891,10 @@ init_declarator_list(declarator): (* NOTE: the list is in reverse *)
 
 init_declarator(declarator):
 | decl= declarator ioption(asm_register) 
-    { InitDecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { InitDecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
                 LF.cabs_of_declarator decl, None) }
 | decl= declarator ioption(asm_register) EQ init= initializer_
-    { InitDecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { InitDecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
                 LF.cabs_of_declarator decl, Some init) }
 ;
 
@@ -929,23 +916,23 @@ storage_class_specifier:
 (* §6.7.2 Type specifiers *)
 type_specifier_nonunique:
 | CHAR
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_char) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_char) }
 | SHORT
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_short) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_short) }
 | INT
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_int) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_int) }
 | LONG
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_long) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_long) }
 | FLOAT
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_float) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_float) }
 | DOUBLE
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_double) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_double) }
 | SIGNED
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_signed) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_signed) }
 | UNSIGNED
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_unsigned) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_unsigned) }
 | COMPLEX
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_Complex) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_Complex) }
 ;
 
 attribute_type_specifier_nonunique:
@@ -955,9 +942,9 @@ attribute_type_specifier_nonunique:
 
 type_specifier_unique:
 | VOID
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_void) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_void) }
 | BOOL
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_Bool) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_Bool) }
 | spec= atomic_type_specifier
     { spec }
 | spec= struct_or_union_specifier
@@ -967,9 +954,9 @@ type_specifier_unique:
 | spec= typedef_name_spec
     { spec }
 | TYPEOF LPAREN expr= expression RPAREN
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_expr expr) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_typeof_expr expr) }
 | TYPEOF LPAREN ty= type_name RPAREN
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_type ty) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_typeof_type ty) }
 ;
 
 attribute_type_specifier_unique:
@@ -980,27 +967,25 @@ attribute_type_specifier_unique:
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? unused_magic= LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
-    { C_lexer.restore_magic unused_magic;
-      if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
+    iopt= general_identifier? LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
+    { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
     { ctor (to_attrs attr_opt) (Some i) None }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? unused_magic= LBRACE RBRACE
+    iopt= general_identifier? LBRACE RBRACE
     (* GCC extension *)
     (* TODO: forbid union *)
-    { C_lexer.restore_magic unused_magic;
-      ctor (to_attrs attr_opt) iopt (Some []) }
+    { ctor (to_attrs attr_opt) iopt (Some []) }
 ;
 
 struct_or_union:
 | STRUCT
-    { fun attrs x y -> TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { fun attrs x y -> TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
                               TSpec_struct (attrs, x, y)) }
 | UNION
-    { fun attrs x y -> TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { fun attrs x y -> TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
                               TSpec_union (attrs, x, y)) }
 ;
 
@@ -1014,8 +999,6 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 struct_declaration:
 | attr_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON has_extra= boption(SEMICOLON+)
-    (* NOTE: the semicolons dont need to restore potential magic comments,
-             because this production is always after the LBRACE of a struct_union (which does perform a restore) *)
     { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       let (tspecs, tquals, align_specs) = tspecs_tquals in
       Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
@@ -1051,12 +1034,11 @@ struct_declarator:
 (* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
 | ENUM ioption(attribute_specifier_sequence) iopt= general_identifier?
-  unused_magic= LBRACE enums= enumerator_list COMMA? RBRACE
-    { C_lexer.restore_magic unused_magic;
-      TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+  LBRACE enums= enumerator_list COMMA? RBRACE
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
              TSpec_enum (iopt, Some (List.rev enums))) }
 | ENUM ioption(attribute_specifier_sequence) i= general_identifier
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
              TSpec_enum (Some i, None)) }
 ;
 
@@ -1078,7 +1060,7 @@ enumerator:
 (* §6.7.2.4 Atomic type specifiers *)
 atomic_type_specifier:
 | ATOMIC LPAREN ty= type_name RPAREN
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_Atomic ty) }
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor), TSpec_Atomic ty) }
 ;
 
 (* §6.7.3 Type qualifiers *)
@@ -1146,41 +1128,41 @@ direct_declarator:
 array_declarator:
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
   expr_opt= assignment_expression? RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { LF.array_decl (ADecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
         option [] List.rev tquals_opt, false,
         map_option (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
 | ddecltor= direct_declarator LBRACK STATIC tquals_opt= type_qualifier_list?
   expr= assignment_expression RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { LF.array_decl (ADecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
                             option [] List.rev tquals_opt,
                             true, Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals= type_qualifier_list STATIC
   expr= assignment_expression RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { LF.array_decl (ADecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
                             List.rev tquals, true,
                             Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { LF.array_decl (ADecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
                             option [] List.rev tquals_opt, false,
                             Some ADeclSize_asterisk)) ddecltor }
 ;
 
 function_declarator:
-| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) clear_magic RPAREN
+| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) RPAREN
     { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 ;
 
 identifier_list: (* NOTE: the list is in reverse *)
 | id= var_name
-    { [ Symbol.Identifier (Location_ocaml.point $startpos, id) ] }
+    { [ Symbol.Identifier (Cerb_location.point $startpos, id) ] }
 | ids= identifier_list COMMA id= var_name
-    { Symbol.Identifier (Location_ocaml.point $startpos, id) :: ids }
+    { Symbol.Identifier (Cerb_location.point $startpos, id) :: ids }
 ;
 
 pointer:
 | STAR ioption(attribute_specifier_sequence) tquals= type_qualifier_list?
   ptr_decltor= pointer?
-    { PDecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { PDecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
              option [] List.rev tquals, ptr_decltor) }
 ;
 
@@ -1239,19 +1221,19 @@ direct_abstract_declarator:
 array_abstract_declarator:
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK
   tquals= ioption(type_qualifier_list) expr= assignment_expression? RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Location_ocaml.unknown,
+    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown,
       option [] id tquals, false,
       option None (fun e -> Some (ADeclSize_expression e)) expr)) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK STATIC
   tquals= type_qualifier_list? expr= assignment_expression RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Location_ocaml.unknown,
+    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown,
       option [] id tquals, true, Some (ADeclSize_expression expr))) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK
   tquals= type_qualifier_list STATIC expr= assignment_expression RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Location_ocaml.unknown, tquals, true,
+    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown, tquals, true,
       Some (ADeclSize_expression expr))) }
 | dabs_decltor= ioption(direct_abstract_declarator) LBRACK STAR RBRACK
-    { DAbs_array (dabs_decltor, ADecl (Location_ocaml.unknown, [], false,
+    { DAbs_array (dabs_decltor, ADecl (Cerb_location.unknown, [], false,
       Some ADeclSize_asterisk)) }
 ;
 
@@ -1271,10 +1253,9 @@ function_abstract_declarator:
 initializer_:
 | expr= assignment_expression
     { Init_expr expr }
-| unused_magic= LBRACE inits= initializer_list RBRACE
-| unused_magic= LBRACE inits= initializer_list COMMA RBRACE
-    { C_lexer.restore_magic unused_magic;
-      Init_list (List.rev inits) }
+| LBRACE inits= initializer_list RBRACE
+| LBRACE inits= initializer_list COMMA RBRACE
+    { Init_list (List.rev inits) }
 ;
 
 initializer_list: (* NOTE: the list is in reverse *)
@@ -1330,50 +1311,38 @@ statement:
 labeled_statement:
 | attr_opt= ioption(attribute_specifier_sequence) i= general_identifier COLON
   stmt= statement
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { CabsStatement (Cerb_location.(region ($startpos, $endpos) NoCursor),
         to_attrs attr_opt,
         CabsSlabel (i, stmt)) }
-| attr_opt= attribute_specifier_sequence? prev_magic= CASE expr1= constant_expression ELLIPSIS expr2= constant_expression COLON
+| attr_opt= attribute_specifier_sequence? CASE expr1= constant_expression ELLIPSIS expr2= constant_expression COLON
   stmt= statement
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs attr_opt
         , CabsScaseGNU (expr1, expr2, stmt) ) }
-| attr_opt= attribute_specifier_sequence? prev_magic= CASE expr= constant_expression COLON
+| attr_opt= attribute_specifier_sequence? CASE expr= constant_expression COLON
   stmt= statement
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs attr_opt
         , CabsScase (expr, stmt) ) }
-| attr_opt= attribute_specifier_sequence? prev_magic= DEFAULT COLON stmt= statement
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos(prev_magic), $endpos) NoCursor)
+| attr_opt= attribute_specifier_sequence? DEFAULT COLON stmt= statement
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs attr_opt
         , CabsSdefault stmt ) }
 ;
 
 (* §6.8.2 Compound statement *)
 compound_statement:
-| prev_magic= LBRACE bis_opt= block_item_list? post_magic= RBRACE
-    { let bis_opt =
-        match post_magic with
-          | [] -> bis_opt
-          | _ ->
-              let magic_stmt =
-                mk_statement post_magic
-                  ( Location_ocaml.(region ($startpos(post_magic), $endpos(post_magic)) NoCursor)
-                  , Annot.no_attributes
-                  , CabsSnull ) in
-              match bis_opt with
-                | None -> Some [magic_stmt]
-                | Some xs -> Some (magic_stmt :: xs) in
-      mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| LBRACE bis_opt= block_item_list? RBRACE
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSblock (option [] List.rev bis_opt) ) }
 (* NON-STD cppmem syntax *)
 | LBRACES stmts= separated_nonempty_list(PIPES, statement) RBRACES
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+    { CabsStatement (Cerb_location.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSpar stmts) }
 ;
@@ -1387,112 +1356,118 @@ block_item_list: (* NOTE: the list is in reverse *)
 
 block_item:
 | xs_decl= declaration
-    { mk_statement (fst xs_decl)
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
-        , CabsSdecl (snd xs_decl) ) }
+        , CabsSdecl xs_decl ) }
 | stmt= statement
     { stmt }
+(* magic comments as statements - permitted in blocks but not at all
+   other statement positions to avoid a parse conflict on
+   while(1) /*@ inv X @*/ {} *)
+| magic= CERB_MAGIC
+    {
+      let loc = fst magic in
+      let null = CabsStatement ( loc, Annot.no_attributes, CabsSnull ) in
+      CabsStatement
+        ( loc
+        , magic_to_attrs [magic]
+        , CabsSmarker null ) }
 ;
 
 (* §6.8.3 Expression and null statements *)
 expression_statement:
-| expr_opt= full_expression? prev_magic= SEMICOLON
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| expr_opt= full_expression? SEMICOLON
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , option CabsSnull (fun z -> CabsSexpr z) expr_opt ) }
-| attr= attribute_specifier_sequence expr= full_expression prev_magic= SEMICOLON
-    { mk_statement prev_magic
-        (Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| attr= attribute_specifier_sequence expr= full_expression SEMICOLON
+    { CabsStatement
+        (Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs (Some attr)
         , CabsSexpr expr ) }
 ;
 
 (* §6.8.4 Selection statements *)
 selection_statement:
-| prev_magic= IF LPAREN expr= full_expression RPAREN stmt= scoped(statement) %prec THEN
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| IF LPAREN expr= full_expression RPAREN stmt= scoped(statement) %prec THEN
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSif (expr, stmt, None) ) }
-| prev_magic= IF LPAREN expr= full_expression RPAREN stmt1= scoped(statement)
+| IF LPAREN expr= full_expression RPAREN stmt1= scoped(statement)
   ELSE stmt2= scoped(statement)
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSif (expr, stmt1, Some stmt2) ) }
-| prev_magic= SWITCH LPAREN expr= full_expression RPAREN stmt= scoped(statement)
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| SWITCH LPAREN expr= full_expression RPAREN stmt= scoped(statement)
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSswitch (expr, stmt) ) }
 ;
 
+magic_comment_list:
+| xs= magic_comment_list magic= CERB_MAGIC
+    { magic :: xs }
+|
+    { [] }
+
 (* §6.8.5 Iteration statements *)
 iteration_statement:
-| prev_magic= WHILE LPAREN expr= full_expression clear_magic RPAREN stmt= scoped(statement)
-    { let (inv_attrs, stmt') =
-        match stmt with
-          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
-              (inv_attrs, inner_stmt)
-          | _ ->
-              (Annot.no_attributes, stmt) in
-      mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
-        , inv_attrs
-        , CabsSwhile (expr, stmt') ) }
-| prev_magic= DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| WHILE LPAREN expr= full_expression RPAREN magic= magic_comment_list stmt= scoped(statement)
+    {
+      CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
+        , magic_to_attrs (List.rev magic)
+        , CabsSwhile (expr, stmt) ) }
+| DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSdo (expr, stmt) ) }
-| prev_magic= FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? clear_magic RPAREN stmt= scoped(statement)
+| FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
+  expr3_opt= full_expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
+        , magic_to_attrs (List.rev magic)
+        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
+| FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
+  expr3_opt= full_expression? RPAREN stmt= scoped(statement)
     { let (inv_attrs, stmt') =
         match stmt with
           | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
               (inv_attrs, inner_stmt)
           | _ ->
               (Annot.no_attributes, stmt) in
-      mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+      CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , inv_attrs
-        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt') ) }
-| prev_magic= FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? clear_magic RPAREN stmt= scoped(statement)
-    { let (inv_attrs, stmt') =
-        match stmt with
-          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
-              (inv_attrs, inner_stmt)
-          | _ ->
-              (Annot.no_attributes, stmt) in
-      mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
-        , inv_attrs
-        , CabsSfor (Some (FC_decl (snd xs_decl)), expr2_opt, expr3_opt, stmt') ) }
+        , CabsSfor (Some (FC_decl xs_decl), expr2_opt, expr3_opt, stmt') ) }
 ;
 
 (* §6.8.6 Jump statements *)
 jump_statement:
-| prev_magic= GOTO i= general_identifier SEMICOLON
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| GOTO i= general_identifier SEMICOLON
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSgoto i ) }
-| prev_magic= CONTINUE SEMICOLON
-    { mk_statement prev_magic 
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| CONTINUE SEMICOLON
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsScontinue ) }
-| prev_magic= BREAK SEMICOLON
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| BREAK SEMICOLON
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSbreak ) }
-| prev_magic= RETURN expr_opt= full_expression? SEMICOLON
-    { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+| RETURN expr_opt= full_expression? SEMICOLON
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSreturn expr_opt ) }
 ;
@@ -1505,11 +1480,11 @@ asm_register:
 asm_qualifier:
 | VOLATILE
 | ASM_VOLATILE
-    { `VOLATILE }
+    { ASM_VOLATILE }
 | INLINE
-    { `INLINE }
+    { ASM_INLINE }
 | GOTO
-    { `GOTO }
+    { ASM_GOTO }
 ;
 
 asm_output_input:
@@ -1558,25 +1533,25 @@ asm_with_labels:
 
 asm_statement:
 | ASM qs= asm_qualifier* LPAREN s= string_literal RPAREN
-    { let is_volatile = List.mem `VOLATILE qs in
-      let is_inline = List.mem `INLINE qs in
+    { let is_volatile = List.mem ASM_VOLATILE qs in
+      let is_inline = List.mem ASM_INLINE qs in
       let strs =
         if fst s = None then snd s else
           (* TODO: better error *)
           failwith "encoding prefix found inside a __asm__ ()"
       in
-      CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes,
+      CabsStatement (Cerb_location.(region ($startpos, $endpos) NoCursor), Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs)) }
 | ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN
-    { let is_volatile = List.mem `VOLATILE qs in
-      let is_inline = List.mem `INLINE qs in
+    { let is_volatile = List.mem ASM_VOLATILE qs in
+      let is_inline = List.mem ASM_INLINE qs in
       let strs =
         if fst s = None then snd s else
           (* TODO: better error *)
           failwith "encoding prefix found inside a __asm__ ()"
       in
 (*      let (outputs, inputs, clobbers, labels) = args in *)
-      CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes,
+      CabsStatement (Cerb_location.(region ($startpos, $endpos) NoCursor), Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs(*, outputs, intputs, clobbers, labels*))) }
 ;
 
@@ -1591,6 +1566,8 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 ;
 
 external_declaration:
+| magic= CERB_MAGIC
+    { EDecl_magic magic }
 | pred= cn_predicate
     { EDecl_predCN pred }
 | func= cn_function
@@ -1602,7 +1579,7 @@ external_declaration:
 | fdef= function_definition
     { EDecl_func fdef }
 | xs_decl= declaration
-    { EDecl_decl (snd xs_decl) }
+    { EDecl_decl xs_decl }
 ;
 
 (* §6.9.1 Function definitions *)
@@ -1616,32 +1593,21 @@ function_definition1:
 
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
+  magic= magic_comment_list
   stmt= compound_statement has_semi= boption(SEMICOLON)
     { if has_semi then warn_extra_semicolon $startpos(has_semi) AFTER_FUNCTION;
-      let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+      let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
-      let (magic_opt, stmt') =
-        match stmt with
-          | CabsStatement (_, magic_attrs, CabsSmarker stmt') ->
-              (Some magic_attrs, stmt')
-          | _ ->
-              (None, stmt) in
-(*
-        if magik <> [] then
-          match attr_opt with
-            | Some xs -> Some ( xs @ [[magic_to_pre_attr magik]])
-            | None    -> Some [[magic_to_pre_attr magik]]
-        else attr_opt in
-*)
+      let magic_opt = magic_to_opt_attrs (List.rev magic) in
       LF.restore_context ctxt;
-      LF.create_function_definition loc attr_opt magic_opt specifs decltor stmt' rev_decl_opt }
+      LF.create_function_definition loc attr_opt magic_opt specifs decltor stmt rev_decl_opt }
 ;
 
 declaration_list: (* NOTE: the list is in reverse *)
 | xs_decl= no_leading_attribute_declaration
-    { [snd xs_decl] }
+    { [xs_decl] }
 | decls= declaration_list xs_decl= no_leading_attribute_declaration
-    { (snd xs_decl) :: decls }
+    { xs_decl :: decls }
 ;
 
 (* (N2335) §6.7.11: Attributes  *)
@@ -1769,7 +1735,7 @@ attribute_identifier:
 | name= general_identifier
     { name }
 | str= c_keyword_as_string
-    { Symbol.Identifier (Location_ocaml.point $startpos, str) }
+    { Symbol.Identifier (Cerb_location.point $startpos, str) }
 
 attribute_token:
 | name= attribute_identifier
@@ -1797,7 +1763,7 @@ balanced_token_sequence: (* NOTE: the list is in reverse *)
 
 string_literal_component:
 | STRING_LITERAL
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       (fst $1, (loc, snd $1)) }
 ;
 
@@ -1819,7 +1785,7 @@ string_literal:
 
 located_string_literal:
 | string_literal
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       let strs = List.map (fun (loc, s) -> (loc, String.concat "" s)) (snd $1) in
       (loc, String.concat "" (List.map snd strs), strs) }
 ;
@@ -1875,54 +1841,54 @@ cn_assertion:
 
 prim_expr:
 | CN_NULL
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const CNConst_NULL)) }
+    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const CNConst_NULL)) }
 | CN_TRUE
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const (CNConst_bool true))) }
+    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool true))) }
 | CN_FALSE
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const (CNConst_bool false))) }
+    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool false))) }
 | cst= CONSTANT
     {
       match cst with
         | Cabs.CabsInteger_const (str, None) ->
-            Cerb_frontend.Cn.(CNExpr ( Location_ocaml.point $startpos
+            Cerb_frontend.Cn.(CNExpr ( Cerb_location.point $startpos
                                      , CNExpr_const (CNConst_integer (Z.of_string str)) ))
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
 | ident= cn_variable
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
+    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_var ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
 | RETURN
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos,
-        CNExpr_var (Symbol.Identifier (Location_ocaml.point $startpos($1), "return")))) }
+    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos,
+        CNExpr_var (Symbol.Identifier (Cerb_location.point $startpos($1), "return")))) }
 | e= prim_expr DOT member=cn_variable
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 | ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
 | ct= cn_good LPAREN arg=expr RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_good (ct, arg))) }
 | ident= cn_variable args= cons_args
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(args)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(args)))
                                , CNExpr_cons (ident, args))) }
 | arr= prim_expr LBRACK idx= expr RBRACK
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_map_get, arr, idx))) }
 | LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($4)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($4)))
                                , CNExpr_at_env (a, l))) }
 | LBRACE members=record_def RBRACE
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos,$endpos) NoCursor)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos,$endpos) NoCursor)
                                , CNExpr_record members)) }
 | LBRACE base_value__updates=nonempty_member_updates RBRACE
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_memberupdates (fst base_value__updates, snd base_value__updates))) }
 | base_value=prim_expr LBRACK updates=separated_nonempty_list(COMMA, index_update) RBRACK
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_arrayindexupdates (base_value, updates))) }
 
 
@@ -1931,28 +1897,28 @@ unary_expr:
 | e= prim_expr
     { e }
 | STAR arg = unary_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_deref arg)) }
 | SIZEOF LT ty= ctype GT
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_sizeof ty)) }
 | OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_offsetof (tag, member))) }
 | LBRACE e= expr RBRACE CN_UNCHANGED
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_unchanged e)) }
 | BANG e= prim_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_not e )) }
 | AMPERSAND LPAREN e= prim_expr MINUS_GT member=cn_variable RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_membershift (e, member) )) }
 | AMPERSAND name=cn_variable
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_addr name)) }
 | LPAREN ty= base_type RPAREN expr= prim_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
 
 
@@ -1961,59 +1927,59 @@ mul_expr:
 | e= unary_expr
      { e }
 | e1= mul_expr STAR e2= unary_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_mul, e1, e2))) }
 | e1= mul_expr SLASH e2= unary_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_div, e1, e2))) }
 
 add_expr:
 | e= mul_expr
      { e }
 | e1= add_expr PLUS e2= mul_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_add, e1, e2))) }
 | e1= add_expr MINUS e2= mul_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_sub, e1, e2))) }
 
 rel_expr:
 | e= add_expr
      { e }
 | e1= rel_expr EQ_EQ e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_equal, e1, e2))) }
 | e1= rel_expr BANG_EQ e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_inequal, e1, e2))) }
 | e1= rel_expr LT e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_lt, e1, e2))) }
 | e1= rel_expr GT e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_gt, e1, e2))) }
 | e1= rel_expr LT_EQ e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_le, e1, e2))) }
 | e1= rel_expr GT_EQ e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_ge, e1, e2))) }
 
 bool_bin_expr:
 | e= rel_expr
     { e }
 | e1= bool_bin_expr AMPERSAND_AMPERSAND e2= rel_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
 | e1= bool_bin_expr PIPE_PIPE e2= rel_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
 list_expr:
 | e= bool_bin_expr
     { e }
 | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_list es)) }
 (*
  | LBRACK COLON bty= base_type RBRACK
@@ -2061,10 +2027,10 @@ match_cases:  (* NOTE: the list is in reverse *)
 
 match_case_lhs: (* very limited subset of Rust options *)
 | ident= cn_variable args= cons_args
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(args)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(args)))
                                , CNExpr_cons (ident, args))) }
 | ident= cn_variable
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
+    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_var ident)) }
 
 
 match_case:
@@ -2073,7 +2039,7 @@ match_case:
 
 match_target:
 | ident= cn_variable
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
+    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_var ident)) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 
@@ -2082,17 +2048,17 @@ expr_without_let:
 | e= list_expr
     { e }
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
 | IF e1= delimited(LPAREN, expr, RPAREN) e2= delimited(LBRACE, expr, RBRACE) ELSE e3= delimited(LBRACE,expr,RBRACE)
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_ite (e1, e2, e3))) }
 | CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                ,
                                CNExpr_each (str, r, e1))) }
 | CN_MATCH e= match_target LBRACE ms= match_cases RBRACE
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                ,
                                CNExpr_match (e, List.rev ms))) }
 
@@ -2100,7 +2066,7 @@ expr:
 | e=expr_without_let
     { e }
 | CN_LET str= cn_variable EQ e1= expr SEMICOLON e2= expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.region ($startpos(e1), $endpos(e1)) NoCursor,
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.region ($startpos(e1), $endpos(e1)) NoCursor,
                                  CNExpr_let (str, e1, e2))) }
 ;
 
@@ -2178,7 +2144,7 @@ cn_function:
   cn_func_args= delimited(LPAREN, args, RPAREN)
   cn_func_body= cn_option_func_body exit_cn
     { (* TODO: check the name starts with lower case *)
-      let loc = Location_ocaml.point $startpos(str) in
+      let loc = Cerb_location.point $startpos(str) in
       { cn_func_loc= loc
       ; cn_func_name= str
       ; cn_func_return_bty
@@ -2193,7 +2159,7 @@ cn_predicate:
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses exit_cn
     { (* TODO: check the name starts with upper case *)
-      let loc = Location_ocaml.point $startpos(str) in
+      let loc = Cerb_location.point $startpos(str) in
       { cn_pred_loc= loc
       ; cn_pred_name= Symbol.Identifier (loc, str)
       ; cn_pred_attrs
@@ -2208,7 +2174,7 @@ cn_lemma:
   CN_ENSURES cn_lemma_ensures=separated_nonempty_list(SEMICOLON, condition)
   exit_cn
     { (* TODO: check the name starts with lower case *)
-      let loc = Location_ocaml.point $startpos(str) in
+      let loc = Cerb_location.point $startpos(str) in
       { cn_lemma_loc= loc
       ; cn_lemma_name= str
       ; cn_lemma_args
@@ -2218,23 +2184,36 @@ cn_datatype:
 | CN_DATATYPE enter_cn nm= cn_variable
   cases= delimited(LBRACE, cn_cons_cases, RBRACE) exit_cn
     { 
-      { cn_dt_loc= Location_ocaml.point $startpos($1)
+      { cn_dt_loc= Cerb_location.point $startpos($1)
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
-
+cn_fun_spec:
+| CN_SPEC enter_cn
+  str= cn_variable
+  cn_spec_args= delimited(LPAREN, args, RPAREN)
+  CN_REQUIRES cn_spec_requires=separated_nonempty_list(SEMICOLON, condition)
+  CN_ENSURES cn_spec_ensures=separated_nonempty_list(SEMICOLON, condition)
+  exit_cn
+    { let loc = Cerb_location.point $startpos(str) in
+      { cn_spec_loc= loc
+      ; cn_spec_name= str
+      ; cn_spec_args
+      ; cn_spec_requires
+      ; cn_spec_ret_name = Symbol.Identifier (Cerb_location.unknown, "dummy")
+      ; cn_spec_ensures } }
 (* all cases where cn_variable is used don't mind if they're shadowing
    a situation where the name has been assigned as a typedef *)
 %inline cn_variable:
 | str= NAME VARIABLE
-    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+    { Symbol.Identifier (Cerb_location.point $startpos(str), str) }
 | str= NAME TYPE
-    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+    { Symbol.Identifier (Cerb_location.point $startpos(str), str) }
 /* %inline cn_u_variable: */
 /* | str= UNAME VARIABLE */
-/*     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) } */
+/*     { Symbol.Identifier (Cerb_location.point $startpos(str), str) } */
 /* %inline cn_l_variable: */
 /* | str= LNAME VARIABLE */
-/*     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) } */
+/*     { Symbol.Identifier (Cerb_location.point $startpos(str), str) } */
 
 
 args:
@@ -2251,10 +2230,10 @@ nonempty_args:
 
 cn_pred_output:
 | bt=base_type
-    { let loc = Location_ocaml.region $loc(bt) NoCursor in
+    { let loc = Cerb_location.region $loc(bt) NoCursor in
       (loc,bt) }
 | bt= delimited(LPAREN, base_type, RPAREN)
-    { let loc = Location_ocaml.region $loc(bt) NoCursor in
+    { let loc = Cerb_location.region $loc(bt) NoCursor in
       (loc,bt) }
 
 
@@ -2273,9 +2252,9 @@ cons_args:
 
 clauses:
 | c= clause SEMICOLON
-    { Cerb_frontend.Cn.CN_clause (Location_ocaml.region $loc NoCursor, c) }
+    { Cerb_frontend.Cn.CN_clause (Cerb_location.region $loc NoCursor, c) }
 | IF LPAREN e= expr RPAREN LBRACE c= clause SEMICOLON RBRACE ELSE LBRACE cs= clauses RBRACE
-    { Cerb_frontend.Cn.CN_if (Location_ocaml.region $loc NoCursor, e, c, cs) }
+    { Cerb_frontend.Cn.CN_if (Cerb_location.region $loc NoCursor, e, c, cs) }
 ;
 
 cn_option_func_body:
@@ -2287,12 +2266,12 @@ cn_option_func_body:
 (*
 cn_func_body:
 | CN_LET str= cn_variable EQ e= expr SEMICOLON c= cn_func_body
-    { let loc = Location_ocaml.point $startpos(str) in
+    { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_fb_letExpr (loc, str, e, c) }
 | RETURN e= expr SEMICOLON
-    { Cerb_frontend.Cn.CN_fb_return (Location_ocaml.region $loc(e) NoCursor, e) }
+    { Cerb_frontend.Cn.CN_fb_return (Cerb_location.region $loc(e) NoCursor, e) }
 | SWITCH e= delimited(LPAREN, expr, RPAREN) cs= nonempty_list(cn_func_body_case)
-    { let loc = Location_ocaml.point $startpos($1) in
+    { let loc = Cerb_location.point $startpos($1) in
       Cerb_frontend.Cn.CN_fb_cases (loc, e, cs) }
 ;
 
@@ -2303,19 +2282,19 @@ cn_func_body_case:
 
 clause:
 | CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
-    { let loc = Location_ocaml.point $startpos(str) in
+    { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_letResource (loc, str, res, c) }
 | CN_LET str= cn_variable EQ e= expr SEMICOLON c= clause
-    { let loc = Location_ocaml.point $startpos(str) in
+    { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_letExpr (loc, str, e, c) }
 | ASSERT e= delimited(LPAREN, assert_expr, RPAREN) SEMICOLON c= clause
-    { Cerb_frontend.Cn.CN_assert (Location_ocaml.region $loc NoCursor, e, c) }
+    { Cerb_frontend.Cn.CN_assert (Cerb_location.region $loc NoCursor, e, c) }
 | RETURN ret= expr
-    { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc(ret) NoCursor, ret) }
+    { Cerb_frontend.Cn.CN_return (Cerb_location.region $loc(ret) NoCursor, ret) }
 | RETURN
 (*copying from prim_expr *)
-    { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc NoCursor, 
-        CNExpr (Location_ocaml.region $loc NoCursor, CNExpr_const CNConst_unit)) }
+    { Cerb_frontend.Cn.CN_return (Cerb_location.region $loc NoCursor, 
+        CNExpr (Cerb_location.region $loc NoCursor, CNExpr_const CNConst_unit)) }
 ;
 
 
@@ -2327,19 +2306,17 @@ assert_expr:
 | e= expr_without_let
     { Cerb_frontend.Cn.CN_assert_exp e }
 
-resource_when_condition:
-| CN_WHEN LPAREN e=expr RPAREN
-    { e }
+
 
 resource:
-| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) cond=option(resource_when_condition)
-    { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, cond, p, es) }
+| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { Cerb_frontend.Cn.CN_pred (Cerb_location.region $loc(p) NoCursor, p, es) }
 | CN_EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
     { Cerb_frontend.Cn.CN_each ( str
                                , bTy
                                , e1
-                               , Location_ocaml.region $loc(p) NoCursor
+                               , Cerb_location.region $loc(p) NoCursor
                                , p
                                , es) }
 ;
@@ -2352,7 +2329,7 @@ pred:
 | CN_BLOCK ty= delimited(LT, ctype, GT)
     { Cerb_frontend.Cn.CN_block ty }
 | str= UNAME VARIABLE
-    { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Location_ocaml.point $startpos(str), str)) }
+    { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Cerb_location.point $startpos(str), str)) }
 ;
 
 ctype:
@@ -2364,37 +2341,37 @@ ctype:
 /* copying 'clause' and adjusting */
 condition:
 | CN_TAKE str= cn_variable EQ res= resource
-    { let loc = Location_ocaml.point $startpos(str) in
+    { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletResource (loc, str, res) }
 | CN_LET str= cn_variable EQ e= expr 
-    { let loc = Location_ocaml.point $startpos(str) in
+    { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletExpr (loc, str, e) }
 | e= assert_expr
-    { Cerb_frontend.Cn.CN_cconstr (Location_ocaml.region $loc NoCursor, e) }
+    { Cerb_frontend.Cn.CN_cconstr (Cerb_location.region $loc NoCursor, e) }
 ;
 
 
 function_spec:
 | CN_TRUSTED EOF
-  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_trusted loc }
 | CN_ACCESSES accs=separated_list(SEMICOLON, cn_variable) EOF
-  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_accesses (loc, accs) }
 | CN_REQUIRES cs=separated_list(SEMICOLON, condition) EOF
-  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_requires (loc, cs) }
 | CN_ENSURES cs=separated_list(SEMICOLON, condition) EOF
-  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_ensures (loc, cs) }
 | CN_FUNCTION nm=cn_variable EOF
-  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_mk_function (loc, nm) }
 
 
 loop_spec:
 | CN_INV cs=separated_list(SEMICOLON, condition) EOF
-  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+  { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_inv (loc, cs) }
 
 %inline to_be_instantiated:
@@ -2405,31 +2382,59 @@ loop_spec:
 | ct=cn_good COMMA
     { Cerb_frontend.Cn.I_Good ct }
 
+%inline to_be_extracted:
+| 
+    { Cerb_frontend.Cn.E_Everything }
+| p=pred COMMA
+    { Cerb_frontend.Cn.E_Pred p }
+
+
 cn_statement:
 /* copying from 'resource' rule */
 | CN_PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc , CN_pack_unpack (Pack, p, es)) }
 /* copying from 'resource' rule */
 | CN_UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc , CN_pack_unpack (Unpack, p, es)) }
 | CN_HAVE a=assert_expr SEMICOLON
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }
+| CN_EXTRACT tbe=to_be_extracted e=expr SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_extract (tbe, e)) }
 | CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }
 | CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_unfold (id, es)) }
 | CN_APPLY id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_apply (id, es)) }
 | ASSERT LPAREN e=assert_expr RPAREN SEMICOLON
-    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in 
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in 
       CN_statement (loc, CN_assert_stmt e) }
 
+cn_toplevel_elem:
+| pred= cn_predicate
+    { EDecl_predCN pred }
+| func= cn_function
+    { EDecl_funcCN func }
+| lmma= cn_lemma
+    { EDecl_lemmaCN lmma }
+| dt= cn_datatype
+    { EDecl_datatypeCN dt }
+| spec= cn_fun_spec
+    { EDecl_fun_specCN spec }
+;
+
+cn_toplevel:
+| EOF
+    { [] }
+| elem= cn_toplevel_elem elems= cn_toplevel
+    { elem :: elems }
 
 
 (* END CN *)

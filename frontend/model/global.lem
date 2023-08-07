@@ -1,5 +1,7 @@
 open import Pervasives
 
+declare {ocaml} rename module = Lem_global
+
 type execution_mode =
   | Interactive
   | Exhaustive
@@ -10,10 +12,10 @@ instance (Eq execution_mode)
   let (<>) = unsafe_structural_inequality
 end
 
-declare ocaml target_rep type     execution_mode = `Global_ocaml.execution_mode`
-declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
-declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`
-declare ocaml target_rep function Random         = `Global_ocaml.Random`
+declare ocaml target_rep type     execution_mode = `Cerb_global.execution_mode`
+declare ocaml target_rep function Interactive    = `Cerb_global.Interactive`
+declare ocaml target_rep function Exhaustive     = `Cerb_global.Exhaustive`
+declare ocaml target_rep function Random         = `Cerb_global.Random`
 
 declare hol target_rep type     execution_mode = `util$execution_mode`
 declare hol target_rep function Interactive    = `util$Interactive`
@@ -21,23 +23,25 @@ declare hol target_rep function Exhaustive     = `util$Exhaustive`
 declare hol target_rep function Random         = `util$Random`
 
 val current_execution_mode: unit -> maybe execution_mode
-declare ocaml target_rep function current_execution_mode = `Global_ocaml.current_execution_mode`
+declare ocaml target_rep function current_execution_mode = `Cerb_global.current_execution_mode`
 declare hol   target_rep function current_execution_mode = `util$current_execution_mode`
 
 val backend_name: unit -> string
-declare ocaml target_rep function backend_name = `Global_ocaml.backend_name`
+declare ocaml target_rep function backend_name = `Cerb_global.backend_name`
 
 val using_concurrency: unit -> bool
-declare ocaml target_rep function using_concurrency = `Global_ocaml.concurrency_mode`
+declare ocaml target_rep function using_concurrency = `Cerb_global.concurrency_mode`
 declare hol  target_rep function using_concurrency u = false
 
 
 val isDefacto: unit -> bool
-declare ocaml target_rep function isDefacto = `Global_ocaml.isDefacto`
+declare ocaml target_rep function isDefacto = `Cerb_global.isDefacto`
 
 val isAgnostic: unit -> bool
-declare ocaml target_rep function isAgnostic = `Global_ocaml.isAgnostic`
+declare ocaml target_rep function isAgnostic = `Cerb_global.isAgnostic`
 
+val isIgnoreBitfields: unit -> bool
+declare ocaml target_rep function isIgnoreBitfields = `Cerb_global.isIgnoreBitfields`
 
 type cerb_switch =
   | SW_strict_reads
@@ -45,13 +49,20 @@ type cerb_switch =
   | SW_zap_dead_pointers
   | SW_inner_arg_temps
   | SW_permissive_printf
+  | SW_no_integer_provenance
+  | SW_CHERI
 
 declare ocaml target_rep function SW_strict_reads = `Switches.SW_strict_reads`
 declare ocaml target_rep function SW_forbid_nullptr_free = `Switches.SW_forbid_nullptr_free`
 declare ocaml target_rep function SW_zap_dead_pointers = `Switches.SW_zap_dead_pointers`
 declare ocaml target_rep function SW_inner_arg_temps = `Switches.SW_inner_arg_temps`
 declare ocaml target_rep function SW_permissive_printf = `Switches.SW_permissive_printf`
+declare ocaml target_rep function SW_no_integer_provenance = `Switches.SW_no_integer_provenance`
+declare ocaml target_rep function SW_CHERI = `Switches.SW_CHERI`
 
+
+val is_CHERI: unit -> bool
+declare ocaml target_rep function is_CHERI = `Switches.is_CHERI`
 
 val is_PNVI: unit -> bool
 declare ocaml target_rep function is_PNVI = `Switches.is_PNVI`

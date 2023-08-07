@@ -85,7 +85,7 @@ let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ai
 (* TODO: Remove dependence on this function *)
 let pp_ail_stmt ((ail_stmt, extra) as ail_info) arg_names_opt = 
   match ail_info with
-  | (A.AilSdeclaration ((name, decl) :: _), ct) -> 
+  | (A.AilSdeclaration ((name, Some decl) :: _), ct) -> 
     let type_str = (match ct with 
       | Some ctype -> pp_ctype ctype ^ " "
       | None -> "const int ") (* Not reached *)

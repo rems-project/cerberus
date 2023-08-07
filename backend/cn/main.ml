@@ -38,9 +38,9 @@ module Log : sig
 end = struct
   let print_count = ref 0
   let print_log_file (filename, file) =
-    if !Debug_ocaml.debug_level > 0 then
+    if !Cerb_debug.debug_level > 0 then
       begin
-        Colour.do_colour := false;
+        Cerb_colour.do_colour := false;
         let count = !print_count in
         let file_path = 
           (Filename.get_temp_dir_name ()) ^ 
@@ -49,7 +49,7 @@ end = struct
         in
         print_file file_path file;
         print_count := 1 + !print_count;
-        Colour.do_colour := true;
+        Cerb_colour.do_colour := true;
       end
 end
 
@@ -60,14 +60,15 @@ open Log
 
 
 
-let frontend incl_dirs astprints filename state_file =
+let frontend incl_dirs incl_files astprints filename state_file =
   let open CF in
-  Global_ocaml.set_cerb_conf "Cn" false Random false Basic false false false false;
+  Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
-  Switches.set ["inner_arg_temps"];
+  Switches.set ["inner_arg_temps"; "at_magic_comments"; "warn_mismatched_magic_comments"];
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
-  let@ (_, ail_prog_opt, prog0) = c_frontend ~cnnames:cn_builtin_fun_names (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
+  let conf = Setup.conf incl_dirs incl_files astprints in
+  let@ (_, ail_prog_opt, prog0) = c_frontend_and_elaboration ~cnnames:cn_builtin_fun_names (conf, io) (stdlib, impl) ~filename in
   let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
@@ -103,7 +104,7 @@ let check_input_file filename =
 
 type executable_spec = {
     pre_post: (CF.Symbol.sym * (string list * string list)) list;
-    in_stmt: (Location_ocaml.t * string) list;
+    in_stmt: (Cerb_location.t * string) list;
 }
 
 
@@ -151,8 +152,8 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
     let strs = List.map (fun s -> Ail_to_c.pp_ail_stmt (s, type_info) arg_names_opt) ail_stats in
     (List.fold_left (^) "" strs) ^ ";\n")
   in
-  let pres = List.map (fun i -> generate_condition_str i None) instrumentation.requires in
-  let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.ensures in
+  let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in
+  let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.surface.ensures in
   (* let arg_strs = List.fold_left (^) "" arg_strs in *)
   [(instrumentation.fn, (arg_strs @ pres, posts))]
   (* let function_identifiers = List.map fst function_definitions in *)
@@ -174,7 +175,7 @@ let generate_c_specs instrumentation_list type_map (ail_prog : _ CF.AilSyntax.si
   (* let open Core_to_mucore in *)
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     let c_pres_and_posts = generate_c_pres_and_posts instrumentation type_map ail_prog in 
-    let c_statements = generate_c_statements instrumentation.statements ail_prog.cn_datatypes in
+    let c_statements = generate_c_statements instrumentation.surface.statements ail_prog.cn_datatypes in
     (* ([(Sym.fresh_pretty "main", ("int i_old = i;", ""))], generate_c_statements instrumentation.statements) *)
     (c_pres_and_posts, c_statements)
   in
@@ -222,24 +223,25 @@ let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
 let main 
       filename 
       incl_dirs
+      incl_files
       loc_pp 
       debug_level 
       print_level 
+      print_sym_nums
       slow_threshold
       no_timestamps
       json 
       state_file 
       diag
       lemmata
-      no_reorder_points
-      no_additional_sat_check
-      no_model_eqs
       only
       csv_times
       log_times
       random_seed
+      solver_logging
       output_decorated
       astprints
+      expect_failure
   =
   if json then begin
       if debug_level > 0 then
@@ -247,42 +249,42 @@ let main
       if print_level > 0 then
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
-  Debug_ocaml.debug_level := debug_level;
+  Cerb_debug.debug_level := debug_level;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
+  CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
   Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
   Solver.random_seed := random_seed;
-  ResourceInference.reorder_points := not no_reorder_points;
-  ResourceInference.additional_sat_check := not no_additional_sat_check;
-  Check.use_model_eqs := not no_model_eqs;
+  Solver.log_to_temp := solver_logging;
   Check.only := only;
   Diagnostics.diag_string := diag;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) = 
     handle_frontend_error 
-      (frontend incl_dirs astprints filename state_file)
+      (frontend incl_dirs incl_files astprints filename state_file)
   in
-  Debug_ocaml.maybe_open_csv_timing_file ();
+  Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel 
     (match (csv_times, log_times) with
      | (Some times, _) -> Some (times, "csv")
      | (_, Some times) -> Some (times, "log")
      | _ -> None);
-  try begin
+  try
       let result = 
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
-         let (instrumentation, type_map) = Core_to_mucore.collect_instrumentation prog5 in
+         let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
+         (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
          print_log_file ("mucore", MUCORE prog5);
-         Colour.do_colour := false; (* Needed for executable spec printing *)
+         Cerb_colour.do_colour := false; (* Needed for executable spec printing *)
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
             let cn_oc = Stdlib.open_out "cn.c" in
-            let executable_spec = generate_c_specs instrumentation type_map ail_prog in
+            let executable_spec = generate_c_specs instrumentation symbol_table ail_prog in
             let c_datatypes = generate_c_datatypes ail_prog.cn_datatypes in
             let c_functions = generate_c_functions ail_prog in
             (* TODO: Topological sort *)
@@ -306,16 +308,15 @@ let main
        in
        Pp.maybe_close_times_channel ();
        match result with
-       | Ok () -> exit 0
-       | Error e when json -> TypeErrors.report_json ?state_file e; exit 1
-       | Error e -> TypeErrors.report ?state_file e; exit 1
-     end 
-     with
+       | Ok () -> exit (if expect_failure then 1 else 0)
+       | Error e ->
+         if json then TypeErrors.report_json ?state_file e else TypeErrors.report ?state_file e;
+         exit (if expect_failure then 0 else 1)
+ with
      | exc -> 
-        Debug_ocaml.maybe_close_csv_timing_file ();
         Pp.maybe_close_times_channel ();
-        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
-
+        Cerb_debug.maybe_close_csv_timing_file_no_err ();
+        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ());
 
 
 open Cmdliner
@@ -327,11 +328,16 @@ let file =
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
 
-let incl_dir =
+let incl_dirs =
   let doc = "Add the specified directory to the search path for the\
              C preprocessor." in
-  Arg.(value & opt_all dir [] & info ["I"; "include-directory"]
+  Arg.(value & opt_all string [] & info ["I"; "include-directory"]
          ~docv:"DIR" ~doc)
+
+let incl_files =
+  let doc = "Adds  an  implicit  #include into the predefines buffer which is \
+             read before the source file is preprocessed." in
+  Arg.(value & opt_all string [] & info ["include"] ~doc)
 
 let loc_pp =
   let doc = "Print pointer values as hexadecimal or as decimal values (hex | dec)" in
@@ -345,6 +351,10 @@ let debug_level =
 let print_level =
   let doc = "Set the debug message level for the type system to $(docv) (should range over [0-15])." in
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
+
+let print_sym_nums =
+  let doc = "Print numeric IDs of Cerberus symbols (variable names)." in
+  Arg.(value & flag & info ["n"; "print-sym-nums"] ~doc)
 
 let slow_threshold =
   let doc = "Set the time threshold (in seconds) for logging to slow_smt.txt temp file." in
@@ -373,18 +383,6 @@ let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
 
-let no_reorder_points =
-  let doc = "Deactivate 'reorder points' optimisation in resource inference." in
-  Arg.(value & flag & info["no_reorder_points"] ~doc)
-
-let no_additional_sat_check =
-  let doc = "Deactivate 'additional sat check' in inference of q-points." in
-  Arg.(value & flag & info["no_additional_sat_check"] ~doc)
-
-let no_model_eqs =
-  let doc = "Deactivate 'model based eqs' optimisation in resource inference spine judgement." in
-  Arg.(value & flag & info["no_model_eqs"] ~doc)
-
 let csv_times =
   let doc = "file in which to output csv timing information" in
   Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
@@ -396,6 +394,10 @@ let log_times =
 let random_seed =
   let doc = "Set the SMT solver random seed (default 1)." in
   Arg.(value & opt int 0 & info ["r"; "random-seed"] ~docv:"I" ~doc)
+
+let solver_logging =
+  let doc = "Have Z3 log in SMT2 format to a file in a temporary directory." in
+  Arg.(value & flag & info ["solver-logging"] ~doc)
 
 let only =
   let doc = "only type-check this function" in
@@ -413,30 +415,35 @@ let astprints =
   Arg.(value & opt (list (enum [("cabs", Cabs); ("ail", Ail); ("core", Core); ("types", Types)])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
+let expect_failure =
+  let doc = "invert return value to 1 if type checks pass and 0 on failure" in
+  Arg.(value & flag & info["expect-failure"] ~doc)
+
 
 let () =
   let open Term in
   let check_t = 
     const main $ 
       file $ 
-      incl_dir $
+      incl_dirs $
+      incl_files $
       loc_pp $ 
       debug_level $ 
       print_level $
+      print_sym_nums $
       slow_threshold $
       no_timestamps $
       json $
       state_file $
       diag $
       lemmata $
-      no_reorder_points $
-      no_additional_sat_check $
-      no_model_eqs $
       only $
       csv_times $
       log_times $
       random_seed $
+      solver_logging $
       output_decorated $
-      astprints
+      astprints $
+      expect_failure
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))

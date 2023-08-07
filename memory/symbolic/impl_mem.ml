@@ -68,7 +68,9 @@ module Constraints = struct
             [Symbol.mk_string ctx "_Unsigned_ity"] [Some integerBaseTypeSort]
             [0(*TODO: no idea with I'm doing*)]
         ; mk_ctor "size_t_ity"
-        ; mk_ctor "ptrdiff_t_ity" ] in
+        ; mk_ctor "ptrdiff_t_ity"
+        ; mk_ctor "ptraddr_t_ity"
+        ] in
     
     let basicTypeSort =
       Datatype.mk_sort_s ctx "BasicType"
@@ -287,6 +289,8 @@ let integerType_to_expr slvSt (ity: Ctype.integerType) =
         Expr.mk_app slvSt.ctx (List.nth fdecls 4) []
     | Ptrdiff_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
+    | Ptraddr_t ->
+        Expr.mk_app slvSt.ctx (List.nth fdecls 6) []
     | Wint_t
     | Wchar_t ->
         assert false (* TODO *)
@@ -501,7 +505,7 @@ let mem_constraint_to_expr st (constr: mem_iv_constraint) =
     Eff (fun st ->
       Solver.push st.slv;
 (*
-      if !Debug_ocaml.debug_level >= 1 then begin
+      if !Cerb_debug.debug_level >= 1 then begin
         prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs)
       end;
 *)
@@ -589,12 +593,19 @@ let validForDeref_ptrval = Defacto_memory.impl_validForDeref_ptrval
 let isWellAligned_ptrval = Defacto_memory.impl_isWellAligned_ptrval
 let ptrfromint = Defacto_memory.impl_ptrcast_ival
 let intfromptr = Defacto_memory.impl_intcast_ptrval
+let derive_cap _ _ _ _ = assert false (* CHERI only *)
+let cap_assign_value _ _ _ = assert false (* CHERI only *)
+let ptr_t_int_value _ = assert false (* CHERI only *)
+let get_intrinsic_type_spec _ =  assert false (* CHERI only *)
+let call_intrinsic _ _ _ = assert false (* CHERI only *)
+let null_cap _ = assert false (* CHERI only *)
 let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval
 let member_shift_ptrval = Defacto_memory.impl_member_shift_ptrval
 let eff_array_shift_ptrval _ _ = failwith "Defacto_memory.impl_array_shift_ptrval"
+let eff_member_shift_ptrval _ ptrval tag_sym membr_ident = return (member_shift_ptrval ptrval tag_sym membr_ident)
 let memcpy = Defacto_memory.impl_memcpy
 let memcmp = Defacto_memory.impl_memcmp
-let realloc _ _ _ = failwith "Defacto: realloc!"
+let realloc _ _ _ _ _ = failwith "Defacto: realloc!"
 let va_start _ = failwith "Defacto: va_start"
 let va_copy _ = failwith "Defacto: va_copy"
 let va_arg _ _ = failwith "Defacto: va_arg"
@@ -628,7 +639,7 @@ let eq_fval = Defacto_memory.impl_eq_fval
 let lt_fval = Defacto_memory.impl_lt_fval
 let le_fval = Defacto_memory.impl_le_fval
 let fvfromint = Defacto_memory.impl_fvfromint
-let ivfromfloat = Defacto_memory.impl_ivfromfloat
+let ivfromfloat _ = Defacto_memory.impl_ivfromfloat
 let unspecified_mval = Defacto_memory.impl_unspecified_mval
 let integer_value_mval = Defacto_memory.impl_integer_value_mval
 let floating_value_mval = Defacto_memory.impl_floating_value_mval
@@ -655,7 +666,7 @@ let serialise_mem_value mv =
 let serialise_storage = function
   | Defacto_memory.Storage_static (_, ty, mv_opt) ->
     `Assoc [("type", `String (String_core_ctype.string_of_ctype ty));
-            ("value", Json.of_option serialise_mem_value mv_opt)]
+            ("value", Cerb_json.of_option serialise_mem_value mv_opt)]
   | Defacto_memory.Storage_dynamic _ -> `Null
 
 let serialise_map f m =
@@ -674,9 +685,9 @@ let string_of_integer_value ival =
 let string_of_mem_value mval =
   Pp_utils.to_plain_string begin
     (* TODO: factorise *)
-    let saved = !Colour.do_colour in
-    Colour.do_colour := false;
+    let saved = !Cerb_colour.do_colour in
+    Cerb_colour.do_colour := false;
     let ret = pp_mem_value mval in
-    Colour.do_colour := saved;
+    Cerb_colour.do_colour := saved;
     ret
   end

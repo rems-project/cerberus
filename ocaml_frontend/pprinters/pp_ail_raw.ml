@@ -1,5 +1,5 @@
 open Ctype
-open Colour
+open Cerb_colour
 
 module P = PPrint
 let (!^ ) = P.(!^)
@@ -57,6 +57,8 @@ let pp_integerType_raw = function
      pp_ctor "Wint_t"
  | Ptrdiff_t ->
      pp_ctor "Ptrdiff_t"
+ | Ptraddr_t ->
+     pp_ctor "Ptraddr_t"
 
 
 

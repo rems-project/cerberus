@@ -824,6 +824,15 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         ) >>
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
+    | (Mem_common.PtrMemberShift tag_sym membr_ident, [Core.Vobject (Core.OVpointer ptrval)]) ->
+        liftMem (Mem.eff_member_shift_ptrval loc ptrval tag_sym membr_ident) >>= fun res ->
+        ND.update (fun dr_st ->
+          <| dr_st with
+            trace= ME_eff_member_shift_ptrval tag_sym membr_ident ptrval res :: dr_st.trace
+          |>
+        ) >>
+        ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
     | (Mem_common.Va_start, [Core.Vlist _ ty_cvals]) ->
         let ty_ptrs =
           List.map (function
@@ -848,7 +857,20 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     | (Mem_common.Copy_alloc_id, [Core.Vobject (Core.OVinteger ival); Core.Vobject (Core.OVpointer ptrval)]) ->
         liftMem (Mem.copy_alloc_id ival ptrval) >>= fun ptrval' ->
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval')))
-    
+
+    | (Mem_common.CHERI_intrinsic str (ret_ty, tys), cvals) ->
+        let mvals =
+          Utils.map2 (fun ty cval ->
+            fromJust "CHERI_intrinsic call" (Caux.memValueFromValue ty cval)
+          ) tys cvals in
+        liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
+        match res_opt with
+          | Just res ->
+              ND.return (mk_th_st (Core.Vobject (snd (Caux.objectValueFromMemValue res))))
+          | Nothing ->
+            ND.return (mk_th_st Core.Vunit)
+        end
+
     | _ ->
         error ("INVALID memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
   end >>= fun th_st' ->
@@ -1334,7 +1356,7 @@ end
 
 val     driver2: bool -> driverM unit
 let rec driver2 with_concurrency =
-  let () = Debug.print_debug 1 [] (fun () -> "ENTERING Driver.driver2") in
+  let () = Debug.print_debug 2 [] (fun () -> "ENTERING Driver.driver2") in
   new_drive_core_threads   () >>= fun tid_steps ->
   ND.get >>= fun post_core_dr_st ->
   
@@ -1411,7 +1433,7 @@ let rec driver2 with_concurrency =
 
 val     hack: map Symbol.sym Symbol.sym -> list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack core_extern env mem_st core_file concur_sym_map pexpr =
-  let () = Debug.print_debug 1 [] (fun () -> "ENTERING Driver.hack") in
+  let () = Debug.print_debug 2 [] (fun () -> "ENTERING Driver.hack") in
   match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") Nothing core_extern env (Just mem_st) core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with

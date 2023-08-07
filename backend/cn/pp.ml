@@ -2,13 +2,10 @@ module CF = Cerb_frontend
 
 include PPrint
 
-(* copying from backend.ml *)
-external get_terminal_size: unit -> (int * int) option = "terminal_size"
-
 type doc = document
 
 (* copying from backend.ml *)
-let term_col = match get_terminal_size () with
+let term_col = match Cerb_util.terminal_size () with
   | Some (_, col) -> col - 1
   | _ -> 80 - 1
 
@@ -115,10 +112,10 @@ let print_file filename doc =
 
 
 let plain = CF.Pp_utils.to_plain_pretty_string
-let (^^^) = Pp_prelude.(^^^)
+let (^^^) = Cerb_pp_prelude.(^^^)
 
 
-let format_string format str = Colour.ansi_format format str
+let format_string format str = Cerb_colour.ansi_format format str
 
 let format format string = 
   let n = String.length string in
@@ -164,6 +161,11 @@ let list_filtered f l =
   match List.filter_map f l with
   | [] -> !^"(empty)"
   | l -> flow (comma ^^ break 1) l
+
+
+let option f none_msg opt = match opt with
+  | None -> !^ none_msg
+  | Some v -> f v
 
 
 
@@ -259,10 +261,11 @@ let time_f_logs (loc : Locations.t) level msg f x =
 
 
 (* stealing some logic from pp_errors *)
-let error (loc : Locations.t) msg extras = 
+let error (loc : Locations.t) (msg : document) extras = 
   let (head, pos) = Locations.head_pos_of_location loc in
-  print stderr (format [Bold; Red] "error:" ^^^ 
-                format [Bold] head ^^^ msg);
+  print stderr (format [Bold] head ^^^
+                format [Bold; Red] "error:" ^^^
+                format [Bold] @@ plain msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
 
@@ -270,8 +273,8 @@ let error (loc : Locations.t) msg extras =
 (* stealing some logic from pp_errors *)
 let warn (loc : Locations.t) msg = 
   let (head, pos) = Locations.head_pos_of_location loc in
-  print stderr (format [Bold; Yellow] "warning:" ^^^ 
-                format [Bold] head ^^^ msg);
+  print stderr (format [Bold] head ^^^
+                format [Bold; Yellow] "warning:" ^^^ msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos
 
 
@@ -282,7 +285,7 @@ let warn (loc : Locations.t) msg =
 
 
 
-(* stealing from debug_ocaml *)
+(* stealing from Cerb_debug *)
 let json_output_channel = ref None
 
 let maybe_open_json_output mfile = 
@@ -323,6 +326,4 @@ let progress_simple title name =
 
 let of_total cur total = 
   Printf.sprintf "[%d/%d]" cur total
-
-
 

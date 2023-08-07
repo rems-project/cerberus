@@ -6,6 +6,7 @@ struct tree_node {
   struct tree_node *right;
 };
 
+/*@
 predicate {integer size} Tree (pointer p) {
   if ( p == NULL ) {
     return { size: 0 };
@@ -17,6 +18,7 @@ predicate {integer size} Tree (pointer p) {
     return { size: left.size + right.size + 1 };
   }
 }
+@*/
 
 #define NULL ((void *)0)
 

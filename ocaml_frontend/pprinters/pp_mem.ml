@@ -1,11 +1,28 @@
-open Pp_prelude
+open Cerb_pp_prelude
 
 open Mem_common
 
+let pp_unaryOperator (o:AilSyntax.unaryOperator) =
+  match o with
+  | Plus -> !^ "Plus"
+  | Minus -> !^ "Minus"
+  | Bnot -> !^ "Bnot"
+  | Address -> !^ "Address"
+  | Indirection -> !^ "Indirection"
+  | PostfixIncr -> !^ "PostfixIncr"
+  | PostfixDecr -> !^ "PostfixDecr"
+
+let pp_derivecap_op = function
+  | DCunary u -> pp_unaryOperator u
+  | DCbinary b -> !^ "TODO:binary"
 
 let pp_pure_memop = function
-  | PURE_MEMOP_TODO ->
-      !^ "PURE_MEMOP_TODO"
+  | DeriveCap (bop, is_signed) ->
+      !^ "DeriveCap" ^^ P.brackets (pp_derivecap_op bop)
+  | CapAssignValue ->
+      !^ "CapAssignValue"
+  | Ptr_tIntValue ->
+      !^ "Ptr_tIntValue"
 
 let pp_memop = function
   | PtrEq ->
@@ -46,9 +63,13 @@ let pp_memop = function
       !^ "Va_end"
   | PtrArrayShift ->
       !^ "PtrArrayShift"
+  | PtrMemberShift (tag_sym, membr_ident) ->
+      !^ "PtrArrayShift" ^^ P.brackets (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ Pp_symbol.pp_identifier membr_ident)
   | Copy_alloc_id ->
       !^ "Copy_alloc_id"
-
+  | CHERI_intrinsic (str, (ret_ty, tys)) ->
+      let fun_ty = Ctype.(Ctype ([], Function ((no_qualifiers, ret_ty), List.map (fun ty -> (no_qualifiers, ty, false)) tys, false))) in
+      !^ ("cheri_" ^ str) ^^ P.brackets (P.squotes (Pp_core_ctype.pp_ctype fun_ty))
 
 
 (* let pp_pointer_shift = Impl.pp_pointer_shift *)

@@ -1,5 +1,8 @@
 let id = fun x -> x
 
+let starts_with pfx s = String.length s >= String.length pfx
+    && String.equal (String.sub s 0 (String.length pfx)) pfx
+
 let comp (f : 'b -> 'c) (g : 'a -> 'b) (x : 'a) : 'c = f (g (x))
 let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   match fs with
@@ -10,9 +13,8 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
 let curry f a b = f (a, b)
 let uncurry f (a, b) = f a b
 
-
 let do_stack_trace () = 
-  let open Debug_ocaml in
+  let open Cerb_debug in
   if !debug_level > 0 then 
     let backtrace = Printexc.get_callstack 200 in
     Some (Printexc.raw_backtrace_to_string backtrace)
@@ -24,14 +26,10 @@ let do_stack_trace () =
 let pair_equal equalityA equalityB (a,b) (a',b') = 
   equalityA a a' && equalityB b b'
 
-
-
 (* let at_most_one err_str = function
  *   | [] -> None
  *   | [x] -> (Some x)
- *   | _ -> Debug_ocaml.error err_str *)
-
-
+ *   | _ -> Cerb_debug.error err_str *)
 
 
 let unsupported (loc : Locations.t) (err : Pp.document) : 'a = 
@@ -39,9 +37,5 @@ let unsupported (loc : Locations.t) (err : Pp.document) : 'a =
   Pp.error loc err (Option.to_list trace);
   exit 2
 
-
-
 let skip swith lrt = if true then swith else lrt
-
-
 
