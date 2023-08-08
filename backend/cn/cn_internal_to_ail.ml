@@ -229,20 +229,39 @@ let rec cn_to_ail_expr_aux_internal
   | Tuple ts -> failwith "TODO"
   | NthTuple (i, t) -> failwith "TODO"
   | Struct (tag, ms) -> failwith "TODO"
-  | StructMember (t, m) -> failwith "TODO"
+
+  | RecordMember (t, m)
+  | StructMember (t, m) -> 
+    let s, e_ = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
+    let ail_expr_ = A.(AilEmemberof (mk_expr e_, m)) in
+    dest d (s, ail_expr_)
+
   | StructUpdate ((t1, m), t2) -> failwith "TODO"
   | Record ms -> failwith "TODO"
-  | RecordMember (t, m) -> failwith "TODO"
   | RecordUpdate ((t1, m), t2) -> failwith "TODO"
   (* | DatatypeCons of Sym.t * 'bt term TODO: will be removed *)
   (* | DatatypeMember of 'bt term * Id.t TODO: will be removed *)
   (* | DatatypeIsCons of Sym.t * 'bt term TODO: will be removed *)
-  | Constructor (nm, ms) -> failwith "TODO"
-  | MemberShift (tag, _, m) -> failwith "TODO"
+  | Constructor (nm, ms) -> 
+    let (ids, ts) = List.split ms in
+    let ss_and_es = List.map (fun t -> cn_to_ail_expr_aux_internal const_prop dts t PassBack) ts in
+    let (ss, es) = List.split ss_and_es in
+    let ms' = List.combine ids (List.map (fun e -> Some (mk_expr e)) es) in
+    dest d (List.concat ss, AilEstruct (nm, ms'))
+
+  | MemberShift (_, tag, member) -> 
+    let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
+    dest d ([], ail_expr_)
+
   | ArrayShift _ -> failwith "TODO"
   | Nil _ -> failwith "TODO"
   | Cons (x, xs) -> failwith "TODO"
-  | Head xs -> failwith "TODO"
+  | Head xs -> 
+    let s, e_ = cn_to_ail_expr_aux_internal const_prop dts xs PassBack in
+    (* dereference to get first value, where xs is assumed to be a pointer *)
+    let ail_expr_ = A.(AilEunary (Indirection, mk_expr e_)) in 
+    dest d (s, ail_expr_)
+
   | Tail xs -> failwith "TODO"
   | NthList (t1, t2, t3) -> failwith "TODO"
   | ArrayToList (t1, t2, t3) -> failwith "TODO"
@@ -265,7 +284,11 @@ let rec cn_to_ail_expr_aux_internal
       (* TODO: Redo with pattern types Christopher has added *)
       failwith "TODO"
 
-  | Cast (bt, t) -> failwith "TODO"
+  | Cast (bt, t) -> 
+    let s, e = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
+    let ail_expr_ = A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type (bt_to_cn_base_type bt)) , (mk_expr e))) in 
+    dest d (s, ail_expr_)
+
   | _ -> failwith "TODO"
 
 let cn_to_ail_expr_internal
