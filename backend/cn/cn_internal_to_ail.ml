@@ -156,7 +156,7 @@ let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=fal
 let rec cn_to_ail_expr_aux_internal 
 : type a. _ option -> (_ Cn.cn_datatype) list -> IT.t -> a dest -> a
 = fun const_prop dts (IT (term_, basetype)) d ->
-  let cn_to_ail_expr_aux_internal_at_env : type a. _ cn_expr -> string -> a dest -> a
+  let _cn_to_ail_expr_aux_internal_at_env : type a. _ cn_expr -> string -> a dest -> a
   = (fun e es d ->
       (match es with
         | start_evaluation_scope -> 
@@ -227,7 +227,7 @@ let rec cn_to_ail_expr_aux_internal
         | [] -> failwith "Cannot have empty expression in CN each expression"
     in 
     dest d (List.concat ss, ail_expr)
-    
+
   (* add Z3's Distinct for separation facts  *)
   | Tuple ts -> failwith "TODO"
   | NthTuple (i, t) -> failwith "TODO"
@@ -259,13 +259,21 @@ let rec cn_to_ail_expr_aux_internal
   | MapGet (t1, t2) -> failwith "TODO"
   | MapDef ((sym, bt), t) -> failwith "TODO"
   | Apply (sym, ts) -> failwith "TODO"
-  | Let ((var, t1), t2) -> failwith "TODO"
-  | Match (t, ps) -> failwith "TODO"
+  | Let ((var, t1), body) -> 
+    let s1, e1 = cn_to_ail_expr_aux_internal const_prop dts t1 PassBack in
+    let ail_assign = A.(AilSdeclaration [(var, Some (mk_expr e1))]) in
+    prefix d (s1 @ [ail_assign]) (cn_to_ail_expr_aux_internal const_prop dts body d)
+
+  | Match (t, ps) -> 
+      (* PATTERN COMPILER *)
+      (* TODO: Redo with pattern types Christopher has added *)
+      failwith "TODO"
+
   | Cast (bt, t) -> failwith "TODO"
   | _ -> failwith "TODO"
 
 let cn_to_ail_expr_internal
-  : type a. (_ Cn.cn_datatype) list -> _ cn_expr -> a dest -> a
+  : type a. (_ Cn.cn_datatype) list -> IT.t -> a dest -> a
   = fun dts cn_expr d ->
     cn_to_ail_expr_aux_internal None dts cn_expr d
 
@@ -337,24 +345,23 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
 
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
-let cn_to_ail_function cn_function cn_datatypes = 
+let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
   let ail_func_body =
-  match cn_function.cn_func_body with
-    | Some e ->
-      let ss = cn_to_ail_expr_internal cn_datatypes e Return in
+  match def.definition with
+    | Def it ->
+      let ss = cn_to_ail_expr_internal cn_datatypes it Return in
       List.map mk_stmt ss
-    | None -> []
+    | _ -> [] (* TODO: Other cases *)
   in
   (* let var_decls = List.map (fun (sym, decl) -> (sym, (Cerb_location.unknown, empty_attributes, decl))) var_decls in *)
-  let ret_type = cn_to_ail_base_type cn_function.cn_func_return_bty in
-  let params = List.map (fun (cn_bt, cn_nm) -> (mk_ctype (cn_to_ail_base_type cn_bt), cn_nm)) cn_function.cn_func_args in
-  let (param_types, param_names) = List.split params in
+  let ret_type = cn_to_ail_base_type (bt_to_cn_base_type def.return_bt) in
+  let params = List.map (fun (sym, bt) -> (sym, mk_ctype (cn_to_ail_base_type (bt_to_cn_base_type bt)))) def.args in
+  let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
-  let func_name = cn_function.cn_func_name in
   (* Generating function declaration *)
-  let decl = (func_name, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
+  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (func_name, (Cerb_location.unknown, 0, empty_attributes, param_names, mk_stmt A.(AilSblock ([], ail_func_body)))) in
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], ail_func_body)))) in
   (decl, def)
 
 let cn_to_ail_assertion assertion cn_datatypes = 
