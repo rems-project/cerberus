@@ -100,9 +100,9 @@ let generate_c_datatypes cn_datatypes =
   let (consts, structs) = List.split docs in
   CF.Pp_utils.to_plain_pretty_string (concat_map_newline consts ^^ concat_map_newline structs)
 
-let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (logical_predicates : Mucore.T.logical_predicates)  =
+let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (logical_predicates : Mucore.T.logical_predicates)  =
   let ail_funs = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes) logical_predicates in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
-  let doc = CF.Pp_ail.pp_program ~executable_spec:true false true (None, modified_prog) in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
   CF.Pp_utils.to_plain_pretty_string doc
