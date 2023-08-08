@@ -56,31 +56,53 @@ let rec cn_to_ail_base_type =
   | CN_set bt -> generate_ail_array bt
   | _ -> failwith "TODO"
 
-let cn_to_ail_binop = function
-  | CN_add -> A.(Arithmetic Add)
-  | CN_sub -> A.(Arithmetic Sub)
-  | CN_mul -> A.(Arithmetic Mul)
-  | CN_div -> A.(Arithmetic Div)
-  | CN_equal -> A.Eq
-  | CN_inequal -> A.Ne
-  | CN_lt -> A.Lt
-  | CN_gt -> A.Gt
-  | CN_le -> A.Le
-  | CN_ge -> A.Ge
-  | CN_or -> A.Or
-  | CN_and -> A.And
-  | CN_map_get -> failwith "TODO"
-  | CN_is_shape -> failwith "TODO"
+let cn_to_ail_binop_internal = function
+  | Terms.And -> A.And
+  | Or -> A.Or
+  (* | Impl *)
+  | Add -> A.(Arithmetic Add)
+  | Sub -> A.(Arithmetic Sub)
+  | Mul 
+  | MulNoSMT -> A.(Arithmetic Mul)
+  | Div 
+  | DivNoSMT -> A.(Arithmetic Div)
+  (* | Exp
+  | ExpNoSMT
+  | Rem
+  | RemNoSMT
+  | Mod
+  | ModNoSMT
+  | XORNoSMT
+  | BWAndNoSMT
+  | BWOrNoSMT *)
+  | LT -> A.Lt
+  | LE -> A.Le
+  (* | Min
+  | Max *)
+  | EQ -> A.Eq
+  | _ -> failwith "TODO: CN internal AST binop translation to Ail"
+  (* | LTPointer
+  | LEPointer
+  | SetUnion
+  | SetIntersection
+  | SetDifference
+  | SetMember
+  | Subset *)
+
   
 
 
-let cn_to_ail_const = function
-  | CNConst_NULL -> A.(AilEconst ConstantNull)
-  | CNConst_integer n -> A.(AilEconst (ConstantInteger (IConstant (n, Decimal, None))))
-  (* Representing bool as integer with integerSuffix B *)
-  | CNConst_bool b -> A.(AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B))))
-  | CNConst_unit -> A.(AilEconst (ConstantIndeterminate C.(Ctype ([], Void))))
- 
+let rec cn_to_ail_const_internal = function
+  | Terms.Z z -> A.AilEconst (ConstantInteger (IConstant (z, Decimal, None)))
+  | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
+  | Pointer z -> A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z)))
+  | Bool b -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B)))
+  | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void)))
+  | Null -> A.AilEconst (ConstantNull)
+  (* TODO *)
+  (* | CType_const of Sctypes.ctype *)
+  (* | Default of BaseTypes.t  *)
+  | _ -> failwith "TODO"
 
 type 'a dest =
 | Assert : (CF.GenTypes.genTypeCategory A.statement_ list) dest
@@ -152,12 +174,60 @@ let rec cn_to_ail_expr_aux_internal
           ))
   in
   match term_ with
-  | Const const -> failwith "TODO"
-  | Sym sym -> failwith "TODO"
-  | Binop (op, t1, t2) -> failwith "TODO"
-  | Not t -> failwith "TODO"
-  | ITE (t1, t2, t3) -> failwith "TODO"
-  | EachI ((r_start, (sym, bt), r_end), t) -> failwith "TODO"
+  | Const const ->
+    let ail_expr_ = cn_to_ail_const_internal const in
+    dest d ([], ail_expr_)
+
+  | Sym sym ->
+    let ail_expr_ = 
+      (match const_prop with
+        | Some (sym2, cn_const) ->
+            if CF.Symbol.equal_sym sym sym2 then
+              cn_to_ail_const_internal cn_const
+            else
+              A.(AilEident sym)
+        | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
+      )
+      in
+      dest d ([], ail_expr_)
+
+  | Binop (bop, t1, t2) ->
+    let s1, e1 = cn_to_ail_expr_aux_internal const_prop dts t1 PassBack in
+    let s2, e2 = cn_to_ail_expr_aux_internal const_prop dts t2 PassBack in
+    let ail_expr_ = A.AilEbinary (mk_expr e1, cn_to_ail_binop_internal bop, mk_expr e2) in 
+    dest d (s1 @ s2, ail_expr_) 
+
+  | Not t -> 
+    let s, e_ = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
+    let ail_expr_ = A.(AilEunary (Bnot, mk_expr e_)) in 
+    dest d (s, ail_expr_)
+
+  | ITE (t1, t2, t3) -> 
+    let s1, e1_ = cn_to_ail_expr_aux_internal const_prop dts t1 PassBack in
+    let s2, e2_ = cn_to_ail_expr_aux_internal const_prop dts t2 PassBack in
+    let s3, e3_ = cn_to_ail_expr_aux_internal const_prop dts t3 PassBack in
+    let ail_expr_ = A.AilEcond (mk_expr e1_, Some (mk_expr e2_), mk_expr e3_) in
+    dest d (s1 @ s2 @ s3, ail_expr_)
+
+  | EachI ((r_start, (sym, bt), r_end), t) -> 
+    let rec create_list_from_range l_start l_end = 
+      (if l_start > l_end then 
+        []
+      else
+          l_start :: (create_list_from_range (l_start + 1) l_end)
+      )
+    in 
+    let consts = create_list_from_range r_start r_end in
+    let cn_consts = List.map (fun i -> Terms.Z (Z.of_int i)) consts in
+    let stats_and_exprs = List.map (fun cn_const -> cn_to_ail_expr_aux_internal (Some (sym, cn_const)) dts t PassBack) cn_consts in
+    let (ss, es_) = List.split stats_and_exprs in 
+    let ail_expr =
+      match es_ with
+        | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> A.(AilEbinary (mk_expr ae1, And, mk_expr ae2))) ail_expr1 ail_exprs_rest
+        | [] -> failwith "Cannot have empty expression in CN each expression"
+    in 
+    dest d (List.concat ss, ail_expr)
+    
   (* add Z3's Distinct for separation facts  *)
   | Tuple ts -> failwith "TODO"
   | NthTuple (i, t) -> failwith "TODO"
