@@ -36,6 +36,7 @@ let rec bt_to_cn_base_type = function
 | BT.List bt -> CN_list (bt_to_cn_base_type bt)
 | BT.Tuple bts -> CN_tuple (List.map bt_to_cn_base_type bts)
 | BT.Set bt -> CN_set (bt_to_cn_base_type bt)
+| _ -> failwith "TODO"
 
 
 (* TODO: Complete *)
@@ -95,7 +96,7 @@ let cn_to_ail_binop_internal = function
 let rec cn_to_ail_const_internal = function
   | Terms.Z z -> A.AilEconst (ConstantInteger (IConstant (z, Decimal, None)))
   | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
-  | Pointer z -> A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z)))
+  | Pointer z -> A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
   | Bool b -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B)))
   | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void)))
   | Null -> A.AilEconst (ConstantNull)
@@ -153,10 +154,11 @@ let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=fal
 
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
+(* TODO: Use mu_datatypes from Mucore program instead of cn_datatypes *)
 let rec cn_to_ail_expr_aux_internal 
 : type a. _ option -> (_ Cn.cn_datatype) list -> IT.t -> a dest -> a
-= fun const_prop dts (IT (term_, basetype)) d ->
-  let _cn_to_ail_expr_aux_internal_at_env : type a. _ cn_expr -> string -> a dest -> a
+= fun const_prop dts (IT (term_, basetype, _)) d ->
+  (* let _cn_to_ail_expr_aux_internal_at_env : type a. _ cn_expr -> string -> a dest -> a
   = (fun e es d ->
       (match es with
         | start_evaluation_scope -> 
@@ -172,7 +174,7 @@ let rec cn_to_ail_expr_aux_internal
           let sym_old = CF.Symbol.Symbol ("", 0, SD_CN_Id e_old_nm) in
           dest d (s, A.(AilEident sym_old))
           ))
-  in
+  in *)
   match term_ with
   | Const const ->
     let ail_expr_ = cn_to_ail_const_internal const in
@@ -196,11 +198,6 @@ let rec cn_to_ail_expr_aux_internal
     let s2, e2 = cn_to_ail_expr_aux_internal const_prop dts t2 PassBack in
     let ail_expr_ = A.AilEbinary (mk_expr e1, cn_to_ail_binop_internal bop, mk_expr e2) in 
     dest d (s1 @ s2, ail_expr_) 
-
-  | Not t -> 
-    let s, e_ = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
-    let ail_expr_ = A.(AilEunary (Bnot, mk_expr e_)) in 
-    dest d (s, ail_expr_)
 
   | ITE (t1, t2, t3) -> 
     let s1, e1_ = cn_to_ail_expr_aux_internal const_prop dts t1 PassBack in
@@ -241,11 +238,10 @@ let rec cn_to_ail_expr_aux_internal
   (* | DatatypeMember of 'bt term * Id.t TODO: will be removed *)
   (* | DatatypeIsCons of Sym.t * 'bt term TODO: will be removed *)
   | Constructor (nm, ms) -> failwith "TODO"
-  | MemberOffset (tag, m) -> failwith "TODO"
-  | ArrayOffset (ct, index) -> failwith "TODO"
-  | Nil -> failwith "TODO"
+  | MemberShift (tag, _, m) -> failwith "TODO"
+  | ArrayShift _ -> failwith "TODO"
+  | Nil _ -> failwith "TODO"
   | Cons (x, xs) -> failwith "TODO"
-  | List ts -> failwith "TODO"
   | Head xs -> failwith "TODO"
   | Tail xs -> failwith "TODO"
   | NthList (t1, t2, t3) -> failwith "TODO"
@@ -311,7 +307,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
       (create_member (cntype_pointer, Id.id "cntype"))]
   in
   let generate_tag_definition dt_members = 
-    let ail_dt_members = List.map (fun (cn_type, id) -> (cn_to_ail_base_type cn_type, id)) dt_members in
+    let ail_dt_members = List.map (fun (id, cn_type) -> (cn_to_ail_base_type cn_type, id)) dt_members in
     (* TODO: Check if something called tag already exists *)
     let members = List.map create_member ail_dt_members in
     C.(StructDef (members, None))
@@ -353,7 +349,6 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
       List.map mk_stmt ss
     | _ -> [] (* TODO: Other cases *)
   in
-  (* let var_decls = List.map (fun (sym, decl) -> (sym, (Cerb_location.unknown, empty_attributes, decl))) var_decls in *)
   let ret_type = cn_to_ail_base_type (bt_to_cn_base_type def.return_bt) in
   let params = List.map (fun (sym, bt) -> (sym, mk_ctype (cn_to_ail_base_type (bt_to_cn_base_type bt)))) def.args in
   let (param_syms, param_types) = List.split params in
@@ -364,16 +359,16 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], ail_func_body)))) in
   (decl, def)
 
-let cn_to_ail_assertion assertion cn_datatypes = 
+(* let cn_to_ail_assertion assertion cn_datatypes = 
   match assertion with
   | CN_assert_exp e_ -> 
       (* TODO: Change type signature to keep declarations too *)
-      let ss = cn_to_ail_expr_internal cn_datatypes e_ Assert in 
+      let ss = cn_to_ail_expr_aux cn_datatypes e_ Assert in 
       List.map mk_stmt ss
-  | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
+  | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO" *)
 
 
-let cn_to_ail_condition cn_condition type_map cn_datatypes = 
+(* let cn_to_ail_condition cn_condition type_map cn_datatypes = 
   match cn_condition with
   | CN_cletResource (loc, name, resource) -> ([A.AilSskip], None) (* TODO *)
   | CN_cletExpr (_, name, expr) -> 
@@ -387,4 +382,4 @@ let cn_to_ail_condition cn_condition type_map cn_datatypes =
   | CN_cconstr (loc, constr) -> 
     let ail_constr = cn_to_ail_assertion constr cn_datatypes in
     let ail_stats_ = List.map rm_stmt ail_constr in
-    (ail_stats_, None)
+    (ail_stats_, None) *)
