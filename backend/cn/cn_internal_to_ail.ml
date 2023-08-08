@@ -10,6 +10,8 @@ module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
 
+(* TODO: Change to use internal  *)
+
 module ConstructorPattern = struct
   type t = C.union_tag 
   let compare (x : t) y = Sym.compare_sym x y
@@ -129,16 +131,16 @@ let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=fal
 
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
-let rec cn_to_ail_expr_aux 
-: type a. _ option -> (_ Cn.cn_datatype) list -> _ cn_expr -> a dest -> a
-= fun const_prop dts (CNExpr (loc, expr_)) d ->
-  let cn_to_ail_expr_aux_at_env : type a. _ cn_expr -> string -> a dest -> a
+let rec cn_to_ail_expr_aux_internal 
+: type a. _ option -> (_ Cn.cn_datatype) list -> IT.t -> a dest -> a
+= fun const_prop dts (IT (term_, basetype)) d ->
+  let cn_to_ail_expr_aux_internal_at_env : type a. _ cn_expr -> string -> a dest -> a
   = (fun e es d ->
       (match es with
         | start_evaluation_scope -> 
           (* let Symbol (digest, nat, _) = CF.Symbol.fresh () in *)
           (* TODO: Make general *)
-          let s, ail_expr = cn_to_ail_expr_aux const_prop dts e PassBack in
+          let s, ail_expr = cn_to_ail_expr_aux_internal const_prop dts e PassBack in
           let e_cur_nm =
           match ail_expr with
             | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
@@ -149,299 +151,53 @@ let rec cn_to_ail_expr_aux
           dest d (s, A.(AilEident sym_old))
           ))
   in
-  match expr_ with
-    | CNExpr_const cn_cst -> 
-      let ail_expr_ = cn_to_ail_const cn_cst in
-      dest d ([], ail_expr_)
-    | CNExpr_value_of_c_variable sym
-    | CNExpr_var sym -> 
-      let ail_expr_ = 
-      (match const_prop with
-        | Some (sym2, cn_const) ->
-            if CF.Symbol.equal_sym sym sym2 then
-              cn_to_ail_const cn_const
-            else
-              A.(AilEident sym)
-        | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
-      )
-      in
-      dest d ([], ail_expr_)
-    (* 
-    | CNExpr_list es_ -> !^ "[...]" (* Currently unused *)
-    *)
-    | CNExpr_memberof (e, xs) -> 
-      let s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
-      let ail_expr_ = A.(AilEmemberof (mk_expr e_, xs)) in
-      dest d (s, ail_expr_)
-    (* 
-    | CNExpr_record es -> failwith "TODO"
-    | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
-    | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
-    *)
+  match term_ with
+  | Const const -> failwith "TODO"
+  | Sym sym -> failwith "TODO"
+  | Binop (op, t1, t2) -> failwith "TODO"
+  | Not t -> failwith "TODO"
+  | ITE (t1, t2, t3) -> failwith "TODO"
+  | EachI ((r_start, (sym, bt), r_end), t) -> failwith "TODO"
+  (* add Z3's Distinct for separation facts  *)
+  | Tuple ts -> failwith "TODO"
+  | NthTuple (i, t) -> failwith "TODO"
+  | Struct (tag, ms) -> failwith "TODO"
+  | StructMember (t, m) -> failwith "TODO"
+  | StructUpdate ((t1, m), t2) -> failwith "TODO"
+  | Record ms -> failwith "TODO"
+  | RecordMember (t, m) -> failwith "TODO"
+  | RecordUpdate ((t1, m), t2) -> failwith "TODO"
+  (* | DatatypeCons of Sym.t * 'bt term TODO: will be removed *)
+  (* | DatatypeMember of 'bt term * Id.t TODO: will be removed *)
+  (* | DatatypeIsCons of Sym.t * 'bt term TODO: will be removed *)
+  | Constructor (nm, ms) -> failwith "TODO"
+  | MemberOffset (tag, m) -> failwith "TODO"
+  | ArrayOffset (ct, index) -> failwith "TODO"
+  | Nil -> failwith "TODO"
+  | Cons (x, xs) -> failwith "TODO"
+  | List ts -> failwith "TODO"
+  | Head xs -> failwith "TODO"
+  | Tail xs -> failwith "TODO"
+  | NthList (t1, t2, t3) -> failwith "TODO"
+  | ArrayToList (t1, t2, t3) -> failwith "TODO"
+  | Representable (ct, t) -> failwith "TODO"
+  | Good (ct, t) -> failwith "TODO"
+  | Aligned t_and_align -> failwith "TODO"
+  | WrapI (ct, t) -> failwith "TODO"
+  | MapConst (bt, t) -> failwith "TODO"
+  | MapSet (t1, t2, t3) -> failwith "TODO"
+  | MapGet (t1, t2) -> failwith "TODO"
+  | MapDef ((sym, bt), t) -> failwith "TODO"
+  | Apply (sym, ts) -> failwith "TODO"
+  | Let ((var, t1), t2) -> failwith "TODO"
+  | Match (t, ps) -> failwith "TODO"
+  | Cast (bt, t) -> failwith "TODO"
+  | _ -> failwith "TODO"
 
-    (* TODO: binary operations on structs (esp. equality) *)
-    | CNExpr_binop (bop, x, y) -> 
-      let s1, e1 = cn_to_ail_expr_aux const_prop dts x PassBack in
-      let s2, e2 = cn_to_ail_expr_aux const_prop dts y PassBack in
-      let ail_expr_ = A.AilEbinary (mk_expr e1, cn_to_ail_binop bop, mk_expr e2) in 
-      dest d (s1 @ s2, ail_expr_)  
-    
-    | CNExpr_sizeof ct -> 
-      let ail_expr_ = A.AilEsizeof (empty_qualifiers, ct) in
-      dest d ([], ail_expr_)
-    
-    | CNExpr_offsetof (tag, member) -> 
-      let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
-      dest d ([], ail_expr_)
-
-    (* TODO: Test *)
-    | CNExpr_membershift (e, member) ->
-      let s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
-      let ail_expr_ = A.(AilEunary (Address, mk_expr (AilEmemberofptr (mk_expr e_, member)))) in 
-      dest d (s, ail_expr_)
-
-    | CNExpr_cast (bt, expr) -> 
-      let s, e = cn_to_ail_expr_aux const_prop dts expr PassBack in
-      let ail_expr_ = A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr e))) in 
-      dest d (s, ail_expr_)
-    
-    | CNExpr_call (sym, exprs) -> 
-      let stats_and_exprs = List.map (fun e -> cn_to_ail_expr_aux const_prop dts e PassBack) exprs in
-      let (ss, es) = List.split stats_and_exprs in 
-      let f = (mk_expr A.(AilEident sym)) in
-      let ail_expr_ = A.AilEcall (f, List.map mk_expr es) in 
-      dest d (List.concat ss, ail_expr_)
-    
-    
-    | CNExpr_cons (c_nm, exprs) -> 
-      (* exprs currently unused *)
-      let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true c_nm in
-      (* let _generate_assign_stat (id, expr) = 
-        let _s, rhs_ail_expr = cn_to_ail_expr_aux const_prop dts expr PassBack in
-        let sym = create_sym_from_id id in
-        let ail_expr = A.(AilEassign (mk_expr (AilEident sym), mk_expr rhs_ail_expr)) in
-        A.(AilSexpr (mk_expr (ail_expr)))
-      in
-      (match exprs with 
-        | (i, _) :: (i', _) :: _ -> 
-            Printf.printf "%s\n%s\n" (Id.pp_string i) (Id.pp_string i') 
-        | _ -> ()
-      ); *)
-      (* Treating enum value as variable name *)
-      dest d ([], AilEident tag_sym)   
-
-    (* Should only be integer range *)
-    | CNExpr_each (sym, (r_start, r_end), e) -> 
-      let rec create_list_from_range l_start l_end = 
-        (if l_start > l_end then 
-          []
-        else
-            l_start :: (create_list_from_range (l_start + 1) l_end)
-        )
-      in 
-      let consts = create_list_from_range (Z.to_int r_start) (Z.to_int r_end) in
-      let cn_consts = List.map (fun i -> CNConst_integer (Z.of_int i)) consts in
-      let stats_and_exprs = List.map (fun cn_const -> cn_to_ail_expr_aux (Some (sym, cn_const)) dts e PassBack) cn_consts in
-      let (ss, es_) = List.split stats_and_exprs in 
-      let ail_expr =
-        match es_ with
-          | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> A.(AilEbinary (mk_expr ae1, And, mk_expr ae2))) ail_expr1 ail_exprs_rest
-          | [] -> failwith "Cannot have empty expression in CN each expression"
-      in 
-      dest d (List.concat ss, ail_expr)
-  
-    | CNExpr_match (e, es) ->
-      
-      (* PATTERN COMPILER *)
-
-      (* let create_binding sym ctype =  *)
-        (* A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype)) *)
-      (* in *)
-
-
-      let simplify_leading_variable cn_expr_ (ps, e) =
-        match ps with 
-          (* CNExpr_const CNConst_unit is a hacky representation for wildcard pattern *)
-          | (CNExpr_var sym') :: ps' -> 
-            (* let binding = create_binding sym' (mk_ctype (cn_to_ail_base_type tp)) in *)
-            (CNExpr_const CNConst_unit :: ps', mk_cn_expr (CNExpr_let (sym', mk_cn_expr cn_expr_, e)))
-          | p :: ps' -> (p :: ps', e)
-          | [] -> assert false
-      in
-
-      let leading_wildcard (ps, _) =
-        match ps with
-          | CNExpr_const CNConst_unit :: ps' -> true
-          | _ :: ps' -> false
-          | [] -> failwith "Empty patterns not allowed"
-      in
-
-      let expand_record ids (ps, e) =
-        match ps with
-          | CNExpr_const CNConst_unit :: ps' ->
-            let ps'' = List.map (fun _ -> CNExpr_const CNConst_unit) ids in
-            (ps'' @ ps', e)
-          | CNExpr_record members :: ps' ->
-            if List.for_all2 (fun (id, m) id' -> Id.equal id id') members ids then
-              let ps'' = List.map (fun (id, m) -> rm_cn_expr m) members in 
-              (ps'' @ ps', e)
-            else 
-              failwith "Fields in pattern not the same as fields in type"
-          | _ :: _ -> failwith "Non-record pattern"
-          | [] -> assert false
-      in  
-
-      let expand_datatype c (ps, e) = 
-        match ps with 
-        | CNExpr_const CNConst_unit :: ps' -> Some (CNExpr_const CNConst_unit :: ps', e)
-        | CNExpr_cons (c_nm, members) :: ps' ->
-          if Sym.equal_sym c c_nm then
-            (* let member_exprs = List.map (fun (id, m) -> rm_cn_expr m) members in *)
-            Some (CNExpr_record members :: ps', e)
-          else
-            None
-        | _ :: _ -> failwith "Non-sum pattern" 
-        | [] -> assert false 
-      in 
-
-      let transform_switch_expr e_
-        = A.(AilEmemberofptr (mk_expr e_, Id.id "tag"))
-      in
-
-      (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
-      (* Matrix algorithm for pattern compilation *)
-      let rec translate : int -> (((C.union_tag, C.ctype) cn_expr_) * _ Cn.cn_base_type) list -> (((C.union_tag, C.ctype) cn_expr_) list * (C.union_tag, C.ctype) cn_expr) list -> (A.bindings list * (_ A.statement_) list) =
-        fun count vars cases -> 
-          match vars with 
-            | [] ->
-              (match cases with 
-              | ([], e) :: rest -> 
-                let rhs = 
-                  (match d with 
-                    | Assert -> 
-                      cn_to_ail_expr_aux const_prop dts e Assert
-                    | Return -> 
-                      cn_to_ail_expr_aux const_prop dts e Return
-                    | AssignVar x -> 
-                      cn_to_ail_expr_aux const_prop dts e (AssignVar x)
-                    | PassBack -> 
-                      failwith "TODO")
-                in 
-                ([], rhs)
-              | [] -> failwith "Incomplete pattern match"
-              | ((_::_), e) :: rest -> assert false)
-
-            | (v, tp) :: vs -> 
-              
-              let cases = List.map (simplify_leading_variable v) cases in
-
-              if List.for_all leading_wildcard cases then
-                let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
-                let (bindings', stats') = translate count vs cases in 
-                ([], stats')
-              else
-                match tp with
-                  | CN_record members_with_types ->
-                      Printf.printf "Inside record case\n"; 
-                      let (ts, ids) = List.split members_with_types in
-                      let vars' = List.map (fun id -> CNExpr_memberof (mk_cn_expr v, id)) ids in
-                      let vs' = (List.combine vars' ts) @ vs in
-                      let cases' = List.map (expand_record ids) cases in
-                      translate count vs' cases'
-
-                  | CN_datatype sym -> 
-                      Printf.printf "Inside datatype case. Sym = %s\n" (Sym.pp_string sym);
-
-                      let cn_dt = List.filter (fun dt -> String.equal (Sym.pp_string sym) (Sym.pp_string dt.cn_dt_name)) dts in 
-                      (match cn_dt with 
-                        | [] -> failwith "Datatype not found"
-                        | dt :: _ ->
-                          let (s1, e1) = cn_to_ail_expr_aux const_prop dts (mk_cn_expr v) PassBack in
-                          let build_case (constr_sym, members_with_types) = 
-                            let cases' = List.filter_map (expand_datatype constr_sym) cases in 
-                            let record_tp = CN_record members_with_types in
-                            let suffix = "_" ^ (string_of_int count) in
-                            let lc_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constr_sym in 
-                            let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 
-                            let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in (* TODO: Remove hack *)
-                            let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym)) in
-                            let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
-                            let (_bindings, member_stats) = translate (count + 1) ((CNExpr_var count_sym, record_tp) :: vs) cases' in
-                            (* TODO: Add real bindings instead of [] *)
-                            let stat_block = A.AilSblock ([], constructor_var_assign :: (List.map mk_stmt member_stats)) in
-                            let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym in
-                            let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, Sym.pp_string tag_sym); attr_args = []} in
-                            let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
-                            let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
-                            ail_case_stmt
-                          in 
-                          let e1_transformed = transform_switch_expr e1 in
-                          let ail_case_stmts = List.map build_case dt.cn_dt_cases in
-                          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], ail_case_stmts)))) in
-                          ([], s1 @ [switch])
-                      )
-                  | _ -> 
-                    (* Cannot have non-variable, non-wildcard pattern besides struct *)
-                    failwith "Unexpected pattern"
-      in
-
-      let translate_real : type a. (((C.union_tag, C.ctype) cn_expr_) * _ Cn.cn_base_type) list -> (((C.union_tag, C.ctype) cn_expr_) list * (C.union_tag, C.ctype) cn_expr) list -> a dest -> a =
-        fun vars cases d ->
-          let (bs, ss) = translate 1 vars cases in
-          match d with 
-            | Assert -> ss
-            | Return -> ss
-            | AssignVar x -> failwith "TODO"
-            | PassBack -> failwith "TODO"
-      in 
-
-      (* Hack before switching over to CN's internal AST *)
-      let tree_sym = Sym.fresh_pretty "tree" in
-      let es' = List.map (fun (lhs, rhs) -> ([rm_cn_expr lhs], rhs)) es in
-      translate_real [(rm_cn_expr e, CN_datatype tree_sym)] es' d
-
-  
-    (* TODO: Might want to consider destination-passing style for if-then-else too (if ternary expressions turn out to look too complicated) *)
-    | CNExpr_ite (e1, e2, e3) -> 
-        let s1, e1_ = cn_to_ail_expr_aux const_prop dts e1 PassBack in
-        let s2, e2_ = cn_to_ail_expr_aux const_prop dts e2 PassBack in
-        let s3, e3_ = cn_to_ail_expr_aux const_prop dts e3 PassBack in
-        let ail_expr_ = A.AilEcond (mk_expr e1_, Some (mk_expr e2_), mk_expr e3_) in
-        dest d (s1 @ s2 @ s3, ail_expr_)
-    
-    (* 
-    | CNExpr_good (ty, e) -> !^ "(good (_, _))" 
-    *)
-
-
-    | CNExpr_let (s, e, body) -> 
-      let s1, e1 = cn_to_ail_expr_aux const_prop dts e PassBack in
-      let ail_assign = A.(AilSdeclaration [(s, Some (mk_expr e1))]) in
-      prefix d (s1 @ [ail_assign]) (cn_to_ail_expr_aux const_prop dts body d)
-
-    | CNExpr_deref expr -> 
-      let s, e = cn_to_ail_expr_aux const_prop dts expr PassBack in 
-      let ail_expr_ = A.(AilEunary (Indirection, mk_expr e)) in 
-      dest d (s, ail_expr_)
-
-    | CNExpr_unchanged e -> 
-      let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
-      let s, e_ = cn_to_ail_expr_aux const_prop dts (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start))) PassBack in 
-      dest d (s, e_)
-  
-    | CNExpr_at_env (e, es) -> cn_to_ail_expr_aux_at_env e es d 
-
-    | CNExpr_not e -> 
-      let s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
-      let ail_expr_ = A.(AilEunary (Bnot, mk_expr e_)) in 
-      dest d (s, ail_expr_)
-
-    | _ -> failwith "TODO"
-
-let cn_to_ail_expr
+let cn_to_ail_expr_internal
   : type a. (_ Cn.cn_datatype) list -> _ cn_expr -> a dest -> a
   = fun dts cn_expr d ->
-    cn_to_ail_expr_aux None dts cn_expr d
+    cn_to_ail_expr_aux_internal None dts cn_expr d
 
 
 type 'a ail_datatype = {
@@ -515,7 +271,7 @@ let cn_to_ail_function cn_function cn_datatypes =
   let ail_func_body =
   match cn_function.cn_func_body with
     | Some e ->
-      let ss = cn_to_ail_expr cn_datatypes e Return in
+      let ss = cn_to_ail_expr_internal cn_datatypes e Return in
       List.map mk_stmt ss
     | None -> []
   in
@@ -535,7 +291,7 @@ let cn_to_ail_assertion assertion cn_datatypes =
   match assertion with
   | CN_assert_exp e_ -> 
       (* TODO: Change type signature to keep declarations too *)
-      let ss = cn_to_ail_expr cn_datatypes e_ Assert in 
+      let ss = cn_to_ail_expr_internal cn_datatypes e_ Assert in 
       List.map mk_stmt ss
   | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
 
@@ -545,7 +301,7 @@ let cn_to_ail_condition cn_condition type_map cn_datatypes =
   | CN_cletResource (loc, name, resource) -> ([A.AilSskip], None) (* TODO *)
   | CN_cletExpr (_, name, expr) -> 
     (* TODO: return declarations too *)
-    let ss = cn_to_ail_expr cn_datatypes expr (AssignVar name) in
+    let ss = cn_to_ail_expr_internal cn_datatypes expr (AssignVar name) in
     let sfb_type = SymTable.find type_map name in
     let basetype = SurfaceBaseTypes.to_basetype sfb_type in
     let cn_basetype = bt_to_cn_base_type basetype in
