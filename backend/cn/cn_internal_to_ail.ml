@@ -9,6 +9,7 @@ open PPrint
 module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
+module T=Terms
 
 (* TODO: Change to use internal  *)
 
@@ -25,7 +26,9 @@ let rec bt_to_cn_base_type = function
 | BT.Unit -> CN_unit
 | BT.Bool -> CN_bool
 | BT.Integer -> CN_integer
+| BT.Bits _ -> failwith "TODO"
 | BT.Real -> CN_real
+| BT.Alloc_id  -> failwith "TODO"
 | BT.CType -> failwith "TODO"
 | BT.Loc -> CN_loc
 | BT.Struct tag -> CN_struct tag
@@ -36,7 +39,25 @@ let rec bt_to_cn_base_type = function
 | BT.List bt -> CN_list (bt_to_cn_base_type bt)
 | BT.Tuple bts -> CN_tuple (List.map bt_to_cn_base_type bts)
 | BT.Set bt -> CN_set (bt_to_cn_base_type bt)
-| _ -> failwith "TODO"
+
+let rec cn_base_type_to_bt = function
+| CN_unit -> BT.Unit
+| CN_bool -> BT.Bool  
+| CN_integer -> BT.Integer
+| CN_bits (sign, size) ->
+    BT.Bits ((match sign with CN_unsigned -> BT.Unsigned | CN_signed -> BT.Signed), size)
+| CN_real -> BT.Real
+| CN_loc -> BT.Loc
+| CN_alloc_id -> BT.Alloc_id
+| CN_struct tag -> BT.Struct tag
+| CN_datatype tag -> BT.Datatype tag
+| CN_record _ -> failwith "TODO"
+| CN_map (type1, type2) -> BT.Map (cn_base_type_to_bt type1, cn_base_type_to_bt type2)
+| CN_list typ -> cn_base_type_to_bt typ
+| CN_tuple ts -> BT.Tuple (List.map cn_base_type_to_bt ts)
+| CN_set typ -> cn_base_type_to_bt typ
+| CN_user_type_name _ -> failwith "TODO"
+| CN_c_typedef_name _ -> failwith "TODO"
 
 
 (* TODO: Complete *)
@@ -280,9 +301,124 @@ let rec cn_to_ail_expr_aux_internal
     prefix d (s1 @ [ail_assign]) (cn_to_ail_expr_aux_internal const_prop dts body d)
 
   | Match (t, ps) -> 
+      Printf.printf "Reached pattern matching case\n";
       (* PATTERN COMPILER *)
-      (* TODO: Redo with pattern types Christopher has added *)
-      failwith "TODO"
+      let simplify_leading_variable t1 (ps, t2) =
+        match ps with 
+        | T.PSym sym' :: ps' -> (T.PWild :: ps', T.(IT (Let ((sym', t1), t2), IT.basetype t2, Cerb_location.unknown)))
+        | p :: ps' -> (p :: ps', t2)
+        | [] -> assert false
+      in
+
+      let leading_wildcard (ps, _) =
+        match ps with
+          | T.PWild :: ps' -> true
+          | _ :: ps' -> false
+          | [] -> failwith "Empty patterns not allowed"
+      in
+
+      let expand_datatype c (ps, e) = 
+        match ps with 
+        | T.PWild :: ps' -> Some (T.PWild :: ps', e)
+        | T.PConstructor (c_nm, members) :: ps' ->
+          if Sym.equal_sym c c_nm then
+            let member_patterns = List.map (fun (_, T.Pat (p_, _, _)) -> p_) members in
+            Some (member_patterns @ ps', e)
+          else
+            None
+        | _ :: _ -> failwith "Non-sum pattern" 
+        | [] -> assert false 
+      in 
+
+      let transform_switch_expr e_
+        = A.(AilEmemberofptr (mk_expr e_, Id.id "tag"))
+      in
+
+      (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
+      (* Matrix algorithm for pattern compilation *)
+      let rec translate : int -> (BT.basetype Terms.term) list -> (_ Terms.pattern_ list * BT.basetype Terms.term) list -> (A.bindings list * (_ A.statement_) list) =
+        fun count vars cases -> 
+          match vars with 
+            | [] ->
+              (match cases with 
+              | ([], t) :: rest -> 
+                let rhs = 
+                  (match d with 
+                    | Assert -> 
+                      cn_to_ail_expr_aux_internal const_prop dts t Assert
+                    | Return -> 
+                      cn_to_ail_expr_aux_internal const_prop dts t Return
+                    | AssignVar x -> 
+                      cn_to_ail_expr_aux_internal const_prop dts t (AssignVar x)
+                    | PassBack -> 
+                      failwith "TODO")
+                in 
+                ([], rhs)
+              | [] -> failwith "Incomplete pattern match"
+              | ((_::_), e) :: rest -> assert false)
+
+            | term :: vs -> 
+              
+              let cases = List.map (simplify_leading_variable term) cases in
+
+              if List.for_all leading_wildcard cases then
+                let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
+                let (bindings', stats') = translate count vs cases in 
+                ([], stats')
+              else
+                match IT.bt term with
+                  | BT.Datatype sym -> 
+                      Printf.printf "Inside datatype case. Sym = %s\n" (Sym.pp_string sym);
+
+                      let cn_dt = List.filter (fun dt -> String.equal (Sym.pp_string sym) (Sym.pp_string dt.cn_dt_name)) dts in 
+                      (match cn_dt with 
+                        | [] -> failwith "Datatype not found"
+                        | dt :: _ ->
+                          let (s1, e1) = cn_to_ail_expr_aux_internal const_prop dts term PassBack in
+                          let build_case (constr_sym, members_with_types) = 
+                            let (ids, ts) = List.split members_with_types in
+                            let bts = List.map cn_base_type_to_bt ts in
+                            let vars' = List.map (fun id -> T.StructMember (term, id)) ids in
+                            let terms' = List.map (fun (var', bt') -> T.IT (var', bt', Cerb_location.unknown)) (List.combine vars' bts) in
+                            let cases' = List.filter_map (expand_datatype constr_sym) cases in 
+                            let suffix = "_" ^ (string_of_int count) in
+                            let lc_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constr_sym in 
+                            let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 
+                            let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in (* TODO: Remove hack *)
+                            let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym)) in
+                            let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
+
+                            let (_bindings, member_stats) = translate (count + 1) (terms' @ vs) cases' in
+                            (* TODO: Add real bindings instead of [] *)
+                            let stat_block = A.AilSblock ([], constructor_var_assign :: (List.map mk_stmt member_stats)) in
+                            let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym in
+                            let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, Sym.pp_string tag_sym); attr_args = []} in
+                            let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
+                            let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
+                            ail_case_stmt
+                          in 
+                          let e1_transformed = transform_switch_expr e1 in
+                          let ail_case_stmts = List.map build_case dt.cn_dt_cases in
+                          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], ail_case_stmts)))) in
+                          ([], s1 @ [switch])
+                      )
+                  | _ -> 
+                    (* Cannot have non-variable, non-wildcard pattern besides struct *)
+                    failwith "Unexpected pattern"
+      in
+
+      let translate_real : type a. (BT.basetype Terms.term) list -> (_ Terms.pattern_ list * BT.basetype Terms.term) list -> a dest -> a =
+        fun vars cases d ->
+          let (bs, ss) = translate 1 vars cases in
+          match d with 
+            | Assert -> ss
+            | Return -> ss
+            | AssignVar x -> failwith "TODO"
+            | PassBack -> failwith "TODO"
+      in 
+
+      let ps' = List.map (fun (T.Pat (p, _, _), t) -> ([p], t)) ps in
+      translate_real [t] ps' d
 
   | Cast (bt, t) -> 
     let s, e = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
@@ -365,6 +501,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
+  Printf.printf "Entered internal function translation\n";
   let ail_func_body =
   match def.definition with
     | Def it ->
