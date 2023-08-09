@@ -186,7 +186,7 @@ let main
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
             let cn_oc = Stdlib.open_out "cn.c" in
-            let executable_spec = Executable_spec.generate_c_specs instrumentation symbol_table ail_prog in
+            let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table ail_prog in
             let c_datatypes = Executable_spec.generate_c_datatypes ail_prog.cn_datatypes in
             let c_functions = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             (* TODO: Topological sort *)

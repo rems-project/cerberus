@@ -238,8 +238,8 @@ let in_stmt_injs xs num_headers =
     let* (start_pos, end_pos) = Pos.of_location loc in
     let num_headers = if (num_headers != 0) then (num_headers + 1) else num_headers in
     Ok
-      { start_pos= { col= start_pos.col - 3; line= start_pos.line + num_headers }
-      ; end_pos= {col= end_pos.col + 3; line= end_pos.line + num_headers }
+      { start_pos= { col= start_pos.col; line= start_pos.line + num_headers }
+      ; end_pos= {col= end_pos.col + 6; line= end_pos.line + num_headers }
       ; kind= InStmt str }
   ) xs
 
