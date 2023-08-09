@@ -1,7 +1,7 @@
+[@@@warning "-27"]
 module CF=Cerb_frontend
 module CB=Cerb_backend
 open PPrint
-open CF.Cn
 
 module A=CF.AilSyntax 
 (* Executable spec helper functions *)
@@ -11,27 +11,24 @@ type executable_spec = {
     in_stmt: (Cerb_location.t * string) list;
 }
 
+let generate_ail_stat_strs (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list) = 
+  let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true (Executable_spec_utils.mk_stmt s)) ail_stats_ in
+  let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
+  List.map CF.Pp_utils.to_plain_pretty_string doc
 
-let generate_c_statements cn_statements cn_datatypes =
-  let generate_c_statement (CN_statement (loc, stmt_)) = 
-    (* TODO: Remove pattern matching here - should only be in cn_to_ail.ml *)
-    let pp_statement =
-      match stmt_ with
-      | CN_assert_stmt e -> 
-        let ail_stats = Cn_to_ail.cn_to_ail_assertion e cn_datatypes in
-        let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in
-        CF.Pp_utils.to_plain_pretty_string (List.fold_left (^^) empty doc)
-      | _ -> ""
-    in 
-  (loc, pp_statement)
-  in
-  List.map generate_c_statement cn_statements
 
-let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map ail_prog =
-  let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in
-  let fn_decl = List.filter sym_equality ail_prog.A.declarations in
-  let fn_def = List.filter sym_equality ail_prog.A.function_definitions in
-  let (arg_types, arg_syms) = 
+let generate_c_statements_internal statements dts =
+  let (locs, stats_) = List.split (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts) statements) in
+  let stat_strs = List.map generate_ail_stat_strs stats_ in
+  let stat_strs = List.map (List.fold_left (^) "") stat_strs in
+  List.combine locs stat_strs
+
+
+let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) =
+  (* let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in *)
+  (* let fn_decl = List.filter sym_equality ail_prog.A.declarations in *)
+  (* let fn_def = List.filter sym_equality ail_prog.A.function_definitions in *)
+  (* let (arg_types, arg_syms) = 
   match (fn_decl, fn_def) with 
     | ((_, (_, _, A.(Decl_function (_, _, arg_types, _, _, _)))) :: _), ((_, (_, _, _, arg_syms, _)) :: _) -> 
       let arg_types = List.map (fun (_, ctype, _) -> ctype) arg_types in
@@ -48,28 +45,31 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
     " = " ^
     CF.Pp_symbol.to_string_pretty sym ^
     ";\n"
-  in
-  let arg_names = List.map CF.Pp_symbol.to_string_pretty arg_syms in
+  in *)
+  (* let arg_names = List.map CF.Pp_symbol.to_string_pretty arg_syms in
   let arg_strs = List.map arg_str_fn (List.combine arg_types arg_syms) in
   let generate_condition_str cn_condition arg_names_opt =
     (let (ail_stats, type_info) = Cn_to_ail.cn_to_ail_condition cn_condition type_map ail_prog.cn_datatypes in
     let strs = List.map (fun s -> Ail_to_c.pp_ail_stmt (s, type_info) arg_names_opt) ail_stats in
     (List.fold_left (^) "" strs) ^ ";\n")
-  in
-  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal ail_prog.cn_datatypes instrumentation.internal.pre in
-  let pre_doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true (Executable_spec_utils.mk_stmt s)) pre_stats_ in
-  let pre_str = CF.Pp_utils.to_plain_pretty_string (List.fold_left (^^) empty pre_doc) in
-  (* let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in *)
-  let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.surface.ensures in
-  [(instrumentation.fn, (arg_strs @ [pre_str], posts))]
+  in *)
+
+
+
+  let dts = ail_prog.cn_datatypes in
+  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal dts instrumentation.internal.pre in
+  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts instrumentation.internal.post in
+  let pre_str = generate_ail_stat_strs pre_stats_ in
+  let post_str = generate_ail_stat_strs post_stats_ in
+  [(instrumentation.fn, (pre_str, post_str))]
 
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs_internal instrumentation_list type_map (ail_prog : _ CF.AilSyntax.sigma) =
+let generate_c_specs_internal instrumentation_list type_map (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog in 
-    let c_statements = generate_c_statements instrumentation.surface.statements ail_prog.cn_datatypes in
+    let c_statements = generate_c_statements_internal instrumentation.internal.statements ail_prog.cn_datatypes in
     (c_pres_and_posts, c_statements)
   in
   let specs = List.map generate_c_spec instrumentation_list in 
@@ -82,6 +82,7 @@ let generate_c_specs_internal instrumentation_list type_map (ail_prog : _ CF.Ail
 let concat_map_newline docs = 
   PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs
 
+(* TODO: Use Mucore datatypes instead of CN datatypes from Ail program *)
 let generate_c_datatypes cn_datatypes = 
   let ail_datatypes = match cn_datatypes with
     | [] -> []
