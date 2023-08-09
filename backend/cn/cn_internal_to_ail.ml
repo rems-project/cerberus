@@ -11,6 +11,7 @@ module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
 module T=Terms
+module LRT=LogicalReturnTypes
 
 (* TODO: Change to use internal  *)
 
@@ -258,9 +259,9 @@ let rec cn_to_ail_expr_aux_internal
     dest d (List.concat ss, ail_expr)
 
   (* add Z3's Distinct for separation facts  *)
-  (* | Tuple ts -> failwith "TODO"
-  | NthTuple (i, t) -> failwith "TODO"
-  | Struct (tag, ms) -> failwith "TODO" *)
+  | Tuple ts -> failwith "TODO1"
+  | NthTuple (i, t) -> failwith "TODO2"
+  | Struct (tag, ms) -> failwith "TODO3"
 
   | RecordMember (t, m)
   | StructMember (t, m) -> 
@@ -268,9 +269,9 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEmemberof (mk_expr e_, m)) in
     dest d (s, ail_expr_)
 
-  (* | StructUpdate ((t1, m), t2) -> failwith "TODO"
-  | Record ms -> failwith "TODO"
-  | RecordUpdate ((t1, m), t2) -> failwith "TODO" *)
+  | StructUpdate ((t1, m), t2) -> failwith "TODO4"
+  | Record ms -> failwith "TODO5"
+  | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
   (* | DatatypeCons of Sym.t * 'bt term TODO: will be removed *)
   (* | DatatypeMember of 'bt term * Id.t TODO: will be removed *)
   (* | DatatypeIsCons of Sym.t * 'bt term TODO: will be removed *)
@@ -285,27 +286,28 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
     dest d ([], ail_expr_)
 
-  (* | ArrayShift _ -> failwith "TODO"
-  | Nil _ -> failwith "TODO"
-  | Cons (x, xs) -> failwith "TODO" *)
+  | ArrayShift _ -> failwith "TODO7"
+  | Nil _ -> failwith "TODO8"
+  | Cons (x, xs) -> failwith "TODO9"
   | Head xs -> 
     let s, e_ = cn_to_ail_expr_aux_internal const_prop dts xs PassBack in
     (* dereference to get first value, where xs is assumed to be a pointer *)
     let ail_expr_ = A.(AilEunary (Indirection, mk_expr e_)) in 
     dest d (s, ail_expr_)
 
-  (* | Tail xs -> failwith "TODO"
-  | NthList (t1, t2, t3) -> failwith "TODO"
-  | ArrayToList (t1, t2, t3) -> failwith "TODO"
-  | Representable (ct, t) -> failwith "TODO"
-  | Good (ct, t) -> failwith "TODO"
-  | Aligned t_and_align -> failwith "TODO"
-  | WrapI (ct, t) -> failwith "TODO"
-  | MapConst (bt, t) -> failwith "TODO"
-  | MapSet (t1, t2, t3) -> failwith "TODO"
-  | MapGet (t1, t2) -> failwith "TODO"
-  | MapDef ((sym, bt), t) -> failwith "TODO"
-  | Apply (sym, ts) -> failwith "TODO" *)
+  | Tail xs -> failwith "TODO11"
+  | NthList (t1, t2, t3) -> failwith "TODO12"
+  | ArrayToList (t1, t2, t3) -> failwith "TODO13"
+  | Representable (ct, t) -> failwith "TODO14"
+  | Good (ct, t) -> 
+    cn_to_ail_expr_aux_internal const_prop dts t d
+  | Aligned t_and_align -> failwith "TODO16"
+  | WrapI (ct, t) -> failwith "TODO17"
+  | MapConst (bt, t) -> failwith "TODO18"
+  | MapSet (t1, t2, t3) -> failwith "TODO19"
+  | MapGet (t1, t2) -> failwith "TODO20"
+  | MapDef ((sym, bt), t) -> failwith "TODO21"
+  | Apply (sym, ts) -> failwith "TODO22"
   | Let ((var, t1), body) -> 
     let s1, e1 = cn_to_ail_expr_aux_internal const_prop dts t1 PassBack in
     let ail_assign = A.(AilSdeclaration [(var, Some (mk_expr e1))]) in
@@ -531,14 +533,13 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   (decl, def)
 
 
-(* let cn_to_ail_logical_constraint_internal dts = function
+let cn_to_ail_logical_constraint_internal dts = function
   | LogicalConstraints.T it -> 
     Printf.printf "Reached logical constraint function\n";
-    ([], A.(AilEunary (Indirection, mk_expr (AilEident (Sym.fresh_pretty "p")))))
-    (* cn_to_ail_expr_internal dts it PassBack *)
+    cn_to_ail_expr_internal dts it PassBack
   | LogicalConstraints.Forall ((s, bt), it) -> 
     cn_to_ail_expr_internal dts it PassBack
-    Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
+    (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
 
 let cn_to_ail_resource_internal dts = function
   | ResourceTypes.P p -> 
@@ -552,22 +553,27 @@ let cn_to_ail_resource_internal dts = function
     | PName pn -> failwith "TODO")
   | ResourceTypes.Q q -> failwith "TODO"
 
+(* TODO: Generate bindings *)
 let rec cn_to_ail_arguments_l_internal dts = function
+    (* CN let *)
   | M_Define ((sym, it), _info, l) ->
     let ss = cn_to_ail_expr_internal dts it (AssignVar sym) in
     ss @ (cn_to_ail_arguments_l_internal dts l)
 
+    (* CN take *)
   | M_Resource ((sym, (re, _bt)), _info, l) -> 
     Printf.printf "Reached M_Resource (Owned)\n";
     let (s, e) = cn_to_ail_resource_internal dts re in
     let ail_stat_ = A.(AilSdeclaration [(sym, Some (mk_expr e))]) in
     s @ ail_stat_ :: cn_to_ail_arguments_l_internal dts l
 
+    (* CN assertion (or inside of take) *)
   | M_Constraint (lc, _info, l) -> 
     Printf.printf "Reached M_Constraint (take)\n";
     (* let (s, e) = cn_to_ail_logical_constraint_internal dts lc in
     let ail_stat_ = A.(AilSexpr (mk_expr e)) in
     s @ ail_stat_ ::  *)
+    (* TODO: Check for assertion case *)
     cn_to_ail_arguments_l_internal dts l
      (* Pp.parens (LogicalConstraints.pp lc) ^^^ pp_mu_arguments_l ppf l *)
   | M_I i -> []
@@ -581,6 +587,65 @@ let rec cn_to_ail_arguments_internal dts = function
   | M_L l ->
       cn_to_ail_arguments_l_internal dts l
 
+(* TODO: Generate bindings *)
+let rec cn_to_ail_post_aux_internal dts = function
+  | LRT.Define ((name, it), info, t) ->
+    let ss = cn_to_ail_expr_internal dts it (AssignVar name) in
+    ss @ cn_to_ail_post_aux_internal dts t
+
+  | LRT.Resource ((name, (re, bt)), info, t)  ->
+    let (s, e) = cn_to_ail_resource_internal dts re in
+    let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr e))]) in
+    s @ ail_stat_ :: cn_to_ail_post_aux_internal dts t
+
+  | LRT.Constraint (lc, (loc, str_opt), t) -> 
+    let (s, e) = cn_to_ail_logical_constraint_internal dts lc in
+    (* TODO: Check this logic *)
+    let ss = match str_opt with 
+      | Some info -> 
+        Printf.printf "Logical constraint info: %s\n" info;
+        []
+      | None -> 
+        Printf.printf "No logical constraint info\n";
+        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
+        s @ [ail_stat_]
+    in
+    ss @ cn_to_ail_post_aux_internal dts t
+
+  | LRT.I -> []
+
+
+let cn_to_ail_post_internal dts (ReturnTypes.Computational (bound, oinfo, t)) = 
+  cn_to_ail_post_aux_internal dts t
+
+let cn_to_ail_cnstatement_internal dts = function 
+  | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> failwith "TODO"
+
+  | Cnprog.M_CN_have lc -> failwith "TODO"
+
+  | Cnprog.M_CN_instantiate (o_s, it) -> failwith "TODO"
+    (* o_s is not a (option) binder *)
+
+  | Cnprog.M_CN_extract (to_extract, it) -> failwith "TODO"
+
+  | Cnprog.M_CN_unfold (fsym, args) -> failwith "TODO"
+    (* fsym is a function symbol *)
+
+  | Cnprog.M_CN_apply (fsym, args) -> failwith "TODO"
+    (* fsym is a lemma symbol *)
+
+  | Cnprog.M_CN_assert lc -> 
+    cn_to_ail_logical_constraint_internal dts lc
+
+
+let cn_to_ail_cnprog_internal dts = function
+| Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> failwith "TODO"
+
+| Cnprog.M_CN_statement (loc, stmt) ->
+  let (s, e) = cn_to_ail_cnstatement_internal dts stmt in 
+  let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
+  (loc, s @ [ail_stat_])
+
 (* let cn_to_ail_assertion assertion cn_datatypes = 
   match assertion with
   | CN_assert_exp e_ -> 
@@ -590,18 +655,3 @@ let rec cn_to_ail_arguments_internal dts = function
   | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO" *)
 
 
-(* let cn_to_ail_condition cn_condition type_map cn_datatypes = 
-  match cn_condition with
-  | CN_cletResource (loc, name, resource) -> ([A.AilSskip], None) (* TODO *)
-  | CN_cletExpr (_, name, expr) -> 
-    (* TODO: return declarations too *)
-    let ss = cn_to_ail_expr_internal cn_datatypes expr (AssignVar name) in
-    let sfb_type = SymTable.find type_map name in
-    let basetype = SurfaceBaseTypes.to_basetype sfb_type in
-    let cn_basetype = bt_to_cn_base_type basetype in
-    let ctype = cn_to_ail_base_type cn_basetype in
-    (ss, Some (mk_ctype ctype))
-  | CN_cconstr (loc, constr) -> 
-    let ail_constr = cn_to_ail_assertion constr cn_datatypes in
-    let ail_stats_ = List.map rm_stmt ail_constr in
-    (ail_stats_, None) *)
