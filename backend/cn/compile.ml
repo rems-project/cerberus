@@ -1119,6 +1119,7 @@ module EffectfulTranslation = struct
     match assrt with
     | CN_assert_exp e_ ->
        let@ e = translate_cn_expr SymSet.empty env e_ in
+       Printf.printf "Reached CN assert translation\n";
        return (LC.T (IT.term_of_sterm e))
     | CN_assert_qexp (sym, bTy, e1_, e2_) ->
        let bt = translate_cn_base_type env bTy in
