@@ -27,8 +27,6 @@ let pp_predicate_name = function
   | PName pn -> Sym.pp pn
 
 
-
-
 type predicate_type = {
     name : predicate_name;
     pointer: IT.t;            (* I *)

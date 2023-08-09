@@ -6,6 +6,7 @@ open CF.Cn
 open Compile
 open Executable_spec_utils
 open PPrint
+open Mucore
 module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
@@ -117,12 +118,14 @@ let cn_to_ail_binop_internal = function
 let rec cn_to_ail_const_internal = function
   | Terms.Z z -> A.AilEconst (ConstantInteger (IConstant (z, Decimal, None)))
   | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
-  | Pointer z -> A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
+  | Pointer z -> 
+    Printf.printf "In Pointer case; const\n";
+    A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
   | Bool b -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B)))
   | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void)))
   | Null -> A.AilEconst (ConstantNull)
   (* TODO *)
-  (* | CType_const of Sctypes.ctype *)
+  | CType_const ct -> failwith "TODO: CType_Const"
   (* | Default of BaseTypes.t  *)
   | _ -> failwith "TODO"
 
@@ -196,6 +199,9 @@ let rec cn_to_ail_expr_aux_internal
           dest d (s, A.(AilEident sym_old))
           ))
   in *)
+  let typ = cn_to_ail_base_type (bt_to_cn_base_type basetype) in
+  let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers (mk_ctype typ) in
+  Printf.printf "C type: %s\n" (CF.Pp_utils.to_plain_pretty_string doc);
   match term_ with
   | Const const ->
     let ail_expr_ = cn_to_ail_const_internal const in
@@ -247,9 +253,9 @@ let rec cn_to_ail_expr_aux_internal
     dest d (List.concat ss, ail_expr)
 
   (* add Z3's Distinct for separation facts  *)
-  | Tuple ts -> failwith "TODO"
+  (* | Tuple ts -> failwith "TODO"
   | NthTuple (i, t) -> failwith "TODO"
-  | Struct (tag, ms) -> failwith "TODO"
+  | Struct (tag, ms) -> failwith "TODO" *)
 
   | RecordMember (t, m)
   | StructMember (t, m) -> 
@@ -257,9 +263,9 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEmemberof (mk_expr e_, m)) in
     dest d (s, ail_expr_)
 
-  | StructUpdate ((t1, m), t2) -> failwith "TODO"
+  (* | StructUpdate ((t1, m), t2) -> failwith "TODO"
   | Record ms -> failwith "TODO"
-  | RecordUpdate ((t1, m), t2) -> failwith "TODO"
+  | RecordUpdate ((t1, m), t2) -> failwith "TODO" *)
   (* | DatatypeCons of Sym.t * 'bt term TODO: will be removed *)
   (* | DatatypeMember of 'bt term * Id.t TODO: will be removed *)
   (* | DatatypeIsCons of Sym.t * 'bt term TODO: will be removed *)
@@ -274,16 +280,16 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
     dest d ([], ail_expr_)
 
-  | ArrayShift _ -> failwith "TODO"
+  (* | ArrayShift _ -> failwith "TODO"
   | Nil _ -> failwith "TODO"
-  | Cons (x, xs) -> failwith "TODO"
+  | Cons (x, xs) -> failwith "TODO" *)
   | Head xs -> 
     let s, e_ = cn_to_ail_expr_aux_internal const_prop dts xs PassBack in
     (* dereference to get first value, where xs is assumed to be a pointer *)
     let ail_expr_ = A.(AilEunary (Indirection, mk_expr e_)) in 
     dest d (s, ail_expr_)
 
-  | Tail xs -> failwith "TODO"
+  (* | Tail xs -> failwith "TODO"
   | NthList (t1, t2, t3) -> failwith "TODO"
   | ArrayToList (t1, t2, t3) -> failwith "TODO"
   | Representable (ct, t) -> failwith "TODO"
@@ -294,7 +300,7 @@ let rec cn_to_ail_expr_aux_internal
   | MapSet (t1, t2, t3) -> failwith "TODO"
   | MapGet (t1, t2) -> failwith "TODO"
   | MapDef ((sym, bt), t) -> failwith "TODO"
-  | Apply (sym, ts) -> failwith "TODO"
+  | Apply (sym, ts) -> failwith "TODO" *)
   | Let ((var, t1), body) -> 
     let s1, e1 = cn_to_ail_expr_aux_internal const_prop dts t1 PassBack in
     let ail_assign = A.(AilSdeclaration [(var, Some (mk_expr e1))]) in
@@ -425,7 +431,7 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type (bt_to_cn_base_type bt)) , (mk_expr e))) in 
     dest d (s, ail_expr_)
 
-  | _ -> failwith "TODO"
+  | _ -> failwith "TODO: default case"
 
 let cn_to_ail_expr_internal
   : type a. (_ Cn.cn_datatype) list -> IT.t -> a dest -> a
@@ -518,6 +524,57 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   (* Generating function definition *)
   let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], ail_func_body)))) in
   (decl, def)
+
+
+(* let cn_to_ail_logical_constraint_internal dts = function
+  | LogicalConstraints.T it -> 
+    Printf.printf "Reached logical constraint function\n";
+    ([], A.(AilEunary (Indirection, mk_expr (AilEident (Sym.fresh_pretty "p")))))
+    (* cn_to_ail_expr_internal dts it PassBack *)
+  | LogicalConstraints.Forall ((s, bt), it) -> 
+    cn_to_ail_expr_internal dts it PassBack
+    Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
+
+let cn_to_ail_resource_internal dts = function
+  | ResourceTypes.P p -> 
+    (* TODO: Use ct for binding *)
+    (match p.name with 
+    | Owned (ct, _) -> 
+      let (s, e) = cn_to_ail_expr_internal dts p.pointer PassBack in
+      (s, A.(AilEunary (Indirection, mk_expr e)))
+    (* | Owned (ct, Uninit) -> failwith "TODO" *)
+      (* !^"Block" ^^ angles (Sctypes.pp ct) *)
+    | PName pn -> failwith "TODO")
+  | ResourceTypes.Q q -> failwith "TODO"
+
+let rec cn_to_ail_arguments_l_internal dts = function
+  | M_Define ((sym, it), _info, l) ->
+    let ss = cn_to_ail_expr_internal dts it (AssignVar sym) in
+    ss @ (cn_to_ail_arguments_l_internal dts l)
+
+  | M_Resource ((sym, (re, _bt)), _info, l) -> 
+    Printf.printf "Reached M_Resource (Owned)\n";
+    let (s, e) = cn_to_ail_resource_internal dts re in
+    let ail_stat_ = A.(AilSdeclaration [(sym, Some (mk_expr e))]) in
+    s @ ail_stat_ :: cn_to_ail_arguments_l_internal dts l
+
+  | M_Constraint (lc, _info, l) -> 
+    Printf.printf "Reached M_Constraint (take)\n";
+    (* let (s, e) = cn_to_ail_logical_constraint_internal dts lc in
+    let ail_stat_ = A.(AilSexpr (mk_expr e)) in
+    s @ ail_stat_ ::  *)
+    cn_to_ail_arguments_l_internal dts l
+     (* Pp.parens (LogicalConstraints.pp lc) ^^^ pp_mu_arguments_l ppf l *)
+  | M_I i -> []
+  (* failwith "TODO" *)
+     (* !^"->" ^^^ Pp.parens (ppf i) *)
+
+let rec cn_to_ail_arguments_internal dts = function
+  | M_Computational ((s, bt), _info, a) ->
+    (* TODO: Do something with s and bt *)
+      cn_to_ail_arguments_internal dts a
+  | M_L l ->
+      cn_to_ail_arguments_l_internal dts l
 
 (* let cn_to_ail_assertion assertion cn_datatypes = 
   match assertion with
