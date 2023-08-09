@@ -1653,7 +1653,6 @@ let collect_instrumentation (file : _ mu_file) =
   Pmap.fold (fun fn decl acc ->
       match decl with
       | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
-         Printf.printf "Entered here\n";
          let stmts_s, stmts_i = stmts_in_function args_and_body in
          let surface = {
              accesses = spec.accesses;
