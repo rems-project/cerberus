@@ -27,7 +27,7 @@ let generate_c_statements cn_statements cn_datatypes =
   in
   List.map generate_c_statement cn_statements
 
-let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) type_map ail_prog =
+let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map ail_prog =
   let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in
   let fn_decl = List.filter sym_equality ail_prog.A.declarations in
   let fn_def = List.filter sym_equality ail_prog.A.function_definitions in
@@ -56,16 +56,19 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
     let strs = List.map (fun s -> Ail_to_c.pp_ail_stmt (s, type_info) arg_names_opt) ail_stats in
     (List.fold_left (^) "" strs) ^ ";\n")
   in
-  let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in
+  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal ail_prog.cn_datatypes instrumentation.internal.pre in
+  let pre_doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true (Executable_spec_utils.mk_stmt s)) pre_stats_ in
+  let pre_str = CF.Pp_utils.to_plain_pretty_string (List.fold_left (^^) empty pre_doc) in
+  (* let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in *)
   let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.surface.ensures in
-  [(instrumentation.fn, (arg_strs @ pres, posts))]
+  [(instrumentation.fn, (arg_strs @ [pre_str], posts))]
 
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs instrumentation_list type_map (ail_prog : _ CF.AilSyntax.sigma) =
+let generate_c_specs_internal instrumentation_list type_map (ail_prog : _ CF.AilSyntax.sigma) =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let c_pres_and_posts = generate_c_pres_and_posts instrumentation type_map ail_prog in 
+    let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog in 
     let c_statements = generate_c_statements instrumentation.surface.statements ail_prog.cn_datatypes in
     (c_pres_and_posts, c_statements)
   in
