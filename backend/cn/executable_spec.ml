@@ -1,4 +1,4 @@
-module CF=Cerb_frontend
+(* module CF=Cerb_frontend
 module CB=Cerb_backend
 open PPrint
 open CF.Cn
@@ -106,4 +106,4 @@ let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
-  CF.Pp_utils.to_plain_pretty_string doc
+  CF.Pp_utils.to_plain_pretty_string doc *)
