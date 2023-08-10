@@ -14,16 +14,86 @@ module BT=BaseTypes
 module T=Terms
 module LRT=LogicalReturnTypes
 
-(* TODO: Change to use internal  *)
+let rec cn_base_type_to_bt = function
+  | CN_unit -> BT.Unit
+  | CN_bool -> BT.Bool  
+  | CN_integer -> BT.Integer
+  | CN_bits (sign, size) ->
+      BT.Bits ((match sign with CN_unsigned -> BT.Unsigned | CN_signed -> BT.Signed), size)
+  | CN_real -> BT.Real
+  | CN_loc -> BT.Loc
+  | CN_alloc_id -> BT.Alloc_id
+  | CN_struct tag -> BT.Struct tag
+  | CN_datatype tag -> BT.Datatype tag
+  | CN_record ms -> 
+    let ms' = List.map (fun (id, bt) -> (id, cn_base_type_to_bt bt)) ms in
+    BT.Record ms'
+  | CN_map (type1, type2) -> BT.Map (cn_base_type_to_bt type1, cn_base_type_to_bt type2)
+  | CN_list typ -> cn_base_type_to_bt typ
+  | CN_tuple ts -> BT.Tuple (List.map cn_base_type_to_bt ts)
+  | CN_set typ -> cn_base_type_to_bt typ
+  | CN_user_type_name _ -> failwith "TODO"
+  | CN_c_typedef_name _ -> failwith "TODO"
+  
 
-module ConstructorPattern = struct
+module MembersKey = struct
+  type t = (Id.t * symbol cn_base_type) list
+  let rec compare (ms : t) ms' =
+    match (ms, ms') with 
+      | ([], []) -> 0
+      | (_, []) -> 1
+      | ([], _) -> -1
+      | ((id, _) :: ms, (id', _) :: ms') -> 
+        let c = String.compare (Id.s id) (Id.s id') in
+        if c == 0 then
+          0
+        else
+          compare ms ms'
+
+    
+end
+
+
+let members_equal ms ms' = 
+  let (ids, cn_bts) = List.split ms in
+  let (ids', cn_bts') = List.split ms' in
+  let ctypes_eq = List.map2 (fun cn_bt cn_bt'->
+    let bt = cn_base_type_to_bt cn_bt in
+    let bt' = cn_base_type_to_bt cn_bt' in
+    BT.equal bt bt') cn_bts cn_bts' in
+  let ids_eq = List.map2 Id.equal ids ids' in
+  (List.fold_left (&&) true ctypes_eq) && (List.fold_left (&&) true ids_eq)
+
+module SymKey = struct
   type t = C.union_tag 
   let compare (x : t) y = Sym.compare_sym x y
 end
 
-module PatternMap = Map.Make(ConstructorPattern)
+
+module RecordMap = Map.Make(MembersKey)
+
+let records = ref RecordMap.empty
 
 let generic_cn_dt_sym = Sym.fresh_pretty "cn_datatype"
+
+let create_id_from_sym ?(lowercase=false) sym =
+  let str = Sym.pp_string sym in 
+  let str = if lowercase then String.lowercase_ascii str else str in
+  Id.id str
+
+let create_sym_from_id id = 
+  Sym.fresh_pretty (Id.pp_string id)
+
+let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=false) constructor =  
+  let doc = 
+  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ suffix) in 
+  let str = 
+  CF.Pp_utils.to_plain_string doc in 
+  let str = if uppercase then String.uppercase_ascii str else str in
+  let str = if lowercase then String.lowercase_ascii str else str in
+  (* Printf.printf "%s\n" str; *)
+  Sym.fresh_pretty str
+
 
 let rec bt_to_cn_base_type = function
 | BT.Unit -> CN_unit
@@ -31,36 +101,20 @@ let rec bt_to_cn_base_type = function
 | BT.Integer -> CN_integer
 | BT.Bits _ -> failwith "TODO"
 | BT.Real -> CN_real
-| BT.Alloc_id  -> failwith "TODO"
-| BT.CType -> failwith "TODO"
+| BT.Alloc_id  -> failwith "TODO BT.Alloc_id"
+| BT.CType -> failwith "TODO BT.Ctype"
 | BT.Loc -> CN_loc
 | BT.Struct tag -> CN_struct tag
 | BT.Datatype tag -> CN_datatype tag
-| BT.Record member_types -> failwith "TODO"
+| BT.Record member_types -> 
+  let ms = List.map (fun (id, bt) -> (id, bt_to_cn_base_type bt)) member_types in
+  CN_record ms
   (* CN_record (List.map_snd of_basetype member_types) *)
 | BT.Map (bt1, bt2) -> CN_map (bt_to_cn_base_type bt1, bt_to_cn_base_type bt2)
 | BT.List bt -> CN_list (bt_to_cn_base_type bt)
 | BT.Tuple bts -> CN_tuple (List.map bt_to_cn_base_type bts)
 | BT.Set bt -> CN_set (bt_to_cn_base_type bt)
 
-let rec cn_base_type_to_bt = function
-| CN_unit -> BT.Unit
-| CN_bool -> BT.Bool  
-| CN_integer -> BT.Integer
-| CN_bits (sign, size) ->
-    BT.Bits ((match sign with CN_unsigned -> BT.Unsigned | CN_signed -> BT.Signed), size)
-| CN_real -> BT.Real
-| CN_loc -> BT.Loc
-| CN_alloc_id -> BT.Alloc_id
-| CN_struct tag -> BT.Struct tag
-| CN_datatype tag -> BT.Datatype tag
-| CN_record _ -> failwith "TODO"
-| CN_map (type1, type2) -> BT.Map (cn_base_type_to_bt type1, cn_base_type_to_bt type2)
-| CN_list typ -> cn_base_type_to_bt typ
-| CN_tuple ts -> BT.Tuple (List.map cn_base_type_to_bt ts)
-| CN_set typ -> cn_base_type_to_bt typ
-| CN_user_type_name _ -> failwith "TODO"
-| CN_c_typedef_name _ -> failwith "TODO"
 
 
 (* TODO: Complete *)
@@ -73,13 +127,26 @@ let rec cn_to_ail_base_type =
   (* | CN_real -> failwith "TODO" *)
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_struct sym -> C.(Struct sym)
-  (* | CN_record of list (cn_base_type 'a * Symbol.identifier) *)
+  | CN_record members -> 
+    let map_bindings = RecordMap.bindings !records in
+    let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
+    let sym = (match eq_members_bindings with 
+      | [] -> 
+        (* First time reaching record of this type - add to map *)
+        let count = RecordMap.cardinal !records in
+        let sym' = Sym.fresh_pretty ("record_" ^ (string_of_int count)) in
+        records := RecordMap.add members sym' !records;
+        sym'
+      | (_, sym') :: _ -> sym')
+    in
+    C.(Struct sym)
+
   | CN_datatype sym -> C.(Pointer (empty_qualifiers, Ctype ([], Struct sym)))
-  (* | CN_map of cn_base_type 'a * cn_base_type 'a *)
+  | CN_map (_, cn_bt) -> generate_ail_array cn_bt
   | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
   (* | CN_tuple of list (cn_base_type 'a) *)
   | CN_set bt -> generate_ail_array bt
-  | _ -> failwith "TODO"
+  | _ -> failwith "TODO cn_to_ail_base_type"
 
 let cn_to_ail_binop_internal = function
   | Terms.And -> A.And
@@ -105,7 +172,7 @@ let cn_to_ail_binop_internal = function
   (* | Min
   | Max *)
   | EQ -> A.Eq
-  | _ -> failwith "TODO: CN internal AST binop translation to Ail"
+  | _ -> A.And (* TODO: Change *)
   (* | LTPointer
   | LEPointer
   | SetUnion
@@ -129,7 +196,7 @@ let rec cn_to_ail_const_internal = function
   (* TODO *)
   | CType_const ct -> failwith "TODO: CType_Const"
   (* | Default of BaseTypes.t  *)
-  | _ -> failwith "TODO"
+  | _ -> failwith "TODO cn_to_ail_const_internal"
 
 type 'a dest =
 | Assert : (CF.GenTypes.genTypeCategory A.statement_ list) dest
@@ -159,24 +226,10 @@ let prefix : type a. a dest -> CF.GenTypes.genTypeCategory A.statement_ list -> 
     | AssignVar _, s2 -> s1 @ s2
     | PassBack, (s2, e) -> (s1 @ s2, e)
 
-let create_id_from_sym ?(lowercase=false) sym =
-  let str = Sym.pp_string sym in 
-  let str = if lowercase then String.lowercase_ascii str else str in
-  Id.id str
-
-let create_sym_from_id id = 
-  Sym.fresh_pretty (Id.pp_string id)
 
 
-let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=false) constructor =  
-  let doc = 
-  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ suffix) in 
-  let str = 
-  CF.Pp_utils.to_plain_string doc in 
-  let str = if uppercase then String.uppercase_ascii str else str in
-  let str = if lowercase then String.lowercase_ascii str else str in
-  (* Printf.printf "%s\n" str; *)
-  Sym.fresh_pretty str
+
+
 
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
@@ -265,12 +318,23 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEmemberof (mk_expr e_, m)) in
     dest d (s, ail_expr_)
 
-  | StructUpdate ((t1, m), t2) -> failwith "TODO4"
+  | StructUpdate ((struct_term, m), new_val) ->
+    let (s1, e1) = cn_to_ail_expr_aux_internal const_prop dts struct_term PassBack in
+    let (s2, e2) = cn_to_ail_expr_aux_internal const_prop dts new_val PassBack in
+    let ail_memberof = A.(AilEmemberof (mk_expr e1, m)) in
+    let ail_assign = A.(AilSexpr (mk_expr (AilEassign ((mk_expr ail_memberof, mk_expr e2))))) in
+    dest d (s1 @ s2 @ [ail_assign], e1)
+
   | Record ms -> failwith "TODO5"
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
-  (* | DatatypeCons of Sym.t * 'bt term TODO: will be removed *)
-  (* | DatatypeMember of 'bt term * Id.t TODO: will be removed *)
-  (* | DatatypeIsCons of Sym.t * 'bt term TODO: will be removed *)
+    (* let dt_type = IT.bt it in
+    let ms = match dt_type with 
+      | Datatype sym -> 
+        let matching_dts = List.filter (fun dt -> String.equal (Sym.pp_string sym) (Sym.pp_string dt.cn_dt_name)) dts in
+        ()
+      | _ -> failwith "Term must be a datatype"
+    in
+    cn_to_ail_expr_aux_internal const_prop dts it d *)
   | Constructor (nm, ms) -> 
     let (ids, ts) = List.split ms in
     let ss_and_es = List.map (fun t -> cn_to_ail_expr_aux_internal const_prop dts t PassBack) ts in
@@ -297,13 +361,26 @@ let rec cn_to_ail_expr_aux_internal
   | Representable (ct, t) -> failwith "TODO14"
   | Good (ct, t) -> 
     cn_to_ail_expr_aux_internal const_prop dts t d
+    
   | Aligned t_and_align -> failwith "TODO16"
   | WrapI (ct, t) -> failwith "TODO17"
   | MapConst (bt, t) -> failwith "TODO18"
   | MapSet (t1, t2, t3) -> failwith "TODO19"
-  | MapGet (t1, t2) -> failwith "TODO20"
+  | MapGet (arr, index) ->
+    (* Only works when index is an integer *)
+    let (s1, e1) = cn_to_ail_expr_aux_internal const_prop dts arr PassBack in
+    let (s2, e2) = cn_to_ail_expr_aux_internal const_prop dts index PassBack in
+    let ail_sub_expr_ = mk_expr (A.(AilEbinary (mk_expr e1, Arithmetic Add, mk_expr e2))) in
+    dest d (s1 @ s2, A.(AilEunary (Indirection, ail_sub_expr_)))
+
   | MapDef ((sym, bt), t) -> failwith "TODO21"
-  | Apply (sym, ts) -> failwith "TODO22"
+  | Apply (sym, ts) ->
+      let stats_and_exprs = List.map (fun e -> cn_to_ail_expr_aux_internal const_prop dts e PassBack) ts in
+      let (ss, es) = List.split stats_and_exprs in 
+      let f = (mk_expr A.(AilEident sym)) in
+      let ail_expr_ = A.AilEcall (f, List.map mk_expr es) in 
+      dest d (List.concat ss, ail_expr_)
+      
   | Let ((var, t1), body) -> 
     let s1, e1 = cn_to_ail_expr_aux_internal const_prop dts t1 PassBack in
     let ail_assign = A.(AilSdeclaration [(var, Some (mk_expr e1))]) in
@@ -360,7 +437,7 @@ let rec cn_to_ail_expr_aux_internal
                     | AssignVar x -> 
                       cn_to_ail_expr_aux_internal const_prop dts t (AssignVar x)
                     | PassBack -> 
-                      failwith "TODO")
+                      failwith "TODO Pattern Match PassBack")
                 in 
                 ([], rhs)
               | [] -> failwith "Incomplete pattern match"
@@ -422,8 +499,8 @@ let rec cn_to_ail_expr_aux_internal
           match d with 
             | Assert -> ss
             | Return -> ss
-            | AssignVar x -> failwith "TODO"
-            | PassBack -> failwith "TODO"
+            | AssignVar x -> failwith "TODO translate_real 1"
+            | PassBack -> failwith "TODO translate_real 2"
       in 
 
       let ps' = List.map (fun (T.Pat (p, _, _), t) -> ([p], t)) ps in
@@ -443,7 +520,7 @@ let cn_to_ail_expr_internal
 
 
 type 'a ail_datatype = {
-  structs: (C.union_tag * (CF.Annot.attributes * C.tag_definition)) list;
+  structs: (C.union_tag * (Mucore.loc * CF.Annot.attributes * C.tag_definition)) list;
   decls: (C.union_tag * A.declaration) list;
   stats: ('a A.statement) list;
 }
@@ -464,7 +541,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let attrs = CF.Annot.Attrs [attr] in
   let enum_members = List.map (fun sym -> (sym, (empty_attributes, None, empty_qualifiers, mk_ctype C.Void))) enum_member_syms in
   let enum_tag_definition = C.(UnionDef enum_members) in
-  let enum = (enum_sym, (attrs, enum_tag_definition)) in
+  let enum = (enum_sym, (Cerb_location.unknown, attrs, enum_tag_definition)) in
   let cntype_sym = Sym.fresh_pretty "cntype" in
   let create_member (ctype_, id) =
     (id, (empty_attributes, None, empty_qualifiers, mk_ctype ctype_))
@@ -483,14 +560,14 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let generate_struct_definition (constructor, members) = 
     let lc_constructor_str = String.lowercase_ascii (Sym.pp_string constructor) in
     let lc_constructor = Sym.fresh_pretty lc_constructor_str in
-    (lc_constructor, (empty_attributes, generate_tag_definition members))
+    (lc_constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
   in
   let structs = List.map (fun c -> generate_struct_definition c) cn_datatype.cn_dt_cases in
   let structs = if first then 
     let generic_dt_struct = 
-      (generic_cn_dt_sym, (empty_attributes, C.(StructDef (extra_members (C.(Basic (Integer (Signed Int_)))), None))))
+      (generic_cn_dt_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef (extra_members (C.(Basic (Integer (Signed Int_)))), None))))
     in
-    let cntype_struct = (cntype_sym, (empty_attributes, C.(StructDef ([], None)))) in
+    let cntype_struct = (cntype_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef ([], None)))) in
     generic_dt_struct :: cntype_struct :: structs
   else
     (* TODO: Add members to cntype_struct as we go along? *)
@@ -503,7 +580,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let union_def = C.(UnionDef union_def_members) in
   let union_member = create_member (C.(Union union_sym), Id.id "u") in
 
-  let structs = structs @ [(union_sym, (empty_attributes, union_def)); (cn_datatype.cn_dt_name, (empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
+  let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   {structs = enum :: structs; decls = []; stats = []}
 
 
@@ -546,8 +623,8 @@ let cn_to_ail_resource_internal dts = function
       (s, A.(AilEunary (Indirection, mk_expr e)))
     (* | Owned (ct, Uninit) -> failwith "TODO" *)
       (* !^"Block" ^^ angles (Sctypes.pp ct) *)
-    | PName pn -> failwith "TODO")
-  | ResourceTypes.Q q -> failwith "TODO"
+    | PName pn -> ([], A.(AilEident pn)))
+  | ResourceTypes.Q q -> failwith "TODO Q"
 
 (* TODO: Generate bindings *)
 let rec cn_to_ail_arguments_l_internal dts = function
@@ -615,19 +692,19 @@ let cn_to_ail_post_internal dts (ReturnTypes.Computational (bound, oinfo, t)) =
   cn_to_ail_post_aux_internal dts t
 
 let cn_to_ail_cnstatement_internal dts = function 
-  | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> failwith "TODO"
+  | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> failwith "TODO M_CN_pack_unpack"
 
-  | Cnprog.M_CN_have lc -> failwith "TODO"
+  | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
-  | Cnprog.M_CN_instantiate (o_s, it) -> failwith "TODO"
+  | Cnprog.M_CN_instantiate (o_s, it) -> failwith "TODO M_CN_instantiate"
     (* o_s is not a (option) binder *)
 
-  | Cnprog.M_CN_extract _ -> failwith "TODO"
+  | Cnprog.M_CN_extract _ -> failwith "TODO M_CN_extract"
 
-  | Cnprog.M_CN_unfold (fsym, args) -> failwith "TODO"
+  | Cnprog.M_CN_unfold (fsym, args) -> failwith "TODO M_CN_unfold"
     (* fsym is a function symbol *)
 
-  | Cnprog.M_CN_apply (fsym, args) -> failwith "TODO"
+  | Cnprog.M_CN_apply (fsym, args) -> failwith "TODO M_CN_apply"
     (* fsym is a lemma symbol *)
 
   | Cnprog.M_CN_assert lc -> 
@@ -636,7 +713,7 @@ let cn_to_ail_cnstatement_internal dts = function
 
 
 let cn_to_ail_cnprog_internal dts = function
-| Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> failwith "TODO"
+| Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> failwith "TODO M_CN_let"
 
 | Cnprog.M_CN_statement (loc, stmt) ->
   let (s, e) = cn_to_ail_cnstatement_internal dts stmt in 
