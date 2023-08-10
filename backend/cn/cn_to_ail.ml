@@ -1,5 +1,5 @@
 [@@@warning "-27"]
-module CF=Cerb_frontend
+(* module CF=Cerb_frontend
 (* module CB=Cerb_backend
 open CB.Pipeline
 open Setup *)
@@ -542,4 +542,4 @@ let cn_to_ail_condition cn_condition type_map cn_datatypes =
   | CN_cconstr (loc, constr) -> 
     let ail_constr = cn_to_ail_assertion constr cn_datatypes in
     let ail_stats_ = List.map rm_stmt ail_constr in
-    (ail_stats_, None)
+    (ail_stats_, None) *)
