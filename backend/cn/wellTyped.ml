@@ -132,7 +132,7 @@ module WIT = struct
   let eval = Simplify.IndexTerms.eval
 
   let rec infer =
-      fun loc ((IT (it, _)) as it_) ->
+      fun loc (IT (it, _)) ->
       match it with
       | Sym s ->
          let@ is_a = bound_a s in
@@ -511,18 +511,12 @@ module WIT = struct
           let@ () = WCT.is_ct loc (Integer ity) in
           let@ t = check loc Integer t in
           return (IT (WrapI (ity, t), BT.Integer))
-       | Nil -> 
-          fail (fun _ -> {loc; msg = Polymorphic_it it_})
+       | Nil bt -> 
+          return (IT (Nil bt, BT.List bt))
        | Cons (t1,t2) ->
           let@ t1 = infer loc t1 in
           let@ t2 = check loc (List (IT.bt t1)) t2 in
           return (IT (Cons (t1, t2),BT.List (IT.bt t1)))
-       | List [] ->
-          fail (fun _ -> {loc; msg = Polymorphic_it it_})
-       | List (t :: ts) ->
-          let@ t = infer loc t in
-          let@ ts = ListM.mapM (check loc (IT.bt t)) ts in
-          return (IT (List (t :: ts),BT.List (IT.bt t)))
        | Head t ->
           let@ t = infer loc t in
           let@ bt = ensure_list_type loc t in
@@ -586,22 +580,25 @@ module WIT = struct
             let@ t2 = infer loc t2 in
             return (IT (Let ((name, t1), t2), IT.bt t2))
             end
-      | Match _ -> failwith "todo"
+      | Match (e, []) ->
+         fail (fun _ -> {loc; msg = Empty_pattern})
+      | Match (e, case::cases) ->
+         (* let@ e = infer loc e in *)
+         (* let case =  *)
+         (*   let pat, body = case in *)
+         (* in *)
+         failwith "asd"
       | Constructor _ -> failwith "todo"
 
     and check =
       fun loc ls it ->
       let@ () = WLS.is_ls loc ls in
-      match it, ls with
-      | IT (Nil, _), List bt ->
-         return (IT (Nil, BT.List bt))
-      | _, _ ->
-         let@ it = infer loc it in
-         if LS.equal ls (IT.bt it) then
-           return it
-         else
-           let expected = Pp.plain (LS.pp ls) in
-           fail (illtyped_index_term loc it (IT.bt it) expected)
+      let@ it = infer loc it in
+      if LS.equal ls (IT.bt it) then
+        return it
+      else
+        let expected = Pp.plain (LS.pp ls) in
+        fail (illtyped_index_term loc it (IT.bt it) expected)
 
 
 

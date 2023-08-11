@@ -616,7 +616,8 @@ module Translate = struct
          term (int_ (Option.get (Memory.member_offset decl member)))
       | ArrayOffset (ct, t) -> 
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
-      | IT.List xs -> uninterp_term context (sort bt) it
+      | Nil _ -> uninterp_term context (sort bt) it
+      | Cons _ -> uninterp_term context (sort bt) it
       | NthList (i, xs, d) ->
          let args = List.map term [i; xs; d] in
          let nm = bt_suffix_name "nth_list" bt in

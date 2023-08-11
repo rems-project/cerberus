@@ -307,22 +307,31 @@ let pp_function = function
   | M_are_compatible -> !^ "are_compatible"
 
 let evaluate_fun mu_fun args =
-  let args_it = List.map IT.term args in
   match mu_fun with
-  | M_params_length -> begin match args_it with
-    | [IT.List xs] -> Some (IT.int_ (List.length xs))
-    | _ -> None
-  end
-  | M_params_nth -> begin match args_it, List.map IT.is_z args with
-    | [IT.List xs; _], [_; Some i] -> if Z.lt i (Z.of_int (List.length xs))
-        then List.nth_opt xs (Z.to_int i) else None
-    | _ -> None
-  end
-  | M_are_compatible -> begin match List.map IT.is_const args with
-    | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] -> if Sctypes.equal ct1 ct2
-      then Some (IT.bool_ true) else None
-    | _ -> None
-  end
+  | M_params_length -> 
+     begin match args with
+     | [arg] -> 
+        Option.bind (IT.dest_list arg) (fun xs -> 
+        Some (IT.int_ (List.length xs)))
+     | _ -> None
+     end
+  | M_params_nth -> 
+     begin match args with
+     | [arg1;arg2] ->
+        Option.bind (IT.dest_list arg1) (fun xs ->
+        Option.bind (IT.is_z arg2) (fun i ->
+            if Z.lt i (Z.of_int (List.length xs))
+            then List.nth_opt xs (Z.to_int i) else None
+        ))
+     | _ -> None
+     end
+  | M_are_compatible -> 
+     begin match List.map IT.is_const args with
+     | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] -> 
+        if Sctypes.equal ct1 ct2
+        then Some (IT.bool_ true) else None
+     | _ -> None
+     end
 
 
 type parse_ast_label_spec =

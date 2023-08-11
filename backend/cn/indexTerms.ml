@@ -36,9 +36,10 @@ let pp ?(atomic=false) =
   Terms.pp ~atomic
 
 
-let rec bound_by_pattern = function
-  | PSym (s, bt) -> [(s, bt)]
-  | PWild _bt -> []
+let rec bound_by_pattern (Pat (pat_, bt)) = 
+  match pat_ with
+  | PSym s -> [(s, bt)]
+  | PWild -> []
   | PConstructor (_s, args) -> 
      List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
@@ -64,9 +65,8 @@ let rec free_vars_ = function
   | Cast (_cbt, t) -> free_vars t
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
-  | Nil -> SymSet.empty
+  | Nil _bt -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
-  | List ts -> free_vars_list ts
   | Head t -> free_vars t
   | Tail t -> free_vars t
   | NthList (i, xs, d) -> free_vars_list [i; xs; d]
@@ -124,9 +124,8 @@ let rec fold_ f binders acc = function
   | Cast (_cbt, t) -> fold f binders acc t
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
-  | Nil -> acc
+  | Nil _bt -> acc
   | Cons (t1, t2) -> fold_list f binders acc [t1; t2]
-  | List ts -> fold_list f binders acc ts
   | Head t -> fold f binders acc t
   | Tail t -> fold f binders acc t
   | NthList (i, xs, d) -> fold_list f binders acc [i; xs; d]
@@ -167,7 +166,7 @@ and fold_list f binders acc xs =
      let acc' = fold f binders acc x in
      fold_list f binders acc' xs
 
-let fold_subterms : 'a 'bt. ((Sym.t * 'bt) list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
+let fold_subterms : 'a. ((Sym.t * 'bt) list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
   fun f acc t -> fold f [] acc t
 
 
@@ -265,12 +264,10 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Good (rt, subst su t), bt)
   | WrapI (ity, t) ->
      IT (WrapI (ity, subst su t), bt)
-  | Nil -> 
-     IT (Nil, bt)
+  | Nil bt' -> 
+     IT (Nil bt', bt)
   | Cons (it1,it2) -> 
      IT (Cons (subst su it1, subst su it2), bt)
-  | List its -> 
-     IT (List (map (subst su) its), bt)
   | Head it -> 
      IT (Head (subst su it), bt)
   | Tail it -> 
@@ -295,33 +292,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Let ((name, subst su t1), subst su t2), bt)
   | Match (e, cases) ->
      let e = subst su e in
-     let cases = 
-       List.map (fun (pat, body) ->
-           let rec aux (pat, body) = 
-             match pat with
-             | PSym (s, bt) -> 
-                let (s, body) = suitably_alpha_rename su.relevant (s, bt) body in
-                (PSym (s, bt), body)
-             | PWild bt -> 
-                (PWild bt, body)
-             | PConstructor (s, args) ->
-                let args, body = 
-                  let ids, pats = List.split args in
-                  let pats, body = aux_list (pats, body) in
-                  (List.combine ids pats, body)
-                in
-                (PConstructor (s, args), body)
-           and aux_list (pats, body) =
-             match pats with
-             | [] -> ([], body)
-             | pat :: pats -> 
-                let (pats, body) = aux_list (pats, body) in
-                let (pat, body) = aux (pat, body) in
-                (pat :: pats, body)
-           in
-           aux (pat, body)
-         ) cases
-     in
+     let cases = List.map (subst_under_pattern su) cases in
      IT (Match (e, cases), bt)
   | Constructor (s, args) ->
      let args = 
@@ -339,6 +310,24 @@ and suitably_alpha_rename syms (s, bt) body =
   if SymSet.mem s syms
   then alpha_rename (s, bt) body
   else (s, body)
+
+
+and subst_under_pattern su (Pat (pat_, bt), body) = 
+  match pat_ with
+  | PSym s -> 
+     let (s, body) = suitably_alpha_rename su.relevant (s, bt) body in
+     (Pat (PSym s, bt), body)
+  | PWild -> 
+     (Pat (PWild, bt), body)
+  | PConstructor (s, args) ->
+     let body, args =
+       fold_left_map (fun body (id, pat') ->
+           let pat', body = subst_under_pattern su (pat', body) in
+           (body, (id, pat'))
+         ) body args
+     in
+     (Pat (PConstructor (s, args), bt), body)
+
 
 
 
@@ -419,7 +408,8 @@ let rec split_and it =
 
 let rec is_const_val = function
   | IT (Const _, _) -> true
-  | IT (List xs, _) -> List.for_all is_const_val xs
+  | IT (Nil _, _) -> true
+  | IT (Cons (hd, tl), _) -> is_const_val hd && is_const_val tl
   | _ -> false
 
 
@@ -638,18 +628,24 @@ let container_of_ (t, tag, member) =
     (sub_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
 
 (* list_op *)
-let nil_ ~item_bt = IT (Nil, BT.List item_bt)
+let nil_ ~item_bt = IT (Nil item_bt, BT.List item_bt)
 let cons_ (it, it') = IT (Cons (it, it'), bt it')
-let list_ ~item_bt its = IT (List its, BT.List item_bt)
+let list_ ~item_bt its = 
+  let rec aux = function
+    | [] -> IT (Nil item_bt, BT.List item_bt)
+    | x :: xs -> IT (Cons (x, aux xs), BT.List item_bt)
+  in
+  aux its
+
 let head_ ~item_bt it = IT (Head it, item_bt)
 let tail_ it = IT (Tail it, bt it)
 let nthList_ (n, it, d) = IT (NthList (n, it, d), bt d)
 let array_to_list_ (arr, i, len) bt = IT (ArrayToList (arr, i, len), bt)
 
-let rec dest_list it = match term it with
-  | Nil -> Some []
+let rec dest_list it = 
+  match term it with
+  | Nil _bt -> Some []
   | Cons (x, xs) -> Option.map (fun ys -> x :: ys) (dest_list xs)
-  | List xs -> Some xs
   (* TODO: maybe include Tail, if we ever actually use it? *)
   | _ -> None
 

@@ -674,6 +674,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         k (or_ [v1; v2]))
      end
   | M_PEapply_fun (fun_id, args) ->
+     (* TODO: this should be checking the base types *)
      let expect_args = Mucore.mu_fun_param_types fun_id in
      let@ () = if List.length expect_args = List.length args then return ()
        else fail (fun _ -> {loc; msg = Number_arguments {has = List.length args;

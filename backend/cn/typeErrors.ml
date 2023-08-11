@@ -115,7 +115,6 @@ type message =
   | NIA : {it: IT.t; hint : string; ctxt : Context.t} -> message
   | TooBigExponent : {it: IT.t; ctxt : Context.t} -> message
   | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
-  | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
   | Unproven_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
@@ -128,6 +127,10 @@ type message =
   | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
 
   | Parser of Cerb_frontend.Errors.cparser_cause
+
+  | Empty_pattern
+  | Missing_pattern of Pp.document
+  | Duplicate_pattern of Loc.t
 
 
 type type_error = {
@@ -313,10 +316,6 @@ let pp_message te =
            !^("Exponent must be non-negative")
      in
      { short; descr = Some descr; state = None; trace = None }
-  | Polymorphic_it it ->
-     let short = !^"Type inference failed" in
-     let descr = !^"Polymorphic index term" ^^^ squotes (IndexTerms.pp it) in
-     { short; descr = Some descr; state = None; trace = None }
   | Write_value_unrepresentable {ct; location; value; ctxt; model} ->
      let short =
        !^"Write value not representable at type" ^^^
@@ -381,6 +380,15 @@ let pp_message te =
      { short; descr = None; state = Some state; trace = None }
   | Parser err ->
      let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
+     { short; descr = None; state = None; trace = None }
+  | Empty_pattern ->
+     let short = !^"Empty match expression." in
+     { short; descr = None; state = None; trace = None }
+  | Missing_pattern p' ->
+     let short = !^"Missing pattern" ^^^ squotes p' ^^ dot in
+     { short; descr = None; state = None; trace = None }
+  | Duplicate_pattern loc ->
+     let short = !^"Duplicate pattern (already matched at" ^^^ Loc.pp loc ^^ !^")" in
      { short; descr = None; state = None; trace = None }
 
 

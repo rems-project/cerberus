@@ -591,7 +591,11 @@ module EffectfulTranslation = struct
         | CNExpr_list es_ ->
             let@ es = ListM.mapM self es_ in
             let item_bt = basetype (List.hd es) in
-            return (IT ((List es), SBT.List item_bt))
+            let rec aux = function
+              | [] -> IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt)
+              | x::xs -> IT (Cons (x, aux xs), SBT.List item_bt)
+            in
+            return (aux es)
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
