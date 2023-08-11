@@ -131,6 +131,16 @@ module WIT = struct
 
   let eval = Simplify.IndexTerms.eval
 
+  let check_and_bind_pattern loc (Pat (pat_, _)) bt =
+    match pat_ with
+    | PSym s -> 
+       let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
+       return (Pat (PSym s, bt))
+    | PWild ->
+       return (Pat (PWild, bt))
+    | PConstructor (s, args) ->
+       failwith "asd"
+
   let rec infer =
       fun loc (IT (it, _)) ->
       match it with
@@ -583,11 +593,11 @@ module WIT = struct
       | Match (e, []) ->
          fail (fun _ -> {loc; msg = Empty_pattern})
       | Match (e, case::cases) ->
-         (* let@ e = infer loc e in *)
-         (* let case =  *)
-         (*   let pat, body = case in *)
+         (* let@ case =  *)
+         (*   let@ pat, body = case *)
          (* in *)
-         failwith "asd"
+         failwith "todo"
+         
       | Constructor _ -> failwith "todo"
 
     and check =

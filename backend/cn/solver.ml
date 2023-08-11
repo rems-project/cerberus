@@ -47,16 +47,6 @@ type model_with_q = model * (Sym.t * BT.t) list
 
 
 
-let mul_no_smt_solver_sym = Sym.fresh_named "mul_uf"
-let div_no_smt_solver_sym = Sym.fresh_named "div_uf"
-let exp_no_smt_solver_sym = Sym.fresh_named "power_uf"
-let mod_no_smt_solver_sym = Sym.fresh_named "mod_uf"
-let rem_no_smt_solver_sym = Sym.fresh_named "rem_uf"
-let xor_no_smt_solver_sym = Sym.fresh_named "xor_uf"
-let bw_and_no_smt_solver_sym = Sym.fresh_named "bw_and_uf"
-let bw_or_no_smt_solver_sym = Sym.fresh_named "bw_or_uf"
-
-
 
 
 let log_file () = match ! log_to_temp with
@@ -455,21 +445,13 @@ module Translate = struct
       | Const (CType_const ct) -> uninterp_term context (sort bt) it
       | Binop (bop, t1, t2) -> 
          let open Z3.Arithmetic in
-         let make_uf sym ret_sort args =
-           let decl = Z3.FuncDecl.mk_func_decl context (symbol sym)
-                        (List.map (fun it -> sort (IT.bt it)) args) (sort ret_sort)
-           in
-           Z3.Expr.mk_app context decl (List.map term args)
-         in
          begin match bop with
          | Add -> mk_add context [term t1; term t2]
          | Sub -> mk_sub context [term t1; term t2]
          | Mul -> mk_mul context [term t1; term t2]
-         | MulNoSMT -> 
-            make_uf mul_no_smt_solver_sym (IT.bt t1) [t1; t2]
+         | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
          | Div -> mk_div context (term t1) (term t2)
-         | DivNoSMT ->
-            make_uf div_no_smt_solver_sym (IT.bt t1) [t1; t2]
+         | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
          | Exp -> 
             begin match is_z t1, is_z t2 with
             | Some z1, Some z2 when Z.fits_int z2 ->
@@ -477,24 +459,18 @@ module Translate = struct
             | _, _ ->
                assert false
             end
-         | ExpNoSMT ->
-            make_uf exp_no_smt_solver_sym (Integer) [t1; t2]
+         | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
          | Rem -> Integer.mk_rem context (term t1) (term t2)
-         | RemNoSMT ->
-            make_uf rem_no_smt_solver_sym (Integer) [t1; t2]
+         | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
          | Mod -> Integer.mk_mod context (term t1) (term t2)
-         | ModNoSMT ->
-            make_uf mod_no_smt_solver_sym (Integer) [t1; t2]
+         | ModNoSMT -> make_uf "mod_uf" (Integer) [t1; t2]
          | LT -> mk_lt context (term t1) (term t2)
          | LE -> mk_le context (term t1) (term t2)
          | Min -> term (ite_ (le_ (t1, t2), t1, t2))
          | Max -> term (ite_ (ge_ (t1, t2), t1, t2))
-         | XORNoSMT ->
-            make_uf xor_no_smt_solver_sym (Integer) [t1; t2]
-         | BWAndNoSMT ->
-            make_uf bw_and_no_smt_solver_sym (Integer) [t1; t2]
-         | BWOrNoSMT ->
-            make_uf bw_or_no_smt_solver_sym (Integer) [t1; t2]
+         | XORNoSMT -> make_uf "xor_uf" (Integer) [t1; t2]
+         | BWAndNoSMT -> make_uf "bw_and_uf" (Integer) [t1; t2]
+         | BWOrNoSMT -> make_uf "bw_or_uf" (Integer) [t1; t2]
          | EQ -> Z3.Boolean.mk_eq context
             (maybe_record_loc_addr_eq global t1 (term t1))
             (maybe_record_loc_addr_eq global t2 (term t2))
@@ -616,8 +592,11 @@ module Translate = struct
          term (int_ (Option.get (Memory.member_offset decl member)))
       | ArrayOffset (ct, t) -> 
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
-      | Nil _ -> uninterp_term context (sort bt) it
-      | Cons _ -> uninterp_term context (sort bt) it
+      | Nil ibt -> 
+         make_uf (plain (!^"nil_uf"^^angles(BT.pp ibt))) (List ibt) []
+      | Cons (t1, t2) -> 
+         let ibt = IT.bt t1 in
+         make_uf (plain (!^"cons_uf"^^angles(BT.pp ibt))) (List ibt) [t1; t2]
       | NthList (i, xs, d) ->
          let args = List.map term [i; xs; d] in
          let nm = bt_suffix_name "nth_list" bt in
@@ -686,6 +665,14 @@ module Translate = struct
          Pp.debug 2 (lazy (Pp.item "smt mapping issue" (IT.pp it)));
          Cerb_debug.error "todo: SMT mapping"
       end
+
+      and make_uf name ret_bt args =
+        let decl = 
+          Z3.FuncDecl.mk_func_decl context (string name)
+            (List.map (fun it -> sort (IT.bt it)) args) (sort ret_bt)
+        in
+        Z3.Expr.mk_app context decl (List.map term args)
+
 
     in
 
