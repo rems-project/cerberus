@@ -83,9 +83,6 @@ type sym_or_string =
   | String of string
 
 
-
-
-
 type message =
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
@@ -102,6 +99,8 @@ type message =
   | First_iarg_missing
   | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
 
+  | Missing_member of Id.t
+  | Duplicate_member of Id.t
 
   | Missing_resource of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
@@ -130,7 +129,7 @@ type message =
 
   | Empty_pattern
   | Missing_pattern of Pp.document
-  | Duplicate_pattern of Loc.t
+  | Duplicate_pattern
 
 
 type type_error = {
@@ -226,6 +225,12 @@ let pp_message te =
         Pp.squotes (BaseTypes.(pp found_bty))
      in
      { short; descr = Some descr; state = None; trace = None }
+  | Missing_member m ->
+     let short = !^"Missing member" ^^^ Id.pp m in
+     { short; descr = None; state = None; trace = None }
+  | Duplicate_member m ->
+     let short = !^"Duplicate member" ^^^ Id.pp m in
+     { short; descr = None; state = None; trace = None }
   | Missing_resource {orequest; situation; oinfo; ctxt; model; trace} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = missing_or_bad_request_description oinfo orequest in
@@ -387,8 +392,8 @@ let pp_message te =
   | Missing_pattern p' ->
      let short = !^"Missing pattern" ^^^ squotes p' ^^ dot in
      { short; descr = None; state = None; trace = None }
-  | Duplicate_pattern loc ->
-     let short = !^"Duplicate pattern (already matched at" ^^^ Loc.pp loc ^^ !^")" in
+  | Duplicate_pattern ->
+     let short = !^"Duplicate pattern" in
      { short; descr = None; state = None; trace = None }
 
 

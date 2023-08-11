@@ -9,6 +9,7 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module TE = TypeErrors
+module IdSet = Set.Make(Id)
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module S = Solver
@@ -201,26 +202,18 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
 
 and check_struct (loc : loc) (tag : Sym.t) 
                  (member_values : (Id.t * mem_value) list) : (lvt) m =
-  (* might have to make sure the fields are ordered in the same way as
-     in the struct declaration *)
   let@ layout = get_struct_decl loc tag in
-  let rec check fields spec =
-    match fields, spec with
-    | ((member, mv) :: fields), ((smember, sct) :: spec) 
-         when Id.equal member smember ->
-       let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct sct) mv in
-       let@ member_its = check fields spec in
-       return ((member, member_lvt) :: member_its)
-    | [], [] -> 
-       return []
-    | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
-       Cerb_debug.error "mismatch in fields in infer_struct"
-    | [], ((member, _) :: _) ->
-       fail (fun _ -> {loc; msg = Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing")})
-    | ((member,_) :: _), [] ->
-       fail (fun _ -> {loc; msg = Generic (!^"supplying unexpected field" ^^^ Id.pp member)})
+  let@ () = 
+    WellTyped.correct_and_no_duplicate_members loc tag 
+      (List.map fst member_values)
   in
-  let@ member_its = check member_values (Memory.member_types layout) in
+  let@ member_its = 
+    ListM.mapM (fun (member, mv) ->
+        let@ sct = get_member_type loc tag member layout in
+        let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct sct) mv in
+        return (member, member_lvt)
+      ) member_values
+  in
   return (IT.struct_ (tag, member_its))
 
 and check_union (loc : loc) (tag : Sym.t) (id : Id.t) 
@@ -688,6 +681,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      )
   | M_PEstruct (tag, xs) ->
      let@ layout = get_struct_decl loc tag in
+     let@ () = WellTyped.correct_and_no_duplicate_members loc tag
+                 (List.map fst xs) in
      let@ xs_with_expects = ListM.mapM (fun (nm, expr) ->
        let@ ty = get_member_type loc tag nm layout in
        return (expr, BT.of_sct ty)) xs in
@@ -1667,11 +1662,19 @@ let check_tagdefs tagDefs =
     | M_UnionDef _ -> 
        unsupported Loc.unknown !^"todo: union types"
     | M_StructDef layout -> 
-       ListM.iterM (fun piece ->
-           match piece.member_or_padding with
-           | Some (name, ct) -> WellTyped.WCT.is_ct Loc.unknown ct
-           | None -> return ()
-         ) layout
+       let@ _ = 
+         ListM.fold_rightM (fun piece have ->
+             match piece.member_or_padding with
+             | Some (name, _) when IdSet.mem name have ->
+                fail (fun _ -> {loc = Loc.unknown; msg = Duplicate_member name})
+             | Some (name, ct) -> 
+                let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
+                return (IdSet.add name have)
+             | None -> 
+                return have
+           ) layout IdSet.empty
+       in
+       return ()
   ) tagDefs
 
 

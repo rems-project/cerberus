@@ -8,6 +8,7 @@ module LRT = LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module Mu = Mucore
+module IdSet = Set.Make(Id)
 
 open Global
 open TE
@@ -24,6 +25,26 @@ open Effectful.Make(Typing)
 
 
 let ensure_base_type = Typing.ensure_base_type
+
+
+let correct_and_no_duplicate_members loc tag members =
+  let@ layout = get_struct_decl loc tag in
+  let member_types = Memory.member_types layout in
+  let@ _, needed = 
+    ListM.fold_rightM (fun member (have, needed) ->
+        if IdSet.mem member have then
+          fail (fun _ -> {loc; msg = Duplicate_member member})
+        else if not (IdSet.mem member needed) then
+          fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
+        else
+          return (IdSet.add member have, IdSet.remove member needed)
+      ) members (IdSet.empty, IdSet.of_list (List.map fst member_types))
+  in
+  match IdSet.elements needed with
+  | [] -> return ()
+  | member :: _ -> fail (fun _ -> {loc; msg = Missing_member member})
+
+  
 
 
 
@@ -132,14 +153,25 @@ module WIT = struct
   let eval = Simplify.IndexTerms.eval
 
   let check_and_bind_pattern loc (Pat (pat_, _)) bt =
-    match pat_ with
-    | PSym s -> 
-       let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
-       return (Pat (PSym s, bt))
-    | PWild ->
-       return (Pat (PWild, bt))
-    | PConstructor (s, args) ->
-       failwith "asd"
+    let@ pat_ = match pat_ with
+      | PSym s -> 
+         let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
+         return (PSym s)
+      | PWild ->
+         return (PWild)
+      | PConstructor (s, args) ->
+         let@ constr_info = get_datatype_constr loc s in
+         let@ () = ensure_base_type loc (Datatype constr_info.c_datatype_tag) ~expect:bt in
+         let@ args = 
+           ListM.mapM (fun (id, apat) ->
+               failwith "asd"
+             ) args
+         in
+         return (PConstructor (s, args))
+    in
+    return (Pat (pat_, bt))
+       
+       
 
   let rec infer =
       fun loc (IT (it, _)) ->
@@ -381,13 +413,8 @@ module WIT = struct
          return (IT (NthTuple (n, t'),item_bt))
       | Struct (tag, members) ->
          let@ layout = get_struct_decl loc tag in
+         let@ () = correct_and_no_duplicate_members loc tag (List.map fst members) in
          let decl_members = Memory.member_types layout in
-         let@ () = 
-           let has = List.length members in
-           let expect = List.length decl_members in
-           if has = expect then return ()
-           else fail (fun _ -> {loc; msg = Number_members {has; expect}})
-         in
          let@ members = 
            ListM.mapM (fun (member,t) ->
                let@ bt = match List.assoc_opt Id.equal member decl_members with
