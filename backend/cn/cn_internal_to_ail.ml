@@ -253,9 +253,9 @@ let rec cn_to_ail_expr_aux_internal
           dest d (s, A.(AilEident sym_old))
           ))
   in *)
-  let typ = cn_to_ail_base_type (bt_to_cn_base_type basetype) in
+  (* let typ = cn_to_ail_base_type (bt_to_cn_base_type basetype) in
   let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers (mk_ctype typ) in
-  Printf.printf "C type: %s\n" (CF.Pp_utils.to_plain_pretty_string doc);
+  Printf.printf "C type: %s\n" (CF.Pp_utils.to_plain_pretty_string doc); *)
   match term_ with
   | Const const ->
     let ail_expr_ = cn_to_ail_const_internal const in
@@ -586,7 +586,6 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
-  Printf.printf "Entered internal function translation\n";
   let ail_func_body =
   match def.definition with
     | Def it ->
@@ -613,17 +612,78 @@ let cn_to_ail_logical_constraint_internal dts = function
     cn_to_ail_expr_internal dts it PassBack
     (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
 
-let cn_to_ail_resource_internal dts = function
+let cn_to_ail_resource_internal sym dts =
+  (* Binding will be different depending on whether it's a p or q - q is array*)
+  let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in 
+  function
   | ResourceTypes.P p -> 
     (* TODO: Use ct for binding *)
-    (match p.name with 
-    | Owned (ct, _) -> 
-      let (s, e) = cn_to_ail_expr_internal dts p.pointer PassBack in
-      (s, A.(AilEunary (Indirection, mk_expr e)))
-    (* | Owned (ct, Uninit) -> failwith "TODO" *)
-      (* !^"Block" ^^ angles (Sctypes.pp ct) *)
-    | PName pn -> ([], A.(AilEident pn)))
-  | ResourceTypes.Q q -> failwith "TODO Q"
+    let (s, e) = cn_to_ail_expr_internal dts p.pointer PassBack in
+    let s_decl = A.(AilSdeclaration [(sym, Some (mk_expr (make_deref_expr_ e)))]) in
+    s @ [s_decl]
+
+  | ResourceTypes.Q q -> 
+    (* 
+      Input is expr of the form:
+      take sym = each (integer q.q; q.permission){ Owned(q.pointer + (q.q * q.step)) }
+    *)
+    let (s1, e1) = cn_to_ail_expr_internal dts q.pointer PassBack in
+    let (s2, e2) = cn_to_ail_expr_internal dts q.permission PassBack in
+    let (s3, e3) = cn_to_ail_expr_internal dts q.step PassBack in
+    let (q_sym, q_bt) = q.q in
+
+    let split_q_permission permission_expr_ = 
+      let (start_cond, end_cond) =
+       match permission_expr_ with 
+        | A.(AilEbinary (start_c, And, end_c)) -> (start_c, end_c)
+        | _ -> failwith "Expressions that are not of the form start_cond && end_cond not supported"
+      in
+      let start_expr = 
+        match (rm_expr start_cond) with 
+          | A.(AilEbinary (expr1, binop, A.AnnotatedExpression (_, _, _, AilEident sym'))) ->
+            (if String.equal (Sym.pp_string q_sym) (Sym.pp_string sym') then
+              (match binop with 
+                | A.Le -> 
+                  Printf.printf "Correct form!\n";
+                  expr1
+                | A.Lt ->
+                  Printf.printf "Correct form!\n";
+                  let one = A.AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None))) in
+                  mk_expr (A.(AilEbinary (expr1, Arithmetic Add, mk_expr one)))
+                | _ -> failwith "Not of correct form: not Le or Lt"
+              )
+            else
+              failwith "Not of correct form (unlikely case - i's not matching)")
+          | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
+      in
+      (start_expr, end_cond)
+    in
+
+    let (start_expr, end_cond) = split_q_permission e2 in
+    let start_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident q_sym), start_expr)))) in
+
+    let q_times_step = A.(AilEbinary (mk_expr (AilEident q_sym), Arithmetic Mul, mk_expr e3)) in
+    let gen_add_expr_ e_ = 
+      A.(AilEbinary (mk_expr e_, Arithmetic Add, mk_expr q_times_step))
+    in
+    let sym_add_expr = make_deref_expr_ (gen_add_expr_ A.(AilEident sym)) in
+    let pointer_add_expr = make_deref_expr_ (gen_add_expr_ e1) in
+    let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr pointer_add_expr)))) in
+    let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q_sym))))) in 
+
+    let while_loop = A.(AilSwhile (end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
+
+    (*
+      Generating a loop of the form:
+      <set q.q to start value>
+      while (q.permission.snd) {
+        *(sym + q.q * q.step) = *(q.pointer + q.q * q.step);
+        q.q++;
+      } 
+    *)
+    
+    s1 @ s2 @ s3 @ [start_assign; while_loop]
+    (* failwith "TODO Q" *)
 
 (* TODO: Generate bindings *)
 let rec cn_to_ail_arguments_l_internal dts = function
@@ -635,9 +695,8 @@ let rec cn_to_ail_arguments_l_internal dts = function
     (* CN take *)
   | M_Resource ((sym, (re, _bt)), _info, l) -> 
     Printf.printf "Reached M_Resource (Owned)\n";
-    let (s, e) = cn_to_ail_resource_internal dts re in
-    let ail_stat_ = A.(AilSdeclaration [(sym, Some (mk_expr e))]) in
-    s @ ail_stat_ :: cn_to_ail_arguments_l_internal dts l
+    let ss = cn_to_ail_resource_internal sym dts re in
+    ss @ cn_to_ail_arguments_l_internal dts l
 
     (* CN assertion (or inside of take) *)
   | M_Constraint (lc, _info, l) -> 
@@ -666,9 +725,8 @@ let rec cn_to_ail_post_aux_internal dts = function
     ss @ cn_to_ail_post_aux_internal dts t
 
   | LRT.Resource ((name, (re, bt)), info, t)  ->
-    let (s, e) = cn_to_ail_resource_internal dts re in
-    let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr e))]) in
-    s @ ail_stat_ :: cn_to_ail_post_aux_internal dts t
+    let ss = cn_to_ail_resource_internal name dts re in
+    ss @ cn_to_ail_post_aux_internal dts t
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
     let (s, e) = cn_to_ail_logical_constraint_internal dts lc in
@@ -695,15 +753,24 @@ let cn_to_ail_cnstatement_internal dts = function
 
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
-  | Cnprog.M_CN_instantiate (o_s, it) -> failwith "TODO M_CN_instantiate"
+  | Cnprog.M_CN_instantiate (o_s, it) -> 
+    (* TODO: Ask Christopher what this does *)
+    cn_to_ail_expr_internal dts it PassBack
+    (* failwith "TODO M_CN_instantiate" *)
     (* o_s is not a (option) binder *)
 
-  | Cnprog.M_CN_extract _ -> failwith "TODO M_CN_extract"
+  | Cnprog.M_CN_extract (_, _, it) -> 
+      (* TODO: Ask Christopher what this does *)
+      cn_to_ail_expr_internal dts it PassBack
+    (* failwith "TODO M_CN_extract" *)
 
   | Cnprog.M_CN_unfold (fsym, args) -> failwith "TODO M_CN_unfold"
     (* fsym is a function symbol *)
 
-  | Cnprog.M_CN_apply (fsym, args) -> failwith "TODO M_CN_apply"
+  | Cnprog.M_CN_apply (fsym, args) -> 
+    (* TODO: Ask Christopher what this does *)
+    (* TODO: Make type correct from return type of top-level CN functions - although it shouldn't really matter (?) *)
+    cn_to_ail_expr_internal dts (IT (Apply (fsym, args), Unit, Cerb_location.unknown)) PassBack
     (* fsym is a lemma symbol *)
 
   | Cnprog.M_CN_assert lc -> 
@@ -711,8 +778,15 @@ let cn_to_ail_cnstatement_internal dts = function
   | _ -> failwith "TODO"
 
 
-let cn_to_ail_cnprog_internal dts = function
-| Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> failwith "TODO M_CN_let"
+let rec cn_to_ail_cnprog_internal dts = function
+| Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
+  let (s, e) = cn_to_ail_expr_internal dts pointer PassBack in
+  let ail_deref_expr_ = A.(AilEunary (Indirection, mk_expr e)) in
+  (* TODO: Use ct for type binding *)
+  (* TODO: Differentiate between read and deref cases for M_CN_let *)
+  let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in
+  let (loc', ss) = cn_to_ail_cnprog_internal dts prog in
+  (loc, s @ ail_stat_ :: ss)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
   let (s, e) = cn_to_ail_cnstatement_internal dts stmt in 
