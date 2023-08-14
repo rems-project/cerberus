@@ -101,6 +101,7 @@ module WBT = struct
       | Bool -> return ()
       | Integer -> return ()
       | Real -> return ()
+      | Alloc_id -> return ()
       | Loc -> return ()
       | CType -> return ()
       | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
@@ -194,6 +195,8 @@ module WIT = struct
          return (IT (Const (Q q), Real))
       | Const (Pointer p) ->
          return (IT (Const (Pointer p), Loc))
+      | Const (Alloc_id p) ->
+         return (IT (Const (Alloc_id p), BT.Alloc_id))
       | Const (Bool b) ->
          return (IT (Const (Bool b), BT.Bool))
       | Const Unit ->

@@ -5,6 +5,7 @@ type const =
   | Z of Z.t
   | Q of Q.t
   | Pointer of Z.t
+  | Alloc_id of Z.t
   | Bool of bool
   | Unit
   | Null
@@ -146,6 +147,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           |  Dec -> !^(Z.to_string i)
           | _ -> !^("0X" ^ (Z.format "016X" i))
           end
+       | Alloc_id i -> !^("@" ^ Z.to_string i)
        | Bool true -> !^"true"
        | Bool false -> !^"false"
        | Unit -> !^"void"

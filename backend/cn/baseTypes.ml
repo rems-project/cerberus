@@ -5,6 +5,7 @@ type basetype =
   | Bool
   | Integer
   | Real
+  | Alloc_id
   | Loc
   | CType
   | Struct of Sym.t
@@ -47,6 +48,7 @@ let rec pp = function
   | Integer -> !^"integer"
   | Real -> !^"real"
   | Loc -> !^"pointer"
+  | Alloc_id -> !^"alloc_id"
   | CType -> !^"ctype"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
@@ -117,11 +119,12 @@ let rec hash = function
   | Bool -> 1
   | Integer -> 2
   | Real -> 3
-  | Loc -> 4
-  | CType -> 5
-  | List _ -> 6
-  | Tuple _ -> 7
-  | Set _ -> 8
+  | Alloc_id -> 4
+  | Loc -> 5
+  | CType -> 6
+  | List _ -> 7
+  | Tuple _ -> 8
+  | Set _ -> 9
   (* | Option _ -> 8 *)
   | Struct tag -> 1000 + Sym.num tag
   | Datatype tag -> 4000 + Sym.num tag

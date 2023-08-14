@@ -311,6 +311,11 @@ module Translate = struct
            (string (bt_name Loc))
            [string "loc_to_integer"] 
            [sort BT.Integer]
+      | Alloc_id ->
+         Z3.Tuple.mk_sort context
+           (string (bt_name Alloc_id))
+           [string "alloc_id_to_integer"]
+           [sort BT.Integer]
       | CType -> (* the ctype type is represented as an uninterpreted sort *)
         Z3.Sort.mk_uninterpreted_s context (bt_name CType)
       | List bt -> (* lists are represented as uninterpreted sorts *)
@@ -388,6 +393,9 @@ module Translate = struct
     Z3.Tuple.get_mk_decl (sort context global Loc)
   
 
+  let integer_to_alloc_id_fundecl context global =
+    Z3.Tuple.get_mk_decl (sort context global Alloc_id)
+
 
   let term ?(warn_lambda=true) context global : IT.t -> expr =
 
@@ -405,6 +413,10 @@ module Translate = struct
     let integer_to_loc i = 
       Z3.Expr.mk_app context 
         (integer_to_loc_fundecl context global) [i] 
+    in
+    let integer_to_alloc_id i =
+      Z3.Expr.mk_app context
+        (integer_to_alloc_id_fundecl context global) [i]
     in
 
 
@@ -428,6 +440,9 @@ module Translate = struct
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
       | Const (Pointer z) -> 
          integer_to_loc
+           (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
+      | Const (Alloc_id z) ->
+         integer_to_alloc_id
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
       | Const (Bool true) -> 
          Z3.Boolean.mk_true context
