@@ -325,7 +325,16 @@ let rec cn_to_ail_expr_aux_internal
     let ail_assign = A.(AilSexpr (mk_expr (AilEassign ((mk_expr ail_memberof, mk_expr e2))))) in
     dest d (s1 @ s2 @ [ail_assign], e1)
 
-  | Record ms -> failwith "TODO5"
+  | Record ms -> 
+    (* TODO: Delete *)
+    let generate_ail_stat (id, it) = 
+      let (s, e) = cn_to_ail_expr_aux_internal const_prop dts it PassBack in
+      let assign_pair = (id, Some (mk_expr e)) in
+      (s, assign_pair)
+    in
+    let (ss, assign_pairs) = List.split (List.map generate_ail_stat ms) in
+    dest d (List.concat ss, A.(AilEstruct (Sym.fresh_pretty "junk", assign_pairs)))
+    (* failwith "TODO5" *)
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
     (* let dt_type = IT.bt it in
     let ms = match dt_type with 
@@ -633,30 +642,60 @@ let cn_to_ail_resource_internal sym dts =
     let (s3, e3) = cn_to_ail_expr_internal dts q.step PassBack in
     let (q_sym, q_bt) = q.q in
 
+    (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
+    let rearrange_start_inequality sym e1 e2 = 
+      match (rm_expr e2) with 
+        | A.(AilEbinary ((A.AnnotatedExpression (_, _, _, AilEident sym1) as expr1), binop, (A.AnnotatedExpression (_, _, _, AilEident sym2) as expr2))) ->
+            (if String.equal (Sym.pp_string sym) (Sym.pp_string sym1) then
+              let inverse_binop = match binop with 
+                | A.(Arithmetic Add) -> A.(Arithmetic Sub)
+                | A.(Arithmetic Sub) -> A.(Arithmetic Add)
+                | _ -> failwith "Other binops not supported"
+              in
+              A.(AilEbinary (e1, inverse_binop, expr2))
+            else 
+              (if String.equal (Sym.pp_string sym) (Sym.pp_string sym2) then 
+                match binop with 
+                  | A.(Arithmetic Add) -> A.(AilEbinary (e1, A.(Arithmetic Sub), expr1))
+                  | A.(Arithmetic Sub) -> failwith "Minus not supported"
+                  | _ -> failwith "Other binops not supported"
+              else 
+                failwith "Not of correct form"
+              )
+            )
+        | _ -> failwith "TODO"
+    in
+
+    let generate_start_expr start_cond =
+      let (start_expr, binop) = 
+        match start_cond with
+          | A.(AilEbinary (expr1, binop, A.AnnotatedExpression (_, _, _, AilEident sym'))) ->
+              (if String.equal (Sym.pp_string q_sym) (Sym.pp_string sym') then
+                (expr1, binop)
+              else
+                failwith "Not of correct form (unlikely case - i's not matching)")
+          | A.(AilEbinary (expr1, binop, expr2)) ->
+              (mk_expr (rearrange_start_inequality q_sym expr1 expr2), binop)
+          | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
+      in
+      match binop with 
+        | A.Le -> 
+          Printf.printf "Correct form!\n";
+          start_expr
+        | A.Lt ->
+          Printf.printf "Correct form!\n";
+          let one = A.AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None))) in
+          mk_expr (A.(AilEbinary (start_expr, Arithmetic Add, mk_expr one)))
+        | _ -> failwith "Not of correct form: not Le or Lt"
+    in
+
     let split_q_permission permission_expr_ = 
       let (start_cond, end_cond) =
        match permission_expr_ with 
         | A.(AilEbinary (start_c, And, end_c)) -> (start_c, end_c)
         | _ -> failwith "Expressions that are not of the form start_cond && end_cond not supported"
       in
-      let start_expr = 
-        match (rm_expr start_cond) with 
-          | A.(AilEbinary (expr1, binop, A.AnnotatedExpression (_, _, _, AilEident sym'))) ->
-            (if String.equal (Sym.pp_string q_sym) (Sym.pp_string sym') then
-              (match binop with 
-                | A.Le -> 
-                  Printf.printf "Correct form!\n";
-                  expr1
-                | A.Lt ->
-                  Printf.printf "Correct form!\n";
-                  let one = A.AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None))) in
-                  mk_expr (A.(AilEbinary (expr1, Arithmetic Add, mk_expr one)))
-                | _ -> failwith "Not of correct form: not Le or Lt"
-              )
-            else
-              failwith "Not of correct form (unlikely case - i's not matching)")
-          | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
-      in
+      let start_expr = generate_start_expr (rm_expr start_cond) in
       (start_expr, end_cond)
     in
 
