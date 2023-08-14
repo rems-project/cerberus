@@ -47,11 +47,6 @@ type model_with_q = model * (Sym.t * BT.t) list
 
 
 
-let bw_ctz_no_smt_solver_sym = Sym.fresh_named "bw_ctz_uf"
-let bw_clz_no_smt_solver_sym = Sym.fresh_named "bw_clz_uf"
-let bw_ffs_no_smt_solver_sym = Sym.fresh_named "bw_ffs_uf"
-
-
 
 let log_file () = match ! log_to_temp with
   | false -> None
@@ -475,12 +470,9 @@ module Translate = struct
          | XORNoSMT -> make_uf "xor_uf" (Integer) [t1; t2]
          | BWAndNoSMT -> make_uf "bw_and_uf" (Integer) [t1; t2]
          | BWOrNoSMT -> make_uf "bw_or_uf" (Integer) [t1; t2]
-         | BWCLZNoSMT ->
-            make_uf bw_clz_no_smt_solver_sym (Integer) [t1; t2]
-         | BWCTZNoSMT ->
-            make_uf bw_ctz_no_smt_solver_sym (Integer) [t1; t2]
-         | BWFFSNoSMT ->
-            make_uf bw_ffs_no_smt_solver_sym (Integer) [t1; t2]
+         | BWCLZNoSMT -> make_uf "bw_clz_uf" (Integer) [t1; t2]
+         | BWCTZNoSMT -> make_uf "bw_ctz_uf" (Integer) [t1; t2]
+         | BWFFSNoSMT -> make_uf "bw_ffs_uf" (Integer) [t1; t2]
          | EQ -> Z3.Boolean.mk_eq context
             (maybe_record_loc_addr_eq global t1 (term t1))
             (maybe_record_loc_addr_eq global t2 (term t2))
