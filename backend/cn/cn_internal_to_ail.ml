@@ -613,13 +613,15 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   (decl, def)
 
 
-let cn_to_ail_logical_constraint_internal dts = function
-  | LogicalConstraints.T it -> 
-    Printf.printf "Reached logical constraint function\n";
-    cn_to_ail_expr_internal dts it PassBack
-  | LogicalConstraints.Forall ((s, bt), it) -> 
-    cn_to_ail_expr_internal dts it PassBack
-    (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
+let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
+  = fun dts d lc -> 
+    match lc with
+    | LogicalConstraints.T it -> 
+      Printf.printf "Reached logical constraint function\n";
+      cn_to_ail_expr_internal dts it d
+    | LogicalConstraints.Forall ((s, bt), it) -> 
+      cn_to_ail_expr_internal dts it d
+      (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
 
 let cn_to_ail_resource_internal sym dts =
   (* Binding will be different depending on whether it's a p or q - q is array*)
@@ -698,6 +700,15 @@ let cn_to_ail_resource_internal sym dts =
       (start_expr, end_cond)
     in
 
+    (*
+      Generating a loop of the form:
+      <set q.q to start value>
+      while (q.permission.snd) {
+        *(sym + q.q * q.step) = *(q.pointer + q.q * q.step);
+        q.q++;
+      } 
+    *)
+
     let (start_expr, end_cond) = split_q_permission e2 in
     let start_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident q_sym), start_expr)))) in
 
@@ -709,20 +720,9 @@ let cn_to_ail_resource_internal sym dts =
     let pointer_add_expr = make_deref_expr_ (gen_add_expr_ e1) in
     let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr pointer_add_expr)))) in
     let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q_sym))))) in 
-
     let while_loop = A.(AilSwhile (end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
 
-    (*
-      Generating a loop of the form:
-      <set q.q to start value>
-      while (q.permission.snd) {
-        *(sym + q.q * q.step) = *(q.pointer + q.q * q.step);
-        q.q++;
-      } 
-    *)
-    
     s1 @ s2 @ s3 @ [start_assign; while_loop]
-    (* failwith "TODO Q" *)
 
 (* TODO: Generate bindings *)
 let rec cn_to_ail_arguments_l_internal dts = function
@@ -758,6 +758,7 @@ let rec cn_to_ail_arguments_internal dts = function
       cn_to_ail_arguments_l_internal dts l
 
 (* TODO: Generate bindings *)
+(* TODO: Add destination passing? *)
 let rec cn_to_ail_post_aux_internal dts = function
   | LRT.Define ((name, it), info, t) ->
     let ss = cn_to_ail_expr_internal dts it (AssignVar name) in
@@ -768,7 +769,7 @@ let rec cn_to_ail_post_aux_internal dts = function
     ss @ cn_to_ail_post_aux_internal dts t
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
-    let (s, e) = cn_to_ail_logical_constraint_internal dts lc in
+    let (s, e) = cn_to_ail_logical_constraint_internal dts PassBack lc in
     (* TODO: Check this logic *)
     let ss = match str_opt with 
       | Some info -> 
@@ -787,20 +788,23 @@ let rec cn_to_ail_post_aux_internal dts = function
 let cn_to_ail_post_internal dts (ReturnTypes.Computational (bound, oinfo, t)) = 
   cn_to_ail_post_aux_internal dts t
 
-let cn_to_ail_cnstatement_internal dts = function 
+(* TODO: Add destination passing *)
+let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> a
+= fun dts d cnstatement ->
+  match cnstatement with
   | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> failwith "TODO M_CN_pack_unpack"
 
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
   | Cnprog.M_CN_instantiate (o_s, it) -> 
     (* TODO: Ask Christopher what this does *)
-    cn_to_ail_expr_internal dts it PassBack
+    cn_to_ail_expr_internal dts it d
     (* failwith "TODO M_CN_instantiate" *)
     (* o_s is not a (option) binder *)
 
   | Cnprog.M_CN_extract (_, _, it) -> 
       (* TODO: Ask Christopher what this does *)
-      cn_to_ail_expr_internal dts it PassBack
+      cn_to_ail_expr_internal dts it d
     (* failwith "TODO M_CN_extract" *)
 
   | Cnprog.M_CN_unfold (fsym, args) -> failwith "TODO M_CN_unfold"
@@ -809,11 +813,12 @@ let cn_to_ail_cnstatement_internal dts = function
   | Cnprog.M_CN_apply (fsym, args) -> 
     (* TODO: Ask Christopher what this does *)
     (* TODO: Make type correct from return type of top-level CN functions - although it shouldn't really matter (?) *)
-    cn_to_ail_expr_internal dts (IT (Apply (fsym, args), Unit, Cerb_location.unknown)) PassBack
+    cn_to_ail_expr_internal dts (IT (Apply (fsym, args), Unit, Cerb_location.unknown)) d
     (* fsym is a lemma symbol *)
 
   | Cnprog.M_CN_assert lc -> 
-    cn_to_ail_logical_constraint_internal dts lc
+    cn_to_ail_logical_constraint_internal dts d lc
+
   | _ -> failwith "TODO"
 
 
@@ -828,9 +833,8 @@ let rec cn_to_ail_cnprog_internal dts = function
   (loc, s @ ail_stat_ :: ss)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
-  let (s, e) = cn_to_ail_cnstatement_internal dts stmt in 
-  let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
-  (loc, s @ [ail_stat_])
+  let ss = cn_to_ail_cnstatement_internal dts Assert stmt in 
+  (loc, ss)
 
 (* let cn_to_ail_assertion assertion cn_datatypes = 
   match assertion with
