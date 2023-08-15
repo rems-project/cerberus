@@ -338,7 +338,6 @@ let rec cn_to_ail_expr_aux_internal
     dest d (List.concat ss, A.(AilEstruct (Sym.fresh_pretty "junk", assign_pairs)))
     (* failwith "TODO5" *)
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
-
   (* Allocation *)
   | Constructor (nm, ms) -> 
     let (ids, ts) = List.split ms in
