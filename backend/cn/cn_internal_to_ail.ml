@@ -343,8 +343,26 @@ let rec cn_to_ail_expr_aux_internal
     (* failwith "TODO5" *)
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
   | DatatypeCons (sym, t) -> 
-    cn_to_ail_expr_aux_internal const_prop dts t d
-    (* failwith "TODO6.1" *)
+    (* Hacky way of finding datatype this comes from - while pipeline being sorted out *)
+    let rec find_dt_from_constructor constr_sym dts = 
+      match dts with 
+        | [] -> failwith "Datatype not found" (* Not found *)
+        | dt :: dts' ->
+          let constructor_syms = List.map fst dt.cn_dt_cases in
+          if List.mem (fun s s' -> String.equal (Sym.pp_string s) (Sym.pp_string s')) constr_sym constructor_syms then
+            dt
+          else 
+            find_dt_from_constructor constr_sym dts'
+    in
+
+    let parent_dt = find_dt_from_constructor sym dts in
+    let res_sym = Sym.fresh_pretty "dt_res" in
+    let res_ident = A.(AilEident res_sym) in
+    let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct parent_dt.cn_dt_name)))])) in
+    let ail_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr res_ident, mk_expr fn_call)))) in
+    let (s, e) = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
+    dest d (s @ [ail_assign], res_ident)
+    
   | DatatypeMember (it, id) -> 
     (* Case of single constructor in datatype *)
     let (s, e) = cn_to_ail_expr_aux_internal const_prop dts it PassBack in
