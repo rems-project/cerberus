@@ -337,18 +337,6 @@ let rec cn_to_ail_expr_aux_internal
     dest d (List.concat ss, A.(AilEstruct (Sym.fresh_pretty "junk", assign_pairs)))
     (* failwith "TODO5" *)
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
-    (* let (s, e) = cn_to_ail_expr_aux_internal const_prop dts it PassBack in
-    let my_val = match e with
-      | A.(AilEstruct (_, assign_pairs)) ->
-        let es = List.filter (fun (id', expr) -> Id.equal id id') assign_pairs in
-        snd (List.hd es)
-      | _ -> failwith "Incorrect type"
-    in
-    let my_val = match my_val with 
-      | Some expr -> rm_expr expr
-      | None -> A.(AilEident (Sym.fresh_pretty "junk"))
-    in
-    dest d (s, my_val) *)
 
   (* Allocation *)
   | Constructor (nm, ms) -> 
@@ -548,68 +536,58 @@ type 'a ail_datatype = {
 let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let enum_sym = generate_sym_with_suffix cn_datatype.cn_dt_name in
   let constructor_syms = List.map fst cn_datatype.cn_dt_cases in
+  let generate_enum_member sym = 
+    let doc = CF.Pp_ail.pp_id ~executable_spec:true sym in 
+    let str = CF.Pp_utils.to_plain_string doc in 
+    let str = String.uppercase_ascii str in
+    Id.id str
+  in
+  let enum_member_syms = List.map generate_enum_member constructor_syms in
+  let attr : CF.Annot.attribute = {attr_ns = None; attr_id = Id.id "enum"; attr_args = []} in
+  let attrs = CF.Annot.Attrs [attr] in
+  let enum_members = List.map (fun sym -> (sym, (empty_attributes, None, empty_qualifiers, mk_ctype C.Void))) enum_member_syms in
+  let enum_tag_definition = C.(UnionDef enum_members) in
+  let enum = (enum_sym, (Cerb_location.unknown, attrs, enum_tag_definition)) in
+  let cntype_sym = Sym.fresh_pretty "cntype" in
   let create_member (ctype_, id) =
     (id, (empty_attributes, None, empty_qualifiers, mk_ctype ctype_))
   in
-
+  let cntype_pointer = C.(Pointer (empty_qualifiers, mk_ctype (Struct cntype_sym))) in
+  let extra_members tag_type = [
+      (create_member (tag_type, Id.id "tag"));
+      (create_member (cntype_pointer, Id.id "cntype"))]
+  in
   let generate_tag_definition dt_members = 
     let ail_dt_members = List.map (fun (id, cn_type) -> (cn_to_ail_base_type cn_type, id)) dt_members in
     (* TODO: Check if something called tag already exists *)
     let members = List.map create_member ail_dt_members in
     C.(StructDef (members, None))
   in
-
   let generate_struct_definition (constructor, members) = 
     let lc_constructor_str = String.lowercase_ascii (Sym.pp_string constructor) in
     let lc_constructor = Sym.fresh_pretty lc_constructor_str in
     (lc_constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
   in
-
-  if (List.length constructor_syms == 1) then
-    let single_struct = generate_struct_definition (cn_datatype.cn_dt_name, snd (List.hd cn_datatype.cn_dt_cases)) in
-    {structs = [single_struct]; decls = []; stats = []}
+  let structs = List.map (fun c -> generate_struct_definition c) cn_datatype.cn_dt_cases in
+  let structs = if first then 
+    let generic_dt_struct = 
+      (generic_cn_dt_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef (extra_members (C.(Basic (Integer (Signed Int_)))), None))))
+    in
+    let cntype_struct = (cntype_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef ([], None)))) in
+    generic_dt_struct :: cntype_struct :: structs
   else
-    let generate_enum_member sym = 
-      let doc = CF.Pp_ail.pp_id ~executable_spec:true sym in 
-      let str = CF.Pp_utils.to_plain_string doc in 
-      let str = String.uppercase_ascii str in
-      Id.id str
-    in
-    let enum_member_syms = List.map generate_enum_member constructor_syms in
-    let attr : CF.Annot.attribute = {attr_ns = None; attr_id = Id.id "enum"; attr_args = []} in
-    let attrs = CF.Annot.Attrs [attr] in
-    let enum_members = List.map (fun sym -> (sym, (empty_attributes, None, empty_qualifiers, mk_ctype C.Void))) enum_member_syms in
-    let enum_tag_definition = C.(UnionDef enum_members) in
-    let enum = (enum_sym, (Cerb_location.unknown, attrs, enum_tag_definition)) in
-    let cntype_sym = Sym.fresh_pretty "cntype" in
-    
-    let cntype_pointer = C.(Pointer (empty_qualifiers, mk_ctype (Struct cntype_sym))) in
-    let extra_members tag_type = [
-        (create_member (tag_type, Id.id "tag"));
-        (create_member (cntype_pointer, Id.id "cntype"))]
-    in
-    
-    
-    let structs = List.map (fun c -> generate_struct_definition c) cn_datatype.cn_dt_cases in
-    let structs = if first then 
-      let generic_dt_struct = 
-        (generic_cn_dt_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef (extra_members (C.(Basic (Integer (Signed Int_)))), None))))
-      in
-      let cntype_struct = (cntype_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef ([], None)))) in
-      generic_dt_struct :: cntype_struct :: structs
-    else
-      (* TODO: Add members to cntype_struct as we go along? *)
-      structs
-    in
-    let union_sym = generate_sym_with_suffix ~suffix:"_union" cn_datatype.cn_dt_name in
-    let union_def_members = List.map (fun sym -> 
-      let lc_sym = Sym.fresh_pretty (String.lowercase_ascii (Sym.pp_string sym)) in
-      create_member (C.(Struct lc_sym), create_id_from_sym ~lowercase:true sym)) constructor_syms in
-    let union_def = C.(UnionDef union_def_members) in
-    let union_member = create_member (C.(Union union_sym), Id.id "u") in
+    (* TODO: Add members to cntype_struct as we go along? *)
+    structs
+  in
+  let union_sym = generate_sym_with_suffix ~suffix:"_union" cn_datatype.cn_dt_name in
+  let union_def_members = List.map (fun sym -> 
+    let lc_sym = Sym.fresh_pretty (String.lowercase_ascii (Sym.pp_string sym)) in
+    create_member (C.(Struct lc_sym), create_id_from_sym ~lowercase:true sym)) constructor_syms in
+  let union_def = C.(UnionDef union_def_members) in
+  let union_member = create_member (C.(Union union_sym), Id.id "u") in
 
-    let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
-    {structs = enum :: structs; decls = []; stats = []}
+  let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
+  {structs = enum :: structs; decls = []; stats = []}
 
 
 
