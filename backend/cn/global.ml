@@ -19,11 +19,20 @@ type t =
   } 
 
 let empty = 
+  let alloc = Sym.fresh_named "__cn_alloc" in
+  let def : ResourcePredicates.definition =
+  { loc = Locations.other (__FILE__ ^ ":" ^ string_of_int __LINE__);
+    pointer = Sym.fresh_named "__cn_alloc_ptr";
+    iargs = [];
+    oarg_bt = Unit;
+    clauses = None;
+  } in
+  let resource_predicates = SymMap.(empty |> add alloc def) in
   { struct_decls = SymMap.empty;
     datatypes = SymMap.empty;
     datatype_constrs = SymMap.empty;
     fun_decls = SymMap.empty;
-    resource_predicates = SymMap.empty;
+    resource_predicates;
     logical_functions = SymMap.empty;
     lemmata = SymMap.empty;
   }
