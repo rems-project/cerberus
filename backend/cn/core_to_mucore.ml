@@ -1423,7 +1423,7 @@ let normalise_file (markers_env, ail_prog) file =
 
   let env = List.fold_left register_glob env globs in
 
-  Print.debug 3 (lazy (Print.item "stdlib symbols" (Print.list Sym.pp
+  Print.debug 3 (lazy (Print.item "stdlib symbols" (Print.list Sym.pp_debug
     (List.map fst (Pmap.bindings_list file.mi_stdlib)))));
 
   Print.debug 3 (lazy (Print.item "stdlib symbols in fmap" (Print.list Sym.pp
