@@ -11,7 +11,10 @@ type executable_spec = {
 }
 
 let generate_ail_stat_strs (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list) = 
-  let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true (Executable_spec_utils.mk_stmt s)) ail_stats_ in
+  (* let test_var_sym = Sym.fresh_pretty "test_var" in *)
+  (* let test_decl = A.(AilSdeclaration [(test_var_sym, Some (Executable_spec_utils.mk_expr (AilEident (Sym.fresh_pretty "some_val"))))]) in *)
+  (* let test_binding = A.(test_var_sym, ((Cerb_location.unknown, Automatic, false), None, Executable_spec_utils.empty_qualifiers, Executable_spec_utils.mk_ctype CF.Ctype.Void)) in *)
+  let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs:[] (Executable_spec_utils.mk_stmt s)) ail_stats_ in
   let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
