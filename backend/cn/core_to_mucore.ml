@@ -928,9 +928,10 @@ let make_label_args f_i loc env st args (accesses, inv) =
        let@ (oa_name, ((pt_ret, oa_bt), lcs), value) = C.ownership (loc, (s, ct)) env in
        let env = C.add_logical oa_name oa_bt env in
        let st = C.LocalState.add_c_variable_state s (CVS_Pointer_pointing_to value) st in
-       let resource = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
+       let owned_res = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
+       let alloc_res = C.allocation_token loc s in
        let@ at = 
-         aux (resources @ [resource], 
+         aux (resources @ [alloc_res; owned_res],
               good_lcs @ good_pointer_lc :: lcs) 
            env st rest 
        in

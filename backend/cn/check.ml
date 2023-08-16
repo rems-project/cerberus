@@ -1185,6 +1185,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                }, 
              O (default_ (BT.of_sct act.ct)))
         in
+        let@ () =
+          add_r loc (P (Global.mk_alloc ret), O IT.unit_) in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         Cerb_debug.error "todo: CreateReadOnly"
@@ -1202,6 +1204,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             pointer = arg;
             iargs = [];
           }, None)
+        in
+        let@ _ =
+          RI.Special.predicate_request loc (Access Kill) (Global.mk_alloc arg, None)
         in
         k unit_)
      | M_Store (_is_locking, act, p_pe, v_pe, mo) -> 

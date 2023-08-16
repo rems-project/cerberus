@@ -1037,6 +1037,13 @@ let ownership (loc, (addr_s, ct)) env =
   let value = IT.sym_ (name, oa_bt) in
   return (name, ((pt_ret, oa_bt), lcs), value)
 
+let allocation_token loc addr_s =
+  let name = match Sym.description addr_s with
+    | SD_ObjectAddress obj_name ->
+       Sym.fresh_make_uniq ("A_"^obj_name)
+    | _ -> assert false in
+  let alloc_ret = Global.mk_alloc (IT.sym_ (addr_s, BT.Loc)) in
+  ((name, (ResourceTypes.P alloc_ret, BT.Unit)), (loc, None))
 
 
 
