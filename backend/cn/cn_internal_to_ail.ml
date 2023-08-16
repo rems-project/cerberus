@@ -96,11 +96,7 @@ let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=fal
 let create_binding sym ctype_ = 
   A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, mk_ctype ctype_))
 
-let rec list_split_three = function 
-  | [] -> ([], [], [])
-  | (x, y, z) :: rest -> 
-    let (xs, ys, zs) = list_split_three rest in
-    (x :: xs, y :: ys, z :: zs)
+
   
 
 let rec bt_to_cn_base_type = function
@@ -134,6 +130,7 @@ let rec cn_to_ail_base_type =
   (* | CN_real -> failwith "TODO" *)
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_struct sym -> C.(Struct sym)
+  (* TODO: Complete with allocation *)
   | CN_record members -> 
     let map_bindings = RecordMap.bindings !records in
     let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
@@ -374,8 +371,10 @@ let rec cn_to_ail_expr_aux_internal
     let (parent_dt, members) = find_dt_from_constructor sym dts in
     let res_sym = Sym.fresh_pretty "dt_res" in
     let res_ident = A.(AilEident res_sym) in
+    let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct parent_dt.cn_dt_name)))) in
+    let res_binding = create_binding res_sym ctype_ in
     let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct parent_dt.cn_dt_name)))])) in
-    let ail_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr res_ident, mk_expr fn_call)))) in
+    let ail_decl = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
     (* Ignore e in this case *)
     let (b, ss, e) = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
 
@@ -408,7 +407,7 @@ let rec cn_to_ail_expr_aux_internal
     let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.id "tag")) in
     let tag_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr tag_member_ptr, mk_expr (AilEident uc_constr_sym))))) in
 
-    dest d (b, [ail_assign; tag_assign] @ modified_stats, res_ident)
+    dest d (b @ [res_binding], [ail_decl; tag_assign] @ modified_stats, res_ident)
 
   | DatatypeMember (it, id) -> 
     (* Case of single constructor in datatype *)
