@@ -572,7 +572,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
               (* printing the types in a human readable format *)
               pp_keyword "sizeof" ^^ P.parens (pp_ctype_human qs ty)
             else
-              pp_keyword "sizeof" ^^ P.parens (pp_ctype qs ty)
+              pp_keyword "sizeof" ^^ P.parens (pp_ctype ~executable_spec qs ty)
         | AilEsizeof_expr e ->
             pp_keyword "sizeof" ^^^ pp ~executable_spec e
         | AilEalignof (qs, ty) ->
