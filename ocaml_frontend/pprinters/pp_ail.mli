@@ -61,7 +61,7 @@ val pp_stringLiteral: stringLiteral -> PPrint.document
 val pp_constant: constant -> PPrint.document
 val pp_expression: ?executable_spec:bool -> 'a expression -> PPrint.document
 val pp_generic_association: 'a generic_association -> PPrint.document
-val pp_statement: ?executable_spec:bool -> 'a statement -> PPrint.document
+val pp_statement: ?executable_spec:bool -> ?bs:bindings -> 'a statement -> PPrint.document
 
 
 

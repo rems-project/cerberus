@@ -710,9 +710,9 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSdeclaration defs ->
         comma_list (fun (id, e_opt) ->
           let doc = 
-            if executable_spec then 
+            (* if executable_spec then 
               pp_id_obj ~executable_spec id 
-            else
+            else *)
             (match List.assoc_opt id bs with
               | Some (_, align_opt, qs, ty) ->
                   pp_alignment_opt align_opt ^^
@@ -956,7 +956,7 @@ let pp_genTypeCategory = function
 
 let pp_expression ?(executable_spec=false) e = pp_expression_aux ~executable_spec (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
-let pp_statement ?(executable_spec=false) s = pp_statement_aux ~executable_spec (fun _ d -> d) ~bs:[] s
+let pp_statement ?(executable_spec=false) ?(bs=[]) s = pp_statement_aux ~executable_spec (fun _ d -> d) ~bs s
 
 
 
