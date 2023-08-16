@@ -328,15 +328,90 @@ let rec cn_to_ail_expr_aux_internal
     (* Allocation *)
   | Record ms -> 
     (* TODO: Delete *)
+    (* Could either be (1) standalone record or (2) part of datatype. Case (2) may not exist soon *)
+    (* Might need to pass records around like datatypes *)
+    let res_sym = Sym.fresh_pretty "dt_res" in
+    let res_ident = A.(AilEident res_sym) in
+
     let generate_ail_stat (id, it) = 
       let (s, e) = cn_to_ail_expr_aux_internal const_prop dts it PassBack in
-      let assign_pair = (id, Some (mk_expr e)) in
-      (s, assign_pair)
+      let ail_memberof = A.(AilEmemberof (mk_expr res_ident, id)) in
+      let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, mk_expr e)))) in
+      (s, assign_stat)
     in
-    let (ss, assign_pairs) = List.split (List.map generate_ail_stat ms) in
-    dest d (List.concat ss, A.(AilEstruct (Sym.fresh_pretty "junk", assign_pairs)))
-    (* failwith "TODO5" *)
+    let (ss, assign_stats) = List.split (List.map generate_ail_stat ms) in
+    dest d (List.concat ss @ assign_stats, A.(AilEstruct (Sym.fresh_pretty "junk", [])))
+
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
+  (* | DatatypeCons (sym, t) -> 
+    (* Hacky way of finding datatype this comes from while pipeline being sorted out *)
+    let rec find_dt_from_constructor constr_sym dts = 
+      match dts with 
+        | [] -> failwith "Datatype not found" (* Not found *)
+        | dt :: dts' ->
+          let matching_cases = List.filter (fun (c_sym, members) -> String.equal (Sym.pp_string c_sym) (Sym.pp_string constr_sym)) dt.cn_dt_cases in
+          if List.length matching_cases != 0 then
+            let (_, members) = List.hd matching_cases in
+            (dt, members)
+          else 
+            find_dt_from_constructor constr_sym dts'
+    in
+
+    let (parent_dt, members) = find_dt_from_constructor sym dts in
+    let res_sym = Sym.fresh_pretty "dt_res" in
+    let res_ident = A.(AilEident res_sym) in
+    let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct parent_dt.cn_dt_name)))])) in
+    let ail_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr res_ident, mk_expr fn_call)))) in
+    (* Ignore e in this case *)
+    let (ss, e) = cn_to_ail_expr_aux_internal const_prop dts t PassBack in
+
+    (* Another hack *)
+    let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true sym in 
+
+    let rec modify_ail_stats = function
+      | [] -> []
+      | (A.(AilSexpr (A.(AnnotatedExpression (_, _, _, AilEassign (lhs, rhs)))))) :: ss -> 
+        let new_lhs = (match rm_expr lhs with 
+          | A.(AilEmemberof (res_ident', id)) ->
+            let e_ = A.(AilEmemberofptr (res_ident', Id.id "u")) in
+            let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
+            let e_'' = A.(AilEmemberof (mk_expr e_', id)) in
+            mk_expr e_''
+          | _ -> failwith "Incorrect form of record translation expr")
+        in
+        let new_stat_ = A.(AilSexpr (mk_expr (AilEassign (new_lhs, rhs)))) in
+        new_stat_ :: modify_ail_stats ss
+      | _ :: ss -> modify_ail_stats ss
+    in 
+
+    let num_members = List.length members in
+    let num_stats = List.length ss in
+    assert (num_members <= num_stats );
+    let member_stats = List.filteri (fun i _ -> i >= num_stats - num_members) ss in
+    let modified_stats = modify_ail_stats member_stats in
+
+    let uc_constr_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true sym in
+    let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.id "tag")) in
+    let tag_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr tag_member_ptr, mk_expr (AilEident uc_constr_sym))))) in
+
+    dest d ([ail_assign; tag_assign] @ modified_stats, res_ident)
+
+  | DatatypeMember (it, id) -> 
+    (* Case of single constructor in datatype *)
+    let (s, e) = cn_to_ail_expr_aux_internal const_prop dts it PassBack in
+    let ail_expr_ = A.(AilEmemberofptr (mk_expr e, Id.id "u")) in
+    let constructor_sym = match IT.bt it with
+      | Datatype sym -> 
+        let dt = List.hd (List.filter (fun d -> String.equal (Sym.pp_string sym) (Sym.pp_string d.cn_dt_name)) dts) in
+        let constructors = List.map fst dt.cn_dt_cases in
+        generate_sym_with_suffix ~suffix:"" ~lowercase:true (List.hd constructors)
+      | _ -> failwith "Can only get datatype member from term of type datatype"
+    in
+    let ail_expr_' = A.(AilEmemberof (mk_expr ail_expr_, create_id_from_sym constructor_sym)) in
+    dest d (s, A.(AilEmemberof (mk_expr ail_expr_', id)))
+
+  | DatatypeIsCons (sym, it) -> failwith "TODO6.3" *)
+
   (* Allocation *)
   | Constructor (nm, ms) -> 
     let (ids, ts) = List.split ms in
