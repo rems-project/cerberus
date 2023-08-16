@@ -6,7 +6,7 @@ DIRNAME=$(dirname $0)
 
 set -e
 
-SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c')
+SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c')
 
 for TEST in $SUCC
 do
