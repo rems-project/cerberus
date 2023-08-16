@@ -1,6 +1,7 @@
 module CF=Cerb_frontend
 module CB=Cerb_backend
 open PPrint
+open Executable_spec_utils
 
 module A=CF.AilSyntax 
 (* Executable spec helper functions *)
@@ -10,18 +11,18 @@ type executable_spec = {
     in_stmt: (Cerb_location.t * string) list;
 }
 
-let generate_ail_stat_strs (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list) = 
+let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list)) = 
   (* let test_var_sym = Sym.fresh_pretty "test_var" in *)
-  (* let test_decl = A.(AilSdeclaration [(test_var_sym, Some (Executable_spec_utils.mk_expr (AilEident (Sym.fresh_pretty "some_val"))))]) in *)
-  (* let test_binding = A.(test_var_sym, ((Cerb_location.unknown, Automatic, false), None, Executable_spec_utils.empty_qualifiers, Executable_spec_utils.mk_ctype CF.Ctype.Void)) in *)
-  let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs:[] (Executable_spec_utils.mk_stmt s)) ail_stats_ in
+  (* let test_decl = A.(AilSdeclaration [(test_var_sym, Some (mk_expr (AilEident (Sym.fresh_pretty "some_val"))))]) in *)
+  (* let test_binding = A.(test_var_sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, mk_ctype CF.Ctype.Void)) in *)
+  let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s)) ail_stats_ in
   let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
 let generate_c_statements_internal statements dts =
-  let (locs, bindings, stats_) = Cn_internal_to_ail.list_split_three (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts) statements) in
-  let stat_strs = List.map generate_ail_stat_strs stats_ in
+  let (locs, bindings, stats_) = list_split_three (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts) statements) in
+  let stat_strs = List.map generate_ail_stat_strs (List.combine bindings stats_) in
   let stat_strs = List.map (List.fold_left (^) "") stat_strs in
   List.combine locs stat_strs
 
@@ -59,8 +60,8 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
 
 
   let dts = ail_prog.cn_datatypes in
-  let (pre_bindings, pre_stats_) = Cn_internal_to_ail.cn_to_ail_arguments_internal dts instrumentation.internal.pre in
-  let (post_bindings, post_stats_) = Cn_internal_to_ail.cn_to_ail_post_internal dts instrumentation.internal.post in
+  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal dts instrumentation.internal.pre in
+  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts instrumentation.internal.post in
   let pre_str = generate_ail_stat_strs pre_stats_ in
   let post_str = generate_ail_stat_strs post_stats_ in
   [(instrumentation.fn, (pre_str, post_str))]
