@@ -35,10 +35,10 @@ let rm_stmt (A.AnnotatedStatement (_, _, stmt_)) = stmt_
 
 
 
-let rec split_list_of_triples = function 
+let rec list_split_three = function 
   | [] -> ([], [], [])
-  | (x, y, z) :: tl ->
-    let (xs, ys, zs) = split_list_of_triples tl in 
+  | (x, y, z) :: rest ->
+    let (xs, ys, zs) = list_split_three rest in 
     (x::xs, y::ys, z::zs)
 
 
