@@ -24,6 +24,7 @@ naive_memcpy (char *in_arr, char *out_arr, int i)
   /*@ inv {out_arr} unchanged @*/
   {
     /*@ extract Owned<char>, j; @*/
+    /*@ instantiate good<char>, j; @*/
     out_arr[j] = in_arr[j];
   }
 
