@@ -877,25 +877,12 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
 
   let (bs, ss) = match def.clauses with 
     | Some clauses -> clause_translate clauses
-      (* let bs_ss_e = List.map (fun (c : RP.clause) -> cn_to_ail_expr_internal dts c.guard PassBack) clauses in
-      let (bs, ss, e) = list_split_three bs_ss_e in
-      let packings = List.map (fun (c : RP.clause) -> c.packing_ft) clauses in
-      let bs_and_ss' = List.map predicate_clause_to_ail packings in
-      let (bs', ss') = List.split bs_and_ss' in
-      (bs @ bs', ss @ ss') *)
     | None -> ([], [])
   in
 
   let pred_body = List.map mk_stmt ss in
-
-  (* match def.definition with
-    | Def it ->
-      let (bs, ss) = cn_to_ail_expr_internal cn_datatypes it Return in
-      (bs, List.map mk_stmt ss)
-    | _ -> ([], []) (* TODO: Other cases *)
-  in *)
   let ret_type = cn_to_ail_base_type (bt_to_cn_base_type def.oarg_bt) in
-  let params = List.map (fun (sym, bt) -> (sym, mk_ctype (cn_to_ail_base_type (bt_to_cn_base_type bt)))) def.iargs in
+  let params = List.map (fun (sym, bt) -> (sym, mk_ctype  (bt_to_ail_ctype bt))) ((def.pointer, BT.Loc) :: def.iargs) in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   (* Generating function declaration *)
