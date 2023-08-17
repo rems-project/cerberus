@@ -10,9 +10,9 @@ let const_qualifiers : C.qualifiers = {const = true; restrict = false; volatile 
 
 let empty_attributes = CF.Annot.Attrs []
 
-let mk_ctype ctype_ =
-  C.Ctype ([], ctype_)
+let mk_ctype ctype_ = C.Ctype ([], ctype_)
 
+let rm_ctype (C.Ctype (_, ctype_)) = ctype_
 
 let mk_expr expr_ = 
   A.AnnotatedExpression (
