@@ -189,9 +189,11 @@ let main
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table ail_prog in
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog.cn_datatypes in
             let c_functions = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+            let c_predicates = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates in
             (* TODO: Topological sort *)
             Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_functions;
+            Stdlib.output_string cn_oc c_predicates;
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog

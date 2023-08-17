@@ -12,6 +12,7 @@ module C=CF.Ctype
 module BT=BaseTypes
 module T=Terms
 module LRT=LogicalReturnTypes
+module LAT=LogicalArgumentTypes
 
 let rec cn_base_type_to_bt = function
   | CN_unit -> BT.Unit
@@ -678,38 +679,6 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let structs = structs @ [(union_sym, (empty_attributes, union_def)); (cn_datatype.cn_dt_name, (empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   {structs = enum :: structs; decls = []; stats = []}
 
-
-
-(* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
-let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
-  let (bs, ail_func_body) =
-  match def.definition with
-    | Def it ->
-      let (bs, ss) = cn_to_ail_expr_internal cn_datatypes it Return in
-      (bs, List.map mk_stmt ss)
-    | _ -> ([], []) (* TODO: Other cases *)
-  in
-  let ret_type = cn_to_ail_base_type (bt_to_cn_base_type def.return_bt) in
-  let params = List.map (fun (sym, bt) -> (sym, mk_ctype (cn_to_ail_base_type (bt_to_cn_base_type bt)))) def.args in
-  let (param_syms, param_types) = List.split params in
-  let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
-  (* Generating function declaration *)
-  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
-  (* Generating function definition *)
-  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
-  (decl, def)
-
-
-let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
-  = fun dts d lc -> 
-    match lc with
-    | LogicalConstraints.T it -> 
-      Printf.printf "Reached logical constraint function\n";
-      cn_to_ail_expr_internal dts it d
-    | LogicalConstraints.Forall ((s, bt), it) -> 
-      cn_to_ail_expr_internal dts it d
-      (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
-
 let cn_to_ail_resource_internal sym dts =
   (* Binding will be different depending on whether it's a p or q - q is array*)
   (* TODO: Match on p.name and q.name *)
@@ -778,13 +747,19 @@ let cn_to_ail_resource_internal sym dts =
         | _ -> failwith "Not of correct form: not Le or Lt"
     in
 
+    let rec get_leftmost_and_expr = function
+      | A.(AilEbinary (lhs, And, rhs)) -> get_leftmost_and_expr (rm_expr lhs)
+      | lhs -> lhs
+    in
+
+
     let split_q_permission permission_expr_ = 
       let (start_cond, end_cond) =
-       match permission_expr_ with 
+        match permission_expr_ with 
         | A.(AilEbinary (start_c, And, end_c)) -> (start_c, end_c)
         | _ -> failwith "Expressions that are not of the form start_cond && end_cond not supported"
       in
-      let start_expr = generate_start_expr (rm_expr start_cond) in
+      let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr start_cond)) in
       (start_expr, end_cond)
     in
 
@@ -811,6 +786,99 @@ let cn_to_ail_resource_internal sym dts =
     let while_loop = A.(AilSwhile (end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
 
     (b1 @ b2 @ b3, s1 @ s2 @ s3 @ [start_assign; while_loop])
+
+let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
+  = fun dts d lc -> 
+      match lc with
+      | LogicalConstraints.T it -> 
+        Printf.printf "Reached logical constraint function\n";
+        cn_to_ail_expr_internal dts it d
+      | LogicalConstraints.Forall ((s, bt), it) -> 
+        cn_to_ail_expr_internal dts it d
+        (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
+    
+  
+
+
+(* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
+let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
+  let (bs, ail_func_body) =
+  match def.definition with
+    | Def it ->
+      let (bs, ss) = cn_to_ail_expr_internal cn_datatypes it Return in
+      (bs, List.map mk_stmt ss)
+    | _ -> ([], []) (* TODO: Other cases *)
+  in
+  let ret_type = cn_to_ail_base_type (bt_to_cn_base_type def.return_bt) in
+  let params = List.map (fun (sym, bt) -> (sym, mk_ctype (cn_to_ail_base_type (bt_to_cn_base_type bt)))) def.args in
+  let (param_syms, param_types) = List.split params in
+  let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
+  (* Generating function declaration *)
+  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
+  (* Generating function definition *)
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
+  (decl, def)
+
+let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts = 
+  let rec predicate_clause_to_ail = function
+      | LAT.Define ((name, it), info, lat) -> 
+        let (b1, s1) = cn_to_ail_expr_internal dts it (AssignVar name) in
+        let (b2, s2) = predicate_clause_to_ail lat in
+        (b1 @ b2, s1 @ s2)
+
+      | LAT.Resource ((name, (ret, bt)), info, lat) -> 
+        let (b1, s1) = cn_to_ail_resource_internal name dts ret in
+        let (b2, s2) = predicate_clause_to_ail lat in
+        (b1 @ b2, s1 @ s2)
+
+      | LAT.Constraint (lc, (loc, str_opt), lat) -> 
+        let (b1, s, e) = cn_to_ail_logical_constraint_internal dts PassBack lc in
+        (* TODO: Check this logic *)
+        let ss = match str_opt with 
+          | Some info -> 
+            Printf.printf "Logical constraint info: %s\n" info;
+            []
+          | None -> 
+            Printf.printf "No logical constraint info\n";
+            let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
+            s @ [ail_stat_]
+        in
+        let (b2, s2) = predicate_clause_to_ail lat in
+
+        (b1 @ b2, ss @ s2)
+
+      | LAT.I it ->
+        cn_to_ail_expr_internal dts it Return
+  in
+
+  let bs_and_ss = match def.clauses with 
+    | Some clauses -> 
+      let packings = List.map (fun (c : RP.clause) -> c.packing_ft) clauses in
+      List.map predicate_clause_to_ail packings
+    | None -> []
+  in
+
+  let (bs, ss) = List.split bs_and_ss in
+  let pred_body = List.map mk_stmt (List.concat ss) in
+
+  (* match def.definition with
+    | Def it ->
+      let (bs, ss) = cn_to_ail_expr_internal cn_datatypes it Return in
+      (bs, List.map mk_stmt ss)
+    | _ -> ([], []) (* TODO: Other cases *)
+  in *)
+  let ret_type = cn_to_ail_base_type (bt_to_cn_base_type def.oarg_bt) in
+  let params = List.map (fun (sym, bt) -> (sym, mk_ctype (cn_to_ail_base_type (bt_to_cn_base_type bt)))) def.iargs in
+  let (param_syms, param_types) = List.split params in
+  let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
+  (* Generating function declaration *)
+  let decl = (pred_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
+  (* Generating function definition *)
+  let def = (pred_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (List.concat bs, pred_body)))) in
+  (decl, def)
+
+
+
 
 (* TODO: Generate bindings *)
 let rec cn_to_ail_arguments_l_internal dts = function
