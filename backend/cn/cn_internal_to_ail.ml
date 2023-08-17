@@ -691,10 +691,7 @@ let cn_to_ail_resource_internal sym dts =
     let (b, s, e) = cn_to_ail_expr_internal dts p.pointer PassBack in
     let ctype_ =  bt_to_ail_ctype (IT.bt p.pointer) in
     let ctype_ = match p.name with 
-      | Owned _ -> 
-        (match ctype_ with
-          | C.(Pointer (_, ct)) -> rm_ctype ct
-          | _ -> failwith "Wrong type")
+      | Owned (sct, _) -> rm_ctype (Sctypes.to_ctype sct)
       | PName _ -> ctype_
     in
     let binding = create_binding sym ctype_ in
