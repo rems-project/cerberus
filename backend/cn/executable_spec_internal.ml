@@ -113,3 +113,10 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true false true (None, modified_prog) in
   CF.Pp_utils.to_plain_pretty_string doc
+
+let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates)  =
+  let ail_funs = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes) resource_predicates in
+  let (decls, defs) = List.split ail_funs in
+  let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true false true (None, modified_prog) in
+  CF.Pp_utils.to_plain_pretty_string doc
