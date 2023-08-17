@@ -440,9 +440,10 @@ let pp_stringLiteral (pref_opt, strs) =
   (P.optional pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Green] (fun () -> P.dquotes (!^ (String.concat "" strs)))
 
 
-let rec pp_constant = function
+let rec pp_constant ?(executable_spec=false) = function
   | ConstantIndeterminate ty ->
       (* NOTE: this is not in C11 *)
+      if executable_spec then P.empty else
       pp_keyword "indet" ^^ P.parens (pp_ctype no_qualifiers ty)
   | ConstantNull ->
       pp_const "NULL"
@@ -453,15 +454,15 @@ let rec pp_constant = function
   | ConstantCharacter cc ->
       pp_characterConstant cc
  | ConstantArray (elem_ty, csts) ->
-     P.braces (comma_list pp_constant csts)
+     P.braces (comma_list (pp_constant ~executable_spec) csts)
  | ConstantStruct (tag_sym, xs) ->
      P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
        comma_list (fun (memb_ident, cst) ->
-         P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
+         P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant ~executable_spec cst
        ) xs
      )
  | ConstantUnion (tag_sym, memb_ident, cst) ->
-     P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
+     P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant ~executable_spec cst)
  
 let pp_ail_builtin = function
   | AilBatomic b ->
@@ -564,7 +565,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEstr lit ->
             pp_stringLiteral lit
         | AilEconst c ->
-            pp_constant c
+            pp_constant ~executable_spec c
         | AilEident x ->
             pp_id ~executable_spec x
         | AilEsizeof (qs, ty) ->
