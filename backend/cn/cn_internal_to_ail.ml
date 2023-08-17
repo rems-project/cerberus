@@ -154,6 +154,8 @@ let rec cn_to_ail_base_type =
   | CN_set bt -> generate_ail_array bt
   | _ -> failwith "TODO cn_to_ail_base_type"
 
+let bt_to_ail_ctype t = cn_to_ail_base_type (bt_to_cn_base_type t)
+
 (* TODO: Finish *)
 let cn_to_ail_binop_internal = function
   | Terms.And -> A.And
@@ -682,9 +684,17 @@ let cn_to_ail_resource_internal sym dts =
   | ResourceTypes.P p -> 
     (* TODO: Use ct for binding *)
     let (b, s, e) = cn_to_ail_expr_internal dts p.pointer PassBack in
-    (* TODO: Hmm. Should make into Let expression so binding can be created there *)
+    let ctype_ =  bt_to_ail_ctype (IT.bt p.pointer) in
+    let ctype_ = match p.name with 
+      | Owned _ -> 
+        (match ctype_ with
+          | C.(Pointer (_, ct)) -> rm_ctype ct
+          | _ -> failwith "Wrong type")
+      | PName _ -> ctype_
+    in
+    let binding = create_binding sym ctype_ in
     let s_decl = A.(AilSdeclaration [(sym, Some (mk_expr (make_deref_expr_ e)))]) in
-    (b, s @ [s_decl])
+    (b @ [binding], s @ [s_decl])
 
   | ResourceTypes.Q q -> 
     (* 
@@ -818,9 +828,11 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
 let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts = 
   let rec predicate_clause_to_ail = function
       | LAT.Define ((name, it), info, lat) -> 
+        let ctype_ = bt_to_ail_ctype (IT.bt it) in
+        let binding = create_binding name ctype_ in
         let (b1, s1) = cn_to_ail_expr_internal dts it (AssignVar name) in
         let (b2, s2) = predicate_clause_to_ail lat in
-        (b1 @ b2, s1 @ s2)
+        (b1 @ b2 @ [binding], s1 @ s2)
 
       | LAT.Resource ((name, (ret, bt)), info, lat) -> 
         let (b1, s1) = cn_to_ail_resource_internal name dts ret in
@@ -840,22 +852,40 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
             s @ [ail_stat_]
         in
         let (b2, s2) = predicate_clause_to_ail lat in
-
         (b1 @ b2, ss @ s2)
 
       | LAT.I it ->
         cn_to_ail_expr_internal dts it Return
   in
 
-  let bs_and_ss = match def.clauses with 
-    | Some clauses -> 
-      let packings = List.map (fun (c : RP.clause) -> c.packing_ft) clauses in
-      List.map predicate_clause_to_ail packings
-    | None -> []
+  let rec clause_translate (clauses : RP.clause list) = 
+    match clauses with
+      | [] -> ([], [])
+      | c :: cs ->
+        let (bs, ss) = predicate_clause_to_ail c.packing_ft in
+        match c.guard with 
+          | IT (Const (Bool true), _, _) -> 
+            let (bs'', ss'') = clause_translate cs in
+            (bs @ bs'', ss @ ss'')
+          | _ -> 
+            let (b1, s1, e) = cn_to_ail_expr_internal dts c.guard PassBack in
+            let (bs'', ss'') = clause_translate cs in
+            let ail_if_stat = A.(AilSif (mk_expr e, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
+            ([], [ail_if_stat])
   in
 
-  let (bs, ss) = List.split bs_and_ss in
-  let pred_body = List.map mk_stmt (List.concat ss) in
+  let (bs, ss) = match def.clauses with 
+    | Some clauses -> clause_translate clauses
+      (* let bs_ss_e = List.map (fun (c : RP.clause) -> cn_to_ail_expr_internal dts c.guard PassBack) clauses in
+      let (bs, ss, e) = list_split_three bs_ss_e in
+      let packings = List.map (fun (c : RP.clause) -> c.packing_ft) clauses in
+      let bs_and_ss' = List.map predicate_clause_to_ail packings in
+      let (bs', ss') = List.split bs_and_ss' in
+      (bs @ bs', ss @ ss') *)
+    | None -> ([], [])
+  in
+
+  let pred_body = List.map mk_stmt ss in
 
   (* match def.definition with
     | Def it ->
@@ -870,7 +900,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
   (* Generating function declaration *)
   let decl = (pred_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (pred_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (List.concat bs, pred_body)))) in
+  let def = (pred_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, pred_body)))) in
   (decl, def)
 
 
