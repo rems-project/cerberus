@@ -756,14 +756,21 @@ let cn_to_ail_resource_internal sym dts =
       | lhs -> lhs
     in
 
+    let rec get_rest_of_expr = function 
+    | A.(AilEbinary (lhs, And, rhs)) ->
+      A.(AilEbinary (mk_expr (get_rest_of_expr (rm_expr lhs)), And, rhs))
+    | lhs -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B)))
+    in
+
 
     let split_q_permission permission_expr_ = 
-      let (start_cond, end_cond) =
+      (* let (start_cond, end_cond) =
         match permission_expr_ with 
         | A.(AilEbinary (start_c, And, end_c)) -> (start_c, end_c)
         | _ -> failwith "Expressions that are not of the form start_cond && end_cond not supported"
-      in
-      let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr start_cond)) in
+      in *)
+      let start_expr = generate_start_expr (get_leftmost_and_expr permission_expr_) in
+      let end_cond = get_rest_of_expr permission_expr_ in
       (start_expr, end_cond)
     in
 
@@ -787,7 +794,7 @@ let cn_to_ail_resource_internal sym dts =
     let pointer_add_expr = make_deref_expr_ (gen_add_expr_ e1) in
     let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr pointer_add_expr)))) in
     let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q_sym))))) in 
-    let while_loop = A.(AilSwhile (end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
+    let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
 
     (b1 @ b2 @ b3, s1 @ s2 @ s3 @ [start_assign; while_loop])
 
