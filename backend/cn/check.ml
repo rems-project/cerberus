@@ -1469,6 +1469,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                       {loc; msg = Unproven_constraint {constr = lc; info = (loc, None); ctxt; model; trace}}
                     )
                end
+            | M_CN_inline _nms ->
+               return ()
           end
      in
      let@ () = ListM.iterM aux cn_progs in

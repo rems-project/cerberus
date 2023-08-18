@@ -1424,6 +1424,8 @@ let translate_cn_statement
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
          let args = List.map IT.term_of_sterm args in
          return (M_CN_statement (loc, M_CN_apply (s, args)))
+      | CN_inline nms ->
+         return (M_CN_statement (loc, M_CN_inline nms))
     )
 
 
