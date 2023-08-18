@@ -641,7 +641,10 @@ module Translate = struct
          let minInt = Memory.min_integer_type ity in
          let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
          let r = rem_f_ (arg, z_ dlt) in
-         let e = ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
+         (* variation from std.core, discussed with authors. the subtraction
+            case is impossible if minInt is zero (i.e. unsigned, the main case) *)
+         let e = if Z.equal minInt Z.zero then r
+         else ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
          term e
       | MapConst (abt, t) -> 
          Z3.Z3Array.mk_const_array context (sort abt) (term t)
