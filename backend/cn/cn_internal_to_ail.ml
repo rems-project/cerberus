@@ -793,23 +793,13 @@ let cn_to_ail_resource_internal sym dts =
       | lhs -> lhs
     in
 
-    (* TODO: Remove superfluous true on very left *)
     let rec get_rest_of_expr = function 
     | A.(AilEbinary (lhs, And, rhs)) ->
-      A.(AilEbinary (mk_expr (get_rest_of_expr (rm_expr lhs)), And, rhs))
+      let r = get_rest_of_expr (rm_expr lhs) in
+      (match r with
+        | A.(AilEconst (ConstantInteger (IConstant _))) -> rm_expr rhs
+        | _ -> A.(AilEbinary (mk_expr r, And, rhs)))
     | lhs -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B)))
-    in
-
-
-    let split_q_permission permission_expr_ = 
-      (* let (start_cond, end_cond) =
-        match permission_expr_ with 
-        | A.(AilEbinary (start_c, And, end_c)) -> (start_c, end_c)
-        | _ -> failwith "Expressions that are not of the form start_cond && end_cond not supported"
-      in *)
-      let start_expr = generate_start_expr (get_leftmost_and_expr permission_expr_) in
-      let end_cond = get_rest_of_expr permission_expr_ in
-      (start_expr, end_cond)
     in
 
     (*
@@ -821,8 +811,11 @@ let cn_to_ail_resource_internal sym dts =
       } 
     *)
 
-    let (start_expr, end_cond) = split_q_permission e2 in
-    let start_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident q_sym), start_expr)))) in
+    let start_expr = generate_start_expr (get_leftmost_and_expr e2) in
+    let end_cond = get_rest_of_expr e2 in
+
+    let start_binding = create_binding q_sym C.(Basic (Integer (Signed Int_))) in
+    let start_assign = A.(AilSdeclaration [(q_sym, Some start_expr)]) in
 
     let q_times_step = A.(AilEbinary (mk_expr (AilEident q_sym), Arithmetic Mul, mk_expr e3)) in
     let gen_add_expr_ e_ = 
@@ -837,6 +830,7 @@ let cn_to_ail_resource_internal sym dts =
     in
     let binding = create_binding sym ctype_ in
 
+
     let (rhs, bs, ss) = match q.name with 
       | Owned _ -> (make_deref_expr_ (gen_add_expr_ e1), [], [])
       | PName pname -> 
@@ -849,7 +843,7 @@ let cn_to_ail_resource_internal sym dts =
     let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q_sym))))) in 
     let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
 
-    (b1 @ b2 @ b3 @ [binding] @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ [start_assign; while_loop])
+    (b1 @ b2 @ b3 @ [start_binding; binding] @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ [start_assign; while_loop])
 
 let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
   = fun dts d lc -> 
@@ -951,7 +945,6 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
 
 
 
-(* TODO: Generate bindings *)
 let rec cn_to_ail_arguments_l_internal dts = function
     (* CN let *)
   | M_Define ((sym, it), _info, l) ->
