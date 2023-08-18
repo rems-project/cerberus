@@ -685,7 +685,9 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSreturnVoid ->
         pp_keyword "return" ^^ P.semi
     | AilSreturn e ->
-        pp_keyword "return" ^^^ pp_expression_aux ~executable_spec pp_annot e ^^ P.semi
+      let e_doc = pp_expression_aux ~executable_spec pp_annot e in
+      if e_doc == P.empty then pp_keyword "return" ^^ P.semi else
+        pp_keyword "return" ^^^ e_doc ^^ P.semi
     | AilSswitch (e, s) ->
         pp_keyword "switch" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^/^ pp_statement ~executable_spec ~is_control:true s
     | AilScase (n, s) ->
