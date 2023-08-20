@@ -1,16 +1,46 @@
 [@@@warning "-27"]
 open Cerb_frontend
 
-module Pos = struct
+module Pos : sig
+  type t = private {
+    line: int;
+    col: int;
+  }
+  val compare: t -> t -> int
+  val v: int -> int -> t
+  val initial: t
+  val newline: t -> t
+  val increment_line: t -> int -> t
+  val of_location: Cerb_location.t -> (t * t, string) result
+  (* val to_string: t -> string *)
+end = struct
   type t = {
     line: int;
     col: int;
   }
+  
+  let compare pos1 pos2 =
+    Stdlib.compare (pos1.line, pos1.col) (pos2.line, pos2.col)
+  
+  (* let to_string pos =
+    Printf.sprintf "{line: %d, col: %d}" pos.line pos.col *)
 
   let v line col =
     { line; col }
 
+  let initial =
+    v 1 1
+  
+  let newline pos =
+    { line= pos.line + 1; col= 1 }
+
+  let increment_line pos n =
+    { pos with line= pos.line + n }
+
   let of_location loc =
+    (* if not (Cerb_location.from_main_file loc) then
+      Printf.fprintf stderr "\x1b[31mHEADER LOC: %s\x1b[0m\n" (Option.value ~default:"<unknown>" (Cerb_location.get_filename loc))
+    ; *)
     match Cerb_location.to_cartesian loc with
       | None ->
           Error (__FUNCTION__ ^ ": failed to get line/col positions")
@@ -56,6 +86,11 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
   let open Pos in
   assert (pos.line > 0);
   assert (pos.line >= st.current_pos.line);
+  (* if not (pos.line >= st.current_pos.line) then begin
+    Printf.fprintf stderr "pos.line: %d -- current_pos.line: %d\n"
+      pos.line st.current_pos.line;
+      failwith "BOOM"
+  end ; *)
   let ident_of_line st str =
     if st.current_pos.col > 1 then
       st.last_indent
@@ -80,7 +115,7 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
               Stdlib.output_string st.output (str ^ "\n");
             end;
             aux
-              { st with current_pos= { line= st.current_pos.line + 1; col= 1 } }
+              { st with current_pos= Pos.newline st.current_pos (*{ line= st.current_pos.line + 1; col= 1 }*) }
       | exception End_of_file -> begin
           Printf.fprintf stderr "st.line= %d\npos.line= %d\n"
             st.current_pos.line pos.line;
@@ -102,12 +137,22 @@ type injection = {
 
 (* start (1, 1) and end (1, 1) for include headers *)
 let inject st inj =
+  (* begin
+    let kind_str = match inj.kind with
+      | InStmt str -> "STMT('" ^ String.escaped str ^ "')"
+      | Return _ -> "RETURN"
+      | Pre _ -> "PRE"
+      | Post _ -> "POST" in
+
+  Printf.fprintf stderr "\x1b[32mINJECT: %s -- %s ==> %s\x1b[0m\n"
+    (Pos.to_string inj.start_pos) (Pos.to_string inj.end_pos) kind_str
+  end; *)
   (* let open Cerb_frontend in *)
   let do_output st str = Stdlib.output_string st.output (decorate_injection str); st in
   let (st, _) = move_to st inj.start_pos in
   let st = begin match inj.kind with
     | InStmt str ->
-        let (st, _) = move_to ~no_ident:true ~print:false st {inj.end_pos with col= inj.end_pos.col } in
+        let (st, _) = move_to ~no_ident:true ~print:false st inj.end_pos (*{inj.end_pos with col= inj.end_pos.col }*) in
         do_output st (String.escaped str)
     | Return None ->
         do_output st ""
@@ -155,15 +200,19 @@ let inject st inj =
 
 let sort_injects xs =
   let cmp inj1 inj2 =
-    let open Pos in
-    Stdlib.compare (inj1.start_pos.line, inj1.start_pos.col) (inj2.start_pos.line, inj2.start_pos.col) in
+    let c = Pos.compare inj1.start_pos inj2.start_pos in
+    if c = 0 then
+      Pos.compare inj1.end_pos inj2.end_pos
+    else
+      c
+    in
   List.sort cmp xs
 
 let inject_all oc filename xs =
   let st = {
     input= Stdlib.open_in filename;
     output= oc;
-    current_pos= { line= 1; col= 1 };
+    current_pos= Pos.initial;
     last_indent= 0;
   } in
   let st =
@@ -237,11 +286,14 @@ let in_stmt_injs xs num_headers =
   mapM (fun (loc, str) ->
     let* (start_pos, end_pos) = Pos.of_location loc in
     let num_headers = if (num_headers != 0) then (num_headers + 1) else num_headers in
+    (* Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s\n"
+      (Cerb_location.location_to_string loc)
+      (Pos.to_string start_pos) (Pos.to_string end_pos); *)
     Ok
-      { start_pos= { col= start_pos.col; line= start_pos.line + num_headers }
-      ; end_pos= {col= end_pos.col + 6; line= end_pos.line + num_headers }
+      { start_pos= Pos.increment_line start_pos num_headers (* { col= start_pos.col; line= start_pos.line + num_headers } *)
+      ; end_pos= Pos.v (end_pos.line + num_headers) (end_pos.col + 6) (*{col= end_pos.col + 6; line= end_pos.line + num_headers }*)
       ; kind= InStmt str }
-  ) xs
+  ) (List.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs)
 
 (* build the injections for the pre/post conditions of a C function *)
 let pre_post_injs pre_post is_void (A.AnnotatedStatement (loc, _, stmt_)) =
@@ -286,8 +338,11 @@ type 'a cn_injection = {
 let output_injections oc cn_inj =
   Cerb_colour.without_colour begin fun () ->
   let* injs =
-    List.fold_left (fun acc_ (fun_sym, (_, _, _, _, stmt)) ->
-      match List.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
+    List.fold_left (fun acc_ (fun_sym, (loc, _, _, _, stmt)) ->
+      if not (Cerb_location.from_main_file loc) then
+        (* let () = Printf.fprintf stderr "\x1b[31mSKIPPING ==> %s\x1b[0m\n" (Cerb_location.simple_location loc) in *)
+        acc_
+      else match List.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
         | Some pre_post_strs ->
             begin match acc_, List.assoc Symbol.equal_sym fun_sym cn_inj.sigm.A.declarations with
               | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
