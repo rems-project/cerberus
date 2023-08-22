@@ -1551,14 +1551,14 @@ type surface = {
     accesses : (Sym.t * Ctype.ctype) list;
     requires: (Sym.t, Ctype.ctype) Cn.cn_condition list;
     ensures: (Sym.t, Ctype.ctype) Cn.cn_condition list;
-    statements: (Sym.t, Ctype.ctype) cn_statement list;
+    statements: (Locations.t * (Sym.t, Ctype.ctype) cn_statement list) list;
   }
 
 type internal = {
     pre: unit mu_arguments;
     post: ReturnTypes.t;
     (* inv: (Loc.t * unit mu_arguments); *) (* TODO *)
-    statements: Cnprog.cn_prog list;
+    statements: (Locations.t * Cnprog.cn_prog list) list;
   }
 
 type instrumentation = {
@@ -1579,7 +1579,7 @@ let concat2_map (f : 'a -> ('b list * 'c list)) (xs : 'a list) : ('b list * 'c l
       concat2 (f x) acc
     ) xs ([], [])
 
-let rec stmts_in_expr (M_Expr (_, _, _, e_)) =
+let rec stmts_in_expr (M_Expr (loc, _, _, e_)) =
   match e_ with
   | M_Epure _ -> ([], [])
   | M_Ememop _ -> ([], [])
@@ -1594,7 +1594,7 @@ let rec stmts_in_expr (M_Expr (_, _, _, e_)) =
   | M_Ebound e -> stmts_in_expr e
   | M_End es -> concat2_map stmts_in_expr es
   | M_Erun _ -> ([], [])
-  | M_CN_progs (stmts_s, stmts_i) -> (stmts_s, stmts_i)
+  | M_CN_progs (stmts_s, stmts_i) -> ([(loc, stmts_s)], [(loc, stmts_i)])
 
 let rec stmts_in_largs f_i = function
   | M_Define (_, _, a) -> stmts_in_largs f_i a
