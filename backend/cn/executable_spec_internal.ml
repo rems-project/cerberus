@@ -73,7 +73,9 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
 let generate_c_specs_internal instrumentation_list type_map (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog in 
-    let c_statements = generate_c_statements_internal instrumentation.internal.statements ail_prog.cn_datatypes in
+    (* FIXME *)
+    let cn_statements = List.concat (List.map snd instrumentation.internal.statements) in
+    let c_statements = generate_c_statements_internal cn_statements ail_prog.cn_datatypes in
     (c_pres_and_posts, c_statements)
   in
   let specs = List.map generate_c_spec instrumentation_list in 
