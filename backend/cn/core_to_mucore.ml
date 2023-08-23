@@ -778,6 +778,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
             ) (get_cerb_magic_attr annots)
           in
           let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
+          Print.debug 2 (lazy (Print.item "building M_CN_progs with loc" (Locations.pp loc)));
           return (M_Expr (loc, [], M_CN_progs (desugared_stmts, stmts)))
        | _, _ ->
           n_expr e1 

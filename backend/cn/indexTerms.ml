@@ -412,6 +412,9 @@ let rec is_const_val = function
   | IT (Cons (hd, tl), _) -> is_const_val hd && is_const_val tl
   | _ -> false
 
+let is_pred_ = function
+  | IT (Apply (name, args), _) -> Some (name, args)
+  | _ -> None
 
 (* shorthands *)
 
