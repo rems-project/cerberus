@@ -345,47 +345,47 @@ let prefer_value_with f expr =
   | None -> return expr
   | Some (x, _) -> return x
 
-let is_fun_addr global t = match IT.is_sym t with
-  | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
-      then Some s else None
-  | _ -> None
-
-
-
-let check_single_ct loc expr =
-  let@ pointer = WellTyped.WIT.check loc BT.CType expr in
+let try_prove_constant loc expr =
   let@ known = eq_value_with IT.is_const expr in
   match known with
-  | Some (_, (IT.CType_const ct, _)) -> return ct
-  | Some _ -> assert false (* should be impossible given the type *)
+  | Some (it, _) -> return it
   | None ->
     (* backup strategy, try to figure out the single value *)
-    let@ m = model_with loc (IT.bool_ false) in
-    let fail2 = (fun msg -> fail (fun _ -> {loc; msg = Generic (!^ "no known value for ctype:"
-        ^^^ (!^ msg))})) in
-    let@ m = match m with
-      | None -> fail2 "cannot get model"
+    let fail2 = (fun msg -> fail (fun _ -> {loc;
+        msg = Generic (!^ "model constant calculation:" ^^^ (!^ msg))})) in
+    let fail_on_none msg = function
       | Some m -> return m
+      | None -> fail2 msg
     in
+    let@ m = model_with loc (IT.bool_ true) in
+    let@ m = fail_on_none "cannot get model" m in
     let@ g = get_global () in
-    let@ y = match Solver.eval g (fst m) expr with
-      | None -> fail2 "cannot eval term"
-      | Some y -> return y
-    in
-    let@ ct = match IT.is_const y with
-      | Some (IT.CType_const ct, _) -> return ct
-      | _ -> fail2 "cannot eval to constant term"
-    in
+    let@ y = fail_on_none "cannot eval term" (Solver.eval g (fst m) expr) in
+    let@ _ = fail_on_none "eval to non-constant term" (IT.is_const y) in
     let eq = IT.eq_ (expr, y) in
     let@ provable = provable loc in
     begin match provable (t_ eq) with
       | `True ->
         let@ () = add_c loc (t_ eq) in
-        return ct
-       | `False ->
-        (* TODO: this is the most likely case, give a better error *)
-        fail2 "cannot prove type is constant"
+        return y
+      | `False ->
+        return expr
     end
+
+
+let is_fun_addr global t = match IT.is_sym t with
+  | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
+      then Some s else None
+  | _ -> None
+
+let check_single_ct loc expr =
+  let@ pointer = WellTyped.WIT.check loc BT.CType expr in
+  let@ t = try_prove_constant loc expr in
+  match IT.is_const t with
+    | Some (IT.CType_const ct, _) -> return ct
+    | Some _ -> assert false (* should be impossible given the type *)
+    | None -> fail (fun _ -> {loc;
+        msg = Generic (!^ "use of non-constant ctype mucore expression")})
 
 
 let get_eq_in_model loc msg x opts =
@@ -585,14 +585,18 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         k (sub_ (v1, v2)))
      | OpMul ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v1 = try_prove_constant loc v1 in
+        let@ v2 = try_prove_constant loc v2 in
         k (if (is_z_ v1 || is_z_ v2) then mul_ (v1, v2) 
            else (warn_uf loc "mul_uf"; mul_no_smt_ (v1, v2))))
      | OpDiv ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v2 = try_prove_constant loc v2 in
         k (if is_z_ v2 then div_ (v1, v2) 
            else (warn_uf loc "div_uf"; div_no_smt_ (v1, v2))))
      | OpRem_f ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v2 = try_prove_constant loc v2 in
         k (if is_z_ v2 then rem_ (v1, v2) 
            else (warn_uf loc "rem_uf"; rem_no_smt_ (v1, v2))))
      | OpRem_t ->
@@ -603,6 +607,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
            (* If the arguments are non-negative, then rem or mod should be sound to use for rem_t *)
            (* If not it throws a type error, but we should instead
               map that to an uninterpreted function eventually. *)
+           let@ v2 = try_prove_constant loc v2 in
            k (if (is_z_ v2) then IT.mod_ (v1, v2) 
               else (warn_uf loc "mod_uf"; IT.mod_no_smt_ (v1, v2)))
         | `False ->
@@ -615,6 +620,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         end)
      | OpExp ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v1 = try_prove_constant loc v1 in
+        let@ v2 = try_prove_constant loc v2 in
         begin match is_z v1, is_z v2 with
         | Some z, Some z' ->
            let it = exp_ (v1, v2) in

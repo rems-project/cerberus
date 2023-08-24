@@ -37,7 +37,7 @@ let mk_local_ptr state =
   let loc_map = IntMap.add loc_ix None state.loc_map in
   let state = { loc_map; next_loc = loc_ix + 1 } in
   (ptr, state)
- 
+
 let is_local_ptr ptr = Option.bind (IT.is_pred_ ptr)
   (function
     | (name, [ix]) when Sym.equal name local_sym_ptr -> Option.map Z.to_int (IT.is_z ix)
