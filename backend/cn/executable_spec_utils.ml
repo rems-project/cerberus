@@ -4,7 +4,6 @@ module C=CF.Ctype
 module Cn=CF.Cn
 
 
-
 let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
 let const_qualifiers : C.qualifiers = {const = true; restrict = false; volatile = false}
 
@@ -33,6 +32,15 @@ let rm_expr (A.AnnotatedExpression (_, _, _, expr_)) = expr_
 
 let rm_stmt (A.AnnotatedStatement (_, _, stmt_)) = stmt_
 
+let empty_ail_str = "empty_ail"
+let empty_ail_expr = A.(AilEident (Sym.fresh_pretty empty_ail_str))
+let empty_ail_stmt = A.(AilSexpr (mk_expr empty_ail_expr))
+
+let is_empty_ail_stmt = function 
+  | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEident sym))) -> String.equal empty_ail_str (Sym.pp_string sym)
+  | _ -> false
+
+  
 
 
 let rec list_split_three = function 
