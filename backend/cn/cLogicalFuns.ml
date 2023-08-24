@@ -20,6 +20,7 @@ let mu_val_to_it = function
   | M_Vtrue -> Some (IT.bool_ true)
   | M_Vfalse -> Some (IT.bool_ false)
   | M_Vobject (M_OVinteger iv) -> Some (IT.z_ (Memory.z_of_ival iv))
+  | M_Vctype ct -> Option.map IT.const_ctype_ (Sctypes.of_ctype ct)
   | _ -> None
 
 let local_sym_ptr = Sym.fresh_named "local_ptr"
@@ -52,6 +53,12 @@ let upd_loc_state state ix v =
   let loc_map = IntMap.add ix (Some v) state.loc_map in
   { state with loc_map }
 
+let do_wrapI loc ct it =
+  match Sctypes.is_integer_type ct with
+  | Some ity -> return (IT.wrapI_ (ity, it))
+  | None -> fail {loc; msg = Generic (Pp.item "expr from C syntax: coercion to non-int type"
+      (Sctypes.pp ct))}
+
 let rec symb_exec_mu_pexpr var_map pexpr =
   let (M_Pexpr (loc, _, _, pe)) = pexpr in
   match pe with
@@ -70,6 +77,8 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     begin match op with
     | OpAdd -> return (IT.add_ (x_v, y_v))
     | OpSub -> return (IT.sub_ (x_v, y_v))
+    | OpMul -> return (IT.mul_ (x_v, y_v))
+    | OpDiv -> return (IT.div_ (x_v, y_v))
     | OpEq  -> return (IT.eq_ (x_v, y_v))
     | OpLt  -> return (IT.lt_ (x_v, y_v))
     | OpLe  -> return (IT.le_ (x_v, y_v))
@@ -82,8 +91,18 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     end
   | M_PEconv_int (ct_expr, pe)
   | M_PEconv_loaded_int (ct_expr, pe) ->
-    (* FIXME revisit this, just ignoring wrapping here *)
-    symb_exec_mu_pexpr var_map pe
+    let@ x = symb_exec_mu_pexpr var_map pe in
+    let@ ct_it = symb_exec_mu_pexpr var_map ct_expr in
+    let@ ct = match IT.is_const ct_it with
+    | Some (IT.CType_const ct, _) -> return ct
+    | Some _ -> assert false (* shouldn't be possible given type *)
+    | None -> fail {loc; msg = Generic (Pp.item "expr from C syntax: non-constant type"
+        (IT.pp ct_it))}
+    in
+    do_wrapI loc ct x
+  | M_PEwrapI (act, pe) ->
+    let@ x = symb_exec_mu_pexpr var_map pe in
+    do_wrapI loc act.ct x
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pure expr"
         (Pp_mucore.pp_pexpr pexpr))}
 
