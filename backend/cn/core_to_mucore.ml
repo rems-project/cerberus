@@ -1580,7 +1580,6 @@ let concat2_map (f : 'a -> ('b list * 'c list)) (xs : 'a list) : ('b list * 'c l
     ) xs ([], [])
 
 let rec stmts_in_expr (M_Expr (loc, _, _, e_)) =
-let rec stmts_in_expr (M_Expr (loc, _, _, e_)) =
   match e_ with
   | M_Epure _ -> ([], [])
   | M_Ememop _ -> ([], [])
@@ -1595,7 +1594,6 @@ let rec stmts_in_expr (M_Expr (loc, _, _, e_)) =
   | M_Ebound e -> stmts_in_expr e
   | M_End es -> concat2_map stmts_in_expr es
   | M_Erun _ -> ([], [])
-  | M_CN_progs (stmts_s, stmts_i) -> ([(loc, stmts_s)], [(loc, stmts_i)])
   | M_CN_progs (stmts_s, stmts_i) -> ([(loc, stmts_s)], [(loc, stmts_i)])
 
 let rec stmts_in_largs f_i = function
