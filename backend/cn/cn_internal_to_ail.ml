@@ -242,6 +242,13 @@ let prefix : type a. a dest -> (A.bindings * CF.GenTypes.genTypeCategory A.state
     | AssignVar _, (b2, s2) -> (b1 @ b2, s1 @ s2)
     | PassBack, (b2, s2, e) -> (b1 @ b2, s1 @ s2, e)
 
+let empty_for_dest : type a. a dest -> a = 
+  fun d ->
+    match d with 
+      | Assert -> ([], [empty_ail_stmt])
+      | Return -> ([], [empty_ail_stmt])
+      | AssignVar _ -> ([], [empty_ail_stmt])
+      | PassBack -> ([], [empty_ail_stmt], empty_ail_expr)
 
 
 
@@ -952,9 +959,10 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
 let rec cn_to_ail_arguments_l_internal dts = function
     (* CN let *)
   | M_Define ((sym, it), _info, l) ->
+    let binding = create_binding sym (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts it (AssignVar sym) in
     let (b2, s2) = cn_to_ail_arguments_l_internal dts l in
-    (b1 @ b2, s1 @ s2)
+    (b1 @ b2 @ [binding], s1 @ s2)
 
     (* CN take *)
   | M_Resource ((sym, (re, _bt)), _info, l) -> 
@@ -987,9 +995,10 @@ let rec cn_to_ail_arguments_internal dts = function
 (* TODO: Add destination passing? *)
 let rec cn_to_ail_post_aux_internal dts = function
   | LRT.Define ((name, it), info, t) ->
+    let binding = create_binding name (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts it (AssignVar name) in
     let (b2, s2) = cn_to_ail_post_aux_internal dts t in
-    (b1 @ b2, s1 @ s2)
+    (b1 @ b2 @ [binding], s1 @ s2)
 
   | LRT.Resource ((name, (re, bt)), info, t)  ->
     let (b1, s1) = cn_to_ail_resource_internal name dts re in
@@ -1030,6 +1039,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
   (* No op on my end *)
   | Cnprog.M_CN_instantiate (o_s, it) -> 
     (* TODO: Ask Christopher what this does *)
+    (* empty_for_dest d *)
     cn_to_ail_expr_internal dts it d
     (* failwith "TODO M_CN_instantiate" *)
     (* o_s is not a (option) binder *)
@@ -1061,18 +1071,10 @@ let rec cn_to_ail_cnprog_internal dts = function
   (* TODO: Differentiate between read and deref cases for M_CN_let *)
   let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in
   let (loc', b2, ss) = cn_to_ail_cnprog_internal dts prog in
-  (loc, b1 @ b2, s @ ail_stat_ :: ss)
+  (loc', b1 @ b2, s @ ail_stat_ :: ss)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
+  (* (loc, [], [empty_ail_stmt]) *)
   let (bs, ss) = cn_to_ail_cnstatement_internal dts Assert stmt in 
   (loc, bs, ss)
-
-(* let cn_to_ail_assertion assertion cn_datatypes = 
-  match assertion with
-  | CN_assert_exp e_ -> 
-      (* TODO: Change type signature to keep declarations too *)
-      let ss = cn_to_ail_expr_aux cn_datatypes e_ Assert in 
-      List.map mk_stmt ss
-  | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO" *)
-
 
