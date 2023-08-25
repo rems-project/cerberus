@@ -748,8 +748,14 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
+          let separated_annots = 
+            List.map (fun (loc, joined_strs) ->
+               let separate_strs = String.split_on_char '\n' joined_strs in
+               List.map (fun str -> (loc, str)) separate_strs
+            ) (get_cerb_magic_attr annots) in
           let@ desugared_stmts_and_stmts =
             ListM.mapM (fun (stmt_loc, stmt_str) ->
+                Printf.printf "Statement string: %s\n" stmt_str;
                 let marker_id = Option.get (get_marker annots) in
                 let marker_id_object_types = Option.get (get_marker_object_types annots) in
                 let@ parsed_stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
@@ -775,7 +781,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                 (* debug 6 (lazy (!^"CN statement after translation"));
                 debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
                 return (desugared_stmt, stmt)
-            ) (get_cerb_magic_attr annots)
+            ) (List.concat separated_annots)
           in
           let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
           Print.debug 2 (lazy (Print.item "building M_CN_progs with loc" (Locations.pp loc)));
