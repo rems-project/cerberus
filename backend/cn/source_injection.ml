@@ -283,7 +283,8 @@ let rec mapM f xs =
      Ok (y :: ys)
 
 let in_stmt_injs xs num_headers =
-  mapM (fun (loc, str) ->
+  mapM (fun (loc, strs) ->
+    let str = String.concat "\n" strs in
     let* (start_pos, end_pos) = Pos.of_location loc in
     let num_headers = if (num_headers != 0) then (num_headers + 1) else num_headers in
     Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s\n Injection string: '%s'\n"
@@ -332,7 +333,7 @@ type 'a cn_injection = {
   filename: string;
   sigm: 'a A.sigma;
   pre_post: (Symbol.sym * (string list * string list)) list;
-  in_stmt: (Cerb_location.t * string) list;
+  in_stmt: (Cerb_location.t * string list) list;
 }
 
 let output_injections oc cn_inj =
