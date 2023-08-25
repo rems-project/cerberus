@@ -470,7 +470,7 @@ let rec cn_to_ail_expr_aux_internal
     dest d ([], [], ail_expr_)
 
   | ArrayShift _ -> failwith "TODO7"
-  | Nil _ -> failwith "TODO8"
+  | Nil bt -> failwith "TODO8"
   | Cons (x, xs) -> failwith "TODO9"
   | Head xs -> 
     let b, s, e_ = cn_to_ail_expr_aux_internal const_prop pred_name dts xs PassBack in
@@ -515,27 +515,31 @@ let rec cn_to_ail_expr_aux_internal
 
   | Match (t, ps) -> 
       Printf.printf "Reached pattern matching case\n";
+
       (* PATTERN COMPILER *)
+
+      let mk_pattern pattern_ bt loc = T.(Pat (pattern_, bt, loc)) in
+
       let simplify_leading_variable t1 (ps, t2) =
         match ps with 
-        | T.PSym sym' :: ps' -> (T.PWild :: ps', T.(IT (Let ((sym', t1), t2), IT.basetype t2, Cerb_location.unknown)))
+        | T.(Pat (PSym sym', p_bt, pt_loc)) :: ps' -> ((mk_pattern T.PWild p_bt pt_loc):: ps', T.(IT (Let ((sym', t1), t2), IT.basetype t2, pt_loc)))
         | p :: ps' -> (p :: ps', t2)
         | [] -> assert false
       in
 
       let leading_wildcard (ps, _) =
         match ps with
-          | T.PWild :: ps' -> true
+          | T.(Pat (PWild, _, _)) :: ps' -> true
           | _ :: ps' -> false
           | [] -> failwith "Empty patterns not allowed"
       in
 
       let expand_datatype c (ps, e) = 
         match ps with 
-        | T.PWild :: ps' -> Some (T.PWild :: ps', e)
-        | T.PConstructor (c_nm, members) :: ps' ->
+        | T.(Pat (PWild, p_bt, p_loc) as pat) :: ps' -> Some (pat :: ps', e)
+        | T.(Pat (PConstructor (c_nm, members), _, _)) :: ps' ->
           if Sym.equal_sym c c_nm then
-            let member_patterns = List.map (fun (_, T.Pat (p_, _, _)) -> p_) members in
+            let member_patterns = List.map snd members in
             Some (member_patterns @ ps', e)
           else
             None
@@ -549,7 +553,7 @@ let rec cn_to_ail_expr_aux_internal
 
       (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
       (* Matrix algorithm for pattern compilation *)
-      let rec translate : int -> (BT.basetype Terms.term) list -> (_ Terms.pattern_ list * BT.basetype Terms.term) list -> (A.bindings * (_ A.statement_) list) =
+      let rec translate : int -> (BT.basetype Terms.term) list -> (BT.basetype Terms.pattern list * BT.basetype Terms.term) list -> (A.bindings * (_ A.statement_) list) =
         fun count vars cases -> 
           match vars with 
             | [] ->
@@ -620,7 +624,7 @@ let rec cn_to_ail_expr_aux_internal
                     failwith "Unexpected pattern"
       in
 
-      let translate_real : type a. (BT.basetype Terms.term) list -> (_ Terms.pattern_ list * BT.basetype Terms.term) list -> a dest -> a =
+      let translate_real : type a. (BT.basetype Terms.term) list -> (BT.basetype Terms.pattern list * BT.basetype Terms.term) list -> a dest -> a =
         fun vars cases d ->
           let (bs, ss) = translate 1 vars cases in
           match d with 
@@ -630,7 +634,7 @@ let rec cn_to_ail_expr_aux_internal
             | PassBack -> failwith "TODO translate_real 2"
       in 
 
-      let ps' = List.map (fun (T.Pat (p, _, _), t) -> ([p], t)) ps in
+      let ps' = List.map (fun (p, t) -> ([p], t)) ps in
       translate_real [t] ps' d
 
   | Cast (bt, t) -> 
@@ -1059,6 +1063,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
   | Cnprog.M_CN_assert lc -> 
     cn_to_ail_logical_constraint_internal dts d lc
 
+  | Cnprog.M_CN_inline _ -> failwith "TODO M_CN_inline"
   | _ -> failwith "TODO"
 
 
