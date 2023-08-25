@@ -12,7 +12,7 @@ module Pos : sig
   val newline: t -> t
   val increment_line: t -> int -> t
   val of_location: Cerb_location.t -> (t * t, string) result
-  (* val to_string: t -> string *)
+  val to_string: t -> string
 end = struct
   type t = {
     line: int;
@@ -22,8 +22,8 @@ end = struct
   let compare pos1 pos2 =
     Stdlib.compare (pos1.line, pos1.col) (pos2.line, pos2.col)
   
-  (* let to_string pos =
-    Printf.sprintf "{line: %d, col: %d}" pos.line pos.col *)
+  let to_string pos =
+    Printf.sprintf "{line: %d, col: %d}" pos.line pos.col
 
   let v line col =
     { line; col }
@@ -286,9 +286,9 @@ let in_stmt_injs xs num_headers =
   mapM (fun (loc, str) ->
     let* (start_pos, end_pos) = Pos.of_location loc in
     let num_headers = if (num_headers != 0) then (num_headers + 1) else num_headers in
-    (* Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s\n"
+    Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s\n Injection string: '%s'\n"
       (Cerb_location.location_to_string loc)
-      (Pos.to_string start_pos) (Pos.to_string end_pos); *)
+      (Pos.to_string start_pos) (Pos.to_string end_pos) (String.escaped str);
     Ok
       { start_pos= Pos.increment_line start_pos num_headers (* { col= start_pos.col; line= start_pos.line + num_headers } *)
       ; end_pos= Pos.v (end_pos.line + num_headers) (end_pos.col + 6) (*{col= end_pos.col + 6; line= end_pos.line + num_headers }*)

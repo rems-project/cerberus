@@ -23,12 +23,9 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
 
 let generate_c_statements_internal (loc, statements) dts =
   let (_, bindings, stats_) = list_split_three (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts) statements) in
-  let stats_ = List.map (fun s -> 
-    (List.filter (fun s' ->
-      (Executable_spec_utils.is_empty_ail_stmt s'))) s) stats_ in
   let stat_strs = List.map generate_ail_stat_strs (List.combine bindings stats_) in
   let stat_strs = List.map (List.fold_left (^) "") stat_strs in
-  let stat_str = List.fold_left (^) "\n" stat_strs in
+  let stat_str = List.fold_left (^) "" stat_strs in
   (loc, stat_str)
 
 
@@ -79,7 +76,7 @@ let generate_c_specs_internal instrumentation_list type_map (statement_locs : Ce
 (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog in 
-    let c_statements = List.map (fun s -> generate_c_statements_internal s ail_prog.cn_datatypes) instrumentation.internal.statements in
+    let c_statements = List.map (fun ((_, ss) as s) -> Printf.printf "Number of statements in magic comment: %d\n" (List.length ss); generate_c_statements_internal s ail_prog.cn_datatypes) instrumentation.internal.statements in
 
     (* let rec add_bindings_to_map m bs = 
       match bs with 
