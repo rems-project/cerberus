@@ -755,7 +755,6 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
             ) (get_cerb_magic_attr annots) in
           let@ desugared_stmts_and_stmts =
             ListM.mapM (fun (stmt_loc, stmt_str) ->
-                Printf.printf "Statement string: %s\n" stmt_str;
                 let marker_id = Option.get (get_marker annots) in
                 let marker_id_object_types = Option.get (get_marker_object_types annots) in
                 let@ parsed_stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
