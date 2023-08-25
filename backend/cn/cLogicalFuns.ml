@@ -59,6 +59,25 @@ let do_wrapI loc ct it =
   | None -> fail {loc; msg = Generic (Pp.item "expr from C syntax: coercion to non-int type"
       (Sctypes.pp ct))}
 
+(* FIXME: this is yet another notion of whether a term is effectively a
+   numeric constant and permitted for multiply/divide or not - similar to
+   a simplifier-based notion in welltyped and a solver-based notion in check. *)
+let rec is_const_num = function
+  | IT.IT (IT.Const _, _) -> true
+  | IT.IT (IT.Binop (binop, x, y), _) -> is_const_num x && is_const_num y &&
+    begin match binop with
+    | IT.Add
+    | IT.Sub
+    | IT.Mul
+    | IT.Div
+    | IT.Exp
+    | IT.Rem
+    | IT.Mod
+    -> true
+    | _ -> false
+    end
+  | _ -> false
+
 let rec symb_exec_mu_pexpr var_map pexpr =
   let (M_Pexpr (loc, _, _, pe)) = pexpr in
   match pe with
@@ -77,8 +96,10 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     begin match op with
     | OpAdd -> return (IT.add_ (x_v, y_v))
     | OpSub -> return (IT.sub_ (x_v, y_v))
-    | OpMul -> return (IT.mul_ (x_v, y_v))
-    | OpDiv -> return (IT.div_ (x_v, y_v))
+    | OpMul -> return (if is_const_num x_v || is_const_num y_v
+        then IT.mul_ (x_v, y_v) else IT.mul_no_smt_ (x_v, y_v))
+    | OpDiv -> return (if is_const_num y_v
+        then IT.div_ (x_v, y_v) else IT.div_no_smt_ (x_v, y_v))
     | OpEq  -> return (IT.eq_ (x_v, y_v))
     | OpLt  -> return (IT.lt_ (x_v, y_v))
     | OpLe  -> return (IT.le_ (x_v, y_v))
