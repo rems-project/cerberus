@@ -750,8 +750,16 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
           let separated_annots = 
             List.map (fun (loc, joined_strs) ->
-               let separate_strs = String.split_on_char '\n' joined_strs in
-               List.map (fun str -> (loc, str)) separate_strs
+               let separate_strs = String.split_on_char ';' joined_strs in
+               let separate_strs = List.map String.trim separate_strs in
+               let separate_locs_and_strs = List.map (fun str -> 
+                  if not (String.equal str "") then
+                     [(loc, str ^ ";")]
+                  else 
+                     []
+               ) separate_strs 
+               in
+               List.concat separate_locs_and_strs
             ) (get_cerb_magic_attr annots) in
           let@ desugared_stmts_and_stmts =
             ListM.mapM (fun (stmt_loc, stmt_str) ->
