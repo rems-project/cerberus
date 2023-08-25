@@ -963,14 +963,14 @@ let rec cn_to_ail_arguments_l_internal dts = function
 
     (* CN take *)
   | M_Resource ((sym, (re, _bt)), _info, l) -> 
-    Printf.printf "Reached M_Resource (Owned)\n";
+    (* Printf.printf "Reached M_Resource (Owned)\n"; *)
     let (b1, s1) = cn_to_ail_resource_internal sym dts re in
     let (b2, s2) = cn_to_ail_arguments_l_internal dts l in
     (b1 @ b2, s1 @ s2)
 
     (* CN assertion (or inside of take) *)
   | M_Constraint (lc, _info, l) -> 
-    Printf.printf "Reached M_Constraint (take)\n";
+    (* Printf.printf "Reached M_Constraint (take)\n"; *)
     (* let (s, e) = cn_to_ail_logical_constraint_internal dts lc in
     let ail_stat_ = A.(AilSexpr (mk_expr e)) in
     s @ ail_stat_ ::  *)
@@ -1064,6 +1064,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
 
 let rec cn_to_ail_cnprog_internal dts = function
 | Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
+  Printf.printf "Entered M_CN_let\n";
   let (b1, s, e) = cn_to_ail_expr_internal dts pointer PassBack in
   let ail_deref_expr_ = A.(AilEunary (Indirection, mk_expr e)) in
   (* TODO: Use ct for type binding *)
@@ -1073,6 +1074,7 @@ let rec cn_to_ail_cnprog_internal dts = function
   (loc', b1 @ b2, s @ ail_stat_ :: ss)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
+  Printf.printf "Entered M_CN_statement\n";
   (* (loc, [], [empty_ail_stmt]) *)
   let (bs, ss) = cn_to_ail_cnstatement_internal dts Assert stmt in 
   (loc, bs, ss)
