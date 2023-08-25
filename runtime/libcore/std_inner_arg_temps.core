@@ -751,7 +751,7 @@ builtin bswap16 (integer): eff loaded integer
 builtin bswap32 (integer): eff loaded integer
 builtin bswap64 (integer): eff loaded integer
 
-proc [ailname = " "] ctz_proxy (n_: loaded integer): eff loaded integer :=
+proc [ailname = "__builtin_ctz"] ctz_proxy (n_: loaded integer): eff loaded integer :=
   case n_ of
     | Specified (n: integer) =>
         if n = 0 then

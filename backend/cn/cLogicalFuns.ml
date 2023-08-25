@@ -3,22 +3,82 @@ open Effectful.Make(Resultat)
 open TypeErrors
 module SymMap = Map.Make(Sym)
 module StringMap = Map.Make(String)
+module IntMap = Map.Make(Int)
 
 
 open Mucore
 
 module IT = IndexTerms
 
-type exec_result = CallRet of IT.t | Compute of IT.t
+type 'a exec_result =
+  | Call_Ret of IT.t
+  | Compute of IT.t * 'a
+  | If_Else of IT.t * 'a exec_result * 'a exec_result
 
 let mu_val_to_it = function
   | M_Vunit -> Some IT.unit_
   | M_Vtrue -> Some (IT.bool_ true)
   | M_Vfalse -> Some (IT.bool_ false)
   | M_Vobject (M_OVinteger iv) -> Some (IT.z_ (Memory.z_of_ival iv))
+  | M_Vctype ct -> Option.map IT.const_ctype_ (Sctypes.of_ctype ct)
   | _ -> None
 
-let symb_exec_mu_pexpr var_map pexpr =
+let local_sym_ptr = Sym.fresh_named "local_ptr"
+
+type state = {
+  loc_map : (IT.t option) IntMap.t;
+  next_loc : int;
+}
+
+let init_state = { loc_map = IntMap.empty; next_loc = 1 }
+
+let mk_local_ptr state =
+  let loc_ix = state.next_loc in
+  let ptr = IT.pred_ local_sym_ptr [IT.int_ loc_ix] BT.Loc in
+  let loc_map = IntMap.add loc_ix None state.loc_map in
+  let state = { loc_map; next_loc = loc_ix + 1 } in
+  (ptr, state)
+
+let is_local_ptr ptr = Option.bind (IT.is_pred_ ptr)
+  (function
+    | (name, [ix]) when Sym.equal name local_sym_ptr -> Option.map Z.to_int (IT.is_z ix)
+    | _ -> None
+  )
+
+let get_local_ptr loc ptr = match is_local_ptr ptr with
+  | None -> fail {loc; msg = Generic (Pp.item "use of non-local pointer" (IT.pp ptr))}
+  | Some ix -> return ix
+
+let upd_loc_state state ix v =
+  let loc_map = IntMap.add ix (Some v) state.loc_map in
+  { state with loc_map }
+
+let do_wrapI loc ct it =
+  match Sctypes.is_integer_type ct with
+  | Some ity -> return (IT.wrapI_ (ity, it))
+  | None -> fail {loc; msg = Generic (Pp.item "expr from C syntax: coercion to non-int type"
+      (Sctypes.pp ct))}
+
+(* FIXME: this is yet another notion of whether a term is effectively a
+   numeric constant and permitted for multiply/divide or not - similar to
+   a simplifier-based notion in welltyped and a solver-based notion in check. *)
+let rec is_const_num = function
+  | IT.IT (IT.Const _, _) -> true
+  | IT.IT (IT.Binop (binop, x, y), _) -> is_const_num x && is_const_num y &&
+    begin match binop with
+    | IT.Add
+    | IT.Sub
+    | IT.Mul
+    | IT.Div
+    | IT.Exp
+    | IT.Rem
+    | IT.Mod
+    -> true
+    | _ -> false
+    end
+  | _ -> false
+
+let rec symb_exec_mu_pexpr var_map pexpr =
   let (M_Pexpr (loc, _, _, pe)) = pexpr in
   match pe with
   | M_PEsym sym -> begin match SymMap.find_opt sym var_map with
@@ -27,10 +87,44 @@ let symb_exec_mu_pexpr var_map pexpr =
   end
   | M_PEval v -> begin match mu_val_to_it v with
     | Some r -> return r
-    | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
+    | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported val"
         (Pp_mucore.pp_pexpr pexpr))}
   end
-  | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
+  | M_PEop (op, x, y) ->
+    let@ x_v = symb_exec_mu_pexpr var_map x in
+    let@ y_v = symb_exec_mu_pexpr var_map y in
+    begin match op with
+    | OpAdd -> return (IT.add_ (x_v, y_v))
+    | OpSub -> return (IT.sub_ (x_v, y_v))
+    | OpMul -> return (if is_const_num x_v || is_const_num y_v
+        then IT.mul_ (x_v, y_v) else IT.mul_no_smt_ (x_v, y_v))
+    | OpDiv -> return (if is_const_num y_v
+        then IT.div_ (x_v, y_v) else IT.div_no_smt_ (x_v, y_v))
+    | OpEq  -> return (IT.eq_ (x_v, y_v))
+    | OpLt  -> return (IT.lt_ (x_v, y_v))
+    | OpLe  -> return (IT.le_ (x_v, y_v))
+    | OpGt  -> return (IT.gt_ (x_v, y_v))
+    | OpGe  -> return (IT.ge_ (x_v, y_v))
+    | OpAnd -> return (IT.and_ [x_v; y_v])
+    | OpOr  -> return (IT.or_ [x_v; y_v])
+    | _ -> fail {loc; msg = Generic (Pp.item "expr from C syntax: unsupported op"
+        (Pp_mucore.Basic.pp_binop op))}
+    end
+  | M_PEconv_int (ct_expr, pe)
+  | M_PEconv_loaded_int (ct_expr, pe) ->
+    let@ x = symb_exec_mu_pexpr var_map pe in
+    let@ ct_it = symb_exec_mu_pexpr var_map ct_expr in
+    let@ ct = match IT.is_const ct_it with
+    | Some (IT.CType_const ct, _) -> return ct
+    | Some _ -> assert false (* shouldn't be possible given type *)
+    | None -> fail {loc; msg = Generic (Pp.item "expr from C syntax: non-constant type"
+        (IT.pp ct_it))}
+    in
+    do_wrapI loc ct x
+  | M_PEwrapI (act, pe) ->
+    let@ x = symb_exec_mu_pexpr var_map pe in
+    do_wrapI loc act.ct x
+  | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pure expr"
         (Pp_mucore.pp_pexpr pexpr))}
 
 let add_pattern p v expr var_map =
@@ -49,40 +143,71 @@ let rec mk_var_map nms vs = match nms, vs with
   | (nm :: nms, v :: vs) -> SymMap.add nm v (mk_var_map nms vs)
   | _ -> assert false
 
-let rec symb_exec_mu_expr label_defs var_map expr =
+let rec symb_exec_mu_expr label_defs state_vars expr =
+  let (state, var_map) = state_vars in
   let (M_Expr (loc, _, e)) = expr in
   match e with
   | M_Epure pe ->
     let@ r_v = symb_exec_mu_pexpr var_map pe in
-    return (Compute r_v)
+    return (Compute (r_v, state))
+  | M_Eif (g_e, e1, e2) ->
+    let@ g_v = symb_exec_mu_pexpr var_map g_e in
+    let@ r_e1 = symb_exec_mu_expr label_defs (state, var_map) e1 in
+    let@ r_e2 = symb_exec_mu_expr label_defs (state, var_map) e2 in
+    return (If_Else (g_v, r_e1, r_e2))
   | M_Elet (M_Pat p, e1, e2) ->
     let@ r_v = symb_exec_mu_pexpr var_map e1 in
     let@ var_map2 = add_pattern p r_v expr var_map in
-    symb_exec_mu_expr label_defs var_map2 e2
-  | M_Ewseq (p, e1, e2) ->
-    let@ r1 = symb_exec_mu_expr label_defs var_map e1 in
-    begin match r1 with
-    | CallRet _ -> (* early return *) return r1
-    | Compute v ->
-      let@ var_map2 = add_pattern p v expr var_map in
-      symb_exec_mu_expr label_defs var_map2 e2
-    end
+    symb_exec_mu_expr label_defs (state, var_map2) e2
+  | M_Ewseq (p, e1, e2)
   | M_Esseq (p, e1, e2) ->
-    let@ r1 = symb_exec_mu_expr label_defs var_map e1 in
-    begin match r1 with
-    | CallRet _ -> (* early return *) return r1
-    | Compute v ->
-      let@ var_map2 = add_pattern p v expr var_map in
-      symb_exec_mu_expr label_defs var_map2 e2
-    end
+    let@ r1 = symb_exec_mu_expr label_defs (state, var_map) e1 in
+    let rec cont = function
+      | Call_Ret x -> (* early return *) return (Call_Ret x)
+      | Compute (v, state) ->
+        let@ var_map2 = add_pattern p v expr var_map in
+        symb_exec_mu_expr label_defs (state, var_map2) e2
+      | If_Else (t, x, y) ->
+        let@ r_x = cont x in
+        let@ r_y = cont y in
+        return (If_Else (t, r_x, r_y))
+    in
+    cont r1
   | M_Erun (sym, args) ->
     let@ arg_vs = ListM.mapM (symb_exec_mu_pexpr var_map) args in
     begin match Pmap.lookup sym label_defs with
     | Some (M_Return _) ->
       assert (List.length args == 1);
-      return (CallRet (List.hd arg_vs))
+      return (Call_Ret (List.hd arg_vs))
     | _ ->
        fail {loc; msg = Generic Pp.(!^"function has goto-labels in control-flow")}
+    end
+  | M_Ebound ex -> symb_exec_mu_expr label_defs (state, var_map) ex
+  | M_Eaction (M_Paction (_, M_Action (_, action))) ->
+    begin match action with
+    | M_Create (pe, act, prefix) ->
+      let (ptr, state) = mk_local_ptr state in
+      return (Compute (ptr, state))
+    | M_Store (_, _, p_pe, v_pe, _) ->
+      let@ p_v = symb_exec_mu_pexpr var_map p_pe in
+      let@ v_v = symb_exec_mu_pexpr var_map v_pe in
+      let@ ix = get_local_ptr loc p_v in
+      return (Compute (IT.unit_, upd_loc_state state ix v_v))
+    | M_Load (_, p_pe, _) ->
+      let@ p_v = symb_exec_mu_pexpr var_map p_pe in
+      let@ ix = get_local_ptr loc p_v in
+      let@ v = match IntMap.find_opt ix state.loc_map with
+        | None -> fail {loc; msg = Generic (Pp.item "unavailable memory address" (IT.pp p_v))}
+        | Some None -> fail {loc; msg = Generic (Pp.item "uninitialised memory address" (IT.pp p_v))}
+        | Some (Some ix) -> return ix
+      in
+      return (Compute (v, state))
+    | M_Kill (_, p_pe) ->
+      let@ p_v = symb_exec_mu_pexpr var_map p_pe in
+      let@ ix = get_local_ptr loc p_v in
+      return (Compute (IT.unit_, {state with loc_map = IntMap.remove ix state.loc_map}))
+    | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported memory op"
+        (Pp_mucore.pp_expr expr))}
     end
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
         (Pp_mucore.pp_expr expr))}
@@ -98,6 +223,14 @@ let c_function_to_it2 fsym rbt args body label_defs : (IT.t) m  =
   match e_ with
   | M_Epure pe -> c_function_to_it fsym rbt args pe label_defs
   | _ -> fail {loc; msg = Generic (Pp.item "c_function_to_it2" (Pp_mucore.pp_expr body))}
+
+let rec get_ret_it = function
+  | Call_Ret v -> Some v
+  | Compute _ -> None
+  | If_Else (t, x, y) ->
+    Option.bind (get_ret_it x) (fun x_v ->
+    Option.bind (get_ret_it y) (fun y_v ->
+    Some (IT.ite_ (t, x_v, y_v))))
 
 let c_fun_to_it id_loc (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
@@ -123,9 +256,9 @@ let c_fun_to_it id_loc (id : Sym.t) fsym def
           assert false
      in
     let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
-    let@ r = symb_exec_mu_expr labels arg_map body in
-    begin match r with
-    | CallRet it -> return it
+    let@ r = symb_exec_mu_expr labels (init_state, arg_map) body in
+    begin match get_ret_it r with
+    | Some it -> return it
     | _ -> fail {loc;
         msg = Generic (Pp.item "c_fun_to_it: does not return" (Pp_mucore.pp_expr body))}
     end

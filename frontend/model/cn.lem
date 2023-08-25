@@ -205,6 +205,7 @@ type cn_statement_ 'a 'ty =
   | CN_unfold of 'a * list (cn_expr 'a 'ty)
   | CN_assert_stmt of cn_assertion 'a 'ty
   | CN_apply of 'a * list (cn_expr 'a 'ty)
+  | CN_inline of (list 'a)
 
 type cn_statement 'a 'ty =
   CN_statement of Loc.t * cn_statement_ 'a 'ty

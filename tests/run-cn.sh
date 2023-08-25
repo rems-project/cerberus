@@ -4,14 +4,19 @@
 
 DIRNAME=$(dirname $0)
 
-set -e
+SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c')
 
-SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c')
+NUM_FAILED=0
+FAILED=''
 
 for TEST in $SUCC
 do
   echo cn $TEST
-  cn $TEST
+  if ! cn $TEST
+  then
+    NUM_FAILED=$(( $NUM_FAILED + 1 ))
+    FAILED="$FAILED $TEST"
+  fi
 done
 
 FAIL=$(find $DIRNAME/cn -name '*.error.c')
@@ -19,10 +24,29 @@ FAIL=$(find $DIRNAME/cn -name '*.error.c')
 for TEST in $FAIL
 do
   echo cn --expect-fail $TEST
-  cn --expect-failure $TEST
+  if ! cn --expect-failure $TEST
+  then
+    NUM_FAILED=$(( $NUM_FAILED + 1 ))
+    FAILED="$FAILED $TEST"
+  fi
 done
 
-echo "All tests passed."
+UNKNOWN=$(find $DIRNAME/cn -name '*.unknown.c')
 
-return 0
+echo $UNKNOWN | xargs -n 1 cn
+
+echo
+echo 'Done running tests.'
+echo
+
+if [ -z "$FAILED" ]
+then
+  echo "All tests passed."
+  exit 0
+else
+  echo "$NUM_FAILED tests failed:"
+  echo "  $FAILED"
+  exit 1
+fi
+
 

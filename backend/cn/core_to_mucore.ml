@@ -748,6 +748,11 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
+          let separated_annots = 
+            List.map (fun (loc, joined_strs) ->
+               let separate_strs = String.split_on_char '\n' joined_strs in
+               List.map (fun str -> (loc, str)) separate_strs
+            ) (get_cerb_magic_attr annots) in
           let@ desugared_stmts_and_stmts =
             ListM.mapM (fun (stmt_loc, stmt_str) ->
                 let marker_id = Option.get (get_marker annots) in
@@ -775,9 +780,10 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                 (* debug 6 (lazy (!^"CN statement after translation"));
                 debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
                 return (desugared_stmt, stmt)
-            ) (get_cerb_magic_attr annots)
+            ) (List.concat separated_annots)
           in
           let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
+          Print.debug 2 (lazy (Print.item "building M_CN_progs with loc" (Locations.pp loc)));
           return (M_Expr (loc, [], M_CN_progs (desugared_stmts, stmts)))
        | _, _ ->
           n_expr e1 
@@ -928,9 +934,10 @@ let make_label_args f_i loc env st args (accesses, inv) =
        let@ (oa_name, ((pt_ret, oa_bt), lcs), value) = C.ownership (loc, (s, ct)) env in
        let env = C.add_logical oa_name oa_bt env in
        let st = C.LocalState.add_c_variable_state s (CVS_Pointer_pointing_to value) st in
-       let resource = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
+       let owned_res = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
+       let alloc_res = C.allocation_token loc s in
        let@ at = 
-         aux (resources @ [resource], 
+         aux (resources @ [alloc_res; owned_res],
               good_lcs @ good_pointer_lc :: lcs) 
            env st rest 
        in
@@ -1128,6 +1135,7 @@ let normalise_fun_map_decl
       (global_types, visible_objects_env)
       env 
       fun_specs
+      stdlib_specs
       (funinfo: mi_funinfo)
       loop_attributes
       fname
@@ -1221,9 +1229,8 @@ let normalise_fun_map_decl
      return (Some (M_Proc(loc, args_and_body, trusted, desugared_spec), mk_functions))
 
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
-     begin match SymMap.find_opt fname fun_specs with
-     | None -> return (Some (M_ProcDecl (loc, None), []))
-     | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
+     begin match SymMap.find_opt fname fun_specs, SymMap.find_opt fname stdlib_specs with
+     | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)), _ ->
        assertl loc (BT.equal (convert_bt loc ret_bt)
                     (BT.of_sct (convert_ct loc ret_ct)))
          !^"function return type mismatch";
@@ -1240,6 +1247,9 @@ let normalise_fun_map_decl
        in
        let ft = at_of_arguments Tools.id args_and_rt in
        return (Some (M_ProcDecl (loc, Some ft), []))
+     | _, Some ft ->
+       return (Some (M_ProcDecl (loc, Some ft), []))
+     | _ -> return (Some (M_ProcDecl (loc, None), []))
      end
   | Mi_BuiltinDecl(loc, bt, bts) -> 
      assert false
@@ -1250,6 +1260,7 @@ let normalise_fun_map
       (global_types, visible_objects_env)
       env
       fun_specs
+      stdlib_specs
       funinfo
       loop_attributes
       fmap
@@ -1259,7 +1270,7 @@ let normalise_fun_map
       try begin
       let@ r = normalise_fun_map_decl (markers_env, ail_prog) 
                  (global_types, visible_objects_env)
-                 env fun_specs funinfo loop_attributes fsym fdecl in
+                 env fun_specs stdlib_specs funinfo loop_attributes fsym fdecl in
       match r with
       | Some (fdecl, more_mk_functions) ->
          let mk_functions' = 
@@ -1357,6 +1368,27 @@ let normalise_tag_definition tag def =
 let normalise_tag_definitions tagDefs =
    Pmap.mapi normalise_tag_definition tagDefs
 
+let mk_binop_spec binop =
+  let loc = Locations.unknown in
+  let info = (loc, None) in
+  let ret = Sym.fresh_named "return" in
+  let x = Sym.fresh_named "x" in
+  let y = Sym.fresh_named "y" in
+  let var nm = IT.sym_ (nm, BT.Integer) in
+  let lcrt = LRT.mConstraint (LC.T (IT.eq_ (var ret,
+    (IT.arith_binop binop (var x, var y)))), info) LRT.I in
+  let rt = RT.mComputational ((ret, BT.Integer), info) lcrt in
+  let ft = AT.mComputationals [(x, BT.Integer, info); (y, BT.Integer, info)]
+    (AT.L (LAT.I rt)) in
+  ft
+
+let mk_stdlib_spec sym =
+  Print.debug 3 (lazy (Print.item "mk_stdlib_spec" (Sym.pp sym)));
+  match Sym.description sym with
+  | SD_Id "ctz" -> Some (sym, mk_binop_spec BWCTZNoSMT)
+  | SD_Id "clz" -> Some (sym, mk_binop_spec BWCLZNoSMT)
+  | SD_Id "ffs" -> Some (sym, mk_binop_spec BWFFSNoSMT)
+  | _ -> None
 
 
 let register_glob env (sym, glob) = 
@@ -1398,13 +1430,27 @@ let normalise_file (markers_env, ail_prog) file =
 
   let env = List.fold_left register_glob env globs in
 
+  Print.debug 3 (lazy (Print.item "stdlib symbols" (Print.list Sym.pp_debug
+    (List.map fst (Pmap.bindings_list file.mi_stdlib)))));
+
+  Print.debug 3 (lazy (Print.item "stdlib symbols in fmap" (Print.list Sym.pp
+    (List.map fst (Pmap.bindings_list file.mi_stdlib)
+    |> List.filter (fun sym -> Option.is_some (Pmap.lookup sym file.mi_funs))))));
+
+  let stdlib_specs = List.map fst (Pmap.bindings_list file.mi_stdlib)
+    |> List.filter (fun sym -> Option.is_some (Pmap.lookup sym file.mi_funs))
+    |> List.filter_map mk_stdlib_spec in
+
   let fun_specs_map = List.fold_right (fun (id, spec) acc ->
       SymMap.add spec.cn_spec_name (id, spec) acc)
     ail_prog.cn_fun_specs SymMap.empty in
 
+  let stdlib_specs_map = List.fold_right (fun (id, spec) acc -> SymMap.add id spec acc)
+    stdlib_specs SymMap.empty in
+
   let@ (funs, mk_functions) = 
     normalise_fun_map (markers_env, ail_prog) (global_types, file.mi_visible_objects_env) 
-      env fun_specs_map
+      env fun_specs_map stdlib_specs_map
       file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in
 

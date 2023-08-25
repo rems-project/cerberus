@@ -9,6 +9,7 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module TE = TypeErrors
+module IdSet = Set.Make(Id)
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module S = Solver
@@ -201,26 +202,18 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
 
 and check_struct (loc : loc) (tag : Sym.t) 
                  (member_values : (Id.t * mem_value) list) : (lvt) m =
-  (* might have to make sure the fields are ordered in the same way as
-     in the struct declaration *)
   let@ layout = get_struct_decl loc tag in
-  let rec check fields spec =
-    match fields, spec with
-    | ((member, mv) :: fields), ((smember, sct) :: spec) 
-         when Id.equal member smember ->
-       let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct sct) mv in
-       let@ member_its = check fields spec in
-       return ((member, member_lvt) :: member_its)
-    | [], [] -> 
-       return []
-    | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
-       Cerb_debug.error "mismatch in fields in infer_struct"
-    | [], ((member, _) :: _) ->
-       fail (fun _ -> {loc; msg = Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing")})
-    | ((member,_) :: _), [] ->
-       fail (fun _ -> {loc; msg = Generic (!^"supplying unexpected field" ^^^ Id.pp member)})
+  let@ () = 
+    WellTyped.correct_and_no_duplicate_members loc tag 
+      (List.map fst member_values)
   in
-  let@ member_its = check member_values (Memory.member_types layout) in
+  let@ member_its = 
+    ListM.mapM (fun (member, mv) ->
+        let@ sct = get_member_type loc tag member layout in
+        let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct sct) mv in
+        return (member, member_lvt)
+      ) member_values
+  in
   return (IT.struct_ (tag, member_its))
 
 and check_union (loc : loc) (tag : Sym.t) (id : Id.t) 
@@ -352,47 +345,47 @@ let prefer_value_with f expr =
   | None -> return expr
   | Some (x, _) -> return x
 
-let is_fun_addr global t = match IT.is_sym t with
-  | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
-      then Some s else None
-  | _ -> None
-
-
-
-let check_single_ct loc expr =
-  let@ pointer = WellTyped.WIT.check loc BT.CType expr in
+let try_prove_constant loc expr =
   let@ known = eq_value_with IT.is_const expr in
   match known with
-  | Some (_, (IT.CType_const ct, _)) -> return ct
-  | Some _ -> assert false (* should be impossible given the type *)
+  | Some (it, _) -> return it
   | None ->
     (* backup strategy, try to figure out the single value *)
-    let@ m = model_with loc (IT.bool_ false) in
-    let fail2 = (fun msg -> fail (fun _ -> {loc; msg = Generic (!^ "no known value for ctype:"
-        ^^^ (!^ msg))})) in
-    let@ m = match m with
-      | None -> fail2 "cannot get model"
+    let fail2 = (fun msg -> fail (fun _ -> {loc;
+        msg = Generic (!^ "model constant calculation:" ^^^ (!^ msg))})) in
+    let fail_on_none msg = function
       | Some m -> return m
+      | None -> fail2 msg
     in
+    let@ m = model_with loc (IT.bool_ true) in
+    let@ m = fail_on_none "cannot get model" m in
     let@ g = get_global () in
-    let@ y = match Solver.eval g (fst m) expr with
-      | None -> fail2 "cannot eval term"
-      | Some y -> return y
-    in
-    let@ ct = match IT.is_const y with
-      | Some (IT.CType_const ct, _) -> return ct
-      | _ -> fail2 "cannot eval to constant term"
-    in
+    let@ y = fail_on_none "cannot eval term" (Solver.eval g (fst m) expr) in
+    let@ _ = fail_on_none "eval to non-constant term" (IT.is_const y) in
     let eq = IT.eq_ (expr, y) in
     let@ provable = provable loc in
     begin match provable (t_ eq) with
       | `True ->
         let@ () = add_c loc (t_ eq) in
-        return ct
-       | `False ->
-        (* TODO: this is the most likely case, give a better error *)
-        fail2 "cannot prove type is constant"
+        return y
+      | `False ->
+        return expr
     end
+
+
+let is_fun_addr global t = match IT.is_sym t with
+  | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
+      then Some s else None
+  | _ -> None
+
+let check_single_ct loc expr =
+  let@ pointer = WellTyped.WIT.check loc BT.CType expr in
+  let@ t = try_prove_constant loc expr in
+  match IT.is_const t with
+    | Some (IT.CType_const ct, _) -> return ct
+    | Some _ -> assert false (* should be impossible given the type *)
+    | None -> fail (fun _ -> {loc;
+        msg = Generic (!^ "use of non-constant ctype mucore expression")})
 
 
 let get_eq_in_model loc msg x opts =
@@ -537,35 +530,23 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      end
   | M_CivCOMPL _ ->
      Cerb_debug.error "todo: CivCOMPL"
-  | M_CivAND (act, pe1, pe2) ->
-     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
-     let _ity = match act.ct with
-       | Integer ity -> ity
-       | _ -> Cerb_debug.error "M_CivAND with non-integer c-type"
-     in
-     check_pexpr ~expect:Integer pe1 (fun vt1 ->
-     check_pexpr ~expect:Integer pe2 (fun vt2 ->
-     let value = warn_uf loc "bw_and_uf"; bw_and_no_smt_ (vt1, vt2) in
-     k value))
-  | M_CivOR (act, pe1, pe2) ->
-     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
-     let _ity = match act.ct with
-       | Integer ity -> ity
-       | _ -> Cerb_debug.error "M_CivOR with non-integer c-type"
-     in
-     check_pexpr ~expect:Integer pe1 (fun vt1 ->
-     check_pexpr ~expect:Integer pe2 (fun vt2 ->
-     let value = warn_uf loc "bw_or_uf"; bw_or_no_smt_ (vt1, vt2) in
-     k value))
+  | M_CivAND (act, pe1, pe2)
+  | M_CivOR (act, pe1, pe2)
   | M_CivXOR (act, pe1, pe2) -> 
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
+     let binop = match pe_ with
+       | M_CivAND _ -> BWAndNoSMT
+       | M_CivOR _ -> BWOrNoSMT
+       | M_CivXOR _ -> XORNoSMT
+       | _ -> assert false
+     in
      let _ity = match act.ct with
        | Integer ity -> ity
-       | _ -> Cerb_debug.error "M_CivXOR with non-integer c-type"
+       | _ -> Cerb_debug.error "M_CivAND/M_CivOR/M_CivXOR with non-integer c-type"
      in
      check_pexpr ~expect:Integer pe1 (fun vt1 ->
      check_pexpr ~expect:Integer pe2 (fun vt2 ->
-     let value = warn_uf loc "xor_uf"; xor_no_smt_ (vt1, vt2) in
+     let value = warn_uf loc "bw_and_uf"; arith_binop binop (vt1, vt2) in
      k value))
   | M_Cfvfromint _ -> 
      unsupported loc !^"floats"
@@ -604,14 +585,18 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         k (sub_ (v1, v2)))
      | OpMul ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v1 = try_prove_constant loc v1 in
+        let@ v2 = try_prove_constant loc v2 in
         k (if (is_z_ v1 || is_z_ v2) then mul_ (v1, v2) 
            else (warn_uf loc "mul_uf"; mul_no_smt_ (v1, v2))))
      | OpDiv ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v2 = try_prove_constant loc v2 in
         k (if is_z_ v2 then div_ (v1, v2) 
            else (warn_uf loc "div_uf"; div_no_smt_ (v1, v2))))
      | OpRem_f ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v2 = try_prove_constant loc v2 in
         k (if is_z_ v2 then rem_ (v1, v2) 
            else (warn_uf loc "rem_uf"; rem_no_smt_ (v1, v2))))
      | OpRem_t ->
@@ -622,6 +607,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
            (* If the arguments are non-negative, then rem or mod should be sound to use for rem_t *)
            (* If not it throws a type error, but we should instead
               map that to an uninterpreted function eventually. *)
+           let@ v2 = try_prove_constant loc v2 in
            k (if (is_z_ v2) then IT.mod_ (v1, v2) 
               else (warn_uf loc "mod_uf"; IT.mod_no_smt_ (v1, v2)))
         | `False ->
@@ -634,6 +620,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         end)
      | OpExp ->
         check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
+        let@ v1 = try_prove_constant loc v1 in
+        let@ v2 = try_prove_constant loc v2 in
         begin match is_z v1, is_z v2 with
         | Some z, Some z' ->
            let it = exp_ (v1, v2) in
@@ -674,6 +662,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         k (or_ [v1; v2]))
      end
   | M_PEapply_fun (fun_id, args) ->
+     (* TODO: this should be checking the base types *)
      let expect_args = Mucore.mu_fun_param_types fun_id in
      let@ () = if List.length expect_args = List.length args then return ()
        else fail (fun _ -> {loc; msg = Number_arguments {has = List.length args;
@@ -687,6 +676,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      )
   | M_PEstruct (tag, xs) ->
      let@ layout = get_struct_decl loc tag in
+     let@ () = WellTyped.correct_and_no_duplicate_members loc tag
+                 (List.map fst xs) in
      let@ xs_with_expects = ListM.mapM (fun (nm, expr) ->
        let@ ty = get_member_type loc tag nm layout in
        return (expr, BT.of_sct ty)) xs in
@@ -1201,6 +1192,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                }, 
              O (default_ (BT.of_sct act.ct)))
         in
+        let@ () =
+          add_r loc (P (Global.mk_alloc ret), O IT.unit_) in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         Cerb_debug.error "todo: CreateReadOnly"
@@ -1218,6 +1211,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             pointer = arg;
             iargs = [];
           }, None)
+        in
+        let@ _ =
+          RI.Special.predicate_request loc (Access Kill) (Global.mk_alloc arg, None)
         in
         k unit_)
      | M_Store (_is_locking, act, p_pe, v_pe, mo) -> 
@@ -1480,6 +1476,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                       {loc; msg = Unproven_constraint {constr = lc; info = (loc, None); ctxt; model; trace}}
                     )
                end
+            | M_CN_inline _nms ->
+               return ()
           end
      in
      let@ () = ListM.iterM aux cn_progs in
@@ -1666,11 +1664,19 @@ let check_tagdefs tagDefs =
     | M_UnionDef _ -> 
        unsupported Loc.unknown !^"todo: union types"
     | M_StructDef layout -> 
-       ListM.iterM (fun piece ->
-           match piece.member_or_padding with
-           | Some (name, ct) -> WellTyped.WCT.is_ct Loc.unknown ct
-           | None -> return ()
-         ) layout
+       let@ _ = 
+         ListM.fold_rightM (fun piece have ->
+             match piece.member_or_padding with
+             | Some (name, _) when IdSet.mem name have ->
+                fail (fun _ -> {loc = Loc.unknown; msg = Duplicate_member name})
+             | Some (name, ct) -> 
+                let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
+                return (IdSet.add name have)
+             | None -> 
+                return have
+           ) layout IdSet.empty
+       in
+       return ()
   ) tagDefs
 
 

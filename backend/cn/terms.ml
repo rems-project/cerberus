@@ -5,6 +5,7 @@ type const =
   | Z of Z.t
   | Q of Q.t
   | Pointer of Z.t
+  | Alloc_id of Z.t
   | Bool of bool
   | Unit
   | Null
@@ -33,6 +34,9 @@ type binop =
   | XORNoSMT
   | BWAndNoSMT
   | BWOrNoSMT
+  | BWCLZNoSMT
+  | BWCTZNoSMT
+  | BWFFSNoSMT
   | LT
   | LE
   | Min
@@ -47,10 +51,13 @@ type binop =
   | Subset
 [@@deriving eq, ord, show]
 
-type pattern = 
+type 'bt pattern_ = 
   | PSym of Sym.t
   | PWild
-  | PConstructor of Sym.t * (Id.t * pattern) list
+  | PConstructor of Sym.t * (Id.t * 'bt pattern) list
+
+and 'bt pattern = 
+  | Pat of 'bt pattern_ * 'bt
 [@@deriving eq, ord, map]
 
 (* over integers and reals *)
@@ -76,9 +83,8 @@ type 'bt term_ =
   | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
-  | Nil
+  | Nil of BaseTypes.t
   | Cons of 'bt term * 'bt term
-  | List of 'bt term list
   | Head of 'bt term
   | Tail of 'bt term
   | NthList of 'bt term * 'bt term * 'bt term
@@ -90,10 +96,10 @@ type 'bt term_ =
   | MapConst of BaseTypes.t * 'bt term
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
-  | MapDef of (Sym.t * 'bt) * 'bt term
+  | MapDef of (Sym.t * BaseTypes.t) * 'bt term
   | Apply of Sym.t * ('bt term) list
   | Let of (Sym.t * 'bt term) * 'bt term
-  | Match of 'bt term * (pattern * 'bt term) list
+  | Match of 'bt term * ('bt pattern * 'bt term) list
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
@@ -106,7 +112,8 @@ let compare = compare_term
 
 
 
-let rec pp_pattern = function
+let rec pp_pattern (Pat (pat_, _bt)) =
+  match pat_ with
   | PSym s -> 
      Sym.pp s
   | PWild -> 
@@ -140,6 +147,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           |  Dec -> !^(Z.to_string i)
           | _ -> !^("0X" ^ (Z.format "016X" i))
           end
+       | Alloc_id i -> !^("@" ^ Z.to_string i)
        | Bool true -> !^"true"
        | Bool false -> !^"false"
        | Unit -> !^"void"
@@ -202,6 +210,12 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"bw_and_uf" [aux false it1; aux false it2]
        | BWOrNoSMT ->
           c_app !^"bw_or_uf" [aux false it1; aux false it2]
+       | BWCLZNoSMT ->
+          c_app !^"bw_clz_uf" [aux false it1; aux false it2]
+       | BWCTZNoSMT ->
+          c_app !^"bw_ctz_uf" [aux false it1; aux false it2]
+       | BWFFSNoSMT ->
+          c_app !^"bw_ffs_uf" [aux false it1; aux false it2]
        | SetMember ->
           c_app !^"member" [aux false it1; aux false it2]
        | SetUnion ->
@@ -282,12 +296,10 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"hd" [aux false o1]
        | Tail (o1) ->
           c_app !^"tl" [aux false o1]
-       | Nil ->
-          brackets empty
+       | Nil bt ->
+          !^"nil" ^^ angles (BaseTypes.pp bt)
        | Cons (t1,t2) ->
           mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
-       | List its ->
-          mparens (brackets (separate_map (comma ^^ space) (aux false) its))
        | NthList (n, xs, d) ->
           c_app !^"nth_list" [aux false n; aux false xs; aux false d]
        | ArrayToList (arr, i, len) ->
@@ -397,7 +409,6 @@ let rec dtree (IT (it_, bt)) =
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
-  | List its -> Dnode (pp_ctor "List", (List.map dtree its))
   | (Aligned a) -> Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
   | (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])

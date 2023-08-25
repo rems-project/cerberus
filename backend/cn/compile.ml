@@ -591,7 +591,11 @@ module EffectfulTranslation = struct
         | CNExpr_list es_ ->
             let@ es = ListM.mapM self es_ in
             let item_bt = basetype (List.hd es) in
-            return (IT ((List es), SBT.List item_bt))
+            let rec aux = function
+              | [] -> IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt)
+              | x::xs -> IT (Cons (x, aux xs), SBT.List item_bt)
+            in
+            return (aux es)
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
@@ -1033,6 +1037,13 @@ let ownership (loc, (addr_s, ct)) env =
   let value = IT.sym_ (name, oa_bt) in
   return (name, ((pt_ret, oa_bt), lcs), value)
 
+let allocation_token loc addr_s =
+  let name = match Sym.description addr_s with
+    | SD_ObjectAddress obj_name ->
+       Sym.fresh_make_uniq ("A_"^obj_name)
+    | _ -> assert false in
+  let alloc_ret = Global.mk_alloc (IT.sym_ (addr_s, BT.Loc)) in
+  ((name, (ResourceTypes.P alloc_ret, BT.Unit)), (loc, None))
 
 
 
@@ -1413,6 +1424,8 @@ let translate_cn_statement
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
          let args = List.map IT.term_of_sterm args in
          return (M_CN_statement (loc, M_CN_apply (s, args)))
+      | CN_inline nms ->
+         return (M_CN_statement (loc, M_CN_inline nms))
     )
 
 

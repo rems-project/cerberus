@@ -4500,6 +4500,14 @@ let desugar_cn_statement (CN_statement loc stmt_) =
      let l = Cn.ensure_not_c_variable l_resolved in
      E.mapM desugar_cn_expr args >>= fun args ->
      E.return (CN_apply l args)
+  | CN_inline nms ->
+     CN_inline <$> E.mapM (fun nm ->
+       E.resolve_ordinary_identifier loc nm >>= function
+         | Just (_, E.OReg_other nm_sym _ _) ->
+           E.return nm_sym
+         | None ->
+           E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+         end) nms
   end >>= fun stmt_ ->
   E.return (CN_statement loc stmt_)
 

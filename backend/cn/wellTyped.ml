@@ -8,6 +8,7 @@ module LRT = LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module Mu = Mucore
+module IdSet = Set.Make(Id)
 
 open Global
 open TE
@@ -24,6 +25,26 @@ open Effectful.Make(Typing)
 
 
 let ensure_base_type = Typing.ensure_base_type
+
+
+let correct_and_no_duplicate_members loc tag members =
+  let@ layout = get_struct_decl loc tag in
+  let member_types = Memory.member_types layout in
+  let@ _, needed = 
+    ListM.fold_rightM (fun member (have, needed) ->
+        if IdSet.mem member have then
+          fail (fun _ -> {loc; msg = Duplicate_member member})
+        else if not (IdSet.mem member needed) then
+          fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
+        else
+          return (IdSet.add member have, IdSet.remove member needed)
+      ) members (IdSet.empty, IdSet.of_list (List.map fst member_types))
+  in
+  match IdSet.elements needed with
+  | [] -> return ()
+  | member :: _ -> fail (fun _ -> {loc; msg = Missing_member member})
+
+  
 
 
 
@@ -80,6 +101,7 @@ module WBT = struct
       | Bool -> return ()
       | Integer -> return ()
       | Real -> return ()
+      | Alloc_id -> return ()
       | Loc -> return ()
       | CType -> return ()
       | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
@@ -131,8 +153,29 @@ module WIT = struct
 
   let eval = Simplify.IndexTerms.eval
 
+  let check_and_bind_pattern loc (Pat (pat_, _)) bt =
+    let@ pat_ = match pat_ with
+      | PSym s -> 
+         let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
+         return (PSym s)
+      | PWild ->
+         return (PWild)
+      | PConstructor (s, args) ->
+         let@ constr_info = get_datatype_constr loc s in
+         let@ () = ensure_base_type loc (Datatype constr_info.c_datatype_tag) ~expect:bt in
+         let@ args = 
+           ListM.mapM (fun (id, apat) ->
+               failwith "asd"
+             ) args
+         in
+         return (PConstructor (s, args))
+    in
+    return (Pat (pat_, bt))
+       
+       
+
   let rec infer =
-      fun loc ((IT (it, _)) as it_) ->
+      fun loc (IT (it, _)) ->
       match it with
       | Sym s ->
          let@ is_a = bound_a s in
@@ -152,6 +195,8 @@ module WIT = struct
          return (IT (Const (Q q), Real))
       | Const (Pointer p) ->
          return (IT (Const (Pointer p), Loc))
+      | Const (Alloc_id p) ->
+         return (IT (Const (Alloc_id p), BT.Alloc_id))
       | Const (Bool b) ->
          return (IT (Const (Bool b), BT.Bool))
       | Const Unit ->
@@ -239,7 +284,10 @@ module WIT = struct
            | ModNoSMT
            | XORNoSMT
            | BWAndNoSMT
-           | BWOrNoSMT ->
+           | BWOrNoSMT
+           | BWCLZNoSMT
+           | BWCTZNoSMT
+           | BWFFSNoSMT ->
               let@ t = check loc Integer t in
               let@ t' = check loc Integer t' in
               return (IT (Binop (arith_op, t, t'), Integer))
@@ -371,13 +419,8 @@ module WIT = struct
          return (IT (NthTuple (n, t'),item_bt))
       | Struct (tag, members) ->
          let@ layout = get_struct_decl loc tag in
+         let@ () = correct_and_no_duplicate_members loc tag (List.map fst members) in
          let decl_members = Memory.member_types layout in
-         let@ () = 
-           let has = List.length members in
-           let expect = List.length decl_members in
-           if has = expect then return ()
-           else fail (fun _ -> {loc; msg = Number_members {has; expect}})
-         in
          let@ members = 
            ListM.mapM (fun (member,t) ->
                let@ bt = match List.assoc_opt Id.equal member decl_members with
@@ -511,18 +554,12 @@ module WIT = struct
           let@ () = WCT.is_ct loc (Integer ity) in
           let@ t = check loc Integer t in
           return (IT (WrapI (ity, t), BT.Integer))
-       | Nil -> 
-          fail (fun _ -> {loc; msg = Polymorphic_it it_})
+       | Nil bt -> 
+          return (IT (Nil bt, BT.List bt))
        | Cons (t1,t2) ->
           let@ t1 = infer loc t1 in
           let@ t2 = check loc (List (IT.bt t1)) t2 in
           return (IT (Cons (t1, t2),BT.List (IT.bt t1)))
-       | List [] ->
-          fail (fun _ -> {loc; msg = Polymorphic_it it_})
-       | List (t :: ts) ->
-          let@ t = infer loc t in
-          let@ ts = ListM.mapM (check loc (IT.bt t)) ts in
-          return (IT (List (t :: ts),BT.List (IT.bt t)))
        | Head t ->
           let@ t = infer loc t in
           let@ bt = ensure_list_type loc t in
@@ -586,22 +623,25 @@ module WIT = struct
             let@ t2 = infer loc t2 in
             return (IT (Let ((name, t1), t2), IT.bt t2))
             end
-      | Match _ -> failwith "todo"
+      | Match (e, []) ->
+         fail (fun _ -> {loc; msg = Empty_pattern})
+      | Match (e, case::cases) ->
+         (* let@ case =  *)
+         (*   let@ pat, body = case *)
+         (* in *)
+         failwith "todo"
+         
       | Constructor _ -> failwith "todo"
 
     and check =
       fun loc ls it ->
       let@ () = WLS.is_ls loc ls in
-      match it, ls with
-      | IT (Nil, _), List bt ->
-         return (IT (Nil, BT.List bt))
-      | _, _ ->
-         let@ it = infer loc it in
-         if LS.equal ls (IT.bt it) then
-           return it
-         else
-           let expected = Pp.plain (LS.pp ls) in
-           fail (illtyped_index_term loc it (IT.bt it) expected)
+      let@ it = infer loc it in
+      if LS.equal ls (IT.bt it) then
+        return it
+      else
+        let expected = Pp.plain (LS.pp ls) in
+        fail (illtyped_index_term loc it (IT.bt it) expected)
 
 
 
