@@ -332,7 +332,7 @@ type 'a cn_injection = {
   filename: string;
   sigm: 'a A.sigma;
   pre_post: (Symbol.sym * (string list * string list)) list;
-  in_stmt: (Cerb_location.t * string) list;
+  in_stmt: (Cerb_location.t * string list) list;
 }
 
 let output_injections oc cn_inj =
