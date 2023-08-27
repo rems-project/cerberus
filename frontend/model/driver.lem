@@ -866,7 +866,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
         match res_opt with
           | Just res ->
-              ND.return (mk_th_st (Core.Vobject (snd (Caux.objectValueFromMemValue res))))
+              ND.return (mk_th_st (Core.Vloaded (snd (Caux.loadedValueFromMemValue res))))
           | Nothing ->
             ND.return (mk_th_st Core.Vunit)
         end

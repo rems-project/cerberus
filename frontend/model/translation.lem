@@ -2313,7 +2313,28 @@ end
             C.Expr [] (C.Ememop (Mem_common.CHERI_intrinsic str (result_ty, [])) [])
           end
       
-      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) (_::_ as es) ->
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) [e] ->
+          self e >>= fun core_e ->
+          let bTy_ret = maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype result_ty) in
+          let ty_e = ctype_of e in
+          let oTy = force_core_object_type_of_ctype ty_e in
+          let arg_bTy = C.BTy_loaded oTy in
+          E.wrapped_fresh_symbol bTy_ret            >>= fun memop_wrp ->
+          E.wrapped_fresh_symbol arg_bTy            >>= fun arg_wrp   ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun obj_wrp   ->
+          let memop = Mem_common.CHERI_intrinsic str (result_ty, [ty_e]) in
+          E.return begin
+            Caux.mk_sseq_e arg_wrp.E.sym_pat core_e
+            begin
+              Caux.mk_case_e arg_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                  , (C.Expr [] (C.Ememop memop [obj_wrp.E.sym_pe])) )
+                ; ( Caux.mk_empty_pat arg_bTy
+                  , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, CHERI intrinsics (unspec)")) ) ]
+            end
+          end
+      
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) (_::_::_ as es) ->
           E.mapM self es >>= fun core_es ->
           let bTy_ret = maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype result_ty) in
           let oTys = List.map (fun e -> force_core_object_type_of_ctype (ctype_of e)) es in
@@ -2340,8 +2361,7 @@ end
             begin
               Caux.mk_case_e args_wrp.E.sym_pe
                 [ ( Caux.mk_tuple_pat (List.map Caux.mk_specified_pat (List.reverse rev_obj_sym_pats))
-                  , Caux.mk_wseq_e memop_wrp.E.sym_pat (C.Expr [] (C.Ememop memop (List.reverse rev_obj_sym_pes)))
-                      (Caux.mk_pure_e (Caux.mk_specified_pe memop_wrp.E.sym_pe)) )
+                  , (C.Expr [] (C.Ememop memop (List.reverse rev_obj_sym_pes))) )
                 ; ( Caux.mk_empty_pat args_bTy
                   , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, CHERI intrinsics (unspec)")) ) ]
             end
