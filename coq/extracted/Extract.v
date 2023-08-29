@@ -31,6 +31,6 @@ Extract Constant ClassicalDedekindReals.sig_not_dec => false.  (* Ugh *)
 
 (* Set Extraction AccessOpaque. *)
 
-Extraction Library Vector.
+(* Extraction Library Vector. *)
 Recursive Extraction Library MorelloCapsGS.
 Recursive Extraction Library CheriMemory.
