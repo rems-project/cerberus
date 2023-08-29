@@ -457,6 +457,13 @@ module Translate = struct
       | Const Null -> 
          integer_to_loc (term (int_ 0))
       | Const (CType_const ct) -> uninterp_term context (sort bt) it
+      | Unop (uop, t) ->
+         begin match uop with
+         | Not -> Z3.Boolean.mk_not context (term t)
+         | BWCLZNoSMT -> make_uf "bw_clz_uf" (Integer) [t]
+         | BWCTZNoSMT -> make_uf "bw_ctz_uf" (Integer) [t]
+         | BWFFSNoSMT -> make_uf "bw_ffs_uf" (Integer) [t]
+         end
       | Binop (bop, t1, t2) -> 
          let open Z3.Arithmetic in
          begin match bop with
@@ -485,9 +492,6 @@ module Translate = struct
          | XORNoSMT -> make_uf "xor_uf" (Integer) [t1; t2]
          | BWAndNoSMT -> make_uf "bw_and_uf" (Integer) [t1; t2]
          | BWOrNoSMT -> make_uf "bw_or_uf" (Integer) [t1; t2]
-         | BWCLZNoSMT -> make_uf "bw_clz_uf" (Integer) [t1; t2]
-         | BWCTZNoSMT -> make_uf "bw_ctz_uf" (Integer) [t1; t2]
-         | BWFFSNoSMT -> make_uf "bw_ffs_uf" (Integer) [t1; t2]
          | EQ -> Z3.Boolean.mk_eq context
             (maybe_record_loc_addr_eq global t1 (term t1))
             (maybe_record_loc_addr_eq global t2 (term t2))
@@ -506,7 +510,6 @@ module Translate = struct
          | Or -> Z3.Boolean.mk_or context (map term [t1;t2])
          | Impl -> Z3.Boolean.mk_implies context (term t1) (term t2)
          end
-      | Not t -> Z3.Boolean.mk_not context (term t)
       | ITE (t1, t2, t3) -> Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EachI ((i1, (s, _), i2), t) ->
          let rec aux i = 

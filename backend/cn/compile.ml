@@ -454,7 +454,7 @@ module EffectfulTranslation = struct
     | CN_equal, _ ->
         return (IT (Binop (EQ, e1, e2), SBT.Bool))
     | CN_inequal, _ ->
-        return (IT ((Not (IT (Binop (EQ, e1, e2), SBT.Bool))), SBT.Bool))
+        return (not_ (IT (Binop (EQ, e1, e2), SBT.Bool)))
     | CN_lt, (SBT.Integer | SBT.Real) ->
         return (IT (Binop (LT, e1, e2), SBT.Bool))
     | CN_lt, SBT.Loc _ ->
@@ -732,7 +732,7 @@ module EffectfulTranslation = struct
            return (IT ((Good (scty, e)), SBT.Bool))
         | CNExpr_not e ->
            let@ e = self e in
-           return (IT ((Not e), SBT.Bool))
+           return (not_ e)
         | CNExpr_unchanged e ->
            let@ cur_e = self e in
            let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in

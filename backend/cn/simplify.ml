@@ -377,15 +377,15 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Impl, a, b), the_bt)
        end
-    | Not a ->
+    | Unop (Not, a) ->
        let a = aux a in
        begin match a with
        | IT (Const (Bool b), _) ->
           bool_ (not b)
-       | IT (Not b, _) ->
+       | IT (Unop (Not, b), _) ->
           b
        | _ -> 
-          IT (Not a, the_bt)
+          IT (Unop (Not, a), the_bt)
        end
     | ITE (a, b, c) ->
        let a = aux a in

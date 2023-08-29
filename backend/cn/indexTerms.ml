@@ -47,8 +47,8 @@ let rec bound_by_pattern (Pat (pat_, bt)) =
 let rec free_vars_ = function
   | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
+  | Unop (_uop, t1) -> free_vars t1
   | Binop (_bop, t1, t2) -> free_vars_list [t1; t2]
-  | Not t1 -> free_vars t1
   | ITE (t1, t2, t3) -> free_vars_list [t1; t2; t3]
   | EachI ((_, (s, _), _), t) -> SymSet.remove s (free_vars t)
   | Tuple ts -> free_vars_list ts
@@ -105,8 +105,8 @@ and free_vars_list xs =
 let rec fold_ f binders acc = function
   | Sym _s -> acc
   | Const _c -> acc
+  | Unop (_uop, t1) -> fold f binders acc t1
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
-  | Not t1 -> fold f binders acc t1
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EachI ((_, (s, bt), _), t) ->
      fold f (binders @ [(s, bt)]) acc t
@@ -219,10 +219,10 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      end
   | Const const -> 
      IT (Const const, bt)
+  | Unop (uop, it) ->
+     IT (Unop (uop, subst su it), bt)
   | Binop (bop, t1, t2) -> 
      IT (Binop (bop, subst su t1, subst su t2), bt)
-  | Not it -> 
-     IT (Not (subst su it), bt)
   | ITE (it,it',it'') -> 
      IT (ITE (subst su it, subst su it', subst su it''), bt)
   | EachI ((i1, (s, s_bt), i2), t) ->
@@ -389,7 +389,7 @@ let is_or = function
   | _ -> None
 
 let is_not = function
-  | IT (Not it, _) -> Some it
+  | IT (Unop (Not, it), _) -> Some it
   | _ -> None
 
 let is_lt = function
@@ -447,7 +447,7 @@ let or2_ (it, it') = IT (Binop (Or, it, it'), BT.Bool)
 let and_ = vargs_binop (bool_ true) (Tools.curry and2_)
 let or_ = vargs_binop (bool_ false) (Tools.curry or2_)
 let impl_ (it, it') = IT (Binop (Impl, it, it'), BT.Bool)
-let not_ it = IT (Not it, BT.Bool)
+let not_ it = IT (Unop (Not, it), bt it)
 let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
 let eq_ (it, it') = IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')
@@ -498,6 +498,7 @@ let intToReal_ it = IT (Cast (Real, it), BT.Real)
 let realToInt_ it = IT (Cast (Integer, it), BT.Integer)
 
 let arith_binop op (it, it') = IT (Binop (op, it, it'), bt it)
+let arith_unop op it = IT (Unop (op, it), bt it)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')

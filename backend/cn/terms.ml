@@ -15,6 +15,13 @@ type const =
    we know nothing about other than Default bt = Default bt *)
 [@@deriving eq, ord]
 
+type unop =
+  | Not
+  | BWCLZNoSMT
+  | BWCTZNoSMT
+  | BWFFSNoSMT
+[@@deriving eq, ord, show]
+
 type binop =
   | And
   | Or
@@ -34,9 +41,6 @@ type binop =
   | XORNoSMT
   | BWAndNoSMT
   | BWOrNoSMT
-  | BWCLZNoSMT
-  | BWCTZNoSMT
-  | BWFFSNoSMT
   | LT
   | LE
   | Min
@@ -64,8 +68,8 @@ and 'bt pattern =
 type 'bt term_ =
   | Const of const
   | Sym of Sym.t
+  | Unop of unop * 'bt term
   | Binop of binop * 'bt term * 'bt term
-  | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EachI of (int * (Sym.t * 'bt) * int) * 'bt term
   (* add Z3's Distinct for separation facts  *)
@@ -158,6 +162,17 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     | Sym sym -> Sym.pp sym
     (* | Arith_op arith_op -> *)
     (*    begin match arith_op with *)
+    | Unop (uop, it1) ->
+       begin match uop with
+       | BWCLZNoSMT ->
+          c_app !^"bw_clz_uf" [aux false it1]
+       | BWCTZNoSMT ->
+          c_app !^"bw_ctz_uf" [aux false it1]
+       | BWFFSNoSMT ->
+          c_app !^"bw_ffs_uf" [aux false it1]
+       | Not ->
+          mparens (!^"!" ^^ parens (aux false it1))
+       end
     | Binop (bop, it1, it2) ->
        begin match bop with
        | And ->
@@ -210,12 +225,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"bw_and_uf" [aux false it1; aux false it2]
        | BWOrNoSMT ->
           c_app !^"bw_or_uf" [aux false it1; aux false it2]
-       | BWCLZNoSMT ->
-          c_app !^"bw_clz_uf" [aux false it1; aux false it2]
-       | BWCTZNoSMT ->
-          c_app !^"bw_ctz_uf" [aux false it1; aux false it2]
-       | BWFFSNoSMT ->
-          c_app !^"bw_ffs_uf" [aux false it1; aux false it2]
        | SetMember ->
           c_app !^"member" [aux false it1; aux false it2]
        | SetUnion ->
@@ -227,8 +236,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Subset ->
           c_app !^"subset" [aux false it1; aux false it2]
        end
-       | Not (o1) ->
-          mparens (!^"!" ^^ parens (aux false o1))
        | ITE (o1,o2,o3) ->
           parens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
        | EachI ((i1, (s, _), i2), t) ->
@@ -380,8 +387,8 @@ let rec dtree (IT (it_, bt)) =
   | Const Unit -> Dleaf !^"unit"
   | Const (Default _) -> Dleaf !^"default"
   | Const Null -> Dleaf !^"null"
+  | Unop (op, t1) -> Dnode (pp_ctor (show_unop op), [dtree t1])
   | Binop (op, t1, t2) -> Dnode (pp_ctor (show_binop op), [dtree t1; dtree t2])
-  | (Not t) -> Dnode (pp_ctor "Not", [dtree t])
   | (ITE (t1, t2, t3)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2; dtree t3])
   | (EachI ((starti,(i,_),endi), body)) -> Dnode (pp_ctor "EachI", [Dleaf !^(string_of_int starti); Dleaf (Sym.pp i); Dleaf !^(string_of_int endi); dtree body])
   | (Tuple its) -> Dnode (pp_ctor "Tuple", List.map dtree its)

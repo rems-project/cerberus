@@ -786,8 +786,11 @@ let it_to_coq loc global list_mono it =
         | IT.Z z -> rets (Z.to_string z)
         | _ -> fail_m loc (Pp.item "it_to_coq: unsupported const" (IT.pp t))
     end
-    | IT.Binop (op, x, y) -> 
-       begin match op with
+    | IT.Unop (op, x) -> begin match op with
+       | IT.Not -> parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x])
+       | _ -> fail_m loc (Pp.item "it_to_coq: unsupported unary op" (IT.pp t))
+    end
+    | IT.Binop (op, x, y) -> begin match op with
        | Add  -> abinop "+" x y
        | Sub  -> abinop "-" x y
        | Mul  -> abinop "*" x y
@@ -812,7 +815,6 @@ let it_to_coq loc global list_mono it =
        | Impl -> abinop (if bool_eq_prop then "->" else "implb") x y
        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported arith op" (IT.pp t))
        end
-    | IT.Not x -> parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x])
     | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm, x), _), _, _) ->
          let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in
          let@ () = ensure_datatype global list_mono loc dt in

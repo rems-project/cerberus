@@ -1151,7 +1151,6 @@ let normalise_fun_map_decl
       (global_types, visible_objects_env)
       env 
       fun_specs
-      stdlib_specs
       (funinfo: mi_funinfo)
       loop_attributes
       fname
@@ -1245,8 +1244,8 @@ let normalise_fun_map_decl
      return (Some (M_Proc(loc, args_and_body, trusted, desugared_spec), mk_functions))
 
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
-     begin match SymMap.find_opt fname fun_specs, SymMap.find_opt fname stdlib_specs with
-     | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)), _ ->
+     begin match SymMap.find_opt fname fun_specs with
+     | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
        assertl loc (BT.equal (convert_bt loc ret_bt)
                     (BT.of_sct (convert_ct loc ret_ct)))
          !^"function return type mismatch";
@@ -1263,8 +1262,6 @@ let normalise_fun_map_decl
        in
        let ft = at_of_arguments Tools.id args_and_rt in
        return (Some (M_ProcDecl (loc, Some ft), []))
-     | _, Some ft ->
-       return (Some (M_ProcDecl (loc, Some ft), []))
      | _ -> return (Some (M_ProcDecl (loc, None), []))
      end
   | Mi_BuiltinDecl(loc, bt, bts) -> 
@@ -1276,7 +1273,6 @@ let normalise_fun_map
       (global_types, visible_objects_env)
       env
       fun_specs
-      stdlib_specs
       funinfo
       loop_attributes
       fmap
@@ -1286,7 +1282,7 @@ let normalise_fun_map
       try begin
       let@ r = normalise_fun_map_decl (markers_env, ail_prog) 
                  (global_types, visible_objects_env)
-                 env fun_specs stdlib_specs funinfo loop_attributes fsym fdecl in
+                 env fun_specs funinfo loop_attributes fsym fdecl in
       match r with
       | Some (fdecl, more_mk_functions) ->
          let mk_functions' = 
@@ -1384,29 +1380,6 @@ let normalise_tag_definition tag def =
 let normalise_tag_definitions tagDefs =
    Pmap.mapi normalise_tag_definition tagDefs
 
-let mk_binop_spec binop =
-  let loc = Locations.unknown in
-  let info = (loc, None) in
-  let ret = Sym.fresh_named "return" in
-  let x = Sym.fresh_named "x" in
-  let y = Sym.fresh_named "y" in
-  let var nm = IT.sym_ (nm, BT.Integer) in
-  let lcrt = LRT.mConstraint (LC.T (IT.eq_ (var ret,
-    (IT.arith_binop binop (var x, var y)))), info) LRT.I in
-  let rt = RT.mComputational ((ret, BT.Integer), info) lcrt in
-  let ft = AT.mComputationals [(x, BT.Integer, info); (y, BT.Integer, info)]
-    (AT.L (LAT.I rt)) in
-  ft
-
-let mk_stdlib_spec sym =
-  Print.debug 3 (lazy (Print.item "mk_stdlib_spec" (Sym.pp sym)));
-  match Sym.description sym with
-  | SD_Id "ctz" -> Some (sym, mk_binop_spec BWCTZNoSMT)
-  | SD_Id "clz" -> Some (sym, mk_binop_spec BWCLZNoSMT)
-  | SD_Id "ffs" -> Some (sym, mk_binop_spec BWFFSNoSMT)
-  | _ -> None
-
-
 let register_glob env (sym, glob) = 
   match glob with
   | M_GlobalDef ((bt, ct), e) ->
@@ -1446,27 +1419,13 @@ let normalise_file (markers_env, ail_prog) file =
 
   let env = List.fold_left register_glob env globs in
 
-  Print.debug 3 (lazy (Print.item "stdlib symbols" (Print.list Sym.pp_debug
-    (List.map fst (Pmap.bindings_list file.mi_stdlib)))));
-
-  Print.debug 3 (lazy (Print.item "stdlib symbols in fmap" (Print.list Sym.pp
-    (List.map fst (Pmap.bindings_list file.mi_stdlib)
-    |> List.filter (fun sym -> Option.is_some (Pmap.lookup sym file.mi_funs))))));
-
-  let stdlib_specs = List.map fst (Pmap.bindings_list file.mi_stdlib)
-    |> List.filter (fun sym -> Option.is_some (Pmap.lookup sym file.mi_funs))
-    |> List.filter_map mk_stdlib_spec in
-
   let fun_specs_map = List.fold_right (fun (id, spec) acc ->
       SymMap.add spec.cn_spec_name (id, spec) acc)
     ail_prog.cn_fun_specs SymMap.empty in
 
-  let stdlib_specs_map = List.fold_right (fun (id, spec) acc -> SymMap.add id spec acc)
-    stdlib_specs SymMap.empty in
-
   let@ (funs, mk_functions) = 
     normalise_fun_map (markers_env, ail_prog) (global_types, file.mi_visible_objects_env) 
-      env fun_specs_map stdlib_specs_map
+      env fun_specs_map
       file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in
 

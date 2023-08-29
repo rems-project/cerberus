@@ -531,13 +531,12 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   | M_PEbitwise_unop (unop, pe1) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Integer pe1 (fun vt1 ->
-     let (binop_ahem, op_nm) = match unop with
+     let (unop, op_nm) = match unop with
        | M_BW_FFS -> (BWFFSNoSMT, "bw_ffs_uf")
        | M_BW_CTZ -> (BWCTZNoSMT, "bw_ctz_uf")
        | M_BW_COMPL -> Cerb_debug.error "todo: M_BW_COMPL"
      in
-     let vt2 = (* this is silly *) IT.int_ 0 in
-     let value = warn_uf loc op_nm; arith_binop binop_ahem (vt1, vt2) in
+     let value = warn_uf loc op_nm; arith_unop unop vt1 in
      k value)
   | M_PEbitwise_binop (binop, pe1, pe2) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in

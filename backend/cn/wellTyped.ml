@@ -208,6 +208,15 @@ module WIT = struct
          return (IT (Const Null, BT.Loc))
       | Const (CType_const ct) ->
          return (IT (Const (CType_const ct), BT.CType))
+      | Unop (unop, t) ->
+         let (arg_bt, ret_bt) = match unop with
+         | Not -> (BT.Bool, BT.Bool)
+         | BWCLZNoSMT
+         | BWCTZNoSMT
+         | BWFFSNoSMT -> (BT.Integer, BT.Integer)
+         in
+         let@ t = check loc arg_bt t in
+         return (IT (Unop (unop, t), ret_bt))
       | Binop (arith_op, t, t') ->
          begin match arith_op with
          | Add ->
@@ -284,10 +293,7 @@ module WIT = struct
            | ModNoSMT
            | XORNoSMT
            | BWAndNoSMT
-           | BWOrNoSMT
-           | BWCLZNoSMT
-           | BWCTZNoSMT
-           | BWFFSNoSMT ->
+           | BWOrNoSMT ->
               let@ t = check loc Integer t in
               let@ t' = check loc Integer t' in
               return (IT (Binop (arith_op, t, t'), Integer))
@@ -382,9 +388,6 @@ module WIT = struct
             let@ t' = check loc Bool t' in
             return (IT (Binop (Impl, t, t'), Bool))
          end
-      | Not t ->
-         let@ t = check loc Bool t in
-         return (IT (Not t,BT.Bool))
       | ITE (t,t',t'') ->
          let@ t = check loc Bool t in
          let@ t' = infer loc t' in

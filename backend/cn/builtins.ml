@@ -39,9 +39,6 @@ let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 (arith_binop XORNo
 let bw_and_uf_def = ("bw_and_uf", Sym.fresh_named "bw_and_uf", mk_arg2 (arith_binop BWAndNoSMT))
 let bw_or_uf_def = ("bw_or_uf", Sym.fresh_named "bw_or_uf", mk_arg2 (arith_binop BWOrNoSMT))
 
-let arith_unop unop x = (* this is silly *)
-  arith_binop unop (x, Terms.IT (Terms.Const (Z Z.zero), SBT.Integer))
-
 let bw_clz_uf_def = ("bw_clz_uf", Sym.fresh_named "bw_clz_uf", mk_arg1 (arith_unop BWCLZNoSMT))
 let bw_ctz_uf_def = ("bw_ctz_uf", Sym.fresh_named "bw_ctz_uf", mk_arg1 (arith_unop BWCTZNoSMT))
 let bw_ffs_uf_def = ("bw_ffs_uf", Sym.fresh_named "bw_ffs_uf", mk_arg1 (arith_unop BWFFSNoSMT))
@@ -50,7 +47,7 @@ let power_def = ("power", Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = ("rem", Sym.fresh_named "rem", mk_arg2 rem_)
 let mod_def = ("mod", Sym.fresh_named "mod", mk_arg2 mod_)
 
-let not_def = ("not", Sym.fresh_named "not", mk_arg1 (fun it -> IT (Not it, SBT.Bool)))
+let not_def = ("not", Sym.fresh_named "not", mk_arg1 not_)
 
 let nth_list_def = ("nth_list", Sym.fresh_named "nth_list", mk_arg3 nthList_)
 

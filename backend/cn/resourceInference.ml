@@ -47,7 +47,7 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
     | IT.Binop (And, x1, x2)
     | IT.Binop (Or, x1, x2) -> split x1 @ split x2
     | IT.StructMember (x, _)
-    | IT.Not x -> split x
+    | IT.Unop (IT.Not, x) -> split x
     | IT.Binop (EQ, x, y)
     | IT.Binop (Impl, x, y)
     | IT.Binop (IT.LT, x, y)
