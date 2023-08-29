@@ -16,7 +16,10 @@ Require Import ExtrOcamlZBigInt.
 Extraction Language OCaml.
 Unset Extraction Optimize. (* trying to make print_msg work *)
 
-Extraction Blacklist String List Char Core Monad Bool Vector Format Nat Int Option Base Numbers FMapAVL OrderedType Map.
+Require Import Coq.Vectors.Vector.
+From stdpp Require Import vector.
+
+Extraction Blacklist vector Vector String List Char Core Monad Bool Format Nat Int Option Base Numbers FMapAVL OrderedType Map.
 
 (* Debugging print *)
 Extraction NoInline Common.Utils.print_msg.
@@ -31,6 +34,6 @@ Extract Constant ClassicalDedekindReals.sig_not_dec => false.  (* Ugh *)
 
 (* Set Extraction AccessOpaque. *)
 
-(* Extraction Library Vector. *)
+Extraction Library vector.
 Recursive Extraction Library MorelloCapsGS.
 Recursive Extraction Library CheriMemory.

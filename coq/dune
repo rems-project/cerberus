@@ -135,6 +135,7 @@
 (copy_files extracted/Utils0.{ml,mli})
 (copy_files extracted/Values.{ml,mli})
 (copy_files extracted/Vector0.{ml,mli})
+(copy_files extracted/vector1.{ml,mli})
 (copy_files extracted/VectorDef.{ml,mli})
 (copy_files extracted/Wf.{ml,mli})
 (copy_files extracted/Word.{ml,mli})
