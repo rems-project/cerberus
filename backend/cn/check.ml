@@ -528,25 +528,27 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      | M_Ccons, _ ->
         fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
      end
-  | M_CivCOMPL _ ->
-     Cerb_debug.error "todo: CivCOMPL"
-  | M_CivAND (act, pe1, pe2)
-  | M_CivOR (act, pe1, pe2)
-  | M_CivXOR (act, pe1, pe2) -> 
+  | M_PEbitwise_unop (unop, pe1) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
-     let binop = match pe_ with
-       | M_CivAND _ -> BWAndNoSMT
-       | M_CivOR _ -> BWOrNoSMT
-       | M_CivXOR _ -> XORNoSMT
-       | _ -> assert false
+     check_pexpr ~expect:Integer pe1 (fun vt1 ->
+     let (binop_ahem, op_nm) = match unop with
+       | M_BW_FFS -> (BWFFSNoSMT, "bw_ffs_uf")
+       | M_BW_CTZ -> (BWCTZNoSMT, "bw_ctz_uf")
+       | M_BW_COMPL -> Cerb_debug.error "todo: M_BW_COMPL"
      in
-     let _ity = match act.ct with
-       | Integer ity -> ity
-       | _ -> Cerb_debug.error "M_CivAND/M_CivOR/M_CivXOR with non-integer c-type"
+     let vt2 = (* this is silly *) IT.int_ 0 in
+     let value = warn_uf loc op_nm; arith_binop binop_ahem (vt1, vt2) in
+     k value)
+  | M_PEbitwise_binop (binop, pe1, pe2) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
+     let (binop, binop_nm) = match binop with
+       | M_BW_AND -> (BWAndNoSMT, "bw_and_uf")
+       | M_BW_OR -> (BWOrNoSMT, "bw_or_uf")
+       | M_BW_XOR -> (XORNoSMT, "bw_xor_uf")
      in
      check_pexpr ~expect:Integer pe1 (fun vt1 ->
      check_pexpr ~expect:Integer pe2 (fun vt2 ->
-     let value = warn_uf loc "bw_and_uf"; arith_binop binop (vt1, vt2) in
+     let value = warn_uf loc binop_nm; arith_binop binop (vt1, vt2) in
      k value))
   | M_Cfvfromint _ -> 
      unsupported loc !^"floats"

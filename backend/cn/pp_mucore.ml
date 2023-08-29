@@ -431,14 +431,20 @@ module Make (Config: CONFIG) = struct
               P.parens (comma_list pp_pexpr pes)
           | M_PEctor (ctor, pes) ->
               pp_ctor ctor ^^ P.parens (comma_list pp_pexpr pes)
-          | M_CivCOMPL (ct, p1) ->
-              !^"IvCOMPL" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1])
-          | M_CivAND (ct, p1, p2) ->
-              !^"IvAND" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1; pp_pexpr p2])
-          | M_CivOR (ct, p1, p2) ->
-              !^"IvOR" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1; pp_pexpr p2])
-          | M_CivXOR (ct, p1, p2) ->
-              !^"IvXOR" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1; pp_pexpr p2])
+          | M_PEbitwise_unop (unop, p1) ->
+              let opnm = match unop with
+              | M_BW_COMPL -> "IvCOMPL"
+              | M_BW_CTZ -> "builtin_ctz"
+              | M_BW_FFS -> "builtin_ffs"
+              in
+              !^opnm ^^ P.parens (pp_pexpr p1)
+          | M_PEbitwise_binop (binop, p1, p2) ->
+              let opnm = match binop with
+              | M_BW_OR -> "IvOR"
+              | M_BW_AND -> "IvAND"
+              | M_BW_XOR -> "IvXOR"
+              in
+              !^opnm ^^ P.parens (separate comma [pp_pexpr p1; pp_pexpr p2])
           | M_Cfvfromint p1 ->
               !^"Cfvfromint" ^^ P.parens (pp_pexpr p1)
           | M_Civfromfloat (ct, p1) ->

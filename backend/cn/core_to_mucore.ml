@@ -245,28 +245,28 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      | Core.CivCOMPL, [ct; arg1] -> 
         let ct = ensure_pexpr_ctype loc !^"CivCOMPL: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
-        annotate (M_CivCOMPL (ct, arg1))
+        annotate (M_PEwrapI(ct, annotate (M_PEbitwise_unop (M_BW_COMPL, arg1))))
      | Core.CivCOMPL, _ -> 
         assert_error loc !^"CivCOMPL applied to wrong number of arguments"
      | Core.CivAND, [ct; arg1; arg2] -> 
         let ct = ensure_pexpr_ctype loc !^"CivAND: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
-        annotate (M_CivAND (ct, arg1, arg2))
+        annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_AND, arg1, arg2))))
      | Core.CivAND, _ ->
         assert_error loc !^"CivAND applied to wrong number of arguments"
      | Core.CivOR, [ct; arg1; arg2] -> 
         let ct = ensure_pexpr_ctype loc !^"CivOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
-        annotate (M_CivOR (ct, arg1, arg2))
+        annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_OR, arg1, arg2))))
      | Core.CivOR, _ ->
         assert_error loc !^"CivOR applied to wrong number of arguments"
      | Core.CivXOR, [ct; arg1; arg2] -> 
         let ct = ensure_pexpr_ctype loc !^"CivXOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
-        annotate (M_CivXOR (ct, arg1, arg2))
+        annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_XOR, arg1, arg2))))
      | Core.CivXOR, _ ->
         assert_error loc !^"CivXOR applied to wrong number of arguments"
      | Core.Cfvfromint, [arg1] -> 
@@ -630,6 +630,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, pe) in
+  let wrap_pure pe = wrap (M_Epure (M_Pexpr (loc, [], (), pe))) in
   let n_pexpr = n_pexpr loc in
   let n_paction = (n_paction loc) in
   let n_memop = (n_memop loc) in
@@ -693,7 +694,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                  Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         let e1 = n_pexpr e1 in
-        return (wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1))))
+        return (wrap_pure (M_PEbool_to_integer e1))
      | Expr (_, Epure (Pexpr (_, _, PEval Vtrue))), 
        Expr (_, Epure (Pexpr (_, _, PEval Vfalse))) ->
         let e1 = n_pexpr e1 in
@@ -731,8 +732,16 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      in
      let es = List.map n_pexpr es in
      return (wrap (M_Eccall(ct1, e2, es)))
-  | Eproc(_a, name1, es) ->
-     assert_error loc !^"Eproc"
+  | Eproc(_a, name, es) ->
+     let es = List.map n_pexpr es in
+     begin match name, es with
+     | Impl (BuiltinFunction "ctz"), [arg1] ->
+       return (wrap_pure (M_PEbitwise_unop (M_BW_CTZ, arg1)))
+     | Impl (BuiltinFunction "generic_ffs"), [arg1] ->
+       return (wrap_pure (M_PEbitwise_unop (M_BW_FFS, arg1)))
+     | _ ->
+       assert_error loc (Print.item "Eproc" (CF.Pp_core_ast.pp_expr e))
+     end
   | Eunseq es ->
      let@ es = ListM.mapM n_expr es in
      return (wrap (M_Eunseq es))

@@ -116,18 +116,15 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     | _ -> fail {loc; msg = Generic (Pp.item "expr from C syntax: unsupported op"
         (Pp_mucore.Basic.pp_binop op))}
     end
-  | M_CivAND (act, pe1, pe2)
-  | M_CivOR (act, pe1, pe2)
-  | M_CivXOR (act, pe1, pe2) ->
+  | M_PEbitwise_binop (binop, pe1, pe2) ->
     let@ x = symb_exec_mu_pexpr var_map pe1 in
     let@ y = symb_exec_mu_pexpr var_map pe2 in
-    let binop = match pe with
-      | M_CivAND _ -> IT.BWAndNoSMT
-      | M_CivOR _ -> IT.BWOrNoSMT
-      | M_CivXOR _ -> IT.XORNoSMT
-      | _ -> assert false
+    let binop = match binop with
+      | M_BW_AND -> IT.BWAndNoSMT
+      | M_BW_OR -> IT.BWOrNoSMT
+      | M_BW_XOR -> IT.XORNoSMT
     in
-    do_wrapI loc act.ct (IT.arith_binop binop (x, y))
+    return (IT.arith_binop binop (x, y))
   | M_PEbool_to_integer pe ->
     let@ x = symb_exec_mu_pexpr var_map pe in
     return (IT.ite_ (x, IT.int_ 1, IT.int_ 0))
