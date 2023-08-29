@@ -1410,6 +1410,15 @@ module CHERIMorello : Memory = struct
                      (toCoq_location loc)
                      name
                      args)
+    >>=
+    (fun res ->
+        Cerb_debug.print_debug 4 []
+          (fun () ->
+            match res with
+            | Some mval -> "MEMOP_RET call_intrinsic = Just " ^ Pp_utils.to_plain_string (pp_mem_value mval)
+            | None -> "MEMOP_RET call_intrinsic = None"
+          );
+        return res)
 
   let get_intrinsic_type_spec name =
     Option.map fromCoq_intrinsics_signature (MM.get_intrinsic_type_spec name)
