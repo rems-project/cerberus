@@ -907,10 +907,10 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
         (* TODO: Check this logic *)
         let ss = match str_opt with 
           | Some info -> 
-            Printf.printf "Logical constraint info: %s\n" info;
+            (* Printf.printf "Logical constraint info: %s\n" info; *)
             []
           | None -> 
-            Printf.printf "No logical constraint info\n";
+            (* Printf.printf "No logical constraint info\n"; *)
             let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
             s @ [ail_stat_]
         in
@@ -1032,7 +1032,8 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
 = fun dts d cnstatement ->
   match cnstatement with
   (* Will go away *)
-  | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> failwith "TODO M_CN_pack_unpack"
+  | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> 
+    cn_to_ail_expr_internal dts (IT (Const (Bool true), BT.Bool, Cerb_location.unknown)) d
 
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
@@ -1050,7 +1051,9 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
       cn_to_ail_expr_internal dts it d
     (* failwith "TODO M_CN_extract" *)
 
-  | Cnprog.M_CN_unfold (fsym, args) -> failwith "TODO M_CN_unfold"
+  | Cnprog.M_CN_unfold (fsym, args) -> 
+    
+    cn_to_ail_expr_internal dts (IT (Const (Bool true), BT.Bool, Cerb_location.unknown)) d
     (* fsym is a function symbol *)
 
   | Cnprog.M_CN_apply (fsym, args) -> 
@@ -1068,7 +1071,6 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
 
 let rec cn_to_ail_cnprog_internal dts = function
 | Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
-  Printf.printf "Entered M_CN_let\n";
   let (b1, s, e) = cn_to_ail_expr_internal dts pointer PassBack in
   let ail_deref_expr_ = A.(AilEunary (Indirection, mk_expr e)) in
   (* TODO: Use ct for type binding *)
@@ -1078,7 +1080,6 @@ let rec cn_to_ail_cnprog_internal dts = function
   (loc', b1 @ b2, s @ ail_stat_ :: ss)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
-  Printf.printf "Entered M_CN_statement\n";
   (* (loc, [], [empty_ail_stmt]) *)
   let (bs, ss) = cn_to_ail_cnstatement_internal dts Assert stmt in 
   (loc, bs, ss)
