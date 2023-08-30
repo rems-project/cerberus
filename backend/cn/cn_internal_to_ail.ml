@@ -735,6 +735,8 @@ let cn_to_ail_resource_internal sym dts =
       | Owned (sct, _) -> rm_ctype (Sctypes.to_ctype sct)
       | PName _ -> ctype_
     in
+    Printf.printf "Resource var name: %s\n" (Sym.pp_string sym);
+
     let binding = create_binding sym ctype_ in
 
     let (b, s, e) = cn_to_ail_expr_internal dts p.pointer PassBack in
@@ -1081,9 +1083,25 @@ let rec cn_to_ail_cnprog_internal dts = function
   let ail_deref_expr_ = A.(AilEunary (Indirection, mk_expr e)) in
   (* TODO: Use ct for type binding *)
   (* TODO: Differentiate between read and deref cases for M_CN_let *)
-  let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in
+  let standardise_sym sym' = 
+    let sym_str = Sym.pp_string sym' in
+    let new_sym_str = String.map (fun c -> 
+      if Char.equal c '&' then '_' else c) sym_str in
+    Sym.fresh_pretty new_sym_str
+    in 
+  let name = standardise_sym name in
+
+  let ct_ = rm_ctype (Sctypes.to_ctype ct) in
+  let ct_without_ptr = match ct_ with 
+    | C.(Pointer (_, ct)) -> rm_ctype ct
+    | _ -> failwith "Should be pointer type"
+  in
+  let binding = create_binding name ct_without_ptr in
+ 
+  let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr ail_deref_expr_))]) in
+  (* let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in *)
   let (loc', b2, ss) = cn_to_ail_cnprog_internal dts prog in
-  (loc', b1 @ b2, s @ ail_stat_ :: ss)
+  (loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
   (* (loc, [], [empty_ail_stmt]) *)
