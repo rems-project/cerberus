@@ -286,6 +286,12 @@ let rec cn_to_ail_expr_aux_internal
     dest d ([], [], ail_expr_)
 
   | Sym sym ->
+    let sym = 
+      if (String.equal (Sym.pp_string sym) "return") then
+        Sym.fresh_pretty "__cn_ret"
+      else 
+        sym 
+    in
     let ail_expr_ = 
       (match const_prop with
         | Some (sym2, cn_const) ->
