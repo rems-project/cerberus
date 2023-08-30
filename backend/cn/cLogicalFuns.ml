@@ -84,6 +84,34 @@ let rec is_const_num = function
     end
   | _ -> false
 
+let rec add_pattern p v var_map =
+  let (M_Pattern (loc, _, pattern) : mu_pattern) = p in
+  match pattern with
+  | M_CaseBase (Some s, _) ->
+    return (SymMap.add s v var_map)
+  | M_CaseBase (None, _) ->
+    return var_map
+  | M_CaseCtor (M_Ctuple, ps) ->
+    begin match IT.term v with
+    | IT.Tuple vs ->
+      assert (List.length vs == List.length ps);
+      let p_vs = List.map2 (fun p v -> (p, v)) ps vs in
+      ListM.fold_rightM (fun (p, v) var_map -> add_pattern p v var_map)
+        p_vs var_map
+    | _ ->
+      fail {loc; msg = Generic (Pp.item "getting expr from C syntax: cannot tuple-split val"
+        (Pp.typ (IT.pp v) (Pp_mucore.Basic.pp_pattern p)))}
+    end
+  | _ ->
+    fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
+        (Pp_mucore.Basic.pp_pattern p))}
+
+let is_undef pexpr =
+  let (M_Pexpr (loc, _, _, pe)) = pexpr in
+  match pe with
+  | M_PEundef _ -> true
+  | _ -> false
+
 let rec symb_exec_mu_pexpr var_map pexpr =
   let (M_Pexpr (loc, _, _, pe)) = pexpr in
   match pe with
@@ -96,6 +124,20 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported val"
         (Pp_mucore.pp_pexpr pexpr))}
   end
+  | M_PElet (M_Pat p, e1, e2) ->
+    let@ r_v = symb_exec_mu_pexpr var_map e1 in
+    let@ var_map2 = add_pattern p r_v var_map in
+    symb_exec_mu_pexpr var_map2 e2
+  | M_PEif (cond_pe, x, y) ->
+    if is_undef x
+    then symb_exec_mu_pexpr var_map y
+    else if is_undef y
+    then symb_exec_mu_pexpr var_map x
+    else
+    let@ cond = symb_exec_mu_pexpr var_map cond_pe in
+    let@ x_v = symb_exec_mu_pexpr var_map x in
+    let@ y_v = symb_exec_mu_pexpr var_map y in
+    return (IT.ite_ (cond, x_v, y_v))
   | M_PEop (op, x, y) ->
     let@ x_v = symb_exec_mu_pexpr var_map x in
     let@ y_v = symb_exec_mu_pexpr var_map y in
@@ -113,9 +155,20 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     | OpGe  -> return (IT.ge_ (x_v, y_v))
     | OpAnd -> return (IT.and_ [x_v; y_v])
     | OpOr  -> return (IT.or_ [x_v; y_v])
+    | OpExp -> return (if is_const_num x_v && is_const_num y_v
+        then IT.exp_ (x_v, y_v) else IT.exp_no_smt_ (x_v, y_v))
     | _ -> fail {loc; msg = Generic (Pp.item "expr from C syntax: unsupported op"
         (Pp_mucore.Basic.pp_binop op))}
     end
+  | M_PEbitwise_unop (unop, pe1) ->
+    let@ x = symb_exec_mu_pexpr var_map pe1 in
+    let@ unop = match unop with
+      | M_BW_CTZ -> return IT.BWCTZNoSMT
+      | M_BW_FFS -> return IT.BWFFSNoSMT
+      | _ -> fail {loc; msg = Generic (Pp.item "expr from C syntax: unsupported unary op"
+        (Pp_mucore.pp_pexpr pexpr))}
+    in
+    return (IT.arith_unop unop x)
   | M_PEbitwise_binop (binop, pe1, pe2) ->
     let@ x = symb_exec_mu_pexpr var_map pe1 in
     let@ y = symb_exec_mu_pexpr var_map pe2 in
@@ -145,19 +198,11 @@ let rec symb_exec_mu_pexpr var_map pexpr =
   | M_PEwrapI (act, pe) ->
     let@ x = symb_exec_mu_pexpr var_map pe in
     do_wrapI loc act.ct x
+  | M_PEcatch_exceptional_condition (act, pe) ->
+    let@ x = symb_exec_mu_pexpr var_map pe in
+    do_wrapI loc act.ct x
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pure expr"
         (Pp_mucore.pp_pexpr pexpr))}
-
-let add_pattern p v expr var_map =
-  let (M_Pattern (loc, _, pattern) : mu_pattern) = p in
-  match pattern with
-  | M_CaseBase (Some s, _) ->
-    return (SymMap.add s v var_map)
-  | M_CaseBase (None, _) ->
-    return var_map
-  | _ ->
-    fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
-        (Pp_mucore.pp_expr expr))}
 
 let rec symb_exec_mu_expr ctxt state_vars expr =
   let (state, var_map) = state_vars in
@@ -173,7 +218,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     return (If_Else (g_v, r_e1, r_e2))
   | M_Elet (M_Pat p, e1, e2) ->
     let@ r_v = symb_exec_mu_pexpr var_map e1 in
-    let@ var_map2 = add_pattern p r_v expr var_map in
+    let@ var_map2 = add_pattern p r_v var_map in
     symb_exec_mu_expr ctxt (state, var_map2) e2
   | M_Ewseq (p, e1, e2)
   | M_Esseq (p, e1, e2) ->
@@ -181,7 +226,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     let rec cont = function
       | Call_Ret x -> (* early return *) return (Call_Ret x)
       | Compute (v, state) ->
-        let@ var_map2 = add_pattern p v expr var_map in
+        let@ var_map2 = add_pattern p v var_map in
         symb_exec_mu_expr ctxt (state, var_map2) e2
       | If_Else (t, x, y) ->
         let@ r_x = cont x in
