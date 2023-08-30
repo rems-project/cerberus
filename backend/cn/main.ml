@@ -158,7 +158,6 @@ let main
          (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
          print_log_file ("mucore", MUCORE prog5);
          Cerb_colour.do_colour := false; (* Needed for executable spec printing *)
-         let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
          | None -> ()
          | Some output_filename ->
@@ -192,7 +191,14 @@ let main
                 prerr_endline str
             end
          end;
-         return res
+
+        match output_decorated with 
+          | None -> 
+            let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in 
+            return res
+          | Some _ -> 
+            return ()
+
        in
        Pp.maybe_close_times_channel ();
        match result with
