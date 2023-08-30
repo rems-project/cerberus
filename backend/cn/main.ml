@@ -180,8 +180,7 @@ let main
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
          let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
          print_log_file ("mucore", MUCORE prog5);
-         Cerb_colour.do_colour := false; (* Needed for executable spec pprinting *)
-         let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
+         Cerb_colour.do_colour := false; (* Needed for executable spec printing *)
          begin match output_decorated with
          | None -> ()
          | Some output_filename ->
@@ -215,7 +214,14 @@ let main
                 prerr_endline str
             end
          end;
-         return res
+
+        match output_decorated with 
+          | None -> 
+            let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in 
+            return res
+          | Some _ -> 
+            return ()
+
        in
        Pp.maybe_close_times_channel ();
        match result with
