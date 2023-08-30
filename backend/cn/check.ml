@@ -1473,6 +1473,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                | `True -> return ()
                | `False -> 
                   let@ model = model () in
+                  let@ () = Diagnostics.investigate model lc in
                   fail_with_trace (fun trace ctxt ->
                       {loc; msg = Unproven_constraint {constr = lc; info = (loc, None); ctxt; model; trace}}
                     )
