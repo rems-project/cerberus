@@ -11,7 +11,7 @@ module Pos : sig
   val newline: t -> t
   val increment_line: t -> int -> t
   val of_location: Cerb_location.t -> (t * t, string) result
-  val to_string: t -> string
+  val[@warning "-unused-value-declaration"] to_string: t -> string
 end = struct
   type t = {
     line: int;
@@ -83,6 +83,11 @@ let decorate_injection str =
 
 let move_to ?(print=true) ?(no_ident=false) st pos =
   let open Pos in
+  (* Printf.fprintf stderr "MOVE_TO[%s] [off: %d] current_pos: %s --> %s\n"
+    (if print then "print" else "\x1b[33m skip\x1b[0m")
+    (Stdlib.pos_in st.input)
+    (Pos.to_string st.current_pos)
+    (Pos.to_string pos); *)
   assert (pos.line > 0);
   assert (pos.line >= st.current_pos.line);
   (* if not (pos.line >= st.current_pos.line) then begin
@@ -153,7 +158,7 @@ let inject st inj =
   let st = begin match inj.kind with
     | InStmt str ->
         let (st, _) = move_to ~no_ident:true ~print:false st inj.end_pos (*{inj.end_pos with col= inj.end_pos.col }*) in
-        do_output st (String.escaped str)
+        do_output st ((*String.escaped*) str)
     | Return None ->
         do_output st ""
         (* do_output st ("__CN_RETURN_VOID;") *)
@@ -283,16 +288,17 @@ let rec mapM f xs =
      Ok (y :: ys)
 
 let in_stmt_injs xs num_headers =
-  mapM (fun (loc, str) ->
+  mapM (fun (loc, strs) ->
     let* (start_pos, end_pos) = Pos.of_location loc in
     let num_headers = if (num_headers != 0) then (num_headers + 1) else num_headers in
-    Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s\n Injection string: '%s'\n"
+    (* Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s ---> [%s]\n"
       (Cerb_location.location_to_string loc)
-      (Pos.to_string start_pos) (Pos.to_string end_pos) (String.escaped str);
+      (Pos.to_string start_pos) (Pos.to_string end_pos)
+      (String.concat "; " (List.map (fun str -> "'" ^ String.escaped str ^ "'") strs)); *)
     Ok
       { start_pos= Pos.increment_line start_pos num_headers (* { col= start_pos.col; line= start_pos.line + num_headers } *)
-      ; end_pos= Pos.v (end_pos.line + num_headers) (end_pos.col + 6) (*{col= end_pos.col + 6; line= end_pos.line + num_headers }*)
-      ; kind= InStmt str }
+      ; end_pos= Pos.v (end_pos.line + num_headers) end_pos.col (*{col= end_pos.col + 6; line= end_pos.line + num_headers }*)
+      ; kind= InStmt (String.concat "\n" strs) }
   ) (List.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs)
 
 (* build the injections for the pre/post conditions of a C function *)
@@ -309,6 +315,12 @@ let pre_post_injs pre_post is_void (A.AnnotatedStatement (loc, _, stmt_)) =
           Ok (pre_pos, post_pos)
       | _ ->
           Error (__FUNCTION__ ^ ": must be called on a function body statement") in
+  (* Printf.fprintf stderr "PRE[%s], pos: %s\n"
+    (Cerb_location.location_to_string loc)
+    (Pos.to_string pre_pos);
+  Printf.fprintf stderr "POST[%s], pos: %s\n"
+    (Cerb_location.location_to_string loc)
+    (Pos.to_string post_pos); *)
   Ok
     ( { start_pos= pre_pos; end_pos= pre_pos
       ; kind= Pre (fst pre_post, is_void) }
