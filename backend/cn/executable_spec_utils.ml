@@ -59,3 +59,16 @@ type cn_dependency_graph = {
 
 let compute_cn_dependencies ail_prog =
   ail_prog
+
+
+
+let generate_include_header (file_name, is_system_header) = 
+  let pre = "#include " in
+  let incl = 
+    if is_system_header then
+      "<" ^ file_name ^ ">"
+    else
+      "\"" ^ file_name ^ "\""
+  in
+  pre ^ incl ^ "\n"
+
