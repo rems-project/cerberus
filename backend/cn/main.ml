@@ -3,6 +3,7 @@ module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
 open Setup
+open Executable_spec_utils
 
 module A=CF.AilSyntax 
 
@@ -200,9 +201,15 @@ let main
             let c_functions = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             let c_predicates = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates in
             (* TODO: Topological sort *)
+            Stdlib.output_string cn_oc (generate_include_header ("alloc.c", false));
             Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_functions;
             Stdlib.output_string cn_oc c_predicates;
+
+            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("alloc.c", false); ("cn.c", false);] in
+            let headers = List.map generate_include_header incls in
+            Stdlib.output_string oc (List.fold_left (^) "" headers);
+            Stdlib.output_string oc "\n";
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
