@@ -73,13 +73,14 @@ let parse parser_start (loc, string) =
        in
        let message = String.sub message 0 (String.length message - 1) in
        (* the two tokens between which the error occurred *)
-       let where =  MenhirLib.ErrorReports.show (fun (start, curr) ->
+       let where = try MenhirLib.ErrorReports.show (fun (start, curr) ->
            Lexing.lexeme {
              lexbuf with
              lex_start_pos = start.Lexing.pos_cnum - start.pos_bol;
              lex_curr_pos = curr.Lexing.pos_cnum - curr.pos_bol;
            }
-         ) buffer in
+         ) buffer
+         with Invalid_argument _ -> "(error in fetching token)" in
        (* fix caret pointing *)
        let plus_3 (l : Lexing.position) = { l with pos_cnum = l.pos_cnum + 3 } in
        let start = Lexing.lexeme_start_p lexbuf in

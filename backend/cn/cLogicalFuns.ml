@@ -21,6 +21,7 @@ let mu_val_to_it = function
   | M_Vfalse -> Some (IT.bool_ false)
   | M_Vobject (M_OVinteger iv) -> Some (IT.z_ (Memory.z_of_ival iv))
   | M_Vctype ct -> Option.map IT.const_ctype_ (Sctypes.of_ctype ct)
+  | M_Vfunction_addr sym -> Some (IT.sym_ (sym, BT.Loc))
   | _ -> None
 
 let local_sym_ptr = Sym.fresh_named "local_ptr"
@@ -28,6 +29,11 @@ let local_sym_ptr = Sym.fresh_named "local_ptr"
 type state = {
   loc_map : (IT.t option) IntMap.t;
   next_loc : int;
+}
+
+type context = {
+  label_defs : unit mu_label_defs;
+  c_fun_pred_map : (Sym.t * LogicalFunctions.definition) SymMap.t;
 }
 
 let init_state = { loc_map = IntMap.empty; next_loc = 1 }
@@ -110,6 +116,24 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     | _ -> fail {loc; msg = Generic (Pp.item "expr from C syntax: unsupported op"
         (Pp_mucore.Basic.pp_binop op))}
     end
+  | M_CivAND (act, pe1, pe2)
+  | M_CivOR (act, pe1, pe2)
+  | M_CivXOR (act, pe1, pe2) ->
+    let@ x = symb_exec_mu_pexpr var_map pe1 in
+    let@ y = symb_exec_mu_pexpr var_map pe2 in
+    let binop = match pe with
+      | M_CivAND _ -> IT.BWAndNoSMT
+      | M_CivOR _ -> IT.BWOrNoSMT
+      | M_CivXOR _ -> IT.XORNoSMT
+      | _ -> assert false
+    in
+    do_wrapI loc act.ct (IT.arith_binop binop (x, y))
+  | M_PEbool_to_integer pe ->
+    let@ x = symb_exec_mu_pexpr var_map pe in
+    return (IT.ite_ (x, IT.int_ 1, IT.int_ 0))
+  | M_PEnot pe ->
+    let@ x = symb_exec_mu_pexpr var_map pe in
+    return (IT.not_ x)
   | M_PEconv_int (ct_expr, pe)
   | M_PEconv_loaded_int (ct_expr, pe) ->
     let@ x = symb_exec_mu_pexpr var_map pe in
@@ -138,12 +162,7 @@ let add_pattern p v expr var_map =
     fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
         (Pp_mucore.pp_expr expr))}
 
-let rec mk_var_map nms vs = match nms, vs with
-  | [], [] -> SymMap.empty
-  | (nm :: nms, v :: vs) -> SymMap.add nm v (mk_var_map nms vs)
-  | _ -> assert false
-
-let rec symb_exec_mu_expr label_defs state_vars expr =
+let rec symb_exec_mu_expr ctxt state_vars expr =
   let (state, var_map) = state_vars in
   let (M_Expr (loc, _, e)) = expr in
   match e with
@@ -152,37 +171,54 @@ let rec symb_exec_mu_expr label_defs state_vars expr =
     return (Compute (r_v, state))
   | M_Eif (g_e, e1, e2) ->
     let@ g_v = symb_exec_mu_pexpr var_map g_e in
-    let@ r_e1 = symb_exec_mu_expr label_defs (state, var_map) e1 in
-    let@ r_e2 = symb_exec_mu_expr label_defs (state, var_map) e2 in
+    let@ r_e1 = symb_exec_mu_expr ctxt (state, var_map) e1 in
+    let@ r_e2 = symb_exec_mu_expr ctxt (state, var_map) e2 in
     return (If_Else (g_v, r_e1, r_e2))
   | M_Elet (M_Pat p, e1, e2) ->
     let@ r_v = symb_exec_mu_pexpr var_map e1 in
     let@ var_map2 = add_pattern p r_v expr var_map in
-    symb_exec_mu_expr label_defs (state, var_map2) e2
+    symb_exec_mu_expr ctxt (state, var_map2) e2
   | M_Ewseq (p, e1, e2)
   | M_Esseq (p, e1, e2) ->
-    let@ r1 = symb_exec_mu_expr label_defs (state, var_map) e1 in
+    let@ r1 = symb_exec_mu_expr ctxt (state, var_map) e1 in
     let rec cont = function
       | Call_Ret x -> (* early return *) return (Call_Ret x)
       | Compute (v, state) ->
         let@ var_map2 = add_pattern p v expr var_map in
-        symb_exec_mu_expr label_defs (state, var_map2) e2
+        symb_exec_mu_expr ctxt (state, var_map2) e2
       | If_Else (t, x, y) ->
         let@ r_x = cont x in
         let@ r_y = cont y in
         return (If_Else (t, r_x, r_y))
     in
     cont r1
+  | M_Eunseq exps ->
+    let orig_expr = expr in
+    let rec cont1 state exp_its = function
+      | [] -> return (Compute (IT.tuple_ (List.rev exp_its), state))
+      | (exp :: exps) ->
+        let@ r = symb_exec_mu_expr ctxt (state, var_map) exp in
+        cont2 exp_its exps r
+      and cont2 exp_its exps = function
+      | Call_Ret _ -> fail {loc; msg = Generic
+          (Pp.item "unsequenced return" (Pp_mucore.pp_expr orig_expr))}
+      | Compute (v, state) -> cont1 state (v :: exp_its) exps
+      | If_Else (t, x, y) ->
+        let@ r_x = cont2 exp_its exps x in
+        let@ r_y = cont2 exp_its exps y in
+        return (If_Else (t, r_x, r_y))
+    in
+    cont1 state [] exps
   | M_Erun (sym, args) ->
     let@ arg_vs = ListM.mapM (symb_exec_mu_pexpr var_map) args in
-    begin match Pmap.lookup sym label_defs with
+    begin match Pmap.lookup sym ctxt.label_defs with
     | Some (M_Return _) ->
       assert (List.length args == 1);
       return (Call_Ret (List.hd arg_vs))
     | _ ->
        fail {loc; msg = Generic Pp.(!^"function has goto-labels in control-flow")}
     end
-  | M_Ebound ex -> symb_exec_mu_expr label_defs (state, var_map) ex
+  | M_Ebound ex -> symb_exec_mu_expr ctxt (state, var_map) ex
   | M_Eaction (M_Paction (_, M_Action (_, action))) ->
     begin match action with
     | M_Create (pe, act, prefix) ->
@@ -209,20 +245,23 @@ let rec symb_exec_mu_expr label_defs state_vars expr =
     | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported memory op"
         (Pp_mucore.pp_expr expr))}
     end
+  | M_Eccall (act, fun_pe, args_pe) ->
+    let@ fun_it = symb_exec_mu_pexpr var_map fun_pe in
+    let@ args_its = ListM.mapM (symb_exec_mu_pexpr var_map) args_pe in
+    let fail_fun_it msg = fail {loc;
+        msg = Generic (Pp.item ("getting expr from C syntax: function val: " ^ msg)
+            (Pp.typ (Pp_mucore.pp_pexpr fun_pe) (IT.pp fun_it)))} in
+    let@ (pred, def) = match IT.is_sym fun_it with
+    | None -> fail_fun_it "not a constant function address"
+    | Some (nm, _) -> begin match SymMap.find_opt nm ctxt.c_fun_pred_map with
+        | None -> fail_fun_it "not a function to be expr-converted"
+        | Some (pred, def) -> return (pred, def)
+    end in
+    return (Compute (IT.pred_ pred args_its def.LogicalFunctions.return_bt, state))
+  | M_CN_progs _ ->
+    return (Compute (IT.unit_, state))
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
         (Pp_mucore.pp_expr expr))}
-
-let c_function_to_it fsym rbt args body label_defs : (IT.t) m  =
-  let (M_Pexpr (loc, _, _, pe_)) = body in
-  match pe_ with
-  | M_PEval _ -> fail {loc; msg = Generic (Pp.string "PEval")}
-  | _ -> fail {loc; msg = Generic (Pp.string "not PEval")}
-
-let c_function_to_it2 fsym rbt args body label_defs : (IT.t) m  =
-  let (M_Expr (loc, _, e_)) = body in
-  match e_ with
-  | M_Epure pe -> c_function_to_it fsym rbt args pe label_defs
-  | _ -> fail {loc; msg = Generic (Pp.item "c_function_to_it2" (Pp_mucore.pp_expr body))}
 
 let rec get_ret_it = function
   | Call_Ret v -> Some v
@@ -232,7 +271,7 @@ let rec get_ret_it = function
     Option.bind (get_ret_it y) (fun y_v ->
     Some (IT.ite_ (t, x_v, y_v))))
 
-let c_fun_to_it id_loc (id : Sym.t) fsym def
+let c_fun_to_it id_loc c_fun_pred_map (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
   let def_args = def.LogicalFunctions.args
     |> List.map IndexTerms.sym_ in
@@ -256,7 +295,8 @@ let c_fun_to_it id_loc (id : Sym.t) fsym def
           assert false
      in
     let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
-    let@ r = symb_exec_mu_expr labels (init_state, arg_map) body in
+    let ctxt = {label_defs = labels; c_fun_pred_map; } in
+    let@ r = symb_exec_mu_expr ctxt (init_state, arg_map) body in
     begin match get_ret_it r with
     | Some it -> return it
     | _ -> fail {loc;
@@ -285,13 +325,17 @@ let upd_def loc sym def_tm logical_predicates =
 let add_c_fun_defs logical_predicates log_c_defs =
   let pred_def_map = List.fold_left (fun m (sym, def) -> SymMap.add sym def m)
     SymMap.empty logical_predicates in
-  let@ conv_defs = ListM.mapM (fun (fsym, fbody, loc, pred_sym) ->
+  let@ c_fun_pred_map = ListM.fold_leftM (fun m (fsym, _, loc, pred_sym) ->
         let@ def = match SymMap.find_opt pred_sym pred_def_map with
           | Some def -> return def
           | None -> fail {loc; msg = Unknown_logical_function
                 {id = pred_sym; resource = false}}
         in
-        let@ it = c_fun_to_it loc pred_sym fsym def fbody in
+        return (SymMap.add fsym (pred_sym, def) m))
+    SymMap.empty log_c_defs in
+  let@ conv_defs = ListM.mapM (fun (fsym, fbody, loc, pred_sym) ->
+        let (_, def) = SymMap.find  fsym c_fun_pred_map in
+        let@ it = c_fun_to_it loc c_fun_pred_map pred_sym fsym def fbody in
         Pp.debug 4 (lazy (Pp.item "converted c function body to logical fun"
             (Pp.typ (Sym.pp fsym) (IT.pp it))));
         return (loc, pred_sym, it)) log_c_defs in
