@@ -15,6 +15,16 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
   (* let test_var_sym = Sym.fresh_pretty "test_var" in *)
   (* let test_decl = A.(AilSdeclaration [(test_var_sym, Some (mk_expr (AilEident (Sym.fresh_pretty "some_val"))))]) in *)
   (* let test_binding = A.(test_var_sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, mk_ctype CF.Ctype.Void)) in *)
+  let is_assert_true = function 
+    | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEassert expr))) ->
+      (match (rm_expr expr) with
+        | A.(AilEconst (ConstantInteger (IConstant (z, Decimal, Some B)))) -> Z.equal z (Z.of_int 1)
+        | _ -> false
+        )
+    | _ -> false
+  in
+
+  let ail_stats_ = List.filter (fun s -> not (is_assert_true s)) ail_stats_ in
   let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s)) ail_stats_ in
   let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
   List.map CF.Pp_utils.to_plain_pretty_string doc
