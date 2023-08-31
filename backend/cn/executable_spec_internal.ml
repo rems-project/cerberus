@@ -86,7 +86,8 @@ let generate_c_specs_internal instrumentation_list type_map (statement_locs : Ce
 (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog in 
-    let c_statements = List.map (fun ((_, ss) as s) -> generate_c_statements_internal s ail_prog.cn_datatypes) instrumentation.internal.statements in
+    let internal_statements = List.filter (fun (_, ss) ->  List.length ss != 0) instrumentation.internal.statements in
+    let c_statements = List.map (fun s -> generate_c_statements_internal s ail_prog.cn_datatypes) internal_statements in
 
     (* let rec add_bindings_to_map m bs = 
       match bs with 
