@@ -1097,7 +1097,7 @@ let rec cn_to_ail_cnprog_internal dts = function
   let ct_ = rm_ctype (Sctypes.to_ctype ct) in
   let ct_without_ptr = match ct_ with 
     | C.(Pointer (_, ct)) -> rm_ctype ct
-    | _ -> failwith "Should be pointer type"
+    | ct_' -> ct_'
   in
   let binding = create_binding name ct_without_ptr in
  
