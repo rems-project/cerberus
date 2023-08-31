@@ -194,7 +194,11 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     | None -> fail {loc; msg = Generic (Pp.item "expr from C syntax: non-constant type"
         (IT.pp ct_it))}
     in
-    do_wrapI loc ct x
+    begin match ct with
+    | Sctypes.Integer Sctypes.IntegerTypes.Bool ->
+      return (IT.ite_ (IT.eq_ (x, IT.int_ 0), IT.int_ 0, IT.int_ 1))
+    | _ -> do_wrapI loc ct x
+    end
   | M_PEwrapI (act, pe) ->
     let@ x = symb_exec_mu_pexpr var_map pe in
     do_wrapI loc act.ct x
