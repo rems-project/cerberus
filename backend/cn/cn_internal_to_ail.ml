@@ -851,7 +851,6 @@ let cn_to_ail_resource_internal sym dts =
       | Owned (sct, _) -> rm_ctype (Sctypes.to_ctype sct)
       | PName _ -> ctype_
     in
-    let binding = create_binding sym ctype_ in
 
 
     let (rhs, bs, ss) = match q.name with 
@@ -862,11 +861,20 @@ let cn_to_ail_resource_internal sym dts =
         (fcall, bs, ss)
     in
 
+    let pointer_type = match ctype_ with 
+      | C.(Pointer (_, Ctype (_, Void))) -> ctype_
+      | ct_ -> C.(Pointer (empty_qualifiers, mk_ctype ct_))
+    in
+
+    let sym_binding = create_binding sym pointer_type in
+    let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int 10000, Decimal, None)))))])) in
+    let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr alloc_call))]) in
+
     let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in
     let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q.q))))) in 
     let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
 
-    (b1 @ b2 @ b3 @ [start_binding; binding] @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ [start_assign; while_loop])
+    (b1 @ b2 @ b3 @ [start_binding; sym_binding] @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ [start_assign; sym_decl; while_loop])
 
 let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
   = fun dts d lc -> 
