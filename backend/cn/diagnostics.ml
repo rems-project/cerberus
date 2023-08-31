@@ -40,23 +40,21 @@ let continue_with (opts : opt list) cfg =
 
 let term_with_model_name nm cfg x =
   let@ g = get_global () in
+  let open Pp in
   match Solver.eval g (fst cfg.model) x with
   | None ->
-    let open Pp in
     return (bold nm ^^ colon ^^^ parens (string "cannot eval") ^^ colon ^^^ IT.pp x)
   | Some r ->
-    if IT.is_true r
+    if IT.is_true r || IT.is_false r
     then begin
       let@ p = provable Locations.unknown in
-      let info = match p (LC.T x) with
-        | `True -> "provably true"
-        | `False -> "true in this model"
+      let info = match p (LC.T (IT.eq_ (x, r))) with
+        | `True -> (!^ "provably" ^^^ IT.pp r)
+        | `False -> (IT.pp r ^^^ !^"in this model")
       in
-      let open Pp in
-      return (bold nm ^^ colon ^^^ parens (string info) ^^ colon ^^^ IT.pp x)
+      return (bold nm ^^ colon ^^^ parens info ^^ colon ^^^ IT.pp x)
     end else
-    let open Pp in
-    return (bold nm ^^ colon ^^^ parens (IT.pp r ^^^ string "in model") ^^ colon ^^^ IT.pp x)
+    return (bold nm ^^ colon ^^^ parens (IT.pp r ^^^ !^"in model") ^^ colon ^^^ IT.pp x)
 
 let bool_subterms1 t = match IT.term t with
   | IT.Binop (And, it,it') -> [it;it']
@@ -196,17 +194,18 @@ and investigate_ite cfg t =
     | ITE (x, y, z) -> x :: acc
     | _ -> acc) [] [] t in
   let@ g = get_global () in
-  let sc1 = Simplify.default g in
-  let sc f = sc1 in
-  let simp f t = Simplify.IndexTerms.simp (sc f) t in
+  let sc x b = Simplify.{(default g) with simp_hook = (fun y ->
+    if IT.equal x y then Some b else None)} in
+  let simp x b t = Simplify.IndexTerms.simp (sc x b) t in
   let opt x b =
     let nm = if b then "true" else "false" in
-    let f = if b then x else IT.not_ x in
     let@ doc = term_with_model_name ("rewrite ite cond to " ^ nm) cfg x in
     return {doc; continue = fun cfg ->
           let open Pp in
-          print stdout (bold "rewrote to:" ^^^ IT.pp (simp f t));
-          investigate_term cfg (simp f t)}
+          let t' = simp x (IT.bool_ b) t in
+          print stdout (bold "rewrote to:" ^^^ IT.pp t');
+          print stdout (bold "different to previous:" ^^^ IT.pp (IT.bool_ (not (IT.equal t t'))));
+          investigate_term cfg t'}
   in
   let opts x = ListM.mapM (opt x) [true; false] in
   let@ xs = ListM.mapM opts ites in
