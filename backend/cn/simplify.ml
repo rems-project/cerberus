@@ -21,11 +21,13 @@ module LCSet = Set.Make(LC)
 type simp_ctxt = {
     global : Global.t;
     values : IT.t SymMap.t;
+    simp_hook : IT.t -> IT.t option;
   }
 
 let default global = {
     global;
-    values = SymMap.empty; 
+    values = SymMap.empty;
+    simp_hook = (fun _ -> None);
   }
 
 
@@ -154,7 +156,12 @@ module IndexTerms = struct
 
     let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
 
-    fun (IT (the_term_, the_bt) as the_term) ->
+    fun it ->
+    let the_term = match simp_ctxt.simp_hook it with
+    | None -> it
+    | Some it' -> it'
+    in
+    let (IT (the_term_, the_bt)) = the_term in
     match the_term_ with
     | Sym _ when BT.equal the_bt BT.Unit -> 
        unit_
@@ -223,8 +230,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Mul, a, b), the_bt)
        end
-    | Binop (MulNoSMT, a, b) ->
-       IT (Binop (MulNoSMT, aux a, aux b), the_bt)
     | Binop (Div, a, b) ->
        let a = aux a in
        let b = aux b in 
@@ -241,8 +246,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Div, a, b), the_bt) 
        end
-    | Binop (DivNoSMT, a, b) ->
-       IT (Binop (DivNoSMT, aux a, aux b), the_bt)
     | Binop (Exp, a, b) ->
        let a = aux a in
        let b = aux b in
@@ -252,10 +255,6 @@ module IndexTerms = struct
        | _ ->
           IT.exp_ (a, b)
        end
-    | Binop (ExpNoSMT, a, b) ->
-       let a = aux a in
-       let b = aux b in
-       IT.exp_no_smt_ (a, b)
     | Binop (Rem, a, b) ->
        let a = aux a in
        let b = aux b in 
@@ -272,8 +271,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Rem, a, b), the_bt) 
        end
-    | Binop (RemNoSMT, a, b) ->
-       IT (Binop (RemNoSMT, aux a, aux b), the_bt)
     | Binop (Mod, a, b) ->
        let a = aux a in
        let b = aux b in
@@ -288,8 +285,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Mod, a, b), the_bt) 
        end
-    | Binop (ModNoSMT, a, b) ->
-       IT (Binop (ModNoSMT, aux a, aux b), the_bt)
     | Binop (LT, a, b) -> 
       let a = aux a in
       let b = aux b in
@@ -335,9 +330,6 @@ module IndexTerms = struct
        let b = aux b in
        if IT.equal a b then a else
        IT (Binop (Max, a, b), the_bt)
-    | Binop (XORNoSMT, a, b) ->
-       IT (Binop (XORNoSMT, aux a, aux b), the_bt)
-
     | Binop (And, it1, it2) ->
       let it1 = aux it1 in
       let it2 = aux it2 in
@@ -528,6 +520,14 @@ module IndexTerms = struct
        else if IT.equal a b
        then bool_ true
        else IT (Binop (LEPointer, a, b), the_bt)
+    | Binop (op, a, b) ->
+       IT (Binop (op, aux a, aux b), the_bt)
+    | Unop (op, a) ->
+       IT (Unop (op, aux a), the_bt)
+    | Constructor (ctor, ts) ->
+       IT (Constructor (ctor, List.map_snd aux ts), the_bt)
+    | WrapI (act, t) ->
+       IT (WrapI (act, aux t), the_bt)
     | Cast (cbt, a) ->
        let a = aux a in
        IT (Cast (cbt, a), the_bt)
@@ -600,7 +600,8 @@ module IndexTerms = struct
         | None -> t
         end
     | _ ->
-       the_term
+      (* FIXME: it's problematic that some term shapes aren't even explored *)
+      it
 
 
   let simp_flatten simp_ctxt term =
@@ -611,11 +612,8 @@ module IndexTerms = struct
 
 
 
-  let eval simp_ctxt = 
-    simp ~inline_functions:true 
-      { global = simp_ctxt.global; 
-        values = simp_ctxt.values; 
-      }
+  let eval simp_ctxt =
+    simp ~inline_functions:true simp_ctxt
 
 end
 
