@@ -518,8 +518,10 @@ let print_core (conf, io) ~filename core_file =
 let core_passes (conf, io) ~filename core_file =
   (* If using the switch making load() returning unspecified value undefined, then
      we remove from the Core the code dealing with them. *)
+  (* This is disabled for CHERI because some of the CHERI_intrinsics can
+     return an unspecified value *)
   let core_file =
-    if Switches.(has_switch SW_strict_reads) then
+    if Switches.(has_switch SW_strict_reads && not (is_CHERI ())) then
       Remove_unspecs.rewrite_file core_file
     else
       core_file in
