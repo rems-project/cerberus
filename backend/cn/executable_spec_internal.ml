@@ -129,6 +129,14 @@ let generate_c_specs_internal instrumentation_list type_map (statement_locs : Ce
 let concat_map_newline docs = 
   PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs
 
+let generate_doc_from_ail_struct ail_struct = 
+  CF.Pp_ail.pp_tag_definition ~executable_spec:true ail_struct ^^ PPrint.hardline
+
+
+let generate_c_records ail_structs = 
+  let struct_docs = List.map generate_doc_from_ail_struct ail_structs in
+  CF.Pp_utils.to_plain_pretty_string (PPrint.concat struct_docs)
+
 (* TODO: Use Mucore datatypes instead of CN datatypes from Ail program *)
 let generate_c_datatypes cn_datatypes = 
   let ail_datatypes = match cn_datatypes with
@@ -138,18 +146,12 @@ let generate_c_datatypes cn_datatypes =
         let ail_dts = List.map Cn_internal_to_ail.cn_to_ail_datatype ds in
         ail_dt1 :: ail_dts
   in
-  (* TODO: Fix number of newlines generated using fold *)
-  let generate_str_from_ail_dt (ail_dt: CF.GenTypes.genTypeCategory Cn_internal_to_ail.ail_datatype) = 
-    let stats = List.map (fun c -> CF.Pp_ail.pp_statement ~executable_spec:true c ^^ PPrint.hardline) ail_dt.stats in
-    let stats = List.fold_left (^^) empty stats in
-    let decls_doc = List.map Ail_to_c.pp_ail_declaration ail_dt.decls in
-    let decls_doc = List.fold_left (^^) empty decls_doc in
-    let structs_doc = PPrint.concat_map (fun s -> CF.Pp_ail.pp_tag_definition ~executable_spec:true s ^^ PPrint.hardline) ail_dt.structs in 
-    (decls_doc ^^ PPrint.hardline ^^ stats, structs_doc)
-  in
-  let docs = List.map generate_str_from_ail_dt ail_datatypes in
-  let (consts, structs) = List.split docs in
-  CF.Pp_utils.to_plain_pretty_string (concat_map_newline consts ^^ concat_map_newline structs)
+
+  let ail_datatypes = List.concat ail_datatypes in
+  
+  let structs = List.map generate_doc_from_ail_struct ail_datatypes in
+  CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs)
+
 
 let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (logical_predicates : Mucore.T.logical_predicates)  =
   let ail_funs = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes) logical_predicates in
@@ -159,8 +161,13 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   CF.Pp_utils.to_plain_pretty_string doc
 
 let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates)  =
-  let ail_funs = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes) resource_predicates in
+  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes) resource_predicates in
+  let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true false true (None, modified_prog) in
-  CF.Pp_utils.to_plain_pretty_string doc
+  let preds_str = 
+  CF.Pp_utils.to_plain_pretty_string doc in
+  let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
+  let records_str = generate_c_records (List.concat ail_records) in
+  (preds_str, records_str)
