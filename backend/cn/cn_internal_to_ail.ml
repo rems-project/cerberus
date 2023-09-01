@@ -732,13 +732,14 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   enum :: structs
 
-let cn_to_ail_resource_internal sym dts =
+let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
   (* Binding will be different depending on whether it's a p or q - q is array*)
-  (* TODO: Match on p.name and q.name *)
   let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in 
   function
   | ResourceTypes.P p -> 
-    (* let ctype_ =  bt_to_ail_ctype (IT.bt p.pointer) in *)
+    let _pt_ctype_ =  bt_to_ail_ctype (IT.bt p.pointer) in
+    (* TODO: Come back to this to mirror q case *)
+    (* TODO: Extract code that is common between p and q cases to avoid duplication *)
     let ctype_ = match p.name with 
       | Owned (sct, _) -> rm_ctype (Sctypes.to_ctype sct)
       | PName pred_name -> 
@@ -843,6 +844,8 @@ let cn_to_ail_resource_internal sym dts =
       } 
     *)
 
+
+
     let start_expr = generate_start_expr (get_leftmost_and_expr e2) in
     let end_cond = get_rest_of_expr e2 in
 
@@ -855,12 +858,22 @@ let cn_to_ail_resource_internal sym dts =
     in
     let sym_add_expr = make_deref_expr_ (gen_add_expr_ A.(AilEident sym)) in
 
-    let ctype_ =  bt_to_ail_ctype (IT.bt q.pointer) in
+    (* let ctype_ =  bt_to_ail_ctype (IT.bt q.pointer) in *)
     let ctype_ = match q.name with 
       | Owned (sct, _) -> rm_ctype (Sctypes.to_ctype sct)
-      | PName _ -> ctype_
+      | PName pname -> 
+        let matching_preds = List.filter (fun (pred_sym', def) -> String.equal (Sym.pp_string pname) (Sym.pp_string pred_sym')) preds in
+        let (pred_sym', pred_def') = match matching_preds with 
+          | [] -> failwith "Predicate not found"
+          | p :: _ -> p 
+        in 
+        let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
+        match cn_bt with 
+          | CN_record _ ->
+            let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_sym' in
+            C.(Pointer (empty_qualifiers, (mk_ctype (Struct pred_record_name))))
+          | _ -> cn_to_ail_base_type ~pred_sym:(Some pred_sym') cn_bt
     in
-
 
     let (rhs, bs, ss) = match q.name with 
       | Owned _ -> (make_deref_expr_ (gen_add_expr_ e1), [], [])
@@ -870,20 +883,27 @@ let cn_to_ail_resource_internal sym dts =
         (fcall, bs, ss)
     in
 
-    let pointer_type = match ctype_ with 
+    (* let pointer_type = match ctype_ with 
       | C.(Pointer (_, Ctype (_, Void))) -> ctype_
       | ct_ -> C.(Pointer (empty_qualifiers, mk_ctype ct_))
+    in *)
+    let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q_sym))))) in 
+
+    let (bs', ss') = match ctype_ with 
+      | C.Void -> 
+        let void_pred_call = A.(AilSexpr (mk_expr rhs)) in
+        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [void_pred_call; increment_stat])), 0)) in
+        ([], [while_loop])
+      | _ -> 
+        let sym_binding = create_binding sym ctype_ in
+        let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int 10000, Decimal, None)))))])) in
+        let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr alloc_call))]) in
+        let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in
+        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
+        ([sym_binding], [sym_decl; while_loop])
     in
 
-    let sym_binding = create_binding sym pointer_type in
-    let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int 10000, Decimal, None)))))])) in
-    let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr alloc_call))]) in
-
-    let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in
-    let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q_sym))))) in 
-    let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
-
-    (b1 @ b2 @ b3 @ [start_binding; sym_binding] @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ [start_assign; sym_decl; while_loop])
+    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ [start_assign] @ ss')
 
 let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
   = fun dts d lc -> 
@@ -917,7 +937,7 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
   (decl, def)
 
-let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts = 
+let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts preds = 
   let rec predicate_clause_to_ail = function
       | LAT.Define ((name, it), info, lat) -> 
         let ctype_ = bt_to_ail_ctype (IT.bt it) in
@@ -927,7 +947,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
         (b1 @ b2 @ [binding], s1 @ s2)
 
       | LAT.Resource ((name, (ret, bt)), info, lat) -> 
-        let (b1, s1) = cn_to_ail_resource_internal name dts ret in
+        let (b1, s1) = cn_to_ail_resource_internal name dts preds ret in
         let (b2, s2) = predicate_clause_to_ail lat in
         (b1 @ b2, s1 @ s2)
 
@@ -994,19 +1014,19 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
 
 
 
-let rec cn_to_ail_arguments_l_internal dts = function
+let rec cn_to_ail_arguments_l_internal dts preds = function
     (* CN let *)
   | M_Define ((sym, it), _info, l) ->
     let binding = create_binding sym (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts it (AssignVar sym) in
-    let (b2, s2) = cn_to_ail_arguments_l_internal dts l in
+    let (b2, s2) = cn_to_ail_arguments_l_internal dts preds l in
     (b1 @ b2 @ [binding], s1 @ s2)
 
     (* CN take *)
   | M_Resource ((sym, (re, _bt)), _info, l) -> 
     (* Printf.printf "Reached M_Resource (Owned)\n"; *)
-    let (b1, s1) = cn_to_ail_resource_internal sym dts re in
-    let (b2, s2) = cn_to_ail_arguments_l_internal dts l in
+    let (b1, s1) = cn_to_ail_resource_internal sym dts preds re in
+    let (b2, s2) = cn_to_ail_arguments_l_internal dts preds l in
     (b1 @ b2, s1 @ s2)
 
     (* CN assertion (or inside of take) *)
@@ -1016,31 +1036,31 @@ let rec cn_to_ail_arguments_l_internal dts = function
     let ail_stat_ = A.(AilSexpr (mk_expr e)) in
     s @ ail_stat_ ::  *)
     (* TODO: Check for assertion case *)
-    cn_to_ail_arguments_l_internal dts l
+    cn_to_ail_arguments_l_internal dts preds l
      (* Pp.parens (LogicalConstraints.pp lc) ^^^ pp_mu_arguments_l ppf l *)
   | M_I i -> ([], [])
   (* failwith "TODO" *)
      (* !^"->" ^^^ Pp.parens (ppf i) *)
 
-let rec cn_to_ail_arguments_internal dts = function
+let rec cn_to_ail_arguments_internal dts preds = function
   | M_Computational ((s, bt), _info, a) ->
     (* TODO: Do something with s and bt *)
-      cn_to_ail_arguments_internal dts a
+      cn_to_ail_arguments_internal dts preds a
   | M_L l ->
-      cn_to_ail_arguments_l_internal dts l
+      cn_to_ail_arguments_l_internal dts preds l
 
 (* TODO: Generate bindings *)
 (* TODO: Add destination passing? *)
-let rec cn_to_ail_post_aux_internal dts = function
+let rec cn_to_ail_post_aux_internal dts preds = function
   | LRT.Define ((name, it), info, t) ->
     let binding = create_binding name (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts it (AssignVar name) in
-    let (b2, s2) = cn_to_ail_post_aux_internal dts t in
+    let (b2, s2) = cn_to_ail_post_aux_internal dts preds t in
     (b1 @ b2 @ [binding], s1 @ s2)
 
   | LRT.Resource ((name, (re, bt)), info, t)  ->
-    let (b1, s1) = cn_to_ail_resource_internal name dts re in
-    let (b2, s2) = cn_to_ail_post_aux_internal dts t in
+    let (b1, s1) = cn_to_ail_resource_internal name dts preds re in
+    let (b2, s2) = cn_to_ail_post_aux_internal dts preds t in
     (b1 @ b2, s1 @ s2)
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
@@ -1055,15 +1075,15 @@ let rec cn_to_ail_post_aux_internal dts = function
         let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
         s @ [ail_stat_]
     in
-    let (b2, s2) = cn_to_ail_post_aux_internal dts t in
+    let (b2, s2) = cn_to_ail_post_aux_internal dts preds t in
 
     (b1 @ b2, ss @ s2)
 
   | LRT.I -> ([], [])
 
 
-let cn_to_ail_post_internal dts (ReturnTypes.Computational (bound, oinfo, t)) = 
-  cn_to_ail_post_aux_internal dts t
+let cn_to_ail_post_internal dts preds (ReturnTypes.Computational (bound, oinfo, t)) = 
+  cn_to_ail_post_aux_internal dts preds t
 
 (* TODO: Add destination passing *)
 let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> a
