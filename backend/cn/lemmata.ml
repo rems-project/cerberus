@@ -121,11 +121,11 @@ let release_failures () =
   | [] -> return ()
   | fs -> (fun _ -> Result.Error (List.hd (List.rev fs)))
 
-(* set of functions with boolean return type that are negated
-   etc and must return bool (be computational) in Coq. the rest
-   return Prop. FIXME: make this configurable. *)
-let bool_funs = StringSet.of_list
-  ["order_aligned"; "in_tree"]
+(* set of functions with boolean return type that we want to use
+   as toplevel propositions, i.e. return Prop rather than bool
+   (computational) in Coq. *)
+let prop_funs = StringSet.of_list
+  []
 
 exception Cannot_Coerce
 
@@ -384,7 +384,7 @@ let fun_prop_ret (global : Global.t) nm =
   | Some def ->
     let open LogicalFunctions in
     BaseTypes.equal BaseTypes.Bool def.return_bt
-      && not (StringSet.mem (Sym.pp_string nm) bool_funs)
+      && StringSet.mem (Sym.pp_string nm) prop_funs
 
 let tuple_syn xs =
   let open Pp in
@@ -418,6 +418,7 @@ let build = function
 let parensM x =
     let@ xd = x in
     return (Pp.parens xd)
+let f_appM nm xs = parensM (build (rets nm :: xs))
 
 let defn nm args opt_ty rhs =
   let open Pp in
@@ -762,23 +763,30 @@ let it_to_coq loc global list_mono it =
     let aux t = f bool_eq_prop t in
     let abinop s x y = parensM (build [aux x; rets s; aux y]) in
     let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
-        then parensM (build [rets "Is_true"; x]) else x
+        then f_appM "Is_true" [x] else x
+    in
+    let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
+      else parensM (rets (Z.to_string z))
     in
     let check_pos t f = 
+      (* FIXME turning this off for now to test stuff
       let t = unfold_if_possible global t in
       match IT.is_z t with
       | Some i when Z.gt i Z.zero -> f
       | _ -> do_fail "divisor (not positive const)"
+      *) f
     in
     match IT.term t with
     | IT.Sym sym -> return (Sym.pp sym)
     | IT.Const l -> begin match l with
         | IT.Bool b -> with_is_true (rets (if b then "true" else "false"))
-        | IT.Z z -> rets (Z.to_string z)
+        | IT.Z z -> enc_z z
         | _ -> do_fail "const"
     end
     | IT.Unop (op, x) -> begin match op with
-       | IT.Not -> parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x])
+       | IT.Not -> f_appM (if bool_eq_prop then "~" else "negb") [aux x]
+       | IT.BWFFSNoSMT -> f_appM "CN_Lib.find_first_set_z" [aux x]
+       | IT.BWCTZNoSMT -> f_appM "CN_Lib.count_trailing_zeroes_z" [aux x]
        | _ -> do_fail "unary op"
     end
     | IT.Binop (op, x, y) -> begin match op with
@@ -790,15 +798,18 @@ let it_to_coq loc global list_mono it =
        | DivNoSMT  -> check_pos y (abinop "/" x y)
        | Mod  -> check_pos y (abinop "mod" x y)
        | ModNoSMT  -> check_pos y (abinop "mod" x y)
-       (* TODO: this can't be right: mod and rem aren't the same *)
+       (* TODO: this can't be right: mod and rem aren't the same
+            - maybe they have the same semantics as Coq Z.modulo/Z.rem *)
        | Rem  -> check_pos y (abinop "mod" x y)
        | RemNoSMT  -> check_pos y (abinop "mod" x y)
        | LT  -> abinop (if bool_eq_prop then "<" else "<?") x y
        | LE  -> abinop (if bool_eq_prop then "<=" else "<=?") x y
        | Exp  -> abinop "^" x y
-       | ExpNoSMT  -> abinop "^" x y
-       | XORNoSMT  -> parensM (build [rets "Z.lxor"; aux x; aux y])
-       | EQ -> build [f false x; rets (if bool_eq_prop then "=" else "=?"); f false y]
+       | ExpNoSMT -> abinop "^" x y
+       | XORNoSMT -> f_appM "Z.lxor" [aux x; aux y]
+       | BWAndNoSMT -> f_appM "Z.land" [aux x; aux y]
+       | BWOrNoSMT -> f_appM "Z.lor" [aux x; aux y]
+       | EQ -> parensM (build [f false x; rets (if bool_eq_prop then "=" else "=?"); f false y])
        | LEPointer -> abinop (if bool_eq_prop then "<=" else "<=?") x y
        | LTPointer -> abinop (if bool_eq_prop then "<" else "<?") x y
        | And -> abinop (if bool_eq_prop then "/\\" else "&&") x y
@@ -830,7 +841,7 @@ let it_to_coq loc global list_mono it =
     | IT.MapSet (m, x, y) ->
        let@ () = ensure_fun_upd () in
        let@ e = eq_of (IT.bt x) in
-       parensM (build [rets "fun_upd"; return e; aux m; aux x; aux y])
+       f_appM "fun_upd" [return e; aux m; aux x; aux y]
     | IT.MapGet (m, x) -> parensM (build [aux m; aux x])
     | IT.RecordMember (t, m) ->
         let flds = BT.record_bt (IT.bt t) in
@@ -921,6 +932,11 @@ let it_to_coq loc global list_mono it =
        let@ (nil, cons, _) = ensure_list global list_mono loc (IT.bt t) in
        parensM (build [rets "CN_Lib.array_to_list"; return nil; return cons;
                        aux arr; aux i; aux len])
+    | IT.WrapI (ity, arg) ->
+       assert (not (Sctypes.IntegerTypes.equal ity Sctypes.IntegerTypes.Bool));
+       let maxInt = Memory.max_integer_type ity in
+       let minInt = Memory.min_integer_type ity in
+       f_appM "CN_Lib.wrapI" [enc_z minInt; enc_z maxInt; aux arg]
     | IT.Let ((nm, x), y) ->
        let@ x = aux x in
        let@ y = aux y in
