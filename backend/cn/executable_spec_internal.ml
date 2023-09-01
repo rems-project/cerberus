@@ -38,7 +38,7 @@ let generate_c_statements_internal (loc, statements) dts =
   (loc, stat_strs)
 
 
-let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) =
+let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   (* let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in *)
   (* let fn_decl = List.filter sym_equality ail_prog.A.declarations in *)
   (* let fn_def = List.filter sym_equality ail_prog.A.function_definitions in *)
@@ -71,8 +71,9 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
 
 
   let dts = ail_prog.cn_datatypes in
-  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal dts instrumentation.internal.pre in
-  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts instrumentation.internal.post in
+  let preds = prog5.mu_resource_predicates in
+  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal dts preds instrumentation.internal.pre in
+  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts preds instrumentation.internal.post in
   let pre_str = generate_ail_stat_strs pre_stats_ in
   let post_str = generate_ail_stat_strs post_stats_ in
   [(instrumentation.fn, (pre_str, post_str))]
@@ -82,9 +83,11 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
 let generate_c_specs_internal instrumentation_list type_map (statement_locs : Cerb_location.t CStatements.LocMap.t)
-(ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
+(ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
+(prog5: unit Mucore.mu_file)
+=
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog in 
+    let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog prog5 in 
     let internal_statements = List.filter (fun (_, ss) ->  List.length ss != 0) instrumentation.internal.statements in
     let c_statements = List.map (fun s -> generate_c_statements_internal s ail_prog.cn_datatypes) internal_statements in
 
@@ -160,8 +163,8 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   let doc = CF.Pp_ail.pp_program ~executable_spec:true false true (None, modified_prog) in
   CF.Pp_utils.to_plain_pretty_string doc
 
-let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates)  =
-  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes) resource_predicates in
+let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) =
+  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes resource_predicates) resource_predicates in
   let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
