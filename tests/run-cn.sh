@@ -23,7 +23,7 @@ FAIL=$(find $DIRNAME/cn -name '*.error.c')
 
 for TEST in $FAIL
 do
-  echo cn --expect-fail $TEST
+  echo cn --expect-failure $TEST
   if ! cn --expect-failure $TEST
   then
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
@@ -34,6 +34,21 @@ done
 UNKNOWN=$(find $DIRNAME/cn -name '*.unknown.c')
 
 echo $UNKNOWN | xargs -n 1 cn
+
+COQ_LEMMAS=$(find $DIRNAME/cn -name 'coq_lemmas' -type d)
+
+for TEST in $COQ_LEMMAS
+do
+  if [ "$1" == "--coq" ]
+  then
+    echo make -C $TEST
+    if ! make -C $TEST
+    then
+      NUM_FAILED=$(( $NUM_FAILED + 1 ))
+      FAILED="$FAILED $TEST"
+    fi
+  fi
+done
 
 echo
 echo 'Done running tests.'
