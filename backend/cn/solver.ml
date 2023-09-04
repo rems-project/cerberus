@@ -36,7 +36,7 @@ let save_slow_problems, saved_slow_problem, set_slow_threshold =
   save_slow_problems, saved_slow_problem, set_slow_threshold
 
 
-type solver = { 
+type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
   }
@@ -120,7 +120,7 @@ module Translate = struct
   end
 
   (* all our symbols are created with strings *)
-  let z3_symbol_equal s s' = 
+  let z3_symbol_equal s s' =
     String.equal (Z3.Symbol.get_string s) (Z3.Symbol.get_string s')
 
   module Z3Symbol_HashedType = struct
@@ -138,7 +138,7 @@ module Translate = struct
   module Z3Symbol_Table = Hashtbl.Make(Z3Symbol_HashedType)
 
 
-  type z3sym_table_entry = 
+  type z3sym_table_entry =
     | MemberFunc of { tag : Sym.t; member : Id.t }
     | StructFunc of { tag : Sym.t }
     | CompFunc of { bts : BT.t list; i : int }
@@ -163,7 +163,7 @@ module Translate = struct
 
   let bt_id_table = BT_Table.create 1000
 
-  let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
+  let z3sym_table : z3sym_table_entry Z3Symbol_Table.t =
     Z3Symbol_Table.create 10000
 
   type premise_info =
@@ -181,7 +181,7 @@ module Translate = struct
 
   let maybe_record_loc_addr_eq global t expr =
     match IT.term t with
-    | Sym sym -> 
+    | Sym sym ->
       if BT.equal (IT.bt t) BT.Loc && SymMap.mem sym global.Global.fun_decls
       then begin Pp.debug 8 (lazy (Pp.item "recording addr in eq" (IT.pp t)));
          needs_premise (IsLocAddrInEq sym) expr end
@@ -242,16 +242,16 @@ module Translate = struct
     | List bt -> true
     | _ -> false
 
-  let tuple_field_name bts i = 
+  let tuple_field_name bts i =
     bt_name (Tuple bts) ^ string_of_int i
 
-  let record_member_name bts member = 
+  let record_member_name bts member =
     Id.pp_string member ^ "_of_" ^ bt_name (Record bts)
 
   let accessor_name dt_name member =
     symbol_string "" dt_name ^ "_" ^ Id.s member
 
-  let member_name tag id = 
+  let member_name tag id =
     bt_name (BT.Struct tag) ^ "_" ^ Id.s id
 
   let dt_recog_name context nm = prefix_symbol context "is_" nm
@@ -306,10 +306,10 @@ module Translate = struct
       | Bool -> Z3.Boolean.mk_sort context
       | Integer -> Z3.Arithmetic.Integer.mk_sort context
       | Real -> Z3.Arithmetic.Real.mk_sort context
-      | Loc -> 
-         Z3.Tuple.mk_sort context 
+      | Loc ->
+         Z3.Tuple.mk_sort context
            (string (bt_name Loc))
-           [string "loc_to_integer"] 
+           [string "loc_to_integer"]
            [sort BT.Integer]
       | Alloc_id ->
          Z3.Tuple.mk_sort context
@@ -325,12 +325,12 @@ module Translate = struct
       | Tuple bts ->
          let bt_symbol = string (bt_name (Tuple bts)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (TupleFunc {bts});
-         let field_symbols = 
-           mapi (fun i _ -> 
+         let field_symbols =
+           mapi (fun i _ ->
                let sym = string (tuple_field_name bts i) in
                Z3Symbol_Table.add z3sym_table sym (CompFunc {bts; i});
                sym
-             ) bts 
+             ) bts
          in
          let sorts = map sort bts in
          Z3.Tuple.mk_sort context bt_symbol field_symbols sorts
@@ -338,8 +338,8 @@ module Translate = struct
          let struct_symbol = string (bt_name (Struct tag)) in
          Z3Symbol_Table.add z3sym_table struct_symbol (StructFunc {tag});
          let layout = SymMap.find tag global.struct_decls in
-         let member_symbols, member_sorts = 
-           map_split (fun (id,sct) -> 
+         let member_symbols, member_sorts =
+           map_split (fun (id,sct) ->
                let s = string (member_name tag id) in
                Z3Symbol_Table.add z3sym_table s (MemberFunc {tag; member=id});
                (s, sort (BT.of_sct sct))
@@ -353,8 +353,8 @@ module Translate = struct
       | Record members ->
          let bt_symbol = string (bt_name (Record members)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (RecordFunc {mbts=members});
-         let member_symbols = 
-           map (fun (member, bt) -> 
+         let member_symbols =
+           map (fun (member, bt) ->
                let sym = string (record_member_name members member) in
                Z3Symbol_Table.add z3sym_table sym (RecordMemberFunc {mbts=members; member});
                sym
@@ -364,7 +364,7 @@ module Translate = struct
          Z3.Tuple.mk_sort context bt_symbol
            member_symbols member_sorts
 
-    and sort bt = 
+    and sort bt =
       match BT_Table.find_opt bt_table bt with
       | Some sort -> sort
       | None ->
@@ -378,7 +378,7 @@ module Translate = struct
 
 
 
-  let init global context = 
+  let init global context =
     BT_Table.clear bt_table;
     Sort_Table.clear sort_table;
     let _ = sort context global BT.Integer in
@@ -386,12 +386,12 @@ module Translate = struct
     ()
 
 
-  let loc_to_integer_fundecl context global = 
+  let loc_to_integer_fundecl context global =
     nth (Z3.Tuple.get_field_decls (sort context global Loc)) 0
 
-  let integer_to_loc_fundecl context global = 
+  let integer_to_loc_fundecl context global =
     Z3.Tuple.get_mk_decl (sort context global Loc)
-  
+
 
   let integer_to_alloc_id_fundecl context global =
     Z3.Tuple.get_mk_decl (sort context global Alloc_id)
@@ -405,14 +405,14 @@ module Translate = struct
     let string str = string context str in
 
     (* let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl in *)
-  
-    let loc_to_integer l = 
-      Z3.Expr.mk_app context 
-        (loc_to_integer_fundecl context global) [l] 
+
+    let loc_to_integer l =
+      Z3.Expr.mk_app context
+        (loc_to_integer_fundecl context global) [l]
     in
-    let integer_to_loc i = 
-      Z3.Expr.mk_app context 
-        (integer_to_loc_fundecl context global) [i] 
+    let integer_to_loc i =
+      Z3.Expr.mk_app context
+        (integer_to_loc_fundecl context global) [i]
     in
     let integer_to_alloc_id i =
       Z3.Expr.mk_app context
@@ -432,29 +432,29 @@ module Translate = struct
     let rec term it =
       let bt = IT.bt it in
       begin match IT.term it with
-      | Sym s -> 
+      | Sym s ->
          Z3.Expr.mk_const context (symbol s) (sort bt)
-      | Const (Z z) -> 
+      | Const (Z z) ->
          Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
-      | Const (Q q) -> 
+      | Const (Q q) ->
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
-      | Const (Pointer z) -> 
+      | Const (Pointer z) ->
          integer_to_loc
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
       | Const (Alloc_id z) ->
          integer_to_alloc_id
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
-      | Const (Bool true) -> 
+      | Const (Bool true) ->
          Z3.Boolean.mk_true context
-      | Const (Bool false) -> 
+      | Const (Bool false) ->
          Z3.Boolean.mk_false context
-      | Const Unit -> 
+      | Const Unit ->
          Z3.Expr.mk_const context (string "unit") (sort Unit)
-      | Const (Default bt) -> 
+      | Const (Default bt) ->
          let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
          let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
          Z3.Expr.mk_const context sym (sort bt)
-      | Const Null -> 
+      | Const Null ->
          integer_to_loc (term (int_ 0))
       | Const (CType_const ct) -> uninterp_term context (sort bt) it
       | Unop (uop, t) ->
@@ -464,7 +464,7 @@ module Translate = struct
          | BWCTZNoSMT -> make_uf "bw_ctz_uf" (Integer) [t]
          | BWFFSNoSMT -> make_uf "bw_ffs_uf" (Integer) [t]
          end
-      | Binop (bop, t1, t2) -> 
+      | Binop (bop, t1, t2) ->
          let open Z3.Arithmetic in
          begin match bop with
          | Add -> mk_add context [term t1; term t2]
@@ -473,7 +473,7 @@ module Translate = struct
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
          | Div -> mk_div context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
-         | Exp -> 
+         | Exp ->
             begin match is_z t1, is_z t2 with
             | Some z1, Some z2 when Z.fits_int z2 ->
                term (z_ (Z.pow z1 (Z.to_int z2)))
@@ -500,10 +500,10 @@ module Translate = struct
          | SetIntersection -> Z3.Set.mk_intersection context (map term [t1;t2])
          | SetDifference -> Z3.Set.mk_difference context (term t1) (term t2)
          | Subset -> Z3.Set.mk_subset context (term t1) (term t2)
-         | LTPointer -> 
-            Z3.Arithmetic.mk_lt context (loc_to_integer (term t1)) 
+         | LTPointer ->
+            Z3.Arithmetic.mk_lt context (loc_to_integer (term t1))
               (loc_to_integer (term t2))
-         | LEPointer -> 
+         | LEPointer ->
             Z3.Arithmetic.mk_le context (loc_to_integer (term t1))
               (loc_to_integer (term t2))
          | And -> Z3.Boolean.mk_and context (map term [t1;t2])
@@ -512,8 +512,8 @@ module Translate = struct
          end
       | ITE (t1, t2, t3) -> Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EachI ((i1, (s, _), i2), t) ->
-         let rec aux i = 
-           if i <= i2 
+         let rec aux i =
+           if i <= i2
            then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
            else []
          in
@@ -538,8 +538,8 @@ module Translate = struct
          let members = Memory.member_types layout in
          let str =
            List.map (fun (member', sct) ->
-               let value = 
-                 if Id.equal member member' then v 
+               let value =
+                 if Id.equal member member' then v
                  else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
                in
                (member', value)
@@ -559,8 +559,8 @@ module Translate = struct
          let members = BT.record_bt (IT.bt t) in
          let str =
            List.map (fun (member', bt) ->
-               let value = 
-                 if Id.equal member member' then v 
+               let value =
+                 if Id.equal member member' then v
                  else IT ((RecordMember (t, member')), bt)
                in
                (member', value)
@@ -604,17 +604,17 @@ module Translate = struct
             Z3.Arithmetic.Real.mk_real2int context (term t)
          | Integer, Real ->
             Z3.Arithmetic.Integer.mk_int2real context (term t)
-         | _ -> 
+         | _ ->
             assert false
          end
       | MemberOffset (tag, member) ->
          let decl = SymMap.find tag struct_decls in
          term (int_ (Option.get (Memory.member_offset decl member)))
-      | ArrayOffset (ct, t) -> 
+      | ArrayOffset (ct, t) ->
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
-      | Nil ibt -> 
+      | Nil ibt ->
          make_uf (plain (!^"nil_uf"^^angles(BT.pp ibt))) (List ibt) []
-      | Cons (t1, t2) -> 
+      | Cons (t1, t2) ->
          let ibt = IT.bt t1 in
          make_uf (plain (!^"cons_uf"^^angles(BT.pp ibt))) (List ibt) [t1; t2]
       | NthList (i, xs, d) ->
@@ -649,13 +649,13 @@ module Translate = struct
          let e = if Z.equal minInt Z.zero then r
          else ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
          term e
-      | MapConst (abt, t) -> 
+      | MapConst (abt, t) ->
          Z3.Z3Array.mk_const_array context (sort abt) (term t)
-      | MapSet (t1, t2, t3) -> 
+      | MapSet (t1, t2, t3) ->
          Z3.Z3Array.mk_store context (term t1) (term t2) (term t3)
       (* | MapGet (IT (Map_op (Def ((s, bt), body)), _), arg) ->  *)
       (*    term (IT.subst (make_subst [(s, arg)]) body) *)
-      | MapGet (f, arg) -> 
+      | MapGet (f, arg) ->
          Z3.Z3Array.mk_select context (term f) (term arg)
       | MapDef ((q_s, q_bt), body) ->
          if warn_lambda then
@@ -670,7 +670,7 @@ module Translate = struct
          | Def body ->
             term (LogicalFunctions.open_fun def.args body args)
          | _ ->
-            let decl = 
+            let decl =
               Z3.FuncDecl.mk_func_decl context (symbol name)
                 (List.map (fun it -> sort (IT.bt it)) args)
                 (sort def.return_bt)
@@ -690,7 +690,7 @@ module Translate = struct
       end
 
       and make_uf name ret_bt args =
-        let decl = 
+        let decl =
           Z3.FuncDecl.mk_func_decl context (string name)
             (List.map (fun it -> sort (IT.bt it)) args) (sort ret_bt)
         in
@@ -699,17 +699,17 @@ module Translate = struct
 
     in
 
-    fun it -> 
+    fun it ->
     term it
 
 
-    
 
 
-  let assumption context global c = 
+
+  let assumption context global c =
     let term it = term context global it in
     match c with
-    | T it -> 
+    | T it ->
        Some (term it)
     | Forall ((s, bt), body) ->
        None
@@ -730,15 +730,15 @@ module Translate = struct
   let goal context global lc =
     let term it = term context global it in
     match lc with
-    | T it -> 
+    | T it ->
        { expr = term it; it; qs = [] }
-    | Forall ((s, bt), it) -> 
+    | Forall ((s, bt), it) ->
        let v_s, v = IT.fresh_same bt s in
        let it = IT.subst (make_subst [(s, v)]) it in
        { expr = term it; it; qs = [(v_s, bt)] }
 
 
-  let extra_assumptions assumptions qs = 
+  let extra_assumptions assumptions qs =
     List.concat_map (fun (s, bt) ->
         let v = sym_ (s, bt) in
         LCSet.fold (fun lc acc ->
@@ -784,7 +784,7 @@ end
 
 
 
-let make global : solver = 
+let make global : solver =
   Z3.Memory.reset ();
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
   let context = Z3.mk_context [] in
@@ -797,7 +797,7 @@ let make global : solver =
 
 
 
-let push solver = 
+let push solver =
   (* do nothing to fancy solver, because that is reset for every query *)
   Z3.Solver.push solver.incremental
 
@@ -806,7 +806,7 @@ let pop solver =
   Z3.Solver.pop solver.incremental 1
 
 
-let add_assumption solver global lc = 
+let add_assumption solver global lc =
   (* do nothing to fancy solver, because that is reset for every query *)
   match Translate.assumption solver.context global lc with
   | None -> ()
@@ -814,7 +814,7 @@ let add_assumption solver global lc =
 
 
 (* as similarly suggested by Robbert *)
-let shortcut simp_ctxt lc = 
+let shortcut simp_ctxt lc =
   let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
   match lc with
   | LC.T (IT (Const (Bool true), _)) -> `True
@@ -828,12 +828,12 @@ type model_state =
   | Model of Z3.context * Z3.Solver.solver * (Sym.t * LogicalSorts.t) list
   | No_model
 
-let model_state = 
+let model_state =
   ref No_model
 
 
 
-let model () = 
+let model () =
   match !model_state with
   | No_model ->
      assert false
@@ -901,7 +901,7 @@ let maybe_save_slow_problem kind context extra_assertions lc lc_t time solver =
     saved_slow_problem ();
     close_out channel
 
-let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc = 
+let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   Cerb_debug.begin_csv_timing ();
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   let context = solver.context in
@@ -909,7 +909,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   let rtrue () = model_state := No_model; `True in
   let rfalse qs solver = model_state := Model (context, solver, qs); `False in
   match shortcut simp_ctxt lc with
-  | `True -> 
+  | `True ->
      Cerb_debug.end_csv_timing "Solver.provable shortcut";
      rtrue ()
   | `No_shortcut lc ->
@@ -940,7 +940,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      | Z3.Solver.UNKNOWN ->
         maybe_save_slow_problem "unknown" solver.context (extra1 @ extra2)
             lc expr elapsed solver.incremental;
-        let reason = Z3.Solver.get_reason_unknown solver.incremental in 
+        let reason = Z3.Solver.get_reason_unknown solver.incremental in
         failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
 let get_loc_addrs_in_eqs solver ~pointer_facts global =
@@ -970,27 +970,27 @@ module Eval = struct
     else ()
 
 
-  let is_array_sort sort = 
-    try 
-      Some (Z3.Z3Array.get_domain sort, 
-            Z3.Z3Array.get_range sort) 
-    with 
+  let is_array_sort sort =
+    try
+      Some (Z3.Z3Array.get_domain sort,
+            Z3.Z3Array.get_range sort)
+    with
     | _ -> None
 
-  let find_already_translated_sort sort = 
+  let find_already_translated_sort sort =
     try Sort_Table.find sort_table sort with
     | Not_found -> failwith (Z3.Sort.to_string sort^"' not in Sort_Table")
 
-  let rec z3_sort (sort : Z3.Sort.sort) = 
+  let rec z3_sort (sort : Z3.Sort.sort) =
     match is_array_sort sort with
     | Some (domain, range) -> Map (z3_sort domain, z3_sort range)
     | None -> find_already_translated_sort sort
 
 
-  let eval global (context, model) to_be_evaluated = 
+  let eval global (context, model) to_be_evaluated =
 
-    let unsupported expr what = 
-      let err = 
+    let unsupported expr what =
+      let err =
         Printf.sprintf "unsupported %s. expr: %s"
           what (Z3.Expr.to_string expr)
       in
@@ -998,7 +998,7 @@ module Eval = struct
     in
 
     (* informed by this: https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
-    let rec func_interp func_decl = 
+    let rec func_interp func_decl =
       let domain = Z3.FuncDecl.get_domain func_decl in
       assert (List.length domain = 1);
       let argument_sort = List.hd domain in
@@ -1014,7 +1014,7 @@ module Eval = struct
         ) entries (const_map_ (z3_sort argument_sort) base_value)
 
 
-    and z3_expr (expr : Z3.Expr.expr) : IT.t = 
+    and z3_expr (expr : Z3.Expr.expr) : IT.t =
       let args = try Z3.Expr.get_args expr with | _ -> [] in
       let args = List.map z3_expr args in
       match () with
@@ -1128,7 +1128,7 @@ module Eval = struct
         let expr_bt = z3_sort (Z3.Expr.get_sort expr) in
         match () with
 
-        | () when 
+        | () when
                Z3.FuncDecl.equal func_decl
                  (loc_to_integer_fundecl context global) ->
            let p = nth args 0 in
@@ -1137,8 +1137,8 @@ module Eval = struct
            | _ -> pointerToIntegerCast_ p
            end
 
-        | () when 
-               Z3.FuncDecl.equal func_decl 
+        | () when
+               Z3.FuncDecl.equal func_decl
                  (integer_to_loc_fundecl context global) ->
            let i = nth args 0 in
            begin match IT.is_z i with
@@ -1163,7 +1163,7 @@ module Eval = struct
            | TupleFunc {bts} ->
               tuple_ args
            | RecordFunc {mbts} ->
-              IT ((Record (List.combine (List.map fst mbts) args)), 
+              IT ((Record (List.combine (List.map fst mbts) args)),
                   Record mbts)
            | RecordMemberFunc {mbts; member} ->
               let member_bt = List.assoc Id.equal member mbts in
