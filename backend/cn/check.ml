@@ -613,6 +613,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
               else (warn_uf loc "mod_uf"; IT.mod_no_smt_ (v1, v2)))
         | `False ->
            let@ model = model () in
+           Pp.debug 1 (lazy (Pp.item "rem_t applied to (possibly) negative arguments"
+               (Pp.list IT.pp [v1; v2])));
            let err = !^"Unsupported: rem_t applied to negative arguments" in
            fail (fun ctxt ->
                let msg = Generic_with_model {err; model; ctxt} in
