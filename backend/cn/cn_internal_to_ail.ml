@@ -844,15 +844,16 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
       } 
     *)
 
-
+    let (i_sym, i_bt) = q.q in
 
     let start_expr = generate_start_expr (get_leftmost_and_expr e2) in
     let end_cond = get_rest_of_expr e2 in
 
-    let start_binding = create_binding q_sym C.(Basic (Integer (Signed Int_))) in
-    let start_assign = A.(AilSdeclaration [(q_sym, Some start_expr)]) in
 
-    let q_times_step = A.(AilEbinary (mk_expr (AilEident q_sym), Arithmetic Mul, mk_expr e3)) in
+    let start_binding = create_binding i_sym C.(Basic (Integer (Signed Int_))) in
+    let start_assign = A.(AilSdeclaration [(i_sym, Some start_expr)]) in
+
+    let q_times_step = A.(AilEbinary (mk_expr (AilEident i_sym), Arithmetic Mul, mk_expr e3)) in
     let gen_add_expr_ e_ = 
       A.(AilEbinary (mk_expr e_, Arithmetic Add, mk_expr q_times_step))
     in
@@ -887,23 +888,25 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
       | C.(Pointer (_, Ctype (_, Void))) -> ctype_
       | ct_ -> C.(Pointer (empty_qualifiers, mk_ctype ct_))
     in *)
-    let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident q_sym))))) in 
+    let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident i_sym))))) in 
 
     let (bs', ss') = match ctype_ with 
       | C.Void -> 
         let void_pred_call = A.(AilSexpr (mk_expr rhs)) in
         let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [void_pred_call; increment_stat])), 0)) in
-        ([], [while_loop])
+        let ail_block = A.(AilSblock ([], List.map mk_stmt [start_assign; while_loop])) in
+        ([], [ail_block])
       | _ -> 
-        let sym_binding = create_binding sym ctype_ in
+        let sym_binding = create_binding sym C.(Pointer (empty_qualifiers, mk_ctype ctype_)) in
         let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int 10000, Decimal, None)))))])) in
         let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr alloc_call))]) in
         let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in
         let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
-        ([sym_binding], [sym_decl; while_loop])
+        let ail_block = A.(AilSblock ([], List.map mk_stmt [start_assign; while_loop])) in
+        ([sym_binding], [sym_decl; ail_block])
     in
 
-    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ [start_assign] @ ss')
+    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ ss')
 
 let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
   = fun dts d lc -> 
