@@ -157,8 +157,10 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     | OpOr  -> return (IT.or_ [x_v; y_v])
     | OpExp -> return (if is_const_num x_v && is_const_num y_v
         then IT.exp_ (x_v, y_v) else IT.exp_no_smt_ (x_v, y_v))
-    | _ -> fail {loc; msg = Generic (Pp.item "expr from C syntax: unsupported op"
-        (Pp_mucore.Basic.pp_binop op))}
+    | OpRem_f -> return (if is_const_num y_v
+        then IT.rem_ (x_v, y_v) else IT.rem_no_smt_ (x_v, y_v))
+    | OpRem_t -> return (if is_const_num y_v
+        then IT.mod_ (x_v, y_v) else IT.mod_no_smt_ (x_v, y_v))
     end
   | M_PEbitwise_unop (unop, pe1) ->
     let@ x = symb_exec_mu_pexpr var_map pe1 in
