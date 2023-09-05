@@ -207,6 +207,7 @@ module Translate = struct
     match bt with
       | BT.Struct nm -> !^ "struct_" ^^ Sym.pp nm
       | BT.Datatype nm -> !^ "datatype_" ^^ Sym.pp nm
+      | BT.Tuple [BT.Alloc_id; BT.Integer] -> !^ "pointer"
       | BT.Tuple _ -> !^ "tuple_" ^^ Pp.int (bt_id bt)
       | BT.List _ -> !^ "list_" ^^ Pp.int (bt_id bt)
       | BT.Set _ -> !^ "set_" ^^ Pp.int (bt_id bt)
@@ -306,11 +307,7 @@ module Translate = struct
       | Bool -> Z3.Boolean.mk_sort context
       | Integer -> Z3.Arithmetic.Integer.mk_sort context
       | Real -> Z3.Arithmetic.Real.mk_sort context
-      | Loc ->
-         Z3.Tuple.mk_sort context
-           (string (bt_name Loc))
-           [string "loc_to_integer"]
-           [sort BT.Integer]
+      | Loc -> translate BT.(Tuple [Alloc_id; Integer])
       | Alloc_id ->
          Z3.Tuple.mk_sort context
            (string (bt_name Alloc_id))
@@ -386,16 +383,17 @@ module Translate = struct
     ()
 
 
-  let loc_to_integer_fundecl context global =
+  let _loc_to_alloc_id_fundecl context global =
     nth (Z3.Tuple.get_field_decls (sort context global Loc)) 0
 
-  let integer_to_loc_fundecl context global =
-    Z3.Tuple.get_mk_decl (sort context global Loc)
+  let loc_to_integer_fundecl context global =
+    nth (Z3.Tuple.get_field_decls (sort context global Loc)) 1
 
+  let alloc_id_integer_to_loc_fundecl context global =
+    Z3.Tuple.get_mk_decl (sort context global Loc)
 
   let integer_to_alloc_id_fundecl context global =
     Z3.Tuple.get_mk_decl (sort context global Alloc_id)
-
 
   let term ?(warn_lambda=true) context global : IT.t -> expr =
 
@@ -410,15 +408,16 @@ module Translate = struct
       Z3.Expr.mk_app context
         (loc_to_integer_fundecl context global) [l]
     in
-    let integer_to_loc i =
-      Z3.Expr.mk_app context
-        (integer_to_loc_fundecl context global) [i]
-    in
+
     let integer_to_alloc_id i =
       Z3.Expr.mk_app context
         (integer_to_alloc_id_fundecl context global) [i]
     in
 
+    let alloc_id_integer_to_loc id i =
+      Z3.Expr.mk_app context
+        (alloc_id_integer_to_loc_fundecl context global) [id; i]
+    in
 
     let apply_matching_func sym_role fds args =
       let matching fd = equal_z3sym_table_entry sym_role
@@ -439,7 +438,8 @@ module Translate = struct
       | Const (Q q) ->
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
       | Const (Pointer z) ->
-         integer_to_loc
+         alloc_id_integer_to_loc
+           (term (alloc_id_ Z.zero))
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
       | Const (Alloc_id z) ->
          integer_to_alloc_id
@@ -455,7 +455,9 @@ module Translate = struct
          let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
          Z3.Expr.mk_const context sym (sort bt)
       | Const Null ->
-         integer_to_loc (term (int_ 0))
+        alloc_id_integer_to_loc
+          (term (alloc_id_ Z.zero))
+          (term (int_ 0))
       | Const (CType_const ct) -> uninterp_term context (sort bt) it
       | Unop (uop, t) ->
          begin match uop with
@@ -597,7 +599,7 @@ module Translate = struct
       | Cast (cbt, t) ->
          begin match IT.bt t, cbt with
          | Integer, Loc ->
-            integer_to_loc (term t)
+            alloc_id_integer_to_loc (term (alloc_id_ Z.zero)) (term t)
          | Loc, Integer ->
             loc_to_integer (term t)
          | Real, Integer ->
@@ -1139,11 +1141,21 @@ module Eval = struct
 
         | () when
                Z3.FuncDecl.equal func_decl
-                 (integer_to_loc_fundecl context global) ->
-           let i = nth args 0 in
+                 (alloc_id_integer_to_loc_fundecl context global) ->
+           let _id = nth args 0 in
+           let i = nth args 1 in
            begin match IT.is_z i with
            | Some z -> pointer_ z
            | _ -> integerToPointerCast_ i
+           end
+
+        | () when
+               Z3.FuncDecl.equal func_decl
+                 (integer_to_alloc_id_fundecl context global) ->
+           let i = nth args 0 in
+           begin match IT.is_z i with
+           | Some z -> alloc_id_ z
+           | _ -> assert false
            end
 
         | () when Z3Symbol_Table.mem z3sym_table func_name ->

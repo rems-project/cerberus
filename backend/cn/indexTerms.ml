@@ -422,6 +422,7 @@ let is_pred_ = function
 (* lit *)
 let sym_ (sym, bt) = IT (Sym sym, bt)
 let z_ n = IT (Const (Z n), BT.Integer)
+let alloc_id_ n = IT (Const (Alloc_id n), BT.Alloc_id)
 let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
 let q1_ q = IT (Const (Q q), BT.Real)
 let pointer_ n = IT (Const (Pointer n), BT.Loc)
