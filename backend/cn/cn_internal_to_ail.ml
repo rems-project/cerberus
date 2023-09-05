@@ -128,7 +128,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) =
   function
   | CN_unit -> C.Void
   | CN_bool -> C.(Basic (Integer Bool))
-  | CN_integer -> C.(Basic (Integer (Signed Int_))) (* TODO: Discuss integers *)
+  | CN_integer -> C.(Basic (Integer (Signed Long))) (* TODO: Discuss integers *)
   (* | CN_real -> failwith "TODO" *)
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_struct sym -> C.(Struct sym)
@@ -865,7 +865,7 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
         let matching_preds = List.filter (fun (pred_sym', def) -> String.equal (Sym.pp_string pname) (Sym.pp_string pred_sym')) preds in
         let (pred_sym', pred_def') = match matching_preds with 
           | [] -> failwith "Predicate not found"
-          | p :: _ -> p 
+          | p :: _ -> p
         in 
         let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
         match cn_bt with 
