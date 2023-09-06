@@ -100,7 +100,7 @@ val ensure_base_type: Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> 
 val make_return_record: 
     Locations.t ->
     string ->
-    (Id.t * BaseTypes.t) list ->
+    BaseTypes.member_types ->
     (IndexTerms.t * IndexTerms.t list) m
 
 val bind_logical_return:

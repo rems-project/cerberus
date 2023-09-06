@@ -10,13 +10,16 @@ type basetype =
   | CType
   | Struct of Sym.t
   | Datatype of Sym.t
-  | Record of (Id.t * basetype) list
+  | Record of member_types
   | Map of basetype * basetype
   | List of basetype
   | Tuple of basetype list
   | Set of basetype
   (* | Option of basetype *)
 [@@deriving eq, ord]
+
+and member_types =
+  (Id.t * basetype) list
 
 
 type t = basetype
@@ -28,10 +31,10 @@ let compare = compare_basetype
 
 type datatype_info = {
   dt_constrs: Sym.t list;
-  dt_all_params: (Id.t * basetype) list;
+  dt_all_params: member_types;
 }
 type constr_info = {
-  c_params: (Id.t * basetype) list;
+  c_params: member_types;
   c_datatype_tag: Sym.t
 }
 

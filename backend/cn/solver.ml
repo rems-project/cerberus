@@ -143,8 +143,8 @@ module Translate = struct
     | StructFunc of { tag : Sym.t }
     | CompFunc of { bts : BT.t list; i : int }
     | TupleFunc of  { bts : BT.t list }
-    | RecordFunc of { mbts : (Id.t * basetype) list }
-    | RecordMemberFunc of { mbts : (Id.t * basetype) list; member : Id.t }
+    | RecordFunc of { mbts : BT.member_types }
+    | RecordMemberFunc of { mbts : BT.member_types; member : Id.t }
     | DefaultFunc of { bt : BT.t }
     | DatatypeConsFunc of { nm: Sym.t }
     | DatatypeConsRecogFunc of { nm: Sym.t }
