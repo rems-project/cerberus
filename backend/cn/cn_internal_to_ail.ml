@@ -132,7 +132,6 @@ let rec cn_to_ail_base_type ?(pred_sym=None) =
   (* | CN_real -> failwith "TODO" *)
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_struct sym -> C.(Struct sym)
-  (* TODO: Complete with allocation *)
   | CN_record members -> 
     let map_bindings = RecordMap.bindings !records in
     let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
@@ -156,6 +155,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) =
 
   (* Every struct is converted into a struct pointer *)
   | CN_datatype sym -> C.(Pointer (empty_qualifiers, Ctype ([], Struct sym)))
+  (* TODO: Implement maps properly *)
   | CN_map (_, cn_bt) -> generate_ail_array cn_bt
   | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
   (* | CN_tuple of list (cn_base_type 'a) *)
@@ -166,30 +166,30 @@ let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn
 
 (* TODO: Finish *)
 let cn_to_ail_binop_internal = function
-  | Terms.And -> A.And
-  | Or -> A.Or
+  | Terms.And -> (A.And, "")
+  | Or -> (A.Or, "")
   (* | Impl *)
-  | Add -> A.(Arithmetic Add)
-  | Sub -> A.(Arithmetic Sub)
+  | Add -> (A.(Arithmetic Add), "")
+  | Sub -> (A.(Arithmetic Sub), "")
   | Mul 
-  | MulNoSMT -> A.(Arithmetic Mul)
+  | MulNoSMT -> (A.(Arithmetic Mul), "")
   | Div 
-  | DivNoSMT -> A.(Arithmetic Div)
-  (* | Exp
-  | ExpNoSMT
-  | Rem
+  | DivNoSMT -> (A.(Arithmetic Div), "")
+  | Exp
+  | ExpNoSMT -> (A.And, "pow")
+  (* | Rem
   | RemNoSMT
   | Mod
   | ModNoSMT
   | XORNoSMT
   | BWAndNoSMT
   | BWOrNoSMT *)
-  | LT -> A.Lt
-  | LE -> A.Le
+  | LT -> (A.Lt, "")
+  | LE -> (A.Le, "")
   (* | Min
   | Max *)
-  | EQ -> A.Eq
-  | _ -> A.And (* TODO: Change *)
+  | EQ -> (A.Eq, "")
+  | _ -> (A.And, "") (* TODO: Change *)
   (* | LTPointer
   | LEPointer
   | SetUnion
@@ -219,19 +219,19 @@ type 'a dest =
 | Assert : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) dest
 | Return : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) dest 
 | AssignVar : C.union_tag -> (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) dest
-| PassBack : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_) dest
+| PassBack : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression) dest
 
-let dest : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_ -> a = 
+let dest : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression -> a = 
   fun d (b, s, e) -> 
     match d with
     | Assert -> 
-      let assert_stmt = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
+      let assert_stmt = A.(AilSexpr (mk_expr (AilEassert e))) in
       (b, s @ [assert_stmt])
     | Return ->
-      let return_stmt = A.(AilSreturn (mk_expr e)) in
+      let return_stmt = A.(AilSreturn e) in
       (b, s @ [return_stmt])
     | AssignVar x -> 
-      let assign_stmt = A.(AilSdeclaration [(x, Some (mk_expr e))]) in
+      let assign_stmt = A.(AilSdeclaration [(x, Some e)]) in
       (b, s @ [assign_stmt])
     | PassBack -> (b, s, e)
 
@@ -249,7 +249,7 @@ let empty_for_dest : type a. a dest -> a =
       | Assert -> ([], [empty_ail_stmt])
       | Return -> ([], [empty_ail_stmt])
       | AssignVar _ -> ([], [empty_ail_stmt])
-      | PassBack -> ([], [empty_ail_stmt], empty_ail_expr)
+      | PassBack -> ([], [empty_ail_stmt], mk_expr empty_ail_expr)
 
 
 
@@ -284,7 +284,7 @@ let rec cn_to_ail_expr_aux_internal
   match term_ with
   | Const const ->
     let ail_expr_ = cn_to_ail_const_internal const in
-    dest d ([], [], ail_expr_)
+    dest d ([], [], mk_expr ail_expr_)
 
   | Sym sym ->
     let sym = 
@@ -303,20 +303,22 @@ let rec cn_to_ail_expr_aux_internal
         | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
       )
       in
-      dest d ([], [], ail_expr_)
+      dest d ([], [], mk_expr ail_expr_)
 
   | Binop (bop, t1, t2) ->
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts t1 PassBack in
     let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts t2 PassBack in
-    let ail_expr_ = A.AilEbinary (mk_expr e1, cn_to_ail_binop_internal bop, mk_expr e2) in 
-    dest d (b1 @ b2, s1 @ s2, ail_expr_) 
+    let (ail_bop, annot) = cn_to_ail_binop_internal bop in
+    let ail_expr_ = A.AilEbinary (e1, ail_bop, e2) in 
+    dest d (b1 @ b2, s1 @ s2, mk_expr ~strs:[annot] ail_expr_) 
+    
 
   | ITE (t1, t2, t3) -> 
-    let b1, s1, e1_ = cn_to_ail_expr_aux_internal const_prop pred_name dts t1 PassBack in
-    let b2, s2, e2_ = cn_to_ail_expr_aux_internal const_prop pred_name dts t2 PassBack in
-    let b3, s3, e3_ = cn_to_ail_expr_aux_internal const_prop pred_name dts t3 PassBack in
-    let ail_expr_ = A.AilEcond (mk_expr e1_, Some (mk_expr e2_), mk_expr e3_) in
-    dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, ail_expr_)
+    let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts t1 PassBack in
+    let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts t2 PassBack in
+    let b3, s3, e3 = cn_to_ail_expr_aux_internal const_prop pred_name dts t3 PassBack in
+    let ail_expr_ = A.AilEcond (e1, Some e2, e3) in
+    dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr ail_expr_)
 
   | EachI ((r_start, (sym, bt), r_end), t) -> 
     let rec create_list_from_range l_start l_end = 
@@ -329,10 +331,10 @@ let rec cn_to_ail_expr_aux_internal
     let consts = create_list_from_range r_start r_end in
     let cn_consts = List.map (fun i -> Terms.Z (Z.of_int i)) consts in
     let bs_ss_es = List.map (fun cn_const -> cn_to_ail_expr_aux_internal (Some (sym, cn_const)) pred_name dts t PassBack) cn_consts in
-    let (bs, ss, es_) = list_split_three bs_ss_es in 
+    let (bs, ss, es) = list_split_three bs_ss_es in 
     let ail_expr =
-      match es_ with
-        | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> A.(AilEbinary (mk_expr ae1, And, mk_expr ae2))) ail_expr1 ail_exprs_rest
+      match es with
+        | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> mk_expr A.(AilEbinary (ae1, And, ae2))) ail_expr1 ail_exprs_rest
         | [] -> failwith "Cannot have empty expression in CN each expression"
     in 
     dest d (List.concat bs, List.concat ss, ail_expr)
@@ -344,23 +346,23 @@ let rec cn_to_ail_expr_aux_internal
 
   | RecordMember (t, m) ->
     (* Currently assuming records only exist  *)
-    let b, s, e_ = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
+    let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
     let ail_expr_ = match pred_name with
-      | Some sym -> A.(AilEmemberofptr (mk_expr e_, m))
-      | None -> A.(AilEmemberof (mk_expr e_, m))
+      | Some sym -> A.(AilEmemberofptr (e, m))
+      | None -> A.(AilEmemberof (e, m))
     in
-    dest d (b, s, ail_expr_)
+    dest d (b, s, mk_expr ail_expr_)
 
   | StructMember (t, m) -> 
-    let b, s, e_ = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
-    let ail_expr_ = A.(AilEmemberof (mk_expr e_, m)) in
-    dest d (b, s, ail_expr_)
+    let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
+    let ail_expr_ = A.(AilEmemberof (e, m)) in
+    dest d (b, s, mk_expr ail_expr_)
 
   | StructUpdate ((struct_term, m), new_val) ->
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts struct_term PassBack in
     let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts new_val PassBack in
-    let ail_memberof = A.(AilEmemberof (mk_expr e1, m)) in
-    let ail_assign = A.(AilSexpr (mk_expr (AilEassign ((mk_expr ail_memberof, mk_expr e2))))) in
+    let ail_memberof = A.(AilEmemberof (e1, m)) in
+    let ail_assign = A.(AilSexpr (mk_expr (AilEassign ((mk_expr ail_memberof, e2))))) in
     dest d (b1 @ b2, s1 @ s2 @ [ail_assign], e1)
 
     (* Allocation *)
@@ -374,7 +376,7 @@ let rec cn_to_ail_expr_aux_internal
     let generate_ail_stat (id, it) = 
       let (b, s, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts it PassBack in
       let ail_memberof = A.(AilEmemberofptr (mk_expr res_ident, id)) in
-      let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, mk_expr e)))) in
+      let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
     in
 
@@ -389,7 +391,7 @@ let rec cn_to_ail_expr_aux_internal
       | None -> ([], []))
     in
     let (bs, ss, assign_stats) = list_split_three (List.map generate_ail_stat ms) in
-    dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, res_ident)
+    dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
 
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
   (* | DatatypeCons (sym, t) -> 
@@ -445,12 +447,12 @@ let rec cn_to_ail_expr_aux_internal
     let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.id "tag")) in
     let tag_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr tag_member_ptr, mk_expr (AilEident uc_constr_sym))))) in
 
-    dest d (b @ [res_binding], [ail_decl; tag_assign] @ modified_stats, res_ident)
+    dest d (b @ [res_binding], [ail_decl; tag_assign] @ modified_stats, mk_expr res_ident)
 
   | DatatypeMember (it, id) -> 
     (* Case of single constructor in datatype *)
     let (b, s, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts it PassBack in
-    let ail_expr_ = A.(AilEmemberofptr (mk_expr e, Id.id "u")) in
+    let ail_expr_ = A.(AilEmemberofptr (e, Id.id "u")) in
     let constructor_sym = match IT.bt it with
       | Datatype sym -> 
         let dt = List.hd (List.filter (fun d -> String.equal (Sym.pp_string sym) (Sym.pp_string d.cn_dt_name)) dts) in
@@ -459,7 +461,7 @@ let rec cn_to_ail_expr_aux_internal
       | _ -> failwith "Can only get datatype member from term of type datatype"
     in
     let ail_expr_' = A.(AilEmemberof (mk_expr ail_expr_, create_id_from_sym constructor_sym)) in
-    dest d (b, s, A.(AilEmemberof (mk_expr ail_expr_', id)))
+    dest d (b, s, mk_expr A.(AilEmemberof (mk_expr ail_expr_', id)))
 
   | DatatypeIsCons (sym, it) -> failwith "TODO6.3" *)
 
@@ -468,21 +470,21 @@ let rec cn_to_ail_expr_aux_internal
     let (ids, ts) = List.split ms in
     let bs_ss_es = List.map (fun t -> cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack) ts in
     let (bs, ss, es) = list_split_three bs_ss_es in
-    let ms' = List.combine ids (List.map (fun e -> Some (mk_expr e)) es) in
-    dest d (List.concat bs, List.concat ss, AilEstruct (nm, ms'))
+    let ms' = List.combine ids (List.map (fun e -> Some e) es) in
+    dest d (List.concat bs, List.concat ss, mk_expr (AilEstruct (nm, ms')))
 
   | MemberShift (_, tag, member) -> 
     let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
-    dest d ([], [], ail_expr_)
+    dest d ([], [], mk_expr ail_expr_)
 
   | ArrayShift _ -> failwith "TODO7"
   | Nil bt -> failwith "TODO8"
   | Cons (x, xs) -> failwith "TODO9"
   | Head xs -> 
-    let b, s, e_ = cn_to_ail_expr_aux_internal const_prop pred_name dts xs PassBack in
+    let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts xs PassBack in
     (* dereference to get first value, where xs is assumed to be a pointer *)
-    let ail_expr_ = A.(AilEunary (Indirection, mk_expr e_)) in 
-    dest d (b, s, ail_expr_)
+    let ail_expr_ = A.(AilEunary (Indirection, e)) in 
+    dest d (b, s, mk_expr ail_expr_)
 
   | Tail xs -> failwith "TODO11"
   | NthList (t1, t2, t3) -> failwith "TODO12"
@@ -492,7 +494,9 @@ let rec cn_to_ail_expr_aux_internal
     cn_to_ail_expr_aux_internal const_prop pred_name dts t d
     
   | Aligned t_and_align -> failwith "TODO16"
-  | WrapI (ct, t) -> failwith "TODO17"
+  | WrapI (ct, t) -> 
+    cn_to_ail_expr_aux_internal const_prop pred_name dts t d
+
   | MapConst (bt, t) -> failwith "TODO18"
   | MapSet (t1, t2, t3) -> failwith "TODO19"
   | MapGet (arr, index) ->
@@ -501,8 +505,8 @@ let rec cn_to_ail_expr_aux_internal
     (* TODO: Do general allocation stuff *)
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts arr PassBack in
     let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts index PassBack in
-    let ail_sub_expr_ = mk_expr (A.(AilEbinary (mk_expr e1, Arithmetic Add, mk_expr e2))) in
-    dest d (b1 @ b2, s1 @ s2, A.(AilEunary (Indirection, ail_sub_expr_)))
+    let ail_sub_expr_ = mk_expr (A.(AilEbinary (e1, Arithmetic Add, e2))) in
+    dest d (b1 @ b2, s1 @ s2, mk_expr A.(AilEunary (Indirection, ail_sub_expr_)))
 
   | MapDef ((sym, bt), t) -> failwith "TODO21"
   | Apply (sym, ts) ->
@@ -510,14 +514,14 @@ let rec cn_to_ail_expr_aux_internal
       let bs_ss_es = List.map (fun e -> cn_to_ail_expr_aux_internal const_prop pred_name dts e PassBack) ts in
       let (bs, ss, es) = list_split_three bs_ss_es in 
       let f = (mk_expr A.(AilEident sym)) in
-      let ail_expr_ = A.AilEcall (f, List.map mk_expr es) in 
-      dest d (List.concat bs, List.concat ss, ail_expr_)
+      let ail_expr_ = A.AilEcall (f, es) in 
+      dest d (List.concat bs, List.concat ss, mk_expr ail_expr_)
       
   | Let ((var, t1), body) -> 
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts t1 PassBack in
     let ctype_ = cn_to_ail_base_type (bt_to_cn_base_type (IT.bt t1)) in
     let binding = create_binding var ctype_ in
-    let ail_assign = A.(AilSdeclaration [(var, Some (mk_expr e1))]) in
+    let ail_assign = A.(AilSdeclaration [(var, Some e1)]) in
     prefix d (b1 @ [binding], s1 @ [ail_assign]) (cn_to_ail_expr_aux_internal const_prop pred_name dts body d)
 
   | Match (t, ps) -> 
@@ -554,8 +558,8 @@ let rec cn_to_ail_expr_aux_internal
         | [] -> assert false 
       in 
 
-      let transform_switch_expr e_
-        = A.(AilEmemberofptr (mk_expr e_, Id.id "tag"))
+      let transform_switch_expr e
+        = A.(AilEmemberofptr (e, Id.id "tag"))
       in
 
       (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
@@ -608,7 +612,7 @@ let rec cn_to_ail_expr_aux_internal
                             let suffix = "_" ^ (string_of_int count) in
                             let lc_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constr_sym in 
                             let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 
-                            let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in (* TODO: Remove hack *)
+                            let rhs_memberof_ptr = A.(AilEmemberofptr (e1, Id.id "u")) in (* TODO: Remove hack *)
                             let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym)) in
                             let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
 
@@ -646,8 +650,8 @@ let rec cn_to_ail_expr_aux_internal
 
   | Cast (bt, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
-    let ail_expr_ = A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type (bt_to_cn_base_type bt)) , (mk_expr e))) in 
-    dest d (b, s, ail_expr_)
+    let ail_expr_ = A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type (bt_to_cn_base_type bt)), e)) in 
+    dest d (b, s, mk_expr ail_expr_)
 
   | _ -> failwith "TODO: default case"
 
@@ -754,11 +758,11 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
     let (rhs, bs, ss) = match p.name with 
       | Owned _ ->
         let cast_ctype_pointer = C.(Pointer (empty_qualifiers, mk_ctype ctype_)) in
-        let cast_e_ = A.(AilEcast (empty_qualifiers, mk_ctype cast_ctype_pointer, mk_expr e)) in
+        let cast_e_ = A.(AilEcast (empty_qualifiers, mk_ctype cast_ctype_pointer, e)) in
         (make_deref_expr_ cast_e_, [], [])
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts it PassBack) p.iargs) in
-        let fcall = A.(AilEcall (mk_expr (AilEident pname), (mk_expr e) :: (List.map mk_expr es))) in
+        let fcall = A.(AilEcall (mk_expr (AilEident pname), e :: es)) in
         (fcall, bs, ss)
     in
     let s_decl = A.(AilSdeclaration [(sym, Some (mk_expr rhs))]) in
@@ -846,14 +850,14 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
 
     let (i_sym, i_bt) = q.q in
 
-    let start_expr = generate_start_expr (get_leftmost_and_expr e2) in
-    let end_cond = get_rest_of_expr e2 in
+    let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr e2)) in
+    let end_cond = get_rest_of_expr (rm_expr e2) in
 
 
     let start_binding = create_binding i_sym C.(Basic (Integer (Signed Int_))) in
     let start_assign = A.(AilSdeclaration [(i_sym, Some start_expr)]) in
 
-    let q_times_step = A.(AilEbinary (mk_expr (AilEident i_sym), Arithmetic Mul, mk_expr e3)) in
+    let q_times_step = A.(AilEbinary (mk_expr (AilEident i_sym), Arithmetic Mul, e3)) in
     let gen_add_expr_ e_ = 
       A.(AilEbinary (mk_expr e_, Arithmetic Add, mk_expr q_times_step))
     in
@@ -877,10 +881,10 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
     in
 
     let (rhs, bs, ss) = match q.name with 
-      | Owned _ -> (make_deref_expr_ (gen_add_expr_ e1), [], [])
+      | Owned _ -> (make_deref_expr_ (gen_add_expr_ (rm_expr e1)), [], [])
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts it PassBack) q.iargs) in
-        let fcall = A.(AilEcall (mk_expr (AilEident pname), (mk_expr (gen_add_expr_ e1)) :: (List.map mk_expr es))) in
+        let fcall = A.(AilEcall (mk_expr (AilEident pname), (mk_expr (gen_add_expr_ (rm_expr e1))) :: es)) in
         (fcall, bs, ss)
     in
 
@@ -963,7 +967,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
             []
           | None -> 
             (* Printf.printf "No logical constraint info\n"; *)
-            let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
+            let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
             s @ [ail_stat_]
         in
         let (b2, s2) = predicate_clause_to_ail lat in
@@ -985,7 +989,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
           | _ -> 
             let (b1, s1, e) = cn_to_ail_expr_internal_with_pred_name pred_sym dts c.guard PassBack in
             let (bs'', ss'') = clause_translate cs in
-            let ail_if_stat = A.(AilSif (mk_expr e, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
+            let ail_if_stat = A.(AilSif (e, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
             ([], [ail_if_stat])
   in
 
@@ -1075,7 +1079,7 @@ let rec cn_to_ail_post_aux_internal dts preds = function
         []
       | None -> 
         Printf.printf "No logical constraint info\n";
-        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
+        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
         s @ [ail_stat_]
     in
     let (b2, s2) = cn_to_ail_post_aux_internal dts preds t in
@@ -1133,7 +1137,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
 let rec cn_to_ail_cnprog_internal dts = function
 | Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
   let (b1, s, e) = cn_to_ail_expr_internal dts pointer PassBack in
-  let ail_deref_expr_ = A.(AilEunary (Indirection, mk_expr e)) in
+  let ail_deref_expr_ = A.(AilEunary (Indirection, e)) in
   (* TODO: Use ct for type binding *)
   (* TODO: Differentiate between read and deref cases for M_CN_let *)
   let standardise_sym sym' = 
