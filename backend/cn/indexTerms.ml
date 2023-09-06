@@ -575,6 +575,8 @@ let integerToPointerCast_ it =
   cast_ Loc it
 let pointerToIntegerCast_ it =
   cast_ Integer it
+let pointerToAllocIdCast_ it =
+  cast_ Alloc_id it
 let memberOffset_ (tag, member) =
   IT (MemberOffset (tag, member), BT.Integer)
 let arrayOffset_ (ct, t) =

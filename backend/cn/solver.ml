@@ -383,7 +383,7 @@ module Translate = struct
     ()
 
 
-  let _loc_to_alloc_id_fundecl context global =
+  let loc_to_alloc_id_fundecl context global =
     nth (Z3.Tuple.get_field_decls (sort context global Loc)) 0
 
   let loc_to_integer_fundecl context global =
@@ -407,6 +407,11 @@ module Translate = struct
     let loc_to_integer l =
       Z3.Expr.mk_app context
         (loc_to_integer_fundecl context global) [l]
+    in
+
+    let loc_to_alloc_id l =
+      Z3.Expr.mk_app context
+        (loc_to_alloc_id_fundecl context global) [l]
     in
 
     let integer_to_alloc_id i =
@@ -602,6 +607,8 @@ module Translate = struct
             alloc_id_integer_to_loc (term (alloc_id_ Z.zero)) (term t)
          | Loc, Integer ->
             loc_to_integer (term t)
+         | Loc, Alloc_id ->
+            loc_to_alloc_id (term t)
          | Real, Integer ->
             Z3.Arithmetic.Real.mk_real2int context (term t)
          | Integer, Real ->
@@ -637,7 +644,13 @@ module Translate = struct
          Z3.FuncDecl.apply fdec args
          |> needs_premise (IsArrayToList it)
       | Aligned t ->
-         term (divisible_ (pointerToIntegerCast_ t.t, t.align))
+         term (and_ [divisible_ (pointerToIntegerCast_ t.t, t.align);
+                    (* FIXME delete this when transition to VIP is over *)
+                    eq_ (pointerToAllocIdCast_ t.t, alloc_id_ Z.zero)])
+      | Representable (CT.Pointer _ as ct, t) ->
+         term (and_ [representable struct_decls ct t;
+                    (* FIXME delete this when transition to VIP is over *)
+                    eq_ (pointerToAllocIdCast_ t, alloc_id_ Z.zero)])
       | Representable (ct, t) ->
          term (representable struct_decls ct t)
       | Good (ct, t) ->
