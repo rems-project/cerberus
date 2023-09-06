@@ -20,6 +20,7 @@ check_foo (int x)
     ensures foo(t) == x + 1i32; 
 @*/
 {
+  ;
 }
 
 
