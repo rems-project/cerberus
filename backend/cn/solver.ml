@@ -644,13 +644,9 @@ module Translate = struct
          Z3.FuncDecl.apply fdec args
          |> needs_premise (IsArrayToList it)
       | Aligned t ->
-         term (and_ [divisible_ (pointerToIntegerCast_ t.t, t.align);
-                    (* FIXME delete this when transition to VIP is over *)
-                    eq_ (pointerToAllocIdCast_ t.t, alloc_id_ Z.zero)])
+         term (divisible_ (pointerToIntegerCast_ t.t, t.align))
       | Representable (CT.Pointer _ as ct, t) ->
-         term (and_ [representable struct_decls ct t;
-                    (* FIXME delete this when transition to VIP is over *)
-                    eq_ (pointerToAllocIdCast_ t, alloc_id_ Z.zero)])
+         term (representable struct_decls ct t)
       | Representable (ct, t) ->
          term (representable struct_decls ct t)
       | Good (ct, t) ->

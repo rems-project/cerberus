@@ -767,6 +767,8 @@ let value_check_pointer alignment ~pointee_ct about =
   in
   and_ [le_ (z_ Z.zero, about_int);
         le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer);
+        (* TODO revist/delete this when transition to VIP is over *)
+        eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
 
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
