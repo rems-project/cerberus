@@ -377,32 +377,40 @@ let rec cn_to_ail_expr_aux_internal
     (* Could either be (1) standalone record or (2) part of datatype. Case (2) may not exist soon *)
     (* Might need to pass records around like datatypes *)
 
-    let res_sym = Sym.fresh_pretty "record_res" in
+    Printf.printf "Entered record case\n";
+
+    let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
 
     let generate_ail_stat (id, it) = 
+      Printf.printf "Id: %s\n" (Id.s id);
       let (b, s, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts it PassBack in
       let ail_memberof = A.(AilEmemberofptr (mk_expr res_ident, id)) in
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
     in
 
-    let (b, s) = (match pred_name with 
+    let (b, s) = match pred_name with 
       | Some sym -> 
-        let record_name = generate_sym_with_suffix ~suffix:"_record" sym in
-        let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct record_name)))) in
-        let res_binding = create_binding res_sym ctype_ in
-        let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct record_name)))])) in
-        let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
-        ([res_binding], [alloc_stat])
-      | None -> ([], []))
+          let sym_name = generate_sym_with_suffix ~suffix:"_record" sym in
+          let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct sym_name)))) in
+          let res_binding = create_binding res_sym ctype_ in
+          let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct sym_name)))])) in
+          let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
+          ([res_binding], [alloc_stat])
+      | None -> ([], [])
     in
+    
     let (bs, ss, assign_stats) = list_split_three (List.map generate_ail_stat ms) in
     dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
 
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
   | DatatypeCons (sym, t) -> 
+    (* sym is the constructor name, t is a record with members and values *)
+    (* e.g. Tree_Node {k: 3, v: 0, l: Tree_Empty {}, r: Tree_Empty {}}*)
     (* Hacky way of finding datatype this comes from while pipeline being sorted out *)
+    Printf.printf "Inside DatatypeCons with sym = %s\n" (Sym.pp_string sym);
+
     let rec find_dt_from_constructor constr_sym dts = 
       match dts with 
         | [] -> failwith "Datatype not found" (* Not found *)
@@ -416,12 +424,14 @@ let rec cn_to_ail_expr_aux_internal
     in
 
     let (parent_dt, members) = find_dt_from_constructor sym dts in
-    let res_sym = Sym.fresh_pretty "dt_res" in
+    Printf.printf "Datatype name: %s\n" (Sym.pp_string parent_dt.cn_dt_name);
+    let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
     let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct parent_dt.cn_dt_name)))) in
     let res_binding = create_binding res_sym ctype_ in
     let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct parent_dt.cn_dt_name)))])) in
     let ail_decl = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
+    Printf.printf "Reached past allocation declaration\n";
     (* Ignore e in this case *)
     let (b, ss, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
 
@@ -433,22 +443,21 @@ let rec cn_to_ail_expr_aux_internal
       | (A.(AilSexpr (A.(AnnotatedExpression (_, _, _, AilEassign (lhs, rhs)))))) :: ss -> 
         let new_lhs = (match rm_expr lhs with 
           | A.(AilEmemberofptr (_, id)) ->
+            (* TODO: Make more precise *)
+            if (Id.equal id (Id.id "tag")) then lhs else 
             let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.id "u")) in
             let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
             let e_'' = A.(AilEmemberof (mk_expr e_', id)) in
             mk_expr e_''
-          | _ -> failwith "Incorrect form of record translation expr")
+          | _ -> lhs)
         in
         let new_stat_ = A.(AilSexpr (mk_expr (AilEassign (new_lhs, rhs)))) in
         new_stat_ :: modify_ail_stats ss
-      | _ :: ss -> modify_ail_stats ss
+      | s :: ss -> s :: modify_ail_stats ss
     in 
 
-    let num_members = List.length members in
-    let num_stats = List.length ss in
-    assert (num_members <= num_stats );
-    let member_stats = List.filteri (fun i _ -> i >= num_stats - num_members) ss in
-    let modified_stats = modify_ail_stats member_stats in
+
+    let modified_stats = modify_ail_stats ss in
 
     let uc_constr_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true sym in
     let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.id "tag")) in
@@ -470,7 +479,8 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_' = A.(AilEmemberof (mk_expr ail_expr_, create_id_from_sym constructor_sym)) in
     dest d (b, s, mk_expr A.(AilEmemberof (mk_expr ail_expr_', id)))
 
-  | DatatypeIsCons (sym, it) -> failwith "TODO6.3"
+  | DatatypeIsCons (sym, it) -> 
+    cn_to_ail_expr_aux_internal const_prop pred_name dts it d
 
   (* Allocation *)
   | Constructor (nm, ms) -> 
@@ -517,7 +527,6 @@ let rec cn_to_ail_expr_aux_internal
 
   | MapDef ((sym, bt), t) -> failwith "TODO21"
   | Apply (sym, ts) ->
-      Printf.printf "FN NAME: %s\n" (Sym.pp_string sym);
       let bs_ss_es = List.map (fun e -> cn_to_ail_expr_aux_internal const_prop pred_name dts e PassBack) ts in
       let (bs, ss, es) = list_split_three bs_ss_es in 
       let f = (mk_expr A.(AilEident sym)) in
