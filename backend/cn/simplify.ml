@@ -541,6 +541,8 @@ module IndexTerms = struct
        | _ -> mul_ (int_ (Memory.size_of_ctype ct), t)
           (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
        end
+    | SizeOf ct ->
+       int_ (Memory.size_of_ctype ct)
     | Representable (ct, t) ->
        IT (Representable (ct, aux t), the_bt)
     | Good (ct, t) ->

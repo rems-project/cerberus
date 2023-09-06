@@ -614,6 +614,8 @@ module Translate = struct
          term (int_ (Option.get (Memory.member_offset decl member)))
       | ArrayOffset (ct, t) ->
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
+      | SizeOf ct ->
+         term (int_ (Memory.size_of_ctype ct))
       | Nil ibt ->
          make_uf (plain (!^"nil_uf"^^angles(BT.pp ibt))) (List ibt) []
       | Cons (t1, t2) ->

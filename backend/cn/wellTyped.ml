@@ -541,6 +541,9 @@ module WIT = struct
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc Integer t in
           return (IT (ArrayOffset (ct, t), Integer))
+       | SizeOf ct ->
+          let@ () = WCT.is_ct loc ct in
+          return (IT (SizeOf ct, Integer))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Integer t.align in

@@ -87,6 +87,7 @@ type 'bt term_ =
   | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
+  | SizeOf of Sctypes.t
   | Nil of BaseTypes.t
   | Cons of 'bt term * 'bt term
   | Head of 'bt term
@@ -285,43 +286,45 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
           mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
+       | SizeOf t ->
+          mparens (c_app !^"sizeof" [Sctypes.pp t])
        (* end *)
     (* | CT_pred ct_pred -> *)
     (*    begin match ct_pred with *)
        | Aligned t ->
-          c_app !^"aligned" [aux false t.t; aux false t.align]
+          mparens (c_app !^"aligned" [aux false t.t; aux false t.align])
        | Representable (rt, t) ->
-          c_app (!^"repr" ^^ angles (CT.pp rt)) [aux false t]
+          mparens (c_app (!^"repr" ^^ angles (CT.pp rt)) [aux false t])
        | Good (rt, t) ->
-          c_app (!^"good" ^^ angles (CT.pp rt)) [aux false t]
+          mparens (c_app (!^"good" ^^ angles (CT.pp rt)) [aux false t])
        | WrapI (ity, t) ->
-          c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [aux false t]
+          mparens (c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [aux false t])
        (* end *)
     (* | List_op list_op -> *)
     (*    begin match list_op with *)
        | Head (o1) ->
-          c_app !^"hd" [aux false o1]
+          mparens (c_app !^"hd" [aux false o1])
        | Tail (o1) ->
-          c_app !^"tl" [aux false o1]
+          mparens (c_app !^"tl" [aux false o1])
        | Nil bt ->
           !^"nil" ^^ angles (BaseTypes.pp bt)
        | Cons (t1,t2) ->
           mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
        | NthList (n, xs, d) ->
-          c_app !^"nth_list" [aux false n; aux false xs; aux false d]
+          mparens (c_app !^"nth_list" [aux false n; aux false xs; aux false d])
        | ArrayToList (arr, i, len) ->
-          c_app !^"array_to_list" [aux false arr; aux false i; aux false len]
+          mparens (c_app !^"array_to_list" [aux false arr; aux false i; aux false len])
        (* end *)
     (* | Set_op set_op -> *)
     (*    begin match set_op with *)
        (* end *)
        | MapConst (_bt, t) ->
-          c_app !^"const" [aux false t]
+          mparens (c_app !^"const" [aux false t])
        | MapGet (t1, t2) ->
-          aux true t1 ^^ brackets (aux false t2)
+          mparens (aux true t1 ^^ brackets (aux false t2))
        | MapSet (t1, t2, t3) ->
-          aux true t1 ^^ 
-            brackets (aux false t2 ^^^ equals ^^^ aux false t3)
+          mparens (aux true t1 ^^ 
+                     brackets (aux false t2 ^^^ equals ^^^ aux false t3))
        | MapDef ((s,_), t) ->
           brackets (Sym.pp s ^^^ !^"->" ^^^ aux false t)
     (* | Map_op map_op -> *)
@@ -347,8 +350,9 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
       (*  prefix 2 0 root_pp @@ align (flow_map (break 0) pp_op ops) *)
     | Apply (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
-    | Let ((name, x1), x2) -> parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
-        aux false x1 ^^^ !^ "in" ^^^ aux false x2)
+    | Let ((name, x1), x2) -> 
+       parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
+                 aux false x1 ^^^ !^ "in" ^^^ aux false x2)
     | Match (e, cases) ->
         !^"match" ^^^ aux false e ^^^ braces (
           (* copying from mparens *)

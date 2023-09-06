@@ -65,6 +65,7 @@ let rec free_vars_ = function
   | Cast (_cbt, t) -> free_vars t
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
+  | SizeOf _t -> SymSet.empty
   | Nil _bt -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
   | Head t -> free_vars t
@@ -124,6 +125,7 @@ let rec fold_ f binders acc = function
   | Cast (_cbt, t) -> fold f binders acc t
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
+  | SizeOf _ct -> acc
   | Nil _bt -> acc
   | Cons (t1, t2) -> fold_list f binders acc [t1; t2]
   | Head t -> fold f binders acc t
@@ -256,6 +258,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (MemberOffset (tag, member), bt)
   | ArrayOffset (tag, t) ->
      IT (ArrayOffset (tag, subst su t), bt)
+  | SizeOf t ->
+     IT (SizeOf t, bt)
   | Aligned t -> 
      IT (Aligned {t= subst su t.t; align= subst su t.align}, bt)
   | Representable (rt, t) -> 
