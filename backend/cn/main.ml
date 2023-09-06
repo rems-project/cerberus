@@ -194,6 +194,7 @@ let main
 
             (* TODO: Topological sort *)
             Stdlib.output_string cn_oc (generate_include_header ("alloc.c", false));
+            Stdlib.output_string cn_oc (generate_include_header ("assert.h", true));
             Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_records;
             Stdlib.output_string cn_oc c_functions;
