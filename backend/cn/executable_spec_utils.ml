@@ -13,10 +13,10 @@ let mk_ctype ctype_ = C.Ctype ([], ctype_)
 
 let rm_ctype (C.Ctype (_, ctype_)) = ctype_
 
-let mk_expr expr_ = 
+let mk_expr ?(strs=[]) expr_ = 
   A.AnnotatedExpression (
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
-     [], Cerb_location.unknown, expr_)
+     strs, Cerb_location.unknown, expr_)
 
 let mk_cn_expr cn_expr_ = 
   Cn.CNExpr (Cerb_location.unknown, cn_expr_)
