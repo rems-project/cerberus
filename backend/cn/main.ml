@@ -200,7 +200,7 @@ let main
             Stdlib.output_string cn_oc c_functions;
             Stdlib.output_string cn_oc c_predicates;
 
-            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("alloc.c", false); ("cn.c", false);] in
+            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); ("alloc.c", false); ("cn.c", false);] in
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n";

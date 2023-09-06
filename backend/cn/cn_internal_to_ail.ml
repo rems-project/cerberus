@@ -165,30 +165,30 @@ let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn
 
 (* TODO: Finish *)
 let cn_to_ail_binop_internal = function
-  | Terms.And -> (A.And, "")
-  | Or -> (A.Or, "")
+  | Terms.And -> (A.And, None)
+  | Or -> (A.Or, None)
   (* | Impl *)
-  | Add -> (A.(Arithmetic Add), "")
-  | Sub -> (A.(Arithmetic Sub), "")
+  | Add -> (A.(Arithmetic Add), None)
+  | Sub -> (A.(Arithmetic Sub), None)
   | Mul 
-  | MulNoSMT -> (A.(Arithmetic Mul), "")
+  | MulNoSMT -> (A.(Arithmetic Mul), None)
   | Div 
-  | DivNoSMT -> (A.(Arithmetic Div), "")
+  | DivNoSMT -> (A.(Arithmetic Div), None)
   | Exp
-  | ExpNoSMT -> (A.And, "pow")
+  | ExpNoSMT -> (A.And, Some "pow")
   (* | Rem
-  | RemNoSMT
+  | RemNoSMT *)
   | Mod
-  | ModNoSMT
-  | XORNoSMT
-  | BWAndNoSMT
-  | BWOrNoSMT *)
-  | LT -> (A.Lt, "")
-  | LE -> (A.Le, "")
-  (* | Min
-  | Max *)
-  | EQ -> (A.Eq, "")
-  | _ -> (A.And, "") (* TODO: Change *)
+  | ModNoSMT -> (A.(Arithmetic Mod), None)
+  | XORNoSMT -> (A.(Arithmetic Bxor), None)
+  | BWAndNoSMT -> (A.(Arithmetic Band), None)
+  | BWOrNoSMT -> (A.(Arithmetic Bor), None)
+  | LT -> (A.Lt, None)
+  | LE -> (A.Le, None)
+  | Min -> (A.And, Some "min")
+  | Max -> (A.And, Some "max")
+  | EQ -> (A.Eq, None)
+  | _ -> (A.And, None) (* TODO: Change *)
   (* | LTPointer
   | LEPointer
   | SetUnion
@@ -308,9 +308,12 @@ let rec cn_to_ail_expr_aux_internal
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts t1 PassBack in
     let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts t2 PassBack in
     let (ail_bop, annot) = cn_to_ail_binop_internal bop in
+    let strs = match annot with 
+      | Some str -> [str]
+      | None -> []
+    in
     let ail_expr_ = A.AilEbinary (e1, ail_bop, e2) in 
-    dest d (b1 @ b2, s1 @ s2, mk_expr ~strs:[annot] ail_expr_) 
-    
+    dest d (b1 @ b2, s1 @ s2, mk_expr ~strs ail_expr_) 
 
   | ITE (t1, t2, t3) -> 
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts t1 PassBack in
