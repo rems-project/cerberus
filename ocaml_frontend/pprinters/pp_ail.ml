@@ -497,7 +497,7 @@ let pp_alignment_opt align_opt =
   P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
 
 let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
-  let rec pp ?(executable_spec=false) p (AnnotatedExpression (annot, _, loc, expr)) =
+  let rec pp ?(executable_spec=false) p (AnnotatedExpression (annot, strs, loc, expr)) =
     let p' = precedence expr in
     let pp ?(executable_spec=false) z = P.group (pp ~executable_spec p' z) in
     (if lt_precedence p' p then fun z -> z else P.parens)
@@ -510,7 +510,16 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEbinary (e1, (Comma as o), e2) ->
             pp ~executable_spec e1 ^^ pp_binaryOperator o ^^ P.space ^^ pp ~executable_spec e2
         | AilEbinary (e1, o, e2) ->
-            pp ~executable_spec e1 ^^^ pp_binaryOperator o ^^^ pp ~executable_spec e2
+            let e1_doc = pp ~executable_spec e1 in
+            let e2_doc = pp ~executable_spec e2 in
+            let standard_doc = e1_doc ^^^ pp_binaryOperator o ^^^ e2_doc in
+            (match strs with 
+              | [x] -> 
+                if String.equal x "pow" then
+                  !^ "pow" ^^ P.lparen ^^ e1_doc ^^ P.comma ^^^ e2_doc ^^ P.rparen 
+                else 
+                  standard_doc
+              | _ -> standard_doc)
         | AilEassign (e1, e2) ->
             pp ~executable_spec e1 ^^^ P.equals ^^^ pp ~executable_spec e2
         | AilEreg_load r ->
