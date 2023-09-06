@@ -19,6 +19,7 @@ check_foo (int x)
     r: Tree_Node {k: 3, v: 0, l: Tree_Empty {}, r: Tree_Empty {}}} @*/
 /*@ ensures foo(t) == x + 1 @*/
 {
+  ;
 }
 
 

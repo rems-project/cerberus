@@ -11,6 +11,14 @@ void *alloc(long nbytes) {
     return res;
 }
 
+long min(long a, long b) {
+    return a < b ? a : b;
+}
+
+long max(long a, long b) {
+    return a > b ? a : b;
+}
+
 
 int main(void) {
     return 0;
