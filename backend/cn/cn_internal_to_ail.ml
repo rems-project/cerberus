@@ -256,6 +256,13 @@ let generate_start_expr start_cond sym =
   
 
 let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) = 
+  (* 
+     Input:
+     each (integer sym; start_expr <= sym && while_cond) {t}
+
+     where (bs, ss, e) = cn_internal_to_ail called on t with PassBack
+  *)
+
   let b = Sym.fresh () in
   let b_ident = A.(AilEident b) in
   let b_binding = create_binding b C.(Basic (Integer Bool)) in
@@ -953,7 +960,7 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
         ([], [ail_block])
       | _ -> 
         let sym_binding = create_binding sym C.(Pointer (empty_qualifiers, mk_ctype ctype_)) in
-        let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int 10000, Decimal, None)))))])) in
+        let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof_expr e1)])) in
         let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr alloc_call))]) in
         let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in
         let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
