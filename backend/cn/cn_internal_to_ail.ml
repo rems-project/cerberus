@@ -383,14 +383,15 @@ let rec cn_to_ail_expr_aux_internal
     let res_ident = A.(AilEident res_sym) in
 
     let generate_ail_stat (id, it) = 
-      Printf.printf "Id: %s\n" (Id.s id);
       let (b, s, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts it PassBack in
+      (* Res ident later gets replaced by correct variable if being called from DatatypeCons *)
       let ail_memberof = A.(AilEmemberofptr (mk_expr res_ident, id)) in
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
     in
 
     let (b, s) = match pred_name with 
+      (* Assuming records only get instantiated at point of return for predicates *)
       | Some sym -> 
           let sym_name = generate_sym_with_suffix ~suffix:"_record" sym in
           let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct sym_name)))) in
@@ -398,6 +399,7 @@ let rec cn_to_ail_expr_aux_internal
           let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct sym_name)))])) in
           let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
           ([res_binding], [alloc_stat])
+      (* Allocation taken care of if in datatype instantiation case - not needed here *)
       | None -> ([], [])
     in
     
@@ -408,9 +410,8 @@ let rec cn_to_ail_expr_aux_internal
   | DatatypeCons (sym, t) -> 
     (* sym is the constructor name, t is a record with members and values *)
     (* e.g. Tree_Node {k: 3, v: 0, l: Tree_Empty {}, r: Tree_Empty {}}*)
-    (* Hacky way of finding datatype this comes from while pipeline being sorted out *)
-    Printf.printf "Inside DatatypeCons with sym = %s\n" (Sym.pp_string sym);
 
+    (* Hacky way of finding datatype this comes from while pipeline being sorted out *)
     let rec find_dt_from_constructor constr_sym dts = 
       match dts with 
         | [] -> failwith "Datatype not found" (* Not found *)
@@ -443,7 +444,7 @@ let rec cn_to_ail_expr_aux_internal
       | (A.(AilSexpr (A.(AnnotatedExpression (_, _, _, AilEassign (lhs, rhs)))))) :: ss -> 
         let new_lhs = (match rm_expr lhs with 
           | A.(AilEmemberofptr (_, id)) ->
-            (* TODO: Make more precise *)
+            (* TODO: Make check for which exprs to modify more precise *)
             if (Id.equal id (Id.id "tag")) then lhs else 
             let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.id "u")) in
             let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
@@ -1108,48 +1109,40 @@ let cn_to_ail_post_internal dts preds (ReturnTypes.Computational (bound, oinfo, 
   cn_to_ail_post_aux_internal dts preds t
 
 (* TODO: Add destination passing *)
-let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> a
+let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
 = fun dts d cnstatement ->
+  let default_true_res = cn_to_ail_expr_internal dts (IT (Const (Bool true), BT.Bool)) d in
   match cnstatement with
-  (* Will go away *)
   | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> 
-    cn_to_ail_expr_internal dts (IT (Const (Bool true), BT.Bool)) d
+    (default_true_res, true)
 
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
-  (* No op on my end *)
   | Cnprog.M_CN_instantiate (o_s, it) -> 
-    (* TODO: Ask Christopher what this does *)
-    (* empty_for_dest d *)
-    cn_to_ail_expr_internal dts it d
-    (* failwith "TODO M_CN_instantiate" *)
-    (* o_s is not a (option) binder *)
+    (default_true_res, true)
 
   | Cnprog.M_CN_extract (to_extract, it) -> 
-      (* TODO: Ask Christopher what this does *)
-      (* For manipulating resources *)
-      cn_to_ail_expr_internal dts it d
-    (* failwith "TODO M_CN_extract" *)
+    (default_true_res, true)
 
   | Cnprog.M_CN_unfold (fsym, args) -> 
-    
-    cn_to_ail_expr_internal dts (IT (Const (Bool true), BT.Bool)) d
+    (default_true_res, true)
     (* fsym is a function symbol *)
 
   | Cnprog.M_CN_apply (fsym, args) -> 
     (* Can ignore *)
     (* TODO: Make type correct from return type of top-level CN functions - although it shouldn't really matter (?) *)
-    cn_to_ail_expr_internal dts (IT (Apply (fsym, args), Unit)) d
+    (default_true_res, true)
     (* fsym is a lemma symbol *)
 
   | Cnprog.M_CN_assert lc -> 
-    cn_to_ail_logical_constraint_internal dts d lc
+    (cn_to_ail_logical_constraint_internal dts d lc, false)
 
   | Cnprog.M_CN_inline _ -> failwith "TODO M_CN_inline"
 
 
-let rec cn_to_ail_cnprog_internal dts = function
+let rec cn_to_ail_cnprog_internal_aux dts = function
 | Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
+  Printf.printf "In M_CN_let\n";
   let (b1, s, e) = cn_to_ail_expr_internal dts pointer PassBack in
   let ail_deref_expr_ = A.(AilEunary (Indirection, e)) in
   (* TODO: Use ct for type binding *)
@@ -1171,11 +1164,18 @@ let rec cn_to_ail_cnprog_internal dts = function
  
   let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr ail_deref_expr_))]) in
   (* let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in *)
-  let (loc', b2, ss) = cn_to_ail_cnprog_internal dts prog in
-  (loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss)
+  let ((loc', b2, ss), do_nothing) = cn_to_ail_cnprog_internal_aux dts prog in
+  if do_nothing then
+    ((loc', [], []), true)
+  else
+    ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), true)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
   (* (loc, [], [empty_ail_stmt]) *)
-  let (bs, ss) = cn_to_ail_cnstatement_internal dts Assert stmt in 
-  (loc, bs, ss)
+  Printf.printf "In M_CN_statement\n";
+  let ((bs, ss), do_nothing) = cn_to_ail_cnstatement_internal dts Assert stmt in 
+  ((loc, bs, ss), do_nothing)
 
+let cn_to_ail_cnprog_internal dts cn_prog =
+  let ((loc, bs, ss), _) = cn_to_ail_cnprog_internal_aux dts cn_prog in
+  (loc, bs, ss)
