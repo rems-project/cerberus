@@ -1162,8 +1162,8 @@ let rec cn_to_ail_cnprog_internal_aux dts = function
  
   let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr ail_deref_expr_))]) in
   (* let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in *)
-  let ((loc', b2, ss), do_nothing) = cn_to_ail_cnprog_internal_aux dts prog in
-  if do_nothing then
+  let ((loc', b2, ss), no_op) = cn_to_ail_cnprog_internal_aux dts prog in
+  if no_op then
     ((loc', [], []), true)
   else
     ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), true)
@@ -1171,8 +1171,8 @@ let rec cn_to_ail_cnprog_internal_aux dts = function
 | Cnprog.M_CN_statement (loc, stmt) ->
   (* (loc, [], [empty_ail_stmt]) *)
   Printf.printf "In M_CN_statement\n";
-  let ((bs, ss), do_nothing) = cn_to_ail_cnstatement_internal dts Assert stmt in 
-  ((loc, bs, ss), do_nothing)
+  let ((bs, ss), no_op) = cn_to_ail_cnstatement_internal dts Assert stmt in 
+  ((loc, bs, ss), no_op)
 
 let cn_to_ail_cnprog_internal dts cn_prog =
   let ((loc, bs, ss), _) = cn_to_ail_cnprog_internal_aux dts cn_prog in
