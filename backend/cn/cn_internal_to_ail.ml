@@ -197,7 +197,82 @@ let cn_to_ail_binop_internal = function
   | SetMember
   | Subset *)
 
+(* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
+let rearrange_start_inequality sym e1 e2 = 
+  match (rm_expr e2) with 
+    | A.(AilEbinary ((A.AnnotatedExpression (_, _, _, AilEident sym1) as expr1), binop, (A.AnnotatedExpression (_, _, _, AilEident sym2) as expr2))) ->
+        (if String.equal (Sym.pp_string sym) (Sym.pp_string sym1) then
+          let inverse_binop = match binop with 
+            | A.(Arithmetic Add) -> A.(Arithmetic Sub)
+            | A.(Arithmetic Sub) -> A.(Arithmetic Add)
+            | _ -> failwith "Other binops not supported"
+          in
+          A.(AilEbinary (e1, inverse_binop, expr2))
+        else 
+          (if String.equal (Sym.pp_string sym) (Sym.pp_string sym2) then 
+            match binop with 
+              | A.(Arithmetic Add) -> A.(AilEbinary (e1, A.(Arithmetic Sub), expr1))
+              | A.(Arithmetic Sub) -> failwith "Minus not supported"
+              | _ -> failwith "Other binops not supported"
+          else 
+            failwith "Not of correct form"
+          )
+        )
+    | _ -> failwith "TODO"
+
+
+let generate_start_expr start_cond sym =
+  let (start_expr, binop) = 
+    match start_cond with
+      | A.(AilEbinary (expr1, binop, A.AnnotatedExpression (_, _, _, AilEident sym'))) ->
+          (if String.equal (Sym.pp_string sym) (Sym.pp_string sym') then
+            (expr1, binop)
+          else
+            failwith "Not of correct form (unlikely case - i's not matching)")
+      | A.(AilEbinary (expr1, binop, expr2)) ->
+          (mk_expr (rearrange_start_inequality sym expr1 expr2), binop)
+      | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
+  in
+  match binop with 
+    | A.Le -> 
+      start_expr
+    | A.Lt ->
+      let one = A.AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None))) in
+      mk_expr (A.(AilEbinary (start_expr, Arithmetic Add, mk_expr one)))
+    | _ -> failwith "Not of correct form: not Le or Lt"
+
+    let rec get_leftmost_and_expr = function
+    | A.(AilEbinary (lhs, And, rhs)) -> get_leftmost_and_expr (rm_expr lhs)
+    | lhs -> lhs
   
+
+  let rec get_rest_of_expr_r = function 
+    | A.(AilEbinary (lhs, And, rhs)) ->
+      let r = get_rest_of_expr_r (rm_expr lhs) in
+      (match r with
+        | A.(AilEconst (ConstantInteger (IConstant _))) -> rm_expr rhs
+        | _ -> A.(AilEbinary (mk_expr r, And, rhs)))
+    | lhs -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B)))
+  
+
+let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) = 
+  let b = Sym.fresh () in
+  let b_ident = A.(AilEident b) in
+  let b_binding = create_binding b C.(Basic (Integer Bool)) in
+  let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B))) in
+  let b_decl = A.(AilSdeclaration [(b, Some (mk_expr true_const))]) in
+
+  let incr_var = A.(AilEident sym) in
+  let incr_var_binding = create_binding sym C.(Basic (Integer (Signed Int_))) in
+  let start_decl = A.(AilSdeclaration [(sym, Some (mk_expr start_expr))]) in
+
+  let rhs_and_expr_ = A.(AilEbinary (mk_expr b_ident, And, e)) in
+  let b_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_)))) in
+  let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in
+  let while_loop = A.(AilSwhile (mk_expr while_cond, mk_stmt (AilSblock (bs, List.map mk_stmt (ss @ [b_assign; incr_stat]))), 0)) in
+
+  let block = A.(AilSblock ([incr_var_binding], List.map mk_stmt [start_decl; while_loop])) in
+  ([b_binding], [b_decl; block], mk_expr b_ident)
 
 
 let rec cn_to_ail_const_internal = function
@@ -348,36 +423,18 @@ let rec cn_to_ail_expr_aux_internal
     
     *)
 
-    Printf.printf "Reached EachI\n";
-
-    let b = Sym.fresh () in
-    let b_ident = A.(AilEident b) in
-    let b_binding = create_binding b C.(Basic (Integer Bool)) in
-    let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B))) in
-    let b_decl = A.(AilSdeclaration [(b, Some (mk_expr true_const))]) in
-
     let mk_int_const n = 
       A.AilEconst (ConstantInteger (IConstant (Z.of_int n, Decimal, None)))
     in
 
+    let incr_var = A.(AilEident sym) in
     let start_int_const = mk_int_const r_start in
     let end_int_const = mk_int_const r_end in
-
-    let incr_var = A.(AilEident sym) in
-    let incr_var_binding = create_binding sym C.(Basic (Integer (Signed Int_))) in
-    let start_decl = A.(AilSdeclaration [(sym, Some (mk_expr start_int_const))]) in
-
     let while_cond = A.(AilEbinary (mk_expr incr_var, Lt, mk_expr end_int_const)) in
-    let (bs, ss, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
-    let rhs_and_expr_ = A.(AilEbinary (mk_expr b_ident, Arithmetic Band, e)) in
-    let b_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_)))) in
-    let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in
-    let while_loop = A.(AilSwhile (mk_expr while_cond, mk_stmt (AilSblock (bs, List.map mk_stmt (ss @ [b_assign; incr_stat]))), 0)) in
+    let translated_t = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
 
-    let block = A.(AilSblock ([incr_var_binding], List.map mk_stmt [start_decl; while_loop])) in
-
-    dest d ([b_binding], [b_decl; block], mk_expr b_ident)
-
+    let (bs, ss, e) = gen_bool_while_loop sym start_int_const while_cond translated_t in
+    dest d (bs, ss, e)
 
   (* add Z3's Distinct for separation facts  *)
   | Tuple ts -> failwith "TODO1"
@@ -826,68 +883,6 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
     let (b1, s1, e1) = cn_to_ail_expr_internal dts q.pointer PassBack in
     let (b2, s2, e2) = cn_to_ail_expr_internal dts q.permission PassBack in
     let (b3, s3, e3) = cn_to_ail_expr_internal dts q.step PassBack in
-    let (q_sym, q_bt) = q.q in
-
-    (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
-    let rearrange_start_inequality sym e1 e2 = 
-      match (rm_expr e2) with 
-        | A.(AilEbinary ((A.AnnotatedExpression (_, _, _, AilEident sym1) as expr1), binop, (A.AnnotatedExpression (_, _, _, AilEident sym2) as expr2))) ->
-            (if String.equal (Sym.pp_string sym) (Sym.pp_string sym1) then
-              let inverse_binop = match binop with 
-                | A.(Arithmetic Add) -> A.(Arithmetic Sub)
-                | A.(Arithmetic Sub) -> A.(Arithmetic Add)
-                | _ -> failwith "Other binops not supported"
-              in
-              A.(AilEbinary (e1, inverse_binop, expr2))
-            else 
-              (if String.equal (Sym.pp_string sym) (Sym.pp_string sym2) then 
-                match binop with 
-                  | A.(Arithmetic Add) -> A.(AilEbinary (e1, A.(Arithmetic Sub), expr1))
-                  | A.(Arithmetic Sub) -> failwith "Minus not supported"
-                  | _ -> failwith "Other binops not supported"
-              else 
-                failwith "Not of correct form"
-              )
-            )
-        | _ -> failwith "TODO"
-    in
-
-    let generate_start_expr start_cond =
-      let (start_expr, binop) = 
-        match start_cond with
-          | A.(AilEbinary (expr1, binop, A.AnnotatedExpression (_, _, _, AilEident sym'))) ->
-              (if String.equal (Sym.pp_string q_sym) (Sym.pp_string sym') then
-                (expr1, binop)
-              else
-                failwith "Not of correct form (unlikely case - i's not matching)")
-          | A.(AilEbinary (expr1, binop, expr2)) ->
-              (mk_expr (rearrange_start_inequality q_sym expr1 expr2), binop)
-          | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
-      in
-      match binop with 
-        | A.Le -> 
-          Printf.printf "Correct form!\n";
-          start_expr
-        | A.Lt ->
-          Printf.printf "Correct form!\n";
-          let one = A.AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None))) in
-          mk_expr (A.(AilEbinary (start_expr, Arithmetic Add, mk_expr one)))
-        | _ -> failwith "Not of correct form: not Le or Lt"
-    in
-
-    let rec get_leftmost_and_expr = function
-      | A.(AilEbinary (lhs, And, rhs)) -> get_leftmost_and_expr (rm_expr lhs)
-      | lhs -> lhs
-    in
-
-    let rec get_rest_of_expr = function 
-    | A.(AilEbinary (lhs, And, rhs)) ->
-      let r = get_rest_of_expr (rm_expr lhs) in
-      (match r with
-        | A.(AilEconst (ConstantInteger (IConstant _))) -> rm_expr rhs
-        | _ -> A.(AilEbinary (mk_expr r, And, rhs)))
-    | lhs -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B)))
-    in
 
     (*
       Generating a loop of the form:
@@ -900,8 +895,8 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
 
     let (i_sym, i_bt) = q.q in
 
-    let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr e2)) in
-    let end_cond = get_rest_of_expr (rm_expr e2) in
+    let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr e2)) i_sym in
+    let end_cond = get_rest_of_expr_r (rm_expr e2) in
 
 
     let start_binding = create_binding i_sym C.(Basic (Integer (Signed Int_))) in
@@ -968,8 +963,43 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a
       | LogicalConstraints.T it -> 
         Printf.printf "Reached logical constraint function\n";
         cn_to_ail_expr_internal dts it d
-      | LogicalConstraints.Forall ((s, bt), it) -> 
-        cn_to_ail_expr_internal dts it d
+      | LogicalConstraints.Forall ((sym, bt), it) -> 
+        Printf.printf "Reached logical constraint function FORALL\n";
+        let (cond_it, t) = match IT.term it with 
+          | Binop (Impl, it, it') -> (it, it')
+          | _ -> failwith "Incorrect form of forall logical constraint term"
+        in
+
+        (* Assume cond_it is of a particular form *)
+        (*
+        Input:
+
+        each (bt s; cond_it) {t}
+
+        
+        Want to translate to:
+        bool b = true; // b should be a fresh sym each time
+
+        {
+          signed int s = r_start;
+          while (sym < r_end) {
+            b = b && t;
+            sym++;
+          }   
+        }
+        
+        assign/return/assert/passback b
+
+        *)
+
+        let (b1, s1, e1) = cn_to_ail_expr_internal dts cond_it PassBack in
+        let t_translated = cn_to_ail_expr_internal dts t PassBack in
+
+        let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr e1)) sym in
+        let while_cond = get_rest_of_expr_r (rm_expr e1) in
+
+        let (bs, ss, e) = gen_bool_while_loop sym (rm_expr start_expr) while_cond t_translated in 
+        dest d (bs, ss, e)
         (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
     
   
@@ -1110,17 +1140,20 @@ let rec cn_to_ail_arguments_internal dts preds = function
 (* TODO: Add destination passing? *)
 let rec cn_to_ail_post_aux_internal dts preds = function
   | LRT.Define ((name, it), info, t) ->
+    Printf.printf "LRT.Define\n";
     let binding = create_binding name (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts it (AssignVar name) in
     let (b2, s2) = cn_to_ail_post_aux_internal dts preds t in
     (b1 @ b2 @ [binding], s1 @ s2)
 
   | LRT.Resource ((name, (re, bt)), info, t)  ->
+    Printf.printf "LRT.Resource\n";
     let (b1, s1) = cn_to_ail_resource_internal name dts preds re in
     let (b2, s2) = cn_to_ail_post_aux_internal dts preds t in
     (b1 @ b2, s1 @ s2)
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
+    Printf.printf "LRT.Constraint\n";
     let (b1, s, e) = cn_to_ail_logical_constraint_internal dts PassBack lc in
     (* TODO: Check this logic *)
     let ss = match str_opt with 
