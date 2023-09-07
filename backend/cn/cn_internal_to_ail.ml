@@ -328,23 +328,61 @@ let rec cn_to_ail_expr_aux_internal
     dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr ail_expr_)
 
   | EachI ((r_start, (sym, bt), r_end), t) -> 
-    let rec create_list_from_range l_start l_end = 
-      (if l_start > l_end then 
-        []
-      else
-          l_start :: (create_list_from_range (l_start + 1) l_end)
-      )
-    in 
-    let consts = create_list_from_range r_start r_end in
-    let cn_consts = List.map (fun i -> Terms.Z (Z.of_int i)) consts in
-    let bs_ss_es = List.map (fun cn_const -> cn_to_ail_expr_aux_internal (Some (sym, cn_const)) pred_name dts t PassBack) cn_consts in
-    let (bs, ss, es) = list_split_three bs_ss_es in 
-    let ail_expr =
-      match es with
-        | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> mk_expr A.(AilEbinary (ae1, And, ae2))) ail_expr1 ail_exprs_rest
-        | [] -> failwith "Cannot have empty expression in CN each expression"
-    in 
-    dest d (List.concat bs, List.concat ss, ail_expr)
+
+    (* 
+    Input:
+
+    each (bt sym; r_start <= sym && sym < r_end) {t} 
+        
+    , where t contains sym *)
+
+
+    (* 
+    Want to translate to:
+    bool b = true; // b should be a fresh sym each time
+
+    {
+      signed int sym = r_start;
+      while (sym < r_end) {
+        b = b && t;
+        sym++;
+      }   
+    }
+    
+    assign/return/assert/passback b
+    
+    *)
+
+    Printf.printf "Reached EachI\n";
+
+    let b = Sym.fresh () in
+    let b_ident = A.(AilEident b) in
+    let b_binding = create_binding b C.(Basic (Integer Bool)) in
+    let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B))) in
+    let b_decl = A.(AilSdeclaration [(b, Some (mk_expr true_const))]) in
+
+    let mk_int_const n = 
+      A.AilEconst (ConstantInteger (IConstant (Z.of_int n, Decimal, None)))
+    in
+
+    let start_int_const = mk_int_const r_start in
+    let end_int_const = mk_int_const r_end in
+
+    let incr_var = A.(AilEident sym) in
+    let incr_var_binding = create_binding sym C.(Basic (Integer (Signed Int_))) in
+    let start_decl = A.(AilSdeclaration [(sym, Some (mk_expr start_int_const))]) in
+
+    let while_cond = A.(AilEbinary (mk_expr incr_var, Lt, mk_expr end_int_const)) in
+    let (bs, ss, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts t PassBack in
+    let rhs_and_expr_ = A.(AilEbinary (mk_expr b_ident, Arithmetic Band, e)) in
+    let b_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_)))) in
+    let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in
+    let while_loop = A.(AilSwhile (mk_expr while_cond, mk_stmt (AilSblock (bs, List.map mk_stmt (ss @ [b_assign; incr_stat]))), 0)) in
+
+    let block = A.(AilSblock ([incr_var_binding], List.map mk_stmt [start_decl; while_loop])) in
+
+    dest d ([b_binding], [b_decl; block], mk_expr b_ident)
+
 
   (* add Z3's Distinct for separation facts  *)
   | Tuple ts -> failwith "TODO1"
