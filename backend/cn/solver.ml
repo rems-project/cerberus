@@ -12,7 +12,6 @@ open LogicalFunctions
 module LCSet = Set.Make(LC)
 module BT = BaseTypes
 module StringSet = Set.Make(String)
-open Match
 
 
 let random_seed = ref 1
