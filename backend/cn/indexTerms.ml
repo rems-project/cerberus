@@ -59,9 +59,6 @@ let rec free_vars_ = function
   | Record members -> free_vars_list (List.map snd members)
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
-  | DatatypeCons (tag, members_xs) -> free_vars members_xs
-  | DatatypeMember (t, member) -> free_vars t
-  | DatatypeIsCons (tag, t) -> free_vars t
   | Cast (_cbt, t) -> free_vars t
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
@@ -119,9 +116,6 @@ let rec fold_ f binders acc = function
   | Record members -> fold_list f binders acc (List.map snd members)
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
-  | DatatypeCons (tag, members_rec) -> fold f binders acc members_rec
-  | DatatypeMember (t, _member) -> fold f binders acc t
-  | DatatypeIsCons (tag, t) -> fold f binders acc t
   | Cast (_cbt, t) -> fold f binders acc t
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
@@ -246,12 +240,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (RecordMember (subst su t, m), bt)
   | RecordUpdate ((t, m), v) ->
      IT (RecordUpdate ((subst su t, m), subst su v), bt)
-  | DatatypeCons (tag, members_rec) ->
-     IT (DatatypeCons (tag, subst su members_rec), bt)
-  | DatatypeMember (t, m) ->
-     IT (DatatypeMember (subst su t, m), bt)
-  | DatatypeIsCons (tag, t) ->
-     IT (DatatypeIsCons (tag, subst su t), bt)
   | Cast (cbt, t) ->
      IT (Cast (cbt, subst su t), bt)
   | MemberOffset (tag, member) ->
@@ -558,14 +546,6 @@ let record_ members =
 let recordMember_ ~member_bt (t, member) =
   IT (RecordMember (t, member), member_bt)
 
-let datatype_cons_ nm dt_tag members =
-  IT (DatatypeCons (nm, record_ members), BT.Datatype dt_tag)
-
-let datatype_is_cons_ nm t =
-  IT (DatatypeIsCons (nm, t), BT.Bool)
-
-let datatype_member_ t nm bt =
-  IT (DatatypeMember (t, nm), bt)
 
 
 (* pointer_op *)

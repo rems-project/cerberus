@@ -81,9 +81,6 @@ type 'bt term_ =
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
-  | DatatypeCons of Sym.t * 'bt term (* TODO: will be removed *)
-  | DatatypeMember of 'bt term * Id.t (* TODO: will be removed *)
-  | DatatypeIsCons of Sym.t * 'bt term (* TODO: will be removed *)
   | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
@@ -272,12 +269,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | RecordUpdate ((t, member), v) ->
           mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux true v))
        (* end *)
-    (* | Datatype_op datatype_op -> *)
-    (*    begin match datatype_op with *)
-       | DatatypeCons (nm, members_rec) -> mparens (Sym.pp nm ^^^ aux false members_rec)
-       | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Id.pp nm
-       | DatatypeIsCons (nm, x) -> mparens (aux false x ^^^ !^ "is" ^^^ Sym.pp nm)
-       (* end *)
     (* | Pointer_op pointer_op -> *)
     (*    begin match pointer_op with *)
        | Cast (cbt, t) ->
@@ -455,12 +446,6 @@ let rec dtree (IT (it_, bt)) =
      Dnode (pp_ctor "RecordMember", [dtree e; Dleaf (Id.pp member)])
   | RecordUpdate ((base, member), v) ->
      Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
-  | DatatypeCons (s, t) ->
-     Dnode (pp_ctor "DatatypeCons", [Dleaf (Sym.pp s); dtree t])
-  | DatatypeMember (t, s) ->
-     Dnode (pp_ctor "DatatypeMember", [dtree t; Dleaf (Id.pp s)])
-  | DatatypeIsCons (s, t) ->
-     Dnode (pp_ctor "DatatypeIsCons", [Dleaf (Sym.pp s); dtree t])
   | Cast (cbt, t) -> 
      Dnode (pp_ctor "Cast", [Dleaf (BaseTypes.pp cbt); dtree t])
   | MemberOffset (tag, id) -> 

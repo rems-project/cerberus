@@ -115,17 +115,17 @@ module IndexTerms = struct
         let member_bt = List.assoc Id.equal member member_tys in
         IT.recordMember_ ~member_bt (it, member)
 
-  let rec datatype_member_reduce it member member_bt =
-    match IT.term it with
-      | DatatypeCons (nm, members_rec) ->
-        let members = BT.record_bt (IT.bt members_rec) in
-        if List.exists (Id.equal member) (List.map fst members)
-        then record_member_reduce members_rec member
-        else IT.IT (DatatypeMember (it, member), member_bt)
-      | ITE (cond, it1, it2) ->
-        ite_ (cond, datatype_member_reduce it1 member member_bt,
-            datatype_member_reduce it2 member member_bt)
-      | _ -> IT.IT (DatatypeMember (it, member), member_bt)
+  (* let rec datatype_member_reduce it member member_bt = *)
+  (*   match IT.term it with *)
+  (*     | DatatypeCons (nm, members_rec) -> *)
+  (*       let members = BT.record_bt (IT.bt members_rec) in *)
+  (*       if List.exists (Id.equal member) (List.map fst members) *)
+  (*       then record_member_reduce members_rec member *)
+  (*       else IT.IT (DatatypeMember (it, member), member_bt) *)
+  (*     | ITE (cond, it1, it2) -> *)
+  (*       ite_ (cond, datatype_member_reduce it1 member member_bt, *)
+  (*           datatype_member_reduce it2 member member_bt) *)
+  (*     | _ -> IT.IT (DatatypeMember (it, member), member_bt) *)
 
   let rec tuple_nth_reduce it n item_bt =
     match IT.term it with
@@ -139,8 +139,8 @@ module IndexTerms = struct
     let (step, it2) = match IT.term it with
       | RecordMember (t, m) ->
           (true, record_member_reduce (accessor_reduce f t) m)
-      | DatatypeMember (t, m) ->
-          (true, datatype_member_reduce (accessor_reduce f t) m bt)
+      (* | DatatypeMember (t, m) -> *)
+      (*     (true, datatype_member_reduce (accessor_reduce f t) m bt) *)
       | NthTuple (n, t) ->
           (true, tuple_nth_reduce (accessor_reduce f t) n bt)
       | _ -> (false, it)
@@ -419,11 +419,6 @@ module IndexTerms = struct
          IT (Record members2, _)  ->
           assert (List.for_all2 (fun x y -> Id.equal (fst x) (fst y)) members1 members2);
           aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
-       | IT (DatatypeCons (nm1, members1), _),
-         IT (DatatypeCons (nm2, members2), _)  ->
-          if Sym.equal nm1 nm2
-          then aux (eq_ (members1, members2))
-          else bool_ false
        | IT (Cast (bt1, it1), _),
          IT (Cast (bt2, it2), _) when BT.equal bt1 bt2 ->
          aux (eq_ (it1, it2))
@@ -493,14 +488,6 @@ module IndexTerms = struct
        let t = aux t in
        let v = aux v in
        IT (RecordUpdate ((t, m), v), the_bt)
-    | IT.DatatypeCons (nm, members_rec) ->
-       IT (IT.DatatypeCons (nm, aux members_rec), the_bt)
-    | IT.DatatypeMember (it, member) ->
-       let it = aux it in
-       datatype_member_reduce it member the_bt
-    | IT.DatatypeIsCons (nm, it) ->
-       let it = aux it in
-       datatype_is_cons_ nm it
     (* revisit when memory model changes *)
     | Binop (LTPointer, a, b) ->
        let a = aux a in

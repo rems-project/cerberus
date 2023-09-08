@@ -526,17 +526,17 @@ module EffectfulTranslation = struct
        let@ ty = lookup_member loc (tag, defs_) member in
        let member_bt = SurfaceBaseTypes.of_sct ty in
        return ( IT.IT ((StructMember (t, member)), member_bt) )
-    | Datatype tag ->
-       let@ dt_info = lookup_datatype loc tag env in
-       let@ bt = match List.assoc_opt Id.equal member dt_info.dt_all_params with
-         | None -> 
-             let msg = !^"Unknown member" ^^^ squotes (Id.pp member)
-                       ^^^ !^"of datatype" ^^^ squotes (Sym.pp tag)
-             in
-             fail {loc; msg = Generic msg}
-         | Some bt -> return (SurfaceBaseTypes.of_basetype bt)
-       in
-       return (IT.IT ((IT.DatatypeMember (t, member)), bt))
+    (* | Datatype tag -> *)
+    (*    let@ dt_info = lookup_datatype loc tag env in *)
+    (*    let@ bt = match List.assoc_opt Id.equal member dt_info.dt_all_params with *)
+    (*      | None ->  *)
+    (*          let msg = !^"Unknown member" ^^^ squotes (Id.pp member) *)
+    (*                    ^^^ !^"of datatype" ^^^ squotes (Sym.pp tag) *)
+    (*          in *)
+    (*          fail {loc; msg = Generic msg} *)
+    (*      | Some bt -> return (SurfaceBaseTypes.of_basetype bt) *)
+    (*    in *)
+    (*    return (IT.IT ((IT.DatatypeMember (t, member)), bt)) *)
     | has -> 
        fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 

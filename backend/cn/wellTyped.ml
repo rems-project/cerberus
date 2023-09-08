@@ -561,29 +561,6 @@ module WIT = struct
          in
          let@ v = check loc bt v in
          return (IT (RecordUpdate ((t, member), v),IT.bt t))
-       | DatatypeCons (nm, member_rec) ->
-         let@ info = get_datatype_constr loc nm in
-         let (arg_ty, res_ty) = BT.cons_dom_rng info in
-         let@ member_rec = check loc arg_ty member_rec in
-         return (IT (DatatypeCons (nm, member_rec),res_ty))
-       | DatatypeMember (t, member) ->
-         let@ t = infer loc t in
-         let@ info = match IT.bt t with
-           | Datatype tag -> get_datatype loc tag
-           | has -> fail (illtyped_index_term loc t has "record")
-         in
-         let@ bt = match List.assoc_opt Id.equal member info.dt_all_params with
-           | Some bt -> return bt
-           | None ->
-               let expected = "datatype with member " ^ Id.pp_string member in
-               fail (illtyped_index_term loc t (IT.bt t) expected)
-         in
-         return (IT (DatatypeMember (t, member),bt))
-       | DatatypeIsCons (nm, t) ->
-         let@ info = get_datatype_constr loc nm in
-         let (_, res_ty) = BT.cons_dom_rng info in
-         let@ t = check loc res_ty t in
-         return (IT (DatatypeIsCons (nm, t),BT.Bool))
        | Cast (cbt, t) ->
           let@ t = infer loc t in
           let@ () = match IT.bt t, cbt with

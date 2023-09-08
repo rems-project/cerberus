@@ -574,12 +574,6 @@ module Translate = struct
              ) members
          in
          term (IT ((Record str), IT.bt t))
-      | DatatypeCons (c_nm, elts_rec) ->
-         failwith "asd"
-      | DatatypeMember (dt_it, member) ->
-         datatypeMember ((term dt_it, IT.bt dt_it), (member,bt))
-      | DatatypeIsCons (c_nm, t) ->
-         datatypeIsCons (c_nm, term t)
       | Cast (cbt, t) ->
          begin match IT.bt t, cbt with
          | Integer, Loc ->
@@ -1240,13 +1234,14 @@ module Eval = struct
               IT ((RecordMember (nth args 0, member)), member_bt)
            | DatatypeConsFunc {nm} ->
               let info = SymMap.find nm global.datatype_constrs in
-              datatype_cons_ nm info.c_datatype_tag
-                  (List.combine (List.map fst info.c_params) args)
+               IT (Constructor (nm, (List.combine (List.map fst info.c_params) args)),
+                   Datatype info.c_datatype_tag)
            | DatatypeConsRecogFunc {nm} ->
               (* not supported inside CN, hopefully we shouldn't need it *)
               unsupported expr ("Reconstructing Z3 term with datatype recogniser")
            | DatatypeAccFunc xs ->
-              Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt
+              unsupported expr ("Reconstructing Z3 term with datatype accessor")
+              (* Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt *)
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
            | Term {it} -> it
            end
