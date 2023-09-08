@@ -167,6 +167,17 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_not e -> !^"!_"
 
 
+let rec symset_bigunion = function
+  | [] -> SymSet.empty
+  | syms::symses -> SymSet.union syms (symset_bigunion symses)
+
+
+let rec bound_by_pattern (CNPat (_loc, pat_)) = 
+  match pat_ with
+  | CNPat_sym s -> SymSet.singleton s
+  | CNPat_wild -> SymSet.empty
+  | CNPat_constructor (_, args) -> 
+     symset_bigunion (List.map (fun (_,p) -> bound_by_pattern p) args)
 
 let rec free_in_expr (CNExpr (_loc, expr_)) =
   match expr_ with
@@ -203,7 +214,12 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
   | CNExpr_each (s, range, e) ->
      SymSet.remove s (free_in_expr e)
   | CNExpr_match (x, ms) ->
-     free_in_exprs (x :: List.map snd ms)
+     let free_per_case = 
+       List.map (fun (pat, body) ->
+           SymSet.diff (free_in_expr body) (bound_by_pattern pat)
+         ) ms
+     in
+     SymSet.union (free_in_expr x) (symset_bigunion free_per_case)
   | CNExpr_let (s, e, body) ->
      SymSet.union (free_in_expr e) 
       (SymSet.remove s (free_in_expr body))
@@ -525,41 +541,36 @@ module EffectfulTranslation = struct
        fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 
 
-  let translate_match env loc x shape_expr : (IT.sterm * (Sym.t * IT.sterm) list) m =
-    let rec f x m = match m with
-      | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
-          let@ cons_info = lookup_constr loc2 c_nm env in
-          (* let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in *)
-          let m1 = IT.IT ((DatatypeIsCons (c_nm, x)), SBT.Bool) in
-          let memb nm =
-              let@ bt = match List.assoc_opt Id.equal nm cons_info.c_params with
-                  | Some bt -> return bt
-                  | None -> 
-                    let msg = 
-                      !^"Unknown field" ^^^ squotes (Id.pp nm) ^^^ !^"of" 
-                      ^^^ squotes (Sym.pp cons_info.c_datatype_tag)
-                    in
-                    fail {loc = loc2; msg = Generic msg}
-              in
-              return (IT.IT ((DatatypeMember (x, nm)), SBT.of_basetype bt))
-          in
-          let@ xs = 
-            ListM.mapM (fun (nm, shape) ->
-              let@ x = memb nm in
-              f x shape
-            ) exprs 
-          in
-          return (m1 :: List.concat (List.map fst xs), List.concat (List.map snd xs))
-      | CNExpr (_, CNExpr_var sym) ->
-          return ([], [(sym, x)])
-      | CNExpr (loc, ex) ->
-          fail {loc; msg = Generic (!^ "not permitted in match pattern:" ^^^ pp_cnexpr_kind ex)}
-    in
-    let@ (xs, ys) = f x shape_expr in
-    Pp.debug 7 (lazy (Pp.item "converted shape_expr" (Pp.brackets (Pp.list IT.pp xs))));
-    return (IT.and_sterm_ xs, ys)
 
 
+
+    
+
+
+  let rec translate_cn_pat env locally_bound (CNPat (loc, pat_), bt) =
+    match pat_ with
+    | CNPat_wild -> 
+       return (env, locally_bound, IT.Pat (PWild, bt))
+    | CNPat_sym s ->
+       let env' = add_logical s bt env in
+       let locally_bound' = SymSet.add s locally_bound in
+       return (env', locally_bound', IT.Pat (PSym s, bt))
+    | CNPat_constructor (cons, args) ->
+       let@ cons_info = lookup_constr loc cons env in
+       let@ env', locally_bound', args =
+         ListM.fold_leftM (fun (env, locally_bound, acc) (m, pat') ->
+             match List.assoc_opt Id.equal m cons_info.c_params with
+             | None -> 
+                let rbt = BT.pp (Record cons_info.c_params) in
+                fail {loc; msg= Unknown_record_member (rbt,m)}
+             | Some mbt ->
+                let@ env', locally_bound', pat' = 
+                  translate_cn_pat env locally_bound (pat', SBT.of_basetype mbt) in
+                return (env', locally_bound', acc @ [(m, pat')])
+           ) (env, locally_bound, []) args
+       in
+       return (env', locally_bound', IT.Pat (PConstructor (cons, args), bt))
+       
 
 
   let translate_cn_expr =
@@ -676,13 +687,13 @@ module EffectfulTranslation = struct
             end
         | CNExpr_cons (c_nm, exprs) ->
             let@ cons_info = lookup_constr loc c_nm env in
-            let@ exprs = ListM.mapM (fun (nm, expr) ->
-                let@ expr = self expr in
-                return (nm, expr)) exprs
+            let@ exprs = 
+              ListM.mapM (fun (nm, expr) ->
+                  let@ expr = self expr in
+                  return (nm, expr)
+                ) exprs
             in
-            let record = IT ((Record exprs),
-                             SBT.Record (List.map (fun (s,t) -> (s, basetype t)) exprs)) in
-            return (IT ((DatatypeCons (c_nm, record)), SBT.Datatype cons_info.c_datatype_tag))
+            return (IT (Constructor (c_nm, exprs), SBT.Datatype cons_info.c_datatype_tag))
         | CNExpr_each (sym, r, e) ->
             let@ expr = 
               trans 
@@ -693,26 +704,17 @@ module EffectfulTranslation = struct
             in
             return (IT ((EachI ((Z.to_int (fst r), (sym, SBT.Integer), Z.to_int (snd r)), expr)), SBT.Bool))
         | CNExpr_match (x, ms) ->
-            let@ x = self x in
-            let x_nm = Sym.fresh_named "match_on" in
-            let x_var = IT.sym_ (x_nm, IT.bt x) in
-            let env = add_logical x_nm (IT.bt x_var) env in
-            let locally_bound = SymSet.add x_nm locally_bound in
-            let f (lhs, rhs) =
-              let@ (cond, lets) = translate_match env loc x_var lhs in
-              let lb = List.fold_left (fun acc (sym, _) -> SymSet.add sym acc) locally_bound lets in
-              let env = List.fold_left (fun acc (sym, y) -> add_logical sym (IT.bt y) acc) env lets in
-              let@ rhs = trans evaluation_scope lb env rhs in
-              let rhs = List.fold_left (fun x (sym, y) -> IT.let_ ((sym, y), x)) rhs lets in
-              return (cond, rhs)
-            in
-            let@ ms = ListM.mapM f ms in
-            let rec g = function
-              | [] -> assert false (* parser should prevent empty match-set *)
-              | [(_, rhs)] -> rhs
-              | (cond, rhs) :: ms -> ite_ (cond, rhs, g ms)
-            in
-            return (IT.let_ ((x_nm, x), g ms))
+           let@ x = self x in
+           let@ ms = 
+             ListM.mapM (fun (pat, body) ->
+                 let@ env', locally_bound', pat =
+                   translate_cn_pat env locally_bound (pat, IT.bt x) in
+                 let@ body = trans evaluation_scope locally_bound' env' body in
+                 return (pat, body)
+               ) ms 
+           in
+           let rbt = IT.basetype (snd (List.hd ms)) in
+           return (IT (Match (x, ms), rbt))
         | CNExpr_let (s, e, body) ->
             let@ e = self e in
             let@ body = 

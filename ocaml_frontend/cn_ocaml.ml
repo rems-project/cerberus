@@ -96,6 +96,21 @@ module MakePp (Conf: PP_CN) = struct
     | CN_is_shape -> P.string "??"
 
   
+  let rec dtree_of_cn_pattern (CNPat (_, pat_)) = 
+    match pat_ with
+    | CNPat_sym s ->
+       Dnode (pp_ctor "CNPat_sym", [Dleaf (Conf.pp_ident s)])
+    | CNPat_wild ->
+       Dleaf (pp_ctor "CNPat_wild")
+    | CNPat_constructor (s, args) ->
+       Dnode (pp_ctor "CNPat_constructor", 
+              Dleaf (Conf.pp_ident s) ::
+              List.map (fun (id, pat) ->
+                  Dnode (pp_ctor "Arg", [Dleaf (pp_identifier id); dtree_of_cn_pattern pat])
+                ) args
+         )
+
+
   let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
     match expr_ with
       | CNExpr_const CNConst_NULL ->
@@ -171,7 +186,7 @@ module MakePp (Conf: PP_CN) = struct
                      !^ (Z.to_string (fst r)) ^^^ P.string "-" ^^^ !^ (Z.to_string (snd r))
                  , [dtree_of_cn_expr expr])
       | CNExpr_match (x, ms) ->
-          let m_doc (lhs, rhs) = Dnode (pp_ctor "=>", List.map dtree_of_cn_expr [lhs; rhs]) in
+          let m_doc (lhs, rhs) = Dnode (pp_ctor "=>", [dtree_of_cn_pattern lhs; dtree_of_cn_expr rhs]) in
           Dnode (pp_ctor "CNExpr_match", [dtree_of_cn_expr x] @ List.map m_doc ms)
       | CNExpr_let (s, e, body) ->
           Dnode (pp_ctor "CNExpr_let", [Dleaf (Conf.pp_ident s); dtree_of_cn_expr e; dtree_of_cn_expr body])

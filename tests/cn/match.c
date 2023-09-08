@@ -8,7 +8,7 @@ datatype tree {
 function (integer) foo (datatype tree t) {
   match t {
     Tree_Empty {} => {0}
-    Tree_Node {k: k, v: v} => {k + v}
+    Tree_Node {k: k, v: v, l: _, r: _} => {k + v}
   }
 }
 @*/

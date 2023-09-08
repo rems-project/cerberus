@@ -12,6 +12,7 @@ open LogicalFunctions
 module LCSet = Set.Make(LC)
 module BT = BaseTypes
 module StringSet = Set.Make(String)
+open Match
 
 
 let random_seed = ref 1
@@ -575,32 +576,11 @@ module Translate = struct
          in
          term (IT ((Record str), IT.bt t))
       | DatatypeCons (c_nm, elts_rec) ->
-         (* ensure datatype added first *)
-         let dt_sort = sort bt in
-         let info = SymMap.find c_nm global.datatype_constrs in
-         let args = List.map (fun (nm, _) -> term (Simplify.IndexTerms.record_member_reduce elts_rec nm))
-                      info.c_params in
-         apply_matching_func (DatatypeConsFunc {nm = c_nm})
-           (Z3.Datatype.get_constructors dt_sort) args
-      | DatatypeMember (it, member) ->
-         (* ensure datatype added first *)
-         let dt_sort = sort (IT.bt it) in
-         let dt_nm = match IT.bt it with
-           | BT.Datatype nm -> nm
-           | _ -> assert false
-         in
-         apply_matching_func (DatatypeAccFunc {member = member; dt = dt_nm; bt})
-           (List.concat (Z3.Datatype.get_accessors dt_sort)) [term it]
+         failwith "asd"
+      | DatatypeMember (dt_it, member) ->
+         datatypeMember ((term dt_it, IT.bt dt_it), (member,bt))
       | DatatypeIsCons (c_nm, t) ->
-         (* ensure datatype added *)
-         let dt_sort = sort (IT.bt t) in
-         let recogs = Z3.Datatype.get_recognizers dt_sort in
-         (* something's funny with these recognizers. assume in same order as constructors *)
-         let dt_nm = Option.get (BT.is_datatype_bt (IT.bt t)) in
-         let info = SymMap.find dt_nm global.datatypes in
-         let assocs = List.map2 (fun c_nm fd -> (c_nm, fd)) info.dt_constrs recogs in
-         let fd = List.assoc Sym.equal c_nm assocs in
-         Z3.FuncDecl.apply fd [term t]
+         datatypeIsCons (c_nm, term t)
       | Cast (cbt, t) ->
          begin match IT.bt t, cbt with
          | Integer, Loc ->
@@ -692,15 +672,57 @@ module Translate = struct
        end
       | Let ((nm, t1), t2) ->
          term (IT.subst (IT.make_subst [(nm, t1)]) t2)
-      (*| Let ((nm, t1), t2) ->
-         let (nm, t2) = IT.alpha_rename (nm, IT.bt t1) t2 in
-         let x = IT.sym_ (nm, IT.bt t1) in
-         let _ = needs_premise (IsLetVar (x, t1)) (term x) in
-         term t2 *)
+      | Constructor (constr, args) ->
+         datatypeCons (constr, args)
+      (* copying and adjusting Thomas's code from compile.ml *)
+      | Match (matched, cases) ->
+         (* let _sort = sort (IT.bt matched) in *)
+         let matched = term matched in
+         let cases = 
+           List.map (fun (pat, body) ->
+               (* print stdout (item "pat" (pp_pattern pat)); *)
+               (* print stdout (item "body" (IT.pp body)); *)
+               let (cond, substs) = translate_case matched pat in
+               let froms, tos = List.split substs in
+               let body = Z3.Expr.substitute (term body) froms tos in
+               (cond, body)
+             ) cases 
+         in
+         let rec aux = function
+           | [] -> term (default_ bt)
+           | (cond, body) :: cases -> Z3.Boolean.mk_ite context cond body (aux cases)
+         in
+         let result = aux cases in
+         (* print stdout (item "matched" !^(Z3.Expr.to_string matched)); *)
+         (* print stdout (item "result" !^(Z3.Expr.to_string result)); *)
+         result
       | _ ->
-         Pp.debug 2 (lazy (Pp.item "smt mapping issue" (IT.pp it)));
+         Pp.print stdout (Pp.item "smt mapping issue" (IT.pp it));
          Cerb_debug.error "todo: SMT mapping"
       end
+
+      and translate_case (matched : Z3.Expr.expr) pat = 
+        match pat with
+        | Pat (PConstructor (c_nm, args), pbt) ->
+           let m1 = datatypeIsCons (c_nm, matched) in
+           let constr_info = SymMap.find c_nm global.datatype_constrs in
+           let dt_tag = constr_info.c_datatype_tag in
+           assert (List.for_all2 (fun (id,_) (id',_) -> Id.equal id id') constr_info.c_params args);
+           let args_conds_substs = 
+             List.map (fun (id, (Pat (_, abt) as apat)) ->
+                 let member = datatypeMember ((matched, Datatype dt_tag), (id,abt)) in
+                 translate_case member apat
+               ) args 
+           in
+           let args_conds, args_substs = List.split args_conds_substs in
+           (Z3.Boolean.mk_and context (m1 :: args_conds), List.concat args_substs)
+       | Pat (PSym s, pbt) ->
+          let subst = (term (IT.sym_ (s, pbt)), matched) in
+          (Z3.Boolean.mk_true context, [subst])
+       | Pat (PWild, _pbt) ->
+          (Z3.Boolean.mk_true context, [])
+
+
 
       and make_uf name ret_bt args =
         let decl =
@@ -709,6 +731,32 @@ module Translate = struct
         in
         Z3.Expr.mk_app context decl (List.map term args)
 
+      and datatypeCons (c_nm, args) =
+        (* ensure datatype added first *)
+        let constr_info = SymMap.find c_nm global.datatype_constrs in
+        let dt_sort = sort (Datatype constr_info.c_datatype_tag) in
+        assert (List.for_all2 (fun (id,_) (id',_) -> Id.equal id id') constr_info.c_params args);
+        let args = List.map (fun (_id, t) -> term t) args in
+        apply_matching_func (DatatypeConsFunc {nm = c_nm})
+          (Z3.Datatype.get_constructors dt_sort) args
+
+      and datatypeMember ((dt_it, dt_bt), (member,bt)) =
+        (* ensure datatype added first *)
+        let dt_sort = sort dt_bt in
+        let dt_nm = datatype_bt dt_bt in
+        apply_matching_func (DatatypeAccFunc {member = member; dt = dt_nm; bt})
+          (List.concat (Z3.Datatype.get_accessors dt_sort)) [dt_it]
+
+      and datatypeIsCons (c_nm, t) =
+        let dt_tag = (SymMap.find c_nm global.datatype_constrs).c_datatype_tag in
+        (* ensure datatype added *)
+        let dt_sort = sort (Datatype dt_tag) in
+        let recogs = Z3.Datatype.get_recognizers dt_sort in
+        (* something's funny with these recognizers. assume in same order as constructors *)
+        let info = SymMap.find dt_tag global.datatypes in
+        let assocs = List.map2 (fun c_nm fd -> (c_nm, fd)) info.dt_constrs recogs in
+        let fd = List.assoc Sym.equal c_nm assocs in
+        Z3.FuncDecl.apply fd [t]
 
     in
 

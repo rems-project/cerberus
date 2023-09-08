@@ -180,6 +180,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "function"      , CN_FUNCTION;
     "lemma"         , CN_LEMMA;
     "datatype"      , CN_DATATYPE;
+    "_"             , CN_WILD;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

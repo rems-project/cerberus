@@ -315,8 +315,12 @@ and suitably_alpha_rename syms (s, bt) body =
   then alpha_rename (s, bt) body
   else (s, body)
 
+and subst_under_pattern su (pat, body) = 
+  let (pat, body) = suitably_alpha_rename_pattern su (pat, body) in
+  (pat, subst su body)
 
-and subst_under_pattern su (Pat (pat_, bt), body) = 
+
+and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) = 
   match pat_ with
   | PSym s -> 
      let (s, body) = suitably_alpha_rename su.relevant (s, bt) body in
@@ -326,11 +330,12 @@ and subst_under_pattern su (Pat (pat_, bt), body) =
   | PConstructor (s, args) ->
      let body, args =
        fold_left_map (fun body (id, pat') ->
-           let pat', body = subst_under_pattern su (pat', body) in
+           let pat', body = suitably_alpha_rename_pattern su (pat', body) in
            (body, (id, pat'))
          ) body args
      in
      (Pat (PConstructor (s, args), bt), body)
+
 
 
 
