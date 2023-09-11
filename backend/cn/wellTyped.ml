@@ -20,39 +20,7 @@ open Typing
 open Effectful.Make(Typing)
 
 
-
-
-
-
 let ensure_base_type = Typing.ensure_base_type
-
-
-let correct_and_no_duplicate_members loc tag members =
-  let@ layout = get_struct_decl loc tag in
-  let member_types = Memory.member_types layout in
-  let@ _, needed = 
-    ListM.fold_rightM (fun member (have, needed) ->
-        if IdSet.mem member have then
-          fail (fun _ -> {loc; msg = Duplicate_member member})
-        else if not (IdSet.mem member needed) then
-          fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
-        else
-          return (IdSet.add member have, IdSet.remove member needed)
-      ) members (IdSet.empty, IdSet.of_list (List.map fst member_types))
-  in
-  match IdSet.elements needed with
-  | [] -> return ()
-  | member :: _ -> fail (fun _ -> {loc; msg = Missing_member member})
-
-  
-
-
-
-(* let check_bound_l loc s =  *)
-(*   let@ is_bound = bound_l s in *)
-(*   if is_bound then return () *)
-(*   else fail (fun _ -> {loc; msg = TE.Unknown_variable s}) *)
-
 
 let illtyped_index_term (loc: loc) it has expected ctxt =
   {loc = loc; msg = TypeErrors.Illtyped_it {it = IT.pp it; has = BT.pp has; expected; o_ctxt = Some ctxt}}
@@ -92,35 +60,114 @@ let ensure_same_argument_number loc input_output has ~expect =
     | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
 
 
+
+
+let compare_by_member_id (id,_) (id',_) = Id.compare id id'
+
+
+let no_duplicate_members loc (have : (Id.t * 'a) list) =
+  let _already = 
+    ListM.fold_leftM (fun already (id, _) ->
+        if IdSet.mem id already 
+        then fail (fun _ -> {loc; msg = Duplicate_member id})
+        else return (IdSet.add id already)
+      ) IdSet.empty have
+  in
+  return ()
+
+let no_duplicate_members_sorted loc have = 
+  let@ () = no_duplicate_members loc have in
+  return (List.sort compare_by_member_id have)
+
+
+let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
+  let needed = IdSet.of_list (List.map fst spec) in
+  let already = IdSet.empty in
+  let@ needed, already =
+    ListM.fold_leftM (fun (needed, already) (id, _) ->
+        if IdSet.mem id already then
+          fail (fun _ -> {loc; msg = Duplicate_member id})
+        else if IdSet.mem id needed then
+          return (IdSet.remove id needed, IdSet.add id already)
+        else
+          fail (fun _ -> {loc; msg = Unexpected_member (List.map fst spec, id)})
+      ) (needed, already) have
+  in
+  match IdSet.elements needed with
+  | [] -> return ()
+  | missing :: _ -> fail (fun _ -> {loc; msg = Missing_member missing})
+
+let correct_members_sorted_annotated loc spec have = 
+  let@ () = correct_members loc spec have in
+  let have = List.sort compare_by_member_id have in
+  let have_annotated = 
+    List.map2 (fun (id,bt) (id',x) ->
+        assert (Id.equal id id');
+        (bt, (id', x))
+      ) spec have
+  in
+  return have_annotated
+  
+
+
+
+
 module WBT = struct
 
   open BT
   let is_bt loc = 
     let rec aux = function
-      | Unit -> return ()
-      | Bool -> return ()
-      | Integer -> return ()
-      | Real -> return ()
-      | Alloc_id -> return ()
-      | Loc -> return ()
-      | CType -> return ()
-      | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
-      | Datatype tag -> let@ _datatype = get_datatype loc tag in return ()
-      | Record members -> ListM.iterM (fun (_, bt) -> aux bt) members
-      | Map (abt, rbt) -> ListM.iterM aux [abt; rbt]
-      | List bt -> aux bt
-      | Tuple bts -> ListM.iterM aux bts
-      | Set bt -> aux bt
+      | Unit -> 
+         return Unit
+      | Bool -> 
+         return Bool
+      | Integer -> 
+         return Integer
+      | Real -> 
+         return Real
+      | Alloc_id -> 
+         return Alloc_id
+      | Loc -> 
+         return Loc
+      | CType -> 
+         return CType
+      | Struct tag -> 
+         let@ _struct_decl = get_struct_decl loc tag in 
+         return (Struct tag)
+      | Datatype tag -> 
+         let@ _datatype = get_datatype loc tag in 
+         return (Datatype tag)
+      | Record members -> 
+         let@ members = 
+           ListM.mapM (fun (id, bt) -> 
+               let@ bt = aux bt in
+               return (id, bt)
+             ) members
+         in
+         let@ members = no_duplicate_members_sorted loc members in
+         return (Record members)
+      | Map (abt, rbt) -> 
+         let@ abt = aux abt in
+         let@ rbt = aux rbt in
+         return (Map (abt, rbt))
+      | List bt -> 
+         let@ bt = aux bt in
+         return (List bt)
+      | Tuple bts -> 
+         let@ bts = ListM.mapM aux bts in
+         return (Tuple bts)
+      | Set bt -> 
+         let@ bt = aux bt in
+         return (Set bt)
     in
     fun bt -> aux bt
-[@@deriving eq, ord]
 
 end
 
 
 module WLS = struct
 
-  let is_ls loc ls = WBT.is_bt loc ls
+  let is_ls = WBT.is_bt
 
 end
 
@@ -169,24 +216,12 @@ module WIT = struct
     | PConstructor (s, args) ->
        let@ info = get_datatype_constr loc s in
        let@ () = ensure_base_type loc ~expect:bt (Datatype info.c_datatype_tag) in
-       let@ args =
-         let rec aux already member_types args =
-           match member_types, args with
-           | [], [] -> 
-              return []
-           | ((m, bt) :: member_types), (m', pat') :: args when Id.equal m m' ->
-              let@ pat' = check_and_bind_pattern loc bt pat' in
-              let@ args = aux (IdSet.add m' already) member_types args in
-              return ((m', pat') :: args)
-           | _, ((m', _) :: _) when IdSet.mem m' already ->
-              fail (fun _ -> {loc; msg = Duplicate_member m'})
-           | _, ((m', _) :: _) ->
-              let rbt = BT.pp (Record info.c_params) in
-              fail (fun _ -> {loc; msg = Unknown_record_member (rbt, m')})
-           | ((m, _) :: _), _ ->
-              fail (fun _ -> {loc; msg = Missing_member m})
-         in
-         aux IdSet.empty info.c_params args
+       let@ args_annotated = correct_members_sorted_annotated loc info.c_params args in
+       let@ args = 
+         ListM.mapM (fun (bt', (id', pat')) ->
+             let@ pat' = check_and_bind_pattern loc bt' pat' in
+             return (id', pat')
+           ) args_annotated
        in
        return (Pat (PConstructor (s, args), bt))
 
@@ -272,7 +307,7 @@ module WIT = struct
       | Const Unit ->
          return (IT (Const Unit, BT.Unit))
       | Const (Default bt) -> 
-         let@ () = WBT.is_bt loc bt in
+         let@ bt = WBT.is_bt loc bt in
          return (IT (Const (Default bt), bt))
       | Const Null ->
          return (IT (Const Null, BT.Loc))
@@ -492,19 +527,17 @@ module WIT = struct
          return (IT (NthTuple (n, t'),item_bt))
       | Struct (tag, members) ->
          let@ layout = get_struct_decl loc tag in
-         let@ () = correct_and_no_duplicate_members loc tag (List.map fst members) in
          let decl_members = Memory.member_types layout in
-         let@ members = 
-           ListM.mapM (fun (member,t) ->
-               let@ bt = match List.assoc_opt Id.equal member decl_members with
-                 | Some sct -> return (BT.of_sct sct)
-                 | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
-               in
-               let@ t = check loc bt t in
-               return (member, t)
-             ) members
+         let@ () = correct_members loc decl_members members in
+         (* "sort" according to declaration *)
+         let@ members_sorted = 
+           ListM.mapM (fun (id, ct) ->
+               let@ t = check loc (BT.of_sct ct) (List.assoc Id.equal id members) in
+               return (id, t)
+             ) decl_members
          in
-         return (IT (Struct (tag, members),BT.Struct tag))
+         assert (List.length members_sorted = List.length members);
+         return (IT (Struct (tag, members_sorted), BT.Struct tag))
       | StructMember (t, member) ->
          let@ t = infer loc t in
          let@ tag = match IT.bt t with
@@ -523,16 +556,14 @@ module WIT = struct
          let@ v = check loc (BT.of_sct field_ct) v in
          return (IT (StructUpdate ((t, member), v),BT.Struct tag))
       | Record members ->
+         let@ members = no_duplicate_members_sorted loc members in
          let@ members = 
-           ListM.mapM (fun (member,t) ->
+           ListM.mapM (fun (id, t) ->
                let@ t = infer loc t in
-               return (member, t)
+               return (id, t)
              ) members
          in
-         let member_types = 
-           List.map (fun (member, t) -> (member, IT.bt t)
-             ) members
-         in
+         let member_types = List.map (fun (id, t) -> (id, IT.bt t)) members in
          return (IT (IT.Record members,BT.Record member_types))
       | RecordMember (t, member) ->
          let@ t = infer loc t in
@@ -562,6 +593,7 @@ module WIT = struct
          let@ v = check loc bt v in
          return (IT (RecordUpdate ((t, member), v),IT.bt t))
        | Cast (cbt, t) ->
+          let@ cbt = WBT.is_bt loc cbt in
           let@ t = infer loc t in
           let@ () = match IT.bt t, cbt with
            | Integer, Loc -> return ()
@@ -577,12 +609,7 @@ module WIT = struct
           in
           return (IT (Cast (cbt, t), cbt))
        | MemberOffset (tag, member) ->
-          let@ layout = get_struct_decl loc tag in
-          let decl_members = Memory.member_types layout in
-          let@ () = match List.assoc_opt Id.equal member decl_members with
-            | Some _ -> return ()
-            | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
-          in
+          let@ _ty = get_struct_member_type loc tag member in
           return (IT (MemberOffset (tag, member),Integer))
        | ArrayOffset (ct, t) ->
           let@ () = WCT.is_ct loc ct in
@@ -608,6 +635,7 @@ module WIT = struct
           let@ t = check loc Integer t in
           return (IT (WrapI (ity, t), BT.Integer))
        | Nil bt -> 
+          let@ bt = WBT.is_bt loc bt in
           return (IT (Nil bt, BT.List bt))
        | Cons (t1,t2) ->
           let@ t1 = infer loc t1 in
@@ -634,7 +662,7 @@ module WIT = struct
           let@ (_, bt) = ensure_map_type loc arr in
           return (IT (ArrayToList (arr, i, len), BT.List bt))
       | MapConst (index_bt, t) ->
-         let@ () = WBT.is_bt loc index_bt in
+         let@ index_bt = WBT.is_bt loc index_bt in
          let@ t = infer loc t in
          return (IT (MapConst (index_bt, t), BT.Map (index_bt, IT.bt t)))
       | MapSet (t1, t2, t3) ->
@@ -652,7 +680,7 @@ module WIT = struct
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let s, body = IT.alpha_rename (s, abt) body in *)
-         let@ () = WBT.is_bt loc abt in
+         let@ abt = WBT.is_bt loc abt in
          pure begin
             let@ () = add_l s abt (loc, lazy (Pp.string "map-def-var")) in
             let@ body = infer loc body in
@@ -671,31 +699,19 @@ module WIT = struct
       | Let ((name, t1), t2) ->
          let@ t1 = infer loc t1 in
          pure begin
-            let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
-            let@ () = add_c loc (LC.t_ (IT.def_ name t1)) in
-            let@ t2 = infer loc t2 in
-            return (IT (Let ((name, t1), t2), IT.bt t2))
-            end
+             let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
+             let@ () = add_c loc (LC.t_ (IT.def_ name t1)) in
+             let@ t2 = infer loc t2 in
+             return (IT (Let ((name, t1), t2), IT.bt t2))
+           end
       | Constructor (s, args) ->
          let@ info = get_datatype_constr loc s in
+         let@ args_annotated = correct_members_sorted_annotated loc info.c_params args in
          let@ args = 
-           let rec aux already member_types args = 
-             match member_types, args with
-             | [], [] -> 
-                return []
-             | ((m, bt) :: member_types), ((m', arg) :: args) when Id.equal m m' ->
-                let@ arg = check loc bt arg in
-                let@ args = aux (IdSet.add m' already) member_types args in
-                return ((m', arg) :: args)
-             | _, ((m', _) :: _) when IdSet.mem m' already ->
-                fail (fun _ -> {loc; msg = Duplicate_member m'})
-             | _, ((m', _) :: _) ->
-                let rbt = BT.pp (Record info.c_params) in
-                fail (fun _ -> {loc; msg = Unknown_record_member (rbt, m')})
-             | ((m, _) :: _), _ ->
-                fail (fun _ -> {loc; msg = Missing_member m})
-           in
-           aux IdSet.empty info.c_params args
+           ListM.mapM (fun (bt', (id', t')) ->
+               let@ t' = check loc bt' t' in
+               return (id', t')
+             ) args_annotated
          in
          return (IT (Constructor (s, args), Datatype info.c_datatype_tag))
       | Match (e, cases) ->
@@ -720,18 +736,12 @@ module WIT = struct
          return (IT (Match (e, cases), rbt))
 
 
-    and check =
-      fun loc ls it ->
-      let@ () = WLS.is_ls loc ls in
+    and check loc ls it =
+      let@ ls = WLS.is_ls loc ls in
       let@ it = infer loc it in
-      if LS.equal ls (IT.bt it) then
-        return it
-      else
-        let expected = Pp.plain (LS.pp ls) in
-        fail (illtyped_index_term loc it (IT.bt it) expected)
-
-
-      
+      if LS.equal ls (IT.bt it) 
+      then return it
+      else fail (illtyped_index_term loc it (IT.bt it) (Pp.plain (LS.pp ls)))
 
 
 end
@@ -842,7 +852,7 @@ module WRS = struct
 
   let welltyped loc (resource, bt) = 
     let@ resource = WRET.welltyped loc resource in
-    let@ () = WBT.is_bt loc bt in
+    let@ bt = WBT.is_bt loc bt in
     let@ oarg_bt = oarg_bt loc resource in
     let@ () = ensure_base_type loc ~expect:oarg_bt bt in
     return (resource, bt)
@@ -863,8 +873,7 @@ module WLC = struct
     | LC.Forall ((s, bt), it) ->
        (* no need to alpha-rename, because context.ml ensures
           there's no name clashes *)
-       (* let s, it = IT.alpha_rename (s,bt) it in *)
-       let@ () = WBT.is_bt loc bt in
+       let@ bt = WBT.is_bt loc bt in
        pure begin
            let@ () = add_l s bt (loc, lazy (Pp.string "forall-var")) in
            let@ it = WIT.check loc BT.Bool it in
@@ -925,7 +934,7 @@ module WRT = struct
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let name, lrt = LRT.alpha_rename (name, bt) lrt in *)
-         let@ () = WBT.is_bt (fst info) bt in
+         let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ lrt = WLRT.welltyped loc lrt in
          return (RT.Computational ((name, bt), info, lrt))
@@ -1001,7 +1010,7 @@ module WAT = struct
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let name, at = AT.alpha_rename i_subst (name, bt) at in *)
-         let@ () = WBT.is_bt (fst info) bt in
+         let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ at = aux at in
          return (AT.Computational ((name, bt), info, at))
@@ -1108,7 +1117,7 @@ module WArgs = struct
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let name, at = AT.alpha_rename i_subst (name, bt) at in *)
-         let@ () = WBT.is_bt (fst info) bt in
+         let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ at, typ = aux at in
          return (Mu.M_Computational ((name, bt), info, at),
@@ -1149,20 +1158,20 @@ module WRPD = struct
 
   open ResourcePredicates 
 
-  let welltyped pd = 
+  let welltyped {loc; pointer; iargs; oarg_bt; clauses} = 
     (* no need to alpha-rename, because context.ml ensures
        there's no name clashes *)
-    (* let pd = ResourcePredicates.alpha_rename_definition pd in *)
     pure begin
-        let@ () = add_l pd.pointer BT.Loc (pd.loc, lazy (Pp.string "ptr-var")) in
-        let@ () = 
-          ListM.iterM (fun (s, ls) -> 
-              let@ () = WLS.is_ls pd.loc ls in
-              add_l s ls (pd.loc, lazy (Pp.string "input-var"))
-            ) pd.iargs 
+        let@ () = add_l pointer BT.Loc (loc, lazy (Pp.string "ptr-var")) in
+        let@ iargs = 
+          ListM.mapM (fun (s, ls) -> 
+              let@ ls = WLS.is_ls loc ls in
+              let@ () = add_l s ls (loc, lazy (Pp.string "input-var")) in
+              return (s, ls)
+            ) iargs 
         in
-        let@ () = WBT.is_bt pd.loc pd.oarg_bt in
-        let@ clauses = match pd.clauses with
+        let@ oarg_bt = WBT.is_bt loc oarg_bt in
+        let@ clauses = match clauses with
           | None -> return None
           | Some clauses ->
              let@ clauses = 
@@ -1173,7 +1182,7 @@ module WRPD = struct
                        let@ () = add_c loc (LC.t_ guard) in
                        let@ () = add_c loc (LC.t_ (IT.and_ negated_guards)) in
                        let@ packing_ft = 
-                         WLAT.welltyped IT.subst (fun loc it -> WIT.check loc pd.oarg_bt it)
+                         WLAT.welltyped IT.subst (fun loc it -> WIT.check loc oarg_bt it)
                            "clause" loc packing_ft
                        in
                        return (acc @ [{loc; guard; packing_ft}])
@@ -1182,7 +1191,7 @@ module WRPD = struct
              in
              return (Some clauses)
         in
-        return { pd with clauses }
+        return {loc; pointer; iargs; oarg_bt; clauses}
       end
 
 end
@@ -1193,29 +1202,29 @@ module WLFD = struct
 
   open LogicalFunctions
 
-  let welltyped_body = WIT.check
-
-
-  let welltyped (pd : LogicalFunctions.definition) = 
+  let welltyped ({loc; args; return_bt; emit_coq; definition} : LogicalFunctions.definition) = 
     (* no need to alpha-rename, because context.ml ensures
        there's no name clashes *)
-    (* let pd = LogicalPredicates.alpha_rename_definition pd in *)
     pure begin
-        let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
-        let info = (pd.loc, lazy (Pp.string "arg-var")) in
-        let@ () = add_ls (List.map (fun (s,bt) -> (s, bt, info)) pd.args) in
-        let@ () = WBT.is_bt pd.loc pd.return_bt in
-        let@ definition = match pd.definition with
+        let@ args = 
+          ListM.mapM (fun (s,ls) -> 
+              let@ ls = WLS.is_ls loc ls in
+              let@ () = add_l s ls (loc, lazy (Pp.string "arg-var")) in
+              return (s, ls)
+            ) args 
+        in
+        let@ return_bt = WBT.is_bt loc return_bt in
+        let@ definition = match definition with
           | Def body -> 
-             let@ body = welltyped_body pd.loc pd.return_bt body in
+             let@ body = WIT.check loc return_bt body in
              return (Def body)
           | Rec_Def body -> 
-             let@ body = welltyped_body pd.loc pd.return_bt body in
+             let@ body = WIT.check loc return_bt body in
              return (Rec_Def body)
           | Uninterp -> 
              return Uninterp
         in
-        return { pd with definition = definition }
+        return {loc; args; return_bt; emit_coq; definition}
       end
 
 end

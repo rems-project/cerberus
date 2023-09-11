@@ -57,11 +57,12 @@ type pointer_value = CF.Impl_mem.pointer_value
 let rec infer_pattern (M_Pattern (loc, _, pattern)) =
   match pattern with
   | M_CaseBase (_, has_bt) -> 
-     let@ () = WellTyped.WBT.is_bt loc has_bt in
+     let@ has_bt = WellTyped.WBT.is_bt loc has_bt in
      return has_bt
   | M_CaseCtor (constructor, pats) ->
     begin match constructor, pats with
     | M_Cnil item_bt, [] -> 
+       let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
        return (BT.List item_bt)
     | M_Cnil _, _ ->
        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
@@ -88,7 +89,7 @@ let rec infer_pattern (M_Pattern (loc, _, pattern)) =
 (* pattern-matches and binds *)
 let rec pattern_match (M_Pattern (loc, _, pattern)) it =
    match pattern with
-   | M_CaseBase (o_s, has_bt) ->
+   | M_CaseBase (o_s, _has_bt) ->
       begin match o_s with
       | Some s ->
          let@ () = add_a_value s it (loc, lazy (Sym.pp s)) in
@@ -99,6 +100,7 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
    | M_CaseCtor (constructor, pats) ->
       match constructor, pats with
       | M_Cnil item_bt, [] ->
+         let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
          let@ () = add_c loc (LC.t_ (eq__ it (nil_ ~item_bt))) in
          return []
       | M_Ccons, [p1; p2] ->
@@ -119,15 +121,6 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
          assert false
  
 
-
-
-
-
-
-(*** function call typing, subtyping, and resource inference *****************)
-
-(* spine is parameterised so it can be used both for function and
-   label types (which don't have a return type) *)
 
 
 
@@ -164,6 +157,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt) m =
             (* the symbol of a function is the same as the symbol of its address *)
             return (sym_ (sym, BT.Loc)) ) 
     ( fun _prov p -> 
+      (* TODO: Dhruv, do we want to do something with the provenance here? *)
       return (pointer_ p) )
 
 let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
@@ -174,7 +168,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
     ( fun _ _ -> 
       unsupported loc !^"infer_mem_value: concurrent read case" )
     ( fun ity iv -> 
-      (* TODO: do anything with ity? *)
+      let@ () = WellTyped.WCT.is_ct loc (Integer ity) in
       let@ () = WellTyped.ensure_base_type loc ~expect Integer in
       return (int_ (Memory.int_of_ival iv)) )
     ( fun ft fv -> 
@@ -194,22 +188,22 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
       let@ values = ListM.mapM (check_mem_value loc ~expect:item_bt) mem_values in
       return (make_array_ ~item_bt values) )
     ( fun tag mvals -> 
+      let@ () = WellTyped.WCT.is_ct loc (Struct tag) in
       let@ () = WellTyped.ensure_base_type loc ~expect (Struct tag) in
-      let mvals = List.map (fun (member, _, mv) -> (member, mv)) mvals in
+      let mvals = List.map (fun (id,ct,mv) -> (id, Sctypes.of_ctype_unsafe loc ct, mv)) mvals in
       check_struct loc tag mvals )
     ( fun tag id mv -> 
       check_union loc tag id mv )
 
-and check_struct (loc : loc) (tag : Sym.t) 
-                 (member_values : (Id.t * mem_value) list) : (lvt) m =
+and check_struct (loc : loc)
+                 (tag : Sym.t) 
+                 (member_values : (Id.t * Sctypes.t * mem_value) list) : lvt m =
   let@ layout = get_struct_decl loc tag in
-  let@ () = 
-    WellTyped.correct_and_no_duplicate_members loc tag 
-      (List.map fst member_values)
-  in
+  let member_types = Memory.member_types layout in
+  assert (List.for_all2 (fun (id,ct) (id',ct',mv') -> Id.equal id id' && Sctypes.equal ct ct') 
+            member_types member_values);
   let@ member_its = 
-    ListM.mapM (fun (member, mv) ->
-        let@ sct = get_member_type loc tag member layout in
+    ListM.mapM (fun (member, sct, mv) ->
         let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct sct) mv in
         return (member, member_lvt)
       ) member_values
@@ -220,8 +214,9 @@ and check_union (loc : loc) (tag : Sym.t) (id : Id.t)
                 (mv : mem_value) : (lvt) m =
   Cerb_debug.error "todo: union types"
 
+
 let rec check_object_value (loc : loc) ~(expect: BT.t)
-          (ov : 'bty mu_object_value) : (lvt) m =
+          (ov : 'bty mu_object_value) : lvt m =
   match ov with
   | M_OVinteger iv ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
@@ -239,8 +234,7 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
      let@ values = ListM.mapM (check_object_value loc ~expect:item_bt) items in
      return (make_array_ ~item_bt values)
   | M_OVstruct (tag, fields) -> 
-     let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
-     check_struct loc tag mvals       
+     check_struct loc tag fields
   | M_OVunion (tag, id, mv) -> 
      check_union loc tag id mv
   | M_OVfloating iv ->
@@ -282,7 +276,7 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt) m =
      let@ _ = get_fun_decl loc sym in
      return (IT.sym_ (sym, Loc))
   | M_Vlist (item_bt, vals) ->
-     let@ () = WellTyped.WBT.is_bt loc item_bt in
+     let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
      let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
      let@ values = ListM.mapM (check_value loc ~expect:item_bt) vals in
      return (list_ ~item_bt values)
@@ -510,7 +504,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         check_pexprs (List.map (fun pe -> (pe, item_bt)) pes) (fun values ->
         k (make_array_ ~item_bt values))
      | M_Cnil item_bt, [] -> 
-        let@ () = WellTyped.WBT.is_bt loc item_bt in
+        let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
         let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
         k (nil_ ~item_bt)
      | M_Cnil item_bt, _ -> 
@@ -679,11 +673,14 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      )
   | M_PEstruct (tag, xs) ->
      let@ layout = get_struct_decl loc tag in
-     let@ () = WellTyped.correct_and_no_duplicate_members loc tag
-                 (List.map fst xs) in
-     let@ xs_with_expects = ListM.mapM (fun (nm, expr) ->
-       let@ ty = get_member_type loc tag nm layout in
-       return (expr, BT.of_sct ty)) xs in
+     let member_types = Memory.member_types layout in
+     assert (List.for_all2 (fun (id,ct) (id',pe') -> Id.equal id id') member_types xs);
+     let@ xs_with_expects = 
+       ListM.mapM (fun (id, expr) ->
+           let@ ty = get_member_type loc tag id layout in
+           return (expr, BT.of_sct ty)
+         ) xs 
+     in
      check_pexprs xs_with_expects (fun vs ->
      let v = struct_ (tag, List.map2 (fun (nm, _) v -> (nm, v)) xs vs) in
      k v)
@@ -743,11 +740,13 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ vt = check_conv_int loc ~expect ct lvt in
      k vt))
   | M_PEwrapI (act, pe) ->
+     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Integer pe (fun arg ->
      let ity = Option.get (Sctypes.is_integer_type act.ct) in
      k (wrapI_ (ity, arg)))
   | M_PEcatch_exceptional_condition (act, pe) ->
+     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      let ity = Option.get (Sctypes.is_integer_type act.ct) in
      check_pexpr ~expect:Integer pe (fun arg ->
@@ -760,6 +759,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
             fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
      )
   | M_PEis_representable_integer (pe, act) ->
+     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
      let@ () = WellTyped.ensure_base_type loc ~expect Bool in
      let ity = Option.get (Sctypes.is_integer_type act.ct) in
      check_pexpr ~expect:Integer pe (fun arg ->
@@ -787,9 +787,6 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      check_pexpr ~expect e2 (fun lvt ->
      let@ () = remove_as bound_a in
      k lvt))
-  (* | M_PEdone pe -> *)
-  (*    let@ arg = infer_pexpr pe in *)
-  (*    Spine.subtype loc arg typ *)
   | M_PEundef (_loc, ub) ->
      let@ provable = provable loc in
      begin match provable (t_ (bool_ false)) with
@@ -823,7 +820,6 @@ and check_pexprs (pes_expects : (_ mu_pexpr * BT.t) list)
 
 
 module Spine : sig
-
   val calltype_ft : 
     Loc.t -> fsym:Sym.t -> _ mu_pexpr list -> AT.ft -> (RT.t -> (unit) m) -> (unit) m
   val calltype_lt : 
@@ -1703,13 +1699,13 @@ let record_and_check_logical_functions funs =
       ) nonrecursive
   in
 
-  (* Then we check the recursive functions: add them all, check
-     welltypedness of each, then overwrite (post-NIA-simplification --
-     a bit ugly). *)
+  (* Then we check the recursive functions: add them all as uninterpreted, check
+     welltypedness of each, then overwrite with actual (NIA-simplified) body. *)
 
   let@ () =
     ListM.iterM (fun (name, def) -> 
-        add_logical_function name def
+        add_logical_function name 
+          {def with definition = Uninterp}
       ) recursive
   in
   ListM.iterM (fun (name, def) -> 
@@ -1719,19 +1715,18 @@ let record_and_check_logical_functions funs =
     ) recursive
 
 let record_and_check_resource_predicates preds =
-  let@ simp_preds = pure begin
-    (* add the names to the context, so recursive preds check *)
-    let@ () = ListM.iterM (fun (name, def) ->
-        add_resource_predicate name { def with clauses = None }) preds in
-    ListM.mapM (fun (name, def) ->
+  (* add the names to the context, so recursive preds check *)
+  let@ () = 
+    ListM.iterM (fun (name, def) ->
+        add_resource_predicate name { def with clauses = None }
+      ) preds 
+  in
+  ListM.iterM (fun (name, def) ->
       debug 2 (lazy (headline ("checking welltypedness of resource pred " ^ Sym.pp_string name)));
       let@ def = WellTyped.WRPD.welltyped def in
-      return (name, def)) preds
-  end in
-  ListM.iterM (fun (name, def) ->
       (* add simplified def to the context *)
       add_resource_predicate name def
-    ) simp_preds
+    ) preds
 
 
 let record_globals globs =
@@ -1740,7 +1735,8 @@ let record_globals globs =
       match def with
       | M_GlobalDef ((gbt, ct), _)
       | M_GlobalDecl ((gbt, ct)) ->
-         let@ () = WellTyped.WBT.is_bt Loc.unknown gbt in
+         assert (BT.equal gbt (BT.of_sct ct));
+         let@ gbt = WellTyped.WBT.is_bt Loc.unknown gbt in
          let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
          let bt = Loc in
          let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp sym))) in
@@ -1771,7 +1767,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
   in
   PmapM.foldM (fun fsym def (trusted, checked) ->
       match def with
-      | M_Proc (loc, args_and_body, tr, _) ->
+      | M_Proc (loc, args_and_body, tr, _parse_ast_things) ->
          welltyped_ping fsym;
          let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
          debug 6 (lazy (!^"function type" ^^^ Sym.pp fsym));
@@ -1781,11 +1777,15 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
          | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)
          | Checked -> return (trusted, (fsym, (loc, args_and_body)) :: checked)
          end
-      | M_ProcDecl (loc, ft) ->
+      | M_ProcDecl (loc, oft) ->
          welltyped_ping fsym;
-         let@ fts = ListM.mapM (WellTyped.WFT.welltyped "function" loc) (Option.to_list ft) in
-         let ft = List.nth_opt fts 0 in
-         let@ () = add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs) in
+         let@ oft = match oft with
+           | None -> return None
+           | Some ft -> 
+              let@ ft = WellTyped.WFT.welltyped "function" loc ft in 
+              return (Some ft)
+         in
+         let@ () = add_fun_decl fsym (loc, oft, Pmap.find fsym mu_call_sigs) in
          return (trusted, checked)
     ) mu_funs ([], [])
 
@@ -1859,8 +1859,10 @@ let check mu_file stmt_locs o_lemma_mode =
 
   Pp.debug 3 (lazy (Pp.headline "type-checked CN top-level declarations."));
 
-  let@ (_trusted, checked) = wf_check_and_record_functions mu_file.mu_funs
-            mu_file.mu_call_funinfo in
+  let@ (_trusted, checked) = 
+    wf_check_and_record_functions mu_file.mu_funs
+      mu_file.mu_call_funinfo 
+  in
 
   Pp.debug 3 (lazy (Pp.headline "type-checked C functions and specifications."));
 

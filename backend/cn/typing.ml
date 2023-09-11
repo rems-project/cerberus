@@ -544,9 +544,10 @@ let get_datatype_constr loc tag =
 
 
 let get_member_type loc tag member layout : (Sctypes.t) m = 
-  match List.assoc_opt Id.equal member (Memory.member_types layout) with
+  let member_types = Memory.member_types layout in
+  match List.assoc_opt Id.equal member member_types with
   | Some membertyp -> return membertyp
-  | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
+  | None -> fail (fun _ -> {loc; msg = Unexpected_member (List.map fst member_types, member)})
 
 let get_struct_member_type loc tag member =
   let@ decl = get_struct_decl loc tag in

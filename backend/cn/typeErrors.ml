@@ -91,8 +91,7 @@ type message =
   | Unknown_datatype_constr of Sym.t
   | Unknown_resource_predicate of {id: Sym.t; logical: bool}
   | Unknown_logical_function of {id: Sym.t; resource: bool}
-  | Unknown_member of Sym.t * Id.t
-  | Unknown_record_member of Pp.doc * Id.t
+  | Unexpected_member of Id.t list * Id.t
   | Unknown_lemma of Sym.t
 
   (* some from Kayvan's compilePredicates module *)
@@ -194,21 +193,9 @@ let pp_message te =
              !^" is a known resource predicate.")
          else None in
      { short; descr; state = None; trace = None }
-  | Unknown_member (tag, member) ->
-     let short = !^"Unknown member" ^^^ Id.pp member in
-     let descr =
-       !^"struct" ^^^ squotes (Sym.pp tag) ^^^
-         !^"does not have member" ^^^
-           Id.pp member
-     in
-     { short; descr = Some descr; state = None; trace = None }
-  | Unknown_record_member (bt, member) ->
-     let short = !^"Unknown member" ^^^ Id.pp member in
-     let descr =
-       !^"struct type" ^^^ bt ^^^
-         !^"does not have member" ^^^
-           Id.pp member
-     in
+  | Unexpected_member (expected, member) ->
+     let short = !^"Unexpected member" ^^^ Id.pp member in
+     let descr = !^"the struct only has members" ^^^ Pp.list Id.pp expected in
      { short; descr = Some descr; state = None; trace = None }
   | Unknown_lemma sym ->
      let short = !^"Unknown lemma" ^^^ squotes (Sym.pp sym) in

@@ -100,8 +100,6 @@ let lookup_struct_opt sym env =
     | Some (M_UnionDef _)| None ->
         None
 
-let lookup_member_opt (def: Memory.struct_layout) member =
-  List.assoc_opt Id.equal member (Memory.member_types def)
 
 let add_datatype sym info env =
   let datatypes = SymMap.add sym info env.datatypes in
@@ -418,10 +416,13 @@ module EffectfulTranslation = struct
     | Some def -> return def
     | None -> fail {loc; msg = Unknown_struct tag}
 
+
+
   let lookup_member loc (tag, def) member =
-    match lookup_member_opt def member with
+    let member_types = Memory.member_types def in
+    match List.assoc_opt Id.equal member member_types with
     | Some ty -> return ty
-    | None -> fail {loc; msg = Unknown_member (tag, member)}
+    | None -> fail {loc; msg = Unexpected_member (List.map fst member_types, member)}
 
   let lookup_datatype loc sym env = match SymMap.find_opt sym env.datatypes with
     | Some info -> return info
@@ -518,7 +519,7 @@ module EffectfulTranslation = struct
     | SBT.Record members ->
        let@ member_bt = match List.assoc_opt Id.equal member members with
          | Some member_bt -> return member_bt
-         | None -> fail {loc; msg = Unknown_record_member (SBT.pp (SBT.Record members), member)}
+         | None -> fail {loc; msg = Unexpected_member (List.map fst members, member)}
        in
        return (IT.recordMember_ ~member_bt (t, member))
     | Struct tag ->
@@ -561,8 +562,7 @@ module EffectfulTranslation = struct
          ListM.fold_leftM (fun (env, locally_bound, acc) (m, pat') ->
              match List.assoc_opt Id.equal m cons_info.c_params with
              | None -> 
-                let rbt = BT.pp (Record cons_info.c_params) in
-                fail {loc; msg= Unknown_record_member (rbt,m)}
+                fail {loc; msg= Unexpected_member (List.map fst cons_info.c_params,m)}
              | Some mbt ->
                 let@ env', locally_bound', pat' = 
                   translate_cn_pat env locally_bound (pat', SBT.of_basetype mbt) in
