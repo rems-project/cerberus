@@ -90,6 +90,11 @@ let is_datatype_bt = function
   | Datatype sym -> Some sym
   | _ -> None
 
+let datatype_bt = function
+  | Datatype sym -> sym
+  | bt -> Cerb_debug.error 
+            ("illtyped index term: not a datatype: " ^ Pp.plain (pp bt))
+
 let is_list_bt = function
   | List bt -> Some bt
   | _ -> None

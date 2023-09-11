@@ -24,6 +24,7 @@ end
 module StringListMap = Map.Make(StringList)
 module IntMap = Map.Make(Int)
 
+open Cerb_pp_prelude
 
 (* Some things are defined on-demand, so this state monad stores the set
    of such things defined and the contents of the various setup sections
@@ -31,8 +32,9 @@ module IntMap = Map.Make(Int)
 module PrevDefs = struct
   type t = {present: (Sym.t list) StringListMap.t;
         defs: (Pp.doc list) IntMap.t;
-        dt_params: (IT.t * Id.t * Sym.t) list}
-  let init_t = {present = StringListMap.empty; defs = IntMap.empty; dt_params = []}
+        dt_params: (IT.t * Id.t * Sym.t) list;
+        failures: TypeErrors.type_error list}
+  let init_t = {present = StringListMap.empty; defs = IntMap.empty; dt_params = []; failures = []}
   type 'a m = t -> ('a * t, TypeErrors.t) Result.t
   let return (x : 'a) : 'a m = (fun st -> Result.Ok (x, st))
   let bind (x : 'a m) (f : 'a -> 'b m) : 'b m = (fun st ->
@@ -102,39 +104,28 @@ let fail msg details =
   print stdout (format [Bold; Red] msg ^^ colon ^^ space ^^ details);
   failwith msg
 
-let fail_m loc msg =
-  (fun st -> Result.Error (TypeErrors.{loc; msg = Generic msg}))
+(* print the error message, but continue with a default value when possible *)
+let fail_m rv loc msg =
+  let err = TypeErrors.{loc; msg = Generic msg} in
+  Pp.error loc msg [];
+  let@ () = upd (fun st -> {st with failures = err :: st.failures}) in
+  return rv
 
-let fail_check_noop = function
-  | body -> fail "non-noop lemma body element" (Pp_mucore.pp_expr body)
+let fail_m_d = fail_m (!^ "<error>")
+let fail_m_o = fail_m None
 
-(* TODO *)
-let check_noop _ = ()
+(* release stored failures as exceptions *)
+let release_failures () =
+  let@ st = get in
+  match st.failures with
+  | [] -> return ()
+  | fs -> (fun _ -> Result.Error (List.hd (List.rev fs)))
 
-(* let check_trusted_fun_body fsym (lsym, def) =  *)
-(*   let open Mucore in *)
-(*   match def with *)
-(*   | Mu.M_Proc (loc, args_body, _trusted) -> *)
-(*      let rec check_l = function *)
-(*        | M_Define (_, _, l) -> check_l l *)
-(*        | M_Resource (_, _, l) -> check_l l *)
-(*        | M_Constraint (_, _, l) -> check_l l *)
-(*        | M_I (body, _labels, _rt) -> *)
-(*           check_noop body *)
-(*      in *)
-(*      let rec check = function *)
-(*        | M_Computational (_, _, t) -> check t *)
-(*        | M_L l -> check_l l *)
-(*      in *)
-(*      check args_body *)
-(*   | _ -> *)
-(*     fail "non-proc trusted function" (Sym.pp fsym) *)
-
-(* set of functions with boolean return type that are negated
-   etc and must return bool (be computational) in Coq. the rest
-   return Prop. FIXME: make this configurable. *)
-let bool_funs = StringSet.of_list
-  ["order_aligned"; "in_tree"]
+(* set of functions with boolean return type that we want to use
+   as toplevel propositions, i.e. return Prop rather than bool
+   (computational) in Coq. *)
+let prop_funs = StringSet.of_list
+  []
 
 exception Cannot_Coerce
 
@@ -252,7 +243,6 @@ let doc_fun_app sd xs =
   parens (flow (break 1) (sd :: xs))
 
 let fun_app s xs =
-  let open Pp in
   doc_fun_app (!^ s) xs
 
 let tuple_coq_ty doc fld_tys =
@@ -394,7 +384,7 @@ let fun_prop_ret (global : Global.t) nm =
   | Some def ->
     let open LogicalFunctions in
     BaseTypes.equal BaseTypes.Bool def.return_bt
-      && not (StringSet.mem (Sym.pp_string nm) bool_funs)
+      && StringSet.mem (Sym.pp_string nm) prop_funs
 
 let tuple_syn xs =
   let open Pp in
@@ -428,6 +418,7 @@ let build = function
 let parensM x =
     let@ xd = x in
     return (Pp.parens xd)
+let f_appM nm xs = parensM (build (rets nm :: xs))
 
 let defn nm args opt_ty rhs =
   let open Pp in
@@ -466,7 +457,7 @@ let ensure_fun_upd () =
 let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
   let open Pp in
   let open Global in
-  let do_fail nm bt = fail_m (fst loc_info) (Pp.item ("bt_to_coq: " ^ nm)
+  let do_fail nm bt = fail_m_d (fst loc_info) (Pp.item ("bt_to_coq: " ^ nm)
         (BaseTypes.pp bt ^^^ !^ "in converting" ^^^ (snd loc_info))) in
   let rec f bt = match bt with
   | BaseTypes.Bool -> return (!^ "bool")
@@ -583,7 +574,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
 let ensure_list global list_mono loc bt =
   let@ dt_bt = match mono_list_bt list_mono bt with
     | Some x -> return x
-    | None -> fail_m loc (Pp.item "ensure_list: not a monomorphised list" (BT.pp bt))
+    | None -> fail ("ensure_list: not a monomorphised list") (BT.pp bt)
   in
   let dt_sym = Option.get (BT.is_datatype_bt dt_bt) in
   let dt_info = SymMap.find dt_sym global.Global.datatypes in
@@ -650,7 +641,7 @@ let ensure_pred global list_mono loc name aux =
          return (defn (Sym.pp_string name) args None rhs)
        )) []
   | Rec_Def body ->
-    fail_m def.loc (Pp.item "rec-def not yet handled" (Sym.pp name))
+    fail_m () def.loc (Pp.item "rec-def not yet handled" (Sym.pp name))
   end
 
 let ensure_struct_mem is_good global list_mono loc ct aux = match Sctypes.is_struct_ctype ct with
@@ -701,37 +692,38 @@ let add_dt_param_counted (it, (m_nm : Id.t)) =
   return sym
 
 let dt_split global x t =
-  let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in
-  let cs_used = IT.fold (fun _ acc t -> match IT.term t with
-    | IT.DatatypeIsCons (c_nm, y) when IT.equal x y -> SymSet.add c_nm acc
-    | _ -> acc) [] SymSet.empty t in
-  Pp.debug 7 (lazy (Pp.item "in dt-split, constructors used" (Pp.braces (Pp.list
-    Sym.pp (SymSet.elements cs_used)))));
-  let mems_used = IT.fold (fun _ acc t -> match IT.term t with
-    | IT.DatatypeMember (y, m_nm) when IT.equal x y -> IdSet.add m_nm acc
-    | _ -> acc) [] IdSet.empty t in
-  Pp.debug 7 (lazy (Pp.item "in dt-split, mems used" (Pp.braces (Pp.list
-    Id.pp (IdSet.elements mems_used)))));
-  let dt_info = SymMap.find dt global.Global.datatypes in
-  let rec redux c_nm t = match IT.term t with
-    | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm2, y), _), x_t, x_f)
-        when IT.equal x y ->
-      if Sym.equal c_nm c_nm2 then redux c_nm x_t else redux c_nm x_f
-    | _ -> t
-  in
-  let f c_nm =
-      let c_info = SymMap.find c_nm global.Global.datatype_constrs in
-      let ms = List.map fst c_info.c_params in
-    (Sym.pp c_nm, ms, mems_used, redux c_nm t)
-  in
-  let (cs_order, need_default) =
-    if List.length dt_info.BT.dt_constrs > SymSet.cardinal cs_used + 1
-    then (SymSet.elements cs_used, true)
-    else (dt_info.BT.dt_constrs, false)
-  in
-  List.map f cs_order @ (if need_default
-    then [(Pp.string "_", [], mems_used, redux dt t (* any non-cons symbol will redux correctly *))]
-    else [])
+  failwith "Sorry: I did not know how to fix this."
+  (* let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in *)
+  (* let cs_used = IT.fold (fun _ acc t -> match IT.term t with *)
+  (*   | IT.DatatypeIsCons (c_nm, y) when IT.equal x y -> SymSet.add c_nm acc *)
+  (*   | _ -> acc) [] SymSet.empty t in *)
+  (* Pp.debug 7 (lazy (Pp.item "in dt-split, constructors used" (Pp.braces (Pp.list *)
+  (*   Sym.pp (SymSet.elements cs_used))))); *)
+  (* let mems_used = IT.fold (fun _ acc t -> match IT.term t with *)
+  (*   | IT.DatatypeMember (y, m_nm) when IT.equal x y -> IdSet.add m_nm acc *)
+  (*   | _ -> acc) [] IdSet.empty t in *)
+  (* Pp.debug 7 (lazy (Pp.item "in dt-split, mems used" (Pp.braces (Pp.list *)
+  (*   Id.pp (IdSet.elements mems_used))))); *)
+  (* let dt_info = SymMap.find dt global.Global.datatypes in *)
+  (* let rec redux c_nm t = match IT.term t with *)
+  (*   | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm2, y), _), x_t, x_f) *)
+  (*       when IT.equal x y -> *)
+  (*     if Sym.equal c_nm c_nm2 then redux c_nm x_t else redux c_nm x_f *)
+  (*   | _ -> t *)
+  (* in *)
+  (* let f c_nm = *)
+  (*     let c_info = SymMap.find c_nm global.Global.datatype_constrs in *)
+  (*     let ms = List.map fst c_info.c_params in *)
+  (*   (Sym.pp c_nm, ms, mems_used, redux c_nm t) *)
+  (* in *)
+  (* let (cs_order, need_default) = *)
+  (*   if List.length dt_info.BT.dt_constrs > SymSet.cardinal cs_used + 1 *)
+  (*   then (SymSet.elements cs_used, true) *)
+  (*   else (dt_info.BT.dt_constrs, false) *)
+  (* in *)
+  (* List.map f cs_order @ (if need_default *)
+  (*   then [(Pp.string "_", [], mems_used, redux dt t (\* any non-cons symbol will redux correctly *\))] *)
+  (*   else []) *)
 
 let dt_access_error t =
   Pp.item "cannot convert datatype accessor"
@@ -764,30 +756,41 @@ let mk_let sym rhs_doc doc =
 let it_to_coq loc global list_mono it =
   let open Pp in
   let eq_of = function
-    | BaseTypes.Integer -> return "Z.eqb"
-    | bt -> fail_m loc (Pp.item "eq_of" (BaseTypes.pp bt))
+    | BaseTypes.Integer -> rets "Z.eqb"
+    | bt -> fail_m_d loc (Pp.item "eq_of" (BaseTypes.pp bt))
   in
   let rec f bool_eq_prop t =
+    let do_fail msg = fail_m_d loc (Pp.item ("it_to_coq: unsupported " ^ msg) (IT.pp t)) in
     let aux t = f bool_eq_prop t in
     let abinop s x y = parensM (build [aux x; rets s; aux y]) in
     let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
-        then parensM (build [rets "Is_true"; x]) else x
+        then f_appM "Is_true" [x] else x
+    in
+    let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
+      else parensM (rets (Z.to_string z))
     in
     let check_pos t f = 
+      (* FIXME turning this off for now to test stuff
       let t = unfold_if_possible global t in
       match IT.is_z t with
       | Some i when Z.gt i Z.zero -> f
-      | _ -> fail_m loc (Pp.item "it_to_coq: divisor not positive const" (IT.pp t))
+      | _ -> do_fail "divisor (not positive const)"
+      *) f
     in
     match IT.term t with
     | IT.Sym sym -> return (Sym.pp sym)
     | IT.Const l -> begin match l with
         | IT.Bool b -> with_is_true (rets (if b then "true" else "false"))
-        | IT.Z z -> rets (Z.to_string z)
-        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported const" (IT.pp t))
+        | IT.Z z -> enc_z z
+        | _ -> do_fail "const"
     end
-    | IT.Binop (op, x, y) -> 
-       begin match op with
+    | IT.Unop (op, x) -> begin match op with
+       | IT.Not -> f_appM (if bool_eq_prop then "~" else "negb") [aux x]
+       | IT.BWFFSNoSMT -> f_appM "CN_Lib.find_first_set_z" [aux x]
+       | IT.BWCTZNoSMT -> f_appM "CN_Lib.count_trailing_zeroes_z" [aux x]
+       | _ -> do_fail "unary op"
+    end
+    | IT.Binop (op, x, y) -> begin match op with
        | Add  -> abinop "+" x y
        | Sub  -> abinop "-" x y
        | Mul  -> abinop "*" x y
@@ -796,35 +799,37 @@ let it_to_coq loc global list_mono it =
        | DivNoSMT  -> check_pos y (abinop "/" x y)
        | Mod  -> check_pos y (abinop "mod" x y)
        | ModNoSMT  -> check_pos y (abinop "mod" x y)
-       (* TODO: this can't be right: mod and rem aren't the same *)
+       (* TODO: this can't be right: mod and rem aren't the same
+            - maybe they have the same semantics as Coq Z.modulo/Z.rem *)
        | Rem  -> check_pos y (abinop "mod" x y)
        | RemNoSMT  -> check_pos y (abinop "mod" x y)
        | LT  -> abinop (if bool_eq_prop then "<" else "<?") x y
        | LE  -> abinop (if bool_eq_prop then "<=" else "<=?") x y
        | Exp  -> abinop "^" x y
-       | ExpNoSMT  -> abinop "^" x y
-       | XORNoSMT  -> parensM (build [rets "Z.lxor"; aux x; aux y])
-       | EQ -> build [f false x; rets (if bool_eq_prop then "=" else "=?"); f false y]
+       | ExpNoSMT -> abinop "^" x y
+       | XORNoSMT -> f_appM "Z.lxor" [aux x; aux y]
+       | BWAndNoSMT -> f_appM "Z.land" [aux x; aux y]
+       | BWOrNoSMT -> f_appM "Z.lor" [aux x; aux y]
+       | EQ -> parensM (build [f false x; rets (if bool_eq_prop then "=" else "=?"); f false y])
        | LEPointer -> abinop (if bool_eq_prop then "<=" else "<=?") x y
        | LTPointer -> abinop (if bool_eq_prop then "<" else "<?") x y
        | And -> abinop (if bool_eq_prop then "/\\" else "&&") x y
        | Or -> abinop (if bool_eq_prop then "\\/" else "||") x y
        | Impl -> abinop (if bool_eq_prop then "->" else "implb") x y
-       | _ -> fail_m loc (Pp.item "it_to_coq: unsupported arith op" (IT.pp t))
+       | _ -> do_fail "arith op"
        end
-    | IT.Not x -> parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x])
-    | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm, x), _), _, _) ->
-         let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in
-         let@ () = ensure_datatype global list_mono loc dt in
-         let branches = dt_split global x t in
-         Pp.debug 7 (lazy (Pp.item "did dt-split" (Pp.parens (Pp.list
-             (fun (_, _, _, t2) -> IT.pp t2) branches))));
-         let br (c_doc, ps, ps_used, t2) = with_selected_dt_params x ps ps_used
-           (fun opt_ps -> build [rets "|"; match_some_dt_params c_doc opt_ps;
-             rets "=>"; (let@ () = debug_dt_params 7 in aux t2)])
-         in
-         parensM (build ([rets "match"; f false x; rets "with"]
-             @ List.map br branches @ [rets "end"]))
+    (* | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm, x), _), _, _) -> *)
+    (*      let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in *)
+    (*      let@ () = ensure_datatype global list_mono loc dt in *)
+    (*      let branches = dt_split global x t in *)
+    (*      Pp.debug 7 (lazy (Pp.item "did dt-split" (Pp.parens (Pp.list *)
+    (*          (fun (_, _, _, t2) -> IT.pp t2) branches)))); *)
+    (*      let br (c_doc, ps, ps_used, t2) = with_selected_dt_params x ps ps_used *)
+    (*        (fun opt_ps -> build [rets "|"; match_some_dt_params c_doc opt_ps; *)
+    (*          rets "=>"; (let@ () = debug_dt_params 7 in aux t2)]) *)
+    (*      in *)
+    (*      parensM (build ([rets "match"; f false x; rets "with"] *)
+    (*          @ List.map br branches @ [rets "end"])) *)
     | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
              aux x; rets "else"; aux y])
     | IT.EachI ((i1, (s, _), i2), x) -> assert bool_eq_prop;
@@ -837,7 +842,7 @@ let it_to_coq loc global list_mono it =
     | IT.MapSet (m, x, y) ->
        let@ () = ensure_fun_upd () in
        let@ e = eq_of (IT.bt x) in
-       parensM (build [rets "fun_upd"; rets e; aux m; aux x; aux y])
+       f_appM "fun_upd" [return e; aux m; aux x; aux y]
     | IT.MapGet (m, x) -> parensM (build [aux m; aux x])
     | IT.RecordMember (t, m) ->
         let flds = BT.record_bt (IT.bt t) in
@@ -883,7 +888,7 @@ let it_to_coq loc global list_mono it =
       | source, target -> 
         let source = Pp.plain (BT.pp source) in
         let target = Pp.plain (BT.pp target) in
-        failwith ("lemma generation: unsupported cast from " ^ source ^ " to " ^ target)
+        do_fail ("cast from " ^ source ^ " to " ^ target)
       end
     | IT.Apply (name, args) ->
         let prop_ret = fun_prop_ret global name in
@@ -899,27 +904,27 @@ let it_to_coq loc global list_mono it =
        assert bool_eq_prop; 
        let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
        parensM (build [rets op_nm; aux t2])
-    | IT.DatatypeCons (nm, members_rec) ->
-        let info = SymMap.find nm global.datatype_constrs in
-        let args = List.map
-           (fun (nm, _) -> Simplify.IndexTerms.record_member_reduce members_rec nm)
-           info.c_params in
-        let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in
-        parensM (build ([return (Sym.pp nm)] @ List.map (f false) args))
-    | IT.DatatypeMember (dt, nm) ->
-        let dt_sym = Option.get (BT.is_datatype_bt (IT.bt dt)) in
-        let info = SymMap.find dt_sym global.datatypes in
-        let@ o_sym = get_dt_param dt nm in
-        begin match (o_sym, List.length info.dt_constrs == 1) with
-          | Some sym, _ -> return (Sym.pp sym)
-          | _, true ->
-            let@ op_nm = ensure_single_datatype_member global list_mono
-                loc dt_sym nm (IT.bt t) in
-            parensM (build [rets op_nm; aux dt])
-          | _ ->
-            let@ () = debug_dt_params 2 in
-            fail_m loc (dt_access_error t)
-        end
+    (* | IT.DatatypeCons (nm, members_rec) -> *)
+    (*     let info = SymMap.find nm global.datatype_constrs in *)
+    (*     let args = List.map *)
+    (*        (fun (nm, _) -> Simplify.IndexTerms.record_member_reduce members_rec nm) *)
+    (*        info.c_params in *)
+    (*     let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in *)
+    (*     parensM (build ([return (Sym.pp nm)] @ List.map (f false) args)) *)
+    (* | IT.DatatypeMember (dt, nm) -> *)
+    (*     let dt_sym = Option.get (BT.is_datatype_bt (IT.bt dt)) in *)
+    (*     let info = SymMap.find dt_sym global.datatypes in *)
+    (*     let@ o_sym = get_dt_param dt nm in *)
+    (*     begin match (o_sym, List.length info.dt_constrs == 1) with *)
+    (*       | Some sym, _ -> return (Sym.pp sym) *)
+    (*       | _, true -> *)
+    (*         let@ op_nm = ensure_single_datatype_member global list_mono *)
+    (*             loc dt_sym nm (IT.bt t) in *)
+    (*         parensM (build [rets op_nm; aux dt]) *)
+    (*       | _ -> *)
+    (*         let@ () = debug_dt_params 2 in *)
+    (*         fail_m_d loc (dt_access_error t) *)
+    (*     end *)
     | IT.NthList (n, xs, d) ->
        let@ (_, _, dest) = ensure_list global list_mono loc (IT.bt xs) in
        parensM (build [rets "CN_Lib.nth_list_z"; return dest;
@@ -928,11 +933,16 @@ let it_to_coq loc global list_mono it =
        let@ (nil, cons, _) = ensure_list global list_mono loc (IT.bt t) in
        parensM (build [rets "CN_Lib.array_to_list"; return nil; return cons;
                        aux arr; aux i; aux len])
+    | IT.WrapI (ity, arg) ->
+       assert (not (Sctypes.IntegerTypes.equal ity Sctypes.IntegerTypes.Bool));
+       let maxInt = Memory.max_integer_type ity in
+       let minInt = Memory.min_integer_type ity in
+       f_appM "CN_Lib.wrapI" [enc_z minInt; enc_z maxInt; aux arg]
     | IT.Let ((nm, x), y) ->
        let@ x = aux x in
        let@ y = aux y in
        parensM (return (mk_let nm x y))
-    | _ -> fail_m loc (Pp.item "it_to_coq: unsupported" (IT.pp t))
+    | _ -> do_fail "term kind"
   in
   f true it
 
@@ -999,7 +1009,7 @@ let ftyp_to_coq loc global list_mono (ftyp: AT.lemmat) =
         let@ l = it_tc it in
         return (omap_split (mk_let sym l) d)
     | LRT.I -> return None
-    | _ -> fail_m loc (Pp.item "ftyp_to_coq: unsupported" (LRT.pp t))
+    | _ -> fail_m_o loc (Pp.item "ftyp_to_coq: unsupported" (LRT.pp t))
   in
   let rec lat_doc t = match t with
     | LAT.Define ((sym, it), _, t) ->
@@ -1007,7 +1017,7 @@ let ftyp_to_coq loc global list_mono (ftyp: AT.lemmat) =
         let@ l = it_tc it in
         return (omap_split (mk_let sym l) d)
     | LAT.Resource _ -> 
-       fail_m loc (Pp.item "ftyp_to_coq: unsupported" (LAT.pp LRT.pp t))
+       fail_m_o loc (Pp.item "ftyp_to_coq: unsupported" (LAT.pp LRT.pp t))
     | LAT.Constraint (lc, _, t) ->
         let@ c = lc_to_coq_c lc in
         let@ d = lat_doc t in
@@ -1074,6 +1084,7 @@ let mod_spec lemma_nms =
 
 let convert_and_print channel global list_mono conv =
   let@ (conv_defs, types, params, defs) = convert_lemma_defs global list_mono conv in
+  let@ () = release_failures () in
   Pp.print channel (types_spec types);
   Pp.print channel (param_spec params);
   Pp.print channel (defs_module defs conv_defs);

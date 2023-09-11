@@ -148,7 +148,7 @@ type asm_qualifier =
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE CN_SPEC
-%token CN_UNCHANGED
+%token CN_UNCHANGED CN_WILD
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
@@ -2025,16 +2025,26 @@ match_cases:  (* NOTE: the list is in reverse *)
 | ms= match_cases m= match_case
     { m :: ms }
 
-match_case_lhs: (* very limited subset of Rust options *)
-| ident= cn_variable args= cons_args
-    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(args)))
-                               , CNExpr_cons (ident, args))) }
+pattern_member_def:
+| member=cn_variable COLON p=pattern
+     { (member, p) } 
+
+pattern_cons_args:
+| xs= delimited(LBRACE, separated_list(COMMA, pattern_member_def), RBRACE)
+    { xs }
+
+pattern: (* very limited subset of Rust options *)
+| CN_WILD
+    { Cerb_frontend.Cn.(CNPat (Cerb_location.point $startpos, CNPat_wild)) }
 | ident= cn_variable
-    { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_var ident)) }
+    { Cerb_frontend.Cn.(CNPat (Cerb_location.point $startpos, CNPat_sym ident)) }
+| ident= cn_variable args= pattern_cons_args
+    { Cerb_frontend.Cn.(CNPat ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(args)))
+                               , CNPat_constructor (ident, args))) }
 
 
 match_case:
-| lhs= match_case_lhs EQ GT rhs= delimited(LBRACE, expr, RBRACE)
+| lhs= pattern EQ GT rhs= delimited(LBRACE, expr, RBRACE)
     { (lhs, rhs) }
 
 match_target:

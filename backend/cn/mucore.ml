@@ -105,16 +105,24 @@ type mu_function = (* some functions that persist into mucore, not just (infix) 
  | M_params_nth
  | M_are_compatible
 
+type bw_binop =
+ | M_BW_OR
+ | M_BW_AND
+ | M_BW_XOR
+
+type bw_unop =
+ | M_BW_COMPL
+ | M_BW_CTZ
+ | M_BW_FFS
+
 type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEsym of symbol
  (* | M_PEimpl of Implementation.implementation_constant (\* implementation-defined constant *\) *)
  | M_PEval of 'TY mu_value
  | M_PEconstrained of (Mem.mem_iv_constraint * 'TY mu_pexpr) list (* constrained value *)
  | M_PEctor of mu_ctor * ('TY mu_pexpr) list (* data constructor application *)
- | M_CivCOMPL of 'TY act * 'TY mu_pexpr (* bitwise complement *)
- | M_CivAND of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr (* bitwise AND *)
- | M_CivOR of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr (* bitwise OR *)
- | M_CivXOR of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr (* bitwise XOR *)
+ | M_PEbitwise_unop of bw_unop * 'TY mu_pexpr
+ | M_PEbitwise_binop of bw_binop * 'TY mu_pexpr * 'TY mu_pexpr
  | M_Cfvfromint of 'TY mu_pexpr (* cast integer to floating value *)
  | M_Civfromfloat of 'TY act * 'TY mu_pexpr (* cast floating to integer value *)
  | M_PEarray_shift of ('TY mu_pexpr) * T.ct * ('TY mu_pexpr) (* pointer array shift *)

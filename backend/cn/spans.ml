@@ -132,7 +132,7 @@ let rec perm_spans m_g q perm =
         norm_spans (List.concat ss)
   | Binop (Impl, lhs, rhs) -> 
         perm_spans m_g q (or_ [not_ lhs; rhs])
-  | Not x ->
+  | Unop (Not, x) ->
         let s = perm_spans m_g q x in
         not_flip_spans s
   | ITE (x,y,z) -> perm_spans m_g q (or_ [and_ [x; y]; and_ [not_ x; z]])

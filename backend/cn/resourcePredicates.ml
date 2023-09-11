@@ -111,6 +111,9 @@ let identify_right_clause provable def pointer iargs =
           | `False -> 
             match provable (t_ (not_ clause.guard)) with
             | `True -> try_clauses clauses
-            | `False -> None          
+            | `False ->
+              Pp.debug 5 (lazy (Pp.item "cannot prove or disprove clause guard"
+                  (IT.pp clause.guard)));
+              None
       in
       try_clauses clauses

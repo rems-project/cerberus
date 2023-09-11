@@ -92,7 +92,7 @@ let is_equality = function
   | T it ->
      begin match it with
      | IT (Binop (EQ,a, b), _) -> Some ((a, b), true)
-     | IT (Not (IT (Binop (EQ,a, b), _)), _) -> Some ((a, b), false)
+     | IT (Unop (Not, IT (Binop (EQ,a, b), _)), _) -> Some ((a, b), false)
      | _ -> None
      end
   | _ -> 

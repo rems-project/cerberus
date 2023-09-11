@@ -4125,15 +4125,21 @@ let rec desugar_cn_base_type loc bTy =
         CN_set <$> desugar_cn_base_type loc bTy
 end
 
-let rec register_cn_match_lhs_idents (CNExpr _ expr_) =
-  match expr_ with
-    | CNExpr_var ident ->
-        E.register_cn_ident CN_vars ident >>= fun _ ->
-        E.return ()
-    | CNExpr_cons _ es ->
-        E.mapM (fun (_, exp) -> register_cn_match_lhs_idents exp) es >>= fun _ ->
-        E.return ()
-    | _ -> E.return ()
+let rec register_and_desugar_cn_pattern (CNPat loc pat_) =
+  match pat_ with
+    | CNPat_sym ident ->
+        E.register_cn_ident CN_vars ident >>= fun sym ->
+        E.return (CNPat loc (CNPat_sym sym))
+    | CNPat_wild ->
+        E.return (CNPat loc (CNPat_wild))
+    | CNPat_constructor cons args ->
+        E.resolve_cn_ident CN_constructor cons >>= fun cons_resolved ->
+        let cons_resolved = Cn.ensure_not_c_variable cons_resolved in
+        E.mapM (fun (member, pat') ->
+            register_and_desugar_cn_pattern pat' >>= fun pat' ->
+            E.return (member, pat')
+          ) args >>= fun args ->
+        E.return (CNPat loc (CNPat_constructor cons_resolved args))
 end
 
 let pair x y = (x, y)
@@ -4216,11 +4222,11 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_match x ms ->
         E.mapM (fun (lhs, rhs) ->
           E.push_cn_scope >>= fun () ->
-          register_cn_match_lhs_idents lhs >>= fun _ ->
-          desugar_cn_expr lhs >>= fun lhs ->
+          register_and_desugar_cn_pattern lhs >>= fun lhs ->
           desugar_cn_expr rhs >>= fun rhs ->
           E.pop_cn_scope >>= fun () ->
-          E.return (lhs, rhs)) ms >>= fun ms ->
+          E.return (lhs, rhs)
+        ) ms >>= fun ms ->
         CNExpr_match <$> desugar_cn_expr x <*> E.return ms
     | CNExpr_let ident e body ->
           (*copy-pasting from CNExpr_match and adjusting*)

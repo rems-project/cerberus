@@ -47,8 +47,8 @@ let rec bound_by_pattern (Pat (pat_, bt)) =
 let rec free_vars_ = function
   | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
+  | Unop (_uop, t1) -> free_vars t1
   | Binop (_bop, t1, t2) -> free_vars_list [t1; t2]
-  | Not t1 -> free_vars t1
   | ITE (t1, t2, t3) -> free_vars_list [t1; t2; t3]
   | EachI ((_, (s, _), _), t) -> SymSet.remove s (free_vars t)
   | Tuple ts -> free_vars_list ts
@@ -59,12 +59,10 @@ let rec free_vars_ = function
   | Record members -> free_vars_list (List.map snd members)
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
-  | DatatypeCons (tag, members_xs) -> free_vars members_xs
-  | DatatypeMember (t, member) -> free_vars t
-  | DatatypeIsCons (tag, t) -> free_vars t
   | Cast (_cbt, t) -> free_vars t
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
+  | SizeOf _t -> SymSet.empty
   | Nil _bt -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
   | Head t -> free_vars t
@@ -105,8 +103,8 @@ and free_vars_list xs =
 let rec fold_ f binders acc = function
   | Sym _s -> acc
   | Const _c -> acc
+  | Unop (_uop, t1) -> fold f binders acc t1
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
-  | Not t1 -> fold f binders acc t1
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EachI ((_, (s, bt), _), t) ->
      fold f (binders @ [(s, bt)]) acc t
@@ -118,12 +116,10 @@ let rec fold_ f binders acc = function
   | Record members -> fold_list f binders acc (List.map snd members)
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
-  | DatatypeCons (tag, members_rec) -> fold f binders acc members_rec
-  | DatatypeMember (t, _member) -> fold f binders acc t
-  | DatatypeIsCons (tag, t) -> fold f binders acc t
   | Cast (_cbt, t) -> fold f binders acc t
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
+  | SizeOf _ct -> acc
   | Nil _bt -> acc
   | Cons (t1, t2) -> fold_list f binders acc [t1; t2]
   | Head t -> fold f binders acc t
@@ -219,10 +215,10 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      end
   | Const const -> 
      IT (Const const, bt)
+  | Unop (uop, it) ->
+     IT (Unop (uop, subst su it), bt)
   | Binop (bop, t1, t2) -> 
      IT (Binop (bop, subst su t1, subst su t2), bt)
-  | Not it -> 
-     IT (Not (subst su it), bt)
   | ITE (it,it',it'') -> 
      IT (ITE (subst su it, subst su it', subst su it''), bt)
   | EachI ((i1, (s, s_bt), i2), t) ->
@@ -244,18 +240,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (RecordMember (subst su t, m), bt)
   | RecordUpdate ((t, m), v) ->
      IT (RecordUpdate ((subst su t, m), subst su v), bt)
-  | DatatypeCons (tag, members_rec) ->
-     IT (DatatypeCons (tag, subst su members_rec), bt)
-  | DatatypeMember (t, m) ->
-     IT (DatatypeMember (subst su t, m), bt)
-  | DatatypeIsCons (tag, t) ->
-     IT (DatatypeIsCons (tag, subst su t), bt)
   | Cast (cbt, t) ->
      IT (Cast (cbt, subst su t), bt)
   | MemberOffset (tag, member) ->
      IT (MemberOffset (tag, member), bt)
   | ArrayOffset (tag, t) ->
      IT (ArrayOffset (tag, subst su t), bt)
+  | SizeOf t ->
+     IT (SizeOf t, bt)
   | Aligned t -> 
      IT (Aligned {t= subst su t.t; align= subst su t.align}, bt)
   | Representable (rt, t) -> 
@@ -311,8 +303,12 @@ and suitably_alpha_rename syms (s, bt) body =
   then alpha_rename (s, bt) body
   else (s, body)
 
+and subst_under_pattern su (pat, body) = 
+  let (pat, body) = suitably_alpha_rename_pattern su (pat, body) in
+  (pat, subst su body)
 
-and subst_under_pattern su (Pat (pat_, bt), body) = 
+
+and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) = 
   match pat_ with
   | PSym s -> 
      let (s, body) = suitably_alpha_rename su.relevant (s, bt) body in
@@ -322,11 +318,12 @@ and subst_under_pattern su (Pat (pat_, bt), body) =
   | PConstructor (s, args) ->
      let body, args =
        fold_left_map (fun body (id, pat') ->
-           let pat', body = subst_under_pattern su (pat', body) in
+           let pat', body = suitably_alpha_rename_pattern su (pat', body) in
            (body, (id, pat'))
          ) body args
      in
      (Pat (PConstructor (s, args), bt), body)
+
 
 
 
@@ -389,7 +386,7 @@ let is_or = function
   | _ -> None
 
 let is_not = function
-  | IT (Not it, _) -> Some it
+  | IT (Unop (Not, it), _) -> Some it
   | _ -> None
 
 let is_lt = function
@@ -422,6 +419,7 @@ let is_pred_ = function
 (* lit *)
 let sym_ (sym, bt) = IT (Sym sym, bt)
 let z_ n = IT (Const (Z n), BT.Integer)
+let alloc_id_ n = IT (Const (Alloc_id n), BT.Alloc_id)
 let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
 let q1_ q = IT (Const (Q q), BT.Real)
 let pointer_ n = IT (Const (Pointer n), BT.Loc)
@@ -447,7 +445,7 @@ let or2_ (it, it') = IT (Binop (Or, it, it'), BT.Bool)
 let and_ = vargs_binop (bool_ true) (Tools.curry and2_)
 let or_ = vargs_binop (bool_ false) (Tools.curry or2_)
 let impl_ (it, it') = IT (Binop (Impl, it, it'), BT.Bool)
-let not_ it = IT (Not it, BT.Bool)
+let not_ it = IT (Unop (Not, it), bt it)
 let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
 let eq_ (it, it') = IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')
@@ -498,6 +496,7 @@ let intToReal_ it = IT (Cast (Real, it), BT.Real)
 let realToInt_ it = IT (Cast (Integer, it), BT.Integer)
 
 let arith_binop op (it, it') = IT (Binop (op, it, it'), bt it)
+let arith_unop op it = IT (Unop (op, it), bt it)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
@@ -547,14 +546,6 @@ let record_ members =
 let recordMember_ ~member_bt (t, member) =
   IT (RecordMember (t, member), member_bt)
 
-let datatype_cons_ nm dt_tag members =
-  IT (DatatypeCons (nm, record_ members), BT.Datatype dt_tag)
-
-let datatype_is_cons_ nm t =
-  IT (DatatypeIsCons (nm, t), BT.Bool)
-
-let datatype_member_ t nm bt =
-  IT (DatatypeMember (t, nm), bt)
 
 
 (* pointer_op *)
@@ -569,6 +560,8 @@ let integerToPointerCast_ it =
   cast_ Loc it
 let pointerToIntegerCast_ it =
   cast_ Integer it
+let pointerToAllocIdCast_ it =
+  cast_ Alloc_id it
 let memberOffset_ (tag, member) =
   IT (MemberOffset (tag, member), BT.Integer)
 let arrayOffset_ (ct, t) =
@@ -759,6 +752,8 @@ let value_check_pointer alignment ~pointee_ct about =
   in
   and_ [le_ (z_ Z.zero, about_int);
         le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer);
+        (* TODO revist/delete this when transition to VIP is over *)
+        eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
 
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =

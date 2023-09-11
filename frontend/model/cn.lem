@@ -63,6 +63,17 @@ type cn_const =
   | CNConst_unit
 
 
+
+
+type cn_pat 'a = CNPat of Loc.t * cn_pat_ 'a
+
+and cn_pat_ 'a = 
+  | CNPat_sym of 'a
+  | CNPat_wild 
+  | CNPat_constructor of 'a * list (Symbol.identifier * cn_pat 'a)
+  
+
+
 type cn_expr_ 'a 'ty =
   | CNExpr_const of cn_const
   | CNExpr_var of 'a
@@ -81,7 +92,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_cons of 'a * list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_each of 'a * (integer * integer) * cn_expr 'a 'ty
   | CNExpr_let of 'a * cn_expr 'a 'ty * cn_expr 'a 'ty
-  | CNExpr_match of cn_expr 'a 'ty * list (cn_expr 'a 'ty * cn_expr 'a 'ty)
+  | CNExpr_match of cn_expr 'a 'ty * list (cn_pat 'a * cn_expr 'a 'ty)
   | CNExpr_ite of cn_expr 'a 'ty * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_good of 'ty * cn_expr 'a 'ty
   | CNExpr_deref of cn_expr 'a 'ty

@@ -21,11 +21,13 @@ module LCSet = Set.Make(LC)
 type simp_ctxt = {
     global : Global.t;
     values : IT.t SymMap.t;
+    simp_hook : IT.t -> IT.t option;
   }
 
 let default global = {
     global;
-    values = SymMap.empty; 
+    values = SymMap.empty;
+    simp_hook = (fun _ -> None);
   }
 
 
@@ -113,17 +115,17 @@ module IndexTerms = struct
         let member_bt = List.assoc Id.equal member member_tys in
         IT.recordMember_ ~member_bt (it, member)
 
-  let rec datatype_member_reduce it member member_bt =
-    match IT.term it with
-      | DatatypeCons (nm, members_rec) ->
-        let members = BT.record_bt (IT.bt members_rec) in
-        if List.exists (Id.equal member) (List.map fst members)
-        then record_member_reduce members_rec member
-        else IT.IT (DatatypeMember (it, member), member_bt)
-      | ITE (cond, it1, it2) ->
-        ite_ (cond, datatype_member_reduce it1 member member_bt,
-            datatype_member_reduce it2 member member_bt)
-      | _ -> IT.IT (DatatypeMember (it, member), member_bt)
+  (* let rec datatype_member_reduce it member member_bt = *)
+  (*   match IT.term it with *)
+  (*     | DatatypeCons (nm, members_rec) -> *)
+  (*       let members = BT.record_bt (IT.bt members_rec) in *)
+  (*       if List.exists (Id.equal member) (List.map fst members) *)
+  (*       then record_member_reduce members_rec member *)
+  (*       else IT.IT (DatatypeMember (it, member), member_bt) *)
+  (*     | ITE (cond, it1, it2) -> *)
+  (*       ite_ (cond, datatype_member_reduce it1 member member_bt, *)
+  (*           datatype_member_reduce it2 member member_bt) *)
+  (*     | _ -> IT.IT (DatatypeMember (it, member), member_bt) *)
 
   let rec tuple_nth_reduce it n item_bt =
     match IT.term it with
@@ -137,8 +139,8 @@ module IndexTerms = struct
     let (step, it2) = match IT.term it with
       | RecordMember (t, m) ->
           (true, record_member_reduce (accessor_reduce f t) m)
-      | DatatypeMember (t, m) ->
-          (true, datatype_member_reduce (accessor_reduce f t) m bt)
+      (* | DatatypeMember (t, m) -> *)
+      (*     (true, datatype_member_reduce (accessor_reduce f t) m bt) *)
       | NthTuple (n, t) ->
           (true, tuple_nth_reduce (accessor_reduce f t) n bt)
       | _ -> (false, it)
@@ -154,7 +156,12 @@ module IndexTerms = struct
 
     let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
 
-    fun (IT (the_term_, the_bt) as the_term) ->
+    fun it ->
+    let the_term = match simp_ctxt.simp_hook it with
+    | None -> it
+    | Some it' -> it'
+    in
+    let (IT (the_term_, the_bt)) = the_term in
     match the_term_ with
     | Sym _ when BT.equal the_bt BT.Unit -> 
        unit_
@@ -223,8 +230,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Mul, a, b), the_bt)
        end
-    | Binop (MulNoSMT, a, b) ->
-       IT (Binop (MulNoSMT, aux a, aux b), the_bt)
     | Binop (Div, a, b) ->
        let a = aux a in
        let b = aux b in 
@@ -241,8 +246,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Div, a, b), the_bt) 
        end
-    | Binop (DivNoSMT, a, b) ->
-       IT (Binop (DivNoSMT, aux a, aux b), the_bt)
     | Binop (Exp, a, b) ->
        let a = aux a in
        let b = aux b in
@@ -252,10 +255,6 @@ module IndexTerms = struct
        | _ ->
           IT.exp_ (a, b)
        end
-    | Binop (ExpNoSMT, a, b) ->
-       let a = aux a in
-       let b = aux b in
-       IT.exp_no_smt_ (a, b)
     | Binop (Rem, a, b) ->
        let a = aux a in
        let b = aux b in 
@@ -272,8 +271,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Rem, a, b), the_bt) 
        end
-    | Binop (RemNoSMT, a, b) ->
-       IT (Binop (RemNoSMT, aux a, aux b), the_bt)
     | Binop (Mod, a, b) ->
        let a = aux a in
        let b = aux b in
@@ -288,8 +285,6 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Mod, a, b), the_bt) 
        end
-    | Binop (ModNoSMT, a, b) ->
-       IT (Binop (ModNoSMT, aux a, aux b), the_bt)
     | Binop (LT, a, b) -> 
       let a = aux a in
       let b = aux b in
@@ -335,9 +330,6 @@ module IndexTerms = struct
        let b = aux b in
        if IT.equal a b then a else
        IT (Binop (Max, a, b), the_bt)
-    | Binop (XORNoSMT, a, b) ->
-       IT (Binop (XORNoSMT, aux a, aux b), the_bt)
-
     | Binop (And, it1, it2) ->
       let it1 = aux it1 in
       let it2 = aux it2 in
@@ -377,15 +369,15 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Impl, a, b), the_bt)
        end
-    | Not a ->
+    | Unop (Not, a) ->
        let a = aux a in
        begin match a with
        | IT (Const (Bool b), _) ->
           bool_ (not b)
-       | IT (Not b, _) ->
+       | IT (Unop (Not, b), _) ->
           b
        | _ -> 
-          IT (Not a, the_bt)
+          IT (Unop (Not, a), the_bt)
        end
     | ITE (a, b, c) ->
        let a = aux a in
@@ -427,11 +419,6 @@ module IndexTerms = struct
          IT (Record members2, _)  ->
           assert (List.for_all2 (fun x y -> Id.equal (fst x) (fst y)) members1 members2);
           aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
-       | IT (DatatypeCons (nm1, members1), _),
-         IT (DatatypeCons (nm2, members2), _)  ->
-          if Sym.equal nm1 nm2
-          then aux (eq_ (members1, members2))
-          else bool_ false
        | IT (Cast (bt1, it1), _),
          IT (Cast (bt2, it2), _) when BT.equal bt1 bt2 ->
          aux (eq_ (it1, it2))
@@ -501,14 +488,6 @@ module IndexTerms = struct
        let t = aux t in
        let v = aux v in
        IT (RecordUpdate ((t, m), v), the_bt)
-    | IT.DatatypeCons (nm, members_rec) ->
-       IT (IT.DatatypeCons (nm, aux members_rec), the_bt)
-    | IT.DatatypeMember (it, member) ->
-       let it = aux it in
-       datatype_member_reduce it member the_bt
-    | IT.DatatypeIsCons (nm, it) ->
-       let it = aux it in
-       datatype_is_cons_ nm it
     (* revisit when memory model changes *)
     | Binop (LTPointer, a, b) ->
        let a = aux a in
@@ -528,6 +507,14 @@ module IndexTerms = struct
        else if IT.equal a b
        then bool_ true
        else IT (Binop (LEPointer, a, b), the_bt)
+    | Binop (op, a, b) ->
+       IT (Binop (op, aux a, aux b), the_bt)
+    | Unop (op, a) ->
+       IT (Unop (op, aux a), the_bt)
+    | Constructor (ctor, ts) ->
+       IT (Constructor (ctor, List.map_snd aux ts), the_bt)
+    | WrapI (act, t) ->
+       IT (WrapI (act, aux t), the_bt)
     | Cast (cbt, a) ->
        let a = aux a in
        IT (Cast (cbt, a), the_bt)
@@ -541,6 +528,8 @@ module IndexTerms = struct
        | _ -> mul_ (int_ (Memory.size_of_ctype ct), t)
           (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
        end
+    | SizeOf ct ->
+       int_ (Memory.size_of_ctype ct)
     | Representable (ct, t) ->
        IT (Representable (ct, aux t), the_bt)
     | Good (ct, t) ->
@@ -600,7 +589,8 @@ module IndexTerms = struct
         | None -> t
         end
     | _ ->
-       the_term
+      (* FIXME: it's problematic that some term shapes aren't even explored *)
+      it
 
 
   let simp_flatten simp_ctxt term =
@@ -611,11 +601,8 @@ module IndexTerms = struct
 
 
 
-  let eval simp_ctxt = 
-    simp ~inline_functions:true 
-      { global = simp_ctxt.global; 
-        values = simp_ctxt.values; 
-      }
+  let eval simp_ctxt =
+    simp ~inline_functions:true simp_ctxt
 
 end
 

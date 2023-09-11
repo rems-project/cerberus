@@ -153,26 +153,96 @@ module WIT = struct
 
   let eval = Simplify.IndexTerms.eval
 
-  let check_and_bind_pattern loc (Pat (pat_, _)) bt =
-    let@ pat_ = match pat_ with
-      | PSym s -> 
-         let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
-         return (PSym s)
-      | PWild ->
-         return (PWild)
-      | PConstructor (s, args) ->
-         let@ constr_info = get_datatype_constr loc s in
-         let@ () = ensure_base_type loc (Datatype constr_info.c_datatype_tag) ~expect:bt in
-         let@ args = 
-           ListM.mapM (fun (id, apat) ->
-               failwith "asd"
-             ) args
+  
+  (* let rec check_and_bind_pattern loc bt pat =  *)
+  (*   match pat with *)
+  (*   | PSym s ->  *)
+       
+
+  let rec check_and_bind_pattern loc bt (Pat (pat_, _)) =
+    match pat_ with
+    | PSym s -> 
+       let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
+       return (Pat (PSym s, bt))
+    | PWild ->
+       return (Pat (PWild, bt))
+    | PConstructor (s, args) ->
+       let@ info = get_datatype_constr loc s in
+       let@ () = ensure_base_type loc ~expect:bt (Datatype info.c_datatype_tag) in
+       let@ args =
+         let rec aux already member_types args =
+           match member_types, args with
+           | [], [] -> 
+              return []
+           | ((m, bt) :: member_types), (m', pat') :: args when Id.equal m m' ->
+              let@ pat' = check_and_bind_pattern loc bt pat' in
+              let@ args = aux (IdSet.add m' already) member_types args in
+              return ((m', pat') :: args)
+           | _, ((m', _) :: _) when IdSet.mem m' already ->
+              fail (fun _ -> {loc; msg = Duplicate_member m'})
+           | _, ((m', _) :: _) ->
+              let rbt = BT.pp (Record info.c_params) in
+              fail (fun _ -> {loc; msg = Unknown_record_member (rbt, m')})
+           | ((m, _) :: _), _ ->
+              fail (fun _ -> {loc; msg = Missing_member m})
          in
-         return (PConstructor (s, args))
-    in
-    return (Pat (pat_, bt))
+         aux IdSet.empty info.c_params args
+       in
+       return (Pat (PConstructor (s, args), bt))
+
+  let leading_sym_or_wild = function
+    | [] -> assert false
+    | Pat (pat_, _) :: _ ->
+       match pat_ with
+       | PSym _ -> true
+       | PWild -> true
+       | PConstructor _ -> false
+
+  let expand_constr (constr, constr_info) (case : (BT.t pattern) list) = 
+    match case with
+    | Pat (PWild, _) :: pats
+    | Pat (PSym _, _) :: pats ->
+       Some (List.map (fun (_m, bt) -> Pat (PWild, bt)) constr_info.c_params @ pats)
+    | Pat (PConstructor (constr', args), _) :: pats 
+         when Sym.equal constr constr' ->
+       assert (List.for_all2 (fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
+       Some (List.map snd args @ pats)
+    | Pat (PConstructor (constr', args), _) :: pats ->
+       None
+    | [] ->
+       assert false
+
        
-       
+
+  (* copying and adjusting Neel's pattern.ml code *)
+  let rec cases_complete loc (bts : BT.t list) (cases : ((BT.t pattern) list) list) =
+    match bts with
+    | [] -> 
+       assert (List.for_all (function [] -> true | _ -> false) cases);
+       begin match cases with
+       | [] -> fail (fun _ -> {loc; msg = Generic !^"Incomplete pattern"})
+       | _ -> return ()
+       (* | [_(\*[]*\)] -> return () *)
+       (* | _::_::_ -> fail (fun _ -> {loc; msg = Generic !^"Duplicate pattern"}) *)
+       end
+    | bt::bts ->
+       if List.for_all leading_sym_or_wild cases then
+         cases_complete loc bts (List.map List.tl cases)
+       else
+         begin match bt with
+         | (Unit|Bool|Integer|Real|Alloc_id|Loc|CType|Struct _|
+            Record _|Map _|List _|Tuple _|Set _) ->
+            failwith "revisit for extended pattern language"
+         | Datatype s ->
+            let@ dt_info = get_datatype loc s in
+            ListM.iterM (fun constr ->
+                let@ constr_info = get_datatype_constr loc constr  in
+                let relevant_cases = 
+                  List.filter_map (expand_constr (constr, constr_info)) cases in
+                let member_bts = List.map snd constr_info.c_params in
+                cases_complete loc (member_bts @ bts) relevant_cases
+              ) dt_info.dt_constrs
+         end
 
   let rec infer =
       fun loc (IT (it, _)) ->
@@ -208,6 +278,15 @@ module WIT = struct
          return (IT (Const Null, BT.Loc))
       | Const (CType_const ct) ->
          return (IT (Const (CType_const ct), BT.CType))
+      | Unop (unop, t) ->
+         let (arg_bt, ret_bt) = match unop with
+         | Not -> (BT.Bool, BT.Bool)
+         | BWCLZNoSMT
+         | BWCTZNoSMT
+         | BWFFSNoSMT -> (BT.Integer, BT.Integer)
+         in
+         let@ t = check loc arg_bt t in
+         return (IT (Unop (unop, t), ret_bt))
       | Binop (arith_op, t, t') ->
          begin match arith_op with
          | Add ->
@@ -284,10 +363,7 @@ module WIT = struct
            | ModNoSMT
            | XORNoSMT
            | BWAndNoSMT
-           | BWOrNoSMT
-           | BWCLZNoSMT
-           | BWCTZNoSMT
-           | BWFFSNoSMT ->
+           | BWOrNoSMT ->
               let@ t = check loc Integer t in
               let@ t' = check loc Integer t' in
               return (IT (Binop (arith_op, t, t'), Integer))
@@ -382,9 +458,6 @@ module WIT = struct
             let@ t' = check loc Bool t' in
             return (IT (Binop (Impl, t, t'), Bool))
          end
-      | Not t ->
-         let@ t = check loc Bool t in
-         return (IT (Not t,BT.Bool))
       | ITE (t,t',t'') ->
          let@ t = check loc Bool t in
          let@ t' = infer loc t' in
@@ -488,29 +561,6 @@ module WIT = struct
          in
          let@ v = check loc bt v in
          return (IT (RecordUpdate ((t, member), v),IT.bt t))
-       | DatatypeCons (nm, member_rec) ->
-         let@ info = get_datatype_constr loc nm in
-         let (arg_ty, res_ty) = BT.cons_dom_rng info in
-         let@ member_rec = check loc arg_ty member_rec in
-         return (IT (DatatypeCons (nm, member_rec),res_ty))
-       | DatatypeMember (t, member) ->
-         let@ t = infer loc t in
-         let@ info = match IT.bt t with
-           | Datatype tag -> get_datatype loc tag
-           | has -> fail (illtyped_index_term loc t has "record")
-         in
-         let@ bt = match List.assoc_opt Id.equal member info.dt_all_params with
-           | Some bt -> return bt
-           | None ->
-               let expected = "datatype with member " ^ Id.pp_string member in
-               fail (illtyped_index_term loc t (IT.bt t) expected)
-         in
-         return (IT (DatatypeMember (t, member),bt))
-       | DatatypeIsCons (nm, t) ->
-         let@ info = get_datatype_constr loc nm in
-         let (_, res_ty) = BT.cons_dom_rng info in
-         let@ t = check loc res_ty t in
-         return (IT (DatatypeIsCons (nm, t),BT.Bool))
        | Cast (cbt, t) ->
           let@ t = infer loc t in
           let@ () = match IT.bt t, cbt with
@@ -538,6 +588,9 @@ module WIT = struct
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc Integer t in
           return (IT (ArrayOffset (ct, t), Integer))
+       | SizeOf ct ->
+          let@ () = WCT.is_ct loc ct in
+          return (IT (SizeOf ct, Integer))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Integer t.align in
@@ -623,15 +676,49 @@ module WIT = struct
             let@ t2 = infer loc t2 in
             return (IT (Let ((name, t1), t2), IT.bt t2))
             end
-      | Match (e, []) ->
-         fail (fun _ -> {loc; msg = Empty_pattern})
-      | Match (e, case::cases) ->
-         (* let@ case =  *)
-         (*   let@ pat, body = case *)
-         (* in *)
-         failwith "todo"
-         
-      | Constructor _ -> failwith "todo"
+      | Constructor (s, args) ->
+         let@ info = get_datatype_constr loc s in
+         let@ args = 
+           let rec aux already member_types args = 
+             match member_types, args with
+             | [], [] -> 
+                return []
+             | ((m, bt) :: member_types), ((m', arg) :: args) when Id.equal m m' ->
+                let@ arg = check loc bt arg in
+                let@ args = aux (IdSet.add m' already) member_types args in
+                return ((m', arg) :: args)
+             | _, ((m', _) :: _) when IdSet.mem m' already ->
+                fail (fun _ -> {loc; msg = Duplicate_member m'})
+             | _, ((m', _) :: _) ->
+                let rbt = BT.pp (Record info.c_params) in
+                fail (fun _ -> {loc; msg = Unknown_record_member (rbt, m')})
+             | ((m, _) :: _), _ ->
+                fail (fun _ -> {loc; msg = Missing_member m})
+           in
+           aux IdSet.empty info.c_params args
+         in
+         return (IT (Constructor (s, args), Datatype info.c_datatype_tag))
+      | Match (e, cases) ->
+         let@ e = infer loc e in
+         let@ rbt, cases = 
+           ListM.fold_leftM (fun (rbt, acc) (pat, body) ->
+               pure begin
+                   let@ pat = check_and_bind_pattern loc (IT.bt e) pat in
+                   let@ body = match rbt with
+                     | None -> infer loc body 
+                     | Some rbt -> check loc rbt body
+                   in
+                   return (Some (IT.bt body), acc @ [(pat, body)])
+                 end
+             ) (None, []) cases
+         in
+         let@ () = cases_complete loc [IT.bt e] (List.map (fun (pat, _) -> [pat]) cases) in
+         let@ rbt = match rbt with
+           | None -> fail (fun _ -> {loc; msg = Empty_pattern})
+           | Some rbt -> return rbt
+         in
+         return (IT (Match (e, cases), rbt))
+
 
     and check =
       fun loc ls it ->
@@ -643,6 +730,8 @@ module WIT = struct
         let expected = Pp.plain (LS.pp ls) in
         fail (illtyped_index_term loc it (IT.bt it) expected)
 
+
+      
 
 
 end
