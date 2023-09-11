@@ -160,7 +160,7 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   let ail_funs = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes) logical_predicates in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
-  let doc = CF.Pp_ail.pp_program ~executable_spec:true false true (None, modified_prog) in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
   CF.Pp_utils.to_plain_pretty_string doc
 
 let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) =
@@ -168,7 +168,7 @@ let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ai
   let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
-  let doc = CF.Pp_ail.pp_program ~executable_spec:true false true (None, modified_prog) in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
   let preds_str = 
   CF.Pp_utils.to_plain_pretty_string doc in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
