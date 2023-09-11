@@ -38,10 +38,6 @@ let align_of_ctype = function
   | ct -> int_of_ival (IM.alignof_ival (Sctypes.to_ctype ct))
 
 
-let size_of_struct tag = size_of_ctype (Struct tag)
-let align_of_struct tag = align_of_ctype (Struct tag)
-
-
 type struct_piece = { 
     offset: int;
     size: int;
@@ -98,36 +94,4 @@ let member_offset (layout : struct_layout) member : int option =
 
 
 
-(* find the (hopefully unique) member that covers this byte offset *)
-let offset_to_member (tag : Sym.t) (layout : struct_layout) (offset : int) =
-  let covering = List.filter (fun (sp : struct_piece) ->
-        sp.offset <= offset && offset < (sp.offset + sp.size))
-    layout in
-  match covering with
-  | [sp] -> sp
-  | [] ->
-    Pp.error Locations.unknown
-        (Pp.item ("offset not in struct: " ^ Int.to_string offset) (Sym.pp tag)) [];
-    assert false
-  | _ :: _ :: _ ->
-    Pp.error Locations.unknown
-        (Pp.item ("offset double-covered in struct: " ^ Int.to_string offset) (Sym.pp tag))
-        (List.map (fun sp -> match sp.member_or_padding with
-            | Some (nm, _) -> Id.pp nm
-            | _ -> Pp.string "padding") covering);
-    assert false
 
-
-
-
-
-
-
-let find_tag struct_decls tag = 
-  SymMap.choose
-    (SymMap.filter (fun s _ ->
-         match Sym.description s with
-         | Sym.SD_Id tag' when String.equal tag tag' -> true
-         | _ -> false
-       ) struct_decls
-    )

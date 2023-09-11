@@ -1338,7 +1338,7 @@ let make_struct_decl loc fields (tag : Sym.t) =
   let member_offset member = 
     Memory.int_of_ival (CF.Impl_mem.offsetof_ival tagDefs tag member)
   in
-  let final_position = Memory.size_of_struct tag in
+  let final_position = Memory.size_of_ctype (Struct tag) in
 
   let rec aux members position =
     match members with
