@@ -227,7 +227,7 @@ let pp_basicType ?(executable_spec=false) = function
   | Floating rft ->
       pp_floatingType rft
 
-let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
+let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (annots, ty) as cty) =
   let precOf = function
     | Void
     | Basic _
@@ -289,7 +289,12 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
     end in
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
-  (aux ~executable_spec 1 qs cty) pp_spaced_ident
+  if executable_spec then 
+    (match annots with 
+      | Annot.Atypedef sym :: _ -> (fun k -> pp_id ~executable_spec sym ^^ k) pp_spaced_ident
+      | _ -> (aux ~executable_spec 1 qs cty) pp_spaced_ident)
+  else
+    (aux ~executable_spec 1 qs cty) pp_spaced_ident
 
 let pp_ctype ?(executable_spec=false) ?(is_human=false) qs ty =
   pp_ctype_aux ~executable_spec ~is_human None qs ty
