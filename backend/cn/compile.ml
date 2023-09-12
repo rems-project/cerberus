@@ -499,9 +499,6 @@ module EffectfulTranslation = struct
             fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"; o_ctxt = None}}
        in
        return (IT ((MapGet (e1, e2)), rbt))
-    | CN_is_shape,_ ->
-        (* should be handled separately *)
-        assert false
     | _ ->
         let open Pp in
         let msg =

@@ -43,7 +43,7 @@ type cn_binop =
   | CN_or
   | CN_and
   | CN_map_get
-  | CN_is_shape
+
 
 (*
   | Exponentiation of term * term
