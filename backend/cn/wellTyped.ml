@@ -249,7 +249,7 @@ module WIT = struct
 
        
 
-  (* copying and adjusting Neel's pattern.ml code *)
+  (* copying and adjusting Neel Krishnaswami's pattern.ml code *)
   let rec cases_complete loc (bts : BT.t list) (cases : ((BT.t pattern) list) list) =
     match bts with
     | [] -> 
@@ -279,7 +279,7 @@ module WIT = struct
               ) dt_info.dt_constrs
          end
 
-  let rec infer =
+  let rec infer : 'bt. Loc.t -> 'bt term -> (BT.t term) m =
       fun loc (IT (it, _)) ->
       match it with
       | Sym s ->
