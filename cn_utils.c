@@ -46,14 +46,14 @@ void cn_map_set(cn_map *m, const char key, void *value) {
 
 
 /* Just works for primitives right now */
-_Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun(void *a, void*b))) {
+_Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (*value_equality_fun)(void *v1, void *v2)) {
     if (ht_size(m1) != ht_size(m2)) return 0;
     
     hash_table_iterator hti1 = ht_iterator(m1);
     hash_table_iterator hti2 = ht_iterator(m2);
 
     while (ht_next(&hti1) && ht_next(&hti2)) {
-        if (*((char *) hti1.value) != *((char *)hti2.value)) return 0;
+        if (!value_equality_fun(hti1.value, hti2.value)) return 0;
     }
 
     return 1;
