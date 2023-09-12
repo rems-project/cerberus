@@ -289,12 +289,13 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (anno
     end in
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
+  let default_doc = (aux ~executable_spec 1 qs cty) pp_spaced_ident in
   if executable_spec then 
     (match annots with 
       | Annot.Atypedef sym :: _ -> (fun k -> pp_id ~executable_spec sym ^^ k) pp_spaced_ident
-      | _ -> (aux ~executable_spec 1 qs cty) pp_spaced_ident)
+      | _ -> default_doc)
   else
-    (aux ~executable_spec 1 qs cty) pp_spaced_ident
+    default_doc
 
 let pp_ctype ?(executable_spec=false) ?(is_human=false) qs ty =
   pp_ctype_aux ~executable_spec ~is_human None qs ty
