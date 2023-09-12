@@ -174,7 +174,7 @@ type cn_predicate 'a 'ty = <|
   cn_pred_clauses: maybe (cn_clauses 'a 'ty);
 |>
 
-type cn_datatype 'a 'ty = <|
+type cn_datatype 'a = <|
   cn_dt_loc: Loc.t;
   cn_dt_name: 'a;
   cn_dt_cases: list ('a * list (cn_base_type 'a * Symbol.identifier));

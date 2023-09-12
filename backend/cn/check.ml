@@ -1828,6 +1828,28 @@ let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
   return (lemma_s, (loc, lemma_typ))
 
 
+let record_and_check_datatypes datatypes = 
+  (* add "empty datatypes" for checks on recursive types to succeed *)
+  let@ () = 
+    ListM.iterM (fun (s, {loc; cases}) ->
+        add_datatype s { dt_constrs = []; dt_all_params = [] }
+      ) datatypes
+  in
+  (* check and normalise datatypes *)
+  let@ datatypes = ListM.mapM WellTyped.WDT.welltyped datatypes in
+  (* properly add datatypes *)
+  ListM.iterM (fun (s, {loc; cases}) ->
+      let@ () =
+        add_datatype s {
+            dt_constrs = List.map fst cases;
+            dt_all_params = List.concat_map snd cases
+          }
+      in
+      ListM.iterM (fun (c,c_params) ->
+          add_datatype_constr c { c_params; c_datatype_tag = s }
+        ) cases
+    ) datatypes
+
 
 
 
@@ -1841,10 +1863,12 @@ let check mu_file stmt_locs o_lemma_mode =
   let@ () = record_tagdefs mu_file.mu_tagDefs in
   let@ () = check_tagdefs mu_file.mu_tagDefs in
 
-  let@ () = ListM.iterM (fun (s,dt) -> add_datatype s dt) 
-              mu_file.mu_datatypes in
-  let@ () = ListM.iterM (fun (s,pd) -> add_datatype_constr s pd)
-              mu_file.mu_constructors in
+  let@ () = record_and_check_datatypes mu_file.mu_datatypes in
+
+  (* let@ () = ListM.iterM (fun (s,dt) -> add_datatype s dt)  *)
+  (*             mu_file.mu_datatypes in *)
+  (* let@ () = ListM.iterM (fun (s,pd) -> add_datatype_constr s pd) *)
+  (*             mu_file.mu_constructors in *)
 
   let@ () = record_globals mu_file.mu_globs in
 

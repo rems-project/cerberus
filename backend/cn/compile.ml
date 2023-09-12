@@ -129,7 +129,7 @@ type cn_lemma =
   (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_lemma
 
 type cn_datatype =
-  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_datatype
+  (CF.Symbol.sym) CF.Cn.cn_datatype
 
 
 let pp_cnexpr_kind expr_ =

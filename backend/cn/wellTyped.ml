@@ -1238,3 +1238,32 @@ module WLemma = struct
     WAT.welltyped LRT.subst WLRT.welltyped "lemma" loc lemma_typ
 
 end
+
+
+module WDT = struct
+
+  open Mu
+
+  let welltyped (dt_name, {loc; cases}) =
+    let@ _ = 
+      (* all argument members disjoint *)
+      ListM.fold_leftM (fun already (id,_) ->
+          if IdSet.mem id already 
+          then fail (fun _ -> {loc; msg = Duplicate_member id})
+          else return (IdSet.add id already)
+        ) IdSet.empty (List.concat_map snd cases)
+    in
+    let@ cases = 
+      ListM.mapM (fun (c, args) ->
+          let@ args = 
+            ListM.mapM (fun (id,bt) -> 
+                let@ bt = WBT.is_bt loc bt in
+                return (id, bt)
+              ) (List.sort compare_by_member_id args)
+          in
+          return (c, args)
+        ) cases
+    in
+    return (dt_name, {loc; cases})
+
+end

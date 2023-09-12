@@ -348,7 +348,7 @@ and external_declaration =
   | EDecl_funcCN of Cn.cn_function Symbol.identifier type_name (* CN backend *)
   | EDecl_lemmaCN of Cn.cn_lemma Symbol.identifier type_name (* CN backend *)
   | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)
-  | EDecl_datatypeCN of Cn.cn_datatype Symbol.identifier type_name (* CN backend *)
+  | EDecl_datatypeCN of Cn.cn_datatype Symbol.identifier (* CN backend *)
   | EDecl_fun_specCN of Cn.cn_fun_spec Symbol.identifier type_name (* CN backend *)
 
 (* §6.9.1 Function definitions, Syntax *)

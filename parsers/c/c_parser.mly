@@ -321,7 +321,7 @@ type asm_qualifier =
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_function> cn_function
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_predicate> cn_predicate
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_datatype> cn_datatype
+%type<(Symbol.identifier) Cerb_frontend.Cn.cn_datatype> cn_datatype
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clauses> clauses
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clause> clause
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_resource> resource

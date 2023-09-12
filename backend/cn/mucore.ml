@@ -416,6 +416,10 @@ type mu_tag_definitions =
 type 'TY mu_globs_list = 
   (symbol * 'TY mu_globs) list
 
+type mu_datatype = 
+  { loc : Loc.t;
+    cases : (Sym.t * (Id.t * T.bt) list) list }
+
 type 'TY mu_file = {
   mu_main    : symbol option;
   mu_tagDefs : mu_tag_definitions;
@@ -425,8 +429,7 @@ type 'TY mu_file = {
   mu_stdlib_syms  : SymSet.t;
   mu_resource_predicates : T.resource_predicates;
   mu_logical_predicates : T.logical_predicates;
-  mu_datatypes : (Sym.t * BaseTypes.datatype_info) list;
-  mu_constructors : (Sym.t * BaseTypes.constr_info) list;
+  mu_datatypes : (Sym.t * mu_datatype) list;
   mu_lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
   mu_call_funinfo : (symbol, Sctypes.c_concrete_sig) Pmap.map;
 }

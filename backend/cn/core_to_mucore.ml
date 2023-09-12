@@ -1393,6 +1393,13 @@ let register_glob env (sym, glob) =
      
 
 
+let translate_datatype {cn_dt_loc; cn_dt_name; cn_dt_cases} =
+  let translate_arg (bt, id) = 
+    (id, SBT.to_basetype (Compile.translate_cn_base_type bt)) in
+  let cases = 
+    List.map (fun (c, args) -> (c, List.map translate_arg args)) cn_dt_cases in
+  (cn_dt_name, { loc = cn_dt_loc; cases })
+
 
 
 let normalise_file (markers_env, ail_prog) file = 
@@ -1438,6 +1445,8 @@ let normalise_file (markers_env, ail_prog) file =
 
   let stdlib_syms = SymSet.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
 
+  let datatypes = List.map translate_datatype ail_prog.cn_datatypes in
+
   let file = {
       mu_main = file.mi_main;
       mu_tagDefs = tagDefs;
@@ -1447,8 +1456,7 @@ let normalise_file (markers_env, ail_prog) file =
       mu_stdlib_syms = stdlib_syms;
       mu_resource_predicates = preds;
       mu_logical_predicates = lfuns;
-      mu_datatypes = SymMap.bindings env.datatypes;
-      mu_constructors = SymMap.bindings env.datatype_constrs;
+      mu_datatypes = datatypes;
       mu_lemmata = lemmata;
       mu_call_funinfo = mu_call_funinfo;
     }
