@@ -1733,10 +1733,8 @@ let record_globals globs =
   (* TODO: check the expressions *)
   ListM.iterM (fun (sym, def) ->
       match def with
-      | M_GlobalDef ((gbt, ct), _)
-      | M_GlobalDecl ((gbt, ct)) ->
-         assert (BT.equal gbt (BT.of_sct ct));
-         let@ gbt = WellTyped.WBT.is_bt Loc.unknown gbt in
+      | M_GlobalDef (ct, _)
+      | M_GlobalDecl ct ->
          let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
          let bt = Loc in
          let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp sym))) in

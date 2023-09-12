@@ -399,8 +399,8 @@ type 'TY mu_fun_map =
 type mu_extern_map = Core.extern_map
 
 type 'TY mu_globs =
-  | M_GlobalDef of (T.bt * T.ct) * 'TY mu_expr
-  | M_GlobalDecl of (T.bt * T.ct)
+  | M_GlobalDef of T.ct * 'TY mu_expr
+  | M_GlobalDecl of T.ct
 
 type 'TY mu_globs_map = 
   (symbol, 'TY mu_globs) Pmap.map

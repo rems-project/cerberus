@@ -976,8 +976,8 @@ module Make (Config: CONFIG) = struct
   let pp_globs budget globs =
     List.fold_left (fun acc (sym, decl) ->
         match decl with
-        | M_GlobalDef ((bTy, gt), e) ->
-          acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
+        | M_GlobalDef (gt, e) ->
+          acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ 
             P.brackets (!^"ct" ^^^ P.equals ^^^ pp_ct gt) ^^^
                 P.colon ^^ P.equals ^^
                 P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1

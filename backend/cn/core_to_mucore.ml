@@ -1308,6 +1308,7 @@ let normalise_globs tagDefs sym g =
   let loc = Loc.unknown in
   match g with
   | GlobalDef ((bt, ct), e) -> 
+     assert (BT.equal BT.Loc (convert_bt loc bt));
      (* this may have to change *)
      let@ e = 
        n_expr loc 
@@ -1317,9 +1318,10 @@ let normalise_globs tagDefs sym g =
          ([], Pmap.empty Int.compare)
          e 
      in
-     return (M_GlobalDef ((convert_bt loc bt, convert_ct loc ct), e))
+     return (M_GlobalDef (convert_ct loc ct, e))
   | GlobalDecl (bt, ct) -> 
-     return (M_GlobalDecl (convert_bt loc bt, convert_ct loc ct))
+     assert (BT.equal BT.Loc (convert_bt loc bt));
+     return (M_GlobalDecl (convert_ct loc ct))
 
 
 let normalise_globs_list tagDefs gs = 
@@ -1382,12 +1384,10 @@ let normalise_tag_definitions tagDefs =
 
 let register_glob env (sym, glob) = 
   match glob with
-  | M_GlobalDef ((bt, ct), e) ->
-     assert (BT.equal bt Loc);
+  | M_GlobalDef (ct, e) ->
      C.add_computational sym (SBT.Loc (Some ct)) env
      (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
-  | M_GlobalDecl (bt, ct) ->
-     assert (BT.equal bt Loc);
+  | M_GlobalDecl ct ->
      C.add_computational sym (SBT.Loc (Some ct)) env
      (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
      
