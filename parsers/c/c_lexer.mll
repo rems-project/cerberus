@@ -180,6 +180,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "function"      , CN_FUNCTION;
     "lemma"         , CN_LEMMA;
     "datatype"      , CN_DATATYPE;
+    "type_synonym"  , CN_TYPE_SYNONYM;
     "_"             , CN_WILD;
   ]
 

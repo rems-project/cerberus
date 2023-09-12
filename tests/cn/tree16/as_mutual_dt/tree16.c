@@ -60,46 +60,44 @@ predicate (datatype tree) Indirect_Tree (pointer p) {
   return T.t;
 }
 
-datatype arc_in_array {
-  Arc_In_Array {map <integer, integer> arr, integer i, integer len}
-}
+type_synonym arc_in_array = ({map <integer, integer> arr, integer i, integer len})
 
-function (boolean) in_tree (datatype tree t, datatype arc_in_array arc)
-function (integer) tree_v (datatype tree t, datatype arc_in_array arc)
+function (boolean) in_tree (datatype tree t, arc_in_array arc)
+function (integer) tree_v (datatype tree t, arc_in_array arc)
 
 function (datatype tree) nth_tree_list (datatype tree_list ts, integer i)
 
-function [coq_unfold] (integer) tree_v_step (datatype tree t, datatype arc_in_array arc)
+function [coq_unfold] (integer) tree_v_step (datatype tree t, arc_in_array arc)
 {
   match t {
     Empty_Tree {} => {
       0
     }
-    Node {v: _, children: _} => {
-      let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
+    Node {v: v, children: children} => {
+      let arc2 = {arr: arc.arr, i: arc.i + 1, len: arc.len};
       ((arc.i < arc.len) ?
-        (tree_v(nth_tree_list(t.children, (arc.arr)[arc.i]), arc2)) :
-        t.v)
+        (tree_v(nth_tree_list(children, (arc.arr)[arc.i]), arc2)) :
+        v)
     }
   }
 }
 
-function [coq_unfold] (boolean) in_tree_step (datatype tree t, datatype arc_in_array arc)
+function [coq_unfold] (boolean) in_tree_step (datatype tree t, arc_in_array arc)
 {
   match t {
     Empty_Tree {} => {
       false
     }
-    Node {v: _, children: _} => {
-      let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
+    Node {v: v, children: children} => {
+      let arc2 = {arr: arc.arr, i: arc.i + 1, len: arc.len};
       ((arc.i < arc.len) ?
-        (in_tree(nth_tree_list(t.children, (arc.arr)[arc.i]), arc2)) :
+        (in_tree(nth_tree_list(children, (arc.arr)[arc.i]), arc2)) :
         true)
     }
   }
 }
 
-lemma in_tree_tree_v_lemma (datatype tree t, datatype arc_in_array arc,
+lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
     map <integer, datatype tree> t_children)
   requires true
   ensures
@@ -120,7 +118,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires each (integer j; (0 <= j) && (j < path_len))
     {(0 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
 /*@ requires take V = Owned(v) @*/
-/*@ requires let arc = Arc_In_Array {arr: Xs, i: i, len: path_len} @*/
+/*@ requires let arc = {arr: Xs, i: i, len: path_len} @*/
 /*@ ensures take T2 = Tree(t) @*/
 /*@ ensures T2.t == {T.t}@start @*/
 /*@ ensures T2.children == {T.children}@start @*/

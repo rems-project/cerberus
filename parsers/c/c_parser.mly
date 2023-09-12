@@ -147,7 +147,8 @@ type asm_qualifier =
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE CN_SPEC
+%token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
+%token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC
 %token CN_UNCHANGED CN_WILD
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
@@ -1568,14 +1569,6 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 external_declaration:
 | magic= CERB_MAGIC
     { EDecl_magic magic }
-| pred= cn_predicate
-    { EDecl_predCN pred }
-| func= cn_function
-    { EDecl_funcCN func }
-| lmma= cn_lemma
-    { EDecl_lemmaCN lmma }
-| dt= cn_datatype
-    { EDecl_datatypeCN dt }
 | fdef= function_definition
     { EDecl_func fdef }
 | xs_decl= declaration
@@ -1917,7 +1910,7 @@ unary_expr:
 | AMPERSAND name=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_addr name)) }
-| LPAREN ty= base_type RPAREN expr= prim_expr
+| LPAREN ty= base_type_explicit RPAREN expr= prim_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
 
@@ -2083,7 +2076,9 @@ expr:
 
 
 (* CN predicate definitions **************************************************)
-base_type:
+
+(* base types, not including user-names (which conflict more in some places) *)
+base_type_explicit:
 | VOID
     { Cerb_frontend.Cn.CN_unit }
 | CN_BOOL
@@ -2110,14 +2105,12 @@ base_type:
     { Cerb_frontend.Cn.CN_set bTy }
 ;
 
-enter_cn:
-| 
-    { C_lexer.internal_state.inside_cn <- true; }
-
-exit_cn:
-| 
-    { C_lexer.internal_state.inside_cn <- false; }
-
+base_type:
+| t= base_type_explicit
+    { t }
+| v= cn_variable
+    { Cerb_frontend.Cn.CN_user_type_name v }
+;
 
 cn_good: 
 | CN_GOOD ty= delimited(LT, ctype, GT)
@@ -2148,11 +2141,11 @@ cn_attrs:
     { [] }
 
 cn_function:
-| CN_FUNCTION enter_cn
+| CN_FUNCTION
   cn_func_attrs= cn_attrs
   cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= cn_variable
   cn_func_args= delimited(LPAREN, args, RPAREN)
-  cn_func_body= cn_option_func_body exit_cn
+  cn_func_body= cn_option_func_body
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.point $startpos(str) in
       { cn_func_loc= loc
@@ -2162,12 +2155,12 @@ cn_function:
       ; cn_func_args
       ; cn_func_body} }
 cn_predicate:
-| CN_PREDICATE enter_cn
+| CN_PREDICATE
   cn_pred_attrs= cn_attrs
   cn_pred_output= cn_pred_output 
   str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
-  cn_pred_clauses= cn_option_pred_clauses exit_cn
+  cn_pred_clauses= cn_option_pred_clauses
     { (* TODO: check the name starts with upper case *)
       let loc = Cerb_location.point $startpos(str) in
       { cn_pred_loc= loc
@@ -2177,12 +2170,11 @@ cn_predicate:
       ; cn_pred_iargs
       ; cn_pred_clauses} }
 cn_lemma:
-| CN_LEMMA enter_cn
+| CN_LEMMA
   str= cn_variable
   cn_lemma_args= delimited(LPAREN, args, RPAREN)
   CN_REQUIRES cn_lemma_requires=separated_nonempty_list(SEMICOLON, condition)
   CN_ENSURES cn_lemma_ensures=separated_nonempty_list(SEMICOLON, condition)
-  exit_cn
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.point $startpos(str) in
       { cn_lemma_loc= loc
@@ -2191,19 +2183,18 @@ cn_lemma:
       ; cn_lemma_requires
       ; cn_lemma_ensures } }
 cn_datatype:
-| CN_DATATYPE enter_cn nm= cn_variable
-  cases= delimited(LBRACE, cn_cons_cases, RBRACE) exit_cn
+| CN_DATATYPE nm= cn_variable
+  cases= delimited(LBRACE, cn_cons_cases, RBRACE)
     { 
       { cn_dt_loc= Cerb_location.point $startpos($1)
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
 cn_fun_spec:
-| CN_SPEC enter_cn
+| CN_SPEC
   str= cn_variable
   cn_spec_args= delimited(LPAREN, args, RPAREN)
   CN_REQUIRES cn_spec_requires=separated_nonempty_list(SEMICOLON, condition)
   CN_ENSURES cn_spec_ensures=separated_nonempty_list(SEMICOLON, condition)
-  exit_cn
     { let loc = Cerb_location.point $startpos(str) in
       { cn_spec_loc= loc
       ; cn_spec_name= str
@@ -2211,6 +2202,17 @@ cn_fun_spec:
       ; cn_spec_requires
       ; cn_spec_ret_name = Symbol.Identifier (Cerb_location.unknown, "dummy")
       ; cn_spec_ensures } }
+cn_type_synonym:
+| CN_TYPE_SYNONYM
+  str= cn_variable
+  EQ
+  ty= opt_paren(base_type)
+    { let loc = Cerb_location.point $startpos(str) in
+      { cn_tysyn_loc= loc
+      ; cn_tysyn_name= str
+      ; cn_tysyn_rhs= ty } }
+
+
 (* all cases where cn_variable is used don't mind if they're shadowing
    a situation where the name has been assigned as a typedef *)
 %inline cn_variable:
@@ -2238,14 +2240,16 @@ nonempty_args:
 ;
 
 
-cn_pred_output:
-| bt=base_type
-    { let loc = Cerb_location.region $loc(bt) NoCursor in
-      (loc,bt) }
-| bt= delimited(LPAREN, base_type, RPAREN)
-    { let loc = Cerb_location.region $loc(bt) NoCursor in
-      (loc,bt) }
+opt_paren(A): 
+| x=A
+    { x }
+| x= delimited(LPAREN, A, RPAREN)
+    { x }
 
+cn_pred_output:
+| bt= opt_paren(base_type)
+    { let loc = Cerb_location.region $loc(bt) NoCursor in
+      (loc,bt) }
 
 
 record_def:
@@ -2439,6 +2443,8 @@ cn_toplevel_elem:
     { EDecl_lemmaCN lmma }
 | dt= cn_datatype
     { EDecl_datatypeCN dt }
+| ts= cn_type_synonym
+    { EDecl_type_synCN ts }
 | spec= cn_fun_spec
     { EDecl_fun_specCN spec }
 ;

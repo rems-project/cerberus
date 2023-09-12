@@ -23,6 +23,7 @@ let string_of_ns = function
   | CN_function -> "specification function"
   | CN_datatype_nm -> "datatype"
   | CN_constructor -> "constructor"
+  | CN_type_nm -> "type name"
 
 let string_of_error = function
   | CNErr_uppercase_function (Symbol.Identifier (_, str)) ->
@@ -78,6 +79,8 @@ module MakePp (Conf: PP_CN) = struct
         pp_type_keyword "tuple" ^^ P.angles (comma_list pp_base_type bTys)
     | CN_set bTy ->
         pp_type_keyword "set" ^^ P.angles (pp_base_type bTy)
+    | CN_user_type_name ident ->
+        P.squotes (Conf.pp_ident ident)
 
   let pp_cn_binop = function
     | CN_add -> P.plus
@@ -335,6 +338,10 @@ module MakePp (Conf: PP_CN) = struct
   let dtree_of_cn_datatype dt =
     Dnode ( pp_ctor "[CN]datatype" ^^^ P.squotes (Conf.pp_ident dt.cn_dt_name)
           , [ Dnode (pp_ctor "[CN]cases", List.map dtree_of_cn_case dt.cn_dt_cases) ])
+
+  let dtree_of_cn_type_syn ts =
+    Dnode ( pp_ctor "[CN]type_synonym" ^^^ P.squotes (Conf.pp_ident ts.cn_tysyn_name)
+          , [ Dleaf (pp_base_type ts.cn_tysyn_rhs) ])
 
 
   let dtree_of_to_instantiate = function

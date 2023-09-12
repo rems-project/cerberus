@@ -1214,12 +1214,26 @@ let register_cn_predicate ident mk =
         fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_predicate))
   end
 
+let register_cn_type_synonym name basety =
+  update_cn_state (fun st -> <| st with
+    Cn_desugaring.cn_type_synonyms= Map.insert name basety
+      st.Cn_desugaring.cn_type_synonyms |>)
+
+let resolve_cn_user_type_name ident =
+  get_cn_state >>= fun st ->
+  match Map.lookup ident st.Cn_desugaring.cn_type_synonyms with
+  | Nothing -> fail (Loc.locOf ident) (Errors.Desugar_CN
+        (Cn.CNErr_unknown_identifier Cn.CN_type_nm ident))
+  | Just basety -> return basety
+  end
+
 let register_cn_datatype ident mk_cases =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
     | Nothing ->
         resolve_cn_ident Cn.CN_datatype_nm ident >>= fun sym_resolved ->
         let sym = Cn.ensure_not_c_variable sym_resolved in
+        register_cn_type_synonym ident (Cn.CN_datatype sym) >>= fun () ->
         push_cn_scope >>= fun () ->
         mk_cases >>= fun cases ->
         let dt = <|
@@ -1237,6 +1251,7 @@ let register_cn_datatype ident mk_cases =
     | Just _ ->
         fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_datatype_nm))
   end
+
 
 (* END CN *)
 

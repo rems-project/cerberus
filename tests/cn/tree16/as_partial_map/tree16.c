@@ -96,8 +96,8 @@ function (datatype tree_node_option) construct_app_rhs (integer v,
     Arc_End {} => {
       Node {v: v}
     }
-    Arc_Step {i: _, tail: _} => {
-     ns[arc.i][arc.tail]
+    Arc_Step {i: i, tail: tail} => {
+     ns[i][tail]
     }
   }
 }
@@ -108,8 +108,8 @@ function (boolean) arc_first_idx_valid (datatype tree_arc arc)
     Arc_End {} => {
       true
     }
-    Arc_Step {i: _, tail: _} => {
-      (0 <= arc.i) && (arc.i < num_nodes())
+    Arc_Step {i: i, tail: tail} => {
+      (0 <= i) && (i < num_nodes())
     }
   }
 }

@@ -269,6 +269,8 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
         Tuple (List.map translate_cn_base_type bTys)
     | CN_set bTy' ->
         Set (translate_cn_base_type bTy')
+    | CN_user_type_name _ ->
+        failwith "user type-abbreviation not removed by cabs->ail elaboration"
 
 
 let register_cn_predicates env (defs: cn_predicate list) =

@@ -4123,6 +4123,8 @@ let rec desugar_cn_base_type loc bTy =
         CN_tuple <$> E.mapM (desugar_cn_base_type loc) bTys
     | CN_set bTy ->
         CN_set <$> desugar_cn_base_type loc bTy
+    | CN_user_type_name ident ->
+        E.resolve_cn_user_type_name ident
 end
 
 let rec register_and_desugar_cn_pattern (CNPat loc pat_) =
@@ -4399,6 +4401,10 @@ let desugar_and_register_cn_datatype dt =
       E.mapM desugar_cn_dt_arg args >>= fun args -> E.return (sym, args)
     ) dt.cn_dt_cases
   end
+
+let desugar_and_register_cn_type_synonym ts =
+  desugar_cn_base_type ts.cn_tysyn_loc ts.cn_tysyn_rhs >>= fun bt ->
+  E.register_cn_type_synonym ts.cn_tysyn_name bt
 
 let desugar_and_register_cn_function func =
   E.register_cn_function func.cn_func_name begin
@@ -4783,6 +4789,8 @@ let desugar_and_register_external_declaration edecl =
       desugar_and_register_cn_fun_spec spec
     | EDecl_datatypeCN dt ->
       desugar_and_register_cn_datatype dt
+    | EDecl_type_synCN ts ->
+      desugar_and_register_cn_type_synonym ts
   end
 
 val register_cn_predicate_names: list external_declaration -> E.desugM unit

@@ -26,6 +26,7 @@ type cn_base_type 'a =
   | CN_list of cn_base_type 'a
   | CN_tuple of list (cn_base_type 'a)
   | CN_set of cn_base_type 'a
+  | CN_user_type_name of 'a
 
 
 
@@ -180,6 +181,12 @@ type cn_datatype 'a = <|
   cn_dt_cases: list ('a * list (cn_base_type 'a * Symbol.identifier));
 |>
 
+type cn_type_synonym 'a = <|
+  cn_tysyn_loc: Loc.t;
+  cn_tysyn_name: 'a;
+  cn_tysyn_rhs: cn_base_type 'a;
+|>
+
 
 
 
@@ -233,6 +240,7 @@ type cn_namespace =
   | CN_constructor
   | CN_vars
   | CN_oarg
+  | CN_type_nm
 
 instance (Show cn_namespace)
   let show ns =
@@ -243,8 +251,9 @@ instance (Show cn_namespace)
       | CN_fun_spec -> "fun_spec"
       | CN_datatype_nm -> "datatype"
       | CN_constructor -> "constructor"
-      | CN_vars   -> "vars"
-      | CN_oarg      -> "oarg"
+      | CN_vars -> "vars"
+      | CN_oarg -> "oarg"
+      | CN_type_nm -> "type name"
     end
 end
 

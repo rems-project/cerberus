@@ -755,6 +755,8 @@ let dtree_of_external_declaration = function
       Dnode (pp_decl_ctor "EDecl_predCN", [Cn_ocaml.PpCabs.dtree_of_cn_predicate pred])
   | EDecl_datatypeCN dt ->
       Dnode (pp_decl_ctor "EDecl_datatypeCN", [Cn_ocaml.PpCabs.dtree_of_cn_datatype dt])
+  | EDecl_type_synCN ts ->
+      Dnode (pp_decl_ctor "EDecl_type_synCN", [Cn_ocaml.PpCabs.dtree_of_cn_type_syn ts])
 (* END CN *)
 
 let filter_external_decl =
@@ -770,6 +772,7 @@ let filter_external_decl =
     | EDecl_lemmaCN _ -> true
     | EDecl_fun_specCN _ -> true
     | EDecl_datatypeCN _ -> true
+    | EDecl_type_synCN _ -> true
   in List.filter pred
 
 let filter_hidden =

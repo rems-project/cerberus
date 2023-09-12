@@ -58,6 +58,8 @@ let specifiers_of_external_declaration = function
       Nothing
   | EDecl_datatypeCN _ ->
       Nothing
+  | EDecl_type_synCN _ ->
+      Nothing
 end
 
 

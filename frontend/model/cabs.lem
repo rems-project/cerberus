@@ -349,6 +349,7 @@ and external_declaration =
   | EDecl_lemmaCN of Cn.cn_lemma Symbol.identifier type_name (* CN backend *)
   | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)
   | EDecl_datatypeCN of Cn.cn_datatype Symbol.identifier (* CN backend *)
+  | EDecl_type_synCN of Cn.cn_type_synonym Symbol.identifier (* CN backend *)
   | EDecl_fun_specCN of Cn.cn_fun_spec Symbol.identifier type_name (* CN backend *)
 
 (* §6.9.1 Function definitions, Syntax *)
@@ -438,6 +439,7 @@ instance (Located external_declaration)
           locOf (pred.Cn.cn_pred_name)
       | EDecl_datatypeCN dt ->
           locOf (dt.Cn.cn_dt_name)
+      | EDecl_type_synCN ts -> ts.Cn.cn_tysyn_loc
     end
 end
 
