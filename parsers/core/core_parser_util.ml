@@ -213,3 +213,6 @@ type token =
   | IVFROMFLOAT
   | NULL
   | BUILTIN
+  | CONV_INT
+  | WRAPI of Core.iop
+  | CATCH_EXCEPTIONAL_CONDITION of Core.iop

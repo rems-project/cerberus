@@ -185,6 +185,17 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux pe1 >>= fun pe1' ->
           aux pe2 >>= fun pe2' ->
           return_wrap (PEop (bop, pe1', pe2'))
+      | PEconv_int (ity, pe) ->
+          aux pe >>= fun pe' ->
+          return_wrap (PEconv_int (ity, pe'))
+      | PEwrapI (ity, iop, pe1, pe2) ->
+          aux pe1 >>= fun pe1' ->
+          aux pe2 >>= fun pe2' ->
+          return_wrap (PEwrapI (ity, iop, pe1', pe2'))
+      | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+          aux pe1 >>= fun pe1' ->
+          aux pe2 >>= fun pe2' ->
+          return_wrap (PEcatch_exceptional_condition (ity, iop, pe1', pe2'))
       | PEstruct (sym, xs) ->
           mapM (fun (ident, pe) ->
             aux pe >>= fun pe' ->

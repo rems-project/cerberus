@@ -14,6 +14,7 @@ module I = Implementation
 module Cty = struct
   include Ctype
   include Ctype_aux
+  include AilTypesAux
 end
 
 import Core_typing_effect
@@ -651,6 +652,25 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
           | OpOr ->
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
+    | PEconv_int ity pe ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
+        E.return begin
+          Pexpr annot (InferredType_object OTy_integer) (PEconv_int ity pe')
+        end
+    | PEwrapI ity iop pe1 pe2 ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return begin
+          Pexpr annot (InferredType_object OTy_integer)
+            (PEwrapI ity iop pe1' pe2')
+        end
+    | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return begin
+          Pexpr annot (InferredType_object OTy_integer)
+            (PEcatch_exceptional_condition ity iop pe1' pe2')
+        end
     | PEstruct tag_sym fields ->
         match fromJust "Core_typing.infer_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
           | Cty.UnionDef _ ->
@@ -1022,6 +1042,19 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
           | OpOr ->
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
+    | PEconv_int ity pe ->
+        guard_match loc "conv_int()" bTy (BTy_object OTy_integer) >>= fun () ->
+        PEconv_int ity <$> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe
+    | PEwrapI ity iop pe1 pe2 ->
+        guard_match loc "wrapI_OP()" bTy (BTy_object OTy_integer) >>= fun () ->
+        PEwrapI ity iop
+          <$> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1
+          <*> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2
+    | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+        guard_match loc "catch_exceptional_condition_OP()" bTy (BTy_object OTy_integer) >>= fun () ->
+        PEcatch_exceptional_condition ity iop
+          <$> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1
+          <*> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2
     | PEstruct tag_sym fields ->
         guard_match loc "struct()" bTy (BTy_object (OTy_struct tag_sym)) >>
         match fromJust "Core_typing.typecheck_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with

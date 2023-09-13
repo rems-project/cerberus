@@ -89,6 +89,9 @@ let precedence_pexpr = function
   | PEmember_shift _
   | PEmemop _
   | PEnot _
+  | PEconv_int _
+  | PEwrapI _
+  | PEcatch_exceptional_condition _
   | PEstruct _
   | PEunion _
   | PEmemberof _
@@ -415,6 +418,22 @@ let pp_if pp_pexpr pp pe1 x y =
   pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp y)
 
 
+let pp_bounded_integer_pexpr pp_pexpr pe =
+  let iop_string = function
+    | IOpAdd -> "_add" in
+  let (ity, kw, pe1, pe2) = match pe with
+    | PEwrapI (ity, iop, pe1, pe2) ->
+        (ity, "wrapI" ^ iop_string iop, pe1, pe2)
+    | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+        (ity, "catch_exceptional_condition" ^ iop_string iop, pe1, pe2)
+    | _ ->
+        assert false in
+  pp_keyword kw ^^ P.parens (
+    pp_ctype (Ctype ([], Basic (Integer ity))) ^^ P.comma ^^^
+    pp_pexpr pe1  ^^ P.comma ^^^
+    pp_pexpr pe2
+  )
+
 let pp_pexpr pe =
   let rec pp prec (Pexpr (annot, _, pe)) =
     let prec' = precedence_pexpr pe in
@@ -485,6 +504,10 @@ let pp_pexpr pe =
           pp_keyword "not" ^^ P.parens (pp pe)
       | PEop (bop, pe1, pe2) ->
           pp pe1 ^^^ pp_binop bop ^/^ pp pe2
+      | PEconv_int (ity, pe) ->
+          pp_keyword "__conv_int__" ^^ P.parens (pp_ctype (Ctype ([], Basic (Integer ity))) ^^ P.comma ^^^ pp pe)
+      | (PEwrapI _ | PEcatch_exceptional_condition _) as pe ->
+          pp_bounded_integer_pexpr pp pe
       | PEstruct (tag_sym, xs) ->
           P.parens (pp_datactor "struct" ^^^ pp_raw_symbol tag_sym) ^^
           P.braces (

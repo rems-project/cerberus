@@ -517,6 +517,17 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         symbolify_pexpr _pe1 >>= fun pe1 ->
         symbolify_pexpr _pe2 >>= fun pe2 ->
         Eff.return (Pexpr (annot, (), PEop (bop, pe1, pe2)))
+    | PEconv_int (ity, _pe) ->
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr (annot, (), PEconv_int (ity, pe)))
+    | PEwrapI (ity, iop, _pe1, _pe2) ->
+        symbolify_pexpr _pe1 >>= fun pe1 ->
+        symbolify_pexpr _pe2 >>= fun pe2 ->
+        Eff.return (Pexpr (annot, (), PEwrapI (ity, iop, pe1, pe2)))
+    | PEcatch_exceptional_condition (ity, iop, _pe1, _pe2) ->
+        symbolify_pexpr _pe1 >>= fun pe1 ->
+        symbolify_pexpr _pe2 >>= fun pe2 ->
+        Eff.return (Pexpr (annot, (), PEcatch_exceptional_condition (ity, iop, pe1, pe2)))
     | PEstruct (_tag_sym, _ident_pes) ->
         symbolify_sym _tag_sym >>= fun tag_sym ->
         Eff.mapM (fun (cid, _pe) -> symbolify_pexpr _pe >>= fun pe -> Eff.return (cid, pe)) _ident_pes >>= fun ident_pes ->
@@ -1163,6 +1174,8 @@ let mk_file decls =
 (* Builtin *)
 %token BUILTIN
 
+%token CONV_INT
+%token<Core.iop> WRAPI CATCH_EXCEPTIONAL_CONDITION
 
 
 %right BACKSLASH_SLASH
@@ -1499,6 +1512,10 @@ core_ctype:
 | ty= delimited(SQUOTE, ctype, SQUOTE)
     { ty }
 
+core_integer_type:
+| ity= delimited(SQUOTE, integer_type, SQUOTE)
+    { ity }
+
 value:
 (* TODO:
   | Vconstrained of list (list Mem.mem_constraint * value)
@@ -1574,6 +1591,12 @@ pexpr:
     { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEcfunction _pe) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
     { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(bop))))], (), PEop (bop, _pe1, _pe2)) }
+| CONV_INT LPAREN ity= core_integer_type COMMA _pe= pexpr RPAREN
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEconv_int (ity, _pe)) }
+| iop= WRAPI LPAREN ity= core_integer_type COMMA _pe1= pexpr COMMA _pe2= pexpr RPAREN
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEwrapI (ity, iop, _pe1, _pe2)) }
+| iop= CATCH_EXCEPTIONAL_CONDITION LPAREN ity= core_integer_type COMMA _pe1= pexpr COMMA _pe2= pexpr RPAREN
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEcatch_exceptional_condition (ity, iop, _pe1, _pe2)) }
 | MEMOP LPAREN memop= PURE_MEMOP_OP COMMA _pes= separated_list(COMMA, pexpr) RPAREN
     { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEmemop (memop, _pes)) }
 | LPAREN STRUCT _sym=SYM RPAREN _mems= delimited(LBRACE,separated_list (COMMA, member), RBRACE)

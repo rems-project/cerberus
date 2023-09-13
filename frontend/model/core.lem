@@ -109,6 +109,13 @@ type binop =  (* binary operators *)
  | OpAnd
  | OpOr
 
+type iop =
+ | IOpAdd
+ (* | IOpSub
+ | IOpMul
+ | IOpDiv
+ | IOpRem_t
+ | IOpRem_f *)
 
 type core_type =  (* Core types *)
  | TyBase of core_base_type (* pure base type *)
@@ -230,6 +237,11 @@ type generic_pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEmemop of Mem_common.pure_memop * list (generic_pexpr 'bty 'sym)
  | PEnot of (generic_pexpr 'bty 'sym) (* boolean not *)
  | PEop of binop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
+
+ | PEconv_int of integerType * (generic_pexpr 'bty 'sym)
+ | PEwrapI of integerType * iop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
+ | PEcatch_exceptional_condition of integerType * iop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
+
  | PEstruct of 'sym * list (Symbol.identifier * (generic_pexpr 'bty 'sym)) (* C struct expression *)
  | PEunion of 'sym * Symbol.identifier * (generic_pexpr 'bty 'sym) (* C union expression *)
  | PEcfunction of (generic_pexpr 'bty 'sym) (* C function pointer expression *)

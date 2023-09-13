@@ -292,6 +292,12 @@ let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
         wrap (PEnot (subst_sym_pexpr2 sym z pe))
     | PEop (bop, pe1, pe2) ->
         wrap (PEop (bop, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2))
+    | PEconv_int (ity, pe) ->
+        wrap (PEconv_int (ity, subst_sym_pexpr2 sym z pe))
+    | PEwrapI (ity, iop, pe1, pe2) ->
+        wrap (PEwrapI (ity, iop, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2))
+    | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+        wrap (PEcatch_exceptional_condition (ity, iop, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2))
     | PEstruct (tag_sym, xs) ->
         wrap (PEstruct (tag_sym, List.map (fun (ident, pe) -> (ident, subst_sym_pexpr2 sym z pe)) xs))
     | PEunion (tag_sym, ident, pe) ->

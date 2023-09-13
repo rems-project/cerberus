@@ -98,6 +98,12 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       free_pexpr acc pe
   | PEop _ pe1 pe2 ->
       free_pexpr (free_pexpr acc pe1) pe2
+  | PEconv_int _ pe ->
+      free_pexpr acc pe
+  | PEwrapI _ _ pe1 pe2 ->
+      free_pexpr (free_pexpr acc pe1) pe2
+  | PEcatch_exceptional_condition _ _ pe1 pe2 ->
+      free_pexpr (free_pexpr acc pe1) pe2
   | PEstruct _ membs ->
       List.foldl (fun acc (_, pe) -> free_pexpr acc pe) acc membs
   | PEunion _ _ pe ->

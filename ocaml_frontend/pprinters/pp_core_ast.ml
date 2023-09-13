@@ -111,6 +111,15 @@ let string_of_bop = function
   | OpAnd   -> "/\\"
   | OpOr    -> "\\/"
 
+let string_of_iop = function
+  | IOpAdd   -> "+"
+  (* | OpSub   -> "-"
+  | OpMul   -> "*"
+  | OpDiv   -> "/"
+  | OpRem_t -> "rem_t"
+  | OpRem_f -> "rem_f"
+  | OpExp   -> "^" *)
+
 let dtree_of_pexpr pexpr =
   let rec self current_loc (Pexpr (annot, _, pexpr_)) =
     let current_loc =
@@ -154,6 +163,20 @@ let dtree_of_pexpr pexpr =
           Dnode (pp_ctor "PEnot", [self pe])
       | PEop (bop, pe1, pe2) ->
           Dnode ( pp_ctor "PEop" ^^^ P.squotes (!^ (string_of_bop bop))
+                , [self pe1; self pe2] )
+      | PEconv_int (ity, pe) ->
+          Dnode ( pp_ctor "PEconv_int" ^^^
+                  P.squotes (Pp_ail.pp_integerType ity)
+                , [self pe] )
+      | PEwrapI (ity, iop, pe1, pe2) ->
+          Dnode ( pp_ctor "PEwrapI" ^^^
+                  P.squotes (Pp_ail.pp_integerType ity) ^^^
+                  P.squotes (!^ (string_of_iop iop))
+                , [self pe1; self pe2] )
+      | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+          Dnode ( pp_ctor "PEcatch_exceptional_condition" ^^^
+                  P.squotes (Pp_ail.pp_integerType ity) ^^^
+                  P.squotes (!^ (string_of_iop iop))
                 , [self pe1; self pe2] )
       | PEstruct (tag_sym, xs) ->
           Dnode ( pp_ctor "PEstruct" ^^^ P.squotes (pp_symbol tag_sym)

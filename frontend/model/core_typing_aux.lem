@@ -263,7 +263,18 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
     | PEnot pe ->
         PEnot <$> export_pexpr pe
     | PEop binop pe1 pe2 ->
-        PEop binop <$> export_pexpr pe1
+        PEop binop
+          <$> export_pexpr pe1
+          <*> export_pexpr pe2
+    | PEconv_int ity pe ->
+        PEconv_int ity <$> export_pexpr pe
+    | PEwrapI ity iop pe1 pe2 ->
+        PEwrapI ity iop
+          <$> export_pexpr pe1
+          <*> export_pexpr pe2
+    | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+        PEcatch_exceptional_condition ity iop
+          <$> export_pexpr pe1
           <*> export_pexpr pe2
     | PEstruct tag_sym xs ->
         PEstruct tag_sym <$>

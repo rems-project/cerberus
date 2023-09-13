@@ -1294,7 +1294,7 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
     let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion (Implementation.integerImpl ()) ty) in
     stdlib.mkcall_conv_int promoted_ty e in
   (* STD §6.3.1.8 *)
-  let usual_arithmetic_conversion (ty1: Ctype.ctype) (ty2: Ctype.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
+  let usual_arithmetic_conversion_aux is_TMP_new (ty1: Ctype.ctype) (ty2: Ctype.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
     match (AilTypesAux.corresponding_real_type ty1, AilTypesAux.corresponding_real_type ty2) with
       (* TODO/NOTE: we convert (long double, double and float) to Ocaml float! This is not the C11 behaviour! *)
       | (Just _, Just _) ->
@@ -1304,55 +1304,62 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
       | (_, Just _) ->
           (C.Pexpr [] () (C.PEctor C.Cfvfromint [e1]), e2)
       | (Nothing, Nothing) ->
+          let mk_conv_int ity pe =
+            if is_TMP_new then
+              Caux.mk_conv_int_pe ity pe
+            else
+              stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer ity))) pe in
           (* STD §6.3.1.8#1, bullet 4 *)
           match (AilTypesAux.promotion (Implementation.integerImpl ()) ty1, AilTypesAux.promotion (Implementation.integerImpl ()) ty2) with
             | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
                 (* "If both operants have the same type, then no further conversion is needed." *)
                 if ty1' = ty2' then
-                  (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty2' e2)
+                  (mk_conv_int ity1' e1, mk_conv_int ity2' e2)
                 (* "Otherwise, if both operands have signed integer types or both have unsigned integer types,
                     the operand with the type of lesser integer conversion rank is converted to the type
                     of the operand with greater rank." *)
                 else if   (AilTypesAux.is_signed_integer_type ty1' && AilTypesAux.is_signed_integer_type ty2')
                        || (AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.is_unsigned_integer_type ty2') then
                   if AilTypesAux.lt_integer_rank ity1' ity2' then
-                    (stdlib.mkcall_conv_int ty2' e1, stdlib.mkcall_conv_int ty2' e2)
+                    (mk_conv_int ity2' e1, mk_conv_int ity2' e2)
                   else
-                    (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty1' e2)
+                    (mk_conv_int ity1' e1, mk_conv_int ity1' e2)
                 (* "Otherwise, if the operand that has unsigned type has rank greater or equal to the rank of the
                     rank of the type of the other operand, then the operand with signed integer type is converted
                     to the type of the operand with unsigned integer type." *)
                 else if AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.ge_integer_rank ity1' ity2' then
-                  (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty1' e2)
+                  (mk_conv_int ity1' e1, mk_conv_int ity1' e2)
                 else if AilTypesAux.is_unsigned_integer_type ty2' && AilTypesAux.ge_integer_rank ity2' ity1' then
-                  (stdlib.mkcall_conv_int ty2' e1, stdlib.mkcall_conv_int ty2' e2)
+                  (mk_conv_int ity2' e1, mk_conv_int ity2' e2)
                 (* "Otherwise, if the type of the operand with signed integer type can represent all of the values
                     of the type of the operand with unsigned integer type, then the operand with unsigned integer
                     type is converted to the type of the operand with signed integer type." *)
                 else if AilTypesAux.is_signed_integer_type ty1' then
                   (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty2' ty1')
-                     (stdlib.mkcall_conv_int ty1' e1)
+                     (mk_conv_int ity1' e1)
                      (* "Otherwise, both operands are converted to the unsigned integer type corresponding to the type
                          of the operand with signed integer type". *)
-                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e1)
+                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity1') e1)
                   ,
                   Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty2' ty1')
-                     (stdlib.mkcall_conv_int ty1' e2)
-                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e2)
+                     (mk_conv_int ity1' e2)
+                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity1') e2)
                   )
                 else
                   (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty1' ty2')
-                     (stdlib.mkcall_conv_int ty2' e1)
-                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e1)
+                     (mk_conv_int ity2' e1)
+                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity2') e1)
                   ,
                   Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty1' ty2')
-                     (stdlib.mkcall_conv_int ty2' e2)
-                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e2)
+                     (mk_conv_int ity2' e2)
+                     (mk_conv_int (AilTypesAux.make_corresponding_unsigned ity2') e2)
                   )
             | _ ->
                 error "Translation.usual_arithmetic_conversion: not (integer vs integer)"
           end
       end in
+  let usual_arithmetic_conversion = usual_arithmetic_conversion_aux false in
+  let usual_arithmetic_conversion_TMP_new = usual_arithmetic_conversion_aux true in
   let result_ty = ctype_of a_expr in
   if AilTypesAux.is_pointer result_ty && Aaux.is_null_pointer_constant a_expr then
     (* NOTE: this is a bit tasteless as it makes the case AilEconst, ConstantNull unreachable *)
@@ -1817,7 +1824,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
             self e2                                             >>= fun core_e2  ->
             let (promoted1_pe, promoted2_pe) =
               Caux.mk_std_pair_pe "§6.5.6#4"
-                (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
+                (usual_arithmetic_conversion_TMP_new (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
             E.return begin
               Caux.add_std "§6.5.6" begin
                 Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) begin
@@ -1834,12 +1841,22 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                                 [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe])
                               (Caux.mk_memop_pe Mem_common.CapAssignValue
                                 [cap_wrp.E.sym_pe; stdlib.mkcall_wrapI result_ty core_add])
-  else if AilTypesAux.is_signed_integer_type result_ty then
+  (* else if AilTypesAux.is_signed_integer_type result_ty then
                             stdlib.mkcall_catch_exceptional_condition result_ty core_add
   else if AilTypesAux.is_integer result_ty then
-                            stdlib.mkcall_wrapI result_ty core_add
+                            (* stdlib.mkcall_wrapI result_ty core_add *)
+                            Caux.mk_wrapI_pe result_ty C.IOpAdd promoted1_pe promoted2_pe
   else
-                            core_add) )
+                            core_add) ) *)
+  else match Cty.match_integer_ctype result_ty with
+    | Cty.MatchedItySigned _ity ->
+                            stdlib.mkcall_catch_exceptional_condition result_ty core_add
+    | Cty.MatchedItyUnsigned ity ->
+                            (* stdlib.mkcall_wrapI result_ty core_add *)
+                            Caux.mk_wrapI_pe ity C.IOpAdd promoted1_pe promoted2_pe
+    | Cty.NotMatchedIty ->
+                            core_add
+  end ) )
                       
                       ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2])
                         , (* If either operand is unspecified, the result is also unspecified is the

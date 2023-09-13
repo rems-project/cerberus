@@ -533,6 +533,12 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
      PEnot (convert_pexpr pe)
  | PEop bop pe1 pe2 ->
      PEop bop (convert_pexpr pe1) (convert_pexpr pe2)
+ | PEconv_int ity pe ->
+    PEconv_int ity (convert_pexpr pe)
+ | PEwrapI ity iop pe1 pe2 ->
+    PEwrapI ity iop (convert_pexpr pe1) (convert_pexpr pe2)
+ | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+    PEcatch_exceptional_condition ity iop (convert_pexpr pe1) (convert_pexpr pe2)
  | PEstruct sym ident_pes ->
      PEstruct sym (List.map (fun (ident, pe) -> (ident, convert_pexpr pe)) ident_pes)
  | PEunion sym ident pe ->

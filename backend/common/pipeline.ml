@@ -353,6 +353,12 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           PEnot (untype_pexpr pe)
       | PEop (binop, pe1, pe2) ->
           PEop (binop, untype_pexpr pe1, untype_pexpr pe2)
+      | PEconv_int (ity, pe) ->
+          PEconv_int (ity, untype_pexpr pe)
+      | PEwrapI (ity, iop, pe1, pe2) ->
+          PEwrapI (ity, iop, untype_pexpr pe1, untype_pexpr pe2)
+      | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+          PEcatch_exceptional_condition (ity, iop, untype_pexpr pe1, untype_pexpr pe2)
       | PEstruct (tag_sym, xs) ->
           PEstruct (tag_sym, List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
       | PEunion (tag_sym, membr_ident, pe) ->

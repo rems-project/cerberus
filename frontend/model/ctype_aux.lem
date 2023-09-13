@@ -234,3 +234,19 @@ let tags_are_compatible tag_sym1 tag_sym2 =
   | StructDef of list (Symbol.identifier * ctype)
   | UnionDef of list (Symbol.identifier * ctype)
 *)
+
+type integer_type_match =
+  | MatchedItySigned of integerType
+  | MatchedItyUnsigned of integerType
+  | NotMatchedIty
+
+let match_integer_ctype (Ctype _ ty_) =
+  match ty_ with
+    | Basic (Integer ity) ->
+        if AilTypesAux.is_signed_ity ity then
+          MatchedItySigned ity
+        else
+          MatchedItyUnsigned ity
+    | _ ->
+        NotMatchedIty
+  end

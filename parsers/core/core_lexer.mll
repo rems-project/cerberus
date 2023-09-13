@@ -113,6 +113,11 @@ let keywords =
       ("pcall",        T.PCALL       );
       ("ccall",        T.CCALL       );
       ("memop",        T.MEMOP       );
+
+      (* Core (pure) builtins for bounded intger arithmetic *)
+      ("__conv_int__", T.CONV_INT);
+      ("wrapI_add", T.(WRAPI Core.IOpAdd));
+      ("catch_exceptional_condition_add", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpAdd));
       
       (* for Core.action_ *)
       ("create", T.CREATE);

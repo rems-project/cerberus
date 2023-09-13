@@ -359,6 +359,18 @@ val mk_op_pe: binop -> pexpr -> pexpr -> pexpr
 let mk_op_pe bop pe1 pe2 =
   Pexpr [] () (PEop bop pe1 pe2)
 
+val mk_conv_int_pe: integerType -> pexpr -> pexpr
+let mk_conv_int_pe ity pe =
+  Pexpr [] () (PEconv_int ity pe)
+
+val mk_wrapI_pe: integerType -> iop -> pexpr -> pexpr -> pexpr
+let mk_wrapI_pe ity iop pe1 pe2 =
+  Pexpr [] () (PEwrapI ity iop pe1 pe2)
+
+val mk_catch_exceptional_condition_pe: integerType -> iop -> pexpr -> pexpr -> pexpr
+let mk_catch_exceptional_condition_pe ity iop pe1 pe2 =
+  Pexpr [] () (PEcatch_exceptional_condition ity iop pe1 pe2)
+
 val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
 let mk_let_pe pat pe1 pe2 =
   Pexpr [] () (PElet pat pe1 pe2)
@@ -900,6 +912,12 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEnot (subst_sym_pexpr sym cval pe)
     | PEop bop pe1 pe2 ->
         PEop bop (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+    | PEconv_int ty pe ->
+        PEconv_int ty (subst_sym_pexpr sym cval pe)
+    | PEwrapI ty iop pe1 pe2 ->
+        PEwrapI ty iop (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+    | PEcatch_exceptional_condition ty iop pe1 pe2 ->
+        PEcatch_exceptional_condition ty iop (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
     | PEstruct tag_sym xs ->
         PEstruct tag_sym (List.map (fun (ident, pe) -> (ident, subst_sym_pexpr sym cval pe)) xs)
     | PEunion tag_sym ident pe ->
@@ -1166,6 +1184,12 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEnot (unsafe_subst_sym_pexpr sym pe' pe)
     | PEop bop pe1 pe2 ->
         PEop bop (unsafe_subst_sym_pexpr sym pe' pe1) (unsafe_subst_sym_pexpr sym pe' pe2)
+    | PEconv_int ty pe ->
+        PEconv_int ty (unsafe_subst_sym_pexpr sym pe' pe)
+    | PEwrapI ty iop pe1 pe2 ->
+        PEwrapI ty iop (unsafe_subst_sym_pexpr sym pe' pe1) (unsafe_subst_sym_pexpr sym pe' pe2)
+    | PEcatch_exceptional_condition ty iop pe1 pe2 ->
+        PEcatch_exceptional_condition ty iop (unsafe_subst_sym_pexpr sym pe' pe1) (unsafe_subst_sym_pexpr sym pe' pe2)
     | PEstruct tag_sym xs ->
         PEstruct tag_sym (List.map (fun (ident, pe) -> (ident, unsafe_subst_sym_pexpr sym pe' pe)) xs)
     | PEunion tag_sym ident pe ->

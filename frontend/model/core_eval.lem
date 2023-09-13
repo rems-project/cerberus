@@ -18,6 +18,78 @@ import Nondeterminism
 module ND = Nondeterminism
 
 
+(* -- see §5.1.2 from ISO/IEC 10967-1:1994(E)
+fun wrapI(ty: ctype, n: integer) : integer :=
+  let dlt: integer = Ivmax(ty) - Ivmin(ty) + 1 in
+  let r: integer = n rem_f dlt in
+  if r <= Ivmax(ty) then
+    r
+  else
+    r - dlt *)
+let mk_wrapI ity ival =
+  match ( Mem.eval_integer_value (Mem.min_ival ity)
+        , Mem.eval_integer_value (Mem.max_ival ity) ) with
+    | (Just min, Just max) ->
+        let dlt = max - min + 1 in
+        match Mem.eval_integer_value (Mem.op_ival Mem_common.IntRem_f ival (Mem.integer_ival dlt)) with
+          | Nothing ->
+              error "Core_eval.mk_wrapI"
+          | Just r ->
+              Mem.integer_ival begin
+                if r <= max then
+                  r
+                else
+                  r - dlt
+              end
+        end
+    | _ ->
+        error "Core_eval.mk_wrapI"
+  end
+
+(*
+  if ty = '_Bool' then
+    if n = 0 then 0 else 1
+  else
+    if is_representable_integer(n, ty) then
+      n
+    else
+      if is_unsigned(ty) then
+        wrapI(ty, n)
+      else
+        <Integer.conv_nonrepresentable_signed_integer>(ty, n)
+*)
+let mk_conv_int ity ival =
+  match Mem.eval_integer_value ival with
+    | Nothing ->
+        error "Core_eval.mk_conv_int"
+    | Just n ->
+        if Ctype.integerTypeEqual ity Ctype.Bool then
+          Mem.integer_ival (if n = 0 then 0 else 1)
+        else
+          match ( Mem.eval_integer_value (Mem.min_ival ity)
+                , Mem.eval_integer_value (Mem.max_ival ity) ) with
+            | (Just min, Just max) ->
+                let n_ival = Mem.integer_ival n in
+                if min <= n && n <= max then
+                  n_ival
+                else
+                  (* TODO need to have the impl-def <Integer.conv_nonrepresentable_signed_integer>(ty, n) (if ity is unsigned) *)
+                  mk_wrapI ity n_ival
+            | _ ->
+                error "Core_eval.mk_conv_int"
+          end
+    end
+
+let mk_wrapI_op ity iop ival1 ival2 =
+  (* let ival1 = mk_conv_int ity ival1 in
+  let ival2 = mk_conv_int ity ival2 in *)
+  let n = match iop with
+    | IOpAdd ->
+        Mem.op_ival Mem_common.IntAdd ival1 ival2
+  end in
+  mk_wrapI ity n
+
+
 
 (* takes the symbolic names of a function, some pure expressions and produce
    the function body where the arguments have been substituted *)
@@ -173,6 +245,12 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
         wrap PEnot pe
     | PEop binop pe1 pe2 ->
         wrap_bin (PEop binop) pe1 pe2
+    | PEconv_int ity pe ->
+        wrap (PEconv_int ity) pe
+    | PEwrapI ity iop pe1 pe2 ->
+        wrap_bin (PEwrapI ity iop) pe1 pe2
+    | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+        wrap_bin (PEcatch_exceptional_condition ity iop) pe1 pe2
     | PEstruct sym xs ->
         pull_helper self (PEstruct sym) xs
     | PEunion sym cid pe ->
@@ -710,6 +788,28 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
         end
     | PEop binop pe1 pe2 ->
        step_eval_peop loc  self binop pe1 pe2
+    | PEconv_int ity pe ->
+        self pe >>= function
+          | Pexpr _ _ (PEval (Vobject (OVinteger ival))) ->
+              EU.return (PEval (Vobject (OVinteger (mk_conv_int ity ival))))
+          | Pexpr _ _ (PEval _) ->
+              EU.fail (Illformed_program "PEconv_int: operand should be an object integer")
+          | pe' ->
+              EU.return (PEconv_int ity pe')
+        end
+    | PEwrapI ity iop pe1 pe2 ->
+        self pe1 >>= fun pe1' ->
+        self pe2 >>= fun pe2' ->
+        match (Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
+          | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+              EU.return (PEval (Vobject (OVinteger (mk_wrapI_op ity iop ival1 ival2))))
+          | (Just _, Just _) ->
+              EU.fail (Illformed_program "PEwrapI: operands should be an object integers")
+            | _ ->
+              EU.return (PEwrapI ity iop pe1' pe2')
+        end
+    | PEcatch_exceptional_condition _ _ _ _ ->
+        error "TODO Core_eval catch_exceptional_condition"
     | PEstruct tag_sym ident_pes ->
         let (idents, pes) = List.unzip ident_pes in
         EU.mapM self pes >>= fun pes' ->

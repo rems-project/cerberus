@@ -704,6 +704,12 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEnot (remove_conv_int_pexpr pe)
     | PEop bop pe1 pe2 ->
         PEop bop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEconv_int ity pe ->
+        PEconv_int ity (remove_conv_int_pexpr pe)
+    | PEwrapI ity iop pe1 pe2 ->
+        PEwrapI ity iop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+        PEcatch_exceptional_condition ity iop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
     | PEstruct sym ident_pes ->
         PEstruct sym (List.map (fun (ident, pe) -> (ident, remove_conv_int_pexpr pe)) ident_pes)
     | PEunion sym ident pe ->
@@ -1039,6 +1045,12 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         isAlwaysDefined pe
     | PEop _ pe1 pe2 ->
         isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEconv_int _ pe ->
+        isAlwaysDefined pe
+    | PEwrapI _ _ pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEcatch_exceptional_condition _ _ pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
     | PEstruct _ ident_pes ->
         List.all (fun (_, pe) -> isAlwaysDefined pe) ident_pes
     | PEunion _ _ pe ->
@@ -1342,6 +1354,12 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEnot (simpl_case_pexpr pe)
     | PEop bop pe1 pe2 ->
         wrap $ PEop bop (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
+    | PEconv_int ity pe ->
+        wrap $ PEconv_int ity (simpl_case_pexpr pe)
+    | PEwrapI ity iop pe1 pe2 ->
+        wrap $ PEwrapI ity iop (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
+    | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+        wrap $ PEcatch_exceptional_condition ity iop (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
     | PEstruct sym ident_pes ->
         wrap $ PEstruct sym (List.map (fun (ident, pe) -> (ident, simpl_case_pexpr pe)) ident_pes)
     | PEunion sym ident pe ->
