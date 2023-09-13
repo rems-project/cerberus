@@ -15,6 +15,10 @@ module T=Terms
 module LRT=LogicalReturnTypes
 module LAT=LogicalArgumentTypes
 
+let map_val_bt = function 
+  | BT.Map (_, bt2) -> bt2
+  | _ -> failwith "Not a map"
+
 let rec cn_base_type_to_bt = function
   | CN_unit -> BT.Unit
   | CN_bool -> BT.Bool  
@@ -415,29 +419,30 @@ let rec cn_to_ail_expr_aux_internal
     in
     let default_ail_binop = A.AilEbinary (e1, ail_bop, e2) in
 
-  
+(*   
     let is_map it = 
       match IT.bt it with 
         | BT.Map (bt1, bt2) -> 
           Printf.printf "Type of %s: Map(%s, %s)\n" (str_of_it_ (IT.term it)) (str_of_ctype (bt_to_ail_ctype bt1)) (str_of_ctype (bt_to_ail_ctype bt2)); 
           true
         | _ -> false
-    in
+    in *)
 
-    let map_val_bt = function 
-      | BT.Map (_, bt2) -> bt2
-      | _ -> failwith "Not a map"
-    in
+    
 
     let ail_expr_ = match ail_bop with 
       | A.Eq -> 
-        if (is_map t1 && is_map t2) then
-          let val_bt = map_val_bt (IT.bt t1) in
-          let val_ctype = bt_to_ail_ctype val_bt in
-          let val_equality_str = (str_of_ctype val_ctype) ^ "_equality" in
-          A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
-        else 
-          default_ail_binop
+        (
+          match IT.bt t1 with 
+            | BT.Map (bt1, bt2) ->
+              let val_bt = map_val_bt (IT.bt t1) in
+              let val_ctype = bt_to_ail_ctype val_bt in
+              let val_equality_str = (str_of_ctype val_ctype) ^ "_equality" in
+              A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
+            | BT.Integer -> 
+                A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_integer_equality")), [e1; e2]))
+            | _ -> default_ail_binop
+        )
       | _ -> default_ail_binop
     in 
     dest d (b1 @ b2, s1 @ s2, mk_expr ~strs ail_expr_) 
@@ -634,14 +639,21 @@ let rec cn_to_ail_expr_aux_internal
 
   | MapConst (bt, t) -> failwith "TODO18"
   | MapSet (t1, t2, t3) -> failwith "TODO19"
-  | MapGet (arr, index) ->
+  | MapGet (m, key) ->
     (* Only works when index is an integer *)
     (* TODO: Make it work for general case *)
     (* TODO: Do general allocation stuff *)
-    let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts arr PassBack in
-    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts index PassBack in
-    let ail_sub_expr_ = mk_expr (A.(AilEbinary (e1, Arithmetic Add, e2))) in
-    dest d (b1 @ b2, s1 @ s2, mk_expr A.(AilEunary (Indirection, ail_sub_expr_)))
+    let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts m PassBack in
+    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts key PassBack in
+    let fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_get")), [e1; e2])) in
+    let cn_ctype = bt_to_ail_ctype (map_val_bt (IT.bt m)) in
+    let cn_ctype_ptr = mk_ctype C.(Pointer (empty_qualifiers, cn_ctype)) in
+    let cast_fcall = A.(AilEcast (empty_qualifiers, cn_ctype_ptr, mk_expr fcall)) in
+    let val_sym = Sym.fresh () in
+    let binding = create_binding val_sym cn_ctype_ptr in
+    let decl = A.(AilSdeclaration [(val_sym, Some (mk_expr cast_fcall))]) in
+    (* let ail_sub_expr_ = mk_expr (A.(AilEbinary (e1, Arithmetic Add, e2))) in *)
+    dest d (b1 @ b2 @ [binding], s1 @ s2 @ [decl], mk_expr A.(AilEident val_sym))
 
   | MapDef ((sym, bt), t) -> failwith "TODO21"
   | Apply (sym, ts) ->
