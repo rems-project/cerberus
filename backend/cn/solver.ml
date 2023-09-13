@@ -40,7 +40,7 @@ type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
     assumptions : LCSet.t ref;
-    focus_terms : (IT.t list) ref;
+    focus_terms : ((IT.t_bindings * IT.t) list) ref;
   }
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
@@ -800,7 +800,7 @@ module Translate = struct
 
 
 
-  let fold_with_adj : 'a. Global.t -> ((Sym.t * 'bt) list -> 'a -> 'bt term -> 'a) ->
+  let fold_with_adj : 'a. Global.t -> ('bt IT.bindings -> 'a -> 'bt term -> 'a) ->
         'a -> 'bt term -> 'a =
     fun global f ->
     let f2 bs (acc, adj_ts) t =
@@ -818,13 +818,15 @@ module Translate = struct
     fun acc t -> fold_list acc [([], t)]
 
   let focus_terms global it = fold_with_adj global
-    (fun bs its it -> if List.length bs > 0 then its
-      else match IT.term it with
-      | IT.NthList _ -> it :: its
-      | IT.ArrayToList _ -> it :: its
-      | IT.Binop (IT.EQ, x, y) -> if Option.is_some (IT.is_sym x) || Option.is_some (IT.is_sym y)
-        then it :: its else its
-      | _ -> its)
+    (fun bs its it ->
+    let interesting = match IT.term it with
+      | IT.NthList _ -> true
+      | IT.ArrayToList _ -> true
+      | IT.Binop (IT.EQ, x, y) -> Option.is_some (IT.is_sym x) || Option.is_some (IT.is_sym y)
+      | _ -> false
+    in
+    if not interesting then its
+    else (bs, it) :: its)
     [] it
 
   let assumption context global c =
@@ -847,7 +849,7 @@ module Translate = struct
       it : IT.t;
       qs : (Sym.t * BT.t) list;
       extra : IT.t list;
-      focused : IT.t list;
+      focused : (IT.t_bindings * IT.t) list;
     }
 [@@warning "-unused-field"]
 

@@ -43,7 +43,6 @@ let rec bound_by_pattern (Pat (pat_, bt)) =
   | PConstructor (_s, args) -> 
      List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
-
 let rec free_vars_ = function
   | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
@@ -99,6 +98,8 @@ and free_vars_list xs =
       SymSet.union ss (free_vars t)
     ) SymSet.empty xs
 
+type 'bt bindings = ('bt pattern * ('bt term) option) list
+type t_bindings = BT.t bindings
 
 let rec fold_ f binders acc = function
   | Sym _s -> acc
@@ -107,7 +108,7 @@ let rec fold_ f binders acc = function
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EachI ((_, (s, bt), _), t) ->
-     fold f (binders @ [(s, bt)]) acc t
+     fold f (binders @ [(Pat (PSym s, bt), None)]) acc t
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
   | Struct (_tag, members) -> fold_list f binders acc (List.map snd members)
@@ -133,18 +134,18 @@ let rec fold_ f binders acc = function
   | MapConst (_bt, t) -> fold f binders acc t
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
-  | MapDef ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
+  | MapDef ((s, bt), t) -> fold f (binders @ [(Pat (PSym s, bt), None)]) acc t
   | Apply (_pred, ts) -> fold_list f binders acc ts
-  | Let ((nm, IT (t1_, bt)), t2) ->
-    let acc' = fold f binders acc (IT (t1_, bt)) in
-    fold f (binders @ [(nm, bt)]) acc' t2
+  | Let ((nm, t1), t2) ->
+    let acc' = fold f binders acc t1 in
+    fold f (binders @ [(Pat (PSym nm, basetype t1), Some t1)]) acc' t2
   | Match (e, cases) -> 
      (* TODO: check this is good *)
      let acc' = fold f binders acc e in
      let rec aux acc = function
        | [] -> acc
        | (pat, body) :: cases -> 
-          let acc' = fold f (binders @ bound_by_pattern pat) acc body in
+          let acc' = fold f (binders @ [(pat, Some e)]) acc body in
           aux acc' cases
      in
      aux acc' cases
@@ -162,7 +163,7 @@ and fold_list f binders acc xs =
      let acc' = fold f binders acc x in
      fold_list f binders acc' xs
 
-let fold_subterms : 'a. ((Sym.t * 'bt) list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
+let fold_subterms : 'a. ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
   fun f acc t -> fold f [] acc t
 
 
@@ -803,16 +804,35 @@ let nth_array_to_list_fact n xs d = match term xs with
     Some (eq_ (lhs, rhs))
   | _ -> None
 
-let nth_array_to_list_facts terms =
-  let nths = fold_list (fun _ acc it -> match term it with
-    | NthList (n, xs, d) -> (n, d, bt xs) :: acc
-    | _ -> acc) [] [] terms in
-  let arr_lists = fold_list (fun _ acc it -> match term it with
-    | ArrayToList _ -> (it, bt it) :: acc
-    | _ -> acc) [] [] terms in
-  List.map (fun (n, d, bt1) -> List.filter_map (fun (xs, bt2) ->
-    if BT.equal bt1 bt2 then nth_array_to_list_fact n xs d else None) arr_lists
-  ) nths |> List.concat
+let rec wrap_bindings_match bs default_v v = match bs, v with
+  | _, None -> None
+  | [], _ -> v
+  | ((pat, x) :: bindings, _) ->
+  begin match wrap_bindings_match bindings default_v v with
+    | None -> None
+    | Some v2 ->
+    let pat_ss = SymSet.of_list (List.map fst (bound_by_pattern pat)) in
+    if SymSet.is_empty (SymSet.inter pat_ss (free_vars v2))
+    then Some v2
+    else begin match x with
+      | None -> None
+      | Some match_e ->
+        Some (IT (Match (match_e, [(pat, v2); (Pat (PWild, basetype match_e), default_v)]), basetype v2))
+    end
+  end
+
+let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) =
+  let nths = List.filter_map (fun (bs, it) -> match term it with
+    | NthList (n, xs, d) -> Some (bs, (n, d, bt xs))
+    | _ -> None) binders_terms in
+  let arr_lists = List.filter_map (fun (bs, it) -> match term it with
+    | ArrayToList _ -> Some (bs, (it, bt it))
+    | _ -> None) binders_terms in
+  List.concat_map (fun (bs1, (n, d, bt1)) -> List.filter_map (fun (bs2, (xs, bt2)) ->
+    if BT.equal bt1 bt2
+    then wrap_bindings_match (bs1 @ bs2) (bool_ true) (nth_array_to_list_fact n xs d)
+    else None) arr_lists
+  ) nths
 
 
 

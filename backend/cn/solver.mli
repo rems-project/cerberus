@@ -40,6 +40,6 @@ val eval :
 
 val get_solver_focused_terms : solver ->
   pointer_facts:IndexTerms.t list ->
-  Global.t -> IndexTerms.t list
+  Global.t -> (IndexTerms.t_bindings * IndexTerms.t) list
 
 
