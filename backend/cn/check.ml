@@ -1715,8 +1715,8 @@ let record_and_check_logical_functions funs =
 
   let@ () =
     ListM.iterM (fun (name, def) -> 
-        add_logical_function name 
-          {def with definition = Uninterp}
+        let@ simple_def = WellTyped.WLFD.welltyped {def with definition = Uninterp} in
+        add_logical_function name simple_def
       ) recursive
   in
   ListM.iterM (fun (name, def) -> 
@@ -1729,7 +1729,8 @@ let record_and_check_resource_predicates preds =
   (* add the names to the context, so recursive preds check *)
   let@ () = 
     ListM.iterM (fun (name, def) ->
-        add_resource_predicate name { def with clauses = None }
+        let@ simple_def = WellTyped.WRPD.welltyped { def with clauses = None } in
+        add_resource_predicate name simple_def
       ) preds 
   in
   ListM.iterM (fun (name, def) ->
