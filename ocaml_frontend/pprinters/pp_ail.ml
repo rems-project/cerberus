@@ -227,7 +227,7 @@ let pp_basicType ?(executable_spec=false) = function
   | Floating rft ->
       pp_floatingType rft
 
-let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (annots, ty) as cty) =
+let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
   let precOf = function
     | Void
     | Basic _
@@ -243,59 +243,65 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (anno
     | Pointer _ ->
         3
   in
-  let rec aux ?(executable_spec=false) p qs (Ctype (_, ty)) : P.document -> P.document =
-    let p' = precOf ty in
-    (* let aux = aux ~executable_spec p' in *)
-    let wrap z = if p' > 0 && p' >= p then z else P.parens z in
-    begin match ty with
-      | Void ->
-          fun k -> pp_qualifiers qs ^^ pp_type_keyword "void" ^^ k
-      | Basic bty ->
-          fun k -> pp_qualifiers qs ^^ pp_basicType ~executable_spec bty ^^ k
-      | Array (elem_ty, n_opt) ->
-          fun k -> aux ~executable_spec p' qs elem_ty (k ^^ (P.brackets (P.optional pp_integer n_opt)))
-      | Function ((ret_qs, ret_ty), params, isVariadic) ->
-          fun k -> aux ~executable_spec p' ret_qs ret_ty P.empty ^^^
-                   P.parens k ^^
-                   P.parens (
-                     (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux ~executable_spec p' qs ty P.empty) params) ^^
-                     (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-                   )
-      | FunctionNoParams ((ret_qs, ret_ty)) ->
-          fun k -> aux ~executable_spec p' ret_qs ret_ty P.empty ^^^
-          P.parens k ^^ P.parens (P.empty)
-      | Pointer (ref_qs, ref_ty) ->
-          fun k ->
-            begin match ref_ty with
-              | Ctype (_, Function ((ret_qs, ret_ty), params, isVariadic)) ->
-                  aux ~executable_spec p' ret_qs ret_ty P.empty ^^^ P.parens (P.star ^^ k) ^^^
-                  P.parens (
-                    (if List.length params = 0 then !^ "void" else comma_list (fun (qs, ty, _) -> aux ~executable_spec p' qs ty P.empty) params) ^^
-                    (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-                  )
-              | _ ->
-                  aux ~executable_spec p' ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
-            end
-      | Atomic ty ->
-          fun k ->
-            pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^
-            P.parens (aux ~executable_spec p' no_qualifiers ty P.empty) ^^ k
-      | Struct sym ->
-          fun k ->
-            pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type ~executable_spec ~is_human sym ^^ k
-      | Union sym ->
-          fun k ->
-            pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type ~executable_spec ~is_human sym ^^ k
-    end in
+  let rec aux ?(executable_spec=false) p qs (Ctype (annots, ty)) : P.document -> P.document =
+    let annot_doc = if executable_spec then 
+      (match annots with 
+        | Annot.Atypedef sym :: _ -> Some (pp_id ~executable_spec sym)
+        | _ -> None)
+    else
+      None 
+    in
+    match annot_doc with
+      | Some doc -> (fun k -> doc ^^ k)
+      | None ->
+        (let p' = precOf ty in
+        (* let aux = aux ~executable_spec p' in *)
+        let wrap z = if p' > 0 && p' >= p then z else P.parens z in
+        begin match ty with
+          | Void ->
+              fun k -> pp_qualifiers qs ^^ pp_type_keyword "void" ^^ k
+          | Basic bty ->
+              fun k -> pp_qualifiers qs ^^ pp_basicType ~executable_spec bty ^^ k
+          | Array (elem_ty, n_opt) ->
+              fun k -> aux ~executable_spec p' qs elem_ty (k ^^ (P.brackets (P.optional pp_integer n_opt)))
+          | Function ((ret_qs, ret_ty), params, isVariadic) ->
+              fun k -> aux ~executable_spec p' ret_qs ret_ty P.empty ^^^
+                      P.parens k ^^
+                      P.parens (
+                        (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux ~executable_spec p' qs ty P.empty) params) ^^
+                        (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+                      )
+          | FunctionNoParams ((ret_qs, ret_ty)) ->
+              fun k -> aux ~executable_spec p' ret_qs ret_ty P.empty ^^^
+              P.parens k ^^ P.parens (P.empty)
+          | Pointer (ref_qs, ref_ty) ->
+              fun k ->
+                begin match ref_ty with
+                  | Ctype (_, Function ((ret_qs, ret_ty), params, isVariadic)) ->
+                      aux ~executable_spec p' ret_qs ret_ty P.empty ^^^ P.parens (P.star ^^ k) ^^^
+                      P.parens (
+                        (if List.length params = 0 then !^ "void" else comma_list (fun (qs, ty, _) -> aux ~executable_spec p' qs ty P.empty) params) ^^
+                        (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+                      )
+                  | _ ->
+                      aux ~executable_spec p' ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
+                end
+          | Atomic ty ->
+              fun k ->
+                pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^
+                P.parens (aux ~executable_spec p' no_qualifiers ty P.empty) ^^ k
+          | Struct sym ->
+              fun k ->
+                pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type ~executable_spec ~is_human sym ^^ k
+          | Union sym ->
+              fun k ->
+                pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type ~executable_spec ~is_human sym ^^ k
+        end) 
+    in
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
-  let default_doc = (aux ~executable_spec 1 qs cty) pp_spaced_ident in
-  if executable_spec then 
-    (match annots with 
-      | Annot.Atypedef sym :: _ -> (fun k -> pp_id ~executable_spec sym ^^ k) pp_spaced_ident
-      | _ -> default_doc)
-  else
-    default_doc
+  (aux ~executable_spec 1 qs cty) pp_spaced_ident
+  
 
 let pp_ctype ?(executable_spec=false) ?(is_human=false) qs ty =
   pp_ctype_aux ~executable_spec ~is_human None qs ty
