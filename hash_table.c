@@ -93,7 +93,7 @@ void* ht_get(hash_table* table, const char* key) {
 
 // Internal function to set an entry (without expanding table).
 static const char* ht_set_entry(ht_entry* entries, size_t capacity,
-        const char* key, void* value, size_t* plength) {
+        const char* key, void* value, int* plength) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(capacity - 1));
@@ -174,7 +174,7 @@ const char* ht_set(hash_table* table, const char* key, void* value) {
                         &table->length);
 }
 
-size_t ht_length(hash_table* table) {
+int ht_size(hash_table* table) {
     return table->length;
 }
 
