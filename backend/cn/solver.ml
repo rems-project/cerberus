@@ -389,6 +389,14 @@ module Translate = struct
   let integer_to_alloc_id_fundecl context global =
     Z3.Tuple.get_mk_decl (sort context global Alloc_id)
 
+  (*copying/adjusting Dhruv's code from above*)
+  let signed_to_unsigned_fundecl context global n =
+   nth (Z3.Tuple.get_field_decls (sort context global (Bits (Signed, n)))) 0
+
+ let unsigned_to_signed_fundecl context global n =
+   Z3.Tuple.get_mk_decl (sort context global (Bits (Signed, n)))
+
+
   let adjust_term global : IT.t -> IT.t option =
 
     let struct_decls = global.struct_decls in
@@ -635,6 +643,14 @@ module Translate = struct
             Z3.Arithmetic.Real.mk_real2int context (term t)
          | Integer, Real ->
             Z3.Arithmetic.Integer.mk_int2real context (term t)
+         | Bits (Unsigned, n), Bits (Signed, n') when n = n' ->
+            Z3.Expr.mk_app context
+              (unsigned_to_signed_fundecl context global n)
+              [term t]
+         | Bits (Signed, n), Bits (Unsigned, n') when n = n' ->
+            Z3.Expr.mk_app context
+              (signed_to_unsigned_fundecl context global n)
+              [term t]
          | _ ->
             assert false
          end
@@ -833,6 +849,7 @@ module Translate = struct
       extra : IT.t list;
       focused : IT.t list;
     }
+[@@warning "-unused-field"]
 
   let goal1 context global lc =
     let term it = term context global it in

@@ -123,6 +123,8 @@ module WBT = struct
          return Bool
       | Integer -> 
          return Integer
+      | Bits (sign, n) ->
+         return (Bits (sign, n))
       | Real -> 
          return Real
       | Alloc_id -> 
@@ -265,7 +267,7 @@ module WIT = struct
          cases_complete loc bts (List.map List.tl cases)
        else
          begin match bt with
-         | (Unit|Bool|Integer|Real|Alloc_id|Loc|CType|Struct _|
+         | (Unit|Bool|Integer|Bits _|Real|Alloc_id|Loc|CType|Struct _|
             Record _|Map _|List _|Tuple _|Set _) ->
             failwith "revisit for extended pattern language"
          | Datatype s ->
@@ -600,6 +602,7 @@ module WIT = struct
            | Loc, Integer -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()
+           | Bits (sign,n), Bits (sign',n') when not (equal_sign sign sign' ) && n = n' -> return ()
            | source, target -> 
              let msg = 
                !^"Unsupported cast from" ^^^ BT.pp source
