@@ -72,3 +72,12 @@ let generate_include_header (file_name, is_system_header) =
   in
   pre ^ incl ^ "\n"
 
+let str_of_ctype ctype = 
+  let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in 
+  CF.Pp_utils.to_plain_pretty_string doc 
+
+let str_of_it_ = function
+  | Terms.Sym sym -> Sym.pp_string sym
+  | _ -> ""
+
+    
