@@ -165,6 +165,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
   let annots = match cn_typ with 
     | CN_integer -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_integer")]
     | CN_bool -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_bool")]
+    | CN_map _ -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")]
     | _ -> []
   in
   mk_ctype ~annots typ
@@ -414,17 +415,29 @@ let rec cn_to_ail_expr_aux_internal
     in
     let default_ail_binop = A.AilEbinary (e1, ail_bop, e2) in
 
-    let is_it_map it = 
+  
+    let is_map it = 
       match IT.bt it with 
-        | BT.Map _ -> true
+        | BT.Map (bt1, bt2) -> 
+          Printf.printf "Type of %s: Map(%s, %s)\n" (str_of_it_ (IT.term it)) (str_of_ctype (bt_to_ail_ctype bt1)) (str_of_ctype (bt_to_ail_ctype bt2)); 
+          true
         | _ -> false
+    in
+
+    let map_val_bt = function 
+      | BT.Map (_, bt2) -> bt2
+      | _ -> failwith "Not a map"
     in
 
     let ail_expr_ = match ail_bop with 
       | A.Eq -> 
-        if (is_it_map t1 && is_it_map t2) then
-        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_equality")), [e1; e2]))
-        else default_ail_binop
+        if (is_map t1 && is_map t2) then
+          let val_bt = map_val_bt (IT.bt t1) in
+          let val_ctype = bt_to_ail_ctype val_bt in
+          let val_equality_str = (str_of_ctype val_ctype) ^ "_equality" in
+          A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
+        else 
+          default_ail_binop
       | _ -> default_ail_binop
     in 
     dest d (b1 @ b2, s1 @ s2, mk_expr ~strs ail_expr_) 
@@ -922,11 +935,10 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
     let gen_add_expr_ e_ = 
       A.(AilEbinary (mk_expr e_, Arithmetic Add, mk_expr q_times_step))
     in
-    let sym_add_expr = make_deref_expr_ (gen_add_expr_ A.(AilEident sym)) in
+    (* let sym_add_expr = make_deref_expr_ (gen_add_expr_ A.(AilEident sym)) in *)
 
-    (* let ctype_ =  bt_to_ail_ctype (IT.bt q.pointer) in *)
-    let ctype = match q.name with 
-      | Owned (sct, _) -> Sctypes.to_ctype sct
+    let (return_ctype, return_bt) = match q.name with 
+      | Owned (sct, _) -> (Sctypes.to_ctype sct, BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct)
       | PName pname -> 
         let matching_preds = List.filter (fun (pred_sym', def) -> String.equal (Sym.pp_string pname) (Sym.pp_string pred_sym')) preds in
         let (pred_sym', pred_def') = match matching_preds with 
@@ -934,11 +946,13 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
           | p :: _ -> p
         in 
         let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
-        match cn_bt with 
+        let ctype = match cn_bt with 
           | CN_record _ ->
             let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_sym' in
             mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype (Struct pred_record_name))))
           | _ -> cn_to_ail_base_type ~pred_sym:(Some pred_sym') cn_bt
+        in 
+        (ctype, pred_def'.oarg_bt)
     in
 
     let (rhs, bs, ss) = match q.name with 
@@ -955,19 +969,28 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
     in *)
     let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident i_sym))))) in 
 
-    let (bs', ss') = match rm_ctype ctype with 
+    let (bs', ss') = match rm_ctype return_ctype with 
       | C.Void -> 
         let void_pred_call = A.(AilSexpr (mk_expr rhs)) in
         let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [void_pred_call; increment_stat])), 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt [start_assign; while_loop])) in
         ([], [ail_block])
       | _ -> 
-        let sym_binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, ctype))) in
-        let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof_expr e1)])) in
+        let cn_map_type = mk_ctype ~annots:[CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")] C.Void in
+        let sym_binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, cn_map_type))) in
+        let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, cn_map_type))])) in
         let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr alloc_call))]) in
-        let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in
-        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [ail_assign_stat; increment_stat])), 0)) in
-        let ail_block = A.(AilSblock ([], List.map mk_stmt [start_assign; while_loop])) in
+        (* Improve - str_of_ctype bound to fail soon *)
+        let f_str = "convert_to_" ^ (str_of_ctype (bt_to_ail_ctype return_bt)) in
+        let conversion_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty f_str)), [mk_expr rhs])) in
+        let val_sym = Sym.fresh () in
+        let cn_pointer_return_type = mk_ctype C.(Pointer (empty_qualifiers, bt_to_ail_ctype return_bt)) in
+        let conversion_binding = create_binding val_sym cn_pointer_return_type in
+        let conversion_stat = A.(AilSdeclaration [(val_sym, Some (mk_expr conversion_fcall))]) in
+        let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), List.map mk_expr [AilEident sym; AilEident i_sym; AilEident val_sym])) in
+        (* let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in *)
+        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [conversion_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat])), 0)) in
+        let ail_block = A.(AilSblock ([conversion_binding], List.map mk_stmt [start_assign; while_loop])) in
         ([sym_binding], [sym_decl; ail_block])
     in
 
