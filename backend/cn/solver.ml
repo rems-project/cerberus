@@ -845,9 +845,7 @@ module Translate = struct
     let g1 = goal1 solver.context global lc in
     let extra1 = extra_assumptions (! (solver.assumptions)) g1.qs in
     let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in
-    Pp.debug 3 (lazy (Pp.item "Translate.goal: focused" (Pp.list IT.pp focused)));
     let extra2 = IT.nth_array_to_list_facts focused in
-    Pp.debug 3 (lazy (Pp.item "Translate.goal: extra" (Pp.list IT.pp (extra2))));
     { g1 with extra = extra2 @ extra1; focused = focused }
 
 end
