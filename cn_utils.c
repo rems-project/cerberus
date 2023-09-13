@@ -1,6 +1,6 @@
 
-#include "alloc.c"
-#include "hash_table.h"
+// #include "alloc.c"
+#include "hash_table.c"
 
 
 
