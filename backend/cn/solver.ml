@@ -39,6 +39,8 @@ let save_slow_problems, saved_slow_problem, set_slow_threshold =
 type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
+    assumptions : LCSet.t ref;
+    focus_terms : (IT.t list) ref;
   }
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
@@ -165,28 +167,6 @@ module Translate = struct
 
   let z3sym_table : z3sym_table_entry Z3Symbol_Table.t =
     Z3Symbol_Table.create 10000
-
-  type premise_info =
-    | IsNthList of IT.t
-    | IsArrayToList of IT.t
-    | IsLocAddrInEq of Sym.t
-
-  (* note translated terms that need additional premises to be added to goals
-     they are in to fully characterise them *)
-  let needs_premise_table = ref (Z3ExprMap.empty : premise_info Z3ExprMap.t)
-
-  let needs_premise info expr =
-    (needs_premise_table := Z3ExprMap.add expr info (! needs_premise_table));
-    expr
-
-  let maybe_record_loc_addr_eq global t expr =
-    match IT.term t with
-    | Sym sym ->
-      if BT.equal (IT.bt t) BT.Loc && SymMap.mem sym global.Global.fun_decls
-      then begin Pp.debug 8 (lazy (Pp.item "recording addr in eq" (IT.pp t)));
-         needs_premise (IsLocAddrInEq sym) expr end
-      else expr
-    | _ -> expr
 
   let string context str =
     Z3.Symbol.mk_string context str
@@ -586,9 +566,7 @@ module Translate = struct
          | XORNoSMT -> make_uf "xor_uf" (Integer) [t1; t2]
          | BWAndNoSMT -> make_uf "bw_and_uf" (Integer) [t1; t2]
          | BWOrNoSMT -> make_uf "bw_or_uf" (Integer) [t1; t2]
-         | EQ -> Z3.Boolean.mk_eq context
-            (maybe_record_loc_addr_eq global t1 (term t1))
-            (maybe_record_loc_addr_eq global t2 (term t2))
+         | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
          | SetUnion -> Z3.Set.mk_union context (map term [t1;t2])
          | SetIntersection -> Z3.Set.mk_intersection context (map term [t1;t2])
@@ -660,7 +638,6 @@ module Translate = struct
          let fdec = Z3.FuncDecl.mk_func_decl_s context nm
                       (List.map sort (List.map IT.bt [i; xs; d])) (sort bt) in
          Z3.FuncDecl.apply fdec args
-         |> needs_premise (IsNthList it)
       | ArrayToList (arr, i, len) ->
          let args = List.map term [arr; i; len] in
          let list_bt = Option.get (BT.is_list_bt bt) in
@@ -668,7 +645,6 @@ module Translate = struct
          let fdec = Z3.FuncDecl.mk_func_decl_s context nm
                       (List.map sort (List.map IT.bt [arr; i; len])) (sort bt) in
          Z3.FuncDecl.apply fdec args
-         |> needs_premise (IsArrayToList it)
       | Aligned _ -> adj ()
       | Representable _ -> adj ()
       | Good _ -> adj ()
@@ -794,13 +770,38 @@ module Translate = struct
 
 
 
+  let fold_with_adj : 'a. Global.t -> ((Sym.t * 'bt) list -> 'a -> 'bt term -> 'a) ->
+        'a -> 'bt term -> 'a =
+    fun global f ->
+    let f2 bs (acc, adj_ts) t =
+      let acc = f bs acc t in
+      match adjust_term global t with
+      | Some t2 -> (acc, (bs, t2) :: adj_ts)
+      | None -> (acc, adj_ts)
+    in
+    let rec fold_list acc = function
+      | [] -> acc
+      | ((bs, t) :: adj_ts) ->
+        let (acc, adj_ts) = IT.fold f2 bs (acc, adj_ts) t in
+        fold_list acc adj_ts
+    in
+    fun acc t -> fold_list acc [([], t)]
 
+  let focus_terms global it = fold_with_adj global
+    (fun bs its it -> if List.length bs > 0 then its
+      else match IT.term it with
+      | IT.NthList _ -> it :: its
+      | IT.ArrayToList _ -> it :: its
+      | IT.Binop (IT.EQ, x, y) -> if Option.is_some (IT.is_sym x) || Option.is_some (IT.is_sym y)
+        then it :: its else its
+      | _ -> its)
+    [] it
 
   let assumption context global c =
     let term it = term context global it in
     match c with
     | T it ->
-       Some (term it)
+       Some (it, term it, focus_terms global it)
     | Forall ((s, bt), body) ->
        None
        (* let q =  *)
@@ -815,18 +816,19 @@ module Translate = struct
       expr : Z3.Expr.expr;
       it : IT.t;
       qs : (Sym.t * BT.t) list;
+      extra : IT.t list;
+      focused : IT.t list;
     }
 
-  let goal context global lc =
+  let goal1 context global lc =
     let term it = term context global it in
     match lc with
     | T it ->
-       { expr = term it; it; qs = [] }
+       { expr = term it; it; qs = []; extra = []; focused = [] }
     | Forall ((s, bt), it) ->
        let v_s, v = IT.fresh_same bt s in
        let it = IT.subst (make_subst [(s, v)]) it in
-       { expr = term it; it; qs = [(v_s, bt)] }
-
+       { expr = term it; it; qs = [(v_s, bt)]; extra = []; focused = [] }
 
   let extra_assumptions assumptions qs =
     List.concat_map (fun (s, bt) ->
@@ -839,44 +841,14 @@ module Translate = struct
           ) assumptions []
       ) qs
 
-  let needs_premise_elts exprs =
-    let m1 = ! needs_premise_table in
-    if Z3ExprMap.is_empty m1 then []
-    else
-    begin
-    Pp.debug 4 (lazy (Pp.item "needs_premise_elts" (Pp.list Pp.string
-        (List.map Z3.Expr.to_string exprs))));
-    let rec f m2 xs = function
-      | [] -> xs
-      | expr :: exprs ->
-        let (m2, xs) = if Z3ExprMap.mem expr m1 && not (Z3ExprMap.mem expr m2)
-          then (Z3ExprMap.add expr () m2, (expr, Z3ExprMap.find expr m1) :: xs)
-          else (m2, xs) in
-        f m2 xs (Z3.Expr.get_args expr @ exprs)
-    in
-    f Z3ExprMap.empty [] exprs
-    end
-
-  let rec extra_logical_facts context global exprs =
-    let key_ts = needs_premise_elts exprs in
-    let array_list_ts = List.filter_map (function
-      | (_, IsNthList x) -> Some x
-      | (_, IsArrayToList x) -> Some x
-      | _ -> None) key_ts in
-    Pp.debug 10 (lazy (Pp.item "array-list key terms" (Pp.list IT.pp array_list_ts)));
-    Pp.debug 4 (lazy (Pp.item "Z3 simplify help" (Pp.string (Z3.Expr.get_simplify_help context))));
-    let array_list_facts = IT.nth_array_to_list_facts array_list_ts
-      |> List.map (fun it -> (it, term context global it)) in
-    let facts = array_list_facts in
-    let exprs2 = (List.map snd facts) @ exprs in
-    let key_ts2 = needs_premise_elts exprs2 in
-    if List.length key_ts2 > List.length key_ts
-    then extra_logical_facts context global exprs2
-    else begin
-      Pp.debug 10 (lazy (Pp.item "extra logical facts" (Pp.list IT.pp (List.map fst facts))));
-      List.map snd facts
-    end
-
+  let goal solver global pointer_facts lc =
+    let g1 = goal1 solver.context global lc in
+    let extra1 = extra_assumptions (! (solver.assumptions)) g1.qs in
+    let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in
+    Pp.debug 3 (lazy (Pp.item "Translate.goal: focused" (Pp.list IT.pp focused)));
+    let extra2 = IT.nth_array_to_list_facts focused in
+    Pp.debug 3 (lazy (Pp.item "Translate.goal: extra" (Pp.list IT.pp (extra2))));
+    { g1 with extra = extra2 @ extra1; focused = focused }
 
 end
 
@@ -889,7 +861,7 @@ let make global : solver =
   let context = Z3.mk_context [] in
   Translate.init global context;
   let incremental = Z3.Solver.mk_simple_solver context in
-  { context; incremental }
+  { context; incremental; assumptions = ref LCSet.empty; focus_terms = ref [] }
 
 
 
@@ -907,9 +879,12 @@ let pop solver =
 
 let add_assumption solver global lc =
   (* do nothing to fancy solver, because that is reset for every query *)
+  solver.assumptions := LCSet.add lc (! (solver.assumptions));
   match Translate.assumption solver.context global lc with
   | None -> ()
-  | Some sc -> Z3.Solver.add solver.incremental [sc]
+  | Some (it, sc, focus) ->
+    Z3.Solver.add solver.incremental [sc];
+    solver.focus_terms := (focus @ (! (solver.focus_terms)))
 
 
 (* as similarly suggested by Robbert *)
@@ -1013,16 +988,13 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      rtrue ()
   | `No_shortcut lc ->
      (*print stdout (item "lc" (LC.pp lc ^^ hardline));*)
-     let Translate.{expr; it; qs} = Translate.goal context global lc in
+     let Translate.{expr; qs; extra; _} = Translate.goal solver global pointer_facts lc in
      let nlc = Z3.Boolean.mk_not context expr in
-     let extra1 = pointer_facts @ Translate.extra_assumptions assumptions qs
-         |> List.map (Translate.term context global) in
-     let extra2 = Translate.extra_logical_facts context global
-         (nlc :: extra1 @ Z3.Solver.get_assertions solver.incremental) in
+     let extra = List.map (Translate.term context global) extra in
      let (elapsed, res) =
        time_f_elapsed (time_f_logs loc 5 "Z3(inc)"
            (Z3.Solver.check solver.incremental))
-         (nlc :: extra1 @ extra2)
+         (nlc :: extra)
      in
      begin match lc with
      | LC.T (IT (Const (Bool false), _)) ->
@@ -1032,29 +1004,19 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      end;
      match res with
      | Z3.Solver.UNSATISFIABLE ->
-        maybe_save_slow_problem "unsat" solver.context (extra1 @ extra2)
+        maybe_save_slow_problem "unsat" solver.context extra
             lc expr elapsed solver.incremental;
         rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
-        maybe_save_slow_problem "unknown" solver.context (extra1 @ extra2)
+        maybe_save_slow_problem "unknown" solver.context extra
             lc expr elapsed solver.incremental;
         let reason = Z3.Solver.get_reason_unknown solver.incremental in
         failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
-let get_loc_addrs_in_eqs solver ~pointer_facts global =
-  (* FIXME: duplicating what provable does *)
-  let context = solver.context in
-  let extra1 = pointer_facts |> List.map (Translate.term context global) in
-  let extra2 = Translate.extra_logical_facts context global
-    (extra1 @ Z3.Solver.get_assertions solver.incremental) in
-  let all_assumptions = extra1 @ extra2 @
-            Z3.Solver.get_assertions solver.incremental in
-  let key_ts = Translate.needs_premise_elts all_assumptions in
-  List.filter_map (function
-    | (_, Translate.IsLocAddrInEq t) -> Some t
-    | _ -> None) key_ts
-
+let get_solver_focused_terms solver ~pointer_facts global =
+  let tr = Translate.goal solver global pointer_facts (LC.T (IT.bool_ true)) in
+  tr.Translate.focused
 
 module Eval = struct
 

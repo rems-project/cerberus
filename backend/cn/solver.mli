@@ -38,9 +38,8 @@ val eval :
   IndexTerms.t option
 
 
-val get_loc_addrs_in_eqs : solver ->
+val get_solver_focused_terms : solver ->
   pointer_facts:IndexTerms.t list ->
-  Global.t -> Sym.t list
-
+  Global.t -> IndexTerms.t list
 
 

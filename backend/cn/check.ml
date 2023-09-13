@@ -372,6 +372,17 @@ let is_fun_addr global t = match IT.is_sym t with
       then Some s else None
   | _ -> None
 
+let get_loc_addrs_in_eqs () =
+  (* bit of a hack, there's code down to the solver to spot equalities where
+     either the lhs or rhs is a symbol *)
+  let@ its = get_solver_focused_terms () in
+  let@ g = get_global () in
+  let addrs = List.filter_map IT.is_eq its
+    |> List.concat_map (fun (x, y) -> [x; y])
+    |> List.filter_map (is_fun_addr g) in
+  Pp.debug 5 (lazy (Pp.item "loc eqs for function pointer check" (Pp.list Sym.pp addrs)));
+  return addrs
+
 let check_single_ct loc expr =
   let@ pointer = WellTyped.WIT.check loc BT.CType expr in
   let@ t = try_prove_constant loc expr in

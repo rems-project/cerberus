@@ -639,13 +639,14 @@ let set_statement_locs statement_locs =
   set { ctxt with statement_locs }
 
 
-let get_loc_addrs_in_eqs () =
+let get_solver_focused_terms () =
   let@ global = get_global () in
   let@ assumptions = all_constraints () in
   let@ s = solver () in
   let@ rs = all_resources () in
   let pointer_facts = Resources.pointer_facts rs in
-  return (Solver.get_loc_addrs_in_eqs s ~pointer_facts global)
+  let terms = Solver.get_solver_focused_terms s ~pointer_facts global in
+  return terms
 
 
 let embed_resultat (m : ('a) Resultat.t) : ('a) m = 
