@@ -153,6 +153,8 @@ module Translate = struct
     | DatatypeAccFunc of { member: Id.t; dt: Sym.t; bt: BT.t }
     | UninterpretedVal of { nm : Sym.t }
     | Term of { it : IT.t }
+    | UnsignedToSigned of int
+    | SignedToUnsigned of int
   [@@deriving eq]
 
 
@@ -286,6 +288,18 @@ module Translate = struct
       | Unit -> Z3.Sort.mk_uninterpreted_s context "unit"
       | Bool -> Z3.Boolean.mk_sort context
       | Integer -> Z3.Arithmetic.Integer.mk_sort context
+      | Bits (Unsigned, n) -> 
+         Z3.BitVector.mk_sort context n
+      | Bits (Signed, n) -> 
+         (*copying/adjusting Dhruv's code for Alloc_id*)
+         let bt_symbol = string (bt_name (Bits (Signed, n))) in
+         let field_symbol = string ("unsigned_" ^ string_of_int n) in
+         Z3Symbol_Table.add z3sym_table bt_symbol (UnsignedToSigned n);
+         Z3Symbol_Table.add z3sym_table field_symbol (SignedToUnsigned n);
+         Z3.Tuple.mk_sort context
+            bt_symbol
+            [field_symbol]
+            [sort (Bits (Unsigned, n))]
       | Real -> Z3.Arithmetic.Real.mk_sort context
       | Loc -> translate BT.(Tuple [Alloc_id; Integer])
       | Alloc_id ->
@@ -1249,6 +1263,10 @@ module Eval = struct
               (* Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt *)
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
            | Term {it} -> it
+           | UnsignedToSigned n ->
+              cast_ (Bits (Signed, n)) (nth args 0)
+           | SignedToUnsigned n ->
+              cast_ (Bits (Unsigned, n)) (nth args 0)
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->

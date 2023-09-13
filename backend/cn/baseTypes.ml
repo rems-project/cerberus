@@ -1,9 +1,15 @@
 open Pp
 
+type sign =
+  | Signed
+  | Unsigned
+[@@deriving eq, ord]
+
 type basetype =
   | Unit 
   | Bool
   | Integer
+  | Bits of sign * int
   | Real
   | Alloc_id
   | Loc
@@ -46,6 +52,8 @@ let rec pp = function
   | Unit -> !^"void"
   | Bool -> !^"bool"
   | Integer -> !^"integer"
+  | Bits (Signed, n) -> !^("i"^string_of_int n)
+  | Bits (Unsigned, n) -> !^("u"^string_of_int n)
   | Real -> !^"real"
   | Loc -> !^"pointer"
   | Alloc_id -> !^"alloc_id"
@@ -135,6 +143,8 @@ let rec hash = function
   | Datatype tag -> 4000 + Sym.num tag
   | Record _ -> 3000
   | Map (abt,rbt) -> 2000 + hash abt + hash rbt
+  | Bits (Signed, n) -> 5000 + n
+  | Bits (Unsigned, n) -> 6000 + n
 
 
 

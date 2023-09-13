@@ -6,6 +6,7 @@ type basetype =
   | Unit 
   | Bool
   | Integer
+  | Bits of BaseTypes.sign * int
   | Real
   | CType
   | Alloc_id
@@ -48,6 +49,8 @@ let rec pp = function
   | Unit -> !^"void"
   | Bool -> !^"bool"
   | Integer -> !^"integer"
+  | Bits (Signed, n) -> !^("i"^string_of_int n)
+  | Bits (Unsigned, n) -> !^("u"^string_of_int n)
   | Real -> !^"real"
   | CType -> !^"ctype"
   | Alloc_id -> !^"alloc_id"
@@ -114,6 +117,7 @@ let rec of_basetype = function
   | BT.Unit -> Unit
   | BT.Bool -> Bool
   | BT.Integer -> Integer
+  | BT.Bits (sign, n) -> Bits (sign, n)
   | BT.Real -> Real
   | BT.CType -> CType
   | BT.Alloc_id -> Alloc_id
@@ -131,6 +135,7 @@ let rec to_basetype = function
   | Unit -> BT.Unit
   | Bool -> BT.Bool
   | Integer -> BT.Integer
+  | Bits (sign, n) -> BT.Bits (sign, n)
   | Real -> BT.Real
   | CType -> BT.CType
   | Alloc_id -> BT.Alloc_id
