@@ -395,6 +395,92 @@ module Translate = struct
   let integer_to_alloc_id_fundecl context global =
     Z3.Tuple.get_mk_decl (sort context global Alloc_id)
 
+  let adjust_term global : IT.t -> IT.t option =
+
+    let struct_decls = global.struct_decls in
+
+    fun it ->
+      begin match IT.term it with
+      | Binop (Exp, t1, t2) ->
+        begin match is_z t1, is_z t2 with
+        | Some z1, Some z2 when Z.fits_int z2 ->
+          Some (z_ (Z.pow z1 (Z.to_int z2)))
+        | _, _ ->
+          assert false
+        end
+      | EachI ((i1, (s, _), i2), t) ->
+         let rec aux i =
+           if i <= i2
+           then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
+           else []
+         in
+         Some (and_ (aux i1))
+      | StructUpdate ((t, member), v) ->
+         let tag = BT.struct_bt (IT.bt t) in
+         let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+         let members = Memory.member_types layout in
+         let str =
+           List.map (fun (member', sct) ->
+               let value =
+                 if Id.equal member member' then v
+                 else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
+               in
+               (member', value)
+             ) members
+         in
+         Some (struct_ (tag, str))
+      | RecordUpdate ((t, member), v) ->
+         let members = BT.record_bt (IT.bt t) in
+         let str =
+           List.map (fun (member', bt) ->
+               let value =
+                 if Id.equal member member' then v
+                 else IT ((RecordMember (t, member')), bt)
+               in
+               (member', value)
+             ) members
+         in
+         Some (IT ((Record str), IT.bt t))
+      | MemberOffset (tag, member) ->
+         let decl = SymMap.find tag struct_decls in
+         Some (int_ (Option.get (Memory.member_offset decl member)))
+      | ArrayOffset (ct, t) ->
+         Some (mul_ (int_ (Memory.size_of_ctype ct), t))
+      | SizeOf ct ->
+         Some (int_ (Memory.size_of_ctype ct))
+      | Aligned t ->
+         Some (divisible_ (pointerToIntegerCast_ t.t, t.align))
+      | Representable (CT.Pointer _ as ct, t) ->
+         Some (representable struct_decls ct t)
+      | Representable (ct, t) ->
+         Some (representable struct_decls ct t)
+      | Good (ct, t) ->
+         Some (good_value struct_decls ct t)
+      | WrapI (ity, arg) ->
+         (* try to follow wrapI from runtime/libcore/std.core *)
+         let maxInt = Memory.max_integer_type ity in
+         let minInt = Memory.min_integer_type ity in
+         let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
+         let r = rem_f_ (arg, z_ dlt) in
+         (* variation from std.core, discussed with authors. the subtraction
+            case is impossible if minInt is zero (i.e. unsigned, the main case) *)
+         let e = if Z.equal minInt Z.zero then r
+         else ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
+         Some e
+      | Apply (name, args) ->
+         let def = Option.get (get_logical_function_def global name) in
+         begin match def.definition with
+         | Def body ->
+            Some (LogicalFunctions.open_fun def.args body args)
+         | _ -> None
+         end
+      | Let ((nm, t1), t2) ->
+         Some (IT.subst (IT.make_subst [(nm, t1)]) t2)
+      | _ ->
+         None
+      end
+
+
   let term ?(warn_lambda=true) context global : IT.t -> expr =
 
     let struct_decls = global.struct_decls in
@@ -435,6 +521,13 @@ module Translate = struct
 
     let rec term it =
       let bt = IT.bt it in
+      let adj () = match adjust_term global it with
+      | None ->
+        Pp.debug 1 (lazy (Pp.item "Translate.term: failed to adjust_term" (IT.pp it)));
+        assert false
+      | Some it2 ->
+        term it2
+      in
       begin match IT.term it with
       | Sym s ->
          Z3.Expr.mk_const context (symbol s) (sort bt)
@@ -480,13 +573,7 @@ module Translate = struct
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
          | Div -> mk_div context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
-         | Exp ->
-            begin match is_z t1, is_z t2 with
-            | Some z1, Some z2 when Z.fits_int z2 ->
-               term (z_ (Z.pow z1 (Z.to_int z2)))
-            | _, _ ->
-               assert false
-            end
+         | Exp -> adj ()
          | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
          | Rem -> Integer.mk_rem context (term t1) (term t2)
          | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
@@ -518,13 +605,7 @@ module Translate = struct
          | Impl -> Z3.Boolean.mk_implies context (term t1) (term t2)
          end
       | ITE (t1, t2, t3) -> Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
-      | EachI ((i1, (s, _), i2), t) ->
-         let rec aux i =
-           if i <= i2
-           then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
-           else []
-         in
-         term (and_ (aux i1))
+      | EachI _ -> adj ()
       | Tuple ts ->
          let constructor = Z3.Tuple.get_mk_decl (sort bt) in
          Z3.Expr.mk_app context constructor (map term ts)
@@ -539,20 +620,7 @@ module Translate = struct
          let n = Option.get (Memory.member_number layout member) in
          let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
          Z3.Expr.mk_app context (nth destructors n) [term t]
-      | StructUpdate ((t, member), v) ->
-         let tag = BT.struct_bt (IT.bt t) in
-         let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
-         let members = Memory.member_types layout in
-         let str =
-           List.map (fun (member', sct) ->
-               let value =
-                 if Id.equal member member' then v
-                 else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
-               in
-               (member', value)
-             ) members
-         in
-         term (struct_ (tag, str))
+      | StructUpdate _ -> adj ()
       | Record mts ->
          let constructor = Z3.Tuple.get_mk_decl (sort bt) in
          Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
@@ -562,18 +630,7 @@ module Translate = struct
          let n = List.assoc Id.equal member members_i in
          let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
          Z3.Expr.mk_app context (nth destructors n) [term t]
-      | RecordUpdate ((t, member), v) ->
-         let members = BT.record_bt (IT.bt t) in
-         let str =
-           List.map (fun (member', bt) ->
-               let value =
-                 if Id.equal member member' then v
-                 else IT ((RecordMember (t, member')), bt)
-               in
-               (member', value)
-             ) members
-         in
-         term (IT ((Record str), IT.bt t))
+      | RecordUpdate _ -> adj ()
       | Cast (cbt, t) ->
          begin match IT.bt t, cbt with
          | Integer, Loc ->
@@ -589,13 +646,9 @@ module Translate = struct
          | _ ->
             assert false
          end
-      | MemberOffset (tag, member) ->
-         let decl = SymMap.find tag struct_decls in
-         term (int_ (Option.get (Memory.member_offset decl member)))
-      | ArrayOffset (ct, t) ->
-         term (mul_ (int_ (Memory.size_of_ctype ct), t))
-      | SizeOf ct ->
-         term (int_ (Memory.size_of_ctype ct))
+      | MemberOffset _ -> adj ()
+      | ArrayOffset _ -> adj ()
+      | SizeOf _ -> adj ()
       | Nil ibt ->
          make_uf (plain (!^"nil_uf"^^angles(BT.pp ibt))) (List ibt) []
       | Cons (t1, t2) ->
@@ -616,25 +669,10 @@ module Translate = struct
                       (List.map sort (List.map IT.bt [arr; i; len])) (sort bt) in
          Z3.FuncDecl.apply fdec args
          |> needs_premise (IsArrayToList it)
-      | Aligned t ->
-         term (divisible_ (pointerToIntegerCast_ t.t, t.align))
-      | Representable (CT.Pointer _ as ct, t) ->
-         term (representable struct_decls ct t)
-      | Representable (ct, t) ->
-         term (representable struct_decls ct t)
-      | Good (ct, t) ->
-         term (good_value struct_decls ct t)
-      | WrapI (ity, arg) ->
-         (* try to follow wrapI from runtime/libcore/std.core *)
-         let maxInt = Memory.max_integer_type ity in
-         let minInt = Memory.min_integer_type ity in
-         let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
-         let r = rem_f_ (arg, z_ dlt) in
-         (* variation from std.core, discussed with authors. the subtraction
-            case is impossible if minInt is zero (i.e. unsigned, the main case) *)
-         let e = if Z.equal minInt Z.zero then r
-         else ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
-         term e
+      | Aligned _ -> adj ()
+      | Representable _ -> adj ()
+      | Good _ -> adj ()
+      | WrapI _ -> adj ()
       | MapConst (abt, t) ->
          Z3.Z3Array.mk_const_array context (sort abt) (term t)
       | MapSet (t1, t2, t3) ->
@@ -653,8 +691,7 @@ module Translate = struct
       | Apply (name, args) ->
          let def = Option.get (get_logical_function_def global name) in
          begin match def.definition with
-         | Def body ->
-            term (LogicalFunctions.open_fun def.args body args)
+         | Def body -> adj ()
          | _ ->
             let decl =
               Z3.FuncDecl.mk_func_decl context (symbol name)
@@ -663,8 +700,7 @@ module Translate = struct
             in
             Z3.Expr.mk_app context decl (List.map term args)
        end
-      | Let ((nm, t1), t2) ->
-         term (IT.subst (IT.make_subst [(nm, t1)]) t2)
+      | Let _ -> adj ()
       | Constructor (constr, args) ->
          datatypeCons (constr, args)
       (* copying and adjusting Thomas's code from compile.ml *)
@@ -807,6 +843,9 @@ module Translate = struct
     let m1 = ! needs_premise_table in
     if Z3ExprMap.is_empty m1 then []
     else
+    begin
+    Pp.debug 4 (lazy (Pp.item "needs_premise_elts" (Pp.list Pp.string
+        (List.map Z3.Expr.to_string exprs))));
     let rec f m2 xs = function
       | [] -> xs
       | expr :: exprs ->
@@ -816,6 +855,7 @@ module Translate = struct
         f m2 xs (Z3.Expr.get_args expr @ exprs)
     in
     f Z3ExprMap.empty [] exprs
+    end
 
   let rec extra_logical_facts context global exprs =
     let key_ts = needs_premise_elts exprs in
@@ -823,14 +863,19 @@ module Translate = struct
       | (_, IsNthList x) -> Some x
       | (_, IsArrayToList x) -> Some x
       | _ -> None) key_ts in
+    Pp.debug 10 (lazy (Pp.item "array-list key terms" (Pp.list IT.pp array_list_ts)));
+    Pp.debug 4 (lazy (Pp.item "Z3 simplify help" (Pp.string (Z3.Expr.get_simplify_help context))));
     let array_list_facts = IT.nth_array_to_list_facts array_list_ts
-      |> List.map (term context global) in
+      |> List.map (fun it -> (it, term context global it)) in
     let facts = array_list_facts in
-    let exprs2 = facts @ exprs in
+    let exprs2 = (List.map snd facts) @ exprs in
     let key_ts2 = needs_premise_elts exprs2 in
     if List.length key_ts2 > List.length key_ts
     then extra_logical_facts context global exprs2
-    else facts
+    else begin
+      Pp.debug 10 (lazy (Pp.item "extra logical facts" (Pp.list IT.pp (List.map fst facts))));
+      List.map snd facts
+    end
 
 
 end
