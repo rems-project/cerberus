@@ -637,7 +637,7 @@ let rec cn_to_ail_expr_aux_internal
     cn_to_ail_expr_aux_internal const_prop pred_name dts t d
 
   | MapConst (bt, t) -> failwith "TODO18"
-  | MapSet (t1, t2, t3) -> failwith "TODO19"
+  | MapSet (m, key, value) -> failwith "TODO19"
   | MapGet (m, key) ->
     (* Only works when index is an integer *)
     (* TODO: Make it work for general case *)
@@ -651,7 +651,6 @@ let rec cn_to_ail_expr_aux_internal
     let val_sym = Sym.fresh () in
     let binding = create_binding val_sym cn_ctype_ptr in
     let decl = A.(AilSdeclaration [(val_sym, Some (mk_expr cast_fcall))]) in
-    (* let ail_sub_expr_ = mk_expr (A.(AilEbinary (e1, Arithmetic Add, e2))) in *)
     dest d (b1 @ b2 @ [binding], s1 @ s2 @ [decl], mk_expr A.(AilEident val_sym))
 
   | MapDef ((sym, bt), t) -> failwith "TODO21"
@@ -991,8 +990,8 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
       | _ -> 
         let cn_map_type = mk_ctype ~annots:[CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")] C.Void in
         let sym_binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, cn_map_type))) in
-        let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, cn_map_type))])) in
-        let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr alloc_call))]) in
+        let create_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "map_create")), [])) in
+        let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr create_call))]) in
         (* Improve - str_of_ctype bound to fail soon *)
         let f_str = "convert_to_" ^ (str_of_ctype (bt_to_ail_ctype return_bt)) in
         let conversion_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty f_str)), [mk_expr rhs])) in
