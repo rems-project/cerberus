@@ -1,12 +1,13 @@
 
 // #include "alloc.c"
 #include "hash_table.c"
+#include <stdio.h>
 
 
 
 /* Wrappers for C types */
 
-typedef signed long cn_integer;
+typedef unsigned int cn_integer;
 typedef _Bool cn_bool;
 
 _Bool cn_char_equality(void *a, void *b) {
@@ -15,15 +16,22 @@ _Bool cn_char_equality(void *a, void *b) {
 
 typedef hash_table cn_map;
 
-
-void *cn_map_get(cn_map *m, const char key) {
-    const char key_arr[1] = {key};
-    return ht_get(m, key_arr);
+cn_map *map_create(void) {
+    return ht_create();
 }
 
-void cn_map_set(cn_map *m, const char key, void *value) {
-    const char key_arr[1] = {key};
-    ht_set(m, key_arr, value);
+
+void *cn_map_get(cn_map *m, unsigned int *key) {
+    // const char key_arr[1] = {key};
+    void *res = ht_get(m, key);
+    if (!res) printf("NULL being returned for key %d\n", *key);
+    return res;
+}
+
+void cn_map_set(cn_map *m, unsigned int *key, void *value) {
+    // const char key_arr[1] = {key};
+    printf("cn_map_set: key = %d\n", *key);
+    ht_set(m, key, value);
 }
 
 /* Every equality function needs to take two void pointers for this to work */
@@ -32,14 +40,23 @@ _Bool cn_integer_equality(void *i1, void *i2) {
 }
 
 _Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
-    if (ht_size(m1) != ht_size(m2)) return 0;
+    // if (ht_size(m1) != ht_size(m2)) return 0;
     
-    hash_table_iterator hti1 = ht_iterator(m1);
-    hash_table_iterator hti2 = ht_iterator(m2);
+    // hash_table_iterator hti1 = ht_iterator(m1);
+    // hash_table_iterator hti2 = ht_iterator(m2);
 
-    while (ht_next(&hti1) && ht_next(&hti2)) {
-        if (!value_equality_fun(hti1.value, hti2.value)) return 0;
-    }
+
+    // while (ht_next(&hti1) && ht_next(&hti2)) {
+    //     printf("Entered loop\n");
+    //     printf("value 1: %c\n", *(cn_integer *)(hti1.value));
+    //     printf("value 2: %c\n", *(cn_integer *)(hti2.value));
+    //     if (!cn_integer_equality(hti1.value, hti2.value)) {
+    //         printf("Values not equal!\n");
+    //         return 0;
+    //     } 
+    // }
+
+    printf("Returning true from cn_map_equality\n");
 
     return 1;
 }
@@ -93,8 +110,9 @@ long max(long a, long b) {
 
 /* Conversion functions */
 
-cn_integer *convert_to_cn_integer(char c) {
+cn_integer *convert_to_cn_integer(int i) {
     cn_integer *ret = alloc(sizeof(cn_integer));
-    *ret = (cn_integer) c;
+    *ret = (cn_integer) i;
+    printf("Inside convert_to_cn_integer: *ret = %d\n", *ret);
     return ret;
 }
