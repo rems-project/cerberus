@@ -145,7 +145,16 @@ let cn_keywords: (string * Tokens.token) list = [
     "boolean"       , CN_BOOL;
     "CN_bool"       , CN_BOOL;
     "integer"       , CN_INTEGER;
-    "CN_integer"    , CN_INTEGER;
+    "u8"           , CN_BITS (`U,8);
+    "u16"           , CN_BITS (`U,16);
+    "u32"           , CN_BITS (`U,32);
+    "u64"           , CN_BITS (`U,64);
+    "u128"           , CN_BITS (`U,128);
+    "i8"           , CN_BITS (`I,8);
+    "i16"           , CN_BITS (`I,16);
+    "i32"           , CN_BITS (`I,32);
+    "i64"           , CN_BITS (`I,64);
+    "i128"           , CN_BITS (`I,128);
     "real"          , CN_REAL;
     "pointer"       , CN_POINTER;
     "map"           , CN_MAP;
@@ -358,6 +367,9 @@ let whitespace_char = [' ' '\t' (*'\n'*) '\012' '\r']
 let lbrack_lbrack = '[' whitespace_char* '['
 (*let rbrack_rbrack = ']' whitespace_char* ']'*)
 
+(* For CN *)
+let cn_integer_width = ("8" | "16" | "32" | "64" | "128")
+
 (* ========================================================================== *)
 
 rule s_char_sequence = parse
@@ -448,6 +460,12 @@ and initial = parse
       { CONSTANT (Cabs.CabsInteger_const (str, Some Cabs.CabsSuffix_UL)) }
   | (integer_constant as str) long_long_suffix unsigned_suffix
       { CONSTANT (Cabs.CabsInteger_const (str, Some Cabs.CabsSuffix_ULL)) }
+    (* For CN. Copying and adjusting Kayvan's code from above. *)
+  | (integer_constant as str) 'u' (cn_integer_width as n)
+      { CN_CONSTANT (str, `U, int_of_string n) }
+  | (integer_constant as str) 'i' (cn_integer_width as n)
+      { CN_CONSTANT (str, `I, int_of_string n) }
+    (* /For CN. *)
   | (integer_constant as str)
       { CONSTANT (Cabs.CabsInteger_const (str, None)) }
 

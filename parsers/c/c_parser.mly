@@ -147,10 +147,12 @@ type asm_qualifier =
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
+%token <[`U|`I] * int>CN_BITS
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC
 %token CN_UNCHANGED CN_WILD
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
+%token <string * [`U|`I] * int> CN_CONSTANT
 
 %token EOF
 
@@ -1848,6 +1850,15 @@ prim_expr:
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
+| cst= CN_CONSTANT
+    {
+        let (str,sign,n) = cst in
+        let sign = match sign with
+         | `U -> Cerb_frontend.Cn.CN_unsigned
+         | `I -> Cerb_frontend.Cn.CN_signed
+         in
+         Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bits ((sign,n),Z.of_string str))))
+    }
 | ident= cn_variable
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_var ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
@@ -2085,6 +2096,14 @@ base_type_explicit:
     { Cerb_frontend.Cn.CN_bool }
 | CN_INTEGER
     { Cerb_frontend.Cn.CN_integer }
+| bit_ty=CN_BITS
+    { let (sign,n) = bit_ty in 
+      let sign = match sign with
+       | `U -> CN_unsigned
+       | `I -> CN_signed
+      in
+      Cerb_frontend.Cn.CN_bits (sign,n)
+    }
 | CN_REAL
     { Cerb_frontend.Cn.CN_real }
 | CN_POINTER

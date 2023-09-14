@@ -136,6 +136,7 @@ type token =
   | CERB_MAGIC of (Cerb_location.t * string)
 
   (* CN syntax *)
+  | CN_CONSTANT of (string * [`I|`U] * int)
   | CN_FUNCTION
   | CN_PREDICATE
   | CN_LEMMA
@@ -152,6 +153,7 @@ type token =
   | CN_APPLY
   | CN_MATCH
   (* | CN_PREDNAME of string *)
+  | CN_BITS of ([`U|`I] * int)
   | CN_BOOL
   | CN_INTEGER
   | CN_REAL
@@ -296,6 +298,7 @@ let string_of_token = function
   | BUILTIN_CHOOSE_EXPR -> "BUILTIN_CHOOSE_EXPR"
   | EOF -> "EOF"
   | CERB_MAGIC (_, str) -> "/*@ " ^ str ^ " @*/"
+  | CN_CONSTANT _ -> "CN_CONSTANT"
   | CN_GOOD -> "CN_GOOD"
   | CN_PACK -> "CN_PACK"
   | CN_UNPACK -> "CN_UNPACK"
@@ -307,6 +310,7 @@ let string_of_token = function
   | CN_MATCH -> "CN_MATCH"
   (* | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")" *)
   | CN_BOOL -> "CN_BOOL"
+  | CN_BITS _ -> "CN_BITS"
   | CN_INTEGER -> "CN_INTEGER"
   | CN_REAL -> "CN_REAL"
   | CN_POINTER -> "CN_POINTER"
