@@ -3,6 +3,7 @@
 #include "alloc.c"
 #include "hash_table.h"
 #include <assert.h>
+#include <stdint.h>
 #include <string.h>
 
 
@@ -19,7 +20,7 @@ hash_table* ht_create(void) {
     table->capacity = INITIAL_CAPACITY;
 
     // Allocate (zero'd) space for entry buckets.
-    table->entries = alloc_zeros(table->capacity * sizeof(ht_entry));
+    table->entries = alloc(table->capacity * sizeof(ht_entry));
     if (table->entries == NULL) {
         // free(table); // error, free table before we return!
         return NULL;
@@ -39,46 +40,30 @@ hash_table* ht_create(void) {
 //     free(table);
 // }
 
-#define FNV_OFFSET 14695981039346656037UL
-#define FNV_PRIME 1099511628211UL
+#define FNV_OFFSET 14695981039346656037U
+#define FNV_PRIME 1099511628211U
 
 // Return 64-bit FNV-1a hash for key (NUL-terminated). See description:
 // https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
-static unsigned long hash_key(const char* key) {
-    unsigned long hash = FNV_OFFSET;
-    for (const char* p = key; *p; p++) {
-        hash ^= (unsigned long)(unsigned char)(*p);
-        hash *= FNV_PRIME;
-    }
+static uint64_t hash_key(unsigned int *key) {
+    uint64_t hash = FNV_OFFSET;
+    hash ^= *key;
+    hash *= FNV_PRIME;
     return hash;
 }
 
-// int str_compare(const char* s1, const char* s2)
-// {
-//     while(*s1 && (*s1 == *s2))
-//     {
-//         s1++;
-//         s2++;
-//     }
-//     return *(const unsigned char*)s1 - *(const unsigned char*)s2;
-// }
 
-// char *str_duplicate(const char *src) {
-//     char *dst = alloc(strlen (src) + 1);  // Space for length plus nul
-//     if (dst == NULL) return NULL;          // No memory
-//     strcpy(dst, src);                      // Copy the characters
-//     return dst;                            // Return the new string
-// }
-
-void* ht_get(hash_table* table, const char* key) {
+void* ht_get(hash_table* table, unsigned int *key) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(table->capacity - 1));
+    printf("ht_get: key = %d, index = %ld\n", *key, index);
 
     // Loop till we find an empty entry.
     while (table->entries[index].key != NULL) {
-        if (strcmp(key, table->entries[index].key) == 0) {
+        if (*key == *(table->entries[index].key)) {
             // Found key, return value.
+            // printf("Set entry. Key: %d, Value: %c\n", *(signed int *)key, *(char *)value);
             return table->entries[index].value;
         }
         // Key wasn't in this slot, move to next (linear probing).
@@ -88,19 +73,26 @@ void* ht_get(hash_table* table, const char* key) {
             index = 0;
         }
     }
+    printf("Returning NULL from ht_get\n");
     return NULL;
 }
 
+unsigned int *duplicate_key(unsigned int *key) {
+    unsigned int *new_key = alloc(sizeof(unsigned int));
+    *new_key = *key;
+    return new_key;
+}
+
 // Internal function to set an entry (without expanding table).
-static const char* ht_set_entry(ht_entry* entries, size_t capacity,
-        const char* key, void* value, int* plength) {
+static unsigned int* ht_set_entry(ht_entry* entries, size_t capacity,
+        unsigned int *key, void* value, int* plength) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(capacity - 1));
 
     // Loop till we find an empty entry.
     while (entries[index].key != NULL) {
-        if (strcmp(key, entries[index].key) == 0) {
+        if (*key == *(entries[index].key)) {
             // Found key (it already exists), update value.
             entries[index].value = value;
             return entries[index].key;
@@ -115,14 +107,15 @@ static const char* ht_set_entry(ht_entry* entries, size_t capacity,
 
     // Didn't find key, allocate+copy if needed, then insert it.
     if (plength != NULL) {
-        key = strdup(key);
+        key = duplicate_key(key);
         if (key == NULL) {
             return NULL;
         }
         (*plength)++;
     }
-    entries[index].key = (char*)key;
+    entries[index].key = key;
     entries[index].value = value;
+    printf("Set entry. Index: %ld, Key: %d, Value: %c\n", index, *key, *(char *)value);
     return key;
 }
 
@@ -134,7 +127,7 @@ static _Bool ht_expand(hash_table* table) {
     if (new_capacity < table->capacity) {
         return 0;  // overflow (capacity would be too big)
     }
-    ht_entry* new_entries = alloc_zeros(new_capacity * sizeof(ht_entry));
+    ht_entry* new_entries = alloc(new_capacity * sizeof(ht_entry));
     if (new_entries == NULL) {
         return 0;
     }
@@ -156,7 +149,7 @@ static _Bool ht_expand(hash_table* table) {
 }
 
 
-const char* ht_set(hash_table* table, const char* key, void* value) {
+unsigned int* ht_set(hash_table* table, unsigned int* key, void* value) {
     assert(value != NULL);
     if (value == NULL) {
         return NULL;
@@ -196,6 +189,7 @@ _Bool ht_next(hash_table_iterator* it) {
             ht_entry entry = table->entries[i];
             it->key = entry.key;
             it->value = entry.value;
+            printf("Get entry (iterator). Index: %ld, Key: %d, Value: %c\n", i, *(signed int *)entry.key, *(char *)entry.value);
             return 1;
         }
     }
