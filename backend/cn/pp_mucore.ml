@@ -203,6 +203,12 @@ module Make (Config: CONFIG) = struct
     | OpAnd -> !^ "/\\"
     | OpOr  -> !^ "\\/"
 
+  let pp_iop = function
+    | IOpAdd -> P.plus
+
+  let pp_bound = function
+    | M_Bound_Wrap act -> !^"wrap<" ^^ pp_ct act.ct ^^ !^">"
+    | M_Bound_Except act -> !^"check<" ^^ pp_ct act.ct ^^ !^">"
 
 
 
@@ -488,6 +494,9 @@ module Make (Config: CONFIG) = struct
               Pp.c_app (!^ "conv_loaded_int") [pp_pexpr ct_expr; pp_pexpr int_expr]
           | M_PEwrapI (act, asym) ->
               !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
+          | M_PEbounded_binop (bound, iop, arg1, arg2) ->
+              !^"bound_op" ^^ P.parens (P.flow (P.comma ^^ P.break 1)
+                  [pp_bound bound; P.squotes (pp_iop iop); pp_pexpr arg1; pp_pexpr arg2])
           | M_PEcatch_exceptional_condition (act, asym) ->
               !^"catch_exceptional_condition" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
           | M_PEis_representable_integer (asym, act) ->

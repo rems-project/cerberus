@@ -739,6 +739,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Bool pe (fun arg ->
      k (ite_ (arg, int_ 1, int_ 0)))
+  | M_PEbounded_binop (act, iop, pe1, pe2) ->
+     unsupported loc !^"use of M_PEbounded_binop"
   | M_PEconv_int (ct_expr, pe)
   | M_PEconv_loaded_int (ct_expr, pe) ->
      check_pexpr ~expect:BT.CType ct_expr (fun ct_it ->

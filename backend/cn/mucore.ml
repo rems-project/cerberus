@@ -120,6 +120,10 @@ type bw_unop =
  | M_BW_CTZ
  | M_BW_FFS
 
+type 'TY bound_kind =
+ | M_Bound_Wrap of 'TY act
+ | M_Bound_Except of 'TY act
+
 type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEsym of symbol
  (* | M_PEimpl of Implementation.implementation_constant (\* implementation-defined constant *\) *)
@@ -146,6 +150,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEconv_loaded_int of 'TY mu_pexpr * 'TY mu_pexpr
  | M_PEwrapI of 'TY act * 'TY mu_pexpr
  | M_PEcatch_exceptional_condition of 'TY act * 'TY mu_pexpr
+ | M_PEbounded_binop of 'TY bound_kind * Core.iop * 'TY mu_pexpr * 'TY mu_pexpr
  | M_PEis_representable_integer of 'TY mu_pexpr * 'TY act
 
  | M_PEundef of Cerb_location.t * Undefined.undefined_behaviour (* undefined behaviour *)

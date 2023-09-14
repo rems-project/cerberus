@@ -223,6 +223,8 @@ let function_ids = [
     ("ctype_width", M_F_ctype_width);
   ]
 
+let ity_act loc ity = {loc; annot = []; type_annot = ();
+  ct = (Sctypes.Integer ity)}
 
 let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   let loc = Loc.update loc (get_loc_ annots) in
@@ -348,6 +350,20 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEmemberof(sym1, id1, e') ->
      let e' = n_pexpr loc e' in
      annotate (M_PEmemberof(sym1, id1, e'))
+  | PEconv_int(ity, e') ->
+     let e' = n_pexpr loc e' in
+     let ity_e = annotate (M_PEval (M_Vctype (Sctypes.to_ctype (Sctypes.Integer ity)))) in
+     annotate (M_PEconv_int(ity_e, e'))
+  | PEwrapI(ity, iop, arg1, arg2) ->
+     let act = ity_act loc ity in
+     let arg1 = n_pexpr loc arg1 in
+     let arg2 = n_pexpr loc arg2 in
+     annotate (M_PEbounded_binop (M_Bound_Wrap act, iop, arg1, arg2))
+  | PEcatch_exceptional_condition(ity, iop, arg1, arg2) ->
+     let act = ity_act loc ity in
+     let arg1 = n_pexpr loc arg1 in
+     let arg2 = n_pexpr loc arg2 in
+     annotate (M_PEbounded_binop (M_Bound_Except act, iop, arg1, arg2))
   | PEcall(sym1, args) ->
      begin match sym1, args with
      | Sym (Symbol (_, _, SD_Id "conv_int")), 
