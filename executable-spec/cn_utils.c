@@ -29,8 +29,6 @@ void *cn_map_get(cn_map *m, unsigned int *key) {
 }
 
 void cn_map_set(cn_map *m, unsigned int *key, void *value) {
-    // const char key_arr[1] = {key};
-    printf("cn_map_set: key = %d\n", *key);
     ht_set(m, key, value);
 }
 
@@ -47,7 +45,6 @@ _Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *,
 
 
     while (ht_next(&hti1)) {
-        printf("Entered loop\n");
         unsigned int* curr_key = hti1.key;
         void *val1 = cn_map_get(m1, curr_key);
         void *val2 = cn_map_get(m2, curr_key);
@@ -55,13 +52,11 @@ _Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *,
         /* Check if other map has this key at all */
         if (!val2) return 0;
 
-        if (!cn_integer_equality(val1, val2)) {
+        if (!value_equality_fun(val1, val2)) {
             printf("Values not equal!\n");
             return 0;
         } 
     }
-
-    printf("Returning true from cn_map_equality\n");
 
     return 1;
 }
@@ -118,6 +113,5 @@ long max(long a, long b) {
 cn_integer *convert_to_cn_integer(int i) {
     cn_integer *ret = alloc(sizeof(cn_integer));
     *ret = (cn_integer) i;
-    printf("Inside convert_to_cn_integer: *ret = %d\n", *ret);
     return ret;
 }

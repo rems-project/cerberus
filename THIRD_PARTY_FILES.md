@@ -83,3 +83,11 @@ In the test/ directory:
 | BSD 2-Clause | tests/csmith/runtime/custom_stdint_x86.h        | Csmith                               |
 | LGPL         | tests/csmith/runtime/custom_limits.h            | Csmith                               |
 | BSD 2-Clause | tests/csmith/runtime/safe_math.h                | Csmith                               |
+
+---
+
+In the `executable-spec` directory:
+
+| License      | Files                                           | From                                 |
+| ------------ | ----------------------------------------------- | ------------------------------------ |
+| MIT          | executable-spec/{hash_table.c, hash_table.h}    | benhoyt                              |
