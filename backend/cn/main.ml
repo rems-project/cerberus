@@ -201,7 +201,7 @@ let main
             let (c_predicates, c_records) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates in
 
             (* TODO: Topological sort *)
-            Stdlib.output_string cn_oc (generate_include_header ("cn_utils.c", false));
+            Stdlib.output_string cn_oc (generate_include_header ("executable-spec/cn_utils.c", false));
             Stdlib.output_string cn_oc (generate_include_header ("assert.h", true));
             Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_records;
