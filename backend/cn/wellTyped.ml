@@ -298,6 +298,8 @@ module WIT = struct
          end
       | Const (Z z) ->
          return (IT (Const (Z z), Integer))
+      | Const (Bits ((sign,n),v) as c) ->
+         return (IT (Const c, BT.Bits (sign,n)))
       | Const (Q q) ->
          return (IT (Const (Q q), Real))
       | Const (Pointer p) ->

@@ -3,6 +3,7 @@ module CT = Sctypes
 
 type const = 
   | Z of Z.t
+  | Bits of (BaseTypes.sign * int) * Z.t
   | Q of Q.t
   | Pointer of Z.t
   | Alloc_id of Z.t
@@ -143,6 +144,10 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     | Const const ->
        begin match const with
        | Z i -> !^(Z.to_string i)
+       | Bits ((sign,n), v) -> 
+         !^(Z.to_string v 
+         ^ (match sign with Unsigned -> "u" | Signed -> "i") 
+         ^ string_of_int n)
        | Q q -> !^(Q.to_string q)
        | Pointer i ->
           begin match !Pp.loc_pp with
@@ -392,6 +397,8 @@ let rec dtree (IT (it_, bt)) =
      Dleaf (Sym.pp s)
   | Const (Z z) -> 
      Dleaf !^(Z.to_string z)
+  | Const (Bits ((sign,n), v)) ->
+     Dleaf (pp (IT (it_,bt)))
   | Const (Q q) -> 
      Dleaf !^(Q.to_string q)
   | Const (Pointer z) -> 

@@ -16,10 +16,15 @@ let ensure_not_c_variable = function
 end
 
 
+type sign = 
+  | CN_unsigned
+  | CN_signed
+
 type cn_base_type 'a =
   | CN_unit
   | CN_bool
   | CN_integer
+  | CN_bits of sign * int
   | CN_real
   | CN_loc
   | CN_struct of 'a
@@ -64,6 +69,7 @@ type cn_binop =
 type cn_const =
   | CNConst_NULL
   | CNConst_integer of integer
+  | CNConst_bits of (sign * int) * integer
   | CNConst_bool of bool
   | CNConst_unit
 

@@ -4091,6 +4091,8 @@ let rec desugar_cn_base_type loc bTy =
       E.return CN_bool
     | CN_integer ->
       E.return CN_integer
+    | CN_bits sign n ->
+      E.return (CN_bits sign n)
     | CN_real ->
       E.return CN_real
     | CN_loc ->

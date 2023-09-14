@@ -141,6 +141,8 @@ let pp_cnexpr_kind expr_ =
   match expr_ with
   | CNExpr_const CNConst_NULL -> !^ "NULL"
   | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
+  | CNExpr_const (CNConst_bits ((sign,n),v)) -> 
+    Pp.string (Z.to_string v ^ (match sign with CN_unsigned -> "u" | CN_signed -> "i") ^ string_of_int n)
   | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
   | CNExpr_const CNConst_unit -> !^"void"
   | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
@@ -256,6 +258,10 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
         Bool
     | CN_integer ->
         Integer
+    | CN_bits (CN_unsigned, n) ->
+        Bits (Unsigned, n)
+    | CN_bits (CN_signed, n) ->
+        Bits (Signed, n)
     | CN_real ->
         Real
     | CN_loc ->
@@ -614,6 +620,12 @@ module EffectfulTranslation = struct
             return (IT (Const Null, SBT.Loc None))
         | CNExpr_const (CNConst_integer n) ->
             return (IT (Const (Z n), SBT.Integer))
+        | CNExpr_const (CNConst_bits ((sign,n),v)) ->
+            let sign = match sign with
+              | CN_unsigned -> BT.Unsigned
+              | CN_signed -> BT.Signed
+            in
+            return (IT (Const (Bits ((sign,n), v)), SBT.Bits (sign,n)))
         | CNExpr_const (CNConst_bool b) ->
             return (IT (Const (Bool b), SBT.Bool))
         | CNExpr_const CNConst_unit ->

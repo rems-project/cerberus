@@ -61,6 +61,8 @@ module MakePp (Conf: PP_CN) = struct
         pp_type_keyword "bool"
     | CN_integer ->
         pp_type_keyword "integer"
+    | CN_bits (CN_unsigned, n) -> pp_type_keyword ("u" ^ string_of_int n)
+    | CN_bits (CN_signed, n) -> pp_type_keyword ("i" ^ string_of_int n)
     | CN_real ->
         pp_type_keyword "real"
     | CN_loc ->
@@ -126,6 +128,8 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ "NULL")
       | CNExpr_const CNConst_integer n ->
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string n))
+      | CNExpr_const (CNConst_bits ((sign,n),v)) ->
+          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string v ^ (match sign with CN_unsigned -> "u" | CN_signed -> "i") ^ string_of_int n))
       | CNExpr_const (CNConst_bool b) ->
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
       | CNExpr_const CNConst_unit ->
