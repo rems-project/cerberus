@@ -2,7 +2,7 @@
 
 // Hash table entry (slot may be filled or empty).
 typedef struct {
-    const char* key;  // key is NULL if this slot is empty
+    unsigned int *key;  // key is NULL if this slot is empty
     void* value;
 } ht_entry;
 
@@ -19,15 +19,15 @@ hash_table *create_hash_table(void);
 
 void destroy_hash_table(hash_table *table);
 
-void *ht_get(hash_table *table, const char *key);
+void *ht_get(hash_table *table, unsigned int *key);
 
-const char* ht_set(hash_table* table, const char* key, void* value);
+unsigned int* ht_set(hash_table* table, unsigned int *key, void* value);
 
 int ht_size(hash_table *table);
 
 
 typedef struct {
-    const char* key;  // current key
+    unsigned int *key;  // current key
     void* value;      // current value
 
     // Don't use these fields directly.
