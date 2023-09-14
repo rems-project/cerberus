@@ -2416,6 +2416,9 @@ cn_statement:
 | ASSERT LPAREN e=assert_expr RPAREN SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in 
       CN_statement (loc, CN_assert_stmt e) }
+| INLINE names= separated_list(COMMA, cn_variable) SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_inline names) }
 
 cn_toplevel_elem:
 | pred= cn_predicate

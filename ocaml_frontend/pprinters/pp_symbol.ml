@@ -111,6 +111,8 @@ let pp_prefix = function
       P.braces (!^ str)
   | PrefStringLiteral _ ->
       P.braces (!^ "string literal")
+  | PrefTemporaryLifetime _ ->
+      P.braces (!^ "rvalue temporary")
   | PrefFunArg (_, _, n) ->
       P.braces (!^ ("arg" ^ string_of_int n))
   | PrefMalloc ->

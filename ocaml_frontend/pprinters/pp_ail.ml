@@ -100,7 +100,6 @@ let pp_storageDuration = function
   | Static    -> pp_keyword "static"
   | Thread    -> pp_keyword "thread"
   | Automatic -> pp_keyword "automatic"
-  | Allocated -> pp_keyword "allocated"
 
 
 let pp_cond switch str =
@@ -482,6 +481,15 @@ let pp_ail_builtin = function
   | AilBCHERI str ->
       !^ str
 
+let pp_alignment = function
+  | AlignInteger n ->
+      pp_keyword "_Alignas" ^^ P.parens (!^ (String_nat_big_num.string_of_decimal n))
+  | AlignType ty ->
+      pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
+
+let pp_alignment_opt align_opt =
+  P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
+
 let rec pp_expression_aux mk_pp_annot a_expr =
   let rec pp p (AnnotatedExpression (annot, _, loc, expr)) =
     let p' = precedence expr in
@@ -589,7 +597,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEprint_type e ->
               pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
         | AilEgcc_statement (bs, ss) ->
-            P.parens (pp_statement_aux mk_pp_annot (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
+            P.parens (pp_statement_aux mk_pp_annot ~bs:[] (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
       )) in
   pp None a_expr
 
@@ -600,8 +608,8 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-and pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
-  let pp_statement ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
+and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
+  let pp_statement ?(is_control=false) ?(bs=bs) (AnnotatedStatement (_, _, stmt_) as stmt) =
     begin match stmt_ with
       | AilSblock _ ->
           P.empty
@@ -611,7 +619,7 @@ and pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
           else
             P.empty
     end ^^
-    pp_statement_aux pp_annot stmt in
+    pp_statement_aux pp_annot ~bs stmt in
   match stmt_ with
     | AilSskip ->
         P.semi
@@ -626,22 +634,7 @@ and pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
         P.rbrace
     | AilSblock (bindings, ss) ->
         let block =
-          P.separate_map
-            (P.semi ^^ P.break 1)
-            (fun (id, (dur_reg_opt,  _align, qs, ty)) ->
-              if !Cerb_debug.debug_level > 5 then
-                (* printing the types in a human readable format *)
-                P.parens ( P.empty
-                             (* TODO
-                  P.optional (fun (dur, isRegister) ->
-                    (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-                      (pp_storageDuration dur)
-                  ) dur_reg_opt ^^^ pp_ctype_human qs ty
-                ) ^^^ pp_id_obj id *) )
-              else
-                pp_ctype_declaration (pp_id_obj id) qs ty
-               ) bindings ^^ P.semi ^^ P.break 1 ^^
-          P.separate_map (P.break 1) pp_statement ss in
+          P.separate_map (P.break 1) (pp_statement ~bs:(bindings@bs)) ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
         (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
     | AilSif (e, s1, s2) ->
@@ -675,10 +668,18 @@ and pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
         pp_keyword "goto" ^^^ pp_id_label l ^^ P.semi
     | AilSdeclaration [] ->
         pp_comment "// empty decl"
-    (* TODO: looks odd *)
     | AilSdeclaration defs ->
-        comma_list (fun (id, e) -> pp_id_obj id ^^^ P.equals ^^^ pp_expression_aux pp_annot e) defs ^^
-        P.semi ^^^ pp_comment "// decl"
+        comma_list (fun (id, e_opt) ->
+          begin match List.assoc_opt id bs with
+            | Some (_, align_opt, qs, ty) ->
+                pp_alignment_opt align_opt ^^
+                pp_ctype_declaration (pp_id_obj id) qs ty
+            | None ->
+                !^ "BINDING_NO_FOUND"
+          end
+          (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e) e_opt
+        ) defs ^^
+        P.semi
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) pp_statement ss
@@ -693,12 +694,6 @@ and pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
 
 let pp_static_assertion pp_annot (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression_aux pp_annot e ^^ P.comma ^^^ pp_stringLiteral lit)
-
-let pp_alignment = function
-  | AlignInteger n ->
-      pp_keyword "_Alignas" ^^ P.parens (!^ (String_nat_big_num.string_of_decimal n))
-  | AlignType ty ->
-      pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
 let pp_tag_definition (tag, (_, def)) =
   match def with
@@ -803,7 +798,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                       else
                         P.empty
                     ) ^^^ P.break 1 ^^
-                    pp_statement_aux pp_annot stmt
+                    pp_statement_aux pp_annot ~bs:[] stmt
                 | None ->
                     P.parens (
                       comma_list (fun (qs, ty, isRegister) ->
@@ -882,7 +877,7 @@ let pp_genTypeCategory = function
 
 let pp_expression e = pp_expression_aux (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
-let pp_statement s = pp_statement_aux (fun _ d -> d) s
+let pp_statement s = pp_statement_aux (fun _ d -> d) ~bs:[] s
 
 
 

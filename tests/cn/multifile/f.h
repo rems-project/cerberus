@@ -1,5 +1,5 @@
 
-int f (int x);
+extern int f (int x);
 
 /*@ spec f (integer x)
   requires

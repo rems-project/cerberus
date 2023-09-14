@@ -141,8 +141,7 @@ Module CheriMemory
 
   Inductive readonly_status : Set :=
   | IsWritable : readonly_status
-  | IsReadOnly_string_literal : readonly_status
-  | IsReadOnly : readonly_status.
+  | IsReadOnly : readonly_kind -> readonly_status.
 
   Inductive allocation_taint :=
   | Exposed
@@ -813,7 +812,7 @@ Module CheriMemory
           | Some mval =>  (* here we allocate an object with initiliazer *)
               let (ro,readonly_status) :=
                 match pref with
-                | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly_string_literal)
+                | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly ReadonlyStringLiteral)
                 | _ => (false,IsWritable)
                 end
               in
@@ -2022,10 +2021,8 @@ Module CheriMemory
                    get_allocation alloc_id >>=
                      (fun (alloc : allocation) =>
                         match alloc.(is_readonly) with
-                        | IsReadOnly =>
-                            fail loc (MerrWriteOnReadOnly false)
-                        | IsReadOnly_string_literal =>
-                            fail loc (MerrWriteOnReadOnly true)
+                        | IsReadOnly ro_kind =>
+                            fail loc (MerrWriteOnReadOnly ro_kind)
                         | IsWritable =>
                             is_atomic_member_access alloc_id cty
                               (cap_to_Z c) >>=
@@ -2053,7 +2050,7 @@ Module CheriMemory
                                                                  ty          := a.(ty)         ;
                                                                  is_dynamic  := a.(is_dynamic) ;
                                                                  is_dead     := a.(is_dead)    ;
-                                                                 is_readonly := IsReadOnly     ;
+                                                                 is_readonly := IsReadOnly ReadonlyConstQualified;
                                                                  taint       := a.(taint)      ;
                                                                |}
                                                          | None => None
@@ -2113,15 +2110,11 @@ Module CheriMemory
                        get_allocation z_value >>=
                          (fun (alloc : allocation) =>
                             match alloc.(is_readonly) with
-                            | IsReadOnly =>
+                            | IsReadOnly ro_kind =>
                                 ret
                                   (FAIL loc
                                      (MerrWriteOnReadOnly
-                                        false))
-                            | IsReadOnly_string_literal =>
-                                ret
-                                  (FAIL loc
-                                     (MerrWriteOnReadOnly true))
+                                        ro_kind))
                             | IsWritable =>
                                 is_atomic_member_access z_value cty
                                 (cap_to_Z c)
@@ -2156,7 +2149,7 @@ Module CheriMemory
                                               ty          := a.(ty)         ;
                                               is_dynamic  := a.(is_dynamic) ;
                                               is_dead     := a.(is_dead)    ;
-                                              is_readonly := IsReadOnly     ;
+                                              is_readonly := IsReadOnly ReadonlyConstQualified;
                                               taint       := a.(taint)      ;
                                             |}
                                       | None => None
@@ -2168,6 +2161,64 @@ Module CheriMemory
                       ret fp))
       | Prov_some alloc_id, PVconcrete c
         => store_concrete alloc_id c
+(*
+      | Prov_some alloc_id, PVconcrete addr
+        =>
+          if cap_is_null addr then
+            fail loc (MerrAccess StoreAccess NullPtr)
+          else
+            is_within_bound alloc_id cty (AddressValue.to_Z (C.cap_get_value addr))
+              >>=
+              (fun (x : bool) =>
+                 match x with
+                 | false =>
+                     fail loc (MerrAccess StoreAccess OutOfBoundPtr)
+                 | true
+                   =>
+                     get_allocation alloc_id >>=
+                       (fun (alloc : allocation) =>
+                          match alloc.(is_readonly) with
+                          | IsReadOnly ro_kind =>
+                              fail loc (MerrWriteOnReadOnly ro_kind)
+                          | IsWritable =>
+                              is_atomic_member_access alloc_id cty
+                                (AddressValue.to_Z (C.cap_get_value addr)) >>=
+                                (fun (x : bool) =>
+                                   match x with
+                                   | true =>
+                                       fail loc
+                                         (MerrAccess LoadAccess AtomicMemberof)
+                                   | false =>
+                                       do_store_cap (Some alloc_id) addr >>=
+                                         (fun (fp : footprint) =>
+                                            if is_locking then
+                                              update
+                                                (fun (st : mem_state) =>
+                                                   mem_state_with_allocations
+                                                     (zmap_update
+                                                        alloc_id
+                                                        (fun (x:option allocation) =>
+                                                           match x with
+                                                           | Some a =>
+                                                               Some {|
+                                                                   prefix      := a.(prefix)      ;
+                                                                   base        := a.(base)        ;
+                                                                   size        := a.(size)        ;
+                                                                   ty          := a.(ty)          ;
+                                                                   is_readonly := IsReadOnly ReadonlyConstQualified;
+                                                                   taint       := a.(taint)       ;
+                                                                 |}
+                                                           | None => None
+                                                           end) st.(allocations))
+                                                     st)
+                                              ;;
+                                              ret fp
+                                            else
+                                              ret fp)
+                                   end)
+                          end)
+                 end)
+*)
       end.
 
   Definition null_ptrval (_:CoqCtype.ctype) : pointer_value

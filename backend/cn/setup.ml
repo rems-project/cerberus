@@ -1,4 +1,5 @@
 open Cerb_backend.Pipeline
+module StringSet = Set.Make(String)
 
 
 let io = default_io_helpers
@@ -52,3 +53,10 @@ let conf incl_dirs incl_files astprints =
   ; cpp_cmd = with_cn_keywords (cpp_str incl_dirs incl_files)
   ; cpp_stderr = true
   }
+
+let unfold_proxies = StringSet.of_list [
+    "ffs_proxy"; "ffsl_proxy"; "ffsll_proxy"; "ctz_proxy";
+  ]
+
+let unfold_stdlib_name s = StringSet.mem s unfold_proxies
+

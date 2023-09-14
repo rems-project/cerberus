@@ -30,6 +30,8 @@ module CerbSwitchesProxy = struct
     | SW_zero_initialised -> SW_zero_initialised
     | SW_revocation `INSTANT -> SW_revocation INSTANT
     | SW_revocation `CORNUCOPIA -> SW_revocation CORNUCOPIA
+    | SW_at_magic_comments -> SW_at_magic_comments
+    | SW_warn_mismatched_magic_comments -> SW_warn_mismatched_magic_comments
 
   let toCoq_switches (cs: cerb_switch list): CoqSwitches.cerb_switches_t =
     let open ListSet in
@@ -83,6 +85,7 @@ module CerbTagDefs = struct
     | PrefSource (loc, sl) -> PrefSource (toCoq_location loc, List.map toCoq_Symbol_sym sl)
     | PrefFunArg (l, d, v) -> PrefFunArg (toCoq_location l, d, Z.of_int v)
     | PrefStringLiteral (l,d) -> PrefStringLiteral (toCoq_location l, d)
+    | PrefTemporaryLifetime (l,d) -> PrefTemporaryLifetime (toCoq_location l, d)
     | PrefCompoundLiteral (l,d) ->  PrefCompoundLiteral (toCoq_location l, d)
     | PrefMalloc -> PrefMalloc
     | PrefOther s -> PrefOther s
@@ -377,13 +380,18 @@ module CHERIMorello : Memory = struct
     | Free_dead_allocation -> Free_dead_allocation
     | Free_out_of_bound -> Free_out_of_bound
 
+  let fromCoq_readonly_kind: MM.readonly_kind -> readonly_kind = function
+    | ReadonlyConstQualified -> ReadonlyConstQualified
+    | ReadonlyStringLiteral -> ReadonlyStringLiteral
+    | ReadonlyTemporaryLifetime -> ReadonlyTemporaryLifetime
+  
   let fromCoq_mem_error: MM.mem_error -> mem_error = function
     | MerrOutsideLifetime s -> MerrOutsideLifetime s
     | MerrInternal s -> MerrInternal s
     | MerrOther s -> MerrOther s
     | MerrPtrdiff -> MerrPtrdiff
     | MerrAccess (k,e) -> MerrAccess (fromCoq_access_kind k, fromCoq_access_error e)
-    | MerrWriteOnReadOnly b -> MerrWriteOnReadOnly b
+    | MerrWriteOnReadOnly k -> MerrWriteOnReadOnly (fromCoq_readonly_kind k)
     | MerrReadUninit -> MerrReadUninit
     | MerrUndefinedFree e -> MerrUndefinedFree ( from_Coq_free_error e)
     | MerrUndefinedRealloc e -> MerrUndefinedRealloc (from_Coq_free_error e)
@@ -413,6 +421,7 @@ module CHERIMorello : Memory = struct
     | UB009_outside_lifetime                               -> UB009_outside_lifetime
     | UB010_pointer_to_dead_object                         -> UB010_pointer_to_dead_object
     | UB011_use_indeterminate_automatic_object             -> UB011_use_indeterminate_automatic_object
+    | UB_modifying_temporary_lifetime                      -> UB_modifying_temporary_lifetime
     | UB012_lvalue_read_trap_representation                -> UB012_lvalue_read_trap_representation
     | UB013_lvalue_side_effect_trap_representation         -> UB013_lvalue_side_effect_trap_representation
     | UB014_unsupported_negative_zero                      -> UB014_unsupported_negative_zero
@@ -648,6 +657,7 @@ module CHERIMorello : Memory = struct
     | PrefSource (loc, sl) -> PrefSource (fromCoq_location loc, List.map fromCoq_Symbol_sym sl)
     | PrefFunArg (l, d, v) -> PrefFunArg (fromCoq_location l, d, Z.to_int v)
     | PrefStringLiteral (l,d) -> PrefStringLiteral (fromCoq_location l, d)
+    | PrefTemporaryLifetime (l, d) -> PrefTemporaryLifetime (fromCoq_location l, d)
     | PrefCompoundLiteral (l,d) ->  PrefCompoundLiteral (fromCoq_location l, d)
     | PrefMalloc -> PrefMalloc
     | PrefOther s -> PrefOther s

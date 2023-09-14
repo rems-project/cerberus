@@ -8,6 +8,12 @@ module Caux = Core_aux
 
 include State
 
+type wrapped_symbol = <|
+  sym_sym: Symbol.sym;
+  sym_pat: C.pattern;
+  sym_pe: C.pexpr;
+|>
+
 type compound_literal_info =
   ( Loc.t
   * Symbol.prefix
@@ -21,6 +27,7 @@ type elab_state = <|
                                               annotate Esave/Erun ctors) *)
   string_literals: list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr);
   compound_literals: list compound_literal_info;
+  temporary_objects: list (wrapped_symbol * Ctype.ctype);
   visible_objects_types_markers_env: map nat (list (Symbol.sym * Ctype.ctype));
 
   errors: list string
@@ -35,15 +42,11 @@ let elab_init () = <|
   visible_objects= [[]];
   string_literals= [];
   compound_literals= [];
+  temporary_objects= [];
   visible_objects_types_markers_env = Map.empty;
   errors = [];
 |>
 
-type wrapped_symbol = <|
-  sym_sym: Symbol.sym;
-  sym_pat: C.pattern;
-  sym_pe: C.pexpr;
-|>
 
 (* TODO: this does not need to be in the monad, but it is useful to unsure
    proper ordering (for "intuitive" sym number) *)
@@ -96,6 +99,20 @@ let with_block_objects binds ma = fun st ->
         | _       -> error "[Translation.E.with_block_objects] found an ill-formed scope stack."
       end;
     compound_literals= st.compound_literals |>)
+
+
+val track_temporary_objects: forall 'a. elabM 'a -> elabM (list (wrapped_symbol * Ctype.ctype) * 'a)
+let track_temporary_objects ma =
+  fun st ->
+    if st.temporary_objects <> [] then
+      error "[Translation.E.track_temporary_objects]"
+    else
+      let (a, st') = ma st in
+      ((st'.temporary_objects, a), <| st' with temporary_objects= [] |>)
+
+val register_temporary_object: wrapped_symbol -> Ctype.ctype -> elabM unit
+let register_temporary_object ptr_wrp ty =
+  fun st -> ((), <| st with temporary_objects= (ptr_wrp, ty) :: st.temporary_objects |>)
 
 (* returns the list of all the C objects in scope. *)
 val get_visible_objects: elabM (list Symbol.sym)

@@ -12,18 +12,32 @@ type t =
   { struct_decls : Memory.struct_decls; 
     datatypes : BaseTypes.datatype_info SymMap.t;
     datatype_constrs : BaseTypes.constr_info SymMap.t;
-    fun_decls : (Locations.t * AT.ft * Sctypes.c_concrete_sig) SymMap.t;
+    fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
     logical_functions : LogicalFunctions.definition SymMap.t;
     lemmata : (Locations.t * AT.lemmat) SymMap.t;
   } 
 
+let mk_alloc : IndexTerms.t -> ResourceTypes.predicate_type =
+  let name : ResourceTypes.predicate_name = PName (Sym.fresh_named "__CN_Alloc") in
+  fun pointer -> { name; pointer; iargs = []; }
+
 let empty = 
+  let [@ocaml.warning "-8"] { name=PName alloc ; _ } : ResourceTypes.predicate_type =
+    mk_alloc IndexTerms.null_  in
+  let def : ResourcePredicates.definition =
+  { loc = Locations.other (__FILE__ ^ ":" ^ string_of_int __LINE__);
+    pointer = Sym.fresh_named "__cn_alloc_ptr";
+    iargs = [];
+    oarg_bt = Unit;
+    clauses = None;
+  } in
+  let resource_predicates = SymMap.(empty |> add alloc def) in
   { struct_decls = SymMap.empty;
     datatypes = SymMap.empty;
     datatype_constrs = SymMap.empty;
     fun_decls = SymMap.empty;
-    resource_predicates = SymMap.empty;
+    resource_predicates;
     logical_functions = SymMap.empty;
     lemmata = SymMap.empty;
   }
@@ -59,7 +73,7 @@ let pp_struct_layout (tag,layout) =
 let pp_struct_decls decls = 
   Pp.list pp_struct_layout (SymMap.bindings decls) 
 
-let pp_fun_decl (sym, (_, t, _)) = item (plain (Sym.pp sym)) (AT.pp RT.pp t)
+let pp_fun_decl (sym, (_, t, _)) = item (plain (Sym.pp sym)) (Pp.option (AT.pp RT.pp) "(no spec)" t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
 
 let pp_resource_predicate_definitions defs =

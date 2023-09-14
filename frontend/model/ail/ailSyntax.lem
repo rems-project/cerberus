@@ -115,7 +115,6 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Static
  | Thread
  | Automatic
- | Allocated
 
 (* the boolean tells whether the object was declared with the register
  * storage-class *)
@@ -198,7 +197,7 @@ and statement_ 'a [name="s*"] =
   | AilSdefault of statement 'a
   | AilSlabel of ail_identifier * statement 'a * maybe Annot.label_annot 
   | AilSgoto of ail_identifier
-  | AilSdeclaration of list (ail_identifier * expression 'a)
+  | AilSdeclaration of list (ail_identifier * maybe (expression 'a))
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
 (* for CN *)

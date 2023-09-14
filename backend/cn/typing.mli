@@ -63,7 +63,7 @@ val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (S
 val get_datatype : Locations.t -> Sym.t -> (BaseTypes.datatype_info) m
 val get_datatype_constr : Locations.t -> Sym.t -> (BaseTypes.constr_info) m
 val get_fun_decl : Locations.t -> Sym.t ->
-    (Locations.t * Global.AT.ft * Sctypes.c_concrete_sig) m
+    (Locations.t * Global.AT.ft option * Sctypes.c_concrete_sig) m
 val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->
@@ -73,7 +73,7 @@ val get_logical_function_def : Locations.t -> Sym.t ->
 
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit) m
-val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Sctypes.c_concrete_sig) ->
+val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft option * Sctypes.c_concrete_sig) ->
     (unit) m
 val add_lemma : Sym.t -> (Locations.t * ArgumentTypes.lemmat) -> (unit) m
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit) m

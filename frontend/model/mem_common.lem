@@ -100,6 +100,11 @@ let show = function
   end
 end
 
+type readonly_kind =
+  | ReadonlyStringLiteral
+  | ReadonlyTemporaryLifetime
+  | ReadonlyConstQualified
+
 type mem_error =
   | MerrOutsideLifetime of string (* mem_read_request *)
   | MerrInternal of string
@@ -107,7 +112,7 @@ type mem_error =
   
   | MerrPtrdiff
   | MerrAccess of access_kind * access_error
-  | MerrWriteOnReadOnly of bool (* is_string_literal *)
+  | MerrWriteOnReadOnly of readonly_kind
   | MerrReadUninit 
   | MerrTrapRepresentation of access_kind
 
@@ -260,10 +265,12 @@ let undefinedFromMem_error = function
   | MerrUndefinedRealloc Free_out_of_bound ->
       Nothing (* this is not a UB but rather an internal error *)
   
-  | MerrWriteOnReadOnly true ->
+  | MerrWriteOnReadOnly ReadonlyStringLiteral ->
       Just Undefined.UB033_modifying_string_literal
-  | MerrWriteOnReadOnly false ->
+  | MerrWriteOnReadOnly ReadonlyConstQualified ->
       Just Undefined.UB064_modifying_const
+  | MerrWriteOnReadOnly ReadonlyTemporaryLifetime ->
+      Just Undefined.UB_modifying_temporary_lifetime
   | MerrReadUninit ->
       Just Undefined.UB011_use_indeterminate_automatic_object
   | MerrTrapRepresentation LoadAccess ->

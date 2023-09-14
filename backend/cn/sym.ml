@@ -44,6 +44,10 @@ let has_id = function
   | _ -> 
      None
 
+let has_id_with f sym = match has_id sym with
+  | None -> false
+  | Some str -> f str
+
 
 module StringHash =
   Hashtbl.Make(struct

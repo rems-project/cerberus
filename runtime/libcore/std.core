@@ -341,7 +341,7 @@ proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: point
 -- <stdlib.h>
 ------------------------------------------------------------------------------
 
-builtin exit ()  : eff unit
+builtin exit (loaded integer) : eff unit
 
 proc [ailname = "__builtin_exit"] exit_proxy (x_ptr: pointer) : eff unit :=
   let strong x: loaded integer = load('signed int', x_ptr) in
@@ -428,16 +428,16 @@ proc [ailname = "memcmp"] memcmp_proxy (p_ptr: pointer, q_ptr: pointer, size_ptr
 -- <sys/stat.h>
 ------------------------------------------------------------------------------
 
-builtin mkdir ([integer], integer): eff loaded pointer
-builtin stat  ([integer], pointer): eff loaded pointer
-builtin lstat ([integer], pointer): eff loaded pointer
-builtin umask (integer)           : eff loaded pointer
-builtin chmod ([integer], integer): eff loaded pointer
-builtin chdir ([integer])         : eff loaded pointer
-builtin chown ([integer], integer, integer): eff loaded pointer
+builtin mkdir ([integer], integer): eff loaded integer
+builtin stat  ([integer], pointer): eff loaded integer
+builtin lstat ([integer], pointer): eff loaded integer
+builtin umask (integer)           : eff loaded integer
+builtin chmod ([integer], integer): eff loaded integer
+builtin chdir ([integer])         : eff loaded integer
+builtin chown ([integer], integer, integer): eff loaded integer
 
 -- int mkdir(const char *, mode_t);
-proc [ailname = "mkdir"] mkdir_proxy (path_ptr: pointer, mode_ptr: pointer) : eff loaded pointer :=
+proc [ailname = "mkdir"] mkdir_proxy (path_ptr: pointer, mode_ptr: pointer) : eff loaded integer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
   let strong mode_loaded: loaded integer = load('unsigned short' {- mode_t -}, mode_ptr) in
   case (path_loaded, mode_loaded) of
@@ -449,7 +449,7 @@ proc [ailname = "mkdir"] mkdir_proxy (path_ptr: pointer, mode_ptr: pointer) : ef
   end
 
 -- int stat(const char *pathname, struct stat *statbuf);
-proc [ailname = "stat"] stat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff loaded pointer :=
+proc [ailname = "stat"] stat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff loaded integer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
   let strong buf_loaded: loaded pointer = load('struct stat*', buf_ptr) in
   case (path_loaded, buf_loaded) of
@@ -461,7 +461,7 @@ proc [ailname = "stat"] stat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff l
   end
 
 -- int lstat(const char *pathname, struct stat *statbuf);
-proc [ailname = "lstat"] lstat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff loaded pointer :=
+proc [ailname = "lstat"] lstat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff loaded integer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
   let strong buf_loaded: loaded pointer = load('struct stat*', buf_ptr) in
   case (path_loaded, buf_loaded) of
@@ -473,7 +473,7 @@ proc [ailname = "lstat"] lstat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff
   end
 
 -- mode_t umask(mode_t mask);
-proc [ailname = "umask"] umask_proxy (mode_ptr: pointer) : eff loaded pointer :=
+proc [ailname = "umask"] umask_proxy (mode_ptr: pointer) : eff loaded integer :=
   let strong mode_loaded: loaded integer = load('signed int', mode_ptr) in
   case (mode_loaded) of
     | Specified (mode: integer) =>
@@ -483,7 +483,7 @@ proc [ailname = "umask"] umask_proxy (mode_ptr: pointer) : eff loaded pointer :=
   end
 
 -- int chmod(const char *pathname, mode_t mode);
-proc [ailname = "chmod"] chmod_proxy (path_ptr: pointer, mode_ptr: pointer) : eff loaded pointer :=
+proc [ailname = "chmod"] chmod_proxy (path_ptr: pointer, mode_ptr: pointer) : eff loaded integer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
   let strong mode_loaded: loaded integer = load('signed int', mode_ptr) in
   case (path_loaded, mode_loaded) of
@@ -495,7 +495,7 @@ proc [ailname = "chmod"] chmod_proxy (path_ptr: pointer, mode_ptr: pointer) : ef
   end
 
 -- int chdir(const char *path);
-proc [ailname = "chdir"] chdir_proxy (path_ptr: pointer) : eff loaded pointer :=
+proc [ailname = "chdir"] chdir_proxy (path_ptr: pointer) : eff loaded integer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
   case (path_loaded) of
     | Specified (path: pointer) =>
@@ -506,7 +506,7 @@ proc [ailname = "chdir"] chdir_proxy (path_ptr: pointer) : eff loaded pointer :=
   end
 
 -- int chown(const char *pathname, uid_t owner, gid_t group);
-proc [ailname = "chown"] chown_proxy (path_ptr: pointer, owner_ptr: pointer, group_ptr: pointer) : eff loaded pointer :=
+proc [ailname = "chown"] chown_proxy (path_ptr: pointer, owner_ptr: pointer, group_ptr: pointer) : eff loaded integer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
   let strong owner_loaded: loaded integer = load('signed int', owner_ptr) in
   let strong group_loaded: loaded integer = load('signed int', group_ptr) in
@@ -806,10 +806,10 @@ proc [ailname = "__builtin_ffsll"] ffsll_proxy (n_ptr: pointer): eff loaded inte
         pure (undef(<<DUMMY(ffsll_proxy)>>))
   end
 
-builtin ctz (): eff loaded integer
-builtin bswap16 (): eff loaded integer
-builtin bswap32 (): eff loaded integer
-builtin bswap64 (): eff loaded integer
+builtin ctz (integer): eff loaded integer
+builtin bswap16 (integer): eff loaded integer
+builtin bswap32 (integer): eff loaded integer
+builtin bswap64 (integer): eff loaded integer
 
 proc [ailname = "__builtin_ctz"] ctz_proxy (n_ptr: pointer): eff loaded integer :=
   let strong n_loaded: loaded integer = load('unsigned int', n_ptr) in

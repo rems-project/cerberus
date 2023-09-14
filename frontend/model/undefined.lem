@@ -55,6 +55,9 @@ type undefined_behaviour =
   (* The value of an object with automatic storage duration is used while it is indeterminate
      (6.2.4, 6.7.9, 6.8). *)
   | UB011_use_indeterminate_automatic_object
+  (* (NOTE: this is missing from Annex J)
+     Any attempt to modify an object with temporary lifetime results in undefined behavior. (6.2.4) *)
+  | UB_modifying_temporary_lifetime
   (* A trap representation is read by an lvalue expression that does not have character type
      (6.2.6.1). *)
   | UB012_lvalue_read_trap_representation
@@ -741,6 +744,8 @@ let std_of_undefined_behaviour = function
       Nothing (* TODO *)
   | UB011_use_indeterminate_automatic_object ->
       Just "§6.2.4"
+  | UB_modifying_temporary_lifetime ->
+      Just "§6.2.4#8, sentence 4"
   | UB012_lvalue_read_trap_representation ->
       Just "§6.2.6.1#5, sentence 2"
   | UB013_lvalue_side_effect_trap_representation ->
@@ -843,6 +848,7 @@ let ub_str_bimap =
     ; (UB009_outside_lifetime, "UB009_outside_lifetime")
     ; (UB010_pointer_to_dead_object, "UB010_pointer_to_dead_object")
     ; (UB011_use_indeterminate_automatic_object, "UB011_use_indeterminate_automatic_object")
+    ; (UB_modifying_temporary_lifetime, "UB_modifying_temporary_lifetime")
     ; (UB012_lvalue_read_trap_representation, "UB012_lvalue_read_trap_representation")
     ; (UB013_lvalue_side_effect_trap_representation, "UB013_lvalue_side_effect_trap_representation")
     ; (UB014_unsupported_negative_zero, "UB014_unsupported_negative_zero")
@@ -1120,6 +1126,8 @@ let ub_short_string = function
       "the value of a pointer to an object whose lifetime has ended is used"
   | UB011_use_indeterminate_automatic_object ->
       "the value of an object with automatic storage duration is used while it is indeterminate"
+  | UB_modifying_temporary_lifetime ->
+      "attempting to modify an object with a temporary lifetime"
   | UB012_lvalue_read_trap_representation ->
       "reading a trap representation with a non-character lvalue expression"
   | UB013_lvalue_side_effect_trap_representation ->
@@ -1249,6 +1257,8 @@ let pretty_string_of_undefined_behaviour = function
       "Pointer_to_dead_object (TODO: find the text, if there is an explicit one)"
   | UB011_use_indeterminate_automatic_object ->
       "TODO[of course there is not explicit piece of text saying that (would be too easy otherwise)]"
+  | UB_modifying_temporary_lifetime ->
+      "(§6.2.4#8) attempting to modify an object with a temporary lifetime"
   | UB012_lvalue_read_trap_representation ->
       "(§6.2.6.1#5) an lvalue expression that does not have character type tried to read from an \
                     object storing a trap representation."

@@ -23,6 +23,7 @@ type cerberus_conf = {
   defacto:            bool;
   permissive:         bool; (* allows GCC extensions and stuff *)
   agnostic:           bool;
+  ignore_bitfields:   bool;
   n1570:              Yojson.Basic.t option;
 }
 
@@ -31,13 +32,13 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-let set_cerb_conf backend_name exec exec_mode concurrency error_verbosity defacto permissive agnostic _bmc =
+let set_cerb_conf backend_name exec exec_mode concurrency error_verbosity defacto permissive agnostic ignore_bitfields _bmc =
   let exec_mode_opt = if exec then Some exec_mode else None in
   let n1570 =
     if error_verbosity <> QuoteStd then None else Some (Lazy.force N1570.data)
   in
   let conf =
-    {backend_name; defacto; concurrency; error_verbosity; agnostic; permissive; exec_mode_opt; n1570}
+    {backend_name; defacto; concurrency; error_verbosity; agnostic; ignore_bitfields; permissive; exec_mode_opt; n1570}
   in
   cerb_conf := fun () -> conf
 
@@ -55,6 +56,9 @@ let isPermissive () =
 
 let isAgnostic () =
   !!cerb_conf.agnostic
+
+let isIgnoreBitfields () =
+  !!cerb_conf.ignore_bitfields
 
 let current_execution_mode () =
   !!cerb_conf.exec_mode_opt

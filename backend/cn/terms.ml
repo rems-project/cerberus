@@ -5,6 +5,7 @@ type const =
   | Z of Z.t
   | Q of Q.t
   | Pointer of Z.t
+  | Alloc_id of Z.t
   | Bool of bool
   | Unit
   | Null
@@ -33,6 +34,9 @@ type binop =
   | XORNoSMT
   | BWAndNoSMT
   | BWOrNoSMT
+  | BWCLZNoSMT
+  | BWCTZNoSMT
+  | BWFFSNoSMT
   | LT
   | LE
   | Min
@@ -46,6 +50,15 @@ type binop =
   | SetMember
   | Subset
 [@@deriving eq, ord, show]
+
+type 'bt pattern_ = 
+  | PSym of Sym.t
+  | PWild
+  | PConstructor of Sym.t * (Id.t * 'bt pattern) list
+
+and 'bt pattern = 
+  | Pat of 'bt pattern_ * 'bt
+[@@deriving eq, ord, map]
 
 (* over integers and reals *)
 type 'bt term_ =
@@ -64,14 +77,14 @@ type 'bt term_ =
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
-  | DatatypeCons of Sym.t * 'bt term
-  | DatatypeMember of 'bt term * Id.t
-  | DatatypeIsCons of Sym.t * 'bt term
+  | DatatypeCons of Sym.t * 'bt term (* TODO: will be removed *)
+  | DatatypeMember of 'bt term * Id.t (* TODO: will be removed *)
+  | DatatypeIsCons of Sym.t * 'bt term (* TODO: will be removed *)
+  | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
-  | Nil
+  | Nil of BaseTypes.t
   | Cons of 'bt term * 'bt term
-  | List of 'bt term list
   | Head of 'bt term
   | Tail of 'bt term
   | NthList of 'bt term * 'bt term * 'bt term
@@ -79,12 +92,14 @@ type 'bt term_ =
   | Representable of Sctypes.t * 'bt term
   | Good of Sctypes.t * 'bt term
   | Aligned of {t : 'bt term; align : 'bt term}
+  | WrapI of Sctypes.IntegerTypes.t * 'bt term
   | MapConst of BaseTypes.t * 'bt term
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
-  | MapDef of (Sym.t * 'bt) * 'bt term
+  | MapDef of (Sym.t * BaseTypes.t) * 'bt term
   | Apply of Sym.t * ('bt term) list
   | Let of (Sym.t * 'bt term) * 'bt term
+  | Match of 'bt term * ('bt pattern * 'bt term) list
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
@@ -95,17 +110,32 @@ and 'bt term =
 let equal = equal_term
 let compare = compare_term
 
+
+
+let rec pp_pattern (Pat (pat_, _bt)) =
+  match pat_ with
+  | PSym s -> 
+     Sym.pp s
+  | PWild -> 
+     underscore
+  | PConstructor (c, args) ->
+     Sym.pp c ^^^ 
+       braces (separate_map (comma ^^ space) (fun (id, pat) ->
+                   Id.pp id ^^ colon ^^^ pp_pattern pat
+                 ) args)
+
 let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -> Pp.doc =
   fun ?(atomic=false) ?(f=fun _ x -> x) ->
   let rec aux atomic (IT (it, _)) =
     let aux b x = f x (aux b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
        by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
+    let parens pped = 
+      Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen) in
+    let braces pped = 
+      Pp.group ((nest 2 @@ lbrace ^^ break 0 ^^ pped) ^^ break 0 ^^ rbrace) in
     let mparens pped =
-      if atomic then
-        Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen)
-      else
-        Pp.group pped in
+      if atomic then parens pped else Pp.group pped in
     let break_op x = break 1 ^^ x ^^ space in
     match it with
     | Const const ->
@@ -117,6 +147,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           |  Dec -> !^(Z.to_string i)
           | _ -> !^("0X" ^ (Z.format "016X" i))
           end
+       | Alloc_id i -> !^("@" ^ Z.to_string i)
        | Bool true -> !^"true"
        | Bool false -> !^"false"
        | Unit -> !^"void"
@@ -179,6 +210,12 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"bw_and_uf" [aux false it1; aux false it2]
        | BWOrNoSMT ->
           c_app !^"bw_or_uf" [aux false it1; aux false it2]
+       | BWCLZNoSMT ->
+          c_app !^"bw_clz_uf" [aux false it1; aux false it2]
+       | BWCTZNoSMT ->
+          c_app !^"bw_ctz_uf" [aux false it1; aux false it2]
+       | BWFFSNoSMT ->
+          c_app !^"bw_ffs_uf" [aux false it1; aux false it2]
        | SetMember ->
           c_app !^"member" [aux false it1; aux false it2]
        | SetUnion ->
@@ -247,9 +284,11 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Aligned t ->
           c_app !^"aligned" [aux false t.t; aux false t.align]
        | Representable (rt, t) ->
-          c_app !^"repr" [CT.pp rt; aux false t]
+          c_app (!^"repr" ^^ angles (CT.pp rt)) [aux false t]
        | Good (rt, t) ->
-          c_app !^"good" [CT.pp rt; aux false t]
+          c_app (!^"good" ^^ angles (CT.pp rt)) [aux false t]
+       | WrapI (ity, t) ->
+          c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [aux false t]
        (* end *)
     (* | List_op list_op -> *)
     (*    begin match list_op with *)
@@ -257,12 +296,10 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"hd" [aux false o1]
        | Tail (o1) ->
           c_app !^"tl" [aux false o1]
-       | Nil ->
-          brackets empty
+       | Nil bt ->
+          !^"nil" ^^ angles (BaseTypes.pp bt)
        | Cons (t1,t2) ->
           mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
-       | List its ->
-          mparens (brackets (separate_map (comma ^^ space) (aux false) its))
        | NthList (n, xs, d) ->
           c_app !^"nth_list" [aux false n; aux false xs; aux false d]
        | ArrayToList (arr, i, len) ->
@@ -305,6 +342,17 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        c_app (Sym.pp name) (List.map (aux false) args)
     | Let ((name, x1), x2) -> parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
         aux false x1 ^^^ !^ "in" ^^^ aux false x2)
+    | Match (e, cases) ->
+        !^"match" ^^^ aux false e ^^^ braces (
+          (* copying from mparens *)
+          Pp.group (nest 2 @@ (
+            separate_map (break 0) (fun (pattern, body) ->
+                pp_pattern pattern ^^^ !^"=>" ^^^ 
+                  braces (aux false body)
+              ) cases))
+        )
+    | Constructor (s, args) ->
+       Sym.pp s ^^^ braces (separate_map (comma ^^ space) (fun (id, e) -> Id.pp id ^^ colon ^^^ aux false e) args)
   in
   fun (it : 'bt term) -> aux atomic it
 
@@ -361,7 +409,6 @@ let rec dtree (IT (it_, bt)) =
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
-  | List its -> Dnode (pp_ctor "List", (List.map dtree its))
   | (Aligned a) -> Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
   | (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])

@@ -158,7 +158,8 @@ module General = struct
        let@ o_re_oarg = resource_request loc uiinfo resource in
        begin match o_re_oarg with
          | None ->
-            let@ model = model () in
+            let@ model = model_with loc (bool_ true) in
+            let model = Option.get model in
             fail_with_trace (fun trace -> fun ctxt ->
                 let ctxt = { ctxt with resources = original_resources } in
                 let msg = Missing_resource
@@ -233,32 +234,6 @@ module General = struct
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
-             | (Q p', O p'_oarg) when subsumed requested.name p'.name ->
-                let base = p'.pointer in
-                let item_size = p'.step in
-                let offset = array_offset_of_pointer ~base ~pointer:requested.pointer in
-                let index = array_pointer_to_index ~base ~item_size ~pointer:requested.pointer in
-                let subst = IT.make_subst [(p'.q, index)] in
-                let pre_match = 
-                  (* adapting from RE.subarray_condition *)
-                  and_ (lePointer_ (base, requested.pointer)
-                        :: divisible_ (offset, item_size)
-                        :: List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs)
-                in
-                let took = and_ [pre_match; IT.subst subst p'.permission] in
-                begin match provable (LC.T took) with
-                | `True ->
-                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
-                   let i_match = eq_ (sym_ (p'.q, Integer), index) in
-                   let permission' = and_ [p'.permission; not_ i_match] in
-                   Changed (Q {p' with permission = permission'}, O p'_oarg), 
-                   (false, O (map_get_ p'_oarg index))
-                | `False ->
-                   let model = Solver.model () in
-                   Pp.debug 9 (lazy (Pp.item "couldn't use q-resource" (RET.pp (fst re))));
-                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
-                   continue
-                end
              | re ->
                 continue
        in
@@ -312,33 +287,6 @@ module General = struct
              assert (RET.steps_constant (fst re));
              if is_false needed then continue else
              match re with
-             | (P p', O p'_oarg) when subsumed requested.name p'.name ->
-                let base = requested.pointer in
-                let item_size = step in
-                let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
-                let index = array_pointer_to_index ~base ~item_size ~pointer:p'.pointer in
-                let subst = IT.make_subst [(requested.q, index)] in
-                let pre_match = 
-                  and_ (lePointer_ (base, p'.pointer)
-                        :: divisible_ (offset, item_size)
-                        :: List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs
-                    )
-                in
-                let took = and_ [pre_match; IT.subst subst needed] in
-                begin match provable (LC.T took) with
-                | `True ->
-                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
-                   let i_match = eq_ (sym_ (requested.q, Integer), index) in
-                   let oarg = add_case (One {one_index = index; value = p'_oarg}) oarg in
-                   let needed' = and_ [needed; not_ i_match] in
-                   Deleted, 
-                   (Simplify.IndexTerms.simp simp_ctxt needed', oarg)
-                | `False ->
-                   let model = Solver.model () in
-                   Pp.debug 9 (lazy (Pp.item "couldn't use resource" (RET.pp (fst re))));
-                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
-                   continue
-                end
              | (Q p', O p'_oarg) when subsumed requested.name p'.name 
                          && IT.equal step p'.step ->
                 let p' = alpha_rename_qpredicate_type_ requested.q p' in

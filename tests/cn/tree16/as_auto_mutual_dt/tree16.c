@@ -131,6 +131,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
     return 1;
   }
   /*@ instantiate i; @*/
+  /*@ extract Owned<int>, i; @*/
   idx = path[i];
   /*@ extract Indirect_Tree, idx; @*/
   r = lookup_rec(t->nodes[idx], path, i + 1, path_len, v);

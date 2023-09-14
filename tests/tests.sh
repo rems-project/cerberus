@@ -193,6 +193,11 @@ citests=(
   0322-invalid_function_declarators.error.c
   0323-nested_function_declarators.syntax-only.c
   0324-atomics.c
+  0328-indeterminate_block_declaration.c
+  0329-rvalue-temporary-lifetime.undef.c
+  0330-alignas.syntax-only.c
+  0331-modifying-rvalue-temporary-lifetime.undef.c
+  0332-rvalue-temporary-lifetime-pointer-zap.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
@@ -210,4 +215,5 @@ skip=(
                               # UB088_reached_end_of_function is disabled for compatibility with CN
   0084-KO1.error.c # need to update the .messages file of the C parser
   0318-compound-interal-in_global.c
+  0332-rvalue-temporary-lifetime-pointer-zap.c # the zapping currently doesn't work (see issue #209)
 )

@@ -460,6 +460,7 @@ Inductive prefix : Type :=
   | PrefSource:  location_ocaml  ->  list  sym  -> prefix
   | PrefFunArg:  location_ocaml  ->  digest  ->  Z  -> prefix
   | PrefStringLiteral:  location_ocaml  ->  digest  -> prefix
+  | PrefTemporaryLifetime: location_ocaml -> digest -> prefix
   | PrefCompoundLiteral:  location_ocaml  ->  digest  -> prefix
   | PrefMalloc: prefix
   | PrefOther:  string  -> prefix .

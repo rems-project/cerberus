@@ -748,8 +748,9 @@ module Make (Config: CONFIG) = struct
           | M_Eccall (pe_ty, pe, pes) ->
               pp_keyword "ccall" ^^ P.parens (pp_ct pe_ty.ct) ^^
                 P.parens (comma_list pp_actype_or_pexpr ((* Left pe_ty ::  *) Right pe :: (map (fun pe -> Right pe)) pes))
-          | M_CN_progs (_, _stmts) -> pp_keyword "cn_prog(todo)"
-             (* placeholder for something better *)
+          | M_CN_progs (_, stmts) -> pp_keyword "cn_prog" ^^ P.parens
+              (* use the AST printer to at least print something, TODO improve *)
+              (Pp.list Pp_ast.pp_doc_tree (List.map Cnprog.dtree stmts))
           (* | M_Eunseq [] -> *)
           (*     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
           (* | M_Eunseq [e] -> *)
@@ -918,7 +919,7 @@ module Make (Config: CONFIG) = struct
         (*     P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) *)
         | M_ProcDecl (loc, ft) ->
             pp_cond loc @@
-            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ pp_ft ft
+            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ Pp.option pp_ft "(no spec)" ft
         (* | M_BuiltinDecl (loc, bTy, bTys) -> *)
         (*     pp_cond loc @@ *)
         (*     pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) *)
@@ -1168,7 +1169,7 @@ module WithLocations = Make(struct
 end)
 
 
-let pp_budget () = Some ((! Cerb_debug.debug_level))
+let pp_budget () = Some ((! Cerb_debug.debug_level) + (! Pp.print_level))
 let pp_pexpr_w b e = Basic.pp_pexpr b e
 let pp_pexpr e = pp_pexpr_w (pp_budget ()) e
 let pp_expr_w b e = Basic.pp_expr b e

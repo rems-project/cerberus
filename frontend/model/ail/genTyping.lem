@@ -1766,6 +1766,8 @@ and perform_decays sigm ctx a_expr =
                   std_annots (Loc.locOf a_expr) (AilEfunction_decay a_expr)
             | GenArray elem_ty sz_opt ->
               match a_expr with
+                | AnnotatedExpression _ _ _ (AilEconst (ConstantIndeterminate _)) ->
+                    a_expr
                 | AnnotatedExpression _ _ _ (AilEarray false _ _) ->
                     (* NOTE: this case doesn't syntactically exist in C, since
                        array values don't exist *)
@@ -2022,7 +2024,10 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                     Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
             else
-              let () = Debug.print_debug 2 [] (fun () ->
+              let () = Debug.print_debug 0 [] (fun () ->
+                "a_e: " ^ Pp.stringFromAil_expression a_e
+              ) in
+              let () = Debug.print_debug 0 [] (fun () ->
                 "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
                 match GenTypes.genTypeCategoryOf a_e with
                   | GenLValueType qs' ty' _ ->
@@ -2046,20 +2051,22 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
 
 val annotate_definition:
   (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
-  sigma unit -> gamma -> (Symbol.sym * expression unit) -> E.errorM (Symbol.sym * expression genTypeCategory)
-let annotate_definition annotate_block sigm gamm (sym, e) =
-  match List.lookup sym gamm with
-    | Just (_, _, sym_qs, sym_ty) ->
+  sigma unit -> gamma -> (Symbol.sym * maybe (expression unit)) -> E.errorM (Symbol.sym * maybe (expression genTypeCategory))
+let annotate_definition annotate_block sigm gamm (sym, e_opt) =
+  match (e_opt, List.lookup sym gamm) with
+    | (Nothing, Just _) ->
+        E.return (sym, Nothing)
+    | (Just e, Just (_, _, sym_qs, sym_ty)) ->
         annotate_definition_aux annotate_block sigm gamm (sym_ty, e) >>= fun a_e ->
-        E.return (sym, a_e)
-    | Nothing ->
+        E.return (sym, Just a_e)
+    | (_, Nothing) ->
         error "annotate_definition: symbol not found in the context"
   end
 
 
 val annotate_definitions:
   (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
-  sigma unit -> gamma -> list (Symbol.sym * expression unit) -> E.errorM (list (Symbol.sym * expression genTypeCategory))
+  sigma unit -> gamma -> list (Symbol.sym * maybe (expression unit)) -> E.errorM (list (Symbol.sym * maybe (expression genTypeCategory)))
 let rec annotate_definitions annotate_block sigm gamm = function
   | [] ->
       E.return []

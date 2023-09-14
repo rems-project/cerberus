@@ -58,11 +58,10 @@ open Log
 
 let frontend incl_dirs incl_files astprints filename state_file =
   let open CF in
-  Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false;
-  (* FIXME: make this a global config thing rather than poking state. *)
-  C_lexer.set_magic_comment_mode (C_lexer.(Magic_At true));
+  Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
-  Switches.set ["inner_arg_temps"];
+  Switches.set ["inner_arg_temps"; "at_magic_comments"; "warn_mismatched_magic_comments"];
+(*  Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name; *)
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
   let conf = Setup.conf incl_dirs incl_files astprints in
@@ -119,6 +118,7 @@ let main
       solver_logging
       output_decorated
       astprints
+      expect_failure
   =
   if json then begin
       if debug_level > 0 then
@@ -152,6 +152,7 @@ let main
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
          (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
+         (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
          print_log_file ("mucore", MUCORE prog5);
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
@@ -185,15 +186,15 @@ let main
        in
        Pp.maybe_close_times_channel ();
        match result with
-       | Ok () -> exit 0
-       | Error e when json -> TypeErrors.report_json ?state_file e; exit 1
-       | Error e -> TypeErrors.report ?state_file e; exit 1
+       | Ok () -> exit (if expect_failure then 1 else 0)
+       | Error e ->
+         if json then TypeErrors.report_json ?state_file e else TypeErrors.report ?state_file e;
+         exit (if expect_failure then 0 else 1)
  with
      | exc -> 
-        Cerb_debug.maybe_close_csv_timing_file ();
         Pp.maybe_close_times_channel ();
-        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
-
+        Cerb_debug.maybe_close_csv_timing_file_no_err ();
+        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ());
 
 
 open Cmdliner
@@ -292,6 +293,10 @@ let astprints =
   Arg.(value & opt (list (enum [("cabs", Cabs); ("ail", Ail); ("core", Core); ("types", Types)])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
+let expect_failure =
+  let doc = "invert return value to 1 if type checks pass and 0 on failure" in
+  Arg.(value & flag & info["expect-failure"] ~doc)
+
 
 let () =
   let open Term in
@@ -316,6 +321,7 @@ let () =
       random_seed $
       solver_logging $
       output_decorated $
-      astprints
+      astprints $
+      expect_failure
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))

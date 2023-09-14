@@ -19,10 +19,12 @@ Inductive cerb_switch : Set :=
 | SW_strict_pointer_relationals : cerb_switch
 | SW_PNVI : SW_PNVI_values -> cerb_switch
 | SW_CHERI : cerb_switch
-| SW_inner_arg_temps
-| SW_permissive_printf
-| SW_zero_initialised
-| SW_revocation: SW_revocation_values -> cerb_switch.
+| SW_inner_arg_temps : cerb_switch
+| SW_permissive_printf : cerb_switch
+| SW_zero_initialised : cerb_switch
+| SW_revocation: SW_revocation_values -> cerb_switch
+| SW_at_magic_comments : cerb_switch
+| SW_warn_mismatched_magic_comments : cerb_switch.
 
 Lemma SW_pointer_arith_values_dec: forall x y:SW_pointer_arith_values, {x = y} + {x <> y}.
 Proof. decide equality. Qed.

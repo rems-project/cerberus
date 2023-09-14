@@ -33,39 +33,83 @@ module type Implementation = sig
   val impl: implementation
 end
 
-let normalise_integerType_ type_alias_map typeof_enum ity =
-  let aux_ibty = function
-    | IntN_t n ->
-        Option.get (type_alias_map.intN_t_alias n)
-    | Int_leastN_t n ->
-        Option.get (type_alias_map.int_leastN_t_alias n)
-    | Int_fastN_t n ->
-        Option.get (type_alias_map.int_fastN_t_alias n)
-    | Intmax_t ->
-        type_alias_map.intmax_t_alias
-    | Intptr_t ->
-        type_alias_map.intptr_t_alias
-    | ibty -> ibty in
-match ity with
-  | Signed ibty ->
-      Signed (aux_ibty ibty)
-  | Unsigned ibty ->
-      Unsigned (aux_ibty ibty)
-  | Enum tag_sym ->
-      typeof_enum tag_sym
-  | Wchar_t ->
-      type_alias_map.wchar_t_alias
-  | Wint_t ->
-      type_alias_map.wint_t_alias
-  | Size_t ->
-      type_alias_map.size_t_alias
-  | Ptrdiff_t ->
-      type_alias_map.ptrdiff_t_alias
-  | ity ->
-      ity
+module Common = struct
+  let normalise_integerType_ type_alias_map typeof_enum ity =
+    let aux_ibty = function
+      | IntN_t n ->
+          Option.get (type_alias_map.intN_t_alias n)
+      | Int_leastN_t n ->
+          Option.get (type_alias_map.int_leastN_t_alias n)
+      | Int_fastN_t n ->
+          Option.get (type_alias_map.int_fastN_t_alias n)
+      | Intmax_t ->
+          type_alias_map.intmax_t_alias
+      | Intptr_t ->
+          type_alias_map.intptr_t_alias
+      | ibty -> ibty in
+  match ity with
+    | Signed ibty ->
+        Signed (aux_ibty ibty)
+    | Unsigned ibty ->
+        Unsigned (aux_ibty ibty)
+    | Enum tag_sym ->
+        typeof_enum tag_sym
+    | Wchar_t ->
+        type_alias_map.wchar_t_alias
+    | Wint_t ->
+        type_alias_map.wint_t_alias
+    | Size_t ->
+        type_alias_map.size_t_alias
+    | Ptrdiff_t ->
+        type_alias_map.ptrdiff_t_alias
+    | ity ->
+        ity
+
+  let precision_ity ~sizeof_ity ~is_signed_ity ity =
+    match sizeof_ity ity with
+      | Some n ->
+          if is_signed_ity ity then
+            Some (8*n-1)
+          else
+            Some (8*n)
+      | None ->
+          None
+  
+  (* NOTE: some of them are not implementation defined *)
+  let is_signed_ity ~typeof_enum ~char_is_signed ity =
+    let ity' =
+      match ity with
+        | Enum tag_sym ->
+            typeof_enum tag_sym
+        | _ ->
+            ity in
+    match ity' with
+      | Char ->
+          char_is_signed
+      | Bool ->
+          false
+      | Signed _ ->
+          true
+      | Unsigned _ ->
+          false
+      | Enum tag_sym ->
+          assert false
+      | Size_t ->
+          (* STD §7.19#2 *)
+          false
+      | Wchar_t ->
+          true
+      | Wint_t ->
+          true
+      | Ptrdiff_t ->
+          (* STD §7.19#2 *)
+          true
+      | Ptraddr_t ->
+          false
+end
 
 let normalise_integerType impl =
-  normalise_integerType_ impl.type_alias_map impl.typeof_enum
+  Common.normalise_integerType_ impl.type_alias_map impl.typeof_enum
 
 module DefaultImpl = struct
   let name = "clang9_x86_64-apple-darwin16.7.0"
@@ -107,38 +151,6 @@ module DefaultImpl = struct
   let max_alignment =
     8
   
-  (* NOTE: some of them are not implementation defined *)
-  let is_signed_ity ity =
-    let ity' =
-      match ity with
-        | Enum tag_sym ->
-            typeof_enum tag_sym
-        | _ ->
-            ity in
-    match ity' with
-      | Char ->
-          true
-      | Bool ->
-          false
-      | Signed _ ->
-          true
-      | Unsigned _ ->
-          false
-      | Enum tag_sym ->
-          assert false
-      | Size_t ->
-          (* STD §7.19#2 *)
-          false
-      | Wchar_t ->
-          true
-      | Wint_t ->
-          true
-      | Ptrdiff_t ->
-          (* STD §7.19#2 *)
-          true
-      | Ptraddr_t ->
-          false
-  
   let type_alias_map =
     let n_t_aliases = function
     | 8  -> Some Ichar
@@ -159,7 +171,7 @@ module DefaultImpl = struct
   }
 
   let sizeof_ity ity =
-    match normalise_integerType_ type_alias_map typeof_enum ity with
+    match Common.normalise_integerType_ type_alias_map typeof_enum ity with
       | Char
       | Bool ->
           Some 1
@@ -191,17 +203,6 @@ module DefaultImpl = struct
       | Ptraddr_t ->
           Some 8
 
-  (* NOTE: the code is bit generic here to allow reusability *)
-  let precision_ity ity =
-    match sizeof_ity ity with
-    | Some n ->
-      if is_signed_ity ity then
-        Some (8*n-1)
-      else
-        Some (8*n)
-    | None ->
-      None
-
   let sizeof_fty = function
     | RealFloating Float ->
         Some 8 (* TODO:hack ==> 4 *)
@@ -211,7 +212,7 @@ module DefaultImpl = struct
         Some 8 (* TODO:hack ==> 16 *)
 
   let alignof_ity ity =
-    match normalise_integerType_ type_alias_map typeof_enum ity with
+    match Common.normalise_integerType_ type_alias_map typeof_enum ity with
       | Char
       | Bool ->
           Some 1
@@ -252,22 +253,24 @@ module DefaultImpl = struct
         Some 8 (* TODO:hack ==> 16 *)
   
   (* CAUTION!! new implementions based on DefaultImpl should redefine this *)
-  let impl: implementation = {
-    name;
-    details;
-    sizeof_pointer;
-    alignof_pointer;
-    max_alignment;
-    is_signed_ity;
-    sizeof_ity;
-    precision_ity;
-    sizeof_fty;
-    alignof_ity;
-    alignof_fty;
-    register_enum;
-    typeof_enum;
-    type_alias_map;
-  }
+  let impl: implementation =
+    let is_signed_ity = Common.is_signed_ity ~typeof_enum ~char_is_signed:true in
+    {
+      name;
+      details;
+      sizeof_pointer;
+      alignof_pointer;
+      max_alignment;
+      is_signed_ity;
+      sizeof_ity;
+      precision_ity= Common.precision_ity ~sizeof_ity ~is_signed_ity;
+      sizeof_fty;
+      alignof_ity;
+      alignof_fty;
+      register_enum;
+      typeof_enum;
+      type_alias_map;
+    }
 end
 
 
@@ -295,8 +298,6 @@ end
 end *)
 
 module MorelloImpl = struct
-  include DefaultImpl
-
   let name = "clang11_aarch64-unknown-freebsd13"
   let details = "clang version 11.0.0\nTarget: Morello"
 
@@ -312,49 +313,50 @@ module MorelloImpl = struct
   let type_alias_map = { DefaultImpl.type_alias_map with
     intptr_t_alias= LongLong;
   }
+
+  let register_enum = DefaultImpl.register_enum
+  let typeof_enum = DefaultImpl.typeof_enum
   
   let alignof_ity ity =
-    match normalise_integerType_ type_alias_map typeof_enum ity with
+    match Common.normalise_integerType_ type_alias_map typeof_enum ity with
       | Signed LongLong
       | Unsigned LongLong -> Some 16
       | ity ->  DefaultImpl.alignof_ity ity
 
   let sizeof_ity ity =
-    match normalise_integerType_ type_alias_map typeof_enum ity with
+    match Common.normalise_integerType_ type_alias_map typeof_enum ity with
       | Signed LongLong
       | Unsigned LongLong -> Some 16
       | ity ->  DefaultImpl.sizeof_ity ity
+  
+  let sizeof_fty = DefaultImpl.sizeof_fty
+  let alignof_fty = DefaultImpl.alignof_fty
 
-  let impl: implementation = {
-    name;
-    details;
-    sizeof_pointer;
-    alignof_pointer;
-    max_alignment;
-    is_signed_ity;
-    sizeof_ity;
-    precision_ity;
-    sizeof_fty;
-    alignof_ity;
-    alignof_fty;
-    register_enum;
-    typeof_enum;
-    type_alias_map;
-  }
+  let impl: implementation =
+    let is_signed_ity = Common.is_signed_ity ~typeof_enum ~char_is_signed:true in
+    {
+      name;
+      details;
+      sizeof_pointer;
+      alignof_pointer;
+      max_alignment;
+      is_signed_ity;
+      sizeof_ity;
+      precision_ity= Common.precision_ity ~sizeof_ity ~is_signed_ity;
+      sizeof_fty;
+      alignof_ity;
+      alignof_fty;
+      register_enum;
+      typeof_enum;
+      type_alias_map;
+    }
 end
 
 
 (* LP64 *)
 module HafniumImpl = struct
-  include DefaultImpl
-
   let name = "hafnium_aarch64-none-eabi"
   let details = "TODO"
-
-  let is_signed_ity = function
-    | Char ->
-        false
-    | ity -> DefaultImpl.is_signed_ity ity
 
   (* let sizeof_fty = function
     | RealFloating Float ->
@@ -371,32 +373,35 @@ module HafniumImpl = struct
         Some 8
     | RealFloating LongDouble ->
         Some 16 *)
-
-  let impl: implementation = {
-    name;
-    details;
-    sizeof_pointer;
-    alignof_pointer;
-    max_alignment;
-    is_signed_ity;
-    sizeof_ity;
-    precision_ity;
-    sizeof_fty;
-    alignof_ity;
-    alignof_fty;
-    register_enum;
-    typeof_enum;
-    type_alias_map;
-  }
+  
+  let impl: implementation =
+    let is_signed_ity = Common.is_signed_ity ~typeof_enum:DefaultImpl.typeof_enum ~char_is_signed:false in
+    let sizeof_ity= DefaultImpl.sizeof_ity in
+    {
+      name;
+      details;
+      sizeof_pointer= DefaultImpl.sizeof_pointer;
+      alignof_pointer= DefaultImpl.alignof_pointer;
+      max_alignment= DefaultImpl.max_alignment;
+      is_signed_ity;
+      sizeof_ity;
+      precision_ity= Common.precision_ity ~sizeof_ity ~is_signed_ity;
+      sizeof_fty= DefaultImpl.sizeof_fty;
+      alignof_ity= DefaultImpl.alignof_ity;
+      alignof_fty= DefaultImpl.alignof_fty;
+      register_enum= DefaultImpl.register_enum;
+      typeof_enum= DefaultImpl.typeof_enum;
+      type_alias_map= DefaultImpl.type_alias_map;
+    }
 end
 
 
 let hafniumIntImpl: IntegerImpl.implementation =
   let open IntegerImpl in
   make_implementation Two'sComplement 
-  HafniumImpl.is_signed_ity
+  HafniumImpl.impl.is_signed_ity
   (fun ity ->
-    match HafniumImpl.precision_ity ity with
+    match HafniumImpl.impl.precision_ity ity with
       | Some n -> n
       | None   -> assert false)
   (Size_t)

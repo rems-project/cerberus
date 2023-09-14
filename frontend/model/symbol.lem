@@ -217,6 +217,7 @@ type prefix =
   | PrefStringLiteral of Loc.t * digest
   | PrefCompoundLiteral of Loc.t * digest
   | PrefMalloc
+  | PrefTemporaryLifetime of Loc.t * digest
   | PrefOther of string
 
 (* TODO: "nat", "int" *)

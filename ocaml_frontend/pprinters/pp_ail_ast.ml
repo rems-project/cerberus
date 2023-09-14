@@ -483,9 +483,9 @@ and dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
         Dleaf ( pp_stmt_ctor "AilSgoto" ^^^ Pp_ail.pp_id sym )
     | AilSdeclaration xs ->
         Dnode ( pp_stmt_ctor "AilSdeclaration"
-              , List.map (fun (sym, e) ->
+              , List.map (fun (sym, e_opt) ->
                     Dnode (pp_stmt_ctor "Symbol" ^^^ Pp_ail.pp_id sym
-                          , [dtree_of_expression e])
+                          , [Option.fold ~none:(Dleaf !^ "NOINIT") ~some:dtree_of_expression e_opt])
                 ) xs )
     | AilSpar ss ->
         Dnode (pp_stmt_ctor "AilSpar"
@@ -508,7 +508,6 @@ let pp_storageDuration = function
   | Static    -> pp_type_keyword "static"
   | Thread    -> pp_type_keyword "thread"
   | Automatic -> pp_type_keyword "automatic"
-  | Allocated -> pp_type_keyword "allocated"
 
 let dtree_of_typedef_attributes (sym, attrs) =
   with_attributes attrs begin

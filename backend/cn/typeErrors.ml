@@ -83,9 +83,6 @@ type sym_or_string =
   | String of string
 
 
-
-
-
 type message =
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
@@ -102,6 +99,8 @@ type message =
   | First_iarg_missing
   | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
 
+  | Missing_member of Id.t
+  | Duplicate_member of Id.t
 
   | Missing_resource of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
@@ -115,7 +114,6 @@ type message =
   | NIA : {it: IT.t; hint : string; ctxt : Context.t} -> message
   | TooBigExponent : {it: IT.t; ctxt : Context.t} -> message
   | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
-  | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
   | Unproven_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
@@ -128,6 +126,10 @@ type message =
   | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
 
   | Parser of Cerb_frontend.Errors.cparser_cause
+
+  | Empty_pattern
+  | Missing_pattern of Pp.document
+  | Duplicate_pattern
 
 
 type type_error = {
@@ -223,6 +225,12 @@ let pp_message te =
         Pp.squotes (BaseTypes.(pp found_bty))
      in
      { short; descr = Some descr; state = None; trace = None }
+  | Missing_member m ->
+     let short = !^"Missing member" ^^^ Id.pp m in
+     { short; descr = None; state = None; trace = None }
+  | Duplicate_member m ->
+     let short = !^"Duplicate member" ^^^ Id.pp m in
+     { short; descr = None; state = None; trace = None }
   | Missing_resource {orequest; situation; oinfo; ctxt; model; trace} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = missing_or_bad_request_description oinfo orequest in
@@ -313,10 +321,6 @@ let pp_message te =
            !^("Exponent must be non-negative")
      in
      { short; descr = Some descr; state = None; trace = None }
-  | Polymorphic_it it ->
-     let short = !^"Type inference failed" in
-     let descr = !^"Polymorphic index term" ^^^ squotes (IndexTerms.pp it) in
-     { short; descr = Some descr; state = None; trace = None }
   | Write_value_unrepresentable {ct; location; value; ctxt; model} ->
      let short =
        !^"Write value not representable at type" ^^^
@@ -381,6 +385,15 @@ let pp_message te =
      { short; descr = None; state = Some state; trace = None }
   | Parser err ->
      let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
+     { short; descr = None; state = None; trace = None }
+  | Empty_pattern ->
+     let short = !^"Empty match expression." in
+     { short; descr = None; state = None; trace = None }
+  | Missing_pattern p' ->
+     let short = !^"Missing pattern" ^^^ squotes p' ^^ dot in
+     { short; descr = None; state = None; trace = None }
+  | Duplicate_pattern ->
+     let short = !^"Duplicate pattern" in
      { short; descr = None; state = None; trace = None }
 
 

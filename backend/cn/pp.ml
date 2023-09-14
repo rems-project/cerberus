@@ -163,6 +163,11 @@ let list_filtered f l =
   | l -> flow (comma ^^ break 1) l
 
 
+let option f none_msg opt = match opt with
+  | None -> !^ none_msg
+  | Some v -> f v
+
+
 
 let nats n =
   let rec aux n = if n < 0 then [] else n :: aux (n - 1) in

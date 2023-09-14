@@ -63,13 +63,18 @@ Module Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
     B.t * A.t * nat -> mem_cheri_error
   | CheriUndefinedTag: mem_cheri_error.
 
+  Inductive readonly_kind : Set :=
+  | ReadonlyStringLiteral: readonly_kind
+  | ReadonlyTemporaryLifetime: readonly_kind
+  | ReadonlyConstQualified: readonly_kind.
+
   Inductive mem_error : Set :=
   | MerrOutsideLifetime : string -> mem_error
   | MerrInternal : string -> mem_error
   | MerrOther : string -> mem_error
   | MerrPtrdiff : mem_error
   | MerrAccess : access_kind -> access_error -> mem_error
-  | MerrWriteOnReadOnly : bool -> mem_error
+  | MerrWriteOnReadOnly : readonly_kind -> mem_error
   | MerrReadUninit : mem_error
   | MerrUndefinedFree : free_error -> mem_error
   | MerrUndefinedRealloc : free_error -> mem_error
@@ -262,9 +267,11 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
     | MerrUndefinedRealloc Free_out_of_bound =>
         Some UB_CERB002d_out_of_bound_realloc
 
-    | MerrWriteOnReadOnly true =>
+    | MerrWriteOnReadOnly ReadonlyStringLiteral =>
         Some UB033_modifying_string_literal
-    | MerrWriteOnReadOnly false =>
+    | MerrWriteOnReadOnly ReadonlyTemporaryLifetime =>
+        Some UB_modifying_temporary_lifetime
+    | MerrWriteOnReadOnly ReadonlyConstQualified =>
         Some UB064_modifying_const
     | MerrReadUninit => None
     | MerrCHERI err =>

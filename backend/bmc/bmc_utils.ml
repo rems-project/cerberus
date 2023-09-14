@@ -160,6 +160,7 @@ let prefix_to_string (prefix: Sym.prefix) =
   | PrefSource (_, l) -> "[" ^ (String.concat "," (List.map symbol_to_string_simple l)) ^ "]"
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
+  | PrefTemporaryLifetime _ -> "rvalue temporary"
   | PrefCompoundLiteral _ -> "compound literal"
   | PrefFunArg (_, _, n) -> "arg" ^ string_of_int n
   | PrefMalloc -> "malloc"
@@ -170,6 +171,7 @@ let prefix_to_string_short (prefix: Sym.prefix) =
   | PrefSource (_, l) ->  symbol_to_string_simple (List.hd (List.rev l))
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
+  | PrefTemporaryLifetime _ -> "rvalue temporary"
   | PrefCompoundLiteral _ -> "compound literal"
   | PrefFunArg (_, _, n) -> "arg" ^ string_of_int n
   | PrefMalloc -> "malloc"

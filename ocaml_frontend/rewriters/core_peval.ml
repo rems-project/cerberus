@@ -193,6 +193,20 @@ let rec select_case_pexpr loc_opt subst_sym pexpr = function
             end
       end
 
+let dest_specified p_e = match p_e with
+  | Pexpr (_, _, PEctor (Cspecified, [p_e2])) -> Some p_e2
+  | Pexpr (x, y, PEval (Vloaded (LVspecified z))) -> Some (Pexpr (x, y, PEval (Vobject z)))
+  | _ -> None
+
+let dest_ptr p_e = match p_e with
+  | Pexpr (_, _, PEval (Vobject (OVpointer ptr))) -> Some ptr
+  | _ -> None
+
+let known_fcall p_e =
+  Option.bind (dest_specified p_e)
+  (fun p_e -> Option.bind (dest_ptr p_e)
+  (fun ptr_e -> Impl_mem.case_ptrval ptr_e (fun _ -> None)
+    (fun opt_sym -> opt_sym) (fun _ _ -> None)))
 
 module Identity = struct
   type 'a t = 'a
@@ -430,21 +444,15 @@ let apply_substs_expr xs e =
   ) e xs
 
 
+(* FIXME: probably this should be passed like a proper parameter *)
+let config_unfold_stdlib : (Symbol.sym -> bool) ref =
+  ref (fun _ -> false)
+
 
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
 let core_peval file : 'bty RW.rewriter =
 
-  let module StringSet = Set.Make(String) in
-
-  let stdlib_unfold_pred fsym fdecl =
-    match Symbol.symbol_description fsym, fdecl with
-    (* | SD_Id "is_representable_integer", _ *)
-    (* | SD_Id "catch_exceptional_condition", _  *)
-    (*   -> *)
-    (*    true *)
-    | _ ->
-       false
-  in
+  let stdlib_unfold_pred fsym fdecl = (! config_unfold_stdlib) fsym in
 
   let impl_unfold_pred _ fdecl =
     match fdecl with
@@ -460,11 +468,11 @@ let core_peval file : 'bty RW.rewriter =
   let to_unfold_funs =
     (* The list of stdlib functions to be unfolded (see PEcall) *)
     Pmap.filter stdlib_unfold_pred file.stdlib in
-  
+
   let to_unfold_impls =
     (* The list of impl-def functions to be unfolded (see PEcall) *)
     Pmap.filter impl_unfold_pred file.impl in
-  
+
   let check_unfold = function
     | Sym sym ->
         begin match Pmap.lookup sym to_unfold_funs with
@@ -480,7 +488,15 @@ let core_peval file : 'bty RW.rewriter =
           | _ ->
               None
         end in
-  
+
+  let check_unfold_proc sym =
+    begin match Pmap.lookup sym to_unfold_funs with
+      | Some (Proc (_, _, _, sym_bTys, e)) ->
+          Some (sym_bTys, e)
+      | _ -> None
+    end
+  in
+
   let open RW in {
     rw_pexpr=
       RW.RW begin fun _ (Pexpr (annots, bTy, pexpr_) as pexpr) ->
@@ -577,7 +593,7 @@ let core_peval file : 'bty RW.rewriter =
                     end
                 
                 | PEcall (nm, pes) ->
-                    (* UNFOLD CALLS TO STDLIB and IMPL-DEF FUNCTIONS TAKING A CTYPE AS PARAMETER *)
+                    (* unfold some calls to stdlib functions *)
                     begin match check_unfold nm with
                       | Some (sym_bTys, body_pe) ->
                           let pats =
@@ -716,6 +732,32 @@ let core_peval file : 'bty RW.rewriter =
                       , Identity.return )
               end
 
+          | Eccall (_, _, f_e, pes) ->
+              begin match known_fcall f_e with
+              (* unfold some calls to stdlib functions *)
+                | Some nm ->
+                    begin match check_unfold_proc nm with
+                      | Some (sym_bTys, body_e) ->
+                          let pats =
+                            List.map (fun (sym, bTy) ->
+                              Core_aux.mk_sym_pat sym bTy
+                            ) sym_bTys in
+                          Update begin
+                            match pes with
+                              | [] ->
+                                  body_e
+                              | _ ->
+                                  Core_aux.mk_let_e
+                                    (Core_aux.mk_tuple_pat pats)
+                                    (Core_aux.mk_tuple_pe pes)
+                                    body_e
+                          end
+                      | None ->
+                          Traverse
+                    end
+                | None ->
+                    Traverse
+              end
 
 (*
                 ChangeDoChildrenPost

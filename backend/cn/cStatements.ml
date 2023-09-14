@@ -101,7 +101,7 @@ let add_map_stmt (stmt : 'a statement) m =
     | AilSpar ss2 -> f (ss2 @ ss) m
     | AilSexpr e -> f ss (do_x l m e)
     | AilSreturn e -> f ss (do_x l m e)
-    | AilSdeclaration xs -> f ss (do_xs l m (List.map snd xs))
+    | AilSdeclaration xs -> f ss (do_xs l m (List.filter_map snd xs))
     | AilSreg_store (_, x) -> f ss (do_x l m x)
     | _ -> f ss m
     end

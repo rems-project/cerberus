@@ -40,6 +40,8 @@ declare ocaml target_rep function isDefacto = `Cerb_global.isDefacto`
 val isAgnostic: unit -> bool
 declare ocaml target_rep function isAgnostic = `Cerb_global.isAgnostic`
 
+val isIgnoreBitfields: unit -> bool
+declare ocaml target_rep function isIgnoreBitfields = `Cerb_global.isIgnoreBitfields`
 
 type cerb_switch =
   | SW_strict_reads
