@@ -40,21 +40,26 @@ _Bool cn_integer_equality(void *i1, void *i2) {
 }
 
 _Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
-    // if (ht_size(m1) != ht_size(m2)) return 0;
+    if (ht_size(m1) != ht_size(m2)) return 0;
     
-    // hash_table_iterator hti1 = ht_iterator(m1);
-    // hash_table_iterator hti2 = ht_iterator(m2);
+    hash_table_iterator hti1 = ht_iterator(m1);
+    hash_table_iterator hti2 = ht_iterator(m2);
 
 
-    // while (ht_next(&hti1) && ht_next(&hti2)) {
-    //     printf("Entered loop\n");
-    //     printf("value 1: %c\n", *(cn_integer *)(hti1.value));
-    //     printf("value 2: %c\n", *(cn_integer *)(hti2.value));
-    //     if (!cn_integer_equality(hti1.value, hti2.value)) {
-    //         printf("Values not equal!\n");
-    //         return 0;
-    //     } 
-    // }
+    while (ht_next(&hti1)) {
+        printf("Entered loop\n");
+        unsigned int* curr_key = hti1.key;
+        void *val1 = cn_map_get(m1, curr_key);
+        void *val2 = cn_map_get(m2, curr_key);
+
+        /* Check if other map has this key at all */
+        if (!val2) return 0;
+
+        if (!cn_integer_equality(val1, val2)) {
+            printf("Values not equal!\n");
+            return 0;
+        } 
+    }
 
     printf("Returning true from cn_map_equality\n");
 
