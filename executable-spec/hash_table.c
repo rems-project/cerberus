@@ -1,4 +1,28 @@
-/* Credit: https://benhoyt.com/writings/hash-table-in-c/#hash-tables */
+/*
+
+MIT License
+
+Copyright (c) 2021 Ben Hoyt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
 
 #include "alloc.c"
 #include "hash_table.h"
@@ -57,7 +81,6 @@ void* ht_get(hash_table* table, unsigned int *key) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(table->capacity - 1));
-    printf("ht_get: key = %d, index = %ld\n", *key, index);
 
     // Loop till we find an empty entry.
     while (table->entries[index].key != NULL) {
@@ -115,7 +138,6 @@ static unsigned int* ht_set_entry(ht_entry* entries, size_t capacity,
     }
     entries[index].key = key;
     entries[index].value = value;
-    printf("Set entry. Index: %ld, Key: %d, Value: %c\n", index, *key, *(char *)value);
     return key;
 }
 
@@ -189,7 +211,6 @@ _Bool ht_next(hash_table_iterator* it) {
             ht_entry entry = table->entries[i];
             it->key = entry.key;
             it->value = entry.value;
-            printf("Get entry (iterator). Index: %ld, Key: %d, Value: %c\n", i, *(signed int *)entry.key, *(char *)entry.value);
             return 1;
         }
     }
