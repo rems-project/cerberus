@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - revocation-proofs
   # pull_request: {}
 
 # cancel in-progress job when a new push is performed
