@@ -943,17 +943,17 @@ Module CheriMemory
     3. Address must be equal to the beginning of allocation
     4. Permissions must be the same as returned by allocator
 
-    TODO: check ghost state?
     TODO: assumes that [C.cap_get_value c = fst (C.cap_get_bounds c) ]
    *)
   Definition cap_match_dyn_allocation c alloc : bool :=
-    let zbounds := Bounds.to_Zs (C.cap_get_bounds c) in
-    let csize := (snd zbounds) - (fst zbounds) in
-
-    Permissions.eqb (C.cap_get_perms c) Permissions.perm_alloc
-    && alloc.(is_dynamic)
-    && AddressValue.eqb alloc.(base) (C.cap_get_value c)
-    && Z.eqb alloc.(size) csize.
+    let gs := C.get_ghost_state c in
+    (negb (gs.(tag_unspecified) || gs.(tag_unspecified))) &&
+      (Permissions.eqb (C.cap_get_perms c) Permissions.perm_alloc
+       && alloc.(is_dynamic)
+       && AddressValue.eqb alloc.(base) (C.cap_get_value c)
+       && (let zbounds := Bounds.to_Zs (C.cap_get_bounds c) in
+           let csize := (snd zbounds) - (fst zbounds) in
+           Z.eqb alloc.(size) csize)).
 
   Definition remove_allocation (alloc_id : Z) : memM unit :=
     update (fun st =>
