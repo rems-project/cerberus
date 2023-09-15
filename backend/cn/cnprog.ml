@@ -40,7 +40,7 @@ let rec subst substitution = function
      let pointer = IT.subst substitution pointer in
      let name, prog = 
        suitably_alpha_rename substitution.relevant 
-         (name, BT.of_sct ct) prog
+         (name, Memory.bt_of_sct ct) prog
      in
      M_CN_let (loc, (name, {ct; pointer}), subst substitution prog)
   | M_CN_statement (loc, stmt) ->

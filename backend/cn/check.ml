@@ -50,14 +50,18 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 (*** pattern matching *********************************************************)
 
+let bogus_cbt_to_bt (cbt : Mucore.T.cbt) = BT.Integer
+
 let rec infer_pattern (M_Pattern (loc, _, pattern)) =
   match pattern with
   | M_CaseBase (_, has_bt) -> 
+     let has_bt = bogus_cbt_to_bt has_bt in
      let@ has_bt = WellTyped.WBT.is_bt loc has_bt in
      return has_bt
   | M_CaseCtor (constructor, pats) ->
     begin match constructor, pats with
     | M_Cnil item_bt, [] -> 
+       let item_bt = bogus_cbt_to_bt item_bt in
        let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
        return (BT.List item_bt)
     | M_Cnil _, _ ->
@@ -96,6 +100,7 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
    | M_CaseCtor (constructor, pats) ->
       match constructor, pats with
       | M_Cnil item_bt, [] ->
+         let item_bt = bogus_cbt_to_bt item_bt in
          let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
          let@ () = add_c loc (LC.t_ (eq__ it (nil_ ~item_bt))) in
          return []
@@ -200,7 +205,7 @@ and check_struct (loc : loc)
             member_types member_values);
   let@ member_its = 
     ListM.mapM (fun (member, sct, mv) ->
-        let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct sct) mv in
+        let@ member_lvt = check_mem_value loc ~expect:(Memory.bt_of_sct sct) mv in
         return (member, member_lvt)
       ) member_values
   in
@@ -272,6 +277,7 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : IT.t m =
      let@ _ = get_fun_decl loc sym in
      return (IT.sym_ (sym, Loc))
   | M_Vlist (item_bt, vals) ->
+     let item_bt = bogus_cbt_to_bt item_bt in
      let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
      let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
      let@ values = ListM.mapM (check_value loc ~expect:item_bt) vals in
@@ -511,6 +517,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         check_pexprs (List.map (fun pe -> (pe, item_bt)) pes) (fun values ->
         k (make_array_ ~item_bt values))
      | M_Cnil item_bt, [] -> 
+        let item_bt = bogus_cbt_to_bt item_bt in
         let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
         let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
         k (nil_ ~item_bt)
@@ -685,7 +692,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ xs_with_expects = 
        ListM.mapM (fun (id, expr) ->
            let@ ty = get_member_type loc tag id layout in
-           return (expr, BT.of_sct ty)
+           return (expr, Memory.bt_of_sct ty)
          ) xs 
      in
      check_pexprs xs_with_expects (fun vs ->
@@ -1204,7 +1211,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                  pointer = ret;
                  iargs = [];
                }, 
-             O (default_ (BT.of_sct act.ct)))
+             O (default_ (Memory.bt_of_sct act.ct)))
         in
         let@ () =
           add_r loc (P (Global.mk_alloc ret), O IT.unit_) in
@@ -1234,7 +1241,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.ensure_base_type loc ~expect Unit in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr ~expect:Loc p_pe (fun parg ->
-        check_pexpr ~expect:(BT.of_sct act.ct) v_pe (fun varg ->
+        check_pexpr ~expect:(Memory.bt_of_sct act.ct) v_pe (fun varg ->
         (* The generated Core program will in most cases before this
            already have checked whether the store value is
            representable and done the right thing. Pointers, as I
@@ -1277,7 +1284,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         k unit_))
      | M_Load (act, p_pe, _mo) -> 
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-        let@ () = WellTyped.ensure_base_type loc ~expect (BT.of_sct act.ct) in
+        let@ () = WellTyped.ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
         check_pexpr ~expect:Loc p_pe (fun pointer ->
         let@ value = load loc pointer act.ct in
         k value)

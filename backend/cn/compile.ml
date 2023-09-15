@@ -562,7 +562,7 @@ module EffectfulTranslation = struct
     | Struct tag ->
        let@ defs_ = lookup_struct loc tag env in
        let@ ty = lookup_member loc (tag, defs_) member in
-       let member_bt = SurfaceBaseTypes.of_sct ty in
+       let member_bt = Memory.sbt_of_sct ty in
        return ( IT.IT ((StructMember (t, member)), member_bt) )
     (* | Datatype tag -> *)
     (*    let@ dt_info = lookup_datatype loc tag env in *)
@@ -881,11 +881,11 @@ module EffectfulTranslation = struct
          in
          (* we don't take Resources.owned_oargs here because we want to
             maintain the C-type information *)
-         let oargs_ty = SBT.of_sct scty in
+         let oargs_ty = Memory.sbt_of_sct scty in
          return (Owned (scty, Init), oargs_ty)
       | CN_block ty ->
         let scty = Sctypes.of_ctype_unsafe res_loc ty in
-        return (Owned (scty, Uninit), SBT.of_sct scty)
+        return (Owned (scty, Uninit), Memory.sbt_of_sct scty)
       | CN_named pred ->
         let@ pred_sig = match lookup_predicate pred env with
           | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
@@ -1312,7 +1312,7 @@ let rec make_lrt_generic env st =
 
   let make_rt loc (env : env) st (s, ct) (accesses, ensures) =
     let ct = Sctypes.of_ctype_unsafe loc ct in
-    let sbt = SBT.of_sct ct in
+    let sbt = Memory.sbt_of_sct ct in
     let bt = SBT.to_basetype sbt in
     let@ lrt = make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures) in
     let info = (loc, Some "return value good") in
@@ -1399,7 +1399,7 @@ module UsingLoads = struct
     and load loc action_pp pointer k =
       let@ pointee_ct = pointee_ct loc pointer in
       let value_s = Sym.fresh_make_uniq (action_pp ^ "_" ^ Pp.plain (IT.pp pointer)) in
-      let value_bt = SBT.of_sct pointee_ct in
+      let value_bt = Memory.sbt_of_sct pointee_ct in
       let value = IT.sym_ (value_s, value_bt) in
       let@ prog = aux (k (Some value)) in
       let load = {ct = pointee_ct; pointer = IT.term_of_sterm pointer} in

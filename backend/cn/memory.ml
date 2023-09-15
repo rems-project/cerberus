@@ -27,6 +27,8 @@ let max_pointer =
   let pointer_bits = size_of_pointer * bits_per_byte in
   Z.sub (Z.pow (Z.of_int 2) pointer_bits) (Z.of_int 1)
 
+let bt_of_sct = BT.of_sct size_of_integer_type
+let sbt_of_sct = SurfaceBaseTypes.of_sct size_of_integer_type
 
 let size_of_ctype = function
   | Void -> Cerb_debug.error "size_of_ctype applied to void"

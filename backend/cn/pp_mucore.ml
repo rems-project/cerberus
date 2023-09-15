@@ -52,6 +52,39 @@ end
 
 
 
+let rec pp_core_object_type = function
+  | OTy_integer ->
+      !^ "integer"
+  | OTy_floating ->
+      !^ "floating"
+  | OTy_pointer ->
+      !^ "pointer"
+  | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
+      !^ "array" ^^ P.parens (pp_core_object_type bty)
+  | OTy_struct ident ->
+      !^ "struct" ^^^ !^(Pp_symbol.to_string ident)
+  | OTy_union ident  ->
+      !^ "union" ^^^ !^(Pp_symbol.to_string ident)
+  (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
+      let pp_ret = match ret_oTy_opt with
+        | Some ret_oTy ->
+            pp_core_object_type ret_oTy
+        | None ->
+            P.underscore in
+      !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+*)
+let rec pp_core_base_type = function
+  | BTy_storable   -> !^ "storable"
+  | BTy_object bty ->
+      pp_core_object_type bty
+  | BTy_loaded bty ->
+      !^ "loaded" ^^^ pp_core_object_type bty
+  | BTy_boolean    -> !^ "boolean"
+  | BTy_ctype      -> !^ "ctype"
+  | BTy_unit       -> !^ "unit"
+  | BTy_list bTy  -> P.brackets (pp_core_base_type bTy)
+  | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
+
 
 
 module Make (Config: CONFIG) = struct
@@ -372,9 +405,9 @@ module Make (Config: CONFIG) = struct
   let rec pp_pattern (M_Pattern (_, _, pat)) =
     match pat with
     | M_CaseBase (None, bTy) ->
-        P.underscore ^^ P.colon ^^^ pp_bt bTy
+        P.underscore ^^ P.colon ^^^ pp_core_base_type bTy
     | M_CaseBase (Some sym, bTy) ->
-        pp_symbol sym ^^ P.colon ^^^ pp_bt bTy
+        pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
   (* Syntactic sugar for tuples and lists *)
     | M_CaseCtor (M_Ctuple, pats) ->
         P.parens (comma_list pp_pattern pats)
@@ -1052,39 +1085,6 @@ module Make (Config: CONFIG) = struct
 
 end
 
-
-let rec pp_core_object_type = function
-  | OTy_integer ->
-      !^ "integer"
-  | OTy_floating ->
-      !^ "floating"
-  | OTy_pointer ->
-      !^ "pointer"
-  | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
-      !^ "array" ^^ P.parens (pp_core_object_type bty)
-  | OTy_struct ident ->
-      !^ "struct" ^^^ !^(Pp_symbol.to_string ident)
-  | OTy_union ident  ->
-      !^ "union" ^^^ !^(Pp_symbol.to_string ident)
-  (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
-      let pp_ret = match ret_oTy_opt with
-        | Some ret_oTy ->
-            pp_core_object_type ret_oTy
-        | None ->
-            P.underscore in
-      !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-*)
-let rec pp_core_base_type = function
-  | BTy_storable   -> !^ "storable"
-  | BTy_object bty ->
-      pp_core_object_type bty
-  | BTy_loaded bty ->
-      !^ "loaded" ^^^ pp_core_object_type bty
-  | BTy_boolean    -> !^ "boolean"
-  | BTy_ctype      -> !^ "ctype"
-  | BTy_unit       -> !^ "unit"
-  | BTy_list bTy  -> P.brackets (pp_core_base_type bTy)
-  | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
 
 
 

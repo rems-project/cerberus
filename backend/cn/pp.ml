@@ -189,6 +189,8 @@ let c_comment pp =
 let c_app f args = 
   group @@ f ^^ group @@ parens @@ nest 2 @@ flow (break 0 ^^ comma ^^ space) args
 
+let ineq x y = x ^^^ !^"!=" ^^^ y
+
 
 
 let headline a = 

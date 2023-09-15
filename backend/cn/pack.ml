@@ -39,7 +39,7 @@ let packing_ft loc global provable ret =
          None
       | Owned ((Array (ict, olength)) as ct, init) ->
          let qpred = unfolded_array init (ict, olength) ret.pointer in
-         let o_s, o = IT.fresh_named (BT.of_sct ct) "value" in
+         let o_s, o = IT.fresh_named (Memory.bt_of_sct ct) "value" in
          let at = 
            LAT.Resource ((o_s, (qpred, IT.bt o)), (loc, None),
            LAT.I o)
@@ -58,11 +58,11 @@ let packing_ft loc global provable ret =
                     iargs = [];
                   }
                 in
-                let m_value_s, m_value = IT.fresh_named (BT.of_sct mct) (Id.s member) in
+                let m_value_s, m_value = IT.fresh_named (Memory.bt_of_sct mct) (Id.s member) in
                 (LRT.Resource ((m_value_s, (request, IT.bt m_value)), (loc, None), lrt),
                 (member, m_value) :: value)
               | None ->
-                let padding_ct = Sctypes.Array (Integer Char, Some size) in
+                let padding_ct = Sctypes.Array (Sctypes.char_ct, Some size) in
                 let request = 
                   P {
                     name = Owned (padding_ct, Uninit);
@@ -70,7 +70,7 @@ let packing_ft loc global provable ret =
                     iargs = [];
                   }
                 in
-                let padding_s, padding = IT.fresh_named (BT.of_sct padding_ct) "padding" in
+                let padding_s, padding = IT.fresh_named (Memory.bt_of_sct padding_ct) "padding" in
                 (LRT.Resource ((padding_s, (request, IT.bt padding)), (loc, None), lrt),
                 value)
               ) layout (LRT.I, [])
@@ -106,17 +106,17 @@ let unpack_owned global (ct, init) pointer (O o) =
               pointer = memberShift_ (pointer, tag, member);
               iargs = [];
             }, 
-            O (member_ ~member_bt:(BT.of_sct mct) (tag, o, member)))
+            O (member_ ~member_bt:(Memory.bt_of_sct mct) (tag, o, member)))
           in
           (mresource :: res)
         | None ->
-          let padding_ct = Sctypes.Array (Integer Char, Some size) in
+          let padding_ct = Sctypes.Array (Sctypes.char_ct, Some size) in
           let mresource = 
             (P {
               name = Owned (padding_ct, Uninit);
               pointer = pointer_offset_ (pointer, int_ offset);
               iargs = [];
-            }, O (default_ (BT.of_sct padding_ct)))
+            }, O (default_ (Memory.bt_of_sct padding_ct)))
           in
           (mresource :: res)
         ) layout []

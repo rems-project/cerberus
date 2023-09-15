@@ -536,7 +536,7 @@ module WIT = struct
          (* "sort" according to declaration *)
          let@ members_sorted = 
            ListM.mapM (fun (id, ct) ->
-               let@ t = check loc (BT.of_sct ct) (List.assoc Id.equal id members) in
+               let@ t = check loc (Memory.bt_of_sct ct) (List.assoc Id.equal id members) in
                return (id, t)
              ) decl_members
          in
@@ -549,7 +549,7 @@ module WIT = struct
            | has -> fail (illtyped_index_term loc t has "struct")
          in
          let@ field_ct = get_struct_member_type loc tag member in
-         return (IT (StructMember (t, member),BT.of_sct field_ct))
+         return (IT (StructMember (t, member),Memory.bt_of_sct field_ct))
       | StructUpdate ((t, member), v) ->
          let@ t = infer loc t in
          let@ tag = match IT.bt t with
@@ -557,7 +557,7 @@ module WIT = struct
            | has -> fail (illtyped_index_term loc t has "struct")
          in
          let@ field_ct = get_struct_member_type loc tag member in
-         let@ v = check loc (BT.of_sct field_ct) v in
+         let@ v = check loc (Memory.bt_of_sct field_ct) v in
          return (IT (StructUpdate ((t, member), v),BT.Struct tag))
       | Record members ->
          let@ members = no_duplicate_members_sorted loc members in
@@ -633,11 +633,11 @@ module WIT = struct
           return (IT (Aligned {t = t_t; align=t_align},BT.Bool))
        | Representable (ct, t) ->
           let@ () = WCT.is_ct loc ct in
-          let@ t = check loc (BT.of_sct ct) t in
+          let@ t = check loc (Memory.bt_of_sct ct) t in
           return (IT (Representable (ct, t),BT.Bool))
        | Good (ct, t) ->
           let@ () = WCT.is_ct loc ct in
-          let@ t = check loc (BT.of_sct ct) t in
+          let@ t = check loc (Memory.bt_of_sct ct) t in
           return (IT (Good (ct, t),BT.Bool))
        | WrapI (ity, t) ->
           let@ () = WCT.is_ct loc (Integer ity) in
@@ -839,7 +839,7 @@ end
 
 let oarg_bt_of_pred loc = function
   | RET.Owned (ct,_init) -> 
-      return (BT.of_sct ct)
+      return (Memory.bt_of_sct ct)
   | RET.PName pn ->
       let@ def = Typing.get_resource_predicate_def loc pn in
       return def.oarg_bt

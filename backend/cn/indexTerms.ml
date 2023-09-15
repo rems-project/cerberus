@@ -539,7 +539,7 @@ let (%.) struct_decls t member =
   let member_bt = match List.assoc_opt Id.equal member
          (Memory.member_types (SymMap.find tag struct_decls))
   with
-    | Some sct -> BT.of_sct sct
+    | Some sct -> Memory.bt_of_sct sct
     | None -> Cerb_debug.error ("struct " ^ Sym.pp_string tag ^
         " does not have member " ^ (Id.pp_string member))
   in
@@ -787,7 +787,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
            List.filter_map (fun piece ->
                match piece.member_or_padding with
                | Some (member, mct) ->
-                  let member_bt = BT.of_sct mct in
+                  let member_bt = Memory.bt_of_sct mct in
                   let member_it = member_ ~member_bt (tag, about, member) in
                   Some (aux mct member_it)
                | None ->

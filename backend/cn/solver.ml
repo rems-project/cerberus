@@ -332,7 +332,7 @@ module Translate = struct
            map_split (fun (id,sct) ->
                let s = string (member_name tag id) in
                Z3Symbol_Table.add z3sym_table s (MemberFunc {tag; member=id});
-               (s, sort (BT.of_sct sct))
+               (s, sort (Memory.bt_of_sct sct))
              ) (Memory.member_types layout)
          in
          Z3.Tuple.mk_sort context struct_symbol
@@ -424,7 +424,7 @@ module Translate = struct
            List.map (fun (member', sct) ->
                let value =
                  if Id.equal member member' then v
-                 else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
+                 else member_ ~member_bt:(Memory.bt_of_sct sct) (tag, t, member')
                in
                (member', value)
              ) members
@@ -1262,7 +1262,7 @@ module Eval = struct
               default_ bt
            | MemberFunc {tag; member} ->
               let sd = Memory.member_types (SymMap.find tag global.struct_decls) in
-              let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
+              let member_bt = Memory.bt_of_sct (List.assoc Id.equal member sd) in
               member_ ~member_bt (tag, nth args 0, member)
            | StructFunc {tag} ->
               let sd = Memory.members (SymMap.find tag global.struct_decls) in

@@ -24,6 +24,7 @@ type make_logical_function =
 module T = struct
   type ct = Sctypes.t
   type bt = BaseTypes.t
+  type cbt = Core.core_base_type
   type ft = ArgumentTypes.ft
   type lt = ArgumentTypes.lt
   type rt = ReturnTypes.t
@@ -70,13 +71,13 @@ and 'TY mu_value =  (* Core values *)
  | M_Vunit
  | M_Vtrue
  | M_Vfalse
- | M_Vlist of T.bt * ('TY mu_value) list
+ | M_Vlist of T.cbt * ('TY mu_value) list
  | M_Vtuple of ('TY mu_value) list (* tuple *)
 
 
 
 type mu_ctor =  (* data constructors *)
- | M_Cnil of T.bt (* empty list *) 
+ | M_Cnil of T.cbt (* empty list *)
  (* annotated with the type of the list items *)
  | M_Ccons (* list cons *)
  | M_Ctuple (* tuple *)
@@ -90,7 +91,7 @@ type mu_ctor =  (* data constructors *)
   * | M_Civfromfloat (\* cast floating to integer value *\) *)
 
 type mu_pattern_ = 
- | M_CaseBase of (Symbol.sym option * T.bt)
+ | M_CaseBase of (Symbol.sym option * T.cbt)
  | M_CaseCtor of mu_ctor * mu_pattern list
 
 and mu_pattern = 

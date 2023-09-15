@@ -86,32 +86,22 @@ let assert_error loc msg =
   then assert false
   else raise ConversionFailed
 
-let assertl loc b msg = 
+let assertl loc b msg extra =
   if b then () 
-  else assert_error loc msg
+  else assert_error loc (msg ^^ Print.hardline ^^ Lazy.force extra)
 
 let convert_ct loc ct = Sctypes.of_ctype_unsafe loc ct
 
-let convert_bt loc =
-
-  let rec bt_of_core_object_type = function
-    | OTy_integer -> BT.Integer
-    | OTy_pointer -> BT.Loc
-    | OTy_array t -> BT.Map (Integer, bt_of_core_object_type t)
-    | OTy_struct tag -> BT.Struct tag
-    | OTy_union _tag -> Tools.unsupported loc !^"union types"
-    | OTy_floating -> Tools.unsupported loc !^"floats"
-  in
+let convert_core_bt_for_list loc =
 
   let rec bt_of_core_base_type = function
     | BTy_unit -> BT.Unit
     | BTy_boolean -> BT.Bool
-    | BTy_object ot -> bt_of_core_object_type ot
-    | BTy_loaded ot -> bt_of_core_object_type ot
     | BTy_list bt -> BT.List (bt_of_core_base_type bt)
     | BTy_tuple bts -> BT.Tuple (List.map bt_of_core_base_type bts)
-    | BTy_storable -> assert_error loc (!^"BTy_storable")
     | BTy_ctype -> BT.CType
+    | cbt -> assert_error loc (Print.item "convert_core_bt_for_list"
+        (Pp_mucore.pp_core_base_type cbt))
   in
 
   fun cbt -> bt_of_core_base_type cbt
@@ -167,12 +157,12 @@ let rec core_to_mu__pattern loc (Pattern (annots, pat_)) =
 
   let wrap pat_ = M_Pattern(loc, annots, pat_) in
   match pat_ with
-  | CaseBase (msym, bt1) -> 
-     wrap (M_CaseBase (msym, convert_bt loc bt1))
+  | CaseBase (msym, cbt1) ->
+     wrap (M_CaseBase (msym, cbt1))
   | CaseCtor(ctor, pats) -> 
      let pats = map (core_to_mu__pattern loc) pats in
      match ctor with
-     | Cnil bt1 -> wrap (M_CaseCtor (M_Cnil (convert_bt loc bt1), pats))
+     | Cnil cbt1 -> wrap (M_CaseCtor (M_Cnil cbt1, pats))
      | Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
      | Ctuple -> wrap (M_CaseCtor (M_Ctuple, pats))
      | Carray -> wrap (M_CaseCtor (M_Carray, pats))
@@ -209,12 +199,12 @@ and n_val loc = function
   | Vtrue -> M_Vtrue
   | Vfalse -> M_Vfalse
   | Vctype ct -> M_Vctype ct
-  | Vlist (cbt, vs) -> M_Vlist (convert_bt loc cbt, List.map (n_val loc) vs)
+  | Vlist (cbt, vs) -> M_Vlist (cbt, List.map (n_val loc) vs)
   | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
 
 
 let unit_pat loc annots = 
-  M_Pattern (loc, annots, M_CaseBase (None, BT.Unit))
+  M_Pattern (loc, annots, M_CaseBase (None, Core.BTy_unit))
 
 
 let function_ids = [
@@ -286,8 +276,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      | Core.Civfromfloat, _ ->
         argnum_err ()
      | Core.Cnil bt1, _ -> 
-        annotate (M_PEctor (M_Cnil (convert_bt loc bt1), 
-                            List.map (n_pexpr loc) args))
+        annotate (M_PEctor (M_Cnil bt1, List.map (n_pexpr loc) args))
      | Core.Ccons, _ ->
         annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
      | Core.Ctuple, _ -> 
@@ -973,12 +962,14 @@ let is_pass_by_pointer = function
   | By_pointer -> true
   | By_value -> false
 
+let check_against_core_bt loc = CoreTypeChecks.check_against_core_bt
+  (fun msg -> fail {loc; msg = Generic msg})
 
 let make_label_args f_i loc env st args (accesses, inv) =
   let rec aux (resources, good_lcs) env st = function
-    | ((o_s, (ct, pass_by_value_or_pointer)), (s, bt)) :: rest ->
+    | ((o_s, (ct, pass_by_value_or_pointer)), (s, cbt)) :: rest ->
        assert (Option.equal Sym.equal o_s (Some s));
-       assert (BT.equal (convert_bt loc bt) Loc);
+       let@ () = check_against_core_bt loc cbt Loc in
        assert (is_pass_by_pointer pass_by_value_or_pointer);
        (* now interesting only: s, ct, rest *)
        let sct = convert_ct loc ct in
@@ -1011,12 +1002,12 @@ let make_label_args f_i loc env st args (accesses, inv) =
 
 let make_function_args f_i loc env args (accesses, requires) =
   let rec aux arg_states good_lcs env st = function
-    | ((mut_arg, (mut_arg', ct)), (pure_arg, bt)) :: rest ->
+    | ((mut_arg, (mut_arg', ct)), (pure_arg, cbt)) :: rest ->
        assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
        let ct = convert_ct loc ct in
-       let sbt = SBT.of_sct ct in
-       let bt = convert_bt loc bt in
-       assert (BT.equal bt (SBT.to_basetype sbt));
+       let sbt = Memory.sbt_of_sct ct in
+       let bt = SBT.to_basetype sbt in
+       let@ () = check_against_core_bt loc cbt bt in
        let env = C.add_computational pure_arg sbt env in
        let arg_state = C.LocalState.CVS_Value (IT.sym_ (pure_arg, sbt)) in
        let st = C.LocalState.add_c_variable_state mut_arg arg_state st in
@@ -1039,7 +1030,7 @@ let make_fun_with_spec_args f_i loc env args requires =
   let rec aux good_lcs env st = function
     | ((cn_bt, pure_arg), ct_ct) :: rest ->
        let ct = convert_ct loc ct_ct in
-       let sbt = SBT.of_sct ct in
+       let sbt = Memory.sbt_of_sct ct in
        let bt = SBT.to_basetype sbt in
        let sbt2 = C.translate_cn_base_type env cn_bt in
        let@ () = if BT.equal bt (SBT.to_basetype sbt2) then return ()
@@ -1191,10 +1182,10 @@ let normalise_label
      end
 
 
-let add_spec_arg_renames loc args (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec) env =
-  List.fold_right (fun ((fun_sym, bt), (_, spec_sym)) env ->
-      C.add_renamed_computational spec_sym fun_sym (SBT.of_basetype (convert_bt loc bt)) env)
-    (List.combine args spec.cn_spec_args) env
+let add_spec_arg_renames loc args arg_cts (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec) env =
+  List.fold_right (fun ((fun_sym, _), (ct, (_, spec_sym))) env ->
+      C.add_renamed_computational spec_sym fun_sym (Memory.sbt_of_sct (convert_ct loc ct)) env)
+    (List.combine args (List.combine arg_cts spec.cn_spec_args)) env
 
 let normalise_fun_map_decl 
       (markers_env, ail_prog) 
@@ -1237,9 +1228,12 @@ let normalise_fun_map_decl
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      Print.debug 6 (lazy (Print.string "desugared requires conds"));
      let@ (ret_s, ret_d_st) = register_new_cn_local (Id.id "return") d_st in
-     assertl loc (BT.equal (convert_bt loc ret_bt) 
-                    (BT.of_sct (convert_ct loc ret_ct))) 
-       !^"function return type mismatch";
+(*
+     let bt1 = convert_bt loc ret_bt in
+     let bt2 = Memory.bt_of_sct (convert_ct loc ret_ct) in
+     assertl loc (BT.equal bt1 bt2)
+       !^"function return type mismatch" (lazy (Print.ineq (BT.pp bt1) (BT.pp bt2)));
+*)
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
 
@@ -1251,9 +1245,9 @@ let normalise_fun_map_decl
               !^"re-specification of CN annotations from:" ^^ P.break 1 ^^^
               Locations.pp spec.cn_spec_loc)}
         in
-        let env = add_spec_arg_renames loc args spec env in
+        let env = add_spec_arg_renames loc args (List.map snd arg_cts) spec env in
         let env = C.add_renamed_computational spec.cn_spec_ret_name ret_s
-            (SBT.of_sct (convert_ct loc ret_ct)) env in
+            (Memory.sbt_of_sct (convert_ct loc ret_ct)) env in
         return (spec.cn_spec_requires, spec.cn_spec_ensures, env)
      | _ -> return ([], [], env)
      in
@@ -1296,9 +1290,7 @@ let normalise_fun_map_decl
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      begin match SymMap.find_opt fname fun_specs with
      | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
-       assertl loc (BT.equal (convert_bt loc ret_bt)
-                    (BT.of_sct (convert_ct loc ret_ct)))
-         !^"function return type mismatch";
+       let@ () = check_against_core_bt loc ret_bt (Memory.bt_of_sct (convert_ct loc ret_ct)) in
        (* let@ (requires, d_st2) = desugar_conds d_st spec.cn_spec_requires in *)
        (* FIXME: do we need to note the return var somehow? *)
        (* let@ (ensures, _) = desugar_conds d_st spec.cn_spec_ensures in *)
@@ -1358,7 +1350,7 @@ let normalise_globs env sym g =
   let loc = Loc.unknown in
   match g with
   | GlobalDef ((bt, ct), e) -> 
-     assert (BT.equal BT.Loc (convert_bt loc bt));
+     let@ () = check_against_core_bt loc bt BT.Loc in
      (* this may have to change *)
      let@ e = 
        n_expr loc 
@@ -1369,8 +1361,8 @@ let normalise_globs env sym g =
          e 
      in
      return (M_GlobalDef (convert_ct loc ct, e))
-  | GlobalDecl (bt, ct) -> 
-     assert (BT.equal BT.Loc (convert_bt loc bt));
+  | GlobalDecl (bt, ct) ->
+     let@ () = check_against_core_bt loc bt BT.Loc in
      return (M_GlobalDecl (convert_ct loc ct))
 
 

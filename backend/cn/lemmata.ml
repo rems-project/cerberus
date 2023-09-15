@@ -228,7 +228,7 @@ let struct_layout_field_bts xs =
     |> List.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
     |> List.filter_map (fun x -> x.member_or_padding)
   in
-  (List.map fst xs2, List.map (fun x -> BaseTypes.of_sct (snd x)) xs2)
+  (List.map fst xs2, List.map (fun x -> Memory.bt_of_sct (snd x)) xs2)
 
 let get_struct_xs struct_decls tag = match SymMap.find_opt tag struct_decls with
   | Some def -> struct_layout_field_bts def
