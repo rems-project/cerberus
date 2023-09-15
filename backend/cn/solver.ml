@@ -534,6 +534,12 @@ module Translate = struct
          Z3.Expr.mk_const context (symbol s) (sort bt)
       | Const (Z z) ->
          Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
+      | Const (Bits ((Unsigned,n),v)) ->
+         Z3.BitVector.mk_numeral context (Z.to_string v) n
+      | Const (Bits ((Signed,n),v)) ->
+         Z3.Expr.mk_app context
+           (unsigned_to_signed_fundecl context global n)
+           [Z3.BitVector.mk_numeral context (Z.to_string v) n]
       | Const (Q q) ->
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
       | Const (Pointer z) ->
