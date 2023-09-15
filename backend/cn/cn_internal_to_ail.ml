@@ -14,8 +14,8 @@ module T=Terms
 module LRT=LogicalReturnTypes
 module LAT=LogicalArgumentTypes
 
-let map_val_bt = function 
-  | BT.Map (_, bt2) -> bt2
+let map_basetypes = function 
+  | BT.Map (bt1, bt2) -> (bt1, bt2)
   | _ -> failwith "Not a map"
 
 let rec cn_base_type_to_bt = function
@@ -434,7 +434,7 @@ let rec cn_to_ail_expr_aux_internal
         (
           match IT.bt t1 with 
             | BT.Map (bt1, bt2) ->
-              let val_bt = map_val_bt (IT.bt t1) in
+              let (_, val_bt) = map_basetypes (IT.bt t1) in
               let val_ctype = bt_to_ail_ctype val_bt in
               let val_equality_str = (str_of_ctype val_ctype) ^ "_equality" in
               A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
@@ -639,19 +639,18 @@ let rec cn_to_ail_expr_aux_internal
   | MapConst (bt, t) -> failwith "TODO18"
   | MapSet (m, key, value) -> failwith "TODO19"
   | MapGet (m, key) ->
-    (* Only works when index is an integer *)
-    (* TODO: Make it work for general case *)
-    (* TODO: Do general allocation stuff *)
+    (* Only works when index is a cn_integer *)
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts m PassBack in
     let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts key PassBack in
-    let fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_get")), [e1; e2])) in
-    let cn_ctype = bt_to_ail_ctype (map_val_bt (IT.bt m)) in
+    let cn_ctype = bt_to_ail_ctype (fst (map_basetypes (IT.bt m))) in
     let cn_ctype_ptr = mk_ctype C.(Pointer (empty_qualifiers, cn_ctype)) in
-    let cast_fcall = A.(AilEcast (empty_qualifiers, cn_ctype_ptr, mk_expr fcall)) in
-    let val_sym = Sym.fresh () in
-    let binding = create_binding val_sym cn_ctype_ptr in
-    let decl = A.(AilSdeclaration [(val_sym, Some (mk_expr cast_fcall))]) in
-    dest d (b1 @ b2 @ [binding], s1 @ s2 @ [decl], mk_expr A.(AilEident val_sym))
+    let key_sym = Sym.fresh () in
+    let key_binding = create_binding key_sym cn_ctype_ptr in
+    let conversion_f_str = "convert_to_" ^ (str_of_ctype cn_ctype) in
+    let key_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty conversion_f_str)), [e2])) in
+    let key_stat = A.(AilSdeclaration [(key_sym, Some (mk_expr key_fcall))]) in
+    let map_get_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_get")), [e1; mk_expr (AilEident key_sym)])) in
+    dest d (b1 @ b2 @ [key_binding], s1 @ s2 @ [key_stat], mk_expr map_get_fcall)
 
   | MapDef ((sym, bt), t) -> failwith "TODO21"
   | Apply (sym, ts) ->
@@ -992,15 +991,20 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
         let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr create_call))]) in
         (* Improve - str_of_ctype bound to fail soon *)
         let f_str = "convert_to_" ^ (str_of_ctype (bt_to_ail_ctype return_bt)) in
-        let conversion_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty f_str)), [mk_expr rhs])) in
+        let f_ident = mk_expr (AilEident (Sym.fresh_pretty f_str)) in
+        let key_sym = Sym.fresh () in
         let val_sym = Sym.fresh () in
+        let key_fcall = A.(AilEcall (f_ident, [mk_expr (AilEident i_sym)])) in
+        let value_fcall = A.(AilEcall (f_ident, [mk_expr rhs])) in
         let cn_pointer_return_type = mk_ctype C.(Pointer (empty_qualifiers, bt_to_ail_ctype return_bt)) in
-        let conversion_binding = create_binding val_sym cn_pointer_return_type in
-        let conversion_stat = A.(AilSdeclaration [(val_sym, Some (mk_expr conversion_fcall))]) in
-        let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), List.map mk_expr [AilEident sym; AilEident i_sym; AilEident val_sym])) in
+        let key_binding = create_binding key_sym cn_pointer_return_type in
+        let value_binding = create_binding val_sym cn_pointer_return_type in
+        let key_stat = A.(AilSdeclaration [(key_sym, Some (mk_expr key_fcall))]) in
+        let value_stat = A.(AilSdeclaration [(val_sym, Some (mk_expr value_fcall))]) in
+        let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), List.map mk_expr [AilEident sym; AilEident key_sym; AilEident val_sym])) in
         (* let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in *)
-        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [conversion_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat])), 0)) in
-        let ail_block = A.(AilSblock ([conversion_binding], List.map mk_stmt [start_assign; while_loop])) in
+        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [key_stat; value_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat])), 0)) in
+        let ail_block = A.(AilSblock ([key_binding; value_binding], List.map mk_stmt [start_assign; while_loop])) in
         ([sym_binding], [sym_decl; ail_block])
     in
 
