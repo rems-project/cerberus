@@ -39,10 +39,6 @@ open WellTyped
 
 
 
-
-type lvt = IT.t
-
-
 (* some of this is informed by impl_mem *)
 
 
@@ -139,7 +135,7 @@ let check_computational_bound loc s =
 
 
 
-let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt) m =
+let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
   let@ () = ensure_base_type loc ~expect BT.Loc in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
@@ -160,7 +156,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt) m =
       (* TODO: Dhruv, do we want to do something with the provenance here? *)
       return (pointer_ p) )
 
-let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
+let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> 
       let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
@@ -197,7 +193,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
 
 and check_struct (loc : loc)
                  (tag : Sym.t) 
-                 (member_values : (Id.t * Sctypes.t * mem_value) list) : lvt m =
+                 (member_values : (Id.t * Sctypes.t * mem_value) list) : IT.t m =
   let@ layout = get_struct_decl loc tag in
   let member_types = Memory.member_types layout in
   assert (List.for_all2 (fun (id,ct) (id',ct',mv') -> Id.equal id id' && Sctypes.equal ct ct') 
@@ -211,12 +207,12 @@ and check_struct (loc : loc)
   return (IT.struct_ (tag, member_its))
 
 and check_union (loc : loc) (tag : Sym.t) (id : Id.t) 
-                (mv : mem_value) : (lvt) m =
+                (mv : mem_value) : IT.t m =
   Cerb_debug.error "todo: union types"
 
 
 let rec check_object_value (loc : loc) ~(expect: BT.t)
-          (ov : 'bty mu_object_value) : lvt m =
+          (ov : 'bty mu_object_value) : IT.t m =
   match ov with
   | M_OVinteger iv ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
@@ -248,7 +244,7 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
 
 
 
-let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt) m = 
+let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : IT.t m = 
   match v with
   | M_Vobject ov ->
      check_object_value loc ~expect ov
