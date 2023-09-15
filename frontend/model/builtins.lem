@@ -495,6 +495,8 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
         Just (AilEbuiltin (AilBCHERI "cheri_representable_length"))
     | "__cerbvar_cheri_representable_alignment_mask" ->
         Just (AilEbuiltin (AilBCHERI "cheri_representable_alignment_mask"))
+    | "__cerbvar_cheri_revoke" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_revoke"))
     | _ ->
       Nothing
 end

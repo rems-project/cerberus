@@ -25,7 +25,7 @@ Local Open Scope string_scope.
 Local Open Scope Z_scope.
 Local Open Scope bool_scope.
 
-Definition debugging : bool := false.
+Definition debugging : bool := true.
 
 (* this definition will be remapped on extraction to OCaml's print_endline *)
 Definition print_msg (msg : string) : unit := tt.
@@ -294,3 +294,9 @@ Proof.
   rewrite H0, H1.
   apply string_eq_refl.
 Qed.
+
+(** Helper function to split a list at given position.
+      List.split_at in Lem.
+ *)
+Definition split_at {A:Type} (n:nat) (l:list A)
+  := (List.firstn n l, List.skipn n l).

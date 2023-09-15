@@ -17,4 +17,8 @@
 #define cheri_representable_length __cerbvar_cheri_representable_length
 #define cheri_representable_alignment_mask __cerbvar_cheri_representable_alignment_mask
 
+#ifdef WITH_CORNUCOPIA
+#define cheri_revoke __cerbvar_cheri_revoke
+#endif
+
 #endif

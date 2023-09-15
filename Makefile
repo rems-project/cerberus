@@ -17,14 +17,10 @@ endif
 # To enable the printing of commands, use [make Q= ...],
 Q = @
 
-# parse the -j flag if present, set jobs to "auto" oterwise
-JFLAGVALUE=$(patsubst -j%,%,$(filter -j%,$(MFLAGS)))
-JOBS=$(if $(JFLAGVALUE),$(JFLAGVALUE),"auto")
-
 ifdef PROFILING
-    DUNEFLAGS=--workspace=dune-workspace.profiling -j $(JOBS)
+    DUNEFLAGS=--workspace=dune-workspace.profiling
 else
-    DUNEFLAGS=-j $(JOBS)
+    DUNEFLAGS=
 endif
 
 .PHONY: normal
@@ -85,7 +81,7 @@ cn: prelude-src
 
 cheri: prelude-src
 	@echo "[DUNE] cerberus-cheri"
-	$(Q)./tools/cheribuild_hack.sh "dune build $(DUNEFLAGS) cerberus-cheri.install"
+	$(Q)dune build $(DUNEFLAGS) cerberus-cheri.install
 
 
 # .PHONY: cerberus-ocaml ocaml
@@ -293,7 +289,7 @@ install: cerberus
 .PHONY: install-cheri
 install-cheri:
 	@echo "[DUNE] install cerberus-cheri"
-	$(Q)./tools/cheribuild_hack.sh "dune build -p cerberus-cheri --profile=release -j $(JOBS) @install"
+	$(Q)dune install cerberus-cheri
 
 .PHONY: install_cn
 install_cn: cn

@@ -9,6 +9,7 @@ open CoqImplementation
 open Strfcap
 open CoqSwitches
 open Switches
+open ZMap
 
 module CerbSwitchesProxy = struct
 
@@ -37,7 +38,7 @@ module CerbSwitchesProxy = struct
     List.fold_left
       (fun s x -> set_add (=) (toCoq_switch x) s) empty_set cs
 
-  let get_swtiches _ = toCoq_switches (Switches.get_switches ())
+  let get_switches _ = toCoq_switches (Switches.get_switches ())
 end
 
 module CerbTagDefs = struct
@@ -315,6 +316,15 @@ module CHERIMorello : Memory = struct
   let bind = Nondeterminism.nd_bind
   let get = Nondeterminism.nd_get
   let (>>=) = Nondeterminism.nd_bind
+
+  (* TODO: hackish *)
+  let fail ?(loc=Cerb_location.other "Cheri") err =
+    let open Nondeterminism in
+    match undefinedFromMem_error err with
+      | Some ub ->
+          kill (Undef0 (loc, [ub]))
+      | None ->
+          kill (Other err)
 
   let lift_coq_serr: (string, 'a) Datatypes.sum -> 'a = function
     | Coq_inl errs -> failwith errs
@@ -850,9 +860,12 @@ module CHERIMorello : Memory = struct
     | InternalErr msg -> failwith msg
 
 
-  (* --- debugging --- *)
+  open PPrint
+  open Cerb_pp_prelude
 
   let string_of_provenance = function
+    | MM.Prov_disabled ->
+       "@disabled"
     | MM.Prov_none ->
        "@empty"
     | Prov_some alloc_id ->
@@ -862,11 +875,71 @@ module CHERIMorello : Memory = struct
     | Prov_device ->
        "@device"
 
+  let pp_pointer_value ?(is_verbose=false) (MM.PV (prov, ptrval_)) =
+    match ptrval_ with
+    | MM.PVfunction (FP_valid sym) ->
+       !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty
+                                         (fromCoq_Symbol_sym sym)))
+    | PVfunction (FP_invalid c) ->
+       !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (C.to_string c))
+    (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
+    | PVconcrete c ->
+       if C.eqb c (C.cap_c0 ()) then
+         !^ "NULL"
+       else
+         (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
+         P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string c))
+
+  let pp_integer_value = function
+    | (MM.IV n) ->
+       !^ (Z.to_string n)
+    | (IC (is_signed, c)) ->
+       let cs = (C.to_string c)
+                ^ (if is_signed then " (signed)" else " (unsigned)")
+       in
+       !^ cs
+
+  let pp_integer_value_for_core = pp_integer_value
+
+  let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
+  let pp_pretty_integer_value _ = pp_integer_value
+
+  let rec pp_mem_value = function
+    | MM.MVunspecified _ ->
+       PPrint.string "UNSPEC"
+    | MVinteger (_, ival) ->
+       pp_integer_value ival
+    | MVfloating (_, fval) ->
+       !^ (Float64.to_string fval)
+    | MVpointer (_, ptrval) ->
+       !^ "ptr" ^^ parens (pp_pointer_value ptrval)
+    | MVarray mvals ->
+       braces (
+           comma_list pp_mem_value mvals
+         )
+    | MVstruct (tag_sym, xs) ->
+       parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty (fromCoq_Symbol_sym tag_sym))) ^^
+         braces (
+             comma_list (fun (ident, _, mval) ->
+                 dot ^^ (Pp_symbol.pp_identifier (fromCoq_Symbol_identifier ident)) ^^ equals ^^^ pp_mem_value mval
+               ) (List.map (fun ((a,b),c) -> (a,b,c)) xs)
+           )
+    | MVunion (tag_sym, membr_ident, mval) ->
+       parens (!^ "union" ^^^ !^ (Pp_symbol.to_string_pretty (fromCoq_Symbol_sym tag_sym))) ^^
+         braces (
+             dot ^^ Pp_symbol.pp_identifier (fromCoq_Symbol_identifier membr_ident) ^^ equals ^^^
+               pp_mem_value mval
+           )
+
+  let pp_pretty_mem_value _ = pp_mem_value
+
+  (* --- debugging --- *)
+
   let print_allocations str st =
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
     let l = ZMap.elements st.MM.allocations in
     List.iter (fun (aid,a) ->
-        Printf.fprintf stderr "@%s: 0x%s,%s (%s)\n"
+        Printf.fprintf stderr "@%s: 0x%s,%s (%s,%s%s)\n"
           (Z.format "%d" aid)
           (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
@@ -874,11 +947,10 @@ module CHERIMorello : Memory = struct
            | MM.Exposed -> "exposed"
            | MM.Unexposed -> "unexposed"
           )
+          (if a.is_dynamic then "dynamic" else "static")
+          (if a.is_dead then ", dead" else "")
       ) l;
-    prerr_endline "END Allocations";
-    Printf.fprintf stderr "Dead Allocations: [%s]\n"
-      (String.concat ","
-         (List.map (Z.to_string) st.MM.dead_allocations))
+    prerr_endline "END Allocations"
 
   let print_bytemap str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
@@ -910,15 +982,19 @@ module CHERIMorello : Memory = struct
 
   (* lifting memM *)
 
-  let lift_coq_memM label (m:'a MM.memM): 'a memM =
+  let lift_coq_memM ?(print_mem_state=true) label (m:'a MM.memM): 'a memM =
     ND (fun st ->
         if !Cerb_debug.debug_level >= 2 then
           Printf.fprintf stderr "MEMOP %s\n" label;
-        if !Cerb_debug.debug_level >= 3 then
+        if print_mem_state then
+          if !Cerb_debug.debug_level >= 2 then
           begin
             print_allocations label st ;
-            print_bytemap label st ;
-            print_captags label st
+            if !Cerb_debug.debug_level >= 3 then
+              begin
+                print_bytemap label st ;
+                print_captags label st
+              end
           end ;
         match m st with
         | (st', Coq_inl e) ->
@@ -941,7 +1017,7 @@ module CHERIMorello : Memory = struct
     get >>= fun st ->
     Cerb_debug.print_debug 1 []
       (fun () -> "allocate_object. last_address=" ^
-                   (Z.to_string (MM.last_address st))
+                   (String_nat_big_num.string_of_hexadecimal (MM.last_address st))
       );
     lift_coq_memM "allocate_object" (MM.allocate_object
                      (toCoq_thread_id tid)
@@ -958,27 +1034,53 @@ module CHERIMorello : Memory = struct
         (size_int: integer_value): pointer_value memM
     =
     get >>= fun st ->
-    Cerb_debug.print_debug 1 []
-      (fun () -> "allocate_region. last_address=" ^
-                   (Z.to_string (MM.last_address st))
-      );
-    lift_coq_memM "allocate_region" (MM.allocate_region
-                     (toCoq_thread_id tid)
-                     (toCoq_Symbol_prefix pref)
-                     align_int
-                     size_int)
+    let label = "allocate_region " ^
+                  "size=" ^ (Pp_utils.to_plain_string (pp_integer_value size_int)) ^
+                    ", last_address=" ^ (String_nat_big_num.string_of_hexadecimal (MM.last_address st))
+    in
+    bind
+      (lift_coq_memM label (MM.allocate_region
+                              (toCoq_thread_id tid)
+                              (toCoq_Symbol_prefix pref)
+                              align_int
+                              size_int))
+      (fun newptr ->
+        Cerb_debug.print_debug 1 []
+          (fun () -> "MEMOP_RET allocate_region " ^
+                       "size=" ^ (Pp_utils.to_plain_string (pp_integer_value size_int)) ^
+                         " = " ^
+                           Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false newptr));
+        return newptr)
 
   let kill (loc:Cerb_location.t) (is_dyn:bool) (pv:pointer_value) : unit memM
     =
-    lift_coq_memM "kill" (MM.kill (toCoq_location loc) is_dyn pv)
+    let label = "kill "
+                ^ (string_of_bool is_dyn) ^ ", "
+                ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false pv)
+    in
+    lift_coq_memM label (MM.kill (toCoq_location loc) is_dyn pv)
 
   let load (loc:Cerb_location.t) (ty:Ctype.ctype) (p:pointer_value): (footprint * mem_value) memM
     =
-    lift_coq_memM "load" (MM.load (toCoq_location loc) (toCoq_ctype ty) p)
+    let label = "load "
+                ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false p)
+    in
+    bind
+      (lift_coq_memM label (MM.load (toCoq_location loc) (toCoq_ctype ty) p))
+      (fun (fp,mval) ->
+        Cerb_debug.print_debug 4 []
+          (fun () -> "MEMOP_RET load =" ^ Pp_utils.to_plain_string (pp_mem_value mval));
+        return (fp,mval))
 
   let store (loc:Cerb_location.t) (ty:Ctype.ctype) (is_locking:bool) (p:pointer_value) (mval:mem_value): footprint memM
     =
-    lift_coq_memM "store" (MM.store (toCoq_location loc) (toCoq_ctype ty) is_locking p mval)
+    let label = "store "
+                ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false p)
+                ^ if !Cerb_debug.debug_level >= 4
+                  then (" value="^ Pp_utils.to_plain_string (pp_mem_value mval))
+                  else ""
+    in
+    lift_coq_memM label (MM.store (toCoq_location loc) (toCoq_ctype ty) is_locking p mval)
 
   let null_ptrval (ty:Ctype.ctype) : pointer_value
     = MM.null_ptrval (toCoq_ctype ty)
@@ -999,9 +1101,10 @@ module CHERIMorello : Memory = struct
     | MM.PV (_, PVfunction (FP_valid sym)) -> ffun (Some (fromCoq_Symbol_sym sym))
     | PV (_, PVfunction (FP_invalid c)) ->
        if MM.cap_is_null c
-      then fnull Ctype.void
+       then fnull Ctype.void
        else ffun None
-    | PV (Prov_none, PVconcrete c) ->
+    | PV (Prov_none, PVconcrete c)
+      | PV (Prov_disabled, PVconcrete c) ->
        if MM.cap_is_null c
        then fconc None (C.cap_get_value c)
        else ffun None
@@ -1048,6 +1151,8 @@ module CHERIMorello : Memory = struct
      it requires some dependencies and fixpoint magic.  It OK to have
      in in OCaml for now *)
   let prefix_of_pointer (MM.PV (prov, pv)) : string option memM =
+    if !Cerb_debug.debug_level >= 2 then
+      Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
     let open String_symbol in
     let rec aux addr (alloc:MM.allocation) = function
       | None
@@ -1085,7 +1190,7 @@ module CHERIMorello : Memory = struct
     in
     match prov with
     | Prov_some alloc_id ->
-       bind (lift_coq_memM "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+       bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
            begin match pv with
            | PVconcrete addr ->
               if C.cap_get_value addr = alloc.base then
@@ -1095,6 +1200,26 @@ module CHERIMorello : Memory = struct
            | _ ->
               return None
            end)
+    | Prov_disabled ->
+       begin match pv with
+       | PVconcrete c ->
+          let addr = C.cap_get_value c in
+          bind (lift_coq_memM ~print_mem_state:false "find_overlapping" (MM.find_overlapping addr)) (fun x ->
+              let loc = Cerb_location.unknown in
+              match x with
+              | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
+              | MM.DoubleAlloc _ -> fail ~loc (MerrInternal "DoubleAlloc without PNVI")
+              | MM.SingleAlloc alloc_id ->
+                 bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+                     if addr = alloc.base then
+                       return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
+                     else
+                       return @@ aux addr alloc (Option.map fromCoq_ctype alloc.ty)
+                   )
+            )
+       | _ ->
+          return None
+       end
     | _ ->
        return None
 
@@ -1295,80 +1420,18 @@ module CHERIMorello : Memory = struct
                      (toCoq_location loc)
                      name
                      args)
+    >>=
+    (fun res ->
+        Cerb_debug.print_debug 4 []
+          (fun () ->
+            match res with
+            | Some mval -> "MEMOP_RET call_intrinsic = Just " ^ Pp_utils.to_plain_string (pp_mem_value mval)
+            | None -> "MEMOP_RET call_intrinsic = None"
+          );
+        return res)
 
   let get_intrinsic_type_spec name =
     Option.map fromCoq_intrinsics_signature (MM.get_intrinsic_type_spec name)
-
-  open PPrint
-  open Cerb_pp_prelude
-
-  let string_of_provenance = function
-    | MM.Prov_none ->
-       "@empty"
-    | Prov_some alloc_id ->
-       "@" ^ Z.to_string alloc_id
-    | Prov_symbolic iota ->
-       "@iota(" ^ Z.to_string iota ^ ")"
-    | Prov_device ->
-       "@device"
-
-  let pp_pointer_value ?(is_verbose=false) (MM.PV (prov, ptrval_)) =
-    match ptrval_ with
-    | MM.PVfunction (FP_valid sym) ->
-       !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty
-                                         (fromCoq_Symbol_sym sym)))
-    | PVfunction (FP_invalid c) ->
-       !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (C.to_string c))
-    (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
-    | PVconcrete c ->
-       if C.eqb c (C.cap_c0 ()) then
-         !^ "NULL"
-       else
-         (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
-         P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string c))
-
-  let pp_integer_value = function
-    | (MM.IV n) ->
-       !^ (Z.to_string n)
-    | (IC (is_signed, c)) ->
-       let cs = (C.to_string c)
-                ^ (if is_signed then " (signed)" else " (unsigned)")
-       in
-       !^ cs
-
-  let pp_integer_value_for_core = pp_integer_value
-
-  let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
-  let pp_pretty_integer_value _ = pp_integer_value
-
-  let rec pp_mem_value = function
-    | MM.MVunspecified _ ->
-       PPrint.string "UNSPEC"
-    | MVinteger (_, ival) ->
-       pp_integer_value ival
-    | MVfloating (_, fval) ->
-       !^ (Float64.to_string fval)
-    | MVpointer (_, ptrval) ->
-       !^ "ptr" ^^ parens (pp_pointer_value ptrval)
-    | MVarray mvals ->
-       braces (
-           comma_list pp_mem_value mvals
-         )
-    | MVstruct (tag_sym, xs) ->
-       parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty (fromCoq_Symbol_sym tag_sym))) ^^
-         braces (
-             comma_list (fun (ident, _, mval) ->
-                 dot ^^ (Pp_symbol.pp_identifier (fromCoq_Symbol_identifier ident)) ^^ equals ^^^ pp_mem_value mval
-               ) (List.map (fun ((a,b),c) -> (a,b,c)) xs)
-           )
-    | MVunion (tag_sym, membr_ident, mval) ->
-       parens (!^ "union" ^^^ !^ (Pp_symbol.to_string_pretty (fromCoq_Symbol_sym tag_sym))) ^^
-         braces (
-             dot ^^ Pp_symbol.pp_identifier (fromCoq_Symbol_identifier membr_ident) ^^ equals ^^^
-               pp_mem_value mval
-           )
-
-  let pp_pretty_mem_value _ = pp_mem_value
 
   (* JSON serialisation *)
   let serialise_mem_state dig (st: mem_state) : Cerb_json.json
