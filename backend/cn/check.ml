@@ -455,7 +455,7 @@ let check_array_shift loc ~expect vt1 (loc_ct, ct) vt2 =
 
 (* could potentially return a vt instead of an RT.t *)
 let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) 
-        (k : lvt -> (unit) m) : (unit) m =
+        (k : IT.t -> (unit) m) : (unit) m =
   let (M_Pexpr (loc, _, _, pe_)) = pe in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
@@ -813,7 +813,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
 
 
 and check_pexprs (pes_expects : (_ mu_pexpr * BT.t) list)
-(k : lvt list -> (unit) m) : (unit) m =
+(k : IT.t list -> (unit) m) : (unit) m =
   match pes_expects with
   | [] -> k []
   | (pe, expect) :: pes_expects ->
@@ -1050,7 +1050,7 @@ let instantiate loc filter arg =
 
 
 let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr) 
-      (k: lvt -> (unit) m)
+      (k: IT.t -> (unit) m)
     : (unit) m =
   let (M_Expr (loc, _annots, e_)) = e in
   let@ () = add_loc_trace loc in
