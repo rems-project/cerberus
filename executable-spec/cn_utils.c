@@ -21,14 +21,14 @@ cn_map *map_create(void) {
 }
 
 
-void *cn_map_get(cn_map *m, unsigned int *key) {
+void *cn_map_get(cn_map *m, cn_integer *key) {
     // const char key_arr[1] = {key};
     void *res = ht_get(m, key);
     if (!res) printf("NULL being returned for key %d\n", *key);
     return res;
 }
 
-void cn_map_set(cn_map *m, unsigned int *key, void *value) {
+void cn_map_set(cn_map *m, cn_integer *key, void *value) {
     ht_set(m, key, value);
 }
 
