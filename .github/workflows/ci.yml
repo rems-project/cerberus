@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - revocation
+      - master
   # pull_request: {}
 
 # cancel in-progress job when a new push is performed
