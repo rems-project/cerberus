@@ -741,6 +741,8 @@ module Make (Config: CONFIG) = struct
                | M_Va_end sym1 ->
                   (Va_end, 
                    [msym sym1])
+               | M_CopyAllocId (sym1, sym2) ->
+                 (Copy_alloc_id, [msym sym1; msym sym2])
              in
             
              let (memop, pes) = aux memop in

@@ -207,6 +207,7 @@ type 'TY mu_memop =
   | M_Va_copy of ('TY mu_pexpr)
   | M_Va_arg of ('TY mu_pexpr * 'TY act)
   | M_Va_end of ('TY mu_pexpr)
+  | M_CopyAllocId of ('TY mu_pexpr * 'TY mu_pexpr)
 
 
 

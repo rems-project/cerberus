@@ -1152,6 +1152,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         (* FIXME(CHERI merge) *)
         (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
         Cerb_debug.error "todo: M_PtrMemberShift"
+     | M_CopyAllocId _ ->
+        Cerb_debug.error "todo: M_CopyAllocId"
      | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
         Cerb_debug.error "todo: M_Memcpy"
      | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->

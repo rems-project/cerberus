@@ -614,6 +614,10 @@ let n_memop loc memop pexprs =
   | (Mem_common.Va_end, [pe]) ->
      let pe = n_pexpr loc pe in
      M_Va_end pe
+  | (Mem_common.Copy_alloc_id, [pe1; pe2]) ->
+    let pe1 = n_pexpr loc pe1 in
+    let pe2 = n_pexpr loc pe2 in
+    M_CopyAllocId (pe1, pe2)
   | (memop, pexprs1) ->
      let err = 
        !^(show_n_memop memop)
