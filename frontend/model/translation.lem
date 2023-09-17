@@ -56,6 +56,18 @@ let floating_conversion_TODO to_ty from_ty z =
   ) in
   z
 
+
+let with_wrapI_or_catch_exceptional_condition result_ty iop promoted1_pe promoted2_pe default_pe =
+  match Cty.match_integer_ctype result_ty with
+    | Cty.MatchedItySigned ity ->
+        Caux.mk_catch_exceptional_condition_pe ity iop promoted1_pe promoted2_pe
+    | Cty.MatchedItyUnsigned ity ->
+        Caux.mk_wrapI_pe ity iop promoted1_pe promoted2_pe
+    | Cty.NotMatchedIty ->
+        default_pe
+  end
+
+
 (* STD §6.5.13#3, sentence 1 *)
 (* STD §6.5.14#3, sentence 1 *)
 (* STD §6.5.15#4, sentence 2 *)
@@ -1844,19 +1856,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
   (* else if AilTypesAux.is_signed_integer_type result_ty then
                             stdlib.mkcall_catch_exceptional_condition result_ty core_add
   else if AilTypesAux.is_integer result_ty then
-                            (* stdlib.mkcall_wrapI result_ty core_add *)
-                            Caux.mk_wrapI_pe result_ty C.IOpAdd promoted1_pe promoted2_pe
+                            stdlib.mkcall_wrapI result_ty core_add
   else
                             core_add) ) *)
-  else match Cty.match_integer_ctype result_ty with
-    | Cty.MatchedItySigned _ity ->
-                            stdlib.mkcall_catch_exceptional_condition result_ty core_add
-    | Cty.MatchedItyUnsigned ity ->
-                            (* stdlib.mkcall_wrapI result_ty core_add *)
-                            Caux.mk_wrapI_pe ity C.IOpAdd promoted1_pe promoted2_pe
-    | Cty.NotMatchedIty ->
-                            core_add
-  end ) )
+  else
+                            with_wrapI_or_catch_exceptional_condition result_ty C.IOpAdd
+                              promoted1_pe promoted2_pe core_add
+                          ) )
                       
                       ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2])
                         , (* If either operand is unspecified, the result is also unspecified is the

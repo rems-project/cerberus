@@ -89,6 +89,24 @@ let mk_wrapI_op ity iop ival1 ival2 =
   end in
   mk_wrapI ity n
 
+let mk_call_catch_exceptional_condition ity iop ival1 ival2 =
+  let ival = match iop with
+    | IOpAdd ->
+        Mem.op_ival Mem_common.IntAdd ival1 ival2
+  end in
+  match ( Mem.eval_integer_value (Mem.min_ival ity)
+        , Mem.eval_integer_value (Mem.max_ival ity)
+        , Mem.eval_integer_value ival ) with
+    | (Just min, Just max, Just n) ->
+        if min <= n && n <= max then
+          Just ival
+        else
+          Nothing
+    | _ ->
+        error "Core_eval.mk_call_catch_exceptional_condition"
+  end
+
+
 
 
 (* takes the symbolic names of a function, some pure expressions and produce
@@ -808,8 +826,22 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
             | _ ->
               EU.return (PEwrapI ity iop pe1' pe2')
         end
-    | PEcatch_exceptional_condition _ _ _ _ ->
-        error "TODO Core_eval catch_exceptional_condition"
+    | PEcatch_exceptional_condition ity iop pe1 pe2 ->
+        self pe1 >>= fun pe1' ->
+        self pe2 >>= fun pe2' ->
+        match (Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
+          | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+              match mk_call_catch_exceptional_condition ity iop ival1 ival2 with
+                | Just ival ->
+                    EU.return (PEval (Vobject (OVinteger ival)))
+                | Nothing ->
+                    Exception.return (Undefined.undef loc [Undefined.UB036_exceptional_condition])
+              end
+          | (Just _, Just _) ->
+              EU.fail (Illformed_program "PEcatch_exceptional_condition: operands should be an object integers")
+            | _ ->
+              EU.return (PEcatch_exceptional_condition ity iop pe1' pe2')
+        end
     | PEstruct tag_sym ident_pes ->
         let (idents, pes) = List.unzip ident_pes in
         EU.mapM self pes >>= fun pes' ->
