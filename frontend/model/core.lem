@@ -111,9 +111,9 @@ type binop =  (* binary operators *)
 
 type iop =
  | IOpAdd
- (* | IOpSub
+ | IOpSub
  | IOpMul
- | IOpDiv
+(* | IOpDiv
  | IOpRem_t
  | IOpRem_f *)
 

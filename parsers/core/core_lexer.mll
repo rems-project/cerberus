@@ -117,7 +117,11 @@ let keywords =
       (* Core (pure) builtins for bounded intger arithmetic *)
       ("__conv_int__", T.CONV_INT);
       ("wrapI_add", T.(WRAPI Core.IOpAdd));
+      ("wrapI_sub", T.(WRAPI Core.IOpSub));
+      ("wrapI_mul", T.(WRAPI Core.IOpMul));
       ("catch_exceptional_condition_add", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpAdd));
+      ("catch_exceptional_condition_sub", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpSub));
+      ("catch_exceptional_condition_mul", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpMul));
       
       (* for Core.action_ *)
       ("create", T.CREATE);

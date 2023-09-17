@@ -420,7 +420,9 @@ let pp_if pp_pexpr pp pe1 x y =
 
 let pp_bounded_integer_pexpr pp_pexpr pe =
   let iop_string = function
-    | IOpAdd -> "_add" in
+    | IOpAdd -> "_add"
+    | IOpSub -> "_sub"
+    | IOpMul -> "_mul" in
   let (ity, kw, pe1, pe2) = match pe with
     | PEwrapI (ity, iop, pe1, pe2) ->
         (ity, "wrapI" ^ iop_string iop, pe1, pe2)

@@ -57,14 +57,19 @@ let floating_conversion_TODO to_ty from_ty z =
   z
 
 
-let with_wrapI_or_catch_exceptional_condition result_ty iop promoted1_pe promoted2_pe default_pe =
+let with_wrapI_or_catch_exceptional_condition result_ty iop promoted1_pe promoted2_pe default_pe_opt =
   match Cty.match_integer_ctype result_ty with
     | Cty.MatchedItySigned ity ->
         Caux.mk_catch_exceptional_condition_pe ity iop promoted1_pe promoted2_pe
     | Cty.MatchedItyUnsigned ity ->
         Caux.mk_wrapI_pe ity iop promoted1_pe promoted2_pe
     | Cty.NotMatchedIty ->
-        default_pe
+        match default_pe_opt with
+          | Just default_pe ->
+              default_pe
+          | Nothing ->
+              error "Translation.with_wrapI_or_catch_exceptional_condition: result_ty is not an integer type, but given no default_pe"
+        end
   end
 
 
@@ -286,12 +291,17 @@ if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
                     (Caux.mk_memop_pe Mem_common.CapAssignValue
                       [cap_wrp.E.sym_pe; stdlib.mkcall_wrapI result_ty core_mul])
 
-else if AilTypesAux.is_signed_integer_type result_ty then
+(* else if AilTypesAux.is_signed_integer_type result_ty then
                  stdlib.mkcall_catch_exceptional_condition result_ty core_mul
 else if AilTypesAux.is_integer result_ty then
                  stdlib.mkcall_wrapI result_ty core_mul
 else
-                 core_mul
+                 core_mul *)
+else
+                  Caux.mk_std_pe "§6.5.5#4" begin
+                    with_wrapI_or_catch_exceptional_condition result_ty C.IOpMul
+                      promoted1_pe promoted2_pe (Just core_mul)
+                  end
                end )
             ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2]),
                (* If either operand is unspecified, the result is also unspecified is the
@@ -1860,8 +1870,10 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
   else
                             core_add) ) *)
   else
-                            with_wrapI_or_catch_exceptional_condition result_ty C.IOpAdd
-                              promoted1_pe promoted2_pe core_add
+                            Caux.mk_std_pe "§6.5.6#5" begin
+                              with_wrapI_or_catch_exceptional_condition result_ty C.IOpAdd
+                                promoted1_pe promoted2_pe (Just core_add)
+                            end
                           ) )
                       
                       ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2])
@@ -1950,12 +1962,17 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                               [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe])
                             (Caux.mk_memop_pe Mem_common.CapAssignValue
                               [cap_wrp.E.sym_pe; stdlib.mkcall_wrapI result_ty core_sub])
-  else if AilTypesAux.is_signed_integer_type result_ty then
+  (* else if AilTypesAux.is_signed_integer_type result_ty then
                           stdlib.mkcall_catch_exceptional_condition result_ty core_sub
   else if AilTypesAux.is_integer result_ty then
                           stdlib.mkcall_wrapI result_ty core_sub
   else
-                          core_sub )
+                          core_sub ) *)
+else
+                          Caux.mk_std_pe "§6.5.5#6" begin
+                            with_wrapI_or_catch_exceptional_condition result_ty C.IOpSub
+                              promoted1_pe promoted2_pe (Just core_sub)
+                          end )
                     ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2])
                       , (* If either operand is unspecified, the result is also unspecified is the
                            result type of unsigned. Otherwise it is undef, since the addition

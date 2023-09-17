@@ -113,9 +113,9 @@ let string_of_bop = function
 
 let string_of_iop = function
   | IOpAdd   -> "+"
-  (* | OpSub   -> "-"
-  | OpMul   -> "*"
-  | OpDiv   -> "/"
+  | IOpSub   -> "-"
+  | IOpMul   -> "*"
+(*  | OpDiv   -> "/"
   | OpRem_t -> "rem_t"
   | OpRem_f -> "rem_f"
   | OpExp   -> "^" *)
