@@ -598,7 +598,11 @@ module WIT = struct
           let@ cbt = WBT.is_bt loc cbt in
           let@ t = infer loc t in
           let@ () = match IT.bt t, cbt with
-           | Integer, Loc -> return ()
+            | Integer, Loc ->
+              let msg = !^"Deprecated cast from integer to pointer." ^^^
+                        !^"Please use copy_alloc_id instead."
+              in
+              Pp.warn loc msg; return ()
            | Loc, Integer -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()
