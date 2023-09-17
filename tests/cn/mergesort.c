@@ -79,19 +79,16 @@ struct int_list_pair split(struct int_list *xs)
 /*@ ensures {fst: Ys, snd: Zs} == split(Xs) @*/
 { 
   if (xs == 0) { 
-    /*@ unpack IntList(xs); @*/
     /*@ unfold split(Xs); @*/
     struct int_list_pair r = {.fst = 0, .snd = 0};
     return r;
   } else {
     struct int_list *cdr = xs -> tail;
     if (cdr == 0) { 
-      /*@ unpack IntList(cdr); @*/
       /*@ unfold split(Xs); @*/
       struct int_list_pair r = {.fst = 0, .snd = xs};
       return r;
     } else { 
-      /*@ unpack IntList(cdr); @*/
       /*@ unfold split(Xs); @*/
       struct int_list_pair p = split(cdr->tail);
       xs->tail = p.fst;
@@ -109,18 +106,14 @@ struct int_list* merge(struct int_list *xs, struct int_list *ys)
 /*@ ensures Zs == merge(Xs, Ys) @*/
 { 
   if (xs == 0) { 
-    /*@ unpack IntList(xs); @*/
     /*@ unfold merge(Xs, Ys); @*/
     return ys;
   } else {
-    /*@ unpack IntList(xs); @*/
     /*@ unfold merge(Xs, Ys); @*/
     if (ys == 0) { 
-      /*@ unpack IntList(ys); @*/
       /*@ unfold merge(Xs, Ys); @*/
       return xs;
     } else { 
-      /*@ unpack IntList(ys); @*/
       /*@ unfold merge(Xs, Ys); @*/
       struct int_list *zs = merge(xs->tail, ys->tail);
       if (xs->head < ys->head) { 
@@ -142,17 +135,14 @@ struct int_list* mergesort(struct int_list *xs)
 /*@ ensures Ys == mergesort(Xs) @*/
 {
   if (xs == 0) { 
-    /*@ unpack IntList(xs); @*/
     /*@ unfold mergesort(Xs); @*/
     return xs;
   } else { 
     struct int_list *tail = xs->tail;
     if (tail == 0) { 
-      /*@ unpack IntList(tail); @*/
       /*@ unfold mergesort(Xs); @*/
       return xs;
     } else { 
-      /*@ unpack IntList(tail); @*/
       /*@ unfold mergesort(Xs); @*/
       struct int_list_pair p = split(xs);
       p.fst = mergesort(p.fst);

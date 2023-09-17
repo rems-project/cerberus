@@ -30,19 +30,15 @@ rev_list (struct node *p)
 
   /* FIXME: apparently we need to initialise all loop vars */
   p2 = NULL;
-  /*@ pack List(NULL); @*/
   while (p)
   /*@ inv take R2 = List(p) @*/
   /*@ inv take R3 = List(rev) @*/
   {
-    /*@ unpack List(p); @*/
     p2 = p->next;
     p->next = rev;
     rev = p;
-    /*@ pack List(rev); @*/
     p = p2;
   }
-  /*@ unpack List(NULL); @*/
   return rev;
 }
 

@@ -33,13 +33,11 @@ rev_tree (struct tree_node *t)
     return t;
   }
 
-  /*@ unpack Tree (t); @*/
 
   tmp = rev_tree (t->left);
   t->left = rev_tree (t->right);
   t->right = tmp;
 
-  /*@ pack Tree (t); @*/
 
   return t;
 }

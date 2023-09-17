@@ -120,9 +120,6 @@ predef_a_tree (struct a_node *p)
   }
   p->k = 1;
   p->v = 0;
-  /*@ unpack B_Tree((*p).right); @*/
-  /*@ unpack A_Tree((*l).odd); @*/
-  /*@ unpack A_Tree((*l).even); @*/
   return p;
 }
 
@@ -348,7 +345,6 @@ inc_a_tree (struct a_node *p)
   int r = 0;
   /*@ apply a_tree_keys_lemma(T.t); @*/
   if (! p) {
-    /*@ unpack A_Tree(p); @*/
     /*@ apply inc_list_lemma(K_Nil {}); @*/
     return 1;
   }
@@ -373,11 +369,9 @@ inc_b_tree (struct b_node *p)
   int r = 0;
   /*@ apply b_tree_keys_lemma(T.t); @*/
   if (! p) {
-    /*@ unpack B_Tree(p); @*/
     /*@ apply inc_list_lemma(K_Nil {}); @*/
     return 1;
   }
-  /*@ unpack B_Tree(p); @*/
   b_tree_keys_node_lemma(p->even, p->odd);
   b_tree_keys_node_merge_inc_lemma(p->even, p->odd);
   b_tree_keys_node_merge_flip_lemma(p->even, p->odd);

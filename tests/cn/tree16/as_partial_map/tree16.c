@@ -147,7 +147,6 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
   int idx = 0;
   int r = 0;
   if (! t) {
-    /*@ unpack Tree(t); @*/
     /*@ apply empty_lemma(arc); @*/
     return 0;
   }

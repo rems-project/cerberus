@@ -119,7 +119,6 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
   int idx = 0;
   int r = 0;
   if (! t) {
-    /*@ unpack Tree(t); @*/
     /*@ apply in_tree_tree_v_lemma(T.t, arc, T.children); @*/
     return 0;
   }
@@ -134,7 +133,6 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
   /*@ extract Indirect_Tree, idx; @*/
   r = lookup_rec(t->nodes[idx], path, i + 1, path_len, v);
   /*@ apply in_tree_tree_v_lemma(T.t, arc, T.children); @*/
-  /*@ unpack Tree(t); @*/
   if (r)
     return 1;
   else

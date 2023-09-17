@@ -38,11 +38,9 @@ struct int_list* IntList_append(struct int_list* xs, struct int_list* ys)
 /*@ ensures L3 == append(L1, L2) @*/
 { 
   if (xs == 0) { 
-    /*@ unpack IntList(xs); @*/
     /*@ unfold append(L1, L2); @*/
     return ys;
   } else { 
-    /*@ unpack IntList(xs); @*/
     /*@ unfold append(L1, L2); @*/
     struct int_list *new_tail = IntList_append(xs->tail, ys);
     xs->tail = new_tail;
@@ -91,7 +89,6 @@ struct int_list_pair split(struct int_list *xs)
     struct int_list_pair r = {.fst = 0, .snd = 0};
     return r;
   } else {
-    /*@ unpack IntList(xs); @*/
     if (xs->tail == 0) { 
       struct int_list_pair r = {.fst = 0, .snd = xs};
       return r;
