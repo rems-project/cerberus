@@ -4154,7 +4154,12 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
         E.resolve_cn_ident CN_vars ident >>= fun (sym, kind) ->
         match kind with
         | Var_kind_cn -> E.return (CNExpr_var sym)
-        | Var_kind_c -> E.return (CNExpr_value_of_c_variable sym)
+        | Var_kind_c C_kind_var -> E.return (CNExpr_value_of_c_variable sym)
+        | Var_kind_c C_kind_enum ->
+            E.resolve_enum_constant sym >>= fun expr_ ->
+            let expr = A.AnnotatedExpression () [] loc expr_ in
+            E.convert_enum_expr loc expr >>= fun (CNExpr _ expr_) ->
+            E.return expr_
         end
     | CNExpr_list es ->
         CNExpr_list <$> E.mapM desugar_cn_expr es

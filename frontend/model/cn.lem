@@ -2,14 +2,17 @@ open import Pervasives
 import Symbol Ctype
 
 (* for desugaring *)
+type cn_c_kind =
+  | C_kind_var
+  | C_kind_enum
 
 type cn_var_kind =
-  | Var_kind_c
+  | Var_kind_c of cn_c_kind
   | Var_kind_cn
 
 let ensure_not_c_variable = function
   | (sym, Var_kind_cn) -> sym
-  | (sym, Var_kind_c) -> Assert_extra.failwith "unexpected c variable"
+  | (sym, Var_kind_c _) -> Assert_extra.failwith "unexpected c variable"
 end
 
 

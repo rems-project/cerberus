@@ -97,6 +97,10 @@ module MakePp (Conf: PP_CN) = struct
     | CN_and -> P.ampersand ^^ P.ampersand
     | CN_map_get -> P.string "CN_map_get"
 
+  let pp_cn_c_kind = function
+    | C_kind_var -> !^ "c_var"
+    | C_kind_enum -> !^ "c_enum_constant"
+
 
   
   let rec dtree_of_cn_pattern (CNPat (_, pat_)) = 
@@ -202,7 +206,8 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_deref e ->
           Dnode (pp_ctor "CNExpr_deref", [dtree_of_cn_expr e])
       | CNExpr_value_of_c_variable ident ->
-          Dleaf (pp_ctor "CNExpr_value_of_c_variable" ^^^ Conf.pp_ident ident)
+          Dnode (pp_ctor "CNExpr_value_of_c_variable"
+               , [Dleaf (Conf.pp_ident ident)])
       | CNExpr_unchanged e ->
           Dnode (pp_ctor "CNExpr_unchanged", [dtree_of_cn_expr e])
       | CNExpr_at_env (e, env_name) ->

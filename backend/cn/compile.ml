@@ -47,14 +47,14 @@ type env = {
   tagDefs: Mu.mu_tag_definitions;
 }
 
-let empty tagDefs =
+let init_env tagDefs =
   { computationals = SymMap.empty;
     logicals= SymMap.empty; 
     predicates= SymMap.empty;
     functions = SymMap.empty; 
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
-    tagDefs; 
+    tagDefs;
   }
 
 
@@ -348,6 +348,33 @@ let add_datatype_info env (dt : cn_datatype) =
 
 let add_datatype_infos env dts =
   ListM.fold_leftM add_datatype_info env dts
+
+
+exception Convert_enum_failed of string
+
+let str_ail_const c = Pp.plain (CF.Pp_ail_ast.pp_constant c)
+let str_ail_expr_constr e =
+  Pp.plain (CF.Pp_ast.doc_tree_toplevel
+    (CF.Pp_ail_ast.dtree_of_expression (fun _ -> (!^ "()")) e))
+
+(* TODO: handle more kinds of constant expression *)
+let convert_enum_expr_to_cn =
+  let open CF.AilSyntax in
+  let conv_const loc = function
+    | ConstantInteger (IConstant (z, _, _)) -> CNExpr (loc, CNExpr_const (CNConst_integer z))
+    | c -> raise (Convert_enum_failed ("unhandled constant: " ^ str_ail_const c))
+  in
+  let rec conv_expr_ e1 loc = function
+    | AilEconst const -> conv_const loc const
+    | AilEannot (cty, expr) -> conv_expr expr
+    | e -> raise (Convert_enum_failed ("unhandled expression: " ^ str_ail_expr_constr e1))
+  and conv_expr e = match e with
+    | AnnotatedExpression (_, _, loc, expr) -> conv_expr_ e loc expr
+  in
+  fun expr -> try
+    Either.Left (conv_expr expr)
+  with
+    | Convert_enum_failed s -> Either.Right s
 
 
 module E = struct

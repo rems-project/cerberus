@@ -10,6 +10,11 @@ type doc_tree =
   | Dnode of P.document * doc_tree list
   | Dnode_attrs of P.document * Annot.attributes * doc_tree list
 
+let doc_tree_toplevel = function
+  | Dleaf p -> p
+  | Dleaf_attrs (p, _) -> p
+  | Dnode (p, _) -> p
+  | Dnode_attrs (p, _, _) -> p
 
 let add_dtree_of_attributes (Annot.Attrs xs) dtrees =
   let open Annot in

@@ -53,6 +53,10 @@ let do_ail_desugar_rdonly desugar_state f =
   let@ (x, _) = do_ail_desugar_op desugar_state f in
   return x
 
+let add_enum_hook desugar_state =
+  CAE.{ desugar_state with cn_state =
+    Cn_desugaring.{ desugar_state.cn_state with cn_enum_hook = C.convert_enum_expr_to_cn } }
+
 let register_new_cn_local id d_st =
   do_ail_desugar_op d_st (CA.register_additional_cn_var id)
 
@@ -1026,7 +1030,9 @@ let make_fun_with_spec_args f_i loc env args requires =
 let desugar_access d_st global_types (loc, id) =
   let@ (s, var_kind) = do_ail_desugar_rdonly d_st (CAE.resolve_cn_ident CN_vars id) in
   let@ () = match var_kind with
-    | Var_kind_c -> return ()
+    | Var_kind_c C_kind_var -> return ()
+    | Var_kind_c C_kind_enum ->
+       fail {loc; msg = Generic (!^"accesses: expected global, not enum constant")}
     | Var_kind_cn ->
        let msg = 
          !^"The name" ^^^ squotes (Id.pp id) 
@@ -1172,9 +1178,9 @@ let normalise_fun_map_decl
          Sym.equal fname ail_prog.function_definitions in
      (* let ail_env = Pmap.find ail_marker ail_prog.markers_env in *)
      (* let d_st = CAE.set_cn_c_identifier_env ail_env d_st in *)
-     let d_st = 
-       CAE.{ inner = Pmap.find ail_marker markers_env;
-                            markers_env = markers_env }
+     let d_st =
+       CAE.{ inner = add_enum_hook (Pmap.find ail_marker markers_env);
+               markers_env = markers_env }
      in
      let@ trusted, accesses, requires, ensures, mk_functions = Parse.parse_function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
@@ -1308,7 +1314,7 @@ let normalise_fun_map
 
 
 
-let normalise_globs tagDefs sym g =
+let normalise_globs env sym g =
   let loc = Loc.unknown in
   match g with
   | GlobalDef ((bt, ct), e) -> 
@@ -1316,7 +1322,7 @@ let normalise_globs tagDefs sym g =
      (* this may have to change *)
      let@ e = 
        n_expr loc 
-         ((C.empty tagDefs, (C.LocalState.init_st).old_states), 
+         ((env, (C.LocalState.init_st).old_states),
           (Pmap.empty Int.compare, 
            CF.Cn_desugaring.initial_cn_desugaring_state [])) 
          ([], Pmap.empty Int.compare)
@@ -1328,9 +1334,9 @@ let normalise_globs tagDefs sym g =
      return (M_GlobalDecl (convert_ct loc ct))
 
 
-let normalise_globs_list tagDefs gs = 
+let normalise_globs_list env gs =
    ListM.mapM (fun (sym,g) -> 
-       let@ g = normalise_globs tagDefs sym g in
+       let@ g = normalise_globs env sym g in
        return (sym, g)
      ) gs
 
@@ -1410,7 +1416,7 @@ let normalise_file (markers_env, ail_prog) file =
 
   let tagDefs = normalise_tag_definitions file.mi_tagDefs in
 
-  let env = C.empty tagDefs in
+  let env = C.init_env tagDefs in
   let@ env = C.add_datatype_infos env ail_prog.cn_datatypes in
   let@ env = C.register_cn_functions env ail_prog.cn_functions in
   let@ lfuns = ListM.mapM (C.translate_cn_function env) ail_prog.cn_functions in
@@ -1426,7 +1432,7 @@ let normalise_file (markers_env, ail_prog) file =
       ) file.mi_globs
   in
 
-  let@ globs = normalise_globs_list tagDefs file.mi_globs in
+  let@ globs = normalise_globs_list env file.mi_globs in
 
   let env = List.fold_left register_glob env globs in
 

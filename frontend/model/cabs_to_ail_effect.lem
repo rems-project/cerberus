@@ -989,18 +989,25 @@ let resolve_cn_ident_opt ns ident =
   get_inner >>= fun inner ->
   let st = inner.cn_state in
 
+  let c_var_kind (kind : identifier_kind) = match kind with
+     | Kind_ordinary OK_enum_constant -> Cn.Var_kind_c Cn.C_kind_enum
+     | Kind_ordinary _ -> Cn.Var_kind_c Cn.C_kind_var
+     | _ -> error "resolve_cn_ident_opt: not Kind_ordinary"
+     end
+  in
+
   (* based on earlier Cabs_to_ail_effect code  *)
   let lookup_in_c_desugaring_state () =
      match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
      | Nothing -> 
         Nothing
-     | Just (_, Internal sym _kind _linkage) -> 
-        Just (sym, Cn.Var_kind_c)
+     | Just (_, Internal sym kind _linkage) ->
+        Just (sym, c_var_kind kind)
      | Just (_, External) ->
         match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
         | Nothing -> Nothing
-        | Just (_scope, (sym, _identifier_kind, _linkage)) ->
-           Just (sym, Cn.Var_kind_c)
+        | Just (_scope, (sym, kind, _linkage)) ->
+           Just (sym, c_var_kind kind)
         end
      end
   in
@@ -1018,7 +1025,7 @@ let resolve_cn_ident_opt ns ident =
           end
     end
   in
-  
+
   let result = match ns with
     | Cn.CN_vars ->
        match lookup_in_c_desugaring_state () with
@@ -1250,6 +1257,15 @@ let register_cn_datatype ident mk_cases =
         end
     | Just _ ->
         fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_datatype_nm))
+  end
+
+let convert_enum_expr loc expr =
+  get_inner >>= fun st ->
+  match st.cn_state.Cn_desugaring.cn_enum_hook expr with
+    | Left res -> return res
+    | Right msg ->
+        fail loc (Errors.Desugar_CN
+            (Cn.CNErr_general ("error converting enum: " ^ msg)))
   end
 
 
