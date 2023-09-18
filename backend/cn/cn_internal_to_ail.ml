@@ -1239,7 +1239,7 @@ let cn_to_ail_post_internal dts preds (ReturnTypes.Computational (bound, oinfo, 
   cn_to_ail_post_aux_internal dts preds t
 
 (* TODO: Add destination passing *)
-let rec cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
+let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
 = fun dts d cnstatement ->
   let true_it = IT.IT (Const (Bool true), BT.Bool, Cerb_location.unknown) in
   let default_true_res = cn_to_ail_expr_internal dts true_it d in
@@ -1251,16 +1251,14 @@ let rec cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a de
 
   | Cnprog.M_CN_instantiate (to_instantiate, it) -> 
     Printf.printf "Translating CN instantiate\n";
-    let lc = LogicalConstraints.T true_it in
-    let (translation, _) = cn_to_ail_cnstatement_internal dts d (Cnprog.M_CN_assert lc) in
-    (translation, true)
+    (default_true_res, true)
   | Cnprog.M_CN_split_case _ -> failwith "TODO M_CN_split_case"
+
 
   | Cnprog.M_CN_extract (_, _, it) -> 
     Printf.printf "Translating CN extract\n";
-    let lc = LogicalConstraints.T true_it in
-    let (translation, _) = cn_to_ail_cnstatement_internal dts d (Cnprog.M_CN_assert lc) in
-    (translation, true)
+    (default_true_res, true)
+
 
   | Cnprog.M_CN_unfold (fsym, args) -> 
     (default_true_res, true)
@@ -1302,18 +1300,22 @@ let rec cn_to_ail_cnprog_internal_aux dts = function
   let binding = create_binding name ct_without_ptr in
  
   let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr ail_deref_expr_))]) in
+  let ((b2, ss), no_op) = cn_to_ail_cnprog_internal_aux dts prog in
   (* let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in *)
-  let ((loc', b2, ss), no_op) = cn_to_ail_cnprog_internal_aux dts prog in
-  if no_op then
+  if no_op then 
+    (([], []), true)
+  else 
+    ((b1 @ binding :: b2, s @ ail_stat_ :: ss), false) 
+
+  (* if no_op then
     ((loc', [], []), true)
   else
-    ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), false)
+    ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), false) *)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
   let ((bs, ss), no_op) = cn_to_ail_cnstatement_internal dts Assert stmt in 
-  ((loc, bs, ss), no_op)
+  ((bs, ss), no_op)
 
-let cn_to_ail_cnprog_internal dts cn_prog =
-  let ((loc, bs, ss), no_op) = cn_to_ail_cnprog_internal_aux dts cn_prog in
-  Printf.printf "Location of CNprog: %s\n" (Cerb_location.location_to_string loc);
-  ((loc, bs, ss), no_op)
+let cn_to_ail_cnprog_internal dts cn_prog = 
+  let ((bs, ss), _) = cn_to_ail_cnprog_internal_aux dts cn_prog in 
+  (bs, ss)
