@@ -197,14 +197,15 @@ let main
             let cn_oc = Stdlib.open_out "cn.c" in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog.cn_datatypes in
-            let c_functions = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
-            let (c_predicates, c_records) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates in
+            let (c_functions, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+            let (c_predicates, c_records') = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates in
 
             (* TODO: Topological sort *)
             Stdlib.output_string cn_oc (generate_include_header ("executable-spec/cn_utils.c", false));
             Stdlib.output_string cn_oc (generate_include_header ("assert.h", true));
             Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_records;
+            Stdlib.output_string cn_oc c_records';
             Stdlib.output_string cn_oc c_functions;
             Stdlib.output_string cn_oc c_predicates;
 
