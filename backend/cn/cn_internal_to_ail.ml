@@ -62,8 +62,6 @@ end
 let members_equal ms ms' = 
   if ((List.length ms) != (List.length ms')) then false else
   (if (List.length ms == 0) then true else (
-    Printf.printf "Inside members_equal\n";
-  Printf.printf "Number of members in record: %d\n" (List.length ms);
   let (cn_bts, ids) = List.split ms in
   let (cn_bts', ids') = List.split ms' in
   let ctypes_eq = List.map2 (fun cn_bt cn_bt'->
@@ -71,10 +69,8 @@ let members_equal ms ms' =
     let bt' = cn_base_type_to_bt cn_bt' in
     BT.equal bt bt') cn_bts cn_bts' in
   let ctypes_eq = List.fold_left (&&) true ctypes_eq in
-  Printf.printf "Types equal: %b\n" ctypes_eq;
   let ids_eq = List.map2 Id.equal ids ids' in
   let ids_eq = List.fold_left (&&) true ids_eq in
-  Printf.printf "Ids equal: %b\n" ids_eq;
   ctypes_eq && ids_eq))
 
 module SymKey = struct
@@ -147,7 +143,6 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
       | None ->   
         let map_bindings = RecordMap.bindings !records in
         let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
-        Printf.printf "Length of eq_members_bindings: %d\n" (List.length eq_members_bindings);
         match eq_members_bindings with 
         | [] -> 
           (* First time reaching record of this type - add to map *)
@@ -156,7 +151,6 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
           records := RecordMap.add members sym' !records;
           sym')
         | (_, sym') :: _ -> 
-          Printf.printf "Sym: %s\n" (Sym.pp_string sym');
           sym')
   in
   let typ = (match cn_typ with
@@ -555,8 +549,6 @@ let rec cn_to_ail_expr_aux_internal
   | Record ms -> 
     (* Could either be (1) standalone record or (2) part of datatype. Case (2) may not exist soon *)
     (* Might need to pass records around like datatypes *)
-
-    Printf.printf "Entered record case\n";
 
     let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
@@ -1032,10 +1024,8 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a
   = fun dts d lc -> 
       match lc with
       | LogicalConstraints.T it -> 
-        Printf.printf "Reached logical constraint function\n";
         cn_to_ail_expr_internal dts it d
       | LogicalConstraints.Forall ((sym, bt), it) -> 
-        Printf.printf "Reached logical constraint function FORALL\n";
         let (cond_it, t) = match IT.term it with 
           | Binop (Impl, it, it') -> (it, it')
           | _ -> failwith "Incorrect form of forall logical constraint term"
@@ -1226,21 +1216,17 @@ let rec cn_to_ail_post_aux_internal dts preds = function
     (b1 @ b2 @ [binding], s1 @ s2)
 
   | LRT.Resource ((name, (re, bt)), info, t)  ->
-    Printf.printf "LRT.Resource\n";
     let (b1, s1) = cn_to_ail_resource_internal name dts preds re in
     let (b2, s2) = cn_to_ail_post_aux_internal dts preds t in
     (b1 @ b2, s1 @ s2)
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
-    Printf.printf "LRT.Constraint\n";
     let (b1, s, e) = cn_to_ail_logical_constraint_internal dts PassBack lc in
     (* TODO: Check this logic *)
     let ss = match str_opt with 
       | Some info -> 
-        Printf.printf "Logical constraint info: %s\n" info;
         []
       | None -> 
-        Printf.printf "No logical constraint info\n";
         let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
         s @ [ail_stat_]
     in
@@ -1255,21 +1241,28 @@ let cn_to_ail_post_internal dts preds (ReturnTypes.Computational (bound, oinfo, 
   cn_to_ail_post_aux_internal dts preds t
 
 (* TODO: Add destination passing *)
-let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
+let rec cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
 = fun dts d cnstatement ->
-  let default_true_res = cn_to_ail_expr_internal dts (IT (Const (Bool true), BT.Bool)) d in
+  let true_it = IT.IT (Const (Bool true), BT.Bool) in
+  let default_true_res = cn_to_ail_expr_internal dts true_it d in
   match cnstatement with
   | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> 
     (default_true_res, true)
 
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
-  | Cnprog.M_CN_instantiate (o_s, it) -> 
-    (default_true_res, true)
+  | Cnprog.M_CN_instantiate (to_instantiate, it) -> 
+    Printf.printf "Translating CN instantiate\n";
+    let lc = LogicalConstraints.T true_it in
+    let (translation, _) = cn_to_ail_cnstatement_internal dts d (Cnprog.M_CN_assert lc) in
+    (translation, true)
   | Cnprog.M_CN_split_case _ -> failwith "TODO M_CN_split_case"
 
   | Cnprog.M_CN_extract (to_extract, it) -> 
-    (default_true_res, true)
+    Printf.printf "Translating CN extract\n";
+    let lc = LogicalConstraints.T true_it in
+    let (translation, _) = cn_to_ail_cnstatement_internal dts d (Cnprog.M_CN_assert lc) in
+    (translation, true)
 
   | Cnprog.M_CN_unfold (fsym, args) -> 
     (default_true_res, true)
@@ -1290,6 +1283,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
 
 let rec cn_to_ail_cnprog_internal_aux dts = function
 | Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
+  
   let (b1, s, e) = cn_to_ail_expr_internal dts pointer PassBack in
   let ail_deref_expr_ = A.(AilEunary (Indirection, e)) in
   (* TODO: Use ct for type binding *)
@@ -1315,12 +1309,13 @@ let rec cn_to_ail_cnprog_internal_aux dts = function
   if no_op then
     ((loc', [], []), true)
   else
-    ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), true)
+    ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), false)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
   let ((bs, ss), no_op) = cn_to_ail_cnstatement_internal dts Assert stmt in 
   ((loc, bs, ss), no_op)
 
 let cn_to_ail_cnprog_internal dts cn_prog =
-  let ((loc, bs, ss), _) = cn_to_ail_cnprog_internal_aux dts cn_prog in
-  (loc, bs, ss)
+  let ((loc, bs, ss), no_op) = cn_to_ail_cnprog_internal_aux dts cn_prog in
+  Printf.printf "Location of CNprog: %s\n" (Cerb_location.location_to_string loc);
+  ((loc, bs, ss), no_op)
