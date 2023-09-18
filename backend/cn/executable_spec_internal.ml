@@ -4,6 +4,22 @@ open PPrint
 open Executable_spec_utils
 module BT=BaseTypes
 
+module LocKey = struct
+  type t = Cerb_location.t
+  let compare (x : t) y = 
+    let (l1, c1) = Cerb_location.head_pos_of_location x in 
+    let (l2, c2) = Cerb_location.head_pos_of_location y in 
+    let l_comp = String.compare l1 l2 in 
+    if l_comp != 0 then 
+      l_comp 
+    else 
+      String.compare c1 c2
+end
+
+module StatsMap = Map.Make(LocKey)
+
+let stats_map = ref StatsMap.empty
+
 module A=CF.AilSyntax 
 (* Executable spec helper functions *)
 
@@ -16,7 +32,7 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
   (* let test_var_sym = Sym.fresh_pretty "test_var" in *)
   (* let test_decl = A.(AilSdeclaration [(test_var_sym, Some (mk_expr (AilEident (Sym.fresh_pretty "some_val"))))]) in *)
   (* let test_binding = A.(test_var_sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, mk_ctype CF.Ctype.Void)) in *)
-  let is_assert_true = function 
+  let _is_assert_true = function 
     | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEassert expr))) ->
       (match (rm_expr expr) with
         | A.(AilEconst (ConstantInteger (IConstant (z, Decimal, Some B)))) -> Z.equal z (Z.of_int 1)
@@ -25,16 +41,19 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
     | _ -> false
   in
 
-  let ail_stats_ = List.filter (fun s -> not (is_assert_true s)) ail_stats_ in
+  (* let ail_stats_ = List.filter (fun s -> not (is_assert_true s)) ail_stats_ in *)
   let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s)) ail_stats_ in
   let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
 let generate_c_statements_internal (loc, statements) dts =
-  let (_, bindings, stats_) = list_split_three (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts) statements) in
+  Printf.printf "Location at which translation happening: %s\n" (Cerb_location.simple_location loc);
+  let (bindings_and_stats, no_ops) = List.split (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts) statements) in
+  let (_, bindings, stats_) = list_split_three bindings_and_stats in
   let stat_strs = List.map generate_ail_stat_strs (List.combine bindings stats_) in
   let stat_strs = List.map (List.fold_left (^) "") stat_strs in
+  stats_map := StatsMap.add loc stat_strs !stats_map;
   (* let stat_str = List.fold_left (^) "" stat_strs in *)
   (loc, stat_strs)
 
@@ -91,7 +110,19 @@ let generate_c_specs_internal instrumentation_list type_map (statement_locs : Ce
     let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog prog5 in 
     let internal_statements = List.filter (fun (_, ss) ->  List.length ss != 0) instrumentation.internal.statements in
     let c_statements = List.map (fun s -> generate_c_statements_internal s ail_prog.cn_datatypes) internal_statements in
-
+    (* let c_statements = StatsMap.bindings !stats_map in *)
+    let rec filter_stats_by_loc locs stats = 
+      match stats with 
+        | [] -> []
+        | (loc, s) :: ss ->
+          let loc_equality x y = 
+            String.equal (Cerb_location.location_to_string x) (Cerb_location.location_to_string y) in 
+          if (List.mem loc_equality loc locs) then 
+            filter_stats_by_loc locs ss
+          else 
+            (loc, s) :: (filter_stats_by_loc (loc :: locs) ss)
+    in
+    let c_statements = filter_stats_by_loc [] c_statements in
     (* let rec add_bindings_to_map m bs = 
       match bs with 
         | [] -> m
