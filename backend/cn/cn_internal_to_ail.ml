@@ -59,15 +59,24 @@ module MembersKey = struct
 end
 
 
+
 let members_equal ms ms' = 
+  if ((List.length ms) != (List.length ms')) then false else
+  (if (List.length ms == 0) then true else (
+    Printf.printf "Inside members_equal\n";
+  Printf.printf "Number of members in record: %d\n" (List.length ms);
   let (ids, cn_bts) = List.split ms in
   let (ids', cn_bts') = List.split ms' in
   let ctypes_eq = List.map2 (fun cn_bt cn_bt'->
     let bt = cn_base_type_to_bt cn_bt in
     let bt' = cn_base_type_to_bt cn_bt' in
     BT.equal bt bt') cn_bts cn_bts' in
+  let ctypes_eq = List.fold_left (&&) true ctypes_eq in
+  Printf.printf "Types equal: %b\n" ctypes_eq;
   let ids_eq = List.map2 Id.equal ids ids' in
-  (List.fold_left (&&) true ctypes_eq) && (List.fold_left (&&) true ids_eq)
+  let ids_eq = List.fold_left (&&) true ids_eq in
+  Printf.printf "Ids equal: %b\n" ids_eq;
+  ctypes_eq && ids_eq))
 
 module SymKey = struct
   type t = C.union_tag 
@@ -126,45 +135,58 @@ let rec bt_to_cn_base_type = function
 
 
 
+
 (* TODO: Complete *)
 let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ = 
   let generate_ail_array bt = C.(Array (cn_to_ail_base_type bt, None)) in 
-  let typ = (match cn_typ with
-  | CN_unit -> C.Void
-  | CN_bool -> C.(Basic (Integer Bool))
-  | CN_integer -> C.(Basic (Integer (Signed Long))) 
-  (* TODO: Discuss integers *)
-  | CN_real -> failwith "TODO"
-  | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
-  | CN_struct sym -> C.(Struct sym)
-  | CN_record members -> 
-    let map_bindings = RecordMap.bindings !records in
-    let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
-    let sym = (
-    match pred_sym with
+  let generate_record_sym sym members =  
+    (match sym with
       | Some sym' -> 
         let sym'' = generate_sym_with_suffix ~suffix:"_record" sym' in
         records := RecordMap.add members sym'' !records;
         sym''
       | None ->   
+        let map_bindings = RecordMap.bindings !records in
+        let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
+        Printf.printf "Length of eq_members_bindings: %d\n" (List.length eq_members_bindings);
         match eq_members_bindings with 
         | [] -> 
           (* First time reaching record of this type - add to map *)
-          let count = RecordMap.cardinal !records in
+          (let count = RecordMap.cardinal !records in
           let sym' = Sym.fresh_pretty ("record_" ^ (string_of_int count)) in
           records := RecordMap.add members sym' !records;
-          sym'
-        | (_, sym') :: _ -> sym')
-    in
+          sym')
+        | (_, sym') :: _ -> 
+          Printf.printf "Sym: %s\n" (Sym.pp_string sym');
+          sym')
+  in
+  let typ = (match cn_typ with
+  | CN_unit -> C.Void
+  | CN_bool -> C.(Basic (Integer Bool))
+  | CN_integer -> C.(Basic (Integer (Signed Long))) 
+  (* TODO: Discuss integers *)
+  | CN_bits _ -> failwith "TODO CN_bits"
+  | CN_real -> failwith "TODO CN_real"
+  | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
+  | CN_alloc_id -> failwith "TODO CN_alloc_id"
+  | CN_struct sym -> C.(Struct sym)
+  | CN_record members -> 
+    let sym = generate_record_sym pred_sym members in
     C.(Pointer (empty_qualifiers, mk_ctype (Struct sym)))
    (* Every struct is converted into a struct pointer *)
    | CN_datatype sym -> C.(Pointer (empty_qualifiers, Ctype ([], Struct sym)))
    (* TODO: Implement maps properly *)
    | CN_map (_, cn_bt) -> generate_ail_array cn_bt
    | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
-   (* | CN_tuple of list (cn_base_type 'a) *)
+   | CN_tuple ts -> 
+      Printf.printf "Entered CN_tuple case\n";
+      let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
+      let members = List.map (fun t -> (some_id, t)) ts in
+      let sym = generate_record_sym pred_sym members in
+      C.(Pointer (empty_qualifiers, mk_ctype (Struct sym)))
    | CN_set bt -> generate_ail_array bt
-   | _ -> failwith "TODO cn_to_ail_base_type")
+   | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
+   | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name")
   in 
   let annots = match cn_typ with 
     | CN_integer -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_integer")]
@@ -556,7 +578,6 @@ let rec cn_to_ail_expr_aux_internal
           let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct sym_name)))])) in
           let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
           ([res_binding], [alloc_stat])
-      (* Allocation taken care of if in datatype instantiation case - not needed here *)
       | None -> ([], [])
     in
     
@@ -883,6 +904,23 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   enum :: structs
 
 let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
+  let calculate_return_type = function 
+  | ResourceTypes.Owned (sct, _) -> (Sctypes.to_ctype sct, BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct)
+  | PName pname -> 
+    let matching_preds = List.filter (fun (pred_sym', def) -> String.equal (Sym.pp_string pname) (Sym.pp_string pred_sym')) preds in
+    let (pred_sym', pred_def') = match matching_preds with 
+      | [] -> failwith "Predicate not found"
+      | p :: _ -> p
+    in 
+    let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
+    let ctype = match cn_bt with 
+      | CN_record _ ->
+        let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_sym' in
+        mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype (Struct pred_record_name))))
+      | _ -> cn_to_ail_base_type ~pred_sym:(Some pred_sym') cn_bt
+    in 
+    (ctype, pred_def'.oarg_bt)
+  in
   (* Binding will be different depending on whether it's a p or q - q is array*)
   let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in 
   function
@@ -890,20 +928,14 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
     let _pt_ctype_ =  bt_to_ail_ctype (IT.bt p.pointer) in
     (* TODO: Come back to this to mirror q case *)
     (* TODO: Extract code that is common between p and q cases to avoid duplication *)
-    let ctype_ = match p.name with 
-      | Owned (sct, _) -> rm_ctype (Sctypes.to_ctype sct)
-      | PName pred_name -> 
-        let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_name in
-        C.(Pointer (empty_qualifiers, (mk_ctype (Struct pred_record_name))))
-    in
-    Printf.printf "Resource var name: %s\n" (Sym.pp_string sym);
-
-    let binding = create_binding sym (mk_ctype ctype_) in
+    let (ctype, _) = calculate_return_type p.name in
+    let binding = create_binding sym ctype in
 
     let (b, s, e) = cn_to_ail_expr_internal dts p.pointer PassBack in
     let (rhs, bs, ss) = match p.name with 
       | Owned _ ->
-        let cast_ctype_pointer = C.(Pointer (empty_qualifiers, mk_ctype ctype_)) in
+        (* TODO: Update to match ResourceTypes.Q q *)
+        let cast_ctype_pointer = C.(Pointer (empty_qualifiers, ctype)) in
         let cast_e_ = A.(AilEcast (empty_qualifiers, mk_ctype cast_ctype_pointer, e)) in
         (make_deref_expr_ cast_e_, [], [])
       | PName pname -> 
@@ -947,23 +979,7 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
     in
     (* let sym_add_expr = make_deref_expr_ (gen_add_expr_ A.(AilEident sym)) in *)
 
-    let (return_ctype, return_bt) = match q.name with 
-      | Owned (sct, _) -> (Sctypes.to_ctype sct, BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct)
-      | PName pname -> 
-        let matching_preds = List.filter (fun (pred_sym', def) -> String.equal (Sym.pp_string pname) (Sym.pp_string pred_sym')) preds in
-        let (pred_sym', pred_def') = match matching_preds with 
-          | [] -> failwith "Predicate not found"
-          | p :: _ -> p
-        in 
-        let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
-        let ctype = match cn_bt with 
-          | CN_record _ ->
-            let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_sym' in
-            mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype (Struct pred_record_name))))
-          | _ -> cn_to_ail_base_type ~pred_sym:(Some pred_sym') cn_bt
-        in 
-        (ctype, pred_def'.oarg_bt)
-    in
+    let (return_ctype, return_bt) = calculate_return_type q.name in
 
     let (rhs, bs, ss) = match q.name with 
       | Owned _ -> (make_deref_expr_ (gen_add_expr_ (rm_expr e1)), [], [])
@@ -1056,19 +1072,29 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a
         dest d (bs, ss, e)
         (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
     
-  
+let rec generate_record_opt pred_sym = function
+  | BT.Record members ->
+    let members' = List.map (fun (id, bt) -> (id, bt_to_cn_base_type bt)) members in
+    let record_sym = generate_sym_with_suffix ~suffix:"_record" pred_sym in
+    Some (generate_struct_definition ~lc:false (record_sym, members'))
+  | BT.Tuple ts ->
+    let members = List.map (fun t -> (create_id_from_sym (Sym.fresh ()), t)) ts in
+    generate_record_opt pred_sym (BT.Record members)
+  | _ -> None
 
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
+  let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) def.return_bt in
   let (bs, ail_func_body) =
   match def.definition with
-    | Def it ->
-      let (bs, ss) = cn_to_ail_expr_internal cn_datatypes it Return in
+    | Def it
+    | Rec_Def it ->
+      let (bs, ss) = cn_to_ail_expr_internal_with_pred_name fn_sym cn_datatypes it Return in
       (bs, List.map mk_stmt ss)
-    | _ -> ([], []) (* TODO: Other cases *)
+    | Uninterp -> ([], [])
   in
-  let ret_type = bt_to_ail_ctype def.return_bt in
+  let ail_record_opt = generate_record_opt fn_sym def.return_bt in
   let params = List.map (fun (sym, bt) -> (sym, bt_to_ail_ctype bt)) def.args in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
@@ -1076,7 +1102,7 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
   let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
-  (decl, def)
+  ((decl, def), ail_record_opt)
 
 let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts preds = 
   let rec predicate_clause_to_ail = function
@@ -1111,6 +1137,8 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
         cn_to_ail_expr_internal_with_pred_name pred_sym dts it Return
   in
 
+  let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) def.oarg_bt in
+
   let rec clause_translate (clauses : RP.clause list) = 
     match clauses with
       | [] -> ([], [])
@@ -1134,15 +1162,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
 
   let pred_body = List.map mk_stmt ss in
 
-  let ail_record_opt = match def.oarg_bt with
-    | BT.Record members ->
-      let members' = List.map (fun (id, bt) -> (id, bt_to_cn_base_type bt)) members in
-      let record_sym = generate_sym_with_suffix ~suffix:"_record" pred_sym in
-      Some (generate_struct_definition ~lc:false (record_sym, members'))
-    | _ -> None
-  in
-
-  let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) def.oarg_bt in
+  let ail_record_opt = generate_record_opt pred_sym def.oarg_bt in
   let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) ((def.pointer, BT.Loc) :: def.iargs) in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
@@ -1269,7 +1289,6 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -
 
 let rec cn_to_ail_cnprog_internal_aux dts = function
 | Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
-  Printf.printf "In M_CN_let\n";
   let (b1, s, e) = cn_to_ail_expr_internal dts pointer PassBack in
   let ail_deref_expr_ = A.(AilEunary (Indirection, e)) in
   (* TODO: Use ct for type binding *)
@@ -1298,8 +1317,6 @@ let rec cn_to_ail_cnprog_internal_aux dts = function
     ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), true)
 
 | Cnprog.M_CN_statement (loc, stmt) ->
-  (* (loc, [], [empty_ail_stmt]) *)
-  Printf.printf "In M_CN_statement\n";
   let ((bs, ss), no_op) = cn_to_ail_cnstatement_internal dts Assert stmt in 
   ((loc, bs, ss), no_op)
 
