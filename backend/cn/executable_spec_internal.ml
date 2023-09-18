@@ -2,6 +2,7 @@ module CF=Cerb_frontend
 module CB=Cerb_backend
 open PPrint
 open Executable_spec_utils
+module BT=BaseTypes
 
 module A=CF.AilSyntax 
 (* Executable spec helper functions *)
@@ -155,13 +156,30 @@ let generate_c_datatypes cn_datatypes =
   let structs = List.map generate_doc_from_ail_struct ail_datatypes in
   CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs)
 
+let bt_is_record_or_tuple = function 
+  | BT.Record _ 
+  | BT.Tuple _ -> true
+  | _ -> false
+
+let fns_and_preds_with_record_rt (funs, preds) = 
+  let funs' = List.filter (fun (_, (def : LogicalFunctions.definition)) -> bt_is_record_or_tuple def.return_bt) funs in 
+  let fun_syms = List.map (fun (fn_sym, _) -> fn_sym) funs' in
+  let preds' = List.filter (fun (_, (def : ResourcePredicates.definition)) -> bt_is_record_or_tuple def.oarg_bt) preds in 
+  let pred_syms = List.map (fun (pred_sym, _) -> pred_sym) preds' in 
+  (fun_syms, pred_syms)
+
+
 
 let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (logical_predicates : Mucore.T.logical_predicates)  =
-  let ail_funs = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes) logical_predicates in
+  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes) logical_predicates in
+  let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
-  CF.Pp_utils.to_plain_pretty_string doc
+  let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
+  let records_str = generate_c_records (List.concat ail_records) in
+  let funs_str = CF.Pp_utils.to_plain_pretty_string doc in 
+  (funs_str, records_str)
 
 let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) =
   let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes resource_predicates) resource_predicates in
