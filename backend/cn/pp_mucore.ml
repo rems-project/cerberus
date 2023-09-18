@@ -238,6 +238,8 @@ module Make (Config: CONFIG) = struct
 
   let pp_iop = function
     | IOpAdd -> P.plus
+    | IOpSub -> P.minus
+    | IOpMul -> P.star
 
   let pp_bound = function
     | M_Bound_Wrap act -> !^"wrap<" ^^ pp_ct act.ct ^^ !^">"
