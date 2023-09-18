@@ -5,21 +5,7 @@ open PPrint
 open Executable_spec_utils
 module BT=BaseTypes
 
-module LocKey = struct
-  type t = Cerb_location.t
-  let compare (x : t) y = 
-    let (l1, c1) = Cerb_location.head_pos_of_location x in 
-    let (l2, c2) = Cerb_location.head_pos_of_location y in 
-    let l_comp = String.compare l1 l2 in 
-    if l_comp != 0 then 
-      l_comp 
-    else 
-      String.compare c1 c2
-end
 
-module StatsMap = Map.Make(LocKey)
-
-let stats_map = ref StatsMap.empty
 
 module A=CF.AilSyntax 
 (* Executable spec helper functions *)
@@ -54,7 +40,6 @@ let generate_c_statements_internal (loc, statements) dts =
   let (_, bindings, stats_) = list_split_three bindings_and_stats in
   let stat_strs = List.map generate_ail_stat_strs (List.combine bindings stats_) in
   let stat_strs = List.map (List.fold_left (^) "") stat_strs in
-  stats_map := StatsMap.add loc stat_strs !stats_map;
   (* let stat_str = List.fold_left (^) "" stat_strs in *)
   (loc, stat_strs)
 
