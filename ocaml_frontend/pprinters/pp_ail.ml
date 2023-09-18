@@ -667,25 +667,10 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
         ) ^^ (if List.length ss > 0 then P.break 1 else P.empty) ^^
         P.rbrace
     | AilSblock (bindings, ss) ->
-        let block =
-          P.separate_map
-            (P.semi ^^ P.break 1)
-            (fun (id, (dur_reg_opt,  _align, qs, ty)) ->
-              if !Cerb_debug.debug_level > 5 then
-                (* printing the types in a human readable format *)
-                P.parens ( P.empty
-                             (* TODO
-                  P.optional (fun (dur, isRegister) ->
-                    (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-                      (pp_storageDuration dur)
-                  ) dur_reg_opt ^^^ pp_ctype_human qs ty
-                ) ^^^ pp_id_obj id *) )
-              else
-                pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
-               ) bindings ^^ P.semi ^^ P.break 1 ^^
-          P.separate_map (P.break 1) (fun s -> pp_statement ~executable_spec ~bs:(bindings@bs) s) ss in
-        P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
-        (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
+      let block =
+        P.separate_map (P.break 1) (pp_statement ~executable_spec ~bs:(bindings@bs)) ss in
+      P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
+      (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
     | AilSif (e, s1, s2) ->
         pp_keyword "if" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^^^
           pp_statement ~executable_spec ~is_control:true s1 ^/^
@@ -728,22 +713,22 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSdeclaration [] ->
         pp_comment "// empty decl"
     | AilSdeclaration defs ->
-        comma_list (fun (id, e_opt) ->
-          let doc = 
-            (* if executable_spec then 
-              pp_id_obj ~executable_spec id 
-            else *)
-            (match List.assoc_opt id bs with
-              | Some (_, align_opt, qs, ty) ->
-                  pp_alignment_opt align_opt ^^
-                  pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
-              | None ->
-                  !^ "BINDING_NO_FOUND")
-          in
-          doc
-          (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) e_opt
-        ) defs ^^
-        P.semi
+      comma_list (fun (id, e_opt) ->
+        let doc = 
+          (* if executable_spec then 
+            pp_id_obj ~executable_spec id 
+          else *)
+          (match List.assoc_opt id bs with
+            | Some (_, align_opt, qs, ty) ->
+                pp_alignment_opt align_opt ^^
+                pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
+            | None ->
+                !^ "BINDING_NO_FOUND")
+        in
+        doc
+        (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) e_opt
+      ) defs ^^
+      P.semi
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) (fun s -> pp_statement ~executable_spec ~bs s) ss
