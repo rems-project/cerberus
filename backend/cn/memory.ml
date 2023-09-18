@@ -16,6 +16,7 @@ let int_of_ival iv = Z.to_int (Option.get (IM.eval_integer_value iv))
 
 let size_of_integer_type it = Option.get ((OI.get ()).sizeof_ity it)
 let align_of_integer_type it = Option.get ((OI.get ()).alignof_ity it)
+let is_signed_integer_type ity = (OI.get ()).is_signed_ity ity
 
 let max_integer_type it = z_of_ival (CF.Impl_mem.max_ival it) 
 let min_integer_type it = z_of_ival (CF.Impl_mem.min_ival it)
@@ -27,8 +28,8 @@ let max_pointer =
   let pointer_bits = size_of_pointer * bits_per_byte in
   Z.sub (Z.pow (Z.of_int 2) pointer_bits) (Z.of_int 1)
 
-let bt_of_sct = BT.of_sct size_of_integer_type
-let sbt_of_sct = SurfaceBaseTypes.of_sct size_of_integer_type
+let bt_of_sct = BT.of_sct is_signed_integer_type size_of_integer_type
+let sbt_of_sct = SurfaceBaseTypes.of_sct is_signed_integer_type size_of_integer_type
 
 let size_of_ctype = function
   | Void -> Cerb_debug.error "size_of_ctype applied to void"

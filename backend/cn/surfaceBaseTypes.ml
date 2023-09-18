@@ -102,14 +102,10 @@ let make_map_bt abt rbt = Map (abt, rbt)
 
 
 
-let rec of_sct size_of = function
+let rec of_sct is_signed size_of = function
   | Sctypes.Void -> Unit
-  | Integer ity -> begin match ity with
-    | Signed _ -> Bits (Signed, size_of ity)
-    | Unsigned _ -> Bits (Unsigned, size_of ity)
-    | _ -> Cerb_debug.error "SurfaceBaseTypes.of_sct: non-normalised integer storage type"
-    end
-  | Array (sct, _) -> Map (Integer, of_sct size_of sct)
+  | Integer ity -> Bits ((if is_signed ity then Signed else Unsigned), size_of ity)
+  | Array (sct, _) -> Map (Integer, of_sct is_signed size_of sct)
   | Pointer ct -> Loc (Some ct)
   | Struct tag -> Struct tag
   | Function _ -> Cerb_debug.error "todo: function types"
