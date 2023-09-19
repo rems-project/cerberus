@@ -1004,7 +1004,7 @@ let make_fun_with_spec_args f_i loc env args requires =
        let ct = convert_ct loc ct_ct in
        let sbt = SBT.of_sct ct in
        let bt = SBT.to_basetype sbt in
-       let sbt2 = C.translate_cn_base_type cn_bt in
+       let sbt2 = C.translate_cn_base_type env cn_bt in
        let@ () = if BT.equal bt (SBT.to_basetype sbt2) then return ()
          else fail {loc; msg = Generic (!^"Argument-type mismatch between" ^^^
            (BT.pp bt) ^^^ Print.parens (!^"from" ^^^ Sctypes.pp ct) ^^^ !^ "and" ^^^
@@ -1071,6 +1071,10 @@ let desugar_conds d_st conds =
 let fetch_enum d_st loc sym =
   let@ expr_ = do_ail_desugar_rdonly d_st (CAE.resolve_enum_constant sym) in
   return (AnnotatedExpression ((), [], loc, expr_))
+
+let fetch_typedef d_st loc sym =
+  let@ (_, _, cty) = do_ail_desugar_rdonly d_st (CAE.resolve_typedef sym) in
+  return cty
 
 
 let dtree_of_inv conds = 
@@ -1402,9 +1406,9 @@ let register_glob env (sym, glob) =
      
 
 
-let translate_datatype {cn_dt_loc; cn_dt_name; cn_dt_cases} =
+let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases} =
   let translate_arg (bt, id) = 
-    (id, SBT.to_basetype (Compile.translate_cn_base_type bt)) in
+    (id, SBT.to_basetype (Compile.translate_cn_base_type env bt)) in
   let cases = 
     List.map (fun (c, args) -> (c, List.map translate_arg args)) cn_dt_cases in
   (cn_dt_name, { loc = cn_dt_loc; cases })
@@ -1421,7 +1425,7 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
                markers_env = markers_env }
   in
 
-  let env = C.init_env tagDefs (fetch_enum fin_d_st) in
+  let env = C.init_env tagDefs (fetch_enum fin_d_st) (fetch_typedef fin_d_st) in
   let@ env = C.add_datatype_infos env ail_prog.cn_datatypes in
   let@ env = C.register_cn_functions env ail_prog.cn_functions in
   let@ lfuns = ListM.mapM (C.translate_cn_function env) ail_prog.cn_functions in
@@ -1460,7 +1464,7 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
 
   let stdlib_syms = SymSet.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
 
-  let datatypes = List.map translate_datatype ail_prog.cn_datatypes in
+  let datatypes = List.map (translate_datatype env) ail_prog.cn_datatypes in
 
   let file = {
       mu_main = file.mi_main;

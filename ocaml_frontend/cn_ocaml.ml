@@ -81,6 +81,8 @@ module MakePp (Conf: PP_CN) = struct
         pp_type_keyword "set" ^^ P.angles (pp_base_type bTy)
     | CN_user_type_name ident ->
         P.squotes (Conf.pp_ident ident)
+    | CN_c_typedef_name ident ->
+        pp_type_keyword "c_typedef" ^^ P.squotes (Conf.pp_ident ident)
 
   let pp_cn_binop = function
     | CN_add -> P.plus

@@ -46,9 +46,10 @@ type env = {
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mu.mu_tag_definitions;
   fetch_enum_expr: Locations.t -> Sym.t -> (unit CF.AilSyntax.expression) Resultat.t;
+  fetch_typedef: Locations.t -> Sym.t -> CF.Ctype.ctype Resultat.t;
 }
 
-let init_env tagDefs fetch_enum_expr =
+let init_env tagDefs fetch_enum_expr fetch_typedef =
   { computationals = SymMap.empty;
     logicals= SymMap.empty; 
     predicates= SymMap.empty;
@@ -57,6 +58,7 @@ let init_env tagDefs fetch_enum_expr =
     datatype_constrs = SymMap.empty;
     tagDefs;
     fetch_enum_expr;
+    fetch_typedef;
   }
 
 
@@ -244,8 +246,9 @@ and free_in_exprs = function
   | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
 
 
-let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
+let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
   let open SurfaceBaseTypes in
+  let self bTy = translate_cn_base_type env bTy in
   match bTy with
     | CN_unit ->
         Unit
@@ -260,31 +263,36 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
     | CN_struct tag_sym ->
         Struct tag_sym
     | CN_record members ->
-        SBT.Record (List.map (fun (bt,m) -> (m, translate_cn_base_type bt)) members)
+        SBT.Record (List.map (fun (bt,m) -> (m, self bt)) members)
     | CN_datatype dt_sym ->
         Datatype dt_sym
     | CN_map (bTy1, bTy2) ->
-        Map ( translate_cn_base_type bTy1
-            , translate_cn_base_type bTy2 )
+        Map ( self bTy1, self bTy2 )
     | CN_list bTy' -> 
-        List (translate_cn_base_type bTy')
+        List (self bTy')
     | CN_tuple bTys ->
-        Tuple (List.map translate_cn_base_type bTys)
+        Tuple (List.map self bTys)
     | CN_set bTy' ->
-        Set (translate_cn_base_type bTy')
+        Set (self bTy')
     | CN_user_type_name _ ->
         failwith "user type-abbreviation not removed by cabs->ail elaboration"
+    | CN_c_typedef_name sym ->
+        (* FIXME handle errors here properly *)
+        let loc = Locations.unknown in
+        match env.fetch_typedef loc sym with
+          | Result.Ok r -> of_sct (Sctypes.of_ctype_unsafe loc r)
+          | Result.Error e -> failwith (Pp.plain (TypeErrors.((pp_message e.msg).short)))
 
 
 let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
       List.map (fun (bTy, id_or_sym) ->
-        (id_or_sym, SBT.to_basetype (translate_cn_base_type bTy))
+        (id_or_sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
     let output = 
-      (SBT.to_basetype (translate_cn_base_type (snd def.cn_pred_output)))
+      (SBT.to_basetype (translate_cn_base_type env (snd def.cn_pred_output)))
     in
     add_predicate def.cn_pred_name { 
         pred_iargs= iargs; 
@@ -330,11 +338,11 @@ let register_cn_functions env (defs: cn_function list) =
   let aux env def =
     let args = 
       List.map (fun (bTy, sym) -> 
-          (sym, SBT.to_basetype (translate_cn_base_type bTy))
+          (sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) def.cn_func_args 
     in
     let return_bt = 
-      SBT.to_basetype (translate_cn_base_type def.cn_func_return_bty)
+      SBT.to_basetype (translate_cn_base_type env def.cn_func_return_bty)
     in
     let fsig = {args; return_bty = return_bt} in
     add_function def.cn_func_loc def.cn_func_name fsig env
@@ -347,7 +355,7 @@ let add_datatype_info env (dt : cn_datatype) =
   let add_param m (ty, nm) =
     match Y.find_opt (Id.s nm) m with
     | None ->
-      return (Y.add (Id.s nm) (nm, SBT.to_basetype (translate_cn_base_type ty)) m)
+      return (Y.add (Id.s nm) (nm, SBT.to_basetype (translate_cn_base_type env ty)) m)
     | Some _ -> 
         fail {loc = Id.loc nm;
               msg = Generic (!^"Re-using member name" ^^^ Id.pp nm 
@@ -358,7 +366,7 @@ let add_datatype_info env (dt : cn_datatype) =
   let add_constr env (cname, params) =
     let c_params = 
       List.map (fun (ty, nm) -> 
-        (nm, SBT.to_basetype (translate_cn_base_type ty))
+        (nm, SBT.to_basetype (translate_cn_base_type env ty))
         ) params
     in
     let info = BT.{c_params; c_datatype_tag = dt.cn_dt_name} in
@@ -692,7 +700,7 @@ module EffectfulTranslation = struct
             return (sym_ (nm, SBT.Loc None))
         | CNExpr_cast (bt, expr) ->
             let@ expr = self expr in
-            let bt = translate_cn_base_type bt in
+            let bt = translate_cn_base_type env bt in
             return (IT (Cast (SBT.to_basetype bt, expr), bt))
         | CNExpr_call (fsym, exprs) ->
             let@ args = ListM.mapM self exprs in
@@ -932,7 +940,7 @@ module EffectfulTranslation = struct
     return (pt, pointee_value)
 
   let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, res, args) =
-    let bt' = translate_cn_base_type bt in
+    let bt' = translate_cn_base_type env bt in
     let@ () = 
       if SBT.equal bt' SBT.Integer then return ()
       else fail {loc = pred_loc; msg = let open Pp in
@@ -975,7 +983,7 @@ module EffectfulTranslation = struct
        let@ e = translate_cn_expr SymSet.empty env e_ in
        return (LC.T (IT.term_of_sterm e))
     | CN_assert_qexp (sym, bTy, e1_, e2_) ->
-       let bt = translate_cn_base_type bTy in
+       let bt = translate_cn_base_type env bTy in
        let env_with_q = add_logical sym bt env in
        let@ e1 = translate_cn_expr (SymSet.singleton sym) env_with_q e1_ in
        let@ e2 = translate_cn_expr (SymSet.singleton sym) env_with_q e2_ in
@@ -1021,7 +1029,7 @@ let translate_cn_function env (def: cn_function) =
   let open LogicalFunctions in
   Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args = 
-    List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)
+    List.map (fun (bTy, sym) -> (sym, translate_cn_base_type env bTy)
       ) def.cn_func_args in
   let env' =
     List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
@@ -1037,7 +1045,7 @@ let translate_cn_function env (def: cn_function) =
        let@ body = translate_cn_func_body env' body in
        return (if is_rec then Rec_Def body else Def body)
     | None -> return Uninterp in
-  let return_bt = translate_cn_base_type def.cn_func_return_bty in
+  let return_bt = translate_cn_base_type env def.cn_func_return_bty in
   let def2 = {
       loc = def.cn_func_loc; 
       args = List.map_snd SBT.to_basetype args; 
@@ -1306,7 +1314,7 @@ let rec make_lrt_generic env st =
     Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name)));
     let rec aux env = function
       | (bTy, sym) :: args' ->
-         let bTy = translate_cn_base_type bTy in
+         let bTy = translate_cn_base_type env bTy in
          let env = add_computational sym bTy env in
          let@ at = aux env args' in
          let info = (def.cn_lemma_loc, None) in

@@ -1002,6 +1002,20 @@ let update_current_cn_scope f =
    not trivia. So, instead, this function makes C variables take
    precedence over CN variables, as suggested by Kayvan. *)
 
+let cn_resolve_ordinary inner ident =
+   match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
+   | Nothing ->
+      Nothing
+   | Just (_, Internal sym kind _linkage) ->
+      Just (sym, kind)
+   | Just (_, External) ->
+      match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
+      | Nothing -> Nothing
+      | Just (_scope, (sym, kind, _linkage)) ->
+         Just (sym, kind)
+      end
+   end
+
 val resolve_cn_ident_opt: forall 'ty. Cn.cn_namespace -> Symbol.identifier -> desugM (maybe (Symbol.sym * Cn.cn_var_kind))
 let resolve_cn_ident_opt ns ident =
 
@@ -1015,22 +1029,13 @@ let resolve_cn_ident_opt ns ident =
      end
   in
 
-  (* based on earlier Cabs_to_ail_effect code  *)
-  let lookup_in_c_desugaring_state () =
-     match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
-     | Nothing -> 
-        Nothing
-     | Just (_, Internal sym kind _linkage) ->
-        Just (sym, c_var_kind kind)
-     | Just (_, External) ->
-        match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
-        | Nothing -> Nothing
-        | Just (_scope, (sym, kind, _linkage)) ->
-           Just (sym, c_var_kind kind)
-        end
-     end
+  let lookup_in_c_desugaring_state () = match cn_resolve_ordinary inner ident with
+    | Just (sym, kind) -> Just (sym, c_var_kind kind)
+    | Nothing -> Nothing
+    end
   in
 
+  (* based on earlier Cabs_to_ail_effect code  *)
   let lookup_in_cn_desugaring_state () =
     match Map.lookup (ns, ident) (current_cn_scope st) with
       | Just sym ->
@@ -1100,6 +1105,19 @@ let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
       return sym
     end
   end
+
+let resolve_cn_user_type_name ident =
+  get_inner >>= fun inner ->
+  get_cn_state >>= fun st ->
+  match cn_resolve_ordinary inner ident with
+    | Just (sym, Kind_ordinary OK_typedef) ->
+      return (Cn.CN_c_typedef_name sym)
+    | _ -> match Map.lookup ident st.Cn_desugaring.cn_type_synonyms with
+      | Nothing -> fail (Loc.locOf ident) (Errors.Desugar_CN
+            (Cn.CNErr_unknown_identifier Cn.CN_type_nm ident))
+      | Just basety -> return basety
+      end
+    end
 
 
 let rec fetch_oarg acc ident = function
@@ -1244,14 +1262,6 @@ let register_cn_type_synonym name basety =
   update_cn_state (fun st -> <| st with
     Cn_desugaring.cn_type_synonyms= Map.insert name basety
       st.Cn_desugaring.cn_type_synonyms |>)
-
-let resolve_cn_user_type_name ident =
-  get_cn_state >>= fun st ->
-  match Map.lookup ident st.Cn_desugaring.cn_type_synonyms with
-  | Nothing -> fail (Loc.locOf ident) (Errors.Desugar_CN
-        (Cn.CNErr_unknown_identifier Cn.CN_type_nm ident))
-  | Just basety -> return basety
-  end
 
 let register_cn_datatype ident mk_cases =
   get_inner >>= fun st ->
