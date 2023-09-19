@@ -154,7 +154,7 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
   aux st
 
 type injection_kind =
-  | InStmt of string
+  | InStmt of int * string
   (* | Return of (Pos.t * Pos.t) option *)
   | Return of Pos.t option
   | Pre of string list * Cerb_frontend.Ctype.ctype
@@ -172,13 +172,13 @@ type injection = {
   kind: injection_kind;
 }
 
-let _string_of_footprint = function
+(* let string_of_footprint = function
   | InLine { start_pos; end_pos} ->
       Printf.sprintf "%s - %s"
         (Pos.to_string start_pos)
         (Pos.to_string end_pos)
   | WholeLine n ->
-      Printf.sprintf "line: %dn" n
+      Printf.sprintf "line: %dn" n *)
 
 (* start (1, 1) and end (1, 1) for include headers *)
 let inject st inj =
@@ -188,7 +188,7 @@ let inject st inj =
       | InLine {start_pos; _} -> move_to st start_pos
       | WholeLine line     -> (move_to_line st line, "") in
   let st = begin match inj.kind with
-    | InStmt str ->
+    | InStmt (_, str) ->
         let (st, _) =
           match inj.footprint with
             | InLine {end_pos; _} -> move_to ~no_ident:true ~print:false st end_pos
@@ -222,8 +222,8 @@ let inject st inj =
         let indented_strs = List.map (fun str -> "\n" ^ indent ^ str) strs in
         let str = List.fold_left (^) "" indented_strs in
         do_output st begin
-          str ^
           "\n__cn_epilogue:\n" ^
+          str ^
           begin if Cerb_frontend.AilTypesAux.is_void ret_ty then
             indent ^ ";"
           else
@@ -252,7 +252,25 @@ let sort_injects xs =
       | InLine {start_pos; _}, WholeLine n ->
           Int.compare start_pos.line n
     in
-  List.sort cmp xs
+  let xs = List.sort cmp xs in
+  (* List.iteri (fun i inj ->
+    Printf.fprintf stderr "\x1b[35m[%d] -> %s @ %s\x1b[0\n"
+      i
+      begin match inj.kind with
+        | InStmt (n,  str) ->
+            "InStmt["^ string_of_int n ^ "] ==> '" ^ String.escaped str ^ "'"
+        | Return None ->
+            "Return[None]"
+        | Return (Some _) ->
+            "Return[Some]"
+        | Pre (strs, _) ->
+            "Pre ==> [" ^ String.concat "," (List.map (fun s -> "\"" ^ String.escaped s ^ "\"" ) strs) ^ "]"
+        | Post _ ->
+            "Post"
+      end
+      (string_of_footprint inj.footprint)
+  ) xs; *)
+  xs
 
 let inject_all oc filename xs =
   let st = {
@@ -342,7 +360,7 @@ let in_stmt_injs xs num_headers =
           start_pos= Pos.increment_line start_pos num_headers;
           end_pos= Pos.v (end_pos.line + num_headers) end_pos.col;
       }
-      ; kind= InStmt (String.concat "\n" strs) }
+      ; kind= InStmt (List.length strs, String.concat "\n" strs) }
   ) (List.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs)
 
 (* build the injections for the pre/post conditions of a C function *)
