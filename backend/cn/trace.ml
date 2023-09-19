@@ -6,14 +6,14 @@ module IT = IndexTerms
 module BT = BaseTypes
 open Mucore
 
-type opt_pat = mu_pattern option
-type expr = unit mu_expr
-type pexpr = unit mu_pexpr
+type 'TY opt_pat = 'TY mu_pattern option
+type 'TY expr = 'TY mu_expr
+type 'TY pexpr = 'TY mu_pexpr
 
 type mu_trace_step = {
     expr_doc : Pp.doc Lazy.t;
     expr_loc : Locations.t;
-    pat: opt_pat;
+    pat_opt_doc: Pp.doc Lazy.t option;
     ct_before: Context.t;
     ct_after: Context.t;
   }
@@ -29,13 +29,15 @@ let empty = {mu_trace = []}
 let add_trace_step pat (expr : 'a mu_expr) (ct1, ct2) (tr : t) =
   let expr_doc = lazy (Pp_mucore.pp_expr_w (Some 100) expr) in
   let expr_loc = loc_of_expr expr in
-  let step = {expr_doc; expr_loc; pat; ct_before = ct1; ct_after = ct2} in
+  let pat_opt_doc = Option.map (fun pat -> lazy (Pp_mucore.Basic.pp_pattern pat)) pat in
+  let step = {expr_doc; expr_loc; pat_opt_doc; ct_before = ct1; ct_after = ct2} in
   {mu_trace = step :: tr.mu_trace}
 
 let add_pure_trace_step pat (expr : 'a mu_pexpr) (ct1, ct2) (tr : t) =
   let expr_doc = lazy (Pp_mucore.pp_pexpr_w (Some 100) expr) in
   let expr_loc = loc_of_pexpr expr in
-  let step = {expr_doc; expr_loc; pat; ct_before = ct1; ct_after = ct2} in
+  let pat_opt_doc = Option.map (fun pat -> lazy (Pp_mucore.Basic.pp_pattern pat)) pat in
+  let step = {expr_doc; expr_loc; pat_opt_doc; ct_before = ct1; ct_after = ct2} in
   {mu_trace = step :: tr.mu_trace}
 
 let rec take i xs = match i <= 0, xs with
@@ -82,14 +84,14 @@ let ctxt_diff ct1 ct2 =
     |> List.map fst in
   (log, com, con, (rs_del, rs_add))
 
-let format_mu (p : opt_pat) expr_doc =
+let format_mu (p : Pp.doc Lazy.t option) expr_doc =
   let open Pp in
   let rhs = Lazy.force expr_doc in
   match p with
     | None -> rhs
     (* | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs *)
-    | Some ((* M_Pat *) pat) -> 
-       !^ "mu_step:" ^^^ Pp_mucore.Basic.pp_pattern pat ^^^ !^ "<-" ^^^ rhs
+    | Some ((* M_Pat *) pat_pp) -> 
+       !^ "mu_step:" ^^^ Lazy.force pat_pp ^^^ !^ "<-" ^^^ rhs
 
 let format_eval model global it =
   let open Pp in
@@ -138,7 +140,7 @@ let format_delta model ct1 ct2 =
 
 let format_mu_step model (s : mu_trace_step) =
   Pp.hang 4 (Pp.flow Pp.hardline
-    (format_mu s.pat s.expr_doc :: format_delta model s.ct_before s.ct_after))
+    (format_mu s.pat_opt_doc s.expr_doc :: format_delta model s.ct_before s.ct_after))
 
 let region_subset (x_l, x_r) (y_l, y_r) =
   let open Lexing in

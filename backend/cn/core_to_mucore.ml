@@ -155,7 +155,7 @@ let ensure_pexpr_ctype loc err pe : 'TY act =
 let rec core_to_mu__pattern loc (Pattern (annots, pat_)) = 
   let loc = Loc.update loc (Annot.get_loc_ annots) in
 
-  let wrap pat_ = M_Pattern(loc, annots, pat_) in
+  let wrap pat_ = M_Pattern(loc, annots, (), pat_) in
   match pat_ with
   | CaseBase (msym, cbt1) ->
      wrap (M_CaseBase (msym, cbt1))
@@ -204,7 +204,7 @@ and n_val loc = function
 
 
 let unit_pat loc annots = 
-  M_Pattern (loc, annots, M_CaseBase (None, Core.BTy_unit))
+  M_Pattern (loc, annots, (), M_CaseBase (None, Core.BTy_unit))
 
 
 let function_ids = [

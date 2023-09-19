@@ -52,7 +52,7 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 let bogus_cbt_to_bt (cbt : Mucore.T.cbt) = BT.Integer
 
-let rec infer_pattern (M_Pattern (loc, _, pattern)) =
+let rec infer_pattern (M_Pattern (loc, _, _, pattern)) =
   match pattern with
   | M_CaseBase (_, has_bt) -> 
      let has_bt = bogus_cbt_to_bt has_bt in
@@ -87,7 +87,7 @@ let rec infer_pattern (M_Pattern (loc, _, pattern)) =
 
 
 (* pattern-matches and binds *)
-let rec pattern_match (M_Pattern (loc, _, pattern)) it =
+let rec pattern_match (M_Pattern (loc, _, _, pattern)) it =
    match pattern with
    | M_CaseBase (o_s, _has_bt) ->
       begin match o_s with

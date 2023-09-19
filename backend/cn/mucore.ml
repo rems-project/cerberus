@@ -90,12 +90,12 @@ type mu_ctor =  (* data constructors *)
   * | M_Cfvfromint (\* cast integer to floating value *\)
   * | M_Civfromfloat (\* cast floating to integer value *\) *)
 
-type mu_pattern_ = 
+type 'TY mu_pattern_ = 
  | M_CaseBase of (Symbol.sym option * T.cbt)
- | M_CaseCtor of mu_ctor * mu_pattern list
+ | M_CaseCtor of mu_ctor * 'TY mu_pattern list
 
-and mu_pattern = 
- | M_Pattern of loc * annot list * mu_pattern_
+and 'TY mu_pattern = 
+ | M_Pattern of loc * annot list * 'TY * 'TY mu_pattern_
 
 type mu_function = (* some functions that persist into mucore, not just (infix) binops *)
  | M_F_params_length
@@ -153,7 +153,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEundef of Cerb_location.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)
  (* | M_PEcase of ('TY mu_pexpr) * (mu_pattern * 'TY mu_tpexpr) list (\* pattern matching *\) *)
- | M_PElet of (mu_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
+ | M_PElet of ('TY mu_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
  | M_PEif of 'TY mu_pexpr * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure if *)
 
 
@@ -232,10 +232,10 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_Eccall of 'TY act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
  (* | M_Eproc of mu_name * ('TY mu_pexpr) list (\* Core procedure call *\) *)
 
- | M_Elet of (mu_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
+ | M_Elet of ('TY mu_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
  | M_Eunseq of ('TY mu_expr) list (* unsequenced expressions *)
- | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* weak sequencing *)
- | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* strong sequencing *)
+ | M_Ewseq of 'TY mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* weak sequencing *)
+ | M_Esseq of 'TY mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* strong sequencing *)
  (* | M_Ecase of 'TY mu_pexpr * (mu_pattern * ('TY mu_texpr)) list (\* pattern matching *\) *)
  | M_Eif of 'TY mu_pexpr * ('TY mu_expr) * ('TY mu_expr)
  | M_Ebound of ('TY mu_expr) (* $\ldots$and boundary *)

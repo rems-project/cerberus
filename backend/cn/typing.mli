@@ -43,8 +43,8 @@ val get_step_trace : unit -> (Trace.t) m
 
 val res_history : int -> (Context.resource_history) m
 
-val begin_trace_of_step : Trace.opt_pat -> 'a Mucore.mu_expr -> (unit -> (unit) m) m
-val begin_trace_of_pure_step : Trace.opt_pat -> 'a Mucore.mu_pexpr -> (unit -> (unit) m) m
+val begin_trace_of_step : 'a Trace.opt_pat -> 'a Mucore.mu_expr -> (unit -> (unit) m) m
+val begin_trace_of_pure_step : 'a Trace.opt_pat -> 'a Mucore.mu_pexpr -> (unit -> (unit) m) m
 
 type changed = 
   | Deleted

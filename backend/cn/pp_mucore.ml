@@ -404,7 +404,7 @@ module Make (Config: CONFIG) = struct
 
 
 
-  let rec pp_pattern (M_Pattern (_, _, pat)) =
+  let rec pp_pattern (M_Pattern (_, _, _, pat)) =
     match pat with
     | M_CaseBase (None, bTy) ->
         P.underscore ^^ P.colon ^^^ pp_core_base_type bTy

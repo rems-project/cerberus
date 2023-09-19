@@ -85,7 +85,7 @@ let rec is_const_num = function
   | _ -> false
 
 let rec add_pattern p v var_map =
-  let (M_Pattern (loc, _, pattern) : mu_pattern) = p in
+  let (M_Pattern (loc, _, _, pattern) : _ mu_pattern) = p in
   match pattern with
   | M_CaseBase (Some s, _) ->
     return (SymMap.add s v var_map)
