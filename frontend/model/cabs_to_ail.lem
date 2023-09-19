@@ -4125,6 +4125,8 @@ let rec desugar_cn_base_type loc bTy =
         CN_set <$> desugar_cn_base_type loc bTy
     | CN_user_type_name ident ->
         E.resolve_cn_user_type_name ident
+    | CN_c_typedef_name _ ->
+        Assert_extra.failwith "CN_c_typedef_name before elaboration"
 end
 
 let rec register_and_desugar_cn_pattern (CNPat loc pat_) =
