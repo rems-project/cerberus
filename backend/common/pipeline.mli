@@ -48,7 +48,7 @@ val c_frontend:
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->
   ( Cabs.translation_unit
-  * (Cabs_to_ail_effect.markers_env * GenTypes.genTypeCategory AilSyntax.ail_program)
+  * (Cabs_to_ail_effect.fin_markers_env * GenTypes.genTypeCategory AilSyntax.ail_program)
   , Cerb_location.t * Errors.cause) Exception.exceptM
 
 val c_frontend_and_elaboration:
@@ -57,7 +57,7 @@ val c_frontend_and_elaboration:
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->
   ( Cabs.translation_unit option
-  * (Cabs_to_ail_effect.markers_env * GenTypes.genTypeCategory AilSyntax.ail_program) option
+  * (Cabs_to_ail_effect.fin_markers_env * GenTypes.genTypeCategory AilSyntax.ail_program) option
   * unit Core.file
   , Cerb_location.t * Errors.cause) Exception.exceptM
 

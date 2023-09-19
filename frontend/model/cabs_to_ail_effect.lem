@@ -283,6 +283,8 @@ type state = <|
 type markers_env =
   map nat state
 
+type fin_markers_env = (nat * markers_env)
+
 type state_with_markers = <|
   inner: state;
   markers_env: markers_env;
@@ -590,13 +592,30 @@ let initial_state core_eval_stuff cn_eval_stuff = <|
 (*   let cn_state = Cn_desugaring.set_c_identifier_env env st.inner.cn_state in *)
 (*   <| st with inner= <| st.inner with cn_state = cn_state |> |> *)
 
+val record_marker: unit -> desugM nat
+let record_marker () =
+  let id = Symbol.fresh_int () in
+  begin if Global.backend_name () = "Cn" then
+    get_inner >>= fun inner ->
+    State_exception.update (fun old_state -> <| old_state with markers_env= Map.insert id inner old_state.markers_env |>)
+  else
+    State_exception.return ()
+  end >>= fun () ->
+  State_exception.return id
 
-val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> desugM 'a -> Exception.exceptM (markers_env * 'a) Errors.error
+val fin_markers_env: unit -> desugM fin_markers_env
+let fin_markers_env () =
+  record_marker () >>= fun id ->
+  State_exception.get >>= fun st ->
+  State_exception.return (id, st.markers_env)
+
+
+val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
 let cabs_to_ail_effect_eval core_eval_stuff cn_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->
-    State_exception.get >>= fun st ->
-    State_exception.return (st.markers_env, res)
+    fin_markers_env () >>= fun markers ->
+    State_exception.return (markers, res)
   end (initial_state core_eval_stuff cn_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
@@ -1259,32 +1278,12 @@ let register_cn_datatype ident mk_cases =
         fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_datatype_nm))
   end
 
-let convert_enum_expr loc expr =
-  get_inner >>= fun st ->
-  match st.cn_state.Cn_desugaring.cn_enum_hook expr with
-    | Left res -> return res
-    | Right msg ->
-        fail loc (Errors.Desugar_CN
-            (Cn.CNErr_general ("error converting enum: " ^ msg)))
-  end
-
 
 (* END CN *)
 
 
 
 
-
-val record_marker: unit -> desugM nat
-let record_marker () =
-  let id = Symbol.fresh_int () in
-  begin if Global.backend_name () = "Cn" then
-    get_inner >>= fun inner ->
-    State_exception.update (fun old_state -> <| old_state with markers_env= Map.insert id inner old_state.markers_env |>)
-  else
-    State_exception.return ()
-  end >>= fun () ->
-  State_exception.return id
 
 
 

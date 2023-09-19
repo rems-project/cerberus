@@ -15,7 +15,6 @@ type cn_desugaring_state = <|
   cn_lemmata: list (Symbol.identifier * (Symbol.sym * cn_lemma Symbol.sym Ctype.ctype));
   cn_fun_specs: list (nat * cn_fun_spec Symbol.sym Ctype.ctype);
   cn_type_synonyms: map Symbol.identifier (cn_base_type Symbol.sym);
-  cn_enum_hook: AilSyntax.expression unit -> either (Cn.cn_expr Symbol.sym Ctype.ctype) string;
 |>
 
 let initial_cn_desugaring_state cn_initial_function_identifiers = 
@@ -36,7 +35,6 @@ let initial_cn_desugaring_state cn_initial_function_identifiers =
   cn_lemmata= [];
   cn_fun_specs= [];
   cn_type_synonyms= Map.empty;
-  cn_enum_hook= (fun _ -> Right "enum conversion not installed");
   (* cn_c_identifier_env= Map.empty; *)
 |>
 

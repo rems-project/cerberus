@@ -53,10 +53,6 @@ let do_ail_desugar_rdonly desugar_state f =
   let@ (x, _) = do_ail_desugar_op desugar_state f in
   return x
 
-let add_enum_hook desugar_state =
-  CAE.{ desugar_state with cn_state =
-    Cn_desugaring.{ desugar_state.cn_state with cn_enum_hook = C.convert_enum_expr_to_cn } }
-
 let register_new_cn_local id d_st =
   do_ail_desugar_op d_st (CA.register_additional_cn_var id)
 
@@ -1072,6 +1068,9 @@ let desugar_conds d_st conds =
     return (cond :: conds, d_st)) ([], d_st) conds in
   return (List.rev conds, d_st)
 
+let fetch_enum d_st loc sym =
+  let@ expr_ = do_ail_desugar_rdonly d_st (CAE.resolve_enum_constant sym) in
+  return (AnnotatedExpression ((), [], loc, expr_))
 
 
 let dtree_of_inv conds = 
@@ -1179,7 +1178,7 @@ let normalise_fun_map_decl
      (* let ail_env = Pmap.find ail_marker ail_prog.markers_env in *)
      (* let d_st = CAE.set_cn_c_identifier_env ail_env d_st in *)
      let d_st =
-       CAE.{ inner = add_enum_hook (Pmap.find ail_marker markers_env);
+       CAE.{ inner = Pmap.find ail_marker markers_env;
                markers_env = markers_env }
      in
      let@ trusted, accesses, requires, ensures, mk_functions = Parse.parse_function_spec attrs in
@@ -1412,11 +1411,17 @@ let translate_datatype {cn_dt_loc; cn_dt_name; cn_dt_cases} =
 
 
 
-let normalise_file (markers_env, ail_prog) file = 
+let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file = 
 
   let tagDefs = normalise_tag_definitions file.mi_tagDefs in
 
-  let env = C.init_env tagDefs in
+  let (fin_marker, markers_env) = fin_markers_env in
+  let fin_d_st =
+       CAE.{ inner = Pmap.find fin_marker markers_env;
+               markers_env = markers_env }
+  in
+
+  let env = C.init_env tagDefs (fetch_enum fin_d_st) in
   let@ env = C.add_datatype_infos env ail_prog.cn_datatypes in
   let@ env = C.register_cn_functions env ail_prog.cn_functions in
   let@ lfuns = ListM.mapM (C.translate_cn_function env) ail_prog.cn_functions in

@@ -100,7 +100,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_ite of cn_expr 'a 'ty * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_good of 'ty * cn_expr 'a 'ty
   | CNExpr_deref of cn_expr 'a 'ty
-  | CNExpr_value_of_c_variable of 'a
+  | CNExpr_value_of_c_atom of 'a * cn_c_kind
   | CNExpr_unchanged of cn_expr 'a 'ty
   | CNExpr_at_env of cn_expr 'a 'ty * string
   | CNExpr_not of cn_expr 'a 'ty

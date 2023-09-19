@@ -4154,12 +4154,7 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
         E.resolve_cn_ident CN_vars ident >>= fun (sym, kind) ->
         match kind with
         | Var_kind_cn -> E.return (CNExpr_var sym)
-        | Var_kind_c C_kind_var -> E.return (CNExpr_value_of_c_variable sym)
-        | Var_kind_c C_kind_enum ->
-            E.resolve_enum_constant sym >>= fun expr_ ->
-            let expr = A.AnnotatedExpression () [] loc expr_ in
-            E.convert_enum_expr loc expr >>= fun (CNExpr _ expr_) ->
-            E.return expr_
+        | Var_kind_c kind -> E.return (CNExpr_value_of_c_atom sym kind)
         end
     | CNExpr_list es ->
         CNExpr_list <$> E.mapM desugar_cn_expr es
@@ -4254,8 +4249,8 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_deref e ->
         desugar_cn_expr e >>= fun e ->
         E.return (CNExpr_deref e)
-    | CNExpr_value_of_c_variable _ ->
-        Assert_extra.failwith "CNExpr_var_of_c_variable"
+    | CNExpr_value_of_c_atom _ _ ->
+        Assert_extra.failwith "CNExpr_var_of_c_atom"
     | CNExpr_unchanged e ->
        desugar_cn_expr e >>= fun e ->
        E.return (CNExpr_unchanged e)
@@ -4837,7 +4832,7 @@ let register_additional_cn_var id = E.register_cn_ident CN_vars id
 
 import Core
 val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> string -> translation_unit ->
-  Exception.exceptM (E.markers_env * ail_program unit) Errors.error
+  Exception.exceptM (E.fin_markers_env * ail_program unit) Errors.error
 let desugar core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
 (*
   E.eval sym_counter core_eval_stuff cn_eval_stuff (

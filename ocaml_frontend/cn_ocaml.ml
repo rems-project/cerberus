@@ -205,9 +205,9 @@ module MakePp (Conf: PP_CN) = struct
                , [Dleaf (Conf.pp_ty ty); dtree_of_cn_expr e])
       | CNExpr_deref e ->
           Dnode (pp_ctor "CNExpr_deref", [dtree_of_cn_expr e])
-      | CNExpr_value_of_c_variable ident ->
-          Dnode (pp_ctor "CNExpr_value_of_c_variable"
-               , [Dleaf (Conf.pp_ident ident)])
+      | CNExpr_value_of_c_atom (ident, kind) ->
+          Dnode (pp_ctor "CNExpr_value_of_c_atom"
+               , [Dleaf (Conf.pp_ident ident); Dleaf (pp_cn_c_kind kind)])
       | CNExpr_unchanged e ->
           Dnode (pp_ctor "CNExpr_unchanged", [dtree_of_cn_expr e])
       | CNExpr_at_env (e, env_name) ->

@@ -45,9 +45,10 @@ type env = {
   datatypes : BaseTypes.datatype_info SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mu.mu_tag_definitions;
+  fetch_enum_expr: Locations.t -> Sym.t -> (unit CF.AilSyntax.expression) Resultat.t;
 }
 
-let init_env tagDefs =
+let init_env tagDefs fetch_enum_expr =
   { computationals = SymMap.empty;
     logicals= SymMap.empty; 
     predicates= SymMap.empty;
@@ -55,6 +56,7 @@ let init_env tagDefs =
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
     tagDefs;
+    fetch_enum_expr;
   }
 
 
@@ -141,7 +143,8 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_const CNConst_unit -> !^"void"
   | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
   | CNExpr_deref e -> !^ "(deref ...)"
-  | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
+  | CNExpr_value_of_c_atom (sym, kind) -> parens (typ
+        (CF.Cn_ocaml.PpAil.pp_cn_c_kind kind) (Sym.pp sym))
   | CNExpr_list es_ -> !^ "[...]"
   | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
   | CNExpr_record members -> !^"{ ... }"
@@ -227,7 +230,7 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_expr e
   | CNExpr_deref e ->
      free_in_expr e
-  | CNExpr_value_of_c_variable s ->
+  | CNExpr_value_of_c_atom (s, _) ->
      SymSet.singleton s
   | CNExpr_unchanged e ->
      free_in_expr e
@@ -295,6 +298,27 @@ open Resultat
 open Effectful.Make(Resultat)
 
 
+(* TODO: handle more kinds of constant expression *)
+let convert_enum_expr =
+  let open CF.AilSyntax in
+  let conv_const loc = function
+    | ConstantInteger (IConstant (z, _, _)) -> return (IT.sterm_of_term (IT.z_ z))
+    | c -> fail {loc; msg = Generic (Pp.item "enum conversion: unhandled constant"
+        (CF.Pp_ail_ast.pp_constant c))}
+  in
+  let rec conv_expr_ e1 loc = function
+    | AilEconst const -> conv_const loc const
+    | AilEannot (cty, expr) -> conv_expr expr
+    | _ -> fail {loc; msg = Generic (Pp.item "enum conversion: unhandled expression kind"
+        (CF.Pp_ast.doc_tree_toplevel (CF.Pp_ail_ast.dtree_of_expression (fun _ -> (!^ "()")) e1)))}
+  and conv_expr e = match e with
+    | AnnotatedExpression (_, _, loc, expr) -> conv_expr_ e loc expr
+  in
+  conv_expr
+
+let do_decode_enum env loc sym =
+  let@ expr = env.fetch_enum_expr loc sym in
+  convert_enum_expr expr
 
 
 
@@ -348,33 +372,6 @@ let add_datatype_info env (dt : cn_datatype) =
 
 let add_datatype_infos env dts =
   ListM.fold_leftM add_datatype_info env dts
-
-
-exception Convert_enum_failed of string
-
-let str_ail_const c = Pp.plain (CF.Pp_ail_ast.pp_constant c)
-let str_ail_expr_constr e =
-  Pp.plain (CF.Pp_ast.doc_tree_toplevel
-    (CF.Pp_ail_ast.dtree_of_expression (fun _ -> (!^ "()")) e))
-
-(* TODO: handle more kinds of constant expression *)
-let convert_enum_expr_to_cn =
-  let open CF.AilSyntax in
-  let conv_const loc = function
-    | ConstantInteger (IConstant (z, _, _)) -> CNExpr (loc, CNExpr_const (CNConst_integer z))
-    | c -> raise (Convert_enum_failed ("unhandled constant: " ^ str_ail_const c))
-  in
-  let rec conv_expr_ e1 loc = function
-    | AilEconst const -> conv_const loc const
-    | AilEannot (cty, expr) -> conv_expr expr
-    | e -> raise (Convert_enum_failed ("unhandled expression: " ^ str_ail_expr_constr e1))
-  and conv_expr e = match e with
-    | AnnotatedExpression (_, _, loc, expr) -> conv_expr_ e loc expr
-  in
-  fun expr -> try
-    Either.Left (conv_expr expr)
-  with
-    | Convert_enum_failed s -> Either.Right s
 
 
 module E = struct
@@ -808,7 +805,7 @@ module EffectfulTranslation = struct
               in
               fail {loc; msg = Generic msg}
            end
-        | CNExpr_value_of_c_variable sym ->
+        | CNExpr_value_of_c_atom (sym, C_kind_var) ->
            assert (not (SymSet.mem sym locally_bound));
            (* let@ o_v = match evaluation_scope with *)
            (*   | Some scope -> *)
@@ -835,6 +832,9 @@ module EffectfulTranslation = struct
            | Some v ->
               return v
            end
+        | CNExpr_value_of_c_atom (sym, C_kind_enum) ->
+           assert (not (SymSet.mem sym locally_bound));
+           liftResultat (do_decode_enum env loc sym)
     in 
     trans None
 
