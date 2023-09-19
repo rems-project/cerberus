@@ -1619,28 +1619,24 @@ let check_procedure
 
       let@ ((body, label_defs, rt), initial_resources) = bind_arguments loc args_and_body in
 
-      let@ label_defs, label_context =
-        PmapM.foldM (fun sym def (label_defs, label_context) ->
-            let@ lt, def, kind =
-              pure begin match def with
-                | M_Return loc ->
-                   return (AT.of_rt rt (LAT.I False.False), M_Return loc, Return)
-                | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
-                   let@ label_args_and_body = 
-                     WellTyped.WLabel.welltyped loc label_args_and_body in
-                   let lt = WellTyped.WLabel.typ label_args_and_body in
-                   let kind = match CF.Annot.get_label_annot annots with
-                     | Some (LAloop_body loop_id) -> Loop
-                     | Some (LAloop_continue loop_id) -> Loop
-                     | _ -> Other
-                   in
-                   return (lt, M_Label (loc, label_args_and_body, annots, parsed_spec), kind)
-                end
+      let label_context =
+        Pmap.fold (fun sym def label_context ->
+            let lt, kind = match def with
+              | M_Return loc ->
+                  (AT.of_rt rt (LAT.I False.False), Return)
+              | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
+                  let lt = WellTyped.WLabel.typ label_args_and_body in
+                  let kind = match CF.Annot.get_label_annot annots with
+                    | Some (LAloop_body loop_id) -> Loop
+                    | Some (LAloop_continue loop_id) -> Loop
+                    | _ -> Other
+                  in
+                  (lt, kind)
             in
             debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
             debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));
-            return ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
-          ) label_defs ([], SymMap.empty)
+            (SymMap.add sym (lt, kind) label_context)
+          ) label_defs SymMap.empty
       in
 
       let@ (), _mete_pre_state = 
@@ -1654,7 +1650,7 @@ let check_procedure
       in
       let@ _mete_post_state = post_state_of_rt loc rt in
 
-      let@ () = ListM.iterM (fun (lsym, def) ->
+      let@ () = PmapM.iterM (fun lsym def ->
         pure begin match def with
           | M_Return loc ->
              return ()
