@@ -1752,7 +1752,8 @@ let record_and_check_resource_predicates preds =
     ) preds
 
 
-let record_globals globs =
+let record_globals : 'bty. (symbol * 'bty mu_globs) list -> unit m =
+  fun globs ->
   (* TODO: check the expressions *)
   ListM.iterM (fun (sym, def) ->
       match def with
@@ -1929,11 +1930,6 @@ let check mu_file stmt_locs o_lemma_mode =
 
   let@ () = record_and_check_datatypes mu_file.mu_datatypes in
 
-  (* let@ () = ListM.iterM (fun (s,dt) -> add_datatype s dt)  *)
-  (*             mu_file.mu_datatypes in *)
-  (* let@ () = ListM.iterM (fun (s,pd) -> add_datatype_constr s pd) *)
-  (*             mu_file.mu_constructors in *)
-
   let@ () = record_globals mu_file.mu_globs in
 
   let@ () = register_fun_syms mu_file in
@@ -1951,8 +1947,7 @@ let check mu_file stmt_locs o_lemma_mode =
   Pp.debug 3 (lazy (Pp.headline "type-checked CN top-level declarations."));
 
   let@ (_trusted, checked) = 
-    wf_check_and_record_functions mu_file.mu_funs
-      mu_file.mu_call_funinfo 
+    wf_check_and_record_functions mu_file.mu_funs mu_file.mu_call_funinfo 
   in
 
   Pp.debug 3 (lazy (Pp.headline "type-checked C functions and specifications."));
