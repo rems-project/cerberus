@@ -794,8 +794,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ () = pure (aux e1 c) in
      let@ () = pure (aux e2 (not_ c)) in
      return ())
-  | M_PElet (M_Pat p, e1, e2) ->
-     let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
+  | M_PElet (p, e1, e2) ->
+     let@ fin = begin_trace_of_pure_step (Some p) e1 in
      let@ p_bt = infer_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
      let@ bound_a = pattern_match p v1 in
@@ -1359,8 +1359,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      check_expr labels ~typ e k
   | _, M_End _ ->
      Cerb_debug.error "todo: End"
-  | _, M_Elet (M_Pat p, e1, e2) ->
-     let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
+  | _, M_Elet (p, e1, e2) ->
+     let@ fin = begin_trace_of_pure_step (Some p) e1 in
      let@ p_bt = infer_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
      let@ bound_a = pattern_match p v1 in
@@ -1508,7 +1508,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
 
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
-     let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
+     let@ fin = begin_trace_of_step (Some p) e1 in
      let@ p_bt = infer_pattern p in
      check_expr labels ~typ:(Normal p_bt) e1 (fun it ->
             let@ bound_a = pattern_match p it in

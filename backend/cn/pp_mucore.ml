@@ -416,9 +416,7 @@ module Make (Config: CONFIG) = struct
     | M_CaseCtor (ctor, pats) ->
         pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
-  let pp_sym_or_pattern = function
-    (* | M_Symbol symbol -> pp_symbol symbol *)
-    | M_Pat pat -> pp_pattern pat
+  
 
 
   let abbreviated = P.dot ^^ P.dot ^^ P.dot
@@ -548,7 +546,7 @@ module Make (Config: CONFIG) = struct
           (*   ) ^^ P.break 1 ^^ pp_keyword "end" *)
           | M_PElet (pat, pe1, pe2) ->
               (* DEBUG  !^ "{-pe-}" ^^^ *)
-              pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^
+              pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
               pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2
           | M_PEif (pe1, pe2, pe3) ->
               P.group (
@@ -811,7 +809,7 @@ module Make (Config: CONFIG) = struct
           | M_Elet (pat, pe1, e2) ->
               P.group (
                 P.prefix 0 1
-                  (pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^ 
+                  (pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^ 
                      pp_pexpr pe1 ^^^ pp_control "in")
                   (pp e2)
              )

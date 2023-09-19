@@ -97,10 +97,6 @@ type mu_pattern_ =
 and mu_pattern = 
  | M_Pattern of loc * annot list * mu_pattern_
 
-type 'TY mu_sym_or_pattern = 
-  (* | M_Symbol of symbol *)
-  | M_Pat of mu_pattern
-
 type mu_function = (* some functions that persist into mucore, not just (infix) binops *)
  | M_F_params_length
  | M_F_params_nth
@@ -157,7 +153,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEundef of Cerb_location.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)
  (* | M_PEcase of ('TY mu_pexpr) * (mu_pattern * 'TY mu_tpexpr) list (\* pattern matching *\) *)
- | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
+ | M_PElet of (mu_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
  | M_PEif of 'TY mu_pexpr * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure if *)
 
 
@@ -236,7 +232,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_Eccall of 'TY act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
  (* | M_Eproc of mu_name * ('TY mu_pexpr) list (\* Core procedure call *\) *)
 
- | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
+ | M_Elet of (mu_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
  | M_Eunseq of ('TY mu_expr) list (* unsequenced expressions *)
  | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* weak sequencing *)
  | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* strong sequencing *)

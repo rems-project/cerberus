@@ -6,7 +6,7 @@ module IT = IndexTerms
 module BT = BaseTypes
 open Mucore
 
-type opt_pat = unit mu_sym_or_pattern option
+type opt_pat = mu_pattern option
 type expr = unit mu_expr
 type pexpr = unit mu_pexpr
 
@@ -88,7 +88,7 @@ let format_mu (p : opt_pat) expr_doc =
   match p with
     | None -> rhs
     (* | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs *)
-    | Some (M_Pat pat) -> 
+    | Some ((* M_Pat *) pat) -> 
        !^ "mu_step:" ^^^ Pp_mucore.Basic.pp_pattern pat ^^^ !^ "<-" ^^^ rhs
 
 let format_eval model global it =

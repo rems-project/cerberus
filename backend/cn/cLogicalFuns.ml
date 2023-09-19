@@ -124,7 +124,7 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported val"
         (Pp_mucore.pp_pexpr pexpr))}
   end
-  | M_PElet (M_Pat p, e1, e2) ->
+  | M_PElet (p, e1, e2) ->
     let@ r_v = symb_exec_mu_pexpr var_map e1 in
     let@ var_map2 = add_pattern p r_v var_map in
     symb_exec_mu_pexpr var_map2 e2
@@ -222,7 +222,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     let@ r_e1 = symb_exec_mu_expr ctxt (state, var_map) e1 in
     let@ r_e2 = symb_exec_mu_expr ctxt (state, var_map) e2 in
     return (If_Else (g_v, r_e1, r_e2))
-  | M_Elet (M_Pat p, e1, e2) ->
+  | M_Elet (p, e1, e2) ->
     let@ r_v = symb_exec_mu_pexpr var_map e1 in
     let@ var_map2 = add_pattern p r_v var_map in
     symb_exec_mu_expr ctxt (state, var_map2) e2

@@ -427,7 +427,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let pat = core_to_mu__pattern loc pat in
         let e' = n_pexpr loc e' in
         let e'' = n_pexpr loc e'' in
-        annotate (M_PElet (M_Pat pat, e', e''))
+        annotate (M_PElet (pat, e', e''))
      end
   | PEif(e1, e2, e3) ->
      begin match e2, e3 with
@@ -713,7 +713,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
         let e1 = n_pexpr e1 in
         let pat = core_to_mu__pattern loc pat in
         let@ e2 = n_expr e2 in
-        return (wrap (M_Elet(M_Pat pat, e1, e2)))
+        return (wrap (M_Elet(pat, e1, e2)))
      end
   | Eif(e1, e2, e3) ->
      begin match e2, e3 with
