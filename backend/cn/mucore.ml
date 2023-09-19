@@ -43,7 +43,7 @@ type symbol = Symbol.sym
 type 'TY act = { 
     loc: loc;
     annot: Annot.annot list;
-    type_annot : 'TY;
+    (* type_annot : 'TY; *)
     ct: T.ct
   }
 

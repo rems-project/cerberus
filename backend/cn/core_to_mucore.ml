@@ -111,7 +111,7 @@ let convert_core_bt_for_list loc =
 let ensure_pexpr_ctype loc err pe : 'TY act = 
   match pe with
   | Pexpr (annot, bty, PEval (Vctype ct)) -> 
-     {loc; annot; type_annot = bty; ct = convert_ct loc ct}
+     {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct}
   | _ ->
      assert_error loc (err ^^ P.colon ^^^ Pp_core.Basic.pp_pexpr pe)
 
@@ -124,24 +124,24 @@ let ensure_pexpr_ctype loc err pe : 'TY act =
 
 
 
-let ensure_ctype__pexpr loc = function
-  | Core.Pexpr (annot, bty, Core.PEval (Core.Vctype ct)) -> 
-     Some ({loc; annot; type_annot = bty; ct = convert_ct loc ct})
-  | _ -> None
+(* let ensure_ctype__pexpr loc = function *)
+(*   | Core.Pexpr (annot, bty, Core.PEval (Core.Vctype ct)) ->  *)
+(*      Some ({loc; annot; type_annot = bty; ct = convert_ct loc ct}) *)
+(*   | _ -> None *)
 
 
-let loc_error loc msg = 
-  Print.error loc !^msg []; 
-  assert false
+(* let loc_error loc msg =  *)
+(*   Print.error loc !^msg [];  *)
+(*   assert false *)
 
-let loc_error_pp loc msg = 
-  Print.error loc msg [];
-  assert false
+(* let loc_error_pp loc msg =  *)
+(*   Print.error loc msg []; *)
+(*   assert false *)
 
-let fensure_ctype__pexpr loc err pe : 'TY act = 
-  match ensure_ctype__pexpr loc pe with
-  | Some ctype -> ctype
-  | None -> loc_error loc err
+(* let fensure_ctype__pexpr loc err pe : 'TY act =  *)
+(*   match ensure_ctype__pexpr loc pe with *)
+(*   | Some ctype -> ctype *)
+(*   | None -> loc_error loc err *)
 
 
 
@@ -213,7 +213,7 @@ let function_ids = [
     ("ctype_width", M_F_ctype_width);
   ]
 
-let ity_act loc ity = {loc; annot = []; type_annot = ();
+let ity_act loc ity = {loc; annot = []; (* type_annot = (); *)
   ct = (Sctypes.Integer ity)}
 
 let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
@@ -738,7 +738,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let ct1 = match ct1 with
        | Core.Pexpr(annot, bty, Core.PEval (Core.Vctype ct1)) -> 
           let loc = Loc.update loc (get_loc_ annots) in
-          {loc; annot; type_annot = bty; ct = convert_ct loc ct1}
+          {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct1}
        | _ -> 
           assert_error loc !^"core_anormalisation: Eccall with non-ctype first argument"
      in
