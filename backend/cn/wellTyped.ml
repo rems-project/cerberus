@@ -1063,11 +1063,11 @@ end
 module WLArgs = struct
 
   let welltyped 
-        (i_welltyped : Loc.t -> 'i -> ('i * 'it) m)
+        (i_welltyped : Loc.t -> 'i -> 'i m)
         kind
         loc
         (at : 'i Mu.mu_arguments_l)
-      : ('i Mu.mu_arguments_l * 'it LAT.t) m = 
+      : ('i Mu.mu_arguments_l) m = 
     let rec aux = function
       | Mu.M_Define ((s, it), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -1076,9 +1076,8 @@ module WLArgs = struct
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (fst info) (LC.t_ (IT.def_ s it)) in
-         let@ at, typ = aux at in
-         return (Mu.M_Define ((s, it), info, at), 
-                 LAT.Define ((s, it), info, typ))
+         let@ at = aux at in
+         return (Mu.M_Define ((s, it), info, at))
       | Mu.M_Resource ((s, (re, re_oa_spec)), info, at) -> 
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
@@ -1086,28 +1085,33 @@ module WLArgs = struct
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
-         let@ at, typ = aux at in
-         return (Mu.M_Resource ((s, (re, re_oa_spec)), info, at),
-                 LAT.Resource ((s, (re, re_oa_spec)), info, typ))
+         let@ at = aux at in
+         return (Mu.M_Resource ((s, (re, re_oa_spec)), info, at))
       | Mu.M_Constraint (lc, info, at) ->
          let@ lc = WLC.welltyped (fst info) lc in
          let@ () = add_c (fst info) lc in
-         let@ at, typ = aux at in
-         return (Mu.M_Constraint (lc, info, at),
-                 LAT.Constraint (lc, info, typ))
+         let@ at = aux at in
+         return (Mu.M_Constraint (lc, info, at))
       | Mu.M_I i -> 
          let@ provable = provable loc in
          let@ () = match provable (LC.t_ (IT.bool_ false)) with
            | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
            | `False -> return ()
          in
-         let@ i, it = i_welltyped loc i in
-         return (Mu.M_I i, 
-                 LAT.I it)
+         let@ i = i_welltyped loc i in
+         return (Mu.M_I i)
     in
     pure (aux at)
 
-
+  let rec typ ityp = function
+    | Mu.M_Define (bound, info, largs) ->
+       LAT.Define (bound, info, typ ityp largs)
+    | Mu.M_Resource (bound, info, largs) ->
+       LAT.Resource (bound, info, typ ityp largs)
+    | Mu.M_Constraint (bound, info, largs) ->
+       LAT.Constraint (bound, info, typ ityp largs)
+    | Mu.M_I i ->
+       LAT.I (ityp i)
 
 end
 
@@ -1116,11 +1120,11 @@ end
 module WArgs = struct
 
   let welltyped 
-        (i_welltyped : Loc.t -> 'i -> ('i * 'it) m) 
+        (i_welltyped : Loc.t -> 'i -> 'i m) 
         kind 
         loc
         (at : 'i Mu.mu_arguments) 
-      : ('i Mu.mu_arguments * 'it AT.t) m = 
+      : ('i Mu.mu_arguments) m = 
     let rec aux = function
       | Mu.M_Computational ((name,bt), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -1128,14 +1132,19 @@ module WArgs = struct
          (* let name, at = AT.alpha_rename i_subst (name, bt) at in *)
          let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
-         let@ at, typ = aux at in
-         return (Mu.M_Computational ((name, bt), info, at),
-                 AT.Computational ((name, bt), info, typ))
+         let@ at = aux at in
+         return (Mu.M_Computational ((name, bt), info, at))
       | Mu.M_L at ->
-         let@ at, typ = WLArgs.welltyped i_welltyped kind loc at in
-         return (Mu.M_L at, AT.L typ)
+         let@ at = WLArgs.welltyped i_welltyped kind loc at in
+         return (Mu.M_L at)
     in
     pure (aux at)
+    
+  let rec typ ityp = function
+    | Mu.M_Computational (bound, info, args) ->
+       AT.Computational (bound, info, typ ityp args)
+    | Mu.M_L largs ->
+       AT.L (WLArgs.typ ityp largs)
 
 end
 
@@ -1144,22 +1153,29 @@ end
 
 module WProc = struct 
   let welltyped (loc : Loc.t) (at : _ Mu.mu_proc_args_and_body)
-      : (_ Mu.mu_proc_args_and_body * AT.ft) m 
+      : (_ Mu.mu_proc_args_and_body) m 
     =
     WArgs.welltyped (fun loc (body, labels, rt) ->
         let@ rt = WRT.welltyped loc rt in
-        return ((body, labels, rt), rt)
+        return (body, labels, rt)
       ) "function" loc at
+
+
+   let typ p = 
+      WArgs.typ (fun (_body, _labels, rt) -> rt) p
 end
 
 module WLabel = struct
   open Mu
   let welltyped (loc : Loc.t) (lt : _ mu_expr mu_arguments)
-      : (_ mu_expr mu_arguments * AT.lt) m 
+      : (_ mu_expr mu_arguments) m 
     =
     WArgs.welltyped (fun loc body -> 
-        return (body, False.False)
+        return body
       ) "loop/label" loc lt
+
+   let typ l = 
+      WArgs.typ (fun _body -> False.False) l
 end
 
 
