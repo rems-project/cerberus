@@ -1,4 +1,5 @@
--R . ""
--R Common/ Common
--R Morello/ Morello
--R CheriMemory/ CheriMemory
+-R ../_build/default/coq/ ""
+-R ../_build/default/coq/Common/ Common
+-R ../_build/default/coq/Morello/ Morello
+-R ../_build/default/coq/CheriMemory/ CheriMemory
+-R ../_build/default/coq/Proofs/ Proofs

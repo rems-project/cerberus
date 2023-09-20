@@ -29,7 +29,7 @@ Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
-Module CheriMemory
+Module Type CheriMemoryImpl
   (C:CAPABILITY_GS
        (AddressValue)
        (Flags)
@@ -3452,7 +3452,7 @@ Module CheriMemory
                       (fun (new_ptr : pointer_value) =>
                          let size_to_copy :=
                            let size_n := num_of_int size in
-                           IV (Z.min (CheriMemory.size alloc) size_n) in
+                           IV (Z.min (CheriMemoryImpl.size alloc) size_n) in
                          memcpy new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
@@ -3475,7 +3475,7 @@ Module CheriMemory
                     (fun (new_ptr : pointer_value) =>
                        let size_to_copy :=
                          let size_n := num_of_int size in
-                         IV (Z.min (CheriMemory.size alloc) size_n) in
+                         IV (Z.min (CheriMemoryImpl.size alloc) size_n) in
                        memcpy new_ptr ptr size_to_copy ;;
                        kill (Loc_other "realloc") true ptr ;;
                        ret new_ptr)
@@ -4390,6 +4390,24 @@ Module CheriMemory
                             None.
 
 
-End CheriMemory.
+End CheriMemoryImpl.
+
+(* TODO: see if we can instantiate it in OCaml *)
+Module CheriMemoryExe
+  (C:CAPABILITY_GS
+       (AddressValue)
+       (Flags)
+       (ObjType)
+       (SealType)
+       (Bounds)
+       (Permissions)
+  )
+  (IMP: Implementation)
+  (TD: TagDefs)
+  (SW: CerbSwitchesDefs)
+<: CheriMemoryImpl(C)(IMP)(TD)(SW).
 
 
+  Include CheriMemoryImpl(C)(IMP)(TD)(SW).
+
+End CheriMemoryExe.
