@@ -31,6 +31,8 @@ let max_pointer =
 let bt_of_sct = BT.of_sct is_signed_integer_type size_of_integer_type
 let sbt_of_sct = SurfaceBaseTypes.of_sct is_signed_integer_type size_of_integer_type
 
+let intptr_bt = bt_of_sct Sctypes.(Integer (Unsigned Intptr_t))
+
 let size_of_ctype = function
   | Void -> Cerb_debug.error "size_of_ctype applied to void"
   | ct -> int_of_ival (IM.sizeof_ival (to_ctype ct))

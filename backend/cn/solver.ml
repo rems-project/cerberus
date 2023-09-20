@@ -300,7 +300,7 @@ module Translate = struct
             [field_symbol]
             [sort (Bits (Unsigned, n))]
       | Real -> Z3.Arithmetic.Real.mk_sort context
-      | Loc -> translate BT.(Tuple [Alloc_id; Integer])
+      | Loc -> translate BT.(Tuple [Alloc_id; (* FIXME Memory.intptr_bt *) Integer])
       | Alloc_id ->
          Z3.Tuple.mk_sort context
            (string (bt_name Alloc_id))
@@ -379,10 +379,10 @@ module Translate = struct
   let loc_to_alloc_id_fundecl context global =
     nth (Z3.Tuple.get_field_decls (sort context global Loc)) 0
 
-  let loc_to_integer_fundecl context global =
+  let loc_to_addr_fundecl context global =
     nth (Z3.Tuple.get_field_decls (sort context global Loc)) 1
 
-  let alloc_id_integer_to_loc_fundecl context global =
+  let alloc_id_addr_to_loc_fundecl context global =
     Z3.Tuple.get_mk_decl (sort context global Loc)
 
   let integer_to_alloc_id_fundecl context global =
@@ -400,15 +400,24 @@ module Translate = struct
 
     let struct_decls = global.struct_decls in
 
+    let intptr_cast = cast_ Memory.intptr_bt in
+
     fun it ->
       begin match IT.term it with
-      | Binop (Exp, t1, t2) ->
-        begin match is_z t1, is_z t2 with
-        | Some z1, Some z2 when Z.fits_int z2 ->
-          Some (z_ (Z.pow z1 (Z.to_int z2)))
-        | _, _ ->
-          assert false
-        end
+      | Const Null -> Some (pointer_ Z.zero)
+      | Binop (op, t1, t2) -> begin match op with
+         | Exp -> begin match is_z t1, is_z t2 with
+            | Some z1, Some z2 when Z.fits_int z2 ->
+              Some (z_ (Z.pow z1 (Z.to_int z2)))
+            | _, _ ->
+              assert false
+            end
+         | Min -> Some (ite_ (le_ (t1, t2), t1, t2))
+         | Max -> Some (ite_ (ge_ (t1, t2), t1, t2))
+         | LTPointer -> Some (lt_ (intptr_cast t1, intptr_cast t2))
+         | LEPointer -> Some (le_ (intptr_cast t1, intptr_cast t2))
+         | _ -> None
+         end
       | EachI ((i1, (s, _), i2), t) ->
          let rec aux i =
            if i <= i2
@@ -491,9 +500,9 @@ module Translate = struct
 
     (* let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl in *)
 
-    let loc_to_integer l =
+    let loc_to_addr l =
       Z3.Expr.mk_app context
-        (loc_to_integer_fundecl context global) [l]
+        (loc_to_addr_fundecl context global) [l]
     in
 
     let loc_to_alloc_id l =
@@ -506,9 +515,9 @@ module Translate = struct
         (integer_to_alloc_id_fundecl context global) [i]
     in
 
-    let alloc_id_integer_to_loc id i =
+    let alloc_id_addr_to_loc id i =
       Z3.Expr.mk_app context
-        (alloc_id_integer_to_loc_fundecl context global) [id; i]
+        (alloc_id_addr_to_loc_fundecl context global) [id; i]
     in
 
     let apply_matching_func sym_role fds args =
@@ -543,9 +552,9 @@ module Translate = struct
       | Const (Q q) ->
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
       | Const (Pointer z) ->
-         alloc_id_integer_to_loc
+         alloc_id_addr_to_loc
            (term (alloc_id_ Z.zero))
-           (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
+           (term (intptr_const_ z))
       | Const (Alloc_id z) ->
          integer_to_alloc_id
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
@@ -559,10 +568,7 @@ module Translate = struct
          let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
          let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
          Z3.Expr.mk_const context sym (sort bt)
-      | Const Null ->
-        alloc_id_integer_to_loc
-          (term (alloc_id_ Z.zero))
-          (term (int_ 0))
+      | Const Null -> adj ()
       | Const (CType_const ct) -> uninterp_term context (sort bt) it
       | Unop (uop, t) ->
          begin match uop with
@@ -573,10 +579,18 @@ module Translate = struct
          end
       | Binop (bop, t1, t2) ->
          let open Z3.Arithmetic in
+         let module BV = Z3.BitVector in
+         let bv_arith_check t bv_v arith_v = match IT.bt t with
+           | BT.Bits _ -> bv_v
+           | BT.Integer -> arith_v
+           | BT.Real -> arith_v
+           | _ -> failwith "bv_arith_check"
+         in
+         let l_bop f ctxt x y = f ctxt [x; y] in
          begin match bop with
-         | Add -> mk_add context [term t1; term t2]
-         | Sub -> mk_sub context [term t1; term t2]
-         | Mul -> mk_mul context [term t1; term t2]
+         | Add -> (bv_arith_check t1 BV.mk_add (l_bop mk_add)) context (term t1) (term t2)
+         | Sub -> (bv_arith_check t1 BV.mk_sub (l_bop mk_sub)) context (term t1) (term t2)
+         | Mul -> (bv_arith_check t1 BV.mk_mul (l_bop mk_mul)) context (term t1) (term t2)
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
          | Div -> mk_div context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
@@ -586,10 +600,10 @@ module Translate = struct
          | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
          | Mod -> Integer.mk_mod context (term t1) (term t2)
          | ModNoSMT -> make_uf "mod_uf" (Integer) [t1; t2]
-         | LT -> mk_lt context (term t1) (term t2)
-         | LE -> mk_le context (term t1) (term t2)
-         | Min -> term (ite_ (le_ (t1, t2), t1, t2))
-         | Max -> term (ite_ (ge_ (t1, t2), t1, t2))
+         | LT -> (bv_arith_check t1 BV.mk_ult mk_lt) context (term t1) (term t2)
+         | LE -> (bv_arith_check t1 BV.mk_ule mk_le) context (term t1) (term t2)
+         | Min -> adj ()
+         | Max -> adj ()
          | XORNoSMT -> make_uf "xor_uf" (Integer) [t1; t2]
          | BWAndNoSMT -> make_uf "bw_and_uf" (Integer) [t1; t2]
          | BWOrNoSMT -> make_uf "bw_or_uf" (Integer) [t1; t2]
@@ -599,12 +613,8 @@ module Translate = struct
          | SetIntersection -> Z3.Set.mk_intersection context (map term [t1;t2])
          | SetDifference -> Z3.Set.mk_difference context (term t1) (term t2)
          | Subset -> Z3.Set.mk_subset context (term t1) (term t2)
-         | LTPointer ->
-            Z3.Arithmetic.mk_lt context (loc_to_integer (term t1))
-              (loc_to_integer (term t2))
-         | LEPointer ->
-            Z3.Arithmetic.mk_le context (loc_to_integer (term t1))
-              (loc_to_integer (term t2))
+         | LTPointer -> adj ()
+         | LEPointer -> adj ()
          | And -> Z3.Boolean.mk_and context (map term [t1;t2])
          | Or -> Z3.Boolean.mk_or context (map term [t1;t2])
          | Impl -> Z3.Boolean.mk_implies context (term t1) (term t2)
@@ -639,9 +649,13 @@ module Translate = struct
       | Cast (cbt, t) ->
          begin match IT.bt t, cbt with
          | Integer, Loc ->
-            alloc_id_integer_to_loc (term (alloc_id_ Z.zero)) (term t)
+            alloc_id_addr_to_loc (term (alloc_id_ Z.zero)) (term t)
+         | Bits _, Loc ->
+            alloc_id_addr_to_loc (term (alloc_id_ Z.zero)) (term t)
          | Loc, Integer ->
-            loc_to_integer (term t)
+            loc_to_addr (term t)
+         | Loc, Bits _ ->
+            loc_to_addr (term t)
          | Loc, Alloc_id ->
             loc_to_alloc_id (term t)
          | Real, Integer ->
@@ -1230,22 +1244,23 @@ module Eval = struct
 
         | () when
                Z3.FuncDecl.equal func_decl
-                 (loc_to_integer_fundecl context global) ->
+                 (loc_to_addr_fundecl context global) ->
            let p = nth args 0 in
+           (* fiddly in the pointer-is-bitvector case
            begin match IT.is_pointer p with
            | Some z -> z_ z
            | _ -> pointerToIntegerCast_ p
-           end
+           end *) pointerToIntegerCast_ p
 
         | () when
                Z3.FuncDecl.equal func_decl
-                 (alloc_id_integer_to_loc_fundecl context global) ->
+                 (alloc_id_addr_to_loc_fundecl context global) ->
            let _id = nth args 0 in
            let i = nth args 1 in
-           begin match IT.is_z i with
+           (* begin match IT.is_z i with
            | Some z -> pointer_ z
            | _ -> integerToPointerCast_ i
-           end
+           end *) integerToPointerCast_ i
 
         | () when
                Z3.FuncDecl.equal func_decl

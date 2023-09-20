@@ -34,6 +34,15 @@ let ensure_integer_or_real_type (loc : loc) it =
      let expect = "integer or real type" in
      fail (illtyped_index_term loc it (IT.bt it) expect)
 
+let ensure_arith_type (loc : loc) it =
+  let open BT in
+  match IT.bt it with
+  | (Integer | Real | Bits _) -> return ()
+  | _ ->
+     let expect = "integer, real or bitvector type" in
+     fail (illtyped_index_term loc it (IT.bt it) expect)
+
+
 let ensure_set_type loc it = 
   let open BT in
   match IT.bt it with
@@ -330,18 +339,18 @@ module WIT = struct
          begin match arith_op with
          | Add ->
             let@ t = infer loc t in
-            let@ () = ensure_integer_or_real_type loc t in
+            let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
             return (IT (Binop (Add, t, t'), IT.bt t))
          | Sub ->
             let@ t = infer loc t in
-            let@ () = ensure_integer_or_real_type loc t in
+            let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
             return (IT (Binop (Sub, t, t'), IT.bt t))
          | Mul ->
             let@ simp_ctxt = simp_ctxt () in
             let@ t = infer loc t in
-            let@ () = ensure_integer_or_real_type loc t in
+            let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
             begin match (IT.bt t), (eval simp_ctxt t), (eval simp_ctxt t') with
             | Real, _, _ -> 
@@ -356,13 +365,13 @@ module WIT = struct
             end
          | MulNoSMT ->
             let@ t = infer loc t in
-            let@ () = ensure_integer_or_real_type loc t in
+            let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
             return (IT (Binop (MulNoSMT, t, t'), IT.bt t))
          | Div ->
             let@ simp_ctxt = simp_ctxt () in
             let@ t = infer loc t in
-            let@ () = ensure_integer_or_real_type loc t in
+            let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
             begin match IT.bt t, eval simp_ctxt t' with
             | Real, _ ->
@@ -379,7 +388,7 @@ module WIT = struct
             end
          | DivNoSMT ->
             let@ t = infer loc t in
-            let@ () = ensure_integer_or_real_type loc t in
+            let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
             return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
          | Exp ->
@@ -430,22 +439,22 @@ module WIT = struct
               end
            | LT ->
               let@ t = infer loc t in
-              let@ () = ensure_integer_or_real_type loc t in
+              let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
               return (IT (Binop (LT, t, t'), BT.Bool))
            | LE ->
               let@ t = infer loc t in
-              let@ () = ensure_integer_or_real_type loc t in
+              let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
               return (IT (Binop (LE, t, t'), BT.Bool))
            | Min ->
               let@ t = infer loc t in
-              let@ () = ensure_integer_or_real_type loc t in
+              let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
               return (IT (Binop (Min, t, t'), IT.bt t))
            | Max ->
               let@ t = infer loc t in
-              let@ () = ensure_integer_or_real_type loc t in
+              let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
               return (IT (Binop (Max, t, t'), IT.bt t))
            | EQ ->

@@ -35,6 +35,8 @@ let sterm_of_term : typed -> sterm =
 let pp ?(atomic=false) =
   Terms.pp ~atomic
 
+let pp_with_typ it = Pp.typ (pp it) (BT.pp (bt it))
+
 
 let rec bound_by_pattern (Pat (pat_, bt)) = 
   match pat_ with
@@ -427,6 +429,10 @@ let is_pred_ = function
 (* lit *)
 let sym_ (sym, bt) = IT (Sym sym, bt)
 let z_ n = IT (Const (Z n), BT.Integer)
+let num_lit_ n bt = match bt with
+  | BT.Bits (sign, sz) -> IT (Const (Bits ((sign, sz), n)), bt)
+  | BT.Integer -> z_ n
+  | _ -> failwith "num_lit_: not a type with numeric literals"
 let alloc_id_ n = IT (Const (Alloc_id n), BT.Alloc_id)
 let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
 let q1_ q = IT (Const (Q q), BT.Real)
@@ -438,8 +444,12 @@ let default_ bt = IT (Const (Default bt), bt)
 let const_ctype_ ct = IT (Const (CType_const ct), BT.CType)
 
 (* cmp_op *)
-let lt_ (it, it') = IT (Binop (LT, it, it'), BT.Bool)
-let le_ (it, it') = IT (Binop (LE,it, it'), BT.Bool)
+let lt_ (it, it') =
+    assert (BT.equal (bt it) (bt it'));
+    IT (Binop (LT, it, it'), BT.Bool)
+let le_ (it, it') =
+    assert (BT.equal (bt it) (bt it'));
+    IT (Binop (LE,it, it'), BT.Bool)
 let gt_ (it, it') = lt_ (it', it)
 let ge_ (it, it') = le_ (it', it)
 
@@ -506,6 +516,11 @@ let realToInt_ it = IT (Cast (Integer, it), BT.Integer)
 let arith_binop op (it, it') = IT (Binop (op, it, it'), bt it)
 let arith_unop op it = IT (Unop (op, it), bt it)
 
+let arith_binop_check op (it, it') =
+  assert (BT.equal (bt it) (bt it'));
+  arith_binop op (it, it')
+let add2_ = arith_binop_check Add
+
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
 let (%*) t t' = mul_ (t, t')
@@ -566,7 +581,10 @@ let cast_ bt it =
   IT (Cast (bt, it), bt)
 let integerToPointerCast_ it =
   cast_ Loc it
+let intptr_const_ n = (* FIXME: switch to this: num_lit_ n Memory.intptr_bt *)
+  z_ n
 let pointerToIntegerCast_ it =
+  (* FIXME: switch to this cast_ Memory.intptr_bt it *)
   cast_ Integer it
 let pointerToAllocIdCast_ it =
   cast_ Alloc_id it
@@ -577,10 +595,11 @@ let arrayOffset_ (ct, t) =
 
 let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true
+  | IT (Cast (BT.Loc, IT (_, BT.Bits _)), _) -> true
   | _ -> false
 
 let pointer_offset_ (p, n) =
-  integerToPointerCast_ (add_ (pointerToIntegerCast_ p, n))
+  integerToPointerCast_ (add2_ (pointerToIntegerCast_ p, n))
 
 let memberShift_ (t, tag, member) =
   pointer_offset_ (t, memberOffset_ (tag, member))
@@ -670,10 +689,8 @@ let subset_ (it, it') = IT (Binop (Subset,it, it'), BT.Bool)
 
 
 (* ct_pred *)
-let minInteger_ t =
-  z_ (Memory.min_integer_type t)
-let maxInteger_ t =
-  z_ (Memory.max_integer_type t)
+let minInteger_ t = num_lit_ (Memory.min_integer_type t) (Memory.bt_of_sct Sctypes.(Integer t))
+let maxInteger_ t = num_lit_ (Memory.max_integer_type t) (Memory.bt_of_sct Sctypes.(Integer t))
 let representable_ (t, it) =
   IT (Representable (t, it), BT.Bool)
 let good_ (sct, it) =
@@ -758,8 +775,9 @@ let value_check_pointer alignment ~pointee_ct about =
     | Function _ -> 1
     | _ -> Memory.size_of_ctype pointee_ct
   in
-  and_ [le_ (z_ Z.zero, about_int);
-        le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer);
+  and_ [le_ (intptr_const_ Z.zero, about_int);
+        le_ (sub_ (add2_ (about_int, intptr_const_ (Z.of_int pointee_size)), intptr_const_ Z.one),
+            intptr_const_ Memory.max_pointer);
         (* TODO revist/delete this when transition to VIP is over *)
         eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
@@ -772,7 +790,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Void ->
        bool_ true
     | Integer it ->
-       in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
+       in_range about (minInteger_ it, maxInteger_ it)
     | Array (it, None) ->
        Cerb_debug.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) ->
