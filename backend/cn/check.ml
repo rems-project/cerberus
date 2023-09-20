@@ -1619,25 +1619,25 @@ let check_procedure
 
       let@ ((body, label_defs, rt), initial_resources) = bind_arguments loc args_and_body in
 
-      let@ label_defs, label_context =
-        PmapM.foldM (fun sym def (label_defs, label_context) ->
-            let@ lt, kind =
-              pure begin match def with
-                | M_Return loc ->
-                   return (AT.of_rt rt (LAT.I False.False), Return)
-                | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
-                   let lt = WellTyped.WLabel.typ label_args_and_body in
-                   let kind = match CF.Annot.get_label_annot annots with
-                     | Some (LAloop_body loop_id) -> Loop
-                     | Some (LAloop_continue loop_id) -> Loop
-                     | _ -> Other
-                   in
-                   return (lt, kind)
-                end
+      (* TODO: simplify. label_defs is now just the list version of the Pmap *)
+      let label_defs, label_context =
+        Pmap.fold (fun sym def (label_defs, label_context) ->
+            let lt, kind =
+              match def with
+               | M_Return loc ->
+                  (AT.of_rt rt (LAT.I False.False), Return)
+               | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
+                  let lt = WellTyped.WLabel.typ label_args_and_body in
+                  let kind = match CF.Annot.get_label_annot annots with
+                  | Some (LAloop_body loop_id) -> Loop
+                  | Some (LAloop_continue loop_id) -> Loop
+                  | _ -> Other
+                  in
+                  (lt, kind)
             in
             debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
             debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));
-            return ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
+            ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
           ) label_defs ([], SymMap.empty)
       in
 
