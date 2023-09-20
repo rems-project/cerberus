@@ -1149,37 +1149,14 @@ module WArgs = struct
 end
 
 
-module WLabel = struct
-   open Mu
-   let welltyped (loc : Loc.t) (lt : _ mu_expr mu_arguments)
-       : (_ mu_expr mu_arguments) m 
-     =
-     WArgs.welltyped (fun loc body -> 
-         return body
-       ) "loop/label" loc lt
- 
-    let typ l = 
-       WArgs.typ (fun _body -> False.False) l
- end
+
 
 module WProc = struct 
-  open Mucore
-
   let welltyped (loc : Loc.t) (at : _ Mu.mu_proc_args_and_body)
       : (_ Mu.mu_proc_args_and_body) m 
     =
     WArgs.welltyped (fun loc (body, labels, rt) ->
         let@ rt = WRT.welltyped loc rt in
-        let@ labels =
-          PmapM.mapM (fun sym def ->
-              match def with
-              | M_Return loc -> 
-                 return (M_Return loc)
-              | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
-                 let@ label_args_and_body = pure (WLabel.welltyped loc label_args_and_body) in
-                 return (M_Label (loc, label_args_and_body, annots, parsed_spec))
-            ) labels Sym.compare
-        in
         return (body, labels, rt)
       ) "function" loc at
 
@@ -1188,7 +1165,18 @@ module WProc = struct
       WArgs.typ (fun (_body, _labels, rt) -> rt) p
 end
 
+module WLabel = struct
+  open Mu
+  let welltyped (loc : Loc.t) (lt : _ mu_expr mu_arguments)
+      : (_ mu_expr mu_arguments) m 
+    =
+    WArgs.welltyped (fun loc body -> 
+        return body
+      ) "loop/label" loc lt
 
+   let typ l = 
+      WArgs.typ (fun _body -> False.False) l
+end
 
 
 module WRPD = struct
