@@ -1250,7 +1250,8 @@ let rec cn_to_ail_post_aux_internal dts preds = function
 
 
 let cn_to_ail_post_internal dts preds (ReturnTypes.Computational (bound, oinfo, t)) = 
-  cn_to_ail_post_aux_internal dts preds t
+  let (bs, ss) = cn_to_ail_post_aux_internal dts preds t in 
+  ([], [A.(AilSblock (bs, List.map mk_stmt ss))])
 
 (* TODO: Add destination passing *)
 let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
