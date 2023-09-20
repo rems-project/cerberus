@@ -1626,9 +1626,8 @@ let check_procedure
                 | M_Return loc ->
                    return (AT.of_rt rt (LAT.I False.False), M_Return loc, Return)
                 | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
-                   let@ label_args_and_body = 
+                   let@ label_args_and_body, lt = 
                      WellTyped.WLabel.welltyped loc label_args_and_body in
-                   let lt = WellTyped.WLabel.typ label_args_and_body in
                    let kind = match CF.Annot.get_label_annot annots with
                      | Some (LAloop_body loop_id) -> Loop
                      | Some (LAloop_continue loop_id) -> Loop
@@ -1792,8 +1791,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
       match def with
       | M_Proc (loc, args_and_body, tr, _parse_ast_things) ->
          welltyped_ping fsym;
-         let@ args_and_body = WellTyped.WProc.welltyped loc args_and_body in
-         let ft = WellTyped.WProc.typ args_and_body in
+         let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
          debug 6 (lazy (!^"function type" ^^^ Sym.pp fsym));
          debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
          let@ () = add_fun_decl fsym (loc, Some ft, Pmap.find fsym mu_call_sigs) in
