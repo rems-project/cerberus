@@ -4,7 +4,7 @@ open Ctype
 (*open Ocaml_implementation*)
 open Memory_model
 open Mem_common
-open CheriMemory
+open CheriMorelloMemory
 open CoqImplementation
 open Strfcap
 open CoqSwitches
@@ -237,7 +237,7 @@ module CerbTagDefs = struct
 end
 
 
-module MM = CheriMemory(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)(CerbSwitchesProxy)
+module MM = CheriMemoryExe(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)(CerbSwitchesProxy)
 module C = MorelloCapabilityWithStrfcap
 
 module Z = struct

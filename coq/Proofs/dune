@@ -1,0 +1,7 @@
+(coq.theory
+ (mode vo)
+ (name Proofs)
+ (package cerberus-cheri)
+ (modules Revocation)
+ (theories CheriMemory Common Morello)
+)

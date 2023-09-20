@@ -1,4 +1,3 @@
-
 (rule
  (deps extracted/CRelationClasses.mli.patch extracted/patch.sh)
  (package cerberus-cheri)
@@ -35,7 +34,7 @@
 (copy_files extracted/CapFns.{ml,mli})
 (copy_files extracted/CapFnsTypes.{ml,mli})
 (copy_files extracted/CarryType.{ml,mli})
-(copy_files extracted/CheriMemory.{ml,mli})
+(copy_files extracted/CheriMorelloMemory.{ml,mli})
 (copy_files extracted/ClassicalDedekindReals.{ml,mli})
 (copy_files extracted/CMorphisms.{ml,mli})
 (copy_files extracted/Compare_dec.{ml,mli})
@@ -172,3 +171,5 @@
  (libraries str strfcap ounit2 lem)
  (modes byte exe)
  (instrumentation (backend landmarks)))
+
+

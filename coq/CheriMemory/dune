@@ -2,6 +2,6 @@
  (mode vo)
  (name CheriMemory)
  (package cerberus-cheri)
- (modules CoqLocation CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory CerbSwitches)
+ (modules CoqLocation CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMorelloMemory CerbSwitches)
  (theories Common Morello)
 )
