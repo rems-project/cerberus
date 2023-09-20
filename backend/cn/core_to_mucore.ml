@@ -1661,6 +1661,15 @@ let collect_instrumentation (file : _ mu_file) =
              statements = stmts_s;
            }
          in
+         (* let loc_str_equality loc1 loc2 = String.equal (Cerb_location.location_to_string loc1) (Cerb_location.location_to_string loc2) in
+         let rec print_duplicates locs stmts = match stmts with 
+            | [] -> ()
+            | (l, s) :: ss -> 
+               (if (List.mem loc_str_equality l locs) then 
+                  Printf.printf "Duplicate found at loc %s\n" (Cerb_location.simple_location l));
+               print_duplicates (l :: locs) ss
+         in
+         print_duplicates [] stmts_i; *)
          let pre, post = pre_post_of_function args_and_body in
          let internal = {
              pre = pre;
