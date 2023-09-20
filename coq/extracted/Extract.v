@@ -1,5 +1,5 @@
 
-From CheriMemory Require CheriMemory.
+From CheriMemory Require CheriMorelloMemory.
 From Morello Require MorelloCapsGS.
 
 From Coq Require Extraction.
@@ -36,4 +36,4 @@ Extract Constant ClassicalDedekindReals.sig_not_dec => false.  (* Ugh *)
 
 Extraction Library vector.
 Recursive Extraction Library MorelloCapsGS.
-Recursive Extraction Library CheriMemory.
+Recursive Extraction Library CheriMorelloMemory.
