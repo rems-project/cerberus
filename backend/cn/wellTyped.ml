@@ -1166,6 +1166,28 @@ module WLabel = struct
 
 module WProc = struct 
   open Mu
+   
+   
+  let label_context function_rt label_defs =
+    Pmap.fold (fun sym def label_context ->
+         let lt, kind =
+            match def with
+            | M_Return loc ->
+               (AT.of_rt function_rt (LAT.I False.False), Return)
+            | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
+               let lt = WLabel.typ label_args_and_body in
+               let kind = match CF.Annot.get_label_annot annots with
+               | Some (LAloop_body loop_id) -> Loop
+               | Some (LAloop_continue loop_id) -> Loop
+               | _ -> Other
+               in
+               (lt, kind)
+         in
+         (*debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
+         debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));*)
+         (SymMap.add sym (lt, kind) label_context)
+      ) label_defs SymMap.empty
+
 
   let typ p = WArgs.typ (fun (_body,_labels,rt) -> rt) p
 

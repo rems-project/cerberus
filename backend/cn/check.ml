@@ -1619,27 +1619,8 @@ let check_procedure
 
       let@ ((body, label_defs, rt), initial_resources) = bind_arguments loc args_and_body in
 
-      (* TODO: simplify. label_defs is now just the list version of the Pmap *)
-      let label_defs, label_context =
-        Pmap.fold (fun sym def (label_defs, label_context) ->
-            let lt, kind =
-              match def with
-               | M_Return loc ->
-                  (AT.of_rt rt (LAT.I False.False), Return)
-               | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
-                  let lt = WellTyped.WLabel.typ label_args_and_body in
-                  let kind = match CF.Annot.get_label_annot annots with
-                  | Some (LAloop_body loop_id) -> Loop
-                  | Some (LAloop_continue loop_id) -> Loop
-                  | _ -> Other
-                  in
-                  (lt, kind)
-            in
-            debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
-            debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));
-            ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
-          ) label_defs ([], SymMap.empty)
-      in
+      let label_context = WellTyped.WProc.label_context rt label_defs in
+      let label_defs = Pmap.bindings_list label_defs in
 
       let@ (), _mete_pre_state = 
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
