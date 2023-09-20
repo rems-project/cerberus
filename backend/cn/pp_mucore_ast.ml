@@ -3,18 +3,15 @@
 open Cerb_pp_prelude
 (*open Pp_ail*)
 
+module CF = Cerb_frontend
+open CF
+
 open Pp_ast
 open Cerb_colour
 
 module P = PPrint
 
-module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
-
-  module T = PP_Typ.T
-  module MuPP = Pp_mucore.Make(Pp_mucore.Basic)(PP_Typ)
-  module Mu = MuPP.Mu
-  open Mu
-
+module PP = struct
 
   let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
 
@@ -49,10 +46,12 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
   (* let dtree_of_asym asym =  *)
   (*   Pp_ast.Dleaf (pp_asym asym) *)
 
+  open Mucore
 
-  let pp_act act = 
-    let open Mucore in
-    PP_Typ.pp_ct act.ct ^^^ Cerb_location.pp_location ~clever:false act.loc
+  module Pp_typ = Pp_mucore.Pp_typ
+
+  let pp_act act =
+    Pp_typ.pp_ct act.ct ^^^ Cerb_location.pp_location ~clever:false act.loc
 
   let dtree_of_act act = 
     Pp_ast.Dleaf (pp_act act)
@@ -95,7 +94,10 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         Dleaf (pp_pure_ctor "Vlist" ^^^ !^ (ansi_format [Red] "TODO"))
     | M_Vtuple cvals ->
         Dleaf (pp_pure_ctor "Vtuple" ^^^ !^ (ansi_format [Red] "TODO"))
-
+    | M_Vctype ctype ->
+        Dleaf (pp_pure_ctor "Vctype" ^^^ !^ (ansi_format [Red] "TODO"))
+    | M_Vfunction_addr sym ->
+        Dleaf (pp_pure_ctor "Vfunction_addr"  ^^^ !^ (ansi_format [Red] "TODO"))
    (* type 'sym generic_value =  (* Core values *)
     | Vobject of ( 'sym generic_object_value) (* C object value *)
     | Vloaded of ( 'sym generic_loaded_value) (* loaded C object value *)
@@ -162,7 +164,8 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
             Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
                   , [self pe] )
         | _ ->
-           Dleaf (pp_ctor ("Pexpr(TODO): " ^ MuPP.string_of_pexpr pexpr))
+           Dnode ( pp_ctor ("Pexpr(TODO)")
+                  , [Dleaf (Pp_mucore.pp_pexpr pexpr)])
     in
     self pexpr
 
@@ -321,7 +324,8 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       | Ewait of Mem_common.thread_id
   *)
         | _ ->
-           Dleaf (pp_ctor ("TExpr(TODO): " ^ MuPP.string_of_texpr expr))
+           Dnode ( pp_ctor ("TExpr(TODO)")
+                  , [Dleaf (Pp_mucore.pp_expr expr)])
             (* Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_texpr expr)) *)
 
 
@@ -390,11 +394,12 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
   let dtree_of_globs xs =
     let aux (sym, glob) =
       match glob with
-      | M_GlobalDef (_, (bTy,_), e) ->
-          Dnode ( pp_field "GlobalDef" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
-                , [dtree_of_expr e] )
-      | M_GlobalDecl (_, (bTy,_)) ->
-          Dleaf (pp_field "GlobalDecl" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy)
+      | M_GlobalDef (ct, e) ->
+          Dnode ( pp_field "GlobalDef" ^^^ pp_symbol sym
+                , [Dleaf (Pp_typ.pp_ct ct); dtree_of_expr e] )
+      | M_GlobalDecl ct ->
+          Dnode ( pp_field "GlobalDecl" ^^^ pp_symbol sym
+                , [Dleaf (Pp_typ.pp_ct ct)] )
     in
     Dnode (pp_field ".globs", List.map aux xs)
 
@@ -403,8 +408,9 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
     match def with
     | M_Return (loc) -> 
        (Dleaf (!^"return" ^^^ Cerb_location.pp_location ~clever:false loc))
-    | M_Label (loc, _, _, _, body, _) -> 
-       Dnode (pp_symbol l ^^^ Cerb_location.pp_location ~clever:false loc, [dtree_of_expr body])
+    | M_Label (loc, args_and_body, _, _) ->
+       Dnode (pp_symbol l ^^^ Cerb_location.pp_location ~clever:false loc
+             , [dtree_of_mu_arguments dtree_of_expr args_and_body])
 
   let dtrees_of_labels labels = 
     Pmap.fold (fun l def acc ->
@@ -413,28 +419,17 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
   let dtree_of_funs xs =
     let aux (sym, decl) =
-      let dtree_of_param (sym, bTy) =
-        Dleaf (pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy) in
       match decl with
-        | M_Fun (bTy, params, pe) ->
-            Dnode ( pp_field "Fun" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
-                  , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                    ; Dnode (pp_field ".body", [dtree_of_pexpr pe]) ] )
-        | M_Proc (loc, bTy, (params, _logical_arguments), e, labels) ->
-            Dnode ( pp_field "PRoc" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
-                  , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                    ; Dnode (pp_field ".body", [dtree_of_expr e])
-                    ; Dnode (pp_field ".labels", dtrees_of_labels labels) ] )
-        | M_ProcDecl (loc, ret_bTy, params_bTys) ->
+        | M_Proc (loc, args_and_body, _, _) ->
+            Dnode ( pp_field "Proc" ^^^ pp_symbol sym
+                  , [ dtree_of_mu_arguments (fun (body, labels, rt) ->
+                      Dnode ( !^"proc_body"
+                            , [ Dnode (pp_field ".body", [dtree_of_expr body])
+                              ; Dnode (pp_field ".labels", dtrees_of_labels labels) ] ))
+                      args_and_body] )
+        | M_ProcDecl (loc, ft) ->
             (* TODO: loc*)
-            Dleaf ( pp_field "ProcDecl" ^^^ pp_symbol sym ^^ P.colon ^^^
-                    P.parens (comma_list MuPP.pp_bt params_bTys) ^^^
-                    P.string "->" ^^^ MuPP.pp_bt ret_bTy )
-        | M_BuiltinDecl (loc, ret_bTy, params_bTys) ->
-            (* TODO: loc*)
-            Dleaf ( pp_field "BuiltinDecl" ^^^ pp_symbol sym ^^ P.colon ^^^
-                    P.parens (comma_list MuPP.pp_bt params_bTys) ^^^
-                    P.string "->" ^^^ MuPP.pp_bt ret_bTy )
+            Dleaf ( pp_field "ProcDecl" ^^^ pp_symbol sym (* TODO: spec *))
     in
     Dnode ( pp_field ".funs"
           , List.map aux (Pmap.bindings_list xs) )
@@ -450,5 +445,10 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
               ; dtree_of_funs file.mu_funs ] )
     end
 
+  let pp_pexpr pexpr = pp_doc_tree (dtree_of_pexpr pexpr)
 
 end
+
+let pp_file = PP.pp_file
+let pp_pexpr = PP.pp_pexpr
+
