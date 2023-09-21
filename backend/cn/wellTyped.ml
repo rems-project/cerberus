@@ -1073,11 +1073,11 @@ module WLArgs = struct
        LAT.I (ityp i)
 
   let welltyped 
-        (i_welltyped : Loc.t -> 'i -> 'i m)
+        (i_welltyped : Loc.t -> 'i -> 'j m)
         kind
         loc
         (at : 'i Mu.mu_arguments_l)
-      : ('i Mu.mu_arguments_l) m = 
+      : ('j Mu.mu_arguments_l) m = 
     let rec aux = function
       | Mu.M_Define ((s, it), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -1127,12 +1127,11 @@ module WArgs = struct
     | Mu.M_L lat ->
        AT.L (WLArgs.typ ityp lat)
 
-  let welltyped 
-        (i_welltyped : Loc.t -> 'i -> 'i m) 
+  let welltyped : 'i 'j. (Loc.t -> 'i -> 'j m) -> string -> Loc.t -> 'i Mu.mu_arguments -> 'j Mu.mu_arguments m =
+    fun (i_welltyped : Loc.t -> 'i -> 'j m) 
         kind 
         loc
-        (at : 'i Mu.mu_arguments) 
-      : ('i Mu.mu_arguments) m = 
+        (at : 'i Mu.mu_arguments) ->
     let rec aux = function
       | Mu.M_Computational ((name,bt), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -1150,6 +1149,137 @@ module WArgs = struct
 
 end
 
+
+
+
+
+module BaseTyping = struct
+
+open Mucore
+open Typing
+open TypeErrors
+module SymMap = Map.Make(Sym)
+module BT = BaseTypes
+module RT = ReturnTypes
+module AT = ArgumentTypes
+open BT
+
+type label_context = (AT.lt * label_kind) SymMap.t
+
+
+let bt_of_expr : 'TY. 'TY mu_expr -> 'TY =
+  fun (M_Expr (_loc, _annots, bty, _e)) -> bty
+
+let bt_of_pexpr : 'TY. 'TY mu_pexpr -> 'TY =
+  fun (M_Pexpr (_loc, _annots, bty, _e)) -> bty
+
+
+
+let infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m = 
+  fun _ -> assert false
+
+let check_pexpr : 'TY. BT.t -> 'TY mu_pexpr -> BT.t mu_pexpr m = 
+  fun _ -> assert false
+
+
+let infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m = 
+  fun label_context e ->
+    let (M_Expr (loc, annots, _, e_)) = e in
+    let@ bty, e_ = match e_ with
+     | M_Epure pe ->
+        let@ pe = infer_pexpr pe in
+        return (bt_of_pexpr pe, M_Epure pe)
+     | M_Ememop (M_PtrEq (pe1, pe2)) ->
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr Loc pe2 in
+        return (Bool, M_Ememop (M_PtrEq (pe1, pe2)))
+     | M_Ememop (M_PtrNe (pe1, pe2)) ->
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr Loc pe2 in
+        return (Bool, M_Ememop (M_PtrNe (pe1, pe2)))
+     | M_Ememop (M_PtrLt (pe1, pe2)) ->
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr Loc pe2 in
+        return (Bool, M_Ememop (M_PtrLt (pe1, pe2)))
+     | M_Ememop (M_PtrGt (pe1, pe2)) ->
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr Loc pe2 in
+        return (Bool, M_Ememop (M_PtrGt (pe1, pe2)))
+     | M_Ememop (M_PtrLe (pe1, pe2)) ->
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr Loc pe2 in
+        return (Bool, M_Ememop (M_PtrLe (pe1, pe2)))
+     | M_Ememop (M_PtrGe (pe1, pe2)) ->
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr Loc pe2 in
+        return (Bool, M_Ememop (M_PtrGe (pe1, pe2)))
+     | M_Ememop (M_Ptrdiff (act, pe1, pe2)) ->
+        let@ () = WCT.is_ct act.loc act.ct in
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr Loc pe2 in
+        let bty = Memory.bt_of_sct (Integer Ptrdiff_t) in
+        return (bty, M_Ememop (M_Ptrdiff (act, pe1, pe2)))
+     | M_Ememop (M_IntFromPtr (act_from, act_to, pe)) ->
+        let@ () = WCT.is_ct act_from.loc act_from.ct in
+        let@ () = WCT.is_ct act_to.loc act_to.ct in
+        let@ pe = check_pexpr Loc pe in
+        let bty = Memory.bt_of_sct act_to.ct in
+        return (bty, M_Ememop (M_IntFromPtr (act_from, act_to, pe)))
+     | M_Ememop (M_PtrFromInt (act_from, act_to, pe)) ->
+        let@ () = WCT.is_ct act_from.loc act_from.ct in
+        let@ () = WCT.is_ct act_to.loc act_to.ct in
+        let@ pe = check_pexpr (Memory.bt_of_sct act_from.ct) pe in
+        let bty = Memory.bt_of_sct act_to.ct in
+        return (bty, M_Ememop (M_PtrFromInt (act_from, act_to, pe)))
+     | M_Ememop (M_PtrValidForDeref (act, pe)) ->
+        let@ () = WCT.is_ct act.loc act.ct in
+        let@ pe = check_pexpr Loc pe in
+        return (Bool, M_Ememop (M_PtrValidForDeref (act, pe)))
+     | M_Ememop (M_PtrWellAligned (act, pe)) ->
+        let@ () = WCT.is_ct act.loc act.ct in
+        let@ pe = check_pexpr Loc pe in
+        return (Bool, M_Ememop (M_PtrWellAligned (act, pe)))
+     | M_Ememop (M_PtrArrayShift (pe1, act, pe2)) ->
+        let@ () = WCT.is_ct act.loc act.ct in
+        let@ pe1 = check_pexpr Loc pe1 in
+        let@ pe2 = check_pexpr (failwith "what to do here") pe2 in
+        return (Loc, M_Ememop (M_PtrArrayShift (pe1, act, pe2)))
+     | M_Ememop (M_PtrMemberShift (tag_sym, memb_ident, pe)) ->
+        let@ _ = get_struct_member_type loc tag_sym memb_ident in
+        let@ pe = check_pexpr Loc pe in
+        return (Loc, M_Ememop (M_PtrMemberShift (tag_sym, memb_ident, pe)))
+     | M_Ememop (M_Memcpy _) (* (asym 'bty * asym 'bty * asym 'bty) *) ->
+        Cerb_debug.error "todo: M_Memcpy"
+     | M_Ememop (M_Memcmp _) (* (asym 'bty * asym 'bty * asym 'bty) *) ->
+        Cerb_debug.error "todo: M_Memcmp"
+     | M_Ememop (M_Realloc _) (* (asym 'bty * asym 'bty * asym 'bty) *) ->
+        Cerb_debug.error "todo: M_Realloc"
+     | M_Ememop (M_Va_start _) (* (asym 'bty * asym 'bty) *) ->
+        Cerb_debug.error "todo: M_Va_start"
+     | M_Ememop (M_Va_copy _) (* (asym 'bty) *) ->
+        Cerb_debug.error "todo: M_Va_copy"
+     | M_Ememop (M_Va_arg _) (* (asym 'bty * actype 'bty) *) ->
+        Cerb_debug.error "todo: M_Va_arg"
+     | M_Ememop (M_Va_end _) (* (asym 'bty) *) ->
+        Cerb_debug.error "todo: M_Va_end"
+     | _ -> 
+       assert false
+    in
+    return (M_Expr (loc, annots, bty, e_))
+       
+  
+  let infer_expr _ e = 
+   let _asd = infer_expr in
+   return e
+
+end
+
+
+
+
+
+
+
 module WLabel = struct
    open Mu
  
@@ -1164,6 +1294,10 @@ module WLabel = struct
  end
 
 
+
+
+
+ 
 module WProc = struct 
   open Mu
    
@@ -1191,11 +1325,10 @@ module WProc = struct
 
   let typ p = WArgs.typ (fun (_body,_labels,rt) -> rt) p
 
-  let welltyped (loc : Loc.t) (at : _ Mu.mu_proc_args_and_body)
-      : (_ Mu.mu_proc_args_and_body) m 
-    =
+  let welltyped : (*'TY.*) Loc.t -> 'TY Mu.mu_proc_args_and_body -> (_(*BT.t*) Mu.mu_proc_args_and_body) m =
+    fun (loc : Loc.t) (at : 'TY1 Mu.mu_proc_args_and_body) ->
     WArgs.welltyped (fun loc (body, labels, rt) ->
-        let@ rt = WRT.welltyped loc rt in
+        let@ rt = pure (WRT.welltyped loc rt) in
         let@ labels =
           PmapM.mapM (fun sym def ->
             match def with
@@ -1206,6 +1339,24 @@ module WProc = struct
                return (M_Label (loc, label_args_and_body, annots, parsed_spec))
             ) labels Sym.compare
         in
+        let label_context = label_context rt labels in
+        let@ labels = 
+          PmapM.mapM (fun sym def ->
+              match def with
+              | M_Return loc ->
+                 return (M_Return loc)
+              | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
+                 let@ label_args_and_body = 
+                   pure begin
+                     WArgs.welltyped (fun loc label_body ->
+                        BaseTyping.infer_expr label_context label_body
+                        ) "label" loc label_args_and_body
+                     end
+                 in
+                 return (M_Label (loc, label_args_and_body, annots, parsed_spec))
+            ) labels Sym.compare
+        in
+        let@ body = pure (BaseTyping.infer_expr label_context body) in
         return (body, labels, rt)
       ) "function" loc at
 end

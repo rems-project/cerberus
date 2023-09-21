@@ -40,7 +40,7 @@ end
 
 type symbol = Symbol.sym
 
-type 'TY act = { 
+type act = { 
     loc: loc;
     annot: Annot.annot list;
     (* type_annot : 'TY; *)
@@ -117,9 +117,9 @@ type bw_unop =
  | M_BW_CTZ
  | M_BW_FFS
 
-type 'TY bound_kind =
- | M_Bound_Wrap of 'TY act
- | M_Bound_Except of 'TY act
+type bound_kind =
+ | M_Bound_Wrap of act
+ | M_Bound_Except of act
 
 type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEsym of symbol
@@ -130,7 +130,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEbitwise_unop of bw_unop * 'TY mu_pexpr
  | M_PEbitwise_binop of bw_binop * 'TY mu_pexpr * 'TY mu_pexpr
  | M_Cfvfromint of 'TY mu_pexpr (* cast integer to floating value *)
- | M_Civfromfloat of 'TY act * 'TY mu_pexpr (* cast floating to integer value *)
+ | M_Civfromfloat of act * 'TY mu_pexpr (* cast floating to integer value *)
  | M_PEarray_shift of ('TY mu_pexpr) * T.ct * ('TY mu_pexpr) (* pointer array shift *)
  | M_PEmember_shift of ('TY mu_pexpr) * symbol * Symbol.identifier (* pointer struct/union member shift *)
  | M_PEnot of 'TY mu_pexpr (* boolean not *)
@@ -145,10 +145,10 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEbool_to_integer of 'TY mu_pexpr
  | M_PEconv_int of 'TY mu_pexpr * 'TY mu_pexpr
  | M_PEconv_loaded_int of 'TY mu_pexpr * 'TY mu_pexpr
- | M_PEwrapI of 'TY act * 'TY mu_pexpr
- | M_PEcatch_exceptional_condition of 'TY act * 'TY mu_pexpr
- | M_PEbounded_binop of 'TY bound_kind * Core.iop * 'TY mu_pexpr * 'TY mu_pexpr
- | M_PEis_representable_integer of 'TY mu_pexpr * 'TY act
+ | M_PEwrapI of act * 'TY mu_pexpr
+ | M_PEcatch_exceptional_condition of act * 'TY mu_pexpr
+ | M_PEbounded_binop of bound_kind * Core.iop * 'TY mu_pexpr * 'TY mu_pexpr
+ | M_PEis_representable_integer of 'TY mu_pexpr * act
 
  | M_PEundef of Cerb_location.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)
@@ -170,20 +170,20 @@ type m_kill_kind =
   | M_Static of T.ct
 
 type 'TY mu_action_ =  (* memory actions *)
- | M_Create of 'TY mu_pexpr * ('TY act) * Symbol.prefix
- | M_CreateReadOnly of 'TY mu_pexpr * 'TY act * 'TY mu_pexpr * Symbol.prefix
+ | M_Create of 'TY mu_pexpr * act * Symbol.prefix
+ | M_CreateReadOnly of 'TY mu_pexpr * act * 'TY mu_pexpr * Symbol.prefix
  | M_Alloc of 'TY mu_pexpr * 'TY mu_pexpr * Symbol.prefix
  | M_Kill of m_kill_kind * 'TY mu_pexpr (* the boolean indicates whether the action is dynamic (i.e. free()) *)
- | M_Store of bool * 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
- | M_Load of 'TY act * 'TY mu_pexpr * Cmm_csem.memory_order
- | M_RMW of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_Store of bool * act * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
+ | M_Load of act * 'TY mu_pexpr * Cmm_csem.memory_order
+ | M_RMW of act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
  | M_Fence of Cmm_csem.memory_order
- | M_CompareExchangeStrong of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_CompareExchangeWeak of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeStrong of act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeWeak of act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
  | M_LinuxFence of Linux.linux_memory_order
- | M_LinuxLoad of 'TY act * 'TY mu_pexpr * Linux.linux_memory_order
- | M_LinuxStore of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * Linux.linux_memory_order
- | M_LinuxRMW of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * Linux.linux_memory_order
+ | M_LinuxLoad of act * 'TY mu_pexpr * Linux.linux_memory_order
+ | M_LinuxStore of act * 'TY mu_pexpr * 'TY mu_pexpr * Linux.linux_memory_order
+ | M_LinuxRMW of act * 'TY mu_pexpr * 'TY mu_pexpr * Linux.linux_memory_order
 
 
 type 'TY mu_action = 
@@ -200,19 +200,19 @@ type 'TY mu_memop =
   | M_PtrGt of ('TY mu_pexpr * 'TY mu_pexpr)
   | M_PtrLe of ('TY mu_pexpr * 'TY mu_pexpr)
   | M_PtrGe of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_Ptrdiff of ('TY act * 'TY mu_pexpr * 'TY mu_pexpr)
-  | M_IntFromPtr of ('TY act * 'TY act * 'TY mu_pexpr)
-  | M_PtrFromInt of ('TY act * 'TY act * 'TY mu_pexpr)
-  | M_PtrValidForDeref of ('TY act * 'TY mu_pexpr)
-  | M_PtrWellAligned of ('TY act * 'TY mu_pexpr)
-  | M_PtrArrayShift of ('TY mu_pexpr * 'TY act * 'TY mu_pexpr)
+  | M_Ptrdiff of (act * 'TY mu_pexpr * 'TY mu_pexpr)
+  | M_IntFromPtr of (act * act * 'TY mu_pexpr)
+  | M_PtrFromInt of (act * act * 'TY mu_pexpr)
+  | M_PtrValidForDeref of (act * 'TY mu_pexpr)
+  | M_PtrWellAligned of (act * 'TY mu_pexpr)
+  | M_PtrArrayShift of ('TY mu_pexpr * act * 'TY mu_pexpr)
   | M_PtrMemberShift of (symbol * Symbol.identifier * 'TY mu_pexpr)
   | M_Memcpy of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
   | M_Memcmp of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
   | M_Realloc of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
   | M_Va_start  of ('TY mu_pexpr * 'TY mu_pexpr)
   | M_Va_copy of ('TY mu_pexpr)
-  | M_Va_arg of ('TY mu_pexpr * 'TY act)
+  | M_Va_arg of ('TY mu_pexpr * act)
   | M_Va_end of ('TY mu_pexpr)
   | M_CopyAllocId of ('TY mu_pexpr * 'TY mu_pexpr)
 
@@ -229,7 +229,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_Ememop of 'TY mu_memop
  | M_Eaction of ('TY mu_paction) (* memory action *)
  | M_Eskip
- | M_Eccall of 'TY act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
+ | M_Eccall of act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
  (* | M_Eproc of mu_name * ('TY mu_pexpr) list (\* Core procedure call *\) *)
 
  | M_Elet of ('TY mu_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
@@ -247,15 +247,13 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
 
 
 and 'TY mu_expr = 
- | M_Expr of loc * annot list * ('TY mu_expr_)
+ | M_Expr of loc * annot list * 'TY * ('TY mu_expr_)
 
-let loc_of_expr (M_Expr (loc, _, _)) = loc
+let loc_of_expr (M_Expr (loc, _, _, _)) = loc
 
 
 
-let embed_pexpr_expr pe : 'TY mu_expr= 
-  let (M_Pexpr (loc, _, _, _)) = pe in
-  M_Expr (loc, [], (M_Epure pe))
+
 
 
 type info = Locations.info

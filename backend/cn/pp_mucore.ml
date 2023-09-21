@@ -298,7 +298,7 @@ module Make (Config: CONFIG) = struct
 
 
 
-  let pp_actype (actype : _ act) = pp_ct actype.ct
+  let pp_actype (actype : act) = pp_ct actype.ct
 
 
   let pp_thread_id n =
@@ -670,7 +670,7 @@ module Make (Config: CONFIG) = struct
     let pp_actype_or_pexpr = pp_actype_or_pexpr budget in
     let pp_action = pp_action budget in
 
-    let rec pp budget prec (M_Expr (loc, annot, e) : 'ty mu_expr) =
+    let rec pp budget prec (M_Expr (loc, annot, _, e) : 'ty mu_expr) =
 
       match budget with
       | Some 0 -> abbreviated

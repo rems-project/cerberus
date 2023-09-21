@@ -212,7 +212,7 @@ let rec symb_exec_mu_pexpr var_map pexpr =
 
 let rec symb_exec_mu_expr ctxt state_vars expr =
   let (state, var_map) = state_vars in
-  let (M_Expr (loc, _, e)) = expr in
+  let (M_Expr (loc, _, _, e)) = expr in
   match e with
   | M_Epure pe ->
     let@ r_v = symb_exec_mu_pexpr var_map pe in

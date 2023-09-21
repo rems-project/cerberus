@@ -108,7 +108,7 @@ let convert_core_bt_for_list loc =
 
 
 
-let ensure_pexpr_ctype loc err pe : 'TY act = 
+let ensure_pexpr_ctype loc err pe : act = 
   match pe with
   | Pexpr (annot, bty, PEval (Vctype ct)) -> 
      {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct}
@@ -658,7 +658,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   let (markers_env, cn_desugaring_state) = desugaring_things in
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
-  let wrap pe = M_Expr (loc, annots, pe) in
+  let wrap pe = M_Expr (loc, annots, (), pe) in
   let wrap_pure pe = wrap (M_Epure (M_Pexpr (loc, [], (), pe))) in
   let n_pexpr = n_pexpr loc in
   let n_paction = (n_paction loc) in
@@ -830,7 +830,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
             ) (List.concat separated_annots)
           in
           let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
-          return (M_Expr (loc, [], M_CN_progs (desugared_stmts, stmts)))
+          return (M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))
        | _, _ ->
           n_expr e1 
      in
@@ -1546,7 +1546,7 @@ let concat2_map (f : 'a -> ('b list * 'c list)) (xs : 'a list) : ('b list * 'c l
       concat2 (f x) acc
     ) xs ([], [])
 
-let rec stmts_in_expr (M_Expr (_, _, e_)) =
+let rec stmts_in_expr (M_Expr (_, _, _, e_)) =
   match e_ with
   | M_Epure _ -> ([], [])
   | M_Ememop _ -> ([], [])

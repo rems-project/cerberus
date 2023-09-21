@@ -939,22 +939,7 @@ end
 
 
 (*** impure expression inference **********************************************)
-
-
-
-(* `t` is used for the type of Run/Goto: Goto has no return type
-   (because the control flow does not return there), but instead
-   returns `False`. Type inference of impure expressions returns
-   either a return type and a typing context or `False` *)
-type 'a orFalse = 
-  | Normal of 'a
-  | False
-
-(* let pp_or_false (ppf : 'a -> Pp.document) (m : 'a orFalse) : Pp.document =  *)
-(*   match m with *)
-(*   | Normal a -> ppf a *)
-(*   | False -> parens !^"no return" *)
-
+open OrFalse
 
 let filter_empty_resources loc =
   let@ provable = provable loc in
@@ -1061,7 +1046,7 @@ let instantiate loc filter arg =
 let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr) 
       (k: IT.t -> (unit) m)
     : (unit) m =
-  let (M_Expr (loc, _annots, e_)) = e in
+  let (M_Expr (loc, _annots, _, e_)) = e in
   let@ () = add_loc_trace loc in
   let@ locs = get_loc_trace () in
   let@ () = print_with_ctxt (fun ctxt ->
@@ -1611,7 +1596,7 @@ let post_state_of_rt loc rt =
 let check_procedure 
       (loc : loc) 
       (fsym : Sym.t)
-      (args_and_body : 'bty mu_proc_args_and_body)
+      (args_and_body : _ mu_proc_args_and_body)
     : (unit) m =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
 
@@ -1763,7 +1748,7 @@ let register_fun_syms mu_file =
     ) mu_file.mu_funs
 
 
-let wf_check_and_record_functions mu_funs mu_call_sigs =
+let wf_check_and_record_functions (mu_funs : (symbol, unit mu_fun_map_decl) Pmap.map) mu_call_sigs =
   let welltyped_ping fsym =
     debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym)))
   in
@@ -1899,7 +1884,7 @@ let record_and_check_datatypes datatypes =
 
 
 
-let check mu_file stmt_locs o_lemma_mode = 
+let check (mu_file : unit mu_file) stmt_locs o_lemma_mode = 
   Cerb_debug.begin_csv_timing () (*total*);
 
   Pp.debug 3 (lazy (Pp.headline "beginning type-checking mucore file."));
