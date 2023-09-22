@@ -1889,7 +1889,7 @@ let check (mu_file : unit mu_file) stmt_locs o_lemma_mode =
 
   Pp.debug 3 (lazy (Pp.headline "beginning type-checking mucore file."));
 
-  let@ mu_file = WellTyped.BaseTyping.infer_types_file mu_file in
+  (* let@ mu_file = WellTyped.BaseTyping.infer_types_file mu_file in *)
 
   let@ () = set_statement_locs stmt_locs in
 
