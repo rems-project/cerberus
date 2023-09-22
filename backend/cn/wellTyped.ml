@@ -1646,14 +1646,14 @@ module WProc = struct
                  let@ label_args_and_body = 
                    pure begin
                      WArgs.welltyped (fun loc label_body ->
-                         BaseTyping.infer_expr label_context label_body
+                         BaseTyping.check_expr label_context (`BT Unit) label_body
                         ) "label" loc label_args_and_body
                      end
                  in
                  return (M_Label (loc, label_args_and_body, annots, parsed_spec))
             ) labels Sym.compare
         in
-        let@ body = pure (BaseTyping.infer_expr label_context body) in
+        let@ body = pure (BaseTyping.check_expr label_context (`BT Unit) body) in
         return (body, labels, rt)
       ) "function" loc at
 end
