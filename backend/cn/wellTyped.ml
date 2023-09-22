@@ -1384,7 +1384,7 @@ let rec infer_expr : 'TY. 'TY mu_expr -> BT.t mu_expr m =
      | M_Ememop (M_PtrArrayShift (pe1, act, pe2)) ->
         let@ () = WCT.is_ct act.loc act.ct in
         let@ pe1 = check_pexpr (`BT Loc) pe1 in
-        let@ pe2 = check_pexpr (`BT (failwith "what to do here")) pe2 in
+        let@ pe2 = check_pexpr `BV pe2 in
         return (Loc, M_Ememop (M_PtrArrayShift (pe1, act, pe2)))
      | M_Ememop (M_PtrMemberShift (tag_sym, memb_ident, pe)) ->
         let@ _ = get_struct_member_type loc tag_sym memb_ident in
