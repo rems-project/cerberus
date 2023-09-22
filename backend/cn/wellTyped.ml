@@ -26,13 +26,11 @@ let illtyped_index_term (loc: loc) it has expected ctxt =
   {loc = loc; msg = TypeErrors.Illtyped_it {it = IT.pp it; has = BT.pp has; expected; o_ctxt = Some ctxt}}
 
 
-let ensure_integer_or_real_type (loc : loc) it = 
-  let open BT in
-  match IT.bt it with
-  | (Integer | Real) -> return ()
-  | _ -> 
-     let expect = "integer or real type" in
-     fail (illtyped_index_term loc it (IT.bt it) expect)
+let ensure_bits_type (loc : loc) (has : BT.t) = 
+  match has with
+  | BT.Bits (sign,n) -> return ()
+  | has -> 
+     fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = !^"bitvector"}})
 
 let ensure_arith_type (loc : loc) it =
   let open BT in
@@ -1188,6 +1186,7 @@ let check_against_core_bt loc cbt bt = Typing.embed_resultat
     (fun msg -> Resultat.fail {loc; msg = Generic msg})
     cbt bt)
 
+
 let rec check_and_bind_pattern bt = function
   | M_Pattern (loc, anns, _, p_) ->
     let@ p_ = check_and_bind_pattern_ bt loc p_ in
@@ -1288,16 +1287,15 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
     in
     return (M_Pexpr (loc, annots, bty, pe_))
 
-and check_pexpr : 'TY. BT.t -> 'TY mu_pexpr -> BT.t mu_pexpr m = 
-  fun bt pe ->
-  let (M_Pexpr (loc, _, _, _)) = pe in
-  let@ pe2 = infer_pexpr pe in
-  let bt2 = bt_of_pexpr pe2 in
-  if BT.equal bt bt2
-  then return pe2
-  else fail (fun ctxt -> {loc = loc; msg = TypeErrors.Illtyped_it
-    {it = Pp_mucore.pp_pexpr pe; has = BT.pp bt2;
-        expected = Pp.plain (BT.pp bt); o_ctxt= Some ctxt}})
+and check_pexpr spec expr =
+  let@ expr = infer_pexpr expr in
+  let@ () = match spec with
+    | `BT expect -> 
+       ensure_base_type (loc_of_pexpr expr) ~expect (bt_of_pexpr expr)
+    | `BV -> 
+       ensure_bits_type (loc_of_pexpr expr) (bt_of_pexpr expr) 
+  in
+  return expr
 
 
 let rec infer_expr : 'TY. 'TY mu_expr -> BT.t mu_expr m = 
@@ -1309,63 +1307,63 @@ let rec infer_expr : 'TY. 'TY mu_expr -> BT.t mu_expr m =
         let@ pe = infer_pexpr pe in
         return (bt_of_pexpr pe, M_Epure pe)
      | M_Ememop (M_PtrEq (pe1, pe2)) ->
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr Loc pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT Loc) pe2 in
         return (Bool, M_Ememop (M_PtrEq (pe1, pe2)))
      | M_Ememop (M_PtrNe (pe1, pe2)) ->
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr Loc pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT Loc) pe2 in
         return (Bool, M_Ememop (M_PtrNe (pe1, pe2)))
      | M_Ememop (M_PtrLt (pe1, pe2)) ->
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr Loc pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT Loc) pe2 in
         return (Bool, M_Ememop (M_PtrLt (pe1, pe2)))
      | M_Ememop (M_PtrGt (pe1, pe2)) ->
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr Loc pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT Loc) pe2 in
         return (Bool, M_Ememop (M_PtrGt (pe1, pe2)))
      | M_Ememop (M_PtrLe (pe1, pe2)) ->
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr Loc pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT Loc) pe2 in
         return (Bool, M_Ememop (M_PtrLe (pe1, pe2)))
      | M_Ememop (M_PtrGe (pe1, pe2)) ->
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr Loc pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT Loc) pe2 in
         return (Bool, M_Ememop (M_PtrGe (pe1, pe2)))
      | M_Ememop (M_Ptrdiff (act, pe1, pe2)) ->
         let@ () = WCT.is_ct act.loc act.ct in
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr Loc pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT Loc) pe2 in
         let bty = Memory.bt_of_sct (Integer Ptrdiff_t) in
         return (bty, M_Ememop (M_Ptrdiff (act, pe1, pe2)))
      | M_Ememop (M_IntFromPtr (act_from, act_to, pe)) ->
         let@ () = WCT.is_ct act_from.loc act_from.ct in
         let@ () = WCT.is_ct act_to.loc act_to.ct in
-        let@ pe = check_pexpr Loc pe in
+        let@ pe = check_pexpr (`BT Loc) pe in
         let bty = Memory.bt_of_sct act_to.ct in
         return (bty, M_Ememop (M_IntFromPtr (act_from, act_to, pe)))
      | M_Ememop (M_PtrFromInt (act_from, act_to, pe)) ->
         let@ () = WCT.is_ct act_from.loc act_from.ct in
         let@ () = WCT.is_ct act_to.loc act_to.ct in
-        let@ pe = check_pexpr (Memory.bt_of_sct act_from.ct) pe in
+        let@ pe = check_pexpr (`BT (Memory.bt_of_sct act_from.ct)) pe in
         let bty = Memory.bt_of_sct act_to.ct in
         return (bty, M_Ememop (M_PtrFromInt (act_from, act_to, pe)))
      | M_Ememop (M_PtrValidForDeref (act, pe)) ->
         let@ () = WCT.is_ct act.loc act.ct in
-        let@ pe = check_pexpr Loc pe in
+        let@ pe = check_pexpr (`BT Loc) pe in
         return (Bool, M_Ememop (M_PtrValidForDeref (act, pe)))
      | M_Ememop (M_PtrWellAligned (act, pe)) ->
         let@ () = WCT.is_ct act.loc act.ct in
-        let@ pe = check_pexpr Loc pe in
+        let@ pe = check_pexpr (`BT Loc) pe in
         return (Bool, M_Ememop (M_PtrWellAligned (act, pe)))
      | M_Ememop (M_PtrArrayShift (pe1, act, pe2)) ->
         let@ () = WCT.is_ct act.loc act.ct in
-        let@ pe1 = check_pexpr Loc pe1 in
-        let@ pe2 = check_pexpr (failwith "what to do here") pe2 in
+        let@ pe1 = check_pexpr (`BT Loc) pe1 in
+        let@ pe2 = check_pexpr (`BT (failwith "what to do here")) pe2 in
         return (Loc, M_Ememop (M_PtrArrayShift (pe1, act, pe2)))
      | M_Ememop (M_PtrMemberShift (tag_sym, memb_ident, pe)) ->
         let@ _ = get_struct_member_type loc tag_sym memb_ident in
-        let@ pe = check_pexpr Loc pe in
+        let@ pe = check_pexpr (`BT Loc) pe in
         return (Loc, M_Ememop (M_PtrMemberShift (tag_sym, memb_ident, pe)))
      | M_Ememop (M_Memcpy _) (* (asym 'bty * asym 'bty * asym 'bty) *) ->
         todo ()
@@ -1382,35 +1380,45 @@ let rec infer_expr : 'TY. 'TY mu_expr -> BT.t mu_expr m =
      | M_Ememop (M_Va_end _) (* (asym 'bty) *) ->
         todo ()
      | M_Eaction (M_Paction (pol, M_Action (aloc, action_))) ->
-        let@ (bTy, action) = begin match action_ with
+        let@ (bTy, action_) = match action_ with
         | M_Create (pe, act, prefix) ->
-           let@ pe = check_pexpr Integer pe in
+           let@ () = WCT.is_ct act.loc act.ct in
+           let@ pe = check_pexpr `BV pe in
            return (Loc, M_Create (pe, act, prefix))
-        | M_Kill (M_Static ct, pe) -> 
-           let@ pe = check_pexpr Loc pe in
-           return (Unit, M_Kill (M_Static ct, pe))
+        | M_Kill (k, pe) -> 
+           let@ () = match k with
+             | M_Dynamic -> return ()
+             | M_Static ct -> WCT.is_ct loc ct
+           in
+           let@ pe = check_pexpr (`BT Loc) pe in
+           return (Unit, M_Kill (k, pe))
         | M_Store (is_locking, act, p_pe, v_pe, mo) ->
-           let@ p_pe = check_pexpr Loc p_pe in
-           let@ v_pe = check_pexpr (Memory.bt_of_sct act.ct) v_pe in
+           let@ () = WCT.is_ct act.loc act.ct in
+           let@ p_pe = check_pexpr (`BT Loc) p_pe in
+           let@ v_pe = check_pexpr (`BT (Memory.bt_of_sct act.ct)) v_pe in
            return (Unit, M_Store (is_locking, act, p_pe, v_pe, mo))
         | M_Load (act, p_pe, mo) ->
-           let@ p_pe = check_pexpr Loc p_pe in
+           let@ () = WCT.is_ct act.loc act.ct in
+           let@ p_pe = check_pexpr (`BT Loc) p_pe in
            return (Memory.bt_of_sct act.ct, M_Load (act, p_pe, mo))
         | _ ->
            todo ()
-        end in
-        return (bTy, M_Eaction (M_Paction (pol, M_Action (aloc, action))))
+        in
+        return (bTy, M_Eaction (M_Paction (pol, M_Action (aloc, action_))))
      | M_Eskip ->
         return (Unit, M_Eskip)
      | M_Eccall (act, f_pe, pes) ->
-        let@ f_pe = check_pexpr Loc f_pe in
+        let@ () = WCT.is_ct act.loc act.ct in
+        let@ f_pe = check_pexpr (`BT Loc) f_pe in
+        (* TODO: we'd have to check the arguments against the function
+           type, but we can't when f_pe is dynamic *)
         let@ pes = ListM.mapM infer_pexpr pes in
         return (Memory.bt_of_sct act.ct, M_Eccall (act, f_pe, pes))
      | M_Eif (c_pe, e1, e2) ->
-        let@ c_pe = check_pexpr Bool c_pe in
+        let@ c_pe = check_pexpr (`BT Bool) c_pe in
         let@ e1 = infer_expr e1 in
         let bt = bt_of_expr e1 in
-        let@ e2 = check_expr bt e2 in
+        let@ e2 = check_expr (`BT bt) e2 in
         return (bt, M_Eif (c_pe, e1, e2))
      | M_Ebound e ->
         let@ e = infer_expr e in
@@ -1418,40 +1426,43 @@ let rec infer_expr : 'TY. 'TY mu_expr -> BT.t mu_expr m =
      | M_Elet (pat, pe, e) ->
         let@ pe = infer_pexpr pe in
         pure begin
-        let@ pat = check_and_bind_pattern (bt_of_pexpr pe) pat in
-        let@ e = infer_expr e in
-        return (bt_of_expr e, M_Elet (pat, pe, e))
+          let@ pat = check_and_bind_pattern (bt_of_pexpr pe) pat in
+          let@ e = infer_expr e in
+          return (bt_of_expr e, M_Elet (pat, pe, e))
         end
      | M_Esseq (pat, e1, e2)
      | M_Ewseq (pat, e1, e2) ->
         let@ e1 = infer_expr e1 in
         pure begin
-        let@ pat = check_and_bind_pattern (bt_of_expr e1) pat in
-        let@ e2 = infer_expr e2 in
-        let e_ = match e_ with
-          | M_Esseq _ -> M_Esseq (pat, e1, e2)
-          | _ -> M_Ewseq (pat, e1, e2)
-        in
-        return (bt_of_expr e2, e_)
+          let@ pat = check_and_bind_pattern (bt_of_expr e1) pat in
+          let@ e2 = infer_expr e2 in
+          let e_ = match e_ with
+            | M_Esseq _ -> M_Esseq (pat, e1, e2)
+            | _ -> M_Ewseq (pat, e1, e2)
+          in
+          return (bt_of_expr e2, e_)
         end
      | _ ->
        todo ()
   in
   return (M_Expr (loc, annots, bty, e_))
 
-and check_expr bt expr =
-  let (M_Expr (loc, _, _, _)) = expr in
-  let@ expr2 = infer_expr expr in
-  let bt2 = bt_of_expr expr2 in
-  if BT.equal bt bt2
-  then return expr2
-  else fail (fun ctxt -> {loc = loc; msg = TypeErrors.Illtyped_it
-    {it = Pp_mucore.pp_expr expr; has = BT.pp bt2;
-        expected = Pp.plain (BT.pp bt); o_ctxt= Some ctxt}})
+and check_expr spec expr =
+  let@ expr = infer_expr expr in
+  let@ () = match spec with
+    | `BT expect -> 
+       ensure_base_type (loc_of_expr expr) ~expect (bt_of_expr expr)
+    | `BV -> 
+       ensure_bits_type (loc_of_expr expr) (bt_of_expr expr) 
+  in
+  return expr
+
+
+
 
 let infer_glob = function
   | M_GlobalDef (ct, expr) ->
-    let@ expr = check_expr (Memory.bt_of_sct ct) expr in
+    let@ expr = check_expr (`BT (Memory.bt_of_sct ct)) expr in
     return (M_GlobalDef (ct, expr))
   | M_GlobalDecl ct ->
     return (M_GlobalDecl ct)
