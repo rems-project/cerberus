@@ -107,6 +107,10 @@ let is_list_bt = function
   | List bt -> Some bt
   | _ -> None
 
+let is_tuple_bt = function
+  | Tuple bts -> Some bts
+  | _ -> None
+
 
 let make_map_bt abt rbt = Map (abt, rbt)
 

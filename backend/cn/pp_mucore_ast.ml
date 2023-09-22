@@ -251,7 +251,7 @@ module PP = struct
           , dtrees )
 
 
-  let rec dtree_of_expr ((M_Expr (loc, annot, expr_)) as expr) =
+  let rec dtree_of_expr ((M_Expr (loc, annot, _ty, expr_)) as expr) =
 
       let pp_ctor str =
         pp_eff_ctor str ^^^ 
@@ -449,6 +449,8 @@ module PP = struct
 
 end
 
-let pp_file = PP.pp_file
+let pp_expr = PP.pp_expr
 let pp_pexpr = PP.pp_pexpr
+
+let pp_file = PP.pp_file
 

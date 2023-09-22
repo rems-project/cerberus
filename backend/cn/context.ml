@@ -21,6 +21,10 @@ type basetype_or_value =
   | BaseType of BT.t
   | Value of IndexTerms.t
 
+let bt_of = function
+  | BaseType bt -> bt
+  | Value v -> IndexTerms.bt v
+
 (* History information about the most recent read/write actions taken on a
    resource. These are used to check for and report on concurrent races. The
    history is kept in a separate map to the resource list, indexed by resource

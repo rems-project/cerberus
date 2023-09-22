@@ -1748,7 +1748,7 @@ let register_fun_syms mu_file =
     ) mu_file.mu_funs
 
 
-let wf_check_and_record_functions (mu_funs : (symbol, unit mu_fun_map_decl) Pmap.map) mu_call_sigs =
+let wf_check_and_record_functions mu_funs mu_call_sigs =
   let welltyped_ping fsym =
     debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym)))
   in
@@ -1888,6 +1888,8 @@ let check (mu_file : unit mu_file) stmt_locs o_lemma_mode =
   Cerb_debug.begin_csv_timing () (*total*);
 
   Pp.debug 3 (lazy (Pp.headline "beginning type-checking mucore file."));
+
+  let@ mu_file = WellTyped.BaseTyping.infer_types_file mu_file in
 
   let@ () = set_statement_locs stmt_locs in
 
