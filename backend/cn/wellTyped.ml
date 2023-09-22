@@ -1232,12 +1232,37 @@ let rec check_and_bind_pattern bt = function
     end in
     return (M_CaseCtor (ctor, pats))
 
+let rec infer_object_value : 'TY. Locations.t -> 'TY mu_object_value ->
+    (BT.t * BT.t mu_object_value) m =
+  fun loc ov ->
+  let todo () = failwith ("TODO: WellTyped infer_object_value: "
+      ^ Pp.plain (CF.Pp_ast.pp_doc_tree (Pp_mucore_ast.PP.dtree_of_object_value ov))) in
+  match ov with
+  | M_OVinteger iv ->
+    let z = Memory.z_of_ival iv in
+    let ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_) in
+    if Z.leq (Memory.min_integer_type ity) z && Z.leq z (Memory.max_integer_type ity)
+    then return (Memory.bt_of_sct (Sctypes.Integer ity), M_OVinteger iv)
+    else fail (fun _ -> {loc; msg = Generic (Pp.item "infer_object_value: doesn't fit in int"
+        (IT.pp (IT.z_ z)))})
+  | M_OVfloating fv ->
+    return (Real, M_OVfloating fv)
+  | M_OVpointer pv ->
+    return (Loc, M_OVpointer pv)
+  | M_OVarray xs ->
+    let@ bt_xs = ListM.mapM (infer_object_value loc) xs in
+    todo ()
+  | M_OVstruct (nm, xs) ->
+    return (Struct nm, M_OVstruct (nm, xs))
+  | M_OVunion _ ->
+    todo ()
 
 let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t * BT.t mu_value) m =
   fun loc v ->
   match v with
   | M_Vobject ov ->
-     Cerb_debug.error "todo: infer object value"
+     let@ (bt, ov) = infer_object_value loc ov in
+     return (bt, M_Vobject ov)
   | M_Vctype ct ->
      return (CType, M_Vctype ct)
   | M_Vunit ->
