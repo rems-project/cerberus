@@ -29,7 +29,12 @@ Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
-Module CheriMemoryProofs
+(* Abstract set of switches *)
+Parameter abst_get_switches: unit -> cerb_switches_t.
+
+Require Import ListSet.
+
+Module RevocationProofs
   (C:CAPABILITY_GS
        (AddressValue)
        (Flags)
@@ -39,12 +44,38 @@ Module CheriMemoryProofs
        (Permissions)
   )
   (IMP: Implementation)
-  (TD: TagDefs)
-  (SW: CerbSwitchesDefs)
-<: CheriMemoryImpl(C)(IMP)(TD)(SW).
+  (TD: TagDefs).
 
+  Fixpoint remove_PNVI (x:cerb_switches_t) : cerb_switches_t :=
+    match x with
+    | nil => empty_set _
+    | SW_PNVI _ :: xs => remove_PNVI xs
+    | x :: xs => x :: remove_PNVI xs
+    end.
 
-  Include CheriMemoryImpl(C)(IMP)(TD)(SW).
+  (* Removes all other PNVI flavours *)
+  Module WithoutPNVISwitches.
+    Definition get_switches (_:unit) := remove_PNVI (abst_get_switches tt).
+  End WithoutPNVISwitches.
 
+  (* Adds [SW_PNVI AE_UDI] are removes all other PNVI flavours *)
+  Module WithPNVISwitches.
+    Definition get_switches (_:unit) :=
+      ListSet.set_add cerb_switch_dec (SW_PNVI AE_UDI)
+        (remove_PNVI (abst_get_switches tt)).
+  End WithPNVISwitches.
 
-End CheriMemoryProofs.
+  Module CheriMemoryWithoutPNVI.
+    Include CheriMemoryImpl(C)(IMP)(TD)(WithoutPNVISwitches).
+  End CheriMemoryWithoutPNVI.
+
+  Module CheriMemoryWithPNVI.
+    Include CheriMemoryImpl(C)(IMP)(TD)(WithPNVISwitches).
+  End CheriMemoryWithPNVI.
+
+(*  Theorem foo:
+    forall t,
+      CheriMemoryWithoutPNVI.null_ptrval t <> CheriMemoryWithPNVI.null_ptrval t.
+ *)
+
+End RevocationProofs.
