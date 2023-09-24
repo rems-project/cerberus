@@ -1323,6 +1323,98 @@ and check_pexpr spec expr =
   return expr
 
 
+let check_cn_statement loc stmt =
+  let open Cnprog in
+  match stmt with
+  | M_CN_pack_unpack (pack_unpack, pt) ->
+     let@ p_pt = WRET.welltyped loc (P pt) in
+     let [@warning "-8"] (RET.P pt) = p_pt in
+     return (M_CN_pack_unpack (pack_unpack, pt))
+  | M_CN_have lc ->
+     let@ lc = WLC.welltyped loc lc in
+     return (M_CN_have lc)
+  | M_CN_instantiate (to_instantiate, it) ->
+     let@ () = match to_instantiate with
+       | I_Function f -> 
+          let@ _ = get_logical_function_def loc f in 
+          return ()
+       | I_Good ct -> 
+          WCT.is_ct loc ct
+       | I_Everything ->
+          return ()
+     in
+     let@ it = WIT.check loc Integer it in
+     return (M_CN_instantiate (to_instantiate, it))
+  | M_CN_extract ((to_extract, it)) ->
+     let@ () = match to_extract with
+       | E_Pred (CN_owned None) -> 
+          return ()
+       | E_Pred (CN_owned (Some ct)) ->
+          WCT.is_ct loc ct
+       | E_Pred (CN_block ct) ->
+          WCT.is_ct loc ct
+       | E_Pred (CN_named p) ->
+          let@ _ = get_resource_predicate_def loc p in
+          return ()
+       | E_Everything ->
+          return ()
+     in
+     let@ it = WIT.check loc Integer it in
+     return (M_CN_extract ((to_extract, it)))
+  | M_CN_unfold (f, its) ->
+     let@ def = get_logical_function_def loc f in
+     let@ () = ensure_same_argument_number loc `General 
+                 (List.length its) ~expect:(List.length def.args)
+     in
+     let@ its = ListM.map2M (fun (_,bt) it -> WIT.check loc bt it) def.args its in
+     return (M_CN_unfold (f, its))
+  | M_CN_apply (l, its) ->
+     let@ (_lemma_loc, lemma_typ) = get_lemma loc l in
+     let@ its = 
+       let wrong_number_arguments () = 
+         let has = List.length its in
+         let expect = AT.count_computational lemma_typ in
+         fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
+       in
+       let rec check_args lemma_typ its =
+         match lemma_typ, its with
+         | (AT.Computational ((_s,bt), info, lemma_typ')), (it :: its') ->
+            let@ it = WIT.check loc bt it in
+            let@ its' = check_args lemma_typ' its' in
+            return (it :: its')
+         | (AT.L _), [] ->
+            return []
+         | _ ->
+            wrong_number_arguments ()
+       in
+       check_args lemma_typ its
+     in
+     return (M_CN_apply (l, its))
+  | M_CN_assert lc ->
+     let@ lc = WLC.welltyped loc lc in
+     return (M_CN_assert lc)
+  | M_CN_inline fs ->
+     let@ _ = ListM.mapM (get_fun_decl loc) fs in
+     return (M_CN_inline fs)
+
+let check_cnprog p =
+  let open Cnprog in
+  let rec aux = function
+    | M_CN_let (loc, (s, {ct; pointer}), p') ->
+       let@ () = WCT.is_ct loc ct in
+       let@ pointer = WIT.check loc Loc pointer in
+       let@ () = add_l s (Memory.bt_of_sct ct) (loc, lazy (Sym.pp s)) in
+       let@ p' = aux p' in
+       return (M_CN_let (loc, (s, {ct; pointer}), p'))
+    | M_CN_statement (loc, stmt) ->
+       let@ stmt = check_cn_statement loc stmt in
+       return (M_CN_statement (loc, stmt))
+  in
+  pure (aux p)
+
+
+
+
 let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m = 
   fun label_context e ->
     let (M_Expr (loc, annots, _, e_)) = e in
@@ -1467,7 +1559,40 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
           in
           return (bt_of_expr e2, e_)
         end
-     | _ ->
+     | M_Eunseq es ->
+        let@ es = ListM.mapM (infer_expr label_context) es in
+        let bts = List.map bt_of_expr es in
+        return (Tuple bts, M_Eunseq es)
+     | M_Erun (l, pes) ->
+        (* copying from check.ml *)
+        let@ (lt,lkind) = match SymMap.find_opt l label_context with
+          | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l)})
+          | Some (lt,lkind) -> return (lt,lkind)
+        in
+        let@ pes = 
+          let wrong_number_arguments () = 
+            let has = List.length pes in
+            let expect = AT.count_computational lt in
+            fail (fun _ -> {loc; msg = Number_arguments {has;expect}})
+          in
+          let rec check_args lt pes =
+            match lt, pes with
+            | (AT.Computational ((_s, bt), _info, lt')), (pe :: pes') ->
+               let@ pe = check_pexpr (`BT bt) pe in
+               let@ pes' = check_args lt' pes' in
+               return (pe :: pes')
+            | (AT.L _lat, []) ->
+               return []
+            | _ ->
+               wrong_number_arguments ()
+          in
+          check_args lt pes
+        in
+        return (Unit, M_Erun (l, pes))
+     | M_CN_progs (surfaceprog, cnprogs) ->
+        let@ cnprogs = ListM.mapM check_cnprog cnprogs in
+        return (Unit, M_CN_progs (surfaceprog, cnprogs))
+     | M_End _ ->
        todo ()
   in
   return (M_Expr (loc, annots, bty, e_))
