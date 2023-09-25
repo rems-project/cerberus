@@ -465,7 +465,9 @@ let or_ = vargs_binop (bool_ false) (Tools.curry or2_)
 let impl_ (it, it') = IT (Binop (Impl, it, it'), BT.Bool)
 let not_ it = IT (Unop (Not, it), bt it)
 let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
-let eq_ (it, it') = IT (Binop (EQ,it, it'), BT.Bool)
+let eq_ (it, it') =
+  assert (BT.equal (bt it) (bt it'));
+  IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
@@ -506,7 +508,7 @@ let rem_ (it, it') = IT (Binop (Rem,it, it'), bt it)
 let rem_no_smt_ (it, it') = IT (Binop (RemNoSMT,it, it'), bt it)
 let mod_ (it, it') = IT (Binop (Mod,it, it'), bt it)
 let mod_no_smt_ (it, it') = IT (Binop (ModNoSMT,it, it'), bt it)
-let divisible_ (it, it') = eq_ (mod_ (it, it'), int_ 0)
+let divisible_ (it, it') = eq_ (mod_ (it, it'), num_lit_ Z.zero (bt it))
 let rem_f_ (it, it') = mod_ (it, it')
 let min_ (it, it') = IT (Binop (Min,it, it'), bt it)
 let max_ (it, it') = IT (Binop (Max,it, it'), bt it)
@@ -581,11 +583,12 @@ let cast_ bt it =
   IT (Cast (bt, it), bt)
 let integerToPointerCast_ it =
   cast_ Loc it
-let intptr_const_ n = (* FIXME: switch to this: num_lit_ n Memory.intptr_bt *)
-  z_ n
+let intptr_const_ n =
+  num_lit_ n Memory.intptr_bt
+  (* for integer-mode: z_ n *)
 let pointerToIntegerCast_ it =
-  (* FIXME: switch to this cast_ Memory.intptr_bt it *)
-  cast_ Integer it
+  cast_ Memory.intptr_bt it
+  (* for integer-mode: cast_ Integer it *)
 let pointerToAllocIdCast_ it =
   cast_ Alloc_id it
 let memberOffset_ (tag, member) =
@@ -698,9 +701,11 @@ let good_ (sct, it) =
 let wrapI_ (ity, arg) = 
   IT (WrapI (ity, arg), BT.Integer)
 let alignedI_ ~t ~align =
+  assert (BT.equal (bt t) Loc);
+  assert (BT.equal (bt (pointerToIntegerCast_ t)) (bt align));
   IT (Aligned {t; align}, BT.Bool)
 let aligned_ (t, ct) =
-  alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct))
+  alignedI_ ~t ~align:(num_lit_ (Z.of_int (Memory.align_of_ctype ct)) (bt t))
 
 
 let const_map_ index_bt t =

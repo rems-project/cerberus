@@ -300,7 +300,7 @@ module Translate = struct
             [field_symbol]
             [sort (Bits (Unsigned, n))]
       | Real -> Z3.Arithmetic.Real.mk_sort context
-      | Loc -> translate BT.(Tuple [Alloc_id; (* FIXME Memory.intptr_bt *) Integer])
+      | Loc -> translate BT.(Tuple [Alloc_id; Memory.intptr_bt])
       | Alloc_id ->
          Z3.Tuple.mk_sort context
            (string (bt_name Alloc_id))
@@ -459,7 +459,9 @@ module Translate = struct
       | SizeOf ct ->
          Some (int_ (Memory.size_of_ctype ct))
       | Aligned t ->
-         Some (divisible_ (pointerToIntegerCast_ t.t, t.align))
+         let addr = pointerToIntegerCast_ t.t in
+         assert (BT.equal (IT.bt addr) (IT.bt t.align));
+         Some (divisible_ (addr, t.align))
       | Representable (CT.Pointer _ as ct, t) ->
          Some (representable struct_decls ct t)
       | Representable (ct, t) ->
@@ -467,16 +469,8 @@ module Translate = struct
       | Good (ct, t) ->
          Some (good_value struct_decls ct t)
       | WrapI (ity, arg) ->
-         (* try to follow wrapI from runtime/libcore/std.core *)
-         let maxInt = Memory.max_integer_type ity in
-         let minInt = Memory.min_integer_type ity in
-         let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
-         let r = rem_f_ (arg, z_ dlt) in
-         (* variation from std.core, discussed with authors. the subtraction
-            case is impossible if minInt is zero (i.e. unsigned, the main case) *)
-         let e = if Z.equal minInt Z.zero then r
-         else ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
-         Some e
+         (* unlike previously (and std.core), implemented natively using bitvector ops *)
+         None
       | Apply (name, args) ->
          let def = Option.get (get_logical_function_def global name) in
          begin match def.definition with
@@ -528,6 +522,30 @@ module Translate = struct
       Z3.FuncDecl.apply fd args
     in
 
+
+    let mk_bv_cast context (to_bt, from_bt, x) =
+      let bits_info bt = match BT.is_bits_bt bt with
+        | Some (sign, sz) -> (BT.equal_sign sign BT.Signed, sz)
+        | None -> failwith ("mk_bv_cast: non-bv type: " ^ Pp.plain (BT.pp bt))
+      in
+      let (to_signed, to_sz) = bits_info to_bt in
+      let (from_signed, from_sz) = bits_info from_bt in
+      let step1 = if from_signed
+        then Z3.Expr.mk_app context (signed_to_unsigned_fundecl context global from_sz) [x]
+        else x
+      in
+      let step2 = if to_sz == from_sz
+        then step1
+        else if to_sz < from_sz
+        then (Z3.BitVector.mk_extract context 0 to_sz step1)
+        else if from_signed
+        then Z3.BitVector.mk_sign_ext context (to_sz - from_sz) step1
+        else Z3.BitVector.mk_zero_ext context (to_sz - from_sz) step1
+      in
+      if to_signed
+        then Z3.Expr.mk_app context (unsigned_to_signed_fundecl context global to_sz) [step2]
+        else step2
+    in
 
     let rec term it =
       let bt = IT.bt it in
@@ -598,7 +616,10 @@ module Translate = struct
          | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
          | Rem -> Integer.mk_rem context (term t1) (term t2)
          | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
-         | Mod -> Integer.mk_mod context (term t1) (term t2)
+         | Mod ->
+           Pp.debug 2 (lazy (Pp.item "Mod" (IT.pp it)));
+           assert (BT.equal (IT.bt t1) (IT.bt t2));
+           (bv_arith_check t1 BV.mk_smod Integer.mk_mod) context (term t1) (term t2)
          | ModNoSMT -> make_uf "mod_uf" (Integer) [t1; t2]
          | LT -> (bv_arith_check t1 BV.mk_ult mk_lt) context (term t1) (term t2)
          | LE -> (bv_arith_check t1 BV.mk_ule mk_le) context (term t1) (term t2)
@@ -662,14 +683,7 @@ module Translate = struct
             Z3.Arithmetic.Real.mk_real2int context (term t)
          | Integer, Real ->
             Z3.Arithmetic.Integer.mk_int2real context (term t)
-         | Bits (Unsigned, n), Bits (Signed, n') when n = n' ->
-            Z3.Expr.mk_app context
-              (unsigned_to_signed_fundecl context global n)
-              [term t]
-         | Bits (Signed, n), Bits (Unsigned, n') when n = n' ->
-            Z3.Expr.mk_app context
-              (signed_to_unsigned_fundecl context global n)
-              [term t]
+         | Bits _, Bits _ -> mk_bv_cast context (cbt, IT.bt t, term t)
          | _ ->
             assert false
          end
@@ -697,7 +711,8 @@ module Translate = struct
       | Aligned _ -> adj ()
       | Representable _ -> adj ()
       | Good _ -> adj ()
-      | WrapI _ -> adj ()
+      | WrapI (ity, arg) ->
+         mk_bv_cast context (Memory.bt_of_sct (Sctypes.Integer ity), IT.bt arg, term arg)
       | MapConst (abt, t) ->
          Z3.Z3Array.mk_const_array context (sort abt) (term t)
       | MapSet (t1, t2, t3) ->
@@ -1182,6 +1197,11 @@ module Eval = struct
 
       | () when Z3.Arithmetic.is_int_numeral expr ->
          z_ (Z3.Arithmetic.Integer.get_big_int expr)
+
+      | () when Z3.BitVector.is_bv_numeral expr ->
+         let s = Z3.BitVector.numeral_to_string expr in
+         let z = Z.of_string s in
+         num_lit_ z (BT.Bits (BT.Unsigned, Z3.BitVector.get_size (Z3.Expr.get_sort expr)))
 
       | () when Z3.Boolean.is_ite expr ->
          ite_ (nth args 0, nth args 1, nth args 2)

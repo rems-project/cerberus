@@ -223,7 +223,6 @@ let ensure_bitvector_type (loc : Loc.loc) ~(expect : BT.t) : (sign * int) m =
 
 let rec check_object_value (loc : loc) ~(expect: BT.t)
           (ov : 'bty mu_object_value) : IT.t m =
-     Pp.debug 2 (lazy (Pp.item "FIXME: remove: check_object_value" (BT.pp expect))); 
   match ov with
   | M_OVinteger iv ->
      let@ _ = ensure_bitvector_type loc ~expect in
@@ -423,7 +422,8 @@ let get_eq_in_model loc msg x opts =
         ((Pp.typ (IT.pp x) (Pp.braces (Pp.list IT.pp opts))) ^^^ !^ "for:" ^^^ msg))})
  
 let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
-  let@ () = WellTyped.ensure_base_type loc ~expect Integer in 
+  let@ _ = ensure_bitvector_type loc ~expect in
+  let@ () = WellTyped.ensure_base_type loc ~expect (Memory.bt_of_sct ct) in
   let@ () = WellTyped.WCT.is_ct loc ct in
   (* let@ arg = check_pexpr ~expect:Integer pe in *)
   (* try to follow conv_int from runtime/libcore/std.core *)
@@ -440,9 +440,10 @@ let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
         {loc; msg}
       )
   in
+  let bt = IT.bt arg in
   let@ value = match ity with
     | Bool ->
-       return (ite_ (eq_ (arg, int_ 0), int_ 0, int_ 1))
+       return (ite_ (eq_ (arg, num_lit_ Z.zero bt), num_lit_ Z.zero expect, num_lit_ Z.one expect))
     | _ when Sctypes.is_unsigned_integer_type ity ->
        let representable = representable_ (ct, arg) in
        (* TODO: revisit this *)
@@ -623,6 +624,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr)
            let@ v2 = try_prove_constant loc v2 in
            k (if (is_z_ v2) then IT.mod_ (v1, v2) 
               else (warn_uf loc "mod_uf"; IT.mod_no_smt_ (v1, v2)))
+
         | `False ->
            let@ model = model () in
            Pp.debug 1 (lazy (Pp.item "rem_t applied to (possibly) negative arguments"
@@ -1189,7 +1191,8 @@ let rec check_expr labels (e : 'bty mu_expr)
         in
         let@ () = add_l ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
         let@ () = add_c loc (t_ (representable_ (Pointer act.ct, ret))) in
-        let@ () = add_c loc (t_ (alignedI_ ~align:arg ~t:ret)) in
+        let align_v = cast_ Memory.intptr_bt arg in
+        let@ () = add_c loc (t_ (alignedI_ ~align:align_v ~t:ret)) in
         let@ () = 
           add_r loc
             (P { name = Owned (act.ct, Uninit); 
