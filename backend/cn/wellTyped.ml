@@ -1308,6 +1308,10 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         in
         let bt = if casts_to_bool then Bool else bt_of_pexpr pe1 in
         return (bt, M_PEop (op, pe1, pe2))
+      | M_PEbounded_binop (bk, op, pe1, pe2) ->
+        let@ pe1 = infer_pexpr pe1 in
+        let@ pe2 = infer_pexpr pe2 in
+        return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
       | _ -> todo ()
     in
     return (M_Pexpr (loc, annots, bty, pe_))

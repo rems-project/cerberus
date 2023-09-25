@@ -215,13 +215,19 @@ and check_union (loc : loc) (tag : Sym.t) (id : Id.t)
                 (mv : mem_value) : IT.t m =
   Cerb_debug.error "todo: union types"
 
+let ensure_bitvector_type (loc : Loc.loc) ~(expect : BT.t) : (sign * int) m =
+  match BT.is_bits_bt expect with
+  | Some (sign, n) -> return (sign, n)
+  | None -> fail (fun _ -> {loc; msg = Mismatch {has = !^"(unspecified) bitvector type";
+    expect = BT.pp expect}})
 
 let rec check_object_value (loc : loc) ~(expect: BT.t)
           (ov : 'bty mu_object_value) : IT.t m =
+     Pp.debug 2 (lazy (Pp.item "FIXME: remove: check_object_value" (BT.pp expect))); 
   match ov with
   | M_OVinteger iv ->
-     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
-     return (z_ (Memory.z_of_ival iv))
+     let@ _ = ensure_bitvector_type loc ~expect in
+     return (num_lit_ (Memory.z_of_ival iv) expect)
   | M_OVpointer p -> 
      check_ptrval loc ~expect p
   | M_OVarray items ->

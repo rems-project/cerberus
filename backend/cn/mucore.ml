@@ -121,6 +121,10 @@ type bound_kind =
  | M_Bound_Wrap of act
  | M_Bound_Except of act
 
+let bound_kind_act = function
+ | M_Bound_Wrap act -> act
+ | M_Bound_Except act -> act
+
 type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEsym of symbol
  (* | M_PEimpl of Implementation.implementation_constant (\* implementation-defined constant *\) *)

@@ -111,6 +111,10 @@ let is_tuple_bt = function
   | Tuple bts -> Some bts
   | _ -> None
 
+let is_bits_bt = function
+  | Bits (sign, n) -> Some (sign, n)
+  | _ -> None
+
 
 let make_map_bt abt rbt = Map (abt, rbt)
 
