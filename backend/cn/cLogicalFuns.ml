@@ -106,12 +106,6 @@ let rec add_pattern p v var_map =
     fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
         (Pp_mucore.Basic.pp_pattern p))}
 
-let is_undef pexpr =
-  let (M_Pexpr (loc, _, _, pe)) = pexpr in
-  match pe with
-  | M_PEundef _ -> true
-  | _ -> false
-
 let rec symb_exec_mu_pexpr var_map pexpr =
   let (M_Pexpr (loc, _, _, pe)) = pexpr in
   match pe with
@@ -129,9 +123,9 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     let@ var_map2 = add_pattern p r_v var_map in
     symb_exec_mu_pexpr var_map2 e2
   | M_PEif (cond_pe, x, y) ->
-    if is_undef x
+    if is_undef_pexpr x
     then symb_exec_mu_pexpr var_map y
-    else if is_undef y
+    else if is_undef_pexpr y
     then symb_exec_mu_pexpr var_map x
     else
     let@ cond = symb_exec_mu_pexpr var_map cond_pe in

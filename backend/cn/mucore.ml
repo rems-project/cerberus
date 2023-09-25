@@ -334,6 +334,25 @@ let pp_function = function
   | M_F_min_int -> !^ "min_int"
   | M_F_ctype_width -> !^ "ctype_width"
 
+let is_undef_pexpr pexpr =
+  let (M_Pexpr (loc, _, _, pe)) = pexpr in
+  match pe with
+  | M_PEundef _ -> true
+  | _ -> false
+
+let is_undef_expr expr =
+  let (M_Expr (loc, _, _, e)) = expr in
+  match e with
+  | M_Epure pe -> is_undef_pexpr pe
+  | _ -> false
+
+let bt_of_expr : 'TY. 'TY mu_expr -> 'TY =
+  fun (M_Expr (_loc, _annots, bty, _e)) -> bty
+
+let bt_of_pexpr : 'TY. 'TY mu_pexpr -> 'TY =
+  fun (M_Pexpr (_loc, _annots, bty, _e)) -> bty
+
+
 let evaluate_fun mu_fun args =
   match mu_fun with
   | M_F_params_length ->

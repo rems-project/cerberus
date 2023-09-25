@@ -106,11 +106,13 @@ let bound s ctxt =
   bound_a s ctxt || bound_l s ctxt
 
 
-let get_a s ctxt =
-  fst (SymMap.find s ctxt.computational)
+let get_a s ctxt = match SymMap.find_opt s ctxt.computational with
+  | Some (bt_v, _) -> bt_v
+  | None -> failwith ("Context.get_a: not found: " ^ Pp.plain (Sym.pp_debug s))
 
-let get_l s ctxt =
-  fst (SymMap.find s ctxt.logical)
+let get_l s ctxt = match SymMap.find_opt s ctxt.logical with
+  | Some (bt_v, _) -> bt_v
+  | None -> failwith ("Context.get_l: not found: " ^ Pp.plain (Sym.pp_debug s))
 
 
 let add_a_binding s binding info ctxt =

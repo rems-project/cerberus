@@ -1175,15 +1175,9 @@ open BT
 type label_context = (AT.lt * label_kind) SymMap.t
 
 
-let bt_of_expr : 'TY. 'TY mu_expr -> 'TY =
-  fun (M_Expr (_loc, _annots, bty, _e)) -> bty
-
-let bt_of_pexpr : 'TY. 'TY mu_pexpr -> 'TY =
-  fun (M_Pexpr (_loc, _annots, bty, _e)) -> bty
-
-let check_against_core_bt loc cbt bt = Typing.embed_resultat
+let check_against_core_bt loc msg2 cbt bt = Typing.embed_resultat
   (CoreTypeChecks.check_against_core_bt
-    (fun msg -> Resultat.fail {loc; msg = Generic msg})
+    (fun msg -> Resultat.fail {loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2)})
     cbt bt)
 
 
@@ -1193,10 +1187,13 @@ let rec check_and_bind_pattern bt = function
     return (M_Pattern (loc, anns, bt, p_))
   and check_and_bind_pattern_ bt loc = function
   | M_CaseBase (sym_opt, cbt) ->
-    let@ () = check_against_core_bt loc cbt bt in
     let@ () = match sym_opt with
-      | Some nm -> add_l nm bt (loc, lazy (Pp.string "pattern-match var"))
-      | None -> return ()
+      | Some nm ->
+          let@ () = check_against_core_bt loc (!^ "  checking pattern-var:" ^^^ Sym.pp nm) cbt bt in
+          add_a nm bt (loc, lazy (Pp.string "pattern-match var"))
+      | None ->
+          let@ () = check_against_core_bt loc (!^ "  checking _ pattern-var") cbt bt in
+          return ()
     in
     return (M_CaseBase (sym_opt, cbt))
   | M_CaseCtor (ctor, pats) ->
@@ -1293,7 +1290,7 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         ^ Pp.plain (Pp_mucore_ast.pp_pexpr pe)) in
     let@ bty, pe_ = match pe_ with
      | M_PEsym sym ->
-        let@ l_elem = get_l sym in
+        let@ l_elem = get_a sym in
         return (Context.bt_of l_elem, M_PEsym sym)
      | M_PEval v ->
         let@ (bt, v) = infer_value loc v in
@@ -1312,20 +1309,36 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pe1 = infer_pexpr pe1 in
         let@ pe2 = infer_pexpr pe2 in
         return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
+      | M_PEconv_int (M_Pexpr (l2, a2, _, M_PEval (M_Vctype ct)), pe) ->
+        let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_Vctype ct)) in
+        let@ pe = infer_pexpr pe in
+        return (Memory.bt_of_sct (Sctypes.of_ctype_unsafe loc ct), M_PEconv_int (ct_pe, pe))
+      | M_PEconv_loaded_int (M_Pexpr (l2, a2, _, M_PEval (M_Vctype ct)), pe) ->
+        let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_Vctype ct)) in
+        let@ pe = infer_pexpr pe in
+        return (Memory.bt_of_sct (Sctypes.of_ctype_unsafe loc ct), M_PEconv_loaded_int (ct_pe, pe))
       | _ -> todo ()
     in
     return (M_Pexpr (loc, annots, bty, pe_))
 
 and check_pexpr spec expr =
-  let@ expr = infer_pexpr expr in
-  let@ () = match spec with
-    | `BT expect -> 
-       ensure_base_type (loc_of_pexpr expr) ~expect (bt_of_pexpr expr)
-    | `BV -> 
-       ensure_bits_type (loc_of_pexpr expr) (bt_of_pexpr expr) 
-  in
-  return expr
-
+  match expr, spec with
+    | M_Pexpr (loc, annots, _, M_PEundef (a, b)), `BT expect ->
+      return (M_Pexpr (loc, annots, expect, M_PEundef (a, b)))
+    | _ -> begin
+      let@ expr = infer_pexpr expr in
+      begin match bt_of_pexpr expr with
+        | Integer -> Pp.debug 1 (lazy (Pp.item "warning: inferred integer bt" (Pp_mucore_ast.pp_pexpr expr)))
+        | _ -> ()
+      end;
+      let@ () = match spec with
+        | `BT expect ->
+           ensure_base_type (loc_of_pexpr expr) ~expect (bt_of_pexpr expr)
+        | `BV ->
+           ensure_bits_type (loc_of_pexpr expr) (bt_of_pexpr expr)
+      in
+      return expr
+    end
 
 let check_cn_statement loc stmt =
   let open Cnprog in
@@ -1530,16 +1543,32 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         return (Unit, M_Eskip)
      | M_Eccall (act, f_pe, pes) ->
         let@ () = WCT.is_ct act.loc act.ct in
+        let@ (ret_ct, arg_cts) = match act.ct with
+          | Sctypes.(Pointer (Function (ret_v_ct, arg_r_cts, _))) ->
+              return (snd ret_v_ct, List.map fst arg_r_cts)
+          | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "not a function pointer at call-site"
+              (Sctypes.pp act.ct))})
+        in
         let@ f_pe = check_pexpr (`BT Loc) f_pe in
         (* TODO: we'd have to check the arguments against the function
            type, but we can't when f_pe is dynamic *)
-        let@ pes = ListM.mapM infer_pexpr pes in
-        return (Memory.bt_of_sct act.ct, M_Eccall (act, f_pe, pes))
+        let arg_bt_specs = List.map (fun ct -> `BT (Memory.bt_of_sct ct)) arg_cts in
+        let@ pes = ListM.map2M check_pexpr arg_bt_specs pes in
+        return (Memory.bt_of_sct ret_ct, M_Eccall (act, f_pe, pes))
      | M_Eif (c_pe, e1, e2) ->
         let@ c_pe = check_pexpr (`BT Bool) c_pe in
-        let@ e1 = infer_expr label_context e1 in
-        let bt = bt_of_expr e1 in
-        let@ e2 = check_expr label_context (`BT bt) e2 in
+        let@ (bt, e1, e2) = if is_undef_expr e1
+        then begin
+          let@ e2 = infer_expr label_context e2 in
+          let bt = bt_of_expr e2 in
+          let@ e1 = check_expr label_context (`BT bt) e1 in
+          return (bt, e1, e2)
+        end else begin
+          let@ e1 = infer_expr label_context e1 in
+          let bt = bt_of_expr e1 in
+          let@ e2 = check_expr label_context (`BT bt) e2 in
+          return (bt, e1, e2)
+        end in
         return (bt, M_Eif (c_pe, e1, e2))
      | M_Ebound e ->
         let@ e = infer_expr label_context e in
@@ -1602,17 +1631,25 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
   return (M_Expr (loc, annots, bty, e_))
 
 and check_expr label_context spec expr =
-  let@ expr = infer_expr label_context expr in
-  let@ () = match spec with
-    | `BT expect -> 
-       ensure_base_type (loc_of_expr expr) ~expect (bt_of_expr expr)
-    | `BV -> 
-       ensure_bits_type (loc_of_expr expr) (bt_of_expr expr) 
-  in
-  return expr
-
-
-
+  (* the special-case is needed for pure undef, whose type can't be inferred *)
+  match expr with
+    | M_Expr (loc, annots, _bt, M_Epure pe) ->
+      let@ pe = check_pexpr spec pe in
+      return (M_Expr (loc, annots, bt_of_pexpr pe, M_Epure pe))
+    | _ -> begin
+      let@ expr = infer_expr label_context expr in
+      begin match bt_of_expr expr with
+        | Integer -> Pp.debug 1 (lazy (Pp.item "warning: inferred integer bt" (Pp_mucore_ast.pp_expr expr)))
+        | _ -> ()
+      end;
+      let@ () = match spec with
+        | `BT expect ->
+           ensure_base_type (loc_of_expr expr) ~expect (bt_of_expr expr)
+        | `BV ->
+           ensure_bits_type (loc_of_expr expr) (bt_of_expr expr)
+      in
+      return expr
+    end
 
 (* let infer_glob = function *)
 (*   | M_GlobalDef (ct, expr) -> *)
