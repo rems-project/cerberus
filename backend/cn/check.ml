@@ -747,7 +747,22 @@ let rec check_pexpr (pe : BT.t mu_pexpr)
      check_pexpr pe (fun arg ->
      k (ite_ (arg, int_ 1, int_ 0)))
   | M_PEbounded_binop (act, iop, pe1, pe2) ->
-     unsupported loc !^"use of M_PEbounded_binop"
+     (* in integers, perform this op and round. in bitvector types, just perform
+        the op (for all the ops where wrapping is consistent) *)
+     let@ _ = ensure_bitvector_type loc ~expect in
+     check_pexpr pe1 (fun arg1 ->
+     check_pexpr pe2 (fun arg2 ->
+     let@ () = if BT.equal (IT.bt arg1) (IT.bt arg2)
+       then return ()
+       else fail (fun _ -> {loc; msg = Generic (Pp.item "bounded_binop mismatching arg typs"
+           (Pp.list IT.pp_with_typ [arg1; arg2]))})
+     in
+     let x = match iop with
+       | IOpAdd -> add_ (arg1, arg2)
+       | IOpSub -> sub_ (arg1, arg2)
+       | IOpMul -> mul_ (arg1, arg2)
+     in
+     k x))
   | M_PEconv_int (ct_expr, pe)
   | M_PEconv_loaded_int (ct_expr, pe) ->
      check_pexpr ct_expr (fun ct_it ->
