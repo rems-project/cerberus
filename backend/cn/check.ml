@@ -266,24 +266,11 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
 (*** pure expression inference ************************************************)
 
 
-let warn_uf loc operation = 
-  let msg = 
-    !^"This expression includes non-linear integer arithmetic." ^^^
-    !^"Generating uninterpreted-function constraint:" ^^^
-    squotes (!^operation)
-  in
-  Pp.warn loc msg
-
-
-
-
-
-
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
-let is_representable_integer arg ity = 
-  let maxInt = Memory.max_integer_type ity in
-  let minInt = Memory.min_integer_type ity in
-  and_ [le_ (z_ minInt, arg); le_ (arg, z_ maxInt)]
+let is_representable_integer arg ity = failwith "fix this"
+  (* let maxInt = Memory.max_integer_type ity in *)
+  (* let minInt = Memory.min_integer_type ity in *)
+  (* and_ [le_ (z_ minInt, arg); le_ (arg, z_ maxInt)] *)
 
 
 let eq_value_with f expr = match f expr with
@@ -379,11 +366,10 @@ let get_eq_in_model loc msg x opts =
     | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "get_eq_in_model: no options are equal"
         ((Pp.typ (IT.pp x) (Pp.braces (Pp.list IT.pp opts))) ^^^ !^ "for:" ^^^ msg))})
  
-let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
-  let@ _ = ensure_bitvector_type loc ~expect in
-  let@ () = WellTyped.ensure_base_type loc ~expect (Memory.bt_of_sct ct) in
+let check_conv_int loc ~expect ct arg =
   let@ () = WellTyped.WCT.is_ct loc ct in
-  (* let@ arg = check_pexpr ~expect:Integer pe in *)
+  let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct ct) in
+  assert (match expect with | Bits _ -> true | _ -> false);
   (* try to follow conv_int from runtime/libcore/std.core *)
   let ity = match ct with
     | Integer ity -> ity
@@ -393,27 +379,40 @@ let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
   let fail_unrepresentable () = 
     let@ model = model () in
     fail (fun ctxt ->
-        let msg = Int_unrepresentable 
-                    {value = arg; ict = ct; ctxt; model} in
-        {loc; msg}
+        {loc; msg = Int_unrepresentable {value = arg; ict = ct; ctxt; model}}
       )
   in
   let bt = IT.bt arg in
+  (* TODO: can we (later) optimise this, so when bt matches ct conv_int becomes a no-op? *)
   let@ value = match ity with
     | Bool ->
-       return (ite_ (eq_ (arg, num_lit_ Z.zero bt), num_lit_ Z.zero expect, num_lit_ Z.one expect))
+       (* TODO: can we (later) express this more efficiently without ITE? *)
+       return (ite_ (eq_ (arg, num_lit_ Z.zero bt), 
+                     num_lit_ Z.zero expect, 
+                     num_lit_ Z.one expect))
     | _ when Sctypes.is_unsigned_integer_type ity ->
        let representable = representable_ (ct, arg) in
        (* TODO: revisit this *)
+       (* TODO: this has to be fixed. The basetypes do not work out.
+          The return value always has to have basetype 'expect'. *)
+       (* I think: representable(ct,t) has to compare t with
+          MinInt(ct) and MaxInt(ct) *in a bitvector type large enough
+          for both the type of t and Min/MaxInt(ct). *)
        begin match provable (t_ representable) with
-       | `True -> return arg
+       | `True -> 
+          (* some kind of cast is needed here, but one that does not change the value *)
+          return arg
        | `False ->
+          (* same as above, some cast is needed for 'arg', where as wrapI's type is already OK *)
           return (ite_ (representable, arg, wrapI_ (ity, arg)))
        end
     | _ ->
        begin match provable (t_ (representable_ (ct, arg))) with
-       | `True -> return arg
-       | `False -> fail_unrepresentable ()
+       | `True -> 
+          (* TODO: again, have to cast arg somehow, without changing the value *)
+          return arg
+       | `False -> 
+          fail_unrepresentable ()
        end
   in
   return value
@@ -423,13 +422,14 @@ let check_array_shift loc ~expect vt1 (loc_ct, ct) vt2 =
   let@ () = WellTyped.WCT.is_ct loc_ct ct in
   return (arrayShift_ (vt1, ct, vt2))
 
-let check_against_core_bt loc msg2 cbt bt = Typing.embed_resultat
-  (CoreTypeChecks.check_against_core_bt
-    (fun msg -> Resultat.fail {loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2)})
-    cbt bt)
+let check_against_core_bt loc msg2 cbt bt = 
+  Typing.embed_resultat
+    (CoreTypeChecks.check_against_core_bt
+       (fun msg -> Resultat.fail {loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2)})
+       cbt bt)
 
 
-(* could potentially return a vt instead of an RT.t *)
+
 let rec check_pexpr (pe : BT.t mu_pexpr)
         (k : IT.t -> (unit) m) : (unit) m =
   let (M_Pexpr (loc, _, expect, pe_)) = pe in
@@ -507,7 +507,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr)
        | M_BW_CTZ -> (BWCTZNoSMT, "bw_ctz_uf")
        | M_BW_COMPL -> Cerb_debug.error "todo: M_BW_COMPL"
      in
-     let value = warn_uf loc op_nm; arith_unop unop vt1 in
+     let value = arith_unop unop vt1 in
      k value)
   | M_PEbitwise_binop (binop, pe1, pe2) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
@@ -518,7 +518,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr)
      in
      check_pexpr pe1 (fun vt1 ->
      check_pexpr pe2 (fun vt2 ->
-     let value = warn_uf loc binop_nm; arith_binop binop (vt1, vt2) in
+     let value = arith_binop binop (vt1, vt2) in
      k value))
   | M_Cfvfromint _ -> 
      unsupported loc !^"floats"
@@ -542,101 +542,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr)
      check_pexpr pe (fun vt ->
      k (not_ vt))
   | M_PEop (op, pe1, pe2) ->
-     let check_args_and_ret abt1 abt2 rbt k' = 
-       check_pexpr pe1 (fun v1 ->
-       check_pexpr pe2 (fun v2 ->
-       let@ () = WellTyped.ensure_base_type loc ~expect rbt in
-       k' (v1, v2)))
-     in
-     begin match op with
-     | OpAdd ->
-        (* FIXME: these types are wrong *)
-        check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
-        k (add_ (v1, v2)))
-     | OpSub ->
-        check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
-        k (sub_ (v1, v2)))
-     | OpMul ->
-        check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
-        let@ v1 = try_prove_constant loc v1 in
-        let@ v2 = try_prove_constant loc v2 in
-        k (if (is_z_ v1 || is_z_ v2) then mul_ (v1, v2) 
-           else (warn_uf loc "mul_uf"; mul_no_smt_ (v1, v2))))
-     | OpDiv ->
-        check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
-        let@ v2 = try_prove_constant loc v2 in
-        k (if is_z_ v2 then div_ (v1, v2) 
-           else (warn_uf loc "div_uf"; div_no_smt_ (v1, v2))))
-     | OpRem_f ->
-        check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
-        let@ v2 = try_prove_constant loc v2 in
-        k (if is_z_ v2 then rem_ (v1, v2) 
-           else (warn_uf loc "rem_uf"; rem_no_smt_ (v1, v2))))
-     | OpRem_t ->
-        check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
-        let@ provable = provable loc in
-        begin match provable (LC.T (and_ [le_ (int_ 0, v1); le_ (int_ 0, v2)])) with
-        | `True ->
-           (* If the arguments are non-negative, then rem or mod should be sound to use for rem_t *)
-           (* If not it throws a type error, but we should instead
-              map that to an uninterpreted function eventually. *)
-           let@ v2 = try_prove_constant loc v2 in
-           k (if (is_z_ v2) then IT.mod_ (v1, v2) 
-              else (warn_uf loc "mod_uf"; IT.mod_no_smt_ (v1, v2)))
-
-        | `False ->
-           let@ model = model () in
-           Pp.debug 1 (lazy (Pp.item "rem_t applied to (possibly) negative arguments"
-               (Pp.list IT.pp [v1; v2])));
-           let err = !^"Unsupported: rem_t applied to negative arguments" in
-           fail (fun ctxt ->
-               let msg = Generic_with_model {err; model; ctxt} in
-               {loc; msg}
-             )
-        end)
-     | OpExp ->
-        check_args_and_ret Integer Integer Integer (fun (v1, v2) ->
-        let@ v1 = try_prove_constant loc v1 in
-        let@ v2 = try_prove_constant loc v2 in
-        begin match is_z v1, is_z v2 with
-        | Some z, Some z' ->
-           let it = exp_ (v1, v2) in
-           if Z.lt z' Z.zero then
-             (* we should relax this and map to exp_no_smt_ if we
-                can handle negative exponents there *)
-             fail (fun ctxt -> {loc; msg = NegativeExponent {it; ctxt}})
-           else if Z.fits_int32 z' then
-             k it
-           else 
-             (* we can probably just relax this and map to exp_no_smt_ *)
-             fail (fun ctxt -> {loc; msg = TooBigExponent {it; ctxt}})
-        | _ ->
-           k (warn_uf loc "power_uf"; exp_no_smt_ (v1, v2))
-        end)
-     | OpEq ->
-        (* eventually we have to also support floats here *)
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (eq_ (v1, v2)))
-     | OpGt ->
-        (* eventually we have to also support floats here *)
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (gt_ (v1, v2)))
-     | OpLt ->
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (lt_ (v1, v2)))
-     | OpGe ->
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (ge_ (v1, v2)))
-     | OpLe -> 
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (le_ (v1, v2)))
-     | OpAnd ->
-        check_args_and_ret Bool Bool Bool (fun (v1, v2) ->
-        k (and_ [v1; v2]))
-     | OpOr -> 
-        check_args_and_ret Bool Bool Bool (fun (v1, v2) ->
-        k (or_ [v1; v2]))
-     end
+     failwith "todo"
   | M_PEapply_fun (fun_id, args) ->
      (* TODO: this should be checking the base types *)
      let expect_args = Mucore.mu_fun_param_types fun_id in
