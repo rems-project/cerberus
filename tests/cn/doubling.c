@@ -8,7 +8,7 @@ add_self (unsigned int x)
 
 unsigned int
 add_self_twice (unsigned int x)
-/*@ ensures return == x + x + x + x @*/
+/*@ ensures return == x * 4u32 @*/
 {
   unsigned int y = add_self(x);
   return y + y;

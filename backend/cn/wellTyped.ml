@@ -357,6 +357,7 @@ module WIT = struct
                    Option.is_some (is_const simp_t) 
                    || Option.is_some (is_const simp_t') ->
                return (IT (Binop (Mul, simp_t, simp_t'), IT.bt t))
+            | Bits _, _, _ -> return (mul_ (t, t'))
             | _ ->
                let hint = "Integer multiplication only allowed when one of the arguments is a constant" in
                fail (fun ctxt -> {loc; msg = NIA {it = IT.mul_ (t, t'); ctxt; hint}})
