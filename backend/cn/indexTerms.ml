@@ -440,6 +440,7 @@ let pointer_ n = IT (Const (Pointer n), BT.Loc)
 let bool_ b = IT (Const (Bool b), BT.Bool)
 let unit_ = IT (Const Unit, BT.Unit)
 let int_ n = z_ (Z.of_int n)
+let int_lit_ n bt = num_lit_ (Z.of_int n) bt
 let default_ bt = IT (Const (Default bt), bt)
 let const_ctype_ ct = IT (Const (CType_const ct), BT.CType)
 
@@ -508,7 +509,7 @@ let rem_ (it, it') = IT (Binop (Rem,it, it'), bt it)
 let rem_no_smt_ (it, it') = IT (Binop (RemNoSMT,it, it'), bt it)
 let mod_ (it, it') = IT (Binop (Mod,it, it'), bt it)
 let mod_no_smt_ (it, it') = IT (Binop (ModNoSMT,it, it'), bt it)
-let divisible_ (it, it') = eq_ (mod_ (it, it'), num_lit_ Z.zero (bt it))
+let divisible_ (it, it') = eq_ (mod_ (it, it'), int_lit_ 0 (bt it))
 let rem_f_ (it, it') = mod_ (it, it')
 let min_ (it, it') = IT (Binop (Min,it, it'), bt it)
 let max_ (it, it') = IT (Binop (Max,it, it'), bt it)
@@ -521,7 +522,7 @@ let arith_unop op it = IT (Unop (op, it), bt it)
 let arith_binop_check op (it, it') =
   assert (BT.equal (bt it) (bt it'));
   arith_binop op (it, it')
-let add2_ = arith_binop_check Add
+let add_check_ = arith_binop_check Add
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
@@ -592,9 +593,9 @@ let pointerToIntegerCast_ it =
 let pointerToAllocIdCast_ it =
   cast_ Alloc_id it
 let memberOffset_ (tag, member) =
-  IT (MemberOffset (tag, member), BT.Integer)
+  IT (MemberOffset (tag, member), Memory.intptr_bt)
 let arrayOffset_ (ct, t) =
-  IT (ArrayOffset (ct, t), BT.Integer)
+  IT (ArrayOffset (ct, t), Memory.intptr_bt)
 
 let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true
@@ -602,7 +603,7 @@ let isIntegerToPointerCast = function
   | _ -> false
 
 let pointer_offset_ (p, n) =
-  integerToPointerCast_ (add2_ (pointerToIntegerCast_ p, n))
+  integerToPointerCast_ (add_check_ (pointerToIntegerCast_ p, n))
 
 let memberShift_ (t, tag, member) =
   pointer_offset_ (t, memberOffset_ (tag, member))
@@ -705,7 +706,7 @@ let alignedI_ ~t ~align =
   assert (BT.equal Memory.intptr_bt (bt align));
   IT (Aligned {t; align}, BT.Bool)
 let aligned_ (t, ct) =
-  alignedI_ ~t ~align:(num_lit_ (Z.of_int (Memory.align_of_ctype ct)) Memory.intptr_bt)
+  alignedI_ ~t ~align:(int_lit_ (Memory.align_of_ctype ct) Memory.intptr_bt)
 
 
 let const_map_ index_bt t =
@@ -781,7 +782,7 @@ let value_check_pointer alignment ~pointee_ct about =
     | _ -> Memory.size_of_ctype pointee_ct
   in
   and_ [le_ (intptr_const_ Z.zero, about_int);
-        le_ (sub_ (add2_ (about_int, intptr_const_ (Z.of_int pointee_size)), intptr_const_ Z.one),
+        le_ (sub_ (add_ (about_int, intptr_const_ (Z.of_int pointee_size)), intptr_const_ Z.one),
             intptr_const_ Memory.max_pointer);
         (* TODO revist/delete this when transition to VIP is over *)
         eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);

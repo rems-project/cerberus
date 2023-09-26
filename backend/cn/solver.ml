@@ -453,11 +453,11 @@ module Translate = struct
          Some (IT ((Record str), IT.bt t))
       | MemberOffset (tag, member) ->
          let decl = SymMap.find tag struct_decls in
-         Some (int_ (Option.get (Memory.member_offset decl member)))
+         Some (int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt)
       | ArrayOffset (ct, t) ->
-         Some (mul_ (int_ (Memory.size_of_ctype ct), t))
+         Some (mul_ (int_lit_ (Memory.size_of_ctype ct) (IT.bt t), t))
       | SizeOf ct ->
-         Some (int_ (Memory.size_of_ctype ct))
+         Some (int_lit_ (Memory.size_of_ctype ct) (IT.bt it))
       | Aligned t ->
          let addr = pointerToIntegerCast_ t.t in
          assert (BT.equal (IT.bt addr) (IT.bt t.align));

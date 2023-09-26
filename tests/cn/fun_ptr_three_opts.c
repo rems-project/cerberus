@@ -36,9 +36,9 @@ typedef int_binop1 *int_binop;
 int_binop g1 = f2;
 
 /*@
-predicate {integer x} Is_Binop (pointer f) {
+predicate (void) Is_Binop (pointer f) {
   assert (in_loc_list (f, [&f1, &f2, &f3]));
-  return {x: 1};
+  return;
 }
 @*/
 

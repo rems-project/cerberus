@@ -114,7 +114,7 @@ let unpack_owned global (ct, init) pointer (O o) =
           let mresource = 
             (P {
               name = Owned (padding_ct, Uninit);
-              pointer = pointer_offset_ (pointer, int_ offset);
+              pointer = pointer_offset_ (pointer, intptr_const_ (Z.of_int offset));
               iargs = [];
             }, O (default_ (Memory.bt_of_sct padding_ct)))
           in
