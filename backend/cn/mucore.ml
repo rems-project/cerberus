@@ -321,13 +321,25 @@ let mu_fun_param_types mu_fun =
   let open BaseTypes in
   match mu_fun with
   | M_F_params_length -> [List CType]
-  | M_F_params_nth -> [List CType; Integer]
+  | M_F_params_nth -> [List CType; Integer (*TODO: bv fix*)]
   | M_F_are_compatible -> [CType; CType]
   | M_F_align_of -> [CType]
   | M_F_size_of -> [CType]
   | M_F_max_int -> [CType]
   | M_F_min_int -> [CType]
   | M_F_ctype_width -> [CType]
+
+let mu_fun_return_type mu_fun = 
+  let open BaseTypes in
+  match mu_fun with
+  | M_F_params_length -> Integer  (* TODO: bv fix *)
+  | M_F_params_nth -> CType
+  | M_F_are_compatible -> Bool
+  | M_F_align_of -> Integer  (* TODO: bv fix *)
+  | M_F_size_of -> Integer  (* TODO: bv fix *)
+  | M_F_max_int -> Integer  (* TODO: bv fix *)
+  | M_F_min_int -> Integer  (* TODO: bv fix *)
+  | M_F_ctype_width -> Integer  (* TODO: bv fix *)
 
 let pp_function = function
   | M_F_params_length -> !^ "params_length"
