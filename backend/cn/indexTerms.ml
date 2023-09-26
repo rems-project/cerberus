@@ -35,7 +35,8 @@ let sterm_of_term : typed -> sterm =
 let pp ?(atomic=false) =
   Terms.pp ~atomic
 
-let pp_with_typ it = Pp.typ (pp it) (BT.pp (bt it))
+let pp_with_typf f it = Pp.typ (pp it) (f (bt it))
+let pp_with_typ = pp_with_typf BT.pp
 
 
 let rec bound_by_pattern (Pat (pat_, bt)) = 
@@ -700,7 +701,7 @@ let representable_ (t, it) =
 let good_ (sct, it) =
   IT (Good (sct, it), BT.Bool)
 let wrapI_ (ity, arg) = 
-  IT (WrapI (ity, arg), BT.Integer)
+  IT (WrapI (ity, arg), Memory.bt_of_sct (Sctypes.Integer ity))
 let alignedI_ ~t ~align =
   assert (BT.equal (bt t) Loc);
   assert (BT.equal Memory.intptr_bt (bt align));

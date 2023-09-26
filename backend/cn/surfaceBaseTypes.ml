@@ -96,6 +96,10 @@ let is_datatype_bt = function
   | Datatype sym -> Some sym
   | _ -> None
 
+let is_bits_bt = function
+  | Bits (sign, sz) -> Some (sign, sz)
+  | _ -> None
+
 
 let make_map_bt abt rbt = Map (abt, rbt)
 

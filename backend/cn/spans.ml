@@ -199,7 +199,7 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
         |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))
   | (RET.Q ({name = Owned (ct, _); _} as qpt)) ->
       assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
-      let ispans = perm_spans m_g qpt.q qpt.permission in
+      let ispans = perm_spans m_g (fst qpt.q) qpt.permission in
       let _ = List.length ispans > 0 || raise NoResult in
       if List.exists (fun (lb, rb) -> Option.is_none lb || Option.is_none rb) ispans
       then raise (Failure (Pp.item "unbounded resource interval" (IT.pp qpt.permission)))
@@ -270,7 +270,7 @@ let get_witnesses = function
   | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, bool_ true)]
   | RET.Q ({name = Owned (ct, _); _} as qpt) ->
      assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
-     let i = sym_ (qpt.q, BT.Integer) in
+     let i = sym_ qpt.q in
      let lbs = scan_subterms is_le qpt.permission
        |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
        |> List.map fst in
@@ -287,7 +287,7 @@ let get_witnesses = function
      in
      List.init (List.length eqs + 1)
        (fun i -> (arrayShift_ (qpt.pointer, ct, add_ (lb, z_ (Z.of_int i))),
-           subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
+           subst (make_subst [(fst qpt.q, z_ (Z.of_int i))]) qpt.permission))
   | _ -> []
 (*
 let narrow_quantified_to_witness ptr (q_pt : RET.qpredicate_type) =

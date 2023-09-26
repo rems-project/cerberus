@@ -289,7 +289,7 @@ module General = struct
              match re with
              | (Q p', O p'_oarg) when subsumed requested.name p'.name 
                          && IT.equal step p'.step ->
-                let p' = alpha_rename_qpredicate_type_ requested.q p' in
+                let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
                 begin match provable (LC.T pmatch) with
                 | `True ->
@@ -316,7 +316,7 @@ module General = struct
          ListM.fold_rightM (fun (predicate_name, index) (needed, oarg) ->
              let continue = return (needed, oarg) in
              if not (is_false needed) && subsumed requested.name predicate_name then 
-               let su = IT.make_subst [(requested.q, index)] in
+               let su = IT.make_subst [(fst requested.q, index)] in
                let needed_at_index = (IT.subst su needed) in
                match provable (LC.t_ needed_at_index) with
                | `False -> continue
@@ -332,13 +332,13 @@ module General = struct
                    | None -> continue
                    | Some ((p', O p'_oarg), _) ->
                       let oarg = add_case (One {one_index = index; value = p'_oarg}) oarg in
-                      let needed' = and_ [needed; ne__ (sym_ (requested.q, Integer)) index] in
+                      let needed' = and_ [needed; ne__ (sym_ requested.q) index] in
                       return (needed', oarg)
              else continue
             
            ) movable_indices (needed, oarg)
        in
-       let nothing_more_needed = forall_ (requested.q, BT.Integer) (not_ needed) in
+       let nothing_more_needed = forall_ requested.q (not_ needed) in
        Pp.debug 9 (lazy (Pp.item "checking resource remainder" (LC.pp nothing_more_needed)));
        let holds = provable nothing_more_needed in
        begin match holds with

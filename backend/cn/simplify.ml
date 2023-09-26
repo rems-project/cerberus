@@ -637,7 +637,7 @@ module ResourceTypes = struct
     }
 
   let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
-    let qp = alpha_rename_qpredicate_type_ (Sym.fresh_same qp.q) qp in
+    let qp = alpha_rename_qpredicate_type_ (Sym.fresh_same (fst qp.q)) qp in
     let permission = simp_flatten simp_ctxt qp.permission in
     {
       name = qp.name;

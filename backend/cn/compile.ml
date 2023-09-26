@@ -512,19 +512,19 @@ module EffectfulTranslation = struct
         return (IT (Binop (EQ, e1, e2), SBT.Bool))
     | CN_inequal, _ ->
         return (not_ (IT (Binop (EQ, e1, e2), SBT.Bool)))
-    | CN_lt, (SBT.Integer | SBT.Real) ->
+    | CN_lt, (SBT.Integer | SBT.Real | SBT.Bits _) ->
         return (IT (Binop (LT, e1, e2), SBT.Bool))
     | CN_lt, SBT.Loc _ ->
         return (IT (Binop (LTPointer, e1, e2), SBT.Bool))
-    | CN_le, (SBT.Integer | SBT.Real) ->
+    | CN_le, (SBT.Integer | SBT.Real | SBT.Bits _) ->
         return (IT (Binop (LE, e1, e2), SBT.Bool))
     | CN_le, SBT.Loc _ ->
         return (IT (Binop (LEPointer, e1, e2), SBT.Bool))
-    | CN_gt, (SBT.Integer | SBT.Real) ->
+    | CN_gt, (SBT.Integer | SBT.Real | SBT.Bits _) ->
         return (IT (Binop (LT, e2, e1), SBT.Bool))
     | CN_gt, SBT.Loc _ ->
         return (IT (Binop (LTPointer, e2, e1), SBT.Bool))
-    | CN_ge, (SBT.Integer | SBT.Real) ->
+    | CN_ge, (SBT.Integer | SBT.Real | SBT.Bits _) ->
         return (IT (Binop (LE, e2, e1), SBT.Bool))
     | CN_ge, SBT.Loc _ ->
         return (IT (Binop (LEPointer, e2, e1), SBT.Bool))
@@ -690,10 +690,10 @@ module EffectfulTranslation = struct
             mk_translate_binop loc bop (e1, e2)
         | CNExpr_sizeof ct ->
             let scty = Sctypes.of_ctype_unsafe loc ct in
-            return (IT (SizeOf scty, SBT.Integer))
+            return (IT (SizeOf scty, Memory.intptr_sbt))
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
-            return (IT ((MemberOffset (tag, member)), SBT.Integer))
+            return (IT ((MemberOffset (tag, member)), Memory.intptr_sbt))
         | CNExpr_membershift (e, member) ->
             let@ e = self e in
             begin match IT.bt e with
@@ -901,19 +901,20 @@ module EffectfulTranslation = struct
   let split_pointer_linear_step loc q (ptr_expr : IT.sterm) =
     let open IndexTerms in
     let open Pp in
-    let qs = sym_ (q, SBT.Integer) in
+    let qs = sym_ q in
     let msg_s = "Iterated predicate pointer must be (ptr + (q_var * offs)):" in
     begin match term ptr_expr with
-      | (Cast (Loc, IT (Binop (Add, b, offs), Integer))) ->
+      | (Cast (Loc, IT (Binop (Add, b, offs), Bits _))) ->
         begin match term b, term offs with
-          | (Cast (Integer, (IT (_, SBT.Loc _) as p))), Binop (Mul, x, y) when Terms.equal SBT.equal x qs ->
+          | (Cast (_, (IT (_, SBT.Loc _) as p))), Binop (Mul, x, y)
+                when Terms.equal SBT.equal x qs ->
             return (p, y)
           | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
         end
       (* temporarily allow this more confusing but more concise syntax,
          until we have enriched Core's pointer base types *)
       | Binop (Add, p, IT (Binop (Mul, x, y), _)) when Terms.equal SBT.equal x qs ->
-         return (p, y)       
+         return (p, y)
       | _ ->
       fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
     end
@@ -928,9 +929,8 @@ module EffectfulTranslation = struct
          (loc, Some "default value constraint"))]
     | RET.Q { name = Owned (scty, Init); q; permission; _} ->
        let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
-       let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
-       [(LC.forall_ (q, BT.Integer)
-            (IT.impl_ (permission, IT.good_ (scty, v_el))),
+       let v_el = IT.map_get_ v (IT.sym_ q) in
+       [(LC.forall_ q (IT.impl_ (permission, IT.good_ (scty, v_el))),
           (loc, Some "default value constraint"))]
      | _ -> 
         []
@@ -955,18 +955,19 @@ module EffectfulTranslation = struct
     let bt' = translate_cn_base_type env bt in
     let@ () = 
       if SBT.equal bt' SBT.Integer then return ()
+      else if Option.is_some (SBT.is_bits_bt bt') then return ()
       else fail {loc = pred_loc; msg = let open Pp in
-          Generic (!^ "quantified v must be integer:" ^^^ SBT.pp bt')}
+          Generic (!^ "quantified v must be integer or bitvector:" ^^^ SBT.pp bt')}
     in
-    let env_with_q = add_logical q SBT.Integer env in
+    let env_with_q = add_logical q bt' env in
     let@ guard_expr = translate_cn_expr (SymSet.singleton q) env_with_q guard in
     let@ args = ListM.mapM (translate_cn_expr (SymSet.singleton q) env_with_q) args in
     let@ (pname, ptr_expr, iargs, oargs_ty) =
            translate_cn_res_info res_loc pred_loc env_with_q res args in
-    let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
-    let m_oargs_ty = SBT.make_map_bt SBT.Integer oargs_ty in
+    let@ (ptr_base, step) = split_pointer_linear_step pred_loc (q, bt') ptr_expr in
+    let m_oargs_ty = SBT.make_map_bt bt' oargs_ty in
     let pt = (RET.Q { name = pname
-              ; q
+              ; q= (q, SBT.to_basetype bt')
               ; pointer= IT.term_of_sterm ptr_base
               ; step = IT.term_of_sterm step
               ; permission= IT.term_of_sterm guard_expr

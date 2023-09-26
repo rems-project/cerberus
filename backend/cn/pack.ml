@@ -1,5 +1,4 @@
 open IndexTerms
-open BaseTypes
 open ResourceTypes
 open Resources
 open ResourcePredicates
@@ -11,7 +10,7 @@ module LAT = LogicalArgumentTypes
 let resource_empty provable resource = 
   let constr = match resource with
     | (P p, _) -> LC.t_ (bool_ false)
-    | (Q p, _) -> LC.forall_ (p.q, BT.Integer) (not_ p.permission)
+    | (Q p, _) -> LC.forall_ p.q (not_ p.permission)
   in
   match provable constr with
   | `True -> `Empty
@@ -20,11 +19,11 @@ let resource_empty provable resource =
 
 let unfolded_array init (ict, olength) pointer = 
   let length = Option.get olength in
-  let q_s, q = IT.fresh_named Integer "i" in
+  let q_s, q = IT.fresh_named Memory.intptr_bt "i" in
   Q { 
     name = Owned (ict, init);
     pointer = pointer;
-    q = q_s;
+    q = (q_s, Memory.intptr_bt);
     step = int_ (Memory.size_of_ctype ict);
     iargs = [];
     permission = and_ [((int_ 0) %<= q); (q %< (int_ length))]
@@ -147,7 +146,7 @@ let unpack loc global provable (ret, O o) =
   let extractable_one loc provable (predicate_name, index) (ret, O o) = 
     match ret with
     | Q ret when equal_predicate_name predicate_name ret.name ->
-       let su = IT.make_subst [(ret.q, index)] in
+       let su = IT.make_subst [(fst ret.q, index)] in
        let index_permission = IT.subst su ret.permission in
        begin match provable (LC.t_ index_permission) with
         | `True -> 
@@ -158,7 +157,7 @@ let unpack loc global provable (ret, O o) =
             O (map_get_ o index))
           in
           let ret_reduced = 
-            { ret with permission = and_ [ret.permission; ne__ (sym_ (ret.q, Integer)) index ] }
+            { ret with permission = and_ [ret.permission; ne__ (sym_ ret.q) index ] }
           in
           Some ((Q ret_reduced, O o), at_index)
        | `False -> 

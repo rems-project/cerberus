@@ -67,7 +67,11 @@ let solver () : (Solver.solver) t =
   fun s -> Ok (s.solver, s)
 
 let fail (f : failure) : ('a) t = 
-  fun s -> Error (f s.typing_context)
+  fun s ->
+  let msg = f s.typing_context in
+  if (! Pp.print_level) > 2
+  then (TypeErrors.report msg; failwith "error")
+  else Error msg
 
 
 let pure (m : ('a) t) : ('a) t =
@@ -331,7 +335,7 @@ let map_and_fold_resources loc
            let (ix, hist) = Context.res_written loc i "changed" (ix, hist) in
            begin match re with
            | (Q {q; permission; _}, _) ->
-              begin match provable_f (LC.forall_ (q, Integer) (IT.not_ permission)) with
+              begin match provable_f (LC.forall_ q (IT.not_ permission)) with
               | `True -> (resources, ix, hist, i::changed_or_deleted, acc)
               | `False ->
                  let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in

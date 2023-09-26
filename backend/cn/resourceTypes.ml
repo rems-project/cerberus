@@ -40,7 +40,7 @@ type predicate_type = {
 type qpredicate_type = {
     name : predicate_name; 
     pointer: IT.t;            (* I *)
-    q: Sym.t;
+    q: Sym.t * BT.t;
     step: IT.t;
     permission: IT.t;         (* I, function of q *)
     iargs: IT.t list;         (* I, function of q *)
@@ -85,14 +85,14 @@ let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
   let pointer = 
     IT.pp p.pointer 
     ^^^ plus 
-    ^^^ Sym.pp p.q 
+    ^^^ Sym.pp (fst p.q)
     ^^^ star 
     ^^^ IT.pp p.step 
   in
   let args = pointer :: List.map IT.pp (p.iargs) in
 
   !^"each" ^^ 
-    parens (BT.pp Integer ^^^ Sym.pp p.q ^^ semi ^^^ IT.pp p.permission) 
+    parens (BT.pp (snd p.q) ^^^ Sym.pp (fst p.q) ^^ semi ^^^ IT.pp p.permission)
     ^/^ braces (c_app (pp_predicate_name p.name) args)
     ^^ pp_maybe_oargs oargs
 
@@ -120,17 +120,17 @@ let json re : Yojson.Safe.t =
 
 
 let alpha_rename_qpredicate_type_ (q' : Sym.t) (qp : qpredicate_type) = 
-  let subst = make_subst [(qp.q, sym_ (q', BT.Integer))] in
+  let subst = make_subst [(fst qp.q, sym_ (q', snd qp.q))] in
   { name = qp.name;
     pointer = qp.pointer;
-    q = q';
+    q = (q', snd qp.q);
     step = qp.step;
     permission = IT.subst subst qp.permission;
     iargs = List.map (IT.subst subst) qp.iargs;
   }
 
 let alpha_rename_qpredicate_type qp =
-  alpha_rename_qpredicate_type_ (Sym.fresh_same qp.q) qp
+  alpha_rename_qpredicate_type_ (Sym.fresh_same (fst qp.q)) qp
 
 
 let subst_predicate_type substitution (p : predicate_type) = 
@@ -142,7 +142,7 @@ let subst_predicate_type substitution (p : predicate_type) =
 
 let subst_qpredicate_type substitution (qp : qpredicate_type) =
   let qp = 
-    if SymSet.mem qp.q substitution.Subst.relevant
+    if SymSet.mem (fst qp.q) substitution.Subst.relevant
     then alpha_rename_qpredicate_type qp 
     else qp
   in
@@ -169,7 +169,7 @@ let free_vars = function
   | Q p -> 
      SymSet.union
        (SymSet.union (IT.free_vars p.pointer) (IT.free_vars p.step))
-       (SymSet.remove p.q (IT.free_vars_list (p.permission :: p.iargs)))
+       (SymSet.remove (fst p.q) (IT.free_vars_list (p.permission :: p.iargs)))
 
 
 
@@ -189,7 +189,7 @@ let same_predicate_name r1 r2 =
 let alpha_equivalent r1 r2 = match r1, r2 with
   | P x, P y -> equal_resource_type r1 r2
   | Q x, Q y ->
-    let y2 = alpha_rename_qpredicate_type_ x.q y in
+    let y2 = alpha_rename_qpredicate_type_ (fst x.q) y in
     equal_resource_type (Q x) (Q y2)
   | _ -> false
 
@@ -222,7 +222,7 @@ let dtree_of_predicate_type (pred : predicate_type) =
 
 let dtree_of_qpredicate_type (pred : qpredicate_type) =
   Dnode (pp_ctor "qpred", 
-        Dleaf (Sym.pp pred.q) ::
+        Dleaf (Pp.parens (Pp.typ (Sym.pp (fst pred.q)) (BT.pp (snd pred.q))))::
         IT.dtree pred.step ::
         IT.dtree pred.permission ::
         dtree_of_predicate_name pred.name ::

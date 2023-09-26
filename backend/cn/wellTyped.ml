@@ -289,8 +289,10 @@ module WIT = struct
          end
 
   let rec infer : 'bt. Loc.t -> 'bt term -> (BT.t term) m =
-      fun loc (IT (it, _)) ->
-      match it with
+    fun loc orig_it ->
+    let (IT (it, _)) = orig_it in
+    Pp.debug 22 (lazy (Pp.item "Welltyped.WIT.infer" (IT.pp orig_it)));
+    let@ it' = match it with
       | Sym s ->
          let@ is_a = bound_a s in
          let@ is_l = bound_l s in
@@ -517,7 +519,7 @@ module WIT = struct
          pure begin 
              let@ () = add_l s Integer (loc, lazy (Pp.string "forall-var")) in
              let@ t = check loc Bool t in
-             return (IT (EachI ((i1, (s, BT.Integer), i2), t),BT.Bool))
+             return (IT (EachI ((i1, (s, Integer), i2), t),BT.Bool))
            end
       | Tuple ts ->
          let@ ts = ListM.mapM (infer loc) ts in
@@ -627,17 +629,17 @@ module WIT = struct
           return (IT (Cast (cbt, t), cbt))
        | MemberOffset (tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
-          return (IT (MemberOffset (tag, member),Integer))
+          return (IT (MemberOffset (tag, member), Memory.intptr_bt))
        | ArrayOffset (ct, t) ->
           let@ () = WCT.is_ct loc ct in
-          let@ t = check loc Integer t in
-          return (IT (ArrayOffset (ct, t), Integer))
+          let@ t = check loc Memory.intptr_bt t in
+          return (IT (ArrayOffset (ct, t), Memory.intptr_bt))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
-          return (IT (SizeOf ct, Integer))
+          return (IT (SizeOf ct, Memory.intptr_bt))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
-          let@ t_align = check loc Integer t.align in
+          let@ t_align = check loc Memory.intptr_bt t.align in
           return (IT (Aligned {t = t_t; align=t_align},BT.Bool))
        | Representable (ct, t) ->
           let@ () = WCT.is_ct loc ct in
@@ -649,8 +651,8 @@ module WIT = struct
           return (IT (Good (ct, t),BT.Bool))
        | WrapI (ity, t) ->
           let@ () = WCT.is_ct loc (Integer ity) in
-          let@ t = check loc Integer t in
-          return (IT (WrapI (ity, t), BT.Integer))
+          let@ t = infer loc t in
+          return (IT (WrapI (ity, t), Memory.bt_of_sct (Integer ity)))
        | Nil bt -> 
           let@ bt = WBT.is_bt loc bt in
           return (IT (Nil bt, BT.List bt))
@@ -751,6 +753,9 @@ module WIT = struct
            | Some rbt -> return rbt
          in
          return (IT (Match (e, cases), rbt))
+    in
+    Pp.debug 22 (lazy (Pp.item "Welltyped.WIT.infer: inferred" (IT.pp_with_typ it')));
+    return it'
 
 
     and check loc ls it =
@@ -796,7 +801,7 @@ module WRET = struct
           there's no name clashes *)
        (* let p = RET.alpha_rename_qpredicate_type p in *)
        let@ pointer = WIT.check loc BT.Loc p.pointer in
-       let@ step = WIT.check loc BT.Integer p.step in
+       let@ step = WIT.infer loc p.step in
        let@ simp_ctxt = simp_ctxt () in
        let@ step = match IT.is_z (Simplify.IndexTerms.eval simp_ctxt step) with
          | Some z ->
@@ -819,12 +824,11 @@ module WRET = struct
        in
        let@ permission, iargs = 
          pure begin 
-             let@ () = add_l p.q Integer (loc, lazy (Pp.string "forall-var")) in
+             let@ () = add_l (fst p.q) (snd p.q) (loc, lazy (Pp.string "forall-var")) in
              let@ permission = WIT.check loc BT.Bool p.permission in
              let@ provable = provable loc in
              let only_nonnegative_indices =
-               LC.forall_ (p.q, Integer) 
-                 (impl_ (p.permission, ge_ (sym_ (p.q, BT.Integer), int_ 0)))
+               LC.forall_ p.q (impl_ (p.permission, ge_ (sym_ p.q, int_lit_ 0 (snd p.q))))
              in
              let@ () = match provable only_nonnegative_indices with
                | `True ->
@@ -859,7 +863,7 @@ let oarg_bt loc = function
       oarg_bt_of_pred loc pred.name
   | RET.Q pred ->
       let@ item_bt = oarg_bt_of_pred loc pred.name in
-      return (BT.make_map_bt Integer item_bt)
+      return (BT.make_map_bt (IT.bt pred.step) item_bt)
 
 
 
