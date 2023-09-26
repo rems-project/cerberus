@@ -1287,8 +1287,10 @@ let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t * BT.t mu_value)
 let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m = 
   fun pe ->
     let (M_Pexpr (loc, annots, _, pe_)) = pe in
-    let todo () = failwith ("TODO: WellTyped infer_pexpr: "
-        ^ Pp.plain (Pp_mucore_ast.pp_pexpr pe)) in
+    let todo () = begin
+        Pp.error loc (!^ "TODO: WellTyped infer_pexpr") [Pp_mucore_ast.pp_pexpr pe];
+        failwith ("TODO: WellTyped infer_pexpr")
+    end in
     let@ bty, pe_ = match pe_ with
      | M_PEsym sym ->
         let@ l_elem = get_a sym in
@@ -1436,7 +1438,10 @@ let check_cnprog p =
 let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m = 
   fun label_context e ->
     let (M_Expr (loc, annots, _, e_)) = e in
-    let todo () = failwith ("TODO: WellTyped infer_expr label_context: " ^ Pp.plain (Pp_mucore_ast.pp_expr e)) in
+    let todo () = begin
+        Pp.error loc (!^ "TODO: WellTyped infer_expr") [Pp_mucore_ast.pp_expr e];
+        failwith ("TODO: WellTyped infer_expr")
+    end in
     let@ bty, e_ = match e_ with
      | M_Epure pe ->
         let@ pe = infer_pexpr pe in
