@@ -52,44 +52,13 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 let bogus_cbt_to_bt (cbt : Mucore.T.cbt) = BT.Integer
 
-let rec infer_pattern (M_Pattern (loc, _, _, pattern)) =
-  match pattern with
-  | M_CaseBase (_, has_bt) -> 
-     let has_bt = bogus_cbt_to_bt has_bt in
-     let@ has_bt = WellTyped.WBT.is_bt loc has_bt in
-     return has_bt
-  | M_CaseCtor (constructor, pats) ->
-    begin match constructor, pats with
-    | M_Cnil item_bt, [] ->
-       let item_bt = bogus_cbt_to_bt item_bt in
-       let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
-       return (BT.List item_bt)
-    | M_Cnil _, _ ->
-       fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
-    | M_Ccons, [p1; p2] -> 
-       let@ bt1 = infer_pattern p1 in
-       let@ bt2 = infer_pattern p2 in
-       let@ () = WellTyped.ensure_base_type loc ~expect:(List bt1) bt2 in
-       return (List bt1)
-    | M_Ccons, _ ->
-        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
-    | M_Ctuple, pats ->
-        let@ bts = ListM.mapM infer_pattern pats in
-        return (BT.Tuple bts)
-    | M_Carray, _ ->
-        Cerb_debug.error "todo: array types"
-    end
-
-
-
-
 
 
 
 (* pattern-matches and binds *)
-let rec pattern_match (M_Pattern (loc, _, _, pattern)) it =
+let rec check_and_match_pattern (M_Pattern (loc, _, bty, pattern)) it =
    match pattern with
-   | M_CaseBase (o_s, _has_bt) ->
+   | M_CaseBase (o_s, _has_cbt) ->
       begin match o_s with
       | Some s ->
          let@ () = add_a_value s it (loc, lazy (Sym.pp s)) in
@@ -99,22 +68,29 @@ let rec pattern_match (M_Pattern (loc, _, _, pattern)) it =
       end
    | M_CaseCtor (constructor, pats) ->
       match constructor, pats with
-      | M_Cnil item_bt, [] ->
-         let item_bt = bogus_cbt_to_bt item_bt in
-         let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
+      | M_Cnil _item_cbt, [] ->
+         let@ item_bt = match bty with
+           | List item_bt -> return item_bt
+           | _ -> fail (fun _ -> {loc; msg = Mismatch {has = !^"list"; expect = BT.pp bty}})
+         in
          let@ () = add_c loc (LC.t_ (eq__ it (nil_ ~item_bt))) in
          return []
       | M_Ccons, [p1; p2] ->
-         let@ item_bt = infer_pattern p1 in
-         let@ a1 = pattern_match p1 (head_ ~item_bt it) in
-         let@ a2 = pattern_match p2 (tail_ it) in
+         let@ () = ensure_base_type loc ~expect:bty (List (bt_of_pattern p1)) in
+         let@ () = ensure_base_type loc ~expect:bty (bt_of_pattern p2) in
+         let item_bt = bt_of_pattern p1 in
+         let@ a1 = check_and_match_pattern p1 (head_ ~item_bt it) in
+         let@ a2 = check_and_match_pattern p2 (tail_ it) in
          let@ () = add_c loc (LC.t_ (ne_ (it, nil_ ~item_bt))) in
          return (a1 @ a2)
       | M_Ctuple, pats ->
-         let@ all_as = ListM.mapiM (fun i p ->
-           let@ item_bt = infer_pattern p in
-           pattern_match p (Simplify.IndexTerms.tuple_nth_reduce it i item_bt)
-         ) pats in
+         let@ () = ensure_base_type loc ~expect:bty (Tuple (List.map bt_of_pattern pats)) in
+         let@ all_as = 
+           ListM.mapiM (fun i p ->
+               let ith = Simplify.IndexTerms.tuple_nth_reduce it i (bt_of_pattern p) in
+               check_and_match_pattern p ith
+             ) pats 
+         in
          return (List.concat all_as)
       | M_Carray, _ ->
          Cerb_debug.error "todo: array patterns"
@@ -810,7 +786,8 @@ let rec check_pexpr (pe : BT.t mu_pexpr)
   | M_PElet (p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some p) e1 in
      check_pexpr e1 (fun v1 ->
-     let@ bound_a = pattern_match p v1 in
+     let@ () = ensure_base_type loc ~expect:(IT.bt v1) (bt_of_pattern p) in
+     let@ bound_a = check_and_match_pattern p v1 in
      let@ () = fin () in
      check_pexpr e2 (fun lvt ->
      let@ () = remove_as bound_a in
@@ -1363,7 +1340,8 @@ let rec check_expr labels (e : 'bty mu_expr)
   | _, M_Elet (p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some p) e1 in
      check_pexpr e1 (fun v1 ->
-     let@ bound_a = pattern_match p v1 in
+     let@ () = ensure_base_type loc ~expect:(IT.bt v1) (bt_of_pattern p) in
+     let@ bound_a = check_and_match_pattern p v1 in
      let@ () = fin () in
      check_expr labels e2 (fun rt ->
          let@ () = remove_as bound_a in
@@ -1510,7 +1488,8 @@ let rec check_expr labels (e : 'bty mu_expr)
   | _, M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some p) e1 in
      check_expr labels e1 (fun it ->
-            let@ bound_a = pattern_match p it in
+            let@ () = ensure_base_type loc ~expect:(IT.bt it) (bt_of_pattern p) in
+            let@ bound_a = check_and_match_pattern p it in
             let@ () = fin () in
             check_expr labels e2 (fun it2 ->
                 let@ () = remove_as bound_a in

@@ -353,6 +353,7 @@ let is_undef_expr expr =
 
 let bt_of_value (M_V (bty, _)) = bty
 let bt_of_object_value (M_OV (bty,_)) = bty
+let bt_of_pattern (M_Pattern (_,_,bty,_)) = bty
 
 let bt_of_expr : 'TY. 'TY mu_expr -> 'TY =
   fun (M_Expr (_loc, _annots, bty, _e)) -> bty
