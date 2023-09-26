@@ -432,7 +432,7 @@ let z_ n = IT (Const (Z n), BT.Integer)
 let num_lit_ n bt = match bt with
   | BT.Bits (sign, sz) -> IT (Const (Bits ((sign, sz), n)), bt)
   | BT.Integer -> z_ n
-  | _ -> failwith "num_lit_: not a type with numeric literals"
+  | _ -> failwith ("num_lit_: not a type with numeric literals: " ^ Pp.plain (BT.pp bt))
 let alloc_id_ n = IT (Const (Alloc_id n), BT.Alloc_id)
 let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
 let q1_ q = IT (Const (Q q), BT.Real)
@@ -702,10 +702,10 @@ let wrapI_ (ity, arg) =
   IT (WrapI (ity, arg), BT.Integer)
 let alignedI_ ~t ~align =
   assert (BT.equal (bt t) Loc);
-  assert (BT.equal (bt (pointerToIntegerCast_ t)) (bt align));
+  assert (BT.equal Memory.intptr_bt (bt align));
   IT (Aligned {t; align}, BT.Bool)
 let aligned_ (t, ct) =
-  alignedI_ ~t ~align:(num_lit_ (Z.of_int (Memory.align_of_ctype ct)) (bt t))
+  alignedI_ ~t ~align:(num_lit_ (Z.of_int (Memory.align_of_ctype ct)) Memory.intptr_bt)
 
 
 let const_map_ index_bt t =

@@ -547,6 +547,19 @@ module Translate = struct
         else step2
     in
 
+    let unsigned_of bt = match bt with
+      | BT.Bits (BT.Signed, n) -> BT.Bits (BT.Unsigned, n)
+      | _ -> failwith ("unsigned_of: not signed")
+    in
+    let via_unsigned context bt op t1 t2 =
+      let to_u t = mk_bv_cast context (unsigned_of bt, bt, t) in
+      mk_bv_cast context (bt, unsigned_of bt, op (to_u t1) (to_u t2))
+    in
+    let cmp_in_unsigned context bt op t1 t2 =
+      let to_u t = mk_bv_cast context (unsigned_of bt, bt, t) in
+      op (to_u t1) (to_u t2)
+    in
+
     let rec term it =
       let bt = IT.bt it in
       let adj () = match adjust_term global it with
@@ -598,31 +611,36 @@ module Translate = struct
       | Binop (bop, t1, t2) ->
          let open Z3.Arithmetic in
          let module BV = Z3.BitVector in
-         let bv_arith_check t bv_v arith_v = match IT.bt t with
-           | BT.Bits _ -> bv_v
+         let bv_arith_case t sgn_v u_v arith_v = match IT.bt t with
+           | BT.Bits (BT.Signed, _) -> sgn_v
+           | BT.Bits (BT.Unsigned, _) -> u_v
            | BT.Integer -> arith_v
            | BT.Real -> arith_v
-           | _ -> failwith "bv_arith_check"
+           | _ -> failwith "bv_arith_case"
          in
          let l_bop f ctxt x y = f ctxt [x; y] in
+         let via_u t op ctxt = via_unsigned ctxt (IT.bt t) (op ctxt) in
+         let cmp_u t op ctxt = cmp_in_unsigned ctxt (IT.bt t) (op ctxt) in
          begin match bop with
-         | Add -> (bv_arith_check t1 BV.mk_add (l_bop mk_add)) context (term t1) (term t2)
-         | Sub -> (bv_arith_check t1 BV.mk_sub (l_bop mk_sub)) context (term t1) (term t2)
-         | Mul -> (bv_arith_check t1 BV.mk_mul (l_bop mk_mul)) context (term t1) (term t2)
+         | Add -> (bv_arith_case t1 (via_u t1 BV.mk_add) BV.mk_add (l_bop mk_add))
+                 context (term t1) (term t2)
+         | Sub -> (bv_arith_case t1 (via_u t1 BV.mk_sub) BV.mk_sub (l_bop mk_sub))
+                 context (term t1) (term t2)
+         | Mul -> (bv_arith_case t1 (via_u t1 BV.mk_mul) BV.mk_mul (l_bop mk_mul))
+                 context (term t1) (term t2)
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
          | Div -> mk_div context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
          | Exp -> adj ()
          | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
-         | Rem -> Integer.mk_rem context (term t1) (term t2)
+         | Rem -> (bv_arith_case t1 (via_u t1 BV.mk_srem) BV.mk_urem Integer.mk_rem)
+                     context (term t1) (term t2)
          | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
-         | Mod ->
-           Pp.debug 2 (lazy (Pp.item "Mod" (IT.pp it)));
-           assert (BT.equal (IT.bt t1) (IT.bt t2));
-           (bv_arith_check t1 BV.mk_smod Integer.mk_mod) context (term t1) (term t2)
+         | Mod -> (bv_arith_case t1 (via_u t1 BV.mk_smod) BV.mk_urem Integer.mk_mod)
+                     context (term t1) (term t2)
          | ModNoSMT -> make_uf "mod_uf" (Integer) [t1; t2]
-         | LT -> (bv_arith_check t1 BV.mk_ult mk_lt) context (term t1) (term t2)
-         | LE -> (bv_arith_check t1 BV.mk_ule mk_le) context (term t1) (term t2)
+         | LT -> (bv_arith_case t1 (cmp_u t1 BV.mk_slt) BV.mk_ult mk_lt) context (term t1) (term t2)
+         | LE -> (bv_arith_case t1 (cmp_u t1 BV.mk_sle) BV.mk_ule mk_le) context (term t1) (term t2)
          | Min -> adj ()
          | Max -> adj ()
          | XORNoSMT -> make_uf "xor_uf" (Integer) [t1; t2]
