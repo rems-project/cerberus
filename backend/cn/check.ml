@@ -222,7 +222,7 @@ let ensure_bitvector_type (loc : Loc.loc) ~(expect : BT.t) : (sign * int) m =
     expect = BT.pp expect}})
 
 let rec check_object_value (loc : loc) ~(expect: BT.t)
-          (ov : 'bty mu_object_value) : IT.t m =
+          (M_OV (_, ov) : 'bty mu_object_value) : lvt m =
   match ov with
   | M_OVinteger iv ->
      let@ _ = ensure_bitvector_type loc ~expect in
@@ -246,15 +246,13 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
   | M_OVfloating iv ->
      unsupported loc !^"floats"
 
-(* and check_loaded_value loc ~expect (M_LVspecified ov) = *)
-(*   check_object_value loc ~expect ov *)
 
 
 
 
 
 
-let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : IT.t m = 
+let rec check_value (loc : loc) ~(expect:BT.t) (M_V (_,v) : 'bty mu_value) : (lvt) m = 
   match v with
   | M_Vobject ov ->
      check_object_value loc ~expect ov

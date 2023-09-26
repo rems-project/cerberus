@@ -328,7 +328,8 @@ module Make (Config: CONFIG) = struct
 
 
 
-  let rec pp_object_value = function
+  let rec pp_object_value (M_OV (_bty,ov)) =
+    match ov with
     | M_OVinteger ival ->
         Impl_mem.pp_integer_value_for_core ival
     | M_OVfloating fval ->
@@ -363,7 +364,8 @@ module Make (Config: CONFIG) = struct
   (*       pp_const "Specified" ^^ P.parens (pp_object_value oval) *)
 
 
-  and pp_value = function
+  and pp_value (M_V (_bty, v)) = 
+    match v with
   (*
     | Vconstrained xs ->
         !^ "{-val-}" ^^^ pp_keyword "constrained" ^^ P.parens (

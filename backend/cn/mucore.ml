@@ -51,7 +51,7 @@ type act = {
 
 
 
-type 'TY mu_object_value =  (* C object values *)
+type 'TY mu_object_value_ =  (* C object values *)
  | M_OVinteger of Impl_mem.integer_value (* integer value *)
  | M_OVfloating of Impl_mem.floating_value (* floating-point value *)
  | M_OVpointer of Impl_mem.pointer_value (* pointer value *)
@@ -59,11 +59,14 @@ type 'TY mu_object_value =  (* C object values *)
  | M_OVstruct of symbol * (Symbol.identifier * T.ct * Impl_mem.mem_value) list (* C struct value *)
  | M_OVunion of symbol * Symbol.identifier * Impl_mem.mem_value (* C union value *)
 
+and 'TY mu_object_value = 
+ | M_OV of 'TY * 'TY mu_object_value_
+
 
 (* and 'TY mu_loaded_value =  (\* potentially unspecified C object values *\) *)
 (*  | M_LVspecified of 'TY mu_object_value (\* non-unspecified loaded value *\) *)
 
-and 'TY mu_value =  (* Core values *)
+and 'TY mu_value_ =  (* Core values *)
  | M_Vobject of 'TY mu_object_value (* C object value *)
  (* | M_Vloaded of 'TY mu_loaded_value (\* loaded C object value *\) *)
  | M_Vctype of Ctype.ctype
@@ -74,6 +77,8 @@ and 'TY mu_value =  (* Core values *)
  | M_Vlist of T.cbt * ('TY mu_value) list
  | M_Vtuple of ('TY mu_value) list (* tuple *)
 
+and 'TY mu_value =
+ | M_V of 'TY * 'TY mu_value_
 
 
 type mu_ctor =  (* data constructors *)
@@ -345,6 +350,9 @@ let is_undef_expr expr =
   match e with
   | M_Epure pe -> is_undef_pexpr pe
   | _ -> false
+
+let bt_of_value (M_V (bty, _)) = bty
+let bt_of_object_value (M_OV (bty,_)) = bty
 
 let bt_of_expr : 'TY. 'TY mu_expr -> 'TY =
   fun (M_Expr (_loc, _annots, bty, _e)) -> bty

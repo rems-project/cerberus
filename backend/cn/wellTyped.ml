@@ -1231,57 +1231,59 @@ let rec check_and_bind_pattern bt = function
     return (M_CaseCtor (ctor, pats))
 
 let rec infer_object_value : 'TY. Locations.t -> 'TY mu_object_value ->
-    (BT.t * BT.t mu_object_value) m =
-  fun loc ov ->
+    (BT.t mu_object_value) m =
+  fun loc (M_OV (_, ov) as ov_original) ->
   let todo () = failwith ("TODO: WellTyped infer_object_value: "
-      ^ Pp.plain (CF.Pp_ast.pp_doc_tree (Pp_mucore_ast.PP.dtree_of_object_value ov))) in
-  match ov with
-  | M_OVinteger iv ->
-    (* FIXME: replace this with something derived from a ctype when that info is available *)
-    let z = Memory.z_of_ival iv in
-    let ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_) in
-    if Z.leq (Memory.min_integer_type ity) z && Z.leq z (Memory.max_integer_type ity)
-    then return (Memory.bt_of_sct (Sctypes.Integer ity), M_OVinteger iv)
-    else fail (fun _ -> {loc; msg = Generic (Pp.item "infer_object_value: doesn't fit in int"
-        (IT.pp (IT.z_ z)))})
-  | M_OVfloating fv ->
-    return (Real, M_OVfloating fv)
-  | M_OVpointer pv ->
-    return (Loc, M_OVpointer pv)
-  | M_OVarray xs ->
-    let@ bt_xs = ListM.mapM (infer_object_value loc) xs in
-    todo ()
-  | M_OVstruct (nm, xs) ->
-    return (Struct nm, M_OVstruct (nm, xs))
-  | M_OVunion _ ->
-    todo ()
+      ^ Pp.plain (CF.Pp_ast.pp_doc_tree (Pp_mucore_ast.PP.dtree_of_object_value ov_original))) in
+  let@ bt, ov = match ov with
+   | M_OVinteger iv ->
+     (* FIXME: replace this with something derived from a ctype when that info is available *)
+     let z = Memory.z_of_ival iv in
+     let ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_) in
+     if Z.leq (Memory.min_integer_type ity) z && Z.leq z (Memory.max_integer_type ity)
+     then return (Memory.bt_of_sct (Sctypes.Integer ity), M_OVinteger iv)
+     else fail (fun _ -> {loc; msg = Generic (Pp.item "infer_object_value: doesn't fit in int"
+         (IT.pp (IT.z_ z)))})
+   | M_OVfloating fv ->
+     return (Real, M_OVfloating fv)
+   | M_OVpointer pv ->
+     return (Loc, M_OVpointer pv)
+   | M_OVarray xs ->
+     let@ bt_xs = ListM.mapM (infer_object_value loc) xs in
+     todo ()
+   | M_OVstruct (nm, xs) ->
+     return (Struct nm, M_OVstruct (nm, xs))
+   | M_OVunion _ ->
+     todo ()
+  in
+  return (M_OV (bt, ov))
 
-let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t * BT.t mu_value) m =
-  fun loc v ->
-  match v with
-  | M_Vobject ov ->
-     let@ (bt, ov) = infer_object_value loc ov in
-     return (bt, M_Vobject ov)
-  | M_Vctype ct ->
-     return (CType, M_Vctype ct)
-  | M_Vunit ->
-     return (Unit, M_Vunit)
-  | M_Vtrue ->
-     return (Bool, M_Vtrue)
-  | M_Vfalse -> 
-     return (Bool, M_Vfalse)
-  | M_Vfunction_addr sym ->
-     return (Loc, M_Vfunction_addr sym)
-  | M_Vlist (item_cbt, vals) ->
-     let@ res = ListM.mapM (infer_value loc) vals in
-     begin match res with
-     | [] -> fail (fun _ -> {loc; msg = Generic (!^ "infer_value of empty list")})
-     | ((bt, _) :: _) ->
-       return (BT.List bt, M_Vlist (item_cbt, List.map snd res))
-     end
-  | M_Vtuple vals ->
-     let@ res = ListM.mapM (infer_value loc) vals in
-     return (BT.Tuple (List.map fst res), M_Vtuple (List.map snd res))
+let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t mu_value) m =
+  fun loc (M_V (_, v)) ->
+  let@ bt, v = match v with
+   | M_Vobject ov ->
+      let@ ov = infer_object_value loc ov in
+      return (bt_of_object_value ov, M_Vobject ov)
+   | M_Vctype ct ->
+      return (CType, M_Vctype ct)
+   | M_Vunit ->
+      return (Unit, M_Vunit)
+   | M_Vtrue ->
+      return (Bool, M_Vtrue)
+   | M_Vfalse -> 
+      return (Bool, M_Vfalse)
+   | M_Vfunction_addr sym ->
+      return (Loc, M_Vfunction_addr sym)
+   | M_Vlist (item_cbt, vals) ->
+      let@ vals = ListM.mapM (infer_value loc) vals in
+      let item_bt = bt_of_value (List.hd vals) in
+      return (List item_bt, M_Vlist (item_cbt, vals))
+   | M_Vtuple vals ->
+      let@ vals = ListM.mapM (infer_value loc) vals in
+      let bt = Tuple (List.map bt_of_value vals) in
+      return (bt, M_Vtuple vals)
+  in
+  return (M_V (bt, v))
 
 
 
@@ -1297,7 +1299,8 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ l_elem = get_a sym in
         return (Context.bt_of l_elem, M_PEsym sym)
      | M_PEval v ->
-        let@ (bt, v) = infer_value loc v in
+        let@ v = infer_value loc v in
+        let bt = bt_of_value v in
         return (bt, M_PEval v)
      | M_PEop (op, pe1, pe2) ->
         let@ pe1 = infer_pexpr pe1 in
@@ -1313,12 +1316,12 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pe1 = infer_pexpr pe1 in
         let@ pe2 = infer_pexpr pe2 in
         return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
-      | M_PEconv_int (M_Pexpr (l2, a2, _, M_PEval (M_Vctype ct)), pe) ->
-        let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_Vctype ct)) in
+      | M_PEconv_int (M_Pexpr (l2, a2, _, M_PEval (M_V (_, M_Vctype ct))), pe) ->
+        let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_V (CType, M_Vctype ct))) in
         let@ pe = infer_pexpr pe in
         return (Memory.bt_of_sct (Sctypes.of_ctype_unsafe loc ct), M_PEconv_int (ct_pe, pe))
-      | M_PEconv_loaded_int (M_Pexpr (l2, a2, _, M_PEval (M_Vctype ct)), pe) ->
-        let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_Vctype ct)) in
+      | M_PEconv_loaded_int (M_Pexpr (l2, a2, _, M_PEval (M_V (_, M_Vctype ct))), pe) ->
+        let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_V (CType, M_Vctype ct))) in
         let@ pe = infer_pexpr pe in
         return (Memory.bt_of_sct (Sctypes.of_ctype_unsafe loc ct), M_PEconv_loaded_int (ct_pe, pe))
       | M_PEbool_to_integer pe ->

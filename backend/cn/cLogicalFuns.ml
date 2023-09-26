@@ -15,11 +15,12 @@ type 'a exec_result =
   | Compute of IT.t * 'a
   | If_Else of IT.t * 'a exec_result * 'a exec_result
 
-let mu_val_to_it = function
+let mu_val_to_it (M_V (_bty, v)) = 
+  match v with
   | M_Vunit -> Some IT.unit_
   | M_Vtrue -> Some (IT.bool_ true)
   | M_Vfalse -> Some (IT.bool_ false)
-  | M_Vobject (M_OVinteger iv) -> Some (IT.z_ (Memory.z_of_ival iv))
+  | M_Vobject (M_OV (_, M_OVinteger iv)) -> Some (IT.z_ (Memory.z_of_ival iv))
   | M_Vctype ct -> Option.map IT.const_ctype_ (Sctypes.of_ctype ct)
   | M_Vfunction_addr sym -> Some (IT.sym_ (sym, BT.Loc))
   | _ -> None

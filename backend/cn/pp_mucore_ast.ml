@@ -57,7 +57,8 @@ module PP = struct
     Pp_ast.Dleaf (pp_act act)
 
 
-  let rec dtree_of_object_value = function
+  let rec dtree_of_object_value (M_OV (_bty, ov)) = 
+    match ov with
     | M_OVinteger ival ->
         Dleaf (pp_pure_ctor "OVinteger" ^^^ Impl_mem.pp_integer_value_for_core ival)
     | M_OVfloating fval ->
@@ -79,7 +80,8 @@ module PP = struct
   (*   | M_LVspecified oval -> *)
   (*       Dnode (pp_pure_ctor "LVspecified", [dtree_of_object_value oval]) *)
 
-  and dtree_of_value = function
+  and dtree_of_value (M_V (_bty, v)) = 
+    match v with
     | M_Vobject oval ->
         Dnode (pp_pure_ctor "Vobject", [dtree_of_object_value oval])
     (* | M_Vloaded lval -> *)

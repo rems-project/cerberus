@@ -170,19 +170,22 @@ let rec core_to_mu__pattern loc (Pattern (annots, pat_)) =
      | _ -> assert_error loc (!^"core_to_mucore: unsupported pattern")
 
 
-let rec n_ov loc = function
-  | OVinteger iv -> 
-     M_OVinteger iv
-  | OVfloating fv -> 
-     M_OVfloating fv
-  | OVpointer pv -> 
-     M_OVpointer pv
-  | OVarray is -> 
-     M_OVarray (List.map (n_lv loc) is)
-  | OVstruct (sym1, is) -> 
-     M_OVstruct (sym1, List.map (fun (id,ct,mv) -> (id,convert_ct loc ct,mv)) is)
-  | OVunion (sym1, id1, mv) -> 
-     M_OVunion (sym1, id1, mv)
+let rec n_ov loc ov = 
+  let ov = match ov with
+   | OVinteger iv -> 
+      M_OVinteger iv
+   | OVfloating fv -> 
+      M_OVfloating fv
+   | OVpointer pv -> 
+      M_OVpointer pv
+   | OVarray is -> 
+      M_OVarray (List.map (n_lv loc) is)
+   | OVstruct (sym1, is) -> 
+      M_OVstruct (sym1, List.map (fun (id,ct,mv) -> (id,convert_ct loc ct,mv)) is)
+   | OVunion (sym1, id1, mv) -> 
+      M_OVunion (sym1, id1, mv)
+  in
+  M_OV ((), ov)
 
 and n_lv loc v =
   match v with
@@ -192,15 +195,18 @@ and n_lv loc v =
      assert_error loc (!^"core_anormalisation: LVunspecified")
 
 
-and n_val loc = function
-  | Vobject ov -> M_Vobject (n_ov loc ov)
-  | Vloaded lv -> M_Vobject (n_lv loc lv)
-  | Vunit -> M_Vunit
-  | Vtrue -> M_Vtrue
-  | Vfalse -> M_Vfalse
-  | Vctype ct -> M_Vctype ct
-  | Vlist (cbt, vs) -> M_Vlist (cbt, List.map (n_val loc) vs)
-  | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
+and n_val loc v =
+  let v = match v with
+   | Vobject ov -> M_Vobject (n_ov loc ov)
+   | Vloaded lv -> M_Vobject (n_lv loc lv)
+   | Vunit -> M_Vunit
+   | Vtrue -> M_Vtrue
+   | Vfalse -> M_Vfalse
+   | Vctype ct -> M_Vctype ct
+   | Vlist (cbt, vs) -> M_Vlist (cbt, List.map (n_val loc) vs)
+   | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
+  in
+  M_V ((),v)
 
 
 let unit_pat loc annots = 
@@ -341,7 +347,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      annotate (M_PEmemberof(sym1, id1, e'))
   | PEconv_int(ity, e') ->
      let e' = n_pexpr loc e' in
-     let ity_e = annotate (M_PEval (M_Vctype (Sctypes.to_ctype (Sctypes.Integer ity)))) in
+     let ity_e = annotate (M_PEval (M_V ((), M_Vctype (Sctypes.to_ctype (Sctypes.Integer ity))))) in
      annotate (M_PEconv_int(ity_e, e'))
   | PEwrapI(ity, iop, arg1, arg2) ->
      let act = ity_act loc ity in
@@ -757,7 +763,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                ( fun _prov _ -> err () )
           | _ -> err ()
           end in
-          M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym)))
+          M_Pexpr (loc, annots, bty, (M_PEval (M_V ((), M_Vfunction_addr sym))))
        | _ -> n_pexpr e2
      in
      let es = List.map n_pexpr es in
