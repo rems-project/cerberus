@@ -34,17 +34,11 @@ Parameter abst_get_switches: unit -> cerb_switches_t.
 
 Require Import ListSet.
 
-Module RevocationProofs
-  (C:CAPABILITY_GS
-       (AddressValue)
-       (Flags)
-       (ObjType)
-       (SealType)
-       (Bounds)
-       (Permissions)
-  )
-  (IMP: Implementation)
-  (TD: TagDefs).
+Module DummyTagDefs: TagDefs.
+  Definition tagDefs (_:unit) := SymMap.empty CoqCtype.tag_definition.
+End DummyTagDefs.
+
+Module RevocationProofs.
 
   Fixpoint remove_PNVI (x:cerb_switches_t) : cerb_switches_t :=
     match x with
@@ -66,16 +60,15 @@ Module RevocationProofs
   End WithPNVISwitches.
 
   Module CheriMemoryWithoutPNVI.
-    Include CheriMemoryImpl(C)(IMP)(TD)(WithoutPNVISwitches).
+    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(DummyTagDefs)(WithoutPNVISwitches).
   End CheriMemoryWithoutPNVI.
 
   Module CheriMemoryWithPNVI.
-    Include CheriMemoryImpl(C)(IMP)(TD)(WithPNVISwitches).
+    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(DummyTagDefs)(WithPNVISwitches).
   End CheriMemoryWithPNVI.
 
 (*  Theorem foo:
     forall t,
       CheriMemoryWithoutPNVI.null_ptrval t <> CheriMemoryWithPNVI.null_ptrval t.
- *)
-
+*)
 End RevocationProofs.
