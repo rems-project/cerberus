@@ -1237,6 +1237,7 @@ let rec infer_object_value : 'TY. Locations.t -> 'TY mu_object_value ->
       ^ Pp.plain (CF.Pp_ast.pp_doc_tree (Pp_mucore_ast.PP.dtree_of_object_value ov))) in
   match ov with
   | M_OVinteger iv ->
+    (* FIXME: replace this with something derived from a ctype when that info is available *)
     let z = Memory.z_of_ival iv in
     let ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_) in
     if Z.leq (Memory.min_integer_type ity) z && Z.leq z (Memory.max_integer_type ity)
@@ -1320,6 +1321,15 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_Vctype ct)) in
         let@ pe = infer_pexpr pe in
         return (Memory.bt_of_sct (Sctypes.of_ctype_unsafe loc ct), M_PEconv_loaded_int (ct_pe, pe))
+      | M_PEbool_to_integer pe ->
+        let@ pe = infer_pexpr pe in
+        (* FIXME: replace this with something derived from a ctype when that info is available *)
+        let ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_) in
+        let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
+        return (bt, M_PEbool_to_integer pe)
+      | M_PEnot pe ->
+        let@ pe = infer_pexpr pe in
+        return (Bool, M_PEnot pe)
       | _ -> todo ()
     in
     return (M_Pexpr (loc, annots, bty, pe_))
