@@ -196,25 +196,22 @@ let ensure_bitvector_type (loc : Loc.loc) ~(expect : BT.t) : (sign * int) m =
   | None -> fail (fun _ -> {loc; msg = Mismatch {has = !^"(unspecified) bitvector type";
     expect = BT.pp expect}})
 
-let rec check_object_value (loc : loc) ~(expect: BT.t)
-          (M_OV (_, ov) : 'bty mu_object_value) : lvt m =
+let rec check_object_value (loc : loc) (M_OV (expect, ov)) : IT.t m =
   match ov with
   | M_OVinteger iv ->
+     (* TODO: maybe check whether iv is within range of the type? *)
      let@ _ = ensure_bitvector_type loc ~expect in
      return (num_lit_ (Memory.z_of_ival iv) expect)
   | M_OVpointer p -> 
      check_ptrval loc ~expect p
   | M_OVarray items ->
-     let@ index_bt, item_bt = match expect with
-       | BT.Map (index_bt, item_bt) -> return (index_bt, item_bt)
-       | _ -> 
-          let msg = Mismatch {has = !^"Array"; expect = BT.pp expect} in
-          fail (fun _ -> {loc; msg})
-     in
-     assert (BT.equal index_bt Integer);
-     let@ values = ListM.mapM (check_object_value loc ~expect:item_bt) items in
+     let item_bt = bt_of_object_value (List.hd items) in
+     let@ () = ensure_base_type loc ~expect (Map (Integer, item_bt)) in
+     let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_object_value i)) items in
+     let@ values = ListM.mapM (check_object_value loc) items in
      return (make_array_ ~item_bt values)
   | M_OVstruct (tag, fields) -> 
+     let@ () = ensure_base_type loc ~expect (Struct tag) in
      check_struct loc tag fields
   | M_OVunion (tag, id, mv) -> 
      check_union loc tag id mv
@@ -227,20 +224,16 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
 
 
 
-let rec check_value (loc : loc) ~(expect:BT.t) (M_V (_,v) : 'bty mu_value) : (lvt) m = 
+let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m = 
   match v with
   | M_Vobject ov ->
-     check_object_value loc ~expect ov
+     let@ () = ensure_base_type loc ~expect (bt_of_object_value ov) in
+     check_object_value loc ov
   | M_Vctype ct ->
      let@ () = WellTyped.ensure_base_type loc ~expect CType in
-     let@ ct = match Sctypes.of_ctype ct with
-       | Some ct -> return ct
-       | None -> fail (fun _ -> {loc; msg = Generic (!^ "unsupported ctype:" ^^^
-            Cerb_frontend.Pp_core_ctype.pp_ctype ct)})
-     in
+     let ct = Sctypes.of_ctype_unsafe loc ct in
+     let@ () = WellTyped.WCT.is_ct loc ct in
      return (IT.const_ctype_ ct)
-  (* | M_Vloaded lv -> *)
-  (*    check_loaded_value loc ~expect lv *)
   | M_Vunit ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      return IT.unit_
@@ -251,28 +244,20 @@ let rec check_value (loc : loc) ~(expect:BT.t) (M_V (_,v) : 'bty mu_value) : (lv
      let@ () = WellTyped.ensure_base_type loc ~expect Bool in
      return (IT.bool_ false)
   | M_Vfunction_addr sym ->
+     let@ () = ensure_base_type loc ~expect Loc in
      (* check it is a valid function address *)
      let@ _ = get_fun_decl loc sym in
      return (IT.sym_ (sym, Loc))
-  | M_Vlist (item_bt, vals) ->
-     let item_bt = bogus_cbt_to_bt item_bt in
-     let@ item_bt = WellTyped.WBT.is_bt loc item_bt in
+  | M_Vlist (_item_cbt, vals) ->
+     let item_bt = bt_of_value (List.hd vals) in
      let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
-     let@ values = ListM.mapM (check_value loc ~expect:item_bt) vals in
+     let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_value i)) vals in
+     let@ values = ListM.mapM (check_value loc) vals in
      return (list_ ~item_bt values)
   | M_Vtuple vals ->
-     let@ item_bts = match expect with
-       | Tuple bts -> 
-          let expect_nr = List.length bts in
-          let has_nr = List.length vals in
-          let@ () = WellTyped.ensure_same_argument_number loc `General 
-                      has_nr ~expect:expect_nr in
-          return bts
-       | _ -> 
-          let msg = Mismatch {has = !^"tuple"; expect = BT.pp expect} in
-          fail (fun _ -> {loc; msg})
-     in
-     let@ values = ListM.map2M (fun v expect -> check_value loc ~expect v) vals item_bts in
+     let item_bts = List.map bt_of_value vals in
+     let@ () = ensure_base_type loc ~expect (Tuple item_bts) in
+     let@ values = ListM.mapM (check_value loc) vals in
      return (tuple_ values)
 
 
@@ -471,7 +456,8 @@ let rec check_pexpr (pe : BT.t mu_pexpr)
   (*    let value = Global.get_impl_constant global i in *)
   (*    return {loc; value} *)
   | M_PEval v ->
-     let@ vt = check_value loc ~expect v in
+     let@ () = ensure_base_type loc ~expect (bt_of_value v) in
+     let@ vt = check_value loc v in
      k vt
   | M_PEconstrained _ ->
      Cerb_debug.error "todo: PEconstrained"
