@@ -103,8 +103,6 @@ let rec check_and_match_pattern (M_Pattern (loc, _, bty, pattern)) it =
 
 
 
-
-
 (*** pure value inference *****************************************************)
 
 
@@ -146,8 +144,9 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
       unsupported loc !^"infer_mem_value: concurrent read case" )
     ( fun ity iv -> 
       let@ () = WellTyped.WCT.is_ct loc (Integer ity) in
-      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
-      return (int_ (Memory.int_of_ival iv)) )
+      let bt = Memory.bt_of_sct (Integer ity) in
+      let@ () = WellTyped.ensure_base_type loc ~expect bt in
+      return (int_lit_ (Memory.int_of_ival iv) bt) )
     ( fun ft fv -> 
       unsupported loc !^"floats" )
     ( fun ct ptrval -> 
@@ -158,7 +157,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
       let@ index_bt, item_bt = match expect with
         | BT.Map (index_bt, item_bt) -> return (index_bt, item_bt)
         | _ -> 
-           let msg = Mismatch {has = !^"Array"; expect = BT.pp expect} in
+           let msg = Mismatch {has = !^"array"; expect = BT.pp expect} in
            fail (fun _ -> {loc; msg})
       in
       assert (BT.equal index_bt Integer);
