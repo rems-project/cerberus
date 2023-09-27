@@ -618,7 +618,9 @@ module WIT = struct
            | Loc, Integer -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()
-           | Bits (sign,n), Bits (sign',n') when not (equal_sign sign sign' ) && n = n' -> return ()
+           | Bits (sign,n), Bits (sign',n')
+               (* FIXME: seems too restrictive when not (equal_sign sign sign' ) && n = n' *)
+               -> return ()
            | source, target -> 
              let msg = 
                !^"Unsupported cast from" ^^^ BT.pp source
@@ -863,7 +865,7 @@ let oarg_bt loc = function
       oarg_bt_of_pred loc pred.name
   | RET.Q pred ->
       let@ item_bt = oarg_bt_of_pred loc pred.name in
-      return (BT.make_map_bt (IT.bt pred.step) item_bt)
+      return (BT.make_map_bt (snd pred.q) item_bt)
 
 
 
@@ -1320,6 +1322,25 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pe1 = infer_pexpr pe1 in
         let@ pe2 = infer_pexpr pe2 in
         return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
+      | M_PEif (c_pe, pe1, pe2) ->
+        let@ c_pe = check_pexpr (`BT Bool) c_pe in
+        let@ (bt, pe1, pe2) = if is_undef_pexpr pe1
+        then begin
+          let@ pe2 = infer_pexpr pe2 in
+          let bt = bt_of_pexpr pe2 in
+          let@ pe1 = check_pexpr (`BT bt) pe1 in
+          return (bt, pe1, pe2)
+        end else begin
+          let@ pe1 = infer_pexpr pe1 in
+          let bt = bt_of_pexpr pe1 in
+          let@ pe2 = check_pexpr (`BT bt) pe2 in
+          return (bt, pe1, pe2)
+        end in
+        return (bt, M_PEif (c_pe, pe1, pe2))
+      | M_PEarray_shift (pe1, ct, pe2) ->
+        let@ pe1 = infer_pexpr pe1 in
+        let@ pe2 = infer_pexpr pe2 in
+        return (Loc, M_PEarray_shift (pe1, ct, pe2))
       | M_PEconv_int (M_Pexpr (l2, a2, _, M_PEval (M_V (_, M_Vctype ct))), pe) ->
         let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_V (CType, M_Vctype ct))) in
         let@ pe = infer_pexpr pe in
@@ -1328,6 +1349,9 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_V (CType, M_Vctype ct))) in
         let@ pe = infer_pexpr pe in
         return (Memory.bt_of_sct (Sctypes.of_ctype_unsafe loc ct), M_PEconv_loaded_int (ct_pe, pe))
+      | M_PEcatch_exceptional_condition (act, pe) ->
+        let@ pe = infer_pexpr pe in
+        return (bt_of_pexpr pe, M_PEcatch_exceptional_condition (act, pe))
       | M_PEbool_to_integer pe ->
         let@ pe = infer_pexpr pe in
         (* FIXME: replace this with something derived from a ctype when that info is available *)
@@ -1362,6 +1386,8 @@ and check_pexpr spec expr =
 
 let check_cn_statement loc stmt =
   let open Cnprog in
+  Pp.debug 22 (lazy (Pp.item "WellTyped.check_cn_statement"
+    (CF.Pp_ast.pp_doc_tree (dtree_of_cn_statement stmt))));
   match stmt with
   | M_CN_pack_unpack (pack_unpack, pt) ->
      let@ p_pt = WRET.welltyped loc (P pt) in
@@ -1380,7 +1406,7 @@ let check_cn_statement loc stmt =
        | I_Everything ->
           return ()
      in
-     let@ it = WIT.check loc Integer it in
+     let@ it = WIT.check loc Memory.intptr_bt it in
      return (M_CN_instantiate (to_instantiate, it))
   | M_CN_extract ((to_extract, it)) ->
      let@ () = match to_extract with
@@ -1396,7 +1422,7 @@ let check_cn_statement loc stmt =
        | E_Everything ->
           return ()
      in
-     let@ it = WIT.check loc Integer it in
+     let@ it = WIT.check loc Memory.intptr_bt it in
      return (M_CN_extract ((to_extract, it)))
   | M_CN_unfold (f, its) ->
      let@ def = get_logical_function_def loc f in
@@ -1440,6 +1466,7 @@ let check_cnprog p =
     | M_CN_let (loc, (s, {ct; pointer}), p') ->
        let@ () = WCT.is_ct loc ct in
        let@ pointer = WIT.check loc Loc pointer in
+       Pp.debug 2 (lazy (Pp.item "check_cnprog add_l" (Pp.typ (Sym.pp s) (Sctypes.pp ct))));
        let@ () = add_l s (Memory.bt_of_sct ct) (loc, lazy (Sym.pp s)) in
        let@ p' = aux p' in
        return (M_CN_let (loc, (s, {ct; pointer}), p'))

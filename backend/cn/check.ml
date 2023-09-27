@@ -429,6 +429,7 @@ let check_against_core_bt loc msg2 cbt bt =
 
 
 let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
+  let orig_pe = pe in
   let (M_Pexpr (loc, _, expect, pe_)) = pe in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
@@ -533,7 +534,36 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      check_pexpr pe (fun vt ->
      k (not_ vt))
   | M_PEop (op, pe1, pe2) ->
-     failwith "todo"
+(* todo
+     begin match op with
+     | OpEq ->
+        (* eventually we have to also support floats here *)
+        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
+        k (eq_ (v1, v2)))
+     | OpGt ->
+        (* eventually we have to also support floats here *)
+        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
+        k (gt_ (v1, v2)))
+     | OpLt ->
+        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
+        k (lt_ (v1, v2)))
+     | OpGe ->
+        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
+        k (ge_ (v1, v2)))
+     | OpLe ->
+        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
+        k (le_ (v1, v2)))
+     | OpAnd ->
+        check_args_and_ret Bool Bool Bool (fun (v1, v2) ->
+        k (and_ [v1; v2]))
+     | OpOr ->
+        check_args_and_ret Bool Bool Bool (fun (v1, v2) ->
+        k (or_ [v1; v2]))
+     | _ ->
+*)
+       Pp.debug 1 (lazy (Pp.item "not yet restored" (Pp_mucore_ast.pp_pexpr orig_pe)));
+       failwith "todo"
+(*     end *)
   | M_PEapply_fun (fun_id, args) ->
      let@ () = ensure_base_type loc ~expect (mu_fun_return_type fun_id) in
      let expect_args = Mucore.mu_fun_param_types fun_id in
