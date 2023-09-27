@@ -520,16 +520,11 @@ module IndexTerms = struct
        IT (Cast (cbt, a), the_bt)
     | MemberOffset (tag, member) ->
        let layout = SymMap.find tag simp_ctxt.global.struct_decls in
-       int_ (Option.get (Memory.member_offset layout member))
+       int_lit_ (Option.get (Memory.member_offset layout member)) Memory.intptr_bt
     | ArrayOffset (ct, t) ->
-       let t = aux t in
-       begin match is_z t with
-       | Some z when Z.equal Z.zero z -> int_ 0
-       | _ -> mul_ (int_ (Memory.size_of_ctype ct), t)
-          (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
-       end
+       aux (mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt, aux t))
     | SizeOf ct ->
-       int_ (Memory.size_of_ctype ct)
+       int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt
     | Representable (ct, t) ->
        IT (Representable (ct, aux t), the_bt)
     | Good (ct, t) ->

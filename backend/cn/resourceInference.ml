@@ -277,7 +277,7 @@ module General = struct
        let needed = requested.permission in
        let step = Simplify.IndexTerms.simp simp_ctxt requested.step in
        let@ () = 
-           if Option.is_some (IT.is_z step) then return ()
+           if Option.is_some (IT.is_const step) then return ()
            else fail (fun _ -> {loc; msg = Generic (!^ "cannot simplify iter-step to constant:"
                ^^^ IT.pp requested.step ^^ colon ^^^ IT.pp step)}) 
        in
@@ -315,7 +315,8 @@ module General = struct
          let@ movable_indices = get_movable_indices () in
          ListM.fold_rightM (fun (predicate_name, index) (needed, oarg) ->
              let continue = return (needed, oarg) in
-             if not (is_false needed) && subsumed requested.name predicate_name then 
+             if not (is_false needed) && subsumed requested.name predicate_name &&
+                     BT.equal (snd requested.q) (IT.bt index) then
                let su = IT.make_subst [(fst requested.q, index)] in
                let needed_at_index = (IT.subst su needed) in
                match provable (LC.t_ needed_at_index) with

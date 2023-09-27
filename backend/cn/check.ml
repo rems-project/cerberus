@@ -53,6 +53,10 @@ type pointer_value = CF.Impl_mem.pointer_value
 let bogus_cbt_to_bt (cbt : Mucore.T.cbt) = BT.Integer
 
 
+let add_c loc lc =
+  let@ _ = WellTyped.WLC.welltyped loc lc in
+  Typing.add_c loc lc
+
 
 
 (* pattern-matches and binds *)
@@ -521,7 +525,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
      check_pexpr pe1 (fun vt1 ->
      check_pexpr pe2 (fun vt2 ->
-     k (arrayShift_ (vt1, ct, vt2))))
+     k (arrayShift_ (vt1, ct, (cast_ Memory.intptr_bt vt2)))))
   | M_PEmember_shift (pe, tag, member) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Loc in
      let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
@@ -1394,11 +1398,11 @@ let rec check_expr labels (e : 'bty mu_expr)
                     let@ () = WCT.is_ct loc ct in 
                     return (IT.mentions_good ct)
                in
-               let@ it = WIT.check loc Integer it in
+               let@ it = WIT.infer loc it in
                instantiate loc filter it
             | M_CN_extract (to_extract, it) ->
                let@ predicate_name = RI.predicate_name_of_to_extract loc to_extract in
-               let@ it = WIT.check loc Memory.intptr_bt it in
+               let@ it = WIT.infer loc it in
                add_movable_index loc (predicate_name, it)
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_function_def loc f in

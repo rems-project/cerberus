@@ -500,7 +500,9 @@ let eachI_ (i1, s, i2) t =
 (* arith_op *)
 let add_ (it, it') = IT (Binop (Add,it, it'), bt it)
 let sub_ (it, it') = IT (Binop (Sub,it, it'), bt it)
-let mul_ (it, it') = IT (Binop (Mul,it, it'), bt it)
+let mul_ (it, it') =
+  assert (BT.equal (bt it) (bt it'));
+  IT (Binop (Mul,it, it'), bt it)
 let mul_no_smt_ (it, it') = IT (Binop (MulNoSMT,it, it'), bt it)
 let div_ (it, it') = IT (Binop (Div,it, it'), bt it)
 let div_no_smt_ (it, it') = IT (Binop (DivNoSMT,it, it'), bt it)

@@ -18,8 +18,8 @@ memcpy (char *dst, char *src, int n)
   /*@ inv {src} unchanged @*/
   /*@ inv {n} unchanged @*/
   {
-    /*@ extract Owned<char>, (u64)i; @*/
-    /*@ instantiate good<char>, (u64)i; @*/
+    /*@ extract Owned<char>, (i32)i; @*/
+    /*@ instantiate good<char>, (i32)i; @*/
     dst[i] = src[i];
   }
 }

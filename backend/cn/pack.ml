@@ -65,7 +65,7 @@ let packing_ft loc global provable ret =
                 let request = 
                   P {
                     name = Owned (padding_ct, Uninit);
-                    pointer = pointer_offset_ (ret.pointer, int_ offset);
+                    pointer = pointer_offset_ (ret.pointer, int_lit_ offset Memory.intptr_bt);
                     iargs = [];
                   }
                 in
@@ -145,14 +145,16 @@ let unpack loc global provable (ret, O o) =
 
   let extractable_one loc provable (predicate_name, index) (ret, O o) = 
     match ret with
-    | Q ret when equal_predicate_name predicate_name ret.name ->
+    | Q ret when equal_predicate_name predicate_name ret.name &&
+             BT.equal (IT.bt index) (snd ret.q) ->
        let su = IT.make_subst [(fst ret.q, index)] in
        let index_permission = IT.subst su ret.permission in
        begin match provable (LC.t_ index_permission) with
         | `True -> 
           let at_index = 
             (P { name = ret.name;
-                pointer = pointer_offset_ (ret.pointer, mul_ (ret.step, index));
+                pointer = pointer_offset_ (ret.pointer,
+                    mul_ (ret.step, cast_ Memory.intptr_bt index));
                 iargs = List.map (IT.subst su) ret.iargs; },
             O (map_get_ o index))
           in

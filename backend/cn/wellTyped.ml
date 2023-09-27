@@ -621,6 +621,8 @@ module WIT = struct
            | Bits (sign,n), Bits (sign',n')
                (* FIXME: seems too restrictive when not (equal_sign sign sign' ) && n = n' *)
                -> return ()
+           | Bits _, Loc -> return ()
+           | Loc, Bits _ -> return ()
            | source, target -> 
              let msg = 
                !^"Unsupported cast from" ^^^ BT.pp source
@@ -803,22 +805,26 @@ module WRET = struct
           there's no name clashes *)
        (* let p = RET.alpha_rename_qpredicate_type p in *)
        let@ pointer = WIT.check loc BT.Loc p.pointer in
-       let@ step = WIT.infer loc p.step in
+       let@ step = WIT.check loc Memory.intptr_bt p.step in
        let@ simp_ctxt = simp_ctxt () in
-       let@ step = match IT.is_z (Simplify.IndexTerms.eval simp_ctxt step) with
-         | Some z ->
-           let@ () = if Z.lt Z.zero z then return ()
+       let step = Simplify.IndexTerms.eval simp_ctxt step in
+       let@ () = match IT.is_const step with
+         | Some (Terms.Z z, _) ->
+           if Z.lt Z.zero z then return ()
            else fail (fun _ -> {loc; msg = Generic
-             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "must be positive")}) in
-           return (IT.z_ z)
-         | None ->
+             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "must be positive")})
+         | Some (Terms.Bits (bits_bt, z), _) ->
+           if Z.lt Z.zero z then return ()
+           else fail (fun _ -> {loc; msg = Generic
+             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "must be positive")})
+         | _ ->
            let hint = "Only constant iteration steps are allowed" in
            fail (fun ctxt -> {loc; msg = NIA {it = p.step; ctxt; hint}})
        in
        let@ () = match p.name with
          | (Owned (ct, _init)) ->
            let sz = Memory.size_of_ctype ct in
-           if IT.equal step (IT.int_ sz) then return ()
+           if IT.equal step (IT.int_lit_ sz Memory.intptr_bt) then return ()
            else fail (fun _ -> {loc; msg = Generic
              (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "different to sizeof" ^^^
                  Sctypes.pp ct ^^^ parens (!^ (Int.to_string sz)))})
@@ -1406,7 +1412,7 @@ let check_cn_statement loc stmt =
        | I_Everything ->
           return ()
      in
-     let@ it = WIT.check loc Memory.intptr_bt it in
+     let@ it = WIT.infer loc it in
      return (M_CN_instantiate (to_instantiate, it))
   | M_CN_extract ((to_extract, it)) ->
      let@ () = match to_extract with
@@ -1422,7 +1428,7 @@ let check_cn_statement loc stmt =
        | E_Everything ->
           return ()
      in
-     let@ it = WIT.check loc Memory.intptr_bt it in
+     let@ it = WIT.infer loc it in
      return (M_CN_extract ((to_extract, it)))
   | M_CN_unfold (f, its) ->
      let@ def = get_logical_function_def loc f in

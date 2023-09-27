@@ -195,7 +195,7 @@ let alpha_equivalent r1 r2 = match r1, r2 with
 
 
 let steps_constant = function
-  | Q qp -> Option.is_some (IT.is_z qp.step)
+  | Q qp -> Option.is_some (IT.is_const qp.step)
   | _ -> true
 
 
