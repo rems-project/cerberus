@@ -601,15 +601,23 @@ module Translate = struct
          Z3.Expr.mk_const context sym (sort bt)
       | Const Null -> adj ()
       | Const (CType_const ct) -> uninterp_term context (sort bt) it
-      | Unop (uop, t) -> failwith "todo"
-         (* begin match uop with *)
-         (* | Not -> Z3.Boolean.mk_not context (term t) *)
+      | Unop (uop, t) ->
+         begin match uop with
+           | Not -> Z3.Boolean.mk_not context (term t)
          (* | BWCLZNoSMT -> make_uf "bw_clz_uf" (Integer) [t] *)
          (* | BWCTZNoSMT -> make_uf "bw_ctz_uf" (Integer) [t] *)
          (* | BWFFSNoSMT -> make_uf "bw_ffs_uf" (Integer) [t] *)
-         (* end *)
+           | _ ->
+           Pp.debug 1 (lazy (Pp.item "not yet restored" (IT.pp_with_typ it)));
+           failwith "todo"
+         end
       | Binop (bop, t1, t2) ->
-         assert (BT.equal (IT.bt t1) (IT.bt t2));
+         if BT.equal (IT.bt t1) (IT.bt t2)
+           then ()
+           else begin
+             Pp.debug 1 (lazy (Pp.item "mismatching binop" (IT.pp it)));
+             assert false
+           end;
          let open Z3.Arithmetic in
          let module BV = Z3.BitVector in
          let bv_arith_case t sgn_v u_v arith_v = match IT.bt t with

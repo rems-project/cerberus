@@ -534,36 +534,63 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      check_pexpr pe (fun vt ->
      k (not_ vt))
   | M_PEop (op, pe1, pe2) ->
-(* todo
+     let check_cmp_ty = function
+       | Integer | Bits _ | Real -> return ()
+       | ty -> fail (fun _ -> {loc; msg = Mismatch {has = BT.pp ty; expect = !^"comparable type"}})
+     in
      begin match op with
      | OpEq ->
-        (* eventually we have to also support floats here *)
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (eq_ (v1, v2)))
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        k (eq_ (v1, v2))))
      | OpGt ->
-        (* eventually we have to also support floats here *)
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (gt_ (v1, v2)))
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = check_cmp_ty (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        k (gt_ (v1, v2))))
      | OpLt ->
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (lt_ (v1, v2)))
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = check_cmp_ty (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        k (lt_ (v1, v2))))
      | OpGe ->
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (ge_ (v1, v2)))
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = check_cmp_ty (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        k (ge_ (v1, v2))))
      | OpLe ->
-        check_args_and_ret Integer Integer Bool (fun (v1, v2) ->
-        k (le_ (v1, v2)))
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = check_cmp_ty (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        k (le_ (v1, v2))))
      | OpAnd ->
-        check_args_and_ret Bool Bool Bool (fun (v1, v2) ->
-        k (and_ [v1; v2]))
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Bool (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Bool (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        k (and_ [v1; v2])))
      | OpOr ->
-        check_args_and_ret Bool Bool Bool (fun (v1, v2) ->
-        k (or_ [v1; v2]))
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Bool (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Bool (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        k (or_ [v1; v2])))
      | _ ->
-*)
        Pp.debug 1 (lazy (Pp.item "not yet restored" (Pp_mucore_ast.pp_pexpr orig_pe)));
        failwith "todo"
-(*     end *)
+     end
   | M_PEapply_fun (fun_id, args) ->
      let@ () = ensure_base_type loc ~expect (mu_fun_return_type fun_id) in
      let expect_args = Mucore.mu_fun_param_types fun_id in
@@ -1371,7 +1398,7 @@ let rec check_expr labels (e : 'bty mu_expr)
                instantiate loc filter it
             | M_CN_extract (to_extract, it) ->
                let@ predicate_name = RI.predicate_name_of_to_extract loc to_extract in
-               let@ it = WIT.check loc Integer it in
+               let@ it = WIT.check loc Memory.intptr_bt it in
                add_movable_index loc (predicate_name, it)
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_function_def loc f in
