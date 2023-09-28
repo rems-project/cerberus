@@ -3,6 +3,9 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
 From Coq.Strings Require Import String Ascii HexString.
+Require Import Coq.Classes.SetoidClass.
+Require Import Coq.Classes.RelationClasses.
+Require Import Coq.Relations.Relation_Definitions.
 Require Import Lia.
 
 From ExtLib.Data Require Import List.
@@ -41,6 +44,8 @@ Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
 
+
+
 Module RevocationProofs.
 
   (* --- Memory models instantiated with and without PNVI --- *)
@@ -60,61 +65,47 @@ Module RevocationProofs.
         (remove_PNVI (abst_get_switches tt)).
   End WithPNVISwitches.
 
-  Module CheriMemoryWithoutPNVI.
-    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(AbstTagDefs)(WithoutPNVISwitches).
+  Module CheriMemoryWithoutPNVI: CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithoutPNVISwitches).
+    Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithoutPNVISwitches).
   End CheriMemoryWithoutPNVI.
 
-  Module CheriMemoryWithPNVI.
-    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(AbstTagDefs)(WithPNVISwitches).
+  Module CheriMemoryWithPNVI:CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
+    Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
   End CheriMemoryWithPNVI.
 
   (* --- Equality predicates for types used in Memory Models --- *)
 
-  Definition function_pointer_eq
-    (a:CheriMemoryWithPNVI.function_pointer)
-    (b:CheriMemoryWithoutPNVI.function_pointer)
-    :=
-    match a,b with
-    | CheriMemoryWithPNVI.FP_valid s1, CheriMemoryWithoutPNVI.FP_valid s2 => s1 = s2
-    | CheriMemoryWithPNVI.FP_invalid c1, CheriMemoryWithoutPNVI.FP_invalid c2 => c1 = c2
-    | _, _ => False
-    end.
+  (* Equality of pointer values without taking provenance into account *)
 
-  Definition pointer_value_base_eq
-    (a:CheriMemoryWithPNVI.pointer_value_base)
-    (b:CheriMemoryWithoutPNVI.pointer_value_base)
-    :=
-    match a,b with
-    | CheriMemoryWithPNVI.PVfunction f1, CheriMemoryWithoutPNVI.PVfunction f2 => function_pointer_eq f1 f2
-    | CheriMemoryWithPNVI.PVconcrete c1, CheriMemoryWithoutPNVI.PVconcrete c2 => c1 = c2
-    | _, _ => False
-    end.
+  Definition pointer_value_eq : relation (CheriMemoryTypesExe.pointer_value_ind)
+    := fun a b =>
+         match a,b with
+         | CheriMemoryTypesExe.PV p1 b1, CheriMemoryTypesExe.PV p2 b2 => b1 = b2
+         end.
 
-  Definition provenance_eq
-    (a:CheriMemoryWithPNVI.provenance)
-    (b:CheriMemoryWithoutPNVI.provenance) : Prop
-    :=
-    match a,b with
-    | CheriMemoryWithPNVI.Prov_disabled, CheriMemoryWithoutPNVI.Prov_disabled => True
-    | CheriMemoryWithPNVI.Prov_none, CheriMemoryWithoutPNVI.Prov_none => True
-    | CheriMemoryWithPNVI.Prov_some id1, CheriMemoryWithoutPNVI.Prov_some id2 =>
-        id1 = id2
-    | CheriMemoryWithPNVI.Prov_symbolic sid1, CheriMemoryWithoutPNVI.Prov_symbolic sid2 =>
-        sid1 = sid2
-    | CheriMemoryWithPNVI.Prov_device, CheriMemoryWithoutPNVI.Prov_device => True
-    | _, _ => False
-    end.
+  (* Equivalence relation for pointer values *)
+  #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
+  Proof.
+    split.
+    -
+      intros a.
+      unfold pointer_value_eq.
+      destruct a; reflexivity.
+    -
+      intros a b.
+      unfold pointer_value_eq.
+      destruct a, b.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      unfold pointer_value_eq.
+      intros H1 H2.
+      rewrite H1, H2.
+      reflexivity.
+  Qed.
 
-  (* Compare pointer values without taking provenance into account *)
-  Definition pointer_value_eq
-    (a:CheriMemoryWithPNVI.pointer_value)
-    (b:CheriMemoryWithoutPNVI.pointer_value) : Prop
-    :=
-    match a,b with
-    | CheriMemoryWithPNVI.PV p1 b1, CheriMemoryWithoutPNVI.PV p2 b2 =>
-        (* provenance_eq p1 p2 /\ *) pointer_value_base_eq b1 b2
-    end.
-
+  (* --- Helper lemmas *)
   Lemma is_PNVI_WithPNVI:
     is_PNVI (WithPNVISwitches.get_switches tt) = true.
   Proof.
@@ -158,5 +149,6 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+
 
 End RevocationProofs.

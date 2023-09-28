@@ -29,7 +29,8 @@ Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
-Module Type CheriMemoryImpl
+Module Type CheriMemoryTypes
+  (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS
        (AddressValue)
        (Flags)
@@ -38,18 +39,14 @@ Module Type CheriMemoryImpl
        (Bounds)
        (Permissions)
   )
-  (IMP: Implementation)
-  (TD: TagDefs)
-  (SW: CerbSwitchesDefs)
-  <: Memory(AddressValue)(Bounds).
+  (IMP: Implementation).
 
-  Include Mem_common(AddressValue)(Bounds).
+  Import MC.
   Include AilTypesAux(IMP).
 
-  Definition name := "cheri-coq".
-
-  Definition symbolic_storage_instance_id : Set := Z.
   Definition storage_instance_id : Set := Z.
+  Definition symbolic_storage_instance_id : Set := Z.
+  Definition floating_value : Set := float. (* 64 bit *)
 
   Inductive provenance : Set :=
   | Prov_disabled : provenance
@@ -69,15 +66,91 @@ Module Type CheriMemoryImpl
   Inductive pointer_value_ind : Set :=
   | PV : provenance -> pointer_value_base -> pointer_value_ind.
 
-  Definition pointer_value := pointer_value_ind.
-
   Inductive integer_value_ind : Set :=
   | IV : Z -> integer_value_ind
   | IC : bool -> C.t -> integer_value_ind.
 
-  Definition integer_value := integer_value_ind.
+  Inductive mem_value_with_err :=
+  | MVEunspecified : CoqCtype.ctype -> mem_value_with_err
+  | MVEinteger :
+    CoqCtype.integerType -> integer_value_ind ->
+    mem_value_with_err
+  | MVEfloating :
+    CoqCtype.floatingType -> floating_value ->
+    mem_value_with_err
+  | MVEpointer :
+    CoqCtype.ctype -> pointer_value_ind -> mem_value_with_err
+  | MVEarray : list mem_value_with_err -> mem_value_with_err
+  | MVEstruct :
+    CoqSymbol.sym ->
+    list  (CoqSymbol.identifier *  CoqCtype.ctype * mem_value_with_err) ->
+    mem_value_with_err
+  | MVEunion :
+    CoqSymbol.sym ->
+    CoqSymbol.identifier -> mem_value_with_err ->
+    mem_value_with_err
+  | MVErr : mem_error -> mem_value_with_err.
 
-  Definition floating_value : Set := float. (* 64 bit *)
+  Inductive mem_value_ind :=
+  | MVunspecified : CoqCtype.ctype -> mem_value_ind
+  | MVinteger :
+    CoqCtype.integerType -> integer_value_ind -> mem_value_ind
+  | MVfloating :
+    CoqCtype.floatingType -> floating_value -> mem_value_ind
+  | MVpointer :
+    CoqCtype.ctype -> pointer_value_ind -> mem_value_ind
+  | MVarray : list mem_value_ind -> mem_value_ind
+  | MVstruct :
+    CoqSymbol.sym ->
+    list (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> mem_value_ind
+  | MVunion :
+    CoqSymbol.sym ->
+    CoqSymbol.identifier -> mem_value_ind -> mem_value_ind.
+
+  Inductive access_intention : Set :=
+  | ReadIntent : access_intention
+  | WriteIntent : access_intention
+  | CallIntent : access_intention.
+
+  Inductive readonly_status : Set :=
+  | IsWritable : readonly_status
+  | IsReadOnly : readonly_kind -> readonly_status.
+
+  Inductive allocation_taint :=
+  | Exposed
+  | Unexposed.
+
+End CheriMemoryTypes.
+
+
+Module Type CheriMemoryImpl
+  (MC:Mem_common(AddressValue)(Bounds))
+  (C:CAPABILITY_GS
+       (AddressValue)
+       (Flags)
+       (ObjType)
+       (SealType)
+       (Bounds)
+       (Permissions)
+  )
+  (IMP: Implementation)
+  (MT: CheriMemoryTypes(MC)(C)(IMP))
+  (TD: TagDefs)
+  (SW: CerbSwitchesDefs)
+<: Memory(AddressValue)(Bounds)(MC).
+
+  Import MC.
+  Import MT.
+
+  Definition name := "cheri-coq".
+
+  Definition pointer_value := pointer_value_ind.
+  Definition integer_value := integer_value_ind.
+  Definition floating_value : Set := MT.floating_value.
+  Definition symbolic_storage_instance_id : Set := MT.symbolic_storage_instance_id.
+  Definition storage_instance_id : Set := MT.storage_instance_id.
+  Definition mem_value := mem_value_ind.
+
 
   (* OCaml Z.sign *)
   Definition sign (x:Z) : Z :=
@@ -95,57 +168,6 @@ Module Type CheriMemoryImpl
       else (Z.succ q, Z.sub r b).
 
 
-  Inductive mem_value_with_err :=
-  | MVEunspecified : CoqCtype.ctype -> mem_value_with_err
-  | MVEinteger :
-    CoqCtype.integerType -> integer_value ->
-    mem_value_with_err
-  | MVEfloating :
-    CoqCtype.floatingType -> floating_value ->
-    mem_value_with_err
-  | MVEpointer :
-    CoqCtype.ctype -> pointer_value -> mem_value_with_err
-  | MVEarray : list mem_value_with_err -> mem_value_with_err
-  | MVEstruct :
-    CoqSymbol.sym ->
-    list  (CoqSymbol.identifier *  CoqCtype.ctype * mem_value_with_err) ->
-    mem_value_with_err
-  | MVEunion :
-    CoqSymbol.sym ->
-    CoqSymbol.identifier -> mem_value_with_err ->
-    mem_value_with_err
-  | MVErr : mem_error -> mem_value_with_err.
-
-  Inductive mem_value_ind :=
-  | MVunspecified : CoqCtype.ctype -> mem_value_ind
-  | MVinteger :
-    CoqCtype.integerType -> integer_value -> mem_value_ind
-  | MVfloating :
-    CoqCtype.floatingType -> floating_value -> mem_value_ind
-  | MVpointer :
-    CoqCtype.ctype -> pointer_value -> mem_value_ind
-  | MVarray : list mem_value_ind -> mem_value_ind
-  | MVstruct :
-    CoqSymbol.sym ->
-    list (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> mem_value_ind
-  | MVunion :
-    CoqSymbol.sym ->
-    CoqSymbol.identifier -> mem_value_ind -> mem_value_ind.
-
-  Definition mem_value := mem_value_ind.
-
-  Inductive access_intention : Set :=
-  | ReadIntent : access_intention
-  | WriteIntent : access_intention
-  | CallIntent : access_intention.
-
-  Inductive readonly_status : Set :=
-  | IsWritable : readonly_status
-  | IsReadOnly : readonly_kind -> readonly_status.
-
-  Inductive allocation_taint :=
-  | Exposed
-  | Unexposed.
 
   Definition allocation_taint_eqb (a b: allocation_taint) :=
     match a, b with
@@ -347,9 +369,9 @@ Module Type CheriMemoryImpl
         match k1, k2 with
         | Read, Read => false
         | _, _ => negb
-                (orb
-                  (Z.leb (Z.add (AddressValue.to_Z b1) sz1) (AddressValue.to_Z b2))
-                  (Z.leb (Z.add (AddressValue.to_Z b2) sz2) (AddressValue.to_Z b1)))
+                    (orb
+                       (Z.leb (Z.add (AddressValue.to_Z b1) sz1) (AddressValue.to_Z b2))
+                       (Z.leb (Z.add (AddressValue.to_Z b2) sz2) (AddressValue.to_Z b1)))
         end
     end.
 
@@ -731,8 +753,8 @@ Module Type CheriMemoryImpl
                    fun (f : CoqSymbol.identifier *  CoqCtype.ctype * Z) =>
                      let '(ident, ty, off) := f in
                      fun (function_parameter :
-                         CoqSymbol.identifier *
-                           CoqCtype.ctype * mem_value) =>
+                           CoqSymbol.identifier *
+                             CoqCtype.ctype * mem_value) =>
                        let '(_, _, mval) := function_parameter in
                        let pad := Z.sub off last_off in
                        '(funptrmap, capmeta, bs) <-
@@ -756,7 +778,7 @@ Module Type CheriMemoryImpl
 
 
   Definition allocate_object
-    (tid:thread_id)
+    (tid:MC.thread_id)
     (pref:CoqSymbol.prefix)
     (int_val:integer_value)
     (ty:CoqCtype.ctype)
@@ -859,7 +881,7 @@ Module Type CheriMemoryImpl
       ).
 
   Definition allocate_region
-    (tid : thread_id)
+    (tid : MC.thread_id)
     (pref : CoqSymbol.prefix)
     (align_int : integer_value)
     (size_int : integer_value)
@@ -1454,7 +1476,7 @@ Module Type CheriMemoryImpl
       let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
       '(_, mval, _) <-
         serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
-                                                          (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
+                                                             (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
       ;;
       match mval with
       | MVEpointer _ (PV _ (PVconcrete c)) =>
@@ -1525,9 +1547,9 @@ Module Type CheriMemoryImpl
             fun x =>
               match x with
               | None => fail loc
-                         (if is_dyn
-                          then (MerrUndefinedFree Free_non_matching)
-                          else (MerrOther "attempted to kill with a pointer not matching any live allocation"))
+                          (if is_dyn
+                           then (MerrUndefinedFree Free_non_matching)
+                           else (MerrOther "attempted to kill with a pointer not matching any live allocation"))
               | Some (alloc_id,alloc) =>
                   precond c alloc alloc_id ;;
                   update
@@ -1573,8 +1595,8 @@ Module Type CheriMemoryImpl
                                 next_iota        := st.(next_iota);
                                 last_address     := st.(last_address) ;
                                 allocations      := update_allocations alloc
-                                               alloc_id
-                                               st.(allocations) ;
+                                                      alloc_id
+                                                      st.(allocations) ;
                                 iota_map         := st.(iota_map);
                                 funptrmap        := st.(funptrmap);
                                 varargs          := st.(varargs);
@@ -4392,8 +4414,17 @@ Module Type CheriMemoryImpl
 
 End CheriMemoryImpl.
 
+Module MemCommonExe:Mem_common(AddressValue)(Bounds).
+  Include Mem_common(AddressValue)(Bounds).
+End MemCommonExe.
+
+Module CheriMemoryTypesExe: CheriMemoryTypes(MemCommonExe)(Capability_GS)(MorelloImpl).
+  Include CheriMemoryTypes(MemCommonExe)(Capability_GS)(MorelloImpl).
+End CheriMemoryTypesExe.
+
 (* TODO: see if we can instantiate it in OCaml *)
 Module CheriMemoryExe
+  (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS
        (AddressValue)
        (Flags)
@@ -4403,11 +4434,11 @@ Module CheriMemoryExe
        (Permissions)
   )
   (IMP: Implementation)
+  (MT: CheriMemoryTypes(MC)(C)(IMP))
   (TD: TagDefs)
   (SW: CerbSwitchesDefs)
-<: CheriMemoryImpl(C)(IMP)(TD)(SW).
+<: CheriMemoryImpl(MC)(C)(IMP)(MT)(TD)(SW).
 
-
-  Include CheriMemoryImpl(C)(IMP)(TD)(SW).
+  Include CheriMemoryImpl(MC)(C)(IMP)(MT)(TD)(SW).
 
 End CheriMemoryExe.
