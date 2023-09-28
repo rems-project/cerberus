@@ -237,7 +237,7 @@ module CerbTagDefs = struct
 end
 
 
-module MM = CheriMemoryExe(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)(CerbSwitchesProxy)
+module MM = CheriMemoryExe(MemCommonExe)(MorelloCapabilityWithStrfcap)(MorelloImpl)(CheriMemoryTypesExe)(CerbTagDefs:CoqTags.TagDefs)(CerbSwitchesProxy)
 module C = MorelloCapabilityWithStrfcap
 
 module Z = struct
@@ -252,6 +252,7 @@ end
 
 
 module CHERIMorello : Memory = struct
+
   let name = MM.name
 
   type pointer_value = MM.pointer_value
@@ -353,11 +354,11 @@ module CHERIMorello : Memory = struct
                                 (List.map (fun (lp1,lp2) -> (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2)) ps)
                                 (fromCoq_location_cursor lc)
 
-  let fromCoq_access_kind: MM.access_kind -> access_kind = function
+  let fromCoq_access_kind: MemCommonExe.access_kind -> access_kind = function
     | LoadAccess -> LoadAccess
     | StoreAccess -> StoreAccess
 
-  let fromCoq_access_error: MM.access_error -> access_error = function
+  let fromCoq_access_error: MemCommonExe.access_error -> access_error = function
     | NullPtr        -> NullPtr
     | FunctionPtr    -> FunctionPtr
     | DeadPtr        -> DeadPtr
@@ -365,27 +366,27 @@ module CHERIMorello : Memory = struct
     | NoProvPtr      -> NoProvPtr
     | AtomicMemberof -> AtomicMemberof
 
-  let from_Coq_vip_error (_:MM.vip_error) : vip_error =
+  let from_Coq_vip_error (_:MemCommonExe.vip_error) : vip_error =
     failwith "vip_error not supported in cheri-coq memory model"
 
-  let from_Coq_mem_cheri_error: MM.mem_cheri_error -> mem_cheri_error = function
+  let from_Coq_mem_cheri_error: MemCommonExe.mem_cheri_error -> mem_cheri_error = function
     | CheriErrDecodingCap -> CheriErrDecodingCap
     | CheriMerrInvalidCap -> CheriMerrInvalidCap
     | CheriMerrInsufficientPermissions -> CheriMerrInsufficientPermissions
     | CheriBoundsErr (((b, s), a), l) -> CheriBoundsErr ((b, s), a, l)
     | CheriUndefinedTag -> CheriUndefinedTag
 
-  let from_Coq_free_error: MM.free_error -> free_error = function
+  let from_Coq_free_error: MemCommonExe.free_error -> free_error = function
     | Free_non_matching -> Free_non_matching
     | Free_dead_allocation -> Free_dead_allocation
     | Free_out_of_bound -> Free_out_of_bound
 
-  let fromCoq_readonly_kind: MM.readonly_kind -> readonly_kind = function
+  let fromCoq_readonly_kind: MemCommonExe.readonly_kind -> readonly_kind = function
     | ReadonlyConstQualified -> ReadonlyConstQualified
     | ReadonlyStringLiteral -> ReadonlyStringLiteral
     | ReadonlyTemporaryLifetime -> ReadonlyTemporaryLifetime
   
-  let fromCoq_mem_error: MM.mem_error -> mem_error = function
+  let fromCoq_mem_error: MemCommonExe.mem_error -> mem_error = function
     | MerrOutsideLifetime s -> MerrOutsideLifetime s
     | MerrInternal s -> MerrInternal s
     | MerrOther s -> MerrOther s
@@ -769,7 +770,7 @@ module CHERIMorello : Memory = struct
     | Struct s -> Struct (fromCoq_Symbol_sym s)
     | Union s -> Union (fromCoq_Symbol_sym s)
 
-  let fromCoq_ovelap_status: MM.overlap_status -> overlap_status = function
+  let fromCoq_ovelap_status: MemCommonExe.overlap_status -> overlap_status = function
     | Disjoint -> Disjoint
     | ExactOverlap -> ExactOverlap
     | PartialOverlap -> PartialOverlap
@@ -778,7 +779,7 @@ module CHERIMorello : Memory = struct
   (* OCaml -> Coq type conversion *)
 
   open CerbTagDefs
-  let toCoq_thread_id (tid:thread_id) : MM.thread_id = Z.of_int tid
+  let toCoq_thread_id (tid:thread_id) : MemCommonExe.thread_id = Z.of_int tid
 
   let toCoq_unaryOperator: AilSyntax.unaryOperator -> CoqAilSyntax.unaryOperator = function
     | Plus        -> Plus
@@ -813,11 +814,11 @@ module CHERIMorello : Memory = struct
     | Eq    ->Eq
     | Ne    ->Ne
 
-  let toCoq_derivecap_op: Mem_common.derivecap_op -> MM.derivecap_op = function
+  let toCoq_derivecap_op: Mem_common.derivecap_op -> MemCommonExe.derivecap_op = function
     | DCunary uo -> DCunary (toCoq_unaryOperator uo)
     | DCbinary bo -> DCbinary (toCoq_binaryOperator bo)
 
-  let toCoq_integer_operator: Mem_common.integer_operator -> MM.integer_operator = function
+  let toCoq_integer_operator: Mem_common.integer_operator -> MemCommonExe.integer_operator = function
   | IntAdd   -> IntAdd
   | IntSub   -> IntSub
   | IntMul   -> IntMul
@@ -826,28 +827,28 @@ module CHERIMorello : Memory = struct
   | IntRem_f -> IntRem_f
   | IntExp   -> IntExp
 
-  let toCoq_floating_operator: Mem_common.floating_operator -> MM.floating_operator = function
+  let toCoq_floating_operator: Mem_common.floating_operator -> MemCommonExe.floating_operator = function
     | FloatAdd -> FloatAdd
     | FloatSub -> FloatSub
     | FloatMul -> FloatMul
     | FloatDiv -> FloatDiv
 
   (* Intrinisics *)
-  let fromCoq_type_predicate: MM.type_predicate -> type_predicate = function
+  let fromCoq_type_predicate: MemCommonExe.type_predicate -> type_predicate = function
     | TyPred f -> TyPred (fun cty ->
                       lift_coq_serr (f (toCoq_ctype cty)))
     | TyIsPointer -> TyIsPointer
 
-  let fromCoq_instrinsics_ret_spec: MM.instrinsics_ret_spec -> instrinsics_ret_spec =function
+  let fromCoq_instrinsics_ret_spec: MemCommonExe.instrinsics_ret_spec -> instrinsics_ret_spec =function
     | ExactRet cty -> ExactRet (fromCoq_ctype cty)
     | CopyRet n -> CopyRet (Z.to_int n)
 
-  let fromCoq_intrinsics_arg_spec: MM.intrinsics_arg_spec -> intrinsics_arg_spec = function
+  let fromCoq_intrinsics_arg_spec: MemCommonExe.intrinsics_arg_spec -> intrinsics_arg_spec = function
     | ExactArg ct -> ExactArg (fromCoq_ctype ct)
     | PolymorphicArg tpl -> PolymorphicArg (List.map fromCoq_type_predicate tpl)
     | CopyArg n -> CopyArg (Z.to_int n)
 
-  let fromCoq_intrinsics_signature ((rsig,asigs):MM.intrinsics_signature) : Mem_common.intrinsics_signature =
+  let fromCoq_intrinsics_signature ((rsig,asigs):MemCommonExe.intrinsics_signature) : Mem_common.intrinsics_signature =
     (fromCoq_instrinsics_ret_spec rsig,
      List.map fromCoq_intrinsics_arg_spec asigs)
 
@@ -864,9 +865,9 @@ module CHERIMorello : Memory = struct
   open Cerb_pp_prelude
 
   let string_of_provenance = function
-    | MM.Prov_disabled ->
+    | CheriMemoryTypesExe.Prov_disabled ->
        "@disabled"
-    | MM.Prov_none ->
+    | CheriMemoryTypesExe.Prov_none ->
        "@empty"
     | Prov_some alloc_id ->
        "@" ^ Z.to_string alloc_id
@@ -875,9 +876,9 @@ module CHERIMorello : Memory = struct
     | Prov_device ->
        "@device"
 
-  let pp_pointer_value ?(is_verbose=false) (MM.PV (prov, ptrval_)) =
+  let pp_pointer_value ?(is_verbose=false) (CheriMemoryTypesExe.PV (prov, ptrval_)) =
     match ptrval_ with
-    | MM.PVfunction (FP_valid sym) ->
+    | CheriMemoryTypesExe.PVfunction (FP_valid sym) ->
        !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty
                                          (fromCoq_Symbol_sym sym)))
     | PVfunction (FP_invalid c) ->
@@ -891,7 +892,7 @@ module CHERIMorello : Memory = struct
          P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string c))
 
   let pp_integer_value = function
-    | (MM.IV n) ->
+    | (CheriMemoryTypesExe.IV n) ->
        !^ (Z.to_string n)
     | (IC (is_signed, c)) ->
        let cs = (C.to_string c)
@@ -905,7 +906,7 @@ module CHERIMorello : Memory = struct
   let pp_pretty_integer_value _ = pp_integer_value
 
   let rec pp_mem_value = function
-    | MM.MVunspecified _ ->
+    | CheriMemoryTypesExe.MVunspecified _ ->
        PPrint.string "UNSPEC"
     | MVinteger (_, ival) ->
        pp_integer_value ival
@@ -944,8 +945,8 @@ module CHERIMorello : Memory = struct
           (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
           (match a.taint with
-           | MM.Exposed -> "exposed"
-           | MM.Unexposed -> "unexposed"
+           | CheriMemoryTypesExe.Exposed -> "exposed"
+           | CheriMemoryTypesExe.Unexposed -> "unexposed"
           )
           (if a.is_dynamic then "dynamic" else "static")
           (if a.is_dead then ", dead" else "")
@@ -1098,7 +1099,7 @@ module CHERIMorello : Memory = struct
   (*TODO: revise that, just a hack for codegen*)
   let case_ptrval (pv:pointer_value) fnull ffun fconc =
     match pv with
-    | MM.PV (_, PVfunction (FP_valid sym)) -> ffun (Some (fromCoq_Symbol_sym sym))
+    | CheriMemoryTypesExe.PV (_, PVfunction (FP_valid sym)) -> ffun (Some (fromCoq_Symbol_sym sym))
     | PV (_, PVfunction (FP_invalid c)) ->
        if MM.cap_is_null c
        then fnull Ctype.void
@@ -1150,7 +1151,7 @@ module CHERIMorello : Memory = struct
   (* There is a sketch of implementation of this function in Coq but
      it requires some dependencies and fixpoint magic.  It OK to have
      in in OCaml for now *)
-  let prefix_of_pointer (MM.PV (prov, pv)) : string option memM =
+  let prefix_of_pointer (CheriMemoryTypesExe.PV (prov, pv)) : string option memM =
     if !Cerb_debug.debug_level >= 2 then
       Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
     let open String_symbol in

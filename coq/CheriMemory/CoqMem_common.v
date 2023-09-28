@@ -9,9 +9,10 @@ Require CoqAilSyntax.
 Require Import CoqCtype.
 Require Import Common.SimpleError.
 
-Module Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
+Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
 
-  Definition thread_id := Z. (* Mem_common.thread_id *)
+  Definition thread_id := Z.
+  (* Parameter thread_id:Set. *)
 
   Inductive overlap_status : Set :=
   | Disjoint : overlap_status
