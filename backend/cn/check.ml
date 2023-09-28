@@ -797,13 +797,13 @@ and check_pexprs (pes : (BT.t mu_pexpr) list) (k : IT.t list -> unit m) : unit m
 
 module Spine : sig
   val calltype_ft : 
-    Loc.t -> fsym:Sym.t -> BT.t mu_pexpr list -> AT.ft -> (RT.t -> (unit) m) -> (unit) m
+    Loc.t -> fsym:Sym.t -> BT.t mu_pexpr list -> AT.ft -> (RT.t -> unit m) -> unit m
   val calltype_lt : 
-    Loc.t -> BT.t mu_pexpr list -> AT.lt * label_kind -> (False.t -> (unit) m) -> (unit) m
+    Loc.t -> BT.t mu_pexpr list -> AT.lt * label_kind -> (False.t -> unit m) -> unit m
   val calltype_lemma :
     Loc.t -> lemma:Sym.t -> (Loc.t * IT.t) list -> AT.lemmat -> (LRT.t -> unit m) -> unit m
   val subtype : 
-    Loc.t -> LRT.t -> (unit -> (unit) m) -> (unit) m
+    Loc.t -> LRT.t -> (unit -> unit m) -> unit m
 end = struct
 
 
@@ -1005,8 +1005,8 @@ let instantiate loc filter arg =
 
 
 let rec check_expr labels (e : 'bty mu_expr)
-      (k: IT.t -> (unit) m)
-    : (unit) m =
+      (k: IT.t -> unit m)
+    : unit m =
   let (M_Expr (loc, _annots, _, e_)) = e in
   let@ () = add_loc_trace loc in
   let@ locs = get_loc_trace () in
@@ -1564,7 +1564,7 @@ let check_procedure
       (loc : loc) 
       (fsym : Sym.t)
       (args_and_body : _ mu_proc_args_and_body)
-    : (unit) m =
+    : unit m =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
 
   pure begin 
