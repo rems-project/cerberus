@@ -1093,27 +1093,37 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
           end
         in
         k actual_value)
-     | M_PtrFromInt (act_from, act2_to, pe) ->
-        let@ () = WellTyped.ensure_base_type loc ~expect Loc in
+     | M_PtrFromInt (act_from, act_to, pe) ->
         let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
-        let@ () = WellTyped.WCT.is_ct act2_to.loc act2_to.ct in
+        let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
+        assert (match act_from.ct with Integer _ -> true | _ -> false);
+        assert (match act_to.ct with Pointer _ -> true | _ -> false);
+        let@ () = WellTyped.ensure_base_type loc ~expect (Memory.bt_of_sct act_to.ct) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(Memory.bt_of_sct act_from.ct) (bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
+        (* TODO: what about unrepresentable values? If that's possible
+           we to make sure our cast semantics correctly matches C's *)
         let value = integerToPointerCast_ arg in
         k value)
      | M_PtrValidForDeref (act, pe) ->
-        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
-        (* check *)
+        (* TODO: provenance things? *)
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
+        (* TODO: check. Also: this is the same as PtrWellAligned *)
         check_pexpr pe (fun arg ->
         let value = aligned_ (arg, act.ct) in
         k value)
      | M_PtrWellAligned (act, pe) ->
-        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
+        (* TODO: check *)
         check_pexpr pe (fun arg ->
         let value = aligned_ (arg, act.ct) in
         k value)
      | M_PtrArrayShift (pe1, act, pe2) ->
+        let@ () = ensure_base_type loc ~expect Loc in
         let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe1) in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
