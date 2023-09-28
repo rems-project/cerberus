@@ -48,13 +48,14 @@ Definition cerb_switches_t := set cerb_switch.
 Definition has_switch (switches:cerb_switches_t) (sw : cerb_switch) : bool :=
   set_mem cerb_switch_dec sw switches.
 
+Definition is_PNVI_switch (s:cerb_switch) :=
+  match s with
+   | SW_PNVI _ => true
+   | _ => false
+  end.
+
 Definition is_PNVI (switches:cerb_switches_t) : bool :=
-  List.existsb
-    (fun (s : cerb_switch) =>
-      match s with
-      | SW_PNVI _ => true
-      | _ => false
-      end) switches.
+  List.existsb is_PNVI_switch switches.
 
 Definition is_CHERI (switches:cerb_switches_t) : bool :=
   has_switch switches (SW_CHERI).
