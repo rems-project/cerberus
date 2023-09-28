@@ -385,7 +385,7 @@ let check_conv_int loc ~expect ct arg =
       )
   in
   let bt = IT.bt arg in
-  (* TODO: can we (later) optimise this, so when bt matches ct conv_int becomes a no-op? *)
+  (* TODO: can we (later) optimise this? *)
   let@ value = match ity with
     | Bool ->
        (* TODO: can we (later) express this more efficiently without ITE? *)
@@ -707,36 +707,41 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ ct = check_single_ct loc ct_it in
      let@ () = WellTyped.WCT.is_ct loc ct in
      let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct ct) in
-  check_pexpr pe (fun lvt ->
+     check_pexpr pe (fun lvt ->
      let@ vt = check_conv_int loc ~expect ct lvt in
      k vt))
-  | M_PEwrapI (act, pe) ->
-     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
-     check_pexpr pe (fun arg ->
-     let ity = Option.get (Sctypes.is_integer_type act.ct) in
-     k (wrapI_ (ity, arg)))
+  | M_PEwrapI (act, pe) -> assert false
+     (* let@ () = WellTyped.WCT.is_ct act.loc act.ct in *)
+     (* let@ () = WellTyped.ensure_base_type loc ~expect Integer in *)
+     (* check_pexpr pe (fun arg -> *)
+     (* let ity = Option.get (Sctypes.is_integer_type act.ct) in *)
+     (* k (wrapI_ (ity, arg))) *)
   | M_PEcatch_exceptional_condition (act, pe) ->
-     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
-     let ity = Option.get (Sctypes.is_integer_type act.ct) in
-     check_pexpr pe (fun arg ->
-         let@ provable = provable loc in
-         match provable (t_ (is_representable_integer arg ity)) with
-         | `True -> (k arg)
-         | `False -> 
-            let@ model = model () in
-            let ub = CF.Undefined.UB036_exceptional_condition in
-            fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
-     )
+     assert false
+     (* let@ () = WellTyped.WCT.is_ct act.loc act.ct in *)
+     (* let@ () = WellTyped.ensure_base_type loc ~expect Integer in *)
+     (* let ity = Option.get (Sctypes.is_integer_type act.ct) in *)
+     (* check_pexpr pe (fun arg -> *)
+     (*     let@ provable = provable loc in *)
+     (*     match provable (t_ (is_representable_integer arg ity)) with *)
+     (*     | `True -> (k arg) *)
+     (*     | `False ->  *)
+     (*        let@ model = model () in *)
+     (*        let ub = CF.Undefined.UB036_exceptional_condition in *)
+     (*        fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}}) *)
+     (* ) *)
   | M_PEis_representable_integer (pe, act) ->
      let@ () = WellTyped.WCT.is_ct act.loc act.ct in
      let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+     let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe) in
      let ity = Option.get (Sctypes.is_integer_type act.ct) in
      check_pexpr pe (fun arg ->
          k (is_representable_integer arg ity)
        )
   | M_PEif (pe, e1, e2) ->
+     let@ () = ensure_base_type loc ~expect (bt_of_pexpr e1) in
+     let@ () = ensure_base_type loc ~expect (bt_of_pexpr e2) in
+     let@ () = ensure_base_type loc ~expect:Bool (bt_of_pexpr pe) in
      check_pexpr pe (fun c ->
      let aux e cond = 
        let@ () = add_c loc (t_ cond) in
@@ -751,14 +756,15 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      return ())
   | M_PElet (p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some p) e1 in
+     let@ () = ensure_base_type loc ~expect (bt_of_pexpr e2) in
+     let@ () = ensure_base_type loc ~expect:(bt_of_pexpr e1) (bt_of_pattern p) in
      check_pexpr e1 (fun v1 ->
-     let@ () = ensure_base_type loc ~expect:(IT.bt v1) (bt_of_pattern p) in
      let@ bound_a = check_and_match_pattern p v1 in
      let@ () = fin () in
      check_pexpr e2 (fun lvt ->
      let@ () = remove_as bound_a in
      k lvt))
-  | M_PEundef (_loc, ub) ->
+  | M_PEundef (loc, ub) ->
      let@ provable = provable loc in
      begin match provable (t_ (bool_ false)) with
      | `True -> return ()
@@ -766,7 +772,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         let@ model = model () in
         fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
      end
-  | M_PEerror (err, pe) ->
+  | M_PEerror (err, _pe) ->
      let@ provable = provable loc in
      begin match provable (t_ (bool_ false)) with
      | `True -> return ()
