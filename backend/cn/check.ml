@@ -868,21 +868,24 @@ end = struct
     spine_l rt_subst rt_pp loc situation lftyp k)
 
 
+  let check_arg_pexpr (pe : BT.t mu_pexpr) ~expect k = 
+    let@ () = ensure_base_type (loc_of_pexpr pe) ~expect (bt_of_pexpr pe) in
+    check_pexpr pe k
+
+  let check_arg_it (loc, it_arg) ~(expect:LS.t) k =
+    let@ it_arg = WellTyped.WIT.check loc expect it_arg in
+    k it_arg
+
   let calltype_ft loc ~fsym args (ftyp : AT.ft) k =
-    spine (fun pe ~expect -> check_pexpr pe) RT.subst
+    spine check_arg_pexpr RT.subst 
       RT.pp loc (FunctionCall fsym) args ftyp k
 
-
   let calltype_lt loc args ((ltyp : AT.lt), label_kind) k =
-    spine (fun pe ~expect -> check_pexpr pe) False.subst False.pp
+    spine check_arg_pexpr False.subst False.pp
       loc (LabelCall label_kind) args ltyp k
 
   let calltype_lemma loc ~lemma args lemma_typ k =
-    let check_it_arg (loc, it_arg) ~(expect:LS.t) k =
-      let@ it_arg = WellTyped.WIT.check loc expect it_arg in
-      k it_arg
-    in
-    spine check_it_arg LRT.subst LRT.pp
+    spine check_arg_it LRT.subst LRT.pp
       loc (LemmaApplication lemma) args lemma_typ k
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
