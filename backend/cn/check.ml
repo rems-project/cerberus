@@ -1045,6 +1045,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         pointer_op gePointer_ pe1 pe2
      | M_Ptrdiff (act, pe1, pe2) -> 
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+        let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct (Integer Ptrdiff_t)) in
+        let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe1) in
+        let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe2) in
         check_pexpr pe1 (fun arg1 ->
         check_pexpr pe2 (fun arg2 ->
         (* copying and adapting from memory/concrete/impl_mem.ml *)
@@ -1053,33 +1056,43 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
           | ct -> Memory.size_of_ctype ct
         in
         let value =
+          (* TODO: here there might be a basetype mismatch: arg1 and
+             arg2 are cast to intptr_t, the return value we want is of
+             the basetype corresponding to ptrdiff_t (hence the
+             divisor literal type). But AIUI, these don't have to be
+             the same base type?*)
           div_
-            (sub_ (pointerToIntegerCast_ arg1,
-                   pointerToIntegerCast_ arg2),
-             int_ divisor)
+            (sub_ (pointerToIntegerCast_ arg1, (* intptr_t *)
+                   pointerToIntegerCast_ arg2), (* intptr_t *)
+             int_lit_ divisor (Memory.bt_of_sct (Integer Ptrdiff_t)))
         in
         k value))
      | M_IntFromPtr (act_from, act_to, pe) ->
-        let@ () = WellTyped.ensure_base_type loc ~expect Integer in
         let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
         let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
+        assert (match act_from.ct with Pointer _ -> true | _ -> false);
+        assert (match act_to.ct with Integer _ -> true | _ -> false);
+        let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act_to.ct) in
+        let@ () = ensure_base_type loc ~expect:(Memory.bt_of_sct act_from.ct) (bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
-        let value = pointerToIntegerCast_ arg in
+        (* TODO: is this good? *)
+        let test_value = cast_ Memory.intptr_bt arg in
+        let actual_value = cast_ (Memory.bt_of_sct act_to.ct) arg in
         let@ () = 
           (* after discussing with Kavyan *)
           let@ provable = provable loc in
-          let lc = t_ (representable_ (act_to.ct, value)) in
+          let lc = t_ (representable_ (act_to.ct, test_value)) in
           begin match provable lc with
           | `True -> return () 
           | `False ->
              let@ model = model () in
              fail (fun ctxt ->
                  let ict = act_to.ct in
-                 {loc; msg = Int_unrepresentable {value = arg; ict; ctxt; model}}
+                 {loc; msg = Int_unrepresentable {value = test_value; ict; ctxt; model}}
                )
           end
         in
-        k value)
+        k actual_value)
      | M_PtrFromInt (act_from, act2_to, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Loc in
         let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
