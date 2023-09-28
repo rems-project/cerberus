@@ -1158,8 +1158,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
   | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
      begin match action_ with
      | M_Create (pe, act, prefix) -> 
-        let@ () = WellTyped.ensure_base_type loc ~expect Loc in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+        let@ () = WellTyped.ensure_base_type loc ~expect Loc in
+        let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
         let ret_s, ret = match prefix with 
           | PrefSource (_loc, syms) -> 
@@ -1175,7 +1176,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
           | _ -> 
              IT.fresh Loc
         in
-        let@ () = add_l ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
+        let@ () = add_a ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
         let@ () = add_c loc (t_ (representable_ (Pointer act.ct, ret))) in
         let align_v = cast_ Memory.intptr_bt arg in
         let@ () = add_c loc (t_ (alignedI_ ~align:align_v ~t:ret)) in
@@ -1187,8 +1188,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                }, 
              O (default_ (Memory.bt_of_sct act.ct)))
         in
-        let@ () =
-          add_r loc (P (Global.mk_alloc ret), O IT.unit_) in
+        let@ () = add_r loc (P (Global.mk_alloc ret), O IT.unit_) in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         Cerb_debug.error "todo: CreateReadOnly"
@@ -1197,8 +1197,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      | M_Kill (M_Dynamic, asym) -> 
         Cerb_debug.error "todo: Free"
      | M_Kill (M_Static ct, pe) -> 
-        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
         let@ () = WellTyped.WCT.is_ct loc ct in
+        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
+        let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
         let@ _ = 
           RI.Special.predicate_request loc (Access Kill) ({
@@ -1212,8 +1213,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         in
         k unit_)
      | M_Store (_is_locking, act, p_pe, v_pe, mo) -> 
-        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Loc (bt_of_pexpr p_pe) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(Memory.bt_of_sct act.ct) (bt_of_pexpr v_pe) in
         check_pexpr p_pe (fun parg ->
         check_pexpr v_pe (fun varg ->
         (* The generated Core program will in most cases before this
@@ -1259,6 +1262,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      | M_Load (act, p_pe, _mo) -> 
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         let@ () = WellTyped.ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Loc (bt_of_pexpr p_pe) in
         check_pexpr p_pe (fun pointer ->
         let@ value = load loc pointer act.ct in
         k value)
