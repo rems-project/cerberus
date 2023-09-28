@@ -32,11 +32,14 @@ Import MonadNotation.
 (* Abstract set of switches *)
 Parameter abst_get_switches: unit -> cerb_switches_t.
 
+(* Abstract tag definitions *)
+Parameter abst_tagDefs: unit -> (SymMap.t CoqCtype.tag_definition).
+
 Require Import ListSet.
 
-Module DummyTagDefs: TagDefs.
-  Definition tagDefs (_:unit) := SymMap.empty CoqCtype.tag_definition.
-End DummyTagDefs.
+Module AbstTagDefs: TagDefs.
+  Definition tagDefs := abst_tagDefs.
+End AbstTagDefs.
 
 Module RevocationProofs.
 
@@ -58,11 +61,11 @@ Module RevocationProofs.
   End WithPNVISwitches.
 
   Module CheriMemoryWithoutPNVI.
-    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(DummyTagDefs)(WithoutPNVISwitches).
+    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(AbstTagDefs)(WithoutPNVISwitches).
   End CheriMemoryWithoutPNVI.
 
   Module CheriMemoryWithPNVI.
-    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(DummyTagDefs)(WithPNVISwitches).
+    Include CheriMemoryImpl(Capability_GS)(MorelloImpl)(AbstTagDefs)(WithPNVISwitches).
   End CheriMemoryWithPNVI.
 
   (* --- Equality predicates for types used in Memory Models --- *)
