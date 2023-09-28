@@ -1007,45 +1007,42 @@ let instantiate loc filter arg =
 
 
 
-let rec check_expr labels (e : 'bty mu_expr)
-      (k: IT.t -> unit m)
-    : unit m =
-  let (M_Expr (loc, _annots, _, e_)) = e in
+let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
+  let (M_Expr (loc, _annots, expect, e_)) = e in
   let@ () = add_loc_trace loc in
-  let@ locs = get_loc_trace () in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
        debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
        debug 3 (lazy (item "ctxt" (Context.pp ctxt)));
     )
   in
-  (* FIXME: get rid of the Normal/orFalse stuff later *)
-  let typ = Normal (bt_of_expr e) in
-  match typ, e_ with
-  | Normal expect, M_Epure pe -> 
+  match e_ with
+  | M_Epure pe -> 
+     let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe) in
      check_pexpr pe (fun lvt ->
      k lvt)
-  | Normal expect, M_Ememop memop ->
+  | M_Ememop memop ->
      let pointer_op op pe1 pe2 = 
+       let@ () = ensure_base_type loc ~expect Bool in
+       let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe1) in
+       let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe2) in
        check_pexpr pe1 (fun arg1 ->
        check_pexpr pe2 (fun arg2 ->
-       let lvt = op (arg1, arg2) in
-       let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt lvt) in
-       k lvt))
+       k (op (arg1, arg2))))
      in
      begin match memop with
-     | M_PtrEq (asym1, asym2) -> 
-        pointer_op eq_ asym1 asym2
-     | M_PtrNe (asym1, asym2) -> 
-        pointer_op ne_ asym1 asym2
-     | M_PtrLt (asym1, asym2) -> 
-        pointer_op ltPointer_ asym1 asym2
-     | M_PtrGt (asym1, asym2) -> 
-        pointer_op gtPointer_ asym1 asym2
-     | M_PtrLe (asym1, asym2) -> 
-        pointer_op lePointer_ asym1 asym2
-     | M_PtrGe (asym1, asym2) -> 
-        pointer_op gePointer_ asym1 asym2
+     | M_PtrEq (pe1, pe2) -> 
+        pointer_op eq_ pe1 pe2
+     | M_PtrNe (pe1, pe2) -> 
+        pointer_op ne_ pe1 pe2
+     | M_PtrLt (pe1, pe2) -> 
+        pointer_op ltPointer_ pe1 pe2
+     | M_PtrGt (pe1, pe2) -> 
+        pointer_op gtPointer_ pe1 pe2
+     | M_PtrLe (pe1, pe2) -> 
+        pointer_op lePointer_ pe1 pe2
+     | M_PtrGe (pe1, pe2) -> 
+        pointer_op gePointer_ pe1 pe2
      | M_Ptrdiff (act, pe1, pe2) -> 
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr pe1 (fun arg1 ->
@@ -1135,7 +1132,7 @@ let rec check_expr labels (e : 'bty mu_expr)
      | M_Va_end _ (* (asym 'bty) *) ->
         Cerb_debug.error "todo: M_Va_end"
      end
-  | Normal expect, M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
+  | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
      begin match action_ with
      | M_Create (pe, act, prefix) -> 
         let@ () = WellTyped.ensure_base_type loc ~expect Loc in
@@ -1259,10 +1256,10 @@ let rec check_expr labels (e : 'bty mu_expr)
      | M_LinuxRMW (ct, sym1, sym2, mo) -> 
         Cerb_debug.error "todo: LinuxRMW"
      end
-  | Normal expect, M_Eskip -> 
+  | M_Eskip -> 
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      k unit_
-  | Normal expect, M_Eccall (act, f_pe, pes) ->
+  | M_Eccall (act, f_pe, pes) ->
      (* todo: do anything with act? *)
      let@ () = WellTyped.WCT.is_ct act.loc act.ct in
      check_pexpr f_pe (fun f_it ->
@@ -1277,27 +1274,12 @@ let rec check_expr labels (e : 'bty mu_expr)
        | Some ft -> return ft
        | None -> fail (fun _ -> {loc; msg = Generic (!^"Call to function with no spec:" ^^^ Sym.pp fsym)})
      in
-
      Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) ->
      let@ () = WellTyped.ensure_base_type loc ~expect bt in
      let@ _, members = make_return_record loc (TypeErrors.call_prefix (FunctionCall fsym)) (RT.binders rt) in
      let@ lvt = bind_return loc members rt in
      k lvt))
-  (* | M_Eproc (fname, pes) -> *)
-  (*    let@ (_, decl_typ) = match fname with *)
-  (*      | CF.Core.Impl impl ->  *)
-  (*         let@ global = get_global () in *)
-  (*         let ift = Global.get_impl_fun_decl global impl in *)
-  (*         let ft = AT.map (fun value -> rt_of_lvt {loc = Loc.unknown; value}) ift in *)
-  (*         return (loc, ft) *)
-  (*      | CF.Core.Sym sym ->  *)
-  (*         let@ (loc, fun_decl, _) = get_fun_decl loc sym in *)
-  (*         return (loc, fun_decl) *)
-  (*    in *)
-  (*    let@ args = ListM.mapM infer_pexpr pes in *)
-  (*    Spine.calltype_ft loc args decl_typ *)
-
-  | _, M_Eif (c_pe, e1, e2) ->
+  | M_Eif (c_pe, e1, e2) ->
      check_pexpr c_pe (fun carg ->
      let aux lc nm e = 
        let@ () = add_c loc (t_ lc) in
@@ -1309,11 +1291,11 @@ let rec check_expr labels (e : 'bty mu_expr)
      let@ () = pure (aux carg "true" e1) in
      let@ () = pure (aux (not_ carg) "false" e2) in
      return ())
-  | _, M_Ebound e ->
+  | M_Ebound e ->
      check_expr labels e k
-  | _, M_End _ ->
+  | M_End _ ->
      Cerb_debug.error "todo: End"
-  | _, M_Elet (p, e1, e2) ->
+  | M_Elet (p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some p) e1 in
      check_pexpr e1 (fun v1 ->
      let@ () = ensure_base_type loc ~expect:(IT.bt v1) (bt_of_pattern p) in
@@ -1323,7 +1305,7 @@ let rec check_expr labels (e : 'bty mu_expr)
          let@ () = remove_as bound_a in
          k rt
      ))
-  | Normal expect, M_Eunseq es ->
+  | M_Eunseq es ->
      let@ item_bts = match expect with
        | Tuple bts ->
           let expect_nr = List.length bts in
@@ -1346,7 +1328,7 @@ let rec check_expr labels (e : 'bty mu_expr)
           k (tuple_ (List.rev vs))
      in
      aux (List.combine es item_bts) [] []
-  | Normal expect, M_CN_progs (_, cn_progs) ->
+  | M_CN_progs (_, cn_progs) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      let rec aux = function
        | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
@@ -1458,10 +1440,8 @@ let rec check_expr labels (e : 'bty mu_expr)
      in
      let@ () = ListM.iterM aux cn_progs in
      k unit_
-     
-
-  | _, M_Ewseq (p, e1, e2)
-  | _, M_Esseq (p, e1, e2) ->
+  | M_Ewseq (p, e1, e2)
+  | M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some p) e1 in
      check_expr labels e1 (fun it ->
             let@ () = ensure_base_type loc ~expect:(IT.bt it) (bt_of_pattern p) in
@@ -1472,7 +1452,7 @@ let rec check_expr labels (e : 'bty mu_expr)
                 k it2
               )
        )
-  | _, M_Erun (label_sym, pes) ->
+  | M_Erun (label_sym, pes) ->
      let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
        | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
        | Some (lt,lkind) -> return (lt,lkind)
@@ -1481,12 +1461,6 @@ let rec check_expr labels (e : 'bty mu_expr)
      Spine.calltype_lt loc pes (lt,lkind) (fun False ->
      let@ () = all_empty loc original_resources in
      return ())
-  | False, _ ->
-     let err = 
-       "This expression returns but is expected "^
-         "to have non-return type."
-     in
-     fail (fun _ -> {loc; msg = Generic !^err})
 
 
 
