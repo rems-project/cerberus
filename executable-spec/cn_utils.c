@@ -160,7 +160,7 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
 }
 
 /* These should be produced automatically based on binops used in source CN annotations */
-_Bool cn_integer_lt(cn_integer *i1, cn_integer *i2) {
+cn_bool cn_integer_lt(cn_integer *i1, cn_integer *i2) {
     return (i1->val) < (i2->val);
 }
 
@@ -188,3 +188,23 @@ cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i) {
     res->ptr = (char *) ptr->ptr + i->val;
     return res;
 }
+
+// Ownership functions
+
+enum OWNERSHIP {
+    GET,
+    TAKE
+};
+
+char owned_char(cn_pointer *cn_pointer, enum OWNERSHIP owned_enum) {
+    switch (owned_enum) {
+        case GET:
+            // printf("GET case\n");
+            break;
+        case TAKE:
+            // printf("TAKE case\n");
+            break;
+    }
+    return *((char *) cn_pointer->ptr);
+}
+

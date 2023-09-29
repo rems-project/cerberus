@@ -423,6 +423,14 @@ let rec cn_to_ail_expr_aux_internal
         | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
       )
       in
+      let ail_expr_ = match d with 
+        | Assert -> 
+          (if (basetype == BT.Bool) then 
+            (ail_expr_ )
+          else 
+            cn_to_ail_const_internal (Bool true))
+        | _ -> ail_expr_ 
+      in
       dest d ([], [], mk_expr ail_expr_)
 
   | Binop (bop, t1, t2) ->
@@ -956,14 +964,30 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
       } 
     *)
 
-    let i_sym = fst q.q in
+    let i_sym = Sym.fresh_pretty ("cn_" ^ (Sym.pp_string (fst q.q))) in
 
     let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr e2)) (fst q.q) in
     let end_cond = get_rest_of_expr_r (rm_expr e2) in
 
+    let cn_integer_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, cn_to_ail_base_type CN_integer)) in 
+    let convert_to_cn_integer_sym = Sym.fresh_pretty "convert_to_cn_integer" in 
 
-    let start_binding = create_binding i_sym (mk_ctype C.(Basic (Integer (Signed Int_)))) in
-    let start_assign = A.(AilSdeclaration [(i_sym, Some start_expr)]) in
+    let convert_to_cn_binop ail_expr_ = match ail_expr_ with 
+      | A.(AilEbinary (lhs, binop, rhs)) ->
+        let cond_rhs_sym = Sym.fresh () in
+        let cn_convert_binding = create_binding cond_rhs_sym cn_integer_ptr_ctype in 
+        let rhs_conversion_fcall = A.(AilEcall (mk_expr (AilEident convert_to_cn_integer_sym), [rhs])) in
+        let cn_convert_stat = A.(AilSdeclaration [(cond_rhs_sym, Some (mk_expr rhs_conversion_fcall))]) in
+        ([cn_convert_binding], [cn_convert_stat])
+      | _ -> ([], []) (* TODO: Recursive case *)
+    in
+
+
+    let conversion_fcall = A.(AilEcall (mk_expr (AilEident convert_to_cn_integer_sym), [start_expr])) in
+
+    let start_binding = create_binding i_sym cn_integer_ptr_ctype in
+    let start_assign = A.(AilSdeclaration [(i_sym, Some (mk_expr conversion_fcall))]) in
+    let (end_binding, end_assign) = convert_to_cn_binop end_cond in 
 
     let q_times_step = A.(AilEbinary (mk_expr (AilEident i_sym), Arithmetic Mul, e3)) in
     let gen_add_expr_ e_ = 
@@ -985,13 +1009,14 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
       | C.(Pointer (_, Ctype (_, Void))) -> ctype_
       | ct_ -> C.(Pointer (empty_qualifiers, mk_ctype ct_))
     in *)
-    let increment_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident i_sym))))) in 
+    let increment_fn_sym = Sym.fresh_pretty "cn_integer_increment" in
+    let increment_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident increment_fn_sym), [mk_expr (AilEident i_sym)])))) in 
 
     let (bs', ss') = match rm_ctype return_ctype with 
       | C.Void -> 
         let void_pred_call = A.(AilSexpr (mk_expr rhs)) in
         let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [void_pred_call; increment_stat])), 0)) in
-        let ail_block = A.(AilSblock ([], List.map mk_stmt [start_assign; while_loop])) in
+        let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign] @ end_assign @ [while_loop]))) in
         ([], [ail_block])
       | _ -> 
         let cn_map_type = mk_ctype ~annots:[CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")] C.Void in
@@ -1001,65 +1026,64 @@ let cn_to_ail_resource_internal sym dts (preds : Mucore.T.resource_predicates) =
         (* Improve - str_of_ctype bound to fail soon *)
         let f_str = "convert_to_" ^ (str_of_ctype (bt_to_ail_ctype return_bt)) in
         let f_ident = mk_expr (AilEident (Sym.fresh_pretty f_str)) in
-        let key_sym = Sym.fresh () in
         let val_sym = Sym.fresh () in
-        let key_fcall = A.(AilEcall (f_ident, [mk_expr (AilEident i_sym)])) in
         let value_fcall = A.(AilEcall (f_ident, [mk_expr rhs])) in
         let cn_pointer_return_type = mk_ctype C.(Pointer (empty_qualifiers, bt_to_ail_ctype return_bt)) in
-        let key_binding = create_binding key_sym cn_pointer_return_type in
         let value_binding = create_binding val_sym cn_pointer_return_type in
-        let key_stat = A.(AilSdeclaration [(key_sym, Some (mk_expr key_fcall))]) in
         let value_stat = A.(AilSdeclaration [(val_sym, Some (mk_expr value_fcall))]) in
-        let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), List.map mk_expr [AilEident sym; AilEident key_sym; AilEident val_sym])) in
+        let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), List.map mk_expr [AilEident sym; AilEident i_sym; AilEident val_sym])) in
         (* let ail_assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr sym_add_expr, mk_expr rhs)))) in *)
-        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [key_stat; value_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat])), 0)) in
-        let ail_block = A.(AilSblock ([key_binding; value_binding], List.map mk_stmt [start_assign; while_loop])) in
+        let while_loop = A.(AilSwhile (mk_expr end_cond, mk_stmt (AilSblock ([], List.map mk_stmt [value_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat])), 0)) in
+        let ail_block = A.(AilSblock ([value_binding], List.map mk_stmt ([start_assign] @ end_assign @ [while_loop]))) in
         ([sym_binding], [sym_decl; ail_block])
     in
 
-    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ ss')
+    (b1 @ b2 @ b3 @ [start_binding] @ end_binding @ bs' @ (List.concat bs), s1 @ s2 @ s3 @ (List.concat ss) @ ss')
 
 let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> a dest -> LC.logical_constraint -> a
   = fun dts d lc -> 
       match lc with
-      | LogicalConstraints.T it -> 
-        cn_to_ail_expr_internal dts it d
-      | LogicalConstraints.Forall ((sym, bt), it) -> 
-        let (cond_it, t) = match IT.term it with 
-          | Binop (Impl, it, it') -> (it, it')
-          | _ -> failwith "Incorrect form of forall logical constraint term"
-        in
+        | LogicalConstraints.T it -> 
+          cn_to_ail_expr_internal dts it d
+        | LogicalConstraints.Forall ((sym, bt), it) -> 
+          let (cond_it, t) = match IT.term it with 
+            | Binop (Impl, it, it') -> (it, it')
+            | _ -> failwith "Incorrect form of forall logical constraint term"
+          in
 
-        (* Assume cond_it is of a particular form *)
-        (*
-        Input:
+          (* Assume cond_it is of a particular form *)
+          (*
+          Input:
 
-        each (bt s; cond_it) {t}
+          each (bt s; cond_it) {t}
+
+          
+          Want to translate to:
+          bool b = true; // b should be a fresh sym each time
+
+          {
+            signed int s = r_start;
+            while (sym < r_end) {
+              b = b && t;
+              sym++;
+            }   
+          }
+          
+          assign/return/assert/passback b
+
+          *)
+
+          let (b1, s1, e1) = cn_to_ail_expr_internal dts cond_it PassBack in
+          let t_translated = cn_to_ail_expr_internal dts t PassBack in
+
+          let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr e1)) sym in
+          let while_cond = get_rest_of_expr_r (rm_expr e1) in
+
+          let (bs, ss, e) = gen_bool_while_loop sym (rm_expr start_expr) while_cond t_translated in 
+          dest d (bs, ss, e)
 
         
-        Want to translate to:
-        bool b = true; // b should be a fresh sym each time
 
-        {
-          signed int s = r_start;
-          while (sym < r_end) {
-            b = b && t;
-            sym++;
-          }   
-        }
-        
-        assign/return/assert/passback b
-
-        *)
-
-        let (b1, s1, e1) = cn_to_ail_expr_internal dts cond_it PassBack in
-        let t_translated = cn_to_ail_expr_internal dts t PassBack in
-
-        let start_expr = generate_start_expr (get_leftmost_and_expr (rm_expr e1)) sym in
-        let while_cond = get_rest_of_expr_r (rm_expr e1) in
-
-        let (bs, ss, e) = gen_bool_while_loop sym (rm_expr start_expr) while_cond t_translated in 
-        dest d (bs, ss, e)
         (* Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it *)
     
 let rec generate_record_opt pred_sym = function
@@ -1189,8 +1213,9 @@ let rec cn_to_ail_arguments_l_internal dts preds = function
     (* Printf.printf "Reached M_Constraint (take)\n"; *)
     let (b1, s1) = cn_to_ail_logical_constraint_internal dts Assert lc in 
     let (b2, s2) = cn_to_ail_arguments_l_internal dts preds l in 
+
     (* Hack *)
-    let rec remove_var_asserts ss = 
+    (* let rec remove_var_asserts ss = 
       match ss with 
       | [] -> []
       | x :: xs ->
@@ -1205,9 +1230,11 @@ let rec cn_to_ail_arguments_l_internal dts preds = function
               | _ -> default_res
             )
           | _ -> default_res
-    in
-
-    (b1 @ b2, (remove_var_asserts s1) @ s2)
+    in *)
+    (b1 @ b2, s1 @ s2)
+    (* (b1 @ b2, (remove_var_asserts s1) @ s2)
+        *)
+      (* (b2, s2) *)
 
   | M_I i -> ([], [])
 
