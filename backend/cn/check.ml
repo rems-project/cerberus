@@ -271,10 +271,14 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
 
 
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
-let is_representable_integer arg ity = failwith "fix this"
-  (* let maxInt = Memory.max_integer_type ity in *)
-  (* let minInt = Memory.min_integer_type ity in *)
-  (* and_ [le_ (z_ minInt, arg); le_ (arg, z_ maxInt)] *)
+let is_representable_integer arg ity =
+  let bt = IT.bt arg in
+  let arg_bits = Option.get (BT.is_bits_bt bt) in
+  let maxInt = Memory.max_integer_type ity in
+  assert (Z.equal (Simplify.IndexTerms.do_wrapI_z arg_bits maxInt) maxInt);
+  let minInt = Memory.min_integer_type ity in
+  assert (Z.equal (Simplify.IndexTerms.do_wrapI_z arg_bits minInt) minInt);
+  and_ [le_ (num_lit_ minInt bt, arg); le_ (arg, num_lit_ maxInt bt)]
 
 
 let eq_value_with f expr = match f expr with
@@ -698,7 +702,37 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      in
      k x))
   | M_PEbounded_binop (M_Bound_Except act, iop, pe1, pe2) ->
-     failwith "todo"
+     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+     let ity = match act.ct with
+       | Integer ity -> ity
+       | _ -> assert false
+     in
+     let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
+     let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
+     let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe2) in
+     let@ bits = match expect with
+       | BT.Bits (_, bits) -> return bits
+       | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item
+           "bounded binop on non-bitwise type" (BT.pp expect))})
+     in
+     check_pexpr pe1 (fun arg1 ->
+     check_pexpr pe2 (fun arg2 ->
+     let large_bt = BT.Bits (BT.Signed, (2 * bits) + 4) in
+     let large x = cast_ large_bt x in
+     let (direct_x, via_large_x) = match iop with
+       | IOpAdd -> (add_ (arg1, arg2), add_ (large arg1, large arg2))
+       | IOpSub -> (sub_ (arg1, arg2), sub_ (large arg1, large arg2))
+       | IOpMul -> (mul_ (arg1, arg2), mul_ (large arg1, large arg2))
+     in
+     let@ provable = provable loc in
+     let@ () = match provable (t_ (is_representable_integer via_large_x ity)) with
+     | `True -> return ()
+     | `False ->
+        let@ model = model () in
+        let ub = CF.Undefined.UB036_exceptional_condition in
+        fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+     in
+     k direct_x))
   | M_PEconv_int (ct_expr, pe)
   | M_PEconv_loaded_int (ct_expr, pe) ->
      let@ () = ensure_base_type loc ~expect:CType (bt_of_pexpr ct_expr) in
