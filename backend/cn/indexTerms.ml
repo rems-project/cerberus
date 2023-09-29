@@ -468,7 +468,11 @@ let impl_ (it, it') = IT (Binop (Impl, it, it'), BT.Bool)
 let not_ it = IT (Unop (Not, it), bt it)
 let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
 let eq_ (it, it') =
-  assert (BT.equal (bt it) (bt it'));
+  begin if BT.equal (bt it) (bt it') then ()
+  else begin Pp.debug 1 (lazy (Pp.item "basetype mismatch" (Pp.list pp_with_typ [it; it'])));
+    assert false
+    end
+  end;
   IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
