@@ -325,7 +325,9 @@ module General = struct
                    let@ o_re_index = 
                      predicate_request loc uiinfo
                        { name = requested.name;
-                         pointer = pointer_offset_ (requested.pointer, (mul_ (requested.step, index)));
+                         pointer = pointer_offset_ (requested.pointer,
+                             (mul_ (cast_ Memory.intptr_bt requested.step,
+                                 cast_ Memory.intptr_bt index)));
                          iargs = List.map (IT.subst su) requested.iargs;
                        }
                    in
@@ -356,7 +358,7 @@ module General = struct
     match o_oarg with
     | None -> return None
     | Some (oarg, rw_time) ->
-      let@ oarg = cases_to_map loc uiinfo Integer oarg_item_bt oarg in
+       let@ oarg = cases_to_map loc uiinfo (snd requested.q) oarg_item_bt oarg in
        let r = { 
            name = requested.name;
            pointer = requested.pointer;

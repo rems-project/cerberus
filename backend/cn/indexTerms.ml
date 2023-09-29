@@ -589,6 +589,7 @@ let integerToPointerCast_ it =
   cast_ Loc it
 let intptr_const_ n =
   num_lit_ n Memory.intptr_bt
+let intptr_int_ n = intptr_const_ (Z.of_int n)
   (* for integer-mode: z_ n *)
 let pointerToIntegerCast_ it =
   cast_ Memory.intptr_bt it
@@ -718,7 +719,8 @@ let map_set_ t1 (t2, t3) =
   IT (MapSet (t1, t2, t3), bt t1)
 let map_get_ v arg =
   match bt v with
-  | BT.Map (_, rbt) ->
+  | BT.Map (dt, rbt) ->
+     assert (BT.equal dt (bt arg));
      IT (MapGet (v, arg), rbt)
   | _ -> Cerb_debug.error "illtyped index term"
 let map_def_ (s, abt) body =
@@ -784,8 +786,8 @@ let value_check_pointer alignment ~pointee_ct about =
     | Function _ -> 1
     | _ -> Memory.size_of_ctype pointee_ct
   in
-  and_ [le_ (intptr_const_ Z.zero, about_int);
-        le_ (sub_ (add_ (about_int, intptr_const_ (Z.of_int pointee_size)), intptr_const_ Z.one),
+  and_ [le_ (intptr_int_ 0, about_int);
+        le_ (sub_ (add_ (about_int, intptr_int_ pointee_size), intptr_int_ 1),
             intptr_const_ Memory.max_pointer);
         (* TODO revist/delete this when transition to VIP is over *)
         eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);

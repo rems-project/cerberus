@@ -610,11 +610,8 @@ module WIT = struct
           let@ cbt = WBT.is_bt loc cbt in
           let@ t = infer loc t in
           let@ () = match IT.bt t, cbt with
-            | Integer, Loc ->
-              let msg = !^"Deprecated cast from integer to pointer." ^^^
-                        !^"Please use copy_alloc_id instead."
-              in
-              Pp.warn loc msg; return ()
+           | Integer, Loc -> fail (fun _ -> {loc; msg =
+               Generic (!^ "cast from integer not allowed in bitvector version")})
            | Loc, Integer -> return ()
            | Loc, Alloc_id -> return ()
            | Integer, Real -> return ()
@@ -1387,6 +1384,11 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
       | M_PEcfunction pe ->
         let@ pe = infer_pexpr pe in
         return (Tuple [CType; List CType; Bool; Bool], M_PEcfunction pe)
+      | M_PEstruct (nm, nm_pes) ->
+        let@ nm_pes = ListM.mapM (fun (nm, pe) ->
+            let@ pe = infer_pexpr pe in
+            return (nm, pe)) nm_pes in
+        return (Struct nm, (M_PEstruct (nm, nm_pes)))
       | _ -> todo ()
     in
     return (M_Pexpr (loc, annots, bty, pe_))

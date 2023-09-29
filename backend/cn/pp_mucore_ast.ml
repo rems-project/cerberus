@@ -144,12 +144,6 @@ module PP = struct
         | M_PEop (bop, pe1, pe2) ->
             Dnode ( pp_ctor "PEop" ^^^ P.squotes (!^ (string_of_bop bop))
                   , [self pe1; self pe2] )
-        | M_PEstruct (tag_sym, xs) ->
-            assert false
-        | M_PEunion (tag_sym, memb_ident, pe) ->
-            assert false
-        | M_PEmemberof (tag_sym, memb_ident, pe) ->
-            assert false
 
 
         (* | M_PEcase (pe, xs) -> *)
