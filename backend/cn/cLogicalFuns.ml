@@ -20,7 +20,14 @@ let mu_val_to_it (M_V (_bty, v)) =
   | M_Vunit -> Some IT.unit_
   | M_Vtrue -> Some (IT.bool_ true)
   | M_Vfalse -> Some (IT.bool_ false)
-  | M_Vobject (M_OV (_, M_OVinteger iv)) -> Some (IT.z_ (Memory.z_of_ival iv))
+  | M_Vobject (M_OV (_, M_OVinteger iv)) ->
+     (* FIXME: this is cloned from WellTyped. replace this with something derived
+         from a ctype when that info is available *)
+     let z = Memory.z_of_ival iv in
+     let ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_) in
+     assert (Z.leq (Memory.min_integer_type ity) z && Z.leq z (Memory.max_integer_type ity));
+     let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
+     Some (IT.num_lit_ z bt)
   | M_Vctype ct -> Option.map IT.const_ctype_ (Sctypes.of_ctype ct)
   | M_Vfunction_addr sym -> Some (IT.sym_ (sym, BT.Loc))
   | _ -> None

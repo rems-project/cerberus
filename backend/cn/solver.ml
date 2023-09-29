@@ -455,7 +455,7 @@ module Translate = struct
          let decl = SymMap.find tag struct_decls in
          Some (int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt)
       | ArrayOffset (ct, t) ->
-         Some (mul_ (int_lit_ (Memory.size_of_ctype ct) (IT.bt t), t))
+         Some (mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt, cast_ Memory.intptr_bt t))
       | SizeOf ct ->
          Some (int_lit_ (Memory.size_of_ctype ct) (IT.bt it))
       | Aligned t ->

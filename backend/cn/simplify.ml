@@ -152,6 +152,19 @@ module IndexTerms = struct
       | Some it3 -> accessor_reduce f it3
     end
 
+  let rec do_wrapI_z (sign, sz) z = match sign with
+    | BT.Unsigned ->
+      let card = Z.pow (Z.of_int 2) sz in
+      if Z.lt z Z.zero
+      then do_wrapI_z (sign, sz) (Z.sub card (do_wrapI_z (sign, sz) (Z.sub Z.zero z)))
+      else Z.rem z card
+    | BT.Signed ->
+      let z = do_wrapI_z (BT.Unsigned, sz) z in
+      let lim = Z.pow (Z.of_int 2) (sz - 1) in
+      if Z.leq lim z
+      then Z.sub z (Z.pow (Z.of_int 2) sz)
+      else z
+
   let rec simp ?(inline_functions=false) simp_ctxt =
 
     let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
@@ -517,12 +530,17 @@ module IndexTerms = struct
        IT (WrapI (act, aux t), the_bt)
     | Cast (cbt, a) ->
        let a = aux a in
-       IT (Cast (cbt, a), the_bt)
+       begin match cbt, IT.is_const a with
+       | Bits (sign, sz), Some (Terms.Bits ((sign2, sz2), z), _) ->
+           let z = do_wrapI_z (sign, sz) (do_wrapI_z (sign2, sz2) z) in
+           num_lit_ z the_bt
+       | _ -> IT (Cast (cbt, a), the_bt)
+       end
     | MemberOffset (tag, member) ->
        let layout = SymMap.find tag simp_ctxt.global.struct_decls in
        int_lit_ (Option.get (Memory.member_offset layout member)) Memory.intptr_bt
     | ArrayOffset (ct, t) ->
-       aux (mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt, aux t))
+       aux (mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt, cast_ Memory.intptr_bt t))
     | SizeOf ct ->
        int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt
     | Representable (ct, t) ->

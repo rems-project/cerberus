@@ -198,7 +198,7 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
 	|> List.concat
         |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))
   | (RET.Q ({name = Owned (ct, _); _} as qpt)) ->
-      assert (IT.equal qpt.step (IT.int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt));
+      assert (IT.equal qpt.step (IT.int_lit_ (Memory.size_of_ctype ct) (snd qpt.q)));
       let ispans = perm_spans m_g (fst qpt.q) qpt.permission in
       let _ = List.length ispans > 0 || raise NoResult in
       if List.exists (fun (lb, rb) -> Option.is_none lb || Option.is_none rb) ispans

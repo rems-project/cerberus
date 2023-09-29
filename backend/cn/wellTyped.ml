@@ -616,6 +616,7 @@ module WIT = struct
               in
               Pp.warn loc msg; return ()
            | Loc, Integer -> return ()
+           | Loc, Alloc_id -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()
            | Bits (sign,n), Bits (sign',n')
@@ -785,6 +786,7 @@ module WRET = struct
   open IndexTerms
 
   let welltyped loc r = 
+    Pp.debug 22 (lazy (Pp.item "WRET: checking" (RET.pp r)));
     let@ spec_iargs = match RET.predicate_name r with
       | Owned (_ct,_init) ->
          return []
@@ -805,7 +807,7 @@ module WRET = struct
           there's no name clashes *)
        (* let p = RET.alpha_rename_qpredicate_type p in *)
        let@ pointer = WIT.check loc BT.Loc p.pointer in
-       let@ step = WIT.check loc Memory.intptr_bt p.step in
+       let@ step = WIT.check loc (snd p.q) p.step in
        let@ simp_ctxt = simp_ctxt () in
        let step = Simplify.IndexTerms.eval simp_ctxt step in
        let@ () = match IT.is_const step with
@@ -824,10 +826,10 @@ module WRET = struct
        let@ () = match p.name with
          | (Owned (ct, _init)) ->
            let sz = Memory.size_of_ctype ct in
-           if IT.equal step (IT.int_lit_ sz Memory.intptr_bt) then return ()
+           if IT.equal step (IT.int_lit_ sz (snd p.q)) then return ()
            else fail (fun _ -> {loc; msg = Generic
-             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "different to sizeof" ^^^
-                 Sctypes.pp ct ^^^ parens (!^ (Int.to_string sz)))})
+             (!^"Iteration step" ^^^ IT.pp p.step ^^^ parens (IT.pp step) ^^^
+                 !^ "different to sizeof" ^^^ Sctypes.pp ct ^^^ parens (!^ (Int.to_string sz)))})
          | _ -> return ()
        in
        let@ permission, iargs = 
@@ -1347,6 +1349,9 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pe1 = infer_pexpr pe1 in
         let@ pe2 = infer_pexpr pe2 in
         return (Loc, M_PEarray_shift (pe1, ct, pe2))
+      | M_PEmember_shift (pe, tag, member) ->
+        let@ pe = infer_pexpr pe in
+        return (Loc, M_PEmember_shift (pe, tag, member))
       | M_PEconv_int (M_Pexpr (l2, a2, _, M_PEval (M_V (_, M_Vctype ct))), pe) ->
         let ct_pe = M_Pexpr (l2, a2, CType, M_PEval (M_V (CType, M_Vctype ct))) in
         let@ pe = infer_pexpr pe in
@@ -1367,6 +1372,21 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
       | M_PEnot pe ->
         let@ pe = infer_pexpr pe in
         return (Bool, M_PEnot pe)
+      | M_PEctor (ctor, pes) ->
+        let@ pes = ListM.mapM infer_pexpr pes in
+        let@ bt = match ctor with
+        | M_Cnil _ -> todo ()
+        | M_Ccons -> begin match pes with
+            | [x; xs] -> return (bt_of_pexpr xs)
+            | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
+        end
+        | M_Ctuple -> return (BT.Tuple (List.map bt_of_pexpr pes))
+        | M_Carray -> todo ()
+        in
+        return (bt, M_PEctor (ctor, pes))
+      | M_PEcfunction pe ->
+        let@ pe = infer_pexpr pe in
+        return (Tuple [CType; List CType; Bool; Bool], M_PEcfunction pe)
       | _ -> todo ()
     in
     return (M_Pexpr (loc, annots, bty, pe_))

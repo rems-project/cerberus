@@ -134,7 +134,7 @@ module PP = struct
         | M_PEconstrained xs ->
             Dleaf (pp_ctor "PEconstrained" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEctor (ctor, pes) ->
-            Dleaf (pp_ctor "PEctor" ^^^ !^ (ansi_format [Red] "TODO"))
+            Dnode (pp_ctor "PEctor", [Dleaf (Pp_mucore.Basic.pp_ctor ctor)] @ List.map self pes)
         | M_PEarray_shift (pe1, ty, pe2) ->
             Dleaf (pp_ctor "PEarray_shift" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEmember_shift (pe, sym, ident) ->

@@ -154,7 +154,7 @@ let unpack loc global provable (ret, O o) =
           let at_index = 
             (P { name = ret.name;
                 pointer = pointer_offset_ (ret.pointer,
-                    mul_ (ret.step, cast_ Memory.intptr_bt index));
+                    mul_ (cast_ Memory.intptr_bt ret.step, cast_ Memory.intptr_bt index));
                 iargs = List.map (IT.subst su) ret.iargs; },
             O (map_get_ o index))
           in
