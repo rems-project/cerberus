@@ -10,7 +10,7 @@ enum {
   global_array_width = 42,
 };
 
-/*@ function (integer) global_array_width () @*/
+/*@ function (i32) global_array_width () @*/
 
 static inline int get_global_array_width_for_cn (void)
 /*@ cn_function global_array_width @*/
@@ -19,10 +19,10 @@ static inline int get_global_array_width_for_cn (void)
 }
 
 /*@
-predicate (map<integer, integer>) Global_Array (pointer p)
+predicate (map<i32, i32>) Global_Array (pointer p)
 {
-  take Arr = each (integer i; 0 <= i && i < global_array_width ())
-    { Owned<int>(p + (i * sizeof<int>)) };
+  take Arr = each (i32 i; 0i32 <= i && i < global_array_width ())
+    { Owned<int>(p + (i * ((i32) (sizeof<int>)))) };
   return Arr;
 }
 @*/
@@ -30,10 +30,10 @@ predicate (map<integer, integer>) Global_Array (pointer p)
 void set_a_pointer(int *p, int x)
 /*@ accesses global_array @*/
 /*@ requires take Arr = Global_Array(global_array) @*/
-/*@ requires let offs = ((integer)p - (integer)global_array) @*/
-/*@ requires mod(offs, sizeof<int>) == 0 @*/
+/*@ requires let offs = ((u64)p - (u64)global_array) @*/
+/*@ requires mod(offs, sizeof<int>) == 0u64 @*/
 /*@ requires let idx = (offs / sizeof<int>) @*/
-/*@ requires 0 <= idx && idx < global_array_width () @*/
+/*@ requires 0u64 <= idx && idx < ((u64) (global_array_width ())) @*/
 /*@ ensures take Arr2 = Global_Array(global_array) @*/
 {
   /*@ extract Owned<int>, idx; @*/

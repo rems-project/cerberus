@@ -8,7 +8,7 @@ memcpy (char *dst, char *src, int n)
 /*@ ensures each (i32 k; 0i32 <= k && k < n) {dstEnd[k] == srcStart[k]} @*/
 {
   int i;
-  for (i = 0; i < n; i++)
+  for (i = 0; i < n; i = i + 1)
   /*@ inv take dstInv = each (i32 j; 0i32 <= j && j < n) {Owned(dst + (j * sizeof<char>))} @*/
   /*@ inv take srcInv = each (i32 j; 0i32 <= j && j < n) {Owned(src + (j * sizeof<char>))} @*/
   /*@ inv srcInv == srcStart @*/

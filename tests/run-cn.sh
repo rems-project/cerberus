@@ -17,6 +17,7 @@ do
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
   fi
+  echo
 done
 
 FAIL=$(find $DIRNAME/cn -name '*.error.c')
@@ -29,6 +30,7 @@ do
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
   fi
+  echo
 done
 
 UNKNOWN=$(find $DIRNAME/cn -name '*.unknown.c')

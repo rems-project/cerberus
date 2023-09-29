@@ -30,7 +30,7 @@ struct b_node {
 /*@
 datatype a_tree {
   A_Leaf {},
-  A_Node {integer k, integer v, datatype b_tree left, datatype b_tree right}
+  A_Node {i32 k, i32 v, datatype b_tree left, datatype b_tree right}
 }
 
 datatype b_tree {
@@ -43,7 +43,7 @@ datatype b_tree {
 
 /*@
 predicate {datatype a_tree t} A_Tree (pointer p) {
-  if (p == ((pointer) 0)) {
+  if (p == NULL) {
     return {t: A_Leaf {}};
   }
   else {
@@ -55,7 +55,7 @@ predicate {datatype a_tree t} A_Tree (pointer p) {
 }
 
 predicate {datatype b_tree t} B_Tree (pointer p) {
-  if (p == ((pointer) 0)) {
+  if (p == NULL) {
     return {t: B_Leaf {}};
   }
   else {
@@ -107,7 +107,7 @@ struct a_node *
 predef_a_tree (struct a_node *p)
 /*@ requires take T = A_Tree (p) @*/
 /*@ ensures take T2 = A_Tree (p) @*/
-/*@ ensures (return == ((pointer) 0)) || (T2.t == A_Node {k: 1, v: 0,
+/*@ ensures (return == NULL) || (T2.t == A_Node {k: 1i32, v: 0i32,
     left: B_Node {even: A_Leaf {}, odd: A_Leaf {}}, right: B_Leaf {}}) @*/
 {
   struct b_node *l = NULL;
@@ -128,7 +128,7 @@ predef_a_tree (struct a_node *p)
 /*@
 datatype key_list {
   K_Nil {},
-  K_Cons {integer k, datatype key_list tail}
+  K_Cons {i32 k, datatype key_list tail}
 }
 
 function (datatype key_list) a_tree_keys (datatype a_tree t)
@@ -151,7 +151,7 @@ lemma inc_list_lemma (datatype key_list xs)
   requires true
   ensures (inc_list (xs)) == (match xs {
     K_Nil {} => {K_Nil {}}
-    K_Cons {k: k, tail: ys} => {K_Cons {k: k + 1, tail: inc_list (ys)}}
+    K_Cons {k: k, tail: ys} => {K_Cons {k: k + 1i32, tail: inc_list (ys)}}
   })
 
 lemma a_tree_keys_lemma (datatype a_tree atree)
@@ -230,7 +230,7 @@ a_tree_keys_node_concat_cons_inc_lemma (int k, struct b_node *right)
 /*@ ensures take R2 = B_Tree (right) @*/
 /*@ ensures R2.t == R.t @*/
 /*@ ensures (inc_list (K_Cons {k: k, tail: (b_tree_keys(R2.t))}))
-  == (K_Cons {k: k + 1, tail: inc_list (b_tree_keys(R2.t))}) @*/
+  == (K_Cons {k: k + 1i32, tail: inc_list (b_tree_keys(R2.t))}) @*/
 {
   /*@ apply inc_list_lemma (K_Cons {k: k, tail: b_tree_keys(R.t)}); @*/
   return;
@@ -340,7 +340,7 @@ int
 inc_a_tree (struct a_node *p)
 /*@ requires take T = A_Tree (p) @*/
 /*@ ensures take T2 = A_Tree (p) @*/
-/*@ ensures (return == 0) || ((a_tree_keys(T2.t)) == (inc_list(a_tree_keys(T.t)))) @*/
+/*@ ensures (return == 0i32) || ((a_tree_keys(T2.t)) == (inc_list(a_tree_keys(T.t)))) @*/
 {
   int r = 0;
   /*@ apply a_tree_keys_lemma(T.t); @*/
@@ -363,7 +363,7 @@ int
 inc_b_tree (struct b_node *p)
 /*@ requires take T = B_Tree (p) @*/
 /*@ ensures take T2 = B_Tree (p) @*/
-/*@ ensures (return == 0) || ((b_tree_keys(T2.t)) == (inc_list(b_tree_keys(T.t)))) @*/
+/*@ ensures (return == 0i32) || ((b_tree_keys(T2.t)) == (inc_list(b_tree_keys(T.t)))) @*/
 {
   struct a_node *tmp = NULL;
   int r = 0;

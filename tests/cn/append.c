@@ -6,7 +6,7 @@ struct int_list {
 /*@
 datatype seq { 
   Seq_Nil {},
-  Seq_Cons {integer head, datatype seq tail}
+  Seq_Cons {i32 head, datatype seq tail}
 }
 
 function [rec] (datatype seq) append(datatype seq xs, datatype seq ys) { 

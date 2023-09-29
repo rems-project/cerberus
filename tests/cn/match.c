@@ -2,12 +2,12 @@
 /*@
 datatype tree {
   Tree_Empty {},
-  Tree_Node {integer k, integer v, datatype tree l, datatype tree r}
+  Tree_Node {i32 k, i32 v, datatype tree l, datatype tree r}
 }
 
-function (integer) foo (datatype tree t) {
+function (i32) foo (datatype tree t) {
   match t {
-    Tree_Empty {} => {0}
+    Tree_Empty {} => {0i32}
     Tree_Node {k: k, v: v, l: _, r: _} => {k + v}
   }
 }
@@ -15,9 +15,9 @@ function (integer) foo (datatype tree t) {
 
 void
 check_foo (int x)
-/*@ requires let t = Tree_Node {k: 1, v: x, l: Tree_Empty {},
-    r: Tree_Node {k: 3, v: 0, l: Tree_Empty {}, r: Tree_Empty {}}} @*/
-/*@ ensures foo(t) == x + 1 @*/
+/*@ requires let t = Tree_Node {k: 1i32, v: x, l: Tree_Empty {},
+    r: Tree_Node {k: 3i32, v: 0i32, l: Tree_Empty {}, r: Tree_Empty {}}} @*/
+/*@ ensures foo(t) == x + 1i32 @*/
 {
 }
 
