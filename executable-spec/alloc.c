@@ -2,7 +2,7 @@
 #include <string.h>
 
 
-static const signed int MEM_SIZE = 10000;
+static const signed int MEM_SIZE = 100000;
 char buf[MEM_SIZE];
 static void *curr = buf;
 
