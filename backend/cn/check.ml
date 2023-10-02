@@ -937,7 +937,6 @@ end
 
 
 (*** impure expression inference **********************************************)
-open OrFalse
 
 let filter_empty_resources loc =
   let@ provable = provable loc in
@@ -1549,20 +1548,24 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
 
 
 
-let check_expr_rt loc labels ~typ e = 
+let check_expr_top loc labels rt e = 
   let@ () = add_loc_trace loc in
-  match typ with
-  | Normal (RT.Computational ((return_s, return_bt), info, lrt)) ->
-     let@ () = WellTyped.ensure_base_type loc ~expect:Unit (bt_of_expr e) in
-     check_expr labels e (fun returned_lvt ->
-         let lrt = LRT.subst (IT.make_subst [(return_s, returned_lvt)]) lrt in
-         let@ original_resources = all_resources_tagged () in
-         Spine.subtype loc lrt (fun () ->
-         let@ () = all_empty loc original_resources in
-         return ())
-       )
-  | False ->
-     check_expr labels e (fun _ -> assert false)
+  let@ () = WellTyped.ensure_base_type loc ~expect:Unit (bt_of_expr e) in
+  check_expr labels e (fun lvt ->
+        let (RT.Computational ((return_s, return_bt), info, lrt)) = rt in
+        match return_bt with
+        | Unit ->
+            let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in
+            let@ original_resources = all_resources_tagged () in
+            Spine.subtype loc lrt (fun () ->
+                  let@ () = all_empty loc original_resources in
+                  return ()
+              )
+        | _ ->
+            let msg = "Non-void-return function does not call 'return'." in
+            fail (fun _ -> {loc; msg = Generic !^msg})
+    )
+
 
 
 
@@ -1641,7 +1644,7 @@ let check_procedure
         pure begin
             let@ () = add_rs loc initial_resources in
             let@ pre_state = get () in
-            let@ () = check_expr_rt loc label_context ~typ:(Normal rt) body in
+            let@ () = check_expr_top loc label_context rt body in
             return ((), pre_state)
           end 
       in
@@ -1655,7 +1658,7 @@ let check_procedure
              debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
              let@ (label_body, label_resources) = bind_arguments loc label_args_and_body in
              let@ () = add_rs loc label_resources in
-             check_expr_rt loc label_context ~typ:False label_body
+             check_expr_top loc label_context rt label_body
           end
         ) label_defs 
       in
