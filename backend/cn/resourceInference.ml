@@ -15,20 +15,8 @@ open Memory
 open Pack
 
 
-let predicate_name_of_to_extract loc (to_extract: _ CF.Cn.cn_to_extract) = 
-  match to_extract with
-  | E_Everything ->
-      let msg = "'extract' requires a predicate name annotation" in
-      fail (fun _ -> {loc; msg = Generic !^msg}) 
-  | E_Pred (CN_owned None) ->
-      let msg = "'extract' requires a C-type annotation for 'Owned'" in
-      fail (fun _ -> {loc; msg = Generic !^msg}) 
-  | E_Pred (CN_owned (Some ct)) ->
-      return (Owned (ct, Init))
-  | E_Pred (CN_block ct) ->
-      return (Owned (ct, Uninit))
-  | E_Pred (CN_named pn) ->
-      return (PName pn)
+
+  
 
 let unpack_def global name args =
     Option.bind (Global.get_logical_function_def global name)

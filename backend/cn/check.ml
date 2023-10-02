@@ -1321,8 +1321,16 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      k unit_
   | M_Eccall (act, f_pe, pes) ->
-     (* todo: do anything with act? *)
      let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+     (* copied TS's, from wellTyped.ml *)
+     (* let@ (_ret_ct, _arg_cts) = match act.ct with *)
+     (*     | Pointer (Function (ret_v_ct, arg_r_cts, is_variadic)) -> *)
+     (*         assert (not is_variadic); *)
+     (*         return (snd ret_v_ct, List.map fst arg_r_cts) *)
+     (*     | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "not a function pointer at call-site" *)
+     (*                                                  (Sctypes.pp act.ct))}) *)
+     (* in *)
+     let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr f_pe) in
      check_pexpr f_pe (fun f_it ->
      let@ global = get_global () in
      let@ known = eq_value_with (is_fun_addr global) f_it in
@@ -1335,12 +1343,16 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
        | Some ft -> return ft
        | None -> fail (fun _ -> {loc; msg = Generic (!^"Call to function with no spec:" ^^^ Sym.pp fsym)})
      in
+     (* checks pes against their annotations, and that they match ft's argument types *)
      Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) ->
      let@ () = WellTyped.ensure_base_type loc ~expect bt in
      let@ _, members = make_return_record loc (TypeErrors.call_prefix (FunctionCall fsym)) (RT.binders rt) in
      let@ lvt = bind_return loc members rt in
      k lvt))
   | M_Eif (c_pe, e1, e2) ->
+     let@ () = ensure_base_type (loc_of_expr e1) ~expect (bt_of_expr e1) in
+     let@ () = ensure_base_type (loc_of_expr e2) ~expect (bt_of_expr e2) in
+     let@ () = ensure_base_type (loc_of_pexpr c_pe) ~expect:Bool (bt_of_pexpr c_pe) in
      check_pexpr c_pe (fun carg ->
      let aux lc nm e = 
        let@ () = add_c loc (t_ lc) in
@@ -1353,13 +1365,15 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      let@ () = pure (aux (not_ carg) "false" e2) in
      return ())
   | M_Ebound e ->
+     let@ () = ensure_base_type (loc_of_expr e) ~expect (bt_of_expr e) in
      check_expr labels e k
   | M_End _ ->
      Cerb_debug.error "todo: End"
   | M_Elet (p, e1, e2) ->
+     let@ () = ensure_base_type (loc_of_expr e2) ~expect (bt_of_expr e2) in
+     let@ () = ensure_base_type (loc_of_pattern p) ~expect:(bt_of_pexpr e1) (bt_of_pattern p) in
      let@ fin = begin_trace_of_pure_step (Some p) e1 in
      check_pexpr e1 (fun v1 ->
-     let@ () = ensure_base_type loc ~expect:(IT.bt v1) (bt_of_pattern p) in
      let@ bound_a = check_and_match_pattern p v1 in
      let@ () = fin () in
      check_expr labels e2 (fun rt ->
@@ -1367,28 +1381,20 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
          k rt
      ))
   | M_Eunseq es ->
-     let@ item_bts = match expect with
-       | Tuple bts ->
-          let expect_nr = List.length bts in
-          let has_nr = List.length es in
-          let@ () = WellTyped.ensure_same_argument_number loc `General has_nr ~expect:expect_nr in
-          return bts
-       | _ -> 
-          let msg = Mismatch {has = !^"tuple"; expect = BT.pp expect} in
-          fail (fun _ -> {loc; msg})
-     in
-     let rec aux es_bts vs prev_used = match es_bts with
-       | (e, bt) :: es_bts ->
+     let@ () = ensure_base_type loc ~expect (Tuple (List.map bt_of_expr es)) in
+     let rec aux es vs prev_used = 
+       match es with
+       | e :: es' ->
           let@ pre_check = all_resources_tagged () in
           check_expr labels e (fun v ->
           let@ post_check = all_resources_tagged () in
           let@ used = compute_used pre_check post_check in
-          aux es_bts (v :: vs) (used :: prev_used))
+          aux es' (v :: vs) (used :: prev_used))
        | [] ->
           (* let@ () = check_used_distinct loc prev_used in *)
           k (tuple_ (List.rev vs))
      in
-     aux (List.combine es item_bts) [] []
+     aux es [] []
   | M_CN_progs (_, cn_progs) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      let rec aux = function
@@ -1453,7 +1459,23 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                let@ it = WIT.infer loc it in
                instantiate loc filter it
             | M_CN_extract (to_extract, it) ->
-               let@ predicate_name = RI.predicate_name_of_to_extract loc to_extract in
+               let@ predicate_name = match to_extract with
+                | E_Everything ->
+                    let msg = "'extract' requires a predicate name annotation" in
+                    fail (fun _ -> {loc; msg = Generic !^msg}) 
+                | E_Pred (CN_owned None) ->
+                    let msg = "'extract' requires a C-type annotation for 'Owned'" in
+                    fail (fun _ -> {loc; msg = Generic !^msg}) 
+                | E_Pred (CN_owned (Some ct)) ->
+                    let@ () = WellTyped.WCT.is_ct loc ct in
+                    return (Owned (ct, Init))
+                | E_Pred (CN_block ct) ->
+                    let@ () = WellTyped.WCT.is_ct loc ct in
+                    return (Owned (ct, Uninit))
+                | E_Pred (CN_named pn) ->
+                    let@ _ = get_resource_predicate_def loc pn in
+                    return (PName pn) 
+               in
                let@ it = WIT.infer loc it in
                add_movable_index loc (predicate_name, it)
             | M_CN_unfold (f, args) ->
@@ -1503,9 +1525,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      k unit_
   | M_Ewseq (p, e1, e2)
   | M_Esseq (p, e1, e2) ->
+     let@ () = ensure_base_type loc ~expect (bt_of_expr e2) in
+     let@ () = ensure_base_type (loc_of_pattern p) ~expect:(bt_of_expr e1) (bt_of_pattern p) in
      let@ fin = begin_trace_of_step (Some p) e1 in
      check_expr labels e1 (fun it ->
-            let@ () = ensure_base_type loc ~expect:(IT.bt it) (bt_of_pattern p) in
             let@ bound_a = check_and_match_pattern p it in
             let@ () = fin () in
             check_expr labels e2 (fun it2 ->
@@ -1514,6 +1537,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
               )
        )
   | M_Erun (label_sym, pes) ->
+     let@ () = ensure_base_type loc ~expect Unit in
      let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
        | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
        | Some (lt,lkind) -> return (lt,lkind)

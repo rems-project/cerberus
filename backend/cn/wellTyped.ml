@@ -1622,7 +1622,8 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
      | M_Eccall (act, f_pe, pes) ->
         let@ () = WCT.is_ct act.loc act.ct in
         let@ (ret_ct, arg_cts) = match act.ct with
-          | Sctypes.(Pointer (Function (ret_v_ct, arg_r_cts, _))) ->
+          | Sctypes.(Pointer (Function (ret_v_ct, arg_r_cts, is_variadic))) ->
+              assert (not is_variadic);
               return (snd ret_v_ct, List.map fst arg_r_cts)
           | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "not a function pointer at call-site"
               (Sctypes.pp act.ct))})
