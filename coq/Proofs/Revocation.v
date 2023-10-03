@@ -6,7 +6,10 @@ From Coq.Strings Require Import String Ascii HexString.
 Require Import Coq.Classes.SetoidClass.
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Relations.Relation_Definitions.
+Require Import Coq.Program.Equality. (* for dep. destruction *)
 Require Import Lia.
+
+Require Import StructTact.StructTactics.
 
 From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
@@ -168,6 +171,88 @@ Module RevocationProofs.
     apply Bool.negb_true_iff in H3.
     rewrite H3 in H1.
     inversion H1.
+  Qed.
+
+  Lemma remove_PNVI_In:
+    forall l s,
+      is_PNVI_switch s = false ->
+      set_In s l <-> set_In s (remove_PNVI l).
+  Proof.
+    intros l s P.
+    split; intros H.
+    -
+      unfold remove_PNVI.
+      apply filter_In.
+      split.
+      apply H.
+      apply Bool.negb_true_iff.
+      assumption.
+    -
+      unfold remove_PNVI in H.
+      apply filter_In in H.
+      apply H.
+  Qed.
+
+
+  Lemma remove_PNVI_set_mem:
+    forall l s,
+      is_PNVI_switch s = false ->
+      set_mem cerb_switch_dec s (remove_PNVI l) =
+        set_mem cerb_switch_dec s l.
+  Proof.
+    intros l s H.
+    apply Bool.eqb_prop.
+    unfold Bool.eqb.
+    break_if;break_if;auto.
+    -
+      apply set_mem_correct1 in Heqb.
+      apply set_mem_complete1 in Heqb0.
+      apply remove_PNVI_In in Heqb;auto.
+    -
+      apply set_mem_correct1 in Heqb0.
+      apply set_mem_complete1 in Heqb.
+      apply remove_PNVI_In in Heqb0;auto.
+  Qed.
+
+
+  (* All non-pnvi switches are the same *)
+  Lemma non_PNVI_switches_match:
+    forall s,
+      is_PNVI_switch s = false ->
+      has_switch (WithPNVISwitches.get_switches tt) s =
+        has_switch (WithoutPNVISwitches.get_switches tt) s.
+  Proof.
+    intros s H.
+    unfold WithPNVISwitches.get_switches.
+    unfold WithoutPNVISwitches.get_switches.
+    generalize (abst_get_switches tt) as l.
+    intros l.
+    pose proof (set_In_dec cerb_switch_dec s l) as D.
+    unfold is_PNVI_switch in H.
+
+    Ltac one_has_switch D :=
+      unfold has_switch;
+      rewrite remove_PNVI_set_mem by auto;
+      destruct D as [IN | NIN];
+      [ apply set_mem_correct2 with (Aeq_dec:=cerb_switch_dec) in IN;
+        rewrite IN;
+        apply set_mem_correct2, set_add_intro1;
+        apply -> remove_PNVI_In;
+        [ apply set_mem_correct1 with (Aeq_dec:=cerb_switch_dec);
+          assumption
+        | auto ]
+      | apply set_mem_complete2 with (Aeq_dec:=cerb_switch_dec) in NIN;
+        rewrite NIN;
+        apply set_mem_complete2;
+        intros H;
+        apply set_add_elim2 in H; auto;
+        apply remove_PNVI_In in H;
+        [ apply set_mem_correct2 with (Aeq_dec:=cerb_switch_dec) in H;
+          congruence
+        | auto ]
+      ].
+
+    destruct s eqn:S; inversion H; clear H; one_has_switch D.
   Qed.
 
   (* --- Lemmas about memory models --- *)
@@ -344,6 +429,7 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
+  (* TODO: requires `offsetof_same`
   Theorem offsetof_ival_same:
     forall tagDefs tag_sym memb_ident,
       CheriMemoryWithPNVI.offsetof_ival tagDefs tag_sym memb_ident =
@@ -351,8 +437,8 @@ Module RevocationProofs.
   Proof.
     intros tagDefs tag_sym memb_ident.
 
-    (* TODO: requires `offsetof_same` *)
   Admitted.
+   *)
 
   (* TODO:
     Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
@@ -554,13 +640,24 @@ Module RevocationProofs.
     constructor; assumption.
   Qed.
 
-(*
-    forall ,
-      CheriMemoryWithPNVI. =
-        CheriMemoryWithoutPNVI..
+
+  Theorem get_intrinsic_type_spec_same:
+    forall s,
+      CheriMemoryWithPNVI.get_intrinsic_type_spec s =
+        CheriMemoryWithoutPNVI.get_intrinsic_type_spec s.
   Proof.
+    intros s.
+    unfold CheriMemoryWithPNVI.get_intrinsic_type_spec.
+    unfold CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
+    repeat break_if; auto.
+
+    rewrite non_PNVI_switches_match in Heqb0.
+    congruence.
+    reflexivity.
+
+    rewrite non_PNVI_switches_match in Heqb0.
+    congruence.
     reflexivity.
   Qed.
- *)
 
 End RevocationProofs.
