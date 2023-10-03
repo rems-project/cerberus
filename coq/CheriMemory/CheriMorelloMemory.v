@@ -120,6 +120,14 @@ Module Type CheriMemoryTypes
   | Exposed
   | Unexposed.
 
+  (* Unfortunate names of two consturctors are mirroring ones from
+     OCaml `Nondeterminism` monad. Third one is used where `failwith` was
+     or `assert false` was used in OCaml. *)
+  Inductive memMError :=
+  | Other: mem_error -> memMError
+  | Undef0: location_ocaml -> (list undefined_behaviour) -> memMError
+  | InternalErr: string -> memMError.
+
 End CheriMemoryTypes.
 
 
@@ -301,14 +309,6 @@ Module Type CheriMemoryImpl
       bytemap := ZMap.empty AbsByte;
       capmeta := ZMap.empty _;
     |}.
-
-  (* Unfortunate names of two consturctors are mirroring ones from
-     OCaml `Nondeterminism` monad. Third one is used where `failwith` was
-     or `assert false` was used in OCaml. *)
-  Inductive memMError :=
-  | Other: mem_error -> memMError
-  | Undef0: location_ocaml -> (list undefined_behaviour) -> memMError
-  | InternalErr: string -> memMError.
 
   Definition memM := errS mem_state memMError.
   #[local] Instance memM_monad: Monad memM.

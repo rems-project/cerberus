@@ -853,7 +853,7 @@ module CHERIMorello : Memory = struct
      List.map fromCoq_intrinsics_arg_spec asigs)
 
   (* memMerror *)
-  let fromCoq_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
+  let fromCoq_memMError (e:CheriMemoryTypesExe.memMError) : mem_error Nondeterminism.kill_reason =
     match e with
     | Other me -> Other (fromCoq_mem_error me)
     | Undef0 (loc, ubs) ->
