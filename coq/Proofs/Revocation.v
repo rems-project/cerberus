@@ -660,4 +660,29 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
+  (* Stateful proofs below *)
+
+  Definition lift_sum
+    {A1 A2 B1 B2 C:Type}
+    (fl: A1->A2->C) (fr:B1->B2->C)
+    (default: C)
+    (a:sum A1 B1) (b:sum A2 B2): C :=
+    match a,b with
+    | inl l1, inl l2 => fl l1 l2
+    | inr r1, inr r2 => fr r1 r2
+    | _, _ => default
+    end.
+
+  Theorem allocator_same:
+    forall mem_state1 mem_state2 size align,
+      mem_state_same mem_state1 mem_state2 ->
+      evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
+        evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2
+      /\
+        lift_sum eq mem_state_same False
+          (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
+          (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2).
+  Proof.
+  Admitted.
+
 End RevocationProofs.
