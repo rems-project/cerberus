@@ -83,6 +83,14 @@ Module RevocationProofs.
          | CheriMemoryTypesExe.PV p1 b1, CheriMemoryTypesExe.PV p2 b2 => b1 = b2
          end.
 
+  (* TODO: incomplete *)
+  Definition mem_state_same
+    (a:CheriMemoryWithPNVI.mem_state_r)
+    (b:CheriMemoryWithoutPNVI.mem_state_r): Prop
+    :=
+    a.(CheriMemoryWithPNVI.next_alloc_id) = b.(CheriMemoryWithoutPNVI.next_alloc_id)
+    /\ ZMap.Equal a.(CheriMemoryWithPNVI.funptrmap) b.(CheriMemoryWithoutPNVI.funptrmap).
+
   (* Equivalence relation for pointer values *)
   #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
   Proof.
@@ -141,6 +149,15 @@ Module RevocationProofs.
 
   (* --- Lemmas about memory models --- *)
 
+  (* TODO: maybe incomplete *)
+  Theorem models_compatible:
+    CheriMemoryWithPNVI.initial_address = CheriMemoryWithoutPNVI.initial_address /\
+      CheriMemoryWithPNVI.DEFAULT_FUEL = CheriMemoryWithoutPNVI.DEFAULT_FUEL /\
+      CheriMemoryWithPNVI.MAX_STRFCAP_FORMAT_LEN = CheriMemoryWithoutPNVI.MAX_STRFCAP_FORMAT_LEN.
+  Proof.
+    repeat split;cbv.
+  Qed.
+
   Theorem null_ptrval_same:
     forall t,
       pointer_value_eq
@@ -148,6 +165,69 @@ Module RevocationProofs.
         (CheriMemoryWithoutPNVI.null_ptrval t).
   Proof.
     reflexivity.
+  Qed.
+
+  Theorem concrete_ptrval_same:
+    forall n a,
+      serr_eq pointer_value_eq
+        (CheriMemoryWithPNVI.concrete_ptrval n a)
+        (CheriMemoryWithoutPNVI.concrete_ptrval n a).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem fun_ptrval_same:
+    forall s,
+      serr_eq pointer_value_eq
+        (CheriMemoryWithPNVI.fun_ptrval s)
+        (CheriMemoryWithoutPNVI.fun_ptrval s).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem case_funsym_opt_same:
+    forall m1 m2 p1 p2,
+      mem_state_same m1 m2 ->
+      pointer_value_eq p1 p2 ->
+      (CheriMemoryWithPNVI.case_funsym_opt m1 p1 =
+         CheriMemoryWithoutPNVI.case_funsym_opt m2 p2).
+  Proof.
+    cbn.
+    unfold pointer_value_eq.
+    unfold CheriMemoryWithPNVI.case_funsym_opt, CheriMemoryWithPNVI.break_PV.
+    destruct p1 as [p1prov p1v].
+    unfold CheriMemoryWithoutPNVI.case_funsym_opt, CheriMemoryWithoutPNVI.break_PV.
+    destruct p2 as [p2prov p2v].
+    intros ME FE.
+    destruct p1v, p2v.
+    clear p1prov p2prov.
+    -
+      inversion FE.
+      clear FE H0 f.
+      destruct f0.
+      +
+        reflexivity.
+      +
+        unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
+        pose models_compatible as C.
+        destruct C as [CI _].
+        rewrite CI.
+        destruct ME as [MNE MFE].
+        unfold ZMap.Equal in MFE.
+        rewrite MFE.
+        reflexivity.
+    -
+      inversion FE.
+    -
+      inversion FE.
+    -
+      inversion FE.
+      clear FE H0 t.
+      rename t0 into c.
+      destruct ME as [MNE MFE].
+      unfold ZMap.Equal in MFE.
+      rewrite MFE.
+      reflexivity.
   Qed.
 
 
