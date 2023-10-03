@@ -12,7 +12,7 @@ From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-From Coq.Lists Require Import List. (* after exltlib *)
+From Coq.Lists Require Import List SetoidList. (* after exltlib *)
 
 From CheriCaps.Morello Require Import Capabilities.
 From CheriCaps.Common Require Import Capabilities.
@@ -75,13 +75,25 @@ Module RevocationProofs.
 
   (* --- Equality predicates for types used in Memory Models --- *)
 
+  Import CheriMemoryTypesExe.
+
   (* Equality of pointer values without taking provenance into account *)
 
-  Definition pointer_value_eq : relation (CheriMemoryTypesExe.pointer_value_ind)
-    := fun a b =>
-         match a,b with
-         | CheriMemoryTypesExe.PV p1 b1, CheriMemoryTypesExe.PV p2 b2 => b1 = b2
-         end.
+  Inductive pointer_value_eq : pointer_value_ind -> pointer_value_ind -> Prop :=
+  | pointer_value_no_prov_eq: forall pr1 pr2 b1 b2,  b1 = b2 -> pointer_value_eq (PV pr1 b1) (PV pr2 b2).
+
+  Inductive mem_value_ind_eq: mem_value_ind -> mem_value_ind -> Prop :=
+  | mem_value_ind_eq_MVunspecified: forall t1 t2, mem_value_ind_eq (MVunspecified t1) (MVunspecified t2)
+  | mem_value_ind_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_ind_eq (MVinteger t1 v1) (MVinteger t2 v2)
+  | mem_value_ind_eq_MVfloating: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_ind_eq (MVfloating t1 v1) (MVfloating t2 v2)
+  | mem_value_ind_eq_MVpointer: forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> mem_value_ind_eq (MVpointer t1 p1) (MVpointer t2 p2)
+  | mem_value_ind_eq_MVarray: forall a1 a2, eqlistA mem_value_ind_eq a1 a2 -> mem_value_ind_eq (MVarray a1) (MVarray a2)
+  | mem_value_ind_eq_MVstruct: forall tag_sym1 l1 tag_sym2 l2,
+      tag_sym1 = tag_sym2 (* TODO *) ->
+      mem_value_ind_eq (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)
+  | mem_value_ind_eq_MVunion: forall tag_sym1 i1 v1 tag_sym2 i2 v2,
+      tag_sym1 = tag_sym2 /\ i1 = i2 /\ mem_value_ind_eq v1 v2 ->
+      mem_value_ind_eq (MVunion tag_sym1 i1 v1) (MVunion tag_sym2 i2 v2).
 
   (* TODO: incomplete *)
   Definition mem_state_same
@@ -97,19 +109,24 @@ Module RevocationProofs.
     split.
     -
       intros a.
-      unfold pointer_value_eq.
-      destruct a; reflexivity.
+      destruct a.
+      apply pointer_value_no_prov_eq.
+      reflexivity.
     -
       intros a b.
-      unfold pointer_value_eq.
       destruct a, b.
+      intros H.
+      apply pointer_value_no_prov_eq.
+      inversion H.
       auto.
     -
       intros a b c.
       destruct a, b, c.
-      unfold pointer_value_eq.
       intros H1 H2.
-      rewrite H1, H2.
+      apply pointer_value_no_prov_eq.
+      inversion H1. clear H1.
+      inversion H2. clear H2.
+      subst.
       reflexivity.
   Qed.
 
@@ -153,7 +170,9 @@ Module RevocationProofs.
   Theorem models_compatible:
     CheriMemoryWithPNVI.initial_address = CheriMemoryWithoutPNVI.initial_address /\
       CheriMemoryWithPNVI.DEFAULT_FUEL = CheriMemoryWithoutPNVI.DEFAULT_FUEL /\
-      CheriMemoryWithPNVI.MAX_STRFCAP_FORMAT_LEN = CheriMemoryWithoutPNVI.MAX_STRFCAP_FORMAT_LEN.
+      CheriMemoryWithPNVI.MAX_STRFCAP_FORMAT_LEN = CheriMemoryWithoutPNVI.MAX_STRFCAP_FORMAT_LEN /\
+      CheriMemoryWithPNVI.zero_fval = CheriMemoryWithoutPNVI.zero_fval /\
+      CheriMemoryWithPNVI.one_fval = CheriMemoryWithoutPNVI.one_fval.
   Proof.
     repeat split;cbv.
   Qed.
@@ -164,6 +183,8 @@ Module RevocationProofs.
         (CheriMemoryWithPNVI.null_ptrval t)
         (CheriMemoryWithoutPNVI.null_ptrval t).
   Proof.
+    intros t.
+    apply pointer_value_no_prov_eq.
     reflexivity.
   Qed.
 
@@ -182,6 +203,8 @@ Module RevocationProofs.
         (CheriMemoryWithPNVI.fun_ptrval s)
         (CheriMemoryWithoutPNVI.fun_ptrval s).
   Proof.
+    intros s.
+    apply pointer_value_no_prov_eq.
     reflexivity.
   Qed.
 
@@ -193,17 +216,15 @@ Module RevocationProofs.
          CheriMemoryWithoutPNVI.case_funsym_opt m2 p2).
   Proof.
     cbn.
-    unfold pointer_value_eq.
+    intros m1 m2 [p1prov p1v] [p2prov p2v] ME FE.
+    inversion FE. clear FE.
     unfold CheriMemoryWithPNVI.case_funsym_opt, CheriMemoryWithPNVI.break_PV.
-    destruct p1 as [p1prov p1v].
     unfold CheriMemoryWithoutPNVI.case_funsym_opt, CheriMemoryWithoutPNVI.break_PV.
-    destruct p2 as [p2prov p2v].
-    intros ME FE.
     destruct p1v, p2v.
-    clear p1prov p2prov.
+    clear p1prov p2prov pr1 pr2 H H2.
     -
-      inversion FE.
-      clear FE H0 f.
+      inversion H0.
+      clear f H0 H1 H2.
       destruct f0.
       +
         reflexivity.
@@ -217,13 +238,12 @@ Module RevocationProofs.
         rewrite MFE.
         reflexivity.
     -
-      inversion FE.
+      inversion H0.
     -
-      inversion FE.
+      inversion H0.
     -
-      inversion FE.
-      clear FE H0 t.
-      rename t0 into c.
+      inversion H0.
+      clear H0 t H5 H1.
       destruct ME as [MNE MFE].
       unfold ZMap.Equal in MFE.
       rewrite MFE.
@@ -278,5 +298,229 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
+  Theorem concurRead_ival_same:
+    forall ct cs,
+      CheriMemoryWithPNVI.concurRead_ival ct cs =
+        CheriMemoryWithoutPNVI.concurRead_ival ct cs.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem integer_ival_same:
+    forall n,
+      CheriMemoryWithPNVI.integer_ival n =
+        CheriMemoryWithoutPNVI.integer_ival n.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem max_ival_same:
+    forall ct,
+      CheriMemoryWithPNVI.max_ival ct =
+        CheriMemoryWithoutPNVI.max_ival ct.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem min_ival_same:
+    forall ct,
+      CheriMemoryWithPNVI.min_ival ct =
+        CheriMemoryWithoutPNVI.min_ival ct.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem op_ival_same:
+    forall op a b,
+      CheriMemoryWithPNVI.op_ival op a b =
+        CheriMemoryWithoutPNVI.op_ival op a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem offsetof_ival_same:
+    forall tagDefs tag_sym memb_ident,
+      CheriMemoryWithPNVI.offsetof_ival tagDefs tag_sym memb_ident =
+        CheriMemoryWithoutPNVI.offsetof_ival tagDefs tag_sym memb_ident.
+  Proof.
+    intros tagDefs tag_sym memb_ident.
+
+    (* TODO: requires `offsetof_same` *)
+  Admitted.
+
+  (* TODO:
+    Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
+    depends on stateful
+   *)
+
+  (* TODO:
+  Definition alignof_ival (ty: CoqCtype.ctype): serr integer_value
+    depends on stateful
+   *)
+
+  Theorem bitwise_complement_ival_same:
+    forall ty v,
+      CheriMemoryWithPNVI.bitwise_complement_ival ty v =
+        CheriMemoryWithoutPNVI.bitwise_complement_ival ty v.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem bitwise_and_ival_same:
+    forall ty a b,
+      CheriMemoryWithPNVI.bitwise_and_ival ty a b =
+        CheriMemoryWithoutPNVI.bitwise_and_ival ty a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem bitwise_or_ival_same:
+    forall ty a b,
+      CheriMemoryWithPNVI.bitwise_or_ival ty a b =
+        CheriMemoryWithoutPNVI.bitwise_or_ival ty a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem bitwise_xor_ival_same:
+    forall ty a b,
+      CheriMemoryWithPNVI.bitwise_xor_ival ty a b =
+        CheriMemoryWithoutPNVI.bitwise_xor_ival ty a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem is_specified_ival_same:
+    forall v,
+      CheriMemoryWithPNVI.is_specified_ival v =
+        CheriMemoryWithoutPNVI.is_specified_ival v.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem eq_ival_same:
+    forall a b,
+      CheriMemoryWithPNVI.eq_ival a b =
+        CheriMemoryWithoutPNVI.eq_ival a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem lt_ival_same:
+    forall a b,
+      CheriMemoryWithPNVI.lt_ival a b =
+        CheriMemoryWithoutPNVI.lt_ival a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem le_ival_same:
+    forall a b,
+      CheriMemoryWithPNVI.le_ival a b =
+        CheriMemoryWithoutPNVI.le_ival a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem str_fval_same:
+    forall v,
+      CheriMemoryWithPNVI.str_fval v =
+        CheriMemoryWithoutPNVI.str_fval v.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Definition op_fval_same:
+    forall fop a b,
+      CheriMemoryWithPNVI.op_fval fop a b =
+        CheriMemoryWithoutPNVI.op_fval fop a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem eq_fval_same:
+    forall a b,
+      CheriMemoryWithPNVI.eq_fval a b =
+        CheriMemoryWithoutPNVI.eq_fval a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem lt_fval_same:
+    forall a b,
+      CheriMemoryWithPNVI.lt_fval a b =
+        CheriMemoryWithoutPNVI.lt_fval a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem le_fval_same:
+    forall a b,
+      CheriMemoryWithPNVI.le_fval a b =
+        CheriMemoryWithoutPNVI.le_fval a b.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem fvfromint_same:
+    forall v,
+      CheriMemoryWithPNVI.fvfromint v =
+        CheriMemoryWithoutPNVI.fvfromint v.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem ivfromfloat_same:
+    forall t v,
+      CheriMemoryWithPNVI.ivfromfloat t v =
+        CheriMemoryWithoutPNVI.ivfromfloat t v.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem unspecified_mval_same:
+    forall t,
+      CheriMemoryWithPNVI.unspecified_mval t =
+        CheriMemoryWithoutPNVI.unspecified_mval t.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem integer_value_mval_same:
+    forall t v,
+      CheriMemoryWithPNVI.integer_value_mval t v =
+        CheriMemoryWithoutPNVI.integer_value_mval t v.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem floating_value_mval_same:
+    forall t v,
+      CheriMemoryWithPNVI.floating_value_mval t v =
+        CheriMemoryWithoutPNVI.floating_value_mval t v.
+  Proof.
+    reflexivity.
+  Qed.
+
+  (* This theorem using weaker equality, since pointers are involved *)
+  Theorem pointer_mval_same:
+    forall t p1 p2,
+      pointer_value_eq p1 p2 ->
+      mem_value_ind_eq (CheriMemoryWithPNVI.pointer_mval t p1)
+        (CheriMemoryWithoutPNVI.pointer_mval t p2).
+  Proof.
+    intros t p1 p2 H.
+    (* TODO: finish proof after finishing `mem_value_ind_eq` *)
+  Admitted.
+
+
+(*
+    forall ,
+      CheriMemoryWithPNVI. =
+        CheriMemoryWithoutPNVI..
+  Proof.
+    reflexivity.
+  Qed.
+ *)
 
 End RevocationProofs.
