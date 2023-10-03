@@ -89,11 +89,17 @@ Module RevocationProofs.
   | mem_value_ind_eq_MVpointer: forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> mem_value_ind_eq (MVpointer t1 p1) (MVpointer t2 p2)
   | mem_value_ind_eq_MVarray: forall a1 a2, eqlistA mem_value_ind_eq a1 a2 -> mem_value_ind_eq (MVarray a1) (MVarray a2)
   | mem_value_ind_eq_MVstruct: forall tag_sym1 l1 tag_sym2 l2,
-      tag_sym1 = tag_sym2 (* TODO *) ->
+      tag_sym1 = tag_sym2  ->
+      eqlistA struct_field_eq l1 l2 ->
       mem_value_ind_eq (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)
-  | mem_value_ind_eq_MVunion: forall tag_sym1 i1 v1 tag_sym2 i2 v2,
-      tag_sym1 = tag_sym2 /\ i1 = i2 /\ mem_value_ind_eq v1 v2 ->
-      mem_value_ind_eq (MVunion tag_sym1 i1 v1) (MVunion tag_sym2 i2 v2).
+  | mem_value_ind_eq_MVunion: forall tag_sym1 id1 v1 tag_sym2 id2 v2,
+      tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_ind_eq v1 v2 ->
+      mem_value_ind_eq (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)
+  with
+    struct_field_eq: (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> Prop :=
+  | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
+      id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
+
 
   (* TODO: incomplete *)
   Definition mem_state_same
