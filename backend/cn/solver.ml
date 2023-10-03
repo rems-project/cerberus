@@ -1146,7 +1146,7 @@ module Eval = struct
          func_interp func_decl
 
       | () when Z3.Z3Array.is_constant_array expr ->
-         let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
+         let abt = z3_sort (Z3.Z3Array.get_domain (Z3.Expr.get_sort expr)) in
          const_map_ abt (hd args)
 
       | () when Z3.Z3Array.is_default_array expr ->
