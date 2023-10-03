@@ -520,6 +520,39 @@ Module RevocationProofs.
     auto.
   Qed.
 
+  (* This theorem using weaker equality, since pointers may be involved *)
+  Theorem array_mval_same:
+    forall a1 a2,
+      eqlistA mem_value_ind_eq a1 a2 ->
+      mem_value_ind_eq (CheriMemoryWithPNVI.array_mval a1)
+        (CheriMemoryWithoutPNVI.array_mval a2).
+  Proof.
+    intros a1 a2 H.
+    constructor.
+    assumption.
+  Qed.
+
+  (* This theorem using weaker equality, since pointers may be involved *)
+  Theorem struct_mval_same:
+    forall s1 s2 l1 l2,
+      s1 = s2 /\ eqlistA struct_field_eq l1 l2 ->
+      mem_value_ind_eq (CheriMemoryWithPNVI.struct_mval s1 l1)
+        (CheriMemoryWithoutPNVI.struct_mval s2 l2).
+  Proof.
+    intros s1 s2 l1 l2 [H1 H2].
+    constructor; assumption.
+  Qed.
+
+  (* This theorem using weaker equality, since pointers may be involved *)
+  Theorem union_mval_same:
+    forall s1 id1 v1 s2 id2 v2,
+      s1 = s2 /\ id1 = id2 /\ mem_value_ind_eq v1 v2 ->
+      mem_value_ind_eq (CheriMemoryWithPNVI.union_mval s1 id1 v1)
+        (CheriMemoryWithoutPNVI.union_mval s2 id2 v2).
+  Proof.
+    intros s1 id1 v1 s2 id2 v2 H.
+    constructor; assumption.
+  Qed.
 
 (*
     forall ,
