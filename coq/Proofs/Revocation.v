@@ -230,5 +230,53 @@ Module RevocationProofs.
       reflexivity.
   Qed.
 
+  Theorem derive_cap_same:
+    forall is_signed bop ival1 ival2,
+      CheriMemoryWithPNVI.derive_cap is_signed bop ival1 ival2 =
+        CheriMemoryWithoutPNVI.derive_cap is_signed bop ival1 ival2.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem cap_assign_value_same:
+    forall loc ival_cap ival_n,
+      CheriMemoryWithPNVI.cap_assign_value loc ival_cap ival_n =
+        CheriMemoryWithoutPNVI.cap_assign_value loc ival_cap ival_n.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem ptr_t_int_value_same:
+    forall p,
+      CheriMemoryWithPNVI.ptr_t_int_value p =
+        CheriMemoryWithoutPNVI.ptr_t_int_value p.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem null_cap_same:
+    forall f,
+      CheriMemoryWithPNVI.null_cap f =
+        CheriMemoryWithoutPNVI.null_cap f.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem array_shift_ptrval_same:
+    forall pv ct iv,
+      CheriMemoryWithPNVI.array_shift_ptrval pv ct iv =
+        CheriMemoryWithoutPNVI.array_shift_ptrval pv ct iv.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Theorem member_shift_ptrval_same:
+    forall pv ct ci,
+      CheriMemoryWithPNVI.member_shift_ptrval pv ct ci =
+        CheriMemoryWithoutPNVI.member_shift_ptrval pv ct ci.
+  Proof.
+    reflexivity.
+  Qed.
+
 
 End RevocationProofs.
