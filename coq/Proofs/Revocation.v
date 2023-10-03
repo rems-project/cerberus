@@ -516,8 +516,9 @@ Module RevocationProofs.
         (CheriMemoryWithoutPNVI.pointer_mval t p2).
   Proof.
     intros t p1 p2 H.
-    (* TODO: finish proof after finishing `mem_value_ind_eq` *)
-  Admitted.
+    constructor.
+    auto.
+  Qed.
 
 
 (*
