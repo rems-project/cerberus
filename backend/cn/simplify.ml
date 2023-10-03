@@ -165,6 +165,14 @@ module IndexTerms = struct
       then Z.sub z (Z.pow (Z.of_int 2) sz)
       else z
 
+  let cast_reduce bt it =
+    begin match bt, IT.is_const it with
+    | BT.Bits (sign, sz), Some (Terms.Bits ((sign2, sz2), z), _) ->
+        let z = do_wrapI_z (sign, sz) (do_wrapI_z (sign2, sz2) z) in
+        num_lit_ z bt
+    | _ -> IT (Cast (bt, it), bt)
+    end
+
   let rec simp ?(inline_functions=false) simp_ctxt =
 
     let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
@@ -530,12 +538,7 @@ module IndexTerms = struct
        IT (WrapI (act, aux t), the_bt)
     | Cast (cbt, a) ->
        let a = aux a in
-       begin match cbt, IT.is_const a with
-       | Bits (sign, sz), Some (Terms.Bits ((sign2, sz2), z), _) ->
-           let z = do_wrapI_z (sign, sz) (do_wrapI_z (sign2, sz2) z) in
-           num_lit_ z the_bt
-       | _ -> IT (Cast (cbt, a), the_bt)
-       end
+       cast_reduce cbt a
     | MemberOffset (tag, member) ->
        let layout = SymMap.find tag simp_ctxt.global.struct_decls in
        int_lit_ (Option.get (Memory.member_offset layout member)) Memory.intptr_bt

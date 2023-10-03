@@ -1339,7 +1339,8 @@ module Eval = struct
       let it = z3_expr expr in
       match bt, IT.bt it with
         | bt1, bt2 when BT.equal bt1 bt2 -> it
-        | BT.Bits (_, n1), BT.Bits (_, n2) when n1 == n2 -> IT.cast_ bt it
+        | BT.Bits (_, n1), BT.Bits (_, n2) when n1 == n2 ->
+            Simplify.IndexTerms.cast_reduce bt it
         | _ -> failwith ("z3_expr_with_typ: reconstruction mismatch " ^
                 Pp.plain (Pp.typ (IT.pp_with_typ it) (BT.pp bt)))
     in
