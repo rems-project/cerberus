@@ -733,6 +733,32 @@ Module RevocationProofs.
           (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
           (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2).
   Proof.
+    intros mem_state1 mem_state2 sz align M.
+    destruct_mem_state_same M.
+    split.
+    -
+      unfold evalErrS.
+      unfold CheriMemoryWithPNVI.allocator, CheriMemoryWithoutPNVI.allocator.
+      unfold put, ret, bind.
+      cbn.
+      repeat break_let.
+      unfold CheriMemoryWithPNVI.memM in *.
+      unfold CheriMemoryWithPNVI.mem_state in *.
+      repeat break_if; repeat break_match;
+      repeat tuple_inversion;
+        rewrite Mlastaddr in *; try congruence; try reflexivity.
+      +
+        rewrite <- Malloc_id in *.
+        rewrite  Heqp1 in Heqp4.
+        tuple_inversion.
+        reflexivity.
+      +
+        rewrite <- Malloc_id in *.
+        rewrite  Heqp1 in Heqp4.
+        tuple_inversion.
+        reflexivity.
+    -
+
   Admitted.
 
 End RevocationProofs.

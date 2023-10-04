@@ -161,6 +161,22 @@ Module Type CheriMemoryTypes
 End CheriMemoryTypes.
 
 
+(* OCaml Z.sign *)
+Definition sign (x:Z) : Z :=
+  match x with
+  | Z0 => 0
+  | Zpos _ => 1
+  | Zneg _ => (-1)
+  end.
+
+(* See [Z.ediv_rem] in OCaml ZArith *)
+Definition quomod (a b: Z) : (Z*Z) :=
+  let (q,r) := Z.quotrem a b in
+  if Z.geb (sign r) 0 then (q,r) else
+    if Z.geb (sign b) 0 then (Z.pred q, Z.add r b)
+    else (Z.succ q, Z.sub r b).
+
+
 Module Type CheriMemoryImpl
   (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS
@@ -188,22 +204,6 @@ Module Type CheriMemoryImpl
   Definition symbolic_storage_instance_id : Set := MT.symbolic_storage_instance_id.
   Definition storage_instance_id : Set := MT.storage_instance_id.
   Definition mem_value := mem_value_ind.
-
-
-  (* OCaml Z.sign *)
-  Definition sign (x:Z) : Z :=
-    match x with
-    | Z0 => 0
-    | Zpos _ => 1
-    | Zneg _ => (-1)
-    end.
-
-  (* See [Z.ediv_rem] in OCaml ZArith *)
-  Definition quomod (a b: Z) : (Z*Z) :=
-    let (q,r) := Z.quotrem a b in
-    if Z.geb (sign r) 0 then (q,r) else
-      if Z.geb (sign b) 0 then (Z.pred q, Z.add r b)
-      else (Z.succ q, Z.sub r b).
 
 
   (*
@@ -313,7 +313,7 @@ Module Type CheriMemoryImpl
   #[local] Instance memM_monad: Monad memM.
   Proof.
     typeclasses eauto.
-  Qed.
+  Defined.
 
   Definition mprint_msg (msg : string) : memM unit :=
     ret (print_msg msg).
