@@ -942,7 +942,7 @@ module CHERIMorello : Memory = struct
     List.iter (fun (aid,a) ->
         Printf.fprintf stderr "@%s: 0x%s,%s (%s,%s%s)\n"
           (Z.format "%d" aid)
-          (Z.format "%x" a.MM.base)
+          (Z.format "%x" a.CheriMemoryTypesExe.base)
           (Z.format "%d" a.size)
           (match a.taint with
            | CheriMemoryTypesExe.Exposed -> "exposed"
@@ -959,9 +959,9 @@ module CHERIMorello : Memory = struct
     List.iter (fun (addr, b) ->
         Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
           (Z.format "%x" addr)
-          (string_of_provenance b.MM.prov)
-          (match b.MM.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
-          (match b.MM.copy_offset with None -> "" | Some n -> " [" ^ Z.to_string n ^ "]")
+          (string_of_provenance b.CheriMemoryTypesExe.prov)
+          (match b.CheriMemoryTypesExe.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+          (match b.CheriMemoryTypesExe.copy_offset with None -> "" | Some n -> " [" ^ Z.to_string n ^ "]")
       ) l;
     prerr_endline "END BYTEMAP"
 
@@ -1155,7 +1155,7 @@ module CHERIMorello : Memory = struct
     if !Cerb_debug.debug_level >= 2 then
       Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
     let open String_symbol in
-    let rec aux addr (alloc:MM.allocation) = function
+    let rec aux addr (alloc:CheriMemoryTypesExe.allocation) = function
       | None
         | Some (Ctype (_, Void))
         | Some (Ctype (_, Function _))
