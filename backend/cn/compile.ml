@@ -286,7 +286,7 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
         (* FIXME handle errors here properly *)
         let loc = Locations.unknown in
         match env.fetch_typedef loc sym with
-          | Result.Ok r -> of_sct (Sctypes.of_ctype_unsafe loc r)
+          | Result.Ok r -> Memory.sbt_of_sct (Sctypes.of_ctype_unsafe loc r)
           | Result.Error e -> failwith (Pp.plain (TypeErrors.((pp_message e.msg).short)))
 
 

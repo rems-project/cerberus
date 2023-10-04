@@ -1591,6 +1591,8 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         todo ()
      | M_Ememop (M_Va_end _) (* (asym 'bty) *) ->
         todo ()
+     | M_Ememop (M_CopyAllocId _) ->
+        todo ()
      | M_Eaction (M_Paction (pol, M_Action (aloc, action_))) ->
         let@ (bTy, action_) = match action_ with
         | M_Create (pe, act, prefix) ->
