@@ -104,13 +104,62 @@ Module RevocationProofs.
       id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
 
-  (* TODO: incomplete *)
+  (*       next_alloc_id : storage_instance_id;
+      next_iota : symbolic_storage_instance_id;
+      last_address : AddressValue.t;
+      allocations : ZMap.t allocation;
+      iota_map : ZMap.t
+                   ((* `Single *) storage_instance_id +
+                      (* `Double *) storage_instance_id * storage_instance_id);
+      funptrmap : ZMap.t
+                    (digest * string * C.t);
+      varargs : ZMap.t
+                  (Z * list (CoqCtype.ctype * pointer_value));
+      next_varargs_id : Z;
+      bytemap : ZMap.t AbsByte;
+      capmeta : ZMap.t (bool* CapGhostState);
+   *)
+
+  Inductive ctype_pointer_value_eq: (CoqCtype.ctype * pointer_value_ind) ->
+                                    (CoqCtype.ctype * pointer_value_ind) -> Prop
+    :=
+  | ctype_pointer_value_eq_1:
+    forall t1 t2 pv1 pv2, t1 = t2 /\ pointer_value_eq pv1 pv2 ->
+                     ctype_pointer_value_eq (t1,pv1) (t2,pv2).
+
+  Inductive varargs_eq: (Z * list (CoqCtype.ctype * pointer_value_ind)) ->
+                        (Z * list (CoqCtype.ctype * pointer_value_ind)) -> Prop :=
+  | varargs_eq_1: forall z1 vl1 z2 vl2,
+      z1 = z2 /\ eqlistA ctype_pointer_value_eq vl1 vl2
+      -> varargs_eq (z1,vl1) (z2,vl2).
+
   Definition mem_state_same
     (a:CheriMemoryWithPNVI.mem_state_r)
     (b:CheriMemoryWithoutPNVI.mem_state_r): Prop
     :=
     a.(CheriMemoryWithPNVI.next_alloc_id) = b.(CheriMemoryWithoutPNVI.next_alloc_id)
-    /\ ZMap.Equal a.(CheriMemoryWithPNVI.funptrmap) b.(CheriMemoryWithoutPNVI.funptrmap).
+    /\ a.(CheriMemoryWithPNVI.next_iota) = b.(CheriMemoryWithoutPNVI.next_iota)
+    /\ a.(CheriMemoryWithPNVI.last_address) = b.(CheriMemoryWithoutPNVI.last_address)
+    /\ ZMap.Equal a.(CheriMemoryWithPNVI.allocations) b.(CheriMemoryWithoutPNVI.allocations)
+    /\ ZMap.Equal a.(CheriMemoryWithPNVI.iota_map) b.(CheriMemoryWithoutPNVI.iota_map)
+    /\ ZMap.Equal a.(CheriMemoryWithPNVI.funptrmap) b.(CheriMemoryWithoutPNVI.funptrmap)
+    /\ ZMap.Equiv varargs_eq a.(CheriMemoryWithPNVI.varargs) b.(CheriMemoryWithoutPNVI.varargs)
+    /\ a.(CheriMemoryWithPNVI.next_varargs_id) = b.(CheriMemoryWithoutPNVI.next_varargs_id)
+    /\ ZMap.Equal a.(CheriMemoryWithPNVI.bytemap) b.(CheriMemoryWithoutPNVI.bytemap)
+    /\ ZMap.Equal a.(CheriMemoryWithPNVI.capmeta) b.(CheriMemoryWithoutPNVI.capmeta).
+
+  Ltac destruct_mem_state_same H :=
+    let Malloc_id := fresh "Malloc_id" in
+    let Mnextiota := fresh "Mnextiota" in
+    let Mlastaddr := fresh "Mlastaddr" in
+    let Mallocs := fresh "Mallocs" in
+    let Miotas := fresh "Miotas" in
+    let Mfuncs := fresh "Mfuncs" in
+    let Mvarargs := fresh "Mvarargs" in
+    let Mnextvararg := fresh "Mnextvararg" in
+    let Mbytes := fresh "Mbytes" in
+    let Mcapmeta := fresh "Mcapmeta" in
+    destruct H as (Malloc_id & Mnextiota & Mlastaddr & Mallocs & Miotas & Mfuncs & Mvarargs & Mnextvararg & Mbytes & Mcapmeta).
 
   (* Equivalence relation for pointer values *)
   #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
@@ -324,9 +373,10 @@ Module RevocationProofs.
         pose models_compatible as C.
         destruct C as [CI _].
         rewrite CI.
-        destruct ME as [MNE MFE].
-        unfold ZMap.Equal in MFE.
-        rewrite MFE.
+
+        destruct_mem_state_same ME.
+        unfold ZMap.Equal in Mfuncs.
+        rewrite Mfuncs.
         reflexivity.
     -
       inversion H0.
@@ -335,9 +385,9 @@ Module RevocationProofs.
     -
       inversion H0.
       clear H0 t H5 H1.
-      destruct ME as [MNE MFE].
-      unfold ZMap.Equal in MFE.
-      rewrite MFE.
+      destruct_mem_state_same ME.
+      unfold ZMap.Equal in Mfuncs.
+      rewrite Mfuncs.
       reflexivity.
   Qed.
 

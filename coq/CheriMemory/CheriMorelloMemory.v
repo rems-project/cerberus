@@ -128,6 +128,36 @@ Module Type CheriMemoryTypes
   | Undef0: location_ocaml -> (list undefined_behaviour) -> memMError
   | InternalErr: string -> memMError.
 
+  Definition allocation_taint_eqb (a b: allocation_taint) :=
+    match a, b with
+    | Exposed, Exposed => true
+    | Unexposed, Unexposed => true
+    | _, _ => false
+    end.
+
+  Inductive taint_ind :=
+  | NoTaint: taint_ind
+  | NewTaint: list storage_instance_id -> taint_ind.
+
+  Record allocation :=
+    {
+      prefix : CoqSymbol.prefix;
+      base : AddressValue.t;
+      size : Z;
+      ty : option CoqCtype.ctype;
+      is_readonly : readonly_status;
+      is_dynamic : bool ;
+      is_dead : bool ;
+      taint : allocation_taint
+    }.
+
+  Record AbsByte :=
+    {
+      prov : provenance;
+      copy_offset : option nat;
+      value : option ascii
+    }.
+
 End CheriMemoryTypes.
 
 
@@ -176,30 +206,6 @@ Module Type CheriMemoryImpl
       else (Z.succ q, Z.sub r b).
 
 
-
-  Definition allocation_taint_eqb (a b: allocation_taint) :=
-    match a, b with
-    | Exposed, Exposed => true
-    | Unexposed, Unexposed => true
-    | _, _ => false
-    end.
-
-  Inductive taint_ind :=
-  | NoTaint: taint_ind
-  | NewTaint: list storage_instance_id -> taint_ind.
-
-  Record allocation :=
-    {
-      prefix : CoqSymbol.prefix;
-      base : AddressValue.t;
-      size : Z;
-      ty : option CoqCtype.ctype;
-      is_readonly : readonly_status;
-      is_dynamic : bool ;
-      is_dead : bool ;
-      taint : allocation_taint
-    }.
-
   (*
      For copy-paste:
 
@@ -219,13 +225,6 @@ Module Type CheriMemoryImpl
 
   Definition allocation_with_dead (r : allocation) :=
     Build_allocation r.(prefix) r.(base) r.(size) r.(ty) r.(is_readonly) r.(is_dynamic) true r.(taint).
-
-  Record AbsByte :=
-    {
-      prov : provenance;
-      copy_offset : option nat;
-      value : option ascii
-    }.
 
   Definition absbyte_v prov copy_offset value : AbsByte
     :=
@@ -3474,7 +3473,7 @@ Module Type CheriMemoryImpl
                       (fun (new_ptr : pointer_value) =>
                          let size_to_copy :=
                            let size_n := num_of_int size in
-                           IV (Z.min (CheriMemoryImpl.size alloc) size_n) in
+                           IV (Z.min (MT.size alloc) size_n) in
                          memcpy new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
@@ -3497,7 +3496,7 @@ Module Type CheriMemoryImpl
                     (fun (new_ptr : pointer_value) =>
                        let size_to_copy :=
                          let size_n := num_of_int size in
-                         IV (Z.min (CheriMemoryImpl.size alloc) size_n) in
+                         IV (Z.min (MT.size alloc) size_n) in
                        memcpy new_ptr ptr size_to_copy ;;
                        kill (Loc_other "realloc") true ptr ;;
                        ret new_ptr)
