@@ -4,8 +4,8 @@
 
 int
 f (int *p, int x)
-/*@ requires x < 12 @*/
-/*@ ensures return < 12 @*/
+/*@ requires x < 12i32 @*/
+/*@ ensures return < 12i32 @*/
 /*@ ensures take Resource_From_Nothing = Owned(p) @*/
 {
   return x;

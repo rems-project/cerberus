@@ -3,7 +3,7 @@
 /* this function doesn't create an integer in memory */
 
 /*@
-predicate (integer) Owned_Wrapper (pointer p) {
+predicate (i32) Owned_Wrapper (pointer p) {
   take I = Owned<int>(p);
   return I;
 }
@@ -11,8 +11,8 @@ predicate (integer) Owned_Wrapper (pointer p) {
 
 int
 f (int *p, int x)
-/*@ requires x < 12 @*/
-/*@ ensures return < 12 @*/
+/*@ requires x < 12i32 @*/
+/*@ ensures return < 12i32 @*/
 /*@ ensures take Resource_From_Nothing = Owned_Wrapper(p) @*/
 {
   return x;
