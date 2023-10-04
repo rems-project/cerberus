@@ -75,7 +75,8 @@ let no_randomness_params () =
   ]
 
 let solver_params = [
-    ("smt.logic", "QF_AUFLIA");
+    ("sat.smt", "true");
+    (* ("smt.logic", "QF_AUFLIA"); *)
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "false");
     ("smt.pull-nested-quantifiers", "true");
@@ -909,7 +910,7 @@ let make global : solver =
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
   let context = Z3.mk_context [] in
   Translate.init global context;
-  let incremental = Z3.Solver.mk_solver_t context (Z3.Tactic.mk_tactic context "default") in
+  let incremental = Z3.Solver.mk_solver context None in
   { context; incremental; focus_terms = ref [] }
 
 
