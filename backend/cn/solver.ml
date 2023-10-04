@@ -909,7 +909,7 @@ let make global : solver =
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
   let context = Z3.mk_context [] in
   Translate.init global context;
-  let incremental = Z3.Solver.mk_simple_solver context in
+  let incremental = Z3.Solver.mk_solver_t context (Z3.Tactic.mk_tactic context "default") in
   { context; incremental; focus_terms = ref [] }
 
 
