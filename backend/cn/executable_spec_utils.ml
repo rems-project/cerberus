@@ -14,10 +14,19 @@ let mk_ctype ?(annots=[]) ctype_ = C.Ctype (annots, ctype_)
 
 let rm_ctype (C.Ctype (_, ctype_)) = ctype_
 
+let get_typedef_string (C.Ctype (annots, ctype_)) = match annots with 
+  | CF.Annot.Atypedef sym :: _ -> Some (Sym.pp_string sym)
+  | _ -> None
+
+
 let mk_expr ?(strs=[]) expr_ = 
   A.AnnotatedExpression (
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
      strs, Cerb_location.unknown, expr_)
+
+let get_expr_strs = function 
+  | (A.AnnotatedExpression (CF.GenTypes.GenLValueType (_, _, _), strs, _, _)) -> strs
+  | _ -> []
 
 let mk_cn_expr cn_expr_ = 
   Cn.CNExpr (Cerb_location.unknown, cn_expr_)
