@@ -164,6 +164,18 @@ cn_bool cn_integer_lt(cn_integer *i1, cn_integer *i2) {
     return (i1->val) < (i2->val);
 }
 
+cn_bool cn_integer_le(cn_integer *i1, cn_integer *i2) {
+    return (i1->val) <= (i2->val);
+}
+
+cn_bool cn_integer_gt(cn_integer *i1, cn_integer *i2) {
+    return (i1->val) > (i2->val);
+}
+
+cn_bool cn_integer_ge(cn_integer *i1, cn_integer *i2) {
+    return (i1->val) >= (i2->val);
+}
+
 cn_integer *cn_integer_add(cn_integer *i1, cn_integer *i2) {
     cn_integer *res = alloc(sizeof(cn_integer));
     // res->val = alloc(sizeof(unsigned int));

@@ -36,7 +36,7 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
 
 let generate_c_statements_internal (loc, statements) dts =
   Printf.printf "Location at which translation happening: %s\n" (Cerb_location.simple_location loc);
-  let (bindings, stats_) = List.split (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts) statements) in
+  let (bindings, stats_) = List.split (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts []) statements) in
   let stat_strs = List.map generate_ail_stat_strs (List.combine bindings stats_) in
   let stat_strs = List.map (List.fold_left (^) "") stat_strs in
   (* let stat_str = List.fold_left (^) "" stat_strs in *)
@@ -46,8 +46,8 @@ let generate_c_statements_internal (loc, statements) dts =
 let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = ail_prog.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
-  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal dts preds instrumentation.internal.pre in
-  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts preds instrumentation.internal.post in
+  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal dts [] preds instrumentation.internal.pre in
+  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts [] preds instrumentation.internal.post in
   let pre_str = generate_ail_stat_strs pre_stats_ in
   let post_str = generate_ail_stat_strs post_stats_ in
   [(instrumentation.fn, (pre_str, post_str))]
@@ -137,7 +137,7 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   (funs_str, records_str)
 
 let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) =
-  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes resource_predicates) resource_predicates in
+  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes [] resource_predicates) resource_predicates in
   let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
