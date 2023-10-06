@@ -1222,8 +1222,8 @@ let rec cn_to_ail_arguments_l_internal dts cn_vars preds = function
   | M_Define ((sym, it), _info, l) ->
     let binding = create_binding sym (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts cn_vars it (AssignVar sym) in
-    let (b2, s2) = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) preds l in
-    (b1 @ b2 @ [binding], s1 @ s2)
+    let (b2, s2, cn_vars') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) preds l in
+    (b1 @ b2 @ [binding], s1 @ s2, cn_vars')
 
     (* CN take *)
   | M_Resource ((sym, (re, _bt)), _info, l) -> 
@@ -1233,14 +1233,14 @@ let rec cn_to_ail_arguments_l_internal dts cn_vars preds = function
       | _ -> ())
     ;
     let (b1, s1) = cn_to_ail_resource_internal sym dts cn_vars preds re in
-    let (b2, s2) = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) preds l in
-    (b1 @ b2, s1 @ s2)
+    let (b2, s2, cn_vars') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) preds l in
+    (b1 @ b2, s1 @ s2, cn_vars')
 
     (* CN assertion (or inside of take) *)
   | M_Constraint (lc, _info, l) -> 
     (* Printf.printf "Reached M_Constraint (take)\n"; *)
     let (b1, s1) = cn_to_ail_logical_constraint_internal dts cn_vars Assert lc in 
-    let (b2, s2) = cn_to_ail_arguments_l_internal dts cn_vars preds l in 
+    let (b2, s2, cn_vars') = cn_to_ail_arguments_l_internal dts cn_vars preds l in 
 
     (* Hack *)
     (* let rec remove_var_asserts ss = 
@@ -1259,19 +1259,20 @@ let rec cn_to_ail_arguments_l_internal dts cn_vars preds = function
             )
           | _ -> default_res
     in *)
-    (b1 @ b2, s1 @ s2)
+    (b1 @ b2, s1 @ s2, cn_vars')
     (* (b1 @ b2, (remove_var_asserts s1) @ s2)
         *)
       (* (b2, s2) *)
 
-  | M_I i -> ([], [])
+  | M_I i -> ([], [], cn_vars)
 
-let rec cn_to_ail_arguments_internal dts cn_vars preds = function
+(* Precondition translation *)
+let rec cn_to_ail_arguments_internal dts preds = function
   | M_Computational ((s, bt), _info, pre) ->
     (* TODO: Do something with s and bt *)
-      cn_to_ail_arguments_internal dts cn_vars preds pre
+      cn_to_ail_arguments_internal dts preds pre
   | M_L pre ->
-      cn_to_ail_arguments_l_internal dts cn_vars preds pre
+      cn_to_ail_arguments_l_internal dts [] preds pre
 
 (* TODO: Generate bindings *)
 (* TODO: Add destination passing? *)
