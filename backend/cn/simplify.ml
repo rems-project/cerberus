@@ -30,7 +30,10 @@ let default global = {
     simp_hook = (fun _ -> None);
   }
 
-
+let rec do_ctz_z z = if Z.equal Z.zero z then 0
+  else if Z.equal (Z.of_int (-1)) z then 0
+  else let (q, r) = Z.div_rem z (Z.of_int 2) in
+  if Z.equal r Z.zero then do_ctz_z q else do_ctz_z q + 1
 
 
 module IndexTerms = struct
@@ -390,15 +393,20 @@ module IndexTerms = struct
        | _ ->
           IT (Binop (Impl, a, b), the_bt)
        end
-    | Unop (Not, a) ->
+    | Unop (op, a) ->
        let a = aux a in
-       begin match a with
-       | IT (Const (Bool b), _) ->
+       begin match op, IT.term a with
+       | Not, Const (Bool b) ->
           bool_ (not b)
-       | IT (Unop (Not, b), _) ->
+       | Not, Unop (Not, b) ->
           b
-       | _ -> 
-          IT (Unop (Not, a), the_bt)
+       | BWCTZNoSMT, Const (Z z) ->
+          int_ (do_ctz_z z)
+       | BWFFSNoSMT, Const (Z z) ->
+          if Z.equal z Z.zero then int_ 0
+          else int_ (do_ctz_z z + 1)
+       | _, _ ->
+          IT (Unop (op, a), the_bt)
        end
     | ITE (a, b, c) ->
        let a = aux a in
@@ -530,8 +538,6 @@ module IndexTerms = struct
        else IT (Binop (LEPointer, a, b), the_bt)
     | Binop (op, a, b) ->
        IT (Binop (op, aux a, aux b), the_bt)
-    | Unop (op, a) ->
-       IT (Unop (op, aux a), the_bt)
     | Constructor (ctor, ts) ->
        IT (Constructor (ctor, List.map_snd aux ts), the_bt)
     | WrapI (act, t) ->

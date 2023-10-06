@@ -511,10 +511,12 @@ module Translate = struct
       in
       let (to_signed, to_sz) = bits_info to_bt in
       let (from_signed, from_sz) = bits_info from_bt in
+      Pp.debug 22 (lazy (Pp.item "mk_bv_cast" (Pp.typ (Pp.list Pp.int [to_sz; from_sz])
+          (Pp.string (Z3.Expr.to_string x)))));
       if to_sz == from_sz
         then x
         else if to_sz < from_sz
-        then (Z3.BitVector.mk_extract context 0 to_sz x)
+        then (Z3.BitVector.mk_extract context (to_sz - 1) 0 x)
         else if from_signed
         then Z3.BitVector.mk_sign_ext context (to_sz - from_sz) x
         else Z3.BitVector.mk_zero_ext context (to_sz - from_sz) x
@@ -592,7 +594,7 @@ module Translate = struct
          | Mul -> (bv_arith_case t1 BV.mk_mul BV.mk_mul (l_bop mk_mul))
                  context (term t1) (term t2)
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
-         | Div -> mk_div context (term t1) (term t2)
+         | Div -> (bv_arith_case t1 BV.mk_sdiv BV.mk_udiv mk_div) context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
          | Exp -> adj ()
          | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
@@ -606,9 +608,9 @@ module Translate = struct
          | LE -> (bv_arith_case t1 BV.mk_sle BV.mk_ule mk_le) context (term t1) (term t2)
          | Min -> adj ()
          | Max -> adj ()
-         | XORNoSMT -> make_uf "xor_uf" (Integer) [t1; t2]
-         | BWAndNoSMT -> make_uf "bw_and_uf" (Integer) [t1; t2]
-         | BWOrNoSMT -> make_uf "bw_or_uf" (Integer) [t1; t2]
+         | XORNoSMT -> BV.mk_xor context (term t1) (term t2)
+         | BWAndNoSMT -> BV.mk_and context (term t1) (term t2)
+         | BWOrNoSMT -> BV.mk_or context (term t1) (term t2)
          | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
          | SetUnion -> Z3.Set.mk_union context (map term [t1;t2])
@@ -750,6 +752,15 @@ module Translate = struct
          Pp.print stdout (Pp.item "smt mapping issue" (IT.pp it));
          Cerb_debug.error "todo: SMT mapping"
       end
+
+(* for extreme printf-debugging
+      and term it =
+        Pp.debug 22 (lazy (Pp.item "Translate.term" (IT.pp it)));
+        let z3_term = term1 it in
+        Pp.debug 22 (lazy (Pp.item "Translate.term: done with"
+            (Pp.typ (IT.pp it) (Pp.string (Z3.Expr.to_string z3_term)))));
+        z3_term
+*)
 
       and translate_case (matched : Z3.Expr.expr) pat = 
         match pat with

@@ -383,6 +383,9 @@ module WIT = struct
                  else fail (fun _ -> {loc; msg = Generic
                    (!^"Divisor " ^^^ IT.pp t' ^^^ !^ "must be positive")}) in
                return (IT (Binop (Div, t, simp_t'), IT.bt t))
+            | Bits _, simp_t' when Option.is_some (is_const simp_t') ->
+               (* TODO: check for a zero divisor *)
+               return (IT (Binop (Div, t, simp_t'), IT.bt t))
             | _ ->
                let hint = "Integer division only allowed when divisor is constant" in
                fail (fun ctxt -> {loc; msg = NIA {it = div_ (t, t'); ctxt; hint}})
@@ -413,9 +416,10 @@ module WIT = struct
            | XORNoSMT
            | BWAndNoSMT
            | BWOrNoSMT ->
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              return (IT (Binop (arith_op, t, t'), Integer))
+              let@ t = infer loc t in
+              let@ () = ensure_bits_type loc (IT.bt t) in
+              let@ t' = check loc (IT.bt t) t' in
+              return (IT (Binop (arith_op, t, t'), IT.bt t))
            | Rem ->
               let@ simp_ctxt = simp_ctxt () in
               let@ t = check loc Integer t in
@@ -1327,6 +1331,13 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pe1 = infer_pexpr pe1 in
         let@ pe2 = infer_pexpr pe2 in
         return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
+      | M_PEbitwise_binop (binop, pe1, pe2) ->
+        (* all the supported binops do arithmetic in the one (bitwise) type *)
+        let@ pe1 = infer_pexpr pe1 in
+        let bt = bt_of_pexpr pe1 in
+        let@ () = ensure_bits_type (loc_of_pexpr pe1) bt in
+        let@ pe2 = check_pexpr (`BT bt) pe2 in
+        return (bt, M_PEbitwise_binop (binop, pe1, pe2))
       | M_PEif (c_pe, pe1, pe2) ->
         let@ c_pe = check_pexpr (`BT Bool) c_pe in
         let@ (bt, pe1, pe2) = if is_undef_pexpr pe1
@@ -1360,6 +1371,9 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
       | M_PEcatch_exceptional_condition (act, pe) ->
         let@ pe = infer_pexpr pe in
         return (bt_of_pexpr pe, M_PEcatch_exceptional_condition (act, pe))
+      | M_PEwrapI (act, pe) ->
+        let@ pe = infer_pexpr pe in
+        return (Memory.bt_of_sct act.ct, M_PEwrapI (act, pe))
       | M_PEbool_to_integer pe ->
         let@ pe = infer_pexpr pe in
         (* FIXME: replace this with something derived from a ctype when that info is available *)
@@ -1509,6 +1523,7 @@ let check_cnprog p =
 
 let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m = 
   fun label_context e ->
+    Pp.debug 22 (lazy (Pp.item "WellTyped.BaseTyping.infer_expr" (Pp_mucore_ast.pp_expr e)));
     let (M_Expr (loc, annots, _, e_)) = e in
     let todo () = begin
         Pp.error loc (!^ "TODO: WellTyped infer_expr") [Pp_mucore_ast.pp_expr e];

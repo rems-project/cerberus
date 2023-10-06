@@ -117,7 +117,7 @@ let dtree_of_cn_statement = function
   | M_CN_unfold (s, args) ->
      Dnode (pp_ctor "Unfold", List.map IT.dtree args)
   | M_CN_apply (s, args) ->
-     Dnode (pp_ctor "Apply", List.map IT.dtree args)
+     Dnode (pp_ctor "Apply", Dleaf (Sym.pp s) :: List.map IT.dtree args)
   | M_CN_assert lc ->
      Dnode (pp_ctor "Assert", [LC.dtree lc])
   | M_CN_inline nms ->
