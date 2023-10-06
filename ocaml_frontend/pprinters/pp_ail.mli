@@ -1,5 +1,4 @@
 open AilSyntax
-open IntegerType
 open Ctype
 
 val pp_type_keyword: string -> PPrint.document

@@ -1,6 +1,5 @@
 (* Things mostly taken unchanged from the concrete memory model that
    we might want to put in a common module *)
-open IntegerType
 open Ctype
 
 let ident_equal x y =

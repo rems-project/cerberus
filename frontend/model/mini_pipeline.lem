@@ -7,7 +7,6 @@ module C = Core
 
 module A = struct
   include import AilSyntax
-  include import IntegerType
   include import Ctype
 end
 import GenTypes GenTypesAux
@@ -212,8 +211,8 @@ let typecheckAil sigm gamm expr =
 
 val in_range_of_signed_int: integer -> maybe bool
 let in_range_of_signed_int n =
-  match ( Mem.eval_integer_value (Mem.min_ival (IntegerType.Signed IntegerType.Int_))
-        , Mem.eval_integer_value (Mem.max_ival (IntegerType.Signed IntegerType.Int_)) ) with
+  match ( Mem.eval_integer_value (Mem.min_ival (Ctype.Signed Ctype.Int_))
+        , Mem.eval_integer_value (Mem.max_ival (Ctype.Signed Ctype.Int_)) ) with
     | (Just min, Just max) ->
         Just (min <= n && n <= max)
     | (Just min, Nothing) ->

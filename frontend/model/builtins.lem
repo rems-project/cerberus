@@ -1,4 +1,4 @@
-open import Pervasives Utils AilSyntax AilTypesAux IntegerType Ctype
+open import Pervasives Utils AilSyntax AilTypesAux Ctype
 import Cmm_csem
 
 (* Things needed to model in a implementation independent way,

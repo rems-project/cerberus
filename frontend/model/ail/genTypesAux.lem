@@ -1,4 +1,4 @@
-open import Pervasives AilSyntax Range ErrorMonad TypingError GenTypes Utils IntegerType Ctype
+open import Pervasives AilSyntax Range ErrorMonad TypingError GenTypes Utils Ctype
 import AilTypesAux AilTyping IntegerImpl Debug
 
 let unatomic = function

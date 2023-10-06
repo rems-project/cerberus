@@ -2,7 +2,6 @@ open Lem_pervasives
 open Either
 
 open AilSyntax
-open IntegerType
 open Ctype
 open GenTypes
 

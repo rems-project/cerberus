@@ -1,7 +1,7 @@
 open import Pervasives
 
 import Symbol AilTypesAux
-open import Utils IntegerType Ctype
+open import Utils Ctype
 import Map_extra
 
 (* SEE src/tags.mli for the documentation *)

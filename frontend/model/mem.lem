@@ -1,5 +1,5 @@
 open import Pervasives
-import Symbol Float IntegerType Ctype Mem_common
+import Symbol Float Ctype Mem_common
 import AilSyntax
 
 type pointer_value
@@ -122,9 +122,9 @@ declare ocaml target_rep function isWellAligned_ptrval = `Impl_mem.isWellAligned
 
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
-val ptrfromint: Loc.t -> IntegerType.integerType -> Ctype.ctype -> integer_value -> memM pointer_value
+val ptrfromint: Loc.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> memM pointer_value
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-val intfromptr: Loc.t -> Ctype.ctype -> IntegerType.integerType -> pointer_value -> memM integer_value
+val intfromptr: Loc.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
 declare ocaml target_rep function ptrfromint = `Impl_mem.ptrfromint`
 declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 
@@ -176,18 +176,18 @@ declare ocaml target_rep function copy_alloc_id = `Impl_mem.copy_alloc_id`
 
 
 (* Integer value constructors *)
-val concurRead_ival: IntegerType.integerType -> Symbol.sym -> integer_value
+val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value
 val integer_ival: integer -> integer_value
-val max_ival: IntegerType.integerType -> integer_value
-val min_ival: IntegerType.integerType -> integer_value
+val max_ival: Ctype.integerType -> integer_value
+val min_ival: Ctype.integerType -> integer_value
 val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
 val offsetof_ival: map Symbol.sym Ctype.tag_definition -> Symbol.sym -> Symbol.identifier -> integer_value
 val sizeof_ival: Ctype.ctype -> integer_value
 val alignof_ival: Ctype.ctype -> integer_value
-val bitwise_complement_ival: IntegerType.integerType -> integer_value -> integer_value
-val bitwise_and_ival: IntegerType.integerType -> integer_value -> integer_value -> integer_value
-val bitwise_or_ival: IntegerType.integerType -> integer_value -> integer_value -> integer_value
-val bitwise_xor_ival: IntegerType.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
+val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
 declare ocaml target_rep function concurRead_ival = `Impl_mem.concurRead_ival`
 declare ocaml target_rep function integer_ival = `Impl_mem.integer_ival`
 declare ocaml target_rep function max_ival = `Impl_mem.max_ival`
@@ -249,14 +249,14 @@ declare ocaml target_rep function le_fval = `Impl_mem.le_fval`
 
 (* Integer <-> Floating casting constructors *)
 val fvfromint: integer_value -> floating_value
-val ivfromfloat: IntegerType.integerType -> floating_value -> integer_value
+val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
 declare ocaml target_rep function fvfromint = `Impl_mem.fvfromint`
 declare ocaml target_rep function ivfromfloat = `Impl_mem.ivfromfloat`
 
 
 (* Memory value constructors *)
 val unspecified_mval: Ctype.ctype -> mem_value
-val integer_value_mval: IntegerType.integerType -> integer_value -> mem_value
+val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
 val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
 val pointer_mval: Ctype.ctype -> pointer_value -> mem_value
 val array_mval: list mem_value -> mem_value
@@ -275,8 +275,8 @@ declare ocaml target_rep function union_mval = `Impl_mem.union_mval`
 val case_mem_value: forall 'a.
   mem_value ->
   (Ctype.ctype -> 'a) -> (* unspecified case *)
-  (IntegerType.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
-  (IntegerType.integerType -> integer_value -> 'a) ->
+  (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
+  (Ctype.integerType -> integer_value -> 'a) ->
   (Ctype.floatingType -> floating_value -> 'a) ->
   (Ctype.ctype -> pointer_value -> 'a) ->
   (list mem_value -> 'a) ->

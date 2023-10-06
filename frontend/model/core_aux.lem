@@ -1,4 +1,4 @@
-open import Pervasives Utils Show Core IntegerType Ctype Annot Map Map_extra
+open import Pervasives Utils Show Core Ctype Annot Map Map_extra
 import AilSyntax Ctype_aux
 import Product Exception Mem Mem_common Mem_aux
 

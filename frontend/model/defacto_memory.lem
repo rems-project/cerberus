@@ -6,7 +6,7 @@ open import Utils Enum
 
 import Cabs Dlist Loc
 
-open import Mem_common Defacto_memory_aux Defacto_memory_types IntegerType Ctype
+open import Mem_common Defacto_memory_aux Defacto_memory_types Ctype
 import Ctype_aux
 
 module F = Float

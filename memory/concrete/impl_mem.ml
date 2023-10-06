@@ -1,4 +1,3 @@
-open IntegerType
 open Ctype
 
 (*open Ocaml_implementation*)
@@ -2701,8 +2700,8 @@ let combine_prov prov1 prov2 =
   let copy_alloc_id ival ptrval =
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
-    intfromptr (Cerb_location.other "copy_alloc_id") Ctype.void (Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrfromint (Cerb_location.other "copy_alloc_id") (Unsigned Intptr_t) Ctype.void ival
+    intfromptr (Cerb_location.other "copy_alloc_id") Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
+    ptrfromint (Cerb_location.other "copy_alloc_id") Ctype.(Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 

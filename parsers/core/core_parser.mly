@@ -1237,54 +1237,54 @@ attribute_pair:
 (* BEGIN Ail types *)
 integer_base_type:
 | ICHAR
-    { IntegerType.Ichar }
+    { Ctype.Ichar }
 | SHORT
-    { IntegerType.Short }
+    { Ctype.Short }
 | INT
-    { IntegerType.Int_ }
+    { Ctype.Int_ }
 | LONG
-    { IntegerType.Long }
+    { Ctype.Long }
 | LONG_LONG
-    { IntegerType.LongLong }
+    { Ctype.LongLong }
 ;
 
 integer_type:
 | CHAR
-    { IntegerType.Char }
+    { Ctype.Char }
 | BOOL
-    { IntegerType.Bool }
+    { Ctype.Bool }
 | INT8_T
-    { IntegerType.Signed (IntegerType.IntN_t 8) }
+    { Ctype.Signed (Ctype.IntN_t 8) }
 | INT16_T
-    { IntegerType.Signed (IntegerType.IntN_t 16) }
+    { Ctype.Signed (Ctype.IntN_t 16) }
 | INT32_T
-    { IntegerType.Signed (IntegerType.IntN_t 32) }
+    { Ctype.Signed (Ctype.IntN_t 32) }
 | INT64_T
-    { IntegerType.Signed (IntegerType.IntN_t 64) }
+    { Ctype.Signed (Ctype.IntN_t 64) }
 | UINT8_T
-    { IntegerType.Unsigned (IntegerType.IntN_t 8) }
+    { Ctype.Unsigned (Ctype.IntN_t 8) }
 | UINT16_T
-    { IntegerType.Unsigned (IntegerType.IntN_t 16) }
+    { Ctype.Unsigned (Ctype.IntN_t 16) }
 | UINT32_T
-    { IntegerType.Unsigned (IntegerType.IntN_t 32) }
+    { Ctype.Unsigned (Ctype.IntN_t 32) }
 | UINT64_T
-    { IntegerType.Unsigned (IntegerType.IntN_t 64) }
+    { Ctype.Unsigned (Ctype.IntN_t 64) }
 | INTMAX_T
-    { IntegerType.(Signed Intmax_t) }
+    { Ctype.(Signed Intmax_t) }
 | INTPTR_T
-    { IntegerType.(Signed Intptr_t) }
+    { Ctype.(Signed Intptr_t) }
 | UINTMAX_T
-    { IntegerType.(Unsigned Intmax_t) }
+    { Ctype.(Unsigned Intmax_t) }
 | UINTPTR_T
-    { IntegerType.(Unsigned Intptr_t) }
+    { Ctype.(Unsigned Intptr_t) }
 | SIGNED ibty= integer_base_type
-    { IntegerType.Signed ibty }
+    { Ctype.Signed ibty }
 | UNSIGNED ibty= integer_base_type
-    { IntegerType.Unsigned ibty }
+    { Ctype.Unsigned ibty }
 | SIZE_T
-    { IntegerType.Size_t }
+    { Ctype.Size_t }
 | PTRDIFF_T
-    { IntegerType.Ptrdiff_t }
+    { Ctype.Ptrdiff_t }
 ;
 
 floating_type:

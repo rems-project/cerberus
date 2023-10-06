@@ -1,4 +1,3 @@
-open IntegerType
 open Ctype
 
 type type_alias_map = {

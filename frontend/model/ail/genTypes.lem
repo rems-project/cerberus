@@ -1,4 +1,4 @@
-open import Pervasives AilSyntax Ctype IntegerType
+open import Pervasives AilSyntax Ctype
 
 type genIntegerType [name="git*"] =
  | Concrete of integerType

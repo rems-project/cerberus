@@ -1,4 +1,4 @@
-open import Pervasives AilSyntax AilTypesAux AilWf Utils ErrorMonad IntegerType Ctype TypingError
+open import Pervasives AilSyntax AilTypesAux AilWf Utils ErrorMonad Ctype TypingError
 import IntegerImpl
 
 (* following the table from (§6.4.4.1#5) *)

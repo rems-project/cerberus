@@ -1,4 +1,3 @@
-open IntegerType
 open Ctype
 open Memory_model
 open Memory_utils
@@ -954,7 +953,7 @@ let copy_alloc_id ival ptrval : pointer_value memM =
         fail (MerrVIP VIP_copy_alloc_id_invalid)
 
 (* Integer value constructors *)
-let concurRead_ival: IntegerType.integerType -> Symbol.sym -> integer_value =
+let concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value =
   fun _ _ -> assert false (* TODO *)
 
 let integer_ival n =

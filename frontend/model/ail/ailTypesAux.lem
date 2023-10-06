@@ -1,4 +1,4 @@
-open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot IntegerType Ctype Global
+open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype Global
 import Implementation IntegerImpl Loc Debug
 
 (* == Predicates on qualifiers ================================================ *)

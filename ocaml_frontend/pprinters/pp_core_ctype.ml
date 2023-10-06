@@ -1,4 +1,3 @@
-open IntegerType
 open Ctype
 
 

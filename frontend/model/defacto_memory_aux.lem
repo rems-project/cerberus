@@ -3,8 +3,6 @@ open import Pervasives Num_extra Ctype
 open import Utils
 open import AilTypesAux 
 
-open import IntegerType
-
 import Ctype_aux
 import Implementation
 

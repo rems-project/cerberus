@@ -1,5 +1,4 @@
 open AilSyntax
-open IntegerType
 open Ctype
 open GenTypes
 
@@ -598,7 +597,7 @@ let pp_annot gtc =
     match ty_ with
       | Basic (Integer ity) ->
           let ity' = Ocaml_implementation.(normalise_integerType (get ()) ity) in
-          begin if not (IntegerType.integerTypeEqual ity ity') then
+          begin if not (Ctype.integerTypeEqual ity ity') then
             fun z -> z ^^ P.colon ^^ P.squotes (Pp_ail.pp_basicType (Integer ity'))
           else
             Fun.id

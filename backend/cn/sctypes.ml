@@ -4,7 +4,7 @@ open Cerb_frontend
 (* copying subset of Ctype.ctype *)
 
 module IntegerBaseTypes = struct
-  type integerBaseType = IntegerType.integerBaseType =
+  type integerBaseType = Ctype.integerBaseType =
     | Ichar
     | Short
     | Int_
@@ -24,7 +24,7 @@ end
 open IntegerBaseTypes
 
 module IntegerTypes = struct
-  type integerType = IntegerType.integerType =
+  type integerType = Ctype.integerType =
     | Char
     | Bool
     | Signed of integerBaseType
