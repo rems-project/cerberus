@@ -4,34 +4,8 @@
  *)
 
 open import Pervasives Utils Loc Show Symbol Global
-import Annot
-
-type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
- | Ichar
- | Short
- | Int_
- | Long
- | LongLong
-   (* Things defined in the standard libraries *)
- | IntN_t of nat
- | Int_leastN_t of nat
- | Int_fastN_t of nat
- | Intmax_t
- | Intptr_t
-
-(* STD §6.2.5#17, sentence 1 *)
-type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
- | Char
- | Bool
- | Signed of integerBaseType
- | Unsigned of integerBaseType
- | Enum of Symbol.sym
-   (* Things defined in the standard libraries *)
- | Wchar_t
- | Wint_t
- | Size_t
- | Ptrdiff_t
- | Ptraddr_t (* CHERI-specific *)
+import Annot IntegerType
+include IntegerType
 
 (* STD §6.2.5#10, sentence 1 *)
 type realFloatingType =
@@ -110,84 +84,6 @@ type tag_definition =
   | UnionDef of list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
 
 (** Type class instances *)
-
-let integerBaseTypeEqual ibty1 ibty2 =
-  let ord = function
-    | Ichar ->
-        (0 : nat)
-    | Short ->
-        1
-    | Int_ ->
-        2
-    | Long ->
-        3
-    | LongLong ->
-        4
-    | IntN_t _ ->
-        5
-    | Int_leastN_t  _ ->
-        6
-    | Int_fastN_t  _ ->
-        7
-    | Intmax_t ->
-        8
-    | Intptr_t ->
-        9
-  end in
-  match (ibty1, ibty2) with
-    | (IntN_t n1, IntN_t n2) ->
-        n1 = n2
-    | (Int_leastN_t n1, Int_leastN_t n2) ->
-        n1 = n2
-    | (Int_fastN_t n1, Int_fastN_t n2) ->
-        n1 = n2
-    | _ ->
-        ord ibty1 = ord ibty2
-  end
-
-instance (Eq integerBaseType)
-  let (=)  = integerBaseTypeEqual
-  let (<>) = fun ibty1 ibty2 -> not (integerBaseTypeEqual ibty1 ibty2)
-end
-
-let integerTypeEqual ity1 ity2 =
-  let ord = function
-    | Char ->
-        (0 : nat)
-    | Bool ->
-        1
-    | Signed _ ->
-        2
-    | Unsigned _ ->
-        3
-    | Enum _ ->
-        4
-    | Size_t ->
-        5
-    | Wchar_t ->
-        6
-    | Wint_t ->
-        7
-    | Ptrdiff_t ->
-        8
-    | Ptraddr_t ->
-        9
-  end in
-  match (ity1, ity2) with
-    | (Signed ibty1, Signed ibty2) ->
-        ibty1 = ibty2
-    | (Unsigned ibty1, Unsigned ibty2) ->
-        ibty1 = ibty2
-    | (Enum sym1, Enum sym2) ->
-        sym1 = sym2
-    | _ ->
-        ord ity1 = ord ity2
-  end
-
-instance (Eq integerType)
-  let (=)  = integerTypeEqual
-  let (<>) = fun ity1 ity2 -> not (integerTypeEqual ity1 ity2)
-end
 
 instance (Eq realFloatingType)
   let (=)  = unsafe_structural_equality
@@ -282,82 +178,6 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
 instance (Eq ctype)
   let (=)  = ctypeEqual
   let (<>) = fun ty1 ty2 -> not (ctypeEqual ty1 ty2)
-end
-
-let setElemCompare_integerBaseType ibty1 ibty2 =
-  let ord = function
-    | Ichar ->
-        (0 : nat)
-    | Short ->
-        1
-    | Int_ ->
-        2
-    | Long ->
-        3
-    | LongLong ->
-        4
-    | IntN_t _ ->
-        5
-    | Int_leastN_t _ ->
-        6
-    | Int_fastN_t _ ->
-        7
-    | Intmax_t ->
-        8
-    | Intptr_t ->
-        9
-  end in
-  match (ibty1, ibty2) with
-    | (IntN_t n1, IntN_t n2) ->
-        setElemCompare n1 n2
-    | (Int_leastN_t n1, Int_leastN_t n2) ->
-        setElemCompare n1 n2
-    | (Int_fastN_t n1, Int_fastN_t n2) ->
-        setElemCompare n1 n2
-    | _ ->
-        setElemCompare (ord ibty1) (ord ibty2)
-  end
-
-instance (SetType integerBaseType)
-  let setElemCompare = setElemCompare_integerBaseType
-end
-
-let setElemCompare_integerType ity1 ity2 =
-  let ord = function
-    | Char ->
-        (0 : nat)
-    | Bool ->
-        1
-    | Signed _ ->
-        2
-    | Unsigned _ ->
-        3
-    | Enum _ ->
-        4
-    | Size_t ->
-        5
-    | Wchar_t ->
-        6
-    | Wint_t ->
-        7
-    | Ptrdiff_t ->
-        8
-    | Ptraddr_t ->
-       9
-end in
-  match (ity1, ity2) with
-    | (Signed ibty1, Signed ibty2) ->
-        setElemCompare ibty1 ibty2
-    | (Unsigned ibty1, Unsigned ibty2) ->
-        setElemCompare ibty1 ibty2
-    | (Enum sym1, Enum sym2) ->
-        setElemCompare sym1 sym2
-    | _ ->
-        setElemCompare (ord ity1) (ord ity2)
-  end
-
-instance (SetType integerType)
-  let setElemCompare = setElemCompare_integerType
 end
 
 
