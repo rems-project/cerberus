@@ -185,6 +185,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
     | CN_integer -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_integer")]
     | CN_bool -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_bool")]
     | CN_map _ -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")]
+    | CN_loc -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer")]
     | _ -> []
   in
   mk_ctype ~annots typ
@@ -432,24 +433,26 @@ let rec cn_to_ail_expr_aux_internal
           | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
         )
       in
-      let ail_expr_ = match d with 
-        | Assert -> 
-          (if (basetype == BT.Bool) then 
-            (ail_expr_ )
-          else 
-            (* Filter out extraneous non-bool assertions *)
-            cn_to_ail_const_internal (Bool true))
-        | _ -> ail_expr_ 
-      in
       let cn_vars_strs = List.map Sym.pp_string cn_vars in 
       let ail_expr_ = if (List.mem String.equal (Sym.pp_string sym) cn_vars_strs) then ail_expr_ else
-      (let typedef_name = get_typedef_string (bt_to_ail_ctype basetype) in 
-      match typedef_name with 
+        (let typedef_name = get_typedef_string (bt_to_ail_ctype basetype) in 
+        match typedef_name with 
         | Some str ->
           A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("convert_to_" ^ str))), [mk_expr ail_expr_]))
-        | None -> ail_expr_)
-      in 
-      dest d ([], [], mk_expr ail_expr_)
+          | None -> ail_expr_)
+        in 
+        let ail_expr_ = match d with 
+          | Assert -> 
+            (if (basetype == BT.Bool) then 
+              ail_expr_ 
+            else 
+              (* Filter out extraneous non-bool assertions *)
+              (* Use Ail directly to avoid conversion function *)
+              A.AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, Some B)))
+              )
+          | _ -> ail_expr_ 
+        in
+        dest d ([], [], mk_expr ail_expr_)
 
   | Binop (bop, t1, t2) ->
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars t1 PassBack in
@@ -497,7 +500,8 @@ let rec cn_to_ail_expr_aux_internal
 
   | SizeOf sct ->
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in 
-    dest d ([], [], mk_expr ail_expr_)
+    let ail_call_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "convert_to_cn_integer")), [mk_expr ail_expr_])) in 
+    dest d ([], [], mk_expr ail_call_)
   | OffsetOf _ -> failwith "TODO OffsetOf"
 
   | ITE (t1, t2, t3) -> 
@@ -1095,17 +1099,16 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> C
 
           *)
 
-          (* TODO: FIX *)
 
-          (* let t_translated = cn_to_ail_expr_internal dts t PassBack in *)
+          let t_translated = cn_to_ail_expr_internal dts cn_vars t PassBack in
           
-          (* let start_expr = generate_start_expr (get_leftmost_and_expr cond_it) sym in *)
+          let start_expr = generate_start_expr (get_leftmost_and_expr cond_it) sym in
           let while_cond = get_rest_of_expr_r cond_it in
-          (* let (b1, s1, e1) = cn_to_ail_expr_internal dts start_expr PassBack in *)
-          let (b2, s2, e2) = cn_to_ail_expr_internal dts cn_vars while_cond PassBack in
+          let (b1, s1, e1) = cn_to_ail_expr_internal dts cn_vars start_expr PassBack in
+          let (b2, s2, e2) = cn_to_ail_expr_internal dts (sym :: cn_vars) while_cond PassBack in
           
-          (* let (bs, ss, e) = gen_bool_while_loop sym (rm_expr e1) e2 t_translated in  *)
-          dest d (b2, s2, e2)
+          let (bs, ss, e) = gen_bool_while_loop sym (rm_expr e1) e2 t_translated in 
+          dest d (bs, ss, e)
 
         
 
