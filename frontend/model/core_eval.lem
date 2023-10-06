@@ -7,7 +7,7 @@ import Mem
 import AilTypesAux
 import Loc Symbol Exception_undefined Pp
 
-import Ctype Ctype_aux Core_aux
+import IntegerType Ctype Ctype_aux Core_aux
 module Caux = Core_aux
 
 module EU  = Exception_undefined
@@ -63,7 +63,7 @@ let mk_conv_int ity ival =
     | Nothing ->
         error "Core_eval.mk_conv_int"
     | Just n ->
-        if Ctype.integerTypeEqual ity Ctype.Bool then
+        if IntegerType.integerTypeEqual ity IntegerType.Bool then
           Mem.integer_ival (if n = 0 then 0 else 1)
         else
           match ( Mem.eval_integer_value (Mem.min_ival ity)

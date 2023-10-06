@@ -14,7 +14,7 @@ import Translation_aux
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
 
-import AilSyntax Ctype
+import AilSyntax IntegerType Ctype
 
 import Translation_aux
 
@@ -205,7 +205,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
   let store_error e =
     let errname = Fs.fs_string_of_error e in
     let err = Builtins.translate_errno ("__cerbvar_" ^ errname) in
-    let err_mval = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival err) in
+    let err_mval = Mem.integer_value_mval (IntegerType.Signed IntegerType.Int_) (Mem.integer_ival err) in
     liftMem $ Mem.store (Loc.other "update errno") Ctype.signed_int false th_st.Core_run.errno err_mval
   in
   let return (fs_st, res) =
@@ -312,11 +312,11 @@ let drive_fs_step tid th_st dr_st fs_oper =
         Mem.store loc (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer iTy))) false
                   ptr mval
       in
-      let sint = Ctype.Unsigned Ctype.Int_ in
-      let uint = Ctype.Signed Ctype.Int_ in
-      let ushort = Ctype.Unsigned Ctype.Short in
-      let slonglong = Ctype.Signed Ctype.LongLong in
-      let ulonglong = Ctype.Unsigned Ctype.LongLong in
+      let sint = IntegerType.Unsigned IntegerType.Int_ in
+      let uint = IntegerType.Signed IntegerType.Int_ in
+      let ushort = IntegerType.Unsigned IntegerType.Short in
+      let slonglong = IntegerType.Signed IntegerType.LongLong in
+      let ulonglong = IntegerType.Unsigned IntegerType.LongLong in
       Mem.bind (store sint "st_dev" Fs.fs_dev) (fun _ ->
       Mem.bind (store ulonglong "st_ino" Fs.fs_ino) (fun _ ->
       Mem.bind (store ushort "st_mode" Fs.fs_mode) (fun _ ->
@@ -1662,18 +1662,18 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                   let mem_vals =
                     List.map (fun c ->
                       (* TODO: fixing impl choice here (ASCII) *)
-                      Mem.integer_mval Ctype.Char $ Decode.decode_character_constant (String.toString [c])
+                      Mem.integer_mval IntegerType.Char $ Decode.decode_character_constant (String.toString [c])
                     ) (String.toCharList arg_str) in
                   (* NOTE: adding a null termination to the char array *)
                   (
-                    Mem.array_mval $ mem_vals ++ [Mem.integer_mval Ctype.Char 0],
+                    Mem.array_mval $ mem_vals ++ [Mem.integer_mval IntegerType.Char 0],
                     Ctype.Ctype [] (Ctype.Array Ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1))
                   )
                 ) arg_strs in
               
               (* memory value to be stored in the memory object pointed to by main.argc *)
               let number_of_args = integerFromNat (List.length args_mem_val_tys) in
-              let argc_mem_val = Mem.integer_mval (Ctype.Signed Ctype.Int_) number_of_args in
+              let argc_mem_val = Mem.integer_mval (IntegerType.Signed IntegerType.Int_) number_of_args in
               
               (* begin if false (*Global.has_switch Global.SW_inner_arg_temps*) then
                 (* in this switch (for CN) Core procedures elaborating C functions
@@ -1752,7 +1752,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
         (* allocating and initialising errno *)
         liftMem (
           Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "errno") (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing Nothing) (fun ptr_val ->
-            let zero = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival 0) in
+            let zero = Mem.integer_value_mval (IntegerType.Signed IntegerType.Int_) (Mem.integer_ival 0) in
             Mem.bind (Mem.store (Loc.other "errno init") Ctype.signed_int false ptr_val zero) (fun _ ->
               Mem.return ptr_val
             )

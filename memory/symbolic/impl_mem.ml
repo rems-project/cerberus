@@ -249,7 +249,7 @@ open Mem_common
 
 let integerBaseType_to_expr slvSt ibty =
   let fdecls = Datatype.get_constructors slvSt.integerBaseTypeSort in
-  Ctype.(match ibty with
+  IntegerType.(match ibty with
     | Ichar ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
     | Short ->
@@ -272,9 +272,9 @@ let integerBaseType_to_expr slvSt ibty =
         Expr.mk_app slvSt.ctx (List.nth fdecls 7) []
   )
 
-let integerType_to_expr slvSt (ity: Ctype.integerType) =
+let integerType_to_expr slvSt (ity: IntegerType.integerType) =
   let fdecls = Datatype.get_constructors slvSt.integerTypeSort in
-  Ctype.(match ity with
+  IntegerType.(match ity with
     | Char ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
     | Bool ->

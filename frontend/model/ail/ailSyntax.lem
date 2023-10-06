@@ -1,4 +1,4 @@
-open import Pervasives Loc Ctype
+open import Pervasives Loc Ctype IntegerType
 import Symbol Annot Cn
 
 type ail_identifier = Symbol.sym

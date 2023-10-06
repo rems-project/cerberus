@@ -1,17 +1,17 @@
-open import Pervasives Utils
+open import Pervasives Utils IntegerType
 import AilSyntax Ctype IntegerImpl
 
 val max_alignment: nat
-val is_signed_ity: Ctype.integerType -> bool
-val sizeof_ity: Ctype.integerType -> maybe nat
-val precision_ity: Ctype.integerType -> maybe nat
+val is_signed_ity: IntegerType.integerType -> bool
+val sizeof_ity: IntegerType.integerType -> maybe nat
+val precision_ity: IntegerType.integerType -> maybe nat
 val sizeof_fty: Ctype.floatingType -> maybe nat
-val alignof_ity: Ctype.integerType -> maybe nat
+val alignof_ity: IntegerType.integerType -> maybe nat
 val alignof_fty: Ctype.floatingType -> maybe nat
 
 val register_enum: Symbol.sym -> list integer -> bool
-val typeof_enum: Symbol.sym -> Ctype.integerType
-val normalise_integerType: Ctype.integerType -> Ctype.integerType
+val typeof_enum: Symbol.sym -> IntegerType.integerType
+val normalise_integerType: IntegerType.integerType -> IntegerType.integerType
 
 declare ocaml target_rep function max_alignment = `(Ocaml_implementation.get()).max_alignment`
 declare ocaml target_rep function is_signed_ity = `(Ocaml_implementation.get()).is_signed_ity`
@@ -38,9 +38,9 @@ let integerImpl () =
         | Nothing -> error "Implemetation.integerImpl, is_precision_ity Nothing"
       end
     )
-    (Ctype.Size_t)
-    (Ctype.Ptrdiff_t)
-    (Ctype.Ptraddr_t)
+    (IntegerType.Size_t)
+    (IntegerType.Ptrdiff_t)
+    (IntegerType.Ptraddr_t)
 
 type implementation_constant =
   (* J.3.2 Environment *)
@@ -680,7 +680,7 @@ let rec normalise_ctype (Ctype annots ty_) =
 
 
 let is_compatible_with_size_t ity =
-  match (sizeof_ity ity, sizeof_ity Size_t) with
+  match (sizeof_ity ity, sizeof_ity IntegerType.Size_t) with
     | (Just sz1, Just sz2) ->
         sz1 = sz2 && not (is_signed_ity ity)
     | _ ->
@@ -689,7 +689,7 @@ let is_compatible_with_size_t ity =
   end
 
 let is_compatible_with_ptrdiff_t ity =
-  match (sizeof_ity ity, sizeof_ity Ptrdiff_t) with
+  match (sizeof_ity ity, sizeof_ity IntegerType.Ptrdiff_t) with
     | (Just sz1, Just sz2) ->
         sz1 = sz2 && is_signed_ity ity
     | _ ->
@@ -697,8 +697,8 @@ let is_compatible_with_ptrdiff_t ity =
         error "Implementation.is_compatible_with_ptrdiff_t"
   end
 
-  (* val is_signed_ity: Ctype.integerType -> bool
-val sizeof_ity: Ctype.integerType -> maybe nat *)
+  (* val is_signed_ity: IntegerType.integerType -> bool
+val sizeof_ity: IntegerType.integerType -> maybe nat *)
 
 let is_signed_or_unsigned_aux ibty =
   fun (Ctype _ ty_) ->
@@ -707,25 +707,25 @@ let is_signed_or_unsigned_aux ibty =
           error "TODO: Implementation.is_signed_or_unsigned Char" (* ibty = Ichar *)
       | Basic (Integer Bool) ->
           error "TODO: Implementation.is_signed_or_unsigned Bool" 
-      | Basic (Integer (Signed ibty')) ->
+      | Basic (Integer (IntegerType.Signed ibty')) ->
           ibty' = ibty
-      | Basic (Integer (Unsigned ibty')) ->
+      | Basic (Integer (IntegerType.Unsigned ibty')) ->
           ibty' = ibty
-      | Basic (Integer (Enum tag_sym)) ->
+      | Basic (Integer (IntegerType.Enum tag_sym)) ->
           (* this should not be possible*)
           error "Implementation.is_signed_or_unsigned_aux: Enum"
-      | Basic (Integer Wchar_t) ->
+      | Basic (Integer IntegerType.Wchar_t) ->
           error "TODO: Implementation.is_signed_or_unsigned Wchar_t" 
-      | Basic (Integer Wint_t) ->
+      | Basic (Integer IntegerType.Wint_t) ->
           error "TODO: Implementation.is_signed_or_unsigned Wint_t" 
-      | Basic (Integer Size_t) ->
-          is_compatible_with_size_t (Unsigned ibty)
-      | Basic (Integer Ptrdiff_t) ->
-          is_compatible_with_ptrdiff_t (Signed ibty)
+      | Basic (Integer IntegerType.Size_t) ->
+          is_compatible_with_size_t (IntegerType.Unsigned ibty)
+      | Basic (Integer IntegerType.Ptrdiff_t) ->
+          is_compatible_with_ptrdiff_t (IntegerType.Signed ibty)
       | _ ->
           false
     end
 
-val is_signed_or_unsigned: integerBaseType -> ctype -> bool
+val is_signed_or_unsigned: IntegerType.integerBaseType -> ctype -> bool
 let is_signed_or_unsigned ibty =
   fun ty -> is_signed_or_unsigned_aux ibty (normalise_ctype ty)

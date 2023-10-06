@@ -1,6 +1,6 @@
 (* TODO: A negative precision argument is taken as if the precision were omitted. *)
 open import Pervasives Utils Monadic_parsing
-import String_extra Errors AilTypesAux Core Core_aux Ctype Mem Mem_aux Float
+import String_extra Errors AilTypesAux Core Core_aux IntegerType Ctype Mem Mem_aux Float
 import Decode Implementation Undefined
 
 module U = Undefined
@@ -403,9 +403,9 @@ let is_illtyped_conversion expected_ty arg_ty =
     false
   else
     match (expected_ty, arg_ty') with
-      | (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer expected_ity)), Ctype.Ctype _ (Ctype.Basic (Ctype.Integer Ctype.Size_t))) ->
+      | (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer expected_ity)), Ctype.Ctype _ (Ctype.Basic (Ctype.Integer IntegerType.Size_t))) ->
           not (Implementation.is_compatible_with_size_t expected_ity)
-      | (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer expected_ity)), Ctype.Ctype _ (Ctype.Basic (Ctype.Integer Ctype.Ptrdiff_t))) ->
+      | (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer expected_ity)), Ctype.Ctype _ (Ctype.Basic (Ctype.Integer IntegerType.Ptrdiff_t))) ->
           not (Implementation.is_compatible_with_ptrdiff_t expected_ity)
       | _ ->
           true
@@ -524,11 +524,11 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
       | Just LM_h ->
           (Nothing, Just h_ty)
       | Just LM_l ->
-          (Just (Implementation.is_signed_or_unsigned Ctype.Long), Nothing)
+          (Just (Implementation.is_signed_or_unsigned IntegerType.Long), Nothing)
       | Just LM_ll ->
-          (Just (Implementation.is_signed_or_unsigned Ctype.LongLong), Nothing)
+          (Just (Implementation.is_signed_or_unsigned IntegerType.LongLong), Nothing)
       | Just LM_j ->
-          (Just (Implementation.is_signed_or_unsigned Ctype.Intmax_t), Nothing)
+          (Just (Implementation.is_signed_or_unsigned IntegerType.Intmax_t), Nothing)
       | Just LM_z ->
           (Just (wrap_is_compatible Implementation.is_compatible_with_size_t), Nothing)
       | Just LM_t ->
@@ -761,13 +761,13 @@ let rec store_chars_in_array zero_terminated ptrval = function
   | [] ->
       if zero_terminated then
         Mem.store (Loc.other "store_chars_in_array()") Ctype.char false ptrval
-                    (Mem.integer_value_mval Ctype.Char (Mem.integer_ival 0)) >>= fun _ ->
+                    (Mem.integer_value_mval IntegerType.Char (Mem.integer_ival 0)) >>= fun _ ->
         Mem.return ()
       else
         Mem.return ()
   | c::cs ->
       let c_mval =
-        Mem.integer_value_mval Ctype.Char
+        Mem.integer_value_mval IntegerType.Char
           (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
       (* TODO: maybe needs to be unsigned char *)
       Mem.store (Loc.other "store_chars_in_array()") Ctype.char false ptrval c_mval >>= fun _ ->

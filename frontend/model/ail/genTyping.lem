@@ -1,4 +1,4 @@
-open import Pervasives Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
+open import Pervasives Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc IntegerType Ctype
 import Constraint Undefined Builtins Debug Pp Cmm_csem Global
 
 import Implementation

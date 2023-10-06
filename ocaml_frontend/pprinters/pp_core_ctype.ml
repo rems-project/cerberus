@@ -1,3 +1,4 @@
+open IntegerType
 open Ctype
 
 

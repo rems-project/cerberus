@@ -92,9 +92,9 @@ module type Memory = sig
   
   (* Casting operations *)
   (* the first ctype is the original integer type, the second is the target referenced type *)
-  val ptrfromint: Cerb_location.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
+  val ptrfromint: Cerb_location.t -> IntegerType.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intfromptr: Cerb_location.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
+  val intfromptr: Cerb_location.t -> Ctype.ctype -> IntegerType.integerType -> pointer_value -> integer_value memM
 
   (* New operations for CHERI *)
   val derive_cap : bool(* is_signed *) -> Mem_common.derivecap_op -> integer_value -> integer_value -> integer_value
@@ -122,20 +122,20 @@ module type Memory = sig
   val copy_alloc_id: integer_value -> pointer_value -> pointer_value memM
   
   (* Integer value constructors *)
-  val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value
+  val concurRead_ival: IntegerType.integerType -> Symbol.sym -> integer_value
   val integer_ival: Nat_big_num.num -> integer_value
-  val max_ival: Ctype.integerType -> integer_value
-  val min_ival: Ctype.integerType -> integer_value
+  val max_ival: IntegerType.integerType -> integer_value
+  val min_ival: IntegerType.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
   val offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
   
   val sizeof_ival: Ctype.ctype -> integer_value
   val alignof_ival: Ctype.ctype -> integer_value
   
-  val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
-  val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
-  val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
-  val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+  val bitwise_complement_ival: IntegerType.integerType -> integer_value -> integer_value
+  val bitwise_and_ival: IntegerType.integerType -> integer_value -> integer_value -> integer_value
+  val bitwise_or_ival: IntegerType.integerType -> integer_value -> integer_value -> integer_value
+  val bitwise_xor_ival: IntegerType.integerType -> integer_value -> integer_value -> integer_value
   
   val case_integer_value: (* TODO: expose more ctors *)
     integer_value ->
@@ -166,14 +166,14 @@ module type Memory = sig
   
   (* Integer <-> Floating casting constructors *)
   val fvfromint: integer_value -> floating_value
-  val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
+  val ivfromfloat: IntegerType.integerType -> floating_value -> integer_value
   
   
   
   (* Memory value constructors *)
   (*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
   val unspecified_mval: Ctype.ctype -> mem_value
-  val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
+  val integer_value_mval: IntegerType.integerType -> integer_value -> mem_value
   val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
   val pointer_mval: Ctype.ctype -> pointer_value -> mem_value
   val array_mval: mem_value list -> mem_value
@@ -184,8 +184,8 @@ module type Memory = sig
   val case_mem_value:
     mem_value ->
     (Ctype.ctype -> 'a) -> (* unspecified case *)
-    (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
-    (Ctype.integerType -> integer_value -> 'a) ->
+    (IntegerType.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
+    (IntegerType.integerType -> integer_value -> 'a) ->
     (Ctype.floatingType -> floating_value -> 'a) ->
     (Ctype.ctype -> pointer_value -> 'a) ->
     (mem_value list -> 'a) ->

@@ -193,7 +193,7 @@ let decode_character_constant str =
   let impl = get () in
   (* let Some sz = impl.sizeof_ity Ctype.Char in *)
   let (min, max) =
-    if impl.is_signed_ity Ctype.Char then
+    if impl.is_signed_ity IntegerType.Char then
       (negate (pow_int (of_int 2) (8-1)), sub (pow_int (of_int 2) (8-1)) (of_int 1))
     else
       (zero, sub (pow_int (of_int 2) (8)) (of_int 1)) in

@@ -130,7 +130,7 @@ LEM_RENAMED = global.lem loc.lem debug.lem decode.lem
 LEM_PRELUDE       = utils.lem annot.lem bimap.lem \
                     dlist.lem enum.lem state.lem symbol.lem \
                     exception.lem product.lem float.lem any.lem
-LEM_CABS          = cabs.lem undefined.lem constraint.lem ctype.lem
+LEM_CABS          = cabs.lem undefined.lem constraint.lem integerType.lem ctype.lem
 LEM_AIL           = typingError.lem errorMonad.lem ailSyntax.lem genTypes.lem
 LEM_CTYPE_AUX     = ctype_aux.lem
 LEM_CORE          = core.lem errors.lem core_aux.lem core_linking.lem

@@ -1319,60 +1319,60 @@ STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
     E.return $
       if specs = Multiset.from_list [BTSpec_char] then
         (* STD §6.7.2#2, item 2 *)
-        Just (loc, Ctype.Integer Ctype.Char)
+        Just (loc, Ctype.Integer IntegerType.Char)
       else if specs = Multiset.from_list [BTSpec_signed; BTSpec_char] then
         (* STD §6.7.2#2, item 3 *)
-        Just (loc, Ctype.Integer (Ctype.Signed Ctype.Ichar))
+        Just (loc, Ctype.Integer (IntegerType.Signed IntegerType.Ichar))
       else if specs = Multiset.from_list [BTSpec_unsigned; BTSpec_char] then
         (* STD §6.7.2#2, item 4 *)
-        Just (loc, Ctype.Integer (Ctype.Unsigned Ctype.Ichar))
+        Just (loc, Ctype.Integer (IntegerType.Unsigned IntegerType.Ichar))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_short];
                 Multiset.from_list [BTSpec_signed; BTSpec_short];
                 Multiset.from_list [BTSpec_short; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_short; BTSpec_int] ] then
         (* STD §6.7.2#2, item 5 *)
-        Just (loc, Ctype.Integer (Ctype.Signed Ctype.Short))
+        Just (loc, Ctype.Integer (IntegerType.Signed IntegerType.Short))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_short];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_short; BTSpec_int] ] then
         (* STD §6.7.2#2, item 6 *)
-        Just (loc, Ctype.Integer (Ctype.Unsigned Ctype.Short))
+        Just (loc, Ctype.Integer (IntegerType.Unsigned IntegerType.Short))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_int];
                 Multiset.from_list [BTSpec_signed];
                 Multiset.from_list [BTSpec_signed; BTSpec_int] ] then
         (* STD §6.7.2#2, item 7 *)
-        Just (loc, Ctype.Integer (Ctype.Signed Ctype.Int_))
+        Just (loc, Ctype.Integer (IntegerType.Signed IntegerType.Int_))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_int] ] then
         (* STD §6.7.2#2, item 8 *)
-        Just (loc, Ctype.Integer (Ctype.Unsigned Ctype.Int_))
+        Just (loc, Ctype.Integer (IntegerType.Unsigned IntegerType.Int_))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_long];
                 Multiset.from_list [BTSpec_signed; BTSpec_long];
                 Multiset.from_list [BTSpec_long; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_int] ]then
         (* STD §6.7.2#2, item 9 *)
-        Just (loc, Ctype.Integer (Ctype.Signed Ctype.Long))
+        Just (loc, Ctype.Integer (IntegerType.Signed IntegerType.Long))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 10 *)
-        Just (loc, Ctype.Integer (Ctype.Unsigned Ctype.Long))
+        Just (loc, Ctype.Integer (IntegerType.Unsigned IntegerType.Long))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_long; BTSpec_long; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 11 *)
-        Just (loc, Ctype.Integer (Ctype.Signed Ctype.LongLong))
+        Just (loc, Ctype.Integer (IntegerType.Signed IntegerType.LongLong))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 12 *)
-        Just (loc, Ctype.Integer (Ctype.Unsigned Ctype.LongLong))
+        Just (loc, Ctype.Integer (IntegerType.Unsigned IntegerType.LongLong))
       else if specs = Multiset.from_list [BTSpec_float] then
         (* STD §6.7.2#2, item 13 *)
         Just (loc, Ctype.Floating (Ctype.RealFloating Ctype.Float))
@@ -1384,7 +1384,7 @@ STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
         Just (loc, Ctype.Floating (Ctype.RealFloating Ctype.LongDouble))
       else if specs = Multiset.from_list [BTSpec_Bool] then
         (* STD §6.7.2#2, item 16 *)
-        Just (loc, Ctype.Integer (Ctype.Bool))
+        Just (loc, Ctype.Integer (IntegerType.Bool))
       else
         Nothing
 
@@ -1611,7 +1611,7 @@ let rec desugar_type_specifiers specs =
                 | Just (_, (tag_sym, _)) ->
                     STD_ "§6.7.2.3#9"
                     E.return ( Ctype.no_qualifiers
-                             , Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic (Ctype.Integer (Ctype.Enum tag_sym))) )
+                             , Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic (Ctype.Integer (IntegerType.Enum tag_sym))) )
                 | Nothing ->
                     E.constraint_violation loc EnumTagIncomplete
               end
@@ -1680,7 +1680,7 @@ let rec desugar_type_specifiers specs =
               register_enumerators loc tag_sym enums >>= fun ns_rev ->
               (* NOTE: this function doesn't care about the order of the integers *)
               E.register_tag_definition loc tag_sym (Enum_definition ns_rev) >>
-              E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic (Ctype.Integer (Ctype.Enum tag_sym))))
+              E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic (Ctype.Integer (IntegerType.Enum tag_sym))))
           
           (* *)
           | [TSpec _ (TSpec_name ((Symbol.Identifier cid_loc str) as ident))] ->
@@ -1736,7 +1736,7 @@ and register_enumerators tag_loc tag_sym enums =
           loc_n
     end in
     begin if Global.isAgnostic () then
-      let minimal_int_range = IntegerImpl.min_integer_range (Ctype.Signed Ctype.Int_) in
+      let minimal_int_range = IntegerImpl.min_integer_range (IntegerType.Signed IntegerType.Int_) in
       if Range.mem n minimal_int_range then
         E.return ()
       else
@@ -4843,17 +4843,17 @@ let desugar core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
     E.under_scope E.Scope_file (
       let (base_qs1, base_ty1, ptr_decltor1) =
         ( Ctype.make_qualifiers true false false
-        , Ctype.Basic (Ctype.Integer (Ctype.Signed Ctype.Int_))
+        , Ctype.Basic (Ctype.Integer (IntegerType.Signed IntegerType.Int_))
         , PDecl [] (Just (PDecl [] Nothing)) ) in (* int const **ptrToPtrToConstInt *)
       
       let (base_qs2, base_ty2, ptr_decltor2) =
         ( Ctype.no_qualifiers
-        , Ctype.Basic (Ctype.Integer (Ctype.Signed Ctype.Int_))
+        , Ctype.Basic (Ctype.Integer (IntegerType.Signed IntegerType.Int_))
         , PDecl [Q_const] (Just (PDecl [] Nothing)) ) in (* int * const *ptrToConstPtrToInt *)
       
       let (base_qs3, base_ty3, ptr_decltor3) =
         ( Ctype.no_qualifiers
-        , Ctype.Basic (Ctype.Integer (Ctype.Signed Ctype.Int_))
+        , Ctype.Basic (Ctype.Integer (IntegerType.Signed IntegerType.Int_))
         , PDecl [] (Just (PDecl [Q_const] Nothing)) ) in (* int ** const constPtrToPtrToInt *)
       
       desugar_pointer_declarator ptr_decltor1 >>= fun mk_type1 ->

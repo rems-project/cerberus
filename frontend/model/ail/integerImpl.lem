@@ -1,4 +1,4 @@
-open import Pervasives Utils Range Ctype
+open import Pervasives Utils Range Ctype IntegerType
 
 type binaryMode =
   | Two'sComplement
