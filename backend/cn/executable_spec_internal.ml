@@ -46,9 +46,9 @@ let generate_c_statements_internal (loc, statements) dts =
 let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = ail_prog.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
-  let pre_stats_ = Cn_internal_to_ail.cn_to_ail_arguments_internal dts [] preds instrumentation.internal.pre in
-  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts [] preds instrumentation.internal.post in
-  let pre_str = generate_ail_stat_strs pre_stats_ in
+  let (pre_bs, pre_ss, cn_vars) = Cn_internal_to_ail.cn_to_ail_arguments_internal dts preds instrumentation.internal.pre in
+  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts cn_vars preds instrumentation.internal.post in
+  let pre_str = generate_ail_stat_strs (pre_bs, pre_ss) in
   let post_str = generate_ail_stat_strs post_stats_ in
   [(instrumentation.fn, (pre_str, post_str))]
 
