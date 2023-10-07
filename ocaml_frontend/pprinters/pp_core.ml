@@ -599,7 +599,9 @@ let rec pp_expr expr =
             | Alabel _ -> 
                acc
             | Acerb _ ->
-                acc
+               acc
+            | Avalue _ ->
+               acc
         ) doc annot
     end
     begin

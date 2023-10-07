@@ -2,6 +2,7 @@ open import Maybe
 open import Pervasives
 import Loc
 import Symbol
+import IntegerType
 
 type bmc_annot =
   | Abmc_id of nat (* NOTE: basically same as uid *)
@@ -58,6 +59,9 @@ type cerb_attribute =
   | ACerb_with_address of integer
   | ACerb_hidden
 
+type value_annot =
+  | Ainteger of IntegerType.integerType
+
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)
   | Aloc of Loc.t (* C source location *)
@@ -71,6 +75,7 @@ type annot =
   | Anot_explode (* tell the a-normalisation not to explode if-then-else *)
   | Alabel of label_annot
   | Acerb of cerb_attribute
+  | Avalue of value_annot
 
 
 type identifier_item_kind =
@@ -108,6 +113,8 @@ let rec get_loc annots =
     | (Alabel _ :: annots') ->
         get_loc annots'
     | (Acerb _ :: annots') ->
+        get_loc annots'
+    | (Avalue _ :: annots') ->
         get_loc annots'
   end
 
@@ -165,6 +172,8 @@ let rec get_attrs annots =
     | (Alabel _ :: annots') ->
         get_attrs annots'
     | (Acerb _ :: annots') ->
+        get_attrs annots'
+    | (Avalue _ :: annots') ->
         get_attrs annots'
   end
 
@@ -253,6 +262,8 @@ let rec get_uid annots =
     | (Alabel _ :: annots') ->
         get_uid annots'
     | (Acerb _ :: annots') ->
+        get_uid annots'
+    | (Avalue _ :: annots') ->
         get_uid annots'
   end
 
