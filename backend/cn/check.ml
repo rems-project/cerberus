@@ -275,9 +275,9 @@ let is_representable_integer arg ity =
   let bt = IT.bt arg in
   let arg_bits = Option.get (BT.is_bits_bt bt) in
   let maxInt = Memory.max_integer_type ity in
-  assert (Z.equal (Simplify.IndexTerms.do_wrapI_z arg_bits maxInt) maxInt);
+  assert (BT.fits_range arg_bits maxInt);
   let minInt = Memory.min_integer_type ity in
-  assert (Z.equal (Simplify.IndexTerms.do_wrapI_z arg_bits minInt) minInt);
+  assert (BT.fits_range arg_bits minInt);
   and_ [le_ (num_lit_ minInt bt, arg); le_ (arg, num_lit_ maxInt bt)]
 
 

@@ -85,7 +85,7 @@ let do_wrapI loc ct ev =
     return (ExprVal (IT.wrapI_ (ity, it)))
   | Some ity, NumVal n ->
     let bt = Memory.bt_of_sct ct in
-    let n = Simplify.IndexTerms.do_wrapI_z (Option.get (BT.is_bits_bt bt)) n in
+    let n = BT.normalise_to_range_bt bt n in
     return (NumVal n)
   | _, TupleVal _ -> failwith "do_wrapI: tuple val in numeric op"
   | None, _ -> fail {loc; msg = Generic (Pp.item "expr from C syntax: coercion to non-int type"

@@ -1273,6 +1273,22 @@ let rec infer_object_value : 'TY. Locations.t -> 'TY mu_object_value ->
   in
   return (M_OV (bt, ov))
 
+let check_object_value : 'TY. Locations.t -> BT.t -> 'TY mu_object_value ->
+    (BT.t mu_object_value) m =
+  fun loc bt (M_OV (_, ov) as ov_original) ->
+  match ov with
+  | M_OVinteger iv ->
+    let z = Memory.z_of_ival iv in
+    let@ () = ensure_bits_type loc bt in
+    if BT.fits_range (Option.get (BT.is_bits_bt bt)) z
+    then return (M_OV (bt, M_OVinteger iv))
+    else fail (fun _ -> {loc; msg = Generic
+        (!^"Value " ^^^ Pp.z z ^^^ !^ "does not fit in expected type" ^^^ BT.pp bt)})
+  | _ ->
+    let@ ov = infer_object_value loc ov_original in
+    let@ () = ensure_base_type loc ~expect:bt (bt_of_object_value ov) in
+    return ov
+
 let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t mu_value) m =
   fun loc (M_V (_, v)) ->
   let@ bt, v = match v with
@@ -1300,7 +1316,16 @@ let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t mu_value) m =
   in
   return (M_V (bt, v))
 
-
+let check_value : 'TY. Locations.t -> BT.t -> 'TY mu_value -> (BT.t mu_value) m =
+  fun loc expect (M_V (_, v) as orig_v) ->
+  match v with
+   | M_Vobject ov ->
+      let@ ov = check_object_value loc expect ov in
+      return (M_V (expect, M_Vobject ov))
+   | _ ->
+      let@ v = infer_value loc orig_v in
+      let@ () = ensure_base_type loc ~expect (bt_of_value v) in
+      return v
 
 let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m = 
   fun pe ->
@@ -1408,9 +1433,14 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
     return (M_Pexpr (loc, annots, bty, pe_))
 
 and check_pexpr spec expr =
-  match expr, spec with
-    | M_Pexpr (loc, annots, _, M_PEundef (a, b)), `BT expect ->
-      return (M_Pexpr (loc, annots, expect, M_PEundef (a, b)))
+  let (M_Pexpr (loc, annots, _, pe_)) = expr in
+  let annot bt pe_ = M_Pexpr (loc, annots, bt, pe_) in
+  match pe_, spec with
+    | M_PEundef (a, b), `BT expect ->
+      return (annot expect (M_PEundef (a, b)))
+    | M_PEval v, `BT expect ->
+      let@ v = check_value loc expect v in
+      return (annot expect (M_PEval v))
     | _ -> begin
       let@ expr = infer_pexpr expr in
       begin match bt_of_pexpr expr with

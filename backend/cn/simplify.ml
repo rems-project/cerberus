@@ -155,23 +155,10 @@ module IndexTerms = struct
       | Some it3 -> accessor_reduce f it3
     end
 
-  let rec do_wrapI_z (sign, sz) z = match sign with
-    | BT.Unsigned ->
-      let card = Z.pow (Z.of_int 2) sz in
-      if Z.lt z Z.zero
-      then do_wrapI_z (sign, sz) (Z.sub card (do_wrapI_z (sign, sz) (Z.sub Z.zero z)))
-      else Z.rem z card
-    | BT.Signed ->
-      let z = do_wrapI_z (BT.Unsigned, sz) z in
-      let lim = Z.pow (Z.of_int 2) (sz - 1) in
-      if Z.leq lim z
-      then Z.sub z (Z.pow (Z.of_int 2) sz)
-      else z
-
   let cast_reduce bt it =
     begin match bt, IT.is_const it with
     | BT.Bits (sign, sz), Some (Terms.Bits ((sign2, sz2), z), _) ->
-        let z = do_wrapI_z (sign, sz) (do_wrapI_z (sign2, sz2) z) in
+        let z = BT.normalise_to_range (sign, sz) (BT.normalise_to_range (sign2, sz2) z) in
         num_lit_ z bt
     | _ -> IT (Cast (bt, it), bt)
     end

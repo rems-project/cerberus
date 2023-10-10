@@ -154,5 +154,40 @@ let rec hash = function
   | Bits (Unsigned, n) -> 6000 + n
 
 
+(* checking/coercing numeric literals into bits range *)
+let bits_cardinality n = Z.pow (Z.of_int 2) n
 
+let bits_range = function
+  | (Unsigned, sz) -> (Z.zero, Z.sub (bits_cardinality sz) Z.one)
+  | (Signed, sz) ->
+    let half_card = bits_cardinality (sz - 1) in
+    (Z.sub Z.zero half_card, Z.sub half_card Z.one)
+
+let fits_range (sign, sz) z =
+  let (minInt, maxInt) = bits_range (sign, sz) in
+  Z.leq minInt z && Z.leq z maxInt
+
+let normalise_to_range (sign, sz) z =
+  let card = bits_cardinality sz in
+  let rec norm_u z = if Z.leq Z.zero z
+      then Z.rem z card
+      else norm_u (Z.sub card (norm_u (Z.sub Z.zero z)))
+  in
+  let norm z = match sign with
+    | Unsigned -> norm_u z
+    | Signed ->
+      let z = norm_u z in
+      let (_, maxInt) = bits_range (sign, sz) in
+      if Z.leq z maxInt then z else (Z.sub z card)
+  in
+  let z2 = norm z in
+  assert (fits_range (sign, sz) z2);
+  if (fits_range (sign, sz) z)
+  then assert (Z.equal z2 z)
+  else ();
+  z2
+
+let normalise_to_range_bt bt z = match is_bits_bt bt with
+  | Some (sign, sz) -> normalise_to_range (sign, sz) z
+  | _ -> failwith ("normalise_to_range: not bits type: " ^ Pp.plain (pp bt))
 
