@@ -191,3 +191,10 @@ let normalise_to_range_bt bt z = match is_bits_bt bt with
   | Some (sign, sz) -> normalise_to_range (sign, sz) z
   | _ -> failwith ("normalise_to_range: not bits type: " ^ Pp.plain (pp bt))
 
+let pick_integer_encoding_type z = match
+    List.find_opt (fun k -> fits_range k z)
+        [(Signed, 32); (Unsigned, 64); (Signed, 64); (Unsigned, 128); (Signed, 128)]
+  with
+  | Some (sign, sz) -> Some (Bits (sign, sz))
+  | _ -> None
+

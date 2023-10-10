@@ -316,7 +316,13 @@ open Effectful.Make(Resultat)
 let convert_enum_expr =
   let open CF.AilSyntax in
   let conv_const loc = function
-    | ConstantInteger (IConstant (z, _, _)) -> return (IT.sterm_of_term (IT.z_ z))
+    | ConstantInteger (IConstant (z, _, _)) ->
+      let@ bt = match BT.pick_integer_encoding_type z with
+      | Some bt -> return bt
+      | None -> fail {loc; msg = Generic (Pp.item "no standard encoding type for constant"
+            (Pp.z z))}
+      in
+      return (IT.sterm_of_term (IT.num_lit_ z bt))
     | c -> fail {loc; msg = Generic (Pp.item "enum conversion: unhandled constant"
         (CF.Pp_ail_ast.pp_constant c))}
   in

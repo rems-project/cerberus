@@ -6,7 +6,7 @@ enum {
 };
 
 unsigned int add_x_y (void)
-/*@ ensures return == num_x + num_y @*/
+/*@ ensures return == ((u32) (num_x + num_y)) @*/
 {
   return num_x + num_y;
 }

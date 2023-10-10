@@ -171,6 +171,12 @@ module WBT = struct
     in
     fun bt -> aux bt
 
+let pick_integer_encoding_type loc z =
+  match BT.pick_integer_encoding_type z with
+  | Some bt -> return bt
+  | None -> fail (fun _ -> {loc; msg = Generic
+        (Pp.item "no standard encoding type for constant" (Pp.z z))})
+
 end
 
 
@@ -1252,13 +1258,9 @@ let rec infer_object_value : 'TY. Locations.t -> 'TY mu_object_value ->
       ^ Pp.plain (CF.Pp_ast.pp_doc_tree (Pp_mucore_ast.PP.dtree_of_object_value ov_original))) in
   let@ bt, ov = match ov with
    | M_OVinteger iv ->
-     (* FIXME: replace this with something derived from a ctype when that info is available *)
      let z = Memory.z_of_ival iv in
-     let ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_) in
-     if Z.leq (Memory.min_integer_type ity) z && Z.leq z (Memory.max_integer_type ity)
-     then return (Memory.bt_of_sct (Sctypes.Integer ity), M_OVinteger iv)
-     else fail (fun _ -> {loc; msg = Generic (Pp.item "infer_object_value: doesn't fit in int"
-         (IT.pp (IT.z_ z)))})
+     let@ bt = WBT.pick_integer_encoding_type loc z in
+     return (bt, M_OVinteger iv)
    | M_OVfloating fv ->
      return (Real, M_OVfloating fv)
    | M_OVpointer pv ->
