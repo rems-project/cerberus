@@ -119,6 +119,7 @@ let main
       output_decorated
       astprints
       expect_failure
+      use_ity
   =
   if json then begin
       if debug_level > 0 then
@@ -126,16 +127,19 @@ let main
       if print_level > 0 then
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
-  Cerb_debug.debug_level := debug_level;
-  Pp.loc_pp := loc_pp;
-  Pp.print_level := print_level;
-  CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
-  Pp.print_timestamps := not no_timestamps;
-  Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
-  Solver.random_seed := random_seed;
-  Solver.log_to_temp := solver_logging;
-  Check.only := only;
-  Diagnostics.diag_string := diag;
+  begin (*flags *)
+    Cerb_debug.debug_level := debug_level;
+    Pp.loc_pp := loc_pp;
+    Pp.print_level := print_level;
+    CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
+    Pp.print_timestamps := not no_timestamps;
+    Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
+    Solver.random_seed := random_seed;
+    Solver.log_to_temp := solver_logging;
+    Check.only := only;
+    Diagnostics.diag_string := diag;
+    WellTyped.use_ity := use_ity
+  end;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) = 
     handle_frontend_error 
@@ -297,6 +301,11 @@ let expect_failure =
   let doc = "invert return value to 1 if type checks pass and 0 on failure" in
   Arg.(value & flag & info["expect-failure"] ~doc)
 
+let use_ity =
+  let doc = "(this switch should go away) in WellTyped.BaseTyping, use integer type annotations placed by the Core elaboration" in
+  Arg.(value & flag & info["use-ity"] ~doc)
+
+
 
 let () =
   let open Term in
@@ -322,6 +331,7 @@ let () =
       solver_logging $
       output_decorated $
       astprints $
-      expect_failure
+      expect_failure $
+      use_ity
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))

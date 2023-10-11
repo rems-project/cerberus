@@ -20,6 +20,9 @@ open Typing
 open Effectful.Make(Typing)
 
 
+let use_ity = ref false
+
+
 let ensure_base_type = Typing.ensure_base_type
 
 let illtyped_index_term (loc: loc) it has expected ctxt =
@@ -1329,9 +1332,37 @@ let check_value : 'TY. Locations.t -> BT.t -> 'TY mu_value -> (BT.t mu_value) m 
       let@ () = ensure_base_type loc ~expect (bt_of_value v) in
       return v
 
+
+let is_integer_annot = function
+  | CF.Annot.Avalue (Ainteger ity) -> Some ity
+  | _ -> None
+
+
+let integer_annot annots =
+  match List.filter_map is_integer_annot annots with
+  | [] -> None
+  | [ity] -> Some ity
+  | _ -> assert false
+
+
+let remove_integer_annot annots = 
+  List.filter (fun a -> Option.is_none (is_integer_annot a)) annots
+
+let remove_integer_annot_expr (M_Expr (loc, annots, bty, e_)) =
+  M_Expr (loc, remove_integer_annot annots, bty, e_)
+
+let remove_integer_annot_pexpr (M_Pexpr (loc, annots, bty, e_)) =
+  M_Pexpr (loc, remove_integer_annot annots, bty, e_)
+
+
 let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m = 
   fun pe ->
     let (M_Pexpr (loc, annots, _, pe_)) = pe in
+    match integer_annot annots with
+    | Some ity when !use_ity -> 
+        check_pexpr (Memory.bt_of_sct (Integer ity)) 
+          (remove_integer_annot_pexpr pe)
+    | _ ->
     let todo () = begin
         Pp.error loc (!^ "TODO: WellTyped infer_pexpr") [Pp_mucore_ast.pp_pexpr pe];
         failwith ("TODO: WellTyped infer_pexpr")
@@ -1436,6 +1467,10 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
 
 and check_pexpr (expect : BT.t) expr =
   let (M_Pexpr (loc, annots, _, pe_)) = expr in
+  let@ () = match integer_annot annots with
+    | Some ity when !use_ity -> ensure_base_type loc ~expect (Memory.bt_of_sct (Integer ity))
+    | _ -> return ()
+  in
   let annot bt pe_ = M_Pexpr (loc, annots, bt, pe_) in
   match pe_ with
     | M_PEundef (a, b) ->
@@ -1552,6 +1587,11 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
   fun label_context e ->
     Pp.debug 22 (lazy (Pp.item "WellTyped.BaseTyping.infer_expr" (Pp_mucore_ast.pp_expr e)));
     let (M_Expr (loc, annots, _, e_)) = e in
+    match integer_annot annots with
+    | Some ity when !use_ity -> 
+        check_expr label_context (Memory.bt_of_sct (Integer ity)) 
+          (remove_integer_annot_expr e)
+    | _ ->
     let todo () = begin
         Pp.error loc (!^ "TODO: WellTyped infer_expr") [Pp_mucore_ast.pp_expr e];
         failwith ("TODO: WellTyped infer_expr")
@@ -1757,8 +1797,13 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
 
 and check_expr label_context (expect : BT.t) expr =
   (* the special-case is needed for pure undef, whose type can't be inferred *)
-  match expr with
-    | M_Expr (loc, annots, _bt, M_Epure pe) ->
+  let (M_Expr (loc, annots, _, e_)) = expr in
+  let@ () = match integer_annot annots with
+    | Some ity when !use_ity -> ensure_base_type loc ~expect (Memory.bt_of_sct (Integer ity))
+    | _ -> return ()
+  in
+  match e_ with
+    | M_Epure pe ->
       let@ pe = check_pexpr expect pe in
       return (M_Expr (loc, annots, bt_of_pexpr pe, M_Epure pe))
     | _ -> begin
