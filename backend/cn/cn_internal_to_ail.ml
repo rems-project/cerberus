@@ -232,7 +232,12 @@ let cn_to_ail_binop_internal bt1 bt2 = function
   | LE -> (A.Le, Some "cn_integer_le")
   | Min -> (A.And, Some "min")
   | Max -> (A.And, Some "max")
-  | EQ -> (A.Eq, None)
+  | EQ -> (A.Eq, None) 
+    (* let fn_str = match get_typedef_string (bt_to_ail_ctype bt1) with 
+      | Some str -> Some (str ^ "_equality")
+      | None -> None
+    in
+    (A.Eq, fn_str) *)
   | _ -> (A.And, None) (* TODO: Change *)
   (* | LTPointer
   | LEPointer
@@ -494,9 +499,14 @@ let rec cn_to_ail_expr_aux_internal
               let val_ctype = bt_to_ail_ctype val_bt in
               let val_equality_str = (str_of_ctype val_ctype) ^ "_equality" in
               A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
-            | BT.Integer -> 
-                A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_integer_equality")), [e1; e2]))
-            | _ -> default_ail_binop
+            (* | BT.Integer -> 
+                A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_integer_equality")), [e1; e2])) *)
+            | _ -> 
+              (match get_typedef_string (bt_to_ail_ctype (IT.bt t1)) with 
+                | Some str ->
+                  let fn_name = str ^ "_equality" in 
+                  A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
+                | None -> default_ail_binop)
         )
       | _ -> default_ail_binop
     in 
