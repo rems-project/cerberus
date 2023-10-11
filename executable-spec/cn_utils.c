@@ -16,7 +16,7 @@
 
 
 typedef struct cn_integer {
-    unsigned int val;
+    unsigned int *val;
 } cn_integer;
 
 typedef struct cn_pointer {
@@ -38,13 +38,13 @@ cn_map *map_create(void) {
 
 void *cn_map_get(cn_map *m, cn_integer *key) {
     // const char key_arr[1] = {key};
-    void *res = ht_get(m, &key->val);
-    if (!res) printf("NULL being returned for key %d\n", (key->val));
+    void *res = ht_get(m, key->val);
+    // if (!res) printf("NULL being returned for key %d\n", *(key->val));
     return res;
 }
 
 void cn_map_set(cn_map *m, cn_integer *key, void *value) {
-    ht_set(m, &key->val, value);
+    ht_set(m, key->val, value);
 }
 
 // void *cn_map_get_2(cn_map *m, cn_integer_2 *key) {
@@ -60,12 +60,9 @@ void cn_map_set(cn_map *m, cn_integer *key, void *value) {
 
 /* Every equality function needs to take two void pointers for this to work */
 _Bool cn_integer_equality(void *i1, void *i2) {
-    return (((cn_integer *) i1)->val) == (((cn_integer *) i2)->val);
+    return (*((cn_integer *) i1)->val) == (*((cn_integer *) i2)->val);
 }
 
-// _Bool cn_integer_2_equality(void *i1, void *i2) {
-//     return *((cn_integer_2 *) i1) == *((cn_integer_2 *) i2);
-// }
 
 
 // Check if m2 is a subset of m1
@@ -149,7 +146,9 @@ cn_integer *convert_to_cn_integer(unsigned int i) {
     // unsigned int *i_ptr = alloc(sizeof(unsigned int));
     // *i_ptr = i;
     // ret->val = i_ptr;
-    ret->val = i;
+    ret->val = alloc(sizeof(unsigned int));
+    *(ret->val) = i;
+    // ret->val = i;
     return ret;
 }
 
@@ -161,43 +160,43 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
 
 /* These should be produced automatically based on binops used in source CN annotations */
 cn_bool cn_integer_lt(cn_integer *i1, cn_integer *i2) {
-    return (i1->val) < (i2->val);
+    return *(i1->val) < *(i2->val);
 }
 
 cn_bool cn_integer_le(cn_integer *i1, cn_integer *i2) {
-    return (i1->val) <= (i2->val);
+    return *(i1->val) <= *(i2->val);
 }
 
 cn_bool cn_integer_gt(cn_integer *i1, cn_integer *i2) {
-    return (i1->val) > (i2->val);
+    return *(i1->val) > *(i2->val);
 }
 
 cn_bool cn_integer_ge(cn_integer *i1, cn_integer *i2) {
-    return (i1->val) >= (i2->val);
+    return *(i1->val) >= *(i2->val);
 }
 
 cn_integer *cn_integer_add(cn_integer *i1, cn_integer *i2) {
     cn_integer *res = alloc(sizeof(cn_integer));
-    // res->val = alloc(sizeof(unsigned int));
-    (res->val) = (i1->val) + (i2->val);
+    res->val = alloc(sizeof(unsigned int));
+    *(res->val) = *(i1->val) + *(i2->val);
     return res;
 }
 
 cn_integer *cn_integer_increment(cn_integer *i) {
-    (i->val)++;
+    *(i->val) = *(i->val) + 1;
     return i;
 }
 
 cn_integer *cn_integer_multiply(cn_integer *i1, cn_integer *i2) {
     cn_integer *res = alloc(sizeof(cn_integer));
-    // res->val = alloc(sizeof(unsigned int));
-    res->val = i1->val * i2->val;
+    res->val = alloc(sizeof(unsigned int));
+    *(res->val) = *(i1->val) * *(i2->val);
     return res;
 }
 
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i) {
     cn_pointer *res = alloc(sizeof(cn_pointer));
-    res->ptr = (char *) ptr->ptr + i->val;
+    res->ptr = (char *) ptr->ptr + *(i->val);
     return res;
 }
 
