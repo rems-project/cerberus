@@ -499,8 +499,6 @@ let rec cn_to_ail_expr_aux_internal
               let val_ctype = bt_to_ail_ctype val_bt in
               let val_equality_str = (str_of_ctype val_ctype) ^ "_equality" in
               A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
-            (* | BT.Integer -> 
-                A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_integer_equality")), [e1; e2])) *)
             | _ -> 
               (match get_typedef_string (bt_to_ail_ctype (IT.bt t1)) with 
                 | Some str ->
@@ -964,30 +962,34 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
     in 
     (ctype, pred_def'.oarg_bt)
   in
-  (* Binding will be different depending on whether it's a p or q - q is array*)
-  let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in 
+  (* let make_deref_expr_ e_ = A.(AilEunary (Indirection, mk_expr e_)) in  *)
   function
   | ResourceTypes.P p -> 
-    let _pt_ctype_ =  bt_to_ail_ctype (IT.bt p.pointer) in
-    (* TODO: Come back to this to mirror q case *)
-    (* TODO: Extract code that is common between p and q cases to avoid duplication *)
-    let (ctype, _) = calculate_return_type p.name in
-    let binding = create_binding sym ctype in
+    let (ctype, bt) = calculate_return_type p.name in
+    let binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, bt_to_ail_ctype bt))) in
 
     let (b, s, e) = cn_to_ail_expr_internal dts cn_vars p.pointer PassBack in
     let (rhs, bs, ss) = match p.name with 
-      | Owned _ ->
-        (* TODO: Update to match ResourceTypes.Q q *)
-        let cast_ctype_pointer = C.(Pointer (empty_qualifiers, ctype)) in
+      | Owned (sct, _) ->
+        let sct_str = CF.Pp_utils.to_plain_pretty_string (Sctypes.pp sct) in 
+        let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
+        let owned_fn_name = "owned_" ^ sct_str in 
+        (* Hack with enum as sym *)
+        let enum_sym = Sym.fresh_pretty "GET" in
+        let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
+        let fn_call_it = IT.IT (Apply (Sym.fresh_pretty owned_fn_name, [p.pointer; enum_val_get]), BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct, Cerb_location.unknown) in
+        let (bs', ss', e') = cn_to_ail_expr_internal dts (enum_sym :: cn_vars) fn_call_it PassBack in
+        (e', bs', ss')
+        (* let cast_ctype_pointer = C.(Pointer (empty_qualifiers, ctype)) in
         let cast_e_ = A.(AilEcast (empty_qualifiers, mk_ctype cast_ctype_pointer, e)) in
-        (make_deref_expr_ cast_e_, [], [])
+        (make_deref_expr_ cast_e_, [], []) *)
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts cn_vars it PassBack) p.iargs) in
         let fcall = A.(AilEcall (mk_expr (AilEident pname), e :: es)) in
-        (fcall, bs, ss)
+        (mk_expr fcall, List.concat bs, List.concat ss)
     in
-    let s_decl = A.(AilSdeclaration [(sym, Some (mk_expr rhs))]) in
-    (b @ (List.concat bs) @ [binding], s @ (List.concat ss) @ [s_decl])
+    let s_decl = A.(AilSdeclaration [(sym, Some rhs)]) in
+    (b @ bs @ [binding], s @ ss @ [s_decl])
 
   | ResourceTypes.Q q -> 
     (* 
@@ -1296,7 +1298,7 @@ let rec cn_to_ail_arguments_internal dts preds = function
 let rec cn_to_ail_post_aux_internal dts cn_vars preds = function
   | LRT.Define ((name, it), info, t) ->
     Printf.printf "LRT.Define\n";
-    let binding = create_binding name (bt_to_ail_ctype (IT.bt it)) in
+    let binding = create_binding name (mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (IT.bt it))))) in
     let (b1, s1) = cn_to_ail_expr_internal dts cn_vars it (AssignVar name) in
     let (b2, s2) = cn_to_ail_post_aux_internal dts (name :: cn_vars) preds t in
     (b1 @ b2 @ [binding], s1 @ s2)
