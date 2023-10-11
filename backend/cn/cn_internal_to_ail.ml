@@ -846,7 +846,12 @@ let rec cn_to_ail_expr_aux_internal
 
   | Cast (bt, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars t PassBack in
-    let ail_expr_ = A.(AilEcast (empty_qualifiers, (bt_to_ail_ctype bt), e)) in 
+    let ail_expr_ = match ((get_typedef_string (bt_to_ail_ctype bt)), get_typedef_string (bt_to_ail_ctype (IT.bt t))) with 
+      | Some cast_type_str, Some original_type_str -> 
+        let fn_name = "cast_" ^ original_type_str ^ "_to_" ^ cast_type_str in 
+        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e]))
+      | _, _ ->
+      A.(AilEcast (empty_qualifiers, (bt_to_ail_ctype bt), e)) in 
     dest d (b, s, mk_expr ail_expr_)
 
 
@@ -1139,7 +1144,7 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
     | Uninterp -> ([], [])
   in
   let ail_record_opt = generate_record_opt fn_sym def.return_bt in
-  let params = List.map (fun (sym, bt) -> (sym, bt_to_ail_ctype bt)) def.args in
+  let params = List.map (fun (sym, bt) -> (sym, (mk_ctype (C.Pointer (empty_qualifiers, (bt_to_ail_ctype bt)))))) def.args in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   (* Generating function declaration *)
@@ -1207,7 +1212,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
   let pred_body = List.map mk_stmt ss in
 
   let ail_record_opt = generate_record_opt pred_sym def.oarg_bt in
-  let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) ((def.pointer, BT.Loc) :: def.iargs) in
+  let params = List.map (fun (sym, bt) -> (sym, (mk_ctype (C.Pointer (empty_qualifiers, (bt_to_ail_ctype bt)))))) ((def.pointer, BT.Loc) :: def.iargs) in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   (* Generating function declaration *)
@@ -1222,7 +1227,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
 let rec cn_to_ail_arguments_l_internal dts cn_vars preds = function
     (* CN let *)
   | M_Define ((sym, it), _info, l) ->
-    let binding = create_binding sym (bt_to_ail_ctype (IT.bt it)) in
+    let binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (IT.bt it))))) in
     let (b1, s1) = cn_to_ail_expr_internal dts cn_vars it (AssignVar sym) in
     let (b2, s2, cn_vars') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) preds l in
     (b1 @ b2 @ [binding], s1 @ s2, cn_vars')

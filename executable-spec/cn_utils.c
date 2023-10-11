@@ -6,14 +6,6 @@
 
 /* Wrappers for C types */
 
-// typedef unsigned int cn_integer_2;
-
-// cn_integer_2 *convert_to_cn_integer_2(unsigned int i) {
-//     cn_integer_2 *cn_i = alloc(sizeof(cn_integer_2));
-//     *cn_i = i;
-//     return cn_i;
-// }
-
 
 typedef struct cn_integer {
     unsigned int *val;
@@ -46,17 +38,6 @@ void *cn_map_get(cn_map *m, cn_integer *key) {
 void cn_map_set(cn_map *m, cn_integer *key, void *value) {
     ht_set(m, key->val, value);
 }
-
-// void *cn_map_get_2(cn_map *m, cn_integer_2 *key) {
-//     // const char key_arr[1] = {key};
-//     void *res = ht_get(m, key);
-//     if (!res) printf("NULL being returned for key %d\n", *(key));
-//     return res;
-// }
-
-// void cn_map_set_2(cn_map *m, cn_integer_2 *key, void *value) {
-//     ht_set(m, key, value);
-// }
 
 /* Every equality function needs to take two void pointers for this to work */
 _Bool cn_integer_equality(void *i1, void *i2) {
@@ -95,22 +76,6 @@ _Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *,
 
 
 
-/* Generic CN equality function */
-
-// _Bool cn_arr_equality(struct cn_array *a, struct cn_array *b) {
-//     if (a->num_elements != b->num_elements) return 0;
-//     if (a->element_type != b->element_type) return 0;
-
-
-//     for (int i = 0; i < a->num_elements; i++) {
-        
-//     }
-
-//     return 1;
-// }
-
-
-
 long min(long a, long b) {
     return a < b ? a : b;
 }
@@ -119,36 +84,12 @@ long max(long a, long b) {
     return a > b ? a : b;
 }
 
-// int array_size(char a[]) {
-//     /* Current invariant: arrays are non-empty */
-//     return (sizeof a)  / (sizeof a[0]);
-// }
-
-// _Bool cn_equality_chars(char *a, char* b) {
-//     /* Current invariant: arrays are non-empty */
-//     if (array_size(a) != array_size(b)) {
-//         return 0;
-//     }
-
-//     for (int i = 0; i < array_size(a); i++) {
-//         if (a[i] != b[i]) {
-//             return 0;
-//         }
-//     }
-
-//     return 1;
-// }
-
 /* Conversion functions */
 
 cn_integer *convert_to_cn_integer(unsigned int i) {
     cn_integer *ret = alloc(sizeof(cn_integer));
-    // unsigned int *i_ptr = alloc(sizeof(unsigned int));
-    // *i_ptr = i;
-    // ret->val = i_ptr;
     ret->val = alloc(sizeof(unsigned int));
     *(ret->val) = i;
-    // ret->val = i;
     return ret;
 }
 
@@ -219,3 +160,16 @@ char owned_char(cn_pointer *cn_pointer, enum OWNERSHIP owned_enum) {
     return *((char *) cn_pointer->ptr);
 }
 
+
+cn_integer *cast_cn_pointer_to_cn_integer(cn_pointer *ptr) {
+    cn_integer *res = alloc(sizeof(cn_integer));
+    res->val = alloc(sizeof(unsigned int));
+    *(res->val) = (unsigned int) ptr->ptr;
+    return res;
+}
+
+cn_pointer *cast_cn_integer_to_cn_pointer(cn_integer *i) {
+    cn_pointer *res = alloc(sizeof(cn_pointer));
+    res->ptr = (void *) *(i->val);
+    return res;
+}
