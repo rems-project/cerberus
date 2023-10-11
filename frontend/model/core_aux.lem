@@ -2103,6 +2103,17 @@ let add_loc loc (Expr annot expr_) =
   end in
   Expr (update_annot pred (Aloc loc) annot) expr_
 
+
+val maybe_annotate_integer_type : ctype -> expr unit -> expr unit
+let maybe_annotate_integer_type (Ctype _ ctype_) (Expr annot expr_) =
+  let annot = match ctype_ with
+    | Basic (Integer ity) -> (Avalue (Ainteger ity)) :: annot
+    | _ -> annot
+  end in
+  Expr annot expr_
+
+
+
 val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
   Expr (Astd str :: annot) expr_
