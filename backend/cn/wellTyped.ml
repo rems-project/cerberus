@@ -1375,6 +1375,13 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ v = infer_value loc v in
         let bt = bt_of_value v in
         return (bt, M_PEval v)
+     | M_PElet (pat, pe1, pe2) ->
+        let@ pe1 = infer_pexpr pe1 in
+        pure begin
+          let@ pat = check_and_bind_pattern (bt_of_pexpr pe1) pat in
+          let@ pe2 = infer_pexpr pe2 in
+          return (bt_of_pexpr pe2, M_PElet (pat, pe1, pe2))
+        end
      | M_PEop (op, pe1, pe2) ->
         let@ pe1 = infer_pexpr pe1 in
         let@ pe2 = infer_pexpr pe2 in
@@ -1389,6 +1396,12 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pe1 = infer_pexpr pe1 in
         let@ pe2 = infer_pexpr pe2 in
         return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
+      | M_PEbitwise_unop (unop, pe) ->
+        (* all the supported unops do arithmetic in the one (bitwise) type *)
+        let@ pe = infer_pexpr pe in
+        let bt = bt_of_pexpr pe in
+        let@ () = ensure_bits_type (loc_of_pexpr pe) bt in
+        return (bt, M_PEbitwise_unop (unop, pe))
       | M_PEbitwise_binop (binop, pe1, pe2) ->
         (* all the supported binops do arithmetic in the one (bitwise) type *)
         let@ pe1 = infer_pexpr pe1 in
