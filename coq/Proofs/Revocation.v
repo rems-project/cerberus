@@ -723,6 +723,57 @@ Module RevocationProofs.
     | _, _ => default
     end.
 
+  (*
+  Lemma zmap_range_init_spec
+    {T} (a0:Z) (n:nat) (step:Z) (v:T) (m m':ZMap.t T):
+    @zmap_range_init T a0 n step v m = m' ->
+    forall k,
+      (exists n', (n'<n)%nat /\ (((Z.of_nat n')*step + a0) = k) /\ ZMap.find k m' = Some v)
+      \/ (ZMap.find k m = ZMap.find k m').
+  Proof.
+    intros H k.
+  Admitted.
+
+   *)
+
+  (*
+  Lemma zmap_range_init_spec
+    {T} (a0:Z) (n:nat) (step:Z) (v:T) (m m':ZMap.t T):
+    @zmap_range_init T a0 n step v m = m' ->
+    forall k,
+      (exists n', (n'<n)%nat /\ (((Z.of_nat n')*step + a0) = k) /\ ZMap.find k m' = Some v)
+      \/ (ZMap.find k m = ZMap.find k m').
+  Proof.
+    intros H k.
+  Admitted.
+
+  (* special case of [zmap_range_init] used in [init_ghost_tags]*)
+  Lemma zmap_range_init_spec_1
+    {T} (al z1 z3:Z) (x:T) (m m':ZMap.t T):
+    @zmap_range_init T (z1 * al)
+      (Z.to_nat  (z3 * al /  (z1 * al)))
+      al
+      x
+      m = m' ->
+    forall k,
+      ( k < (z1 * al) /\ ZMap.find k m' = Some x)
+      \/ (ZMap.find k m = ZMap.find k m').
+  Proof.
+    intros H k.
+
+  Admitted.
+  *)
+
+  Lemma AddressValue_Z_id:
+    forall a,
+      AddressValue.of_Z (AddressValue.to_Z a) = a.
+  Proof.
+    intros a.
+    unfold AddressValue.t, AddressValue.of_Z, AddressValue.to_Z in *.
+    unfold bv_to_Z_unsigned.
+    apply bitvector.Z_to_bv_bv_unsigned.
+  Qed.
+
   Theorem allocator_same:
     forall mem_state1 mem_state2 size align,
       mem_state_same mem_state1 mem_state2 ->
@@ -736,7 +787,7 @@ Module RevocationProofs.
     intros mem_state1 mem_state2 sz align M.
     destruct_mem_state_same M.
     split.
-    -
+    - (* return value *)
       unfold evalErrS.
       unfold CheriMemoryWithPNVI.allocator, CheriMemoryWithoutPNVI.allocator.
       unfold put, ret, bind.
@@ -757,7 +808,57 @@ Module RevocationProofs.
         rewrite  Heqp1 in Heqp4.
         tuple_inversion.
         reflexivity.
-    -
+    - (* state *)
+      unfold lift_sum.
+      unfold CheriMemoryWithPNVI.mem_state in *.
+      unfold execErrS.
+      repeat break_let.
+      repeat break_match;invc Heqs1;invc Heqs0.
+      all: cbn in Heqp, Heqp0; repeat break_let.
+      +
+        repeat break_match_hyp;
+          repeat tuple_inversion; auto.
+      +
+        repeat break_match_hyp;
+          repeat tuple_inversion;
+          (rewrite Mlastaddr in Heqb1, Heqp4;
+           rewrite Heqp4 in Heqp2;
+           tuple_inversion;
+           congruence).
+      +
+        repeat break_match_hyp;
+          repeat tuple_inversion;
+          (rewrite Mlastaddr in Heqb1, Heqp4;
+           rewrite Heqp4 in Heqp2;
+           tuple_inversion;
+           congruence).
+      +
+        repeat break_match_hyp;
+          repeat tuple_inversion;
+          unfold mem_state_same;cbn;
+        (try rewrite Malloc_id in *; clear Malloc_id;
+        try rewrite Mnextiota in *; clear Mnextiota;
+        try rewrite Mlastaddr in *; clear Mlastaddr;
+        try rewrite Mnextvararg in *; clear Mnextvararg);
+          rewrite Heqp4 in Heqp2; tuple_inversion
+        ;repeat split; auto.
+
+        all: destruct Mvarargs as [MvarargsIn MvarargsMap].
+        all: auto.
+        all: try apply MvarargsIn.
+
+        *
+          cbn.
+          repeat break_let.
+
+          clear -Mcapmeta.
+          (*
+          unfold ZMap.Equal in Mcapmeta.
+          unfold ZMap.Equal.
+          intros k.
+          specialize (Mcapmeta k).
+          *)
+
 
   Admitted.
 
