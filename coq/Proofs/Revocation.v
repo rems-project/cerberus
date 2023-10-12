@@ -762,7 +762,17 @@ Module RevocationProofs.
     intros H k.
 
   Admitted.
-  *)
+   *)
+
+  Lemma init_ghost_tags_same:
+    forall (sz : Z) (t : AddressValue.t) (c1 c0 : ZMap.t (bool * CapGhostState)),
+      ZMap.Equal (elt:=bool * CapGhostState) c0 c1 ->
+      ZMap.Equal (elt:=bool * CapGhostState)
+        (CheriMemoryWithPNVI.init_ghost_tags t sz c0)
+        (CheriMemoryWithoutPNVI.init_ghost_tags t sz c1).
+  Proof.
+    intros sz.
+  Admitted.
 
   Lemma AddressValue_Z_id:
     forall a,
@@ -833,33 +843,32 @@ Module RevocationProofs.
            tuple_inversion;
            congruence).
       +
+        (* main proof here: [mem_state_same m1 m2] *)
+
         repeat break_match_hyp;
           repeat tuple_inversion;
-          unfold mem_state_same;cbn;
+          unfold mem_state_same; cbn;
         (try rewrite Malloc_id in *; clear Malloc_id;
         try rewrite Mnextiota in *; clear Mnextiota;
         try rewrite Mlastaddr in *; clear Mlastaddr;
         try rewrite Mnextvararg in *; clear Mnextvararg);
-          rewrite Heqp4 in Heqp2; tuple_inversion
-        ;repeat split; auto.
+          rewrite Heqp4 in Heqp2; tuple_inversion;
+        repeat split; auto.
 
         all: destruct Mvarargs as [MvarargsIn MvarargsMap].
         all: auto.
         all: try apply MvarargsIn.
-
+        all: try find_contradiction.
         *
           cbn.
           repeat break_let.
-
-          clear -Mcapmeta.
-          (*
-          unfold ZMap.Equal in Mcapmeta.
-          unfold ZMap.Equal.
-          intros k.
-          specialize (Mcapmeta k).
-          *)
-
-
-  Admitted.
+          apply init_ghost_tags_same.
+          assumption.
+        *
+          cbn.
+          repeat break_let.
+          apply init_ghost_tags_same.
+          assumption.
+  Qed.
 
 End RevocationProofs.
