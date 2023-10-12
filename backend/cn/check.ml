@@ -744,12 +744,13 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      check_pexpr pe (fun lvt ->
      let@ vt = check_conv_int loc ~expect ct lvt in
      k vt))
-  | M_PEwrapI (act, pe) -> assert false
-     (* let@ () = WellTyped.WCT.is_ct act.loc act.ct in *)
-     (* let@ () = WellTyped.ensure_base_type loc ~expect Integer in *)
-     (* check_pexpr pe (fun arg -> *)
-     (* let ity = Option.get (Sctypes.is_integer_type act.ct) in *)
-     (* k (wrapI_ (ity, arg))) *)
+  | M_PEwrapI (act, pe) ->
+     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+     let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe) in
+     check_pexpr pe (fun arg ->
+     let bt = Memory.bt_of_sct act.ct in
+     let@ () = WellTyped.ensure_bits_type loc bt in
+     k (cast_ bt arg))
   | M_PEcatch_exceptional_condition (act, pe) ->
      assert false
      (* let@ () = WellTyped.WCT.is_ct act.loc act.ct in *)
