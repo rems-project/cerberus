@@ -7,6 +7,10 @@ Require Import Coq.Classes.SetoidClass.
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Program.Equality. (* for dep. destruction *)
+Require Import Coq.FSets.FMapFacts.
+Require Import Coq.FSets.FMapAVL.
+Require Import Coq.Structures.OrderedTypeEx.
+
 Require Import Lia.
 
 Require Import StructTact.StructTactics.
@@ -34,6 +38,9 @@ Local Open Scope bool_scope.
 Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
+
+Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
+Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
 
 (* Abstract set of switches *)
 Parameter abst_get_switches: unit -> cerb_switches_t.
@@ -723,56 +730,36 @@ Module RevocationProofs.
     | _, _ => default
     end.
 
-  (*
-  Lemma zmap_range_init_spec
-    {T} (a0:Z) (n:nat) (step:Z) (v:T) (m m':ZMap.t T):
-    @zmap_range_init T a0 n step v m = m' ->
-    forall k,
-      (exists n', (n'<n)%nat /\ (((Z.of_nat n')*step + a0) = k) /\ ZMap.find k m' = Some v)
-      \/ (ZMap.find k m = ZMap.find k m').
+  #[local] Instance zmap_range_init_Proper:
+    forall [elt : Type], Proper (eq ==> eq ==> eq ==> eq ==> ZMap.Equal ==> ZMap.Equal) (zmap_range_init (T:=elt)).
   Proof.
-    intros H k.
-  Admitted.
-
-   *)
-
-  (*
-  Lemma zmap_range_init_spec
-    {T} (a0:Z) (n:nat) (step:Z) (v:T) (m m':ZMap.t T):
-    @zmap_range_init T a0 n step v m = m' ->
-    forall k,
-      (exists n', (n'<n)%nat /\ (((Z.of_nat n')*step + a0) = k) /\ ZMap.find k m' = Some v)
-      \/ (ZMap.find k m = ZMap.find k m').
-  Proof.
-    intros H k.
-  Admitted.
-
-  (* special case of [zmap_range_init] used in [init_ghost_tags]*)
-  Lemma zmap_range_init_spec_1
-    {T} (al z1 z3:Z) (x:T) (m m':ZMap.t T):
-    @zmap_range_init T (z1 * al)
-      (Z.to_nat  (z3 * al /  (z1 * al)))
-      al
-      x
-      m = m' ->
-    forall k,
-      ( k < (z1 * al) /\ ZMap.find k m' = Some x)
-      \/ (ZMap.find k m = ZMap.find k m').
-  Proof.
-    intros H k.
-
-  Admitted.
-   *)
+    intros elt a1 a0 EA n0 n EN s0 s ES v0 v EV m0 m1 EM k.
+    subst.
+    dependent induction n.
+    -
+      cbn.
+      apply EM.
+    -
+      cbn.
+      apply IHn.
+      apply F.add_m;auto.
+  Qed.
 
   Lemma init_ghost_tags_same:
-    forall (sz : Z) (t : AddressValue.t) (c1 c0 : ZMap.t (bool * CapGhostState)),
+    forall (sz : Z) (addr : AddressValue.t) (c1 c0 : ZMap.t (bool * CapGhostState)),
       ZMap.Equal (elt:=bool * CapGhostState) c0 c1 ->
       ZMap.Equal (elt:=bool * CapGhostState)
-        (CheriMemoryWithPNVI.init_ghost_tags t sz c0)
-        (CheriMemoryWithoutPNVI.init_ghost_tags t sz c1).
+        (CheriMemoryWithPNVI.init_ghost_tags addr sz c0)
+        (CheriMemoryWithoutPNVI.init_ghost_tags addr sz c1).
   Proof.
-    intros sz.
-  Admitted.
+    unfold CheriMemoryWithPNVI.init_ghost_tags, CheriMemoryWithoutPNVI.init_ghost_tags.
+    generalize (alignof_pointer MorelloImpl.get) as al.
+    generalize ((false, {| tag_unspecified := true; bounds_unspecified := false |})) as v.
+    intros v al sz addr c1 c0 E k.
+    repeat break_let.
+    setoid_rewrite E.
+    reflexivity.
+  Qed.
 
   Lemma AddressValue_Z_id:
     forall a,
