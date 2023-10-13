@@ -215,7 +215,13 @@ let cn_to_ail_binop_internal bt1 bt2 = function
       | _, _ -> None
     in
     (A.(Arithmetic Add), str_opt))
-  | Sub -> (A.(Arithmetic Sub), None)
+  | Sub -> 
+    let str_opt = match bt1, bt2 with 
+      | BT.Integer, BT.Integer -> Some "cn_integer_sub"
+      | BT.Loc, BT.Integer -> Some "cn_pointer_sub"
+      | _, _ -> None
+    in
+    (A.(Arithmetic Sub), str_opt)
   | Mul 
   | MulNoSMT -> (A.(Arithmetic Mul), Some "cn_integer_multiply")
   | Div 
@@ -388,13 +394,60 @@ let empty_for_dest : type a. a dest -> a =
       | AssignVar _ -> ([], [empty_ail_stmt])
       | PassBack -> ([], [empty_ail_stmt], mk_expr empty_ail_expr)
 
-
 let add_conversion_fn ail_expr_ bt = 
-    let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in 
-    match typedef_name with 
-    | Some str ->
-      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("convert_to_" ^ str))), [mk_expr ail_expr_]))
-      | None -> ail_expr_
+  let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in 
+  match typedef_name with 
+  | Some str ->
+    let str = String.concat "_" (String.split_on_char ' ' str) in
+    A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("convert_to_" ^ str))), [mk_expr ail_expr_]))
+  | None -> ail_expr_
+    
+
+type extra_info = {
+  pred_name: Sym.sym option;
+  dts: (Sym.sym Cn.cn_datatype) list;
+  cn_vars: (C.union_tag) list;
+  ownership_ctypes: C.ctype list;
+}
+
+
+let generate_ownership_function ctype = 
+  let ctype_str = str_of_ctype ctype in
+  let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
+  let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
+  let param1_sym = Sym.fresh_pretty "cn_ptr" in
+  let param2_sym = Sym.fresh_pretty "owned_enum" in
+  let param1 = (param1_sym, mk_ctype (C.(Pointer (empty_qualifiers, bt_to_ail_ctype BT.Loc)))) in
+  let param2 = (param2_sym, mk_ctype (C.(Basic (Integer (Enum (Sym.fresh_pretty "OWNERSHIP")))))) in
+  let (param_syms, param_types) = List.split [param1; param2] in
+  let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
+  let generate_case enum_str = 
+    let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in
+    let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt AilSbreak)) in 
+    A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
+  in
+  (* Function body *)
+  let switch_stmt = A.(AilSswitch (mk_expr (AilEident param2_sym), mk_stmt (AilSblock ([], List.map generate_case ["GET"; "TAKE"])))) in
+  let cast_expr_ = A.(AilEcast (empty_qualifiers, (mk_ctype C.(Pointer (empty_qualifiers, ctype))), mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.id "ptr")))) in
+  let deref_expr_ = A.(AilEunary (Indirection, mk_expr cast_expr_)) in
+  let sct_opt = Sctypes.of_ctype ctype in
+  let sct = match sct_opt with 
+    | Some sct -> sct
+    | None -> failwith "Bad sctype when trying to generate ownership function"
+  in
+  let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
+  let ret_type = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype bt))) in
+  let return_stmt = A.(AilSreturn (mk_expr (add_conversion_fn deref_expr_ bt))) in
+  (* Generating function declaration *)
+  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
+  (* Generating function definition *)
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], List.map mk_stmt [switch_stmt; return_stmt])))) in
+  (decl, def)
+
+
+(* TODO *)
+let generate_equality_function name = ()
+
 
 
 (* frontend/model/ail/ailSyntax.lem *)
@@ -498,7 +551,9 @@ let rec cn_to_ail_expr_aux_internal
             | BT.Map (bt1, bt2) ->
               let (_, val_bt) = map_basetypes (IT.bt t1) in
               let val_ctype = bt_to_ail_ctype val_bt in
-              let val_equality_str = (str_of_ctype val_ctype) ^ "_equality" in
+              let val_str = str_of_ctype val_ctype in
+              let val_str = String.concat "_" (String.split_on_char ' ' val_str) in
+              let val_equality_str =  val_str ^ "_equality" in
               A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
             | _ -> 
               (match get_typedef_string (bt_to_ail_ctype (IT.bt t1)) with 
@@ -827,8 +882,7 @@ let rec cn_to_ail_expr_aux_internal
                             let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym in
                             let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, Sym.pp_string tag_sym); attr_args = []} in
                             let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
-                            let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
-                            ail_case_stmt
+                            A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
                           in 
                           let e1_transformed = transform_switch_expr e1 in
                           let ail_case_stmts = List.map build_case dt.cn_dt_cases in
@@ -970,7 +1024,7 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
     let binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, bt_to_ail_ctype bt))) in
 
     let (b, s, e) = cn_to_ail_expr_internal dts cn_vars p.pointer PassBack in
-    let (rhs, bs, ss) = match p.name with 
+    let (rhs, bs, ss, owned_ctype) = match p.name with 
       | Owned (sct, _) ->
         let sct_str = CF.Pp_utils.to_plain_pretty_string (Sctypes.pp sct) in 
         let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
@@ -980,17 +1034,17 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
         let fn_call_it = IT.IT (Apply (Sym.fresh_pretty owned_fn_name, [p.pointer; enum_val_get]), BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct, Cerb_location.unknown) in
         let (bs', ss', e') = cn_to_ail_expr_internal dts (enum_sym :: cn_vars) fn_call_it PassBack in
-        (e', bs', ss')
+        (e', bs', ss', Some (Sctypes.to_ctype sct))
         (* let cast_ctype_pointer = C.(Pointer (empty_qualifiers, ctype)) in
         let cast_e_ = A.(AilEcast (empty_qualifiers, mk_ctype cast_ctype_pointer, e)) in
         (make_deref_expr_ cast_e_, [], []) *)
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts cn_vars it PassBack) p.iargs) in
         let fcall = A.(AilEcall (mk_expr (AilEident pname), e :: es)) in
-        (mk_expr fcall, List.concat bs, List.concat ss)
+        (mk_expr fcall, List.concat bs, List.concat ss, None)
     in
     let s_decl = A.(AilSdeclaration [(sym, Some rhs)]) in
-    (b @ bs @ [binding], s @ ss @ [s_decl])
+    (b @ bs @ [binding], s @ ss @ [s_decl], owned_ctype)
 
   | ResourceTypes.Q q -> 
     (* 
@@ -1042,9 +1096,10 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
     let ptr_add_binding = create_binding ptr_add_sym cn_pointer_return_type in
     let ptr_add_stat = A.(AilSdeclaration [(ptr_add_sym, Some e4)]) in
 
-    let (rhs, bs, ss) = match q.name with 
-      | Owned (sct, init) -> 
+    let (rhs, bs, ss, owned_ctype) = match q.name with 
+      | Owned (sct, _) -> 
         let sct_str = CF.Pp_utils.to_plain_pretty_string (Sctypes.pp sct) in 
+        let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
         let owned_fn_name = "owned_" ^ sct_str in 
         let ptr_add_it = IT.(IT (Sym ptr_add_sym, BT.Loc, Cerb_location.unknown)) in
         (* Hack with enum as sym *)
@@ -1052,11 +1107,11 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
         let fn_call_it = IT.IT (Apply (Sym.fresh_pretty owned_fn_name, [ptr_add_it; enum_val_get]), BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct, Cerb_location.unknown) in
         let (bs', ss', e') = cn_to_ail_expr_internal dts (i_sym :: ptr_add_sym :: enum_sym :: cn_vars) fn_call_it PassBack in
-        (e', bs', ss')
+        (e', bs', ss', Some (Sctypes.to_ctype sct))
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts (i_sym :: cn_vars) it PassBack) q.iargs) in
         let fcall = A.(AilEcall (mk_expr (AilEident pname), (mk_expr (AilEident ptr_add_sym)) :: es)) in
-        (mk_expr fcall, List.concat bs, List.concat ss)
+        (mk_expr fcall, List.concat bs, List.concat ss, None)
     in
 
     let increment_fn_sym = Sym.fresh_pretty "cn_integer_increment" in
@@ -1079,7 +1134,7 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
         ([sym_binding], [sym_decl; ail_block])
     in
 
-    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
+    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss', owned_ctype)
 
 let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> C.union_tag list -> a dest -> LC.logical_constraint -> a
   = fun dts cn_vars d lc -> 
@@ -1166,19 +1221,23 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
   ((decl, def), ail_record_opt)
 
-let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts cn_vars preds = 
-  let rec predicate_clause_to_ail = function
+let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts cn_vars ots preds = 
+  let rec predicate_clause_to_ail ownership_ctypes = function
       | LAT.Define ((name, it), info, lat) -> 
         let ctype = bt_to_ail_ctype (IT.bt it) in
         let binding = create_binding name ctype in
         let (b1, s1) = cn_to_ail_expr_internal_with_pred_name pred_sym dts (name :: cn_vars) it (AssignVar name) in
-        let (b2, s2) = predicate_clause_to_ail lat in
-        (b1 @ b2 @ [binding], s1 @ s2)
+        let (b2, s2, ownership_ctypes') = predicate_clause_to_ail ownership_ctypes lat in
+        (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
 
       | LAT.Resource ((name, (ret, bt)), info, lat) -> 
-        let (b1, s1) = cn_to_ail_resource_internal name dts (name :: cn_vars) preds ret in
-        let (b2, s2) = predicate_clause_to_ail lat in
-        (b1 @ b2, s1 @ s2)
+        let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts (name :: cn_vars) preds ret in
+        let ct = match owned_ctype with 
+          | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
+          | None -> []
+        in
+        let (b2, s2, ownership_ctypes') = predicate_clause_to_ail (ct @ ownership_ctypes) lat in
+        (b1 @ b2, s1 @ s2, ownership_ctypes')
 
       | LAT.Constraint (lc, (loc, str_opt), lat) -> 
         let (b1, s, e) = cn_to_ail_logical_constraint_internal dts cn_vars PassBack lc in
@@ -1192,34 +1251,35 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
             let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
             s @ [ail_stat_]
         in
-        let (b2, s2) = predicate_clause_to_ail lat in
-        (b1 @ b2, ss @ s2)
+        let (b2, s2, ownership_ctypes') = predicate_clause_to_ail ownership_ctypes lat in
+        (b1 @ b2, ss @ s2, ownership_ctypes')
 
       | LAT.I it ->
-        cn_to_ail_expr_internal_with_pred_name pred_sym dts cn_vars it Return
+        let (bs, ss) = cn_to_ail_expr_internal_with_pred_name pred_sym dts cn_vars it Return in 
+        (bs, ss, ownership_ctypes)
   in
 
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) def.oarg_bt in
 
-  let rec clause_translate (clauses : RP.clause list) = 
+  let rec clause_translate (clauses : RP.clause list) ownership_ctypes = 
     match clauses with
-      | [] -> ([], [])
+      | [] -> ([], [], ownership_ctypes)
       | c :: cs ->
-        let (bs, ss) = predicate_clause_to_ail c.packing_ft in
+        let (bs, ss, ownership_ctypes') = predicate_clause_to_ail ownership_ctypes c.packing_ft in
         match c.guard with 
           | IT (Const (Bool true), _, _) -> 
-            let (bs'', ss'') = clause_translate cs in
-            (bs @ bs'', ss @ ss'')
+            let (bs'', ss'', ownership_ctypes'') = clause_translate cs ownership_ctypes' in
+            (bs @ bs'', ss @ ss'', ownership_ctypes'')
           | _ -> 
             let (b1, s1, e) = cn_to_ail_expr_internal_with_pred_name pred_sym dts [] c.guard PassBack in
-            let (bs'', ss'') = clause_translate cs in
+            let (bs'', ss'', ownership_ctypes'') = clause_translate cs ownership_ctypes' in
             let ail_if_stat = A.(AilSif (e, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
-            ([], [ail_if_stat])
+            ([], [ail_if_stat], ownership_ctypes'')
   in
 
-  let (bs, ss) = match def.clauses with 
-    | Some clauses -> clause_translate clauses
-    | None -> ([], [])
+  let (bs, ss, ownership_ctypes') = match def.clauses with 
+    | Some clauses -> clause_translate clauses ots
+    | None -> ([], [], ots)
   in
 
   let pred_body = List.map mk_stmt ss in
@@ -1232,82 +1292,71 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
   let decl = (pred_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
   let def = (pred_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, pred_body)))) in
-  ((decl, def), ail_record_opt)
+  ((decl, def), ail_record_opt, ownership_ctypes')
+
+let rec cn_to_ail_predicates_internal pred_def_list dts cn_vars ots preds = 
+  match pred_def_list with 
+    | [] -> ([], [], ots)
+    | p :: ps ->
+      let (d, r, ots') = cn_to_ail_predicate_internal p dts cn_vars ots preds in 
+      let (ds, rs, ots'') = cn_to_ail_predicates_internal ps dts cn_vars ots' preds in 
+      (d :: ds, r :: rs, ots'')
 
 
-
-
-let rec cn_to_ail_arguments_l_internal dts cn_vars preds = function
+let rec cn_to_ail_arguments_l_internal dts cn_vars ownership_ctypes preds = function
     (* CN let *)
   | M_Define ((sym, it), _info, l) ->
     let binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (IT.bt it))))) in
     let (b1, s1) = cn_to_ail_expr_internal dts cn_vars it (AssignVar sym) in
-    let (b2, s2, cn_vars') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) preds l in
-    (b1 @ b2 @ [binding], s1 @ s2, cn_vars')
+    let (b2, s2, cn_vars', ownership_ctypes') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) ownership_ctypes preds l in
+    (b1 @ b2 @ [binding], s1 @ s2, cn_vars', ownership_ctypes')
 
     (* CN take *)
   | M_Resource ((sym, (re, _bt)), _info, l) -> 
-    (* Printf.printf "Reached M_Resource (Owned)\n"; *)
-    (match _bt with 
-      | BT.Map (_, _) -> Printf.printf "%s is a map\n" (Sym.pp_string sym)
-      | _ -> ())
-    ;
-    let (b1, s1) = cn_to_ail_resource_internal sym dts cn_vars preds re in
-    let (b2, s2, cn_vars') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) preds l in
-    (b1 @ b2, s1 @ s2, cn_vars')
+    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal sym dts cn_vars preds re in
+    (* No duplicates *)
+    let ct = match owned_ctype with 
+      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
+      | None -> []
+    in
+    let (b2, s2, cn_vars', ownership_ctypes') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) (ct @ ownership_ctypes) preds l in
+    (b1 @ b2, s1 @ s2, cn_vars', ownership_ctypes')
 
     (* CN assertion (or inside of take) *)
   | M_Constraint (lc, _info, l) -> 
-    (* Printf.printf "Reached M_Constraint (take)\n"; *)
     let (b1, s1) = cn_to_ail_logical_constraint_internal dts cn_vars Assert lc in 
-    let (b2, s2, cn_vars') = cn_to_ail_arguments_l_internal dts cn_vars preds l in 
+    let (b2, s2, cn_vars', ownership_ctypes') = cn_to_ail_arguments_l_internal dts cn_vars ownership_ctypes preds l in 
+    (b1 @ b2, s1 @ s2, cn_vars', ownership_ctypes')
 
-    (* Hack *)
-    (* let rec remove_var_asserts ss = 
-      match ss with 
-      | [] -> []
-      | x :: xs ->
-        let default_res = x :: remove_var_asserts xs in
-        match x with 
-          | A.(AilSexpr e) -> 
-            (match rm_expr e with 
-              | A.(AilEassert e') ->
-                (match rm_expr e' with 
-                  | A.(AilEident _) -> remove_var_asserts xs
-                  | _ -> default_res)
-              | _ -> default_res
-            )
-          | _ -> default_res
-    in *)
-    (b1 @ b2, s1 @ s2, cn_vars')
-    (* (b1 @ b2, (remove_var_asserts s1) @ s2)
-        *)
-      (* (b2, s2) *)
-
-  | M_I i -> ([], [], cn_vars)
+  | M_I i -> ([], [], cn_vars, ownership_ctypes)
 
 (* Precondition translation *)
 let rec cn_to_ail_arguments_internal dts preds = function
   | M_Computational ((s, bt), _info, pre) ->
-    (* TODO: Do something with s and bt *)
+    (* (s, bt) are function arguments *)
       cn_to_ail_arguments_internal dts preds pre
   | M_L pre ->
-      cn_to_ail_arguments_l_internal dts [] preds pre
+      cn_to_ail_arguments_l_internal dts [] [] preds pre
 
 (* TODO: Generate bindings *)
 (* TODO: Add destination passing? *)
-let rec cn_to_ail_post_aux_internal dts cn_vars preds = function
+let rec cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds = function
   | LRT.Define ((name, it), info, t) ->
     Printf.printf "LRT.Define\n";
     let binding = create_binding name (mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (IT.bt it))))) in
     let (b1, s1) = cn_to_ail_expr_internal dts cn_vars it (AssignVar name) in
-    let (b2, s2) = cn_to_ail_post_aux_internal dts (name :: cn_vars) preds t in
-    (b1 @ b2 @ [binding], s1 @ s2)
+    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts (name :: cn_vars) ownership_ctypes preds t in
+    (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
 
   | LRT.Resource ((name, (re, bt)), info, t)  ->
-    let (b1, s1) = cn_to_ail_resource_internal name dts cn_vars preds re in
-    let (b2, s2) = cn_to_ail_post_aux_internal dts (name :: cn_vars) preds t in
-    (b1 @ b2, s1 @ s2)
+    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts cn_vars preds re in
+    (* No duplicates *)
+    let ct = match owned_ctype with 
+      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
+      | None -> []
+    in
+    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts (name :: cn_vars) (ct @ ownership_ctypes) preds t in
+    (b1 @ b2, s1 @ s2, ownership_ctypes')
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
     let (b1, s, e) = cn_to_ail_logical_constraint_internal dts cn_vars PassBack lc in
@@ -1319,16 +1368,16 @@ let rec cn_to_ail_post_aux_internal dts cn_vars preds = function
         let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
         s @ [ail_stat_]
     in
-    let (b2, s2) = cn_to_ail_post_aux_internal dts cn_vars preds t in
+    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds t in
 
-    (b1 @ b2, ss @ s2)
+    (b1 @ b2, ss @ s2, ownership_ctypes')
 
-  | LRT.I -> ([], [])
+  | LRT.I -> ([], [], ownership_ctypes)
 
 
-let cn_to_ail_post_internal dts cn_vars preds (ReturnTypes.Computational (bound, oinfo, t)) = 
-  let (bs, ss) = cn_to_ail_post_aux_internal dts cn_vars preds t in 
-  ([], [A.(AilSblock (bs, List.map mk_stmt ss))])
+let cn_to_ail_post_internal dts cn_vars ownership_ctypes preds (ReturnTypes.Computational (bound, oinfo, t)) = 
+  let (bs, ss, ownership_ctypes') = cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds t in 
+  ([], [A.(AilSblock (bs, List.map mk_stmt ss))], ownership_ctypes')
 
 (* TODO: Add destination passing *)
 let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> C.union_tag list -> a dest -> Cnprog.cn_statement -> (a * bool)
