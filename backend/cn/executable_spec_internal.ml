@@ -12,12 +12,10 @@ module A=CF.AilSyntax
 type executable_spec = {
     pre_post: (CF.Symbol.sym * (string list * string list)) list;
     in_stmt: (Cerb_location.t * string list) list;
+    ownership_ctypes: CF.Ctype.ctype list;
 }
 
 let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list)) = 
-  (* let test_var_sym = Sym.fresh_pretty "test_var" in *)
-  (* let test_decl = A.(AilSdeclaration [(test_var_sym, Some (mk_expr (AilEident (Sym.fresh_pretty "some_val"))))]) in *)
-  (* let test_binding = A.(test_var_sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, mk_ctype CF.Ctype.Void)) in *)
   let is_assert_true = function 
     | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEassert expr))) ->
       (match (rm_expr expr) with
@@ -45,11 +43,11 @@ let generate_c_statements_internal (loc, statements) dts =
 let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = ail_prog.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
-  let (pre_bs, pre_ss, cn_vars) = Cn_internal_to_ail.cn_to_ail_arguments_internal dts preds instrumentation.internal.pre in
-  let post_stats_ = Cn_internal_to_ail.cn_to_ail_post_internal dts cn_vars preds instrumentation.internal.post in
+  let (pre_bs, pre_ss, cn_vars, ownership_ctypes) = Cn_internal_to_ail.cn_to_ail_arguments_internal dts preds instrumentation.internal.pre in
+  let (post_bs, post_ss, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_post_internal dts cn_vars ownership_ctypes preds instrumentation.internal.post in
   let pre_str = generate_ail_stat_strs (pre_bs, pre_ss) in
-  let post_str = generate_ail_stat_strs post_stats_ in
-  [(instrumentation.fn, (pre_str, post_str))]
+  let post_str = generate_ail_stat_strs (post_bs, post_ss) in
+  ([(instrumentation.fn, (pre_str, post_str))], ownership_ctypes')
 
 
 
@@ -74,14 +72,12 @@ let generate_c_specs_internal instrumentation_list type_map (statement_locs : Ce
     (* let internal_statements = List.filter (fun (_, ss) ->  List.length ss != 0) instrumentation.internal.statements in *)
     let internal_statements = remove_duplicates [] instrumentation.internal.statements in
     let c_statements = List.map (fun s -> generate_c_statements_internal s ail_prog.cn_datatypes) internal_statements in
-    let c_pres_and_posts = generate_c_pres_and_posts_internal instrumentation type_map ail_prog prog5 in 
-    (c_pres_and_posts, c_statements)
+    let (c_pres_and_posts, ownership_ctypes) = generate_c_pres_and_posts_internal instrumentation type_map ail_prog prog5 in 
+    (c_pres_and_posts, c_statements, ownership_ctypes)
   in
   let specs = List.map generate_c_spec instrumentation_list in 
-  let (pre_post, in_stmt) = List.split specs in
-  let pre_post = List.fold_left List.append [] pre_post in
-  let in_stmt = List.fold_left List.append [] in_stmt in
-  let executable_spec = {pre_post = pre_post; in_stmt = in_stmt} in
+  let (pre_post, in_stmt, ownership_ctypes) = list_split_three specs in
+  let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt; ownership_ctypes = List.concat ownership_ctypes} in
   executable_spec
 
 let concat_map_newline docs = 
@@ -135,9 +131,9 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   let funs_str = CF.Pp_utils.to_plain_pretty_string doc in 
   (funs_str, records_str)
 
-let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) =
-  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes [] resource_predicates) resource_predicates in
-  let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
+let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) ownership_ctypes =
+  (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates in *)
+  let (ail_funs, ail_records_opt, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_predicates_internal resource_predicates ail_prog.cn_datatypes [] ownership_ctypes resource_predicates in 
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
@@ -145,4 +141,12 @@ let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ai
   CF.Pp_utils.to_plain_pretty_string doc in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let records_str = generate_c_records (List.concat ail_records) in
-  (preds_str, records_str)
+  (preds_str, records_str, ownership_ctypes')
+
+let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 
+  let ail_funs = List.map Cn_internal_to_ail.generate_ownership_function ctypes in 
+  let (decls, defs) = List.split ail_funs in
+  let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
+  CF.Pp_utils.to_plain_pretty_string doc
+

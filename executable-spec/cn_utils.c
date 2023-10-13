@@ -148,17 +148,6 @@ enum OWNERSHIP {
     TAKE
 };
 
-char owned_char(cn_pointer *cn_pointer, enum OWNERSHIP owned_enum) {
-    switch (owned_enum) {
-        case GET:
-            // printf("GET case\n");
-            break;
-        case TAKE:
-            // printf("TAKE case\n");
-            break;
-    }
-    return *((char *) cn_pointer->ptr);
-}
 
 
 cn_integer *cast_cn_pointer_to_cn_integer(cn_pointer *ptr) {
