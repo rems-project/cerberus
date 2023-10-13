@@ -1566,7 +1566,7 @@ type instrumentation = {
     fn_loc: Loc.t;
     surface: surface;
     internal : internal;
-  }
+}
 
 
 let concat2 (x : ('a list * 'b list)) (y : ('a list * 'b list)) : 'a list * 'b list =
