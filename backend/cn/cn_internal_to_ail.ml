@@ -13,6 +13,7 @@ module BT=BaseTypes
 module T=Terms
 module LRT=LogicalReturnTypes
 module LAT=LogicalArgumentTypes
+module AT=ArgumentTypes
 
 let map_basetypes = function 
   | BT.Map (bt1, bt2) -> (bt1, bt2)
@@ -357,10 +358,26 @@ let rec cn_to_ail_const_internal = function
   (* | Default of BaseTypes.t  *)
   | _ -> failwith "TODO cn_to_ail_const_internal"
 
+type ail_bindings_and_statements = A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
+
+type ail_executable_spec = {
+    pre: ail_bindings_and_statements;
+    post: ail_bindings_and_statements;
+    in_stmt: (Locations.t * ail_bindings_and_statements) list;
+    ownership_ctypes: CF.Ctype.ctype list;
+}
+
+let empty_ail_executable_spec = {
+  pre = ([], []);
+  post = ([], []);
+  in_stmt = [];
+  ownership_ctypes = [];
+}
+
 type 'a dest =
-| Assert : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) dest
-| Return : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) dest 
-| AssignVar : C.union_tag -> (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) dest
+| Assert : ail_bindings_and_statements dest
+| Return : ail_bindings_and_statements dest 
+| AssignVar : C.union_tag -> ail_bindings_and_statements dest
 | PassBack : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression) dest
 
 let dest : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression -> a = 
@@ -923,9 +940,9 @@ let cn_to_ail_expr_internal
     cn_to_ail_expr_aux_internal None None dts cn_vars cn_expr d
 
 let cn_to_ail_expr_internal_with_pred_name
-  : type a. Sym.sym -> (_ Cn.cn_datatype) list -> C.union_tag list -> IT.t -> a dest -> a
-    = fun pred_name dts cn_vars cn_expr d ->
-      cn_to_ail_expr_aux_internal None (Some pred_name) dts cn_vars cn_expr d    
+  : type a. (Sym.sym option) -> (_ Cn.cn_datatype) list -> C.union_tag list -> IT.t -> a dest -> a
+    = fun pred_name_opt dts cn_vars cn_expr d ->
+      cn_to_ail_expr_aux_internal None pred_name_opt dts cn_vars cn_expr d    
 
 
 let create_member (ctype, id) =
@@ -1206,7 +1223,7 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   match def.definition with
     | Def it
     | Rec_Def it ->
-      let (bs, ss) = cn_to_ail_expr_internal_with_pred_name fn_sym cn_datatypes [] it Return in
+      let (bs, ss) = cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return in
       (bs, List.map mk_stmt ss)
     | Uninterp -> ([], [])
   in
@@ -1220,57 +1237,63 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
   ((decl, def), ail_record_opt)
 
+(* type lat_dest =
+  | IndexTerm
+  | PostAndStatements *)
+
+  
+let rec cn_to_ail_lat_internal dts pred_sym_opt cn_vars ownership_ctypes preds = function
+  | LAT.Define ((name, it), info, lat) -> 
+    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let binding = create_binding name ctype in
+    let (b1, s1) = cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts (name :: cn_vars) it (AssignVar name) in
+    let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal dts pred_sym_opt cn_vars ownership_ctypes preds lat in
+    (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
+
+  | LAT.Resource ((name, (ret, bt)), info, lat) -> 
+    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts (name :: cn_vars) preds ret in
+    let ct = match owned_ctype with 
+      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
+      | None -> []
+    in
+    let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal dts pred_sym_opt cn_vars (ct @ ownership_ctypes) preds lat in
+    (b1 @ b2, s1 @ s2, ownership_ctypes')
+
+  | LAT.Constraint (lc, (loc, str_opt), lat) -> 
+    let (b1, s, e) = cn_to_ail_logical_constraint_internal dts cn_vars PassBack lc in
+    (* TODO: Check this logic *)
+    let ss = match str_opt with 
+      | Some info -> 
+        (* Printf.printf "Logical constraint info: %s\n" info; *)
+        []
+      | None -> 
+        (* Printf.printf "No logical constraint info\n"; *)
+        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
+        s @ [ail_stat_]
+    in
+    let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal dts pred_sym_opt cn_vars ownership_ctypes preds lat in
+    (b1 @ b2, ss @ s2, ownership_ctypes')
+
+  | LAT.I it ->
+    let (bs, ss) = cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts cn_vars it Return in 
+    (bs, ss, ownership_ctypes)
+
+
+
 let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts cn_vars ots preds = 
-  let rec predicate_clause_to_ail ownership_ctypes = function
-      | LAT.Define ((name, it), info, lat) -> 
-        let ctype = bt_to_ail_ctype (IT.bt it) in
-        let binding = create_binding name ctype in
-        let (b1, s1) = cn_to_ail_expr_internal_with_pred_name pred_sym dts (name :: cn_vars) it (AssignVar name) in
-        let (b2, s2, ownership_ctypes') = predicate_clause_to_ail ownership_ctypes lat in
-        (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
-
-      | LAT.Resource ((name, (ret, bt)), info, lat) -> 
-        let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts (name :: cn_vars) preds ret in
-        let ct = match owned_ctype with 
-          | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
-          | None -> []
-        in
-        let (b2, s2, ownership_ctypes') = predicate_clause_to_ail (ct @ ownership_ctypes) lat in
-        (b1 @ b2, s1 @ s2, ownership_ctypes')
-
-      | LAT.Constraint (lc, (loc, str_opt), lat) -> 
-        let (b1, s, e) = cn_to_ail_logical_constraint_internal dts cn_vars PassBack lc in
-        (* TODO: Check this logic *)
-        let ss = match str_opt with 
-          | Some info -> 
-            (* Printf.printf "Logical constraint info: %s\n" info; *)
-            []
-          | None -> 
-            (* Printf.printf "No logical constraint info\n"; *)
-            let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
-            s @ [ail_stat_]
-        in
-        let (b2, s2, ownership_ctypes') = predicate_clause_to_ail ownership_ctypes lat in
-        (b1 @ b2, ss @ s2, ownership_ctypes')
-
-      | LAT.I it ->
-        let (bs, ss) = cn_to_ail_expr_internal_with_pred_name pred_sym dts cn_vars it Return in 
-        (bs, ss, ownership_ctypes)
-  in
-
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) def.oarg_bt in
 
   let rec clause_translate (clauses : RP.clause list) ownership_ctypes = 
     match clauses with
       | [] -> ([], [], ownership_ctypes)
       | c :: cs ->
-        let (bs, ss, ownership_ctypes') = predicate_clause_to_ail ownership_ctypes c.packing_ft in
+        let (bs, ss, ownership_ctypes') = cn_to_ail_lat_internal dts (Some pred_sym) cn_vars ownership_ctypes preds c.packing_ft in
         match c.guard with 
           | IT (Const (Bool true), _, _) -> 
             let (bs'', ss'', ownership_ctypes'') = clause_translate cs ownership_ctypes' in
             (bs @ bs'', ss @ ss'', ownership_ctypes'')
           | _ -> 
-            let (b1, s1, e) = cn_to_ail_expr_internal_with_pred_name pred_sym dts [] c.guard PassBack in
+            let (b1, s1, e) = cn_to_ail_expr_internal_with_pred_name (Some pred_sym) dts [] c.guard PassBack in
             let (bs'', ss'', ownership_ctypes'') = clause_translate cs ownership_ctypes' in
             let ail_if_stat = A.(AilSif (e, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
             ([], [ail_if_stat], ownership_ctypes'')
@@ -1302,42 +1325,6 @@ let rec cn_to_ail_predicates_internal pred_def_list dts cn_vars ots preds =
       (d :: ds, r :: rs, ots'')
 
 
-let rec cn_to_ail_arguments_l_internal dts cn_vars ownership_ctypes preds = function
-    (* CN let *)
-  | M_Define ((sym, it), _info, l) ->
-    let binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (IT.bt it))))) in
-    let (b1, s1) = cn_to_ail_expr_internal dts cn_vars it (AssignVar sym) in
-    let (b2, s2, cn_vars', ownership_ctypes') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) ownership_ctypes preds l in
-    (b1 @ b2 @ [binding], s1 @ s2, cn_vars', ownership_ctypes')
-
-    (* CN take *)
-  | M_Resource ((sym, (re, _bt)), _info, l) -> 
-    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal sym dts cn_vars preds re in
-    (* No duplicates *)
-    let ct = match owned_ctype with 
-      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
-      | None -> []
-    in
-    let (b2, s2, cn_vars', ownership_ctypes') = cn_to_ail_arguments_l_internal dts (sym :: cn_vars) (ct @ ownership_ctypes) preds l in
-    (b1 @ b2, s1 @ s2, cn_vars', ownership_ctypes')
-
-    (* CN assertion (or inside of take) *)
-  | M_Constraint (lc, _info, l) -> 
-    let (b1, s1) = cn_to_ail_logical_constraint_internal dts cn_vars Assert lc in 
-    let (b2, s2, cn_vars', ownership_ctypes') = cn_to_ail_arguments_l_internal dts cn_vars ownership_ctypes preds l in 
-    (b1 @ b2, s1 @ s2, cn_vars', ownership_ctypes')
-
-  | M_I i -> ([], [], cn_vars, ownership_ctypes)
-
-(* Precondition translation *)
-let rec cn_to_ail_arguments_internal dts preds = function
-  | M_Computational ((s, bt), _info, pre) ->
-    (* (s, bt) are function arguments *)
-      cn_to_ail_arguments_internal dts preds pre
-  | M_L pre ->
-      cn_to_ail_arguments_l_internal dts [] [] preds pre
-
-(* TODO: Generate bindings *)
 (* TODO: Add destination passing? *)
 let rec cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds = function
   | LRT.Define ((name, it), info, t) ->
@@ -1374,7 +1361,7 @@ let rec cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds = functio
   | LRT.I -> ([], [], ownership_ctypes)
 
 
-let cn_to_ail_post_internal dts cn_vars ownership_ctypes preds (ReturnTypes.Computational (bound, oinfo, t)) = 
+let cn_to_ail_post_internal dts cn_vars ownership_ctypes preds (RT.Computational (bound, oinfo, t)) = 
   let (bs, ss, ownership_ctypes') = cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds t in 
   ([], [A.(AilSblock (bs, List.map mk_stmt ss))], ownership_ctypes')
 
@@ -1459,3 +1446,69 @@ let rec cn_to_ail_cnprog_internal_aux dts cn_vars = function
 let cn_to_ail_cnprog_internal dts cn_vars cn_prog = 
   let ((bs, ss), _) = cn_to_ail_cnprog_internal_aux dts cn_vars cn_prog in 
   (bs, ss)
+
+let cn_to_ail_statements dts cn_vars (loc, cn_progs) = 
+  let bs_and_ss = List.map (fun prog -> cn_to_ail_cnprog_internal dts cn_vars prog) cn_progs in 
+  let (bs, ss) = List.split bs_and_ss in 
+  (loc, (List.concat bs, List.concat ss))
+
+let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
+  | LAT.Define ((name, it), info, lat) -> 
+    let ctype = bt_to_ail_ctype (IT.bt it) in
+    let binding = create_binding name ctype in
+    let (b1, s1) = cn_to_ail_expr_internal dts (name :: cn_vars) it (AssignVar name) in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds lat in
+    let (b2, s2) = ail_executable_spec.pre in 
+    {ail_executable_spec with pre = (b1 @ b2 @ [binding], s1 @ s2);}
+
+  | LAT.Resource ((name, (ret, bt)), info, lat) -> 
+    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts (name :: cn_vars) preds ret in
+    let ct = match owned_ctype with 
+      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
+      | None -> []
+    in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars (ct @ ownership_ctypes) preds lat in
+    let (b2, s2) = ail_executable_spec.pre in
+    {ail_executable_spec with pre = (b1 @ b2, s1 @ s2);}
+
+  | LAT.Constraint (lc, (loc, str_opt), lat) -> 
+    let (b1, s, e) = cn_to_ail_logical_constraint_internal dts cn_vars PassBack lc in
+    (* TODO: Check this logic *)
+    let ss = match str_opt with 
+      | Some info -> 
+        (* Printf.printf "Logical constraint info: %s\n" info; *)
+        []
+      | None -> 
+        (* Printf.printf "No logical constraint info\n"; *)
+        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
+        s @ [ail_stat_]
+    in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds lat in
+    let (b2, s2) = ail_executable_spec.pre in 
+    {ail_executable_spec with pre = (b1 @ b2, ss @ s2);}
+
+  | LAT.I (post, stats) ->
+     let rec remove_duplicates locs stats = 
+      (match stats with 
+        | [] -> []
+        | (loc, s) :: ss ->
+          let loc_equality x y = 
+            String.equal (Cerb_location.location_to_string x) (Cerb_location.location_to_string y) in 
+          if (List.mem loc_equality loc locs) then 
+            remove_duplicates locs ss
+          else 
+            (loc, s) :: (remove_duplicates (loc :: locs) ss))
+    in
+    let stats = remove_duplicates [] stats in
+    let ail_statements = List.map (fun stat_pair -> cn_to_ail_statements dts cn_vars stat_pair) stats in 
+    let (post_bs, post_ss, ownership_ctypes') = cn_to_ail_post_internal dts cn_vars ownership_ctypes preds post in 
+    {pre = ([], []); post = (post_bs, post_ss); in_stmt = ail_statements; ownership_ctypes = ownership_ctypes'}
+
+
+let rec cn_to_ail_pre_post_aux_internal dts preds = function 
+  | AT.Computational ((sym, bt), info, at) -> cn_to_ail_pre_post_aux_internal dts preds at
+  | AT.L lat -> cn_to_ail_lat_internal_2 dts [] [] preds lat
+  
+let cn_to_ail_pre_post_internal dts preds = function 
+  | Some internal -> cn_to_ail_pre_post_aux_internal dts preds internal
+  | None -> empty_ail_executable_spec
