@@ -31,23 +31,14 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
-let generate_c_statements_internal (loc, statements) dts =
-  Printf.printf "Location at which translation happening: %s\n" (Cerb_location.simple_location loc);
-  let (bindings, stats_) = List.split (List.map (Cn_internal_to_ail.cn_to_ail_cnprog_internal dts []) statements) in
-  let stat_strs = List.map generate_ail_stat_strs (List.combine bindings stats_) in
-  let stat_strs = List.map (List.fold_left (^) "") stat_strs in
-  (* let stat_str = List.fold_left (^) "" stat_strs in *)
-  (loc, stat_strs)
-
-
 let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = ail_prog.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
-  let (pre_bs, pre_ss, cn_vars, ownership_ctypes) = Cn_internal_to_ail.cn_to_ail_arguments_internal dts preds instrumentation.internal.pre in
-  let (post_bs, post_ss, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_post_internal dts cn_vars ownership_ctypes preds instrumentation.internal.post in
-  let pre_str = generate_ail_stat_strs (pre_bs, pre_ss) in
-  let post_str = generate_ail_stat_strs (post_bs, post_ss) in
-  ([(instrumentation.fn, (pre_str, post_str))], ownership_ctypes')
+  let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal dts preds instrumentation.internal in 
+  let pre_str = generate_ail_stat_strs ail_executable_spec.pre in
+  let post_str = generate_ail_stat_strs ail_executable_spec.post in
+  let in_stmt = List.map (fun (loc, bs_and_ss) -> (loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
+  ([(instrumentation.fn, (pre_str, post_str))], in_stmt, ail_executable_spec.ownership_ctypes)
 
 
 
@@ -58,22 +49,8 @@ let generate_c_specs_internal instrumentation_list type_map (statement_locs : Ce
 (prog5: unit Mucore.mu_file)
 =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let rec remove_duplicates locs stats = 
-      (match stats with 
-        | [] -> []
-        | (loc, s) :: ss ->
-          let loc_equality x y = 
-            String.equal (Cerb_location.location_to_string x) (Cerb_location.location_to_string y) in 
-          if (List.mem loc_equality loc locs) then 
-            remove_duplicates locs ss
-          else 
-            (loc, s) :: (remove_duplicates (loc :: locs) ss))
-    in
-    (* let internal_statements = List.filter (fun (_, ss) ->  List.length ss != 0) instrumentation.internal.statements in *)
-    let internal_statements = remove_duplicates [] instrumentation.internal.statements in
-    let c_statements = List.map (fun s -> generate_c_statements_internal s ail_prog.cn_datatypes) internal_statements in
-    let (c_pres_and_posts, ownership_ctypes) = generate_c_pres_and_posts_internal instrumentation type_map ail_prog prog5 in 
-    (c_pres_and_posts, c_statements, ownership_ctypes)
+    let (c_pres_and_posts, c_in_stmt, ownership_ctypes) = generate_c_pres_and_posts_internal instrumentation type_map ail_prog prog5 in 
+    (c_pres_and_posts, c_in_stmt, ownership_ctypes)
   in
   let specs = List.map generate_c_spec instrumentation_list in 
   let (pre_post, in_stmt, ownership_ctypes) = list_split_three specs in
