@@ -1547,27 +1547,41 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
   return file
 
 
-
-type surface = {
-    accesses : (Sym.t * Ctype.ctype) list;
-    requires: (Sym.t, Ctype.ctype) Cn.cn_condition list;
-    ensures: (Sym.t, Ctype.ctype) Cn.cn_condition list;
-    statements: (Locations.t * (Sym.t, Ctype.ctype) cn_statement list) list;
-  }
-
+(*
 type internal = {
     pre: unit mu_arguments;
     post: ReturnTypes.t;
-    (* inv: (Loc.t * unit mu_arguments); *) (* TODO *)
+    inv: (Loc.t * unit mu_arguments);
     statements: (Locations.t * Cnprog.cn_prog list) list;
   }
+*)
+
+type statements = (Locations.t * Cnprog.cn_prog list) list
+
+type fn_spec_instrumentation = 
+  (ReturnTypes.t * statements) ArgumentTypes.t
 
 type instrumentation = {
     fn: Sym.t;
     fn_loc: Loc.t;
-    surface: surface;
-    internal : internal;
+    internal : fn_spec_instrumentation option;
 }
+
+let fn_spec_instrumentation_subst : _ Subst.t -> fn_spec_instrumentation -> fn_spec_instrumentation =
+  ArgumentTypes.subst (fun subst (rt, stmts) ->
+    let rt = ReturnTypes.subst subst rt in
+    let stmts = 
+      List.map (fun (loc, cn_progs) ->
+        (loc, List.map (Cnprog.subst subst) cn_progs)
+      ) stmts
+    in
+    (rt, stmts)
+  ) 
+
+(* substitute `s_with` for `s_replace` of basetype `bt` *)
+let fn_spec_instrumentation_sym_subst (s_replace, bt, s_with) fn_spec = 
+  let subst = IT.make_subst [(s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown))] in
+  fn_spec_instrumentation_subst subst fn_spec
 
 
 let concat2 (x : ('a list * 'b list)) (y : ('a list * 'b list)) : 'a list * 'b list =
@@ -1620,83 +1634,22 @@ let stmts_in_function args_and_body =
     ) args_and_body
 
 
-let pre_post_of_function args_and_body =
-
-  let rec of_args_l = function
-    | M_Define (bound, info, a_l) ->
-       let pre, post = of_args_l a_l in
-       (M_Define (bound, info, pre), post)
-    | M_Resource (bound, info, a_l) ->
-       let pre, post = of_args_l a_l in
-       (M_Resource (bound, info, pre), post)
-    | M_Constraint (lc, info, a_l) ->
-       let pre, post = of_args_l a_l in
-       (M_Constraint (lc, info, pre), post)
-    | M_I (_, _labels, rt) ->
-       (M_I (), rt)
-  in
-
-  let rec of_args = function
-    | M_Computational (bound, info, a) ->
-       let pre, post = of_args a in
-       (M_Computational (bound, info, pre), post)
-    | M_L a_l ->
-       let pre, post = of_args_l a_l in
-       (M_L pre, post)
-  in
-
-  of_args args_and_body
-
-
-
 let collect_instrumentation (file : _ mu_file) =
-  let instrs =
-  Pmap.fold (fun fn decl acc ->
-      match decl with
-      | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
-         let stmts_s, stmts_i = stmts_in_function args_and_body in
-         let surface = {
-             accesses = spec.accesses;
-             requires = spec.requires;
-             ensures = spec.ensures;
-             statements = stmts_s;
-           }
-         in
-         (* let loc_str_equality loc1 loc2 = String.equal (Cerb_location.location_to_string loc1) (Cerb_location.location_to_string loc2) in
-         let rec print_duplicates locs stmts = match stmts with 
-            | [] -> ()
-            | (l, s) :: ss -> 
-               (if (List.mem loc_str_equality l locs) then 
-                  Printf.printf "Duplicate found at loc %s\n" (Cerb_location.simple_location l));
-               print_duplicates (l :: locs) ss
-         in
-         print_duplicates [] stmts_i; *)
-         let pre, post = pre_post_of_function args_and_body in
-         let internal = {
-             pre = pre;
-             post = post;
-             statements = stmts_i;
-           }
-         in
-         { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
-      | M_ProcDecl (fn_loc, _fn) ->
-         (* let stmts_s, stmts_i = stmts_in_function args_and_body in *)
-         let surface = { 
-             accesses = [];
-             requires = [];
-             ensures = [];
-             statements = [];
-           }
-         in
-         (* let pre, post = pre_post_of_function args_and_body in *)
-         let internal = {
-             pre = M_L (M_I ());
-             post = Computational ((Sym.fresh_pretty "", Unit), (Cerb_location.unknown, None), I);
-             statements = [];
-           } 
-         in
-         { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
-    ) file.mu_funs []
+  let instrs = 
+    List.map (fun (fn, decl) ->
+        match decl with
+        | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
+            let args_and_body = argument_type args_and_body in
+            let internal = 
+              ArgumentTypes.map (fun (body, labels, rt) ->
+                  let _, stmts = concat2 (stmts_in_expr body) (stmts_in_labels labels) in
+                  (rt, stmts)
+                ) args_and_body
+            in
+            { fn = fn; fn_loc = fn_loc; internal = Some internal }
+        | M_ProcDecl (fn_loc, _fn) ->
+           { fn = fn; fn_loc = fn_loc; internal = None }
+      ) (Pmap.bindings_list file.mu_funs)
    in
    (instrs, C.symtable)
 
