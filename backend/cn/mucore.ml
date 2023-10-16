@@ -292,7 +292,27 @@ type 'i mu_arguments =
   | M_L of 'i mu_arguments_l
 
 
-let dtree_of_mu_arguments dtree_i =
+module LAT = LogicalArgumentTypes
+module AT = ArgumentTypes
+
+let rec largument_type = function
+  | M_Define (bound, info, a) ->
+      LAT.Define (bound, info, largument_type a)
+  | M_Resource (bound, info, a) ->
+      LAT.Resource (bound, info, largument_type a)
+  | M_Constraint (lc, info, a) ->
+      LAT.Constraint (lc, info, largument_type a)
+  | M_I i ->
+      LAT.I i
+
+let rec argument_type = function
+  | M_Computational (bound, info, a) ->
+      AT.Computational (bound, info, argument_type a)
+  | M_L a ->
+      AT.L (largument_type a)
+
+
+let dtree_of_mu_arguments dtree_i = 
   let rec aux = function
   | M_Computational ((s, _bt), _, lat) ->
      Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); aux lat])
