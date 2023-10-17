@@ -146,3 +146,11 @@ let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory 
   let comment = "\n/* OWNERSHIP FUNCTIONS */\n\n" in
   comment ^ CF.Pp_utils.to_plain_pretty_string doc
 
+let generate_conversion_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
+  let ail_funs = List.map Cn_internal_to_ail.generate_struct_conversion_function ail_prog.tag_definitions in 
+  let ail_funs = List.concat ail_funs in 
+  let (decls, defs) = List.split ail_funs in
+  let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
+  let comment = "\n/* CONVERSION FUNCTIONS */\n\n" in
+  comment ^ CF.Pp_utils.to_plain_pretty_string doc
