@@ -2,6 +2,7 @@
 // #include "alloc.c"
 #include "hash_table.c"
 #include <stdio.h>
+#include <math.h>
 
 
 /* Wrappers for C types */
@@ -76,14 +77,6 @@ _Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *,
 
 
 
-long min(long a, long b) {
-    return a < b ? a : b;
-}
-
-long max(long a, long b) {
-    return a > b ? a : b;
-}
-
 /* Conversion functions */
 
 cn_integer *convert_to_cn_integer(unsigned int i) {
@@ -123,6 +116,13 @@ cn_integer *cn_integer_add(cn_integer *i1, cn_integer *i2) {
     return res;
 }
 
+cn_integer *cn_integer_pow(cn_integer *i1, cn_integer *i2) {
+    cn_integer *res = alloc(sizeof(cn_integer));
+    res->val = alloc(sizeof(unsigned int));
+    *(res->val) = pow(*(i1->val), *(i2->val));
+    return res;
+}
+
 cn_integer *cn_integer_increment(cn_integer *i) {
     *(i->val) = *(i->val) + 1;
     return i;
@@ -134,6 +134,15 @@ cn_integer *cn_integer_multiply(cn_integer *i1, cn_integer *i2) {
     *(res->val) = *(i1->val) * *(i2->val);
     return res;
 }
+
+cn_integer *cn_integer_min(cn_integer *i1, cn_integer *i2) {
+    return cn_integer_lt(i1, i2) ? i1 : i2;
+}
+
+cn_integer *cn_integer_max(cn_integer *i1, cn_integer *i2) {
+    return cn_integer_gt(i1, i2) ? i1 : i2;
+}
+
 
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i) {
     cn_pointer *res = alloc(sizeof(cn_pointer));

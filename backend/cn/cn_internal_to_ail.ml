@@ -163,7 +163,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
   | CN_real -> failwith "TODO CN_real"
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_alloc_id -> failwith "TODO CN_alloc_id"
-  | CN_struct sym -> C.(Struct sym)
+  | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
   | CN_record members -> 
     let sym = generate_record_sym pred_sym members in
     C.(Pointer (empty_qualifiers, mk_ctype (Struct sym)))
@@ -227,7 +227,7 @@ let cn_to_ail_binop_internal bt1 bt2 = function
   | Div 
   | DivNoSMT -> (A.(Arithmetic Div), Some "cn_integer_divide")
   | Exp
-  | ExpNoSMT -> (A.And, Some "pow")
+  | ExpNoSMT -> (A.And, Some "cn_integer_pow")
   (* | Rem
   | RemNoSMT *)
   | Mod
@@ -237,8 +237,8 @@ let cn_to_ail_binop_internal bt1 bt2 = function
   | BWOrNoSMT -> (A.(Arithmetic Bor), None)
   | LT -> (A.Lt, Some "cn_integer_lt")
   | LE -> (A.Le, Some "cn_integer_le")
-  | Min -> (A.And, Some "min")
-  | Max -> (A.And, Some "max")
+  | Min -> (A.And, Some "cn_integer_min")
+  | Max -> (A.And, Some "cn_integer_max")
   | EQ -> (A.Eq, None) 
     (* let fn_str = match get_typedef_string (bt_to_ail_ctype bt1) with 
       | Some str -> Some (str ^ "_equality")
@@ -1015,6 +1015,19 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   enum :: structs
 
+let cn_to_ail_struct ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
+  | C.StructDef (members, opt) -> 
+    let cn_struct_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
+    let new_members = List.map (fun (id, (attrs, alignment, qualifiers, ctype)) -> 
+      let sct_opt = Sctypes.of_ctype ctype in 
+      let sct = match sct_opt with | Some t -> t | None -> failwith "Bad sctype" in
+      let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
+      (id, (attrs, alignment, qualifiers, mk_ctype (C.Pointer (empty_qualifiers, (bt_to_ail_ctype bt))))))
+    members 
+    in
+    [(cn_struct_sym, (loc, attrs, C.StructDef (new_members, opt)))]
+  | C.UnionDef _ -> []
+
 let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predicates) =
   let calculate_return_type = function 
   | ResourceTypes.Owned (sct, _) -> (Sctypes.to_ctype sct, BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct)
@@ -1452,14 +1465,17 @@ let cn_to_ail_statements dts cn_vars (loc, cn_progs) =
   let (bs, ss) = List.split bs_and_ss in 
   (loc, (List.concat bs, List.concat ss))
 
+let prepend_to_precondition ail_executable_spec (b1, s1) = 
+  let (b2, s2) = ail_executable_spec.pre in
+  {ail_executable_spec with pre = (b1 @ b2, s1 @ s2)}
+
 let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let binding = create_binding name ctype in
     let (b1, s1) = cn_to_ail_expr_internal dts (name :: cn_vars) it (AssignVar name) in
     let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds lat in
-    let (b2, s2) = ail_executable_spec.pre in 
-    {ail_executable_spec with pre = (b1 @ b2 @ [binding], s1 @ s2);}
+    prepend_to_precondition ail_executable_spec (binding :: b1, s1)
 
   | LAT.Resource ((name, (ret, bt)), info, lat) -> 
     let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts (name :: cn_vars) preds ret in
@@ -1468,8 +1484,7 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
       | None -> []
     in
     let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars (ct @ ownership_ctypes) preds lat in
-    let (b2, s2) = ail_executable_spec.pre in
-    {ail_executable_spec with pre = (b1 @ b2, s1 @ s2);}
+    prepend_to_precondition ail_executable_spec (b1, s1)
 
   | LAT.Constraint (lc, (loc, str_opt), lat) -> 
     let (b1, s, e) = cn_to_ail_logical_constraint_internal dts cn_vars PassBack lc in
@@ -1484,8 +1499,7 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
         s @ [ail_stat_]
     in
     let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds lat in
-    let (b2, s2) = ail_executable_spec.pre in 
-    {ail_executable_spec with pre = (b1 @ b2, ss @ s2);}
+    prepend_to_precondition ail_executable_spec (b1, ss)
 
   | LAT.I (post, stats) ->
      let rec remove_duplicates locs stats = 
@@ -1514,8 +1528,7 @@ let rec cn_to_ail_pre_post_aux_internal dts preds = function
     let decl = A.(AilSdeclaration [(cn_sym, Some (mk_expr rhs))]) in
     let subst_at = Core_to_mucore.fn_spec_instrumentation_sym_subst (sym, bt, cn_sym) at in
     let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds subst_at in 
-    let (bs, ss) = ail_executable_spec.pre in 
-    {ail_executable_spec with pre = (binding :: bs, decl :: ss)}
+    prepend_to_precondition ail_executable_spec ([binding], [decl])
   | AT.L lat -> cn_to_ail_lat_internal_2 dts [] [] preds lat
   
 let cn_to_ail_pre_post_internal dts preds = function 
