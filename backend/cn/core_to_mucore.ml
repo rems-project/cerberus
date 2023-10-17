@@ -218,8 +218,9 @@ let unit_pat loc annots =
 
 
 let function_ids = [
-    ("params_length", M_params_length);
-    ("params_nth", M_params_nth);
+    ("params_length", M_F_params_length);
+    ("params_nth", M_F_params_nth);
+    ("ctype_width", M_F_ctype_width);
   ]
 
 
@@ -241,45 +242,47 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEerror(err, e') ->
      annotate (M_PEerror (err, n_pexpr loc e'))
   | PEctor(ctor, args) ->
+     let argnum_err () = assert_error loc (Print.item "PEctor wrong number of arguments"
+         (Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe)))) in
      begin match ctor, args with
      | Core.CivCOMPL, [ct; arg1] -> 
         let ct = ensure_pexpr_ctype loc !^"CivCOMPL: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_unop (M_BW_COMPL, arg1))))
      | Core.CivCOMPL, _ -> 
-        assert_error loc !^"CivCOMPL applied to wrong number of arguments"
+        argnum_err ()
      | Core.CivAND, [ct; arg1; arg2] -> 
         let ct = ensure_pexpr_ctype loc !^"CivAND: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_AND, arg1, arg2))))
      | Core.CivAND, _ ->
-        assert_error loc !^"CivAND applied to wrong number of arguments"
+        argnum_err ()
      | Core.CivOR, [ct; arg1; arg2] -> 
         let ct = ensure_pexpr_ctype loc !^"CivOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_OR, arg1, arg2))))
      | Core.CivOR, _ ->
-        assert_error loc !^"CivOR applied to wrong number of arguments"
+        argnum_err ()
      | Core.CivXOR, [ct; arg1; arg2] -> 
         let ct = ensure_pexpr_ctype loc !^"CivXOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_XOR, arg1, arg2))))
      | Core.CivXOR, _ ->
-        assert_error loc !^"CivXOR applied to wrong number of arguments"
+        argnum_err ()
      | Core.Cfvfromint, [arg1] -> 
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Cfvfromint arg1)
      | Core.Cfvfromint, _ ->
-        assert_error loc !^"Cfvfromint applied to wrong number of arguments"
+        argnum_err ()
      | Core.Civfromfloat, [ct; arg1] -> 
         let ct = ensure_pexpr_ctype loc !^"Civfromfloat: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Civfromfloat(ct, arg1))
      | Core.Civfromfloat, _ ->
-        assert_error loc !^"Civfromfloat applied to wrong number of arguments"
+        argnum_err ()
      | Core.Cnil bt1, _ -> 
         annotate (M_PEctor (M_Cnil (convert_bt loc bt1), 
                             List.map (n_pexpr loc) args))
@@ -289,10 +292,27 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         annotate (M_PEctor (M_Ctuple, List.map (n_pexpr loc) args))
      | Core.Carray, _ -> 
         annotate (M_PEctor (M_Carray, List.map (n_pexpr loc) args))
-     | Core.Cspecified, _ -> 
+     | Core.Cspecified, _ ->
         n_pexpr loc (List.hd args)
-     | _ -> 
-        assert_error loc (!^"core_to_mucore: unsupported ctor application")
+     | Core.Civsizeof, [ct_expr] ->
+        annotate (M_PEapply_fun (M_F_size_of, [n_pexpr loc ct_expr]))
+     | Core.Civsizeof, _ ->
+        argnum_err ()
+     | Core.Civalignof, [ct_expr] ->
+        annotate (M_PEapply_fun (M_F_align_of, [n_pexpr loc ct_expr]))
+     | Core.Civalignof, _ ->
+        argnum_err ()
+     | Core.Civmax, [ct_expr] ->
+        annotate (M_PEapply_fun (M_F_max_int, [n_pexpr loc ct_expr]))
+     | Core.Civmax, _ ->
+        argnum_err ()
+     | Core.Civmin, [ct_expr] ->
+        annotate (M_PEapply_fun (M_F_min_int, [n_pexpr loc ct_expr]))
+     | Core.Civmin, _ ->
+        argnum_err ()
+     | _ ->
+        assert_error loc (Print.item "core_to_mucore: unsupported ctor application"
+            (Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe))))
      end
   | PEcase(e', pats_pes) ->
      assert_error loc !^"PEcase"
@@ -366,7 +386,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      | Sym sym, _ ->
         assert_error loc (!^"PEcall not inlined:" ^^^ Sym.pp sym)
      | Impl impl, _ ->
-        assert_error loc (!^"PEcall not inlined:" ^^^ !^(Implementation.string_of_implementation_constant impl))
+        assert_error loc (!^"PEcall to impl not inlined:" ^^^ !^(Implementation.string_of_implementation_constant impl))
      end
   | PElet(pat, e', e'') ->
      begin match pat, e' with
@@ -435,7 +455,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEare_compatible(e1, e2) ->
      let e1 = n_pexpr loc e1 in
      let e2 = n_pexpr loc e2 in
-     annotate (M_PEapply_fun (M_are_compatible, [e1; e2]))
+     annotate (M_PEapply_fun (M_F_are_compatible, [e1; e2]))
 
 
 
@@ -721,17 +741,18 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
        let err () = Tools.unsupported loc !^"invalid function constant" in
        match e2 with
        | Core.Pexpr(annots, bty, Core.PEval v) ->
-          begin match v with
+          let sym = begin match v with
           | Vobject (OVpointer ptrval)
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
                ( fun ct -> err ())
                ( function
                    | None -> (* FIXME(CHERI merge) *)err ()
-                   | Some sym -> M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym))) )
+                   | Some sym -> sym )
                ( fun _prov _ -> err () )
           | _ -> err ()
-          end
+          end in
+          M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym)))
        | _ -> n_pexpr e2
      in
      let es = List.map n_pexpr es in

@@ -69,7 +69,7 @@ let frontend incl_dirs incl_files astprints filename state_file =
   let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
-  let prog2 = Core_peval.rewrite_file prog1 in
+  let prog2 = (* Core_peval.rewrite_file *) prog1 in
   let prog3 = Milicore.core_to_micore__file Locations.update prog2 in
   let prog4 = Milicore_label_inline.rewrite_file prog3 in
   let statement_locs = CStatements.search ail_prog in

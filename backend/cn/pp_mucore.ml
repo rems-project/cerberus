@@ -185,10 +185,7 @@ module Make (Config: CONFIG) = struct
    *   | TyEffect baseTy -> P.brackets (pp_base_type baseTy) *)
 
 
-  let pp_function = function
-    | M_params_length -> !^ "params_length"
-    | M_params_nth -> !^ "params_nth"
-    | M_are_compatible -> !^ "are_compatible"
+  let pp_function = Mucore.pp_function
 
   let pp_binop = function
     | OpAdd -> P.plus

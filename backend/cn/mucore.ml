@@ -101,9 +101,14 @@ type 'TY mu_sym_or_pattern =
   | M_Pat of mu_pattern
 
 type mu_function = (* some functions that persist into mucore, not just (infix) binops *)
- | M_params_length
- | M_params_nth
- | M_are_compatible
+ | M_F_params_length
+ | M_F_params_nth
+ | M_F_are_compatible
+ | M_F_size_of
+ | M_F_align_of
+ | M_F_max_int
+ | M_F_min_int
+ | M_F_ctype_width
 
 type bw_binop =
  | M_BW_OR
@@ -306,25 +311,35 @@ let mResources res t = List.fold_right mResource res t
 let mu_fun_param_types mu_fun =
   let open BaseTypes in
   match mu_fun with
-  | M_params_length -> [List CType]
-  | M_params_nth -> [List CType; Integer]
-  | M_are_compatible -> [CType; CType]
+  | M_F_params_length -> [List CType]
+  | M_F_params_nth -> [List CType; Integer]
+  | M_F_are_compatible -> [CType; CType]
+  | M_F_align_of -> [CType]
+  | M_F_size_of -> [CType]
+  | M_F_max_int -> [CType]
+  | M_F_min_int -> [CType]
+  | M_F_ctype_width -> [CType]
 
 let pp_function = function
-  | M_params_length -> !^ "params_length"
-  | M_params_nth -> !^ "params_nth"
-  | M_are_compatible -> !^ "are_compatible"
+  | M_F_params_length -> !^ "params_length"
+  | M_F_params_nth -> !^ "params_nth"
+  | M_F_are_compatible -> !^ "are_compatible"
+  | M_F_align_of -> !^ "align_of"
+  | M_F_size_of -> !^ "size_of"
+  | M_F_max_int -> !^ "max_int"
+  | M_F_min_int -> !^ "min_int"
+  | M_F_ctype_width -> !^ "ctype_width"
 
 let evaluate_fun mu_fun args =
   match mu_fun with
-  | M_params_length -> 
+  | M_F_params_length ->
      begin match args with
-     | [arg] -> 
-        Option.bind (IT.dest_list arg) (fun xs -> 
+     | [arg] ->
+        Option.bind (IT.dest_list arg) (fun xs ->
         Some (IT.int_ (List.length xs)))
      | _ -> None
      end
-  | M_params_nth -> 
+  | M_F_params_nth ->
      begin match args with
      | [arg1;arg2] ->
         Option.bind (IT.dest_list arg1) (fun xs ->
@@ -334,11 +349,41 @@ let evaluate_fun mu_fun args =
         ))
      | _ -> None
      end
-  | M_are_compatible -> 
+  | M_F_are_compatible ->
      begin match List.map IT.is_const args with
-     | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] -> 
+     | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] ->
         if Sctypes.equal ct1 ct2
         then Some (IT.bool_ true) else None
+     | _ -> None
+     end
+  | M_F_size_of ->
+     begin match List.map IT.is_const args with
+     | [Some (IT.CType_const ct, _)] ->
+        Some (IT.int_ (Memory.size_of_ctype ct))
+     | _ -> None
+     end
+  | M_F_align_of ->
+     begin match List.map IT.is_const args with
+     | [Some (IT.CType_const ct, _)] ->
+        Some (IT.int_ (Memory.align_of_ctype ct))
+     | _ -> None
+     end
+  | M_F_max_int ->
+     begin match List.map IT.is_const args with
+     | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
+        Some (IT.z_ (Memory.max_integer_type ity))
+     | _ -> None
+     end
+  | M_F_min_int ->
+     begin match List.map IT.is_const args with
+     | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
+        Some (IT.z_ (Memory.min_integer_type ity))
+     | _ -> None
+     end
+  | M_F_ctype_width ->
+     begin match List.map IT.is_const args with
+     | [Some (IT.CType_const ct, _)] ->
+        Some (IT.int_ (Memory.size_of_ctype ct * 8))
      | _ -> None
      end
 
