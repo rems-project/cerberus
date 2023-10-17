@@ -12,6 +12,9 @@ open LogicalFunctions
 module LCSet = Set.Make(LC)
 module BT = BaseTypes
 module StringSet = Set.Make(String)
+module ITMap = Map.Make(IT)
+module ITSet = Set.Make(IT)
+
 
 
 let random_seed = ref 1
@@ -21,6 +24,7 @@ let slow_smt_file () =
   let open Filename in
   get_temp_dir_name () ^ dir_sep ^ "slow_smt.txt"
 
+let is_int_mode = ref true
 
 let save_slow_problems, saved_slow_problem, set_slow_threshold =
   (* not yet written this run, > 3.0s counts as slow, append to this fname *)
@@ -35,16 +39,22 @@ let save_slow_problems, saved_slow_problem, set_slow_threshold =
   in
   save_slow_problems, saved_slow_problem, set_slow_threshold
 
+type card_constraint =
+  | Card_Known of int
+  | Card_Info of (IT.t list * IT.t list)
+type card_constraints = card_constraint ITMap.t
 
 type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
     assumptions : LCSet.t ref;
+    pending_assumptions : LC.t list ref;
+    card_constraints : card_constraints ref;
     focus_terms : ((IT.t_bindings * IT.t) list) ref;
   }
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
-type model = Z3.context * Z3.Model.model
+type model = Z3.context * card_constraints * Z3.Model.model
 type model_with_q = model * (Sym.t * BT.t) list
 
 
@@ -112,6 +122,136 @@ let params () =
 
 
 
+
+module Card_Constraints = struct
+
+  let card_bounds n =
+    (* inclusive bounds for cardinality n are (- (2 ^ n), (2 ^ n) - 1) *)
+    let card = Z.pow (Z.of_int 2) n in
+    let neg_card = Z.sub Z.zero card in
+    (neg_card, Z.sub card Z.one)
+
+  let get_it_ineqs adjust it =
+    let extra_ineqs_lhs t1 t2 = match IT.term t1 with
+      | Binop (Add, t3, t4) -> [le_ (t3, sub_ (t2, t4)); le_ (t4, sub_ (t2, t3))]
+      | Binop (Sub, t3, t4) -> [le_ (t3, add_ (t2, t4))]
+      | _ -> []
+    in
+    let extra_ineqs_rhs t1 t2 = match IT.term t2 with
+      | Binop (Add, t3, t4) -> [le_ (sub_ (t1, t4), t3); le_ (sub_ (t1, t3), t4)]
+      | Binop (Sub, t3, t4) -> [le_ (add_ (t1, t4), t3)]
+      | _ -> []
+    in
+    let extra_ineqs t1 t2 = extra_ineqs_lhs t1 t2 @ extra_ineqs_rhs t1 t2 in
+    let rec f found = function
+      | [] -> found
+      | it :: its when ITSet.mem it found -> f found its
+      | it :: its -> begin match IT.term it with
+          | Binop (And, t1, t2) -> f found (t1 :: t2 :: its)
+          | Binop (Impl, t1, t2) -> f found (t2 :: its)
+          | Binop (LT, t1, t2) -> f found (le_ (t1, t2) :: its)
+          | Binop (LE, t1, t2) -> f (ITSet.add it found) (extra_ineqs t1 t2 @ its)
+          | _ -> f found (Option.to_list (adjust it) @ its)
+      end
+    in
+    let it_s = f ITSet.empty [it] in
+    List.filter_map IT.is_le (ITSet.elements it_s)
+
+  let rec is_relevant_constraint_term it =
+    match IT.is_sym it, IT.isPointerToIntegerCast it with
+    | Some _, _ -> true
+    | _, Some addr -> is_relevant_constraint_term addr
+    | _ -> false
+
+  let add_lhs_constraint (cs : card_constraints) (lhs, rhs) =
+    match is_relevant_constraint_term lhs, ITMap.find_opt lhs cs with
+    | false, _ -> cs
+    | _, None -> ITMap.add lhs (Card_Info ([], [rhs])) cs
+    | _, Some (Card_Known _) -> cs
+    | _, Some (Card_Info (lhss, rhss)) -> ITMap.add lhs (Card_Info (lhss, rhs :: rhss)) cs
+
+  let add_rhs_constraint (cs : card_constraints) (lhs, rhs) =
+    match is_relevant_constraint_term rhs, ITMap.find_opt rhs cs with
+    | false, _ -> cs
+    | _, None -> ITMap.add rhs (Card_Info ([lhs], [])) cs
+    | _, Some (Card_Known _) -> cs
+    | _, Some (Card_Info (lhss, rhss)) -> ITMap.add rhs (Card_Info (lhs :: lhss, rhss)) cs
+
+  let get_saved_card (cs : card_constraints) it = match ITMap.find_opt it cs with
+    | Some (Card_Known i) -> Some i
+    | _ -> None
+
+  let max_int i j = if i < j then j else i
+
+  let get_z_card z =
+    let rec find i =
+      let (min, max) = card_bounds i in
+      if Z.leq min z && Z.leq z max then i else find (i + 4)
+    in
+    find 4
+
+  let rec get_known_card (cs : card_constraints) it = match IT.term it with
+    | Sym _ -> get_saved_card cs it
+    | Cast _ when Option.is_some (IT.isPointerToIntegerCast it) -> get_saved_card cs it
+    | Const (Z z) -> Some (get_z_card z)
+    | Binop (oper, x, y) ->
+      Option.bind (get_known_card cs x) (fun xc ->
+      Option.bind (get_known_card cs y) (fun yc -> match oper with
+        | Add -> Some (max_int xc yc + 1)
+        | Sub -> Some (max_int xc yc + 1)
+        | Mul -> Some (xc + yc + 2)
+        | Div -> Some (xc + 1)
+        | Rem -> Some (xc + 1)
+        | Mod -> Some (xc + 1)
+        | Min -> Some (max_int xc yc)
+        | Max -> Some (max_int xc yc)
+        | _ -> None))
+    | ITE (b, x, y) ->
+      Option.bind (get_known_card cs x) (fun xc ->
+      Option.bind (get_known_card cs y) (fun yc ->
+        Some (max_int xc yc)))
+    | _ -> None
+
+  let update_known_at (cs : card_constraints) it =
+    let find = List.find_map (get_known_card cs) in
+    match ITMap.find_opt it cs with
+    | Some (Card_Info (lhss, rhss)) -> begin match find lhss, find rhss with
+        | Some i, Some j -> (true, ITMap.add it (Card_Known (max_int i j)) cs)
+        | _ -> (false, cs)
+      end
+    | _ -> (false, cs)
+
+  let update_known_constraints (cs : card_constraints) its =
+    let its = ITSet.elements (ITSet.of_list its) in
+    let rec f cs =
+        let (upd, cs) = List.fold_right (fun it (upd, cs) ->
+            let (upd2, cs) = update_known_at cs it in
+            (upd || upd2, cs)) its (false, cs) in
+        if upd then f cs else cs
+    in f cs
+
+  let add_constraints_from_ineqs cs ineqs =
+    let cs = List.fold_left add_lhs_constraint cs ineqs in
+    let cs = List.fold_left add_rhs_constraint cs ineqs in
+    update_known_constraints cs (List.map fst ineqs @ List.map snd ineqs)
+
+  let update_constraints solver adjust lcs =
+    let new_ineqs = List.concat_map (function
+      | T it -> get_it_ineqs adjust it
+      | Forall _ -> []) lcs in
+    let cs = add_constraints_from_ineqs (! (solver.card_constraints)) new_ineqs in
+    (solver.card_constraints := cs)
+
+  let card_constraint_check solver global (it, n) =
+    let card = Z.pow (Z.of_int 2) n in
+    let neg_card = Z.sub Z.zero card in
+    IT.and_ [IT.le_ (IT.z_ neg_card, it); IT.lt_ (it, IT.z_ card)]
+
+  let _stop_complaining = (is_int_mode, card_constraint_check)
+
+
+
+end
 
 module Translate = struct
 
@@ -201,8 +341,6 @@ module Translate = struct
   let bt_name bt = Pp.plain (bt_pp_name bt)
 
   let bt_suffix_name nm bt = Pp.plain (!^ nm ^^ !^ "_" ^^ bt_pp_name bt)
-
-  module ITMap = Map.Make(IT)
 
   let uninterp_tab = ref (ITMap.empty, 0)
 
@@ -483,7 +621,7 @@ module Translate = struct
       end
 
 
-  let term ?(warn_lambda=true) context global : IT.t -> expr =
+  let term1 ?(warn_lambda=true) context card_constraints global : IT.t -> expr =
 
     let struct_decls = global.struct_decls in
     let sort bt = sort context global bt in
@@ -530,6 +668,13 @@ module Translate = struct
       | Some it2 ->
         term it2
       in
+      if BT.equal (IT.bt it) BT.Integer then
+      begin match Card_Constraints.get_known_card card_constraints it with
+      | None -> Pp.warn Loc.unknown (Pp.item "no known cardinality constraint" (IT.pp it))
+      | Some n -> Pp.debug 10 (lazy (Pp.item "cardinality constraint"
+          (Pp.typ (IT.pp it) (Pp.int n))))
+      end else ();
+
       begin match IT.term it with
       | Sym s ->
          Z3.Expr.mk_const context (symbol s) (sort bt)
@@ -829,8 +974,10 @@ module Translate = struct
     else (bs, it) :: its)
     [] it
 
-  let assumption context global c =
-    let term it = term context global it in
+  let term solver global it = term1 solver.context (! (solver.card_constraints)) global it
+
+  let assumption solver global c =
+    let term it = term solver global it in
     match c with
     | T it ->
        Some (it, term it, focus_terms global it)
@@ -853,8 +1000,8 @@ module Translate = struct
     }
 [@@warning "-unused-field"]
 
-  let goal1 context global lc =
-    let term it = term context global it in
+  let goal1 solver global lc =
+    let term it = term solver global it in
     match lc with
     | T it ->
        { expr = term it; it; qs = []; extra = []; focused = [] }
@@ -875,7 +1022,7 @@ module Translate = struct
       ) qs
 
   let goal solver global pointer_facts lc =
-    let g1 = goal1 solver.context global lc in
+    let g1 = goal1 solver global lc in
     let extra1 = extra_assumptions (! (solver.assumptions)) g1.qs in
     let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in
     let extra2 = IT.nth_array_to_list_facts focused in
@@ -892,7 +1039,9 @@ let make global : solver =
   let context = Z3.mk_context [] in
   Translate.init global context;
   let incremental = Z3.Solver.mk_simple_solver context in
-  { context; incremental; assumptions = ref LCSet.empty; focus_terms = ref [] }
+  { context; incremental; assumptions = ref LCSet.empty;
+    pending_assumptions = ref []; card_constraints = ref ITMap.empty;
+    focus_terms = ref []; }
 
 
 
@@ -900,22 +1049,28 @@ let make global : solver =
 
 
 let push solver =
-  (* do nothing to fancy solver, because that is reset for every query *)
   Z3.Solver.push solver.incremental
 
 let pop solver =
-  (* do nothing to fancy solver, because that is reset for every query *)
   Z3.Solver.pop solver.incremental 1
 
 
 let add_assumption solver global lc =
-  (* do nothing to fancy solver, because that is reset for every query *)
+  (* the assumption will be passed to Z3.Solver.add on the next sync_assumptions *)
   solver.assumptions := LCSet.add lc (! (solver.assumptions));
-  match Translate.assumption solver.context global lc with
+  solver.pending_assumptions := (lc :: (! (solver.pending_assumptions)))
+
+let sync_assumptions solver global =
+  let todo = List.rev (! (solver.pending_assumptions)) in
+  solver.pending_assumptions := [];
+  Card_Constraints.update_constraints solver (Translate.adjust_term global) todo;
+  let add lc = match Translate.assumption solver global lc with
   | None -> ()
   | Some (it, sc, focus) ->
     Z3.Solver.add solver.incremental [sc];
     solver.focus_terms := (focus @ (! (solver.focus_terms)))
+  in
+  List.iter add todo
 
 
 (* as similarly suggested by Robbert *)
@@ -930,22 +1085,24 @@ let shortcut simp_ctxt lc =
 
 
 type model_state =
-  | Model of Z3.context * Z3.Solver.solver * (Sym.t * LogicalSorts.t) list
+  | Model of Z3.context * card_constraints * Z3.Solver.solver * (Sym.t * LogicalSorts.t) list
   | No_model
 
 let model_state =
   ref No_model
 
 
+let mk_model_state solver z3_solver qs =
+    Model (solver.context, (! (solver.card_constraints)), z3_solver, qs)
 
-let model () =
+let model () : model_with_q =
   match !model_state with
   | No_model ->
      assert false
-  | Model (context, z3_solver, qs) ->
+  | Model (context, card_cs, z3_solver, qs) ->
      let omodel = Z3.Solver.get_model z3_solver in
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
-     ((context, model), qs)
+     ((context, card_cs, model), qs)
 
 let paren_sexp nm doc = Pp.parens (!^ nm ^^^ doc)
 
@@ -1012,7 +1169,8 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   let context = solver.context in
   debug 13 (lazy (item "context" (Context.pp_constraints assumptions)));
   let rtrue () = model_state := No_model; `True in
-  let rfalse qs solver = model_state := Model (context, solver, qs); `False in
+  let rfalse qs z3_solver = model_state := mk_model_state solver z3_solver qs; `False in
+  sync_assumptions solver global;
   match shortcut simp_ctxt lc with
   | `True ->
      Cerb_debug.end_csv_timing "Solver.provable shortcut";
@@ -1021,7 +1179,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      (*print stdout (item "lc" (LC.pp lc ^^ hardline));*)
      let Translate.{expr; qs; extra; _} = Translate.goal solver global pointer_facts lc in
      let nlc = Z3.Boolean.mk_not context expr in
-     let extra = List.map (Translate.term context global) extra in
+     let extra = List.map (Translate.term solver global) extra in
      let (elapsed, res) =
        time_f_elapsed (time_f_logs loc 5 "Z3(inc)"
            (Z3.Solver.check solver.incremental))
@@ -1079,8 +1237,9 @@ module Eval = struct
     | None -> find_already_translated_sort sort
 
 
-  let eval global (context, model) to_be_evaluated =
+  let eval global (m : model) to_be_evaluated =
 
+    let (context, card_cs, model) = m in
     let unsupported expr what =
       let err =
         Printf.sprintf "unsupported %s. expr: %s"
@@ -1315,7 +1474,7 @@ module Eval = struct
 
     in
 
-    let expr = Translate.term ~warn_lambda:false context global to_be_evaluated in
+    let expr = Translate.term1 ~warn_lambda:false context card_cs global to_be_evaluated in
     match Z3.Model.eval model expr true with
     | None -> None
     | Some v ->

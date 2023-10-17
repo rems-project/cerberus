@@ -572,6 +572,10 @@ let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true
   | _ -> false
 
+let isPointerToIntegerCast = function
+  | IT (Cast (BT.Integer, it), _) when BT.equal (bt it) BT.Loc -> Some it
+  | _ -> None
+
 let pointer_offset_ (p, n) =
   integerToPointerCast_ (add_ (pointerToIntegerCast_ p, n))
 
