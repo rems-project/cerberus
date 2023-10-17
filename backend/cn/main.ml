@@ -191,12 +191,14 @@ let main
             let (c_functions, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             let (c_predicates, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
             let ownership_functions = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
-
+            let c_structs = Executable_spec_internal.generate_c_structs ail_prog.tag_definitions in 
 
             (* TODO: Topological sort *)
             Stdlib.output_string cn_oc (generate_include_header ("executable-spec/cn_utils.c", false));
             Stdlib.output_string cn_oc (generate_include_header ("assert.h", true));
             Stdlib.output_string cn_oc c_datatypes;
+            Stdlib.output_string cn_oc c_structs;
+            Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
             Stdlib.output_string cn_oc c_records;
             Stdlib.output_string cn_oc c_records';
             Stdlib.output_string cn_oc c_functions;
