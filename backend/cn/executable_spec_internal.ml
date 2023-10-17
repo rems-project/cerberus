@@ -84,6 +84,13 @@ let generate_c_datatypes cn_datatypes =
   let structs = List.map generate_doc_from_ail_struct ail_datatypes in
   CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs)
 
+let generate_c_structs c_structs = 
+  let ail_structs = List.map Cn_internal_to_ail.cn_to_ail_struct c_structs in 
+  let docs = List.map generate_doc_from_ail_struct (List.concat ail_structs) in
+  let comment = "\n/* CN VERSIONS OF C STRUCTS */\n\n" in
+  comment ^ CF.Pp_utils.to_plain_pretty_string (concat_map_newline docs)
+
+
 let bt_is_record_or_tuple = function 
   | BT.Record _ 
   | BT.Tuple _ -> true
@@ -107,7 +114,8 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let records_str = generate_c_records (List.concat ail_records) in
   let funs_str = CF.Pp_utils.to_plain_pretty_string doc in 
-  (funs_str, records_str)
+  let comment = "\n/* CN FUNCTIONS */\n\n" in
+  (comment ^ funs_str, records_str)
 
 let rec remove_duplicates eq_fun = function 
   | [] -> []
@@ -127,12 +135,14 @@ let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ai
   CF.Pp_utils.to_plain_pretty_string doc in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let records_str = generate_c_records (List.concat ail_records) in
-  (preds_str, records_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
+  let comment = "\n/* CN PREDICATES */\n\n" in
+  (comment ^ preds_str, records_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
 let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 
   let ail_funs = List.map Cn_internal_to_ail.generate_ownership_function ctypes in 
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
-  CF.Pp_utils.to_plain_pretty_string doc
+  let comment = "\n/* OWNERSHIP FUNCTIONS */\n\n" in
+  comment ^ CF.Pp_utils.to_plain_pretty_string doc
 
