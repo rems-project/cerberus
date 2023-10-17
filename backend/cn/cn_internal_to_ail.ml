@@ -520,12 +520,12 @@ let rec cn_to_ail_expr_aux_internal
           | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
         )
       in
-      let cn_vars_strs = List.map Sym.pp_string cn_vars in 
-      let ail_expr_ = if (List.mem String.equal (Sym.pp_string sym) cn_vars_strs) 
+      (* let cn_vars_strs = List.map Sym.pp_string cn_vars in  *)
+      (* let ail_expr_ = if (List.mem String.equal (Sym.pp_string sym) cn_vars_strs) 
         then ail_expr_ 
       else 
         add_conversion_fn ail_expr_ basetype
-      in
+      in *)
         (* let ail_expr_ = match d with 
           | Assert -> 
             (if (basetype == BT.Bool) then 
@@ -787,7 +787,7 @@ let rec cn_to_ail_expr_aux_internal
       let (bs, ss, es) = list_split_three bs_ss_es in 
       let f = (mk_expr A.(AilEident sym)) in
       let ail_expr_ = A.AilEcall (f, es) in 
-      let ail_expr_ = add_conversion_fn ail_expr_ basetype in 
+      (* let ail_expr_ = add_conversion_fn ail_expr_ basetype in  *)
       dest d (List.concat bs, List.concat ss, mk_expr ail_expr_)
       
   | Let ((var, t1), body) -> 
@@ -1507,7 +1507,16 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
 
 
 let rec cn_to_ail_pre_post_aux_internal dts preds = function 
-  | AT.Computational ((sym, bt), info, at) -> cn_to_ail_pre_post_aux_internal dts preds at
+  | AT.Computational ((sym, bt), info, at) -> 
+    let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
+    let cn_ctype = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype bt))) in 
+    let binding = create_binding cn_sym cn_ctype in 
+    let rhs = add_conversion_fn A.(AilEident sym) bt in 
+    let decl = A.(AilSdeclaration [(cn_sym, Some (mk_expr rhs))]) in
+    let subst_at = Core_to_mucore.fn_spec_instrumentation_sym_subst (sym, bt, cn_sym) at in
+    let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds subst_at in 
+    let (bs, ss) = ail_executable_spec.pre in 
+    {ail_executable_spec with pre = (binding :: bs, decl :: ss)}
   | AT.L lat -> cn_to_ail_lat_internal_2 dts [] [] preds lat
   
 let cn_to_ail_pre_post_internal dts preds = function 
