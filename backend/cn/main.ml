@@ -190,6 +190,7 @@ let main
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog.cn_datatypes in
             let (c_functions, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             let (c_predicates, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+            let conversion_functions = Executable_spec_internal.generate_conversion_functions ail_prog in 
             let ownership_functions = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
             let c_structs = Executable_spec_internal.generate_c_structs ail_prog.tag_definitions in 
 
@@ -203,6 +204,7 @@ let main
             Stdlib.output_string cn_oc c_records';
             Stdlib.output_string cn_oc c_functions;
             Stdlib.output_string cn_oc c_predicates;
+            Stdlib.output_string cn_oc conversion_functions;
             Stdlib.output_string cn_oc ownership_functions;
 
             let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); ("cn.c", false);] in
