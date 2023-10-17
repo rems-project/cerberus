@@ -39,7 +39,6 @@ let save_slow_problems, saved_slow_problem, set_slow_threshold =
 type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
-    assumptions : LCSet.t ref;
     focus_terms : ((IT.t_bindings * IT.t) list) ref;
   }
 type expr = Z3.Expr.expr
@@ -477,7 +476,7 @@ module Translate = struct
          | _ -> None
          end
       | Let ((nm, t1), t2) ->
-         Some (IT.subst (IT.make_subst [(nm, t1)]) t2)
+         Some (IT.substitute_lets it)
       | _ ->
          None
       end
@@ -806,7 +805,9 @@ module Translate = struct
     let f2 bs (acc, adj_ts) t =
       let acc = f bs acc t in
       match adjust_term global t with
-      | Some t2 -> (acc, (bs, t2) :: adj_ts)
+      | Some t2 ->
+        let t2 = IT.substitute_lets t2 in
+        (acc, (bs, t2) :: adj_ts)
       | None -> (acc, adj_ts)
     in
     let rec fold_list acc = function
@@ -815,7 +816,8 @@ module Translate = struct
         let (acc, adj_ts) = IT.fold f2 bs (acc, adj_ts) t in
         fold_list acc adj_ts
     in
-    fun acc t -> fold_list acc [([], t)]
+    fun acc t ->
+    fold_list acc [([], t)]
 
   let focus_terms global it = fold_with_adj global
     (fun bs its it ->
@@ -874,9 +876,9 @@ module Translate = struct
           ) assumptions []
       ) qs
 
-  let goal solver global pointer_facts lc =
+  let goal solver global assumptions pointer_facts lc =
     let g1 = goal1 solver.context global lc in
-    let extra1 = extra_assumptions (! (solver.assumptions)) g1.qs in
+    let extra1 = extra_assumptions assumptions g1.qs in
     let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in
     let extra2 = IT.nth_array_to_list_facts focused in
     { g1 with extra = extra2 @ extra1; focused = focused }
@@ -892,7 +894,7 @@ let make global : solver =
   let context = Z3.mk_context [] in
   Translate.init global context;
   let incremental = Z3.Solver.mk_simple_solver context in
-  { context; incremental; assumptions = ref LCSet.empty; focus_terms = ref [] }
+  { context; incremental; focus_terms = ref [] }
 
 
 
@@ -910,7 +912,6 @@ let pop solver =
 
 let add_assumption solver global lc =
   (* do nothing to fancy solver, because that is reset for every query *)
-  solver.assumptions := LCSet.add lc (! (solver.assumptions));
   match Translate.assumption solver.context global lc with
   | None -> ()
   | Some (it, sc, focus) ->
@@ -1019,7 +1020,8 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      rtrue ()
   | `No_shortcut lc ->
      (*print stdout (item "lc" (LC.pp lc ^^ hardline));*)
-     let Translate.{expr; qs; extra; _} = Translate.goal solver global pointer_facts lc in
+     let Translate.{expr; qs; extra; _} = Translate.goal solver
+         global assumptions pointer_facts lc in
      let nlc = Z3.Boolean.mk_not context expr in
      let extra = List.map (Translate.term context global) extra in
      let (elapsed, res) =
@@ -1045,8 +1047,8 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
         let reason = Z3.Solver.get_reason_unknown solver.incremental in
         failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
-let get_solver_focused_terms solver ~pointer_facts global =
-  let tr = Translate.goal solver global pointer_facts (LC.T (IT.bool_ true)) in
+let get_solver_focused_terms solver ~assumptions ~pointer_facts global =
+  let tr = Translate.goal solver global assumptions pointer_facts (LC.T (IT.bool_ true)) in
   tr.Translate.focused
 
 module Eval = struct

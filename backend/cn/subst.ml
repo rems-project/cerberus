@@ -4,7 +4,8 @@ open Pp
 
 type 'a t = {
     replace : (Sym.t * 'a) list;
-    relevant : SymSet.t
+    relevant : SymSet.t;
+    flags : SymSet.t;
   }
 type 'a subst = 'a t
 
@@ -22,4 +23,10 @@ let make free_vars replace =
         SymSet.union (free_vars r) (SymSet.add s acc)
       ) replace SymSet.empty
   in
-  { replace; relevant }
+  { replace; relevant; flags = SymSet.empty }
+
+let add free_vars (s, r) subst =
+  { subst with
+    replace = (s, r) :: subst.replace;
+    relevant = SymSet.union (free_vars r) (SymSet.add s subst.relevant) }
+

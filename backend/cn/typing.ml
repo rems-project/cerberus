@@ -643,9 +643,11 @@ let get_solver_focused_terms () =
   let@ global = get_global () in
   let@ assumptions = all_constraints () in
   let@ s = solver () in
+  let@ ctxt = get () in
   let@ rs = all_resources () in
   let pointer_facts = Resources.pointer_facts rs in
-  let terms = Solver.get_solver_focused_terms s ~pointer_facts global in
+  let assumptions = ctxt.constraints in
+  let terms = Solver.get_solver_focused_terms s ~assumptions ~pointer_facts global in
   return terms
 
 

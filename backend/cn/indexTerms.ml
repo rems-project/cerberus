@@ -204,8 +204,9 @@ let preds_of t =
 let json it : Yojson.Safe.t =
   `String (Pp.plain (pp it))
 
-
 let make_subst = Subst.make free_vars
+
+let substitute_lets_flag = Sym.fresh_named "substitute_lets"
 
 let rec subst (su : typed subst) (IT (it, bt)) =
   match it with
@@ -281,8 +282,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | Apply (name, args) ->
      IT (Apply (name, List.map (subst su) args), bt)
   | Let ((name, t1), t2) ->
-     let name, t2 = suitably_alpha_rename su.relevant (name, basetype t1) t2 in
-     IT (Let ((name, subst su t1), subst su t2), bt)
+     if SymSet.mem substitute_lets_flag su.flags
+     then
+       let t1 = subst su t1 in
+       subst (Subst.add free_vars (name, t1) su) t2
+     else begin
+       let name, t2 = suitably_alpha_rename su.relevant (name, basetype t1) t2 in
+       IT (Let ((name, subst su t1), subst su t2), bt)
+     end
   | Match (e, cases) ->
      let e = subst su e in
      let cases = List.map (subst_under_pattern su) cases in
@@ -326,9 +333,9 @@ and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) =
      (Pat (PConstructor (s, args), bt), body)
 
 
-
-
-
+let substitute_lets =
+  let flags = SymSet.of_list [substitute_lets_flag] in
+  subst ({(make_subst []) with flags})
 
 
 
