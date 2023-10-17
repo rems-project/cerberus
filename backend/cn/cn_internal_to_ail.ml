@@ -417,15 +417,14 @@ let add_conversion_fn ail_expr_ bt =
   | Some str ->
     let str = String.concat "_" (String.split_on_char ' ' str) in
     A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("convert_to_" ^ str))), [mk_expr ail_expr_]))
-  | None -> ail_expr_
+  | None -> (match bt with 
+      | BT.Struct sym -> 
+        let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
+        let conversion_fn_str = "convert_to_struct_" ^ (Sym.pp_string cn_sym) in 
+        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), [mk_expr ail_expr_]))
+      | _ -> ail_expr_
+    )
     
-
-type extra_info = {
-  pred_name: Sym.sym option;
-  dts: (Sym.sym Cn.cn_datatype) list;
-  cn_vars: (C.union_tag) list;
-  ownership_ctypes: C.ctype list;
-}
 
 
 let generate_ownership_function ctype = 
@@ -794,6 +793,7 @@ let rec cn_to_ail_expr_aux_internal
   | Let ((var, t1), body) -> 
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars t1 PassBack in
     let ctype = bt_to_ail_ctype (IT.bt t1) in
+    let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in
     let binding = create_binding var ctype in
     let ail_assign = A.(AilSdeclaration [(var, Some e1)]) in
     prefix d (b1 @ [binding], s1 @ [ail_assign]) (cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars body d)
@@ -1016,6 +1016,41 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   enum :: structs
 
+let generate_struct_conversion_function ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
+  | C.StructDef (members, _) -> 
+    let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
+    let cn_struct_ctype = mk_ctype C.(Struct cn_sym) in
+    let fn_sym = Sym.fresh_pretty ("convert_to_struct_" ^ (Sym.pp_string cn_sym)) in
+    let param_sym = sym in
+    let param_type = (empty_qualifiers, mk_ctype (C.(Struct sym)), false) in
+    (* Function body *)
+    let res_sym = Sym.fresh_pretty "res" in 
+    let res_binding = create_binding res_sym (mk_ctype (C.Pointer (empty_qualifiers, cn_struct_ctype))) in
+    let alloc_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, cn_struct_ctype))])) in 
+    let res_assign = A.(AilSdeclaration [(res_sym, Some (mk_expr alloc_fcall))]) in 
+    let generate_member_assignment (id, (_, _, _, ctype)) = 
+      let rhs = A.(AilEmemberof (mk_expr (AilEident param_sym), id)) in
+      let sct_opt = Sctypes.of_ctype ctype in 
+      let sct = match sct_opt with 
+        | Some t -> t
+        | None -> failwith "Bad sctype"
+      in
+      let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
+      let rhs = add_conversion_fn rhs bt in 
+      let lhs = A.(AilEmemberofptr (mk_expr (AilEident res_sym), id)) in 
+      A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr rhs))))
+    in
+    let member_assignments = List.map generate_member_assignment members in 
+    let return_stmt = A.(AilSreturn (mk_expr (AilEident res_sym))) in 
+    let ret_type = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (BT.Struct sym)))) in
+    (* Generating function declaration *)
+    let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), [param_type], false, false, false)))) in
+    (* Generating function definition *)
+    let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, [param_sym], mk_stmt A.(AilSblock ([res_binding], List.map mk_stmt (res_assign :: member_assignments @ [return_stmt]))))) in
+    [(decl, def)]
+  | C.UnionDef _ -> []
+
+
 let cn_to_ail_struct ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
   | C.StructDef (members, opt) -> 
     let cn_struct_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
@@ -1233,6 +1268,7 @@ let rec generate_record_opt pred_sym = function
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) def.return_bt in
+  let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in
   let (bs, ail_func_body) =
   match def.definition with
     | Def it
