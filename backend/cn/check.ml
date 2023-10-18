@@ -1840,6 +1840,49 @@ let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
   return (lemma_s, (loc, lemma_typ))
 
 
+let ctz_proxy_ft =
+  let info = (Locations.unknown, Some "ctz_proxy builtin ft") in
+  let (n_sym, n) = IT.fresh_named BT.Integer "n_" in
+  let (ret_sym, ret) = IT.fresh_named BT.Integer "return" in
+  let neq_0 = LC.T (IT.not_ (IT.eq_ (n, IT.int_ 0))) in
+  let eq_ctz = LC.T (IT.eq_ (ret, IT.arith_unop Terms.BWCTZNoSMT n)) in
+  let rt = RT.mComputational ((ret_sym, BT.Integer), info)
+    (LRT.mConstraint (eq_ctz, info) LRT.I) in
+  let ft = AT.mComputationals [(n_sym, BT.Integer, info)]
+    (AT.L (LAT.mConstraint (neq_0, info) (LAT.I rt))) in
+  ft
+
+let ffs_proxy_ft =
+  let info = (Locations.unknown, Some "ffs_proxy builtin ft") in
+  let (n_sym, n) = IT.fresh_named BT.Integer "n_" in
+  let (ret_sym, ret) = IT.fresh_named BT.Integer "return" in
+  let eq_ffs = LC.T (IT.eq_ (ret, IT.arith_unop Terms.BWFFSNoSMT n)) in
+  let rt = RT.mComputational ((ret_sym, BT.Integer), info)
+    (LRT.mConstraint (eq_ffs, info) LRT.I) in
+  let ft = AT.mComputationals [(n_sym, BT.Integer, info)] (AT.L (LAT.I rt)) in
+  ft
+
+
+let add_stdlib_spec mu_call_sigs fsym =
+  match Sym.has_id fsym with
+  (* FIXME: change the naming, we aren't unfolding these *)
+  | Some s when Setup.unfold_stdlib_name s ->
+    let add ft = begin
+        Pp.debug 2 (lazy (Pp.headline ("adding builtin spec for procedure " ^ Sym.pp_string fsym)));
+        add_fun_decl fsym (Locations.unknown, Some ft, Pmap.find fsym mu_call_sigs)
+      end in
+    if String.equal s "ctz_proxy"
+    then
+      add ctz_proxy_ft
+    else if String.equal s "ffs_proxy"
+    then
+      add ffs_proxy_ft
+    else
+      return ()
+  | _ ->
+    return ()
+
+
 let record_and_check_datatypes datatypes = 
   (* add "empty datatypes" for checks on recursive types to succeed *)
   let@ () = 
@@ -1885,6 +1928,9 @@ let check mu_file stmt_locs o_lemma_mode =
   let@ () = record_globals mu_file.mu_globs in
 
   let@ () = register_fun_syms mu_file in
+
+  let@ () = ListM.iterM (add_stdlib_spec mu_file.mu_call_funinfo)
+    (SymSet.elements mu_file.mu_stdlib_syms) in
 
   Pp.debug 3 (lazy (Pp.headline "added top-level types and constants."));
 
