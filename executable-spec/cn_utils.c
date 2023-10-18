@@ -116,6 +116,13 @@ cn_integer *cn_integer_add(cn_integer *i1, cn_integer *i2) {
     return res;
 }
 
+cn_integer *cn_integer_sub(cn_integer *i1, cn_integer *i2) {
+    cn_integer *res = alloc(sizeof(cn_integer));
+    res->val = alloc(sizeof(unsigned int));
+    *(res->val) = *(i1->val) - *(i2->val);
+    return res;
+}
+
 cn_integer *cn_integer_pow(cn_integer *i1, cn_integer *i2) {
     cn_integer *res = alloc(sizeof(cn_integer));
     res->val = alloc(sizeof(unsigned int));
@@ -132,6 +139,13 @@ cn_integer *cn_integer_multiply(cn_integer *i1, cn_integer *i2) {
     cn_integer *res = alloc(sizeof(cn_integer));
     res->val = alloc(sizeof(unsigned int));
     *(res->val) = *(i1->val) * *(i2->val);
+    return res;
+}
+
+cn_integer *cn_integer_divide(cn_integer *i1, cn_integer *i2) {
+    cn_integer *res = alloc(sizeof(cn_integer));
+    res->val = alloc(sizeof(unsigned int));
+    *(res->val) = *(i1->val) / *(i2->val);
     return res;
 }
 
