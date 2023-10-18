@@ -600,7 +600,12 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        failwith "todo"
      end
   | M_PEapply_fun (fun_id, args) ->
-     let@ () = ensure_base_type loc ~expect (mu_fun_return_type fun_id) in
+     let@ ret_bt = match mu_fun_return_type fun_id args with
+       | Some bt -> return bt
+       | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "untypeable mucore function"
+              (Pp_mucore_ast.pp_pexpr orig_pe))})
+     in
+     let@ () = ensure_base_type loc ~expect ret_bt in
      let expect_args = Mucore.mu_fun_param_types fun_id in
      let@ () = 
        let has = List.length args in

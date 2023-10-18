@@ -1357,6 +1357,7 @@ let remove_integer_annot_pexpr (M_Pexpr (loc, annots, bty, e_)) =
 
 let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m = 
   fun pe ->
+    Pp.debug 22 (lazy (Pp.item "WellTyped.BaseTyping.infer_pexpr" (Pp_mucore_ast.pp_pexpr pe)));
     let (M_Pexpr (loc, annots, _, pe_)) = pe in
     match integer_annot annots with
     | Some ity when !use_ity -> 
@@ -1474,6 +1475,17 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
             let@ pe = infer_pexpr pe in
             return (nm, pe)) nm_pes in
         return (Struct nm, (M_PEstruct (nm, nm_pes)))
+      | M_PEapply_fun (fname, pes) ->
+        let param_tys = Mucore.mu_fun_param_types fname in
+        let@ () = ensure_same_argument_number loc `Input (List.length pes)
+            ~expect:(List.length param_tys) in
+        let@ pes = ListM.map2M check_pexpr param_tys pes in
+        let@ bt = match Mucore.mu_fun_return_type fname pes with
+          | Some bt -> return bt
+          | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "untypeable mucore function"
+              (Pp_mucore_ast.pp_pexpr pe))})
+        in
+        return (bt, M_PEapply_fun (fname, pes))
       | _ -> todo ()
     in
     return (M_Pexpr (loc, annots, bty, pe_))

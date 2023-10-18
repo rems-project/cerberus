@@ -352,6 +352,10 @@ let is_z = function
 
 let is_z_ it = Option.is_some (is_z it)
 
+let is_bits_const = function
+  | IT (Const (Bits (info, n)), _) -> Some (info, n)
+  | _ -> None
+
 let is_pointer = function
   | IT (Const (Pointer z), bt) -> Some z
   | _ -> None
