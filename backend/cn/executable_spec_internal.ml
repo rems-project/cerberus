@@ -70,8 +70,8 @@ let generate_c_records ail_structs =
   CF.Pp_utils.to_plain_pretty_string (PPrint.concat struct_docs)
 
 (* TODO: Use Mucore datatypes instead of CN datatypes from Ail program *)
-let generate_c_datatypes cn_datatypes = 
-  let ail_datatypes = match cn_datatypes with
+let generate_c_datatypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
+  let ail_datatypes = match ail_prog.cn_datatypes with
     | [] -> []
     | (d :: ds) ->
         let ail_dt1 = Cn_internal_to_ail.cn_to_ail_datatype ~first:true d in
@@ -146,11 +146,13 @@ let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory 
   let comment = "\n/* OWNERSHIP FUNCTIONS */\n\n" in
   comment ^ CF.Pp_utils.to_plain_pretty_string doc
 
-let generate_conversion_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
+let generate_conversion_and_equality_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
   let ail_funs = List.map Cn_internal_to_ail.generate_struct_conversion_function ail_prog.tag_definitions in 
+  let ail_funs' = List.map Cn_internal_to_ail.generate_struct_equality_function ail_prog.tag_definitions in 
   let ail_funs = List.concat ail_funs in 
+  let ail_funs = ail_funs @ List.concat ail_funs' in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
-  let comment = "\n/* CONVERSION FUNCTIONS */\n\n" in
+  let comment = "\n/* CONVERSION AND EQUALITY FUNCTIONS */\n\n" in
   comment ^ CF.Pp_utils.to_plain_pretty_string doc

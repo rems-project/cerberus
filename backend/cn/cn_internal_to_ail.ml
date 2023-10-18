@@ -16,6 +16,8 @@ module LRT=LogicalReturnTypes
 module LAT=LogicalArgumentTypes
 module AT=ArgumentTypes
 
+let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B)))
+
 let map_basetypes = function 
   | BT.Map (bt1, bt2) -> (bt1, bt2)
   | _ -> failwith "Not a map"
@@ -328,7 +330,6 @@ let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) =
   let b = Sym.fresh () in
   let b_ident = A.(AilEident b) in
   let b_binding = create_binding b (mk_ctype C.(Basic (Integer Bool))) in
-  let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B))) in
   let b_decl = A.(AilSdeclaration [(b, Some (mk_expr true_const))]) in
 
   let incr_var = A.(AilEident sym) in
@@ -461,8 +462,6 @@ let generate_ownership_function ctype =
   (decl, def)
 
 
-(* TODO *)
-let generate_equality_function name = ()
 
 
 
@@ -764,7 +763,6 @@ let rec cn_to_ail_expr_aux_internal
   | ArrayToList (t1, t2, t3) -> failwith "TODO13"
   | Representable (ct, t) -> failwith "TODO14"
   | Good (ct, t) -> 
-    let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, Some B))) in 
     dest d ([], [], mk_expr true_const)
     (* cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars t d *)
     
@@ -1016,6 +1014,57 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   enum :: structs
 
+let generate_struct_equality_function ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
+    | C.StructDef (members, _) -> 
+      let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
+      let cn_struct_ctype = mk_ctype C.(Struct cn_sym) in
+      let cn_struct_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, cn_struct_ctype)) in
+      let fn_sym = Sym.fresh_pretty ("struct_" ^ (Sym.pp_string cn_sym) ^ "_equality") in
+      let param_syms = [Sym.fresh_pretty "x"; Sym.fresh_pretty "y"] in 
+      let param_type = (empty_qualifiers, mk_ctype (C.Pointer (empty_qualifiers, mk_ctype Void)), false) in
+      let cast_param_syms = List.map (fun sym -> generate_sym_with_suffix ~suffix:"_cast" sym) param_syms in 
+      let cast_bindings = List.map (fun sym -> create_binding sym cn_struct_ptr_ctype) cast_param_syms in 
+      let cast_assignments = List.map (fun (cast_sym, sym) -> A.(AilSdeclaration [cast_sym, Some (mk_expr (AilEcast (empty_qualifiers, cn_struct_ptr_ctype, (mk_expr (AilEident sym)))))])) (List.combine cast_param_syms param_syms) in 
+      (* Function body *)
+      let generate_member_equality (id, (_, _, _, ctype)) = 
+        let doc = (CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype) in 
+        Printf.printf "%s\n" (CF.Pp_utils.to_plain_pretty_string doc);
+        let sct_opt = Sctypes.of_ctype ctype in 
+        let sct = match sct_opt with 
+          | Some t -> t
+          | None -> 
+            Printf.printf "None case\n";
+            failwith "Bad sctype"
+        in
+        let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
+        let typedef_str = match get_typedef_string (bt_to_ail_ctype bt) with 
+          | Some str -> String.concat "_" (String.split_on_char ' ' str)
+          | None -> match rm_ctype ctype with 
+            | C.Struct struct_sym -> "struct_" ^ (Sym.pp_string struct_sym)
+            | _ -> ""
+        in
+        let equality_fun_str = typedef_str ^ "_equality" in
+        let args = List.map (fun cast_sym -> mk_expr (AilEmemberofptr (mk_expr (AilEident cast_sym), id))) cast_param_syms in 
+        mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty equality_fun_str)), args))
+      in
+      let member_equality_exprs = List.map generate_member_equality members in 
+      let ail_and_binop = List.fold_left (fun e1 e2 -> mk_expr A.(AilEbinary (e1, And, e2))) (mk_expr true_const) member_equality_exprs in
+      let rec remove_true_const ail_binop = match rm_expr ail_binop with 
+        | A.(AilEbinary (e1, And, e2)) -> (match rm_expr e1 with 
+            | A.AilEconst (ConstantInteger (IConstant (_, Decimal, Some B))) -> e2
+            | _ -> mk_expr A.(AilEbinary (remove_true_const e1, And, e2)))
+        | _ -> failwith "Incorrect form"
+      in
+      let ail_and_binop = remove_true_const ail_and_binop in
+      let return_stmt = A.(AilSreturn ail_and_binop) in 
+      let ret_type = bt_to_ail_ctype BT.Bool in
+      (* Generating function declaration *)
+      let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), [param_type; param_type], false, false, false)))) in
+      (* Generating function definition *)
+      let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (cast_bindings, List.map mk_stmt (cast_assignments @ [return_stmt]))))) in
+      [(decl, def)]
+    | C.UnionDef _ -> []
+
 let generate_struct_conversion_function ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
   | C.StructDef (members, _) -> 
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
@@ -1212,7 +1261,6 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> C
             | _ -> failwith "Incorrect form of forall logical constraint term"
         in
 
-        let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B))) in
 
         match IT.term t with 
           | Good _ -> dest d ([], [], mk_expr true_const)
