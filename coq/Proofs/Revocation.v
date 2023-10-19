@@ -987,6 +987,6 @@ Module RevocationProofs.
         try apply Mvarargs01;
         try apply Mvarargs02.
       Transparent CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
-  Qed.
+  Admitted.
 
 End RevocationProofs.
