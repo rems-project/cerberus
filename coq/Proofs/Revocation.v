@@ -858,4 +858,75 @@ Module RevocationProofs.
           assumption.
   Qed.
 
+  Lemma num_of_int_eq:
+    forall x, CheriMemoryWithPNVI.num_of_int x = CheriMemoryWithoutPNVI.num_of_int x.
+  Proof.
+    auto.
+  Qed.
+
+  Theorem allocate_region_same:
+    forall mem_state1 mem_state2 tid pref align_int size_int,
+      mem_state_same mem_state1 mem_state2 ->
+
+      lift_sum eq pointer_value_eq False
+        (evalErrS (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int) mem_state1)
+        (evalErrS (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int) mem_state2)
+      /\
+        lift_sum eq mem_state_same False
+          (execErrS (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int) mem_state1)
+          (execErrS (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int) mem_state2).
+  Proof.
+    Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
+    intros mem_state1 mem_state2 tid pref align_int size_int M.
+    destruct_mem_state_same M.
+    split.
+    - (* return value *)
+      unfold lift_sum.
+      unfold CheriMemoryWithPNVI.mem_state in *.
+      unfold evalErrS.
+      repeat break_let.
+      repeat break_match;invc Heqs1;invc Heqs0;
+        cbn in Heqp, Heqp0; repeat break_let;
+        rewrite num_of_int_eq in *;
+
+
+
+        remember (Capability_GS.representable_length
+                    (CheriMemoryWithoutPNVI.num_of_int size_int)) as size;
+        clear Heqsize;
+        rewrite num_of_int_eq in *;
+        remember (Z.max (CheriMemoryWithoutPNVI.num_of_int align_int)
+                    (Z.succ
+                       (AddressValue.to_Z
+                          (AddressValue.bitwise_complement
+                             (AddressValue.of_Z
+                                (Z.of_N
+                                   (MachineWord.MachineWord.word_to_N
+                                      (Values.get_word
+                                         (CapFns.CapGetRepresentableMask
+                                            (MachineWord.MachineWord.Z_to_word
+                                               (Pos.to_nat 64)
+                                               (CheriMemoryWithoutPNVI.num_of_int
+                                                  size_int))))))))))) as align;
+        clear Heqalign.
+
+      all: assert(evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
+                    evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2) as E;try  apply allocator_same;
+        repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+        try apply Mvarargs1; try apply Mvarargs2;
+        unfold evalErrS in E;
+        repeat break_let;
+        repeat tuple_inversion;
+        destruct s0,s; inv E;repeat tuple_inversion;
+        try reflexivity;
+        repeat break_let;
+        repeat tuple_inversion.
+
+      constructor.
+      reflexivity.
+    -
+      admit.
+  Admitted.
+
+
 End RevocationProofs.

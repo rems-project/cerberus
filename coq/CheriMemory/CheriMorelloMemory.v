@@ -177,6 +177,13 @@ Definition quomod (a b: Z) : (Z*Z) :=
     else (Z.succ q, Z.sub r b).
 
 
+Definition wrapI min_v max_v n :=
+  let dlt := Z.succ (Z.sub max_v min_v) in
+  let r := Z_integerRem_f n dlt in
+  if Z.leb r max_v then r
+  else Z.sub r dlt.
+
+
 Module Type CheriMemoryImpl
   (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS
@@ -373,12 +380,6 @@ Module Type CheriMemoryImpl
                        (Z.leb (Z.add (AddressValue.to_Z b2) sz2) (AddressValue.to_Z b1)))
         end
     end.
-
-  Definition wrapI min_v max_v n :=
-    let dlt := Z.succ (Z.sub max_v min_v) in
-    let r := Z_integerRem_f n dlt in
-    if Z.leb r max_v then r
-    else Z.sub r dlt.
 
   Definition unwrap_cap_value n :=
     let ptraddr_bits := (Z.of_nat C.sizeof_ptraddr) * 8 in
