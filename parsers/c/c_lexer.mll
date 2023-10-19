@@ -172,6 +172,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "unpack"        , CN_UNPACK;
     "instantiate"   , CN_INSTANTIATE;
     "extract"       , CN_EXTRACT;
+    "array_shift"   , CN_ARRAY_SHIFT;
     "have"          , CN_HAVE;
     "unfold"        , CN_UNFOLD;
     "apply"         , CN_APPLY;

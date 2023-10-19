@@ -5,9 +5,9 @@
 char
 get_from_arr (char *in_arr)
 /*@ requires take IA = each (integer j; 0 <= j && j < 10)
-  {Owned<char>(in_arr + (j * sizeof<char>))} @*/
+  {Owned<char>(in_arr + j)} @*/
 /*@ ensures take IA2 = each (integer j; 0 <= j && j < 10)
-  {Owned<char>(in_arr + (j * sizeof<char>))} @*/
+  {Owned<char>(in_arr + j)} @*/
 {
   char c;
 

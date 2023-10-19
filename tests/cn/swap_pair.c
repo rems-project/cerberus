@@ -1,6 +1,6 @@
 void swap_pair(unsigned long int *pair_p)
-/*@ requires take pairStart = each (integer j; 0 <= j && j < 2) {Owned(pair_p + (j * sizeof<unsigned long int>))} @*/
-/*@ ensures take pairEnd = each (integer j; 0 <= j && j < 2) {Owned(pair_p + (j * sizeof<unsigned long int>))} @*/
+/*@ requires take pairStart = each (integer j; 0 <= j && j < 2) {Owned(pair_p + j)} @*/
+/*@ ensures take pairEnd = each (integer j; 0 <= j && j < 2) {Owned(pair_p + j)} @*/
 /*@ ensures pairEnd[0] == pairStart[1] @*/
 /*@ ensures pairEnd[1] == pairStart[0] @*/
 {

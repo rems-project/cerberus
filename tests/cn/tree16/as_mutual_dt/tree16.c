@@ -48,7 +48,7 @@ predicate {datatype tree t, integer v, map <integer, datatype tree> children}
     take V = Owned<int>((pointer)(((integer)p) + (offsetof (node, v))));
     let nodes_ptr = ((pointer)((((integer)p) + (offsetof (node, nodes)))));
     take Ns = each (integer i; (0 <= i) && (i < (num_nodes ())))
-      {Indirect_Tree((pointer)(((integer)nodes_ptr) + (i * (sizeof <tree>))))};
+      {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
     let ts = array_to_tree_list (Ns, num_nodes ());
     return {t: Node {v: V, children: ts}, v: V, children: Ns};
   }
@@ -113,7 +113,7 @@ int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<typeof(i)>(path + j)} @*/
 /*@ requires ((0 <= path_len) && (0 <= i) && (i <= path_len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < path_len))
     {(0 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
@@ -123,7 +123,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ ensures T2.t == {T.t}@start @*/
 /*@ ensures T2.children == {T.children}@start @*/
 /*@ ensures take Xs2 = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<typeof(i)>(path + j)} @*/
 /*@ ensures Xs2 == {Xs}@start @*/
 /*@ ensures take V2 = Owned(v) @*/
 /*@ ensures ((return == 0) && (not (in_tree (T2.t, arc))))

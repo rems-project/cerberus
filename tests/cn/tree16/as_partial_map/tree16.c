@@ -51,7 +51,7 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
     take V = Owned<int>((pointer)(((integer)p) + (offsetof (node, v))));
     let nodes_ptr = ((pointer)((((integer)p) + (offsetof (node, nodes)))));
     take Ns = each (integer i; (0 <= i) && (i < (num_nodes ())))
-      {Indirect_Tree((pointer)(((integer)nodes_ptr) + (i * (sizeof <tree>))))};
+      {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
     let t = construct (V, Ns);
     return {t: t, v: V, ns: Ns};
   }
@@ -71,7 +71,7 @@ predicate {datatype tree_arc arc, map<integer, integer> xs}
   assert (i <= len);
   assert (0 <= i);
   take Xs = each (integer j; (0 <= j) && (j < len))
-    {Owned<signed int>(p + (j * sizeof<signed int>))};
+    {Owned<signed int>(array_shift<signed int>(p, j))};
   assert (each (integer j; (0 <= j) && (j < len))
     {(0 <= Xs[j]) && (Xs[j] < (num_nodes ()))});
   return {arc: mk_arc(Xs, i, len), xs: Xs};
@@ -129,7 +129,7 @@ int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<int>(path + (j * 4))} @*/
+    {Owned<int>(path + j)} @*/
 /*@ requires ((0 <= path_len) && (0 <= i) && (i <= path_len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < path_len))
     {(0 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
@@ -138,7 +138,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ ensures take T2 = Tree(t) @*/
 /*@ ensures T2.t == {T.t}@start @*/
 /*@ ensures take Xs2 = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<int>(path + (j * 4))} @*/
+    {Owned<int>(path + j)} @*/
 /*@ ensures Xs2 == {Xs}@start @*/
 /*@ ensures take V2 = Owned(v) @*/
 /*@ ensures ((return == 0) && ((T2.t[arc]) == Node_None {}))

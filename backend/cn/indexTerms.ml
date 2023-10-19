@@ -578,6 +578,8 @@ let memberShift_ (base, tag, member) =
   IT (MemberShift (base, tag, member), BT.Loc)
 let arrayShift_ ~base ~index ct  =
   IT (ArrayShift { base; ct; index }, BT.Loc)
+let sizeOf_ ct =
+  IT (SizeOf ct, BT.Integer)
 
 let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true

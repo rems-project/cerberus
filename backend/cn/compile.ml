@@ -155,6 +155,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
   | CNExpr_sizeof ct -> !^ "(sizeof _)"
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
+  | CNExpr_array_shift (e1, ct, e2) -> !^"(array_shift<_>(_, _)"
   | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
   | CNExpr_addr nm -> !^ "&_"
   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
@@ -204,6 +205,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      SymSet.empty
   | CNExpr_offsetof _ ->
      SymSet.empty
+  | CNExpr_array_shift (e1, _ct, e2) ->
+     free_in_exprs [e1; e2]
   | CNExpr_membershift (e, _id) ->
      free_in_expr e
   | CNExpr_addr _ ->
@@ -476,28 +479,28 @@ module EffectfulTranslation = struct
   let mk_translate_binop loc bop (e1, e2) =
     let open IndexTerms in
     match bop, IT.bt e1 with
-    | CN_add, _ (* (SBT.Integer | SBT.Real) *) ->
+    | CN_add, (SBT.Integer | SBT.Real) ->
         return (IT (Binop (Add, e1, e2), IT.bt e1))
-    (* | CN_add, (SBT.Loc oct) -> *)
-    (*    begin match oct with *)
-    (*    | Some ct -> *)
-    (*       let (IT (it_, _)) =  *)
-    (*         sterm_of_term (arrayShift_ (term_of_sterm e1, ct, term_of_sterm e2)) in *)
-    (*       return (IT (it_, Loc oct)) *)
-    (*    | None -> *)
-    (*       cannot_tell_pointee_ctype loc e1 *)
-    (*    end *)
-    | CN_sub, _ (* (SBT.Integer | SBT.Real) *) ->
+    | CN_add, (SBT.Loc oct) ->
+       begin match oct with
+       | Some ct ->
+          let (IT (it_, _)) =
+            sterm_of_term (arrayShift_ ~base:(term_of_sterm e1) ct ~index:(term_of_sterm e2)) in
+          return (IT (it_, Loc oct))
+       | None ->
+          cannot_tell_pointee_ctype loc e1
+       end
+    | CN_sub, (SBT.Integer | SBT.Real) ->
         return (IT (Binop (Sub, e1, e2), IT.bt e1))
-    (* | CN_sub, (SBT.Loc oct) -> *)
-    (*    begin match oct with *)
-    (*    | Some ct -> *)
-    (*       let (IT (it_, _)) =  *)
-    (*         sterm_of_term (arrayShift_ (term_of_sterm e1, ct, sub_ (int_ 0, term_of_sterm e2))) in *)
-    (*       return (IT (it_, Loc oct)) *)
-    (*    | None -> *)
-    (*       cannot_tell_pointee_ctype loc e1 *)
-    (*    end *)
+    | CN_sub, (SBT.Loc oct) ->
+       begin match oct with
+       | Some ct ->
+          let (IT (it_, _)) =
+            sterm_of_term (arrayShift_ ~base:(term_of_sterm e1) ct ~index:(sub_ (int_ 0, term_of_sterm e2))) in
+          return (IT (it_, Loc oct))
+       | None ->
+          cannot_tell_pointee_ctype loc e1
+       end
     | CN_mul, _ ->
         return (IT (Binop (Mul, e1, e2), IT.bt e1))
     | CN_div, _ ->
@@ -682,6 +685,21 @@ module EffectfulTranslation = struct
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
             return (IT ((OffsetOf (tag, member)), SBT.Integer))
+        | CNExpr_array_shift (base, ct, index) ->
+           let@ base = self base in
+            begin match IT.bt base with
+            | Loc _ ->
+              let@ index = self index in
+              begin match IT.bt index with
+                | Integer ->
+                  let ct = Sctypes.of_ctype_unsafe loc ct in
+                  return (IT (ArrayShift { base; ct; index }, Loc (Some ct)))
+                | has -> 
+                   fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer"; o_ctxt = None}}
+              end
+            | has ->
+               fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
+            end
         | CNExpr_membershift (e, member) ->
             let@ e = self e in
             begin match IT.bt e with
@@ -890,18 +908,10 @@ module EffectfulTranslation = struct
     let open IndexTerms in
     let open Pp in
     let qs = sym_ (q, SBT.Integer) in
-    let msg_s = "Iterated predicate pointer must be (ptr + (q_var * offs)):" in
+    let msg_s = "Iterated predicate pointer must be (ptr + q_var) or array_shift(ptr, ctype, q_var):" in
     begin match term ptr_expr with
-      | (Cast (Loc, IT (Binop (Add, b, offs), Integer))) ->
-        begin match term b, term offs with
-          | (Cast (Integer, (IT (_, SBT.Loc _) as p))), Binop (Mul, x, y) when Terms.equal SBT.equal x qs ->
-            return (p, y)
-          | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
-        end
-      (* temporarily allow this more confusing but more concise syntax,
-         until we have enriched Core's pointer base types *)
-      | Binop (Add, p, IT (Binop (Mul, x, y), _)) when Terms.equal SBT.equal x qs ->
-         return (p, y)       
+      | ArrayShift { base=p; ct; index=x } when Terms.equal SBT.equal x qs ->
+        return (p, sterm_of_term @@ sizeOf_ ct)
       | _ ->
       fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
     end

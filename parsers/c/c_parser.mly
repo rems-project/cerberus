@@ -145,7 +145,7 @@ type asm_qualifier =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
+%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_ARRAY_SHIFT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC
@@ -1859,6 +1859,9 @@ prim_expr:
                                , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
+| CN_ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))) 
+                               , CNExpr_array_shift (base, ty, index))) }
 | ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
