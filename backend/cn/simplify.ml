@@ -518,15 +518,14 @@ module IndexTerms = struct
     | Cast (cbt, a) ->
        let a = aux a in
        IT (Cast (cbt, a), the_bt)
-    | MemberOffset (tag, member) ->
-       let layout = SymMap.find tag simp_ctxt.global.struct_decls in
-       int_ (Option.get (Memory.member_offset layout member))
-    | ArrayOffset (ct, t) ->
-       let t = aux t in
-       begin match is_z t with
-       | Some z when Z.equal Z.zero z -> int_ 0
-       | _ -> mul_ (int_ (Memory.size_of_ctype ct), t)
-          (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
+    | MemberShift (t, tag, member) ->
+      IT (MemberShift (aux t, tag, member), the_bt)
+    | ArrayShift { base; ct; index } ->
+       let base = aux base in
+       let index = aux index in
+       begin match is_z index with
+       | Some z when Z.equal Z.zero z -> base
+       | _ -> IT (ArrayShift { base; ct; index }, the_bt)
        end
     | SizeOf ct ->
        int_ (Memory.size_of_ctype ct)

@@ -286,7 +286,7 @@ let get_witnesses = function
          | (lb :: _) -> lb
      in
      List.init (List.length eqs + 1)
-       (fun i -> (arrayShift_ (qpt.pointer, ct, add_ (lb, z_ (Z.of_int i))),
+       (fun i -> (arrayShift_ ~base:qpt.pointer  ct  ~index:(add_ (lb, z_ (Z.of_int i))),
            subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
   | _ -> []
 (*

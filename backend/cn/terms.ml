@@ -82,9 +82,10 @@ type 'bt term_ =
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
   | Constructor of Sym.t * (Id.t * 'bt term) list
-  | MemberOffset of Sym.t * Id.t
-  | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
+  | MemberShift of 'bt term * Sym.t * Id.t
+  | ArrayShift of { base: 'bt term; ct: Sctypes.t; index: 'bt term }
   | SizeOf of Sctypes.t
+  | OffsetOf of Sym.t * Id.t
   | Nil of BaseTypes.t
   | Cons of 'bt term * 'bt term
   | Head of 'bt term
@@ -273,12 +274,14 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     (*    begin match pointer_op with *)
        | Cast (cbt, t) ->
           mparens (align @@ parens(BaseTypes.pp cbt) ^^ break 0 ^^ aux true t)
-       | MemberOffset (tag, member) ->
-          mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
-       | ArrayOffset (ct, t) ->
-          mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
+       | MemberShift (t, tag, member) ->
+         mparens (c_app !^"member_shift" [aux false t; Sym.pp tag; Id.pp member])
+       | ArrayShift { base; ct; index } ->
+         mparens (c_app !^"array_shift" [aux false base; Sctypes.pp ct; aux false index])
        | SizeOf t ->
           mparens (c_app !^"sizeof" [Sctypes.pp t])
+       | OffsetOf (tag, member) ->
+         mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        (* end *)
     (* | CT_pred ct_pred -> *)
     (*    begin match ct_pred with *)
@@ -448,10 +451,10 @@ let rec dtree (IT (it_, bt)) =
      Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
   | Cast (cbt, t) ->
      Dnode (pp_ctor "Cast", [Dleaf (BaseTypes.pp cbt); dtree t])
-  | MemberOffset (tag, id) ->
-     Dnode (pp_ctor "MemberOffset", [Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
-  | ArrayOffset (ty, t) ->
-     Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
+  | MemberShift (t, tag, id) ->
+    Dnode (pp_ctor "MemberShift", [dtree t; Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
+  | ArrayShift { base; ct=ty; index=t } ->
+     Dnode (pp_ctor "ArrayShift", [Dleaf (Sctypes.pp ty); dtree t])
   | Representable (ty, t) ->
      Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | Good (ty, t) ->
@@ -501,5 +504,7 @@ let rec dtree (IT (it_, bt)) =
        ])
   | SizeOf ct ->
      Dnode (pp_ctor "SizeOf", [Dleaf (Sctypes.pp ct)])
+  | OffsetOf (tag, member) ->
+    Dnode (pp_ctor "OffsetOf", [Dleaf (Sym.pp tag); Dleaf (Id.pp member)])
   | Let ((s, t1), t2) ->
      Dnode (pp_ctor "Let", [Dleaf (Sym.pp s); dtree t1; dtree t2])

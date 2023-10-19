@@ -681,7 +681,7 @@ module EffectfulTranslation = struct
             return (IT (SizeOf scty, SBT.Integer))
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
-            return (IT ((MemberOffset (tag, member)), SBT.Integer))
+            return (IT ((OffsetOf (tag, member)), SBT.Integer))
         | CNExpr_membershift (e, member) ->
             let@ e = self e in
             begin match IT.bt e with

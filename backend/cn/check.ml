@@ -450,7 +450,7 @@ let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
 let check_array_shift loc ~expect vt1 (loc_ct, ct) vt2 =
   let@ () = WellTyped.ensure_base_type loc ~expect Loc in
   let@ () = WellTyped.WCT.is_ct loc_ct ct in
-  return (arrayShift_ (vt1, ct, vt2))
+  return (arrayShift_ ~base:vt1 ct  ~index:vt2)
 
 
 (* could potentially return a vt instead of an RT.t *)

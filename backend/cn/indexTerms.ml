@@ -59,9 +59,10 @@ let rec free_vars_ = function
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
   | Cast (_cbt, t) -> free_vars t
-  | MemberOffset (_tag, _id) -> SymSet.empty
-  | ArrayOffset (_sct, t) -> free_vars t
+  | MemberShift (t, _tag, _id) -> free_vars t
+  | ArrayShift { base; ct=_; index } -> free_vars_list [base; index]
   | SizeOf _t -> SymSet.empty
+  | OffsetOf (tag, member) -> SymSet.empty
   | Nil _bt -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
   | Head t -> free_vars t
@@ -118,9 +119,10 @@ let rec fold_ f binders acc = function
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
   | Cast (_cbt, t) -> fold f binders acc t
-  | MemberOffset (_tag, _id) -> acc
-  | ArrayOffset (_sct, t) -> fold f binders acc t
+  | MemberShift (t, _tag, _id) -> fold f binders acc t
+  | ArrayShift { base; ct=_; index } -> fold_list f binders acc [base; index]
   | SizeOf _ct -> acc
+  | OffsetOf (_tag, _member) -> acc
   | Nil _bt -> acc
   | Cons (t1, t2) -> fold_list f binders acc [t1; t2]
   | Head t -> fold f binders acc t
@@ -244,12 +246,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (RecordUpdate ((subst su t, m), subst su v), bt)
   | Cast (cbt, t) ->
      IT (Cast (cbt, subst su t), bt)
-  | MemberOffset (tag, member) ->
-     IT (MemberOffset (tag, member), bt)
-  | ArrayOffset (tag, t) ->
-     IT (ArrayOffset (tag, subst su t), bt)
+  | MemberShift (t, tag, member) ->
+     IT (MemberShift (subst su t, tag, member), bt)
+  | ArrayShift { base; ct; index } ->
+    IT (ArrayShift { base=subst su base; ct; index=subst su index }, bt)
   | SizeOf t ->
      IT (SizeOf t, bt)
+  | OffsetOf (tag, member) ->
+     IT (OffsetOf (tag, member), bt)
   | Aligned t -> 
      IT (Aligned {t= subst su t.t; align= subst su t.align}, bt)
   | Representable (rt, t) -> 
@@ -570,29 +574,20 @@ let pointerToIntegerCast_ it =
   cast_ Integer it
 let pointerToAllocIdCast_ it =
   cast_ Alloc_id it
-let memberOffset_ (tag, member) =
-  IT (MemberOffset (tag, member), BT.Integer)
-let arrayOffset_ (ct, t) =
-  IT (ArrayOffset (ct, t), BT.Integer)
+let memberShift_ (base, tag, member) =
+  IT (MemberShift (base, tag, member), BT.Loc)
+let arrayShift_ ~base ~index ct  =
+  IT (ArrayShift { base; ct; index }, BT.Loc)
 
 let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true
   | _ -> false
 
-let pointer_offset_ (p, n) =
-  integerToPointerCast_ (add_ (pointerToIntegerCast_ p, n))
-
-let memberShift_ (t, tag, member) =
-  pointer_offset_ (t, memberOffset_ (tag, member))
-let arrayShift_ (t1, ct, t2) =
-  pointer_offset_ (t1, arrayOffset_ (ct, t2))
-
-
-
-
+let pointer_offset_ (base, offset) =
+  arrayShift_ ~base (Sctypes.Integer Char) ~index:offset
 
 let array_index_to_pointer ~base ~item_ct ~index =
-  arrayShift_ (base, item_ct, index)
+  arrayShift_ ~base ~index item_ct
 
 let array_offset_of_pointer ~base ~pointer =
   sub_ (pointerToIntegerCast_ pointer,
@@ -625,10 +620,6 @@ let cellPointer_ ~base ~step ~starti ~endi ~p =
 
 
 
-
-let container_of_ (t, tag, member) =
-  integerToPointerCast_
-    (sub_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
 
 (* list_op *)
 let nil_ ~item_bt = IT (Nil item_bt, BT.List item_bt)

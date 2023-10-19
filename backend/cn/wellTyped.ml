@@ -615,16 +615,21 @@ module WIT = struct
              fail (fun _ -> {loc; msg = Generic msg})
           in
           return (IT (Cast (cbt, t), cbt))
-       | MemberOffset (tag, member) ->
+       | MemberShift (t, tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
-          return (IT (MemberOffset (tag, member),Integer))
-       | ArrayOffset (ct, t) ->
+          let@ t = check loc Loc t in
+          return (IT (MemberShift (t, tag, member), BT.Loc))
+       | ArrayShift { base; ct; index } ->
           let@ () = WCT.is_ct loc ct in
-          let@ t = check loc Integer t in
-          return (IT (ArrayOffset (ct, t), Integer))
+          let@ base = check loc Loc base in
+          let@ index = check loc Integer index in
+          return (IT (ArrayShift { base; ct; index }, BT.Loc))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
-          return (IT (SizeOf ct, Integer))
+          return (IT (SizeOf ct, BT.Integer))
+       | OffsetOf (tag, member) ->
+          let@ _ty = get_struct_member_type loc tag member in
+          return (IT (OffsetOf (tag, member), BT.Integer))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Integer t.align in
