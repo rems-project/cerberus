@@ -360,8 +360,7 @@ let it_adjust (global : Global.t) it =
         then t else f (IT.good_value global.struct_decls ct t2)
     | Representable (ct, t2) -> if Option.is_some (Sctypes.is_struct_ctype ct)
         then t else f (IT.representable global.struct_decls ct t2)
-    | Aligned t ->
-        f (IT.divisible_ (IT.pointerToIntegerCast_ t.t, t.align))
+    | Aligned t -> f @@ IT.eq_ (IT.mod_ (t.t, t.align), IT.int_ 0)
     | IT.Let ((nm, x), y) ->
         let x = f x in
         let y = f y in
@@ -762,7 +761,6 @@ let it_to_coq loc global list_mono it =
   let rec f bool_eq_prop t =
     let do_fail msg = fail_m_d loc (Pp.item ("it_to_coq: unsupported " ^ msg) (IT.pp t)) in
     let aux t = f bool_eq_prop t in
-    let abinop s x y = parensM (build [aux x; rets s; aux y]) in
     let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
         then f_appM "Is_true" [x] else x
     in
@@ -778,19 +776,38 @@ let it_to_coq loc global list_mono it =
       *) f
     in
     match IT.term t with
-    | IT.Sym sym -> return (Sym.pp sym)
+    | IT.Sym sym ->
+      let sym = Sym.pp_string sym in
+      let is_return = String.equal sym "return" in
+      let pp_sym = string @@ if is_return then "ret" else sym in
+      let pp_convert = match IT.bt t with
+      | Integer | Loc -> !^ "bv_unsigned "
+      | _ -> empty
+      in
+      return @@ precede pp_convert pp_sym
     | IT.Const l -> begin match l with
         | IT.Bool b -> with_is_true (rets (if b then "true" else "false"))
         | IT.Z z -> enc_z z
         | _ -> do_fail "const"
     end
     | IT.Unop (op, x) -> begin match op with
-       | IT.Not -> f_appM (if bool_eq_prop then "~" else "negb") [aux x]
+       | IT.Not -> begin match bool_eq_prop with
+         | true -> begin match x with
+           | (IT (IT.Binop (EQ, x, y), _)) -> build [aux x; rets "≠"; aux y]
+           | _ -> f_appM "~" [aux x]
+           end
+         | false -> f_appM "negb" [aux x]
+         end
        | IT.BWFFSNoSMT -> f_appM "CN_Lib.find_first_set_z" [aux x]
        | IT.BWCTZNoSMT -> f_appM "CN_Lib.count_trailing_zeroes_z" [aux x]
        | _ -> do_fail "unary op"
     end
-    | IT.Binop (op, x, y) -> begin match op with
+    | IT.Binop (op, x, y) ->
+      let abinop s x y =
+        let suffix_bt = if BaseTypes.equal (IT.bt t) BaseTypes.Integer then !^ "%Z" else empty in
+        let@ exp = build [aux x; rets s; aux y] in
+        return @@ parens exp ^^ suffix_bt
+      in begin match op with
        | Add  -> abinop "+" x y
        | Sub  -> abinop "-" x y
        | Mul  -> abinop "*" x y
@@ -843,7 +860,12 @@ let it_to_coq loc global list_mono it =
        let@ () = ensure_fun_upd () in
        let@ e = eq_of (IT.bt x) in
        f_appM "fun_upd" [return e; aux m; aux x; aux y]
-    | IT.MapGet (m, x) -> parensM (build [aux m; aux x])
+    | IT.MapGet (m, x) -> 
+      let@ x' = aux x in
+      let x' = return @@ x' ^^ !^ "%nat" in
+      let@ pp_mapGet = parensM (build [aux m; return @@ !^ "!!!"; x']) in
+      let pp_mapGet = parens (!^ "bv_unsigned " ^^ pp_mapGet) in
+      return pp_mapGet
     | IT.RecordMember (t, m) ->
         let flds = BT.record_bt (IT.bt t) in
         if List.length flds == 1

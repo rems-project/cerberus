@@ -19,6 +19,7 @@ module Mu = Mucore
 module RI = ResourceInference
 module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
+module BV = BinaryVerification
 
 open Tools
 open Sctypes
@@ -1633,7 +1634,7 @@ let check_procedure
           ) label_defs ([], SymMap.empty)
       in
 
-      let@ (), _mete_pre_state = 
+      let@ (), pre_state_ctxt =
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
         pure begin
             let@ () = add_rs loc initial_resources in
@@ -1642,7 +1643,12 @@ let check_procedure
             return ((), pre_state)
           end 
       in
-      let@ _mete_post_state = post_state_of_rt loc rt in
+      let@ post_state_ctxt = post_state_of_rt loc rt in
+
+      debug 6 (lazy (Context.pp pre_state_ctxt));
+      debug 6 (lazy (Context.pp post_state_ctxt));
+
+      let@ () = BV.pp_procedure fsym loc pre_state_ctxt post_state_ctxt in
 
       let@ () = ListM.iterM (fun (lsym, def) ->
         pure begin match def with
@@ -1815,7 +1821,9 @@ let check_c_functions funs =
      begin match found with
      | Some (fsym, (loc, args_and_body)) ->
         let () = progress_simple (of_total 1 1) (Sym.pp_string fsym) in
-        check_procedure loc fsym args_and_body
+        let@ () = check_procedure loc fsym args_and_body in
+        BV.pp_lemma fsym;
+        return ()
      | None ->
         Pp.warn_noloc (!^"function" ^^^ !^fname ^^^ !^"not found");
         return ()
@@ -1828,6 +1836,7 @@ let check_c_functions funs =
            check_procedure loc fsym args_and_body
          ) funs
      in
+     let _ = List.map_fst BV.pp_lemma funs in
      return ()
 
 
@@ -1949,7 +1958,12 @@ let check mu_file stmt_locs o_lemma_mode =
   Pp.debug 3 (lazy (Pp.headline "type-checked C functions and specifications."));
 
   Cerb_debug.begin_csv_timing () (*type checking functions*);
+
+  BV.pp_top_parts ();
   let@ () = check_c_functions checked in
+  BV.pp_bottom_parts ();
+  BV.cleanup ();
+
   Cerb_debug.end_csv_timing "type checking functions";
 
   let@ global = get_global () in

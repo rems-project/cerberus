@@ -286,7 +286,10 @@ let add_c_internal lc =
   let@ s = get () in
   let@ solver = solver () in
   let@ simp_ctxt = simp_ctxt () in
-  let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
+  let lc = if BinaryVerificationTypes.enabled ()
+    (* Don't simplify to keep translated specifications readable *)
+    then lc
+    else Simplify.LogicalConstraints.simp simp_ctxt lc in
   let s = Context.add_c lc s in
   let () = Solver.add_assumption solver s.global lc in
   let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in

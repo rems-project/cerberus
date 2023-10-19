@@ -111,6 +111,7 @@ let main
       state_file 
       diag
       lemmata
+      bv_args
       only
       csv_times
       log_times
@@ -136,6 +137,7 @@ let main
   Solver.log_to_temp := solver_logging;
   Check.only := only;
   Diagnostics.diag_string := diag;
+  BinaryVerificationTypes.args := bv_args;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) = 
     handle_frontend_error 
@@ -261,6 +263,25 @@ let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
 
+let bv_filename_elf =
+  let doc = "compiled program in elf format" in
+  Arg.(required & pos 0 (some file) None & info [] ~docv:"ELF-IN" ~doc)
+
+let bv_filename_objdump =
+  let doc = "objdump of compiled program" in
+  Arg.(required & pos 1 (some file) None & info [] ~docv:"OBJDUMP-IN" ~doc)
+
+let bv_filename_coq =
+  let doc = "file in which to output the Coq proof" in
+  Arg.(required & pos 3 (some string) None & info [] ~docv:"COQ-OUT" ~doc)
+
+let bv_coq_dir =
+  let doc =
+    "The logical Coq directory (i.e., module path) under which the \
+    generated files are placed. Should be the same one as for Islaris."
+  in
+  Arg.(required & pos 2 (some string) None & info [] ~docv:"COQ-DIR" ~doc)
+
 let csv_times =
   let doc = "file in which to output csv timing information" in
   Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
@@ -300,9 +321,21 @@ let expect_failure =
 
 let () =
   let open Term in
-  let check_t = 
-    const main $ 
-      file $ 
+  let main_t verify_bin =
+    let bv_filenames =
+      if verify_bin
+        then
+          let record filename_elf filename_objdump coq coq_dir
+            : BinaryVerificationTypes.t option =
+            Some { filename_elf; filename_objdump; coq = open_out coq; coq_dir } in
+          const record $
+            bv_filename_elf $
+            bv_filename_objdump $
+            bv_filename_coq $
+            bv_coq_dir
+      else const None in
+    const main $
+      file $
       incl_dirs $
       incl_files $
       loc_pp $ 
@@ -315,6 +348,7 @@ let () =
       state_file $
       diag $
       lemmata $
+      bv_filenames $
       only $
       csv_times $
       log_times $
@@ -324,4 +358,12 @@ let () =
       astprints $
       expect_failure
   in
-  Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
+  let check_t = main_t false in
+  let bv_t = main_t true in
+  let cn_info = Cmd.info "cn" in
+  let check_info = Cmd.info "check" in
+  let bv_info = Cmd.info "bin" in
+  let check_cmd = Cmd.v check_info check_t in
+  let bv_cmd = Cmd.v bv_info bv_t in
+  let cmds = Cmd.group cn_info ~default:check_t [check_cmd; bv_cmd] in
+  Stdlib.exit @@ Cmd.eval cmds
