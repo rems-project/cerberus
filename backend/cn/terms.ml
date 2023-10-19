@@ -1,7 +1,7 @@
 open Pp
 module CT = Sctypes
 
-type const = 
+type const =
   | Z of Z.t
   | Q of Q.t
   | Pointer of Z.t
@@ -55,12 +55,12 @@ type binop =
   | Subset
 [@@deriving eq, ord, show]
 
-type 'bt pattern_ = 
+type 'bt pattern_ =
   | PSym of Sym.t
   | PWild
   | PConstructor of Sym.t * (Id.t * 'bt pattern) list
 
-and 'bt pattern = 
+and 'bt pattern =
   | Pat of 'bt pattern_ * 'bt
 [@@deriving eq, ord, map]
 
@@ -116,12 +116,12 @@ let compare = compare_term
 
 let rec pp_pattern (Pat (pat_, _bt)) =
   match pat_ with
-  | PSym s -> 
+  | PSym s ->
      Sym.pp s
-  | PWild -> 
+  | PWild ->
      underscore
   | PConstructor (c, args) ->
-     Sym.pp c ^^^ 
+     Sym.pp c ^^^
        braces (separate_map (comma ^^ space) (fun (id, pat) ->
                    Id.pp id ^^ colon ^^^ pp_pattern pat
                  ) args)
@@ -132,9 +132,9 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     let aux b x = f x (aux b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
        by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
-    let parens pped = 
+    let parens pped =
       Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen) in
-    let braces pped = 
+    let braces pped =
       Pp.group ((nest 2 @@ lbrace ^^ break 0 ^^ pped) ^^ break 0 ^^ rbrace) in
     let mparens pped =
       if atomic then parens pped else Pp.group pped in
@@ -314,7 +314,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | MapGet (t1, t2) ->
           mparens (aux true t1 ^^ brackets (aux false t2))
        | MapSet (t1, t2, t3) ->
-          mparens (aux true t1 ^^ 
+          mparens (aux true t1 ^^
                      brackets (aux false t2 ^^^ equals ^^^ aux false t3))
        | MapDef ((s,_), t) ->
           brackets (Sym.pp s ^^^ !^"->" ^^^ aux false t)
@@ -341,7 +341,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
       (*  prefix 2 0 root_pp @@ align (flow_map (break 0) pp_op ops) *)
     | Apply (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
-    | Let ((name, x1), x2) -> 
+    | Let ((name, x1), x2) ->
        parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
                  aux false x1 ^^^ !^ "in" ^^^ aux false x2)
     | Match (e, cases) ->
@@ -349,7 +349,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           (* copying from mparens *)
           Pp.group (nest 2 @@ (
             separate_map (break 0) (fun (pattern, body) ->
-                pp_pattern pattern ^^^ !^"=>" ^^^ 
+                pp_pattern pattern ^^^ !^"=>" ^^^
                   braces (aux false body)
               ) cases))
         )
@@ -369,14 +369,14 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
 
 
 
-open Cerb_pp_prelude 
+open Cerb_pp_prelude
 open Cerb_frontend.Pp_ast
 
-let rec dtree_of_pat (Pat (pat_, _bt)) = 
+let rec dtree_of_pat (Pat (pat_, _bt)) =
   match pat_ with
-  | PSym s -> 
+  | PSym s ->
      Dnode (pp_ctor "PSym", [Dleaf (Sym.pp s)])
-  | PWild -> 
+  | PWild ->
      Dleaf (pp_ctor "PWild")
   | PConstructor (s, pats) ->
      Dnode (pp_ctor "PConstructor",
@@ -388,101 +388,101 @@ let rec dtree_of_pat (Pat (pat_, _bt)) =
 
 let rec dtree (IT (it_, bt)) =
   match it_ with
-  | Sym s -> 
+  | Sym s ->
      Dleaf (Sym.pp s)
-  | Const (Z z) -> 
+  | Const (Z z) ->
      Dleaf !^(Z.to_string z)
-  | Const (Q q) -> 
+  | Const (Q q) ->
      Dleaf !^(Q.to_string q)
-  | Const (Pointer z) -> 
+  | Const (Pointer z) ->
      Dleaf !^(Z.to_string z)
-  | Const (Bool b) -> 
+  | Const (Bool b) ->
      Dleaf !^(if b then "true" else "false")
-  | Const Unit -> 
+  | Const Unit ->
      Dleaf !^"unit"
-  | Const (Default _) -> 
+  | Const (Default _) ->
      Dleaf !^"default"
-  | Const Null -> 
+  | Const Null ->
      Dleaf !^"null"
-  | Const (Alloc_id z) -> 
+  | Const (Alloc_id z) ->
      Dnode (pp_ctor "alloc_id", [Dleaf !^(Z.to_string z)])
-  | Const (CType_const ct) -> 
+  | Const (CType_const ct) ->
      Dleaf (Sctypes.pp ct)
-  | Unop (op, t1) -> 
+  | Unop (op, t1) ->
      Dnode (pp_ctor (show_unop op), [dtree t1])
-  | Binop (op, t1, t2) -> 
+  | Binop (op, t1, t2) ->
      Dnode (pp_ctor (show_binop op), [dtree t1; dtree t2])
-  | ITE (t1, t2, t3) -> 
+  | ITE (t1, t2, t3) ->
      Dnode (pp_ctor "Impl", [dtree t1; dtree t2; dtree t3])
-  | EachI ((starti,(i,_),endi), body) -> 
+  | EachI ((starti,(i,_),endi), body) ->
      Dnode (pp_ctor "EachI", [
-           Dleaf !^(string_of_int starti); 
-           Dleaf (Sym.pp i); 
-           Dleaf !^(string_of_int endi); 
+           Dleaf !^(string_of_int starti);
+           Dleaf (Sym.pp i);
+           Dleaf !^(string_of_int endi);
            dtree body
        ])
-  | Tuple its -> 
+  | Tuple its ->
      Dnode (pp_ctor "Tuple", List.map dtree its)
-  | NthTuple (i, t) -> 
+  | NthTuple (i, t) ->
      Dnode (pp_ctor "NthTuple", [Dleaf !^(string_of_int i); dtree t])
   | Struct (tag, members) ->
-     Dnode (pp_ctor ("Struct("^Sym.pp_string tag^")"), 
-            List.map (fun (member,e) -> 
+     Dnode (pp_ctor ("Struct("^Sym.pp_string tag^")"),
+            List.map (fun (member,e) ->
                 Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])
               ) members)
   | StructMember (e, member) ->
      Dnode (pp_ctor "StructMember", [dtree e; Dleaf (Id.pp member)])
   | StructUpdate ((base, member), v) ->
      Dnode (pp_ctor "StructUpdate", [
-           dtree base; 
+           dtree base;
            Dleaf (Id.pp member); dtree v
        ])
   | Record members ->
-     Dnode (pp_ctor "Record", 
-            List.map (fun (member,e) -> 
+     Dnode (pp_ctor "Record",
+            List.map (fun (member,e) ->
                 Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])
               ) members)
   | RecordMember (e, member) ->
      Dnode (pp_ctor "RecordMember", [dtree e; Dleaf (Id.pp member)])
   | RecordUpdate ((base, member), v) ->
      Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
-  | Cast (cbt, t) -> 
+  | Cast (cbt, t) ->
      Dnode (pp_ctor "Cast", [Dleaf (BaseTypes.pp cbt); dtree t])
-  | MemberOffset (tag, id) -> 
+  | MemberOffset (tag, id) ->
      Dnode (pp_ctor "MemberOffset", [Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
-  | ArrayOffset (ty, t) -> 
+  | ArrayOffset (ty, t) ->
      Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
-  | Representable (ty, t) -> 
+  | Representable (ty, t) ->
      Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
-  | Good (ty, t) -> 
+  | Good (ty, t) ->
      Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
-  | Aligned a -> 
+  | Aligned a ->
      Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
-  | MapConst (bt, t) -> 
+  | MapConst (bt, t) ->
      Dnode (pp_ctor "MapConst", [dtree t])
-  | MapSet (t1, t2, t3) -> 
+  | MapSet (t1, t2, t3) ->
      Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
-  | MapGet (t1, t2) -> 
+  | MapGet (t1, t2) ->
      Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
-  | MapDef ((s, bt), t) -> 
+  | MapDef ((s, bt), t) ->
      Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
-  | Apply (f, args) -> 
+  | Apply (f, args) ->
      Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))
   | Constructor (s, args) ->
-     Dnode (pp_ctor "Constructor", 
+     Dnode (pp_ctor "Constructor",
            Dleaf (Sym.pp s) ::
            List.map (fun (id, t) ->
                Dnode (pp_ctor "Arg", [Dleaf (Id.pp id); dtree t])
              ) args
        )
   | Match (t, pats) ->
-     Dnode (pp_ctor "Match", 
+     Dnode (pp_ctor "Match",
             dtree t ::
               List.map (fun (pat, body) ->
                   Dnode (pp_ctor "Case", [dtree_of_pat pat; dtree body])
                 ) pats
        )
-  | Nil bt -> 
+  | Nil bt ->
      Dleaf (!^"Nil" ^^ angles (BaseTypes.pp bt))
   | Cons (t1, t2) ->
      Dnode (pp_ctor "Cons", [dtree t1; dtree t2])
