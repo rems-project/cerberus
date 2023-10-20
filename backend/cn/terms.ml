@@ -275,9 +275,9 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Cast (cbt, t) ->
           mparens (align @@ parens(BaseTypes.pp cbt) ^^ break 0 ^^ aux true t)
        | MemberShift (t, tag, member) ->
-         mparens (c_app !^"member_shift" [aux false t; Sym.pp tag; Id.pp member])
+         mparens (c_app (!^"member_shift" ^^ angles (Sym.pp tag)) [aux false t; Id.pp member])
        | ArrayShift { base; ct; index } ->
-         mparens (c_app !^"array_shift" [aux false base; Sctypes.pp ct; aux false index])
+         mparens (c_app (!^"array_shift" ^^ angles (Sctypes.pp ct)) [aux false base; aux false index])
        | SizeOf t ->
           mparens (c_app !^"sizeof" [Sctypes.pp t])
        | OffsetOf (tag, member) ->

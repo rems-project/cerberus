@@ -173,6 +173,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "instantiate"   , CN_INSTANTIATE;
     "extract"       , CN_EXTRACT;
     "array_shift"   , CN_ARRAY_SHIFT;
+    "member_shift"  , CN_MEMBER_SHIFT;
     "have"          , CN_HAVE;
     "unfold"        , CN_UNFOLD;
     "apply"         , CN_APPLY;

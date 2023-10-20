@@ -48,8 +48,8 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
     return {t: (empty ()), v: 0, ns: default_ns ()};
   }
   else {
-    take V = Owned<int>((pointer)(((integer)p) + (offsetof (node, v))));
-    let nodes_ptr = ((pointer)((((integer)p) + (offsetof (node, nodes)))));
+    take V = Owned<int>(member_shift<node>(p,v));
+    let nodes_ptr = member_shift<node>(p,nodes);
     take Ns = each (integer i; (0 <= i) && (i < (num_nodes ())))
       {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
     let t = construct (V, Ns);

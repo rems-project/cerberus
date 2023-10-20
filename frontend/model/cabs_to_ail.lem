@@ -4195,9 +4195,17 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
           | None ->
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
       end
-    | CNExpr_membershift e memb ->
-       desugar_cn_expr e >>= fun e ->
-       E.return (CNExpr_membershift e memb)
+    | CNExpr_membershift e Nothing memb ->
+      desugar_cn_expr e >>= fun e ->
+      E.return (CNExpr_membershift e Nothing memb)
+    | CNExpr_membershift e (Just struct_tag) memb ->
+      E.resolve_extraordinary_identifier struct_tag E.Namespace_tag >>= function
+          | Just (_, (tag_sym, _)) ->
+              desugar_cn_expr e >>= fun e ->
+              E.return (CNExpr_membershift e (Just tag_sym) memb)
+          | None ->
+              E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
+      end
     | CNExpr_addr nm ->
        E.resolve_ordinary_identifier loc nm >>= function
           | Just (_, E.OReg_other nm_sym _ _) ->

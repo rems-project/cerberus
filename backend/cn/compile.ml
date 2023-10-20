@@ -156,7 +156,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_sizeof ct -> !^ "(sizeof _)"
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
   | CNExpr_array_shift (e1, ct, e2) -> !^"(array_shift<_>(_, _)"
-  | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
+  | CNExpr_membershift (e1, opt_tag, member) -> !^ "&(_ -> _)"
   | CNExpr_addr nm -> !^ "&_"
   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
   | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
@@ -207,7 +207,7 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      SymSet.empty
   | CNExpr_array_shift (e1, _ct, e2) ->
      free_in_exprs [e1; e2]
-  | CNExpr_membershift (e, _id) ->
+  | CNExpr_membershift (e, _opt_tag, _id) ->
      free_in_expr e
   | CNExpr_addr _ ->
      SymSet.empty
@@ -685,35 +685,47 @@ module EffectfulTranslation = struct
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
             return (IT ((OffsetOf (tag, member)), SBT.Integer))
-        | CNExpr_array_shift (base, ct, index) ->
+        | CNExpr_array_shift (base, annot, index) ->
            let@ base = self base in
-            begin match IT.bt base with
-            | Loc _ ->
+           begin match IT.bt base with
+           | Loc _ ->
+             (* this does not check whether Loc (Some inferred) = Loc (Some annot)
+                and just defers to what the user wrote, because pointer
+                arithmetic can happen at any size/type *)
               let@ index = self index in
               begin match IT.bt index with
-                | Integer ->
-                  let ct = Sctypes.of_ctype_unsafe loc ct in
-                  return (IT (ArrayShift { base; ct; index }, Loc (Some ct)))
-                | has ->
-                   fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer"; o_ctxt = None}}
+              | Integer ->
+                let ct = Sctypes.of_ctype_unsafe loc annot in
+                return (IT (ArrayShift { base; ct; index }, Loc (Some ct)))
+              | has ->
+                 fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer"; o_ctxt = None}}
               end
-            | has ->
-               fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
-            end
-        | CNExpr_membershift (e, member) ->
-            let@ e = self e in
-            begin match IT.bt e with
-            | Loc (Some (Struct tag)) ->
-               let@ struct_def = lookup_struct loc tag env in
-               let@ member_ty = lookup_member loc (tag, struct_def) member in
-               let (IT (it_, _)) = IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member)) in
-               (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on now. *)
-               return (IT (it_, Loc (Some member_ty)))
-            | Loc None ->
-               cannot_tell_pointee_ctype loc e
-            | has ->
-               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
-            end
+           | has ->
+              fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
+           end
+        | CNExpr_membershift (e, opt_tag, member) ->
+           let@ e = self e in
+           let with_tag tag =
+              let@ struct_def = lookup_struct loc tag env in
+              let@ member_ty = lookup_member loc (tag, struct_def) member in
+              let (IT (it_, _)) = IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member)) in
+              (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on now. *)
+              return (IT (it_, Loc (Some member_ty)))
+           in
+           begin match opt_tag, IT.bt e with
+           | Some tag, Loc (Some (Struct tag')) ->
+             if Sym.equal tag tag' then
+               with_tag tag
+             else
+               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp (Struct tag'); expected = Pp.plain @@ SBT.pp (Struct tag); o_ctxt = None}}
+           | Some tag, Loc None
+           | None, Loc (Some (Struct tag)) ->
+              with_tag tag
+           | None, Loc None ->
+              cannot_tell_pointee_ctype loc e
+           | _ , has ->
+              fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
+           end
         | CNExpr_addr nm ->
             return (sym_ (nm, SBT.Loc None))
         | CNExpr_cast (bt, expr) ->

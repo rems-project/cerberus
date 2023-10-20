@@ -38,8 +38,8 @@ predicate {datatype tree t, integer v, map <integer, datatype tree> children}
     return {t: Empty_Tree {}, v: 0, children: default_children ()};
   }
   else {
-    take V = Owned<int>((pointer)(((integer)p) + (offsetof (node, v))));
-    let nodes_ptr = ((pointer)((((integer)p) + (offsetof (node, nodes)))));
+    take V = Owned<int>(member_shift<node>(p,v));
+    let nodes_ptr = member_shift<node>(p,nodes);
     take Ns = each (integer i; (0 <= i) && (i < (num_nodes ())))
       {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
     let ts = array_to_list (Ns, 0, num_nodes ());

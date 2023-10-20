@@ -174,9 +174,10 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_offsetof (ty_tag, member) ->
           Dleaf (pp_ctor "CNExpr_offsetof" ^^^ P.squotes (Conf.pp_ident ty_tag) ^^^
                 P.squotes (pp_identifier member))
-      | CNExpr_membershift (e, member) ->
-          Dnode (pp_ctor "CNExpr_membershift", [dtree_of_cn_expr e;
-                                                Dleaf (P.squotes (pp_identifier member))])
+      | CNExpr_membershift (e, ty_tag, member) ->
+          Dnode (pp_ctor "CNExpr_membershift", [dtree_of_cn_expr e]
+                                               @ (Option.fold ty_tag ~none:[] ~some:(fun ty_tag -> [Dleaf (P.squotes @@ Conf.pp_ident ty_tag)]))
+                                               @ [Dleaf (P.squotes (pp_identifier member))])
       | CNExpr_addr nm ->
           Dnode (pp_ctor "CNExpr_addr", [Dleaf (Conf.pp_ident nm)])
       | CNExpr_cast (ty, expr) ->

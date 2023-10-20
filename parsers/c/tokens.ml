@@ -148,6 +148,7 @@ type token =
   | CN_HAVE
   | CN_EXTRACT
   | CN_ARRAY_SHIFT
+  | CN_MEMBER_SHIFT
   | CN_INSTANTIATE
   | CN_UNFOLD
   | CN_APPLY
@@ -303,6 +304,7 @@ let string_of_token = function
   | CN_HAVE -> "CN_HAVE"
   | CN_EXTRACT -> "CN_EXTRACT"
   | CN_ARRAY_SHIFT -> "CN_ARRAY_SHIFT"
+  | CN_MEMBER_SHIFT -> "CN_MEMBER_SHIFT"
   | CN_INSTANTIATE -> "CN_INSTANTIATE"
   | CN_UNFOLD -> "CN_UNFOLD"
   | CN_APPLY -> "CN_APPLY"
