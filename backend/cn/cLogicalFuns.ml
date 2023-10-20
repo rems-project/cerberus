@@ -254,6 +254,22 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     let@ x = symb_exec_mu_pexpr var_map pe in
     let@ x = get_val "boolean not param" x in
     rval (IT.not_ x)
+  | M_PEapply_fun (f, pes) ->
+      let@ xs = ListM.mapM (symb_exec_mu_pexpr var_map) pes in
+      let@ xs = ListM.mapM (get_val "apply_fun args") xs in
+      begin match f, xs with
+      | M_F_max_int, [ct_it] -> 
+        let@ ity = match IT.is_const ct_it with
+         | Some (IT.CType_const (Integer ity), _) -> return ity
+         | Some _ -> assert false
+         | None -> 
+            fail {loc; msg = Generic (Pp.item "expr from C syntax: non-constant type"
+                   (IT.pp ct_it))}
+        in
+        rval (IT.maxInteger_ ity)
+      | M_F_max_int, _ -> assert false
+      | _ -> failwith "todo: more apply_fun cases"
+      end
   | M_PEconv_int (ct_expr, pe)
   | M_PEconv_loaded_int (ct_expr, pe) ->
     let@ x = symb_exec_mu_pexpr var_map pe in
@@ -286,7 +302,7 @@ let rec symb_exec_mu_pexpr var_map pexpr =
     let@ x = symb_exec_mu_pexpr var_map (M_Pexpr (loc, [], (), M_PEop (op2, pe_x, pe_y))) in
     do_wrapI loc ((bound_kind_act bk).ct) x
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pure expr"
-        (Pp_mucore.pp_pexpr pexpr))}
+        (Pp_mucore_ast.pp_pexpr pexpr))}
 
 
 let rec symb_exec_mu_expr ctxt state_vars expr =
