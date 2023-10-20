@@ -1339,7 +1339,7 @@ let is_integer_annot = function
 
 
 let integer_annot annots =
-  match List.filter_map is_integer_annot annots with
+  match List.sort_uniq CF.IntegerType.setElemCompare_integerType (List.filter_map is_integer_annot annots) with
   | [] -> None
   | [ity] -> Some ity
   | _ -> assert false
