@@ -771,6 +771,98 @@ Module RevocationProofs.
     apply bitvector.Z_to_bv_bv_unsigned.
   Qed.
 
+  Theorem allocator_same_result:
+    forall mem_state1 mem_state2 size align,
+      mem_state_same mem_state1 mem_state2 ->
+      evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
+        evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2.
+  Proof.
+    intros mem_state1 mem_state2 sz align M.
+    destruct_mem_state_same M.
+    (* return value *)
+    unfold evalErrS.
+    unfold CheriMemoryWithPNVI.allocator, CheriMemoryWithoutPNVI.allocator.
+    unfold put, ret, bind.
+    cbn.
+    repeat break_let.
+    unfold CheriMemoryWithPNVI.memM in *.
+    unfold CheriMemoryWithPNVI.mem_state in *.
+    repeat break_if; repeat break_match;
+      repeat tuple_inversion;
+      rewrite Mlastaddr in *; try congruence; try reflexivity.
+    -
+      rewrite <- Malloc_id in *.
+      rewrite  Heqp1 in Heqp4.
+      tuple_inversion.
+      reflexivity.
+    -
+      rewrite <- Malloc_id in *.
+      rewrite  Heqp1 in Heqp4.
+      tuple_inversion.
+      reflexivity.
+  Qed.
+
+  Theorem allocator_same_state:
+    forall mem_state1 mem_state2 size align,
+      mem_state_same mem_state1 mem_state2 ->
+      lift_sum eq mem_state_same False
+        (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
+        (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2).
+  Proof.
+    intros mem_state1 mem_state2 size0 align M.
+    destruct_mem_state_same M.
+    unfold lift_sum.
+    unfold CheriMemoryWithPNVI.mem_state in *.
+    unfold execErrS.
+    repeat break_let.
+    repeat break_match;invc Heqs1;invc Heqs0.
+    all: cbn in Heqp, Heqp0; repeat break_let.
+    +
+      repeat break_match_hyp;
+        repeat tuple_inversion; auto.
+    +
+      repeat break_match_hyp;
+        repeat tuple_inversion;
+        (rewrite Mlastaddr in Heqb1, Heqp4;
+         rewrite Heqp4 in Heqp2;
+         tuple_inversion;
+         congruence).
+    +
+      repeat break_match_hyp;
+        repeat tuple_inversion;
+        (rewrite Mlastaddr in Heqb1, Heqp4;
+         rewrite Heqp4 in Heqp2;
+         tuple_inversion;
+         congruence).
+    +
+      (* main proof here: [mem_state_same m1 m2] *)
+
+      repeat break_match_hyp;
+        repeat tuple_inversion;
+        unfold mem_state_same; cbn;
+        (try rewrite Malloc_id in *; clear Malloc_id;
+         try rewrite Mnextiota in *; clear Mnextiota;
+         try rewrite Mlastaddr in *; clear Mlastaddr;
+         try rewrite Mnextvararg in *; clear Mnextvararg);
+        rewrite Heqp4 in Heqp2; tuple_inversion;
+        repeat split; auto.
+
+      all: destruct Mvarargs as [MvarargsIn MvarargsMap].
+      all: auto.
+      all: try apply MvarargsIn.
+      all: try find_contradiction.
+      *
+        cbn.
+        repeat break_let.
+        apply init_ghost_tags_same.
+        assumption.
+      *
+        cbn.
+        repeat break_let.
+        apply init_ghost_tags_same.
+        assumption.
+  Qed.
+
   Theorem allocator_same:
     forall mem_state1 mem_state2 size align,
       mem_state_same mem_state1 mem_state2 ->
@@ -782,80 +874,9 @@ Module RevocationProofs.
           (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2).
   Proof.
     intros mem_state1 mem_state2 sz align M.
-    destruct_mem_state_same M.
     split.
-    - (* return value *)
-      unfold evalErrS.
-      unfold CheriMemoryWithPNVI.allocator, CheriMemoryWithoutPNVI.allocator.
-      unfold put, ret, bind.
-      cbn.
-      repeat break_let.
-      unfold CheriMemoryWithPNVI.memM in *.
-      unfold CheriMemoryWithPNVI.mem_state in *.
-      repeat break_if; repeat break_match;
-      repeat tuple_inversion;
-        rewrite Mlastaddr in *; try congruence; try reflexivity.
-      +
-        rewrite <- Malloc_id in *.
-        rewrite  Heqp1 in Heqp4.
-        tuple_inversion.
-        reflexivity.
-      +
-        rewrite <- Malloc_id in *.
-        rewrite  Heqp1 in Heqp4.
-        tuple_inversion.
-        reflexivity.
-    - (* state *)
-      unfold lift_sum.
-      unfold CheriMemoryWithPNVI.mem_state in *.
-      unfold execErrS.
-      repeat break_let.
-      repeat break_match;invc Heqs1;invc Heqs0.
-      all: cbn in Heqp, Heqp0; repeat break_let.
-      +
-        repeat break_match_hyp;
-          repeat tuple_inversion; auto.
-      +
-        repeat break_match_hyp;
-          repeat tuple_inversion;
-          (rewrite Mlastaddr in Heqb1, Heqp4;
-           rewrite Heqp4 in Heqp2;
-           tuple_inversion;
-           congruence).
-      +
-        repeat break_match_hyp;
-          repeat tuple_inversion;
-          (rewrite Mlastaddr in Heqb1, Heqp4;
-           rewrite Heqp4 in Heqp2;
-           tuple_inversion;
-           congruence).
-      +
-        (* main proof here: [mem_state_same m1 m2] *)
-
-        repeat break_match_hyp;
-          repeat tuple_inversion;
-          unfold mem_state_same; cbn;
-        (try rewrite Malloc_id in *; clear Malloc_id;
-        try rewrite Mnextiota in *; clear Mnextiota;
-        try rewrite Mlastaddr in *; clear Mlastaddr;
-        try rewrite Mnextvararg in *; clear Mnextvararg);
-          rewrite Heqp4 in Heqp2; tuple_inversion;
-        repeat split; auto.
-
-        all: destruct Mvarargs as [MvarargsIn MvarargsMap].
-        all: auto.
-        all: try apply MvarargsIn.
-        all: try find_contradiction.
-        *
-          cbn.
-          repeat break_let.
-          apply init_ghost_tags_same.
-          assumption.
-        *
-          cbn.
-          repeat break_let.
-          apply init_ghost_tags_same.
-          assumption.
+    - apply allocator_same_result; assumption.
+    - apply allocator_same_state; assumption.
   Qed.
 
   Lemma num_of_int_eq:
@@ -987,6 +1008,7 @@ Module RevocationProofs.
         try apply Mvarargs01;
         try apply Mvarargs02.
       Transparent CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
-  Admitted.
+      Show Proof.
+  Qed.
 
 End RevocationProofs.
