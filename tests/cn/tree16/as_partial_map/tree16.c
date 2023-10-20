@@ -71,7 +71,7 @@ predicate {datatype tree_arc arc, map<integer, integer> xs}
   assert (i <= len);
   assert (0 <= i);
   take Xs = each (integer j; (0 <= j) && (j < len))
-    {Owned<signed int>(array_shift<signed int>(p, j))};
+    {Owned(array_shift<signed int>(p, j))};
   assert (each (integer j; (0 <= j) && (j < len))
     {(0 <= Xs[j]) && (Xs[j] < (num_nodes ()))});
   return {arc: mk_arc(Xs, i, len), xs: Xs};

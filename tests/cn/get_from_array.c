@@ -22,7 +22,7 @@ static inline int get_global_array_width_for_cn (void)
 predicate (map<integer, integer>) Global_Array (pointer p)
 {
   take Arr = each (integer i; 0 <= i && i < global_array_width ())
-    { Owned<int>(array_shift<int>(p, i)) };
+    { Owned(array_shift<int>(p, i)) };
   return Arr;
 }
 @*/
