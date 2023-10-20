@@ -444,6 +444,13 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
        ->
         let e1 = n_pexpr loc e1 in
         annotate (M_PEbool_to_integer e1)
+     | Pexpr (_, _, PEctor (Cspecified, [Pexpr (_, _, PEval (Vobject (OVinteger iv1)))])), 
+       Pexpr (_, _, PEctor (Cspecified, [Pexpr (_, _, PEval (Vobject (OVinteger iv2)))]))
+          when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
+               Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
+       ->
+        let e1 = n_pexpr loc e1 in
+        annotate (M_PEbool_to_integer e1)
      (* this should go away *)
      | Pexpr (_, _, PEval Vtrue), Pexpr (_, _, PEval Vfalse) ->
         n_pexpr loc e1
