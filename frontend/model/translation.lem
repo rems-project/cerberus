@@ -871,11 +871,12 @@ let translate_function_call loc is_used translate_expr stdlib e es =
   E.foldlM (fun (n, rev_core_creates) ((_, expect_param_ty, _), (arg_ty, arg_is_null, arg_sym_pe)) ->
     E.wrapped_fresh_symbol C.BTy_ctype                  >>= fun param_ty_wrp ->
     E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun arg_ptr_wrp  ->
+    let expect_param_ty_pe = Caux.mk_ail_ctype_pe expect_param_ty in
     E.return
       ( n+1
       , (Caux.mk_let_e param_ty_wrp.E.sym_pat (stdlib.mkcall_params_nth params_wrp.E.sym_pe (Caux.mk_integer_pe n))
         (Caux.mk_if_e_ [Annot.Anot_explode]
-          (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_param_ty) param_ty_wrp.E.sym_pe))
+          (Caux.mk_not_pe (Caux.mk_are_compatible expect_param_ty_pe param_ty_wrp.E.sym_pe))
           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
           begin
             let conv_value =
@@ -885,12 +886,12 @@ let translate_function_call loc is_used translate_expr stdlib e es =
                 floating, the other one must also be an integer or floating (respectively) *)
               else if AilTypesAux.is_integer expect_param_ty then
                 if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_conv_loaded_int_ param_ty_wrp.E.sym_pe arg_sym_pe
+                  stdlib.mkcall_conv_loaded_int_ expect_param_ty_pe arg_sym_pe
                 else
-                  stdlib.mkcall_loaded_ivfromfloat_ param_ty_wrp.E.sym_pe arg_sym_pe
+                  stdlib.mkcall_loaded_ivfromfloat_ expect_param_ty_pe arg_sym_pe
               else if AilTypesAux.is_floating expect_param_ty then
                 if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_loaded_fvfromint_ param_ty_wrp.E.sym_pe arg_sym_pe
+                  stdlib.mkcall_loaded_fvfromint_ expect_param_ty_pe arg_sym_pe
                 else
                   arg_sym_pe
               else if AilTypesAux.is_pointer expect_param_ty && arg_is_null then
@@ -905,10 +906,10 @@ let translate_function_call loc is_used translate_expr stdlib e es =
                 Cmm.NA in
             Caux.add_std "§6.5.2.2#7, sentence 1" begin
               Caux.mk_wseq_e arg_ptr_wrp.E.sym_pat
-                (Caux.pcreate loc (Caux.mk_alignof_pe param_ty_wrp.E.sym_pe) param_ty_wrp.E.sym_pe (Symbol.PrefFunArg loc (Symbol.digest ()) (intFromInteger n)))
+                (Caux.pcreate loc (Caux.mk_alignof_pe expect_param_ty_pe) expect_param_ty_pe (Symbol.PrefFunArg loc (Symbol.digest ()) (intFromInteger n)))
                 begin
                   Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
-                    (Caux.pstore loc param_ty_wrp.E.sym_pe arg_ptr_wrp.E.sym_pe conv_value mo)
+                    (Caux.pstore loc expect_param_ty_pe arg_ptr_wrp.E.sym_pe conv_value mo)
                     (Caux.mk_pure_e arg_ptr_wrp.E.sym_pe)
                 end
             end
@@ -920,23 +921,24 @@ let translate_function_call loc is_used translate_expr stdlib e es =
     E.foldlM (fun (n, cn_core_args) ((_, expect_param_ty, _), (arg_ty, arg_is_null, arg_sym_pe)) ->
       E.wrapped_fresh_symbol C.BTy_ctype                  >>= fun param_ty_wrp ->
       E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun arg_ptr_wrp ->
+      let expect_param_ty_pe = Caux.mk_ail_ctype_pe expect_param_ty in
       E.return
         ( n+1
         , (Caux.mk_let_pe param_ty_wrp.E.sym_pat (stdlib.mkcall_params_nth params_wrp.E.sym_pe (Caux.mk_integer_pe n))
           (Caux.mk_if_pe_ [Annot.Anot_explode]
-            (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_param_ty) param_ty_wrp.E.sym_pe))
+            (Caux.mk_not_pe (Caux.mk_are_compatible expect_param_ty_pe param_ty_wrp.E.sym_pe))
             (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible)
             begin
               (* NOTE: since the expected type is compatible with the parameter type,
                 if one is an integer or floating, the other one must also be an integer or floating (respectively) *)
               if AilTypesAux.is_integer expect_param_ty then
                 if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_conv_loaded_int_ param_ty_wrp.E.sym_pe arg_sym_pe
+                  stdlib.mkcall_conv_loaded_int_ expect_param_ty_pe arg_sym_pe
                 else
-                  stdlib.mkcall_loaded_ivfromfloat_ param_ty_wrp.E.sym_pe arg_sym_pe
+                  stdlib.mkcall_loaded_ivfromfloat_ expect_param_ty_pe arg_sym_pe
               else if AilTypesAux.is_floating expect_param_ty then
                 if AilTypesAux.is_integer arg_ty then
-                  stdlib.mkcall_loaded_fvfromint_ param_ty_wrp.E.sym_pe arg_sym_pe
+                  stdlib.mkcall_loaded_fvfromint_ expect_param_ty_pe arg_sym_pe
                 else
                   arg_sym_pe
               else if AilTypesAux.is_pointer expect_param_ty && arg_is_null then
