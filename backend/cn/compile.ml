@@ -920,7 +920,7 @@ module EffectfulTranslation = struct
     let open IndexTerms in
     let open Pp in
     let qs = sym_ (q, SBT.Integer) in
-    let msg_s = "Iterated predicate pointer must be (ptr + q_var) or array_shift(ptr, ctype, q_var):" in
+    let msg_s = "Iterated predicate pointer must be (ptr + q_var) or array_shift<ctype>(ptr, q_var):" in
     begin match term ptr_expr with
       | ArrayShift { base=p; ct; index=x } when Terms.equal SBT.equal x qs ->
         return (p, sterm_of_term @@ sizeOf_ ct)
