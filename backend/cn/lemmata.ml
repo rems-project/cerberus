@@ -691,67 +691,16 @@ let add_dt_param_counted (it, (m_nm : Id.t)) =
   let@ () = add_dt_param (it, m_nm, sym) in
   return sym
 
-let dt_split global x t =
-  failwith "Sorry: I did not know how to fix this."
-  (* let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in *)
-  (* let cs_used = IT.fold (fun _ acc t -> match IT.term t with *)
-  (*   | IT.DatatypeIsCons (c_nm, y) when IT.equal x y -> SymSet.add c_nm acc *)
-  (*   | _ -> acc) [] SymSet.empty t in *)
-  (* Pp.debug 7 (lazy (Pp.item "in dt-split, constructors used" (Pp.braces (Pp.list *)
-  (*   Sym.pp (SymSet.elements cs_used))))); *)
-  (* let mems_used = IT.fold (fun _ acc t -> match IT.term t with *)
-  (*   | IT.DatatypeMember (y, m_nm) when IT.equal x y -> IdSet.add m_nm acc *)
-  (*   | _ -> acc) [] IdSet.empty t in *)
-  (* Pp.debug 7 (lazy (Pp.item "in dt-split, mems used" (Pp.braces (Pp.list *)
-  (*   Id.pp (IdSet.elements mems_used))))); *)
-  (* let dt_info = SymMap.find dt global.Global.datatypes in *)
-  (* let rec redux c_nm t = match IT.term t with *)
-  (*   | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm2, y), _), x_t, x_f) *)
-  (*       when IT.equal x y -> *)
-  (*     if Sym.equal c_nm c_nm2 then redux c_nm x_t else redux c_nm x_f *)
-  (*   | _ -> t *)
-  (* in *)
-  (* let f c_nm = *)
-  (*     let c_info = SymMap.find c_nm global.Global.datatype_constrs in *)
-  (*     let ms = List.map fst c_info.c_params in *)
-  (*   (Sym.pp c_nm, ms, mems_used, redux c_nm t) *)
-  (* in *)
-  (* let (cs_order, need_default) = *)
-  (*   if List.length dt_info.BT.dt_constrs > SymSet.cardinal cs_used + 1 *)
-  (*   then (SymSet.elements cs_used, true) *)
-  (*   else (dt_info.BT.dt_constrs, false) *)
-  (* in *)
-  (* List.map f cs_order @ (if need_default *)
-  (*   then [(Pp.string "_", [], mems_used, redux dt t (\* any non-cons symbol will redux correctly *\))] *)
-  (*   else []) *)
-
-let dt_access_error t =
-  Pp.item "cannot convert datatype accessor"
-    (Pp.typ (IT.pp t) (Pp.flow_map (Pp.break 1) Pp.string
-        ["datatype accessor expressions are";
-            "only available in the branch of an";
-            "if-then-else expression (_ ? _ : _)";
-            "whose switch established the datatype";
-            "shape (_ ?? Constructor {})"]))
-
-let with_selected_dt_params it mem_nms set_used f = with_reset_dt_params (fun () ->
-    let@ xs = ListM.mapM (fun m_nm -> if IdSet.mem m_nm set_used
-        then let@ sym = add_dt_param_counted (it, m_nm) in
-            return (Some sym)
-        else return None) mem_nms in
-    Pp.debug 7 (lazy (Pp.item "with_selected_dt_params"
-        (Pp.brackets (Pp.list (function | None -> Pp.string "_" | Some sym -> Sym.pp sym) xs))));
-    f xs)
-
-let match_some_dt_params c_doc opt_params =
-  build (return c_doc :: List.map (function
-    | None -> rets "_"
-    | Some m_sym -> return (Sym.pp m_sym)
-  ) opt_params)
-
 let mk_let sym rhs_doc doc =
   let open Pp in
   !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
+
+let rec pat_to_coq = function
+  | Terms.Pat (Terms.PSym sym, _) -> return (Sym.pp sym)
+  | Terms.Pat (Terms.PWild, _) -> rets "_"
+  | Terms.Pat (Terms.PConstructor (c_nm, id_ps), _) ->
+    (* assuming here that the id's are in canonical order *)
+    parensM (build ([return (Sym.pp c_nm)] @ List.map pat_to_coq (List.map snd id_ps)))
 
 let it_to_coq loc global list_mono it =
   let open Pp in
@@ -818,18 +767,10 @@ let it_to_coq loc global list_mono it =
        | Impl -> abinop (if bool_eq_prop then "->" else "implb") x y
        | _ -> do_fail "arith op"
        end
-    (* | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm, x), _), _, _) -> *)
-    (*      let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in *)
-    (*      let@ () = ensure_datatype global list_mono loc dt in *)
-    (*      let branches = dt_split global x t in *)
-    (*      Pp.debug 7 (lazy (Pp.item "did dt-split" (Pp.parens (Pp.list *)
-    (*          (fun (_, _, _, t2) -> IT.pp t2) branches)))); *)
-    (*      let br (c_doc, ps, ps_used, t2) = with_selected_dt_params x ps ps_used *)
-    (*        (fun opt_ps -> build [rets "|"; match_some_dt_params c_doc opt_ps; *)
-    (*          rets "=>"; (let@ () = debug_dt_params 7 in aux t2)]) *)
-    (*      in *)
-    (*      parensM (build ([rets "match"; f false x; rets "with"] *)
-    (*          @ List.map br branches @ [rets "end"])) *)
+    | IT.Match (x, cases) ->
+        let br (pat, rhs) = build ([rets "|"; pat_to_coq pat; rets "=>"; f false rhs]) in
+        parensM (build ([rets "match"; f false x; rets "with"]
+            @ List.map br cases @ [rets "end"]))
     | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
              aux x; rets "else"; aux y])
     | IT.EachI ((i1, (s, _), i2), x) -> assert bool_eq_prop;
@@ -904,27 +845,11 @@ let it_to_coq loc global list_mono it =
        assert bool_eq_prop; 
        let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
        parensM (build [rets op_nm; aux t2])
-    (* | IT.DatatypeCons (nm, members_rec) -> *)
-    (*     let info = SymMap.find nm global.datatype_constrs in *)
-    (*     let args = List.map *)
-    (*        (fun (nm, _) -> Simplify.IndexTerms.record_member_reduce members_rec nm) *)
-    (*        info.c_params in *)
-    (*     let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in *)
-    (*     parensM (build ([return (Sym.pp nm)] @ List.map (f false) args)) *)
-    (* | IT.DatatypeMember (dt, nm) -> *)
-    (*     let dt_sym = Option.get (BT.is_datatype_bt (IT.bt dt)) in *)
-    (*     let info = SymMap.find dt_sym global.datatypes in *)
-    (*     let@ o_sym = get_dt_param dt nm in *)
-    (*     begin match (o_sym, List.length info.dt_constrs == 1) with *)
-    (*       | Some sym, _ -> return (Sym.pp sym) *)
-    (*       | _, true -> *)
-    (*         let@ op_nm = ensure_single_datatype_member global list_mono *)
-    (*             loc dt_sym nm (IT.bt t) in *)
-    (*         parensM (build [rets op_nm; aux dt]) *)
-    (*       | _ -> *)
-    (*         let@ () = debug_dt_params 2 in *)
-    (*         fail_m_d loc (dt_access_error t) *)
-    (*     end *)
+    | IT.Constructor (nm, id_args) ->
+       let info = SymMap.find nm global.datatype_constrs in
+       let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in
+       (* assuming here that the id's are in canonical order *)
+       parensM (build ([return (Sym.pp nm)] @ List.map (f false) (List.map snd id_args)))
     | IT.NthList (n, xs, d) ->
        let@ (_, _, dest) = ensure_list global list_mono loc (IT.bt xs) in
        parensM (build [rets "CN_Lib.nth_list_z"; return dest;
