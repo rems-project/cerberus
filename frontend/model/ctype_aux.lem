@@ -7,12 +7,15 @@ import Map_extra
 (* SEE src/tags.mli for the documentation *)
 val tagDefs: unit -> map Symbol.sym tag_definition
 val set_tagDefs: map Symbol.sym tag_definition -> unit
+val with_tagDefs: forall 'a. map Symbol.sym tag_definition -> (unit -> 'a) -> 'a
 
 declare ocaml target_rep function tagDefs = `Tags.tagDefs`
 declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
+declare ocaml target_rep function with_tagDefs = `Tags.with_tagDefs`
 
 declare hol target_rep function tagDefs = `tagDefs`
 declare hol target_rep function set_tagDefs = `set_tagDefs`
+declare hol target_rep function with_tagDefs = `with_tagDefs`
 
 val get_membersDefs: Symbol.sym -> tag_definition
 let get_membersDefs tag_sym =

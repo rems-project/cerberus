@@ -148,9 +148,9 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
               ND.return (Driver.finalize "Mini_pipeline" dr_st')
             )
           ) in
-        let () = Ctype_aux.set_tagDefs (Translation.translate_tag_definitions sigm.A.tag_definitions) in
-        let execs = runND_proxy driver_action dr_st in
-        let () = Ctype_aux.reset_tagDefs () in
+        let execs = Ctype_aux.with_tagDefs (Translation.translate_tag_definitions sigm.A.tag_definitions) begin
+          fun () -> runND_proxy driver_action dr_st
+        end in
         match execs with
           | [(ND.Active dres, _, _ )] ->
               Eff.return dres.Driver.dres_core_value

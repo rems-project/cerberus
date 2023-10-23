@@ -18,3 +18,10 @@ let tagDefs () =
         v
     | None ->
         failwith "Tags definitions must be set by Tags.set_tagDefs before any use"
+
+let with_tagDefs tagDefs f =
+  let saved = !_tagDefs in
+  _tagDefs := (true, Some tagDefs);
+   let ret = f () in
+  _tagDefs := saved;
+  ret
