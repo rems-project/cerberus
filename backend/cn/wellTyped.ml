@@ -442,14 +442,16 @@ module WIT = struct
               end
            | Mod ->
               let@ simp_ctxt = simp_ctxt () in
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              begin match is_z (eval simp_ctxt t') with
+              let@ t = infer loc t in
+              let@ () = ensure_bits_type loc (IT.bt t) in
+              let@ t' = check loc (IT.bt t) t' in
+              let simp_t' = eval simp_ctxt t' in
+              begin match is_const simp_t' with
               | None ->
                  let hint = "Only division (mod) by constants is allowed" in
                  fail (fun ctxt -> {loc; msg = NIA {it = mod_ (t, t'); ctxt; hint}})
               | Some z' ->
-                 return (IT (Binop (Mod, t, z_ z'), Integer))
+                 return (IT (Binop (Mod, t, simp_t'), IT.bt t))
               end
            | LT ->
               let@ t = infer loc t in
