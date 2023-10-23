@@ -152,6 +152,8 @@ module Translate = struct
     | DatatypeAccFunc of { member: Id.t; dt: Sym.t; bt: BT.t }
     | UninterpretedVal of { nm : Sym.t }
     | Term of { it : IT.t }
+    | UnsignedToSigned of int
+    | SignedToUnsigned of int
   [@@deriving eq]
 
 
@@ -285,8 +287,18 @@ module Translate = struct
       | Unit -> Z3.Sort.mk_uninterpreted_s context "unit"
       | Bool -> Z3.Boolean.mk_sort context
       | Integer -> Z3.Arithmetic.Integer.mk_sort context
-      | Bits (_, n) ->
+      | Bits (Unsigned, n) -> 
          Z3.BitVector.mk_sort context n
+      | Bits (Signed, n) -> 
+         (*copying/adjusting Dhruv's code for Alloc_id*)
+         let bt_symbol = string (bt_name (Bits (Signed, n))) in
+         let field_symbol = string ("unsigned_" ^ string_of_int n) in
+         Z3Symbol_Table.add z3sym_table bt_symbol (UnsignedToSigned n);
+         Z3Symbol_Table.add z3sym_table field_symbol (SignedToUnsigned n);
+         Z3.Tuple.mk_sort context
+            bt_symbol
+            [field_symbol]
+            [sort (Bits (Unsigned, n))]
       | Real -> Z3.Arithmetic.Real.mk_sort context
       | Loc -> translate BT.(Tuple [Alloc_id; Memory.intptr_bt])
       | Alloc_id ->
@@ -375,6 +387,13 @@ module Translate = struct
 
   let integer_to_alloc_id_fundecl context global =
     Z3.Tuple.get_mk_decl (sort context global Alloc_id)
+
+  (*copying/adjusting Dhruv's code from above*)
+  let signed_to_unsigned_fundecl context global n =
+   nth (Z3.Tuple.get_field_decls (sort context global (Bits (Signed, n)))) 0
+
+ let unsigned_to_signed_fundecl context global n =
+   Z3.Tuple.get_mk_decl (sort context global (Bits (Signed, n)))
 
 
   let adjust_term global : IT.t -> IT.t option =
@@ -511,15 +530,34 @@ module Translate = struct
       in
       let (to_signed, to_sz) = bits_info to_bt in
       let (from_signed, from_sz) = bits_info from_bt in
-      Pp.debug 22 (lazy (Pp.item "mk_bv_cast" (Pp.typ (Pp.list Pp.int [to_sz; from_sz])
-          (Pp.string (Z3.Expr.to_string x)))));
-      if to_sz == from_sz
-        then x
+      let step1 = if from_signed
+        then Z3.Expr.mk_app context (signed_to_unsigned_fundecl context global from_sz) [x]
+        else x
+      in
+      let step2 = if to_sz == from_sz
+        then step1
         else if to_sz < from_sz
-        then (Z3.BitVector.mk_extract context (to_sz - 1) 0 x)
+        then Z3.BitVector.mk_extract context (to_sz - 1) 0 step1
         else if from_signed
-        then Z3.BitVector.mk_sign_ext context (to_sz - from_sz) x
-        else Z3.BitVector.mk_zero_ext context (to_sz - from_sz) x
+        then Z3.BitVector.mk_sign_ext context (to_sz - from_sz) step1
+        else Z3.BitVector.mk_zero_ext context (to_sz - from_sz) step1
+      in
+      if to_signed
+        then Z3.Expr.mk_app context (unsigned_to_signed_fundecl context global to_sz) [step2]
+        else step2
+    in
+
+    let unsigned_of bt = match bt with
+      | BT.Bits (BT.Signed, n) -> BT.Bits (BT.Unsigned, n)
+      | _ -> failwith ("unsigned_of: not signed")
+    in
+    let via_unsigned context bt op t1 t2 =
+      let to_u t = mk_bv_cast context (unsigned_of bt, bt, t) in
+      mk_bv_cast context (bt, unsigned_of bt, op (to_u t1) (to_u t2))
+    in
+    let cmp_in_unsigned context bt op t1 t2 =
+      let to_u t = mk_bv_cast context (unsigned_of bt, bt, t) in
+      op (to_u t1) (to_u t2)
     in
 
     let rec term it =
@@ -536,8 +574,12 @@ module Translate = struct
          Z3.Expr.mk_const context (symbol s) (sort bt)
       | Const (Z z) ->
          Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
-      | Const (Bits ((_,n),v)) ->
+      | Const (Bits ((Unsigned,n),v)) ->
          Z3.BitVector.mk_numeral context (Z.to_string v) n
+      | Const (Bits ((Signed,n),v)) ->
+         Z3.Expr.mk_app context
+           (unsigned_to_signed_fundecl context global n)
+           [Z3.BitVector.mk_numeral context (Z.to_string v) n]
       | Const (Q q) ->
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
       | Const (Pointer z) ->
@@ -586,26 +628,28 @@ module Translate = struct
            | _ -> failwith "bv_arith_case"
          in
          let l_bop f ctxt x y = f ctxt [x; y] in
+         let via_u t op ctxt = via_unsigned ctxt (IT.bt t) (op ctxt) in
+         let cmp_u t op ctxt = cmp_in_unsigned ctxt (IT.bt t) (op ctxt) in
          begin match bop with
-         | Add -> (bv_arith_case t1 BV.mk_add BV.mk_add (l_bop mk_add))
+         | Add -> (bv_arith_case t1 (via_u t1 BV.mk_add) BV.mk_add (l_bop mk_add))
                  context (term t1) (term t2)
-         | Sub -> (bv_arith_case t1 BV.mk_sub BV.mk_sub (l_bop mk_sub))
+         | Sub -> (bv_arith_case t1 (via_u t1 BV.mk_sub) BV.mk_sub (l_bop mk_sub))
                  context (term t1) (term t2)
-         | Mul -> (bv_arith_case t1 BV.mk_mul BV.mk_mul (l_bop mk_mul))
+         | Mul -> (bv_arith_case t1 (via_u t1 BV.mk_mul) BV.mk_mul (l_bop mk_mul))
                  context (term t1) (term t2)
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
          | Div -> (bv_arith_case t1 BV.mk_sdiv BV.mk_udiv mk_div) context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
          | Exp -> adj ()
          | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
-         | Rem -> (bv_arith_case t1 BV.mk_srem BV.mk_urem Integer.mk_rem)
+         | Rem -> (bv_arith_case t1 (via_u t1 BV.mk_srem) BV.mk_urem Integer.mk_rem)
                      context (term t1) (term t2)
          | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
-         | Mod -> (bv_arith_case t1 BV.mk_smod BV.mk_urem Integer.mk_mod)
+         | Mod -> (bv_arith_case t1 (via_u t1 BV.mk_smod) BV.mk_urem Integer.mk_mod)
                      context (term t1) (term t2)
          | ModNoSMT -> make_uf "mod_uf" (Integer) [t1; t2]
-         | LT -> (bv_arith_case t1 BV.mk_slt BV.mk_ult mk_lt) context (term t1) (term t2)
-         | LE -> (bv_arith_case t1 BV.mk_sle BV.mk_ule mk_le) context (term t1) (term t2)
+         | LT -> (bv_arith_case t1 (cmp_u t1 BV.mk_slt) BV.mk_ult mk_lt) context (term t1) (term t2)
+         | LE -> (bv_arith_case t1 (cmp_u t1 BV.mk_sle) BV.mk_ule mk_le) context (term t1) (term t2)
          | Min -> adj ()
          | Max -> adj ()
          | XORNoSMT -> BV.mk_xor context (term t1) (term t2)
@@ -1317,6 +1361,10 @@ module Eval = struct
               (* Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt *)
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
            | Term {it} -> it
+           | UnsignedToSigned n ->
+              cast_ (Bits (Signed, n)) (nth args 0)
+           | SignedToUnsigned n ->
+              cast_ (Bits (Unsigned, n)) (nth args 0)
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
@@ -1346,22 +1394,12 @@ module Eval = struct
 
     in
 
-    let z3_expr_with_typ bt expr =
-      let it = z3_expr expr in
-      match bt, IT.bt it with
-        | bt1, bt2 when BT.equal bt1 bt2 -> it
-        | BT.Bits (_, n1), BT.Bits (_, n2) when n1 == n2 ->
-            Simplify.IndexTerms.cast_reduce bt it
-        | _ -> failwith ("z3_expr_with_typ: reconstruction mismatch " ^
-                Pp.plain (Pp.typ (IT.pp_with_typ it) (BT.pp bt)))
-    in
-
     let expr = Translate.term ~warn_lambda:false context global to_be_evaluated in
     match Z3.Model.eval model expr true with
     | None -> None
     | Some v ->
       trace_z3_eval expr v;
-      Some (z3_expr_with_typ (IT.bt to_be_evaluated) v)
+      Some (z3_expr v)
 
 end
 
