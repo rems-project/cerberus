@@ -57,9 +57,11 @@ Proof.
       lia.
 Qed.
 
+Definition arc_in_array : Type := ((Z -> Z) * Z * Z).
+ 
 Definition arc_from_array (arc : arc_in_array) :=
   match arc with
-  | Arc_In_Array arr i j => get_array_elts arr i (Z.to_nat (j - i))
+  | (arr, i, j) => get_array_elts arr i (Z.to_nat (j - i))
   end.
 
 Definition array_to_list (arr : Z -> tree) (n : Z) :=
@@ -68,7 +70,7 @@ Definition array_to_list (arr : Z -> tree) (n : Z) :=
 Fixpoint lookup_tree (t : tree) (arc : list Z) : option Z :=
   match t with
   | Empty_Tree => None
-  | Node v ts => match arc with
+  | Node ts v => match arc with
     | [] => Some v
     | ix :: ixs => lookup_tree (CN_Lib.nth_list_z dest_list_of_tree ix ts Empty_Tree) ixs
     end

@@ -35,10 +35,10 @@ Proof.
 Qed.
 
 Lemma arc_from_array_step:
-  forall arr i len, arc_from_array (Arc_In_Array arr i len) =
+  forall arr i len, arc_from_array (arr, i, len) =
   match (len <=? i) with
   | true => []
-  | false => arr i :: arc_from_array (Arc_In_Array arr (i + 1) len)
+  | false => arr i :: arc_from_array (arr, i + 1, len)
   end.
 Proof.
   intros.
@@ -57,7 +57,8 @@ Lemma in_tree_tree_v_lemma : in_tree_tree_v_lemma_type.
 Proof.
   unfold in_tree_tree_v_lemma_type.
   intros.
-  destruct arc as [arr i len].
+  destruct arc as [arr_i len].
+  destruct arr_i as [arr i].
   repeat (apply conj).
   (*
   - unfold in_tree, Setup.in_tree.
@@ -83,10 +84,9 @@ Proof.
   - unfold nth_tree_list, array_to_tree_list, Setup.array_to_list.
     rewrite to_list_of_list.
     cbn.
-    destruct ((0 <=? arr i) && (arr i <? num_nodes)) eqn: ix_ok; try apply I.
-    unfold num_nodes in *.
+    destruct ((0 <=? arr i) && (arr i <? num_nodes)) eqn: ix_ok;
+      cbn in *; rewrite ix_ok; try apply I.
     rewrite nth_get_array_elts by lia.
-    simpl.
     f_equal.
     lia.
 Qed.

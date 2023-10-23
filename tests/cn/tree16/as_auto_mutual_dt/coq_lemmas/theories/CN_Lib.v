@@ -148,3 +148,9 @@ Proof.
       auto.
 Qed.
 
+Definition wrapI (minInt : Z) (maxInt : Z) x :=
+  let delta := (maxInt - minInt)%Z in
+  let r := Z.modulo x delta in
+  (if (r <=? maxInt) then r else r - delta)%Z.
+
+
