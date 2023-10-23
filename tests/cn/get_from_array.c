@@ -36,7 +36,8 @@ void set_a_pointer(int *p, int x)
 /*@ requires 0u64 <= idx && idx < ((u64) (global_array_width ())) @*/
 /*@ ensures take Arr2 = Global_Array(global_array) @*/
 {
-  /*@ extract Owned<int>, idx; @*/
+  /*@ extract Owned<int>, ((i32) idx); @*/
+  /*@ instantiate good<int>, ((i32) idx); @*/
   *p = x;
 }
 
