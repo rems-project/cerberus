@@ -1448,6 +1448,9 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
       | M_PEwrapI (act, pe) ->
         let@ pe = infer_pexpr pe in
         return (Memory.bt_of_sct act.ct, M_PEwrapI (act, pe))
+      | M_PEis_representable_integer (pe, act) ->
+        let@ pe = infer_pexpr pe in
+        return (Bool, M_PEis_representable_integer (pe, act))
       | M_PEbool_to_integer pe ->
         let@ pe = infer_pexpr pe in
         (* FIXME: replace this with something derived from a ctype when that info is available *)

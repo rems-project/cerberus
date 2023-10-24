@@ -757,19 +757,20 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = WellTyped.ensure_bits_type loc bt in
      k (cast_ bt arg))
   | M_PEcatch_exceptional_condition (act, pe) ->
-     assert false
-     (* let@ () = WellTyped.WCT.is_ct act.loc act.ct in *)
-     (* let@ () = WellTyped.ensure_base_type loc ~expect Integer in *)
-     (* let ity = Option.get (Sctypes.is_integer_type act.ct) in *)
-     (* check_pexpr pe (fun arg -> *)
-     (*     let@ provable = provable loc in *)
-     (*     match provable (t_ (is_representable_integer arg ity)) with *)
-     (*     | `True -> (k arg) *)
-     (*     | `False ->  *)
-     (*        let@ model = model () in *)
-     (*        let ub = CF.Undefined.UB036_exceptional_condition in *)
-     (*        fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}}) *)
-     (* ) *)
+     let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+     let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe) in
+     check_pexpr pe (fun arg ->
+     let bt = Memory.bt_of_sct act.ct in
+     let@ () = WellTyped.ensure_bits_type loc bt in
+     let ity = Option.get (Sctypes.is_integer_type act.ct) in
+     let@ provable = provable loc in
+     match provable (t_ (is_representable_integer arg ity)) with
+     | `True -> (k arg)
+     | `False ->
+        let@ model = model () in
+        let ub = CF.Undefined.UB036_exceptional_condition in
+        fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+     )
   | M_PEis_representable_integer (pe, act) ->
      let@ () = WellTyped.WCT.is_ct act.loc act.ct in
      let@ () = WellTyped.ensure_base_type loc ~expect Bool in
