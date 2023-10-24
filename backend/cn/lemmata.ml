@@ -125,7 +125,7 @@ let release_failures () =
    as toplevel propositions, i.e. return Prop rather than bool
    (computational) in Coq. *)
 let prop_funs = StringSet.of_list
-  []
+  ["page_group_ok"]
 
 exception Cannot_Coerce
 
@@ -708,11 +708,18 @@ let it_to_coq loc global list_mono it =
     | BaseTypes.Integer -> rets "Z.eqb"
     | bt -> fail_m_d loc (Pp.item "eq_of" (BaseTypes.pp bt))
   in
-  let rec f bool_eq_prop t =
+  let rec f comp_bool t =
     let do_fail msg = fail_m_d loc (Pp.item ("it_to_coq: unsupported " ^ msg) (IT.pp t)) in
-    let aux t = f bool_eq_prop t in
+    let fail_on_prop () = match comp_bool with
+      | None -> return ()
+      | Some (ctxt, reason) -> fail_m () loc
+        (Pp.item ("it_to_coq: unsupported in computational (non-Prop) mode")
+            (Pp.flow (Pp.comma ^^ Pp.break 1) [IT.pp t; !^ reason; !^ "context:"; IT.pp ctxt]))
+    in
+    let aux t = f comp_bool t in
     let abinop s x y = parensM (build [aux x; rets s; aux y]) in
-    let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
+    let enc_prop = Option.is_none comp_bool in
+    let with_is_true x = if enc_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
         then f_appM "Is_true" [x] else x
     in
     let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
@@ -734,7 +741,7 @@ let it_to_coq loc global list_mono it =
         | _ -> do_fail "const"
     end
     | IT.Unop (op, x) -> begin match op with
-       | IT.Not -> f_appM (if bool_eq_prop then "~" else "negb") [aux x]
+       | IT.Not -> f_appM (if enc_prop then "~" else "negb") [aux x]
        | IT.BWFFSNoSMT -> f_appM "CN_Lib.find_first_set_z" [aux x]
        | IT.BWCTZNoSMT -> f_appM "CN_Lib.count_trailing_zeroes_z" [aux x]
        | _ -> do_fail "unary op"
@@ -752,38 +759,43 @@ let it_to_coq loc global list_mono it =
             - maybe they have the same semantics as Coq Z.modulo/Z.rem *)
        | Rem  -> check_pos y (abinop "mod" x y)
        | RemNoSMT  -> check_pos y (abinop "mod" x y)
-       | LT  -> abinop (if bool_eq_prop then "<" else "<?") x y
-       | LE  -> abinop (if bool_eq_prop then "<=" else "<=?") x y
+       | LT  -> abinop (if enc_prop then "<" else "<?") x y
+       | LE  -> abinop (if enc_prop then "<=" else "<=?") x y
        | Exp  -> abinop "^" x y
        | ExpNoSMT -> abinop "^" x y
        | XORNoSMT -> f_appM "Z.lxor" [aux x; aux y]
        | BWAndNoSMT -> f_appM "Z.land" [aux x; aux y]
        | BWOrNoSMT -> f_appM "Z.lor" [aux x; aux y]
-       | EQ -> parensM (build [f false x; rets (if bool_eq_prop then "=" else "=?"); f false y])
-       | LEPointer -> abinop (if bool_eq_prop then "<=" else "<=?") x y
-       | LTPointer -> abinop (if bool_eq_prop then "<" else "<?") x y
-       | And -> abinop (if bool_eq_prop then "/\\" else "&&") x y
-       | Or -> abinop (if bool_eq_prop then "\\/" else "||") x y
-       | Impl -> abinop (if bool_eq_prop then "->" else "implb") x y
+       | EQ ->
+           let comp = Some (t, "argument of equality") in
+           parensM (build [f comp x; rets (if enc_prop then "=" else "=?"); f comp y])
+       | LEPointer -> abinop (if enc_prop then "<=" else "<=?") x y
+       | LTPointer -> abinop (if enc_prop then "<" else "<?") x y
+       | And -> abinop (if enc_prop then "/\\" else "&&") x y
+       | Or -> abinop (if enc_prop then "\\/" else "||") x y
+       | Impl -> abinop (if enc_prop then "->" else "implb") x y
        | _ -> do_fail "arith op"
        end
     | IT.Match (x, cases) ->
-        let br (pat, rhs) = build ([rets "|"; pat_to_coq pat; rets "=>"; f false rhs]) in
-        parensM (build ([rets "match"; f false x; rets "with"]
+        let comp = Some (t, "case-discriminant") in
+        let br (pat, rhs) = build ([rets "|"; pat_to_coq pat; rets "=>"; aux rhs]) in
+        parensM (build ([rets "match"; f comp x; rets "with"]
             @ List.map br cases @ [rets "end"]))
-    | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
-             aux x; rets "else"; aux y])
-    | IT.EachI ((i1, (s, _), i2), x) -> assert bool_eq_prop;
-         let@ x = aux x in
-         let@ enc = mk_forall global list_mono loc s BaseTypes.Integer
+    | IT.ITE (sw, x, y) ->
+        let comp = Some (t, "if-condition") in
+        parensM (build [rets "if"; f comp sw; rets "then"; aux x; rets "else"; aux y])
+    | IT.EachI ((i1, (s, _), i2), x) ->
+        let@ () = fail_on_prop () in
+        let@ x = aux x in
+        let@ enc = mk_forall global list_mono loc s BaseTypes.Integer
              (binop "->" (binop "/\\"
                  (binop "<=" (Pp.int i1) (Sym.pp s)) (binop "<=" (Sym.pp s) (Pp.int i2)))
              x) in
-         return (parens enc)
+        return (parens enc)
     | IT.MapSet (m, x, y) ->
-       let@ () = ensure_fun_upd () in
-       let@ e = eq_of (IT.bt x) in
-       f_appM "fun_upd" [return e; aux m; aux x; aux y]
+        let@ () = ensure_fun_upd () in
+        let@ e = eq_of (IT.bt x) in
+        f_appM "fun_upd" [return e; aux m; aux x; aux y]
     | IT.MapGet (m, x) -> parensM (build [aux m; aux x])
     | IT.RecordMember (t, m) ->
         let flds = BT.record_bt (IT.bt t) in
@@ -823,33 +835,34 @@ let it_to_coq loc global list_mono it =
         let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
         parensM (build [rets op_nm; aux t; aux x])
     | IT.Cast (cbt, t) ->
-      begin match IT.bt t, cbt with
-      | Integer, Loc -> aux t
-      | Loc, Integer -> aux t
-      | source, target -> 
-        let source = Pp.plain (BT.pp source) in
-        let target = Pp.plain (BT.pp target) in
-        do_fail ("cast from " ^ source ^ " to " ^ target)
-      end
+        begin match IT.bt t, cbt with
+        | Integer, Loc -> aux t
+        | Loc, Integer -> aux t
+        | source, target ->
+            let source = Pp.plain (BT.pp source) in
+            let target = Pp.plain (BT.pp target) in
+            do_fail ("cast from " ^ source ^ " to " ^ target)
+        end
     | IT.Apply (name, args) ->
         let prop_ret = fun_prop_ret global name in
-        let body_aux = f prop_ret in
+        let body_aux = f (if prop_ret then None else Some (t, "fun-arg")) in
         let@ () = ensure_pred global list_mono loc name body_aux in
-        let@ r = parensM (build ([return (Sym.pp name)] @ List.map (f false) args)) in
+        let@ r = parensM (build ([return (Sym.pp name)] @ List.map body_aux args)) in
         if prop_ret then return r else with_is_true (return r)
     | IT.Good (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
-       assert bool_eq_prop; 
-       let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
-       parensM (build [rets op_nm; aux t2])
+        let@ () = fail_on_prop () in
+        let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
+        parensM (build [rets op_nm; aux t2])
     | IT.Representable (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
-       assert bool_eq_prop; 
-       let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
-       parensM (build [rets op_nm; aux t2])
+        let@ () = fail_on_prop () in
+        let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
+        parensM (build [rets op_nm; aux t2])
     | IT.Constructor (nm, id_args) ->
        let info = SymMap.find nm global.datatype_constrs in
+       let comp = Some (t, "datatype contents") in
        let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in
        (* assuming here that the id's are in canonical order *)
-       parensM (build ([return (Sym.pp nm)] @ List.map (f false) (List.map snd id_args)))
+       parensM (build ([return (Sym.pp nm)] @ List.map (f comp) (List.map snd id_args)))
     | IT.NthList (n, xs, d) ->
        let@ (_, _, dest) = ensure_list global list_mono loc (IT.bt xs) in
        parensM (build [rets "CN_Lib.nth_list_z"; return dest;
@@ -869,7 +882,7 @@ let it_to_coq loc global list_mono it =
        parensM (return (mk_let nm x y))
     | _ -> do_fail "term kind"
   in
-  f true it
+  f None it
 
 let lc_to_coq_check_triv loc global list_mono = function
   | LC.T it -> let it = it_adjust global it in
