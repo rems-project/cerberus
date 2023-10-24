@@ -34,7 +34,11 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
 let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = ail_prog.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
-  let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal dts preds instrumentation.internal in 
+  let c_return_type = match List.assoc CF.Symbol.equal_sym instrumentation.fn ail_prog.A.declarations with 
+    | (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) -> ret_ty
+    | _ -> failwith "TODO" 
+  in
+  let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal dts preds c_return_type instrumentation.internal in 
   let pre_str = generate_ail_stat_strs ail_executable_spec.pre in
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
   let in_stmt = List.map (fun (loc, bs_and_ss) -> (loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in

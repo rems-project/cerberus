@@ -203,7 +203,7 @@ let cn_to_ail_unop_internal = function
   (* | BWCLZNoSMT
   | BWCTZNoSMT
   | BWFFSNoSMT *)
-  | _ -> failwith "TODO"
+  | _ -> failwith "TODO: unop translation"
 
 (* TODO: Finish *)
 let cn_to_ail_binop_internal bt1 bt2 = function
@@ -504,7 +504,7 @@ let rec cn_to_ail_expr_aux_internal
   | Sym sym ->
       let sym = 
         if (String.equal (Sym.pp_string sym) "return") then
-          Sym.fresh_pretty "__cn_ret"
+          Sym.fresh_pretty "return_cn"
         else 
           sym 
       in
@@ -654,7 +654,7 @@ let rec cn_to_ail_expr_aux_internal
 
   | StructMember (t, m) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars t PassBack in
-    let ail_expr_ = A.(AilEmemberof (e, m)) in
+    let ail_expr_ = A.(AilEmemberofptr (e, m)) in
     dest d (b, s, mk_expr ail_expr_)
 
   | StructUpdate ((struct_term, m), new_val) ->
@@ -1063,7 +1063,7 @@ let generate_struct_equality_function ((sym, (loc, attrs, tag_def)) : (A.ail_ide
       (* Generating function definition *)
       let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (cast_bindings, List.map mk_stmt (cast_assignments @ [return_stmt]))))) in
       [(decl, def)]
-    | C.UnionDef _ -> []
+  | C.UnionDef _ -> []
 
 let generate_struct_conversion_function ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
   | C.StructDef (members, _) -> 
@@ -1335,9 +1335,6 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
   ((decl, def), ail_record_opt)
 
-(* type lat_dest =
-  | IndexTerm
-  | PostAndStatements *)
 
   
 let rec cn_to_ail_lat_internal dts pred_sym_opt cn_vars ownership_ctypes preds = function
@@ -1461,7 +1458,7 @@ let rec cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds = functio
 
 let cn_to_ail_post_internal dts cn_vars ownership_ctypes preds (RT.Computational (bound, oinfo, t)) = 
   let (bs, ss, ownership_ctypes') = cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds t in 
-  ([], [A.(AilSblock (bs, List.map mk_stmt ss))], ownership_ctypes')
+  (bs, List.map mk_stmt ss, ownership_ctypes')
 
 (* TODO: Add destination passing *)
 let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> C.union_tag list -> a dest -> Cnprog.cn_statement -> (a * bool)
@@ -1554,12 +1551,13 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
   let (b2, s2) = ail_executable_spec.pre in
   {ail_executable_spec with pre = (b1 @ b2, s1 @ s2)}
 
-let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
+let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_type = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
+    let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in
     let binding = create_binding name ctype in
     let (b1, s1) = cn_to_ail_expr_internal dts (name :: cn_vars) it (AssignVar name) in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_type lat in
     prepend_to_precondition ail_executable_spec (binding :: b1, s1)
 
   | LAT.Resource ((name, (ret, bt)), info, lat) -> 
@@ -1568,7 +1566,7 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
       | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
       | None -> []
     in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars (ct @ ownership_ctypes) preds lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars (ct @ ownership_ctypes) preds c_return_type lat in
     prepend_to_precondition ail_executable_spec (b1, s1)
 
   | LAT.Constraint (lc, (loc, str_opt), lat) -> 
@@ -1583,7 +1581,7 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
         let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
         s @ [ail_stat_]
     in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_type lat in
     prepend_to_precondition ail_executable_spec (b1, ss)
 
   | LAT.I (post, stats) ->
@@ -1598,13 +1596,32 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds = function
           else 
             (loc, s) :: (remove_duplicates (loc :: locs) ss))
     in
+    (* let substitution : IT.t Subst.t = {replace = [(Sym.fresh_pretty "return", IT.(IT (Sym (Sym.fresh_pretty "__cn_ret"), BT.Unit)))]; relevant = SymSet.empty} in *)
+    (* let post_with_ret = RT.subst substitution post in *)
+    let (return_cn_binding, return_cn_decl) = match rm_ctype c_return_type with 
+      | C.Void -> ([], [])
+      | _ ->
+        let return_cn_sym = Sym.fresh_pretty "return_cn" in
+        let sct_opt = Sctypes.of_ctype c_return_type in 
+        let sct = match sct_opt with 
+          | Some t -> t
+          | None -> failwith "No sctype conversion"
+        in
+        let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
+        let real_return_ctype = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype bt))) in 
+        let return_cn_binding = create_binding return_cn_sym real_return_ctype in 
+        let cn_ret_ail_expr_ = A.(AilEident (Sym.fresh_pretty "__cn_ret")) in
+        let return_cn_decl = A.(AilSdeclaration [(return_cn_sym, Some (mk_expr (add_conversion_fn cn_ret_ail_expr_ bt)))]) in
+        ([return_cn_binding], [mk_stmt return_cn_decl])
+    in
     let stats = remove_duplicates [] stats in
     let ail_statements = List.map (fun stat_pair -> cn_to_ail_statements dts cn_vars stat_pair) stats in 
     let (post_bs, post_ss, ownership_ctypes') = cn_to_ail_post_internal dts cn_vars ownership_ctypes preds post in 
-    {pre = ([], []); post = (post_bs, post_ss); in_stmt = ail_statements; ownership_ctypes = ownership_ctypes'}
+    let block = A.(AilSblock (return_cn_binding @ post_bs, return_cn_decl @ post_ss)) in
+    {pre = ([], []); post = ([], [block]); in_stmt = ail_statements; ownership_ctypes = ownership_ctypes'}
 
 
-let rec cn_to_ail_pre_post_aux_internal dts preds = function 
+let rec cn_to_ail_pre_post_aux_internal dts preds c_return_type = function 
   | AT.Computational ((sym, bt), info, at) -> 
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
     let cn_ctype = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype bt))) in 
@@ -1612,10 +1629,10 @@ let rec cn_to_ail_pre_post_aux_internal dts preds = function
     let rhs = add_conversion_fn A.(AilEident sym) bt in 
     let decl = A.(AilSdeclaration [(cn_sym, Some (mk_expr rhs))]) in
     let subst_at = Core_to_mucore.fn_spec_instrumentation_sym_subst (sym, bt, cn_sym) at in
-    let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds subst_at in 
+    let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds c_return_type subst_at in 
     prepend_to_precondition ail_executable_spec ([binding], [decl])
-  | AT.L lat -> cn_to_ail_lat_internal_2 dts [] [] preds lat
+  | AT.L lat -> cn_to_ail_lat_internal_2 dts [] [] preds c_return_type lat
   
-let cn_to_ail_pre_post_internal dts preds = function 
-  | Some internal -> cn_to_ail_pre_post_aux_internal dts preds internal
+let cn_to_ail_pre_post_internal dts preds c_return_type = function 
+  | Some internal -> cn_to_ail_pre_post_aux_internal dts preds c_return_type internal
   | None -> empty_ail_executable_spec

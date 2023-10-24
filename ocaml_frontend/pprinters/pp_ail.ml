@@ -517,6 +517,9 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEunary (PostfixIncr as o, e)
         | AilEunary (PostfixDecr as o, e) ->
             pp ~executable_spec e ^^ pp_unaryOperator o
+        | AilEunary (Bnot, e) ->
+            let unop_doc = if executable_spec then P.bang else P.tilde in 
+            unop_doc ^^ pp ~executable_spec e
         | AilEunary (o, e) ->
             pp_unaryOperator o ^^ pp ~executable_spec e
         | AilEbinary (e1, (Comma as o), e2) ->
