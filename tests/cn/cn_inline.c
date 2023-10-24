@@ -6,12 +6,12 @@ enum size {
   small,
 };
 
-/*@ function (integer) lookup_size_shift (integer sz) @*/
+/*@ function (i32) lookup_size_shift (i32 sz) @*/
 
 static inline int
 lookup_size_shift (enum size sz)
 /*@ cn_function lookup_size_shift @*/
-/*@ ensures return == lookup_size_shift(sz) @*/
+/*@ ensures return == lookup_size_shift((i32) sz) @*/
 {
   switch (sz) {
     case big:
@@ -31,11 +31,11 @@ lookup_size_shift (enum size sz)
 
 int
 f (void)
-/*@ ensures return < power(10, 6) @*/
+/*@ ensures return < (1000i32) @*/
 {
   int x;
-  x = 1 << lookup_size_shift(medium);
-  x += 1 << lookup_size_shift(small);
+  x = 3 * lookup_size_shift(medium);
+  x += 5 * lookup_size_shift(small);
   return x;
 }
 
