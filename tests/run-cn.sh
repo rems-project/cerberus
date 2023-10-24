@@ -9,10 +9,12 @@ SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\
 NUM_FAILED=0
 FAILED=''
 
+CN="cn $CN_FLAGS"
+
 for TEST in $SUCC
 do
-  echo cn $TEST
-  if ! cn $TEST
+  echo $CN $TEST
+  if ! $CN $TEST
   then
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
@@ -24,8 +26,8 @@ FAIL=$(find $DIRNAME/cn -name '*.error.c')
 
 for TEST in $FAIL
 do
-  echo cn --expect-failure $TEST
-  if ! cn --expect-failure $TEST
+  echo $CN --expect-failure $TEST
+  if ! $CN --expect-failure $TEST
   then
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
