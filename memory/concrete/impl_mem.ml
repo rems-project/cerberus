@@ -2304,6 +2304,10 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   
   let max_ival ity =
     let open Nat_big_num in
+    let ity = match ity with
+      | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
+      | _ -> ity
+    in
     IV (Prov_none, begin match (Ocaml_implementation.get ()).sizeof_ity ity with
       | Some n ->
           let signed_max =
@@ -2330,8 +2334,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
             | Ptraddr_t ->
                 unsigned_max
             | Enum _ ->
-                (* TODO: hack, assuming like int *)
-                sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
+                assert false (* handled above *)
           end
       | None ->
           failwith "the concrete memory model requires a complete implementation MAX"
@@ -2339,6 +2342,10 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   
   let min_ival ity =
     let open Nat_big_num in
+    let ity = match ity with
+      | Enum nm -> (Ocaml_implementation.get ()).typeof_enum nm
+      | _ -> ity
+    in
     IV (Prov_none, begin match ity with
       | Char ->
           if (Ocaml_implementation.get ()).is_signed_ity Char then
@@ -2363,8 +2370,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
           end
       | Ptraddr_t -> zero
       | Enum _ ->
-          (* TODO: hack, assuming like int *)
-          negate (pow_int (of_int 2) (8*4-1))
+          assert false (* handled above *)
     end)
   
   (* TODO: conversion? *)
