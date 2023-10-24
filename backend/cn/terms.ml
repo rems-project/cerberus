@@ -84,6 +84,7 @@ type 'bt term_ =
   | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberShift of 'bt term * Sym.t * Id.t
   | ArrayShift of { base: 'bt term; ct: Sctypes.t; index: 'bt term }
+  | CopyAllocId of { int: 'bt term; loc: 'bt term }
   | SizeOf of Sctypes.t
   | OffsetOf of Sym.t * Id.t
   | Nil of BaseTypes.t
@@ -278,6 +279,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
          mparens (c_app (!^"member_shift" ^^ angles (Sym.pp tag)) [aux false t; Id.pp member])
        | ArrayShift { base; ct; index } ->
          mparens (c_app (!^"array_shift" ^^ angles (Sctypes.pp ct)) [aux false base; aux false index])
+       | CopyAllocId { int; loc } ->
+         mparens (c_app !^"copy_alloc_id" [aux false int; aux false loc])
        | SizeOf t ->
           mparens (c_app !^"sizeof" [Sctypes.pp t])
        | OffsetOf (tag, member) ->
@@ -455,6 +458,8 @@ let rec dtree (IT (it_, bt)) =
     Dnode (pp_ctor "MemberShift", [dtree t; Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
   | ArrayShift { base; ct=ty; index=t } ->
      Dnode (pp_ctor "ArrayShift", [Dleaf (Sctypes.pp ty); dtree t])
+  | CopyAllocId { int; loc } ->
+     Dnode (pp_ctor "CopyAllocId", [dtree int; dtree loc])
   | Representable (ty, t) ->
      Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | Good (ty, t) ->

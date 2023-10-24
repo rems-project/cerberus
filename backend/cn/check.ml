@@ -1155,9 +1155,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      | M_CopyAllocId (pe1, pe2) ->
         check_pexpr ~expect:Integer pe1 (fun vt1 ->
         check_pexpr ~expect:BT.Loc pe2 (fun vt2 ->
-        let _alloc_id = pointerToAllocIdCast_ vt2 in
-        let new_ptr = integerToPointerCast_ vt1 in
-        k new_ptr))
+        k (copyAllocId_ ~int:vt1 ~loc:vt2)))
      | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
         Cerb_debug.error "todo: M_Memcpy"
      | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->

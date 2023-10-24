@@ -668,6 +668,9 @@ module Translate = struct
         alloc_id_integer_to_loc
           alloc_id
           (Z3.Arithmetic.mk_add context [addr; offset])
+      | CopyAllocId { int; loc } ->
+        let int, loc = term int, term loc in
+        alloc_id_integer_to_loc (loc_to_alloc_id loc) int
       | Nil ibt ->
          make_uf (plain (!^"nil_uf"^^angles(BT.pp ibt))) (List ibt) []
       | Cons (t1, t2) ->

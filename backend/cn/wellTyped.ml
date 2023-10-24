@@ -624,6 +624,10 @@ module WIT = struct
           let@ base = check loc Loc base in
           let@ index = check loc Integer index in
           return (IT (ArrayShift { base; ct; index }, BT.Loc))
+       | CopyAllocId { int; loc=ptr } ->
+          let@ int = check loc Integer int in
+          let@ ptr = check loc Loc ptr in
+          return (IT (CopyAllocId { int; loc=ptr }, BT.Loc))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
           return (IT (SizeOf ct, BT.Integer))
