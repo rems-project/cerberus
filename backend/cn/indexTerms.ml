@@ -757,6 +757,8 @@ let value_check_pointer alignment ~pointee_ct about =
         eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
 
+let value_check_array_size_warning = ref 100
+
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
   let open Sctypes in
   let open Memory in
@@ -769,6 +771,13 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Array (it, None) ->
        Cerb_debug.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) ->
+       if n > ! value_check_array_size_warning
+       then begin
+         (* FIXME: handle this better rather than just warning *)
+         Pp.warn Locations.unknown
+           (Pp.string ("good/value_check of array of large size: " ^ Int.to_string n));
+         value_check_array_size_warning := n
+       end else ();
        (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
        let i_s, i = fresh BT.Integer in
        and_

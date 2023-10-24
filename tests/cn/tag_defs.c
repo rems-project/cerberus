@@ -1,6 +1,10 @@
+enum {
+  ARRAY_SIZE = 128
+};
+
 int f(int *p)
-/*@ requires take P = Owned<char[4096]>(p) @*/
-/*@ ensures take P2 = Owned<char[4096]>(p) @*/
+/*@ requires take P = Owned<char[ARRAY_SIZE]>(p) @*/
+/*@ ensures take P2 = Owned<char[ARRAY_SIZE]>(p) @*/
 {
     return 0;
 }
