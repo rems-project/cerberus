@@ -1387,7 +1387,8 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         end
      | M_PEop (op, pe1, pe2) ->
         let@ pe1 = infer_pexpr pe1 in
-        let@ pe2 = infer_pexpr pe2 in
+        (* Core binops are either ('a -> 'a -> bool) or ('a -> 'a -> 'a) *)
+        let@ pe2 = check_pexpr (bt_of_pexpr pe1) pe2 in
         let casts_to_bool = match op with
           | OpEq | OpGt | OpLt | OpGe | OpLe
             -> true
@@ -1397,7 +1398,8 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         return (bt, M_PEop (op, pe1, pe2))
       | M_PEbounded_binop (bk, op, pe1, pe2) ->
         let@ pe1 = infer_pexpr pe1 in
-        let@ pe2 = infer_pexpr pe2 in
+        (* Core i-binops are all ('a -> 'a -> 'a) *)
+        let@ pe2 = check_pexpr (bt_of_pexpr pe1) pe2 in
         return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
       | M_PEbitwise_unop (unop, pe) ->
         (* all the supported unops do arithmetic in the one (bitwise) type *)
