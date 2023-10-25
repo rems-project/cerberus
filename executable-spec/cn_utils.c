@@ -3,6 +3,7 @@
 #include "hash_table.c"
 #include <stdio.h>
 #include <math.h>
+#include <assert.h>
 
 
 /* Wrappers for C types */
@@ -16,11 +17,42 @@ typedef struct cn_pointer {
     void *ptr;
 } cn_pointer;
 
-typedef _Bool cn_bool;
+typedef struct cn_bool {
+    _Bool val;
+} cn_bool;
 
-_Bool cn_char_equality(void *a, void *b) {
-    return *(char *)a == *(char *)b;
+cn_bool *convert_to_cn_bool(_Bool b) {
+    cn_bool *res = alloc(sizeof(cn_bool));
+    res->val = b;
+    return res;
 }
+
+void cn_assert(cn_bool *cn_b) {
+    assert(cn_b->val);
+}
+
+cn_bool *cn_bool_and(cn_bool *b1, cn_bool *b2) {
+    cn_bool *res = alloc(sizeof(cn_bool));
+    res->val = b1->val && b2->val;
+    return res;
+}
+
+cn_bool *cn_bool_or(cn_bool *b1, cn_bool *b2) {
+    cn_bool *res = alloc(sizeof(cn_bool));
+    res->val = b1->val || b2->val;
+    return res;
+}
+
+cn_bool *cn_bool_not(cn_bool *b) {
+    cn_bool *res = alloc(sizeof(cn_bool));
+    res->val = !(b->val);
+    return res;
+}
+
+cn_bool *cn_bool_equality(cn_bool *b1, cn_bool *b2) {
+    return convert_to_cn_bool(b1->val == b2->val);
+}
+
 
 typedef hash_table cn_map;
 
@@ -41,18 +73,18 @@ void cn_map_set(cn_map *m, cn_integer *key, void *value) {
 }
 
 /* Every equality function needs to take two void pointers for this to work */
-_Bool cn_integer_equality(void *i1, void *i2) {
-    return (*((cn_integer *) i1)->val) == (*((cn_integer *) i2)->val);
+cn_bool *cn_integer_equality(void *i1, void *i2) {
+    return convert_to_cn_bool((*((cn_integer *) i1)->val) == (*((cn_integer *) i2)->val));
 }
 
-_Bool cn_pointer_equality(void *i1, void *i2) {
-    return (((cn_pointer *) i1)->ptr) == (((cn_pointer *) i2)->ptr);
+cn_bool *cn_pointer_equality(void *i1, void *i2) {
+    return convert_to_cn_bool((((cn_pointer *) i1)->ptr) == (((cn_pointer *) i2)->ptr));
 }
 
 
 // Check if m2 is a subset of m1
-_Bool cn_map_subset(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
-    if (ht_size(m1) != ht_size(m2)) return 0;
+cn_bool *cn_map_subset(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
+    if (ht_size(m1) != ht_size(m2)) return convert_to_cn_bool(0);
     
     hash_table_iterator hti1 = ht_iterator(m1);
 
@@ -62,19 +94,19 @@ _Bool cn_map_subset(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, v
         void *val2 = ht_get(m2, curr_key);
 
         /* Check if other map has this key at all */
-        if (!val2) return 0;
+        if (!val2) return convert_to_cn_bool(0);
 
         if (!value_equality_fun(val1, val2)) {
             printf("Values not equal!\n");
-            return 0;
+            return convert_to_cn_bool(0);
         } 
     }
 
-    return 1;
+    return convert_to_cn_bool(1);
 }
 
-_Bool cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
-    return cn_map_subset(m1, m2, value_equality_fun) && cn_map_subset(m2, m1, value_equality_fun);
+cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
+    return cn_bool_and(cn_map_subset(m1, m2, value_equality_fun), cn_map_subset(m2, m1, value_equality_fun));
 }
 
 
@@ -96,20 +128,20 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
 }
 
 /* These should be produced automatically based on binops used in source CN annotations */
-cn_bool cn_integer_lt(cn_integer *i1, cn_integer *i2) {
-    return *(i1->val) < *(i2->val);
+cn_bool *cn_integer_lt(cn_integer *i1, cn_integer *i2) {
+    return convert_to_cn_bool(*(i1->val) < *(i2->val));
 }
 
-cn_bool cn_integer_le(cn_integer *i1, cn_integer *i2) {
-    return *(i1->val) <= *(i2->val);
+cn_bool *cn_integer_le(cn_integer *i1, cn_integer *i2) {
+    return convert_to_cn_bool(*(i1->val) <= *(i2->val));
 }
 
-cn_bool cn_integer_gt(cn_integer *i1, cn_integer *i2) {
-    return *(i1->val) > *(i2->val);
+cn_bool *cn_integer_gt(cn_integer *i1, cn_integer *i2) {
+    return convert_to_cn_bool(*(i1->val) > *(i2->val));
 }
 
-cn_bool cn_integer_ge(cn_integer *i1, cn_integer *i2) {
-    return *(i1->val) >= *(i2->val);
+cn_bool *cn_integer_ge(cn_integer *i1, cn_integer *i2) {
+    return convert_to_cn_bool(*(i1->val) >= *(i2->val));
 }
 
 cn_integer *cn_integer_add(cn_integer *i1, cn_integer *i2) {
