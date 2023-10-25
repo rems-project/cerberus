@@ -89,8 +89,36 @@ Module RevocationProofs.
 
   (* Equality of pointer values without taking provenance into account *)
 
-  Inductive pointer_value_eq : pointer_value_ind -> pointer_value_ind -> Prop :=
+  Inductive pointer_value_eq: pointer_value_ind -> pointer_value_ind -> Prop :=
   | pointer_value_no_prov_eq: forall pr1 pr2 b1 b2,  b1 = b2 -> pointer_value_eq (PV pr1 b1) (PV pr2 b2).
+
+  (* Equivalence relation for pointer values *)
+  #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
+  Proof.
+    split.
+    -
+      intros a.
+      destruct a.
+      apply pointer_value_no_prov_eq.
+      reflexivity.
+    -
+      intros a b.
+      destruct a, b.
+      intros H.
+      apply pointer_value_no_prov_eq.
+      inversion H.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      intros H1 H2.
+      apply pointer_value_no_prov_eq.
+      inversion H1. clear H1.
+      inversion H2. clear H2.
+      subst.
+      reflexivity.
+  Qed.
+
 
   Inductive mem_value_ind_eq: mem_value_ind -> mem_value_ind -> Prop :=
   | mem_value_ind_eq_MVunspecified: forall t1 t2, mem_value_ind_eq (MVunspecified t1) (MVunspecified t2)
@@ -110,22 +138,6 @@ Module RevocationProofs.
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
-
-  (*       next_alloc_id : storage_instance_id;
-      next_iota : symbolic_storage_instance_id;
-      last_address : AddressValue.t;
-      allocations : ZMap.t allocation;
-      iota_map : ZMap.t
-                   ((* `Single *) storage_instance_id +
-                      (* `Double *) storage_instance_id * storage_instance_id);
-      funptrmap : ZMap.t
-                    (digest * string * C.t);
-      varargs : ZMap.t
-                  (Z * list (CoqCtype.ctype * pointer_value));
-      next_varargs_id : Z;
-      bytemap : ZMap.t AbsByte;
-      capmeta : ZMap.t (bool* CapGhostState);
-   *)
 
   Inductive ctype_pointer_value_eq: (CoqCtype.ctype * pointer_value_ind) ->
                                     (CoqCtype.ctype * pointer_value_ind) -> Prop
@@ -168,32 +180,6 @@ Module RevocationProofs.
     let Mcapmeta := fresh "Mcapmeta" in
     destruct H as (Malloc_id & Mnextiota & Mlastaddr & Mallocs & Miotas & Mfuncs & Mvarargs & Mnextvararg & Mbytes & Mcapmeta).
 
-  (* Equivalence relation for pointer values *)
-  #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
-  Proof.
-    split.
-    -
-      intros a.
-      destruct a.
-      apply pointer_value_no_prov_eq.
-      reflexivity.
-    -
-      intros a b.
-      destruct a, b.
-      intros H.
-      apply pointer_value_no_prov_eq.
-      inversion H.
-      auto.
-    -
-      intros a b c.
-      destruct a, b, c.
-      intros H1 H2.
-      apply pointer_value_no_prov_eq.
-      inversion H1. clear H1.
-      inversion H2. clear H2.
-      subst.
-      reflexivity.
-  Qed.
 
   (* --- Helper lemmas *)
   Lemma is_PNVI_WithPNVI:
@@ -249,7 +235,6 @@ Module RevocationProofs.
       apply H.
   Qed.
 
-
   Lemma remove_PNVI_set_mem:
     forall l s,
       is_PNVI_switch s = false ->
@@ -269,7 +254,6 @@ Module RevocationProofs.
       apply set_mem_complete1 in Heqb.
       apply remove_PNVI_In in Heqb0;auto.
   Qed.
-
 
   (* All non-pnvi switches are the same *)
   Lemma non_PNVI_switches_match:
@@ -697,7 +681,6 @@ Module RevocationProofs.
     constructor; assumption.
   Qed.
 
-
   Theorem get_intrinsic_type_spec_same:
     forall s,
       CheriMemoryWithPNVI.get_intrinsic_type_spec s =
@@ -879,7 +862,7 @@ Module RevocationProofs.
     - apply allocator_same_state; assumption.
   Qed.
 
-  Lemma num_of_int_eq:
+  Lemma num_of_int_same:
     forall x, CheriMemoryWithPNVI.num_of_int x = CheriMemoryWithoutPNVI.num_of_int x.
   Proof.
     auto.
@@ -912,12 +895,12 @@ Module RevocationProofs.
         unfold CheriMemoryWithPNVI.allocate_region, WithPNVISwitches.get_switches, bind, ret in Heqp; simpl in Heqp;
         unfold CheriMemoryWithoutPNVI.allocate_region, WithoutPNVISwitches.get_switches, bind, ret in Heqp0; simpl in Heqp0;
         repeat break_let;
-        rewrite num_of_int_eq in *;
+        rewrite num_of_int_same in *;
 
         remember (Capability_GS.representable_length
                     (CheriMemoryWithoutPNVI.num_of_int size_int)) as size;
         clear Heqsize;
-        rewrite num_of_int_eq in *;
+        rewrite num_of_int_same in *;
 
         match goal with
         | H: context [ CheriMemoryWithPNVI.allocator ?S ?A] |- _ => remember A as align; clear Heqalign
@@ -957,12 +940,12 @@ Module RevocationProofs.
         unfold CheriMemoryWithPNVI.allocate_region, WithPNVISwitches.get_switches, bind, ret in Heqp; simpl in Heqp;
         unfold CheriMemoryWithoutPNVI.allocate_region, WithoutPNVISwitches.get_switches, bind, ret in Heqp0; simpl in Heqp0;
         repeat break_let;
-        rewrite num_of_int_eq in *;
+        rewrite num_of_int_same in *;
 
         remember (Capability_GS.representable_length
                     (CheriMemoryWithoutPNVI.num_of_int size_int)) as size;
         clear Heqsize;
-        rewrite num_of_int_eq in *;
+        rewrite num_of_int_same in *;
         match goal with
         | H: context [ CheriMemoryWithPNVI.allocator ?S ?A] |- _ => remember A as align; clear Heqalign
         end.
@@ -986,8 +969,6 @@ Module RevocationProofs.
         try reflexivity;repeat break_let;
         repeat tuple_inversion;
         repeat break_match; invc Heqs1; invc Heqs0.
-
-
 
       unfold evalErrS in E1.
       repeat break_let;
