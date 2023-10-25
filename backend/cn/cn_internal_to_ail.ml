@@ -575,7 +575,7 @@ let rec cn_to_ail_expr_aux_internal
 
   | SizeOf sct ->
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in 
-    let ail_call_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "convert_to_cn_integer")), [mk_expr ail_expr_])) in 
+    let ail_call_ = add_conversion_fn ail_expr_ BT.Integer in 
     dest d ([], [], mk_expr ail_call_)
   | OffsetOf _ -> failwith "TODO OffsetOf"
 
@@ -584,7 +584,6 @@ let rec cn_to_ail_expr_aux_internal
     let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t2 PassBack in
     let b3, s3, e3 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t3 PassBack in
     let ail_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_ite")), [e1; e2; e3])) in
-    (* let ail_expr_ = A.AilEcond (e1, Some e2, e3) in *)
     dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr ail_expr_)
 
   | EachI ((r_start, (sym, bt), r_end), t) -> 
@@ -1307,13 +1306,13 @@ let rec generate_record_opt pred_sym = function
 let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) def.return_bt in
   (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
-  let (bs, ail_func_body) =
+  let (bs, ail_func_body_opt) =
   match def.definition with
     | Def it
     | Rec_Def it ->
       let (bs, ss) = cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return in
-      (bs, List.map mk_stmt ss)
-    | Uninterp -> ([], [])
+      (bs, Some (List.map mk_stmt ss))
+    | Uninterp -> ([], None)
   in
   let ail_record_opt = generate_record_opt fn_sym def.return_bt in
   let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) def.args in
@@ -1322,7 +1321,10 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   (* Generating function declaration *)
   let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body)))) in
+  let def = match ail_func_body_opt with 
+    | Some ail_func_body -> Some (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body))))
+    | None -> None
+  in
   ((decl, def), ail_record_opt)
 
 
