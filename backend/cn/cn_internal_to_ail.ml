@@ -109,7 +109,10 @@ let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=fal
 let create_binding sym ctype = 
   A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
 
+let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
+let generate_cn_assert ail_expr = 
+  A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr]))
   
 
 let rec bt_to_cn_base_type = function
@@ -201,7 +204,7 @@ let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn
 
 (* TODO: Finish *)
 let cn_to_ail_unop_internal = function 
-  | Terms.Not -> A.Bnot
+  | Terms.Not -> (A.Bnot, Some "cn_bool_not")
   (* | BWCLZNoSMT
   | BWCTZNoSMT
   | BWFFSNoSMT *)
@@ -209,8 +212,8 @@ let cn_to_ail_unop_internal = function
 
 (* TODO: Finish *)
 let cn_to_ail_binop_internal bt1 bt2 = function
-  | Terms.And -> (A.And, None)
-  | Or -> (A.Or, None)
+  | Terms.And -> (A.And, Some "cn_bool_and")
+  | Or -> (A.Or, Some "cn_bool_or")
   (* | Impl *)
   | Add -> 
     (let str_opt = match bt1, bt2 with 
@@ -260,6 +263,21 @@ let cn_to_ail_binop_internal bt1 bt2 = function
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
 
+let add_conversion_fn ail_expr_ bt = 
+  let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in 
+  match typedef_name with 
+  | Some str ->
+    let str = String.concat "_" (String.split_on_char ' ' str) in
+    A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("convert_to_" ^ str))), [mk_expr ail_expr_]))
+  | None -> (match bt with 
+      | BT.Struct sym -> 
+        let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
+        let conversion_fn_str = "convert_to_struct_" ^ (Sym.pp_string cn_sym) in 
+        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), [mk_expr ail_expr_]))
+      | _ -> ail_expr_
+    )
+    
+
 let rearrange_start_inequality sym e1 e2 = 
   match IT.term e2 with 
     | Terms.Binop (binop, (IT.IT (Sym sym1, _, _) as expr1), (IT.IT (Sym sym2, _, _) as expr2)) -> 
@@ -301,7 +319,7 @@ let generate_start_expr start_cond sym =
         start_expr
       | LT ->
         let one = IT.(IT (Const (Terms.Z (Z.of_int 1)), BT.Integer, Cerb_location.unknown)) in
-        IT.IT (Terms.(Binop (Add, start_expr, one)), BT.Integer, Cerb_location.unknown)
+        IT.(IT (Apply (Sym.fresh_pretty "cn_integer_add", [start_expr; one]), BT.Integer, Cerb_location.unknown)) 
       | _ -> failwith "Not of correct form: not Le or Lt"
 
 
@@ -330,14 +348,15 @@ let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) =
 
   let b = Sym.fresh () in
   let b_ident = A.(AilEident b) in
-  let b_binding = create_binding b (mk_ctype C.(Basic (Integer Bool))) in
-  let b_decl = A.(AilSdeclaration [(b, Some (mk_expr true_const))]) in
+  let b_binding = create_binding b (bt_to_ail_ctype BT.Bool) in
+  let b_decl = A.(AilSdeclaration [(b, Some (mk_expr (add_conversion_fn true_const BT.Bool)))]) in
 
   let incr_var = A.(AilEident sym) in
   let incr_var_binding = create_binding sym (bt_to_ail_ctype BT.Integer) in
   let start_decl = A.(AilSdeclaration [(sym, Some (mk_expr start_expr))]) in
 
-  let rhs_and_expr_ = A.(AilEbinary (mk_expr b_ident, And, e)) in
+  let cn_bool_and_sym = Sym.fresh_pretty "cn_bool_and" in
+  let rhs_and_expr_ = A.(AilEcall (mk_expr (AilEident cn_bool_and_sym), [mk_expr b_ident; e])) in
   let b_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_)))) in
   (* let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in *)
   let incr_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_integer_increment")), [mk_expr incr_var])))) in
@@ -387,7 +406,7 @@ let dest : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statemen
   fun d (b, s, e) -> 
     match d with
     | Assert -> 
-      let assert_stmt = A.(AilSexpr (mk_expr (AilEassert e))) in
+      let assert_stmt = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
       (b, s @ [assert_stmt])
     | Return ->
       let return_stmt = A.(AilSreturn e) in
@@ -413,20 +432,7 @@ let empty_for_dest : type a. a dest -> a =
       | AssignVar _ -> ([], [empty_ail_stmt])
       | PassBack -> ([], [empty_ail_stmt], mk_expr empty_ail_expr)
 
-let add_conversion_fn ail_expr_ bt = 
-  let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in 
-  match typedef_name with 
-  | Some str ->
-    let str = String.concat "_" (String.split_on_char ' ' str) in
-    A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("convert_to_" ^ str))), [mk_expr ail_expr_]))
-  | None -> (match bt with 
-      | BT.Struct sym -> 
-        let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
-        let conversion_fn_str = "convert_to_struct_" ^ (Sym.pp_string cn_sym) in 
-        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), [mk_expr ail_expr_]))
-      | _ -> ail_expr_
-    )
-    
+
 
 
 let generate_ownership_function ctype = 
@@ -572,11 +578,18 @@ let rec cn_to_ail_expr_aux_internal
               let val_equality_str =  val_str ^ "_equality" in
               A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
             | _ -> 
-              (match get_typedef_string (bt_to_ail_ctype (IT.bt t1)) with 
+              let ctype = (bt_to_ail_ctype (IT.bt t1)) in
+              (match get_typedef_string ctype with 
                 | Some str ->
                   let fn_name = str ^ "_equality" in 
                   A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
-                | None -> default_ail_binop)
+                | None -> 
+                  (match rm_ctype ctype with 
+                    | C.(Pointer (_, Ctype (_, Struct sym))) -> 
+                      let str = "struct_" ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
+                      let fn_name = str ^ "_equality" in 
+                      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
+                    | _ -> default_ail_binop))
         )
       | _ -> default_ail_binop
     in 
@@ -584,9 +597,13 @@ let rec cn_to_ail_expr_aux_internal
 
   | Unop (unop, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars t PassBack in
-    let ail_unop = cn_to_ail_unop_internal unop in
+    let (ail_unop, annot)  = cn_to_ail_unop_internal unop in
+    let strs = match annot with 
+      | Some str -> [str]
+      | None -> []
+    in
     let ail_expr_ = A.(AilEunary (ail_unop, e)) in 
-    dest d (b, s, mk_expr ail_expr_)
+    dest d (b, s, mk_expr ~strs ail_expr_)
 
   | SizeOf sct ->
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in 
@@ -1051,14 +1068,15 @@ let generate_struct_equality_function ((sym, (loc, attrs, tag_def)) : (A.ail_ide
         mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty equality_fun_str)), args))
       in
       let member_equality_exprs = List.map generate_member_equality members in 
-      let ail_and_binop = List.fold_left (fun e1 e2 -> mk_expr A.(AilEbinary (e1, And, e2))) (mk_expr true_const) member_equality_exprs in
-      let rec remove_true_const ail_binop = match rm_expr ail_binop with 
+      let cn_bool_and_sym = Sym.fresh_pretty "cn_bool_and" in
+      let ail_and_binop = List.fold_left (fun e1 e2 -> mk_expr (A.(AilEcall (mk_expr (AilEident cn_bool_and_sym), [e1; e2])))) (mk_expr (add_conversion_fn true_const BT.Bool)) member_equality_exprs in
+      (* let rec remove_true_const ail_binop = match rm_expr ail_binop with 
         | A.(AilEbinary (e1, And, e2)) -> (match rm_expr e1 with 
             | A.AilEconst (ConstantInteger (IConstant (_, Decimal, Some B))) -> e2
             | _ -> mk_expr A.(AilEbinary (remove_true_const e1, And, e2)))
         | _ -> failwith "Incorrect form"
       in
-      let ail_and_binop = remove_true_const ail_and_binop in
+      let ail_and_binop = remove_true_const ail_and_binop in *)
       let return_stmt = A.(AilSreturn ail_and_binop) in 
       let ret_type = bt_to_ail_ctype BT.Bool in
       (* Generating function declaration *)
@@ -1295,10 +1313,6 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> C
 
           *)
 
-
-
-
-          
           let start_expr = generate_start_expr (get_leftmost_and_expr cond_it) sym in
           let while_cond = get_rest_of_expr_r cond_it in
           let (b1, s1, e1) = cn_to_ail_expr_internal dts cn_vars start_expr PassBack in
@@ -1370,7 +1384,7 @@ let rec cn_to_ail_lat_internal dts pred_sym_opt cn_vars ownership_ctypes preds =
         []
       | None -> 
         (* Printf.printf "No logical constraint info\n"; *)
-        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
+        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
         s @ [ail_stat_]
     in
     let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal dts pred_sym_opt cn_vars ownership_ctypes preds lat in
@@ -1453,7 +1467,7 @@ let rec cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds = functio
       | Some info -> 
         []
       | None -> 
-        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
+        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
         s @ [ail_stat_]
     in
     let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds t in
@@ -1585,7 +1599,7 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_typ
         []
       | None -> 
         (* Printf.printf "No logical constraint info\n"; *)
-        let ail_stat_ = A.(AilSexpr (mk_expr (AilEassert e))) in
+        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
         s @ [ail_stat_]
     in
     let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_type lat in
