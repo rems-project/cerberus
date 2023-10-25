@@ -953,41 +953,32 @@ Module RevocationProofs.
       unfold execErrS.
       repeat break_let.
       repeat break_match;invc Heqs1;invc Heqs0;
-        cbn in Heqp, Heqp0; repeat break_let;
+
+        unfold CheriMemoryWithPNVI.allocate_region, WithPNVISwitches.get_switches, bind, ret in Heqp; simpl in Heqp;
+        unfold CheriMemoryWithoutPNVI.allocate_region, WithoutPNVISwitches.get_switches, bind, ret in Heqp0; simpl in Heqp0;
+        repeat break_let;
         rewrite num_of_int_eq in *;
-
-
 
         remember (Capability_GS.representable_length
                     (CheriMemoryWithoutPNVI.num_of_int size_int)) as size;
         clear Heqsize;
         rewrite num_of_int_eq in *;
-        remember (Z.max (CheriMemoryWithoutPNVI.num_of_int align_int)
-                    (Z.succ
-                       (AddressValue.to_Z
-                          (AddressValue.bitwise_complement
-                             (AddressValue.of_Z
-                                (Z.of_N
-                                   (MachineWord.MachineWord.word_to_N
-                                      (Values.get_word
-                                         (CapFns.CapGetRepresentableMask
-                                            (MachineWord.MachineWord.Z_to_word
-                                               (Pos.to_nat 64)
-                                               (CheriMemoryWithoutPNVI.num_of_int
-                                                  size_int))))))))))) as align;
-        clear Heqalign;
+        match goal with
+        | H: context [ CheriMemoryWithPNVI.allocator ?S ?A] |- _ => remember A as align; clear Heqalign
+        end.
 
-        assert(E0:lift_sum eq mem_state_same False
-                    (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
-                    (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2)) by
+      all: assert(E0:lift_sum eq mem_state_same False
+                       (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
+                       (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2)) by
         (try apply allocator_same;
          repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
-         try apply Mvarargs1; try apply Mvarargs2);
-        assert(E1:evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
-                    evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2) by (try  apply allocator_same;
-                                                                                           repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
-                                                                                           try apply Mvarargs1; try apply Mvarargs2);
+         try apply Mvarargs1; try apply Mvarargs2).
+      all: assert(E1:evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
+                       evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2) by (try  apply allocator_same;
+                                                                                              repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+                                                                                              try apply Mvarargs1; try apply Mvarargs2).
 
+      all:
         unfold lift_sum, execErrS in E0;
         repeat break_let;
         repeat tuple_inversion;
@@ -996,19 +987,19 @@ Module RevocationProofs.
         repeat tuple_inversion;
         repeat break_match; invc Heqs1; invc Heqs0.
 
-      unfold evalErrS in E1;
-        repeat break_let;
+
+
+      unfold evalErrS in E1.
+      repeat break_let;
         repeat tuple_inversion;
         destruct s0,s; invc E1;repeat tuple_inversion;
-
         destruct_mem_state_same E0;
         repeat split;cbn;try assumption;
         (try setoid_rewrite Mallocs0; try reflexivity);
         destruct Mvarargs0 as [Mvarargs01 Mvarargs02];
         try apply Mvarargs01;
         try apply Mvarargs02.
-      (* Bug: Hangs on Qed here! *)
-    Admitted.
+    Qed.
 
     Theorem allocate_region_same:
       mem_state_same mem_state1 mem_state2 ->
