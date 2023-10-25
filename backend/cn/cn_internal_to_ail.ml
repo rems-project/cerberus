@@ -584,7 +584,8 @@ let rec cn_to_ail_expr_aux_internal
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack in
     let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t2 PassBack in
     let b3, s3, e3 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t3 PassBack in
-    let ail_expr_ = A.AilEcond (e1, Some e2, e3) in
+    let ail_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_ite")), [e1; e2; e3])) in
+    (* let ail_expr_ = A.AilEcond (e1, Some e2, e3) in *)
     dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr ail_expr_)
 
   | EachI ((r_start, (sym, bt), r_end), t) -> 
