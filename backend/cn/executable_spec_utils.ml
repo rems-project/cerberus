@@ -15,9 +15,14 @@ let mk_ctype ?(annots=[]) ctype_ = C.Ctype (annots, ctype_)
 
 let rm_ctype (C.Ctype (_, ctype_)) = ctype_
 
-let get_typedef_string (C.Ctype (annots, ctype_)) = match annots with 
+let get_typedef_string_aux (C.Ctype (annots, ctype_)) = match annots with 
   | CF.Annot.Atypedef sym :: _ -> Some (Sym.pp_string sym)
   | _ -> None
+
+let get_typedef_string (C.(Ctype (_, ctype_))) =
+  match ctype_ with 
+    | Pointer (_, ctype) -> get_typedef_string_aux ctype
+    | _ -> None
 
 
 let mk_expr ?(strs=[]) expr_ = 

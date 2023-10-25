@@ -169,10 +169,9 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
   | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
   | CN_record members -> 
     let sym = generate_record_sym pred_sym members in
-    C.(Pointer (empty_qualifiers, mk_ctype (Struct sym)))
+    Struct sym
    (* Every struct is converted into a struct pointer *)
-   | CN_datatype sym -> C.(Pointer (empty_qualifiers, Ctype ([], Struct sym)))
-   (* TODO: Implement maps properly *)
+   | CN_datatype sym -> Struct sym
    | CN_map (_, cn_bt) -> generate_ail_array cn_bt
    | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
    | CN_tuple ts -> 
@@ -180,7 +179,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
       let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
       let members = List.map (fun t -> (some_id, t)) ts in
       let sym = generate_record_sym pred_sym members in
-      C.(Pointer (empty_qualifiers, mk_ctype (Struct sym)))
+      Struct sym
    | CN_set bt -> generate_ail_array bt
    | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
    | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name")
@@ -192,7 +191,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
     | CN_loc -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer")]
     | _ -> []
   in
-  mk_ctype ~annots typ
+  mk_ctype C.(Pointer (empty_qualifiers, mk_ctype ~annots typ))
 
  
 
@@ -234,7 +233,7 @@ let cn_to_ail_binop_internal bt1 bt2 = function
   (* | Rem
   | RemNoSMT *)
   | Mod
-  | ModNoSMT -> (A.(Arithmetic Mod), None)
+  | ModNoSMT -> (A.(Arithmetic Mod), Some "cn_integer_mod")
   | XORNoSMT -> (A.(Arithmetic Bxor), None)
   | BWAndNoSMT -> (A.(Arithmetic Band), None)
   | BWOrNoSMT -> (A.(Arithmetic Bor), None)
@@ -333,7 +332,7 @@ let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) =
   let b_decl = A.(AilSdeclaration [(b, Some (mk_expr true_const))]) in
 
   let incr_var = A.(AilEident sym) in
-  let incr_var_binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, bt_to_ail_ctype BT.Integer))) in
+  let incr_var_binding = create_binding sym (bt_to_ail_ctype BT.Integer) in
   let start_decl = A.(AilSdeclaration [(sym, Some (mk_expr start_expr))]) in
 
   let rhs_and_expr_ = A.(AilEbinary (mk_expr b_ident, And, e)) in
@@ -434,7 +433,7 @@ let generate_ownership_function ctype =
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
   let param2_sym = Sym.fresh_pretty "owned_enum" in
-  let param1 = (param1_sym, mk_ctype (C.(Pointer (empty_qualifiers, bt_to_ail_ctype BT.Loc)))) in
+  let param1 = (param1_sym, bt_to_ail_ctype BT.Loc) in
   let param2 = (param2_sym, mk_ctype (C.(Basic (Integer (Enum (Sym.fresh_pretty "OWNERSHIP")))))) in
   let (param_syms, param_types) = List.split [param1; param2] in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
@@ -453,7 +452,7 @@ let generate_ownership_function ctype =
     | None -> failwith "Bad sctype when trying to generate ownership function"
   in
   let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
-  let ret_type = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype bt))) in
+  let ret_type = bt_to_ail_ctype bt in
   let return_stmt = A.(AilSreturn (mk_expr (add_conversion_fn deref_expr_ bt))) in
   (* Generating function declaration *)
   let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
@@ -777,7 +776,10 @@ let rec cn_to_ail_expr_aux_internal
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars m PassBack in
     let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars key PassBack in
     let map_get_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_get")), [e1; e2])) in
-    dest d (b1 @ b2, s1 @ s2, mk_expr map_get_fcall)
+    let (key_bt, val_bt) = BT.map_bt (IT.bt m) in 
+    let ctype = bt_to_ail_ctype val_bt in 
+    let cast_expr_ = A.(AilEcast (empty_qualifiers, ctype, mk_expr map_get_fcall)) in
+    dest d (b1 @ b2, s1 @ s2, mk_expr cast_expr_)
 
   | MapDef ((sym, bt), t) -> failwith "TODO21"
   | Apply (sym, ts) ->
@@ -791,7 +793,6 @@ let rec cn_to_ail_expr_aux_internal
   | Let ((var, t1), body) -> 
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars t1 PassBack in
     let ctype = bt_to_ail_ctype (IT.bt t1) in
-    let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in
     let binding = create_binding var ctype in
     let ail_assign = A.(AilSdeclaration [(var, Some e1)]) in
     prefix d (b1 @ [binding], s1 @ [ail_assign]) (cn_to_ail_expr_aux_internal const_prop pred_name dts cn_vars body d)
@@ -1091,7 +1092,7 @@ let generate_struct_conversion_function ((sym, (loc, attrs, tag_def)) : (A.ail_i
     in
     let member_assignments = List.map generate_member_assignment members in 
     let return_stmt = A.(AilSreturn (mk_expr (AilEident res_sym))) in 
-    let ret_type = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (BT.Struct sym)))) in
+    let ret_type = (bt_to_ail_ctype (BT.Struct sym)) in
     (* Generating function declaration *)
     let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), [param_type], false, false, false)))) in
     (* Generating function definition *)
@@ -1107,7 +1108,7 @@ let cn_to_ail_struct ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_l
       let sct_opt = Sctypes.of_ctype ctype in 
       let sct = match sct_opt with | Some t -> t | None -> failwith "Bad sctype" in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
-      (id, (attrs, alignment, qualifiers, mk_ctype (C.Pointer (empty_qualifiers, (bt_to_ail_ctype bt))))))
+      (id, (attrs, alignment, qualifiers, (bt_to_ail_ctype bt))))
     members 
     in
     [(cn_struct_sym, (loc, attrs, C.StructDef (new_members, opt)))]
@@ -1135,7 +1136,6 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
   function
   | ResourceTypes.P p -> 
     let (ctype, bt) = calculate_return_type p.name in
-    let binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, bt_to_ail_ctype bt))) in
 
     let (b, s, e) = cn_to_ail_expr_internal dts cn_vars p.pointer PassBack in
     let (rhs, bs, ss, owned_ctype) = match p.name with 
@@ -1148,17 +1148,19 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
         let fn_call_it = IT.IT (Apply (Sym.fresh_pretty owned_fn_name, [p.pointer; enum_val_get]), BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct, Cerb_location.unknown) in
         let (bs', ss', e') = cn_to_ail_expr_internal dts (enum_sym :: cn_vars) fn_call_it PassBack in
-        (e', bs', ss', Some (Sctypes.to_ctype sct))
+        let binding = create_binding sym (bt_to_ail_ctype bt) in
+        (e', binding :: bs', ss', Some (Sctypes.to_ctype sct))
         (* let cast_ctype_pointer = C.(Pointer (empty_qualifiers, ctype)) in
         let cast_e_ = A.(AilEcast (empty_qualifiers, mk_ctype cast_ctype_pointer, e)) in
         (make_deref_expr_ cast_e_, [], []) *)
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts cn_vars it PassBack) p.iargs) in
         let fcall = A.(AilEcall (mk_expr (AilEident pname), e :: es)) in
-        (mk_expr fcall, List.concat bs, List.concat ss, None)
+        let binding = create_binding sym (bt_to_ail_ctype ~pred_sym:(Some pname) bt) in
+        (mk_expr fcall, binding :: (List.concat bs), List.concat ss, None)
     in
     let s_decl = A.(AilSdeclaration [(sym, Some rhs)]) in
-    (b @ bs @ [binding], s @ ss @ [s_decl], owned_ctype)
+    (b @ bs, s @ ss @ [s_decl], owned_ctype)
 
   | ResourceTypes.Q q -> 
     (* 
@@ -1180,7 +1182,7 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
     let start_expr = generate_start_expr (get_leftmost_and_expr q.permission) (fst q.q) in
     let (_, _, e_start) = cn_to_ail_expr_internal dts cn_vars start_expr PassBack in 
     (* let (b_end, s_end, e_end) = cn_to_ail_expr_internal dts q.permission PassBack in *)
-    let cn_integer_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, cn_to_ail_base_type CN_integer)) in 
+    let cn_integer_ptr_ctype = bt_to_ail_ctype BT.Integer in 
     (* let convert_to_cn_integer_sym = Sym.fresh_pretty "convert_to_cn_integer" in  *)
     
     let (b2, s2, e2) = cn_to_ail_expr_internal dts (i_sym :: cn_vars) q.permission PassBack in
@@ -1206,7 +1208,7 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
     let (b4, s4, e4) = cn_to_ail_expr_internal dts (i_sym :: cn_vars) value_it PassBack in
 
     let ptr_add_sym = Sym.fresh () in
-    let cn_pointer_return_type = mk_ctype (C.Pointer (empty_qualifiers, bt_to_ail_ctype BT.Loc)) in 
+    let cn_pointer_return_type = bt_to_ail_ctype BT.Loc in 
     let ptr_add_binding = create_binding ptr_add_sym cn_pointer_return_type in
     let ptr_add_stat = A.(AilSdeclaration [(ptr_add_sym, Some e4)]) in
 
@@ -1316,7 +1318,7 @@ let rec generate_record_opt pred_sym = function
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) def.return_bt in
-  let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in
+  (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
   let (bs, ail_func_body) =
   match def.definition with
     | Def it
@@ -1326,7 +1328,7 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
     | Uninterp -> ([], [])
   in
   let ail_record_opt = generate_record_opt fn_sym def.return_bt in
-  let params = List.map (fun (sym, bt) -> (sym, (mk_ctype (C.Pointer (empty_qualifiers, (bt_to_ail_ctype bt)))))) def.args in
+  let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) def.args in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   (* Generating function declaration *)
@@ -1402,7 +1404,7 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
   let pred_body = List.map mk_stmt ss in
 
   let ail_record_opt = generate_record_opt pred_sym def.oarg_bt in
-  let params = List.map (fun (sym, bt) -> (sym, (mk_ctype (C.Pointer (empty_qualifiers, (bt_to_ail_ctype bt)))))) ((def.pointer, BT.Loc) :: def.iargs) in
+  let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) ((def.pointer, BT.Loc) :: def.iargs) in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   (* Generating function declaration *)
@@ -1424,7 +1426,7 @@ let rec cn_to_ail_predicates_internal pred_def_list dts cn_vars ots preds =
 let rec cn_to_ail_post_aux_internal dts cn_vars ownership_ctypes preds = function
   | LRT.Define ((name, it), info, t) ->
     Printf.printf "LRT.Define\n";
-    let binding = create_binding name (mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype (IT.bt it))))) in
+    let binding = create_binding name (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts cn_vars it (AssignVar name) in
     let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts (name :: cn_vars) ownership_ctypes preds t in
     (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
@@ -1554,7 +1556,7 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
 let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_type = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
-    let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in
+    (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding name ctype in
     let (b1, s1) = cn_to_ail_expr_internal dts (name :: cn_vars) it (AssignVar name) in
     let ail_executable_spec = cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_type lat in
@@ -1608,7 +1610,7 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_typ
           | None -> failwith "No sctype conversion"
         in
         let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
-        let real_return_ctype = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype bt))) in 
+        let real_return_ctype = bt_to_ail_ctype bt in 
         let return_cn_binding = create_binding return_cn_sym real_return_ctype in 
         let cn_ret_ail_expr_ = A.(AilEident (Sym.fresh_pretty "__cn_ret")) in
         let return_cn_decl = A.(AilSdeclaration [(return_cn_sym, Some (mk_expr (add_conversion_fn cn_ret_ail_expr_ bt)))]) in
@@ -1624,7 +1626,7 @@ let rec cn_to_ail_lat_internal_2 dts cn_vars ownership_ctypes preds c_return_typ
 let rec cn_to_ail_pre_post_aux_internal dts preds c_return_type = function 
   | AT.Computational ((sym, bt), info, at) -> 
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
-    let cn_ctype = mk_ctype C.(Pointer (empty_qualifiers, (bt_to_ail_ctype bt))) in 
+    let cn_ctype = bt_to_ail_ctype bt in 
     let binding = create_binding cn_sym cn_ctype in 
     let rhs = add_conversion_fn A.(AilEident sym) bt in 
     let decl = A.(AilSdeclaration [(cn_sym, Some (mk_expr rhs))]) in
