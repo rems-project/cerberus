@@ -32,6 +32,15 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
+
+let rec extract_global_variables = function
+  | [] -> []
+  | (sym, (_, _, decl)) :: ds -> 
+      (match decl with 
+        | A.Decl_object (_, _, _, ctype) -> (sym, ctype) :: extract_global_variables ds
+        | A.Decl_function _ -> extract_global_variables ds)
+
+        
 let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = ail_prog.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
@@ -39,7 +48,8 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
     | (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) -> ret_ty
     | _ -> failwith "TODO" 
   in
-  let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal dts preds c_return_type instrumentation.internal in 
+  let globals = extract_global_variables ail_prog.declarations in
+  let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal dts preds globals c_return_type instrumentation.internal in 
   let pre_str = generate_ail_stat_strs ail_executable_spec.pre in
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
   let in_stmt = List.map (fun (loc, bs_and_ss) -> (loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
