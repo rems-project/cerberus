@@ -40,7 +40,7 @@ let rec extract_global_variables = function
         | A.Decl_object (_, _, _, ctype) -> (sym, ctype) :: extract_global_variables ds
         | A.Decl_function _ -> extract_global_variables ds)
 
-        
+
 let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) type_map (ail_prog: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = ail_prog.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
@@ -123,6 +123,7 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes) logical_predicates in
   let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
   let (decls, defs) = List.split ail_funs in
+  let defs = List.filter_map (fun x -> x) defs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
