@@ -190,7 +190,10 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
     | CN_loc -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer")]
     | _ -> []
   in
-  mk_ctype C.(Pointer (empty_qualifiers, mk_ctype ~annots typ))
+  let ret = mk_ctype ~annots typ in
+  match typ with 
+    | C.Void -> ret 
+    | _ -> mk_ctype C.(Pointer (empty_qualifiers, ret))
 
  
 
@@ -1159,7 +1162,10 @@ let cn_to_ail_resource_internal sym dts cn_vars (preds : Mucore.T.resource_predi
         let binding = create_binding sym (bt_to_ail_ctype ~pred_sym:(Some pname) bt) in
         (mk_expr fcall, binding :: (List.concat bs), List.concat ss, None)
     in
-    let s_decl = A.(AilSdeclaration [(sym, Some rhs)]) in
+    let s_decl = match rm_ctype ctype with 
+      | C.Void -> A.(AilSexpr rhs)
+      | _ -> A.(AilSdeclaration [(sym, Some rhs)]) 
+    in
     (b @ bs, s @ ss @ [s_decl], owned_ctype)
 
   | ResourceTypes.Q q -> 
