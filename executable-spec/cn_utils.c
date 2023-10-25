@@ -45,6 +45,9 @@ _Bool cn_integer_equality(void *i1, void *i2) {
     return (*((cn_integer *) i1)->val) == (*((cn_integer *) i2)->val);
 }
 
+_Bool cn_pointer_equality(void *i1, void *i2) {
+    return (((cn_pointer *) i1)->ptr) == (((cn_pointer *) i2)->ptr);
+}
 
 
 // Check if m2 is a subset of m1
@@ -146,6 +149,13 @@ cn_integer *cn_integer_divide(cn_integer *i1, cn_integer *i2) {
     cn_integer *res = alloc(sizeof(cn_integer));
     res->val = alloc(sizeof(unsigned int));
     *(res->val) = *(i1->val) / *(i2->val);
+    return res;
+}
+
+cn_integer *cn_integer_mod(cn_integer *i1, cn_integer *i2) {
+    cn_integer *res = alloc(sizeof(cn_integer));
+    res->val = alloc(sizeof(unsigned int));
+    *(res->val) = *(i1->val) % *(i2->val);
     return res;
 }
 
