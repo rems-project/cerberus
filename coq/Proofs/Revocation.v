@@ -119,7 +119,6 @@ Module RevocationProofs.
       reflexivity.
   Qed.
 
-
   Inductive mem_value_ind_eq: mem_value_ind -> mem_value_ind -> Prop :=
   | mem_value_ind_eq_MVunspecified: forall t1 t2, mem_value_ind_eq (MVunspecified t1) (MVunspecified t2)
   | mem_value_ind_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_ind_eq (MVinteger t1 v1) (MVinteger t2 v2)
@@ -152,7 +151,7 @@ Module RevocationProofs.
       z1 = z2 /\ eqlistA ctype_pointer_value_eq vl1 vl2
       -> varargs_eq (z1,vl1) (z2,vl2).
 
-  Definition mem_state_same
+  Definition mem_state_same_rel
     (a:CheriMemoryWithPNVI.mem_state_r)
     (b:CheriMemoryWithoutPNVI.mem_state_r): Prop
     :=
@@ -167,7 +166,7 @@ Module RevocationProofs.
     /\ ZMap.Equal a.(CheriMemoryWithPNVI.bytemap) b.(CheriMemoryWithoutPNVI.bytemap)
     /\ ZMap.Equal a.(CheriMemoryWithPNVI.capmeta) b.(CheriMemoryWithoutPNVI.capmeta).
 
-  Ltac destruct_mem_state_same H :=
+  Ltac destruct_mem_state_same_rel H :=
     let Malloc_id := fresh "Malloc_id" in
     let Mnextiota := fresh "Mnextiota" in
     let Mlastaddr := fresh "Mlastaddr" in
@@ -341,7 +340,7 @@ Module RevocationProofs.
 
   Theorem case_funsym_opt_same:
     forall m1 m2 p1 p2,
-      mem_state_same m1 m2 ->
+      mem_state_same_rel m1 m2 ->
       pointer_value_eq p1 p2 ->
       (CheriMemoryWithPNVI.case_funsym_opt m1 p1 =
          CheriMemoryWithoutPNVI.case_funsym_opt m2 p2).
@@ -365,7 +364,7 @@ Module RevocationProofs.
         destruct C as [CI _].
         rewrite CI.
 
-        destruct_mem_state_same ME.
+        destruct_mem_state_same_rel ME.
         unfold ZMap.Equal in Mfuncs.
         rewrite Mfuncs.
         reflexivity.
@@ -376,7 +375,7 @@ Module RevocationProofs.
     -
       inversion H0.
       clear H0 t H5 H1.
-      destruct_mem_state_same ME.
+      destruct_mem_state_same_rel ME.
       unfold ZMap.Equal in Mfuncs.
       rewrite Mfuncs.
       reflexivity.
@@ -754,14 +753,42 @@ Module RevocationProofs.
     apply bitvector.Z_to_bv_bv_unsigned.
   Qed.
 
-  Lemma allocator_same_result:
-    forall mem_state1 mem_state2 size align,
-      mem_state_same mem_state1 mem_state2 ->
-      evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
-        evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2.
+  Class SameValue {T1 T2:Type}
+    (R: T1 -> T2 -> Prop) (* relation between values *)
+    (M1: CheriMemoryWithPNVI.memM T1)
+    (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
+    :=
+    eval_to_same : forall mem_state1 mem_state2,
+        mem_state_same_rel mem_state1 mem_state2 ->
+        lift_sum eq R False
+          (evalErrS M1 mem_state1)
+          (evalErrS M2 mem_state2).
+
+  Class SameState {T1 T2:Type}
+    (M1: CheriMemoryWithPNVI.memM T1)
+    (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
+    :=
+    exec_to_same : forall mem_state1 mem_state2,
+        mem_state_same_rel mem_state1 mem_state2 ->
+        lift_sum eq mem_state_same_rel False
+          (execErrS M1 mem_state1)
+          (execErrS M2 mem_state2).
+
+  Class Same {T1 T2:Type}
+    (R: T1 -> T2 -> Prop) (* relation between values *)
+    (M1: CheriMemoryWithPNVI.memM T1)
+    (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
+    := {
+      #[global] Same_Value :: SameValue R M1 M2 ;
+      #[global] Same_State :: SameState M1 M2
+    }.
+
+  #[local] Instance allocator_same_result:
+    forall size align,
+      SameValue eq (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
   Proof.
-    intros mem_state1 mem_state2 sz align M.
-    destruct_mem_state_same M.
+    intros sz align mem_state1 mem_state2 M.
+    destruct_mem_state_same_rel M.
     (* return value *)
     unfold evalErrS.
     unfold CheriMemoryWithPNVI.allocator, CheriMemoryWithoutPNVI.allocator.
@@ -785,15 +812,12 @@ Module RevocationProofs.
       reflexivity.
   Qed.
 
-  Lemma allocator_same_state:
-    forall mem_state1 mem_state2 size align,
-      mem_state_same mem_state1 mem_state2 ->
-      lift_sum eq mem_state_same False
-        (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
-        (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2).
+  #[local] Instance allocator_same_state:
+    forall size align,
+      SameState (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
   Proof.
-    intros mem_state1 mem_state2 size0 align M.
-    destruct_mem_state_same M.
+    intros size0 align mem_state1 mem_state2 M.
+    destruct_mem_state_same_rel M.
     unfold lift_sum.
     unfold CheriMemoryWithPNVI.mem_state in *.
     unfold execErrS.
@@ -818,11 +842,11 @@ Module RevocationProofs.
          tuple_inversion;
          congruence).
     +
-      (* main proof here: [mem_state_same m1 m2] *)
+      (* main proof here: [mem_state_same_rel m1 m2] *)
 
       repeat break_match_hyp;
         repeat tuple_inversion;
-        unfold mem_state_same; cbn;
+        unfold mem_state_same_rel; cbn;
         (try rewrite Malloc_id in *; clear Malloc_id;
          try rewrite Mnextiota in *; clear Mnextiota;
          try rewrite Mlastaddr in *; clear Mlastaddr;
@@ -846,20 +870,12 @@ Module RevocationProofs.
         assumption.
   Qed.
 
-  Theorem allocator_same:
-    forall mem_state1 mem_state2 size align,
-      mem_state_same mem_state1 mem_state2 ->
-      evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
-        evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2
-      /\
-        lift_sum eq mem_state_same False
-          (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
-          (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2).
+  #[local] Instance allocator_same:
+    forall size align,
+      Same eq (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
   Proof.
-    intros mem_state1 mem_state2 sz align M.
-    split.
-    - apply allocator_same_result; assumption.
-    - apply allocator_same_state; assumption.
+    intros sz align.
+    split;typeclasses eauto.
   Qed.
 
   Lemma num_of_int_same:
@@ -868,9 +884,32 @@ Module RevocationProofs.
     auto.
   Qed.
 
+
+  (* special case of [lift_sum] where the type is the same and relations are both [eq] *)
+  Lemma lift_sum_eq_eq
+    {T:Type}
+    (M1: CheriMemoryWithPNVI.memM T)
+    (M2: CheriMemoryWithoutPNVI.memM T):
+    forall mem_state1 mem_state2,
+      lift_sum eq eq False
+        (evalErrS M1 mem_state1)
+        (evalErrS M2 mem_state2) <->
+        eq (evalErrS M1 mem_state1) (evalErrS M2 mem_state2).
+  Proof.
+    intros mem_state1 mem_state2.
+    split.
+    -
+      unfold lift_sum.
+      repeat break_match; intros H; try contradiction;
+        try (rewrite H; reflexivity).
+    -
+      intros E.
+      rewrite E.
+      unfold lift_sum.
+      repeat break_match; try contradiction; reflexivity.
+  Qed.
+
   Section allocate_region_proofs.
-    Parameter mem_state1 : CheriMemoryWithPNVI.mem_state.
-    Parameter mem_state2 : CheriMemoryWithoutPNVI.mem_state.
     Parameter  tid : MemCommonExe.thread_id.
     Parameter  pref : CoqSymbol.prefix.
     Parameter  align_int: CheriMemoryWithPNVI.integer_value.
@@ -878,14 +917,13 @@ Module RevocationProofs.
 
     Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
 
-    Lemma allocate_region_same_result:
-      mem_state_same mem_state1 mem_state2 ->
-      lift_sum eq pointer_value_eq False
-        (evalErrS (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int) mem_state1)
-        (evalErrS (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int) mem_state2).
+    #[global] Instance allocate_region_same_result:
+      SameValue pointer_value_eq
+        (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int)
+        (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int).
     Proof.
-      intros M.
-      destruct_mem_state_same M.
+      intros mem_state1 mem_state2 M.
+      destruct_mem_state_same_rel M.
       unfold lift_sum.
       unfold CheriMemoryWithPNVI.mem_state in *.
       unfold evalErrS.
@@ -906,10 +944,13 @@ Module RevocationProofs.
         | H: context [ CheriMemoryWithPNVI.allocator ?S ?A] |- _ => remember A as align; clear Heqalign
         end.
 
-      all: assert(E:evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
-                      evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2) by (try  apply allocator_same;
-                                                                                             repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
-                                                                                             try apply Mvarargs1; try apply Mvarargs2);
+      all:assert(E:evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
+                     evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2)
+        by (apply lift_sum_eq_eq;
+            apply allocator_same_result;
+            repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+            try apply Mvarargs1; try apply Mvarargs2
+           );
 
         unfold evalErrS in E;
         repeat break_let;
@@ -923,14 +964,13 @@ Module RevocationProofs.
       reflexivity.
     Qed.
 
-    Lemma allocate_region_same_state:
-      mem_state_same mem_state1 mem_state2 ->
-      lift_sum eq mem_state_same False
-        (execErrS (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int) mem_state1)
-        (execErrS (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int) mem_state2).
+    #[global] Instance allocate_region_same_state:
+      SameState
+        (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int)
+        (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int).
     Proof.
-      intros M.
-      destruct_mem_state_same M.
+      intros mem_state1 mem_state2 M.
+      destruct_mem_state_same_rel M.
       unfold lift_sum.
       unfold CheriMemoryWithPNVI.mem_state in *.
       unfold execErrS.
@@ -950,16 +990,18 @@ Module RevocationProofs.
         | H: context [ CheriMemoryWithPNVI.allocator ?S ?A] |- _ => remember A as align; clear Heqalign
         end.
 
-      all: assert(E0:lift_sum eq mem_state_same False
+      all: assert(E0:lift_sum eq mem_state_same_rel False
                        (execErrS (CheriMemoryWithPNVI.allocator size align) mem_state1)
                        (execErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2)) by
         (try apply allocator_same;
          repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
          try apply Mvarargs1; try apply Mvarargs2).
       all: assert(E1:evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
-                       evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2) by (try  apply allocator_same;
-                                                                                              repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
-                                                                                              try apply Mvarargs1; try apply Mvarargs2).
+                       evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2)         by (apply lift_sum_eq_eq;
+                                                                                                      apply allocator_same_result;
+                                                                                                      repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+                                                                                                      try apply Mvarargs1; try apply Mvarargs2
+                                                                                                     ).
 
       all:
         unfold lift_sum, execErrS in E0;
@@ -974,7 +1016,7 @@ Module RevocationProofs.
       repeat break_let;
         repeat tuple_inversion;
         destruct s0,s; invc E1;repeat tuple_inversion;
-        destruct_mem_state_same E0;
+        destruct_mem_state_same_rel E0;
         repeat split;cbn;try assumption;
         (try setoid_rewrite Mallocs0; try reflexivity);
         destruct Mvarargs0 as [Mvarargs01 Mvarargs02];
@@ -982,19 +1024,12 @@ Module RevocationProofs.
         try apply Mvarargs02.
     Qed.
 
-    Theorem allocate_region_same:
-      mem_state_same mem_state1 mem_state2 ->
-      lift_sum eq pointer_value_eq False
-        (evalErrS (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int) mem_state1)
-        (evalErrS (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int) mem_state2)
-      /\
-        lift_sum eq mem_state_same False
-          (execErrS (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int) mem_state1)
-          (execErrS (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int) mem_state2).
+    #[global] Instance allocate_region_same:
+      Same pointer_value_eq
+        (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int)
+        (CheriMemoryWithoutPNVI.allocate_region tid pref align_int size_int).
     Proof.
-      split.
-      - apply allocate_region_same_result; assumption.
-      - apply allocate_region_same_state; assumption.
+      split;typeclasses eauto.
     Qed.
 
   End allocate_region_proofs.
