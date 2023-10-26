@@ -54,7 +54,17 @@ Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
 
+(* This (seemingly) prevents slow `Qed` problem.
+   Usage: replace `cbn in H` with `cbn_hyp H`.
 
+   See aslo:
+     - discussion: https://coq.zulipchat.com/#narrow/stream/237977-Coq-users/topic/Coq.20hangs.20on.20Qed
+     - FAQ: https://github.com/coq/coq/wiki/Troubleshooting#what-can-i-do-when-qed-is-slow
+
+   TODO: move to separate file with other tactics we define
+ *)
+Ltac cbn_hyp H :=
+  let T := type of H in let T' := eval cbn in T in replace T with T' in H by (cbn;reflexivity).
 
 Module RevocationProofs.
 
@@ -823,7 +833,7 @@ Module RevocationProofs.
     unfold execErrS.
     repeat break_let.
     repeat break_match;invc Heqs1;invc Heqs0.
-    all: cbn in Heqp, Heqp0; repeat break_let.
+    all: cbn_hyp Heqp; cbn_hyp Heqp0; repeat break_let.
     +
       repeat break_match_hyp;
         repeat tuple_inversion; auto.
@@ -884,7 +894,6 @@ Module RevocationProofs.
     auto.
   Qed.
 
-
   (* special case of [lift_sum] where the type is the same and relations are both [eq] *)
   Lemma lift_sum_eq_eq
     {T:Type}
@@ -929,9 +938,8 @@ Module RevocationProofs.
       unfold evalErrS.
       repeat break_let.
       repeat break_match;invc Heqs1;invc Heqs0;
-
-        unfold CheriMemoryWithPNVI.allocate_region, WithPNVISwitches.get_switches, bind, ret in Heqp; simpl in Heqp;
-        unfold CheriMemoryWithoutPNVI.allocate_region, WithoutPNVISwitches.get_switches, bind, ret in Heqp0; simpl in Heqp0;
+        cbn_hyp Heqp;
+        cbn_hyp Heqp0;
         repeat break_let;
         rewrite num_of_int_same in *;
 
@@ -976,9 +984,8 @@ Module RevocationProofs.
       unfold execErrS.
       repeat break_let.
       repeat break_match;invc Heqs1;invc Heqs0;
-
-        unfold CheriMemoryWithPNVI.allocate_region, WithPNVISwitches.get_switches, bind, ret in Heqp; simpl in Heqp;
-        unfold CheriMemoryWithoutPNVI.allocate_region, WithoutPNVISwitches.get_switches, bind, ret in Heqp0; simpl in Heqp0;
+        cbn_hyp Heqp;
+        cbn_hyp Heqp0;
         repeat break_let;
         rewrite num_of_int_same in *;
 
