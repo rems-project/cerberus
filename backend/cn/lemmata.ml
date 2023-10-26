@@ -473,7 +473,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
   | BaseTypes.Record mems ->
     let@ enc_mem_bts = ListM.mapM f (List.map snd mems) in
     return (tuple_coq_ty (!^ "record") enc_mem_bts)
-  | BaseTypes.Loc -> return (!^ "Z")
+  | BaseTypes.Loc -> return (!^ "CN_Lib.Loc")
   | BaseTypes.Datatype tag ->
     let@ () = ensure_datatype global list_mono (fst loc_info) tag in
     return (Sym.pp tag)
@@ -880,6 +880,9 @@ let it_to_coq loc global list_mono it =
        let@ x = aux x in
        let@ y = aux y in
        parensM (return (mk_let nm x y))
+    | IT.ArrayShift { base; ct; index } ->
+      let size_of_ct = Z.of_int @@ Memory.size_of_ctype ct in
+      f_appM "CN_Lib.array_shift" [aux base; enc_z size_of_ct; aux index]
     | _ -> do_fail "term kind"
   in
   f None it
