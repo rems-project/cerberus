@@ -1497,12 +1497,12 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
       file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in
 
-  let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mk_functions in
-
   let mu_call_funinfo = Pmap.mapi (fun fsym (_, _, ret, args, variadic, has_proto) ->
     Sctypes.{ sig_return_ty = ret; sig_arg_tys = List.map snd args;
       sig_variadic = variadic; sig_has_proto = has_proto;
     }) file.mi_funinfo in
+
+  let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mu_call_funinfo mk_functions in
 
   let stdlib_syms = SymSet.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
 
