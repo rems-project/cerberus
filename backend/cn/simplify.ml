@@ -185,43 +185,42 @@ module IndexTerms = struct
        end
     | Const _ ->
        the_term
-
     | Binop (Add, a, b) ->
        let a = aux a in
        let b = aux b in
-       begin match a, b with
-       | IT (Const (Z i1), _), IT (Const (Z i2), _) ->
-          IT (Const (Z (Z.add i1 i2)), the_bt)
-       | IT (Const (Q q1), _), IT (Const (Q q2), _) ->
+       begin match a, b, IT.get_num_z a, IT.get_num_z b with
+       | _, _, Some i1, Some i2 ->
+          IT.num_lit_ (Z.add i1 i2) the_bt
+       | IT (Const (Q q1), _), IT (Const (Q q2), _), _, _ ->
           IT (Const (Q (Q.add q1 q2)), the_bt) 
-       | a, IT (Const (Z z), _) when Z.equal z Z.zero ->
+       | a, _, _, Some z when Z.equal z Z.zero ->
           a
-       | IT (Const (Z z), _), a when Z.equal z Z.zero ->
+       | _, b, Some z, _ when Z.equal z Z.zero ->
           a
        | IT (Binop (Add,c, IT (Const (Z i1), _)), _), 
-         IT (Const (Z i2), _) ->
+         IT (Const (Z i2), _), _, _ ->
           add_ (c, z_ (Z.add i1 i2))
-       | _, _ ->
+       | _, _, _, _ ->
           IT (Binop (Add, a, b), the_bt)
        end
     | Binop (Sub, a, b) ->
        let a = aux a in
        let b = aux b in
-       begin match a, b, the_bt with
-       | _, _, BT.Integer when IT.equal a b ->
+       begin match a, b, the_bt, IT.get_num_z a, IT.get_num_z b with
+       | _, _, BT.Integer, _, _ when IT.equal a b ->
           int_ 0
-       | _, _, BT.Real when IT.equal a b ->
+       | _, _, BT.Real, _, _ when IT.equal a b ->
           q_ (0, 1)
-       | IT (Const (Z i1), _), IT (Const (Z i2), _), _ ->
-          IT (Const (Z (Z.sub i1 i2)), the_bt)
-       | IT (Const (Q q1), _), IT (Const (Q q2), _), _ ->
+       | _, _, _, Some i1, Some i2 ->
+          IT.num_lit_ (Z.sub i1 i2) the_bt
+       | IT (Const (Q q1), _), IT (Const (Q q2), _), _, _, _ ->
           IT (Const (Q (Q.sub q1 q2)), the_bt)
-       | _, IT (Const (Z i2), _), _ when Z.equal i2 Z.zero ->
+       | a, _, _, _, Some z when Z.equal z Z.zero ->
           a
-       | IT (Binop (Add, c, d), _), _, _ when IT.equal c b ->
+       | IT (Binop (Add, c, d), _), _, _, _, _ when IT.equal c b ->
           (* (c + d) - b  when  c = b *)
           d
-       | _, _, _ ->
+       | _, _, _, _, _ ->
           IT (Binop (Sub, a, b), the_bt) 
        end
     | Binop (Mul, a, b) ->
@@ -285,14 +284,16 @@ module IndexTerms = struct
     | Binop (Mod, a, b) ->
        let a = aux a in
        let b = aux b in
-       begin match a, b with
-       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) ->
-          int_ 0
+       begin match a, b, get_num_z a, get_num_z b with
+       | _, _, Some a, Some b when Z.geq a Z.zero && Z.gt b Z.zero ->
+         num_lit_ (Z.rem a b) the_bt
+       | _, _, Some a, _ when Z.equal a (Z.zero) ->
+          int_lit_ 0 the_bt
        | IT (Binop (Mul, IT (Const (Z y), _), _), _), 
-         IT (Const (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
+         IT (Const (Z y'), _), _, _ when Z.equal y y' && Z.gt y Z.zero ->
           int_ 0
-       | _, IT (Const (Z b), _) when Z.equal b Z.one ->
-          int_ 0
+       | _, _, _, Some b when Z.equal b Z.one ->
+          int_lit_ 0 the_bt
        | _ ->
           IT (Binop (Mod, a, b), the_bt) 
        end
@@ -389,9 +390,15 @@ module IndexTerms = struct
           b
        | BWCTZNoSMT, Const (Z z) ->
           int_ (do_ctz_z z)
+       | BWCTZNoSMT, Const (Bits (bits, z)) ->
+          int_lit_ (do_ctz_z (BT.normalise_to_range bits z)) (IT.bt a)
        | BWFFSNoSMT, Const (Z z) ->
           if Z.equal z Z.zero then int_ 0
           else int_ (do_ctz_z z + 1)
+       | BWFFSNoSMT, Const (Bits (bits, z)) ->
+          let z = BT.normalise_to_range bits z in
+          if Z.equal z Z.zero then int_lit_ 0 (IT.bt a)
+          else int_lit_ (do_ctz_z z + 1) (IT.bt a)
        | _, _ ->
           IT (Unop (op, a), the_bt)
        end
@@ -527,8 +534,15 @@ module IndexTerms = struct
        IT (Binop (op, aux a, aux b), the_bt)
     | Constructor (ctor, ts) ->
        IT (Constructor (ctor, List.map_snd aux ts), the_bt)
-    | WrapI (act, t) ->
-       IT (WrapI (act, aux t), the_bt)
+    | WrapI (ity, t) ->
+       let t = aux t in
+       begin match get_num_z t with
+       | None -> IT (WrapI (ity, t), the_bt)
+       | Some z -> begin match Memory.bt_of_sct (Sctypes.Integer ity) with
+         | BT.Bits (sign, sz) -> num_lit_ (BT.normalise_to_range (sign, sz) z) the_bt
+         | _ -> IT (WrapI (ity, t), the_bt)
+         end
+       end
     | Cast (cbt, a) ->
        let a = aux a in
        cast_reduce cbt a

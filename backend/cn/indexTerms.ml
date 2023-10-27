@@ -352,6 +352,11 @@ let is_z = function
 
 let is_z_ it = Option.is_some (is_z it)
 
+let get_num_z it = match term it with
+  | Const (Z _) -> is_z it
+  | Const (Bits (info, z)) -> Some (BT.normalise_to_range info z)
+  | _ -> None
+
 let is_bits_const = function
   | IT (Const (Bits (info, n)), _) -> Some (info, n)
   | _ -> None
