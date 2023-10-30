@@ -479,23 +479,6 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
-  (* TODO: requires `offsetof_same`
-  Theorem offsetof_ival_same:
-    forall tagDefs tag_sym memb_ident,
-      CheriMemoryWithPNVI.offsetof_ival tagDefs tag_sym memb_ident =
-        CheriMemoryWithoutPNVI.offsetof_ival tagDefs tag_sym memb_ident.
-  Proof.
-    intros tagDefs tag_sym memb_ident.
-
-  Admitted.
-   *)
-
-  (* TODO:
-    Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
-    depends on stateful
-   *)
-
-
   Lemma alignof_same:
     forall fuel maybe_tagDefs ty,
       CheriMemoryWithPNVI.alignof fuel maybe_tagDefs ty =
@@ -504,6 +487,7 @@ Module RevocationProofs.
     intros fuel maybe_tagDefs ty.
     reflexivity.
   Qed.
+  Opaque CheriMemoryWithPNVI.alignof CheriMemoryWithoutPNVI.alignof.
 
   Theorem alignof_ival_same:
     forall ty,
@@ -513,10 +497,46 @@ Module RevocationProofs.
     intros ty.
     unfold CheriMemoryWithPNVI.alignof_ival, CheriMemoryWithoutPNVI.alignof_ival.
     unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
-    Opaque CheriMemoryWithPNVI.alignof CheriMemoryWithoutPNVI.alignof.
     cbn.
     repeat break_match;rewrite alignof_same in Heqs;rewrite Heqs in Heqs0;inv Heqs0; reflexivity.
   Qed.
+
+  Lemma offsetof_same:
+    forall fuel tagDefs tag_sym,
+      CheriMemoryWithPNVI.offsetsof fuel tagDefs tag_sym =
+        CheriMemoryWithoutPNVI.offsetsof fuel tagDefs tag_sym.
+  Proof.
+    intros fuel tagDefs tag_sym.
+    destruct fuel; [reflexivity|].
+    cbn.
+    break_match; [|reflexivity].
+    break_match; [|reflexivity].
+    remember (monadic_fold_left _ _ _) as f1.
+    break_match.
+    reflexivity.
+    break_let.
+    reflexivity.
+  Qed.
+  Opaque CheriMemoryWithPNVI.offsetsof CheriMemoryWithoutPNVI.offsetsof.
+
+  Theorem offsetof_ival_same:
+    forall tagDefs tag_sym memb_ident,
+      CheriMemoryWithPNVI.offsetof_ival tagDefs tag_sym memb_ident =
+        CheriMemoryWithoutPNVI.offsetof_ival tagDefs tag_sym memb_ident.
+  Proof.
+    intros tagDefs tag_sym memb_ident.
+    cbn.
+    unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
+    cbn.
+    repeat break_match; rewrite offsetof_same in Heqs; rewrite Heqs in Heqs0; inv Heqs0 ; try reflexivity;
+      rewrite Heqo in Heqo0;
+      inv Heqo0; reflexivity.
+  Qed.
+
+  (* TODO:
+    Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
+    depends on stateful
+   *)
 
   Theorem bitwise_complement_ival_same:
     forall ty v,
