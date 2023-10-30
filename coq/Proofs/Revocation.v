@@ -495,10 +495,28 @@ Module RevocationProofs.
     depends on stateful
    *)
 
-  (* TODO:
-  Definition alignof_ival (ty: CoqCtype.ctype): serr integer_value
-    depends on stateful
-   *)
+
+  Lemma alignof_same:
+    forall fuel maybe_tagDefs ty,
+      CheriMemoryWithPNVI.alignof fuel maybe_tagDefs ty =
+        CheriMemoryWithoutPNVI.alignof fuel maybe_tagDefs ty.
+  Proof.
+    intros fuel maybe_tagDefs ty.
+    reflexivity.
+  Qed.
+
+  Theorem alignof_ival_same:
+    forall ty,
+      CheriMemoryWithPNVI.alignof_ival ty =
+        CheriMemoryWithoutPNVI.alignof_ival ty.
+  Proof.
+    intros ty.
+    unfold CheriMemoryWithPNVI.alignof_ival, CheriMemoryWithoutPNVI.alignof_ival.
+    unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
+    Opaque CheriMemoryWithPNVI.alignof CheriMemoryWithoutPNVI.alignof.
+    cbn.
+    repeat break_match;rewrite alignof_same in Heqs;rewrite Heqs in Heqs0;inv Heqs0; reflexivity.
+  Qed.
 
   Theorem bitwise_complement_ival_same:
     forall ty v,
@@ -919,10 +937,10 @@ Module RevocationProofs.
   Qed.
 
   Section allocate_region_proofs.
-    Parameter  tid : MemCommonExe.thread_id.
-    Parameter  pref : CoqSymbol.prefix.
-    Parameter  align_int: CheriMemoryWithPNVI.integer_value.
-    Parameter  size_int : CheriMemoryWithPNVI.integer_value.
+    Variable  tid : MemCommonExe.thread_id.
+    Variable  pref : CoqSymbol.prefix.
+    Variable  align_int: CheriMemoryWithPNVI.integer_value.
+    Variable  size_int : CheriMemoryWithPNVI.integer_value.
 
     Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
 
