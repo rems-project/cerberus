@@ -533,10 +533,31 @@ Module RevocationProofs.
       inv Heqo0; reflexivity.
   Qed.
 
-  (* TODO:
-    Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
-    depends on stateful
-   *)
+  Lemma sizeof_same:
+    forall fuel maybe_tagDefs,
+      CheriMemoryWithPNVI.sizeof fuel maybe_tagDefs =
+        CheriMemoryWithoutPNVI.sizeof fuel maybe_tagDefs.
+  Proof.
+    intros fuel maybe_tagDefs.
+    destruct fuel; [reflexivity|].
+    cbn.
+    break_match; [|reflexivity].
+    f_equiv.
+  Qed.
+  Opaque CheriMemoryWithPNVI.sizeof CheriMemoryWithoutPNVI.sizeof.
+
+  Theorem sizeof_ival_same:
+    forall ty,
+      CheriMemoryWithPNVI.sizeof_ival ty =
+        CheriMemoryWithoutPNVI.sizeof_ival ty.
+  Proof.
+    intros ty.
+    cbn.
+    unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
+    repeat break_match; rewrite sizeof_same in Heqs; rewrite Heqs in Heqs0; inv Heqs0 ; try reflexivity;
+      rewrite Heqo in Heqo0;
+      inv Heqo0; reflexivity.
+  Qed.
 
   Theorem bitwise_complement_ival_same:
     forall ty v,
@@ -1078,5 +1099,70 @@ Module RevocationProofs.
     Qed.
 
   End allocate_region_proofs.
+
+  (*
+  Section allocate_object_proofs.
+    Variable  tid : MemCommonExe.thread_id.
+    Variable  pref : CoqSymbol.prefix.
+    Variable  int_val: CheriMemoryWithPNVI.integer_value.
+    Variable  ty : CoqCtype.ctype.
+    Variable  init_opt : option CheriMemoryWithPNVI.mem_value.
+
+    Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
+
+    #[global] Instance allocate_object_same_result:
+      SameValue pointer_value_eq
+        (CheriMemoryWithPNVI.allocate_object tid pref int_val ty init_opt)
+        (CheriMemoryWithoutPNVI.allocate_object tid pref int_val ty init_opt).
+    Proof.
+      intros mem_state1 mem_state2 M.
+      destruct_mem_state_same_rel M.
+      unfold lift_sum.
+      unfold CheriMemoryWithPNVI.mem_state in *.
+      unfold evalErrS.
+      repeat break_let.
+      repeat break_match;invc Heqs1;invc Heqs0.
+      -
+        unfold CheriMemoryWithPNVI.allocate_object, WithPNVISwitches.get_switches, CheriMemoryWithPNVI.serr2memM, bind, ret in Heqp. repeat break_let.
+       cbn in Heqp.
+        cbn in Heqp.
+        cbn_hyp Heqp.
+        cbn_hyp Heqp0;
+        repeat break_let;
+        rewrite num_of_int_same in *;
+
+        remember (Capability_GS.representable_length
+                    (CheriMemoryWithoutPNVI.num_of_int size_int)) as size;
+        clear Heqsize;
+        rewrite num_of_int_same in *;
+
+        match goal with
+        | H: context [ CheriMemoryWithPNVI.allocator ?S ?A] |- _ => remember A as align; clear Heqalign
+        end.
+
+      all:assert(E:evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
+                     evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2)
+        by (apply lift_sum_eq_eq;
+            apply allocator_same_result;
+            repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+            try apply Mvarargs1; try apply Mvarargs2
+           );
+
+        unfold evalErrS in E;
+        repeat break_let;
+        repeat tuple_inversion;
+        destruct s0,s; inv E;repeat tuple_inversion;
+        try reflexivity;
+        repeat break_let;
+        repeat tuple_inversion.
+
+      constructor.
+      reflexivity.
+
+
+    Qed.
+
+  End allocate_object_proofs.
+*)
 
 End RevocationProofs.
