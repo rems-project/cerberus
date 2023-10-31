@@ -327,6 +327,7 @@ Module RevocationProofs.
     apply pointer_value_no_prov_eq.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.null_ptrval CheriMemoryWithoutPNVI.null_ptrval.
 
   Theorem concrete_ptrval_same:
     forall n a,
@@ -336,6 +337,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.concrete_ptrval CheriMemoryWithoutPNVI.concrete_ptrval.
 
   Theorem fun_ptrval_same:
     forall s,
@@ -347,6 +349,7 @@ Module RevocationProofs.
     apply pointer_value_no_prov_eq.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.fun_ptrval CheriMemoryWithoutPNVI.fun_ptrval.
 
   Theorem case_funsym_opt_same:
     forall m1 m2 p1 p2,
@@ -390,6 +393,7 @@ Module RevocationProofs.
       rewrite Mfuncs.
       reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.case_funsym_opt CheriMemoryWithoutPNVI.case_funsym_opt.
 
   Theorem derive_cap_same:
     forall is_signed bop ival1 ival2,
@@ -398,6 +402,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.derive_cap CheriMemoryWithoutPNVI.derive_cap.
 
   Theorem cap_assign_value_same:
     forall loc ival_cap ival_n,
@@ -406,6 +411,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.cap_assign_value CheriMemoryWithoutPNVI.cap_assign_value.
 
   Theorem ptr_t_int_value_same:
     forall p,
@@ -414,6 +420,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.ptr_t_int_value CheriMemoryWithoutPNVI.ptr_t_int_value.
 
   Theorem null_cap_same:
     forall f,
@@ -422,6 +429,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.null_cap CheriMemoryWithoutPNVI.null_cap.
 
   Theorem array_shift_ptrval_same:
     forall pv ct iv,
@@ -430,6 +438,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.array_shift_ptrval CheriMemoryWithoutPNVI.array_shift_ptrval.
 
   Theorem member_shift_ptrval_same:
     forall pv ct ci,
@@ -438,6 +447,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.member_shift_ptrval CheriMemoryWithoutPNVI.member_shift_ptrval.
 
   Theorem concurRead_ival_same:
     forall ct cs,
@@ -446,6 +456,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.concurRead_ival CheriMemoryWithoutPNVI.concurRead_ival.
 
   Theorem integer_ival_same:
     forall n,
@@ -454,6 +465,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.integer_ival CheriMemoryWithoutPNVI.integer_ival.
 
   Theorem max_ival_same:
     forall ct,
@@ -462,6 +474,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.max_ival CheriMemoryWithoutPNVI.max_ival.
 
   Theorem min_ival_same:
     forall ct,
@@ -470,6 +483,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.min_ival CheriMemoryWithoutPNVI.min_ival.
 
   Theorem op_ival_same:
     forall op a b,
@@ -478,6 +492,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.op_ival CheriMemoryWithoutPNVI.op_ival.
 
   Lemma alignof_same:
     forall fuel maybe_tagDefs ty,
@@ -487,7 +502,7 @@ Module RevocationProofs.
     intros fuel maybe_tagDefs ty.
     reflexivity.
   Qed.
-  Opaque CheriMemoryWithPNVI.alignof CheriMemoryWithoutPNVI.alignof.
+  #[global] Opaque CheriMemoryWithPNVI.alignof CheriMemoryWithoutPNVI.alignof.
 
   Theorem alignof_ival_same:
     forall ty,
@@ -500,6 +515,7 @@ Module RevocationProofs.
     cbn.
     repeat break_match;rewrite alignof_same in Heqs;rewrite Heqs in Heqs0;inv Heqs0; reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.alignof_ival CheriMemoryWithoutPNVI.alignof_ival.
 
   Lemma offsetof_same:
     forall fuel tagDefs tag_sym,
@@ -517,7 +533,7 @@ Module RevocationProofs.
     break_let.
     reflexivity.
   Qed.
-  Opaque CheriMemoryWithPNVI.offsetsof CheriMemoryWithoutPNVI.offsetsof.
+  #[global] Opaque CheriMemoryWithPNVI.offsetsof CheriMemoryWithoutPNVI.offsetsof.
 
   Theorem offsetof_ival_same:
     forall tagDefs tag_sym memb_ident,
@@ -532,6 +548,7 @@ Module RevocationProofs.
       rewrite Heqo in Heqo0;
       inv Heqo0; reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.offsetof_ival CheriMemoryWithoutPNVI.offsetof_ival.
 
   Lemma sizeof_same:
     forall fuel maybe_tagDefs,
@@ -544,7 +561,7 @@ Module RevocationProofs.
     break_match; [|reflexivity].
     f_equiv.
   Qed.
-  Opaque CheriMemoryWithPNVI.sizeof CheriMemoryWithoutPNVI.sizeof.
+  #[global] Opaque CheriMemoryWithPNVI.sizeof CheriMemoryWithoutPNVI.sizeof.
 
   Theorem sizeof_ival_same:
     forall ty,
@@ -558,6 +575,7 @@ Module RevocationProofs.
       rewrite Heqo in Heqo0;
       inv Heqo0; reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.sizeof_ival CheriMemoryWithoutPNVI.sizeof_ival.
 
   Theorem bitwise_complement_ival_same:
     forall ty v,
@@ -566,6 +584,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.bitwise_complement_ival CheriMemoryWithoutPNVI.bitwise_complement_ival.
 
   Theorem bitwise_and_ival_same:
     forall ty a b,
@@ -574,6 +593,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.bitwise_and_ival CheriMemoryWithoutPNVI.bitwise_and_ival.
 
   Theorem bitwise_or_ival_same:
     forall ty a b,
@@ -582,6 +602,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.bitwise_or_ival CheriMemoryWithoutPNVI.bitwise_or_ival.
 
   Theorem bitwise_xor_ival_same:
     forall ty a b,
@@ -590,6 +611,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.bitwise_xor_ival CheriMemoryWithoutPNVI.bitwise_xor_ival.
 
   Theorem is_specified_ival_same:
     forall v,
@@ -598,6 +620,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.is_specified_ival CheriMemoryWithoutPNVI.is_specified_ival.
 
   Theorem eq_ival_same:
     forall a b,
@@ -606,6 +629,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.eq_ival CheriMemoryWithoutPNVI.eq_ival.
 
   Theorem lt_ival_same:
     forall a b,
@@ -614,6 +638,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.lt_ival CheriMemoryWithoutPNVI.lt_ival.
 
   Theorem le_ival_same:
     forall a b,
@@ -622,6 +647,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.le_ival CheriMemoryWithoutPNVI.le_ival.
 
   Theorem str_fval_same:
     forall v,
@@ -630,6 +656,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.str_fval CheriMemoryWithoutPNVI.str_fval.
 
   Definition op_fval_same:
     forall fop a b,
@@ -638,6 +665,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.op_fval CheriMemoryWithoutPNVI.op_fval.
 
   Theorem eq_fval_same:
     forall a b,
@@ -646,6 +674,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.eq_fval CheriMemoryWithoutPNVI.eq_fval.
 
   Theorem lt_fval_same:
     forall a b,
@@ -654,6 +683,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.lt_fval CheriMemoryWithoutPNVI.lt_fval.
 
   Theorem le_fval_same:
     forall a b,
@@ -662,6 +692,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.le_fval CheriMemoryWithoutPNVI.le_fval.
 
   Theorem fvfromint_same:
     forall v,
@@ -670,6 +701,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.fvfromint CheriMemoryWithoutPNVI.fvfromint.
 
   Theorem ivfromfloat_same:
     forall t v,
@@ -678,6 +710,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.ivfromfloat CheriMemoryWithoutPNVI.ivfromfloat.
 
   Theorem unspecified_mval_same:
     forall t,
@@ -686,6 +719,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.unspecified_mval CheriMemoryWithoutPNVI.unspecified_mval.
 
   Theorem integer_value_mval_same:
     forall t v,
@@ -694,6 +728,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.integer_value_mval CheriMemoryWithoutPNVI.integer_value_mval.
 
   Theorem floating_value_mval_same:
     forall t v,
@@ -702,6 +737,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.floating_value_mval CheriMemoryWithoutPNVI.floating_value_mval.
 
   (* This theorem using weaker equality, since pointers are involved *)
   Theorem pointer_mval_same:
@@ -767,6 +803,7 @@ Module RevocationProofs.
     congruence.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
   (* Stateful proofs below *)
 
@@ -811,6 +848,7 @@ Module RevocationProofs.
     setoid_rewrite E.
     reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.init_ghost_tags CheriMemoryWithoutPNVI.init_ghost_tags.
 
   Lemma AddressValue_Z_id:
     forall a,
@@ -946,12 +984,14 @@ Module RevocationProofs.
     intros sz align.
     split;typeclasses eauto.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
 
   Lemma num_of_int_same:
     forall x, CheriMemoryWithPNVI.num_of_int x = CheriMemoryWithoutPNVI.num_of_int x.
   Proof.
     auto.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.num_of_int CheriMemoryWithoutPNVI.num_of_int.
 
   (* special case of [lift_sum] where the type is the same and relations are both [eq] *)
   Lemma lift_sum_eq_eq
@@ -982,8 +1022,6 @@ Module RevocationProofs.
     Variable  pref : CoqSymbol.prefix.
     Variable  align_int: CheriMemoryWithPNVI.integer_value.
     Variable  size_int : CheriMemoryWithPNVI.integer_value.
-
-    Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
 
     #[global] Instance allocate_region_same_result:
       SameValue pointer_value_eq
@@ -1098,6 +1136,8 @@ Module RevocationProofs.
       split;typeclasses eauto.
     Qed.
 
+    #[global] Opaque CheriMemoryWithPNVI.allocate_region CheriMemoryWithoutPNVI.allocate_region.
+
   End allocate_region_proofs.
 
   (*
@@ -1163,6 +1203,6 @@ Module RevocationProofs.
     Qed.
 
   End allocate_object_proofs.
-*)
+   *)
 
 End RevocationProofs.
