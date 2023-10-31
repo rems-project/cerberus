@@ -119,6 +119,7 @@ let main
       output_decorated
       astprints
       expect_failure
+      use_vip
   =
   if json then begin
       if debug_level > 0 then
@@ -135,6 +136,7 @@ let main
   Solver.random_seed := random_seed;
   Solver.log_to_temp := solver_logging;
   Check.only := only;
+  IndexTerms.use_vip := use_vip;
   Diagnostics.diag_string := diag;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) = 
@@ -297,6 +299,10 @@ let expect_failure =
   let doc = "invert return value to 1 if type checks pass and 0 on failure" in
   Arg.(value & flag & info["expect-failure"] ~doc)
 
+(* TODO remove this when VIP impl complete *)
+let use_vip =
+  let doc = "use experimental VIP rules" in
+  Arg.(value & flag & info["vip"] ~doc)
 
 let () =
   let open Term in
@@ -322,6 +328,7 @@ let () =
       solver_logging $
       output_decorated $
       astprints $
-      expect_failure
+      expect_failure $
+      use_vip
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))

@@ -750,6 +750,8 @@ let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) =
     bool_ c_sig.sig_variadic; bool_ c_sig.sig_has_proto])))
 
 
+let use_vip = ref false
+
 let value_check_pointer alignment ~pointee_ct about =
   let about_int = pointerToIntegerCast_ about in
   let pointee_size = match pointee_ct with
@@ -757,11 +759,12 @@ let value_check_pointer alignment ~pointee_ct about =
     | Function _ -> 1
     | _ -> Memory.size_of_ctype pointee_ct
   in
-  and_ [le_ (z_ Z.zero, about_int);
-        le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer);
-        (* TODO revist/delete this when transition to VIP is over *)
-        eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);
-        if alignment then aligned_ (about, pointee_ct) else bool_ true]
+  and_ @@ List.filter_map Fun.id [
+    Some (le_ (z_ Z.zero, about_int));
+    Some (le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer));
+    if not (!use_vip) then Some (eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero)) else None;
+    if alignment then Some (aligned_ (about, pointee_ct)) else None;
+  ]
 
 let value_check_array_size_warning = ref 100
 
