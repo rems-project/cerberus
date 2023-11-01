@@ -604,13 +604,14 @@ module IndexTerms = struct
     | Apply (name, args) ->
 
       let args = List.map aux args in
-      let def = SymMap.find name simp_ctxt.global.logical_functions in
       let t = IT (Apply (name, args), the_bt) in
-      if not inline_functions then t else 
-        begin match LogicalFunctions.try_open_fun def args with
+      if not inline_functions then t
+      else begin
+        let def = SymMap.find name simp_ctxt.global.logical_functions in
+        match LogicalFunctions.try_open_fun def args with
         | Some inlined -> aux inlined
         | None -> t
-        end
+      end
     | _ ->
       (* FIXME: it's problematic that some term shapes aren't even explored *)
       it

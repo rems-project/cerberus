@@ -161,7 +161,11 @@ let set_num_val_typ bt x_v = match x_v with
 
 let match_val_typs loc x_v y_v = match x_v, y_v with
   | ExprVal x, ExprVal y -> begin
-    assert (BT.equal (IT.bt x) (IT.bt y));
+    if BT.equal (IT.bt x) (IT.bt y) then ()
+    else begin
+      Pp.debug 1 (lazy (Pp.item "match_val_typs failed" (Pp.list IT.pp_with_typ [x; y])));
+      failwith "match_val_typs failed"
+    end;
     return (x, y)
   end
   | ExprVal x, NumVal n -> return (x, IT.num_lit_ n (IT.bt x))
@@ -174,6 +178,15 @@ let match_val_typs loc x_v y_v = match x_v, y_v with
 
 let signed_int_ity = Sctypes.(IntegerTypes.Signed IntegerBaseTypes.Int_)
 let signed_int_ty = Memory.bt_of_sct (Sctypes.Integer signed_int_ity)
+
+let is_two_pow it = match IT.term it with
+  | Terms.Binop (Terms.ExpNoSMT, x, y)
+    when Option.equal Z.equal (IT.get_num_z x) (Some (Z.of_int 2)) ->
+    Some y
+  | Terms.Binop (Terms.Exp, x, y)
+    when Option.equal Z.equal (IT.get_num_z x) (Some (Z.of_int 2)) ->
+    Some y
+  | _ -> None
 
 let bool_ite_1_0 b = IT.ite_ (b, IT.int_lit_ 1 signed_int_ty, IT.int_lit_ 0 signed_int_ty)
 
@@ -237,9 +250,15 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     | OpRem_t -> if is_const_num y_v
         then IT.mod_ (x_v, y_v) else IT.mod_no_smt_ (x_v, y_v)
     end in
-    begin match x_v, y_v with
-    | NumVal x_n, NumVal y_n -> simp_const_pe (f (IT.z_ x_n) (IT.z_ y_n))
-    | _, _ ->
+    begin match op, x_v, y_v with
+    | _, NumVal x_n, NumVal y_n -> simp_const_pe (f (IT.z_ x_n) (IT.z_ y_n))
+    | OpMul, ExprVal x, ExprVal y when Option.is_some (is_two_pow y) ->
+      let exp = Option.get (is_two_pow y) in
+      rval (IT.mul_ (x, IT.exp_ (IT.int_lit_ 2 (IT.bt x), exp)))
+    | OpDiv, ExprVal x, ExprVal y when Option.is_some (is_two_pow y) ->
+      let exp = Option.get (is_two_pow y) in
+      rval (IT.div_ (x, IT.exp_ (IT.int_lit_ 2 (IT.bt x), exp)))
+    | _, _, _ ->
       let@ x_v, y_v = match_val_typs loc x_v y_v in
       let@ res = simp_const_pe (f x_v y_v) in
       return res
@@ -298,8 +317,12 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     in
     begin match ct with
     | Sctypes.Integer Sctypes.IntegerTypes.Bool ->
-      let@ x = get_val "bool conversion param" x in
-      rval (bool_ite_1_0 (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x))))
+      begin match x with
+      | NumVal i -> rval (IT.bool_ (not (Z.equal i Z.zero)))
+      | _ ->
+        let@ x_v = get_val "bool conversion param" x in
+        rval (bool_ite_1_0 (IT.eq_ (x_v, IT.int_lit_ 0 (IT.bt x_v))))
+      end
     | _ -> do_wrapI loc ct x
     end
   | M_PEwrapI (act, pe) ->
