@@ -29,6 +29,8 @@ From Morello Require Import CapabilitiesGS MorelloCapsGS.
 
 From CheriMemory Require Import CheriMorelloMemory Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CerbSwitches CoqAilTypesAux.
 
+Require Import Tactics.
+
 Local Open Scope string_scope.
 Local Open Scope type_scope.
 Local Open Scope list_scope.
@@ -53,18 +55,6 @@ Require Import ListSet.
 Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
-
-(* This (seemingly) prevents slow `Qed` problem.
-   Usage: replace `cbn in H` with `cbn_hyp H`.
-
-   See aslo:
-     - discussion: https://coq.zulipchat.com/#narrow/stream/237977-Coq-users/topic/Coq.20hangs.20on.20Qed
-     - FAQ: https://github.com/coq/coq/wiki/Troubleshooting#what-can-i-do-when-qed-is-slow
-
-   TODO: move to separate file with other tactics we define
- *)
-Ltac cbn_hyp H :=
-  let T := type of H in let T' := eval cbn in T in replace T with T' in H by (cbn;reflexivity).
 
 Module RevocationProofs.
 
@@ -1139,39 +1129,6 @@ Module RevocationProofs.
     #[global] Opaque CheriMemoryWithPNVI.allocate_region CheriMemoryWithoutPNVI.allocate_region.
 
   End allocate_region_proofs.
-
-  (* TODO : move *)
-  Ltac inl_inr :=
-    match goal with
-    | [H1: inl _ = inr _ |- _] => inversion H1
-    | [H1: inr _ = inl _ |- _] => inversion H1
-
-    | [H1: inl _ = Monad.ret _ |- _] => inversion H1
-    | [H1: Monad.ret _ = inl _ |- _] => inversion H1
-
-    | [H1: raise _ = inr _ |- _] => inversion H1
-    | [H1: inr _ = raise _ |- _] => inversion H1
-
-    | [ |- inl ?x = inl ?x ] => reflexivity
-    | [ |- inr ?x = inr ?x ] => reflexivity
-
-    | [H1: ?a = inr _,
-          H2: ?a = inl _ |- _] => rewrite H1 in H2;
-                                inversion H2
-
-    end.
-
-  (* TODO : move *)
-  Ltac inl_inr_inv :=
-    match goal with
-    | [H1: inl _ = inl _ |- _] => inversion H1; clear H1
-    | [H1: inr _ = inr _ |- _] => inversion H1; clear H1
-
-    | [H1: inr _ = Monad.ret _ |- _] => inversion H1; clear H1
-    | [H1: Monad.ret _ = inr _ |- _] => inversion H1; clear H1
-    | [H1: raise _ = inl _ |- _] => inversion H1; clear H1
-    | [H1: inl _ = raise _ |- _] => inversion H1; clear H1
-    end.
 
   Lemma bind_Same_eq {T1 T2 T:Type}
     {R: T1 -> T2 -> Prop} (* relation between values *)
