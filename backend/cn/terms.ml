@@ -4,7 +4,7 @@ module CT = Sctypes
 type const =
   | Z of Z.t
   | Q of Q.t
-  | Pointer of Z.t
+  | Pointer of { alloc_id: Z.t; addr: Z.t }
   | Alloc_id of Z.t
   | Bool of bool
   | Unit
@@ -141,16 +141,14 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     let mparens pped =
       if atomic then parens pped else Pp.group pped in
     let break_op x = break 1 ^^ x ^^ space in
+    let alloc_id i = !^("@" ^ Z.to_string i) in
     match it with
     | Const const ->
        begin match const with
        | Z i -> !^(Z.to_string i)
        | Q q -> !^(Q.to_string q)
-       | Pointer i ->
-          begin match !Pp.loc_pp with
-          |  Dec -> !^(Z.to_string i)
-          | _ -> !^("0X" ^ (Z.format "016X" i))
-          end
+       | Pointer { alloc_id=id; addr } ->
+         braces (alloc_id id ^^ Pp.semi ^^ Pp.space ^^ !^(Z.to_string addr))
        | Alloc_id i -> !^("@" ^ Z.to_string i)
        | Bool true -> !^"true"
        | Bool false -> !^"false"
@@ -160,8 +158,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | CType_const ct -> Pp.squotes (Sctypes.pp ct)
        end
     | Sym sym -> Sym.pp sym
-    (* | Arith_op arith_op -> *)
-    (*    begin match arith_op with *)
     | Unop (uop, it1) ->
        begin match uop with
        | BWCLZNoSMT ->
@@ -241,16 +237,10 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | EachI ((i1, (s, _), i2), t) ->
          Pp.(group @@ group (c_app !^"for" [int i1; Sym.pp s; int i2])
              ^/^ group ((nest 2 @@ lbrace ^^ break 0 ^^ (aux false t)) ^^ break 0 ^^ rbrace))
-       (* end *)
-    (* | Tuple_op tuple_op -> *)
-    (*    begin match tuple_op with *)
        | NthTuple (n,it2) ->
           mparens (aux true it2 ^^ dot ^^ !^("member" ^ string_of_int n))
        | Tuple its ->
           braces (separate_map (semi ^^ space) (aux false) its)
-       (* end *)
-    (* | Struct_op struct_op -> *)
-    (*    begin match struct_op with *)
        | Struct (_tag, members) ->
          align @@ lbrace ^^^ flow_map (break 0 ^^ comma ^^ space) (fun (member,it) ->
              Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux false it)
@@ -259,9 +249,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           prefix 0 0 (aux true t) (dot ^^ Id.pp member )
        | StructUpdate ((t, member), v) ->
           mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux true v))
-       (* end *)
-    (* | Record_op record_op -> *)
-    (*    begin match record_op with *)
        | Record members ->
          align @@ lbrace ^^^ flow_map (break 0 ^^ comma ^^ space) (fun (member,it) ->
              Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux false it)
@@ -270,9 +257,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           prefix 0 0 (aux true t) (dot ^^ Id.pp member)
        | RecordUpdate ((t, member), v) ->
           mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux true v))
-       (* end *)
-    (* | Pointer_op pointer_op -> *)
-    (*    begin match pointer_op with *)
        | Cast (cbt, t) ->
           mparens (align @@ parens(BaseTypes.pp cbt) ^^ break 0 ^^ aux true t)
        | MemberShift (t, tag, member) ->
@@ -285,9 +269,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           mparens (c_app !^"sizeof" [Sctypes.pp t])
        | OffsetOf (tag, member) ->
          mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
-       (* end *)
-    (* | CT_pred ct_pred -> *)
-    (*    begin match ct_pred with *)
        | Aligned t ->
           mparens (c_app !^"aligned" [aux false t.t; aux false t.align])
        | Representable (rt, t) ->
@@ -296,9 +277,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           mparens (c_app (!^"good" ^^ angles (CT.pp rt)) [aux false t])
        | WrapI (ity, t) ->
           mparens (c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [aux false t])
-       (* end *)
-    (* | List_op list_op -> *)
-    (*    begin match list_op with *)
        | Head (o1) ->
           mparens (c_app !^"hd" [aux false o1])
        | Tail (o1) ->
@@ -311,10 +289,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           mparens (c_app !^"nth_list" [aux false n; aux false xs; aux false d])
        | ArrayToList (arr, i, len) ->
           mparens (c_app !^"array_to_list" [aux false arr; aux false i; aux false len])
-       (* end *)
-    (* | Set_op set_op -> *)
-    (*    begin match set_op with *)
-       (* end *)
        | MapConst (_bt, t) ->
           mparens (c_app !^"const" [aux false t])
        | MapGet (t1, t2) ->
@@ -324,27 +298,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
                      brackets (aux false t2 ^^^ equals ^^^ aux false t3))
        | MapDef ((s,_), t) ->
           brackets (Sym.pp s ^^^ !^"->" ^^^ aux false t)
-    (* | Map_op map_op -> *)
-
-       (* disabling that for now, because I'll add an expression for updating multiple cells at once *)
-      (* let rec consolidate ops = function *)
-      (*   | IT (Map_op (MapSet (t1, t2, t3)), _) -> consolidate (`Set (t2, t3) :: ops) t1 *)
-      (*   | IT (Map_op (MapGet (t, args)), _) ->  consolidate ((`Get args) :: ops) t *)
-      (*   | it_ -> (it_, ops) in *)
-      (* let pp_op = function *)
-      (*  | `Set (t2,t3) -> *)
-      (*    Pp.group @@ brackets @@ (aux false t2 ^/^ equals) ^/^ align (aux false t3) *)
-      (*  | `Get args -> *)
-      (*     Pp.group @@ brackets @@ aux false args in *)
-      (* let (root, ops) = consolidate [] it_ in *)
-      (* let root_pp = match root with *)
-      (*  | IT (Map_op (MapConst (_, t)), _) -> *)
-      (*     Pp.group @@ brackets @@ aux false t *)
-      (*  | IT (Map_op (MapDef ((s, abt), body)), _) -> *)
-      (*     Pp.group @@ braces (BaseTypes.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body) *)
-      (*  | it_ -> aux true it_ *)
-      (*  in *)
-      (*  prefix 2 0 root_pp @@ align (flow_map (break 0) pp_op ops) *)
     | Apply (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
     | Let ((name, x1), x2) ->
@@ -393,6 +346,7 @@ let rec dtree_of_pat (Pat (pat_, _bt)) =
        )
 
 let rec dtree (IT (it_, bt)) =
+  let alloc_id z = Dnode (pp_ctor "alloc_id", [Dleaf !^(Z.to_string z)]) in
   match it_ with
   | Sym s ->
      Dleaf (Sym.pp s)
@@ -400,8 +354,8 @@ let rec dtree (IT (it_, bt)) =
      Dleaf !^(Z.to_string z)
   | Const (Q q) ->
      Dleaf !^(Q.to_string q)
-  | Const (Pointer z) ->
-     Dleaf !^(Z.to_string z)
+  | Const (Pointer { alloc_id=id; addr }) ->
+    Dnode (pp_ctor "pointer", [alloc_id id; Dleaf !^(Z.to_string addr)])
   | Const (Bool b) ->
      Dleaf !^(if b then "true" else "false")
   | Const Unit ->
@@ -411,7 +365,7 @@ let rec dtree (IT (it_, bt)) =
   | Const Null ->
      Dleaf !^"null"
   | Const (Alloc_id z) ->
-     Dnode (pp_ctor "alloc_id", [Dleaf !^(Z.to_string z)])
+    alloc_id z
   | Const (CType_const ct) ->
      Dleaf (Sctypes.pp ct)
   | Unop (op, t1) ->

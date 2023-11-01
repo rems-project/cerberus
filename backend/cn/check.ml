@@ -152,9 +152,12 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
             let@ _ = get_fun_decl loc sym in
             (* the symbol of a function is the same as the symbol of its address *)
             return (sym_ (sym, BT.Loc)) ) 
-    ( fun _prov p -> 
-      (* TODO: Dhruv, do we want to do something with the provenance here? *)
-      return (pointer_ p) )
+    ( fun prov p ->
+       let@ alloc_id =
+          match prov with
+            | Some id -> return id
+            | None -> fail (fun _ -> {loc; msg = Empty_provenance }) in
+        return (pointer_ ~alloc_id ~addr:p) )
 
 let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
   CF.Impl_mem.case_mem_value mem

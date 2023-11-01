@@ -184,7 +184,8 @@ let rec get_packing_ft_owned_resources = function
 let rec model_res_spans m_g (res : ResourceTypes.t) =
   match res with
   | (RET.P ({name = Owned (ct, _); _} as pt)) ->
-      let ptr = eval_extract "resource pointer" m_g is_pointer pt.pointer in
+      (* FIXME: use alloc id provenance for VIP *)
+      let (_id, ptr)  = eval_extract "resource pointer" m_g is_pointer pt.pointer in
       let sz = Memory.size_of_ctype ct in
       [((ptr, Z.add ptr (Z.of_int sz)), (res, res))]
   | (RET.P ({name = PName pname; _} as r_pt)) ->
@@ -205,7 +206,8 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
       then raise (Failure (Pp.item "unbounded resource interval" (IT.pp qpt.permission)))
       else ();
       let spans = List.map (fun (i, j) -> (Option.get i, Option.get j)) ispans in
-      let ptr = eval_extract "q-resource pointer" m_g is_pointer qpt.pointer in
+      (* FIXME: use alloc id provenance for VIP *)
+      let (_id, ptr) = eval_extract "q-resource pointer" m_g is_pointer qpt.pointer in
       let sz = Z.of_int (Memory.size_of_ctype ct) in
       let offs i = Z.add ptr (Z.mul i sz) in
       List.map (fun (i, j) -> ((offs i, offs (Z.add j (Z.of_int 1))), (res, res))) spans

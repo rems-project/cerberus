@@ -534,10 +534,10 @@ module Translate = struct
          Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
       | Const (Q q) ->
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
-      | Const (Pointer z) ->
+      | Const (Pointer { alloc_id; addr }) ->
          alloc_id_integer_to_loc
-           (term (alloc_id_ Z.zero))
-           (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
+           (term (alloc_id_ alloc_id))
+           (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string addr))
       | Const (Alloc_id z) ->
          integer_to_alloc_id
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
@@ -1242,18 +1242,18 @@ module Eval = struct
                  (loc_to_integer_fundecl context global) ->
            let p = nth args 0 in
            begin match IT.is_pointer p with
-           | Some z -> z_ z
+           | Some (_id, z) -> z_ z
            | _ -> pointerToIntegerCast_ p
            end
 
         | () when
                Z3.FuncDecl.equal func_decl
                  (alloc_id_integer_to_loc_fundecl context global) ->
-           let _id = nth args 0 in
+           let alloc_id = Option.value_err "non-wrapped alloc_id" @@ IT.is_alloc_id @@ nth args 0 in
            let i = nth args 1 in
            begin match IT.is_z i with
-           | Some z -> pointer_ z
-           | _ -> integerToPointerCast_ i
+           | Some addr -> pointer_ ~alloc_id ~addr
+           | _ -> copyAllocId_ ~int:i ~loc:(pointer_ ~alloc_id ~addr:Z.zero)
            end
 
         | () when

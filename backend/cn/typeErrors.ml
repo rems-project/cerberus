@@ -130,6 +130,7 @@ type message =
   | Empty_pattern
   | Missing_pattern of Pp.document
   | Duplicate_pattern
+  | Empty_provenance
 
 
 type type_error = {
@@ -382,6 +383,9 @@ let pp_message te =
      { short; descr = None; state = None; trace = None }
   | Duplicate_pattern ->
      let short = !^"Duplicate pattern" in
+     { short; descr = None; state = None; trace = None }
+  | Empty_provenance ->
+     let short = !^"Empty provenance" in
      { short; descr = None; state = None; trace = None }
 
 

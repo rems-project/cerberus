@@ -358,7 +358,11 @@ let is_z = function
 let is_z_ it = Option.is_some (is_z it)
 
 let is_pointer = function
-  | IT (Const (Pointer z), bt) -> Some z
+  | IT (Const (Pointer { alloc_id; addr }), bt) -> Some (alloc_id, addr)
+  | _ -> None
+
+let is_alloc_id = function
+  | IT (Const (Alloc_id alloc_id), bt) -> Some alloc_id
   | _ -> None
 
 let is_sym = function
@@ -431,14 +435,17 @@ let is_pred_ = function
 
 (* shorthands *)
 
+let use_vip = ref false
 
 (* lit *)
 let sym_ (sym, bt) = IT (Sym sym, bt)
 let z_ n = IT (Const (Z n), BT.Integer)
-let alloc_id_ n = IT (Const (Alloc_id n), BT.Alloc_id)
+let alloc_id_ n = IT (Const (Alloc_id (if !use_vip then n else Z.zero)), BT.Alloc_id)
 let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
 let q1_ q = IT (Const (Q q), BT.Real)
-let pointer_ n = IT (Const (Pointer n), BT.Loc)
+let pointer_ ~alloc_id ~addr =
+  let alloc_id = if !use_vip then alloc_id else Z.zero in
+  IT (Const (Pointer { alloc_id; addr }), BT.Loc)
 let bool_ b = IT (Const (Bool b), BT.Bool)
 let unit_ = IT (Const Unit, BT.Unit)
 let int_ n = z_ (Z.of_int n)
@@ -750,8 +757,6 @@ let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) =
     bool_ c_sig.sig_variadic; bool_ c_sig.sig_has_proto])))
 
 
-let use_vip = ref false
-
 let value_check_pointer alignment ~pointee_ct about =
   let about_int = pointerToIntegerCast_ about in
   let pointee_size = match pointee_ct with
@@ -762,7 +767,7 @@ let value_check_pointer alignment ~pointee_ct about =
   and_ @@ List.filter_map Fun.id [
     Some (le_ (z_ Z.zero, about_int));
     Some (le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer));
-    if not (!use_vip) then Some (eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero)) else None;
+    if !use_vip then None else Some (eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero));
     if alignment then Some (aligned_ (about, pointee_ct)) else None;
   ]
 
