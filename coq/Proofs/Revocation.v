@@ -1140,6 +1140,99 @@ Module RevocationProofs.
 
   End allocate_region_proofs.
 
+  (* TODO : move *)
+  Ltac inl_inr :=
+    match goal with
+    | [H1: inl _ = inr _ |- _] => inversion H1
+    | [H1: inr _ = inl _ |- _] => inversion H1
+
+    | [H1: inl _ = Monad.ret _ |- _] => inversion H1
+    | [H1: Monad.ret _ = inl _ |- _] => inversion H1
+
+    | [H1: raise _ = inr _ |- _] => inversion H1
+    | [H1: inr _ = raise _ |- _] => inversion H1
+
+    | [ |- inl ?x = inl ?x ] => reflexivity
+    | [ |- inr ?x = inr ?x ] => reflexivity
+
+    | [H1: ?a = inr _,
+          H2: ?a = inl _ |- _] => rewrite H1 in H2;
+                                inversion H2
+
+    end.
+
+  (* TODO : move *)
+  Ltac inl_inr_inv :=
+    match goal with
+    | [H1: inl _ = inl _ |- _] => inversion H1; clear H1
+    | [H1: inr _ = inr _ |- _] => inversion H1; clear H1
+
+    | [H1: inr _ = Monad.ret _ |- _] => inversion H1; clear H1
+    | [H1: Monad.ret _ = inr _ |- _] => inversion H1; clear H1
+    | [H1: raise _ = inl _ |- _] => inversion H1; clear H1
+    | [H1: inl _ = raise _ |- _] => inversion H1; clear H1
+    end.
+
+  Lemma bind_Same_eq {T1 T2 T:Type}
+    {R: T1 -> T2 -> Prop} (* relation between values *)
+    {M1: CheriMemoryWithPNVI.memM T}
+    {M2: CheriMemoryWithoutPNVI.memM T}
+    {C1: T -> CheriMemoryWithPNVI.memM T1}
+    {C2: T -> CheriMemoryWithoutPNVI.memM T2}
+    :
+    (Same eq M1 M2 /\
+       (forall x1 x2, x1 = x2 -> Same R (C1 x1) (C2 x2)))
+    ->
+      Same R (bind M1 C1) (bind M2 C2).
+  Proof.
+    intros [[EMV EMS] EC].
+    split;
+      intros m1 m2 M;
+      unfold lift_sum;
+      unfold execErrS, evalErrS;
+      repeat break_let;
+      unfold SameValue in EMV;
+      repeat break_match; invc Heqs1; invc Heqs0;
+
+      cbn in *;
+      repeat break_let;
+      destruct s,s0; try tuple_inversion;
+
+      specialize (EMV m1 m2 M);
+      unfold lift_sum, evalErrS in EMV;
+      repeat break_let;
+      repeat break_match;
+      repeat tuple_inversion;
+      repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto;
+
+      specialize (EMS m1 m2 M);
+      unfold lift_sum, execErrS in EMS;
+      repeat break_let;
+      repeat break_match;
+      repeat tuple_inversion;
+      repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto;
+
+      match goal with
+      | [H1: C1 ?T ?M1 = _, H2: C2 ?T ?M2 = _,  H3: mem_state_same_rel ?M1 ?M2 |- _ ] =>
+          try (specialize (EC T T eq_refl);
+               destruct EC as [ECV ECS];
+               specialize (ECV M1 M2 EMS);
+               unfold lift_sum, evalErrS in ECV;
+               repeat break_let;
+               repeat break_match;
+               repeat tuple_inversion;
+               repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto)
+
+      end.
+
+
+    specialize (ECS m7 m8 EMS).
+    unfold lift_sum, execErrS in ECS.
+    repeat break_let;
+      repeat break_match;
+      repeat tuple_inversion;
+      repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto.
+  Qed.
 
   Section allocate_object_proofs.
     Variable  tid : MemCommonExe.thread_id.
@@ -1148,74 +1241,34 @@ Module RevocationProofs.
     Variable  ty : CoqCtype.ctype.
     Variable  init_opt : option CheriMemoryWithPNVI.mem_value.
 
-    #[global] Instance allocate_object_same_result:
-      SameValue pointer_value_eq
+    #[global] Instance allocate_object_same:
+      Same pointer_value_eq
         (CheriMemoryWithPNVI.allocate_object tid pref int_val ty init_opt)
         (CheriMemoryWithoutPNVI.allocate_object tid pref int_val ty init_opt).
     Proof.
-      intros mem_state1 mem_state2 M.
-      destruct_mem_state_same_rel M.
-      unfold lift_sum.
-      unfold CheriMemoryWithPNVI.mem_state in *.
-      unfold evalErrS.
-      repeat break_let.
 
-      (* both `cbn in` and `cbn_hyp` diverge on Heqp and Heqp0! *)
-      unfold CheriMemoryWithPNVI.allocate_object, WithPNVISwitches.get_switches, CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithPNVI.serr2memM  in Heqp.
-      unfold bind, ret, CheriMemoryWithPNVI.memM_monad, Monad_errS in Heqp.
-      unfold CheriMemoryWithoutPNVI.allocate_object, WithoutPNVISwitches.get_switches, CheriMemoryWithoutPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.serr2memM, bind, ret in Heqp0.
-      unfold bind, ret, CheriMemoryWithoutPNVI.memM_monad, Monad_errS in Heqp0.
-      rewrite num_of_int_same in *.
-      rewrite sizeof_same in *.
-      repeat break_let.
-      clear Heqp2. (* pref breakdown *)
-      (* handle sizeof error case *)
-      (destruct (CheriMemoryWithoutPNVI.sizeof 1000 None ty) ;
-         [ destruct s,s0;
-           repeat tuple_inversion;
-           unfold raise, Exception_errS in *;
-           repeat tuple_inversion;try reflexivity| ]).
-      repeat tuple_inversion.
-      repeat break_let.
-      remember (Capability_GS.representable_length z) as size;clear Heqsize.
-      match goal with
-      | H: context [ CheriMemoryWithPNVI.allocator ?S ?A] |- _ => remember A as align; clear Heqalign
-      end.
-      rename m2 into mem_state1, m1 into mem_state2.
+      unfold CheriMemoryWithPNVI.allocate_object, WithPNVISwitches.get_switches, CheriMemoryWithPNVI.DEFAULT_FUEL.
+      unfold CheriMemoryWithoutPNVI.allocate_object, WithoutPNVISwitches.get_switches, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
 
-      assert (MS: mem_state_same_rel mem_state1 mem_state2)
-        by (repeat split;
-            try assumption;
-            destruct Mvarargs as [Mvarargs1 Mvarargs2];
-            try apply Mvarargs1; try apply Mvarargs2).
+      apply bind_Same_eq.
+      split.
+      admit.
+      intros;subst;try break_let.
 
-      assert(EV:evalErrS (CheriMemoryWithPNVI.allocator size align) mem_state1 =
-                  evalErrS (CheriMemoryWithoutPNVI.allocator size align) mem_state2) by apply lift_sum_eq_eq, allocator_same_result, MS.
+      apply bind_Same_eq.
+      split.
+      admit.
+      intros;subst;try break_let.
+
+      apply bind_Same_eq.
+      split.
+      admit.
+      intros;subst;try break_let.
 
 
-        unfold evalErrS in EV.
-        repeat break_let.
-        repeat tuple_inversion.
-        destruct s2,s1; inv EV;repeat tuple_inversion.
-        try reflexivity;
-          repeat break_let;
-          repeat tuple_inversion;
-          repeat break_let.
-
-        clear EV.
-
-
-      pose proof (allocator_same_state size align mem_state1 mem_state2 MS) as ES.
-      unfold lift_sum, execErrS in ES.
-      rewrite Heqp3,Heqp4 in ES.
-      unfold Monad_either, Exception_either, ret, raise in ES.
-      repeat break_let.
-      rename m4 into mem_state1', m3 into mem_state2'.
-
-      clear Heqp3 Heqp4 Heqp1 p0.
-      (* done with step1 - allocator call. *)
 
     Admitted.
+
 
   End allocate_object_proofs.
 
