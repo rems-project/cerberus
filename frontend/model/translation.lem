@@ -1391,7 +1391,7 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
   else
     let A.AnnotatedExpression annot std_annots loc expr = a_expr in
     (comb (Caux.add_loc loc)
-          (Caux.maybe_annotate_integer_type result_ty)) <$> 
+          (if is_lvalue then (fun z -> z) else Caux.maybe_annotate_integer_type result_ty)) <$>
       match expr with
       | A.AilEunary A.Plus e ->
           (* STD §6.5.3.3#2 *)
