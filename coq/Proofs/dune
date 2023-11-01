@@ -2,6 +2,6 @@
  (mode vo)
  (name Proofs)
  (package cerberus-cheri)
- (modules Revocation)
+ (modules Tactics Revocation)
  (theories CheriMemory Common Morello)
 )
