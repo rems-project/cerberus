@@ -1214,7 +1214,7 @@ Module RevocationProofs.
 
       apply bind_Same_eq.
       split.
-      admit.
+      apply allocator_same.
       intros;subst;try break_let.
 
       apply bind_Same_eq.
