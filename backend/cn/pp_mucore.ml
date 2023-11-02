@@ -240,6 +240,8 @@ module Make (Config: CONFIG) = struct
     | IOpAdd -> P.plus
     | IOpSub -> P.minus
     | IOpMul -> P.star
+    | IOpShl -> P.langle ^^ P.langle
+    | IOpShr -> P.rangle ^^ P.rangle
 
   let pp_bound = function
     | M_Bound_Wrap act -> !^"wrap<" ^^ pp_ct act.ct ^^ !^">"

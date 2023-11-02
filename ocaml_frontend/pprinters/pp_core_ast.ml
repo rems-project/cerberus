@@ -115,6 +115,8 @@ let string_of_iop = function
   | IOpAdd   -> "+"
   | IOpSub   -> "-"
   | IOpMul   -> "*"
+  | IOpShl   -> "<<"
+  | IOpShr   -> ">>"
 (*  | OpDiv   -> "/"
   | OpRem_t -> "rem_t"
   | OpRem_f -> "rem_f"

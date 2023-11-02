@@ -119,9 +119,13 @@ let keywords =
       ("wrapI_add", T.(WRAPI Core.IOpAdd));
       ("wrapI_sub", T.(WRAPI Core.IOpSub));
       ("wrapI_mul", T.(WRAPI Core.IOpMul));
+      ("wrapI_shl", T.(WRAPI Core.IOpShl));
+      ("wrapI_shr", T.(WRAPI Core.IOpShr));
       ("catch_exceptional_condition_add", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpAdd));
       ("catch_exceptional_condition_sub", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpSub));
       ("catch_exceptional_condition_mul", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpMul));
+      ("catch_exceptional_condition_shl", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpShl));
+      ("catch_exceptional_condition_shr", T.(CATCH_EXCEPTIONAL_CONDITION Core.IOpShr));
       
       (* for Core.action_ *)
       ("create", T.CREATE);

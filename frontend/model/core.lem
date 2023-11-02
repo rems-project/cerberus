@@ -113,6 +113,8 @@ type iop =
  | IOpAdd
  | IOpSub
  | IOpMul
+ | IOpShl
+ | IOpShr
 (* | IOpDiv
  | IOpRem_t
  | IOpRem_f *)

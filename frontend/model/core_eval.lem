@@ -80,22 +80,22 @@ let mk_conv_int ity ival =
           end
     end
 
-let iop_to_integer_operator = function
-  | IOpAdd -> Mem_common.IntAdd
-  | IOpSub -> Mem_common.IntSub
-  | IOpMul -> Mem_common.IntMul
+let mk_iop = function
+  | IOpAdd -> fun x y -> Mem.op_ival Mem_common.IntAdd x y
+  | IOpSub -> fun x y -> Mem.op_ival Mem_common.IntSub x y
+  | IOpMul -> fun x y -> Mem.op_ival Mem_common.IntMul x y
+  | IOpShl -> fun x y -> Mem.op_ival Mem_common.IntMul x (Mem.op_ival Mem_common.IntExp (Mem.integer_ival 2) y)
+  | IOpShr -> fun x y -> Mem.op_ival Mem_common.IntDiv x (Mem.op_ival Mem_common.IntExp (Mem.integer_ival 2) y)
 end
 
 let mk_wrapI_op ity iop ival1 ival2 =
   (* let ival1 = mk_conv_int ity ival1 in
   let ival2 = mk_conv_int ity ival2 in *)
-  mk_wrapI ity begin
-    Mem.op_ival (iop_to_integer_operator iop) ival1 ival2
-  end
+  mk_wrapI ity (mk_iop iop ival1 ival2)
 
 
 let mk_call_catch_exceptional_condition ity iop ival1 ival2 =
-  let ival = Mem.op_ival (iop_to_integer_operator iop) ival1 ival2 in
+  let ival = mk_iop iop ival1 ival2 in
   match ( Mem.eval_integer_value (Mem.min_ival ity)
         , Mem.eval_integer_value (Mem.max_ival ity)
         , Mem.eval_integer_value ival ) with
