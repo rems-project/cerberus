@@ -862,7 +862,6 @@ Module RevocationProofs.
           (evalErrS M1 mem_state1)
           (evalErrS M2 mem_state2).
 
-
   Class SameState {T1 T2:Type}
     (M1: CheriMemoryWithPNVI.memM T1)
     (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
@@ -1161,15 +1160,16 @@ Module RevocationProofs.
     split; intros m1 m2 M;cbn;try reflexivity; try assumption.
   Qed.
 
-  Lemma bind_Same_eq {T1 T2 T:Type}
+  Lemma bind_Same {T1 T2 T1' T2':Type}
     {R: T1 -> T2 -> Prop} (* relation between values *)
-    {M1: CheriMemoryWithPNVI.memM T}
-    {M2: CheriMemoryWithoutPNVI.memM T}
-    {C1: T -> CheriMemoryWithPNVI.memM T1}
-    {C2: T -> CheriMemoryWithoutPNVI.memM T2}
+    (R': T1' -> T2' -> Prop) (* relation between values *)
+    {M1: CheriMemoryWithPNVI.memM T1'}
+    {M2: CheriMemoryWithoutPNVI.memM T2'}
+    {C1: T1' -> CheriMemoryWithPNVI.memM T1}
+    {C2: T2' -> CheriMemoryWithoutPNVI.memM T2}
     :
-    (Same eq M1 M2 /\
-       (forall x1 x2, x1 = x2 -> Same R (C1 x1) (C2 x2)))
+    (Same R' M1 M2 /\
+       (forall x1 x2, R' x1 x2 -> Same R (C1 x1) (C2 x2)))
     ->
       Same R (bind M1 C1) (bind M2 C2).
   Proof.
@@ -1200,17 +1200,17 @@ Module RevocationProofs.
       repeat tuple_inversion;
       repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto;
 
-      match goal with
-      | [H1: C1 ?T ?M1 = _, H2: C2 ?T ?M2 = _,  H3: mem_state_same_rel ?M1 ?M2 |- _ ] =>
-          try (specialize (EC T T eq_refl);
-               destruct EC as [ECV ECS];
-               specialize (ECV M1 M2 EMS);
-               unfold lift_sum, evalErrS in ECV;
-               repeat break_let;
-               repeat break_match;
-               repeat tuple_inversion;
-               repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto)
 
+      match goal with
+      | [H1: C1 ?T1 ?M1 = _, H2: C2 ?T2 ?M2 = _,  H3: mem_state_same_rel ?M1 ?M2 |- _ ] =>
+          specialize (EC T1 T2 EMV);
+          destruct EC as [ECV ECS];
+          specialize (ECV M1 M2 EMS);
+          unfold lift_sum, evalErrS in ECV;
+          repeat break_let;
+          repeat break_match;
+          repeat tuple_inversion;
+          repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto
       end.
 
 
@@ -1220,6 +1220,22 @@ Module RevocationProofs.
       repeat break_match;
       repeat tuple_inversion;
       repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto.
+  Qed.
+
+  (* special case of [bind_Same] *)
+  Lemma bind_Same_eq {T1 T2 T:Type}
+    {R: T1 -> T2 -> Prop} (* relation between values *)
+    {M1: CheriMemoryWithPNVI.memM T}
+    {M2: CheriMemoryWithoutPNVI.memM T}
+    {C1: T -> CheriMemoryWithPNVI.memM T1}
+    {C2: T -> CheriMemoryWithoutPNVI.memM T2}
+    :
+    (Same eq M1 M2 /\
+       (forall x1 x2, x1 = x2 -> Same R (C1 x1) (C2 x2)))
+    ->
+      Same R (bind M1 C1) (bind M2 C2).
+  Proof.
+    apply bind_Same.
   Qed.
 
   Lemma serr2memM_same {T: Type}
@@ -1270,16 +1286,36 @@ Module RevocationProofs.
 
       apply bind_Same_eq.
       split.
-      admit.
-      intros;subst;try break_let.
-      apply ret_Same.
+      break_match.
+      -
+        apply (bind_Same mem_state_same_rel).
+        split.
+        admit.
+        intros.
+        apply bind_Same_eq.
+        split.
+        apply serr2memM_same.
+        admit. (* TODO: repr_same! *)
 
-      setoid_rewrite is_PNVI_WithPNVI.
-      setoid_rewrite is_PNVI_WithoutPNVI.
-      constructor;reflexivity.
-
+        intros; repeat break_let.
+        apply bind_Same_eq.
+        split.
+        admit. (* TODO: same_put *)
+        intros.
+        apply ret_Same;reflexivity.
+      -
+        apply bind_Same_eq.
+        split.
+        admit. (* TODO: same update *)
+        intros.
+        apply ret_Same;reflexivity.
+      -
+        intros;subst;try break_let.
+        apply ret_Same.
+        setoid_rewrite is_PNVI_WithPNVI.
+        setoid_rewrite is_PNVI_WithoutPNVI.
+        constructor;reflexivity.
     Admitted.
-
 
   End allocate_object_proofs.
 
