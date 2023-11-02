@@ -456,10 +456,12 @@ let const_ctype_ ct = IT (Const (CType_const ct), BT.CType)
 
 (* cmp_op *)
 let lt_ (it, it') =
-    assert (BT.equal (bt it) (bt it'));
+    if BT.equal (bt it) (bt it') then ()
+    else failwith ("lt_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [it; it']));
     IT (Binop (LT, it, it'), BT.Bool)
 let le_ (it, it') =
-    assert (BT.equal (bt it) (bt it'));
+    if BT.equal (bt it) (bt it') then ()
+    else failwith ("le_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [it; it']));
     IT (Binop (LE,it, it'), BT.Bool)
 let gt_ (it, it') = lt_ (it', it)
 let ge_ (it, it') = le_ (it', it)
@@ -477,11 +479,8 @@ let impl_ (it, it') = IT (Binop (Impl, it, it'), BT.Bool)
 let not_ it = IT (Unop (Not, it), bt it)
 let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
 let eq_ (it, it') =
-  begin if BT.equal (bt it) (bt it') then ()
-  else begin Pp.debug 1 (lazy (Pp.item "basetype mismatch" (Pp.list pp_with_typ [it; it'])));
-    assert false
-    end
-  end;
+  if BT.equal (bt it) (bt it') then ()
+  else failwith ("eq_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [it; it']));
   IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
@@ -710,8 +709,6 @@ let subset_ (it, it') = IT (Binop (Subset,it, it'), BT.Bool)
 
 
 (* ct_pred *)
-let minInteger_ t = num_lit_ (Memory.min_integer_type t) (Memory.bt_of_sct Sctypes.(Integer t))
-let maxInteger_ t = num_lit_ (Memory.max_integer_type t) (Memory.bt_of_sct Sctypes.(Integer t))
 let representable_ (t, it) =
   IT (Representable (t, it), BT.Bool)
 let good_ (sct, it) =
@@ -783,6 +780,20 @@ let def_ sym e = eq_ (sym_ (sym, bt e), e)
 let in_range within (min, max) =
   and_ [le_ (min, within); le_ (within, max)]
 
+let in_z_range within (min_z, max_z) = match bt within with
+  | BT.Integer -> in_range within (z_ min_z, z_ max_z)
+  | BT.Bits (sign, sz) ->
+    let the_bt = bt within in
+    let (min_possible, max_possible) = BT.bits_range (sign, sz) in
+    let min_c = if Z.leq min_z min_possible then bool_ true
+      else if Z.leq min_z max_possible then le_ (num_lit_ min_z the_bt, within)
+      else bool_ false in
+    let max_c = if Z.leq max_possible max_z then bool_ true
+      else if Z.leq min_possible max_z then le_ (within, num_lit_ max_z the_bt)
+      else bool_ false in
+    and_ [min_c; max_c]
+  | _ -> failwith ("in_z_range: unsupported type: " ^ Pp.plain (pp_with_typ within))
+
 let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) =
   let open Sctypes in
   Option.bind (Sctypes.of_ctype c_sig.sig_return_ty) (fun ret_ct ->
@@ -814,7 +825,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Void ->
        bool_ true
     | Integer it ->
-       in_range about (minInteger_ it, maxInteger_ it)
+       in_z_range about (Memory.min_integer_type it, Memory.max_integer_type it)
     | Array (it, None) ->
        Cerb_debug.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) ->

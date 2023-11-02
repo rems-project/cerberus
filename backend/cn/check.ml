@@ -204,8 +204,14 @@ let rec check_object_value (loc : loc) (M_OV (expect, ov)) : IT.t m =
   match ov with
   | M_OVinteger iv ->
      (* TODO: maybe check whether iv is within range of the type? *)
-     let@ _ = ensure_bitvector_type loc ~expect in
-     return (num_lit_ (Memory.z_of_ival iv) expect)
+     let@ bt_info = ensure_bitvector_type loc ~expect in
+     let z = Memory.z_of_ival iv in
+     let (min_z, max_z) = BT.bits_range bt_info in
+     if Z.leq min_z z && Z.leq z max_z
+     then return (num_lit_ z expect)
+     else fail (fun _ -> {loc;
+        msg = Generic (!^ "integer literal not representable at type" ^^^
+          Pp.typ (Pp.z z) (BT.pp expect))})
   | M_OVpointer p -> 
      check_ptrval loc ~expect p
   | M_OVarray items ->
@@ -397,26 +403,13 @@ let check_conv_int loc ~expect ct arg =
                      num_lit_ Z.zero expect, 
                      num_lit_ Z.one expect))
     | _ when Sctypes.is_unsigned_integer_type ity ->
-       let representable = representable_ (ct, arg) in
-       (* TODO: revisit this *)
-       (* TODO: this has to be fixed. The basetypes do not work out.
-          The return value always has to have basetype 'expect'. *)
-       (* I think: representable(ct,t) has to compare t with
-          MinInt(ct) and MaxInt(ct) *in a bitvector type large enough
-          for both the type of t and Min/MaxInt(ct). *)
-       begin match provable (t_ representable) with
-       | `True -> 
-          (* some kind of cast is needed here, but one that does not change the value *)
-          return arg
-       | `False ->
-          (* same as above, some cast is needed for 'arg', where as wrapI's type is already OK *)
-          return (ite_ (representable, arg, wrapI_ (ity, arg)))
-       end
+       (* casting to the relevant type does the same thing as wrapI *)
+       return (cast_ (Memory.bt_of_sct ct) arg)
     | _ ->
        begin match provable (t_ (representable_ (ct, arg))) with
        | `True -> 
-          (* TODO: again, have to cast arg somehow, without changing the value *)
-          return arg
+          (* this proves that this cast does not change the (integer) interpretation *)
+          return (cast_ (Memory.bt_of_sct ct) arg)
        | `False -> 
           fail_unrepresentable ()
        end
