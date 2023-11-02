@@ -1132,6 +1132,35 @@ Module RevocationProofs.
 
   End allocate_region_proofs.
 
+  Lemma ret_Same {T1 T2:Type}
+    {R: T1 -> T2 -> Prop} (* relation between values *)
+    :
+    forall x1 x2, R x1 x2 -> Same R (ret x1) (ret x2).
+  Proof.
+    intros x1 x2 E.
+    repeat break_match;
+      unfold CheriMemoryWithPNVI.memM, CheriMemoryWithoutPNVI.memM,
+      CheriMemoryWithPNVI.mem_state, CheriMemoryWithoutPNVI.mem_state.
+    split; intros m1 m2 M;cbn;try reflexivity; try assumption.
+  Qed.
+
+  Lemma raise_Same_eq {T:Type}:
+    forall x1 x2, x1 = x2 ->
+             @Same T T (@eq T)
+               (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
+                  (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
+                  x1)
+               (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
+                  (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
+                  x2).
+  Proof.
+    intros x1 x2 E.
+    repeat break_match;
+      unfold CheriMemoryWithPNVI.memM, CheriMemoryWithoutPNVI.memM,
+      CheriMemoryWithPNVI.mem_state, CheriMemoryWithoutPNVI.mem_state.
+    split; intros m1 m2 M;cbn;try reflexivity; try assumption.
+  Qed.
+
   Lemma bind_Same_eq {T1 T2 T:Type}
     {R: T1 -> T2 -> Prop} (* relation between values *)
     {M1: CheriMemoryWithPNVI.memM T}
@@ -1193,8 +1222,6 @@ Module RevocationProofs.
       repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto.
   Qed.
 
-  (* TODO: see if this could be generalized to some form of Reflxivity,
-     assuming [eq T] is reflexive *)
   Lemma serr2memM_same {T: Type}
     {M1 M2: serr T}:
     M1 = M2 ->
@@ -1209,8 +1236,8 @@ Module RevocationProofs.
     repeat break_match;
       unfold CheriMemoryWithPNVI.memM, CheriMemoryWithoutPNVI.memM,
       CheriMemoryWithPNVI.mem_state, CheriMemoryWithoutPNVI.mem_state;clear.
-    split; intros m1 m2 M;cbn;try reflexivity; try assumption.
-    split; intros m1 m2 M;cbn;try reflexivity; try assumption.
+    apply raise_Same_eq; reflexivity.
+    apply ret_Same; reflexivity.
   Qed.
 
   Section allocate_object_proofs.
@@ -1245,7 +1272,7 @@ Module RevocationProofs.
       split.
       admit.
       intros;subst;try break_let.
-
+      apply ret_Same.
 
 
     Admitted.
