@@ -1593,31 +1593,41 @@ end
                         (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe)
                                                              (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe))
                           (Caux.mk_std_undef_pe loc "§6.5.7#4, sentence 3" Undefined.UB51b_shift_too_large)
-begin if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-let core_shl =
-  Caux.mk_std_pe "§6.5.7#4, sentence 2" begin
-    stdlib.mkcall_wrapI result_ty
-      (Caux.mk_op_pe C.OpMul promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe))
-  end in
-  begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
-    Caux.mk_specified_pe begin
-      Caux.mk_memop_pe Mem_common.CapAssignValue
-        [ Caux.mk_memop_pe
-            (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Shl)) (AilTypesAux.is_signed_integer_type result_ty))
-            [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe]
-        ; core_shl ]
-    end
-else
-                      Caux.mk_specified_pe core_shl
-end
+begin
+let result_ity = match result_ty with
+  | Cty.Ctype _ (Cty.Basic (Cty.Integer ity)) -> ity
+  | _ -> illTypedAil loc "A.Shl result type should be an integer type"
+end in
+if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+      let core_shl =
+        Caux.mk_std_pe "§6.5.7#4, sentence 2" begin
+          Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpMul promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe))
+            (Caux.mk_op_pe C.OpAdd (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) (Caux.mk_integer_pe 1))
+        end in
+      begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                          Caux.mk_specified_pe begin
+                            Caux.mk_memop_pe Mem_common.CapAssignValue
+                              [ Caux.mk_memop_pe
+                                  (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Shl)) (AilTypesAux.is_signed_integer_type result_ty))
+                                  [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe]
+                              ; core_shl ]
+                          end
+      else if Global.backend_name () = "Cn" then
+                          Caux.mk_wrapI_pe result_ity C.IOpShl promoted1_wrp.E.sym_pe promoted2_wrp.E.sym_pe
+      else
+                          Caux.mk_specified_pe core_shl
+      end
 else
                         Caux.mk_std_pe "§6.5.7#4, sentence 3"
                           (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpLt promoted1_wrp.E.sym_pe (Caux.mk_integer_pe 0))
                             (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052a_negative_left_shift)
+  begin if Global.backend_name () = "Cn" then
+                          Caux.mk_catch_exceptional_condition_pe result_ity C.IOpShl promoted1_wrp.E.sym_pe promoted2_wrp.E.sym_pe
+  else
                           (Caux.mk_let_pe res_wrp.E.sym_pat
                             (Caux.mk_op_pe C.OpMul promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe))
                           (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_is_representable res_wrp.E.sym_pe result_ty)
-  begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+    begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
                           Caux.mk_specified_pe begin
                             Caux.mk_memop_pe Mem_common.CapAssignValue
                               [ Caux.mk_memop_pe
@@ -1625,10 +1635,11 @@ else
                                   [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe]
                               ; res_wrp.E.sym_pe ]
                           end
-  else
+    else
                             (Caux.mk_specified_pe res_wrp.E.sym_pe)
-  end
-                            (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift))))
+    end
+                            (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift)))
+  end)
 end
                            )))) ]
                 end
