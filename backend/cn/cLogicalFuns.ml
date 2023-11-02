@@ -17,16 +17,13 @@ type 'a exec_result =
   | Compute of IT.t * 'a
   | If_Else of IT.t * 'a exec_result * 'a exec_result
 
-let mu_val_to_it opt_bt (M_V (_bty, v)) = 
+let mu_val_to_it (M_V ((bt : BT.t), v)) =
   match v with
   | M_Vunit -> Some IT.unit_
   | M_Vtrue -> Some (IT.bool_ true)
   | M_Vfalse -> Some (IT.bool_ false)
   | M_Vobject (M_OV (_, M_OVinteger iv)) ->
-    begin match opt_bt with
-    | Some bt -> Some (IT.num_lit_ (Memory.z_of_ival iv) bt)
-    | None -> None
-    end
+    Some (IT.num_lit_ (Memory.z_of_ival iv) bt)
   | M_Vobject (M_OV (_, M_OVpointer ptr_val)) ->
     CF.Impl_mem.case_ptrval ptr_val
     ( fun _ -> Some IT.null_ )
@@ -165,10 +162,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
       | _ -> fail {loc; msg = Unknown_variable sym}
     end
   | M_PEval v ->
-    let opt_bt = WellTyped.BaseTyping.integer_annot annots
-      |> Option.map (fun ity -> Memory.bt_of_sct (Sctypes.Integer ity))
-    in
-    begin match mu_val_to_it opt_bt v with
+    begin match mu_val_to_it v with
       | Some r -> return r
       | _ -> unsupported "val" (Pp.typ (!^ "typ info") (Pp.list BT.pp (Option.to_list opt_bt)))
     end
@@ -276,13 +270,14 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     let@ x = self var_map pe in
     do_wrapI loc act.ct x
   | M_PEbounded_binop (bk, op, pe_x, pe_y) ->
-    let op2 = match op with
-      | IOpAdd -> CF.Core.OpAdd
-      | IOpSub -> CF.Core.OpSub
-      | IOpMul -> CF.Core.OpMul
+    let@ x = self var_map pe_x in
+    let@ y = self var_map pe_y in
+    let it = match op with
+      | IOpAdd -> IT.add_ (x, y)
+      | IOpSub -> IT.sub_ (x, y)
+      | IOpMul -> IT.mul_ (x, y)
     in
-    let@ x = self var_map (M_Pexpr (loc, [], (), M_PEop (op2, pe_x, pe_y))) in
-    do_wrapI loc ((bound_kind_act bk).ct) x
+    do_wrapI loc ((bound_kind_act bk).ct) it
   | M_PEcfunction pe ->
     let@ x = self var_map pe in
     let c_sig = Option.bind (IT.is_sym x)
@@ -438,52 +433,6 @@ let rec filter_syms ss p =
     else mk (M_CaseCtor (M_Ctuple, ps))
   | _ -> p
 
-let rec simp_mu_pexpr p pexpr =
-  let (M_Pexpr (loc, annots, ty, pe)) = pexpr in
-  let mk pe = M_Pexpr (loc, annots, ty, pe) in
-  let (M_Pattern (_, _, _, pat)) = p in
-  match pat, pe with
-  | _, _ when is_wild_pat p ->
-    mk (M_PEval (M_V ((), M_Vunit)))
-  | M_CaseCtor (M_Ctuple, ps), M_PEctor (M_Ctuple, pes)
-    when List.length ps == List.length pes ->
-    mk (M_PEctor (M_Ctuple, List.map2 simp_mu_pexpr ps pes))
-  | _ -> pexpr
-
-let rec simp_mu_expr opt_p expr =
-  let (M_Expr (loc, annots, ty, e)) = expr in
-  let mk e = M_Expr (loc, annots, ty, e) in
-  match e with
-  | M_Epure pe -> begin match opt_p with
-    | Some p -> mk (M_Epure (simp_mu_pexpr p pe))
-    | None -> expr
-    end
-  | M_Eif (g_e, e1, e2) when is_undef_expr e1 -> simp_mu_expr opt_p e2
-  | M_Eif (g_e, e1, e2) when is_undef_expr e2 -> simp_mu_expr opt_p e1
-  | M_Eif (g_e, e1, e2) ->
-    let e1 = simp_mu_expr opt_p e1 in
-    let e2 = simp_mu_expr opt_p e2 in
-    mk (M_Eif (g_e, e1, e2))
-  | M_Elet (p, pe1, e2) -> simp_mu_expr opt_p (mk (M_Ewseq (p, mk (M_Epure pe1), e2)))
-  | M_Esseq (p, e1, e2)
-  | M_Ewseq (p, e1, e2) ->
-    let e2 = simp_mu_expr opt_p e2 in
-    let p = filter_syms (Free.free_in_expr e2) p in
-    let e1 = simp_mu_expr (Some p) e1 in
-    mk (M_Ewseq (p, e1, e2))
-  | M_Eunseq exps ->
-    let exps = match opt_p with
-    | Some (M_Pattern (_, _, _, M_CaseCtor (M_Ctuple, ps)))
-        when List.length ps == List.length exps ->
-      List.map2 simp_mu_expr (List.map (fun p -> Some p) ps) exps
-    | Some (M_Pattern (_, _, _, M_CaseCtor _)) ->
-      List.map (simp_mu_expr None) exps
-    | _ -> List.map (simp_mu_expr opt_p) exps
-    in
-    mk (M_Eunseq exps)
-  | M_Ebound ex -> simp_mu_expr opt_p ex
-  | _ -> expr
-
 let rec get_ret_it bt = function
   | Call_Ret v -> Some v
   | Compute _ -> None
@@ -491,6 +440,8 @@ let rec get_ret_it bt = function
     Option.bind (get_ret_it bt x) (fun x_v ->
     Option.bind (get_ret_it bt y) (fun y_v ->
     Some (IT.ite_ (t, x_v, y_v))))
+
+let embed_typing m = Typing.run Context.empty m
 
 let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
@@ -517,10 +468,9 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
      in
     let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
     let ctxt = {glob_context with label_defs = labels} in
-    (*
-    let body2 = simp_mu_expr None body in
-    Pp.debug 22 (lazy (Pp.item "simplified mu body" (Pp.list Pp_mucore.pp_expr [body; body2])));
-    *)
+    (* TODO: if labels are used, the WellTyped code will fail in an incomprehensible way,
+        should probably give the user a better error first *)
+    let@ body = embed_typing (WellTyped.BaseTyping.infer_expr SymMap.empty body) in
     let@ r = symb_exec_mu_expr ctxt (init_state, arg_map) body in
     begin match get_ret_it (def.LogicalFunctions.return_bt) r with
     | Some it -> return it
