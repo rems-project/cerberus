@@ -336,13 +336,17 @@ module WIT = struct
       | Const (CType_const ct) ->
          return (IT (Const (CType_const ct), BT.CType))
       | Unop (unop, t) ->
-         let (arg_bt, ret_bt) = match unop with
-         | Not -> (BT.Bool, BT.Bool)
+         let@ (t, ret_bt) = begin match unop with
+         | Not ->
+           let@ t = check loc BT.Bool t in
+           return (t, BT.Bool)
          | BWCLZNoSMT
          | BWCTZNoSMT
-         | BWFFSNoSMT -> (BT.Integer, BT.Integer)
-         in
-         let@ t = check loc arg_bt t in
+         | BWFFSNoSMT ->
+           let@ t = infer loc t in
+           let@ () = ensure_bits_type loc (IT.bt t) in
+           return (t, IT.bt t)
+         end in
          return (IT (Unop (unop, t), ret_bt))
       | Binop (arith_op, t, t') ->
          begin match arith_op with

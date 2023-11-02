@@ -11,7 +11,7 @@ f1 (int x, int y) {
 
 extern int f2 (int x, int y);
 /*@
-spec f2 (integer x, integer y)
+spec f2 (i32 x, i32 y)
   requires true
   ensures true
 @*/
@@ -23,9 +23,9 @@ typedef int_binop1 *int_binop;
 int_binop g1 = f2;
 
 /*@
-predicate {integer x} Is_Known_Binop (pointer f) {
+predicate (void) Is_Known_Binop (pointer f) {
   assert ((f == &f1) || (f == &f2));
-  return {x: 1};
+  return;
 }
 @*/
 

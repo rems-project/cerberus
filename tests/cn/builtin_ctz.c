@@ -1,11 +1,11 @@
 
 
 /*@
-lemma uint_ctz_uf_repr(integer x)
+lemma uint_ctz_uf_repr(u32 x)
   requires
     good<unsigned int>(x)
   ensures
-    0 <= bw_ctz_uf(x) && bw_ctz_uf(x) <= 64
+    0u32 <= bw_ctz_uf(x) && bw_ctz_uf(x) <= 64u32
 @*/
 
 int
