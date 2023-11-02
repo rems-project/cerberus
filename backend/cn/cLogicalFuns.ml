@@ -449,27 +449,35 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
     |> List.map IndexTerms.sym_ in
   match fn with
   | M_Proc (loc, args_and_body, _trusted, _) ->
-     let rec ignore_l = function
-       | M_Define (_, _, l) -> ignore_l l
-       | M_Resource (_, _, l) -> ignore_l l
-       | M_Constraint (_, _, l) -> ignore_l l
-       | M_I i -> i
-     in
-     let rec mk_var_map acc args_and_body def_args =
-       (* TODO: fix: this is just ignoring the types *)
-       match args_and_body, def_args with
-       | M_Computational ((s, bt), _, args_and_body), 
-         v :: def_args ->
-          mk_var_map (SymMap.add s v acc) args_and_body def_args
-       | M_L l, [] ->
-          (acc, ignore_l l)
-       | _ -> 
-          assert false
-     in
+    let rec ignore_l = function
+      | M_Define (_, _, l) -> ignore_l l
+      | M_Resource (_, _, l) -> ignore_l l
+      | M_Constraint (_, _, l) -> ignore_l l
+      | M_I i -> i
+    in
+    let rec mk_var_map acc args_and_body def_args =
+      (* TODO: fix: this is just ignoring the types *)
+      match args_and_body, def_args with
+      | M_Computational ((s, bt), _, args_and_body),
+        v :: def_args ->
+        Pp.debug 3 (lazy (Pp.item "adding var_map arg var binding" (Sym.pp_debug s)));
+        mk_var_map (SymMap.add s v acc) args_and_body def_args
+      | M_L l, [] ->
+        (acc, ignore_l l)
+      | _ ->
+        assert false
+    in
+    let rec in_computational_ctxt args_and_body m = match args_and_body with
+      | M_Computational ((s, bt), (loc, info), args_and_body) ->
+        Typing.bind (Typing.add_a s bt (loc, lazy (Pp.item "argument" (Sym.pp s))))
+            (fun () -> in_computational_ctxt args_and_body m)
+      | M_L _ -> m
+    in
     let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
     let ctxt = {glob_context with label_defs = labels} in
     let label_context = WellTyped.WProc.label_context rt labels in
-    let@ body = embed_typing (WellTyped.BaseTyping.infer_expr label_context body) in
+    let@ body = embed_typing (in_computational_ctxt args_and_body
+        (WellTyped.BaseTyping.infer_expr label_context body)) in
     let@ r = symb_exec_mu_expr ctxt (init_state, arg_map) body in
     begin match get_ret_it (def.LogicalFunctions.return_bt) r with
     | Some it -> return it
