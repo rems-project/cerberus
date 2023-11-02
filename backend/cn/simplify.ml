@@ -419,9 +419,6 @@ module IndexTerms = struct
          IT (Record members2, _)  ->
           assert (List.for_all2 (fun x y -> Id.equal (fst x) (fst y)) members1 members2);
           aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
-       | IT (Cast (bt1, it1), _),
-         IT (Cast (bt2, it2), _) when BT.equal bt1 bt2 ->
-         aux (eq_ (it1, it2))
        | _, _ ->
           eq_ (a, b)
        end
