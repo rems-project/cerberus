@@ -540,6 +540,7 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.offsetof_ival CheriMemoryWithoutPNVI.offsetof_ival.
 
+  (* TODO: [ty] is missing *)
   Lemma sizeof_same:
     forall fuel maybe_tagDefs,
       CheriMemoryWithPNVI.sizeof fuel maybe_tagDefs =
@@ -860,6 +861,7 @@ Module RevocationProofs.
         lift_sum eq R False
           (evalErrS M1 mem_state1)
           (evalErrS M2 mem_state2).
+
 
   Class SameState {T1 T2:Type}
     (M1: CheriMemoryWithPNVI.memM T1)
@@ -1191,6 +1193,26 @@ Module RevocationProofs.
       repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto.
   Qed.
 
+  (* TODO: see if this could be generalized to some form of Reflxivity,
+     assuming [eq T] is reflexive *)
+  Lemma serr2memM_same {T: Type}
+    {M1 M2: serr T}:
+    M1 = M2 ->
+    Same (@eq T)
+      (CheriMemoryWithPNVI.serr2memM M1)
+      (CheriMemoryWithoutPNVI.serr2memM M2).
+  Proof.
+    intros.
+    rewrite H.
+    clear H.
+    unfold CheriMemoryWithPNVI.serr2memM, CheriMemoryWithoutPNVI.serr2memM.
+    repeat break_match;
+      unfold CheriMemoryWithPNVI.memM, CheriMemoryWithoutPNVI.memM,
+      CheriMemoryWithPNVI.mem_state, CheriMemoryWithoutPNVI.mem_state;clear.
+    split; intros m1 m2 M;cbn;try reflexivity; try assumption.
+    split; intros m1 m2 M;cbn;try reflexivity; try assumption.
+  Qed.
+
   Section allocate_object_proofs.
     Variable  tid : MemCommonExe.thread_id.
     Variable  pref : CoqSymbol.prefix.
@@ -1209,7 +1231,9 @@ Module RevocationProofs.
 
       apply bind_Same_eq.
       split.
-      admit.
+      apply serr2memM_same.
+      rewrite sizeof_same.
+      reflexivity.
       intros;subst;try break_let.
 
       apply bind_Same_eq.
