@@ -219,20 +219,45 @@ module General = struct
              match re with
              | (P p', p'_oarg) when RET.subsumed requested.name p'.name ->
                 let pmatch = 
-                  eq_ (requested.pointer, p'.pointer)
+                  eq_ ((pointerToIntegerCast_ requested.pointer), (pointerToIntegerCast_ p'.pointer))
                   :: List.map2 eq__ requested.iargs p'.iargs
                 in
                 let took = and_ pmatch in
+                let prov =
+                  eq_ (pointerToAllocIdCast_ requested.pointer, pointerToAllocIdCast_ p'.pointer) in
+                let debug_failure model msg term =
+                  Pp.debug 9 (lazy (Pp.item msg (RET.pp (fst re))));
+                  debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T term) in
                 begin match provable (LC.T took) with
                 | `True ->
-                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
-                   Deleted, 
-                   (false, p'_oarg)
+                  begin match provable (LC.T prov) with
+                  | `True ->
+                    Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
+                    Deleted,
+                    (false, p'_oarg)
+                  | `False ->
+                    debug_failure
+                      (Solver.model ())
+                      "couldn't use resource (matched address but not provenance)"
+                      prov;
+                    continue
+                  end
                 | `False ->
-                   let model = Solver.model () in
-                   Pp.debug 9 (lazy (Pp.item "couldn't use resource" (RET.pp (fst re))));
-                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
-                   continue
+                  let model = Solver.model () in
+                  begin match provable (LC.T prov) with
+                  | `True ->
+                    debug_failure
+                      model
+                      "couldn't use resource (matched provenance but not address)"
+                      took;
+                    continue
+                  | `False ->
+                    debug_failure
+                      (Solver.model ())
+                      "couldn't use resource"
+                      (and_ @@ eq_ (requested.pointer, p'.pointer) :: List.tl pmatch);
+                    continue
+                  end
                 end
              | re ->
                 continue
