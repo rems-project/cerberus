@@ -468,9 +468,8 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
      in
     let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
     let ctxt = {glob_context with label_defs = labels} in
-    (* TODO: if labels are used, the WellTyped code will fail in an incomprehensible way,
-        should probably give the user a better error first *)
-    let@ body = embed_typing (WellTyped.BaseTyping.infer_expr SymMap.empty body) in
+    let label_context = WellTyped.WProc.label_context rt labels in
+    let@ body = embed_typing (WellTyped.BaseTyping.infer_expr label_context body) in
     let@ r = symb_exec_mu_expr ctxt (init_state, arg_map) body in
     begin match get_ret_it (def.LogicalFunctions.return_bt) r with
     | Some it -> return it
