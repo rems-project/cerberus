@@ -91,7 +91,7 @@ citests=(
 # 0101-sym_cfunction.c
   0105-incr.c
   0106-typedef_parsing_bug.syntax-only.c
-# 0108-shifts.c
+  0108-shifts.c
   0109-promotion_lt.c
   0110-loop_in_loop.c
   0111-skipped_label.c
@@ -198,6 +198,7 @@ citests=(
   0330-alignas.syntax-only.c
   0331-modifying-rvalue-temporary-lifetime.undef.c
   0332-rvalue-temporary-lifetime-pointer-zap.c
+  0333-shifts_non_representable.undef.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
