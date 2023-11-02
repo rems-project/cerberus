@@ -1256,6 +1256,21 @@ Module RevocationProofs.
     apply ret_Same; reflexivity.
   Qed.
 
+  Lemma get_Same:
+    @Same CheriMemoryWithPNVI.mem_state_r CheriMemoryWithoutPNVI.mem_state_r
+      mem_state_same_rel
+      (@get CheriMemoryWithPNVI.mem_state_r CheriMemoryWithPNVI.memM
+         (State_errS CheriMemoryWithPNVI.mem_state memMError))
+      (@get CheriMemoryWithoutPNVI.mem_state_r CheriMemoryWithoutPNVI.memM
+         (State_errS CheriMemoryWithoutPNVI.mem_state memMError)).
+  Proof.
+    split;
+      intros m1 m2 M;
+      destruct_mem_state_same_rel M;
+      repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+        try apply Mvarargs1; try apply Mvarargs2.
+  Qed.
+
   Section allocate_object_proofs.
     Variable  tid : MemCommonExe.thread_id.
     Variable  pref : CoqSymbol.prefix.
@@ -1290,7 +1305,7 @@ Module RevocationProofs.
       -
         apply (bind_Same mem_state_same_rel).
         split.
-        admit.
+        apply get_Same.
         intros.
         apply bind_Same_eq.
         split.
