@@ -263,6 +263,8 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
         Real
     | CN_loc ->
         Loc None
+    | CN_alloc_id ->
+        Alloc_id
     | CN_struct tag_sym ->
         Struct tag_sym
     | CN_record members ->

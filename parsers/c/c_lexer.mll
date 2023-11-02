@@ -148,6 +148,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "CN_integer"    , CN_INTEGER;
     "real"          , CN_REAL;
     "pointer"       , CN_POINTER;
+    "alloc_id"      , CN_ALLOC_ID;
     "map"           , CN_MAP;
     "list"          , CN_LIST;
     "tuple"         , CN_TUPLE;

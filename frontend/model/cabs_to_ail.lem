@@ -4095,6 +4095,8 @@ let rec desugar_cn_base_type loc bTy =
       E.return CN_real
     | CN_loc ->
       E.return CN_loc
+    | CN_alloc_id ->
+      E.return CN_alloc_id
     | CN_struct tag_ident ->
         E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
           | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->

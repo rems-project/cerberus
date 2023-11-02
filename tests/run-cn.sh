@@ -11,8 +11,8 @@ FAILED=''
 
 for TEST in $SUCC
 do
-  echo cn $TEST
-  if ! cn $TEST
+  echo cn --vip $TEST
+  if ! cn --vip $TEST
   then
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
@@ -23,8 +23,8 @@ FAIL=$(find $DIRNAME/cn -name '*.error.c')
 
 for TEST in $FAIL
 do
-  echo cn --expect-failure $TEST
-  if ! cn --expect-failure $TEST
+  echo cn --vip --expect-failure $TEST
+  if ! cn --vip --expect-failure $TEST
   then
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"

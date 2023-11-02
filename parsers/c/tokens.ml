@@ -158,6 +158,7 @@ type token =
   | CN_INTEGER
   | CN_REAL
   | CN_POINTER
+  | CN_ALLOC_ID
   | CN_MAP
   | CN_LIST
   | CN_TUPLE
@@ -309,11 +310,11 @@ let string_of_token = function
   | CN_UNFOLD -> "CN_UNFOLD"
   | CN_APPLY -> "CN_APPLY"
   | CN_MATCH -> "CN_MATCH"
-  (* | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")" *)
   | CN_BOOL -> "CN_BOOL"
   | CN_INTEGER -> "CN_INTEGER"
   | CN_REAL -> "CN_REAL"
   | CN_POINTER -> "CN_POINTER"
+  | CN_ALLOC_ID -> "CN_ALLOC_ID"
   | CN_MAP -> "CN_MAP"
   | CN_LIST -> "CN_LIST"
   | CN_TUPLE -> "CN_TUPLE"

@@ -65,6 +65,8 @@ module MakePp (Conf: PP_CN) = struct
         pp_type_keyword "real"
     | CN_loc ->
         pp_type_keyword "loc"
+    | CN_alloc_id ->
+        pp_type_keyword "alloc_id"
     | CN_struct ident ->
         pp_type_keyword "struct" ^^^ P.squotes (Conf.pp_ident ident)
     | CN_record members ->

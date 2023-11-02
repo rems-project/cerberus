@@ -603,6 +603,7 @@ module WIT = struct
                         !^"Please use copy_alloc_id instead."
               in
               Pp.warn loc msg; return ()
+           | Loc, Alloc_id -> return ()
            | Loc, Integer -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()

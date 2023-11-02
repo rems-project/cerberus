@@ -22,6 +22,7 @@ type cn_base_type 'a =
   | CN_integer
   | CN_real
   | CN_loc
+  | CN_alloc_id
   | CN_struct of 'a
   | CN_record of list (cn_base_type 'a * Symbol.identifier)
   | CN_datatype of 'a

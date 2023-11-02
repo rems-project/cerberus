@@ -29,8 +29,9 @@ predicate (map<integer, integer>) Global_Array (pointer p)
 
 void set_a_pointer(int *p, int x)
 /*@ accesses global_array @*/
+/*@ requires (alloc_id) global_array == (alloc_id) p @*/
 /*@ requires take Arr = Global_Array(global_array) @*/
-/*@ requires let offs = ((integer)p - (integer)global_array) @*/
+/*@ requires let offs = (integer)p - (integer)global_array @*/
 /*@ requires mod(offs, sizeof<int>) == 0 @*/
 /*@ requires let idx = (offs / sizeof<int>) @*/
 /*@ requires 0 <= idx && idx < global_array_width () @*/
