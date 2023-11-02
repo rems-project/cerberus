@@ -1274,6 +1274,9 @@ Module RevocationProofs.
       intros;subst;try break_let.
       apply ret_Same.
 
+      setoid_rewrite is_PNVI_WithPNVI.
+      setoid_rewrite is_PNVI_WithoutPNVI.
+      constructor;reflexivity.
 
     Admitted.
 
