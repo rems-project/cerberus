@@ -144,7 +144,7 @@ Module RevocationProofs.
     :=
   | ctype_pointer_value_eq_1:
     forall t1 t2 pv1 pv2, t1 = t2 /\ pointer_value_eq pv1 pv2 ->
-                     ctype_pointer_value_eq (t1,pv1) (t2,pv2).
+                          ctype_pointer_value_eq (t1,pv1) (t2,pv2).
 
   Inductive varargs_eq: (Z * list (CoqCtype.ctype * pointer_value_ind)) ->
                         (Z * list (CoqCtype.ctype * pointer_value_ind)) -> Prop :=
@@ -1146,13 +1146,13 @@ Module RevocationProofs.
 
   Lemma raise_Same_eq {T:Type}:
     forall x1 x2, x1 = x2 ->
-             @Same T T (@eq T)
-               (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
-                  (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
-                  x1)
-               (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
-                  (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
-                  x2).
+                  @Same T T (@eq T)
+                    (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
+                       (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
+                       x1)
+                    (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
+                       (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
+                       x2).
   Proof.
     intros x1 x2 E.
     repeat break_match;
@@ -1257,6 +1257,25 @@ Module RevocationProofs.
         try apply Mvarargs1; try apply Mvarargs2.
   Qed.
 
+  Lemma update_Same
+    {F1:CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithPNVI.mem_state_r}
+    {F2:CheriMemoryWithoutPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r}
+    :
+
+    (forall m1 m2, mem_state_same_rel m1 m2 ->  mem_state_same_rel (F1 m1) (F2 m2)) ->
+    Same (@eq unit) (ErrorWithState.update F1) (ErrorWithState.update F2).
+  Proof.
+    split.
+    -
+      split.
+    -
+      intros m1 m2 M.
+      specialize (H m1 m2 M).
+      destruct_mem_state_same_rel H.
+      repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+        try apply Mvarargs1; try apply Mvarargs2.
+  Qed.
+
   Lemma serr2memM_same {T: Type}
     {M1 M2: serr T}:
     M1 = M2 ->
@@ -1287,7 +1306,7 @@ Module RevocationProofs.
       intros m1 m2 M;
       destruct_mem_state_same_rel M;
       repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
-        try apply Mvarargs1; try apply Mvarargs2.
+      try apply Mvarargs1; try apply Mvarargs2.
   Qed.
 
 
@@ -1387,7 +1406,14 @@ Module RevocationProofs.
       -
         apply bind_Same_eq.
         split.
-        admit. (* TODO: same update *)
+        apply update_Same.
+        {
+          intros m1 m2 H.
+          destruct_mem_state_same_rel H.
+          repeat split;try assumption;
+            destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
+          cbn;apply add_m;[reflexivity|reflexivity| assumption].
+        }
         intros.
         apply ret_Same;reflexivity.
       -
