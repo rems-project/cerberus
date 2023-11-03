@@ -90,8 +90,14 @@ Module RevocationProofs.
 
   (* Equality of pointer values without taking provenance into account *)
 
-  Inductive pointer_value_eq: pointer_value_ind -> pointer_value_ind -> Prop :=
+  Inductive pointer_value_eq: relation pointer_value_ind :=
   | pointer_value_no_prov_eq: forall pr1 pr2 b1 b2,  b1 = b2 -> pointer_value_eq (PV pr1 b1) (PV pr2 b2).
+
+  (* Equality of byte values without taking provenance into account *)
+  Inductive AbsByte_eq: relation AbsByte :=
+  | AbsByte_no_prov_eq: forall a1 a2,
+      copy_offset a1 = copy_offset a2
+      /\ value a1 = value a2 -> AbsByte_eq a1 a2.
 
   (* Equivalence relation for pointer values *)
   #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
@@ -164,7 +170,7 @@ Module RevocationProofs.
     /\ ZMap.Equal a.(CheriMemoryWithPNVI.funptrmap) b.(CheriMemoryWithoutPNVI.funptrmap)
     /\ ZMap.Equiv varargs_eq a.(CheriMemoryWithPNVI.varargs) b.(CheriMemoryWithoutPNVI.varargs)
     /\ a.(CheriMemoryWithPNVI.next_varargs_id) = b.(CheriMemoryWithoutPNVI.next_varargs_id)
-    /\ ZMap.Equal a.(CheriMemoryWithPNVI.bytemap) b.(CheriMemoryWithoutPNVI.bytemap)
+    /\ ZMap.Equal a.(CheriMemoryWithPNVI.bytemap) b.(CheriMemoryWithoutPNVI.bytemap) (* TODO: different equality *)
     /\ ZMap.Equal a.(CheriMemoryWithPNVI.capmeta) b.(CheriMemoryWithoutPNVI.capmeta).
 
   Ltac destruct_mem_state_same_rel H :=
@@ -797,33 +803,6 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
-  Theorem repr_same:
-    forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
-
-      ZMap.Equal funptrmap1 funptrmap2
-      /\ ZMap.Equal capmeta1 capmeta2
-      /\ addr1 = addr2
-      /\ mval1 = mval2 ->
-      CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1 =
-        CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2.
-  Proof.
-    intros fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
-      [Ffun [Ecap [Eaddr Emval]]].
-  Admitted.
-
-  (* --- Stateful proofs below --- *)
-
-  Definition lift_sum
-    {A1 A2 B1 B2 C:Type}
-    (fl: A1->A2->C) (fr:B1->B2->C)
-    (default: C)
-    (a:sum A1 B1) (b:sum A2 B2): C :=
-    match a,b with
-    | inl l1, inl l2 => fl l1 l2
-    | inr r1, inr r2 => fr r1 r2
-    | _, _ => default
-    end.
-
   #[local] Instance zmap_range_init_Proper:
     forall [elt : Type], Proper (eq ==> eq ==> eq ==> eq ==> ZMap.Equal ==> ZMap.Equal) (zmap_range_init (T:=elt)).
   Proof.
@@ -838,6 +817,103 @@ Module RevocationProofs.
       apply IHn.
       apply F.add_m;auto.
   Qed.
+
+  (* TODO: move elsewhere *)
+  (* Simple case *)
+  #[global] Instance zmap_mapi_proper
+    {A B : Type}
+    (f : ZMap.key -> A -> B)
+    :
+    Proper ((ZMap.Equal) ==> (ZMap.Equal)) (ZMap.mapi f).
+  Proof.
+    intros a1 a2 H.
+    unfold ZMap.Equal in *.
+    intros k.
+    specialize (H k).
+    rewrite mapi_o.
+    rewrite mapi_o.
+    -
+      unfold option_map.
+      repeat break_match;invc H; reflexivity.
+    -
+      intros x y e HF;rewrite HF;reflexivity.
+    -
+      intros x y e HF;rewrite HF;reflexivity.
+  Qed.
+
+  Lemma ghost_tags_same:
+    forall (addr : AddressValue.t) (sz:Z) (c1 c0 : ZMap.t (bool * CapGhostState)),
+      ZMap.Equal (elt:=bool * CapGhostState) c0 c1 ->
+      ZMap.Equal (elt:=bool * CapGhostState)
+        (CheriMemoryWithPNVI.ghost_tags addr sz c0)
+        (CheriMemoryWithoutPNVI.ghost_tags addr sz c1).
+  Proof.
+    intros addr sz c1 c0 H.
+    unfold CheriMemoryWithPNVI.ghost_tags, CheriMemoryWithoutPNVI.ghost_tags.
+    (* repeat break_let. *)
+    match goal with
+      [ |- context[ZMap.mapi ?ff _]] => remember ff as f
+    end.
+    rewrite H.
+    reflexivity.
+  Qed.
+  #[global] Opaque CheriMemoryWithPNVI.ghost_tags CheriMemoryWithoutPNVI.ghost_tags.
+
+  Definition repr_res_eq
+    : relation (
+          ZMap.t (digest * string * Capability_GS.t)
+          * ZMap.t (bool * CapGhostState)
+          * list AbsByte
+        )
+    :=
+    fun '(m1,m2,l1) '(m1',m2',l1') =>
+      ZMap.Equal m1 m1'
+      /\ ZMap.Equal m2 m2'
+      /\ eqlistA AbsByte_eq l1 l1'.
+
+  Theorem repr_same:
+    forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
+      ZMap.Equal funptrmap1 funptrmap2
+      /\ ZMap.Equal capmeta1 capmeta2
+      /\ addr1 = addr2
+      /\ mval1 = mval2 ->
+      serr_eq repr_res_eq
+        (CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1)
+        (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
+  Proof.
+    intros fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
+      [Ffun [Ecap [Eaddr Emval]]].
+    destruct fuel;[reflexivity|].
+    cbn.
+    subst.
+    unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
+    repeat rewrite sizeof_same.
+    induction mval2.
+    -
+      break_match.
+      reflexivity.
+      repeat split; auto.
+      apply ghost_tags_same.
+      assumption.
+
+      unfold CheriMemoryWithPNVI.default_prov.
+      unfold CheriMemoryWithoutPNVI.default_prov.
+      rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+
+  Admitted.
+
+  (* --- Stateful proofs below --- *)
+
+  Definition lift_sum
+    {A1 A2 B1 B2 C:Type}
+    (fl: A1->A2->C) (fr:B1->B2->C)
+    (default: C)
+    (a:sum A1 B1) (b:sum A2 B2): C :=
+    match a,b with
+    | inl l1, inl l2 => fl l1 l2
+    | inr r1, inr r2 => fr r1 r2
+    | _, _ => default
+    end.
 
   Lemma init_ghost_tags_same:
     forall (sz : Z) (addr : AddressValue.t) (c1 c0 : ZMap.t (bool * CapGhostState)),
@@ -1387,12 +1463,16 @@ Module RevocationProofs.
         split.
         apply get_Same.
         intros.
-        apply bind_Same_eq.
+        apply (bind_Same repr_res_eq).
         split.
-        apply serr2memM_same.
         {
+          (* TODO: need genealized [serr2memM_same] *)
+          (*
+          apply serr2memM_same.
           destruct_mem_state_same_rel H.
           apply repr_same; auto.
+           *)
+          admit.
         }
         intros; repeat break_let.
         apply bind_Same_eq.
@@ -1400,7 +1480,7 @@ Module RevocationProofs.
         apply put_Same.
         {
           destruct_mem_state_same_rel H.
-          tuple_inversion.
+          destruct H0 as [H0 [H1 H2]].
           subst.
           repeat split;try assumption;
             destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
@@ -1415,6 +1495,7 @@ Module RevocationProofs.
             tuple_inversion;reflexivity.
             auto.
           }
+          apply zmap_mapi_proper.
         }
         intros.
         apply ret_Same;reflexivity.
