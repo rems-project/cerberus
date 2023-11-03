@@ -119,8 +119,8 @@ let main
       output_decorated
       astprints
       expect_failure
-      use_ity
-      skip_peval
+      no_use_ity
+      use_peval
   =
   if json then begin
       if debug_level > 0 then
@@ -139,13 +139,12 @@ let main
     Solver.log_to_temp := solver_logging;
     Check.only := only;
     Diagnostics.diag_string := diag;
-    WellTyped.use_ity := use_ity
+    WellTyped.use_ity := not no_use_ity
   end;
-  let do_peval = not skip_peval in
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) = 
     handle_frontend_error 
-      (frontend incl_dirs incl_files astprints do_peval filename state_file)
+      (frontend incl_dirs incl_files astprints use_peval filename state_file)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel 
@@ -303,13 +302,13 @@ let expect_failure =
   let doc = "invert return value to 1 if type checks pass and 0 on failure" in
   Arg.(value & flag & info["expect-failure"] ~doc)
 
-let use_ity =
-  let doc = "(this switch should go away) in WellTyped.BaseTyping, use integer type annotations placed by the Core elaboration" in
-  Arg.(value & flag & info["use-ity"] ~doc)
+let no_use_ity =
+  let doc = "(this switch should go away) in WellTyped.BaseTyping, do not use integer type annotations placed by the Core elaboration" in
+  Arg.(value & flag & info["no-use-ity"] ~doc)
 
-let skip_peval =
-  let doc = "(this switch should go away) skip the Core partial evaluation phase" in
-  Arg.(value & flag & info["skip-peval"] ~doc)
+let use_peval =
+  let doc = "(this switch should go away) run the Core partial evaluation phase" in
+  Arg.(value & flag & info["use-peval"] ~doc)
 
 
 
@@ -339,7 +338,7 @@ let () =
       output_decorated $
       astprints $
       expect_failure $
-      use_ity $
-      skip_peval
+      no_use_ity $
+      use_peval
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
