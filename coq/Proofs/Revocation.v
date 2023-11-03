@@ -99,6 +99,33 @@ Module RevocationProofs.
       copy_offset a1 = copy_offset a2
       /\ value a1 = value a2 -> AbsByte_eq a1 a2.
 
+  #[local] Instance AbsByte_Equivalence: Equivalence AbsByte_eq.
+  Proof.
+    split.
+    -
+      intros a.
+      destruct a.
+      constructor.
+      split;reflexivity.
+    -
+      intros a b.
+      destruct a, b.
+      intros H.
+      destruct H. destruct H.
+      constructor.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      intros H1 H2.
+      destruct H1. destruct H.
+      destruct H2. destruct H1.
+      constructor.
+      split.
+      rewrite H; apply H1.
+      rewrite H0. apply H2.
+  Qed.
+
   (* Equivalence relation for pointer values *)
   #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
   Proof.
@@ -819,8 +846,20 @@ Module RevocationProofs.
   Qed.
 
   (* TODO: move elsewhere *)
+  #[global] Instance zmap_mapi_Proper
+    {A B : Type}
+    (pA: relation A)
+    (pB: relation B)
+    (f : ZMap.key -> A -> B)
+    {Hf: Proper (eq ==> pA ==> pB) f}
+    :
+    Proper ((ZMap.Equiv pA) ==> (ZMap.Equiv pB)) (ZMap.mapi f).
+  Proof.
+  Admitted.
+
+  (* TODO: move elsewhere *)
   (* Simple case *)
-  #[global] Instance zmap_mapi_proper
+  #[global] Instance zmap_mapi_Proper_equal
     {A B : Type}
     (f : ZMap.key -> A -> B)
     :
@@ -840,6 +879,18 @@ Module RevocationProofs.
     -
       intros x y e HF;rewrite HF;reflexivity.
   Qed.
+
+  (* Now we can prove that mapi is Proper with respect to eqlistA. *)
+  (* TODO: move elsewhere *)
+  #[global] Lemma list_mapi_Proper
+    {A B : Type}
+    (f : nat -> A -> B)
+    (pA: relation A)
+    (pB: relation B)
+    {Hf: Proper (eq ==> pA ==> pB) f}:
+    Proper (eqlistA pA ==> eqlistA pB) (mapi f).
+  Proof.
+  Admitted.
 
   Lemma ghost_tags_same:
     forall (addr : AddressValue.t) (sz:Z) (c1 c0 : ZMap.t (bool * CapGhostState)),
@@ -1180,6 +1231,33 @@ Module RevocationProofs.
     (f : A -> B -> A)
     `{f_mor: !Proper ((Ae) ==> (Eb) ==> (Ae)) f}
     :
+    Proper (eqlistA Eb ==> Ae ==> Ae) (List.fold_left f).
+  Proof.
+    intros x y Exy.
+    intros a b Eab.
+
+
+    dependent induction Exy.
+    -
+      apply Eab.
+    -
+      cbn.
+      apply IHExy.
+      apply f_mor.
+      apply Eab.
+      apply H1.
+  Qed.
+
+  (* TODO: move elsewhere *)
+  #[global] Instance List_fold_left_eq_proper
+    {A B : Type}
+    (Eb: relation B)
+    (Ae: relation A)
+    `{Equivalence A Ae}
+    `{Equivalence B Eb}
+    (f : A -> B -> A)
+    `{f_mor: !Proper ((Ae) ==> (Eb) ==> (Ae)) f}
+    :
     Proper ((eq) ==> (Ae) ==> (Ae)) (List.fold_left f).
   Proof.
     intros x y Exy.
@@ -1367,6 +1445,37 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.allocate_region CheriMemoryWithoutPNVI.allocate_region.
 
+  Definition Z_AbsByte_eq (za1: (Z*AbsByte)) (za2: (Z*AbsByte)): Prop
+    :=
+    let '(z1,a1) := za1 in
+    let '(z2,a2) := za2 in
+    z1 = z2 /\ AbsByte_eq a1 a2.
+
+  #[local] Instance Z_AbsByte_Equivalence: Equivalence Z_AbsByte_eq.
+  Proof.
+    split.
+    -
+      intros a.
+      destruct a.
+      constructor; reflexivity.
+    -
+      intros a b.
+      destruct a, b.
+      intros [H1 H2].
+      constructor.
+      auto.
+      symmetry.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      intros [H1 H2].
+      intros [H3 H4].
+      constructor.
+      rewrite H1. apply H3.
+      rewrite H2. apply H4.
+  Qed.
+
   Section allocate_object_proofs.
     Variable  tid : MemCommonExe.thread_id.
     Variable  pref : CoqSymbol.prefix.
@@ -1426,16 +1535,26 @@ Module RevocationProofs.
             destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
           cbn;apply add_m;[reflexivity|reflexivity| assumption].
           cbn.
-          apply List_fold_left_proper with (Eb:=(@eq (Z * AbsByte))); try reflexivity; try typeclasses eauto; try assumption.
+
+          apply In_m_Proper;[reflexivity|].
+
+          apply List_fold_left_proper with (Eb:=Z_AbsByte_eq); try reflexivity; try typeclasses eauto; try assumption.
           {
             intros l1 l2 LE a1 a2 AE.
             repeat break_let.
-            eapply add_m_Proper.
-            tuple_inversion;reflexivity.
-            tuple_inversion;reflexivity.
-            auto.
+            cbn in AE.
+            destruct AE.
+            rewrite LE.
+            (* TODO: need ZMap.Equiv here *)
+            Set Printing All.
+            rewrite H3.
+            eapply add_m_Proper;auto.
+            destruct a1,a2,AE.
+            repeat tuple_inversion.
+            apply H3.
           }
-          apply zmap_mapi_proper.
+          Set Printing All.
+          apply list_mapi_Proper with (Eb:=(@eq (Z * AbsByte))).
         }
         intros.
         apply ret_Same;reflexivity.
