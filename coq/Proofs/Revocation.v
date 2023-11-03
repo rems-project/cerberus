@@ -3,6 +3,7 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
 From Coq.Strings Require Import String Ascii HexString.
+Require Import Coq.Classes.Morphisms.
 Require Import Coq.Classes.SetoidClass.
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Relations.Relation_Definitions.
@@ -1361,7 +1362,26 @@ Module RevocationProofs.
         intros; repeat break_let.
         apply bind_Same_eq.
         split.
-        admit. (* TODO: same_put *)
+        apply put_Same.
+
+        {
+          destruct_mem_state_same_rel H.
+          tuple_inversion.
+          subst.
+          repeat split;try assumption;
+            destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
+          cbn;apply add_m;[reflexivity|reflexivity| assumption].
+          cbn.
+          apply List_fold_left_proper with (Eb:=(@eq (Z * AbsByte))); try reflexivity; try typeclasses eauto; try assumption.
+          {
+            intros l1 l2 LE a1 a2 AE.
+            repeat break_let.
+            eapply add_m_Proper.
+            tuple_inversion;reflexivity.
+            tuple_inversion;reflexivity.
+            auto.
+          }
+        }
         intros.
         apply ret_Same;reflexivity.
       -
