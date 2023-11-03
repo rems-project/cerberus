@@ -797,7 +797,21 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
-  (* Stateful proofs below *)
+  Theorem repr_same:
+    forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
+
+      ZMap.Equal funptrmap1 funptrmap2
+      /\ ZMap.Equal capmeta1 capmeta2
+      /\ addr1 = addr2
+      /\ mval1 = mval2 ->
+      CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1 =
+        CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2.
+  Proof.
+    intros fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
+      [Ffun [Ecap [Eaddr Emval]]].
+  Admitted.
+
+  (* --- Stateful proofs below --- *)
 
   Definition lift_sum
     {A1 A2 B1 B2 C:Type}
@@ -1376,13 +1390,14 @@ Module RevocationProofs.
         apply bind_Same_eq.
         split.
         apply serr2memM_same.
-        admit. (* TODO: repr_same! *)
-
+        {
+          destruct_mem_state_same_rel H.
+          apply repr_same; auto.
+        }
         intros; repeat break_let.
         apply bind_Same_eq.
         split.
         apply put_Same.
-
         {
           destruct_mem_state_same_rel H.
           tuple_inversion.
@@ -1422,7 +1437,7 @@ Module RevocationProofs.
         setoid_rewrite is_PNVI_WithPNVI.
         setoid_rewrite is_PNVI_WithoutPNVI.
         constructor;reflexivity.
-    Admitted.
+    Qed.
 
   End allocate_object_proofs.
 
