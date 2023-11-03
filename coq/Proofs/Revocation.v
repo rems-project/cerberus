@@ -1238,6 +1238,24 @@ Module RevocationProofs.
     apply bind_Same.
   Qed.
 
+  Lemma put_Same
+    {V1:CheriMemoryWithPNVI.mem_state_r}
+    {V2:CheriMemoryWithoutPNVI.mem_state_r}
+    :
+    mem_state_same_rel V1 V2 ->
+    Same (@eq unit) (put V1) (put V2).
+  Proof.
+    split.
+    -
+      split.
+    -
+      destruct_mem_state_same_rel H.
+      intros m1 m2 M;
+        destruct_mem_state_same_rel M.
+      repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
+        try apply Mvarargs1; try apply Mvarargs2.
+  Qed.
+
   Lemma serr2memM_same {T: Type}
     {M1 M2: serr T}:
     M1 = M2 ->
