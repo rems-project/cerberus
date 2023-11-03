@@ -126,6 +126,75 @@ Module RevocationProofs.
       rewrite H0. apply H2.
   Qed.
 
+  Lemma In_m_Proper_Equiv
+    (elt : Type)
+    (R: relation elt)
+    :
+    Proper (eq ==> ZMap.Equiv R ==> iff) (ZMap.In (elt:=elt)).
+  Proof.
+    intros k1 k2 EE m1 m2 [ME1 _].
+    subst. rename k2 into k.
+    specialize (ME1 k).
+    assumption.
+  Qed.
+
+  #[local] Instance zmap_Equiv_Equivalence
+    (elt: Type)
+    (R: relation elt)
+    `{H: Equivalence elt R}
+    :
+    Equivalence (ZMap.Equiv R).
+  Proof.
+    rename H into EE.
+    split.
+    -
+      intros m.
+      constructor.
+      + auto.
+      +
+        intros k e e' H0 H1.
+        auto.
+        assert(E: e = e') by (eapply MapsTo_fun;eauto).
+        rewrite E.
+        reflexivity.
+    -
+      intros a b [H1 H2].
+      split.
+      +
+        intros k.
+        specialize (H1 k).
+        symmetry.
+        apply H1.
+      +
+        intros k e e'.
+        specialize (H2 k e' e).
+        intros H H0.
+        symmetry.
+        apply H2;assumption.
+    -
+      intros a b c.
+      intros [H1 H2] [H3 H4].
+      split.
+      +
+        intros k.
+        specialize (H1 k).
+        specialize (H3 k).
+        split.
+        *
+          intros HH.
+          apply H3, H1, HH.
+        *
+          intros HH.
+          apply H1, H3, HH.
+      +
+        intros k e e'.
+        clear H1 H3.
+        specialize (H2 k).
+        specialize (H4 k).
+        intros H H0.
+        admit.
+  Admitted.
+
   (* Equivalence relation for pointer values *)
   #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
   Proof.
@@ -846,6 +915,7 @@ Module RevocationProofs.
   Qed.
 
   (* TODO: move elsewhere *)
+  (* TODO: maybe not needed! *)
   #[global] Instance zmap_mapi_Proper
     {A B : Type}
     (pA: relation A)
@@ -858,6 +928,16 @@ Module RevocationProofs.
   Admitted.
 
   (* TODO: move elsewhere *)
+  #[global] Instance zmap_add_Proper
+    {elt : Type}
+    (R: relation elt)
+    :
+    Proper ((eq) ==> R ==> (ZMap.Equiv R) ==> (ZMap.Equiv R)) (ZMap.add (elt:=elt)).
+  Proof.
+  Admitted.
+
+  (* TODO: move elsewhere *)
+  (* TODO: maybe not needed! *)
   (* Simple case *)
   #[global] Instance zmap_mapi_Proper_equal
     {A B : Type}
@@ -1536,25 +1616,36 @@ Module RevocationProofs.
           cbn;apply add_m;[reflexivity|reflexivity| assumption].
           cbn.
 
-          apply In_m_Proper;[reflexivity|].
-
+          apply In_m_Proper_Equiv with (R:=AbsByte_eq);[reflexivity|].
           apply List_fold_left_proper with (Eb:=Z_AbsByte_eq); try reflexivity; try typeclasses eauto; try assumption.
           {
             intros l1 l2 LE a1 a2 AE.
             repeat break_let.
             cbn in AE.
             destruct AE.
+            subst.
             rewrite LE.
-            (* TODO: need ZMap.Equiv here *)
-            Set Printing All.
             rewrite H3.
-            eapply add_m_Proper;auto.
-            destruct a1,a2,AE.
-            repeat tuple_inversion.
-            apply H3.
+            reflexivity.
           }
-          Set Printing All.
-          apply list_mapi_Proper with (Eb:=(@eq (Z * AbsByte))).
+          apply list_mapi_Proper with
+            (pA:=AbsByte_eq)
+            (pB:=Z_AbsByte_eq).
+          {
+            intros l1 l2 LE a1 a2 AE.
+            repeat break_let.
+            cbn in AE.
+            subst.
+
+            (* TODO: stopped here *)
+            rewrite AE.
+            rewrite LE.
+            rewrite H3.
+            reflexivity.
+          }
+          admit.
+          symmetry;apply H2.
+
         }
         intros.
         apply ret_Same;reflexivity.
