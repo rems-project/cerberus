@@ -392,9 +392,42 @@ module Translate = struct
   let signed_to_unsigned_fundecl context global n =
    nth (Z3.Tuple.get_field_decls (sort context global (Bits (Signed, n)))) 0
 
- let unsigned_to_signed_fundecl context global n =
+  let unsigned_to_signed_fundecl context global n =
    Z3.Tuple.get_mk_decl (sort context global (Bits (Signed, n)))
 
+  let rec mk_ctz context target_sz cur_sz tm =
+    assert (cur_sz >= 1);
+    let target s = Z3.BitVector.mk_numeral context s target_sz in
+    let eq_0 tm sz = Z3.Boolean.mk_eq context tm (Z3.BitVector.mk_numeral context "0" sz) in
+    if cur_sz == 1
+    then Z3.Boolean.mk_ite context (eq_0 tm cur_sz) (target "1") (target "0")
+    else
+      let top_sz = cur_sz / 2 in
+      let bot_sz = cur_sz - top_sz in
+      let top = Z3.BitVector.mk_extract context (cur_sz - 1) (cur_sz - top_sz) tm in
+      let bot = Z3.BitVector.mk_extract context (bot_sz - 1) 0 tm in
+      Z3.Boolean.mk_ite context (eq_0 bot bot_sz)
+        (Z3.BitVector.mk_add context (mk_ctz context target_sz top_sz top)
+          (target (Int.to_string bot_sz)))
+        (mk_ctz context target_sz bot_sz bot)
+
+  let rec mk_clz context target_sz cur_sz tm =
+    assert (cur_sz >= 1);
+    let target s = Z3.BitVector.mk_numeral context s target_sz in
+    let eq_0 tm sz = Z3.Boolean.mk_eq context tm (Z3.BitVector.mk_numeral context "0" sz) in
+    if cur_sz == 1
+    then Z3.Boolean.mk_ite context (eq_0 tm cur_sz) (target "1") (target "0")
+    else
+      let top_sz = cur_sz / 2 in
+      let bot_sz = cur_sz - top_sz in
+      let top = Z3.BitVector.mk_extract context (cur_sz - 1) (cur_sz - top_sz) tm in
+      let bot = Z3.BitVector.mk_extract context (bot_sz - 1) 0 tm in
+      Z3.Boolean.mk_ite context (eq_0 top top_sz)
+        (Z3.BitVector.mk_add context (mk_clz context target_sz bot_sz bot)
+          (target (Int.to_string top_sz)))
+        (mk_clz context target_sz top_sz top)
+
+  let _foo = (mk_ctz, mk_clz)
 
   let adjust_term global : IT.t -> IT.t option =
 
@@ -405,6 +438,12 @@ module Translate = struct
     fun it ->
       begin match IT.term it with
       | Const Null -> Some (pointer_ Z.zero)
+      | Unop (op, t1) -> begin match op with
+         | BWFFSNoSMT ->
+            let intl i = int_lit_ i (IT.bt t1) in
+            Some (ite_ (eq_ (t1, intl 0), intl 0, add_ (arith_unop BWCTZNoSMT t1, intl 1)))
+         | _ -> None
+      end
       | Binop (op, t1, t2) -> begin match op with
          | Exp -> begin match is_z t1, is_z t2 with
             | Some z1, Some z2 when Z.fits_int z2 ->
@@ -559,6 +598,8 @@ module Translate = struct
       let to_u t = mk_bv_cast context (unsigned_of bt, bt, t) in
       op (to_u t1) (to_u t2)
     in
+    let via_unsigned1 context bt op t1 =
+      via_unsigned context bt (fun t1 _ -> op t1) t1 t1 in
 
     let rec term it =
       let bt = IT.bt it in
@@ -604,12 +645,19 @@ module Translate = struct
       | Unop (uop, t) ->
          begin match uop with
            | Not -> Z3.Boolean.mk_not context (term t)
-         (* | BWCLZNoSMT -> make_uf "bw_clz_uf" (Integer) [t] *)
-         (* | BWCTZNoSMT -> make_uf "bw_ctz_uf" (Integer) [t] *)
-         (* | BWFFSNoSMT -> make_uf "bw_ffs_uf" (Integer) [t] *)
-           | _ ->
-           Pp.debug 1 (lazy (Pp.item "not yet restored" (IT.pp_with_typ it)));
-           failwith "todo"
+           | BWFFSNoSMT -> adj ()
+           | BWCLZNoSMT -> begin match IT.bt t with
+               | BT.Bits (BT.Unsigned, sz) -> mk_clz context sz sz (term t)
+               | BT.Bits (BT.Signed, sz) -> via_unsigned1 context (IT.bt t)
+                   (mk_clz context sz sz) (term t)
+               | _ -> failwith "solver: BWCLZNoSMT: not a bitwise type"
+             end
+           | BWCTZNoSMT -> begin match IT.bt t with
+               | BT.Bits (BT.Unsigned, sz) -> mk_ctz context sz sz (term t)
+               | BT.Bits (BT.Signed, sz) -> via_unsigned1 context (IT.bt t)
+                   (mk_ctz context sz sz) (term t)
+               | _ -> failwith "solver: BWCTZNoSMT: not a bitwise type"
+             end
          end
       | Binop (bop, t1, t2) ->
          if BT.equal (IT.bt t1) (IT.bt t2)

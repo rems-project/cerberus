@@ -1862,24 +1862,24 @@ let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
 
 let ctz_proxy_ft =
   let info = (Locations.unknown, Some "ctz_proxy builtin ft") in
-  let (n_sym, n) = IT.fresh_named BT.Integer "n_" in
-  let (ret_sym, ret) = IT.fresh_named BT.Integer "return" in
-  let neq_0 = LC.T (IT.not_ (IT.eq_ (n, IT.int_ 0))) in
-  let eq_ctz = LC.T (IT.eq_ (ret, IT.arith_unop Terms.BWCTZNoSMT n)) in
-  let rt = RT.mComputational ((ret_sym, BT.Integer), info)
+  let (n_sym, n) = IT.fresh_named (BT.(Bits (Unsigned, 32))) "n_" in
+  let (ret_sym, ret) = IT.fresh_named (BT.(Bits (Signed, 32))) "return" in
+  let neq_0 = LC.T (IT.not_ (IT.eq_ (n, IT.int_lit_ 0 (IT.bt n)))) in
+  let eq_ctz = LC.T (IT.eq_ (ret, cast_ (IT.bt ret) (IT.arith_unop Terms.BWCTZNoSMT n))) in
+  let rt = RT.mComputational ((ret_sym, IT.bt ret), info)
     (LRT.mConstraint (eq_ctz, info) LRT.I) in
-  let ft = AT.mComputationals [(n_sym, BT.Integer, info)]
+  let ft = AT.mComputationals [(n_sym, IT.bt n, info)]
     (AT.L (LAT.mConstraint (neq_0, info) (LAT.I rt))) in
   ft
 
 let ffs_proxy_ft =
   let info = (Locations.unknown, Some "ffs_proxy builtin ft") in
-  let (n_sym, n) = IT.fresh_named BT.Integer "n_" in
-  let (ret_sym, ret) = IT.fresh_named BT.Integer "return" in
+  let (n_sym, n) = IT.fresh_named (BT.(Bits (Signed, 32))) "n_" in
+  let (ret_sym, ret) = IT.fresh_named (BT.(Bits (Signed, 32))) "return" in
   let eq_ffs = LC.T (IT.eq_ (ret, IT.arith_unop Terms.BWFFSNoSMT n)) in
-  let rt = RT.mComputational ((ret_sym, BT.Integer), info)
+  let rt = RT.mComputational ((ret_sym, IT.bt ret), info)
     (LRT.mConstraint (eq_ffs, info) LRT.I) in
-  let ft = AT.mComputationals [(n_sym, BT.Integer, info)] (AT.L (LAT.I rt)) in
+  let ft = AT.mComputationals [(n_sym, IT.bt n, info)] (AT.L (LAT.I rt)) in
   ft
 
 
