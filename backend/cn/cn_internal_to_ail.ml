@@ -1416,19 +1416,23 @@ let rec cn_to_ail_predicates_internal pred_def_list dts globals ots preds =
 let rec cn_to_ail_post_aux_internal dts globals ownership_ctypes preds = function
   | LRT.Define ((name, it), info, t) ->
     Printf.printf "LRT.Define\n";
-    let binding = create_binding name (bt_to_ail_ctype (IT.bt it)) in
-    let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar name) in
-    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals ownership_ctypes preds t in
+    let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
+    let new_lrt = Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, IT.bt it, new_name) t in 
+    let binding = create_binding new_name (bt_to_ail_ctype (IT.bt it)) in
+    let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
+    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals ownership_ctypes preds new_lrt in
     (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
 
   | LRT.Resource ((name, (re, bt)), info, t)  ->
-    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts globals preds re in
+    let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
+    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal new_name dts globals preds re in
     (* No duplicates *)
     let ct = match owned_ctype with 
       | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
       | None -> []
     in
-    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals (ct @ ownership_ctypes) preds t in
+    let new_lrt = Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, bt, new_name) t in 
+    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals (ct @ ownership_ctypes) preds new_lrt in
     (b1 @ b2, s1 @ s2, ownership_ctypes')
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
@@ -1546,19 +1550,23 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
 let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
+    let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
+    let new_lat = Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, IT.bt it, new_name) lat in 
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding name ctype in
     let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar name) in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (binding :: b1, s1)
 
   | LAT.Resource ((name, (ret, bt)), info, lat) -> 
-    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal name dts globals preds ret in
+    let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
+    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal new_name dts globals preds ret in
     let ct = match owned_ctype with 
       | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
       | None -> []
     in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals (ct @ ownership_ctypes) preds c_return_type lat in
+    let new_lat = Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, bt, new_name) lat in 
+    let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals (ct @ ownership_ctypes) preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (b1, s1)
 
   | LAT.Constraint (lc, (loc, str_opt), lat) -> 
@@ -1620,10 +1628,11 @@ let rec cn_to_ail_pre_post_aux_internal dts preds globals c_return_type = functi
     let binding = create_binding cn_sym cn_ctype in 
     let rhs = add_conversion_fn A.(AilEident sym) bt in 
     let decl = A.(AilSdeclaration [(cn_sym, Some (mk_expr rhs))]) in
-    let subst_at = Core_to_mucore.fn_spec_instrumentation_sym_subst (sym, bt, cn_sym) at in
+    let subst_at = Core_to_mucore.fn_spec_instrumentation_sym_subst_at (sym, bt, cn_sym) at in
     let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds globals c_return_type subst_at in 
     prepend_to_precondition ail_executable_spec ([binding], [decl])
-  | AT.L lat -> cn_to_ail_lat_internal_2 dts globals [] preds c_return_type lat
+  | AT.L lat -> 
+    cn_to_ail_lat_internal_2 dts globals [] preds c_return_type lat
   
 let cn_to_ail_pre_post_internal dts preds globals c_return_type = function 
   | Some internal -> cn_to_ail_pre_post_aux_internal dts preds globals c_return_type internal

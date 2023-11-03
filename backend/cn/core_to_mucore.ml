@@ -1567,21 +1567,35 @@ type instrumentation = {
     internal : fn_spec_instrumentation option;
 }
 
-let fn_spec_instrumentation_subst : _ Subst.t -> fn_spec_instrumentation -> fn_spec_instrumentation =
-  ArgumentTypes.subst (fun subst (rt, stmts) ->
-    let rt = ReturnTypes.subst subst rt in
-    let stmts = 
-      List.map (fun (loc, cn_progs) ->
-        (loc, List.map (Cnprog.subst subst) cn_progs)
-      ) stmts
-    in
-    (rt, stmts)
-  ) 
+let rt_stmts_subst = (fun subst (rt, stmts) ->
+   let rt = ReturnTypes.subst subst rt in
+   let stmts = 
+     List.map (fun (loc, cn_progs) ->
+       (loc, List.map (Cnprog.subst subst) cn_progs)
+     ) stmts
+   in
+   (rt, stmts)
+ ) 
+
+let fn_spec_instrumentation_subst_at : _ Subst.t -> fn_spec_instrumentation -> fn_spec_instrumentation =
+  ArgumentTypes.subst rt_stmts_subst
+
+let fn_spec_instrumentation_subst_lat : _ Subst.t -> (ReturnTypes.t * statements) LogicalArgumentTypes.t -> (ReturnTypes.t * statements) LogicalArgumentTypes.t =
+   LogicalArgumentTypes.subst rt_stmts_subst
+
 
 (* substitute `s_with` for `s_replace` of basetype `bt` *)
-let fn_spec_instrumentation_sym_subst (s_replace, bt, s_with) fn_spec = 
+let fn_spec_instrumentation_sym_subst_at (s_replace, bt, s_with) fn_spec = 
   let subst = IT.make_subst [(s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown))] in
-  fn_spec_instrumentation_subst subst fn_spec
+  fn_spec_instrumentation_subst_at subst fn_spec
+
+let fn_spec_instrumentation_sym_subst_lat (s_replace, bt, s_with) fn_spec = 
+   let subst = IT.make_subst [(s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown))] in
+   fn_spec_instrumentation_subst_lat subst fn_spec
+
+let fn_spec_instrumentation_sym_subst_lrt (s_replace, bt, s_with) fn_spec = 
+   let subst = IT.make_subst [(s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown))] in
+   LRT.subst subst fn_spec
 
 
 let concat2 (x : ('a list * 'b list)) (y : ('a list * 'b list)) : 'a list * 'b list =
