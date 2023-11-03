@@ -1289,6 +1289,34 @@ Module RevocationProofs.
         try apply Mvarargs1; try apply Mvarargs2.
   Qed.
 
+
+  (* TODO: move elsewhere *)
+  #[global] Instance List_fold_left_proper
+    {A B : Type}
+    (Eb: relation B)
+    (Ae: relation A)
+    `{Equivalence A Ae}
+    `{Equivalence B Eb}
+    (f : A -> B -> A)
+    `{f_mor: !Proper ((Ae) ==> (Eb) ==> (Ae)) f}
+    :
+    Proper ((eq) ==> (Ae) ==> (Ae)) (List.fold_left f).
+  Proof.
+    intros x y Exy.
+    destruct Exy.
+    intros a b Eab.
+    -
+      dependent induction x.
+      +
+        apply Eab.
+      +
+        cbn.
+        apply IHx.
+        apply f_mor.
+        assumption.
+        reflexivity.
+  Qed.
+
   Section allocate_object_proofs.
     Variable  tid : MemCommonExe.thread_id.
     Variable  pref : CoqSymbol.prefix.
