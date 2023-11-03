@@ -428,7 +428,9 @@ module WIT = struct
            | ModNoSMT
            | XORNoSMT
            | BWAndNoSMT
-           | BWOrNoSMT ->
+           | BWOrNoSMT
+           | ShiftLeft
+           | ShiftRight ->
               let@ t = infer loc t in
               let@ () = ensure_bits_type loc (IT.bt t) in
               let@ t' = check loc (IT.bt t) t' in
@@ -1402,8 +1404,20 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         return (bt, M_PEop (op, pe1, pe2))
       | M_PEbounded_binop (bk, op, pe1, pe2) ->
         let@ pe1 = infer_pexpr pe1 in
-        (* Core i-binops are all ('a -> 'a -> 'a) *)
-        let@ pe2 = check_pexpr (bt_of_pexpr pe1) pe2 in
+        (* Core i-binops are all ('a -> 'a -> 'a), except shifts which promote the rhs *)
+        let promotes_rhs = match op with
+          | IOpShl | IOpShr
+            -> true
+          | _ -> false
+        in
+        let@ pe2 = if promotes_rhs
+          then begin
+            let@ pe2 = infer_pexpr pe2 in
+            let@ () = ensure_bits_type (loc_of_pexpr pe2) (bt_of_pexpr pe2) in
+            return pe2
+          end
+          else check_pexpr (bt_of_pexpr pe1) pe2
+        in
         return (Memory.bt_of_sct ((bound_kind_act bk).ct), M_PEbounded_binop (bk, op, pe1, pe2))
       | M_PEbitwise_unop (unop, pe) ->
         (* all the supported unops do arithmetic in the one (bitwise) type *)

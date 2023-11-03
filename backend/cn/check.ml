@@ -690,13 +690,20 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      assert (match act.ct with Integer ity when is_unsigned_integer_type ity -> true | _ -> false);
      let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
-     let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe2) in
+     let@ () = ensure_bits_type loc expect in
+     let@ () = ensure_bits_type loc (bt_of_pexpr pe2) in
      check_pexpr pe1 (fun arg1 ->
      check_pexpr pe2 (fun arg2 ->
+     let arg1_bt_range = BT.bits_range (Option.get (BT.is_bits_bt (IT.bt arg1))) in
+     let arg2_bits_lost = IT.not_ (IT.in_z_range arg2 arg1_bt_range) in
      let x = match iop with
        | IOpAdd -> add_ (arg1, arg2)
        | IOpSub -> sub_ (arg1, arg2)
        | IOpMul -> mul_ (arg1, arg2)
+       | IOpShl -> ite_ (arg2_bits_lost, IT.int_lit_ 0 expect,
+               arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2))
+       | IOpShr -> ite_ (arg2_bits_lost, IT.int_lit_ 0 expect,
+               arith_binop Terms.ShiftRight (arg1, cast_ (IT.bt arg1) arg2))
      in
      k x))
   | M_PEbounded_binop (M_Bound_Except act, iop, pe1, pe2) ->
@@ -708,22 +715,25 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe2) in
-     let@ bits = match expect with
-       | BT.Bits (_, bits) -> return bits
-       | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item
-           "bounded binop on non-bitwise type" (BT.pp expect))})
-     in
+     let@ () = WellTyped.ensure_bits_type loc expect in
+     let (_, bits) = Option.get (BT.is_bits_bt expect) in
      check_pexpr pe1 (fun arg1 ->
      check_pexpr pe2 (fun arg2 ->
      let large_bt = BT.Bits (BT.Signed, (2 * bits) + 4) in
      let large x = cast_ large_bt x in
-     let (direct_x, via_large_x) = match iop with
-       | IOpAdd -> (add_ (arg1, arg2), add_ (large arg1, large arg2))
-       | IOpSub -> (sub_ (arg1, arg2), sub_ (large arg1, large arg2))
-       | IOpMul -> (mul_ (arg1, arg2), mul_ (large arg1, large arg2))
+     let (direct_x, via_large_x, premise) = match iop with
+       | IOpAdd -> (add_ (arg1, arg2), add_ (large arg1, large arg2), bool_ true)
+       | IOpSub -> (sub_ (arg1, arg2), sub_ (large arg1, large arg2), bool_ true)
+       | IOpMul -> (mul_ (arg1, arg2), mul_ (large arg1, large arg2), bool_ true)
+       | IOpShl -> (arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2),
+            arith_binop Terms.ShiftLeft (large arg1, large arg2),
+            IT.in_z_range arg2 (Z.zero, Z.of_int bits))
+       | IOpShr -> (arith_binop Terms.ShiftRight (arg1, cast_ (IT.bt arg1) arg2),
+            arith_binop Terms.ShiftRight (large arg1, large arg2),
+            IT.in_z_range arg2 (Z.zero, Z.of_int bits))
      in
      let@ provable = provable loc in
-     let@ () = match provable (t_ (is_representable_integer via_large_x ity)) with
+     let@ () = match provable (t_ (and_ [premise; is_representable_integer via_large_x ity])) with
      | `True -> return ()
      | `False ->
         let@ model = model () in

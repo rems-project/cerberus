@@ -655,6 +655,10 @@ module Translate = struct
          | XORNoSMT -> BV.mk_xor context (term t1) (term t2)
          | BWAndNoSMT -> BV.mk_and context (term t1) (term t2)
          | BWOrNoSMT -> BV.mk_or context (term t1) (term t2)
+         | ShiftLeft -> (bv_arith_case t1 (via_u t1 BV.mk_shl) BV.mk_shl
+                 (fun _ -> failwith "int ShiftLeft")) context (term t1) (term t2)
+         | ShiftRight -> (bv_arith_case t1 (via_u t1 BV.mk_ashr) BV.mk_shl
+                 (fun _ -> failwith "int ShiftRight")) context (term t1) (term t2)
          | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
          | SetUnion -> Z3.Set.mk_union context (map term [t1;t2])

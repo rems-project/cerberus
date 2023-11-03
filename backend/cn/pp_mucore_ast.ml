@@ -276,8 +276,12 @@ module PP = struct
 
   (*
         | Ecase of ('bty, 'sym) generic_pexpr * ('sym generic_pattern * ('a, 'bty, 'sym) generic_expr) list
-        | Eif of ('bty, 'sym) generic_pexpr * ('a, 'bty, 'sym) generic_expr * ('a, 'bty, 'sym) generic_expr
   *)
+      | M_Eif (pe, e1, e2) ->
+          Dnode ( pp_ctor "Eif"
+                , (*add_std_annot*) [ dtree_of_pexpr pe
+                                    ; dtree_of_expr e1
+                                    ; dtree_of_expr e2 ] )
 
       | M_Elet (pat, e1, e2) ->
           Dnode ( pp_ctor "Elet" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)

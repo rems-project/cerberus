@@ -42,6 +42,8 @@ type binop =
   | XORNoSMT
   | BWAndNoSMT
   | BWOrNoSMT
+  | ShiftLeft
+  | ShiftRight
   | LT
   | LE
   | Min
@@ -228,6 +230,10 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"bw_and_uf" [aux false it1; aux false it2]
        | BWOrNoSMT ->
           c_app !^"bw_or_uf" [aux false it1; aux false it2]
+       | ShiftLeft ->
+          c_app !^"shift_left" [aux false it1; aux false it2]
+       | ShiftRight ->
+          c_app !^"shift_right" [aux false it1; aux false it2]
        | SetMember ->
           c_app !^"member" [aux false it1; aux false it2]
        | SetUnion ->

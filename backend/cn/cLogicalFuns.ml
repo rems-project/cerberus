@@ -276,6 +276,8 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
       | IOpAdd -> IT.add_ (x, y)
       | IOpSub -> IT.sub_ (x, y)
       | IOpMul -> IT.mul_ (x, y)
+      | IOpShl -> IT.arith_binop Terms.ShiftLeft (x, IT.cast_ (IT.bt x) y)
+      | IOpShr -> IT.arith_binop Terms.ShiftRight (x, IT.cast_ (IT.bt x) y)
     in
     do_wrapI loc ((bound_kind_act bk).ct) it
   | M_PEcfunction pe ->
