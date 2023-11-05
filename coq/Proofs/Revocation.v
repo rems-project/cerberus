@@ -1613,39 +1613,47 @@ Module RevocationProofs.
           subst.
           repeat split;try assumption;
             destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
-          cbn;apply add_m;[reflexivity|reflexivity| assumption].
-          cbn.
 
-          apply In_m_Proper_Equiv with (R:=AbsByte_eq);[reflexivity|].
-          apply List_fold_left_proper with (Eb:=Z_AbsByte_eq); try reflexivity; try typeclasses eauto; try assumption.
-          {
-            intros l1 l2 LE a1 a2 AE.
-            repeat break_let.
-            cbn in AE.
-            destruct AE.
-            subst.
-            rewrite LE.
-            rewrite H3.
-            reflexivity.
-          }
-          apply list_mapi_Proper with
-            (pA:=AbsByte_eq)
-            (pB:=Z_AbsByte_eq).
-          {
-            intros l1 l2 LE a1 a2 AE.
-            repeat break_let.
-            cbn in AE.
-            subst.
-
-            (* TODO: stopped here *)
-            rewrite AE.
-            rewrite LE.
-            rewrite H3.
-            reflexivity.
-          }
-          admit.
-          symmetry;apply H2.
-
+          - cbn;apply add_m;[reflexivity|reflexivity| assumption].
+          - apply In_m_Proper_Equiv with (R:=AbsByte_eq);[reflexivity|].
+            apply List_fold_left_proper with (Eb:=Z_AbsByte_eq); try reflexivity; try typeclasses eauto; try assumption.
+            + intros l1 l2 LE a1 a2 AE.
+              repeat break_let.
+              cbn in AE.
+              destruct AE.
+              subst.
+              rewrite LE.
+              rewrite H3.
+              reflexivity.
+            + apply list_mapi_Proper with (pA:=AbsByte_eq) (pB:=Z_AbsByte_eq).
+              * intros l1 l2 LE a1 a2 AE.
+                subst.
+                constructor.
+                reflexivity.
+                assumption.
+              * symmetry;apply H2.
+            + symmetry; assumption.
+          - apply In_m_Proper_Equiv with (R:=AbsByte_eq);[reflexivity|].
+            apply List_fold_left_proper with (Eb:=Z_AbsByte_eq); try reflexivity; try typeclasses eauto; try assumption.
+            + intros l1 l2 LE a1 a2 AE.
+              repeat break_let.
+              cbn in AE.
+              destruct AE.
+              subst.
+              rewrite LE.
+              rewrite H3.
+              reflexivity.
+            + apply list_mapi_Proper with (pA:=AbsByte_eq) (pB:=Z_AbsByte_eq).
+              * intros l1 l2 LE a1 a2 AE.
+                subst.
+                constructor.
+                reflexivity.
+                assumption.
+              * apply H2.
+          -
+            admit.
+          -
+            admit.
         }
         intros.
         apply ret_Same;reflexivity.
@@ -1659,6 +1667,10 @@ Module RevocationProofs.
           repeat split;try assumption;
             destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
           cbn;apply add_m;[reflexivity|reflexivity| assumption].
+          cbn; apply Mbytes.
+          cbn; apply Mbytes.
+          admit.
+          admit.
         }
         intros.
         apply ret_Same;reflexivity.
