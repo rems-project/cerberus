@@ -1837,11 +1837,27 @@ Module RevocationProofs.
           destruct_mem_state_same_rel H.
           repeat split;try assumption;
             destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
-          cbn;apply add_m;[reflexivity|reflexivity| assumption].
-          cbn; apply Mbytes.
-          cbn; apply Mbytes.
-          admit.
-          admit.
+          - cbn;apply add_m;[reflexivity|reflexivity| assumption].
+          - cbn; apply Mbytes.
+          - cbn; apply Mbytes.
+          -
+            cut(AbsByte_eq e e').
+            {
+              intros A.
+              invc A.
+              apply H1.
+            }
+            destruct Mbytes as [_ E].
+            eapply E;[eapply H|eapply H0].
+          -
+            cut(AbsByte_eq e e').
+            {
+              intros A.
+              invc A.
+              apply H1.
+            }
+            destruct Mbytes as [_ E].
+            eapply E;[eapply H|eapply H0].
         }
         intros.
         apply ret_Same;reflexivity.
