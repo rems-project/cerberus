@@ -963,15 +963,36 @@ Module RevocationProofs.
       apply F.add_m;auto.
   Qed.
 
-
   #[global] Instance zmap_add_Proper
     {elt : Type}
     (R: relation elt)
     :
     Proper ((eq) ==> R ==> (ZMap.Equiv R) ==> (ZMap.Equiv R)) (ZMap.add (elt:=elt)).
   Proof.
-  Admitted.
-
+    intros k' k Ek e e' Ee m m' [Em1 Em2].
+    subst.
+    split.
+    -
+      intros k0.
+      destruct (Z.eq_dec k k0); subst; split; intros H; apply add_in_iff.
+      1,2: left; reflexivity.
+      1,2: right; apply Em1; apply add_in_iff in H;
+      destruct H; [congruence|assumption].
+    -
+      intros k0 e0 e'0 H H0.
+      destruct (Z.eq_dec k k0).
+      + (* k=k0 *)
+        clear Em1.
+        subst k0.
+        apply add_mapsto_iff in H.
+        apply add_mapsto_iff in H0.
+        destruct H as [ [Hk He] | [Hk He]],
+            H0 as [ [H0k H0e] | [H0k H0e]]; subst; try congruence.
+      + (* k<>k0 *)
+        apply ZMap.add_3 in H ; [|assumption].
+        apply ZMap.add_3 in H0 ; [|assumption].
+        apply Em2 with (k:=k0);assumption.
+  Qed.
 
   (* TODO: move elsewhere *)
   (* TODO: maybe not needed! *)
