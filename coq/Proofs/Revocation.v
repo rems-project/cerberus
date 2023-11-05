@@ -963,8 +963,19 @@ Module RevocationProofs.
       apply F.add_m;auto.
   Qed.
 
+
+  #[global] Instance zmap_add_Proper
+    {elt : Type}
+    (R: relation elt)
+    :
+    Proper ((eq) ==> R ==> (ZMap.Equiv R) ==> (ZMap.Equiv R)) (ZMap.add (elt:=elt)).
+  Proof.
+  Admitted.
+
+
   (* TODO: move elsewhere *)
   (* TODO: maybe not needed! *)
+  (*
   #[global] Instance zmap_mapi_Proper
     {A B : Type}
     (pA: relation A)
@@ -975,15 +986,7 @@ Module RevocationProofs.
     Proper ((ZMap.Equiv pA) ==> (ZMap.Equiv pB)) (ZMap.mapi f).
   Proof.
   Admitted.
-
-  (* TODO: move elsewhere *)
-  #[global] Instance zmap_add_Proper
-    {elt : Type}
-    (R: relation elt)
-    :
-    Proper ((eq) ==> R ==> (ZMap.Equiv R) ==> (ZMap.Equiv R)) (ZMap.add (elt:=elt)).
-  Proof.
-  Admitted.
+   *)
 
   (* TODO: move elsewhere *)
   (* TODO: maybe not needed! *)
@@ -1010,7 +1013,7 @@ Module RevocationProofs.
   Qed.
 
   (* Now we can prove that mapi is Proper with respect to eqlistA. *)
-  (* TODO: move elsewhere *)
+  (* TODO: move to Utils.v *)
   #[global] Lemma list_mapi_Proper
     {A B : Type}
     (f : nat -> A -> B)
