@@ -83,6 +83,13 @@ Definition mapi {A B: Type} (f: nat -> A -> B) (l:list A) : list B :=
     end
   in map_ O l.
 
+(* alternative definition of [mapi] *)
+Fixpoint mapi' {A B: Type} (f: nat -> A -> B) (l:list A) : list B :=
+  match l with
+  | [] => []
+  | x :: xs => (f O x) :: (mapi' (fun n v => f (S n) v) xs)
+  end.
+
 (* c.f.
    List.fold_left
      : forall A B : Type, (A -> B -> A) -> list B -> A -> A
