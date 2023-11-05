@@ -1334,7 +1334,37 @@ Module RevocationProofs.
       assumption.
   Qed.
 
-  Lemma serr2memM_same {T: Type}
+  Lemma serr2memM_same
+    {T: Type}
+    (R: relation T)
+    {M1 M2: serr T}:
+    serr_eq R M1 M2 ->
+    Same R
+      (CheriMemoryWithPNVI.serr2memM M1)
+      (CheriMemoryWithoutPNVI.serr2memM M2).
+  Proof.
+    intros H.
+    unfold serr_eq in H.
+    unfold CheriMemoryWithPNVI.serr2memM, CheriMemoryWithoutPNVI.serr2memM.
+    repeat break_match;subst.
+    -
+      split.
+      + unfold SameValue; reflexivity.
+      + unfold SameState; reflexivity.
+    - tauto.
+    - tauto.
+    - split.
+      + unfold SameValue.
+        intros mem_state1 mem_state2 H0.
+        unfold lift_sum.
+        assumption.
+      + unfold SameState.
+        intros mem_state1 mem_state2 H0.
+        unfold lift_sum.
+        assumption.
+  Qed.
+
+  Lemma serr2memM_same_eq {T: Type}
     {M1 M2: serr T}:
     M1 = M2 ->
     Same (@eq T)
@@ -1342,14 +1372,10 @@ Module RevocationProofs.
       (CheriMemoryWithoutPNVI.serr2memM M2).
   Proof.
     intros.
-    rewrite H.
-    clear H.
-    unfold CheriMemoryWithPNVI.serr2memM, CheriMemoryWithoutPNVI.serr2memM.
-    repeat break_match;
-      unfold CheriMemoryWithPNVI.memM, CheriMemoryWithoutPNVI.memM,
-      CheriMemoryWithPNVI.mem_state, CheriMemoryWithoutPNVI.mem_state;clear.
-    apply raise_Same_eq; reflexivity.
-    apply ret_Same; reflexivity.
+    apply serr2memM_same.
+    rewrite H. clear H.
+    unfold serr_eq.
+    break_match;reflexivity.
   Qed.
 
   Lemma get_Same:
@@ -1647,7 +1673,7 @@ Module RevocationProofs.
 
       apply bind_Same_eq.
       split.
-      apply serr2memM_same.
+      apply serr2memM_same_eq.
       rewrite sizeof_same.
       reflexivity.
       intros;subst;try break_let.
@@ -1668,13 +1694,10 @@ Module RevocationProofs.
         apply (bind_Same repr_res_eq).
         split.
         {
-          (* TODO: need genealized [serr2memM_same] *)
-          (*
-          apply serr2memM_same.
+          apply serr2memM_same with (R:=repr_res_eq).
           destruct_mem_state_same_rel H.
-          apply repr_same; auto.
-           *)
-          admit.
+          apply repr_same.
+          repeat split; try assumption.
         }
         intros; repeat break_let.
         apply bind_Same_eq.
