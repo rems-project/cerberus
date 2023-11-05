@@ -138,6 +138,102 @@ Module RevocationProofs.
     assumption.
   Qed.
 
+  #[local] Instance zmap_Equiv_Reflexive
+    (elt: Type)
+    (R: relation elt)
+    `{EE: Equivalence elt R}
+    :
+    Reflexive (ZMap.Equiv R).
+  Proof.
+    intros m.
+    constructor.
+    + auto.
+    +
+      intros k e e' H0 H1.
+      auto.
+      assert(E: e = e') by (eapply MapsTo_fun;eauto).
+      rewrite E.
+      reflexivity.
+  Qed.
+
+  #[local] Instance zmap_Equiv_Symmetric
+    (elt: Type)
+    (R: relation elt)
+    `{EE: Equivalence elt R}
+    :
+    Symmetric (ZMap.Equiv R).
+  Proof.
+    intros a b [H1 H2].
+    split.
+    +
+      intros k.
+      specialize (H1 k).
+      symmetry.
+      apply H1.
+    +
+      intros k e e'.
+      specialize (H2 k e' e).
+      intros H H0.
+      symmetry.
+      apply H2;assumption.
+  Qed.
+
+  #[local] Instance zmap_Equiv_Transitive
+    (elt: Type)
+    (R: relation elt)
+    `{EE: Equivalence elt R}
+    :
+    Transitive (ZMap.Equiv R).
+  Proof.
+    intros a b c.
+    intros Eab Ebc.
+    split.
+    +
+      destruct Eab as [H1 _], Ebc as [H3 _].
+      intros k.
+      specialize (H1 k).
+      specialize (H3 k).
+      split; intros HH.
+      * apply H3, H1, HH.
+      * apply H1, H3, HH.
+    +
+      destruct Eab as [H1 H2], Ebc as [H3 H4].
+      intros k e1 e3.
+      specialize (H1 k).
+      specialize (H2 k).
+      specialize (H3 k).
+      specialize (H4 k).
+      intros Ha Hc.
+
+      destruct EE as [_ _ RT].
+      unfold Transitive in RT.
+
+      destruct (ZMap.find k b) eqn:Hb.
+      *
+        rename e into e2.
+        apply ZMap.find_2 in Hb.
+        specialize (H2 e1 e2 Ha Hb).
+        eapply RT.
+        eapply H2.
+        eapply H4; assumption.
+      *
+        apply not_find_in_iff in Hb.
+        destruct H1 as [H1 _].
+
+        assert(ZMap.In (elt:=elt) k a) as HaI.
+        {
+          clear -Ha.
+          apply in_find_iff.
+          apply ZMap.find_1 in Ha.
+          rewrite Ha.
+          auto.
+        }
+
+        contradict Hb.
+        apply H1.
+        apply HaI.
+  Qed.
+
   #[local] Instance zmap_Equiv_Equivalence
     (elt: Type)
     (R: relation elt)
@@ -145,55 +241,8 @@ Module RevocationProofs.
     :
     Equivalence (ZMap.Equiv R).
   Proof.
-    rename H into EE.
-    split.
-    -
-      intros m.
-      constructor.
-      + auto.
-      +
-        intros k e e' H0 H1.
-        auto.
-        assert(E: e = e') by (eapply MapsTo_fun;eauto).
-        rewrite E.
-        reflexivity.
-    -
-      intros a b [H1 H2].
-      split.
-      +
-        intros k.
-        specialize (H1 k).
-        symmetry.
-        apply H1.
-      +
-        intros k e e'.
-        specialize (H2 k e' e).
-        intros H H0.
-        symmetry.
-        apply H2;assumption.
-    -
-      intros a b c.
-      intros [H1 H2] [H3 H4].
-      split.
-      +
-        intros k.
-        specialize (H1 k).
-        specialize (H3 k).
-        split.
-        *
-          intros HH.
-          apply H3, H1, HH.
-        *
-          intros HH.
-          apply H1, H3, HH.
-      +
-        intros k e e'.
-        clear H1 H3.
-        specialize (H2 k).
-        specialize (H4 k).
-        intros H H0.
-        admit.
-  Admitted.
+    split;typeclasses eauto.
+  Qed.
 
   (* Equivalence relation for pointer values *)
   #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
@@ -1651,6 +1700,7 @@ Module RevocationProofs.
                 assumption.
               * apply H2.
           -
+            cbn in H, H3.
             admit.
           -
             admit.
