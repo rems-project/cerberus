@@ -1786,7 +1786,45 @@ Module RevocationProofs.
                 assumption.
               * apply H2.
           -
-            admit.
+            (* copy-paste from previous goal! *)
+            cbn in H, H3.
+            cut(AbsByte_eq e e').
+            {
+              intros A.
+              clear -A.
+              invc A.
+              apply H.
+            }
+            match goal with
+            | [H0: ZMap.MapsTo k e ?L1,
+                  H1: ZMap.MapsTo k e' ?L2 |- _] =>
+                cut(ZMap.Equiv AbsByte_eq L1 L2)
+            end.
+            {
+              intros E.
+              clear -H H3 E.
+              destruct E as [_ E].
+              eapply E.
+              eapply H.
+              eapply H3.
+            }
+
+            apply List_fold_left_proper with (Eb:=Z_AbsByte_eq); try reflexivity; try typeclasses eauto; try assumption.
+            + intros l1 l2 LE a1 a2 AE.
+              repeat break_let.
+              cbn in AE.
+              destruct AE.
+              subst.
+              rewrite LE.
+              rewrite H5.
+              reflexivity.
+            + apply list_mapi_Proper with (pA:=AbsByte_eq) (pB:=Z_AbsByte_eq).
+              * intros l1 l2 LE a1 a2 AE.
+                subst.
+                constructor.
+                reflexivity.
+                assumption.
+              * apply H2.
         }
         intros.
         apply ret_Same;reflexivity.
