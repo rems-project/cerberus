@@ -1680,7 +1680,7 @@ end
                                                              (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe))
                           (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
                           begin
-                            let expr = Caux.mk_op_pe C.OpDiv obj1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe) in
+                            let expr = Caux.mk_op_pe C.OpDiv promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe) in
                             Caux.mk_specified_pe begin
 begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
     fun z ->
