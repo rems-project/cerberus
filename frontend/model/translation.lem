@@ -1692,8 +1692,18 @@ begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
   else
     fun z -> z
 end
-begin if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-                               Caux.mk_std_pe "6.5.7#5, sentence 2" expr
+begin
+let result_ity = match result_ty with
+  | Cty.Ctype _ (Cty.Basic (Cty.Integer ity)) -> ity
+  | _ -> illTypedAil loc "A.Shr result type should be an integer type"
+end in
+if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                              Caux.mk_std_pe "6.5.7#5, sentence 2"
+  begin if Global.backend_name () = "Cn" then
+                                Caux.mk_wrapI_pe result_ity C.IOpShr promoted1_wrp.E.sym_pe promoted2_wrp.E.sym_pe
+  else
+                                expr
+  end
 else
                                Caux.mk_std_pe "6.5.7#5, sentence 3" begin
                                 Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpGe promoted1_wrp.E.sym_pe (Caux.mk_integer_pe 0))
