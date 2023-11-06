@@ -651,12 +651,12 @@ let translate_postfix loc translate_expr stdlib result_ty op e =
   (* TODO: use atomic RMW if the type is atomic *)
   (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but a do while
            with compare_exchange_weak with seq_cst, seq_cst) *)
-  let (std_para, core_op, ptr_shift_const) =
+  let (std_para, core_op, int_op, ptr_shift_const) =
     match op with
       | A.PostfixIncr ->
-          ("#2", C.OpAdd, 1)
+          ("#2", C.OpAdd, C.IOpAdd, 1)
       | A.PostfixDecr ->
-          ("#3", C.OpSub, 0 - 1)
+          ("#3", C.OpSub, C.IOpSub, 0 - 1)
       | (*BISECT-IGNORE*) _ ->
           error "[Translation.translate_postfix], 'op' must be a postfix operator"
     end in
@@ -696,10 +696,9 @@ match Ctype.unatomic_ ty with
                         fromJust "Translation.translate_postfix promotion"
                           (AilTypesAux.promotion (Implementation.integerImpl ()) (ctype_of e)) in
                       stdlib.mkcall_conv_int result_ty begin
-      mk_cheri begin if AilTypesAux.is_signed_integer_type promoted_ty then
-                        stdlib.mkcall_catch_exceptional_condition promoted_ty core_postfix
-      else (* is unsigned *)
-                        stdlib.mkcall_wrapI promoted_ty core_postfix
+      mk_cheri begin
+        with_wrapI_or_catch_exceptional_condition promoted_ty int_op
+          obj_wrp.E.sym_pe (Caux.mk_integer_pe 1) (Just core_postfix)
       end
                       end
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
