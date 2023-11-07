@@ -3,6 +3,7 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
 From Coq.Strings Require Import String Ascii HexString.
+
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Classes.SetoidClass.
 Require Import Coq.Classes.RelationClasses.
@@ -41,6 +42,8 @@ Local Open Scope bool_scope.
 Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
+
+Require Import ProofsAux.
 
 Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
 Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
@@ -126,151 +129,6 @@ Module RevocationProofs.
       rewrite H0. apply H2.
   Qed.
 
-  Lemma In_m_Proper_Equiv
-    (elt : Type)
-    (R: relation elt)
-    :
-    Proper (eq ==> ZMap.Equiv R ==> iff) (ZMap.In (elt:=elt)).
-  Proof.
-    intros k1 k2 EE m1 m2 [ME1 _].
-    subst. rename k2 into k.
-    specialize (ME1 k).
-    assumption.
-  Qed.
-
-  #[local] Instance zmap_Equiv_Reflexive
-    (elt: Type)
-    (R: relation elt)
-    `{EE: Equivalence elt R}
-    :
-    Reflexive (ZMap.Equiv R).
-  Proof.
-    intros m.
-    constructor.
-    + auto.
-    +
-      intros k e e' H0 H1.
-      auto.
-      assert(E: e = e') by (eapply MapsTo_fun;eauto).
-      rewrite E.
-      reflexivity.
-  Qed.
-
-  #[local] Instance zmap_Equiv_Symmetric
-    (elt: Type)
-    (R: relation elt)
-    `{EE: Equivalence elt R}
-    :
-    Symmetric (ZMap.Equiv R).
-  Proof.
-    intros a b [H1 H2].
-    split.
-    +
-      intros k.
-      specialize (H1 k).
-      symmetry.
-      apply H1.
-    +
-      intros k e e'.
-      specialize (H2 k e' e).
-      intros H H0.
-      symmetry.
-      apply H2;assumption.
-  Qed.
-
-  #[local] Instance zmap_Equiv_Transitive
-    (elt: Type)
-    (R: relation elt)
-    `{EE: Equivalence elt R}
-    :
-    Transitive (ZMap.Equiv R).
-  Proof.
-    intros a b c.
-    intros Eab Ebc.
-    split.
-    +
-      destruct Eab as [H1 _], Ebc as [H3 _].
-      intros k.
-      specialize (H1 k).
-      specialize (H3 k).
-      split; intros HH.
-      * apply H3, H1, HH.
-      * apply H1, H3, HH.
-    +
-      destruct Eab as [H1 H2], Ebc as [H3 H4].
-      intros k e1 e3.
-      specialize (H1 k).
-      specialize (H2 k).
-      specialize (H3 k).
-      specialize (H4 k).
-      intros Ha Hc.
-
-      destruct EE as [_ _ RT].
-      unfold Transitive in RT.
-
-      destruct (ZMap.find k b) eqn:Hb.
-      *
-        rename e into e2.
-        apply ZMap.find_2 in Hb.
-        specialize (H2 e1 e2 Ha Hb).
-        eapply RT.
-        eapply H2.
-        eapply H4; assumption.
-      *
-        apply not_find_in_iff in Hb.
-        destruct H1 as [H1 _].
-
-        assert(ZMap.In (elt:=elt) k a) as HaI.
-        {
-          clear -Ha.
-          apply in_find_iff.
-          apply ZMap.find_1 in Ha.
-          rewrite Ha.
-          auto.
-        }
-
-        contradict Hb.
-        apply H1.
-        apply HaI.
-  Qed.
-
-  #[local] Instance zmap_Equiv_Equivalence
-    (elt: Type)
-    (R: relation elt)
-    `{H: Equivalence elt R}
-    :
-    Equivalence (ZMap.Equiv R).
-  Proof.
-    split;typeclasses eauto.
-  Qed.
-
-  (* Equivalence relation for pointer values *)
-  #[local] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
-  Proof.
-    split.
-    -
-      intros a.
-      destruct a.
-      apply pointer_value_no_prov_eq.
-      reflexivity.
-    -
-      intros a b.
-      destruct a, b.
-      intros H.
-      apply pointer_value_no_prov_eq.
-      inversion H.
-      auto.
-    -
-      intros a b c.
-      destruct a, b, c.
-      intros H1 H2.
-      apply pointer_value_no_prov_eq.
-      inversion H1. clear H1.
-      inversion H2. clear H2.
-      subst.
-      reflexivity.
-  Qed.
-
   Inductive mem_value_ind_eq: mem_value_ind -> mem_value_ind -> Prop :=
   | mem_value_ind_eq_MVunspecified: forall t1 t2, mem_value_ind_eq (MVunspecified t1) (MVunspecified t2)
   | mem_value_ind_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_ind_eq (MVinteger t1 v1) (MVinteger t2 v2)
@@ -295,7 +153,7 @@ Module RevocationProofs.
     :=
   | ctype_pointer_value_eq_1:
     forall t1 t2 pv1 pv2, t1 = t2 /\ pointer_value_eq pv1 pv2 ->
-                     ctype_pointer_value_eq (t1,pv1) (t2,pv2).
+                          ctype_pointer_value_eq (t1,pv1) (t2,pv2).
 
   Inductive varargs_eq: (Z * list (CoqCtype.ctype * pointer_value_ind)) ->
                         (Z * list (CoqCtype.ctype * pointer_value_ind)) -> Prop :=
@@ -894,6 +752,33 @@ Module RevocationProofs.
     auto.
   Qed.
 
+  (* Equivalence relation for pointer values *)
+  #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
+  Proof.
+    split.
+    -
+      intros a.
+      destruct a.
+      apply pointer_value_no_prov_eq.
+      reflexivity.
+    -
+      intros a b.
+      destruct a, b.
+      intros H.
+      apply pointer_value_no_prov_eq.
+      inversion H.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      intros H1 H2.
+      apply pointer_value_no_prov_eq.
+      inversion H1. clear H1.
+      inversion H2. clear H2.
+      subst.
+      reflexivity.
+  Qed.
+
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem array_mval_same:
     forall a1 a2,
@@ -993,57 +878,6 @@ Module RevocationProofs.
         apply ZMap.add_3 in H0 ; [|assumption].
         apply Em2 with (k:=k0);assumption.
   Qed.
-
-  (* TODO: move elsewhere *)
-  (* TODO: maybe not needed! *)
-  (*
-  #[global] Instance zmap_mapi_Proper
-    {A B : Type}
-    (pA: relation A)
-    (pB: relation B)
-    (f : ZMap.key -> A -> B)
-    {Hf: Proper (eq ==> pA ==> pB) f}
-    :
-    Proper ((ZMap.Equiv pA) ==> (ZMap.Equiv pB)) (ZMap.mapi f).
-  Proof.
-  Admitted.
-   *)
-
-  (* TODO: move elsewhere *)
-  (* TODO: maybe not needed! *)
-  (* Simple case *)
-  #[global] Instance zmap_mapi_Proper_equal
-    {A B : Type}
-    (f : ZMap.key -> A -> B)
-    :
-    Proper ((ZMap.Equal) ==> (ZMap.Equal)) (ZMap.mapi f).
-  Proof.
-    intros a1 a2 H.
-    unfold ZMap.Equal in *.
-    intros k.
-    specialize (H k).
-    rewrite mapi_o.
-    rewrite mapi_o.
-    -
-      unfold option_map.
-      repeat break_match;invc H; reflexivity.
-    -
-      intros x y e HF;rewrite HF;reflexivity.
-    -
-      intros x y e HF;rewrite HF;reflexivity.
-  Qed.
-
-  (* Now we can prove that mapi is Proper with respect to eqlistA. *)
-  (* TODO: move to Utils.v *)
-  #[global] Lemma list_mapi_Proper
-    {A B : Type}
-    (f : nat -> A -> B)
-    (pA: relation A)
-    (pB: relation B)
-    {Hf: Proper (eq ==> pA ==> pB) f}:
-    Proper (eqlistA pA ==> eqlistA pB) (mapi f).
-  Proof.
-  Admitted.
 
   Lemma ghost_tags_same:
     forall (addr : AddressValue.t) (sz:Z) (c1 c0 : ZMap.t (bool * CapGhostState)),
@@ -1190,13 +1024,13 @@ Module RevocationProofs.
 
   Lemma raise_Same_eq {T:Type}:
     forall x1 x2, x1 = x2 ->
-             @Same T T (@eq T)
-               (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
-                  (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
-                  x1)
-               (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
-                  (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
-                  x2).
+                  @Same T T (@eq T)
+                    (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
+                       (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
+                       x1)
+                    (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
+                       (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
+                       x2).
   Proof.
     intros x1 x2 E.
     repeat break_match;
@@ -1398,60 +1232,6 @@ Module RevocationProofs.
       invc Mbytes2;
       destruct H1;
       assumption.
-  Qed.
-
-  (* TODO: move elsewhere *)
-  #[global] Instance List_fold_left_proper
-    {A B : Type}
-    (Eb: relation B)
-    (Ae: relation A)
-    `{Equivalence A Ae}
-    `{Equivalence B Eb}
-    (f : A -> B -> A)
-    `{f_mor: !Proper ((Ae) ==> (Eb) ==> (Ae)) f}
-    :
-    Proper (eqlistA Eb ==> Ae ==> Ae) (List.fold_left f).
-  Proof.
-    intros x y Exy.
-    intros a b Eab.
-
-
-    dependent induction Exy.
-    -
-      apply Eab.
-    -
-      cbn.
-      apply IHExy.
-      apply f_mor.
-      apply Eab.
-      apply H1.
-  Qed.
-
-  (* TODO: move elsewhere *)
-  #[global] Instance List_fold_left_eq_proper
-    {A B : Type}
-    (Eb: relation B)
-    (Ae: relation A)
-    `{Equivalence A Ae}
-    `{Equivalence B Eb}
-    (f : A -> B -> A)
-    `{f_mor: !Proper ((Ae) ==> (Eb) ==> (Ae)) f}
-    :
-    Proper ((eq) ==> (Ae) ==> (Ae)) (List.fold_left f).
-  Proof.
-    intros x y Exy.
-    destruct Exy.
-    intros a b Eab.
-    -
-      dependent induction x.
-      +
-        apply Eab.
-      +
-        cbn.
-        apply IHx.
-        apply f_mor.
-        assumption.
-        reflexivity.
   Qed.
 
   (* special case of [lift_sum] where the type is the same and relations are both [eq] *)
