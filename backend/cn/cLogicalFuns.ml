@@ -260,10 +260,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     in
     begin match ct with
     | Sctypes.Integer Sctypes.IntegerTypes.Bool ->
-      begin match IT.get_num_z x with
-      | Some i -> return (IT.bool_ (not (Z.equal i Z.zero)))
-      | _ -> return (bool_ite_1_0 (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x))))
-      end
+      simp_const_pe (bool_ite_1_0 (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x))))
     | _ -> do_wrapI loc ct x
     end
   | M_PEwrapI (act, pe) ->
@@ -439,13 +436,20 @@ let rec filter_syms ss p =
     else mk (M_CaseCtor (M_Ctuple, ps))
   | _ -> p
 
-let rec get_ret_it bt = function
-  | Call_Ret v -> Some v
-  | Compute _ -> None
+let rec get_ret_it loc body bt = function
+  | Call_Ret v ->
+    let@ () = if BT.equal (IT.bt v) bt
+      then return ()
+      else fail_n {loc;
+        msg = Generic (Pp.item "get_ret_it: basetype mismatch" (IT.pp_with_typ v))}
+    in
+    return v
+  | Compute _ -> fail_n {loc;
+        msg = Generic (Pp.item "c_fun_to_it: does not return" (Pp_mucore.pp_expr body))}
   | If_Else (t, x, y) ->
-    Option.bind (get_ret_it bt x) (fun x_v ->
-    Option.bind (get_ret_it bt y) (fun y_v ->
-    Some (IT.ite_ (t, x_v, y_v))))
+    let@ x_v = get_ret_it loc body bt x in
+    let@ y_v = get_ret_it loc body bt y in
+    return (IT.ite_ (t, x_v, y_v))
 
 let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
@@ -464,7 +468,6 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
       match args_and_body, def_args with
       | M_Computational ((s, bt), _, args_and_body),
         v :: def_args ->
-        Pp.debug 3 (lazy (Pp.item "adding var_map arg var binding" (Sym.pp_debug s)));
         mk_var_map (SymMap.add s v acc) args_and_body def_args
       | M_L l, [] ->
         (acc, ignore_l l)
@@ -483,11 +486,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
     let@ body = pure (in_computational_ctxt args_and_body
         (WellTyped.BaseTyping.infer_expr label_context body)) in
     let@ r = symb_exec_mu_expr ctxt (init_state, arg_map) body in
-    begin match get_ret_it (def.LogicalFunctions.return_bt) r with
-    | Some it -> return it
-    | _ -> fail_n {loc;
-        msg = Generic (Pp.item "c_fun_to_it: does not return" (Pp_mucore.pp_expr body))}
-    end
+    get_ret_it loc body (def.LogicalFunctions.return_bt) r
   | _ ->
     fail_n {loc = id_loc;
         msg = Generic (Pp.string ("c_fun_to_it: not defined: " ^ Sym.pp_string fsym))}

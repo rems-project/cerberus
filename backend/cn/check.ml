@@ -1872,16 +1872,18 @@ let ctz_proxy_ft =
     (AT.L (LAT.mConstraint (neq_0, info) (LAT.I rt))) in
   ft
 
-let ffs_proxy_ft =
-  let info = (Locations.unknown, Some "ffs_proxy builtin ft") in
-  let (n_sym, n) = IT.fresh_named (BT.(Bits (Signed, 32))) "n_" in
-  let (ret_sym, ret) = IT.fresh_named (BT.(Bits (Signed, 32))) "return" in
-  let eq_ffs = LC.T (IT.eq_ (ret, IT.arith_unop Terms.BWFFSNoSMT n)) in
-  let rt = RT.mComputational ((ret_sym, IT.bt ret), info)
+let ffs_proxy_ft sz =
+  let sz_name = CF.Pp_ail.string_of_integerBaseType sz in
+  let bt = Memory.bt_of_sct (Sctypes.(Integer (Signed sz))) in
+  let ret_bt = Memory.bt_of_sct (Sctypes.(Integer (Signed Int_))) in
+  let info = (Locations.unknown, Some ("ffs_proxy builtin ft: " ^ sz_name)) in
+  let (n_sym, n) = IT.fresh_named bt "n_" in
+  let (ret_sym, ret) = IT.fresh_named ret_bt "return" in
+  let eq_ffs = LC.T (IT.eq_ (ret, IT.cast_ ret_bt (IT.arith_unop Terms.BWFFSNoSMT n))) in
+  let rt = RT.mComputational ((ret_sym, ret_bt), info)
     (LRT.mConstraint (eq_ffs, info) LRT.I) in
-  let ft = AT.mComputationals [(n_sym, IT.bt n, info)] (AT.L (LAT.I rt)) in
+  let ft = AT.mComputationals [(n_sym, bt, info)] (AT.L (LAT.I rt)) in
   ft
-
 
 let add_stdlib_spec mu_call_sigs fsym =
   match Sym.has_id fsym with
@@ -1896,7 +1898,13 @@ let add_stdlib_spec mu_call_sigs fsym =
       add ctz_proxy_ft
     else if String.equal s "ffs_proxy"
     then
-      add ffs_proxy_ft
+      add (ffs_proxy_ft (Sctypes.IntegerBaseTypes.Int_))
+    else if String.equal s "ffsl_proxy"
+    then
+      add (ffs_proxy_ft (Sctypes.IntegerBaseTypes.Long))
+    else if String.equal s "ffsll_proxy"
+    then
+      add (ffs_proxy_ft (Sctypes.IntegerBaseTypes.LongLong))
     else
       return ()
   | _ ->
