@@ -1341,9 +1341,8 @@ let normalise_fun_map
       match r with
       | Some (fdecl, more_mk_functions) ->
          let mk_functions' = 
-           List.map (fun (loc, lsym) -> 
-               (fsym, fdecl, loc, lsym)
-             ) more_mk_functions
+           List.map (fun (loc, lsym) -> {c_fun_sym = fsym; loc; l_fun_sym = lsym})
+             more_mk_functions
          in
          return (Pmap.add fsym fdecl fmap, mk_functions' @ mk_functions, failed)
       | None ->
@@ -1502,8 +1501,6 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
       sig_variadic = variadic; sig_has_proto = has_proto;
     }) file.mi_funinfo in
 
-  let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mu_call_funinfo mk_functions in
-
   let stdlib_syms = SymSet.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
 
   let datatypes = List.map (translate_datatype env) ail_prog.cn_datatypes in
@@ -1515,6 +1512,7 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
       mu_funs = funs;
       mu_extern = file.mi_extern;
       mu_stdlib_syms = stdlib_syms;
+      mu_mk_functions = mk_functions;
       mu_resource_predicates = preds;
       mu_logical_predicates = lfuns;
       mu_datatypes = datatypes;

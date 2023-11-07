@@ -1956,6 +1956,9 @@ let check (mu_file : unit mu_file) stmt_locs o_lemma_mode =
 
   let@ lemmata = ListM.mapM wf_check_and_record_lemma mu_file.mu_lemmata in
 
+  let@ () = CLogicalFuns.add_logical_funs_from_c mu_file.mu_call_funinfo
+    mu_file.mu_mk_functions mu_file.mu_funs in
+
   Pp.debug 3 (lazy (Pp.headline "type-checked CN top-level declarations."));
 
   let@ (_trusted, checked) = 

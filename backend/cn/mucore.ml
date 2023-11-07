@@ -528,6 +528,12 @@ type mu_datatype =
   { loc : Loc.t;
     cases : (Sym.t * (Id.t * T.bt) list) list }
 
+type mu_function_to_convert =
+  { loc: Loc.t;
+    c_fun_sym : Sym.t;
+    l_fun_sym : Sym.t;
+  }
+
 type 'TY mu_file = {
   mu_main    : symbol option;
   mu_tagDefs : mu_tag_definitions;
@@ -535,6 +541,7 @@ type 'TY mu_file = {
   mu_funs    : 'TY mu_fun_map;
   mu_extern  : mu_extern_map;
   mu_stdlib_syms  : SymSet.t;
+  mu_mk_functions  : mu_function_to_convert list;
   mu_resource_predicates : T.resource_predicates;
   mu_logical_predicates : T.logical_predicates;
   mu_datatypes : (Sym.t * mu_datatype) list;
