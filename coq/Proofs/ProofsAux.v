@@ -1,3 +1,4 @@
+Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Classes.SetoidClass.
 Require Import Coq.Classes.RelationClasses.
@@ -7,7 +8,7 @@ Require Import Coq.FSets.FMapFacts.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedTypeEx.
 
-From ExtLib.Data Require Import List.
+Require Import ExtLib.Data.List.
 
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
@@ -108,8 +109,8 @@ Section ZMapAux.
   #[global] Instance zmap_mapi_Proper_equal
     {A B : Type}
     (f : ZMap.key -> A -> B)
-    :
-    Proper ((ZMap.Equal) ==> (ZMap.Equal)) (ZMap.mapi f).
+  :
+  Proper ((ZMap.Equal) ==> (ZMap.Equal)) (ZMap.mapi f).
   Proof.
     intros a1 a2 H.
     unfold ZMap.Equal in *.
@@ -137,7 +138,6 @@ Section ZMapAux.
     specialize (ME1 k).
     assumption.
   Qed.
-
 
   #[global] Instance zmap_Equiv_Reflexive
     (elt: Type)
@@ -247,5 +247,53 @@ Section ZMapAux.
   Proof.
     split;typeclasses eauto.
   Qed.
+
+  #[global] Instance zmap_range_init_Proper:
+    forall [elt : Type], Proper (eq ==> eq ==> eq ==> eq ==> ZMap.Equal ==> ZMap.Equal)
+                      (zmap_range_init (T:=elt)).
+  Proof.
+    intros elt a1 a0 EA n0 n EN s0 s ES v0 v EV m0 m1 EM k.
+    subst.
+    dependent induction n.
+    -
+      cbn.
+      apply EM.
+    -
+      cbn.
+      apply IHn.
+      apply F.add_m;auto.
+  Qed.
+
+  #[global] Instance zmap_add_Proper
+    {elt : Type}
+    (R: relation elt)
+    :
+    Proper ((eq) ==> R ==> (ZMap.Equiv R) ==> (ZMap.Equiv R)) (ZMap.add (elt:=elt)).
+  Proof.
+    intros k' k Ek e e' Ee m m' [Em1 Em2].
+    subst.
+    split.
+    -
+      intros k0.
+      destruct (Z.eq_dec k k0); subst; split; intros H; apply add_in_iff.
+      1,2: left; reflexivity.
+      1,2: right; apply Em1; apply add_in_iff in H;
+      destruct H; [congruence|assumption].
+    -
+      intros k0 e0 e'0 H H0.
+      destruct (Z.eq_dec k k0).
+      + (* k=k0 *)
+        clear Em1.
+        subst k0.
+        apply add_mapsto_iff in H.
+        apply add_mapsto_iff in H0.
+        destruct H as [ [Hk He] | [Hk He]],
+            H0 as [ [H0k H0e] | [H0k H0e]]; subst; try congruence.
+      + (* k<>k0 *)
+        apply ZMap.add_3 in H ; [|assumption].
+        apply ZMap.add_3 in H0 ; [|assumption].
+        apply Em2 with (k:=k0);assumption.
+  Qed.
+
 
 End ZMapAux.

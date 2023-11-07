@@ -833,52 +833,6 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
-  #[local] Instance zmap_range_init_Proper:
-    forall [elt : Type], Proper (eq ==> eq ==> eq ==> eq ==> ZMap.Equal ==> ZMap.Equal) (zmap_range_init (T:=elt)).
-  Proof.
-    intros elt a1 a0 EA n0 n EN s0 s ES v0 v EV m0 m1 EM k.
-    subst.
-    dependent induction n.
-    -
-      cbn.
-      apply EM.
-    -
-      cbn.
-      apply IHn.
-      apply F.add_m;auto.
-  Qed.
-
-  #[global] Instance zmap_add_Proper
-    {elt : Type}
-    (R: relation elt)
-    :
-    Proper ((eq) ==> R ==> (ZMap.Equiv R) ==> (ZMap.Equiv R)) (ZMap.add (elt:=elt)).
-  Proof.
-    intros k' k Ek e e' Ee m m' [Em1 Em2].
-    subst.
-    split.
-    -
-      intros k0.
-      destruct (Z.eq_dec k k0); subst; split; intros H; apply add_in_iff.
-      1,2: left; reflexivity.
-      1,2: right; apply Em1; apply add_in_iff in H;
-      destruct H; [congruence|assumption].
-    -
-      intros k0 e0 e'0 H H0.
-      destruct (Z.eq_dec k k0).
-      + (* k=k0 *)
-        clear Em1.
-        subst k0.
-        apply add_mapsto_iff in H.
-        apply add_mapsto_iff in H0.
-        destruct H as [ [Hk He] | [Hk He]],
-            H0 as [ [H0k H0e] | [H0k H0e]]; subst; try congruence.
-      + (* k<>k0 *)
-        apply ZMap.add_3 in H ; [|assumption].
-        apply ZMap.add_3 in H0 ; [|assumption].
-        apply Em2 with (k:=k0);assumption.
-  Qed.
-
   Lemma ghost_tags_same:
     forall (addr : AddressValue.t) (sz:Z) (c1 c0 : ZMap.t (bool * CapGhostState)),
       ZMap.Equal (elt:=bool * CapGhostState) c0 c1 ->
