@@ -602,8 +602,11 @@ let rec pp_expr expr =
                acc
             | Acerb _ ->
                acc
-            | Avalue _ ->
-               acc
+            | Avalue (Ainteger ity) ->
+                if Cerb_debug.get_debug_level () > 3 then
+                  in_comment (!^ "cn_value" ^^ P.colon ^^^ Pp_ail.pp_integerType ity) ^^ acc
+                else
+                  acc
         ) doc annot
     end
     begin
