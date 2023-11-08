@@ -148,7 +148,7 @@ let is_two_pow it = match IT.term it with
   | _ -> None
 
 let bool_rep_ty = Memory.bt_of_sct (Sctypes.(Integer IntegerTypes.Bool))
-let bool_ite_1_0 b = IT.ite_ (b, IT.int_lit_ 1 bool_rep_ty, IT.int_lit_ 0 bool_rep_ty)
+let bool_ite_1_0 bt b = IT.ite_ (b, IT.int_lit_ 1 bt, IT.int_lit_ 0 bt)
 
 let rec symb_exec_mu_pexpr ctxt var_map pexpr =
   let (M_Pexpr (loc, annots, _, pe)) = pexpr in
@@ -239,7 +239,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     simp_const_pe (IT.arith_binop binop (x, y))
   | M_PEbool_to_integer pe ->
     let@ x = self var_map pe in
-    return (bool_ite_1_0 x)
+    return (bool_ite_1_0 signed_int_ty x)
   | M_PEnot pe ->
     let@ x = self var_map pe in
     return (IT.not_ x)
@@ -264,7 +264,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     in
     begin match ct with
     | Sctypes.Integer Sctypes.IntegerTypes.Bool ->
-      simp_const_pe (bool_ite_1_0 (IT.not_ (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x)))))
+      simp_const_pe (bool_ite_1_0 bool_rep_ty (IT.not_ (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x)))))
     | _ -> do_wrapI loc ct x
     end
   | M_PEwrapI (act, pe) ->
