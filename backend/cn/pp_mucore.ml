@@ -652,7 +652,8 @@ module Make (Config: CONFIG) = struct
               | Alabel _ -> acc
                  (* !^"{-return-}" ^^ acc *)
               | Acerb _ -> acc
-              | Avalue _ -> acc
+              | Avalue (Ainteger ity) -> !^"{- type" ^^^
+                 Pp_core_ctype.pp_integer_ctype ity ^^ !^"-}" ^^ acc
           ) doc annot
 
   (* let pp_expr budget (M_Expr (loc, annot, e) : 'ty mu_expr) = *)
