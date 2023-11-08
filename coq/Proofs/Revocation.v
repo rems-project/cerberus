@@ -1456,8 +1456,8 @@ Module RevocationProofs.
               rewrite H3.
               reflexivity.
             + apply list_mapi_Proper with (pA:=AbsByte_eq) (pB:=Z_AbsByte_eq).
-              * intros l1 l2 LE a1 a2 AE.
-                subst.
+              *
+                intros n a1 a2 AE.
                 constructor.
                 reflexivity.
                 assumption.
@@ -1474,8 +1474,8 @@ Module RevocationProofs.
               rewrite H3.
               reflexivity.
             + apply list_mapi_Proper with (pA:=AbsByte_eq) (pB:=Z_AbsByte_eq).
-              * intros l1 l2 LE a1 a2 AE.
-                subst.
+              *
+                intros n a1 a2 AE.
                 constructor.
                 reflexivity.
                 assumption.
@@ -1513,8 +1513,7 @@ Module RevocationProofs.
               rewrite H5.
               reflexivity.
             + apply list_mapi_Proper with (pA:=AbsByte_eq) (pB:=Z_AbsByte_eq).
-              * intros l1 l2 LE a1 a2 AE.
-                subst.
+              * intros n a1 a2 AE.
                 constructor.
                 reflexivity.
                 assumption.
@@ -1553,8 +1552,7 @@ Module RevocationProofs.
               rewrite H5.
               reflexivity.
             + apply list_mapi_Proper with (pA:=AbsByte_eq) (pB:=Z_AbsByte_eq).
-              * intros l1 l2 LE a1 a2 AE.
-                subst.
+              * intros n a1 a2 AE.
                 constructor.
                 reflexivity.
                 assumption.
