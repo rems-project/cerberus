@@ -43,7 +43,7 @@ datatype b_tree {
 
 /*@
 predicate {datatype a_tree t} A_Tree (pointer p) {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: A_Leaf {}};
   }
   else {
@@ -55,7 +55,7 @@ predicate {datatype a_tree t} A_Tree (pointer p) {
 }
 
 predicate {datatype b_tree t} B_Tree (pointer p) {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: B_Leaf {}};
   }
   else {
@@ -107,7 +107,7 @@ struct a_node *
 predef_a_tree (struct a_node *p)
 /*@ requires take T = A_Tree (p) @*/
 /*@ ensures take T2 = A_Tree (p) @*/
-/*@ ensures (return == NULL) || (T2.t == A_Node {k: 1, v: 0,
+/*@ ensures is_null(return) || (T2.t == A_Node {k: 1, v: 0,
     left: B_Node {even: A_Leaf {}, odd: A_Leaf {}}, right: B_Leaf {}}) @*/
 {
   struct b_node *l = NULL;

@@ -21,7 +21,7 @@ function [rec] (datatype seq) append(datatype seq xs, datatype seq ys) {
 }
 
 predicate (datatype seq) IntList(pointer p) {
-  if (p == NULL) { 
+  if (is_null(p)) { 
     return Seq_Nil{};
   } else { 
     take H = Owned<struct int_list>(p);

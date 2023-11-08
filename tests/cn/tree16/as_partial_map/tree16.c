@@ -44,7 +44,7 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
         integer v, map<integer, map<datatype tree_arc, datatype tree_node_option> > ns}
   Tree (pointer p)
 {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: (empty ()), v: 0, ns: default_ns ()};
   }
   else {

@@ -51,7 +51,7 @@ let not_def = ("not", Sym.fresh_named "not", mk_arg1 not_)
 
 let nth_list_def = ("nth_list", Sym.fresh_named "nth_list", mk_arg3 nthList_)
 
-let array_to_list_def = 
+let array_to_list_def =
   ("array_to_list", Sym.fresh_named "array_to_list", mk_arg3_err
   (fun loc (arr, i, len) -> match SBT.is_map_bt (IT.bt arr) with
     | None -> fail {loc; msg = Illtyped_it {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected = "map"; o_ctxt = None}}
@@ -65,7 +65,7 @@ let in_loc_list_def =
 
 let cellpointer_def =
   ("cellPointer",
-   Sym.fresh_named "cellPointer", 
+   Sym.fresh_named "cellPointer",
    mk_arg5 (fun (base, step, starti, endi, p) ->
        let base = IT.term_of_sterm base in
        let step = IT.term_of_sterm step in
@@ -76,12 +76,29 @@ let cellpointer_def =
      )
   )
 
-let builtin_funs = 
+let is_null_def =
+  ("is_null",
+   Sym.fresh_named "is_null",
+   mk_arg1 (fun p ->
+       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_))
+     )
+  )
+
+let ptr_eq_def =
+    ("ptr_eq",
+        Sym.fresh_named "ptr_eq",
+        mk_arg2 (fun (p1, p2) ->
+       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p1, IT.term_of_sterm p2))
+     )
+   )
+
+
+let builtin_funs =
   [
       mul_uf_def;
       div_uf_def;
       power_uf_def;
-      rem_uf_def;  
+      rem_uf_def;
       mod_uf_def;
       xor_uf_def;
       bw_and_uf_def;
@@ -102,6 +119,8 @@ let builtin_funs =
       in_loc_list_def;
 
       cellpointer_def;
+      is_null_def;
+      ptr_eq_def;
     ]
 
 let apply_builtin_funs loc fsym args =

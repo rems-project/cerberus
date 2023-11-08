@@ -508,8 +508,16 @@ module EffectfulTranslation = struct
     | CN_div, _ ->
         return (IT (Binop (Div, e1, e2), IT.bt e1))
     | CN_equal, _ ->
+      (match IT.bt e1, IT.bt e2 with
+       | Loc _, Loc _ ->
+         Pp.warn loc !^"pointer equality check"
+       | _, _ -> ());
         return (IT (Binop (EQ, e1, e2), SBT.Bool))
     | CN_inequal, _ ->
+      (match IT.bt e1, IT.bt e2 with
+       | Loc _, Loc _ ->
+         Pp.warn loc !^"pointer inequality check"
+       | _, _ -> ());
         return (not_ (IT (Binop (EQ, e1, e2), SBT.Bool)))
     | CN_lt, (SBT.Integer | SBT.Real) ->
         return (IT (Binop (LT, e1, e2), SBT.Bool))
@@ -800,7 +808,9 @@ module EffectfulTranslation = struct
         | CNExpr_unchanged e ->
            let@ cur_e = self e in
            let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in
-           mk_translate_binop loc CN_equal (cur_e, old_e)
+           (* want to bypass the warning for (Loc, Loc) equality *)
+           (* mk_translate_binop loc CN_equal (cur_e, old_e) *)
+           return (IT (Binop (EQ, cur_e, old_e), SBT.Bool))
         | CNExpr_at_env (e, scope) ->
            let@ () = match evaluation_scope with
              | None -> return ()

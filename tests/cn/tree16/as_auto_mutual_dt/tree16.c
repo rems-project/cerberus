@@ -34,7 +34,7 @@ function (map <integer, datatype tree>) default_children ()
 predicate {datatype tree t, integer v, map <integer, datatype tree> children}
   Tree (pointer p)
 {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: Empty_Tree {}, v: 0, children: default_children ()};
   }
   else {

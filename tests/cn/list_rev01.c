@@ -7,7 +7,7 @@ struct node {
 
 /*@
 predicate {integer len} List (pointer p) {
-  if ( p == NULL ) {
+  if ( is_null(p) ) {
     return { len: 0 };
   }
   else {

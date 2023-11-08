@@ -24,7 +24,7 @@ int_binop g1 = f2;
 
 /*@
 predicate {integer x} Is_Known_Binop (pointer f) {
-  assert ((f == &f1) || (f == &f2));
+  assert (ptr_eq(f, &f1) || ptr_eq(f, &f2));
   return {x: 1};
 }
 @*/

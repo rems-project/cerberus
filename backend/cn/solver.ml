@@ -592,9 +592,11 @@ module Translate = struct
          | SetDifference -> Z3.Set.mk_difference context (term t1) (term t2)
          | Subset -> Z3.Set.mk_subset context (term t1) (term t2)
          | LTPointer ->
+            (* FIXME this needs to check whether alloc_ids are equal *)
             Z3.Arithmetic.mk_lt context (loc_to_integer (term t1))
               (loc_to_integer (term t2))
          | LEPointer ->
+            (* FIXME this needs to check whether alloc_ids are equal *)
             Z3.Arithmetic.mk_le context (loc_to_integer (term t1))
               (loc_to_integer (term t2))
          | And -> Z3.Boolean.mk_and context (map term [t1;t2])
