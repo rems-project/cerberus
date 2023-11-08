@@ -445,11 +445,13 @@ let rec get_ret_it loc body bt = function
     let@ () = if BT.equal (IT.bt v) bt
       then return ()
       else fail_n {loc;
-        msg = Generic (Pp.item "get_ret_it: basetype mismatch" (IT.pp_with_typ v))}
+        msg = Generic (Pp.item "get_ret_it: basetype mismatch"
+            (Pp.infix_arrow (IT.pp_with_typ v) (BT.pp bt)))}
     in
     return v
   | Compute _ -> fail_n {loc;
-        msg = Generic (Pp.item "c_fun_to_it: does not return" (Pp_mucore.pp_expr body))}
+        msg = Generic (Pp.item "cn_function c->logical conversion: does not return"
+            (Pp_mucore.pp_expr body))}
   | If_Else (t, x, y) ->
     let@ x_v = get_ret_it loc body bt x in
     let@ y_v = get_ret_it loc body bt y in
@@ -459,7 +461,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
   let def_args = def.LogicalFunctions.args
     |> List.map IndexTerms.sym_ in
-  Pp.debug 3 (lazy (Pp.item "converting C function to logical"
+  Pp.debug 3 (lazy (Pp.item "cn_function converting C function to logical"
     (Pp.infix_arrow (Sym.pp fsym) (Sym.pp id))));
   match fn with
   | M_Proc (loc, args_and_body, _trusted, _) ->
@@ -487,6 +489,14 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
       | M_L _ -> m
     in
     let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
+    let@ () = match rt with
+      | ReturnTypes.Computational ((_, bt), _, _) ->
+          let l_ret_bt = def.LogicalFunctions.return_bt in
+          if BT.equal bt l_ret_bt then return ()
+          else fail_n {loc = id_loc; msg = Generic (Pp.item "cn_function: return-type mismatch"
+              (Pp.infix_arrow (Pp.typ (Sym.pp fsym) (BT.pp bt))
+                  (Pp.typ (Sym.pp id) (BT.pp l_ret_bt))))}
+    in
     let ctxt = {glob_context with label_defs = labels} in
     let label_context = WellTyped.WProc.label_context rt labels in
     let@ body = pure (in_computational_ctxt args_and_body
@@ -496,7 +506,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
     simp_const loc (lazy (Pp_mucore.pp_expr body)) it
   | _ ->
     fail_n {loc = id_loc;
-        msg = Generic (Pp.string ("c_fun_to_it: not defined: " ^ Sym.pp_string fsym))}
+        msg = Generic (Pp.string ("cn_function: not defined: " ^ Sym.pp_string fsym))}
 
 let upd_def (loc, sym, def_tm) =
   let open LogicalFunctions in
