@@ -181,6 +181,9 @@ module IntMap = Map.Make(Int)
 let typ n typ = 
   n ^^^ colon ^^^ typ
 
+let infix_arrow x y =
+  x ^^^ !^"->" ^^^ y
+
 let item item content = 
   format [Bold] item ^^ colon ^^ hardline ^^ content
 

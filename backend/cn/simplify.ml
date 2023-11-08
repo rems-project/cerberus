@@ -415,26 +415,24 @@ module IndexTerms = struct
     | Binop (EQ, a, b) ->
        let a = aux a in
        let b = aux b in
+       let is_c t = Option.is_some (IT.is_const t) in
        begin match a, b with
        | _ when IT.equal a b ->
          IT (Const (Bool true), the_bt) 
        | IT (Const (Z z1), _), IT (Const (Z z2), _) ->
           bool_ (Z.equal z1 z2)
-       (* (cond ? z1 : z2) == z3 *)
-       | IT (ITE (cond, 
-                  IT (Const (Z z1), _), 
-                  IT (Const (Z z2), _)), _),
-         IT (Const (Z z3), _)
-
-       | IT (Const (Z z3), _),
-         IT (ITE (cond, 
-                  IT (Const (Z z1), _), 
-                  IT (Const (Z z2), _)), _) ->
-
+       | IT (Const (Bits (bits_info1, z1)), _), IT (Const (Bits (bits_info2, z2)), _) ->
+          let z1 = BT.normalise_to_range bits_info1 z1 in
+          let z2 = BT.normalise_to_range bits_info2 z2 in
+          bool_ (Z.equal z1 z2)
+       (* (cond ? const-1 : const-2) == const-3 *)
+       | IT (ITE (cond, t1, t2), _), t3 when ((is_c t1 || is_c t2) && is_c t3)
+       ->
           aux (
-            and_ [impl_ (cond, bool_ (Z.equal z1 z3));
-                  impl_ (not_ cond, bool_ (Z.equal z2 z3))]
+            and_ [impl_ (cond, eq_ (t1, t3));
+                  impl_ (not_ cond, eq_ (t2, t3))]
             )
+       | t3, IT (ITE (cond, t1, t2), _) when is_c t3 -> aux (eq_ (b, a))
        | IT (Tuple items1, _),
          IT (Tuple items2, _)  ->
           aux (and_ (List.map2 eq__ items1 items2))
@@ -615,7 +613,6 @@ module IndexTerms = struct
     | _ ->
       (* FIXME: it's problematic that some term shapes aren't even explored *)
       it
-
 
   let simp_flatten simp_ctxt term =
     match simp simp_ctxt term with

@@ -88,7 +88,10 @@ let simp_const loc lpp it =
 let do_wrapI loc ct it =
   match Sctypes.is_integer_type ct with
   | Some ity ->
-    return (IT.wrapI_ (ity, it))
+    let ity_bt = Memory.bt_of_sct ct in
+    if BT.equal ity_bt (IT.bt it)
+    then return it
+    else return (IT.wrapI_ (ity, it))
   | None -> fail_n {loc; msg = Generic (Pp.item "expr from C syntax: coercion to non-int type"
       (Sctypes.pp ct))}
 
@@ -144,7 +147,8 @@ let is_two_pow it = match IT.term it with
     Some y
   | _ -> None
 
-let bool_ite_1_0 b = IT.ite_ (b, IT.int_lit_ 1 signed_int_ty, IT.int_lit_ 0 signed_int_ty)
+let bool_rep_ty = Memory.bt_of_sct (Sctypes.(Integer IntegerTypes.Bool))
+let bool_ite_1_0 b = IT.ite_ (b, IT.int_lit_ 1 bool_rep_ty, IT.int_lit_ 0 bool_rep_ty)
 
 let rec symb_exec_mu_pexpr ctxt var_map pexpr =
   let (M_Pexpr (loc, annots, _, pe)) = pexpr in
@@ -260,7 +264,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     in
     begin match ct with
     | Sctypes.Integer Sctypes.IntegerTypes.Bool ->
-      simp_const_pe (bool_ite_1_0 (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x))))
+      simp_const_pe (bool_ite_1_0 (IT.not_ (IT.eq_ (x, IT.int_lit_ 0 (IT.bt x)))))
     | _ -> do_wrapI loc ct x
     end
   | M_PEwrapI (act, pe) ->
@@ -455,6 +459,8 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
   let def_args = def.LogicalFunctions.args
     |> List.map IndexTerms.sym_ in
+  Pp.debug 3 (lazy (Pp.item "converting C function to logical"
+    (Pp.infix_arrow (Sym.pp fsym) (Sym.pp id))));
   match fn with
   | M_Proc (loc, args_and_body, _trusted, _) ->
     let rec ignore_l = function
@@ -486,7 +492,8 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
     let@ body = pure (in_computational_ctxt args_and_body
         (WellTyped.BaseTyping.infer_expr label_context body)) in
     let@ r = symb_exec_mu_expr ctxt (init_state, arg_map) body in
-    get_ret_it loc body (def.LogicalFunctions.return_bt) r
+    let@ it = get_ret_it loc body (def.LogicalFunctions.return_bt) r in
+    simp_const loc (lazy (Pp_mucore.pp_expr body)) it
   | _ ->
     fail_n {loc = id_loc;
         msg = Generic (Pp.string ("c_fun_to_it: not defined: " ^ Sym.pp_string fsym))}
