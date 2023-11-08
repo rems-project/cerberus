@@ -592,13 +592,19 @@ module Translate = struct
          | SetDifference -> Z3.Set.mk_difference context (term t1) (term t2)
          | Subset -> Z3.Set.mk_subset context (term t1) (term t2)
          | LTPointer ->
-            (* FIXME this needs to check whether alloc_ids are equal *)
-            Z3.Arithmetic.mk_lt context (loc_to_integer (term t1))
-              (loc_to_integer (term t2))
+            let t1, t2 = term t1, term t2 in
+            let addr1, addr2 = loc_to_integer t1, loc_to_integer t2 in
+            let addr_lt = Z3.Arithmetic.mk_lt context addr1 addr2 in
+            let prov1, prov2 = loc_to_alloc_id t1, loc_to_alloc_id t2 in
+            let prov_eq = Z3.Boolean.mk_eq context prov1 prov2 in
+            Z3.Boolean.mk_and context [prov_eq; addr_lt]
          | LEPointer ->
-            (* FIXME this needs to check whether alloc_ids are equal *)
-            Z3.Arithmetic.mk_le context (loc_to_integer (term t1))
-              (loc_to_integer (term t2))
+            let t1, t2 = term t1, term t2 in
+            let addr1, addr2 = loc_to_integer t1, loc_to_integer t2 in
+            let addr_le = Z3.Arithmetic.mk_le context addr1 addr2 in
+            let prov1, prov2 = loc_to_alloc_id t1, loc_to_alloc_id t2 in
+            let prov_eq = Z3.Boolean.mk_eq context prov1 prov2 in
+            Z3.Boolean.mk_and context [prov_eq; addr_le]
          | And -> Z3.Boolean.mk_and context (map term [t1;t2])
          | Or -> Z3.Boolean.mk_or context (map term [t1;t2])
          | Impl -> Z3.Boolean.mk_implies context (term t1) (term t2)
