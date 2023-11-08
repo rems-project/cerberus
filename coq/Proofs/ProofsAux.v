@@ -23,6 +23,7 @@ Require Import StructTact.StructTactics.
 Require Import Tactics.
 
 Section ListAux.
+
   #[global] Instance List_fold_left_proper
     {A B : Type}
     (Eb: relation B)
@@ -73,7 +74,6 @@ Section ListAux.
         reflexivity.
   Qed.
 
-
   Lemma mapi_cons  {A B : Type} x l {f: nat -> A -> B}:
     mapi f (x :: l) = f 0 x :: mapi (compose f S) l.
   Proof. auto. Qed.
@@ -97,6 +97,22 @@ Section ListAux.
       +
         apply IH. intros i y y' ?.
         apply Hf, H0.
+  Qed.
+
+  #[global] Instance list_init_proper
+    {A:Type}
+    (Ae: relation A)
+    :
+    Proper ( eq ==> (eq ==> (Ae)) ==> eqlistA Ae) list_init.
+  Proof.
+    intros n n' En f f' f_mor.
+    subst n'.
+    induction n.
+    -
+      constructor.
+    -
+      simpl.
+      constructor; auto.
   Qed.
 
 End ListAux.
