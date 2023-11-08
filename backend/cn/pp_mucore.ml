@@ -621,40 +621,30 @@ module Make (Config: CONFIG) = struct
           P.parens (comma_list pp_actype_or_pexpr [Left ty;Right e1;Right e2] ^^ P.comma ^^^
                     pp_linux_memory_order mo)
 
-  let do_annots annot = 
-        fun doc ->
-          List.fold_left (fun acc annot_elem ->
-            match annot_elem with
-              | Aloc loc ->
-                  P.range (handle_location loc) acc
-              | Astd str ->
-                  if show_std then
-                    !^"{-#" ^^ !^ str ^^ !^"#-}" ^^ P.hardline ^^ acc
-                  else
-                    acc
-              | Auid uid ->
-                  P.range (handle_uid uid) acc
-              | Amarker n ->
-                  !^"{-" ^^ !^("marker " ^ string_of_int n) ^^ !^"-}" ^^ acc
+  let pp_str_annot = function
+              | Aloc loc -> [!^"TODO(loc)"]
+              | Astd str -> if show_std then [!^ str] else []
+              | Auid uid -> [!^"TODO(uid)"]
+              | Amarker n -> [!^("marker " ^ string_of_int n)]
               | Amarker_object_types n ->
-                  !^"{-" ^^ !^("marker_object_types " ^ string_of_int n) ^^ !^"-}" ^^ acc
+                  [!^("marker_object_types " ^ string_of_int n)]
               | Abmc annot ->
                   begin match annot with
-                  | Abmc_id id ->
-                      !^"{-" ^^ !^(string_of_int id) ^^ !^"-}" ^^ acc
+                  | Abmc_id id -> [!^(string_of_int id)]
                   end
-              | Atypedef sym ->
-                !^"{-" ^^ pp_symbol sym ^^ !^"-}" ^^ acc
-              | Aattrs _ ->
-                  !^ "TODO(Aattrs)" ^^ acc
-              | Anot_explode ->
-                 !^"{-not-explode-}" ^^ acc
-              | Alabel _ -> acc
-                 (* !^"{-return-}" ^^ acc *)
-              | Acerb _ -> acc
-              | Avalue (Ainteger ity) -> !^"{- type" ^^^
-                 Pp_core_ctype.pp_integer_ctype ity ^^ !^"-}" ^^ acc
-          ) doc annot
+              | Atypedef sym -> [pp_symbol sym]
+              | Aattrs _ -> [!^ "TODO(Aattrs)"]
+              | Anot_explode -> [!^"not-explode"]
+              | Alabel _ -> [!^ "TODO(label)"]
+              | Acerb _ -> []
+              | Avalue (Ainteger ity) -> [!^"type" ^^^
+                 Pp_core_ctype.pp_integer_ctype ity]
+
+  let pp_annots annots =
+    Pp.flow_map (!^ "") (fun annot_str -> !^"{-#" ^^ annot_str ^^ !^"#-}")
+      (List.concat_map pp_str_annot annots)
+
+  let do_annots annot doc = pp_annots annot ^^ doc
 
   (* let pp_expr budget (M_Expr (loc, annot, e) : 'ty mu_expr) = *)
 

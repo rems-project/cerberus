@@ -113,7 +113,6 @@ module PP = struct
 
   let string_of_bop = Pp_core_ast.string_of_bop
 
-
   let dtree_of_pexpr (pexpr : 'ty mu_pexpr) =
 
     let rec self (M_Pexpr (loc, annot, _, pexpr_)) =
@@ -123,7 +122,7 @@ module PP = struct
           Cerb_location.pp_location ~clever:false loc
       in
 
-      match pexpr_ with
+      let without_annot = match pexpr_ with
 
         | M_PEsym sym ->
             Dleaf (pp_ctor "PEsym" ^^^ pp_symbol sym)
@@ -162,6 +161,14 @@ module PP = struct
         | _ ->
            Dnode ( pp_ctor ("Pexpr(TODO)")
                   , [Dleaf (Pp_mucore.pp_pexpr pexpr)])
+      in
+      match annot, without_annot with
+        | [], dtree -> dtree
+        | annots, Dnode (nm, xs) ->
+            Dnode (nm, xs @ [Dnode (pp_ctor "Annot",
+                List.map (fun ann -> Dleaf ann)
+                    (List.concat_map Pp_mucore.Basic.pp_str_annot annots))])
+        | _, dtree -> dtree
     in
     self pexpr
 
