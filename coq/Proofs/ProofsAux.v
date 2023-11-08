@@ -73,16 +73,31 @@ Section ListAux.
         reflexivity.
   Qed.
 
-  (* Now we can prove that mapi is Proper with respect to eqlistA. *)
-  #[global] Lemma list_mapi_Proper
+
+  Lemma mapi_cons  {A B : Type} x l {f: nat -> A -> B}:
+    mapi f (x :: l) = f 0 x :: mapi (compose f S) l.
+  Proof. auto. Qed.
+
+  #[global] Instance list_mapi_Proper
     {A B : Type}
-    (f : nat -> A -> B)
     (pA: relation A)
     (pB: relation B)
-    {Hf: Proper (eq ==> pA ==> pB) f}:
-    Proper (eqlistA pA ==> eqlistA pB) (mapi f).
+    :
+    Proper (pointwise_relation _ (pA ==> pB) ==> (eqlistA pA ==> eqlistA pB))
+      mapi.
   Proof.
-  Admitted.
+    intros f f' Hf l l' Hl. revert f f' Hf.
+    induction Hl as [|x1 x2 l1 l2 ?? IH]; intros f f' Hf.
+    - constructor.
+    -
+      cbn.
+      constructor.
+      +
+        apply Hf, H.
+      +
+        apply IH. intros i y y' ?.
+        apply Hf, H0.
+  Qed.
 
 End ListAux.
 
@@ -250,7 +265,7 @@ Section ZMapAux.
 
   #[global] Instance zmap_range_init_Proper:
     forall [elt : Type], Proper (eq ==> eq ==> eq ==> eq ==> ZMap.Equal ==> ZMap.Equal)
-                      (zmap_range_init (T:=elt)).
+                           (zmap_range_init (T:=elt)).
   Proof.
     intros elt a1 a0 EA n0 n EN s0 s ES v0 v EV m0 m1 EM k.
     subst.
