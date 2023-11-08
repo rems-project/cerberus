@@ -876,13 +876,14 @@ Module RevocationProofs.
     intros fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
       [Ffun [Ecap [Eaddr Emval]]].
     destruct fuel;[reflexivity|].
-    cbn.
     subst.
-    unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
-    repeat rewrite sizeof_same.
-    induction mval2.
+    induction mval2 eqn:IMV;
+      cbn;
+      unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL;
+      repeat rewrite sizeof_same.
     -
-      break_match.
+      (* mval2 = MVunspecified c *)
+      break_match_goal.
       reflexivity.
       repeat split; auto.
       apply ghost_tags_same.
@@ -891,6 +892,20 @@ Module RevocationProofs.
       unfold CheriMemoryWithPNVI.default_prov.
       unfold CheriMemoryWithoutPNVI.default_prov.
       rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+
+      apply list_init_proper;[reflexivity|].
+      intros x y E.
+      constructor.
+      split; auto.
+    - (* mval2 = MVinteger i i0 *)
+      destruct i0 eqn:II0.
+      +
+        (* i0 = IV z *)
+        break_match ; [reflexivity|].
+        break_match ; [reflexivity|].
+        admit.
+      +
+        (* i0 = IC b t *)
 
   Admitted.
 
