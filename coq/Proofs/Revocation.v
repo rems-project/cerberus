@@ -834,13 +834,15 @@ Module RevocationProofs.
   #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
   Lemma ghost_tags_same:
-    forall (addr : AddressValue.t) (sz:Z) (c1 c0 : ZMap.t (bool * CapGhostState)),
+    forall (addr : AddressValue.t) (sz0 sz1:Z) (c0 c1 : ZMap.t (bool * CapGhostState)),
+      sz0 = sz1 ->
       ZMap.Equal (elt:=bool * CapGhostState) c0 c1 ->
       ZMap.Equal (elt:=bool * CapGhostState)
-        (CheriMemoryWithPNVI.ghost_tags addr sz c0)
-        (CheriMemoryWithoutPNVI.ghost_tags addr sz c1).
+        (CheriMemoryWithPNVI.ghost_tags addr sz0 c0)
+        (CheriMemoryWithoutPNVI.ghost_tags addr sz1 c1).
   Proof.
-    intros addr sz c1 c0 H.
+    intros addr sz0 sz1 Hsz c1 c0 H.
+    subst sz1.
     unfold CheriMemoryWithPNVI.ghost_tags, CheriMemoryWithoutPNVI.ghost_tags.
     (* repeat break_let. *)
     match goal with
@@ -877,17 +879,21 @@ Module RevocationProofs.
       [Ffun [Ecap [Eaddr Emval]]].
     destruct fuel;[reflexivity|].
     subst.
+
+    Opaque is_signed_ity.
     induction mval2 eqn:IMV;
       cbn;
       unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL;
+      try match goal with
+        | [|- context[is_signed_ity ?f ?v]] => generalize (is_signed_ity f v) as g_is_signed_ity; intros g_is_signed_ity
+        end;
       repeat rewrite sizeof_same.
     -
       (* mval2 = MVunspecified c *)
       break_match_goal.
       reflexivity.
       repeat split; auto.
-      apply ghost_tags_same.
-      assumption.
+      apply ghost_tags_same; [reflexivity|assumption].
 
       unfold CheriMemoryWithPNVI.default_prov.
       unfold CheriMemoryWithoutPNVI.default_prov.
@@ -901,9 +907,40 @@ Module RevocationProofs.
       destruct i0 eqn:II0.
       +
         (* i0 = IV z *)
-        break_match ; [reflexivity|].
-        break_match ; [reflexivity|].
-        admit.
+        destruct_serr_eq.
+        *
+          cbn.
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+            subst; reflexivity.
+        *
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; inl_inr.
+        *
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; inl_inr.
+        *
+          cbn.
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+            subst.
+          split; [assumption|].
+          split.
+          apply ghost_tags_same.
+          f_equiv; rewrite 2!map_length; reflexivity.
+          assumption.
+          unfold CheriMemoryWithPNVI.default_prov.
+          unfold CheriMemoryWithoutPNVI.default_prov.
+          rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+          eapply list_map_Proper with (pA:=@eq ascii).
+          --
+            intros a1 a2 Ea.
+            subst.
+            constructor.
+            cbn.
+            auto.
+          --
+            reflexivity.
       +
         (* i0 = IC b t *)
 
