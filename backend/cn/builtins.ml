@@ -92,6 +92,17 @@ let ptr_eq_def =
      )
    )
 
+let addr_eq_def =
+    ("addr_eq",
+       Sym.fresh_named "addr_eq",
+        mk_arg2 (fun (p1, p2) ->
+          IT.(sterm_of_term @@ eq_ (
+             pointerToIntegerCast_ @@ term_of_sterm p1,
+             pointerToIntegerCast_ @@ term_of_sterm p2
+          ))
+       )
+   )
+
 
 let builtin_funs =
   [
