@@ -678,6 +678,7 @@ module Translate = struct
          let l_bop f ctxt x y = f ctxt [x; y] in
          let via_u t op ctxt = via_unsigned ctxt (IT.bt t) (op ctxt) in
          let cmp_u t op ctxt = cmp_in_unsigned ctxt (IT.bt t) (op ctxt) in
+         let fail_on str ctxt = failwith ("solver: unexpected value type for: " ^ str) in
          begin match bop with
          | Add -> (bv_arith_case t1 (via_u t1 BV.mk_add) BV.mk_add (l_bop mk_add))
                  context (term t1) (term t2)
@@ -686,7 +687,8 @@ module Translate = struct
          | Mul -> (bv_arith_case t1 (via_u t1 BV.mk_mul) BV.mk_mul (l_bop mk_mul))
                  context (term t1) (term t2)
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
-         | Div -> (bv_arith_case t1 BV.mk_sdiv BV.mk_udiv mk_div) context (term t1) (term t2)
+         | Div -> (bv_arith_case t1 (via_u t1 BV.mk_sdiv) BV.mk_udiv mk_div)
+                 context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
          | Exp -> adj ()
          | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
@@ -700,13 +702,16 @@ module Translate = struct
          | LE -> (bv_arith_case t1 (cmp_u t1 BV.mk_sle) BV.mk_ule mk_le) context (term t1) (term t2)
          | Min -> adj ()
          | Max -> adj ()
-         | XORNoSMT -> BV.mk_xor context (term t1) (term t2)
-         | BWAndNoSMT -> BV.mk_and context (term t1) (term t2)
-         | BWOrNoSMT -> BV.mk_or context (term t1) (term t2)
-         | ShiftLeft -> (bv_arith_case t1 (via_u t1 BV.mk_shl) BV.mk_shl
-                 (fun _ -> failwith "int ShiftLeft")) context (term t1) (term t2)
-         | ShiftRight -> (bv_arith_case t1 (via_u t1 BV.mk_ashr) BV.mk_shl
-                 (fun _ -> failwith "int ShiftRight")) context (term t1) (term t2)
+         | XORNoSMT -> (bv_arith_case t1 (via_u t1 BV.mk_xor) BV.mk_xor (fail_on "xor"))
+                     context (term t1) (term t2)
+         | BWAndNoSMT -> (bv_arith_case t1 (via_u t1 BV.mk_and) BV.mk_and (fail_on "bw_and"))
+                     context (term t1) (term t2)
+         | BWOrNoSMT -> (bv_arith_case t1 (via_u t1 BV.mk_or) BV.mk_or (fail_on "bw_or"))
+                     context (term t1) (term t2)
+         | ShiftLeft -> (bv_arith_case t1 (via_u t1 BV.mk_shl) BV.mk_shl (fail_on "shift_left"))
+                     context (term t1) (term t2)
+         | ShiftRight -> (bv_arith_case t1 (via_u t1 BV.mk_ashr) BV.mk_shl (fail_on "shift_right"))
+                     context (term t1) (term t2)
          | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
          | SetUnion -> Z3.Set.mk_union context (map term [t1;t2])
