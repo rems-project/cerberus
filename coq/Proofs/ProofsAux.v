@@ -99,6 +99,23 @@ Section ListAux.
         apply Hf, H0.
   Qed.
 
+  #[global] Instance list_map_Proper
+    {A B : Type}
+    (pA: relation A)
+    (pB: relation B)
+    :
+    Proper ((pA ==> pB) ==> (eqlistA pA ==> eqlistA pB)) (@map A B).
+  Proof.
+    intros f f' Hf l l' Hl. revert f f' Hf.
+    induction Hl as [|x1 x2 l1 l2 ?? IH]; intros f f' Hf.
+    - constructor.
+    -
+      cbn.
+      constructor.
+      + apply Hf, H.
+      + apply IH, Hf.
+  Qed.
+
   #[global] Instance list_init_proper
     {A:Type}
     (Ae: relation A)
