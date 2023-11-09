@@ -1,5 +1,6 @@
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
+Require Import Common.SimpleError.
 
 (* This (seemingly) prevents slow `Qed` problem.
    Usage: replace `cbn in H` with `cbn_hyp H`.
@@ -40,4 +41,12 @@ Ltac inl_inr_inv :=
   | [H1: Monad.ret _ = inr _ |- _] => inversion H1; clear H1
   | [H1: raise _ = inl _ |- _] => inversion H1; clear H1
   | [H1: inl _ = raise _ |- _] => inversion H1; clear H1
+  end.
+
+Ltac destruct_serr_eq :=
+  match goal with
+  | [|- serr_eq _ ?a ?b] =>
+      let AH := fresh "Hserr" in
+      let BH := fresh "Hserr" in
+      destruct a eqn:AH, b eqn:BH
   end.
