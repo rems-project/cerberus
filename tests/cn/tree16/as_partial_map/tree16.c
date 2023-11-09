@@ -14,7 +14,7 @@ struct node {
 };
 
 /*@
-function (integer) num_nodes ()
+function (i32) num_nodes ()
 @*/
 
 int cn_get_num_nodes (void)
@@ -26,32 +26,32 @@ int cn_get_num_nodes (void)
 /*@
 datatype tree_arc {
   Arc_End {},
-  Arc_Step {integer i, datatype tree_arc tail}
+  Arc_Step {i32 i, datatype tree_arc tail}
 }
 
 datatype tree_node_option {
   Node_None {},
-  Node {integer v}
+  Node {i32 v}
 }
 
 function (map<datatype tree_arc, datatype tree_node_option>) empty ()
 function (map<datatype tree_arc, datatype tree_node_option>) construct
-    (integer v, map<integer, map<datatype tree_arc, datatype tree_node_option> > ts)
+    (i32 v, map<i32, map<datatype tree_arc, datatype tree_node_option> > ts)
 
-function (map<integer, map<datatype tree_arc, datatype tree_node_option> >) default_ns ()
+function (map<i32, map<datatype tree_arc, datatype tree_node_option> >) default_ns ()
 
 predicate {map<datatype tree_arc, datatype tree_node_option> t,
-        integer v, map<integer, map<datatype tree_arc, datatype tree_node_option> > ns}
+        i32 v, map<i32, map<datatype tree_arc, datatype tree_node_option> > ns}
   Tree (pointer p)
 {
   if (p == NULL) {
-    return {t: (empty ()), v: 0, ns: default_ns ()};
+    return {t: (empty ()), v: 0i32, ns: default_ns ()};
   }
   else {
-    take V = Owned<int>((pointer)(((integer)p) + (offsetof (node, v))));
-    let nodes_ptr = ((pointer)((((integer)p) + (offsetof (node, nodes)))));
-    take Ns = each (integer i; (0 <= i) && (i < (num_nodes ())))
-      {Indirect_Tree((pointer)(((integer)nodes_ptr) + (i * (sizeof <tree>))))};
+    take V = Owned<int>((pointer)(((u64)p) + (offsetof (node, v))));
+    let nodes_ptr = ((pointer)((((u64)p) + (offsetof (node, nodes)))));
+    take Ns = each (i32 i; (0i32 <= i) && (i < (num_nodes ())))
+      {Indirect_Tree((pointer)(((u64)nodes_ptr) + (i * ((i32)(sizeof <tree>)))))};
     let t = construct (V, Ns);
     return {t: t, v: V, ns: Ns};
   }
@@ -63,33 +63,33 @@ predicate (map <datatype tree_arc, datatype tree_node_option>) Indirect_Tree (po
   return T.t;
 }
 
-function (datatype tree_arc) mk_arc (map <integer, integer> m, integer i, integer len)
+function (datatype tree_arc) mk_arc (map <i32, i32> m, i32 i, i32 len)
 
-predicate {datatype tree_arc arc, map<integer, integer> xs}
-        Arc (pointer p, integer i, integer len) {
-  assert (0 <= len);
+predicate {datatype tree_arc arc, map<i32, i32> xs}
+        Arc (pointer p, i32 i, i32 len) {
+  assert (0i32 <= len);
   assert (i <= len);
-  assert (0 <= i);
-  take Xs = each (integer j; (0 <= j) && (j < len))
-    {Owned<signed int>(p + (j * sizeof<signed int>))};
-  assert (each (integer j; (0 <= j) && (j < len))
-    {(0 <= Xs[j]) && (Xs[j] < (num_nodes ()))});
+  assert (0i32 <= i);
+  take Xs = each (i32 j; (0i32 <= j) && (j < len))
+    {Owned<signed int>(p + (j * ((i32) (sizeof<signed int>))))};
+  assert (each (i32 j; (0i32 <= j) && (j < len))
+    {(0i32 <= Xs[j]) && (Xs[j] < (num_nodes ()))});
   return {arc: mk_arc(Xs, i, len), xs: Xs};
 }
 
-lemma mk_arc_lemma (map <integer, integer> m, integer i, integer len)
-  requires ((0 <= len) && (0 <= i) && (i <= len))
+lemma mk_arc_lemma (map <i32, i32> m, i32 i, i32 len)
+  requires ((0i32 <= len) && (0i32 <= i) && (i <= len))
   ensures (mk_arc(m, i, len)) ==
     (i < len ?
-        Arc_Step {i: m[i], tail: mk_arc(m, i + 1, len)} :
+        Arc_Step {i: m[i], tail: mk_arc(m, i + 1i32, len)} :
         Arc_End {})
 
 lemma empty_lemma (datatype tree_arc arc)
   requires true
   ensures ((empty ())[arc]) == Node_None {}
 
-function (datatype tree_node_option) construct_app_rhs (integer v,
-        map<integer, map<datatype tree_arc, datatype tree_node_option> > ns,
+function (datatype tree_node_option) construct_app_rhs (i32 v,
+        map<i32, map<datatype tree_arc, datatype tree_node_option> > ns,
         datatype tree_arc arc)
 {
   match arc {
@@ -109,14 +109,14 @@ function (boolean) arc_first_idx_valid (datatype tree_arc arc)
       true
     }
     Arc_Step {i: i, tail: tail} => {
-      (0 <= i) && (i < num_nodes())
+      (0i32 <= i) && (i < num_nodes())
     }
   }
 }
 
 
-lemma construct_lemma (integer v,
-        map<integer, map<datatype tree_arc, datatype tree_node_option> > ns,
+lemma construct_lemma (i32 v,
+        map<i32, map<datatype tree_arc, datatype tree_node_option> > ns,
         datatype tree_arc arc)
   requires
     arc_first_idx_valid(arc)
@@ -128,21 +128,21 @@ lemma construct_lemma (integer v,
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires take T = Tree(t) @*/
-/*@ requires take Xs = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<int>(path + (j * 4))} @*/
-/*@ requires ((0 <= path_len) && (0 <= i) && (i <= path_len)) @*/
-/*@ requires each (integer j; (0 <= j) && (j < path_len))
-    {(0 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
+/*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
+    {Owned<int>(path + (j * ((i32) (sizeof<signed int>))))} @*/
+/*@ requires ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len)) @*/
+/*@ requires each (i32 j; (0i32 <= j) && (j < path_len))
+    {(0i32 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
 /*@ requires take V = Owned(v) @*/
 /*@ requires let arc = mk_arc(Xs, i, path_len) @*/
 /*@ ensures take T2 = Tree(t) @*/
 /*@ ensures T2.t == {T.t}@start @*/
-/*@ ensures take Xs2 = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<int>(path + (j * 4))} @*/
+/*@ ensures take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
+    {Owned<int>(path + (j * ((i32) (sizeof<signed int>))))} @*/
 /*@ ensures Xs2 == {Xs}@start @*/
 /*@ ensures take V2 = Owned(v) @*/
-/*@ ensures ((return == 0) && ((T2.t[arc]) == Node_None {}))
-  || ((return == 1) && ((T2.t[arc]) == Node {v: V2})) @*/
+/*@ ensures ((return == 0i32) && ((T2.t[arc]) == Node_None {}))
+  || ((return == 1i32) && ((T2.t[arc]) == Node {v: V2})) @*/
 {
   int idx = 0;
   int r = 0;
