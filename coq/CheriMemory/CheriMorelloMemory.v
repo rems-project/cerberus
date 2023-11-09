@@ -397,7 +397,7 @@ Module Type CheriMemoryImpl
         if is_signed then unwrap_cap_value n else n
     end.
 
-  (* Creare new cap meta for region where all tags are unspecified *)
+  (* Crear new cap meta for region where all tags are unspecified *)
   Program Definition init_ghost_tags
     (addr: AddressValue.t)
     (size: Z)
