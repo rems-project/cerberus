@@ -1113,10 +1113,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      | M_IntFromPtr (act_from, act_to, pe) ->
         let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
         let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
-        assert (match act_from.ct with Pointer _ -> true | _ -> false);
         assert (match act_to.ct with Integer _ -> true | _ -> false);
         let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act_to.ct) in
-        let@ () = ensure_base_type loc ~expect:(Memory.bt_of_sct act_from.ct) (bt_of_pexpr pe) in
+        let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
         (* TODO: is this good? *)
         let test_value = cast_ Memory.intptr_bt arg in
