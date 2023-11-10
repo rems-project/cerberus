@@ -93,7 +93,7 @@ Module RevocationProofs.
 
   (* Equality of pointer values without taking provenance into account *)
 
-  Inductive pointer_value_eq: relation pointer_value_ind :=
+  Inductive pointer_value_eq: relation pointer_value_indt :=
   | pointer_value_no_prov_eq: forall pr1 pr2 b1 b2,  b1 = b2 -> pointer_value_eq (PV pr1 b1) (PV pr2 b2).
 
   (* Equality of byte values without taking provenance into account *)
@@ -129,34 +129,34 @@ Module RevocationProofs.
       rewrite H0. apply H2.
   Qed.
 
-  Inductive mem_value_ind_eq: mem_value_ind -> mem_value_ind -> Prop :=
-  | mem_value_ind_eq_MVunspecified: forall t1 t2, mem_value_ind_eq (MVunspecified t1) (MVunspecified t2)
-  | mem_value_ind_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_ind_eq (MVinteger t1 v1) (MVinteger t2 v2)
-  | mem_value_ind_eq_MVfloating: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_ind_eq (MVfloating t1 v1) (MVfloating t2 v2)
-  | mem_value_ind_eq_MVpointer: forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> mem_value_ind_eq (MVpointer t1 p1) (MVpointer t2 p2)
-  | mem_value_ind_eq_MVarray: forall a1 a2, eqlistA mem_value_ind_eq a1 a2 -> mem_value_ind_eq (MVarray a1) (MVarray a2)
-  | mem_value_ind_eq_MVstruct: forall tag_sym1 l1 tag_sym2 l2,
+  Inductive mem_value_indt_eq: mem_value_indt -> mem_value_indt -> Prop :=
+  | mem_value_indt_eq_MVunspecified: forall t1 t2, mem_value_indt_eq (MVunspecified t1) (MVunspecified t2)
+  | mem_value_indt_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_eq (MVinteger t1 v1) (MVinteger t2 v2)
+  | mem_value_indt_eq_MVfloating: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_eq (MVfloating t1 v1) (MVfloating t2 v2)
+  | mem_value_indt_eq_MVpointer: forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> mem_value_indt_eq (MVpointer t1 p1) (MVpointer t2 p2)
+  | mem_value_indt_eq_MVarray: forall a1 a2, eqlistA mem_value_indt_eq a1 a2 -> mem_value_indt_eq (MVarray a1) (MVarray a2)
+  | mem_value_indt_eq_MVstruct: forall tag_sym1 l1 tag_sym2 l2,
       tag_sym1 = tag_sym2  ->
       eqlistA struct_field_eq l1 l2 ->
-      mem_value_ind_eq (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)
-  | mem_value_ind_eq_MVunion: forall tag_sym1 id1 v1 tag_sym2 id2 v2,
-      tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_ind_eq v1 v2 ->
-      mem_value_ind_eq (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)
+      mem_value_indt_eq (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)
+  | mem_value_indt_eq_MVunion: forall tag_sym1 id1 v1 tag_sym2 id2 v2,
+      tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_eq v1 v2 ->
+      mem_value_indt_eq (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)
   with
-    struct_field_eq: (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> Prop :=
+    struct_field_eq: (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> Prop :=
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
 
-  Inductive ctype_pointer_value_eq: (CoqCtype.ctype * pointer_value_ind) ->
-                                    (CoqCtype.ctype * pointer_value_ind) -> Prop
+  Inductive ctype_pointer_value_eq: (CoqCtype.ctype * pointer_value_indt) ->
+                                    (CoqCtype.ctype * pointer_value_indt) -> Prop
     :=
   | ctype_pointer_value_eq_1:
     forall t1 t2 pv1 pv2, t1 = t2 /\ pointer_value_eq pv1 pv2 ->
                      ctype_pointer_value_eq (t1,pv1) (t2,pv2).
 
-  Inductive varargs_eq: (Z * list (CoqCtype.ctype * pointer_value_ind)) ->
-                        (Z * list (CoqCtype.ctype * pointer_value_ind)) -> Prop :=
+  Inductive varargs_eq: (Z * list (CoqCtype.ctype * pointer_value_indt)) ->
+                        (Z * list (CoqCtype.ctype * pointer_value_indt)) -> Prop :=
   | varargs_eq_1: forall z1 vl1 z2 vl2,
       z1 = z2 /\ eqlistA ctype_pointer_value_eq vl1 vl2
       -> varargs_eq (z1,vl1) (z2,vl2).
@@ -744,7 +744,7 @@ Module RevocationProofs.
   Theorem pointer_mval_same:
     forall t p1 p2,
       pointer_value_eq p1 p2 ->
-      mem_value_ind_eq (CheriMemoryWithPNVI.pointer_mval t p1)
+      mem_value_indt_eq (CheriMemoryWithPNVI.pointer_mval t p1)
         (CheriMemoryWithoutPNVI.pointer_mval t p2).
   Proof.
     intros t p1 p2 H.
@@ -782,8 +782,8 @@ Module RevocationProofs.
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem array_mval_same:
     forall a1 a2,
-      eqlistA mem_value_ind_eq a1 a2 ->
-      mem_value_ind_eq (CheriMemoryWithPNVI.array_mval a1)
+      eqlistA mem_value_indt_eq a1 a2 ->
+      mem_value_indt_eq (CheriMemoryWithPNVI.array_mval a1)
         (CheriMemoryWithoutPNVI.array_mval a2).
   Proof.
     intros a1 a2 H.
@@ -795,7 +795,7 @@ Module RevocationProofs.
   Theorem struct_mval_same:
     forall s1 s2 l1 l2,
       s1 = s2 /\ eqlistA struct_field_eq l1 l2 ->
-      mem_value_ind_eq (CheriMemoryWithPNVI.struct_mval s1 l1)
+      mem_value_indt_eq (CheriMemoryWithPNVI.struct_mval s1 l1)
         (CheriMemoryWithoutPNVI.struct_mval s2 l2).
   Proof.
     intros s1 s2 l1 l2 [H1 H2].
@@ -805,8 +805,8 @@ Module RevocationProofs.
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem union_mval_same:
     forall s1 id1 v1 s2 id2 v2,
-      s1 = s2 /\ id1 = id2 /\ mem_value_ind_eq v1 v2 ->
-      mem_value_ind_eq (CheriMemoryWithPNVI.union_mval s1 id1 v1)
+      s1 = s2 /\ id1 = id2 /\ mem_value_indt_eq v1 v2 ->
+      mem_value_indt_eq (CheriMemoryWithPNVI.union_mval s1 id1 v1)
         (CheriMemoryWithoutPNVI.union_mval s2 id2 v2).
   Proof.
     intros s1 id1 v1 s2 id2 v2 H.
