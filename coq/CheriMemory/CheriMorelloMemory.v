@@ -63,23 +63,23 @@ Module Type CheriMemoryTypes
   | PVfunction : function_pointer -> pointer_value_base
   | PVconcrete : C.t -> pointer_value_base.
 
-  Inductive pointer_value_ind : Set :=
-  | PV : provenance -> pointer_value_base -> pointer_value_ind.
+  Inductive pointer_value_indt : Set :=
+  | PV : provenance -> pointer_value_base -> pointer_value_indt.
 
-  Inductive integer_value_ind : Set :=
-  | IV : Z -> integer_value_ind
-  | IC : bool -> C.t -> integer_value_ind.
+  Inductive integer_value_indt : Set :=
+  | IV : Z -> integer_value_indt
+  | IC : bool -> C.t -> integer_value_indt.
 
   Inductive mem_value_with_err :=
   | MVEunspecified : CoqCtype.ctype -> mem_value_with_err
   | MVEinteger :
-    CoqCtype.integerType -> integer_value_ind ->
+    CoqCtype.integerType -> integer_value_indt ->
     mem_value_with_err
   | MVEfloating :
     CoqCtype.floatingType -> floating_value ->
     mem_value_with_err
   | MVEpointer :
-    CoqCtype.ctype -> pointer_value_ind -> mem_value_with_err
+    CoqCtype.ctype -> pointer_value_indt -> mem_value_with_err
   | MVEarray : list mem_value_with_err -> mem_value_with_err
   | MVEstruct :
     CoqSymbol.sym ->
@@ -91,21 +91,21 @@ Module Type CheriMemoryTypes
     mem_value_with_err
   | MVErr : mem_error -> mem_value_with_err.
 
-  Inductive mem_value_ind :=
-  | MVunspecified : CoqCtype.ctype -> mem_value_ind
+  Inductive mem_value_indt :=
+  | MVunspecified : CoqCtype.ctype -> mem_value_indt
   | MVinteger :
-    CoqCtype.integerType -> integer_value_ind -> mem_value_ind
+    CoqCtype.integerType -> integer_value_indt -> mem_value_indt
   | MVfloating :
-    CoqCtype.floatingType -> floating_value -> mem_value_ind
+    CoqCtype.floatingType -> floating_value -> mem_value_indt
   | MVpointer :
-    CoqCtype.ctype -> pointer_value_ind -> mem_value_ind
-  | MVarray : list mem_value_ind -> mem_value_ind
+    CoqCtype.ctype -> pointer_value_indt -> mem_value_indt
+  | MVarray : list mem_value_indt -> mem_value_indt
   | MVstruct :
     CoqSymbol.sym ->
-    list (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> mem_value_ind
+    list (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> mem_value_indt
   | MVunion :
     CoqSymbol.sym ->
-    CoqSymbol.identifier -> mem_value_ind -> mem_value_ind.
+    CoqSymbol.identifier -> mem_value_indt -> mem_value_indt.
 
   Inductive access_intention : Set :=
   | ReadIntent : access_intention
@@ -135,9 +135,9 @@ Module Type CheriMemoryTypes
     | _, _ => false
     end.
 
-  Inductive taint_ind :=
-  | NoTaint: taint_ind
-  | NewTaint: list storage_instance_id -> taint_ind.
+  Inductive taint_indt :=
+  | NoTaint: taint_indt
+  | NewTaint: list storage_instance_id -> taint_indt.
 
   Record allocation :=
     {
@@ -205,12 +205,12 @@ Module Type CheriMemoryImpl
 
   Definition name := "cheri-coq".
 
-  Definition pointer_value := pointer_value_ind.
-  Definition integer_value := integer_value_ind.
+  Definition pointer_value := pointer_value_indt.
+  Definition integer_value := integer_value_indt.
   Definition floating_value : Set := MT.floating_value.
   Definition symbolic_storage_instance_id : Set := MT.symbolic_storage_instance_id.
   Definition storage_instance_id : Set := MT.storage_instance_id.
-  Definition mem_value := mem_value_ind.
+  Definition mem_value := mem_value_indt.
 
 
   (*
@@ -361,11 +361,11 @@ Module Type CheriMemoryImpl
   Inductive footprint_kind :=
   | Write | Read.
 
-  Inductive footprint_ind :=
+  Inductive footprint_indt :=
   (* base address, size *)
-  | FP: footprint_kind -> AddressValue.t -> Z -> footprint_ind.
+  | FP: footprint_kind -> AddressValue.t -> Z -> footprint_indt.
 
-  Definition footprint := footprint_ind.
+  Definition footprint := footprint_indt.
 
   Definition cap_to_Z c := AddressValue.to_Z (C.cap_get_value c).
 
@@ -1056,37 +1056,37 @@ Module Type CheriMemoryImpl
     | PV prov ptrval => (prov,ptrval)
     end.
 
-  Inductive overlap_ind :=
-  | NoAlloc: overlap_ind
-  | SingleAlloc: storage_instance_id -> overlap_ind
-  | DoubleAlloc: storage_instance_id -> storage_instance_id -> overlap_ind.
+  Inductive overlap_indt :=
+  | NoAlloc: overlap_indt
+  | SingleAlloc: storage_instance_id -> overlap_indt
+  | DoubleAlloc: storage_instance_id -> storage_instance_id -> overlap_indt.
 
-  Inductive prov_ptr_valid_ind :=
+  Inductive prov_ptr_valid_indt :=
   | NotValidPtrProv
   | ValidPtrProv.
 
-  Definition string_of_prov_ptr_valid_ind p :=
+  Definition string_of_prov_ptr_valid_indt p :=
     match p with
     | NotValidPtrProv => "NotValidPtrProv"
     | ValidPtrProv => "ValidPtrProv"
     end.
 
-  Inductive prov_valid_ind :=
-  | VALID: provenance -> prov_valid_ind
-  | INVALID: prov_valid_ind.
+  Inductive prov_valid_indt :=
+  | VALID: provenance -> prov_valid_indt
+  | INVALID: prov_valid_indt.
 
-  Definition string_of_prov_valid_ind p :=
+  Definition string_of_prov_valid_indt p :=
     match p with
     | VALID _ => "VALID _"
     | INVALID => "INVALID"
     end.
 
-  Inductive bytes_ind :=
-  | PtrBytes: Z -> bytes_ind
-  | OtherBytes: bytes_ind.
+  Inductive bytes_indt :=
+  | PtrBytes: Z -> bytes_indt
+  | OtherBytes: bytes_indt.
 
   Definition split_bytes (bs : list AbsByte)
-    : serr (provenance * prov_ptr_valid_ind * list (option ascii))
+    : serr (provenance * prov_ptr_valid_indt * list (option ascii))
     :=
     match bs with
     | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
@@ -1158,7 +1158,7 @@ Module Type CheriMemoryImpl
         ret (pvalid,pptrvalid,rev_values)
     end.
 
-  Definition provs_of_bytes (bs : list AbsByte) : taint_ind :=
+  Definition provs_of_bytes (bs : list AbsByte) : taint_indt :=
     let xs :=
       List.fold_left
         (fun (acc : list storage_instance_id) =>
@@ -1195,13 +1195,13 @@ Module Type CheriMemoryImpl
 
   Fixpoint abst
     (fuel: nat)
-    (find_overlapping : Z -> overlap_ind)
+    (find_overlapping : Z -> overlap_indt)
     (funptrmap : ZMap.t (digest * string * C.t))
     (tag_query_f : Z -> (bool* CapGhostState))
     (addr : Z)
     (cty : CoqCtype.ctype)
     (bs : list AbsByte)
-    : serr (taint_ind * mem_value_with_err * list AbsByte)
+    : serr (taint_indt * mem_value_with_err * list AbsByte)
     :=
     match fuel with
     | O => raise "abst out of fuel"
@@ -1210,7 +1210,7 @@ Module Type CheriMemoryImpl
         let self f := abst f find_overlapping funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
         sassert (negb (Nat.ltb (List.length bs) (Z.to_nat sz))) "abst, |bs| < sizeof(ty)" ;;
-        let merge_taint (x_value : taint_ind) (y_value : taint_ind) : taint_ind :=
+        let merge_taint (x_value : taint_indt) (y_value : taint_indt) : taint_indt :=
           match (x_value, y_value) with
           | (NoTaint, NoTaint) => NoTaint
           | ((NoTaint, NewTaint xs) | (NewTaint xs, NoTaint)) => NewTaint xs
@@ -1271,7 +1271,7 @@ Module Type CheriMemoryImpl
             end
         | CoqCtype.Array elem_ty (Some n_value) =>
             let fix aux (fuel:nat) (n_value : Z) par (cs : list AbsByte)
-              : serr (taint_ind *  mem_value_with_err * list AbsByte)
+              : serr (taint_indt *  mem_value_with_err * list AbsByte)
               :=
               match fuel with
               | O => raise "abst.aux out of fuel"
@@ -1292,7 +1292,7 @@ Module Type CheriMemoryImpl
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, prov_status, bs1') <- split_bytes bs1 ;;
-            (* sprint_msg ("BS1 prov_status=" ++ (string_of_prov_ptr_valid_ind prov_status)) ;; *)
+            (* sprint_msg ("BS1 prov_status=" ++ (string_of_prov_ptr_valid_indt prov_status)) ;; *)
             match extract_unspec bs1' with
             | Some cs =>
                 let (tag,gs) := tag_query_f addr in
@@ -1412,7 +1412,7 @@ Module Type CheriMemoryImpl
     | MVErr err => fail loc err
     end.
 
-  Definition find_overlapping_st st addr : overlap_ind
+  Definition find_overlapping_st st addr : overlap_indt
     :=
     let (require_exposed, allow_one_past) :=
       match CoqSwitches.has_switch_pred (SW.get_switches tt)
@@ -1454,7 +1454,7 @@ Module Type CheriMemoryImpl
                  end
       ) st.(allocations) NoAlloc.
 
-  Definition find_overlapping addr : memM overlap_ind
+  Definition find_overlapping addr : memM overlap_indt
     :=  get >>= fun st => ret (find_overlapping_st st addr).
 
   (* If pointer stored at [addr] with meta information [meta] has it's
@@ -1704,7 +1704,7 @@ Module Type CheriMemoryImpl
                       | None => None
                       end) st.(allocations)) st).
 
-  Definition expose_allocations (t: taint_ind): memM unit
+  Definition expose_allocations (t: taint_indt): memM unit
     := match t with
        | NoTaint => ret tt
        | NewTaint xs =>
@@ -2306,7 +2306,7 @@ Module Type CheriMemoryImpl
     end.
  *)
 
-  Definition case_funsym_opt (st:mem_state) (pv:pointer_value_ind): option CoqSymbol.sym
+  Definition case_funsym_opt (st:mem_state) (pv:pointer_value_indt): option CoqSymbol.sym
     :=
     let '(_, ptrval) := break_PV pv in
     match ptrval with
@@ -3132,9 +3132,9 @@ Module Type CheriMemoryImpl
                                   CoqSymbol.identifier -> serr pointer_value
     := fun _ _ _ => raise "members_shift_ptrval (pure) is not supported in CHERI".
 
-  Inductive collapse_ind :=
-  | NoCollapse: collapse_ind
-  | Collapse: Z -> collapse_ind.
+  Inductive collapse_indt :=
+  | NoCollapse: collapse_indt
+  | Collapse: Z -> collapse_indt.
 
   Definition eff_array_shift_ptrval
     (loc : location_ocaml)
