@@ -917,7 +917,8 @@ Module RevocationProofs.
     subst.
 
     Opaque is_signed_ity.
-    induction mval2 eqn:IMV;
+    revert fuel.
+    induction mval2;intros fuel;
       cbn;
       unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL;
       try match goal with
@@ -1138,7 +1139,89 @@ Module RevocationProofs.
             solve_relation.
             reflexivity.
     -
-
+      (* mval2 = MVarray l *)
+      admit.
+    -
+      (* mval2 = MVstruct s l *)
+      admit.
+    -
+      (* finished base case, got IHm *)
+      destruct_serr_eq; break_match_hyp; try inl_inr. repeat inl_inr_inv; subst;
+        try reflexivity.
+      +
+        repeat break_match_hyp; try inl_inr;
+          repeat inl_inr_inv;subst.
+        rewrite <- Heqs3, <- Heqs0.
+        destruct fuel;[reflexivity|].
+        apply IHmval2.
+      +
+        exfalso.
+        repeat break_match_hyp; try inl_inr;
+          repeat inl_inr_inv;subst.
+        destruct fuel;[inversion Heqs0|].
+        specialize (IHmval2 fuel).
+        unfold  serr_eq in IHmval2.
+        repeat break_match_hyp; try inl_inr.
+        tauto.
+      +
+        exfalso.
+        repeat break_match_hyp; try inl_inr;
+          repeat inl_inr_inv;subst.
+        destruct fuel;[inversion Heqs2|].
+        specialize (IHmval2 fuel).
+        unfold  serr_eq in IHmval2.
+        repeat break_match_hyp; try inl_inr.
+        tauto.
+      +
+        rewrite <- Hserr, <- Hserr0.
+        clear Hserr Hserr0.
+        repeat break_match.
+        *
+          rewrite <- Heqs1, <- Heqs2.
+          destruct fuel;[reflexivity|].
+          specialize (IHmval2 fuel).
+          unfold  serr_eq in IHmval2.
+          repeat break_match_hyp; try inl_inr.
+          tauto.
+        *
+          repeat break_match_hyp; try inl_inr;
+            repeat inl_inr_inv;subst.
+          destruct fuel;[inversion Heqs2|].
+          specialize (IHmval2 fuel).
+          unfold  serr_eq in IHmval2.
+          repeat break_match_hyp; try inl_inr.
+          tauto.
+        *
+          repeat break_match_hyp; try inl_inr;
+            repeat inl_inr_inv;subst.
+          destruct fuel;[inversion Heqs1|].
+          specialize (IHmval2 fuel).
+          unfold  serr_eq in IHmval2.
+          repeat break_match_hyp; try inl_inr.
+          tauto.
+        *
+          destruct fuel;[inversion Heqs2|].
+          specialize (IHmval2 fuel).
+          unfold  serr_eq in IHmval2.
+          rewrite Heqs1, Heqs2 in IHmval2.
+          destruct IHmval2 as [A [B C]].
+          subst.
+          repeat constructor.
+          --
+            assumption.
+          --
+            assumption.
+          --
+            apply eqlistA_app.
+            typeclasses eauto.
+            assumption.
+            apply list_init_proper.
+            f_equiv.
+            eapply eqlistA_length,C.
+            unfold CheriMemoryWithPNVI.default_prov, CheriMemoryWithoutPNVI.default_prov.
+            intros x y E.
+            constructor.
+            auto.
   Admitted.
 
   (* --- Stateful proofs below --- *)
