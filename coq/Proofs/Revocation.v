@@ -932,7 +932,7 @@ Module RevocationProofs.
           unfold CheriMemoryWithPNVI.default_prov.
           unfold CheriMemoryWithoutPNVI.default_prov.
           rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
-          eapply list_map_Proper with (pA:=@eq ascii).
+          apply list_map_Proper with (pA:=@eq ascii).
           --
             intros a1 a2 Ea.
             subst.
@@ -943,7 +943,40 @@ Module RevocationProofs.
             reflexivity.
       +
         (* i0 = IC b t *)
-
+        destruct_serr_eq.
+        *
+          cbn.
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+            subst; reflexivity.
+        *
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; inl_inr.
+        *
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; inl_inr.
+        *
+          cbn.
+          unfold option2serr in Hserr, Hserr0.
+          repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+            subst.
+          split; [assumption|].
+          split.
+          rewrite Ecap;reflexivity.
+          unfold CheriMemoryWithPNVI.default_prov.
+          unfold CheriMemoryWithoutPNVI.default_prov.
+          rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+          eapply list_mapi_Proper with (pA:=@eq ascii).
+          --
+            intros n a1 a2 Ea.
+            subst.
+            constructor.
+            cbn.
+            auto.
+          --
+            reflexivity.
+    -
+      (* mval2 = MVfloating f f0 *)
   Admitted.
 
   (* --- Stateful proofs below --- *)
