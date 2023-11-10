@@ -1140,12 +1140,22 @@ Module RevocationProofs.
             reflexivity.
     -
       (* mval2 = MVarray l *)
-      admit.
+      destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr. repeat inl_inr_inv; subst.
+      +
+        admit.
+      +
+        exfalso.
+        admit.
+      +
+        exfalso.
+        admit.
+      +
+        admit.
     -
       (* mval2 = MVstruct s l *)
       admit.
     -
-      (* finished base case, got IHm *)
+      (* finished base cases, got IHm *)
       destruct_serr_eq; break_match_hyp; try inl_inr. repeat inl_inr_inv; subst;
         try reflexivity.
       +
