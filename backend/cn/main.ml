@@ -66,6 +66,12 @@ let frontend incl_dirs incl_files astprints do_peval filename state_file =
   let@ impl = load_core_impl stdlib impl_name in
   let conf = Setup.conf incl_dirs incl_files astprints in
   let@ (_, ail_prog_opt, prog0) = c_frontend_and_elaboration ~cnnames:cn_builtin_fun_names (conf, io) (stdlib, impl) ~filename in
+  let@ () =  begin
+    if conf.typecheck_core then
+      let@ _ = Core_typing.typecheck_program prog0 in return ()
+    else
+      return ()
+  end in
   let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
@@ -80,6 +86,11 @@ let frontend incl_dirs incl_files astprints do_peval filename state_file =
 
 
 let handle_frontend_error = function
+  | CF.Exception.Exception ((_, CF.Errors.CORE_TYPING _) as err) ->
+     prerr_string (CF.Pp_errors.to_string err);
+     prerr_endline @@ Cerb_colour.(ansi_format ~err:true [Bold; Red] "error: ") ^
+       "this is likely a bug in the Core elaboration.";
+     exit 2
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
   | CF.Exception.Result result ->
