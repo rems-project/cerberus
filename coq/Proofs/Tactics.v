@@ -50,3 +50,12 @@ Ltac destruct_serr_eq :=
       let BH := fresh "Hserr" in
       destruct a eqn:AH, b eqn:BH
   end.
+
+Ltac autospecialize H :=
+  match type of H with
+  | ?P -> _ => let T' := fresh "T" in
+             assert (T' : P); [clear H | specialize (H T'); try clear T']
+  end.
+
+Ltac full_autospecialize H :=
+  autospecialize H; [| try full_autospecialize H].
