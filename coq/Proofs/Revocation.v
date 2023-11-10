@@ -966,7 +966,7 @@ Module RevocationProofs.
           unfold CheriMemoryWithPNVI.default_prov.
           unfold CheriMemoryWithoutPNVI.default_prov.
           rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
-          eapply list_mapi_Proper with (pA:=@eq ascii).
+          apply list_mapi_Proper with (pA:=@eq ascii).
           --
             intros n a1 a2 Ea.
             subst.
@@ -977,6 +977,45 @@ Module RevocationProofs.
             reflexivity.
     -
       (* mval2 = MVfloating f f0 *)
+      destruct (CheriMemoryWithoutPNVI.sizeof 1000 None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating f)))).
+      +
+        reflexivity.
+      +
+        destruct_serr_eq.
+        *
+          cbn.
+          repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+            subst; reflexivity.
+        *
+          repeat break_match_hyp; inl_inr.
+        *
+          repeat break_match_hyp; inl_inr.
+        *
+          break_if; [ inl_inr|].
+          break_match_hyp; [ inl_inr|].
+          rewrite <- Hserr, <- Hserr0.
+          clear Hserr Hserr0.
+          cbn.
+          split; [assumption|].
+          split.
+          --
+            rewrite 2!map_length.
+            apply ghost_tags_same;[reflexivity|assumption].
+          --
+          unfold CheriMemoryWithPNVI.default_prov.
+          unfold CheriMemoryWithoutPNVI.default_prov.
+          rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+          apply list_map_Proper with (pA:=@eq ascii).
+          ++
+            intros a1 a2 Ea.
+            subst.
+            constructor.
+            cbn.
+            auto.
+          ++
+            reflexivity.
+    -
+      admit.
   Admitted.
 
   (* --- Stateful proofs below --- *)
