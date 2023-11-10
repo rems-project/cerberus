@@ -710,7 +710,7 @@ module Translate = struct
                      context (term t1) (term t2)
          | ShiftLeft -> (bv_arith_case t1 (via_u t1 BV.mk_shl) BV.mk_shl (fail_on "shift_left"))
                      context (term t1) (term t2)
-         | ShiftRight -> (bv_arith_case t1 (via_u t1 BV.mk_ashr) BV.mk_shl (fail_on "shift_right"))
+         | ShiftRight -> (bv_arith_case t1 (via_u t1 BV.mk_ashr) BV.mk_lshr (fail_on "shift_right"))
                      context (term t1) (term t2)
          | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)

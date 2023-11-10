@@ -1522,6 +1522,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                | `True -> return ()
                | `False -> 
                   let@ model = model () in
+                  let@ simp_ctxt = simp_ctxt () in
+                  let@ global = get_global () in
+                  RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt lc;
                   let@ () = Diagnostics.investigate model lc in
                   fail_with_trace (fun trace ctxt ->
                       {loc; msg = Unproven_constraint {constr = lc; info = (loc, None); ctxt; model; trace}}
