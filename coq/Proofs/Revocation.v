@@ -153,7 +153,7 @@ Module RevocationProofs.
     :=
   | ctype_pointer_value_eq_1:
     forall t1 t2 pv1 pv2, t1 = t2 /\ pointer_value_eq pv1 pv2 ->
-                          ctype_pointer_value_eq (t1,pv1) (t2,pv2).
+                     ctype_pointer_value_eq (t1,pv1) (t2,pv2).
 
   Inductive varargs_eq: (Z * list (CoqCtype.ctype * pointer_value_ind)) ->
                         (Z * list (CoqCtype.ctype * pointer_value_ind)) -> Prop :=
@@ -833,6 +833,42 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
+
+
+  Definition resolve_function_pointer_res_eq
+    : relation ((ZMap.t (digest * string * Capability_GS.t)) * Capability_GS.t)
+    :=
+    fun '(m,c) '(m',c') =>
+      c=c' /\ ZMap.Equal m m'.
+
+  Lemma resolve_function_pointer_same:
+    forall (m1 m2 : ZMap.t (digest * string * Capability_GS.t)) (fp1 fp2 : function_pointer),
+      fp1 = fp2 ->
+      ZMap.Equal m1 m2 ->
+      resolve_function_pointer_res_eq
+        (CheriMemoryWithPNVI.resolve_function_pointer m1 fp1)
+        (CheriMemoryWithoutPNVI.resolve_function_pointer m2 fp2).
+  Proof.
+    intros m1 m2 fp1 fp2 Ef Em.
+    subst fp2.
+    unfold CheriMemoryWithPNVI.resolve_function_pointer, CheriMemoryWithoutPNVI.resolve_function_pointer.
+    destruct fp1.
+    -
+      destruct s.
+      unfold resolve_function_pointer_res_eq.
+      repeat break_let;
+
+        rewrite Em in Heqp; break_match; repeat break_let; repeat tuple_inversion;
+        split; try assumption; try reflexivity.
+
+      destruct s; try assumption.
+      rewrite Em.
+      solve_proper.
+    -
+      cbn.
+      split;[reflexivity|assumption].
+  Qed.
+
   Lemma ghost_tags_same:
     forall (addr : AddressValue.t) (sz0 sz1:Z) (c0 c1 : ZMap.t (bool * CapGhostState)),
       sz0 = sz1 ->
@@ -1002,20 +1038,107 @@ Module RevocationProofs.
             rewrite 2!map_length.
             apply ghost_tags_same;[reflexivity|assumption].
           --
-          unfold CheriMemoryWithPNVI.default_prov.
-          unfold CheriMemoryWithoutPNVI.default_prov.
-          rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
-          apply list_map_Proper with (pA:=@eq ascii).
+            unfold CheriMemoryWithPNVI.default_prov.
+            unfold CheriMemoryWithoutPNVI.default_prov.
+            rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+            apply list_map_Proper with (pA:=@eq ascii).
+            ++
+              intros a1 a2 Ea.
+              subst.
+              constructor.
+              cbn.
+              auto.
+            ++
+              reflexivity.
+    -
+      (* mval2 = MVpointer c p *)
+      destruct_serr_eq.
+      *
+        cbn.
+        unfold option2serr in Hserr, Hserr0.
+        repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+          subst; reflexivity.
+      *
+        unfold option2serr in Hserr, Hserr0.
+        repeat break_match_hyp; unfold ret; try inl_inr.
+        repeat inl_inr_inv; subst.
+        cbn.
+        pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+        full_autospecialize H.
+        reflexivity.
+        assumption.
+        unfold resolve_function_pointer_res_eq in H.
+        repeat break_let.
+        destruct H.
+        congruence.
+      *
+        unfold option2serr in Hserr, Hserr0.
+        repeat break_match_hyp; unfold ret; try inl_inr.
+        repeat inl_inr_inv; subst.
+        cbn.
+        pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+        full_autospecialize H.
+        reflexivity.
+        assumption.
+        unfold resolve_function_pointer_res_eq in H.
+        repeat break_let.
+        destruct H.
+        congruence.
+      *
+        unfold option2serr in Hserr, Hserr0.
+        repeat break_match_hyp; unfold ret; try inl_inr.
+        repeat inl_inr_inv; subst.
+        cbn.
+        pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s0)) (FP_valid (Symbol d z s0) )) as H.
+        full_autospecialize H.
+        reflexivity.
+        assumption.
+        unfold resolve_function_pointer_res_eq in H.
+        repeat break_let.
+        destruct H.
+        repeat tuple_inversion.
+        repeat split.
+        --
+          assumption.
+        --
+          rewrite Ecap.
+          reflexivity.
+        --
+          rewrite Heqo0 in Heqo.
+          invc Heqo.
+          unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+          eapply list_mapi_Proper.
+          solve_relation.
+          reflexivity.
+        --
+          rewrite <- Hserr, <- Hserr0.
+          cbn.
+          split; [assumption|].
+          split.
           ++
-            intros a1 a2 Ea.
-            subst.
-            constructor.
-            cbn.
-            auto.
+            rewrite Ecap.
+            solve_proper.
           ++
+            unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+            eapply list_mapi_Proper.
+            solve_relation.
+            reflexivity.
+        --
+          (* same as previous bullet! *)
+          rewrite <- Hserr, <- Hserr0.
+          cbn.
+          split; [assumption|].
+          split.
+          ++
+            rewrite Ecap.
+            solve_proper.
+          ++
+            unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+            eapply list_mapi_Proper.
+            solve_relation.
             reflexivity.
     -
-      admit.
+
   Admitted.
 
   (* --- Stateful proofs below --- *)
@@ -1102,13 +1225,13 @@ Module RevocationProofs.
 
   Lemma raise_Same_eq {T:Type}:
     forall x1 x2, x1 = x2 ->
-                  @Same T T (@eq T)
-                    (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
-                       (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
-                       x1)
-                    (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
-                       (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
-                       x2).
+             @Same T T (@eq T)
+               (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
+                  (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
+                  x1)
+               (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
+                  (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
+                  x2).
   Proof.
     intros x1 x2 E.
     repeat break_match;
