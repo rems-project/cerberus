@@ -99,5 +99,10 @@ let member_offset (layout : struct_layout) member : int option =
     ) layout
 
 
+(* tries to implement all_values_representable_in from runtime std.core *)
+let all_values_representable_in (ity1, ity2) =
+  Z.leq (min_integer_type ity2) (min_integer_type ity1) &&
+  Z.leq (max_integer_type ity1) (max_integer_type ity2)
+
 
 

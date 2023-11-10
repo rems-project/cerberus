@@ -386,13 +386,27 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let arg1 = n_pexpr loc arg1 in
         let ct = ensure_pexpr_ctype loc !^"PEcall(is_representable_integer,_): not a constant ctype" arg2 in
         annotate (M_PEis_representable_integer(arg1, ct))
+     | Sym (Symbol (_, _, SD_Id "all_values_representable_in")),
+        [arg1; arg2] ->
+        let ct1 = ensure_pexpr_ctype loc !^"PEcall(all_values_representable_in,_): not a constant ctype" arg1 in
+        let ct2 = ensure_pexpr_ctype loc !^"PEcall(all_values_representable_in,_): not a constant ctype" arg2 in
+        begin match Sctypes.is_integer_type ct1.ct, Sctypes.is_integer_type ct2.ct with
+        | Some ity1, Some ity2 ->
+          if Memory.all_values_representable_in (ity1, ity2)
+          then annotate (M_PEval (M_V ((), M_Vtrue)))
+          else annotate (M_PEval (M_V ((), M_Vfalse)))
+        | _ ->
+          assert_error loc (!^"all_values_representable_in: not integer types:" ^^^
+            Print.list Pp_core.Basic.pp_pexpr [arg1; arg2])
+        end
      | Sym (Symbol (_, _, SD_Id fun_id)), args ->
         begin match List.assoc_opt String.equal fun_id function_ids with
         | Some fun_id ->
            let args = List.map (n_pexpr loc) args in
            annotate (M_PEapply_fun (fun_id, args))
         | None ->
-           assert_error loc (!^"PEcall not inlined: " ^^^ !^ fun_id)
+           assert_error loc (!^"PEcall (SD_Id) not inlined: " ^^^ !^ fun_id ^^ Print.colon ^^^
+             Print.list Pp_core.Basic.pp_pexpr args)
         end
      | Sym sym, _ ->
         assert_error loc (!^"PEcall not inlined:" ^^^ Sym.pp sym)
