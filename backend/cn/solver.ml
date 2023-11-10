@@ -75,7 +75,7 @@ let no_randomness_params () =
   ]
 
 let solver_params = [
-    ("smt.logic", "QF_AUFLIA");
+    ("smt.logic", "ALL");
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "false");
     ("smt.pull-nested-quantifiers", "true");
@@ -1009,6 +1009,16 @@ module Translate = struct
 end
 
 
+(* taking a prefix of the simplifications listed in https://microsoft.github.io/z3guide/docs/strategies/simplifiers/ *)
+(* z3 -simplifiers prints the list of available simplifiers*)
+let simplifiers = [
+    "simplify";
+    "solve-eqs";
+    "elim-unconstrained";
+    "propagate-values";
+    "simplify";
+  ]
+
 
 
 let make global : solver =
@@ -1016,7 +1026,17 @@ let make global : solver =
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
   let context = Z3.mk_context [] in
   Translate.init global context;
-  let incremental = Z3.Solver.mk_solver_t context (Z3.Tactic.mk_tactic context "default") in
+  let base_incremental = Z3.Solver.mk_simple_solver context in
+  let incremental = 
+    match List.map (Z3.Simplifier.mk_simplifier context) simplifiers with
+    | s1::s2::rest ->
+        Z3.Solver.add_simplifier context base_incremental
+          (Z3.Simplifier.and_then context s1 s2 rest)
+    | [s] -> 
+        Z3.Solver.add_simplifier context base_incremental s
+    | [] -> 
+        base_incremental
+  in
   { context; incremental; focus_terms = ref [] }
 
 
