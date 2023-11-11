@@ -62,6 +62,7 @@ End AbstTagDefs.
 
 Module RevocationProofs.
 
+
   (* --- Memory models instantiated with and without PNVI --- *)
 
   Definition remove_PNVI: cerb_switches_t -> cerb_switches_t :=
@@ -90,6 +91,49 @@ Module RevocationProofs.
   (* --- Equality predicates for types used in Memory Models --- *)
 
   Import CheriMemoryTypesExe.
+
+  (* Custom induction principle for mem_value_indt *)
+  Theorem mem_value_indt_induction
+    : forall P : mem_value_indt -> Prop,
+      (* base cases *)
+      (forall c : CoqCtype.ctype, P (MVunspecified c)) ->
+      (forall (i : CoqCtype.integerType) (i0 : integer_value_indt), P (MVinteger i i0)) ->
+      (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVfloating f f0)) ->
+      (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVpointer c p)) ->
+      (* recursive cases *)
+      (forall l : list mem_value_indt, List.Forall P l -> P (MVarray l)) ->
+      (forall (s : sym) (l : list (identifier * CoqCtype.ctype * mem_value_indt)),
+          List.Forall (fun '(_,_,b) => P b) l ->
+          P (MVstruct s l)) ->
+      (forall (s : sym) (i : identifier) (m : mem_value_indt), P m -> P (MVunion s i m)) ->
+
+      forall m : mem_value_indt, P m.
+  Proof.
+    intros P H_unspecified H_integer H_floating H_pointer H_array H_struct H_union.
+    fix IH 1.
+    destruct m.
+    - apply H_unspecified.
+    - apply H_integer.
+    - apply H_floating.
+    - apply H_pointer.
+    -
+      apply H_array.
+      induction l.
+      constructor.
+      constructor.
+      apply IH.
+      apply IHl.
+    -
+      apply H_struct.
+      induction l.
+      constructor.
+      constructor.
+      repeat break_let.
+      apply IH.
+      apply IHl.
+    - apply H_union.
+      apply IH.
+  Defined.
 
   (* Equality of pointer values without taking provenance into account *)
 
@@ -918,7 +962,7 @@ Module RevocationProofs.
 
     Opaque is_signed_ity.
     revert fuel.
-    induction mval2;intros fuel;
+    induction mval2 using mem_value_indt_induction;intros fuel;
       cbn;
       unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL;
       try match goal with
@@ -1140,8 +1184,12 @@ Module RevocationProofs.
             reflexivity.
     -
       (* mval2 = MVarray l *)
-      destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr. repeat inl_inr_inv; subst.
+      (* TODO: need monadic_fold_left_Proper *)
+      destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
       +
+        cbn.
+        unfold CheriMemoryWithPNVI.mem_value, CheriMemoryWithoutPNVI.mem_value in *.
+        (* setoid_rewrite Ecap in Heqs1. *)
         admit.
       +
         exfalso.
@@ -1155,7 +1203,7 @@ Module RevocationProofs.
       (* mval2 = MVstruct s l *)
       admit.
     -
-      (* finished base cases, got IHm *)
+      (* mval2 = MVunion ... *)
       destruct_serr_eq; break_match_hyp; try inl_inr. repeat inl_inr_inv; subst;
         try reflexivity.
       +
