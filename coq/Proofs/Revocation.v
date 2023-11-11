@@ -192,6 +192,22 @@ Module RevocationProofs.
       id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
 
+  #[global] Instance mem_value_indt_eq_Reflexive
+    :
+    Reflexive (mem_value_indt_eq).
+  Proof.
+    (* TODO *)
+  Admitted.
+
+  #[global] Instance eqlistA_Reflexive
+    {T:Type}
+    (R: relation T)
+    `{RR: Reflexive T R}:
+    Reflexive (eqlistA R ).
+  Proof.
+    (* TODO *)
+  Admitted.
+
   Inductive ctype_pointer_value_eq: (CoqCtype.ctype * pointer_value_indt) ->
                                     (CoqCtype.ctype * pointer_value_indt) -> Prop
     :=
@@ -945,12 +961,27 @@ Module RevocationProofs.
       /\ ZMap.Equal m2 m2'
       /\ eqlistA AbsByte_eq l1 l1'.
 
+
+  #[global] Instance monadic_fold_left_proper
+    (A B : Type)
+    (Eb: relation B)
+    (Ea: relation A)
+    {m : Type -> Type}
+    {M : Monad m}
+    (EMa : relation (m A))
+    :
+    Proper ((Ea ==> Eb ==> EMa) ==> (eqlistA Eb) ==> Ea ==> EMa) monadic_fold_left.
+  Proof.
+    (* TODO *)
+  Admitted.
+
+
   Theorem repr_same:
     forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
       ZMap.Equal funptrmap1 funptrmap2
       /\ ZMap.Equal capmeta1 capmeta2
       /\ addr1 = addr2
-      /\ mval1 = mval2 ->
+      /\ mval1 = mval2 -> (* TODO: need different equality *)
       serr_eq repr_res_eq
         (CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1)
         (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
@@ -1189,8 +1220,26 @@ Module RevocationProofs.
       +
         cbn.
         unfold CheriMemoryWithPNVI.mem_value, CheriMemoryWithoutPNVI.mem_value in *.
-        (* setoid_rewrite Ecap in Heqs1. *)
-        admit.
+        cut(@inl string (ZMap.t (digest * string * Capability_GS.t) * ZMap.t (bool * CapGhostState) * Z * list (list AbsByte)) s = inl s0).
+        {
+          intros HS.
+          invc HS.
+          reflexivity.
+        }
+        rewrite <- Heqs1, <- Heqs2.
+        clear Heqs1 Heqs2.
+        apply monadic_fold_left_proper with
+          (Ea:=fun '(_,_,_,l1) '(_,_,_,l2) => eqlistA (eqlistA AbsByte_eq) l1 l2)
+          (Eb:=mem_value_indt_eq).
+        *
+          intros a b Eav m1 m2 Em.
+          repeat break_let.
+          subst.
+          admit.
+        *
+          reflexivity.
+        *
+          constructor.
       +
         exfalso.
         admit.
