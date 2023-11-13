@@ -191,13 +191,32 @@ Module RevocationProofs.
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
-
-  #[global] Instance mem_value_indt_eq_Reflexive
-    :
-    Reflexive (mem_value_indt_eq).
+    (* Equivalence relation for pointer values *)
+  #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
   Proof.
-    (* TODO *)
-  Admitted.
+    split.
+    -
+      intros a.
+      destruct a.
+      apply pointer_value_no_prov_eq.
+      reflexivity.
+    -
+      intros a b.
+      destruct a, b.
+      intros H.
+      apply pointer_value_no_prov_eq.
+      inversion H.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      intros H1 H2.
+      apply pointer_value_no_prov_eq.
+      inversion H1. clear H1.
+      inversion H2. clear H2.
+      subst.
+      reflexivity.
+  Qed.
 
   #[global] Instance eqlistA_Reflexive
     {T:Type}
@@ -205,8 +224,45 @@ Module RevocationProofs.
     `{RR: Reflexive T R}:
     Reflexive (eqlistA R ).
   Proof.
-    (* TODO *)
-  Admitted.
+    intros a.
+    induction a.
+    - constructor.
+    -
+      constructor; [apply RR|apply IHa].
+  Qed.
+
+  #[global] Instance mem_value_indt_eq_Reflexive
+    :
+    Reflexive (mem_value_indt_eq).
+  Proof.
+    intros a.
+    induction a using mem_value_indt_induction; constructor;auto.
+    -
+      split; reflexivity.
+    -
+      apply eqlistA_altdef.
+      apply list.Forall_Forall2_diag.
+      apply H.
+    -
+      apply eqlistA_altdef.
+      apply list.Forall_Forall2_diag.
+      revert H.
+      induction l.
+      +
+        constructor.
+      +
+        intros H.
+        apply list.Forall_cons_1 in H.
+        destruct H as [H1 H2].
+        constructor.
+        *
+          repeat break_let.
+          invc H1; constructor;auto.
+        *
+          apply IHl in H2. clear IHl.
+          repeat break_let.
+          apply H2.
+  Qed.
 
   Inductive ctype_pointer_value_eq: (CoqCtype.ctype * pointer_value_indt) ->
                                     (CoqCtype.ctype * pointer_value_indt) -> Prop
@@ -810,33 +866,6 @@ Module RevocationProofs.
     intros t p1 p2 H.
     constructor.
     auto.
-  Qed.
-
-  (* Equivalence relation for pointer values *)
-  #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
-  Proof.
-    split.
-    -
-      intros a.
-      destruct a.
-      apply pointer_value_no_prov_eq.
-      reflexivity.
-    -
-      intros a b.
-      destruct a, b.
-      intros H.
-      apply pointer_value_no_prov_eq.
-      inversion H.
-      auto.
-    -
-      intros a b c.
-      destruct a, b, c.
-      intros H1 H2.
-      apply pointer_value_no_prov_eq.
-      inversion H1. clear H1.
-      inversion H2. clear H2.
-      subst.
-      reflexivity.
   Qed.
 
   (* This theorem using weaker equality, since pointers may be involved *)
