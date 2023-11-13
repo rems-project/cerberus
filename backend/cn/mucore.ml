@@ -339,7 +339,7 @@ let is_ctype_const pe =
 let mu_fun_return_type mu_fun args =
   let open BaseTypes in
   match mu_fun, args with
-  | M_F_params_length, _ -> Some `Returns_Integer
+  | M_F_params_length, _ -> Some (`Returns_BT (Memory.bt_of_sct (Integer (Unsigned Short))))
   | M_F_params_nth, _ -> Some (`Returns_BT CType)
   | M_F_are_compatible, _ -> Some (`Returns_BT Bool)
   | M_F_align_of, _ -> Some `Returns_Integer
