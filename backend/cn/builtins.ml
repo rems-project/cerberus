@@ -92,6 +92,17 @@ let ptr_eq_def =
      )
    )
 
+let prov_eq_def =
+    ("prov_eq",
+       Sym.fresh_named "prov_eq",
+        mk_arg2 (fun (p1, p2) ->
+          IT.(sterm_of_term @@ eq_ (
+             pointerToAllocIdCast_ @@ term_of_sterm p1,
+             pointerToAllocIdCast_ @@ term_of_sterm p2
+          ))
+       )
+   )
+
 let addr_eq_def =
     ("addr_eq",
        Sym.fresh_named "addr_eq",
@@ -131,7 +142,9 @@ let builtin_funs =
 
       cellpointer_def;
       is_null_def;
+      prov_eq_def;
       ptr_eq_def;
+      addr_eq_def;
     ]
 
 let apply_builtin_funs loc fsym args =

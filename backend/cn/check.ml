@@ -1069,6 +1069,31 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      check_pexpr ~expect pe (fun lvt ->
      k lvt)
   | Normal expect, M_Ememop memop ->
+      let pointer_eq ?(negate = false) asym1 asym2 =
+       check_pexpr ~expect:Loc asym1 (fun arg1 ->
+       check_pexpr ~expect:Loc asym2 (fun arg2 ->
+       let prov1, prov2 = pointerToAllocIdCast_ arg1, pointerToAllocIdCast_ arg2 in
+       let addr1, addr2 = pointerToIntegerCast_ arg1, pointerToIntegerCast_ arg2 in
+       let addr_eq = eq_ (addr1, addr2) in
+       let prov_eq = eq_ (prov1, prov2) in
+       let prov_neq = ne_ (prov1, prov2) in
+       let@ provable = provable loc in
+       let@ () =
+         match provable @@ t_ @@ and_ [prov_neq; addr_eq] with
+         | `False ->
+           return ()
+         | `True ->
+           warn loc !^"ambiguous pointer (in)equality case: addresses equal, but provenances differ";
+           return ()
+       in
+       let res_sym, res = IT.fresh_named Bool (if negate then "ptrNeq" else "ptrEq") in
+       let@ result = add_a res_sym Bool (loc, lazy (Sym.pp res_sym)) in
+       let@ () = add_c loc @@ t_ @@ impl_ (prov_eq, eq_ (res, addr_eq)) in
+       (* this constraint may make the result non-deterministic *)
+       let@ () = add_c loc @@ t_ @@ impl_ (prov_neq, or_ [eq_ (res, addr_eq); eq_ (res, bool_ false)]) in
+       let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt res) in
+       k (if negate then not_ res else res)))
+     in
      let pointer_op op pe1 pe2 = 
        check_pexpr ~expect:Loc pe1 (fun arg1 ->
        check_pexpr ~expect:Loc pe2 (fun arg2 ->
@@ -1078,9 +1103,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      begin match memop with
      | M_PtrEq (asym1, asym2) -> 
-        pointer_op eq_ asym1 asym2
+       pointer_eq asym1 asym2
      | M_PtrNe (asym1, asym2) -> 
-        pointer_op ne_ asym1 asym2
+       pointer_eq ~negate:true asym1 asym2
      | M_PtrLt (asym1, asym2) -> 
         pointer_op ltPointer_ asym1 asym2
      | M_PtrGt (asym1, asym2) -> 
