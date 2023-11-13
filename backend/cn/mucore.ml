@@ -338,20 +338,19 @@ let is_ctype_const pe =
 
 let mu_fun_return_type mu_fun args =
   let open BaseTypes in
-  let short_int = Bits (Signed, 32) in
   match mu_fun, args with
-  | M_F_params_length, _ -> Some short_int
-  | M_F_params_nth, _ -> Some CType
-  | M_F_are_compatible, _ -> Some Bool
-  | M_F_align_of, _ -> Some short_int
-  | M_F_size_of, _ -> Some short_int
+  | M_F_params_length, _ -> Some `Returns_Integer
+  | M_F_params_nth, _ -> Some (`Returns_BT CType)
+  | M_F_are_compatible, _ -> Some (`Returns_BT Bool)
+  | M_F_align_of, _ -> Some `Returns_Integer
+  | M_F_size_of, _ -> Some `Returns_Integer
   | M_F_max_int, [ct] -> Option.bind (is_ctype_const ct) Sctypes.of_ctype
-    |> Option.map Memory.bt_of_sct
+    |> Option.map (fun sct -> `Returns_BT (Memory.bt_of_sct sct))
   | M_F_max_int, _ -> None
   | M_F_min_int, [ct] -> Option.bind (is_ctype_const ct) Sctypes.of_ctype
-    |> Option.map Memory.bt_of_sct
+    |> Option.map (fun sct -> `Returns_BT (Memory.bt_of_sct sct))
   | M_F_min_int, _ -> None
-  | M_F_ctype_width, _ -> Some short_int
+  | M_F_ctype_width, _ -> Some `Returns_Integer
 
 let pp_function = function
   | M_F_params_length -> !^ "params_length"
@@ -387,15 +386,13 @@ let bt_of_expr : 'TY. 'TY mu_expr -> 'TY =
 let bt_of_pexpr : 'TY. 'TY mu_pexpr -> 'TY =
   fun (M_Pexpr (_loc, _annots, bty, _e)) -> bty
 
-
 let evaluate_fun mu_fun args =
-  let short_int = BaseTypes.(Bits (Signed, 32)) in
   match mu_fun with
   | M_F_params_length ->
      begin match args with
      | [arg] ->
         Option.bind (IT.dest_list arg) (fun xs ->
-        Some (IT.int_lit_ (List.length xs) short_int))
+        Some (`Result_Integer (Z.of_int (List.length xs))))
      | _ -> None
      end
   | M_F_params_nth ->
@@ -405,7 +402,8 @@ let evaluate_fun mu_fun args =
         Option.bind (IT.is_bits_const arg2) (fun (bits_info, i) ->
             assert (BaseTypes.fits_range bits_info i);
             if Z.lt i (Z.of_int (List.length xs)) && Z.leq Z.zero i
-            then List.nth_opt xs (Z.to_int i) else None
+            then Option.bind (List.nth_opt xs (Z.to_int i)) (fun it -> Some (`Result_IT it))
+            else None
         ))
      | _ -> None
      end
@@ -413,39 +411,39 @@ let evaluate_fun mu_fun args =
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] ->
         if Sctypes.equal ct1 ct2
-        then Some (IT.bool_ true) else None
+        then Some (`Result_IT (IT.bool_ true)) else None
      | _ -> None
      end
   | M_F_size_of ->
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
-        Some (IT.int_lit_ (Memory.size_of_ctype ct) short_int)
+        Some (`Result_Integer (Z.of_int (Memory.size_of_ctype ct)))
      | _ -> None
      end
   | M_F_align_of ->
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
-        Some (IT.int_lit_ (Memory.align_of_ctype ct) short_int)
+        Some (`Result_Integer (Z.of_int (Memory.align_of_ctype ct)))
      | _ -> None
      end
   | M_F_max_int ->
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
-        Some (IT.num_lit_ (Memory.max_integer_type ity) bt)
+        Some (`Result_IT (IT.num_lit_ (Memory.max_integer_type ity) bt))
      | _ -> None
      end
   | M_F_min_int ->
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
-        Some (IT.num_lit_ (Memory.min_integer_type ity) bt)
+        Some (`Result_IT (IT.num_lit_ (Memory.min_integer_type ity) bt))
      | _ -> None
      end
   | M_F_ctype_width ->
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
-        Some (IT.int_lit_ (Memory.size_of_ctype ct * 8) short_int)
+        Some (`Result_Integer (Z.of_int (Memory.size_of_ctype ct * 8)))
      | _ -> None
      end
 

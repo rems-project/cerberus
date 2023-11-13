@@ -6,6 +6,7 @@ module SymSet = Set.Make(Sym)
 module StringMap = Map.Make(String)
 module IntMap = Map.Make(Int)
 module CF=Cerb_frontend
+module BT = BaseTypes
 
 open Cerb_pp_prelude
 open Mucore
@@ -150,6 +151,24 @@ let is_two_pow it = match IT.term it with
 let bool_rep_ty = Memory.bt_of_sct (Sctypes.(Integer IntegerTypes.Bool))
 let bool_ite_1_0 bt b = IT.ite_ (b, IT.int_lit_ 1 bt, IT.int_lit_ 0 bt)
 
+(* FIXME: find a home for this, also needed in check, needs the Typing monad *)
+let eval_mu_fun f args orig_pexpr =
+  let (M_Pexpr (loc, _, bt, pe)) = orig_pexpr in
+  begin match Mucore.evaluate_fun f args with
+    | Some (`Result_IT it) -> return it
+    | Some (`Result_Integer z) ->
+      let@ () = WellTyped.ensure_bits_type loc bt in
+      let bits_info = Option.get (BT.is_bits_bt bt) in
+      if BT.fits_range bits_info z
+      then return (IT.num_lit_ z bt)
+      else fail_n {loc; msg = Generic (Pp.item "function application result out of range"
+        (Pp_mucore_ast.pp_pexpr orig_pexpr ^^ Pp.hardline ^^ Pp.typ (Pp.z z) (BT.pp bt)))}
+    | None ->
+      fail_n {loc; msg = Generic (Pp.item "cannot evaluate mucore function app"
+        (Pp_mucore_ast.pp_pexpr orig_pexpr ^^ Pp.hardline ^^ !^ "arg vals:" ^^^
+            Pp.brackets (Pp.list IT.pp args)))}
+  end
+
 let rec symb_exec_mu_pexpr ctxt var_map pexpr =
   let (M_Pexpr (loc, annots, _, pe)) = pexpr in
   let opt_bt = WellTyped.BaseTyping.integer_annot annots
@@ -245,10 +264,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     return (IT.not_ x)
   | M_PEapply_fun (f, pes) ->
       let@ xs = ListM.mapM (self var_map) pes in
-      begin match evaluate_fun f xs with
-        | Some it -> return it
-        | None -> unsupported "mucore apply_fun unspecified" (!^ "")
-      end
+      eval_mu_fun f xs pexpr
   | M_PEctor (M_Ctuple, pes) ->
     let@ xs = ListM.mapM (self var_map) pes in
     return (IT.tuple_ xs)

@@ -593,12 +593,12 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        failwith "todo"
      end
   | M_PEapply_fun (fun_id, args) ->
-     let@ ret_bt = match mu_fun_return_type fun_id args with
-       | Some bt -> return bt
+     let@ () = match mu_fun_return_type fun_id args with
+       | Some (`Returns_BT bt) -> ensure_base_type loc ~expect bt
+       | Some (`Returns_Integer) -> ensure_bits_type loc expect
        | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "untypeable mucore function"
               (Pp_mucore_ast.pp_pexpr orig_pe))})
      in
-     let@ () = ensure_base_type loc ~expect ret_bt in
      let expect_args = Mucore.mu_fun_param_types fun_id in
      let@ () = 
        let has = List.length args in
@@ -612,11 +612,8 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
          ) args expect_args
      in
      check_pexprs args (fun args ->
-     let@ args = ListM.mapM (prefer_value_with IT.is_const_val) args in
-     match Mucore.evaluate_fun fun_id args with
-     | Some t -> k t
-     | None -> fail (fun _ -> {loc; msg = Generic (!^ "cannot evaluate function:" ^^^
-           Pp.c_app (Mucore.pp_function fun_id) (List.map IT.pp args))})
+     let@ res = CLogicalFuns.eval_mu_fun fun_id args orig_pe in
+     k res
      )
   | M_PEstruct (tag, xs) ->
      let@ () = WellTyped.WCT.is_ct loc (Struct tag) in

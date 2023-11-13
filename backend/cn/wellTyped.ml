@@ -1502,15 +1502,7 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
             return (nm, pe)) nm_pes in
         return (Struct nm, (M_PEstruct (nm, nm_pes)))
       | M_PEapply_fun (fname, pes) ->
-        let param_tys = Mucore.mu_fun_param_types fname in
-        let@ () = ensure_same_argument_number loc `Input (List.length pes)
-            ~expect:(List.length param_tys) in
-        let@ pes = ListM.map2M check_pexpr param_tys pes in
-        let@ bt = match Mucore.mu_fun_return_type fname pes with
-          | Some bt -> return bt
-          | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "untypeable mucore function"
-              (Pp_mucore_ast.pp_pexpr pe))})
-        in
+        let@ (bt, pes) = check_infer_apply_fun None fname pes pe in
         return (bt, M_PEapply_fun (fname, pes))
       | _ -> todo ()
     in
@@ -1529,6 +1521,9 @@ and check_pexpr (expect : BT.t) expr =
     | M_PEval v ->
       let@ v = check_value loc expect v in
       return (annot expect (M_PEval v))
+    | M_PEapply_fun (fname, pes) ->
+      let@ (bt, pes) = check_infer_apply_fun (Some expect) fname pes expr in
+      return (annot expect (M_PEapply_fun (fname, pes)))
     | _ -> begin
       let@ expr = infer_pexpr expr in
       begin match bt_of_pexpr expr with
@@ -1538,6 +1533,26 @@ and check_pexpr (expect : BT.t) expr =
       let@ () = ensure_base_type (loc_of_pexpr expr) ~expect (bt_of_pexpr expr) in
       return expr
     end
+
+and check_infer_apply_fun (expect : BT.t option) fname pexps orig_pe =
+  let (M_Pexpr (loc, annots, _, _)) = orig_pe in
+  let param_tys = Mucore.mu_fun_param_types fname in
+  let@ () = ensure_same_argument_number loc `Input (List.length pexps)
+      ~expect:(List.length param_tys) in
+  let@ pexps = ListM.map2M check_pexpr param_tys pexps in
+  let@ bt = match Mucore.mu_fun_return_type fname pexps, expect with
+    | Some (`Returns_BT bt), _ -> return bt
+    | Some (`Returns_Integer), Some bt ->
+      let@ () = ensure_bits_type loc bt in
+      return bt
+    | None, _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "untypeable mucore function"
+        (Pp_mucore_ast.pp_pexpr orig_pe))})
+    | Some (`Returns_Integer), None -> fail (fun _ -> {loc; msg =
+        Generic (Pp.item "mucore function requires type-annotation"
+            (Pp_mucore_ast.pp_pexpr orig_pe))})
+  in
+  return (bt, pexps)
+
 
 let check_cn_statement loc stmt =
   let open Cnprog in
