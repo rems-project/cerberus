@@ -2104,6 +2104,18 @@ let add_loc loc (Expr annot expr_) =
   Expr (update_annot pred (Aloc loc) annot) expr_
 
 
+val annotate_integer_type_pexpr : integerType -> pexpr -> pexpr
+let annotate_integer_type_pexpr ity (Pexpr annot bty expr_) =
+  let annot = (Avalue (Ainteger ity)) :: annot in
+  Pexpr annot bty expr_
+
+
+val annotate_integer_type_expr : integerType -> expr unit -> expr unit
+let annotate_integer_type_expr ity (Expr annot expr_) =
+  let annot = (Avalue (Ainteger ity)) :: annot in
+  Expr annot expr_
+
+
 val maybe_annotate_integer_type : ctype -> expr unit -> expr unit
 let maybe_annotate_integer_type (Ctype _ ctype_) (Expr annot expr_) =
   let annot = match ctype_ with

@@ -1313,9 +1313,14 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
     | GenTypes.GenRValueType _ ->
         false
   end in
-  let integer_promotion (ty: Ctype.ctype) (e: C.pexpr) : C.pexpr =
+  let integer_promotion_and_type (ty: Ctype.ctype) (e: C.pexpr) : C.pexpr * Ctype.integerType =
     let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion (Implementation.integerImpl ()) ty) in
-    stdlib.mkcall_conv_int promoted_ty e in
+    let promoted_ity = match promoted_ty with
+      | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) -> ity
+      | _ -> Assert_extra.failwith "impossible"
+    end in
+    (stdlib.mkcall_conv_int promoted_ty e, promoted_ity) in
+  let integer_promotion ty e = fst (integer_promotion_and_type ty e) in
   (* STD §6.3.1.8 *)
   let usual_arithmetic_conversion_aux is_TMP_new (ty1: Ctype.ctype) (ty2: Ctype.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
     match (AilTypesAux.corresponding_real_type ty1, AilTypesAux.corresponding_real_type ty2) with
@@ -1580,16 +1585,18 @@ else
 end
                       )
                     ; ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
-                      , Caux.mk_let_pe promoted1_wrp.E.sym_pat
+                      , let (promoted2_def, promoted2_ity) = integer_promotion_and_type (ctype_of e2) obj2_wrp.E.sym_pe in
+                        Caux.mk_let_pe promoted1_wrp.E.sym_pat
                           (Caux.mk_std_pe "§6.5.7#3, sentence 1" (integer_promotion (ctype_of e1) obj1_wrp.E.sym_pe))
                         (Caux.mk_let_pe promoted2_wrp.E.sym_pat
-                          (Caux.mk_std_pe "§6.5.7#3, sentence 1" (integer_promotion (ctype_of e2) obj2_wrp.E.sym_pe))
+                          (Caux.mk_std_pe "§6.5.7#3, sentence 1" promoted2_def)
                         (* (§6.5.7#2) if promoted2 < 0 then undef *)
                         (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpLt promoted2_wrp.E.sym_pe (Caux.mk_integer_pe 0))
                           (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
                         (* ctype_width(result_ty) <= promoted2 *)
-                        (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe)
-                                                             (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe))
+                        (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpOr 
+                              (Caux.mk_op_pe C.OpLt (Caux.annotate_integer_type_pexpr promoted2_ity (stdlib.mkcall_ctype_width result_ty)) promoted2_wrp.E.sym_pe)
+                              (Caux.mk_op_pe C.OpEq (Caux.annotate_integer_type_pexpr promoted2_ity (stdlib.mkcall_ctype_width result_ty)) promoted2_wrp.E.sym_pe))
                           (Caux.mk_std_undef_pe loc "§6.5.7#4, sentence 3" Undefined.UB51b_shift_too_large)
 begin
 let result_ity = match result_ty with
@@ -1668,14 +1675,16 @@ end
                       , Caux.mk_unspecified_pe (result_ty) )
                     ; ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat
                                           ; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
-                      , Caux.mk_let_pe promoted1_wrp.E.sym_pat (integer_promotion (ctype_of e1) obj1_wrp.E.sym_pe)
-                        (Caux.mk_let_pe promoted2_wrp.E.sym_pat (integer_promotion (ctype_of e2) obj2_wrp.E.sym_pe)
+                      , let (promoted2_def, promoted2_ity) = integer_promotion_and_type (ctype_of e2) obj2_wrp.E.sym_pe in
+                        Caux.mk_let_pe promoted1_wrp.E.sym_pat (integer_promotion (ctype_of e1) obj1_wrp.E.sym_pe)
+                        (Caux.mk_let_pe promoted2_wrp.E.sym_pat promoted2_def
                         (* (§6.5.7#2) if promoted2 < 0 then undef *)
                         (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpLt promoted2_wrp.E.sym_pe (Caux.mk_integer_pe 0))
                           (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
                         (* ctype_width(result_ty) <= promoted2 *)
-                        (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe)
-                                                             (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe))
+                        (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpOr 
+                                  (Caux.mk_op_pe C.OpLt (Caux.annotate_integer_type_pexpr promoted2_ity (stdlib.mkcall_ctype_width result_ty)) promoted2_wrp.E.sym_pe)
+                                  (Caux.mk_op_pe C.OpEq (Caux.annotate_integer_type_pexpr promoted2_ity (stdlib.mkcall_ctype_width result_ty)) promoted2_wrp.E.sym_pe))
                           (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
                           begin
                             let expr = Caux.mk_op_pe C.OpDiv promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe) in
