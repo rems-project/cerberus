@@ -445,9 +445,9 @@ module Translate = struct
          | _ -> None
       end
       | Binop (op, t1, t2) -> begin match op with
-         | Exp -> begin match is_z t1, is_z t2 with
+         | Exp -> begin match get_num_z t1, get_num_z t2 with
             | Some z1, Some z2 when Z.fits_int z2 ->
-              Some (z_ (Z.pow z1 (Z.to_int z2)))
+              Some (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.bt t1))
             | _, _ ->
               assert false
             end

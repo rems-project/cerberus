@@ -410,15 +410,17 @@ module WIT = struct
             return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
          | Exp ->
             let@ simp_ctxt = simp_ctxt () in
-            let@ t = check loc Integer t in
-            let@ t' = check loc Integer t' in
-            begin match is_z (eval simp_ctxt t), is_z (eval simp_ctxt t') with
+            let@ t = infer loc t in
+            let bt = IT.bt t in
+            let@ () = ensure_bits_type loc bt in
+            let@ t' = check loc bt t' in
+            begin match get_num_z (eval simp_ctxt t), get_num_z (eval simp_ctxt t') with
             | Some _, Some z' when Z.lt z' Z.zero ->
                fail (fun ctxt -> {loc; msg = NegativeExponent {it = exp_ (t, t'); ctxt}})
             | Some _, Some z' when not (Z.fits_int32 z') ->
                fail (fun ctxt -> {loc; msg = TooBigExponent {it = exp_ (t, t'); ctxt}})
             | Some z, Some z' ->
-               return (IT (Binop (Exp, z_ z, z_ z'), Integer))
+               return (IT (Binop (Exp, num_lit_ z bt, num_lit_ z' bt), bt))
             | _ ->
                let hint = "Only exponentiation of two constants is allowed" in
                fail (fun ctxt -> {loc; msg = NIA {it = exp_ (t, t'); ctxt; hint}})
