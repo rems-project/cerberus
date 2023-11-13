@@ -1647,7 +1647,7 @@ let check_cnprog p =
   pure (aux p)
 
 
-
+let signed_int_ty = Memory.bt_of_sct (Sctypes.(Integer (Signed Int_)))
 
 let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m = 
   fun label_context e ->
@@ -1746,7 +1746,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         let@ (bTy, action_) = match action_ with
         | M_Create (pe, act, prefix) ->
            let@ () = WCT.is_ct act.loc act.ct in
-           let@ pe = infer_pexpr pe in
+           let@ pe = check_pexpr signed_int_ty pe in
            let@ () = ensure_bits_type (loc_of_pexpr pe) (bt_of_pexpr pe) in
            return (Loc, M_Create (pe, act, prefix))
         | M_Kill (k, pe) -> 
