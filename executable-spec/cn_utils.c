@@ -27,6 +27,10 @@ cn_bool *convert_to_cn_bool(_Bool b) {
     return res;
 }
 
+_Bool convert_from_cn_bool(cn_bool *b) {
+    return b->val;
+}
+
 void cn_assert(cn_bool *cn_b) {
     assert(cn_b->val);
 }
@@ -87,7 +91,7 @@ cn_bool *cn_pointer_equality(void *i1, void *i2) {
 
 
 // Check if m2 is a subset of m1
-cn_bool *cn_map_subset(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
+cn_bool *cn_map_subset(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *)) {
     if (ht_size(m1) != ht_size(m2)) return convert_to_cn_bool(0);
     
     hash_table_iterator hti1 = ht_iterator(m1);
@@ -100,7 +104,7 @@ cn_bool *cn_map_subset(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *
         /* Check if other map has this key at all */
         if (!val2) return convert_to_cn_bool(0);
 
-        if (!value_equality_fun(val1, val2)) {
+        if (convert_from_cn_bool(cn_bool_not(value_equality_fun(val1, val2)))) {
             printf("Values not equal!\n");
             return convert_to_cn_bool(0);
         } 
@@ -109,7 +113,7 @@ cn_bool *cn_map_subset(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *
     return convert_to_cn_bool(1);
 }
 
-cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, _Bool (value_equality_fun)(void *, void *)) {
+cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *)) {
     return cn_bool_and(cn_map_subset(m1, m2, value_equality_fun), cn_map_subset(m2, m1, value_equality_fun));
 }
 
