@@ -360,7 +360,9 @@ let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) =
   let b_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_)))) in
   (* let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in *)
   let incr_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_integer_increment")), [mk_expr incr_var])))) in
-  let while_loop = A.(AilSwhile (while_cond, mk_stmt (AilSblock (bs, List.map mk_stmt (ss @ [b_assign; incr_stat]))), 0)) in
+  let convert_from_cn_bool_ident = mk_expr A.(AilEident (Sym.fresh_pretty "convert_from_cn_bool")) in
+  let while_cond_with_conversion = mk_expr A.(AilEcall (convert_from_cn_bool_ident, [while_cond])) in
+  let while_loop = A.(AilSwhile (while_cond_with_conversion, mk_stmt (AilSblock (bs, List.map mk_stmt (ss @ [b_assign; incr_stat]))), 0)) in
 
   let block = A.(AilSblock ([incr_var_binding], List.map mk_stmt [start_decl; while_loop])) in
   ([b_binding], [b_decl; block], mk_expr b_ident)
@@ -1224,10 +1226,13 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
     let increment_fn_sym = Sym.fresh_pretty "cn_integer_increment" in
     let increment_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident increment_fn_sym), [mk_expr (AilEident i_sym)])))) in 
 
+    let convert_from_cn_bool_ident = mk_expr A.(AilEident (Sym.fresh_pretty "convert_from_cn_bool")) in
+    let e2_with_conversion = mk_expr A.(AilEcall (convert_from_cn_bool_ident, [e2])) in
+
     let (bs', ss') = match rm_ctype return_ctype with 
       | C.Void -> 
         let void_pred_call = A.(AilSexpr rhs) in
-        let while_loop = A.(AilSwhile (e2, mk_stmt (AilSblock ([ptr_add_binding], List.map mk_stmt [ptr_add_stat; void_pred_call; increment_stat])), 0)) in
+        let while_loop = A.(AilSwhile (e2_with_conversion, mk_stmt (AilSblock ([ptr_add_binding], List.map mk_stmt [ptr_add_stat; void_pred_call; increment_stat])), 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([], [ail_block])
       | _ -> 
@@ -1236,7 +1241,7 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
         let create_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "map_create")), [])) in
         let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr create_call))]) in
         let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), (List.map mk_expr [AilEident sym; AilEident i_sym]) @ [rhs])) in
-        let while_loop = A.(AilSwhile (e2, mk_stmt (AilSblock (ptr_add_binding :: b4, List.map mk_stmt (s4 @ [ptr_add_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat]))), 0)) in
+        let while_loop = A.(AilSwhile (e2_with_conversion, mk_stmt (AilSblock (ptr_add_binding :: b4, List.map mk_stmt (s4 @ [ptr_add_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat]))), 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([sym_binding], [sym_decl; ail_block])
     in
@@ -1553,8 +1558,8 @@ let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_typ
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
     let new_lat = Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, IT.bt it, new_name) lat in 
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
-    let binding = create_binding name ctype in
-    let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar name) in
+    let binding = create_binding new_name ctype in
+    let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
     let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (binding :: b1, s1)
 
