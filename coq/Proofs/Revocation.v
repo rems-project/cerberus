@@ -174,7 +174,7 @@ Module RevocationProofs.
   Qed.
 
   Inductive mem_value_indt_eq: mem_value_indt -> mem_value_indt -> Prop :=
-  | mem_value_indt_eq_MVunspecified: forall t1 t2, mem_value_indt_eq (MVunspecified t1) (MVunspecified t2)
+  | mem_value_indt_eq_MVunspecified: forall t1 t2, t1 = t2 -> mem_value_indt_eq (MVunspecified t1) (MVunspecified t2)
   | mem_value_indt_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_eq (MVinteger t1 v1) (MVinteger t2 v2)
   | mem_value_indt_eq_MVfloating: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_eq (MVfloating t1 v1) (MVfloating t2 v2)
   | mem_value_indt_eq_MVpointer: forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> mem_value_indt_eq (MVpointer t1 p1) (MVpointer t2 p2)
