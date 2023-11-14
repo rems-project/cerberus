@@ -193,11 +193,17 @@ Module RevocationProofs.
 
   Lemma mem_value_indt_eq_induction:
     forall P : mem_value_indt -> mem_value_indt -> Prop,
+
+      (* base non-recursive cases *)
       (forall t1 t2, t1 = t2 -> P (MVunspecified t1) (MVunspecified t2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVinteger t1 v1) (MVinteger t2 v2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVfloating t1 v1) (MVfloating t2 v2)) ->
       (forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> P (MVpointer t1 p1) (MVpointer t2 p2)) ->
-      (forall a1 a2, List.Forall2 P a1 a2 -> P (MVarray a1) (MVarray a2)) ->
+
+      (* recursive cases below *)
+
+      (forall a1 a2, eqlistA mem_value_indt_eq a1 a2 -> List.Forall2 P a1 a2 -> P (MVarray a1) (MVarray a2)) ->
+
       (forall tag_sym1 l1 tag_sym2 l2,
           tag_sym1 = tag_sym2 ->
           eqlistA struct_field_eq l1 l2 ->
@@ -1026,6 +1032,25 @@ Module RevocationProofs.
     (* TODO *)
   Admitted.
 
+  (* specialized version of abobe, postulating that `f` must be proper only for elements from the list *)
+  Lemma monadic_fold_left_proper'
+    (A B : Type)
+    (Eb : relation B)
+    (Ea : relation A)
+    (m : Type -> Type)
+    (M : Monad m)
+    (EMa : relation (m A))
+    (f f' : A -> B -> m A)
+    (l l' : list B)
+    (El : eqlistA Eb l l')
+    {x x' : A}
+    {Ex : Ea x x'}
+    (Ef : forall (x x' : A), (Ea x x') -> Forall2 (fun y y' => EMa (f x y) (f' x' y')) l l')
+    :
+    EMa (monadic_fold_left f l x) (monadic_fold_left f' l' x').
+  Proof.
+  Admitted.
+
   Theorem repr_same:
     forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
       ZMap.Equal funptrmap1 funptrmap2
@@ -1321,22 +1346,42 @@ Module RevocationProofs.
         }
         unfold repr_fold_T.
         rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
-        eapply monadic_fold_left_proper with
+        eapply monadic_fold_left_proper' with
           (Ea:=repr_fold_eq)
           (Eb:=mem_value_indt_eq).
-        *
-          intros x y E m1 m2 Em.
-          repeat break_let.
-          destruct E as [E1 [E2 [E3 E4]]].
-          subst.
-          admit.
         *
           assumption.
         *
           repeat split;try assumption.
           constructor.
+        *
+          intros x x' Ex.
+          repeat break_let.
+          destruct Ex as [E1 [E2 [E3 E4]]].
+          subst.
+          rename H into Ae.
+          rename H0 into H.
+          revert H.
+
+          apply Forall2_impl.
+          intros a b H.
+          destruct fuel;[reflexivity|].
+          specialize (H fuel z0 t t1 E2 capmeta1 capmeta2 Ecap).
+          repeat break_match_goal; try assumption.
+          inversion H as [H0 [H1 H2]].
+          subst.
+          repeat split; auto.
+          apply eqlistA_length in H2.
+          rewrite H2.
+          reflexivity.
       +
         exfalso.
+        admit.
+      +
+        exfalso.
+        admit.
+      +
+        (* value case *)
         admit.
     -
       (* mval2 = MVstruct s l *)
