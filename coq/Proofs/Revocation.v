@@ -191,6 +191,28 @@ Module RevocationProofs.
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
+  Lemma mem_value_indt_eq_induction:
+    forall P : mem_value_indt -> mem_value_indt -> Prop,
+      (forall t1 t2, t1 = t2 -> P (MVunspecified t1) (MVunspecified t2)) ->
+      (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVinteger t1 v1) (MVinteger t2 v2)) ->
+      (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVfloating t1 v1) (MVfloating t2 v2)) ->
+      (forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> P (MVpointer t1 p1) (MVpointer t2 p2)) ->
+      (forall a1 a2, List.Forall2 P a1 a2 -> P (MVarray a1) (MVarray a2)) ->
+      (forall tag_sym1 l1 tag_sym2 l2,
+          tag_sym1 = tag_sym2 ->
+          eqlistA struct_field_eq l1 l2 ->
+          List.Forall2 (fun x y => struct_field_eq x y -> P (snd x) (snd y)) l1 l2 ->
+          P (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)) ->
+
+      (forall tag_sym1 id1 v1 tag_sym2 id2 v2,
+          tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_eq v1 v2 ->
+          P v1 v2 ->
+          P (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)) ->
+      forall x y, mem_value_indt_eq x y -> P x y.
+  Proof.
+  Admitted.
+
+
     (* Equivalence relation for pointer values *)
   #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
   Proof.
@@ -1004,7 +1026,6 @@ Module RevocationProofs.
     (* TODO *)
   Admitted.
 
-
   Theorem repr_same:
     forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
       ZMap.Equal funptrmap1 funptrmap2
@@ -1021,30 +1042,35 @@ Module RevocationProofs.
     subst.
 
     Opaque is_signed_ity.
-    revert fuel.
-    induction mval2 using mem_value_indt_induction;intros fuel;
-      cbn;
-      unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL;
+    revert fuel addr2 funptrmap1 funptrmap2 Ffun capmeta1 capmeta2 Ecap.
+    induction Emval using mem_value_indt_eq_induction;intros; cbn;
+      unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL; subst;
+
+      (*
       try match goal with
         | [|- context[is_signed_ity ?f ?v]] => generalize (is_signed_ity f v) as g_is_signed_ity; intros g_is_signed_ity
         end;
+       *)
+
       repeat rewrite sizeof_same.
     -
-      (* mval2 = MVunspecified c *)
-      break_match_goal.
-      reflexivity.
+      (* MVunspecified *)
+      destruct (CheriMemoryWithoutPNVI.sizeof 1000 None t2); [reflexivity|].
+      destruct_serr_eq; try inl_inr.
+      rewrite <- Hserr, <- Hserr0.
       repeat split; auto.
       apply ghost_tags_same; [reflexivity|assumption].
 
       unfold CheriMemoryWithPNVI.default_prov.
       unfold CheriMemoryWithoutPNVI.default_prov.
       rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
-
       apply list_init_proper;[reflexivity|].
       intros x y E.
       constructor.
       split; auto.
-    - (* mval2 = MVinteger i i0 *)
+    - (* MVinteger *)
+      destruct H as [H0 H1]; subst.
+      rename v2 into i0.
       destruct i0 eqn:II0.
       +
         (* i0 = IV z *)
@@ -1053,7 +1079,7 @@ Module RevocationProofs.
           cbn.
           unfold option2serr in Hserr, Hserr0.
           repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
-            subst; reflexivity.
+            subst; try reflexivity.
         *
           unfold option2serr in Hserr, Hserr0.
           repeat break_match_hyp; inl_inr.
@@ -1117,8 +1143,10 @@ Module RevocationProofs.
           --
             reflexivity.
     -
-      (* mval2 = MVfloating f f0 *)
-      destruct (CheriMemoryWithoutPNVI.sizeof 1000 None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating f)))).
+      (* MVfloating *)
+      destruct H as [H0 H1]; subst.
+      rename v2 into i0.
+      destruct (CheriMemoryWithoutPNVI.sizeof 1000 None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating t2)))).
       +
         reflexivity.
       +
@@ -1156,7 +1184,10 @@ Module RevocationProofs.
             ++
               reflexivity.
     -
-      (* mval2 = MVpointer c p *)
+      (* MVpointer c p *)
+      destruct H as [H0 H1]; subst.
+      inversion H1.
+      subst.
       destruct_serr_eq.
       *
         cbn.
@@ -1193,6 +1224,7 @@ Module RevocationProofs.
         unfold option2serr in Hserr, Hserr0.
         repeat break_match_hyp; unfold ret; try inl_inr.
         repeat inl_inr_inv; subst.
+
         cbn.
         pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s0)) (FP_valid (Symbol d z s0) )) as H.
         full_autospecialize H.
@@ -1212,8 +1244,13 @@ Module RevocationProofs.
           rewrite Heqo0 in Heqo.
           invc Heqo.
           unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
-          eapply list_mapi_Proper.
-          solve_relation.
+          eapply list_mapi_Proper with (pA:=eq).
+          intros n x y E.
+          constructor.
+          cbn. split.
+          reflexivity.
+          subst.
+          reflexivity.
           reflexivity.
         --
           rewrite <- Hserr, <- Hserr0.
@@ -1225,8 +1262,13 @@ Module RevocationProofs.
             solve_proper.
           ++
             unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
-            eapply list_mapi_Proper.
-            solve_relation.
+            eapply list_mapi_Proper with (pA:=eq).
+            intros n x y E.
+            constructor.
+            cbn. split.
+            reflexivity.
+            subst.
+            reflexivity.
             reflexivity.
         --
           (* same as previous bullet! *)
@@ -1238,44 +1280,63 @@ Module RevocationProofs.
             rewrite Ecap.
             solve_proper.
           ++
-            unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
-            eapply list_mapi_Proper.
-            solve_relation.
-            reflexivity.
+          unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+          eapply list_mapi_Proper with (pA:=eq).
+          intros n x y E.
+          constructor.
+          cbn. split.
+          reflexivity.
+          subst.
+          reflexivity.
+          reflexivity.
     -
-      (* mval2 = MVarray l *)
-      (* TODO: need monadic_fold_left_Proper *)
+      (* MVarray *)
+      (* HERE *)
+
       destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
       +
+        (* error case *)
         cbn.
         unfold CheriMemoryWithPNVI.mem_value, CheriMemoryWithoutPNVI.mem_value in *.
-        cut(@inl string (ZMap.t (digest * string * Capability_GS.t) * ZMap.t (bool * CapGhostState) * Z * list (list AbsByte)) s = inl s0).
+
+
+        Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
+                                       * ZMap.t (bool * CapGhostState)
+                                       * Z
+                                       * list (list AbsByte).
+        Let repr_fold_eq
+          : relation repr_fold_T
+          :=
+          fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
+            a1 = a2
+            /\ ZMap.Equal m1 m1'
+            /\ ZMap.Equal m2 m2'
+            /\ eqlistA (eqlistA AbsByte_eq) l1 l1'.
+
+        cut(@serr_eq repr_fold_T repr_fold_eq (inl s) (inl s0)).
         {
           intros HS.
           invc HS.
           reflexivity.
         }
-        rewrite <- Heqs1, <- Heqs2.
-        clear Heqs1 Heqs2.
-        apply monadic_fold_left_proper with
-          (Ea:=fun '(_,_,_,l1) '(_,_,_,l2) => eqlistA (eqlistA AbsByte_eq) l1 l2)
+        unfold repr_fold_T.
+        rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
+        eapply monadic_fold_left_proper with
+          (Ea:=repr_fold_eq)
           (Eb:=mem_value_indt_eq).
         *
-          intros a b Eav m1 m2 Em.
+          intros x y E m1 m2 Em.
           repeat break_let.
+          destruct E as [E1 [E2 [E3 E4]]].
           subst.
           admit.
         *
-          reflexivity.
+          assumption.
         *
+          repeat split;try assumption.
           constructor.
       +
         exfalso.
-        admit.
-      +
-        exfalso.
-        admit.
-      +
         admit.
     -
       (* mval2 = MVstruct s l *)
