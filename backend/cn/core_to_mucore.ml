@@ -472,7 +472,11 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let e1 = n_pexpr loc e1 in
         let e2 = n_pexpr loc e2 in
         let e3 = n_pexpr loc e3 in
-        annotate (M_PEif (e1, e2, e3))
+        begin match e1 with
+        | M_Pexpr (_, _, _, M_PEval (M_V (_, M_Vtrue))) -> e2
+        | M_Pexpr (_, _, _, M_PEval (M_V (_, M_Vfalse))) -> e3
+        | _ -> annotate (M_PEif (e1, e2, e3))
+        end
      end
   | PEis_scalar e' ->
      assert_error loc !^"core_anormalisation: PEis_scalar"
