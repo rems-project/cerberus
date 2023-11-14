@@ -7,9 +7,11 @@ module RE = Resources
 open TypeErrors
 
 
+type solver = Solver.solver
+
 type s = {
     typing_context: Context.t;
-    solver : Solver.solver;
+    solver : solver;
     sym_eqs : IT.t SymMap.t;
     equalities: bool Simplify.ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;

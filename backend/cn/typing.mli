@@ -1,3 +1,17 @@
+type solver
+
+type s = {
+    typing_context: Context.t;
+    solver : solver;
+    sym_eqs : IndexTerms.t Global.SymMap.t;
+    equalities: bool Simplify.ITPairMap.t;
+    past_models : (Solver.model_with_q * Context.t) list;
+    step_trace : Trace.t;
+    found_equalities : EqTable.table;
+    movable_indices: (ResourceTypes.predicate_name * IndexTerms.t) list;
+  }
+
+
 type 'a t
 type 'a m = 'a t
 type failure = Context.t -> TypeErrors.t
