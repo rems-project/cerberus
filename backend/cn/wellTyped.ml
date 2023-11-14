@@ -2035,7 +2035,9 @@ module WProc = struct
                return (M_Label (loc, label_args_and_body, annots, parsed_spec))
             ) labels Sym.compare
         in
+        Pp.debug 2 (lazy (Pp.item "WProc: labels" (Pp.list Sym.pp (List.map fst (Pmap.bindings_list labels)))));
         let label_context = label_context rt labels in
+        Pp.debug 2 (lazy (Pp.item "WProc: labels again" (Pp.list Sym.pp (List.map fst (SymMap.bindings label_context)))));
         let@ labels = 
           PmapM.mapM (fun sym def ->
               match def with

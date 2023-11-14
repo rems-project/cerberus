@@ -54,9 +54,12 @@ module Make(T : S) = struct
       let l12 = List.combine l1 l2 in
       mapM (Tools.uncurry f) l12
 
-    let iterM (f : ('a -> unit m)) (l : 'a list) : unit m = 
-      let@ _ = mapM f l in 
+    let iteriM (f : (int -> 'a -> unit m)) (l : 'a list) : unit m =
+      let@ _ = mapiM f l in
       return ()
+
+    let iterM (f : ('a -> unit m)) (l : 'a list) : unit m =
+      iteriM (fun _ -> f) l
 
     let concat_mapM f l = 
       let@ xs = mapM f l in
@@ -86,6 +89,13 @@ module Make(T : S) = struct
           (f : 'k -> 'x -> 'y -> 'y m)
           (map : ('k,'x) Pmap.map) (init: 'y) : 'y m =
       Pmap.fold (fun k v aM -> let@ a = aM in f k v a) map (return init)
+
+    let foldiM
+          (f : int -> 'k -> 'x -> 'y -> 'y m)
+          (map : ('k,'x) Pmap.map) (init: 'y) : 'y m =
+      ListM.fold_leftM (fun y (i, (k, x)) -> f i k x y)
+          init
+          (List.mapi (fun i (k, x) -> (i, (k, x))) (Pmap.bindings_list map))
 
     let iterM f m = 
       Pmap.fold (fun k v m -> let@ () = m in f k v) 

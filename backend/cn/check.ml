@@ -1719,11 +1719,14 @@ let record_and_check_logical_functions funs =
       ) funs
   in
 
+  let n_funs = List.length funs in
+
   (* First check and add non-recursive functions. We check before
      adding them, because they cannot depend on themselves*)
   let@ () =
-    ListM.iterM (fun (name, def) -> 
-        debug 2 (lazy (headline ("checking welltypedness of function " ^ Sym.pp_string name)));
+    ListM.iteriM (fun i (name, def) ->
+        debug 2 (lazy (headline ("checking welltypedness of function" ^
+            Pp.of_total i n_funs ^ ": " ^ Sym.pp_string name)));
         let@ def = WellTyped.WLFD.welltyped def in
         add_logical_function name def
       ) nonrecursive
@@ -1738,8 +1741,9 @@ let record_and_check_logical_functions funs =
         add_logical_function name simple_def
       ) recursive
   in
-  ListM.iterM (fun (name, def) -> 
-      debug 2 (lazy (headline ("checking welltypedness of function " ^ Sym.pp_string name)));
+  ListM.iteriM (fun i (name, def) ->
+      debug 2 (lazy (headline ("checking welltypedness of recursive function" ^
+          Pp.of_total (i + List.length nonrecursive) n_funs ^ ": " ^ Sym.pp_string name)));
       let@ def = WellTyped.WLFD.welltyped def in
       add_logical_function name def
     ) recursive
@@ -1752,8 +1756,9 @@ let record_and_check_resource_predicates preds =
         add_resource_predicate name simple_def
       ) preds 
   in
-  ListM.iterM (fun (name, def) ->
-      debug 2 (lazy (headline ("checking welltypedness of resource pred " ^ Sym.pp_string name)));
+  ListM.iteriM (fun i (name, def) ->
+      debug 2 (lazy (headline ("checking welltypedness of resource pred" ^
+          Pp.of_total i (List.length preds) ^ ": " ^ Sym.pp_string name)));
       let@ def = WellTyped.WRPD.welltyped def in
       (* add simplified def to the context *)
       add_resource_predicate name def
@@ -1792,13 +1797,15 @@ let register_fun_syms mu_file =
 
 
 let wf_check_and_record_functions mu_funs mu_call_sigs =
-  let welltyped_ping fsym =
-    debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym)))
+  let n_syms = List.length (Pmap.bindings_list mu_funs) in
+  let welltyped_ping i fsym =
+    debug 2 (lazy (headline ("checking welltypedness of procedure" ^
+        Pp.of_total i n_syms ^ ": " ^ Sym.pp_string fsym)))
   in
-  PmapM.foldM (fun fsym def (trusted, checked) ->
+  PmapM.foldiM (fun i fsym def (trusted, checked) ->
       match def with
       | M_Proc (loc, args_and_body, tr, _parse_ast_things) ->
-         welltyped_ping fsym;
+         welltyped_ping i fsym;
          let@ args_and_body = WellTyped.WProc.welltyped loc args_and_body in
          let ft = WellTyped.WProc.typ args_and_body in
          debug 6 (lazy (!^"function type" ^^^ Sym.pp fsym));
@@ -1809,7 +1816,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
          | Checked -> return (trusted, (fsym, (loc, args_and_body)) :: checked)
          end
       | M_ProcDecl (loc, oft) ->
-         welltyped_ping fsym;
+         welltyped_ping i fsym;
          let@ oft = match oft with
            | None -> return None
            | Some ft -> 
