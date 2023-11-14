@@ -1010,7 +1010,7 @@ Module RevocationProofs.
       ZMap.Equal funptrmap1 funptrmap2
       /\ ZMap.Equal capmeta1 capmeta2
       /\ addr1 = addr2
-      /\ mval1 = mval2 -> (* TODO: need different equality *)
+      /\  mem_value_indt_eq mval1 mval2 ->
       serr_eq repr_res_eq
         (CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1)
         (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
