@@ -1472,6 +1472,9 @@ let translate_cn_statement
            | I_Good ct -> I_Good (Sctypes.of_ctype_unsafe loc ct)
          in
          return (M_CN_statement (loc, M_CN_instantiate (to_instantiate, expr)))
+      | CN_split_case e ->
+         let@ e = ET.translate_cn_assrt env (loc, e) in
+         return (M_CN_statement (loc, M_CN_split_case e))
       | CN_extract (to_extract, expr) ->
           let@ expr = ET.translate_cn_expr SymSet.empty env expr in
           let expr = IT.term_of_sterm expr in

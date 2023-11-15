@@ -777,16 +777,20 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
        )
   | M_PEif (pe, e1, e2) ->
      check_pexpr ~expect:Bool pe (fun c ->
-     let aux e cond = 
+     let aux e cond name = 
        let@ () = add_c loc (t_ cond) in
-       Pp.debug 5 (lazy (Pp.item "checking consistency of if-branch" (IT.pp cond)));
+       Pp.debug 5 (lazy (Pp.item ("checking consistency of "^ name ^ "-branch") (IT.pp cond)));
        let@ provable = provable loc in
        match provable (t_ (bool_ false)) with
-       | `True -> return ()
-       | `False -> check_pexpr ~expect e k
+       | `True ->
+          Pp.debug 5 (lazy (Pp.headline "inconsistent, skipping"));
+          return ()
+       | `False ->
+          Pp.debug 5 (lazy (Pp.headline "consistent, checking"));
+          check_pexpr ~expect e k
      in
-     let@ () = pure (aux e1 c) in
-     let@ () = pure (aux e2 (not_ c)) in
+     let@ () = pure (aux e1 c "then") in
+     let@ () = pure (aux e2 (not_ c) "else") in
      return ())
   | M_PElet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
@@ -1411,51 +1415,12 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      aux (List.combine es item_bts) [] []
   | Normal expect, M_CN_progs (_, cn_progs) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
-     let rec aux = function
-       | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
-          let@ pointer = WellTyped.WIT.check loc Loc pointer in
-          let@ () = WCT.is_ct loc ct in
-          let@ value = load loc pointer ct in
-          aux (Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog)
-       | Cnprog.M_CN_statement (loc, stmt) ->
+     let aux loc stmt =
           (* copying bits of code from elsewhere in check.ml *)
-          begin match stmt with
-            | M_CN_pack_unpack (pack_unpack, pt) -> 
+          match stmt with
+            | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> 
                     warn loc !^"Explicit pack/unpack unsupported.";
                     return ()
-(*                let@ pred = WRET.welltyped loc (P pt) in
-               let pt = match pred with P pt -> pt | _ -> assert false in
-               let@ pname, def = match pt.name with
-                 | PName pname -> 
-                    let@ def = Typing.get_resource_predicate_def loc pname in
-                    return (pname, def)
-                 | Owned _ -> 
-                    fail (fun _ -> {loc; msg = Generic !^"Packing/unpacking 'Owned' currently unsupported."})
-                 | Block _ -> 
-                    fail (fun _ -> {loc; msg = Generic !^"Packing/unpacking 'Block' currently unsupported."})
-               in
-               let err_prefix = match pack_unpack with
-                 | Pack -> !^ "cannot pack:" ^^^ pp_predicate_name pt.name
-                 | Unpack -> !^ "cannot unpack:" ^^^ pp_predicate_name pt.name
-               in
-               let@ right_clause = 
-                 ResourceInference.select_resource_predicate_clause def
-                   loc pt.pointer pt.iargs err_prefix 
-               in
-               begin match pack_unpack with
-               | Unpack ->
-                  let@ (pred, O pred_oarg) =
-                    RI.Special.predicate_request ~recursive:false
-                      loc (Call (UnpackPredicate (Manual, pname))) (pt, None)
-                  in
-                  let lrt = ResourcePredicates.clause_lrt pred_oarg right_clause.packing_ft in
-                  let@ _, members = make_return_record loc (UnpackPredicate (Manual, pname)) (LRT.binders lrt) in
-                  bind_logical_return loc members lrt
-               | Pack ->
-                  Spine.calltype_packing loc pname right_clause.packing_ft (fun output -> 
-                  add_r loc (P pt, O output)
-                  )
-               end *)
             | M_CN_have lc ->
                let@ lc = WLC.welltyped loc lc in
                fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
@@ -1472,6 +1437,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                in
                let@ it = WIT.check loc Integer it in
                instantiate loc filter it
+            | M_CN_split_case _ ->
+              assert false
             | M_CN_extract (to_extract, it) ->
                let@ predicate_name = RI.predicate_name_of_to_extract loc to_extract in
                let@ it = WIT.check loc Integer it in
@@ -1517,12 +1484,46 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                end
             | M_CN_inline _nms ->
                return ()
+     in
+     let rec loop = function
+       | [] -> k unit_
+       | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) :: cn_progs ->
+          let@ pointer = WellTyped.WIT.check loc Loc pointer in
+          let@ () = WCT.is_ct loc ct in
+          let@ value = load loc pointer ct in
+          let subbed = Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog in
+          loop (subbed :: cn_progs)
+       | (Cnprog.M_CN_statement (loc, cn_statement)) :: cn_progs ->
+          begin match cn_statement with
+          | Cnprog.M_CN_split_case lc ->
+             Pp.debug 5 (lazy (Pp.headline "checking split_case"));
+             let@ lc = WellTyped.WLC.welltyped loc lc in
+             let@ it = match lc with
+               | T it ->
+                 return it
+               | Forall ((sym, bt), it) ->
+                  fail (fun _ -> {loc; msg = Generic !^"Cannot split on forall condition"}) in
+             let branch it nm =
+               let@ () = add_c loc (t_ it) in
+               debug 5 (lazy (item ("splitting case " ^ nm) (IT.pp it)));
+               let@ provable = provable loc in
+               match provable (t_ (bool_ false)) with
+               | `True ->
+                 Pp.debug 5 (lazy (Pp.headline "inconsistent, skipping"));
+                 return ()
+               | `False ->
+                 Pp.debug 5 (lazy (Pp.headline "consistent, continuing"));
+                 loop cn_progs
+             in
+             let@ () = pure @@ branch it "true" in
+             let@ () = pure @@ branch (not_ it) "false" in
+             return ()
+          | _ ->
+            let@ () = aux loc cn_statement in
+            loop cn_progs
           end
      in
-     let@ () = ListM.iterM aux cn_progs in
-     k unit_
-     
-
+     loop cn_progs
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in

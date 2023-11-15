@@ -376,6 +376,8 @@ module MakePp (Conf: PP_CN) = struct
        Dnode (pp_ctor "[CN]have", [dtree_of_cn_assertion assrt])
     | CN_instantiate (to_instantiate, arg) ->
        Dnode (pp_ctor "[CN]instantiate", [dtree_of_to_instantiate to_instantiate; dtree_of_cn_expr arg])
+    | CN_split_case cond ->
+      Dnode (pp_ctor "[CN]split_case", [dtree_of_cn_assertion cond])
     | CN_extract (to_extract, arg) ->
        Dnode (pp_ctor "[CN]extract", [dtree_of_to_extract to_extract; dtree_of_cn_expr arg])
     | CN_unfold (s, args) ->

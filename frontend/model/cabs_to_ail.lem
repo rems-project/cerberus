@@ -4507,6 +4507,9 @@ let desugar_cn_statement (CN_statement loc stmt_) =
      end >>= fun o_filter ->
      desugar_cn_expr expr >>= fun expr ->
      E.return (CN_instantiate o_filter expr)
+  | CN_split_case cond ->
+     desugar_cn_assertion cond >>= fun cond ->
+     E.return (CN_split_case cond)
   | CN_extract to_extract expr ->
     match to_extract with
     | E_Everything -> E.return E_Everything

@@ -145,7 +145,7 @@ type asm_qualifier =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
+%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
@@ -2429,6 +2429,9 @@ cn_statement:
 | CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }
+| CN_SPLIT_CASE a=assert_expr SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_split_case a) }
 | CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_unfold (id, es)) }

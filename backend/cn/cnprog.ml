@@ -17,6 +17,7 @@ type cn_statement =
   | M_CN_pack_unpack of CF.Cn.pack_unpack * ResourceTypes.predicate_type
   | M_CN_have of LogicalConstraints.t
   | M_CN_instantiate of (Sym.t, Sctypes.t) CF.Cn.cn_to_instantiate * IndexTerms.t
+  | M_CN_split_case of LogicalConstraints.t
   | M_CN_extract of cn_extract
   | M_CN_unfold of Sym.t * IndexTerms.t list
   | M_CN_apply of Sym.t * IndexTerms.t list
@@ -52,6 +53,8 @@ let rec subst substitution = function
        | M_CN_instantiate (o_s, it) ->
           (* o_s is not a (option) binder *)
           M_CN_instantiate (o_s, IT.subst substitution it)
+       | M_CN_split_case lc ->
+          M_CN_split_case (LC.subst substitution lc)
        | M_CN_extract (to_extract, it) ->
            M_CN_extract (to_extract, IT.subst substitution it)
        | M_CN_unfold (fsym, args) ->
@@ -111,6 +114,8 @@ let dtree_of_cn_statement = function
   | M_CN_instantiate (to_instantiate, it) ->
      Dnode (pp_ctor "Instantiate",
             [dtree_of_to_instantiate to_instantiate; IT.dtree it])
+  | M_CN_split_case lc ->
+     Dnode (pp_ctor "Split_case", [LC.dtree lc])
   | M_CN_extract (to_extract, it) ->
      Dnode (pp_ctor "Extract",
             [dtree_of_to_extract to_extract; IT.dtree it])
