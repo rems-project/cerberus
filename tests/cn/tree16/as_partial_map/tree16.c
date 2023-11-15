@@ -59,6 +59,7 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
 
 predicate (map <datatype tree_arc, datatype tree_node_option>) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
+  assert (is_null(V) || (integer) V != 0);
   take T = Tree(V);
   return T.t;
 }
@@ -127,6 +128,7 @@ lemma construct_lemma (integer v,
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
+/*@ requires is_null(t) || (integer) t != 0 @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (integer j; (0 <= j) && (j < path_len))
     {Owned<int>(path + j)} @*/

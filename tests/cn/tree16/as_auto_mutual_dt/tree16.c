@@ -49,6 +49,7 @@ predicate {datatype tree t, integer v, map <integer, datatype tree> children}
 
 predicate (datatype tree) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
+  assert (is_null(V) || (integer) V != 0);
   take T = Tree(V);
   return T.t;
 }
@@ -98,6 +99,7 @@ lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
+/*@ requires is_null(t) || (integer) t != 0 @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (integer j; (0 <= j) && (j < path_len))
     {Owned<typeof(i)>(path + j)} @*/
