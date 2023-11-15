@@ -1019,7 +1019,11 @@ end
 let simplifiers = [
     "simplify";
     "solve-eqs";
+(*
+    this seems to lead to very strange outcomes, and maybe shouldn't
+    be allowed in incremental-mode
     "elim-unconstrained";
+*)
     "propagate-values";
     "simplify";
   ]
