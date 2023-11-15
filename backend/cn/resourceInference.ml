@@ -174,6 +174,11 @@ module General = struct
        | `False ->
            let@ model = model () in
            let@ global = get_global () in
+           let@ all_cs = all_constraints () in
+           let@ () = if Context.LCSet.mem c all_cs
+             then fail (fun _ -> {loc; msg = Generic
+               (Pp.item "insane situation: failed constraint in context" (LC.pp c))})
+             else return () in
            debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
            let@ () = Diagnostics.investigate model c in
            fail_with_trace (fun trace -> fun ctxt ->
