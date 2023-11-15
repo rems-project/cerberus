@@ -133,7 +133,7 @@ Module RevocationProofs.
       apply IHl.
     - apply H_union.
       apply IH.
-  Defined.
+  Qed.
 
   (* Equality of pointer values without taking provenance into account *)
 
@@ -189,7 +189,7 @@ Module RevocationProofs.
   with
     struct_field_eq: (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> Prop :=
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
-      id1 = id2 /\ t1 = t2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
+      id1 = id2 /\ t1 = t2 /\ mem_value_indt_eq v1 v2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
   Lemma mem_value_indt_eq_induction:
     forall P : mem_value_indt -> mem_value_indt -> Prop,
@@ -203,23 +203,61 @@ Module RevocationProofs.
       (* recursive cases below *)
 
       (forall a1 a2, eqlistA mem_value_indt_eq a1 a2 -> List.Forall2 P a1 a2 -> P (MVarray a1) (MVarray a2)) ->
-
       (forall tag_sym1 l1 tag_sym2 l2,
           tag_sym1 = tag_sym2 ->
           eqlistA struct_field_eq l1 l2 ->
-          List.Forall2 (fun x y => struct_field_eq x y -> P (snd x) (snd y)) l1 l2 ->
+          List.Forall2 (fun x y => P (snd x) (snd y)) l1 l2 ->
           P (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)) ->
 
       (forall tag_sym1 id1 v1 tag_sym2 id2 v2,
           tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_eq v1 v2 ->
           P v1 v2 ->
           P (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)) ->
+
       forall x y, mem_value_indt_eq x y -> P x y.
   Proof.
+    intros P Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer
+      Hrec_array Hrec_struct Hrec_union.
+
+    fix my_induction 3.
+    intros x y.
+    destruct x,y; intro H; invc H.
+    (* base cases *)
+    - apply Hbase_unspecified. reflexivity.
+    - apply Hbase_integer. assumption.
+    - apply Hbase_floating. assumption.
+    - apply Hbase_pointer. assumption.
+    - (* recursive case for MVarray *)
+      apply Hrec_array; [assumption|]. clear Hrec_array.
+      induction H2.
+      constructor.
+      apply Forall2_cons.
+      apply my_induction.
+      assumption.
+      assumption.
+    - (* recursive case for MVstruct *)
+      apply Hrec_struct; auto.
+      induction H5.
+      + constructor.
+      + apply Forall2_cons.
+        *
+          invc H.
+          cbn.
+          apply my_induction.
+          destruct H0 as [_ [_ H0]].
+          assumption.
+        *
+          apply IHeqlistA.
+    - (* recursive case for MVunion *)
+      clear Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer Hrec_array Hrec_struct.
+      apply Hrec_union; auto.
+      apply my_induction.
+      destruct H1 as [_ [_ H1]].
+      assumption.
   Admitted.
 
 
-    (* Equivalence relation for pointer values *)
+  (* Equivalence relation for pointer values *)
   #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
   Proof.
     split.
