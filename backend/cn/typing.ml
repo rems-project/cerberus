@@ -725,6 +725,15 @@ let bind_return loc members (rt : ReturnTypes.t) =
   | _ ->
      assert false
 
+let debug_solver_to_string () =
+  let@ s = solver () in
+  Solver.debug_solver_to_string s;
+  return ()
 
-  
+let debug_solver_query lc =
+  let@ ctxt = get () in
+  let@ s = solver () in
+  let pointer_facts = Resources.pointer_facts (Context.get_rs ctxt) in
+  Solver.debug_solver_query s ctxt.global ctxt.constraints pointer_facts lc;
+  return ()
 

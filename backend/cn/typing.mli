@@ -140,3 +140,7 @@ val add_movable_index:
 val get_movable_indices:
     unit ->
     ((ResourceTypes.predicate_name * IndexTerms.t) list) m
+
+val debug_solver_to_string: unit -> unit m
+val debug_solver_query: LogicalConstraints.t -> unit m
+

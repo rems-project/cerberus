@@ -44,4 +44,8 @@ val get_solver_focused_terms : solver ->
   pointer_facts:IndexTerms.t list ->
   Global.t -> (IndexTerms.t_bindings * IndexTerms.t) list
 
+val debug_solver_to_string : solver -> unit
+
+val debug_solver_query : solver -> Global.t -> Context.LCSet.t ->
+  IndexTerms.t list -> LogicalConstraints.t -> unit
 

@@ -1482,3 +1482,24 @@ module Eval = struct
 end
 
 let eval = Eval.eval
+
+let debug_solver_to_string solver =
+  Pp.debug 2 (lazy (Pp.item "debug solver.to_string"
+    (Pp.string (Z3.Solver.to_string solver.incremental))))
+
+let debug_solver_query solver global assumptions pointer_facts lc =
+  Pp.debug 2 (lazy begin
+    let Translate.{expr; qs; extra; _} = Translate.goal solver
+         global assumptions pointer_facts lc in
+    let extra = List.map (Translate.term solver.context global) extra in
+    let nlc = Z3.Boolean.mk_not solver.context expr in
+    let solver_doc = !^ (Z3.Solver.to_string solver.incremental) in
+    Z3.Solver.push solver.incremental;
+    Z3.Solver.add solver.incremental (extra @ [nlc]);
+    Z3.Solver.pop solver.incremental 1;
+    let whole_doc = solver_doc ^^ !^ "(check-sat)" in
+    Pp.item "debug solver query" whole_doc ^^ Pp.hardline ^^
+    Pp.item "should include" (Pp.flow_map Pp.hardline (fun x -> (!^ (Z3.Expr.to_string x)))
+        (extra @ [nlc]))
+  end)
+
