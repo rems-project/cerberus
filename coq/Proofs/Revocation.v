@@ -191,6 +191,19 @@ Module RevocationProofs.
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 /\ mem_value_indt_eq v1 v2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
+  (*
+  Fixpoint mem_value_indt_measure (v : mem_value_indt) : nat :=
+    match v with
+    | MVunspecified _ => 1
+    | MVinteger _ _ => 1
+    | MVfloating _ _ => 1
+    | MVpointer _ _ => 1
+    | MVarray lst => 1 + list_sum (map mem_value_indt_measure lst)
+    | MVstruct _ lst => 1 + list_sum (map (fun x => mem_value_indt_measure (snd x)) lst)
+    | MVunion _ _ v => 1 + mem_value_indt_measure v
+    end.
+   *)
+
   Lemma mem_value_indt_eq_induction:
     forall P : mem_value_indt -> mem_value_indt -> Prop,
 
@@ -218,8 +231,7 @@ Module RevocationProofs.
   Proof.
     intros P Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer
       Hrec_array Hrec_struct Hrec_union.
-
-    fix my_induction 3.
+    fix IH 3.
     intros x y.
     destruct x,y; intro H; invc H.
     (* base cases *)
@@ -232,7 +244,7 @@ Module RevocationProofs.
       induction H2.
       constructor.
       apply Forall2_cons.
-      apply my_induction.
+      apply IH.
       assumption.
       assumption.
     - (* recursive case for MVstruct *)
@@ -243,7 +255,7 @@ Module RevocationProofs.
         *
           invc H.
           cbn.
-          apply my_induction.
+          apply IH.
           destruct H0 as [_ [_ H0]].
           assumption.
         *
@@ -251,11 +263,10 @@ Module RevocationProofs.
     - (* recursive case for MVunion *)
       clear Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer Hrec_array Hrec_struct.
       apply Hrec_union; auto.
-      apply my_induction.
+      apply IH.
       destruct H1 as [_ [_ H1]].
       assumption.
   Admitted.
-
 
   (* Equivalence relation for pointer values *)
   #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
