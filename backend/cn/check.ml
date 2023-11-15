@@ -1679,6 +1679,7 @@ let check_procedure
  
 
 let only = ref None
+let batch = ref false
 
 let record_tagdefs tagDefs = 
   PmapM.iterM (fun tag def ->
@@ -1848,13 +1849,30 @@ let check_c_functions funs =
      end
   | None ->
      let number_entries = List.length funs in
-     let@ _ = 
-       ListM.mapiM (fun counter (fsym, (loc, args_and_body)) ->
-           let () = progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym) in
-           check_procedure loc fsym args_and_body
-         ) funs
-     in
-     return ()
+     match !batch with
+     | false ->
+        let@ _ = 
+          ListM.mapiM (fun counter (fsym, (loc, args_and_body)) ->
+              let () = progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym) in
+              check_procedure loc fsym args_and_body
+            ) funs
+        in
+        return ()
+    | true ->
+        let@ _, pass, fail = 
+          ListM.fold_leftM (fun (counter,pass,fail) (fsym, (loc, args_and_body)) ->
+              let@ outcome = sandbox (check_procedure loc fsym args_and_body) in
+              match outcome with
+              | Ok _ -> 
+                 progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym ^ " -- pass");
+                 return (counter+1, pass+1, fail)
+              | Error _ ->
+                 progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym ^ " -- fail");
+                 return (counter+1, pass, fail+1)
+            ) (0, 0, 0) funs
+        in
+        print stdout (item "summary" (int pass ^^^ !^"pass" ^^ comma ^^^ int fail ^^^ !^"fail" ));
+        return ()
 
 
 

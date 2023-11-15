@@ -46,6 +46,29 @@ let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
   | Error e -> Error e
 
 
+
+let sandbox (m : 'a t) : ('a Resultat.t) t =
+  fun s ->
+  let n = Solver.num_scopes s.solver in
+  Solver.push s.solver;
+  let outcome = match m s with
+    | Ok (a, _s') ->
+        assert (Solver.num_scopes s.solver = n + 1); 
+        Solver.pop s.solver 1;
+        Ok a
+    | Error e ->
+        let n' = Solver.num_scopes s.solver in
+        assert (n' > n);
+        Solver.pop s.solver (n' - n);
+        Error e
+  in
+  Ok (outcome, s)
+  
+  
+  
+  
+
+
 let return (a : 'a) : ('a) t =
   fun s -> Ok (a, s)
 
@@ -79,7 +102,7 @@ let pure (m : ('a) t) : ('a) t =
     | Ok (a, _) -> Ok (a, s)
     | Error e -> Error e
   in
-  Solver.pop s.solver;
+  Solver.pop s.solver 1;
   outcome
 
 

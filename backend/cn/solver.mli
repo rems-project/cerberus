@@ -7,8 +7,9 @@ val log_to_temp : bool ref
 
 val make : Global.t -> solver
 
+val num_scopes : solver -> int
 val push : solver -> unit
-val pop : solver -> unit
+val pop : solver -> int -> unit
 val add_assumption : solver -> Global.t -> LogicalConstraints.t -> unit
 
 val set_slow_threshold : float -> unit

@@ -23,6 +23,7 @@ val (let@) : 'a m -> ('a -> 'b m) -> 'b m
 val fail : failure -> 'a m
 val fail_with_trace : (Trace.t -> failure) -> 'a m
 val run : Context.t -> 'a m -> ('a, TypeErrors.t) Result.t
+val sandbox : 'a t -> ('a Resultat.t) t
 
 val get: unit -> Context.t m
 val print_with_ctxt : (Context.t -> unit) -> unit m

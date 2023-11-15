@@ -132,6 +132,7 @@ let main
       expect_failure
       no_use_ity
       use_peval
+      batch
   =
   if json then begin
       if debug_level > 0 then
@@ -149,6 +150,7 @@ let main
     Solver.random_seed := random_seed;
     Solver.log_to_temp := solver_logging;
     Check.only := only;
+    Check.batch := batch;
     Diagnostics.diag_string := diag;
     WellTyped.use_ity := not no_use_ity
   end;
@@ -250,6 +252,11 @@ let print_sym_nums =
   let doc = "Print numeric IDs of Cerberus symbols (variable names)." in
   Arg.(value & flag & info ["n"; "print-sym-nums"] ~doc)
 
+let batch =
+  let doc = "Type check functions in batch/do not stop on first type error (unless `only` is used)" in
+  Arg.(value & flag & info ["batch"] ~doc)
+
+
 let slow_threshold =
   let doc = "Set the time threshold (in seconds) for logging to slow_smt.txt temp file." in
   Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
@@ -350,6 +357,7 @@ let () =
       astprints $
       expect_failure $
       no_use_ity $
-      use_peval
+      use_peval $
+      batch
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))

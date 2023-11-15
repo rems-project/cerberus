@@ -1046,16 +1046,17 @@ let make global : solver =
 
 
 
-
+let num_scopes solver =
+  Z3.Solver.get_num_scopes solver.incremental
 
 
 let push solver =
   (* do nothing to fancy solver, because that is reset for every query *)
   Z3.Solver.push solver.incremental
 
-let pop solver =
+let pop solver n =
   (* do nothing to fancy solver, because that is reset for every query *)
-  Z3.Solver.pop solver.incremental 1
+  Z3.Solver.pop solver.incremental n
 
 
 let add_assumption solver global lc =
