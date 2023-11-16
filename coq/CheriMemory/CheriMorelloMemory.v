@@ -91,6 +91,9 @@ Module Type CheriMemoryTypes
     mem_value_with_err
   | MVErr : mem_error -> mem_value_with_err.
 
+  Unset Elimination Schemes.
+  (* This prevent default elimination principle from being generated for
+     this type, as it is inadequate *)
   Inductive mem_value_indt :=
   | MVunspecified : CoqCtype.ctype -> mem_value_indt
   | MVinteger :
@@ -106,6 +109,51 @@ Module Type CheriMemoryTypes
   | MVunion :
     CoqSymbol.sym ->
     CoqSymbol.identifier -> mem_value_indt -> mem_value_indt.
+  Set Elimination Schemes.
+
+  (* Custom induction principle for mem_value_indt *)
+  Theorem mem_value_indt_ind
+    : forall P : mem_value_indt -> Prop,
+      (* base cases *)
+      (forall c : CoqCtype.ctype, P (MVunspecified c)) ->
+      (forall (i : CoqCtype.integerType) (i0 : integer_value_indt), P (MVinteger i i0)) ->
+      (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVfloating f f0)) ->
+      (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVpointer c p)) ->
+      (* recursive cases *)
+      (forall l : list mem_value_indt, List.Forall P l -> P (MVarray l)) ->
+      (forall (s : sym) (l : list (identifier * CoqCtype.ctype * mem_value_indt)),
+          List.Forall (fun '(_,_,b) => P b) l ->
+          P (MVstruct s l)) ->
+      (forall (s : sym) (i : identifier) (m : mem_value_indt), P m -> P (MVunion s i m)) ->
+
+      forall m : mem_value_indt, P m.
+  Proof.
+    intros P H_unspecified H_integer H_floating H_pointer H_array H_struct H_union.
+    fix IH 1.
+    destruct m.
+    - apply H_unspecified.
+    - apply H_integer.
+    - apply H_floating.
+    - apply H_pointer.
+    -
+      apply H_array.
+      induction l.
+      constructor.
+      constructor.
+      apply IH.
+      apply IHl.
+    -
+      apply H_struct.
+      induction l.
+      constructor.
+      constructor.
+      destruct a.
+      destruct p.
+      apply IH.
+      apply IHl.
+    - apply H_union.
+      apply IH.
+  Qed.
 
   Inductive access_intention : Set :=
   | ReadIntent : access_intention
