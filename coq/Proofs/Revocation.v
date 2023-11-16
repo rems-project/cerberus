@@ -92,49 +92,6 @@ Module RevocationProofs.
 
   Import CheriMemoryTypesExe.
 
-  (* Custom induction principle for mem_value_indt *)
-  Theorem mem_value_indt_induction
-    : forall P : mem_value_indt -> Prop,
-      (* base cases *)
-      (forall c : CoqCtype.ctype, P (MVunspecified c)) ->
-      (forall (i : CoqCtype.integerType) (i0 : integer_value_indt), P (MVinteger i i0)) ->
-      (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVfloating f f0)) ->
-      (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVpointer c p)) ->
-      (* recursive cases *)
-      (forall l : list mem_value_indt, List.Forall P l -> P (MVarray l)) ->
-      (forall (s : sym) (l : list (identifier * CoqCtype.ctype * mem_value_indt)),
-          List.Forall (fun '(_,_,b) => P b) l ->
-          P (MVstruct s l)) ->
-      (forall (s : sym) (i : identifier) (m : mem_value_indt), P m -> P (MVunion s i m)) ->
-
-      forall m : mem_value_indt, P m.
-  Proof.
-    intros P H_unspecified H_integer H_floating H_pointer H_array H_struct H_union.
-    fix IH 1.
-    destruct m.
-    - apply H_unspecified.
-    - apply H_integer.
-    - apply H_floating.
-    - apply H_pointer.
-    -
-      apply H_array.
-      induction l.
-      constructor.
-      constructor.
-      apply IH.
-      apply IHl.
-    -
-      apply H_struct.
-      induction l.
-      constructor.
-      constructor.
-      repeat break_let.
-      apply IH.
-      apply IHl.
-    - apply H_union.
-      apply IH.
-  Qed.
-
   (* Equality of pointer values without taking provenance into account *)
 
   Inductive pointer_value_eq: relation pointer_value_indt :=
@@ -173,6 +130,10 @@ Module RevocationProofs.
       rewrite H0. apply H2.
   Qed.
 
+  Unset Elimination Schemes.
+  (* This prevent default elimination principle from being generated for
+     this type, as it is inadequate *)
+
   Inductive mem_value_indt_eq: mem_value_indt -> mem_value_indt -> Prop :=
   | mem_value_indt_eq_MVunspecified: forall t1 t2, t1 = t2 -> mem_value_indt_eq (MVunspecified t1) (MVunspecified t2)
   | mem_value_indt_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_eq (MVinteger t1 v1) (MVinteger t2 v2)
@@ -190,23 +151,10 @@ Module RevocationProofs.
     struct_field_eq: (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> Prop :=
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 /\ mem_value_indt_eq v1 v2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
+  Set Elimination Schemes.
 
-
-
-  (*
-  Fixpoint mem_value_indt_measure (v : mem_value_indt) : nat :=
-    match v with
-    | MVunspecified _ => 1
-    | MVinteger _ _ => 1
-    | MVfloating _ _ => 1
-    | MVpointer _ _ => 1
-    | MVarray lst => 1 + list_sum (map mem_value_indt_measure lst)
-    | MVstruct _ lst => 1 + list_sum (map (fun x => mem_value_indt_measure (snd x)) lst)
-    | MVunion _ _ v => 1 + mem_value_indt_measure v
-    end.
-   *)
-
-  Lemma mem_value_indt_eq_induction:
+  (* Custom induction principle for mem_value_indt_eq *)
+  Lemma mem_value_indt_eq_ind:
     forall P : mem_value_indt -> mem_value_indt -> Prop,
 
       (* base non-recursive cases *)
@@ -315,7 +263,7 @@ Module RevocationProofs.
     Reflexive (mem_value_indt_eq).
   Proof.
     intros a.
-    induction a using mem_value_indt_induction; constructor;auto.
+    dependent induction a; constructor; auto.
     -
       split; reflexivity.
     -
@@ -332,11 +280,11 @@ Module RevocationProofs.
       +
         intros H.
         apply list.Forall_cons_1 in H.
+        repeat break_let.
         destruct H as [H1 H2].
         constructor.
         *
-          repeat break_let.
-          invc H1; constructor;auto.
+          invc H1; repeat split; constructor;auto.
         *
           apply IHl in H2. clear IHl.
           repeat break_let.
@@ -1119,7 +1067,7 @@ Module RevocationProofs.
 
     Opaque is_signed_ity.
     revert fuel addr2 funptrmap1 funptrmap2 Ffun capmeta1 capmeta2 Ecap.
-    induction Emval using mem_value_indt_eq_induction;intros; cbn;
+    induction Emval;intros; cbn;
       unfold CheriMemoryWithPNVI.DEFAULT_FUEL, CheriMemoryWithoutPNVI.DEFAULT_FUEL; subst;
 
       (*
@@ -1439,82 +1387,7 @@ Module RevocationProofs.
       admit.
     -
       (* mval2 = MVunion ... *)
-      destruct_serr_eq; break_match_hyp; try inl_inr. repeat inl_inr_inv; subst;
-        try reflexivity.
-      +
-        repeat break_match_hyp; try inl_inr;
-          repeat inl_inr_inv;subst.
-        rewrite <- Heqs3, <- Heqs0.
-        destruct fuel;[reflexivity|].
-        apply IHmval2.
-      +
-        exfalso.
-        repeat break_match_hyp; try inl_inr;
-          repeat inl_inr_inv;subst.
-        destruct fuel;[inversion Heqs0|].
-        specialize (IHmval2 fuel).
-        unfold  serr_eq in IHmval2.
-        repeat break_match_hyp; try inl_inr.
-        tauto.
-      +
-        exfalso.
-        repeat break_match_hyp; try inl_inr;
-          repeat inl_inr_inv;subst.
-        destruct fuel;[inversion Heqs2|].
-        specialize (IHmval2 fuel).
-        unfold  serr_eq in IHmval2.
-        repeat break_match_hyp; try inl_inr.
-        tauto.
-      +
-        rewrite <- Hserr, <- Hserr0.
-        clear Hserr Hserr0.
-        repeat break_match.
-        *
-          rewrite <- Heqs1, <- Heqs2.
-          destruct fuel;[reflexivity|].
-          specialize (IHmval2 fuel).
-          unfold  serr_eq in IHmval2.
-          repeat break_match_hyp; try inl_inr.
-          tauto.
-        *
-          repeat break_match_hyp; try inl_inr;
-            repeat inl_inr_inv;subst.
-          destruct fuel;[inversion Heqs2|].
-          specialize (IHmval2 fuel).
-          unfold  serr_eq in IHmval2.
-          repeat break_match_hyp; try inl_inr.
-          tauto.
-        *
-          repeat break_match_hyp; try inl_inr;
-            repeat inl_inr_inv;subst.
-          destruct fuel;[inversion Heqs1|].
-          specialize (IHmval2 fuel).
-          unfold  serr_eq in IHmval2.
-          repeat break_match_hyp; try inl_inr.
-          tauto.
-        *
-          destruct fuel;[inversion Heqs2|].
-          specialize (IHmval2 fuel).
-          unfold  serr_eq in IHmval2.
-          rewrite Heqs1, Heqs2 in IHmval2.
-          destruct IHmval2 as [A [B C]].
-          subst.
-          repeat constructor.
-          --
-            assumption.
-          --
-            assumption.
-          --
-            apply eqlistA_app.
-            typeclasses eauto.
-            assumption.
-            apply list_init_proper.
-            f_equiv.
-            eapply eqlistA_length,C.
-            unfold CheriMemoryWithPNVI.default_prov, CheriMemoryWithoutPNVI.default_prov.
-            intros x y E.
-            constructor.
-            auto.
+      admit.
   Admitted.
 
   (* --- Stateful proofs below --- *)
@@ -2055,6 +1928,7 @@ Module RevocationProofs.
           destruct_mem_state_same_rel H.
           apply repr_same.
           repeat split; try assumption.
+          reflexivity.
         }
         intros; repeat break_let.
         apply bind_Same_eq.
