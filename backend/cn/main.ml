@@ -194,7 +194,16 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            let cn_oc = Stdlib.open_out "cn.c" in
+            let dir_name = String.split_on_char '/' output_filename in
+            let rec take_n n list = match list with 
+              | [] -> failwith "Empty list"
+              | x :: xs -> if n = 1 then [x] else x :: (take_n (n - 1) xs)
+            in
+            let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in
+            let cn_filename = String.concat "/" cn_prefix_list  ^ "/" ^ "cn.c" in
+            Printf.printf "OUTPUT FILENAME: %s\n" output_filename;
+            Printf.printf "CN.C FILENAME: %s\n" cn_filename;
+            let cn_oc = Stdlib.open_out cn_filename in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog in
             let (c_functions, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
