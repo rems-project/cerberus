@@ -191,6 +191,8 @@ Module RevocationProofs.
   | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 /\ mem_value_indt_eq v1 v2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
 
+
+
   (*
   Fixpoint mem_value_indt_measure (v : mem_value_indt) : nat :=
     match v with
@@ -232,8 +234,8 @@ Module RevocationProofs.
     intros P Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer
       Hrec_array Hrec_struct Hrec_union.
     fix IH 3.
-    intros x y.
-    destruct x,y; intro H; invc H.
+    intros x y H.
+    destruct x,y; invc H.
     (* base cases *)
     - apply Hbase_unspecified. reflexivity.
     - apply Hbase_integer. assumption.
@@ -266,7 +268,7 @@ Module RevocationProofs.
       apply IH.
       destruct H1 as [_ [_ H1]].
       assumption.
-  Admitted.
+  Qed.
 
   (* Equivalence relation for pointer values *)
   #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
