@@ -1030,18 +1030,19 @@ let instantiate loc filter arg =
   let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
   let@ () = add_c loc (LC.t_ (eq__ arg_it arg)) in
   let@ constraints = all_constraints () in
-  let extra_assumptions = 
-    List.filter_map (fun lc ->
-        match lc with
-        | Forall ((s, bt), t) 
-             when BT.equal bt (IT.bt arg_it) && filter t ->
-           Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t))
-        | _ -> 
-           None
-      ) (LCSet.elements constraints)
+  let extra_assumptions1 = List.filter_map (function
+        | Forall ((s, bt), t) when filter t -> Some ((s, bt), t)
+        | _ -> None) (LCSet.elements constraints) in
+  let extra_assumptions2, type_mismatch = List.partition (fun ((_, bt), _) ->
+        BT.equal bt (IT.bt arg_it)) extra_assumptions1 in
+  let extra_assumptions = List.map (fun ((s, _), t) ->
+        LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t)) extra_assumptions2
   in
-  if List.length extra_assumptions == 0 then Pp.warn loc (Pp.string "nothing instantiated")
+  if List.length extra_assumptions == 0 then Pp.warn loc (!^ "nothing instantiated")
   else ();
+  List.iteri (fun i ((_, bt), _) -> if i < 2
+    then Pp.warn loc (!^ "did not instantiate on basetype mismatch:" ^^^
+        (Pp.list BT.pp [bt; IT.bt arg_it]))) type_mismatch;
   add_cs loc extra_assumptions
 
 
