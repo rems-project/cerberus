@@ -4,15 +4,18 @@
 
 DIRNAME=$(dirname $0)
 
-SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c')
+SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c' | grep -v '\-exec\.c')
 
 NUM_FAILED=0
 FAILED=''
 
+mkdir -p $DIRNAME/cn/exec
+
 for TEST in $SUCC
 do
-  echo cn $TEST --output_decorated=$(basename $TEST .c)-exec.c
-  if ! cn $TEST --output_decorated=$(basename $TEST .c)-exec.c
+  mkdir -p $DIRNAME/cn/exec/$(basename $TEST .c)
+  echo cn $TEST --output_decorated=$DIRNAME/cn/exec/$(basename $TEST .c)/$(basename $TEST .c)-exec.c
+  if ! cn $TEST --output_decorated=$DIRNAME/cn/exec/$(basename $TEST .c)/$(basename $TEST .c)-exec.c
   then
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
