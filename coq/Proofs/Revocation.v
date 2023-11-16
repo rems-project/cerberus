@@ -1050,6 +1050,14 @@ Module RevocationProofs.
   Proof.
   Admitted.
 
+  Lemma equlistA_concat_rev:
+    forall l0 l : list (list AbsByte),
+      eqlistA (eqlistA AbsByte_eq) l0 l ->
+      eqlistA AbsByte_eq (concat (rev l0)) (concat (rev l)).
+  Proof.
+    intros l0 l1 E.
+  Admitted.
+
   Theorem repr_same:
     forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
       ZMap.Equal funptrmap1 funptrmap2
@@ -1317,57 +1325,44 @@ Module RevocationProofs.
       (* MVarray *)
       (* HERE *)
 
+      Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
+                              * ZMap.t (bool * CapGhostState)
+                              * Z
+                              * list (list AbsByte).
+      Let repr_fold_eq
+        : relation repr_fold_T
+          :=
+            fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
+              a1 = a2
+              /\ ZMap.Equal m1 m1'
+              /\ ZMap.Equal m2 m2'
+              /\ eqlistA (eqlistA AbsByte_eq) l1 l1'.
+
       destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
       +
         (* error case *)
         cbn.
-        unfold CheriMemoryWithPNVI.mem_value, CheriMemoryWithoutPNVI.mem_value in *.
-
-
-        Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
-                                       * ZMap.t (bool * CapGhostState)
-                                       * Z
-                                       * list (list AbsByte).
-        Let repr_fold_eq
-          : relation repr_fold_T
-          :=
-          fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
-            a1 = a2
-            /\ ZMap.Equal m1 m1'
-            /\ ZMap.Equal m2 m2'
-            /\ eqlistA (eqlistA AbsByte_eq) l1 l1'.
-
-        cut(@serr_eq repr_fold_T repr_fold_eq (inl s) (inl s0)).
-        {
-          intros HS.
-          invc HS.
-          reflexivity.
-        }
+        cut(@serr_eq repr_fold_T repr_fold_eq (inl s) (inl s0));
+          [intros HS;invc HS;reflexivity|].
         unfold repr_fold_T.
         rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
         eapply monadic_fold_left_proper' with
           (Ea:=repr_fold_eq)
           (Eb:=mem_value_indt_eq).
-        *
-          assumption.
-        *
-          repeat split;try assumption.
-          constructor.
+        * assumption.
+        * repeat split; [assumption|assumption|constructor].
         *
           intros x x' Ex.
           repeat break_let.
           destruct Ex as [E1 [E2 [E3 E4]]].
           subst.
-          rename H into Ae.
-          rename H0 into H.
-          revert H.
-
+          revert H0.
           apply Forall2_impl.
-          intros a b H.
+          intros a b H0.
           destruct fuel;[reflexivity|].
-          specialize (H fuel z0 t t1 E2 capmeta1 capmeta2 Ecap).
+          specialize (H0 fuel z0 t t1 E2 capmeta1 capmeta2 Ecap).
           repeat break_match_goal; try assumption.
-          inversion H as [H0 [H1 H2]].
+          inversion H0 as [H01 [H1 H2]].
           subst.
           repeat split; auto.
           apply eqlistA_length in H2.
@@ -1375,13 +1370,96 @@ Module RevocationProofs.
           reflexivity.
       +
         exfalso.
-        admit.
+        cbn.
+        cut(@serr_eq repr_fold_T repr_fold_eq (inl s) (inr (t, t0, z, l)));
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_fold_T.
+        rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
+        eapply monadic_fold_left_proper' with
+          (Ea:=repr_fold_eq)
+          (Eb:=mem_value_indt_eq).
+        * assumption.
+        * repeat split; [assumption|assumption|constructor].
+        *
+          intros x x' Ex.
+          repeat break_let.
+          destruct Ex as [E1 [E2 [E3 E4]]].
+          subst.
+          revert H0.
+          apply Forall2_impl.
+          intros a b H0.
+          destruct fuel;[reflexivity|].
+          specialize (H0 fuel z1 t1 t3 E2 capmeta1 capmeta2 Ecap).
+          repeat break_match_goal; try assumption.
+          inversion H0 as [H01 [H1 H2]].
+          subst.
+          repeat split; auto.
+          apply eqlistA_length in H2.
+          rewrite H2.
+          reflexivity.
       +
         exfalso.
-        admit.
+        cbn.
+        cut(@serr_eq repr_fold_T repr_fold_eq (inr (t, t0, z, l)) (inl s));
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_fold_T.
+        rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
+        eapply monadic_fold_left_proper' with
+          (Ea:=repr_fold_eq)
+          (Eb:=mem_value_indt_eq).
+        * assumption.
+        * repeat split; [assumption|assumption|constructor].
+        *
+          intros x x' Ex.
+          repeat break_let.
+          destruct Ex as [E1 [E2 [E3 E4]]].
+          subst.
+          revert H0.
+          apply Forall2_impl.
+          intros a b H0.
+          destruct fuel;[reflexivity|].
+          specialize (H0 fuel z1 t1 t3 E2 capmeta1 capmeta2 Ecap).
+          repeat break_match_goal; try assumption.
+          inversion H0 as [H01 [H1 H2]].
+          subst.
+          repeat split; auto.
+          apply eqlistA_length in H2.
+          rewrite H2.
+          reflexivity.
       +
         (* value case *)
-        admit.
+        cbn.
+        cut(@serr_eq repr_fold_T repr_fold_eq ( inr (t1, t2, z0, l0)) (inr (t, t0, z, l))).
+        {
+          intros HS.
+          invc HS.
+          destruct H2 as [H2 [H3 H4]].
+          repeat split ; [assumption|assumption|apply equlistA_concat_rev;assumption].
+        }
+        unfold repr_fold_T.
+        rewrite <- Heqs, <- Heqs0; clear Heqs Heqs0.
+        eapply monadic_fold_left_proper' with
+          (Ea:=repr_fold_eq)
+          (Eb:=mem_value_indt_eq).
+        * assumption.
+        * repeat split; [assumption|assumption|constructor].
+        *
+          intros x x' Ex.
+          repeat break_let.
+          destruct Ex as [E1 [E2 [E3 E4]]].
+          subst.
+          revert H0.
+          apply Forall2_impl.
+          intros a b H0.
+          destruct fuel;[reflexivity|].
+          specialize (H0 fuel z2 t3 t5 E2 capmeta1 capmeta2 Ecap).
+          repeat break_match_goal; try assumption.
+          inversion H0 as [H01 [H1 H2]].
+          subst.
+          repeat split; auto.
+          apply eqlistA_length in H2.
+          rewrite H2.
+          reflexivity.
     -
       (* mval2 = MVstruct s l *)
       admit.
