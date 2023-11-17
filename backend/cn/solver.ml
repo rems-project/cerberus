@@ -84,6 +84,7 @@ let solver_params = [
     ("smt.arith.nl", "false");
     ("smt.arith.nl.branching", "false");
     ("smt.arith.nl.rounds", "0");
+    ("sat.smt", "true");
   ]
 
 let rewriter_params = [
@@ -1035,7 +1036,7 @@ let make global : solver =
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
   let context = Z3.mk_context [] in
   Translate.init global context;
-  let base_incremental = Z3.Solver.mk_simple_solver context in
+  let base_incremental = Z3.Solver.mk_solver context None in
   let incremental = 
     match List.map (Z3.Simplifier.mk_simplifier context) simplifiers with
     | s1::s2::rest ->
@@ -1046,6 +1047,11 @@ let make global : solver =
     | [] -> 
         base_incremental
   in
+  (* https://microsoft.github.io/z3guide/programming/Parameters/#combined_solver *)
+  let params = Z3.Params.mk_params context in
+  Z3.Params.add_int params (Z3.Symbol.mk_string context "combined_solver.solver2_timeout") 200;
+  Z3.Params.add_int params (Z3.Symbol.mk_string context "combined_solver.solver2_unknown") 2; 
+  Z3.Solver.set_parameters incremental params;
   { context; incremental; focus_terms = ref [] }
 
 
