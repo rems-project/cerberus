@@ -1016,21 +1016,12 @@ Module RevocationProofs.
       /\ ZMap.Equal m2 m2'
       /\ eqlistA AbsByte_eq l1 l1'.
 
-  #[global] Instance monadic_fold_left_proper
-    (A B : Type)
-    (Eb: relation B)
-    (Ea: relation A)
-    {m : Type -> Type}
-    {M : Monad m}
-    (EMa : relation (m A))
-    :
-    Proper ((Ea ==> Eb ==> EMa) ==> (eqlistA Eb) ==> Ea ==> EMa) monadic_fold_left.
-  Proof.
-    (* TODO *)
-  Admitted.
 
-  (* specialized version of abobe, postulating that `f` must be proper only for elements from the list *)
-  Lemma monadic_fold_left_proper'
+  (* Proper for [monadic_fold_left], postulating that `f` must be proper only for elements from the list.
+     C.f. to more naive formulation:
+     [Proper ((Ea ==> Eb ==> EMa) ==> (eqlistA Eb) ==> Ea ==> EMa) monadic_fold_left]
+   *)
+  Lemma monadic_fold_left_proper
     (A B : Type)
     (Eb : relation B)
     (Ea : relation A)
@@ -1342,7 +1333,7 @@ Module RevocationProofs.
           [intros HS;invc HS;reflexivity|].
         unfold repr_fold_T.
         rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
-        eapply monadic_fold_left_proper' with
+        eapply monadic_fold_left_proper with
           (Ea:=repr_fold_eq)
           (Eb:=mem_value_indt_eq).
         * assumption.
@@ -1371,7 +1362,7 @@ Module RevocationProofs.
           [intros HS;invc HS;reflexivity|].
         unfold repr_fold_T.
         rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
-        eapply monadic_fold_left_proper' with
+        eapply monadic_fold_left_proper with
           (Ea:=repr_fold_eq)
           (Eb:=mem_value_indt_eq).
         * assumption.
@@ -1400,7 +1391,7 @@ Module RevocationProofs.
           [intros HS;invc HS;reflexivity|].
         unfold repr_fold_T.
         rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
-        eapply monadic_fold_left_proper' with
+        eapply monadic_fold_left_proper with
           (Ea:=repr_fold_eq)
           (Eb:=mem_value_indt_eq).
         * assumption.
@@ -1434,7 +1425,7 @@ Module RevocationProofs.
         }
         unfold repr_fold_T.
         rewrite <- Heqs, <- Heqs0; clear Heqs Heqs0.
-        eapply monadic_fold_left_proper' with
+        eapply monadic_fold_left_proper with
           (Ea:=repr_fold_eq)
           (Eb:=mem_value_indt_eq).
         * assumption.
@@ -1458,6 +1449,12 @@ Module RevocationProofs.
           reflexivity.
     -
       (* mval2 = MVstruct s l *)
+      rewrite offsetof_same.
+      break_match;[reflexivity|].
+      clear Heqs.
+      repeat break_let.
+      break_match;[reflexivity|].
+      clear Heqs.
       admit.
     -
       (* mval2 = MVunion ... *)
