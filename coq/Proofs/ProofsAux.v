@@ -132,6 +132,50 @@ Section ListAux.
       constructor; auto.
   Qed.
 
+  #[global] Instance eqlistA_Reflexive
+    {T:Type}
+    (R: relation T)
+    `{RR: Reflexive T R}:
+    Reflexive (eqlistA R ).
+  Proof.
+    intros a.
+    induction a;constructor.
+    apply RR.
+    apply IHa.
+  Qed.
+
+  Lemma ealistA_concat:
+    forall (A:Type) (l0 l1: list (list A)) (R:relation A),
+      eqlistA (eqlistA R) l0 l1 -> eqlistA R (concat l0) (concat l1).
+  Proof.
+    intros A l0 l1 R E.
+    apply eqlistA_altdef in E.
+    apply eqlistA_altdef.
+
+    induction E.
+    -
+      constructor.
+    -
+      cbn.
+      apply Forall2_app.
+      +
+        apply eqlistA_altdef in H.
+        assumption.
+      +
+        apply IHE.
+  Qed.
+
+  Lemma equlistA_concat_rev:
+    forall (A:Type) (l0 l1: list (list A)) (R:relation A),
+      eqlistA (eqlistA R) l0 l1 ->
+      eqlistA R (concat (rev l0)) (concat (rev l1)).
+  Proof.
+    intros A l0 l1 R H.
+    apply ealistA_concat.
+    apply eqlistA_rev.
+    assumption.
+  Qed.
+
 End ListAux.
 
 Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).

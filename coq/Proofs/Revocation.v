@@ -245,19 +245,6 @@ Module RevocationProofs.
       reflexivity.
   Qed.
 
-  #[global] Instance eqlistA_Reflexive
-    {T:Type}
-    (R: relation T)
-    `{RR: Reflexive T R}:
-    Reflexive (eqlistA R ).
-  Proof.
-    intros a.
-    induction a.
-    - constructor.
-    -
-      constructor; [apply RR|apply IHa].
-  Qed.
-
   #[global] Instance mem_value_indt_eq_Reflexive
     :
     Reflexive (mem_value_indt_eq).
@@ -1037,14 +1024,6 @@ Module RevocationProofs.
     :
     EMa (monadic_fold_left f l x) (monadic_fold_left f' l' x').
   Proof.
-  Admitted.
-
-  Lemma equlistA_concat_rev:
-    forall l0 l : list (list AbsByte),
-      eqlistA (eqlistA AbsByte_eq) l0 l ->
-      eqlistA AbsByte_eq (concat (rev l0)) (concat (rev l)).
-  Proof.
-    intros l0 l1 E.
   Admitted.
 
   Theorem repr_same:
