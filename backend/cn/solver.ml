@@ -1101,11 +1101,9 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-let paren_sexp nm doc = Pp.parens (!^ nm ^^^ doc)
-
+(*
 let scan_z3_log_file_decls fname =
   let f = open_in fname in
-  (* String.fold_left arrives in 4.13 which we're not all on yet *)
   let paren_count l = Seq.fold_left (fun i c -> if c == '('
     then i + 1 else if c == ')' then i - 1
     else i) 0 (String.to_seq l) in
@@ -1128,6 +1126,7 @@ let scan_z3_log_file_decls fname =
   in
   remdups StringSet.empty [] groups
   |> List.map (fun ss -> Pp.flow_map (Pp.break 1) Pp.string ss)
+*)
 
 let maybe_save_slow_problem kind context extra_assertions lc lc_t time solver =
   match save_slow_problems () with
@@ -1138,23 +1137,20 @@ let maybe_save_slow_problem kind context extra_assertions lc lc_t time solver =
     output_string channel "\n\n";
     if first_msg then output_string channel "## New CN run ##\n\n" else ();
     let lc_doc = Pp.string (Z3.Expr.to_string lc_t) in
-    let check_doc = paren_sexp "check-sat" lc_doc in
-    let ass_docs = extra_assertions @ Z3.Solver.get_assertions solver
-        |> List.map (fun e -> paren_sexp "assert" (Pp.string (Z3.Expr.to_string e))) in
-    let smt_item = match log_file () with
-      | None -> ("SMT assertions (set z3 logging for complete problem)",
-          ass_docs @ [check_doc])
-      | Some fname ->
-      let decls = scan_z3_log_file_decls fname in
-      ("SMT problem", (decls @ ass_docs @ [check_doc]))
-    in
+    let check_doc = !^"(check-sat)" in
+    (* it seems that Z3.Solver.to_string gives us useful setup/definitions,
+        assuming everything is in scope *)
+    let simple = Z3.Solver.mk_simple_solver context in
+    Z3.Solver.add simple (Z3.Solver.get_assertions solver @
+        extra_assertions @ [Z3.Boolean.mk_not context lc_t]);
+    let smt_item = Pp.string (Z3.Solver.to_string simple) ^^ check_doc in
     Cerb_colour.without_colour (fun () -> print channel (item "Slow problem"
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
           item "SMT constraint" lc_doc;
           item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
-          item (fst smt_item) (Pp.flow (Pp.break 1) (snd smt_item));
+          item "SMT problem" (Pp.hardline ^^ smt_item);
       ]))) ();
     output_string channel "\n";
     saved_slow_problem ();
