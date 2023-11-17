@@ -259,9 +259,11 @@ module IndexTerms = struct
     | Binop (Exp, a, b) ->
        let a = aux a in
        let b = aux b in
-       begin match a, b with
-       | IT (Const (Z a), _), IT (Const (Z b), _) when Z.fits_int b ->
+       begin match a, b, get_num_z a, get_num_z b with
+       | IT (Const (Z a), _), IT (Const (Z b), _), _, _ when Z.fits_int b ->
           z_ (Z.pow a (Z.to_int b))
+       | _, _, Some a, Some b when Z.fits_int b ->
+          num_lit_ (Z.pow a (Z.to_int b)) the_bt
        | _ ->
           IT.exp_ (a, b)
        end

@@ -456,6 +456,8 @@ module WIT = struct
               let simp_t' = eval simp_ctxt t' in
               begin match is_const simp_t' with
               | None ->
+                 Pp.debug 1 (lazy (Pp.item "mod rhs check: simplified"
+                     (Pp.infix_arrow (IT.pp t') (IT.pp simp_t'))));
                  let hint = "Only division (mod) by constants is allowed" in
                  fail (fun ctxt -> {loc; msg = NIA {it = mod_ (t, t'); ctxt; hint}})
               | Some z' ->
