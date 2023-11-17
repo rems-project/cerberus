@@ -548,15 +548,24 @@ let rec cn_to_ail_expr_aux_internal
               let val_equality_str =  val_str ^ "_equality" in
               A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
             | _ -> 
+              Printf.printf "ENTERED EQUALITY CASE\n";
               let ctype = (bt_to_ail_ctype (IT.bt t1)) in
               (match get_typedef_string ctype with 
                 | Some str ->
+                  Printf.printf "ENTERED SOME CASE\n";
                   let fn_name = str ^ "_equality" in 
                   A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
                 | None -> 
+                  Printf.printf "ENTERED NONE CASE\n";
                   (match rm_ctype ctype with 
                     | C.(Pointer (_, Ctype (_, Struct sym))) -> 
-                      let str = "struct_" ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
+                      let dt_names = List.map (fun dt -> Sym.pp_string dt.cn_dt_name) dts in 
+                      Printf.printf "ALL DATATYPE NAMES:\n";
+                      List.iter (fun dt_str -> Printf.printf "%s\n" dt_str) dt_names;
+                      Printf.printf "THIS STRUCT NAME: %s\n" (Sym.pp_string sym);
+                      let is_datatype = List.mem String.equal (Sym.pp_string sym) dt_names in
+                      let prefix = if is_datatype then "datatype_" else "struct_" in
+                      let str = prefix ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
                       let fn_name = str ^ "_equality" in 
                       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
                     | _ -> default_ail_binop))
@@ -700,14 +709,12 @@ let rec cn_to_ail_expr_aux_internal
     in
 
     let (parent_dt, members) = find_dt_from_constructor sym dts in
-    Printf.printf "Datatype name: %s\n" (Sym.pp_string parent_dt.cn_dt_name);
     let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
     let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct parent_dt.cn_dt_name)))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
     let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct parent_dt.cn_dt_name)))])) in
     let ail_decl = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
-    Printf.printf "Reached past allocation declaration\n";
 
     let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true sym in 
 
@@ -858,8 +865,6 @@ let rec cn_to_ail_expr_aux_internal
               else
                 match IT.bt term with
                   | BT.Datatype sym -> 
-                      Printf.printf "Inside datatype case. Sym = %s\n" (Sym.pp_string sym);
-
                       let cn_dt = List.filter (fun dt -> String.equal (Sym.pp_string sym) (Sym.pp_string dt.cn_dt_name)) dts in 
                       (match cn_dt with 
                         | [] -> failwith "Datatype not found"
@@ -1003,6 +1008,41 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
 
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   enum :: structs
+
+let generate_datatype_equality_function (cn_datatype : cn_datatype) =
+  (* 
+    type cn_datatype 'a = <|
+      cn_dt_loc: Loc.t;
+      cn_dt_name: 'a;
+      cn_dt_cases: list ('a * list (cn_base_type 'a * Symbol.identifier));
+    |>   
+  *)
+  let dt_sym = cn_datatype.cn_dt_name in
+  let fn_sym = Sym.fresh_pretty ("datatype_" ^ (Sym.pp_string dt_sym) ^ "_equality") in
+  let param1_sym = Sym.fresh_pretty "x" in 
+  let param2_sym = Sym.fresh_pretty "y" in
+  let id_tag = Id.id "tag" in
+  let param_syms = [param1_sym; param2_sym] in 
+  let param_type = (empty_qualifiers, mk_ctype (C.Pointer (empty_qualifiers, mk_ctype (Struct dt_sym))), false) in
+  let tag_check_cond = A.(AilEbinary (mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), id_tag)), Ne, mk_expr (AilEmemberofptr (mk_expr (AilEident param2_sym), id_tag)))) in
+  let false_it = IT.(IT (Const (Bool false), BT.Bool, Cerb_location.unknown)) in 
+  (* Adds conversion function *)
+  let (_, _, e1) = cn_to_ail_expr_internal [] [] false_it PassBack in
+  let return_false = A.(AilSreturn e1) in
+  let create_case (constr_sym, members) =
+    let enum_str = Sym.pp_string (generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym) in
+    let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in 
+    let ail_case = A.(AilScase (Nat_big_num.zero, mk_stmt (AilSblock ([], [])))) in 
+    A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
+  in
+  let switch_stmt = A.(AilSswitch (mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), id_tag)), mk_stmt (AilSblock ([], List.map create_case cn_datatype.cn_dt_cases)))) in
+  let tag_if_stmt = A.(AilSif (mk_expr tag_check_cond, mk_stmt return_false, mk_stmt switch_stmt)) in
+  let ret_type = bt_to_ail_ctype BT.Bool in
+  (* Generating function declaration *)
+  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), [param_type; param_type], false, false, false)))) in
+  (* Generating function definition *)
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], [mk_stmt tag_if_stmt])))) in
+  [(decl, def)]
 
 let generate_struct_equality_function ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
     | C.StructDef (members, _) -> 

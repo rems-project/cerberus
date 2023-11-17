@@ -188,11 +188,11 @@ let main
             let oc = Stdlib.open_out output_filename in
             let dir_name = String.split_on_char '/' output_filename in
             let rec take_n n list = match list with 
-              | [] -> failwith "Empty list"
+              | [] -> []
               | x :: xs -> if n == 1 then [x] else x :: (take_n (n - 1) xs)
             in
             let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in
-            let cn_prefix = String.concat "/" cn_prefix_list  ^ "/" in
+            let cn_prefix = if (List.length dir_name != 0) then String.concat "/" cn_prefix_list  ^ "/" else "" in
             (* Printf.printf "OUTPUT FILENAME: %s\n" output_filename; *)
             (* Printf.printf "CN.C FILENAME: %s\n" cn_filename; *)
             let cn_oc = Stdlib.open_out (cn_prefix ^ "cn.c") in
@@ -232,7 +232,7 @@ let main
             Stdlib.output_string cn_oc conversion_function_defs;
             Stdlib.output_string cn_oc ownership_function_defs;
 
-            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); ("cn.c", false);] in
+            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); ("cn.h", false);] in
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n";
