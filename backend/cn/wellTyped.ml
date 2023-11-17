@@ -1709,7 +1709,9 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
      | M_Ememop (M_PtrFromInt (act_from, act_to, pe)) ->
         let@ () = WCT.is_ct act_from.loc act_from.ct in
         let@ () = WCT.is_ct act_to.loc act_to.ct in
-        let@ pe = check_pexpr ((Memory.bt_of_sct act_from.ct)) pe in
+        let from_bt = Memory.bt_of_sct act_from.ct in
+        let@ pe = check_pexpr from_bt pe in
+        let@ () = ensure_bits_type (loc_of_pexpr pe) from_bt in
         return (Loc, M_Ememop (M_PtrFromInt (act_from, act_to, pe)))
      | M_Ememop (M_PtrValidForDeref (act, pe)) ->
         let@ () = WCT.is_ct act.loc act.ct in

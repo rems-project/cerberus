@@ -1136,10 +1136,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      | M_PtrFromInt (act_from, act_to, pe) ->
         let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
         let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
-        assert (match act_from.ct with Integer _ -> true | _ -> false);
-        assert (match act_to.ct with Pointer _ -> true | _ -> false);
-        let@ () = WellTyped.ensure_base_type loc ~expect (Memory.bt_of_sct act_to.ct) in
-        let@ () = WellTyped.ensure_base_type loc ~expect:(Memory.bt_of_sct act_from.ct) (bt_of_pexpr pe) in
+        let@ () = WellTyped.ensure_base_type loc ~expect Loc in
+        let@ () = WellTyped.ensure_base_type loc ~expect:(Memory.bt_of_sct act_from.ct)
+            (bt_of_pexpr pe) in
+        let@ bt_info = ensure_bitvector_type loc ~expect:(bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
         (* TODO: what about unrepresentable values? If that's possible
            we to make sure our cast semantics correctly matches C's *)
