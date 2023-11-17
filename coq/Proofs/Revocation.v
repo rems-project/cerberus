@@ -1005,18 +1005,16 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.ghost_tags CheriMemoryWithoutPNVI.ghost_tags.
 
-  Definition repr_res_eq
-    : relation (
-          ZMap.t (digest * string * Capability_GS.t)
-          * ZMap.t (bool * CapGhostState)
-          * list AbsByte
-        )
+  Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
+                              * ZMap.t (bool * CapGhostState)
+                              * list AbsByte.
+
+  Definition repr_res_eq : relation (repr_res_t)
     :=
     fun '(m1,m2,l1) '(m1',m2',l1') =>
       ZMap.Equal m1 m1'
       /\ ZMap.Equal m2 m2'
       /\ eqlistA AbsByte_eq l1 l1'.
-
 
   #[global] Instance monadic_fold_left_proper
     (A B : Type)
@@ -1323,8 +1321,6 @@ Module RevocationProofs.
           reflexivity.
     -
       (* MVarray *)
-      (* HERE *)
-
       Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
                               * ZMap.t (bool * CapGhostState)
                               * Z
@@ -1465,7 +1461,58 @@ Module RevocationProofs.
       admit.
     -
       (* mval2 = MVunion ... *)
-      admit.
+      destruct H as [H0 [H1 H2]].
+      subst.
+      break_match;[reflexivity|].
+      clear Heqs.
+
+      destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
+      +
+        (* error case *)
+        cbn.
+        cut(@serr_eq repr_res_t repr_res_eq (inl s) (inl s0));
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_res_t.
+        rewrite <- Heqs1, <- Heqs2.
+        destruct fuel;[reflexivity|].
+        eapply IHEmval; assumption.
+      +
+        exfalso.
+        cut(@serr_eq repr_res_t repr_res_eq (inl s) (inr (t, t0, l)));
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_res_t.
+        rewrite <- Heqs0, <- Heqs1.
+        destruct fuel;[reflexivity|].
+        eapply IHEmval; assumption.
+      +
+        exfalso.
+        cut(@serr_eq repr_res_t repr_res_eq (inr (t, t0, l)) (inl s));
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_res_t.
+        rewrite <- Heqs0, <- Heqs1.
+        destruct fuel;[reflexivity|].
+        eapply IHEmval; assumption.
+      +
+        (* value case *)
+        cut(@serr_eq repr_res_t repr_res_eq (inr (t1, t2, l0)) (inr (t, t0, l))).
+        {
+          intros HS.
+          invc HS. destruct H0.
+          cbn; repeat split; try reflexivity; try assumption.
+          apply eqlistA_app.
+          typeclasses eauto.
+          assumption.
+          apply list_init_proper.
+          apply eqlistA_length in H1.
+          rewrite H1. reflexivity.
+          intros x y E.
+          subst.
+          repeat split; auto.
+        }
+        unfold repr_res_t.
+        rewrite <- Heqs, <- Heqs0.
+        destruct fuel;[reflexivity|].
+        eapply IHEmval; assumption.
   Admitted.
 
   (* --- Stateful proofs below --- *)
