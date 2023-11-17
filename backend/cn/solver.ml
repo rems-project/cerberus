@@ -975,8 +975,9 @@ module Translate = struct
       expr : Z3.Expr.expr;
       it : IT.t;
       qs : (Sym.t * BT.t) list;
-      extra : IT.t list;
+      extra : Z3.Expr.expr list;
       focused : (IT.t_bindings * IT.t) list;
+      smt2_doc : Pp.doc Lazy.t;
     }
 [@@warning "-unused-field"]
 
@@ -989,13 +990,14 @@ module Translate = struct
 
   let goal1 context global lc =
     let term it = term context global it in
+    let smt2_doc = lazy (!^ "<to be replaced>") in
     match lc with
     | T it ->
-       { expr = term it; it; qs = []; extra = []; focused = [] }
+       { expr = term it; it; qs = []; extra = []; focused = []; smt2_doc }
     | Forall ((s, bt), it) ->
        let v_s, v = IT.fresh_same bt s in
        let it = IT.subst (make_subst [(s, v)]) it in
-       { expr = term it; it; qs = [(v_s, bt)]; extra = []; focused = [] }
+       { expr = term it; it; qs = [(v_s, bt)]; extra = []; focused = []; smt2_doc }
 
   let extra_assumptions assumptions qs =
     List.concat_map (fun (s, bt) ->
@@ -1008,12 +1010,23 @@ module Translate = struct
           ) assumptions []
       ) qs
 
+  let goal_to_smt2_doc solver extra lc_expr =
+    let check_doc = !^"(check-sat)" in
+    (* it seems that Z3.Solver.to_string gives us useful setup/definitions,
+        once everything is in scope, which it is in a throwaway solver instance *)
+    let simple = Z3.Solver.mk_simple_solver solver.context in
+    Z3.Solver.add simple (Z3.Solver.get_assertions solver.incremental @
+        extra @ [Z3.Boolean.mk_not solver.context lc_expr]);
+    Pp.string (Z3.Solver.to_string simple) ^^ check_doc
+
   let goal solver global assumptions pointer_facts lc =
     let g1 = goal1 solver.context global lc in
     let extra1 = extra_assumptions assumptions g1.qs in
     let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in
     let extra2 = IT.nth_array_to_list_facts focused in
-    { g1 with extra = extra2 @ extra1; focused = focused }
+    let extra = List.map (term solver.context global) (extra2 @ extra1) in
+    let smt2_doc = lazy (goal_to_smt2_doc solver extra g1.expr) in
+    { g1 with extra = extra; focused = focused; smt2_doc = smt2_doc }
 
 end
 
@@ -1102,34 +1115,7 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-(*
-let scan_z3_log_file_decls fname =
-  let f = open_in fname in
-  let paren_count l = Seq.fold_left (fun i c -> if c == '('
-    then i + 1 else if c == ')' then i - 1
-    else i) 0 (String.to_seq l) in
-  let rec read_loop parens ls groups = try
-    let l = input_line f in
-    let parens = parens + paren_count l in
-    if parens == 0 then read_loop 0 [] (rev (l :: ls) :: groups)
-      else read_loop parens (l :: ls) groups
-    with End_of_file -> List.rev groups
-  in
-  let groups = read_loop 0 [] []
-    |> List.filter (function | [] -> false | (s :: _) -> Tools.starts_with "(declar" s)
-  in
-  let rec remdups ss gps = function
-    | [] -> List.rev gps
-    | (gp :: gps2) ->
-      let s = String.concat "\n" gp in
-      if StringSet.mem s ss then remdups ss gps gps2
-      else remdups (StringSet.add s ss) (gp :: gps) gps2
-  in
-  remdups StringSet.empty [] groups
-  |> List.map (fun ss -> Pp.flow_map (Pp.break 1) Pp.string ss)
-*)
-
-let maybe_save_slow_problem kind context extra_assertions lc lc_t time solver =
+let maybe_save_slow_problem kind lc lc_t smt2_doc time solver =
   match save_slow_problems () with
   | (_, _, None) -> ()
   | (_, cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
@@ -1138,20 +1124,13 @@ let maybe_save_slow_problem kind context extra_assertions lc lc_t time solver =
     output_string channel "\n\n";
     if first_msg then output_string channel "## New CN run ##\n\n" else ();
     let lc_doc = Pp.string (Z3.Expr.to_string lc_t) in
-    let check_doc = !^"(check-sat)" in
-    (* it seems that Z3.Solver.to_string gives us useful setup/definitions,
-        assuming everything is in scope *)
-    let simple = Z3.Solver.mk_simple_solver context in
-    Z3.Solver.add simple (Z3.Solver.get_assertions solver @
-        extra_assertions @ [Z3.Boolean.mk_not context lc_t]);
-    let smt_item = Pp.string (Z3.Solver.to_string simple) ^^ check_doc in
     Cerb_colour.without_colour (fun () -> print channel (item "Slow problem"
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
           item "SMT constraint" lc_doc;
           item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
-          item "SMT problem" (Pp.hardline ^^ smt_item);
+          item "SMT problem" (Lazy.force smt2_doc);
       ]))) ();
     output_string channel "\n";
     saved_slow_problem ();
@@ -1169,10 +1148,9 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      rtrue ()
   | `No_shortcut lc ->
      let existing_scs = Z3.Solver.get_assertions solver.incremental in
-     let Translate.{expr; qs; extra; _} = Translate.goal solver
+     let Translate.{expr; qs; extra; smt2_doc; _} = Translate.goal solver
          global assumptions pointer_facts lc in
      let nlc = Z3.Boolean.mk_not context expr in
-     let extra = List.map (Translate.term context global) extra in
      let (elapsed, res) =
        time_f_elapsed (time_f_logs loc 5 "Z3(inc)"
            (Z3.Solver.check solver.incremental))
@@ -1180,14 +1158,14 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      in
      match res with
      | Z3.Solver.UNSATISFIABLE ->
-        maybe_save_slow_problem "unsat" solver.context extra
-            lc expr elapsed solver.incremental;
+        maybe_save_slow_problem "unsat"
+            lc expr smt2_doc elapsed solver.incremental;
         rtrue ()
      | Z3.Solver.SATISFIABLE ->
         rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
-        maybe_save_slow_problem "unknown" solver.context extra
-            lc expr elapsed solver.incremental;
+        maybe_save_slow_problem "unknown"
+            lc expr smt2_doc elapsed solver.incremental;
         let (elapsed2, res2) =
           time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)"
               (Z3.Solver.check solver.non_incremental))
@@ -1195,14 +1173,14 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
         in
         match res2 with
         | Z3.Solver.UNSATISFIABLE ->
-           maybe_save_slow_problem "unsat" solver.context extra
-               lc expr elapsed solver.non_incremental;
+           maybe_save_slow_problem "unsat"
+               lc expr smt2_doc elapsed solver.non_incremental;
            rtrue ()
         | Z3.Solver.SATISFIABLE ->
            rfalse qs solver.non_incremental
         | Z3.Solver.UNKNOWN ->
-           maybe_save_slow_problem "unknown" solver.context extra
-               lc expr elapsed solver.non_incremental;
+           maybe_save_slow_problem "unknown"
+               lc expr smt2_doc elapsed solver.non_incremental;
           let reason = Z3.Solver.get_reason_unknown solver.non_incremental in
           failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
@@ -1499,17 +1477,8 @@ let debug_solver_to_string solver =
 
 let debug_solver_query solver global assumptions pointer_facts lc =
   Pp.debug 2 (lazy begin
-    let Translate.{expr; qs; extra; _} = Translate.goal solver
+    let Translate.{smt2_doc;_} = Translate.goal solver
          global assumptions pointer_facts lc in
-    let extra = List.map (Translate.term solver.context global) extra in
-    let nlc = Z3.Boolean.mk_not solver.context expr in
-    let solver_doc = !^ (Z3.Solver.to_string solver.incremental) in
-    Z3.Solver.push solver.incremental;
-    Z3.Solver.add solver.incremental (extra @ [nlc]);
-    Z3.Solver.pop solver.incremental 1;
-    let whole_doc = solver_doc ^^ !^ "(check-sat)" in
-    Pp.item "debug solver query" whole_doc ^^ Pp.hardline ^^
-    Pp.item "should include" (Pp.flow_map Pp.hardline (fun x -> (!^ (Z3.Expr.to_string x)))
-        (extra @ [nlc]))
+    Pp.item "debug solver query" (Lazy.force smt2_doc)
   end)
 
