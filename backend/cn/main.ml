@@ -189,33 +189,48 @@ let main
             let dir_name = String.split_on_char '/' output_filename in
             let rec take_n n list = match list with 
               | [] -> failwith "Empty list"
-              | x :: xs -> if n = 1 then [x] else x :: (take_n (n - 1) xs)
+              | x :: xs -> if n == 1 then [x] else x :: (take_n (n - 1) xs)
             in
             let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in
-            let cn_filename = String.concat "/" cn_prefix_list  ^ "/" ^ "cn.c" in
-            Printf.printf "OUTPUT FILENAME: %s\n" output_filename;
-            Printf.printf "CN.C FILENAME: %s\n" cn_filename;
-            let cn_oc = Stdlib.open_out cn_filename in
+            let cn_prefix = String.concat "/" cn_prefix_list  ^ "/" in
+            (* Printf.printf "OUTPUT FILENAME: %s\n" output_filename; *)
+            (* Printf.printf "CN.C FILENAME: %s\n" cn_filename; *)
+            let cn_oc = Stdlib.open_out (cn_prefix ^ "cn.c") in
+            let cn_header_oc = Stdlib.open_out (cn_prefix ^ "cn.h") in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog in
-            let (c_functions, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
-            let (c_predicates, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
-            let conversion_functions = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
-            let ownership_functions = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
+            let (c_function_defs, c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+            let (c_predicate_defs, c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+            let (conversion_function_defs, conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
+            let (ownership_function_defs, ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
             let c_structs = Executable_spec_internal.generate_c_structs ail_prog.tag_definitions in 
 
+            let rec repeat n str = 
+              if n <= 0 then [] else 
+                (if n == 1 then [str] else str :: (repeat (n - 1) str)) 
+            in
+            (* Hacky. TODO: Make less hacky *)
+            let dots_repeat_list = repeat ((List.length dir_name) - 2) ".." in
+            let dots_str = String.concat "/" dots_repeat_list in
+
             (* TODO: Topological sort *)
-            Stdlib.output_string cn_oc (generate_include_header ("executable-spec/cn_utils.c", false));
-            Stdlib.output_string cn_oc (generate_include_header ("assert.h", true));
-            Stdlib.output_string cn_oc c_datatypes;
-            Stdlib.output_string cn_oc c_structs;
-            Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
-            Stdlib.output_string cn_oc c_records;
-            Stdlib.output_string cn_oc c_records';
-            Stdlib.output_string cn_oc c_functions;
-            Stdlib.output_string cn_oc c_predicates;
-            Stdlib.output_string cn_oc conversion_functions;
-            Stdlib.output_string cn_oc ownership_functions;
+            Stdlib.output_string cn_header_oc (generate_include_header (dots_str ^ "/executable-spec/cn_utils.c", false));
+            Stdlib.output_string cn_header_oc (generate_include_header ("assert.h", true));
+            Stdlib.output_string cn_header_oc c_datatypes;
+            Stdlib.output_string cn_header_oc c_structs;
+            Stdlib.output_string cn_header_oc "\n/* CN RECORDS */\n\n";
+            Stdlib.output_string cn_header_oc c_records;
+            Stdlib.output_string cn_header_oc c_records';
+            Stdlib.output_string cn_header_oc c_function_decls;
+            Stdlib.output_string cn_header_oc c_predicate_decls;
+            Stdlib.output_string cn_header_oc conversion_function_decls;
+            Stdlib.output_string cn_header_oc ownership_function_decls;
+
+            Stdlib.output_string cn_oc (generate_include_header ("cn.h", false));
+            Stdlib.output_string cn_oc c_function_defs;
+            Stdlib.output_string cn_oc c_predicate_defs;
+            Stdlib.output_string cn_oc conversion_function_defs;
+            Stdlib.output_string cn_oc ownership_function_defs;
 
             let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); ("cn.c", false);] in
             let headers = List.map generate_include_header incls in
