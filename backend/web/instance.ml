@@ -215,7 +215,7 @@ let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
     elaborate ~is_bmc:false ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
     begin if conf.instance.link_libc then
-      let libc = Pipeline.read_core_object (core_std, core_lib) @@ in_runtime "libc/libc.co" in
+      Pipeline.read_core_object (conf.pipeline, conf.io) ~is_lib:true (core_std, core_lib) @@ in_runtime "libc/libc.co" >>= fun libc ->
       Core_linking.link [core; libc]
     else
       return core
@@ -608,7 +608,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let core     = set_uid core in
     let ranges   = create_expr_range_list core in
     begin if conf.instance.link_libc then
-      let libc = Pipeline.read_core_object (core_std, core_lib) @@ in_runtime "libc/libc.co" in
+      Pipeline.read_core_object (conf.pipeline, conf.io) ~is_lib:true (core_std, core_lib) @@ in_runtime "libc/libc.co" >>= fun libc ->
       Core_linking.link [core; libc]
     else
       return core

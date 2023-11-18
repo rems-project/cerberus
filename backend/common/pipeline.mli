@@ -90,8 +90,10 @@ val ocaml_backend:
    *)
 
 val read_core_object:
+  (configuration * io_helpers) -> ?is_lib:bool ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
-  string -> unit Core.file
+  string ->
+  (unit Core.file, Cerb_location.t * Errors.cause) Exception.exceptM
 val write_core_object: unit Core.file -> string -> unit
 
 

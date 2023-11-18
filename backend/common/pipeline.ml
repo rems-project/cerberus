@@ -604,16 +604,16 @@ let version_info =
     (Version.version)
     (Impl_mem.name)
 
-let read_core_object (core_stdlib, core_impl) fname =
+let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filename =
   let open Core in
-  let ic = open_in_bin fname in
+  let ic = open_in_bin filename in
   let v = input_line ic in
   if v <> version_info
   then
     Cerb_debug.warn [] (fun () -> "read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;
-  { main=    dump.main;
+  let core_file = { main=    dump.main;
     tagDefs= map_from_assoc sym_compare dump.dump_tagDefs;
     stdlib=  snd core_stdlib;
     impl=    core_impl;
@@ -623,7 +623,11 @@ let read_core_object (core_stdlib, core_impl) fname =
     funinfo= map_from_assoc sym_compare dump.dump_funinfo;
     loop_attributes0= Pmap.empty compare(* map_from_assoc compare dump.dump_loop_attributes *);
     visible_objects_env= Pmap.empty compare
-  }
+  } in
+  if not is_lib then
+    print_core (conf, io) ~filename core_file
+  else
+    return core_file
 
 let write_core_object core_file fname =
   let open Core in
