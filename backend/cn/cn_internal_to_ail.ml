@@ -1019,21 +1019,50 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
     |>   
   *)
   let dt_sym = cn_datatype.cn_dt_name in
-  let fn_sym = Sym.fresh_pretty ("datatype_" ^ (Sym.pp_string dt_sym) ^ "_equality") in
+  let fn_sym = Sym.fresh_pretty ("struct_" ^ (Sym.pp_string dt_sym) ^ "_equality") in
   let param1_sym = Sym.fresh_pretty "x" in 
   let param2_sym = Sym.fresh_pretty "y" in
   let id_tag = Id.id "tag" in
   let param_syms = [param1_sym; param2_sym] in 
   let param_type = (empty_qualifiers, mk_ctype (C.Pointer (empty_qualifiers, mk_ctype (Struct dt_sym))), false) in
   let tag_check_cond = A.(AilEbinary (mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), id_tag)), Ne, mk_expr (AilEmemberofptr (mk_expr (AilEident param2_sym), id_tag)))) in
-  let false_it = IT.(IT (Const (Bool false), BT.Bool)) in 
+  let false_it = IT.(IT (Const (Z (Z.of_int 0)), BT.Bool)) in 
   (* Adds conversion function *)
   let (_, _, e1) = cn_to_ail_expr_internal [] [] false_it PassBack in
   let return_false = A.(AilSreturn e1) in
-  let create_case (constr_sym, members) =
-    let enum_str = Sym.pp_string (generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym) in
+  let rec generate_equality_expr members sym1 sym2 = match members with 
+    | [] -> 
+      IT.(IT (Const (Z (Z.of_int 1)), BT.Bool)) 
+    | (cn_bt, id) :: ms -> 
+      let sym1_it = IT.(IT (Sym sym1, BT.Loc)) in 
+      let sym2_it = IT.(IT (Sym sym2, BT.Loc)) in
+      let lhs = IT.(IT (StructMember (sym1_it, id), cn_base_type_to_bt cn_bt)) in 
+      let rhs = IT.(IT (StructMember (sym2_it, id), cn_base_type_to_bt cn_bt)) in 
+      let eq_it = IT.(IT (Binop (EQ, lhs, rhs), BT.Bool)) in
+      let remaining = generate_equality_expr ms sym1 sym2 in 
+      IT.(IT (Binop (And, eq_it, remaining), BT.Bool))
+  in
+  let create_case (constructor, members) =
+    let enum_str = Sym.pp_string (generate_sym_with_suffix ~suffix:"" ~uppercase:true constructor) in
     let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in 
-    let ail_case = A.(AilScase (Nat_big_num.zero, mk_stmt (AilSblock ([], [])))) in 
+    let x_constr_sym = Sym.fresh () in 
+    let y_constr_sym = Sym.fresh () in
+    let constr_syms = [x_constr_sym; y_constr_sym] in
+    let (bs, ss) = match members with 
+    | [] -> ([], [])
+    | _ -> 
+        let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constructor in
+        let constr_id = create_id_from_sym ~lowercase:true constructor in 
+        let constr_struct_type = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct lc_constr_sym))) in
+        let bindings = List.map (fun sym -> create_binding sym constr_struct_type) constr_syms in 
+        let memberof_ptr_es = List.map (fun sym -> mk_expr A.(AilEmemberofptr (mk_expr (AilEident sym), Id.id "u"))) param_syms in
+        let decls = List.map (fun (constr_sym, e) -> A.(AilSdeclaration [(constr_sym, Some (mk_expr (AilEmemberof (e, constr_id))))])) (List.combine constr_syms memberof_ptr_es) in
+        (bindings, List.map mk_stmt decls)
+    in
+    let equality_expr = generate_equality_expr members x_constr_sym y_constr_sym in
+    let (_, _, e) = cn_to_ail_expr_internal [] [] equality_expr PassBack in
+    let return_stat = mk_stmt A.(AilSreturn e) in
+    let ail_case = A.(AilScase (Nat_big_num.zero, mk_stmt (AilSblock (bs, ss @ [return_stat])))) in 
     A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
   in
   let switch_stmt = A.(AilSswitch (mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), id_tag)), mk_stmt (AilSblock ([], List.map create_case cn_datatype.cn_dt_cases)))) in
