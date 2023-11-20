@@ -723,7 +723,7 @@ let rec cn_to_ail_expr_aux_internal
       let ail_memberof = if (Id.equal id (Id.id "tag")) then e else 
         let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.id "u")) in
         let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
-        let e_'' = A.(AilEmemberof (mk_expr e_', id)) in
+        let e_'' = A.(AilEmemberofptr (mk_expr e_', id)) in
         mk_expr e_''
       in
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (ail_memberof, e)))) in
@@ -877,7 +877,7 @@ let rec cn_to_ail_expr_aux_internal
                             let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 
                             let rhs_memberof_ptr = A.(AilEmemberofptr (e1, Id.id "u")) in (* TODO: Remove hack *)
                             let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym)) in
-                            let constr_binding = create_binding count_sym (mk_ctype C.(Struct lc_sym)) in
+                            let constr_binding = create_binding count_sym (mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype C.(Struct lc_sym))))) in
                             let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
 
                             let (ts, ids) = List.split members_with_types in
@@ -1003,7 +1003,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let union_sym = generate_sym_with_suffix ~suffix:"_union" cn_datatype.cn_dt_name in
   let union_def_members = List.map (fun sym -> 
     let lc_sym = Sym.fresh_pretty (String.lowercase_ascii (Sym.pp_string sym)) in
-    create_member (mk_ctype C.(Struct lc_sym), create_id_from_sym ~lowercase:true sym)) constructor_syms in
+    create_member (mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype (Struct lc_sym)))), create_id_from_sym ~lowercase:true sym)) constructor_syms in
   let union_def = C.(UnionDef union_def_members) in
   let union_member = create_member (mk_ctype C.(Union union_sym), Id.id "u") in
 
