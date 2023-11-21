@@ -1,3 +1,4 @@
+Require Import Coq.Strings.String.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Classes.SetoidClass.
@@ -18,6 +19,11 @@ Require Import Lia.
 Require Import Common.SimpleError.
 Require Import Common.Utils.
 Require Import Common.ZMap.
+
+Require Import ExtLib.Structures.Monads.
+Require Import ExtLib.Structures.Monad.
+Require Import ExtLib.Data.Monads.EitherMonad.
+Require Import Coq.Relations.Relation_Definitions.
 
 Require Import StructTact.StructTactics.
 Require Import Tactics.
@@ -389,3 +395,44 @@ Section ZMapAux.
 
 
 End ZMapAux.
+
+Section SimpleError.
+
+  #[global] Instance serr_ret_proper {T R}:
+  Proper (R ==> serr_eq R) ((@ret serr (Monad_either string) T)).
+  Proof.
+    intros x y E.
+    unfold Monad_either, ret.
+    unfold serr_eq.
+    assumption.
+  Qed.
+
+  #[global] Instance serr_bind_proper {T:Type} {R: relation T}:
+    Proper (serr_eq R ==> (R ==> serr_eq R) ==> serr_eq R) bind.
+  Proof.
+
+    intros x y Exy f f' Ef.
+    unfold serr_eq in *.
+    cbn.
+    repeat break_match; try inl_inr;
+      repeat inl_inr_inv; subst; try reflexivity; try tauto.
+
+    -
+      specialize (Ef t0 t Exy).
+      cbn in Ef.
+      repeat break_match_hyp; try inl_inr; repeat inl_inr_inv; subst;reflexivity.
+    -
+      specialize (Ef t1 t0 Exy).
+      cbn in Ef.
+      repeat break_match_hyp; try inl_inr; tauto.
+    -
+      specialize (Ef t1 t0 Exy).
+      cbn in Ef.
+      repeat break_match_hyp; try inl_inr; tauto.
+    -
+      specialize (Ef t2 t1 Exy).
+      cbn in Ef.
+      repeat break_match_hyp; try inl_inr; repeat inl_inr_inv; subst;auto.
+  Qed.
+
+End SimpleError.
