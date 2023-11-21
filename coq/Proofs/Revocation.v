@@ -1062,6 +1062,8 @@ Module RevocationProofs.
     (m : Type -> Type)
     (M : Monad m)
     (EMa : relation (m A))
+    (RetProper: Proper (Ea ==> EMa) ret)
+    (BindProper: Proper ((EMa) ==> (Ea ==> EMa) ==> (EMa)) (@bind m M A A))
     (f f': A -> B -> C -> m A)
     (l1 l1' : list B)
     (l2 l2' : list C)
@@ -1516,7 +1518,7 @@ Module RevocationProofs.
             (Ea:=repr_fold2_eq)
             (Eb:=eq)
             (Ec:=struct_field_eq);
-            [reflexivity|assumption|repeat split;auto|].
+            [typeclasses eauto|typeclasses eauto|reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
           intros a a' Ea.
@@ -1571,7 +1573,7 @@ Module RevocationProofs.
           eapply monadic_fold_left2_proper with
             (Ea:=repr_fold2_eq)
             (Eb:=eq)
-            (Ec:=struct_field_eq);
+            (Ec:=struct_field_eq);try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
@@ -1627,7 +1629,7 @@ Module RevocationProofs.
           eapply monadic_fold_left2_proper with
             (Ea:=repr_fold2_eq)
             (Eb:=eq)
-            (Ec:=struct_field_eq);
+            (Ec:=struct_field_eq);try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
@@ -1700,7 +1702,7 @@ Module RevocationProofs.
           eapply monadic_fold_left2_proper with
             (Ea:=repr_fold2_eq)
             (Eb:=eq)
-            (Ec:=struct_field_eq);
+            (Ec:=struct_field_eq);try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
