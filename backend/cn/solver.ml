@@ -16,6 +16,7 @@ module StringSet = Set.Make(String)
 
 let random_seed = ref 1
 let log_to_temp = ref false
+let trace_all_queries = ref false
 
 let slow_smt_file () =
   let open Filename in
@@ -35,12 +36,15 @@ let save_slow_problems, saved_slow_problem, set_slow_threshold =
   in
   save_slow_problems, saved_slow_problem, set_slow_threshold
 
+type query_trace_elem =
+  Push | Pop | Assert of (IT.t list) | Check of (IT.t list)
 
 type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
     non_incremental : Z3.Solver.solver;
     focus_terms : ((IT.t_bindings * IT.t) list) ref;
+    query_trace : query_trace_elem list ref;
   }
 
 type expr = Z3.Expr.expr
@@ -49,7 +53,10 @@ type model = Z3.context * Z3.Model.model
 type model_with_q = model * (Sym.t * BT.t) list
 
 
-
+let trace elems solver =
+  if ! trace_all_queries
+  then (solver.query_trace := elems @ (! (solver.query_trace)))
+  else ()
 
 let log_file () = match ! log_to_temp with
   | false -> None
@@ -1026,6 +1033,7 @@ module Translate = struct
     let extra2 = IT.nth_array_to_list_facts focused in
     let extra = List.map (term solver.context global) (extra2 @ extra1) in
     let smt2_doc = lazy (goal_to_smt2_doc solver extra g1.expr) in
+    trace [Check (IT.not_ g1.it :: (extra2 @ extra1))] solver;
     { g1 with extra = extra; focused = focused; smt2_doc = smt2_doc }
 
 end
@@ -1070,13 +1078,16 @@ let make global : solver =
     s
   in
   let non_incremental = Z3.Solver.mk_solver context None in
-  { context; incremental; non_incremental; focus_terms = ref [] }
-
+  { context; incremental; non_incremental; focus_terms = ref []; query_trace = ref [] }
 
 
 (* do nothing to non-incremental solver, because that is reset for every query *)
-let push solver = Z3.Solver.push solver.incremental
-let pop solver n = Z3.Solver.pop solver.incremental n
+let push solver =
+  Z3.Solver.push solver.incremental;
+  trace [Push] solver
+let pop solver n =
+  Z3.Solver.pop solver.incremental n;
+  trace (List.init n (fun _ -> Pop)) solver
 let num_scopes solver = Z3.Solver.get_num_scopes solver.incremental
 
 
@@ -1086,6 +1097,7 @@ let add_assumption solver global lc =
   | None -> ()
   | Some (it, sc, focus) ->
     Z3.Solver.add solver.incremental [sc];
+    trace [Assert [it]] solver;
     solver.focus_terms := (focus @ (! (solver.focus_terms)))
 
 
@@ -1136,6 +1148,11 @@ let maybe_save_slow_problem kind lc lc_t smt2_doc time solver =
     saved_slow_problem ();
     close_out channel
 
+let print_doc_to fname doc =
+  let channel = open_out_gen [Open_wronly; Open_creat] 0o666 fname in
+  print channel doc;
+  close_out channel
+
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   debug 13 (lazy (item "context" (Context.pp_constraints assumptions)));
@@ -1150,6 +1167,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      let existing_scs = Z3.Solver.get_assertions solver.incremental in
      let Translate.{expr; qs; extra; smt2_doc; _} = Translate.goal solver
          global assumptions pointer_facts lc in
+     print_doc_to "recent.smt2" (Lazy.force smt2_doc);
      let nlc = Z3.Boolean.mk_not context expr in
      let (elapsed, res) =
        time_f_elapsed (time_f_logs loc 5 "Z3(inc)"
@@ -1481,4 +1499,11 @@ let debug_solver_query solver global assumptions pointer_facts lc =
          global assumptions pointer_facts lc in
     Pp.item "debug solver query" (Lazy.force smt2_doc)
   end)
+
+let debug_solver_incremental_trace solver =
+  ()
+
+let _d = debug_solver_incremental_trace
+
+
 
