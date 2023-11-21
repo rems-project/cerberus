@@ -39,8 +39,10 @@ let save_slow_problems, saved_slow_problem, set_slow_threshold =
 type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
+    non_incremental : Z3.Solver.solver;
     focus_terms : ((IT.t_bindings * IT.t) list) ref;
   }
+
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
 type model = Z3.context * Z3.Model.model
@@ -75,15 +77,14 @@ let no_randomness_params () =
   ]
 
 let solver_params = [
-    ("smt.logic", "ALL");
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "false");
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");
     ("smt.ematching", "false");
-    ("smt.arith.nl", "false");
-    ("smt.arith.nl.branching", "false");
-    ("smt.arith.nl.rounds", "0");
+    (* ("smt.arith.nl", "false"); *)
+    (* ("smt.arith.nl.branching", "false"); *)
+    (* ("smt.arith.nl.rounds", "0"); *)
     ("sat.smt", "true");
   ]
 
@@ -158,7 +159,7 @@ module Translate = struct
   [@@deriving eq]
 
 
-  module Z3ExprMap = Map.Make(struct type t = Z3.Expr.expr let compare = Z3.Expr.compare end)
+  (* module Z3ExprMap = Map.Make(struct type t = Z3.Expr.expr let compare = Z3.Expr.compare end) *)
 
 
 
@@ -370,6 +371,7 @@ module Translate = struct
 
 
   let init global context =
+    (* TODO: clear other tables? *)
     BT_Table.clear bt_table;
     Sort_Table.clear sort_table;
     let _ = sort context global BT.Integer in
@@ -967,12 +969,6 @@ module Translate = struct
        Some (it, term it, focus_terms global it)
     | Forall ((s, bt), body) ->
        None
-       (* let q =  *)
-       (*   Z3.Quantifier.mk_forall_const context  *)
-       (*     [term (sym_ (s, bt))] (term body)  *)
-       (*     None [] [] None None  *)
-       (* in *)
-       (* Some (Z3.Quantifier.expr_of_quantifier q) *)
 
 
   type reduction = {
@@ -983,6 +979,13 @@ module Translate = struct
       focused : (IT.t_bindings * IT.t) list;
     }
 [@@warning "-unused-field"]
+
+
+
+
+
+
+
 
   let goal1 context global lc =
     let term it = term context global it in
@@ -1029,6 +1032,16 @@ let simplifiers = [
     "simplify";
   ]
 
+let _add_simplifiers context solver = 
+  match List.map (Z3.Simplifier.mk_simplifier context) simplifiers with
+  | s1::s2::rest ->
+      Z3.Solver.add_simplifier context solver
+        (Z3.Simplifier.and_then context s1 s2 rest)
+  | [s] -> 
+      Z3.Solver.add_simplifier context solver s
+  | [] -> 
+      solver
+
 
 
 let make global : solver =
@@ -1036,41 +1049,26 @@ let make global : solver =
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
   let context = Z3.mk_context [] in
   Translate.init global context;
-  let base_incremental = Z3.Solver.mk_solver context None in
-  let incremental = 
-    match List.map (Z3.Simplifier.mk_simplifier context) simplifiers with
-    | s1::s2::rest ->
-        Z3.Solver.add_simplifier context base_incremental
-          (Z3.Simplifier.and_then context s1 s2 rest)
-    | [s] -> 
-        Z3.Solver.add_simplifier context base_incremental s
-    | [] -> 
-        base_incremental
+  let incremental =
+    let s = Z3.Solver.mk_simple_solver context in
+    let params = Z3.Params.mk_params context in
+    Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 200;
+    Z3.Solver.set_parameters s params;
+    s
   in
-  (* https://microsoft.github.io/z3guide/programming/Parameters/#combined_solver *)
-  let params = Z3.Params.mk_params context in
-  Z3.Params.add_int params (Z3.Symbol.mk_string context "combined_solver.solver2_timeout") 200;
-  Z3.Params.add_int params (Z3.Symbol.mk_string context "combined_solver.solver2_unknown") 2; 
-  Z3.Solver.set_parameters incremental params;
-  { context; incremental; focus_terms = ref [] }
+  let non_incremental = Z3.Solver.mk_solver context None in
+  { context; incremental; non_incremental; focus_terms = ref [] }
 
 
 
-let num_scopes solver =
-  Z3.Solver.get_num_scopes solver.incremental
-
-
-let push solver =
-  (* do nothing to fancy solver, because that is reset for every query *)
-  Z3.Solver.push solver.incremental
-
-let pop solver n =
-  (* do nothing to fancy solver, because that is reset for every query *)
-  Z3.Solver.pop solver.incremental n
+(* do nothing to non-incremental solver, because that is reset for every query *)
+let push solver = Z3.Solver.push solver.incremental
+let pop solver n = Z3.Solver.pop solver.incremental n
+let num_scopes solver = Z3.Solver.get_num_scopes solver.incremental
 
 
 let add_assumption solver global lc =
-  (* do nothing to fancy solver, because that is reset for every query *)
+  (* do nothing to non-incremental solver, because that is reset for every query *)
   match Translate.assumption solver.context global lc with
   | None -> ()
   | Some (it, sc, focus) ->
@@ -1084,9 +1082,6 @@ let shortcut simp_ctxt lc =
   match lc with
   | LC.T (IT (Const (Bool true), _)) -> `True
   | _ -> `No_shortcut lc
-
-
-
 
 
 type model_state =
@@ -1163,10 +1158,9 @@ let maybe_save_slow_problem kind context extra_assertions lc lc_t time solver =
     close_out channel
 
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
-  Cerb_debug.begin_csv_timing ();
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
-  let context = solver.context in
   debug 13 (lazy (item "context" (Context.pp_constraints assumptions)));
+  let context = solver.context in
   let rtrue () = model_state := No_model; `True in
   let rfalse qs solver = model_state := Model (context, solver, qs); `False in
   match shortcut simp_ctxt lc with
@@ -1174,7 +1168,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      Cerb_debug.end_csv_timing "Solver.provable shortcut";
      rtrue ()
   | `No_shortcut lc ->
-     (*print stdout (item "lc" (LC.pp lc ^^ hardline));*)
+     let existing_scs = Z3.Solver.get_assertions solver.incremental in
      let Translate.{expr; qs; extra; _} = Translate.goal solver
          global assumptions pointer_facts lc in
      let nlc = Z3.Boolean.mk_not context expr in
@@ -1184,23 +1178,33 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
            (Z3.Solver.check solver.incremental))
          (nlc :: extra)
      in
-     begin match lc with
-     | LC.T (IT (Const (Bool false), _)) ->
-      Cerb_debug.end_csv_timing "Solver.provable false"
-     | _ ->
-     Cerb_debug.end_csv_timing "Solver.provable noshortcut"
-     end;
      match res with
      | Z3.Solver.UNSATISFIABLE ->
         maybe_save_slow_problem "unsat" solver.context extra
             lc expr elapsed solver.incremental;
         rtrue ()
-     | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
+     | Z3.Solver.SATISFIABLE ->
+        rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
         maybe_save_slow_problem "unknown" solver.context extra
             lc expr elapsed solver.incremental;
-        let reason = Z3.Solver.get_reason_unknown solver.incremental in
-        failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
+        let (elapsed2, res2) =
+          time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)"
+              (Z3.Solver.check solver.non_incremental))
+            (nlc :: extra @ existing_scs)
+        in
+        match res2 with
+        | Z3.Solver.UNSATISFIABLE ->
+           maybe_save_slow_problem "unsat" solver.context extra
+               lc expr elapsed solver.non_incremental;
+           rtrue ()
+        | Z3.Solver.SATISFIABLE ->
+           rfalse qs solver.non_incremental
+        | Z3.Solver.UNKNOWN ->
+           maybe_save_slow_problem "unknown" solver.context extra
+               lc expr elapsed solver.non_incremental;
+          let reason = Z3.Solver.get_reason_unknown solver.non_incremental in
+          failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
 let get_solver_focused_terms solver ~assumptions ~pointer_facts global =
   let tr = Translate.goal solver global assumptions pointer_facts (LC.T (IT.bool_ true)) in
