@@ -82,7 +82,7 @@ let rec pp_aux i_pp = function
   | Define ((name, it), _info, t) ->
      group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux i_pp t
   | Resource ((name, (re, _bt)), _info, t) ->
-     group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
+     group (!^"take" ^^^ (Sym.pp name) ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
   | Constraint (lc, _info, t) ->
      let op = equals ^^ rangle () in
      group (LC.pp lc ^^^ op) :: pp_aux i_pp t

@@ -141,7 +141,7 @@ let rec pp_aux lrt =
   | Define ((name, it), _info, t) ->
      group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux t
   | Resource ((name, (re, bt)), _info, t) ->
-     group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ RT.pp re ^^ semi) :: pp_aux t
+     group (!^"take" ^^^ (Sym.pp name) ^^^ equals ^^^ RT.pp re ^^ semi) :: pp_aux t
   | Constraint (lc, _info, t) ->
      let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
      group (LogicalConstraints.pp lc ^^^ op) :: pp_aux t
