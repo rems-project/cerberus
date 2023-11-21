@@ -1026,6 +1026,32 @@ Module RevocationProofs.
   Proof.
   Admitted.
 
+  (* Proper for [monadic_fold_left2], postulating that `f` must be proper only for elements from the list.
+   *)
+  Lemma monadic_fold_left2_proper
+    {A B C:Type}
+    (Eb : relation B)
+    (Ea : relation A)
+    (Ec : relation C)
+    (m : Type -> Type)
+    (M : Monad m)
+    (EMa : relation (m A))
+    (f f': A -> B -> C -> m A)
+    (l1 l1' : list B)
+    (l2 l2' : list C)
+    (El1 : eqlistA Eb l1 l1')
+    (El2 : eqlistA Ec l2 l2')
+    {x x' : A}
+    {Ex : Ea x x'}
+    (Ef : forall (a a' : A), (Ea a a') ->
+                        Forall2 (fun b b' =>
+                                   Forall2 (fun c c' =>
+                                              EMa (f a b c) (f' a' b' c')) l2 l2') l1 l1')
+    :
+    EMa (monadic_fold_left2 f x l1 l2) (monadic_fold_left2 f' x' l1' l2').
+  Proof.
+  Admitted.
+
   Theorem repr_same:
     forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
       ZMap.Equal funptrmap1 funptrmap2
@@ -1434,7 +1460,263 @@ Module RevocationProofs.
       repeat break_let.
       break_match;[reflexivity|].
       clear Heqs.
-      admit.
+
+      Let repr_fold2_T:Type := ZMap.t (digest * string * Capability_GS.t)
+                              * ZMap.t (bool * CapGhostState)
+                              * Z
+                              * list AbsByte.
+      Let repr_fold2_eq
+        : relation repr_fold2_T
+          :=
+            fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
+              a1 = a2
+              /\ ZMap.Equal m1 m1'
+              /\ ZMap.Equal m2 m2'
+              /\ eqlistA AbsByte_eq l1 l1'.
+
+      destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
+      +
+        (* Error case *)
+        cut(@serr_eq repr_fold2_T repr_fold2_eq (inl s) (inl s0));
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_fold2_T.
+        rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
+
+        eapply monadic_fold_left2_proper with
+          (Ea:=repr_fold2_eq)
+          (Eb:=eq)
+          (Ec:=struct_field_eq);
+          [reflexivity|assumption|repeat split;auto|].
+
+        (* proper for 'f' *)
+        intros a a' Ea.
+        unfold repr_fold2_eq in Ea.
+        repeat break_let.
+        destruct Ea as [Ez [Efun1 [Ecap1 Ebytes]]].
+        subst.
+        apply list.Reflexive_instance_0.
+        intros b.
+        revert H1.
+        repeat break_let.
+        apply Forall2_impl.
+        intros a b0 H.
+        repeat break_let.
+        destruct fuel;[reflexivity|].
+
+        specialize (H fuel (addr2 + z1) t t1 Efun1 t0 t2 Ecap1).
+        unfold serr_eq in H.
+        Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
+        repeat break_match_hyp;subst;try tauto.
+        *
+          cbn in Heqs1, Heqs2.
+          rewrite Heqs1, Heqs2.
+          reflexivity.
+        *
+          cbn in Heqs0, Heqs1.
+          rewrite Heqs0, Heqs1.
+          repeat break_let.
+          break_match_goal.
+          reflexivity.
+          constructor.
+          reflexivity.
+          destruct H as [ H1 [H2 H3]].
+          repeat split;auto.
+          apply eqlistA_app.
+          typeclasses eauto.
+          auto.
+          clear -H3.
+          apply eqlistA_app;[typeclasses eauto | | assumption].
+          apply list_init_proper.
+          reflexivity.
+          intros x y H.
+          apply AbsByte_no_prov_eq.
+          split; reflexivity.
+          Transparent CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
+      +
+        exfalso.
+        cut(@serr_eq repr_fold2_T repr_fold2_eq (inl s) (inr (t, t0, z1, l0)));
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_fold2_T.
+        rewrite <- Heqs0, <- Heqs1; clear Heqs0 Heqs1.
+        eapply monadic_fold_left2_proper with
+          (Ea:=repr_fold2_eq)
+          (Eb:=eq)
+          (Ec:=struct_field_eq);
+          [reflexivity|assumption|repeat split;auto|].
+
+        (* proper for 'f' *)
+        intros a a' Ea.
+        unfold repr_fold2_eq in Ea.
+        repeat break_let.
+        destruct Ea as [Ez [Efun1 [Ecap1 Ebytes]]].
+        subst.
+        apply list.Reflexive_instance_0.
+        intros b.
+        revert H1.
+        repeat break_let.
+        apply Forall2_impl.
+        intros a b0 H.
+        repeat break_let.
+        destruct fuel;[reflexivity|].
+
+        specialize (H fuel (addr2 + z2) _ _ Efun1 _ _ Ecap1).
+        unfold serr_eq in H.
+        Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
+        repeat break_match_hyp;subst;try tauto.
+        *
+          cbn in Heqs0, Heqs1.
+          rewrite Heqs0, Heqs1.
+          reflexivity.
+        *
+          cbn in Heqs0, Heqs1.
+          rewrite Heqs0, Heqs1.
+          repeat break_let.
+          break_match_goal.
+          reflexivity.
+          constructor.
+          reflexivity.
+          destruct H as [ H1 [H2 H3]].
+          repeat split;auto.
+          apply eqlistA_app.
+          typeclasses eauto.
+          auto.
+          clear -H3.
+          apply eqlistA_app;[typeclasses eauto | | assumption].
+          apply list_init_proper.
+          reflexivity.
+          intros x y H.
+          apply AbsByte_no_prov_eq.
+          split; reflexivity.
+          Transparent CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
+      +
+        exfalso;
+        cut(@serr_eq repr_fold2_T repr_fold2_eq (inr (t, t0, z1, l0)) (inl s) );
+          [intros HS;invc HS;reflexivity|].
+        unfold repr_fold2_T.
+        rewrite <- Heqs0, <- Heqs1; clear Heqs0 Heqs1.
+        eapply monadic_fold_left2_proper with
+          (Ea:=repr_fold2_eq)
+          (Eb:=eq)
+          (Ec:=struct_field_eq);
+          [reflexivity|assumption|repeat split;auto|].
+
+        (* proper for 'f' *)
+        intros a a' Ea.
+        unfold repr_fold2_eq in Ea.
+        repeat break_let.
+        destruct Ea as [Ez [Efun1 [Ecap1 Ebytes]]].
+        subst.
+        apply list.Reflexive_instance_0.
+        intros b.
+        revert H1.
+        repeat break_let.
+        apply Forall2_impl.
+        intros a b0 H.
+        repeat break_let.
+        destruct fuel;[reflexivity|].
+
+        specialize (H fuel (addr2 + z2) _ _ Efun1 _ _ Ecap1).
+        unfold serr_eq in H.
+        Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
+        repeat break_match_hyp;subst;try tauto.
+        *
+          cbn in Heqs0, Heqs1.
+          rewrite Heqs0, Heqs1.
+          reflexivity.
+        *
+          cbn in Heqs0, Heqs1.
+          rewrite Heqs0, Heqs1.
+          repeat break_let.
+          break_match_goal.
+          reflexivity.
+          constructor.
+          reflexivity.
+          destruct H as [ H1 [H2 H3]].
+          repeat split;auto.
+          apply eqlistA_app.
+          typeclasses eauto.
+          auto.
+          clear -H3.
+          apply eqlistA_app;[typeclasses eauto | | assumption].
+          apply list_init_proper.
+          reflexivity.
+          intros x y H.
+          apply AbsByte_no_prov_eq.
+          split; reflexivity.
+          Transparent CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
+      +
+        (* value case *)
+        cut(@serr_eq repr_fold2_T repr_fold2_eq (inr (t1, t2, z2, l3)) (inr (t, t0, z1, l0))).
+        {
+          intros HS.
+          destruct HS as [HS1 [HS2 [HS3 HS4]]].
+          constructor.
+          assumption.
+          split.
+          assumption.
+          apply eqlistA_app.
+          typeclasses eauto.
+          assumption.
+          apply list_init_proper.
+          reflexivity.
+          intros x y H.
+          apply AbsByte_no_prov_eq.
+          split; reflexivity.
+        }
+
+        unfold repr_fold2_T.
+        rewrite <- Heqs, <- Heqs0; clear Heqs Heqs0.
+
+        eapply monadic_fold_left2_proper with
+          (Ea:=repr_fold2_eq)
+          (Eb:=eq)
+          (Ec:=struct_field_eq);
+          [reflexivity|assumption|repeat split;auto|].
+
+        (* proper for 'f' *)
+        intros a a' Ea.
+        unfold repr_fold2_eq in Ea.
+        repeat break_let.
+        destruct Ea as [Ez [Efun1 [Ecap1 Ebytes]]].
+        subst.
+        apply list.Reflexive_instance_0.
+        intros b.
+        revert H1.
+        repeat break_let.
+        apply Forall2_impl.
+        intros a b0 H.
+        repeat break_let.
+        destruct fuel;[reflexivity|].
+
+        specialize (H fuel (addr2 + z3) _ _ Efun1 _ _ Ecap1).
+        unfold serr_eq in H.
+        Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
+        repeat break_match_hyp;subst;try tauto.
+        *
+          cbn in Heqs, Heqs0.
+          rewrite Heqs, Heqs0.
+          reflexivity.
+        *
+          cbn in Heqs, Heqs0.
+          rewrite Heqs, Heqs0.
+          repeat break_let.
+          break_match_goal.
+          reflexivity.
+          constructor.
+          reflexivity.
+          destruct H as [ H1 [H2 H3]].
+          repeat split;auto.
+          apply eqlistA_app.
+          typeclasses eauto.
+          auto.
+          clear -H3.
+          apply eqlistA_app;[typeclasses eauto | | assumption].
+          apply list_init_proper.
+          reflexivity.
+          intros x y H.
+          apply AbsByte_no_prov_eq.
+          split; reflexivity.
+          Transparent CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
     -
       (* mval2 = MVunion ... *)
       destruct H as [H0 [H1 H2]].
@@ -1489,7 +1771,8 @@ Module RevocationProofs.
         rewrite <- Heqs, <- Heqs0.
         destruct fuel;[reflexivity|].
         eapply IHEmval; assumption.
-  Admitted.
+  Qed.
+  Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
 
   (* --- Stateful proofs below --- *)
 
