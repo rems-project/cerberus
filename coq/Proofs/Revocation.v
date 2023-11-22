@@ -2,6 +2,7 @@ Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
+Require Import Coq.Logic.FunctionalExtensionality.
 From Coq.Strings Require Import String Ascii HexString.
 
 Require Import Coq.Classes.Morphisms.
@@ -62,7 +63,6 @@ End AbstTagDefs.
 
 Module RevocationProofs.
 
-
   (* --- Memory models instantiated with and without PNVI --- *)
 
   Definition remove_PNVI: cerb_switches_t -> cerb_switches_t :=
@@ -87,6 +87,45 @@ Module RevocationProofs.
   Module CheriMemoryWithPNVI:CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
     Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
   End CheriMemoryWithPNVI.
+
+
+  (* monad laws for both instantiations *)
+
+  #[global] Instance CheriMemoryWithPNVI_memM_MonadLaws:
+    MonadLaws (CheriMemoryWithPNVI.memM_monad).
+  Proof.
+    split; intros;  unfold CheriMemoryWithPNVI.memM_monad, Monad_errS, ret, bind;
+      repeat break_let.
+    - f_equiv.
+    -
+      apply functional_extensionality.
+      destruct x.
+      break_let.
+      destruct s; reflexivity.
+    -
+      apply functional_extensionality.
+      destruct x.
+      repeat break_let.
+      repeat break_match; tuple_inversion; reflexivity.
+  Qed.
+
+  #[global] Instance CheriMemoryWithoutPNVI_memM_MonadLaws:
+    MonadLaws (CheriMemoryWithoutPNVI.memM_monad).
+  Proof.
+    split; intros;  unfold CheriMemoryWithoutPNVI.memM_monad, Monad_errS, ret, bind;
+      repeat break_let.
+    - f_equiv.
+    -
+      apply functional_extensionality.
+      destruct x.
+      break_let.
+      destruct s; reflexivity.
+    -
+      apply functional_extensionality.
+      destruct x.
+      repeat break_let.
+      repeat break_match; tuple_inversion; reflexivity.
+  Qed.
 
   (* --- Equality predicates for types used in Memory Models --- *)
 
@@ -2547,6 +2586,22 @@ Module RevocationProofs.
     (* TODO: need Proper for [ZMap.fold] wrt [ZMap.Equal] *)
   Admitted.
 
+  Lemma revoke_pointers_same:
+    forall a : allocation,
+      Same eq (CheriMemoryWithPNVI.revoke_pointers a)
+        (CheriMemoryWithoutPNVI.revoke_pointers a).
+  Proof.
+    intros a.
+  Admitted.
+
+  Lemma remove_allocation_same:
+    forall z : Z,
+      Same eq (CheriMemoryWithPNVI.remove_allocation z)
+        (CheriMemoryWithoutPNVI.remove_allocation z).
+  Proof.
+    intros z.
+  Admitted.
+
   #[global] Instance kill_same
     (loc : location_ocaml)
     (is_dyn : bool)
@@ -2586,13 +2641,33 @@ Module RevocationProofs.
             unfold CheriMemoryWithPNVI.cap_match_dyn_allocation, CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
             repeat break_match; repeat same_step; try reflexivity; clear Heqb0 Heqb1 Heqb2.
             split.
-            ++ admit.
+            ++ apply revoke_pointers_same.
+            ++ intros; apply remove_allocation_same.
             ++
-              intros.
-              subst.
-              admit.
-            ++
-              admit.
+              split.
+              **
+                cbn.
+                unfold SameValue.
+                intros mem_state1 mem_state2 H.
+                apply lift_sum_eq_eq.
+                unfold evalErrS.
+                repeat break_let.
+                repeat break_match;tuple_inversion;
+                unfold Exception_either, Monad_either, raise, ret; [|reflexivity].
+                unfold CheriMemoryWithPNVI.revoke_pointers in Heqp2.
+                break_if.
+                admit.
+                inv Heqp2.
+              **
+                (* TODO: use something like `bind_Same` but assuming state on the left unchanged *)
+                unfold SameState.
+                intros mem_state1 mem_state2 H.
+                unfold lift_sum.
+                unfold execErrS, Exception_either, Monad_either, CheriMemoryWithoutPNVI.memM_monad, Monad_errS, raise, ret.
+                repeat break_let.
+                repeat break_match;try inl_inr.
+                inl_inr_inv; subst. admit.
+                inl_inr_inv; subst. admit.
             ++
               admit.
           --
