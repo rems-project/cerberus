@@ -2522,4 +2522,74 @@ Module RevocationProofs.
   End allocate_object_proofs.
 
 
+  #[local] Instance find_live_allocation_same (addr:AddressValue.t):
+    Same eq
+      (CheriMemoryWithPNVI.find_live_allocation addr)
+      (CheriMemoryWithoutPNVI.find_live_allocation addr).
+  Proof.
+    unfold CheriMemoryWithPNVI.find_live_allocation, CheriMemoryWithoutPNVI.find_live_allocation.
+    apply bind_Same with (R':=mem_state_same_rel).
+    split.
+    eapply get_Same.
+    intros x1 x2 H.
+    eapply ret_Same.
+    destruct H as [_ [_ [_ [H4 _]]]].
+    (* TODO: need Proper for [ZMap.fold] wrt [ZMap.Equal] *)
+  Admitted.
+
+
+  #[global] Instance kill_same
+    (loc : location_ocaml)
+    (is_dyn : bool)
+    (ptr : pointer_value_indt)
+    :
+    Same eq
+      (CheriMemoryWithPNVI.kill loc is_dyn ptr)
+      (CheriMemoryWithoutPNVI.kill loc is_dyn ptr).
+  Proof.
+    unfold CheriMemoryWithPNVI.kill, CheriMemoryWithPNVI.DEFAULT_FUEL.
+    unfold CheriMemoryWithoutPNVI.kill, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
+    unfold CheriMemoryWithPNVI.fail, CheriMemoryWithoutPNVI.fail.
+    destruct ptr.
+    destruct p eqn:P.
+    - (* Prov_disabled *)
+      destruct p0 eqn:P0.
+      + (* PVfunction *) break_match; apply raise_Same_eq; reflexivity.
+      + (* PVconcrete *)
+        unfold CheriMemoryWithPNVI.cap_is_null, CheriMemoryWithoutPNVI.cap_is_null.
+        unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
+
+        replace (has_switch (WithoutPNVISwitches.get_switches tt) SW_forbid_nullptr_free) with
+          (has_switch (WithPNVISwitches.get_switches tt) SW_forbid_nullptr_free)
+        by (apply non_PNVI_switches_match;auto).
+        break_if.
+        break_match; apply raise_Same_eq; reflexivity.
+        apply bind_Same_eq; split.
+        apply find_live_allocation_same.
+        intros.
+        subst.
+        destruct x2 eqn:X2.
+        *
+          break_let.
+          apply bind_Same_eq.
+          split.
+          --
+            unfold CheriMemoryWithPNVI.cap_match_dyn_allocation, CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
+            repeat break_match; try apply raise_Same_eq; try reflexivity.
+            (* TODO: define 'step' tactics applying approirate raise/bind/ret/get_Same *)
+            admit.
+            admit.
+            admit.
+            admit.
+          --
+            admit.
+        *
+          admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+  Admitted.
+
+
 End RevocationProofs.
