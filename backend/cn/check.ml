@@ -1531,6 +1531,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
             | M_CN_inline _nms ->
                return ()
             | M_CN_print it ->
+               let@ it = WellTyped.WIT.infer loc it in
+               let@ simp_ctxt = simp_ctxt () in
+               let it = Simplify.IndexTerms.simp simp_ctxt it in               
                print stdout (item "printed" (IT.pp it));
                return ()
           end
