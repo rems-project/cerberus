@@ -2128,6 +2128,16 @@ Module RevocationProofs.
       repeat break_match; try contradiction; reflexivity.
   Qed.
 
+  Ltac same_step :=
+    match goal with
+    |[|- Same eq (bind _ _) (bind _ _)] => apply bind_Same_eq
+    |[|- Same eq (raise _) (raise _)] => apply raise_Same_eq
+    |[|- Same _ (ret _) (ret _)] => apply ret_Same
+    |[|- Same _ get get] => apply get_Same
+    |[|- Same eq (put _) (put _)] => apply put_Same
+    |[|- Same eq (ErrorWithState.update _) (ErrorWithState.update _)] => apply update_Same
+    end.
+
   (* [allocator] proofs use manual brute-force approach *)
   Section allocator_proofs.
     Variable  size : Z.
@@ -2248,7 +2258,7 @@ Module RevocationProofs.
     apply bind_Same_eq.
     split.
     -
-      apply update_Same.
+      same_step.
       intros m1 m2 H0.
       destruct_mem_state_same_rel H0.
       repeat split;cbn;try assumption;
@@ -2266,7 +2276,7 @@ Module RevocationProofs.
       apply add_m;tuple_inversion;auto.
     -
       intros x0 x3 H0.
-      apply ret_Same.
+      same_step.
       constructor.
       rewrite num_of_int_same.
       tuple_inversion.
@@ -2339,7 +2349,7 @@ Module RevocationProofs.
       -
         apply (bind_Same mem_state_same_rel).
         split.
-        apply get_Same.
+        same_step.
         intros.
         apply (bind_Same repr_res_eq).
         split.
@@ -2353,7 +2363,7 @@ Module RevocationProofs.
         intros; repeat break_let.
         apply bind_Same_eq.
         split.
-        apply put_Same.
+        same_step.
         {
           destruct_mem_state_same_rel H.
           destruct H0 as [H0 [H1 H2]].
@@ -2476,11 +2486,11 @@ Module RevocationProofs.
               * apply H2.
         }
         intros.
-        apply ret_Same;reflexivity.
+        same_step;reflexivity.
       -
         apply bind_Same_eq.
         split.
-        apply update_Same.
+        same_step.
         {
           intros m1 m2 H.
           destruct_mem_state_same_rel H.
@@ -2509,10 +2519,10 @@ Module RevocationProofs.
             eapply E;[eapply H|eapply H0].
         }
         intros.
-        apply ret_Same;reflexivity.
+        same_step;reflexivity.
       -
         intros;subst;try break_let.
-        apply ret_Same.
+        same_step.
         setoid_rewrite is_PNVI_WithPNVI.
         setoid_rewrite is_PNVI_WithoutPNVI.
         constructor;reflexivity.
@@ -2530,13 +2540,12 @@ Module RevocationProofs.
     unfold CheriMemoryWithPNVI.find_live_allocation, CheriMemoryWithoutPNVI.find_live_allocation.
     apply bind_Same with (R':=mem_state_same_rel).
     split.
-    eapply get_Same.
+    same_step.
     intros x1 x2 H.
-    eapply ret_Same.
+    same_step.
     destruct H as [_ [_ [_ [H4 _]]]].
     (* TODO: need Proper for [ZMap.fold] wrt [ZMap.Equal] *)
   Admitted.
-
 
   #[global] Instance kill_same
     (loc : location_ocaml)
@@ -2554,7 +2563,7 @@ Module RevocationProofs.
     destruct p eqn:P.
     - (* Prov_disabled *)
       destruct p0 eqn:P0.
-      + (* PVfunction *) break_match; apply raise_Same_eq; reflexivity.
+      + (* PVfunction *) break_match; same_step; reflexivity.
       + (* PVconcrete *)
         unfold CheriMemoryWithPNVI.cap_is_null, CheriMemoryWithoutPNVI.cap_is_null.
         unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
@@ -2563,24 +2572,29 @@ Module RevocationProofs.
           (has_switch (WithPNVISwitches.get_switches tt) SW_forbid_nullptr_free)
         by (apply non_PNVI_switches_match;auto).
         break_if.
-        break_match; apply raise_Same_eq; reflexivity.
-        apply bind_Same_eq; split.
+        break_match; same_step; reflexivity.
+        same_step; split.
         apply find_live_allocation_same.
         intros.
         subst.
         destruct x2 eqn:X2.
         *
           break_let.
-          apply bind_Same_eq.
+          same_step.
           split.
           --
             unfold CheriMemoryWithPNVI.cap_match_dyn_allocation, CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
-            repeat break_match; try apply raise_Same_eq; try reflexivity.
-            (* TODO: define 'step' tactics applying approirate raise/bind/ret/get_Same *)
-            admit.
-            admit.
-            admit.
-            admit.
+            repeat break_match; repeat same_step; try reflexivity; clear Heqb0 Heqb1 Heqb2.
+            split.
+            ++ admit.
+            ++
+              intros.
+              subst.
+              admit.
+            ++
+              admit.
+            ++
+              admit.
           --
             admit.
         *
