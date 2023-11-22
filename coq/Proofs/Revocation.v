@@ -2517,6 +2517,7 @@ Module RevocationProofs.
         setoid_rewrite is_PNVI_WithoutPNVI.
         constructor;reflexivity.
     Qed.
+    #[global] Opaque CheriMemoryWithPNVI.allocate_object CheriMemoryWithoutPNVI.allocate_object.
 
   End allocate_object_proofs.
 
