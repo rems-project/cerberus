@@ -6887,6 +6887,42 @@ translation_unit: BOOL LNAME TYPE LBRACE RBRACE WHILE
 
 parsing "function_definition": seen "function_definition1 option(declaration_list) magic_comment_list compound_statement", expecting "boption(SEMICOLON)"
 
+cn_statement: CN_PRINT WHILE
+##
+## Ends in an error in state: 1322.
+##
+## cn_statement -> CN_PRINT . LPAREN expr RPAREN SEMICOLON [ # ]
+##
+## The known suffix of the stack is as follows:
+## CN_PRINT
+##
+
+parsing "cn_statement": seen "CN_PRINT", expecting "LPAREN expr RPAREN SEMICOLON"
+
+cn_statement: CN_PRINT LPAREN WHILE
+##
+## Ends in an error in state: 1323.
+##
+## cn_statement -> CN_PRINT LPAREN . expr RPAREN SEMICOLON [ # ]
+##
+## The known suffix of the stack is as follows:
+## CN_PRINT LPAREN
+##
+
+parsing "cn_statement": seen "CN_PRINT LPAREN", expecting "expr RPAREN SEMICOLON"
+
+cn_statement: CN_PRINT LPAREN CN_CONSTANT RPAREN WHILE
+##
+## Ends in an error in state: 1325.
+##
+## cn_statement -> CN_PRINT LPAREN expr RPAREN . SEMICOLON [ # ]
+##
+## The known suffix of the stack is as follows:
+## CN_PRINT LPAREN expr RPAREN
+##
+
+parsing "cn_statement": seen "CN_PRINT LPAREN expr RPAREN", expecting "SEMICOLON"
+
 cn_statement: INLINE UNAME WHILE
 ##
 ## Ends in an error in state: 2.
@@ -14451,30 +14487,6 @@ cn_statement: CN_UNFOLD LNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-cn_statement: CN_PRINT WHILE
-##
-## Ends in an error in state: 1322.
-##
-## cn_statement -> CN_PRINT . LPAREN expr RPAREN SEMICOLON [ # ]
-##
-## The known suffix of the stack is as follows:
-## CN_PRINT
-##
-
-parsing "cn_statement": seen "CN_PRINT", expecting "LPAREN expr RPAREN SEMICOLON"
-
-cn_statement: CN_PRINT LPAREN WHILE
-##
-## Ends in an error in state: 1323.
-##
-## cn_statement -> CN_PRINT LPAREN . expr RPAREN SEMICOLON [ # ]
-##
-## The known suffix of the stack is as follows:
-## CN_PRINT LPAREN
-##
-
-parsing "cn_statement": seen "CN_PRINT LPAREN", expecting "expr RPAREN SEMICOLON"
-
 cn_statement: CN_PRINT LPAREN CN_CONSTANT EOF
 ##
 ## Ends in an error in state: 1324.
@@ -14499,18 +14511,6 @@ cn_statement: CN_PRINT LPAREN CN_CONSTANT EOF
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
-
-cn_statement: CN_PRINT LPAREN CN_CONSTANT RPAREN WHILE
-##
-## Ends in an error in state: 1325.
-##
-## cn_statement -> CN_PRINT LPAREN expr RPAREN . SEMICOLON [ # ]
-##
-## The known suffix of the stack is as follows:
-## CN_PRINT LPAREN expr RPAREN
-##
-
-parsing "cn_statement": seen "CN_PRINT LPAREN expr RPAREN", expecting "SEMICOLON"
 
 cn_statement: CN_PACK CN_OWNED COMMA
 ##
