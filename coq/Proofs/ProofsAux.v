@@ -22,6 +22,7 @@ Require Import Common.ZMap.
 
 Require Import ExtLib.Structures.Monads.
 Require Import ExtLib.Structures.Monad.
+Require Import ExtLib.Structures.MonadLaws.
 Require Import ExtLib.Data.Monads.EitherMonad.
 Require Import Coq.Relations.Relation_Definitions.
 
@@ -436,3 +437,11 @@ Section SimpleError.
   Qed.
 
 End SimpleError.
+
+
+#[global] Instance Monad_either_MonadLaws {T:Type}:
+  MonadLaws (Monad_either T).
+Proof.
+  split; intros;  unfold Monad_either, ret, bind;
+    repeat break_match;subst; try inl_inr_inv; try reflexivity; try inl_inr.
+Qed.
