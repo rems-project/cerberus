@@ -18,7 +18,7 @@ Require Import Lia.
 Require Import StructTact.StructTactics.
 
 From ExtLib.Data Require Import List.
-From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
+From ExtLib.Structures Require Import Monad Monads MonadLaws MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
 From Coq.Lists Require Import List SetoidList. (* after exltlib *)
@@ -1061,6 +1061,7 @@ Module RevocationProofs.
     (Ec : relation C)
     (m : Type -> Type)
     (M : Monad m)
+    (ML: MonadLaws M)
     (EMa : relation (m A))
     (RetProper: Proper (Ea ==> EMa) ret)
     (BindProper: Proper ((EMa) ==> (Ea ==> EMa) ==> (EMa)) (@bind m M A A))
@@ -1517,8 +1518,8 @@ Module RevocationProofs.
           eapply monadic_fold_left2_proper with
             (Ea:=repr_fold2_eq)
             (Eb:=eq)
-            (Ec:=struct_field_eq);
-            [typeclasses eauto|typeclasses eauto|reflexivity|assumption|repeat split;auto|].
+            (Ec:=struct_field_eq); try typeclasses eauto;
+            [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
           intros a a' Ea.
