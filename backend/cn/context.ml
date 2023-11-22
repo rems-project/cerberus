@@ -150,8 +150,10 @@ let pp_history h =
       ("last written at", Locations.pp h.last_written)])
 
 let set_map_history id h m =
+  (*
   Pp.debug 10 (lazy (Pp.item ("setting resource history of " ^ Int.to_string id)
     (pp_history h)));
+  *)
   IntMap.add id h m
 
 let set_history id h (ctxt : t) =
