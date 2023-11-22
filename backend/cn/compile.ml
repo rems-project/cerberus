@@ -1480,6 +1480,11 @@ let translate_cn_statement
          return (M_CN_statement (loc, M_CN_apply (s, args)))
       | CN_inline nms ->
          return (M_CN_statement (loc, M_CN_inline nms))
+      | CN_print expr ->
+         let@ expr = ET.translate_cn_expr SymSet.empty env expr in
+         let expr = IT.term_of_sterm expr in
+         return (M_CN_statement (loc, M_CN_print expr))
+         
     )
 
 

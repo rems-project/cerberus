@@ -22,6 +22,7 @@ type cn_statement =
   | M_CN_apply of Sym.t * IndexTerms.t list
   | M_CN_assert of LogicalConstraints.t
   | M_CN_inline of Sym.t list
+  | M_CN_print of IndexTerms.t
 
 
 
@@ -64,6 +65,8 @@ let rec subst substitution = function
           M_CN_assert (LC.subst substitution lc)
        | M_CN_inline nms ->
           M_CN_inline nms
+       | M_CN_print it ->
+          M_CN_print (IT.subst substitution it)
      in
      M_CN_statement (loc, stmt)
 
@@ -122,6 +125,8 @@ let dtree_of_cn_statement = function
      Dnode (pp_ctor "Assert", [LC.dtree lc])
   | M_CN_inline nms ->
      Dnode (pp_ctor "Inline", List.map (fun nm -> Dleaf (Sym.pp nm)) nms)
+  | M_CN_print it ->
+     Dnode (pp_ctor "Print", [IT.dtree it])
 
 
 let rec dtree = function

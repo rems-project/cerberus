@@ -4524,6 +4524,9 @@ let desugar_cn_statement (CN_statement loc stmt_) =
          | None ->
            E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
          end) nms
+  | CN_print e ->
+     desugar_cn_expr e >>= fun e ->
+     E.return (CN_print e)
   end >>= fun stmt_ ->
   E.return (CN_statement loc stmt_)
 

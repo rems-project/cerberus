@@ -1633,6 +1633,9 @@ let check_cn_statement loc stmt =
   | M_CN_inline fs ->
      let@ _ = ListM.mapM (get_fun_decl loc) fs in
      return (M_CN_inline fs)
+  | M_CN_print it ->
+     let@ it = WIT.infer loc it in
+     return (M_CN_print it)
 
 let check_cnprog p =
   let open Cnprog in

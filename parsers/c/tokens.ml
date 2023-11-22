@@ -151,6 +151,7 @@ type token =
   | CN_INSTANTIATE
   | CN_UNFOLD
   | CN_APPLY
+  | CN_PRINT
   | CN_MATCH
   (* | CN_PREDNAME of string *)
   | CN_BITS of ([`U|`I] * int)
@@ -307,6 +308,7 @@ let string_of_token = function
   | CN_INSTANTIATE -> "CN_INSTANTIATE"
   | CN_UNFOLD -> "CN_UNFOLD"
   | CN_APPLY -> "CN_APPLY"
+  | CN_PRINT -> "CN_PRINT"
   | CN_MATCH -> "CN_MATCH"
   (* | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")" *)
   | CN_BOOL -> "CN_BOOL"

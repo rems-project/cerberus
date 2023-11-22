@@ -145,12 +145,12 @@ type asm_qualifier =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
+%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_PRINT
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token <[`U|`I] * int>CN_BITS
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC
-%token CN_UNCHANGED CN_WILD
+%token CN_UNCHANGED CN_WILD CN_MATCH
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 %token <string * [`U|`I] * int> CN_CONSTANT
 
@@ -2452,6 +2452,9 @@ cn_statement:
 | INLINE names= separated_list(COMMA, cn_variable) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_inline names) }
+| CN_PRINT LPAREN e=expr RPAREN SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_print e) }
 
 cn_toplevel_elem:
 | pred= cn_predicate

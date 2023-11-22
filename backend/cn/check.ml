@@ -1530,6 +1530,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                end
             | M_CN_inline _nms ->
                return ()
+            | M_CN_print it ->
+               print stdout (item "printed" (IT.pp it));
+               return ()
           end
      in
      let@ () = ListM.iterM aux cn_progs in

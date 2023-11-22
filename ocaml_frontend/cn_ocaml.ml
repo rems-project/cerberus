@@ -384,6 +384,8 @@ module MakePp (Conf: PP_CN) = struct
        Dnode (pp_ctor "[CN]apply", Dleaf (Conf.pp_ident s) :: List.map dtree_of_cn_expr args)
     | CN_inline nms ->
        Dnode (pp_ctor "[CN]inline", List.map (fun nm -> Dleaf (Conf.pp_ident nm)) nms)
+    | CN_print it ->
+       Dnode (pp_ctor "[CN]print", [dtree_of_cn_expr it])
 
 end
 

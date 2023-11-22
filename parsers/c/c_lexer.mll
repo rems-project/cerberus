@@ -129,6 +129,7 @@ let keywords: (string * Tokens.token) list = [
     "__cerb_have"          , CN_HAVE;
     "__cerb_instantiate"   , CN_INSTANTIATE;
     "__cerb_extract"       , CN_EXTRACT;
+    "__cerb_print"         , CN_PRINT;
     (* END CN *)
   ]
 
@@ -180,6 +181,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "pack"          , CN_PACK;
     "unpack"        , CN_UNPACK;
     "instantiate"   , CN_INSTANTIATE;
+    "print"         , CN_PRINT;
     "extract"       , CN_EXTRACT;
     "have"          , CN_HAVE;
     "unfold"        , CN_UNFOLD;
