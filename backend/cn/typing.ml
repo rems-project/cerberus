@@ -192,8 +192,6 @@ let make_provable loc =
 let provable loc = 
   fun s -> 
   Ok (make_provable loc s, s)
-  
-
 
   
 
@@ -209,20 +207,29 @@ let get_just_models () =
   let@ ms = get_models () in
   return (List.map fst ms)
 
-let model_has_prop prop =
+let model_has_prop () =
   let@ global = get_global () in
   let is_some_true t = Option.is_some t && IT.is_true (Option.get t) in
-  return (fun m -> is_some_true (Solver.eval global (fst m) prop))
+  return (fun prop m -> is_some_true (Solver.eval global (fst m) prop))
+
+let provable_consult_model loc m =
+  let@ has_prop = model_has_prop () in
+  let@ p_f = provable loc in
+  let res lc = match lc with
+    | LC.T t when has_prop (IT.not_ t) m -> `False
+    | _ -> p_f lc
+  in
+  return res
 
 let prev_models_with loc prop =
   let@ ms = get_just_models () in
-  let@ has_prop = model_has_prop prop in
-  return (List.filter has_prop ms)
+  let@ has_prop = model_has_prop () in
+  return (List.filter (has_prop prop) ms)
 
 let model_with loc prop =
   let@ ms = get_just_models () in
-  let@ has_prop = model_has_prop prop in
-  match List.find_opt has_prop ms with
+  let@ has_prop = model_has_prop () in
+  match List.find_opt (has_prop prop) ms with
     | Some m -> return (Some m)
     | None -> begin
       let@ prover = provable loc in
@@ -442,22 +449,24 @@ let unfold_resources loc =
     let@ provable_f = provable Locations.unknown in
     let (resources, orig_ix) = s.resources in
     let _orig_hist = s.resource_history in
-    match provable_f (LC.t_ (IT.bool_ false)) with
-    | `True -> return ()
-    | `False ->
+    let@ true_m = model_with loc (IT.bool_ true) in
+    match true_m with
+    | None -> return () (* contradictory state *)
+    | Some model ->
+    let@ provable_f2 = provable_consult_model loc model in
     let keep, unpack, extract =
       List.fold_right (fun (re, i) (keep, unpack, extract) ->
-          match Pack.unpack loc s.global provable_f re with
+          match Pack.unpack loc s.global provable_f2 re with
           | Some unpackable -> 
               let pname = RET.pp_predicate_name (RET.predicate_name (fst re)) in
               (keep, (i, pname, unpackable) :: unpack, extract)
           | None -> 
               let re_reduced, extracted =
-                Pack.extractable_multiple loc provable_f movable_indices re in
+                Pack.extractable_multiple loc provable_f2 movable_indices re in
               let keep' = match extracted with
                | [] -> (re_reduced, i) :: keep
                | _ ->
-                  match Pack.resource_empty provable_f re_reduced with
+                  match Pack.resource_empty provable_f2 re_reduced with
                   | `Empty -> keep
                   | `NonEmpty _ -> (re_reduced, i) :: keep
               in
@@ -641,7 +650,8 @@ let test_value_eqs loc guard x ys =
   let rec loop group ms = function
     | [] -> return ()
     | y :: ys ->
-      let@ counterex = model_has_prop (IT.not_ (IT.eq_ (x, y))) in
+      let@ has_prop = model_has_prop () in
+      let counterex = has_prop (IT.not_ (IT.eq_ (x, y))) in
       if ITSet.mem y group || List.exists counterex ms
       then loop group ms ys
       else match prover (prop y) with
