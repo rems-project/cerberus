@@ -157,6 +157,7 @@ module IndexTerms = struct
 
   let cast_reduce bt it =
     begin match bt, IT.is_const it with
+    | _, _ when BT.equal (IT.bt it) bt -> it
     | BT.Bits (sign, sz), Some (Terms.Bits ((sign2, sz2), z), _) ->
         let z = BT.normalise_to_range (sign, sz) (BT.normalise_to_range (sign2, sz2) z) in
         num_lit_ z bt
