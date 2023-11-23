@@ -864,7 +864,8 @@ end = struct
             debug 6 (lazy (item "spec" (LAT.pp rt_pp ftyp)));
           )
         in
-        let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc (Call situation)
+        let uiinfo = (Call situation, []) in
+        let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc uiinfo
                       original_resources ftyp in
         match ftyp with
         | I rt -> return rt
@@ -1525,7 +1526,8 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                   RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt lc;
                   let@ () = Diagnostics.investigate model lc in
                   fail_with_trace (fun trace ctxt ->
-                      {loc; msg = Unproven_constraint {constr = lc; info = (loc, None); ctxt; model; trace}}
+                      {loc; msg = Unproven_constraint {constr = lc; info = (loc, None);
+                          requests = []; ctxt; model; trace}}
                     )
                end
             | M_CN_inline _nms ->

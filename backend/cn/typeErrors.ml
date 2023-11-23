@@ -43,7 +43,6 @@ type situation =
   | Access of access
   | Call of call_situation
 
-
 let call_situation = function
   | FunctionCall fsym -> !^"checking call of function" ^^^ Sym.pp fsym
   | LemmaApplication l -> !^"applying lemma" ^^^ Sym.pp l
@@ -74,7 +73,13 @@ let for_situation = function
   | Call Subtyping -> !^"for subtyping"
 
 
+type request_chain_elem = {
+  resource: RET.t;
+  loc: Locations.t option;
+  reason: string option;
+}
 
+type request_chain = request_chain_elem list
 
 
 
@@ -102,8 +107,8 @@ type message =
   | Duplicate_member of Id.t
 
 
-  | Missing_resource of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
-  | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
+  | Missing_resource of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
+  | Merging_multiple_arrays of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q }
   | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
@@ -116,7 +121,7 @@ type message =
   | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
-  | Unproven_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
+  | Unproven_constraint of {constr : LC.t; requests: request_chain; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
 
   | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Solver.model_with_q}
   | Implementation_defined_behaviour of document * state_report
@@ -149,20 +154,26 @@ type report = {
   }
 
 
-let missing_or_bad_request_description oinfo orequest = 
-  match oinfo, orequest with
-  | Some (spec_loc, Some descr), _ ->
-     let (head, _) = Locations.head_pos_of_location spec_loc in
-     Some (!^"Resource from" ^^^ !^head ^^^ parens !^descr)
-  | Some (spec_loc, None), _ ->
-     let (head, _) = Locations.head_pos_of_location spec_loc in
-     Some (!^"Resource from" ^^^ !^head)
-  | None, Some request ->
-     let re_pp = RET.pp request in
-     Some (!^"Resource" ^^^ squotes re_pp)
-  | None, None ->
-     None  
-
+let request_chain_description requests =
+  let pp_req req =
+    let doc = RET.pp req.resource in
+    let doc = match req.loc with
+      | None -> doc
+      | Some loc -> doc ^^ hardline ^^ (!^ "      ") ^^
+        (!^ (fst (Locations.head_pos_of_location loc)))
+    in
+    match req.reason with
+      | None -> doc
+      | Some str -> doc ^^^ parens (!^ str)
+  in
+  let rec loop req = function
+    | [] -> !^ "Resource needed:" ^^^ pp_req req
+    | (req2 :: reqs) -> loop req2 reqs ^^ hardline ^^
+        !^ "  which requires:" ^^^ pp_req req
+  in
+  match requests with
+    | [] -> None
+    | req :: reqs -> Some (loop req reqs)
 
 
 let pp_message te =
@@ -219,18 +230,20 @@ let pp_message te =
   | Duplicate_member m ->
      let short = !^"Duplicate member" ^^^ Id.pp m in
      { short; descr = None; state = None; trace = None }
-  | Missing_resource {orequest; situation; oinfo; ctxt; model; trace} ->
+  | Missing_resource {requests; situation; ctxt; model; trace} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
-     let descr = missing_or_bad_request_description oinfo orequest in
+     let descr = request_chain_description requests in
+     let orequest = Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0) in
      let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
      let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = descr; state = Some state; trace = Some trace_doc }
-  | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
+  | Merging_multiple_arrays {requests; situation; ctxt; model} ->
      let short = 
        !^"Cannot satisfy request for resource" ^^^ for_situation situation ^^ dot ^^^
          !^"It requires merging multiple arrays."
      in
-     let descr = missing_or_bad_request_description oinfo orequest in
+     let descr = request_chain_description requests in
+     let orequest = Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0) in
      let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
      { short; descr = descr; state = Some state; trace = None }
   | Unused_resource {resource; ctxt; model; trace} ->
@@ -331,16 +344,20 @@ let pp_message te =
      let descr = !^"Value" ^^ colon ^^^ value in
      let state = Explain.state ctxt model Explain.no_ex in
      { short; descr = Some descr; state = Some state; trace = None }
-  | Unproven_constraint {constr; info; ctxt; model; trace} ->
+  | Unproven_constraint {constr; requests; info; ctxt; model; trace} ->
      let short = !^"Unprovable constraint" in
      let state = Explain.state ctxt model
          Explain.{no_ex with unproven_constraint = Some constr} in
      let descr =
        let (spec_loc, odescr) = info in
        let (head, _) = Locations.head_pos_of_location spec_loc in
-       match odescr with
-       | None -> !^"Constraint from " ^^^ parens (!^head)
+       let doc = match odescr with
+       | None -> !^"Constraint from" ^^^ parens (!^head)
        | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ parens (!^head)
+       in
+       match request_chain_description requests with
+       | Some doc2 -> doc ^^ hardline ^^ doc2
+       | None -> doc
      in
      let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = Some descr; state = Some state; trace = Some trace_doc }

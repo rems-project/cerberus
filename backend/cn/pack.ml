@@ -30,7 +30,8 @@ let unfolded_array init (ict, olength) pointer =
   }
   
 
-let packing_ft loc global provable ret = 
+let packing_ft global provable ret =
+  let loc = Locations.unknown in
   match ret with
   | P ret ->
      begin match ret.name with
@@ -132,7 +133,7 @@ let unpack loc global provable (ret, O o) =
     | Some re -> Some (`RES re)
     end
   | _ ->
-    begin match packing_ft loc global provable ret with
+    begin match packing_ft global provable ret with
     | None -> None
     | Some packing_ft -> Some (`LRT (ResourcePredicates.clause_lrt o packing_ft))
     end

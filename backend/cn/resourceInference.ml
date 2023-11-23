@@ -84,6 +84,8 @@ module General = struct
   type one = {one_index : IT.t; value : IT.t}
   type many = {many_guard: IT.t; value : IT.t}
 
+  type uiinfo = (TypeErrors.situation * TypeErrors.request_chain)
+
   type case =
     | One of one
     | Many of many
@@ -100,7 +102,7 @@ module General = struct
 
 
 
-  let cases_to_map loc (situation, (orequest, oinfo)) a_bt item_bt (C cases) = 
+  let cases_to_map loc (uiinfo: uiinfo) a_bt item_bt (C cases) =
     let update_with_ones base_array ones =
       List.fold_left (fun m {one_index; value} ->
           map_set_ m (one_index, value)
@@ -132,7 +134,7 @@ module General = struct
   (* this version is parametric in resource_request (defined below) to ensure
      the return-type (also parametric) is as general as possible *)
   let parametric_ftyp_args_request_step resource_request rt_subst loc
-        situation original_resources ftyp changed_or_deleted =
+        (uiinfo : uiinfo) original_resources ftyp changed_or_deleted =
     (* take one step of the "spine" judgement, reducing a function-type
        by claiming an argument resource or otherwise reducing towards
        an instantiated return-type *)
@@ -142,7 +144,10 @@ module General = struct
     begin match ftyp with
     | LAT.Resource ((s, (resource, bt)), info, ftyp) ->
        let resource = Simplify.ResourceTypes.simp simp_ctxt resource in
-       let uiinfo = (situation, (Some resource, Some info)) in
+       let (situation, request_chain) = uiinfo in
+       let step = TypeErrors.{resource; loc = Some (fst info);
+           reason = Some ("arg " ^ Sym.pp_string s)} in
+       let uiinfo = (situation, step :: request_chain) in
        let@ o_re_oarg = resource_request loc uiinfo resource in
        begin match o_re_oarg with
          | None ->
@@ -151,8 +156,7 @@ module General = struct
             fail_with_trace (fun trace -> fun ctxt ->
                 let ctxt = { ctxt with resources = original_resources } in
                 let msg = Missing_resource
-                           {orequest = Some resource;
-                            situation; oinfo = Some info; model; trace; ctxt} in
+                           {requests = request_chain; situation; model; trace; ctxt} in
                 {loc; msg}
            )
          | Some ((re, O oargs), changed_or_deleted') ->
@@ -186,7 +190,8 @@ module General = struct
            let@ () = Diagnostics.investigate model c in
            fail_with_trace (fun trace -> fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
-                  {loc; msg = Unproven_constraint {constr = c; info; ctxt; model; trace}}
+                  {loc; msg = Unproven_constraint {constr = c; info;
+                      requests = snd uiinfo; ctxt; model; trace}}
                 )
        end
     | I rt -> 
@@ -200,7 +205,7 @@ module General = struct
 
 
   (* TODO: check that oargs are in the same order? *)
-  let rec predicate_request loc uiinfo (requested : RET.predicate_type) 
+  let rec predicate_request loc (uiinfo : uiinfo) (requested : RET.predicate_type)
     : (((predicate_type * oargs) * int list) option) m  =
        debug 7 (lazy (item "predicate request" (RET.pp (P requested))));
        let start_timing = time_log_start "predicate-request" "" in
@@ -249,9 +254,9 @@ module General = struct
           (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
           return (Some (r, changed_or_deleted))
        | true ->
-          begin match packing_ft loc global provable (P requested) with
+          begin match packing_ft global provable (P requested) with
           | Some packing_ft ->
-             let@ o, changed_or_deleted = ftyp_args_request_for_pack loc (fst uiinfo) packing_ft in
+             let@ o, changed_or_deleted = ftyp_args_request_for_pack loc uiinfo packing_ft in
              return (Some ((requested, O o), changed_or_deleted))
           | None ->
              return None
@@ -367,7 +372,7 @@ module General = struct
        return (Some ((r, O oarg), rw_time))
 
 
-  and ftyp_args_request_for_pack loc situation ftyp =
+  and ftyp_args_request_for_pack loc uiinfo ftyp =
     (* record the resources now, so errors are raised with all
        the resources present, rather than those that remain after some
        arguments are claimed *)
@@ -379,7 +384,7 @@ module General = struct
         let@ ftyp, rw_time = 
           parametric_ftyp_args_request_step
             resource_request IT.subst loc
-            situation original_resources ftyp rw_time
+            uiinfo original_resources ftyp rw_time
         in
         loop ftyp rw_time
     in
@@ -408,28 +413,32 @@ end
 
 module Special = struct
 
-  let fail_missing_resource loc situation (orequest, oinfo) = 
+  let fail_missing_resource loc (situation, requests) =
     let@ model = model_with loc (bool_ true) in
     let model = Option.get model in
     fail_with_trace (fun trace -> fun ctxt ->
-        let msg = Missing_resource {orequest; situation; oinfo; model; trace; ctxt} in
+        let msg = Missing_resource {requests; situation; model; trace; ctxt} in
         {loc; msg})
 
 
   let predicate_request loc situation (request, oinfo) = 
-    let uiinfo = (situation, (Some (P request), oinfo)) in
+    let requests = [TypeErrors.{resource = P request;
+        loc = Option.map fst oinfo; reason = Option.map snd oinfo}] in
+    let uiinfo = (situation, requests) in
     let@ result = General.predicate_request loc uiinfo request in
     match result with
     | Some r -> return r
-    | None -> fail_missing_resource loc situation (Some (P request), oinfo)
+    | None -> fail_missing_resource loc uiinfo
 
 
   let qpredicate_request loc situation (request, oinfo) = 
-    let uiinfo = (situation, (Some (Q request), oinfo)) in
+    let requests = [TypeErrors.{resource = Q request;
+        loc = Option.map fst oinfo; reason = Option.map snd oinfo}] in
+    let uiinfo = (situation, requests) in
     let@ result = General.qpredicate_request loc uiinfo request in
     match result with
     | Some r -> return r
-    | None -> fail_missing_resource loc situation (Some (Q request), oinfo)
+    | None -> fail_missing_resource loc uiinfo
 
 end
 
