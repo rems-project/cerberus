@@ -434,13 +434,12 @@ Module RevocationProofs.
   Qed.
 
   (* All non-pnvi switches are the same *)
-  Lemma non_PNVI_switches_match:
-    forall s,
+  Lemma non_PNVI_switches_match (s: cerb_switch):
       is_PNVI_switch s = false ->
       has_switch (WithPNVISwitches.get_switches tt) s =
         has_switch (WithoutPNVISwitches.get_switches tt) s.
   Proof.
-    intros s H.
+    intros H.
     unfold WithPNVISwitches.get_switches.
     unfold WithoutPNVISwitches.get_switches.
     generalize (abst_get_switches tt) as l.
@@ -472,6 +471,26 @@ Module RevocationProofs.
 
     destruct s eqn:S; inversion H; clear H; one_has_switch D.
   Qed.
+
+  Ltac normalize_switches :=
+    match goal with
+    | [H: context[has_switch (WithoutPNVISwitches.get_switches tt) ?s] |- _] =>
+        match s with
+        | SW_PNVI _ => fail
+        | _ =>
+            replace (has_switch (WithoutPNVISwitches.get_switches tt) s) with
+            (has_switch (WithPNVISwitches.get_switches tt) s)
+            in H by (apply non_PNVI_switches_match;auto)
+        end
+    | [|- context[has_switch (WithoutPNVISwitches.get_switches tt) ?s]] =>
+        match s with
+        | SW_PNVI _ => fail
+        | _ =>
+            replace (has_switch (WithoutPNVISwitches.get_switches tt) s) with
+            (has_switch (WithPNVISwitches.get_switches tt) s)
+            by (apply non_PNVI_switches_match;auto)
+        end
+    end.
 
   (* --- Lemmas about memory models --- *)
 
@@ -963,19 +982,10 @@ Module RevocationProofs.
     intros s.
     unfold CheriMemoryWithPNVI.get_intrinsic_type_spec.
     unfold CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
-    repeat break_if; auto.
-
-    rewrite non_PNVI_switches_match in Heqb0.
-    congruence.
-    reflexivity.
-
-    rewrite non_PNVI_switches_match in Heqb0.
-    congruence.
-    reflexivity.
+    repeat break_if; auto;
+      normalize_switches;congruence.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
-
-
 
   Definition resolve_function_pointer_res_eq
     : relation ((ZMap.t (digest * string * Capability_GS.t)) * Capability_GS.t)
@@ -2586,6 +2596,20 @@ Module RevocationProofs.
     (* TODO: need Proper for [ZMap.fold] wrt [ZMap.Equal] *)
   Admitted.
 
+  Lemma maybe_revoke_pointer_same:
+    forall
+      (alloc_base alloc_limit: Z)
+      (st1: CheriMemoryWithPNVI.mem_state)
+      (st2: CheriMemoryWithoutPNVI.mem_state)
+      (addr: Z)
+      (meta: (bool*CapGhostState)),
+
+      mem_state_same_rel st1 st2 ->
+      Same eq (CheriMemoryWithPNVI.maybe_revoke_pointer alloc_base alloc_limit st1 addr meta)
+        (CheriMemoryWithoutPNVI.maybe_revoke_pointer alloc_base alloc_limit st2 addr meta).
+  Proof.
+  Admitted.
+
   Lemma revoke_pointers_same:
     forall a : allocation,
       Same eq (CheriMemoryWithPNVI.revoke_pointers a)
@@ -2622,10 +2646,7 @@ Module RevocationProofs.
       + (* PVconcrete *)
         unfold CheriMemoryWithPNVI.cap_is_null, CheriMemoryWithoutPNVI.cap_is_null.
         unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
-
-        replace (has_switch (WithoutPNVISwitches.get_switches tt) SW_forbid_nullptr_free) with
-          (has_switch (WithPNVISwitches.get_switches tt) SW_forbid_nullptr_free)
-        by (apply non_PNVI_switches_match;auto).
+        repeat normalize_switches.
         break_if.
         break_match; same_step; reflexivity.
         same_step; split.
@@ -2639,37 +2660,10 @@ Module RevocationProofs.
           split.
           --
             unfold CheriMemoryWithPNVI.cap_match_dyn_allocation, CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
-            repeat break_match; repeat same_step; try reflexivity; clear Heqb0 Heqb1 Heqb2.
+            repeat break_match; repeat same_step; try reflexivity. (* ; clear Heqb0 Heqb1 Heqb2. *)
             split.
             ++ apply revoke_pointers_same.
             ++ intros; apply remove_allocation_same.
-            ++
-              split.
-              **
-                cbn.
-                unfold SameValue.
-                intros mem_state1 mem_state2 H.
-                apply lift_sum_eq_eq.
-                unfold evalErrS.
-                repeat break_let.
-                repeat break_match;tuple_inversion;
-                unfold Exception_either, Monad_either, raise, ret; [|reflexivity].
-                unfold CheriMemoryWithPNVI.revoke_pointers in Heqp2.
-                break_if.
-                admit.
-                inv Heqp2.
-              **
-                (* TODO: use something like `bind_Same` but assuming state on the left unchanged *)
-                unfold SameState.
-                intros mem_state1 mem_state2 H.
-                unfold lift_sum.
-                unfold execErrS, Exception_either, Monad_either, CheriMemoryWithoutPNVI.memM_monad, Monad_errS, raise, ret.
-                repeat break_let.
-                repeat break_match;try inl_inr.
-                inl_inr_inv; subst. admit.
-                inl_inr_inv; subst. admit.
-            ++
-              admit.
           --
             admit.
         *
