@@ -36,6 +36,7 @@ let setup conf =
       pprints=            [];
       astprints=          [];
       ppflags=            [];
+      ppouts=             [];
       typecheck_core=     false;
       rewrite_core=       conf.rewrite_core;
       sequentialise_core= conf.sequentialise_core;
@@ -140,7 +141,7 @@ let result_of_elaboration (_, _, cabs, ail, core) =
   Elaboration
     { pp= {
         cabs= None;
-        ail=  mk_elab @@ Pp_ail.pp_program false false ail;
+        ail=  mk_elab @@ Cerb_colour.without_colour (Pp_ail.pp_program ~show_include:false) ail;
         core= Some (elim_paragraph_sym core)
       };
       ast= {

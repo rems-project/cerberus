@@ -101,7 +101,7 @@ let cerberus debug_level progress core_obj
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
       bmc_all_execs bmc_output_model bmc_cat bmc_mode;
   set_cerb_conf "Bmc" exec exec_mode concurrency QuoteStd defacto false false false bmc;
-  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
+  let conf = { astprints; pprints; ppflags; ppouts=[]; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -403,9 +403,8 @@ let fs =
 
 let ppflags =
   let open Pipeline in
-  let doc = "Pretty print flags [annot: include location and ISO annotations,\
-             fout: output in a file]." in
-  Arg.(value & opt (list (enum ["annot", Annot; "fout", FOut])) [] &
+  let doc = "Pretty print flags [annot: include location and ISO annotations]." in
+  Arg.(value & opt (list (enum ["annot", Annot])) [] &
        info ["pp_flags"] ~doc)
 
 let files =

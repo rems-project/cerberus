@@ -97,7 +97,7 @@ let cerberus debug_level progress core_obj
              link_lib_path link_core_obj
              impl_name
              exec exec_mode iso_switches switches batch concurrency
-             astprints pprints ppflags
+             astprints pprints ppflags pp_ail_out pp_core_out
              sequentialise_core rewrite_core typecheck_core defacto permissive ignore_bitfields
              fs_dump fs trace
              output_name
@@ -114,9 +114,17 @@ let cerberus debug_level progress core_obj
     | None -> []
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
+  let ppouts =
+    match pp_ail_out with
+      | Some file -> [Ail, file]
+      | None -> [] in
+  let ppouts =
+    match pp_core_out with
+      | Some file -> (Core, file) :: ppouts
+      | None -> ppouts in
   (* set global configuration *)
   set_cerb_conf "Driver" exec exec_mode concurrency QuoteStd defacto permissive agnostic ignore_bitfields false;
-  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
+  let conf = { astprints; pprints; ppflags; ppouts; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -418,10 +426,17 @@ let fs =
 
 let ppflags =
   let open Pipeline in
-  let doc = "Pretty print flags [annot: include location and ISO annotations, \
-             fout: output in a file]." in
-  Arg.(value & opt (list (enum ["annot", Annot; "fout", FOut])) [] &
+  let doc = "Pretty print flags [annot: include location and ISO annotations]." in
+  Arg.(value & opt (list (enum ["annot", Annot ])) [] &
        info ["pp_flags"] ~doc)
+
+let pp_ail_out =
+  let doc = "Write Ail pprint to a file." in
+  Arg.(value & opt (some string) None & info ["pp_ail_out"] ~doc)
+
+let pp_core_out =
+  let doc = "Write Core pprint to a file." in
+  Arg.(value & opt (some string) None & info ["pp_core_out"] ~doc)
 
 let files =
   let doc = "source C or Core file" in
@@ -494,7 +509,7 @@ let () =
                          impl $
                          exec $ exec_mode $ iso $ switches $ batch $
                          concurrency $
-                         astprints $ pprints $ ppflags $
+                         astprints $ pprints $ ppflags $ pp_ail_out $ pp_core_out $
                          sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $ ignore_bitfields $
                          fs_dump $ fs $ trace $
                          output_file $
