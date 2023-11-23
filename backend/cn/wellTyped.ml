@@ -297,6 +297,27 @@ module WIT = struct
               ) dt_info.dt_constrs
          end
 
+  let cases_necessary loc pats =
+    (* checking no case is covered by previous cases (not whether a case is
+       covered by a collection of previous cases, that's more work to do *)
+    let rec covers p1 p2 = match p1, p2 with
+      | Pat (PWild, _), _ -> true
+      | Pat (PSym _, _), _ -> true
+      | Pat (PConstructor (s1, ps1), _), Pat (PConstructor (s2, ps2), _)
+        when (Sym.equal s1 s2 && List.equal Id.equal (List.map fst ps1) (List.map fst ps2)) ->
+          List.for_all2 covers (List.map snd ps1) (List.map snd ps2)
+      | _, _ -> false
+    in
+    let@ _ = ListM.fold_leftM (fun prev pat ->
+      match List.find_opt (fun p1 -> covers p1 pat) prev with
+      | None -> return (pat :: prev)
+      | Some p1 ->
+        let err = (!^"pattern-match case" ^^^ Terms.pp_pattern pat ^^^
+            !^"covered by previous pattern" ^^^ Terms.pp_pattern p1) in
+        fail (fun _ -> {loc; msg = Generic err})
+    ) [] pats in
+    return ()
+
   let rec infer : 'bt. Loc.t -> 'bt term -> (BT.t term) m =
     fun loc orig_it ->
     let (IT (it, _)) = orig_it in
@@ -775,6 +796,7 @@ module WIT = struct
              ) (None, []) cases
          in
          let@ () = cases_complete loc [IT.bt e] (List.map (fun (pat, _) -> [pat]) cases) in
+         let@ () = cases_necessary loc (List.map (fun (pat, _) -> pat) cases) in
          let@ rbt = match rbt with
            | None -> fail (fun _ -> {loc; msg = Empty_pattern})
            | Some rbt -> return rbt

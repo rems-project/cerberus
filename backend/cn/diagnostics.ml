@@ -88,6 +88,10 @@ let split_eq x y = match (IT.term x, IT.term y) with
   | (IT.MapGet (m1, x1), IT.MapGet (m2, x2)) -> Some [(m1, m2); (x1, x2)]
   | (IT.Apply (nm, xs), IT.Apply (nm2, ys)) when Sym.equal nm nm2 ->
     Some (List.map2 (fun x y -> (x, y)) xs ys)
+  | (IT.Constructor (nm, xs), IT.Constructor (nm2, ys)) when Sym.equal nm nm2 ->
+    let xs = List.sort WellTyped.compare_by_member_id xs in
+    let ys = List.sort WellTyped.compare_by_member_id ys in
+    Some (List.map2 (fun (_, x) (_, y) -> (x, y)) xs ys)
   | _ -> None
 
 (* investigate the provability of a term *)
