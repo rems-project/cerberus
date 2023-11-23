@@ -226,11 +226,10 @@ let reg_snippet2 opt_loc file_lines = match Option.bind opt_loc Locations.is_reg
           | Some l ->
               let x = loc_start.pos_cnum - loc_start.pos_bol in
               let y = loc_end.pos_cnum - loc_start.pos_cnum in
-              let s = if x + y <= String.length l
-                then String.sub l x y else String.sub l x (String.length l - x)
-              in
-              if loc_end.pos_lnum == loc_start.pos_lnum then !^ s
-                else !^ s ^^^ !^ "..."
+              let extra = if loc_end.pos_lnum == loc_start.pos_lnum then "" else " ..." in
+              begin try !^ (String.sub l x y) ^^ !^ extra
+                with Invalid_argument _ -> !^ "in" ^^^ parens (!^ l ^^ !^ extra)
+              end
           end
     in
     r ^^ colon ^^^ snip
