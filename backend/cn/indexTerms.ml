@@ -362,7 +362,8 @@ let is_bits_const = function
   | _ -> None
 
 let is_pointer = function
-  | IT (Const (Pointer z), bt) -> Some z
+  | IT (Const (Pointer z), _) -> Some z
+  | IT (Cast (Loc, addr), _) -> get_num_z addr
   | _ -> None
 
 let is_sym = function
