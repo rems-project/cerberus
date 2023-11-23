@@ -1236,6 +1236,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         in
         let@ () =
           add_r loc (P (Global.mk_alloc ret), O IT.unit_) in
+        let@ () = add_alloc loc ~ptr:ret ~size:(Memory.size_of_ctype act.ct) in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         Cerb_debug.error "todo: CreateReadOnly"

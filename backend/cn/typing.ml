@@ -679,6 +679,10 @@ let add_c loc c =
   let@ () = add_c_internal c in
   unfold_resources loc
 
+let add_alloc loc ~ptr ~size =
+  let@ ctxt = get () in
+  add_c loc @@ Context.add_alloc ~ptr ~size ctxt
+
 let add_cs loc cs = 
   let@ () = iterM add_c_internal cs in
   unfold_resources loc

@@ -159,14 +159,19 @@ module General = struct
        begin match o_re_oarg with
          | None ->
             let@ model = model_with loc (bool_ true) in
-            let model = Option.get model in
-            fail_with_trace (fun trace -> fun ctxt ->
-                let ctxt = { ctxt with resources = original_resources } in
-                let msg = Missing_resource
-                           {orequest = Some resource;
-                            situation; oinfo = Some info; model; trace; ctxt} in
-                {loc; msg}
-           )
+            begin match model with
+            | None ->
+              fail_with_trace (fun _ _ ->
+                  let msg = Generic (Pp.string "logically-inconsistent constraints - either CN internal or user specifications") in
+                  {loc; msg})
+            | Some model ->
+                    fail_with_trace (fun trace -> fun ctxt ->
+                        let ctxt = { ctxt with resources = original_resources } in
+                        let msg = Missing_resource
+                                   {orequest = Some resource;
+                                    situation; oinfo = Some info; model; trace; ctxt} in
+                        {loc; msg})
+            end
          | Some ((re, O oargs), changed_or_deleted') ->
             assert (ResourceTypes.equal re resource);
             let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
@@ -436,10 +441,15 @@ module Special = struct
 
   let fail_missing_resource loc situation (orequest, oinfo) = 
     let@ model = model_with loc (bool_ true) in
-    let model = Option.get model in
-    fail_with_trace (fun trace -> fun ctxt ->
-        let msg = Missing_resource {orequest; situation; oinfo; model; trace; ctxt} in
-        {loc; msg})
+    match model with
+    | None ->
+      fail_with_trace (fun _ _ ->
+          let msg = Generic (Pp.string "logically-inconsistent constraints - either CN internal or user specifications") in
+          {loc; msg})
+    | Some model ->
+      fail_with_trace (fun trace -> fun ctxt ->
+          let msg = Missing_resource {orequest; situation; oinfo; model; trace; ctxt} in
+          {loc; msg})
 
 
   let predicate_request loc situation (request, oinfo) = 

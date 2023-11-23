@@ -34,6 +34,7 @@ val add_l : Sym.t -> BaseTypes.t -> Context.l_info -> (unit) m
 val add_l_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_ls : (Sym.t * BaseTypes.t * Context.l_info) list -> (unit) m
 val add_c : Locations.t -> LogicalConstraints.t -> (unit) m
+val add_alloc : Locations.t -> ptr:IndexTerms.t -> size:int -> unit m
 val add_cs : Locations.t -> LogicalConstraints.t list -> (unit) m
 val add_r : Locations.t -> Resources.t -> unit m
 val add_rs : Locations.t -> Resources.t list -> unit m
