@@ -2580,7 +2580,6 @@ Module RevocationProofs.
 
   End allocate_object_proofs.
 
-
   #[local] Instance find_live_allocation_same (addr:AddressValue.t):
     Same eq
       (CheriMemoryWithPNVI.find_live_allocation addr)
@@ -2596,6 +2595,29 @@ Module RevocationProofs.
     (* TODO: need Proper for [ZMap.fold] wrt [ZMap.Equal] *)
   Admitted.
 
+  Definition mem_value_with_err_eq : relation mem_value_with_err.
+  Admitted.
+
+  Definition abst_res_eq: relation (taint_indt * mem_value_with_err * list AbsByte)
+    := fun '(t1,mv1,b1) '(t2,mv2,b2) =>
+         t1 = t2 /\ mem_value_with_err_eq mv1 mv2 /\ eqlistA AbsByte_eq b1 b2.
+
+  Theorem abst_same
+    (fuel: nat)
+    (find_overlapping1 : Z -> CheriMemoryWithPNVI.overlap_indt)
+    (find_overlapping2 : Z -> CheriMemoryWithoutPNVI.overlap_indt)
+    (funptrmap : ZMap.t (digest * string * Capability_GS.t))
+    (tag_query_f : Z -> (bool* CapGhostState))
+    (addr : Z)
+    (cty : CoqCtype.ctype)
+    (bs : list AbsByte)
+    :
+    serr_eq abst_res_eq
+      (CheriMemoryWithPNVI.abst fuel find_overlapping1 funptrmap tag_query_f addr cty bs)
+      (CheriMemoryWithoutPNVI.abst fuel find_overlapping2 funptrmap tag_query_f addr cty bs).
+  Proof.
+  Admitted.
+
   Lemma maybe_revoke_pointer_same:
     forall
       (alloc_base alloc_limit: Z)
@@ -2608,6 +2630,15 @@ Module RevocationProofs.
       Same eq (CheriMemoryWithPNVI.maybe_revoke_pointer alloc_base alloc_limit st1 addr meta)
         (CheriMemoryWithoutPNVI.maybe_revoke_pointer alloc_base alloc_limit st2 addr meta).
   Proof.
+    intros alloc_base alloc_limit st1 st2 addr meta M.
+    unfold CheriMemoryWithPNVI.maybe_revoke_pointer, CheriMemoryWithoutPNVI.maybe_revoke_pointer.
+    break_if.
+    same_step; reflexivity.
+    same_step.
+    split.
+    apply serr2memM_same. (* TODO automate in same_step *)
+
+
   Admitted.
 
   Lemma revoke_pointers_same:
