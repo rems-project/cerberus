@@ -2087,18 +2087,18 @@ Module RevocationProofs.
       assumption.
   Qed.
 
-  Lemma serr2memM_same
+  Lemma serr2InternalErr_same
     {T: Type}
     (R: relation T)
     {M1 M2: serr T}:
     serr_eq R M1 M2 ->
     Same R
-      (CheriMemoryWithPNVI.serr2memM M1)
-      (CheriMemoryWithoutPNVI.serr2memM M2).
+      (CheriMemoryWithPNVI.serr2InternalErr M1)
+      (CheriMemoryWithoutPNVI.serr2InternalErr M2).
   Proof.
     intros H.
     unfold serr_eq in H.
-    unfold CheriMemoryWithPNVI.serr2memM, CheriMemoryWithoutPNVI.serr2memM.
+    unfold CheriMemoryWithPNVI.serr2InternalErr, CheriMemoryWithoutPNVI.serr2InternalErr.
     repeat break_match;subst.
     -
       split.
@@ -2117,15 +2117,15 @@ Module RevocationProofs.
         assumption.
   Qed.
 
-  Lemma serr2memM_same_eq {T: Type}
+  Lemma serr2InternalErr_same_eq {T: Type}
     {M1 M2: serr T}:
     M1 = M2 ->
     Same (@eq T)
-      (CheriMemoryWithPNVI.serr2memM M1)
-      (CheriMemoryWithoutPNVI.serr2memM M2).
+      (CheriMemoryWithPNVI.serr2InternalErr M1)
+      (CheriMemoryWithoutPNVI.serr2InternalErr M2).
   Proof.
     intros.
-    apply serr2memM_same.
+    apply serr2InternalErr_same.
     rewrite H. clear H.
     unfold serr_eq.
     break_match;reflexivity.
@@ -2382,7 +2382,7 @@ Module RevocationProofs.
 
       apply bind_Same_eq.
       split.
-      apply serr2memM_same_eq.
+      apply serr2InternalErr_same_eq.
       rewrite sizeof_same.
       reflexivity.
       intros;subst;try break_let.
@@ -2403,7 +2403,7 @@ Module RevocationProofs.
         apply (bind_Same repr_res_eq).
         split.
         {
-          apply serr2memM_same with (R:=repr_res_eq).
+          apply serr2InternalErr_same with (R:=repr_res_eq).
           destruct_mem_state_same_rel H.
           apply repr_same.
           repeat split; try assumption.
@@ -2636,7 +2636,7 @@ Module RevocationProofs.
     same_step; reflexivity.
     same_step.
     split.
-    apply serr2memM_same. (* TODO automate in same_step *)
+    apply serr2InternalErr_same. (* TODO automate in same_step *)
 
 
   Admitted.
