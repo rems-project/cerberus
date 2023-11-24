@@ -70,6 +70,9 @@ Module Type CheriMemoryTypes
   | IV : Z -> integer_value_indt
   | IC : bool -> C.t -> integer_value_indt.
 
+  Unset Elimination Schemes.
+  (* This prevent default elimination principle from being generated for
+     this type, as it is inadequate *)
   Inductive mem_value_with_err :=
   | MVEunspecified : CoqCtype.ctype -> mem_value_with_err
   | MVEinteger :
@@ -80,6 +83,7 @@ Module Type CheriMemoryTypes
     mem_value_with_err
   | MVEpointer :
     CoqCtype.ctype -> pointer_value_indt -> mem_value_with_err
+  | MVErr : mem_error -> mem_value_with_err
   | MVEarray : list mem_value_with_err -> mem_value_with_err
   | MVEstruct :
     CoqSymbol.sym ->
@@ -88,8 +92,54 @@ Module Type CheriMemoryTypes
   | MVEunion :
     CoqSymbol.sym ->
     CoqSymbol.identifier -> mem_value_with_err ->
-    mem_value_with_err
-  | MVErr : mem_error -> mem_value_with_err.
+    mem_value_with_err.
+  Set Elimination Schemes.
+
+  (* Custom induction principle for mem_value_with_err *)
+  Theorem mem_value_with_err_ind
+    : forall P : mem_value_with_err -> Prop,
+      (* base cases *)
+      (forall c : CoqCtype.ctype, P (MVEunspecified c)) ->
+      (forall (i : CoqCtype.integerType) (i0 : integer_value_indt), P (MVEinteger i i0)) ->
+      (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVEfloating f f0)) ->
+      (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVEpointer c p)) ->
+      (forall (e: mem_error), P (MVErr e)) ->
+      (* recursive cases *)
+      (forall l : list mem_value_with_err, List.Forall P l -> P (MVEarray l)) ->
+      (forall (s : sym) (l : list (identifier * CoqCtype.ctype * mem_value_with_err)),
+          List.Forall (fun '(_,_,b) => P b) l ->
+          P (MVEstruct s l)) ->
+      (forall (s : sym) (i : identifier) (m : mem_value_with_err), P m -> P (MVEunion s i m)) ->
+
+      forall m : mem_value_with_err, P m.
+  Proof.
+    intros P H_unspecified H_integer H_floating H_pointer H_err H_array H_struct H_union.
+    fix IH 1.
+    destruct m.
+    - apply H_unspecified.
+    - apply H_integer.
+    - apply H_floating.
+    - apply H_pointer.
+    - apply H_err.
+    -
+      apply H_array.
+      induction l.
+      constructor.
+      constructor.
+      apply IH.
+      apply IHl.
+    -
+      apply H_struct.
+      induction l.
+      constructor.
+      constructor.
+      destruct a.
+      destruct p.
+      apply IH.
+      apply IHl.
+    - apply H_union.
+      apply IH.
+  Qed.
 
   Unset Elimination Schemes.
   (* This prevent default elimination principle from being generated for
