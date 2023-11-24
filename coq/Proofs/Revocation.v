@@ -2767,6 +2767,38 @@ Module RevocationProofs.
         (CheriMemoryWithoutPNVI.revoke_pointers a).
   Proof.
     intros a.
+    unfold CheriMemoryWithPNVI.revoke_pointers, CheriMemoryWithoutPNVI.revoke_pointers.
+    break_if;[|apply ret_Same;reflexivity].
+    same_step.
+    split;[|intros;apply ret_Same;reflexivity].
+    same_step.
+    split.
+    -
+      eapply bind_Same.
+      split.
+      apply get_Same.
+      intros x1 x2 H.
+      destruct_mem_state_same_rel H.
+      (* zmap_mmapi_same? *)
+      admit.
+    -
+      intros x1 x2 H.
+      apply update_Same.
+      subst.
+      intros m1 m2 H0.
+      subst.
+      unfold CheriMemoryWithPNVI.mem_state_with_capmeta, CheriMemoryWithoutPNVI.mem_state_with_capmeta.
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      split;[cbn; apply H0|].
+      cbn.
+      reflexivity.
   Admitted.
 
   Lemma remove_allocation_same:
