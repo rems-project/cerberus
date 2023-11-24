@@ -373,7 +373,7 @@ Module Type CheriMemoryImpl
   Definition mprint_msg (msg : string) : memM unit :=
     ret (print_msg msg).
 
-  Definition serr2memM {A: Type} (e:serr A): (memM A)
+  Definition serr2InternalErr {A: Type} (e:serr A): (memM A)
     := match e with
        | inr v => ret v
        | inl msg => raise (InternalErr msg)
@@ -834,7 +834,7 @@ Module Type CheriMemoryImpl
     : memM pointer_value
     :=
     let align_n := num_of_int int_val in
-    size_n <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+    size_n <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
@@ -889,7 +889,7 @@ Module Type CheriMemoryImpl
               let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_dead := false; is_readonly:= readonly_status; taint:= Unexposed |} in
 
               st <- get ;;
-              '(funptrmap, capmeta, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) (AddressValue.to_Z addr) mval) ;;
+              '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) (AddressValue.to_Z addr) mval) ;;
               let bs := mapi (fun i b => (Z.add (AddressValue.to_Z addr) (Z.of_nat i), b)) pre_bs in
               put {|
                   next_alloc_id    := st.(next_alloc_id);
@@ -1523,7 +1523,7 @@ Module Type CheriMemoryImpl
     else
       let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
       '(_, mval, _) <-
-        serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
+        serr2InternalErr (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
                                                              (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
       ;;
       match mval with
@@ -1786,7 +1786,7 @@ Module Type CheriMemoryImpl
     (lvalue_ty : CoqCtype.ctype)
     (addr : Z) : memM bool
     :=
-    sz <- serr2memM (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
          ret
@@ -1801,7 +1801,7 @@ Module Type CheriMemoryImpl
 
   Definition is_within_device (ty : CoqCtype.ctype) (addr : Z) : memM bool
     :=
-    sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
     ret
       (List.existsb
          (fun '(min, max) =>
@@ -1815,7 +1815,7 @@ Module Type CheriMemoryImpl
     (addr : Z.t)
     : memM bool
     :=
-    sz <- serr2memM (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
          match
@@ -1826,7 +1826,7 @@ Module Type CheriMemoryImpl
            end
          with
          | Some ty, true =>
-             e <- serr2memM (CoqCtype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
+             e <- serr2InternalErr (CoqCtype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
              ret
                (negb
                   (Z.eqb addr (AddressValue.to_Z alloc.(base)) && (Z.eqb sz alloc.(size) && e)))
@@ -1872,7 +1872,7 @@ Module Type CheriMemoryImpl
                    bounds_unspecified := false |})
            in
            '(taint, mval, bs') <-
-             serr2memM (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) tag_query addr ty bs)
+             serr2InternalErr (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) tag_query addr ty bs)
            ;;
            mem_value_strip_err loc mval >>=
              (fun (mval : mem_value) =>
@@ -1880,7 +1880,7 @@ Module Type CheriMemoryImpl
                     || CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI)
                  then expose_allocations taint
                  else ret tt) ;;
-                sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+                sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
                 let fp := FP Read (AddressValue.of_Z addr) sz in
                 match bs' with
                 | [] =>
@@ -1931,7 +1931,7 @@ Module Type CheriMemoryImpl
                       | true =>
                           fail loc (MerrAccess LoadAccess AtomicMemberof)
                       | false =>
-                          sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+                          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
                           do_load_cap (Some alloc_id) c sz
                       end)
              end)
@@ -1952,7 +1952,7 @@ Module Type CheriMemoryImpl
         if cap_is_null c then
           fail loc (MerrAccess LoadAccess NullPtr)
         else
-          sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
           is_within_device ty (cap_to_Z c) >>=
             (fun (function_parameter : bool) =>
                match function_parameter with
@@ -1991,7 +1991,7 @@ Module Type CheriMemoryImpl
                                  end)
                         end))
           in
-          sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
           resolve_iota precondition iota >>=
             (fun (alloc_id : storage_instance_id) =>
                do_load_cap (Some alloc_id) addr sz)
@@ -2029,7 +2029,7 @@ Module Type CheriMemoryImpl
     : memM  footprint
     :=
     let '(prov,ptrval_) := break_PV ptr in
-    cond <- serr2memM (
+    cond <- serr2InternalErr (
                 mt <- typeof mval ;;
                 CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
                   (CoqCtype.unatomic mt))
@@ -2042,13 +2042,13 @@ Module Type CheriMemoryImpl
             (c_value : C.t)
         : memM footprint
         :=
-        nsz <- serr2memM (sizeof DEFAULT_FUEL None cty) ;;
+        nsz <- serr2InternalErr (sizeof DEFAULT_FUEL None cty) ;;
         cap_check loc c_value 0 WriteIntent nsz ;;
         let addr := (cap_to_Z c_value) in
         
         st <- get ;;
         '(funptrmap, capmeta, pre_bs) <-
-          serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
+          serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
         ;;
         let bs :=
           mapi (fun (i_value: nat) (b_value: AbsByte)
@@ -2569,7 +2569,7 @@ Module Type CheriMemoryImpl
         | CoqCtype.Ctype _ (CoqCtype.Array elem_ty _) => elem_ty
         | _ => diff_ty
         end in
-      sz <- serr2memM (sizeof DEFAULT_FUEL None diff_ty') ;;
+      sz <- serr2InternalErr (sizeof DEFAULT_FUEL None diff_ty') ;;
       ret (IV (Z.div (Z.sub addr1 addr2) sz))
     in
     let error_postcond := fail loc MerrPtrdiff
@@ -2735,7 +2735,7 @@ Module Type CheriMemoryImpl
         ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ " + " ++ String.dec_str offset))
     | Some (CoqCtype.Ctype _ (CoqCtype.Struct tag_sym)) => (* TODO: nested structs *)
         let offset := Z.sub addr alloc.(base) in
-        '(offs, _) <- serr2memM (offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym) ;;
+        '(offs, _) <- serr2InternalErr (offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym) ;;
         let fix find y :=
           match y with
           | [] => None
@@ -2749,7 +2749,7 @@ Module Type CheriMemoryImpl
     | Some (CoqCtype.Ctype _ (CoqCtype.Array ty _)) =>
         let offset := Z.sub addr alloc.(base) in
         if Z.ltb offset alloc.(size) then
-          sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
           let n := Z.div offset sz in
           ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ "[" ++ String.dec_str n ++ "]"))
         else
@@ -2794,7 +2794,7 @@ Module Type CheriMemoryImpl
               (MerrOther
                  "called isWellAligned_ptrval on function pointer")
         | PV _ (PVconcrete addr) =>
-            sz <- serr2memM (alignof DEFAULT_FUEL None ref_ty) ;;
+            sz <- serr2InternalErr (alignof DEFAULT_FUEL None ref_ty) ;;
             ret (Z.eqb (Z.modulo (cap_to_Z addr) sz) 0)
         end
     end.
@@ -3046,7 +3046,7 @@ Module Type CheriMemoryImpl
     let wrap_intcast (ity2 : CoqCtype.integerType) (ival : integer_value)
       : memM integer_value
       :=
-      icr <- serr2memM (internal_intcast loc ity2 ival) ;;
+      icr <- serr2InternalErr (internal_intcast loc ity2 ival) ;;
       match icr with
       | inl err => fail loc err
       | inr ival => ret ival
@@ -3096,8 +3096,8 @@ Module Type CheriMemoryImpl
               CoqCtype.Unsigned CoqCtype.Intptr_t) =>
               wrap_intcast ity (IC false c_value)
           | _ =>
-              maxival <- serr2memM (max_ival ity) ;;
-              minival <- serr2memM (min_ival ity) ;;
+              maxival <- serr2InternalErr (max_ival ity) ;;
+              minival <- serr2InternalErr (min_ival ity) ;;
               let ity_max := num_of_int maxival in
               let ity_min := num_of_int minival in
               let addr := (cap_to_Z c_value) in
@@ -3192,7 +3192,7 @@ Module Type CheriMemoryImpl
     : memM pointer_value
     :=
     let ival := num_of_int ival_int in
-    sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
     let offset := Z.mul sz ival
     in
     let shift_concrete c_value shifted_addr alloc_id :=
@@ -3355,7 +3355,7 @@ Module Type CheriMemoryImpl
     (memb_ident: CoqSymbol.identifier):  memM pointer_value
     :=
     let '(prov,ptrval_) := break_PV ptr in
-    ioff <- serr2memM (offsetof_ival (TD.tagDefs tt) tag_sym memb_ident) ;;
+    ioff <- serr2InternalErr (offsetof_ival (TD.tagDefs tt) tag_sym memb_ident) ;;
     offset <-
       match ioff with
       | IV offset => ret (offset)
@@ -3408,8 +3408,8 @@ Module Type CheriMemoryImpl
     let fix copy_tags (index: nat): memM pointer_value :=
       let copy_tag (dst_p : pointer_value) (src_p : pointer_value)
         : memM unit :=
-        dst_a <- serr2memM (cap_addr_of_pointer_value dst_p) ;;
-        src_a <- serr2memM (cap_addr_of_pointer_value src_p) ;;
+        dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
+        src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
         update
           (fun (st : mem_state) =>
              match ZMap.find src_a st.(capmeta) with
@@ -4028,8 +4028,8 @@ Module Type CheriMemoryImpl
                    | MVinteger (CoqCtype.Size_t as ity) (IV n_value)
                      =>
                        iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
-                       sz <- serr2memM (sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil(CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
-                       bytes_value <- serr2memM (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
+                       sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil(CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
+                       bytes_value <- serr2InternalErr (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
                        let bits := bool_bits_of_bytes bytes_value in
                        match Permissions.of_list bits with
                        | None =>
@@ -4126,7 +4126,7 @@ Module Type CheriMemoryImpl
                                 representation of bounds, could exceed
                                 the width of the return type. To avoid
                                 that we cap it here *)
-                             max_size_t <- serr2memM (max_ival CoqCtype.Size_t) ;;
+                             max_size_t <- serr2InternalErr (max_ival CoqCtype.Size_t) ;;
                              let length := Z.min (Z.sub limit base) (num_of_int max_size_t) in
                              ret (Some (MVinteger CoqCtype.Size_t (IV length)))
                        end)
