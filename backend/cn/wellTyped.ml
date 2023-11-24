@@ -1622,6 +1622,8 @@ let check_cn_statement loc stmt =
      return (M_CN_extract ((to_extract, it)))
   | M_CN_unfold (f, its) ->
      let@ def = get_logical_function_def loc f in
+     if LogicalFunctions.is_recursive def then ()
+     else Pp.warn loc (Pp.item "unfold of function not marked [rec] (no effect)" (Sym.pp f));
      let@ () = ensure_same_argument_number loc `General 
                  (List.length its) ~expect:(List.length def.args)
      in

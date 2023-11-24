@@ -1731,32 +1731,22 @@ let record_and_check_logical_functions funs =
 
   let n_funs = List.length funs in
 
-  (* First check and add non-recursive functions. We check before
-     adding them, because they cannot depend on themselves*)
-  let@ () =
-    ListM.iteriM (fun i (name, def) ->
-        debug 2 (lazy (headline ("checking welltypedness of function" ^
-            Pp.of_total i n_funs ^ ": " ^ Sym.pp_string name)));
-        let@ def = WellTyped.WLFD.welltyped def in
-        add_logical_function name def
-      ) nonrecursive
-  in
-
-  (* Then we check the recursive functions: add them all as uninterpreted, check
-     welltypedness of each, then overwrite with actual (NIA-simplified) body. *)
-
+  (* Add all recursive functions (without their actual bodies), so that they
+     can depend on themselves and each other. *)
   let@ () =
     ListM.iterM (fun (name, def) -> 
         let@ simple_def = WellTyped.WLFD.welltyped {def with definition = Uninterp} in
         add_logical_function name simple_def
       ) recursive
   in
+
+  (* Now check all functions in order. *)
   ListM.iteriM (fun i (name, def) ->
-      debug 2 (lazy (headline ("checking welltypedness of recursive function" ^
-          Pp.of_total (i + List.length nonrecursive) n_funs ^ ": " ^ Sym.pp_string name)));
-      let@ def = WellTyped.WLFD.welltyped def in
-      add_logical_function name def
-    ) recursive
+        debug 2 (lazy (headline ("checking welltypedness of function" ^
+            Pp.of_total i n_funs ^ ": " ^ Sym.pp_string name)));
+        let@ def = WellTyped.WLFD.welltyped def in
+        add_logical_function name def
+      ) funs
 
 let record_and_check_resource_predicates preds =
   (* add the names to the context, so recursive preds check *)
