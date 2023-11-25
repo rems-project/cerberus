@@ -1971,7 +1971,7 @@ Module RevocationProofs.
   Qed.
 
   Lemma bind_Same {T1 T2 T1' T2':Type}
-    {R: T1 -> T2 -> Prop} (* relation between values *)
+    (R: T1 -> T2 -> Prop) (* relation between values *)
     (R': T1' -> T2' -> Prop) (* relation between values *)
     {M1: CheriMemoryWithPNVI.memM T1'}
     {M2: CheriMemoryWithoutPNVI.memM T2'}
@@ -2408,11 +2408,11 @@ Module RevocationProofs.
       split.
       break_match.
       -
-        apply (bind_Same mem_state_same_rel).
+        apply bind_Same with (R':=mem_state_same_rel).
         split.
         same_step.
         intros.
-        apply (bind_Same repr_res_eq).
+        apply bind_Same with (R':=repr_res_eq).
         split.
         {
           apply serr2InternalErr_same with (R:=repr_res_eq).
@@ -2688,14 +2688,17 @@ Module RevocationProofs.
       (alloc_base alloc_limit: Z)
       (st1: CheriMemoryWithPNVI.mem_state)
       (st2: CheriMemoryWithoutPNVI.mem_state)
-      (addr: Z)
-      (meta: (bool*CapGhostState)),
+      (addr1 addr2: Z)
+      (meta1 meta2: (bool*CapGhostState)),
 
+      addr1 = addr2 ->
+      meta1 = meta2 ->
       mem_state_same_rel st1 st2 ->
-      Same eq (CheriMemoryWithPNVI.maybe_revoke_pointer alloc_base alloc_limit st1 addr meta)
-        (CheriMemoryWithoutPNVI.maybe_revoke_pointer alloc_base alloc_limit st2 addr meta).
+      Same eq (CheriMemoryWithPNVI.maybe_revoke_pointer alloc_base alloc_limit st1 addr1 meta1)
+        (CheriMemoryWithoutPNVI.maybe_revoke_pointer alloc_base alloc_limit st2 addr2 meta2).
   Proof.
-    intros alloc_base alloc_limit st1 st2 addr meta M.
+    intros alloc_base alloc_limit st1 st2 addr1 addr2 meta1 meta2 H1 H2 M.
+    subst.
     unfold CheriMemoryWithPNVI.maybe_revoke_pointer, CheriMemoryWithoutPNVI.maybe_revoke_pointer.
     break_if.
     -
@@ -2724,6 +2727,20 @@ Module RevocationProofs.
         apply ret_Same;reflexivity.
   Qed.
 
+  Lemma zmap_mmapi_same:
+    forall (A B:Type) (R: relation B) f1 f2 (m1 m2:ZMap.t A),
+      ZMap.Equal m1 m2 ->
+      (forall k1 k2 v1 v2, k1=k2 -> v1=v2 -> Same R (f1 k1 v1) (f2 k2 v2)) ->
+      Same ZMap.Equal
+        (zmap_mmapi f1 m1)
+        (zmap_mmapi f2 m2).
+  Proof.
+    intros A B R f1 f2 m1 m2 H H0.
+    split.
+    -
+      unfold zmap_mmapi.
+  Admitted.
+
   Lemma revoke_pointers_same:
     forall a : allocation,
       Same eq (CheriMemoryWithPNVI.revoke_pointers a)
@@ -2734,16 +2751,17 @@ Module RevocationProofs.
     break_if;[|apply ret_Same;reflexivity].
     same_step.
     split;[|intros;apply ret_Same;reflexivity].
-    same_step.
+    eapply bind_Same with (R':=ZMap.Equal).
     split.
     -
       eapply bind_Same.
       split.
       apply get_Same.
       intros x1 x2 H.
-      destruct_mem_state_same_rel H.
-      (* zmap_mmapi_same? *)
-      admit.
+      eapply zmap_mmapi_same.
+      apply H.
+      intros k1 k2 v1 v2 H0 H1.
+      apply maybe_revoke_pointer_same; auto.
     -
       intros x1 x2 H.
       apply update_Same.
@@ -2761,8 +2779,8 @@ Module RevocationProofs.
       split;[cbn; apply H0|].
       split;[cbn; apply H0|].
       cbn.
-      reflexivity.
-  Admitted.
+      assumption.
+  Qed.
 
   Lemma remove_allocation_same:
     forall z : Z,
