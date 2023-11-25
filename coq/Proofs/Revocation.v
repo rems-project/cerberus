@@ -2670,6 +2670,15 @@ Module RevocationProofs.
 
   End allocate_object_proofs.
 
+  #[global] Instance zmap_fold_proper
+    {A elt : Type}
+    (Ae: relation A)
+    (Eelt: relation elt)
+    :
+    Proper (((eq) ==> Eelt ==> Ae ==> Ae) ==> ZMap.Equal ==> Ae ==> Ae) (@ZMap.fold elt A).
+  Proof.
+  Admitted.
+
   #[local] Instance find_live_allocation_same (addr:AddressValue.t):
     Same eq
       (CheriMemoryWithPNVI.find_live_allocation addr)
@@ -2682,8 +2691,11 @@ Module RevocationProofs.
     intros x1 x2 H.
     same_step.
     destruct H as [_ [_ [_ [H4 _]]]].
-    (* TODO: need Proper for [ZMap.fold] wrt [ZMap.Equal] *)
-  Admitted.
+    apply zmap_fold_proper with (Eelt:=eq);auto.
+    intros x x' Ex a a' Ea y y' Ey.
+    subst.
+    break_match;reflexivity.
+  Qed.
 
   Definition abst_res_eq: relation (taint_indt * mem_value_with_err * list AbsByte)
     := fun '(t1,mv1,b1) '(t2,mv2,b2) =>
