@@ -2874,6 +2874,33 @@ Module RevocationProofs.
     apply H.
   Qed.
 
+  Lemma get_allocation_same:
+    forall s1 s2 : storage_instance_id,
+      s1 = s2 ->
+      Same eq (CheriMemoryWithPNVI.get_allocation s1) (CheriMemoryWithoutPNVI.get_allocation s2).
+  Proof.
+    intros s1 s2 H.
+    unfold CheriMemoryWithPNVI.get_allocation, CheriMemoryWithoutPNVI.get_allocation.
+    subst.
+    eapply bind_Same with (R':=mem_state_same_rel).
+    split.
+    same_step.
+    intros x1 x2 H.
+    replace (ZMap.find (elt:=allocation) s2 (CheriMemoryWithoutPNVI.allocations x2))
+      with (ZMap.find (elt:=allocation) s2 (CheriMemoryWithPNVI.allocations x1)).
+    2: {
+      apply find_m_Proper.
+      reflexivity.
+      apply H.
+    }
+    break_match.
+    same_step.
+    reflexivity.
+    unfold CheriMemoryWithPNVI.fail_noloc, CheriMemoryWithoutPNVI.fail_noloc.
+    unfold CheriMemoryWithPNVI.fail, CheriMemoryWithoutPNVI.fail.
+    break_match;same_step;reflexivity.
+  Qed.
+
   #[global] Instance kill_same
     (loc : location_ocaml)
     (is_dyn : bool)
@@ -2913,13 +2940,52 @@ Module RevocationProofs.
             ++ apply revoke_pointers_same.
             ++ intros; apply remove_allocation_same.
           --
-            admit.
+            intros x1 x0 H.
+            same_step.
+            intros m1 m2 H0.
+
+            split;[cbn; apply H0|].
+            split;[cbn; apply H0|].
+            split;[cbn; apply H0|].
+            split.
+            cbn.
+            break_if.
+            unfold zmap_update_element.
+            apply add_m_Proper;try reflexivity.
+            apply remove_m_Proper;[reflexivity| apply H0].
+            apply remove_m_Proper;[reflexivity| apply H0].
+            split;[cbn; apply H0|].
+            split;[cbn; apply H0|].
+            split;[cbn; apply H0|].
+            split;[cbn; apply H0|].
+            split;[cbn; apply H0|].
+            apply H0.
         *
-          admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
+          break_match.
+          same_step; reflexivity.
+          same_step; reflexivity.
+    - (* Prov_none *)
+      repeat break_match; same_step; reflexivity.
+    -
+      break_match.
+      repeat break_match; same_step; reflexivity.
+      normalize_switches.
+      unfold CheriMemoryWithPNVI.cap_is_null, CheriMemoryWithoutPNVI.cap_is_null.
+      unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
+      break_match.
+      repeat break_match; same_step; reflexivity.
+      same_step.
+      split.
+      apply get_allocation_same;try reflexivity.
+      intros x1 x2 H.
+      subst.
+      break_if.
+      repeat break_match; same_step; reflexivity.
+      admit.
+    -
+      admit.
+    - (* Prov_device *)
+      repeat break_match; same_step; reflexivity.
   Admitted.
 
 
