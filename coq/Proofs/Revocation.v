@@ -2717,7 +2717,45 @@ Module RevocationProofs.
         (CheriMemoryWithPNVI.fetch_bytes bytemap1 base_addr n_bytes)
         (CheriMemoryWithoutPNVI.fetch_bytes bytemap2 base_addr n_bytes).
   Proof.
-  Admitted.
+    intros bytemap1 bytemap2 base_addr n_bytes B.
+    unfold CheriMemoryWithPNVI.fetch_bytes, CheriMemoryWithoutPNVI.fetch_bytes.
+    apply list_map_Proper with (pA:=eq).
+    -
+      intros x y E.
+      subst y. rename x into k.
+      unfold ZMap.Equiv in B.
+      destruct B as [B1 B2].
+      break_match;break_match.
+      +
+        apply B2 with (k:=k);
+        apply find_mapsto_iff; assumption.
+      +
+        exfalso.
+        apply not_find_in_iff in Heqo0.
+        destruct Heqo0.
+        apply B1.
+        apply in_find_iff.
+        rewrite Heqo.
+        auto.
+      +
+        exfalso.
+        apply not_find_in_iff in Heqo.
+        destruct Heqo.
+        apply B1.
+        apply in_find_iff.
+        rewrite Heqo0.
+        auto.
+      +
+        unfold CheriMemoryWithPNVI.default_prov, CheriMemoryWithoutPNVI.default_prov.
+        rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+        constructor.
+        split; auto.
+    -
+      apply list_init_proper;auto.
+      intros x y E.
+      subst.
+      reflexivity.
+  Qed.
   #[global] Opaque CheriMemoryWithPNVI.fetch_bytes CheriMemoryWithoutPNVI.fetch_bytes.
 
   Lemma maybe_revoke_pointer_same:
