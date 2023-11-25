@@ -286,11 +286,11 @@ Section ZMapAux.
   (* Simple case *)
   #[global] Instance zmap_mapi_Proper_equal
     {A B : Type}
-    (f : ZMap.key -> A -> B)
   :
-  Proper ((ZMap.Equal) ==> (ZMap.Equal)) (ZMap.mapi f).
+  Proper ((eq ==> eq ==> eq) ==>
+      (ZMap.Equal) ==> (ZMap.Equal)) (@ZMap.mapi A B ).
   Proof.
-    intros a1 a2 H.
+    intros f1 f2 Ef a1 a2 H.
     unfold ZMap.Equal in *.
     intros k.
     specialize (H k).
@@ -298,7 +298,10 @@ Section ZMapAux.
     rewrite mapi_o.
     -
       unfold option_map.
-      repeat break_match;invc H; reflexivity.
+      repeat break_match;invc H.
+      f_equiv.
+      apply Ef;reflexivity.
+      reflexivity.
     -
       intros x y e HF;rewrite HF;reflexivity.
     -
