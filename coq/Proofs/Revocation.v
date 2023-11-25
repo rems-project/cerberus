@@ -2857,7 +2857,22 @@ Module RevocationProofs.
         (CheriMemoryWithoutPNVI.remove_allocation z).
   Proof.
     intros z.
-  Admitted.
+    unfold CheriMemoryWithPNVI.remove_allocation, CheriMemoryWithoutPNVI.remove_allocation.
+    same_step.
+    intros m1 m2 H.
+    split;[cbn; apply H|].
+    split;[cbn; apply H|].
+    split;[cbn; apply H|].
+    split.
+    apply remove_m_Proper;[reflexivity|apply H].
+    split;[cbn; apply H|].
+    split;[cbn; apply H|].
+    split;[cbn; apply H|].
+    split;[cbn; apply H|].
+    split;[cbn; apply H|].
+    cbn.
+    apply H.
+  Qed.
 
   #[global] Instance kill_same
     (loc : location_ocaml)
