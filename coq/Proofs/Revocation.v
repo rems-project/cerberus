@@ -1143,84 +1143,6 @@ Module RevocationProofs.
       /\ eqlistA AbsByte_eq l1 l1'.
 
 
-  (* Proper for [monadic_fold_left], postulating that `f` must be proper only for elements from the list.
-     C.f. to more naive formulation:
-     [Proper ((Ea ==> Eb ==> EMa) ==> (eqlistA Eb) ==> Ea ==> EMa) monadic_fold_left]
-   *)
-  Lemma monadic_fold_left_proper
-    (A B : Type)
-    (Eb : relation B)
-    (Ea : relation A)
-    (m : Type -> Type)
-    (M : Monad m)
-    (EMa : relation (m A))
-    (RetProper: Proper (Ea ==> EMa) ret)
-    (BindProper: Proper ((EMa) ==> (Ea ==> EMa) ==> (EMa)) (@bind m M A A))
-    (f f' : A -> B -> m A)
-    (l l' : list B)
-    (El : eqlistA Eb l l')
-    {a a' : A}
-    {Ex : Ea a a'}
-    (Ef : forall (a a' : A), (Ea a a') -> Forall2 (fun b b' => EMa (f a b) (f' a' b')) l l')
-    :
-    EMa (monadic_fold_left f l a) (monadic_fold_left f' l' a').
-  Proof.
-    revert a a' Ex.
-    induction El.
-    -
-      intros.
-      apply RetProper.
-      assumption.
-    -
-      intros a a' EA.
-      cbn.
-      apply BindProper.
-      +
-        specialize (Ef a a' EA).
-        invc Ef.
-        assumption.
-      +
-        intros b b' EB.
-        apply IHEl.
-        *
-          intros a0 a0' EA0.
-          specialize (Ef a0 a0' EA0).
-          invc Ef.
-          assumption.
-        *
-          assumption.
-  Qed.
-
-  (* Proper for [monadic_fold_left2], postulating that `f` must be proper only for elements from the list.
-   *)
-  Lemma monadic_fold_left2_proper
-    {A B C:Type}
-    (Eb : relation B)
-    (Ea : relation A)
-    (Ec : relation C)
-    (m : Type -> Type)
-    (M : Monad m)
-    (ML: MonadLaws M)
-    (EMa : relation (m A))
-    (RetProper: Proper (Ea ==> EMa) ret)
-    (BindProper: Proper ((EMa) ==> (Ea ==> EMa) ==> (EMa)) (@bind m M A A))
-    (f f': A -> B -> C -> m A)
-    (l1 l1' : list B)
-    (l2 l2' : list C)
-    (El1 : eqlistA Eb l1 l1')
-    (El2 : eqlistA Ec l2 l2')
-    {x x' : A}
-    {Ex : Ea x x'}
-    (Ef : forall (a a' : A), (Ea a a') ->
-                        Forall2 (fun b b' =>
-                                   Forall2 (fun c c' =>
-                                              EMa (f a b c) (f' a' b' c')) l2 l2') l1 l1')
-    :
-    EMa (monadic_fold_left2 f x l1 l2) (monadic_fold_left2 f' x' l1' l2').
-  Proof.
-  Admitted.
-
-
   Section repr_same_proof.
 
     Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
@@ -2669,15 +2591,6 @@ Module RevocationProofs.
     #[global] Opaque CheriMemoryWithPNVI.allocate_object CheriMemoryWithoutPNVI.allocate_object.
 
   End allocate_object_proofs.
-
-  #[global] Instance zmap_fold_proper
-    {A elt : Type}
-    (Ae: relation A)
-    (Eelt: relation elt)
-    :
-    Proper (((eq) ==> Eelt ==> Ae ==> Ae) ==> ZMap.Equal ==> Ae ==> Ae) (@ZMap.fold elt A).
-  Proof.
-  Admitted.
 
   #[local] Instance find_live_allocation_same (addr:AddressValue.t):
     Same eq
