@@ -316,23 +316,23 @@ module IndexTerms = struct
       let a = aux a in
       let b = aux b in
       let (a, b) = simp_comp_if_int a b in
-      begin match a, b with
-      | IT (Const (Z z1), _), IT (Const (Z z2), _) ->
+      begin match a, b, IT.get_num_z a, IT.get_num_z b with
+      | _, _, Some z1, Some z2 ->
          IT (Const (Bool (Z.leq z1 z2)), the_bt)
-      | IT (Const (Q q1), _), IT (Const (Q q2), _) ->
+      | IT (Const (Q q1), _), IT (Const (Q q2), _), _, _ ->
          IT (Const (Bool (Q.leq q1 q2)), the_bt)
-      | _, _ when IT.equal a b ->
+      | _, _, _, _ when IT.equal a b ->
          bool_ true
-      | IT (Binop (Rem, _, IT (Const (Z z1), _)), _), 
-        IT (Const (Z z2), _) 
-      | IT (Binop (Mod, _, IT (Const (Z z1), _)), _), 
-        IT (Const (Z z2), _) 
+      | IT (Binop (Rem, _, IT (Const (Z z1), _)), _),
+        IT (Const (Z z2), _), _, _
+      | IT (Binop (Mod, _, IT (Const (Z z1), _)), _),
+        IT (Const (Z z2), _), _, _
            when
              Z.gt z1 Z.zero &&
                Z.gt z2 Z.zero &&
                  Z.equal z1 (Z.add z2 Z.one) ->
          bool_ true
-      | _, _ ->
+      | _, _, _, _ ->
          IT (Binop (LE, a, b), the_bt)
       end
     | Binop (Min, a, b) ->
