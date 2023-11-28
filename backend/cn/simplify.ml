@@ -30,11 +30,13 @@ let default global = {
     simp_hook = (fun _ -> None);
   }
 
-let rec do_ctz_z z = if Z.equal Z.zero z then 0
-  else if Z.equal (Z.of_int (-1)) z then 0
-  else let (q, r) = Z.div_rem z (Z.of_int 2) in
-  if Z.equal r Z.zero then do_ctz_z q else do_ctz_z q + 1
-
+let do_ctz_z z =
+  let rec loop z found = if Z.equal Z.zero z then assert false
+    else begin let (q, r) = Z.div_rem z (Z.of_int 2) in
+      if Z.equal r Z.zero then loop q (found + 1) else found
+    end
+  in
+  if Z.equal Z.zero z then None else Some (loop z 0)
 
 module IndexTerms = struct
 
@@ -392,16 +394,22 @@ module IndexTerms = struct
        | Not, Unop (Not, b) ->
           b
        | BWCTZNoSMT, Const (Z z) ->
-          int_ (do_ctz_z z)
+          begin match do_ctz_z z with
+          | None -> IT (Unop (op, a), the_bt)
+          | Some i -> int_ i
+          end
        | BWCTZNoSMT, Const (Bits (bits, z)) ->
-          int_lit_ (do_ctz_z (BT.normalise_to_range bits z)) (IT.bt a)
+          begin match do_ctz_z (BT.normalise_to_range bits z) with
+          | None -> IT (Unop (op, a), the_bt)
+          | Some i -> int_lit_ i the_bt
+          end
        | BWFFSNoSMT, Const (Z z) ->
           if Z.equal z Z.zero then int_ 0
-          else int_ (do_ctz_z z + 1)
+          else int_ (Option.get (do_ctz_z z) + 1)
        | BWFFSNoSMT, Const (Bits (bits, z)) ->
           let z = BT.normalise_to_range bits z in
-          if Z.equal z Z.zero then int_lit_ 0 (IT.bt a)
-          else int_lit_ (do_ctz_z z + 1) (IT.bt a)
+          if Z.equal z Z.zero then int_lit_ 0 the_bt
+          else int_lit_ (Option.get (do_ctz_z z) + 1) the_bt
        | _, _ ->
           IT (Unop (op, a), the_bt)
        end
