@@ -24,6 +24,9 @@ SOFTWARE.
 
 */
 
+#include "alloc.c"
+#include <stdbool.h>
+
 // Hash table entry (slot may be filled or empty).
 typedef struct {
     unsigned int *key;  // key is NULL if this slot is empty
@@ -39,9 +42,9 @@ struct hash_table {
 
 typedef struct hash_table hash_table;
 
-hash_table *create_hash_table(void);
+hash_table *ht_create(void);
 
-void destroy_hash_table(hash_table *table);
+// void destroy_hash_table(hash_table *table);
 
 void *ht_get(hash_table *table, unsigned int *key);
 

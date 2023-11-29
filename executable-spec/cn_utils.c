@@ -1,6 +1,6 @@
 
 // #include "alloc.c"
-#include "hash_table.c"
+#include "hash_table.h"
 #include <stdio.h>
 #include <math.h>
 #include <assert.h>
