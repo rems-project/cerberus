@@ -24,7 +24,6 @@ SOFTWARE.
 
 */
 
-#include "alloc.c"
 #include "hash_table.h"
 #include <assert.h>
 #include <stdint.h>
