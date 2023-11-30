@@ -1645,9 +1645,9 @@ Module Type CheriMemoryImpl
             fun x =>
               match x with
               | None => fail loc
-                          (if is_dyn
-                           then (MerrUndefinedFree Free_non_matching)
-                           else (MerrOther "attempted to kill with a pointer not matching any live allocation"))
+                         (if is_dyn
+                          then (MerrUndefinedFree Free_non_matching)
+                          else (MerrOther "attempted to kill with a pointer not matching any live allocation"))
               | Some (alloc_id,alloc) =>
                   precond c alloc alloc_id ;;
                   update
@@ -1714,26 +1714,23 @@ Module Type CheriMemoryImpl
                 then fail loc (MerrUndefinedFree Free_dead_allocation)
                 else raise (InternalErr "Concrete: FREE was called on a dead allocation")
               else
-                if is_dyn && negb (cap_match_dyn_allocation c alloc)
-                then fail loc (MerrUndefinedFree Free_non_matching)
-                else
-                  precond c alloc alloc_id ;;
-                  update
-                    (fun st =>
-                       {|
-                         next_alloc_id    := st.(next_alloc_id);
-                         next_iota        := st.(next_iota);
-                         last_address     := st.(last_address) ;
-                         allocations      := update_allocations alloc
-                                               alloc_id
-                                               st.(allocations);
-                         iota_map         := st.(iota_map);
-                         funptrmap        := st.(funptrmap);
-                         varargs          := st.(varargs);
-                         next_varargs_id  := st.(next_varargs_id);
-                         bytemap          := st.(bytemap);
-                         capmeta          := st.(capmeta);
-                       |})
+                precond c alloc alloc_id ;;
+                update
+                  (fun st =>
+                     {|
+                       next_alloc_id    := st.(next_alloc_id);
+                       next_iota        := st.(next_iota);
+                       last_address     := st.(last_address) ;
+                       allocations      := update_allocations alloc
+                                             alloc_id
+                                             st.(allocations);
+                       iota_map         := st.(iota_map);
+                       funptrmap        := st.(funptrmap);
+                       varargs          := st.(varargs);
+                       next_varargs_id  := st.(next_varargs_id);
+                       bytemap          := st.(bytemap);
+                       capmeta          := st.(capmeta);
+                     |})
     end.
 
 
