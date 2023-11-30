@@ -55,7 +55,7 @@ let parse_with_cn ~c_lexer lexbuf =
   let Cabs.TUnit decls = C_parser.translation_unit (lexer_cn_hack ~c_lexer) lexbuf in
   Cabs.TUnit (List.concat (List.map (convert_toplevel_magic c_lexer) decls))
 
-let after_before_msg buffer ~cnum_hack (lexbuf : Lexing.lexbuf) =
+let after_before_msg buffer ~cnum_hack (lexbuf : Lexing.lexbuf) = try
   MenhirLib.ErrorReports.show (fun (start, curr) ->
       let start_pos = start.Lexing.pos_cnum - cnum_hack in
       let curr_pos = curr.Lexing.pos_cnum - cnum_hack in
@@ -70,6 +70,7 @@ let after_before_msg buffer ~cnum_hack (lexbuf : Lexing.lexbuf) =
           lexbuf.lex_buffer_len start_pos curr_pos cnum_hack;
       )
     ) buffer
+  with Invalid_argument _ -> "(error formatting 'where' information)"
 
 let parse lexbuf =
   let c_buffer, c_lexer = MenhirLib.ErrorReports.wrap C_lexer.lexer in
