@@ -5,6 +5,7 @@ type language =
 
 type pp_flag =
   | Annot
+  | Loc
 
 type configuration = {
   debug_level: int;

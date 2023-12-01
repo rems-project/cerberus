@@ -67,6 +67,7 @@ type language =
 
 type pp_flag =
   | Annot
+  | Loc
 
 type configuration = {
   debug_level: int;
@@ -517,7 +518,12 @@ let print_core (conf, io) ~filename core_file =
       let pp_file file =
         let saved = !Cerb_colour.do_colour in
         Cerb_colour.do_colour := Unix.isatty Unix.stdout && Option.is_none fout_opt;
-        let ret = (if List.mem Annot conf.ppflags then Pp_core.WithStd.pp_file else Pp_core.Basic.pp_file) file in
+        let ret = (match List.mem Annot conf.ppflags, List.mem Loc conf.ppflags with
+                   | false, false -> Pp_core.Basic.pp_file
+                   | false, true -> Pp_core.WithLocations.pp_file
+                   | true, false -> Pp_core.WithStd.pp_file
+                   | true, true -> Pp_core.WithLocationsAndStd.pp_file
+                  ) file in
         Cerb_colour.do_colour := saved;
         ret in
       io.run_pp fout_opt (pp_file core_file)
