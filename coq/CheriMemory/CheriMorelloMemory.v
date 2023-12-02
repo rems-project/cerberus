@@ -1030,7 +1030,9 @@ Module Type CheriMemoryImpl
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (cap_to_Z c) 0.
 
-  (* find first live allocation with given starting addrress *)
+  (* Find first live allocation with given starting addrress. We need
+     to check for liveness here, instead of later as multiple dead
+     allocations may correspond to given address.  *)
   Definition find_live_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
     get >>= fun st =>
         ret
@@ -1054,10 +1056,10 @@ Module Type CheriMemoryImpl
         end.
 
   (*
+
     Check if given cap is matches exactly a cap retruned by one of
     previous dynamic allocations.
 
-    0. The allocation must be live (ensured by [find_live_allocation]
     1. The allocation must be dynamic
     2. Bounds must exactly span allocation
     3. Address must be equal to the beginning of allocation
@@ -1089,6 +1091,9 @@ Module Type CheriMemoryImpl
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
               |}).
+
+  Definition get_allocation_opt (alloc_id : Z) : memM (option allocation) :=
+    get >>= fun st => ret (ZMap.find alloc_id st.(allocations)).
 
   Definition get_allocation (alloc_id : Z) : memM allocation :=
     get >>=
@@ -1618,7 +1623,9 @@ Module Type CheriMemoryImpl
 
     let precond c alloc alloc_id :=
       if is_dyn && negb (cap_match_dyn_allocation c alloc)
-      then fail loc (MerrUndefinedFree Free_non_matching)
+      then
+        (* the capability corresponding to dynamic allocation was changed *)
+        fail loc (MerrUndefinedFree Free_non_matching)
       else
         if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
         then revoke_pointers alloc ;; remove_allocation alloc_id
@@ -1632,10 +1639,6 @@ Module Type CheriMemoryImpl
     in
 
     match ptr with
-    | PV _ (PVfunction _) =>
-        fail loc (MerrOther "attempted to kill with a function pointer")
-    | PV Prov_none (PVconcrete c) =>
-        fail loc (MerrOther "attempted to kill with a pointer lacking a provenance")
     | PV Prov_disabled (PVconcrete c) =>
         if cap_is_null c
            && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
@@ -1644,30 +1647,90 @@ Module Type CheriMemoryImpl
           find_live_allocation (C.cap_get_value c) >>=
             fun x =>
               match x with
-              | None => fail loc
-                         (if is_dyn
-                          then (MerrUndefinedFree Free_non_matching)
-                          else (MerrOther "attempted to kill with a pointer not matching any live allocation"))
+              | None =>
+                  (* Unfortunately we could not distinguish here
+                     between the cases where allocation could not be
+                     found because of the starting address does not
+                     match (`Free_non_matching`) or it was previously
+                     killed (`Free_dead_allocation`).
+                   *)
+                  fail loc
+                    (if is_dyn
+                     then MerrUndefinedFree Free_non_matching
+                     else MerrOther "attempted to kill with a pointer not matching any live allocation")
               | Some (alloc_id,alloc) =>
-                  precond c alloc alloc_id ;;
-                  update
-                    (fun st =>
-                       {|
-                         next_alloc_id    := st.(next_alloc_id);
-                         next_iota        := st.(next_iota);
-                         last_address     := st.(last_address) ;
-                         allocations      := update_allocations alloc
-                                               alloc_id
-                                               st.(allocations);
-                         iota_map         := st.(iota_map);
-                         funptrmap        := st.(funptrmap);
-                         varargs          := st.(varargs);
-                         next_varargs_id  := st.(next_varargs_id);
-                         bytemap          := st.(bytemap);
-                         capmeta          := st.(capmeta);
-                       |})
+                  match is_dyn, alloc.(is_dynamic) with
+                  | true, false =>
+                      (* an attempt to kill a static allocation as dynamic. e.g. call free on
+                       the address of local variable *)
+                      fail loc (MerrUndefinedFree Free_non_matching)
+                  | false, true =>
+                      (* This should not happen *)
+                      raise (InternalErr "An attempt to kill dymanic allocation as static")
+                  | _ , _ =>
+                      precond c alloc alloc_id ;;
+                      update
+                        (fun st =>
+                           {|
+                             next_alloc_id    := st.(next_alloc_id);
+                             next_iota        := st.(next_iota);
+                             last_address     := st.(last_address) ;
+                             allocations      := update_allocations alloc
+                                                   alloc_id
+                                                   st.(allocations);
+                             iota_map         := st.(iota_map);
+                             funptrmap        := st.(funptrmap);
+                             varargs          := st.(varargs);
+                             next_varargs_id  := st.(next_varargs_id);
+                             bytemap          := st.(bytemap);
+                             capmeta          := st.(capmeta);
+                           |})
+                  end
               end
-    | PV Prov_device (PVconcrete _) => ret tt
+    | PV (Prov_some alloc_id) (PVconcrete c) =>
+        if cap_is_null c
+           && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
+        then fail loc MerrFreeNullPtr
+        else
+          get_allocation_opt alloc_id >>= fun alloc_opt =>
+              match alloc_opt with
+              | None =>
+                  (* The allocation_id in the pointer is no longer in the list of allocations. *)
+                  fail loc (MerrUndefinedFree Free_dead_allocation)
+              | Some alloc =>
+                  match is_dyn, alloc.(is_dynamic), alloc.(is_dead) with
+                  | true, false, _ =>
+                      (* an attempt to kill a static allocation as dynamic. e.g. call free on
+                       the address of local variable *)
+                      fail loc (MerrUndefinedFree Free_non_matching)
+                  | false, true, _ =>
+                      (* This should not happen *)
+                      raise (InternalErr "An attempt to kill dymanic allocation as static")
+                  | true, true, true =>
+                      (* the dynamic allocation was already freed *)
+                      fail loc (MerrUndefinedFree Free_dead_allocation)
+                  | false, false, true =>
+                      raise (InternalErr "An attempt to double-kill non-dynamic allocation")
+                  | _ , _, false =>
+                      precond c alloc alloc_id ;;
+                      update
+                        (fun st =>
+                           {|
+                             next_alloc_id    := st.(next_alloc_id);
+                             next_iota        := st.(next_iota);
+                             last_address     := st.(last_address) ;
+                             allocations      := update_allocations alloc
+                                                   alloc_id
+                                                   st.(allocations);
+                             iota_map         := st.(iota_map);
+                             funptrmap        := st.(funptrmap);
+                             varargs          := st.(varargs);
+                             next_varargs_id  := st.(next_varargs_id);
+                             bytemap          := st.(bytemap);
+                             capmeta          := st.(capmeta);
+                           |})
+                  end
+              end
     | PV (Prov_symbolic iota) (PVconcrete c) =>
         if cap_is_null c && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
         then fail loc MerrFreeNullPtr
@@ -1703,34 +1766,11 @@ Module Type CheriMemoryImpl
                                 capmeta          := st.(capmeta);
                               |})
             ))
-    | PV (Prov_some alloc_id) (PVconcrete c) =>
-        if cap_is_null c
-           && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
-        then fail loc MerrFreeNullPtr
-        else
-          get_allocation alloc_id >>= fun alloc =>
-              if alloc.(is_dead) then
-                if is_dyn
-                then fail loc (MerrUndefinedFree Free_dead_allocation)
-                else raise (InternalErr "Concrete: FREE was called on a dead allocation")
-              else
-                precond c alloc alloc_id ;;
-                update
-                  (fun st =>
-                     {|
-                       next_alloc_id    := st.(next_alloc_id);
-                       next_iota        := st.(next_iota);
-                       last_address     := st.(last_address) ;
-                       allocations      := update_allocations alloc
-                                             alloc_id
-                                             st.(allocations);
-                       iota_map         := st.(iota_map);
-                       funptrmap        := st.(funptrmap);
-                       varargs          := st.(varargs);
-                       next_varargs_id  := st.(next_varargs_id);
-                       bytemap          := st.(bytemap);
-                       capmeta          := st.(capmeta);
-                     |})
+    | PV Prov_device (PVconcrete _) => ret tt
+    | PV _ (PVfunction _) =>
+        fail loc (MerrOther "attempted to kill with a function pointer")
+    | PV Prov_none (PVconcrete c) =>
+        fail loc (MerrOther "attempted to kill with a pointer lacking a provenance")
     end.
 
 
