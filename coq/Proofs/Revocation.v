@@ -2835,12 +2835,14 @@ Module RevocationProofs.
   #[global] Instance kill_same
     (loc : location_ocaml)
     (is_dyn : bool)
-    (ptr : pointer_value_indt)
+    (ptr1 ptr2 : pointer_value_indt)
     :
+    pointer_value_eq ptr1 ptr2 ->
     Same eq
-      (CheriMemoryWithPNVI.kill loc is_dyn ptr)
-      (CheriMemoryWithoutPNVI.kill loc is_dyn ptr).
+      (CheriMemoryWithPNVI.kill loc is_dyn ptr1)
+      (CheriMemoryWithoutPNVI.kill loc is_dyn ptr1).
   Proof.
+    (*
     unfold CheriMemoryWithPNVI.kill, CheriMemoryWithPNVI.DEFAULT_FUEL.
     unfold CheriMemoryWithoutPNVI.kill, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
     unfold CheriMemoryWithPNVI.fail, CheriMemoryWithoutPNVI.fail.
@@ -2917,6 +2919,7 @@ Module RevocationProofs.
       admit.
     - (* Prov_device *)
       repeat break_match; same_step; reflexivity.
+*)
   Admitted.
 
 
