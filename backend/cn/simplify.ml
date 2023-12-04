@@ -560,6 +560,7 @@ module IndexTerms = struct
        begin match get_num_z index with
        | Some z when Z.equal Z.zero z -> base
        | _ -> IT (ArrayShift { base; ct; index }, the_bt)
+       end
     | SizeOf ct ->
        int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt
     | Representable (ct, t) ->

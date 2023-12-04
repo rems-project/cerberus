@@ -326,6 +326,7 @@ let expect_failure =
 let use_vip =
   let doc = "use experimental VIP rules" in
   Arg.(value & flag & info["vip"] ~doc)
+
 let no_use_ity =
   let doc = "(this switch should go away) in WellTyped.BaseTyping, do not use integer type annotations placed by the Core elaboration" in
   Arg.(value & flag & info["no-use-ity"] ~doc)
@@ -362,7 +363,7 @@ let () =
       output_decorated $
       astprints $
       expect_failure $
-      use_vip
+      use_vip $
       no_use_ity $
       use_peval $
       batch

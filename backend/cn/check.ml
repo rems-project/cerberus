@@ -525,7 +525,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
      check_pexpr pe1 (fun vt1 ->
      check_pexpr pe2 (fun vt2 ->
-     k (arrayShift_ (vt1, ct, (cast_ Memory.intptr_bt vt2)))))
+     k (arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.intptr_bt vt2))))
   | M_PEmember_shift (pe, tag, member) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Loc in
      let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
@@ -1071,9 +1071,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      check_pexpr pe (fun lvt ->
      k lvt)
   | M_Ememop memop ->
-      let pointer_eq ?(negate = false) asym1 asym2 =
-       check_pexpr ~expect:Loc asym1 (fun arg1 ->
-       check_pexpr ~expect:Loc asym2 (fun arg2 ->
+      let pointer_eq ?(negate = false) pe1 pe2 =
+       check_pexpr pe1 (fun arg1 ->
+       check_pexpr pe2 (fun arg2 ->
        let prov1, prov2 = pointerToAllocIdCast_ arg1, pointerToAllocIdCast_ arg2 in
        let addr1, addr2 = pointerToIntegerCast_ arg1, pointerToIntegerCast_ arg2 in
        let addr_eq = eq_ (addr1, addr2) in
@@ -1202,7 +1202,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
         check_pexpr pe1 (fun vt1 ->
         check_pexpr pe2 (fun vt2 ->
-        k (arrayShift_ (vt1, act.ct, vt2))))
+        k (arrayShift_ ~base:vt1 act.ct ~index:vt2)))
      | M_PtrMemberShift (tag_sym, memb_ident, pe) ->
         (* FIXME(CHERI merge) *)
         (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)

@@ -660,7 +660,6 @@ module WIT = struct
                Generic (!^ "cast from integer not allowed in bitvector version")})
            | Loc, Alloc_id -> return ()
            | Loc, Integer -> return ()
-           | Loc, Alloc_id -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()
            | Bits (sign,n), Bits (sign',n')
@@ -1670,6 +1669,9 @@ let check_cn_statement loc stmt =
   | M_CN_print it ->
      let@ it = WIT.infer loc it in
      return (M_CN_print it)
+  | M_CN_split_case lc ->
+     let@ lc = WLC.welltyped loc lc in
+     return (M_CN_split_case lc)
 
 let check_cnprog p =
   let open Cnprog in

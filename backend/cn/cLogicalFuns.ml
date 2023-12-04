@@ -33,7 +33,7 @@ let mu_val_to_it (M_V ((bt : BT.t), v)) =
     ( function
         | None -> None
         | Some sym -> Some (IT.sym_ (sym, BT.Loc)) )
-    ( fun _prov p -> Some (IT.pointer_ p) )
+    ( fun _prov _p -> (* how to correctly convert provenance? *) None )
   | M_Vctype ct -> Option.map (fun ct -> IT.const_ctype_ ct) (Sctypes.of_ctype ct)
   | M_Vfunction_addr sym -> Some (IT.sym_ (sym, BT.Loc))
   | _ -> None
