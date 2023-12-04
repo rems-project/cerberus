@@ -12,11 +12,11 @@ let io, get_progress =
   let open Pipeline in
   default_io_helpers, get_progress
 
-let frontend (conf, io) filename core_std =
+let frontend (conf, io) ~is_lib filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
-    return @@ read_core_object core_std filename
+    read_core_object (conf, io) ~is_lib core_std filename
   else if Filename.check_suffix filename ".c" then
     c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
@@ -46,7 +46,7 @@ let core_libraries incl lib_paths libs =
   let lib_paths = if incl then in_runtime "libc" :: lib_paths else lib_paths in
   let libs = if incl then "c" :: libs else libs in
   List.map (fun lib ->
-      match List.fold_left (fun acc path ->
+      true, match List.fold_left (fun acc path ->
           match acc with
           | Some _ -> acc
           | None ->
@@ -101,7 +101,7 @@ let cerberus debug_level progress core_obj
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
       bmc_all_execs bmc_output_model bmc_cat bmc_mode;
   set_cerb_conf "Bmc" exec exec_mode concurrency QuoteStd defacto false false false bmc;
-  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
+  let conf = { astprints; pprints; ppflags; ppouts=[]; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -114,9 +114,10 @@ let cerberus debug_level progress core_obj
     return (core_stdlib, core_impl)
   in
   let main core_std =
-    Exception.except_foldlM (fun core_files file ->
-        frontend (conf, io) file core_std >>= fun core_file ->
-        return (core_file::core_files)) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ files)
+    Exception.except_foldlM (fun core_files (is_lib, file) ->
+      frontend (conf, io) ~is_lib file core_std >>= fun core_file ->
+      return (core_file::core_files)
+    ) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ (List.map (fun z -> (false, z)) files))
   in
   let epilogue n =
     if batch = `Batch then
@@ -186,7 +187,7 @@ let cerberus debug_level progress core_obj
       else
         Pp_errors.fatal "no input file"
     | [file] when core_obj ->
-      prelude >>= frontend (conf, io) file >>= fun core_file ->
+      prelude >>= frontend (conf, io) ~is_lib:false file >>= fun core_file ->
       begin match output_name with
         | Some output_file ->
           write_core_object core_file output_file
@@ -237,7 +238,7 @@ let cerberus debug_level progress core_obj
       else if core_obj then
         prelude >>= fun core_std ->
         Exception.except_foldlM (fun () file ->
-          frontend (conf, io) file core_std >>= fun core_file ->
+          frontend (conf, io) ~is_lib:false file core_std >>= fun core_file ->
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file;
           return ()
@@ -402,9 +403,8 @@ let fs =
 
 let ppflags =
   let open Pipeline in
-  let doc = "Pretty print flags [annot: include location and ISO annotations,\
-             fout: output in a file]." in
-  Arg.(value & opt (list (enum ["annot", Annot; "fout", FOut])) [] &
+  let doc = "Pretty print flags [annot: include location and ISO annotations]." in
+  Arg.(value & opt (list (enum ["annot", Annot])) [] &
        info ["pp_flags"] ~doc)
 
 let files =

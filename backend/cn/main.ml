@@ -130,6 +130,7 @@ let main
       output_decorated
       astprints
       expect_failure
+      use_vip
       no_use_ity
       use_peval
       batch
@@ -150,6 +151,7 @@ let main
     Solver.random_seed := random_seed;
     Solver.log_to_temp := solver_logging;
     Check.only := only;
+  IndexTerms.use_vip := use_vip;
     Check.batch := batch;
     Diagnostics.diag_string := diag;
     WellTyped.use_ity := not no_use_ity
@@ -320,6 +322,10 @@ let expect_failure =
   let doc = "invert return value to 1 if type checks pass and 0 on failure" in
   Arg.(value & flag & info["expect-failure"] ~doc)
 
+(* TODO remove this when VIP impl complete *)
+let use_vip =
+  let doc = "use experimental VIP rules" in
+  Arg.(value & flag & info["vip"] ~doc)
 let no_use_ity =
   let doc = "(this switch should go away) in WellTyped.BaseTyping, do not use integer type annotations placed by the Core elaboration" in
   Arg.(value & flag & info["no-use-ity"] ~doc)
@@ -356,6 +362,7 @@ let () =
       output_decorated $
       astprints $
       expect_failure $
+      use_vip
       no_use_ity $
       use_peval $
       batch

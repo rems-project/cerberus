@@ -135,9 +135,12 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
             let@ _ = get_fun_decl loc sym in
             (* the symbol of a function is the same as the symbol of its address *)
             return (sym_ (sym, BT.Loc)) ) 
-    ( fun _prov p -> 
-      (* TODO: Dhruv, do we want to do something with the provenance here? *)
-      return (pointer_ p) )
+    ( fun prov p ->
+       let@ alloc_id =
+          match prov with
+            | Some id -> return id
+            | None -> fail (fun _ -> {loc; msg = Empty_provenance }) in
+        return (pointer_ ~alloc_id ~addr:p) )
 
 let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
   CF.Impl_mem.case_mem_value mem
@@ -419,7 +422,7 @@ let check_conv_int loc ~expect ct arg =
 let _check_array_shift loc ~expect vt1 (loc_ct, ct) vt2 =
   let@ () = WellTyped.ensure_base_type loc ~expect Loc in
   let@ () = WellTyped.WCT.is_ct loc_ct ct in
-  return (arrayShift_ (vt1, ct, vt2))
+  return (arrayShift_ ~base:vt1 ct  ~index:vt2)
 
 let check_against_core_bt loc msg2 cbt bt = 
   Typing.embed_resultat
@@ -784,16 +787,20 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr e2) in
      let@ () = ensure_base_type loc ~expect:Bool (bt_of_pexpr pe) in
      check_pexpr pe (fun c ->
-     let aux e cond = 
+     let aux e cond name = 
        let@ () = add_c loc (t_ cond) in
-       Pp.debug 5 (lazy (Pp.item "checking consistency of if-branch" (IT.pp cond)));
+       Pp.debug 5 (lazy (Pp.item ("checking consistency of "^ name ^ "-branch") (IT.pp cond)));
        let@ provable = provable loc in
        match provable (t_ (bool_ false)) with
-       | `True -> return ()
-       | `False -> check_pexpr e k
+       | `True ->
+          Pp.debug 5 (lazy (Pp.headline "inconsistent, skipping"));
+          return ()
+       | `False ->
+          Pp.debug 5 (lazy (Pp.headline "consistent, checking"));
+          check_pexpr e k
      in
-     let@ () = pure (aux e1 c) in
-     let@ () = pure (aux e2 (not_ c)) in
+     let@ () = pure (aux e1 c "then") in
+     let@ () = pure (aux e2 (not_ c) "else") in
      return ())
   | M_PElet (p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some p) e1 in
@@ -1064,6 +1071,31 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      check_pexpr pe (fun lvt ->
      k lvt)
   | M_Ememop memop ->
+      let pointer_eq ?(negate = false) asym1 asym2 =
+       check_pexpr ~expect:Loc asym1 (fun arg1 ->
+       check_pexpr ~expect:Loc asym2 (fun arg2 ->
+       let prov1, prov2 = pointerToAllocIdCast_ arg1, pointerToAllocIdCast_ arg2 in
+       let addr1, addr2 = pointerToIntegerCast_ arg1, pointerToIntegerCast_ arg2 in
+       let addr_eq = eq_ (addr1, addr2) in
+       let prov_eq = eq_ (prov1, prov2) in
+       let prov_neq = ne_ (prov1, prov2) in
+       let@ provable = provable loc in
+       let@ () =
+         match provable @@ t_ @@ and_ [prov_neq; addr_eq] with
+         | `False ->
+           return ()
+         | `True ->
+           warn loc !^"ambiguous pointer (in)equality case: addresses equal, but provenances differ";
+           return ()
+       in
+       let res_sym, res = IT.fresh_named Bool (if negate then "ptrNeq" else "ptrEq") in
+       let@ result = add_a res_sym Bool (loc, lazy (Sym.pp res_sym)) in
+       let@ () = add_c loc @@ t_ @@ impl_ (prov_eq, eq_ (res, addr_eq)) in
+       (* this constraint may make the result non-deterministic *)
+       let@ () = add_c loc @@ t_ @@ impl_ (prov_neq, or_ [eq_ (res, addr_eq); eq_ (res, bool_ false)]) in
+       let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt res) in
+       k (if negate then not_ res else res)))
+     in
      let pointer_op op pe1 pe2 = 
        let@ () = ensure_base_type loc ~expect Bool in
        let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe1) in
@@ -1074,9 +1106,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      in
      begin match memop with
      | M_PtrEq (pe1, pe2) -> 
-        pointer_op eq_ pe1 pe2
+       pointer_eq pe1 pe2
      | M_PtrNe (pe1, pe2) -> 
-        pointer_op ne_ pe1 pe2
+       pointer_eq ~negate:true pe1 pe2
      | M_PtrLt (pe1, pe2) -> 
         pointer_op ltPointer_ pe1 pe2
      | M_PtrGt (pe1, pe2) -> 
@@ -1180,9 +1212,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         let@ () = WellTyped.ensure_base_type loc ~expect:BT.Loc (bt_of_pexpr pe2) in
         check_pexpr pe1 (fun vt1 ->
         check_pexpr pe2 (fun vt2 ->
-        let _alloc_id = pointerToAllocIdCast_ vt2 in
-        let new_ptr = integerToPointerCast_ vt1 in
-        k new_ptr))
+        k (copyAllocId_ ~int:vt1 ~loc:vt2)))
      | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
         Cerb_debug.error "todo: M_Memcpy"
      | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -1406,51 +1436,12 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      aux es [] []
   | M_CN_progs (_, cn_progs) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
-     let rec aux = function
-       | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
-          let@ pointer = WellTyped.WIT.check loc Loc pointer in
-          let@ () = WCT.is_ct loc ct in
-          let@ value = load loc pointer ct in
-          aux (Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog)
-       | Cnprog.M_CN_statement (loc, stmt) ->
+     let aux loc stmt =
           (* copying bits of code from elsewhere in check.ml *)
-          begin match stmt with
-            | M_CN_pack_unpack (pack_unpack, pt) -> 
+          match stmt with
+            | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> 
                     warn loc !^"Explicit pack/unpack unsupported.";
                     return ()
-(*                let@ pred = WRET.welltyped loc (P pt) in
-               let pt = match pred with P pt -> pt | _ -> assert false in
-               let@ pname, def = match pt.name with
-                 | PName pname -> 
-                    let@ def = Typing.get_resource_predicate_def loc pname in
-                    return (pname, def)
-                 | Owned _ -> 
-                    fail (fun _ -> {loc; msg = Generic !^"Packing/unpacking 'Owned' currently unsupported."})
-                 | Block _ -> 
-                    fail (fun _ -> {loc; msg = Generic !^"Packing/unpacking 'Block' currently unsupported."})
-               in
-               let err_prefix = match pack_unpack with
-                 | Pack -> !^ "cannot pack:" ^^^ pp_predicate_name pt.name
-                 | Unpack -> !^ "cannot unpack:" ^^^ pp_predicate_name pt.name
-               in
-               let@ right_clause = 
-                 ResourceInference.select_resource_predicate_clause def
-                   loc pt.pointer pt.iargs err_prefix 
-               in
-               begin match pack_unpack with
-               | Unpack ->
-                  let@ (pred, O pred_oarg) =
-                    RI.Special.predicate_request ~recursive:false
-                      loc (Call (UnpackPredicate (Manual, pname))) (pt, None)
-                  in
-                  let lrt = ResourcePredicates.clause_lrt pred_oarg right_clause.packing_ft in
-                  let@ _, members = make_return_record loc (UnpackPredicate (Manual, pname)) (LRT.binders lrt) in
-                  bind_logical_return loc members lrt
-               | Pack ->
-                  Spine.calltype_packing loc pname right_clause.packing_ft (fun output -> 
-                  add_r loc (P pt, O output)
-                  )
-               end *)
             | M_CN_have lc ->
                let@ lc = WLC.welltyped loc lc in
                fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
@@ -1467,6 +1458,8 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                in
                let@ it = WIT.infer loc it in
                instantiate loc filter it
+            | M_CN_split_case _ ->
+              assert false
             | M_CN_extract (to_extract, it) ->
                let@ predicate_name = match to_extract with
                 | E_Everything ->
@@ -1538,10 +1531,46 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                let it = Simplify.IndexTerms.simp simp_ctxt it in               
                print stdout (item "printed" (IT.pp it));
                return ()
+     in
+     let rec loop = function
+       | [] -> k unit_
+       | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) :: cn_progs ->
+          let@ pointer = WellTyped.WIT.check loc Loc pointer in
+          let@ () = WCT.is_ct loc ct in
+          let@ value = load loc pointer ct in
+          let subbed = Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog in
+          loop (subbed :: cn_progs)
+       | (Cnprog.M_CN_statement (loc, cn_statement)) :: cn_progs ->
+          begin match cn_statement with
+          | Cnprog.M_CN_split_case lc ->
+             Pp.debug 5 (lazy (Pp.headline "checking split_case"));
+             let@ lc = WellTyped.WLC.welltyped loc lc in
+             let@ it = match lc with
+               | T it ->
+                 return it
+               | Forall ((sym, bt), it) ->
+                  fail (fun _ -> {loc; msg = Generic !^"Cannot split on forall condition"}) in
+             let branch it nm =
+               let@ () = add_c loc (t_ it) in
+               debug 5 (lazy (item ("splitting case " ^ nm) (IT.pp it)));
+               let@ provable = provable loc in
+               match provable (t_ (bool_ false)) with
+               | `True ->
+                 Pp.debug 5 (lazy (Pp.headline "inconsistent, skipping"));
+                 return ()
+               | `False ->
+                 Pp.debug 5 (lazy (Pp.headline "consistent, continuing"));
+                 loop cn_progs
+             in
+             let@ () = pure @@ branch it "true" in
+             let@ () = pure @@ branch (not_ it) "false" in
+             return ()
+          | _ ->
+            let@ () = aux loc cn_statement in
+            loop cn_progs
           end
      in
-     let@ () = ListM.iterM aux cn_progs in
-     k unit_
+     loop cn_progs
   | M_Ewseq (p, e1, e2)
   | M_Esseq (p, e1, e2) ->
      let@ () = ensure_base_type loc ~expect (bt_of_expr e2) in

@@ -44,14 +44,14 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
         i32 v, map<i32, map<datatype tree_arc, datatype tree_node_option> > ns}
   Tree (pointer p)
 {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: (empty ()), v: 0i32, ns: default_ns ()};
   }
   else {
-    take V = Owned<int>((pointer)(((u64)p) + (offsetof (node, v))));
-    let nodes_ptr = ((pointer)((((u64)p) + (offsetof (node, nodes)))));
+    take V = Owned<int>(member_shift<node>(p,v));
+    let nodes_ptr = member_shift<node>(p,nodes);
     take Ns = each (i32 i; (0i32 <= i) && (i < (num_nodes ())))
-      {Indirect_Tree((pointer)(((u64)nodes_ptr) + (i * ((i32)(sizeof <tree>)))))};
+      {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
     let t = construct (V, Ns);
     return {t: t, v: V, ns: Ns};
   }
@@ -59,6 +59,7 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
 
 predicate (map <datatype tree_arc, datatype tree_node_option>) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
+  assert (is_null(V) || (integer) V != 0);
   take T = Tree(V);
   return T.t;
 }
@@ -71,7 +72,7 @@ predicate {datatype tree_arc arc, map<i32, i32> xs}
   assert (i <= len);
   assert (0i32 <= i);
   take Xs = each (i32 j; (0i32 <= j) && (j < len))
-    {Owned<signed int>(p + (j * ((i32) (sizeof<signed int>))))};
+    {Owned(array_shift<signed int>(p, j))};
   assert (each (i32 j; (0i32 <= j) && (j < len))
     {(0i32 <= Xs[j]) && (Xs[j] < (num_nodes ()))});
   return {arc: mk_arc(Xs, i, len), xs: Xs};
@@ -127,6 +128,7 @@ lemma construct_lemma (i32 v,
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
+/*@ requires is_null(t) || (integer) t != 0 @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
     {Owned<int>(path + (j * ((i32) (sizeof<signed int>))))} @*/

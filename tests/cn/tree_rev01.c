@@ -8,7 +8,7 @@ struct tree_node {
 
 /*@
 predicate {integer size} Tree (pointer p) {
-  if ( p == NULL ) {
+  if (is_null(p)) {
     return { size: 0 };
   }
   else {

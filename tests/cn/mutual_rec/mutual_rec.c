@@ -43,11 +43,13 @@ datatype b_tree {
 
 /*@
 predicate {datatype a_tree t} A_Tree (pointer p) {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: A_Leaf {}};
   }
   else {
     take V = Owned<struct a_node>(p);
+    assert ((is_null(V.left) || !addr_eq(V.left, NULL))
+      && (is_null(V.right) || !addr_eq(V.right, NULL)));
     take L = B_Tree(V.left);
     take R = B_Tree(V.right);
     return {t: A_Node {k: V.k, v: V.v, left: L.t, right: R.t}};
@@ -55,11 +57,13 @@ predicate {datatype a_tree t} A_Tree (pointer p) {
 }
 
 predicate {datatype b_tree t} B_Tree (pointer p) {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: B_Leaf {}};
   }
   else {
     take V = Owned<struct b_node>(p);
+    assert ((is_null(V.even) || !addr_eq(V.even, NULL))
+      && (is_null(V.odd) || !addr_eq(V.odd, NULL)));
     take E = A_Tree(V.even);
     take O = A_Tree(V.odd);
     return {t: B_Node {even: E.t, odd: O.t}};
@@ -107,7 +111,7 @@ struct a_node *
 predef_a_tree (struct a_node *p)
 /*@ requires take T = A_Tree (p) @*/
 /*@ ensures take T2 = A_Tree (p) @*/
-/*@ ensures (return == NULL) || (T2.t == A_Node {k: 1i32, v: 0i32,
+/*@ ensures is_null(return) || (T2.t == A_Node {k: 1i32, v: 0i32,
     left: B_Node {even: A_Leaf {}, odd: A_Leaf {}}, right: B_Leaf {}}) @*/
 {
   struct b_node *l = NULL;
@@ -338,6 +342,7 @@ int inc_b_tree (struct b_node *p);
 
 int
 inc_a_tree (struct a_node *p)
+/*@ requires is_null(p) || !addr_eq(p, NULL) @*/
 /*@ requires take T = A_Tree (p) @*/
 /*@ ensures take T2 = A_Tree (p) @*/
 /*@ ensures (return == 0i32) || ((a_tree_keys(T2.t)) == (inc_list(a_tree_keys(T.t)))) @*/
@@ -361,6 +366,7 @@ inc_a_tree (struct a_node *p)
 
 int
 inc_b_tree (struct b_node *p)
+/*@ requires is_null(p) || !addr_eq(p, NULL) @*/
 /*@ requires take T = B_Tree (p) @*/
 /*@ ensures take T2 = B_Tree (p) @*/
 /*@ ensures (return == 0i32) || ((b_tree_keys(T2.t)) == (inc_list(b_tree_keys(T.t)))) @*/

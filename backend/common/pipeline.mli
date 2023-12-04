@@ -4,13 +4,15 @@ type language =
   | Cabs | Ail | Core | Types
 
 type pp_flag =
-  | Annot | FOut
+  | Annot
+  | Loc
 
 type configuration = {
   debug_level: int;
   pprints: language list;
   astprints: language list;
   ppflags: pp_flag list;
+  ppouts: (language * string) list;
   typecheck_core: bool;
   rewrite_core: bool;
   sequentialise_core: bool;
@@ -21,7 +23,7 @@ type configuration = {
 type io_helpers = {
   pass_message: string -> (unit, Errors.error) Exception.exceptM;
   set_progress: string -> (unit, Errors.error) Exception.exceptM;
-  run_pp: (string * string) option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
+  run_pp: string option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
   print_endline: string -> (unit, Errors.error) Exception.exceptM;
   print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
   warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
@@ -29,7 +31,7 @@ type io_helpers = {
 val default_io_helpers: io_helpers
 val get_progress: unit -> int
 
-val run_pp: ?remove_path:bool -> (string * string) option -> PPrint.document -> unit
+val run_pp: string option -> PPrint.document -> unit
 
 val core_stdlib_path: unit -> string
 
@@ -90,8 +92,10 @@ val ocaml_backend:
    *)
 
 val read_core_object:
+  (configuration * io_helpers) -> ?is_lib:bool ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
-  string -> unit Core.file
+  string ->
+  (unit Core.file, Cerb_location.t * Errors.cause) Exception.exceptM
 val write_core_object: unit Core.file -> string -> unit
 
 

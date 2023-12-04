@@ -4097,6 +4097,8 @@ let rec desugar_cn_base_type loc bTy =
       E.return CN_real
     | CN_loc ->
       E.return CN_loc
+    | CN_alloc_id ->
+      E.return CN_alloc_id
     | CN_struct tag_ident ->
         E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
           | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
@@ -4197,9 +4199,17 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
           | None ->
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
       end
-    | CNExpr_membershift e memb ->
-       desugar_cn_expr e >>= fun e ->
-       E.return (CNExpr_membershift e memb)
+    | CNExpr_membershift e Nothing memb ->
+      desugar_cn_expr e >>= fun e ->
+      E.return (CNExpr_membershift e Nothing memb)
+    | CNExpr_membershift e (Just struct_tag) memb ->
+      E.resolve_extraordinary_identifier struct_tag E.Namespace_tag >>= function
+          | Just (_, (tag_sym, _)) ->
+              desugar_cn_expr e >>= fun e ->
+              E.return (CNExpr_membershift e (Just tag_sym) memb)
+          | None ->
+              E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
+      end
     | CNExpr_addr nm ->
        E.resolve_ordinary_identifier loc nm >>= function
           | Just (_, E.OReg_other nm_sym _ _) ->
@@ -4210,6 +4220,11 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_cast ty e ->
         CNExpr_cast <$> desugar_cn_base_type loc ty
                     <*> desugar_cn_expr e
+    | CNExpr_array_shift e1 ct e2 ->
+      desugar_cn_expr e1 >>= fun e1 ->
+      desugar_type_name ct >>= fun (_, ct) ->
+      desugar_cn_expr e2 >>= fun e2 ->
+      E.return (CNExpr_array_shift e1 ct e2)
     | CNExpr_call nm es ->
         E.resolve_cn_ident CN_function nm >>= fun sym_resolved ->
         let sym = Cn.ensure_not_c_variable sym_resolved in
@@ -4494,6 +4509,9 @@ let desugar_cn_statement (CN_statement loc stmt_) =
      end >>= fun o_filter ->
      desugar_cn_expr expr >>= fun expr ->
      E.return (CN_instantiate o_filter expr)
+  | CN_split_case cond ->
+     desugar_cn_assertion cond >>= fun cond ->
+     E.return (CN_split_case cond)
   | CN_extract to_extract expr ->
     match to_extract with
     | E_Everything -> E.return E_Everything

@@ -33,7 +33,7 @@ datatype int_list {
 }
 
 predicate {datatype int_list v} IntList(pointer l) {
-  if ( l == NULL ) {
+  if ( is_null(l) ) {
     return { v: Nil {} } ;
   } else {
     take H = Owned<struct int_list_items>(l) ;

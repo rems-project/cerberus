@@ -62,9 +62,11 @@ let rec free_vars_ = function
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
   | Cast (_cbt, t) -> free_vars t
-  | MemberOffset (_tag, _id) -> SymSet.empty
-  | ArrayOffset (_sct, t) -> free_vars t
+  | MemberShift (t, _tag, _id) -> free_vars t
+  | ArrayShift { base; ct=_; index } -> free_vars_list [base; index]
+  | CopyAllocId { int; loc } -> free_vars_list [int; loc]
   | SizeOf _t -> SymSet.empty
+  | OffsetOf (tag, member) -> SymSet.empty
   | Nil _bt -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
   | Head t -> free_vars t
@@ -121,9 +123,11 @@ let rec fold_ f binders acc = function
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
   | Cast (_cbt, t) -> fold f binders acc t
-  | MemberOffset (_tag, _id) -> acc
-  | ArrayOffset (_sct, t) -> fold f binders acc t
+  | MemberShift (t, _tag, _id) -> fold f binders acc t
+  | ArrayShift { base; ct=_; index } -> fold_list f binders acc [base; index]
+  | CopyAllocId { int; loc } -> fold_list f binders acc [int; loc]
   | SizeOf _ct -> acc
+  | OffsetOf (_tag, _member) -> acc
   | Nil _bt -> acc
   | Cons (t1, t2) -> fold_list f binders acc [t1; t2]
   | Head t -> fold f binders acc t
@@ -247,12 +251,16 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (RecordUpdate ((subst su t, m), subst su v), bt)
   | Cast (cbt, t) ->
      IT (Cast (cbt, subst su t), bt)
-  | MemberOffset (tag, member) ->
-     IT (MemberOffset (tag, member), bt)
-  | ArrayOffset (tag, t) ->
-     IT (ArrayOffset (tag, subst su t), bt)
+  | MemberShift (t, tag, member) ->
+     IT (MemberShift (subst su t, tag, member), bt)
+  | ArrayShift { base; ct; index } ->
+    IT (ArrayShift { base=subst su base; ct; index=subst su index }, bt)
+  | CopyAllocId { int; loc } ->
+    IT (CopyAllocId { int= subst su int; loc=subst su loc }, bt)
   | SizeOf t ->
      IT (SizeOf t, bt)
+  | OffsetOf (tag, member) ->
+     IT (OffsetOf (tag, member), bt)
   | Aligned t -> 
      IT (Aligned {t= subst su t.t; align= subst su t.align}, bt)
   | Representable (rt, t) -> 
@@ -362,8 +370,11 @@ let is_bits_const = function
   | _ -> None
 
 let is_pointer = function
-  | IT (Const (Pointer z), _) -> Some z
-  | IT (Cast (Loc, addr), _) -> get_num_z addr
+  | IT (Const (Pointer { alloc_id; addr }), bt) -> Some (alloc_id, addr)
+  | _ -> None
+
+let is_alloc_id = function
+  | IT (Const (Alloc_id alloc_id), bt) -> Some alloc_id
   | _ -> None
 
 let is_sym = function
@@ -436,18 +447,21 @@ let is_pred_ = function
 
 (* shorthands *)
 
+let use_vip = ref false
 
 (* lit *)
 let sym_ (sym, bt) = IT (Sym sym, bt)
 let z_ n = IT (Const (Z n), BT.Integer)
+let alloc_id_ n = IT (Const (Alloc_id (if !use_vip then n else Z.zero)), BT.Alloc_id)
 let num_lit_ n bt = match bt with
   | BT.Bits (sign, sz) -> IT (Const (Bits ((sign, sz), n)), bt)
   | BT.Integer -> z_ n
   | _ -> failwith ("num_lit_: not a type with numeric literals: " ^ Pp.plain (BT.pp bt))
-let alloc_id_ n = IT (Const (Alloc_id n), BT.Alloc_id)
 let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
 let q1_ q = IT (Const (Q q), BT.Real)
-let pointer_ n = IT (Const (Pointer n), BT.Loc)
+let pointer_ ~alloc_id ~addr =
+  let alloc_id = if !use_vip then alloc_id else Z.zero in
+  IT (Const (Pointer { alloc_id; addr }), BT.Loc)
 let bool_ b = IT (Const (Bool b), BT.Bool)
 let unit_ = IT (Const Unit, BT.Unit)
 let int_ n = z_ (Z.of_int n)
@@ -609,30 +623,25 @@ let pointerToIntegerCast_ it =
   (* for integer-mode: cast_ Integer it *)
 let pointerToAllocIdCast_ it =
   cast_ Alloc_id it
-let memberOffset_ (tag, member) =
-  IT (MemberOffset (tag, member), Memory.intptr_bt)
-let arrayOffset_ (ct, t) =
-  IT (ArrayOffset (ct, t), Memory.intptr_bt)
+let memberShift_ (base, tag, member) =
+  IT (MemberShift (base, tag, member), BT.Loc)
+let arrayShift_ ~base ~index ct  =
+  IT (ArrayShift { base; ct; index }, BT.Loc)
+let copyAllocId_ ~int ~loc =
+  IT (CopyAllocId { int; loc }, BT.Loc)
+let sizeOf_ ct =
+  IT (SizeOf ct, BT.Integer)
 
 let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true
   | IT (Cast (BT.Loc, IT (_, BT.Bits _)), _) -> true
   | _ -> false
 
-let pointer_offset_ (p, n) =
-  integerToPointerCast_ (add_check_ (pointerToIntegerCast_ p, n))
-
-let memberShift_ (t, tag, member) =
-  pointer_offset_ (t, memberOffset_ (tag, member))
-let arrayShift_ (t1, ct, t2) =
-  pointer_offset_ (t1, arrayOffset_ (ct, t2))
-
-
-
-
+let pointer_offset_ (base, offset) =
+  arrayShift_ ~base (Sctypes.Integer Char) ~index:offset
 
 let array_index_to_pointer ~base ~item_ct ~index =
-  arrayShift_ (base, item_ct, index)
+  arrayShift_ ~base ~index item_ct
 
 let array_offset_of_pointer ~base ~pointer =
   sub_ (pointerToIntegerCast_ pointer,
@@ -665,10 +674,6 @@ let cellPointer_ ~base ~step ~starti ~endi ~p =
 
 
 
-
-let container_of_ (t, tag, member) =
-  integerToPointerCast_
-    (sub_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
 
 (* list_op *)
 let nil_ ~item_bt = IT (Nil item_bt, BT.List item_bt)
@@ -811,12 +816,15 @@ let value_check_pointer alignment ~pointee_ct about =
     | Function _ -> 1
     | _ -> Memory.size_of_ctype pointee_ct
   in
-  and_ [le_ (intptr_int_ 0, about_int);
-        le_ (sub_ (add_ (about_int, intptr_int_ pointee_size), intptr_int_ 1),
-            intptr_const_ Memory.max_pointer);
-        (* TODO revist/delete this when transition to VIP is over *)
-        eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero);
-        if alignment then aligned_ (about, pointee_ct) else bool_ true]
+  and_ @@ List.filter_map Fun.id [
+    Some (le_ (intptr_int_ 0, about_int));
+    Some (le_ (sub_ (add_ (about_int, intptr_int_ pointee_size), intptr_int_ 1),
+            intptr_const_ Memory.max_pointer));
+    if !use_vip then None else Some (eq_ (pointerToAllocIdCast_ about, alloc_id_ Z.zero));
+    if alignment then Some (aligned_ (about, pointee_ct)) else None;
+  ]
+
+let value_check_array_size_warning = ref 100
 
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
   let open Sctypes in
@@ -830,6 +838,13 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Array (it, None) ->
        Cerb_debug.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) ->
+       if n > ! value_check_array_size_warning
+       then begin
+         (* FIXME: handle this better rather than just warning *)
+         Pp.warn Locations.unknown
+           (Pp.string ("good/value_check of array of large size: " ^ Int.to_string n));
+         value_check_array_size_warning := n
+       end else ();
        (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
        let i_s, i = fresh BT.Integer in
        and_

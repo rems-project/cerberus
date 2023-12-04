@@ -128,6 +128,7 @@ let keywords: (string * Tokens.token) list = [
     "__cerb_unpack"        , CN_UNPACK;
     "__cerb_have"          , CN_HAVE;
     "__cerb_instantiate"   , CN_INSTANTIATE;
+    "__cerb_split_case"    , CN_SPLIT_CASE;
     "__cerb_extract"       , CN_EXTRACT;
     "__cerb_print"         , CN_PRINT;
     (* END CN *)
@@ -158,6 +159,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "i128"           , CN_BITS (`I,128);
     "real"          , CN_REAL;
     "pointer"       , CN_POINTER;
+    "alloc_id"      , CN_ALLOC_ID;
     "map"           , CN_MAP;
     "list"          , CN_LIST;
     "tuple"         , CN_TUPLE;
@@ -182,7 +184,10 @@ let cn_keywords: (string * Tokens.token) list = [
     "unpack"        , CN_UNPACK;
     "instantiate"   , CN_INSTANTIATE;
     "print"         , CN_PRINT;
+    "split_case"    , CN_SPLIT_CASE;
     "extract"       , CN_EXTRACT;
+    "array_shift"   , CN_ARRAY_SHIFT;
+    "member_shift"  , CN_MEMBER_SHIFT;
     "have"          , CN_HAVE;
     "unfold"        , CN_UNFOLD;
     "apply"         , CN_APPLY;

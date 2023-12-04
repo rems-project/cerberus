@@ -296,9 +296,9 @@ module Translate = struct
       | Unit -> Z3.Sort.mk_uninterpreted_s context "unit"
       | Bool -> Z3.Boolean.mk_sort context
       | Integer -> Z3.Arithmetic.Integer.mk_sort context
-      | Bits (Unsigned, n) -> 
+      | Bits (Unsigned, n) ->
          Z3.BitVector.mk_sort context n
-      | Bits (Signed, n) -> 
+      | Bits (Signed, n) ->
          (*copying/adjusting Dhruv's code for Alloc_id*)
          let bt_symbol = string (bt_name (Bits (Signed, n))) in
          let field_symbol = string ("unsigned_" ^ string_of_int n) in
@@ -500,11 +500,9 @@ module Translate = struct
              ) members
          in
          Some (IT ((Record str), IT.bt t))
-      | MemberOffset (tag, member) ->
+      | OffsetOf (tag, member) ->
          let decl = SymMap.find tag struct_decls in
          Some (int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt)
-      | ArrayOffset (ct, t) ->
-         Some (mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt, cast_ Memory.intptr_bt t))
       | SizeOf ct ->
          Some (int_lit_ (Memory.size_of_ctype ct) (IT.bt it))
       | Aligned t ->
@@ -633,10 +631,10 @@ module Translate = struct
            [Z3.BitVector.mk_numeral context (Z.to_string v) n]
       | Const (Q q) ->
          Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
-      | Const (Pointer z) ->
+      | Const (Pointer { alloc_id; addr }) ->
          alloc_id_addr_to_loc
-           (term (alloc_id_ Z.zero))
-           (term (intptr_const_ z))
+           (term (alloc_id_ alloc_id))
+           (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string addr))
       | Const (Alloc_id z) ->
          integer_to_alloc_id
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
@@ -728,8 +726,20 @@ module Translate = struct
          | SetIntersection -> Z3.Set.mk_intersection context (map term [t1;t2])
          | SetDifference -> Z3.Set.mk_difference context (term t1) (term t2)
          | Subset -> Z3.Set.mk_subset context (term t1) (term t2)
-         | LTPointer -> adj ()
-         | LEPointer -> adj ()
+         | LTPointer ->
+            let t1, t2 = term t1, term t2 in
+            let addr1, addr2 = loc_to_integer t1, loc_to_integer t2 in
+            let addr_lt = Z3.Arithmetic.mk_lt context addr1 addr2 in
+            let prov1, prov2 = loc_to_alloc_id t1, loc_to_alloc_id t2 in
+            let prov_eq = Z3.Boolean.mk_eq context prov1 prov2 in
+            Z3.Boolean.mk_and context [prov_eq; addr_lt]
+         | LEPointer ->
+            let t1, t2 = term t1, term t2 in
+            let addr1, addr2 = loc_to_integer t1, loc_to_integer t2 in
+            let addr_le = Z3.Arithmetic.mk_le context addr1 addr2 in
+            let prov1, prov2 = loc_to_alloc_id t1, loc_to_alloc_id t2 in
+            let prov_eq = Z3.Boolean.mk_eq context prov1 prov2 in
+            Z3.Boolean.mk_and context [prov_eq; addr_le]
          | And -> Z3.Boolean.mk_and context (map term [t1;t2])
          | Or -> Z3.Boolean.mk_or context (map term [t1;t2])
          | Impl -> Z3.Boolean.mk_implies context (term t1) (term t2)
@@ -781,9 +791,26 @@ module Translate = struct
          | _ ->
             assert false
          end
-      | MemberOffset _ -> adj ()
-      | ArrayOffset _ -> adj ()
       | SizeOf _ -> adj ()
+      | OffsetOf _ -> adj ()
+      | MemberShift (t, tag, member) ->
+         let decl = SymMap.find tag struct_decls in
+         let offset = term @@ int_ (Option.get (Memory.member_offset decl member)) in
+         let t = term t in
+         let (alloc_id, addr) = (loc_to_alloc_id t, loc_to_integer t) in
+         alloc_id_integer_to_loc
+           alloc_id
+           (Z3.Arithmetic.mk_add context [addr; offset])
+      | ArrayShift { base; ct; index } ->
+        let offset = term @@ mul_ (int_ (Memory.size_of_ctype ct), index) in
+        let base = term base in
+        let (alloc_id, addr) = (loc_to_alloc_id base, loc_to_integer base) in
+        alloc_id_integer_to_loc
+          alloc_id
+          (Z3.Arithmetic.mk_add context [addr; offset])
+      | CopyAllocId { int; loc } ->
+        let int, loc = term int, term loc in
+        alloc_id_integer_to_loc (loc_to_alloc_id loc) int
       | Nil ibt ->
          make_uf (plain (!^"nil_uf"^^angles(BT.pp ibt))) (List ibt) []
       | Cons (t1, t2) ->
@@ -841,7 +868,7 @@ module Translate = struct
       | Match (matched, cases) ->
          (* let _sort = sort (IT.bt matched) in *)
          let matched = term matched in
-         let cases = 
+         let cases =
            List.map (fun (pat, body) ->
                (* print stdout (item "pat" (pp_pattern pat)); *)
                (* print stdout (item "body" (IT.pp body)); *)
@@ -849,7 +876,7 @@ module Translate = struct
                let froms, tos = List.split substs in
                let body = Z3.Expr.substitute (term body) froms tos in
                (cond, body)
-             ) cases 
+             ) cases
          in
          let rec aux = function
            | [] -> term (default_ bt)
@@ -873,18 +900,18 @@ module Translate = struct
         z3_term
 *)
 
-      and translate_case (matched : Z3.Expr.expr) pat = 
+      and translate_case (matched : Z3.Expr.expr) pat =
         match pat with
         | Pat (PConstructor (c_nm, args), pbt) ->
            let m1 = datatypeIsCons (c_nm, matched) in
            let constr_info = SymMap.find c_nm global.datatype_constrs in
            let dt_tag = constr_info.c_datatype_tag in
            assert (List.for_all2 (fun (id,_) (id',_) -> Id.equal id id') constr_info.c_params args);
-           let args_conds_substs = 
+           let args_conds_substs =
              List.map (fun (id, (Pat (_, abt) as apat)) ->
                  let member = datatypeMember ((matched, Datatype dt_tag), (id,abt)) in
                  translate_case member apat
-               ) args 
+               ) args
            in
            let args_conds, args_substs = List.split args_conds_substs in
            (Z3.Boolean.mk_and context (m1 :: args_conds), List.concat args_substs)
@@ -1388,18 +1415,18 @@ module Eval = struct
            let p = nth args 0 in
            (* fiddly in the pointer-is-bitvector case
            begin match IT.is_pointer p with
-           | Some z -> z_ z
+           | Some (_id, z) -> z_ z
            | _ -> pointerToIntegerCast_ p
            end *) pointerToIntegerCast_ p
 
         | () when
                Z3.FuncDecl.equal func_decl
                  (alloc_id_addr_to_loc_fundecl context global) ->
-           let _id = nth args 0 in
+           let alloc_id = Option.value_err "non-wrapped alloc_id" @@ IT.is_alloc_id @@ nth args 0 in
            let i = nth args 1 in
            (* begin match IT.is_z i with
-           | Some z -> pointer_ z
-           | _ -> integerToPointerCast_ i
+           | Some addr -> pointer_ ~alloc_id ~addr
+           | _ -> copyAllocId_ ~int:i ~loc:(pointer_ ~alloc_id ~addr:Z.zero)
            end *) integerToPointerCast_ i
 
         | () when

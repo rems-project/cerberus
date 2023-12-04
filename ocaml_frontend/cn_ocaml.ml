@@ -67,6 +67,8 @@ module MakePp (Conf: PP_CN) = struct
         pp_type_keyword "real"
     | CN_loc ->
         pp_type_keyword "loc"
+    | CN_alloc_id ->
+        pp_type_keyword "alloc_id"
     | CN_struct ident ->
         pp_type_keyword "struct" ^^^ P.squotes (Conf.pp_ident ident)
     | CN_record members ->
@@ -178,13 +180,17 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_offsetof (ty_tag, member) ->
           Dleaf (pp_ctor "CNExpr_offsetof" ^^^ P.squotes (Conf.pp_ident ty_tag) ^^^
                 P.squotes (pp_identifier member))
-      | CNExpr_membershift (e, member) ->
-          Dnode (pp_ctor "CNExpr_membershift", [dtree_of_cn_expr e;
-                                                Dleaf (P.squotes (pp_identifier member))])
+      | CNExpr_membershift (e, ty_tag, member) ->
+          Dnode (pp_ctor "CNExpr_membershift", [dtree_of_cn_expr e]
+                                               @ (Option.fold ty_tag ~none:[] ~some:(fun ty_tag -> [Dleaf (P.squotes @@ Conf.pp_ident ty_tag)]))
+                                               @ [Dleaf (P.squotes (pp_identifier member))])
       | CNExpr_addr nm ->
           Dnode (pp_ctor "CNExpr_addr", [Dleaf (Conf.pp_ident nm)])
       | CNExpr_cast (ty, expr) ->
           Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
+      | CNExpr_array_shift (base, ctype, index) ->
+          Dnode (pp_ctor "CNExpr_array_shift"
+                , [dtree_of_cn_expr base; Dleaf (Conf.pp_ty ctype); dtree_of_cn_expr index])
       | CNExpr_call (nm, exprs) ->
           Dnode (pp_ctor "CNExpr_call" ^^^ P.squotes (Conf.pp_ident nm)
                  , List.map dtree_of_cn_expr exprs)
@@ -374,6 +380,8 @@ module MakePp (Conf: PP_CN) = struct
        Dnode (pp_ctor "[CN]have", [dtree_of_cn_assertion assrt])
     | CN_instantiate (to_instantiate, arg) ->
        Dnode (pp_ctor "[CN]instantiate", [dtree_of_to_instantiate to_instantiate; dtree_of_cn_expr arg])
+    | CN_split_case cond ->
+      Dnode (pp_ctor "[CN]split_case", [dtree_of_cn_assertion cond])
     | CN_extract (to_extract, arg) ->
        Dnode (pp_ctor "[CN]extract", [dtree_of_to_extract to_extract; dtree_of_cn_expr arg])
     | CN_unfold (s, args) ->

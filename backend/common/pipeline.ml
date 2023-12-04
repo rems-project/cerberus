@@ -8,18 +8,11 @@ let (>>=) = Exception.except_bind
 let (<$>)  = Exception.except_fmap
 let return = Exception.except_return
 
-let run_pp ?(remove_path = true) with_ext doc =
+let run_pp fout_opt doc =
   let (is_fout, oc) =
-    match with_ext with
-      | Some (filename, ext_str) ->
-         let open Filename in
-         let filename = 
-           if remove_path then remove_extension (basename filename) ^ "." ^ ext_str 
-           else remove_extension filename ^ "." ^ ext_str 
-         in
-         (true, Stdlib.open_out filename)
-      | None ->
-          (false, Stdlib.stdout) in
+    match fout_opt with
+      | Some filename -> true, Stdlib.open_out filename
+      | None -> false, Stdlib.stdout in
   let saved = !Cerb_colour.do_colour in
   Cerb_colour.do_colour := not is_fout;
   let term_col = match Cerb_util.terminal_size () with
@@ -73,13 +66,15 @@ type language =
   | Cabs | Ail | Core | Types
 
 type pp_flag =
-  | Annot | FOut
+  | Annot
+  | Loc
 
 type configuration = {
   debug_level: int;
   pprints: language list;
   astprints: language list;
   ppflags: pp_flag list;
+  ppouts: (language * string) list;
   typecheck_core: bool;
   rewrite_core: bool;
   sequentialise_core: bool;
@@ -90,7 +85,7 @@ type configuration = {
 type io_helpers = {
   pass_message: string -> (unit, Errors.error) Exception.exceptM;
   set_progress: string -> (unit, Errors.error) Exception.exceptM;
-  run_pp: (string * string) option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
+  run_pp: string option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
   print_endline: string -> (unit, Errors.error) Exception.exceptM;
   print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
   warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
@@ -109,8 +104,8 @@ let (default_io_helpers, get_progress) =
                  return ()
       end;
     run_pp = begin
-      fun opts doc -> run_pp opts doc;
-                      return ()
+      fun fout_opt doc -> run_pp fout_opt doc;
+                          return ()
       end;
     print_endline = begin
       fun str -> print_endline str;
@@ -173,8 +168,6 @@ let cpp (conf, io) ~filename =
 
 let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
   Cerb_fresh.set_digest filename;
-  let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
-  (* -- *)
   let parse filename file_content =
     C_parser_driver.parse_from_string ~filename file_content >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
@@ -186,6 +179,13 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
       fun () -> io.warn (fun () -> "TODO: Cabs pprint to yet supported")
     end >>= fun () -> return cabs_tunit in
   (* -- *)
+  let mk_pp_program pp fout_opt file =
+    let fout_opt = List.assoc_opt Ail conf.ppouts in
+    let saved = !Cerb_colour.do_colour in
+    Cerb_colour.do_colour := Unix.isatty Unix.stdout && Option.is_none fout_opt;
+    let ret = pp file in
+    Cerb_colour.do_colour := saved;
+    ret in
   let desugar cabs_tunit =
     let (ailnames, core_stdlib_fun_map) = core_stdlib in
     Cabs_to_ail.desugar (ailnames, core_stdlib_fun_map, core_impl) cnnames
@@ -197,7 +197,9 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
             fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)
           end
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.pprints) begin
-            fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program true false ail_prog)
+            fun () ->
+            let fout_opt = List.assoc_opt Ail conf.ppouts in
+            io.run_pp fout_opt (mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ail_prog)
           end
       >>= fun () -> return (markers_env, ail_prog) in
   (* -- *)
@@ -216,12 +218,13 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
     end >>= fun () ->
     whenM (conf.debug_level <= 4 && List.mem Ail conf.pprints) begin
       fun () ->
+        let fout_opt = List.assoc_opt Ail conf.ppouts in
         let doc = if conf.debug_level = 4 then
           (* (for debug 4) pretty-printing Ail with type annotations *)
-          Pp_ail.pp_program_with_annot ailtau_prog
+          mk_pp_program Pp_ail.pp_program_with_annot fout_opt ailtau_prog
         else
-          Pp_ail.pp_program true false ailtau_prog in
-        io.run_pp (wrap_fout (Some (filename, "ail"))) doc
+          mk_pp_program (Pp_ail.pp_program ~show_include:false) fout_opt ailtau_prog in
+        io.run_pp fout_opt doc
     end >>= fun () -> return ailtau_prog in
   (* -- *)
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
@@ -511,15 +514,25 @@ let typed_core_passes (conf, io) core_file =
   return (untype_file typed_core_file'', typed_core_file'')
 
 let print_core (conf, io) ~filename core_file =
-  let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   whenM (List.mem Core conf.astprints) begin
     fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core_ast.pp_file core_file)
+      io.run_pp None (Pp_core_ast.pp_file core_file)
   end >>= fun () ->
   whenM (List.mem Core conf.pprints) begin
       fun () ->
-      let pp_file = if List.mem Annot conf.ppflags then Pp_core.WithStd.pp_file else Pp_core.Basic.pp_file in
-      io.run_pp (wrap_fout (Some (filename, "core"))) (pp_file core_file)
+      let fout_opt = List.assoc_opt Core conf.ppouts in
+      let pp_file file =
+        let saved = !Cerb_colour.do_colour in
+        Cerb_colour.do_colour := Unix.isatty Unix.stdout && Option.is_none fout_opt;
+        let ret = (match List.mem Annot conf.ppflags, List.mem Loc conf.ppflags with
+                   | false, false -> Pp_core.Basic.pp_file
+                   | false, true -> Pp_core.WithLocations.pp_file
+                   | true, false -> Pp_core.WithStd.pp_file
+                   | true, true -> Pp_core.WithLocationsAndStd.pp_file
+                  ) file in
+        Cerb_colour.do_colour := saved;
+        ret in
+      io.run_pp fout_opt (pp_file core_file)
   end >>= fun () ->
   return core_file
 
@@ -610,16 +623,16 @@ let version_info =
     (Version.version)
     (Impl_mem.name)
 
-let read_core_object (core_stdlib, core_impl) fname =
+let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filename =
   let open Core in
-  let ic = open_in_bin fname in
+  let ic = open_in_bin filename in
   let v = input_line ic in
   if v <> version_info
   then
     Cerb_debug.warn [] (fun () -> "read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;
-  { main=    dump.main;
+  let core_file = { main=    dump.main;
     tagDefs= map_from_assoc sym_compare dump.dump_tagDefs;
     stdlib=  snd core_stdlib;
     impl=    core_impl;
@@ -629,7 +642,11 @@ let read_core_object (core_stdlib, core_impl) fname =
     funinfo= map_from_assoc sym_compare dump.dump_funinfo;
     loop_attributes0= Pmap.empty compare(* map_from_assoc compare dump.dump_loop_attributes *);
     visible_objects_env= Pmap.empty compare
-  }
+  } in
+  if not is_lib then
+    print_core (conf, io) ~filename core_file
+  else
+    return core_file
 
 let write_core_object core_file fname =
   let open Core in

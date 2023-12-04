@@ -148,7 +148,10 @@ type token =
   | CN_UNPACK
   | CN_HAVE
   | CN_EXTRACT
+  | CN_ARRAY_SHIFT
+  | CN_MEMBER_SHIFT
   | CN_INSTANTIATE
+  | CN_SPLIT_CASE
   | CN_UNFOLD
   | CN_APPLY
   | CN_PRINT
@@ -159,6 +162,7 @@ type token =
   | CN_INTEGER
   | CN_REAL
   | CN_POINTER
+  | CN_ALLOC_ID
   | CN_MAP
   | CN_LIST
   | CN_TUPLE
@@ -305,17 +309,20 @@ let string_of_token = function
   | CN_UNPACK -> "CN_UNPACK"
   | CN_HAVE -> "CN_HAVE"
   | CN_EXTRACT -> "CN_EXTRACT"
+  | CN_ARRAY_SHIFT -> "CN_ARRAY_SHIFT"
+  | CN_MEMBER_SHIFT -> "CN_MEMBER_SHIFT"
   | CN_INSTANTIATE -> "CN_INSTANTIATE"
+  | CN_SPLIT_CASE -> "CN_SPLIT_CASE"
   | CN_UNFOLD -> "CN_UNFOLD"
   | CN_APPLY -> "CN_APPLY"
   | CN_PRINT -> "CN_PRINT"
   | CN_MATCH -> "CN_MATCH"
-  (* | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")" *)
   | CN_BOOL -> "CN_BOOL"
   | CN_BITS _ -> "CN_BITS"
   | CN_INTEGER -> "CN_INTEGER"
   | CN_REAL -> "CN_REAL"
   | CN_POINTER -> "CN_POINTER"
+  | CN_ALLOC_ID -> "CN_ALLOC_ID"
   | CN_MAP -> "CN_MAP"
   | CN_LIST -> "CN_LIST"
   | CN_TUPLE -> "CN_TUPLE"

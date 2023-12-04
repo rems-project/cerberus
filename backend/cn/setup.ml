@@ -47,6 +47,7 @@ let conf incl_dirs incl_files astprints =
   ; pprints = []
   ; astprints = astprints
   ; ppflags = []
+  ; ppouts = []
   ; typecheck_core = true
   ; rewrite_core = true
   ; sequentialise_core = true

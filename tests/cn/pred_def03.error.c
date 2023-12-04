@@ -5,7 +5,7 @@ struct int_list_items {
 
 /*@
 predicate {integer len} IntList(pointer l) {
-  if ( l == NULL ) {
+  if ( is_null(l) ) {
     return { len: 0 } ;
   } else {
     take head_item = Owned<struct int_list_items>(l) ;

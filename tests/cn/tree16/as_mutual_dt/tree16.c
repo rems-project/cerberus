@@ -39,14 +39,14 @@ function (map <i32, datatype tree>) default_children ()
 predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
   Tree (pointer p)
 {
-  if (p == NULL) {
+  if (is_null(p)) {
     return {t: Empty_Tree {}, v: 0i32, children: default_children ()};
   }
   else {
-    take V = Owned<int>((pointer)(((u64)p) + (offsetof (node, v))));
-    let nodes_ptr = ((pointer)((((u64)p) + (offsetof (node, nodes)))));
+    take V = Owned<int>(member_shift<node>(p,v));
+    let nodes_ptr = member_shift<node>(p,nodes);
     take Ns = each (i32 i; (0i32 <= i) && (i < (num_nodes ())))
-      {Indirect_Tree(nodes_ptr + (i * ((i32)(sizeof <tree>))))};
+      {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
     let ts = array_to_tree_list (Ns, num_nodes ());
     return {t: Node {v: V, children: ts}, v: V, children: Ns};
   }
@@ -54,6 +54,7 @@ predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
 
 predicate (datatype tree) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
+  assert (is_null(V) || (integer) V != 0);
   take T = Tree(V);
   return T.t;
 }
@@ -109,6 +110,7 @@ lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
+/*@ requires is_null(t) || (integer) t != 0 @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
     {Owned(path + (j * 4i32))} @*/

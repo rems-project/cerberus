@@ -892,8 +892,7 @@ let filter_external_decl (id, sigma) =
   let pred (_, (loc, _, _)) = Cerb_location.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
-let pp_program do_colour show_include ail_prog =
-  Cerb_colour.do_colour := do_colour && Unix.isatty Unix.stdout;
+let pp_program ~show_include ail_prog =
   let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
   pp_program_aux (fun _ doc -> doc) filtered_ail_prog
 

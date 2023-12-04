@@ -145,11 +145,11 @@ type asm_qualifier =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_PRINT
-%token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
+%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_MATCH CN_PRINT
+%token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
 %token <[`U|`I] * int>CN_BITS
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
-%token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC
+%token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
 %token CN_UNCHANGED CN_WILD CN_MATCH
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 %token <string * [`U|`I] * int> CN_CONSTANT
@@ -289,7 +289,7 @@ type asm_qualifier =
 
 %type<Cabs.cabs_statement>
   statement labeled_statement compound_statement expression_statement
-  selection_statement iteration_statement jump_statement 
+  selection_statement iteration_statement jump_statement
 
 %type<Cabs.cabs_statement list>
   block_item_list
@@ -335,7 +335,7 @@ type asm_qualifier =
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
 
 %type<Cerb_frontend.Cabs.external_declaration> cn_toplevel_elem
-%type<Cerb_frontend.Cabs.external_declaration list> cn_toplevel 
+%type<Cerb_frontend.Cabs.external_declaration list> cn_toplevel
 
 
 
@@ -543,7 +543,7 @@ postfix_expression:
 | expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
     { CabsExpression ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                      , CabsEcall (expr, option [] List.rev exprs_opt) ) }
-| expr= postfix_expression DOT i= general_identifier 
+| expr= postfix_expression DOT i= general_identifier
     { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEmemberof (expr, i) ) }
 | expr= postfix_expression MINUS_GT i= general_identifier
@@ -893,7 +893,7 @@ init_declarator_list(declarator): (* NOTE: the list is in reverse *)
 ;
 
 init_declarator(declarator):
-| decl= declarator ioption(asm_register) 
+| decl= declarator ioption(asm_register)
     { InitDecl (Cerb_location.(region ($startpos, $endpos) NoCursor),
                 LF.cabs_of_declarator decl, None) }
 | decl= declarator ioption(asm_register) EQ init= initializer_
@@ -939,7 +939,7 @@ type_specifier_nonunique:
 ;
 
 attribute_type_specifier_nonunique:
-| ty= type_specifier_nonunique ioption(attribute_specifier_sequence) 
+| ty= type_specifier_nonunique ioption(attribute_specifier_sequence)
     { ty }
 ;
 
@@ -963,7 +963,7 @@ type_specifier_unique:
 ;
 
 attribute_type_specifier_unique:
-| ty= type_specifier_unique ioption(attribute_specifier_sequence) 
+| ty= type_specifier_unique ioption(attribute_specifier_sequence)
     { ty }
 ;
 
@@ -1870,6 +1870,12 @@ prim_expr:
                                , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
+| CN_ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_array_shift (base, ty, index))) }
+| CN_MEMBER_SHIFT LT tag=cn_variable GT LPAREN base=expr COMMA member=cn_variable RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_membershift (base, Some tag, member))) }
 | ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
@@ -1917,7 +1923,7 @@ unary_expr:
                                , CNExpr_not e )) }
 | AMPERSAND LPAREN e= prim_expr MINUS_GT member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_membershift (e, member) )) }
+                               , CNExpr_membershift (e, None, member) )) }
 | AMPERSAND name=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_addr name)) }
@@ -2006,7 +2012,7 @@ int_range:
 
 member_def:
 | member=cn_variable COLON e=expr
-     { (member, e) } 
+     { (member, e) }
 
 member_updates:
 | update=member_def COMMA base_value__updates=member_updates
@@ -2021,7 +2027,7 @@ nonempty_member_updates:
 
 index_update:
 | i=prim_expr COLON e=expr
-     { (i, e) } 
+     { (i, e) }
 
 match_cases:  (* NOTE: the list is in reverse *)
 | m= match_case
@@ -2031,7 +2037,7 @@ match_cases:  (* NOTE: the list is in reverse *)
 
 pattern_member_def:
 | member=cn_variable COLON p=pattern
-     { (member, p) } 
+     { (member, p) }
 
 pattern_cons_args:
 | xs= delimited(LBRACE, separated_list(COMMA, pattern_member_def), RBRACE)
@@ -2108,6 +2114,8 @@ base_type_explicit:
     { Cerb_frontend.Cn.CN_real }
 | CN_POINTER
     { Cerb_frontend.Cn.CN_loc }
+| CN_ALLOC_ID
+    { Cerb_frontend.Cn.CN_alloc_id }
 | members= delimited(LBRACE, nonempty_args, RBRACE)
     { Cerb_frontend.Cn.CN_record members }
 | STRUCT id= cn_variable
@@ -2131,7 +2139,7 @@ base_type:
     { Cerb_frontend.Cn.CN_user_type_name v }
 ;
 
-cn_good: 
+cn_good:
 | CN_GOOD ty= delimited(LT, ctype, GT)
     { ty }
 
@@ -2176,7 +2184,7 @@ cn_function:
 cn_predicate:
 | CN_PREDICATE
   cn_pred_attrs= cn_attrs
-  cn_pred_output= cn_pred_output 
+  cn_pred_output= cn_pred_output
   str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses
@@ -2204,7 +2212,7 @@ cn_lemma:
 cn_datatype:
 | CN_DATATYPE nm= cn_variable
   cases= delimited(LBRACE, cn_cons_cases, RBRACE)
-    { 
+    {
       { cn_dt_loc= Cerb_location.point $startpos($1)
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
@@ -2259,7 +2267,7 @@ nonempty_args:
 ;
 
 
-opt_paren(A): 
+opt_paren(A):
 | x=A
     { x }
 | x= delimited(LPAREN, A, RPAREN)
@@ -2293,7 +2301,7 @@ clauses:
 cn_option_func_body:
 | cn_func_body=delimited(LBRACE, expr, RBRACE)
     { Some cn_func_body }
-| 
+|
     { None }
 
 (*
@@ -2326,7 +2334,7 @@ clause:
     { Cerb_frontend.Cn.CN_return (Cerb_location.region $loc(ret) NoCursor, ret) }
 | RETURN
 (*copying from prim_expr *)
-    { Cerb_frontend.Cn.CN_return (Cerb_location.region $loc NoCursor, 
+    { Cerb_frontend.Cn.CN_return (Cerb_location.region $loc NoCursor,
         CNExpr (Cerb_location.region $loc NoCursor, CNExpr_const CNConst_unit)) }
 ;
 
@@ -2376,7 +2384,7 @@ condition:
 | CN_TAKE str= cn_variable EQ res= resource
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletResource (loc, str, res) }
-| CN_LET str= cn_variable EQ e= expr 
+| CN_LET str= cn_variable EQ e= expr
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletExpr (loc, str, e) }
 | e= assert_expr
@@ -2408,7 +2416,7 @@ loop_spec:
       Cerb_frontend.Cn.CN_inv (loc, cs) }
 
 %inline to_be_instantiated:
-| 
+|
     { Cerb_frontend.Cn.I_Everything }
 | f=cn_variable COMMA
     { Cerb_frontend.Cn.I_Function f }
@@ -2416,7 +2424,7 @@ loop_spec:
     { Cerb_frontend.Cn.I_Good ct }
 
 %inline to_be_extracted:
-| 
+|
     { Cerb_frontend.Cn.E_Everything }
 | p=pred COMMA
     { Cerb_frontend.Cn.E_Pred p }
@@ -2440,6 +2448,9 @@ cn_statement:
 | CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }
+| CN_SPLIT_CASE a=assert_expr SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_split_case a) }
 | CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_unfold (id, es)) }
@@ -2447,7 +2458,7 @@ cn_statement:
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_apply (id, es)) }
 | ASSERT LPAREN e=assert_expr RPAREN SEMICOLON
-    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in 
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_assert_stmt e) }
 | INLINE names= separated_list(COMMA, cn_variable) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in

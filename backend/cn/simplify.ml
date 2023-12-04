@@ -451,9 +451,6 @@ module IndexTerms = struct
          IT (Record members2, _)  ->
           assert (List.for_all2 (fun x y -> Id.equal (fst x) (fst y)) members1 members2);
           aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
-       | IT (Cast (bt1, it1), _),
-         IT (Cast (bt2, it2), _) when BT.equal bt1 bt2 ->
-         aux (eq_ (it1, it2))
        | _, _ ->
           eq_ (a, b)
        end
@@ -555,11 +552,14 @@ module IndexTerms = struct
     | Cast (cbt, a) ->
        let a = aux a in
        cast_reduce cbt a
-    | MemberOffset (tag, member) ->
-       let layout = SymMap.find tag simp_ctxt.global.struct_decls in
-       int_lit_ (Option.get (Memory.member_offset layout member)) Memory.intptr_bt
-    | ArrayOffset (ct, t) ->
-       aux (mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt, cast_ Memory.intptr_bt t))
+    | MemberShift (t, tag, member) ->
+      IT (MemberShift (aux t, tag, member), the_bt)
+    | ArrayShift { base; ct; index } ->
+       let base = aux base in
+       let index = aux index in
+       begin match get_num_z index with
+       | Some z when Z.equal Z.zero z -> base
+       | _ -> IT (ArrayShift { base; ct; index }, the_bt)
     | SizeOf ct ->
        int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt
     | Representable (ct, t) ->

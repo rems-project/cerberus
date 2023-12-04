@@ -658,6 +658,7 @@ module WIT = struct
           let@ () = match IT.bt t, cbt with
            | Integer, Loc -> fail (fun _ -> {loc; msg =
                Generic (!^ "cast from integer not allowed in bitvector version")})
+           | Loc, Alloc_id -> return ()
            | Loc, Integer -> return ()
            | Loc, Alloc_id -> return ()
            | Integer, Real -> return ()
@@ -675,16 +676,25 @@ module WIT = struct
              fail (fun _ -> {loc; msg = Generic msg})
           in
           return (IT (Cast (cbt, t), cbt))
-       | MemberOffset (tag, member) ->
+       | MemberShift (t, tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
-          return (IT (MemberOffset (tag, member), Memory.intptr_bt))
-       | ArrayOffset (ct, t) ->
+          let@ t = check loc Loc t in
+          return (IT (MemberShift (t, tag, member), BT.Loc))
+       | ArrayShift { base; ct; index } ->
           let@ () = WCT.is_ct loc ct in
-          let@ t = check loc Memory.intptr_bt t in
-          return (IT (ArrayOffset (ct, t), Memory.intptr_bt))
+          let@ base = check loc Loc base in
+          let@ index = check loc Integer index in
+          return (IT (ArrayShift { base; ct; index }, BT.Loc))
+       | CopyAllocId { int; loc=ptr } ->
+          let@ int = check loc Integer int in
+          let@ ptr = check loc Loc ptr in
+          return (IT (CopyAllocId { int; loc=ptr }, BT.Loc))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
           return (IT (SizeOf ct, Memory.intptr_bt))
+       | OffsetOf (tag, member) ->
+          let@ _ty = get_struct_member_type loc tag member in
+          return (IT (OffsetOf (tag, member), BT.Integer))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Memory.intptr_bt t.align in

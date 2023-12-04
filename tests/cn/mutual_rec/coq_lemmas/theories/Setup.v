@@ -25,7 +25,7 @@ Definition merge (xs ys : list Z) :=
 Fixpoint walk_a_tree (t : a_tree) : list Z :=
   match t with
   | A_Leaf => []
-  | A_Node k v l r => walk_b_tree l ++ k :: walk_b_tree r
+  | A_Node k l r v => walk_b_tree l ++ k :: walk_b_tree r
   end
   with
   walk_b_tree (t : b_tree) : list Z :=
