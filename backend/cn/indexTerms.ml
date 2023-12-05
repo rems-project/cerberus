@@ -64,7 +64,7 @@ let rec free_vars_ = function
   | Cast (_cbt, t) -> free_vars t
   | MemberShift (t, _tag, _id) -> free_vars t
   | ArrayShift { base; ct=_; index } -> free_vars_list [base; index]
-  | CopyAllocId { int; loc } -> free_vars_list [int; loc]
+  | CopyAllocId { addr; loc } -> free_vars_list [addr; loc]
   | SizeOf _t -> SymSet.empty
   | OffsetOf (tag, member) -> SymSet.empty
   | Nil _bt -> SymSet.empty
@@ -125,7 +125,7 @@ let rec fold_ f binders acc = function
   | Cast (_cbt, t) -> fold f binders acc t
   | MemberShift (t, _tag, _id) -> fold f binders acc t
   | ArrayShift { base; ct=_; index } -> fold_list f binders acc [base; index]
-  | CopyAllocId { int; loc } -> fold_list f binders acc [int; loc]
+  | CopyAllocId { addr; loc } -> fold_list f binders acc [addr; loc]
   | SizeOf _ct -> acc
   | OffsetOf (_tag, _member) -> acc
   | Nil _bt -> acc
@@ -255,8 +255,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (MemberShift (subst su t, tag, member), bt)
   | ArrayShift { base; ct; index } ->
     IT (ArrayShift { base=subst su base; ct; index=subst su index }, bt)
-  | CopyAllocId { int; loc } ->
-    IT (CopyAllocId { int= subst su int; loc=subst su loc }, bt)
+  | CopyAllocId { addr; loc } ->
+    IT (CopyAllocId { addr= subst su addr; loc=subst su loc }, bt)
   | SizeOf t ->
      IT (SizeOf t, bt)
   | OffsetOf (tag, member) ->
@@ -627,10 +627,10 @@ let memberShift_ (base, tag, member) =
   IT (MemberShift (base, tag, member), BT.Loc)
 let arrayShift_ ~base ~index ct  =
   IT (ArrayShift { base; ct; index }, BT.Loc)
-let copyAllocId_ ~int ~loc =
-  IT (CopyAllocId { int; loc }, BT.Loc)
+let copyAllocId_ ~addr ~loc =
+  IT (CopyAllocId { addr; loc }, BT.Loc)
 let sizeOf_ ct =
-  IT (SizeOf ct, BT.Integer)
+  IT (SizeOf ct, Memory.sint_bt)
 
 let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true

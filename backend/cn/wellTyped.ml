@@ -659,7 +659,6 @@ module WIT = struct
            | Integer, Loc -> fail (fun _ -> {loc; msg =
                Generic (!^ "cast from integer not allowed in bitvector version")})
            | Loc, Alloc_id -> return ()
-           | Loc, Integer -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()
            | Bits (sign,n), Bits (sign',n')
@@ -682,18 +681,19 @@ module WIT = struct
        | ArrayShift { base; ct; index } ->
           let@ () = WCT.is_ct loc ct in
           let@ base = check loc Loc base in
-          let@ index = check loc Integer index in
+          let@ index = infer loc index in
+          let@ () = ensure_bits_type loc (IT.bt index) in
           return (IT (ArrayShift { base; ct; index }, BT.Loc))
-       | CopyAllocId { int; loc=ptr } ->
-          let@ int = check loc Integer int in
+       | CopyAllocId { addr; loc=ptr } ->
+          let@ addr = check loc Memory.intptr_bt addr in
           let@ ptr = check loc Loc ptr in
-          return (IT (CopyAllocId { int; loc=ptr }, BT.Loc))
+          return (IT (CopyAllocId { addr; loc=ptr }, BT.Loc))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
-          return (IT (SizeOf ct, Memory.intptr_bt))
+          return (IT (SizeOf ct, Memory.sint_bt))
        | OffsetOf (tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
-          return (IT (OffsetOf (tag, member), BT.Integer))
+          return (IT (OffsetOf (tag, member), Memory.sint_bt))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Memory.intptr_bt t.align in
@@ -1784,8 +1784,10 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         todo ()
      | M_Ememop (M_Va_end _) (* (asym 'bty) *) ->
         todo ()
-     | M_Ememop (M_CopyAllocId _) ->
-        todo ()
+     | M_Ememop (M_CopyAllocId (pe1, pe2)) ->
+        let@ pe1 = check_pexpr Memory.intptr_bt pe1 in
+        let@ pe2 = check_pexpr BT.Loc pe2 in
+        return (Loc, M_Ememop (M_CopyAllocId (pe1, pe2)))
      | M_Eaction (M_Paction (pol, M_Action (aloc, action_))) ->
         let@ (bTy, action_) = match action_ with
         | M_Create (pe, act, prefix) ->

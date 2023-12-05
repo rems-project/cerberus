@@ -634,7 +634,7 @@ module Translate = struct
       | Const (Pointer { alloc_id; addr }) ->
          alloc_id_addr_to_loc
            (term (alloc_id_ alloc_id))
-           (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string addr))
+           (term (num_lit_ addr Memory.intptr_bt))
       | Const (Alloc_id z) ->
          integer_to_alloc_id
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
@@ -765,8 +765,6 @@ module Translate = struct
             alloc_id_addr_to_loc (term (alloc_id_ Z.zero)) (term t)
          | Bits _, Loc ->
             alloc_id_addr_to_loc (term (alloc_id_ Z.zero)) (term t)
-         | Loc, Integer ->
-            loc_to_addr (term t)
          | Loc, Bits _ ->
             loc_to_addr (term t)
          | Loc, Alloc_id ->
@@ -788,7 +786,7 @@ module Translate = struct
          let offset = int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt in
          alloc_id_addr_to_loc
            alloc_id
-           (Z3.Arithmetic.mk_add context [addr; term offset])
+           (Z3.BitVector.mk_add context addr (term offset))
       | ArrayShift { base; ct; index } ->
         let offset = mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt,
             cast_ Memory.intptr_bt index) in
@@ -796,9 +794,9 @@ module Translate = struct
         let (alloc_id, addr) = (loc_to_alloc_id base, loc_to_addr base) in
         alloc_id_addr_to_loc
           alloc_id
-          (Z3.Arithmetic.mk_add context [addr; term offset])
-      | CopyAllocId { int; loc } ->
-        let int, loc = term int, term loc in
+          (Z3.BitVector.mk_add context addr (term offset))
+      | CopyAllocId { addr; loc } ->
+        let int, loc = term addr, term loc in
         alloc_id_addr_to_loc (loc_to_alloc_id loc) int
       | Nil ibt ->
          make_uf (plain (!^"nil_uf"^^angles(BT.pp ibt))) (List ibt) []
@@ -1415,7 +1413,7 @@ module Eval = struct
            let i = nth args 1 in
            begin match IT.get_num_z i with
            | Some addr -> pointer_ ~alloc_id ~addr
-           | _ -> copyAllocId_ ~int:i ~loc:(pointer_ ~alloc_id ~addr:Z.zero)
+           | _ -> copyAllocId_ ~addr:i ~loc:(pointer_ ~alloc_id ~addr:Z.zero)
            end
 
         | () when

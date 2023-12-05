@@ -34,6 +34,9 @@ let sbt_of_sct = SurfaceBaseTypes.of_sct is_signed_integer_type size_of_integer_
 let intptr_bt = bt_of_sct Sctypes.(Integer (Unsigned Intptr_t))
 let intptr_sbt = sbt_of_sct Sctypes.(Integer (Unsigned Intptr_t))
 
+let sint_bt = bt_of_sct Sctypes.(Integer (Signed Int_))
+let sint_sbt = sbt_of_sct Sctypes.(Integer (Signed Int_))
+
 let size_of_ctype = function
   | Void -> Cerb_debug.error "size_of_ctype applied to void"
   | ct -> int_of_ival (IM.sizeof_ival (to_ctype ct))

@@ -493,7 +493,7 @@ module EffectfulTranslation = struct
   let mk_translate_binop loc bop (e1, e2) =
     let open IndexTerms in
     match bop, IT.bt e1 with
-    | CN_add, (SBT.Integer | SBT.Real) ->
+    | CN_add, (SBT.Integer | SBT.Real | SBT.Bits _) ->
         return (IT (Binop (Add, e1, e2), IT.bt e1))
     | CN_add, (SBT.Loc oct) ->
        begin match oct with
@@ -504,7 +504,7 @@ module EffectfulTranslation = struct
        | None ->
           cannot_tell_pointee_ctype loc e1
        end
-    | CN_sub, (SBT.Integer | SBT.Real) ->
+    | CN_sub, (SBT.Integer | SBT.Real | SBT.Bits _ ) ->
         return (IT (Binop (Sub, e1, e2), IT.bt e1))
     | CN_sub, (SBT.Loc oct) ->
        begin match oct with
@@ -709,10 +709,10 @@ module EffectfulTranslation = struct
             mk_translate_binop loc bop (e1, e2)
         | CNExpr_sizeof ct ->
             let scty = Sctypes.of_ctype_unsafe loc ct in
-            return (IT (SizeOf scty, Memory.intptr_sbt))
+            return (IT (SizeOf scty, Memory.sint_sbt))
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
-            return (IT ((OffsetOf (tag, member)), Memory.intptr_sbt))
+            return (IT ((OffsetOf (tag, member)), Memory.sint_sbt))
         | CNExpr_array_shift (base, annot, index) ->
            let@ base = self base in
            begin match IT.bt base with
@@ -722,7 +722,7 @@ module EffectfulTranslation = struct
                 arithmetic can happen at any size/type *)
               let@ index = self index in
               begin match IT.bt index with
-              | Integer ->
+              | Integer | Bits _ ->
                 let ct = Sctypes.of_ctype_unsafe loc annot in
                 return (IT (ArrayShift { base; ct; index }, Loc (Some ct)))
               | has ->
@@ -950,10 +950,10 @@ module EffectfulTranslation = struct
     let open IndexTerms in
     let open Pp in
     let qs = sym_ q in
-    let msg_s = "Iterated predicate pointer must be (ptr + q_var) or array_shift<ctype>(ptr, q_var):" in
+    let msg_s = "Iterated predicate pointer must be array_shift<ctype>(ptr, q_var):" in
     begin match term ptr_expr with
       | ArrayShift { base=p; ct; index=x } when Terms.equal SBT.equal x qs ->
-        return (p, sterm_of_term @@ sizeOf_ ct)
+        return (p, cast_ (SBT.to_basetype (snd q)) (sizeOf_ ct))
       | _ ->
       fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
     end
@@ -1008,7 +1008,7 @@ module EffectfulTranslation = struct
     let pt = (RET.Q { name = pname
               ; q= (q, SBT.to_basetype bt')
               ; pointer= IT.term_of_sterm ptr_base
-              ; step = IT.term_of_sterm step
+              ; step = step
               ; permission= IT.term_of_sterm guard_expr
               ; iargs = List.map IT.term_of_sterm iargs},
            m_oargs_ty)
