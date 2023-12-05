@@ -32,8 +32,8 @@ void set_a_pointer(int *p, int x)
 /*@ requires (alloc_id) global_array == (alloc_id) p @*/
 /*@ requires take Arr = Global_Array(global_array) @*/
 /*@ requires let offs = ((u64)p - (u64)global_array) @*/
-/*@ requires mod(offs, sizeof<int>) == 0u64 @*/
-/*@ requires let idx = (offs / sizeof<int>) @*/
+/*@ requires mod(offs, (u64) (sizeof<int>)) == 0u64 @*/
+/*@ requires let idx = (offs / ((u64) (sizeof<int>))) @*/
 /*@ requires 0u64 <= idx && idx < ((u64) (global_array_width ())) @*/
 /*@ ensures take Arr2 = Global_Array(global_array) @*/
 {

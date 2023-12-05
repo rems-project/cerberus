@@ -25,7 +25,7 @@ predicate (datatype seq) IntList(pointer p) {
     return Seq_Nil{};
   } else { 
     take H = Owned<struct int_list>(p);
-    assert (is_null(H.tail) || (integer)H.tail != 0);
+    assert (is_null(H.tail) || (u64)H.tail != 0u64);
     take tl = IntList(H.tail);
     return (Seq_Cons { head: H.head, tail: tl });
   }
