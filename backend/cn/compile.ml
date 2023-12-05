@@ -713,17 +713,23 @@ module EffectfulTranslation = struct
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
             return (IT ((OffsetOf (tag, member)), Memory.sint_sbt))
-        | CNExpr_array_shift (base, annot, index) ->
+        | CNExpr_array_shift (base, ty_annot, index) ->
            let@ base = self base in
-           begin match IT.bt base with
-           | Loc _ ->
-             (* this does not check whether Loc (Some inferred) = Loc (Some annot)
+           let@ ct = match ty_annot, IT.bt base with
+           | Some ty, _ ->
+             (* this does not check whether the annotation and pointer type agree
                 and just defers to what the user wrote, because pointer
                 arithmetic can happen at any size/type *)
+             return (Sctypes.of_ctype_unsafe loc ty)
+           | None, Loc (Some bt) -> return bt
+           | _ -> fail {loc; msg = Generic
+               (!^ "type of array not specified (e.g. array_shift<int>) or known from pointer")}
+           in
+           begin match IT.bt base with
+           | Loc _ ->
               let@ index = self index in
               begin match IT.bt index with
               | Integer | Bits _ ->
-                let ct = Sctypes.of_ctype_unsafe loc annot in
                 return (IT (ArrayShift { base; ct; index }, Loc (Some ct)))
               | has ->
                  fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer"; o_ctxt = None}}

@@ -190,7 +190,9 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
       | CNExpr_array_shift (base, ctype, index) ->
           Dnode (pp_ctor "CNExpr_array_shift"
-                , [dtree_of_cn_expr base; Dleaf (Conf.pp_ty ctype); dtree_of_cn_expr index])
+                , [dtree_of_cn_expr base]
+                  @ List.map (fun ctype -> Dleaf (Conf.pp_ty ctype)) (Option.to_list ctype)
+                  @ [dtree_of_cn_expr index])
       | CNExpr_call (nm, exprs) ->
           Dnode (pp_ctor "CNExpr_call" ^^^ P.squotes (Conf.pp_ident nm)
                  , List.map dtree_of_cn_expr exprs)

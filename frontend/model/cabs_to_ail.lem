@@ -4152,6 +4152,12 @@ end
 
 let pair x y = (x, y)
 
+let desugar_maybe desugar_f o =
+  match o with
+  | Just x -> desugar_f x >>= fun x -> E.return (Just x)
+  | Nothing -> E.return Nothing
+  end
+
 let rec desugar_cn_expr (CNExpr loc expr_) =
   match expr_ with
     | CNExpr_const cst ->
@@ -4222,7 +4228,8 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
                     <*> desugar_cn_expr e
     | CNExpr_array_shift e1 ct e2 ->
       desugar_cn_expr e1 >>= fun e1 ->
-      desugar_type_name ct >>= fun (_, ct) ->
+      desugar_maybe desugar_type_name ct >>= fun ct_tup ->
+      let ct = Maybe.map (fun (_, ct) -> ct) ct_tup in
       desugar_cn_expr e2 >>= fun e2 ->
       E.return (CNExpr_array_shift e1 ct e2)
     | CNExpr_call nm es ->
@@ -4296,12 +4303,6 @@ let desugar_cn_pred = function
       let sym = Cn.ensure_not_c_variable sym_resolved in
       E.return (CN_named sym)
 end
-
-let desugar_maybe desugar_f o =
-  match o with
-  | Just x -> desugar_f x >>= fun x -> E.return (Just x)
-  | Nothing -> E.return Nothing
-  end
 
 let desugar_cn_resource = function
   | CN_pred loc pred es ->

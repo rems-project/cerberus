@@ -1872,7 +1872,13 @@ prim_expr:
     { e }
 | CN_ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_array_shift (base, ty, index))) }
+                               , CNExpr_array_shift (base, Some ty, index))) }
+| CN_ARRAY_SHIFT LPAREN base=expr COMMA index=expr RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_array_shift (base, None, index))) }
+| CN_MEMBER_SHIFT LPAREN base=expr COMMA member=cn_variable RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_membershift (base, None, member))) }
 | CN_MEMBER_SHIFT LT tag=cn_variable GT LPAREN base=expr COMMA member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_membershift (base, Some tag, member))) }
