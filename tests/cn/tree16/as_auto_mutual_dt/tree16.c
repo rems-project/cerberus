@@ -102,7 +102,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires is_null(t) || (integer) t != 0 @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned(path + (j * 4i32))} @*/
+    {Owned(array_shift(path, j))} @*/
 /*@ requires ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len)) @*/
 /*@ requires each (i32 j; (0i32 <= j) && (j < path_len))
     {(0i32 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
@@ -112,7 +112,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ ensures T2.t == {T.t}@start @*/
 /*@ ensures T2.children == {T.children}@start @*/
 /*@ ensures take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned(path + (j * ((i32) (sizeof<int>))))} @*/
+    {Owned(array_shift(path, j))} @*/
 /*@ ensures Xs2 == {Xs}@start @*/
 /*@ ensures take V2 = Owned(v) @*/
 /*@ ensures ((return == 0i32) && (not (in_tree (T2.t, arc))))

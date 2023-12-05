@@ -14,13 +14,13 @@ predicate {i32 k} Tagged_Pointer (pointer p, i32 k) {
     return {k: k};
   }
   else { if (k == 1i32) {
-    assert (mod((u64)p, sizeof<int>) == 0u64);
+    assert (mod((u64)p, ((u64) (sizeof<int>))) == 0u64);
     take V = Owned<int>(p);
     return {k: k};
   }
   else {
     assert (k == 2i32);
-    assert (mod((u64)p, sizeof<struct two_ints>) == 0u64);
+    assert (mod((u64)p, ((u64) (sizeof<struct two_ints>))) == 0u64);
     take V = Owned<struct two_ints>(p);
     return {k: k};
   } }

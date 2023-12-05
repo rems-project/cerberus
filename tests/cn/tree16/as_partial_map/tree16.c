@@ -59,7 +59,7 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
 
 predicate (map <datatype tree_arc, datatype tree_node_option>) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
-  assert (is_null(V) || (integer) V != 0);
+  assert (is_null(V) || ((u64) V != 0u64));
   take T = Tree(V);
   return T.t;
 }
@@ -128,10 +128,10 @@ lemma construct_lemma (i32 v,
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
-/*@ requires is_null(t) || (integer) t != 0 @*/
+/*@ requires is_null(t) || ((u64) t != 0u64) @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned<int>(path + (j * ((i32) (sizeof<signed int>))))} @*/
+    {Owned(array_shift(path, j))} @*/
 /*@ requires ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len)) @*/
 /*@ requires each (i32 j; (0i32 <= j) && (j < path_len))
     {(0i32 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
@@ -140,7 +140,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ ensures take T2 = Tree(t) @*/
 /*@ ensures T2.t == {T.t}@start @*/
 /*@ ensures take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned<int>(path + (j * ((i32) (sizeof<signed int>))))} @*/
+    {Owned(array_shift(path, j))} @*/
 /*@ ensures Xs2 == {Xs}@start @*/
 /*@ ensures take V2 = Owned(v) @*/
 /*@ ensures ((return == 0i32) && ((T2.t[arc]) == Node_None {}))

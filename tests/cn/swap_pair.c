@@ -1,8 +1,8 @@
 void swap_pair(unsigned long int *pair_p)
 /*@ requires take pairStart = each (i32 j; 0i32 <= j && j < 2i32)
-  {Owned(pair_p + (j * ((i32) (sizeof<unsigned long int>))))} @*/
+  {Owned(array_shift(pair_p, j))} @*/
 /*@ ensures take pairEnd = each (i32 j; 0i32 <= j && j < 2i32)
-  {Owned(pair_p + (j * ((i32) (sizeof<unsigned long int>))))} @*/
+  {Owned(array_shift(pair_p, j))} @*/
 /*@ ensures pairEnd[0i32] == pairStart[1i32] @*/
 /*@ ensures pairEnd[1i32] == pairStart[0i32] @*/
 {
