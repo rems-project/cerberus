@@ -1208,7 +1208,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
         Cerb_debug.error "todo: M_PtrMemberShift"
      | M_CopyAllocId (pe1, pe2) ->
-        let@ () = WellTyped.ensure_base_type loc ~expect:Memory.intptr_bt (bt_of_pexpr pe2) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Memory.intptr_bt (bt_of_pexpr pe1) in
         let@ () = WellTyped.ensure_base_type loc ~expect:BT.Loc (bt_of_pexpr pe2) in
         check_pexpr pe1 (fun vt1 ->
         check_pexpr pe2 (fun vt2 ->
