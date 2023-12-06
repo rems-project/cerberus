@@ -760,7 +760,7 @@ Module Type CheriMemoryImpl
     end.
 
   Definition default_prov (_:unit) :=
-    if CoqSwitches.is_PNVI (SW.get_switches tt)
+    if CoqSwitches.has_PNVI (SW.get_switches tt)
     then Prov_none
     else Prov_disabled.
 
@@ -971,7 +971,7 @@ Module Type CheriMemoryImpl
                  C.cap_narrow_perms c p
                else c
              in
-             let prov := if CoqSwitches.is_PNVI (SW.get_switches tt)
+             let prov := if CoqSwitches.has_PNVI (SW.get_switches tt)
                          then Prov_some alloc_id
                          else Prov_disabled
              in
@@ -1020,7 +1020,7 @@ Module Type CheriMemoryImpl
                capmeta          := st.(capmeta);
              |})
         ;;
-        let prov := if CoqSwitches.is_PNVI (SW.get_switches tt)
+        let prov := if CoqSwitches.has_PNVI (SW.get_switches tt)
                     then Prov_some alloc_id
                     else Prov_disabled
         in
