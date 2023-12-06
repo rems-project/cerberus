@@ -54,8 +54,17 @@ Definition is_PNVI_switch (s:cerb_switch) :=
    | _ => false
   end.
 
-Definition is_PNVI (switches:cerb_switches_t) : bool :=
+Definition has_PNVI (switches:cerb_switches_t) : bool :=
   List.existsb is_PNVI_switch switches.
+
+Definition is_Revocation_switch (s:cerb_switch) :=
+  match s with
+   | SW_revocation _ => true
+   | _ => false
+  end.
+
+Definition has_Revocation (switches:cerb_switches_t) : bool :=
+  List.existsb is_Revocation_switch switches.
 
 Definition is_CHERI (switches:cerb_switches_t) : bool :=
   has_switch switches (SW_CHERI).

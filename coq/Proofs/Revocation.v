@@ -68,26 +68,37 @@ Module RevocationProofs.
   Definition remove_PNVI: cerb_switches_t -> cerb_switches_t :=
     List.filter (fun s => negb (is_PNVI_switch s)).
 
-  (* Removes all other PNVI flavours *)
+  Definition remove_Revocation: cerb_switches_t -> cerb_switches_t :=
+    List.filter (fun s => negb (is_Revocation_switch s)).
+
+  (* 1. removes all PNVI flavours
+     2. Adds [SW_revocation INSTANT] and removes all other revocation mechanisms
+   *)
   Module WithoutPNVISwitches.
-    Definition get_switches (_:unit) := remove_PNVI (abst_get_switches tt).
+    Definition get_switches (_:unit) :=
+      ListSet.set_add cerb_switch_dec (SW_revocation INSTANT)
+      (remove_Revocation
+        (remove_PNVI (abst_get_switches tt))).
   End WithoutPNVISwitches.
 
-  (* Adds [SW_PNVI AE_UDI] are removes all other PNVI flavours *)
+  (* 1. removes all revocation mechanisms
+     2. adds [SW_PNVI AE_UDI] and removes all other PNVI flavours *)
   Module WithPNVISwitches.
     Definition get_switches (_:unit) :=
       ListSet.set_add cerb_switch_dec (SW_PNVI AE_UDI)
-        (remove_PNVI (abst_get_switches tt)).
+        (remove_Revocation
+           (remove_PNVI (abst_get_switches tt))).
   End WithPNVISwitches.
 
+  (* This is pure CHERI memory model with instant revocation but without PNVI. *)
   Module CheriMemoryWithoutPNVI: CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithoutPNVISwitches).
     Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithoutPNVISwitches).
   End CheriMemoryWithoutPNVI.
 
+  (* This is CHERI memory model whout instant revocation but with PNVI. *)
   Module CheriMemoryWithPNVI:CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
     Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
   End CheriMemoryWithPNVI.
-
 
   (* monad laws for both instantiations *)
 
@@ -450,8 +461,9 @@ Module RevocationProofs.
 
 
   (* --- Helper lemmas *)
-  Lemma is_PNVI_WithPNVI:
-    is_PNVI (WithPNVISwitches.get_switches tt) = true.
+
+  Lemma has_PNVI_WithPNVI:
+    has_PNVI (WithPNVISwitches.get_switches tt) = true.
   Proof.
     unfold WithPNVISwitches.get_switches.
     remember (abst_get_switches tt) as l.
@@ -464,23 +476,32 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
-  Lemma is_PNVI_WithoutPNVI:
-    is_PNVI (WithoutPNVISwitches.get_switches tt) = false.
+
+  Lemma has_PNVI_WithoutPNVI:
+    has_PNVI (WithoutPNVISwitches.get_switches tt) = false.
   Proof.
     unfold WithoutPNVISwitches.get_switches.
     remember (abst_get_switches tt) as l.
-    unfold is_PNVI, remove_PNVI in *.
+    unfold has_PNVI, remove_PNVI, remove_Revocation in *.
     apply Bool.not_true_is_false.
     intros E.
     apply Bool.Is_true_eq_left in E.
     apply list.existb_True in E.
     apply Exists_exists in E.
     destruct E as [x [H0 H1]].
-    apply filter_In in H0.
-    destruct H0 as [H2 H3].
-    apply Bool.negb_true_iff in H3.
-    rewrite H3 in H1.
-    inversion H1.
+    apply set_add_iff in H0.
+    destruct H0.
+    -
+      subst.
+      inversion H1.
+    -
+      apply filter_In in H.
+      destruct H as [H2 H3].
+      apply filter_In in H2.
+      destruct H2 as [H4 H5].
+      apply Bool.negb_true_iff in H5.
+      rewrite H5 in H1.
+      inversion H1.
   Qed.
 
   Lemma remove_PNVI_In:
@@ -499,6 +520,26 @@ Module RevocationProofs.
       assumption.
     -
       unfold remove_PNVI in H.
+      apply filter_In in H.
+      apply H.
+  Qed.
+
+  Lemma remove_Revocation_In:
+    forall l s,
+      is_Revocation_switch s = false ->
+      set_In s l <-> set_In s (remove_Revocation l).
+  Proof.
+    intros l s P.
+    split; intros H.
+    -
+      unfold remove_Revocation.
+      apply filter_In.
+      split.
+      apply H.
+      apply Bool.negb_true_iff.
+      assumption.
+    -
+      unfold remove_Revocation in H.
       apply filter_In in H.
       apply H.
   Qed.
@@ -523,50 +564,116 @@ Module RevocationProofs.
       apply remove_PNVI_In in Heqb0;auto.
   Qed.
 
-  (* All non-pnvi switches are the same *)
-  Lemma non_PNVI_switches_match (s: cerb_switch):
-      is_PNVI_switch s = false ->
-      has_switch (WithPNVISwitches.get_switches tt) s =
-        has_switch (WithoutPNVISwitches.get_switches tt) s.
+  Lemma remove_Revocation_set_mem:
+    forall l s,
+      is_Revocation_switch s = false ->
+      set_mem cerb_switch_dec s (remove_Revocation l) =
+        set_mem cerb_switch_dec s l.
   Proof.
-    intros H.
-    unfold WithPNVISwitches.get_switches.
-    unfold WithoutPNVISwitches.get_switches.
+    intros l s H.
+    apply Bool.eqb_prop.
+    unfold Bool.eqb.
+    break_if;break_if;auto.
+    -
+      apply set_mem_correct1 in Heqb.
+      apply set_mem_complete1 in Heqb0.
+      apply remove_Revocation_In in Heqb;auto.
+    -
+      apply set_mem_correct1 in Heqb0.
+      apply set_mem_complete1 in Heqb.
+      apply remove_Revocation_In in Heqb0;auto.
+  Qed.
+
+  Lemma remove_Revocation_correct:
+    forall l s, is_Revocation_switch s = true -> ~(set_In s (remove_Revocation l)).
+  Proof.
+    intros l.
+    induction l;intros.
+    - auto.
+    - cbn.
+      destruct (cerb_switch_dec a s) as [E|NE].
+      +
+        subst.
+        break_if.
+        * apply negb_true_iff in Heqb; congruence.
+        * apply IHl; auto.
+      +
+        break_if.
+        *
+          cbn.
+          intros [C1 |C2].
+          -- congruence.
+          -- contradict C2; apply IHl; assumption.
+        * apply IHl; assumption.
+  Qed.
+
+  (* All non-pnvi and non-revocation switches are the same *)
+  Lemma non_PNVI_switches_match (s: cerb_switch):
+    (is_PNVI_switch s = false /\ s <> SW_revocation INSTANT) ->
+    has_switch (WithPNVISwitches.get_switches tt) s =
+      has_switch (WithoutPNVISwitches.get_switches tt) s.
+  Proof.
+    intros [HP HR].
+    unfold WithPNVISwitches.get_switches, WithoutPNVISwitches.get_switches.
     generalize (abst_get_switches tt) as l.
     intros l.
     pose proof (set_In_dec cerb_switch_dec s l) as D.
-    unfold is_PNVI_switch in H.
+    unfold is_PNVI_switch in HP.
+    unfold is_Revocation_switch in HR.
 
     Ltac one_has_switch D :=
       unfold has_switch;
-      rewrite remove_PNVI_set_mem by auto;
+      apply eqb_true_iff;
+      unfold Bool.eqb;
       destruct D as [IN | NIN];
-      [ apply set_mem_correct2 with (Aeq_dec:=cerb_switch_dec) in IN;
-        rewrite IN;
-        apply set_mem_correct2, set_add_intro1;
-        apply -> remove_PNVI_In;
-        [ apply set_mem_correct1 with (Aeq_dec:=cerb_switch_dec);
-          assumption
-        | auto ]
-      | apply set_mem_complete2 with (Aeq_dec:=cerb_switch_dec) in NIN;
-        rewrite NIN;
-        apply set_mem_complete2;
-        intros H;
-        apply set_add_elim2 in H; auto;
-        apply remove_PNVI_In in H;
-        [ apply set_mem_correct2 with (Aeq_dec:=cerb_switch_dec) in H;
-          congruence
-        | auto ]
+      [
+        repeat break_if; try tauto;
+        match goal with
+        | [H: set_mem _ _ _ = false |- _] =>
+            apply set_mem_complete1 in H;
+            contradict H;
+            apply set_add_intro1;
+            apply -> remove_Revocation_In;auto;
+            apply -> remove_PNVI_In;auto
+        end
+      |
+        repeat break_if; try tauto;
+        match goal with
+        | [H: set_mem _ _ _ = true |- _] =>
+            apply set_mem_correct1 in H;
+            contradict NIN;
+            apply set_add_elim in H;
+            destruct H as [H1 |H2];
+            [inversion H1 |
+              apply remove_Revocation_In in H2; auto;
+              apply remove_PNVI_In in H2; auto]
+        end
       ].
 
-    destruct s eqn:S; inversion H; clear H; one_has_switch D.
+    destruct s eqn:S; invc HP; try invc HR; try one_has_switch D.
+    destruct s0;[congruence|].
+    unfold has_switch.
+    apply eqb_true_iff.
+    unfold Bool.eqb.
+    repeat break_if;auto;
+    match goal with
+    | [H: set_mem _ _ _ = true |- _] =>
+        apply set_mem_correct1 in H;
+        apply set_add_elim in H;
+        destruct H as [H1 |H2]; [inversion H1|];
+        contradict H2;
+        apply remove_Revocation_correct;
+        auto
+    end.
   Qed.
 
+  (* We normalize, if possible, towards [WithPNVISwitches] *)
   Ltac normalize_switches :=
     match goal with
     | [H: context[has_switch (WithoutPNVISwitches.get_switches tt) ?s] |- _] =>
         match s with
         | SW_PNVI _ => fail
+        | SW_revocation _ => fail
         | _ =>
             replace (has_switch (WithoutPNVISwitches.get_switches tt) s) with
             (has_switch (WithPNVISwitches.get_switches tt) s)
@@ -575,6 +682,7 @@ Module RevocationProofs.
     | [|- context[has_switch (WithoutPNVISwitches.get_switches tt) ?s]] =>
         match s with
         | SW_PNVI _ => fail
+        | SW_revocation _ => fail
         | _ =>
             replace (has_switch (WithoutPNVISwitches.get_switches tt) s) with
             (has_switch (WithPNVISwitches.get_switches tt) s)
@@ -1201,7 +1309,7 @@ Module RevocationProofs.
 
         unfold CheriMemoryWithPNVI.default_prov.
         unfold CheriMemoryWithoutPNVI.default_prov.
-        rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+        rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
         apply list_init_proper;[reflexivity|].
         intros x y E.
         constructor.
@@ -1236,7 +1344,7 @@ Module RevocationProofs.
             assumption.
             unfold CheriMemoryWithPNVI.default_prov.
             unfold CheriMemoryWithoutPNVI.default_prov.
-            rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+            rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
             apply list_map_Proper with (pA:=@eq ascii).
             --
               intros a1 a2 Ea.
@@ -1270,7 +1378,7 @@ Module RevocationProofs.
             rewrite Ecap;reflexivity.
             unfold CheriMemoryWithPNVI.default_prov.
             unfold CheriMemoryWithoutPNVI.default_prov.
-            rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+            rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
             apply list_mapi_Proper with (pA:=@eq ascii).
             --
               intros n a1 a2 Ea.
@@ -1311,7 +1419,7 @@ Module RevocationProofs.
             --
               unfold CheriMemoryWithPNVI.default_prov.
               unfold CheriMemoryWithoutPNVI.default_prov.
-              rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+              rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
               apply list_map_Proper with (pA:=@eq ascii).
               ++
                 intros a1 a2 Ea.
@@ -2584,8 +2692,8 @@ Module RevocationProofs.
       -
         intros;subst;try break_let.
         same_step.
-        setoid_rewrite is_PNVI_WithPNVI.
-        setoid_rewrite is_PNVI_WithoutPNVI.
+        setoid_rewrite has_PNVI_WithPNVI.
+        setoid_rewrite has_PNVI_WithoutPNVI.
         constructor;reflexivity.
     Qed.
     #[global] Opaque CheriMemoryWithPNVI.allocate_object CheriMemoryWithoutPNVI.allocate_object.
@@ -2672,7 +2780,7 @@ Module RevocationProofs.
         auto.
       +
         unfold CheriMemoryWithPNVI.default_prov, CheriMemoryWithoutPNVI.default_prov.
-        rewrite is_PNVI_WithPNVI, is_PNVI_WithoutPNVI.
+        rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
         constructor.
         split; auto.
     -
