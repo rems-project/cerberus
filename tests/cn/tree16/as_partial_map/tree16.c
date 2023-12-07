@@ -1,7 +1,8 @@
 
 
 enum {
-  NUM_NODES = 16
+  NUM_NODES = 16,
+  LEN_LIMIT = (1 << 16),
 };
 
 struct node;
@@ -79,7 +80,9 @@ predicate {datatype tree_arc arc, map<i32, i32> xs}
 }
 
 lemma mk_arc_lemma (map <i32, i32> m, i32 i, i32 len)
-  requires ((0i32 <= len) && (0i32 <= i) && (i <= len))
+  requires
+    ((0i32 <= len) && (0i32 <= i) && (i <= len));
+    len <= LEN_LIMIT
   ensures (mk_arc(m, i, len)) ==
     (i < len ?
         Arc_Step {i: m[i], tail: mk_arc(m, i + 1i32, len)} :
@@ -129,6 +132,7 @@ lemma construct_lemma (i32 v,
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires is_null(t) || ((u64) t != 0u64) @*/
+/*@ requires path_len <= LEN_LIMIT @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
     {Owned(array_shift(path, j))} @*/

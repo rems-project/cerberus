@@ -1,7 +1,8 @@
 
 
 enum {
-  NUM_NODES = 16
+  NUM_NODES = 16,
+  LEN_LIMIT = 1 << 16,
 };
 
 struct node;
@@ -12,14 +13,6 @@ struct node {
   int v;
   tree nodes[NUM_NODES];
 };
-
-/*@
-function (i32) num_nodes ()
-@*/
-
-int cn_get_num_nodes (void)
-/*@ cn_function num_nodes @*/
-{ return NUM_NODES; }
 
 /*@
 datatype tree {
@@ -45,9 +38,9 @@ predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
   else {
     take V = Owned<int>(member_shift<node>(p,v));
     let nodes_ptr = member_shift<node>(p,nodes);
-    take Ns = each (i32 i; (0i32 <= i) && (i < (num_nodes ())))
+    take Ns = each (i32 i; (0i32 <= i) && (i < NUM_NODES))
       {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
-    let ts = array_to_tree_list (Ns, num_nodes ());
+    let ts = array_to_tree_list (Ns, NUM_NODES);
     return {t: Node {v: V, children: ts}, v: V, children: Ns};
   }
 }
@@ -98,25 +91,28 @@ function [coq_unfold] (boolean) in_tree_step (datatype tree t, arc_in_array arc)
 
 lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
     map <i32, datatype tree> t_children)
-  requires true
+  requires
+    0i32 <= arc.i;
+    arc.len <= LEN_LIMIT
   ensures
     (tree_v(t, arc)) == (tree_v_step(t, arc));
     (in_tree(t, arc)) == (in_tree_step(t, arc));
     let i = (arc.arr)[arc.i];
-    ((0i32 <= i) && (i < (num_nodes())))
-    ? (nth_tree_list(array_to_tree_list (t_children, num_nodes ()), i) == t_children[i])
+    ((0i32 <= i) && (i < NUM_NODES))
+    ? (nth_tree_list(array_to_tree_list (t_children, NUM_NODES), i) == t_children[i])
     : true
 @*/
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires is_null(t) || ((u64) t != 0u64) @*/
+/*@ requires path_len <= LEN_LIMIT @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
     {Owned(array_shift(path, j))} @*/
 /*@ requires ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len)) @*/
 /*@ requires each (i32 j; (0i32 <= j) && (j < path_len))
-    {(0i32 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
+    {(0i32 <= (Xs[j])) && ((Xs[j]) < NUM_NODES)} @*/
 /*@ requires take V = Owned(v) @*/
 /*@ requires let arc = {arr: Xs, i: i, len: path_len} @*/
 /*@ ensures take T2 = Tree(t) @*/

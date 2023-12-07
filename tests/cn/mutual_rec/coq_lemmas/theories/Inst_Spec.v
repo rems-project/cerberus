@@ -37,8 +37,12 @@ Open Scope Z.
 Lemma inc_list_lemma: inc_list_lemma_type.
 Proof.
   unfold inc_list_lemma_type, inc_list.
-  intros.
-  destruct xs; auto.
+  intro.
+  destruct xs.
+  - auto.
+  - intros.
+    rewrite CN_Lib.wrapI_idem by lia.
+    auto.
 Qed.
 
 Lemma a_tree_keys_lemma: a_tree_keys_lemma_type.

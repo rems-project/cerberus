@@ -44,6 +44,7 @@ Proof.
   unfold mk_arc, Setup.mk_arc.
   destruct (i <? len) eqn: i_lt.
   - rewrite z_to_nat_sub_succ by lia.
+    rewrite CN_Lib.wrapI_idem by lia.
     auto.
   - rewrite z_to_nat_eq_0 by lia.
     auto.

@@ -127,6 +127,11 @@ predef_a_tree (struct a_node *p)
   return p;
 }
 
+enum {
+  enum_INT_MIN = INT_MIN,
+  enum_INT_MAX = INT_MAX,
+};
+
 /* Setup for reasoning about the list of keys of an A/B tree. */
 
 /*@
@@ -152,7 +157,11 @@ function (datatype key_list) merge (datatype key_list xs, datatype key_list ys)
 
 /*@
 lemma inc_list_lemma (datatype key_list xs)
-  requires true
+  requires
+    (match xs {
+      K_Nil {} => {true}
+      K_Cons {k: k, tail: ys} => {enum_INT_MIN <= k && k < enum_INT_MAX}
+    })
   ensures (inc_list (xs)) == (match xs {
     K_Nil {} => {K_Nil {}}
     K_Cons {k: k, tail: ys} => {K_Cons {k: k + 1i32, tail: inc_list (ys)}}
@@ -231,6 +240,7 @@ a_tree_keys_node_concat_inc_lemma (int k, struct b_node *left, struct b_node *ri
 void
 a_tree_keys_node_concat_cons_inc_lemma (int k, struct b_node *right)
 /*@ requires take R = B_Tree (right) @*/
+/*@ requires k < enum_INT_MAX @*/
 /*@ ensures take R2 = B_Tree (right) @*/
 /*@ ensures R2.t == R.t @*/
 /*@ ensures (inc_list (K_Cons {k: k, tail: (b_tree_keys(R2.t))}))
