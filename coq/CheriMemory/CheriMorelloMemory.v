@@ -2964,51 +2964,49 @@ Module Type CheriMemoryImpl
     (int_v : integer_value) : memM pointer_value
     :=
     match int_ty, int_v with
-    | CoqCtype.Unsigned CoqCtype.Intptr_t, IC _ c_value
-    | CoqCtype.Signed CoqCtype.Intptr_t, IC _ c_value
+    | CoqCtype.Unsigned CoqCtype.Intptr_t, IC _ c
+    | CoqCtype.Signed CoqCtype.Intptr_t, IC _ c
       =>
-        let addr := (cap_to_Z c_value) in
-        find_overlapping addr >>=
-          (fun x =>
-             match x with
-             | NoAlloc => ret (default_prov tt)
-             | SingleAlloc alloc_id => ret (Prov_some alloc_id)
-             | DoubleAlloc alloc_id1 alloc_id2 =>
-                 add_iota (alloc_id1,alloc_id2) >>=
-                   (fun (iota : symbolic_storage_instance_id) =>
-                      ret (Prov_symbolic iota))
-             end >>=
-               (fun (prov : provenance) => ret (PV prov (PVconcrete c_value))))
+        prov <-
+          (ovlp <- find_overlapping (cap_to_Z c) ;;
+           match ovlp with
+           | NoAlloc => ret (default_prov tt)
+           | SingleAlloc alloc_id => ret (Prov_some alloc_id)
+           | DoubleAlloc alloc_id1 alloc_id2 =>
+               iota <- add_iota (alloc_id1,alloc_id2) ;;
+               ret (Prov_symbolic iota)
+           end)
+        ;; ret (PV prov (PVconcrete c))
     | CoqCtype.Unsigned CoqCtype.Intptr_t, IV _
     | CoqCtype.Signed CoqCtype.Intptr_t, IV _ =>
-        raise (InternalErr "ptrfromint: invalid encoding for [u]intptr_t")
-    | _, IV n_value =>
-        if Z.eqb n_value 0
+        raise (InternalErr "ptrfromint: invalid encoding for (u)intptr_t")
+    | _, IV n =>
+        if Z.eqb n 0
         then ret (PV (default_prov tt) (PVconcrete (C.cap_c0 tt)))
         else
           let addr :=
+            (* wrapI *)
             let dlt := Z.succ (Z.sub (AddressValue.to_Z C.max_ptraddr) (AddressValue.to_Z C.min_ptraddr)) in
-            let r_value := Z_integerRem_f n_value dlt in
-            if  Z.leb r_value (AddressValue.to_Z C.max_ptraddr)
-            then r_value
-            else Z.sub r_value dlt
+            let r := Z_integerRem_f n dlt in
+            if Z.leb r (AddressValue.to_Z C.max_ptraddr)
+            then r
+            else Z.sub r dlt
           in
-          find_overlapping addr >>=
-            (fun x =>
-               match x with
-               | NoAlloc => ret (default_prov tt)
-               | SingleAlloc alloc_id => ret (Prov_some alloc_id)
-               | DoubleAlloc alloc_id1 alloc_id2 =>
-                   add_iota (alloc_id1, alloc_id2) >>=
-                     (fun (iota : symbolic_storage_instance_id) =>
-                        ret (Prov_symbolic iota))
-               end >>=
-                 (fun (prov : provenance) =>
-                    let c_value := C.cap_set_value (C.cap_c0 tt) (AddressValue.of_Z addr) in
-                    ret (PV prov (PVconcrete c_value))))
+          prov <-
+            (ovlp <- find_overlapping addr ;;
+             match ovlp with
+             | NoAlloc => ret (default_prov tt)
+             | SingleAlloc alloc_id => ret (Prov_some alloc_id)
+             | DoubleAlloc alloc_id1 alloc_id2 =>
+                 iota <- add_iota (alloc_id1, alloc_id2) ;;
+                 ret (Prov_symbolic iota)
+             end)
+          ;;
+          let c := C.cap_set_value (C.cap_c0 tt) (AddressValue.of_Z addr) in
+          ret (PV prov (PVconcrete c))
     | _, IC _ _ =>
         raise (InternalErr
-                 "invalid integer value (capability for non- [u]intptr_t")
+                 "invalid integer value (capability for non-(u)intptr_t")
     end.
 
   Definition internal_intcast
