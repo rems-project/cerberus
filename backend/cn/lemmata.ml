@@ -462,6 +462,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
   let rec f bt = match bt with
   | BaseTypes.Bool -> return (!^ "bool")
   | BaseTypes.Integer -> return (!^ "Z")
+  | BaseTypes.Bits _ -> return (!^ "Z")
   | BaseTypes.Map (x, y) ->
     let@ enc_x = f x in
     let@ enc_y = f y in
@@ -702,6 +703,15 @@ let rec pat_to_coq = function
     (* assuming here that the id's are in canonical order *)
     parensM (build ([return (Sym.pp c_nm)] @ List.map pat_to_coq (List.map snd id_ps)))
 
+let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
+  else parensM (rets (Z.to_string z))
+
+let norm_bv_op bt doc_f = match bt with
+  | BT.Bits (sign, sz) ->
+    let (minInt, maxInt) = BT.bits_range (sign, sz) in
+    f_appM "CN_Lib.wrapI" [enc_z minInt; enc_z maxInt; doc_f]
+  | _ -> doc_f
+
 let it_to_coq loc global list_mono it =
   let open Pp in
   let eq_of = function
@@ -722,9 +732,6 @@ let it_to_coq loc global list_mono it =
     let with_is_true x = if enc_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
         then f_appM "Is_true" [x] else x
     in
-    let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
-      else parensM (rets (Z.to_string z))
-    in
     let check_pos t f = 
       (* FIXME turning this off for now to test stuff
       let t = unfold_if_possible global t in
@@ -738,15 +745,16 @@ let it_to_coq loc global list_mono it =
     | IT.Const l -> begin match l with
         | IT.Bool b -> with_is_true (rets (if b then "true" else "false"))
         | IT.Z z -> enc_z z
+        | IT.Bits (info, z) -> enc_z (BT.normalise_to_range info z)
         | _ -> do_fail "const"
     end
-    | IT.Unop (op, x) -> begin match op with
+    | IT.Unop (op, x) -> norm_bv_op (IT.bt t) begin match op with
        | IT.Not -> f_appM (if enc_prop then "~" else "negb") [aux x]
        | IT.BWFFSNoSMT -> f_appM "CN_Lib.find_first_set_z" [aux x]
        | IT.BWCTZNoSMT -> f_appM "CN_Lib.count_trailing_zeroes_z" [aux x]
        | _ -> do_fail "unary op"
     end
-    | IT.Binop (op, x, y) -> begin match op with
+    | IT.Binop (op, x, y) -> norm_bv_op (IT.bt t) begin match op with
        | Add  -> abinop "+" x y
        | Sub  -> abinop "-" x y
        | Mul  -> abinop "*" x y
