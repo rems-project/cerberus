@@ -462,6 +462,7 @@ Module RevocationProofs.
 
   (* --- Helper lemmas *)
 
+
   Lemma has_PNVI_WithPNVI:
     has_PNVI (WithPNVISwitches.get_switches tt) = true.
   Proof.
@@ -667,9 +668,33 @@ Module RevocationProofs.
     end.
   Qed.
 
+  Lemma has_INSTANT_WithPNVI:
+    has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT) = false.
+  Proof.
+    unfold has_switch.
+    unfold WithPNVISwitches.get_switches.
+    apply set_mem_complete2.
+    intros C.
+    apply set_add_elim in C.
+    destruct C as [C1 |C2]; [inversion C1|].
+    contradict C2.
+    apply remove_Revocation_correct.
+    auto.
+  Qed.
+
+
   (* We normalize, if possible, towards [WithPNVISwitches] *)
   Ltac normalize_switches :=
     match goal with
+    | [H: context[has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT)] |- _] =>
+        replace (has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT))
+        with false in H by (symmetry;apply has_INSTANT_WithPNVI)
+     | [H: context[has_PNVI (WithPNVISwitches.get_switches tt)] |- _] =>
+        replace (has_PNVI (WithPNVISwitches.get_switches tt))
+        with true in H by has_PNVI_WithPNVI
+    | [H: context[has_PNVI (WithoutPNVISwitches.get_switches tt)] |- _] =>
+        replace (has_PNVI (WithoutPNVISwitches.get_switches tt))
+        with false in H by has_PNVI_WithoutPNVI
     | [H: context[has_switch (WithoutPNVISwitches.get_switches tt) ?s] |- _] =>
         match s with
         | SW_PNVI _ => fail
@@ -1238,6 +1263,19 @@ Module RevocationProofs.
     reflexivity.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.ghost_tags CheriMemoryWithoutPNVI.ghost_tags.
+
+  Theorem cap_match_dyn_allocation_same:
+    forall t1 t2 a1 a2,
+      t1 = t2 /\ a1 = a2 ->
+      CheriMemoryWithPNVI.cap_match_dyn_allocation t1 a1 =
+        CheriMemoryWithoutPNVI.cap_match_dyn_allocation t2 a2.
+  Proof.
+    intros t1 t2 a1 a2 [ET EA].
+    unfold CheriMemoryWithPNVI.cap_match_dyn_allocation, CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
+    subst.
+    reflexivity.
+  Qed.
+  #[global] Opaque CheriMemoryWithPNVI.cap_match_dyn_allocation CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
 
   Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
                               * ZMap.t (bool * CapGhostState)
@@ -2078,6 +2116,36 @@ Module RevocationProofs.
     split; intros m1 m2 M;cbn;try reflexivity; try assumption.
   Qed.
 
+  #[local] Instance fail_same {T:Type}:
+    forall l1 l2 e1 e2, l1 = l2 /\ e1 = e2 ->
+
+             @Same T T (@eq T)
+                   (CheriMemoryWithPNVI.fail l1 e1)
+                   (CheriMemoryWithoutPNVI.fail l2 e2).
+  Proof.
+    intros l1 l2 e1 e2 [EL EE].
+    subst.
+    unfold CheriMemoryWithPNVI.fail, CheriMemoryWithoutPNVI.fail.
+    break_match;
+    apply raise_Same_eq;reflexivity.
+  Qed.
+  #[global] Opaque CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
+
+  #[local] Instance fail_noloc_same {T:Type}:
+    forall e1 e2, e1 = e2 ->
+             @Same T T (@eq T)
+                   (CheriMemoryWithPNVI.fail_noloc e1)
+                   (CheriMemoryWithoutPNVI.fail_noloc e2).
+  Proof.
+    intros e1 e2 EE.
+    subst.
+    unfold CheriMemoryWithPNVI.fail_noloc, CheriMemoryWithoutPNVI.fail_noloc.
+    apply fail_same.
+    split;
+    reflexivity.
+  Qed.
+  #[global] Opaque CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc.
+
   Lemma bind_Same {T1 T2 T1' T2':Type}
     (R: T1 -> T2 -> Prop) (* relation between values *)
     (R': T1' -> T2' -> Prop) (* relation between values *)
@@ -2312,6 +2380,9 @@ Module RevocationProofs.
     Variable  size : Z.
     Variable  align : Z.
 
+    (* Temporary make these transparent as we have proven some of the lemmas by brute force before introducing [fail_same] and [fail_noloc_same] *)
+    #[local] Transparent CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
+
     #[local] Instance allocator_same_result:
       SameValue eq (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
     Proof.
@@ -2452,6 +2523,8 @@ Module RevocationProofs.
       reflexivity.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.allocate_region CheriMemoryWithoutPNVI.allocate_region.
+
+    #[local] Opaque CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
 
   Definition Z_AbsByte_eq (za1: (Z*AbsByte)) (za2: (Z*AbsByte)): Prop
     :=
@@ -2717,6 +2790,7 @@ Module RevocationProofs.
     subst.
     break_match;reflexivity.
   Qed.
+  #[global] Opaque CheriMemoryWithPNVI.find_live_allocation CheriMemoryWithoutPNVI.find_live_allocation.
 
   Definition abst_res_eq: relation (taint_indt * mem_value_with_err * list AbsByte)
     := fun '(t1,mv1,b1) '(t2,mv2,b2) =>
@@ -2935,9 +3009,8 @@ Module RevocationProofs.
     break_match.
     same_step.
     reflexivity.
-    unfold CheriMemoryWithPNVI.fail_noloc, CheriMemoryWithoutPNVI.fail_noloc.
-    unfold CheriMemoryWithPNVI.fail, CheriMemoryWithoutPNVI.fail.
-    break_match;same_step;reflexivity.
+    apply fail_noloc_same.
+    reflexivity.
   Qed.
 
   #[global] Instance kill_same
@@ -2950,41 +3023,43 @@ Module RevocationProofs.
       (CheriMemoryWithPNVI.kill loc is_dyn ptr1)
       (CheriMemoryWithoutPNVI.kill loc is_dyn ptr1).
   Proof.
-    (*
+    intros PE.
+    invc PE.
+    destruct b2;[cbn;destruct pr1; apply fail_same;split;split;reflexivity|].
+    Opaque bind ret raise. (* TODO: move *)
+    cbn.
     unfold CheriMemoryWithPNVI.kill, CheriMemoryWithPNVI.DEFAULT_FUEL.
     unfold CheriMemoryWithoutPNVI.kill, CheriMemoryWithoutPNVI.DEFAULT_FUEL.
-    unfold CheriMemoryWithPNVI.fail, CheriMemoryWithoutPNVI.fail.
-    destruct ptr.
-    destruct p eqn:P.
+    destruct pr1 eqn:P.
     - (* Prov_disabled *)
-      destruct p0 eqn:P0.
-      + (* PVfunction *) break_match; same_step; reflexivity.
-      + (* PVconcrete *)
-        unfold CheriMemoryWithPNVI.cap_is_null, CheriMemoryWithoutPNVI.cap_is_null.
-        unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
-        repeat normalize_switches.
-        break_if.
-        break_match; same_step; reflexivity.
-        same_step; split.
-        apply find_live_allocation_same.
-        intros.
-        subst.
-        destruct x2 eqn:X2.
+      unfold CheriMemoryWithPNVI.cap_is_null, CheriMemoryWithoutPNVI.cap_is_null.
+      unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
+      repeat normalize_switches.
+      break_if;[apply fail_same; auto|].
+      same_step; split.
+      apply find_live_allocation_same.
+      intros.
+      subst.
+      destruct x2 eqn:X2.
+      +
+        break_let.
+        break_if; break_if;[|apply fail_same; auto|same_step; auto|].
         *
-          break_let.
-          same_step.
-          split.
+          same_step;split.
+          repeat break_if.
+          1:apply fail_same; auto.
+          1-9:try erewrite cap_match_dyn_allocation_same in * by eauto; try congruence.
+          1-5: repeat normalize_switches;try lia.
           --
-            unfold CheriMemoryWithPNVI.cap_match_dyn_allocation, CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
-            repeat break_match; repeat same_step; try reflexivity. (* ; clear Heqb0 Heqb1 Heqb2. *)
-            split.
-            ++ apply revoke_pointers_same.
-            ++ intros; apply remove_allocation_same.
+            (* tricky one! *)
+            admit.
+          --
+            same_step;auto.
           --
             intros x1 x0 H.
+            subst.
             same_step.
             intros m1 m2 H0.
-
             split;[cbn; apply H0|].
             split;[cbn; apply H0|].
             split;[cbn; apply H0|].
@@ -3002,9 +3077,10 @@ Module RevocationProofs.
             split;[cbn; apply H0|].
             apply H0.
         *
-          break_match.
-          same_step; reflexivity.
-          same_step; reflexivity.
+          (*
+        break_match.
+        same_step; reflexivity.
+        same_step; reflexivity.
     - (* Prov_none *)
       repeat break_match; same_step; reflexivity.
     -
@@ -3027,7 +3103,7 @@ Module RevocationProofs.
       admit.
     - (* Prov_device *)
       repeat break_match; same_step; reflexivity.
-*)
+           *)
   Admitted.
 
 
