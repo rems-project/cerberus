@@ -1181,7 +1181,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      let existing_scs = Z3.Solver.get_assertions solver.incremental in
      let Translate.{expr; qs; extra; smt2_doc; _} = Translate.goal solver
          global assumptions pointer_facts lc in
-     print_doc_to "recent.smt2" (Lazy.force smt2_doc);
+     (if !print_level >= 1 then print_doc_to "recent.smt2" (Lazy.force smt2_doc));
      let nlc = Z3.Boolean.mk_not context expr in
      let (elapsed, res) =
        time_f_elapsed (time_f_logs loc 5 "Z3(inc)"
