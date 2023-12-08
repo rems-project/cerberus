@@ -24,7 +24,8 @@ From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
 From Coq.Lists Require Import List SetoidList. (* after exltlib *)
 
-From CheriCaps.Morello Require Import Capabilities.
+From CheriCaps.Morello Require Import
+  Capabilities.
 From CheriCaps.Common Require Import Capabilities.
 
 From Common Require Import SimpleError Utils ZMap.
@@ -142,12 +143,90 @@ Module RevocationProofs.
 
   Import CheriMemoryTypesExe.
 
-  (* Equality of pointer values without taking provenance into account *)
+  #[local] Definition single_alloc_id_cap_cmp m1 c1 c2 alloc_id :=
+      (* Capabilities to live allocations are the same *)
+      (exists a, ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ a.(is_dead) = false /\ c1 = c2)
+      (* Capabilities to dead allocations are revoked without PNVI *)
+      \/ (exists a, ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ a.(is_dead) = true /\ (Capability_GS.cap_invalidate c1) = c2)
+      (* Capabilities to garbage-collected allocations are revoked without PNVI *)
+      \/ (~ ZMap.In alloc_id m1.(CheriMemoryWithPNVI.allocations)).
 
+  #[local] Definition double_alloc_id_cap_cmp m1 c1 c2 alloc_id1 alloc_id2 :=
+    (* TODO: a placeholder, which is obvoiusly wrong! *)
+    single_alloc_id_cap_cmp m1 c1 c2 alloc_id1 \/ single_alloc_id_cap_cmp m1 c1 c2 alloc_id2.
+
+  (*
+    Pointer equality. The first pointer is from the "WithPNVI" memory
+    model, while the second one is from the "WithoutPNVI".
+
+    Despite being the same type [pointer_value_indt], the relation is
+    not symmetric, not transitive, and not reflexive!
+
+    RHS provenance could only be [Prov_disabled].
+   *)
+  Inductive ptr_value_same
+    (m1: CheriMemoryWithPNVI.mem_state_r)
+    (m2: CheriMemoryWithoutPNVI.mem_state_r): relation pointer_value_indt
+    :=
+
+  (* -- stateless cases -- *)
+
+  | ptr_value_same_none: forall b1 b2,  b1 = b2 -> ptr_value_same m1 m2 (PV Prov_none b1) (PV Prov_disabled b2)
+  | ptr_value_same_device: forall b1 b2,  b1 = b2 -> ptr_value_same m1 m2 (PV Prov_device b1) (PV Prov_disabled b2)
+  (* function pointers are not revoked *)
+  | ptr_value_same_some_func: forall f1 f2 pr1,
+      f1 = f2
+      -> ptr_value_same m1 m2 (PV pr1 (PVfunction f1)) (PV Prov_disabled (PVfunction f2))
+
+  (* -- stateful cases -- *)
+
+  | ptr_value_same_some_conc: forall c1 c2 alloc_id,
+      single_alloc_id_cap_cmp m1 c1 c2 alloc_id ->
+      ptr_value_same m1 m2 (PV (Prov_some alloc_id) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2))
+  | ptr_value_same_symb_conc: forall c1 c2 s,
+      (exists alloc_id,
+          ZMap.MapsTo s (inl alloc_id) m1.(CheriMemoryWithPNVI.iota_map) /\
+            single_alloc_id_cap_cmp m1 c1 c2 alloc_id)
+      \/
+      (exists alloc_id1 alloc_id2,
+          ZMap.MapsTo s (inr (alloc_id1,alloc_id2)) m1.(CheriMemoryWithPNVI.iota_map) /\
+            double_alloc_id_cap_cmp m1 c1 c2 alloc_id1 alloc_id2)
+      -> ptr_value_same m1 m2 (PV (Prov_symbolic s) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2)).
+
+  (* Equality of pointer values without taking provenance into account *)
   Inductive pointer_value_eq: relation pointer_value_indt :=
   | pointer_value_no_prov_eq: forall pr1 pr2 b1 b2,  b1 = b2 -> pointer_value_eq (PV pr1 b1) (PV pr2 b2).
 
+  (* Equivalence relation for pointer values *)
+  #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
+  Proof.
+    split.
+    -
+      intros a.
+      destruct a.
+      apply pointer_value_no_prov_eq.
+      reflexivity.
+    -
+      intros a b.
+      destruct a, b.
+      intros H.
+      apply pointer_value_no_prov_eq.
+      inversion H.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      intros H1 H2.
+      apply pointer_value_no_prov_eq.
+      inversion H1. clear H1.
+      inversion H2. clear H2.
+      subst.
+      reflexivity.
+  Qed.
+
+
   (* Equality of byte values without taking provenance into account *)
+
   Inductive AbsByte_eq: relation AbsByte :=
   | AbsByte_no_prov_eq: forall a1 a2,
       copy_offset a1 = copy_offset a2
@@ -358,32 +437,6 @@ Module RevocationProofs.
       assumption.
   Qed.
 
-  (* Equivalence relation for pointer values *)
-  #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
-  Proof.
-    split.
-    -
-      intros a.
-      destruct a.
-      apply pointer_value_no_prov_eq.
-      reflexivity.
-    -
-      intros a b.
-      destruct a, b.
-      intros H.
-      apply pointer_value_no_prov_eq.
-      inversion H.
-      auto.
-    -
-      intros a b c.
-      destruct a, b, c.
-      intros H1 H2.
-      apply pointer_value_no_prov_eq.
-      inversion H1. clear H1.
-      inversion H2. clear H2.
-      subst.
-      reflexivity.
-  Qed.
 
   #[global] Instance mem_value_indt_eq_Reflexive
     :
