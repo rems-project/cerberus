@@ -873,10 +873,22 @@ let representable = value_check false
 
 let good_pointer = value_check_pointer true
 
+let promote_to_compare it it' =
+  let res_bt = match bt it, bt it' with
+  | bt1, bt2 when BT.equal bt1 bt2 -> bt1
+  | BT.Bits (_, sz), BT.Bits (_, sz') -> BT.Bits (BT.Signed, sz + sz' + 2)
+  | _ -> failwith ("promote to compare: impossible types to compare: " ^
+    Pp.plain (Pp.list pp_with_typ [it; it']))
+  in
+  let cast it = if BT.equal (bt it) res_bt then it else cast_ res_bt it in
+  (cast it, cast it')
+
 let nth_array_to_list_fact n xs d = match term xs with
   | ArrayToList (arr, i, len) ->
+    let lt_n_len = lt_ (promote_to_compare n len) in
     let lhs = nthList_ (n, xs, d) in
-    let rhs = ite_ (and_ [le_ (int_ 0, n); lt_ (n, len)], map_get_ arr (add_ (i, n)), d) in
+    let rhs = ite_ (and_ [le_ (int_lit_ 0 (bt n), n); lt_n_len],
+        map_get_ arr (add_ (i, cast_ (bt i) n)), d) in
     Some (eq_ (lhs, rhs))
   | _ -> None
 
