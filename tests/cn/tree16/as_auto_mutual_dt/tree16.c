@@ -1,7 +1,8 @@
 
 
 enum {
-  NUM_NODES = 16
+  NUM_NODES = 16,
+  LEN_LIMIT = 1 << 16,
 };
 
 struct node;
@@ -35,7 +36,7 @@ predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
   Tree (pointer p)
 {
   if (is_null(p)) {
-    return {t: Empty_Tree {}, v: 0, children: default_children ()};
+    return {t: Empty_Tree {}, v: 0i32, children: default_children ()};
   }
   else {
     take V = Owned<int>(member_shift<node>(p,v));
@@ -49,7 +50,7 @@ predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
 
 predicate (datatype tree) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
-  assert (is_null(V) || (integer) V != 0);
+  assert (is_null(V) || ((u64) V != 0u64));
   take T = Tree(V);
   return T.t;
 }
@@ -91,7 +92,9 @@ function [coq_unfold] (boolean) in_tree_step (datatype tree t, arc_in_array arc)
 
 lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
     map <i32, datatype tree> t_children)
-  requires true
+  requires
+    0i32 <= arc.i;
+    arc.len <= LEN_LIMIT
   ensures
     (tree_v(t, arc)) == (tree_v_step(t, arc));
     (in_tree(t, arc)) == (in_tree_step(t, arc))
@@ -99,7 +102,8 @@ lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
-/*@ requires is_null(t) || (integer) t != 0 @*/
+/*@ requires is_null(t) || ((u64) t != 0u64) @*/
+/*@ requires path_len <= LEN_LIMIT @*/
 /*@ requires take T = Tree(t) @*/
 /*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
     {Owned(array_shift(path, j))} @*/

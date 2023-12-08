@@ -54,20 +54,23 @@ Proof.
   intros.
   destruct arc as [arr_i len].
   destruct arr_i as [arr i].
+  simpl in H, H0.
   repeat (apply conj).
   - unfold tree_v, Setup.tree_v.
     rewrite (arc_from_array_step _ i).
     rewrite Z.leb_antisym.
     cbn.
     destruct (i <? len) eqn: path_end.
-    + destruct t; auto.
+    + rewrite CN_Lib.wrapI_idem by lia.
+      destruct t; auto.
     + destruct t; auto.
   - unfold in_tree, Setup.in_tree.
     rewrite (arc_from_array_step _ i).
     rewrite Z.leb_antisym.
     cbn.
     destruct (i <? len) eqn: path_end.
-    + destruct t; auto.
+    + rewrite CN_Lib.wrapI_idem by lia.
+      destruct t; auto.
     + destruct t; auto.
 Qed.
 
