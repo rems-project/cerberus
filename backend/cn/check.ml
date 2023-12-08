@@ -50,14 +50,6 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 (*** pattern matching *********************************************************)
 
-let bogus_cbt_to_bt (cbt : Mucore.T.cbt) = BT.Integer
-
-
-let add_c loc lc =
-  let@ _ = WellTyped.WLC.welltyped loc lc in
-  Typing.add_c loc lc
-
-
 
 (* pattern-matches and binds *)
 let rec check_and_match_pattern (M_Pattern (loc, _, bty, pattern)) it =
@@ -435,6 +427,12 @@ let check_against_core_bt loc msg2 cbt bt =
 let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
   let orig_pe = pe in
   let (M_Pexpr (loc, _, expect, pe_)) = pe in
+  let@ omodel = model_with loc (bool_ true) in
+  match omodel with
+  | None -> 
+      warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
+      return ()
+  | Some _ ->
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
       debug 3 (lazy (item "expr" (Pp_mucore.pp_pexpr pe)));
@@ -1058,6 +1056,12 @@ let instantiate loc filter arg =
 
 let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
   let (M_Expr (loc, _annots, expect, e_)) = e in
+  let@ omodel = model_with loc (bool_ true) in
+  match omodel with
+  | None -> 
+      warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
+      return ()
+  | Some _ ->
   let@ () = add_loc_trace loc in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
