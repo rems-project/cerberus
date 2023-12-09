@@ -1398,8 +1398,8 @@ Module RevocationProofs.
         repeat split; auto.
         apply ghost_tags_same; [reflexivity|assumption].
 
-        unfold CheriMemoryWithPNVI.default_prov.
-        unfold CheriMemoryWithoutPNVI.default_prov.
+        unfold CheriMemoryWithPNVI.PNVI_prov.
+        unfold CheriMemoryWithoutPNVI.PNVI_prov.
         rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
         apply list_init_proper;[reflexivity|].
         intros x y E.
@@ -1433,8 +1433,8 @@ Module RevocationProofs.
             apply ghost_tags_same.
             f_equiv; rewrite 2!map_length; reflexivity.
             assumption.
-            unfold CheriMemoryWithPNVI.default_prov.
-            unfold CheriMemoryWithoutPNVI.default_prov.
+            unfold CheriMemoryWithPNVI.PNVI_prov.
+            unfold CheriMemoryWithoutPNVI.PNVI_prov.
             rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
             apply list_map_Proper with (pA:=@eq ascii).
             --
@@ -1467,8 +1467,8 @@ Module RevocationProofs.
             split; [assumption|].
             split.
             rewrite Ecap;reflexivity.
-            unfold CheriMemoryWithPNVI.default_prov.
-            unfold CheriMemoryWithoutPNVI.default_prov.
+            unfold CheriMemoryWithPNVI.PNVI_prov.
+            unfold CheriMemoryWithoutPNVI.PNVI_prov.
             rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
             apply list_mapi_Proper with (pA:=@eq ascii).
             --
@@ -1508,8 +1508,8 @@ Module RevocationProofs.
               rewrite 2!map_length.
               apply ghost_tags_same;[reflexivity|assumption].
             --
-              unfold CheriMemoryWithPNVI.default_prov.
-              unfold CheriMemoryWithoutPNVI.default_prov.
+              unfold CheriMemoryWithPNVI.PNVI_prov.
+              unfold CheriMemoryWithoutPNVI.PNVI_prov.
               rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
               apply list_map_Proper with (pA:=@eq ascii).
               ++
@@ -2818,9 +2818,8 @@ Module RevocationProofs.
       -
         intros;subst;try break_let.
         same_step.
-        setoid_rewrite has_PNVI_WithPNVI.
-        setoid_rewrite has_PNVI_WithoutPNVI.
-        constructor;reflexivity.
+        constructor.
+        reflexivity.
     Qed.
     #[global] Opaque CheriMemoryWithPNVI.allocate_object CheriMemoryWithoutPNVI.allocate_object.
 
@@ -2906,7 +2905,7 @@ Module RevocationProofs.
         rewrite Heqo0.
         auto.
       +
-        unfold CheriMemoryWithPNVI.default_prov, CheriMemoryWithoutPNVI.default_prov.
+        unfold CheriMemoryWithPNVI.PNVI_prov, CheriMemoryWithoutPNVI.PNVI_prov.
         rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
         constructor.
         split; auto.
