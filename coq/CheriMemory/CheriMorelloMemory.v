@@ -1606,7 +1606,7 @@ Module Type CheriMemoryImpl
     (ptr : pointer_value)
     : memM unit
     :=
-
+    (* Checks if capability matches allocation *)
     let check_cap_alloc_match c alloc :=
       if is_dyn && negb (cap_match_dyn_allocation c alloc)
       then
@@ -1615,6 +1615,7 @@ Module Type CheriMemoryImpl
       else ret tt
     in
 
+    (* update allocations in memory state and run revocation if necessary *)
     let update_allocations alloc alloc_id :=
       if is_dyn then
         if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
@@ -1633,6 +1634,21 @@ Module Type CheriMemoryImpl
       else
         (* not-dynamic allocation. we do not revoke these. just remove *)
         remove_allocation alloc_id
+    in
+
+    (* check if [is_dyn] parameter matches [allocation.(is_dynamic)] *)
+    let check_dyn_match alloc_dyn :=
+      match is_dyn, alloc_dyn with
+      | true, false =>
+          (* an attempt to kill a static allocation as dynamic. e.g. call free on
+             the address of local variable *)
+          fail loc (MerrUndefinedFree Free_non_matching)
+      | false, true =>
+          (* This should not happen *)
+          raise (InternalErr "An attempt to kill dymanic allocation as static")
+      | _ , _ =>
+          ret tt
+      end
     in
 
     match ptr with
@@ -1656,18 +1672,9 @@ Module Type CheriMemoryImpl
                      then MerrUndefinedFree Free_non_matching
                      else MerrOther "attempted to kill with a pointer not matching any live allocation")
               | Some (alloc_id,alloc) =>
-                  match is_dyn, alloc.(is_dynamic) with
-                  | true, false =>
-                      (* an attempt to kill a static allocation as dynamic. e.g. call free on
-                       the address of local variable *)
-                      fail loc (MerrUndefinedFree Free_non_matching)
-                  | false, true =>
-                      (* This should not happen *)
-                      raise (InternalErr "An attempt to kill dymanic allocation as static")
-                  | _ , _ =>
-                      check_cap_alloc_match c alloc ;;
-                      update_allocations alloc alloc_id
-                  end
+                  check_dyn_match alloc.(is_dynamic) ;;
+                  check_cap_alloc_match c alloc ;;
+                  update_allocations alloc alloc_id
               end
     | PV (Prov_some alloc_id) (PVconcrete c) =>
         if cap_is_null c
@@ -1680,23 +1687,16 @@ Module Type CheriMemoryImpl
                   (* The allocation_id in the pointer is no longer in the list of allocations. *)
                   fail loc (MerrUndefinedFree Free_dead_allocation)
               | Some alloc =>
-                  match is_dyn, alloc.(is_dynamic), alloc.(is_dead) with
-                  | true, false, _ =>
-                      (* an attempt to kill a static allocation as dynamic. e.g. call free on
-                       the address of local variable *)
-                      fail loc (MerrUndefinedFree Free_non_matching)
-                  | false, true, _ =>
-                      (* This should not happen *)
-                      raise (InternalErr "An attempt to kill dymanic allocation as static")
-                  | true, true, true =>
+                  check_dyn_match alloc.(is_dynamic) ;;
+                  if alloc.(is_dead) then
+                    if alloc.(is_dynamic) then
                       (* the dynamic allocation was already freed *)
                       fail loc (MerrUndefinedFree Free_dead_allocation)
-                  | false, false, true =>
+                    else
                       raise (InternalErr "An attempt to double-kill non-dynamic allocation")
-                  | _ , _, false =>
-                      check_cap_alloc_match c alloc ;;
-                      update_allocations alloc alloc_id
-                  end
+                  else
+                    check_cap_alloc_match c alloc ;;
+                    update_allocations alloc alloc_id
               end
     | PV (Prov_symbolic iota) (PVconcrete c) =>
         if cap_is_null c && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
