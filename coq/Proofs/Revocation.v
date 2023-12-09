@@ -143,17 +143,52 @@ Module RevocationProofs.
 
   Import CheriMemoryTypesExe.
 
-  #[local] Definition single_alloc_id_cap_cmp m1 c1 c2 alloc_id :=
-      (* Capabilities to live allocations are the same *)
-      (exists a, ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ a.(is_dead) = false /\ c1 = c2)
-      (* Capabilities to dead allocations are revoked without PNVI *)
-      \/ (exists a, ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ a.(is_dead) = true /\ (Capability_GS.cap_invalidate c1) = c2)
-      (* Capabilities to garbage-collected allocations are revoked without PNVI *)
-      \/ (~ ZMap.In alloc_id m1.(CheriMemoryWithPNVI.allocations)).
+  Definition if_then_else (P Q R : Prop) := P -> Q /\ ~P -> R.
 
-  #[local] Definition double_alloc_id_cap_cmp m1 c1 c2 alloc_id1 alloc_id2 :=
-    (* TODO: a placeholder, which is obvoiusly wrong! *)
-    single_alloc_id_cap_cmp m1 c1 c2 alloc_id1 \/ single_alloc_id_cap_cmp m1 c1 c2 alloc_id2.
+  (* This version is restricted to model parametrizations we are using.
+     In particular, with PNVI there are no 'dead' allocations, they are just removed.
+     Also, without PNVI, instant revocation is assumed *)
+  #[local] Definition single_alloc_id_cap_cmp m1 c1 c2 alloc_id : Prop :=
+    if_then_else (ZMap.In alloc_id m1.(CheriMemoryWithPNVI.allocations))
+      (* Capabilities to live allocations are the same *)
+      (c1 = c2)
+      (* Capabilities to dead allocations are revoked without PNVI *)
+      ((Capability_GS.cap_invalidate c1) = c2).
+
+  (* Check whether this cap base address is within allocation *)
+  #[local] Definition cap_alloc_match c a : Prop
+    :=
+    let alloc_base := AddressValue.to_Z a.(base) in
+    let alloc_limit := alloc_base + a.(size) in
+    let ptr_base := fst (Bounds.to_Zs (Capability_GS.cap_get_bounds c)) in
+    alloc_base <= ptr_base /\ ptr_base < alloc_limit.
+
+  (* TODO: review if it could be shortened *)
+  #[local] Definition double_alloc_id_cap_cmp
+    m1
+    (c1 c2: Capability_GS.t)
+    alloc_id1 alloc_id2 : Prop
+    :=
+    if_then_else
+      (ZMap.In alloc_id1 m1.(CheriMemoryWithPNVI.allocations) /\ ZMap.In alloc_id2 m1.(CheriMemoryWithPNVI.allocations))
+      (* both allocations are live, so the caps must match exactly *)
+      (c1 = c2)
+      (if_then_else
+         (ZMap.In alloc_id1 m1.(CheriMemoryWithPNVI.allocations) /\ ZMap.In alloc_id2 m1.(CheriMemoryWithPNVI.allocations))
+         (* both allocations are dead, so the cap must be untagged *)
+         ((Capability_GS.cap_invalidate c1) = c2)
+         (* only live allocation one exists *)
+         (exists a, (ZMap.MapsTo alloc_id1 a m1.(CheriMemoryWithPNVI.allocations) \/
+                  ZMap.MapsTo alloc_id2 a m1.(CheriMemoryWithPNVI.allocations)) /\
+                 (if_then_else
+                    (cap_alloc_match c1 a)
+                    (* it corresponds to c1 (via bounds *)
+                    (c1 = c2)
+                    (* it is some unrelated allocation! *)
+                    ((Capability_GS.cap_invalidate c1) = c2)
+                 )
+         )
+      ).
 
   (*
     Pointer equality. The first pointer is from the "WithPNVI" memory
