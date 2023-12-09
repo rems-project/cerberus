@@ -1614,21 +1614,32 @@ Module Type CheriMemoryImpl
     : memM unit
     :=
 
-    let precond c alloc alloc_id :=
+    let check_cap_alloc_match c alloc :=
       if is_dyn && negb (cap_match_dyn_allocation c alloc)
       then
         (* the capability corresponding to dynamic allocation was changed *)
         fail loc (MerrUndefinedFree Free_non_matching)
-      else
-        if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
-        then revoke_pointers alloc ;; remove_allocation alloc_id
-        else ret tt
+      else ret tt
     in
 
-    let update_allocations alloc alloc_id all_allocs :=
-      if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
-      then zmap_update_element alloc_id (allocation_with_dead alloc) all_allocs
-      else ZMap.remove alloc_id all_allocs
+    let update_allocations alloc alloc_id :=
+      if is_dyn then
+        if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
+        then
+          (* instant revocation. Revoke and remove allocation id *)
+          revoke_pointers alloc ;; remove_allocation alloc_id
+        else if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
+             then
+               (* delayed revocation. Mark allocation as 'dead' *)
+               st <- get ;;
+               let newallocs := zmap_update_element alloc_id (allocation_with_dead alloc) st.(allocations) in
+               update (mem_state_with_allocations newallocs)
+             else
+               (* no revocation. remove allocation *)
+               remove_allocation alloc_id
+      else
+        (* not-dynamic allocation. we do not revoke these. just remove *)
+        remove_allocation alloc_id
     in
 
     match ptr with
@@ -1661,23 +1672,8 @@ Module Type CheriMemoryImpl
                       (* This should not happen *)
                       raise (InternalErr "An attempt to kill dymanic allocation as static")
                   | _ , _ =>
-                      precond c alloc alloc_id ;;
-                      update
-                        (fun st =>
-                           {|
-                             next_alloc_id    := st.(next_alloc_id);
-                             next_iota        := st.(next_iota);
-                             last_address     := st.(last_address) ;
-                             allocations      := update_allocations alloc
-                                                   alloc_id
-                                                   st.(allocations);
-                             iota_map         := st.(iota_map);
-                             funptrmap        := st.(funptrmap);
-                             varargs          := st.(varargs);
-                             next_varargs_id  := st.(next_varargs_id);
-                             bytemap          := st.(bytemap);
-                             capmeta          := st.(capmeta);
-                           |})
+                      check_cap_alloc_match c alloc ;;
+                      update_allocations alloc alloc_id
                   end
               end
     | PV (Prov_some alloc_id) (PVconcrete c) =>
@@ -1705,23 +1701,8 @@ Module Type CheriMemoryImpl
                   | false, false, true =>
                       raise (InternalErr "An attempt to double-kill non-dynamic allocation")
                   | _ , _, false =>
-                      precond c alloc alloc_id ;;
-                      update
-                        (fun st =>
-                           {|
-                             next_alloc_id    := st.(next_alloc_id);
-                             next_iota        := st.(next_iota);
-                             last_address     := st.(last_address) ;
-                             allocations      := update_allocations alloc
-                                                   alloc_id
-                                                   st.(allocations);
-                             iota_map         := st.(iota_map);
-                             funptrmap        := st.(funptrmap);
-                             varargs          := st.(varargs);
-                             next_varargs_id  := st.(next_varargs_id);
-                             bytemap          := st.(bytemap);
-                             capmeta          := st.(capmeta);
-                           |})
+                      check_cap_alloc_match c alloc ;;
+                      update_allocations alloc alloc_id
                   end
               end
     | PV (Prov_symbolic iota) (PVconcrete c) =>
@@ -1742,22 +1723,8 @@ Module Type CheriMemoryImpl
             (fun alloc_id =>
                get_allocation alloc_id >>=
                  (fun alloc =>
-                    precond c alloc alloc_id ;;
-                    update (fun st =>
-                              {|
-                                next_alloc_id    := st.(next_alloc_id);
-                                next_iota        := st.(next_iota);
-                                last_address     := st.(last_address) ;
-                                allocations      := update_allocations alloc
-                                                      alloc_id
-                                                      st.(allocations) ;
-                                iota_map         := st.(iota_map);
-                                funptrmap        := st.(funptrmap);
-                                varargs          := st.(varargs);
-                                next_varargs_id  := st.(next_varargs_id);
-                                bytemap          := st.(bytemap);
-                                capmeta          := st.(capmeta);
-                              |})
+                    check_cap_alloc_match c alloc ;;
+                    update_allocations alloc alloc_id
             ))
     | PV Prov_device (PVconcrete _) => ret tt
     | PV _ (PVfunction _) =>
