@@ -1594,25 +1594,18 @@ Module Type CheriMemoryImpl
 
   (* revoke (clear tag) any pointer in the memory pointing within the
      bounds of given dynamic allocation.
+
+     [alloc] parameter should be a dynamic allocation
    *)
   Definition revoke_pointers alloc : memM unit
     :=
-    if alloc.(is_dynamic)
-    then
-      let base := AddressValue.to_Z alloc.(base) in
-      let limit := base + alloc.(size) in
-      (* mprint_msg ("revoke_pointers " ++ (String.hex_str base) ++ " - "  ++ (String.hex_str limit)) ;; *)
-      get >>=
-        (fun st =>
-           zmap_mmapi
-             (maybe_revoke_pointer base limit st)
-             st.(capmeta)
-        )
-        >>=
-        (fun newmeta => update (fun st => mem_state_with_capmeta newmeta st))
-      ;; ret tt
-    else
-      ret tt. (* allocation is not dynamic *)
+    let base := AddressValue.to_Z alloc.(base) in
+    let limit := base + alloc.(size) in
+    (* mprint_msg ("revoke_pointers " ++ (String.hex_str base) ++ " - "  ++ (String.hex_str limit)) ;; *)
+    st <- get ;;
+    newmeta <- zmap_mmapi (maybe_revoke_pointer base limit st) st.(capmeta) ;;
+    update (mem_state_with_capmeta newmeta) ;;
+    ret tt.
 
   Definition kill
     (loc : location_ocaml)
