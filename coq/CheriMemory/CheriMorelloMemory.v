@@ -2004,28 +2004,21 @@ Module Type CheriMemoryImpl
                LoadAccess
                NullPtr)
         else
-          let precondition (z_value : storage_instance_id) : memM merr
+          let precondition (alloc_id : storage_instance_id) : memM merr
             :=
-            is_dead_allocation z_value >>=
-              (fun (function_parameter : bool) =>
-                 if function_parameter
-                 then ret (FAIL loc (MerrAccess LoadAccess DeadPtr))
-                 else
-                   is_within_bound z_value ty (cap_to_Z addr) >>=
-                     (fun (function_parameter : bool) =>
-                        match function_parameter with
-                        | false =>
-                            ret (FAIL loc (MerrAccess LoadAccess OutOfBoundPtr))
-                        | true =>
-                            is_atomic_member_access z_value ty
-                              (cap_to_Z addr) >>=
-                              (fun (function_parameter : bool) =>
-                                 match function_parameter with
-                                 | true =>
-                                     ret (FAIL loc (MerrAccess LoadAccess AtomicMemberof))
-                                 | false => ret OK
-                                 end)
-                        end))
+            dead <- is_dead_allocation alloc_id ;;
+            if dead
+            then ret (FAIL loc (MerrAccess LoadAccess DeadPtr))
+            else
+              inbounds <- is_within_bound alloc_id ty (cap_to_Z addr) ;;
+              match inbounds with
+              | false => ret (FAIL loc (MerrAccess LoadAccess OutOfBoundPtr))
+              | true =>
+                  atomic <- is_atomic_member_access alloc_id ty (cap_to_Z addr) ;;
+                  if atomic
+                  then ret (FAIL loc (MerrAccess LoadAccess AtomicMemberof))
+                  else ret OK
+              end
           in
           sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
           resolve_iota precondition iota >>=
@@ -2205,35 +2198,29 @@ Module Type CheriMemoryImpl
                  StoreAccess
                  NullPtr)
           else
-            let precondition (z_value : Z) : memM merr
+            let precondition (alloc_id : Z) : memM merr
               :=
-              is_within_bound z_value cty (cap_to_Z c) >>=
-                (fun (x : bool) =>
-                   match x with
-                   | false =>
-                       ret (FAIL loc (MerrAccess StoreAccess OutOfBoundPtr))
-                   | true =>
-                       get_allocation z_value >>=
-                         (fun (alloc : allocation) =>
-                            match alloc.(is_readonly) with
-                            | IsReadOnly ro_kind =>
-                                ret
-                                  (FAIL loc
-                                     (MerrWriteOnReadOnly
-                                        ro_kind))
-                            | IsWritable =>
-                                is_atomic_member_access z_value cty
-                                (cap_to_Z c)
-                                  >>=
-                                  (fun (x : bool) =>
-                                     if x
-                                     then ret
-                                            (FAIL loc (MerrAccess
-                                                           LoadAccess
-                                                           AtomicMemberof))
-                                     else ret OK)
-                            end)
-                   end)
+              inbounds <- is_within_bound alloc_id cty (cap_to_Z c) ;;
+              if inbounds then
+                alloc <- get_allocation alloc_id ;;
+                match alloc.(is_readonly) with
+                | IsReadOnly ro_kind =>
+                    ret
+                      (FAIL loc
+                         (MerrWriteOnReadOnly
+                            ro_kind))
+                | IsWritable =>
+                    atomic <- is_atomic_member_access alloc_id cty
+                               (cap_to_Z c) ;;
+                    if atomic
+                    then ret
+                           (FAIL loc (MerrAccess
+                                        LoadAccess
+                                        AtomicMemberof))
+                    else ret OK
+                end
+              else
+                ret (FAIL loc (MerrAccess StoreAccess OutOfBoundPtr))
             in
             resolve_iota precondition iota >>=
               (fun (alloc_id : storage_instance_id) =>
