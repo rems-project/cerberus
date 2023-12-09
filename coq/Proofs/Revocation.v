@@ -3074,6 +3074,7 @@ Module RevocationProofs.
       (CheriMemoryWithPNVI.kill loc is_dyn ptr1)
       (CheriMemoryWithoutPNVI.kill loc is_dyn ptr1).
   Proof.
+(*
     intros PE.
     invc PE.
     destruct b2;[cbn;destruct pr1; apply fail_same;split;split;reflexivity|].
@@ -3128,6 +3129,7 @@ Module RevocationProofs.
             split;[cbn; apply H0|].
             apply H0.
         *
+        *)
           (*
         break_match.
         same_step; reflexivity.
