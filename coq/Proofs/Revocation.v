@@ -2983,38 +2983,36 @@ Module RevocationProofs.
   Proof.
     intros a.
     unfold CheriMemoryWithPNVI.revoke_pointers, CheriMemoryWithoutPNVI.revoke_pointers.
-    break_if;[|apply ret_Same;reflexivity].
+    eapply bind_Same with (R':=mem_state_same_rel).
+    split.
     same_step.
-    split;[|intros;apply ret_Same;reflexivity].
+    intros x1 x2 H.
     eapply bind_Same with (R':=ZMap.Equal).
     split.
     -
-      eapply bind_Same.
-      split.
-      apply get_Same.
-      intros x1 x2 H.
       eapply zmap_mmapi_same.
       apply H.
       intros k1 k2 v1 v2 H0 H1.
       apply maybe_revoke_pointer_same; auto.
     -
-      intros x1 x2 H.
+      intros x0 x3 H0.
       apply update_Same.
-      subst.
-      intros m1 m2 H0.
-      subst.
+      intros m1 m2 H1.
       unfold CheriMemoryWithPNVI.mem_state_with_capmeta, CheriMemoryWithoutPNVI.mem_state_with_capmeta.
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
-      split;[cbn; apply H0|].
+      destruct_mem_state_same_rel H.
+      destruct_mem_state_same_rel H1.
+
+      split;[cbn;auto|].
+      split;[cbn;auto|].
+      split;[cbn;auto|].
+      split;[cbn;auto|].
+      split;[cbn;auto|].
+      split;[cbn;auto|].
+      split;[cbn;auto|].
+      split;[cbn;auto|].
+      split;[cbn;auto|].
       cbn.
-      assumption.
+      auto.
   Qed.
 
   Lemma remove_allocation_same:
