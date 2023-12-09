@@ -759,9 +759,9 @@ Module Type CheriMemoryImpl
     | FP_invalid c => (funptrmap, c)
     end.
 
-  Definition default_prov (_:unit) :=
+  Definition PNVI_prov p :=
     if CoqSwitches.has_PNVI (SW.get_switches tt)
-    then Prov_none
+    then p
     else Prov_disabled.
 
   Fixpoint repr
@@ -781,12 +781,12 @@ Module Type CheriMemoryImpl
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) sz capmeta),
-                (list_init (Z.to_nat sz) (fun _ => absbyte_v (default_prov tt) None None)))
+                (list_init (Z.to_nat sz) (fun _ => absbyte_v (PNVI_prov Prov_none) None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
-            let bs := List.map (fun (x : ascii) => absbyte_v (default_prov tt) None (Some x)) bs' in
+            let bs := List.map (fun (x : ascii) => absbyte_v (PNVI_prov Prov_none) None (Some x)) bs' in
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
@@ -797,11 +797,11 @@ Module Type CheriMemoryImpl
             ret (funptrmap, capmeta,
                 (mapi
                    (fun (i_value : nat) (b_value : ascii) =>
-                      absbyte_v (default_prov tt) None (Some b_value)) cb))
+                      absbyte_v (PNVI_prov Prov_none) None (Some b_value)) cb))
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
-            let bs := List.map (fun (x : ascii) => absbyte_v (default_prov tt) None (Some x)) bs'
+            let bs := List.map (fun (x : ascii) => absbyte_v (PNVI_prov Prov_none) None (Some x)) bs'
             in
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVpointer ref_ty (PV prov ptrval_) =>
@@ -840,7 +840,7 @@ Module Type CheriMemoryImpl
                 mvals (funptrmap, capmeta, addr, nil) ;;
             ret (funptrmap, capmeta, (List.concat (List.rev bs_s)))
         | MVstruct tag_sym xs =>
-            let padding_byte _ : AbsByte := absbyte_v (default_prov tt) None None in
+            let padding_byte _ : AbsByte := absbyte_v (PNVI_prov Prov_none) None None in
             '(offs, last_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Struct tag_sym)) ;;
             let final_pad := Z.sub sz last_off in
@@ -870,7 +870,7 @@ Module Type CheriMemoryImpl
             ret (funptrmap', capmeta',
                 (List.app bs
                    (list_init (Nat.sub (Z.to_nat size) (List.length bs))
-                      (fun _ => absbyte_v (default_prov tt) None None))))
+                      (fun _ => absbyte_v (PNVI_prov Prov_none) None None))))
         end
     end.
 
@@ -971,11 +971,7 @@ Module Type CheriMemoryImpl
                  C.cap_narrow_perms c p
                else c
              in
-             let prov := if CoqSwitches.has_PNVI (SW.get_switches tt)
-                         then Prov_some alloc_id
-                         else Prov_disabled
-             in
-             ret (PV prov (PVconcrete c))
+             ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c))
       ).
 
   Definition allocate_region
@@ -1020,12 +1016,7 @@ Module Type CheriMemoryImpl
                capmeta          := st.(capmeta);
              |})
         ;;
-        let prov := if CoqSwitches.has_PNVI (SW.get_switches tt)
-                    then Prov_some alloc_id
-                    else Prov_disabled
-        in
-        ret (PV prov (PVconcrete c_value)
-          ).
+        ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c_value)).
 
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (cap_to_Z c) 0.
@@ -1246,7 +1237,7 @@ Module Type CheriMemoryImpl
                  end in
 
                ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
-            (List.rev bs) ((VALID (default_prov tt)), nil, (PtrBytes 0)) ;;
+            (List.rev bs) ((VALID (PNVI_prov Prov_none)), nil, (PtrBytes 0)) ;;
 
         let pvalid := match _prov with
                       | INVALID => Prov_disabled
@@ -1425,18 +1416,20 @@ Module Type CheriMemoryImpl
                         end
                     | _ =>
                         let prov :=
-                          match prov_status with
-                          | NotValidPtrProv =>
-                              match
-                                find_overlapping
-                                  (cap_to_Z c_value) with
-                              | NoAlloc => (default_prov tt)
-                              | SingleAlloc alloc_id => Prov_some alloc_id
-                              | DoubleAlloc alloc_id1 alloc_id2 =>
-                                  Prov_some alloc_id1
-                              end
-                          | ValidPtrProv => prov
-                          end in
+                          PNVI_prov
+                            (match prov_status with
+                             | NotValidPtrProv =>
+                                 match
+                                   find_overlapping
+                                     (cap_to_Z c_value) with
+                                 | NoAlloc => Prov_none
+                                 | SingleAlloc alloc_id => Prov_some alloc_id
+                                 | DoubleAlloc alloc_id1 alloc_id2 =>
+                                     Prov_some alloc_id1
+                                 end
+                             | ValidPtrProv => prov
+                             end)
+                        in
                         (* sprint_msg (C.to_string n_value) ;; *)
                         ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete c_value)), bs2)
                     end
@@ -1481,7 +1474,7 @@ Module Type CheriMemoryImpl
       (fun (addr : Z.t) =>
          match ZMap.find addr bytemap with
          | Some b_value => b_value
-         | None => absbyte_v (default_prov tt) None None
+         | None => absbyte_v (PNVI_prov Prov_none) None None
          end)
       (list_init (Z.to_nat n_bytes)
          (fun (i : nat) =>
@@ -1710,22 +1703,18 @@ Module Type CheriMemoryImpl
         then fail loc MerrFreeNullPtr
         else
           let precondition z :=
-            get_allocation z >>=
-              fun alloc =>
-                ret
-                  (if alloc.(is_dead)
-                   then (FAIL loc (MerrUndefinedFree Free_dead_allocation))
-                   else if AddressValue.eqb (C.cap_get_value c) alloc.(base)
-                        then OK
-                        else FAIL loc (MerrUndefinedFree Free_out_of_bound))
+            alloc <- get_allocation z ;;
+            ret
+              (if alloc.(is_dead)
+               then FAIL loc (MerrUndefinedFree Free_dead_allocation)
+               else if AddressValue.eqb (C.cap_get_value c) alloc.(base)
+                    then OK
+                    else FAIL loc (MerrUndefinedFree Free_out_of_bound))
           in
-          resolve_iota precondition iota >>=
-            (fun alloc_id =>
-               get_allocation alloc_id >>=
-                 (fun alloc =>
-                    check_cap_alloc_match c alloc ;;
-                    update_allocations alloc alloc_id
-            ))
+          alloc_id <- resolve_iota precondition iota ;;
+          alloc <- get_allocation alloc_id ;;
+          check_cap_alloc_match c alloc ;;
+          update_allocations alloc alloc_id
     | PV Prov_device (PVconcrete _) => ret tt
     | PV _ (PVfunction _) =>
         fail loc (MerrOther "attempted to kill with a function pointer")
@@ -2340,11 +2329,11 @@ Module Type CheriMemoryImpl
 
   Definition null_ptrval (_:CoqCtype.ctype) : pointer_value
     :=
-    PV (default_prov tt) (PVconcrete (C.cap_c0 tt)).
+    PV (PNVI_prov Prov_none) (PVconcrete (C.cap_c0 tt)).
 
   Definition fun_ptrval (sym : CoqSymbol.sym)
     : serr pointer_value :=
-    ret (PV (default_prov tt) (PVfunction (FP_valid sym))).
+    ret (PV (PNVI_prov Prov_none) (PVfunction (FP_valid sym))).
 
   Definition concrete_ptrval : Z -> AddressValue.t -> serr pointer_value :=
     fun _ _ =>
@@ -2930,11 +2919,11 @@ Module Type CheriMemoryImpl
         prov <-
           (ovlp <- find_overlapping (cap_to_Z c) ;;
            match ovlp with
-           | NoAlloc => ret (default_prov tt)
-           | SingleAlloc alloc_id => ret (Prov_some alloc_id)
+           | NoAlloc => ret (PNVI_prov Prov_none)
+           | SingleAlloc alloc_id => ret (PNVI_prov (Prov_some alloc_id))
            | DoubleAlloc alloc_id1 alloc_id2 =>
                iota <- add_iota (alloc_id1,alloc_id2) ;;
-               ret (Prov_symbolic iota)
+               ret (PNVI_prov (Prov_symbolic iota))
            end)
         ;; ret (PV prov (PVconcrete c))
     | CoqCtype.Unsigned CoqCtype.Intptr_t, IV _
@@ -2942,7 +2931,7 @@ Module Type CheriMemoryImpl
         raise (InternalErr "ptrfromint: invalid encoding for (u)intptr_t")
     | _, IV n =>
         if Z.eqb n 0
-        then ret (PV (default_prov tt) (PVconcrete (C.cap_c0 tt)))
+        then ret (PV (PNVI_prov Prov_none) (PVconcrete (C.cap_c0 tt)))
         else
           let addr :=
             (* wrapI *)
@@ -2955,11 +2944,11 @@ Module Type CheriMemoryImpl
           prov <-
             (ovlp <- find_overlapping addr ;;
              match ovlp with
-             | NoAlloc => ret (default_prov tt)
-             | SingleAlloc alloc_id => ret (Prov_some alloc_id)
+             | NoAlloc => ret (PNVI_prov Prov_none)
+             | SingleAlloc alloc_id => ret (PNVI_prov (Prov_some alloc_id))
              | DoubleAlloc alloc_id1 alloc_id2 =>
                  iota <- add_iota (alloc_id1, alloc_id2) ;;
-                 ret (Prov_symbolic iota)
+                 ret (PNVI_prov (Prov_symbolic iota))
              end)
           ;;
           let c := C.cap_set_value (C.cap_c0 tt) (AddressValue.of_Z addr) in
@@ -3248,7 +3237,7 @@ Module Type CheriMemoryImpl
                    (Z.add (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) sz)
            then
              let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-             ret (PV (Prov_some alloc_id) (PVconcrete c_value))
+             ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c_value))
            else
              fail loc MerrArrayShift
         )
@@ -3358,7 +3347,7 @@ Module Type CheriMemoryImpl
         then fail loc (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-          ret (PV Prov_none (PVconcrete c_value))
+          ret (PV (PNVI_prov Prov_none) (PVconcrete c_value))
     | PV Prov_disabled (PVconcrete c_value) =>
         let shifted_addr := Z.add (cap_to_Z c_value) offset in
         if is_strict_pointer_arith tt
@@ -3932,12 +3921,12 @@ Module Type CheriMemoryImpl
         let pre_bs :=
           List.map
             (fun (c_value : ascii) =>
-               {| prov := (default_prov tt); copy_offset := None;
+               {| prov := (PNVI_prov Prov_none); copy_offset := None;
                                      value := Some c_value |}) cs in
         let pre_bs :=
           List.app pre_bs
             [
-              {| prov := (default_prov tt); copy_offset := None;
+              {| prov := (PNVI_prov Prov_none); copy_offset := None;
                                     value := Some "000" % char |}
             ] in
         let addr := (cap_to_Z c_value) in
