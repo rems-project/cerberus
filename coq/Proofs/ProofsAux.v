@@ -283,6 +283,26 @@ Section ZMapAux.
   Admitted.
    *)
 
+  Lemma zmap_in_mapsto {T:Type} (k:ZMap.key) (v:T) (m:ZMap.t T):
+    ZMap.In k m -> (exists v, @ZMap.MapsTo T k v m).
+  Proof.
+    intros H.
+    destruct H.
+    exists x.
+    unfold ZMap.MapsTo.
+    apply H.
+  Qed.
+
+  Lemma zmap_in_mapsto' {T:Type} k (m: ZMap.t T):
+    ZMap.In k m -> {v | @ZMap.MapsTo T k v m}.
+  Proof.
+    intros H.
+    apply in_find_iff in H.
+    destruct (ZMap.find k m) eqn:Hfind.
+    - exists t. apply ZMap.find_2. assumption.
+    - contradiction.
+  Qed.
+
   (* Simple case *)
   #[global] Instance zmap_mapi_Proper_equal
     {A B : Type}

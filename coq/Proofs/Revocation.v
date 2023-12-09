@@ -1,8 +1,10 @@
 Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
+Require Import Coq.ZArith.ZArith_dec.
 Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Logic.FunctionalExtensionality.
+Require Import Coq.Logic.Decidable.
 From Coq.Strings Require Import String Ascii HexString.
 
 Require Import Coq.Classes.Morphisms.
@@ -143,17 +145,18 @@ Module RevocationProofs.
 
   Import CheriMemoryTypesExe.
 
-  Definition if_then_else (P Q R : Prop) := P -> Q /\ ~P -> R.
-
-  (* This version is restricted to model parametrizations we are using.
-     In particular, with PNVI there are no 'dead' allocations, they are just removed.
-     Also, without PNVI, instant revocation is assumed *)
-  #[local] Definition single_alloc_id_cap_cmp m1 c1 c2 alloc_id : Prop :=
-    if_then_else (ZMap.In alloc_id m1.(CheriMemoryWithPNVI.allocations))
+  (* This version is restricted to model parametrizations we are
+     using.  In particular, with PNVI there are no 'dead' allocations,
+     they are just removed. Also, without PNVI, instant revocation is
+     assumed *)
+  #[local] Definition single_alloc_id_cap_cmp (allocs:ZMap.t allocation) c1 c2 alloc_id : Prop :=
+    if In_dec allocs alloc_id
+    then
       (* Capabilities to live allocations are the same *)
-      (c1 = c2)
+      c1 = c2
+    else
       (* Capabilities to dead allocations are revoked without PNVI *)
-      ((Capability_GS.cap_invalidate c1) = c2).
+      Capability_GS.cap_invalidate c1 = c2.
 
   (* Check whether this cap base address is within allocation *)
   #[local] Definition cap_alloc_match c a : Prop
@@ -163,32 +166,47 @@ Module RevocationProofs.
     let ptr_base := fst (Bounds.to_Zs (Capability_GS.cap_get_bounds c)) in
     alloc_base <= ptr_base /\ ptr_base < alloc_limit.
 
-  (* TODO: review if it could be shortened *)
+  Lemma cap_alloc_match_dec c a: {cap_alloc_match c a}+{~cap_alloc_match c a}.
+    pose (alloc_base := AddressValue.to_Z a.(base)).
+    pose (alloc_limit := alloc_base + a.(size)).
+    pose (ptr_base := fst (Bounds.to_Zs (Capability_GS.cap_get_bounds c))).
+    destruct (Z_le_dec alloc_base ptr_base) as [H1|H1], (Z_lt_dec ptr_base alloc_limit) as [H2|H2].
+    - left. split; assumption.
+    - right. intro H. apply H2. apply H.
+    - right. intro H. apply H1. apply H.
+    - right. intro H. destruct H as [H _]. contradiction.
+  Qed.
+
+  Definition cap_live_alloc_match alloc_id allocs c1 c2 : Prop :=
+    (* only live allocation one exists *)
+    exists a, ZMap.MapsTo alloc_id a allocs ->
+         if cap_alloc_match_dec c1 a
+         then
+           (* it corresponds to c1 (via bounds) *)
+           c1 = c2
+         else
+           (* it is some unrelated allocation! *)
+           Capability_GS.cap_invalidate c1 = c2.
+
   #[local] Definition double_alloc_id_cap_cmp
-    m1
+    allocs
     (c1 c2: Capability_GS.t)
     alloc_id1 alloc_id2 : Prop
     :=
-    if_then_else
-      (ZMap.In alloc_id1 m1.(CheriMemoryWithPNVI.allocations) /\ ZMap.In alloc_id2 m1.(CheriMemoryWithPNVI.allocations))
-      (* both allocations are live, so the caps must match exactly *)
-      (c1 = c2)
-      (if_then_else
-         (ZMap.In alloc_id1 m1.(CheriMemoryWithPNVI.allocations) /\ ZMap.In alloc_id2 m1.(CheriMemoryWithPNVI.allocations))
-         (* both allocations are dead, so the cap must be untagged *)
-         ((Capability_GS.cap_invalidate c1) = c2)
-         (* only live allocation one exists *)
-         (exists a, (ZMap.MapsTo alloc_id1 a m1.(CheriMemoryWithPNVI.allocations) \/
-                  ZMap.MapsTo alloc_id2 a m1.(CheriMemoryWithPNVI.allocations)) /\
-                 (if_then_else
-                    (cap_alloc_match c1 a)
-                    (* it corresponds to c1 (via bounds *)
-                    (c1 = c2)
-                    (* it is some unrelated allocation! *)
-                    ((Capability_GS.cap_invalidate c1) = c2)
-                 )
-         )
-      ).
+    if In_dec allocs alloc_id1 then
+      if In_dec allocs alloc_id2 then
+        (* both allocations are live, so the caps must match exactly *)
+        c1 = c2
+      else
+        (* [alloc_id1] is found but not [alloc_id2] *)
+        cap_live_alloc_match alloc_id1 allocs c1 c2
+    else
+      if In_dec allocs alloc_id2 then
+        (* [alloc_id1] not found but [alloc_id2] is *)
+        cap_live_alloc_match alloc_id2 allocs c1 c2
+      else
+        (* both allocations are dead, so the cap must be untagged *)
+        Capability_GS.cap_invalidate c1 = c2.
 
   (*
     Pointer equality. The first pointer is from the "WithPNVI" memory
@@ -216,16 +234,16 @@ Module RevocationProofs.
   (* -- stateful cases -- *)
 
   | ptr_value_same_some_conc: forall c1 c2 alloc_id,
-      single_alloc_id_cap_cmp m1 c1 c2 alloc_id ->
+      single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) c1 c2 alloc_id ->
       ptr_value_same m1 m2 (PV (Prov_some alloc_id) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2))
   | ptr_value_same_symb_conc: forall c1 c2 s,
       (exists alloc_id,
           ZMap.MapsTo s (inl alloc_id) m1.(CheriMemoryWithPNVI.iota_map) /\
-            single_alloc_id_cap_cmp m1 c1 c2 alloc_id)
+            single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) c1 c2 alloc_id)
       \/
       (exists alloc_id1 alloc_id2,
           ZMap.MapsTo s (inr (alloc_id1,alloc_id2)) m1.(CheriMemoryWithPNVI.iota_map) /\
-            double_alloc_id_cap_cmp m1 c1 c2 alloc_id1 alloc_id2)
+            double_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) c1 c2 alloc_id1 alloc_id2)
       -> ptr_value_same m1 m2 (PV (Prov_symbolic s) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2)).
 
   (* Equality of pointer values without taking provenance into account *)
@@ -233,7 +251,7 @@ Module RevocationProofs.
   | pointer_value_no_prov_eq: forall pr1 pr2 b1 b2,  b1 = b2 -> pointer_value_eq (PV pr1 b1) (PV pr2 b2).
 
   (* Equivalence relation for pointer values *)
-  #[global] Instance pointer_value_Equivalence : Equivalence(pointer_value_eq).
+  #[global] Instance pointer_value_eq_Equivalence : Equivalence(pointer_value_eq).
   Proof.
     split.
     -
