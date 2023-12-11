@@ -134,9 +134,9 @@ exception Cannot_Coerce
    returned unchanged as a way of passing their return values. *)
 let try_coerce_res (ftyp : AT.lemmat) =
   let rec erase_res r t = match t with
-    | LRT.Define (v, info, t) -> 
+    | LRT.Define (v, info, t) ->
        LRT.Define (v, info, erase_res r t)
-    | LRT.Constraint (lc, info, t) -> 
+    | LRT.Constraint (lc, info, t) ->
        LRT.Constraint (lc, info, erase_res r t)
     | LRT.Resource ((name, (re, bt)), info, t) ->
         let (arg_name, arg_re) = r in
@@ -158,19 +158,19 @@ let try_coerce_res (ftyp : AT.lemmat) =
     | LAT.Resource ((name, (re, bt)), info, t) ->
        let computationals, t = coerce_lat (erase_res2 (name, re) t) in
        ((name, bt, info) :: computationals), t
-    | LAT.Define (v, info, t) -> 
+    | LAT.Define (v, info, t) ->
        let computationals, t = coerce_lat t in
        computationals, LAT.Define (v, info, t)
-    | LAT.Constraint (lc, info, t) -> 
+    | LAT.Constraint (lc, info, t) ->
        let computationals, t = coerce_lat t in
        computationals, LAT.Constraint (lc, info, t)
-    | LAT.I _ -> 
+    | LAT.I _ ->
        [], t
   in
   let rec coerce_at t = match t with
-    | AT.Computational (v, info, t) -> 
+    | AT.Computational (v, info, t) ->
        AT.Computational (v, info, coerce_at t)
-    | AT.L t -> 
+    | AT.L t ->
        let computationals, t = coerce_lat t in
        AT.mComputationals computationals (AT.L t)
   in
@@ -378,7 +378,7 @@ let it_adjust (global : Global.t) it =
   Pp.debug 9 (lazy (Pp.item "it_adjust" (binop "->" (IT.pp it) (IT.pp res))));
   f it
 
-let fun_prop_ret (global : Global.t) nm = 
+let fun_prop_ret (global : Global.t) nm =
   match SymMap.find_opt nm global.logical_functions with
   | None -> fail "fun_prop_ret: not found" (Sym.pp nm)
   | Some def ->
@@ -524,20 +524,20 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
   let@ bt_doc = bt_to_coq global list_mono inf bt in
   let cons_line c =
     let c_info = SymMap.find c global.Global.datatype_constrs in
-    let pats = 
-      List.map (fun (m2, _) -> 
+    let pats =
+      List.map (fun (m2, _) ->
         if Id.equal mem_tag m2
-        then Id.pp mem_tag 
+        then Id.pp mem_tag
         else Pp.string "_"
-      ) c_info.c_params 
+      ) c_info.c_params
     in
     let open Pp in
     !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^
     if List.exists (Id.equal mem_tag) (List.map fst c_info.c_params)
-    then Id.pp mem_tag 
+    then Id.pp mem_tag
     else !^"default"
   in
-  let@ () = 
+  let@ () =
   gen_ensure 0 ["types"; "datatype acc"; Sym.pp_string dt_tag; Id.pp_string mem_tag]
     (lazy (
       let open Pp in
@@ -631,7 +631,7 @@ let ensure_pred global list_mono loc name aux =
       let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
       return (!^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline)
     )) []
-  | Def body -> 
+  | Def body ->
      gen_ensure 2 ["predefs"; "pred"; Sym.pp_string name]
        (lazy (
          let@ rhs = aux (it_adjust global body) in
@@ -662,7 +662,7 @@ let ensure_struct_mem is_good global list_mono loc ct aux = match Sctypes.is_str
   )) [tag] in
   return op_nm
 
-let rec unfold_if_possible global it = 
+let rec unfold_if_possible global it =
   let open IT in
   let open LogicalFunctions in
   match it with
@@ -671,8 +671,8 @@ let rec unfold_if_possible global it =
      begin match def.definition with
      | Rec_Def _ -> it
      | Uninterp -> it
-     | Def body -> 
-        unfold_if_possible global 
+     | Def body ->
+        unfold_if_possible global
           ((open_fun def.args body args))
      end
   | _ ->
@@ -732,7 +732,10 @@ let it_to_coq loc global list_mono it =
     let with_is_true x = if enc_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
         then f_appM "Is_true" [x] else x
     in
-    let check_pos t f = 
+    let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
+      else parensM (rets (Z.to_string z))
+    in
+    let check_pos t f =
       (* FIXME turning this off for now to test stuff
       let t = unfold_if_possible global t in
       match IT.is_z t with
@@ -965,7 +968,7 @@ let ftyp_to_coq loc global list_mono (ftyp: AT.lemmat) =
         let@ d = lat_doc t in
         let@ l = it_tc it in
         return (omap_split (mk_let sym l) d)
-    | LAT.Resource _ -> 
+    | LAT.Resource _ ->
        fail_m_o loc (Pp.item "ftyp_to_coq: unsupported" (LAT.pp LRT.pp t))
     | LAT.Constraint (lc, _, t) ->
         let@ c = lc_to_coq_c lc in
@@ -1039,7 +1042,7 @@ let convert_and_print channel global list_mono conv =
   Pp.print channel (defs_module defs conv_defs);
   Pp.print channel (mod_spec (List.map (fun (nm, _, _, _) -> nm) conv));
   return ()
- 
+
 let cmp_line_numbers = function
   | None, None -> 0
   | None, _ -> 1
@@ -1070,9 +1073,9 @@ let do_re_retype mu_file trusted_funs prev_mode pred_defs pre_retype_mu_file =
 *)
 
 type scanned = {
-    sym : Sym.t; 
-    loc: Loc.t; 
-    typ: AT.lemmat; 
+    sym : Sym.t;
+    loc: Loc.t;
+    typ: AT.lemmat;
     scan_res: scan_res
   }
 
@@ -1085,10 +1088,10 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
   Pp.print channel (header filename);
   Pp.debug 1 (lazy (Pp.item "lemmata generation"
     (Pp.braces (Pp.list Sym.pp (List.map fst lemmata)))));
-  let scan_lemmata = 
+  let scan_lemmata =
     List.map (fun (sym, (loc, typ)) ->
         {sym; loc; typ; scan_res = scan typ}
-      ) lemmata 
+      ) lemmata
     |> List.sort (fun x (y : scanned) -> cmp_loc_line_numbers x.loc y.loc)
   in
   let (impure, pure) = List.partition (fun x -> Option.is_some x.scan_res.res) scan_lemmata in

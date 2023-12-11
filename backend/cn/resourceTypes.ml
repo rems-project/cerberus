@@ -12,7 +12,7 @@ module LCSet = Set.Make(LC)
 type init = Init | Uninit
 [@@deriving eq, ord]
 
-type predicate_name = 
+type predicate_name =
   | Owned of Sctypes.t * init
   | PName of Sym.t
 [@@deriving eq, ord]
@@ -30,7 +30,7 @@ let pp_predicate_name = function
 
 
 type predicate_type = {
-    name : predicate_name; 
+    name : predicate_name;
     pointer: IT.t;            (* I *)
     iargs: IT.t list;         (* I *)
   }
@@ -38,7 +38,7 @@ type predicate_type = {
 
 
 type qpredicate_type = {
-    name : predicate_name; 
+    name : predicate_name;
     pointer: IT.t;            (* I *)
     q: Sym.t * BT.t;
     step: IT.t;
@@ -77,21 +77,21 @@ let pp_maybe_oargs = function
 
 let pp_predicate_type_aux (p : predicate_type) oargs =
   let args = List.map IT.pp (p.pointer :: p.iargs) in
-  c_app (pp_predicate_name p.name) args 
+  c_app (pp_predicate_name p.name) args
   ^^ pp_maybe_oargs oargs
 
 
 let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
-  let pointer = 
-    IT.pp p.pointer 
-    ^^^ plus 
+  let pointer =
+    IT.pp p.pointer
+    ^^^ plus
     ^^^ Sym.pp (fst p.q)
-    ^^^ star 
-    ^^^ IT.pp p.step 
+    ^^^ star
+    ^^^ IT.pp p.step
   in
   let args = pointer :: List.map IT.pp (p.iargs) in
 
-  !^"each" ^^ 
+  !^"each" ^^
     parens (BT.pp (snd p.q) ^^^ Sym.pp (fst p.q) ^^ semi ^^^ IT.pp p.permission)
     ^/^ braces (c_app (pp_predicate_name p.name) args)
     ^^ pp_maybe_oargs oargs
@@ -100,7 +100,7 @@ let pp_predicate_type p = pp_predicate_type_aux p None
 let pp_qpredicate_type p = pp_qpredicate_type_aux p None
 
 
-let pp_aux r o = 
+let pp_aux r o =
   match r with
   | P p -> pp_predicate_type_aux p o
   | Q qp -> pp_qpredicate_type_aux qp o
@@ -113,13 +113,13 @@ let equal = equal_resource_type
 let compare = compare_resource_type
 
 
-let json re : Yojson.Safe.t = 
+let json re : Yojson.Safe.t =
   `String (Pp.plain (pp re))
 
 
 
 
-let alpha_rename_qpredicate_type_ (q' : Sym.t) (qp : qpredicate_type) = 
+let alpha_rename_qpredicate_type_ (q' : Sym.t) (qp : qpredicate_type) =
   let subst = make_subst [(fst qp.q, sym_ (q', snd qp.q))] in
   { name = qp.name;
     pointer = qp.pointer;
@@ -133,7 +133,7 @@ let alpha_rename_qpredicate_type qp =
   alpha_rename_qpredicate_type_ (Sym.fresh_same (fst qp.q)) qp
 
 
-let subst_predicate_type substitution (p : predicate_type) = 
+let subst_predicate_type substitution (p : predicate_type) =
   {
     name = p.name;
     pointer = IT.subst substitution p.pointer;
@@ -141,9 +141,9 @@ let subst_predicate_type substitution (p : predicate_type) =
   }
 
 let subst_qpredicate_type substitution (qp : qpredicate_type) =
-  let qp = 
+  let qp =
     if SymSet.mem (fst qp.q) substitution.Subst.relevant
-    then alpha_rename_qpredicate_type qp 
+    then alpha_rename_qpredicate_type qp
     else qp
   in
   {
@@ -164,9 +164,9 @@ let subst (substitution : IT.t Subst.t) = function
 
 
 let free_vars = function
-  | P p -> 
+  | P p ->
      IT.free_vars_list (p.pointer :: p.iargs)
-  | Q p -> 
+  | Q p ->
      SymSet.union
        (SymSet.union (IT.free_vars p.pointer) (IT.free_vars p.step))
        (SymSet.remove (fst p.q) (IT.free_vars_list (p.permission :: p.iargs)))
@@ -215,13 +215,13 @@ let dtree_of_predicate_name = function
   | PName s -> Dleaf (Sym.pp s)
 
 let dtree_of_predicate_type (pred : predicate_type) =
-  Dnode (pp_ctor "pred", 
+  Dnode (pp_ctor "pred",
         dtree_of_predicate_name pred.name ::
         IT.dtree pred.pointer ::
         List.map IT.dtree pred.iargs)
 
 let dtree_of_qpredicate_type (pred : qpredicate_type) =
-  Dnode (pp_ctor "qpred", 
+  Dnode (pp_ctor "qpred",
         Dleaf (Pp.parens (Pp.typ (Sym.pp (fst pred.q)) (BT.pp (snd pred.q))))::
         IT.dtree pred.step ::
         IT.dtree pred.permission ::

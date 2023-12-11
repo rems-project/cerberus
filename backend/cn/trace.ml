@@ -50,12 +50,12 @@ let list_new xs ys =
   let len = List.length ys - List.length xs in
   take len ys
 
-let set_new xs ys = 
+let set_new xs ys =
   let open Context in
   (* difference between xs and ys, assuming ys (pre-) extends xs *)
   LCSet.elements (LCSet.diff ys xs)
 
-let map_new xs ys = 
+let map_new xs ys =
   let open Context in
   (* difference between xs and ys, assuming ys (pre-) extends xs *)
   SymMap.bindings
@@ -90,7 +90,7 @@ let format_mu (p : Pp.doc Lazy.t option) expr_doc =
   match p with
     | None -> rhs
     (* | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs *)
-    | Some ((* M_Pat *) pat_pp) -> 
+    | Some ((* M_Pat *) pat_pp) ->
        !^ "mu_step:" ^^^ Lazy.force pat_pp ^^^ !^ "<-" ^^^ rhs
 
 let format_eval model global it =
@@ -99,7 +99,7 @@ let format_eval model global it =
   | None -> parens (!^ "cannot eval:" ^^^ IT.pp it)
   | Some v -> IT.pp it ^^^ equals ^^^ IT.pp v
 
-let format_var model global (sym, (binding, _)) = 
+let format_var model global (sym, (binding, _)) =
   match binding with
   | Context.BaseType bt -> format_eval model global (IT.sym_ (sym, bt))
   | Context.Value it -> format_eval model global it
@@ -280,14 +280,14 @@ let log_block ctxt model (sym, (bt, (loc, info))) =
 
 let format_ctxt_logical_trace model (ctxt : Context.t) =
   let preamble = [Pp.string "Logical variables created in type-checking:"] in
-  let non_unit = 
-    List.filter_map (fun (s, (binding, linfo)) -> 
+  let non_unit =
+    List.filter_map (fun (s, (binding, linfo)) ->
       match binding with
       | Context.BaseType bt when not (BT.equal bt BT.Unit) ->
         Some (s, (bt, linfo))
       | _ ->
         None
-    ) (Context.SymMap.bindings ctxt.Context.logical) 
+    ) (Context.SymMap.bindings ctxt.Context.logical)
   in
   Pp.flow Pp.hardline (preamble @ List.map (log_block ctxt model) non_unit)
 

@@ -141,7 +141,7 @@ let pp_cnexpr_kind expr_ =
   match expr_ with
   | CNExpr_const CNConst_NULL -> !^ "NULL"
   | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
-  | CNExpr_const (CNConst_bits ((sign,n),v)) -> 
+  | CNExpr_const (CNConst_bits ((sign,n),v)) ->
     Pp.string (Z.to_string v ^ (match sign with CN_unsigned -> "u" | CN_signed -> "i") ^ string_of_int n)
   | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
   | CNExpr_const CNConst_unit -> !^"void"
@@ -1526,7 +1526,7 @@ let translate_cn_statement
          let@ expr = ET.translate_cn_expr SymSet.empty env expr in
          let expr = IT.term_of_sterm expr in
          return (M_CN_statement (loc, M_CN_print expr))
-         
+
     )
 
 

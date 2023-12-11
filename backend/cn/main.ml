@@ -14,7 +14,7 @@ type core_file = (unit,unit) CF.Core.generic_file
 type mu_file = unit Mucore.mu_file
 
 
-type file = 
+type file =
   | CORE of core_file
   | MUCORE of mu_file
 
@@ -29,7 +29,7 @@ let print_file filename file =
        (Pp_mucore.Basic.pp_file None file);
 
 
-module Log : sig 
+module Log : sig
   val print_log_file : (string * file) -> unit
 end = struct
   let print_count = ref 0
@@ -38,8 +38,8 @@ end = struct
       begin
         Cerb_colour.do_colour := false;
         let count = !print_count in
-        let file_path = 
-          (Filename.get_temp_dir_name ()) ^ 
+        let file_path =
+          (Filename.get_temp_dir_name ()) ^
             Filename.dir_sep ^
             (string_of_int count ^ "__" ^ filename)
         in
@@ -100,7 +100,7 @@ let handle_frontend_error = function
 
 
 
-let check_input_file filename = 
+let check_input_file filename =
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
   else if not (String.equal (Filename.extension filename) ".c") then
@@ -108,18 +108,18 @@ let check_input_file filename =
 
 
 
-let main 
-      filename 
+let main
+      filename
       incl_dirs
       incl_files
-      loc_pp 
-      debug_level 
-      print_level 
+      loc_pp
+      debug_level
+      print_level
       print_sym_nums
       slow_threshold
       no_timestamps
-      json 
-      state_file 
+      json
+      state_file
       diag
       lemmata
       only
@@ -157,18 +157,18 @@ let main
     WellTyped.use_ity := not no_use_ity
   end;
   check_input_file filename;
-  let (prog4, (markers_env, ail_prog), statement_locs) = 
-    handle_frontend_error 
+  let (prog4, (markers_env, ail_prog), statement_locs) =
+    handle_frontend_error
       (frontend incl_dirs incl_files astprints use_peval filename state_file)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
-  Pp.maybe_open_times_channel 
+  Pp.maybe_open_times_channel
     (match (csv_times, log_times) with
      | (Some times, _) -> Some (times, "csv")
      | (_, Some times) -> Some (times, "log")
      | _ -> None);
   try
-      let result = 
+      let result =
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
          (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
@@ -211,7 +211,7 @@ let main
          if json then TypeErrors.report_json ?state_file e else TypeErrors.report ?state_file e;
          exit (if expect_failure then 0 else 1)
  with
-     | exc -> 
+     | exc ->
         Pp.maybe_close_times_channel ();
         Cerb_debug.maybe_close_csv_timing_file_no_err ();
         Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ());
@@ -340,13 +340,13 @@ let use_peval =
 
 let () =
   let open Term in
-  let check_t = 
-    const main $ 
-      file $ 
+  let check_t =
+    const main $
+      file $
       incl_dirs $
       incl_files $
-      loc_pp $ 
-      debug_level $ 
+      loc_pp $
+      debug_level $
       print_level $
       print_sym_nums $
       slow_threshold $

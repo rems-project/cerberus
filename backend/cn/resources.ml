@@ -12,7 +12,7 @@ open ResourceTypes
 
 
 
-    
+
 
 
 type oargs = O of IT.t
@@ -28,21 +28,21 @@ let request (r, _oargs) = r
 let oargs_bt (_re, O oargs) = IT.bt oargs
 
 
-let pp (r, O oargs) = 
+let pp (r, O oargs) =
   ResourceTypes.pp_aux r (Some oargs)
 
 
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))
 
 
-let subst substitution ((r, O oargs) : t) = 
+let subst substitution ((r, O oargs) : t) =
   (ResourceTypes.subst substitution r,
    O (IT.subst substitution oargs))
 
 
-let free_vars (r, O oargs) = 
+let free_vars (r, O oargs) =
   SymSet.union (ResourceTypes.free_vars r) (IT.free_vars oargs)
-    
+
 
 
 (* assumption: the resource is owned *)
@@ -61,7 +61,7 @@ let pointer_facts =
   let rec aux acc = function
     | [] -> acc
     | r :: rs ->
-       let acc = derived_lc1 r @ (List.concat_map (derived_lc2 r) rs) @ acc in 
+       let acc = derived_lc1 r @ (List.concat_map (derived_lc2 r) rs) @ acc in
        aux acc rs
   in
   fun resources -> aux [] resources

@@ -219,7 +219,7 @@ let pp_message te =
      { short; descr = Some descr; state = None; trace = None }
   | First_iarg_not_pointer { pname; found_bty } ->
      let short = !^"Non-pointer first input argument" in
-     let descr = 
+     let descr =
         !^ "the first input argument of predicate" ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname) ^^^
         !^ "must have type" ^^^ Pp.squotes (BaseTypes.(pp Loc)) ^^^ !^ "but was found with type" ^^^
         Pp.squotes (BaseTypes.(pp found_bty))
@@ -239,7 +239,7 @@ let pp_message te =
      let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = descr; state = Some state; trace = Some trace_doc }
   | Merging_multiple_arrays {requests; situation; ctxt; model} ->
-     let short = 
+     let short =
        !^"Cannot satisfy request for resource" ^^^ for_situation situation ^^ dot ^^^
          !^"It requires merging multiple arrays."
      in
@@ -299,7 +299,7 @@ let pp_message te =
   | NIA {it; hint; ctxt} ->
      let it = IT.pp it in
      let short = !^"Type error" in
-     let descr = 
+     let descr =
        !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Non-linear integer arithmetic in the specification term" ^^^ it ^^ dot ^^^
            !^hint
@@ -308,7 +308,7 @@ let pp_message te =
   | TooBigExponent {it; ctxt} ->
      let it = IT.pp it in
      let short = !^"Type error" in
-     let descr = 
+     let descr =
        !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Too big exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must fit int32 type")
@@ -317,7 +317,7 @@ let pp_message te =
   | NegativeExponent {it; ctxt} ->
      let it = IT.pp it in
      let short = !^"Type error" in
-     let descr = 
+     let descr =
        !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Negative exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must be non-negative")
@@ -367,7 +367,7 @@ let pp_message te =
      let state = Explain.state ctxt model Explain.no_ex in
      let descr = match CF.Undefined.std_of_undefined_behaviour ub with
       | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
-      | None -> !^(CF.Undefined.ub_short_string ub) 
+      | None -> !^(CF.Undefined.ub_short_string ub)
      in
      { short; descr = Some descr; state = Some state; trace = None }
   | Implementation_defined_behaviour (impl, state) ->
@@ -449,7 +449,7 @@ let report ?state_file:to_ {loc; msg} =
 let report_json ?state_file:to_ {loc; msg} =
   let report = pp_message msg in
   let state_error_file = match report.state with
-    | Some state -> 
+    | Some state ->
        let file = match to_ with
          | Some file -> file
          | None -> Filename.temp_file "" ".cn-state"

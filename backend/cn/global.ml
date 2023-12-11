@@ -8,21 +8,21 @@ module AT = ArgumentTypes
 
 
 
-type t = 
-  { struct_decls : Memory.struct_decls; 
+type t =
+  { struct_decls : Memory.struct_decls;
     datatypes : BaseTypes.datatype_info SymMap.t;
     datatype_constrs : BaseTypes.constr_info SymMap.t;
     fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
     logical_functions : LogicalFunctions.definition SymMap.t;
     lemmata : (Locations.t * AT.lemmat) SymMap.t;
-  } 
+  }
 
 let mk_alloc : IndexTerms.t -> ResourceTypes.predicate_type =
   let name : ResourceTypes.predicate_name = PName (Sym.fresh_named "__CN_Alloc") in
   fun pointer -> { name; pointer; iargs = []; }
 
-let empty = 
+let empty =
   let [@ocaml.warning "-8"] { name=PName alloc ; _ } : ResourceTypes.predicate_type =
     mk_alloc IndexTerms.null_  in
   let def : ResourcePredicates.definition =
@@ -54,14 +54,14 @@ let sym_map_from_bindings xs = List.fold_left (fun m (nm, x) -> SymMap.add nm x 
 
 
 
-let pp_struct_layout (tag,layout) = 
-  item ("struct " ^ plain (Sym.pp tag) ^ " (raw)") 
-    (separate_map hardline (fun Memory.{offset; size; member_or_padding} -> 
+let pp_struct_layout (tag,layout) =
+  item ("struct " ^ plain (Sym.pp tag) ^ " (raw)")
+    (separate_map hardline (fun Memory.{offset; size; member_or_padding} ->
          item "offset" (Pp.int offset) ^^ comma ^^^
            item "size" (Pp.int size) ^^ comma ^^^
-             item "content" 
-               begin match member_or_padding with 
-               | Some (member, sct) -> 
+             item "content"
+               begin match member_or_padding with
+               | Some (member, sct) ->
                   typ (Id.pp member) (Sctypes.pp sct)
                | None ->
                   parens (!^"padding" ^^^ Pp.int size)
@@ -70,8 +70,8 @@ let pp_struct_layout (tag,layout) =
     )
 
 
-let pp_struct_decls decls = 
-  Pp.list pp_struct_layout (SymMap.bindings decls) 
+let pp_struct_decls decls =
+  Pp.list pp_struct_layout (SymMap.bindings decls)
 
 let pp_fun_decl (sym, (_, t, _)) = item (plain (Sym.pp sym)) (Pp.option (AT.pp RT.pp) "(no spec)" t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
@@ -81,7 +81,7 @@ let pp_resource_predicate_definitions defs =
       item (Sym.pp_string name) (ResourcePredicates.pp_definition def))
     (SymMap.bindings defs)
 
-let pp global = 
+let pp global =
   pp_struct_decls global.struct_decls ^^ hardline ^^
   pp_fun_decls global.fun_decls ^^ hardline ^^
   pp_resource_predicate_definitions global.resource_predicates

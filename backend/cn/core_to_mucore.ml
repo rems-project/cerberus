@@ -11,7 +11,7 @@ open Cerb_frontend.Pp_ast
 
 module Pmap = struct
   include Pmap
-  let filter_map compare f map = 
+  let filter_map compare f map =
     Pmap.fold (fun key value acc ->
         match f key value with
         | Some value' -> Pmap.add key value' acc
@@ -80,14 +80,14 @@ type mu_expr = unit Mu.mu_expr
 
 exception ConversionFailed
 
-let assert_error loc msg = 
-  Print.error loc msg []; 
+let assert_error loc msg =
+  Print.error loc msg [];
   if ! Cerb_debug.debug_level > 0
   then assert false
   else raise ConversionFailed
 
 let assertl loc b msg extra =
-  if b then () 
+  if b then ()
   else assert_error loc (msg ^^ Print.hardline ^^ Lazy.force extra)
 
 let convert_ct loc ct = Sctypes.of_ctype_unsafe loc ct
@@ -108,9 +108,9 @@ let convert_core_bt_for_list loc =
 
 
 
-let ensure_pexpr_ctype loc err pe : act = 
+let ensure_pexpr_ctype loc err pe : act =
   match pe with
-  | Pexpr (annot, bty, PEval (Vctype ct)) -> 
+  | Pexpr (annot, bty, PEval (Vctype ct)) ->
      {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct}
   | _ ->
      assert_error loc (err ^^ P.colon ^^^ Pp_core.Basic.pp_pexpr pe)
@@ -152,14 +152,14 @@ let ensure_pexpr_ctype loc err pe : act =
 
 
 
-let rec core_to_mu__pattern loc (Pattern (annots, pat_)) = 
+let rec core_to_mu__pattern loc (Pattern (annots, pat_)) =
   let loc = Loc.update loc (Annot.get_loc_ annots) in
 
   let wrap pat_ = M_Pattern(loc, annots, (), pat_) in
   match pat_ with
   | CaseBase (msym, cbt1) ->
      wrap (M_CaseBase (msym, cbt1))
-  | CaseCtor(ctor, pats) -> 
+  | CaseCtor(ctor, pats) ->
      let pats = map (core_to_mu__pattern loc) pats in
      match ctor with
      | Cnil cbt1 -> wrap (M_CaseCtor (M_Cnil cbt1, pats))
@@ -170,28 +170,28 @@ let rec core_to_mu__pattern loc (Pattern (annots, pat_)) =
      | _ -> assert_error loc (!^"core_to_mucore: unsupported pattern")
 
 
-let rec n_ov loc ov = 
+let rec n_ov loc ov =
   let ov = match ov with
-   | OVinteger iv -> 
+   | OVinteger iv ->
       M_OVinteger iv
-   | OVfloating fv -> 
+   | OVfloating fv ->
       M_OVfloating fv
-   | OVpointer pv -> 
+   | OVpointer pv ->
       M_OVpointer pv
-   | OVarray is -> 
+   | OVarray is ->
       M_OVarray (List.map (n_lv loc) is)
-   | OVstruct (sym1, is) -> 
+   | OVstruct (sym1, is) ->
       M_OVstruct (sym1, List.map (fun (id,ct,mv) -> (id,convert_ct loc ct,mv)) is)
-   | OVunion (sym1, id1, mv) -> 
+   | OVunion (sym1, id1, mv) ->
       M_OVunion (sym1, id1, mv)
   in
   M_OV ((), ov)
 
 and n_lv loc v =
   match v with
-  | LVspecified ov -> 
+  | LVspecified ov ->
      n_ov loc ov
-  | LVunspecified ct1 -> 
+  | LVunspecified ct1 ->
      assert_error loc (!^"core_anormalisation: LVunspecified")
 
 
@@ -209,7 +209,7 @@ and n_val loc v =
   M_V ((),v)
 
 
-let unit_pat loc annots = 
+let unit_pat loc annots =
   M_Pattern (loc, annots, (), M_CaseBase (None, Core.BTy_unit))
 
 
@@ -226,16 +226,16 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   let loc = Loc.update loc (get_loc_ annots) in
   let annotate pe = M_Pexpr (loc, annots, bty, pe) in
   match pe with
-  | PEsym sym1 -> 
+  | PEsym sym1 ->
      annotate (M_PEsym sym1)
-  | PEimpl i -> 
+  | PEimpl i ->
      assert_error loc (!^"PEimpl not inlined")
-  | PEval v -> 
+  | PEval v ->
      annotate (M_PEval (n_val loc v))
-  | PEconstrained l -> 
+  | PEconstrained l ->
      let l = List.map (fun (c, e) -> (c, n_pexpr loc e)) l in
      annotate (M_PEconstrained l)
-  | PEundef(l, u) -> 
+  | PEundef(l, u) ->
      annotate (M_PEundef (l, u))
   | PEerror(err, e') ->
      annotate (M_PEerror (err, n_pexpr loc e'))
@@ -243,51 +243,51 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      let argnum_err () = assert_error loc (Print.item "PEctor wrong number of arguments"
          (Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe)))) in
      begin match ctor, args with
-     | Core.CivCOMPL, [ct; arg1] -> 
+     | Core.CivCOMPL, [ct; arg1] ->
         let ct = ensure_pexpr_ctype loc !^"CivCOMPL: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_unop (M_BW_COMPL, arg1))))
-     | Core.CivCOMPL, _ -> 
+     | Core.CivCOMPL, _ ->
         argnum_err ()
-     | Core.CivAND, [ct; arg1; arg2] -> 
+     | Core.CivAND, [ct; arg1; arg2] ->
         let ct = ensure_pexpr_ctype loc !^"CivAND: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_AND, arg1, arg2))))
      | Core.CivAND, _ ->
         argnum_err ()
-     | Core.CivOR, [ct; arg1; arg2] -> 
+     | Core.CivOR, [ct; arg1; arg2] ->
         let ct = ensure_pexpr_ctype loc !^"CivOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_OR, arg1, arg2))))
      | Core.CivOR, _ ->
         argnum_err ()
-     | Core.CivXOR, [ct; arg1; arg2] -> 
+     | Core.CivXOR, [ct; arg1; arg2] ->
         let ct = ensure_pexpr_ctype loc !^"CivXOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, annotate (M_PEbitwise_binop (M_BW_XOR, arg1, arg2))))
      | Core.CivXOR, _ ->
         argnum_err ()
-     | Core.Cfvfromint, [arg1] -> 
+     | Core.Cfvfromint, [arg1] ->
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Cfvfromint arg1)
      | Core.Cfvfromint, _ ->
         argnum_err ()
-     | Core.Civfromfloat, [ct; arg1] -> 
+     | Core.Civfromfloat, [ct; arg1] ->
         let ct = ensure_pexpr_ctype loc !^"Civfromfloat: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Civfromfloat(ct, arg1))
      | Core.Civfromfloat, _ ->
         argnum_err ()
-     | Core.Cnil bt1, _ -> 
+     | Core.Cnil bt1, _ ->
         annotate (M_PEctor (M_Cnil bt1, List.map (n_pexpr loc) args))
      | Core.Ccons, _ ->
         annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
-     | Core.Ctuple, _ -> 
+     | Core.Ctuple, _ ->
         annotate (M_PEctor (M_Ctuple, List.map (n_pexpr loc) args))
-     | Core.Carray, _ -> 
+     | Core.Carray, _ ->
         annotate (M_PEctor (M_Carray, List.map (n_pexpr loc) args))
      | Core.Cspecified, _ ->
         n_pexpr loc (List.hd args)
@@ -324,7 +324,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
       (* FIXME(CHERI merge) *)
       (* this construct is currently only used by the CHERI switch *)
       assert_error loc !^"PEmemop"
-  | PEnot e' -> 
+  | PEnot e' ->
      let e' = n_pexpr loc e' in
      annotate (M_PEnot e')
   | PEop(binop1, e', e'') ->
@@ -361,17 +361,17 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      annotate (M_PEbounded_binop (M_Bound_Except act, iop, arg1, arg2))
   | PEcall(sym1, args) ->
      begin match sym1, args with
-     | Sym (Symbol (_, _, SD_Id "conv_int")), 
+     | Sym (Symbol (_, _, SD_Id "conv_int")),
        [arg1;arg2] ->
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEconv_int(arg1, arg2))
-     | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), 
+     | Sym (Symbol (_, _, SD_Id "conv_loaded_int")),
        [arg1;arg2] ->
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEconv_loaded_int(arg1, arg2))
-     | Sym (Symbol (_, _, SD_Id "wrapI")), 
+     | Sym (Symbol (_, _, SD_Id "wrapI")),
        [arg1;arg2] ->
         let ct = (ensure_pexpr_ctype loc !^"PEcall(wrapI,_): not a constant ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
@@ -415,29 +415,29 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      end
   | PElet(pat, e', e'') ->
      begin match pat, e' with
-     | Pattern (annots, CaseBase (Some sym, _)), 
-       Pexpr (annots2, _, PEsym sym2) 
-     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
-       Pexpr (annots2, _, PEsym sym2) 
+     | Pattern (annots, CaseBase (Some sym, _)),
+       Pexpr (annots2, _, PEsym sym2)
+     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])),
+       Pexpr (annots2, _, PEsym sym2)
        ->
-        let e'' = Core_peval.subst_sym_pexpr2 sym 
+        let e'' = Core_peval.subst_sym_pexpr2 sym
                     (get_loc annots2, `SYM sym2) e'' in
         n_pexpr loc e''
 
 
      | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
-                                           Pattern (_, CaseBase (Some sym', _))])), 
+                                           Pattern (_, CaseBase (Some sym', _))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
      | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
-                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
        (* pairwise disjoint *)
        when (List.length (List.sort_uniq Sym.compare [sym; sym'; sym2; sym2']) = 4) ->
-        let e'' = Core_peval.subst_sym_pexpr2 sym 
+        let e'' = Core_peval.subst_sym_pexpr2 sym
                    (get_loc annots2, `SYM sym2) e'' in
-        let e'' = Core_peval.subst_sym_pexpr2 sym' 
+        let e'' = Core_peval.subst_sym_pexpr2 sym'
                    (get_loc annots2, `SYM sym2') e'' in
         n_pexpr loc e''
 
@@ -451,14 +451,14 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      end
   | PEif(e1, e2, e3) ->
      begin match e2, e3 with
-     | Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))), 
+     | Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))),
        Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))
           when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
                Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         let e1 = n_pexpr loc e1 in
         annotate (M_PEbool_to_integer e1)
-     | Pexpr (_, _, PEctor (Cspecified, [Pexpr (_, _, PEval (Vobject (OVinteger iv1)))])), 
+     | Pexpr (_, _, PEctor (Cspecified, [Pexpr (_, _, PEval (Vobject (OVinteger iv1)))])),
        Pexpr (_, _, PEctor (Cspecified, [Pexpr (_, _, PEval (Vobject (OVinteger iv2)))]))
           when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
                Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
@@ -544,7 +544,7 @@ let n_action loc action =
      let e3 = n_pexpr loc e3 in
      let e4 = n_pexpr loc e4 in
      wrap (M_RMW(ctype1, e2, e3, e4, mo1, mo2))
-  | Fence0 mo1 -> 
+  | Fence0 mo1 ->
      wrap (M_Fence mo1)
   | CompareExchangeStrong(e1, e2, e3, e4, mo1, mo2) ->
      let ctype1 = (ensure_pexpr_ctype loc !^"CompareExchangeStrong: not a constant ctype" e1) in
@@ -575,16 +575,16 @@ let n_action loc action =
      let e3 = n_pexpr loc e3 in
      wrap (M_LinuxRMW(ctype1, e2, e3, lmo))
 
-     
 
-let n_paction loc (Paction(pol, a)) = 
+
+let n_paction loc (Paction(pol, a)) =
   M_Paction (pol, n_action loc a)
 
 
 
 
 
-let show_n_memop = 
+let show_n_memop =
   Mem_common.(instance_Show_Show_Mem_common_generic_memop_dict Symbol.instance_Show_Show_Symbol_sym_dict).show_method
 
 let n_memop loc memop pexprs =
@@ -675,17 +675,17 @@ let n_memop loc memop pexprs =
     let pe2 = n_pexpr loc pe2 in
     M_CopyAllocId (pe1, pe2)
   | (memop, pexprs1) ->
-     let err = 
+     let err =
        !^(show_n_memop memop)
-       ^^^ !^"applied to" 
-       ^^^ Print.int (List.length pexprs1) 
+       ^^^ !^"applied to"
+       ^^^ Print.int (List.length pexprs1)
        ^^^ !^"arguments"
      in
      assert_error loc err
 
 
 
-let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m = 
+let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m =
   let (markers_env, cn_desugaring_state) = desugaring_things in
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
@@ -696,9 +696,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   let n_memop = (n_memop loc) in
   let n_expr = (n_expr loc ((env, old_states), desugaring_things) (global_types, visible_objects_env)) in
   match pe with
-  | Epure pexpr2 -> 
+  | Epure pexpr2 ->
      return (wrap (M_Epure (n_pexpr pexpr2)))
-  | Ememop(memop1, pexprs1) -> 
+  | Ememop(memop1, pexprs1) ->
      return (wrap (M_Ememop (n_memop memop1 pexprs1)))
   | Eaction paction2 ->
      return (wrap (M_Eaction (n_paction paction2)))
@@ -717,26 +717,26 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   | Elet(pat, e1, e2) ->
      begin match pat, e1 with
      | Pattern (annots, CaseBase (Some sym, _)),
-       Pexpr (annots2, _, PEsym sym2) 
-     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
-       Pexpr (annots2, _, PEsym sym2) 
+       Pexpr (annots2, _, PEsym sym2)
+     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])),
+       Pexpr (annots2, _, PEsym sym2)
        ->
-        let e2 = Core_peval.subst_sym_expr2 sym 
+        let e2 = Core_peval.subst_sym_expr2 sym
                    (get_loc annots2, `SYM sym2) e2 in
         n_expr e2
      | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
-                                           Pattern (_, CaseBase (Some sym', _))])), 
+                                           Pattern (_, CaseBase (Some sym', _))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
      | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
-                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
        (* pairwise disjoint *)
        when (List.length (List.sort_uniq Sym.compare [sym; sym'; sym2; sym2']) = 4) ->
-        let e2 = Core_peval.subst_sym_expr2 sym 
+        let e2 = Core_peval.subst_sym_expr2 sym
                    (get_loc annots2, `SYM sym2) e2 in
-        let e2 = Core_peval.subst_sym_expr2 sym' 
+        let e2 = Core_peval.subst_sym_expr2 sym'
                    (get_loc annots2, `SYM sym2') e2 in
         n_expr e2
 
@@ -748,14 +748,14 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      end
   | Eif(e1, e2, e3) ->
      begin match e2, e3 with
-     | Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))), 
+     | Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))),
        Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))))
           when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
                  Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         let e1 = n_pexpr e1 in
         return (wrap_pure (M_PEbool_to_integer e1))
-     | Expr (_, Epure (Pexpr (_, _, PEval Vtrue))), 
+     | Expr (_, Epure (Pexpr (_, _, PEval Vtrue))),
        Expr (_, Epure (Pexpr (_, _, PEval Vfalse))) ->
         let e1 = n_pexpr e1 in
         return (wrap (M_Epure e1))
@@ -767,13 +767,13 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      end
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
-       | Core.Pexpr(annot, bty, Core.PEval (Core.Vctype ct1)) -> 
+       | Core.Pexpr(annot, bty, Core.PEval (Core.Vctype ct1)) ->
           let loc = Loc.update loc (get_loc_ annots) in
           {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct1}
-       | _ -> 
+       | _ ->
           assert_error loc !^"core_anormalisation: Eccall with non-ctype first argument"
      in
-     let e2 = 
+     let e2 =
        let err () = Tools.unsupported loc !^"invalid function constant" in
        match e2 with
        | Core.Pexpr(annots, bty, Core.PEval v) ->
@@ -818,16 +818,16 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
-          let separated_annots = 
+          let separated_annots =
             List.map (fun (loc, joined_strs) ->
                let separate_strs = String.split_on_char ';' joined_strs in
                let separate_strs = List.map String.trim separate_strs in
-               let separate_locs_and_strs = List.map (fun str -> 
+               let separate_locs_and_strs = List.map (fun str ->
                   if not (String.equal str "") then
                      [(loc, str ^ ";")]
-                  else 
+                  else
                      []
-               ) separate_strs 
+               ) separate_strs
                in
                List.concat separate_locs_and_strs
             ) (get_cerb_magic_attr annots) in
@@ -836,24 +836,24 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                 let marker_id = Option.get (get_marker annots) in
                 let marker_id_object_types = Option.get (get_marker_object_types annots) in
                 let@ parsed_stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
-                let@ desugared_stmt = 
-                  do_ail_desugar_rdonly (CAE.{ 
+                let@ desugared_stmt =
+                  do_ail_desugar_rdonly (CAE.{
                         markers_env = markers_env;
                         inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
                     })
-                    (CA.desugar_cn_statement parsed_stmt) 
+                    (CA.desugar_cn_statement parsed_stmt)
                 in
-                let visible_objects= 
+                let visible_objects=
                   global_types @
-                  Pmap.find marker_id_object_types visible_objects_env 
+                  Pmap.find marker_id_object_types visible_objects_env
                 in
                 (* debug 6 (lazy (!^"CN statement before translation"));
                 debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt))); *)
 
-                let@ stmt = 
-                  Compile.translate_cn_statement 
-                    (fun sym -> List.assoc Sym.equal sym visible_objects) 
-                    old_states env desugared_stmt 
+                let@ stmt =
+                  Compile.translate_cn_statement
+                    (fun sym -> List.assoc Sym.equal sym visible_objects)
+                    old_states env desugared_stmt
                 in
                 (* debug 6 (lazy (!^"CN statement after translation"));
                 debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
@@ -863,7 +863,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
           let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
           return (M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))
        | _, _ ->
-          n_expr e1 
+          n_expr e1
      in
      let pat = core_to_mu__pattern loc pat in
      let@ e2 = n_expr e2 in
@@ -874,12 +874,12 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   | End es ->
      let@ es = ListM.mapM n_expr es in
      return (wrap (M_End es))
-  | Esave((sym1,bt1), syms_typs_pes, e) ->  
+  | Esave((sym1,bt1), syms_typs_pes, e) ->
      assert_error loc !^"core_anormalisation: Esave"
   | Erun(_a, sym1, pes) ->
      let pes = List.map n_pexpr pes in
      return (wrap (M_Erun(sym1, pes)))
-  | Epar es -> 
+  | Epar es ->
      assert_error loc !^"core_anormalisation: Epar"
   | Ewait tid1 ->
      assert_error loc !^"core_anormalisation: Ewait"
@@ -923,9 +923,9 @@ let rec arguments_of_lat f_i = function
      M_Resource (bound, info, arguments_of_lat f_i lat)
   | LAT.Constraint (c, info, lat) ->
      M_Constraint (c, info, arguments_of_lat f_i lat)
-  | LAT.I i -> 
+  | LAT.I i ->
      M_I (f_i i)
-     
+
 let rec arguments_of_at f_i = function
   | AT.Computational (bound, info, at) ->
      M_Computational (bound, info, arguments_of_at f_i at)
@@ -945,25 +945,25 @@ type identifier_env = Annot.identifier_env
 
 let make_largs f_i =
   let rec aux env st = function
-    | (Cn.CN_cletResource (loc, name, resource) :: conditions) -> 
-       let@ (pt_ret, oa_bt), lcs, pointee_values = 
+    | (Cn.CN_cletResource (loc, name, resource) :: conditions) ->
+       let@ (pt_ret, oa_bt), lcs, pointee_values =
          C.LocalState.handle st
-           (C.ET.translate_cn_let_resource env (loc, name, resource)) 
+           (C.ET.translate_cn_let_resource env (loc, name, resource))
        in
        let env = C.add_logical name oa_bt env in
        let st = C.LocalState.add_pointee_values pointee_values st in
        let@ lat = aux env st (conditions) in
-       return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+       return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None))
                  (Mu.mConstraints lcs lat))
     | (Cn.CN_cletExpr (loc, name, expr) :: conditions) ->
-       let@ expr = 
+       let@ expr =
          C.LocalState.handle st
-           (C.ET.translate_cn_expr SymSet.empty env expr) 
+           (C.ET.translate_cn_expr SymSet.empty env expr)
        in
        let@ lat = aux (C.add_logical name (IT.bt expr) env) st (conditions) in
        return (Mu.mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
     | (Cn.CN_cconstr (loc, constr) :: conditions) ->
-       let@ lc = 
+       let@ lc =
          C.LocalState.handle st
            (C.ET.translate_cn_assrt env (loc, constr))
        in
@@ -976,14 +976,14 @@ let make_largs f_i =
   aux
 
 
-let rec make_largs_with_accesses f_i env st (accesses, conditions) = 
+let rec make_largs_with_accesses f_i env st (accesses, conditions) =
   match accesses with
   | ((loc, (addr_s, ct)) :: accesses) ->
      let@ (name, ((pt_ret, oa_bt), lcs), value) = C.ownership (loc, (addr_s, ct)) env in
      let env = C.add_logical name oa_bt env in
      let st = C.LocalState.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) st in
      let@ lat = make_largs_with_accesses f_i env st (accesses, conditions) in
-     return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+     return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None))
                (Mu.mConstraints lcs lat))
   | [] ->
      make_largs f_i env st conditions
@@ -1006,7 +1006,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
        let sct = convert_ct loc ct in
        let p_sbt = SBT.Loc (Some sct) in
        let env = C.add_computational s p_sbt env in
-       let good_pointer_lc = 
+       let good_pointer_lc =
          let info = (loc, Some (Sym.pp_string s ^ " good")) in
          (LC.t_ (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc))), info)
        in
@@ -1015,13 +1015,13 @@ let make_label_args f_i loc env st args (accesses, inv) =
        let st = C.LocalState.add_c_variable_state s (CVS_Pointer_pointing_to value) st in
        let owned_res = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
        let alloc_res = C.allocation_token loc s in
-       let@ at = 
+       let@ at =
          aux (resources @ [alloc_res; owned_res],
-              good_lcs @ good_pointer_lc :: lcs) 
-           env st rest 
+              good_lcs @ good_pointer_lc :: lcs)
+           env st rest
        in
        return (Mu.mComputational ((s, Loc), (loc, None)) at)
-    | [] -> 
+    | [] ->
        let@ lat = make_largs_with_accesses f_i env st (accesses, inv) in
        let at = Mu.mResources resources (Mu.mConstraints good_lcs lat) in
        return (M_L at)
@@ -1042,16 +1042,16 @@ let make_function_args f_i loc env args (accesses, requires) =
        let env = C.add_computational pure_arg sbt env in
        let arg_state = C.LocalState.CVS_Value (IT.sym_ (pure_arg, sbt)) in
        let st = C.LocalState.add_c_variable_state mut_arg arg_state st in
-       let good_lc = 
+       let good_lc =
          let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
          (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt))), info)
        in
-       let@ at = 
-         aux (arg_states @ [(mut_arg, arg_state)]) 
-           (good_lc :: good_lcs) env st rest 
+       let@ at =
+         aux (arg_states @ [(mut_arg, arg_state)])
+           (good_lc :: good_lcs) env st rest
        in
        return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
-    | [] -> 
+    | [] ->
        let@ lat = make_largs_with_accesses (f_i arg_states) env st (accesses, requires) in
        return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
   in
@@ -1089,10 +1089,10 @@ let desugar_access d_st global_types (loc, id) =
     | Var_kind_c C_kind_enum ->
        fail {loc; msg = Generic (!^"accesses: expected global, not enum constant")}
     | Var_kind_cn ->
-       let msg = 
-         !^"The name" ^^^ squotes (Id.pp id) 
-         ^^^ !^"is not bound to a C global variable." 
-         ^^^ !^"Perhaps it has been shadowed by a CN variable?" 
+       let msg =
+         !^"The name" ^^^ squotes (Id.pp id)
+         ^^^ !^"is not bound to a C global variable."
+         ^^^ !^"Perhaps it has been shadowed by a CN variable?"
        in
        fail {loc; msg = Generic msg}
   in
@@ -1136,42 +1136,42 @@ let fetch_typedef d_st loc sym =
   return cty
 
 
-let dtree_of_inv conds = 
+let dtree_of_inv conds =
   Dnode (pp_ctor "LoopInvariantAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
-let dtree_of_requires conds = 
+let dtree_of_requires conds =
   Dnode (pp_ctor "RequiresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
-let dtree_of_ensures conds = 
+let dtree_of_ensures conds =
   Dnode (pp_ctor "EnsuresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
-let dtree_of_accesses accesses = 
-  Dnode (pp_ctor "AccessesAnnotation", 
+let dtree_of_accesses accesses =
+  Dnode (pp_ctor "AccessesAnnotation",
          List.map (fun (_loc, (s, ct)) ->
              Dnode (pp_ctor "Access", [Dleaf (Sym.pp s); Dleaf (Pp_core_ctype.pp_ctype ct)])
            ) accesses)
 
 
-let normalise_label 
+let normalise_label
       fsym
-      (markers_env, precondition_cn_desugaring_state) 
+      (markers_env, precondition_cn_desugaring_state)
       (global_types, visible_objects_env)
       (accesses, loop_attributes) (env : C.env) st label_name label =
   match label with
-  | Mi_Return loc -> 
+  | Mi_Return loc ->
      return (M_Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
      begin match CF.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
-        let@ desugared_inv, cn_desugaring_state = 
+        let@ desugared_inv, cn_desugaring_state =
           match Pmap.lookup loop_id loop_attributes with
-          | Some (marker_id, attrs) -> 
+          | Some (marker_id, attrs) ->
              let@ inv = Parse.parse_inv_spec attrs in
-             let d_st = CAE.{ 
+             let d_st = CAE.{
                  markers_env = markers_env;
                  inner = { (Pmap.find marker_id markers_env) with cn_state = precondition_cn_desugaring_state };
                }
              in
              let@ (inv, d_st) = desugar_conds d_st inv in
              return (inv, d_st.inner.cn_state)
-          | None -> 
+          | None ->
              return ([], precondition_cn_desugaring_state)
         in
         debug 6 (lazy (!^"invariant in function" ^^^ Sym.pp fsym));
@@ -1181,11 +1181,11 @@ let normalise_label
           make_label_args (fun env st ->
               n_expr loc ((env, st.old_states), (markers_env, cn_desugaring_state))
                 (global_types, visible_objects_env) label_body
-            ) 
-            loc 
-            env 
+            )
+            loc
+            env
             st
-            (List.combine lt label_args) 
+            (List.combine lt label_args)
             (accesses, desugared_inv)
         in
         (* let lt =  *)
@@ -1200,15 +1200,15 @@ let normalise_label
         assert_error loc !^"continue label has not been inlined"
      | Some (LAloop_break loop_id) ->
         assert_error loc !^"break label has not been inlined"
-     | Some LAreturn -> 
+     | Some LAreturn ->
         assert_error loc !^"return label has not been inlined"
-     | Some LAswitch -> 
+     | Some LAswitch ->
         assert_error loc !^"switch labels"
-     | Some LAcase -> 
+     | Some LAcase ->
         assert_error loc !^"case label has not been inlined"
-     | Some LAdefault -> 
+     | Some LAdefault ->
         assert_error loc !^"default label has not been inlined"
-     | None -> 
+     | None ->
         assert_error loc !^"non-loop labels"
      end
 
@@ -1218,10 +1218,10 @@ let add_spec_arg_renames loc args arg_cts (spec : (Symbol.sym, Ctype.ctype) cn_f
       C.add_renamed_computational spec_sym fun_sym (Memory.sbt_of_sct (convert_ct loc ct)) env)
     (List.combine args (List.combine arg_cts spec.cn_spec_args)) env
 
-let normalise_fun_map_decl 
-      (markers_env, ail_prog) 
+let normalise_fun_map_decl
+      (markers_env, ail_prog)
       (global_types, visible_objects_env)
-      env 
+      env
       fun_specs
       (funinfo: mi_funinfo)
       loop_attributes
@@ -1232,9 +1232,9 @@ let normalise_fun_map_decl
   | Some (loc, attrs, ret_ct, arg_cts, variadic, _) ->
   if variadic then Tools.unsupported loc !^"variadic functions";
   match decl with
-  | Mi_Fun (bt, args, pe) -> 
+  | Mi_Fun (bt, args, pe) ->
      assert false
-  | Mi_Proc (loc, _mrk, ret_bt, args, body, labels) -> 
+  | Mi_Proc (loc, _mrk, ret_bt, args, body, labels) ->
      Print.debug 2 (lazy (Print.item ("normalising procedure") (Sym.pp fname)));
      let (_, ail_marker, _, ail_args, _) = List.assoc
          Sym.equal fname ail_prog.function_definitions in
@@ -1291,34 +1291,34 @@ let normalise_fun_map_decl
      debug 6 (lazy (pp_doc_tree (dtree_of_requires requires)));
      debug 6 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
 
-     let@ args_and_body = 
+     let@ args_and_body =
        make_function_args (fun arg_states env st ->
            let st = C.LocalState.make_state_old st C.start_evaluation_scope in
            let@ body = n_expr loc ((env,st.old_states), (markers_env, d_st.inner.cn_state)) (global_types, visible_objects_env) body in
-           let@ returned = 
+           let@ returned =
              C.make_rt loc env (C.LocalState.add_c_variable_states arg_states st)
-               (ret_s, ret_ct) (accesses, ensures) 
+               (ret_s, ret_ct) (accesses, ensures)
            in
-           let@ labels = 
+           let@ labels =
              PmapM.mapM (normalise_label fname
                            (markers_env,CAE.(d_st.inner.cn_state))
                            (global_types, visible_objects_env)
                            (accesses, loop_attributes) env st)
                labels Sym.compare in
            return (body, labels, returned)
-         ) 
-         loc 
-         env 
-         (List.combine (List.combine ail_args arg_cts) args) 
+         )
+         loc
+         env
+         (List.combine (List.combine ail_args arg_cts) args)
          (accesses, requires)
      in
      (* let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in *)
-     
+
      let desugared_spec = { accesses = List.map snd accesses; requires; ensures } in
 
      return (Some (M_Proc(loc, args_and_body, trusted, desugared_spec), mk_functions))
 
-  | Mi_ProcDecl(loc, ret_bt, bts) -> 
+  | Mi_ProcDecl(loc, ret_bt, bts) ->
      begin match SymMap.find_opt fname fun_specs with
      | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
        let@ () = check_against_core_bt loc ret_bt (Memory.bt_of_sct (convert_ct loc ret_ct)) in
@@ -1337,11 +1337,11 @@ let normalise_fun_map_decl
        return (Some (M_ProcDecl (loc, Some ft), []))
      | _ -> return (Some (M_ProcDecl (loc, None), []))
      end
-  | Mi_BuiltinDecl(loc, bt, bts) -> 
+  | Mi_BuiltinDecl(loc, bt, bts) ->
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
-let normalise_fun_map 
+let normalise_fun_map
       (markers_env, ail_prog)
       (global_types, visible_objects_env)
       env
@@ -1353,12 +1353,12 @@ let normalise_fun_map
   let@ (fmap, mk_functions, failed) =
   PmapM.foldM (fun fsym fdecl (fmap, mk_functions, failed) ->
       try begin
-      let@ r = normalise_fun_map_decl (markers_env, ail_prog) 
+      let@ r = normalise_fun_map_decl (markers_env, ail_prog)
                  (global_types, visible_objects_env)
                  env fun_specs funinfo loop_attributes fsym fdecl in
       match r with
       | Some (fdecl, more_mk_functions) ->
-         let mk_functions' = 
+         let mk_functions' =
            List.map (fun (loc, lsym) -> {c_fun_sym = fsym; loc; l_fun_sym = lsym})
              more_mk_functions
          in
@@ -1379,16 +1379,16 @@ let normalise_fun_map
 let normalise_globs env sym g =
   let loc = Loc.unknown in
   match g with
-  | GlobalDef ((bt, ct), e) -> 
+  | GlobalDef ((bt, ct), e) ->
      let@ () = check_against_core_bt loc bt BT.Loc in
      (* this may have to change *)
-     let@ e = 
-       n_expr loc 
+     let@ e =
+       n_expr loc
          ((env, (C.LocalState.init_st).old_states),
-          (Pmap.empty Int.compare, 
-           CF.Cn_desugaring.initial_cn_desugaring_state [])) 
+          (Pmap.empty Int.compare,
+           CF.Cn_desugaring.initial_cn_desugaring_state []))
          ([], Pmap.empty Int.compare)
-         e 
+         e
      in
      return (M_GlobalDef (convert_ct loc ct, e))
   | GlobalDecl (bt, ct) ->
@@ -1397,27 +1397,27 @@ let normalise_globs env sym g =
 
 
 let normalise_globs_list env gs =
-   ListM.mapM (fun (sym,g) -> 
+   ListM.mapM (fun (sym,g) ->
        let@ g = normalise_globs env sym g in
        return (sym, g)
      ) gs
 
 
 
-let make_struct_decl loc fields (tag : Sym.t) = 
+let make_struct_decl loc fields (tag : Sym.t) =
 
   let open Memory in
   let tagDefs = CF.Tags.tagDefs () in
 
-  let member_offset member = 
+  let member_offset member =
     Memory.int_of_ival (CF.Impl_mem.offsetof_ival tagDefs tag member)
   in
   let final_position = Memory.size_of_ctype (Struct tag) in
 
   let rec aux members position =
     match members with
-    | [] -> 
-       if position < final_position 
+    | [] ->
+       if position < final_position
        then [{offset = position; size = final_position - position; member_or_padding = None}]
        else []
     | (member, (attrs, _(*align_opt*), qualifiers, ct)) :: members ->
@@ -1426,10 +1426,10 @@ let make_struct_decl loc fields (tag : Sym.t) =
        let offset = member_offset member in
        let size = Memory.size_of_ctype sct in
        let to_pad = offset - position in
-       let padding = 
+       let padding =
          if to_pad > 0
-         then [{offset = position; size = to_pad; member_or_padding = None}] 
-         else [] 
+         then [{offset = position; size = to_pad; member_or_padding = None}]
+         else []
        in
        let member = [{offset; size; member_or_padding = Some (member, sct)}] in
        let rest = aux members (offset + size) in
@@ -1440,21 +1440,21 @@ let make_struct_decl loc fields (tag : Sym.t) =
 
 
 
-let normalise_tag_definition tag def = 
+let normalise_tag_definition tag def =
   let loc = Loc.unknown in
   match def with
-  | StructDef(fields, Some flexible_array_member) -> 
+  | StructDef(fields, Some flexible_array_member) ->
      Tools.unsupported loc !^"flexible array member"
-  | StructDef (fields, None) -> 
+  | StructDef (fields, None) ->
      M_StructDef (make_struct_decl loc fields tag)
-  | UnionDef l -> 
+  | UnionDef l ->
      Tools.unsupported loc !^"union types"
 
 
 let normalise_tag_definitions tagDefs =
    Pmap.mapi normalise_tag_definition tagDefs
 
-let register_glob env (sym, glob) = 
+let register_glob env (sym, glob) =
   match glob with
   | M_GlobalDef (ct, e) ->
      C.add_computational sym (SBT.Loc (Some ct)) env
@@ -1462,19 +1462,19 @@ let register_glob env (sym, glob) =
   | M_GlobalDecl ct ->
      C.add_computational sym (SBT.Loc (Some ct)) env
      (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
-     
+
 
 
 let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases} =
-  let translate_arg (bt, id) = 
+  let translate_arg (bt, id) =
     (id, SBT.to_basetype (Compile.translate_cn_base_type env bt)) in
-  let cases = 
+  let cases =
     List.map (fun (c, args) -> (c, List.map translate_arg args)) cn_dt_cases in
   (cn_dt_name, { loc = cn_dt_loc; cases })
 
 
 
-let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file = 
+let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
 
   let tagDefs = normalise_tag_definitions file.mi_tagDefs in
 
@@ -1492,7 +1492,7 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
   let@ preds = ListM.mapM (C.translate_cn_predicate env) ail_prog.cn_predicates in
   let@ lemmata = ListM.mapM (C.translate_cn_lemma env) ail_prog.cn_lemmata in
 
-  let global_types = 
+  let global_types =
     List.map (fun (s, global) ->
         match global with
         | GlobalDef ((_bt, ct), _e) -> (s, ct)
@@ -1508,8 +1508,8 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
       SymMap.add spec.cn_spec_name (id, spec) acc)
     ail_prog.cn_fun_specs SymMap.empty in
 
-  let@ (funs, mk_functions) = 
-    normalise_fun_map (markers_env, ail_prog) (global_types, file.mi_visible_objects_env) 
+  let@ (funs, mk_functions) =
+    normalise_fun_map (markers_env, ail_prog) (global_types, file.mi_visible_objects_env)
       env fun_specs_map
       file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in
@@ -1602,20 +1602,20 @@ let rec stmts_in_args f_i = function
   | M_Computational (_, _, a) -> stmts_in_args f_i a
   | M_L a -> stmts_in_largs f_i a
 
-let stmts_in_labels labels = 
+let stmts_in_labels labels =
   Pmap.fold (fun s def acc ->
       match def with
       | M_Return _ -> acc
       | M_Label (_, a, _, _) -> concat2 (stmts_in_args stmts_in_expr a) acc
     ) labels ([], [])
 
-let stmts_in_function args_and_body = 
+let stmts_in_function args_and_body =
   stmts_in_args (fun (body, labels, _rt) ->
       concat2 (stmts_in_expr body) (stmts_in_labels labels)
     ) args_and_body
 
 
-let pre_post_of_function args_and_body = 
+let pre_post_of_function args_and_body =
 
   let rec of_args_l = function
     | M_Define (bound, info, a_l) ->
@@ -1645,12 +1645,12 @@ let pre_post_of_function args_and_body =
 
 
 let collect_instrumentation (file : _ mu_file) =
-  let instrs = 
+  let instrs =
   Pmap.fold (fun fn decl acc ->
       match decl with
       | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
          let stmts_s, stmts_i = stmts_in_function args_and_body in
-         let surface = { 
+         let surface = {
              accesses = spec.accesses;
              requires = spec.requires;
              ensures = spec.ensures;
@@ -1662,7 +1662,7 @@ let collect_instrumentation (file : _ mu_file) =
              pre = pre;
              post = post;
              statements = stmts_i;
-           } 
+           }
          in
          { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
       | M_ProcDecl (fn_loc, _ft) ->

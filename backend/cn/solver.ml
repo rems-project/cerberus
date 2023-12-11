@@ -1067,14 +1067,14 @@ let simplifiers = [
     "simplify";
   ]
 
-let _add_simplifiers context solver = 
+let _add_simplifiers context solver =
   match List.map (Z3.Simplifier.mk_simplifier context) simplifiers with
   | s1::s2::rest ->
       Z3.Solver.add_simplifier context solver
         (Z3.Simplifier.and_then context s1 s2 rest)
-  | [s] -> 
+  | [s] ->
       Z3.Solver.add_simplifier context solver s
-  | [] -> 
+  | [] ->
       solver
 
 

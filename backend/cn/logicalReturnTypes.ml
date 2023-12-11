@@ -6,7 +6,7 @@ module IT = IndexTerms
 module LC = LogicalConstraints
 
 
-type t = 
+type t =
   | Define of (Sym.t * IT.t) * info * t
   | Resource of (Sym.t * (RT.t * BT.t)) * info * t
   | Constraint of LogicalConstraints.t * info * t
@@ -16,11 +16,11 @@ type t =
 
 
 
-let mDefine (name, bound, info) t = 
+let mDefine (name, bound, info) t =
   Define ((name, bound), info, t)
-let mResource (bound, info) t = 
+let mResource (bound, info) t =
   Resource (bound, info, t)
-let mConstraint (bound, info) t = 
+let mConstraint (bound, info) t =
   Constraint (bound, info, t)
 
 let mDefines = List.fold_right mDefine
@@ -28,22 +28,22 @@ let mResources = List.fold_right mResource
 let mConstraints = List.fold_right mConstraint
 
 
-let rec subst (substitution: IT.t Subst.t) lrt = 
+let rec subst (substitution: IT.t Subst.t) lrt =
   match lrt with
   | Define ((name, it), info, t) ->
      let it = IT.subst substitution it in
      let name, t = suitably_alpha_rename substitution.relevant (name, IT.bt it) t in
      Define ((name, it), info, subst substitution t)
-  | Resource ((name, (re, bt)), info, t) -> 
+  | Resource ((name, (re, bt)), info, t) ->
      let re = RT.subst substitution re in
      let name, t = suitably_alpha_rename substitution.relevant (name, bt) t in
      let t = subst substitution t in
      Resource ((name, (re, bt)), info, t)
-  | Constraint (lc, info, t) -> 
+  | Constraint (lc, info, t) ->
      let lc = LogicalConstraints.subst substitution lc in
      let t = subst substitution t in
      Constraint (lc, info, t)
-  | I -> 
+  | I ->
      I
 
 and alpha_rename_ s' (s, ls) t =
@@ -54,7 +54,7 @@ and alpha_rename (s, ls) t =
   let s' = Sym.fresh_same s in
   alpha_rename_ s' (s, ls) t
 
-and suitably_alpha_rename syms (s, ls) t = 
+and suitably_alpha_rename syms (s, ls) t =
   if SymSet.mem s syms
   then alpha_rename (s, ls) t
   else (s, t)
@@ -84,7 +84,7 @@ let alpha_unique ss =
   in f ss
 
 
-let binders = 
+let binders =
   let rec aux = function
     | Define ((s, it), _, t) ->
        let (s, t) = alpha_rename (s, IT.bt it) t in
@@ -113,7 +113,7 @@ let free_vars lrt =
   f lrt
 
 
-let simp simp_it simp_lc simp_re = 
+let simp simp_it simp_lc simp_re =
   let rec aux = function
     | Define ((s, it), info, t) ->
        let it = simp_it it in
@@ -145,11 +145,11 @@ let rec pp_aux lrt =
   | Constraint (lc, _info, t) ->
      let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
      group (LogicalConstraints.pp lc ^^^ op) :: pp_aux t
-  | I -> 
+  | I ->
      [!^"I"]
 
-let pp rt = 
-  Pp.flow (Pp.break 1) (pp_aux rt) 
+let pp rt =
+  Pp.flow (Pp.break 1) (pp_aux rt)
 
 
 
@@ -179,7 +179,7 @@ let rec json = function
      `Variant ("Constraint", Some (`Assoc args))
   | I ->
      `Variant ("I", None)
-     
+
 
 
 
@@ -190,7 +190,7 @@ let rec alpha_equivalent lrt lrt' =
      let new_s = if Sym.equal s s' then s else Sym.fresh_same s in
      let _, lrt = alpha_rename_ new_s (s, IT.bt it) lrt in
      let _, lrt' = alpha_rename_ new_s (s', IT.bt it') lrt' in
-     IT.equal it it' 
+     IT.equal it it'
      && alpha_equivalent lrt lrt'
   | Resource ((s, (re, bt)), _, lrt),
     Resource ((s', (re', bt')), _, lrt') ->
@@ -198,7 +198,7 @@ let rec alpha_equivalent lrt lrt' =
      let _, lrt = alpha_rename_ new_s (s, bt) lrt in
      let _, lrt' = alpha_rename_ new_s (s', bt') lrt' in
      RT.alpha_equivalent re re'
-     && BT.equal bt bt' 
+     && BT.equal bt bt'
      && alpha_equivalent lrt lrt'
   | Constraint (lc, _, lrt),
     Constraint (lc', _, lrt') ->

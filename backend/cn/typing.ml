@@ -25,20 +25,20 @@ type 'a m = 'a t
 type failure = Context.t -> TypeErrors.t
 
 
-let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t = 
+let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
   let solver = Solver.make c.global in
   let sym_eqs = SymMap.empty in
   LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
-  let s = { 
-      typing_context = c; 
-      solver; 
-      sym_eqs; 
+  let s = {
+      typing_context = c;
+      solver;
+      sym_eqs;
       equalities = Simplify.ITPairMap.empty;
-      past_models = []; 
+      past_models = [];
       step_trace = Trace.empty;
       found_equalities = EqTable.empty;
       movable_indices = [];
-    } 
+    }
   in
   let outcome = m s in
   match outcome with
@@ -53,7 +53,7 @@ let sandbox (m : 'a t) : ('a Resultat.t) t =
   Solver.push s.solver;
   let outcome = match m s with
     | Ok (a, _s') ->
-        assert (Solver.num_scopes s.solver = n + 1); 
+        assert (Solver.num_scopes s.solver = n + 1);
         Solver.pop s.solver 1;
         Ok a
     | Error e ->
@@ -63,17 +63,17 @@ let sandbox (m : 'a t) : ('a Resultat.t) t =
         Error e
   in
   Ok (outcome, s)
-  
-  
-  
-  
+
+
+
+
 
 
 let return (a : 'a) : ('a) t =
   fun s -> Ok (a, s)
 
-let bind (m : ('a) t) (f : 'a -> ('b) t) : ('b) t = 
-  fun s -> 
+let bind (m : ('a) t) (f : 'a -> ('b) t) : ('b) t =
+  fun s ->
   match m s with
   | Error e -> Error e
   | Ok (x, s') -> (f x) s'
@@ -82,16 +82,16 @@ let bind (m : ('a) t) (f : 'a -> ('b) t) : ('b) t =
 
 let (let@) = bind
 
-let get () : (Context.t) t = 
+let get () : (Context.t) t =
   fun s -> Ok (s.typing_context, s)
 
-let set (c : Context.t) : (unit) t = 
+let set (c : Context.t) : (unit) t =
   fun s -> Ok ((), {s with typing_context = c})
 
-let solver () : (Solver.solver) t = 
+let solver () : (Solver.solver) t =
   fun s -> Ok (s.solver, s)
 
-let fail (f : failure) : ('a) t = 
+let fail (f : failure) : ('a) t =
   fun s -> Error (f s.typing_context)
 
 
@@ -134,21 +134,21 @@ let fail_with_trace m =
   let@ tr = get_step_trace () in
   fail (m tr)
 
-let print_with_ctxt printer = 
+let print_with_ctxt printer =
   let@ s = get () in
   let () = printer s in
   return ()
 
-let get_global () = 
+let get_global () =
   let@ s = get () in
   return (s.global)
 
-let set_global global : (unit) m = 
+let set_global global : (unit) m =
   let@ ctxt = get () in
   set {ctxt with global}
 
 
-let all_constraints () = 
+let all_constraints () =
   let@ s = get () in
   return s.constraints
 
@@ -170,30 +170,30 @@ let make_simp_ctxt s =
     }
 
 
-let simp_ctxt () = 
+let simp_ctxt () =
   fun s -> Ok (make_simp_ctxt s, s)
 
 
 let make_provable loc =
-  fun ({typing_context = s; solver; _} as c) -> 
+  fun ({typing_context = s; solver; _} as c) ->
   let simp_ctxt = make_simp_ctxt c in
   let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
-  let f lc = 
-    Solver.provable 
-      ~loc 
-      ~solver ~global:s.global 
+  let f lc =
+    Solver.provable
+      ~loc
+      ~solver ~global:s.global
       ~assumptions:s.constraints
       ~simp_ctxt
-      ~pointer_facts 
-      lc 
+      ~pointer_facts
+      lc
   in
   f
 
-let provable loc = 
-  fun s -> 
+let provable loc =
+  fun s ->
   Ok (make_provable loc s, s)
 
-  
+
 
 
 let model () =
@@ -240,31 +240,31 @@ let model_with loc prop =
             return (Some m)
   end
 
-let bound_a sym = 
+let bound_a sym =
   let@ s = get () in
   return (Context.bound_a sym s)
 
-let bound_l sym = 
+let bound_l sym =
   let@ s = get () in
   return (Context.bound_l sym s)
 
-let bound sym = 
+let bound sym =
   let@ s = get () in
   return (Context.bound sym s)
 
-let get_a sym = 
+let get_a sym =
   let@ s = get () in
   return (Context.get_a sym s)
 
-let get_l sym = 
+let get_l sym =
   let@ s = get () in
   return (Context.get_l sym s)
 
-let add_a sym bt info = 
+let add_a sym bt info =
   let@ s = get () in
   set (Context.add_a sym bt info s)
 
-let add_a_value sym value info = 
+let add_a_value sym value info =
   let@ s = get () in
   set (Context.add_a_value sym value info s)
 
@@ -272,11 +272,11 @@ let add_l sym bt info =
   let@ s = get () in
   set (Context.add_l sym bt info s)
 
-let add_l_value sym value info = 
+let add_l_value sym value info =
   let@ s = get () in
   set (Context.add_l_value sym value info s)
 
-let remove_a sym = 
+let remove_a sym =
   let@ s = get () in
   set (Context.remove_a sym s)
 
@@ -289,22 +289,22 @@ let rec add_ls = function
      let@ () = add_l s ls info in
      add_ls lvars
 
-let add_sym_eqs sym_eqs = 
-  fun s -> 
-  let sym_eqs = 
-    List.fold_left (fun acc (s, v) -> 
+let add_sym_eqs sym_eqs =
+  fun s ->
+  let sym_eqs =
+    List.fold_left (fun acc (s, v) ->
         SymMap.add s v acc
-      ) s.sym_eqs sym_eqs 
+      ) s.sym_eqs sym_eqs
   in
   Ok ((), { s with sym_eqs })
 
 let add_equalities new_equalities =
   fun s ->
-  let equalities = 
+  let equalities =
     List.fold_left (fun acc ((a, b), eq_or_not) ->
         Simplify.ITPairMap.add (a,b) eq_or_not acc
       )
-      s.equalities new_equalities 
+      s.equalities new_equalities
   in
   Ok ((), { s with equalities })
 
@@ -313,7 +313,7 @@ let add_found_equalities lc =
   upd_found_eqs (EqTable.add_lc_eqs eqs lc)
 
 
-let add_c_internal lc = 
+let add_c_internal lc =
   let@ _ = drop_models () in
   let@ s = get () in
   let@ solver = solver () in
@@ -326,23 +326,23 @@ let add_c_internal lc =
   let@ _ = add_found_equalities lc in
   let@ () = set s in
   return ()
-  
+
 let add_r_internal loc (r, RE.O oargs) =
   let@ s = get () in
   let@ simp_ctxt = simp_ctxt () in
   let r = Simplify.ResourceTypes.simp simp_ctxt r in
   let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
-  set (Context.add_r loc (r, O oargs) s)  
-  
-  
-type changed = 
+  set (Context.add_r loc (r, O oargs) s)
+
+
+type changed =
   | Deleted
   | Unchanged
   | Changed of RE.t
 
-  
 
-  
+
+
 let map_and_fold_resources loc
     (f : RE.t -> 'acc -> changed * 'acc)
     (acc : 'acc) =
@@ -369,80 +369,80 @@ let map_and_fold_resources loc
                  let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in
                  ((re, ix) :: resources, ix + 1, hist, i::changed_or_deleted, acc)
               end
-           | _ -> 
+           | _ ->
               let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in
               ((re, ix) :: resources, ix + 1, hist, i::changed_or_deleted, acc)
            end
       ) resources ([], orig_ix, orig_hist, [], acc)
   in
   let@ () = set {s with resources = (resources, ix); resource_history = hist} in
-  return (acc, changed_or_deleted)  
-  
+  return (acc, changed_or_deleted)
 
 
-  
+
+
 let ensure_logical_sort (loc : Loc.loc) ~(expect : LS.t) (has : LS.t) : (unit) m =
-  if LS.equal has expect 
-  then return () 
+  if LS.equal has expect
+  then return ()
   else fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = BT.pp expect}})
 
 let ensure_base_type (loc : Loc.loc) ~(expect : BT.t) (has : BT.t) : (unit) m =
-  ensure_logical_sort loc ~expect has  
+  ensure_logical_sort loc ~expect has
 
 
-let make_return_record loc (record_name:string) record_members = 
+let make_return_record loc (record_name:string) record_members =
   let record_s = Sym.fresh_make_uniq record_name in
   (* let record_s = Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation) in *)
   let record_bt = BT.Record record_members in
   let@ () = add_l record_s record_bt (loc, lazy (Sym.pp record_s)) in
   let record_it = IT.sym_ (record_s, record_bt) in
-  let member_its = 
-    List.map (fun (s, member_bt) -> 
+  let member_its =
+    List.map (fun (s, member_bt) ->
         IT.recordMember_ ~member_bt (record_it, s)
-      ) record_members 
+      ) record_members
   in
   return (record_it, member_its)
 
 
 
-  
+
 
 
 (* This essentially pattern-matches a logical return type against a
    record pattern. `record_it` is the index term for the record,
    `members` the pattern for its members. *)
-let bind_logical_return_internal loc = 
-  let rec aux members lrt = 
+let bind_logical_return_internal loc =
+  let rec aux members lrt =
     match members, lrt with
-    | member :: members, 
+    | member :: members,
       LogicalReturnTypes.Define ((s, it), _, lrt) ->
        let@ () = ensure_base_type loc ~expect:(IT.bt it) (IT.bt member) in
        let@ () = add_c_internal (LC.t_ (IT.eq__ member it)) in
        aux members (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt)
     | member :: members,
-      Resource ((s, (re, bt)), _, lrt) -> 
+      Resource ((s, (re, bt)), _, lrt) ->
        let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
        let@ () = add_r_internal loc (re, RE.O member) in
        aux members (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt)
     | members,
-      Constraint (lc, _, lrt) -> 
+      Constraint (lc, _, lrt) ->
        let@ () = add_c_internal lc in
        aux members lrt
     | [],
-      I -> 
+      I ->
        return ()
     | _ ->
        assert false
   in
   fun members lrt -> aux members lrt
 
-let get_movable_indices () = 
+let get_movable_indices () =
   fun s ->
-  Ok (s.movable_indices, s)  
-  
+  Ok (s.movable_indices, s)
+
 
 (* copying and adjusting map_and_fold_resources *)
-let unfold_resources loc = 
+let unfold_resources loc =
   let rec aux () =
     let@ s = get () in
     let@ movable_indices = get_movable_indices () in
@@ -457,10 +457,10 @@ let unfold_resources loc =
     let keep, unpack, extract =
       List.fold_right (fun (re, i) (keep, unpack, extract) ->
           match Pack.unpack loc s.global provable_f2 re with
-          | Some unpackable -> 
+          | Some unpackable ->
               let pname = RET.pp_predicate_name (RET.predicate_name (fst re)) in
               (keep, (i, pname, unpackable) :: unpack, extract)
-          | None -> 
+          | None ->
               let re_reduced, extracted =
                 Pack.extractable_multiple loc provable_f2 movable_indices re in
               let keep' = match extracted with
@@ -485,8 +485,8 @@ let unfold_resources loc =
     let@ () = iterM (add_r_internal loc) extract in
     match unpack, extract with
     | [], [] -> return ()
-    | _ -> 
-      aux () 
+    | _ ->
+      aux ()
   in
   aux ()
 
@@ -509,11 +509,11 @@ let get_loc_trace () =
   let@ c = get () in
   return c.location_trace
 
-let set_loc_trace tr = 
+let set_loc_trace tr =
   let@ c = get () in
   set ({c with location_trace = tr})
 
-let add_loc_trace loc = 
+let add_loc_trace loc =
   let@ locs = get_loc_trace () in
   set_loc_trace (loc :: locs)
 
@@ -557,19 +557,19 @@ let get_logical_function_def loc id =
   | None -> fail (fun _ -> {loc; msg = Unknown_logical_function {id;
       resource = Option.is_some (Global.get_resource_predicate_def global id)}})
 
-let get_struct_decl loc tag = 
+let get_struct_decl loc tag =
   let@ global = get_global () in
   match SymMap.find_opt tag global.struct_decls with
   | Some decl -> return decl
   | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
 
-let get_datatype loc tag = 
+let get_datatype loc tag =
   let@ global = get_global () in
   match SymMap.find_opt tag global.datatypes with
   | Some dt -> return dt
   | None -> fail (fun _ -> {loc; msg = Unknown_datatype tag})
 
-let get_datatype_constr loc tag = 
+let get_datatype_constr loc tag =
   let@ global = get_global () in
   match SymMap.find_opt tag global.datatype_constrs with
   | Some info -> return info
@@ -577,7 +577,7 @@ let get_datatype_constr loc tag =
 
 
 
-let get_member_type loc tag member layout : (Sctypes.t) m = 
+let get_member_type loc tag member layout : (Sctypes.t) m =
   let member_types = Memory.member_types layout in
   match List.assoc_opt Id.equal member member_types with
   | Some membertyp -> return membertyp
@@ -588,13 +588,13 @@ let get_struct_member_type loc tag member =
   let@ ty = get_member_type loc tag member decl in
   return ty
 
-let get_fun_decl loc fsym = 
+let get_fun_decl loc fsym =
   let@ global = get_global () in
   match Global.get_fun_decl global fsym with
   | Some t -> return t
   | None -> fail (fun _ -> {loc; msg = Unknown_function fsym})
 
-let get_lemma loc lsym = 
+let get_lemma loc lsym =
   let@ global = get_global () in
   match Global.get_lemma global lsym with
   | Some t -> return t
@@ -602,11 +602,11 @@ let get_lemma loc lsym =
 
 
 
-let add_struct_decl tag layout : (unit) m = 
+let add_struct_decl tag layout : (unit) m =
   let@ global = get_global () in
   set_global { global with struct_decls = SymMap.add tag layout global.struct_decls }
 
-let add_fun_decl fname entry = 
+let add_fun_decl fname entry =
   let@ global = get_global () in
   set_global { global with fun_decls = SymMap.add fname entry global.fun_decls }
 
@@ -615,20 +615,20 @@ let add_lemma lemma_s (loc, lemma_typ) =
   set_global { global with lemmata = SymMap.add lemma_s (loc, lemma_typ) global.lemmata }
 
 
-let add_resource_predicate name entry = 
+let add_resource_predicate name entry =
   let@ global = get_global () in
   set_global { global with resource_predicates = Global.SymMap.add name entry global.resource_predicates }
 
 
-let add_logical_function name entry = 
+let add_logical_function name entry =
   let@ global = get_global () in
   set_global { global with logical_functions = Global.SymMap.add name entry global.logical_functions }
 
-let add_datatype name entry = 
+let add_datatype name entry =
   let@ global = get_global () in
   set_global { global with datatypes = SymMap.add name entry global.datatypes }
 
-let add_datatype_constr name entry = 
+let add_datatype_constr name entry =
   let@ global = get_global () in
   set_global { global with datatype_constrs = SymMap.add name entry global.datatype_constrs }
 
@@ -669,7 +669,7 @@ let test_value_eqs loc guard x ys =
   loop group ms ys
 
 
-let set_statement_locs statement_locs = 
+let set_statement_locs statement_locs =
   let@ ctxt = get () in
   set { ctxt with statement_locs }
 
@@ -686,7 +686,7 @@ let get_solver_focused_terms () =
   return terms
 
 
-let embed_resultat (m : ('a) Resultat.t) : ('a) m = 
+let embed_resultat (m : ('a) Resultat.t) : ('a) m =
   fun s ->
   match m with
   | Ok r -> Ok (r , s)
@@ -698,11 +698,11 @@ let add_movable_index_internal e : unit m =
   Ok ((), {s with movable_indices = e :: s.movable_indices})
 
 
-let add_movable_index loc e = 
+let add_movable_index loc e =
   let@ () = add_movable_index_internal e in
   unfold_resources loc
 
-let add_r loc re = 
+let add_r loc re =
    let@ () = add_r_internal loc re in
    unfold_resources loc
 
@@ -714,12 +714,12 @@ let add_c loc c =
   let@ () = add_c_internal c in
   unfold_resources loc
 
-let add_cs loc cs = 
+let add_cs loc cs =
   let@ () = iterM add_c_internal cs in
   unfold_resources loc
-  
 
-let bind_logical_return loc members lrt = 
+
+let bind_logical_return loc members lrt =
   let@ () = bind_logical_return_internal loc members lrt in
   unfold_resources loc
 
@@ -729,7 +729,7 @@ let bind_return loc members (rt : ReturnTypes.t) =
   | member :: members,
     Computational ((s, bt), _, lrt) ->
      let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
-     let@ () = bind_logical_return loc members 
+     let@ () = bind_logical_return loc members
                  (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt) in
      return member
   | _ ->

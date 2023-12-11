@@ -76,17 +76,17 @@ type c_concrete_sig = {
   sig_has_proto: bool;
 }
 
-let rec subtype ct ct' = 
+let rec subtype ct ct' =
   match ct, ct' with
-  | Void, Void -> 
+  | Void, Void ->
      true
-  | Integer it, Integer it' -> 
+  | Integer it, Integer it' ->
      IntegerTypes.equal it it'
-  | Array (ct, olength), Array (ct', None) -> 
+  | Array (ct, olength), Array (ct', None) ->
      subtype ct ct'
-  | Array (ct, olength), Array (ct', olength') -> 
+  | Array (ct, olength), Array (ct', olength') ->
      subtype ct ct' && Option.equal Int.equal olength olength'
-  | Pointer ct, Pointer ct' -> 
+  | Pointer ct, Pointer ct' ->
      subtype ct ct'
   | Struct tag, Struct tag' ->
      Sym.equal tag tag'
@@ -98,13 +98,13 @@ let rec subtype ct ct' =
 
 
 let is_unsigned_integer_type ty =
-  AilTypesAux.is_unsigned_integer_type 
+  AilTypesAux.is_unsigned_integer_type
     Ctype.(Ctype ([], Basic (Integer ty)))
 
 
 let is_unsigned_integer_ctype = function
   | Integer ty ->
-     AilTypesAux.is_unsigned_integer_type 
+     AilTypesAux.is_unsigned_integer_type
        Ctype.(Ctype ([], Basic (Integer ty)))
   | _ -> false
 
@@ -123,19 +123,19 @@ let char_ct = Integer Char
 
 let rec to_ctype (ct_ : ctype) =
   let ct_ = match ct_ with
-    | Void -> 
+    | Void ->
        Ctype.Void
-    | Integer it -> 
+    | Integer it ->
        Basic (Integer it)
     | Array (t, oi) ->
        Array (to_ctype t, Option.map Z.of_int oi)
-    | Pointer t -> 
+    | Pointer t ->
        Pointer (Ctype.no_qualifiers, to_ctype t)
-    | Struct t -> 
+    | Struct t ->
        Struct t
     | Function ((ret_q,ret_ct), args, variadic) ->
-       let args = 
-         List.map (fun (arg_ct, is_reg) -> 
+       let args =
+         List.map (fun (arg_ct, is_reg) ->
              (Ctype.no_qualifiers, to_ctype arg_ct, is_reg)
            ) args
        in
@@ -148,18 +148,18 @@ let rec to_ctype (ct_ : ctype) =
 let rec of_ctype (Ctype.Ctype (_,ct_)) =
   let open Option in
   match ct_ with
-  | Ctype.Void -> 
+  | Ctype.Void ->
      return Void
-  | Ctype.Basic (Integer it) -> 
+  | Ctype.Basic (Integer it) ->
      return (Integer it)
-  | Ctype.Basic (Floating it) -> 
+  | Ctype.Basic (Floating it) ->
      fail
-  | Ctype.Array (ct,nopt) -> 
+  | Ctype.Array (ct,nopt) ->
      let@ ct = of_ctype ct in
      return (Array (ct, Option.map Z.to_int nopt))
   | Ctype.Function ((ret_q,ret_ct), args, variadic) ->
-     let@ args = 
-       ListM.mapM (fun (_arg_q, arg_ct, is_reg) -> 
+     let@ args =
+       ListM.mapM (fun (_arg_q, arg_ct, is_reg) ->
            let@ arg_ct = of_ctype arg_ct in
            return (arg_ct, is_reg)
          ) args
@@ -168,7 +168,7 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
      return (Function ((ret_q, ret_ct), args, variadic))
   | Ctype.FunctionNoParams _ ->
       fail
-  | Ctype.Pointer (qualifiers,ctype) -> 
+  | Ctype.Pointer (qualifiers,ctype) ->
      let@ t = of_ctype ctype in
      return (Pointer t)
   | Ctype.Atomic _ ->
@@ -178,16 +178,16 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
   | Union _ ->
      fail
 
-let of_ctype_unsafe loc ct = 
+let of_ctype_unsafe loc ct =
   let open Cerb_pp_prelude in
   match of_ctype ct with
   | Some ct -> ct
-  | None -> Tools.unsupported loc (!^"C-type" ^^^ Cerb_frontend.Pp_core_ctype.pp_ctype ct)  
+  | None -> Tools.unsupported loc (!^"C-type" ^^^ Cerb_frontend.Pp_core_ctype.pp_ctype ct)
 
 
 let pp t = Pp_core_ctype.pp_ctype (to_ctype t)
 
 
 let is_integer_type = function
-  | Integer it -> Some it 
+  | Integer it -> Some it
   | _ -> None

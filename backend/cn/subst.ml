@@ -10,15 +10,15 @@ type 'a t = {
 type 'a subst = 'a t
 
 
-let pp ppf subst = 
+let pp ppf subst =
   Pp.list (fun (before, after) ->
       !^"replace" ^^^ Sym.pp before ^^^ !^"with" ^^^ ppf after
     ) subst
 
 
 
-let make free_vars replace = 
-  let relevant = 
+let make free_vars replace =
+  let relevant =
     List.fold_right (fun (s, r) acc ->
         SymSet.union (free_vars r) (SymSet.add s acc)
       ) replace SymSet.empty

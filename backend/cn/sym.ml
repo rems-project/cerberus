@@ -41,7 +41,7 @@ let fresh_same (s : t) : t =
 let has_id = function
   | CF.Symbol.Symbol (digest, nat, SD_Id str) ->
      Some str
-  | _ -> 
+  | _ ->
      None
 
 let has_id_with f sym = match has_id sym with

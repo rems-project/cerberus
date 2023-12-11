@@ -17,7 +17,7 @@ type l_info = (Locations.t * Pp.doc Lazy.t)
 let pp_l_info doc (l : l_info) =
   typ doc (Lazy.force (snd l) ^^ break 1 ^^ Locations.pp (fst l))
 
-type basetype_or_value = 
+type basetype_or_value =
   | BaseType of BT.t
   | Value of IndexTerms.t
 
@@ -78,19 +78,19 @@ let pp_basetype_or_value = function
   | Value it -> IndexTerms.pp it
 
 let pp_variable_bindings bindings =
-  (Pp.list (fun (sym, (binding, _)) -> 
+  (Pp.list (fun (sym, (binding, _)) ->
        typ (Sym.pp sym) (pp_basetype_or_value binding)
      ) (SymMap.bindings bindings))
 
 
 let pp_constraints constraints =
-  (Pp.list (fun lc -> 
+  (Pp.list (fun lc ->
        if (!print_level >= 11 || Option.is_none (LC.is_sym_lhs_equality lc))
        then LC.pp lc
        else parens !^"..."
      ) (LCSet.elements constraints))
 
-let pp (ctxt : t) = 
+let pp (ctxt : t) =
   item "computational" (pp_variable_bindings ctxt.computational) ^/^
   item "logical" (pp_variable_bindings ctxt.logical) ^/^
   item "resources" (Pp.list RE.pp (get_rs ctxt)) ^/^
@@ -132,7 +132,7 @@ let add_l_value s value info ctxt = add_l_binding s (Value value) info ctxt
 (* Move s from computational to logical world so we can keep the
    constraints that may be attached to s: s will still be bound
    "logically", but out of scope as far as the Core program goes. *)
-let remove_a s ctxt = 
+let remove_a s ctxt =
   let (binding, info) = SymMap.find s ctxt.computational in
   add_l_binding s binding info { ctxt with computational = SymMap.remove s ctxt.computational }
 
@@ -191,20 +191,20 @@ let clone_history id ids m =
   List.fold_right (fun id2 m -> set_map_history id2 h m) ids m
 
 
-let json (ctxt : t) : Yojson.Safe.t = 
+let json (ctxt : t) : Yojson.Safe.t =
 
   let basetype_or_value = function
     | BaseType bt -> `Variant ("BaseType", Some (BT.json bt))
     | Value it -> `Variant ("Value", Some (IndexTerms.json it))
   in
 
-  let computational  = 
+  let computational  =
     List.map (fun (sym, (binding, _)) ->
         `Assoc [("name", Sym.json sym);
                 ("type", basetype_or_value binding)]
       ) (SymMap.bindings ctxt.computational)
   in
-  let logical = 
+  let logical =
     List.map (fun (sym, (binding, _)) ->
         `Assoc [("name", Sym.json sym);
                 ("type", basetype_or_value binding)]
@@ -212,7 +212,7 @@ let json (ctxt : t) : Yojson.Safe.t =
   in
   let resources = List.map RE.json (get_rs ctxt) in
   let constraints = List.map LC.json (LCSet.elements ctxt.constraints) in
-  let json_record = 
+  let json_record =
     `Assoc [("computational", `List computational);
             ("logical", `List logical);
             ("resources", `List resources);

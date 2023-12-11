@@ -3,7 +3,7 @@
 open Pp
 
 type basetype =
-  | Unit 
+  | Unit
   | Bool
   | Integer
   | Bits of BaseTypes.sign * int
@@ -74,13 +74,13 @@ let json bt : Yojson.Safe.t =
 
 
 let struct_bt = function
-  | Struct tag -> tag 
-  | bt -> Cerb_debug.error 
+  | Struct tag -> tag
+  | bt -> Cerb_debug.error
            ("illtyped index term: not a struct type: " ^ Pp.plain (pp bt))
 
 let record_bt = function
   | Record members -> members
-  | bt -> Cerb_debug.error 
+  | bt -> Cerb_debug.error
            ("illtyped index term: not a member type: " ^ Pp.plain (pp bt))
 
 let is_map_bt = function
@@ -88,8 +88,8 @@ let is_map_bt = function
   | _ -> None
 
 let map_bt = function
-  | Map (abt, rbt) -> (abt, rbt) 
-  | bt -> Cerb_debug.error 
+  | Map (abt, rbt) -> (abt, rbt)
+  | bt -> Cerb_debug.error
            ("illtyped index term: not a map type: " ^ Pp.plain (pp bt))
 
 let is_datatype_bt = function

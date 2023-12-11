@@ -14,7 +14,7 @@ module SymMap = Map.Make(Sym)
 
 
 
-type def_or_uninterp = 
+type def_or_uninterp =
   | Def of IT.t
   | Rec_Def of IT.t
   | Uninterp
@@ -40,15 +40,15 @@ type definition = {
   }
 
 
-let is_recursive def = 
+let is_recursive def =
   match def.definition with
   | Rec_Def _ -> true
   | Def _ -> false
   | Uninterp -> false
 
 
-let alpha_rename_definition def = 
-  let args, subst = 
+let alpha_rename_definition def =
+  let args, subst =
     List.fold_right (fun (s, ls) (args, subst) ->
         let s' = Sym.fresh_same s in
         ((s', ls) :: args, (s, sym_ (s', ls)) :: subst)
@@ -79,23 +79,23 @@ let open_fun def_args def_body args =
 let unroll_once def args =
   match def.definition with
   | Def body
-  | Rec_Def body -> 
+  | Rec_Def body ->
      Some (open_fun def.args body args)
-  | Uninterp -> 
+  | Uninterp ->
      None
 
 
 let try_open_fun def args =
   match def.definition with
-  | Def body -> 
+  | Def body ->
      Some (open_fun def.args body args)
-  | Rec_Def _ -> 
+  | Rec_Def _ ->
      None
   | Uninterp ->
      None
 
 (*
-let try_open_fun_to_term def name args = 
+let try_open_fun_to_term def name args =
   Option.map (fun body ->
       Body.to_term def.return_bt body
     ) (try_open_fun def name args)

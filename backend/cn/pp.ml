@@ -10,7 +10,7 @@ let term_col = match Cerb_util.terminal_size () with
   | _ -> 80 - 1
 
 
-type loc_pp = 
+type loc_pp =
   | Hex
   | Dec
 
@@ -100,12 +100,12 @@ let maybe_close_times_channel () =
 
 
 (* from run_pp *)
-let print channel doc = 
+let print channel doc =
   PPrint.ToChannel.pretty 1.0 term_col channel (doc ^^ hardline);
   flush channel
 
 (* adapting from pipeline.ml *)
-let print_file filename doc = 
+let print_file filename doc =
   let oc = open_out filename in
   print oc doc;
   close_out oc
@@ -118,39 +118,39 @@ let (^^^) = Cerb_pp_prelude.(^^^)
 
 let format_string format str = Cerb_colour.ansi_format format str
 
-let format format string = 
+let format format string =
   let n = String.length string in
   fancystring (format_string format string) n
 
-let uformat format string n = 
+let uformat format string n =
   fancystring (format_string format string) n
 
 
 type alignment = L | R
 
-let pad_ alignment should_width has_width pp = 
+let pad_ alignment should_width has_width pp =
   let diff = should_width - has_width in
-  if diff < 0 then pp else 
+  if diff < 0 then pp else
     match alignment with
     | L -> pp ^^ repeat diff space
     | R -> repeat diff space ^^ pp
 
-let pad alignment width pp = 
+let pad alignment width pp =
   pad_ alignment width (requirement pp) pp
 
 
-let pad_string_ alignment should_width has_width pp = 
+let pad_string_ alignment should_width has_width pp =
   let diff = should_width - has_width in
-  if diff < 0 then pp else 
+  if diff < 0 then pp else
     match alignment with
     | L -> pp ^ String.make diff ' '
     | R -> String.make diff ' ' ^ pp
 
 
-let pad_string alignment width pp = 
+let pad_string alignment width pp =
   pad_string_ alignment width (String.length pp) pp
 
-let list f l = 
+let list f l =
   match l with
   | [] -> !^"(empty)"
   | l -> flow_map (comma ^^ break 1) f l
@@ -158,7 +158,7 @@ let list f l =
 let commas l = list (fun pp -> pp) l
 
 
-let list_filtered f l = 
+let list_filtered f l =
   match List.filter_map f l with
   | [] -> !^"(empty)"
   | l -> flow (comma ^^ break 1) l
@@ -178,26 +178,26 @@ module IntMap = Map.Make(Int)
 
 
 
-let typ n typ = 
+let typ n typ =
   n ^^^ colon ^^^ typ
 
 let infix_arrow x y =
   x ^^^ !^"->" ^^^ y
 
-let item item content = 
+let item item content =
   format [Bold] item ^^ colon ^^ hardline ^^ content
 
-let c_comment pp = 
+let c_comment pp =
   !^"/*" ^^ pp ^^ !^"*/"
 
-let c_app f args = 
+let c_app f args =
   group @@ f ^^ group @@ parens @@ nest 2 @@ flow (break 0 ^^ comma ^^ space) args
 
 let ineq x y = x ^^^ !^"!=" ^^^ y
 
 
 
-let headline a = 
+let headline a =
   (if !print_level >= 2 then hardline else empty) ^^
     format [Bold; Magenta] ("# " ^ a)
 
@@ -205,8 +205,8 @@ let bold a = format [Bold] a
 
 let action a = format [Cyan] ("## " ^ a ^ " ")
 
-let debug l pp = 
-  if !print_level >= l 
+let debug l pp =
+  if !print_level >= l
   then
     let pp1 = Lazy.force pp in
     let pp2 = if ! print_timestamps then begin
@@ -215,7 +215,7 @@ let debug l pp =
     end else pp1 in
     print stderr pp2
 
-let warn_noloc pp = 
+let warn_noloc pp =
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
 let time_f_elapsed f x =
@@ -267,7 +267,7 @@ let time_f_logs (loc : Locations.t) level msg f x =
 
 
 (* stealing some logic from pp_errors *)
-let error (loc : Locations.t) (msg : document) extras = 
+let error (loc : Locations.t) (msg : document) extras =
   let (head, pos) = Locations.head_pos_of_location loc in
   print stderr (format [Bold] head ^^^
                 format [Bold; Red] "error:" ^^^
@@ -277,7 +277,7 @@ let error (loc : Locations.t) (msg : document) extras =
 
 
 (* stealing some logic from pp_errors *)
-let warn (loc : Locations.t) msg = 
+let warn (loc : Locations.t) msg =
   let (head, pos) = Locations.head_pos_of_location loc in
   print stderr (format [Bold] head ^^^
                 format [Bold; Yellow] "warning:" ^^^ msg);
@@ -294,20 +294,20 @@ let warn (loc : Locations.t) msg =
 (* stealing from Cerb_debug *)
 let json_output_channel = ref None
 
-let maybe_open_json_output mfile = 
+let maybe_open_json_output mfile =
   match mfile with
-  | None -> 
+  | None ->
      json_output_channel := None
-  | Some file -> 
+  | Some file ->
      let oc = open_out file in
      json_output_channel := Some oc;
      output_string oc "[\n"
 
-let maybe_close_json_output () = 
+let maybe_close_json_output () =
   match !json_output_channel with
-  | None -> 
+  | None ->
      ()
-  | Some oc -> 
+  | Some oc ->
      output_string oc "\n]";
      json_output_channel := None;
      close_out oc
@@ -325,11 +325,11 @@ let print_json =
 
 
 
-let progress_simple title name = 
+let progress_simple title name =
   let msg = format [Blue] title ^^ colon ^^^ !^name in
   print stdout msg
 
 
-let of_total cur total = 
+let of_total cur total =
   Printf.sprintf "[%d/%d]" cur total
 

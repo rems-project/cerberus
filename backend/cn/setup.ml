@@ -8,7 +8,7 @@ let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
 (* adapting code from backend/driver/main.ml *)
 let cpp_str incl_dirs incl_files =
-  String.concat " " 
+  String.concat " "
     (["cc -std=c11 -E -CC -Werror -nostdinc -undef -D__cerb__";
       "-I " ^ Cerb_runtime.in_runtime "libc/include";
       "-I " ^ Cerb_runtime.in_runtime "libcore";
@@ -33,16 +33,16 @@ let with_cn_keywords str =
     ; "pack_struct"
     ; "unpack_struct"
     ; "have"
-    ; "show" 
-    ; "instantiate" 
-    ] 
+    ; "show"
+    ; "instantiate"
+    ]
   in
   List.fold_left (fun acc kw ->
     acc ^ " -D" ^ kw ^ "=__cerb_" ^ kw
   ) str cn_keywords
 
 
-let conf incl_dirs incl_files astprints = 
+let conf incl_dirs incl_files astprints =
   { debug_level = 0
   ; pprints = []
   ; astprints = astprints

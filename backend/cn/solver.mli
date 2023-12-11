@@ -15,27 +15,27 @@ val add_assumption : solver -> Global.t -> LogicalConstraints.t -> unit
 val set_slow_threshold : float -> unit
 
 
-val provable : 
+val provable :
   loc:Locations.t ->
-  solver:solver -> 
-  global:Global.t -> 
-  assumptions:Context.LCSet.t -> 
+  solver:solver ->
+  global:Global.t ->
+  assumptions:Context.LCSet.t ->
   simp_ctxt:Simplify.simp_ctxt ->
   pointer_facts:IndexTerms.t list ->
-  LogicalConstraints.t -> 
+  LogicalConstraints.t ->
   [> `True | `False ]
 
 
-val model : 
-  unit -> 
+val model :
+  unit ->
   model_with_q
 
 
 
-val eval : 
-  Global.t -> 
-  model -> 
-  IndexTerms.t -> 
+val eval :
+  Global.t ->
+  model ->
+  IndexTerms.t ->
   IndexTerms.t option
 
 

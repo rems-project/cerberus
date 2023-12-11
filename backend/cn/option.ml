@@ -30,13 +30,13 @@ let return (a: 'a): 'a m = Some a
 
 let fail : 'a m = None
 
-let bind (a: 'a m) (f: 'a -> 'b m) : 'b m = 
+let bind (a: 'a m) (f: 'a -> 'b m) : 'b m =
   match a with
-  | Some a -> f a 
+  | Some a -> f a
   | None -> None
 
 
-let equal equality oa oa' = 
+let equal equality oa oa' =
   match oa, oa' with
   | Some a, Some a' -> equality a a'
   | None, None -> true
@@ -71,13 +71,13 @@ let to_list = function
   | Some a -> [a]
   | None -> []
 
-let list (o_xs : ('a option) list) : 'a list = 
+let list (o_xs : ('a option) list) : 'a list =
   List.filter_map (fun o -> o) o_xs
 
 
 module ListM = struct
 
-  let rec mapM f xs = 
+  let rec mapM f xs =
     match xs with
     | [] -> return []
     | x :: xs ->

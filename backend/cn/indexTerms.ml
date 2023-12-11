@@ -25,10 +25,10 @@ let bt = basetype
 let term (IT (t, _)) = t
 
 
-let term_of_sterm : sterm -> typed = 
+let term_of_sterm : sterm -> typed =
   Terms.map_term SurfaceBaseTypes.to_basetype
 
-let sterm_of_term : typed -> sterm = 
+let sterm_of_term : typed -> sterm =
   Terms.map_term SurfaceBaseTypes.of_basetype
 
 
@@ -39,11 +39,11 @@ let pp_with_typf f it = Pp.typ (pp it) (f (bt it))
 let pp_with_typ = pp_with_typf BT.pp
 
 
-let rec bound_by_pattern (Pat (pat_, bt)) = 
+let rec bound_by_pattern (Pat (pat_, bt)) =
   match pat_ with
   | PSym s -> [(s, bt)]
   | PWild -> []
-  | PConstructor (_s, args) -> 
+  | PConstructor (_s, args) ->
      List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
 let rec free_vars_ = function
@@ -92,7 +92,7 @@ let rec free_vars_ = function
           aux (SymSet.union more acc) cases
      in
      aux (free_vars e) cases
-  | Constructor (_s, args) -> 
+  | Constructor (_s, args) ->
      free_vars_list (List.map snd args)
 
 and free_vars (IT (term_, _bt)) =
@@ -146,17 +146,17 @@ let rec fold_ f binders acc = function
   | Let ((nm, t1), t2) ->
     let acc' = fold f binders acc t1 in
     fold f (binders @ [(Pat (PSym nm, basetype t1), Some t1)]) acc' t2
-  | Match (e, cases) -> 
+  | Match (e, cases) ->
      (* TODO: check this is good *)
      let acc' = fold f binders acc e in
      let rec aux acc = function
        | [] -> acc
-       | (pat, body) :: cases -> 
+       | (pat, body) :: cases ->
           let acc' = fold f (binders @ [(pat, Some e)]) acc body in
           aux acc' cases
      in
      aux acc' cases
-  | Constructor (s, args) -> 
+  | Constructor (s, args) ->
      fold_list f binders acc (List.map snd args)
 
 and fold f binders acc (IT (term_, _bt)) =
@@ -176,12 +176,12 @@ let fold_subterms : 'a. ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term
 
 
 
-let is_call (f: Sym.t) (IT (it_, bt)) = 
+let is_call (f: Sym.t) (IT (it_, bt)) =
   match it_ with
   | Apply (f', _) when Sym.equal f f' -> true
   | _ -> false
 
-let is_good (ct : Sctypes.t) (IT (it_, bt)) = 
+let is_good (ct : Sctypes.t) (IT (it_, bt)) =
   match it_ with
   | Good (ct', _) when Sctypes.equal ct ct' -> true
   | _ -> false
@@ -222,13 +222,13 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      | Some after -> after
      | None -> IT (Sym sym, bt)
      end
-  | Const const -> 
+  | Const const ->
      IT (Const const, bt)
   | Unop (uop, it) ->
      IT (Unop (uop, subst su it), bt)
-  | Binop (bop, t1, t2) -> 
+  | Binop (bop, t1, t2) ->
      IT (Binop (bop, subst su t1, subst su t2), bt)
-  | ITE (it,it',it'') -> 
+  | ITE (it,it',it'') ->
      IT (ITE (subst su it, subst su it', subst su it''), bt)
   | EachI ((i1, (s, s_bt), i2), t) ->
      let s, t = suitably_alpha_rename su.relevant (s, s_bt) t in
@@ -261,25 +261,25 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (SizeOf t, bt)
   | OffsetOf (tag, member) ->
      IT (OffsetOf (tag, member), bt)
-  | Aligned t -> 
+  | Aligned t ->
      IT (Aligned {t= subst su t.t; align= subst su t.align}, bt)
-  | Representable (rt, t) -> 
+  | Representable (rt, t) ->
      IT (Representable (rt, subst su t), bt)
-  | Good (rt, t) -> 
+  | Good (rt, t) ->
      IT (Good (rt, subst su t), bt)
   | WrapI (ity, t) ->
      IT (WrapI (ity, subst su t), bt)
-  | Nil bt' -> 
+  | Nil bt' ->
      IT (Nil bt', bt)
-  | Cons (it1,it2) -> 
+  | Cons (it1,it2) ->
      IT (Cons (subst su it1, subst su it2), bt)
-  | Head it -> 
+  | Head it ->
      IT (Head (subst su it), bt)
-  | Tail it -> 
+  | Tail it ->
      IT (Tail (subst su it), bt)
-  | NthList (i, xs, d) -> 
+  | NthList (i, xs, d) ->
      IT (NthList (subst su i, subst su xs, subst su d), bt)
-  | ArrayToList (arr, i, len) -> 
+  | ArrayToList (arr, i, len) ->
      IT (ArrayToList (subst su arr, subst su i, subst su len), bt)
   | MapConst (bt, t) ->
      IT (MapConst (bt, subst su t), bt)
@@ -306,7 +306,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      let cases = List.map (subst_under_pattern su) cases in
      IT (Match (e, cases), bt)
   | Constructor (s, args) ->
-     let args = 
+     let args =
        List.map (fun (id, e) ->
            (id, subst su e)
          ) args
@@ -322,17 +322,17 @@ and suitably_alpha_rename syms (s, bt) body =
   then alpha_rename (s, bt) body
   else (s, body)
 
-and subst_under_pattern su (pat, body) = 
+and subst_under_pattern su (pat, body) =
   let (pat, body) = suitably_alpha_rename_pattern su (pat, body) in
   (pat, subst su body)
 
 
-and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) = 
+and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) =
   match pat_ with
-  | PSym s -> 
+  | PSym s ->
      let (s, body) = suitably_alpha_rename su.relevant (s, bt) body in
      (Pat (PSym s, bt), body)
-  | PWild -> 
+  | PWild ->
      (Pat (PWild, bt), body)
   | PConstructor (s, args) ->
      let body, args =
@@ -519,7 +519,7 @@ let let_ ((nm, x), y) = IT (Let ((nm, x), y), basetype y)
 (*   | _ -> not_ it *)
 
 
-let eachI_ (i1, s, i2) t = 
+let eachI_ (i1, s, i2) t =
   IT (EachI ((i1, (s, BT.Integer), i2), t), BT.Bool)
 (* let existsI_ (i1, s, i2) t = not_ (eachI_ (i1, s, i2) (not_ t)) *)
 
@@ -530,6 +530,7 @@ let sub_ (it, it') = IT (Binop (Sub,it, it'), bt it)
 let mul_ (it, it') =
   assert (BT.equal (bt it) (bt it'));
   IT (Binop (Mul,it, it'), bt it)
+
 let mul_no_smt_ (it, it') = IT (Binop (MulNoSMT,it, it'), bt it)
 let div_ (it, it') = IT (Binop (Div,it, it'), bt it)
 let div_no_smt_ (it, it') = IT (Binop (DivNoSMT,it, it'), bt it)
@@ -678,7 +679,7 @@ let cellPointer_ ~base ~step ~starti ~endi ~p =
 (* list_op *)
 let nil_ ~item_bt = IT (Nil item_bt, BT.List item_bt)
 let cons_ (it, it') = IT (Cons (it, it'), bt it')
-let list_ ~item_bt its = 
+let list_ ~item_bt its =
   let rec aux = function
     | [] -> IT (Nil item_bt, BT.List item_bt)
     | x :: xs -> IT (Cons (x, aux xs), BT.List item_bt)
@@ -690,7 +691,7 @@ let tail_ it = IT (Tail it, bt it)
 let nthList_ (n, it, d) = IT (NthList (n, it, d), bt d)
 let array_to_list_ (arr, i, len) bt = IT (ArrayToList (arr, i, len), bt)
 
-let rec dest_list it = 
+let rec dest_list it =
   match term it with
   | Nil _bt -> Some []
   | Cons (x, xs) -> Option.map (fun ys -> x :: ys) (dest_list xs)
@@ -719,7 +720,7 @@ let representable_ (t, it) =
   IT (Representable (t, it), BT.Bool)
 let good_ (sct, it) =
   IT (Good (sct, it), BT.Bool)
-let wrapI_ (ity, arg) = 
+let wrapI_ (ity, arg) =
   IT (WrapI (ity, arg), Memory.bt_of_sct (Sctypes.Integer ity))
 let alignedI_ ~t ~align =
   assert (BT.equal (bt t) Loc);

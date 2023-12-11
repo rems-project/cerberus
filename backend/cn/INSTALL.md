@@ -12,8 +12,8 @@ via `opam init` after the installation of opam.)
 2. Install the GMP and MPFR libraries, and Python (a dependency of
    Z3). On a Ubuntu system this is done via `sudo apt install libgmp-dev libmpfr-dev python2.7` .
 
-3. Install the `dune` OCaml build system and Lem via 
-  
+3. Install the `dune` OCaml build system and Lem via
+
     ```
     opam install dune lem
     ```
@@ -36,12 +36,12 @@ via `opam init` after the installation of opam.)
 
    ```
    make install
-   ``` 
-   
-   and finally 
-   
+   ```
+
+   and finally
+
    ```
    make install_cn
-   ``` 
-   
+   ```
+
    which installs Cerberus, CN, and dependencies.

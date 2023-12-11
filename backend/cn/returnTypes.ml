@@ -9,7 +9,7 @@ type t = Computational of (Sym.t * BaseTypes.t) * info * LRT.t
 
 
 
-let mComputational (bound, oinfo) t = 
+let mComputational (bound, oinfo) t =
   Computational (bound, oinfo, t)
 
 
@@ -23,7 +23,7 @@ let mComputational (bound, oinfo) t =
 
 let rec subst (substitution: IT.t Subst.t) at =
   match at with
-  | Computational ((name, bt), info, t) -> 
+  | Computational ((name, bt), info, t) ->
      let name, t = LRT.suitably_alpha_rename substitution.relevant (name, bt) t in
      Computational ((name, bt), info, LRT.subst substitution t)
 
@@ -34,8 +34,8 @@ and alpha_rename (s, ls) t =
   let s' = Sym.fresh_same s in
   alpha_rename_ s' (s, ls) t
 
-and suitably_alpha_rename syms (s, ls) t = 
-  if SymSet.mem s syms 
+and suitably_alpha_rename syms (s, ls) t =
+  if SymSet.mem s syms
   then alpha_rename (s, ls) t
   else (s, t)
 
@@ -69,14 +69,14 @@ let bound = function
 
 
 
-let pp_aux rt = 
+let pp_aux rt =
   let open Pp in
   match rt with
   | Computational ((name, bt), oinfo, t) ->
      let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
      (op ^^^ typ (Sym.pp name) (BaseTypes.pp bt) ^^ dot) :: LRT.pp_aux t
 
-let pp rt = 
+let pp rt =
   Pp.flow (Pp.break 1) (pp_aux rt)
 
 
@@ -93,7 +93,7 @@ let json = function
 
 
 
-let alpha_equivalent rt rt' = 
+let alpha_equivalent rt rt' =
   match rt, rt' with
   | Computational ((s, bt), _, t),
     Computational ((s', bt'), _, t') ->

@@ -40,9 +40,9 @@ let clause_has_resource req c =
 let relevant_predicate_clauses global oname req =
   let open Global in
   let open ResourcePredicates in
-  let clauses = 
+  let clauses =
     let defs = SymMap.bindings global.resource_predicates in
-    List.concat_map (fun (nm, def) -> 
+    List.concat_map (fun (nm, def) ->
         match def.clauses with
         | Some clauses -> List.map (fun c -> (nm, c)) clauses
         | None -> []
@@ -71,15 +71,15 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
 
   let evaluate it = Solver.eval ctxt.global model it in
 
-  let mevaluate it = 
+  let mevaluate it =
     match evaluate it with
     | Some v -> IT.pp v
     | None -> parens !^"not evaluated"
   in
 
-  let variables = 
+  let variables =
     let make s ls =
-      {var = Sym.pp s; 
+      {var = Sym.pp s;
        value = mevaluate (sym_ (s, ls))}
     in
     List.map (fun (s, ls) -> make s ls) quantifier_counter_model @
@@ -108,7 +108,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
   end;*)
 
 
-  let resources = 
+  let resources =
     let (same_res, diff_res) = match extras.request with
       | None -> ([], get_rs ctxt)
       | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
@@ -116,7 +116,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
     List.map (res_entry req_cmp true) same_res @ List.map (res_entry req_cmp false) diff_res
   in
 
-  let predicate_hints = 
+  let predicate_hints =
     let predicate_name = match Option.map predicate_name extras.request with
       | Some (PName sym) -> Some sym
       | _ -> None
@@ -132,7 +132,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
         clause = LogicalArgumentTypes.pp IT.pp c.packing_ft
       }
     in
-    List.map doc_clause predicate_clauses 
+    List.map doc_clause predicate_clauses
   in
   let requested = List.map (req_entry None) (Option.to_list extras.request) in
   let pp_with_simp lc = [LC.pp lc; Pp.item "simplified" (LC.pp

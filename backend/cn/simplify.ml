@@ -4,7 +4,7 @@ open IndexTerms
 open Terms
 
 
-module ITPair = struct 
+module ITPair = struct
   type it_pair = IT.t * IT.t
   [@@deriving eq, ord]
   type t = it_pair
@@ -177,7 +177,7 @@ module IndexTerms = struct
     in
     let (IT (the_term_, the_bt)) = the_term in
     match the_term_ with
-    | Sym _ when BT.equal the_bt BT.Unit -> 
+    | Sym _ when BT.equal the_bt BT.Unit ->
        unit_
     | Sym sym ->
        begin match SymMap.find_opt sym simp_ctxt.values with
@@ -195,12 +195,12 @@ module IndexTerms = struct
        | _, _, Some i1, Some i2 ->
           IT.num_lit_ (Z.add i1 i2) the_bt
        | IT (Const (Q q1), _), IT (Const (Q q2), _), _, _ ->
-          IT (Const (Q (Q.add q1 q2)), the_bt) 
+          IT (Const (Q (Q.add q1 q2)), the_bt)
        | a, _, _, Some z when Z.equal z Z.zero ->
           a
        | _, b, Some z, _ when Z.equal z Z.zero ->
           a
-       | IT (Binop (Add,c, IT (Const (Z i1), _)), _), 
+       | IT (Binop (Add,c, IT (Const (Z i1), _)), _),
          IT (Const (Z i2), _), _, _ ->
           add_ (c, z_ (Z.add i1 i2))
        | _, _, _, _ ->
@@ -224,7 +224,7 @@ module IndexTerms = struct
           (* (c + d) - b  when  c = b *)
           d
        | _, _, _, _, _ ->
-          IT (Binop (Sub, a, b), the_bt) 
+          IT (Binop (Sub, a, b), the_bt)
        end
     | Binop (Mul, a, b) ->
        let a = aux a in
@@ -245,19 +245,19 @@ module IndexTerms = struct
        end
     | Binop (Div, a, b) ->
        let a = aux a in
-       let b = aux b in 
+       let b = aux b in
        begin match a, b with
        | IT (Const (Z a), _), IT (Const (Z b), _) ->
             assert (Z.lt Z.zero b);
           z_ (Z.div a b)
-       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) -> 
+       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) ->
           int_ 0
-       | _, IT (Const (Z b), _) when Z.equal b Z.one -> 
+       | _, IT (Const (Z b), _) when Z.equal b Z.one ->
           a
        | IT (Binop (Mul, b', c), _), _ when IT.equal b' b ->
           c
        | _ ->
-          IT (Binop (Div, a, b), the_bt) 
+          IT (Binop (Div, a, b), the_bt)
        end
     | Binop (Exp, a, b) ->
        let a = aux a in
@@ -272,19 +272,19 @@ module IndexTerms = struct
        end
     | Binop (Rem, a, b) ->
        let a = aux a in
-       let b = aux b in 
+       let b = aux b in
        begin match a, b with
        | IT (Const (Z z1), _), IT (Const (Z z2), _) when Z.geq z1 Z.zero && Z.gt z2 Z.zero ->
          IT (Const (Z (Z.rem z1 z2)), the_bt)
-       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) -> 
+       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) ->
           int_ 0
-       | IT (Binop (Mul, IT (Const (Z y), _), _), _), 
+       | IT (Binop (Mul, IT (Const (Z y), _), _), _),
          IT (Const (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
           int_ 0
        | _, IT (Const (Z b), _) when Z.equal b Z.one ->
           int_ 0
        | _ ->
-          IT (Binop (Rem, a, b), the_bt) 
+          IT (Binop (Rem, a, b), the_bt)
        end
     | Binop (Mod, a, b) ->
        let a = aux a in
@@ -294,15 +294,15 @@ module IndexTerms = struct
          num_lit_ (Z.rem a b) the_bt
        | _, _, Some a, _ when Z.equal a (Z.zero) ->
           int_lit_ 0 the_bt
-       | IT (Binop (Mul, IT (Const (Z y), _), _), _), 
+       | IT (Binop (Mul, IT (Const (Z y), _), _), _),
          IT (Const (Z y'), _), _, _ when Z.equal y y' && Z.gt y Z.zero ->
           int_ 0
        | _, _, _, Some b when Z.equal b Z.one ->
           int_lit_ 0 the_bt
        | _ ->
-          IT (Binop (Mod, a, b), the_bt) 
+          IT (Binop (Mod, a, b), the_bt)
        end
-    | Binop (LT, a, b) -> 
+    | Binop (LT, a, b) ->
       let a = aux a in
       let b = aux b in
       let (a, b) = simp_comp_if_int a b in
@@ -314,7 +314,7 @@ module IndexTerms = struct
       | _, _ ->
          IT (Binop (LT, a, b), the_bt)
       end
-    | Binop (LE, a, b) -> 
+    | Binop (LE, a, b) ->
       let a = aux a in
       let b = aux b in
       let (a, b) = simp_comp_if_int a b in
@@ -376,7 +376,7 @@ module IndexTerms = struct
        else
        begin match a, b with
        | IT (Const (Bool false), _), _ ->
-          IT (Const (Bool true), the_bt) 
+          IT (Const (Bool true), the_bt)
        | _, IT (Const (Bool true), _) ->
           IT (Const (Bool true), the_bt)
        | IT (Const (Bool true), _), _ ->
@@ -429,7 +429,7 @@ module IndexTerms = struct
        let is_c t = Option.is_some (IT.is_const t) in
        begin match a, b with
        | _ when IT.equal a b ->
-         IT (Const (Bool true), the_bt) 
+         IT (Const (Bool true), the_bt)
        | IT (Const (Z z1), _), IT (Const (Z z2), _) ->
           bool_ (Z.equal z1 z2)
        | IT (Const (Bits (bits_info1, z1)), _), IT (Const (Bits (bits_info2, z2)), _) ->
@@ -455,7 +455,7 @@ module IndexTerms = struct
           eq_ (a, b)
        end
     | EachI ((i1, (s, s_bt), i2), t) ->
-       let s' = Sym.fresh_same s in 
+       let s' = Sym.fresh_same s in
        let t = IndexTerms.subst (make_subst [(s, sym_ (s', the_bt))]) t in
        let t = aux t in
        IT (EachI ((i1, (s', s_bt), i2), t), the_bt)
@@ -468,9 +468,9 @@ module IndexTerms = struct
        tuple_nth_reduce it n the_bt
     | IT.Struct (tag, members) ->
        begin match members with
-       | (_, IT (StructMember (str, _), _)) :: _ when 
+       | (_, IT (StructMember (str, _), _)) :: _ when
               BT.equal (Struct tag) (IT.bt str) &&
-              List.for_all (function 
+              List.for_all (function
                   | (mem, IT (StructMember (str', mem'), _)) ->
                     Id.equal mem mem' && IT.equal str str'
                   | _ -> false
@@ -478,7 +478,7 @@ module IndexTerms = struct
           ->
            str
        | _ ->
-          let members = 
+          let members =
             List.map (fun (member, it) ->
                 (member, aux it)
               ) members
@@ -487,7 +487,7 @@ module IndexTerms = struct
        end
     | IT.StructMember (s_it, member) ->
        let s_it = aux s_it in
-       let rec make t = 
+       let rec make t =
          match t with
          | IT (Struct (_, members), _) ->
             List.assoc Id.equal member members
@@ -504,7 +504,7 @@ module IndexTerms = struct
        let v = aux v in
        IT (StructUpdate ((t, m), v), the_bt)
     | IT.Record members ->
-       let members = 
+       let members =
          List.map (fun (member, it) ->
              (member, aux it)
            ) members
@@ -567,7 +567,7 @@ module IndexTerms = struct
        IT (Representable (ct, aux t), the_bt)
     | Good (ct, t) ->
        IT (Good (ct, aux t), the_bt)
-    | Aligned a -> 
+    | Aligned a ->
        IT (Aligned {t = aux a.t; align = aux a.align}, the_bt)
     | MapConst (index_bt, t) ->
        let t = aux t in
@@ -580,7 +580,7 @@ module IndexTerms = struct
     | MapGet (map, index) ->
        let map = aux map in
        let index = aux index in
-       let rec make map index = 
+       let rec make map index =
          begin match map with
          | IT (MapDef ((s, abt), body), _) ->
             assert (BT.equal abt (IT.bt index));
@@ -606,7 +606,7 @@ module IndexTerms = struct
        in
        make map index
     | MapDef ((s, abt), body) ->
-       let s' = Sym.fresh_same s in 
+       let s' = Sym.fresh_same s in
        let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
        let body = aux body in
        IT (MapDef ((s', abt), body), the_bt)
@@ -664,7 +664,7 @@ module ResourceTypes = struct
   open ResourceTypes
 
   let simp_predicate_type simp_ctxt (p : predicate_type) = {
-      name = p.name; 
+      name = p.name;
       pointer = simp simp_ctxt p.pointer;
       iargs = List.map (simp simp_ctxt) p.iargs;
     }

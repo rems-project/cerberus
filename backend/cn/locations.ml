@@ -22,28 +22,28 @@ let to_string loc = Cerb_location.location_to_string loc
 let other str = Cerb_location.other str
 
 
-let dirs_to_ignore = 
-  StringSet.of_list 
+let dirs_to_ignore =
+  StringSet.of_list
     (List.map Cerb_runtime.in_runtime
        [ "libc/include"
-       ; "libcore" 
+       ; "libcore"
        ; ("impls/" ^ Setup.impl_name ^ ".impl")
        ]
     )
 
-let good_location (loc : Cerb_location.t) = 
+let good_location (loc : Cerb_location.t) =
   match Cerb_location.get_filename loc, Cerb_location.is_other loc with
   | Some file, _ -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
   | _, Some other -> true
   | None, _ -> false
 
 
-let updateB (loc : t) (loc2 : Cerb_location.t) = 
-  if good_location loc2 then (loc2, true) 
+let updateB (loc : t) (loc2 : Cerb_location.t) =
+  if good_location loc2 then (loc2, true)
   else (loc, false)
 
-let update (loc : t) (loc2 : Cerb_location.t) = 
-  if good_location loc2 then loc2 
+let update (loc : t) (loc2 : Cerb_location.t) =
+  if good_location loc2 then loc2
   else loc
 
 
@@ -51,7 +51,7 @@ let log (locs : path) (loc' : Cerb_location.t) : path =
   if good_location loc' then loc' :: locs else locs
 
 
-let head_pos_of_location = 
+let head_pos_of_location =
   Cerb_location.head_pos_of_location
 
 
@@ -66,20 +66,20 @@ let unpack l = l
  * } *)
 
 
-let json_lexing_position p = 
+let json_lexing_position p =
   let open Lexing in
   `Assoc [("file", `String p.pos_fname);
           ("line", `Int p.pos_lnum);
           ("char", `Int (p.pos_cnum - p.pos_bol))]
 
-let json_raw_loc loc : Yojson.Safe.t = 
+let json_raw_loc loc : Yojson.Safe.t =
   let open Cerb_location in
   let json = match loc with
-    | Loc_unknown -> 
+    | Loc_unknown ->
        `Variant ("Unknown", None)
-    | Loc_other str -> 
+    | Loc_other str ->
        `Variant ("Other", Some (`String str))
-    | Loc_point point -> 
+    | Loc_point point ->
        `Variant ("Point", Some (json_lexing_position point))
       (* start, end, cursor *)
     | Loc_region (startp, endp, cursor) ->
@@ -94,14 +94,14 @@ let json_raw_loc loc : Yojson.Safe.t =
             `Variant ("RegionCursor", Some (`Assoc [ ("cursor_start", json_lexing_position b)
                                                    ; ("cursor_end", json_lexing_position e) ]))
          in
-       let args = 
+       let args =
          [("region_start", startp');
           ("region_end", endp');
           ("region_cursor", cursor')]
        in
        `Variant ("Region", Some (`Assoc args))
     | Loc_regions (starts_ends,cursor) ->
-       let starts_ends' = 
+       let starts_ends' =
          List.map (fun (startp, endp) ->
              let startp' = json_lexing_position startp in
              let endp' = json_lexing_position endp in
@@ -117,7 +117,7 @@ let json_raw_loc loc : Yojson.Safe.t =
             `Variant ("RegionCursor", Some (`Assoc [ ("cursor_start", json_lexing_position b)
                                                    ; ("cursor_end", json_lexing_position e) ]))
        in
-       let args = 
+       let args =
          [("regions", `List starts_ends');
           ("cursor", cursor')]
        in
@@ -129,7 +129,7 @@ let json_loc loc : Yojson.Safe.t =
   json_raw_loc (Cerb_location.to_raw loc)
 
 
-let json_path locs : Yojson.Safe.t = 
+let json_path locs : Yojson.Safe.t =
   let locs_json = List.map json_loc (List.rev locs) in
   `Variant ("path", Some (`List locs_json))
 

@@ -53,11 +53,11 @@ module PP = struct
   let pp_act act =
     Pp_typ.pp_ct act.ct ^^^ Cerb_location.pp_location ~clever:false act.loc
 
-  let dtree_of_act act = 
+  let dtree_of_act act =
     Pp_ast.Dleaf (pp_act act)
 
 
-  let rec dtree_of_object_value (M_OV (_bty, ov)) = 
+  let rec dtree_of_object_value (M_OV (_bty, ov)) =
     match ov with
     | M_OVinteger ival ->
         Dleaf (pp_pure_ctor "OVinteger" ^^^ Impl_mem.pp_integer_value_for_core ival)
@@ -80,7 +80,7 @@ module PP = struct
   (*   | M_LVspecified oval -> *)
   (*       Dnode (pp_pure_ctor "LVspecified", [dtree_of_object_value oval]) *)
 
-  and dtree_of_value (M_V (_bty, v)) = 
+  and dtree_of_value (M_V (_bty, v)) =
     match v with
     | M_Vobject oval ->
         Dnode (pp_pure_ctor "Vobject", [dtree_of_object_value oval])
@@ -118,7 +118,7 @@ module PP = struct
     let rec self (M_Pexpr (loc, annot, _, pexpr_)) =
 
       let pp_ctor str =
-        pp_pure_ctor str ^^^ 
+        pp_pure_ctor str ^^^
           Cerb_location.pp_location ~clever:false loc
       in
 
@@ -257,7 +257,7 @@ module PP = struct
   let rec dtree_of_expr ((M_Expr (loc, annot, _ty, expr_)) as expr) =
 
       let pp_ctor str =
-        pp_eff_ctor str ^^^ 
+        pp_eff_ctor str ^^^
           Cerb_location.pp_location ~clever:false loc
       in
 
@@ -413,13 +413,13 @@ module PP = struct
 
   let dtree_of_label l def =
     match def with
-    | M_Return (loc) -> 
+    | M_Return (loc) ->
        (Dleaf (!^"return" ^^^ Cerb_location.pp_location ~clever:false loc))
     | M_Label (loc, args_and_body, _, _) ->
        Dnode (pp_symbol l ^^^ Cerb_location.pp_location ~clever:false loc
              , [dtree_of_mu_arguments dtree_of_expr args_and_body])
 
-  let dtrees_of_labels labels = 
+  let dtrees_of_labels labels =
     Pmap.fold (fun l def acc ->
         acc @ [dtree_of_label l def]
       ) labels []

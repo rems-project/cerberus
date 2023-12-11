@@ -32,7 +32,7 @@ type cn_load = {ct : Sctypes.t; pointer : IndexTerms.t}
 
 
 
-type cn_prog = 
+type cn_prog =
   | M_CN_let of Loc.t * (Sym.t * cn_load) * cn_prog
   | M_CN_statement of Loc.t * cn_statement
 
@@ -40,8 +40,8 @@ type cn_prog =
 let rec subst substitution = function
   | M_CN_let (loc, (name, {ct; pointer}), prog) ->
      let pointer = IT.subst substitution pointer in
-     let name, prog = 
-       suitably_alpha_rename substitution.relevant 
+     let name, prog =
+       suitably_alpha_rename substitution.relevant
          (name, Memory.bt_of_sct ct) prog
      in
      M_CN_let (loc, (name, {ct; pointer}), subst substitution prog)
@@ -99,7 +99,7 @@ let dtree_of_to_instantiate = function
 
 let dtree_of_to_extract = function
   | E_Everything -> Dleaf !^"[CN]everything"
-  | E_Pred pred -> 
+  | E_Pred pred ->
      let pred = match pred with
      | CN_owned oct -> CN_owned (Option.map Sctypes.to_ctype oct)
      | CN_block ct -> CN_block (Sctypes.to_ctype ct)
@@ -137,7 +137,7 @@ let dtree_of_cn_statement = function
 let rec dtree = function
   | M_CN_let (_loc, (s, load), prog) ->
      Dnode (pp_ctor "LetLoad", [
-           Dleaf (Sym.pp s); 
+           Dleaf (Sym.pp s);
            IT.dtree load.pointer;
            Dleaf (Sctypes.pp load.ct);
            dtree prog])

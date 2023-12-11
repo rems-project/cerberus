@@ -16,7 +16,7 @@ open Pack
 
 
 
-  
+
 
 let unpack_def global name args =
     Option.bind (Global.get_logical_function_def global name)
@@ -91,9 +91,9 @@ module General = struct
     | Many of many
 
   let pp_case = function
-    | One {one_index;value} -> 
+    | One {one_index;value} ->
        !^"one" ^^ parens (IT.pp one_index ^^ colon ^^^ IT.pp value)
-    | Many {many_guard;value} -> 
+    | Many {many_guard;value} ->
        !^"many" ^^ parens (IT.pp many_guard ^^ colon ^^^ IT.pp value)
 
   type cases = C of case list
@@ -108,13 +108,13 @@ module General = struct
           map_set_ m (one_index, value)
         ) base_array ones
     in
-    let ones, manys = 
+    let ones, manys =
       List.partition_map (function One c -> Left c | Many c -> Right c) cases in
-    let@ base_value = 
+    let@ base_value =
       match manys, item_bt with
-      | [{many_guard = _; value}], _ -> 
+      | [{many_guard = _; value}], _ ->
           return value
-      | [], _ 
+      | [], _
       | _, BT.Unit ->
           return (default_ (BT.Map (a_bt, item_bt)))
       | many, _ -> fail (fun ctxt -> {loc; msg = Generic (!^ "Merging multiple arrays with non-void values:" ^^^ Pp.list IT.pp
@@ -173,7 +173,7 @@ module General = struct
        let@ provable = provable loc in
        let res = provable c in
        begin match res with
-       | `True -> 
+       | `True ->
            return (ftyp, changed_or_deleted)
        | `False ->
            let@ model = model () in
@@ -194,7 +194,7 @@ module General = struct
                       requests = snd uiinfo; ctxt; model; trace}}
                 )
        end
-    | I rt -> 
+    | I rt ->
        return (ftyp, changed_or_deleted)
     end
 
@@ -213,13 +213,13 @@ module General = struct
        let@ provable = provable loc in
        let@ global = get_global () in
        let@ simp_ctxt = simp_ctxt () in
-       let needed = true in 
+       let needed = true in
        let resource_scan re ((needed : bool), oargs) =
              let continue = (Unchanged, (needed, oargs)) in
              if not needed then continue else
              match re with
              | (P p', p'_oarg) when RET.subsumed requested.name p'.name ->
-                let pmatch = 
+                let pmatch =
                   eq_ ((pointerToIntegerCast_ requested.pointer), (pointerToIntegerCast_ p'.pointer))
                   :: List.map2 eq__ requested.iargs p'.iargs
                 in
@@ -270,10 +270,10 @@ module General = struct
        Pp.debug 9 (lazy (Pp.item "checking resource remainder" (IT.pp (bool_ needed))));
        let@ res = begin match needed with
        | false ->
-          let r = (({ 
+          let r = (({
               name = requested.name;
               pointer = requested.pointer;
-              iargs = requested.iargs; 
+              iargs = requested.iargs;
             } : predicate_type), oarg)
           in
           (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
@@ -291,9 +291,9 @@ module General = struct
        return res
 
 
-       
 
-    
+
+
 
   and qpredicate_request_aux loc uiinfo (requested : RET.qpredicate_type) =
        debug 7 (lazy (item "qpredicate request" (RET.pp (Q requested))));
@@ -302,10 +302,10 @@ module General = struct
        let@ global = get_global () in
        let needed = requested.permission in
        let step = Simplify.IndexTerms.simp simp_ctxt requested.step in
-       let@ () = 
+       let@ () =
            if Option.is_some (IT.is_const step) then return ()
            else fail (fun _ -> {loc; msg = Generic (!^ "cannot simplify iter-step to constant:"
-               ^^^ IT.pp requested.step ^^ colon ^^^ IT.pp step)}) 
+               ^^^ IT.pp requested.step ^^ colon ^^^ IT.pp step)})
        in
        let@ ((needed, oarg), rw_time) =
          map_and_fold_resources loc (fun re (needed, oarg) ->
@@ -313,7 +313,7 @@ module General = struct
              assert (RET.steps_constant (fst re));
              if is_false needed then continue else
              match re with
-             | (Q p', O p'_oarg) when subsumed requested.name p'.name 
+             | (Q p', O p'_oarg) when subsumed requested.name p'.name
                          && IT.equal step p'.step ->
                 let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
@@ -325,7 +325,7 @@ module General = struct
                    let needed' = and_ [needed; not_ (and_ [iarg_match; p'.permission])] in
                    let permission' = and_ [p'.permission; not_ (and_ [iarg_match; needed])] in
                    let oarg = add_case (Many {many_guard = took; value = p'_oarg}) oarg in
-                   Changed (Q {p' with permission = permission'}, O p'_oarg), 
+                   Changed (Q {p' with permission = permission'}, O p'_oarg),
                    (Simplify.IndexTerms.simp simp_ctxt needed', oarg)
                 | `False ->
                    let model = Solver.model () in
@@ -337,7 +337,7 @@ module General = struct
                 continue
            ) (needed, C [])
        in
-       let@ needed, oarg = 
+       let@ needed, oarg =
          let@ movable_indices = get_movable_indices () in
          ListM.fold_rightM (fun (predicate_name, index) (needed, oarg) ->
              let continue = return (needed, oarg) in
@@ -347,8 +347,8 @@ module General = struct
                let needed_at_index = (IT.subst su needed) in
                match provable (LC.t_ needed_at_index) with
                | `False -> continue
-               | `True -> 
-                   let@ o_re_index = 
+               | `True ->
+                   let@ o_re_index =
                      predicate_request loc uiinfo
                        { name = requested.name;
                          pointer = pointer_offset_ (requested.pointer,
@@ -364,7 +364,7 @@ module General = struct
                       let needed' = and_ [needed; ne__ (sym_ requested.q) index] in
                       return (needed', oarg)
              else continue
-            
+
            ) movable_indices (needed, oarg)
        in
        let nothing_more_needed = forall_ requested.q (not_ needed) in
@@ -378,21 +378,21 @@ module General = struct
          return None
        end
 
-  and qpredicate_request loc uiinfo (requested : RET.qpredicate_type) = 
+  and qpredicate_request loc uiinfo (requested : RET.qpredicate_type) =
     let@ o_oarg = qpredicate_request_aux loc uiinfo requested in
     let@ oarg_item_bt = WellTyped.oarg_bt_of_pred loc requested.name in
     match o_oarg with
     | None -> return None
     | Some (oarg, rw_time) ->
        let@ oarg = cases_to_map loc uiinfo (snd requested.q) oarg_item_bt oarg in
-       let r = { 
+       let r = {
            name = requested.name;
            pointer = requested.pointer;
            q = requested.q;
            step = requested.step;
            permission = requested.permission;
-           iargs = requested.iargs; 
-         } 
+           iargs = requested.iargs;
+         }
        in
        return (Some ((r, O oarg), rw_time))
 
@@ -402,11 +402,11 @@ module General = struct
        the resources present, rather than those that remain after some
        arguments are claimed *)
     let@ original_resources = all_resources_tagged () in
-    let rec loop ftyp rw_time = 
+    let rec loop ftyp rw_time =
       match ftyp with
       | LAT.I rt -> return (rt, rw_time)
       | _ ->
-        let@ ftyp, rw_time = 
+        let@ ftyp, rw_time =
           parametric_ftyp_args_request_step
             resource_request IT.subst loc
             uiinfo original_resources ftyp rw_time
@@ -422,14 +422,14 @@ module General = struct
        return (Option.map (fun ((p, o), changed_or_deleted) -> ((P p, o), changed_or_deleted)) result)
     | Q request ->
        let@ result = qpredicate_request loc uiinfo request in
-       return (Option.map (fun ((q, o), changed_or_deleted) -> ((Q q, o), changed_or_deleted)) result)  
+       return (Option.map (fun ((q, o), changed_or_deleted) -> ((Q q, o), changed_or_deleted)) result)
 
 
 
   (* I don't know if we need the rw_time in check.ml? *)
-  let ftyp_args_request_step rt_subst loc situation original_resources ftyp = 
+  let ftyp_args_request_step rt_subst loc situation original_resources ftyp =
     let@ rt, _rw_time =
-      parametric_ftyp_args_request_step resource_request rt_subst loc 
+      parametric_ftyp_args_request_step resource_request rt_subst loc
         situation original_resources ftyp []
     in
     return rt
@@ -446,7 +446,7 @@ module Special = struct
         {loc; msg})
 
 
-  let predicate_request loc situation (request, oinfo) = 
+  let predicate_request loc situation (request, oinfo) =
     let requests = [TypeErrors.{resource = P request;
         loc = Option.map fst oinfo; reason = Option.map snd oinfo}] in
     let uiinfo = (situation, requests) in
@@ -456,7 +456,7 @@ module Special = struct
     | None -> fail_missing_resource loc uiinfo
 
 
-  let qpredicate_request loc situation (request, oinfo) = 
+  let qpredicate_request loc situation (request, oinfo) =
     let requests = [TypeErrors.{resource = Q request;
         loc = Option.map fst oinfo; reason = Option.map snd oinfo}] in
     let uiinfo = (situation, requests) in

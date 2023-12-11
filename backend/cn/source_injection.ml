@@ -25,7 +25,7 @@ type state = {
 
 
 let ident_of_line str =
-  let rec aux i = 
+  let rec aux i =
     match String.get str i with
       | ' ' | '\t' ->
           aux (i+1)
@@ -132,7 +132,7 @@ let inject st inj =
             ""
           else
             "\n" ^ indent ^ "return __cn_ret;"
-          end 
+          end
         end
   end in
   fst (move_to ~print:false st inj.end_pos)
@@ -162,7 +162,7 @@ let inject_all oc filename xs =
        aux ()
       (* | None -> *)
     | exception End_of_file ->
-       st 
+       st
   in
   aux ()
 
@@ -209,7 +209,7 @@ let posOf_stmt stmt =
   Pos.of_location loc
 
 let (let*) = Result.bind
-let rec mapM f xs = 
+let rec mapM f xs =
   match xs with
   | [] -> Ok []
   | x :: xs ->

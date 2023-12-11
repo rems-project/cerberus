@@ -39,24 +39,24 @@ type state_report = {
 
 
 type column = {
-    classes : string list; 
-    content : string; 
+    classes : string list;
+    content : string;
     colspan : int
   }
 type row = {
     header : bool;
-    classes : string list; 
+    classes : string list;
     columns : column list
   }
 
 type p = {text : string}
 
 type table = {
-    rows : row list; 
+    rows : row list;
     column_info : string list
   }
 
-type element = 
+type element =
   | P of p
   | Table of table
 
@@ -70,28 +70,28 @@ let classes = function
 
 let column header {classes = cs; content; colspan} =
   let tag = if header then "th" else "td" in
-  "<"^tag^" "^classes cs^" colspan=\"" ^ string_of_int colspan ^ "\">" ^ 
-    content ^ 
+  "<"^tag^" "^classes cs^" colspan=\"" ^ string_of_int colspan ^ "\">" ^
+    content ^
   "</"^tag^">"
 
 let row {header; classes = cs; columns} =
-  let content = 
-    "<tr "^classes cs^">" ^ 
-      String.concat "" (List.map (column header) columns) ^ 
+  let content =
+    "<tr "^classes cs^">" ^
+      String.concat "" (List.map (column header) columns) ^
     "</tr>"
   in
   if header then "<thead>"^content^"</thead>" else content
 
-let column_info column_class = 
+let column_info column_class =
   "<col class = \""^column_class^"\">"
 
-let table {rows; column_info = ci} = 
-  "<table>" ^ 
-    String.concat "" (List.map row rows) ^ 
+let table {rows; column_info = ci} =
+  "<table>" ^
+    String.concat "" (List.map row rows) ^
   "</table>"
 
-let p {text} = 
-  "<p>" ^ 
+let p {text} =
+  "<p>" ^
     text ^
   "</p>"
 
@@ -100,11 +100,11 @@ let element = function
   | Table tablecontent -> table tablecontent
 
 let body {elements} =
-  "<body>" ^ 
+  "<body>" ^
     String.concat "" (List.map element elements) ^
   "</body>"
 
-let head {style} = 
+let head {style} =
   "<head>" ^
     "<style>" ^
       style ^
@@ -113,13 +113,13 @@ let head {style} =
 
 
 let html {head = h; body = b} =
-  "<html>" ^ 
+  "<html>" ^
     head h ^
     body b ^
   "</html>"
 
 
-let to_html report = 
+let to_html report =
 
   let sdoc doc = Pp.plain doc in
 
@@ -143,7 +143,7 @@ let to_html report =
   let variable_entry {var; value} =
     { header = false;
       classes = ["variable_entry"];
-      columns = [ 
+      columns = [
           { classes = ["expression"]; content = sdoc var; colspan = 1 };
           { classes = ["value"]; content = sdoc value; colspan = 2 };
         ]
@@ -174,7 +174,7 @@ let to_html report =
   let full_row_entry nm doc =
     { header = false;
       classes = [nm ^ "_entry"];
-      columns = [ 
+      columns = [
           { classes = [nm]; content = sdoc doc; colspan = 3 };
         ]
     }
@@ -183,23 +183,23 @@ let to_html report =
   let constraint_entry = full_row_entry "constraint" in
   let location_entry = full_row_entry "location" in
 
-  let header hds = 
-    let columns = 
+  let header hds =
+    let columns =
       List.map (fun (name, colspan) ->
           {classes = [];
-           content = name; 
+           content = name;
            colspan = colspan}
         ) hds
     in
-    { header = true; 
-      columns; 
-      classes = ["table_header"]} 
+    { header = true;
+      columns;
+      classes = ["table_header"]}
   in
 
   let opt_header xs hds = if List.length xs = 0
     then [] else [header hds] in
 
-  let table = 
+  let table =
     { column_info = ["column1"; "column2"; "column3"];
       rows = (
         (* header [("pointer",1); ("addr",1); ("state",1)] :: *)
@@ -223,6 +223,6 @@ let to_html report =
 
   { head = {style = Style.style};
     body = {elements = [Table table]} }
-  
+
 
 let print_report report = html (to_html report)

@@ -149,9 +149,9 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     | Const const ->
        begin match const with
        | Z i -> !^(Z.to_string i)
-       | Bits ((sign,n), v) -> 
-         !^(Z.to_string v 
-         ^ (match sign with Unsigned -> "u" | Signed -> "i") 
+       | Bits ((sign,n), v) ->
+         !^(Z.to_string v
+         ^ (match sign with Unsigned -> "u" | Signed -> "i")
          ^ string_of_int n)
        | Q q -> !^(Q.to_string q)
        | Pointer { alloc_id=id; addr } ->

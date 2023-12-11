@@ -7,7 +7,7 @@ module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 
 
-type 'i t = 
+type 'i t =
   | Define of (Sym.t * IT.t) * info * 'i t
   | Resource of (Sym.t * (RET.t * BT.t)) * info * 'i t
   | Constraint of LC.t * info * 'i t
@@ -30,33 +30,33 @@ let rec subst i_subst =
        let it = IT.subst substitution it in
        let name, t = suitably_alpha_rename i_subst substitution.relevant (name, IT.bt it) t in
        Define ((name, it), info, aux substitution t)
-    | Resource ((name, (re, bt)), info, t) -> 
+    | Resource ((name, (re, bt)), info, t) ->
        let re = RET.subst substitution re in
        let name, t = suitably_alpha_rename i_subst substitution.relevant (name, bt) t in
        let t = aux substitution t in
        Resource ((name, (re, bt)), info, t)
-    | Constraint (lc, info, t) -> 
+    | Constraint (lc, info, t) ->
        let lc = LC.subst substitution lc in
        let t = aux substitution t in
        Constraint (lc, info, t)
-    | I i -> 
+    | I i ->
        let i = i_subst substitution i in
        I i
   in
   aux
 
-and alpha_rename i_subst (s, ls) t = 
+and alpha_rename i_subst (s, ls) t =
   let s' = Sym.fresh_same s in
   (s', subst i_subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
 
-and suitably_alpha_rename i_subst syms (s, ls) t = 
-  if SymSet.mem s syms 
+and suitably_alpha_rename i_subst syms (s, ls) t =
+  if SymSet.mem s syms
   then alpha_rename i_subst (s, ls) t
   else (s, t)
 
 
 
-let simp i_subst simp_i simp_it simp_lc simp_re = 
+let simp i_subst simp_i simp_it simp_lc simp_re =
   let rec aux = function
     | Define ((s, it), info, t) ->
        let it = simp_it it in
@@ -86,11 +86,11 @@ let rec pp_aux i_pp = function
   | Constraint (lc, _info, t) ->
      let op = equals ^^ rangle () in
      group (LC.pp lc ^^^ op) :: pp_aux i_pp t
-  | I i -> 
+  | I i ->
      [i_pp i]
 
 
-let pp i_pp ft = 
+let pp i_pp ft =
   flow (break 1) (pp_aux i_pp ft)
 
 
@@ -123,7 +123,7 @@ let alpha_unique ss =
   f ss
 
 
-let binders i_binders i_subst = 
+let binders i_binders i_subst =
   let rec aux = function
     | Define ((s, it), _, t) ->
        let (s, t) = alpha_rename i_subst (s, IT.bt it) t in
@@ -140,24 +140,24 @@ let binders i_binders i_subst =
 
 
 
-let rec of_lrt (lrt : LRT.t) (rest : 'i t) : 'i t = 
+let rec of_lrt (lrt : LRT.t) (rest : 'i t) : 'i t =
   match lrt with
-  | LRT.I -> 
+  | LRT.I ->
      rest
   | LRT.Define ((name, it), info, args) ->
      Define ((name, it), info, of_lrt args rest)
-  | LRT.Resource ((name, t), info, args) -> 
+  | LRT.Resource ((name, t), info, args) ->
      Resource ((name, t), info, of_lrt args rest)
-  | LRT.Constraint (t, info, args) -> 
+  | LRT.Constraint (t, info, args) ->
      Constraint (t, info, of_lrt args rest)
 
 let rec map (f : 'i -> 'j) (at : 'i t) : 'j t =
   match at with
   | Define (bound, info, at) ->
      Define (bound, info, map f at)
-  | Resource (bound, info, at) -> 
+  | Resource (bound, info, at) ->
      Resource (bound, info, map f at)
-  | Constraint (lc, info, at) -> 
+  | Constraint (lc, info, at) ->
      Constraint (lc, info, map f at)
   | I i ->
      I (f i)
@@ -168,11 +168,11 @@ let rec r_resource_requests r =
   match r with
   | Define (_, _, t) ->
      r_resource_requests t
-  | Resource (resource, info, t) -> 
+  | Resource (resource, info, t) ->
      resource :: r_resource_requests t
   | Constraint (_, _, t) ->
      r_resource_requests t
-  | I _ -> 
+  | I _ ->
      []
 
 
@@ -196,7 +196,7 @@ let rec has_resource (f : 'a -> bool) (at : 'a t) =
 open Cerb_frontend.Pp_ast
 
 
-let dtree dtree_i = 
+let dtree dtree_i =
   let rec aux = function
   | Define ((s, it), _, t) ->
      Dnode (pp_ctor "Define", [Dleaf (Sym.pp s); IT.dtree it; aux t])

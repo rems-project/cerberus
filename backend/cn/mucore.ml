@@ -12,7 +12,7 @@ type loc = Loc.t
 
 
 
-type trusted = 
+type trusted =
   | Trusted of Cerb_location.t
   | Checked
 
@@ -40,7 +40,7 @@ end
 
 type symbol = Symbol.sym
 
-type act = { 
+type act = {
     loc: loc;
     annot: Annot.annot list;
     (* type_annot : 'TY; *)
@@ -59,7 +59,7 @@ type 'TY mu_object_value_ =  (* C object values *)
  | M_OVstruct of symbol * (Symbol.identifier * T.ct * Impl_mem.mem_value) list (* C struct value *)
  | M_OVunion of symbol * Symbol.identifier * Impl_mem.mem_value (* C union value *)
 
-and 'TY mu_object_value = 
+and 'TY mu_object_value =
  | M_OV of 'TY * 'TY mu_object_value_
 
 
@@ -95,11 +95,11 @@ type mu_ctor =  (* data constructors *)
   * | M_Cfvfromint (\* cast integer to floating value *\)
   * | M_Civfromfloat (\* cast floating to integer value *\) *)
 
-type 'TY mu_pattern_ = 
+type 'TY mu_pattern_ =
  | M_CaseBase of (Symbol.sym option * T.cbt)
  | M_CaseCtor of mu_ctor * 'TY mu_pattern list
 
-and 'TY mu_pattern = 
+and 'TY mu_pattern =
  | M_Pattern of loc * annot list * 'TY * 'TY mu_pattern_
 
 type mu_function = (* some functions that persist into mucore, not just (infix) binops *)
@@ -167,14 +167,14 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
 
 
 
-and 'TY mu_pexpr = 
+and 'TY mu_pexpr =
  | M_Pexpr of loc * annot list * 'TY * ('TY mu_pexpr_)
 
 let loc_of_pexpr (M_Pexpr (loc, _, _, _)) = loc
 
 
 
-type m_kill_kind = 
+type m_kill_kind =
   | M_Dynamic
   | M_Static of T.ct
 
@@ -195,7 +195,7 @@ type 'TY mu_action_ =  (* memory actions *)
  | M_LinuxRMW of act * 'TY mu_pexpr * 'TY mu_pexpr * Linux.linux_memory_order
 
 
-type 'TY mu_action = 
+type 'TY mu_action =
  | M_Action of Cerb_location.t * ('TY mu_action_)
 
 
@@ -255,7 +255,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_CN_progs of ((Sym.t, Ctype.ctype) Cn.cn_statement) list * Cnprog.cn_prog list
 
 
-and 'TY mu_expr = 
+and 'TY mu_expr =
  | M_Expr of loc * annot list * 'TY * ('TY mu_expr_)
 
 let loc_of_expr (M_Expr (loc, _, _, _)) = loc
@@ -267,13 +267,13 @@ let loc_of_expr (M_Expr (loc, _, _, _)) = loc
 
 type info = Locations.info
 
-type 'i mu_arguments_l = 
+type 'i mu_arguments_l =
   | M_Define of (Sym.t * IndexTerms.t) * info * 'i mu_arguments_l
   | M_Resource of (Sym.t * (ResourceTypes.t * BaseTypes.t)) * info * 'i mu_arguments_l
   | M_Constraint of LogicalConstraints.t * info * 'i mu_arguments_l
   | M_I of 'i
 
-let dtree_of_mu_arguments_l dtree_i = 
+let dtree_of_mu_arguments_l dtree_i =
   let rec aux = function
   | M_Define ((s, it), _, t) ->
      Dnode (pp_ctor "Define", [Dleaf (Sym.pp s); IT.dtree it; aux t])
@@ -287,16 +287,16 @@ let dtree_of_mu_arguments_l dtree_i =
   aux
 
 
-type 'i mu_arguments = 
+type 'i mu_arguments =
   | M_Computational of (Sym.t * T.bt) * info * 'i mu_arguments
   | M_L of 'i mu_arguments_l
 
 
-let dtree_of_mu_arguments dtree_i = 
+let dtree_of_mu_arguments dtree_i =
   let rec aux = function
   | M_Computational ((s, bt), _, lat) ->
      Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); aux lat])
-  | M_L l -> 
+  | M_L l ->
      dtree_of_mu_arguments_l dtree_i l
   in
   aux
@@ -451,22 +451,22 @@ let evaluate_fun mu_fun args =
 type parse_ast_label_spec =
   { label_spec: (Sym.t, Ctype.ctype) Cn.cn_condition list }
 
-type 'TY mu_label_def = 
+type 'TY mu_label_def =
   | M_Return of loc
-  | M_Label of loc * ('TY mu_expr) mu_arguments * annot list * 
+  | M_Label of loc * ('TY mu_expr) mu_arguments * annot list *
                  (* for generating runtime assertions *)
                  parse_ast_label_spec
 
 let dtree_of_label_def = function
-  | M_Return _ -> 
+  | M_Return _ ->
      Dleaf !^"return label"
   | M_Label (_loc, args_and_body, _, _) ->
      dtree_of_mu_arguments (fun body ->
          Dleaf !^"(body)"
        ) args_and_body
-  
 
-type 'TY mu_label_defs = 
+
+type 'TY mu_label_defs =
   (symbol, ('TY mu_label_def)) Pmap.map
 
 
@@ -490,14 +490,14 @@ type parse_ast_function_specification =
 
 type 'TY mu_fun_map_decl =
   (* | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr *)
-  | M_Proc of Cerb_location.t * 'TY mu_proc_args_and_body * trusted * 
+  | M_Proc of Cerb_location.t * 'TY mu_proc_args_and_body * trusted *
                 parse_ast_function_specification
       (* recording the desugared parse ast, for generating runtime checks *)
-                
+
   | M_ProcDecl of Cerb_location.t * T.ft option
   (* | M_BuiltinDecl of Cerb_location.t * T.bt * T.bt list *)
 
-type 'TY mu_fun_map = 
+type 'TY mu_fun_map =
   (symbol, 'TY mu_fun_map_decl) Pmap.map
 
 
@@ -508,7 +508,7 @@ type 'TY mu_globs =
   | M_GlobalDef of T.ct * 'TY mu_expr
   | M_GlobalDecl of T.ct
 
-type 'TY mu_globs_map = 
+type 'TY mu_globs_map =
   (symbol, 'TY mu_globs) Pmap.map
 
 
@@ -516,13 +516,13 @@ type mu_tag_definition =
   | M_StructDef of T.st
   | M_UnionDef of T.ut
 
-type mu_tag_definitions = 
+type mu_tag_definitions =
   (Symbol.sym, mu_tag_definition) Pmap.map
 
-type 'TY mu_globs_list = 
+type 'TY mu_globs_list =
   (symbol * 'TY mu_globs) list
 
-type mu_datatype = 
+type mu_datatype =
   { loc : Loc.t;
     cases : (Sym.t * (Id.t * T.bt) list) list }
 

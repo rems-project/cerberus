@@ -61,15 +61,15 @@ val res_history : int -> (Context.resource_history) m
 val begin_trace_of_step : 'a Trace.opt_pat -> 'a Mucore.mu_expr -> (unit -> (unit) m) m
 val begin_trace_of_pure_step : 'a Trace.opt_pat -> 'a Mucore.mu_pexpr -> (unit -> (unit) m) m
 
-type changed = 
+type changed =
   | Deleted
   | Unchanged
   | Changed of Resources.t
 
-val map_and_fold_resources : 
+val map_and_fold_resources :
   Locations.t ->
-  (Resources.t -> 'acc -> changed * 'acc) -> 
-  'acc -> 
+  (Resources.t -> 'acc -> changed * 'acc) ->
+  'acc ->
   ('acc * int list) m
 
 val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl) m
@@ -112,7 +112,7 @@ val embed_resultat : 'a Resultat.t -> 'a m
 val ensure_logical_sort: Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
 val ensure_base_type: Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
 
-val make_return_record: 
+val make_return_record:
     Locations.t ->
     string ->
     BaseTypes.member_types ->
@@ -122,8 +122,8 @@ val bind_logical_return:
     Locations.t ->
     IndexTerms.t list ->
     LogicalReturnTypes.t ->
-    unit m    
-    
+    unit m
+
 
 val bind_return:
     Locations.t ->

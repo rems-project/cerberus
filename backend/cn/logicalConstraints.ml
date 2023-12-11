@@ -4,7 +4,7 @@ module SymSet = Set.Make(Sym)
 open Pp
 
 
-type logical_constraint = 
+type logical_constraint =
   | T of IT.t
   | Forall of (Sym.t * BT.t) * IT.t
 [@@deriving eq, ord]
@@ -17,32 +17,32 @@ let compare = compare_logical_constraint
 
 
 let pp = function
-  | T it -> 
+  | T it ->
      IT.pp it
   | Forall ((s, bt), it) ->
      Pp.c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ IT.pp it
 
-let json c : Yojson.Safe.t = 
+let json c : Yojson.Safe.t =
   `String (Pp.plain (pp c))
 
 
 
-let subst su c = 
+let subst su c =
   match c with
-  | T it -> 
+  | T it ->
      T (IT.subst su it)
   | Forall ((s, bt), body) ->
      let s, body = IT.suitably_alpha_rename su.relevant (s, bt) body in
      Forall ((s, bt), IT.subst su body)
 
-let subst_ su c = 
+let subst_ su c =
   subst (IT.make_subst su) c
 
 
 let free_vars = function
-  | T c -> 
+  | T c ->
      IT.free_vars c
-  | Forall ((s,_), body) -> 
+  | Forall ((s,_), body) ->
      SymSet.remove s (IT.free_vars body)
 
 
@@ -95,7 +95,7 @@ let is_equality = function
      | IT (Unop (Not, IT (Binop (EQ,a, b), _)), _) -> Some ((a, b), false)
      | _ -> None
      end
-  | _ -> 
+  | _ ->
      None
 
 let equates_to it2 = function
@@ -105,12 +105,12 @@ let equates_to it2 = function
      | IT (Binop (EQ,a, b), _) when IT.equal b it2 -> Some a
      | _ -> None
      end
-  | _ -> 
+  | _ ->
      None
 
 
 
-let dtree = 
+let dtree =
   let open Cerb_frontend.Pp_ast in
   function
   | T it -> Dnode (pp_ctor "T", [IT.dtree it])

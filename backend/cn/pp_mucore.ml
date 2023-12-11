@@ -102,15 +102,15 @@ module Make (Config: CONFIG) = struct
   let pp_raw_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string a))
   let pp_number  n = !^ (ansi_format [Yellow] n)
   let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_implementation_constant i)))
-  let pp_undef ub = 
+  let pp_undef ub =
     P.angles (P.angles (!^ (ansi_format [Magenta] (Undefined.stringFromUndefined_behaviour ub))))
 
 
   let maybe_print_location : Loc.t -> P.document =
-    if not show_locations then 
+    if not show_locations then
       fun loc -> P.empty
-    else 
-      fun loc -> 
+    else
+      fun loc ->
       P.parens (Cerb_location.pp_location ~clever:true loc) ^^ P.space
 
 
@@ -179,7 +179,7 @@ module Make (Config: CONFIG) = struct
     (* | M_Eindet _ *)
     (* | M_Epar _ *)
     (* | M_Ewait _ -> *)
-      -> 
+      ->
         None
     (* | M_Ecase _ -> None *)
     | M_Ebound _ -> None
@@ -366,7 +366,7 @@ module Make (Config: CONFIG) = struct
   (*       pp_const "Specified" ^^ P.parens (pp_object_value oval) *)
 
 
-  and pp_value (M_V (_bty, v)) = 
+  and pp_value (M_V (_bty, v)) =
     match v with
   (*
     | Vconstrained xs ->
@@ -420,7 +420,7 @@ module Make (Config: CONFIG) = struct
     | M_CaseCtor (ctor, pats) ->
         pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
-  
+
 
 
   let abbreviated = P.dot ^^ P.dot ^^ P.dot
@@ -428,8 +428,8 @@ module Make (Config: CONFIG) = struct
 
 
 
-  let rec pp_actype_or_pexpr budget = function 
-    | Left ct -> pp_actype ct 
+  let rec pp_actype_or_pexpr budget = function
+    | Left ct -> pp_actype ct
     | Right sym -> pp_pexpr budget sym
 
 
@@ -440,7 +440,7 @@ module Make (Config: CONFIG) = struct
     let rec pp budget prec (M_Pexpr (loc, annot, _, pe)) =
       match budget with
       | Some 0 -> abbreviated
-      | _ -> 
+      | _ ->
       let budget' = match budget with
         | Some n -> Some (n-1)
         | None -> None
@@ -670,7 +670,7 @@ module Make (Config: CONFIG) = struct
 
       match budget with
       | Some 0 -> abbreviated
-      | _ -> 
+      | _ ->
 
       let budget' = match budget with
         | Some n -> Some (n-1)
@@ -717,69 +717,69 @@ module Make (Config: CONFIG) = struct
                let msym sym1=  (Either.Right sym1) in
                match memop with
                | M_PtrEq (sym1,sym2) ->
-                  (PtrEq, 
+                  (PtrEq,
                    [msym sym1; msym sym2])
                | M_PtrNe (sym1,sym2) ->
-                  (PtrNe, 
+                  (PtrNe,
                    [msym sym1; msym sym2])
                | M_PtrLt (sym1,sym2) ->
-                  (PtrLt, 
+                  (PtrLt,
                    [msym sym1; msym sym2])
                | M_PtrGt (sym1,sym2) ->
-                  (PtrGt, 
+                  (PtrGt,
                    [msym sym1; msym sym2])
                | M_PtrLe (sym1,sym2) ->
-                  (PtrLe, 
+                  (PtrLe,
                    [msym sym1; msym sym2])
                | M_PtrGe (sym1,sym2) ->
-                  (PtrGe, 
+                  (PtrGe,
                    [msym sym1; msym sym2])
                | M_Ptrdiff (ct1,sym1,sym2) ->
-                  (Ptrdiff, 
+                  (Ptrdiff,
                    [mctype ct1; msym sym1; msym sym2])
                | M_IntFromPtr (ct1,ct2,sym1) ->
-                  (IntFromPtr, 
+                  (IntFromPtr,
                    [mctype ct1; mctype ct2; msym sym1])
                | M_PtrFromInt (ct1,ct2,sym1) ->
-                  (PtrFromInt, 
+                  (PtrFromInt,
                    [mctype ct1; mctype ct2; msym sym1])
                | M_PtrValidForDeref (ct1,sym1) ->
-                  (PtrValidForDeref, 
+                  (PtrValidForDeref,
                    [mctype ct1; msym sym1])
                | M_PtrWellAligned (ct1,sym1) ->
-                  (PtrWellAligned, 
+                  (PtrWellAligned,
                    [mctype ct1; msym sym1])
                | M_PtrArrayShift (sym1,ct1,sym2) ->
-                  (PtrArrayShift, 
+                  (PtrArrayShift,
                    [msym sym1; mctype ct1; msym sym2])
                | M_PtrMemberShift (tag_sym, memb_ident, sym) ->
                   (PtrMemberShift (tag_sym, memb_ident),
                    [msym sym])
                | M_Memcpy (sym1,sym2,sym3) ->
-                  (Memcpy, 
+                  (Memcpy,
                    [msym sym1; msym sym2; msym sym3])
                | M_Memcmp (sym1,sym2,sym3) ->
-                  (Memcmp, 
+                  (Memcmp,
                    [msym sym1; msym sym2; msym sym3])
                | M_Realloc (sym1,sym2,sym3) ->
-                  (Realloc, 
+                  (Realloc,
                    [msym sym1; msym sym2; msym sym3])
                | M_Va_start (sym1,sym2) ->
-                  (Va_start, 
+                  (Va_start,
                    [msym sym1; msym sym2])
                | M_Va_copy sym1 ->
-                  (Va_copy, 
+                  (Va_copy,
                    [msym sym1])
                | M_Va_arg (sym1,ct1) ->
-                  (Va_arg, 
+                  (Va_arg,
                    [msym sym1; mctype ct1])
                | M_Va_end sym1 ->
-                  (Va_end, 
+                  (Va_end,
                    [msym sym1])
                | M_CopyAllocId (sym1, sym2) ->
                  (Copy_alloc_id, [msym sym1; msym sym2])
              in
-            
+
              let (memop, pes) = aux memop in
              pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_pexpr pes)
           | M_Eaction (M_Paction (p, (M_Action (_, act)))) ->
@@ -805,7 +805,7 @@ module Make (Config: CONFIG) = struct
           | M_Elet (pat, pe1, e2) ->
               P.group (
                 P.prefix 0 1
-                  (pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^ 
+                  (pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
                      pp_pexpr pe1 ^^^ pp_control "in")
                   (pp e2)
              )
@@ -900,11 +900,11 @@ module Make (Config: CONFIG) = struct
     let tagDefs = Pmap.bindings_list tagDefs in
     let pp (sym, tagDef) =
       begin match tagDef with
-      | M_StructDef sd -> 
-         pp_keyword "def" ^^^ pp_keyword "struct" ^^^ 
+      | M_StructDef sd ->
+         pp_keyword "def" ^^^ pp_keyword "struct" ^^^
            pp_raw_symbol sym ^^^ P.colon ^^ P.equals ^^ (pp_st sd)
-      | M_UnionDef ut -> 
-         pp_keyword "def" ^^^ pp_keyword "union" ^^^ 
+      | M_UnionDef ut ->
+         pp_keyword "def" ^^^ pp_keyword "union" ^^^
            pp_raw_symbol sym ^^^ P.colon ^^ P.equals ^^ (pp_ut ut)
       end
       (* let (ty, tags) = match tagDef with
@@ -977,24 +977,24 @@ module Make (Config: CONFIG) = struct
                 (Pmap.fold (fun sym def acc ->
                      acc ^^
                      begin match def with
-                     | M_Return _ -> 
+                     | M_Return _ ->
                         P.break 1 ^^ !^"return label" ^^^ pp_symbol sym (* ^^ P.colon ^^^ pp_lt lt *)
                      | M_Label (_loc , label_args_and_body, annots, _) ->
-                        P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ Pp.equals ^^^ 
+                        P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ Pp.equals ^^^
                           pp_mu_arguments begin fun label_body ->
                           (* label core function definition *)
                             (P.nest 2 (P.break 1 ^^ pp_expr budget label_body))
                           end label_args_and_body
                      end  ^^ P.hardline
                    ) labels P.empty
-                ) 
-                ^^ 
+                )
+                ^^
                   (* pp body *)
                 P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_expr budget body)
               )
             end args_and_body
       end ^^ P.hardline ^^ P.hardline
-               
+
       ) funs P.empty
 
 
@@ -1006,7 +1006,7 @@ module Make (Config: CONFIG) = struct
       ) symmap
 
   let mk_comment doc =
-    pp_ansi_format [Red] (fun () -> 
+    pp_ansi_format [Red] (fun () ->
       !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
     )
 
@@ -1014,7 +1014,7 @@ module Make (Config: CONFIG) = struct
     List.fold_left (fun acc (sym, decl) ->
         match decl with
         | M_GlobalDef (gt, e) ->
-          acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ 
+          acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^
             P.brackets (!^"ct" ^^^ P.equals ^^^ pp_ct gt) ^^^
                 P.colon ^^ P.equals ^^
                 P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1
@@ -1094,11 +1094,11 @@ module Pp_standard_typ = (struct
    * let pp_object_type = pp_core_object_type *)
 
   let pp_bt = pp_core_base_type
-  
+
 
   let pp_ct ty = P.squotes (Pp_core_ctype.pp_ctype ty)
 
-  let pp_ut (membrs) = 
+  let pp_ut (membrs) =
     let (ty, tags) = ("union", membrs) in
     let pp_tag (Symbol.Identifier (_, name), (_,_,_,ct)) =
       !^name ^^ P.colon ^^^ pp_ct ct
@@ -1107,7 +1107,7 @@ module Pp_standard_typ = (struct
 
 
 
-  let pp_st (membrs_, flexible_opt) = 
+  let pp_st (membrs_, flexible_opt) =
     let membrs = match flexible_opt with
       | None ->
          membrs_
@@ -1131,19 +1131,19 @@ module Pp_standard_typ = (struct
   let pp_rt ret_bt =
     pp_core_base_type ret_bt
 
-  let pp_ft (ret_bt, params) = 
-    pp_core_base_type ret_bt ^^ 
+  let pp_ft (ret_bt, params) =
+    pp_core_base_type ret_bt ^^
       Pp.parens (Pp.flow_map Pp.comma pp_bt params)
 
     (* let pp_lt = None *)
   (* stealing from Pp_core *)
   let pp_lt params =
-    comma_list (fun (_,(ty,by_pointer)) -> 
+    comma_list (fun (_,(ty,by_pointer)) ->
         if by_pointer then pp_ctype ty else pp_ctype ty ^^^ P.parens (P.string "val")
       ) params
 
 
-  
+
 end)
 
 

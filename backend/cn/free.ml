@@ -15,7 +15,7 @@ let big_union sets =
   union_map (fun s -> s)
 
 
-let rec bound_by_pattern (M_Pattern (_, _, _, pat_)) = 
+let rec bound_by_pattern (M_Pattern (_, _, _, pat_)) =
   match pat_ with
   | M_CaseBase (None, _) -> SymSet.empty
   | M_CaseBase (Some s, _) -> SymSet.singleton s
@@ -28,7 +28,7 @@ let free_in_generic_name = function
   | CF.Core.Sym s -> SymSet.singleton s
   | CF.Core.Impl _ic -> SymSet.empty
 
-let rec free_in_pexpr (M_Pexpr (_, _, _, pexpr_)) : SymSet.t = 
+let rec free_in_pexpr (M_Pexpr (_, _, _, pexpr_)) : SymSet.t =
   match pexpr_ with
   | M_PEsym s -> SymSet.singleton s
   | M_PEval _ -> SymSet.empty
@@ -40,7 +40,7 @@ let rec free_in_pexpr (M_Pexpr (_, _, _, pexpr_)) : SymSet.t =
   | M_PEbitwise_binop (_bop, pe1, pe2) -> union_map free_in_pexpr [pe1; pe2]
   | M_Cfvfromint pe -> free_in_pexpr pe
   | M_Civfromfloat (_act, pe) -> free_in_pexpr pe
-  | M_PEarray_shift (pe1, _ct, pe2) -> union_map free_in_pexpr [pe1; pe2] 
+  | M_PEarray_shift (pe1, _ct, pe2) -> union_map free_in_pexpr [pe1; pe2]
   | M_PEmember_shift (pe, _sym, _id) -> free_in_pexpr pe
   | M_PEnot pe -> free_in_pexpr pe
   | M_PEop (_op, pe1, pe2) -> union_map free_in_pexpr [pe1; pe2]
@@ -58,9 +58,9 @@ let rec free_in_pexpr (M_Pexpr (_, _, _, pexpr_)) : SymSet.t =
   | M_PEundef (_loc, _ub) -> SymSet.empty
   | M_PEcfunction pe -> free_in_pexpr pe
   | M_PElet (pattern, pe1, pe2) ->
-     SymSet.union 
+     SymSet.union
        (free_in_pexpr pe1)
-       (SymSet.diff 
+       (SymSet.diff
           (free_in_pexpr pe2)
           (bound_by_pattern pattern)
        )
@@ -70,7 +70,7 @@ let rec free_in_pexpr (M_Pexpr (_, _, _, pexpr_)) : SymSet.t =
 
 
 
-let free_in_action (M_Action (_, action_)) = 
+let free_in_action (M_Action (_, action_)) =
   match action_ with
    | M_Create (pe, _act, _prefix) -> free_in_pexpr pe
    | M_CreateReadOnly (pe1, _act, pe2, _prefix) -> union_map free_in_pexpr [pe1; pe2]
@@ -90,7 +90,7 @@ let free_in_action (M_Action (_, action_)) =
 let free_in_paction = function
   | M_Paction (_polarity, action) -> free_in_action action
 
-let free_in_memop memop = 
+let free_in_memop memop =
   union_map free_in_pexpr
     begin match memop with
     | M_PtrEq (pe1, pe2) -> [pe1; pe2]
@@ -124,12 +124,12 @@ let rec free_in_expr (M_Expr (_, _, _, expr_)) =
   | M_Eaction paction -> free_in_paction paction
   | M_Eskip -> SymSet.empty
   | M_Eccall (_act, fsym, pes) -> union_map free_in_pexpr (fsym :: pes)
-  | M_Elet (pattern, pexpr, expr) -> 
-     SymSet.union (free_in_pexpr pexpr) 
+  | M_Elet (pattern, pexpr, expr) ->
+     SymSet.union (free_in_pexpr pexpr)
        (SymSet.diff (free_in_expr expr) (bound_by_pattern pattern))
   | M_Ewseq (pattern, e1, e2)
-  | M_Esseq (pattern, e1, e2) -> 
-     SymSet.union (free_in_expr e1) 
+  | M_Esseq (pattern, e1, e2) ->
+     SymSet.union (free_in_expr e1)
        (SymSet.diff (free_in_expr e2) (bound_by_pattern pattern))
   | M_Eunseq exps -> union_map free_in_expr exps
   | M_CN_progs (_, _) -> SymSet.empty
