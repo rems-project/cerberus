@@ -528,8 +528,8 @@ let eachI_ (i1, s, i2) t =
 let add_ (it, it') = IT (Binop (Add,it, it'), bt it)
 let sub_ (it, it') = IT (Binop (Sub,it, it'), bt it)
 let mul_ (it, it') =
-  assert (BT.equal (bt it) (bt it'));
-  IT (Binop (Mul,it, it'), bt it)
+  if BT.equal (bt it) (bt it') then (IT (Binop (Mul,it, it'), bt it))
+  else failwith ("eq_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [it; it']))
 
 let mul_no_smt_ (it, it') = IT (Binop (MulNoSMT,it, it'), bt it)
 let div_ (it, it') = IT (Binop (Div,it, it'), bt it)
