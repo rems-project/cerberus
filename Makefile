@@ -27,7 +27,16 @@ endif
 normal: cerberus
 
 .PHONY: all
-all: cerberus cerberus-bmc cerberus-web cn #rustic
+
+ifeq ($(shell command -v coqc >/dev/null 2>&1; echo $$?), 0)
+    $(info Coq found. Will attempt to build Cerberus-CHERI)
+    CERBERUS_GOAL = cerberus cerberus-bmc cerberus-web cn cheri #rustic
+else
+    CERBERUS_GOAL = cerberus cerberus-bmc cerberus-web cn #rustic
+endif
+
+all: $(CERBERUS_GOAL)
+
 
 .PHONY: full-build
 full-build: prelude-src
