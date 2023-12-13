@@ -1,0 +1,24 @@
+FROM ubuntu:23.04
+
+RUN apt-get update \
+    && apt-get install -y git build-essential libgmp-dev opam python3-distutils \
+    && apt-get autoremove --purge -y \
+    && apt-get autoclean -y \
+    && rm -rf /var/cache/apt/* /tmp/*
+
+RUN opam init --disable-sandboxing --yes --compiler=4.14.1
+
+RUN opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released \
+    && opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git \
+    && opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git \
+    && opam pin --yes -n coq-sail https://github.com/rems-project/coq-sail.git \
+    && opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git \
+    && opam pin add -n --yes cerberus-lib https://github.com/rems-project/cerberus.git \
+    && opam pin add -n --yes cerberus https://github.com/rems-project/cerberus.git \
+    && opam pin add -n --yes cerberus-cheri https://github.com/rems-project/cerberus.git
+
+RUN opam install --yes cerberus cerberus-cheri \
+    && opam clean --yes --all-switches --download-cache --logs --repo-cache
+
+# run commands in the correct opam environment without [eval $(opam env)]
+ENTRYPOINT ["opam", "exec", "--safe", "--"]
