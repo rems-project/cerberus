@@ -103,7 +103,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_array_shift of cn_expr 'a 'ty * maybe 'ty * cn_expr 'a 'ty
   | CNExpr_call of 'a * list (cn_expr 'a 'ty)
   | CNExpr_cons of 'a * list (Symbol.identifier * cn_expr 'a 'ty)
-  | CNExpr_each of 'a * (integer * integer) * cn_expr 'a 'ty
+  | CNExpr_each of 'a * cn_base_type 'a * (integer * integer) * cn_expr 'a 'ty
   | CNExpr_let of 'a * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_match of cn_expr 'a 'ty * list (cn_pat 'a * cn_expr 'a 'ty)
   | CNExpr_ite of cn_expr 'a 'ty * cn_expr 'a 'ty * cn_expr 'a 'ty

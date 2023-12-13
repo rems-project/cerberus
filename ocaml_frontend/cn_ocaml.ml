@@ -125,17 +125,21 @@ module MakePp (Conf: PP_CN) = struct
 
 
   let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
+    let string_of_cn_const = function
+      | CNConst_NULL ->
+          "NULL"
+      | CNConst_integer n ->
+          Z.to_string n
+      | CNConst_bits ((sign,n),v) ->
+          Z.to_string v ^ (match sign with CN_unsigned -> "u" | CN_signed -> "i") ^ string_of_int n
+      | CNConst_bool b ->
+          if b then "true" else "false"
+      | CNConst_unit ->
+         "unit"
+    in
     match expr_ with
-      | CNExpr_const CNConst_NULL ->
-          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ "NULL")
-      | CNExpr_const CNConst_integer n ->
-          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string n))
-      | CNExpr_const (CNConst_bits ((sign,n),v)) ->
-          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string v ^ (match sign with CN_unsigned -> "u" | CN_signed -> "i") ^ string_of_int n))
-      | CNExpr_const (CNConst_bool b) ->
-          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
-      | CNExpr_const CNConst_unit ->
-          Dleaf (pp_ctor "CNExpr_const" ^^^ !^"unit")
+      | CNExpr_const const ->
+          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (string_of_cn_const const))
       | CNExpr_var ident ->
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
       (* | CNExpr_rvar ident -> *)
@@ -202,8 +206,8 @@ module MakePp (Conf: PP_CN) = struct
               Dnode (pp_identifier ident, [dtree_of_cn_expr e])
             ) xs in
           Dnode (pp_ctor "CNExpr_cons" ^^^ P.squotes (Conf.pp_ident nm), docs)
-      | CNExpr_each (ident, r, expr) ->
-          Dnode (pp_ctor "CNExpr_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^
+      | CNExpr_each (ident, bTy ,r, expr) ->
+          Dnode (pp_ctor "CNExpr_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy ^^^
                      !^ (Z.to_string (fst r)) ^^^ P.string "-" ^^^ !^ (Z.to_string (snd r))
                  , [dtree_of_cn_expr expr])
       | CNExpr_match (x, ms) ->

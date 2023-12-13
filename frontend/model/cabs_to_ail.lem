@@ -4241,12 +4241,13 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
        let sym = Cn.ensure_not_c_variable sym_resolved in
        E.mapM (fun (nm2, exp) -> pair nm2 <$> desugar_cn_expr exp) es >>= fun es ->
        E.return (CNExpr_cons sym es)
-    | CNExpr_each ident r e ->
+    | CNExpr_each ident bTy r e ->
         E.push_cn_scope >>= fun () ->
         E.register_cn_ident CN_vars ident >>= fun sym ->
+        desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy ->
         desugar_cn_expr e >>= fun e ->
         E.pop_cn_scope >>= fun () ->
-        E.return (CNExpr_each sym r e)
+        E.return (CNExpr_each sym bTy r e)
     | CNExpr_match x ms ->
         E.mapM (fun (lhs, rhs) ->
           E.push_cn_scope >>= fun () ->

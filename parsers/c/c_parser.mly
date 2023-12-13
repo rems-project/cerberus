@@ -2079,10 +2079,10 @@ expr_without_let:
 | IF e1= delimited(LPAREN, expr, RPAREN) e2= delimited(LBRACE, expr, RBRACE) ELSE e3= delimited(LBRACE,expr,RBRACE)
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_ite (e1, e2, e3))) }
-| CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
+| CN_EACH LPAREN bTy= base_type str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                ,
-                               CNExpr_each (str, r, e1))) }
+                               CNExpr_each (str, bTy, r, e1))) }
 | CN_MATCH e= match_target LBRACE ms= match_cases RBRACE
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                ,

@@ -467,10 +467,10 @@ module Translate = struct
          | LEPointer -> Some (le_ (intptr_cast t1, intptr_cast t2))
          | _ -> None
          end
-      | EachI ((i1, (s, _), i2), t) ->
+      | EachI ((i1, (s, bt), i2), t) ->
          let rec aux i =
            if i <= i2
-           then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
+           then IT.subst (make_subst [(s, num_lit_ (Z.of_int i) bt)]) t :: aux (i + 1)
            else []
          in
          Some (and_ (aux i1))
@@ -671,7 +671,10 @@ module Translate = struct
          if BT.equal (IT.bt t1) (IT.bt t2)
            then ()
            else begin
-             Pp.debug 1 (lazy (Pp.item "mismatching binop" (IT.pp it)));
+             let bt1 = BT.pp @@ IT.bt t1 in
+             let bt2 = BT.pp @@ IT.bt t2 in
+             let doc = Pp.(IT.pp it ^^^ parens (bt1 ^^ comma ^^^ bt2)) in
+             Pp.debug 1 (lazy (Pp.item "mismatching binop" doc));
              assert false
            end;
          let open Z3.Arithmetic in

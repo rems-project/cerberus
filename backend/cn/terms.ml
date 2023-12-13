@@ -74,7 +74,7 @@ type 'bt term_ =
   | Unop of unop * 'bt term
   | Binop of binop * 'bt term * 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
-  | EachI of (int * (Sym.t * 'bt) * int) * 'bt term
+  | EachI of (int * (Sym.t * BaseTypes.t) * int) * 'bt term
   (* add Z3's Distinct for separation facts  *)
   | Tuple of 'bt term list
   | NthTuple of int * 'bt term

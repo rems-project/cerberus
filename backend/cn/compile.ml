@@ -163,7 +163,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
   | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
-  | CNExpr_each (sym, r, e) -> !^ "(each ...)"
+  | CNExpr_each (sym, bt, r, e) -> !^ "(each ...)"
   | CNExpr_match (x, ms) -> !^ "match ... {...}"
   | CNExpr_let (s, e, body) -> !^ "let ...; ..."
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
@@ -219,7 +219,7 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs es
   | CNExpr_cons (_c, args) ->
      free_in_exprs (List.map snd args)
-  | CNExpr_each (s, range, e) ->
+  | CNExpr_each (s, bt, range, e) ->
      SymSet.remove s (free_in_expr e)
   | CNExpr_match (x, ms) ->
      let free_per_case =
@@ -628,6 +628,13 @@ module EffectfulTranslation = struct
        return (env', locally_bound', IT.Pat (PConstructor (cons, args), bt))
 
 
+  let check_quantified_base_type env loc bt =
+    let bt = translate_cn_base_type env bt in
+    if SBT.equal bt SBT.Integer then return bt
+    else if Option.is_some (SBT.is_bits_bt bt) then return bt
+    else fail {loc; msg = let open Pp in
+        Generic (!^ "quantified v must be integer or bitvector:" ^^^ SBT.pp bt)}
+
 
   let translate_cn_expr =
     let open IndexTerms in
@@ -732,7 +739,7 @@ module EffectfulTranslation = struct
               | Integer | Bits _ ->
                 return (IT (ArrayShift { base; ct; index }, Loc (Some ct)))
               | has ->
-                 fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer"; o_ctxt = None}}
+                 fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer or bits"; o_ctxt = None}}
               end
            | has ->
               fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
@@ -789,7 +796,7 @@ module EffectfulTranslation = struct
                 ) exprs
             in
             return (IT (Constructor (c_nm, exprs), SBT.Datatype cons_info.c_datatype_tag))
-        | CNExpr_each (sym, r, e) ->
+        | CNExpr_each (sym, bt, r, e) ->
             let@ expr =
               trans
                 evaluation_scope
@@ -797,7 +804,8 @@ module EffectfulTranslation = struct
                 (add_logical sym SBT.Integer env)
                 e
             in
-            return (IT ((EachI ((Z.to_int (fst r), (sym, SBT.Integer), Z.to_int (snd r)), expr)), SBT.Bool))
+            let@ bt = check_quantified_base_type env loc bt in
+            return (IT ((EachI ((Z.to_int (fst r), (sym, SBT.to_basetype bt), Z.to_int (snd r)), expr)), SBT.Bool))
         | CNExpr_match (x, ms) ->
            let@ x = self x in
            let@ ms =
@@ -997,13 +1005,7 @@ module EffectfulTranslation = struct
     return (pt, pointee_value)
 
   let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, res, args) =
-    let bt' = translate_cn_base_type env bt in
-    let@ () =
-      if SBT.equal bt' SBT.Integer then return ()
-      else if Option.is_some (SBT.is_bits_bt bt') then return ()
-      else fail {loc = pred_loc; msg = let open Pp in
-          Generic (!^ "quantified v must be integer or bitvector:" ^^^ SBT.pp bt')}
-    in
+    let@ bt' = check_quantified_base_type env pred_loc bt in
     let env_with_q = add_logical q bt' env in
     let@ guard_expr = translate_cn_expr (SymSet.singleton q) env_with_q guard in
     let@ args = ListM.mapM (translate_cn_expr (SymSet.singleton q) env_with_q) args in
