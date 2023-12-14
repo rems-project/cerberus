@@ -691,7 +691,7 @@ module WIT = struct
           return (IT (CopyAllocId { addr; loc=ptr }, BT.Loc))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
-          return (IT (SizeOf ct, Memory.sint_bt))
+          return (IT (SizeOf ct, Memory.size_bt))
        | OffsetOf (tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
           return (IT (OffsetOf (tag, member), Memory.sint_bt))

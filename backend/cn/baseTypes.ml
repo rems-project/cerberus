@@ -135,6 +135,9 @@ let rec of_sct is_signed size_of = function
 and intptr_bt is_signed size_of = 
   of_sct is_signed size_of Sctypes.(Integer (Unsigned Intptr_t))
 
+and size_bt is_signed size_of = 
+  of_sct is_signed size_of Sctypes.(Integer Size_t)
+
 
 let rec hash = function
   | Unit -> 0

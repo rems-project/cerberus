@@ -34,6 +34,11 @@ let sbt_of_sct = SurfaceBaseTypes.of_sct is_signed_integer_type size_of_integer_
 let intptr_bt = BT.intptr_bt is_signed_integer_type size_of_integer_type
 let intptr_sbt = SurfaceBaseTypes.intptr_bt is_signed_integer_type size_of_integer_type
 
+let size_bt = BT.size_bt is_signed_integer_type size_of_integer_type
+let size_sbt = SurfaceBaseTypes.size_bt is_signed_integer_type size_of_integer_type
+
+
+
 let sint_bt = bt_of_sct Sctypes.(Integer (Signed Int_))
 let sint_sbt = sbt_of_sct Sctypes.(Integer (Signed Int_))
 

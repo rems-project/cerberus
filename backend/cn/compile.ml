@@ -716,7 +716,7 @@ module EffectfulTranslation = struct
             mk_translate_binop loc bop (e1, e2)
         | CNExpr_sizeof ct ->
             let scty = Sctypes.of_ctype_unsafe loc ct in
-            return (IT (SizeOf scty, Memory.sint_sbt))
+            return (IT (SizeOf scty, Memory.size_sbt))
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
             return (IT ((OffsetOf (tag, member)), Memory.sint_sbt))

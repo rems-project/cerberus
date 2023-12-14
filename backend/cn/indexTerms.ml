@@ -454,7 +454,9 @@ let sym_ (sym, bt) = IT (Sym sym, bt)
 let z_ n = IT (Const (Z n), BT.Integer)
 let alloc_id_ n = IT (Const (Alloc_id (if !use_vip then n else Z.zero)), BT.Alloc_id)
 let num_lit_ n bt = match bt with
-  | BT.Bits (sign, sz) -> IT (Const (Bits ((sign, sz), n)), bt)
+  | BT.Bits (sign, sz) -> 
+      assert (BT.fits_range (sign, sz) n);
+      IT (Const (Bits ((sign, sz), n)), bt)
   | BT.Integer -> z_ n
   | _ -> failwith ("num_lit_: not a type with numeric literals: " ^ Pp.plain (BT.pp bt))
 let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
@@ -631,7 +633,7 @@ let arrayShift_ ~base ~index ct  =
 let copyAllocId_ ~addr ~loc =
   IT (CopyAllocId { addr; loc }, BT.Loc)
 let sizeOf_ ct =
-  IT (SizeOf ct, Memory.sint_bt)
+  IT (SizeOf ct, Memory.size_bt)
 
 let isIntegerToPointerCast = function
   | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true

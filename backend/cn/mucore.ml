@@ -343,7 +343,7 @@ let mu_fun_return_type mu_fun args =
   | M_F_params_nth, _ -> Some (`Returns_BT CType)
   | M_F_are_compatible, _ -> Some (`Returns_BT Bool)
   | M_F_align_of, _ -> Some `Returns_Integer
-  | M_F_size_of, _ -> Some `Returns_Integer
+  | M_F_size_of, _ -> Some (`Returns_BT Memory.size_bt) (* TODO: Is that good? *)
   | M_F_max_int, [ct] -> Option.bind (is_ctype_const ct) Sctypes.of_ctype
     |> Option.map (fun sct -> `Returns_BT (Memory.bt_of_sct sct))
   | M_F_max_int, _ -> None

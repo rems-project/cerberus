@@ -562,7 +562,7 @@ module IndexTerms = struct
        | _ -> IT (ArrayShift { base; ct; index }, the_bt)
        end
     | SizeOf ct ->
-       int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt
+       int_lit_ (Memory.size_of_ctype ct) Memory.size_bt
     | Representable (ct, t) ->
        IT (Representable (ct, aux t), the_bt)
     | Good (ct, t) ->
