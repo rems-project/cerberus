@@ -246,40 +246,7 @@ Module RevocationProofs.
             double_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) c1 c2 alloc_id1 alloc_id2)
       -> ptr_value_same m1 m2 (PV (Prov_symbolic s) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2)).
 
-  (* Equality of pointer values without taking provenance into account *)
-  Inductive pointer_value_eq: relation pointer_value_indt :=
-  | pointer_value_no_prov_eq: forall pr1 pr2 b1 b2,  b1 = b2 -> pointer_value_eq (PV pr1 b1) (PV pr2 b2).
-
-  (* Equivalence relation for pointer values *)
-  #[global] Instance pointer_value_eq_Equivalence : Equivalence(pointer_value_eq).
-  Proof.
-    split.
-    -
-      intros a.
-      destruct a.
-      apply pointer_value_no_prov_eq.
-      reflexivity.
-    -
-      intros a b.
-      destruct a, b.
-      intros H.
-      apply pointer_value_no_prov_eq.
-      inversion H.
-      auto.
-    -
-      intros a b c.
-      destruct a, b, c.
-      intros H1 H2.
-      apply pointer_value_no_prov_eq.
-      inversion H1. clear H1.
-      inversion H2. clear H2.
-      subst.
-      reflexivity.
-  Qed.
-
-
   (* Equality of byte values without taking provenance into account *)
-
   Inductive AbsByte_eq: relation AbsByte :=
   | AbsByte_no_prov_eq: forall a1 a2,
       copy_offset a1 = copy_offset a2
@@ -312,188 +279,173 @@ Module RevocationProofs.
       rewrite H0. apply H2.
   Qed.
 
-  Unset Elimination Schemes.
-  (* This prevent default elimination principle from being generated for
+  (* The following prevent default elimination principle from being generated for
      this type, as it is inadequate *)
-  Inductive mem_value_with_err_eq: mem_value_with_err -> mem_value_with_err -> Prop :=
-  | mem_value_with_err_eq_MVEunspecified: forall t1 t2, t1 = t2 -> mem_value_with_err_eq (MVEunspecified t1) (MVEunspecified t2)
-  | mem_value_with_err_eq_MVEinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_with_err_eq (MVEinteger t1 v1) (MVEinteger t2 v2)
-  | mem_value_with_err_eq_MVEfloating: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_with_err_eq (MVEfloating t1 v1) (MVEfloating t2 v2)
-  | mem_value_with_err_eq_MVEpointer: forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> mem_value_with_err_eq (MVEpointer t1 p1) (MVEpointer t2 p2)
-  | mem_value_with_err_eq_MVEarray: forall a1 a2, eqlistA mem_value_with_err_eq a1 a2 -> mem_value_with_err_eq (MVEarray a1) (MVEarray a2)
-  | mem_value_with_err_eq_MVErr: forall e1 e2, e1 = e2 -> mem_value_with_err_eq (MVErr e1) (MVErr e2)
-  | mem_value_with_err_eq_MVEstruct: forall tag_sym1 l1 tag_sym2 l2,
+  Unset Elimination Schemes.
+  (* This relation is non-reflexive *)
+  Inductive mem_value_with_err_same: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> mem_value_with_err -> mem_value_with_err -> Prop :=
+  | mem_value_with_err_same_MVEunspecified: forall m1 m2 t1 t2, t1 = t2 -> mem_value_with_err_same m1 m2 (MVEunspecified t1) (MVEunspecified t2)
+  | mem_value_with_err_same_MVEinteger: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_with_err_same m1 m2 (MVEinteger t1 v1) (MVEinteger t2 v2)
+  | mem_value_with_err_same_MVEfloating: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_with_err_same m1 m2 (MVEfloating t1 v1) (MVEfloating t2 v2)
+  | mem_value_with_err_same_MVEpointer: forall m1 m2 t1 t2 p1 p2, t1 = t2 /\ ptr_value_same m1 m2 p1 p2 -> mem_value_with_err_same m1 m2 (MVEpointer t1 p1) (MVEpointer t2 p2)
+  | mem_value_with_err_same_MVEarray: forall m1 m2 a1 a2, eqlistA (mem_value_with_err_same m1 m2) a1 a2 -> mem_value_with_err_same m1 m2 (MVEarray a1) (MVEarray a2)
+  | mem_value_with_err_same_MVErr: forall m1 m2 e1 e2, e1 = e2 -> mem_value_with_err_same m1 m2 (MVErr e1) (MVErr e2)
+  | mem_value_with_err_same_MVEstruct: forall m1 m2 tag_sym1 l1 tag_sym2 l2,
       tag_sym1 = tag_sym2  ->
-      eqlistA struct_with_err_field_eq l1 l2 ->
-      mem_value_with_err_eq (MVEstruct tag_sym1 l1) (MVEstruct tag_sym2 l2)
-  | mem_value_with_err_eq_MVEunion: forall tag_sym1 id1 v1 tag_sym2 id2 v2,
-      tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_with_err_eq v1 v2 ->
-      mem_value_with_err_eq (MVEunion tag_sym1 id1 v1) (MVEunion tag_sym2 id2 v2)
+      eqlistA (struct_with_err_field_eq m1 m2) l1 l2 ->
+      mem_value_with_err_same m1 m2 (MVEstruct tag_sym1 l1) (MVEstruct tag_sym2 l2)
+  | mem_value_with_err_same_MVEunion: forall m1 m2 tag_sym1 id1 v1 tag_sym2 id2 v2,
+      tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_with_err_same m1 m2 v1 v2 ->
+      mem_value_with_err_same m1 m2 (MVEunion tag_sym1 id1 v1) (MVEunion tag_sym2 id2 v2)
   with
-    struct_with_err_field_eq: (CoqSymbol.identifier * CoqCtype.ctype * mem_value_with_err) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_with_err) -> Prop :=
-  | struct_field_with_err_triple_eq: forall id1 id2 t1 t2 v1 v2,
-      id1 = id2 /\ t1 = t2 /\ mem_value_with_err_eq v1 v2 -> struct_with_err_field_eq (id1,t1,v1) (id2,t2,v2).
+    struct_with_err_field_eq: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r ->
+                              (CoqSymbol.identifier * CoqCtype.ctype * mem_value_with_err) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_with_err) -> Prop :=
+  | struct_field_with_err_triple_eq: forall m1 m2 id1 id2 t1 t2 v1 v2,
+      id1 = id2 /\ t1 = t2 /\ mem_value_with_err_same m1 m2 v1 v2 -> struct_with_err_field_eq m1 m2 (id1,t1,v1) (id2,t2,v2).
   Set Elimination Schemes.
 
-  (* Custom induction principle for mem_value_with_err_eq *)
-  Lemma mem_value_with_err_eq_ind:
-    forall P : mem_value_with_err -> mem_value_with_err -> Prop,
+  (* Custom induction principle for mem_value_with_err_same *)
+  Lemma mem_value_with_err_same_ind:
+    forall (m1 : CheriMemoryWithPNVI.mem_state_r) (m2 : CheriMemoryWithoutPNVI.mem_state_r)
+      (P : mem_value_with_err -> mem_value_with_err -> Prop),
 
-      (* base non-recursive cases *)
       (forall t1 t2, t1 = t2 -> P (MVEunspecified t1) (MVEunspecified t2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVEinteger t1 v1) (MVEinteger t2 v2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVEfloating t1 v1) (MVEfloating t2 v2)) ->
-      (forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> P (MVEpointer t1 p1) (MVEpointer t2 p2)) ->
-      (forall (e1 e2: MemCommonExe.mem_error), e1=e2 -> P (MVErr e1) (MVErr e2)) ->
+      (forall t1 t2 p1 p2, t1 = t2 /\ ptr_value_same m1 m2 p1 p2 -> P (MVEpointer t1 p1) (MVEpointer t2 p2)) ->
+      (forall e1 e2, e1 = e2 -> P (MVErr e1) (MVErr e2)) ->
 
-      (* recursive cases below *)
-
-      (forall a1 a2, eqlistA mem_value_with_err_eq a1 a2 -> List.Forall2 P a1 a2 -> P (MVEarray a1) (MVEarray a2)) ->
+      (forall a1 a2, eqlistA (mem_value_with_err_same m1 m2) a1 a2 -> List.Forall2 P a1 a2 -> P (MVEarray a1) (MVEarray a2)) ->
       (forall tag_sym1 l1 tag_sym2 l2,
           tag_sym1 = tag_sym2 ->
-          eqlistA struct_with_err_field_eq l1 l2 ->
-          List.Forall2 (fun x y => P (snd x) (snd y)) l1 l2 ->
+          eqlistA (struct_with_err_field_eq m1 m2) l1 l2 ->
+          List.Forall2 (fun '(id1, ct1, mv1) '(id2, ct2, mv2) => id1 = id2 /\ ct1 = ct2 /\ P mv1 mv2) l1 l2 ->
           P (MVEstruct tag_sym1 l1) (MVEstruct tag_sym2 l2)) ->
 
       (forall tag_sym1 id1 v1 tag_sym2 id2 v2,
-          tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_with_err_eq v1 v2 ->
+          tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_with_err_same m1 m2 v1 v2 ->
           P v1 v2 ->
           P (MVEunion tag_sym1 id1 v1) (MVEunion tag_sym2 id2 v2)) ->
 
-
-      forall x y, mem_value_with_err_eq x y -> P x y.
+      forall x y, mem_value_with_err_same m1 m2 x y -> P x y.
   Proof.
-    intros P Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer Hbase_err
+    intros m1 m2 P Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer Hbase_err
       Hrec_array Hrec_struct Hrec_union.
     fix IH 3.
     intros x y H.
-    destruct x,y; invc H.
-    (* base cases *)
+    destruct x, y; inversion H; subst; clear H.
+
     - apply Hbase_unspecified. reflexivity.
     - apply Hbase_integer. assumption.
     - apply Hbase_floating. assumption.
     - apply Hbase_pointer. assumption.
-    - apply Hbase_err.  reflexivity.
-    - (* recursive case for MVEarray *)
-      apply Hrec_array; [assumption|]. clear Hrec_array.
-      induction H2.
-      constructor.
-      apply Forall2_cons.
-      apply IH.
-      assumption.
-      assumption.
-    - (* recursive case for MVEstruct *)
-      apply Hrec_struct; auto.
-      induction H5.
+    - apply Hbase_err. reflexivity.
+
+    - apply Hrec_array; [assumption|].
+      clear Hrec_array.
+      induction H4.
       + constructor.
-      + apply Forall2_cons.
-        *
-          invc H.
-          cbn.
-          apply IH.
-          destruct H0 as [_ [_ H0]].
-          assumption.
-        *
-          apply IHeqlistA.
-    - (* recursive case for MVEunion *)
-      clear Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer Hrec_array Hrec_struct.
-      apply Hrec_union; auto.
+      + constructor; [apply IH; assumption | apply IHeqlistA; assumption].
+
+    - apply Hrec_struct; [reflexivity | assumption |].
+      clear Hrec_struct.
+      induction H7.
+      + constructor.
+      + inversion H; subst; clear H.
+        destruct H0 as [H1 [H2 H3]].
+        subst.
+        constructor.
+        split;auto.
+        apply IHeqlistA.
+    - destruct H3 as [H4 [H5 H6]].
+      apply Hrec_union.
+      split;auto.
       apply IH.
-      destruct H1 as [_ [_ H1]].
-      assumption.
+      auto.
   Qed.
 
-  Unset Elimination Schemes.
-  (* This prevent default elimination principle from being generated for
+
+  (* The following prevent default elimination principle from being generated for
      this type, as it is inadequate *)
-  Inductive mem_value_indt_eq: mem_value_indt -> mem_value_indt -> Prop :=
-  | mem_value_indt_eq_MVunspecified: forall t1 t2, t1 = t2 -> mem_value_indt_eq (MVunspecified t1) (MVunspecified t2)
-  | mem_value_indt_eq_MVinteger: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_eq (MVinteger t1 v1) (MVinteger t2 v2)
-  | mem_value_indt_eq_MVfloating: forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_eq (MVfloating t1 v1) (MVfloating t2 v2)
-  | mem_value_indt_eq_MVpointer: forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> mem_value_indt_eq (MVpointer t1 p1) (MVpointer t2 p2)
-  | mem_value_indt_eq_MVarray: forall a1 a2, eqlistA mem_value_indt_eq a1 a2 -> mem_value_indt_eq (MVarray a1) (MVarray a2)
-  | mem_value_indt_eq_MVstruct: forall tag_sym1 l1 tag_sym2 l2,
-      tag_sym1 = tag_sym2  ->
-      eqlistA struct_field_eq l1 l2 ->
-      mem_value_indt_eq (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)
-  | mem_value_indt_eq_MVunion: forall tag_sym1 id1 v1 tag_sym2 id2 v2,
-      tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_eq v1 v2 ->
-      mem_value_indt_eq (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)
+  Unset Elimination Schemes.
+  (* This relation is non-reflexive *)
+  Inductive mem_value_indt_same: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> mem_value_indt -> mem_value_indt -> Prop :=
+  | mem_value_indt_same_MVunspecified: forall m1 m2 t1 t2, t1 = t2 -> mem_value_indt_same m1 m2 (MVunspecified t1) (MVunspecified t2)
+  | mem_value_indt_same_MVinteger: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_same m1 m2 (MVinteger t1 v1) (MVinteger t2 v2)
+  | mem_value_indt_same_MVfloating: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_same m1 m2 (MVfloating t1 v1) (MVfloating t2 v2)
+  | mem_value_indt_same_MVpointer: forall m1 m2 t1 t2 p1 p2, t1 = t2 /\ ptr_value_same m1 m2 p1 p2 -> mem_value_indt_same m1 m2 (MVpointer t1 p1) (MVpointer t2 p2)
+  | mem_value_indt_same_MVarray: forall m1 m2 a1 a2, eqlistA (mem_value_indt_same m1 m2) a1 a2 -> mem_value_indt_same m1 m2 (MVarray a1) (MVarray a2)
+  | mem_value_indt_same_MVstruct: forall m1 m2 tag_sym1 l1 tag_sym2 l2,
+      tag_sym1 = tag_sym2 ->
+      eqlistA (struct_field_eq m1 m2) l1 l2 ->
+      mem_value_indt_same m1 m2 (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)
+  | mem_value_indt_same_MVunion: forall m1 m2 tag_sym1 id1 v1 tag_sym2 id2 v2,
+      tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_same m1 m2 v1 v2 ->
+      mem_value_indt_same m1 m2 (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)
   with
-    struct_field_eq: (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> Prop :=
-  | struct_field_triple_eq: forall id1 id2 t1 t2 v1 v2,
-      id1 = id2 /\ t1 = t2 /\ mem_value_indt_eq v1 v2 -> struct_field_eq (id1,t1,v1) (id2,t2,v2).
+    struct_field_eq: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> Prop :=
+  | struct_field_triple_eq: forall m1 m2 id1 id2 t1 t2 v1 v2,
+      id1 = id2 /\ t1 = t2 /\ mem_value_indt_same m1 m2 v1 v2 -> struct_field_eq m1 m2 (id1,t1,v1) (id2,t2,v2).
   Set Elimination Schemes.
 
-  (* Custom induction principle for mem_value_indt_eq *)
-  Lemma mem_value_indt_eq_ind:
-    forall P : mem_value_indt -> mem_value_indt -> Prop,
+  (* Custom induction principle for mem_value_indt_same *)
+  Lemma mem_value_indt_same_ind:
+    forall (m1 : CheriMemoryWithPNVI.mem_state_r) (m2 : CheriMemoryWithoutPNVI.mem_state_r)
+      (P : mem_value_indt -> mem_value_indt -> Prop),
 
-      (* base non-recursive cases *)
       (forall t1 t2, t1 = t2 -> P (MVunspecified t1) (MVunspecified t2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVinteger t1 v1) (MVinteger t2 v2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVfloating t1 v1) (MVfloating t2 v2)) ->
-      (forall t1 t2 p1 p2, t1 = t2 /\ pointer_value_eq p1 p2 -> P (MVpointer t1 p1) (MVpointer t2 p2)) ->
+      (forall t1 t2 p1 p2, t1 = t2 /\ ptr_value_same m1 m2 p1 p2 -> P (MVpointer t1 p1) (MVpointer t2 p2)) ->
 
-      (* recursive cases below *)
-
-      (forall a1 a2, eqlistA mem_value_indt_eq a1 a2 -> List.Forall2 P a1 a2 -> P (MVarray a1) (MVarray a2)) ->
+      (forall a1 a2, eqlistA (mem_value_indt_same m1 m2) a1 a2 -> List.Forall2 P a1 a2 -> P (MVarray a1) (MVarray a2)) ->
       (forall tag_sym1 l1 tag_sym2 l2,
           tag_sym1 = tag_sym2 ->
-          eqlistA struct_field_eq l1 l2 ->
-          List.Forall2 (fun x y => P (snd x) (snd y)) l1 l2 ->
+          eqlistA (struct_field_eq m1 m2) l1 l2 ->
+          List.Forall2 (fun '(id1, _, mv1) '(id2, _, mv2) => id1 = id2 /\ P mv1 mv2) l1 l2 ->
           P (MVstruct tag_sym1 l1) (MVstruct tag_sym2 l2)) ->
 
       (forall tag_sym1 id1 v1 tag_sym2 id2 v2,
-          tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_eq v1 v2 ->
+          tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_same m1 m2 v1 v2 ->
           P v1 v2 ->
           P (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)) ->
 
-      forall x y, mem_value_indt_eq x y -> P x y.
+      forall x y, mem_value_indt_same m1 m2 x y -> P x y.
   Proof.
-    intros P Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer
+    intros m1 m2 P Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer
       Hrec_array Hrec_struct Hrec_union.
     fix IH 3.
     intros x y H.
-    destruct x,y; invc H.
-    (* base cases *)
-    - apply Hbase_unspecified. reflexivity.
-    - apply Hbase_integer. assumption.
-    - apply Hbase_floating. assumption.
-    - apply Hbase_pointer. assumption.
-    - (* recursive case for MVarray *)
-      apply Hrec_array; [assumption|]. clear Hrec_array.
-      induction H2.
-      constructor.
-      apply Forall2_cons.
-      apply IH.
-      assumption.
-      assumption.
-    - (* recursive case for MVstruct *)
-      apply Hrec_struct; auto.
-      induction H5.
-      + constructor.
-      + apply Forall2_cons.
-        *
-          invc H.
-          cbn.
-          apply IH.
-          destruct H0 as [_ [_ H0]].
-          assumption.
-        *
-          apply IHeqlistA.
-    - (* recursive case for MVunion *)
-      clear Hbase_unspecified Hbase_integer Hbase_floating Hbase_pointer Hrec_array Hrec_struct.
-      apply Hrec_union; auto.
-      apply IH.
-      destruct H1 as [_ [_ H1]].
-      assumption.
+    destruct x, y; inversion H; subst; clear H.
+
+    - apply Hbase_unspecified; auto.
+    - apply Hbase_integer; auto.
+    - apply Hbase_floating; auto.
+    - apply Hbase_pointer; auto.
+
+    - apply Hrec_array; auto.
+      + induction H4; constructor.
+        apply IH; auto.
+        apply IHeqlistA; auto; apply H2.
+    - apply Hrec_struct; auto.
+      + clear Hrec_struct.
+        induction H7; constructor.
+        inversion H; subst.
+        destruct H0 as [H1 [H2 H3]].
+        split;auto.
+        apply IHeqlistA; auto.
+    - apply Hrec_union; auto.
+      apply IH; auto.
+      destruct H3; destruct H0; auto.
   Qed.
 
 
-  #[global] Instance mem_value_indt_eq_Reflexive
+  (* [mem_value_indt_same] is not reflexive! *)
+
+  (* TODO: remove, as [mem_value_indt_same] is not reflexive!
+  #[global] Instance mem_value_indt_same_Reflexive
     :
-    Reflexive (mem_value_indt_eq).
+    Reflexive (mem_value_indt_same).
   Proof.
     intros a.
     dependent induction a; constructor; auto.
@@ -523,36 +475,60 @@ Module RevocationProofs.
           repeat break_let.
           apply H2.
   Qed.
+   *)
 
-  Inductive ctype_pointer_value_eq: (CoqCtype.ctype * pointer_value_indt) ->
-                                    (CoqCtype.ctype * pointer_value_indt) -> Prop
+  Inductive ctype_pointer_value_same:
+    CheriMemoryWithPNVI.mem_state_r ->
+    CheriMemoryWithoutPNVI.mem_state_r ->
+    (CoqCtype.ctype * pointer_value_indt) ->
+    (CoqCtype.ctype * pointer_value_indt) -> Prop
     :=
-  | ctype_pointer_value_eq_1:
-    forall t1 t2 pv1 pv2, t1 = t2 /\ pointer_value_eq pv1 pv2 ->
-                     ctype_pointer_value_eq (t1,pv1) (t2,pv2).
+  | ctype_pointer_value_same_1:
+    forall m1 m2 t1 t2 pv1 pv2, t1 = t2 /\ ptr_value_same m1 m2 pv1 pv2 ->
+                     ctype_pointer_value_same m1 m2 (t1,pv1) (t2,pv2).
 
-  Inductive varargs_eq: (Z * list (CoqCtype.ctype * pointer_value_indt)) ->
-                        (Z * list (CoqCtype.ctype * pointer_value_indt)) -> Prop :=
-  | varargs_eq_1: forall z1 vl1 z2 vl2,
-      z1 = z2 /\ eqlistA ctype_pointer_value_eq vl1 vl2
-      -> varargs_eq (z1,vl1) (z2,vl2).
-
-  Definition mem_state_same_rel
-    (a:CheriMemoryWithPNVI.mem_state_r)
-    (b:CheriMemoryWithoutPNVI.mem_state_r): Prop
+  Inductive varargs_same:
+    CheriMemoryWithPNVI.mem_state_r ->
+    CheriMemoryWithoutPNVI.mem_state_r ->
+    (Z * list (CoqCtype.ctype * pointer_value_indt)) ->
+    (Z * list (CoqCtype.ctype * pointer_value_indt)) -> Prop
     :=
-    a.(CheriMemoryWithPNVI.next_alloc_id) = b.(CheriMemoryWithoutPNVI.next_alloc_id)
-    /\ a.(CheriMemoryWithPNVI.next_iota) = b.(CheriMemoryWithoutPNVI.next_iota)
-    /\ a.(CheriMemoryWithPNVI.last_address) = b.(CheriMemoryWithoutPNVI.last_address)
-    /\ ZMap.Equal a.(CheriMemoryWithPNVI.allocations) b.(CheriMemoryWithoutPNVI.allocations)
-    /\ ZMap.Equal a.(CheriMemoryWithPNVI.iota_map) b.(CheriMemoryWithoutPNVI.iota_map)
-    /\ ZMap.Equal a.(CheriMemoryWithPNVI.funptrmap) b.(CheriMemoryWithoutPNVI.funptrmap)
-    /\ ZMap.Equiv varargs_eq a.(CheriMemoryWithPNVI.varargs) b.(CheriMemoryWithoutPNVI.varargs)
-    /\ a.(CheriMemoryWithPNVI.next_varargs_id) = b.(CheriMemoryWithoutPNVI.next_varargs_id)
-    /\ ZMap.Equiv AbsByte_eq a.(CheriMemoryWithPNVI.bytemap) b.(CheriMemoryWithoutPNVI.bytemap)
-    /\ ZMap.Equal a.(CheriMemoryWithPNVI.capmeta) b.(CheriMemoryWithoutPNVI.capmeta).
+  | varargs_same_1: forall m1 m2 z1 vl1 z2 vl2,
+      z1 = z2 /\ eqlistA (ctype_pointer_value_same m1 m2) vl1 vl2
+      -> varargs_same m1 m2 (z1,vl1) (z2,vl2).
 
-  Ltac destruct_mem_state_same_rel H :=
+
+  (* Prior calling this we already established that:
+
+     [ZMap.Equal m1.(CheriMemoryWithPNVI.allocations) m2.(CheriMemoryWithoutPNVI.allocations)]
+   *)
+  Definition capmeta_same
+    (m1:CheriMemoryWithPNVI.mem_state_r)
+    (m2:CheriMemoryWithoutPNVI.mem_state_r)
+    (cm1 cm2: ZMap.t (bool* CapGhostState))
+    : Prop
+    :=
+    forall k t1 t2 gs1 gs2,
+      ZMap.MapsTo k (t1,gs1) cm1 ->
+      ZMap.MapsTo k (t2,gs2) cm2. (* TODO *)
+
+  Definition mem_state_same
+    (m1:CheriMemoryWithPNVI.mem_state_r)
+    (m2:CheriMemoryWithoutPNVI.mem_state_r): Prop
+    :=
+    m1.(CheriMemoryWithPNVI.next_alloc_id) = m2.(CheriMemoryWithoutPNVI.next_alloc_id)
+    /\ m1.(CheriMemoryWithPNVI.next_iota) = m2.(CheriMemoryWithoutPNVI.next_iota)
+    /\ m1.(CheriMemoryWithPNVI.last_address) = m2.(CheriMemoryWithoutPNVI.last_address)
+    /\ ZMap.Equal m1.(CheriMemoryWithPNVI.allocations) m2.(CheriMemoryWithoutPNVI.allocations)
+    /\ ZMap.Equal m1.(CheriMemoryWithPNVI.iota_map) m2.(CheriMemoryWithoutPNVI.iota_map)
+    /\ ZMap.Equal m1.(CheriMemoryWithPNVI.funptrmap) m2.(CheriMemoryWithoutPNVI.funptrmap)
+    /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
+    /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
+    /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
+    /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
+
+
+  Ltac destruct_mem_state_same H :=
     let Malloc_id := fresh "Malloc_id" in
     let Mnextiota := fresh "Mnextiota" in
     let Mlastaddr := fresh "Mlastaddr" in
@@ -564,7 +540,6 @@ Module RevocationProofs.
     let Mbytes := fresh "Mbytes" in
     let Mcapmeta := fresh "Mcapmeta" in
     destruct H as (Malloc_id & Mnextiota & Mlastaddr & Mallocs & Miotas & Mfuncs & Mvarargs & Mnextvararg & Mbytes & Mcapmeta).
-
 
   (* --- Helper lemmas *)
 
@@ -841,20 +816,23 @@ Module RevocationProofs.
   Qed.
 
   Theorem null_ptrval_same:
-    forall t,
-      pointer_value_eq
+    forall m1 m2 t,
+      ptr_value_same m1 m2
         (CheriMemoryWithPNVI.null_ptrval t)
         (CheriMemoryWithoutPNVI.null_ptrval t).
   Proof.
-    intros t.
-    apply pointer_value_no_prov_eq.
+    intros m1 m2 t.
+    unfold CheriMemoryWithPNVI.null_ptrval, CheriMemoryWithoutPNVI.null_ptrval.
+    unfold CheriMemoryWithPNVI.PNVI_prov, CheriMemoryWithoutPNVI.PNVI_prov.
+    repeat normalize_switches.
+    constructor.
     reflexivity.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.null_ptrval CheriMemoryWithoutPNVI.null_ptrval.
 
   Theorem concrete_ptrval_same:
-    forall n a,
-      serr_eq pointer_value_eq
+    forall m1 m2 n a,
+      serr_eq (ptr_value_same m1 m2)
         (CheriMemoryWithPNVI.concrete_ptrval n a)
         (CheriMemoryWithoutPNVI.concrete_ptrval n a).
   Proof.
@@ -863,20 +841,23 @@ Module RevocationProofs.
   #[global] Opaque CheriMemoryWithPNVI.concrete_ptrval CheriMemoryWithoutPNVI.concrete_ptrval.
 
   Theorem fun_ptrval_same:
-    forall s,
-      serr_eq pointer_value_eq
+    forall m1 m2 s,
+      serr_eq (ptr_value_same m1 m2)
         (CheriMemoryWithPNVI.fun_ptrval s)
         (CheriMemoryWithoutPNVI.fun_ptrval s).
   Proof.
-    intros s.
-    apply pointer_value_no_prov_eq.
+    intros m1 m2 s.
+    cbn.
+    unfold CheriMemoryWithPNVI.PNVI_prov, CheriMemoryWithoutPNVI.PNVI_prov.
+    repeat normalize_switches.
+    constructor.
     reflexivity.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.fun_ptrval CheriMemoryWithoutPNVI.fun_ptrval.
 
   Theorem case_funsym_opt_same:
     forall m1 m2 p1 p2,
-      mem_state_same_rel m1 m2 ->
+      mem_state_same m1 m2 ->
       pointer_value_eq p1 p2 ->
       (CheriMemoryWithPNVI.case_funsym_opt m1 p1 =
          CheriMemoryWithoutPNVI.case_funsym_opt m2 p2).
@@ -900,7 +881,7 @@ Module RevocationProofs.
         destruct C as [CI _].
         rewrite CI.
 
-        destruct_mem_state_same_rel ME.
+        destruct_mem_state_same ME.
         unfold ZMap.Equal in Mfuncs.
         rewrite Mfuncs.
         reflexivity.
@@ -911,7 +892,7 @@ Module RevocationProofs.
     -
       inversion H0.
       clear H0 t H5 H1.
-      destruct_mem_state_same_rel ME.
+      destruct_mem_state_same ME.
       unfold ZMap.Equal in Mfuncs.
       rewrite Mfuncs.
       reflexivity.
@@ -1267,7 +1248,7 @@ Module RevocationProofs.
   Theorem pointer_mval_same:
     forall t p1 p2,
       pointer_value_eq p1 p2 ->
-      mem_value_indt_eq (CheriMemoryWithPNVI.pointer_mval t p1)
+      mem_value_indt_same (CheriMemoryWithPNVI.pointer_mval t p1)
         (CheriMemoryWithoutPNVI.pointer_mval t p2).
   Proof.
     intros t p1 p2 H.
@@ -1278,8 +1259,8 @@ Module RevocationProofs.
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem array_mval_same:
     forall a1 a2,
-      eqlistA mem_value_indt_eq a1 a2 ->
-      mem_value_indt_eq (CheriMemoryWithPNVI.array_mval a1)
+      eqlistA mem_value_indt_same a1 a2 ->
+      mem_value_indt_same (CheriMemoryWithPNVI.array_mval a1)
         (CheriMemoryWithoutPNVI.array_mval a2).
   Proof.
     intros a1 a2 H.
@@ -1291,7 +1272,7 @@ Module RevocationProofs.
   Theorem struct_mval_same:
     forall s1 s2 l1 l2,
       s1 = s2 /\ eqlistA struct_field_eq l1 l2 ->
-      mem_value_indt_eq (CheriMemoryWithPNVI.struct_mval s1 l1)
+      mem_value_indt_same (CheriMemoryWithPNVI.struct_mval s1 l1)
         (CheriMemoryWithoutPNVI.struct_mval s2 l2).
   Proof.
     intros s1 s2 l1 l2 [H1 H2].
@@ -1301,8 +1282,8 @@ Module RevocationProofs.
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem union_mval_same:
     forall s1 id1 v1 s2 id2 v2,
-      s1 = s2 /\ id1 = id2 /\ mem_value_indt_eq v1 v2 ->
-      mem_value_indt_eq (CheriMemoryWithPNVI.union_mval s1 id1 v1)
+      s1 = s2 /\ id1 = id2 /\ mem_value_indt_same v1 v2 ->
+      mem_value_indt_same (CheriMemoryWithPNVI.union_mval s1 id1 v1)
         (CheriMemoryWithoutPNVI.union_mval s2 id2 v2).
   Proof.
     intros s1 id1 v1 s2 id2 v2 H.
@@ -1434,7 +1415,7 @@ Module RevocationProofs.
         ZMap.Equal funptrmap1 funptrmap2
         /\ ZMap.Equal capmeta1 capmeta2
         /\ addr1 = addr2
-        /\  mem_value_indt_eq mval1 mval2 ->
+        /\  mem_value_indt_same mval1 mval2 ->
         serr_eq repr_res_eq
           (CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1)
           (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
@@ -1697,7 +1678,7 @@ Module RevocationProofs.
           rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_eq).
+            (Eb:=mem_value_indt_same).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -1728,7 +1709,7 @@ Module RevocationProofs.
           rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_eq).
+            (Eb:=mem_value_indt_same).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -1759,7 +1740,7 @@ Module RevocationProofs.
           rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_eq).
+            (Eb:=mem_value_indt_same).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -1795,7 +1776,7 @@ Module RevocationProofs.
           rewrite <- Heqs, <- Heqs0; clear Heqs Heqs0.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_eq).
+            (Eb:=mem_value_indt_same).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -2175,7 +2156,7 @@ Module RevocationProofs.
     (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
     :=
     eval_to_same : forall mem_state1 mem_state2,
-        mem_state_same_rel mem_state1 mem_state2 ->
+        mem_state_same mem_state1 mem_state2 ->
         lift_sum eq R False
           (evalErrS M1 mem_state1)
           (evalErrS M2 mem_state2).
@@ -2185,8 +2166,8 @@ Module RevocationProofs.
     (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
     :=
     exec_to_same : forall mem_state1 mem_state2,
-        mem_state_same_rel mem_state1 mem_state2 ->
-        lift_sum eq mem_state_same_rel False
+        mem_state_same mem_state1 mem_state2 ->
+        lift_sum eq mem_state_same False
           (execErrS M1 mem_state1)
           (execErrS M2 mem_state2).
 
@@ -2300,7 +2281,7 @@ Module RevocationProofs.
 
 
       match goal with
-      | [H1: C1 ?T1 ?M1 = _, H2: C2 ?T2 ?M2 = _,  H3: mem_state_same_rel ?M1 ?M2 |- _ ] =>
+      | [H1: C1 ?T1 ?M1 = _, H2: C2 ?T2 ?M2 = _,  H3: mem_state_same ?M1 ?M2 |- _ ] =>
           specialize (EC T1 T2 EMV);
           destruct EC as [ECV ECS];
           specialize (ECV M1 M2 EMS);
@@ -2340,16 +2321,16 @@ Module RevocationProofs.
     {V1:CheriMemoryWithPNVI.mem_state_r}
     {V2:CheriMemoryWithoutPNVI.mem_state_r}
     :
-    mem_state_same_rel V1 V2 ->
+    mem_state_same V1 V2 ->
     Same (@eq unit) (put V1) (put V2).
   Proof.
     split.
     -
       split.
     -
-      destruct_mem_state_same_rel H.
+      destruct_mem_state_same H.
       intros m1 m2 M;
-        destruct_mem_state_same_rel M.
+        destruct_mem_state_same M.
       repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
         try apply Mvarargs1; try apply Mvarargs2.
 
@@ -2366,7 +2347,7 @@ Module RevocationProofs.
     {F2:CheriMemoryWithoutPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r}
     :
 
-    (forall m1 m2, mem_state_same_rel m1 m2 ->  mem_state_same_rel (F1 m1) (F2 m2)) ->
+    (forall m1 m2, mem_state_same m1 m2 ->  mem_state_same (F1 m1) (F2 m2)) ->
     Same (@eq unit) (ErrorWithState.update F1) (ErrorWithState.update F2).
   Proof.
     split.
@@ -2375,7 +2356,7 @@ Module RevocationProofs.
     -
       intros m1 m2 M.
       specialize (H m1 m2 M).
-      destruct_mem_state_same_rel H.
+      destruct_mem_state_same H.
       repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
         try apply Mvarargs1; try apply Mvarargs2.
 
@@ -2433,7 +2414,7 @@ Module RevocationProofs.
 
   Lemma get_Same:
     @Same CheriMemoryWithPNVI.mem_state_r CheriMemoryWithoutPNVI.mem_state_r
-      mem_state_same_rel
+      mem_state_same
       (@get CheriMemoryWithPNVI.mem_state_r CheriMemoryWithPNVI.memM
          (State_errS CheriMemoryWithPNVI.mem_state memMError))
       (@get CheriMemoryWithoutPNVI.mem_state_r CheriMemoryWithoutPNVI.memM
@@ -2441,7 +2422,7 @@ Module RevocationProofs.
   Proof.
     split;
       intros m1 m2 M;
-      destruct_mem_state_same_rel M;
+      destruct_mem_state_same M;
       repeat split;try assumption;destruct Mvarargs as [Mvarargs1 Mvarargs2];
       try apply Mvarargs1; try apply Mvarargs2.
 
@@ -2499,7 +2480,7 @@ Module RevocationProofs.
       SameValue eq (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
     Proof.
       intros mem_state1 mem_state2 M.
-      destruct_mem_state_same_rel M.
+      destruct_mem_state_same M.
       (* return value *)
       unfold evalErrS.
       unfold CheriMemoryWithPNVI.allocator, CheriMemoryWithoutPNVI.allocator.
@@ -2527,7 +2508,7 @@ Module RevocationProofs.
       SameState (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
     Proof.
       intros mem_state1 mem_state2 M.
-      destruct_mem_state_same_rel M.
+      destruct_mem_state_same M.
       unfold lift_sum.
       unfold CheriMemoryWithPNVI.mem_state in *.
       unfold execErrS.
@@ -2552,10 +2533,10 @@ Module RevocationProofs.
            tuple_inversion;
            congruence).
       +
-        (* main proof here: [mem_state_same_rel m1 m2] *)
+        (* main proof here: [mem_state_same m1 m2] *)
         repeat break_match_hyp;
           repeat tuple_inversion;
-          unfold mem_state_same_rel; cbn;
+          unfold mem_state_same; cbn;
           (try rewrite Malloc_id in *; clear Malloc_id;
            try rewrite Mnextiota in *; clear Mnextiota;
            try rewrite Mlastaddr in *; clear Mlastaddr;
@@ -2612,7 +2593,7 @@ Module RevocationProofs.
     -
       same_step.
       intros m1 m2 H0.
-      destruct_mem_state_same_rel H0.
+      destruct_mem_state_same H0.
       repeat split;cbn;try assumption;
         (try setoid_rewrite Mallocs0; try reflexivity);
         destruct Mvarargs as [Mvarargs01 Mvarargs02];
@@ -2701,7 +2682,7 @@ Module RevocationProofs.
       split.
       break_match.
       -
-        apply bind_Same with (R':=mem_state_same_rel).
+        apply bind_Same with (R':=mem_state_same).
         split.
         same_step.
         intros.
@@ -2709,7 +2690,7 @@ Module RevocationProofs.
         split.
         {
           apply serr2InternalErr_same with (R:=repr_res_eq).
-          destruct_mem_state_same_rel H.
+          destruct_mem_state_same H.
           apply repr_same.
           repeat split; try assumption.
           reflexivity.
@@ -2719,7 +2700,7 @@ Module RevocationProofs.
         split.
         same_step.
         {
-          destruct_mem_state_same_rel H.
+          destruct_mem_state_same H.
           destruct H0 as [H0 [H1 H2]].
           subst.
           repeat split;try assumption;
@@ -2847,7 +2828,7 @@ Module RevocationProofs.
         same_step.
         {
           intros m1 m2 H.
-          destruct_mem_state_same_rel H.
+          destruct_mem_state_same H.
           repeat split;try assumption;
             destruct Mvarargs as [Mvarargs1 Mvarargs2];try apply Mvarargs1; try apply Mvarargs2.
           - cbn;apply add_m;[reflexivity|reflexivity| assumption].
@@ -2890,7 +2871,7 @@ Module RevocationProofs.
       (CheriMemoryWithoutPNVI.find_live_allocation addr).
   Proof.
     unfold CheriMemoryWithPNVI.find_live_allocation, CheriMemoryWithoutPNVI.find_live_allocation.
-    apply bind_Same with (R':=mem_state_same_rel).
+    apply bind_Same with (R':=mem_state_same).
     split.
     same_step.
     intros x1 x2 H.
@@ -2905,7 +2886,7 @@ Module RevocationProofs.
 
   Definition abst_res_eq: relation (taint_indt * mem_value_with_err * list AbsByte)
     := fun '(t1,mv1,b1) '(t2,mv2,b2) =>
-         t1 = t2 /\ mem_value_with_err_eq mv1 mv2 /\ eqlistA AbsByte_eq b1 b2.
+         t1 = t2 /\ mem_value_with_err_same mv1 mv2 /\ eqlistA AbsByte_eq b1 b2.
 
   Theorem abst_same
     (fuel: nat)
@@ -2986,7 +2967,7 @@ Module RevocationProofs.
 
       addr1 = addr2 ->
       meta1 = meta2 ->
-      mem_state_same_rel st1 st2 ->
+      mem_state_same st1 st2 ->
       Same eq (CheriMemoryWithPNVI.maybe_revoke_pointer alloc_base alloc_limit st1 addr1 meta1)
         (CheriMemoryWithoutPNVI.maybe_revoke_pointer alloc_base alloc_limit st2 addr2 meta2).
   Proof.
@@ -3041,7 +3022,7 @@ Module RevocationProofs.
   Proof.
     intros a.
     unfold CheriMemoryWithPNVI.revoke_pointers, CheriMemoryWithoutPNVI.revoke_pointers.
-    eapply bind_Same with (R':=mem_state_same_rel).
+    eapply bind_Same with (R':=mem_state_same).
     split.
     same_step.
     intros x1 x2 H.
@@ -3057,8 +3038,8 @@ Module RevocationProofs.
       apply update_Same.
       intros m1 m2 H1.
       unfold CheriMemoryWithPNVI.mem_state_with_capmeta, CheriMemoryWithoutPNVI.mem_state_with_capmeta.
-      destruct_mem_state_same_rel H.
-      destruct_mem_state_same_rel H1.
+      destruct_mem_state_same H.
+      destruct_mem_state_same H1.
 
       split;[cbn;auto|].
       split;[cbn;auto|].
@@ -3104,7 +3085,7 @@ Module RevocationProofs.
     intros s1 s2 H.
     unfold CheriMemoryWithPNVI.get_allocation, CheriMemoryWithoutPNVI.get_allocation.
     subst.
-    eapply bind_Same with (R':=mem_state_same_rel).
+    eapply bind_Same with (R':=mem_state_same).
     split.
     same_step.
     intros x1 x2 H.
