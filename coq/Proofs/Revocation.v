@@ -795,7 +795,7 @@ Module RevocationProofs.
     | [H: context[has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT)] |- _] =>
         replace (has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT))
         with false in H by (symmetry;apply has_INSTANT_WithPNVI)
-     | [H: context[has_PNVI (WithPNVISwitches.get_switches tt)] |- _] =>
+    | [H: context[has_PNVI (WithPNVISwitches.get_switches tt)] |- _] =>
         replace (has_PNVI (WithPNVISwitches.get_switches tt))
         with true in H by has_PNVI_WithPNVI
     | [H: context[has_PNVI (WithoutPNVISwitches.get_switches tt)] |- _] =>
@@ -819,6 +819,12 @@ Module RevocationProofs.
             (has_switch (WithPNVISwitches.get_switches tt) s)
             by (apply non_PNVI_switches_match;auto)
         end
+    | [ |- context[has_PNVI (WithPNVISwitches.get_switches tt)]] =>
+        setoid_replace (has_PNVI (WithPNVISwitches.get_switches tt))
+        with true by (apply has_PNVI_WithPNVI)
+    | [|- context[has_PNVI (WithoutPNVISwitches.get_switches tt)]] =>
+        replace (has_PNVI (WithoutPNVISwitches.get_switches tt))
+        with false by (symmetry;apply has_PNVI_WithoutPNVI)
     end.
 
   (* --- Lemmas about memory models --- *)
