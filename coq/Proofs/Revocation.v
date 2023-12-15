@@ -1318,47 +1318,44 @@ Module RevocationProofs.
 
   (* This theorem using weaker equality, since pointers are involved *)
   Theorem pointer_mval_same:
-    forall t p1 p2,
-      pointer_value_eq p1 p2 ->
-      mem_value_indt_same (CheriMemoryWithPNVI.pointer_mval t p1)
+    forall m1 m2 t p1 p2,
+      ptr_value_same m1 m2 p1 p2 ->
+      mem_value_indt_same m1 m2 (CheriMemoryWithPNVI.pointer_mval t p1)
         (CheriMemoryWithoutPNVI.pointer_mval t p2).
   Proof.
-    intros t p1 p2 H.
     constructor.
     auto.
   Qed.
 
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem array_mval_same:
-    forall a1 a2,
-      eqlistA mem_value_indt_same a1 a2 ->
-      mem_value_indt_same (CheriMemoryWithPNVI.array_mval a1)
+    forall m1 m2 a1 a2,
+      eqlistA (mem_value_indt_same m1 m2) a1 a2 ->
+      mem_value_indt_same m1 m2 (CheriMemoryWithPNVI.array_mval a1)
         (CheriMemoryWithoutPNVI.array_mval a2).
   Proof.
-    intros a1 a2 H.
     constructor.
     assumption.
   Qed.
 
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem struct_mval_same:
-    forall s1 s2 l1 l2,
-      s1 = s2 /\ eqlistA struct_field_eq l1 l2 ->
-      mem_value_indt_same (CheriMemoryWithPNVI.struct_mval s1 l1)
+    forall m1 m2 s1 s2 l1 l2,
+      s1 = s2 /\ eqlistA (struct_field_eq m1 m2) l1 l2 ->
+      mem_value_indt_same m1 m2 (CheriMemoryWithPNVI.struct_mval s1 l1)
         (CheriMemoryWithoutPNVI.struct_mval s2 l2).
   Proof.
-    intros s1 s2 l1 l2 [H1 H2].
+    intros m1 m2 s1 s2 l1 l2 [H1 H2].
     constructor; assumption.
   Qed.
 
   (* This theorem using weaker equality, since pointers may be involved *)
   Theorem union_mval_same:
-    forall s1 id1 v1 s2 id2 v2,
-      s1 = s2 /\ id1 = id2 /\ mem_value_indt_same v1 v2 ->
-      mem_value_indt_same (CheriMemoryWithPNVI.union_mval s1 id1 v1)
+    forall m1 m2 s1 id1 v1 s2 id2 v2,
+      s1 = s2 /\ id1 = id2 /\ mem_value_indt_same m1 m2 v1 v2 ->
+      mem_value_indt_same m1 m2 (CheriMemoryWithPNVI.union_mval s1 id1 v1)
         (CheriMemoryWithoutPNVI.union_mval s2 id2 v2).
   Proof.
-    intros s1 id1 v1 s2 id2 v2 H.
     constructor; assumption.
   Qed.
 
