@@ -214,7 +214,7 @@ Module RevocationProofs.
     model, while the second one is from the "WithoutPNVI".
 
     Despite being the same type [pointer_value_indt], the relation is
-    not symmetric, not transitive, and not reflexive!
+    non-symmetric, non-transitive, and irreflexive!
 
     RHS provenance could only be [Prov_disabled].
    *)
@@ -283,7 +283,7 @@ Module RevocationProofs.
   (* The following prevent default elimination principle from being generated for
      this type, as it is inadequate *)
   Unset Elimination Schemes.
-  (* This relation is non-reflexive *)
+  (* This relation is non-reflexive (but not irreflexive) *)
   Inductive mem_value_with_err_same: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> mem_value_with_err -> mem_value_with_err -> Prop :=
   | mem_value_with_err_same_MVEunspecified: forall m1 m2 t1 t2, t1 = t2 -> mem_value_with_err_same m1 m2 (MVEunspecified t1) (MVEunspecified t2)
   | mem_value_with_err_same_MVEinteger: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_with_err_same m1 m2 (MVEinteger t1 v1) (MVEinteger t2 v2)
