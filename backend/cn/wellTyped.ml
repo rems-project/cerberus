@@ -700,9 +700,16 @@ module WIT = struct
           return (IT (CopyAllocId { addr; loc=ptr }, BT.Loc))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
+          let sz = Memory.size_of_ctype ct in
+          let rs = Option.get (BT.is_bits_bt Memory.size_bt) in
+          let@ () = ensure_z_fits_bits_type loc rs (Z.of_int sz) in
           return (IT (SizeOf ct, Memory.size_bt))
        | OffsetOf (tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
+          let@ decl = get_struct_decl loc tag in
+          let o = Option.get (Memory.member_offset decl member) in
+          let rs = Option.get (BT.is_bits_bt Memory.sint_bt) in
+          let@ () = ensure_z_fits_bits_type loc rs (Z.of_int o) in
           return (IT (OffsetOf (tag, member), Memory.sint_bt))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
