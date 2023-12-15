@@ -283,7 +283,7 @@ Section ZMapAux.
   Admitted.
    *)
 
-  Lemma zmap_in_mapsto {T:Type} (k:ZMap.key) (v:T) (m:ZMap.t T):
+  Lemma zmap_in_mapsto {T:Type} (k:ZMap.key) (m:ZMap.t T):
     ZMap.In k m -> (exists v, @ZMap.MapsTo T k v m).
   Proof.
     intros H.
