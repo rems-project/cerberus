@@ -177,9 +177,10 @@ Module RevocationProofs.
     - right. intro H. destruct H as [H _]. contradiction.
   Qed.
 
+  (* we know [alloc_id] is in [allocs] *)
   Definition cap_live_alloc_match alloc_id allocs c1 c2 : Prop :=
     (* only live allocation one exists *)
-    exists a, ZMap.MapsTo alloc_id a allocs ->
+    forall a, ZMap.MapsTo alloc_id a allocs ->
          if cap_alloc_match_dec c1 a
          then
            (* it corresponds to c1 (via bounds) *)
@@ -440,43 +441,6 @@ Module RevocationProofs.
   Qed.
 
 
-  (* [mem_value_indt_same] is not reflexive! *)
-
-  (* TODO: remove, as [mem_value_indt_same] is not reflexive!
-  #[global] Instance mem_value_indt_same_Reflexive
-    :
-    Reflexive (mem_value_indt_same).
-  Proof.
-    intros a.
-    dependent induction a; constructor; auto.
-    -
-      split; reflexivity.
-    -
-      apply eqlistA_altdef.
-      apply list.Forall_Forall2_diag.
-      apply H.
-    -
-      apply eqlistA_altdef.
-      apply list.Forall_Forall2_diag.
-      revert H.
-      induction l.
-      +
-        constructor.
-      +
-        intros H.
-        apply list.Forall_cons_1 in H.
-        repeat break_let.
-        destruct H as [H1 H2].
-        constructor.
-        *
-          invc H1; repeat split; constructor;auto.
-        *
-          apply IHl in H2. clear IHl.
-          repeat break_let.
-          apply H2.
-  Qed.
-   *)
-
   Inductive ctype_pointer_value_same:
     CheriMemoryWithPNVI.mem_state_r ->
     CheriMemoryWithoutPNVI.mem_state_r ->
@@ -498,19 +462,43 @@ Module RevocationProofs.
       -> varargs_same m1 m2 (z1,vl1) (z2,vl2).
 
 
-  (* Prior calling this we already established that:
+  (* Simple function decode capability from memory. We do not check alignment, provenance, etc  *)
+  Definition decode_cap_at (addr:Z) (bytemap:ZMap.t AbsByte): option Capability_GS.t
+    :=
+    let abs := CheriMemoryWithPNVI.fetch_bytes bytemap addr (sizeof_pointer MorelloImpl.get) in
+    let bs := List.map value abs in
+    cs <- extract_unspec bs ;;
+    Capability_GS.decode (List.rev cs) false.
 
-     [ZMap.Equal m1.(CheriMemoryWithPNVI.allocations) m2.(CheriMemoryWithoutPNVI.allocations)]
+
+  (* Prior to calling this we already established that:
+
+    [ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)]
+
+    So when decoding caps we can use the either of bytemaps.
    *)
-  Definition capmeta_same
+  Definition cap_in_memory_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
     (m2:CheriMemoryWithoutPNVI.mem_state_r)
-    (cm1 cm2: ZMap.t (bool* CapGhostState))
     : Prop
     :=
-    forall k t1 t2 gs1 gs2,
-      ZMap.MapsTo k (t1,gs1) cm1 ->
-      ZMap.MapsTo k (t2,gs2) cm2. (* TODO *)
+    forall (k:ZMap.key) (t1 t2:bool) (gs1 gs2:CapGhostState),
+      (ZMap.MapsTo k (t1,gs1) m1.(CheriMemoryWithPNVI.capmeta) <-> ZMap.MapsTo k (t2,gs1) m2.(CheriMemoryWithoutPNVI.capmeta))
+      /\ gs1 = gs2 (* same ghost state *)
+      /\ ((* tags must be either same *)
+          t1 = t2
+          \/ ( (* or non-PNVI cap may be revoked *)
+              t1 = true /\ t2 = false
+              /\  (* if pointing to dead allocation *)
+                (exists c,
+                    decode_cap_at k m1.(CheriMemoryWithPNVI.bytemap) = Some c
+                    /\
+                      ~(exists alloc_id a,
+                            ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ cap_alloc_match c a)
+                )
+            )
+        ).
+
 
   Definition mem_state_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
@@ -525,8 +513,17 @@ Module RevocationProofs.
     /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
     /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
-    /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
+    /\ cap_in_memory_same m1 m2.
 
+  (* TODO: Memory invariant sketch:
+
+    1. All keys in capmeta must be pointer-aligned addresses
+    2. All caps which are tagged according to capmeta must:
+       1. have their corrsponding bytes intialized
+       2. decode without error
+
+    Due to types we will need to have 2 versions of this per module! (or define in module
+   *)
 
   Ltac destruct_mem_state_same H :=
     let Malloc_id := fresh "Malloc_id" in
@@ -855,47 +852,122 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.fun_ptrval CheriMemoryWithoutPNVI.fun_ptrval.
 
+  (* TODO: this should be part of capabilities library *)
+  Lemma cap_invalidate_preserves_value:
+    forall c : Capability_GS.t,
+      Capability_GS.cap_get_value c = Capability_GS.cap_get_value (Capability_GS.cap_invalidate c).
+  Proof.
+    intros c.
+  Admitted.
+
+  Lemma single_alloc_id_cap_cmp_value_eq:
+    forall m1 c1 c2 alloc_id,
+      single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) c1 c2 alloc_id
+      ->
+        Capability_GS.cap_get_value c1 = Capability_GS.cap_get_value c2.
+  Proof.
+    intros m1 c1 c2 alloc_id H.
+    unfold single_alloc_id_cap_cmp in H.
+    break_if.
+    -
+      subst.
+      reflexivity.
+    -
+      clear - H.
+      subst.
+      apply cap_invalidate_preserves_value.
+  Qed.
+
+  Lemma double_alloc_id_cap_cmp_value_eq:
+    forall m1 c1 c2 alloc_id1 alloc_id2,
+      double_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) c1 c2 alloc_id1 alloc_id2
+      ->
+        Capability_GS.cap_get_value c1 = Capability_GS.cap_get_value c2.
+  Proof.
+    intros m1 c1 c2 alloc_id1 alloc_id2 H.
+    unfold double_alloc_id_cap_cmp, cap_live_alloc_match in H.
+    repeat break_match.
+    1: subst; reflexivity.
+    1,2:
+      rename i into I;
+    apply zmap_in_mapsto in I;
+    destruct I as [a I];
+    specialize (H a I);
+    break_if;subst;[reflexivity|apply cap_invalidate_preserves_value].
+    -
+      subst.
+      apply cap_invalidate_preserves_value.
+  Qed.
+
   Theorem case_funsym_opt_same:
     forall m1 m2 p1 p2,
       mem_state_same m1 m2 ->
-      pointer_value_eq p1 p2 ->
+      ptr_value_same m1 m2 p1 p2 ->
       (CheriMemoryWithPNVI.case_funsym_opt m1 p1 =
          CheriMemoryWithoutPNVI.case_funsym_opt m2 p2).
   Proof.
     cbn.
     intros m1 m2 [p1prov p1v] [p2prov p2v] ME FE.
-    inversion FE. clear FE.
-    unfold CheriMemoryWithPNVI.case_funsym_opt, CheriMemoryWithPNVI.break_PV.
-    unfold CheriMemoryWithoutPNVI.case_funsym_opt, CheriMemoryWithoutPNVI.break_PV.
-    destruct p1v, p2v.
-    clear p1prov p2prov pr1 pr2 H H2.
-    -
-      inversion H0.
-      clear f H0 H1 H2.
-      destruct f0.
-      +
-        reflexivity.
-      +
-        unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
-        pose models_compatible as C.
-        destruct C as [CI _].
-        rewrite CI.
+    invc FE;
+      unfold CheriMemoryWithPNVI.case_funsym_opt, CheriMemoryWithPNVI.break_PV,
+      CheriMemoryWithoutPNVI.case_funsym_opt, CheriMemoryWithoutPNVI.break_PV.
 
-        destruct_mem_state_same ME.
-        unfold ZMap.Equal in Mfuncs.
-        rewrite Mfuncs.
-        reflexivity.
+    #[local] Ltac solve_zmap_find ME Mfuncs :=
+      unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z;
+      pose models_compatible as C;
+      destruct C as [CI _];
+      rewrite CI;
+      destruct_mem_state_same ME;
+      unfold ZMap.Equal in Mfuncs;
+      rewrite Mfuncs;
+      reflexivity.
+
     -
-      inversion H0.
+      break_match_goal; [
+          break_match_goal;[reflexivity | solve_zmap_find ME Mfuncs]
+        | solve_zmap_find ME Mfuncs].
     -
-      inversion H0.
+      (* same as previous *)
+      break_match_goal; [
+          break_match_goal;[reflexivity | solve_zmap_find ME Mfuncs]
+        | solve_zmap_find ME Mfuncs].
     -
-      inversion H0.
-      clear H0 t H5 H1.
+      break_match_goal;[reflexivity|solve_zmap_find ME Mfuncs].
+
+    -
+      unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
+      pose models_compatible as C.
+      destruct C as [CI _].
+      rewrite CI. clear CI.
       destruct_mem_state_same ME.
       unfold ZMap.Equal in Mfuncs.
-      rewrite Mfuncs.
+      rewrite Mfuncs; clear Mfuncs.
+
+      apply single_alloc_id_cap_cmp_value_eq in H0.
+      rewrite H0.
       reflexivity.
+    -
+
+      unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
+      pose models_compatible as C.
+      destruct C as [CI _].
+      rewrite CI. clear CI.
+      destruct_mem_state_same ME.
+      unfold ZMap.Equal in Mfuncs.
+      rewrite Mfuncs; clear Mfuncs.
+
+      destruct H0.
+      +
+        destruct H as [alloc_id [H1 H2]].
+        apply single_alloc_id_cap_cmp_value_eq in H2.
+        rewrite H2.
+        reflexivity.
+      +
+        destruct H as [alloc_id1 [alloc_id2 [H1 H2]]].
+        apply double_alloc_id_cap_cmp_value_eq in H2.
+        rewrite H2.
+        reflexivity.
+
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.case_funsym_opt CheriMemoryWithoutPNVI.case_funsym_opt.
 
