@@ -575,6 +575,10 @@ module WIT = struct
          (* let s, t = IT.alpha_rename (s, BT.Integer) t in *)
          pure begin
              let@ bt = WBT.is_bt loc bt in
+             let@ () = ensure_bits_type loc bt in
+             let rs = Option.get (BT.is_bits_bt bt) in
+             let@ () = ensure_z_fits_bits_type loc rs (Z.of_int i1) in
+             let@ () = ensure_z_fits_bits_type loc rs (Z.of_int i2) in
              let@ () = add_l s bt (loc, lazy (Pp.string "forall-var")) in
              let@ t = check loc Bool t in
              return (IT (EachI ((i1, (s, bt), i2), t),BT.Bool))
