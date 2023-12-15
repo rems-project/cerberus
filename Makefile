@@ -24,18 +24,16 @@ else
 endif
 
 .PHONY: normal
-normal: cerberus
-
-.PHONY: all
-
 ifeq ($(shell command -v coqc >/dev/null 2>&1; echo $$?), 0)
-    $(info Coq found. Will attempt to build Cerberus-CHERI)
-    CERBERUS_GOAL = cerberus cerberus-bmc cerberus-web cn cheri #rustic
+    NORMAL_GOAL = cerberus-with-cheri
 else
-    CERBERUS_GOAL = cerberus cerberus-bmc cerberus-web cn #rustic
+    NORMAL_GOAL = cerberus
 endif
 
-all: $(CERBERUS_GOAL)
+normal: $(NORMAL_GOAL)
+
+.PHONY: all
+all: normal cerberus-bmc cerberus-web cn
 
 
 .PHONY: full-build
@@ -92,6 +90,13 @@ cheri: prelude-src
 	@echo "[DUNE] cerberus-cheri"
 	$(Q)dune build $(DUNEFLAGS) cerberus-cheri.install
 
+# combined goal to build both cerberus and cheri together as single dune run.
+# building them separately form makefile causes them to run two confilcting
+# dune builds in parallel
+.PHONY: cerberus-with-cheri
+cerberus-with-cheri: prelude-src
+	@echo "[DUNE] cerberus-with-cheri"
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cerberus-cheri.install
 
 # .PHONY: cerberus-ocaml ocaml
 # ocaml: cerberus-ocaml
