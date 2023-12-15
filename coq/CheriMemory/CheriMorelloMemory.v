@@ -281,6 +281,16 @@ Definition wrapI min_v max_v n :=
   if Z.leb r max_v then r
   else Z.sub r dlt.
 
+Definition extract_unspec {A : Set} (xs : list (option A))
+  : option (list A) :=
+  List.fold_left
+    (fun (acc_opt : option (list A)) =>
+     fun (c_opt : option A) =>
+       match (acc_opt, c_opt) with
+       | (None, _) => None
+       | (_, None) => None
+       | (Some acc, Some c_value) => Some (cons c_value acc)
+       end) (List.rev xs) (Some nil) .
 
 Module Type CheriMemoryImpl
   (MC:Mem_common(AddressValue)(Bounds))
@@ -1269,17 +1279,6 @@ Module Type CheriMemoryImpl
     | [] => NoTaint
     | _ => NewTaint xs
     end.
-
-  Definition extract_unspec {A : Set} (xs : list (option A))
-    : option (list A) :=
-    List.fold_left
-      (fun (acc_opt : option (list A)) =>
-       fun (c_opt : option A) =>
-         match (acc_opt, c_opt) with
-         | (None, _) => None
-         | (_, None) => None
-         | (Some acc, Some c_value) => Some (cons c_value acc)
-         end) (List.rev xs) (Some nil) .
 
   (** Convert an arbitrary integer value to unsinged cap value *)
   Definition wrap_cap_value (n_value : Z) : Z :=
