@@ -35,6 +35,14 @@ let ensure_bits_type (loc : loc) (has : BT.t) =
   | has ->
      fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = !^"bitvector"}})
 
+let ensure_z_fits_bits_type loc (sign, n) v = 
+  if BT.fits_range (sign, n) v then 
+    return ()
+  else
+    let err = !^"Value" ^^^ Pp.z v ^^^ !^"does not fit" ^^^ BT.pp (Bits (sign, n)) in
+    fail (fun _ -> {loc; msg = Generic err})
+
+
 let ensure_arith_type (loc : loc) it =
   let open BT in
   match IT.bt it with
@@ -338,6 +346,7 @@ module WIT = struct
       | Const (Z z) ->
          return (IT (Const (Z z), Integer))
       | Const (Bits ((sign,n),v) as c) ->
+         let@ () = ensure_z_fits_bits_type loc (sign, n) v in
          return (IT (Const c, BT.Bits (sign,n)))
       | Const (Q q) ->
          return (IT (Const (Q q), Real))
