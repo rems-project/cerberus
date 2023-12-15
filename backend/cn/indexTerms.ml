@@ -739,7 +739,8 @@ let map_set_ t1 (t2, t3) =
 let map_get_ v arg =
   match bt v with
   | BT.Map (dt, rbt) ->
-     assert (BT.equal dt (bt arg));
+     if BT.equal dt (bt arg) then ()
+     else failwith ("mag_get_: type mismatch: " ^ Pp.plain (Pp.list pp_with_typ [v; arg]));
      IT (MapGet (v, arg), rbt)
   | _ -> Cerb_debug.error "illtyped index term"
 let map_def_ (s, abt) body =
@@ -849,7 +850,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
          value_check_array_size_warning := n
        end else ();
        (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
-       let i_s, i = fresh BT.Integer in
+       let i_s, i = fresh @@ BT.Bits (Unsigned, 64) in
        and_
          [eachI_ (0, i_s, n - 1) (aux item_ct (map_get_ about i))]
     | Pointer pointee_ct ->
