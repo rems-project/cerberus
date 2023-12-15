@@ -351,6 +351,8 @@ module WIT = struct
       | Const (Q q) ->
          return (IT (Const (Q q), Real))
       | Const (Pointer p) ->
+         let rs = Option.get (BT.is_bits_bt Memory.intptr_bt) in
+         let@ () = ensure_z_fits_bits_type loc rs p.addr in
          return (IT (Const (Pointer p), Loc))
       | Const (Alloc_id p) ->
          return (IT (Const (Alloc_id p), BT.Alloc_id))
