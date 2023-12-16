@@ -477,25 +477,26 @@ Module RevocationProofs.
 
     So when decoding caps we can use the either of bytemaps.
    *)
-  Definition cap_in_memory_same
+  Definition caps_in_memory_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
     (m2:CheriMemoryWithoutPNVI.mem_state_r)
+    (capmeta1 capmeta2: ZMap.t (bool * CapGhostState))
     : Prop
     :=
     forall (k:ZMap.key) (t1 t2:bool) (gs1 gs2:CapGhostState),
-      (ZMap.MapsTo k (t1,gs1) m1.(CheriMemoryWithPNVI.capmeta) <-> ZMap.MapsTo k (t2,gs1) m2.(CheriMemoryWithoutPNVI.capmeta))
-      /\ gs1 = gs2 (* same ghost state *)
-      /\ ((* tags must be either same *)
-          t1 = t2
-          \/ ( (* or non-PNVI cap may be revoked *)
-              t1 = true /\ t2 = false
-              /\  (* if pointing to dead allocation *)
-                (exists c,
-                    decode_cap_at k m1.(CheriMemoryWithPNVI.bytemap) = Some c
-                    /\
-                      ~(exists alloc_id a,
-                            ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ cap_alloc_match c a)
-                )
+      (ZMap.MapsTo k (t1,gs1) capmeta1 <-> ZMap.MapsTo k (t2,gs2) capmeta2)
+      /\ ((t1 = t2 /\ gs1 = gs2) (* same tags and same ghost state *)
+         \/ ( (* non-PNVI cap was revoked *)
+             t1 = true /\ t2 = false
+             /\  (* if pointing to dead allocation *)
+               (exists c,
+                   decode_cap_at k m1.(CheriMemoryWithPNVI.bytemap) = Some c
+                   /\
+                     ~(exists alloc_id a,
+                           ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ cap_alloc_match c a)
+               )
+             /\ gs2.(tag_unspecified) = false (* cleared during revocation *)
+             /\ gs1.(bounds_unspecified) = gs2.(bounds_unspecified)
             )
         ).
 
@@ -513,7 +514,7 @@ Module RevocationProofs.
     /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
     /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
-    /\ cap_in_memory_same m1 m2.
+    /\ caps_in_memory_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
   (* TODO: Memory invariant sketch:
 
@@ -1407,12 +1408,12 @@ Module RevocationProofs.
   Qed.
 
   Lemma ghost_tags_same:
-    forall (addr : AddressValue.t) (sz0 sz1:Z) (c0 c1 : ZMap.t (bool * CapGhostState)),
+    forall m1 m2 (addr : AddressValue.t) (sz0 sz1:Z) (capmeta0 capmeta1 : ZMap.t (bool * CapGhostState)),
       sz0 = sz1 ->
-      ZMap.Equal (elt:=bool * CapGhostState) c0 c1 ->
-      ZMap.Equal (elt:=bool * CapGhostState)
-        (CheriMemoryWithPNVI.ghost_tags addr sz0 c0)
-        (CheriMemoryWithoutPNVI.ghost_tags addr sz1 c1).
+      caps_in_memory_same m1 m2 capmeta0 capmeta1 ->
+      caps_in_memory_same m1 m2
+        (CheriMemoryWithPNVI.ghost_tags addr sz0 capmeta0)
+        (CheriMemoryWithoutPNVI.ghost_tags addr sz1 capmeta1).
   Proof.
     intros addr sz0 sz1 Hsz c1 c0 H.
     subst sz1.
