@@ -471,6 +471,32 @@ Module RevocationProofs.
     Capability_GS.decode (List.rev cs) false.
 
 
+  (* A predicate that defines the relationship between metadata values
+     `meta1` and `meta2` associated with an address in two different
+     capability maps within the context provided by the memory state
+     `m1` from a system with PNVI *)
+  Definition cap_in_memory_same
+    (m1: CheriMemoryWithPNVI.mem_state_r)
+    (addr: Z)
+    (meta1 meta2 : bool * CapGhostState)
+    : Prop :=
+
+    let (t1, gs1) := meta1 in
+    let (t2, gs2) := meta2 in
+    (t1 = t2 /\ gs1 = gs2) (* same tags and same ghost state *)
+    \/ ( (* non-PNVI cap was revoked *)
+        t1 = true /\ t2 = false
+        /\  (* if pointing to dead allocation *)
+          (exists c,
+              decode_cap_at addr m1.(CheriMemoryWithPNVI.bytemap) = Some c
+              /\
+                ~(exists alloc_id a,
+                      ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ cap_alloc_match c a)
+          )
+        /\ gs2.(tag_unspecified) = false (* cleared during revocation *)
+        /\ gs1.(bounds_unspecified) = gs2.(bounds_unspecified)
+      ).
+
   (* Prior to calling this we already established that:
 
     [ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)]
@@ -483,22 +509,7 @@ Module RevocationProofs.
     (capmeta1 capmeta2: ZMap.t (bool * CapGhostState))
     : Prop
     :=
-    forall (k:ZMap.key) (t1 t2:bool) (gs1 gs2:CapGhostState),
-      (ZMap.MapsTo k (t1,gs1) capmeta1 <-> ZMap.MapsTo k (t2,gs2) capmeta2)
-      /\ ((t1 = t2 /\ gs1 = gs2) (* same tags and same ghost state *)
-         \/ ( (* non-PNVI cap was revoked *)
-             t1 = true /\ t2 = false
-             /\  (* if pointing to dead allocation *)
-               (exists c,
-                   decode_cap_at k m1.(CheriMemoryWithPNVI.bytemap) = Some c
-                   /\
-                     ~(exists alloc_id a,
-                           ZMap.MapsTo alloc_id a m1.(CheriMemoryWithPNVI.allocations) /\ cap_alloc_match c a)
-               )
-             /\ gs2.(tag_unspecified) = false (* cleared during revocation *)
-             /\ gs1.(bounds_unspecified) = gs2.(bounds_unspecified)
-            )
-        ).
+    zmap_relate_keys capmeta1 capmeta2 (cap_in_memory_same m1).
 
 
   Definition mem_state_same
