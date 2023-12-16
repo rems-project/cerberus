@@ -269,6 +269,17 @@ Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
 
 Section ZMapAux.
 
+  (* A predicate that accepts two ZMaps `map1` and `map2` of
+     potentially different value types `A` and `B`, and a relation
+     `R`. It ensures that for every key in these ZMaps, `R` holds for
+     the corresponding values if the key exists in both maps, or that
+     the key does not exist in either map. *)
+  Definition zmap_relate_keys {A B : Type} (map1: ZMap.t A) (map2: ZMap.t B)
+    (R: ZMap.key -> A -> B -> Prop) : Prop :=
+    forall k,
+      (exists v1 v2, ZMap.MapsTo k v1 map1 /\ ZMap.MapsTo k v2 map2 /\ R k v1 v2)
+      \/ (~exists v, ZMap.MapsTo k v map1 /\ ~exists v, ZMap.MapsTo k v map2).
+
   (* TODO: maybe not needed! *)
   (*
   #[global] Instance zmap_mapi_Proper
