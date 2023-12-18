@@ -870,6 +870,12 @@ Module RevocationProofs.
       Capability_GS.cap_get_value c = Capability_GS.cap_get_value (Capability_GS.cap_invalidate c).
   Proof.
     intros c.
+    destruct c.
+    unfold Capability_GS.cap_invalidate, Capability_GS.cap_get_value, Capability.cap_get_value, Capability_GS.cap.
+    unfold Capability_GS.set_cap, Capability.cap_invalidate.
+    unfold CapFns.CapWithTagClear, CapFns.CapGetValue.
+    cbn.
+    f_equiv.
   Admitted.
 
   Lemma single_alloc_id_cap_cmp_value_eq:
