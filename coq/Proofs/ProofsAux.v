@@ -278,7 +278,7 @@ Section ZMapAux.
     (R: ZMap.key -> A -> B -> Prop) : Prop :=
     forall k,
       (exists v1 v2, ZMap.MapsTo k v1 map1 /\ ZMap.MapsTo k v2 map2 /\ R k v1 v2)
-      \/ (~exists v, ZMap.MapsTo k v map1 /\ ~exists v, ZMap.MapsTo k v map2).
+      \/ ((~exists v, ZMap.MapsTo k v map1) /\ (~exists v, ZMap.MapsTo k v map2)).
 
   (* TODO: maybe not needed! *)
   (*
