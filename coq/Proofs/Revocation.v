@@ -1432,15 +1432,109 @@ Module RevocationProofs.
         (CheriMemoryWithPNVI.ghost_tags addr sz0 capmeta0)
         (CheriMemoryWithoutPNVI.ghost_tags addr sz1 capmeta1).
   Proof.
-    intros addr sz0 sz1 Hsz c1 c0 H.
+    intros m1 m2 addr sz0 sz1 capmeta0 capmeta1 Hsz H.
     subst sz1.
     unfold CheriMemoryWithPNVI.ghost_tags, CheriMemoryWithoutPNVI.ghost_tags.
-    (* repeat break_let. *)
+
     match goal with
       [ |- context[ZMap.mapi ?ff _]] => remember ff as f
     end.
-    rewrite H.
-    reflexivity.
+
+    unfold caps_in_memory_same, zmap_relate_keys.
+    intros k.
+    specialize (H k).
+    destruct H as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
+    -
+      left.
+      apply ZMap.mapi_1 with (f:=f) in I0, I1.
+      destruct I0 as [k0 [E0 M0]].
+      destruct I1 as [k1 [E1 M1]].
+      subst k0 k1.
+      exists (f k v1), (f k v2).
+      split. auto.
+      split. auto.
+      unfold cap_in_memory_same in *.
+      repeat break_let.
+      destruct S as [[E0 E1] | [N1 [N2 [N3 [N4 N5]]]]].
+      +
+        left.
+        subst b0 c0.
+        rewrite Heqp3 in Heqp4.
+        clear Heqp3.
+        tuple_inversion.
+        auto.
+      +
+        right.
+        subst b b0.
+        destruct c, c0.
+        cbn in N4, N5.
+        subst bounds_unspecified0 tag_unspecified0.
+        repeat split.
+        *
+          rename Heqp3 into H.
+          rewrite Heqf in H.
+          clear - H.
+          cbn in H.
+          break_if.
+          --
+            tuple_inversion.
+            reflexivity.
+          --
+            tuple_inversion.
+            reflexivity.
+        *
+          rename Heqp4 into H.
+          rewrite Heqf in H.
+          clear - H.
+          cbn in H.
+          tuple_inversion.
+          reflexivity.
+        *
+          destruct N3 as [c [N3 N3']].
+          exists c.
+          split.
+          apply N3.
+          apply N3'.
+        *
+          rename Heqp4 into H.
+          rewrite Heqf in H.
+          clear - H.
+          cbn in H.
+          tuple_inversion.
+          reflexivity.
+        *
+          rewrite Heqf in Heqp3, Heqp4.
+          clear - Heqp3 Heqp4.
+          cbn in *.
+          tuple_inversion.
+          break_if;(tuple_inversion;reflexivity).
+    -
+      right.
+      split.
+      +
+        intros [x H].
+        contradict N1.
+        apply mapi_mapsto_iff in H.
+        *
+          destruct H as [y [H1 H2]].
+          exists y.
+          apply H2.
+        *
+          intros x0 y e H1.
+          subst x0.
+          reflexivity.
+      +
+        intros [x H].
+        contradict N2.
+        apply mapi_mapsto_iff in H.
+        *
+          destruct H as [y [H1 H2]].
+          exists y.
+          apply H2.
+        *
+          intros x0 y e H1.
+          subst x0.
+          reflexivity.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.ghost_tags CheriMemoryWithoutPNVI.ghost_tags.
 
