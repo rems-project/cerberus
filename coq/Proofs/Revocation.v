@@ -1551,17 +1551,19 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.cap_match_dyn_allocation CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
 
-  Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
+  #[local] Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
                               * ZMap.t (bool * CapGhostState)
                               * list AbsByte.
 
-  Definition repr_res_eq : relation (repr_res_t)
+  #[local] Definition repr_res_eq
+    (mem1:CheriMemoryWithPNVI.mem_state_r)
+    (mem2:CheriMemoryWithoutPNVI.mem_state_r)
+  : relation (repr_res_t)
     :=
     fun '(m1,m2,l1) '(m1',m2',l1') =>
       ZMap.Equal m1 m1'
-      /\ ZMap.Equal m2 m2'
+      /\ caps_in_memory_same mem1 mem2 m2 m2'
       /\ eqlistA AbsByte_eq l1 l1'.
-
 
   Section repr_same_proof.
 
@@ -1570,12 +1572,14 @@ Module RevocationProofs.
                             * Z
                             * list (list AbsByte).
     Let repr_fold_eq
+      (mem1:CheriMemoryWithPNVI.mem_state_r)
+      (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       : relation repr_fold_T
         :=
           fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
             a1 = a2
             /\ ZMap.Equal m1 m1'
-            /\ ZMap.Equal m2 m2'
+            /\ caps_in_memory_same mem1 mem2 m2 m2'
             /\ eqlistA (eqlistA AbsByte_eq) l1 l1'.
 
     Let repr_fold2_T:Type := ZMap.t (digest * string * Capability_GS.t)
@@ -1583,25 +1587,27 @@ Module RevocationProofs.
                              * Z
                              * list AbsByte.
     Let repr_fold2_eq
+      (mem1:CheriMemoryWithPNVI.mem_state_r)
+      (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       : relation repr_fold2_T
         :=
           fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
             a1 = a2
             /\ ZMap.Equal m1 m1'
-            /\ ZMap.Equal m2 m2'
+            /\ caps_in_memory_same mem1 mem2 m2 m2'
             /\ eqlistA AbsByte_eq l1 l1'.
 
     Theorem repr_same:
-      forall fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
+      forall m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
         ZMap.Equal funptrmap1 funptrmap2
-        /\ ZMap.Equal capmeta1 capmeta2
+        /\ caps_in_memory_same m1 m2 capmeta1 capmeta2
         /\ addr1 = addr2
-        /\  mem_value_indt_same mval1 mval2 ->
-        serr_eq repr_res_eq
+        /\  mem_value_indt_same m1 m2 mval1 mval2 ->
+        serr_eq (repr_res_eq m1 m2)
           (CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1)
           (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
     Proof.
-      intros fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
+      intros m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
         [Ffun [Ecap [Eaddr Emval]]].
       destruct fuel;[reflexivity|].
       subst.
@@ -1615,17 +1621,27 @@ Module RevocationProofs.
         (* MVunspecified *)
         destruct (CheriMemoryWithoutPNVI.sizeof 1000 None t2); [reflexivity|].
         destruct_serr_eq; try inl_inr.
-        rewrite <- Hserr, <- Hserr0.
-        repeat split; auto.
-        apply ghost_tags_same; [reflexivity|assumption].
+        rewrite <- Hserr, <- Hserr0. clear Hserr Hserr0.
+        constructor;auto.
+        split.
+        +
+          unfold caps_in_memory_same in Ecap.
+          repeat split.
+          *
+            intros H.
+            specialize (Ecap k t1 t0 gs1 gs1).
+            destruct Ecap as [E1 [E2 E3]].
+            (* HERE *)
 
-        unfold CheriMemoryWithPNVI.PNVI_prov.
-        unfold CheriMemoryWithoutPNVI.PNVI_prov.
-        rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
-        apply list_init_proper;[reflexivity|].
-        intros x y E.
-        constructor.
-        split; auto.
+          apply ghost_tags_same; [reflexivity|assumption]. *)
+        +
+          unfold CheriMemoryWithPNVI.PNVI_prov.
+          unfold CheriMemoryWithoutPNVI.PNVI_prov.
+          rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
+          apply list_init_proper;[reflexivity|].
+          intros x y E.
+          constructor.
+          split; auto.
       - (* MVinteger *)
         destruct H as [H0 H1]; subst.
         rename v2 into i0.
@@ -1744,81 +1760,63 @@ Module RevocationProofs.
       -
         (* MVpointer c p *)
         destruct H as [H0 H1]; subst.
-        inversion H1.
-        subst.
-        destruct_serr_eq.
-        *
-          cbn.
-          unfold option2serr in Hserr, Hserr0.
-          repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
-            subst; reflexivity.
-        *
-          unfold option2serr in Hserr, Hserr0.
-          repeat break_match_hyp; unfold ret; try inl_inr.
-          repeat inl_inr_inv; subst.
-          cbn.
-          pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
-          full_autospecialize H.
-          reflexivity.
-          assumption.
-          unfold resolve_function_pointer_res_eq in H.
-          repeat break_let.
-          destruct H.
-          congruence.
-        *
-          unfold option2serr in Hserr, Hserr0.
-          repeat break_match_hyp; unfold ret; try inl_inr.
-          repeat inl_inr_inv; subst.
-          cbn.
-          pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
-          full_autospecialize H.
-          reflexivity.
-          assumption.
-          unfold resolve_function_pointer_res_eq in H.
-          repeat break_let.
-          destruct H.
-          congruence.
-        *
-          unfold option2serr in Hserr, Hserr0.
-          repeat break_match_hyp; unfold ret; try inl_inr.
-          repeat inl_inr_inv; subst.
-
-          cbn.
-          pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s0)) (FP_valid (Symbol d z s0) )) as H.
-          full_autospecialize H.
-          reflexivity.
-          assumption.
-          unfold resolve_function_pointer_res_eq in H.
-          repeat break_let.
-          destruct H.
-          repeat tuple_inversion.
-          repeat split.
-          --
+        invc H1.
+        +
+          destruct_serr_eq.
+          *
+            cbn.
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+              subst; reflexivity.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+            full_autospecialize H.
+            reflexivity.
             assumption.
-          --
-            rewrite Ecap.
-            reflexivity.
-          --
-            rewrite Heqo0 in Heqo.
-            invc Heqo.
-            unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
-            eapply list_mapi_Proper with (pA:=eq).
-            intros n x y E.
-            constructor.
-            cbn. split.
-            reflexivity.
-            subst.
-            reflexivity.
-            reflexivity.
-          --
-            rewrite <- Hserr, <- Hserr0.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            congruence.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
             cbn.
-            split; [assumption|].
-            split.
-            ++
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            congruence.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s0)) (FP_valid (Symbol d z s0) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            repeat tuple_inversion.
+            repeat split.
+            --
+              assumption.
+            --
               rewrite Ecap.
-              solve_proper.
-            ++
+              reflexivity.
+            --
+              rewrite Heqo0 in Heqo.
+              invc Heqo.
               unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
               eapply list_mapi_Proper with (pA:=eq).
               intros n x y E.
@@ -1828,16 +1826,99 @@ Module RevocationProofs.
               subst.
               reflexivity.
               reflexivity.
-          --
-            (* same as previous bullet! *)
-            rewrite <- Hserr, <- Hserr0.
+            --
+              rewrite <- Hserr, <- Hserr0.
+              cbn.
+              split; [assumption|].
+              split.
+              ++
+                rewrite Ecap.
+                solve_proper.
+              ++
+                unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+                eapply list_mapi_Proper with (pA:=eq).
+                intros n x y E.
+                constructor.
+                cbn. split.
+                reflexivity.
+                subst.
+                reflexivity.
+                reflexivity.
+            --
+              (* same as previous bullet! *)
+              rewrite <- Hserr, <- Hserr0.
+              cbn.
+              split; [assumption|].
+              split.
+              ++
+                rewrite Ecap.
+                solve_proper.
+              ++
+                unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+                eapply list_mapi_Proper with (pA:=eq).
+                intros n x y E.
+                constructor.
+                cbn. split.
+                reflexivity.
+                subst.
+                reflexivity.
+                reflexivity.
+        +
+          destruct_serr_eq.
+          *
             cbn.
-            split; [assumption|].
-            split.
-            ++
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+              subst; reflexivity.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            congruence.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            congruence.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s0)) (FP_valid (Symbol d z s0) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            repeat tuple_inversion.
+            repeat split.
+            --
+              assumption.
+            --
               rewrite Ecap.
-              solve_proper.
-            ++
+              reflexivity.
+            --
+              rewrite Heqo0 in Heqo.
+              invc Heqo.
               unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
               eapply list_mapi_Proper with (pA:=eq).
               intros n x y E.
@@ -1847,9 +1928,213 @@ Module RevocationProofs.
               subst.
               reflexivity.
               reflexivity.
+            --
+              rewrite <- Hserr, <- Hserr0.
+              cbn.
+              split; [assumption|].
+              split.
+              ++
+                rewrite Ecap.
+                solve_proper.
+              ++
+                unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+                eapply list_mapi_Proper with (pA:=eq).
+                intros n x y E.
+                constructor.
+                cbn. split.
+                reflexivity.
+                subst.
+                reflexivity.
+                reflexivity.
+            --
+              (* same as previous bullet! *)
+              rewrite <- Hserr, <- Hserr0.
+              cbn.
+              split; [assumption|].
+              split.
+              ++
+                rewrite Ecap.
+                solve_proper.
+              ++
+                unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+                eapply list_mapi_Proper with (pA:=eq).
+                intros n x y E.
+                constructor.
+                cbn. split.
+                reflexivity.
+                subst.
+                reflexivity.
+                reflexivity.
+        +
+          destruct_serr_eq.
+          *
+            cbn.
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+              subst; reflexivity.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            congruence.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s1)) (FP_valid (Symbol d z s1) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            congruence.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+
+            cbn.
+            pose proof (resolve_function_pointer_same funptrmap1 funptrmap2 (FP_valid (Symbol d z s0)) (FP_valid (Symbol d z s0) )) as H.
+            full_autospecialize H.
+            reflexivity.
+            assumption.
+            unfold resolve_function_pointer_res_eq in H.
+            repeat break_let.
+            destruct H.
+            repeat tuple_inversion.
+            repeat split.
+            --
+              assumption.
+            --
+              rewrite Ecap.
+              reflexivity.
+            --
+              rewrite Heqo0 in Heqo.
+              invc Heqo.
+              unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+              eapply list_mapi_Proper with (pA:=eq).
+              intros n x y E.
+              constructor.
+              cbn. split.
+              reflexivity.
+              subst.
+              reflexivity.
+              reflexivity.
+            --
+              rewrite <- Hserr, <- Hserr0.
+              cbn.
+              split; [assumption|].
+              split.
+              ++
+                rewrite Ecap.
+                solve_proper.
+              ++
+                unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+                eapply list_mapi_Proper with (pA:=eq).
+                intros n x y E.
+                constructor.
+                cbn. split.
+                reflexivity.
+                subst.
+                reflexivity.
+                reflexivity.
+        +
+          destruct_serr_eq.
+          *
+            cbn.
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+              subst; reflexivity.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            admit.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            admit.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+
+            cbn.
+            repeat split.
+            --
+              assumption.
+            --
+              rewrite Ecap.
+              admit.
+            --
+              invc Heqo.
+              unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+              eapply list_mapi_Proper with (pA:=eq).
+              intros n x y E.
+              constructor.
+              cbn. split.
+              reflexivity.
+              subst.
+              reflexivity.
+              admit.
+        +
+          destruct_serr_eq.
+          *
+            cbn.
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; try inl_inr; repeat inl_inr_inv;
+              subst; reflexivity.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            admit.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+            cbn.
+            admit.
+          *
+            unfold option2serr in Hserr, Hserr0.
+            repeat break_match_hyp; unfold ret; try inl_inr.
+            repeat inl_inr_inv; subst.
+
+            cbn.
+            repeat split.
+            --
+              assumption.
+            --
+              rewrite Ecap.
+              admit.
+            --
+              invc Heqo.
+              unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
+              eapply list_mapi_Proper with (pA:=eq).
+              intros n x y E.
+              constructor.
+              cbn. split.
+              reflexivity.
+              subst.
+              reflexivity.
+              admit.
       -
         (* MVarray *)
-        destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
+        destruct_serr_eq ; repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
         +
           (* error case *)
           cbn.
@@ -1859,7 +2144,7 @@ Module RevocationProofs.
           rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_same).
+            (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -1890,7 +2175,7 @@ Module RevocationProofs.
           rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_same).
+            (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -1921,7 +2206,7 @@ Module RevocationProofs.
           rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_same).
+            (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -1957,7 +2242,7 @@ Module RevocationProofs.
           rewrite <- Heqs, <- Heqs0; clear Heqs Heqs0.
           eapply monadic_fold_left_proper with
             (Ea:=repr_fold_eq)
-            (Eb:=mem_value_indt_same).
+            (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
           * assumption.
@@ -1999,7 +2284,7 @@ Module RevocationProofs.
           eapply monadic_fold_left2_proper with
             (Ea:=repr_fold2_eq)
             (Eb:=eq)
-            (Ec:=struct_field_eq); try typeclasses eauto;
+            (Ec:=struct_field_eq m1 m2); try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
@@ -2015,6 +2300,8 @@ Module RevocationProofs.
           apply Forall2_impl.
           intros a b0 H.
           repeat break_let.
+          destruct H as [II H].
+          subst.
           destruct fuel;[reflexivity|].
 
           specialize (H fuel (addr2 + z1) t t1 Efun1 t0 t2 Ecap1).
@@ -2022,11 +2309,10 @@ Module RevocationProofs.
           Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
           repeat break_match_hyp;subst;try tauto.
           *
-            cbn in Heqs1, Heqs2.
-            rewrite Heqs1, Heqs2.
             reflexivity.
           *
             cbn in Heqs0, Heqs1.
+            repeat break_let.
             rewrite Heqs0, Heqs1.
             repeat break_let.
             break_match_goal.
