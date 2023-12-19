@@ -878,6 +878,27 @@ Module RevocationProofs.
     f_equiv.
   Admitted.
 
+  (* TODO: this should be part of capabilities library *)
+  Lemma cap_invalidate_preserves_ghost_state:
+    forall c : Capability_GS.t,
+      Capability_GS.get_ghost_state c = Capability_GS.get_ghost_state (Capability_GS.cap_invalidate c).
+  Proof.
+    intros c.
+    destruct c.
+    unfold Capability_GS.cap_invalidate, Capability_GS.get_ghost_state.
+    reflexivity.
+  Qed.
+
+  (* TODO: this should be part of capabilities library *)
+  Lemma invalidate_invalidates:
+    forall c : Capability_GS.t, Capability_GS.cap_is_valid (Capability_GS.cap_invalidate c) = false.
+  Proof.
+    intros c.
+    unfold Capability_GS.cap_is_valid, Capability_GS.cap_invalidate.
+    unfold Capability.cap_is_valid, Capability_GS.cap, Capability_GS.set_cap, Capability.cap_invalidate.
+    unfold CapFns.CapIsTagClear.
+  Admitted.
+
   Lemma single_alloc_id_cap_cmp_value_eq:
     forall m1 c1 c2 alloc_id,
       single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) c1 c2 alloc_id
@@ -1567,6 +1588,131 @@ Module RevocationProofs.
 
   Section repr_same_proof.
 
+    (* TODO generalize *)
+    Lemma caps_in_memory_add_same:
+      forall (m1 : CheriMemoryWithPNVI.mem_state_r) (m2 : CheriMemoryWithoutPNVI.mem_state_r)
+        (addr : Z) (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState)),
+        caps_in_memory_same m1 m2 capmeta1 capmeta2 ->
+        forall t : Capability_GS.t,
+          caps_in_memory_same m1 m2
+            (ZMap.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta1)
+            (ZMap.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta2).
+    Proof.
+      intros m1 m2 addr capmeta1 capmeta2 Ecap c.
+      unfold caps_in_memory_same, zmap_relate_keys in *.
+      intros k.
+      specialize (Ecap k).
+      destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
+      -
+        left.
+        destruct (Z.eq_dec k addr).
+        +
+          subst k.
+          exists (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c), (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c).
+          repeat split.
+          1,2: apply ZMap.add_1;reflexivity.
+          constructor;split;reflexivity.
+        +
+          eexists.
+          eexists.
+          repeat split.
+          1,2: apply ZMap.add_2;auto;eassumption.
+          assumption.
+      -
+        destruct (Z.eq_dec k addr).
+        +
+          left.
+          subst k.
+          exists (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c), (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c).
+          repeat split.
+          1,2: apply ZMap.add_1;reflexivity.
+          constructor;split;reflexivity.
+        +
+          right.
+          split.
+          *
+            contradict N1.
+            destruct N1.
+            exists x.
+            apply ZMap.add_3 in H;auto.
+          *
+            contradict N2.
+            destruct N2.
+            exists x.
+            apply ZMap.add_3 in H;auto.
+    Qed.
+
+    Lemma caps_in_memory_same_single_alloc:
+      forall (m1 : CheriMemoryWithPNVI.mem_state_r) (m2 : CheriMemoryWithoutPNVI.mem_state_r)
+        (c2 c1 : Capability_GS.t) (alloc_id : ZMap.key) (addr : Z)
+        (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState)),
+        caps_in_memory_same m1 m2 capmeta1 capmeta2 ->
+        single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) c1 c2 alloc_id ->
+        caps_in_memory_same m1 m2
+          (ZMap.add addr (Capability_GS.cap_is_valid c1, Capability_GS.get_ghost_state c1) capmeta1)
+          (ZMap.add addr (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2) capmeta2).
+    Proof.
+      intros m1 m2 c2 c1 alloc_id addr capmeta1 capmeta2 Ecap H.
+      unfold single_alloc_id_cap_cmp in H.
+      break_if;[subst;apply caps_in_memory_add_same, Ecap|].
+      rename n into I.
+      subst c2.
+      repeat rewrite <- cap_invalidate_preserves_ghost_state.
+      generalize (Capability_GS.get_ghost_state c1) as gs; intros.
+      rewrite invalidate_invalidates.
+      generalize (Capability_GS.cap_is_valid c1) as t; intros.
+      clear c1.
+
+      unfold caps_in_memory_same, zmap_relate_keys in *.
+      intros k.
+      specialize (Ecap k).
+      destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
+      -
+        left.
+        destruct (Z.eq_dec k addr).
+        +
+          subst k.
+          exists (t, gs), (false, gs).
+          repeat split.
+          1,2: apply ZMap.add_1;reflexivity.
+          constructor;split;try reflexivity.
+
+          unfold cap_in_memory_same in S.
+          repeat break_let.
+          destruct S as [[E0 E1] | [N1 [N2 [N3 [N4 N5]]]]];subst.
+          admit.
+          admit.
+        +
+          eexists.
+          eexists.
+          repeat split.
+          1,2: apply ZMap.add_2;auto;eassumption.
+          assumption.
+      -
+        destruct (Z.eq_dec k addr).
+        +
+          left.
+          subst k.
+          exists (t, gs), (false, gs).
+          repeat split.
+          1,2: apply ZMap.add_1;reflexivity.
+          constructor;split;try reflexivity.
+          admit.
+        +
+          right.
+          split.
+          *
+            contradict N1.
+            destruct N1.
+            exists x.
+            apply ZMap.add_3 in H;auto.
+          *
+            contradict N2.
+            destruct N2.
+            exists x.
+            apply ZMap.add_3 in H;auto.
+    Admitted.
+
     Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
                             * ZMap.t (bool * CapGhostState)
                             * Z
@@ -1625,15 +1771,7 @@ Module RevocationProofs.
         constructor;auto.
         split.
         +
-          unfold caps_in_memory_same in Ecap.
-          repeat split.
-          *
-            intros H.
-            specialize (Ecap k t1 t0 gs1 gs1).
-            destruct Ecap as [E1 [E2 E3]].
-            (* HERE *)
-
-          apply ghost_tags_same; [reflexivity|assumption]. *)
+          apply ghost_tags_same; [reflexivity|assumption].
         +
           unfold CheriMemoryWithPNVI.PNVI_prov.
           unfold CheriMemoryWithoutPNVI.PNVI_prov.
@@ -1703,19 +1841,21 @@ Module RevocationProofs.
               subst.
             split; [assumption|].
             split.
-            rewrite Ecap;reflexivity.
-            unfold CheriMemoryWithPNVI.PNVI_prov.
-            unfold CheriMemoryWithoutPNVI.PNVI_prov.
-            rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
-            apply list_mapi_Proper with (pA:=@eq ascii).
             --
-              intros n a1 a2 Ea.
-              subst.
-              constructor.
-              cbn.
-              auto.
+              apply caps_in_memory_add_same, Ecap.
             --
-              reflexivity.
+              unfold CheriMemoryWithPNVI.PNVI_prov.
+              unfold CheriMemoryWithoutPNVI.PNVI_prov.
+              rewrite has_PNVI_WithPNVI, has_PNVI_WithoutPNVI.
+              apply list_mapi_Proper with (pA:=@eq ascii).
+              ++
+                intros n a1 a2 Ea.
+                subst.
+                constructor.
+                cbn.
+                auto.
+              ++
+                reflexivity.
       -
         (* MVfloating *)
         destruct H as [H0 H1]; subst.
@@ -1812,8 +1952,7 @@ Module RevocationProofs.
             --
               assumption.
             --
-              rewrite Ecap.
-              reflexivity.
+              apply caps_in_memory_add_same, Ecap.
             --
               rewrite Heqo0 in Heqo.
               invc Heqo.
@@ -1832,8 +1971,7 @@ Module RevocationProofs.
               split; [assumption|].
               split.
               ++
-                rewrite Ecap.
-                solve_proper.
+                apply caps_in_memory_add_same, Ecap.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
                 eapply list_mapi_Proper with (pA:=eq).
@@ -1851,8 +1989,7 @@ Module RevocationProofs.
               split; [assumption|].
               split.
               ++
-                rewrite Ecap.
-                solve_proper.
+                apply caps_in_memory_add_same, Ecap.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
                 eapply list_mapi_Proper with (pA:=eq).
@@ -1914,8 +2051,7 @@ Module RevocationProofs.
             --
               assumption.
             --
-              rewrite Ecap.
-              reflexivity.
+              apply caps_in_memory_add_same, Ecap.
             --
               rewrite Heqo0 in Heqo.
               invc Heqo.
@@ -1934,8 +2070,7 @@ Module RevocationProofs.
               split; [assumption|].
               split.
               ++
-                rewrite Ecap.
-                solve_proper.
+                apply caps_in_memory_add_same, Ecap.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
                 eapply list_mapi_Proper with (pA:=eq).
@@ -1953,8 +2088,7 @@ Module RevocationProofs.
               split; [assumption|].
               split.
               ++
-                rewrite Ecap.
-                solve_proper.
+                apply caps_in_memory_add_same, Ecap.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
                 eapply list_mapi_Proper with (pA:=eq).
@@ -2016,8 +2150,7 @@ Module RevocationProofs.
             --
               assumption.
             --
-              rewrite Ecap.
-              reflexivity.
+              apply caps_in_memory_add_same, Ecap.
             --
               rewrite Heqo0 in Heqo.
               invc Heqo.
@@ -2036,8 +2169,7 @@ Module RevocationProofs.
               split; [assumption|].
               split.
               ++
-                rewrite Ecap.
-                solve_proper.
+                apply caps_in_memory_add_same, Ecap.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
                 eapply list_mapi_Proper with (pA:=eq).
@@ -2077,8 +2209,8 @@ Module RevocationProofs.
             --
               assumption.
             --
-              rewrite Ecap.
-              admit.
+              clear - H Ecap.
+              apply (caps_in_memory_same_single_alloc _ _ _ _ _ _ _ _ Ecap H).
             --
               invc Heqo.
               unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
@@ -2119,7 +2251,8 @@ Module RevocationProofs.
             --
               assumption.
             --
-              rewrite Ecap.
+              (* rewrite Ecap.
+               *)
               admit.
             --
               invc Heqo.
@@ -2138,12 +2271,12 @@ Module RevocationProofs.
         +
           (* error case *)
           cbn.
-          cut(@serr_eq repr_fold_T repr_fold_eq (inl s) (inl s0));
+          cut(@serr_eq repr_fold_T (repr_fold_eq m1 m2)  (inl s) (inl s0));
             [intros HS;invc HS;reflexivity|].
           unfold repr_fold_T.
           rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
           eapply monadic_fold_left_proper with
-            (Ea:=repr_fold_eq)
+            (Ea:=repr_fold_eq m1 m2)
             (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
@@ -2169,12 +2302,12 @@ Module RevocationProofs.
         +
           exfalso.
           cbn.
-          cut(@serr_eq repr_fold_T repr_fold_eq (inl s) (inr (t, t0, z, l)));
+          cut(@serr_eq repr_fold_T (repr_fold_eq m1 m2) (inl s) (inr (t, t0, z, l)));
             [intros HS;invc HS;reflexivity|].
           unfold repr_fold_T.
           rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
           eapply monadic_fold_left_proper with
-            (Ea:=repr_fold_eq)
+            (Ea:=repr_fold_eq m1 m2)
             (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
@@ -2200,12 +2333,12 @@ Module RevocationProofs.
         +
           exfalso.
           cbn.
-          cut(@serr_eq repr_fold_T repr_fold_eq (inr (t, t0, z, l)) (inl s));
+          cut(@serr_eq repr_fold_T (repr_fold_eq m1 m2) (inr (t, t0, z, l)) (inl s));
             [intros HS;invc HS;reflexivity|].
           unfold repr_fold_T.
           rewrite <- Heqs1, <- Heqs0; clear Heqs1 Heqs0.
           eapply monadic_fold_left_proper with
-            (Ea:=repr_fold_eq)
+            (Ea:=repr_fold_eq m1 m2)
             (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
@@ -2231,7 +2364,7 @@ Module RevocationProofs.
         +
           (* value case *)
           cbn.
-          cut(@serr_eq repr_fold_T repr_fold_eq ( inr (t1, t2, z0, l0)) (inr (t, t0, z, l))).
+          cut(@serr_eq repr_fold_T (repr_fold_eq m1 m2) ( inr (t1, t2, z0, l0)) (inr (t, t0, z, l))).
           {
             intros HS.
             invc HS.
@@ -2241,7 +2374,7 @@ Module RevocationProofs.
           unfold repr_fold_T.
           rewrite <- Heqs, <- Heqs0; clear Heqs Heqs0.
           eapply monadic_fold_left_proper with
-            (Ea:=repr_fold_eq)
+            (Ea:=repr_fold_eq m1 m2)
             (Eb:=mem_value_indt_same m1 m2).
           * typeclasses eauto.
           * typeclasses eauto.
@@ -2276,13 +2409,13 @@ Module RevocationProofs.
         destruct_serr_eq ;  repeat break_match_hyp ; try inl_inr; repeat inl_inr_inv; subst.
         +
           (* Error case *)
-          cut(@serr_eq repr_fold2_T repr_fold2_eq (inl s) (inl s0));
+          cut(@serr_eq repr_fold2_T (repr_fold2_eq m1 m2) (inl s) (inl s0));
             [intros HS;invc HS;reflexivity|].
           unfold repr_fold2_T.
           rewrite <- Heqs1, <- Heqs2; clear Heqs1 Heqs2.
 
           eapply monadic_fold_left2_proper with
-            (Ea:=repr_fold2_eq)
+            (Ea:=repr_fold2_eq m1 m2)
             (Eb:=eq)
             (Ec:=struct_field_eq m1 m2); try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
@@ -2311,9 +2444,6 @@ Module RevocationProofs.
           *
             reflexivity.
           *
-            cbn in Heqs0, Heqs1.
-            repeat break_let.
-            rewrite Heqs0, Heqs1.
             repeat break_let.
             break_match_goal.
             reflexivity.
@@ -2334,14 +2464,14 @@ Module RevocationProofs.
             Transparent CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
         +
           exfalso.
-          cut(@serr_eq repr_fold2_T repr_fold2_eq (inl s) (inr (t, t0, z1, l0)));
+          cut(@serr_eq repr_fold2_T (repr_fold2_eq m1 m2) (inl s) (inr (t, t0, z1, l0)));
             [intros HS;invc HS;reflexivity|].
           unfold repr_fold2_T.
           rewrite <- Heqs0, <- Heqs1; clear Heqs0 Heqs1.
           eapply monadic_fold_left2_proper with
-            (Ea:=repr_fold2_eq)
+            (Ea:=repr_fold2_eq m1 m2)
             (Eb:=eq)
-            (Ec:=struct_field_eq);try typeclasses eauto;
+            (Ec:=struct_field_eq m1 m2);try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
@@ -2358,18 +2488,16 @@ Module RevocationProofs.
           intros a b0 H.
           repeat break_let.
           destruct fuel;[reflexivity|].
-
+          destruct H as [I H].
+          subst i0.
           specialize (H fuel (addr2 + z2) _ _ Efun1 _ _ Ecap1).
           unfold serr_eq in H.
           Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
           repeat break_match_hyp;subst;try tauto.
           *
             cbn in Heqs0, Heqs1.
-            rewrite Heqs0, Heqs1.
             reflexivity.
           *
-            cbn in Heqs0, Heqs1.
-            rewrite Heqs0, Heqs1.
             repeat break_let.
             break_match_goal.
             reflexivity.
@@ -2390,14 +2518,14 @@ Module RevocationProofs.
             Transparent CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
         +
           exfalso;
-            cut(@serr_eq repr_fold2_T repr_fold2_eq (inr (t, t0, z1, l0)) (inl s) );
+            cut(@serr_eq repr_fold2_T (repr_fold2_eq m1 m2) (inr (t, t0, z1, l0)) (inl s) );
             [intros HS;invc HS;reflexivity|].
           unfold repr_fold2_T.
           rewrite <- Heqs0, <- Heqs1; clear Heqs0 Heqs1.
           eapply monadic_fold_left2_proper with
-            (Ea:=repr_fold2_eq)
+            (Ea:=repr_fold2_eq m1 m2)
             (Eb:=eq)
-            (Ec:=struct_field_eq);try typeclasses eauto;
+            (Ec:=struct_field_eq m1 m2);try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
@@ -2414,18 +2542,15 @@ Module RevocationProofs.
           intros a b0 H.
           repeat break_let.
           destruct fuel;[reflexivity|].
-
+          destruct H as [I H].
+          subst i0.
           specialize (H fuel (addr2 + z2) _ _ Efun1 _ _ Ecap1).
           unfold serr_eq in H.
           Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
           repeat break_match_hyp;subst;try tauto.
           *
-            cbn in Heqs0, Heqs1.
-            rewrite Heqs0, Heqs1.
             reflexivity.
           *
-            cbn in Heqs0, Heqs1.
-            rewrite Heqs0, Heqs1.
             repeat break_let.
             break_match_goal.
             reflexivity.
@@ -2446,7 +2571,7 @@ Module RevocationProofs.
             Transparent CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
         +
           (* value case *)
-          cut(@serr_eq repr_fold2_T repr_fold2_eq (inr (t1, t2, z2, l3)) (inr (t, t0, z1, l0))).
+          cut(@serr_eq repr_fold2_T (repr_fold2_eq m1 m2) (inr (t1, t2, z2, l3)) (inr (t, t0, z1, l0))).
           {
             intros HS.
             destruct HS as [HS1 [HS2 [HS3 HS4]]].
@@ -2468,9 +2593,9 @@ Module RevocationProofs.
           rewrite <- Heqs, <- Heqs0; clear Heqs Heqs0.
 
           eapply monadic_fold_left2_proper with
-            (Ea:=repr_fold2_eq)
+            (Ea:=repr_fold2_eq m1 m2)
             (Eb:=eq)
-            (Ec:=struct_field_eq);try typeclasses eauto;
+            (Ec:=struct_field_eq m1 m2);try typeclasses eauto;
             [reflexivity|assumption|repeat split;auto|].
 
           (* proper for 'f' *)
@@ -2488,17 +2613,15 @@ Module RevocationProofs.
           repeat break_let.
           destruct fuel;[reflexivity|].
 
+          destruct H as [I H].
+          subst i0.
           specialize (H fuel (addr2 + z3) _ _ Efun1 _ _ Ecap1).
           unfold serr_eq in H.
           Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
           repeat break_match_hyp;subst;try tauto.
           *
-            cbn in Heqs, Heqs0.
-            rewrite Heqs, Heqs0.
             reflexivity.
           *
-            cbn in Heqs, Heqs0.
-            rewrite Heqs, Heqs0.
             repeat break_let.
             break_match_goal.
             reflexivity.
@@ -2528,7 +2651,7 @@ Module RevocationProofs.
         +
           (* error case *)
           cbn.
-          cut(@serr_eq repr_res_t repr_res_eq (inl s) (inl s0));
+          cut(@serr_eq repr_res_t (repr_res_eq m1 m2) (inl s) (inl s0));
             [intros HS;invc HS;reflexivity|].
           unfold repr_res_t.
           rewrite <- Heqs1, <- Heqs2.
@@ -2536,7 +2659,7 @@ Module RevocationProofs.
           eapply IHEmval; assumption.
         +
           exfalso.
-          cut(@serr_eq repr_res_t repr_res_eq (inl s) (inr (t, t0, l)));
+          cut(@serr_eq repr_res_t (repr_res_eq m1 m2) (inl s) (inr (t, t0, l)));
             [intros HS;invc HS;reflexivity|].
           unfold repr_res_t.
           rewrite <- Heqs0, <- Heqs1.
@@ -2544,7 +2667,7 @@ Module RevocationProofs.
           eapply IHEmval; assumption.
         +
           exfalso.
-          cut(@serr_eq repr_res_t repr_res_eq (inr (t, t0, l)) (inl s));
+          cut(@serr_eq repr_res_t (repr_res_eq m1 m2) (inr (t, t0, l)) (inl s));
             [intros HS;invc HS;reflexivity|].
           unfold repr_res_t.
           rewrite <- Heqs0, <- Heqs1.
@@ -2552,7 +2675,7 @@ Module RevocationProofs.
           eapply IHEmval; assumption.
         +
           (* value case *)
-          cut(@serr_eq repr_res_t repr_res_eq (inr (t1, t2, l0)) (inr (t, t0, l))).
+          cut(@serr_eq repr_res_t (repr_res_eq m1 m2) (inr (t1, t2, l0)) (inr (t, t0, l))).
           {
             intros HS.
             invc HS. destruct H0.
