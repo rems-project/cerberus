@@ -219,7 +219,11 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   match it with
   | Sym sym ->
      begin match List.assoc_opt Sym.equal sym su.replace with
-     | Some after -> after
+     | Some after ->
+       if BT.equal bt (basetype after) then ()
+       else failwith ("ill-typed substitution: " ^
+         Pp.plain (Pp.list pp_with_typ [IT (it, bt); after]));
+       after
      | None -> IT (Sym sym, bt)
      end
   | Const const ->
