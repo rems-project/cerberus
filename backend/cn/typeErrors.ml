@@ -291,7 +291,7 @@ let pp_message te =
   | Illtyped_it {it; has; expected; o_ctxt} ->
      let short = !^"Type error" in
      let descr =
-       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
+       !^"Illtyped expression" ^^^ squotes it ^^ dot ^^^
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
            !^"but is" ^^^ squotes has
      in
@@ -300,7 +300,7 @@ let pp_message te =
      let it = IT.pp it in
      let short = !^"Type error" in
      let descr =
-       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
+       !^"Illtyped expression" ^^^ squotes it ^^ dot ^^^
          !^"Non-linear integer arithmetic in the specification term" ^^^ it ^^ dot ^^^
            !^hint
      in
@@ -309,7 +309,7 @@ let pp_message te =
      let it = IT.pp it in
      let short = !^"Type error" in
      let descr =
-       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
+       !^"Illtyped expression" ^^^ squotes it ^^ dot ^^^
          !^"Too big exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must fit int32 type")
      in
