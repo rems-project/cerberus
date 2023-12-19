@@ -343,12 +343,12 @@ let it_adjust (global : Global.t) it =
             let x = f x in
             let y = f y in
             if IT.is_false x || IT.is_true y then IT.bool_ true else IT.impl_ (x, y)
-        | IT.EachI ((i1, (s, _), i2), x) ->
+        | IT.EachI ((i1, (s, bt), i2), x) ->
             let x = f x in
             let (s, x, vs) = alpha_rename_if_pp_same (s, BT.Integer) x in
             if not (SymSet.mem s vs)
             then (assert (i1 <= i2); x)
-            else IT.eachI_ (i1, s, i2) x
+            else IT.eachI_ (i1, (s, bt), i2) x
     | IT.Apply (name, args) ->
         let open LogicalFunctions in
         let def = SymMap.find name global.logical_functions in

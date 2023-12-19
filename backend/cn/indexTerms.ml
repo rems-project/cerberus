@@ -521,8 +521,8 @@ let let_ ((nm, x), y) = IT (Let ((nm, x), y), basetype y)
 (*   | _ -> not_ it *)
 
 
-let eachI_ (i1, s, i2) t =
-  IT (EachI ((i1, (s, BT.Integer), i2), t), BT.Bool)
+let eachI_ (i1, (s, bt), i2) t =
+  IT (EachI ((i1, (s, bt), i2), t), BT.Bool)
 (* let existsI_ (i1, s, i2) t = not_ (eachI_ (i1, s, i2) (not_ t)) *)
 
 
@@ -850,9 +850,16 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
          value_check_array_size_warning := n
        end else ();
        (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
-       let i_s, i = fresh @@ BT.Bits (Unsigned, 64) in
-       and_
-         [eachI_ (0, i_s, n - 1) (aux item_ct (map_get_ about i))]
+       let ix_bt = match BT.is_map_bt (bt about) with
+         | Some (abt, _) -> abt
+         | _ -> failwith ("value_check: argument not a map: " ^ Pp.plain (pp_with_typ about))
+       in
+       let () = if BT.equal ix_bt Memory.intptr_bt then ()
+         else Pp.warn Locations.unknown
+           (Pp.item "unexpected type of array arg" (pp_with_typ about))
+       in
+       let i_s, i = fresh ix_bt in
+       eachI_ (0, (i_s, ix_bt), n - 1) (aux item_ct (map_get_ about i))
     | Pointer pointee_ct ->
        value_check_pointer alignment ~pointee_ct about
     | Struct tag ->
