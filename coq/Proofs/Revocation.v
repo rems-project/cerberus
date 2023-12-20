@@ -1671,14 +1671,16 @@ Module RevocationProofs.
           (ZMap.add addr (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2) capmeta2).
     Proof.
       intros m1 m2 c2 c1 alloc_id addr capmeta1 capmeta2 Ecap H.
-      inversion H.
-      - (* live *)
-        inversion H1.
+      invc H.
+      - (* `alloc_id` is live *)
+        invc H1.
         + (* alloc/cap match *)
-          subst.
-          constructor.
+
+          unfold caps_in_memory_same, zmap_relate_keys.
+          intros k.
           destruct (Z.eq_dec k addr).
           *
+            left.
             subst k.
             exists (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2), (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2).
             repeat split.
@@ -1688,13 +1690,25 @@ Module RevocationProofs.
             specialize (Ecap k).
             destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
             --
+              left.
               eexists.
               eexists.
               repeat split.
               1,2: apply ZMap.add_2;auto;eassumption.
               assumption.
             --
-              admit.
+              right.
+              split.
+              ++
+                contradict N1.
+                destruct N1.
+                exists x.
+                apply ZMap.add_3 in H1;auto.
+              ++
+                contradict N2.
+                destruct N2.
+                exists x.
+                apply ZMap.add_3 in H1;auto.
         + (* alloc/cap mis-match *)
           admit.
     Admitted.
