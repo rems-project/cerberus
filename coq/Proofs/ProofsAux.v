@@ -314,6 +314,22 @@ Section ZMapAux.
     - contradiction.
   Qed.
 
+  Lemma zmap_MapsTo_dec
+    {A:Type}
+    {Adec: forall x y:A, {x = y} + {x <> y}}
+    (k: ZMap.key)
+    (v:A)
+    (m: ZMap.t A)
+    :
+    {ZMap.MapsTo (elt:=A) k v m} + {~ ZMap.MapsTo (elt:=A) k v m}.
+  Proof.
+    destruct (ZMap.find (elt:=A) k m) eqn:H.
+    - destruct (Adec v a).
+      * left. apply ZMap.find_2 in H. subst. assumption.
+      * right. intro Hcontra. apply ZMap.find_1 in Hcontra. congruence.
+    - right. intro Hcontra. apply ZMap.find_1 in Hcontra. congruence.
+  Qed.
+
   (* Simple case *)
   #[global] Instance zmap_mapi_Proper_equal
     {A B : Type}
