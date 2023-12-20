@@ -145,19 +145,6 @@ Module RevocationProofs.
 
   Import CheriMemoryTypesExe.
 
-  (* This version is restricted to model parametrizations we are
-     using.  In particular, with PNVI there are no 'dead' allocations,
-     they are just removed. Also, without PNVI, instant revocation is
-     assumed *)
-  #[local] Definition single_alloc_id_cap_cmp (allocs:ZMap.t allocation) c1 c2 alloc_id : Prop :=
-    if In_dec allocs alloc_id
-    then
-      (* Capabilities to live allocations are the same *)
-      c1 = c2
-    else
-      (* Capabilities to dead allocations are revoked without PNVI *)
-      Capability_GS.cap_invalidate c1 = c2.
-
   (* Check whether this cap base address is within allocation *)
   #[local] Definition cap_alloc_match c a : Prop
     :=
@@ -177,37 +164,67 @@ Module RevocationProofs.
     - right. intro H. destruct H as [H _]. contradiction.
   Qed.
 
-  (* we know [alloc_id] is in [allocs] *)
-  Definition cap_live_alloc_match alloc_id allocs c1 c2 : Prop :=
-    (* only live allocation one exists *)
-    forall a, ZMap.MapsTo alloc_id a allocs ->
-         if cap_alloc_match_dec c1 a
-         then
-           (* it corresponds to c1 (via bounds) *)
-           c1 = c2
-         else
-           (* it is some unrelated allocation! *)
-           Capability_GS.cap_invalidate c1 = c2.
+  (* Equality predicate for 2 caps, with additional allocation
+     information associated with the 1st one.
 
-  #[local] Definition double_alloc_id_cap_cmp
-    allocs
+     If there is a mismatch between [c1] and [a], we assume that `c1`
+     corresponds to a different, now defunct, allocation.  *)
+  Inductive cap_match_with_alloc (a: allocation) (c1 c2: Capability_GS.t): Prop :=
+  | cap_match_alloc_match: cap_alloc_match c1 a -> c1 = c2 -> cap_match_with_alloc a c1 c2
+  | cap_match_with_alloc_mismatch: ~cap_alloc_match c1 a -> Capability_GS.cap_invalidate c1 = c2 -> cap_match_with_alloc a c1 c2.
+
+  (* This version is restricted to model parametrizations we are
+     using. In particular, with PNVI there are no 'dead' allocations,
+     they are just removed. Also, without PNVI, instant revocation is
+     assumed
+   *)
+  Inductive single_alloc_id_cap_cmp (allocs: ZMap.t allocation) (alloc_id: Z) c1 c2 : Prop :=
+  | single_cap_cmp_live:
+    (* The allocation ID is mapped to an allocation *)
+    forall a, ZMap.MapsTo alloc_id a allocs ->
+         cap_match_with_alloc a c1 c2 -> (* then match c1 to c2 based on alloc_id *)
+         single_alloc_id_cap_cmp allocs alloc_id c1 c2
+  | single_cap_cmp_dead:
+    (* The allocation ID is not mapped to an allocation *)
+    ~ ZMap.In alloc_id allocs ->
+    Capability_GS.cap_invalidate c1 = c2 ->
+    single_alloc_id_cap_cmp allocs alloc_id c1 c2.
+
+  Inductive double_alloc_id_cap_cmp (allocs: ZMap.t allocation)
+    (alloc_id1 alloc_id2: Z)
     (c1 c2: Capability_GS.t)
-    alloc_id1 alloc_id2 : Prop
-    :=
-    if In_dec allocs alloc_id1 then
-      if In_dec allocs alloc_id2 then
-        (* both allocations are live, so the caps must match exactly *)
-        c1 = c2
-      else
-        (* [alloc_id1] is found but not [alloc_id2] *)
-        cap_live_alloc_match alloc_id1 allocs c1 c2
-    else
-      if In_dec allocs alloc_id2 then
-        (* [alloc_id1] not found but [alloc_id2] is *)
-        cap_live_alloc_match alloc_id2 allocs c1 c2
-      else
-        (* both allocations are dead, so the cap must be untagged *)
-        Capability_GS.cap_invalidate c1 = c2.
+    : Prop :=
+  | double_cap_cmp_both_live:
+    (* When both allocation IDs are mapped to some allocation in allocs *)
+    forall a1,
+      ZMap.MapsTo alloc_id1 a1 allocs ->
+      forall a2,
+        ZMap.MapsTo alloc_id2 a2 allocs ->
+        (cap_alloc_match c1 a1 \/ cap_alloc_match c1 a2)
+        -> c1 = c2 -> (* then c1 and c2 must be equal *)
+    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+
+  | double_cap_cmp_first_live:
+    (* When only the first allocation ID is mapped to an allocation *)
+    forall a1, ZMap.MapsTo alloc_id1 a1 allocs ->
+    ~ZMap.In alloc_id2 allocs ->
+    cap_match_with_alloc a1 c1 c2 -> (* then match c1 to c2 based on alloc_id1 *)
+    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+
+  | double_cap_cmp_second_live:
+    (* When only the second allocation ID is mapped to an allocation *)
+    ~ZMap.In alloc_id1 allocs ->
+    forall a2, ZMap.MapsTo alloc_id2 a2 allocs ->
+    cap_match_with_alloc a2 c1 c2 -> (* then match c1 to c2 based on alloc_id2 *)
+    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+
+  | double_cap_cmp_both_dead:
+    (* When neither allocation ID is live (not mapped in allocs) *)
+    ~ZMap.In alloc_id1 allocs ->
+    ~ZMap.In alloc_id2 allocs ->
+    Capability_GS.cap_invalidate c1 = c2 -> (* then c1 must be invalidated to equal c2 *)
+    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2.
+
 
   (*
     Pointer equality. The first pointer is from the "WithPNVI" memory
@@ -235,16 +252,16 @@ Module RevocationProofs.
   (* -- stateful cases -- *)
 
   | ptr_value_same_some_conc: forall c1 c2 alloc_id,
-      single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) c1 c2 alloc_id ->
+      single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id c1 c2  ->
       ptr_value_same m1 m2 (PV (Prov_some alloc_id) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2))
   | ptr_value_same_symb_conc: forall c1 c2 s,
       (exists alloc_id,
           ZMap.MapsTo s (inl alloc_id) m1.(CheriMemoryWithPNVI.iota_map) /\
-            single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) c1 c2 alloc_id)
+            single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id c1 c2 )
       \/
       (exists alloc_id1 alloc_id2,
           ZMap.MapsTo s (inr (alloc_id1,alloc_id2)) m1.(CheriMemoryWithPNVI.iota_map) /\
-            double_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) c1 c2 alloc_id1 alloc_id2)
+            double_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id1 alloc_id2 c1 c2)
       -> ptr_value_same m1 m2 (PV (Prov_symbolic s) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2)).
 
   (* Equality of byte values without taking provenance into account *)
@@ -900,41 +917,41 @@ Module RevocationProofs.
   Admitted.
 
   Lemma single_alloc_id_cap_cmp_value_eq:
-    forall m1 c1 c2 alloc_id,
-      single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) c1 c2 alloc_id
+    forall m1 alloc_id c1 c2 ,
+      single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) alloc_id c1 c2
       ->
         Capability_GS.cap_get_value c1 = Capability_GS.cap_get_value c2.
   Proof.
-    intros m1 c1 c2 alloc_id H.
-    unfold single_alloc_id_cap_cmp in H.
-    break_if.
-    -
-      subst.
+    intros m1 alloc_id c1 c2 Hcmp.
+    inversion Hcmp as [a Hmap Hmatch | Hmap Hinv]; subst.
+    - (* single_cap_cmp_live case *)
+      invc Hmatch.
       reflexivity.
-    -
-      clear - H.
-      subst.
+      apply cap_invalidate_preserves_value.
+    - (* single_cap_cmp_dead case *)
       apply cap_invalidate_preserves_value.
   Qed.
 
   Lemma double_alloc_id_cap_cmp_value_eq:
     forall m1 c1 c2 alloc_id1 alloc_id2,
-      double_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) c1 c2 alloc_id1 alloc_id2
+      double_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) alloc_id1 alloc_id2 c1 c2
       ->
         Capability_GS.cap_get_value c1 = Capability_GS.cap_get_value c2.
   Proof.
-    intros m1 c1 c2 alloc_id1 alloc_id2 H.
-    unfold double_alloc_id_cap_cmp, cap_live_alloc_match in H.
-    repeat break_match.
-    1: subst; reflexivity.
-    1,2:
-      rename i into I;
-    apply zmap_in_mapsto in I;
-    destruct I as [a I];
-    specialize (H a I);
-    break_if;subst;[reflexivity|apply cap_invalidate_preserves_value].
+    intros m1 alloc_id1 alloc_id2 c1 c2 H.
+    inversion H.
     -
-      subst.
+      subst. reflexivity.
+    -
+      inversion H2; subst.
+      + reflexivity.
+      + apply cap_invalidate_preserves_value.
+    -
+      inversion H2; subst.
+      + reflexivity.
+      + apply cap_invalidate_preserves_value.
+    -
+      inversion H2.
       apply cap_invalidate_preserves_value.
   Qed.
 
@@ -1642,17 +1659,47 @@ Module RevocationProofs.
             apply ZMap.add_3 in H;auto.
     Qed.
 
+    (* TODO: generalize *)
     Lemma caps_in_memory_same_single_alloc:
       forall (m1 : CheriMemoryWithPNVI.mem_state_r) (m2 : CheriMemoryWithoutPNVI.mem_state_r)
         (c2 c1 : Capability_GS.t) (alloc_id : ZMap.key) (addr : Z)
         (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState)),
         caps_in_memory_same m1 m2 capmeta1 capmeta2 ->
-        single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) c1 c2 alloc_id ->
+        single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) alloc_id c1 c2  ->
         caps_in_memory_same m1 m2
           (ZMap.add addr (Capability_GS.cap_is_valid c1, Capability_GS.get_ghost_state c1) capmeta1)
           (ZMap.add addr (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2) capmeta2).
     Proof.
       intros m1 m2 c2 c1 alloc_id addr capmeta1 capmeta2 Ecap H.
+      inversion H.
+      - (* live *)
+        inversion H1.
+        + (* alloc/cap match *)
+          subst.
+          constructor.
+          destruct (Z.eq_dec k addr).
+          *
+            subst k.
+            exists (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2), (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2).
+            repeat split.
+            1,2: apply ZMap.add_1;reflexivity.
+            constructor;split;try reflexivity.
+          *
+            specialize (Ecap k).
+            destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
+            --
+              eexists.
+              eexists.
+              repeat split.
+              1,2: apply ZMap.add_2;auto;eassumption.
+              assumption.
+            --
+              admit.
+        + (* alloc/cap mis-match *)
+          admit.
+    Admitted.
+
+(* old stuff
       unfold single_alloc_id_cap_cmp in H.
       break_if;[subst;apply caps_in_memory_add_same, Ecap|].
       rename n into I.
@@ -1712,6 +1759,7 @@ Module RevocationProofs.
             exists x.
             apply ZMap.add_3 in H;auto.
     Admitted.
+ *)
 
     Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
                             * ZMap.t (bool * CapGhostState)
