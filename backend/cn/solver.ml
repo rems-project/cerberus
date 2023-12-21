@@ -679,11 +679,11 @@ module Translate = struct
            end;
          let open Z3.Arithmetic in
          let module BV = Z3.BitVector in
-         let bv_arith_case t sgn_v u_v arith_v = match IT.bt t with
-           | BT.Bits (BT.Signed, _) -> sgn_v
-           | BT.Bits (BT.Unsigned, _) -> u_v
-           | BT.Integer -> arith_v
-           | BT.Real -> arith_v
+         let bv_arith_case t ~signed ~unsigned ~int_real = match IT.bt t with
+           | BT.Bits (BT.Signed, _) -> signed
+           | BT.Bits (BT.Unsigned, _) -> unsigned
+           | BT.Integer -> int_real
+           | BT.Real -> int_real
            | _ -> failwith "bv_arith_case"
          in
          let l_bop f ctxt x y = f ctxt [x; y] in
@@ -691,37 +691,37 @@ module Translate = struct
          let cmp_u t op ctxt = cmp_in_unsigned ctxt (IT.bt t) (op ctxt) in
          let fail_on str ctxt = failwith ("solver: unexpected value type for: " ^ str) in
          begin match bop with
-         | Add -> (bv_arith_case t1 (via_u t1 BV.mk_add) BV.mk_add (l_bop mk_add))
+         | Add -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_add) ~unsigned:BV.mk_add ~int_real:(l_bop mk_add))
                  context (term t1) (term t2)
-         | Sub -> (bv_arith_case t1 (via_u t1 BV.mk_sub) BV.mk_sub (l_bop mk_sub))
+         | Sub -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_sub) ~unsigned:BV.mk_sub ~int_real:(l_bop mk_sub))
                  context (term t1) (term t2)
-         | Mul -> (bv_arith_case t1 (via_u t1 BV.mk_mul) BV.mk_mul (l_bop mk_mul))
+         | Mul -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_mul) ~unsigned:BV.mk_mul ~int_real:(l_bop mk_mul))
                  context (term t1) (term t2)
          | MulNoSMT -> make_uf "mul_uf" (IT.bt t1) [t1; t2]
-         | Div -> (bv_arith_case t1 (via_u t1 BV.mk_sdiv) BV.mk_udiv mk_div)
+         | Div -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_sdiv) ~unsigned:BV.mk_udiv ~int_real:mk_div)
                  context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
          | Exp -> adj ()
          | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
-         | Rem -> (bv_arith_case t1 (via_u t1 BV.mk_srem) BV.mk_urem Integer.mk_rem)
+         | Rem -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_srem) ~unsigned:BV.mk_urem ~int_real:Integer.mk_rem)
                      context (term t1) (term t2)
          | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
-         | Mod -> (bv_arith_case t1 (via_u t1 BV.mk_smod) BV.mk_urem Integer.mk_mod)
+         | Mod -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_smod) ~unsigned:BV.mk_urem ~int_real:Integer.mk_mod)
                      context (term t1) (term t2)
          | ModNoSMT -> make_uf "mod_uf" (Integer) [t1; t2]
-         | LT -> (bv_arith_case t1 (cmp_u t1 BV.mk_slt) BV.mk_ult mk_lt) context (term t1) (term t2)
-         | LE -> (bv_arith_case t1 (cmp_u t1 BV.mk_sle) BV.mk_ule mk_le) context (term t1) (term t2)
+         | LT -> (bv_arith_case t1 ~signed:(cmp_u t1 BV.mk_slt) ~unsigned:BV.mk_ult ~int_real:mk_lt) context (term t1) (term t2)
+         | LE -> (bv_arith_case t1 ~signed:(cmp_u t1 BV.mk_sle) ~unsigned:BV.mk_ule ~int_real:mk_le) context (term t1) (term t2)
          | Min -> adj ()
          | Max -> adj ()
-         | XORNoSMT -> (bv_arith_case t1 (via_u t1 BV.mk_xor) BV.mk_xor (fail_on "xor"))
+         | XORNoSMT -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_xor) ~unsigned:BV.mk_xor ~int_real:(fail_on "xor"))
                      context (term t1) (term t2)
-         | BWAndNoSMT -> (bv_arith_case t1 (via_u t1 BV.mk_and) BV.mk_and (fail_on "bw_and"))
+         | BWAndNoSMT -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_and) ~unsigned:BV.mk_and ~int_real:(fail_on "bw_and"))
                      context (term t1) (term t2)
-         | BWOrNoSMT -> (bv_arith_case t1 (via_u t1 BV.mk_or) BV.mk_or (fail_on "bw_or"))
+         | BWOrNoSMT -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_or) ~unsigned:BV.mk_or ~int_real:(fail_on "bw_or"))
                      context (term t1) (term t2)
-         | ShiftLeft -> (bv_arith_case t1 (via_u t1 BV.mk_shl) BV.mk_shl (fail_on "shift_left"))
+         | ShiftLeft -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_shl) ~unsigned:BV.mk_shl ~int_real:(fail_on "shift_left"))
                      context (term t1) (term t2)
-         | ShiftRight -> (bv_arith_case t1 (via_u t1 BV.mk_ashr) BV.mk_lshr (fail_on "shift_right"))
+         | ShiftRight -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_ashr) ~unsigned:BV.mk_lshr ~int_real:(fail_on "shift_right"))
                      context (term t1) (term t2)
          | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
