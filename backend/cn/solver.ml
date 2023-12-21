@@ -702,13 +702,13 @@ module Translate = struct
                  context (term t1) (term t2)
          | DivNoSMT -> make_uf "div_uf" (IT.bt t1) [t1; t2]
          | Exp -> adj ()
-         | ExpNoSMT -> make_uf "exp_uf" (Integer) [t1; t2]
+         | ExpNoSMT -> make_uf "exp_uf" (IT.bt t1) [t1; t2]
          | Rem -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_srem) ~unsigned:BV.mk_urem ~int_real:Integer.mk_rem)
                      context (term t1) (term t2)
-         | RemNoSMT -> make_uf "rem_uf" (Integer) [t1; t2]
+         | RemNoSMT -> make_uf "rem_uf" (IT.bt t1) [t1; t2]
          | Mod -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_smod) ~unsigned:BV.mk_urem ~int_real:Integer.mk_mod)
                      context (term t1) (term t2)
-         | ModNoSMT -> make_uf "mod_uf" (Integer) [t1; t2]
+         | ModNoSMT -> make_uf "mod_uf" (IT.bt t1) [t1; t2]
          | LT -> (bv_arith_case t1 ~signed:(cmp_u t1 BV.mk_slt) ~unsigned:BV.mk_ult ~int_real:mk_lt) context (term t1) (term t2)
          | LE -> (bv_arith_case t1 ~signed:(cmp_u t1 BV.mk_sle) ~unsigned:BV.mk_ule ~int_real:mk_le) context (term t1) (term t2)
          | Min -> adj ()
