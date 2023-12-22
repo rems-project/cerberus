@@ -487,11 +487,10 @@ Module RevocationProofs.
     cs <- extract_unspec bs ;;
     Capability_GS.decode (List.rev cs) false.
 
-
-  (* A predicate that defines the relationship between metadata values
-     `meta1` and `meta2` associated with given [addr] from two
-     different capability maps within the memory state context
-     provided by the [bytemap] and [allocatations] *)
+  (** A predicate that defines the relationship between two capmeta
+      elements with key [addr] from two different capability maps
+      within the memory state context provided by the [bytemap] and
+      [allocatations] *)
   Definition addr_cap_meta_same
     (bytemap: ZMap.t AbsByte)
     (allocations: ZMap.t allocation)
@@ -1681,10 +1680,9 @@ Module RevocationProofs.
         (CheriMemoryWithoutPNVI.update_capmeta c2 addr capmeta2).
     Proof.
       intros Ecap H.
-
       unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
       rewrite is_pointer_algined_same.
-      break_if;[|assumption].
+      destruct (CheriMemoryWithoutPNVI.is_pointer_algined addr) eqn:A ; [|assumption].
       invc H.
       - (* `single_cap_cmp_live` constructor: `alloc_id` is live *)
         unfold capmeta_same , zmap_relate_keys.
@@ -1701,53 +1699,34 @@ Module RevocationProofs.
             1,2: apply ZMap.add_1;reflexivity.
             constructor;split;try reflexivity.
           *
-            specialize (Ecap k).
-            destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
-            --
-              left.
-              eexists.
-              eexists.
-              repeat split.
-              1,2: apply ZMap.add_2;auto;eassumption.
-              assumption.
-            --
-              right.
-              split.
-              ++
-                contradict N1.
-                destruct N1.
-                exists x.
-                apply ZMap.add_3 in H1;auto.
-              ++
-                contradict N2.
-                destruct N2.
-                exists x.
-                apply ZMap.add_3 in H1;auto.
+            setoid_rewrite add_neq_mapsto_iff;auto.
         + (* `cap_match_with_alloc_mismatch` constructor: alloc/cap mis-match *)
-          invc H1;[congruence|].
+          invc H1 ; [congruence|].
           clear H3 H4.
-          (* from HERE *)
           destruct (Z.eq_dec k addr).
-          * (* modifying existing cap *)
+          * (* cap which is being added *)
             subst k.
-            specialize (Ecap addr).
-            destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
-            --
-              (* `addr` is present in both maps *)
-              left.
-              admit.
-            --
-              (* `addr` is present in neither *)
-              left.
-              repeat rewrite invalidate_invalidates.
-              repeat rewrite <- cap_invalidate_preserves_ghost_state.
+            left.
+            repeat rewrite invalidate_invalidates.
+            repeat rewrite <- cap_invalidate_preserves_ghost_state.
+            exists (Capability_GS.cap_is_valid c1, Capability_GS.get_ghost_state c1).
+            exists (false, Capability_GS.get_ghost_state c1).
+            split. apply ZMap.add_1; reflexivity.
+            split. apply ZMap.add_1; reflexivity.
 
-              exists (Capability_GS.cap_is_valid c1, Capability_GS.get_ghost_state c1), (false, Capability_GS.get_ghost_state c1).
-              repeat split.
-              1,2: apply ZMap.add_1;reflexivity.
-              unfold addr_cap_meta_same.
-
-              right.
+            unfold addr_cap_meta_same.
+            (* left. if we know `c1` is untagged. *)
+            right.
+            (*
+              HERE
+              specialize (Ecap addr).
+              destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
+             *)
+            admit.
+          * (* all other caps unchanged *)
+            setoid_rewrite add_neq_mapsto_iff;auto.
+      - (* `single_cap_cmp_dead` consturctor: `alloc_id` is dead *)
+        admit.
     Admitted.
 
     Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
