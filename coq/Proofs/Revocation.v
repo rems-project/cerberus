@@ -1588,6 +1588,14 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.cap_match_dyn_allocation CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
 
+  Theorem is_pointer_algined_same:
+    forall p,
+      CheriMemoryWithPNVI.is_pointer_algined p = CheriMemoryWithoutPNVI.is_pointer_algined p.
+  Proof.
+    reflexivity.
+  Qed.
+  #[global] Opaque CheriMemoryWithPNVI.is_pointer_algined CheriMemoryWithoutPNVI.is_pointer_algined.
+
   #[local] Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
                               * ZMap.t (bool * CapGhostState)
                               * list AbsByte.
@@ -1604,7 +1612,7 @@ Module RevocationProofs.
 
   Section repr_same_proof.
 
-    Lemma caps_in_memory_add_same
+    Lemma capmeta_add_eq_same
       (bytemap: ZMap.t AbsByte)
       (allocations: ZMap.t allocation)
       (addr : Z)
@@ -1660,7 +1668,7 @@ Module RevocationProofs.
     Qed.
 
     (* TODO: generalize *)
-    Lemma capmeta_same_single_alloc
+    Lemma capmeta_add_single_alloc_same
       (bytemap: ZMap.t AbsByte)
       (allocations: ZMap.t allocation)
       (c2 c1 : Capability_GS.t)
@@ -1676,7 +1684,7 @@ Module RevocationProofs.
       intros Ecap H.
 
       unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-      unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+      rewrite is_pointer_algined_same.
       break_if;[|assumption].
       invc H.
       - (* `single_cap_cmp_live` constructor: `alloc_id` is live *)
@@ -1873,9 +1881,9 @@ Module RevocationProofs.
             split.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-              unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+              rewrite is_pointer_algined_same.
               break_if.
-              ++ apply caps_in_memory_add_same, Ecap.
+              ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
               unfold CheriMemoryWithPNVI.PNVI_prov.
@@ -1987,9 +1995,9 @@ Module RevocationProofs.
               assumption.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-              unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+              rewrite is_pointer_algined_same.
               break_if.
-              ++ apply caps_in_memory_add_same, Ecap.
+              ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
               rewrite Heqo0 in Heqo.
@@ -2010,9 +2018,9 @@ Module RevocationProofs.
               split.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-                unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+                rewrite is_pointer_algined_same.
                 break_if.
-                ** apply caps_in_memory_add_same, Ecap.
+                ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
@@ -2032,9 +2040,9 @@ Module RevocationProofs.
               split.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-                unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+                rewrite is_pointer_algined_same.
                 break_if.
-                ** apply caps_in_memory_add_same, Ecap.
+                ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
@@ -2098,9 +2106,9 @@ Module RevocationProofs.
               assumption.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-              unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+              rewrite is_pointer_algined_same.
               break_if.
-              ++ apply caps_in_memory_add_same, Ecap.
+              ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
               rewrite Heqo0 in Heqo.
@@ -2121,9 +2129,9 @@ Module RevocationProofs.
               split.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-                unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+                rewrite is_pointer_algined_same.
                 break_if.
-                ** apply caps_in_memory_add_same, Ecap.
+                ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
@@ -2143,9 +2151,9 @@ Module RevocationProofs.
               split.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-                unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+                rewrite is_pointer_algined_same.
                 break_if.
-                ** apply caps_in_memory_add_same, Ecap.
+                ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
@@ -2209,9 +2217,9 @@ Module RevocationProofs.
               assumption.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-              unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+              rewrite is_pointer_algined_same.
               break_if.
-              ++ apply caps_in_memory_add_same, Ecap.
+              ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
               rewrite Heqo0 in Heqo.
@@ -2232,9 +2240,9 @@ Module RevocationProofs.
               split.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
-                unfold CheriMemoryWithPNVI.is_pointer_algined, CheriMemoryWithoutPNVI.is_pointer_algined.
+                rewrite is_pointer_algined_same.
                 break_if.
-                ** apply caps_in_memory_add_same, Ecap.
+                ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
                 unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
@@ -2276,7 +2284,7 @@ Module RevocationProofs.
               assumption.
             --
               clear - H Ecap.
-              eapply capmeta_same_single_alloc; eauto.
+              eapply capmeta_add_single_alloc_same; eauto.
             --
               invc Heqo.
               unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
