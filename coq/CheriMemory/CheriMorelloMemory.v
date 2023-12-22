@@ -774,6 +774,23 @@ Module Type CheriMemoryImpl
     then p
     else Prov_disabled.
 
+  Definition is_pointer_algined (addr : Z) : bool :=
+    let align := IMP.get.(alignof_pointer) in
+    Z.eqb (Z.modulo addr align) 0.
+
+  (** Update [capmeta] dictionary for capability [c] stored at [addr].
+      If address is capability-aligned, then the tag and ghost state
+      is stored. Otherwise capmeta is left unchanged.  *)
+  Definition update_capmeta
+    (c: C.t)
+    (addr: Z)
+    (capmeta : ZMap.t (bool*CapGhostState))
+    : ZMap.t (bool*CapGhostState)
+    :=
+    if is_pointer_algined addr
+    then ZMap.add addr (C.cap_is_valid c, C.get_ghost_state c) capmeta
+    else capmeta.
+
   Fixpoint repr
     (fuel: nat)
     (funptrmap: ZMap.t (digest * string * C.t))
@@ -800,10 +817,7 @@ Module Type CheriMemoryImpl
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
-            let capmeta := ZMap.add addr
-                             (C.cap_is_valid c_value, C.get_ghost_state c_value)
-                             capmeta
-            in
+            let capmeta := update_capmeta c_value addr capmeta in
             ret (funptrmap, capmeta,
                 (mapi
                    (fun (i_value : nat) (b_value : ascii) =>
@@ -821,20 +835,14 @@ Module Type CheriMemoryImpl
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
                 '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
-                let capmeta := ZMap.add addr
-                                 (C.cap_is_valid c_value, C.get_ghost_state c_value)
-                                 capmeta
-                in
+                let capmeta := update_capmeta c_value addr capmeta in
                 ret (funptrmap, capmeta,
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb))
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
-                let capmeta := ZMap.add addr
-                                 (C.cap_is_valid c_value, C.get_ghost_state c_value)
-                                 capmeta
-                in
+                let capmeta := update_capmeta c_value addr capmeta in
                 ret (funptrmap, capmeta,
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
@@ -1148,11 +1156,6 @@ Module Type CheriMemoryImpl
                     bytemap          := st.(bytemap);
                     capmeta          := st.(capmeta);
                   |}) ;; ret alloc_id.
-
-  Definition is_pointer_algined (a : Z) : bool :=
-    let v := IMP.get.(alignof_pointer) in
-    let (_,m) := quomod a v in
-    Z.eqb m 0.
 
   (* Convinience function to be used in breaking let to avoid match *)
   Definition break_PV (p:pointer_value) :=
