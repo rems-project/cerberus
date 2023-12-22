@@ -341,6 +341,9 @@ Module Type CheriMemoryImpl
   Definition allocation_with_dead (r : allocation) :=
     Build_allocation r.(prefix) r.(base) r.(size) r.(ty) r.(is_readonly) r.(is_dynamic) true r.(taint).
 
+  Definition allocation_with_is_readonly (r : allocation) ro :=
+    Build_allocation r.(prefix) r.(base) r.(size) r.(ty) ro r.(is_dynamic) r.(is_dead) r.(taint).
+
   Definition absbyte_v prov copy_offset value : AbsByte
     :=
     {| prov := prov; copy_offset := copy_offset; value := value |}.
@@ -1885,55 +1888,53 @@ Module Type CheriMemoryImpl
           (sz : Z)
       : memM (footprint * mem_value)
       :=
-      get >>=
-        (fun (st : mem_state) =>
-           let bs := fetch_bytes st.(bytemap) addr sz in
-           let tag_query (a_value : Z) : bool* CapGhostState :=
-             if is_pointer_algined a_value then
-               match ZMap.find a_value st.(capmeta) with
-               | Some x => x
-               | None =>
-                   (* this should not happen *)
-                   (false,
-                     {| tag_unspecified := true;
-                       bounds_unspecified := false |})
-               end
-             else
-               (* An attempt to load a capability from not properly
+      st <- get ;;
+      let bs := fetch_bytes st.(bytemap) addr sz in
+      let tag_query (a_value : Z) : bool* CapGhostState :=
+        if is_pointer_algined a_value then
+          match ZMap.find a_value st.(capmeta) with
+          | Some x => x
+          | None =>
+              (* this should not happen *)
+              (false,
+                {| tag_unspecified := true;
+                  bounds_unspecified := false |})
+          end
+        else
+          (* An attempt to load a capability from not properly
                   aligned address. OCaml handles this with [failwith]
                   but here we just return default value. But the
                   question what error to raise is moot since this is
                   an internal error which should never happen, and
                   hopefully we will prove so. *)
-               (false,
-                 {| tag_unspecified := true;
-                   bounds_unspecified := false |})
-           in
-           '(taint, mval, bs') <-
-             serr2InternalErr (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) tag_query addr ty bs)
-           ;;
-           mem_value_strip_err loc mval >>=
-             (fun (mval : mem_value) =>
-                (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE)
-                    || CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI)
-                 then expose_allocations taint
-                 else ret tt) ;;
-                sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-                let fp := FP Read (AddressValue.of_Z addr) sz in
-                match bs' with
-                | [] =>
-                    if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_reads
-                    then
-                      match mval with
-                      | MVunspecified _ =>
-                          fail loc MerrReadUninit
-                      | _ => ret (fp, mval)
-                      end
-                    else
-                      ret (fp, mval)
-                | _ =>
-                    fail loc (MerrWIP "load, bs' <> []")
-                end))
+          (false,
+            {| tag_unspecified := true;
+              bounds_unspecified := false |})
+      in
+      '(taint, mval, bs') <-
+        serr2InternalErr (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) tag_query addr ty bs)
+      ;;
+      mval <- mem_value_strip_err loc mval ;;
+      (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE)
+          || CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI)
+       then expose_allocations taint
+       else ret tt) ;;
+      sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+      let fp := FP Read (AddressValue.of_Z addr) sz in
+      match bs' with
+      | [] =>
+          if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_reads
+          then
+            match mval with
+            | MVunspecified _ =>
+                fail loc MerrReadUninit
+            | _ => ret (fp, mval)
+            end
+          else
+            ret (fp, mval)
+      | _ =>
+          fail loc (MerrWIP "load, bs' <> []")
+      end
     in
     let do_load_cap
           (alloc_id_opt : option storage_instance_id)
@@ -1948,31 +1949,21 @@ Module Type CheriMemoryImpl
       if cap_is_null c then
         fail loc (MerrAccess LoadAccess NullPtr)
       else
-        (is_dead_allocation alloc_id) >>=
-          (fun x =>
-             match x with
-             | true => fail loc (MerrAccess LoadAccess DeadPtr)
-             | false => ret tt
-             end)
+        dead <- is_dead_allocation alloc_id;;
+        (if dead
+         then fail loc (MerrAccess LoadAccess DeadPtr)
+         else ret tt)
         ;;
-        is_within_bound alloc_id ty
-          (cap_to_Z c) >>=
-          (fun (function_parameter : bool) =>
-             match function_parameter with
-             | false =>
-                 fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-             | true =>
-                 is_atomic_member_access alloc_id ty
-                   (cap_to_Z c) >>=
-                   (fun (function_parameter : bool) =>
-                      match function_parameter with
-                      | true =>
-                          fail loc (MerrAccess LoadAccess AtomicMemberof)
-                      | false =>
-                          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-                          do_load_cap (Some alloc_id) c sz
-                      end)
-             end)
+        inbounds <- is_within_bound alloc_id ty (cap_to_Z c) ;;
+        if inbounds then
+          atomic <- is_atomic_member_access alloc_id ty  (cap_to_Z c) ;;
+          if atomic
+          then fail loc (MerrAccess LoadAccess AtomicMemberof)
+          else
+            (sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+             do_load_cap (Some alloc_id) c sz)
+        else
+          fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     in
     match prov, ptrval_ with
     | _, PVfunction _ =>
@@ -1980,25 +1971,21 @@ Module Type CheriMemoryImpl
     | Prov_none, PVconcrete c =>
         fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     | Prov_disabled, PVconcrete c =>
-        find_overlapping (cap_to_Z c) >>= fun x =>
-            match x with
-            | NoAlloc => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-            | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
-            | SingleAlloc alloc_id => load_concrete alloc_id c
-            end
+        olp <- find_overlapping (cap_to_Z c) ;;
+        match olp with
+        | NoAlloc => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
+        | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
+        | SingleAlloc alloc_id => load_concrete alloc_id c
+        end
     | Prov_device, PVconcrete c =>
         if cap_is_null c then
           fail loc (MerrAccess LoadAccess NullPtr)
         else
           sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-          is_within_device ty (cap_to_Z c) >>=
-            (fun (function_parameter : bool) =>
-               match function_parameter with
-               | false =>
-                   fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-               | true =>
-                   do_load_cap None c sz
-               end)
+          isdev <- is_within_device ty (cap_to_Z c) ;;
+          if isdev
+          then do_load_cap None c sz
+          else fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     | Prov_symbolic iota, PVconcrete addr =>
         if cap_is_null addr then
           fail loc
@@ -2013,19 +2000,16 @@ Module Type CheriMemoryImpl
             then ret (FAIL loc (MerrAccess LoadAccess DeadPtr))
             else
               inbounds <- is_within_bound alloc_id ty (cap_to_Z addr) ;;
-              match inbounds with
-              | false => ret (FAIL loc (MerrAccess LoadAccess OutOfBoundPtr))
-              | true =>
-                  atomic <- is_atomic_member_access alloc_id ty (cap_to_Z addr) ;;
-                  if atomic
-                  then ret (FAIL loc (MerrAccess LoadAccess AtomicMemberof))
-                  else ret OK
-              end
+              if inbounds then
+                (atomic <- is_atomic_member_access alloc_id ty (cap_to_Z addr) ;;
+                 if atomic
+                 then ret (FAIL loc (MerrAccess LoadAccess AtomicMemberof))
+                 else ret OK)
+              else ret (FAIL loc (MerrAccess LoadAccess OutOfBoundPtr))
           in
           sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-          resolve_iota precondition iota >>=
-            (fun (alloc_id : storage_instance_id) =>
-               do_load_cap (Some alloc_id) addr sz)
+          alloc_id <- resolve_iota precondition iota ;;
+          do_load_cap (Some alloc_id) addr sz
     | Prov_some alloc_id, PVconcrete c =>
         load_concrete alloc_id c
     end.
@@ -2061,9 +2045,9 @@ Module Type CheriMemoryImpl
     :=
     let '(prov,ptrval_) := break_PV ptr in
     cond <- serr2InternalErr (
-                mt <- typeof mval ;;
-                CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
-                  (CoqCtype.unatomic mt))
+               mt <- typeof mval ;;
+               CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
+                 (CoqCtype.unatomic mt))
     ;;
     if negb cond 
     then fail loc (MerrOther "store with an ill-typed memory value")
@@ -2085,12 +2069,12 @@ Module Type CheriMemoryImpl
           mapi (fun (i_value: nat) (b_value: AbsByte)
                 => ((Z.add addr (Z.of_nat i_value)), b_value)) pre_bs
         in
-        let bytemap : ZMap.t AbsByte := (List.fold_left
-                          (fun (acc : ZMap.t AbsByte) =>
-                           fun (function_parameter : Z * AbsByte) =>
-                             let '(addr, b_value) := function_parameter in
-                             ZMap.add addr b_value acc)
-                          bs st.(bytemap)) in
+        let bytemap : ZMap.t AbsByte :=
+          List.fold_left
+            (fun (acc : ZMap.t AbsByte) (ab : Z * AbsByte) =>
+               let '(addr, b_value) := ab in
+               ZMap.add addr b_value acc)
+            bs st.(bytemap) in
 
         put {|
             next_alloc_id    := st.(next_alloc_id);
@@ -2107,63 +2091,39 @@ Module Type CheriMemoryImpl
         ;;
         ret (FP Write (AddressValue.of_Z addr) nsz)
       in
+
       let store_concrete alloc_id c :=
-        if cap_is_null c  then
+        if cap_is_null c then
           fail loc (MerrAccess StoreAccess NullPtr)
         else
-          is_within_bound alloc_id cty (cap_to_Z c)
-            >>=
-            (fun (x : bool) =>
-               match x with
-               | false =>
-                   fail loc (MerrAccess StoreAccess OutOfBoundPtr)
-               | true
-                 =>
-                   get_allocation alloc_id >>=
-                     (fun (alloc : allocation) =>
-                        match alloc.(is_readonly) with
-                        | IsReadOnly ro_kind =>
-                            fail loc (MerrWriteOnReadOnly ro_kind)
-                        | IsWritable =>
-                            is_atomic_member_access alloc_id cty
-                              (cap_to_Z c) >>=
-                              (fun (x : bool) =>
-                                 match x with
-                                 | true =>
-                                     fail loc
-                                       (MerrAccess LoadAccess AtomicMemberof)
-                                 | false =>
-                                     do_store_cap (Some alloc_id) c >>=
-                                       (fun (fp : footprint) =>
-                                          if is_locking then
-                                            update
-                                              (fun (st : mem_state) =>
-                                                 mem_state_with_allocations
-                                                   (zmap_update
-                                                      alloc_id
-                                                      (fun (x:option allocation) =>
-                                                         match x with
-                                                         | Some a =>
-                                                             Some {|
-                                                                 prefix      := a.(prefix)     ;
-                                                                 base        := a.(base)       ;
-                                                                 size        := a.(size)       ;
-                                                                 ty          := a.(ty)         ;
-                                                                 is_dynamic  := a.(is_dynamic) ;
-                                                                 is_dead     := a.(is_dead)    ;
-                                                                 is_readonly := IsReadOnly ReadonlyConstQualified;
-                                                                 taint       := a.(taint)      ;
-                                                               |}
-                                                         | None => None
-                                                         end) st.(allocations))
-                                                   st)
-                                            ;;
-                                            ret fp
-                                          else
-                                            ret fp)
-                                 end)
-                        end)
-               end)
+          inbounds <- is_within_bound alloc_id cty (cap_to_Z c) ;;
+          if inbounds then
+            (alloc <- get_allocation alloc_id ;;
+             match alloc.(is_readonly) with
+             | IsReadOnly ro_kind =>
+                 fail loc (MerrWriteOnReadOnly ro_kind)
+             | IsWritable =>
+                 atomic <- is_atomic_member_access alloc_id cty (cap_to_Z c) ;;
+                 if atomic
+                 then fail loc (MerrAccess LoadAccess AtomicMemberof)
+                 else
+                   (fp <- do_store_cap (Some alloc_id) c ;;
+                    if is_locking then
+                      update
+                        (fun (st : mem_state) =>
+                           mem_state_with_allocations
+                             (zmap_update alloc_id
+                                (fun (oa:option allocation) =>
+                                   a <- oa ;;
+                                   ret (allocation_with_is_readonly a (IsReadOnly ReadonlyConstQualified))
+                                ) st.(allocations))
+                             st)
+                      ;;
+                      ret fp
+                    else
+                      ret fp)
+             end)
+          else  fail loc (MerrAccess StoreAccess OutOfBoundPtr)
       in
 
       match prov, ptrval_ with
@@ -2175,12 +2135,12 @@ Module Type CheriMemoryImpl
       | Prov_none, PVconcrete c =>
           fail loc (MerrAccess StoreAccess OutOfBoundPtr)
       | Prov_disabled, PVconcrete c =>
-          find_overlapping (cap_to_Z c) >>= fun x =>
-              match x with
-              | NoAlloc => fail loc (MerrAccess StoreAccess OutOfBoundPtr)
-              | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
-              | SingleAlloc alloc_id => store_concrete alloc_id c
-              end
+          olp <- find_overlapping (cap_to_Z c) ;;
+          match olp with
+          | NoAlloc => fail loc (MerrAccess StoreAccess OutOfBoundPtr)
+          | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
+          | SingleAlloc alloc_id => store_concrete alloc_id c
+          end
       | Prov_device, PVconcrete c =>
           if cap_is_null c then
             fail loc
@@ -2188,11 +2148,10 @@ Module Type CheriMemoryImpl
                  StoreAccess
                  NullPtr)
           else
-            is_within_device cty (cap_to_Z c) >>=
-              (fun (x : bool) =>
-                 if x
-                 then do_store_cap None c
-                 else fail loc (MerrAccess StoreAccess OutOfBoundPtr))
+            dev <- is_within_device cty (cap_to_Z c) ;;
+            if dev
+            then do_store_cap None c
+            else fail loc (MerrAccess StoreAccess OutOfBoundPtr)
       | Prov_symbolic iota, PVconcrete c =>
           if cap_is_null c then
             fail loc
@@ -2224,96 +2183,24 @@ Module Type CheriMemoryImpl
               else
                 ret (FAIL loc (MerrAccess StoreAccess OutOfBoundPtr))
             in
-            resolve_iota precondition iota >>=
-              (fun (alloc_id : storage_instance_id) =>
-                 do_store_cap (Some alloc_id) c >>=
-                   (fun (fp : footprint) =>
-                      (if is_locking then
-                         update
-                           (fun (st : mem_state) =>
-                              mem_state_with_allocations
-                                (zmap_update alloc_id
-                                   (fun (x : option allocation) =>
-                                      match x with
-                                      | Some a =>
-                                          Some
-                                            {|
-                                              prefix      := a.(prefix)     ;
-                                              base        := a.(base)       ;
-                                              size        := a.(size)       ;
-                                              ty          := a.(ty)         ;
-                                              is_dynamic  := a.(is_dynamic) ;
-                                              is_dead     := a.(is_dead)    ;
-                                              is_readonly := IsReadOnly ReadonlyConstQualified;
-                                              taint       := a.(taint)      ;
-                                            |}
-                                      | None => None
-                                      end) st.(allocations))
-                                st)
-                       else
-                         ret tt)
-                      ;;
-                      ret fp))
+            alloc_id <- resolve_iota precondition iota ;;
+            fp <- do_store_cap (Some alloc_id) c ;;
+            (if is_locking then
+               update
+                 (fun (st : mem_state) =>
+                    mem_state_with_allocations
+                      (zmap_update alloc_id
+                         (fun (oa : option allocation) =>
+                            a <- oa ;;
+                            ret (allocation_with_is_readonly a (IsReadOnly ReadonlyConstQualified))
+                         ) st.(allocations))
+                      st)
+             else
+               ret tt)
+            ;;
+            ret fp
       | Prov_some alloc_id, PVconcrete c
         => store_concrete alloc_id c
-(*
-      | Prov_some alloc_id, PVconcrete addr
-        =>
-          if cap_is_null addr then
-            fail loc (MerrAccess StoreAccess NullPtr)
-          else
-            is_within_bound alloc_id cty (AddressValue.to_Z (C.cap_get_value addr))
-              >>=
-              (fun (x : bool) =>
-                 match x with
-                 | false =>
-                     fail loc (MerrAccess StoreAccess OutOfBoundPtr)
-                 | true
-                   =>
-                     get_allocation alloc_id >>=
-                       (fun (alloc : allocation) =>
-                          match alloc.(is_readonly) with
-                          | IsReadOnly ro_kind =>
-                              fail loc (MerrWriteOnReadOnly ro_kind)
-                          | IsWritable =>
-                              is_atomic_member_access alloc_id cty
-                                (AddressValue.to_Z (C.cap_get_value addr)) >>=
-                                (fun (x : bool) =>
-                                   match x with
-                                   | true =>
-                                       fail loc
-                                         (MerrAccess LoadAccess AtomicMemberof)
-                                   | false =>
-                                       do_store_cap (Some alloc_id) addr >>=
-                                         (fun (fp : footprint) =>
-                                            if is_locking then
-                                              update
-                                                (fun (st : mem_state) =>
-                                                   mem_state_with_allocations
-                                                     (zmap_update
-                                                        alloc_id
-                                                        (fun (x:option allocation) =>
-                                                           match x with
-                                                           | Some a =>
-                                                               Some {|
-                                                                   prefix      := a.(prefix)      ;
-                                                                   base        := a.(base)        ;
-                                                                   size        := a.(size)        ;
-                                                                   ty          := a.(ty)          ;
-                                                                   is_readonly := IsReadOnly ReadonlyConstQualified;
-                                                                   taint       := a.(taint)       ;
-                                                                 |}
-                                                           | None => None
-                                                           end) st.(allocations))
-                                                     st)
-                                              ;;
-                                              ret fp
-                                            else
-                                              ret fp)
-                                   end)
-                          end)
-                 end)
-*)
       end.
 
   Definition null_ptrval (_:CoqCtype.ctype) : pointer_value
