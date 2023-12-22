@@ -1667,8 +1667,7 @@ Module RevocationProofs.
             apply ZMap.add_3 in H;auto.
     Qed.
 
-    (* TODO: generalize *)
-    Lemma capmeta_add_single_alloc_same
+    Lemma update_capmeta_single_alloc_same
       (bytemap: ZMap.t AbsByte)
       (allocations: ZMap.t allocation)
       (c2 c1 : Capability_GS.t)
@@ -2284,7 +2283,7 @@ Module RevocationProofs.
               assumption.
             --
               clear - H Ecap.
-              eapply capmeta_add_single_alloc_same; eauto.
+              eapply update_capmeta_single_alloc_same; eauto.
             --
               invc Heqo.
               unfold CheriMemoryWithPNVI.absbyte_v, CheriMemoryWithoutPNVI.absbyte_v.
