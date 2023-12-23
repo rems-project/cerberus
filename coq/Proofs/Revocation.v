@@ -478,7 +478,6 @@ Module RevocationProofs.
       z1 = z2 /\ eqlistA (ctype_pointer_value_same m1 m2) vl1 vl2
       -> varargs_same m1 m2 (z1,vl1) (z2,vl2).
 
-
   (* Simple function decode capability from memory. We do not check alignment, provenance, etc  *)
   Definition decode_cap_at (addr:Z) (bytemap:ZMap.t AbsByte): option Capability_GS.t
     :=
@@ -491,33 +490,35 @@ Module RevocationProofs.
       elements with key [addr] from two different capability maps
       within the memory state context provided by the [bytemap] and
       [allocatations] *)
-  Definition addr_cap_meta_same
-    (bytemap: ZMap.t AbsByte)
-    (allocations: ZMap.t allocation)
-    (addr: Z)
-    (meta1 meta2 : bool * CapGhostState)
-    : Prop :=
+  Inductive addr_cap_meta_same :
+    ZMap.t AbsByte -> (* bytemap *)
+    ZMap.t allocation -> (* allocations *)
+    Z -> (* addr *)
+    bool * CapGhostState -> (* meta1 *)
+    bool * CapGhostState -> (* meta2 *)
+    Prop :=
+  (* this covers non-revoked caps as well as caps pointing to device ranges *)
+  | addr_cap_meta_same_tags_and_ghost_state :
+    forall bytemap allocations addr meta,
+      addr_cap_meta_same bytemap allocations addr meta meta
+  (* this covers a situation when cap corresponding to [meta2] was revoked *)
+  | addr_cap_meta_same_revoked :
+    forall bytemap allocations addr gs1 gs2 c,
+      decode_cap_at addr bytemap = Some c -> (* decoding error should never happen *)
+      (forall alloc_id a, ~(ZMap.MapsTo alloc_id a allocations /\ cap_bounds_within_alloc c a)) ->
+      gs2.(tag_unspecified) = false ->
+      gs1.(bounds_unspecified) = gs2.(bounds_unspecified) ->
+      addr_cap_meta_same bytemap allocations addr (true, gs1) (false, gs2).
 
-    let (t1, gs1) := meta1 in
-    let (t2, gs2) := meta2 in
-    (t1 = t2 /\ gs1 = gs2) (* same tags and same ghost state *)
-    \/ ( (* non-PNVI cap was revoked *)
-        t1 = true /\ t2 = false
-        /\  (* if pointing to dead allocation *)
-          (exists c,
-              decode_cap_at addr bytemap = Some c
-              /\
-                ~(exists alloc_id a,
-                      ZMap.MapsTo alloc_id a allocations /\ cap_bounds_within_alloc c a)
-          )
-        /\ gs2.(tag_unspecified) = false (* cleared during revocation *)
-        /\ gs1.(bounds_unspecified) = gs2.(bounds_unspecified)
-      ).
+  (* Prior to calling this, we have already established that the
+     [allocations] fields are the same in both memory states, so we
+     pass just one copy.
 
-  (* Prior to calling this we already established that [bytemap] and
-     [allocations] fields are the same in the both memory states, so
-     we pass just one copy.
-   *)
+     Similarly, the [bytemap] fields are the same up to provenance
+     information. Since the non-PNVI version is supposed to have all
+     provenance fields set to `Prof_disabled`, we assume that here we
+     pass the PNVI version of bytemap, which may contain additional
+     provenance information.  *)
   Definition capmeta_same
     (bytemap: ZMap.t AbsByte)
     (allocations: ZMap.t allocation)
@@ -525,7 +526,6 @@ Module RevocationProofs.
     : Prop
     :=
     zmap_relate_keys capmeta1 capmeta2 (addr_cap_meta_same bytemap allocations).
-
 
   Definition mem_state_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
