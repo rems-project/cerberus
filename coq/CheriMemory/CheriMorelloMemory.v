@@ -1192,7 +1192,7 @@ Module Type CheriMemoryImpl
     end.
 
   Inductive bytes_indt :=
-  | PtrBytes: Z -> bytes_indt
+  | PtrBytes: nat -> bytes_indt
   | OtherBytes: bytes_indt.
 
   Definition split_bytes (bs : list AbsByte)
@@ -1243,12 +1243,12 @@ Module Type CheriMemoryImpl
                let offset_acc' :=
                  let ncond :=
                    match offset_acc, b_value.(copy_offset) with
-                   | PtrBytes n1, Some n2 => Z.eqb n1 (Z.of_nat n2)
+                   | PtrBytes n1, Some n2 => Nat.eqb n1 n2
                    | _, _ => false
                    end in
 
                  match offset_acc, b_value.(copy_offset),ncond with
-                 | PtrBytes n1, Some n2, true => PtrBytes (Z.add n1 1)
+                 | PtrBytes n1, Some n2, true => PtrBytes (S n1)
                  | _, _, _ => OtherBytes
                  end in
 
