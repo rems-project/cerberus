@@ -1256,7 +1256,7 @@ Module Type CheriMemoryImpl
             (List.rev bs) ((VALID (PNVI_prov Prov_none)), nil, (PtrBytes 0)) ;;
 
         let pvalid := match _prov with
-                      | INVALID => Prov_disabled
+                      | INVALID => PNVI_prov Prov_none
                       | VALID z_value => z_value
                       end in
 
