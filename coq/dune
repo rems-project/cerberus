@@ -12,6 +12,7 @@
 (copy_files extracted/CapabilitiesGS.{ml,mli})
 (copy_files extracted/CRelationClasses.ml)
 (copy_files extracted/Option0.{ml,mli})
+(copy_files extracted/OptionMonad.{ml,mli})
 (copy_files extracted/base0.{ml,mli})
 (copy_files extracted/Numbers0.{ml,mli})
 (copy_files extracted/CoqAilSyntax.{ml,mli})
