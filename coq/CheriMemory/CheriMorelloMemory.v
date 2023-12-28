@@ -1195,6 +1195,8 @@ Module Type CheriMemoryImpl
   | PtrBytes: nat -> bytes_indt
   | OtherBytes: bytes_indt.
 
+  (* Given a (non-empty) list of bytes combine their provenance (if
+     compatible). Returns the empty provenance otherwise *)
   Definition split_bytes (bs : list AbsByte)
     : serr (provenance * prov_ptr_valid_indt * list (option ascii))
     :=
@@ -1205,14 +1207,14 @@ Module Type CheriMemoryImpl
           monadic_fold_left
             (fun '(prov_acc, val_acc, offset_acc) b_value =>
 
-               let acond :=
+               let some_cond :=
                  match prov_acc, b_value.(prov) with
                  | VALID (Prov_some alloc_id1), Prov_some alloc_id2 =>
                      Z.eqb alloc_id1 alloc_id2
                  | _, _ => false
                  end in
 
-               let icond :=
+               let symbolic_cond :=
                  match prov_acc, b_value.(prov) with
                  | VALID (Prov_symbolic iota1), Prov_symbolic iota2 =>
                      Z.eqb iota1 iota2
@@ -1220,23 +1222,31 @@ Module Type CheriMemoryImpl
                  end in
 
                prov_acc' <-
-                 match (prov_acc, b_value.(prov)), acond, icond with
+                 match (prov_acc, b_value.(prov)), some_cond, symbolic_cond with
                  | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), false, _
                    => ret INVALID
                  | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, false
                    => ret INVALID
+
                  | (VALID (Prov_symbolic iota1), Prov_some alloc_id'), _, _
                    => raise "TODO(iota) split_bytes 1"
                  | (VALID (Prov_some alloc_id), Prov_symbolic iota), _, _ =>
                      raise "TODO(iota) split_bytes 2"
+
                  | (VALID Prov_none, (Prov_some _) as new_prov), _, _ =>
                      ret (VALID new_prov)
-                 | (VALID Prov_disabled, Prov_some _), _, _ =>
-                     ret INVALID
-                 | (VALID Prov_disabled, Prov_symbolic _), _, _ =>
-                     ret INVALID
                  | (VALID Prov_none, (Prov_symbolic _) as new_prov), _, _ =>
                      ret (VALID new_prov)
+
+                 (* disabled provenance does not mix with others *)
+                 | (VALID Prov_disabled    , Prov_none      ), _, _
+                 | (VALID Prov_disabled    , Prov_some _    ), _, _
+                 | (VALID Prov_disabled    , Prov_symbolic _), _, _
+                 | (VALID Prov_none        , Prov_disabled  ), _, _
+                 | (VALID (Prov_some _)    , Prov_disabled  ), _, _
+                 | (VALID (Prov_symbolic _), Prov_disabled  ), _, _ =>
+                     ret INVALID
+
                  | (prev_acc, _), _, _ => ret prev_acc
                  end ;;
 
@@ -1265,7 +1275,7 @@ Module Type CheriMemoryImpl
                          | _ => ValidPtrProv
                          end in
 
-        ret (pvalid,pptrvalid,rev_values)
+        ret (pvalid, pptrvalid, rev_values)
     end.
 
   Definition provs_of_bytes (bs : list AbsByte) : taint_indt :=
