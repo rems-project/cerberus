@@ -1171,111 +1171,70 @@ Module Type CheriMemoryImpl
   | SingleAlloc: storage_instance_id -> overlap_indt
   | DoubleAlloc: storage_instance_id -> storage_instance_id -> overlap_indt.
 
-  Inductive prov_ptr_valid_indt :=
-  | NotValidPtrProv
-  | ValidPtrProv.
-
-  Definition string_of_prov_ptr_valid_indt p :=
-    match p with
-    | NotValidPtrProv => "NotValidPtrProv"
-    | ValidPtrProv => "ValidPtrProv"
-    end.
-
-  Inductive prov_valid_indt :=
-  | VALID: provenance -> prov_valid_indt
-  | INVALID: prov_valid_indt.
-
-  Definition string_of_prov_valid_indt p :=
-    match p with
-    | VALID _ => "VALID _"
-    | INVALID => "INVALID"
-    end.
-
-  Inductive bytes_indt :=
-  | PtrBytes: nat -> bytes_indt
-  | OtherBytes: bytes_indt.
-
   (* Given a (non-empty) list of bytes combine their provenance (if
      compatible). Returns the empty provenance otherwise *)
   Definition split_bytes (bs : list AbsByte)
-    : serr (provenance * prov_ptr_valid_indt * list (option ascii))
-    :=
+    : serr (provenance * bool (*ptr valid *) * list (option ascii)) :=
     match bs with
     | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
-    | bs =>
-        '(_prov, rev_values, offset_status) <-
+    | _ =>
+        '(prov_maybe, rev_values, offset_status_maybe) <-
           monadic_fold_left
-            (fun '(prov_acc, val_acc, offset_acc) b_value =>
-
-               let some_cond :=
-                 match prov_acc, b_value.(prov) with
-                 | VALID (Prov_some alloc_id1), Prov_some alloc_id2 =>
-                     Z.eqb alloc_id1 alloc_id2
-                 | _, _ => false
-                 end in
-
-               let symbolic_cond :=
-                 match prov_acc, b_value.(prov) with
-                 | VALID (Prov_symbolic iota1), Prov_symbolic iota2 =>
-                     Z.eqb iota1 iota2
-                 | _, _ => false
-                 end in
-
+            (fun '(prov_acc_maybe, val_acc, offset_acc_maybe) b_value =>
                prov_acc' <-
-                 match (prov_acc, b_value.(prov)), some_cond, symbolic_cond with
-                 | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), false, _
-                   => ret INVALID
-                 | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, false
-                   => ret INVALID
-
-                 | (VALID (Prov_symbolic iota1), Prov_some alloc_id'), _, _
-                   => raise "TODO(iota) split_bytes 1"
-                 | (VALID (Prov_some alloc_id), Prov_symbolic iota), _, _ =>
-                     raise "TODO(iota) split_bytes 2"
-
-                 | (VALID Prov_none, (Prov_some _) as new_prov), _, _ =>
-                     ret (VALID new_prov)
-                 | (VALID Prov_none, (Prov_symbolic _) as new_prov), _, _ =>
-                     ret (VALID new_prov)
+                 match prov_acc_maybe, b_value.(prov) with
+                 (* the same type of provenance *)
+                 | Some (Prov_some alloc_id1), Prov_some alloc_id2 =>
+                     if Z.eqb alloc_id1 alloc_id2 then ret prov_acc_maybe else ret None
+                 | Some (Prov_symbolic iota1), Prov_symbolic iota2 =>
+                     if Z.eqb iota1 iota2 then ret prov_acc_maybe else ret None
+                 | Some Prov_disabled, Prov_disabled =>
+                     ret (Some Prov_disabled)
 
                  (* disabled provenance does not mix with others *)
-                 | (VALID Prov_disabled    , Prov_none      ), _, _
-                 | (VALID Prov_disabled    , Prov_some _    ), _, _
-                 | (VALID Prov_disabled    , Prov_symbolic _), _, _
-                 | (VALID Prov_none        , Prov_disabled  ), _, _
-                 | (VALID (Prov_some _)    , Prov_disabled  ), _, _
-                 | (VALID (Prov_symbolic _), Prov_disabled  ), _, _ =>
-                     ret INVALID
+                 | Some Prov_disabled, _ | _, Prov_disabled =>
+                                             ret None
 
-                 | (prev_acc, _), _, _ => ret prev_acc
+                 (* Switching from Prov_none to a new provenance is allowed *)
+                 | Some Prov_none, _ as new_prov => ret (Some new_prov)
+
+                 (* Mixed cases. Should not happen? *)
+                 | Some (Prov_symbolic iota1), Prov_some alloc_id' =>
+                     raise "Mixed symboloc/some provenances split_bytes"
+                 | Some (Prov_some alloc_id), Prov_symbolic iota2 =>
+                     raise "Mixed some/symbloic provenances split_bytes"
+
+                 (*  The following cases could be handled with:
+
+                  | _, _ =>
+                     ret prov_acc_maybe
+
+                     but we implicitly elaborate them for clarity
+                  *)
+
+                 (* Once invalid, always invalid *)
+                 | None, _ => ret prov_acc_maybe
+                 (* subsequent Prov_none are ignored *)
+                 | _, Prov_none => ret prov_acc_maybe
+
+                 (* subsequent Prov_device are ignored (* TODO: review *) *)
+                 | _, Prov_device => ret prov_acc_maybe
+                 (* Prov_device is sticky (* TODO: review *) *)
+                 | Some Prov_device, _ => ret prov_acc_maybe
+
                  end ;;
-
                let offset_acc' :=
-                 let ncond :=
-                   match offset_acc, b_value.(copy_offset) with
-                   | PtrBytes n1, Some n2 => Nat.eqb n1 n2
-                   | _, _ => false
-                   end in
-
-                 match offset_acc, b_value.(copy_offset),ncond with
-                 | PtrBytes n1, Some n2, true => PtrBytes (S n1)
-                 | _, _, _ => OtherBytes
+                 match offset_acc_maybe, b_value.(copy_offset) with
+                 | Some n1, Some n2 =>
+                     if Nat.eqb n1 n2 then Some (S n1) else None
+                 | _, _ => None
                  end in
-
                ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
-            (List.rev bs) ((VALID (PNVI_prov Prov_none)), nil, (PtrBytes 0)) ;;
+            (List.rev bs) ((Some (PNVI_prov Prov_none), nil, Some O)) ;;
 
-        let pvalid := match _prov with
-                      | INVALID => PNVI_prov Prov_none
-                      | VALID z_value => z_value
-                      end in
-
-        let pptrvalid := match offset_status with
-                         | OtherBytes => NotValidPtrProv
-                         | _ => ValidPtrProv
-                         end in
-
-        ret (pvalid, pptrvalid, rev_values)
+        ret (Values.opt_def (PNVI_prov Prov_none) prov_maybe ,
+            CapFns.is_some offset_status_maybe,
+            rev_values)
     end.
 
   Definition provs_of_bytes (bs : list AbsByte) : taint_indt :=
@@ -1400,8 +1359,7 @@ Module Type CheriMemoryImpl
         | CoqCtype.Pointer _ ref_ty =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
-            '(prov, prov_status, bs1') <- split_bytes bs1 ;;
-            (* sprint_msg ("BS1 prov_status=" ++ (string_of_prov_ptr_valid_indt prov_status)) ;; *)
+            '(prov, prov_valid, bs1') <- split_bytes bs1 ;;
             match extract_unspec bs1' with
             | Some cs =>
                 let (tag,gs) := tag_query_f addr in
@@ -1432,18 +1390,17 @@ Module Type CheriMemoryImpl
                     | _ =>
                         let prov :=
                           PNVI_prov
-                            (match prov_status with
-                             | NotValidPtrProv =>
-                                 match
-                                   find_overlapping
-                                     (cap_to_Z c_value) with
-                                 | NoAlloc => Prov_none
-                                 | SingleAlloc alloc_id => Prov_some alloc_id
-                                 | DoubleAlloc alloc_id1 alloc_id2 =>
-                                     Prov_some alloc_id1
-                                 end
-                             | ValidPtrProv => prov
-                             end)
+                            (if Bool.eqb prov_valid true
+                             then prov
+                             else
+                               match
+                                 find_overlapping
+                                   (cap_to_Z c_value) with
+                               | NoAlloc => Prov_none
+                               | SingleAlloc alloc_id => Prov_some alloc_id
+                               | DoubleAlloc alloc_id1 alloc_id2 =>
+                                   Prov_some alloc_id1
+                               end)
                         in
                         (* sprint_msg (C.to_string n_value) ;; *)
                         ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete c_value)), bs2)
