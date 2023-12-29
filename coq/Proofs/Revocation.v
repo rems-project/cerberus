@@ -479,36 +479,72 @@ Module RevocationProofs.
       -> varargs_same m1 m2 (z1,vl1) (z2,vl2).
 
   (* Simple function decode capability from memory. We do not check alignment, provenance, etc  *)
-  Definition decode_cap_at (addr:Z) (bytemap:ZMap.t AbsByte): option Capability_GS.t
+  Definition decode_cap_at (addr:Z) (abs:list AbsByte) (tag:bool): option Capability_GS.t
     :=
-    let abs := CheriMemoryWithPNVI.fetch_bytes bytemap addr (sizeof_pointer MorelloImpl.get) in
     let bs := List.map value abs in
     cs <- extract_unspec bs ;;
-    Capability_GS.decode (List.rev cs) false.
+    Capability_GS.decode (List.rev cs) tag.
+
+  Inductive split_bytes_step: provenance -> provenance -> provenance -> Prop :=
+  (* the same type of provenance *)
+  | split_bytes_step_same:
+    forall p, split_bytes_step p p p
+
+  (* switching from None (except Prov_disabled *)
+  | split_bytes_step_none_to_some:
+    forall alloc_id,
+      split_bytes_step Prov_none (Prov_some alloc_id) (Prov_some alloc_id)
+  | split_bytes_step_none_to_symbolic:
+    forall iota,
+      split_bytes_step Prov_none (Prov_symbolic iota) (Prov_symbolic iota)
+  | split_bytes_step_none_to_device:
+    split_bytes_step Prov_none Prov_device Prov_device
+
+  (* ignoring subsequent Prov_none *)
+  | split_bytes_step_some_to_none:
+    forall alloc_id,
+      split_bytes_step (Prov_some alloc_id) Prov_none (Prov_some alloc_id)
+  | split_bytes_step_symbolic_to_none:
+    forall iota,
+      split_bytes_step (Prov_symbolic iota) Prov_none (Prov_symbolic iota)
+  | split_bytes_step_device_to_none:
+    split_bytes_step Prov_device Prov_none Prov_device.
+
+  Inductive split_bytes_spec: provenance -> list AbsByte -> Prop :=
+  | split_bytes_spec_nil: forall p, split_bytes_spec p []
+  | split_bytes_spec_cons:
+    forall b bs prov_accum new_accum,
+      split_bytes_spec prov_accum bs
+      -> split_bytes_step prov_accum b.(prov) new_accum
+      -> split_bytes_spec new_accum (b::bs).
 
   (** A predicate that defines the relationship between two capmeta
       elements with key [addr] from two different capability maps
       within the memory state context provided by the [bytemap] and
       [allocatations] *)
   Inductive addr_cap_meta_same :
-    ZMap.t AbsByte -> (* bytemap *)
-    ZMap.t allocation -> (* allocations *)
+    CheriMemoryWithPNVI.mem_state_r ->
+    CheriMemoryWithoutPNVI.mem_state_r ->
     Z -> (* addr *)
     bool * CapGhostState -> (* meta1 *)
     bool * CapGhostState -> (* meta2 *)
     Prop :=
   (* this covers non-revoked caps as well as caps pointing to device ranges *)
   | addr_cap_meta_same_tags_and_ghost_state :
-    forall bytemap allocations addr meta,
-      addr_cap_meta_same bytemap allocations addr meta meta
+    forall m1 m2 addr meta,
+      addr_cap_meta_same m1 m2 addr meta meta
   (* this covers a situation when cap corresponding to [meta2] was revoked *)
   | addr_cap_meta_same_revoked :
-    forall bytemap allocations addr gs1 gs2 c,
-      decode_cap_at addr bytemap = Some c -> (* decoding error should never happen *)
-      (forall alloc_id a, ~(ZMap.MapsTo alloc_id a allocations /\ cap_bounds_within_alloc c a)) ->
-      gs2.(tag_unspecified) = false ->
-      gs1.(bounds_unspecified) = gs2.(bounds_unspecified) ->
-      addr_cap_meta_same bytemap allocations addr (true, gs1) (false, gs2).
+    forall m1 m2 addr gs1 gs2 c1 c2 bs1 bs2 prov,
+      CheriMemoryWithPNVI.fetch_bytes m1.(CheriMemoryWithPNVI.bytemap) addr (sizeof_pointer MorelloImpl.get) = bs1
+      -> CheriMemoryWithPNVI.fetch_bytes m2.(CheriMemoryWithoutPNVI.bytemap) addr (sizeof_pointer MorelloImpl.get) = bs2
+      -> decode_cap_at addr bs1 true = Some c1 (* decoding error should never happen *)
+      -> decode_cap_at addr bs2 false = Some c2 (* decoding error should never happen *)
+      -> split_bytes_spec prov bs1
+      -> ptr_value_same m1 m2 (PV prov (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2))
+      -> gs2.(tag_unspecified) = false
+      -> gs1.(bounds_unspecified) = gs2.(bounds_unspecified)
+      -> addr_cap_meta_same m1 m2 addr (true, gs1) (false, gs2).
 
   (* Prior to calling this, we have already established that the
      [allocations] fields are the same in both memory states, so we
@@ -520,16 +556,17 @@ Module RevocationProofs.
      pass the PNVI version of bytemap, which may contain additional
      provenance information.  *)
   Definition capmeta_same
-    (bytemap: ZMap.t AbsByte)
-    (allocations: ZMap.t allocation)
+    (m1:CheriMemoryWithPNVI.mem_state_r)
+    (m2:CheriMemoryWithoutPNVI.mem_state_r)
     (capmeta1 capmeta2: ZMap.t (bool * CapGhostState))
     : Prop
     :=
-    zmap_relate_keys capmeta1 capmeta2 (addr_cap_meta_same bytemap allocations).
+    zmap_relate_keys capmeta1 capmeta2 (addr_cap_meta_same m1 m2).
 
   Definition mem_state_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
-    (m2:CheriMemoryWithoutPNVI.mem_state_r): Prop
+    (m2:CheriMemoryWithoutPNVI.mem_state_r)
+    : Prop
     :=
     m1.(CheriMemoryWithPNVI.next_alloc_id) = m2.(CheriMemoryWithoutPNVI.next_alloc_id)
     /\ m1.(CheriMemoryWithPNVI.next_iota) = m2.(CheriMemoryWithoutPNVI.next_iota)
@@ -540,7 +577,7 @@ Module RevocationProofs.
     /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
     /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
-    /\ capmeta_same m1.(CheriMemoryWithPNVI.bytemap) m1.(CheriMemoryWithPNVI.allocations) m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
+    /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
   (* TODO: Memory invariant sketch:
 
