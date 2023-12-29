@@ -29,6 +29,10 @@ Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
+(* these are generic functions defined in odd places *)
+Local Notation opt_def := Values.opt_def.
+Local Notation is_some := CapFns.is_some.
+
 Module Type CheriMemoryTypes
   (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS
@@ -1232,8 +1236,8 @@ Module Type CheriMemoryImpl
                ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
             (List.rev bs) ((Some (PNVI_prov Prov_none), nil, Some O)) ;;
 
-        ret (Values.opt_def (PNVI_prov Prov_none) prov_maybe ,
-            CapFns.is_some offset_status_maybe,
+        ret (opt_def (PNVI_prov Prov_none) prov_maybe ,
+            is_some offset_status_maybe,
             rev_values)
     end.
 
