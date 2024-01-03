@@ -408,11 +408,13 @@ module Concrete : Memory = struct
                 | _ ->
                     `OtherBytes in
               (prov_acc', b.value :: val_acc, offset_acc')
-            ) (`VALID b.prov, [], `PtrBytes 0) bl in
-          ( (match _prov with `INVALID -> Prov_none | `VALID z -> z)
-          , (match offset_status with `OtherBytes -> `NotValidPtrProv | _ -> `ValidPtrProv)
-          , List.rev rev_values )
-    
+              ) (`VALID b.prov, [], `PtrBytes 0) bl in
+          let values = List.rev rev_values in
+          match _prov, offset_status with
+          | `VALID z, `PtrBytes _ -> (z, `ValidPtrProv, values)
+          | `VALID z, _ -> (z, `NotValidPtrProv, rev_values)
+          | `INVALID, _ -> (Prov_none, `NotValidPtrProv, rev_values)
+
     (* PNVI-ae-udi *)
     let provs_of_bytes bs =
       let xs = List.fold_left (fun acc b ->
