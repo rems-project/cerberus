@@ -1213,7 +1213,7 @@ Module Type CheriMemoryImpl
             (List.rev bs) ((Some b.(prov), nil, Some O)) ;;
 
         ret (opt_def (PNVI_prov Prov_none) prov_maybe ,
-            is_some offset_status_maybe,
+            is_some offset_status_maybe && is_some prov_maybe,
             rev_values)
     end.
 
