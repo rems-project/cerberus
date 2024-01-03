@@ -485,38 +485,20 @@ Module RevocationProofs.
     cs <- extract_unspec bs ;;
     Capability_GS.decode (List.rev cs) tag.
 
-  Inductive split_bytes_step: provenance -> provenance -> provenance -> Prop :=
-  (* the same type of provenance *)
-  | split_bytes_step_same:
-    forall p, split_bytes_step p p p
+  (* [True] if list of bytes starts with given offset and offsets
+     increases by one each step *)
+  Inductive bytes_copy_offset_seq: nat -> list AbsByte -> Prop :=
+  | bytes_copy_offset_seq_nil: forall n, bytes_copy_offset_seq n []
+  | bytes_copy_offset_seq_cons:
+    forall n b bs,
+      b.(copy_offset) = Some n ->
+      bytes_copy_offset_seq (S n) bs -> bytes_copy_offset_seq n (b::bs).
 
-  (* switching from None (except Prov_disabled *)
-  | split_bytes_step_none_to_some:
-    forall alloc_id,
-      split_bytes_step Prov_none (Prov_some alloc_id) (Prov_some alloc_id)
-  | split_bytes_step_none_to_symbolic:
-    forall iota,
-      split_bytes_step Prov_none (Prov_symbolic iota) (Prov_symbolic iota)
-  | split_bytes_step_none_to_device:
-    split_bytes_step Prov_none Prov_device Prov_device
-
-  (* ignoring subsequent Prov_none *)
-  | split_bytes_step_some_to_none:
-    forall alloc_id,
-      split_bytes_step (Prov_some alloc_id) Prov_none (Prov_some alloc_id)
-  | split_bytes_step_symbolic_to_none:
-    forall iota,
-      split_bytes_step (Prov_symbolic iota) Prov_none (Prov_symbolic iota)
-  | split_bytes_step_device_to_none:
-    split_bytes_step Prov_device Prov_none Prov_device.
-
-  Inductive split_bytes_spec: provenance -> list AbsByte -> Prop :=
-  | split_bytes_spec_nil: forall p, split_bytes_spec p []
-  | split_bytes_spec_cons:
-    forall b bs prov_accum new_accum,
-      split_bytes_spec prov_accum bs
-      -> split_bytes_step prov_accum b.(prov) new_accum
-      -> split_bytes_spec new_accum (b::bs).
+  (* [True] if all bytes in given list [bl] have given provenance, and
+     their offsets are sequential ending with [0] *)
+  Definition split_bytes_ptr_spec (p:provenance) (bl:list AbsByte): Prop :=
+    List.Forall (fun x => provenance_eqb p x.(prov) = true) bl
+    /\ bytes_copy_offset_seq 0 (List.rev bl).
 
   (** A predicate that defines the relationship between two capmeta
       elements with key [addr] from two different capability maps
@@ -538,9 +520,9 @@ Module RevocationProofs.
     forall m1 m2 addr gs1 gs2 c1 c2 bs1 bs2 prov,
       CheriMemoryWithPNVI.fetch_bytes m1.(CheriMemoryWithPNVI.bytemap) addr (sizeof_pointer MorelloImpl.get) = bs1
       -> CheriMemoryWithPNVI.fetch_bytes m2.(CheriMemoryWithoutPNVI.bytemap) addr (sizeof_pointer MorelloImpl.get) = bs2
+      -> split_bytes_ptr_spec prov bs1
       -> decode_cap_at addr bs1 true = Some c1 (* decoding error should never happen *)
       -> decode_cap_at addr bs2 false = Some c2 (* decoding error should never happen *)
-      -> split_bytes_spec prov bs1
       -> ptr_value_same m1 m2 (PV prov (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2))
       -> gs2.(tag_unspecified) = false
       -> gs1.(bounds_unspecified) = gs2.(bounds_unspecified)
