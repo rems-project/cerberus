@@ -282,7 +282,7 @@ module Concrete : Memory = struct
     | Prov_some of storage_instance_id
     | Prov_symbolic of symbolic_storage_instance_id (* only for PNVI-ae-udi *)
     | Prov_device
-  
+
   (* Note: using Z instead of int64 because we need to be able to have
      unsigned 64bits values *)
   type pointer_value_base =
@@ -395,31 +395,20 @@ module Concrete : Memory = struct
     let split_bytes = function
       | [] ->
           failwith "Concrete.AbsByte.split_bytes: called on an empty list"
-      | bs ->
+      | (b::bs) as bl ->
           let (_prov, rev_values, offset_status) =
             List.fold_left (fun (prov_acc, val_acc, offset_acc) b ->
               let prov_acc' = match prov_acc, b.prov with
-                | `VALID (Prov_some alloc_id1), Prov_some alloc_id2 when alloc_id1 <> alloc_id2 ->
-                    `INVALID
-                | `VALID (Prov_symbolic iota1), Prov_symbolic iota2 when iota1 <> iota2 ->
-                    `INVALID
-                | `VALID (Prov_symbolic iota1), Prov_some alloc_id' ->
-                    failwith "TODO(iota) split_bytes 1"
-                | `VALID (Prov_some alloc_id), Prov_symbolic iota ->
-                    failwith "TODO(iota) split_bytes 2"
-                | `VALID Prov_none, (Prov_some _ as new_prov) ->
-                    `VALID new_prov
-                | `VALID Prov_none, (Prov_symbolic _ as new_prov) ->
-                    `VALID new_prov
-                | prev_acc, _ ->
-                    prev_acc in
+                | `VALID p1, p2 when p1 = p2 -> prov_acc
+                | _, _ -> `INVALID
+              in
               let offset_acc' = match offset_acc, b.copy_offset with
                 | `PtrBytes n1, Some n2 when n1 = n2 ->
                     `PtrBytes (n1+1)
                 | _ ->
                     `OtherBytes in
               (prov_acc', b.value :: val_acc, offset_acc')
-            ) (`VALID Prov_none, [], `PtrBytes 0) bs in
+            ) (`VALID b.prov, [], `PtrBytes 0) bl in
           ( (match _prov with `INVALID -> Prov_none | `VALID z -> z)
           , (match offset_status with `OtherBytes -> `NotValidPtrProv | _ -> `ValidPtrProv)
           , List.rev rev_values )
