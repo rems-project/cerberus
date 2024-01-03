@@ -1274,7 +1274,7 @@ Module Type CheriMemoryImpl
           =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
-            '(prov, _, bs1') <- split_bytes bs1 ;;
+            '(_, _, bs1') <- split_bytes bs1 ;;
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             let _:bool := iss in (* hack to hint type checker *)
             match extract_unspec bs1' with
