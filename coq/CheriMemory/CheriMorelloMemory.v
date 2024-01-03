@@ -59,6 +59,17 @@ Module Type CheriMemoryTypes
   | Prov_symbolic : symbolic_storage_instance_id -> provenance
   | Prov_device : provenance.
 
+  Definition provenance_eqb: provenance -> provenance -> bool :=
+    fun p1 p2 =>
+      match p1, p2 with
+      | Prov_disabled, Prov_disabled => true
+      | Prov_none, Prov_none => true
+      | Prov_some alloc_id1, Prov_some alloc_id2 => Z.eqb alloc_id1 alloc_id2
+      | Prov_symbolic iota1, Prov_symbolic iota2 => Z.eqb iota1 iota2
+      | Prov_device, Prov_devie => true
+      | _, _ => false
+      end.
+
   Inductive function_pointer : Set :=
   | FP_valid : CoqSymbol.sym -> function_pointer
   | FP_invalid : C.t -> function_pointer.
@@ -1181,60 +1192,25 @@ Module Type CheriMemoryImpl
     : serr (provenance * bool (*ptr valid *) * list (option ascii)) :=
     match bs with
     | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
-    | _ =>
+    | b::_ =>
         '(prov_maybe, rev_values, offset_status_maybe) <-
           monadic_fold_left
-            (fun '(prov_acc_maybe, val_acc, offset_acc_maybe) b_value =>
+            (fun '(prov_acc_maybe, val_acc, offset_acc_maybe) b =>
                prov_acc' <-
-                 match prov_acc_maybe, b_value.(prov) with
-                 (* the same type of provenance *)
-                 | Some (Prov_some alloc_id1), Prov_some alloc_id2 =>
-                     if Z.eqb alloc_id1 alloc_id2 then ret prov_acc_maybe else ret None
-                 | Some (Prov_symbolic iota1), Prov_symbolic iota2 =>
-                     if Z.eqb iota1 iota2 then ret prov_acc_maybe else ret None
-                 | Some Prov_disabled, Prov_disabled =>
-                     ret (Some Prov_disabled)
-
-                 (* disabled provenance does not mix with others *)
-                 | Some Prov_disabled, _ | _, Prov_disabled =>
-                                             ret None
-
-                 (* Switching from Prov_none to a new provenance is allowed *)
-                 | Some Prov_none, _ as new_prov => ret (Some new_prov)
-
-                 (* Mixed cases. Should not happen? *)
-                 | Some (Prov_symbolic iota1), Prov_some alloc_id' =>
-                     raise "Mixed symboloc/some provenances split_bytes"
-                 | Some (Prov_some alloc_id), Prov_symbolic iota2 =>
-                     raise "Mixed some/symbloic provenances split_bytes"
-
-                 (*  The following cases could be handled with:
-
-                  | _, _ =>
-                     ret prov_acc_maybe
-
-                     but we implicitly elaborate them for clarity
-                  *)
-
-                 (* Once invalid, always invalid *)
-                 | None, _ => ret prov_acc_maybe
-                 (* subsequent Prov_none are ignored *)
-                 | _, Prov_none => ret prov_acc_maybe
-
-                 (* subsequent Prov_device are ignored (* TODO: review *) *)
-                 | _, Prov_device => ret prov_acc_maybe
-                 (* Prov_device is sticky (* TODO: review *) *)
-                 | Some Prov_device, _ => ret prov_acc_maybe
-
+                 match prov_acc_maybe, b.(prov) with
+                 | Some p1, p2 =>
+                     if provenance_eqb p1 p2 then ret prov_acc_maybe else ret None
+                 (* once invalid stays always invalid *)
+                 | None, _ => ret None
                  end ;;
                let offset_acc' :=
-                 match offset_acc_maybe, b_value.(copy_offset) with
+                 match offset_acc_maybe, b.(copy_offset) with
                  | Some n1, Some n2 =>
                      if Nat.eqb n1 n2 then Some (S n1) else None
                  | _, _ => None
                  end in
-               ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
-            (List.rev bs) ((Some (PNVI_prov Prov_none), nil, Some O)) ;;
+               ret (prov_acc', b.(value)::val_acc, offset_acc'))
+            (List.rev bs) ((Some b.(prov), nil, Some O)) ;;
 
         ret (opt_def (PNVI_prov Prov_none) prov_maybe ,
             is_some offset_status_maybe,
