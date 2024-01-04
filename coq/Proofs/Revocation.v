@@ -1617,19 +1617,19 @@ Module RevocationProofs.
     :=
     fun '(m1,m2,l1) '(m1',m2',l1') =>
       ZMap.Equal m1 m1'
-      /\ capmeta_same mem1.(CheriMemoryWithPNVI.bytemap) mem1.(CheriMemoryWithPNVI.allocations) m2 m2'
+      /\ capmeta_same mem1 mem2 m2 m2'
       /\ eqlistA AbsByte_eq l1 l1'.
 
   Section repr_same_proof.
 
     Lemma capmeta_add_eq_same
-      (bytemap: ZMap.t AbsByte)
-      (allocations: ZMap.t allocation)
+      (mem1:CheriMemoryWithPNVI.mem_state_r)
+      (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       (addr : Z)
       (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState)):
-      capmeta_same bytemap allocations capmeta1 capmeta2 ->
+      capmeta_same mem1 mem2 capmeta1 capmeta2 ->
       forall t : Capability_GS.t,
-        capmeta_same bytemap allocations
+        capmeta_same mem1 mem2
           (ZMap.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta1)
           (ZMap.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta2).
     Proof.
