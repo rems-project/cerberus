@@ -540,10 +540,9 @@ Module RevocationProofs.
   Definition capmeta_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
     (m2:CheriMemoryWithoutPNVI.mem_state_r)
-    (capmeta1 capmeta2: ZMap.t (bool * CapGhostState))
     : Prop
     :=
-    zmap_relate_keys capmeta1 capmeta2 (addr_cap_meta_same m1 m2).
+    zmap_relate_keys m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta) (addr_cap_meta_same m1 m2).
 
   Definition mem_state_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
@@ -559,7 +558,7 @@ Module RevocationProofs.
     /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
     /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
-    /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
+    /\ capmeta_same m1 m2.
 
   (* TODO: Memory invariant sketch:
 
@@ -567,8 +566,9 @@ Module RevocationProofs.
     2. All caps which are tagged according to capmeta must:
        1. have their corrsponding bytes intialized
        2. decode without error
+       3. Have same provenance and correct sequence bytes (per `split_bytes_ptr_spec`)
 
-    Due to types we will need to have 2 versions of this per module! (or define in module
+       Due to types we will need to have 2 versions of this, one per module
    *)
 
   Ltac destruct_mem_state_same H :=
