@@ -1534,7 +1534,7 @@ Module Type CheriMemoryImpl
           then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
           else ret meta (* outside allocation. leave unchanged *)
       | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
-      | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
+      | _ => raise (InternalErr "Unexpected `abst` return value. Expecting concrete pointer.")
       end.
 
   (* revoke (clear tag) any pointer in the memory pointing within the
