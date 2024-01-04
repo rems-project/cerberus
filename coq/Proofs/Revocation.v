@@ -540,9 +540,10 @@ Module RevocationProofs.
   Definition capmeta_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
     (m2:CheriMemoryWithoutPNVI.mem_state_r)
+    capmeta1 capmeta2
     : Prop
     :=
-    zmap_relate_keys m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta) (addr_cap_meta_same m1 m2).
+    zmap_relate_keys capmeta1 capmeta2 (addr_cap_meta_same m1 m2).
 
   Definition mem_state_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
@@ -558,7 +559,7 @@ Module RevocationProofs.
     /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
     /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
-    /\ capmeta_same m1 m2.
+    /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
   (* TODO: Memory invariant sketch:
 
@@ -1500,70 +1501,61 @@ Module RevocationProofs.
     specialize (H k).
     destruct H as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
     -
+      (* [k] in [capmeta0] and [capmeta1] *)
       left.
       apply ZMap.mapi_1 with (f:=f) in I0, I1.
       destruct I0 as [k0 [E0 M0]].
       destruct I1 as [k1 [E1 M1]].
       subst k0 k1.
       exists (f k v1), (f k v2).
-      split. auto.
-      split. auto.
-      unfold addr_cap_meta_same in *.
-      repeat break_let.
-      destruct S as [[E0 E1] | [N1 [N2 [N3 [N4 N5]]]]].
+
+      split; auto.
+      split; auto.
+      inversion S;[constructor|].
+      subst v2 v1 addr0 m3 m1.
+      destruct gs1, gs2.
+      cbn in *.
+      repeat (break_match_hyp; try some_none).
+
+      (*
+
+      apply mapi_mapsto_iff in M0; [| intros; subst; reflexivity].
+      destruct M0 as [v0' [FE0 M0]].
+
+      apply mapi_mapsto_iff in M1; [| intros; subst; reflexivity].
+      destruct M1 as [v1' [FE1 M1]].
+       *)
+      subst tag_unspecified0 bounds_unspecified0.
+      remember (f k (false, {| tag_unspecified := false; bounds_unspecified := bounds_unspecified |})) as f1 eqn:F1.
+      rewrite Heqf in F1.
+      cbv in F1.
+      subst f1.
+
+      remember (f k (true, {| tag_unspecified := tag_unspecified; bounds_unspecified := bounds_unspecified |})) as f0 eqn:F0.
+      rewrite Heqf in F0.
+      break_if;subst f0; cbn in *.
       +
-        left.
-        subst b0 c0.
-        rewrite Heqp3 in Heqp4.
-        clear Heqp3.
-        tuple_inversion.
-        auto.
+        clear M0 M1.
+        clear f Heqf.
+        invc S.
+        cbn in *.
+        repeat (break_match_hyp; try some_none).
+        econstructor; eauto;
+          (unfold decode_cap_at;
+           cbn;
+           break_match;[repeat some_inv;auto| congruence]).
       +
-        right.
-        subst b b0.
-        destruct c, c0.
-        cbn in N4, N5.
-        subst bounds_unspecified0 tag_unspecified0.
-        repeat split.
-        *
-          rename Heqp3 into H.
-          rewrite Heqf in H.
-          clear - H.
-          cbn in H.
-          break_if.
-          --
-            tuple_inversion.
-            reflexivity.
-          --
-            tuple_inversion.
-            reflexivity.
-        *
-          rename Heqp4 into H.
-          rewrite Heqf in H.
-          clear - H.
-          cbn in H.
-          tuple_inversion.
-          reflexivity.
-        *
-          destruct N3 as [c [N3 N3']].
-          exists c.
-          split.
-          apply N3.
-          apply N3'.
-        *
-          rename Heqp4 into H.
-          rewrite Heqf in H.
-          clear - H.
-          cbn in H.
-          tuple_inversion.
-          reflexivity.
-        *
-          rewrite Heqf in Heqp3, Heqp4.
-          clear - Heqp3 Heqp4.
-          cbn in *.
-          tuple_inversion.
-          break_if;(tuple_inversion;reflexivity).
+        clear M0 M1.
+        clear f Heqf.
+        invc S.
+        cbn in *.
+        repeat (break_match_hyp; try some_none).
+        econstructor; eauto;
+          (unfold decode_cap_at;
+           cbn;
+           break_match;[repeat some_inv;auto| congruence]).
     -
+      (* [k] not in [capmeta0] and [capmeta1] *)
       right.
       split.
       +
