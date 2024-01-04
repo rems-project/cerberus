@@ -59,3 +59,24 @@ Ltac autospecialize H :=
 
 Ltac full_autospecialize H :=
   autospecialize H; [| try full_autospecialize H].
+
+Ltac some_none :=
+  let H' := fresh in
+  match goal with
+  | [H1: ?x = None, H2: ?x <> None |- _] => congruence
+  | [H1: ?x = Some _, H2: ?x = None |- _ ] => congruence
+  | [H: Some _ = None |- _ ] => inversion H
+  | [H: None = Some _ |- _ ] => inversion H
+  | [ |- Some _ <> None ] => intros H'; inversion H'
+  | [ |- None <> None ] => congruence
+  | [ |- Some ?a <> Some ?a ] => congruence
+  | [ |- Some _ <> None ] => intros H'; inversion H'
+  | [ |- None <> Some _ ] => intros H'; inversion H'
+  | [ |- None = None ] => reflexivity
+  | [ |- Some ?a = Some ?a] => reflexivity
+  end.
+
+Ltac some_inv :=
+  match goal with
+  | [H: Some ?a = Some ?b |- _ ] => inversion H; clear H
+  end.
