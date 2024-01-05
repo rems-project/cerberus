@@ -1613,12 +1613,12 @@ Module RevocationProofs.
   #[local] Definition repr_res_eq
     (mem1:CheriMemoryWithPNVI.mem_state_r)
     (mem2:CheriMemoryWithoutPNVI.mem_state_r)
-  : relation (repr_res_t)
+    : relation (repr_res_t)
     :=
-    fun '(m1,m2,l1) '(m1',m2',l1') =>
-      ZMap.Equal m1 m1'
-      /\ capmeta_same mem1 mem2 m2 m2'
-      /\ eqlistA AbsByte_eq l1 l1'.
+    fun '(funptrmap,capmeta, bytemap) '(funptrmap',capmeta', bytemap') =>
+      ZMap.Equal funptrmap funptrmap'
+      /\ capmeta_same mem1 mem2 capmeta capmeta'
+      /\ eqlistA AbsByte_eq bytemap bytemap'.
 
   Section repr_same_proof.
 
@@ -1677,20 +1677,27 @@ Module RevocationProofs.
             apply ZMap.add_3 in H;auto.
     Qed.
 
+
     Lemma update_capmeta_single_alloc_same
-      (bytemap: ZMap.t AbsByte)
-      (allocations: ZMap.t allocation)
+      (mem1:CheriMemoryWithPNVI.mem_state_r)
+      (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       (c2 c1 : Capability_GS.t)
       (alloc_id : ZMap.key)
       (addr : Z)
-      (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState)):
-      capmeta_same bytemap allocations capmeta1 capmeta2 ->
-      single_alloc_id_cap_cmp allocations alloc_id c1 c2  ->
-      capmeta_same bytemap allocations
-        (CheriMemoryWithPNVI.update_capmeta c1 addr capmeta1)
-        (CheriMemoryWithoutPNVI.update_capmeta c2 addr capmeta2).
+      (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState))
+      (bytes1 bytes2: list ascii)
+      (tag1 tag2: bool)
+      :
+      capmeta_same mem1 mem2 capmeta1 capmeta2 ->
+      Capability_GS.encode true c1 = Some (bytes1, tag1) ->
+      Capability_GS.encode true c2 = Some (bytes2, tag2) ->
+      single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations mem1) alloc_id c1 c2
+      ->
+        capmeta_same mem1 mem2
+          (CheriMemoryWithPNVI.update_capmeta c1 addr capmeta1)
+          (CheriMemoryWithoutPNVI.update_capmeta c2 addr capmeta2).
     Proof.
-      intros Ecap H.
+      intros Ecap E1 E2 H.
       unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
       rewrite is_pointer_algined_same.
       destruct (CheriMemoryWithoutPNVI.is_pointer_algined addr) eqn:A ; [|assumption].
@@ -1698,7 +1705,7 @@ Module RevocationProofs.
       - (* `single_cap_cmp_live` constructor: `alloc_id` is live *)
         unfold capmeta_same , zmap_relate_keys.
         intros k.
-        inversion H1. clear H1.
+        invc H1.
         + (* `cap_match_alloc_match` constructor: allocation/cap match *)
           subst.
           destruct (Z.eq_dec k addr).
@@ -1712,8 +1719,6 @@ Module RevocationProofs.
           *
             setoid_rewrite add_neq_mapsto_iff;auto.
         + (* `cap_match_with_alloc_mismatch` constructor: alloc/cap mis-match *)
-          invc H1 ; [congruence|].
-          clear H3 H4.
           destruct (Z.eq_dec k addr).
           * (* cap which is being added *)
             subst k.
@@ -1724,21 +1729,36 @@ Module RevocationProofs.
             exists (false, Capability_GS.get_ghost_state c1).
             split. apply ZMap.add_1; reflexivity.
             split. apply ZMap.add_1; reflexivity.
-
-            unfold addr_cap_meta_same.
-            (* left. if we know `c1` is untagged. *)
-            right.
-            (*
-              HERE
+            destruct (Capability_GS.cap_is_valid c1).
+            --
+              (* revocation case *)
+              unfold capmeta_same , zmap_relate_keys in Ecap.
               specialize (Ecap addr).
               destruct Ecap as [[v1 [v2 [I0 [I1 S]]]] | [N1 N2]].
-             *)
-            admit.
+              ++
+                remember
+                  (mapi
+                     (fun (i_value : nat) (b_value : ascii) =>
+                        CheriMemoryWithPNVI.absbyte_v (Prov_some alloc_id) (Some i_value) (Some b_value)) bytes1) as bs1.
+                remember (mapi
+                            (fun (i_value : nat) (b_value : ascii) =>
+                               CheriMemoryWithoutPNVI.absbyte_v Prov_disabled (Some i_value) (Some b_value)) bytes2) as bs2.
+
+                econstructor 2 with (c1:=c1) (c2:=c1) (prov:=Prov_some alloc_id)
+                                    (bs1:=bs1) (bs2:=bs2); auto; admit.
+
+                (* HERE. We refer to bytes which has not been changed yet.
+                   Conculusion: using `capmeta_same` instead of `repr_res_same` is wrong *)
+              ++
+                admit.
+            --
+              constructor.
           * (* all other caps unchanged *)
             setoid_rewrite add_neq_mapsto_iff;auto.
       - (* `single_cap_cmp_dead` consturctor: `alloc_id` is dead *)
         admit.
     Admitted.
+
 
     Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
                             * ZMap.t (bool * CapGhostState)
@@ -1752,7 +1772,7 @@ Module RevocationProofs.
           fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
             a1 = a2
             /\ ZMap.Equal m1 m1'
-            /\ capmeta_same mem1.(CheriMemoryWithPNVI.bytemap) mem1.(CheriMemoryWithPNVI.allocations) m2 m2'
+            /\ capmeta_same mem1 mem2 m2 m2'
             /\ eqlistA (eqlistA AbsByte_eq) l1 l1'.
 
     Let repr_fold2_T:Type := ZMap.t (digest * string * Capability_GS.t)
@@ -1767,13 +1787,13 @@ Module RevocationProofs.
           fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
             a1 = a2
             /\ ZMap.Equal m1 m1'
-            /\ capmeta_same mem1.(CheriMemoryWithPNVI.bytemap) mem1.(CheriMemoryWithPNVI.allocations) m2 m2'
+            /\ capmeta_same mem1 mem2 m2 m2'
             /\ eqlistA AbsByte_eq l1 l1'.
 
     Theorem repr_same:
       forall m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
         ZMap.Equal funptrmap1 funptrmap2
-        /\ capmeta_same m1.(CheriMemoryWithPNVI.bytemap) m1.(CheriMemoryWithPNVI.allocations) capmeta1 capmeta2
+        /\ capmeta_same m1 m2 capmeta1 capmeta2
         /\ addr1 = addr2
         /\  mem_value_indt_same m1 m2 mval1 mval2 ->
         serr_eq (repr_res_eq m1 m2)
@@ -2268,11 +2288,16 @@ Module RevocationProofs.
             repeat inl_inr_inv; subst.
 
             cbn.
+            remember (mapi
+                        (fun (i_value : nat) (b_value : ascii) =>
+                           CheriMemoryWithPNVI.absbyte_v (Prov_some alloc_id) (Some i_value) (Some b_value)) l0) as bs1.
+            remember (mapi
+                        (fun (i_value : nat) (b_value : ascii) =>
+                           CheriMemoryWithoutPNVI.absbyte_v Prov_disabled (Some i_value) (Some b_value)) l) as bs2.
             repeat split.
             --
               assumption.
             --
-              clear - H Ecap.
               eapply update_capmeta_single_alloc_same; eauto.
             --
               invc Heqo.
