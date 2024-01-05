@@ -8,6 +8,8 @@ From ExtLib.Structures Require Import Monad Monads Traversable.
 
 From Coq.Lists Require Import List. (* after exltlib *)
 
+From Common Require Import Utils.
+
 Local Open Scope type_scope.
 Local Open Scope list_scope.
 Local Open Scope Z_scope.
@@ -69,6 +71,17 @@ Definition zmap_sequence
     end
   in
   loop (ZMap.elements mv) (ZMap.empty A).
+
+(** Adds elements of given [list] to a [map] starting at [index]. *)
+Definition zmap_add_list_at
+  {T:Type}
+  (map: ZMap.t T)
+  (list: list T)
+  (offset: Z)
+  : ZMap.t T
+  :=
+  let ilist := mapi (fun (i: nat) (v: T) => ((Z.add offset (Z.of_nat i)), v)) list in
+  List.fold_left (fun acc '(k, v) =>  ZMap.add k v acc) ilist map.
 
 (* Monadic mapi *)
 Definition zmap_mmapi
