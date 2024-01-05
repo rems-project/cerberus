@@ -92,8 +92,8 @@ Fixpoint monadic_fold_left
   (f : A -> B -> m A) (l : list B) (a : A)
   : m A
   := match l with
-     | List.nil => ret a
-     | List.cons b l =>
+     | [] => ret a
+     | b::l =>
          a' <- f a b ;;
          monadic_fold_left f l a'
      end.
