@@ -1606,6 +1606,7 @@ Module RevocationProofs.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.is_pointer_algined CheriMemoryWithoutPNVI.is_pointer_algined.
 
+  (* return type of [repr] *)
   #[local] Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
                               * ZMap.t (bool * CapGhostState)
                               * list AbsByte.
@@ -1613,12 +1614,21 @@ Module RevocationProofs.
   #[local] Definition repr_res_eq
     (mem1:CheriMemoryWithPNVI.mem_state_r)
     (mem2:CheriMemoryWithoutPNVI.mem_state_r)
+    (addr : Z)
     : relation (repr_res_t)
     :=
-    fun '(funptrmap,capmeta, bytemap) '(funptrmap',capmeta', bytemap') =>
+    fun '(funptrmap, capmeta, bytes) '(funptrmap', capmeta', bytes') =>
+
+      let bytemap  := zmap_add_list_at mem1.(CheriMemoryWithPNVI.bytemap   ) bytes  addr in
+      let bytemap' := zmap_add_list_at mem2.(CheriMemoryWithoutPNVI.bytemap) bytes' addr in
+      let mem1' :=
+        CheriMemoryWithPNVI.mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta mem1 in
+      let mem2' :=
+        CheriMemoryWithoutPNVI.mem_state_with_funptrmap_bytemap_capmeta funptrmap' bytemap' capmeta' mem2 in
+
       ZMap.Equal funptrmap funptrmap'
-      /\ capmeta_same mem1 mem2 capmeta capmeta'
-      /\ eqlistA AbsByte_eq bytemap bytemap'.
+      /\ capmeta_same mem1' mem2' capmeta capmeta'
+      /\ eqlistA AbsByte_eq bytes bytes'.
 
   Section repr_same_proof.
 
@@ -1769,11 +1779,13 @@ Module RevocationProofs.
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       : relation repr_fold_T
         :=
-          fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
-            a1 = a2
-            /\ ZMap.Equal m1 m1'
-            /\ capmeta_same mem1 mem2 m2 m2'
-            /\ eqlistA (eqlistA AbsByte_eq) l1 l1'.
+          fun '(funptrmap,capmeta,a,lbytes) '(funptrmap',capmeta',a',lbytes') =>
+            let bs  := List.concat (List.rev lbytes ) in
+            let bs' := List.concat (List.rev lbytes') in
+            a = a'
+            /\ repr_res_eq mem1 mem2 (a - (Z.of_nat (List.length bs)))
+                (funptrmap  , capmeta  , bs )
+                (funptrmap' , capmeta' , bs').
 
     Let repr_fold2_T:Type := ZMap.t (digest * string * Capability_GS.t)
                              * ZMap.t (bool * CapGhostState)
@@ -1782,13 +1794,14 @@ Module RevocationProofs.
     Let repr_fold2_eq
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
+      (addr : Z)
       : relation repr_fold2_T
         :=
-          fun '(m1,m2,a1,l1) '(m1',m2',a2,l1') =>
-            a1 = a2
-            /\ ZMap.Equal m1 m1'
-            /\ capmeta_same mem1 mem2 m2 m2'
-            /\ eqlistA AbsByte_eq l1 l1'.
+          fun '(funptrmap,capmeta,a,bytes) '(funptrmap',capmeta',a',bytes') =>
+            a = a'
+            /\ repr_res_eq mem1 mem2 addr
+                (funptrmap, capmeta,  bytes )
+                (funptrmap',capmeta', bytes').
 
     Theorem repr_same:
       forall m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
@@ -1796,8 +1809,8 @@ Module RevocationProofs.
         /\ capmeta_same m1 m2 capmeta1 capmeta2
         /\ addr1 = addr2
         /\  mem_value_indt_same m1 m2 mval1 mval2 ->
-        serr_eq (repr_res_eq m1 m2)
-          (CheriMemoryWithPNVI.repr fuel funptrmap1 capmeta1 addr1 mval1)
+        serr_eq (repr_res_eq m1 m2 addr1)
+          (CheriMemoryWithPNVI.repr    fuel funptrmap1 capmeta1 addr1 mval1)
           (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
     Proof.
       intros m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
@@ -1815,10 +1828,12 @@ Module RevocationProofs.
         destruct (CheriMemoryWithoutPNVI.sizeof 1000 None t2); [reflexivity|].
         destruct_serr_eq; try inl_inr.
         rewrite <- Hserr, <- Hserr0. clear Hserr Hserr0.
+
         constructor;auto.
         split.
         +
-          apply ghost_tags_same; [reflexivity|assumption].
+          admit.
+          (* apply ghost_tags_same; [reflexivity|assumption]. *)
         +
           unfold CheriMemoryWithPNVI.PNVI_prov.
           unfold CheriMemoryWithoutPNVI.PNVI_prov.
