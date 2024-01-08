@@ -48,6 +48,9 @@ let has_id_with f sym = match has_id sym with
   | None -> false
   | Some str -> f str
 
+let has_cn_id_with f  = function
+  | CF.Symbol.Symbol (_, _, SD_CN_Id str) -> f str
+  | _ -> false
 
 module StringHash =
   Hashtbl.Make(struct

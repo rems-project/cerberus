@@ -57,11 +57,12 @@ let alpha_rename_definition def =
   let definition = subst_def_or_uninterp (IT.make_subst subst) def.definition in
   {def with args; definition }
 
+let pp_args xs = Pp.flow_map (Pp.break 1)
+  (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BT.pp typ))) xs
 
 let pp_def nm def =
   let open Pp in
-  nm ^^ colon ^^^ flow (break 1)
-    (List.map (fun (sym, t) -> parens (typ (Sym.pp sym) (LogicalSorts.pp t))) def.args) ^^
+  nm ^^ colon ^^^ pp_args def.args ^^
     colon ^/^
     begin match def.definition with
     | Uninterp -> !^ "uninterpreted"
