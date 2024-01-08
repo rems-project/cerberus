@@ -105,9 +105,10 @@ let parse_function_spec (Attrs attributes) =
         let use = List.exists (fun (x, y) -> String.equal x (fst k) && String.equal y (snd k))
             [("cerb", "magic"); ("cn", "requires"); ("cn", "ensures");
                 ("cn", "accesses"); ("cn", "trusted")] in
-        if use then ListM.mapM (fun (loc, arg, _) ->
-               parse C_parser.function_spec (loc, arg)
-             ) attr.attr_args
+        if use then 
+          ListM.concat_mapM (fun (loc, arg, _) ->
+              parse C_parser.function_spec (loc, arg)
+            ) attr.attr_args
         else return []
       ) attributes
   in

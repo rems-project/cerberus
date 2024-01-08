@@ -330,7 +330,7 @@ type asm_qualifier =
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_resource> resource
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_pred> pred
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_condition> condition
-%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec> function_spec
+%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec list> function_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
 
@@ -2398,22 +2398,26 @@ condition:
 ;
 
 
-function_spec:
-| CN_TRUSTED EOF
+function_spec_item:
+| CN_TRUSTED
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_trusted loc }
-| CN_ACCESSES accs=separated_list(SEMICOLON, cn_variable) EOF
+| CN_ACCESSES accs=separated_list(SEMICOLON, cn_variable)
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_accesses (loc, accs) }
-| CN_REQUIRES cs=separated_list(SEMICOLON, condition) EOF
+| CN_REQUIRES cs=separated_list(SEMICOLON, condition)
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_requires (loc, cs) }
-| CN_ENSURES cs=separated_list(SEMICOLON, condition) EOF
+| CN_ENSURES cs=separated_list(SEMICOLON, condition)
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_ensures (loc, cs) }
-| CN_FUNCTION nm=cn_variable EOF
+| CN_FUNCTION nm=cn_variable
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_mk_function (loc, nm) }
+
+function_spec: 
+| fs=list(function_spec_item) EOF
+  { fs }
 
 
 loop_spec:
