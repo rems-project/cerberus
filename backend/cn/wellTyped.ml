@@ -924,7 +924,7 @@ module WRET = struct
              let@ permission = WIT.check loc BT.Bool p.permission in
              let@ provable = provable loc in
              let only_nonnegative_indices =
-               LC.forall_ p.q (impl_ (p.permission, ge_ (sym_ p.q, int_lit_ 0 (snd p.q))))
+               LC.forall_ p.q (impl_ (permission, ge_ (sym_ p.q, int_lit_ 0 (snd p.q))))
              in
              let@ () = match provable only_nonnegative_indices with
                | `True ->
