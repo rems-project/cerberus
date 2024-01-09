@@ -924,6 +924,10 @@ module WRET = struct
              let@ permission = WIT.check loc BT.Bool p.permission in
              let@ provable = provable loc in
              let only_nonnegative_indices =
+               (* It is important to use `permission` here and NOT `p.permission`.
+                  If there is a record involved, `permission` is normalised but the `p.permission` is not
+                  If there is a subsitution in `provable` then a type check
+                  assertion may fail if the non-normalised form is used *)
                LC.forall_ p.q (impl_ (permission, ge_ (sym_ p.q, int_lit_ 0 (snd p.q))))
              in
              let@ () = match provable only_nonnegative_indices with
