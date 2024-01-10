@@ -249,7 +249,68 @@ CN has a C-like expression syntax. Expressions include
 
 
 ### Auxiliary definitions
+
+CN top-level definitions and declarations are placed in the same
+special comment syntax
+(`/*@ ... @*/`), at the global level in C, that is, not attached to any
+C function or contained within any enclosing C syntax.
+
+These top-level commands mostly introduce new types and terms that can be
+used in subsequent CN syntax. These declarations begin with an identifying
+keyword (e.g. `datatype`, `predicate`). Multiple such top-level commands can
+be placed in the one special comment without any separator token, for instance:
+
+  ```
+  /*@
+  datatype dt {
+    ...
+  }
+
+  predicate (void) Pred (pointer p, i32 x) {
+    ...
+  }
+  @*/
+  ```
+
 #### Datatype definitions
+
+The `datatype` top-level command adds a user-defined datatype to the universe of CN base types.
+
+For instance, the following definition introduces a list of 32-bit integers
+(this will support different operations to CN's builtin list type).
+
+  ```
+  /*@
+  datatype int_list {
+    Nil {},
+    Cons {i32 x, datatype int_list tl}
+  }
+  @*/
+  ```
+
+The above introduces a two-constructor datatype. The new type can be referred to with
+the syntax `int_list` or `datatype int_list`.
+
+The datatype syntax is designed to be similar to Rust's, but not necessarily the same.
+
+Explicit values of the new datatype can be constructed with the syntax
+  `<cn_variable> LBRACE <member_def>* RBRACE`, e.g. `Cons {x: 0i32, tl: Nil {}}`.
+
+Values of the datatype can be destructed with the match syntax
+`MATCH <expr> LBRACE <match_case>+ RBRACE`, where each match case is of the form
+`<pattern> EQ GT LBRACE <expr> RBRACE`. The expression to be matched on must be
+parenthesised unless it is a single token.
+
+For instance, the sum of up to two elements of the list `xs` can be written with:
+
+  ```
+  match xs {
+    Nil {} => { 0 }
+    Cons {x : x1, tl: Nil {} } => { x1 }
+    Cons {x : x1, tl: Cons {x : x2, tl: _ } } => { x1 + x2 }
+  }
+  ```
+
 #### Specification function definitions
 #### Resource predicate definitions
 ### Proof assistance
