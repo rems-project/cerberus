@@ -635,14 +635,22 @@ following defines a function computing the length of a list, using the
 <p>Function definitions follow the form</p>
 <pre><code>function &lt;cn_attrs&gt; LPAREN &lt;base_type&gt; RPAREN
   &lt;cn_variable&gt; LPAREN &lt;args&gt; RPAREN &lt;cn_option_func_body&gt;</code></pre>
-<p>(i.e. <code>function</code>, followed by an optional list of
-attributes, the return basetype enclosed in parentheses, the name of the
-function, a list of zero or more arguments within parentheses, and
-finally, an optional function body).</p>
-<p>Attributes are a comma-separated list of attribute names, enclosed
-within square brackets; currently the possible attributes are: -
-<code>rec</code>, to indicate a recursive function definition, and -
-<code>coq_unfold</code> {TODO}.</p>
+<p>That is, <code>function</code> is followed by:</p>
+<ul>
+<li><p>an optional list of attributes<br />
+(within square brackets, a comma-separated list of attribute
+names),</p></li>
+<li><p>the return basetype<br />
+(enclosed in parentheses),</p></li>
+<li><p>the name of the function,</p></li>
+<li><p>the list of function arguments<br />
+(within parentheses, a comma-separated list of arguments, each
+comprising a basetype followed by the argument name),</p></li>
+<li><p>an optional function body.</p></li>
+</ul>
+<p>The possible attributes are currently: - <code>rec</code>, to
+indicate a recursive function definition, and - <code>coq_unfold</code>
+{TODO}.</p>
 <p>The function body is simply an expression, enclosed in curly
 braces.</p>
 <p><strong>Functions without body.</strong> When the function body is

@@ -330,9 +330,22 @@ Function definitions follow the form
 function <cn_attrs> LPAREN <base_type> RPAREN
   <cn_variable> LPAREN <args> RPAREN <cn_option_func_body>
 ```
-(i.e. `function`, followed by an optional list of attributes, the return basetype enclosed in parentheses, the name of the function, a list of zero or more arguments within parentheses, and finally, an optional function body).
+That is, `function` is followed by:
 
-Attributes are a comma-separated list of attribute names, enclosed within square brackets; currently the possible attributes are:
+- an optional list of attributes  
+  (within square brackets, a comma-separated list of attribute names),
+
+- the return basetype  
+  (enclosed in parentheses),  
+
+- the name of the function,
+
+- the list of function arguments  
+  (within parentheses, a comma-separated list of arguments, each comprising a basetype followed by the argument name),
+
+- an optional function body.
+
+The possible attributes are currently:
 - `rec`, to indicate a recursive function definition, and
 - `coq_unfold` {TODO}.
 
