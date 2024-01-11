@@ -283,7 +283,7 @@ For instance, the following definition introduces a list of 32-bit integers
   /*@
   datatype int_list {
     Nil {},
-    Cons {i32 x, datatype int_list tl}
+    Cons {i32 hd, datatype int_list tl}
   }
   @*/
   ```
@@ -294,7 +294,7 @@ the syntax `int_list` or `datatype int_list`.
 The datatype syntax is designed to be similar to Rust's, but not necessarily the same.
 
 Explicit values of the new datatype can be constructed with the syntax
-  `<cn_variable> LBRACE <member_def>* RBRACE`, e.g. `Cons {x: 0i32, tl: Nil {}}`.
+  `<cn_variable> LBRACE <member_def>* RBRACE`, e.g. `Cons {hd: 0i32, tl: Nil {}}`.
 
 Values of the datatype can be destructed with the match syntax
 `MATCH <expr> LBRACE <match_case>+ RBRACE`, where each match case is of the form
@@ -306,8 +306,8 @@ For instance, the sum of up to two elements of the list `xs` can be written with
   ```
   match xs {
     Nil {} => { 0i32 }
-    Cons {x : x1, tl: Nil {} } => { x1 }
-    Cons {x : x1, tl: Cons {x : x2, tl: _ } } => { x1 + x2 }
+    Cons {hd : x1, tl: Nil {} } => { x1 }
+    Cons {hd : x1, tl: Cons {hd : x2, tl: _ } } => { x1 + x2 }
   }
   ```
 
@@ -319,7 +319,7 @@ Users can define CN functions for use in specifications. Function definitions ca
 function [rec] (integer) length (datatype int_list l) {
   match l {
     Nil {} => { 0 }
-    Cons { x: _, tl: l2 } => { 1 + length(l2) }
+    Cons { hd: _, tl: l2 } => { 1 + length(l2) }
   }
 }
 ```
@@ -346,7 +346,9 @@ That is, `function` is followed by:
 - an optional function body.
 
 The possible attributes are currently:
+
 - `rec`, to indicate a recursive function definition, and
+
 - `coq_unfold` {TODO}.
 
 The function body is simply an expression, enclosed in curly braces. 
@@ -359,6 +361,34 @@ The function body is simply an expression, enclosed in curly braces.
 
 
 #### Resource predicate definitions
+
+In addition to the built-in resource predicates `Owned` and `Block`, CN allows users to define new resource predicates. This can be necessary to describe the ownership requirements for the use of recursive datastructures, or useful for grouping together common CN conditions under a single definition.
+
+As explained earlier, in CN resources have inputs and outputs. Informally, the inputs are arguments required to define *what memory is owned*, whereas the outputs are information derived from the combination of inputs and the owned memory. In the case of the `Owned` predicate, its single input is the pointer to the owned memory area, its output is the pointee value stored in the owned memory location; CN generalises this idea to arbitrary resource predicates. In resource predicate definitions, the user therefore decides which outputs a resource predicate should "expose".
+
+Shown below is an example of the linked-list resource predicate:
+
+```
+predicate (datatype int_list) LinkedList(pointer p) {
+  if (is_null(p)) {
+    return Nil {};
+  }
+  else {
+    take h = Owned<struct list_head>(p);
+    take t = LinkedList(h.next);
+    return Cons {hd: h.v, tl: t};
+  }
+}
+```
+{TODO}
+
+
+{TODO}
+```
+preciate <cn_attrs> <cn_pred_output> UNAME VARIABLE
+         LPAREN <args> RPAREN <cn_option_pred_clauses>
+```
+
 ### Proof assistance
 #### CN statements
 #### Lemma statements
