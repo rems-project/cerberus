@@ -564,9 +564,111 @@ VIP memory model)</li>
 <li>map access and update operations</li>
 </ul>
 <h3 id="auxiliary-definitions">Auxiliary definitions</h3>
+<p>CN top-level definitions and declarations are placed in the same
+special comment syntax (<code>/*@ ... @*/</code>), at the global level
+in C, that is, not attached to any C function or contained within any
+enclosing C syntax.</p>
+<p>These top-level commands mostly introduce new types and terms that
+can be used in subsequent CN syntax. These declarations begin with an
+identifying keyword (e.g. <code>datatype</code>,
+<code>predicate</code>). Multiple such top-level commands can be placed
+in the one special comment without any separator token, for
+instance:</p>
+<pre><code>/*@
+datatype dt {
+  ...
+}
+
+predicate (void) Pred (pointer p, i32 x) {
+  ...
+}
+@*/</code></pre>
 <h4 id="datatype-definitions">Datatype definitions</h4>
+<p>The <code>datatype</code> top-level command adds a user-defined
+datatype to the universe of CN base types.</p>
+<p>For instance, the following definition introduces a list of 32-bit
+integers (this will support different operations to CN’s builtin list
+type).</p>
+<pre><code>/*@
+datatype int_list {
+  Nil {},
+  Cons {i32 x, datatype int_list tl}
+}
+@*/</code></pre>
+<p>The above introduces a two-constructor datatype. The new type can be
+referred to with the syntax <code>int_list</code> or
+<code>datatype int_list</code>.</p>
+<p>The datatype syntax is designed to be similar to Rust’s, but not
+necessarily the same.</p>
+<p>Explicit values of the new datatype can be constructed with the
+syntax
+<code>&lt;cn_variable&gt; LBRACE &lt;member_def&gt;* RBRACE</code>,
+e.g. <code>Cons {x: 0i32, tl: Nil {}}</code>.</p>
+<p>Values of the datatype can be destructed with the match syntax
+<code>MATCH &lt;expr&gt; LBRACE &lt;match_case&gt;+ RBRACE</code>, where
+each match case is of the form
+<code>&lt;pattern&gt; EQ GT LBRACE &lt;expr&gt; RBRACE</code>. The
+expression to be matched on must be parenthesised unless it is a single
+token.</p>
+<p>For instance, the sum of up to two elements of the list
+<code>xs</code> can be written with:</p>
+<pre><code>match xs {
+  Nil {} =&gt; { 0i32 }
+  Cons {x : x1, tl: Nil {} } =&gt; { x1 }
+  Cons {x : x1, tl: Cons {x : x2, tl: _ } } =&gt; { x1 + x2 }
+}</code></pre>
 <h4 id="specification-function-definitions">Specification function
 definitions</h4>
+<p>Users can define CN functions for use in specifications. Function
+definitions can be recursive and mutually recursive. For instance, the
+following defines a function computing the length of a list, using the
+<code>int_list</code> datatype defined in the previous section.</p>
+<pre><code>function [rec] (integer) length (datatype int_list l) {
+  match l {
+    Nil {} =&gt; { 0 }
+    Cons { x: _, tl: l2 } =&gt; { 1 + length(l2) }
+  }
+}</code></pre>
+<p>This defines a function <code>length</code>, with a single argument,
+<code>l</code> of <code>int_list</code> datatype, and with
+<code>integer</code> return type.</p>
+<p>Function definitions follow the form</p>
+<pre><code>function &lt;cn_attrs&gt; LPAREN &lt;base_type&gt; RPAREN
+  &lt;cn_variable&gt; LPAREN &lt;args&gt; RPAREN &lt;cn_option_func_body&gt;</code></pre>
+<p>(i.e. <code>function</code>, followed by an optional list of
+attributes, the return basetype enclosed in parentheses, the name of the
+function, a list of zero or more arguments within parentheses, and
+finally, an optional function body).</p>
+<p>Attributes are a comma-separated list of attribute names, enclosed
+within square brackets; currently the possible attributes are: -
+<code>rec</code>, to indicate a recursive function definition, and -
+<code>coq_unfold</code> {TODO}.</p>
+<p>The function body is simply an expression, enclosed in curly
+braces.</p>
+<p><strong>Functions without body.</strong> When the function body is
+omitted, the function is treated as uninterpreted by CN: i.e. given the
+definition of a function <code>f</code> without body, CN will not be
+able to prove anything about <code>f(ARGS)</code> (the result of
+applying <code>f</code> to some list of arguments <code>ARGS</code>),
+other than deducing <code>f(ARGS) = f(ARGS&#39;)</code> from
+<code>ARGS = ARGS&#39;</code> (for some other list of arguments
+<code>ARGS&#39;</code>). Defining a CN function <code>f</code> without body
+can be useful to treat <code>f</code> as abstract in the CN
+verification, for instance when the goal is to deletate all proof
+depending on the details of <code>f</code> to manual Coq proof.</p>
+<p><strong>Recursive functions.</strong> In order to define a recursive
+function, the attribute <code>rec</code> must be used. To define a
+collection of two or more mutually recursive functions, simply use the
+<code>rec</code> attribute for each of them.</p>
+<p><strong>Note:</strong> Since verification becomes undecidable in the
+presence of recursive specification functions, CN does not attempt to
+reason about recursive definitions. Without explicit user intervention,
+CN treats a function <code>f</code> with recursive (or mutually
+recursive definition) the same as a function without body. When
+verification of C code requires reasoning about such functions, users
+have to manually assist in the proof, either by <em>manually unfolding
+function definitions</em> or using <em>manually stated and applied
+lemmata</em> (both of which are explained later).</p>
 <h4 id="resource-predicate-definitions">Resource predicate
 definitions</h4>
 <h3 id="proof-assistance">Proof assistance</h3>

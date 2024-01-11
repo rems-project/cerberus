@@ -305,13 +305,46 @@ For instance, the sum of up to two elements of the list `xs` can be written with
 
   ```
   match xs {
-    Nil {} => { 0 }
+    Nil {} => { 0i32 }
     Cons {x : x1, tl: Nil {} } => { x1 }
     Cons {x : x1, tl: Cons {x : x2, tl: _ } } => { x1 + x2 }
   }
   ```
 
 #### Specification function definitions
+
+Users can define CN functions for use in specifications. Function definitions can be recursive and mutually recursive. For instance, the following defines a function computing the length of a list, using the `int_list` datatype defined in the previous section.
+
+```
+function [rec] (integer) length (datatype int_list l) {
+  match l {
+    Nil {} => { 0 }
+    Cons { x: _, tl: l2 } => { 1 + length(l2) }
+  }
+}
+```
+This defines a function `length`, with a single argument, `l` of `int_list` datatype, and with `integer` return type.
+
+Function definitions follow the form
+```
+function <cn_attrs> LPAREN <base_type> RPAREN
+  <cn_variable> LPAREN <args> RPAREN <cn_option_func_body>
+```
+(i.e. `function`, followed by an optional list of attributes, the return basetype enclosed in parentheses, the name of the function, a list of zero or more arguments within parentheses, and finally, an optional function body).
+
+Attributes are a comma-separated list of attribute names, enclosed within square brackets; currently the possible attributes are:
+- `rec`, to indicate a recursive function definition, and
+- `coq_unfold` {TODO}.
+
+The function body is simply an expression, enclosed in curly braces. 
+
+**Functions without body.** When the function body is omitted, the function is treated as uninterpreted by CN: i.e. given the definition of a function `f` without body, CN will not be able to prove anything about `f(ARGS)` (the result of applying `f` to some list of arguments `ARGS`), other than deducing `f(ARGS) = f(ARGS')` from `ARGS = ARGS'` (for some other list of arguments `ARGS'`). Defining a CN function `f` without body can be useful to treat `f` as abstract in the CN verification, for instance when the goal is to deletate all proof depending on the details of `f` to manual Coq proof.
+
+**Recursive functions.** In order to define a recursive function, the attribute `rec` must be used. To define a collection of two or more mutually recursive functions, simply use the `rec` attribute for each of them.
+
+**Note:** Since verification becomes undecidable in the presence of recursive specification functions, CN does not attempt to reason about recursive definitions. Without explicit user intervention, CN treats a function `f` with recursive (or mutually recursive definition) the same as a function without body. When verification of C code requires reasoning about such functions, users have to manually assist in the proof, either by *manually unfolding function definitions* or using *manually stated and applied lemmata* (both of which are explained later).
+
+
 #### Resource predicate definitions
 ### Proof assistance
 #### CN statements
