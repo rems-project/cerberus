@@ -271,7 +271,7 @@ type state = <|
   loop_attributes: Annot.loop_attributes;
 
   (* BEGIN CN *)
-  toplevel_magic_statements: list (Loc.t * string);
+  toplevel_magic_statements: list (Loc.t * list (Loc.t * string));
 
   cn_state: Cn_desugaring.cn_desugaring_state;
   (* END CN *)
@@ -1152,7 +1152,7 @@ let lookup_cn_lemma id =
   resolve_cn_ident Cn.CN_lemma id >>= fun (sym, _) ->
   return sym
 
-val add_toplevel_magic: (Loc.t * string) -> desugM unit
+val add_toplevel_magic: (Loc.t * list (Loc.t * string)) -> desugM unit
 let add_toplevel_magic str =
   update_inner (fun st -> <| st with
     toplevel_magic_statements = str :: st.toplevel_magic_statements |>)

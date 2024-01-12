@@ -344,7 +344,7 @@ type translation_unit =
 and external_declaration =
   | EDecl_func of function_definition
   | EDecl_decl of cabs_declaration
-  | EDecl_magic of (Loc.t * string) (* magic comment at top level *)
+  | EDecl_magic of (Loc.t * (list (Loc.t * string))) (* magic comment at top level *)
   | EDecl_funcCN of Cn.cn_function Symbol.identifier type_name (* CN backend *)
   | EDecl_lemmaCN of Cn.cn_lemma Symbol.identifier type_name (* CN backend *)
   | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)

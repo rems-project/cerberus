@@ -818,49 +818,32 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
-          let separated_annots =
-            List.map (fun (loc, joined_strs) ->
-               let separate_strs = String.split_on_char ';' joined_strs in
-               let separate_strs = List.map String.trim separate_strs in
-               let separate_locs_and_strs = List.map (fun str ->
-                  if not (String.equal str "") then
-                     [(loc, str ^ ";")]
-                  else
-                     []
-               ) separate_strs
-               in
-               List.concat separate_locs_and_strs
-            ) (get_cerb_magic_attr annots) in
-          let@ desugared_stmts_and_stmts =
-            ListM.mapM (fun (stmt_loc, stmt_str) ->
-                let marker_id = Option.get (get_marker annots) in
-                let marker_id_object_types = Option.get (get_marker_object_types annots) in
-                let@ parsed_stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
-                let@ desugared_stmt =
+          let marker_id = Option.get (get_marker annots) in
+          let marker_id_object_types = Option.get (get_marker_object_types annots) in
+          let comments = match get_attrs annots with
+            | None -> []
+            | Some attrs -> Parse.magic_comments_of_attributes attrs
+          in
+          let@ parsed_stmts =
+            ListM.concat_mapM (Parse.parse C_parser.cn_statement_list) comments in
+          let@ desugared_stmts =
+            ListM.mapM (fun parsed_stmt ->
                   do_ail_desugar_rdonly (CAE.{
                         markers_env = markers_env;
                         inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
                     })
                     (CA.desugar_cn_statement parsed_stmt)
-                in
-                let visible_objects=
+          ) parsed_stmts in
+          let visible_objects=
                   global_types @
                   Pmap.find marker_id_object_types visible_objects_env
-                in
-                (* debug 6 (lazy (!^"CN statement before translation"));
-                debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt))); *)
-
-                let@ stmt =
+          in
+          let@ stmts =
+            ListM.mapM (fun desugared_stmt ->
                   Compile.translate_cn_statement
                     (fun sym -> List.assoc Sym.equal sym visible_objects)
                     old_states env desugared_stmt
-                in
-                (* debug 6 (lazy (!^"CN statement after translation"));
-                debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
-                return (desugared_stmt, stmt)
-            ) (List.concat separated_annots)
-          in
-          let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
+          ) desugared_stmts in
           return (M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))
        | _, _ ->
           n_expr e1

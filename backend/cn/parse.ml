@@ -9,23 +9,10 @@ module Cn = Cerb_frontend.Cn
 
 module Loc = Locations
 
-(* the character @ is not a separator in C, so supporting @start as a
-   legacy syntax requires special hacks *)
-let fiddle_at_hack string =
-  let ss = String.split_on_char '@' string in
-  let rec fix = function
-    | [] -> ""
-    | [s] -> s
-    | (s1 :: s2 :: ss) -> if Tools.starts_with "start" s2
-        then fix ((s1 ^ "%" ^ s2) :: ss)
-        else fix ((s1 ^ "@" ^ s2) :: ss)
-  in
-  fix ss
-
-let diagnostic_get_tokens string =
-  C_lexer.internal_state.inside_cn <- true;
-  let lexbuf = Lexing.from_string string in
-  let rec f xs = try begin match C_lexer.lexer lexbuf with
+let diagnostic_get_tokens loc_strs =
+  let lexbuf = C_parser_driver.mk_lexbuf_from_loc_strs loc_strs in
+  let lexer = C_lexer.cn_lexer () in
+  let rec f xs = try begin match lexer lexbuf with
     | Tokens.EOF -> List.rev ("EOF" :: xs)
     | t -> f (Tokens.string_of_token t :: xs)
   end with C_lexer.Error err -> List.rev (CF.Pp_errors.string_of_cparser_cause err :: xs)
@@ -35,29 +22,9 @@ let diagnostic_get_tokens string =
 
 (* adapting from core_parser_driver.ml *)
 
-let parse parser_start (loc, string) =
-  let string = fiddle_at_hack string in
-  C_lexer.internal_state.inside_cn <- true;
-  let lexbuf = Lexing.from_string string in
-  let () =
-    let open Cerb_location in
-    Lexing.set_position lexbuf
-      (* revisit *)
-      begin match Cerb_location.to_raw loc with
-      | Loc_unknown -> lexbuf.lex_curr_p
-      | Loc_other _ -> lexbuf.lex_curr_p
-      | Loc_point pos -> pos
-      (* start, end, cursor *)
-      | Loc_region (pos, _, _ ) -> pos
-      | Loc_regions ([],_) -> lexbuf.lex_curr_p
-      | Loc_regions ((pos,_) :: _, _) -> pos
-      end
-  in
-  let () = match Cerb_location.get_filename loc with
-    | Some filename -> lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname= filename }
-    | None -> ()
-  in
-  let buffer, lexer = MenhirLib.ErrorReports.wrap C_lexer.lexer in
+let parse parser_start loc_strs =
+  let lexbuf = C_parser_driver.mk_lexbuf_from_loc_strs loc_strs in
+  let buffer, lexer = MenhirLib.ErrorReports.wrap (C_lexer.cn_lexer ()) in
   let@ parsed_spec =
     try return (parser_start lexer lexbuf) with
     | C_lexer.Error err ->
@@ -73,45 +40,37 @@ let parse parser_start (loc, string) =
        in
        let message = String.sub message 0 (String.length message - 1) in
        (* the two tokens between which the error occurred *)
-       let where = try MenhirLib.ErrorReports.show (fun (start, curr) ->
-           Lexing.lexeme {
-             lexbuf with
-             lex_start_pos = start.Lexing.pos_cnum - start.pos_bol;
-             lex_curr_pos = curr.Lexing.pos_cnum - curr.pos_bol;
-           }
-         ) buffer
+       let where = try MenhirLib.ErrorReports.show
+           (C_parser_driver.snippet_from_loc_strs loc_strs) buffer
          with Invalid_argument _ -> "(error in fetching token)" in
-       (* fix caret pointing *)
-       let plus_3 (l : Lexing.position) = { l with pos_cnum = l.pos_cnum + 3 } in
-       let start = Lexing.lexeme_start_p lexbuf in
-       let end_ = Lexing.lexeme_end_p lexbuf in
-       let loc = Cerb_location.(region (plus_3 start , plus_3 end_) NoCursor) in
+       let r = (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) in
+       let loc = Cerb_location.(region r NoCursor) in
        Pp.debug 6 (lazy (
-           let toks = try diagnostic_get_tokens string
+           let toks = try diagnostic_get_tokens loc_strs
              with C_lexer.Error _ -> ["(re-parse error)"] in
            Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))));
        fail {loc; msg = Parser (Cparser_unexpected_token (where ^ "\n" ^ message))}
   in
   return parsed_spec
 
+let magic_comments_of_attributes (Attrs attributes) =
+  List.concat_map (fun attr ->
+    (* FIXME (TS): sometimes this needs to be cerb::magic, other times
+       cn:... is used. this all feels like a hack *)
+    let k = (Option.value ~default:"<>" (Option.map Id.s attr.attr_ns), Id.s attr.attr_id) in
+    let use = List.exists (fun (x, y) -> String.equal x (fst k) && String.equal y (snd k))
+        [("cerb", "magic"); ("cn", "requires"); ("cn", "ensures");
+            ("cn", "accesses"); ("cn", "trusted")] in
+    if use
+    then List.map (fun (loc, _, loc_strs) -> loc_strs) attr.attr_args
+    else []
+  ) attributes
 
-let parse_function_spec (Attrs attributes) =
-  let attributes = List.rev attributes in
-  let@ conditions =
-    ListM.concat_mapM (fun attr ->
-        let k = (Option.value ~default:"<>" (Option.map Id.s attr.attr_ns), Id.s attr.attr_id) in
-        (* FIXME (TS): I'm not sure if the check against cerb::magic was strange,
-            or if it was checking the wrong thing the whole time *)
-        let use = List.exists (fun (x, y) -> String.equal x (fst k) && String.equal y (snd k))
-            [("cerb", "magic"); ("cn", "requires"); ("cn", "ensures");
-                ("cn", "accesses"); ("cn", "trusted")] in
-        if use then 
-          ListM.concat_mapM (fun (loc, arg, _) ->
-              parse C_parser.function_spec (loc, arg)
-            ) attr.attr_args
-        else return []
-      ) attributes
-  in
+
+let parse_function_spec attributes =
+  let@ conditions = ListM.concat_mapM (fun comment ->
+      parse C_parser.function_spec comment
+   ) (magic_comments_of_attributes attributes) in
   ListM.fold_leftM (fun acc cond ->
     match cond, acc with
     | (Cn.CN_trusted loc), (_, [], [], [], []) ->
@@ -133,16 +92,10 @@ let parse_function_spec (Attrs attributes) =
     )
     (Mucore.Checked, [], [], [], []) conditions
 
-let parse_inv_spec (Attrs attributes) =
-  ListM.concat_mapM (fun attr ->
-      match Option.map Id.s (attr.attr_ns), Id.s (attr.attr_id) with
-      | Some "cerb", "magic" ->
-         ListM.concat_mapM (fun (loc, arg, _) ->
-             let@ (Cn.CN_inv (_loc, conds)) = parse C_parser.loop_spec (loc, arg) in
-             return conds
-           ) attr.attr_args
-      | _ ->
-         return []
-    ) attributes
+let parse_inv_spec attributes =
+  ListM.concat_mapM (fun comment ->
+    let@ (Cn.CN_inv (_loc, conds)) = parse C_parser.loop_spec comment in
+    return conds
+  ) (magic_comments_of_attributes attributes)
 
 

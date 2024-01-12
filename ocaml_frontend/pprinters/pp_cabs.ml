@@ -743,8 +743,8 @@ let dtree_of_external_declaration = function
   | EDecl_decl decl ->
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_cabs_declaration decl])
 (* BEGIN CN *)
-  | EDecl_magic (_, str) ->
-      Dleaf (pp_stmt_ctor "EDecl_magic" ^^^ !^ str)
+  | EDecl_magic (_, loc_strs) ->
+      Dnode (pp_decl_ctor "EDecl_magic", List.map (fun (_, s) -> Dleaf (!^ s)) loc_strs)
   | EDecl_funcCN func ->
       Dnode (pp_decl_ctor "EDecl_funcCN", [Cn_ocaml.PpCabs.dtree_of_cn_function func])
   | EDecl_lemmaCN lmma ->

@@ -71,7 +71,7 @@ let magic_to_attr magik : Annot.attribute =
   let open Annot in
   { attr_ns= Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
   ; attr_id= Symbol.Identifier (Cerb_location.unknown, "magic")
-  ; attr_args= List.map (fun (loc, str) -> (loc, str, [loc, str])) magik }
+  ; attr_args= List.map (fun (loc, loc_strs) -> (loc, "MAGIC", loc_strs)) magik }
 
 let magic_to_attrs = function
   | [] ->
@@ -140,7 +140,7 @@ type asm_qualifier =
 %token BMC_ASSUME
 
 (* magic comment token *)
-%token<Cerb_location.t * string> CERB_MAGIC
+%token <Cerb_location.t * ((Cerb_location.t * string) list)> CERB_MAGIC
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
@@ -150,7 +150,7 @@ type asm_qualifier =
 %token <[`U|`I] * int>CN_BITS
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
-%token CN_UNCHANGED CN_WILD CN_MATCH
+%token CN_UNCHANGED CN_WILD CN_AT CN_MATCH
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 %token <string * [`U|`I] * int> CN_CONSTANT
 
@@ -319,6 +319,7 @@ type asm_qualifier =
 %start function_spec
 %start loop_spec
 %start cn_statement
+%start cn_statement_list
 %start cn_toplevel
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
@@ -333,6 +334,8 @@ type asm_qualifier =
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec list> function_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
+%type<((Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement) list> cn_statement_list
+
 
 %type<Cerb_frontend.Cabs.external_declaration> cn_toplevel_elem
 %type<Cerb_frontend.Cabs.external_declaration list> cn_toplevel
@@ -473,16 +476,6 @@ declarator_typedefname:
     { LF.declare_typedefname (LF.identifier decl); decl }
 ;
 
-start_ignore:
-| (* empty *)
-  { (*C_lexer.internal_state.ignore_magic <- true*) }
-;
-
-end_ignore:
-| (* empty *)
-  { C_lexer.internal_state.ignore_magic <- false }
-;
-
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
 | i= general_identifier
@@ -491,13 +484,13 @@ enumeration_constant:
 
 (* §6.5.1 Primary expressions *)
 primary_expression:
-| str= var_name start_ignore
+| str= var_name
     { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
         CabsEident (Symbol.Identifier (Cerb_location.point $startpos(str), str))) }
-| cst= CONSTANT start_ignore
+| cst= CONSTANT
     { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEconst cst) }
-| lit= string_literal start_ignore
+| lit= string_literal
     { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
@@ -819,7 +812,7 @@ expression:
 ;
 
 full_expression:
-| expr= terminated(expression, end_ignore)
+| expr= expression
     { expr }
 
 (* §6.6 Constant expressions *)
@@ -1370,10 +1363,9 @@ block_item:
    while(1) /*@ inv X @*/ {} *)
 | magic= CERB_MAGIC
     {
-      let loc = fst magic in
-      let null = CabsStatement ( loc, Annot.no_attributes, CabsSnull ) in
+      let null = CabsStatement ( fst magic, Annot.no_attributes, CabsSnull ) in
       CabsStatement
-        ( loc
+        ( fst magic
         , magic_to_attrs [magic]
         , CabsSmarker null ) }
 ;
@@ -1894,7 +1886,7 @@ prim_expr:
 | arr= prim_expr LBRACK idx= expr RBRACK
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_map_get, arr, idx))) }
-| LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
+| LBRACE a=expr RBRACE CN_AT l=NAME VARIABLE
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($4)))
                                , CNExpr_at_env (a, l))) }
 | LBRACE members=record_def RBRACE
@@ -2253,12 +2245,6 @@ cn_type_synonym:
     { Symbol.Identifier (Cerb_location.point $startpos(str), str) }
 | str= NAME TYPE
     { Symbol.Identifier (Cerb_location.point $startpos(str), str) }
-/* %inline cn_u_variable: */
-/* | str= UNAME VARIABLE */
-/*     { Symbol.Identifier (Cerb_location.point $startpos(str), str) } */
-/* %inline cn_l_variable: */
-/* | str= LNAME VARIABLE */
-/*     { Symbol.Identifier (Cerb_location.point $startpos(str), str) } */
 
 
 args:
@@ -2476,6 +2462,11 @@ cn_statement:
 | CN_PRINT LPAREN e=expr RPAREN SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_print e) }
+
+cn_statement_list:
+| stmts= list(cn_statement) EOF
+    { stmts }
+;
 
 cn_toplevel_elem:
 | pred= cn_predicate

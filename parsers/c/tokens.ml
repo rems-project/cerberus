@@ -133,7 +133,7 @@ type token =
   | BUILTIN_CHOOSE_EXPR
 
   (* Magic comments as tokens *)
-  | CERB_MAGIC of (Cerb_location.t * string)
+  | CERB_MAGIC of (Cerb_location.t * ((Cerb_location.t * string) list))
 
   (* CN syntax *)
   | CN_CONSTANT of (string * [`I|`U] * int)
@@ -182,6 +182,7 @@ type token =
   | CN_TRUSTED
   | CN_UNCHANGED
   | CN_WILD
+  | CN_AT
 
 
 let string_of_token = function
@@ -302,7 +303,7 @@ let string_of_token = function
   | BUILTIN_TYPES_COMPATIBLE_P -> "BUILTIN_TYPES_COMPATIBLE_P"
   | BUILTIN_CHOOSE_EXPR -> "BUILTIN_CHOOSE_EXPR"
   | EOF -> "EOF"
-  | CERB_MAGIC (_, str) -> "/*@ " ^ str ^ " @*/"
+  | CERB_MAGIC (_, loc_strs) -> "/*@ " ^ String.concat "\n" (List.map snd loc_strs) ^ " @*/"
   | CN_CONSTANT _ -> "CN_CONSTANT"
   | CN_GOOD -> "CN_GOOD"
   | CN_PACK -> "CN_PACK"
@@ -348,4 +349,5 @@ let string_of_token = function
   | CN_TRUSTED -> "CN_TRUSTED"
   | CN_UNCHANGED -> "CN_UNCHANGED"
   | CN_WILD -> "CN_WILD"
+  | CN_AT -> "@"
 
