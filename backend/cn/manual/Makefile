@@ -10,9 +10,18 @@ grammar.md: ../../../parsers/c/c_parser.mly
 	obelisk $< | awk '/prim\_expr/, 0' >> $@
 	echo '```' >> $@
 
+PANDOC_EMBED_RESOURCES_CHECK=$(shell pandoc -h | grep embed.resources)
+
+ifneq (${PANDOC_EMBED_RESOURCES_CHECK}, )
+PANDOC_EMBED_RESOURCES= --embed-resources
+else
+PANDOC_EMBED_RESOURCES= --self-contained
+endif
+
+PANDOC_OPTS= --standalone --highlight-style=tango ${PANDOC_EMBED_RESOURCES}
 
 manual.html: manual.md grammar.md
-	pandoc --standalone --highlight-style=tango --embed-resources manual.md grammar.md -t html5 -o $@
+	pandoc ${PANDOC_OPTS} manual.md grammar.md -t html5 -o $@
 
 
 clean:
