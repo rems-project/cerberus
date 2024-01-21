@@ -28,12 +28,14 @@ val stringFromAil_qualifiers: Ctype.qualifiers -> string
 val stringFromAil_ctype:      Ctype.qualifiers -> Ctype.ctype -> string
 val stringFromAil_genType:    GenTypes.genType -> string
 val stringFromAil_expression: forall 'a. AilSyntax.expression 'a -> string
+val stringFromAil_statement: forall 'a. AilSyntax.statement 'a -> string
 
 
 declare ocaml target_rep function stringFromAil_qualifiers = `String_ail.string_of_qualifiers_human`
 declare ocaml target_rep function stringFromAil_ctype = `String_ail.string_of_ctype_human`
 declare ocaml target_rep function stringFromAil_genType = `String_ail.string_of_genType`
 declare ocaml target_rep function stringFromAil_expression = `String_ail.string_of_expression`
+declare ocaml target_rep function stringFromAil_statement = `String_ail.string_of_statement`
 declare hol   target_rep function stringFromAil_qualifiers =
                                   `pp_ail$pp_qualifiers`
 declare hol   target_rep function stringFromAil_ctype = `pp_ail$pp_ail_ctype`

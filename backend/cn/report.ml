@@ -33,6 +33,7 @@ type state_report = {
     resources : resource_entry list;
     predicate_hints : predicate_clause_entry list;
     constraints: Pp.doc list;
+    trace: Pp.doc list;
   }
 
 
@@ -204,20 +205,20 @@ let to_html report =
       rows = (
         (* header [("pointer",1); ("addr",1); ("state",1)] :: *)
         (* List.map state_entry report.memory @ *)
-        opt_header report.requested [("requested resource", 2); ("byte span", 1)] @
-        List.map resource_entry report.requested @
-        opt_header report.unproven [("unproven constraint", 3)] @
-        List.map constraint_entry report.unproven @
-        opt_header report.predicate_hints [("possibly relevant predicate clauses", 3)] @
-        List.map predicate_info_entry report.predicate_hints @
-        opt_header report.resources [("available resources", 2); ("byte span and match", 1)] @
-        List.map resource_entry report.resources @
-        header [("expression",1); ("value",2)] ::
-        List.map variable_entry report.variables @
-        header [("constraints",3)] ::
-        List.map constraint_entry report.constraints @
         opt_header report.location_trace [("path to error",3)] @
-        List.map location_entry report.location_trace
+          List.map location_entry report.trace @
+        opt_header report.requested [("requested resource", 2); ("byte span", 1)] @
+          List.map resource_entry report.requested @
+        opt_header report.unproven [("unproven constraint", 3)] @
+          List.map constraint_entry report.unproven @
+        opt_header report.predicate_hints [("possibly relevant predicate clauses", 3)] @
+          List.map predicate_info_entry report.predicate_hints @
+        opt_header report.resources [("available resources", 2); ("byte span and match", 1)] @
+          List.map resource_entry report.resources @
+        header [("expression",1); ("value",2)] ::
+          List.map variable_entry report.variables @
+        header [("constraints",3)] ::
+          List.map constraint_entry report.constraints 
     )}
   in
 

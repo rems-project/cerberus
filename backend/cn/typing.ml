@@ -7,6 +7,7 @@ module RE = Resources
 open TypeErrors
 
 
+
 type solver = Solver.solver
 
 type s = {
@@ -747,3 +748,20 @@ let debug_solver_query lc =
   Solver.debug_solver_query s ctxt.global ctxt.constraints pointer_facts lc;
   return ()
 
+
+
+
+let add_label_to_trace label = 
+  fun s ->
+  let typing_context = Context.add_label_to_trace label s.typing_context in
+  Ok ((), { s with typing_context })  
+
+let add_stmt_to_trace stmt = 
+  fun s ->
+  let typing_context = Context.add_stmt_to_trace stmt s.typing_context in
+  Ok ((), { s with typing_context })  
+
+let add_expr_to_trace expr = 
+  fun s ->
+  let typing_context = Context.add_expr_to_trace expr s.typing_context in
+  Ok ((), { s with typing_context })  

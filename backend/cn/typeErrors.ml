@@ -10,11 +10,7 @@ module RE = Resources
 module LC = LogicalConstraints
 module RET = ResourceTypes
 
-type label_kind =
-  | Return
-  | Loop
-  | Other
-
+type label_kind = Context.label_kind
 
 type access =
   | Load
@@ -31,25 +27,44 @@ type call_situation =
   | LabelCall of label_kind
   | Subtyping
 
+let label_prefix = 
+  let open CF.Annot in
+  function
+  | LAreturn -> "return"
+  | LAloop_break _ -> "break"
+  | LAloop_continue _ -> "continue"
+  | LAloop_body _ -> "loop"
+  | LAloop_prebody _ -> "pre-loop"
+  | LAswitch -> failwith "todo"
+  | LAcase -> failwith "todo"
+  | LAdefault -> failwith "todo"
+
 let call_prefix = function
   | FunctionCall fsym -> "call_" ^ Sym.pp_string fsym
   | LemmaApplication l -> "apply_" ^ Sym.pp_string l
-  | LabelCall Return -> "return"
-  | LabelCall Loop -> "loop"
-  | LabelCall Other -> "goto"
+  | LabelCall la -> label_prefix la
   | Subtyping -> "return"
 
 type situation =
   | Access of access
   | Call of call_situation
 
-let call_situation = function
+let call_situation= function
   | FunctionCall fsym -> !^"checking call of function" ^^^ Sym.pp fsym
   | LemmaApplication l -> !^"applying lemma" ^^^ Sym.pp l
-  | LabelCall Return -> !^"checking return"
-  | LabelCall Loop -> !^"checking loop entry"
-  | LabelCall Other -> !^"checking label call"
-  | Subtyping -> !^"checking subtyping"
+  | LabelCall la ->
+     begin match la with
+     | LAreturn -> !^"checking return"
+     | LAloop_break _ -> !^"checking loop break"
+     | LAloop_continue _ -> !^"checking loop continue"
+     | LAloop_body _ -> !^"checking loop entry"
+     | LAloop_prebody _ -> failwith "todo"
+     | LAswitch -> failwith "todo"
+     | LAcase -> failwith "todo"
+     | LAdefault -> failwith "todo"
+     end
+  | Subtyping -> !^"checking return"
+
 
 let checking_situation = function
   | Access access -> !^"checking access"
@@ -63,15 +78,25 @@ let for_access = function
   | Store ->  !^"for writing"
   | Free -> !^"for free-ing"
 
+
 let for_situation = function
   | Access access -> for_access access
-  | Call FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
-  | Call LemmaApplication l -> !^"for applying lemma" ^^^ Sym.pp l
-  | Call LabelCall Return -> !^"for returning"
-  | Call LabelCall Loop -> !^"for loop"
-  | Call LabelCall Other -> !^"for calling label"
-  | Call Subtyping -> !^"for subtyping"
-
+  | Call s -> 
+      match s with
+      | FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
+      | LemmaApplication l -> !^"for applying lemma" ^^^ Sym.pp l
+      | LabelCall la ->
+         begin match la with
+         | LAreturn -> !^"for returning"
+         | LAloop_break _ -> !^"for breaking from loop"
+         | LAloop_continue _ -> !^"for loop continue"
+         | LAloop_body _ -> !^"for looping"
+         | LAloop_prebody _ -> failwith "todo"
+         | LAswitch -> failwith "todo"
+         | LAcase -> failwith "todo"
+         | LAdefault -> failwith "todo"
+         end
+      | Subtyping -> !^"for returning"
 
 type request_chain_elem = {
   resource: RET.t;

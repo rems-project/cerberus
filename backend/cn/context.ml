@@ -39,6 +39,19 @@ type resource_history =
   }
 
 
+type per_stmt_trace = {
+  stmt: Locations.t;
+  exprs: Locations.t list;
+}
+
+type label_kind = CF.Annot.label_annot
+
+type per_label_trace = {
+  label: (Locations.t * label_kind) option; (*None for main function body*)
+  stmts: per_stmt_trace list;
+}
+
+type trace = per_label_trace list
 
 type t = {
     computational : (basetype_or_value * l_info) SymMap.t;
@@ -49,6 +62,7 @@ type t = {
     global : Global.t;
     location_trace : Locations.loc list;
     statement_locs : Locations.loc CStatements.LocMap.t;
+    trace : trace; (* most recent first*)
   }
 
 
@@ -67,6 +81,7 @@ let empty =
     global = Global.empty;
     location_trace = [];
     statement_locs  = CStatements.LocMap.empty;
+    trace = [];
   }
 
 
@@ -141,6 +156,41 @@ let add_c c (ctxt : t) =
   let s = ctxt.constraints in
   if LCSet.mem c s then ctxt
   else { ctxt with constraints = LCSet.add c s }
+
+
+let add_label_to_trace label ctxt =
+  { ctxt with trace = { label; stmts = [] } :: ctxt.trace }
+
+
+let modify_current_label_trace f ctxt = 
+  let label, labels = match ctxt.trace with
+    | hd::tl -> hd, tl
+    | [] -> assert false
+  in
+  { ctxt with trace = f label :: labels } 
+
+let add_stmt_to_trace (stmt : Locations.t) ctxt =
+  modify_current_label_trace (fun label ->
+      { label with stmts = { stmt; exprs = [] } :: label.stmts }
+    ) ctxt
+
+
+let modify_current_stmt_trace f ctxt = 
+  modify_current_label_trace (fun label ->
+      let stmt, stmts = match label.stmts with
+        | [] -> assert false
+        | hd :: tl -> hd, tl
+      in
+      { label with stmts = f stmt :: stmts }
+    ) ctxt
+
+let add_expr_to_trace (expr : Locations.t) ctxt = 
+  modify_current_stmt_trace (fun stmt ->
+      { stmt with exprs = expr :: stmt.exprs }
+    ) ctxt
+
+
+
 
 let pp_history h =
   Pp.braces (Pp.list (fun (nm, v) -> Pp.typ (Pp.string nm) v)

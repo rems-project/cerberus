@@ -607,6 +607,12 @@ let rec pp_expr expr =
                   in_comment (!^ "cn_value" ^^ P.colon ^^^ Pp_ail.pp_integerType ity) ^^ acc
                 else
                   acc
+            | Ainlined_label s ->
+                acc
+            | Astmt _ ->
+                acc
+            | Aexpr _ ->
+                acc
         ) doc annot
     end
     begin

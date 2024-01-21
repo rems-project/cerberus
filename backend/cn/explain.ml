@@ -135,10 +135,44 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
     List.map doc_clause predicate_clauses
   in
   let requested = List.map (req_entry None) (Option.to_list extras.request) in
-  let pp_with_simp lc = [LC.pp lc; Pp.item "simplified" (LC.pp
+  let pp_with_simp lc = [LC.pp lc; !^"(simplified)" ^^^ (LC.pp
     (Simplify.LogicalConstraints.simp (Simplify.default ctxt.global) lc))] in
   let unproven = List.map pp_with_simp (Option.to_list extras.unproven_constraint)
     |> List.concat in
+
+  let trace = 
+    (*copying from above*)
+    let print_location loc = Pp.string (Locations.to_string loc) in
+    let print_label = function
+      | None -> !^"label: function body"
+      | Some (loc, label_kind) -> 
+          let open CF.Annot in
+          let prefix = match label_kind with
+            | LAreturn -> "return"
+            | LAloop_break _ -> "break"
+            | LAloop_continue _ -> "loop continue"
+            | LAloop_body _ -> "loop body"
+            | LAloop_prebody _ -> "pre-loop condition"
+            | LAswitch -> failwith "todo"
+            | LAcase -> failwith "todo"
+            | LAdefault -> failwith "todo"
+          in
+          !^prefix ^^ colon ^^^ (print_location loc)
+    in
+    List.concat_map (fun label ->
+         print_label label.label
+         :: List.map (fun s -> 
+              print_location s.stmt
+            ) (List.rev label.stmts)
+      ) (List.rev ctxt.trace)
+    @
+    (match ctxt.trace with
+     | {label; stmts = stmt :: _ } :: _ -> 
+        List.map (fun e -> 
+            !^"expr:" ^^^ print_location e
+          ) (List.rev stmt.exprs)
+     | _ -> [])
+  in
 
   Pp.html_escapes := prev;
 
@@ -148,7 +182,8 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
     unproven;
     resources;
     predicate_hints;
-    constraints }
+    constraints;
+    trace }
 
 
 

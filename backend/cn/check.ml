@@ -1052,10 +1052,35 @@ let instantiate loc filter arg =
   add_cs loc extra_assumptions
 
 
+  
+let add_trace_information labels annots =
+  let open CF.Annot in
+  let inlined_labels = 
+    List.filter_map (function Ainlined_label l -> Some l | _ -> None) annots in
+  let stmt_locs = 
+    List.filter_map (function Astmt loc -> Some loc | _ -> None) annots in 
+  let expr_locs = 
+    List.filter_map (function Aexpr loc -> Some loc | _ -> None) annots in
+  let@ () = match inlined_labels with
+    | [] -> return ()
+    | [(lloc,lsym,lannot)] -> 
+      add_label_to_trace (Some (lloc,lannot)) 
+    | _ -> assert false
+  in
+  let@ () = match stmt_locs with
+    | [] -> return ()
+    | l :: _ -> add_stmt_to_trace l
+  in
+  let@ () = match expr_locs with
+    | [] -> return ()
+    | l :: _ -> add_expr_to_trace l
+  in
+  return ()
 
 
 let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
-  let (M_Expr (loc, _annots, expect, e_)) = e in
+  let (M_Expr (loc, annots, expect, e_)) = e in
+  let@ () = add_trace_information labels annots in
   let@ omodel = model_with loc (bool_ true) in
   match omodel with
   | None -> 
@@ -1592,7 +1617,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      let@ () = ensure_base_type loc ~expect Unit in
      let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
        | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
-       | Some (lt,lkind) -> return (lt,lkind)
+       | Some (lt,lkind,_) -> return (lt,lkind)
      in
      let@ original_resources = all_resources_tagged () in
      Spine.calltype_lt loc pes (lt,lkind) (fun False ->
@@ -1697,6 +1722,7 @@ let check_procedure
         pure begin
             let@ () = add_rs loc initial_resources in
             let@ pre_state = get () in
+            let@ () = add_label_to_trace None in
             let@ () = check_expr_top loc label_context rt body in
             return ((), pre_state)
           end
@@ -1708,9 +1734,11 @@ let check_procedure
           | M_Return loc ->
              return ()
           | M_Label (loc, label_args_and_body, annots, _) ->
-             debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
+             debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym ^ " " ^ Loc.to_string loc)));
              let@ (label_body, label_resources) = bind_arguments loc label_args_and_body in
              let@ () = add_rs loc label_resources in
+             let (_,label_kind,loc) = SymMap.find lsym label_context in
+             let@ () = add_label_to_trace (Some (loc,label_kind)) in
              check_expr_top loc label_context rt label_body
           end
         ) label_defs

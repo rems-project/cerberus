@@ -76,6 +76,9 @@ type annot =
   | Alabel of label_annot
   | Acerb of cerb_attribute
   | Avalue of value_annot
+  | Ainlined_label of (Loc.t * Symbol.sym * label_annot)
+  | Astmt of Loc.t
+  | Aexpr of Loc.t
 
 
 type identifier_item_kind =
@@ -116,6 +119,12 @@ let rec get_loc annots =
         get_loc annots'
     | (Avalue _ :: annots') ->
         get_loc annots'
+	| (Ainlined_label _ :: annots') ->
+	    get_loc annots'
+	| (Astmt _ :: annots') ->
+	    get_loc annots'
+	| (Aexpr _ :: annots') ->
+	    get_loc annots'
   end
 
 (* This is assuming there is only one Atypedef annot *)
@@ -175,6 +184,12 @@ let rec get_attrs annots =
         get_attrs annots'
     | (Avalue _ :: annots') ->
         get_attrs annots'
+    | (Ainlined_label _ :: annots') ->
+	    get_attrs annots'
+	| (Astmt _ :: annots') ->
+	    get_attrs annots'
+	| (Aexpr _ :: annots') ->
+	    get_attrs annots'
   end
 
 
@@ -265,6 +280,12 @@ let rec get_uid annots =
         get_uid annots'
     | (Avalue _ :: annots') ->
         get_uid annots'
+	| (Ainlined_label _ :: annots') ->
+	    get_uid annots'
+	| (Astmt _ :: annots') ->
+	    get_uid annots'
+	| (Aexpr _ :: annots') ->
+	    get_uid annots'
   end
 
 

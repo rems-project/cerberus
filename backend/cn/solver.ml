@@ -1173,6 +1173,7 @@ let print_doc_to fname doc =
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   debug 13 (lazy (item "context" (Context.pp_constraints assumptions)));
+  Cerb_debug.begin_csv_timing ();
   let context = solver.context in
   let rtrue () = model_state := No_model; `True in
   let rfalse qs solver = model_state := Model (context, solver, qs); `False in

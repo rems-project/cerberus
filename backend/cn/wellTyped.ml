@@ -10,6 +10,7 @@ module LAT = LogicalArgumentTypes
 module Mu = Mucore
 module IdSet = Set.Make(Id)
 
+open Context
 open Global
 open TE
 open Pp
@@ -1277,7 +1278,7 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 open BT
 
-type label_context = (AT.lt * label_kind) SymMap.t
+type label_context = (AT.lt * label_kind * Locations.t) SymMap.t
 
 
 let check_against_core_bt loc msg2 cbt bt = Typing.embed_resultat
@@ -1914,7 +1915,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         (* copying from check.ml *)
         let@ (lt,lkind) = match SymMap.find_opt l label_context with
           | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l)})
-          | Some (lt,lkind) -> return (lt,lkind)
+          | Some (lt,lkind,_) -> return (lt,lkind)
         in
         let@ pes =
           let wrong_number_arguments () =
@@ -2081,22 +2082,18 @@ module WProc = struct
 
   let label_context function_rt label_defs =
     Pmap.fold (fun sym def label_context ->
-         let lt, kind =
+         let lt, kind, loc =
             match def with
             | M_Return loc ->
-               (AT.of_rt function_rt (LAT.I False.False), Return)
+               (AT.of_rt function_rt (LAT.I False.False), CF.Annot.LAreturn, loc)
             | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
                let lt = WLabel.typ label_args_and_body in
-               let kind = match CF.Annot.get_label_annot annots with
-               | Some (LAloop_body loop_id) -> Loop
-               | Some (LAloop_continue loop_id) -> Loop
-               | _ -> Other
-               in
-               (lt, kind)
+               let kind = Option.get (CF.Annot.get_label_annot annots) in
+               (lt, kind, loc)
          in
          (*debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
          debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));*)
-         (SymMap.add sym (lt, kind) label_context)
+         (SymMap.add sym (lt, kind, loc) label_context)
       ) label_defs SymMap.empty
 
 

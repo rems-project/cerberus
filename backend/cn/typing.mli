@@ -1,5 +1,6 @@
 type solver
 
+
 type s = {
     typing_context: Context.t;
     solver : solver;
@@ -144,3 +145,6 @@ val get_movable_indices:
 val debug_solver_to_string: unit -> unit m
 val debug_solver_query: LogicalConstraints.t -> unit m
 
+val add_label_to_trace : (Locations.t * Context.label_kind) option -> unit m
+val add_stmt_to_trace : Locations.t -> unit m
+val add_expr_to_trace : Locations.t -> unit m

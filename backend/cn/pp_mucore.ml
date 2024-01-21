@@ -639,6 +639,10 @@ module Make (Config: CONFIG) = struct
               | Acerb _ -> []
               | Avalue (Ainteger ity) -> [!^"type" ^^^
                  Pp_core_ctype.pp_integer_ctype ity]
+              | Ainlined_label (_, s, _) ->
+                 [!^"inlined" ^^^ pp_symbol s]
+              | Astmt loc -> [!^"TODO(stmt)"]
+              | Aexpr loc -> [!^"TODO(expr)"]
 
   let pp_annots annots =
     Pp.flow_map (!^ "") (fun annot_str -> !^"{-#" ^^ annot_str ^^ !^"#-}")

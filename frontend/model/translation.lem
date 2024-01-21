@@ -1394,7 +1394,7 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
     E.return (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe result_ty)))
   else
     let A.AnnotatedExpression annot std_annots loc expr = a_expr in
-    (comb (Caux.add_loc loc)
+    (comb (comb (Caux.add_loc loc) (Caux.add_expr_loc loc))
           (if is_lvalue then (fun z -> z) else Caux.maybe_annotate_integer_type result_ty)) <$>
       match expr with
       | A.AilEunary A.Plus e ->
@@ -3357,8 +3357,11 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
                                                 default_lab= default_lab |>
   in
   let self = translate_stmt stdlib tagDefs f env in
-  
-  (Caux.add_loc loc -| Caux.add_attrs stmt_attrs) <$>
+  let () = Debug.print_debug_located 1 [] loc (fun () ->
+            "** TRANSLATING ** " ^
+            Pp.stringFromAil_statement (A.AnnotatedStatement loc stmt_attrs stmt)
+          ) in
+  (Caux.add_loc loc -| Caux.add_stmt_loc loc -| Caux.add_attrs stmt_attrs) <$>
   match stmt with
     | A.AilSskip ->
         E.return Caux.mk_skip_e
@@ -3509,7 +3512,10 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
               end
                 (Caux.mk_if_e do_loop_wrp.E.sym_pe
                    begin
-                     Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_body loop_id)] (sym_loop_body, C.BTy_unit) args
+                     let body_loc = locOf s in
+                     let label_loc = Loc.with_cursor_from loc body_loc in
+                     Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_body loop_id);
+                                      Annot.Aloc label_loc] (sym_loop_body, C.BTy_unit) args
                        core_s_loop
                    end 
                    Caux.mk_skip_e)

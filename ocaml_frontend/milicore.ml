@@ -105,7 +105,7 @@ let core_to_micore__funmap_decl update_loc = function
                 ) params) 
            in
            let params = List.map (fun (sym, (((bt, _), _))) -> (sym,bt)) params in
-           let lloc = update_loc loc (Annot.get_loc_ annots) in
+           let lloc = (Annot.get_loc_ annots) in
            if is_return annots
            then 
              (* bogus: *)

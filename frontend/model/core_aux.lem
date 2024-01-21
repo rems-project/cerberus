@@ -1,5 +1,5 @@
 open import Pervasives Utils Show Core Ctype Annot Map Map_extra
-import AilSyntax Ctype_aux
+import AilSyntax Ctype_aux 
 import Product Exception Mem Mem_common Mem_aux
 
 open import Errors
@@ -2103,6 +2103,14 @@ let add_loc loc (Expr annot expr_) =
   end in
   Expr (update_annot pred (Aloc loc) annot) expr_
 
+val add_stmt_loc: Loc.t -> expr unit -> expr unit
+let add_stmt_loc loc (Expr annot expr_) =
+  Expr (Astmt loc :: annot) expr_
+
+val add_expr_loc: Loc.t -> expr unit -> expr unit
+let add_expr_loc loc (Expr annot expr_) =
+  Expr (Aexpr loc :: annot) expr_
+
 
 val annotate_integer_type_pexpr : integerType -> pexpr -> pexpr
 let annotate_integer_type_pexpr ity (Pexpr annot bty expr_) =
@@ -2295,8 +2303,8 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         m_union_saves st begin
           m_union_saves
             <| st1 with
-              m_tmp_acc= Map.map (fun (cbt,args,body,annots) -> 
-                             (cbt, args, Expr annots (Ewseq pat body e2), annots) )
+              m_tmp_acc= Map.map (fun (cbt,args,body,annots') -> 
+                             (cbt, args, Expr annots (Ewseq pat body e2), annots') )
                                st1.m_tmp_acc
             |>
             st2
@@ -2307,8 +2315,8 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         m_union_saves st begin
           m_union_saves
             <| st1 with
-              m_tmp_acc= Map.map (fun (cbt,args,body,annots) -> 
-                             (cbt, args, Expr annots (Esseq pat body e2), annots) )
+              m_tmp_acc= Map.map (fun (cbt,args,body,annots') -> 
+                             (cbt, args, Expr annots (Esseq pat body e2), annots') )
                                st1.m_tmp_acc
             |>
             st2
@@ -2320,7 +2328,11 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         (* typing forbids "saves" inside a "nd()" *)
         st
     | Esave (sym, ty) params e ->
-       (* let () = Debug.print_debug 0 [] (fun () -> "label: " ^ show sym) in *)
+	   let oloc = Annot.get_loc annots in
+	   let () = match oloc with 
+	     | Just _ -> () 
+		 | _ -> Debug.print_debug 0 [] (fun () -> "label " ^ show sym ^ "missing label location")
+		end in
         m_collect_saves_aux
           <| st with m_tmp_acc= Map.insert sym (ty,params,e,annots) st.m_tmp_acc |>
           e
