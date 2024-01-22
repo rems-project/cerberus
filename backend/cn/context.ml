@@ -39,16 +39,21 @@ type resource_history =
   }
 
 
-type per_stmt_trace = {
-  stmt: Locations.t;
-  exprs: Locations.t list;
-}
+type trace_item = 
+  | Stmt
+  | Expr 
+  | Read of IndexTerms.t * IndexTerms.t
+  | Write of IndexTerms.t * IndexTerms.t
+  | Create of IndexTerms.t 
+  | Kill of IndexTerms.t
+  | Call of Sym.t * IndexTerms.t list
+
 
 type label_kind = CF.Annot.label_annot
 
 type per_label_trace = {
   label: (Locations.t * label_kind) option; (*None for main function body*)
-  stmts: per_stmt_trace list;
+  trace: (trace_item * Locations.t) list;
 }
 
 type trace = per_label_trace list
@@ -159,7 +164,7 @@ let add_c c (ctxt : t) =
 
 
 let add_label_to_trace label ctxt =
-  { ctxt with trace = { label; stmts = [] } :: ctxt.trace }
+  { ctxt with trace = { label; trace = [] } :: ctxt.trace }
 
 
 let modify_current_label_trace f ctxt = 
@@ -169,26 +174,10 @@ let modify_current_label_trace f ctxt =
   in
   { ctxt with trace = f label :: labels } 
 
-let add_stmt_to_trace (stmt : Locations.t) ctxt =
+let add_trace_item_to_trace i ctxt =
   modify_current_label_trace (fun label ->
-      { label with stmts = { stmt; exprs = [] } :: label.stmts }
+      { label with trace = i :: label.trace}
     ) ctxt
-
-
-let modify_current_stmt_trace f ctxt = 
-  modify_current_label_trace (fun label ->
-      let stmt, stmts = match label.stmts with
-        | [] -> assert false
-        | hd :: tl -> hd, tl
-      in
-      { label with stmts = f stmt :: stmts }
-    ) ctxt
-
-let add_expr_to_trace (expr : Locations.t) ctxt = 
-  modify_current_stmt_trace (fun stmt ->
-      { stmt with exprs = expr :: stmt.exprs }
-    ) ctxt
-
 
 
 

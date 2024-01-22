@@ -756,12 +756,8 @@ let add_label_to_trace label =
   let typing_context = Context.add_label_to_trace label s.typing_context in
   Ok ((), { s with typing_context })  
 
-let add_stmt_to_trace stmt = 
+let add_trace_item_to_trace i = 
   fun s ->
-  let typing_context = Context.add_stmt_to_trace stmt s.typing_context in
+  let typing_context = Context.add_trace_item_to_trace i s.typing_context in
   Ok ((), { s with typing_context })  
 
-let add_expr_to_trace expr = 
-  fun s ->
-  let typing_context = Context.add_expr_to_trace expr s.typing_context in
-  Ok ((), { s with typing_context })  

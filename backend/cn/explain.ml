@@ -159,20 +159,32 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
           in
           !^prefix ^^ colon ^^^ (print_location loc)
     in
+    let print_trace_item (i, loc) = 
+      print_location loc ^^
+      match i with
+      | Stmt -> 
+          Pp.empty
+      | Expr -> 
+          Pp.empty
+      | Read (p,v) -> 
+          colon ^^^ !^"read" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"for" ^^^ IT.pp p ^^^ parens (mevaluate p)
+      | Write (p,v) -> 
+          colon ^^^ !^"wrote" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"to" ^^^ IT.pp p ^^^ parens (mevaluate p)
+      | Create p -> 
+          colon ^^^ !^"allocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
+      | Kill p -> 
+          colon ^^^ !^"deallocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
+      | Call (s,[]) -> 
+          colon ^^^ !^"called" ^^^ Sym.pp s 
+      | Call (s,args) -> 
+          colon ^^^ !^"called" ^^^ Sym.pp s ^^^ !^"with" ^^^
+         separate_map (comma ^^ space) (fun arg -> IT.pp arg ^^^ parens (mevaluate arg)) args 
+    in
     List.concat_map (fun label ->
          print_label label.label
-         :: List.map (fun s -> 
-              print_location s.stmt
-            ) (List.rev label.stmts)
+         :: List.map print_trace_item (List.rev label.trace)
       ) (List.rev ctxt.trace)
-    @
-    (match ctxt.trace with
-     | {label; stmts = stmt :: _ } :: _ -> 
-        List.map (fun e -> 
-            !^"expr:" ^^^ print_location e
-          ) (List.rev stmt.exprs)
-     | _ -> [])
-  in
+    in
 
   Pp.html_escapes := prev;
 

@@ -1021,13 +1021,17 @@ let _check_used_distinct loc used =
 
 
 let load loc pointer ct =
-  pure begin
-    let@ (point, O value), _ =
-      RI.Special.predicate_request loc (Access Load)
-        ({name = Owned (ct, Init); pointer; iargs = []}, None)
-    in
-    return value
-  end
+  let@ value = 
+    pure begin
+      let@ (point, O value), _ =
+        RI.Special.predicate_request loc (Access Load)
+          ({name = Owned (ct, Init); pointer; iargs = []}, None)
+      in
+      return value
+    end
+  in
+  let@ () = add_trace_item_to_trace (Read (pointer, value), loc) in
+  return value
 
 
 let instantiate loc filter arg =
@@ -1069,11 +1073,11 @@ let add_trace_information labels annots =
   in
   let@ () = match stmt_locs with
     | [] -> return ()
-    | l :: _ -> add_stmt_to_trace l
+    | l :: _ -> add_trace_item_to_trace (Stmt, l) 
   in
   let@ () = match expr_locs with
     | [] -> return ()
-    | l :: _ -> add_expr_to_trace l
+    | l :: _ -> add_trace_item_to_trace (Context.Expr, l)
   in
   return ()
 
@@ -1291,6 +1295,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
              O (default_ (Memory.bt_of_sct act.ct)))
         in
         let@ () = add_r loc (P (Global.mk_alloc ret), O IT.unit_) in
+        let@ () = add_trace_item_to_trace (Create ret, loc) in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) ->
         Cerb_debug.error "todo: CreateReadOnly"
@@ -1313,6 +1318,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         let@ _ =
           RI.Special.predicate_request loc (Access Kill) (Global.mk_alloc arg, None)
         in
+        let@ () = add_trace_item_to_trace (Kill arg, loc) in
         k unit_)
      | M_Store (_is_locking, act, p_pe, v_pe, mo) ->
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
@@ -1360,6 +1366,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                },
              O varg)
         in
+        let@ () = add_trace_item_to_trace (Write (parg, varg), loc) in
         k unit_))
      | M_Load (act, p_pe, _mo) ->
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in

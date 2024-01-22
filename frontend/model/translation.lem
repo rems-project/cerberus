@@ -4098,7 +4098,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                         (Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function)
                         (Caux.mk_unspecified_pe return_ty) in *)
                       Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function in
-                  Caux.mk_save_e_ [Annot.Alabel Annot.LAreturn]
+                  Caux.mk_save_e_ [Annot.Alabel Annot.LAreturn; Annot.Aloc loc]
                                   (ret_label, ret_bTy)
                                   [(ret_sym, ((ret_bTy, Just (return_ty, C.By_value)), ret_pe))]
                     (Caux.mk_pure_e (Caux.mk_sym_pe ret_sym))

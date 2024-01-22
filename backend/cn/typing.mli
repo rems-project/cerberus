@@ -146,5 +146,4 @@ val debug_solver_to_string: unit -> unit m
 val debug_solver_query: LogicalConstraints.t -> unit m
 
 val add_label_to_trace : (Locations.t * Context.label_kind) option -> unit m
-val add_stmt_to_trace : Locations.t -> unit m
-val add_expr_to_trace : Locations.t -> unit m
+val add_trace_item_to_trace : Context.trace_item * Locations.t -> unit m
