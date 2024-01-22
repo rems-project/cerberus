@@ -160,24 +160,23 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
           !^prefix ^^ colon ^^^ (print_location loc)
     in
     let print_trace_item (i, loc) = 
-      print_location loc ^^
       match i with
       | Stmt -> 
-          Pp.empty
+         !^"--" ^^^ print_location loc ^^ Pp.empty
       | Expr -> 
-          Pp.empty
+         !^"----" ^^^ print_location loc ^^ Pp.empty
       | Read (p,v) -> 
-          colon ^^^ !^"read" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"for" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"read" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"for" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Write (p,v) -> 
-          colon ^^^ !^"wrote" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"to" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"wrote" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"to" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Create p -> 
-          colon ^^^ !^"allocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"allocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Kill p -> 
-          colon ^^^ !^"deallocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"deallocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Call (s,[]) -> 
-          colon ^^^ !^"called" ^^^ Sym.pp s 
+         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"called" ^^^ Sym.pp s 
       | Call (s,args) -> 
-          colon ^^^ !^"called" ^^^ Sym.pp s ^^^ !^"with" ^^^
+         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"called" ^^^ Sym.pp s ^^^ !^"with" ^^^
          separate_map (comma ^^ space) (fun arg -> IT.pp arg ^^^ parens (mevaluate arg)) args 
     in
     List.concat_map (fun label ->

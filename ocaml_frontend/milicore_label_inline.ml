@@ -4,7 +4,7 @@ open List
 open Cerb_pp_prelude
 open PPrint
 
-let inline_label oannots (label_loc, label_sym, label_arg_syms_bts, label_body) args =
+let inline_label run_annots (label_loc, l_annot, label_sym, label_arg_syms_bts, label_body) args =
   Cerb_debug.output_string2 (Pp_symbol.to_string label_sym ^ ": " ^ Pp_utils.to_plain_string (Cerb_location.pp_location label_loc));
   if ((List.length label_arg_syms_bts) <> (List.length args)) 
   then begin
@@ -18,12 +18,7 @@ let inline_label oannots (label_loc, label_sym, label_arg_syms_bts, label_body) 
     end 
   else
   let arguments = (Lem_list.list_combine label_arg_syms_bts args) in
-  let (Expr(annots2, e_)) = 
-    let label_annot = Option.get (Annot.get_label_annot oannots) in
-    let label_body' = match label_body with
-      | Expr (body_annots, body) ->
-          Expr ((Annot.Ainlined_label (label_loc, label_sym, label_annot)) :: body_annots, body)    
-    in
+  let (Expr (body_annots, body_)) = 
     (List.fold_right (fun ((spec_arg, spec_bt), expr_arg) body ->
          match expr_arg with
          | Pexpr (_, _, PEsym s) when Symbol.symbolEquality s spec_arg ->
@@ -31,10 +26,16 @@ let inline_label oannots (label_loc, label_sym, label_arg_syms_bts, label_body) 
          | _ ->
             let pat = (Pattern ([], CaseBase (Some spec_arg, spec_bt))) in
             Expr([], (Elet (pat, expr_arg, body)))
-       ) arguments label_body')
+       ) arguments label_body)
   in
   (* this combines annotations *)
-  Expr (annots2 @ oannots , e_)
+  let annots = 
+    let label_annot = Option.get (Annot.get_label_annot l_annot) in
+    (Annot.Ainlined_label (label_loc, label_sym, label_annot))
+    :: (List.filter (function Annot.Alabel _ -> false | _ -> true) run_annots)
+    @ body_annots  
+  in
+  Expr (annots, body_)
 
 
 (* looking at how remove_unspecs.ml works, copying, and adjusting *)
@@ -43,7 +44,7 @@ open Core_rewriter
 module RW = Rewriter(Identity_monad)
 
 let rewriter label : 'bty RW.rewriter =
-  let (label_loc, label_sym, label_arg_syms_bts, label_body) = label in
+  let (_, _, label_sym, _, _) = label in
   {
     rw_pexpr= RW.RW (fun _ _ -> Traverse);
     rw_action= RW.RW (fun _ act -> Traverse);    
@@ -85,8 +86,8 @@ let rec inline_label_labels_and_body ~to_inline ~to_keep body =
      (to_keep, body)
   | l :: to_inline' ->
      let to_inline' = 
-       List.map (fun (lloc, lname, arg_syms, lbody) -> 
-           (lloc, lname, arg_syms, rewrite_expr l lbody)
+       List.map (fun (lloc, lannot, lname, arg_syms, lbody) -> 
+           (lloc, lannot, lname, arg_syms, rewrite_expr l lbody)
          ) to_inline'
      in
      let to_keep = 
@@ -109,7 +110,7 @@ let rewrite_fun_map_decl = function
            match def with
            | Mi_Label(l_loc, _lt, args, lbody, annot) when should_be_inlined annot ->
               to_keep, 
-              ((l_loc, label, args, lbody) :: to_inline)
+              ((l_loc, annot, label, args, lbody) :: to_inline)
            | Mi_Label _
            | Mi_Return _ -> 
               (Pmap.add label def to_keep), 
