@@ -898,17 +898,25 @@ end = struct
       )
     in
 
-    let rec check args ftyp k =
-      match args, ftyp with
-      | (arg :: args), (Computational ((s, bt), _info, ftyp)) ->
-         check_arg arg ~expect:bt (fun arg ->
-         check args (subst rt_subst (make_subst [(s, arg)]) ftyp) k)
-      | [], (L ftyp) ->
-         k ftyp
-      | _ ->
-         let expect = count_computational original_ftyp in
-         let has = List.length original_args in
-         fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
+    let check = 
+      let rec aux args_acc args ftyp k =
+        match args, ftyp with
+        | (arg :: args), (Computational ((s, bt), _info, ftyp)) ->
+           check_arg arg ~expect:bt (fun arg ->
+           aux (args_acc @ [arg]) args (subst rt_subst (make_subst [(s, arg)]) ftyp) k)
+        | [], (L ftyp) ->
+           let@ () = match situation with
+             | FunctionCall fsym ->
+                 add_trace_item_to_trace (Call (fsym, args_acc),loc)
+             | _ -> return ()
+           in
+           k ftyp
+        | _ ->
+           let expect = count_computational original_ftyp in
+           let has = List.length original_args in
+           fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
+      in
+      fun args ftyp k -> aux [] args ftyp k
     in
 
     check args ftyp (fun lftyp ->
