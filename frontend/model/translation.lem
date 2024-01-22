@@ -3481,7 +3481,6 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
     | A.AilSwhile e s loop_id ->
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
         let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "while_" ^ show x) in
-        let sym_loop_body = Symbol.fresh_pretty_with_id (fun x ->  "while_body_" ^ show x) in
         E.wrapped_fresh_symbol C.BTy_boolean                  >>= fun do_loop_wrp  ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer)   >>= fun test_wrp     ->
         E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)   >>= fun case_wrp     ->
@@ -3510,15 +3509,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
                   ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                     , Caux.mk_nd_e [Caux.mk_pure_e (Caux.mk_boolean_pe true); Caux.mk_pure_e (Caux.mk_boolean_pe false)] ) ]
               end
-                (Caux.mk_if_e do_loop_wrp.E.sym_pe
-                   begin
-                     let body_loc = locOf s in
-                     let label_loc = Loc.with_cursor_from loc body_loc in
-                     Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_body loop_id);
-                                      Annot.Aloc label_loc] (sym_loop_body, C.BTy_unit) args
-                       core_s_loop
-                   end 
-                   Caux.mk_skip_e)
+                (Caux.mk_if_e do_loop_wrp.E.sym_pe core_s_loop Caux.mk_skip_e)
             end
           end
         end
