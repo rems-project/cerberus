@@ -44,9 +44,10 @@ module Make (Config: CONFIG) =
 struct
 open Config
 
-let in_comment ?(single_line=true) doc =
+let in_comment ?(single_line=true) ?(with_hash=false) doc =
+  let pref, suf = if with_hash then "{-#", "#-}" else "{-", "-}" in
   pp_ansi_format [Red] (fun () ->
-    P.enclose (!^ "{-") (!^ "-}")
+    P.enclose (!^ pref) (!^ suf)
       begin
         if single_line then
           P.space ^^ doc ^^ P.space
@@ -56,17 +57,17 @@ let in_comment ?(single_line=true) doc =
   )
 
 let maybe_print_location (annot: Annot.annot list) : P.document =
-  if not show_locations then 
+  if not show_locations then
     P.empty
   else
     match Annot.get_loc annot with
       | Some loc ->
-          P.parens (Cerb_location.pp_location loc) ^^ P.space
+          in_comment ~single_line:true ~with_hash:true (Cerb_colour.without_colour Cerb_location.pp_location loc) ^^ P.space
       | _ ->
           P.empty
 
 let maybe_print_explode_annot (annot: Annot.annot list) : P.document =
-  if not show_explode_annot then 
+  if not show_explode_annot then
     P.empty
   else
     match Annot.explode annot with
@@ -567,7 +568,7 @@ let rec pp_expr expr =
                 P.range (handle_location loc) acc
             | Astd str ->
                 if show_std then
-                  in_comment (!^ str) ^^ P.hardline ^^ acc
+                  in_comment ~with_hash:true (!^ str) ^^ P.hardline ^^ acc
                 else
                   acc
             | Auid uid ->
