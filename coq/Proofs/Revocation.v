@@ -602,7 +602,6 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
-
   Lemma has_PNVI_WithoutPNVI:
     has_PNVI (WithoutPNVISwitches.get_switches tt) = false.
   Proof.
@@ -1769,12 +1768,13 @@ Module RevocationProofs.
         admit.
     Admitted.
 
+    #[local]Definition repr_fold_T:Type :=
+      ZMap.t (digest * string * Capability_GS.t)
+      * ZMap.t (bool * CapGhostState)
+      * Z
+      * list (list AbsByte).
 
-    Let repr_fold_T:Type := ZMap.t (digest * string * Capability_GS.t)
-                            * ZMap.t (bool * CapGhostState)
-                            * Z
-                            * list (list AbsByte).
-    Let repr_fold_eq
+    #[local]Definition repr_fold_eq
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       : relation repr_fold_T
@@ -1787,21 +1787,23 @@ Module RevocationProofs.
                 (funptrmap  , capmeta  , bs )
                 (funptrmap' , capmeta' , bs').
 
-    Let repr_fold2_T:Type := ZMap.t (digest * string * Capability_GS.t)
-                             * ZMap.t (bool * CapGhostState)
-                             * Z
-                             * list AbsByte.
-    Let repr_fold2_eq
+    #[local]Definition repr_fold2_T:Type :=
+      ZMap.t (digest * string * Capability_GS.t)
+      * ZMap.t (bool * CapGhostState)
+      * Z
+      * list AbsByte.
+
+    #[local]Definition repr_fold2_eq
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       (addr : Z)
       : relation repr_fold2_T
-        :=
-          fun '(funptrmap,capmeta,a,bytes) '(funptrmap',capmeta',a',bytes') =>
-            a = a'
-            /\ repr_res_eq mem1 mem2 addr
-                (funptrmap, capmeta,  bytes )
-                (funptrmap',capmeta', bytes').
+      :=
+      fun '(funptrmap,capmeta,a,bytes) '(funptrmap',capmeta',a',bytes') =>
+        a = a'
+        /\ repr_res_eq mem1 mem2 addr
+            (funptrmap, capmeta,  bytes )
+            (funptrmap',capmeta', bytes').
 
     Theorem repr_same:
       forall m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
