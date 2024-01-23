@@ -16,7 +16,6 @@ type s = {
     sym_eqs : IT.t SymMap.t;
     equalities: bool Simplify.ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
-    step_trace : Trace.t;
     found_equalities : EqTable.table;
     movable_indices: (RET.predicate_name * IT.t) list;
   }
@@ -36,7 +35,6 @@ let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
       sym_eqs;
       equalities = Simplify.ITPairMap.empty;
       past_models = [];
-      step_trace = Trace.empty;
       found_equalities = EqTable.empty;
       movable_indices = [];
     }
@@ -127,13 +125,6 @@ let get_found_eqs () = fun s -> Ok (s.found_equalities, s)
 let upd_found_eqs eqs = fun s -> Ok ((), {s with found_equalities = eqs})
 
 
-let get_step_trace () = fun s -> Ok (s.step_trace, s)
-
-let set_step_trace tr = fun s -> Ok ((), {s with step_trace = tr})
-
-let fail_with_trace m =
-  let@ tr = get_step_trace () in
-  fail (m tr)
 
 let print_with_ctxt printer =
   let@ s = get () in
@@ -525,19 +516,7 @@ let add_loc_trace loc =
 (*   let@ _ = set_loc_trace prev_tr in *)
 (*   return x *)
 
-let finish_trace_step do_add ctxt1 () =
-  let@ ctxt2 = get () in
-  let@ tr = get_step_trace () in
-  let@ () = set_step_trace (do_add (ctxt1, ctxt2) tr) in
-  return ()
 
-let begin_trace_of_step pat expr =
-  let@ ctxt1 = get () in
-  return (finish_trace_step (Trace.add_trace_step pat expr) ctxt1)
-
-let begin_trace_of_pure_step pat pexpr =
-  let@ ctxt1 = get () in
-  return (finish_trace_step (Trace.add_pure_trace_step pat pexpr) ctxt1)
 
 let get_resource_predicate_def loc id =
   let@ global = get_global () in

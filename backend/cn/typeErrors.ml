@@ -132,9 +132,9 @@ type message =
   | Duplicate_member of Id.t
 
 
-  | Missing_resource of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
+  | Missing_resource of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q; }
   | Merging_multiple_arrays of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q }
-  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
+  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; }
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
@@ -146,7 +146,7 @@ type message =
   | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
-  | Unproven_constraint of {constr : LC.t; requests: request_chain; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
+  | Unproven_constraint of {constr : LC.t; requests: request_chain; info : info; ctxt : Context.t; model : Solver.model_with_q; }
 
   | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Solver.model_with_q}
   | Implementation_defined_behaviour of document * state_report
@@ -176,7 +176,6 @@ type report = {
     short : Pp.doc;
     descr : Pp.doc option;
     state : state_report option;
-    trace : Pp.doc option;
   }
 
 
@@ -206,42 +205,42 @@ let pp_message te =
   match te with
   | Unknown_variable s ->
      let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None; }
   | Unknown_function sym ->
      let short = !^"Unknown function" ^^^ squotes (Sym.pp sym) in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None; }
   | Unknown_struct tag ->
      let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None; }
   | Unknown_datatype tag ->
      let short = !^"Datatype" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None; }
   | Unknown_datatype_constr tag ->
      let short = !^"Datatype constructor" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | Unknown_resource_predicate {id; logical} ->
      let short = !^"Unknown resource predicate" ^^^ squotes (Sym.pp id) in
      let descr = if logical then Some (!^"Note " ^^^ squotes (Sym.pp id) ^^^
              !^" is a known logical predicate.")
          else None in
-     { short; descr; state = None; trace = None }
+     { short; descr; state = None;  }
   | Unknown_logical_function {id; resource} ->
      let short = !^"Unknown logical function" ^^^ squotes (Sym.pp id) in
      let descr = if resource then Some (!^"Note " ^^^ squotes (Sym.pp id) ^^^
              !^" is a known resource predicate.")
          else None in
-     { short; descr; state = None; trace = None }
+     { short; descr; state = None;  }
   | Unexpected_member (expected, member) ->
      let short = !^"Unexpected member" ^^^ Id.pp member in
      let descr = !^"the struct only has members" ^^^ Pp.list Id.pp expected in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | Unknown_lemma sym ->
      let short = !^"Unknown lemma" ^^^ squotes (Sym.pp sym) in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | First_iarg_missing ->
      let short = !^"Missing pointer input argument" in
      let descr = !^ "a predicate definition must have at least one input argument" in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | First_iarg_not_pointer { pname; found_bty } ->
      let short = !^"Non-pointer first input argument" in
      let descr =
@@ -249,20 +248,19 @@ let pp_message te =
         !^ "must have type" ^^^ Pp.squotes (BaseTypes.(pp Loc)) ^^^ !^ "but was found with type" ^^^
         Pp.squotes (BaseTypes.(pp found_bty))
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | Missing_member m ->
      let short = !^"Missing member" ^^^ Id.pp m in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | Duplicate_member m ->
      let short = !^"Duplicate member" ^^^ Id.pp m in
-     { short; descr = None; state = None; trace = None }
-  | Missing_resource {requests; situation; ctxt; model; trace} ->
+     { short; descr = None; state = None;  }
+  | Missing_resource {requests; situation; ctxt; model; } ->
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = request_chain_description requests in
      let orequest = Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0) in
      let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
-     let trace_doc = Trace.format_trace (fst model) trace in
-     { short; descr = descr; state = Some state; trace = Some trace_doc }
+     { short; descr = descr; state = Some state; }
   | Merging_multiple_arrays {requests; situation; ctxt; model} ->
      let short =
        !^"Cannot satisfy request for resource" ^^^ for_situation situation ^^ dot ^^^
@@ -271,48 +269,47 @@ let pp_message te =
      let descr = request_chain_description requests in
      let orequest = Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0) in
      let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
-     { short; descr = descr; state = Some state; trace = None }
-  | Unused_resource {resource; ctxt; model; trace} ->
+     { short; descr = descr; state = Some state;  }
+  | Unused_resource {resource; ctxt; model; } ->
      let resource = RE.pp resource in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
      let state = Explain.state ctxt model Explain.no_ex in
-     let trace_doc = Trace.format_trace (fst model) trace in
-     { short; descr = None; state = Some state; trace = Some trace_doc }
+     { short; descr = None; state = Some state; }
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None; trace = None}
+     { short; descr = Some descr; state = None; }
   | Number_arguments {has;expect} ->
      let short = !^"Wrong number of arguments" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | Number_input_arguments {has;expect} ->
      let short = !^"Wrong number of input arguments" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | Number_output_arguments {has;expect} ->
      let short = !^"Wrong number of output arguments" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | Mismatch {has; expect} ->
      let short = !^"Type error" in
      let descr =
        !^"Expected value of type" ^^^ squotes expect ^^^
          !^"but found value of type" ^^^ squotes has
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | Illtyped_it {it; has; expected; o_ctxt} ->
      let short = !^"Type error" in
      let descr =
@@ -320,7 +317,7 @@ let pp_message te =
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
            !^"but is" ^^^ squotes has
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None;  }
   | NIA {it; hint; ctxt} ->
      let it = IT.pp it in
      let short = !^"Type error" in
@@ -329,7 +326,7 @@ let pp_message te =
          !^"Non-linear integer arithmetic in the specification term" ^^^ it ^^ dot ^^^
            !^hint
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None; }
   | TooBigExponent {it; ctxt} ->
      let it = IT.pp it in
      let short = !^"Type error" in
@@ -338,7 +335,7 @@ let pp_message te =
          !^"Too big exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must fit int32 type")
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None; }
   | NegativeExponent {it; ctxt} ->
      let it = IT.pp it in
      let short = !^"Type error" in
@@ -347,7 +344,7 @@ let pp_message te =
          !^"Negative exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must be non-negative")
      in
-     { short; descr = Some descr; state = None; trace = None }
+     { short; descr = Some descr; state = None; }
   | Write_value_unrepresentable {ct; location; value; ctxt; model} ->
      let short =
        !^"Write value not representable at type" ^^^
@@ -360,7 +357,7 @@ let pp_message te =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
      in
-     { short; descr = Some descr; state = Some state; trace = None }
+     { short; descr = Some descr; state = Some state; }
   | Int_unrepresentable {value; ict; ctxt; model} ->
      let short =
        !^"integer value not representable at type" ^^^
@@ -369,8 +366,8 @@ let pp_message te =
      let value = IT.pp (value) in
      let descr = !^"Value" ^^ colon ^^^ value in
      let state = Explain.state ctxt model Explain.no_ex in
-     { short; descr = Some descr; state = Some state; trace = None }
-  | Unproven_constraint {constr; requests; info; ctxt; model; trace} ->
+     { short; descr = Some descr; state = Some state; }
+  | Unproven_constraint {constr; requests; info; ctxt; model; } ->
      let short = !^"Unprovable constraint" in
      let state = Explain.state ctxt model
          Explain.{no_ex with unproven_constraint = Some constr} in
@@ -385,8 +382,7 @@ let pp_message te =
        | Some doc2 -> doc ^^ hardline ^^ doc2
        | None -> doc
      in
-     let trace_doc = Trace.format_trace (fst model) trace in
-     { short; descr = Some descr; state = Some state; trace = Some trace_doc }
+     { short; descr = Some descr; state = Some state; }
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
      let state = Explain.state ctxt model Explain.no_ex in
@@ -394,41 +390,41 @@ let pp_message te =
       | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
       | None -> !^(CF.Undefined.ub_short_string ub)
      in
-     { short; descr = Some descr; state = Some state; trace = None }
+     { short; descr = Some descr; state = Some state;  }
   | Implementation_defined_behaviour (impl, state) ->
      let short = !^"Implementation defined behaviour" in
      let descr = impl in
-     { short; descr = Some descr; state = Some state; trace = None }
+     { short; descr = Some descr; state = Some state;  }
   | Unspecified ctype ->
      let short = !^"Unspecified value of C-type" ^^^ CF.Pp_core_ctype.pp_ctype ctype in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | StaticError {err; ctxt; model} ->
      let short = !^"Static error" in
      let state = Explain.state ctxt model Explain.no_ex in
      let descr = !^err in
-     { short; descr = Some descr; state = Some state; trace = None }
+     { short; descr = Some descr; state = Some state;  }
   | Generic err ->
      let short = err in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | Generic_with_model {err; model; ctxt} ->
      let short = err in
      let state = Explain.state ctxt model Explain.no_ex in
-     { short; descr = None; state = Some state; trace = None }
+     { short; descr = None; state = Some state;  }
   | Parser err ->
      let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | Empty_pattern ->
      let short = !^"Empty match expression." in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | Missing_pattern p' ->
      let short = !^"Missing pattern" ^^^ squotes p' ^^ dot in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | Duplicate_pattern ->
      let short = !^"Duplicate pattern" in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
   | Empty_provenance ->
      let short = !^"Empty provenance" in
-     { short; descr = None; state = None; trace = None }
+     { short; descr = None; state = None;  }
 
 
 type t = type_error
@@ -438,13 +434,6 @@ let output_state state_error_file state =
   let channel = open_out state_error_file in
   let () = Printf.fprintf channel "%s" (Report.print_report state) in
   close_out channel
-
-let output_trace trace =
-  let fname = Filename.temp_file "trace_" ".txt" in
-  let channel = open_out fname in
-  print channel trace;
-  close_out channel;
-  !^ "trace in" ^^^ !^ fname
 
 (* stealing some logic from pp_errors *)
 let report ?state_file:to_ {loc; msg} =
@@ -457,11 +446,7 @@ let report ?state_file:to_ {loc; msg} =
        in
        output_state state_error_file state;
        let msg = !^"Consider the state in" ^^^ !^state_error_file in
-       let msg2 = match report.trace with
-         | None -> msg
-         | Some tr -> msg ^^^ ampersand ^^^ (output_trace tr)
-       in
-       Some msg2
+       Some msg
     | None ->
        None
   in

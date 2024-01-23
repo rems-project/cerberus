@@ -7,7 +7,6 @@ type s = {
     sym_eqs : IndexTerms.t Global.SymMap.t;
     equalities: bool Simplify.ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
-    step_trace : Trace.t;
     found_equalities : EqTable.table;
     movable_indices: (ResourceTypes.predicate_name * IndexTerms.t) list;
   }
@@ -22,7 +21,6 @@ val bind : 'a m -> ('a -> 'b m) -> 'b m
 val pure : 'a m -> 'a m
 val (let@) : 'a m -> ('a -> 'b m) -> 'b m
 val fail : failure -> 'a m
-val fail_with_trace : (Trace.t -> failure) -> 'a m
 val run : Context.t -> 'a m -> ('a, TypeErrors.t) Result.t
 val sandbox : 'a t -> ('a Resultat.t) t
 
@@ -55,12 +53,9 @@ val add_r : Locations.t -> Resources.t -> unit m
 val add_rs : Locations.t -> Resources.t list -> unit m
 val get_loc_trace : unit -> (Locations.loc list) m
 val add_loc_trace : Locations.t -> (unit) m
-val get_step_trace : unit -> (Trace.t) m
 
 val res_history : int -> (Context.resource_history) m
 
-val begin_trace_of_step : 'a Trace.opt_pat -> 'a Mucore.mu_expr -> (unit -> (unit) m) m
-val begin_trace_of_pure_step : 'a Trace.opt_pat -> 'a Mucore.mu_pexpr -> (unit -> (unit) m) m
 
 type changed =
   | Deleted

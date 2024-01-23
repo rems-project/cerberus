@@ -153,10 +153,10 @@ module General = struct
          | None ->
             let@ model = model_with loc (bool_ true) in
             let model = Option.get model in
-            fail_with_trace (fun trace -> fun ctxt ->
+            fail (fun ctxt ->
                 let ctxt = { ctxt with resources = original_resources } in
                 let msg = Missing_resource
-                           {requests = request_chain; situation; model; trace; ctxt} in
+                           {requests = request_chain; situation; model; ctxt} in
                 {loc; msg}
            )
          | Some ((re, O oargs), changed_or_deleted') ->
@@ -188,10 +188,10 @@ module General = struct
              else return () in
            debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
            let@ () = Diagnostics.investigate model c in
-           fail_with_trace (fun trace -> fun ctxt ->
+           fail (fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
                   {loc; msg = Unproven_constraint {constr = c; info;
-                      requests = snd uiinfo; ctxt; model; trace}}
+                      requests = snd uiinfo; ctxt; model; }}
                 )
        end
     | I rt ->
@@ -441,8 +441,8 @@ module Special = struct
   let fail_missing_resource loc (situation, requests) =
     let@ model = model_with loc (bool_ true) in
     let model = Option.get model in
-    fail_with_trace (fun trace -> fun ctxt ->
-        let msg = Missing_resource {requests; situation; model; trace; ctxt} in
+    fail (fun ctxt ->
+        let msg = Missing_resource {requests; situation; model; ctxt} in
         {loc; msg})
 
 

@@ -801,12 +801,10 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = pure (aux e2 (not_ c) "else") in
      return ())
   | M_PElet (p, e1, e2) ->
-     let@ fin = begin_trace_of_pure_step (Some p) e1 in
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr e2) in
      let@ () = ensure_base_type loc ~expect:(bt_of_pexpr e1) (bt_of_pattern p) in
      check_pexpr e1 (fun v1 ->
      let@ bound_a = check_and_match_pattern p v1 in
-     let@ () = fin () in
      check_pexpr e2 (fun lvt ->
      let@ () = remove_as bound_a in
      k lvt))
@@ -979,9 +977,9 @@ let all_empty loc original_resources =
       let@ global = get_global () in
       let@ simp_ctxt = simp_ctxt () in
       RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt constr;
-      fail_with_trace (fun trace ctxt ->
+      fail(fun ctxt ->
             let ctxt = { ctxt with resources = original_resources } in
-            {loc; msg = Unused_resource {resource; ctxt; model; trace}})
+            {loc; msg = Unused_resource {resource; ctxt; model; }})
 
 
 let compute_used (prev_rs, prev_ix) (post_rs, _) =
@@ -1455,10 +1453,8 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
   | M_Elet (p, e1, e2) ->
      let@ () = ensure_base_type (loc_of_expr e2) ~expect (bt_of_expr e2) in
      let@ () = ensure_base_type (loc_of_pattern p) ~expect:(bt_of_pexpr e1) (bt_of_pattern p) in
-     let@ fin = begin_trace_of_pure_step (Some p) e1 in
      check_pexpr e1 (fun v1 ->
      let@ bound_a = check_and_match_pattern p v1 in
-     let@ () = fin () in
      check_expr labels e2 (fun rt ->
          let@ () = remove_as bound_a in
          k rt
@@ -1562,9 +1558,9 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                   let@ global = get_global () in
                   RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt lc;
                   let@ () = Diagnostics.investigate model lc in
-                  fail_with_trace (fun trace ctxt ->
+                  fail (fun ctxt ->
                       {loc; msg = Unproven_constraint {constr = lc; info = (loc, None);
-                          requests = []; ctxt; model; trace}}
+                          requests = []; ctxt; model; }}
                     )
                end
             | M_CN_inline _nms ->
@@ -1619,10 +1615,8 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
   | M_Esseq (p, e1, e2) ->
      let@ () = ensure_base_type loc ~expect (bt_of_expr e2) in
      let@ () = ensure_base_type (loc_of_pattern p) ~expect:(bt_of_expr e1) (bt_of_pattern p) in
-     let@ fin = begin_trace_of_step (Some p) e1 in
      check_expr labels e1 (fun it ->
             let@ bound_a = check_and_match_pattern p it in
-            let@ () = fin () in
             check_expr labels e2 (fun it2 ->
                 let@ () = remove_as bound_a in
                 k it2
