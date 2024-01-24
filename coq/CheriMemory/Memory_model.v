@@ -10,6 +10,7 @@ From CheriCaps.Common Require Import Addr Capabilities.
 Require Import CoqLocation.
 Require Import CoqSymbol.
 Require Import CoqMem_common.
+Require Import CoqIntegerType.
 Require Import CoqCtype.
 Require Import Common.SimpleError.
 
@@ -95,12 +96,12 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter isWellAligned_ptrval : CoqCtype.ctype -> pointer_value -> memM bool.
 
   Parameter ptrfromint :
-    location_ocaml -> CoqCtype.integerType ->
+    location_ocaml -> CoqIntegerType.integerType ->
     CoqCtype.ctype -> integer_value -> memM pointer_value.
 
   Parameter intfromptr :
     location_ocaml -> CoqCtype.ctype ->
-    CoqCtype.integerType -> pointer_value -> memM integer_value.
+    CoqIntegerType.integerType -> pointer_value -> memM integer_value.
 
   Parameter derive_cap :
     bool -> derivecap_op -> integer_value ->  integer_value -> serr integer_value.
@@ -150,12 +151,12 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter copy_alloc_id : integer_value -> pointer_value -> memM pointer_value.
 
   Parameter concurRead_ival :
-    CoqCtype.integerType -> CoqSymbol.sym ->
+    CoqIntegerType.integerType -> CoqSymbol.sym ->
     serr integer_value.
 
   Parameter integer_ival : Z -> integer_value.
-  Parameter max_ival : CoqCtype.integerType -> serr integer_value.
-  Parameter min_ival : CoqCtype.integerType -> serr integer_value.
+  Parameter max_ival : CoqIntegerType.integerType -> serr integer_value.
+  Parameter min_ival : CoqIntegerType.integerType -> serr integer_value.
   Parameter op_ival :
     integer_operator -> integer_value ->
     integer_value -> integer_value.
@@ -168,15 +169,15 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter sizeof_ival : CoqCtype.ctype -> serr integer_value.
   Parameter alignof_ival : CoqCtype.ctype -> serr integer_value.
   Parameter bitwise_complement_ival :
-    CoqCtype.integerType -> integer_value -> integer_value.
+    CoqIntegerType.integerType -> integer_value -> integer_value.
   Parameter bitwise_and_ival :
-    CoqCtype.integerType -> integer_value -> integer_value ->
+    CoqIntegerType.integerType -> integer_value -> integer_value ->
     integer_value.
   Parameter bitwise_or_ival :
-    CoqCtype.integerType -> integer_value -> integer_value ->
+    CoqIntegerType.integerType -> integer_value -> integer_value ->
     integer_value.
   Parameter bitwise_xor_ival :
-    CoqCtype.integerType -> integer_value -> integer_value ->
+    CoqIntegerType.integerType -> integer_value -> integer_value ->
     integer_value.
 
   (* Parameter case_integer_value :
@@ -210,11 +211,11 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   Parameter fvfromint : integer_value -> serr floating_value.
 
   Parameter ivfromfloat :
-    CoqCtype.integerType -> floating_value -> serr integer_value.
+    CoqIntegerType.integerType -> floating_value -> serr integer_value.
 
   Parameter unspecified_mval : CoqCtype.ctype -> mem_value.
   Parameter integer_value_mval :
-    CoqCtype.integerType -> integer_value -> mem_value.
+    CoqIntegerType.integerType -> integer_value -> mem_value.
   Parameter floating_value_mval :
     CoqCtype.floatingType -> floating_value -> mem_value.
   Parameter pointer_mval : CoqCtype.ctype -> pointer_value -> mem_value.
@@ -231,8 +232,8 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
   (* Parameter case_mem_value :
     forall {a : Set},
       mem_value -> (CoqCtype.ctype -> a) ->
-      (CoqCtype.integerType -> CoqSymbol.sym -> a) ->
-      (CoqCtype.integerType -> integer_value -> a) ->
+      (CoqIntegerType.integerType -> CoqSymbol.sym -> a) ->
+      (CoqIntegerType.integerType -> integer_value -> a) ->
       (CoqCtype.floatingType -> floating_value -> a) ->
       (CoqCtype.ctype -> pointer_value -> a) ->
       (list mem_value -> a) ->

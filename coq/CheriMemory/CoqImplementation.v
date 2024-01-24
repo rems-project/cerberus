@@ -4,6 +4,7 @@ Require Import Coq.Strings.String.
 Require Import Coq.ZArith.ZArith.
 Require Import Lia.
 
+Require Import CoqIntegerType.
 Require Import CoqCtype.
 
 Local Open Scope Z_scope.
