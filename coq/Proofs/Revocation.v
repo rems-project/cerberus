@@ -923,16 +923,6 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
-  (* TODO: this should be part of capabilities library *)
-  Lemma invalidate_invalidates:
-    forall c : Capability_GS.t, Capability_GS.cap_is_valid (Capability_GS.cap_invalidate c) = false.
-  Proof.
-    intros c.
-    unfold Capability_GS.cap_is_valid, Capability_GS.cap_invalidate.
-    unfold Capability.cap_is_valid, Capability_GS.cap, Capability_GS.set_cap, Capability.cap_invalidate.
-    unfold CapFns.CapIsTagClear.
-  Admitted.
-
   Lemma single_alloc_id_cap_cmp_value_eq:
     forall m1 alloc_id c1 c2 ,
       single_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) alloc_id c1 c2
@@ -1732,7 +1722,7 @@ Module RevocationProofs.
           * (* cap which is being added *)
             subst k.
             left.
-            repeat rewrite invalidate_invalidates.
+            repeat rewrite Capability_GS.cap_invalidate_invalidates.
             repeat rewrite <- cap_invalidate_preserves_ghost_state.
             exists (Capability_GS.cap_is_valid c1, Capability_GS.get_ghost_state c1).
             exists (false, Capability_GS.get_ghost_state c1).
