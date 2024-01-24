@@ -20,7 +20,9 @@ Print _Core_ elaboration for `test.c` using ISO C semantics:
 
 ## Local install
 
-To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.12.0).
+To build Cerberus, you need opam (>= 2.0.0, see
+[here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml
+(>= 4.12.0). Current developement is using Coq 8.16.1.
 
 First set up additional repositories for Coq and Iris packages:
 
@@ -32,9 +34,11 @@ opam pin -n coq-sail https://github.com/rems-project/coq-sail.git
 opam pin -n coq-cheri-capabilities https://github.com/vzaliva/coq-cheri-capabilities.git
 ```
 
-Install the remaining dependencies (including `lem` and `menhir`) using opam:
+Install the remaining dependencies using opam:
 
-```sh
+```bash
+opam pin add -n cerberus-lib .
+opam pin add -n cerberus-cheri .
 opam install --deps-only ./cerberus-cheri.opam
 ```
 
@@ -47,7 +51,5 @@ make cheri
 To install Cerberus-CHERI:
 
 ```bash
-opam pin add -n cerberus-lib .
-opam pin add -n cerberus-cheri .
 opam install cerberus-cheri
 ```
