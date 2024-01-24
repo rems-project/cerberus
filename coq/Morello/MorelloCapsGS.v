@@ -215,7 +215,7 @@ Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Fl
   Proof. intros a b. unfold eqb. unfold value_compare. apply Capability.eqb_value_compare. Qed.
     
   Lemma eqb_exact_compare: forall (a b : t), eqb a b = true <-> exact_compare a b = Eq.
-  Proof. intros. unfold eqb. unfold exact_compare. apply Capability.eqb_exact_compare. Qed.
+  Proof. intros. unfold eqb. unfold exact_compare. apply Capability.eqb_exact_compare. Qed. 
 
   Lemma cap_invalidate_invalidates: forall c, cap_is_valid (cap_invalidate c) = false.
   Proof.
