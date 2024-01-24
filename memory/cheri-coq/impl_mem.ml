@@ -119,7 +119,7 @@ module CerbTagDefs = struct
       volatile = q.volatile
     }
 
-  let toCoq_integerBaseType: integerBaseType -> CoqCtype.integerBaseType = function
+  let toCoq_integerBaseType: integerBaseType -> CoqIntegerType.integerBaseType = function
     | Ichar           -> Ichar
     | Short           -> Short
     | Int_            -> Int_
@@ -131,7 +131,7 @@ module CerbTagDefs = struct
     | Intmax_t        -> Intmax_t
     | Intptr_t        -> Intptr_t
 
-  let toCoq_integerType: integerType -> CoqCtype.integerType = function
+  let toCoq_integerType: integerType -> CoqIntegerType.integerType = function
     | Char          -> Char
     | Bool          -> Bool
     | Signed bt     -> Signed (toCoq_integerBaseType bt)
@@ -164,7 +164,10 @@ module CerbTagDefs = struct
   let toCoq_cerb_attribute: Annot.cerb_attribute -> CoqAnnot.cerb_attribute = function
     | ACerb_with_address n -> ACerb_with_address n
     | ACerb_hidden -> ACerb_hidden
-  
+
+  let toCoq_value_annot: Annot.value_annot -> CoqAnnot.value_annot = function
+    | Ainteger a -> toCoq_integerType a
+
   let toCoq_annot: Annot.annot -> CoqAnnot.annot = function
     | Astd s       -> Astd s
     | Aloc loc     -> Aloc (toCoq_location loc)
@@ -177,6 +180,7 @@ module CerbTagDefs = struct
     | Anot_explode -> Anot_explode
     | Alabel la    -> Alabel (toCoq_label_annot la)
     | Acerb ca -> Acerb (toCoq_cerb_attribute ca)
+    | Avalue va -> Avalue (toCoq_value_annot va)
 
   let toCoq_basicType: basicType -> CoqCtype.basicType = function
     | Integer ity -> Integer (toCoq_integerType ity)
@@ -666,7 +670,7 @@ module CHERIMorello : Memory = struct
   let fromCoq_Symbol_identifier: CoqSymbol.identifier -> Symbol.identifier = function
     | Identifier (l,s) -> Identifier (fromCoq_location l, s)
 
-  let fromCoq_integerBaseType: CoqCtype.integerBaseType -> integerBaseType = function
+  let fromCoq_integerBaseType: CoqIntegerType.integerBaseType -> integerBaseType = function
     | Ichar           -> Ichar
     | Short           -> Short
     | Int_            -> Int_
@@ -678,7 +682,7 @@ module CHERIMorello : Memory = struct
     | Intmax_t        -> Intmax_t
     | Intptr_t        -> Intptr_t
       
-  let fromCoq_integerType: CoqCtype.integerType -> integerType = function
+  let fromCoq_integerType: CoqIntegerType.integerType -> integerType = function
     | Char          -> Char
     | Bool          -> Bool
     | Signed bt     -> Signed (fromCoq_integerBaseType bt)
@@ -730,6 +734,9 @@ module CHERIMorello : Memory = struct
   | ACerb_with_address n -> ACerb_with_address n
   | ACerb_hidden -> ACerb_hidden
 
+  let fromCoq_value_annot (v:CoqAnnot.value_annot): Annot.value_annot =
+    Ainteger (fromCoq_integerType v)
+
   let fromCoq_annot: CoqAnnot.annot -> Annot.annot = function
   | Astd s       -> Astd s
   | Aloc loc     -> Aloc (fromCoq_location loc)
@@ -742,6 +749,7 @@ module CHERIMorello : Memory = struct
   | Anot_explode -> Anot_explode
   | Alabel la    -> Alabel (fromCoq_label_annot la)
   | Acerb ca     -> Acerb (fromCoq_cerb_attribute ca)
+  | Avalue va     -> Avalue (fromCoq_value_annot va)
 
   let fromCoq_basicType: CoqCtype.basicType -> basicType = function
     | Integer ity -> Integer (fromCoq_integerType ity)

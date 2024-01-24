@@ -91,7 +91,7 @@ Module Type CheriMemoryTypes
   Inductive mem_value_with_err :=
   | MVEunspecified : CoqCtype.ctype -> mem_value_with_err
   | MVEinteger :
-    CoqCtype.integerType -> integer_value_indt ->
+    CoqIntegerType.integerType -> integer_value_indt ->
     mem_value_with_err
   | MVEfloating :
     CoqCtype.floatingType -> floating_value ->
@@ -115,7 +115,7 @@ Module Type CheriMemoryTypes
     : forall P : mem_value_with_err -> Prop,
       (* base cases *)
       (forall c : CoqCtype.ctype, P (MVEunspecified c)) ->
-      (forall (i : CoqCtype.integerType) (i0 : integer_value_indt), P (MVEinteger i i0)) ->
+      (forall (i : CoqIntegerType.integerType) (i0 : integer_value_indt), P (MVEinteger i i0)) ->
       (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVEfloating f f0)) ->
       (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVEpointer c p)) ->
       (forall (e: mem_error), P (MVErr e)) ->
@@ -162,7 +162,7 @@ Module Type CheriMemoryTypes
   Inductive mem_value_indt :=
   | MVunspecified : CoqCtype.ctype -> mem_value_indt
   | MVinteger :
-    CoqCtype.integerType -> integer_value_indt -> mem_value_indt
+    CoqIntegerType.integerType -> integer_value_indt -> mem_value_indt
   | MVfloating :
     CoqCtype.floatingType -> floating_value -> mem_value_indt
   | MVpointer :
@@ -181,7 +181,7 @@ Module Type CheriMemoryTypes
     : forall P : mem_value_indt -> Prop,
       (* base cases *)
       (forall c : CoqCtype.ctype, P (MVunspecified c)) ->
-      (forall (i : CoqCtype.integerType) (i0 : integer_value_indt), P (MVinteger i i0)) ->
+      (forall (i : CoqIntegerType.integerType) (i0 : integer_value_indt), P (MVinteger i i0)) ->
       (forall (f : CoqCtype.floatingType) (f0 : floating_value), P (MVfloating f f0)) ->
       (forall (c : CoqCtype.ctype) (p : pointer_value_indt), P (MVpointer c p)) ->
       (* recursive cases *)
@@ -1259,8 +1259,8 @@ Module Type CheriMemoryImpl
             CoqCtype.Function _ _ _ |
             CoqCtype.FunctionNoParams _) =>
             raise "abst on function!"
-        | (CoqCtype.Basic (CoqCtype.Integer ((CoqCtype.Signed CoqCtype.Intptr_t) as ity))
-          | CoqCtype.Basic (CoqCtype.Integer ((CoqCtype.Unsigned CoqCtype.Intptr_t) as ity)))
+        | (CoqCtype.Basic (CoqCtype.Integer ((CoqIntegerType.Signed CoqIntegerType.Intptr_t) as ity))
+          | CoqCtype.Basic (CoqCtype.Integer ((CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) as ity)))
           =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
@@ -2699,13 +2699,13 @@ Module Type CheriMemoryImpl
 
   Definition ptrfromint
     (loc : location_ocaml)
-    (int_ty : CoqCtype.integerType)
+    (int_ty : CoqIntegerType.integerType)
     (ref_ty : CoqCtype.ctype)
     (int_v : integer_value) : memM pointer_value
     :=
     match int_ty, int_v with
-    | CoqCtype.Unsigned CoqCtype.Intptr_t, IC _ c
-    | CoqCtype.Signed CoqCtype.Intptr_t, IC _ c
+    | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t, IC _ c
+    | CoqIntegerType.Signed CoqIntegerType.Intptr_t, IC _ c
       =>
         prov <-
           (ovlp <- find_overlapping (cap_to_Z c) ;;
@@ -2717,8 +2717,8 @@ Module Type CheriMemoryImpl
                ret (PNVI_prov (Prov_symbolic iota))
            end)
         ;; ret (PV prov (PVconcrete c))
-    | CoqCtype.Unsigned CoqCtype.Intptr_t, IV _
-    | CoqCtype.Signed CoqCtype.Intptr_t, IV _ =>
+    |CoqIntegerType.Unsigned CoqIntegerType.Intptr_t, IV _
+    | CoqIntegerType.Signed CoqIntegerType.Intptr_t, IV _ =>
         raise (InternalErr "ptrfromint: invalid encoding for (u)intptr_t")
     | _, IV n =>
         if Z.eqb n 0
@@ -2751,7 +2751,7 @@ Module Type CheriMemoryImpl
 
   Definition internal_intcast
     (loc : location_ocaml)
-    (ity2 : CoqCtype.integerType)
+    (ity2 : CoqIntegerType.integerType)
     (ival : integer_value)
     : serr (sum mem_error integer_value)
     :=
@@ -2766,7 +2766,7 @@ Module Type CheriMemoryImpl
         (0, Z.pow 2 nbits - 1) in
     let conv_int_to_ity2 (n_value : Z) : Z :=
       match ity2 with
-      | CoqCtype.Bool =>
+      | CoqIntegerType.Bool =>
           if Z.eqb n_value 0
           then 0
           else 1
@@ -2776,11 +2776,11 @@ Module Type CheriMemoryImpl
           else wrapI min_ity2 max_ity2 n_value
       end in
     match ival, ity2 with
-    | IC false _, CoqCtype.Unsigned CoqCtype.Intptr_t
-    | IC true _, CoqCtype.Signed CoqCtype.Intptr_t =>
+    | IC false _, CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
+    | IC true _, CoqIntegerType.Signed CoqIntegerType.Intptr_t =>
         ret (inr ival)
-    | IC (false as is_signed) cap, CoqCtype.Signed CoqCtype.Intptr_t
-    | IC (true as is_signed) cap,  CoqCtype.Unsigned CoqCtype.Intptr_t =>
+    | IC (false as is_signed) cap, CoqIntegerType.Signed CoqIntegerType.Intptr_t
+    | IC (true as is_signed) cap,  CoqIntegerType.Unsigned CoqIntegerType.Intptr_t =>
         ret (inr  (IC (negb is_signed) cap))
     | IC false cap, _ =>
         let n_value := (cap_to_Z cap) in
@@ -2788,8 +2788,8 @@ Module Type CheriMemoryImpl
     | IC true cap, _ =>
         let n_value := (cap_to_Z cap) in
         ret (inr (IV (conv_int_to_ity2 (unwrap_cap_value n_value))))
-    | IV n_value, CoqCtype.Unsigned CoqCtype.Intptr_t
-    | IV n_value, CoqCtype.Signed CoqCtype.Intptr_t =>
+    | IV n_value, CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
+    | IV n_value, CoqIntegerType.Signed CoqIntegerType.Intptr_t =>
         if Z.eqb n_value 0 then
           ret (inr (IC false (C.cap_c0 tt)))
         else
@@ -2800,7 +2800,7 @@ Module Type CheriMemoryImpl
         ret (inr (IV (conv_int_to_ity2 n_value)))
     end.
 
-  Definition max_ival (ity: CoqCtype.integerType)
+  Definition max_ival (ity: CoqIntegerType.integerType)
     : serr integer_value
     :=
     let signed_max (n_value : Z) : Z :=
@@ -2808,63 +2808,63 @@ Module Type CheriMemoryImpl
     let unsigned_max (n_value : Z) : Z :=
       (Z.pow 2 (Z.mul 8 n_value)) - 1 in
     match ity with
-    | CoqCtype.Signed CoqCtype.Intptr_t =>
+    | CoqIntegerType.Signed CoqIntegerType.Intptr_t =>
         ret (IV (signed_max (Z.of_nat C.sizeof_ptraddr)))
-    | CoqCtype.Unsigned CoqCtype.Intptr_t =>
+    | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t =>
         ret (IV (unsigned_max (Z.of_nat C.sizeof_ptraddr)))
     | _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         match ity with
-        | CoqCtype.Char =>
-            if IMP.get.(CoqImplementation.is_signed_ity) CoqCtype.Char
+        | CoqIntegerType.Char =>
+            if IMP.get.(CoqImplementation.is_signed_ity) CoqIntegerType.Char
             then ret (IV (signed_max n_value))
             else ret (IV (unsigned_max n_value))
-        | CoqCtype.Bool => ret (IV (unsigned_max n_value))
-        | CoqCtype.Size_t
-        | CoqCtype.Wchar_t
-        | CoqCtype.Unsigned _ => ret (IV (unsigned_max n_value))
-        | CoqCtype.Ptrdiff_t
-        | CoqCtype.Wint_t
-        | CoqCtype.Signed _ => ret (IV (signed_max n_value))
-        | CoqCtype.Ptraddr_t => ret (IV (unsigned_max n_value))
-        | CoqCtype.Enum _ => ret (IV (signed_max 4))
+        | CoqIntegerType.Bool => ret (IV (unsigned_max n_value))
+        | CoqIntegerType.Size_t
+        | CoqIntegerType.Wchar_t
+        | CoqIntegerType.Unsigned _ => ret (IV (unsigned_max n_value))
+        | CoqIntegerType.Ptrdiff_t
+        | CoqIntegerType.Wint_t
+        | CoqIntegerType.Signed _ => ret (IV (signed_max n_value))
+        | CoqIntegerType.Ptraddr_t => ret (IV (unsigned_max n_value))
+        | CoqIntegerType.Enum _ => ret (IV (signed_max 4))
         end
     end.
 
-  Definition min_ival (ity: CoqCtype.integerType)
+  Definition min_ival (ity: CoqIntegerType.integerType)
     : serr integer_value
     :=
     let signed_min (n_value: Z) : Z :=
       Z.opp (Z.pow 2 (Z.mul 8 n_value - 1)) in
     match ity with
-    | CoqCtype.Char =>
-        if IMP.get.(CoqImplementation.is_signed_ity) CoqCtype.Char
+    | CoqIntegerType.Char =>
+        if IMP.get.(CoqImplementation.is_signed_ity) CoqIntegerType.Char
         then ret (IV (signed_min 1))
         else ret (IV 0)
-    | CoqCtype.Bool
-    | CoqCtype.Size_t
-    | CoqCtype.Wchar_t
-    | CoqCtype.Wint_t
-    | CoqCtype.Unsigned _ => ret (IV 0)
-    | CoqCtype.Signed CoqCtype.Intptr_t =>
+    | CoqIntegerType.Bool
+    | CoqIntegerType.Size_t
+    | CoqIntegerType.Wchar_t
+    | CoqIntegerType.Wint_t
+    | CoqIntegerType.Unsigned _ => ret (IV 0)
+    | CoqIntegerType.Signed CoqIntegerType.Intptr_t =>
         ret (IV (signed_min (Z.of_nat C.sizeof_ptraddr)))
-    | CoqCtype.Ptrdiff_t
-    | CoqCtype.Signed _ =>
+    | CoqIntegerType.Ptrdiff_t
+    | CoqIntegerType.Signed _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         ret (IV (signed_min n_value))
-    | CoqCtype.Ptraddr_t => ret (IV 0)
-    | CoqCtype.Enum _ => ret (IV (signed_min 4))
+    | CoqIntegerType.Ptraddr_t => ret (IV 0)
+    | CoqIntegerType.Enum _ => ret (IV (signed_min 4))
     end.
 
   Definition intfromptr
     (loc : location_ocaml)
     (_ : CoqCtype.ctype)
-    (ity: CoqCtype.integerType)
+    (ity: CoqIntegerType.integerType)
     (ptr: pointer_value)
     : memM integer_value
     :=
     let '(prov,ptrval_) := break_PV ptr in
-    let wrap_intcast (ity2 : CoqCtype.integerType) (ival : integer_value)
+    let wrap_intcast (ity2 : CoqIntegerType.integerType) (ival : integer_value)
       : memM integer_value
       :=
       icr <- serr2InternalErr (internal_intcast loc ity2 ival) ;;
@@ -2880,8 +2880,8 @@ Module Type CheriMemoryImpl
           (fun (st : mem_state) =>
              match ity with
              |
-               (CoqCtype.Signed CoqCtype.Intptr_t |
-                 CoqCtype.Unsigned CoqCtype.Intptr_t) =>
+               (CoqIntegerType.Signed CoqIntegerType.Intptr_t |
+                 CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) =>
                  match ZMap.find n_value st.(funptrmap) with
                  | Some (file_dig, name, c_value) =>
                      wrap_intcast ity (IC false c_value)
@@ -2894,9 +2894,9 @@ Module Type CheriMemoryImpl
     | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
         if cap_is_null c_value then
           match ity with
-          | CoqCtype.Signed CoqCtype.Intptr_t =>
+          | CoqIntegerType.Signed CoqIntegerType.Intptr_t =>
               ret (IC true (C.cap_c0 tt))
-          | CoqCtype.Unsigned CoqCtype.Intptr_t =>
+          | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t =>
               ret (IC false (C.cap_c0 tt))
           | _ => ret (IV 0)
           end
@@ -2913,8 +2913,8 @@ Module Type CheriMemoryImpl
           ;;
           match ity with
           |
-            (CoqCtype.Signed CoqCtype.Intptr_t |
-              CoqCtype.Unsigned CoqCtype.Intptr_t) =>
+            (CoqIntegerType.Signed CoqIntegerType.Intptr_t |
+              CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) =>
               wrap_intcast ity (IC false c_value)
           | _ =>
               maxival <- serr2InternalErr (max_ival ity) ;;
@@ -3459,10 +3459,10 @@ Module Type CheriMemoryImpl
     (ival : integer_value) (ptrval : pointer_value)
     : memM pointer_value
     :=
-    intfromptr Loc_unknown CoqCtype.void (CoqCtype.Unsigned CoqCtype.Intptr_t) ptrval ;;
-    ptrfromint Loc_unknown (CoqCtype.Unsigned CoqCtype.Intptr_t) CoqCtype.void ival.
+    intfromptr Loc_unknown CoqCtype.void (CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) ptrval ;;
+    ptrfromint Loc_unknown (CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) CoqCtype.void ival.
 
-  Definition concurRead_ival: CoqCtype.integerType -> CoqSymbol.sym -> serr (integer_value)
+  Definition concurRead_ival: CoqIntegerType.integerType -> CoqSymbol.sym -> serr (integer_value)
     := fun _ _ => raise "TODO: concurRead_ival".
 
   Definition integer_ival (z:Z): integer_value := IV z.
@@ -3502,20 +3502,20 @@ Module Type CheriMemoryImpl
     ret (IV a).
 
   Definition bitwise_complement_ival
-    (ty : CoqCtype.integerType)
+    (ty : CoqIntegerType.integerType)
     (v : integer_value) : integer_value
     :=
     IV (Z.opp (num_of_int v) -1).
 
-  Definition bitwise_and_ival (ty : CoqCtype.integerType)
+  Definition bitwise_and_ival (ty : CoqIntegerType.integerType)
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.land.
 
-  Definition bitwise_or_ival (ty : CoqCtype.integerType)
+  Definition bitwise_or_ival (ty : CoqIntegerType.integerType)
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.lor.
 
-  Definition bitwise_xor_ival (ty : CoqCtype.integerType)
+  Definition bitwise_xor_ival (ty : CoqIntegerType.integerType)
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.lxor.
 
@@ -3566,11 +3566,11 @@ Module Type CheriMemoryImpl
     := raise "fvfromint not implemented".
 
   Definition ivfromfloat
-    (ity: CoqCtype.integerType)
+    (ity: CoqIntegerType.integerType)
     (fval: floating_value): serr integer_value
     :=
     match ity with
-    | CoqCtype.Bool =>
+    | CoqIntegerType.Bool =>
         ret (IV (if eq_fval fval zero_fval then 0 else 1))
     | _ =>
         nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
@@ -3596,7 +3596,7 @@ Module Type CheriMemoryImpl
   Definition unspecified_mval (ty: CoqCtype.ctype): mem_value := MVunspecified ty.
 
   Definition integer_value_mval
-    (ity: CoqCtype.integerType) (ival: integer_value)
+    (ity: CoqIntegerType.integerType) (ival: integer_value)
     : mem_value := MVinteger ity ival.
 
   Definition floating_value_mval
@@ -3624,8 +3624,8 @@ Module Type CheriMemoryImpl
     {A: Set}
     (mval : mem_value)
     (f_unspec : CoqCtype.ctype -> A)
-    (f_concur : CoqCtype.integerType -> CoqSymbol.sym -> A)
-    (f_ival : CoqCtype.integerType -> integer_value -> A)
+    (f_concur : CoqIntegerType.integerType -> CoqSymbol.sym -> A)
+    (f_ival : CoqIntegerType.integerType -> integer_value -> A)
     (f_fval : CoqCtype.floatingType -> floating_value -> A)
     (f_ptr : CoqCtype.ctype -> pointer_value -> A)
     (f_array : list mem_value -> A)
@@ -3769,7 +3769,7 @@ Module Type CheriMemoryImpl
                             ret
                               (Some
                                  (MVinteger
-                                    (CoqCtype.Signed CoqCtype.Long)
+                                    (CoqIntegerType.Signed CoqIntegerType.Long)
                                     (IV (-1))))
                         | Some res =>
                             let res_size := String.length res in
@@ -3778,16 +3778,16 @@ Module Type CheriMemoryImpl
                               ret
                                 (Some
                                    (MVinteger
-                                      (CoqCtype.Signed
-                                         CoqCtype.Long)
+                                      (CoqIntegerType.Signed
+                                         CoqIntegerType.Long)
                                       (IV (-1))))
                             else
                               store_string loc res (Z.to_nat maxsize_n) buf_cap ;;
                               (ret
                                  (Some
                                     (MVinteger
-                                       (CoqCtype.Signed
-                                          CoqCtype.Long) (IV res_size_n))))
+                                       (CoqIntegerType.Signed
+                                          CoqIntegerType.Long) (IV res_size_n))))
                         end)
                | (_, _, _) =>
                    fail loc
@@ -3813,7 +3813,7 @@ Module Type CheriMemoryImpl
                  update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
                  ;;
                  match upper_val with
-                 | MVinteger CoqCtype.Size_t (IV n_value) =>
+                 | MVinteger CoqIntegerType.Size_t (IV n_value) =>
                      let x' := (cap_to_Z c_value) in
                      let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
                      in ret (Some (update_cap_in_mem_value cap_val c_value))
@@ -3844,7 +3844,7 @@ Module Type CheriMemoryImpl
                          mem_state_with_funptrmap funptrmap st))
                    ;;
                    match mask_val with
-                   | MVinteger (CoqCtype.Size_t as ity) (IV n_value)
+                   | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
                      =>
                        iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
                        sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
@@ -3886,7 +3886,7 @@ Module Type CheriMemoryImpl
                      then ret (Some (MVunspecified CoqCtype.size_t))
                      else
                        let v_value := C.cap_get_offset c_value in
-                       ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
+                       ret (Some (MVinteger CoqIntegerType.Size_t (IV v_value)))
                  end)
           else
             if String.eqb name "cheri_address_get" then
@@ -3902,7 +3902,7 @@ Module Type CheriMemoryImpl
                                (String.append name "'")))
                    | Some (_, c_value) =>
                        let v_value := (cap_to_Z c_value) in
-                       ret (Some (MVinteger CoqCtype.Ptraddr_t (IV v_value)))
+                       ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
                    end)
             else
               if String.eqb name "cheri_base_get" then
@@ -3921,7 +3921,7 @@ Module Type CheriMemoryImpl
                          then ret (Some (MVunspecified (CoqCtype.ptraddr_t tt)))
                          else
                            let v_value := fst (Bounds.to_Zs (C.cap_get_bounds c_value))
-                           in ret (Some (MVinteger CoqCtype.Ptraddr_t (IV v_value)))
+                           in ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
                      end)
               else
                 if String.eqb name "cheri_length_get" then
@@ -3945,9 +3945,9 @@ Module Type CheriMemoryImpl
                                 representation of bounds, could exceed
                                 the width of the return type. To avoid
                                 that we cap it here *)
-                             max_size_t <- serr2InternalErr (max_ival CoqCtype.Size_t) ;;
+                             max_size_t <- serr2InternalErr (max_ival CoqIntegerType.Size_t) ;;
                              let length := Z.min (limit - base) (num_of_int max_size_t) in
-                             ret (Some (MVinteger CoqCtype.Size_t (IV length)))
+                             ret (Some (MVinteger CoqIntegerType.Size_t (IV length)))
                        end)
                 else
                   if String.eqb name "cheri_tag_get" then
@@ -3968,10 +3968,10 @@ Module Type CheriMemoryImpl
                                             (CoqCtype.Ctype []
                                                (CoqCtype.Basic
                                                   (CoqCtype.Integer
-                                                     CoqCtype.Bool)))))
+                                                     CoqIntegerType.Bool)))))
                              else
                                let b_value := if C.cap_is_valid c then 1 else 0
-                               in ret (Some (MVinteger CoqCtype.Bool (IV b_value)))
+                               in ret (Some (MVinteger CoqIntegerType.Bool (IV b_value)))
                          end)
                   else
                     if String.eqb name "cheri_tag_clear" then
@@ -4024,12 +4024,12 @@ Module Type CheriMemoryImpl
                                                 (CoqCtype.Ctype []
                                                    (CoqCtype.Basic
                                                       (CoqCtype.Integer
-                                                         CoqCtype.Bool)))))
+                                                         CoqIntegerType.Bool)))))
                                  else
                                    let v_value := if C.eqb c0 c1 then 1 else 0 in
                                    ret
                                      (Some
-                                        (MVinteger CoqCtype.Bool
+                                        (MVinteger CoqIntegerType.Bool
                                            (IV v_value)))
                              end)
                       else
@@ -4037,11 +4037,11 @@ Module Type CheriMemoryImpl
                           match List.nth_error args 0%nat with
                           | None =>
                               raise (InternalErr "missing argument")
-                          | Some (MVinteger CoqCtype.Size_t (IV n_value)) =>
+                          | Some (MVinteger CoqIntegerType.Size_t (IV n_value)) =>
                               let l_value := C.representable_length n_value in
                               ret
                                 (Some
-                                   (MVinteger CoqCtype.Size_t
+                                   (MVinteger CoqIntegerType.Size_t
                                       (IV l_value)))
                           | Some _ =>
                               fail loc
@@ -4057,12 +4057,12 @@ Module Type CheriMemoryImpl
                             match List.nth_error args 0%nat with
                             | None =>
                                 raise (InternalErr "missing argument")
-                            | Some (MVinteger CoqCtype.Size_t (IV n_value))
+                            | Some (MVinteger CoqIntegerType.Size_t (IV n_value))
                               =>
                                 let l_value := C.representable_alignment_mask n_value in
                                 ret
                                   (Some
-                                     (MVinteger CoqCtype.Size_t
+                                     (MVinteger CoqIntegerType.Size_t
                                         (IV l_value)))
                             | Some _ =>
                                 fail loc
@@ -4201,7 +4201,7 @@ Module Type CheriMemoryImpl
                     ((ExactRet
                         (CoqCtype.Ctype []
                            (CoqCtype.Basic
-                              (CoqCtype.Integer CoqCtype.Bool)))),
+                              (CoqCtype.Integer CoqIntegerType.Bool)))),
                       [
                         PolymorphicArg
                           [
@@ -4233,7 +4233,7 @@ Module Type CheriMemoryImpl
                             (CoqCtype.Ctype []
                                (CoqCtype.Basic
                                   (CoqCtype.Integer
-                                     CoqCtype.Bool)))),
+                                     CoqIntegerType.Bool)))),
                           [
                             PolymorphicArg
                               [

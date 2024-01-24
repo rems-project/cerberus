@@ -46,6 +46,7 @@
 (copy_files extracted/ConstructiveExtra.{ml,mli})
 (copy_files extracted/ConstructiveRcomplete.{ml,mli})
 (copy_files extracted/ConstructiveReals.{ml,mli})
+(copy_files extracted/CoqIntegerType.{ml,mli})
 (copy_files extracted/CoqCtype.{ml,mli})
 (copy_files extracted/countable.{ml,mli})
 (copy_files extracted/Datatypes.{ml,mli})

@@ -3,6 +3,7 @@ Require Import Coq.Numbers.BinNums.
 
 Require Import CoqSymbol.
 Require Import CoqLocation.
+Require Import CoqIntegerType.
 
 Import ListNotations.
 
@@ -49,6 +50,8 @@ Inductive cerb_attribute : Type :=
   | ACerb_with_address: nat -> cerb_attribute
   | ACerb_hidden: cerb_attribute.
 
+Inductive value_annot : Type :=
+| Ainteger: integerType -> value_annot.
 
 Inductive annot : Type := 
   | Astd:  string  -> annot  (* ISO C11 Standard Annotation *)
@@ -62,7 +65,9 @@ Inductive annot : Type :=
                               must only be used on a ctype to indicate it is a unfolding of a typedef *)
   | Anot_explode: annot  (* tell the a-normalisation not to explode if-then-else *)
   | Alabel:  label_annot  -> annot
-  | Acerb: cerb_attribute -> annot.
+  | Acerb: cerb_attribute -> annot
+  | Avalue: value_annot -> annot.
+
 
 (*
 Definition loop_attributes : Type :=  fmap  loop_id   attributes .
