@@ -1,4 +1,5 @@
 Require Import CoqImplementation.
+Require Import CoqIntegerType.
 Require Import CoqCtype.
 
 Module AilTypesAux(IMP: Implementation).
