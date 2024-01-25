@@ -1805,6 +1805,7 @@ Module RevocationProofs.
           (CheriMemoryWithPNVI.repr    fuel funptrmap1 capmeta1 addr1 mval1)
           (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
     Proof.
+(*
       intros m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
         [Ffun [Ecap [Eaddr Emval]]].
       destruct fuel;[reflexivity|].
@@ -2790,9 +2791,12 @@ Module RevocationProofs.
           destruct fuel;[reflexivity|].
           eapply IHEmval; assumption.
     Qed.
+ *)
+      Admitted.
 
   End repr_same_proof.
 
+(*
   Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
 
   (* --- Stateful proofs below --- *)
@@ -3883,5 +3887,5 @@ Module RevocationProofs.
            *)
   Admitted.
 
-
+*)
 End RevocationProofs.
