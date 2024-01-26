@@ -134,17 +134,18 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
     in
     List.map doc_clause predicate_clauses
   in
-  let requested = List.map (req_entry None) (Option.to_list extras.request) in
-  let pp_with_simp lc = [LC.pp lc; !^"(simplified)" ^^^ (LC.pp
-    (Simplify.LogicalConstraints.simp (Simplify.default ctxt.global) lc))] in
-  let unproven = List.map pp_with_simp (Option.to_list extras.unproven_constraint)
-    |> List.concat in
+  let requested = Option.map (req_entry None) extras.request in
+  let pp_with_simp lc = 
+    let lc_simp = Simplify.LogicalConstraints.simp (Simplify.default ctxt.global) lc in 
+    (LC.pp lc, LC.pp lc_simp)
+  in
+  let unproven = Option.map pp_with_simp extras.unproven_constraint in
 
   let trace = 
     (*copying from above*)
     let print_location loc = Pp.string (Locations.to_string loc) in
     let print_label = function
-      | None -> !^"label: function body"
+      | None -> !^"function body"
       | Some (loc, label_kind) -> 
           let open CF.Annot in
           let prefix = match label_kind with
@@ -159,31 +160,49 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
           in
           !^prefix ^^ colon ^^^ (print_location loc)
     in
+
+    
     let print_trace_item (i, loc) = 
       match i with
       | Stmt -> 
-         !^"--" ^^^ print_location loc ^^ Pp.empty
+         print_location loc ^^ Pp.empty
       | Expr -> 
-         !^"----" ^^^ print_location loc ^^ Pp.empty
+         print_location loc ^^ Pp.empty
       | Read (p,v) -> 
-         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"read" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"for" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         print_location loc ^^ colon ^^^ !^"read" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"for" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Write (p,v) -> 
-         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"wrote" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"to" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         print_location loc ^^ colon ^^^ !^"wrote" ^^^ IT.pp v ^^^ parens (mevaluate v) ^^^ !^"to" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Create p -> 
-         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"allocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         print_location loc ^^ colon ^^^ !^"allocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Kill p -> 
-         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"deallocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
+         print_location loc ^^ colon ^^^ !^"deallocated" ^^^ IT.pp p ^^^ parens (mevaluate p)
       | Call (s,[]) -> 
-         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"called" ^^^ Sym.pp s 
+         print_location loc ^^ colon ^^^ !^"called" ^^^ Sym.pp s 
       | Call (s,args) -> 
-         !^"----" ^^^ print_location loc ^^ colon ^^^ !^"called" ^^^ Sym.pp s ^^^ !^"with" ^^^
+         print_location loc ^^ colon ^^^ !^"called" ^^^ Sym.pp s ^^^ !^"with" ^^^
          separate_map (comma ^^ space) (fun arg -> IT.pp arg ^^^ parens (mevaluate arg)) args 
     in
-    List.concat_map (fun label ->
-         print_label label.label
-         :: List.map print_trace_item (List.rev label.trace)
-      ) (List.rev ctxt.trace)
+
+    let intra_label_trace_report (t: (trace_item * Locations.t) list) = 
+      let t = List.rev t in
+      let groups = List.separate_and_group (function (Stmt, l) -> Some l | _ -> None) t in
+      List.map (fun (stmt, is) ->
+        Report.{ 
+          stmt = (match stmt with
+             | Some l -> print_location l
+             | None -> Pp.parens (!^"no statement"))
+          ; 
+          within = List.map print_trace_item is }
+        ) groups
     in
+    List.map (fun (l : Context.per_label_trace) ->
+        Report.{ 
+          label = print_label l.label;
+          trace = intra_label_trace_report l.trace 
+        }
+      ) (List.rev ctxt.trace)
+  in
+    
 
   Pp.html_escapes := prev;
 

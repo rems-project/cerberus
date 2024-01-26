@@ -432,7 +432,7 @@ type t = type_error
 
 let output_state state_error_file state =
   let channel = open_out state_error_file in
-  let () = Printf.fprintf channel "%s" (Report.print_report state) in
+  let () = Printf.fprintf channel "%s" (Report.make state) in
   close_out channel
 
 (* stealing some logic from pp_errors *)

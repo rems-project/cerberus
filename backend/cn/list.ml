@@ -72,3 +72,25 @@ let map_fst (f : 'a -> 'c) (xs : ('a * 'b) list) : ('c * 'b) list =
 
 let map_snd (f : 'b -> 'c) (xs : ('a * 'b) list) : ('a * 'c) list =
   map (fun (a, b) -> (a, f b)) xs
+
+
+let rec separate_and_group (by : 'b -> 'a option) : 'b list -> ('a option * 'b list) list =
+  function
+  | [] -> []
+  | b :: bs -> 
+    match by b, separate_and_group by bs with
+    | Some a, ((None, bs') :: abs) -> 
+        (Some a, bs') :: abs
+    | Some a, abs ->
+        (Some a, []) :: abs
+    | None, ((None, bs') :: abs) ->
+        (None, b :: bs') :: abs
+    | None, abs ->
+        (None, [b]) :: abs
+
+
+let empty = function
+  | [] -> true
+  | _ -> false
+
+let non_empty l = not (empty l)

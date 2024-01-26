@@ -1,26 +1,32 @@
-let style = "@import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
-
+let style = "
 * {
-    font-size: 10.5pt
+    font-size: 11pt
 }
 
 html {
-    font-family: 'Source Sans Pro', monospace;;
+    font-family: sans-serif;
     padding: 0;
     margin: 0;
     /* font-size: 8pt; */
 }
 
 body {
-    padding: 0;
+    padding: 10px;
     margin: 0;
+    max-width: 800px;
 }
 
 table {
+    width: 100%;
     border: 1px solid;
     border-collapse: collapse;
     /* max-width: 1400px; */
     /* table-layout: fixed; */
+}
+
+h1 {
+    font-size: 11pt;
+    margin-top: 16pt;
 }
 
 tr {
@@ -44,10 +50,9 @@ th {
     padding-bottom: 5px;
 }
 
-
-
-.loc_v {
-    text-align: right;
+th {
+    font-weight: normal;
+    font-style: italic;
 }
 
 
@@ -59,17 +64,20 @@ th {
     }
 
     table, th, td {
-        border-color: #202020;
+        border-color: #303030;
+    }
+
+    tr {
+        background-color: #181818;
     }
 
     th {
-        color: white;
-        background-color: #202020;
+        background-color: #252525;
+        border-bottom: 1px solid #303030;
     }
 
     tr:hover {
-        background-color: #101010;
-        color: cyan;
+        background-color: #101044;
     }
 }
 
@@ -83,17 +91,20 @@ th {
     }
 
     table, th, td {
-        border-color: #DFDFDF;
+        border-color: #E9E9E9;
+    }
+
+    tr {
+        background-color: #F8F8F8;
     }
 
     th {
-        color: black;
-        background-color: #DFDFDF;
+        background-color: #F0F0F0;
+        border-bottom: 1px solid #E9E9E9;
     }
 
     tr:hover {
         background-color: #E2F0FF;
-        color: black;
     }
 }
 "
