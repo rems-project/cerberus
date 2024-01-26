@@ -269,6 +269,10 @@ Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
 
 Section ZMapAux.
 
+  Definition zmap_forall_keys {A:Type} (pred: Z -> Prop) (m:ZMap.t A) : Prop
+    :=
+    forall k, ZMap.In k m -> pred k.
+
   (* A predicate that accepts two ZMaps `map1` and `map2` of
      potentially different value types `A` and `B`, and a relation
      `R`. It ensures that for every key in these ZMaps, `R` holds for
@@ -583,3 +587,16 @@ Proof.
   split; intros;  unfold Monad_either, ret, bind;
     repeat break_match;subst; try inl_inr_inv; try reflexivity; try inl_inr.
 Qed.
+
+
+Definition is_Some {A:Type} (x:option A) : Prop
+  := match x with
+     | Some _ => True
+     | None => False
+     end.
+
+Definition is_None {A:Type} (x:option A) : Prop
+  := match x with
+     | Some _ => False
+     | None => True
+     end.
