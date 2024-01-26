@@ -592,7 +592,7 @@ type).</p>
 <pre><code>/*@
 datatype int_list {
   Nil {},
-  Cons {i32 x, datatype int_list tl}
+  Cons {i32 hd, datatype int_list tl}
 }
 @*/</code></pre>
 <p>The above introduces a two-constructor datatype. The new type can be
@@ -603,7 +603,7 @@ necessarily the same.</p>
 <p>Explicit values of the new datatype can be constructed with the
 syntax
 <code>&lt;cn_variable&gt; LBRACE &lt;member_def&gt;* RBRACE</code>,
-e.g. <code>Cons {x: 0i32, tl: Nil {}}</code>.</p>
+e.g. <code>Cons {hd: 0i32, tl: Nil {}}</code>.</p>
 <p>Values of the datatype can be destructed with the match syntax
 <code>MATCH &lt;expr&gt; LBRACE &lt;match_case&gt;+ RBRACE</code>, where
 each match case is of the form
@@ -614,8 +614,8 @@ token.</p>
 <code>xs</code> can be written with:</p>
 <pre><code>match xs {
   Nil {} =&gt; { 0i32 }
-  Cons {x : x1, tl: Nil {} } =&gt; { x1 }
-  Cons {x : x1, tl: Cons {x : x2, tl: _ } } =&gt; { x1 + x2 }
+  Cons {hd : x1, tl: Nil {} } =&gt; { x1 }
+  Cons {hd : x1, tl: Cons {hd : x2, tl: _ } } =&gt; { x1 + x2 }
 }</code></pre>
 <h4 id="specification-function-definitions">Specification function
 definitions</h4>
@@ -626,7 +626,7 @@ following defines a function computing the length of a list, using the
 <pre><code>function [rec] (integer) length (datatype int_list l) {
   match l {
     Nil {} =&gt; { 0 }
-    Cons { x: _, tl: l2 } =&gt; { 1 + length(l2) }
+    Cons { hd: _, tl: l2 } =&gt; { 1 + length(l2) }
   }
 }</code></pre>
 <p>This defines a function <code>length</code>, with a single argument,
@@ -648,9 +648,12 @@ names),</p></li>
 comprising a basetype followed by the argument name),</p></li>
 <li><p>an optional function body.</p></li>
 </ul>
-<p>The possible attributes are currently: - <code>rec</code>, to
-indicate a recursive function definition, and - <code>coq_unfold</code>
-{TODO}.</p>
+<p>The possible attributes are currently:</p>
+<ul>
+<li><p><code>rec</code>, to indicate a recursive function definition,
+and</p></li>
+<li><p><code>coq_unfold</code> {TODO}.</p></li>
+</ul>
 <p>The function body is simply an expression, enclosed in curly
 braces.</p>
 <p><strong>Functions without body.</strong> When the function body is
@@ -679,6 +682,123 @@ function definitions</em> or using <em>manually stated and applied
 lemmata</em> (both of which are explained later).</p>
 <h4 id="resource-predicate-definitions">Resource predicate
 definitions</h4>
+<p>In addition to the built-in resource predicates <code>Owned</code>
+and <code>Block</code>, CN allows users to define new resource
+predicates. This can be necessary to describe the ownership requirements
+for the use of recursive datastructures, or useful for grouping together
+common CN conditions under a single definition.</p>
+<p>As explained earlier, in CN resources have inputs and outputs.
+Informally, the inputs are arguments required to define <em>which memory
+locations are owned</em>, whereas the outputs are information derived
+from the inputs and the owned memory. In the case of the
+<code>Owned</code> predicate, its single input is the pointer to the
+owned memory location, its output is the pointee value stored in the
+owned location. CN generalises this idea to arbitrary resource
+predicates. In resource predicate definitions, the user therefore
+decides which outputs a resource predicate should “expose”.</p>
+<p>To illustrate resource predicate definitions, shown below is the CN
+definition of a linked list data structure, which describes the
+ownership shape associated with linked lists, here represented using the
+C <code>struct list_head</code> type (of list elements).</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> list_head <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span> v<span class="op">;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">struct</span> list_head <span class="op">*</span>next<span class="op">;</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Each element of the list is a <code>struct list_head</code>,
+comprising an integer value <code>v</code>and pointer <code>next</code>,
+to the next element of the list. A list is then represented as a
+<code>struct list_head</code> pointer – using NULL to encode the empty
+list, and a non-NULL pointer to the first/head element of a list stored
+in memory for non-empty lists.</p>
+<pre><code>/*@
+predicate (datatype int_list) LinkedList (pointer p) {
+  if (is_null(p)) {
+    return Nil {};
+  }
+  else {
+    take h = Owned&lt;struct list_head&gt;(p);
+    take t = LinkedList(h.next);
+    return Cons {hd: h.v, tl: t};
+  }
+}
+@*/</code></pre>
+<p>The CN definition encodes this informal description. The above CN
+code defines a resource predicate <code>LinkedList</code>, which takes
+the pointer <code>p</code>, the C encoding of the linked list, as an
+input. Its output is a mathematical list, of datatype
+<code>int_list</code> (as defined earlier above).</p>
+<p>The body of <code>LinkedList</code> specifies what ownership of this
+predicate means. This is usually done by distinguishing different cases,
+using a top-level if-then-else structure. Each branch then specifies the
+conditions required for the predicate to hold, using CN conditions as in
+function and loop specifications, and ends in a return statement that
+defines the predicate output for this branch.</p>
+<p>Here there two cases:</p>
+<ul>
+<li><p>If <code>p</code> is the NULL pointer, then no memory ownership
+is taken and no other conditions apply. The output, the mathematical
+list represented by <code>p</code>, is the empty list, here specified
+with <code>return Nil {}</code>.</p></li>
+<li><p>Otherwise (for a non-NULL pointer <code>p</code>) the linked list
+predicate requires ownership for <code>p</code>. The line
+<code>take h = Owned&lt;struct list_head&gt;(p);</code> asserts this
+ownership, at <code>struct list_head</code> type, and binds the value of
+the owned struct to <code>h</code>. To specify ownership of the
+remainder of the list the next line,
+<code>take t = LinkedList(h.next);</code> claims ownership of another
+instance of the <code>LinkedList</code> predicate, for the pointer
+<code>h.next</code> to the next element of the list. This recursively
+asserts ownership for the next element of the list, and all following
+ones and returns the mathematical list representation for the remainder
+of the list, binding this to <code>t</code>. (As in the case of function
+and loop specifications, <code>h.next</code> can also be referred to
+using the <code>*</code>-notation <code>(*p).next</code>; hence an
+equivalent specification could have used the line
+<code>take t = LinkedList((*p).next);</code>.) As in the first case, the
+body of the else branch ends by defining the mathematical list output by
+the predicate, here the cons of the the head value <code>h.v</code> and
+the remainder of the list (returned from the recursive application of
+LinkedList) <code>t</code>:
+<code>return Cons {hd: h.v, tl: t}</code>.</p></li>
+</ul>
+<p>CN resource predicate definitions in general follow the same shape
+shown in the linked list example:</p>
+<pre><code>precicate &lt;cn_attrs&gt; &lt;cn_pred_output&gt; UNAME VARIABLE
+         LPAREN &lt;args&gt; RPAREN &lt;cn_option_pred_clauses&gt;</code></pre>
+<p>That is, <code>predicate</code>, followed by</p>
+<ul>
+<li><p>an optional list of attributes (currently none are used for
+resource predicates);</p></li>
+<li><p>the CN basetype of the predicate output;</p></li>
+<li><p>the name of the resource predicate, by convention using uppercase
+letters</p></li>
+<li><p>a list of one or more predicate inputs (within parentheses, a
+list of arguments, each being a CN basetype followed by the argument
+name); the first argument is required to be the pointer the ownership is
+associated with;</p></li>
+<li><p>an optional predicate definition body.</p></li>
+</ul>
+<p>The (optional) predicate body is a collection of guarded
+<code>clauses</code>, enclosed in curly braces; the <code>clauses</code>
+have the form
+<code>if ( &lt;EXPR&gt; ) { clause; } else { &lt;clauses&gt; }</code>,
+where each clause is a semi-colon separated sequence of conditions
+(<code>take</code> resource conditions, <code>assert</code> logical
+conditions, <code>let</code> bindings) ending in a return statement for
+the output. The return statement takes the expression being returned as
+an output, or stands alone (with no argument) for returning
+<code>void</code>/unit as an output.</p>
+<pre><code>&lt;cn_option_pred_clauses&gt; ::= [LBRACE &lt;clauses&gt; RBRACE]
+
+&lt;clauses&gt; ::= &lt;clause&gt; SEMICOLON
+            | IF LPAREN &lt;expr&gt; RPAREN LBRACE &lt;clause&gt; SEMICOLON RBRACE ELSE
+              LBRACE &lt;clauses&gt; RBRACE
+
+&lt;clause&gt; ::= CN_TAKE &lt;cn_variable&gt; EQ &lt;resource&gt; SEMICOLON &lt;clause&gt;
+           | CN_LET &lt;cn_variable&gt; EQ &lt;expr&gt; SEMICOLON &lt;clause&gt;
+           | ASSERT LPAREN &lt;assert_expr&gt; RPAREN SEMICOLON &lt;clause&gt;
+           | RETURN &lt;expr&gt;
+           | RETURN</code></pre>
 <h3 id="proof-assistance">Proof assistance</h3>
 <h4 id="cn-statements">CN statements</h4>
 <h4 id="lemma-statements">Lemma statements</h4>

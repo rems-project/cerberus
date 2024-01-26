@@ -279,14 +279,14 @@ The `datatype` top-level command adds a user-defined datatype to the universe of
 For instance, the following definition introduces a list of 32-bit integers
 (this will support different operations to CN's builtin list type).
 
-  ```
-  /*@
-  datatype int_list {
-    Nil {},
-    Cons {i32 hd, datatype int_list tl}
-  }
-  @*/
-  ```
+```
+/*@
+datatype int_list {
+  Nil {},
+  Cons {i32 hd, datatype int_list tl}
+}
+@*/
+```
 
 The above introduces a two-constructor datatype. The new type can be referred to with
 the syntax `int_list` or `datatype int_list`.
@@ -303,13 +303,13 @@ parenthesised unless it is a single token.
 
 For instance, the sum of up to two elements of the list `xs` can be written with:
 
-  ```
-  match xs {
-    Nil {} => { 0i32 }
-    Cons {hd : x1, tl: Nil {} } => { x1 }
-    Cons {hd : x1, tl: Cons {hd : x2, tl: _ } } => { x1 + x2 }
-  }
-  ```
+```
+match xs {
+  Nil {} => { 0i32 }
+  Cons {hd : x1, tl: Nil {} } => { x1 }
+  Cons {hd : x1, tl: Cons {hd : x2, tl: _ } } => { x1 + x2 }
+}
+```
 
 #### Specification function definitions
 
@@ -326,10 +326,12 @@ function [rec] (integer) length (datatype int_list l) {
 This defines a function `length`, with a single argument, `l` of `int_list` datatype, and with `integer` return type.
 
 Function definitions follow the form
+
 ```
 function <cn_attrs> LPAREN <base_type> RPAREN
   <cn_variable> LPAREN <args> RPAREN <cn_option_func_body>
 ```
+
 That is, `function` is followed by:
 
 - an optional list of attributes  
@@ -364,12 +366,23 @@ The function body is simply an expression, enclosed in curly braces.
 
 In addition to the built-in resource predicates `Owned` and `Block`, CN allows users to define new resource predicates. This can be necessary to describe the ownership requirements for the use of recursive datastructures, or useful for grouping together common CN conditions under a single definition.
 
-As explained earlier, in CN resources have inputs and outputs. Informally, the inputs are arguments required to define *what memory is owned*, whereas the outputs are information derived from the combination of inputs and the owned memory. In the case of the `Owned` predicate, its single input is the pointer to the owned memory area, its output is the pointee value stored in the owned memory location; CN generalises this idea to arbitrary resource predicates. In resource predicate definitions, the user therefore decides which outputs a resource predicate should "expose".
+As explained earlier, in CN resources have inputs and outputs. Informally, the inputs are arguments required to define *which memory locations are owned*, whereas the outputs are information derived from the inputs and the owned memory. In the case of the `Owned` predicate, its single input is the pointer to the owned memory location, its output is the pointee value stored in the owned location. CN generalises this idea to arbitrary resource predicates. In resource predicate definitions, the user therefore decides which outputs a resource predicate should "expose".
 
-Shown below is an example of the linked-list resource predicate:
+To illustrate resource predicate definitions, shown below is the CN definition of a linked list data structure, which describes the ownership shape associated with linked lists, here represented using the C `struct list_head` type (of list elements).
+
+```c
+struct list_head {
+  int v;
+  struct list_head *next;
+};
 
 ```
-predicate (datatype int_list) LinkedList(pointer p) {
+
+Each element of the list is a `struct list_head`, comprising an integer value `v`and pointer `next`, to the next element of the list. A list is then represented as a `struct list_head` pointer -- using NULL to encode the empty list, and a non-NULL pointer to the first/head element of a list stored in memory for non-empty lists.
+
+```
+/*@
+predicate (datatype int_list) LinkedList (pointer p) {
   if (is_null(p)) {
     return Nil {};
   }
@@ -379,15 +392,54 @@ predicate (datatype int_list) LinkedList(pointer p) {
     return Cons {hd: h.v, tl: t};
   }
 }
+@*/
 ```
-{TODO}
+The CN definition encodes this informal description. The above CN code defines a resource predicate `LinkedList`, which takes the pointer `p`, the C encoding of the linked list, as an input. Its output is a mathematical list, of datatype `int_list` (as defined earlier above). 
+
+The body of `LinkedList` specifies what ownership of this predicate means. This is usually done by distinguishing different cases, using a top-level if-then-else structure. Each branch then specifies the conditions required for the predicate to hold, using CN conditions as in function and loop specifications, and ends in a return statement that defines the predicate output for this branch.
+
+Here there two cases: 
+
+- If `p` is the NULL pointer, then no memory ownership is taken and no other conditions apply. The output, the mathematical list represented by `p`, is the empty list, here specified with `return Nil {}`.
+
+- Otherwise (for a non-NULL pointer `p`) the linked list predicate requires ownership for `p`. The line `take h = Owned<struct list_head>(p);` asserts this ownership, at `struct list_head` type, and binds the value of the owned struct to `h`. To specify ownership of the remainder of the list the next line, `take t = LinkedList(h.next);` claims ownership of another instance of the `LinkedList` predicate, for the pointer `h.next` to the next element of the list. This recursively asserts ownership for the next element of the list, and all following ones and returns the mathematical list representation for the remainder of the list, binding this to `t`. (As in the case of function and loop specifications, `h.next` can also be referred to using the `*`-notation `(*p).next`; hence an equivalent specification could have used the line `take t = LinkedList((*p).next);`.) As in the first case, the body of the else branch ends by defining the mathematical list output by the predicate, here the cons of the the head value `h.v` and the remainder of the list (returned from the recursive application of LinkedList) `t`: `return Cons {hd: h.v, tl: t}`.
 
 
-{TODO}
+CN resource predicate definitions in general follow the same shape shown in the linked list example: 
+
 ```
-preciate <cn_attrs> <cn_pred_output> UNAME VARIABLE
+precicate <cn_attrs> <cn_pred_output> UNAME VARIABLE
          LPAREN <args> RPAREN <cn_option_pred_clauses>
 ```
+
+That is, `predicate`, followed by
+
+- an optional list of attributes (currently none are used for resource predicates);
+
+- the CN basetype of the predicate output;
+
+- the name of the resource predicate, by convention using uppercase letters
+
+- a list of one or more predicate inputs (within parentheses, a list of arguments, each being a CN basetype followed by the argument name); the first argument is required to be the pointer the ownership is associated with;
+
+- an optional predicate definition body.
+
+The (optional) predicate body is a collection of guarded `clauses`, enclosed in curly braces; the `clauses` have the form `if ( <EXPR> ) { clause; } else { <clauses> }`, where each clause is a semi-colon separated sequence of conditions (`take` resource conditions, `assert` logical conditions, `let` bindings) ending in a return statement for the output. The return statement takes the expression being returned as an output, or stands alone (with no argument) for returning `void`/unit as an output.
+
+```
+<cn_option_pred_clauses> ::= [LBRACE <clauses> RBRACE]
+
+<clauses> ::= <clause> SEMICOLON
+            | IF LPAREN <expr> RPAREN LBRACE <clause> SEMICOLON RBRACE ELSE
+              LBRACE <clauses> RBRACE
+
+<clause> ::= CN_TAKE <cn_variable> EQ <resource> SEMICOLON <clause>
+           | CN_LET <cn_variable> EQ <expr> SEMICOLON <clause>
+           | ASSERT LPAREN <assert_expr> RPAREN SEMICOLON <clause>
+           | RETURN <expr>
+           | RETURN
+```
+
 
 ### Proof assistance
 #### CN statements
