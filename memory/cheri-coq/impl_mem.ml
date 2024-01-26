@@ -181,6 +181,10 @@ module CerbTagDefs = struct
     | Alabel la    -> Alabel (toCoq_label_annot la)
     | Acerb ca -> Acerb (toCoq_cerb_attribute ca)
     | Avalue va -> Avalue (toCoq_value_annot va)
+    | Ainlined_label (l,s,la) ->
+       Ainlined_label (toCoq_location l, toCoq_Symbol_sym s, toCoq_label_annot la)
+    | Astmt l -> Astmt (toCoq_location l)
+    | Aexpr l -> Aexpr (toCoq_location l)
 
   let toCoq_basicType: basicType -> CoqCtype.basicType = function
     | Integer ity -> Integer (toCoq_integerType ity)
@@ -750,6 +754,12 @@ module CHERIMorello : Memory = struct
   | Alabel la    -> Alabel (fromCoq_label_annot la)
   | Acerb ca     -> Acerb (fromCoq_cerb_attribute ca)
   | Avalue va     -> Avalue (fromCoq_value_annot va)
+  | Ainlined_label (l, s, la) ->  Ainlined_label
+                                    (fromCoq_location l,
+                                     fromCoq_Symbol_sym s,
+                                     fromCoq_label_annot la)
+  | Astmt loc -> Astmt (fromCoq_location loc)
+  | Aexpr loc -> Aexpr (fromCoq_location loc)
 
   let fromCoq_basicType: CoqCtype.basicType -> basicType = function
     | Integer ity -> Integer (fromCoq_integerType ity)

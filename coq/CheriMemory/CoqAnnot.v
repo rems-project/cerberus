@@ -66,7 +66,10 @@ Inductive annot : Type :=
   | Anot_explode: annot  (* tell the a-normalisation not to explode if-then-else *)
   | Alabel:  label_annot  -> annot
   | Acerb: cerb_attribute -> annot
-  | Avalue: value_annot -> annot.
+  | Avalue: value_annot -> annot
+  | Ainlined_label: location_ocaml -> CoqSymbol.sym -> label_annot -> annot
+  | Astmt: location_ocaml -> annot
+  | Aexpr: location_ocaml -> annot.
 
 
 (*
