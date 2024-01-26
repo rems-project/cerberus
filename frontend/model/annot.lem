@@ -42,6 +42,8 @@ type label_annot =
   | LAcase
   | LAdefault
 
+  | LAactual_label
+
 instance (Show label_annot)
   let show = function
     | LAloop_prebody id -> "loop pre-body " ^ show id
@@ -52,6 +54,7 @@ instance (Show label_annot)
     | LAswitch -> "switch"
     | LAcase -> "case"
     | LAdefault -> "default"
+    | LAactual_label -> "label"
   end
 end
 

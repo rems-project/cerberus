@@ -154,6 +154,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
             | LAloop_continue _ -> "loop continue"
             | LAloop_body _ -> "loop body"
             | LAloop_prebody _ -> "pre-loop condition"
+            | LAactual_label -> "label"
             | LAswitch -> failwith "todo"
             | LAcase -> failwith "todo"
             | LAdefault -> failwith "todo"

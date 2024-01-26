@@ -3734,9 +3734,16 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
+        (* Some AilSlabel's are added by cabs-to-ail: continue labels 
+           created for different kinds of loops. Those will have an
+           m_label_annot of the form `Just`, rather than `Nothing`. 
+           Those AilSlabel's that were not introduced by cabs-to-ail
+           should all be proper labels in the C source, and with `Nothing`
+           for m_label_annot. So for these, we add the corresponding label
+           annotation here. *)
         let annots = match m_label_annot with
           | Just loop_annot -> [Annot.Alabel loop_annot]
-          | Nothing -> []
+          | Nothing -> [Annot.Alabel Annot.LAactual_label]
         end in
         E.return (Caux.mk_save_e_ annots (sym, C.BTy_unit) args core_s)
     

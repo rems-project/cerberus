@@ -38,6 +38,7 @@ let label_prefix =
   | LAswitch -> failwith "todo"
   | LAcase -> failwith "todo"
   | LAdefault -> failwith "todo"
+  | LAactual_label -> "label"
 
 let call_prefix = function
   | FunctionCall fsym -> "call_" ^ Sym.pp_string fsym
@@ -62,6 +63,7 @@ let call_situation= function
      | LAswitch -> failwith "todo"
      | LAcase -> failwith "todo"
      | LAdefault -> failwith "todo"
+     | LAactual_label -> !^"checking jump to label"
      end
   | Subtyping -> !^"checking return"
 
@@ -95,6 +97,7 @@ let for_situation = function
          | LAswitch -> failwith "todo"
          | LAcase -> failwith "todo"
          | LAdefault -> failwith "todo"
+         | LAactual_label -> !^"for jumping to label"
          end
       | Subtyping -> !^"for returning"
 

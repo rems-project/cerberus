@@ -1208,6 +1208,8 @@ let normalise_label
         assert_error loc !^"case label has not been inlined"
      | Some LAdefault ->
         assert_error loc !^"default label has not been inlined"
+     | Some LAactual_label ->
+        failwith "todo: associate invariant with label or inline"
      | None ->
         assert_error loc !^"non-loop labels"
      end
