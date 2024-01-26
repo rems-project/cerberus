@@ -561,16 +561,35 @@ Module RevocationProofs.
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
     /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
-  (* TODO: Memory invariant sketch:
 
-    1. All keys in capmeta must be pointer-aligned addresses
-    2. All caps which are tagged according to capmeta must:
-       1. have their corrsponding bytes intialized
-       2. decode without error
-       3. Have same provenance and correct sequence bytes (per `split_bytes_ptr_spec`)
+  (* CheriMemoryWithPNVI memory invariant  *)
+  Definition mem_invariant_WithPNVI (m: CheriMemoryWithPNVI.mem_state_r) : Prop
+    :=
+    let cm := m.(CheriMemoryWithPNVI.capmeta) in
+    let bm := m.(CheriMemoryWithPNVI.bytemap) in
 
-       Due to types we will need to have 2 versions of this, one per module
-   *)
+    (* All keys in capmeta must be pointer-aligned addresses *)
+    zmap_forall_keys
+      (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0)
+      cm
+    /\
+      (* All caps which are tagged according to capmeta must: *)
+      (forall addr g bs, ZMap.MapsTo addr (true,g) cm ->
+
+                    CheriMemoryWithPNVI.fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
+
+                    (* Have same provenance and correct sequence bytes *)
+                    ((exists p, split_bytes_ptr_spec p bs)
+
+                     /\ (exists ls:list ascii,
+                           (* have their corrsponding bytes intialized *)
+                           Forall2 (fun a x => a.(value) = Some x) bs ls
+                           /\
+                             (* decode without error *)
+                             (extract_unspec (List.map (fun x => x.(value)) bs) = Some ls
+                              /\ is_Some(Capability_GS.decode (List.rev ls) true))))
+      ).
+
 
   Ltac destruct_mem_state_same H :=
     let Malloc_id := fresh "Malloc_id" in
