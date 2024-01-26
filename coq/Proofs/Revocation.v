@@ -561,21 +561,34 @@ Module RevocationProofs.
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
     /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
+  Definition allocations_do_no_overlap (a1 a2:allocation) : Prop
+    :=
+    let a1_base := AddressValue.to_Z a1.(base) in
+    let a2_base := AddressValue.to_Z a2.(base) in
+    let a1_size := a1.(size) in
+    let a2_size := a2.(size) in
+    (a1_base + a1_size <= a2_base) \/ (a2_base + a2_size <= a1_base).
+
 
   (* CheriMemoryWithPNVI memory invariant.
 
      Note: in absence of revocation, the capaiblities in memory could
      point to live as well as dead allocations.
-
-     TODO: non-ovelapping allocations
    *)
   Definition mem_invariant_WithPNVI (m: CheriMemoryWithPNVI.mem_state_r) : Prop
     :=
     let cm := m.(CheriMemoryWithPNVI.capmeta) in
     let bm := m.(CheriMemoryWithPNVI.bytemap) in
+    let am := m.(CheriMemoryWithPNVI.allocations) in
+
+    (* live allocatoins do not overlap *)
+    forall alloc_id1 alloc_id2 a1 a2,
+      ZMap.MapsTo alloc_id1 a1 am -> ZMap.MapsTo alloc_id2 a2 am ->
+      a1.(is_dead) = false -> a2.(is_dead) = false
+      -> allocations_do_no_overlap a1 a2
 
     (* All keys in capmeta must be pointer-aligned addresses *)
-    zmap_forall_keys
+    /\ zmap_forall_keys
       (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0)
       cm
     /\
@@ -599,7 +612,7 @@ Module RevocationProofs.
 
      It is similar to to "with PNVI" except:
      1. All provenanes should be `Prov_disabled`
-     2. All tagged caps bounds shoud fit one of live allocations
+     2. All tagged caps bounds should fit one of allocations
    *)
   Definition mem_invariant_WithoutPNVI (m: CheriMemoryWithoutPNVI.mem_state_r) : Prop
     :=
@@ -607,8 +620,14 @@ Module RevocationProofs.
     let bm := m.(CheriMemoryWithoutPNVI.bytemap) in
     let am := m.(CheriMemoryWithoutPNVI.allocations) in
 
+    (* live allocatoins do not overlap *)
+    forall alloc_id1 alloc_id2 a1 a2,
+      ZMap.MapsTo alloc_id1 a1 am -> ZMap.MapsTo alloc_id2 a2 am
+      (* a1.(is_dead) = false -> a2.(is_dead) = false --  we need this for Corunucopia only *)
+      -> allocations_do_no_overlap a1 a2
+
     (* All keys in capmeta must be pointer-aligned addresses *)
-    zmap_forall_keys
+    /\ zmap_forall_keys
       (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0)
       cm
     /\
@@ -626,7 +645,9 @@ Module RevocationProofs.
                            (* decode without error *)
                            /\ (exists c,
                                  Capability_GS.decode (List.rev ls) true = Some c
+                                 (* All tagged caps bounds shoud fit one of live allocations *)
                                  /\ exists a alloc_id, ZMap.MapsTo alloc_id a am ->
+                                                 a.(is_dynamic) = true /\ (* We do not deal with espcaped pointers to stack vars  *)
                                                  (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
                                                  cap_bounds_within_alloc c a
                     )))
