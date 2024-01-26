@@ -562,7 +562,13 @@ Module RevocationProofs.
     /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
 
-  (* CheriMemoryWithPNVI memory invariant  *)
+  (* CheriMemoryWithPNVI memory invariant.
+
+     Note: in absence of revocation, the capaiblities in memory could
+     point to live as well as dead allocations.
+
+     TODO: non-ovelapping allocations
+   *)
   Definition mem_invariant_WithPNVI (m: CheriMemoryWithPNVI.mem_state_r) : Prop
     :=
     let cm := m.(CheriMemoryWithPNVI.capmeta) in
@@ -586,8 +592,44 @@ Module RevocationProofs.
                            Forall2 (fun a x => a.(value) = Some x) bs ls
                            /\
                              (* decode without error *)
-                             (extract_unspec (List.map (fun x => x.(value)) bs) = Some ls
-                              /\ is_Some(Capability_GS.decode (List.rev ls) true))))
+                             is_Some(Capability_GS.decode (List.rev ls) true)))
+      ).
+
+  (* CheriMemoryWithoutPNVI memory invariant
+
+     It is similar to to "with PNVI" except:
+     1. All provenanes should be `Prov_disabled`
+     2. All tagged caps bounds shoud fit one of live allocations
+   *)
+  Definition mem_invariant_WithoutPNVI (m: CheriMemoryWithoutPNVI.mem_state_r) : Prop
+    :=
+    let cm := m.(CheriMemoryWithoutPNVI.capmeta) in
+    let bm := m.(CheriMemoryWithoutPNVI.bytemap) in
+    let am := m.(CheriMemoryWithoutPNVI.allocations) in
+
+    (* All keys in capmeta must be pointer-aligned addresses *)
+    zmap_forall_keys
+      (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0)
+      cm
+    /\
+      (* All caps which are tagged according to capmeta must: *)
+      (forall addr g bs, ZMap.MapsTo addr (true,g) cm ->
+
+                    CheriMemoryWithoutPNVI.fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
+
+                    (* Have same provenance and correct sequence bytes *)
+                    (split_bytes_ptr_spec Prov_disabled bs
+
+                     /\ (exists ls:list ascii,
+                           (* have their corrsponding bytes intialized *)
+                           Forall2 (fun a x => a.(value) = Some x) bs ls
+                           (* decode without error *)
+                           /\ (exists c,
+                                 Capability_GS.decode (List.rev ls) true = Some c
+                                 /\ exists a alloc_id, ZMap.MapsTo alloc_id a am ->
+                                                 (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
+                                                 cap_bounds_within_alloc c a
+                    )))
       ).
 
 
