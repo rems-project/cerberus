@@ -769,7 +769,15 @@ module Translate = struct
          | Bits _, Loc ->
             alloc_id_addr_to_loc (term (alloc_id_ Z.zero)) (term t)
          | Loc, Bits _ ->
-            loc_to_addr (term t)
+           (* Recall above
+           | Loc -> translate BT.(Tuple [Alloc_id; Memory.intptr_bt]) *)
+           if BT.equal cbt Memory.intptr_bt then
+             loc_to_addr (term t)
+           else
+             (* But if we need to cast a pointer to any other type (e.g. signed, or of a different
+                length) first we need to cast the pointer to the intptr type, and then cast to the
+                requested one *)
+             term (cast_ cbt (cast_ Memory.intptr_bt t))
          | Loc, Alloc_id ->
             loc_to_alloc_id (term t)
          | Real, Integer ->
