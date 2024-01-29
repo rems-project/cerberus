@@ -572,8 +572,7 @@ Module RevocationProofs.
 
   (* CheriMemoryWithPNVI memory invariant.
 
-     Note: in absence of revocation, the capaiblities in memory could
-     point to live as well as dead allocations.
+    Note: We do not enforce where tagged caps are pointing. They could be pointing to live, dead, or outside of any allocation.
    *)
   Definition mem_invariant_WithPNVI (m: CheriMemoryWithPNVI.mem_state_r) : Prop
     :=
@@ -610,9 +609,9 @@ Module RevocationProofs.
 
   (* CheriMemoryWithoutPNVI memory invariant
 
-     It is similar to to "with PNVI" except:
-     1. All provenanes should be `Prov_disabled`
-     2. All tagged caps bounds should fit one of allocations
+     It is similar to "with PNVI" except:
+     1. Provenance should be always `Prov_disabled`
+     2. All tagged caps bounds should fit one of existing allocations
    *)
   Definition mem_invariant_WithoutPNVI (m: CheriMemoryWithoutPNVI.mem_state_r) : Prop
     :=
@@ -645,9 +644,9 @@ Module RevocationProofs.
                            (* decode without error *)
                            /\ (exists c,
                                  Capability_GS.decode (List.rev ls) true = Some c
-                                 (* All tagged caps bounds shoud fit one of live allocations *)
+                                 (* All tagged caps should have bounds fitting one of allocations *)
                                  /\ exists a alloc_id, ZMap.MapsTo alloc_id a am ->
-                                                 a.(is_dynamic) = true /\ (* We do not deal with espcaped pointers to stack vars  *)
+                                                 (* We do not allow escaped pointers to local variables *)
                                                  (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
                                                  cap_bounds_within_alloc c a
                     )))
