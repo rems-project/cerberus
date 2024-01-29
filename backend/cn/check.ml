@@ -906,6 +906,12 @@ end = struct
            let@ () = match situation with
              | FunctionCall fsym ->
                  add_trace_item_to_trace (Call (fsym, args_acc),loc)
+             | (Subtyping | LabelCall LAreturn) ->
+                 let returned = match args_acc with
+                   | [v] -> v
+                   | _ -> assert false
+                 in
+                 add_trace_item_to_trace (Return returned, loc)
              | _ -> return ()
            in
            k ftyp

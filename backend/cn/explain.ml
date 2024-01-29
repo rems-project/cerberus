@@ -182,6 +182,9 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
       | Call (s,args) -> 
          print_location loc ^^ colon ^^^ !^"called" ^^^ Sym.pp s ^^^ !^"with" ^^^
          separate_map (comma ^^ space) (fun arg -> IT.pp arg ^^^ parens (mevaluate arg)) args 
+      | Return v ->
+         print_location loc ^^ colon ^^^ !^"returned" ^^^
+         IT.pp v ^^^ parens (mevaluate v)
     in
 
     let intra_label_trace_report (t: (trace_item * Locations.t) list) = 

@@ -47,6 +47,7 @@ type trace_item =
   | Create of IndexTerms.t 
   | Kill of IndexTerms.t
   | Call of Sym.t * IndexTerms.t list
+  | Return of IndexTerms.t
 
 
 type label_kind = CF.Annot.label_annot
