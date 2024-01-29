@@ -166,6 +166,10 @@ module IndexTerms = struct
     | _ -> IT (Cast (bt, it), bt)
     end
 
+  let num_lit_norm bt z = match bt with
+    | BT.Bits (sign, sz) -> IT.num_lit_ (BT.normalise_to_range (sign, sz) z) bt
+    | _ -> IT.num_lit_ z bt
+
   let rec simp ?(inline_functions=false) simp_ctxt =
 
     let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
@@ -193,7 +197,7 @@ module IndexTerms = struct
        let b = aux b in
        begin match a, b, IT.get_num_z a, IT.get_num_z b with
        | _, _, Some i1, Some i2 ->
-          IT.num_lit_ (Z.add i1 i2) the_bt
+          num_lit_norm the_bt (Z.add i1 i2)
        | IT (Const (Q q1), _), IT (Const (Q q2), _), _, _ ->
           IT (Const (Q (Q.add q1 q2)), the_bt)
        | a, _, _, Some z when Z.equal z Z.zero ->
@@ -215,7 +219,7 @@ module IndexTerms = struct
        | _, _, BT.Real, _, _ when IT.equal a b ->
           q_ (0, 1)
        | _, _, _, Some i1, Some i2 ->
-          IT.num_lit_ (Z.sub i1 i2) the_bt
+          num_lit_norm the_bt (Z.sub i1 i2)
        | IT (Const (Q q1), _), IT (Const (Q q2), _), _, _, _ ->
           IT (Const (Q (Q.sub q1 q2)), the_bt)
        | a, _, _, _, Some z when Z.equal z Z.zero ->
@@ -266,7 +270,7 @@ module IndexTerms = struct
        | IT (Const (Z a), _), IT (Const (Z b), _), _, _ when Z.fits_int b ->
           z_ (Z.pow a (Z.to_int b))
        | _, _, Some a, Some b when Z.fits_int b ->
-          num_lit_ (Z.pow a (Z.to_int b)) the_bt
+          num_lit_norm the_bt (Z.pow a (Z.to_int b))
        | _ ->
           IT.exp_ (a, b)
        end
@@ -291,7 +295,7 @@ module IndexTerms = struct
        let b = aux b in
        begin match a, b, get_num_z a, get_num_z b with
        | _, _, Some a, Some b when Z.geq a Z.zero && Z.gt b Z.zero ->
-         num_lit_ (Z.rem a b) the_bt
+         num_lit_norm the_bt (Z.rem a b)
        | _, _, Some a, _ when Z.equal a (Z.zero) ->
           int_lit_ 0 the_bt
        | IT (Binop (Mul, IT (Const (Z y), _), _), _),
@@ -545,7 +549,7 @@ module IndexTerms = struct
        begin match get_num_z t with
        | None -> IT (WrapI (ity, t), the_bt)
        | Some z -> begin match Memory.bt_of_sct (Sctypes.Integer ity) with
-         | BT.Bits (sign, sz) -> num_lit_ (BT.normalise_to_range (sign, sz) z) the_bt
+         | BT.Bits (sign, sz) -> num_lit_norm the_bt z
          | _ -> IT (WrapI (ity, t), the_bt)
          end
        end
