@@ -66,17 +66,19 @@ let rewrite_expr label expr =
 
 
 (* todo: ensure CN does not loop when inlining *)
-let should_be_inlined annots = 
+let should_be_inlined label_name annots = 
   let warn lk = Cerb_debug.warn [] (fun () -> "inlining"^lk^"label") in
-  match Annot.get_label_annot annots with
-  | Some (LAloop_break _) -> true
-  | Some (LAloop_continue _) -> true
-  | Some (LAloop_body _) -> true
-  | Some LAswitch -> warn "switch"; true
-  | Some LAcase -> warn "case"; true
-  | Some LAdefault -> warn "default"; true
-  | Some _ -> false
-  | None -> warn "(generic)"; true
+  let label_annot = Option.get (Annot.get_label_annot annots) in
+  match label_annot with
+  | LAloop_break _ -> true
+  | LAloop_continue _ -> true
+  | LAloop_body _ -> true
+  | LAswitch -> warn "switch"; true
+  | LAcase -> warn "case"; true
+  | LAdefault -> warn "default"; true
+  | LAactual_label -> warn (Pp_symbol.to_string_pretty_cn label_name); true
+  | _ -> false
+
 
 
 (* TODO: check about largs *)
@@ -108,7 +110,7 @@ let rewrite_fun_map_decl = function
      let to_keep, to_inline = 
        Pmap.fold (fun label def (to_keep, to_inline) ->
            match def with
-           | Mi_Label(l_loc, _lt, args, lbody, annot) when should_be_inlined annot ->
+           | Mi_Label(l_loc, _lt, args, lbody, annot) when should_be_inlined label annot ->
               to_keep, 
               ((l_loc, annot, label, args, lbody) :: to_inline)
            | Mi_Label _
