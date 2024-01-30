@@ -850,10 +850,12 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                 (* debug 6 (lazy (!^"CN statement before translation"));
                 debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt))); *)
 
+                let get_c_obj sym = match List.assoc_opt Sym.equal sym visible_objects with
+                  | Some obj_ty -> obj_ty
+                  | None -> failwith ("use of C obj without known type: " ^ Sym.pp_string sym)
+                in
                 let@ stmt =
-                  Compile.translate_cn_statement
-                    (fun sym -> List.assoc Sym.equal sym visible_objects)
-                    old_states env desugared_stmt
+                  Compile.translate_cn_statement get_c_obj old_states env desugared_stmt
                 in
                 (* debug 6 (lazy (!^"CN statement after translation"));
                 debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
