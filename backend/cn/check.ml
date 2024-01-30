@@ -333,17 +333,6 @@ let is_fun_addr global t = match IT.is_sym t with
       then Some s else None
   | _ -> None
 
-let get_loc_addrs_in_eqs () =
-  (* bit of a hack, there's code down to the solver to spot equalities where
-     either the lhs or rhs is a symbol *)
-  let@ focused = get_solver_focused_terms () in
-  let@ g = get_global () in
-  let addrs = List.filter_map IT.is_eq (List.map snd focused)
-    |> List.concat_map (fun (x, y) -> [x; y])
-    |> List.filter_map (is_fun_addr g) in
-  Pp.debug 5 (lazy (Pp.item "loc eqs for function pointer check" (Pp.list Sym.pp addrs)));
-  return addrs
-
 let check_single_ct loc expr =
   let@ pointer = WellTyped.WIT.check loc BT.CType expr in
   let@ t = try_prove_constant loc expr in
@@ -654,24 +643,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        (* time to case split on function-pointer possibilities. *)
        let explanation = !^ "a function pointer must be explicitly enumerated" ^^^
            !^ "e.g. (in_loc_list (p, [fun1; fun2]))" in
-       let@ opts = get_loc_addrs_in_eqs () in
-       let@ () = if List.length opts > 0 then return ()
-         else fail (fun _ -> {loc; msg = Generic (!^"no address eqs found:" ^^^ explanation)}) in
-       let msg = !^ "picking function target" ^^^ Pp.parens explanation in
-       let ptr_opts = List.map (fun nm -> (sym_ (nm, BT.Loc))) opts in
-       let@ eq_opt = get_eq_in_model loc msg ptr ptr_opts in
-       Pp.debug 5 (lazy (Pp.item "function pointer application: case splitting on" (IT.pp eq_opt)));
-       let aux e cond =
-         let@ () = add_c loc (t_ cond) in
-         Pp.debug 5 (lazy (Pp.item "checking consistency of eq branch" (IT.pp cond)));
-         let@ provable = provable loc in
-         match provable (t_ (bool_ false)) with
-         | `True -> return ()
-         | `False -> check_pexpr e k
-       in
-       let@ () = pure (aux pe (eq_ (ptr, eq_opt))) in
-       let@ () = pure (aux pe (not_ (eq_ (ptr, eq_opt)))) in
-       return ()
+       fail (fun _ -> {loc; msg = Generic explanation})
     end
   )
   | M_PEmemberof _ ->
