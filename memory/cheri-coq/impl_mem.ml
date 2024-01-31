@@ -151,7 +151,7 @@ module CerbTagDefs = struct
   let toCoq_floatingType: floatingType -> CoqCtype.floatingType  = function
     | RealFloating rft -> (toCoq_realFloatingType rft)
 
-  let toCoq_label_annot: Annot.label_annot -> CoqAnnot.label_annot = function
+  let [@warning "-8"] toCoq_label_annot: Annot.label_annot -> CoqAnnot.label_annot = function
     | LAloop_prebody lid  -> LAloop_prebody (Z.of_int lid)
     | LAloop_body lid     -> LAloop_body (Z.of_int lid)
     | LAloop_continue lid -> LAloop_continue (Z.of_int lid)
@@ -165,7 +165,7 @@ module CerbTagDefs = struct
     | ACerb_with_address n -> ACerb_with_address n
     | ACerb_hidden -> ACerb_hidden
   
-  let toCoq_annot: Annot.annot -> CoqAnnot.annot = function
+  let [@warning "-8"] toCoq_annot: Annot.annot -> CoqAnnot.annot = function
     | Astd s       -> Astd s
     | Aloc loc     -> Aloc (toCoq_location loc)
     | Auid s       -> Auid s
