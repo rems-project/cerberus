@@ -652,6 +652,23 @@ Module RevocationProofs.
                     )))
       ).
 
+    Lemma initial_mem_state_invariant_WithPNVI:
+      mem_invariant_WithPNVI CheriMemoryWithPNVI.initial_mem_state.
+    Proof.
+      unfold CheriMemoryWithPNVI.initial_mem_state.
+      repeat split; cbn in *;
+        apply empty_mapsto_iff in H;
+        contradiction.
+    Qed.
+
+    Lemma initial_mem_state_invariant_WithoutPNVI:
+      mem_invariant_WithoutPNVI CheriMemoryWithoutPNVI.initial_mem_state.
+    Proof.
+      unfold CheriMemoryWithPNVI.initial_mem_state.
+      repeat split; cbn in *;
+        apply empty_mapsto_iff in H;
+        contradiction.
+    Qed.
 
   Ltac destruct_mem_state_same H :=
     let Malloc_id := fresh "Malloc_id" in
@@ -3237,9 +3254,12 @@ Module RevocationProofs.
     |[|- Same eq (put _) (put _)] => apply put_Same
     |[|- Same eq (ErrorWithState.update _) (ErrorWithState.update _)] => apply update_Same
     end.
+ *)
 
-  (* [allocator] proofs use manual brute-force approach *)
+
   Section allocator_proofs.
+
+(*
     Variable  size : Z.
     Variable  align : Z.
 
@@ -3334,9 +3354,10 @@ Module RevocationProofs.
       split;typeclasses eauto.
     Qed.
     #[global] Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
-
+*)
   End allocator_proofs.
 
+  (*
   Lemma num_of_int_same:
     forall x, CheriMemoryWithPNVI.num_of_int x = CheriMemoryWithoutPNVI.num_of_int x.
   Proof.
