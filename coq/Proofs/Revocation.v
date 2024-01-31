@@ -2893,8 +2893,6 @@ Module RevocationProofs.
       Admitted.
 
   End repr_same_proof.
-
-(*
   Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
 
   (* --- Stateful proofs below --- *)
@@ -3254,7 +3252,6 @@ Module RevocationProofs.
     |[|- Same eq (put _) (put _)] => apply put_Same
     |[|- Same eq (ErrorWithState.update _) (ErrorWithState.update _)] => apply update_Same
     end.
- *)
 
 
   Section allocator_proofs.
