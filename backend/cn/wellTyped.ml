@@ -1508,7 +1508,7 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         return (bt, M_PEbitwise_binop (binop, pe1, pe2))
       | M_PEif (c_pe, pe1, pe2) ->
         let@ c_pe = check_pexpr (Bool) c_pe in
-        let@ (bt, pe1, pe2) = if is_undef_pexpr pe1
+        let@ (bt, pe1, pe2) = if is_undef_or_error_pexpr pe1
         then begin
           let@ pe2 = infer_pexpr pe2 in
           let bt = bt_of_pexpr pe2 in
@@ -1577,7 +1577,17 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
       | M_PEapply_fun (fname, pes) ->
         let@ (bt, pes) = check_infer_apply_fun None fname pes pe in
         return (bt, M_PEapply_fun (fname, pes))
-      | _ -> todo ()
+      | M_PEconstrained _
+      | M_Cfvfromint _
+      | M_Civfromfloat (_, _)
+      | M_PEunion (_, _, _)
+      | M_PEmemberof (_, _, _)
+      | M_PEconv_int (_, _)
+      | M_PEconv_loaded_int (_, _)
+      (* reaching these cases should be prevented by the `is_unreachable` used
+         in inferring types of M_PEif *)
+      | M_PEerror (_, _)
+      | M_PEundef (_, _) -> todo ()
     in
     return (M_Pexpr (loc, annots, bty, pe_))
 
@@ -1591,6 +1601,9 @@ and check_pexpr (expect : BT.t) expr =
   match pe_ with
     | M_PEundef (a, b) ->
       return (annot expect (M_PEundef (a, b)))
+    | M_PEerror (err, pe) ->
+      let@ pe = infer_pexpr pe in
+      return (annot expect (M_PEerror (err, pe)))
     | M_PEval v ->
       let@ v = check_value loc expect v in
       return (annot expect (M_PEval v))
@@ -1872,7 +1885,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         return (Memory.bt_of_sct ret_ct, M_Eccall (act, f_pe, pes))
      | M_Eif (c_pe, e1, e2) ->
         let@ c_pe = check_pexpr (Bool) c_pe in
-        let@ (bt, e1, e2) = if is_undef_expr e1
+        let@ (bt, e1, e2) = if is_undef_or_error_expr e1
         then begin
           let@ e2 = infer_expr label_context e2 in
           let bt = bt_of_expr e2 in

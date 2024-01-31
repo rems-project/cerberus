@@ -197,9 +197,9 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     let@ var_map2 = add_pattern p r_v var_map in
     self var_map2 e2
   | M_PEif (cond_pe, x, y) ->
-    if is_undef_pexpr x
+    if is_undef_or_error_pexpr x
     then self var_map y
-    else if is_undef_pexpr y
+    else if is_undef_or_error_pexpr y
     then self var_map x
     else
     let@ cond = self var_map cond_pe in
@@ -327,9 +327,9 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     let@ r_v = symb_exec_mu_pexpr ctxt var_map pe in
     return (Compute (r_v, state))
   | M_Eif (g_e, e1, e2) ->
-    if is_undef_expr e1
+    if is_undef_or_error_expr e1
     then symb_exec_mu_expr ctxt (state, var_map) e2
-    else if is_undef_expr e2
+    else if is_undef_or_error_expr e2
     then symb_exec_mu_expr ctxt (state, var_map) e1
     else
     let@ g_v = symb_exec_mu_pexpr ctxt var_map g_e in

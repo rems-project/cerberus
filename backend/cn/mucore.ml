@@ -362,16 +362,17 @@ let pp_function = function
   | M_F_min_int -> !^ "min_int"
   | M_F_ctype_width -> !^ "ctype_width"
 
-let is_undef_pexpr pexpr =
+let is_undef_or_error_pexpr pexpr =
   let (M_Pexpr (loc, _, _, pe)) = pexpr in
   match pe with
-  | M_PEundef _ -> true
+  | M_PEundef _
+  | M_PEerror _ -> true
   | _ -> false
 
-let is_undef_expr expr =
+let is_undef_or_error_expr expr =
   let (M_Expr (loc, _, _, e)) = expr in
   match e with
-  | M_Epure pe -> is_undef_pexpr pe
+  | M_Epure pe -> is_undef_or_error_pexpr pe
   | _ -> false
 
 let bt_of_value (M_V (bty, _)) = bty
