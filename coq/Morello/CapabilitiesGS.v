@@ -252,4 +252,6 @@ Module Type CAPABILITY_GS
   (* Make sure `eqb` and `value_compare` are consistent *)
   Parameter eqb_value_compare: forall a b, eqb a b = true -> value_compare a b = Eq.
 
+  Parameter cap_invalidate_invalidates: forall c, cap_is_valid (cap_invalidate c) = false.
+
 End CAPABILITY_GS.
