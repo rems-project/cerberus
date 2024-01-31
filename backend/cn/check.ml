@@ -327,12 +327,6 @@ let try_prove_constant loc expr =
         return expr
     end
 
-
-let is_fun_addr global t = match IT.is_sym t with
-  | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
-      then Some s else None
-  | _ -> None
-
 let check_single_ct loc expr =
   let@ pointer = WellTyped.WIT.check loc BT.CType expr in
   let@ t = try_prove_constant loc expr in
@@ -342,27 +336,28 @@ let check_single_ct loc expr =
     | None -> fail (fun _ -> {loc;
         msg = Generic (!^ "use of non-constant ctype mucore expression")})
 
+let is_fun_addr global t = match IT.is_sym t with
+  | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
+      then Some s else None
+  | _ -> None
 
-let get_eq_in_model loc msg x opts =
-  let@ m = model_with loc (IT.bool_ true) in
-  let@ m = match m with
-    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "cannot get model for" msg)})
-    | Some m -> return m
+let known_function_pointer loc p =
+  let@ global = get_global () in
+  let@ already_known = eq_value_with (is_fun_addr global) p in
+  let@ () = match already_known with
+    | Some _ -> (* no need to find more eqs *) return ()
+    | None ->
+      let global_funs = SymMap.bindings global.Global.fun_decls in
+      let fun_addrs = List.map (fun (sym, _) -> IT.sym_ (sym, BT.Loc)) global_funs in
+      test_value_eqs loc None p fun_addrs
   in
-  let@ g = get_global () in
-  let ev x = Solver.eval g (fst m) x in
-  let@ () = match ev x with
-    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "get_eq_in_model: cannot eval in model"
-        (IT.pp x ^^^ !^ "for:" ^^^ msg))})
-    | Some _ -> return ()
-  in
-  let y = List.find_opt
-    (fun y -> Option.equal IT.equal (ev (eq_ (x, y))) (Some (IT.bool_ true)))
-    opts in
-  match y with
-    | Some y -> return y
-    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "get_eq_in_model: no options are equal"
-        ((Pp.typ (IT.pp x) (Pp.braces (Pp.list IT.pp opts))) ^^^ !^ "for:" ^^^ msg))})
+  let@ now_known = eq_value_with (is_fun_addr global) p in
+  match now_known with
+    | Some (_, sym) -> return sym
+    | None ->
+      fail (fun _ -> {loc;
+          msg = Generic (Pp.item "function pointer must be provably equal to a defined function"
+              (IT.pp p))})
 
 let check_conv_int loc ~expect ct arg =
   assert (match expect with | Bits _ -> true | _ -> false);
@@ -627,24 +622,14 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      check_pexpr pe2 (fun ptr ->
      let@ global = get_global () in
      (* function vals are just symbols the same as the names of functions *)
-     let@ known = eq_value_with (is_fun_addr global) ptr in
-     begin match known with
-     | Some (_, sym) ->
-       (* need to conjure up the characterising 4-tuple *)
-       Pp.debug 5 (lazy (!^ "lookup of C function:" ^^^ Sym.pp sym));
-       Pp.debug 5 (lazy (!^ "in globals:" ^^^ IT.pp (IT.bool_ (SymMap.mem sym global.Global.fun_decls))));
-       let@ (_, _, c_sig) = get_fun_decl loc sym in
-       begin match IT.const_of_c_sig c_sig with
-         | Some it -> k it
-         | None -> fail (fun _ -> {loc; msg = Generic (!^ "unsupported c-type in sig of:" ^^^
-             Sym.pp sym)})
-       end
-     | None ->
-       (* time to case split on function-pointer possibilities. *)
-       let explanation = !^ "a function pointer must be explicitly enumerated" ^^^
-           !^ "e.g. (in_loc_list (p, [fun1; fun2]))" in
-       fail (fun _ -> {loc; msg = Generic explanation})
-    end
+     let@ sym = known_function_pointer loc ptr in
+     (* need to conjure up the characterising 4-tuple *)
+     let@ (_, _, c_sig) = get_fun_decl loc sym in
+     begin match IT.const_of_c_sig c_sig with
+       | Some it -> k it
+       | None -> fail (fun _ -> {loc; msg = Generic (!^ "unsupported c-type in sig of:" ^^^
+           Sym.pp sym)})
+     end
   )
   | M_PEmemberof _ ->
      Cerb_debug.error "todo: M_PEmemberof"
@@ -1392,11 +1377,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr f_pe) in
      check_pexpr f_pe (fun f_it ->
      let@ global = get_global () in
-     let@ known = eq_value_with (is_fun_addr global) f_it in
-     let@ fsym = match known with
-       | Some (_, sym) -> return sym
-       | _ -> unsupported loc !^"function application of function pointers"
-     in
+     let@ fsym = known_function_pointer loc f_it in
      let@ (_loc, opt_ft, _) = get_fun_decl loc fsym in
      let@ ft = match opt_ft with
        | Some ft -> return ft

@@ -65,7 +65,6 @@ call_site (int x, int y) {
   g2 = get_int_binop(y);
   /*@ split_case (ptr_eq (g2, &f1)); @*/;
   /*@ split_case (ptr_eq (g2, &f2)); @*/;
-  /*@ split_case (ptr_eq (g2, &f3)); @*/;
   z = g2 (x, y);
 
   return z;
