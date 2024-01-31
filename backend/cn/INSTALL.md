@@ -4,7 +4,7 @@ Below are the installation instructions for installing Cerberus, CN,
 and their dependencies.
 
 
-1. Install a recent version of OCaml (we are using 4.12.0) and the opam
+1. Install a recent version of OCaml (we are using 5.0.0) and the opam
 package manager for OCaml, following the instructions at
 <https://ocaml.org/docs/install.html>. (Remember to initialise opam
 via `opam init` after the installation of opam.)
