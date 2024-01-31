@@ -401,6 +401,9 @@ Module Type CheriMemoryImpl
 
   Definition mem_state := mem_state_r.
 
+  Definition mem_state_with_last_address last_address (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) last_address r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+
   Definition mem_state_with_bytemap bytemap (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta).
 
@@ -596,6 +599,9 @@ Module Type CheriMemoryImpl
                 capmeta          := init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta);
               |}
             ;;
+
+            (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
+
             ret (alloc_id, (AddressValue.of_Z addr)).
 
 
@@ -1556,25 +1562,49 @@ Module Type CheriMemoryImpl
       else ret tt
     in
 
+    (* Attempt to re-use some memory if we removing the last
+       allocation. this will not not allways recover all memory, as we
+       do not know how much alignment have been added. The alighment
+       part will not get recovered.
+
+       Unfortunately this naive implementation won't work for `malloc`
+       call followed by `free` because some intermediate values will
+       be allocated during the call.
+     *)
+    let try_memory_reuse alloc :=
+      st <- get ;;
+      (* mprint_msg ("Kill: "  ++ AddressValue.to_string alloc.(base) ++ " (" ++ String.dec_str alloc.(size) ++ ")" ) ;; *)
+      if
+        (negb (AddressValue.eqb st.(last_address) initial_address)) &&
+        AddressValue.eqb st.(last_address) alloc.(base)
+      then
+        (* mprint_msg ("Reuse!");; *)
+        update (mem_state_with_last_address
+                  (AddressValue.with_offset alloc.(base) alloc.(size)))
+      else
+        ret tt
+    in
+
     (* update allocations in memory state and run revocation if necessary *)
     let update_allocations alloc alloc_id :=
-      if is_dyn then
-        if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
-        then
-          (* instant revocation. Revoke and remove allocation id *)
-          revoke_pointers alloc ;; remove_allocation alloc_id
-        else if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
-             then
-               (* delayed revocation. Mark allocation as 'dead' *)
-               st <- get ;;
-               let newallocs := zmap_update_element alloc_id (allocation_with_dead alloc) st.(allocations) in
-               update (mem_state_with_allocations newallocs)
-             else
-               (* no revocation. remove allocation *)
-               remove_allocation alloc_id
-      else
-        (* not-dynamic allocation. we do not revoke these. just remove *)
-        remove_allocation alloc_id
+      (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
+      then
+        (* instant revocation. Revoke and remove allocation id.
+           both static and dynamic *)
+        revoke_pointers alloc ;; remove_allocation alloc_id
+      else if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA) && is_dyn
+           then
+             (* delayed revocation. Mark allocation as 'dead'.
+                NB: Cornucopia revokes only dynamic allocations.*)
+             st <- get ;;
+             let newallocs := zmap_update_element alloc_id (allocation_with_dead alloc) st.(allocations) in
+             update (mem_state_with_allocations newallocs)
+           else
+             (* no revocation. remove allocation *)
+             remove_allocation alloc_id
+      )
+      ;;
+      try_memory_reuse alloc
     in
 
     (* check if [is_dyn] parameter matches [allocation.(is_dynamic)] *)
