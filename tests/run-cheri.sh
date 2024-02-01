@@ -59,10 +59,10 @@ fi
 
 # Use the provided path to cerberus, otherwise default to the driver backend build
 # CERB="${WITH_CERB:=dune exec --no-print-directory cerberus --no-build -- }"
-CERB="${WITH_CERB:=dune exec --no-print-directory cerberus-cheri --no-build -- --switches=PNVI_ae_udi,strict_pointer_equality,strict_pointer_arith,strict_pointer_relationals,CHERI}"
+CERB="${WITH_CERB:=dune exec --no-print-directory cerberus-cheri --no-build --}"
 if [[ ! -z "${USE_OPAM+x}" ]]; then
   echo -e "\033[1m\033[33mUsing opam installed cerberus\033[0m";
-  CERB=$OPAM_SWITCH_PREFIX/bin/cerberus
+  CERB=$OPAM_SWITCH_PREFIX/bin/cerberus-cheri
   export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus/runtime/
 else
   export CERB_RUNTIME=../runtime/
@@ -83,9 +83,9 @@ do
   fi
 
   if [[ $file == *.syntax-only.c ]]; then
-    $CERB --nolibc --typecheck-core $CIDIR/$file > tmp/result 2> tmp/stderr
+    $CERB --switches=PNVI_ae_udi,strict_pointer_equality,strict_pointer_arith,strict_pointer_relationals,CHERI --nolibc --typecheck-core $CIDIR/$file > tmp/result 2> tmp/stderr
   else
-    $CERB --nolibc --typecheck-core --exec --batch $CIDIR/$file 1> tmp/result 2> tmp/stderr
+    $CERB --switches=PNVI_ae_udi,strict_pointer_equality,strict_pointer_arith,strict_pointer_relationals,CHERI --nolibc --typecheck-core --exec --batch $CIDIR/$file 1> tmp/result 2> tmp/stderr
   fi
   ret=$?;
   if [ -f $CIDIR/expected/$file.expected ]; then
