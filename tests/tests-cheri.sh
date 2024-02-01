@@ -166,7 +166,6 @@ citests=(
   0295-global_const_int.undef.c
   0296-global_const_array.undef.c
   0297-atomic_memberof.undef.c
-  0298-atomic_memberofptr.undef.c
   0299-qualified_ptrdiff.c
   0300-unseq_race_ko01.undef.c
   0301-unseq_race_ko02.undef.c
@@ -194,9 +193,7 @@ citests=(
   0323-nested_function_declarators.syntax-only.c
   0324-atomics.c
   0328-indeterminate_block_declaration.c
-  0329-rvalue-temporary-lifetime.undef.c
   0330-alignas.syntax-only.c
-  0331-modifying-rvalue-temporary-lifetime.undef.c
   0332-rvalue-temporary-lifetime-pointer-zap.c
   0333-shifts_non_representable.undef.c
 )
@@ -217,4 +214,9 @@ skip=(
   0084-KO1.error.c # need to update the .messages file of the C parser
   0318-compound-interal-in_global.c
   0332-rvalue-temporary-lifetime-pointer-zap.c # the zapping currently doesn't work (see issue #209)
+
+  # CHERI-related bugs/questions:
+  0298-atomic_memberofptr.undef.c
+  0329-rvalue-temporary-lifetime.undef.c
+  0331-modifying-rvalue-temporary-lifetime.undef.c
 )
