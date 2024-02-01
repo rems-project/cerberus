@@ -57,7 +57,7 @@ if [[ $# == 1 ]]; then
 fi
 
 # Use the provided path to cerberus, otherwise default to the driver backend build
-# CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
+# CERB="${WITH_CERB:=dune exec --no-print-directory cerberus --no-build -- }"
 CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
 if [[ ! -z "${USE_OPAM+x}" ]]; then
   echo -e "\033[1m\033[33mUsing opam installed cerberus\033[0m";
