@@ -59,7 +59,7 @@ fi
 
 # Use the provided path to cerberus, otherwise default to the driver backend build
 # CERB="${WITH_CERB:=dune exec --no-print-directory cerberus --no-build -- }"
-CERB="${WITH_CERB:=dune exec --no-print-directory cerberus-cheri --no-build -- --switches=PNVI_ae_udi,strict_pointer_equality,strict_pointer_arith,strict_pointer_relationals,strict_reads,CHERI}"
+CERB="${WITH_CERB:=dune exec --no-print-directory cerberus-cheri --no-build -- --switches=PNVI_ae_udi,strict_pointer_equality,strict_pointer_arith,strict_pointer_relationals,CHERI}"
 if [[ ! -z "${USE_OPAM+x}" ]]; then
   echo -e "\033[1m\033[33mUsing opam installed cerberus\033[0m";
   CERB=$OPAM_SWITCH_PREFIX/bin/cerberus
@@ -71,7 +71,7 @@ fi
 # Running ci tests
 for file in "${citests[@]}"
 do
-  if [ ! -f ./$CIDIR/$file ]; then
+  if [ ! -f $CIDIR/$file ]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m";
     fail=$((fail+1));
     continue
@@ -88,7 +88,7 @@ do
     $CERB --nolibc --typecheck-core --exec --batch $CIDIR/$file 1> tmp/result 2> tmp/stderr
   fi
   ret=$?;
-  if [ -f ./$CIDIR/expected/$file.expected ]; then
+  if [ -f $CIDIR/expected/$file.expected ]; then
     if [[ $file == *.error.c || $file == *.syntax-only.c ]]; then
       # removing the last line from stderr (the time stats)
       if [ "$(uname)" == "Linux" ]; then
