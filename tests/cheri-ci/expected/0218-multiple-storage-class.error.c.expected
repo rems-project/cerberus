@@ -1,0 +1,6 @@
+cheri-ci/0218-multiple-storage-class.error.c:2:19: error: constraint violation: multiple incompatible storage class specifiers
+  auto static int x;
+                  ^ 
+§6.7.1#2: 
+2   At most, one storage-class specifier may be given in the declaration specifiers in a
+    declaration, except that _Thread_local may appear with static or extern.120)

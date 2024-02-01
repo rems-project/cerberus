@@ -1,0 +1,6 @@
+cheri-ci/0293-compound-assignment.error.c:5:5: error: constraint violation: invalid operands to binary expression ('signed int' and 'struct s')
+  x *= a;
+  ~ ^  ~ 
+§6.5.5#2, sentence 1: 
+2   Each of the operands shall have arithmetic type. The operands of the % operator shall
+    have integer type.

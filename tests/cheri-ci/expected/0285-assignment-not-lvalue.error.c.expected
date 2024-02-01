@@ -1,0 +1,5 @@
+cheri-ci/0285-assignment-not-lvalue.error.c:2:3: error: constraint violation: expression is not assignable
+  1 = 2;
+  ~ ^
+§6.5.16#2: 
+2   An assignment operator shall have a modifiable lvalue as its left operand.

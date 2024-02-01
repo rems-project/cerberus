@@ -1,0 +1,6 @@
+cheri-ci/0052-global_not_constant.error.c:2:9: error: constraint violation: initializer element is not a compile-time constant
+int y = x + 2;
+        ~~^~~ 
+§6.7.9#4: 
+4   All the expressions in an initializer for an object that has static or thread storage duration
+    shall be constant expressions or string literals.

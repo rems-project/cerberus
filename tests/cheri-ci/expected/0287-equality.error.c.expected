@@ -1,0 +1,10 @@
+cheri-ci/0287-equality.error.c:3:5: error: constraint violation: invalid operands to binary expression ('struct (unnamed tag at cheri-ci/0287-equality.error.c:2:3-9)*' and 'signed int')
+  a == 1;
+  ~ ^  ~ 
+§6.5.9#2: 
+2   One of the following shall hold:
+    -- both operands have arithmetic type;
+    -- both operands are pointers to qualified or unqualified versions of compatible types;
+    -- one operand is a pointer to an object type and the other is a pointer to a qualified or
+       unqualified version of void; or
+    -- one operand is a pointer and the other is a null pointer constant.

@@ -1,0 +1,5 @@
+cheri-ci/0065-const1.error.c:6:3: error: constraint violation: expression is not assignable
+  *x = 0; // this is an error
+  ~~ ^
+§6.5.16#2: 
+2   An assignment operator shall have a modifiable lvalue as its left operand.

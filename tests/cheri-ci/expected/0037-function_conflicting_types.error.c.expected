@@ -1,0 +1,6 @@
+cheri-ci/0037-function_conflicting_types.error.c:3:5: error: constraint violation: multiple declarations in the same scope with incompatible types
+int f(int n) {
+    ^ 
+§6.7#4: 
+4   All declarations in the same scope that refer to the same object or function shall specify
+    compatible types.

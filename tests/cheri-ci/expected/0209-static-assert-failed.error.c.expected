@@ -1,0 +1,5 @@
+cheri-ci/0209-static-assert-failed.error.c:2:18: error: constraint violation: static assert expression failed: failed miserably!
+  _Static_assert(0, "failed miserably!");
+                 ^ 
+§6.7.10#2: 
+2   The constant expression shall compare unequal to 0.

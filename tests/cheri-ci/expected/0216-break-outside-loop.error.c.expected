@@ -1,0 +1,5 @@
+cheri-ci/0216-break-outside-loop.error.c:2:3: error: constraint violation: break statement outside a switch or a loop
+  break;
+  ^~~~~~ 
+§6.8.6.3#1: 
+1   A break statement shall appear only in or as a switch body or loop body.

@@ -1,0 +1,6 @@
+cheri-ci/0213-label-statement-outside-switch.error.c:2:8: error: constraint violation: label statement outside switch
+  case 0:;
+       ^ 
+§6.8.1#2: 
+2   A case or default label shall appear only in a switch statement. Further
+    constraints on such labels are discussed under the switch statement.

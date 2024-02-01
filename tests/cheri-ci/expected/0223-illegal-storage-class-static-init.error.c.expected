@@ -1,0 +1,6 @@
+cheri-ci/0223-illegal-storage-class-static-init.error.c:3:20: error: constraint violation: initializer element is not a compile-time constant
+  static int x = { foo() };
+                   ^~~~~ 
+§6.7.9#4: 
+4   All the expressions in an initializer for an object that has static or thread storage duration
+    shall be constant expressions or string literals.

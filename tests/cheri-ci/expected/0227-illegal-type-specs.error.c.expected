@@ -1,0 +1,34 @@
+cheri-ci/0227-illegal-type-specs.error.c:2:3: error: constraint violation: illegal combination of type specifiers
+  signed float x;
+  ^~~~~~~~~~~~ 
+§6.7.2#2: 
+2   At least one type specifier shall be given in the declaration specifiers in each declaration,
+    and in the specifier-qualifier list in each struct declaration and type name. Each list of
+    type specifiers shall be one of the following multisets (delimited by commas, when there
+    is more than one multiset per item); the type specifiers may occur in any order, possibly
+    intermixed with the other declaration specifiers.
+    -- void
+    -- char
+    -- signed char
+    -- unsigned char
+    -- short, signed short, short int, or signed short int
+    -- unsigned short, or unsigned short int
+    -- int, signed, or signed int
+    -- unsigned, or unsigned int
+    -- long, signed long, long int, or signed long int
+    -- unsigned long, or unsigned long int
+
+    -- long long, signed long long, long long int, or
+       signed long long int
+    -- unsigned long long, or unsigned long long int
+    -- float
+    -- double
+    -- long double
+    -- _Bool
+    -- float _Complex
+    -- double _Complex
+    -- long double _Complex
+    -- atomic type specifier
+    -- struct or union specifier
+    -- enum specifier
+    -- typedef name

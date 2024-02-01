@@ -1,0 +1,5 @@
+cheri-ci/0238-storage-class-function-decl.error.c:1:22: error: constraint violation: invalid storage class specifier in function declarator
+void foo (static int x);
+                     ^ 
+§6.7.6.3#2: 
+2    The only storage-class specifier that shall occur in a parameter declaration is register.

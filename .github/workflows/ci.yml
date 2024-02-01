@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - master
-  # pull_request: {}
+      - cheri-tests
+    pull_request: {}
 
 # cancel in-progress job when a new push is performed
 concurrency:
@@ -88,8 +89,10 @@ jobs:
         opam pin --yes --no-action add cerberus-cheri .
         opam install --yes cerberus-cheri
 
-    # - name: Run Cerberus-CHRI tests
-    #   if: ${{ matrix.version == '4.14.1' }}
-    #   run: |
-    #     eval $(opam env --switch=with_coq)
-    #     make cheri-test
+    - name: Run Cerberus-CHERI tests
+      if: ${{ matrix.version == '4.14.1' }}
+      run: |
+        eval $(opam env --switch=with_coq)
+        make cheri-test
+        cd tests; USE_OPAM='' ./run-cheri.sh
+        cd ..

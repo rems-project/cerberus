@@ -1,0 +1,1 @@
+Undefined {ub: "UB081_scalar_initializer_not_single_expression", stderr: "", loc: "<1:5--1:15>"}

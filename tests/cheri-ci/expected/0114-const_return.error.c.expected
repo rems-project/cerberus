@@ -1,0 +1,5 @@
+cheri-ci/0114-const_return.error.c:8:3: error: constraint violation: expression is not assignable
+  *f() = 10; // shouldn't typecheck
+  ~~~~ ^
+§6.5.16#2: 
+2   An assignment operator shall have a modifiable lvalue as its left operand.

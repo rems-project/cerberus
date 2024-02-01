@@ -1,0 +1,28 @@
+cheri-ci/0041-struct_incompatible.error.c:7:8: error: constraint violation: assigning to 'struct T' from incompatible type 'struct T'
+  s2 = f(); // error: the two structs are incompatible
+     ^ ~~~ 
+§6.5.16.1#1: 
+1   One of the following shall hold:112)
+    -- the left operand has atomic, qualified, or unqualified arithmetic type, and the right has
+       arithmetic type;
+    -- the left operand has an atomic, qualified, or unqualified version of a structure or union
+       type compatible with the type of the right;
+    -- the left operand has atomic, qualified, or unqualified pointer type, and (considering
+       the type the left operand would have after lvalue conversion) both operands are
+       pointers to qualified or unqualified versions of compatible types, and the type pointed
+       to by the left has all the qualifiers of the type pointed to by the right;
+    -- the left operand has atomic, qualified, or unqualified pointer type, and (considering
+       the type the left operand would have after lvalue conversion) one operand is a pointer
+       to an object type, and the other is a pointer to a qualified or unqualified version of
+       void, and the type pointed to by the left has all the qualifiers of the type pointed to
+       by the right;
+    -- the left operand is an atomic, qualified, or unqualified pointer, and the right is a null
+       pointer constant; or
+    -- the left operand has type atomic, qualified, or unqualified _Bool, and the right is a
+       pointer.
+
+FOOTNOTE.112: 
+The asymmetric appearance of these constraints with respect to type qualifiers is due to the conversion
+         (specified in 6.3.2.1) that changes lvalues to ``the value of the expression'' and thus removes any type
+         qualifiers that were applied to the type category of the expression (for example, it removes const but
+         not volatile from the type int volatile * const).

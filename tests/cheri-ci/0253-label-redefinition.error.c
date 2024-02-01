@@ -1,0 +1,4 @@
+void foo() {
+foo:;
+foo:;
+}

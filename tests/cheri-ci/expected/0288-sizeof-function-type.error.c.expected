@@ -1,0 +1,8 @@
+cheri-ci/0288-sizeof-function-type.error.c:4:9: error: constraint violation: invalid application of 'sizeof' to a function type
+  sizeof(foo);
+  ^     ~~~~~ 
+§6.5.3.4#1, sentence 1: 
+1   The sizeof operator shall not be applied to an expression that has function type or an
+    incomplete type, to the parenthesized name of such a type, or to an expression that
+    designates a bit-field member. The _Alignof operator shall not be applied to a
+    function type or an incomplete type.

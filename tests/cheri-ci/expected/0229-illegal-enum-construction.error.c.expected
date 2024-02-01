@@ -1,0 +1,10 @@
+cheri-ci/0229-illegal-enum-construction.error.c:1:6: error: such construction is not allowed for enumerators
+enum x;
+     ^ 
+§6.7.2.3#7: 
+7   A declaration of the form
+             struct-or-union identifier ;
+    specifies a structure or union type and declares the identifier as a tag of that type.131)
+
+FOOTNOTE.131: 
+A similar construction with enum does not exist.
