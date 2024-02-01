@@ -92,5 +92,7 @@ jobs:
     - name: Run Cerberus-CHERI tests
       if: ${{ matrix.version == '4.14.1' }}
       run: |
+        opam switch with_coq
+        eval $(opam env --switch=with_coq)
         cd tests; USE_OPAM='' ./run-cheri.sh
         cd ..
