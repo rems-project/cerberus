@@ -1,0 +1,7 @@
+cheri-ci/0322-invalid_function_declarators.error.c:2:3: error: use of undeclared identifier 'not_arg'
+  not_arg; // this is NOT in scope
+  ^
+§6.5.1#2: 
+2   An identifier is a primary expression, provided it has been declared as designating an
+    object (in which case it is an lvalue) or a function (in which case it is a function
+    designator).91)

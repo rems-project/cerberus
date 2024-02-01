@@ -1,0 +1,6 @@
+cheri-ci/0038-function_redefinition.error.c:3:6: error: constraint violation: multiple declarations in the same scope with incompatible types
+char f(int n) {
+     ^ 
+§6.7#4: 
+4   All declarations in the same scope that refer to the same object or function shall specify
+    compatible types.

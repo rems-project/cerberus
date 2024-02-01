@@ -1,0 +1,3 @@
+cerberus: FILE... arguments: no `cheri-ci/0036-auto_register_function.error.c,'
+          file or directory
+Usage: cerberus [OPTION]... [FILE]...

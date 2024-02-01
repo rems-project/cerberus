@@ -1,0 +1,6 @@
+cheri-ci/0232-invalid-use-Atomic.error.c:2:3: error: constraint violation: invalid use of _Atomic
+  _Atomic (const int) x;
+  ^~~~~~~~~~~~~~~~~~~ 
+§6.7.2.4#3: 
+3   The type name in an atomic type specifier shall not refer to an array type, a function type,
+    an atomic type, or a qualified type.

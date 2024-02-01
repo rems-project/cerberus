@@ -1,0 +1,34 @@
+cheri-ci/0316-declaration_struct_pointer.error.c:9:17: error: constraint violation: initializing 'struct T' with an expression of incompatible type 'struct T*'
+  struct T st = func();
+                ^~~~~~ 
+§6.7.9#11, sentence 2: 
+11   The initializer for a scalar shall be a single expression, optionally enclosed in braces. The
+     initial value of the object is that of the expression (after conversion); the same type
+     constraints and conversions as for simple assignment apply, taking the type of the scalar
+     to be the unqualified version of its declared type.
+
+§6.5.16.1#1: 
+1   One of the following shall hold:112)
+    -- the left operand has atomic, qualified, or unqualified arithmetic type, and the right has
+       arithmetic type;
+    -- the left operand has an atomic, qualified, or unqualified version of a structure or union
+       type compatible with the type of the right;
+    -- the left operand has atomic, qualified, or unqualified pointer type, and (considering
+       the type the left operand would have after lvalue conversion) both operands are
+       pointers to qualified or unqualified versions of compatible types, and the type pointed
+       to by the left has all the qualifiers of the type pointed to by the right;
+    -- the left operand has atomic, qualified, or unqualified pointer type, and (considering
+       the type the left operand would have after lvalue conversion) one operand is a pointer
+       to an object type, and the other is a pointer to a qualified or unqualified version of
+       void, and the type pointed to by the left has all the qualifiers of the type pointed to
+       by the right;
+    -- the left operand is an atomic, qualified, or unqualified pointer, and the right is a null
+       pointer constant; or
+    -- the left operand has type atomic, qualified, or unqualified _Bool, and the right is a
+       pointer.
+
+FOOTNOTE.112: 
+The asymmetric appearance of these constraints with respect to type qualifiers is due to the conversion
+         (specified in 6.3.2.1) that changes lvalues to ``the value of the expression'' and thus removes any type
+         qualifiers that were applied to the type category of the expression (for example, it removes const but
+         not volatile from the type int volatile * const).

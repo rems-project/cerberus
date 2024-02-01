@@ -1,0 +1,6 @@
+cheri-ci/0211-function-id-not-function-type.error.c:3:5: error: constraint violation: function identifier must have a function type
+fun f {}
+    ^ 
+§6.9.1#2: 
+2   The identifier declared in a function definition (which is the name of the function) shall
+    have a function type, as specified by the declarator portion of the function definition.162)

@@ -1,0 +1,7 @@
+cheri-ci/0230-enum-incomplete.error.c:1:1: error: constraint violation: incomplete enum type
+enum e x;
+^~~~~~ 
+§6.7.2.3#3: 
+3   A type specifier of the form
+            enum identifier
+    without an enumerator list shall only appear after the type it specifies is complete.

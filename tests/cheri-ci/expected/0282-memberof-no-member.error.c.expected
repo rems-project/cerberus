@@ -1,0 +1,6 @@
+cheri-ci/0282-memberof-no-member.error.c:4:3: error: constraint violation: no member named 'y' in 'struct s'
+  (bar()).y;
+  ~~~~~~~ ^
+§6.5.2.3#1: 
+1    The first operand of the . operator shall have an atomic, qualified, or unqualified
+     structure or union type, and the second operand shall name a member of that type.

@@ -1,0 +1,6 @@
+cheri-ci/0214-illegal-storage-class-for-statement.error.c:2:19: error: constraint violation: illegal storage class
+  for (static int i = 0;;);
+                  ^ 
+§6.8.5#3: 
+3   The declaration part of a for statement shall only declare identifiers for objects having
+    storage class auto or register.

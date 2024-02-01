@@ -1,0 +1,7 @@
+cheri-ci/0254-undeclared-label.error.c:2:8: error: constraint violation: use of undeclared label 'foo'
+  goto foo;
+       ^~~ 
+§6.8.6.1#1, sentence 1: 
+1   The identifier in a goto statement shall name a label located somewhere in the enclosing
+    function. A goto statement shall not jump from outside the scope of an identifier having
+    a variably modified type to inside the scope of that identifier.

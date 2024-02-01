@@ -1,0 +1,6 @@
+cheri-ci/0205-illegal-storage-class.error.c:1:10: error: constraint violation: illegal storage class
+auto int a;
+         ^ 
+§6.9#2: 
+2   The storage-class specifiers auto and register shall not appear in the declaration
+    specifiers in an external declaration.

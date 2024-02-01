@@ -1,0 +1,8 @@
+cheri-ci/0220-thread-local-auto.error.c:2:21: error: constraint violation: multiple incompatible storage class specifiers
+  _Thread_local int foo;
+                    ^~~ 
+§6.7.1#3, sentence 1: 
+3   In the declaration of an object with block scope, if the declaration specifiers include
+    _Thread_local, they shall also include either static or extern. If
+    _Thread_local appears in any declaration of an object, it shall be present in every
+    declaration of that object.

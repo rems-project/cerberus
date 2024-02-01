@@ -1,0 +1,5 @@
+cheri-ci/0215-continue-outside-loop.error.c:2:3: error: constraint violation: continue statement outside a loop
+  continue;
+  ^~~~~~~~~ 
+§6.8.6.2#1: 
+1   A continue statement shall appear only in or as a loop body.

@@ -1,0 +1,7 @@
+cheri-ci/0217-non-void-function-return.error.c:1:12: error: constraint violation: non-void function should return a value
+int foo() {return;}
+           ^~~~~~~ 
+§6.8.6.4#1, sentence 2: 
+1   A return statement with an expression shall not appear in a function whose return type
+    is void. A return statement without an expression shall only appear in a function
+    whose return type is void.

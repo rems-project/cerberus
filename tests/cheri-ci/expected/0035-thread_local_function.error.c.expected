@@ -1,0 +1,6 @@
+cheri-ci/0035-thread_local_function.error.c:12:1: error: constraint violation: illegal storage class
+_Thread_local int f3() {
+^~~~~~~~~~~~~~~~~~~~~~~~ 
+§6.9.1#4: 
+4   The storage-class specifier, if any, in the declaration specifiers shall be either extern or
+    static.

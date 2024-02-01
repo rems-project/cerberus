@@ -1,0 +1,5 @@
+cheri-ci/0219-thread-local-function-declaration.error.c:1:19: error: constraint violation: _Thread_local in function declaration
+_Thread_local int foo(void);
+                  ^~~~~~~~~ 
+§6.7.1#4: 
+4   _Thread_local shall not appear in the declaration specifiers of a function declaration.
