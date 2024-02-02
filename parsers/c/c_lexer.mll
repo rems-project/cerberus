@@ -267,6 +267,19 @@ let hexadecimal_prefix = "0x" | "0X"
 let hexadecimal_constant =
   hexadecimal_prefix hexadecimal_digit+
 
+(* since C2x *)
+(* TODO: we need a mechanism to signal that a C2x feature has been used *)
+let binary_prefix = "0b" | "0B"
+
+let binary_digit = "0" | "1"
+
+let binary_constant =
+  (* TODO: removing the separator for now. We need to update the functions in
+  Decode.ml for things to work *)
+  (* binary_prefix (binary_digit "'"?)+ *)
+  binary_prefix (binary_digit)+
+
+
 let octal_constant = '0' octal_digit*
 
 let decimal_constant = nonzero_digit digit*
@@ -276,6 +289,7 @@ let integer_constant =
     decimal_constant
   | octal_constant
   | hexadecimal_constant
+  | binary_constant (* since C2x *)
 
 
 (* STD §6.4.3#1 *)

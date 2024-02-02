@@ -60,3 +60,13 @@ let string_of_hexadecimal_pad length n =
   if has_length < length 
   then "0x" ^ String.make (length - has_length) '0' ^ Bytes.to_string ret
   else "0x" ^ Bytes.to_string ret
+
+let string_of_binary n =
+  let l = chars_of_num_with_basis 2 false n in
+  let ret = Bytes.create (List.length l + 2) in
+  Bytes.set ret 0 '0';
+  Bytes.set ret 1 'b';
+  List.iteri (fun i c ->
+    Bytes.set ret (i+2) c
+  ) l;
+  Bytes.to_string ret

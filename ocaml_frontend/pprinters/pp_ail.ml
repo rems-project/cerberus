@@ -394,6 +394,7 @@ let pp_integerConstant = function
             | Octal       -> String_nat_big_num.string_of_octal n
             | Decimal     -> String_nat_big_num.string_of_decimal n
             | Hexadecimal -> String_nat_big_num.string_of_hexadecimal n
+            | Binary      -> String_nat_big_num.string_of_binary n
          )  ^^ (P.optional pp_integerSuffix suff_opt)
   | IConstantMax ity ->
       pp_const (macro_string_of_integerType ity ^ "_MAX")

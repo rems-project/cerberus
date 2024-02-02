@@ -197,13 +197,15 @@ let pp_pretty_integer_value format (IV (_, ival_)) =
         !^ "UNSPEC"
     | IVconcrete n ->
         !^ begin
-             let b = match format.Boot_printf.basis with
-               | Some AilSyntax.Octal ->
-                   8
-               | Some AilSyntax.Decimal | None ->
-                   10
-               | Some AilSyntax.Hexadecimal ->
-                   16 in
+            let b = match format.Boot_printf.basis with
+              | Some AilSyntax.Octal ->
+                  8
+              | Some AilSyntax.Decimal | None ->
+                  10
+              | Some AilSyntax.Hexadecimal ->
+                  16
+              | Some AilSyntax.Binary ->
+                  2 in
              let chars = String_nat_big_num.chars_of_num_with_basis b format.Boot_printf.use_upper n in
              let bts = Bytes.create (List.length chars) in
              List.iteri (Bytes.set bts) chars;

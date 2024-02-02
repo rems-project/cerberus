@@ -13,8 +13,15 @@ let decode_integer_constant str =
   let (str, basisN, basis) =
     if str.[0] = '0' then
       let l = String.length str in
-      if String.length str > 1 && (str.[1] = 'x' || str.[1] = 'X') then
-        (String.sub str 2 (l-2), 16, AilSyntax.Hexadecimal)
+      if String.length str > 1 then
+        begin match str.[1] with
+          | 'x' | 'X' ->
+            (String.sub str 2 (l-2), 16, AilSyntax.Hexadecimal)
+          | 'b' | 'B' ->
+            (String.sub str 2 (l-2), 2, AilSyntax.Binary)
+          | _ ->
+            (String.sub str 1 (l-1), 8, AilSyntax.Octal)
+        end
       else
         (String.sub str 1 (l-1), 8, AilSyntax.Octal)
     else

@@ -16,6 +16,7 @@ type basis =
   | Octal
   | Decimal
   | Hexadecimal
+  | Binary
 
 type integerConstant [name = "ic*"] =
   | IConstant of integer * basis * maybe integerSuffix
