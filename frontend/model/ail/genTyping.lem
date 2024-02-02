@@ -119,7 +119,8 @@ let gen_typing_type_of_constant loc iCst =
           Concrete <$> try_ranges loc n [ Signed Int_; Signed Long; Signed LongLong ]
       | IConstant n _ Nothing ->
           (* Octal or Hexadecimal *)
-          Concrete <$> try_ranges loc n [ Signed Int_; Unsigned Int_; Unsigned Long
+          Concrete <$> try_ranges loc n [ Signed Int_; Unsigned Int_
+                                        ; Signed Long ; Unsigned Long
                                         ; Signed LongLong; Unsigned LongLong ]
       | IConstant n _ (Just U) ->
           (* Decimal, Octal or Hexadecimal *)
