@@ -63,7 +63,7 @@ CERB="${WITH_CERB:=dune exec --no-print-directory cerberus-cheri --no-build --}"
 if [[ ! -z "${USE_OPAM+x}" ]]; then
   echo -e "\033[1m\033[33mUsing opam installed cerberus-cheri\033[0m";
   CERB=$OPAM_SWITCH_PREFIX/bin/cerberus-cheri
-  export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus/runtime/
+  export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus-cheri/runtime/
 else
   export CERB_RUNTIME=../runtime/
 fi

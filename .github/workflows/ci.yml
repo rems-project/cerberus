@@ -89,7 +89,7 @@ jobs:
         opam pin --yes --no-action add cerberus-cheri .
         opam install --yes cerberus-cheri
 
-    - name: Run Cerberus-CHERI tests
+    - name: Run Cerberus-CHERI CI tests
       if: ${{ matrix.version == '4.14.1' }}
       run: |
         opam switch with_coq
