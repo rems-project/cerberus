@@ -536,6 +536,50 @@ Section ZMapAux.
   Proof.
   Admitted.
 
+  Lemma zmap_mapsto_in {T:Type} (k:ZMap.key) (m:ZMap.t T) (v:T):
+    ZMap.MapsTo k v m -> ZMap.In k m.
+  Proof.
+    intros H.
+    apply ZMap.find_1 in H.
+    apply in_find_iff.
+    rewrite H.
+    congruence.
+  Qed.
+
+  Lemma zmap_relate_keys_same_keys {A B:Type} (m1:ZMap.t A) (m2:ZMap.t B) f:
+      zmap_relate_keys m1 m2 f ->
+      (forall k, ZMap.In k m1 <-> ZMap.In k m2).
+  Proof.
+    intros H k.
+    unfold zmap_relate_keys in H.
+    specialize (H k).
+    split.
+    -
+      intros M.
+      destruct H.
+      +
+        destruct H as [v1 [v2 [H1 [H2 H3]]]].
+        apply zmap_mapsto_in in H2.
+        apply H2.
+      +
+        destruct H.
+        contradict H.
+        apply zmap_in_mapsto in M.
+        apply M.
+    -
+      intros M.
+      destruct H.
+      +
+        destruct H as [v1 [v2 [H1 [H2 H3]]]].
+        apply zmap_mapsto_in in H1.
+        apply H1.
+      +
+        destruct H.
+        contradict H0.
+        apply zmap_in_mapsto in M.
+        apply M.
+  Qed.
+
 
 End ZMapAux.
 
