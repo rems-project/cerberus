@@ -260,7 +260,7 @@ Module Type CheriMemoryTypes
       ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
       is_dynamic : bool ;
-      is_dead : bool ;
+      is_dead : bool ; (* only used in cornucopia *)
       taint : allocation_taint
     }.
 
