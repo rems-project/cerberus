@@ -1,0 +1,10 @@
+cheri-ci/0034-duplicate_proto.error.c:1:18: error: constraint violation: multiple declaration of 'n'
+int f(int n, int n); // ERROR: duplicate declaration of n
+                 ^ 
+§6.7#3: 
+3   If an identifier has no linkage, there shall be no more than one declaration of the identifier
+    (in a declarator or type specifier) with the same scope and in the same name space, except
+    that:
+    -- a typedef name may be redefined to denote the same type as it currently does,
+       provided that type is not a variably modified type;
+    -- tags may be redeclared as specified in 6.7.2.3.

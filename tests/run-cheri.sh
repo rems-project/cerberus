@@ -3,10 +3,11 @@
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
 
-. ./tests.sh
+. ./tests-cheri.sh
 
 mkdir -p tmp
 
+CIDIR=cheri-ci
 pass=0
 fail=0
 
@@ -58,11 +59,11 @@ fi
 
 # Use the provided path to cerberus, otherwise default to the driver backend build
 # CERB="${WITH_CERB:=dune exec --no-print-directory cerberus --no-build -- }"
-CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+CERB="${WITH_CERB:=dune exec --no-print-directory cerberus-cheri --no-build --}"
 if [[ ! -z "${USE_OPAM+x}" ]]; then
-  echo -e "\033[1m\033[33mUsing opam installed cerberus\033[0m";
-  CERB=$OPAM_SWITCH_PREFIX/bin/cerberus
-  export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus/runtime/
+  echo -e "\033[1m\033[33mUsing opam installed cerberus-cheri\033[0m";
+  CERB=$OPAM_SWITCH_PREFIX/bin/cerberus-cheri
+  export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus-cheri/runtime/
 else
   export CERB_RUNTIME=../runtime/
 fi
@@ -70,7 +71,7 @@ fi
 # Running ci tests
 for file in "${citests[@]}"
 do
-  if [ ! -f ./ci/$file ]; then
+  if [ ! -f $CIDIR/$file ]; then
     echo -e "Test $file: \033[1m\033[33mNOT FOUND\033[0m";
     fail=$((fail+1));
     continue
@@ -82,12 +83,12 @@ do
   fi
 
   if [[ $file == *.syntax-only.c ]]; then
-    $CERB --nolibc --typecheck-core ci/$file > tmp/result 2> tmp/stderr
+    $CERB --switches=PNVI_ae_udi,strict_pointer_equality,strict_pointer_arith,strict_pointer_relationals,CHERI --nolibc --typecheck-core $CIDIR/$file > tmp/result 2> tmp/stderr
   else
-    $CERB --nolibc --typecheck-core --exec --batch ci/$file 1> tmp/result 2> tmp/stderr
+    $CERB --switches=PNVI_ae_udi,strict_pointer_equality,strict_pointer_arith,strict_pointer_relationals,CHERI --nolibc --typecheck-core --exec --batch $CIDIR/$file 1> tmp/result 2> tmp/stderr
   fi
   ret=$?;
-  if [ -f ./ci/expected/$file.expected ]; then
+  if [ -f $CIDIR/expected/$file.expected ]; then
     if [[ $file == *.error.c || $file == *.syntax-only.c ]]; then
       # removing the last line from stderr (the time stats)
       if [ "$(uname)" == "Linux" ]; then
@@ -95,11 +96,11 @@ do
       else # otherwise we assume this is macOS or BSD
           sed -i '' -e '$ d' tmp/stderr
       fi;
-      if ! cmp --silent "tmp/stderr" "ci/expected/$file.expected"; then
+      if ! cmp --silent "tmp/stderr" "$CIDIR/expected/$file.expected"; then
         ret=0;
       fi
     else
-      if ! cmp --silent "tmp/result" "ci/expected/$file.expected"; then
+      if ! cmp --silent "tmp/result" "$CIDIR/expected/$file.expected"; then
         if [[ $file == *.undef.c ]]; then
           ret=0;
         else

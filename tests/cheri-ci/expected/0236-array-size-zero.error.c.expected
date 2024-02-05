@@ -1,0 +1,11 @@
+cheri-ci/0236-array-size-zero.error.c:1:6: error: constraint violation: array declared with a negative or zero size
+char a[0];
+     ^~~~ 
+§6.7.6.2#1, sentence 3: 
+1   In addition to optional type qualifiers and the keyword static, the [ and ] may delimit
+    an expression or *. If they delimit an expression (which specifies the size of an array), the
+    expression shall have an integer type. If the expression is a constant expression, it shall
+    have a value greater than zero. The element type shall not be an incomplete or function
+    type. The optional type qualifiers and the keyword static shall appear only in a
+    declaration of a function parameter with an array type, and then only in the outermost
+    array type derivation.

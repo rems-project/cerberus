@@ -1,0 +1,5 @@
+cheri-ci/0040-struct_redefinition.error.c:8:8: error: constraint violation: redefinition of 'T'
+struct T {
+       ^ 
+§6.7.2.3#1: 
+1   A specific type shall have its content defined at most once.

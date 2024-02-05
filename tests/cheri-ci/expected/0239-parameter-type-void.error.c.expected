@@ -1,0 +1,8 @@
+cheri-ci/0239-parameter-type-void.error.c:1:16: error: constraint violation: argument may not have 'void' type
+void foo (void x) {}
+               ^ 
+§6.9.1#5, sentence 1: 
+5   If the declarator includes a parameter type list, the declaration of each parameter shall
+    include an identifier, except for the special case of a parameter list consisting of a single
+    parameter of type void, in which case there shall not be an identifier. No declaration list
+    shall follow.

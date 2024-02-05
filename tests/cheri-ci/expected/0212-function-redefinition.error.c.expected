@@ -1,0 +1,9 @@
+cheri-ci/0212-function-redefinition.error.c:2:7: error: constraint violation: redefinition of 'foo'
+float foo() {return 0.;}
+      ^~~ 
+§6.9#3: 
+3   There shall be no more than one external definition for each identifier declared with
+    internal linkage in a translation unit. Moreover, if an identifier declared with internal
+    linkage is used in an expression (other than as a part of the operand of a sizeof or
+    _Alignof operator whose result is an integer constant), there shall be exactly one
+    external definition for the identifier in the translation unit.

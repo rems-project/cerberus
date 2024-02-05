@@ -1,0 +1,1 @@
+Defined {value: "Specified(0)", stdout: "*p++ ==> 10\n*p   ==> 20\n", stderr: "", blocked: "false"}

@@ -1,0 +1,6 @@
+cheri-ci/0228-tag-redecl.error.c:2:7: error: constraint violation: use of 'S' with tag type that does not match previous declaration
+union S;
+      ^ 
+§6.7.2.3#2: 
+2   Where two declarations that use the same tag declare the same type, they shall both use
+    the same choice of struct, union, or enum.

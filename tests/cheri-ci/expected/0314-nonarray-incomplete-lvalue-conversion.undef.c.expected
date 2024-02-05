@@ -1,0 +1,1 @@
+Undefined {ub: "UB020_nonarray_incomplete_lvalue_conversion", stderr: "", loc: "<2:3--2:7>"}

@@ -1,0 +1,6 @@
+cheri-ci/0224-enum-not-int.error.c:2:5: error: constraint violation: expression is not an integer constant expression
+  A=1.
+    ^~ 
+§6.7.2.2#2: 
+2    The expression that defines the value of an enumeration constant shall be an integer
+     constant expression that has a value representable as an int.

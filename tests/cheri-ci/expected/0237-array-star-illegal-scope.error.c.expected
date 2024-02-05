@@ -1,0 +1,11 @@
+cheri-ci/0237-array-star-illegal-scope.error.c:1:6: error: star modifier used outside of function prototype
+char a[*];
+     ^~~~ 
+§6.7.6.2#4, 2nd sentence: 
+4   If the size is not present, the array type is an incomplete type. If the size is * instead of
+    being an expression, the array type is a variable length array type of unspecified size,
+    which can only be used in declarations or type names with function prototype scope;143)
+    such arrays are nonetheless complete types. If the size is an integer constant expression
+    and the element type has a known constant size, the array type is not a variable length
+    array type; otherwise, the array type is a variable length array type. (Variable length
+    arrays are a conditional feature that implementations need not support; see 6.10.8.3.)

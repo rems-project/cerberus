@@ -1,0 +1,6 @@
+cheri-ci/0291-cast-not-scalar-type.error.c:5:14: error: constraint violation: used type 'struct s' where scalar type is required
+  (struct s) x;
+  ^          ~ 
+§6.5.4#2: 
+2   Unless the type name specifies a void type, the type name shall specify atomic, qualified,
+    or unqualified scalar type, and the operand shall have scalar type.

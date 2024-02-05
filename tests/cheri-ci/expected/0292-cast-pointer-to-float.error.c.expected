@@ -1,0 +1,6 @@
+cheri-ci/0292-cast-pointer-to-float.error.c:4:11: error: constraint violation: pointer cannot be cast to type 'float'
+  (float) x;
+  ^       ~ 
+§6.5.4#4, sentence 1: 
+4   A pointer type shall not be converted to any floating type. A floating type shall not be
+    converted to any pointer type.

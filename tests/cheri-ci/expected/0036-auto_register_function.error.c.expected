@@ -1,0 +1,6 @@
+cheri-ci/0036-auto_register_function.error.c:2:10: error: constraint violation: illegal storage class
+auto int f1() {
+         ^~ 
+§6.9#2: 
+2   The storage-class specifiers auto and register shall not appear in the declaration
+    specifiers in an external declaration.
