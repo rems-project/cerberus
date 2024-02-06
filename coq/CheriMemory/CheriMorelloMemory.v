@@ -965,7 +965,11 @@ Module Type CheriMemoryImpl
               let (ro,readonly_status) :=
                 match pref with
                 | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly ReadonlyStringLiteral)
-                | _ => (false,IsWritable)
+                | CoqSymbol.PrefTemporaryLifetime _ _ =>
+                    (true, IsReadOnly ReadonlyTemporaryLifetime)
+                | _ =>
+                    (true, IsReadOnly ReadonlyConstQualified)
+                (* | _ => (false,IsWritable) *)
                 end
               in
               let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_dead := false; is_readonly:= readonly_status; taint:= Unexposed |} in
@@ -2022,6 +2026,13 @@ Module Type CheriMemoryImpl
     if negb cond 
     then fail loc (MerrOther "store with an ill-typed memory value")
     else
+      let select_ro_kind p :=
+        match p with
+        | CoqSymbol.PrefTemporaryLifetime _ _ => ReadonlyTemporaryLifetime
+        | CoqSymbol.PrefStringLiteral _ _ => ReadonlyStringLiteral
+        | _ => ReadonlyConstQualified
+        end
+      in
       let do_store_cap
             (alloc_id_opt : option storage_instance_id)
             (c_value : C.t)
@@ -2065,7 +2076,7 @@ Module Type CheriMemoryImpl
                              (zmap_update alloc_id
                                 (fun (oa:option allocation) =>
                                    a <- oa ;;
-                                   ret (allocation_with_is_readonly a (IsReadOnly ReadonlyConstQualified))
+                                   ret (allocation_with_is_readonly a (IsReadOnly (select_ro_kind a.(prefix))))
                                 ) st.(allocations))
                              st)
                       ;;
