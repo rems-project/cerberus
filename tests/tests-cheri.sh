@@ -194,6 +194,7 @@ citests=(
   0324-atomics.c
   0328-indeterminate_block_declaration.c
   0330-alignas.syntax-only.c
+  0331-modifying-rvalue-temporary-lifetime.undef.c
   0332-rvalue-temporary-lifetime-pointer-zap.c
   0333-shifts_non_representable.undef.c
 )
@@ -218,5 +219,4 @@ skip=(
   # CHERI-related bugs/questions:
   0298-atomic_memberofptr.undef.c
   0329-rvalue-temporary-lifetime.undef.c
-  0331-modifying-rvalue-temporary-lifetime.undef.c
 )
