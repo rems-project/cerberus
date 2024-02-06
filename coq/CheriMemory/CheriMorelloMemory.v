@@ -1130,7 +1130,12 @@ Module Type CheriMemoryImpl
         end.
 
   Definition is_dead_allocation (alloc_id : storage_instance_id) : memM bool :=
-    get_allocation alloc_id >>= fun alloc => ret alloc.(is_dead).
+    get >>=
+      fun st =>
+        match ZMap.find alloc_id st.(allocations) with
+        | Some a => ret a.(is_dead)
+        | None => ret true
+        end.
 
   (* PNVI-ae-udi *)
   Definition lookup_iota iota :=
@@ -2706,9 +2711,9 @@ Module Type CheriMemoryImpl
         else
           find_overlapping (cap_to_Z c_value) >>= fun x =>
               match x with
-              | NoAlloc => fail Loc_unknown (MerrAccess LoadAccess OutOfBoundPtr)
-              | DoubleAlloc _ _ => fail Loc_unknown (MerrInternal "DoubleAlloc without PNVI")
-              | SingleAlloc alloc_id => isWellAligned_ptrval ref_ty ptrval
+              | NoAlloc => ret false
+              | DoubleAlloc _ _
+              | SingleAlloc _ => isWellAligned_ptrval ref_ty ptrval
               end
     end.
 
