@@ -267,7 +267,7 @@ module General = struct
          map_and_fold_resources loc resource_scan
              (needed, O (default_ oarg_bt))
        in
-       Pp.debug 9 (lazy (Pp.item "checking resource remainder" (IT.pp (bool_ needed))));
+       Pp.debug 9 (lazy (Pp.item "was resource found in context" (IT.pp (bool_ (not needed)))));
        let@ res = begin match needed with
        | false ->
           let r = (({
@@ -281,9 +281,13 @@ module General = struct
        | true ->
           begin match packing_ft global provable (P requested) with
           | Some packing_ft ->
+             Pp.debug 9 (lazy (Pp.item "attempting to pack compound resource"
+                 (LAT.pp (fun _ -> Pp.string "resource") packing_ft)));
              let@ o, changed_or_deleted = ftyp_args_request_for_pack loc uiinfo packing_ft in
              return (Some ((requested, O o), changed_or_deleted))
           | None ->
+             Pp.debug 9 (lazy (Pp.item "no pack rule for resource, out of options"
+                 (RET.pp (P requested))));
              return None
           end
        end in
