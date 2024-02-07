@@ -99,6 +99,9 @@ let handle_frontend_error = function
 
 
 
+let opt_comma_split = function
+  | None -> []
+  | Some str -> String.split_on_char ',' str
 
 let check_input_file filename =
   if not (Sys.file_exists filename) then
@@ -123,6 +126,7 @@ let main
       diag
       lemmata
       only
+      skip
       csv_times
       log_times
       random_seed
@@ -150,7 +154,7 @@ let main
     Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
     Solver.random_seed := random_seed;
     Solver.log_to_temp := solver_logging;
-    Check.only := only;
+    Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   IndexTerms.use_vip := use_vip;
     Check.batch := batch;
     Diagnostics.diag_string := diag;
@@ -303,8 +307,12 @@ let solver_logging =
   Arg.(value & flag & info ["solver-logging"] ~doc)
 
 let only =
-  let doc = "only type-check this function" in
+  let doc = "only type-check this function (or comma-separated names)" in
   Arg.(value & opt (some string) None & info ["only"] ~doc)
+
+let skip =
+  let doc = "skip type-checking of this function (or comma-separated names)" in
+  Arg.(value & opt (some string) None & info ["skip"] ~doc)
 
 (* TODO(Christopher/Rini): I'm adding a tentative cli option, rename/change it to whatever you prefer *)
 let output_decorated =
@@ -356,6 +364,7 @@ let () =
       diag $
       lemmata $
       only $
+      skip $
       csv_times $
       log_times $
       random_seed $

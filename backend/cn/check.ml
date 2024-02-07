@@ -1716,7 +1716,7 @@ let check_procedure
 
 
 
-let only = ref None
+let skip_and_only = ref (([] : string list), ([] : string list))
 let batch = ref false
 
 let record_tagdefs tagDefs =
@@ -1860,47 +1860,46 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
 
 
 let check_c_functions funs =
-  match !only with
-  | Some fname ->
-     let found =
-       List.find_opt (fun (fsym, _) ->
-           (String.equal fname (Sym.pp_string fsym))
-         ) funs
+  let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
+  let str_fsyms s = match List.filter (matches_str s) (List.map fst funs) with
+    | [] ->
+      Pp.warn_noloc (!^"function" ^^^ !^s ^^^ !^"not found");
+      []
+    | ss -> ss
+  in
+  let strs_fsyms ss = SymSet.of_list (List.concat_map str_fsyms ss) in
+  let skip = strs_fsyms (fst (! skip_and_only)) in
+  let only = strs_fsyms (snd (! skip_and_only)) in
+  let only_funs = match (snd (! skip_and_only)) with
+    | [] -> funs
+    | ss -> List.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
+  in
+  let selected_funs = List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs in
+  let number_entries = List.length selected_funs in
+  match !batch with
+  | false ->
+     let@ _ =
+       ListM.mapiM (fun counter (fsym, (loc, args_and_body)) ->
+           let () = progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym) in
+           check_procedure loc fsym args_and_body
+         ) selected_funs
      in
-     begin match found with
-     | Some (fsym, (loc, args_and_body)) ->
-        let () = progress_simple (of_total 1 1) (Sym.pp_string fsym) in
-        check_procedure loc fsym args_and_body
-     | None ->
-        Pp.warn_noloc (!^"function" ^^^ !^fname ^^^ !^"not found");
-        return ()
-     end
-  | None ->
-     let number_entries = List.length funs in
-     match !batch with
-     | false ->
-        let@ _ =
-          ListM.mapiM (fun counter (fsym, (loc, args_and_body)) ->
-              let () = progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym) in
-              check_procedure loc fsym args_and_body
-            ) funs
-        in
-        return ()
-    | true ->
-        let@ _, pass, fail =
-          ListM.fold_leftM (fun (counter,pass,fail) (fsym, (loc, args_and_body)) ->
-              let@ outcome = sandbox (check_procedure loc fsym args_and_body) in
-              match outcome with
-              | Ok _ ->
-                 progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym ^ " -- pass");
-                 return (counter+1, pass+1, fail)
-              | Error _ ->
-                 progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym ^ " -- fail");
-                 return (counter+1, pass, fail+1)
-            ) (0, 0, 0) funs
-        in
-        print stdout (item "summary" (int pass ^^^ !^"pass" ^^ comma ^^^ int fail ^^^ !^"fail" ));
-        return ()
+     return ()
+  | true ->
+     let@ _, pass, fail =
+       ListM.fold_leftM (fun (counter,pass,fail) (fsym, (loc, args_and_body)) ->
+           let@ outcome = sandbox (check_procedure loc fsym args_and_body) in
+           match outcome with
+           | Ok _ ->
+              progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym ^ " -- pass");
+              return (counter+1, pass+1, fail)
+           | Error _ ->
+              progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym ^ " -- fail");
+              return (counter+1, pass, fail+1)
+         ) (0, 0, 0) selected_funs
+     in
+     print stdout (item "summary" (int pass ^^^ !^"pass" ^^ comma ^^^ int fail ^^^ !^"fail" ));
+     return ()
 
 
 
