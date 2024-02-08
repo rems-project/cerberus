@@ -526,7 +526,7 @@ Module RevocationProofs.
   | addr_cap_meta_same_tags_and_ghost_state :
     forall m1 m2 addr meta,
       addr_cap_meta_same m1 m2 addr meta meta
-  (* this covers a situation when cap corresponding to [meta2] was revoked *)
+  (* this covers a situation when cap corresponding to [meta2] has been revoked *)
   | addr_cap_meta_same_revoked :
     forall m1 m2 addr gs1 gs2 c1 c2 bs1 bs2 prov,
       CheriMemoryWithPNVI.fetch_bytes m1.(CheriMemoryWithPNVI.bytemap) addr (sizeof_pointer MorelloImpl.get) = bs1
@@ -584,10 +584,15 @@ Module RevocationProofs.
 
   (* CheriMemoryWithPNVI memory invariant.
 
-     NB: We do not enforce where tagged caps are pointing. They could
-     be pointing to live, dead, or outside of any allocation.
+     In general we do not enforce where tagged caps are pointing. They
+     could be pointing to live, dead, or outside of any allocation.
 
-     In case of Cornucopia the invariant will be different.
+     However if they are pointing to an allocation they must be within
+     it's bounds.
+
+     NB. [allocation.(is_dead)] is not used. Dead allocations are
+     immediately remved. So in case of Cornucopia the invariant will
+     be different.
 
    *)
   Definition mem_invariant_WithPNVI (m: CheriMemoryWithPNVI.mem_state_r) : Prop
@@ -614,18 +619,28 @@ Module RevocationProofs.
                    (* Have the same provenance and correct sequence bytes *)
                    (exists p, split_bytes_ptr_spec p bs)
                    (* decode without error *)
-                   /\ (exists c, decode_cap bs true c)
+                   /\ (exists c, decode_cap bs true c
+                           (* if there is a live allocation, the cap bounds should fit within it *)
+                           /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am ->
+                                            (* We do not allow escaped pointers to local variables *)
+                                            (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
+                                            cap_bounds_within_alloc c a)
+                     )
                  )
           )
       ).
 
   (* CheriMemoryWithoutPNVI memory invariant
 
-     It is similar to "with PNVI" except:
-     1. Provenance should be always `Prov_disabled`
-     2. All tagged caps bounds should fit one of existing allocations
+     It is similar to "with PNVI" except: 1. Provenance should be
+     always `Prov_disabled` 2. All tagged caps bounds should fit one
+     of existing allocations
 
-     It will work only for instant revocation. In case of Cornucopia the invariant will be different.
+     It will work only for instant revocation. In case of Cornucopia
+     the invariant will be different.
+
+     NB. [allocation.(is_dead)] is not used. Dead allocations are
+     immediately remved.
    *)
   Definition mem_invariant_WithoutPNVI (m: CheriMemoryWithoutPNVI.mem_state_r) : Prop
     :=
@@ -654,7 +669,7 @@ Module RevocationProofs.
                                 (* decode without error *)
                                 decode_cap bs true c
                                 (* with decoded bounds bounds fitting one of the allocations *)
-                                /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am ->
+                                /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
                                                  (* We do not allow escaped pointers to local variables *)
                                                  (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
                                                  cap_bounds_within_alloc c a)
@@ -741,9 +756,10 @@ Module RevocationProofs.
     destruct_mem_state_same M.
     split.
     -
+      (* mem_invariant_WithPNVI m1 -> mem_invariant_WithoutPNVI m2 *)
       unfold mem_invariant_WithPNVI, mem_invariant_WithoutPNVI.
       subst.
-      intros [H1 [H2 H3]].
+      intros [H1 [H2 [H3 H4]]].
       repeat split.
       +
         intros alloc_id a H.
@@ -759,7 +775,6 @@ Module RevocationProofs.
         rewrite Mallocs.
         eapply H0.
       +
-        destruct H3 as [H3 H4].
         unfold capmeta_same in Mcapmeta.
         unfold zmap_forall_keys in *.
         intros k I.
@@ -769,32 +784,67 @@ Module RevocationProofs.
         apply Mcapmeta.
         apply I.
       +
-        destruct H3 as [H3 H4].
         specialize (H4 addr g).
         specialize (Mcapmeta addr).
         destruct Mcapmeta as [[v1 [v2 [M1 [M2 M3]]]]|[M1 M2]].
         *
+          (* addr_cap_meta_same_tags_and_ghost_state *)
           assert(E:v2 = (true,g)).
           {
             eapply MapsTo_fun;eauto.
           }
           subst v2.
           invc M3.
+          specialize (H4 M1 (CheriMemoryWithPNVI.fetch_bytes (CheriMemoryWithPNVI.bytemap m1) addr (sizeof_pointer MorelloImpl.get))).
+          destruct H4.
+          reflexivity.
+          destruct H0.
+          invc H0.
+          clear -Mbytes H5.
+          (* seems provable *)
+          admit.
+        *
+          (* addr_cap_meta_same_revoked *)
+          (* we could not prove that all pointer bytes will have `Prov_disabled` provenance. We can only prove that they will have the same provenance *)
+          admit.
+      +
+        (* seems to be provable *)
+        (* Hint: prove `CheriMemoryWithoutPNVI.fetch_bytes` and `rev` are proper wrt `ZMap.Equiv AbsByte_eq` *)
+        admit.
+      +
+        (* not provable *)
+        specialize (H4 addr g).
+        unfold capmeta_same, zmap_relate_keys in Mcapmeta.
+        specialize (Mcapmeta addr).
+        destruct Mcapmeta as [Mcapmeta|Mcapmeta].
+        *
+          destruct Mcapmeta as [v1 [v2 [M1 [M2 CS]]]].
+          destruct CS.
           --
-            specialize (H4 M1 (CheriMemoryWithPNVI.fetch_bytes (CheriMemoryWithPNVI.bytemap m1) addr (sizeof_pointer MorelloImpl.get))).
-            destruct H4.
-            reflexivity.
-            destruct H0.
-            invc H0.
-            clear -Mbytes H5.
+            assert(meta = (true,g)) by (eapply F.MapsTo_fun; eauto).
+            subst meta.
+            specialize (H4 M1).
+            assert(exists bs, CheriMemoryWithPNVI.fetch_bytes (CheriMemoryWithPNVI.bytemap m1) addr (sizeof_pointer MorelloImpl.get) = bs) as F.
+            {
+              admit.
+            }
+            destruct F as [bs1 F].
+            specialize (H4 bs1 F).
+            destruct H4 as [[p S1] [c [D [a [alloc_id H4]]]]].
+            exists c.
+            split.
+            admit. (* follows from D *)
+
+            exists a, alloc_id.
+            split.
+            (* we stuck here. With PNVI allocation may or may not exists,
+               while without PNVI it must exsits. *)
+            admit.
+            admit.
+          --
             admit.
         *
           admit.
-      +
-        admit.
-      +
-        admit.
-        (* not sure about this one *)
     -
       unfold mem_invariant_WithPNVI, mem_invariant_WithoutPNVI.
       subst.
