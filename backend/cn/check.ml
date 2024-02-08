@@ -647,6 +647,10 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
      let@ () = ensure_bits_type loc expect in
      let@ () = ensure_bits_type loc (bt_of_pexpr pe2) in
+     let@ () = match iop with
+       | IOpShl | IOpShr -> return ()
+       | _ -> ensure_base_type loc ~expect (bt_of_pexpr pe2)
+     in
      check_pexpr pe1 (fun arg1 ->
      check_pexpr pe2 (fun arg2 ->
      let arg1_bt_range = BT.bits_range (Option.get (BT.is_bits_bt (IT.bt arg1))) in
@@ -669,8 +673,12 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      in
      let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
-     let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe2) in
      let@ () = WellTyped.ensure_bits_type loc expect in
+     let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
+     let@ () = match iop with
+       | IOpShl | IOpShr -> return ()
+       | _ -> ensure_base_type loc ~expect (bt_of_pexpr pe2)
+     in
      let (_, bits) = Option.get (BT.is_bits_bt expect) in
      check_pexpr pe1 (fun arg1 ->
      check_pexpr pe2 (fun arg2 ->
