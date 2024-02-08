@@ -696,7 +696,7 @@ and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
 let pp_static_assertion pp_annot (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression_aux pp_annot e ^^ P.comma ^^^ pp_stringLiteral lit)
 
-let pp_tag_definition (tag, (_, def)) =
+let pp_tag_definition (tag, (_, _, def)) =
   match def with
     | StructDef (ident_qs_tys, flexible_opt) ->
         pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (

@@ -1713,9 +1713,9 @@ let get_anonymous_struct_or_union ty =
   match (* Ctype.unatomic_ *) ty with
     | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (Struct_definition _ _ _ (Just _)) ->
+          | Just (Struct_definition _ _ _ _ (Just _)) ->
               fail (Loc.unknown) (Errors.Desugar_ConstraintViolation Constraint.StructMemberFlexibleArray)
-          | Just (Struct_definition _ isAnonymous membrs Nothing) ->
+          | Just (Struct_definition _ _ isAnonymous membrs Nothing) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1724,7 +1724,7 @@ let get_anonymous_struct_or_union ty =
         end
     | Ctype.Ctype _ (Ctype.Union tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (Union_definition _ isAnonymous membrs) ->
+          | Just (Union_definition _ _ isAnonymous membrs) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -2078,7 +2078,7 @@ let get_alignof =
   get_tag_definitions >>= fun tagDefs ->
   let pseudo_tagDefs =
     Map.map function
-      | Struct_definition _ _ membrs flex_opt ->
+      | Struct_definition _ _ _ membrs flex_opt ->
           List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) membrs ++
           match flex_opt with
             | Nothing ->
@@ -2086,7 +2086,7 @@ let get_alignof =
             | Just (Ctype.FlexibleArrayMember _ _ _ ty) ->
                 [(Nothing, Ctype.Ctype [] (Ctype.Array ty Nothing))]
           end
-      | Union_definition _ _ membrs ->
+      | Union_definition _ _ _ membrs ->
           List.map (fun (_, (_, align_opt, _, ty)) -> (Nothing, ty)) membrs
       | Enum_definition _ ->
           [(* dummy, this won't be called *)]
@@ -2408,10 +2408,10 @@ let mk_current_ail_sigma =
           List.reverse begin
             List.foldl (fun acc (ident, tagDef) ->
               match tagDef with
-                | Struct_definition attrs _ xs flexible_opt ->
-                    (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
-                | Union_definition attrs _ xs ->
-                    (ident, (attrs, Ctype.UnionDef xs)) :: acc
+                | Struct_definition loc attrs _ xs flexible_opt ->
+                    (ident, (loc, attrs, Ctype.StructDef xs flexible_opt)) :: acc
+                | Union_definition loc attrs _ xs ->
+                    (ident, (loc, attrs, Ctype.UnionDef xs)) :: acc
                 | Enum_definition _ ->
                     acc
               end
@@ -2595,10 +2595,10 @@ let extract_program startup_str =
      
      A.tag_definitions= List.foldr (fun (sym, def) acc ->
                           match def with
-                           | Struct_definition attrs _ membersDefs flexible_opt ->
-                               (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
-                           | Union_definition attrs _ membersDefs ->
-                               (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
+                           | Struct_definition loc attrs _ membersDefs flexible_opt ->
+                               (sym, (loc, attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
+                           | Union_definition loc attrs _ membersDefs ->
+                               (sym, (loc, attrs, Ctype.UnionDef membersDefs)) :: acc
                            | Enum_definition _ ->
                                acc
                            end
@@ -2680,10 +2680,10 @@ let get_sigma_sofar =
        
        A.tag_definitions= List.foldr (fun (sym, def) acc ->
                             match def with
-                             | Struct_definition attrs _ membersDefs flexible_opt ->
-                                 (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
-                             | Union_definition attrs _ membersDefs ->
-                                 (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
+                             | Struct_definition loc attrs _ membersDefs flexible_opt ->
+                                 (sym, (loc, attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
+                             | Union_definition loc attrs _ membersDefs ->
+                                 (sym, (loc, attrs, Ctype.UnionDef membersDefs)) :: acc
                              | Enum_definition _ ->
                                  acc
                              end

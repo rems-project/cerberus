@@ -14,7 +14,7 @@ let inline (<$>) = E.fmap
 
 val lookup_tag_definition: forall 'a. sigma 'a -> ail_identifier -> maybe tag_definition
 let lookup_tag_definition s sym =
-  Maybe.map snd (List.lookup sym s.tag_definitions)
+  Maybe.map (fun (_, _, z) -> z) (List.lookup sym s.tag_definitions)
 
 
 (* NOTE: move in_range and try_ranges inside gen_typing_type_of_constant if Lem ever allows
@@ -2257,7 +2257,7 @@ let annotate_sigma sigm =
     else
       E.return () in
   E.mapM (function
-    | (_, (_, StructDef xs flexible_opt)) ->
+    | (_, (_, _, StructDef xs flexible_opt)) ->
         E.mapM_ (check_member true) xs >>= fun () ->
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
@@ -2269,7 +2269,7 @@ let annotate_sigma sigm =
           | Just (FlexibleArrayMember _ _ flex_qs flex_elem_ty) ->
               wf_lvalue sigm flex_qs (Ctype [] (Array flex_elem_ty Nothing))
         end
-    | (_, (_, UnionDef xs)) ->
+    | (_, (_, _, UnionDef xs)) ->
         E.mapM (check_member false) xs >>
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)

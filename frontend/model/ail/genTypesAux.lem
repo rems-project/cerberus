@@ -381,19 +381,19 @@ let is_complete sigm gty =
       (* STD §6.2.5#22, sentence 3-4 *)
     | GenStruct sym ->
         match List.lookup sym sigm.tag_definitions with
-          | Just (_, StructDef _ _) ->
+          | Just (_, _, StructDef _ _) ->
               (* TODO[note]: as far as I can tell, a struct with a flexible array member
                               is still a complete type *)
               true
           | _ ->
-              let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
-                  (fun () -> "GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
+              (* let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
+                  (fun () -> "GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in *)
               false
         end
       (* STD §6.2.5#22, sentence 3-4 *)
     | GenUnion sym ->
         match List.lookup sym sigm.tag_definitions with
-          | Just (_, UnionDef _) ->
+          | Just (_, _, UnionDef _) ->
               true
           | _ ->
               false

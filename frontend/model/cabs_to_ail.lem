@@ -138,7 +138,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: xs) _) ->
+          | Just (Struct_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: xs) _) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
@@ -160,7 +160,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
     | Ctype.Union tag_sym ->
         (* TODO: check *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
@@ -186,7 +186,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               ([Elem_array 0], if is_unknown_size then entity_cty else elem_ty)
           | Ctype.Struct tag_sym ->
               match Map.lookup tag_sym tagDefs with
-                | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _) _) ->
+                | Just (Struct_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _) _) ->
                     let () = if isAnonymous then
                       Debug.print_debug 2 [] (fun () ->
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
@@ -199,7 +199,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
           | Ctype.Union tag_sym ->
               (* TODO: check *)
               match Map.lookup tag_sym tagDefs with
-                | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
+                | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
                       Debug.print_debug 2 [] (fun () ->
                         "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
@@ -328,7 +328,7 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
 
-          | Just (Struct_definition _ isAnonymous xs _) ->
+          | Just (Struct_definition _ _ isAnonymous xs _) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
@@ -372,7 +372,7 @@ let rec _UNUSED_ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
           _UNUSED_ctypeAtPath tagDefs elem_ty path'
     | (Ctype.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ _ xs _) ->
+          | Just (Struct_definition _ _ _ xs _) ->
               match List.lookup memb_ident xs with
                 | Nothing ->
                     error "ctypeAtPath: Struct, invalid member"
@@ -409,7 +409,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
         innerCtype tagDefs atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ _ ((_, (_, _, _, memb_ty)) :: _) _) ->
+          | Just (Struct_definition _ _ _ ((_, (_, _, _, memb_ty)) :: _) _) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Struct"
@@ -417,7 +417,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
     | Ctype.Union tag_sym ->
         (* TODO: this may be wrong when called in a Desig context ... *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ _ ((_, (_, _, _, memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ _ ((_, (_, _, _, memb_ty)) :: _)) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Union"
@@ -447,7 +447,7 @@ let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
           List.reverse acc
     | (Ctype.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ _ ((first_memb_ident, (_, _, _, memb_ty)) :: _) _) ->
+          | Just (Struct_definition _ _ _ ((first_memb_ident, (_, _, _, memb_ty)) :: _) _) ->
               if first_memb_ident = memb_ident then
                 match path' with
                   | [] ->
@@ -499,7 +499,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ isAnonymous xs _) ->
+          | Just (Struct_definition _ _ isAnonymous xs _) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
@@ -516,7 +516,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
@@ -1575,11 +1575,11 @@ let rec desugar_type_specifiers specs =
           E.register_tag_definition loc tag_sym
             match (struct_or_union, flexible_opt) with
               | (UNION, _) ->
-                  Union_definition attrs (isNothing tag_ident_opt) all_membDefs
+                  Union_definition loc attrs (isNothing tag_ident_opt) all_membDefs
               | (STRUCT, Nothing) ->
-                  Struct_definition attrs (isNothing tag_ident_opt) all_membDefs Nothing
+                  Struct_definition loc attrs (isNothing tag_ident_opt) all_membDefs Nothing
               | (STRUCT, Just (membDefs', flexible)) ->
-                  Struct_definition attrs (isNothing tag_ident_opt) membDefs' (Just flexible)
+                  Struct_definition loc attrs (isNothing tag_ident_opt) membDefs' (Just flexible)
             end >>= fun () ->
           E.return (Ctype.no_qualifiers, type_ctor tag_sym) in
         match specs with
@@ -2910,13 +2910,13 @@ and _UNUSED_static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty)
     
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ _ xs Nothing) ->
+          | Just (Struct_definition _ _ _ xs Nothing) ->
               ConstantStruct tag_sym $
                 List.map (fun (ident, (_, _, _, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
                   (ident, _UNUSED_static_thread_implicit_initializer tagDefs ty)
                 ) xs
-          | Just (Struct_definition _ _ _ (Just _)) ->
+          | Just (Struct_definition _ _ _ _ (Just _)) ->
               error "TODO: Cabs_to_ail.static_thread_implicit_initializer => flexible array member"
           | _ ->
               error "Cabs_to_ail.static_thread_implicit, Struct, not Struct_definition"
@@ -2924,7 +2924,7 @@ and _UNUSED_static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty)
     
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ _ xs) ->
+          | Just (Union_definition _ _ _ xs) ->
               let (ident, (_, _, _, ty)) = match xs with
                 | [] ->
                     (* NOTE: I don't the parser can produce an empty Union_definition *)
@@ -3128,7 +3128,7 @@ and foo_aux
                               end in
                               E.get_tag_definitions >>= fun tagDefs ->
                               match Map.lookup tag_sym tagDefs with
-                                | Just (Struct_definition _ isAnonymous membrs _) ->
+                                | Just (Struct_definition _ _ isAnonymous membrs _) ->
                                     begin if isAnonymous then
                                       E.print_debugM 2 (fun () ->
                                         "foo_aux (Init_expr, is_struct): this may be WRONG ==> anonymous Struct"

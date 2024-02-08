@@ -7,8 +7,8 @@ module A = AilSyntax
 
 
 type tag_definition =
-  | Struct_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
-  | Union_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype))
+  | Struct_definition of Loc.t * Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
+  | Union_definition of Loc.t * Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype))
   | Enum_definition of list integer
 
 
@@ -95,7 +95,7 @@ end
 val desug_get_structDefs: map Symbol.sym tag_definition -> Symbol.sym -> Annot.attributes * bool * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
 let desug_get_structDefs tagDefs tag_sym =
   match Map.lookup tag_sym tagDefs with
-    | Just (Struct_definition annots isAnonymous xs flex_opt) ->
+    | Just (Struct_definition _ annots isAnonymous xs flex_opt) ->
         (annots, isAnonymous, xs, flex_opt)
     | Just _ ->
         error ("Cabs_to_ail_aux.desug_get_structDefs (" ^ show tag_sym ^
@@ -135,7 +135,7 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
     | Ctype.Struct tag_sym ->
         A.ConstantStruct tag_sym
           match Map.lookup tag_sym tagDefs with
-            | Just (Struct_definition _ _ xs _) ->
+            | Just (Struct_definition _ _ _ xs _) ->
                 (* NOTE: the potential flexible array member is NOT initialised
                          (there won't even be space allocated for it) *)
                 List.map (fun (memb_ident, (_, _, _, memb_ty)) ->
@@ -146,7 +146,7 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
           end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ _ ((memb_ident, (_, _, _, memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ _ ((memb_ident, (_, _, _, memb_ty)) :: _)) ->
               A.ConstantUnion tag_sym memb_ident (mk_zeroInit_aux tagDefs memb_ty)
           | _ ->
               error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Union"

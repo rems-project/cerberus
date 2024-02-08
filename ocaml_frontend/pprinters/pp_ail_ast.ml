@@ -541,7 +541,7 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
   end
 
 
-let dtree_of_tag_definition (i, (def_attrs, tag)) =
+let dtree_of_tag_definition (i, (tagdef_loc, def_attrs, tag)) =
   let dleaf_of_field (i, (attrs, align_opt, qs, ty)) =
     with_attributes attrs begin
       Dleaf (Pp_symbol.pp_identifier i ^^^ P.squotes (pp_ctype qs ty) ^^
@@ -554,12 +554,14 @@ let dtree_of_tag_definition (i, (def_attrs, tag)) =
               fs_
           | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
               fs_ @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))] in
-        Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id ~is_human:true i
+        Dnode ( pp_ctor "StructDef" ^^^ Cerb_location.pp_location ~clever:false tagdef_loc ^^^
+                Pp_ail.pp_id ~is_human:true i
               , List.map dleaf_of_field fs)
 
 
     | UnionDef fs ->
-        Dnode (pp_ctor "UnionDef" ^^^ Pp_ail.pp_id ~is_human:true i
+        Dnode ( pp_ctor "UnionDef" ^^^ Cerb_location.pp_location ~clever:false tagdef_loc ^^^
+                Pp_ail.pp_id ~is_human:true i
               , List.map dleaf_of_field fs)
   end
 

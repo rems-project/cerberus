@@ -3871,10 +3871,10 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
 
 
 val translate_tag_definitions:
-  list (A.ail_identifier * (Annot.attributes * Ctype.tag_definition)) ->
+  list (A.ail_identifier * (Loc.t * Annot.attributes * Ctype.tag_definition)) ->
   C.core_tag_definitions
 let translate_tag_definitions ctx =
-  Map.fromList (List.map (fun (x, (_, y)) -> (x, y)) ctx)
+  Map.fromList (List.map (fun (x, (_, _, y)) -> (x, y)) ctx)
 
 import Cerb_attributes
 

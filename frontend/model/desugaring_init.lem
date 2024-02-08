@@ -51,7 +51,7 @@ end
 let lookup_struct_members tagDefs tag_sym =
   let aux (ident, (_, _, _, ty)) = (ident, ty) in
   match Map.lookup tag_sym tagDefs with
-    | Just (Struct_definition _ _ (x::xs) flex_opt) ->
+    | Just (Struct_definition _ _ _ (x::xs) flex_opt) ->
         (aux x, List.map aux xs, flex_opt)
     | _ ->
         error "Desugaring_init.lookup_struct_members: Nothing or empty Struct definition"
@@ -60,7 +60,7 @@ let lookup_struct_members tagDefs tag_sym =
 let lookup_union_members tagDefs tag_sym =
   let aux (ident, (_, _, _, ty)) = (ident, ty) in
   match Map.lookup tag_sym tagDefs with
-    | Just (Union_definition _ _ (x::xs)) ->
+    | Just (Union_definition _ _ _ (x::xs)) ->
         (aux x, List.map aux xs)
     | _ ->
         error "Desugaring_init.lookup_union_members: Nothing or empty Union definition"
@@ -535,7 +535,7 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
         wrap_expr (AilSyntax.AilEarray false(*TODO*) elem_ty es)
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ isAnonymous xs _) ->
+          | Just (Struct_definition _ _ isAnonymous xs _) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
@@ -551,7 +551,7 @@ let rec constructValue_aux tagDefs path init_map (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
