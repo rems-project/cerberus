@@ -1131,16 +1131,13 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
           | Array (item_ty, _) -> Memory.size_of_ctype item_ty
           | ct -> Memory.size_of_ctype ct
         in
+        let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
         let value =
-          (* TODO: here there might be a basetype mismatch: arg1 and
-             arg2 are cast to intptr_t, the return value we want is of
-             the basetype corresponding to ptrdiff_t (hence the
-             divisor literal type). But AIUI, these don't have to be
-             the same base type?*)
+          (* TODO: confirm that the cast from intptr_t to ptrdiff_t
+             yields the expected result. *)
           div_
-            (sub_ (pointerToIntegerCast_ arg1, (* intptr_t *)
-                   pointerToIntegerCast_ arg2), (* intptr_t *)
-             int_lit_ divisor (Memory.bt_of_sct (Integer Ptrdiff_t)))
+            (cast_ ptr_diff_bt (sub_ (pointerToIntegerCast_ arg1, pointerToIntegerCast_ arg2)),
+             int_lit_ divisor ptr_diff_bt)
         in
         k value))
      | M_IntFromPtr (act_from, act_to, pe) ->

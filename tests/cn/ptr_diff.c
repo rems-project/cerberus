@@ -1,0 +1,10 @@
+
+int
+f (int *p, int *q)
+/*@ requires q == array_shift(p, 10i32) @*/
+{
+  int x;
+  x = p - q;
+
+  return x;
+}
