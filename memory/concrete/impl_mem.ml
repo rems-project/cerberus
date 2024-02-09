@@ -356,6 +356,36 @@ module Concrete : Memory = struct
   
   open Eff
   
+  let combine_prov prov1 prov2 =
+    match (prov1, prov2) with
+      | (Prov_none, Prov_none) ->
+          Prov_none
+      | (Prov_none, Prov_some id) ->
+          Prov_some id
+      | (Prov_none, Prov_device) ->
+          Prov_device
+      | (Prov_some id, Prov_none) ->
+          Prov_some id
+      | (Prov_some id1, Prov_some id2) ->
+          if id1 = id2 then
+            Prov_some id1
+          else
+            Prov_none
+      | (Prov_some _, Prov_device) ->
+          Prov_device
+      | (Prov_device, Prov_none) ->
+          Prov_device
+      | (Prov_device, Prov_some _) ->
+          Prov_device
+      | (Prov_device, Prov_device) ->
+          Prov_device
+      
+      (* PNVI-ae-udi *)
+      (* TODO: this is improvised, need to check with P *)
+      | (Prov_symbolic _, _)
+      | (_, Prov_symbolic _) ->
+          failwith "Concrete.combine_prov: found a Prov_symbolic"  
+
   
   (* INTERNAL: address *)
   type address = N.num
@@ -2387,36 +2417,6 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
             fail ~loc MerrIntFromPtr
           else
             return (mk_ival prov addr)
-
-let combine_prov prov1 prov2 =
-  match (prov1, prov2) with
-    | (Prov_none, Prov_none) ->
-        Prov_none
-    | (Prov_none, Prov_some id) ->
-        Prov_some id
-    | (Prov_none, Prov_device) ->
-        Prov_device
-    | (Prov_some id, Prov_none) ->
-        Prov_some id
-    | (Prov_some id1, Prov_some id2) ->
-        if id1 = id2 then
-          Prov_some id1
-        else
-          Prov_none
-    | (Prov_some _, Prov_device) ->
-        Prov_device
-    | (Prov_device, Prov_none) ->
-        Prov_device
-    | (Prov_device, Prov_some _) ->
-        Prov_device
-    | (Prov_device, Prov_device) ->
-        Prov_device
-    
-    (* PNVI-ae-udi *)
-    (* TODO: this is improvised, need to check with P *)
-    | (Prov_symbolic _, _)
-    | (_, Prov_symbolic _) ->
-        failwith "Concrete.combine_prov: found a Prov_symbolic"
 
 
   let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
