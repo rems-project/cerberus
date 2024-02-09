@@ -339,6 +339,9 @@ let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
   | PEmemop( mop, pes) -> PEmemop ( mop, (selfs pes))
   | PEnot pe -> PEnot (self( 1) pe)
   | PEop( bop, pe1, pe2) -> PEop( bop, (self( 1) pe1), (self( 2) pe2))
+  | PEconv_int ( ity, pe) -> PEconv_int( ity, (self( 1) pe))
+  | PEwrapI ( ity, iop, pe1, pe2) -> PEwrapI ( ity, iop, (self( 1) pe1), (self( 2) pe2))
+  | PEcatch_exceptional_condition ( ity, iop, pe1, pe2) -> PEcatch_exceptional_condition ( ity, iop, (self( 1) pe1), (self( 2) pe2))
   | PEstruct( sym2, fields) -> PEstruct( sym2,
                       (Lem_list.mapi (fun i (cid, pe) -> (cid, self (i+ 1) pe)) fields))
   | PEunion( sym2, cid, pe) -> PEunion( sym2, cid, (self( 1) pe))

@@ -42,6 +42,12 @@ let rec unsafe_substitute_pexpr (map: substitute_map)
         PEnot(unsafe_substitute_pexpr map pe)
     | PEop (binop, pe1, pe2) ->
         PEop(binop, unsafe_substitute_pexpr map pe1, unsafe_substitute_pexpr map pe2)
+    | PEconv_int (ity, pe) ->
+        PEconv_int(ity, unsafe_substitute_pexpr map pe)
+    | PEwrapI (ity, iop, pe1, pe2) ->
+        PEwrapI (ity, iop, unsafe_substitute_pexpr map pe1, unsafe_substitute_pexpr map pe2)
+    | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+        PEcatch_exceptional_condition (ity, iop, unsafe_substitute_pexpr map pe1, unsafe_substitute_pexpr map pe2)
     | PEstruct _
     | PEunion _ -> assert false
     | PEcall (name, pelist) ->

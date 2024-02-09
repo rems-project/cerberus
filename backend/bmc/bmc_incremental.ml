@@ -233,6 +233,17 @@ module BmcInline = struct
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
         return (PEop(bop, inlined_pe1, inlined_pe2))
+    | PEconv_int (ity, pe) ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEconv_int (ity, inlined_pe))
+    | PEwrapI (ity, iop, pe1, pe2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (PEwrapI (ity, iop, inlined_pe1, inlined_pe2))
+    | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (PEcatch_exceptional_condition (ity, iop, inlined_pe1, inlined_pe2))
     | PEstruct (sym, pexprs) ->
         mapM (fun (cab_id, pe) ->
           inline_pe pe >>= fun inlined_pe ->
@@ -813,6 +824,17 @@ module BmcSSA = struct
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
         return (PEop(binop, ssad_pe1, ssad_pe2))
+    | PEconv_int (ity, pe) ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEconv_int (ity, ssad_pe))
+    | PEwrapI (ity, iop, pe1, pe2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (PEwrapI (ity, iop, ssad_pe1, ssad_pe2))
+    | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (PEcatch_exceptional_condition (ity, iop, ssad_pe1, ssad_pe2))
     | PEstruct (sym, pexprs) ->
        mapM (fun (cab_id, pe) ->
           ssa_pe pe >>= fun ssad_pe ->
@@ -1383,6 +1405,11 @@ module BmcZ3 = struct
         z3_pe pe1 >>= fun z3d_pe1 ->
         z3_pe pe2 >>= fun z3d_pe2 ->
         return (binop_to_z3 binop z3d_pe1 z3d_pe2)
+    | PEconv_int _
+    | PEwrapI _
+    | PEcatch_exceptional_condition _ ->
+        (* FIXME: this is only used by CN *)
+        failwith "PEconv_int|PEwrapI|PEcatch_exceptional_condition is not supported"
     | PEstruct (sym, pes) ->
         get_file >>= fun file ->
         let struct_sort = CtypeToZ3.struct_sym_to_z3_sort sym file in
@@ -2284,6 +2311,13 @@ module BmcBind = struct
         bind_pe pe1 >>= fun bound_pe1 ->
         bind_pe pe2 >>= fun bound_pe2 ->
         return (bound_pe1 @ bound_pe2)
+    | PEconv_int (_, pe) ->
+        bind_pe pe
+    | PEwrapI (_, _, pe1, pe2)
+    | PEcatch_exceptional_condition (_, _, pe1, pe2) ->
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        return (bound_pe1 @ bound_pe2)
     | PEstruct (_, pes) ->
         mapM bind_pe @@ List.map snd pes >>= fun bound_pes ->
         return (List.concat bound_pes)
@@ -2659,6 +2693,13 @@ module BmcVC = struct
     | PEmemop _ -> (* FIXME: CHERI *) failwith "PEmemop"
     | PEnot pe         -> vcs_pe pe
     | PEop (_, pe1, pe2) ->
+        vcs_pe    pe1 >>= fun vc1s ->
+        vcs_pe    pe2 >>= fun vc2s ->
+        return (vc1s @ vc2s)
+    | PEconv_int (_, pe) ->
+        vcs_pe pe
+    | PEwrapI (_, _, pe1, pe2)
+    | PEcatch_exceptional_condition (_, _, pe1, pe2) ->
         vcs_pe    pe1 >>= fun vc1s ->
         vcs_pe    pe2 >>= fun vc2s ->
         return (vc1s @ vc2s)
@@ -5131,6 +5172,13 @@ module BmcConcActions = struct
     | PEnot pe ->
         do_taint_pe pe
     | PEop (_, pe1, pe2) ->
+        do_taint_pe pe1 >>= fun taint_pe1 ->
+        do_taint_pe pe2 >>= fun taint_pe2 ->
+        return (Pset.union taint_pe1 taint_pe2)
+    | PEconv_int (_, pe) ->
+        do_taint_pe pe
+    | PEwrapI (_, _, pe1, pe2)
+    | PEcatch_exceptional_condition (_, _, pe1, pe2) ->
         do_taint_pe pe1 >>= fun taint_pe1 ->
         do_taint_pe pe2 >>= fun taint_pe2 ->
         return (Pset.union taint_pe1 taint_pe2)
