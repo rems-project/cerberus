@@ -762,11 +762,13 @@ Module RevocationProofs.
       intros [H1 [H2 [H3 H4]]].
       repeat split.
       +
+        (* ... -> is_dead a = false *)
         intros alloc_id a H.
         apply (H1 alloc_id).
         rewrite Mallocs.
         assumption.
       +
+        (* ... -> allocations_do_no_overlap a1 a2 *)
         intros alloc_id1 alloc_id2 a1 a2 H H0.
         eapply H2.
         eauto.
@@ -775,6 +777,8 @@ Module RevocationProofs.
         rewrite Mallocs.
         eapply H0.
       +
+        (* zmap_forall_keys (fun addr : Z => addr mod alignof_pointer MorelloImpl.get = 0)  (CheriMemoryWithoutPNVI.capmeta m2) *)
+
         unfold capmeta_same in Mcapmeta.
         unfold zmap_forall_keys in *.
         intros k I.
@@ -784,6 +788,7 @@ Module RevocationProofs.
         apply Mcapmeta.
         apply I.
       +
+        (* Forall (fun x : AbsByte => provenance_eqb Prov_disabled (prov x) = true) bs *)
         specialize (H4 addr g).
         specialize (Mcapmeta addr).
         destruct Mcapmeta as [[v1 [v2 [M1 [M2 M3]]]]|[M1 M2]].
@@ -808,11 +813,19 @@ Module RevocationProofs.
           (* we could not prove that all pointer bytes will have `Prov_disabled` provenance. We can only prove that they will have the same provenance *)
           admit.
       +
+        (* bytes_copy_offset_seq 0 (rev bs) *)
         (* seems to be provable *)
         (* Hint: prove `CheriMemoryWithoutPNVI.fetch_bytes` and `rev` are proper wrt `ZMap.Equiv AbsByte_eq` *)
         admit.
       +
-        (* not provable *)
+        (*
+          exists c : Capability_GS.t,
+          decode_cap bs true c /\
+          (exists (a : allocation) (alloc_id : ZMap.key),
+          ZMap.MapsTo alloc_id a (CheriMemoryWithoutPNVI.allocations m2) /\
+          cap_bounds_within_alloc c a)
+         *)
+        (* not provable (`decode_cap bs true c` is OK) *)
         specialize (H4 addr g).
         unfold capmeta_same, zmap_relate_keys in Mcapmeta.
         specialize (Mcapmeta addr).
@@ -846,16 +859,20 @@ Module RevocationProofs.
         *
           admit.
     -
+      (* not provable *)
+      (* mem_invariant_WithoutPNVI m2 -> mem_invariant_WithPNVI m1  *)
       unfold mem_invariant_WithPNVI, mem_invariant_WithoutPNVI.
       subst.
-      intros [H1 [H2 H3]].
+      intros [H1 [H2 [H3 H4]]].
       repeat split.
       +
+        (* ... -> is_dead a = false *)
         intros alloc_id a H.
         apply (H1 alloc_id).
         rewrite <- Mallocs.
         assumption.
       +
+        (* ... -> allocations_do_no_overlap a1 a2 *)
         intros alloc_id1 alloc_id2 a1 a2 H H0.
         eapply H2.
         rewrite <- Mallocs.
@@ -863,8 +880,7 @@ Module RevocationProofs.
         rewrite <- Mallocs.
         eapply H0.
       +
-
-        destruct H3 as [H3 H4].
+        (* zmap_forall_keys (fun addr : Z => addr mod alignof_pointer MorelloImpl.get = 0)  (CheriMemoryWithPNVI.capmeta m1) *)
         unfold capmeta_same in Mcapmeta.
         unfold zmap_forall_keys in *.
         intros k I.
@@ -874,7 +890,60 @@ Module RevocationProofs.
         apply Mcapmeta.
         apply I.
       +
+        (*   exists p : provenance, split_bytes_ptr_spec p bs *)
+        (* we could not prove that all pointer bytes will have the same provenance *)
+        admit.
+      +
+        (*
+          exists c : Capability_GS.t,
+          decode_cap bs true c /\
+          (exists (a : allocation) (alloc_id : ZMap.key),
+          ZMap.MapsTo alloc_id a (CheriMemoryWithPNVI.allocations m1) ->
+          cap_bounds_within_alloc c a)
+         *)
+        specialize (H4 addr g).
+        unfold capmeta_same, zmap_relate_keys in Mcapmeta.
+        specialize (Mcapmeta addr).
+        destruct Mcapmeta as [Mcapmeta|[N1 N2]].
+        *
+          (* address present in both m1 and m2 capmeta *)
+          destruct Mcapmeta as [v1 [v2 [M1 [M2 CS]]]].
+          destruct CS.
+          --
+            (* addr_cap_meta_same_tags_and_ghost_state *)
+            assert(meta = (true,g)).
+            {
+              eapply (F.MapsTo_fun M1).
+              eauto.
+            }
+            subst meta.
+            specialize (H4 M2).
+            assert(exists bs, CheriMemoryWithoutPNVI.fetch_bytes (CheriMemoryWithoutPNVI.bytemap m2) addr (sizeof_pointer MorelloImpl.get) = bs) as F.
+            {
+              admit.
+            }
+            destruct F as [bs1 F].
+            specialize (H4 bs1 F).
+            destruct H4 as [[p S1] [c [D [a [alloc_id [H4 H5]]]]]].
+            exists c.
+            split.
+            admit. (* follows from D *)
+            exists a, alloc_id.
+            rewrite Mallocs.
+            auto.
+          --
+            (* addr_cap_meta_same_revoked *)
 
+            (* we could not derive anything useful from a variant without PNVI,
+               because revoked caps are not present there and `MCapmeta` does not
+               give use any information about them. Hence this is also not provable.
+               *)
+            admit.
+        *
+          (* address present in neither m1 nor m2 capmeta *)
+          contradict N1.
+          exists (true, g).
+          apply H.
   Admitted.
 
   (* --- Helper lemmas *)
