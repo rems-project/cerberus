@@ -26,8 +26,7 @@ From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
 From Coq.Lists Require Import List SetoidList. (* after exltlib *)
 
-From CheriCaps.Morello Require Import
-  Capabilities.
+From CheriCaps.Morello Require Import Capabilities.
 From CheriCaps.Common Require Import Capabilities.
 
 From Common Require Import SimpleError Utils ZMap.
@@ -73,73 +72,6 @@ Module RevocationProofs.
 
   Definition remove_Revocation: cerb_switches_t -> cerb_switches_t :=
     List.filter (fun s => negb (is_Revocation_switch s)).
-
-  (* 1. removes all PNVI flavours
-     2. Adds [SW_revocation INSTANT] and removes all other revocation mechanisms
-   *)
-  Module WithoutPNVISwitches.
-    Definition get_switches (_:unit) :=
-      ListSet.set_add cerb_switch_dec (SW_revocation INSTANT)
-      (remove_Revocation
-        (remove_PNVI (abst_get_switches tt))).
-  End WithoutPNVISwitches.
-
-  (* 1. removes all revocation mechanisms
-     2. adds [SW_PNVI AE_UDI] and removes all other PNVI flavours *)
-  Module WithPNVISwitches.
-    Definition get_switches (_:unit) :=
-      ListSet.set_add cerb_switch_dec (SW_PNVI AE_UDI)
-        (remove_Revocation
-           (remove_PNVI (abst_get_switches tt))).
-  End WithPNVISwitches.
-
-  (* This is pure CHERI memory model with instant revocation but without PNVI. *)
-  Module CheriMemoryWithoutPNVI: CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithoutPNVISwitches).
-    Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithoutPNVISwitches).
-  End CheriMemoryWithoutPNVI.
-
-  (* This is CHERI memory model whout instant revocation but with PNVI. *)
-  Module CheriMemoryWithPNVI:CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
-    Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(WithPNVISwitches).
-  End CheriMemoryWithPNVI.
-
-  (* monad laws for both instantiations *)
-
-  #[global] Instance CheriMemoryWithPNVI_memM_MonadLaws:
-    MonadLaws (CheriMemoryWithPNVI.memM_monad).
-  Proof.
-    split; intros;  unfold CheriMemoryWithPNVI.memM_monad, Monad_errS, ret, bind;
-      repeat break_let.
-    - f_equiv.
-    -
-      apply functional_extensionality.
-      destruct x.
-      break_let.
-      destruct s; reflexivity.
-    -
-      apply functional_extensionality.
-      destruct x.
-      repeat break_let.
-      repeat break_match; tuple_inversion; reflexivity.
-  Qed.
-
-  #[global] Instance CheriMemoryWithoutPNVI_memM_MonadLaws:
-    MonadLaws (CheriMemoryWithoutPNVI.memM_monad).
-  Proof.
-    split; intros;  unfold CheriMemoryWithoutPNVI.memM_monad, Monad_errS, ret, bind;
-      repeat break_let.
-    - f_equiv.
-    -
-      apply functional_extensionality.
-      destruct x.
-      break_let.
-      destruct s; reflexivity.
-    -
-      apply functional_extensionality.
-      destruct x.
-      repeat break_let.
-      repeat break_match; tuple_inversion; reflexivity.
-  Qed.
 
   (* --- Equality predicates for types used in Memory Models --- *)
 
@@ -202,21 +134,21 @@ Module RevocationProofs.
         ZMap.MapsTo alloc_id2 a2 allocs ->
         (cap_bounds_within_alloc c1 a1 \/ cap_bounds_within_alloc c1 a2)
         -> c1 = c2 -> (* then c1 and c2 must be equal *)
-    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+        double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
 
   | double_cap_cmp_first_live:
     (* When only the first allocation ID is mapped to an allocation *)
     forall a1, ZMap.MapsTo alloc_id1 a1 allocs ->
-    ~ZMap.In alloc_id2 allocs ->
-    cap_match_with_alloc a1 c1 c2 -> (* then match c1 to c2 based on alloc_id1 *)
-    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+          ~ZMap.In alloc_id2 allocs ->
+          cap_match_with_alloc a1 c1 c2 -> (* then match c1 to c2 based on alloc_id1 *)
+          double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
 
   | double_cap_cmp_second_live:
     (* When only the second allocation ID is mapped to an allocation *)
     ~ZMap.In alloc_id1 allocs ->
     forall a2, ZMap.MapsTo alloc_id2 a2 allocs ->
-    cap_match_with_alloc a2 c1 c2 -> (* then match c1 to c2 based on alloc_id2 *)
-    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+          cap_match_with_alloc a2 c1 c2 -> (* then match c1 to c2 based on alloc_id2 *)
+          double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
 
   | double_cap_cmp_both_dead:
     (* When neither allocation ID is live (not mapped in allocs) *)
@@ -225,6 +157,298 @@ Module RevocationProofs.
     Capability_GS.cap_invalidate c1 = c2 -> (* then c1 must be invalidated to equal c2 *)
     double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2.
 
+
+  (* Equality of byte values without taking provenance into account *)
+  Inductive AbsByte_eq: relation AbsByte :=
+  | AbsByte_no_prov_eq: forall a1 a2,
+      copy_offset a1 = copy_offset a2
+      /\ value a1 = value a2 -> AbsByte_eq a1 a2.
+
+  #[local] Instance AbsByte_Equivalence: Equivalence AbsByte_eq.
+  Proof.
+    split.
+    -
+      intros a.
+      destruct a.
+      constructor.
+      split;reflexivity.
+    -
+      intros a b.
+      destruct a, b.
+      intros H.
+      destruct H. destruct H.
+      constructor.
+      auto.
+    -
+      intros a b c.
+      destruct a, b, c.
+      intros H1 H2.
+      destruct H1. destruct H.
+      destruct H2. destruct H1.
+      constructor.
+      split.
+      rewrite H; apply H1.
+      rewrite H0. apply H2.
+  Qed.
+
+  (* Simple function decode capability from memory. We do not check alignment, provenance, etc.
+     Could be proven to be them same as [decode_cap]
+   *)
+  (*
+  Definition decode_cap_fun (abs:list AbsByte) (tag:bool): option Capability_GS.t
+    :=
+    let bs := List.map value abs in
+    cs <- extract_unspec bs ;;
+    Capability_GS.decode (List.rev cs) tag.
+   *)
+
+  Definition decode_cap (bs:list AbsByte) (tag:bool) (c:Capability_GS.t): Prop
+    :=
+    exists ls:list ascii,
+      (* have their corrsponding bytes intialized *)
+      Forall2 (fun a x => a.(value) = Some x) bs ls
+      (* decode without error *)
+      /\ Capability_GS.decode (List.rev ls) true = Some c.
+
+  (* [True] if list of bytes starts with given offset and offsets
+     increases by one each step *)
+  Inductive bytes_copy_offset_seq: nat -> list AbsByte -> Prop :=
+  | bytes_copy_offset_seq_nil: forall n, bytes_copy_offset_seq n []
+  | bytes_copy_offset_seq_cons:
+    forall n b bs,
+      b.(copy_offset) = Some n ->
+      bytes_copy_offset_seq (S n) bs -> bytes_copy_offset_seq n (b::bs).
+
+  (* [True] if all bytes in given list [bl] have given provenance, and
+     their offsets are sequential ending with [0] *)
+  Definition split_bytes_ptr_spec (p:provenance) (bl:list AbsByte): Prop :=
+    List.Forall (fun x => provenance_eqb p x.(prov) = true) bl
+    /\ bytes_copy_offset_seq 0 (List.rev bl).
+
+  Definition allocations_do_no_overlap (a1 a2:allocation) : Prop
+    :=
+    let a1_base := AddressValue.to_Z a1.(base) in
+    let a2_base := AddressValue.to_Z a2.(base) in
+    let a1_size := a1.(size) in
+    let a2_size := a2.(size) in
+    (a1_base + a1_size <= a2_base) \/ (a2_base + a2_size <= a1_base).
+
+  Module Type CheriMemoryImplWithProofs
+    (SW: CerbSwitchesDefs) <:
+    CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(SW).
+    Include CheriMemoryExe(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(SW).
+
+    Import CheriMemoryTypesExe.
+
+    Definition base_mem_invariant (m: mem_state_r) : Prop
+      :=
+      let cm := m.(capmeta) in
+      let bm := m.(bytemap) in
+      let am := m.(allocations) in
+
+      (* All allocations are live *)
+      (forall alloc_id a, ZMap.MapsTo alloc_id a am ->  a.(is_dead) = false)
+
+      (* live allocatoins do not overlap *)
+      /\ (forall alloc_id1 alloc_id2 a1 a2,
+            ZMap.MapsTo alloc_id1 a1 am -> ZMap.MapsTo alloc_id2 a2 am -> allocations_do_no_overlap a1 a2)
+
+      (* All keys in capmeta must be pointer-aligned addresses *)
+      /\ zmap_forall_keys (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0) cm.
+
+
+    Instance memM_MonadLaws: MonadLaws (memM_monad).
+    Proof.
+      split; intros;  unfold memM_monad, Monad_errS, ret, bind;
+        repeat break_let.
+      - f_equiv.
+      -
+        apply functional_extensionality.
+        destruct x.
+        break_let.
+        destruct s; reflexivity.
+      -
+        apply functional_extensionality.
+        destruct x.
+        repeat break_let.
+        repeat break_match; tuple_inversion; reflexivity.
+    Qed.
+
+  End CheriMemoryImplWithProofs.
+
+  Module CheriMemoryImplWithProofsExe
+    (SW: CerbSwitchesDefs)
+  <: CheriMemoryImplWithProofs(SW).
+    Include CheriMemoryImplWithProofs(SW).
+  End CheriMemoryImplWithProofsExe.
+
+  (* 1. removes all PNVI flavours
+     2. Adds [SW_revocation INSTANT] and removes all other revocation mechanisms
+   *)
+  Module WithoutPNVISwitches.
+    Definition get_switches (_:unit) :=
+      ListSet.set_add cerb_switch_dec (SW_revocation INSTANT)
+        (remove_Revocation
+           (remove_PNVI (abst_get_switches tt))).
+  End WithoutPNVISwitches.
+
+  (* 1. removes all revocation mechanisms
+     2. adds [SW_PNVI AE_UDI] and removes all other PNVI flavours *)
+  Module WithPNVISwitches.
+    Definition get_switches (_:unit) :=
+      ListSet.set_add cerb_switch_dec (SW_PNVI AE_UDI)
+        (remove_Revocation
+           (remove_PNVI (abst_get_switches tt))).
+  End WithPNVISwitches.
+
+
+  (* This is pure CHERI memory model with instant revocation but without PNVI. *)
+  Module CheriMemoryWithoutPNVI: CheriMemoryImplWithProofs(WithoutPNVISwitches).
+    Include CheriMemoryImplWithProofsExe(WithoutPNVISwitches).
+
+    (* CheriMemoryWithoutPNVI memory invariant
+
+     It is similar to "with PNVI" except: 1. Provenance should be
+     always `Prov_disabled` 2. All tagged caps bounds should fit one
+     of existing allocations
+
+     It will work only for instant revocation. In case of Cornucopia
+     the invariant will be different.
+
+     NB. [allocation.(is_dead)] is not used. Dead allocations are
+     immediately remved.
+     *)
+    Definition mem_invariant (m: mem_state_r) : Prop
+      :=
+      let cm := m.(capmeta) in
+      let bm := m.(bytemap) in
+      let am := m.(allocations) in
+
+      base_mem_invariant m
+      /\
+        (* All caps which are tagged according to capmeta must: *)
+        (forall addr g, ZMap.MapsTo addr (true,g) cm ->
+                   (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
+                          (
+                            (* Have same provenance and correct sequence bytes *)
+                            split_bytes_ptr_spec Prov_disabled bs
+                            /\ (exists c,
+                                  (* decode without error *)
+                                  decode_cap bs true c
+                                  (* with decoded bounds bounds fitting one of the allocations *)
+                                  /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
+                                                     (* We do not allow escaped pointers to local variables *)
+                                                     (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
+                                                     cap_bounds_within_alloc c a)
+                              )
+                          )
+                   )
+        ).
+
+    Lemma initial_mem_state_invariant:
+      mem_invariant initial_mem_state.
+    Proof.
+      unfold initial_mem_state, mem_invariant.
+      repeat split; cbn in *.
+      -
+        intros alloc_id a H.
+        apply empty_mapsto_iff in H;
+          contradiction.
+      -
+        intros alloc_id1 alloc_id2 a1 a2 H H0.
+        apply empty_mapsto_iff in H;
+          contradiction.
+      -
+        unfold zmap_forall_keys.
+        intros k H.
+        apply empty_in_iff in H;
+          contradiction.
+      -
+        apply empty_mapsto_iff in H;
+          contradiction.
+      -
+        apply empty_mapsto_iff in H;
+          contradiction.
+      -
+        apply empty_mapsto_iff in H;
+          contradiction.
+    Qed.
+
+  End CheriMemoryWithoutPNVI.
+
+  (* This is CHERI memory model whout instant revocation but with PNVI. *)
+  Module CheriMemoryWithPNVI:CheriMemoryImplWithProofs(WithPNVISwitches).
+    Include CheriMemoryImplWithProofsExe(WithPNVISwitches).
+
+
+    (* CheriMemoryWithPNVI memory invariant.
+
+     In general we do not enforce where tagged caps are pointing. They
+     could be pointing to live, dead, or outside of any allocation.
+
+     However if they are pointing to an allocation they must be within
+     it's bounds.
+
+     NB. [allocation.(is_dead)] is not used. Dead allocations are
+     immediately remved. So in case of Cornucopia the invariant will
+     be different.
+
+     *)
+    Definition mem_invariant (m: mem_state_r) : Prop
+      :=
+      let cm := m.(capmeta) in
+      let bm := m.(bytemap) in
+      let am := m.(allocations) in
+
+      base_mem_invariant m
+      /\
+        (* All caps which are tagged according to capmeta must: *)
+        (forall addr g,
+            ZMap.MapsTo addr (true,g) cm ->
+            (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
+                   (
+                     (* Have the same provenance and correct sequence bytes *)
+                     (exists p, split_bytes_ptr_spec p bs)
+                     (* decode without error *)
+                     /\ (exists c, decode_cap bs true c
+                             (* if there is a live allocation, the cap bounds should fit within it *)
+                             /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am ->
+                                              (* We do not allow escaped pointers to local variables *)
+                                              (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
+                                              cap_bounds_within_alloc c a)
+                       )
+                   )
+            )
+        ).
+
+    Lemma initial_mem_state_invariant:
+      mem_invariant initial_mem_state.
+    Proof.
+      unfold initial_mem_state, mem_invariant.
+      repeat split; cbn in *.
+      -
+        intros alloc_id a H.
+        apply empty_mapsto_iff in H;
+          contradiction.
+      -
+        intros alloc_id1 alloc_id2 a1 a2 H H0.
+        apply empty_mapsto_iff in H;
+          contradiction.
+      -
+        unfold zmap_forall_keys.
+        intros k H.
+        apply empty_in_iff in H;
+          contradiction.
+      -
+
+        apply empty_mapsto_iff in H;
+          contradiction.
+      -
+        apply empty_mapsto_iff in H;
+          contradiction.
+    Qed.
+
+  End CheriMemoryWithPNVI.
 
   (*
     Pointer equality. The first pointer is from the "WithPNVI" memory
@@ -259,43 +483,10 @@ Module RevocationProofs.
           ZMap.MapsTo s (inl alloc_id) m1.(CheriMemoryWithPNVI.iota_map) /\
             single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id c1 c2 )
       \/
-      (exists alloc_id1 alloc_id2,
-          ZMap.MapsTo s (inr (alloc_id1,alloc_id2)) m1.(CheriMemoryWithPNVI.iota_map) /\
-            double_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id1 alloc_id2 c1 c2)
+        (exists alloc_id1 alloc_id2,
+            ZMap.MapsTo s (inr (alloc_id1,alloc_id2)) m1.(CheriMemoryWithPNVI.iota_map) /\
+              double_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id1 alloc_id2 c1 c2)
       -> ptr_value_same m1 m2 (PV (Prov_symbolic s) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2)).
-
-  (* Equality of byte values without taking provenance into account *)
-  Inductive AbsByte_eq: relation AbsByte :=
-  | AbsByte_no_prov_eq: forall a1 a2,
-      copy_offset a1 = copy_offset a2
-      /\ value a1 = value a2 -> AbsByte_eq a1 a2.
-
-  #[local] Instance AbsByte_Equivalence: Equivalence AbsByte_eq.
-  Proof.
-    split.
-    -
-      intros a.
-      destruct a.
-      constructor.
-      split;reflexivity.
-    -
-      intros a b.
-      destruct a, b.
-      intros H.
-      destruct H. destruct H.
-      constructor.
-      auto.
-    -
-      intros a b c.
-      destruct a, b, c.
-      intros H1 H2.
-      destruct H1. destruct H.
-      destruct H2. destruct H1.
-      constructor.
-      split.
-      rewrite H; apply H1.
-      rewrite H0. apply H2.
-  Qed.
 
   (* The following prevent default elimination principle from being generated for
      this type, as it is inadequate *)
@@ -477,40 +668,6 @@ Module RevocationProofs.
       z1 = z2 /\ eqlistA (ctype_pointer_value_same m1 m2) vl1 vl2
       -> varargs_same m1 m2 (z1,vl1) (z2,vl2).
 
-  (* Simple function decode capability from memory. We do not check alignment, provenance, etc.
-     Could be proven to be them same as [decode_cap]
-   *)
-  (*
-  Definition decode_cap_fun (abs:list AbsByte) (tag:bool): option Capability_GS.t
-    :=
-    let bs := List.map value abs in
-    cs <- extract_unspec bs ;;
-    Capability_GS.decode (List.rev cs) tag.
-   *)
-
-  Definition decode_cap (bs:list AbsByte) (tag:bool) (c:Capability_GS.t): Prop
-    :=
-    exists ls:list ascii,
-      (* have their corrsponding bytes intialized *)
-      Forall2 (fun a x => a.(value) = Some x) bs ls
-      (* decode without error *)
-      /\ Capability_GS.decode (List.rev ls) true = Some c.
-
-  (* [True] if list of bytes starts with given offset and offsets
-     increases by one each step *)
-  Inductive bytes_copy_offset_seq: nat -> list AbsByte -> Prop :=
-  | bytes_copy_offset_seq_nil: forall n, bytes_copy_offset_seq n []
-  | bytes_copy_offset_seq_cons:
-    forall n b bs,
-      b.(copy_offset) = Some n ->
-      bytes_copy_offset_seq (S n) bs -> bytes_copy_offset_seq n (b::bs).
-
-  (* [True] if all bytes in given list [bl] have given provenance, and
-     their offsets are sequential ending with [0] *)
-  Definition split_bytes_ptr_spec (p:provenance) (bl:list AbsByte): Prop :=
-    List.Forall (fun x => provenance_eqb p x.(prov) = true) bl
-    /\ bytes_copy_offset_seq 0 (List.rev bl).
-
   (** A predicate that defines the relationship between two capmeta
       elements with key [addr] from two different capability maps
       within the memory state context provided by the [bytemap] and
@@ -573,166 +730,6 @@ Module RevocationProofs.
     /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
     /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
-  Definition allocations_do_no_overlap (a1 a2:allocation) : Prop
-    :=
-    let a1_base := AddressValue.to_Z a1.(base) in
-    let a2_base := AddressValue.to_Z a2.(base) in
-    let a1_size := a1.(size) in
-    let a2_size := a2.(size) in
-    (a1_base + a1_size <= a2_base) \/ (a2_base + a2_size <= a1_base).
-
-
-  (* CheriMemoryWithPNVI memory invariant.
-
-     In general we do not enforce where tagged caps are pointing. They
-     could be pointing to live, dead, or outside of any allocation.
-
-     However if they are pointing to an allocation they must be within
-     it's bounds.
-
-     NB. [allocation.(is_dead)] is not used. Dead allocations are
-     immediately remved. So in case of Cornucopia the invariant will
-     be different.
-
-   *)
-  Definition mem_invariant_WithPNVI (m: CheriMemoryWithPNVI.mem_state_r) : Prop
-    :=
-    let cm := m.(CheriMemoryWithPNVI.capmeta) in
-    let bm := m.(CheriMemoryWithPNVI.bytemap) in
-    let am := m.(CheriMemoryWithPNVI.allocations) in
-
-    (* All allocations are live *)
-    (forall alloc_id a, ZMap.MapsTo alloc_id a am ->  a.(is_dead) = false)
-
-    (* live allocatoins do not overlap *)
-    /\ (forall alloc_id1 alloc_id2 a1 a2,
-          ZMap.MapsTo alloc_id1 a1 am -> ZMap.MapsTo alloc_id2 a2 am -> allocations_do_no_overlap a1 a2)
-
-    (* All keys in capmeta must be pointer-aligned addresses *)
-    /\ zmap_forall_keys (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0) cm
-    /\
-      (* All caps which are tagged according to capmeta must: *)
-      (forall addr g,
-          ZMap.MapsTo addr (true,g) cm ->
-          (forall bs, CheriMemoryWithPNVI.fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
-                 (
-                   (* Have the same provenance and correct sequence bytes *)
-                   (exists p, split_bytes_ptr_spec p bs)
-                   (* decode without error *)
-                   /\ (exists c, decode_cap bs true c
-                           (* if there is a live allocation, the cap bounds should fit within it *)
-                           /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am ->
-                                            (* We do not allow escaped pointers to local variables *)
-                                            (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
-                                            cap_bounds_within_alloc c a)
-                     )
-                 )
-          )
-      ).
-
-  (* CheriMemoryWithoutPNVI memory invariant
-
-     It is similar to "with PNVI" except: 1. Provenance should be
-     always `Prov_disabled` 2. All tagged caps bounds should fit one
-     of existing allocations
-
-     It will work only for instant revocation. In case of Cornucopia
-     the invariant will be different.
-
-     NB. [allocation.(is_dead)] is not used. Dead allocations are
-     immediately remved.
-   *)
-  Definition mem_invariant_WithoutPNVI (m: CheriMemoryWithoutPNVI.mem_state_r) : Prop
-    :=
-    let cm := m.(CheriMemoryWithoutPNVI.capmeta) in
-    let bm := m.(CheriMemoryWithoutPNVI.bytemap) in
-    let am := m.(CheriMemoryWithoutPNVI.allocations) in
-
-    (* All allocations are live *)
-    (forall alloc_id a, ZMap.MapsTo alloc_id a am ->  a.(is_dead) = false)
-
-    (* live allocatoins do not overlap *)
-    /\ (forall alloc_id1 alloc_id2 a1 a2,
-          ZMap.MapsTo alloc_id1 a1 am -> ZMap.MapsTo alloc_id2 a2 am ->
-          allocations_do_no_overlap a1 a2)
-
-    (* All keys in capmeta must be pointer-aligned addresses *)
-    /\ (zmap_forall_keys (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0) cm)
-    /\
-      (* All caps which are tagged according to capmeta must: *)
-      (forall addr g, ZMap.MapsTo addr (true,g) cm ->
-                 (forall bs, CheriMemoryWithoutPNVI.fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
-                        (
-                          (* Have same provenance and correct sequence bytes *)
-                          split_bytes_ptr_spec Prov_disabled bs
-                          /\ (exists c,
-                                (* decode without error *)
-                                decode_cap bs true c
-                                (* with decoded bounds bounds fitting one of the allocations *)
-                                /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
-                                                 (* We do not allow escaped pointers to local variables *)
-                                                 (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
-                                                 cap_bounds_within_alloc c a)
-                            )
-                        )
-                 )
-      ).
-
-    Lemma initial_mem_state_invariant_WithPNVI:
-      mem_invariant_WithPNVI CheriMemoryWithPNVI.initial_mem_state.
-    Proof.
-      unfold CheriMemoryWithPNVI.initial_mem_state, mem_invariant_WithPNVI.
-      repeat split; cbn in *.
-      -
-        intros alloc_id a H.
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        intros alloc_id1 alloc_id2 a1 a2 H H0.
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        unfold zmap_forall_keys.
-        intros k H.
-        apply empty_in_iff in H;
-          contradiction.
-      -
-
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        apply empty_mapsto_iff in H;
-          contradiction.
-    Qed.
-
-    Lemma initial_mem_state_invariant_WithoutPNVI:
-      mem_invariant_WithoutPNVI CheriMemoryWithoutPNVI.initial_mem_state.
-    Proof.
-      unfold CheriMemoryWithPNVI.initial_mem_state, mem_invariant_WithoutPNVI.
-      repeat split; cbn in *.
-      -
-        intros alloc_id a H.
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        intros alloc_id1 alloc_id2 a1 a2 H H0.
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        unfold zmap_forall_keys.
-        intros k H.
-        apply empty_in_iff in H;
-          contradiction.
-      -
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        apply empty_mapsto_iff in H;
-          contradiction.
-    Qed.
 
   Ltac destruct_mem_state_same H :=
     let Malloc_id := fresh "Malloc_id" in
@@ -747,19 +744,19 @@ Module RevocationProofs.
     let Mcapmeta := fresh "Mcapmeta" in
     destruct H as (Malloc_id & Mnextiota & Mlastaddr & Mallocs & Miotas & Mfuncs & Mvarargs & Mnextvararg & Mbytes & Mcapmeta).
 
-  Lemma mem_state_same_invariants:
+  Lemma base_mem_state_same_invariants:
     forall m1 m2,
       mem_state_same m1 m2 ->
-      (mem_invariant_WithPNVI m1 <-> mem_invariant_WithoutPNVI m2).
+      (CheriMemoryWithPNVI.base_mem_invariant m1 <-> CheriMemoryWithoutPNVI.base_mem_invariant m2).
   Proof.
     intros m1 m2 M.
     destruct_mem_state_same M.
     split.
     -
       (* mem_invariant_WithPNVI m1 -> mem_invariant_WithoutPNVI m2 *)
-      unfold mem_invariant_WithPNVI, mem_invariant_WithoutPNVI.
+      unfold CheriMemoryWithPNVI.base_mem_invariant, CheriMemoryWithoutPNVI.base_mem_invariant.
       subst.
-      intros [H1 [H2 [H3 H4]]].
+      intros [H1 [H2 H3]].
       repeat split.
       +
         (* ... -> is_dead a = false *)
@@ -787,83 +784,12 @@ Module RevocationProofs.
         apply H3.
         apply Mcapmeta.
         apply I.
-      +
-        (* Forall (fun x : AbsByte => provenance_eqb Prov_disabled (prov x) = true) bs *)
-        specialize (H4 addr g).
-        specialize (Mcapmeta addr).
-        destruct Mcapmeta as [[v1 [v2 [M1 [M2 M3]]]]|[M1 M2]].
-        *
-          (* addr_cap_meta_same_tags_and_ghost_state *)
-          assert(E:v2 = (true,g)).
-          {
-            eapply MapsTo_fun;eauto.
-          }
-          subst v2.
-          invc M3.
-          specialize (H4 M1 (CheriMemoryWithPNVI.fetch_bytes (CheriMemoryWithPNVI.bytemap m1) addr (sizeof_pointer MorelloImpl.get))).
-          destruct H4.
-          reflexivity.
-          destruct H0.
-          invc H0.
-          clear -Mbytes H5.
-          (* seems provable *)
-          admit.
-        *
-          (* addr_cap_meta_same_revoked *)
-          (* we could not prove that all pointer bytes will have `Prov_disabled` provenance. We can only prove that they will have the same provenance *)
-          admit.
-      +
-        (* bytes_copy_offset_seq 0 (rev bs) *)
-        (* seems to be provable *)
-        (* Hint: prove `CheriMemoryWithoutPNVI.fetch_bytes` and `rev` are proper wrt `ZMap.Equiv AbsByte_eq` *)
-        admit.
-      +
-        (*
-          exists c : Capability_GS.t,
-          decode_cap bs true c /\
-          (exists (a : allocation) (alloc_id : ZMap.key),
-          ZMap.MapsTo alloc_id a (CheriMemoryWithoutPNVI.allocations m2) /\
-          cap_bounds_within_alloc c a)
-         *)
-        (* not provable (`decode_cap bs true c` is OK) *)
-        specialize (H4 addr g).
-        unfold capmeta_same, zmap_relate_keys in Mcapmeta.
-        specialize (Mcapmeta addr).
-        destruct Mcapmeta as [Mcapmeta|Mcapmeta].
-        *
-          destruct Mcapmeta as [v1 [v2 [M1 [M2 CS]]]].
-          destruct CS.
-          --
-            assert(meta = (true,g)) by (eapply F.MapsTo_fun; eauto).
-            subst meta.
-            specialize (H4 M1).
-            assert(exists bs, CheriMemoryWithPNVI.fetch_bytes (CheriMemoryWithPNVI.bytemap m1) addr (sizeof_pointer MorelloImpl.get) = bs) as F.
-            {
-              admit.
-            }
-            destruct F as [bs1 F].
-            specialize (H4 bs1 F).
-            destruct H4 as [[p S1] [c [D [a [alloc_id H4]]]]].
-            exists c.
-            split.
-            admit. (* follows from D *)
-
-            exists a, alloc_id.
-            split.
-            (* we stuck here. With PNVI allocation may or may not exists,
-               while without PNVI it must exsits. *)
-            admit.
-            admit.
-          --
-            admit.
-        *
-          admit.
     -
       (* not provable *)
       (* mem_invariant_WithoutPNVI m2 -> mem_invariant_WithPNVI m1  *)
-      unfold mem_invariant_WithPNVI, mem_invariant_WithoutPNVI.
+      unfold CheriMemoryWithPNVI.base_mem_invariant, CheriMemoryWithoutPNVI.base_mem_invariant.
       subst.
-      intros [H1 [H2 [H3 H4]]].
+      intros [H1 [H2 H3]].
       repeat split.
       +
         (* ... -> is_dead a = false *)
@@ -889,65 +815,9 @@ Module RevocationProofs.
         apply H3.
         apply Mcapmeta.
         apply I.
-      +
-        (*   exists p : provenance, split_bytes_ptr_spec p bs *)
-        (* we could not prove that all pointer bytes will have the same provenance *)
-        admit.
-      +
-        (*
-          exists c : Capability_GS.t,
-          decode_cap bs true c /\
-          (exists (a : allocation) (alloc_id : ZMap.key),
-          ZMap.MapsTo alloc_id a (CheriMemoryWithPNVI.allocations m1) ->
-          cap_bounds_within_alloc c a)
-         *)
-        specialize (H4 addr g).
-        unfold capmeta_same, zmap_relate_keys in Mcapmeta.
-        specialize (Mcapmeta addr).
-        destruct Mcapmeta as [Mcapmeta|[N1 N2]].
-        *
-          (* address present in both m1 and m2 capmeta *)
-          destruct Mcapmeta as [v1 [v2 [M1 [M2 CS]]]].
-          destruct CS.
-          --
-            (* addr_cap_meta_same_tags_and_ghost_state *)
-            assert(meta = (true,g)).
-            {
-              eapply (F.MapsTo_fun M1).
-              eauto.
-            }
-            subst meta.
-            specialize (H4 M2).
-            assert(exists bs, CheriMemoryWithoutPNVI.fetch_bytes (CheriMemoryWithoutPNVI.bytemap m2) addr (sizeof_pointer MorelloImpl.get) = bs) as F.
-            {
-              admit.
-            }
-            destruct F as [bs1 F].
-            specialize (H4 bs1 F).
-            destruct H4 as [[p S1] [c [D [a [alloc_id [H4 H5]]]]]].
-            exists c.
-            split.
-            admit. (* follows from D *)
-            exists a, alloc_id.
-            rewrite Mallocs.
-            auto.
-          --
-            (* addr_cap_meta_same_revoked *)
-
-            (* we could not derive anything useful from a variant without PNVI,
-               because revoked caps are not present there and `MCapmeta` does not
-               give use any information about them. Hence this is also not provable.
-               *)
-            admit.
-        *
-          (* address present in neither m1 nor m2 capmeta *)
-          contradict N1.
-          exists (true, g).
-          apply H.
-  Admitted.
+  Qed.
 
   (* --- Helper lemmas *)
-
 
   Lemma has_PNVI_WithPNVI:
     has_PNVI (WithPNVISwitches.get_switches tt) = true.
@@ -1142,15 +1012,15 @@ Module RevocationProofs.
     apply eqb_true_iff.
     unfold Bool.eqb.
     repeat break_if;auto;
-    match goal with
-    | [H: set_mem _ _ _ = true |- _] =>
-        apply set_mem_correct1 in H;
-        apply set_add_elim in H;
-        destruct H as [H1 |H2]; [inversion H1|];
-        contradict H2;
-        apply remove_Revocation_correct;
-        auto
-    end.
+      match goal with
+      | [H: set_mem _ _ _ = true |- _] =>
+          apply set_mem_correct1 in H;
+          apply set_add_elim in H;
+          destruct H as [H1 |H2]; [inversion H1|];
+          contradict H2;
+          apply remove_Revocation_correct;
+          auto
+      end.
   Qed.
 
   Lemma has_INSTANT_WithPNVI:
@@ -1958,8 +1828,8 @@ Module RevocationProofs.
 
   (* return type of [repr] *)
   #[local] Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
-                              * ZMap.t (bool * CapGhostState)
-                              * list AbsByte.
+                                         * ZMap.t (bool * CapGhostState)
+                                         * list AbsByte.
 
   #[local] Definition repr_res_eq
     (mem1:CheriMemoryWithPNVI.mem_state_r)
@@ -2107,7 +1977,7 @@ Module RevocationProofs.
                 econstructor 2 with (c1:=c1) (c2:=c1) (prov:=Prov_some alloc_id)
                                     (bs1:=bs1) (bs2:=bs2); auto; admit.
 
-                (* HERE. We refer to bytes which has not been changed yet.
+              (* HERE. We refer to bytes which has not been changed yet.
                    Conculusion: using `capmeta_same` instead of `repr_res_same` is wrong *)
               ++
                 admit.
@@ -2129,14 +1999,14 @@ Module RevocationProofs.
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       : relation repr_fold_T
-        :=
-          fun '(funptrmap,capmeta,a,lbytes) '(funptrmap',capmeta',a',lbytes') =>
-            let bs  := List.concat (List.rev lbytes ) in
-            let bs' := List.concat (List.rev lbytes') in
-            a = a'
-            /\ repr_res_eq mem1 mem2 (a - (Z.of_nat (List.length bs)))
-                (funptrmap  , capmeta  , bs )
-                (funptrmap' , capmeta' , bs').
+      :=
+      fun '(funptrmap,capmeta,a,lbytes) '(funptrmap',capmeta',a',lbytes') =>
+        let bs  := List.concat (List.rev lbytes ) in
+        let bs' := List.concat (List.rev lbytes') in
+        a = a'
+        /\ repr_res_eq mem1 mem2 (a - (Z.of_nat (List.length bs)))
+             (funptrmap  , capmeta  , bs )
+             (funptrmap' , capmeta' , bs').
 
     #[local]Definition repr_fold2_T:Type :=
       ZMap.t (digest * string * Capability_GS.t)
@@ -2153,8 +2023,8 @@ Module RevocationProofs.
       fun '(funptrmap,capmeta,a,bytes) '(funptrmap',capmeta',a',bytes') =>
         a = a'
         /\ repr_res_eq mem1 mem2 addr
-            (funptrmap, capmeta,  bytes )
-            (funptrmap',capmeta', bytes').
+             (funptrmap, capmeta,  bytes )
+             (funptrmap',capmeta', bytes').
 
     Theorem repr_same:
       forall m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
@@ -2166,7 +2036,7 @@ Module RevocationProofs.
           (CheriMemoryWithPNVI.repr    fuel funptrmap1 capmeta1 addr1 mval1)
           (CheriMemoryWithoutPNVI.repr fuel funptrmap2 capmeta2 addr2 mval2).
     Proof.
-(*
+    (*
       intros m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2
         [Ffun [Ecap [Eaddr Emval]]].
       destruct fuel;[reflexivity|].
@@ -2709,7 +2579,7 @@ Module RevocationProofs.
               assumption.
             --
               (* rewrite Ecap.
-               *)
+     *)
               admit.
             --
               invc Heqo.
@@ -3152,8 +3022,8 @@ Module RevocationProofs.
           destruct fuel;[reflexivity|].
           eapply IHEmval; assumption.
     Qed.
- *)
-      Admitted.
+     *)
+    Admitted.
 
   End repr_same_proof.
   Opaque CheriMemoryWithPNVI.repr CheriMemoryWithoutPNVI.repr.
@@ -3242,13 +3112,13 @@ Module RevocationProofs.
 
   Lemma raise_Same_eq {T:Type}:
     forall x1 x2, x1 = x2 ->
-             @Same T T (@eq T)
-               (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
-                  (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
-                  x1)
-               (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
-                  (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
-                  x2).
+                  @Same T T (@eq T)
+                    (@raise memMError (errS CheriMemoryWithPNVI.mem_state_r memMError)
+                       (Exception_errS CheriMemoryWithPNVI.mem_state_r memMError) T
+                       x1)
+                    (@raise memMError (errS CheriMemoryWithoutPNVI.mem_state_r memMError)
+                       (Exception_errS CheriMemoryWithoutPNVI.mem_state_r memMError) T
+                       x2).
   Proof.
     intros x1 x2 E.
     repeat break_match;
@@ -3260,30 +3130,30 @@ Module RevocationProofs.
   #[local] Instance fail_same {T:Type}:
     forall l1 l2 e1 e2, l1 = l2 /\ e1 = e2 ->
 
-             @Same T T (@eq T)
-                   (CheriMemoryWithPNVI.fail l1 e1)
-                   (CheriMemoryWithoutPNVI.fail l2 e2).
+                        @Same T T (@eq T)
+                          (CheriMemoryWithPNVI.fail l1 e1)
+                          (CheriMemoryWithoutPNVI.fail l2 e2).
   Proof.
     intros l1 l2 e1 e2 [EL EE].
     subst.
     unfold CheriMemoryWithPNVI.fail, CheriMemoryWithoutPNVI.fail.
     break_match;
-    apply raise_Same_eq;reflexivity.
+      apply raise_Same_eq;reflexivity.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
 
   #[local] Instance fail_noloc_same {T:Type}:
     forall e1 e2, e1 = e2 ->
-             @Same T T (@eq T)
-                   (CheriMemoryWithPNVI.fail_noloc e1)
-                   (CheriMemoryWithoutPNVI.fail_noloc e2).
+                  @Same T T (@eq T)
+                    (CheriMemoryWithPNVI.fail_noloc e1)
+                    (CheriMemoryWithoutPNVI.fail_noloc e2).
   Proof.
     intros e1 e2 EE.
     subst.
     unfold CheriMemoryWithPNVI.fail_noloc, CheriMemoryWithoutPNVI.fail_noloc.
     apply fail_same.
     split;
-    reflexivity.
+      reflexivity.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc.
 
@@ -3519,7 +3389,7 @@ Module RevocationProofs.
 
   Section allocator_proofs.
 
-(*
+  (*
     Variable  size : Z.
     Variable  align : Z.
 
@@ -3614,10 +3484,10 @@ Module RevocationProofs.
       split;typeclasses eauto.
     Qed.
     #[global] Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
-*)
+   *)
   End allocator_proofs.
 
-  (*
+(*
   Lemma num_of_int_same:
     forall x, CheriMemoryWithPNVI.num_of_int x = CheriMemoryWithoutPNVI.num_of_int x.
   Proof.
@@ -4246,8 +4116,8 @@ Module RevocationProofs.
       admit.
     - (* Prov_device *)
       repeat break_match; same_step; reflexivity.
-           *)
+ *)
   Admitted.
 
-*)
+ *)
 End RevocationProofs.
