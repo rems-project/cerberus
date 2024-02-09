@@ -267,6 +267,10 @@ let set_uid file =
       | PEmemop (mop, pes) -> PEmemop (mop, List.map set_pe pes)
       | PEnot pe -> PEnot (set_pe pe)
       | PEop (bop, pe1, pe2) -> PEop (bop, set_pe pe1, set_pe pe2)
+      | PEconv_int (ity, pe) -> PEconv_int (ity, set_pe pe)
+      | PEwrapI (ity, iop, pe1, pe2) -> PEwrapI (ity, iop, set_pe pe1, set_pe pe2)
+      | PEcatch_exceptional_condition (ity, iop, pe1, pe2) ->
+          PEcatch_exceptional_condition (ity, iop, set_pe pe1, set_pe pe2)
       | PEstruct (sym, fields) ->
           PEstruct (sym, List.mapi (fun i (cid, pe) -> (cid, set_pe pe)) fields)
       | PEunion (sym, cid, pe) -> PEunion (sym, cid, set_pe pe)
