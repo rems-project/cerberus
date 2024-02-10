@@ -303,7 +303,7 @@ Module RevocationProofs.
 
 
   (* This is pure CHERI memory model with instant revocation but without PNVI. *)
-  Module CheriMemoryWithoutPNVI: CheriMemoryImplWithProofs(WithoutPNVISwitches).
+  Module CheriMemoryWithoutPNVI.
     Include CheriMemoryImplWithProofsExe(WithoutPNVISwitches).
 
     (* CheriMemoryWithoutPNVI memory invariant
@@ -377,7 +377,7 @@ Module RevocationProofs.
   End CheriMemoryWithoutPNVI.
 
   (* This is CHERI memory model whout instant revocation but with PNVI. *)
-  Module CheriMemoryWithPNVI:CheriMemoryImplWithProofs(WithPNVISwitches).
+  Module CheriMemoryWithPNVI.
     Include CheriMemoryImplWithProofsExe(WithPNVISwitches).
 
 
@@ -3089,13 +3089,42 @@ Module RevocationProofs.
           (execErrS M1 mem_state1)
           (execErrS M2 mem_state2).
 
+  (*
+     `inl` (errors) are compared by a function.
+     `inr` are tested to satisfy respective predicates
+   *)
+  Definition lift_sum_p
+    {A1 A2 B1 B2:Type}
+    (fl: A1->A2->Prop) (P1:B1->Prop) (P2:B2->Prop)
+    (a:sum A1 B1) (b:sum A2 B2): Prop :=
+    match a,b with
+    | inl l1, inl l2 => fl l1 l2
+    | inr r1, inr r2 => P1 r1 /\ P2 r2
+    | _, _ => False
+    end.
+
+  (* TODO: experimental *)
+  Class PreservesInvariant {T1 T2:Type}
+    (M1: CheriMemoryWithPNVI.memM T1)
+    (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
+    :=
+    preserves_invariant : forall mem_state1 mem_state2,
+        (CheriMemoryWithPNVI.mem_invariant mem_state1 /\ CheriMemoryWithoutPNVI.mem_invariant mem_state2)
+        ->
+          lift_sum_p eq
+            CheriMemoryWithPNVI.mem_invariant
+            CheriMemoryWithoutPNVI.mem_invariant
+            (execErrS M1 mem_state1)
+            (execErrS M2 mem_state2).
+
   Class Same {T1 T2:Type}
     (R: T1 -> T2 -> Prop) (* relation between values *)
     (M1: CheriMemoryWithPNVI.memM T1)
     (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
     := {
       #[global] Same_Value :: SameValue R M1 M2 ;
-      #[global] Same_State :: SameState M1 M2
+      #[global] Same_State :: SameState M1 M2 ;
+      (*  #[global] Preserves_Invariant :: PreservesInvariant M1 M2 *)
     }.
 
   Lemma ret_Same {T1 T2:Type}
