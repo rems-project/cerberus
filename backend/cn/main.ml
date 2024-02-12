@@ -192,8 +192,6 @@ let main
             in
             let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in
             let cn_prefix = if (List.length dir_name != 0) then String.concat "/" cn_prefix_list  ^ "/" else "" in
-            (* Printf.printf "OUTPUT FILENAME: %s\n" output_filename; *)
-            (* Printf.printf "CN.C FILENAME: %s\n" cn_filename; *)
             let cn_oc = Stdlib.open_out (cn_prefix ^ "cn.c") in
             let cn_header_oc = Stdlib.open_out (cn_prefix ^ "cn.h") in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
