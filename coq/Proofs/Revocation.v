@@ -139,16 +139,16 @@ Module RevocationProofs.
   | double_cap_cmp_first_live:
     (* When only the first allocation ID is mapped to an allocation *)
     forall a1, ZMap.MapsTo alloc_id1 a1 allocs ->
-          ~ZMap.In alloc_id2 allocs ->
-          cap_match_with_alloc a1 c1 c2 -> (* then match c1 to c2 based on alloc_id1 *)
-          double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+               ~ZMap.In alloc_id2 allocs ->
+               cap_match_with_alloc a1 c1 c2 -> (* then match c1 to c2 based on alloc_id1 *)
+               double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
 
   | double_cap_cmp_second_live:
     (* When only the second allocation ID is mapped to an allocation *)
     ~ZMap.In alloc_id1 allocs ->
     forall a2, ZMap.MapsTo alloc_id2 a2 allocs ->
-          cap_match_with_alloc a2 c1 c2 -> (* then match c1 to c2 based on alloc_id2 *)
-          double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
+               cap_match_with_alloc a2 c1 c2 -> (* then match c1 to c2 based on alloc_id2 *)
+               double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
 
   | double_cap_cmp_both_dead:
     (* When neither allocation ID is live (not mapped in allocs) *)
@@ -274,6 +274,122 @@ Module RevocationProofs.
         repeat break_match; tuple_inversion; reflexivity.
     Qed.
 
+    Definition lift_sum_p
+      {A B:Type}
+      (Pa: A -> Prop)
+      (Pb: B -> Prop)
+      (a:sum A B): Prop :=
+      match a with
+      | inl a => Pa a
+      | inr b => Pb b
+      end.
+
+    Section MemMwithInvariant.
+      Parameter invr: mem_state_r -> Prop.
+
+      Class PreservesInvariant {T: Type} (M: memM T): Prop
+        :=
+        preserves_invariant : forall mem_state,
+            invr mem_state
+            ->
+              lift_sum_p
+                (fun _ => True)
+                invr
+                (execErrS M mem_state).
+
+
+      Lemma ret_PreservesInvariant:
+        forall T (x:T), PreservesInvariant (ret x).
+      Proof.
+        intros T x.
+        unfold PreservesInvariant.
+        intros m H.
+        apply H.
+      Qed.
+
+      Lemma raise_PreservesInvariant {T:Type}:
+        forall x,
+          PreservesInvariant
+            (@raise memMError (errS mem_state_r memMError)
+               (Exception_errS mem_state_r memMError) T
+               x).
+      Proof.
+        intros x.
+        split.
+      Qed.
+
+      Lemma bind_PreservesInvariant {T T': Type}
+        {M: memM T'}
+        {C: T' -> memM T}
+        :
+        PreservesInvariant M ->
+        (forall x, PreservesInvariant (C x))
+        -> PreservesInvariant (bind M C).
+      Proof.
+        intros MH MC.
+        unfold PreservesInvariant.
+        intros mem_state0 H0.
+        unfold execErrS, evalErrS, lift_sum_p in *.
+        repeat break_let.
+        cbn in *.
+        repeat break_let.
+        break_match;auto.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        break_match_hyp.
+        tuple_inversion.
+        subst.
+
+        specialize (MH mem_state0 H0).
+        unfold PreservesInvariant in *.
+        unfold execErrS, evalErrS, lift_sum_p in MH.
+        break_let.
+        tuple_inversion.
+        cbn in MH.
+        specialize (MC t0 m0 MH).
+        unfold execErrS, evalErrS, lift_sum_p in MC.
+        break_let.
+        tuple_inversion.
+        cbn in MC.
+        apply MC.
+      Qed.
+
+      Lemma put_PreservesInvariant:
+        forall m, invr m -> PreservesInvariant (put m).
+      Proof.
+        intros m H.
+        cbn.
+        intros m0 H0.
+        cbn.
+        apply H.
+      Qed.
+
+      Lemma get_PreservesInvariant:
+        PreservesInvariant get.
+      Proof.
+        intros m H.
+        cbn.
+        apply H.
+      Qed.
+
+      Lemma update_PreservesInvariant
+        {f:mem_state_r -> mem_state_r}
+        :
+        (forall m, invr m ->  invr (f m)) ->
+        PreservesInvariant (ErrorWithState.update f).
+      Proof.
+        intros H.
+        cbn.
+        unfold PreservesInvariant.
+        intros m MI.
+        cbn.
+        apply H, MI.
+      Qed.
+
+    End MemMwithInvariant.
+
   End CheriMemoryImplWithProofs.
 
   Module CheriMemoryImplWithProofsExe
@@ -316,7 +432,7 @@ Module RevocationProofs.
      the invariant will be different.
 
      NB. [allocation.(is_dead)] is not used. Dead allocations are
-     immediately remved.
+     immediately removed.
      *)
     Definition mem_invariant (m: mem_state_r) : Prop
       :=
@@ -333,14 +449,14 @@ Module RevocationProofs.
                             (* Have same provenance and correct sequence bytes *)
                             split_bytes_ptr_spec Prov_disabled bs
                             /\ (exists c,
-                                  (* decode without error *)
-                                  decode_cap bs true c
-                                  (* with decoded bounds bounds fitting one of the allocations *)
-                                  /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
-                                                     (* We do not allow escaped pointers to local variables *)
-                                                     (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
-                                                     cap_bounds_within_alloc c a)
-                              )
+                                   (* decode without error *)
+                                   decode_cap bs true c
+                                   (* with decoded bounds bounds fitting one of the allocations *)
+                                   /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
+                                                            (* We do not allow escaped pointers to local variables *)
+                                                            (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
+                                                            cap_bounds_within_alloc c a)
+                               )
                           )
                    )
         ).
@@ -406,18 +522,19 @@ Module RevocationProofs.
         (forall addr g,
             ZMap.MapsTo addr (true,g) cm ->
             (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
-                   (
-                     (* Have the same provenance and correct sequence bytes *)
-                     (exists p, split_bytes_ptr_spec p bs)
-                     (* decode without error *)
-                     /\ (exists c, decode_cap bs true c
-                             (* if there is a live allocation, the cap bounds should fit within it *)
-                             /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am ->
-                                              (* We do not allow escaped pointers to local variables *)
-                                              (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
-                                              cap_bounds_within_alloc c a)
-                       )
-                   )
+                        (
+                          (* Have the same provenance and correct sequence bytes *)
+                          (exists p, split_bytes_ptr_spec p bs)
+                          (* decode without error *)
+                          /\ (exists c, decode_cap bs true c
+                                        (* if there is a live allocation, the cap bounds should fit within it *)
+                                        /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am ->
+                                                               (* TODO: provenance <> alloc_id *)
+                                                               (* We do not allow escaped pointers to local variables *)
+                                                               (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
+                                                               cap_bounds_within_alloc c a)
+                             )
+                        )
             )
         ).
 
@@ -516,7 +633,7 @@ Module RevocationProofs.
   (* Custom induction principle for mem_value_with_err_same *)
   Lemma mem_value_with_err_same_ind:
     forall (m1 : CheriMemoryWithPNVI.mem_state_r) (m2 : CheriMemoryWithoutPNVI.mem_state_r)
-      (P : mem_value_with_err -> mem_value_with_err -> Prop),
+           (P : mem_value_with_err -> mem_value_with_err -> Prop),
 
       (forall t1 t2, t1 = t2 -> P (MVEunspecified t1) (MVEunspecified t2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVEinteger t1 v1) (MVEinteger t2 v2)) ->
@@ -600,7 +717,7 @@ Module RevocationProofs.
   (* Custom induction principle for mem_value_indt_same *)
   Lemma mem_value_indt_same_ind:
     forall (m1 : CheriMemoryWithPNVI.mem_state_r) (m2 : CheriMemoryWithoutPNVI.mem_state_r)
-      (P : mem_value_indt -> mem_value_indt -> Prop),
+           (P : mem_value_indt -> mem_value_indt -> Prop),
 
       (forall t1 t2, t1 = t2 -> P (MVunspecified t1) (MVunspecified t2)) ->
       (forall t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> P (MVinteger t1 v1) (MVinteger t2 v2)) ->
@@ -656,7 +773,7 @@ Module RevocationProofs.
     :=
   | ctype_pointer_value_same_1:
     forall m1 m2 t1 t2 pv1 pv2, t1 = t2 /\ ptr_value_same m1 m2 pv1 pv2 ->
-                           ctype_pointer_value_same m1 m2 (t1,pv1) (t2,pv2).
+                                ctype_pointer_value_same m1 m2 (t1,pv1) (t2,pv2).
 
   Inductive varargs_same:
     CheriMemoryWithPNVI.mem_state_r ->
@@ -3030,7 +3147,7 @@ Module RevocationProofs.
 
   (* --- Stateful proofs below --- *)
 
-  Definition lift_sum
+  Definition lift_sum2
     {A1 A2 B1 B2 C:Type}
     (fl: A1->A2->C) (fr:B1->B2->C)
     (default: C)
@@ -3075,7 +3192,7 @@ Module RevocationProofs.
     :=
     eval_to_same : forall mem_state1 mem_state2,
         mem_state_same mem_state1 mem_state2 ->
-        lift_sum eq R False
+        lift_sum2 eq R False
           (evalErrS M1 mem_state1)
           (evalErrS M2 mem_state2).
 
@@ -3085,37 +3202,9 @@ Module RevocationProofs.
     :=
     exec_to_same : forall mem_state1 mem_state2,
         mem_state_same mem_state1 mem_state2 ->
-        lift_sum eq mem_state_same False
+        lift_sum2 eq mem_state_same False
           (execErrS M1 mem_state1)
           (execErrS M2 mem_state2).
-
-  (*
-     `inl` (errors) are compared by a function.
-     `inr` are tested to satisfy respective predicates
-   *)
-  Definition lift_sum_p
-    {A1 A2 B1 B2:Type}
-    (fl: A1->A2->Prop) (P1:B1->Prop) (P2:B2->Prop)
-    (a:sum A1 B1) (b:sum A2 B2): Prop :=
-    match a,b with
-    | inl l1, inl l2 => fl l1 l2
-    | inr r1, inr r2 => P1 r1 /\ P2 r2
-    | _, _ => False
-    end.
-
-  (* TODO: experimental *)
-  Class PreservesInvariant {T1 T2:Type}
-    (M1: CheriMemoryWithPNVI.memM T1)
-    (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
-    :=
-    preserves_invariant : forall mem_state1 mem_state2,
-        (CheriMemoryWithPNVI.mem_invariant mem_state1 /\ CheriMemoryWithoutPNVI.mem_invariant mem_state2)
-        ->
-          lift_sum_p eq
-            CheriMemoryWithPNVI.mem_invariant
-            CheriMemoryWithoutPNVI.mem_invariant
-            (execErrS M1 mem_state1)
-            (execErrS M2 mem_state2).
 
   Class Same {T1 T2:Type}
     (R: T1 -> T2 -> Prop) (* relation between values *)
@@ -3124,7 +3213,6 @@ Module RevocationProofs.
     := {
       #[global] Same_Value :: SameValue R M1 M2 ;
       #[global] Same_State :: SameState M1 M2 ;
-      (*  #[global] Preserves_Invariant :: PreservesInvariant M1 M2 *)
     }.
 
   Lemma ret_Same {T1 T2:Type}
@@ -3202,7 +3290,7 @@ Module RevocationProofs.
     intros [[EMV EMS] EC].
     split;
       intros m1 m2 M;
-      unfold lift_sum;
+      unfold lift_sum2;
       unfold execErrS, evalErrS;
       repeat break_let;
       unfold SameValue in EMV;
@@ -3213,14 +3301,14 @@ Module RevocationProofs.
       destruct s,s0; try tuple_inversion;
 
       specialize (EMV m1 m2 M);
-      unfold lift_sum, evalErrS in EMV;
+      unfold lift_sum2, evalErrS in EMV;
       repeat break_let;
       repeat break_match;
       repeat tuple_inversion;
       repeat inl_inr_inv; subst; try reflexivity; try inl_inr; try tauto;
 
       specialize (EMS m1 m2 M);
-      unfold lift_sum, execErrS in EMS;
+      unfold lift_sum2, execErrS in EMS;
       repeat break_let;
       repeat break_match;
       repeat tuple_inversion;
@@ -3232,7 +3320,7 @@ Module RevocationProofs.
           specialize (EC T1 T2 EMV);
           destruct EC as [ECV ECS];
           specialize (ECV M1 M2 EMS);
-          unfold lift_sum, evalErrS in ECV;
+          unfold lift_sum2, evalErrS in ECV;
           repeat break_let;
           repeat break_match;
           repeat tuple_inversion;
@@ -3241,7 +3329,7 @@ Module RevocationProofs.
 
 
     specialize (ECS m7 m8 EMS).
-    unfold lift_sum, execErrS in ECS.
+    unfold lift_sum2, execErrS in ECS.
     repeat break_let;
       repeat break_match;
       repeat tuple_inversion;
@@ -3337,11 +3425,11 @@ Module RevocationProofs.
     - split.
       + unfold SameValue.
         intros mem_state1 mem_state2 H0.
-        unfold lift_sum.
+        unfold lift_sum2.
         assumption.
       + unfold SameState.
         intros mem_state1 mem_state2 H0.
-        unfold lift_sum.
+        unfold lift_sum2.
         assumption.
   Qed.
 
@@ -3381,13 +3469,13 @@ Module RevocationProofs.
       assumption.
   Qed.
 
-  (* special case of [lift_sum] where the type is the same and relations are both [eq] *)
-  Lemma lift_sum_eq_eq
+  (* special case of [lift_sum2] where the type is the same and relations are both [eq] *)
+  Lemma lift_sum2_eq_eq
     {T:Type}
     (M1: CheriMemoryWithPNVI.memM T)
     (M2: CheriMemoryWithoutPNVI.memM T):
     forall mem_state1 mem_state2,
-      lift_sum eq eq False
+      lift_sum2 eq eq False
         (evalErrS M1 mem_state1)
         (evalErrS M2 mem_state2) <->
         eq (evalErrS M1 mem_state1) (evalErrS M2 mem_state2).
@@ -3395,13 +3483,13 @@ Module RevocationProofs.
     intros mem_state1 mem_state2.
     split.
     -
-      unfold lift_sum.
+      unfold lift_sum2.
       repeat break_match; intros H; try contradiction;
         try (rewrite H; reflexivity).
     -
       intros E.
       rewrite E.
-      unfold lift_sum.
+      unfold lift_sum2.
       repeat break_match; try contradiction; reflexivity.
   Qed.
 
@@ -3458,7 +3546,7 @@ Module RevocationProofs.
     Proof.
       intros mem_state1 mem_state2 M.
       destruct_mem_state_same M.
-      unfold lift_sum.
+      unfold lift_sum2.
       unfold CheriMemoryWithPNVI.mem_state in *.
       unfold execErrS.
       repeat break_let.
