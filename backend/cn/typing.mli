@@ -1,16 +1,6 @@
 type solver
 
 
-type s = {
-    typing_context: Context.t;
-    solver : solver;
-    sym_eqs : IndexTerms.t Global.SymMap.t;
-    equalities: bool Simplify.ITPairMap.t;
-    past_models : (Solver.model_with_q * Context.t) list;
-    found_equalities : EqTable.table;
-    movable_indices: (ResourceTypes.predicate_name * IndexTerms.t) list;
-  }
-
 
 type 'a t
 type 'a m = 'a t
@@ -29,8 +19,8 @@ val print_with_ctxt : (Context.t -> unit) -> unit m
 val get_global : unit -> Global.t m
 val all_constraints : unit -> Context.LCSet.t m
 val simp_ctxt : unit -> Simplify.simp_ctxt m
-val all_resources : unit -> Resources.t list m
-val all_resources_tagged : unit -> ((Resources.t * int) list * int) m
+val all_resources : Locations.t -> Resources.t list m
+val all_resources_tagged : Locations.t -> ((Resources.t * int) list * int) m
 val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False]) m
 val model : unit -> (Solver.model_with_q) m
 val model_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q option) m
@@ -54,7 +44,7 @@ val add_rs : Locations.t -> Resources.t list -> unit m
 val get_loc_trace : unit -> (Locations.loc list) m
 val add_loc_trace : Locations.t -> (unit) m
 
-val res_history : int -> (Context.resource_history) m
+val res_history : Locations.t -> int -> (Context.resource_history) m
 
 
 type changed =
@@ -99,7 +89,7 @@ val value_eq_group : IndexTerms.t option -> IndexTerms.t -> (EqTable.ITSet.t) m
 val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->
     IndexTerms.t list -> (unit) m
 
-val get_solver_focused_terms : unit -> ((IndexTerms.t_bindings * IndexTerms.t) list) m
+val get_solver_focused_terms : Locations.t -> ((IndexTerms.t_bindings * IndexTerms.t) list) m
 
 val embed_resultat : 'a Resultat.t -> 'a m
 

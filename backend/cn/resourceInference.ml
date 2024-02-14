@@ -405,7 +405,7 @@ module General = struct
     (* record the resources now, so errors are raised with all
        the resources present, rather than those that remain after some
        arguments are claimed *)
-    let@ original_resources = all_resources_tagged () in
+    let@ original_resources = all_resources_tagged loc in
     let rec loop ftyp rw_time =
       match ftyp with
       | LAT.I rt -> return (rt, rw_time)

@@ -823,7 +823,7 @@ end = struct
     (* record the resources now, so errors are raised with all
        the resources present, rather than those that remain after some
        arguments are claimed *)
-    let@ original_resources = all_resources_tagged () in
+    let@ original_resources = all_resources_tagged loc in
 
     let@ rt =
       let rec check ftyp =
@@ -953,13 +953,13 @@ let all_empty loc original_resources =
             {loc; msg = Unused_resource {resource; ctxt; model; }})
 
 
-let compute_used (prev_rs, prev_ix) (post_rs, _) =
+let compute_used loc (prev_rs, prev_ix) (post_rs, _) =
   let post_ixs = IntSet.of_list (List.map snd post_rs) in
   (* restore previous resources that have disappeared from the context, since they
      might participate in a race *)
   let all_rs = post_rs @ List.filter (fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
   ListM.fold_leftM (fun (rs, ws) (r, i) ->
-    let@ h = res_history i in
+    let@ h = res_history loc i in
     if h.last_written_id >= prev_ix
     then return (rs, (r, h, i) :: ws)
     else if h.last_read_id >= prev_ix
@@ -1428,10 +1428,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      let rec aux es vs prev_used =
        match es with
        | e :: es' ->
-          let@ pre_check = all_resources_tagged () in
+          let@ pre_check = all_resources_tagged loc in
           check_expr labels e (fun v ->
-          let@ post_check = all_resources_tagged () in
-          let@ used = compute_used pre_check post_check in
+          let@ post_check = all_resources_tagged loc in
+          let@ used = compute_used loc pre_check post_check in
           aux es' (v :: vs) (used :: prev_used))
        | [] ->
           (* let@ () = check_used_distinct loc prev_used in *)
@@ -1592,7 +1592,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
        | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
        | Some (lt,lkind,_) -> return (lt,lkind)
      in
-     let@ original_resources = all_resources_tagged () in
+     let@ original_resources = all_resources_tagged loc in
      Spine.calltype_lt loc pes (lt,lkind) (fun False ->
      let@ () = all_empty loc original_resources in
      return ())
@@ -1607,7 +1607,7 @@ let check_expr_top loc labels rt e =
         match return_bt with
         | Unit ->
             let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in
-            let@ original_resources = all_resources_tagged () in
+            let@ original_resources = all_resources_tagged loc in
             Spine.subtype loc lrt (fun () ->
                   let@ () = all_empty loc original_resources in
                   return ()

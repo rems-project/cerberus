@@ -18,6 +18,7 @@ type s = {
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
     movable_indices: (RET.predicate_name * IT.t) list;
+    unfold_resources_required: bool;
   }
 
 type 'a t = s -> ('a * s, TypeErrors.t) Result.t
@@ -37,6 +38,7 @@ let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
       past_models = [];
       found_equalities = EqTable.empty;
       movable_indices = [];
+      unfold_resources_required = false;
     }
   in
   let outcome = m s in
@@ -114,6 +116,10 @@ module Eff = Effectful.Make(struct
 let iterM = Eff.ListM.iterM
 
 
+let upd_inner f = fun s -> Ok ((), f s)
+
+let get_inner f = fun s -> Ok (f s, s)
+
 let get_models () = fun s -> Ok (s.past_models, s)
 
 let upd_models ms = fun s -> Ok ((), {s with past_models = ms})
@@ -144,16 +150,6 @@ let all_constraints () =
   let@ s = get () in
   return s.constraints
 
-
-
-let all_resources_tagged () =
-  let@ s = get () in
-  return s.resources
-
-let all_resources () =
-  let@ s = get () in
-  return (Context.get_rs s)
-
 let make_simp_ctxt s =
   Simplify.{
       global = s.typing_context.global;
@@ -181,7 +177,7 @@ let make_provable loc =
   in
   f
 
-let provable loc =
+let provable_inner loc =
   fun s ->
   Ok (make_provable loc s, s)
 
@@ -206,25 +202,20 @@ let model_has_prop () =
 
 let provable_consult_model loc m =
   let@ has_prop = model_has_prop () in
-  let@ p_f = provable loc in
+  let@ p_f = provable_inner loc in
   let res lc = match lc with
     | LC.T t when has_prop (IT.not_ t) m -> `False
     | _ -> p_f lc
   in
   return res
 
-let prev_models_with loc prop =
-  let@ ms = get_just_models () in
-  let@ has_prop = model_has_prop () in
-  return (List.filter (has_prop prop) ms)
-
-let model_with loc prop =
+let model_with_inner loc prop =
   let@ ms = get_just_models () in
   let@ has_prop = model_has_prop () in
   match List.find_opt (has_prop prop) ms with
     | Some m -> return (Some m)
     | None -> begin
-      let@ prover = provable loc in
+      let@ prover = provable_inner loc in
       match prover (LC.t_ (IT.not_ prop)) with
         | `True -> return None
         | `False ->
@@ -264,9 +255,19 @@ let add_l sym bt info =
   let@ s = get () in
   set (Context.add_l sym bt info s)
 
+let add_sym_eqs sym_eqs =
+  fun s ->
+  let sym_eqs =
+    List.fold_left (fun acc (s, v) ->
+        SymMap.add s v acc
+      ) s.sym_eqs sym_eqs
+  in
+  Ok ((), { s with sym_eqs })
+
 let add_l_value sym value info =
   let@ s = get () in
-  set (Context.add_l_value sym value info s)
+  let@ () = set (Context.add_l_value sym value info s) in
+  add_sym_eqs [(sym, value)]
 
 let remove_a sym =
   let@ s = get () in
@@ -280,15 +281,6 @@ let rec add_ls = function
   | (s, ls, info) :: lvars ->
      let@ () = add_l s ls info in
      add_ls lvars
-
-let add_sym_eqs sym_eqs =
-  fun s ->
-  let sym_eqs =
-    List.fold_left (fun acc (s, v) ->
-        SymMap.add s v acc
-      ) s.sym_eqs sym_eqs
-  in
-  Ok ((), { s with sym_eqs })
 
 let add_equalities new_equalities =
   fun s ->
@@ -335,11 +327,11 @@ type changed =
 
 
 
-let map_and_fold_resources loc
+let map_and_fold_resources_inner loc
     (f : RE.t -> 'acc -> changed * 'acc)
     (acc : 'acc) =
   let@ s = get () in
-  let@ provable_f = provable loc in
+  let@ provable_f = provable_inner loc in
   let (resources, orig_ix) = s.resources in
   let orig_hist = s.resource_history in
   let resources, ix, hist, changed_or_deleted, acc =
@@ -434,14 +426,15 @@ let get_movable_indices () =
 
 
 (* copying and adjusting map_and_fold_resources *)
-let unfold_resources loc =
+let do_unfold_resources loc =
   let rec aux () =
     let@ s = get () in
     let@ movable_indices = get_movable_indices () in
-    let@ provable_f = provable Locations.unknown in
+    let@ provable_f = provable_inner Locations.unknown in
     let (resources, orig_ix) = s.resources in
     let _orig_hist = s.resource_history in
-    let@ true_m = model_with loc (IT.bool_ true) in
+    Pp.debug 8 (lazy (Pp.string "-- checking resource unfolds now --"));
+    let@ true_m = model_with_inner loc (IT.bool_ true) in
     match true_m with
     | None -> return () (* contradictory state *)
     | Some model ->
@@ -483,16 +476,50 @@ let unfold_resources loc =
   aux ()
 
 
+let set_unfold_resources () = upd_inner (fun s -> {s with unfold_resources_required = true})
+
+let sync_unfold_resources loc =
+  let@ needed = get_inner (fun s -> s.unfold_resources_required) in
+  if not needed then return ()
+  else begin
+    let@ () = do_unfold_resources loc in
+    upd_inner (fun s -> {s with unfold_resources_required = false})
+  end
 
 
 
+let provable loc =
+  let@ () = sync_unfold_resources loc in
+  provable_inner loc
 
+let all_resources_tagged loc =
+  let@ () = sync_unfold_resources loc in
+  let@ s = get () in
+  return s.resources
 
+let all_resources loc =
+  let@ () = sync_unfold_resources loc in
+  let@ s = get () in
+  return (Context.get_rs s)
 
-
-let res_history i =
+let res_history loc i =
+  let@ () = sync_unfold_resources loc in
   let@ s = get () in
   return (Context.res_history s i)
+
+let map_and_fold_resources loc f acc =
+  let@ () = sync_unfold_resources loc in
+  map_and_fold_resources_inner loc f acc
+
+let prev_models_with loc prop =
+  let@ () = sync_unfold_resources loc in
+  let@ ms = get_just_models () in
+  let@ has_prop = model_has_prop () in
+  return (List.filter (has_prop prop) ms)
+
+let model_with loc prop =
+  let@ () = sync_unfold_resources loc in
+  model_with_inner loc prop
 
 
 
@@ -654,12 +681,12 @@ let set_statement_locs statement_locs =
   set { ctxt with statement_locs }
 
 
-let get_solver_focused_terms () =
+let get_solver_focused_terms loc =
   let@ global = get_global () in
   let@ assumptions = all_constraints () in
   let@ s = solver () in
   let@ ctxt = get () in
-  let@ rs = all_resources () in
+  let@ rs = all_resources loc in
   let pointer_facts = Resources.pointer_facts rs in
   let assumptions = ctxt.constraints in
   let terms = Solver.get_solver_focused_terms s ~assumptions ~pointer_facts global in
@@ -680,28 +707,27 @@ let add_movable_index_internal e : unit m =
 
 let add_movable_index loc e =
   let@ () = add_movable_index_internal e in
-  unfold_resources loc
+  set_unfold_resources ()
 
 let add_r loc re =
    let@ () = add_r_internal loc re in
-   unfold_resources loc
+   set_unfold_resources ()
 
 let add_rs loc rs =
   let@ () = iterM (add_r_internal loc) rs in
-  unfold_resources loc
+  set_unfold_resources ()
 
 let add_c loc c =
   let@ () = add_c_internal c in
-  unfold_resources loc
+  set_unfold_resources ()
 
 let add_cs loc cs =
   let@ () = iterM add_c_internal cs in
-  unfold_resources loc
-
+  set_unfold_resources ()
 
 let bind_logical_return loc members lrt =
   let@ () = bind_logical_return_internal loc members lrt in
-  unfold_resources loc
+  set_unfold_resources ()
 
 (* Same for return types *)
 let bind_return loc members (rt : ReturnTypes.t) =
