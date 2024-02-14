@@ -256,6 +256,11 @@ Module RevocationProofs.
       (* All keys in capmeta must be pointer-aligned addresses *)
       /\ zmap_forall_keys (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0) cm.
 
+    Ltac destruct_base_mem_invariant H :=
+      let Bdead := fresh "Bdead" in
+      let Bnooverlap := fresh "Bnooverlap" in
+      let Balign := fresh "Balign" in
+      destruct H as [Bdead [Bnooverlap Balign]].
 
     Instance memM_MonadLaws: MonadLaws (memM_monad).
     Proof.
@@ -285,7 +290,7 @@ Module RevocationProofs.
       end.
 
     Section MemMwithInvariant.
-      Parameter invr: mem_state_r -> Prop.
+      Variable invr: mem_state_r -> Prop.
 
       Class PreservesInvariant {T: Type} (M: memM T): Prop
         :=
@@ -317,6 +322,15 @@ Module RevocationProofs.
         intros x.
         split.
       Qed.
+
+      Lemma bind_get_PreservesInvariant {T: Type}
+        {C: mem_state_r -> memM T}
+        :
+        (forall m, invr m -> PreservesInvariant (C m))
+        -> PreservesInvariant (bind get C).
+      Proof.
+      Admitted.
+
 
       Lemma bind_PreservesInvariant {T T': Type}
         {M: memM T'}
@@ -428,12 +442,11 @@ Module RevocationProofs.
      always `Prov_disabled` 2. All tagged caps bounds should fit one
      of existing allocations
 
-     It will work only for instant revocation. In case of Cornucopia
-     the invariant will be different.
+     It will work only for instant revocation. In the case of
+     Cornucopia the invariant will be different.
 
      NB. [allocation.(is_dead)] is not used. Dead allocations are
-     immediately removed.
-     *)
+     immediately removed.  *)
     Definition mem_invariant (m: mem_state_r) : Prop
       :=
       let cm := m.(capmeta) in
@@ -490,6 +503,175 @@ Module RevocationProofs.
           contradiction.
     Qed.
 
+    (* TODO: move up *)
+    Ltac preserves_step :=
+      match goal with
+      |[|- PreservesInvariant _ (bind get _)] => apply bind_get_PreservesInvariant
+      |[|- PreservesInvariant _ (bind _ _)] => apply bind_PreservesInvariant
+      |[|- PreservesInvariant _ (raise _)] => apply raise_PreservesInvariant
+      |[|- PreservesInvariant _ (ret _)] => apply ret_PreservesInvariant
+      |[|- PreservesInvariant _ get] => apply get_PreservesInvariant
+      |[|- PreservesInvariant _ (put _) ] => apply put_PreservesInvariant
+      |[|- PreservesInvariant _ (ErrorWithState.update _)] => apply update_PreservesInvariant
+      end.
+
+    #[local] Instance fail_preserves_invariant {T:Type}:
+      forall l e,
+        PreservesInvariant mem_invariant (@fail T l e).
+    Proof.
+      intros l e.
+      unfold fail.
+      break_match; preserves_step.
+    Qed.
+    #[local] Opaque fail.
+
+    #[local] Instance fail_noloc_preserves {T:Type}:
+      forall e,
+        PreservesInvariant mem_invariant (@fail_noloc T e).
+    Proof.
+      intros e.
+      unfold fail_noloc.
+      apply fail_preserves_invariant.
+    Qed.
+    #[local] Opaque fail_noloc.
+
+    #[local] Instance serr2InternalErr_preserves
+      {T: Type}
+      {e: serr T}:
+      PreservesInvariant mem_invariant (serr2InternalErr e).
+    Proof.
+      unfold serr2InternalErr.
+      destruct e;  preserves_step.
+    Qed.
+    #[local] Opaque serr2InternalErr.
+
+    Lemma init_ghost_tags_spec
+      (addr: AddressValue.t)
+      (size: Z)
+      (c0: ZMap.t (bool*CapGhostState)):
+      forall a tg,
+        ZMap.MapsTo a tg (init_ghost_tags addr size c0)
+        ->
+          (ZMap.MapsTo a tg c0
+          \/
+            (Z.modulo a MorelloImpl.get.(alignof_pointer) = 0
+             /\
+               tg = (false, {| tag_unspecified := true; bounds_unspecified := false |}))).
+    Proof.
+      intros a tg H.
+      unfold init_ghost_tags in *.
+      repeat break_let.
+      (* TODO: need zmap_range_init spec *)
+    Admitted.
+
+    Lemma mem_state_after_ghist_tags_preserves:
+      forall m addr size,
+        mem_invariant m ->
+        mem_invariant (mem_state_with_capmeta
+                         (init_ghost_tags addr size (capmeta m))
+                         m).
+    Proof.
+      intros m addr sz H.
+      destruct H as [MIbase MIcap].
+      destruct_base_mem_invariant MIbase.
+      split.
+      -
+        (* base invariant *)
+        clear MIcap.
+        split.
+        auto.
+        split;auto.
+
+        (* alignment proof *)
+        intros a E.
+        apply zmap_in_mapsto in E.
+        destruct E as [tg E].
+        unfold mem_state_with_capmeta in E.
+        simpl in E.
+        apply init_ghost_tags_spec in E.
+        destruct E.
+        +
+          (* capmeta unchanged at [a] *)
+          apply zmap_mapsto_in in H.
+          apply Balign.
+          apply H.
+        +
+          (* capmeta cleared *)
+          destruct H as [H1 H2].
+          apply H1.
+      -
+        intros a g E bs F.
+        simpl in *.
+        apply init_ghost_tags_spec in E.
+        destruct E as [E | [A E]].
+        +
+          (* capmeta unchanged at [a] *)
+          specialize (MIcap a g E bs F).
+          apply MIcap.
+        +
+          inversion E.
+    Qed.
+
+    Lemma mem_state_with_next_alloc_id_preserves:
+      forall m,
+        mem_invariant m ->
+        (forall x, mem_invariant (mem_state_with_next_alloc_id x m)).
+    Proof.
+      intros m H x.
+      destruct H as [MIbase MIcap].
+      destruct_base_mem_invariant MIbase.
+      unfold mem_state_with_next_alloc_id.
+      split;cbn.
+      split;cbn;auto.
+      auto.
+    Qed.
+
+    Lemma mem_state_with_last_address_preserves:
+      forall m,
+        mem_invariant m ->
+        (forall x, mem_invariant (mem_state_with_last_address x m)).
+    Proof.
+      intros m H x.
+      destruct H as [MIbase MIcap].
+      destruct_base_mem_invariant MIbase.
+      unfold mem_state_with_next_alloc_id.
+      split;cbn.
+      split;cbn;auto.
+      auto.
+    Qed.
+
+    Section allocator_proofs.
+
+      Variable  size : Z.
+      Variable  align : Z.
+
+      #[local] Instance allocator_preserves:
+        PreservesInvariant mem_invariant (allocator size align).
+      Proof.
+        unfold allocator.
+        preserves_step.
+        intros m H.
+        preserves_step.
+        -
+          break_let.
+          break_if.
+          apply fail_noloc_preserves.
+          preserves_step.
+        -
+          intros x0.
+          preserves_step.
+          preserves_step.
+          apply mem_state_with_next_alloc_id_preserves.
+          apply mem_state_with_last_address_preserves.
+          apply mem_state_after_ghist_tags_preserves.
+          apply H.
+          intros u.
+          preserves_step.
+      Qed.
+      #[local] Opaque allocator.
+
+    End allocator_proofs.
+
   End CheriMemoryWithoutPNVI.
 
   (* This is CHERI memory model whout instant revocation but with PNVI. *)
@@ -506,8 +688,8 @@ Module RevocationProofs.
      it's bounds.
 
      NB. [allocation.(is_dead)] is not used. Dead allocations are
-     immediately remved. So in case of Cornucopia the invariant will
-     be different.
+     immediately removed. So in the case of Cornucopia the invariant
+     will be different.
 
      *)
     Definition mem_invariant (m: mem_state_r) : Prop
