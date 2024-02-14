@@ -416,6 +416,9 @@ Module Type CheriMemoryImpl
   Definition mem_state_with_next_iota next_iota (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
+  Definition mem_state_with_next_alloc_id next_alloc_id (r : mem_state) :=
+    Build_mem_state_r next_alloc_id r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+
   Definition mem_state_with_capmeta capmeta (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta.
 
@@ -585,19 +588,9 @@ Module Type CheriMemoryImpl
         )
           >>= fun addr =>
             put
-              {|
-                next_alloc_id    := Z.succ alloc_id;
-                next_iota        := st.(next_iota);
-                last_address     := AddressValue.of_Z addr;
-                allocations      := st.(allocations);
-                iota_map         := st.(iota_map);
-                funptrmap        := st.(funptrmap);
-                varargs          := st.(varargs);
-                next_varargs_id  := st.(next_varargs_id);
-                bytemap          := st.(bytemap);
-                (* tags in newly allocated region are unspecified *)
-                capmeta          := init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta);
-              |}
+              (mem_state_with_next_alloc_id (Z.succ alloc_id)
+                 (mem_state_with_last_address (AddressValue.of_Z addr)
+                    (mem_state_with_capmeta (init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta)) st)))
             ;;
 
             (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
