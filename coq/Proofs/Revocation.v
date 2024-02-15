@@ -740,37 +740,30 @@ Module RevocationProofs.
       auto.
     Qed.
 
-    Section allocator_proofs.
-
-      Variable  size : Z.
-      Variable  align : Z.
-
-      #[local] Instance allocator_preserves:
-        PreservesInvariant mem_invariant (allocator size align).
-      Proof.
-        unfold allocator.
+    #[local] Instance allocator_preserves (size align : Z):
+      PreservesInvariant mem_invariant (allocator size align).
+    Proof.
+      unfold allocator.
+      preserves_step.
+      intros m H.
+      preserves_step.
+      -
+        break_let.
+        break_if.
+        apply fail_noloc_preserves.
         preserves_step.
-        intros m H.
+      -
+        intros x0.
         preserves_step.
-        -
-          break_let.
-          break_if.
-          apply fail_noloc_preserves.
-          preserves_step.
-        -
-          intros x0.
-          preserves_step.
-          preserves_step.
-          apply mem_state_with_next_alloc_id_preserves.
-          apply mem_state_with_last_address_preserves.
-          apply mem_state_after_ghist_tags_preserves.
-          apply H.
-          intros u.
-          preserves_step.
-      Qed.
-      #[local] Opaque allocator.
-
-    End allocator_proofs.
+        preserves_step.
+        apply mem_state_with_next_alloc_id_preserves.
+        apply mem_state_with_last_address_preserves.
+        apply mem_state_after_ghist_tags_preserves.
+        apply H.
+        intros u.
+        preserves_step.
+    Qed.
+    #[local] Opaque allocator.
 
   End CheriMemoryWithoutPNVI.
 
