@@ -312,6 +312,7 @@ Module RevocationProofs.
         intros m H.
         apply H.
       Qed.
+      #[local] Opaque ret.
 
       Lemma raise_PreservesInvariant {T:Type}:
         forall x,
@@ -323,6 +324,7 @@ Module RevocationProofs.
         intros x.
         split.
       Qed.
+      #[local] Opaque raise.
 
       Lemma bind_PreservesInvariant {T T': Type}
         {M: memM T'}
@@ -455,6 +457,43 @@ Module RevocationProofs.
   Module CheriMemoryWithoutPNVI.
     Include CheriMemoryImplWithProofsExe(WithoutPNVISwitches).
 
+    Lemma resolve_has_PNVI:
+      has_PNVI (WithoutPNVISwitches.get_switches tt) = false.
+    Proof.
+      unfold WithoutPNVISwitches.get_switches.
+      remember (abst_get_switches tt) as l.
+      unfold has_PNVI, remove_PNVI, remove_Revocation in *.
+      apply Bool.not_true_is_false.
+      intros E.
+      apply Bool.Is_true_eq_left in E.
+      apply list.existb_True in E.
+      apply Exists_exists in E.
+      destruct E as [x [H0 H1]].
+      apply set_add_iff in H0.
+      destruct H0.
+      -
+        subst.
+        inversion H1.
+      -
+        apply filter_In in H.
+        destruct H as [H2 H3].
+        apply filter_In in H2.
+        destruct H2 as [H4 H5].
+        apply Bool.negb_true_iff in H5.
+        rewrite H5 in H1.
+        inversion H1.
+    Qed.
+
+    Lemma resolve_has_INSTANT:
+      has_switch (WithoutPNVISwitches.get_switches tt) (SW_revocation INSTANT) = true.
+    Proof.
+      unfold has_switch.
+      unfold WithoutPNVISwitches.get_switches.
+      apply set_mem_correct2.
+      apply set_add_intro2.
+      reflexivity.
+    Qed.
+
     (* CheriMemoryWithoutPNVI memory invariant
 
      It is similar to "with PNVI" except: 1. Provenance should be
@@ -522,7 +561,47 @@ Module RevocationProofs.
           contradiction.
     Qed.
 
+    #[local] Instance fail_PreservesInvariant {T:Type}:
+      forall l e,
+        PreservesInvariant mem_invariant (@fail T l e).
+    Proof.
+      intros l e.
+      unfold fail.
+      break_match;
+      apply raise_PreservesInvariant.
+    Qed.
+    #[local] Opaque fail.
+
+    #[local] Instance fail_noloc_PreservesInvariant {T:Type}:
+      forall e,
+        PreservesInvariant mem_invariant (@fail_noloc T e).
+    Proof.
+      intros e.
+      unfold fail_noloc.
+      apply fail_PreservesInvariant.
+    Qed.
+    #[local] Opaque fail_noloc.
+
+    #[local] Instance serr2InternalErr_PreservesInvariant
+      {T: Type}
+      {e: serr T}:
+      PreservesInvariant mem_invariant (serr2InternalErr e).
+    Proof.
+      unfold serr2InternalErr.
+      destruct e.
+      apply raise_PreservesInvariant.
+      apply ret_PreservesInvariant.
+    Qed.
+    #[local] Opaque serr2InternalErr.
+
     (* TODO: move up *)
+
+    #[local] Opaque bind.
+    #[local] Opaque raise.
+    #[local] Opaque ret.
+    #[local] Opaque get.
+    #[local] Opaque put.
+
     Ltac preserves_step :=
       match goal with
       |[|- PreservesInvariant _ (bind get _)] => apply bind_get_PreservesInvariant
@@ -532,37 +611,10 @@ Module RevocationProofs.
       |[|- PreservesInvariant _ get] => apply get_PreservesInvariant
       |[|- PreservesInvariant _ (put _) ] => apply put_PreservesInvariant
       |[|- PreservesInvariant _ (ErrorWithState.update _)] => apply update_PreservesInvariant
+      |[|- PreservesInvariant _ (fail _ _)] => apply fail_PreservesInvariant
+      |[|- PreservesInvariant _ (fail_noloc _)] => apply fail_noloc_PreservesInvariant
+      |[|- PreservesInvariant _ (serr2InternalErr _)] => apply serr2InternalErr_PreservesInvariant
       end.
-
-    #[local] Instance fail_preserves_invariant {T:Type}:
-      forall l e,
-        PreservesInvariant mem_invariant (@fail T l e).
-    Proof.
-      intros l e.
-      unfold fail.
-      break_match; preserves_step.
-    Qed.
-    #[local] Opaque fail.
-
-    #[local] Instance fail_noloc_preserves {T:Type}:
-      forall e,
-        PreservesInvariant mem_invariant (@fail_noloc T e).
-    Proof.
-      intros e.
-      unfold fail_noloc.
-      apply fail_preserves_invariant.
-    Qed.
-    #[local] Opaque fail_noloc.
-
-    #[local] Instance serr2InternalErr_preserves
-      {T: Type}
-      {e: serr T}:
-      PreservesInvariant mem_invariant (serr2InternalErr e).
-    Proof.
-      unfold serr2InternalErr.
-      destruct e;  preserves_step.
-    Qed.
-    #[local] Opaque serr2InternalErr.
 
     Lemma zmap_range_init_spec
       {T:Type}
@@ -720,7 +772,6 @@ Module RevocationProofs.
       intros m H x.
       destruct H as [MIbase MIcap].
       destruct_base_mem_invariant MIbase.
-      unfold mem_state_with_next_alloc_id.
       split;cbn.
       split;cbn;auto.
       auto.
@@ -734,7 +785,6 @@ Module RevocationProofs.
       intros m H x.
       destruct H as [MIbase MIcap].
       destruct_base_mem_invariant MIbase.
-      unfold mem_state_with_next_alloc_id.
       split;cbn.
       split;cbn;auto.
       auto.
@@ -749,9 +799,7 @@ Module RevocationProofs.
       preserves_step.
       -
         break_let.
-        break_if.
-        apply fail_noloc_preserves.
-        preserves_step.
+        break_if; preserves_step.
       -
         intros x0.
         preserves_step.
@@ -764,6 +812,120 @@ Module RevocationProofs.
         preserves_step.
     Qed.
     #[local] Opaque allocator.
+
+    #[global] Instance find_live_allocation_preserves:
+      forall a, PreservesInvariant mem_invariant
+             (find_live_allocation a).
+    Proof.
+      intros a.
+      unfold find_live_allocation.
+      preserves_step.
+      intros m H.
+      preserves_step.
+    Qed.
+
+    #[global] Instance zmap_mmapi_preserves
+      {A B : Type}
+      (f : ZMap.key -> A -> memM B)
+      (zm: ZMap.t A):
+      (forall k x, PreservesInvariant mem_invariant (f k x)) ->
+      PreservesInvariant mem_invariant (@zmap_mmapi A B memM memM_monad f zm).
+    Proof.
+      intros H.
+      unfold zmap_mmapi.
+    Admitted.
+
+    #[global] Instance maybe_revoke_pointer_preserves
+      (alloc_base alloc_limit: Z)
+      (st: mem_state)
+      (addr: Z)
+      (meta: (bool*CapGhostState)):
+      mem_invariant st ->
+      PreservesInvariant mem_invariant
+        (maybe_revoke_pointer alloc_base alloc_limit st addr meta).
+    Proof.
+      intros M.
+      clear M.
+      unfold maybe_revoke_pointer.
+      break_if.
+      preserves_step.
+      preserves_step.
+      preserves_step.
+      intros x.
+      repeat break_let.
+      break_match; try preserves_step.
+      break_match; try preserves_step.
+      break_match; try preserves_step.
+      break_match; try preserves_step.
+    Qed.
+
+    #[global] Instance revoke_pointers_preserves:
+      forall a,PreservesInvariant mem_invariant (revoke_pointers a).
+    Proof.
+      intros a.
+      unfold revoke_pointers.
+      preserves_step.
+      intros m H.
+      preserves_step.
+      -
+        apply zmap_mmapi_preserves.
+        intros k x.
+        apply maybe_revoke_pointer_preserves.
+        assumption.
+      -
+        intros x.
+        preserves_step.
+        preserves_step.
+        intros m0 H0.
+        admit.
+        intros x0.
+        preserves_step.
+    Admitted.
+
+    #[global] Instance kill_preserves
+      (loc : location_ocaml)
+      (is_dyn : bool)
+      (ptr : pointer_value_indt)
+      :
+      PreservesInvariant mem_invariant (kill loc is_dyn ptr).
+    Proof.
+      unfold kill.
+      rewrite resolve_has_PNVI.
+      rewrite resolve_has_INSTANT.
+      destruct ptr.
+      destruct p eqn:P.
+      2-5:break_match;simpl; preserves_step.
+
+      break_match;simpl;try preserves_step.
+      break_match;simpl;try preserves_step.
+      apply find_live_allocation_preserves.
+      intros x.
+      break_match.
+      -
+        break_let.
+        preserves_step;[repeat break_if; preserves_step|].
+        intros u0.
+        preserves_step;[repeat break_if; preserves_step|].
+        intros u1.
+        preserves_step.
+        +
+          preserves_step.
+          *
+            admit.
+          *
+            intros u2.
+            admit.
+        +
+          intros u2.
+          preserves_step.
+          intros m H.
+          repeat break_if; preserves_step.
+          intros m0 H0.
+          apply mem_state_with_last_address_preserves.
+          assumption.
+      -
+        preserves_step.
+    Admitted.
 
   End CheriMemoryWithoutPNVI.
 
@@ -1225,33 +1387,6 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
-  Lemma has_PNVI_WithoutPNVI:
-    has_PNVI (WithoutPNVISwitches.get_switches tt) = false.
-  Proof.
-    unfold WithoutPNVISwitches.get_switches.
-    remember (abst_get_switches tt) as l.
-    unfold has_PNVI, remove_PNVI, remove_Revocation in *.
-    apply Bool.not_true_is_false.
-    intros E.
-    apply Bool.Is_true_eq_left in E.
-    apply list.existb_True in E.
-    apply Exists_exists in E.
-    destruct E as [x [H0 H1]].
-    apply set_add_iff in H0.
-    destruct H0.
-    -
-      subst.
-      inversion H1.
-    -
-      apply filter_In in H.
-      destruct H as [H2 H3].
-      apply filter_In in H2.
-      destruct H2 as [H4 H5].
-      apply Bool.negb_true_iff in H5.
-      rewrite H5 in H1.
-      inversion H1.
-  Qed.
-
   Lemma remove_PNVI_In:
     forall l s,
       is_PNVI_switch s = false ->
@@ -1441,7 +1576,7 @@ Module RevocationProofs.
         with true in H by has_PNVI_WithPNVI
     | [H: context[has_PNVI (WithoutPNVISwitches.get_switches tt)] |- _] =>
         replace (has_PNVI (WithoutPNVISwitches.get_switches tt))
-        with false in H by has_PNVI_WithoutPNVI
+        with false in H by CheriMemoryWithoutPNVI.resolve_has_PNVI
     | [H: context[has_switch (WithoutPNVISwitches.get_switches tt) ?s] |- _] =>
         match s with
         | SW_PNVI _ => fail
@@ -1465,7 +1600,7 @@ Module RevocationProofs.
         with true by (apply has_PNVI_WithPNVI)
     | [|- context[has_PNVI (WithoutPNVISwitches.get_switches tt)]] =>
         replace (has_PNVI (WithoutPNVISwitches.get_switches tt))
-        with false by (symmetry;apply has_PNVI_WithoutPNVI)
+        with false by (symmetry;apply CheriMemoryWithoutPNVI.resolve_has_PNVI)
     end.
 
   (* --- Lemmas about memory models --- *)
