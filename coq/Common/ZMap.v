@@ -25,8 +25,8 @@ Fixpoint zmap_range_init {T} (a0:Z) (n:nat) (step:Z) (v:T) (m:ZMap.t T) : ZMap.t
   match n with
   | O => m
   | S n =>
-      let m := ZMap.add (Z.add a0 (Z.mul (Z.of_nat n) step)) v m in
-      zmap_range_init a0 n step v m
+      let m := zmap_range_init a0 n step v m in
+      ZMap.add (Z.add a0 (Z.mul (Z.of_nat n) step)) v m
   end.
 
 Definition zmap_update_element
