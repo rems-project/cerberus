@@ -1650,45 +1650,53 @@ Module Type CheriMemoryImpl
                   update_allocations alloc alloc_id
               end
     | PV (Prov_some alloc_id) (PVconcrete c) =>
-        if cap_is_null c
-           && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
-        then fail loc MerrFreeNullPtr
+        if negb (CoqSwitches.has_PNVI (SW.get_switches tt)) then
+          raise (InternalErr "Unexpected provenance in absence of PNVI")
         else
-          get_allocation_opt alloc_id >>= fun alloc_opt =>
-              match alloc_opt with
-              | None =>
-                  (* The allocation_id in the pointer is no longer in the list of allocations. *)
-                  fail loc (MerrUndefinedFree Free_dead_allocation)
-              | Some alloc =>
-                  check_dyn_match alloc.(is_dynamic) ;;
-                  if alloc.(is_dead) then
-                    if alloc.(is_dynamic) then
-                      (* the dynamic allocation was already freed *)
-                      fail loc (MerrUndefinedFree Free_dead_allocation)
+          if cap_is_null c
+             && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
+          then fail loc MerrFreeNullPtr
+          else
+            get_allocation_opt alloc_id >>= fun alloc_opt =>
+                match alloc_opt with
+                | None =>
+                    (* The allocation_id in the pointer is no longer in the list of allocations. *)
+                    fail loc (MerrUndefinedFree Free_dead_allocation)
+                | Some alloc =>
+                    check_dyn_match alloc.(is_dynamic) ;;
+                    if alloc.(is_dead) then
+                      if alloc.(is_dynamic) then
+                        (* the dynamic allocation was already freed *)
+                        fail loc (MerrUndefinedFree Free_dead_allocation)
+                      else
+                        raise (InternalErr "An attempt to double-kill non-dynamic allocation")
                     else
-                      raise (InternalErr "An attempt to double-kill non-dynamic allocation")
-                  else
-                    check_cap_alloc_match c alloc ;;
-                    update_allocations alloc alloc_id
-              end
+                      check_cap_alloc_match c alloc ;;
+                      update_allocations alloc alloc_id
+                end
     | PV (Prov_symbolic iota) (PVconcrete c) =>
-        if cap_is_null c && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
-        then fail loc MerrFreeNullPtr
+        if negb (CoqSwitches.has_PNVI (SW.get_switches tt)) then
+          raise (InternalErr "Unexpected provenance in absence of PNVI")
         else
-          let precondition z :=
-            alloc <- get_allocation z ;;
-            ret
-              (if alloc.(is_dead)
-               then FAIL loc (MerrUndefinedFree Free_dead_allocation)
-               else if AddressValue.eqb (C.cap_get_value c) alloc.(base)
-                    then OK
-                    else FAIL loc (MerrUndefinedFree Free_out_of_bound))
-          in
-          alloc_id <- resolve_iota precondition iota ;;
-          alloc <- get_allocation alloc_id ;;
-          check_cap_alloc_match c alloc ;;
-          update_allocations alloc alloc_id
-    | PV Prov_device (PVconcrete _) => ret tt
+          if cap_is_null c && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
+          then fail loc MerrFreeNullPtr
+          else
+            let precondition z :=
+              alloc <- get_allocation z ;;
+              ret
+                (if alloc.(is_dead)
+                 then FAIL loc (MerrUndefinedFree Free_dead_allocation)
+                 else if AddressValue.eqb (C.cap_get_value c) alloc.(base)
+                      then OK
+                      else FAIL loc (MerrUndefinedFree Free_out_of_bound))
+            in
+            alloc_id <- resolve_iota precondition iota ;;
+            alloc <- get_allocation alloc_id ;;
+            check_cap_alloc_match c alloc ;;
+            update_allocations alloc alloc_id
+    | PV Prov_device (PVconcrete _) =>
+        (* TODO: should that be an error ?? *)
+        ret tt
     | PV _ (PVfunction _) =>
         fail loc (MerrOther "attempted to kill with a function pointer")
     | PV Prov_none (PVconcrete c) =>
