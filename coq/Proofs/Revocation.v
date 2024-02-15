@@ -6,6 +6,7 @@ Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Logic.FunctionalExtensionality.
 Require Import Coq.Logic.Decidable.
 From Coq.Strings Require Import String Ascii HexString.
+Require Import Coq.micromega.Psatz.
 
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Classes.SetoidClass.
@@ -563,6 +564,98 @@ Module RevocationProofs.
     Qed.
     #[local] Opaque serr2InternalErr.
 
+
+    Fixpoint zmap_range_init' {T} (a0:Z) (n:nat) (step:Z) (v:T) (m:ZMap.t T) : ZMap.t T
+      :=
+      match n with
+      | O => m
+      | S n =>
+          let m := zmap_range_init' a0 n step v m in
+          ZMap.add (Z.add a0 (Z.mul (Z.of_nat n) step)) v m
+      end.
+
+    Lemma zmap_range_init_spec'
+      {T:Type}
+      (a0:Z)
+      (n:nat)
+      (step:Z)
+      (v:T)
+      (m:ZMap.t T):
+      forall k x,
+        ZMap.MapsTo k x (zmap_range_init' a0 n step v m)
+        ->
+          {
+            ~(exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
+            /\ ZMap.MapsTo k x m
+          }+
+            {
+              (exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
+              /\
+                x=v
+            }.
+    Proof.
+      induction n as [|n' IHn].
+      -
+        left.
+        split.
+        +
+          intros C.
+          destruct C as [i [C _]].
+          lia.
+        +
+          cbn in H.
+          assumption.
+      -
+        simpl. intros k x Hmap.
+        destruct (Z.eq_dec (a0 + Z.of_nat n' * step) k) as [E|NE].
+        + (* Case: k is the newly added key *)
+          right. split. exists n'. split; lia.
+          apply add_mapsto_iff in Hmap.
+          destruct Hmap as [[H1 H2] | [H3 H4]];[auto|congruence].
+        + (* Case: k is not the newly added key, apply IH *)
+          apply add_mapsto_iff in Hmap.
+          specialize (IHn k x).
+          autospecialize IHn.
+          {
+            destruct Hmap as [[H1 H2] | [H3 H4]];[congruence|auto].
+          }
+          destruct IHn as [[Hni Hm]|[Hi Hv]].
+          * left. split; auto.
+            intro H.
+            apply Hni. destruct H as [i [Hlt Heq]].
+            exists i. split.
+            --
+              admit.
+            --
+            auto.
+          * right. destruct Hi as [i [Hlt Heq]].
+            split.
+            exists i. split; [lia|]. assumption.
+            auto.
+    Admitted.
+
+    Lemma zmap_range_init_spec
+      {T:Type}
+      (a0:Z)
+      (n:nat)
+      (step:Z)
+      (v:T)
+      (m:ZMap.t T):
+      forall k x,
+        ZMap.MapsTo k x (zmap_range_init a0 n step v m)
+        ->
+          {
+            ~(exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
+            /\ ZMap.MapsTo k x m
+          }+
+            {
+              (exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
+              /\
+                x=v
+            }.
+    Proof.
+    Admitted.
+
     Lemma init_ghost_tags_spec
       (addr: AddressValue.t)
       (size: Z)
@@ -571,16 +664,30 @@ Module RevocationProofs.
         ZMap.MapsTo a tg (init_ghost_tags addr size c0)
         ->
           (ZMap.MapsTo a tg c0
-          \/
-            (Z.modulo a MorelloImpl.get.(alignof_pointer) = 0
-             /\
-               tg = (false, {| tag_unspecified := true; bounds_unspecified := false |}))).
+           \/
+             (Z.modulo a MorelloImpl.get.(alignof_pointer) = 0
+              /\
+                tg = (false, {| tag_unspecified := true; bounds_unspecified := false |}))).
     Proof.
       intros a tg H.
       unfold init_ghost_tags in *.
       repeat break_let.
-      (* TODO: need zmap_range_init spec *)
-    Admitted.
+      apply zmap_range_init_spec in H.
+      destruct H as [[H1 H2] | [[i [H3 H4]] H5]].
+      -
+        left.
+        apply H2.
+      -
+        right.
+        split.
+        +
+          subst a.
+          setoid_rewrite Z.mul_comm.
+          rewrite <- Z.mul_add_distr_l.
+          apply ZLib.Z_mod_mult'.
+        +
+          apply H5.
+    Qed.
 
     Lemma mem_state_after_ghist_tags_preserves:
       forall m addr size,
