@@ -488,12 +488,15 @@ Section ZMapAux.
     subst.
     dependent induction n.
     -
-      cbn.
+      simpl.
       apply EM.
     -
-      cbn.
+      simpl.
+      repeat rewrite add_o.
+      break_if.
+      reflexivity.
       apply IHn.
-      apply F.add_m;auto.
+      assumption.
   Qed.
 
   #[global] Instance zmap_add_Proper
