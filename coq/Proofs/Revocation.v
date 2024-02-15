@@ -323,15 +323,6 @@ Module RevocationProofs.
         split.
       Qed.
 
-      Lemma bind_get_PreservesInvariant {T: Type}
-        {C: mem_state_r -> memM T}
-        :
-        (forall m, invr m -> PreservesInvariant (C m))
-        -> PreservesInvariant (bind get C).
-      Proof.
-      Admitted.
-
-
       Lemma bind_PreservesInvariant {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
@@ -368,6 +359,33 @@ Module RevocationProofs.
         tuple_inversion.
         cbn in MC.
         apply MC.
+      Qed.
+
+      Lemma bind_get_PreservesInvariant {T: Type}
+        {C: mem_state_r -> memM T}
+        :
+        (forall m, invr m -> PreservesInvariant (C m))
+        -> PreservesInvariant (bind get C).
+      Proof.
+        intros MH m MI.
+        unfold PreservesInvariant.
+        cbn.
+        unfold execErrS, evalErrS, lift_sum_p in *.
+        break_let.
+        cbn in *.
+        break_match;auto.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        specialize (MH m MI).
+        unfold PreservesInvariant in MH.
+        specialize (MH m MI).
+        unfold execErrS, evalErrS, lift_sum_p in MH.
+        break_let.
+        tuple_inversion.
+        cbn in MH.
+        auto.
       Qed.
 
       Lemma put_PreservesInvariant:
