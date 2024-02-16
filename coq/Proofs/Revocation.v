@@ -836,26 +836,23 @@ Module RevocationProofs.
     Admitted.
 
     #[global] Instance maybe_revoke_pointer_preserves
-      (alloc_base alloc_limit: Z)
+      allocation
       (st: mem_state)
       (addr: Z)
       (meta: (bool*CapGhostState)):
       mem_invariant st ->
       PreservesInvariant mem_invariant
-        (maybe_revoke_pointer alloc_base alloc_limit st addr meta).
+        (maybe_revoke_pointer allocation st addr meta).
     Proof.
       intros M.
       clear M.
       unfold maybe_revoke_pointer.
+      break_let.
       break_if.
       preserves_step.
       preserves_step.
       preserves_step.
       intros x.
-      repeat break_let.
-      break_match; try preserves_step.
-      break_match; try preserves_step.
-      break_match; try preserves_step.
       break_match; try preserves_step.
     Qed.
 
