@@ -1502,12 +1502,26 @@ Module Type CheriMemoryImpl
   Definition find_overlapping addr : memM overlap_indt
     :=  get >>= fun st => ret (find_overlapping_st st addr).
 
+  (* Check whether this cap base address is within allocation *)
+  Definition cap_bounds_within_alloc_bool (c:C.t) a : bool
+    :=
+    let alloc_base := AddressValue.to_Z a.(base) in
+    let alloc_limit := alloc_base + a.(size) in
+    let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
+    (alloc_base <=? ptr_base) && (ptr_base <? alloc_limit).
+
+  Definition fetch_and_decode_cap bytemap addr tag : serr C.t :=
+    let bs := fetch_bytes bytemap addr IMP.get.(sizeof_pointer) in
+    '(_, _, bs1) <- split_bytes bs ;;
+    cs <- option2serr "cap contains unspecified bytes" (extract_unspec bs1) ;;
+    option2serr "error decoding cap" (C.decode (List.rev cs) tag).
+
   (* If pointer stored at [addr] with meta information [meta] has it's
      base within given [base] and [limit] region, revoke it by returning
      new meta.
    *)
   Definition maybe_revoke_pointer
-    (alloc_base alloc_limit: Z)
+    allocation
     (st: mem_state)
     (addr: Z)
     (meta: (bool*CapGhostState))
@@ -1515,37 +1529,25 @@ Module Type CheriMemoryImpl
     memM (bool* CapGhostState)
     :=
     (* mprint_msg ("maybe_revoke_pointer "  ++ String.hex_str addr) ;; *)
-    if negb (fst meta)
-    then ret meta (* the pointer is already untagged *)
+    let '(tag, gs) := meta in
+    if negb tag then ret meta (* the pointer is already untagged *)
     else
-      let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
-      '(_, mval, _) <-
-        serr2InternalErr (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
-                                                             (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
-      ;;
-      match mval with
-      | MVEpointer _ (PV _ (PVconcrete c)) =>
-          let '(t, gs) := meta  in
-          let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
-          if Z.leb alloc_base ptr_base && Z.ltb ptr_base alloc_limit
-          then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
-          else ret meta (* outside allocation. leave unchanged *)
-      | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
-      | _ => raise (InternalErr "Unexpected `abst` return value. Expecting concrete pointer.")
-      end.
+      c <- serr2InternalErr (fetch_and_decode_cap st.(bytemap) addr tag) ;;
+      if cap_bounds_within_alloc_bool c allocation
+      then
+        ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
+      else ret meta. (* outside allocation. leave unchanged *)
 
   (* revoke (clear tag) any pointer in the memory pointing within the
      bounds of given dynamic allocation.
 
      [alloc] parameter should be a dynamic allocation
    *)
-  Definition revoke_pointers alloc : memM unit
+  Definition revoke_pointers allocation : memM unit
     :=
-    let base := AddressValue.to_Z alloc.(base) in
-    let limit := base + alloc.(size) in
     (* mprint_msg ("revoke_pointers " ++ (String.hex_str base) ++ " - "  ++ (String.hex_str limit)) ;; *)
     st <- get ;;
-    newmeta <- zmap_mmapi (maybe_revoke_pointer base limit st) st.(capmeta) ;;
+    newmeta <- zmap_mmapi (maybe_revoke_pointer allocation st) st.(capmeta) ;;
     update (mem_state_with_capmeta newmeta) ;;
     ret tt.
 
