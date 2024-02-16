@@ -445,6 +445,13 @@ module Concrete : Memory = struct
           | `VALID z, _ -> (z, `NotValidPtrProv, values)
           | `INVALID, _ -> (Prov_none, `NotValidPtrProv, values)
     
+    let pvi_split_bytes bs =
+      let prov, rev_bs =
+        List.fold_left (fun (prov_acc, rev_bs_acc) b ->
+          (combine_prov b.prov prov_acc, b.value :: rev_bs_acc)
+        ) (Prov_none, []) bs in
+      prov, List.rev rev_bs
+    
     (* PNVI-ae-udi *)
     let provs_of_bytes bs =
       let xs = List.fold_left (fun acc b ->
@@ -924,7 +931,7 @@ module Concrete : Memory = struct
           assert false
       | Basic (Integer ity) ->
           let (bs1, bs2) = L.split_at (N.to_int (sizeof cty)) bs in
-          let (prov, _, bs1') = AbsByte.split_bytes bs1 in
+          let (prov, bs1') = AbsByte.pvi_split_bytes bs1 in
             (* PNVI-ae-udi *)
           ( AbsByte.provs_of_bytes bs1
           , begin match extract_unspec bs1' with
