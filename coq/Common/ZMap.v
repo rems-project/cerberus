@@ -18,7 +18,10 @@ Local Open Scope monad_scope.
 Import ListNotations.
 Import MonadNotation.
 
+Require Import Coq.FSets.FMapFacts.
+
 Module ZMap := FMapAVL.Make(Z_as_OT).
+Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
 
 Fixpoint zmap_range_init {T} (a0:Z) (n:nat) (step:Z) (v:T) (m:ZMap.t T) : ZMap.t T
   :=
@@ -64,6 +67,19 @@ Definition zmap_sequence
   {M: Monad m}
   (mv: ZMap.t (m A)): m (ZMap.t A)
   :=
+  let (kl,vl) := List.split (ZMap.elements mv) in
+  vl' <- sequence (F:=m) (T:=list) vl ;;
+  ret (of_list (list_prod kl vl')).
+
+(*
+Alternative defintion. More efficient but harder to prove.
+
+Definition zmap_sequence
+  {A: Type}
+  {m: Type -> Type}
+  {M: Monad m}
+  (mv: ZMap.t (m A)): m (ZMap.t A)
+  :=
   let fix loop (ls: list (ZMap.key*(m A))) (acc:ZMap.t A) : m (ZMap.t A) :=
     match ls with
     | [] => ret acc
@@ -71,6 +87,7 @@ Definition zmap_sequence
     end
   in
   loop (ZMap.elements mv) (ZMap.empty A).
+ *)
 
 (** Adds elements of given [list] to a [map] starting at [index]. *)
 Definition zmap_add_list_at
