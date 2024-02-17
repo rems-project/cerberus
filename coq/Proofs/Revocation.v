@@ -824,6 +824,111 @@ Module RevocationProofs.
       preserves_step.
     Qed.
 
+    (* TODO:
+       move to ProofAux.
+       This proof requires [Equivalence (@ea A)] which may be unecessary.
+     *)
+    Lemma zmap_maps_to_elements_p
+      {A: Type}
+      `{Ae: Equivalence (@ea A)}
+      (P: A -> Prop)
+      (mv: ZMap.t A)
+      :
+      (forall k v, ZMap.MapsTo k v mv -> P v) <-> (List.Forall (fun '(k,v) => P v) (ZMap.elements mv)).
+    Proof.
+      split.
+      - intros HMapsTo.
+        apply List.Forall_forall.
+        intros (k, v) Hin.
+        apply In_InA with (eqA:=(ZMap.eq_key_elt (elt:=A))) in Hin.
+        apply WZP.elements_mapsto_iff in Hin.
+        apply HMapsTo in Hin.
+        assumption.
+        typeclasses eauto.
+      - intros HForall k v HMapsTo.
+        apply WZP.elements_mapsto_iff in HMapsTo.
+        apply List.Forall_forall with (x := (k, v)) in HForall.
+        + apply HForall.
+        +
+          apply InA_alt in HMapsTo.
+          destruct HMapsTo as [(k',v') [ [Ek Ev] HM]].
+          cbn in Ek, Ev.
+          subst.
+          assumption.
+    Qed.
+
+    (* TODO alternative definition.*)
+    Definition zmap_sequence'
+      {A: Type}
+      {m: Type -> Type}
+      {M: Monad m}
+      (mv: ZMap.t (m A)): m (ZMap.t A)
+      :=
+      let me := ZMap.elements mv in
+      let kl := List.map fst me in
+      let vl := List.map snd me in
+      vl' <- sequence (F:=m) (T:=list) vl
+      ;;
+      let me' := list_prod kl vl' in
+      let mv' := of_list me' in
+      ret mv'.
+
+
+    (* Prove that it is same as original? Or just replace the original *)
+    Lemma zmap_sequence'_zmap_sequence_eq
+      {A: Type}
+      {m: Type -> Type}
+      {M: Monad m}
+      (mv: ZMap.t (m A)):
+      zmap_sequence' mv = zmap_sequence mv.
+    Proof.
+    Admitted.
+
+    #[global] Instance zmap_sequence'_preserves
+      {A: Type}
+      (mv: ZMap.t (memM A)):
+      (forall k v, ZMap.MapsTo k v mv -> PreservesInvariant mem_invariant v) ->
+      PreservesInvariant mem_invariant (zmap_sequence' mv).
+    Proof.
+      intros H.
+      apply zmap_maps_to_elements_p in H.
+      unfold zmap_sequence'.
+      remember (ZMap.elements (elt:=memM A) mv) as ls.
+      preserves_step.
+      -
+        unfold sequence, mapT.
+        cbn.
+        induction ls.
+        +
+          cbn.
+          preserves_step.
+        +
+          cbn.
+          unfold apM.
+          preserves_step.
+          preserves_step.
+          preserves_step.
+          intros x.
+          admit.
+          intros x.
+          admit.
+      -
+        intros x.
+        preserves_step.
+    Admitted.
+
+    (* TODO: prove or disacard *)
+    #[global] Instance zmap_sequence_preserves
+      {A: Type}
+      (mv: ZMap.t (memM A)):
+      (forall k v, ZMap.MapsTo k v mv -> PreservesInvariant mem_invariant v) ->
+      PreservesInvariant mem_invariant (zmap_sequence mv).
+    Proof.
+      intros H.
+      unfold zmap_sequence.
+      apply zmap_maps_to_elements_p in H.
+    Admitted.
+
     #[global] Instance zmap_mmapi_preserves
       {A B : Type}
       (f : ZMap.key -> A -> memM B)
@@ -833,7 +938,13 @@ Module RevocationProofs.
     Proof.
       intros H.
       unfold zmap_mmapi.
-    Admitted.
+      apply zmap_sequence_preserves.
+      intros k v H0.
+      apply F.mapi_inv in H0.
+      destruct H0 as [v' [k' [E [E1 M]]]].
+      subst.
+      apply H.
+    Qed.
 
     #[global] Instance maybe_revoke_pointer_preserves
       allocation
