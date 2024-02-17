@@ -19,7 +19,7 @@ Unset Extraction Optimize. (* trying to make print_msg work *)
 Require Import Coq.Vectors.Vector.
 From stdpp Require Import vector.
 
-Extraction Blacklist vector Vector String List Char Core Monad Bool Format Nat Int Option Base Numbers FMapAVL OrderedType Map.
+Extraction Blacklist vector Vector String List Char Core Monad Bool Format Nat Int Option Base Numbers FMapAVL FMapFacts OrderedType Map.
 
 (* Debugging print *)
 Extraction NoInline Common.Utils.print_msg.

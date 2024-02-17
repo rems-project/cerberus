@@ -583,6 +583,34 @@ Section ZMapAux.
         apply M.
   Qed.
 
+  Lemma zmap_maps_to_elements_p
+    {A: Type}
+    `{Ae: Equivalence A (@eq A)}
+    (P: A -> Prop)
+    (mv: ZMap.t A)
+    :
+    (forall k v, ZMap.MapsTo k v mv -> P v) <-> (List.Forall (fun '(k,v) => P v) (ZMap.elements mv)).
+  Proof.
+    split.
+    - intros HMapsTo.
+      apply List.Forall_forall.
+      intros (k, v) Hin.
+      apply In_InA with (eqA:=(ZMap.eq_key_elt (elt:=A))) in Hin.
+      apply WZP.elements_mapsto_iff in Hin.
+      apply HMapsTo in Hin.
+      assumption.
+      typeclasses eauto.
+    - intros HForall k v HMapsTo.
+      apply WZP.elements_mapsto_iff in HMapsTo.
+      apply List.Forall_forall with (x := (k, v)) in HForall.
+      + apply HForall.
+      +
+        apply InA_alt in HMapsTo.
+        destruct HMapsTo as [(k',v') [ [Ek Ev] HM]].
+        cbn in Ek, Ev.
+        subst.
+        assumption.
+  Qed.
 
 End ZMapAux.
 
