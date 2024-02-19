@@ -1483,7 +1483,13 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                     return (PName pn)
                in
                let@ it = WIT.infer loc it in
-               add_movable_index loc (predicate_name, it)
+               let@ (original_rs, _) = all_resources_tagged loc in
+               let@ () = add_movable_index loc (predicate_name, it) in
+               let@ (upd_rs, _) = all_resources_tagged loc in
+               if List.equal Int.equal (List.map snd original_rs) (List.map snd upd_rs)
+               then warn loc !^"Special-case index added by extract, no resource (yet) extracted."
+               else ();
+               return ()
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_function_def loc f in
                let has_args, expect_args = List.length args, List.length def.args in
