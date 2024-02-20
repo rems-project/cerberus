@@ -3,7 +3,7 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Utils Loc Show Symbol Global
+open import Pervasives Utils Loc Show Symbol
 import Annot IntegerType
 include IntegerType
 
@@ -381,6 +381,7 @@ val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
 
+import Global
 val ptraddr_t: unit -> ctype
 let ptraddr_t _ =
   if Global.is_CHERI() then

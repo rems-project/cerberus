@@ -1,4 +1,5 @@
-open import Pervasives Utils Global Loc String_extra Num
+open import Pervasives Utils Loc String_extra Num
+import Global
 
 import State Undefined Translation_effect Loc List_extra
 open import Translation_aux
@@ -916,7 +917,7 @@ let translate_function_call loc is_used translate_expr stdlib e es =
         )) :: rev_core_creates )
   ) (0,[]) (List.zip expect_params args_info) >>= fun (_, rev_core_creates) ->
   (* standard arguments (CN elaboration switch) *)
-  begin if Global.has_switch SW_inner_arg_temps then
+  begin if Global.has_switch Global.SW_inner_arg_temps then
     E.foldlM (fun (n, cn_core_args) ((_, expect_param_ty, _), (arg_ty, arg_is_null, arg_sym_pe)) ->
       E.wrapped_fresh_symbol C.BTy_ctype                  >>= fun param_ty_wrp ->
       E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun arg_ptr_wrp ->
@@ -1047,7 +1048,7 @@ else
           (Caux.mk_op_pe C.OpOr is_variadic_wrp.E.sym_pe
                           (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_wrp.E.sym_pe)))
           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
-begin if Global.has_switch SW_inner_arg_temps then
+begin if Global.has_switch Global.SW_inner_arg_temps then
           (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe ((*is_used_pe :: *)List.reverse rev_cn_core_args))
 else
             (* create temporary object *)
@@ -3969,7 +3970,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           let is_using_inner_arg_temps =
             (* NOTE: we exclude main because the driver allocates the objects for argc and argvs *)
             (* with this switch the argument temporary objects are allocated in the function *)
-            Global.has_switch SW_inner_arg_temps && startup_sym_opt <> Just sym in
+            Global.has_switch Global.SW_inner_arg_temps && startup_sym_opt <> Just sym in
           (* elaboration of a function *)
           let ret_bTy =
             if AilTypesAux.is_void return_ty then
@@ -4005,7 +4006,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
             | Just (loc, mrk, _, param_syms, stmt) ->
                 E.mapM (fun (s, bTy) ->
                   let descr = 
-                    if not (Global.has_switch SW_inner_arg_temps) then Symbol.SD_None else
+                    if not (Global.has_switch Global.SW_inner_arg_temps) then Symbol.SD_None else
                       match Symbol.symbol_description s with
                       | Symbol.SD_ObjectAddress v -> Symbol.SD_FunArgValue v
                       | _ -> Assert_extra.failwith "function argument does not have SD_ObjectAddress description"
@@ -4020,7 +4021,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   ( loc, decl_attrs, return_ty
                   (* TODO: check if we need qualifiers too *)
                   , List.map (fun (sym, (_, ty, _)) -> 
-                        if Global.has_switch SW_inner_arg_temps then 
+                        if Global.has_switch Global.SW_inner_arg_temps then 
                           let descr = match Symbol.symbol_description sym with
                             | Symbol.SD_ObjectAddress v -> Symbol.SD_FunArgValue v
                             | _ -> Assert_extra.failwith "function argument does not have SD_ObjectAddress description"

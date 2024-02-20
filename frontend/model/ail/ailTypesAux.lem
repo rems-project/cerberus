@@ -1,5 +1,5 @@
-open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype Global
-import Implementation IntegerImpl Loc Debug
+open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype
+import Global Implementation IntegerImpl Loc Debug
 
 (* == Predicates on qualifiers ================================================ *)
 val is_unqualified: qualifiers -> bool
