@@ -83,6 +83,13 @@ cheri: prelude-src
 	@echo "[DUNE] cerberus-cheri"
 	$(Q)dune build $(DUNEFLAGS) cerberus-cheri.install
 
+# combined goal to build both cerberus and cheri together as single dune run.
+# building them separately form makefile causes them to run two confilcting
+# dune builds in parallel
+.PHONY: cerberus-with-cheri
+cerberus-with-cheri: prelude-src
+	@echo "[DUNE] cerberus-with-cheri"
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cerberus-cheri.install
 
 # .PHONY: cerberus-ocaml ocaml
 # ocaml: cerberus-ocaml
