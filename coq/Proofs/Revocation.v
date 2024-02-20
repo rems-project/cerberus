@@ -364,6 +364,55 @@ Module RevocationProofs.
         apply MC.
       Qed.
 
+      Lemma bind_PreservesInvariant' {T T': Type}
+        {m: memM T'}
+        {c: T' -> memM T}
+        :
+        (forall s, invr s ->
+              (forall s' x, m s = (s', inr x) -> (invr s' /\ PreservesInvariant (c x))))
+        -> PreservesInvariant (bind m c).
+      Proof.
+
+        Transparent ret.
+        Transparent raise.
+
+        intros MH.
+        unfold PreservesInvariant.
+        intros mem_state0 H0.
+        specialize (MH mem_state0 H0).
+        unfold execErrS, evalErrS, lift_sum_p.
+        repeat break_let.
+        cbn in *.
+
+        break_let.
+        break_match;auto.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        break_match_hyp.
+        tuple_inversion.
+        subst.
+        specialize (MH m1 t0).
+        destruct MH as [MI MH].
+        - reflexivity.
+        -
+          clear - MH Heqp MI.
+          unfold PreservesInvariant in MH.
+          specialize (MH m1 MI).
+          unfold execErrS, evalErrS, lift_sum_p, raise, ret, Exception_either, Monad_either  in MH.
+          break_let.
+          repeat break_match; try break_let;
+            try inl_inr_inv; subst.
+
+          repeat tuple_inversion.
+          repeat tuple_inversion.
+          inl_inr.
+          inl_inr.
+          tuple_inversion.
+          assumption.
+      Qed.
+
       Lemma bind_get_PreservesInvariant {T: Type}
         {C: mem_state_r -> memM T}
         :
@@ -883,7 +932,6 @@ Module RevocationProofs.
       break_let.
       preserves_step.
       -
-        Set Printing All.
         apply sequence_preserves.
         generalize dependent (ZMap.elements (elt:=memM A) mv).
         intros ls H S.
@@ -958,17 +1006,14 @@ Module RevocationProofs.
       unfold revoke_pointers.
       preserves_step.
       intros m H.
-      preserves_step.
+      apply bind_PreservesInvariant'.
+
+      intros s H0 s' x H1.
+      split.
       -
-        apply zmap_mmapi_preserves.
-        intros k x.
-        apply maybe_revoke_pointer_preserves.
-        assumption.
+        admit.
       -
-        intros x.
         preserves_step.
-        preserves_step.
-        intros m0 H0.
         admit.
         intros x0.
         preserves_step.
