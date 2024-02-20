@@ -1778,18 +1778,17 @@ module BmcZ3 = struct
     | Ememop (PtrWellAligned,[ctype_pe;ptr]) ->
         assert (g_pnvi);
         (* We only support this with byte-wise mode *)
-        failwith "Ptr type-casting not supported"
         (* address of ptr % align of ctype is 0 *)
         (* TODO: what if NULL? *)
-        (*let ctype = ctype_from_pexpr ctype_pe in
+        let ctype = ctype_from_pexpr ctype_pe in
         z3_pe ctype_pe >>= fun _ ->
         z3_pe ptr      >>= fun z3d_ptr ->
         get_file       >>= fun file ->
         let addr_of_ptr = PointerSort.get_addr_index z3d_ptr in
         let alignment = int_to_z3 (alignof_type ctype file) in
-        return (mk_eq (Integer.mk_mod g_ctx addr_of_ptr alignment)
+        return (mk_eq (Z3.Arithmetic.Integer.mk_mod g_ctx addr_of_ptr alignment)
                       (int_to_z3 0)
-               )*)
+               )
     | Ememop (PtrArrayShift,
               [ptr;Pexpr(_, BTy_ctype, PEval (Vctype ctype));index]) ->
         (* We treat this like a PEarray_shift;
