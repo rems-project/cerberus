@@ -431,7 +431,7 @@ Module Type CheriMemoryImpl
   Definition mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) bytemap capmeta.
 
-  Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFF").
+  Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFFFFFF").
 
   Definition DEFAULT_FUEL:nat := 1000%nat. (* TODO maybe needs to be abstracted *)
   Definition MAX_STRFCAP_FORMAT_LEN := 4096%nat.
