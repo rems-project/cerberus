@@ -152,7 +152,9 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Bits ((sign,n), v) ->
          !^(Z.to_string v
          ^ (match sign with Unsigned -> "u" | Signed -> "i")
-         ^ string_of_int n)
+         ^ string_of_int n) ^^^
+         (!^ "/*") ^^^ (!^ ("0x" ^ Z.format "%x" (BaseTypes.normalise_to_range (Unsigned, n) v))) ^^^
+         (!^ "*/")
        | Q q -> !^(Q.to_string q)
        | Pointer { alloc_id=id; addr } ->
          braces (alloc_id id ^^ Pp.semi ^^ Pp.space ^^ !^(Z.to_string addr))
