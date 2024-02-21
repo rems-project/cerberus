@@ -86,11 +86,14 @@ Definition bool_list_cmp (a b: list bool) : bool :=
 Definition mem {A:Type} `{forall (x y:A), Decidable (x = y)} (a:A): (list A) -> bool
   := List.existsb (fun e => decide (e = a)).
 
-Fixpoint mapi {A B: Type} (f: nat -> A -> B) (l:list A) : list B :=
+Fixpoint mapi_aux {A B: Type} (f: nat -> A -> B) (acc: list B) (n: nat) (l: list A) : list B :=
   match l with
-  | [] => []
-  | x :: xs => (f O x) :: (mapi (fun n v => f (S n) v) xs)
+  | [] => rev acc
+  | x :: xs => mapi_aux f (f n x :: acc) (S n) xs
   end.
+
+Definition mapi {A B: Type} (f: nat -> A -> B) (l: list A) : list B :=
+  mapi_aux f [] 0 l.
 
 (* c.f.
    List.fold_left

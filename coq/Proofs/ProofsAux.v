@@ -81,9 +81,23 @@ Section ListAux.
         reflexivity.
   Qed.
 
-  Lemma mapi_cons  {A B : Type} x l {f: nat -> A -> B}:
-    mapi f (x :: l) = f 0 x :: mapi (compose f S) l.
-  Proof. auto. Qed.
+  #[global] Instance list_mapi_aux_Proper:
+    forall (A B : Type) (pA: relation A) (pB: relation B),
+      Proper (pointwise_relation nat (pA ==> pB) ==> eqlistA pB ==> eq ==> eqlistA pA ==> eqlistA pB) mapi_aux.
+  Proof.
+    intros A B pA pB f g Hfg acc acc' acc_eq n n' N l1 l2 Heql.
+    subst n'.
+    revert acc acc' acc_eq n.
+    induction Heql as [| x y l1' l2' Hxy Heql' IH];intros.
+    - simpl. (* Base case: both lists are empty *)
+      apply rev_eqlistA_compat.
+      assumption.
+    - simpl.
+      apply IH.
+      constructor.
+      + apply Hfg, Hxy.
+      + apply acc_eq.
+  Qed.
 
   #[global] Instance list_mapi_Proper
     {A B : Type}
@@ -93,34 +107,9 @@ Section ListAux.
     Proper (pointwise_relation _ (pA ==> pB) ==> (eqlistA pA ==> eqlistA pB))
       mapi.
   Proof.
-    intros f f' Hf l l' Hl. revert f f' Hf.
-    induction Hl as [|x1 x2 l1 l2 ?? IH]; intros f f' Hf.
-    - constructor.
-    -
-      cbn.
-      constructor.
-      +
-        apply Hf, H.
-      +
-        apply IH. intros i y y' ?.
-        apply Hf, H0.
-  Qed.
-
-  #[global] Instance list_map_Proper
-    {A B : Type}
-    (pA: relation A)
-    (pB: relation B)
-    :
-    Proper ((pA ==> pB) ==> (eqlistA pA ==> eqlistA pB)) (@map A B).
-  Proof.
-    intros f f' Hf l l' Hl. revert f f' Hf.
-    induction Hl as [|x1 x2 l1 l2 ?? IH]; intros f f' Hf.
-    - constructor.
-    -
-      cbn.
-      constructor.
-      + apply Hf, H.
-      + apply IH, Hf.
+    intros f g Hfg l1 l2 Heql.
+    unfold mapi.
+    eapply list_mapi_aux_Proper;eauto.
   Qed.
 
   Lemma list_init_rec_proper_aux :
