@@ -1472,9 +1472,9 @@ module Eval = struct
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
            | Term {it} -> it
            | UnsignedToSigned n ->
-              cast_ (Bits (Signed, n)) (nth args 0)
+              Simplify.IndexTerms.cast_reduce (Bits (Signed, n)) (nth args 0)
            | SignedToUnsigned n ->
-              cast_ (Bits (Unsigned, n)) (nth args 0)
+              Simplify.IndexTerms.cast_reduce (Bits (Unsigned, n)) (nth args 0)
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
