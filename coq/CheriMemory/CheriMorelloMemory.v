@@ -1208,11 +1208,12 @@ Module Type CheriMemoryImpl
                  | _, _ => None
                  end in
                ret (prov_acc', b.(value)::val_acc, offset_acc'))
-            (List.rev bs) ((Some b.(prov), [], Some O)) ;;
+            bs ((Some b.(prov), [], Some O)) ;;
 
+        let values := List.rev rev_values in
         ret (opt_def (PNVI_prov Prov_none) prov_maybe ,
             is_some offset_status_maybe && is_some prov_maybe,
-            rev_values)
+            values)
     end.
 
   Definition provs_of_bytes (bs : list AbsByte) : taint_indt :=
@@ -1279,7 +1280,7 @@ Module Type CheriMemoryImpl
             | Some cs =>
                 ret (provs_of_bytes bs1,
                     let (tag,gs) := tag_query_f addr in
-                    match C.decode (List.rev cs) tag with
+                    match C.decode cs tag with
                     | None => MVErr (MerrCHERI CheriErrDecodingCap)
                     | Some c_value =>
                         let c_value := C.set_ghost_state c_value gs in
@@ -1341,7 +1342,7 @@ Module Type CheriMemoryImpl
             match extract_unspec bs1' with
             | Some cs =>
                 let (tag,gs) := tag_query_f addr in
-                match C.decode (List.rev cs) tag with
+                match C.decode cs tag with
                 | None => ret (NoTaint, MVErr (MerrCHERI CheriErrDecodingCap), bs2)
                 | Some c_value =>
                     let c_value := C.set_ghost_state c_value gs in
@@ -1426,9 +1427,7 @@ Module Type CheriMemoryImpl
          | None => absbyte_v (PNVI_prov Prov_none) None None
          end)
       (list_init (Z.to_nat n_bytes)
-         (fun (i : nat) =>
-            let offset := Z.of_nat i in
-            base_addr + offset)).
+         (fun (i : nat) => base_addr + (Z.of_nat i))).
 
   Fixpoint mem_value_strip_err
     (loc : location_ocaml)
@@ -1514,7 +1513,7 @@ Module Type CheriMemoryImpl
     let bs := fetch_bytes bytemap addr IMP.get.(sizeof_pointer) in
     '(_, _, bs1) <- split_bytes bs ;;
     cs <- option2serr "cap contains unspecified bytes" (extract_unspec bs1) ;;
-    option2serr "error decoding cap" (C.decode (List.rev cs) tag).
+    option2serr "error decoding cap" (C.decode cs tag).
 
   (* If pointer stored at [addr] with meta information [meta] has it's
      base within given [base] and [limit] region, revoke it by returning

@@ -123,20 +123,35 @@ Section ListAux.
       + apply IH, Hf.
   Qed.
 
+  Lemma list_init_rec_proper_aux :
+    forall (A : Type) (Ae : relation A),
+      Proper (eq ==> (eq ==> Ae) ==> eqlistA Ae ==> eqlistA Ae) (@list_init_rec A).
+  Proof.
+    intros A Ae. unfold Proper, respectful.
+    intros i i' Hi f g Hfg acc acc' Hacc. subst i'.
+    revert acc acc' Hacc.
+    induction i as [|i IH]; intros acc acc' Hacc.
+    - (* Base case *)
+      simpl. assumption.
+    - (* Inductive step *)
+      simpl. apply IH.
+      + constructor; [apply Hfg | assumption].
+        reflexivity.
+  Qed.
+
   #[global] Instance list_init_proper
     {A:Type}
     (Ae: relation A)
     :
-    Proper ( eq ==> (eq ==> (Ae)) ==> eqlistA Ae) list_init.
+    Proper (eq ==> (eq ==> (Ae)) ==> eqlistA Ae) list_init.
   Proof.
-    intros n n' En f f' f_mor.
-    subst n'.
-    induction n.
-    -
-      constructor.
-    -
-      simpl.
-      constructor; auto.
+    intros x y Hxy f g Hfg.
+    subst.
+    unfold list_init.
+    apply list_init_rec_proper_aux.
+    - constructor.
+    - assumption.
+    - constructor.
   Qed.
 
   #[global] Instance eqlistA_Reflexive

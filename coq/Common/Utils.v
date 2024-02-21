@@ -36,31 +36,42 @@ Definition sprint_msg (msg : string) : serr unit :=
   else 
     ret tt.
 
-Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
-  :=
-  match n with
-  | O => []
-  | S n => (f n) :: list_init n f
-  end.
+Fixpoint list_init_rec {A : Type} (i : nat) (f : nat -> A) (acc : list A) :=
+    match i with
+    | O => acc
+    | S i' => list_init_rec i' f ((f i') :: acc)
+    end.
 
-Fixpoint monadic_list_init
-  {A:Type}
-  {m : Type -> Type}
-  {M : Monad m}
-  (n:nat)
-  (f: nat -> m A): m (list A)
+Definition list_init {A : Type} (n : nat) (f : nat -> A) : list A :=
+  list_init_rec n f [].
+
+Fixpoint monadic_list_init_rec
+  {A: Type}
+  {m: Type -> Type}
+  {M: Monad m}
+  (n: nat)
+  (f: nat -> m A)
+  (acc: list A)
+  : m (list A)
   :=
   match n with
-  | O => ret []
+  | O => ret acc
   | S n =>
       h <- f n ;;
-      t <- monadic_list_init n f ;;
-      ret (h :: t)
+      monadic_list_init_rec n f (h :: acc)
   end.
 
+Definition monadic_list_init
+  {A: Type}
+  {m: Type -> Type}
+  {M: Monad m}
+  (n: nat)
+  (f: nat -> m A): m (list A)
+  :=
+  monadic_list_init_rec n f [].
 
-(** Inlike OCaml version if lists have different sizes, we just terminate
-    after consuming the shortest one, without signaling error *)
+(** Unlike OCaml version, if lists are of different sizes, we simply
+    stop after consuming the shortest one without raising an error. *)
 Fixpoint fold_left2 {A B C:Type} (f: A -> B -> C -> A) (accu:A) (l1:list B) (l2:list C): A :=
   match l1, l2 with
   | a1::l1, a2::l2 => fold_left2 f (f accu a1 a2) l1 l2
