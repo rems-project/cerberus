@@ -68,10 +68,12 @@ Module RevocationProofs.
 
   (* --- Memory models instantiated with and without PNVI --- *)
 
-  Definition remove_PNVI: cerb_switches_t -> cerb_switches_t :=
+  Definition remove_PNVI: cerb_switches_t -> cerb_switches_t
+    :=
     List.filter (fun s => negb (is_PNVI_switch s)).
 
-  Definition remove_Revocation: cerb_switches_t -> cerb_switches_t :=
+  Definition remove_Revocation: cerb_switches_t -> cerb_switches_t
+    :=
     List.filter (fun s => negb (is_Revocation_switch s)).
 
   (* --- Equality predicates for types used in Memory Models --- *)
@@ -102,7 +104,8 @@ Module RevocationProofs.
 
      If there is a mismatch between [c1] and [a], we assume that `c1`
      corresponds to a different, now defunct, allocation.  *)
-  Inductive cap_match_with_alloc (a: allocation) (c1 c2: Capability_GS.t): Prop :=
+  Inductive cap_match_with_alloc (a: allocation) (c1 c2: Capability_GS.t): Prop
+    :=
   | cap_match_alloc_match: cap_bounds_within_alloc c1 a -> c1 = c2 -> cap_match_with_alloc a c1 c2
   | cap_match_with_alloc_mismatch: ~cap_bounds_within_alloc c1 a -> Capability_GS.cap_invalidate c1 = c2 -> cap_match_with_alloc a c1 c2.
 
@@ -111,7 +114,8 @@ Module RevocationProofs.
      they are just removed. Also, without PNVI, instant revocation is
      assumed
    *)
-  Inductive single_alloc_id_cap_cmp (allocs: ZMap.t allocation) (alloc_id: Z) c1 c2 : Prop :=
+  Inductive single_alloc_id_cap_cmp (allocs: ZMap.t allocation) (alloc_id: Z) c1 c2 : Prop
+    :=
   | single_cap_cmp_live:
     (* The allocation ID is mapped to an allocation *)
     forall a, ZMap.MapsTo alloc_id a allocs ->
@@ -125,7 +129,8 @@ Module RevocationProofs.
 
 
   (* Equality of byte values without taking provenance into account *)
-  Inductive AbsByte_eq: relation AbsByte :=
+  Inductive AbsByte_eq: relation AbsByte
+    :=
   | AbsByte_no_prov_eq: forall a1 a2,
       copy_offset a1 = copy_offset a2
       /\ value a1 = value a2 -> AbsByte_eq a1 a2.
@@ -178,7 +183,8 @@ Module RevocationProofs.
 
   (* [True] if list of bytes starts with given offset and offsets
      increases by one each step *)
-  Inductive bytes_copy_offset_seq: nat -> list AbsByte -> Prop :=
+  Inductive bytes_copy_offset_seq: nat -> list AbsByte -> Prop
+    :=
   | bytes_copy_offset_seq_nil: forall n, bytes_copy_offset_seq n []
   | bytes_copy_offset_seq_cons:
     forall n b bs,
@@ -187,7 +193,8 @@ Module RevocationProofs.
 
   (* [True] if all bytes in given list [bl] have given provenance, and
      their offsets are sequential ending with [0] *)
-  Definition split_bytes_ptr_spec (p:provenance) (bl:list AbsByte): Prop :=
+  Definition split_bytes_ptr_spec (p:provenance) (bl:list AbsByte): Prop
+    :=
     List.Forall (fun x => provenance_eqb p x.(prov) = true) bl
     /\ bytes_copy_offset_seq 0 (List.rev bl).
 
@@ -222,7 +229,8 @@ Module RevocationProofs.
       (* All keys in capmeta must be pointer-aligned addresses *)
       /\ zmap_forall_keys (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0) cm.
 
-    Ltac destruct_base_mem_invariant H :=
+    Ltac destruct_base_mem_invariant H
+      :=
       let Bdead := fresh "Bdead" in
       let Bnooverlap := fresh "Bnooverlap" in
       let Balign := fresh "Balign" in
@@ -258,7 +266,8 @@ Module RevocationProofs.
     Section MemMwithInvariant.
       Variable invr: mem_state_r -> Prop.
 
-      Class PreservesInvariant {T: Type} (M: memM T): Prop
+      Class PreservesInvariant
+        {T: Type} (M: memM T): Prop
         :=
         preserves_invariant : forall mem_state,
             invr mem_state
@@ -279,7 +288,8 @@ Module RevocationProofs.
       Qed.
       #[local] Opaque ret.
 
-      Lemma raise_PreservesInvariant {T:Type}:
+      Lemma raise_PreservesInvariant
+        {T:Type}:
         forall x,
           PreservesInvariant
             (@raise memMError (errS mem_state_r memMError)
@@ -291,7 +301,8 @@ Module RevocationProofs.
       Qed.
       #[local] Opaque raise.
 
-      Lemma bind_PreservesInvariant {T T': Type}
+      Lemma bind_PreservesInvariant
+        {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
         :
@@ -329,7 +340,8 @@ Module RevocationProofs.
         apply MC.
       Qed.
 
-      Lemma bind_PreservesInvariant' {T T': Type}
+      Lemma bind_PreservesInvariant'
+        {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
         :
@@ -378,7 +390,8 @@ Module RevocationProofs.
           assumption.
       Qed.
 
-      Lemma bind_get_PreservesInvariant {T: Type}
+      Lemma bind_get_PreservesInvariant
+        {T: Type}
         {C: mem_state_r -> memM T}
         :
         (forall m, invr m -> PreservesInvariant (C m))
@@ -469,7 +482,8 @@ Module RevocationProofs.
      2. Adds [SW_revocation INSTANT] and removes all other revocation mechanisms
    *)
   Module WithoutPNVISwitches.
-    Definition get_switches (_:unit) :=
+    Definition get_switches (_:unit)
+      :=
       ListSet.set_add cerb_switch_dec (SW_revocation INSTANT)
         (remove_Revocation
            (remove_PNVI (abst_get_switches tt))).
@@ -478,7 +492,8 @@ Module RevocationProofs.
   (* 1. removes all revocation mechanisms
      2. adds [SW_PNVI AE_UDI] and removes all other PNVI flavours *)
   Module WithPNVISwitches.
-    Definition get_switches (_:unit) :=
+    Definition get_switches (_:unit)
+      :=
       ListSet.set_add cerb_switch_dec (SW_PNVI AE_UDI)
         (remove_Revocation
            (remove_PNVI (abst_get_switches tt))).
@@ -634,7 +649,8 @@ Module RevocationProofs.
     #[local] Opaque get.
     #[local] Opaque put.
 
-    Ltac preserves_step :=
+    Ltac preserves_step
+      :=
       match goal with
       |[|- PreservesInvariant _ (bind get _)] => apply bind_get_PreservesInvariant
       |[|- PreservesInvariant _ (bind _ _)] => apply bind_PreservesInvariant
@@ -1139,7 +1155,8 @@ Module RevocationProofs.
      this type, as it is inadequate *)
   Unset Elimination Schemes.
   (* This relation is non-reflexive (but not irreflexive) *)
-  Inductive mem_value_with_err_same: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> mem_value_with_err -> mem_value_with_err -> Prop :=
+  Inductive mem_value_with_err_same: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> mem_value_with_err -> mem_value_with_err -> Prop
+    :=
   | mem_value_with_err_same_MVEunspecified: forall m1 m2 t1 t2, t1 = t2 -> mem_value_with_err_same m1 m2 (MVEunspecified t1) (MVEunspecified t2)
   | mem_value_with_err_same_MVEinteger: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_with_err_same m1 m2 (MVEinteger t1 v1) (MVEinteger t2 v2)
   | mem_value_with_err_same_MVEfloating: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_with_err_same m1 m2 (MVEfloating t1 v1) (MVEfloating t2 v2)
@@ -1225,7 +1242,8 @@ Module RevocationProofs.
      this type, as it is inadequate *)
   Unset Elimination Schemes.
   (* This relation is non-reflexive *)
-  Inductive mem_value_indt_same: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> mem_value_indt -> mem_value_indt -> Prop :=
+  Inductive mem_value_indt_same: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> mem_value_indt -> mem_value_indt -> Prop
+    :=
   | mem_value_indt_same_MVunspecified: forall m1 m2 t1 t2, t1 = t2 -> mem_value_indt_same m1 m2 (MVunspecified t1) (MVunspecified t2)
   | mem_value_indt_same_MVinteger: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_same m1 m2 (MVinteger t1 v1) (MVinteger t2 v2)
   | mem_value_indt_same_MVfloating: forall m1 m2 t1 t2 v1 v2, t1 = t2 /\ v1 = v2 -> mem_value_indt_same m1 m2 (MVfloating t1 v1) (MVfloating t2 v2)
@@ -1239,7 +1257,8 @@ Module RevocationProofs.
       tag_sym1 = tag_sym2 /\ id1 = id2 /\ mem_value_indt_same m1 m2 v1 v2 ->
       mem_value_indt_same m1 m2 (MVunion tag_sym1 id1 v1) (MVunion tag_sym2 id2 v2)
   with
-    struct_field_eq: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> Prop :=
+    struct_field_eq: CheriMemoryWithPNVI.mem_state_r -> CheriMemoryWithoutPNVI.mem_state_r -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> (CoqSymbol.identifier * CoqCtype.ctype * mem_value_indt) -> Prop
+    :=
   | struct_field_triple_eq: forall m1 m2 id1 id2 t1 t2 v1 v2,
       id1 = id2 /\ t1 = t2 /\ mem_value_indt_same m1 m2 v1 v2 -> struct_field_eq m1 m2 (id1,t1,v1) (id2,t2,v2).
   Set Elimination Schemes.
@@ -1376,7 +1395,8 @@ Module RevocationProofs.
     /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
 
-  Ltac destruct_mem_state_same H :=
+  Ltac destruct_mem_state_same H
+    :=
     let Malloc_id := fresh "Malloc_id" in
     let Mlastaddr := fresh "Mlastaddr" in
     let Mallocs := fresh "Mallocs" in
@@ -1593,7 +1613,8 @@ Module RevocationProofs.
     unfold is_PNVI_switch in HP.
     unfold is_Revocation_switch in HR.
 
-    Ltac one_has_switch D :=
+    Ltac one_has_switch D
+      :=
       unfold has_switch;
       apply eqb_true_iff;
       unfold Bool.eqb;
@@ -1655,7 +1676,8 @@ Module RevocationProofs.
 
 
   (* We normalize, if possible, towards [WithPNVISwitches] *)
-  Ltac normalize_switches :=
+  Ltac normalize_switches
+    :=
     match goal with
     | [H: context[has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT)] |- _] =>
         replace (has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT))
@@ -3947,7 +3969,8 @@ Module RevocationProofs.
       repeat break_match; try contradiction; reflexivity.
   Qed.
 
-  Ltac same_step :=
+  Ltac same_step
+    :=
     match goal with
     |[|- Same eq (bind _ _) (bind _ _)] => apply bind_Same_eq
     |[|- Same eq (raise _) (raise _)] => apply raise_Same_eq
