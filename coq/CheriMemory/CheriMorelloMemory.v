@@ -56,7 +56,6 @@ Module Type CheriMemoryTypes
   | Prov_disabled : provenance
   | Prov_none : provenance
   | Prov_some : storage_instance_id -> provenance
-  | Prov_symbolic : symbolic_storage_instance_id -> provenance
   | Prov_device : provenance.
 
   Definition provenance_eqb: provenance -> provenance -> bool :=
@@ -65,7 +64,6 @@ Module Type CheriMemoryTypes
       | Prov_disabled, Prov_disabled => true
       | Prov_none, Prov_none => true
       | Prov_some alloc_id1, Prov_some alloc_id2 => Z.eqb alloc_id1 alloc_id2
-      | Prov_symbolic iota1, Prov_symbolic iota2 => Z.eqb iota1 iota2
       | Prov_device, Prov_devie => true
       | _, _ => false
       end.
@@ -367,12 +365,8 @@ Module Type CheriMemoryImpl
   Record mem_state_r :=
     {
       next_alloc_id : storage_instance_id;
-      next_iota : symbolic_storage_instance_id;
       last_address : AddressValue.t;
       allocations : ZMap.t allocation;
-      iota_map : ZMap.t
-                   ((* `Single *) storage_instance_id +
-                      (* `Double *) storage_instance_id * storage_instance_id);
       funptrmap : ZMap.t
                     (digest * string * C.t);
       varargs : ZMap.t
@@ -387,10 +381,8 @@ Module Type CheriMemoryImpl
 
               {|
                 next_alloc_id    := st.(next_alloc_id);
-                next_iota        := st.(next_iota);
                 last_address     := st.(last_address) ;
                 allocations      := st.(allocations);
-                iota_map         := st.(iota_map);
                 funptrmap        := st.(funptrmap);
                 varargs          := st.(varargs);
                 next_varargs_id  := st.(next_varargs_id);
@@ -402,34 +394,28 @@ Module Type CheriMemoryImpl
   Definition mem_state := mem_state_r.
 
   Definition mem_state_with_last_address last_address (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) last_address r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) last_address r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_bytemap bytemap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta).
 
   Definition mem_state_with_allocations allocations (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
-
-  Definition mem_state_with_iota_map iota_map (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
-
-  Definition mem_state_with_next_iota next_iota (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) allocations r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_next_alloc_id next_alloc_id (r : mem_state) :=
-    Build_mem_state_r next_alloc_id r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r next_alloc_id r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_capmeta capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta.
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta.
 
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta).
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) bytemap capmeta.
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) bytemap capmeta.
 
   Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFFFFFF").
 
@@ -439,10 +425,8 @@ Module Type CheriMemoryImpl
   Definition initial_mem_state : mem_state :=
     {|
       next_alloc_id := Z0;
-      next_iota := Z0;
       last_address := initial_address;
       allocations := ZMap.empty allocation;
-      iota_map := ZMap.empty (storage_instance_id + storage_instance_id * storage_instance_id);
       funptrmap := ZMap.empty (digest * string * C.t);
       varargs := ZMap.empty (Z * list (CoqCtype.ctype * pointer_value));
       next_varargs_id := Z0;
@@ -509,9 +493,9 @@ Module Type CheriMemoryImpl
         match k1, k2 with
         | Read, Read => false
         | _, _ => negb
-                    (orb
-                       (Z.leb (AddressValue.to_Z b1 + sz1) (AddressValue.to_Z b2))
-                       (Z.leb (AddressValue.to_Z b2 + sz2) (AddressValue.to_Z b1)))
+                   (orb
+                      (Z.leb (AddressValue.to_Z b1 + sz1) (AddressValue.to_Z b2))
+                      (Z.leb (AddressValue.to_Z b2 + sz2) (AddressValue.to_Z b1)))
         end
     end.
 
@@ -582,7 +566,7 @@ Module Type CheriMemoryImpl
           let (q,m) := quomod z align in
           let z' := z - (if Z.ltb q 0 then Z.opp m else m) in
           if Z.leb z' 0 then
-            fail_noloc (MerrOther "CHERI.allocator: failed (out of memory)")
+            fail_noloc (MerrOther "allocator: failed (out of memory)")
           else
             ret z'
         )
@@ -944,10 +928,8 @@ Module Type CheriMemoryImpl
               update (fun st =>
                         {|
                           next_alloc_id    := st.(next_alloc_id);
-                          next_iota        := st.(next_iota);
                           last_address     := st.(last_address) ;
                           allocations      := ZMap.add alloc_id alloc st.(allocations);
-                          iota_map         := st.(iota_map);
                           funptrmap        := st.(funptrmap);
                           varargs          := st.(varargs);
                           next_varargs_id  := st.(next_varargs_id);
@@ -962,7 +944,7 @@ Module Type CheriMemoryImpl
                     (true, IsReadOnly ReadonlyTemporaryLifetime)
                 | _ =>
                     (true, IsReadOnly ReadonlyConstQualified)
-                (* | _ => (false,IsWritable) *)
+                      (* | _ => (false,IsWritable) *)
                 end
               in
               let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_dead := false; is_readonly:= readonly_status; taint:= Unexposed |} in
@@ -972,10 +954,8 @@ Module Type CheriMemoryImpl
               let bs := mapi (fun i b => (AddressValue.to_Z addr + (Z.of_nat i), b)) pre_bs in
               put {|
                   next_alloc_id    := st.(next_alloc_id);
-                  next_iota        := st.(next_iota);
                   last_address     := st.(last_address) ;
                   allocations      := ZMap.add alloc_id alloc st.(allocations);
-                  iota_map         := st.(iota_map);
                   funptrmap        := funptrmap;
                   varargs          := st.(varargs);
                   next_varargs_id  := st.(next_varargs_id);
@@ -1034,10 +1014,8 @@ Module Type CheriMemoryImpl
           (fun (st : mem_state) =>
              {|
                next_alloc_id    := st.(next_alloc_id);
-               next_iota        := st.(next_iota);
                last_address     := st.(last_address) ;
                allocations      := (ZMap.add alloc_id alloc st.(allocations));
-               iota_map         := st.(iota_map);
                funptrmap        := st.(funptrmap);
                varargs          := st.(varargs);
                next_varargs_id  := st.(next_varargs_id);
@@ -1101,10 +1079,8 @@ Module Type CheriMemoryImpl
     update (fun st =>
               {|
                 next_alloc_id    := st.(next_alloc_id);
-                next_iota        := st.(next_iota);
                 last_address     := st.(last_address) ;
                 allocations      := ZMap.remove alloc_id st.(allocations);
-                iota_map         := st.(iota_map);
                 funptrmap        := st.(funptrmap);
                 varargs          := st.(varargs);
                 next_varargs_id  := st.(next_varargs_id);
@@ -1122,7 +1098,7 @@ Module Type CheriMemoryImpl
         | Some v => ret v
         | None =>
             fail_noloc (MerrOutsideLifetime
-                          (String.append "CHERI.get_allocation, alloc_id="
+                          (String.append "get_allocation, alloc_id="
                              (of_Z alloc_id)))
         end.
 
@@ -1134,62 +1110,18 @@ Module Type CheriMemoryImpl
         | None => ret true
         end.
 
-  (* PNVI-ae-udi *)
-  Definition lookup_iota iota :=
-    get >>= fun st =>
-        match ZMap.find iota st.(iota_map) with
-        | Some v => ret v
-        | None => raise (InternalErr "lookup_iota failed")
-        end.
-
-  (* PNVI-ae-udi *)
-  Definition resolve_iota precond iota :=
-    lookup_iota iota >>=
-      (fun x => match x with
-                | inl alloc_id =>
-                    (precond alloc_id >>= merr2memM alloc_id)
-                | inr (alloc_id1, alloc_id2) =>
-                    precond alloc_id1 >>=
-                      fun x => match x with
-                               | OK =>
-                                   ret alloc_id1
-                               | FAIL _ _ =>
-                                   precond alloc_id2 >>= merr2memM alloc_id2
-                               end
-                end)
-      >>=
-      fun alloc_id =>
-        update (fun st =>
-                  {|
-                    next_alloc_id    := st.(next_alloc_id);
-                    next_iota        := st.(next_iota);
-                    last_address     := st.(last_address) ;
-                    allocations      := st.(allocations);
-                    iota_map         := ZMap.add iota (inl alloc_id) st.(iota_map);
-                    funptrmap        := st.(funptrmap);
-                    varargs          := st.(varargs);
-                    next_varargs_id  := st.(next_varargs_id);
-                    bytemap          := st.(bytemap);
-                    capmeta          := st.(capmeta);
-                  |}) ;; ret alloc_id.
-
   (* Convinience function to be used in breaking let to avoid match *)
   Definition break_PV (p:pointer_value) :=
     match p with
     | PV prov ptrval => (prov,ptrval)
     end.
 
-  Inductive overlap_indt :=
-  | NoAlloc: overlap_indt
-  | SingleAlloc: storage_instance_id -> overlap_indt
-  | DoubleAlloc: storage_instance_id -> storage_instance_id -> overlap_indt.
-
   (* Given a (non-empty) list of bytes combine their provenance (if
      compatible). Returns the empty provenance otherwise *)
   Definition split_bytes (bs : list AbsByte)
     : serr (provenance * bool (*ptr valid *) * list (option ascii)) :=
     match bs with
-    | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
+    | [] => raise "AbsByte.split_bytes: called on an empty list"
     | b::_ =>
         '(prov_maybe, rev_values, offset_status_maybe) <-
           monadic_fold_left
@@ -1224,7 +1156,6 @@ Module Type CheriMemoryImpl
            match b_value.(prov) with
            | Prov_disabled
            | Prov_none
-           | Prov_symbolic _
            | Prov_device
              => acc
            | Prov_some alloc_id => alloc_id::acc
@@ -1242,7 +1173,7 @@ Module Type CheriMemoryImpl
 
   Fixpoint abst
     (fuel: nat)
-    (find_overlapping : Z -> overlap_indt)
+    (find_allocation : C.t -> option (storage_instance_id * allocation))
     (funptrmap : ZMap.t (digest * string * C.t))
     (tag_query_f : Z -> (bool* CapGhostState))
     (addr : Z)
@@ -1254,7 +1185,7 @@ Module Type CheriMemoryImpl
     | O => raise "abst out of fuel"
     | S fuel =>
         let '(CoqCtype.Ctype _ ty) := cty in
-        let self f := abst f find_overlapping funptrmap tag_query_f in
+        let self f := abst f find_allocation funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
         sassert (negb (Nat.ltb (List.length bs) (Z.to_nat sz))) "abst, |bs| < sizeof(ty)" ;;
         let merge_taint (x_value : taint_indt) (y_value : taint_indt) : taint_indt :=
@@ -1372,13 +1303,9 @@ Module Type CheriMemoryImpl
                             (if Bool.eqb prov_valid true
                              then prov
                              else
-                               match
-                                 find_overlapping
-                                   (cap_to_Z c_value) with
-                               | NoAlloc => Prov_none
-                               | SingleAlloc alloc_id => Prov_some alloc_id
-                               | DoubleAlloc alloc_id1 alloc_id2 =>
-                                   Prov_some alloc_id1
+                               match find_allocation c_value with
+                               | None => Prov_none
+                               | Some (alloc_id,_) => Prov_some alloc_id
                                end)
                         in
                         (* sprint_msg (C.to_string n_value) ;; *)
@@ -1456,50 +1383,30 @@ Module Type CheriMemoryImpl
     | MVErr err => fail loc err
     end.
 
-  Definition find_overlapping_st st addr : overlap_indt
-    :=
-    let (require_exposed, allow_one_past) :=
-      match CoqSwitches.has_switch_pred (SW.get_switches tt)
-              (fun x => match x with SW_PNVI _ => true | _ => false end)
-      with
-      | Some (CoqSwitches.SW_PNVI variant) =>
-          match variant with
-          | PLAIN => (false, false)
-          | AE => (true, false)
-          | AE_UDI => (true, true)
-          end
-      | Some _ => (false, false) (* impossible case *)
-      | None => (false, false)
-      end
-    in
-    ZMap.fold (fun alloc_id alloc acc =>
-                 let new_opt :=
-                   if alloc.(is_dead)
-                   then None
-                   else if Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (AddressValue.to_Z alloc.(base) + alloc.(size))
-                        then
-                          (* PNVI-ae, PNVI-ae-udi *)
-                          if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
-                          then None
-                          else Some alloc_id
-                        else if allow_one_past then
-                               (* PNVI-ae-udi *)
-                               if Z.eqb addr (AddressValue.to_Z alloc.(base) + alloc.(size))
-                                  && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
-                               then Some alloc_id
-                               else None
-                             else None
-                 in
-                 match acc, new_opt with
-                 | _, None => acc
-                 | NoAlloc, Some alloc_id => SingleAlloc alloc_id
-                 | SingleAlloc alloc_id1, Some alloc_id2 => DoubleAlloc alloc_id1 alloc_id2
-                 | DoubleAlloc _ _, Some _ => acc
-                 end
-      ) st.(allocations) NoAlloc.
 
-  Definition find_overlapping addr : memM overlap_indt
-    :=  get >>= fun st => ret (find_overlapping_st st addr).
+  (* formerly `find_overlapping` *)
+  Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
+    :=
+    let require_exposed := CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE)
+                           || CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI) in
+    let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
+    let csize := climit - cbase in
+
+    zmap_find_first
+      (fun alloc_id alloc =>
+         let abase := AddressValue.to_Z alloc.(base) in
+         let asize := alloc.(size) in
+         let alimit := abase + asize in
+
+         (negb alloc.(is_dead))
+         && (Z.leb abase cbase && Z.ltb cbase alimit)
+         && ((require_exposed && (allocation_taint_eqb alloc.(taint) Exposed))
+             || negb require_exposed)
+      ) st.(allocations).
+
+
+  Definition find_cap_allocation c : memM (option (storage_instance_id * allocation))
+    :=  st <- get ;; ret (find_cap_allocation_st st c).
 
   (* Check whether this cap base address is within allocation *)
   Definition cap_bounds_within_alloc_bool (c:C.t) a : bool
@@ -1579,7 +1486,7 @@ Module Type CheriMemoryImpl
       (* mprint_msg ("Kill: "  ++ AddressValue.to_string alloc.(base) ++ " (" ++ String.dec_str alloc.(size) ++ ")" ) ;; *)
       if
         (negb (AddressValue.eqb st.(last_address) initial_address)) &&
-        AddressValue.eqb st.(last_address) alloc.(base)
+          AddressValue.eqb st.(last_address) alloc.(base)
       then
         (* mprint_msg ("Reuse!");; *)
         update (mem_state_with_last_address
@@ -1591,20 +1498,20 @@ Module Type CheriMemoryImpl
     (* update allocations in memory state and run revocation if necessary *)
     let update_allocations alloc alloc_id :=
       (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
-      then
-        (* instant revocation. Revoke and remove allocation id.
+       then
+         (* instant revocation. Revoke and remove allocation id.
            both static and dynamic *)
-        revoke_pointers alloc ;; remove_allocation alloc_id
-      else if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA) && is_dyn
-           then
-             (* delayed revocation. Mark allocation as 'dead'.
+         revoke_pointers alloc ;; remove_allocation alloc_id
+       else if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA) && is_dyn
+            then
+              (* delayed revocation. Mark allocation as 'dead'.
                 NB: Cornucopia revokes only dynamic allocations.*)
-             st <- get ;;
-             let newallocs := zmap_update_element alloc_id (allocation_with_dead alloc) st.(allocations) in
-             update (mem_state_with_allocations newallocs)
-           else
-             (* no revocation. remove allocation *)
-             remove_allocation alloc_id
+              st <- get ;;
+              let newallocs := zmap_update_element alloc_id (allocation_with_dead alloc) st.(allocations) in
+              update (mem_state_with_allocations newallocs)
+            else
+              (* no revocation. remove allocation *)
+              remove_allocation alloc_id
       )
       ;;
       try_memory_reuse alloc
@@ -1675,26 +1582,6 @@ Module Type CheriMemoryImpl
                       check_cap_alloc_match c alloc ;;
                       update_allocations alloc alloc_id
                 end
-    | PV (Prov_symbolic iota) (PVconcrete c) =>
-        if negb (CoqSwitches.has_PNVI (SW.get_switches tt)) then
-          raise (InternalErr "Unexpected provenance in absence of PNVI")
-        else
-          if cap_is_null c && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
-          then fail loc MerrFreeNullPtr
-          else
-            let precondition z :=
-              alloc <- get_allocation z ;;
-              ret
-                (if alloc.(is_dead)
-                 then FAIL loc (MerrUndefinedFree Free_dead_allocation)
-                 else if AddressValue.eqb (C.cap_get_value c) alloc.(base)
-                      then OK
-                      else FAIL loc (MerrUndefinedFree Free_out_of_bound))
-            in
-            alloc_id <- resolve_iota precondition iota ;;
-            alloc <- get_allocation alloc_id ;;
-            check_cap_alloc_match c alloc ;;
-            update_allocations alloc alloc_id
     | PV Prov_device (PVconcrete _) =>
         (* TODO: should that be an error ?? *)
         ret tt
@@ -1756,16 +1643,16 @@ Module Type CheriMemoryImpl
                    (fun (x : option allocation) =>
                       match x with
                       | Some alloc => Some
-                                        {|
-                                          prefix := alloc.(prefix);
-                                          base := alloc.(base);
-                                          size := alloc.(size);
-                                          ty := alloc.(ty);
-                                          is_dynamic := alloc.(is_dynamic);
-                                          is_dead := alloc.(is_dead);
-                                          is_readonly := alloc.(is_readonly);
-                                          taint := Exposed
-                                        |}
+                                       {|
+                                         prefix := alloc.(prefix);
+                                         base := alloc.(base);
+                                         size := alloc.(size);
+                                         ty := alloc.(ty);
+                                         is_dynamic := alloc.(is_dynamic);
+                                         is_dead := alloc.(is_dead);
+                                         is_readonly := alloc.(is_readonly);
+                                         taint := Exposed
+                                       |}
                       | None => None
                       end) st.(allocations)) st).
 
@@ -1782,16 +1669,16 @@ Module Type CheriMemoryImpl
                           (fun x =>
                              match x with
                              | Some alloc => Some
-                                               {|
-                                                 prefix := alloc.(prefix);
-                                                 base := alloc.(base);
-                                                 size := alloc.(size);
-                                                 ty := alloc.(ty);
-                                                 is_dynamic := alloc.(is_dynamic);
-                                                 is_dead := alloc.(is_dead);
-                                                 is_readonly := alloc.(is_readonly);
-                                                 taint := Exposed
-                                               |}
+                                              {|
+                                                prefix := alloc.(prefix);
+                                                base := alloc.(base);
+                                                size := alloc.(size);
+                                                ty := alloc.(ty);
+                                                is_dynamic := alloc.(is_dynamic);
+                                                is_dead := alloc.(is_dead);
+                                                is_readonly := alloc.(is_readonly);
+                                                taint := Exposed
+                                              |}
                              | None => None
                              end) acc)
                      xs st.(allocations))
@@ -1822,8 +1709,8 @@ Module Type CheriMemoryImpl
     ret
       (List.existsb
          (fun '(min, max) =>
-              Z.leb (AddressValue.to_Z min) addr
-              && Z.leb (addr + sz) (AddressValue.to_Z max))
+            Z.leb (AddressValue.to_Z min) addr
+            && Z.leb (addr + sz) (AddressValue.to_Z max))
          device_ranges).
 
   Definition is_atomic_member_access
@@ -1888,7 +1775,7 @@ Module Type CheriMemoryImpl
               bounds_unspecified := false |})
       in
       '(taint, mval, bs') <-
-        serr2InternalErr (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) tag_query addr ty bs)
+        serr2InternalErr (abst DEFAULT_FUEL (find_cap_allocation_st st) st.(funptrmap) tag_query addr ty bs)
       ;;
       mval <- mem_value_strip_err loc mval ;;
       (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE)
@@ -1947,11 +1834,10 @@ Module Type CheriMemoryImpl
     | Prov_none, PVconcrete c =>
         fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     | Prov_disabled, PVconcrete c =>
-        olp <- find_overlapping (cap_to_Z c) ;;
+        olp <- find_cap_allocation c ;;
         match olp with
-        | NoAlloc => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-        | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
-        | SingleAlloc alloc_id => load_concrete alloc_id c
+        | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
+        | Some (alloc_id,_) => load_concrete alloc_id c
         end
     | Prov_device, PVconcrete c =>
         if cap_is_null c then
@@ -1962,30 +1848,6 @@ Module Type CheriMemoryImpl
           if isdev
           then do_load_cap None c sz
           else fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-    | Prov_symbolic iota, PVconcrete addr =>
-        if cap_is_null addr then
-          fail loc
-            (MerrAccess
-               LoadAccess
-               NullPtr)
-        else
-          let precondition (alloc_id : storage_instance_id) : memM merr
-            :=
-            dead <- is_dead_allocation alloc_id ;;
-            if dead
-            then ret (FAIL loc (MerrAccess LoadAccess DeadPtr))
-            else
-              inbounds <- is_within_bound alloc_id ty (cap_to_Z addr) ;;
-              if inbounds then
-                (atomic <- is_atomic_member_access alloc_id ty (cap_to_Z addr) ;;
-                 if atomic
-                 then ret (FAIL loc (MerrAccess LoadAccess AtomicMemberof))
-                 else ret OK)
-              else ret (FAIL loc (MerrAccess LoadAccess OutOfBoundPtr))
-          in
-          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-          alloc_id <- resolve_iota precondition iota ;;
-          do_load_cap (Some alloc_id) addr sz
     | Prov_some alloc_id, PVconcrete c =>
         load_concrete alloc_id c
     end.
@@ -2025,7 +1887,7 @@ Module Type CheriMemoryImpl
                CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
                  (CoqCtype.unatomic mt))
     ;;
-    if negb cond 
+    if negb cond
     then fail loc (MerrOther "store with an ill-typed memory value")
     else
       let select_ro_kind p :=
@@ -2043,7 +1905,7 @@ Module Type CheriMemoryImpl
         nsz <- serr2InternalErr (sizeof DEFAULT_FUEL None cty) ;;
         cap_check loc c_value 0 WriteIntent nsz ;;
         let addr := (cap_to_Z c_value) in
-        
+
         st <- get ;;
         '(funptrmap, capmeta, pre_bs) <-
           serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
@@ -2098,11 +1960,10 @@ Module Type CheriMemoryImpl
       | Prov_none, PVconcrete c =>
           fail loc (MerrAccess StoreAccess OutOfBoundPtr)
       | Prov_disabled, PVconcrete c =>
-          olp <- find_overlapping (cap_to_Z c) ;;
+          olp <- find_cap_allocation c ;;
           match olp with
-          | NoAlloc => fail loc (MerrAccess StoreAccess OutOfBoundPtr)
-          | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
-          | SingleAlloc alloc_id => store_concrete alloc_id c
+          | None => fail loc (MerrAccess StoreAccess OutOfBoundPtr)
+          | Some (alloc_id,_) => store_concrete alloc_id c
           end
       | Prov_device, PVconcrete c =>
           if cap_is_null c then
@@ -2115,53 +1976,6 @@ Module Type CheriMemoryImpl
             if dev
             then do_store_cap None c
             else fail loc (MerrAccess StoreAccess OutOfBoundPtr)
-      | Prov_symbolic iota, PVconcrete c =>
-          if cap_is_null c then
-            fail loc
-              (MerrAccess
-                 StoreAccess
-                 NullPtr)
-          else
-            let precondition (alloc_id : Z) : memM merr
-              :=
-              inbounds <- is_within_bound alloc_id cty (cap_to_Z c) ;;
-              if inbounds then
-                alloc <- get_allocation alloc_id ;;
-                match alloc.(is_readonly) with
-                | IsReadOnly ro_kind =>
-                    ret
-                      (FAIL loc
-                         (MerrWriteOnReadOnly
-                            ro_kind))
-                | IsWritable =>
-                    atomic <- is_atomic_member_access alloc_id cty
-                               (cap_to_Z c) ;;
-                    if atomic
-                    then ret
-                           (FAIL loc (MerrAccess
-                                        LoadAccess
-                                        AtomicMemberof))
-                    else ret OK
-                end
-              else
-                ret (FAIL loc (MerrAccess StoreAccess OutOfBoundPtr))
-            in
-            alloc_id <- resolve_iota precondition iota ;;
-            fp <- do_store_cap (Some alloc_id) c ;;
-            (if is_locking then
-               update
-                 (fun (st : mem_state) =>
-                    mem_state_with_allocations
-                      (zmap_update alloc_id
-                         (fun (oa : option allocation) =>
-                            a <- oa ;;
-                            ret (allocation_with_is_readonly a (IsReadOnly ReadonlyConstQualified))
-                         ) st.(allocations))
-                      st)
-             else
-               ret tt)
-            ;;
-            ret fp
       | Prov_some alloc_id, PVconcrete c
         => store_concrete alloc_id c
       end.
@@ -2178,7 +1992,7 @@ Module Type CheriMemoryImpl
     fun _ _ =>
       raise
         "concrete_ptrval: integer to pointer cast is not supported".
-(*
+  (*
   Definition case_ptrval
     {A: Set}
     (pv : pointer_value)
@@ -2227,7 +2041,7 @@ Module Type CheriMemoryImpl
         | None => None
         end
     end.
- *)
+   *)
 
   Definition case_funsym_opt (st:mem_state) (pv:pointer_value_indt): option CoqSymbol.sym
     :=
@@ -2269,7 +2083,7 @@ Module Type CheriMemoryImpl
                  ret (CoqSymbol.symbolEquality sym sym2)
              | None =>
                  raise (InternalErr
-                          "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol")
+                          "eq_ptrval ==> FP_valid failed to resolve function symbol")
              end)
     | PVfunction _, _
     | _, PVfunction _ =>
@@ -2367,27 +2181,27 @@ Module Type CheriMemoryImpl
         then fail loc (MerrWIP "le_ptrval ==> one null pointer")
         else
           if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_pointer_relationals then
-               match
-                 prov1, prov2,
-                 (match prov1, prov2 with
-                  | Prov_some alloc1, Prov_some alloc2 =>
-                      Z.eqb alloc1 alloc2
-                  | _, _ => false
-                  end) with
-               | Prov_some alloc1, Prov_some alloc2, true =>
-                   ret (match C.value_compare addr1 addr2 with
-                        | Lt => true
-                        | Eq => true
-                        | _ => false
-                        end)
-               | _, _, _ => fail loc MerrPtrComparison
-               end
-             else
-               ret (match C.value_compare addr1 addr2 with
-                    | Lt => true
-                    | Eq => true
-                    | _ => false
-                    end)
+            match
+              prov1, prov2,
+              (match prov1, prov2 with
+               | Prov_some alloc1, Prov_some alloc2 =>
+                   Z.eqb alloc1 alloc2
+               | _, _ => false
+               end) with
+            | Prov_some alloc1, Prov_some alloc2, true =>
+                ret (match C.value_compare addr1 addr2 with
+                     | Lt => true
+                     | Eq => true
+                     | _ => false
+                     end)
+            | _, _, _ => fail loc MerrPtrComparison
+            end
+          else
+            ret (match C.value_compare addr1 addr2 with
+                 | Lt => true
+                 | Eq => true
+                 | _ => false
+                 end)
     | _, _ => fail loc (MerrWIP "le_ptrval")
     end.
 
@@ -2471,104 +2285,6 @@ Module Type CheriMemoryImpl
                    error_postcond)
           else
             error_postcond
-      | PV (Prov_symbolic iota) (PVconcrete addr1),
-        PV (Prov_some alloc_id') (PVconcrete addr2)
-      | PV (Prov_some alloc_id') (PVconcrete addr1),
-        PV (Prov_symbolic iota) (PVconcrete addr2) =>
-          lookup_iota iota >>=
-            (fun x =>
-               match x with
-               | inl alloc_id =>
-                   if Z.eqb alloc_id alloc_id' then
-                     get_allocation alloc_id >>=
-                       (fun (alloc : allocation) =>
-                          if
-                            precond alloc
-                              (cap_to_Z addr1)
-                              (cap_to_Z addr2)
-                          then
-                            valid_postcond
-                              (cap_to_Z addr1)
-                              (cap_to_Z addr2)
-                          else
-                            error_postcond)
-                   else
-                     error_postcond
-               | inr (alloc_id1, alloc_id2) =>
-                   if Z.eqb alloc_id1 alloc_id' || Z.eqb alloc_id2 alloc_id'
-                   then
-                     get_allocation alloc_id' >>=
-                       (fun (alloc : allocation) =>
-                          if precond alloc
-                               (cap_to_Z addr1)
-                               (cap_to_Z addr2)
-                          then
-                            (update
-                               (fun (st : mem_state) =>
-                                  mem_state_with_iota_map
-                                    (ZMap.add iota (inl alloc_id')
-                                       st.(iota_map)) st))
-                            ;;
-                            (valid_postcond
-                               (cap_to_Z addr1)
-                               (cap_to_Z addr2))
-                          else
-                            error_postcond)
-                   else
-                     error_postcond
-               end)
-      | PV (Prov_symbolic iota1) (PVconcrete addr1),
-        PV (Prov_symbolic iota2) (PVconcrete addr2) =>
-          lookup_iota iota1 >>=
-            (fun ids1 =>
-               lookup_iota iota2 >>=
-                 (fun ids2 =>
-                    let inter_ids :=
-                      match ids1, ids2 with
-                      | inl x_value, inl y_value =>
-                          if Z.eqb x_value y_value
-                          then SingleAlloc x_value
-                          else NoAlloc
-                      | inl x_value, inr (y_value, z_value)
-                      | inr (y_value, z_value), inl x_value =>
-                          if Z.eqb x_value y_value || Z.eqb x_value z_value
-                          then SingleAlloc x_value
-                          else NoAlloc
-                      | inr (x1, x2), inr (y1, y2) =>
-                          if Z.eqb x1 y1 then
-                            if Z.eqb x2 y2
-                            then DoubleAlloc x1 x2
-                            else SingleAlloc x1
-                          else
-                            if Z.eqb x2 y2
-                            then SingleAlloc x2
-                            else NoAlloc
-                      end in
-                    match inter_ids with
-                    | NoAlloc => error_postcond
-                    | SingleAlloc alloc_id' =>
-                        update
-                          (fun (st : mem_state) =>
-                             mem_state_with_iota_map
-                               (ZMap.add iota1 (inl alloc_id')
-                                  (ZMap.add iota2 (inl alloc_id')
-                                     st.(iota_map))) st)
-                        ;;
-                        valid_postcond
-                          (cap_to_Z addr1)
-                          (cap_to_Z addr2)
-                    | DoubleAlloc alloc_id1 alloc_id2 =>
-                        match C.value_compare addr1 addr2 with
-                        | Eq =>
-                            valid_postcond
-                              (cap_to_Z addr1)
-                              (cap_to_Z addr2)
-                        | _ =>
-                            fail loc
-                              (MerrOther
-                                 "in `diff_ptrval` invariant of PNVI-ae-udi failed: ambiguous iotas with addr1 <> addr2")
-                        end
-                    end))
       | _,_ => error_postcond
       end.
 
@@ -2697,21 +2413,6 @@ Module Type CheriMemoryImpl
         if cap_is_null c_value
         then ret false
         else isWellAligned_ptrval ref_ty ptrval
-    | PV (Prov_symbolic iota) (PVconcrete c_value) =>
-        if cap_is_null c_value
-        then ret false
-        else
-          lookup_iota iota >>=
-            (fun x =>
-               match x with
-               | inl alloc_id => do_test alloc_id
-               | inr (alloc_id1, alloc_id2) =>
-                   do_test alloc_id1 >>=
-                     (fun (x : bool) =>
-                        if x
-                        then ret true
-                        else do_test alloc_id2)
-               end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         if cap_is_null c_value
         then ret false
@@ -2722,28 +2423,12 @@ Module Type CheriMemoryImpl
         if cap_is_null c_value
         then ret false
         else
-          find_overlapping (cap_to_Z c_value) >>= fun x =>
+          find_cap_allocation c_value >>= fun x =>
               match x with
-              | NoAlloc => ret false
-              | DoubleAlloc _ _
-              | SingleAlloc _ => isWellAligned_ptrval ref_ty ptrval
+              | None => ret false
+              | Some _ => isWellAligned_ptrval ref_ty ptrval
               end
     end.
-
-  Definition add_iota
-    (alloc_ids: storage_instance_id * storage_instance_id)
-    : memM symbolic_storage_instance_id
-    :=
-    get >>=
-      (fun (st : mem_state) =>
-         let iota := st.(next_iota) in
-         put
-           (mem_state_with_iota_map
-              (ZMap.add iota (inr alloc_ids) st.(iota_map))
-              (mem_state_with_next_iota
-                 (Z.succ st.(next_iota)) st)) ;;
-
-         ret iota).
 
   Definition ptrfromint
     (loc : location_ocaml)
@@ -2756,13 +2441,10 @@ Module Type CheriMemoryImpl
     | CoqIntegerType.Signed CoqIntegerType.Intptr_t, IC _ c
       =>
         prov <-
-          (ovlp <- find_overlapping (cap_to_Z c) ;;
+          (ovlp <- find_cap_allocation c ;;
            match ovlp with
-           | NoAlloc => ret (PNVI_prov Prov_none)
-           | SingleAlloc alloc_id => ret (PNVI_prov (Prov_some alloc_id))
-           | DoubleAlloc alloc_id1 alloc_id2 =>
-               iota <- add_iota (alloc_id1,alloc_id2) ;;
-               ret (PNVI_prov (Prov_symbolic iota))
+           | None => ret (PNVI_prov Prov_none)
+           | Some (alloc_id,_) => ret (PNVI_prov (Prov_some alloc_id))
            end)
         ;; ret (PV prov (PVconcrete c))
     |CoqIntegerType.Unsigned CoqIntegerType.Intptr_t, IV _
@@ -2780,16 +2462,7 @@ Module Type CheriMemoryImpl
             then r
             else r - dlt
           in
-          prov <-
-            (ovlp <- find_overlapping addr ;;
-             match ovlp with
-             | NoAlloc => ret (PNVI_prov Prov_none)
-             | SingleAlloc alloc_id => ret (PNVI_prov (Prov_some alloc_id))
-             | DoubleAlloc alloc_id1 alloc_id2 =>
-                 iota <- add_iota (alloc_id1, alloc_id2) ;;
-                 ret (PNVI_prov (Prov_symbolic iota))
-             end)
-          ;;
+          let prov := (PNVI_prov Prov_none) in
           let c := C.cap_set_value (C.cap_c0 tt) (AddressValue.of_Z addr) in
           ret (PV prov (PVconcrete c))
     | _, IC _ _ =>
@@ -3012,10 +2685,10 @@ Module Type CheriMemoryImpl
                    then
                      (if C.cap_is_sealed c
                       then C.set_ghost_state c
-                             {|
-                               tag_unspecified := true ;
-                               bounds_unspecified := (C.get_ghost_state c).(bounds_unspecified)
-                             |}
+                                             {|
+                                               tag_unspecified := true ;
+                                               bounds_unspecified := (C.get_ghost_state c).(bounds_unspecified)
+                                             |}
                       else c)
                    else C.set_ghost_state
                           c
@@ -3079,93 +2752,7 @@ Module Type CheriMemoryImpl
     in
     match ptrval with
     | PV _ (PVfunction _) =>
-        raise (InternalErr "CHERI.eff_array_shift_ptrval, PVfunction")
-    | PV ((Prov_symbolic iota) as prov) (PVconcrete c_value) =>
-        if cap_is_null c_value then
-          raise (InternalErr
-                   "TODO(shift a null pointer should be undefined behaviour)")
-        else
-          let shifted_addr := cap_to_Z c_value + offset in
-          let precond (z_value : Z.t) : memM bool :=
-            if is_strict_pointer_arith tt
-            then
-              get_allocation z_value >>=
-                (fun (alloc : allocation) =>
-                   ret (Z.leb (AddressValue.to_Z alloc.(base)) shifted_addr
-                        && Z.leb
-                             (shifted_addr + sz)
-                             (AddressValue.to_Z alloc.(base) + alloc.(size) + sz)))
-            else
-              ret true
-          in
-          lookup_iota iota >>=
-            (fun x =>
-               match x with
-               | inr (alloc_id1, alloc_id2) =>
-                   if negb (Z.eqb ival 0) then
-                     (precond alloc_id1 >>=
-                        (fun (x : bool) =>
-                           match x with
-                           | true =>
-                               precond alloc_id2 >>=
-                                 (fun (x : bool) =>
-                                    match x with
-                                    | true =>
-                                        if CoqSwitches.has_switch (SW.get_switches tt) (SW_pointer_arith PERMISSIVE)
-                                        then ret NoCollapse
-                                        else
-                                          fail loc
-                                            (MerrOther
-                                               "(PNVI-ae-uid) ambiguous non-zero array shift")
-                                    | false => ret (Collapse alloc_id1)
-                                    end)
-                           | false =>
-                               precond alloc_id2 >>=
-                                 (fun (function_parameter : bool) =>
-                                    match function_parameter with
-                                    | true => ret (Collapse alloc_id2)
-                                    | false => fail loc MerrArrayShift
-                                    end)
-                           end) >>=
-                        (fun x =>
-                           match x with
-                           | Collapse alloc_id =>
-                               update
-                                 (fun (st : mem_state) =>
-                                    mem_state_with_iota_map
-                                      (ZMap.add iota (inl alloc_id)
-                                         st.(iota_map)) st)
-                           | NoCollapse => ret tt
-                           end))
-                     ;;
-                     let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-                     ret (PV prov (PVconcrete c_value))
-                   else
-                     precond alloc_id1 >>=
-                       (fun (function_parameter : bool) =>
-                          match function_parameter with
-                          | true => ret tt
-                          | false =>
-                              precond alloc_id2 >>=
-                                (fun (x : bool) =>
-                                   match x with
-                                   | true => ret tt
-                                   | false => fail loc MerrArrayShift
-                                   end)
-                          end)
-                     ;;
-                     let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-                     ret (PV prov (PVconcrete c_value))
-               | inl alloc_id =>
-                   precond alloc_id >>=
-                     (fun (function_parameter : bool) =>
-                        match function_parameter with
-                        | true =>
-                            let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-                            ret (PV prov (PVconcrete c_value))
-                        | false => fail loc MerrArrayShift
-                        end)
-               end)
+        raise (InternalErr "eff_array_shift_ptrval, PVfunction")
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         let shifted_addr := cap_to_Z c_value + offset in
         if is_strict_pointer_arith tt
@@ -3185,11 +2772,10 @@ Module Type CheriMemoryImpl
         let shifted_addr := cap_to_Z c_value + offset in
         if is_strict_pointer_arith tt
         then
-          find_overlapping (cap_to_Z c_value) >>= fun x =>
+          find_cap_allocation c_value >>= fun x =>
               match x with
-              | NoAlloc => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-              | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
-              | SingleAlloc alloc_id => shift_concrete c_value shifted_addr  alloc_id
+              | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
+              | Some (alloc_id,_) => shift_concrete c_value shifted_addr  alloc_id
               end
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
@@ -3212,7 +2798,7 @@ Module Type CheriMemoryImpl
     match List.find pred xs with
     | Some (_, _, offset) => ret (IV offset)
     | None =>
-        raise "CHERI.offsetof_ival: invalid memb_ident"
+        raise "offsetof_ival: invalid memb_ident"
     end.
 
   Definition eff_member_shift_ptrval
@@ -3228,16 +2814,16 @@ Module Type CheriMemoryImpl
       | IV offset => ret (offset)
       | IC _ c_value =>
           raise (InternalErr
-                   "CHERI.member_shift_ptrval invalid offset value type")
+                   "member_shift_ptrval invalid offset value type")
       end ;;
     match ptrval_ with
     | PVfunction _ =>
-        raise (InternalErr "CHERI.member_shift_ptrval, PVfunction")
+        raise (InternalErr "member_shift_ptrval, PVfunction")
     | PVconcrete c_value =>
         if cap_is_null c_value then
           if Z.eqb 0 offset
           then ret (PV prov (PVconcrete (C.cap_c0 tt)))
-          else raise (InternalErr "CHERI.member_shift_ptrval, shifting NULL")
+          else raise (InternalErr "member_shift_ptrval, shifting NULL")
         else
           let addr := (cap_to_Z c_value) in
           let c_value := C.cap_set_value c_value (AddressValue.of_Z (addr + offset)) in
@@ -3365,8 +2951,8 @@ Module Type CheriMemoryImpl
     (size : integer_value) : memM pointer_value
     :=
     (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
-    then cornucopiaRevoke tt
-    else ret tt) ;;
+     then cornucopiaRevoke tt
+     else ret tt) ;;
     match ptr with
     | PV Prov_none (PVconcrete c) =>
         if cap_is_null c  then
@@ -3409,13 +2995,13 @@ Module Type CheriMemoryImpl
                   if AddressValue.eqb alloc.(base) (C.cap_get_value c)
                   then
                     allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
-                    (fun (new_ptr : pointer_value) =>
-                       let size_to_copy :=
-                         let size_n := num_of_int size in
-                         IV (Z.min (MT.size alloc) size_n) in
-                       memcpy new_ptr ptr size_to_copy ;;
-                       kill (Loc_other "realloc") true ptr ;;
-                       ret new_ptr)
+                      (fun (new_ptr : pointer_value) =>
+                         let size_to_copy :=
+                           let size_n := num_of_int size in
+                           IV (Z.min (MT.size alloc) size_n) in
+                         memcpy new_ptr ptr size_to_copy ;;
+                         kill (Loc_other "realloc") true ptr ;;
+                         ret new_ptr)
                   else
                     fail loc (MerrUndefinedRealloc Free_out_of_bound)
     | PV _ _ =>
@@ -3531,9 +3117,9 @@ Module Type CheriMemoryImpl
     | IntSub => int_bin Z.sub v1 v2
     | IntMul => int_bin Z.mul v1 v2
     | IntDiv => int_bin (fun n1 n2 =>
-                           if Z.eqb n2 0
-                           then 0
-                           else Z_integerDiv_t n1 n2) v1 v2
+                          if Z.eqb n2 0
+                          then 0
+                          else Z_integerDiv_t n1 n2) v1 v2
     | IntRem_t => int_bin Z_integerRem_t v1 v2
     | IntRem_f => int_bin Z_integerRem_f v1 v2
     | IntExp => int_bin Z.pow v1 v2
@@ -3593,7 +3179,7 @@ Module Type CheriMemoryImpl
   (* Not implmeneted but we need a placeholder to compile libc during build *)
   Definition str_fval (str : string) : serr floating_value :=
     ret PrimFloat.zero.
-    (* raise "str_fval not implmented". *)
+  (* raise "str_fval not implmented". *)
 
   Definition op_fval
     (fop : floating_operator)
@@ -3755,12 +3341,12 @@ Module Type CheriMemoryImpl
           List.map
             (fun (c_value : ascii) =>
                {| prov := (PNVI_prov Prov_none); copy_offset := None;
-                                     value := Some c_value |}) cs in
+                                                 value := Some c_value |}) cs in
         let pre_bs :=
           List.app pre_bs
             [
               {| prov := (PNVI_prov Prov_none); copy_offset := None;
-                                    value := Some "000" % char |}
+                                                value := Some "000" % char |}
             ] in
         let addr := (cap_to_Z c_value) in
         let bs :=
@@ -3788,343 +3374,343 @@ Module Type CheriMemoryImpl
       then (cornucopiaRevoke tt ;; ret None)
       else fail loc (MerrOther "'cheri_revoke' called without 'cornucopia' switch")
     else if String.eqb name "strfcap" then
-      buf_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-      maxsize_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-      format_val <- option2memM "missing argument"  (List.nth_error args 2%nat) ;;
-      cap_val <- option2memM "missing argument"  (List.nth_error args 3%nat) ;;
-      get >>=
-        (fun (st : mem_state) =>
-           match cap_of_mem_value st.(funptrmap) cap_val with
-           | None =>
-               fail loc
-                 (MerrOther
-                    (String.append
-                       "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                       (String.append name "'")))
-           | Some (funptrmap, c_value) =>
-               (update
-                  (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st))
-               ;;
-               match (buf_val, maxsize_val, format_val) with
-               |
-                 (MVpointer _ (PV _ (PVconcrete buf_cap)),
-                   MVinteger _ (IV maxsize_n),
-                   MVpointer _ (PV _ (PVconcrete format_cap))) =>
-                   load_string loc format_cap MAX_STRFCAP_FORMAT_LEN >>=
-                     (fun (format : string) =>
-                        match C.strfcap format c_value with
-                        | None =>
-                            ret
-                              (Some
-                                 (MVinteger
-                                    (CoqIntegerType.Signed CoqIntegerType.Long)
-                                    (IV (-1))))
-                        | Some res =>
-                            let res_size := String.length res in
-                            let res_size_n := Z.of_nat res_size in
-                            if Z.geb res_size_n maxsize_n then
-                              ret
-                                (Some
-                                   (MVinteger
-                                      (CoqIntegerType.Signed
-                                         CoqIntegerType.Long)
-                                      (IV (-1))))
-                            else
-                              store_string loc res (Z.to_nat maxsize_n) buf_cap ;;
-                              (ret
-                                 (Some
-                                    (MVinteger
-                                       (CoqIntegerType.Signed
-                                          CoqIntegerType.Long) (IV res_size_n))))
-                        end)
-               | (_, _, _) =>
-                   fail loc
-                     (MerrOther
-                        (String.append "CHERI.call_intrinsic: wrong types in: '"
-                           (String.append name "'")))
-               end
-           end)
-    else
-      if String.eqb name "cheri_bounds_set" then
-        cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-        upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-        get >>=
-          (fun (st : mem_state) =>
-             match cap_of_mem_value st.(funptrmap) cap_val with
-             | None =>
-                 fail loc
-                   (MerrOther
-                      (String.append
-                         "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                         (String.append name "'")))
-             | Some (funptrmap, c_value) =>
-                 update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
-                 ;;
-                 match upper_val with
-                 | MVinteger CoqIntegerType.Size_t (IV n_value) =>
-                     let x' := (cap_to_Z c_value) in
-                     let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
-                     in ret (Some (update_cap_in_mem_value cap_val c_value))
-                 | _ =>
-                     fail loc
-                       (MerrOther
-                          (String.append
-                             "CHERI.call_intrinsic: 2nd argument's type is not size_t in: '"
-                             (String.append name "'")))
-                 end
-             end)
-      else
-        if String.eqb name "cheri_perms_and" then
-          cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-          mask_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-          get >>=
-            (fun (st : mem_state) =>
-               match cap_of_mem_value st.(funptrmap) cap_val with
-               | None =>
-                   fail loc
-                     (MerrOther
-                        (String.append
-                           "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                           (String.append name "'")))
-               | Some (funptrmap, c_value) =>
-                   (update
-                      (fun (st : mem_state) =>
-                         mem_state_with_funptrmap funptrmap st))
-                   ;;
-                   match mask_val with
-                   | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
-                     =>
-                       iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
-                       sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
-                       bytes_value <- serr2InternalErr (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
-                       let bits := bool_bits_of_bytes bytes_value in
-                       match Permissions.of_list bits with
-                       | None =>
-                           fail loc
-                             (MerrOther
-                                (String.append
-                                   "CHERI.call_intrinsic: error decoding permission bits: '"
-                                   (String.append name "'")))
-                       | Some pmask =>
-                           let c_value := C.cap_narrow_perms c_value pmask
-                           in ret (Some (update_cap_in_mem_value cap_val c_value))
-                       end
-                   | _ =>
-                       fail loc
-                         (MerrOther
-                            (String.append
-                               "CHERI.call_intrinsic: 2nd argument's type is not size_t in: '"
-                               (String.append name "'")))
-                   end
-               end)
-        else
-          if String.eqb name "cheri_offset_get" then
-            cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-            get >>=
-              (fun (st : mem_state) =>
-                 match cap_of_mem_value st.(funptrmap) cap_val with
-                 | None =>
-                     fail loc
-                       (MerrOther
-                          (String.append
-                             "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                             (String.append name "'")))
-                 | Some (_, c_value) =>
-                     if (C.get_ghost_state c_value).(bounds_unspecified)
-                     then ret (Some (MVunspecified CoqCtype.size_t))
-                     else
-                       let v_value := C.cap_get_offset c_value in
-                       ret (Some (MVinteger CoqIntegerType.Size_t (IV v_value)))
-                 end)
-          else
-            if String.eqb name "cheri_address_get" then
-              cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-              get >>=
-                (fun (st : mem_state) =>
-                   match cap_of_mem_value st.(funptrmap) cap_val with
-                   | None =>
-                       fail loc
-                         (MerrOther
-                            (String.append
-                               "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                               (String.append name "'")))
-                   | Some (_, c_value) =>
-                       let v_value := (cap_to_Z c_value) in
-                       ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
-                   end)
-            else
-              if String.eqb name "cheri_base_get" then
-                cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-                get >>=
-                  (fun (st : mem_state) =>
-                     match cap_of_mem_value st.(funptrmap) cap_val with
-                     | None =>
-                         fail loc
-                           (MerrOther
-                              (String.append
-                                 "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                                 (String.append name "'")))
-                     | Some (_, c_value) =>
-                         if (C.get_ghost_state c_value).(bounds_unspecified)
-                         then ret (Some (MVunspecified (CoqCtype.ptraddr_t tt)))
-                         else
-                           let v_value := fst (Bounds.to_Zs (C.cap_get_bounds c_value))
-                           in ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
-                     end)
-              else
-                if String.eqb name "cheri_length_get" then
-                  cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-                  get >>=
-                    (fun (st : mem_state) =>
-                       match cap_of_mem_value st.(funptrmap) cap_val
-                       with
-                       | None =>
-                           fail loc
-                             (MerrOther
-                                (String.append
-                                   "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                                   (String.append name "'")))
-                       | Some (_, c_value) =>
-                           if (C.get_ghost_state c_value).(bounds_unspecified)
-                           then ret (Some (MVunspecified CoqCtype.size_t))
-                           else
-                             let '(base, limit) := Bounds.to_Zs (C.cap_get_bounds c_value) in
-                             (* length, as computed from the internal
-                                representation of bounds, could exceed
-                                the width of the return type. To avoid
-                                that we cap it here *)
-                             max_size_t <- serr2InternalErr (max_ival CoqIntegerType.Size_t) ;;
-                             let length := Z.min (limit - base) (num_of_int max_size_t) in
-                             ret (Some (MVinteger CoqIntegerType.Size_t (IV length)))
-                       end)
-                else
-                  if String.eqb name "cheri_tag_get" then
-                    cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-                    get >>=
-                      (fun (st : mem_state) =>
-                         match cap_of_mem_value st.(funptrmap) cap_val
-                         with
-                         | None =>
-                             fail loc
-                               (MerrOther
-                                  (String.append
-                                     "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                                     (String.append name "'")))
-                         | Some (_, c) =>
-                             if (C.get_ghost_state c).(tag_unspecified) then
-                               ret (Some (MVunspecified
-                                            (CoqCtype.Ctype []
-                                               (CoqCtype.Basic
-                                                  (CoqCtype.Integer
-                                                     CoqIntegerType.Bool)))))
-                             else
-                               let b_value := if C.cap_is_valid c then 1 else 0
-                               in ret (Some (MVinteger CoqIntegerType.Bool (IV b_value)))
-                         end)
-                  else
-                    if String.eqb name "cheri_tag_clear" then
-                      cap_val <- option2memM "missing argument"  (List.nth_error args 0) ;;
-                      get >>=
-                        (fun (st : mem_state) =>
-                           match
-                             cap_of_mem_value st.(funptrmap) cap_val
-                           with
-                           | None =>
-                               fail loc
-                                 (MerrOther
-                                    (String.append
-                                       "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                                       (String.append name "'")))
-                           | Some (funptrmap, c_value) =>
-                               update (fun st => mem_state_with_funptrmap funptrmap st)
-                               ;;
-                               let c_value := C.cap_invalidate c_value in
-                               ret (Some (update_cap_in_mem_value cap_val c_value))
-                           end)
-                    else
-                      if String.eqb name "cheri_is_equal_exact" then
-                        cap_val0 <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-                        cap_val1 <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-                        get >>=
-                          (fun (st : mem_state) =>
-                             match
-                               (cap_of_mem_value st.(funptrmap) cap_val0),
-                               (cap_of_mem_value st.(funptrmap) cap_val1) with
-                             | None, _ =>
-                                 fail loc
-                                   (MerrOther
-                                      (String.append
-                                         "CHERI.call_intrinsic: non-cap 1st argument in: '"
-                                         (String.append name "'")))
-                             | _, None =>
-                                 fail loc
-                                   (MerrOther
-                                      (String.append
-                                         "CHERI.call_intrinsic: non-cap 2nd argument in: '"
-                                         (String.append name "'")))
-                             | Some (_, c0), Some (_, c1) =>
-                                 let gs0 := C.get_ghost_state c0 in
-                                 let gs1 := C.get_ghost_state c1 in
-                                 if gs0.(tag_unspecified) || gs1.(tag_unspecified)
-                                    || gs0.(bounds_unspecified) || gs1.(bounds_unspecified)
-                                 then
-                                   ret (Some (MVunspecified
-                                                (CoqCtype.Ctype []
-                                                   (CoqCtype.Basic
-                                                      (CoqCtype.Integer
-                                                         CoqIntegerType.Bool)))))
-                                 else
-                                   let v_value := if C.eqb c0 c1 then 1 else 0 in
+           buf_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+           maxsize_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+           format_val <- option2memM "missing argument"  (List.nth_error args 2%nat) ;;
+           cap_val <- option2memM "missing argument"  (List.nth_error args 3%nat) ;;
+           get >>=
+             (fun (st : mem_state) =>
+                match cap_of_mem_value st.(funptrmap) cap_val with
+                | None =>
+                    fail loc
+                      (MerrOther
+                         (String.append
+                            "call_intrinsic: non-cap 1st argument in: '"
+                            (String.append name "'")))
+                | Some (funptrmap, c_value) =>
+                    (update
+                       (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st))
+                    ;;
+                    match (buf_val, maxsize_val, format_val) with
+                    |
+                      (MVpointer _ (PV _ (PVconcrete buf_cap)),
+                        MVinteger _ (IV maxsize_n),
+                        MVpointer _ (PV _ (PVconcrete format_cap))) =>
+                        load_string loc format_cap MAX_STRFCAP_FORMAT_LEN >>=
+                          (fun (format : string) =>
+                             match C.strfcap format c_value with
+                             | None =>
+                                 ret
+                                   (Some
+                                      (MVinteger
+                                         (CoqIntegerType.Signed CoqIntegerType.Long)
+                                         (IV (-1))))
+                             | Some res =>
+                                 let res_size := String.length res in
+                                 let res_size_n := Z.of_nat res_size in
+                                 if Z.geb res_size_n maxsize_n then
                                    ret
                                      (Some
-                                        (MVinteger CoqIntegerType.Bool
-                                           (IV v_value)))
+                                        (MVinteger
+                                           (CoqIntegerType.Signed
+                                              CoqIntegerType.Long)
+                                           (IV (-1))))
+                                 else
+                                   store_string loc res (Z.to_nat maxsize_n) buf_cap ;;
+                                   (ret
+                                      (Some
+                                         (MVinteger
+                                            (CoqIntegerType.Signed
+                                               CoqIntegerType.Long) (IV res_size_n))))
                              end)
-                      else
-                        if String.eqb name "cheri_representable_length" then
-                          match List.nth_error args 0%nat with
-                          | None =>
-                              raise (InternalErr "missing argument")
-                          | Some (MVinteger CoqIntegerType.Size_t (IV n_value)) =>
-                              let l_value := C.representable_length n_value in
-                              ret
-                                (Some
-                                   (MVinteger CoqIntegerType.Size_t
-                                      (IV l_value)))
-                          | Some _ =>
-                              fail loc
-                                (MerrOther
-                                   (String.append
-                                      "CHERI.call_intrinsic: 1st argument's type is not size_t in: '"
-                                      (String.append name "'")))
-                          end
-                        else
-                          if
-                            String.eqb name "cheri_representable_alignment_mask"
-                          then
-                            match List.nth_error args 0%nat with
+                    | (_, _, _) =>
+                        fail loc
+                          (MerrOther
+                             (String.append "call_intrinsic: wrong types in: '"
+                                (String.append name "'")))
+                    end
+                end)
+         else
+           if String.eqb name "cheri_bounds_set" then
+             cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+             upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+             get >>=
+               (fun (st : mem_state) =>
+                  match cap_of_mem_value st.(funptrmap) cap_val with
+                  | None =>
+                      fail loc
+                        (MerrOther
+                           (String.append
+                              "call_intrinsic: non-cap 1st argument in: '"
+                              (String.append name "'")))
+                  | Some (funptrmap, c_value) =>
+                      update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
+                      ;;
+                      match upper_val with
+                      | MVinteger CoqIntegerType.Size_t (IV n_value) =>
+                          let x' := (cap_to_Z c_value) in
+                          let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
+                          in ret (Some (update_cap_in_mem_value cap_val c_value))
+                      | _ =>
+                          fail loc
+                            (MerrOther
+                               (String.append
+                                  "call_intrinsic: 2nd argument's type is not size_t in: '"
+                                  (String.append name "'")))
+                      end
+                  end)
+           else
+             if String.eqb name "cheri_perms_and" then
+               cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+               mask_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+               get >>=
+                 (fun (st : mem_state) =>
+                    match cap_of_mem_value st.(funptrmap) cap_val with
+                    | None =>
+                        fail loc
+                          (MerrOther
+                             (String.append
+                                "call_intrinsic: non-cap 1st argument in: '"
+                                (String.append name "'")))
+                    | Some (funptrmap, c_value) =>
+                        (update
+                           (fun (st : mem_state) =>
+                              mem_state_with_funptrmap funptrmap st))
+                        ;;
+                        match mask_val with
+                        | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
+                          =>
+                            iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
+                            sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
+                            bytes_value <- serr2InternalErr (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
+                            let bits := bool_bits_of_bytes bytes_value in
+                            match Permissions.of_list bits with
                             | None =>
-                                raise (InternalErr "missing argument")
-                            | Some (MVinteger CoqIntegerType.Size_t (IV n_value))
-                              =>
-                                let l_value := C.representable_alignment_mask n_value in
-                                ret
-                                  (Some
-                                     (MVinteger CoqIntegerType.Size_t
-                                        (IV l_value)))
-                            | Some _ =>
                                 fail loc
                                   (MerrOther
                                      (String.append
-                                        "CHERI.call_intrinsic: 1st argument's type is not size_t in: '"
+                                        "call_intrinsic: error decoding permission bits: '"
                                         (String.append name "'")))
+                            | Some pmask =>
+                                let c_value := C.cap_narrow_perms c_value pmask
+                                in ret (Some (update_cap_in_mem_value cap_val c_value))
                             end
-                          else
+                        | _ =>
                             fail loc
                               (MerrOther
                                  (String.append
-                                    "CHERI.call_intrinsic: unknown intrinsic: '"
-                                    (String.append name "'"))).
+                                    "call_intrinsic: 2nd argument's type is not size_t in: '"
+                                    (String.append name "'")))
+                        end
+                    end)
+             else
+               if String.eqb name "cheri_offset_get" then
+                 cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                 get >>=
+                   (fun (st : mem_state) =>
+                      match cap_of_mem_value st.(funptrmap) cap_val with
+                      | None =>
+                          fail loc
+                            (MerrOther
+                               (String.append
+                                  "call_intrinsic: non-cap 1st argument in: '"
+                                  (String.append name "'")))
+                      | Some (_, c_value) =>
+                          if (C.get_ghost_state c_value).(bounds_unspecified)
+                          then ret (Some (MVunspecified CoqCtype.size_t))
+                          else
+                            let v_value := C.cap_get_offset c_value in
+                            ret (Some (MVinteger CoqIntegerType.Size_t (IV v_value)))
+                      end)
+               else
+                 if String.eqb name "cheri_address_get" then
+                   cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                   get >>=
+                     (fun (st : mem_state) =>
+                        match cap_of_mem_value st.(funptrmap) cap_val with
+                        | None =>
+                            fail loc
+                              (MerrOther
+                                 (String.append
+                                    "call_intrinsic: non-cap 1st argument in: '"
+                                    (String.append name "'")))
+                        | Some (_, c_value) =>
+                            let v_value := (cap_to_Z c_value) in
+                            ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
+                        end)
+                 else
+                   if String.eqb name "cheri_base_get" then
+                     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                     get >>=
+                       (fun (st : mem_state) =>
+                          match cap_of_mem_value st.(funptrmap) cap_val with
+                          | None =>
+                              fail loc
+                                (MerrOther
+                                   (String.append
+                                      "call_intrinsic: non-cap 1st argument in: '"
+                                      (String.append name "'")))
+                          | Some (_, c_value) =>
+                              if (C.get_ghost_state c_value).(bounds_unspecified)
+                              then ret (Some (MVunspecified (CoqCtype.ptraddr_t tt)))
+                              else
+                                let v_value := fst (Bounds.to_Zs (C.cap_get_bounds c_value))
+                                in ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
+                          end)
+                   else
+                     if String.eqb name "cheri_length_get" then
+                       cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                       get >>=
+                         (fun (st : mem_state) =>
+                            match cap_of_mem_value st.(funptrmap) cap_val
+                            with
+                            | None =>
+                                fail loc
+                                  (MerrOther
+                                     (String.append
+                                        "call_intrinsic: non-cap 1st argument in: '"
+                                        (String.append name "'")))
+                            | Some (_, c_value) =>
+                                if (C.get_ghost_state c_value).(bounds_unspecified)
+                                then ret (Some (MVunspecified CoqCtype.size_t))
+                                else
+                                  let '(base, limit) := Bounds.to_Zs (C.cap_get_bounds c_value) in
+                                  (* length, as computed from the internal
+                                representation of bounds, could exceed
+                                the width of the return type. To avoid
+                                that we cap it here *)
+                                  max_size_t <- serr2InternalErr (max_ival CoqIntegerType.Size_t) ;;
+                                  let length := Z.min (limit - base) (num_of_int max_size_t) in
+                                  ret (Some (MVinteger CoqIntegerType.Size_t (IV length)))
+                            end)
+                     else
+                       if String.eqb name "cheri_tag_get" then
+                         cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                         get >>=
+                           (fun (st : mem_state) =>
+                              match cap_of_mem_value st.(funptrmap) cap_val
+                              with
+                              | None =>
+                                  fail loc
+                                    (MerrOther
+                                       (String.append
+                                          "call_intrinsic: non-cap 1st argument in: '"
+                                          (String.append name "'")))
+                              | Some (_, c) =>
+                                  if (C.get_ghost_state c).(tag_unspecified) then
+                                    ret (Some (MVunspecified
+                                                 (CoqCtype.Ctype []
+                                                    (CoqCtype.Basic
+                                                       (CoqCtype.Integer
+                                                          CoqIntegerType.Bool)))))
+                                  else
+                                    let b_value := if C.cap_is_valid c then 1 else 0
+                                    in ret (Some (MVinteger CoqIntegerType.Bool (IV b_value)))
+                              end)
+                       else
+                         if String.eqb name "cheri_tag_clear" then
+                           cap_val <- option2memM "missing argument"  (List.nth_error args 0) ;;
+                           get >>=
+                             (fun (st : mem_state) =>
+                                match
+                                  cap_of_mem_value st.(funptrmap) cap_val
+                                with
+                                | None =>
+                                    fail loc
+                                      (MerrOther
+                                         (String.append
+                                            "call_intrinsic: non-cap 1st argument in: '"
+                                            (String.append name "'")))
+                                | Some (funptrmap, c_value) =>
+                                    update (fun st => mem_state_with_funptrmap funptrmap st)
+                                    ;;
+                                    let c_value := C.cap_invalidate c_value in
+                                    ret (Some (update_cap_in_mem_value cap_val c_value))
+                                end)
+                         else
+                           if String.eqb name "cheri_is_equal_exact" then
+                             cap_val0 <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                             cap_val1 <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+                             get >>=
+                               (fun (st : mem_state) =>
+                                  match
+                                    (cap_of_mem_value st.(funptrmap) cap_val0),
+                                    (cap_of_mem_value st.(funptrmap) cap_val1) with
+                                  | None, _ =>
+                                      fail loc
+                                        (MerrOther
+                                           (String.append
+                                              "call_intrinsic: non-cap 1st argument in: '"
+                                              (String.append name "'")))
+                                  | _, None =>
+                                      fail loc
+                                        (MerrOther
+                                           (String.append
+                                              "call_intrinsic: non-cap 2nd argument in: '"
+                                              (String.append name "'")))
+                                  | Some (_, c0), Some (_, c1) =>
+                                      let gs0 := C.get_ghost_state c0 in
+                                      let gs1 := C.get_ghost_state c1 in
+                                      if gs0.(tag_unspecified) || gs1.(tag_unspecified)
+                                         || gs0.(bounds_unspecified) || gs1.(bounds_unspecified)
+                                      then
+                                        ret (Some (MVunspecified
+                                                     (CoqCtype.Ctype []
+                                                        (CoqCtype.Basic
+                                                           (CoqCtype.Integer
+                                                              CoqIntegerType.Bool)))))
+                                      else
+                                        let v_value := if C.eqb c0 c1 then 1 else 0 in
+                                        ret
+                                          (Some
+                                             (MVinteger CoqIntegerType.Bool
+                                                (IV v_value)))
+                                  end)
+                           else
+                             if String.eqb name "cheri_representable_length" then
+                               match List.nth_error args 0%nat with
+                               | None =>
+                                   raise (InternalErr "missing argument")
+                               | Some (MVinteger CoqIntegerType.Size_t (IV n_value)) =>
+                                   let l_value := C.representable_length n_value in
+                                   ret
+                                     (Some
+                                        (MVinteger CoqIntegerType.Size_t
+                                           (IV l_value)))
+                               | Some _ =>
+                                   fail loc
+                                     (MerrOther
+                                        (String.append
+                                           "call_intrinsic: 1st argument's type is not size_t in: '"
+                                           (String.append name "'")))
+                               end
+                             else
+                               if
+                                 String.eqb name "cheri_representable_alignment_mask"
+                               then
+                                 match List.nth_error args 0%nat with
+                                 | None =>
+                                     raise (InternalErr "missing argument")
+                                 | Some (MVinteger CoqIntegerType.Size_t (IV n_value))
+                                   =>
+                                     let l_value := C.representable_alignment_mask n_value in
+                                     ret
+                                       (Some
+                                          (MVinteger CoqIntegerType.Size_t
+                                             (IV l_value)))
+                                 | Some _ =>
+                                     fail loc
+                                       (MerrOther
+                                          (String.append
+                                             "call_intrinsic: 1st argument's type is not size_t in: '"
+                                             (String.append name "'")))
+                                 end
+                               else
+                                 fail loc
+                                   (MerrOther
+                                      (String.append
+                                         "call_intrinsic: unknown intrinsic: '"
+                                         (String.append name "'"))).
 
   Definition get_intrinsic_type_spec (name : string)
     : option intrinsics_signature
@@ -4134,197 +3720,197 @@ Module Type CheriMemoryImpl
       then Some ((ExactRet CoqCtype.void), [])
       else None
     else if String.eqb name "strfcap" then
-      Some
-        ((ExactRet
-            CoqCtype.signed_long),
-          [
-            ExactArg
-              (CoqCtype.Ctype []
-                 (CoqCtype.Pointer
-                    {|
-                      CoqCtype.const := false;
-                      CoqCtype.restrict := true;
-                      CoqCtype.volatile := false
-                    |}
-                    CoqCtype.signed_char));
-            ExactArg
-              CoqCtype.size_t;
-            ExactArg
-              (CoqCtype.Ctype []
-                 (CoqCtype.Pointer
-                    {| CoqCtype.const := true;
-                      CoqCtype.restrict := true;
-                      CoqCtype.volatile := false
-                    |}
-                    CoqCtype.signed_char));
-            PolymorphicArg
-              [
-                TyPred
-                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                TyPred
-                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                TyIsPointer
-              ]
-        ])
-    else
-      if String.eqb name "cheri_bounds_set" then
-        Some
-          ((CopyRet 0),
-            [
-              PolymorphicArg
-                [
-                  TyPred
-                    (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                  TyPred
-                    (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                  TyIsPointer
-                ];
-              ExactArg
-                CoqCtype.size_t
-          ])
-      else
-        if String.eqb name "cheri_perms_and" then
-          Some
-            ((CopyRet 0),
-              [
-                PolymorphicArg
-                  [
-                    TyPred
-                      (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                    TyPred
-                      (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                    TyIsPointer
-                  ];
-                ExactArg
-                  CoqCtype.size_t
-            ])
-        else
-          if String.eqb name "cheri_address_get" then
-            Some
-              ((ExactRet
-                  (CoqCtype.ptraddr_t tt)),
-                [
-                  PolymorphicArg
-                    [
-                      TyPred
-                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                      TyPred
-                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                      TyIsPointer
-                    ]
-              ])
-          else
-            if String.eqb name "cheri_base_get" then
-              Some
-                ((ExactRet
-                    (CoqCtype.ptraddr_t tt)),
-                  [
-                    PolymorphicArg
-                      [
-                        TyPred
-                          (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                        TyPred
-                          (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                        TyIsPointer
-                      ]
-                ])
-            else
-              if String.eqb name "cheri_length_get" then
-                Some
-                  ((ExactRet
-                      CoqCtype.size_t),
-                    [
-                      PolymorphicArg
-                        [
-                          TyPred
-                            (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                          TyPred
-                            (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                          TyIsPointer
-                        ]
-                  ])
-              else
-                if String.eqb name "cheri_tag_get" then
-                  Some
-                    ((ExactRet
-                        (CoqCtype.Ctype []
-                           (CoqCtype.Basic
-                              (CoqCtype.Integer CoqIntegerType.Bool)))),
-                      [
-                        PolymorphicArg
-                          [
-                            TyPred
-                              (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                            TyPred
-                              (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                            TyIsPointer
-                          ]
-                    ])
-                else
-                  if String.eqb name "cheri_tag_clear" then
-                    Some
-                      ((CopyRet 0),
-                        [
-                          PolymorphicArg
-                            [
-                              TyPred
-                                (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                              TyPred
-                                (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                              TyIsPointer
-                            ]
-                      ])
-                  else
-                    if String.eqb name "cheri_is_equal_exact" then
-                      Some
-                        ((ExactRet
-                            (CoqCtype.Ctype []
-                               (CoqCtype.Basic
-                                  (CoqCtype.Integer
-                                     CoqIntegerType.Bool)))),
-                          [
-                            PolymorphicArg
-                              [
-                                TyPred
-                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                                TyPred
-                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                                TyIsPointer
-                              ];
-                            PolymorphicArg
-                              [
-                                TyPred
-                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                                TyPred
-                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                                TyIsPointer
-                              ]
-                        ])
-                    else
-                      if String.eqb name "cheri_representable_length" then
-                        Some ((ExactRet CoqCtype.size_t), [ExactArg CoqCtype.size_t])
-                      else
-                        if
-                          String.eqb name "cheri_representable_alignment_mask"
-                        then
-                          Some ((ExactRet CoqCtype.size_t), [ExactArg CoqCtype.size_t])
-                        else
-                          if String.eqb name "cheri_offset_get" then
-                            Some
-                              ((ExactRet
-                                  CoqCtype.size_t),
-                                [
-                                  PolymorphicArg
-                                    [
-                                      TyPred
-                                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
-                                      TyPred
-                                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
-                                      TyIsPointer
-                                    ]
-                              ])
-                          else
-                            None.
+           Some
+             ((ExactRet
+                 CoqCtype.signed_long),
+               [
+                 ExactArg
+                   (CoqCtype.Ctype []
+                      (CoqCtype.Pointer
+                         {|
+                           CoqCtype.const := false;
+                           CoqCtype.restrict := true;
+                           CoqCtype.volatile := false
+                         |}
+                         CoqCtype.signed_char));
+                 ExactArg
+                   CoqCtype.size_t;
+                 ExactArg
+                   (CoqCtype.Ctype []
+                      (CoqCtype.Pointer
+                         {| CoqCtype.const := true;
+                           CoqCtype.restrict := true;
+                           CoqCtype.volatile := false
+                         |}
+                         CoqCtype.signed_char));
+                 PolymorphicArg
+                   [
+                     TyPred
+                       (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                     TyPred
+                       (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                     TyIsPointer
+                   ]
+             ])
+         else
+           if String.eqb name "cheri_bounds_set" then
+             Some
+               ((CopyRet 0),
+                 [
+                   PolymorphicArg
+                     [
+                       TyPred
+                         (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                       TyPred
+                         (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                       TyIsPointer
+                     ];
+                   ExactArg
+                     CoqCtype.size_t
+               ])
+           else
+             if String.eqb name "cheri_perms_and" then
+               Some
+                 ((CopyRet 0),
+                   [
+                     PolymorphicArg
+                       [
+                         TyPred
+                           (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                         TyPred
+                           (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                         TyIsPointer
+                       ];
+                     ExactArg
+                       CoqCtype.size_t
+                 ])
+             else
+               if String.eqb name "cheri_address_get" then
+                 Some
+                   ((ExactRet
+                       (CoqCtype.ptraddr_t tt)),
+                     [
+                       PolymorphicArg
+                         [
+                           TyPred
+                             (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                           TyPred
+                             (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                           TyIsPointer
+                         ]
+                   ])
+               else
+                 if String.eqb name "cheri_base_get" then
+                   Some
+                     ((ExactRet
+                         (CoqCtype.ptraddr_t tt)),
+                       [
+                         PolymorphicArg
+                           [
+                             TyPred
+                               (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                             TyPred
+                               (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                             TyIsPointer
+                           ]
+                     ])
+                 else
+                   if String.eqb name "cheri_length_get" then
+                     Some
+                       ((ExactRet
+                           CoqCtype.size_t),
+                         [
+                           PolymorphicArg
+                             [
+                               TyPred
+                                 (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                               TyPred
+                                 (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                               TyIsPointer
+                             ]
+                       ])
+                   else
+                     if String.eqb name "cheri_tag_get" then
+                       Some
+                         ((ExactRet
+                             (CoqCtype.Ctype []
+                                (CoqCtype.Basic
+                                   (CoqCtype.Integer CoqIntegerType.Bool)))),
+                           [
+                             PolymorphicArg
+                               [
+                                 TyPred
+                                   (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                                 TyPred
+                                   (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                                 TyIsPointer
+                               ]
+                         ])
+                     else
+                       if String.eqb name "cheri_tag_clear" then
+                         Some
+                           ((CopyRet 0),
+                             [
+                               PolymorphicArg
+                                 [
+                                   TyPred
+                                     (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                                   TyPred
+                                     (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                                   TyIsPointer
+                                 ]
+                           ])
+                       else
+                         if String.eqb name "cheri_is_equal_exact" then
+                           Some
+                             ((ExactRet
+                                 (CoqCtype.Ctype []
+                                    (CoqCtype.Basic
+                                       (CoqCtype.Integer
+                                          CoqIntegerType.Bool)))),
+                               [
+                                 PolymorphicArg
+                                   [
+                                     TyPred
+                                       (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                                     TyPred
+                                       (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                                     TyIsPointer
+                                   ];
+                                 PolymorphicArg
+                                   [
+                                     TyPred
+                                       (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                                     TyPred
+                                       (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                                     TyIsPointer
+                                   ]
+                             ])
+                         else
+                           if String.eqb name "cheri_representable_length" then
+                             Some ((ExactRet CoqCtype.size_t), [ExactArg CoqCtype.size_t])
+                           else
+                             if
+                               String.eqb name "cheri_representable_alignment_mask"
+                             then
+                               Some ((ExactRet CoqCtype.size_t), [ExactArg CoqCtype.size_t])
+                             else
+                               if String.eqb name "cheri_offset_get" then
+                                 Some
+                                   ((ExactRet
+                                       CoqCtype.size_t),
+                                     [
+                                       PolymorphicArg
+                                         [
+                                           TyPred
+                                             (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
+                                           TyPred
+                                             (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
+                                           TyIsPointer
+                                         ]
+                                   ])
+                               else
+                                 None.
 
 
 End CheriMemoryImpl.

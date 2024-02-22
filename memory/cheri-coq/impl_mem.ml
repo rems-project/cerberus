@@ -889,8 +889,6 @@ module CHERIMorello : Memory = struct
        "@empty"
     | Prov_some alloc_id ->
        "@" ^ Z.to_string alloc_id
-    | Prov_symbolic iota ->
-       "@iota(" ^ Z.to_string iota ^ ")"
     | Prov_device ->
        "@device"
 
@@ -1223,12 +1221,11 @@ module CHERIMorello : Memory = struct
        begin match pv with
        | PVconcrete c ->
           let addr = C.cap_get_value c in
-          bind (lift_coq_memM ~print_mem_state:false "find_overlapping" (MM.find_overlapping addr)) (fun x ->
+          bind (lift_coq_memM ~print_mem_state:false "find_cap_allocation" (MM.find_cap_allocation c)) (fun x ->
               let loc = Cerb_location.unknown in
               match x with
-              | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
-              | MM.DoubleAlloc _ -> fail ~loc (MerrInternal "DoubleAlloc without PNVI")
-              | MM.SingleAlloc alloc_id ->
+              | None -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
+              | Some (alloc_id,_) ->
                  bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
                      if addr = alloc.base then
                        return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))

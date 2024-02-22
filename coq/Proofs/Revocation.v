@@ -123,41 +123,6 @@ Module RevocationProofs.
     Capability_GS.cap_invalidate c1 = c2 ->
     single_alloc_id_cap_cmp allocs alloc_id c1 c2.
 
-  Inductive double_alloc_id_cap_cmp (allocs: ZMap.t allocation)
-    (alloc_id1 alloc_id2: Z)
-    (c1 c2: Capability_GS.t)
-    : Prop :=
-  | double_cap_cmp_both_live:
-    (* When both allocation IDs are mapped to some allocation in allocs *)
-    forall a1,
-      ZMap.MapsTo alloc_id1 a1 allocs ->
-      forall a2,
-        ZMap.MapsTo alloc_id2 a2 allocs ->
-        (cap_bounds_within_alloc c1 a1 \/ cap_bounds_within_alloc c1 a2)
-        -> c1 = c2 -> (* then c1 and c2 must be equal *)
-        double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
-
-  | double_cap_cmp_first_live:
-    (* When only the first allocation ID is mapped to an allocation *)
-    forall a1, ZMap.MapsTo alloc_id1 a1 allocs ->
-               ~ZMap.In alloc_id2 allocs ->
-               cap_match_with_alloc a1 c1 c2 -> (* then match c1 to c2 based on alloc_id1 *)
-               double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
-
-  | double_cap_cmp_second_live:
-    (* When only the second allocation ID is mapped to an allocation *)
-    ~ZMap.In alloc_id1 allocs ->
-    forall a2, ZMap.MapsTo alloc_id2 a2 allocs ->
-               cap_match_with_alloc a2 c1 c2 -> (* then match c1 to c2 based on alloc_id2 *)
-               double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2
-
-  | double_cap_cmp_both_dead:
-    (* When neither allocation ID is live (not mapped in allocs) *)
-    ~ZMap.In alloc_id1 allocs ->
-    ~ZMap.In alloc_id2 allocs ->
-    Capability_GS.cap_invalidate c1 = c2 -> (* then c1 must be invalidated to equal c2 *)
-    double_alloc_id_cap_cmp allocs alloc_id1 alloc_id2 c1 c2.
-
 
   (* Equality of byte values without taking provenance into account *)
   Inductive AbsByte_eq: relation AbsByte :=
@@ -1031,7 +996,7 @@ Module RevocationProofs.
       rewrite resolve_has_INSTANT.
       destruct ptr.
       destruct p eqn:P.
-      2-5:break_match;simpl; preserves_step.
+      2-4:break_match;simpl; preserves_step.
 
       break_match;simpl;try preserves_step.
       break_match;simpl;try preserves_step.
@@ -1168,16 +1133,7 @@ Module RevocationProofs.
 
   | ptr_value_same_some_conc: forall c1 c2 alloc_id,
       single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id c1 c2  ->
-      ptr_value_same m1 m2 (PV (Prov_some alloc_id) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2))
-  | ptr_value_same_symb_conc: forall c1 c2 s,
-      (exists alloc_id,
-          ZMap.MapsTo s (inl alloc_id) m1.(CheriMemoryWithPNVI.iota_map) /\
-            single_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id c1 c2 )
-      \/
-        (exists alloc_id1 alloc_id2,
-            ZMap.MapsTo s (inr (alloc_id1,alloc_id2)) m1.(CheriMemoryWithPNVI.iota_map) /\
-              double_alloc_id_cap_cmp m1.(CheriMemoryWithPNVI.allocations) alloc_id1 alloc_id2 c1 c2)
-      -> ptr_value_same m1 m2 (PV (Prov_symbolic s) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2)).
+      ptr_value_same m1 m2 (PV (Prov_some alloc_id) (PVconcrete c1)) (PV Prov_disabled (PVconcrete c2)).
 
   (* The following prevent default elimination principle from being generated for
      this type, as it is inadequate *)
@@ -1411,10 +1367,8 @@ Module RevocationProofs.
     : Prop
     :=
     m1.(CheriMemoryWithPNVI.next_alloc_id) = m2.(CheriMemoryWithoutPNVI.next_alloc_id)
-    /\ m1.(CheriMemoryWithPNVI.next_iota) = m2.(CheriMemoryWithoutPNVI.next_iota)
     /\ m1.(CheriMemoryWithPNVI.last_address) = m2.(CheriMemoryWithoutPNVI.last_address)
     /\ ZMap.Equal m1.(CheriMemoryWithPNVI.allocations) m2.(CheriMemoryWithoutPNVI.allocations)
-    /\ ZMap.Equal m1.(CheriMemoryWithPNVI.iota_map) m2.(CheriMemoryWithoutPNVI.iota_map)
     /\ ZMap.Equal m1.(CheriMemoryWithPNVI.funptrmap) m2.(CheriMemoryWithoutPNVI.funptrmap)
     /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
     /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
@@ -1424,16 +1378,14 @@ Module RevocationProofs.
 
   Ltac destruct_mem_state_same H :=
     let Malloc_id := fresh "Malloc_id" in
-    let Mnextiota := fresh "Mnextiota" in
     let Mlastaddr := fresh "Mlastaddr" in
     let Mallocs := fresh "Mallocs" in
-    let Miotas := fresh "Miotas" in
     let Mfuncs := fresh "Mfuncs" in
     let Mvarargs := fresh "Mvarargs" in
     let Mnextvararg := fresh "Mnextvararg" in
     let Mbytes := fresh "Mbytes" in
     let Mcapmeta := fresh "Mcapmeta" in
-    destruct H as (Malloc_id & Mnextiota & Mlastaddr & Mallocs & Miotas & Mfuncs & Mvarargs & Mnextvararg & Mbytes & Mcapmeta).
+    destruct H as (Malloc_id & Mlastaddr & Mallocs & Mfuncs & Mvarargs & Mnextvararg & Mbytes & Mcapmeta).
 
   Lemma base_mem_state_same_invariants:
     forall m1 m2,
@@ -1834,29 +1786,6 @@ Module RevocationProofs.
       apply cap_invalidate_preserves_value.
   Qed.
 
-  Lemma double_alloc_id_cap_cmp_value_eq:
-    forall m1 c1 c2 alloc_id1 alloc_id2,
-      double_alloc_id_cap_cmp (CheriMemoryWithPNVI.allocations m1) alloc_id1 alloc_id2 c1 c2
-      ->
-        Capability_GS.cap_get_value c1 = Capability_GS.cap_get_value c2.
-  Proof.
-    intros m1 alloc_id1 alloc_id2 c1 c2 H.
-    inversion H.
-    -
-      subst. reflexivity.
-    -
-      inversion H2; subst.
-      + reflexivity.
-      + apply cap_invalidate_preserves_value.
-    -
-      inversion H2; subst.
-      + reflexivity.
-      + apply cap_invalidate_preserves_value.
-    -
-      inversion H2.
-      apply cap_invalidate_preserves_value.
-  Qed.
-
   Theorem case_funsym_opt_same:
     forall m1 m2 p1 p2,
       mem_state_same m1 m2 ->
@@ -1904,28 +1833,6 @@ Module RevocationProofs.
       apply single_alloc_id_cap_cmp_value_eq in H0.
       rewrite H0.
       reflexivity.
-    -
-
-      unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
-      pose models_compatible as C.
-      destruct C as [CI _].
-      rewrite CI. clear CI.
-      destruct_mem_state_same ME.
-      unfold ZMap.Equal in Mfuncs.
-      rewrite Mfuncs; clear Mfuncs.
-
-      destruct H0.
-      +
-        destruct H as [alloc_id [H1 H2]].
-        apply single_alloc_id_cap_cmp_value_eq in H2.
-        rewrite H2.
-        reflexivity.
-      +
-        destruct H as [alloc_id1 [alloc_id2 [H1 H2]]].
-        apply double_alloc_id_cap_cmp_value_eq in H2.
-        rewrite H2.
-        reflexivity.
-
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.case_funsym_opt CheriMemoryWithoutPNVI.case_funsym_opt.
 

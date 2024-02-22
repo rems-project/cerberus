@@ -109,3 +109,14 @@ Definition zmap_mmapi
   : m (ZMap.t B)
   :=
   zmap_sequence (ZMap.mapi f zm).
+
+Definition zmap_find_first {A:Type} (f:ZMap.key -> A -> bool) (m:ZMap.t A): option (ZMap.key * A)
+  :=
+  ZMap.fold (fun k v (acc:option (ZMap.key * A)) =>
+               match acc with
+               | None => if f k v
+                        then Some (k, v)
+                        else None
+               | Some _ => acc
+               end)
+    m None.
