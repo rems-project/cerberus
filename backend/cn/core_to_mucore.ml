@@ -818,24 +818,18 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
-          let separated_annots =
-            List.map (fun (loc, joined_strs) ->
-               let separate_strs = String.split_on_char ';' joined_strs in
-               let separate_strs = List.map String.trim separate_strs in
-               let separate_locs_and_strs = List.map (fun str ->
-                  if not (String.equal str "") then
-                     [(loc, str ^ ";")]
-                  else
-                     []
-               ) separate_strs
-               in
-               List.concat separate_locs_and_strs
-            ) (get_cerb_magic_attr annots) in
+          let magic_attrs = get_cerb_magic_attr annots in
+          let marker_id = Option.get (get_marker annots) in
+          let marker_id_object_types = Option.get (get_marker_object_types annots) in
+          let@ parsed_stmts =
+            ListM.concat_mapM (fun (stmt_loc, stmt_str) ->
+                let@ parsed_stmts = Parse.parse C_parser.cn_statements (stmt_loc, stmt_str) in
+                let with_locs = List.map (fun stmt -> (stmt_loc, stmt)) parsed_stmts in
+                return with_locs
+              ) magic_attrs
+          in
           let@ desugared_stmts_and_stmts =
-            ListM.mapM (fun (stmt_loc, stmt_str) ->
-                let marker_id = Option.get (get_marker annots) in
-                let marker_id_object_types = Option.get (get_marker_object_types annots) in
-                let@ parsed_stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
+            ListM.mapM (fun (stmt_loc, parsed_stmt) ->
                 let@ desugared_stmt =
                   do_ail_desugar_rdonly (CAE.{
                         markers_env = markers_env;
@@ -860,7 +854,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                 (* debug 6 (lazy (!^"CN statement after translation"));
                 debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
                 return (desugared_stmt, stmt)
-            ) (List.concat separated_annots)
+            ) parsed_stmts
           in
           let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
           return (M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))

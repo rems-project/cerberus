@@ -318,7 +318,7 @@ type asm_qualifier =
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
 %start function_spec
 %start loop_spec
-%start cn_statement
+%start cn_statements
 %start cn_toplevel
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
@@ -333,6 +333,9 @@ type asm_qualifier =
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec list> function_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
+%type<((Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement) list> cn_statements
+
+
 
 %type<Cerb_frontend.Cabs.external_declaration> cn_toplevel_elem
 %type<Cerb_frontend.Cabs.external_declaration list> cn_toplevel
@@ -1834,6 +1837,13 @@ cn_assertion:
     | Env of term * string
 *)
 
+ominus:
+| 
+    { false }
+| MINUS
+    { true }
+
+
 prim_expr:
 | CN_NULL
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const CNConst_NULL)) }
@@ -1841,23 +1851,25 @@ prim_expr:
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool true))) }
 | CN_FALSE
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool false))) }
-| cst= CONSTANT
+| negate=ominus cst= CONSTANT
     {
       match cst with
         | Cabs.CabsInteger_const (str, None) ->
+            let v = if negate then Z.of_string ("-"^str) else Z.of_string str in
             Cerb_frontend.Cn.(CNExpr ( Cerb_location.point $startpos
-                                     , CNExpr_const (CNConst_integer (Z.of_string str)) ))
+                                     , CNExpr_const (CNConst_integer v) ))
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| cst= CN_CONSTANT
+| negate=ominus cst= CN_CONSTANT
     {
         let (str,sign,n) = cst in
         let sign = match sign with
          | `U -> Cerb_frontend.Cn.CN_unsigned
          | `I -> Cerb_frontend.Cn.CN_signed
          in
-         Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bits ((sign,n),Z.of_string str))))
+         let v = if negate then Z.of_string ("-"^str) else Z.of_string str in
+         Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bits ((sign,n),v))))
     }
 | ident= cn_variable
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_var ident)) }
@@ -2476,6 +2488,10 @@ cn_statement:
 | CN_PRINT LPAREN e=expr RPAREN SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_print e) }
+
+cn_statements:
+| ls=list(cn_statement) EOF
+    { ls }
 
 cn_toplevel_elem:
 | pred= cn_predicate
