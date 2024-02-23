@@ -285,8 +285,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (NthList (subst su i, subst su xs, subst su d), bt)
   | ArrayToList (arr, i, len) ->
      IT (ArrayToList (subst su arr, subst su i, subst su len), bt)
-  | MapConst (bt, t) ->
-     IT (MapConst (bt, subst su t), bt)
+  | MapConst (arg_bt, t) ->
+     IT (MapConst (arg_bt, subst su t), bt)
   | MapSet (t1, t2, t3) ->
      IT (MapSet (subst su t1, subst su t2, subst su t3), bt)
   | MapGet (it, arg) ->
