@@ -147,7 +147,8 @@ module General = struct
        let (situation, request_chain) = uiinfo in
        let step = TypeErrors.{resource; loc = Some (fst info);
            reason = Some ("arg " ^ Sym.pp_string s)} in
-       let uiinfo = (situation, step :: request_chain) in
+       let request_chain = step :: request_chain in
+       let uiinfo = (situation, request_chain) in
        let@ o_re_oarg = resource_request loc uiinfo resource in
        begin match o_re_oarg with
          | None ->

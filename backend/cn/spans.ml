@@ -4,7 +4,7 @@ module RE = Resources
 module LAT = LogicalArgumentTypes
 module SymMap = Map.Make(Sym)
 
-
+open Cerb_pp_prelude
 open IT
 
 exception Failure of Pp.doc
@@ -31,7 +31,6 @@ type action = Pack of RET.predicate_type | Unpack of RET.predicate_type
 [@@deriving eq, ord]
 
 let pp_action act =
-  let open Pp in
   match act with
   | Pack pt -> !^ "Pack:" ^^^ (RET.pp_predicate_type pt)
   | Unpack pt -> !^ "Unpack:" ^^^ (RET.pp_predicate_type pt)
@@ -231,6 +230,7 @@ let pp_model_spans m g cmp res =
   with
     | Failure s -> s
     | NoResult -> Pp.string "[]"
+    | Stdlib.Failure s -> !^"failwith in span calculation:" ^^^ !^ s
 
 let pp_pt_ct pt ct =
   let open Pp in
