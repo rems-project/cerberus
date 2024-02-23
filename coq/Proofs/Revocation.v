@@ -278,6 +278,18 @@ Module RevocationProofs.
                 (execErrS M mem_state).
 
 
+      Lemma update_mem_state_spec
+        (f : mem_state -> mem_state)
+        (s s' : mem_state):
+          @ErrorWithState.update mem_state memMError f s = (s', inr tt) -> s' = f s.
+      Proof.
+        intros H.
+        unfold ErrorWithState.update in H.
+        unfold bind, get, put, Monad_errS, State_errS in H.
+        tuple_inversion.
+        reflexivity.
+      Qed.
+
       Lemma ret_PreservesInvariant:
         forall T (x:T), PreservesInvariant (ret x).
       Proof.
@@ -340,6 +352,7 @@ Module RevocationProofs.
         apply MC.
       Qed.
 
+      (* More specific, reasoning about value of [x] *)
       Lemma bind_PreservesInvariant'
         {T T': Type}
         {m: memM T'}
@@ -377,6 +390,64 @@ Module RevocationProofs.
           clear - MH Heqp MI.
           unfold PreservesInvariant in MH.
           specialize (MH m1 MI).
+          unfold execErrS, evalErrS, lift_sum_p, raise, ret, Exception_either, Monad_either  in MH.
+          break_let.
+          repeat break_match; try break_let;
+            try inl_inr_inv; subst.
+
+          repeat tuple_inversion.
+          repeat tuple_inversion.
+          inl_inr.
+          inl_inr.
+          tuple_inversion.
+          assumption.
+      Qed.
+
+      Definition post_exec_invariant
+        {T: Type} (mem_state: mem_state_r) (M: memM T) : Prop
+        :=
+        lift_sum_p
+          (fun _ => True)
+          invr
+          (execErrS M mem_state).
+
+
+      (* even more specific *)
+      Lemma bind_PreservesInvariant''
+        {T T': Type}
+        {m: memM T'}
+        {c: T' -> memM T}
+        :
+        (forall s, invr s ->
+              (forall s' x, m s = (s', inr x) -> (invr s' /\ post_exec_invariant s' (c x))))
+        -> PreservesInvariant (bind m c).
+      Proof.
+        Transparent ret.
+        Transparent raise.
+        intros MH.
+        unfold PreservesInvariant.
+        intros mem_state0 H0.
+        specialize (MH mem_state0 H0).
+        unfold execErrS, evalErrS, lift_sum_p.
+        repeat break_let.
+        cbn in *.
+
+        break_let.
+        break_match;auto.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        break_match_hyp.
+        tuple_inversion.
+        subst.
+        specialize (MH m1 t0).
+        destruct MH as [MI MH].
+        - reflexivity.
+        -
+          clear - MH Heqp MI.
+          unfold post_exec_invariant in MH.
+
           unfold execErrS, evalErrS, lift_sum_p, raise, ret, Exception_either, Monad_either  in MH.
           break_let.
           repeat break_match; try break_let;
@@ -959,6 +1030,7 @@ Module RevocationProofs.
       apply H.
     Qed.
 
+
     #[global] Instance maybe_revoke_pointer_preserves
       allocation
       (st: mem_state)
@@ -980,25 +1052,191 @@ Module RevocationProofs.
       break_match; try preserves_step.
     Qed.
 
+    (* relation of pointer before and afer revocaton (per [maybe_revoke_pointer] *)
+    Inductive revoked_pointer_rel: (bool * CapGhostState) -> (bool * CapGhostState) -> Prop :=
+    | revoked_pointer_rel_same: forall c, revoked_pointer_rel c c
+    | revoked_pointer_rel_revoked: forall gs, revoked_pointer_rel (true, gs) (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |}).
+
+    Lemma zmap_maybe_revoke_pointer_res_invariant:
+      forall (a : allocation) (m : mem_state_r),
+        mem_invariant m ->
+        forall s : mem_state_r,
+          mem_invariant s ->
+          forall (s' : mem_state) (x : ZMap.t (bool * CapGhostState)),
+            zmap_mmapi (maybe_revoke_pointer a m) (capmeta m) s = (s', inr x) -> mem_invariant s'.
+    Proof.
+      intros a m IM s IS s' x M.
+
+      pose proof (zmap_mmapi_preserves (maybe_revoke_pointer a m) (capmeta m)) as P.
+      autospecialize P.
+      intros k x0.
+      apply maybe_revoke_pointer_preserves; auto.
+
+      specialize (P s IS).
+      unfold lift_sum_p in P.
+      break_match.
+      -
+        unfold execErrS in Heqs0.
+        break_let.
+        Transparent ret raise.
+        unfold ret, raise, Exception_either, Monad_either in Heqs0.
+        Opaque ret raise.
+        break_match_hyp;[|inl_inr].
+        inl_inr_inv.
+        subst.
+        unfold memM_monad in Heqp.
+        rewrite M in Heqp.
+        tuple_inversion.
+      -
+        unfold execErrS in Heqs0.
+        break_let.
+        Transparent ret raise.
+        unfold ret, raise, Exception_either, Monad_either in Heqs0.
+        Opaque ret raise.
+        break_match_hyp;[inl_inr|].
+        inl_inr_inv.
+        subst.
+        unfold memM_monad in Heqp.
+        rewrite M in Heqp.
+        tuple_inversion.
+        assumption.
+    Qed.
+
+    Lemma zmap_mmapi_maybe_revoke_pointer_same_state
+      (a : allocation)
+      (m m0 m1: mem_state)
+      (oldmeta newmeta : ZMap.t (bool * CapGhostState)):
+
+      zmap_mmapi (maybe_revoke_pointer a m) oldmeta m0 = (m1, inr newmeta) ->
+      m0 = m1.
+    Proof.
+    Admitted.
+
+    Lemma zmap_mmapi_maybe_revoke_pointer_spec
+      (a : allocation)
+      (m0 : mem_state)
+      (oldmeta newmeta : ZMap.t (bool * CapGhostState)):
+
+      zmap_mmapi (maybe_revoke_pointer a m0) oldmeta m0 = (m0, inr newmeta) ->
+      zmap_relate_keys oldmeta newmeta (fun _ : ZMap.key => revoked_pointer_rel).
+    Proof.
+      intros H.
+      intros k.
+      unfold zmap_mmapi in H.
+      unfold zmap_sequence in H.
+      break_let.
+    Admitted.
+
+
     #[global] Instance revoke_pointers_preserves:
       forall a,PreservesInvariant mem_invariant (revoke_pointers a).
     Proof.
+
+      (* This function is atypical as its state is intricately linked
+      with the return value in subtle ways. We couldn't apply our
+      usual preservation step lemmas and had to brute-force our way
+      through. *)
+
       intros a.
       unfold revoke_pointers.
-      preserves_step.
       intros m H.
-      apply bind_PreservesInvariant'.
 
-      intros s H0 s' x H1.
+      Transparent ret raise bind get.
+      unfold execErrS, evalErrS, lift_sum_p.
+      break_let.
+      break_match.
+      trivial.
+      unfold ret, raise, Exception_either, Monad_either in Heqs0.
+      break_match_hyp.
+      inl_inr.
+      inl_inr_inv.
+      subst.
+
+      unfold memM_monad, Monad_errS, State_errS, ret, bind, get in Heqp.
+      repeat break_let.
+      break_match_hyp.
+      tuple_inversion.
+      break_let.
+      break_match_hyp;
+        tuple_inversion.
+
+      destruct u0.
+      rename Heqp1 into U, t into newmeta.
+      apply update_mem_state_spec in U.
+
+      (* [maybe_revoke_pointer] does not change state *)
+      assert(SM0: m = m0).
+      {
+        eapply zmap_mmapi_maybe_revoke_pointer_same_state.
+        eauto.
+      }
+      subst m.
+
+      assert(R: zmap_relate_keys (capmeta m0) newmeta (fun k => revoked_pointer_rel)).
+      {
+        eapply zmap_mmapi_maybe_revoke_pointer_spec.
+        eauto.
+      }
+
+      unfold mem_state_with_capmeta in U.
+
+      destruct H as [Sbase Scap].
+      destruct_base_mem_invariant Sbase.
+      destruct m1; cbn in *.
+      invc U.
       split.
       -
-        admit.
+        (* base_mem_invariant *)
+        repeat split;auto.
+
+        clear - Balign R.
+        cbn.
+        intros k I.
+        specialize (Balign k).
+        specialize (R k).
+        destruct R as [[v1 [v2 [M1 [M2 R]]]]|[NR0 NR1]].
+        +
+          apply Balign.
+          eapply zmap_mapsto_in.
+          eauto.
+        +
+          contradict NR1.
+          eapply zmap_in_mapsto in I.
+          apply I.
       -
-        preserves_step.
-        admit.
-        intros x0.
-        preserves_step.
-    Admitted.
+        clear Bdead Bnooverlap Balign.
+        intros addr g H bs H0.
+        specialize (Scap addr g).
+        specialize (R addr).
+        cbn in *.
+        destruct R as [[v1 [v2 [M1 [M2 R]]]]|[NR0 NR1]].
+        --
+          (* both keys present *)
+          invc R.
+          ++
+            (* ghost states are same *)
+            pose proof (MapsTo_fun M2 H).
+            subst.
+            clear H.
+
+            specialize (Scap M1).
+            remember (fetch_bytes (bytemap m0) addr (sizeof_pointer MorelloImpl.get)) as bs.
+            specialize (Scap bs).
+            autospecialize Scap.
+            reflexivity.
+            auto.
+          ++
+            (* revoked *)
+            pose proof (MapsTo_fun M2 H).
+            subst.
+            congruence.
+        --
+          (* both keys are absent *)
+          contradict NR1.
+          eexists.
+          eauto.
+          Opaque ret raise bind get.
+    Qed.
 
     #[global] Instance kill_preserves
       (loc : location_ocaml)
