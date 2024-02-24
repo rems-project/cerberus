@@ -10,4 +10,4 @@
  (modules abstract_string dir_heap fs_dict_wrappers fs_dump ; fs_interface FIXME?
   fs_prelude fs_printer fs_spec lem_support list_array sibylfs)
  (wrapped false)
- (libraries sha lem ppx_sexp_conv sexplib))
+ (libraries unix sha lem ppx_sexp_conv sexplib))

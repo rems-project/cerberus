@@ -1,7 +1,7 @@
 ; Profiles
 (env
- (dev     (flags :standard -bin-annot -I +unix -I +str))
- (release (flags :standard -bin-annot -I +unix -I +str)))
+ (dev     (flags :standard -bin-annot))
+ (release (flags :standard -bin-annot)))
 
 (dirs util sibylfs ocaml_frontend memory parsers backend tools runtime coq)
 

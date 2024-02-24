@@ -5,7 +5,7 @@
  (modules :standard)
  (wrapped false)
  (foreign_stubs (language c) (names cerberus_cstubs))
- (libraries lem pprint yojson unix))
+ (libraries unix str lem pprint yojson))
 
 (rule
  (target n1570.ml)
