@@ -101,7 +101,7 @@ let rewriter_params = [
 
 let model_params = [
     ("model", "true");
-    ("model.compact", "true");
+    ("model.compact", "false");
     ("model.completion", "true");
     ("model.inline_def", "true");
     ("model_evaluator.completion", "true");
