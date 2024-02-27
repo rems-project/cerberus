@@ -4,7 +4,6 @@ description: "The CN type system"
 maintainer: ["Christopher Pulte <cp526@cl.cam.ac.uk>"]
 depends: [
   "cerberus-lib"
-  "ppx_tools"
   "monomorphic"
   "ppx_deriving"
   "z3" {>= "4.8.14"}
