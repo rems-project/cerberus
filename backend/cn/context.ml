@@ -25,6 +25,10 @@ let bt_of = function
   | BaseType bt -> bt
   | Value v -> IndexTerms.bt v
 
+let has_value = function
+  | BaseType _ -> false
+  | Value _ -> true
+
 (* History information about the most recent read/write actions taken on a
    resource. These are used to check for and report on concurrent races. The
    history is kept in a separate map to the resource list, indexed by resource

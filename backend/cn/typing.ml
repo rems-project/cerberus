@@ -183,6 +183,7 @@ let provable_inner loc =
 
 
 
+let check_models = ref false
 
 let model () =
   let m = Solver.model () in
@@ -209,6 +210,29 @@ let provable_consult_model loc m =
   in
   return res
 
+let do_check_model loc m prop =
+  Pp.warn loc (Pp.string "doing model consistency check");
+  let@ ctxt = get () in
+  let@ global = get_global () in
+  let vs = Context.(
+    (SymMap.bindings ctxt.computational @ SymMap.bindings ctxt.logical)
+    |> List.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
+    |> List.map (fun (nm, (bt_or_v, _)) -> IT.sym_ (nm, bt_of bt_or_v))
+  ) in
+  let eqs = List.filter_map (fun v -> match Solver.eval global (fst m) v with
+    | None -> None
+    | Some x -> Some (IT.eq_ (v, x))
+  ) vs in
+  let@ prover = provable_inner loc in
+  match prover (LogicalConstraints.T (IT.and_ (prop :: eqs))) with
+  | `False -> return ()
+  | `True -> fail (fun _ -> {loc; msg = Generic (Pp.string "Solver model inconsistent")})
+
+let cond_check_model loc m prop =
+  if ! check_models
+  then do_check_model loc m prop
+  else return ()
+
 let model_with_inner loc prop =
   let@ ms = get_just_models () in
   let@ has_prop = model_has_prop () in
@@ -220,8 +244,10 @@ let model_with_inner loc prop =
         | `True -> return None
         | `False ->
             let@ m = model () in
+            let@ () = cond_check_model loc m prop in
             return (Some m)
   end
+
 
 let bound_a sym =
   let@ s = get () in
