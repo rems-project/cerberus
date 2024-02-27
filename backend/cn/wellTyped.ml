@@ -2316,7 +2316,7 @@ module WDT = struct
                          (abt :: rbt :: BT.containeds [abt;rbt]))
                   in
                   let in_scc = SymSet.of_list scc in
-                  begin match SymSet.to_list (SymSet.inter dt_deps in_scc) with
+                  begin match SymSet.elements (SymSet.inter dt_deps in_scc) with
                   | [] -> return ()
                   | bad :: _ ->
                       let err =
