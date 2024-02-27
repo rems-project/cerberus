@@ -1982,6 +1982,7 @@ let record_and_check_datatypes datatypes =
   in
   (* check and normalise datatypes *)
   let@ datatypes = ListM.mapM WellTyped.WDT.welltyped datatypes in
+  let@ _sccs = WellTyped.WDT.check_recursion_ok datatypes in
   (* properly add datatypes *)
   ListM.iterM (fun (s, {loc; cases}) ->
       let@ () =

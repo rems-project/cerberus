@@ -68,6 +68,27 @@ let rec pp = function
   (* | Option t -> !^"option" ^^ angles (pp t) *)
 
 
+let rec contained : t -> t list = 
+  function
+  | Unit -> []
+  | Bool -> []
+  | Integer -> []
+  | Bits _ -> []
+  | Real -> []
+  | Alloc_id -> []
+  | Loc -> []
+  | CType -> []
+  | Struct _ -> []
+  | Datatype _ -> []
+  | Record ms -> let mts = List.map snd ms in mts @ containeds mts
+  | Map (abt,rbt) -> abt :: rbt :: containeds [abt; rbt]
+  | List bt -> bt :: contained bt
+  | Tuple bts -> bts @ containeds bts
+  | Set bt -> bt :: contained bt
+
+and containeds bts = List.concat_map contained bts
+
+
 
 let json bt : Yojson.Safe.t =
   `String (Pp.plain (pp bt))

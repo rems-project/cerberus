@@ -7,6 +7,8 @@ depends: [
   "monomorphic"
   "ppx_deriving"
   "z3" {>= "4.8.14"}
+  "cmdliner"
+  "ocamlgraph"
 ]
 build: [
   ["dune" "subst"] {pinned}

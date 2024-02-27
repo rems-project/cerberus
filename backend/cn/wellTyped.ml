@@ -2263,4 +2263,77 @@ module WDT = struct
     in
     return (dt_name, {loc; cases})
 
+
+  module G = Graph.Persistent.Digraph.Concrete(Sym)
+  module Components = Graph.Components.Make(G)
+
+  (* Z3 (possibly other solvers, too) does not permit types where in
+     the definition of a type t, t is used inside an array, e.g. an
+     integer-t-array. We forbid this here. *)
+
+  let bts_in_dt_constructor_argument (_name, bt) =
+    bt :: BT.contained bt
+
+  let bts_in_dt_case (_constr, args) = 
+    List.concat_map bts_in_dt_constructor_argument args
+
+  let bts_in_dt_definition { loc; cases } = 
+    List.concat_map bts_in_dt_case cases
+
+  let dts_in_dt_definition dt_def = 
+    List.filter_map BT.is_datatype_bt (bts_in_dt_definition dt_def)
+
+
+  let check_recursion_ok datatypes = 
+
+    let graph = G.empty in
+
+    let graph = 
+      List.fold_left (fun graph (dt, _) ->
+          G.add_vertex graph dt
+        ) graph datatypes
+    in 
+
+    let graph = 
+      List.fold_left (fun graph (dt, dt_def) ->
+          List.fold_left (fun graph dt' ->
+              G.add_edge graph dt dt'
+            ) graph (dts_in_dt_definition dt_def)
+        ) graph datatypes
+    in
+
+    let sccs = Components.scc_list graph in
+
+    let@ () = 
+      ListM.iterM (fun scc ->
+        ListM.iterM (fun dt ->
+            let dt_def = List.assoc Sym.equal dt datatypes in
+            ListM.iterM (function
+              | BT.Map (abt, rbt) ->
+                  let dt_deps = 
+                    SymSet.of_list
+                      (List.filter_map BT.is_datatype_bt 
+                         (abt :: rbt :: BT.containeds [abt;rbt]))
+                  in
+                  let in_scc = SymSet.of_list scc in
+                  begin match SymSet.to_list (SymSet.inter dt_deps in_scc) with
+                  | [] -> return ()
+                  | bad :: _ ->
+                      let err =
+                        !^"Illegal datatype definition." ^^^ !^"The definition of" ^^^ squotes (BT.pp (Datatype dt))
+                        ^^^ !^"refers to the type" ^^^ squotes (BT.pp (Map (abt, rbt))) ^^ !^","
+                        ^^^ !^"which contains a reference to" ^^^ squotes (BT.pp (Datatype bad)) ^^ dot
+                        ^^^ !^"Type recursion via a map type is not permitted."
+                      in
+                      fail (fun _ -> {loc = dt_def.loc; msg = Generic err})
+                  end
+              | _ -> return ()
+              ) (bts_in_dt_definition dt_def)
+          ) scc
+        ) sccs
+    in
+
+    return sccs
+
+
 end
