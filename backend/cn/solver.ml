@@ -248,43 +248,57 @@ module Translate = struct
   let dt_recog_name context nm = prefix_symbol context "is_" nm
 
 
-  let translate_datatypes other_sort context global =
-    let to_translate = global.datatypes |> SymMap.bindings
-      |> List.filter (fun (nm, _) -> not (BT_Table.mem bt_table (BT.Datatype nm)))
-      |> List.mapi (fun i (nm, _) -> (nm, i))
+  let translate_datatypes = 
+
+    let already_done = ref false in
+
+    fun other_sort context global ->
+
+    let translate_group to_translate =
+      let to_translate = List.mapi (fun i nm -> (nm, i)) to_translate in
+      let arg_sort bt = match bt with
+        | BT.Datatype nm -> begin match BT_Table.find_opt bt_table bt with
+            | Some sort -> (Some sort, 0)
+            | None -> 
+                (* if nm is not in BT_Table, then nm must be in the current 
+                   `to_translate` group (otherwise the topological order
+                   would be different *)
+                (None, List.assoc Sym.equal nm to_translate)
+          end
+        | _ -> (Some (other_sort bt), 0)
+      in
+      let conv_cons dt_nm nm =
+        let info = SymMap.find nm global.datatype_constrs in
+        let r = List.map (fun (_, bt) -> arg_sort bt) info.c_params in
+        let sym = symbol context nm in
+        let is_sym = dt_recog_name context nm in
+        Z3Symbol_Table.add z3sym_table sym (DatatypeConsFunc {nm});
+        (* Z3Symbol_Table.add z3sym_table is_sym (DatatypeConsRecogFunc {nm}); *)
+        List.iter (fun (member, bt) -> Z3Symbol_Table.add z3sym_table
+            (string context (accessor_name dt_nm member)) (DatatypeAccFunc {member; dt = dt_nm; bt})) info.c_params;
+        Z3.Datatype.mk_constructor context sym is_sym
+            (List.map (fun (member, _) -> string context (accessor_name dt_nm member)) info.c_params)
+            (List.map fst r) (List.map snd r)
+      in
+      let conv_dt nm =
+        let info = SymMap.find nm global.datatypes in
+        List.map (conv_cons nm) info.dt_constrs
+      in
+      let sorts = Z3.Datatype.mk_sorts context
+          (List.map (fun (nm, _) -> symbol context nm) to_translate)
+          (List.map (fun (nm, _) -> conv_dt nm) to_translate)
+      in
+      List.iter2 (fun (nm, _) sort -> begin
+              BT_Table.add bt_table (BT.Datatype nm) sort;
+              Sort_Table.add sort_table sort (BT.Datatype nm);
+          end) to_translate sorts
     in
-    let arg_sort bt = match bt with
-      | BT.Datatype nm -> begin match BT_Table.find_opt bt_table bt with
-          | Some sort -> (Some sort, 0)
-          | None -> (None, List.assoc Sym.equal nm to_translate)
-        end
-      | _ -> (Some (other_sort bt), 0)
-    in
-    let conv_cons dt_nm nm =
-      let info = SymMap.find nm global.datatype_constrs in
-      let r = List.map (fun (_, bt) -> arg_sort bt) info.c_params in
-      let sym = symbol context nm in
-      let is_sym = dt_recog_name context nm in
-      Z3Symbol_Table.add z3sym_table sym (DatatypeConsFunc {nm});
-      (* Z3Symbol_Table.add z3sym_table is_sym (DatatypeConsRecogFunc {nm}); *)
-      List.iter (fun (member, bt) -> Z3Symbol_Table.add z3sym_table
-          (string context (accessor_name dt_nm member)) (DatatypeAccFunc {member; dt = dt_nm; bt})) info.c_params;
-      Z3.Datatype.mk_constructor context sym is_sym
-          (List.map (fun (member, _) -> string context (accessor_name dt_nm member)) info.c_params)
-          (List.map fst r) (List.map snd r)
-    in
-    let conv_dt nm =
-      let info = SymMap.find nm global.datatypes in
-      List.map (conv_cons nm) info.dt_constrs
-    in
-    let sorts = Z3.Datatype.mk_sorts context
-        (List.map (fun (nm, _) -> symbol context nm) to_translate)
-        (List.map (fun (nm, _) -> conv_dt nm) to_translate)
-    in
-    List.iter2 (fun (nm, _) sort -> begin
-            BT_Table.add bt_table (BT.Datatype nm) sort;
-            Sort_Table.add sort_table sort (BT.Datatype nm);
-        end) to_translate sorts
+
+    if !already_done then () else begin
+      already_done := true;
+      List.iter translate_group (Option.get global.datatype_order)
+    end
+
 
   let sort : Z3.context -> Global.t -> BT.t -> sort =
 
