@@ -44,6 +44,9 @@ val add_rs : Locations.t -> Resources.t list -> unit m
 val get_loc_trace : unit -> (Locations.loc list) m
 val add_loc_trace : Locations.t -> (unit) m
 
+val set_datatype_order : (Sym.t list list) option -> unit m
+val get_datatype_order : unit -> ((Sym.t list list) option) m
+
 val res_history : Locations.t -> int -> (Context.resource_history) m
 
 

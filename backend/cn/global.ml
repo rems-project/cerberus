@@ -12,6 +12,7 @@ type t =
   { struct_decls : Memory.struct_decls;
     datatypes : BaseTypes.datatype_info SymMap.t;
     datatype_constrs : BaseTypes.constr_info SymMap.t;
+    datatype_order : ((Sym.t list) list) option;
     fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
     logical_functions : LogicalFunctions.definition SymMap.t;
@@ -36,6 +37,7 @@ let empty =
   { struct_decls = SymMap.empty;
     datatypes = SymMap.empty;
     datatype_constrs = SymMap.empty;
+    datatype_order = None;
     fun_decls = SymMap.empty;
     resource_predicates;
     logical_functions = SymMap.empty;

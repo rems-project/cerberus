@@ -570,6 +570,16 @@ let add_loc_trace loc =
 (*   return x *)
 
 
+let set_datatype_order datatype_order = 
+  let@ g = get_global () in
+  set_global { g with datatype_order }
+
+
+let get_datatype_order () =
+  let@ g = get_global () in
+  return g.datatype_order
+
+
 
 let get_resource_predicate_def loc id =
   let@ global = get_global () in
