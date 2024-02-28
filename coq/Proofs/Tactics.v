@@ -12,6 +12,31 @@ Require Import Common.SimpleError.
 Ltac cbn_hyp H :=
   let T := type of H in let T' := eval cbn in T in replace T with T' in H by (cbn;reflexivity).
 
+
+Lemma ret_inr
+  {T E:Type}
+  {x0 x1:T}:
+  @ret (sum E) (Monad_either E) T x0 = @inr E T x1 -> @inr E T x0 = @inr E T x1.
+Proof.
+  Transparent ret.
+  intros H.
+  unfold ret, Monad_either in H.
+  apply H.
+  Opaque ret.
+Qed.
+
+Lemma raise_inl
+  {T E:Type}
+  {e0 e1:E}:
+  @raise E (sum E) (Exception_either E) T e0 = @inl E T e1 -> @inl E T e0 = @inl E T e1.
+Proof.
+  Transparent raise.
+  intros H.
+  unfold raise, Exception_either in H.
+  apply H.
+  Opaque raise.
+Qed.
+
 Ltac inl_inr :=
   match goal with
   | [H1: inl _ = inr _ |- _] => inversion H1
@@ -36,10 +61,20 @@ Ltac inl_inr_inv :=
   match goal with
   | [H1: inl _ = inl _ |- _] => inversion H1; clear H1
   | [H1: inr _ = inr _ |- _] => inversion H1; clear H1
+  | [H1: inr _ = @Monad.ret _ (Monad_either _) _ ?x |- _] =>
+      symmetry in H1;
+      apply ret_inr in H1;
+      subst x
+  | [H1: @Monad.ret _ (Monad_either _) _ _ = inr _ |- _] =>
+      apply ret_inr in H1;
+      inversion H1;
+      clear H1
 
-  | [H1: inr _ = Monad.ret _ |- _] => inversion H1; clear H1
-  | [H1: Monad.ret _ = inr _ |- _] => inversion H1; clear H1
-  | [H1: raise _ = inl _ |- _] => inversion H1; clear H1
+  | [H1: @raise _ (sum _) (Exception_either _) _ _ =
+           @inl _ _ _ |- _] =>
+      apply raise_inl in H1;
+      inversion H1;
+      clear H1
   | [H1: inl _ = raise _ |- _] => inversion H1; clear H1
   end.
 

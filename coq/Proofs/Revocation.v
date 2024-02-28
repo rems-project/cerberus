@@ -1078,9 +1078,6 @@ Module RevocationProofs.
       -
         unfold execErrS in Heqs0.
         break_let.
-        Transparent ret raise.
-        unfold ret, raise, Exception_either, Monad_either in Heqs0.
-        Opaque ret raise.
         break_match_hyp;[|inl_inr].
         inl_inr_inv.
         subst.
@@ -1199,7 +1196,6 @@ Module RevocationProofs.
       break_let.
       break_match.
       trivial.
-      unfold ret, raise, Exception_either, Monad_either in Heqs0.
       break_match_hyp.
       inl_inr.
       inl_inr_inv.
@@ -1304,36 +1300,70 @@ Module RevocationProofs.
       destruct ptr.
       destruct p eqn:P.
       2-4:break_match;simpl; preserves_step.
-
       break_match;simpl;try preserves_step.
-      break_match;simpl;try preserves_step.
-      apply find_live_allocation_preserves.
-      intros x.
-      break_match.
+      break_match;simpl;[preserves_step|].
+      apply bind_PreservesInvariant'.
+      intros s H s' x H0.
+      pose proof (find_live_allocation_preserves (Capability_GS.cap_get_value t)) as A.
+      specialize (A s H).
+      unfold lift_sum_p in A.
+      break_match_hyp.
       -
+        clear - H0 Heqs0.
+        unfold execErrS in Heqs0.
         break_let.
-        preserves_step;[repeat break_if; preserves_step|].
-        intros u0.
-        preserves_step;[repeat break_if; preserves_step|].
-        intros u1.
-        preserves_step.
+        tuple_inversion.
+        inl_inr.
+      -
+        unfold execErrS in Heqs0.
+        break_let.
+        tuple_inversion.
+        inl_inr_inv.
+        subst.
+        split;[apply A|].
+        break_match.
         +
+          break_let.
+          preserves_step;[repeat break_if; preserves_step|].
+          intros u0.
+          preserves_step;[repeat break_if; preserves_step|].
+          intros u1.
+          clear u0 u1.
           preserves_step.
           *
-            typeclasses eauto.
+            apply bind_PreservesInvariant''.
+            intros s0 H0 s' x0 H1.
+            split.
+
+            pose proof (revoke_pointers_preserves a) as R.
+            specialize (R s0 H0).
+            unfold lift_sum_p in R.
+            break_match_hyp.
+            --
+              unfold execErrS in Heqs1.
+              break_let.
+              tuple_inversion.
+              inl_inr.
+            --
+              unfold execErrS in Heqs1.
+              break_let.
+              tuple_inversion.
+              inl_inr_inv.
+              auto.
+            --
+              destruct x0.
+              subst.
+              admit.
           *
             intros u2.
-            admit.
+            preserves_step.
+            intros m0 H0.
+            repeat break_if; preserves_step.
+            intros m1 H1.
+            apply mem_state_with_last_address_preserves.
+            assumption.
         +
-          intros u2.
           preserves_step.
-          intros m H.
-          repeat break_if; preserves_step.
-          intros m0 H0.
-          apply mem_state_with_last_address_preserves.
-          assumption.
-      -
-        preserves_step.
     Admitted.
 
   End CheriMemoryWithoutPNVI.
