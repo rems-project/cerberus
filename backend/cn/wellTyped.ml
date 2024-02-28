@@ -2306,30 +2306,33 @@ module WDT = struct
 
     let@ () = 
       ListM.iterM (fun scc ->
-        ListM.iterM (fun dt ->
-            let dt_def = List.assoc Sym.equal dt datatypes in
-            ListM.iterM (function
-              | BT.Map (abt, rbt) ->
-                  let dt_deps = 
-                    SymSet.of_list
-                      (List.filter_map BT.is_datatype_bt 
-                         (abt :: rbt :: BT.containeds [abt;rbt]))
-                  in
-                  let in_scc = SymSet.of_list scc in
-                  begin match SymSet.elements (SymSet.inter dt_deps in_scc) with
-                  | [] -> return ()
-                  | bad :: _ ->
-                      let err =
-                        !^"Illegal datatype definition." ^^^ !^"The definition of" ^^^ squotes (BT.pp (Datatype dt))
-                        ^^^ !^"refers to the type" ^^^ squotes (BT.pp (Map (abt, rbt))) ^^ !^","
-                        ^^^ !^"which contains a reference to" ^^^ squotes (BT.pp (Datatype bad)) ^^ dot
-                        ^^^ !^"Type recursion via a map type is not permitted."
+          let scc_set = SymSet.of_list scc in
+          ListM.iterM (fun dt ->
+              let {loc;cases} = List.assoc Sym.equal dt datatypes in
+              ListM.iterM (fun (ctor,args) ->
+                  ListM.iterM (fun (id, bt) ->
+                      let indirect_deps = 
+                        SymSet.of_list 
+                          (List.filter_map BT.is_datatype_bt (BT.contained bt)) 
                       in
-                      fail (fun _ -> {loc = dt_def.loc; msg = Generic err})
-                  end
-              | _ -> return ()
-              ) (bts_in_dt_definition dt_def)
-          ) scc
+                      let bad = SymSet.inter indirect_deps scc_set in
+                      begin match SymSet.elements bad with
+                      | [] -> return ()
+                      | dt' :: _ ->
+                          let err = 
+                            !^"Illegal datatype definition." 
+                            ^^^ !^"Constructor argument" ^^^ squotes (Id.pp id)
+                            ^^^ !^"is given type" ^^^ squotes (BT.pp bt) ^^ comma
+                            ^^^ !^"which indirectly refers to" 
+                            ^^^ squotes (BT.pp (Datatype dt')) ^^ dot
+                            ^^^ !^"Indirect recursion via map, set, record,"
+                            ^^^ !^"or tuple types is not permitted."
+                          in
+                          fail (fun _ -> {loc; msg = Generic err})
+                      end
+                    ) args
+                ) cases
+            ) scc
         ) sccs
     in
 
