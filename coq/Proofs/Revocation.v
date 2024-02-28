@@ -1102,15 +1102,68 @@ Module RevocationProofs.
         assumption.
     Qed.
 
+    Definition memM_same_state
+      {T: Type}
+      (c: memM T)
+      := forall v m0 m1, c m0 = (m1, inr v) -> m0 = m1.
+
+    Lemma maybe_revoke_pointer_same_state
+      (k : Z)
+      (meta: bool * CapGhostState)
+      (a : allocation)
+      (m : mem_state):
+      memM_same_state (maybe_revoke_pointer a m k meta).
+    Proof.
+      Transparent ret raise bind serr2InternalErr.
+
+      intros newmeta m0 m1 H.
+      unfold maybe_revoke_pointer in H.
+      unfold serr2InternalErr, ret, raise, memM_monad, Exception_errS, Exception_either, Monad_errS, Monad_either in H.
+      break_let.
+      break_if.
+      tuple_inversion.
+      reflexivity.
+      unfold bind in H.
+      break_let.
+      break_match.
+      tuple_inversion.
+      break_if.
+      tuple_inversion.
+      break_match.
+      tuple_inversion.
+      tuple_inversion.
+      reflexivity.
+      break_match.
+      repeat tuple_inversion.
+      repeat tuple_inversion.
+      reflexivity.
+      Opaque ret raise bind serr2InternalErr.
+    Qed.
+
+    Lemma zmap_mmapi_same_state
+      {A B: Type}
+      (c: ZMap.key -> A -> memM B)
+      (zm : ZMap.t A):
+
+      memM_same_state (zmap_mmapi c zm).
+    Proof.
+      intros v m0 m1 H.
+      unfold zmap_mmapi in H.
+      remember (ZMap.mapi c zm) as zmm eqn:ZMM.
+      unfold zmap_sequence in H.
+      remember (ZMap.elements zm) as ze eqn:ZE.
+      break_let.
+      (* TODO: seems provable. need to link `elements` with `mapi` and then do induction *)
+    Admitted.
+
     Lemma zmap_mmapi_maybe_revoke_pointer_same_state
       (a : allocation)
-      (m m0 m1: mem_state)
-      (oldmeta newmeta : ZMap.t (bool * CapGhostState)):
-
-      zmap_mmapi (maybe_revoke_pointer a m) oldmeta m0 = (m1, inr newmeta) ->
-      m0 = m1.
+      (m: mem_state)
+      (oldmeta : ZMap.t (bool * CapGhostState)):
+      memM_same_state (zmap_mmapi (maybe_revoke_pointer a m) oldmeta).
     Proof.
-    Admitted.
+      apply zmap_mmapi_same_state.
+    Qed.
 
     Lemma zmap_mmapi_maybe_revoke_pointer_spec
       (a : allocation)
@@ -1267,7 +1320,7 @@ Module RevocationProofs.
         +
           preserves_step.
           *
-            admit.
+            typeclasses eauto.
           *
             intros u2.
             admit.
