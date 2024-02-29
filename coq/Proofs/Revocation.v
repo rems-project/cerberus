@@ -1287,6 +1287,76 @@ Module RevocationProofs.
           Opaque ret raise bind get.
     Qed.
 
+    Lemma find_live_allocation_same_state
+      (addr : AddressValue.t):
+      memM_same_state (find_live_allocation addr).
+    Proof.
+      intros res s s' H.
+      unfold find_live_allocation in H.
+      Transparent ret bind get.
+      unfold bind, get, ret, memM_monad, Monad_errS, State_errS in H.
+      tuple_inversion.
+      reflexivity.
+      Opaque ret bind get.
+    Qed.
+
+    Lemma find_live_allocation_res_consistent
+      (addr : AddressValue.t)
+      (alloc : allocation)
+      (alloc_id : Z)
+      (s s' : mem_state):
+      find_live_allocation addr s = (s', inr (Some (alloc_id, alloc))) ->
+      ZMap.MapsTo alloc_id alloc s'.(allocations).
+    Proof.
+      intros H.
+      unfold find_live_allocation in H.
+      Transparent ret bind get.
+      unfold bind, get, ret, memM_monad, Monad_errS, State_errS in H.
+      Opaque ret bind get.
+      tuple_inversion.
+      revert H2.
+      match goal with
+      | [ |- context[ZMap.fold ?f _ _]] =>
+          remember f as ff
+      end.
+      revert alloc_id alloc.
+      cut(
+          (fun res =>
+            match res with
+            | None => True
+            | Some (alloc_id, alloc) => ZMap.MapsTo alloc_id alloc (allocations s')
+            end) (ZMap.fold ff (allocations s') None)).
+      {
+        clear.
+        intros H alloc_id alloc H2.
+        cbn in H.
+        break_match_hyp.
+        -
+          break_let.
+          invc H2.
+          assumption.
+        -
+          inv H2.
+      }
+      apply fold_rec_nodep.
+      -
+        trivial.
+      -
+        intros k e a H H0.
+        break_match_goal;[|trivial].
+        break_match_hyp;break_let;subst.
+        +
+          invc Heqo.
+          assumption.
+        +
+          break_if.
+          *
+            invc Heqo.
+            assumption.
+          *
+            inv Heqo.
+    Qed.
+
     #[global] Instance kill_preserves
       (loc : location_ocaml)
       (is_dyn : bool)
@@ -1353,6 +1423,11 @@ Module RevocationProofs.
             --
               destruct x0.
               subst.
+              rename a into alloc, z into alloc_id.
+              pose proof (find_live_allocation_same_state (Capability_GS.cap_get_value t)) as H2.
+              specialize (H2 _ _ _ Heqp0).
+              subst.
+              apply find_live_allocation_res_consistent in Heqp0.
               admit.
           *
             intros u2.
