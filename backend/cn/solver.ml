@@ -1179,6 +1179,7 @@ let maybe_save_slow_problem kind lc lc_t smt2_doc time solver =
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
+          item "result" (Pp.string kind);
           item "SMT constraint" lc_doc;
           item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
           item "SMT problem" (Lazy.force smt2_doc);
@@ -1191,6 +1192,11 @@ let print_doc_to fname doc =
   let channel = open_out_gen [Open_wronly; Open_creat] 0o666 fname in
   print channel doc;
   close_out channel
+
+let res_short_string = function
+  | Z3.Solver.UNSATISFIABLE -> "unsat"
+  | Z3.Solver.SATISFIABLE -> "sat"
+  | Z3.Solver.UNKNOWN -> "unknown"
 
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
@@ -1214,31 +1220,27 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
            (Z3.Solver.check solver.incremental))
          (nlc :: extra)
      in
+     maybe_save_slow_problem (res_short_string res)
+            lc expr smt2_doc elapsed solver.incremental;
      match res with
      | Z3.Solver.UNSATISFIABLE ->
-        maybe_save_slow_problem "unsat"
-            lc expr smt2_doc elapsed solver.incremental;
         rtrue ()
      | Z3.Solver.SATISFIABLE ->
         rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
-        maybe_save_slow_problem "unknown"
-            lc expr smt2_doc elapsed solver.incremental;
         let (elapsed2, res2) =
           time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)"
               (Z3.Solver.check solver.non_incremental))
             (nlc :: extra @ existing_scs)
         in
+        maybe_save_slow_problem (res_short_string res2)
+            lc expr smt2_doc elapsed2 solver.non_incremental;
         match res2 with
         | Z3.Solver.UNSATISFIABLE ->
-           maybe_save_slow_problem "unsat"
-               lc expr smt2_doc elapsed solver.non_incremental;
            rtrue ()
         | Z3.Solver.SATISFIABLE ->
            rfalse qs solver.non_incremental
         | Z3.Solver.UNKNOWN ->
-           maybe_save_slow_problem "unknown"
-               lc expr smt2_doc elapsed solver.non_incremental;
           let reason = Z3.Solver.get_reason_unknown solver.non_incremental in
           failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
