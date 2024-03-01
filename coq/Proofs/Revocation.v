@@ -291,6 +291,30 @@ Module RevocationProofs.
         preserves_invariant:
           invr s -> post_exec_invariant s M.
 
+
+      (* [SameState] is stronger and implies [PreservesInvariant] *)
+      Lemma SameStatePreserves
+        {T: Type}
+        (M: memM T)
+        :
+        SameState M -> forall s, PreservesInvariant s M.
+      Proof.
+        intros H s I.
+        unfold SameState in H.
+        unfold post_exec_invariant, lift_sum_p.
+        break_match.
+        trivial.
+        unfold execErrS in Heqs0.
+        break_let.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        specialize (H t s m Heqp).
+        subst.
+        assumption.
+      Qed.
+
       Lemma update_mem_state_spec
         (f : mem_state -> mem_state)
         (s s' : mem_state):
@@ -303,21 +327,40 @@ Module RevocationProofs.
         reflexivity.
       Qed.
 
-      Lemma ret_PreservesInvariant:
-        forall s T (x:T), PreservesInvariant s (ret x).
+      Instance ret_SameState:
+        forall {T} (x:T),  SameState (@ret memM (Monad_errS mem_state memMError) T x).
       Proof.
-        intros s T x I.
-        unfold PreservesInvariant, post_exec_invariant, lift_sum_p.
-        break_match.
-        trivial.
-        cbn in Heqs0.
-        inl_inr_inv.
-        subst.
-        apply I.
+        intros T x v s s' H.
+        Transparent ret.
+        unfold ret, memM_monad, Monad_errS in H.
+        Opaque ret.
+        tuple_inversion.
+        reflexivity.
+      Qed.
+
+      Instance ret_PreservesInvariant:
+        forall s {T} (x:T), PreservesInvariant s (ret x).
+      Proof.
+        intros s T x.
+        apply SameStatePreserves.
+        typeclasses eauto.
       Qed.
       #[local] Opaque ret.
 
-      Lemma raise_PreservesInvariant
+      Instance raise_SameState
+        {T:Type}:
+        forall x,
+          SameState
+            (@raise memMError (errS mem_state_r memMError)
+               (Exception_errS mem_state_r memMError) T
+               x).
+      Proof.
+        intros e x s s' H.
+        invc H.
+      Qed.
+      #[local] Opaque raise.
+
+      Instance raise_PreservesInvariant
         {T:Type}:
         forall s x,
           PreservesInvariant s
@@ -326,12 +369,13 @@ Module RevocationProofs.
                x).
       Proof.
         intros s x.
-        split.
+        apply SameStatePreserves.
+        typeclasses eauto.
       Qed.
       #[local] Opaque raise.
 
       (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
-      Lemma bind_PreservesInvariant_same_state
+      Instance bind_PreservesInvariant_same_state
         {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
@@ -366,7 +410,7 @@ Module RevocationProofs.
       Qed.
 
       (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
-      Lemma bind_PreservesInvariant
+      Instance bind_PreservesInvariant
         {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
@@ -404,7 +448,7 @@ Module RevocationProofs.
       Qed.
 
       (* More specific, allows reasoning about the value of [x] *)
-      Lemma bind_PreservesInvariant'
+      Instance bind_PreservesInvariant'
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -451,7 +495,7 @@ Module RevocationProofs.
       Qed.
 
       (* More specific, allows reasoning about the value of [x] *)
-     Lemma bind_PreservesInvariant''
+     Instance bind_PreservesInvariant''
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -510,7 +554,7 @@ Module RevocationProofs.
       Qed.
 
       (* Special case of bind, where the state is passed to the continuation *)
-      Lemma bind_get_PreservesInvariant
+      Instance bind_get_PreservesInvariant
         {T: Type}
         {C: mem_state_r -> memM T}
         :
@@ -539,7 +583,7 @@ Module RevocationProofs.
       Qed.
 
       (** generic version, where [m] does not depend on [s] *)
-      Lemma put_PreservesInvariant:
+      Instance put_PreservesInvariant:
         forall s m, invr m -> PreservesInvariant s (put m).
       Proof.
         intros s m H H0.
@@ -547,7 +591,7 @@ Module RevocationProofs.
       Qed.
 
       (** dependent version, where [m] depends on [s] *)
-      Lemma put_PreservesInvariant':
+      Instance put_PreservesInvariant':
         forall s m, (invr s -> invr m) -> PreservesInvariant s (put m).
       Proof.
         intros s m D H0.
@@ -555,14 +599,16 @@ Module RevocationProofs.
         apply H0.
       Qed.
 
-      Lemma get_PreservesInvariant:
+      Instance get_PreservesInvariant:
         forall s, PreservesInvariant s get.
       Proof.
         intros s H.
+        apply SameStatePreserves.
+        typeclasses eauto.
         apply H.
       Qed.
 
-      Lemma update_PreservesInvariant
+      Instance update_PreservesInvariant
         {f: mem_state_r -> mem_state_r}
         :
         forall s,
@@ -732,26 +778,58 @@ Module RevocationProofs.
           contradiction.
     Qed.
 
+    #[local] Instance fail_SameState {T:Type}:
+      forall l e,
+        SameState (@fail T l e).
+    Proof.
+      intros l e.
+      unfold fail.
+      break_match;
+      apply raise_SameState.
+    Qed.
+    #[local] Opaque fail.
+
     #[local] Instance fail_PreservesInvariant {T:Type}:
       forall s l e,
         PreservesInvariant mem_invariant s (@fail T l e).
     Proof.
       intros s l e.
-      unfold fail.
-      break_match;
-      apply raise_PreservesInvariant.
+      apply SameStatePreserves.
+      apply fail_SameState.
     Qed.
     #[local] Opaque fail.
+
+    #[local] Instance fail_noloc_SameState {T:Type}:
+      forall e,
+        SameState (@fail_noloc T e).
+    Proof.
+      intros e.
+      unfold fail_noloc.
+      apply fail_SameState.
+    Qed.
+    #[local] Opaque fail_noloc.
 
     #[local] Instance fail_noloc_PreservesInvariant {T:Type}:
       forall s e,
         PreservesInvariant mem_invariant s (@fail_noloc T e).
     Proof.
       intros s e.
-      unfold fail_noloc.
-      apply fail_PreservesInvariant.
+      apply SameStatePreserves.
+      apply fail_noloc_SameState.
     Qed.
     #[local] Opaque fail_noloc.
+
+    #[local] Instance serr2InternalErr_SameState
+      {T: Type}
+      {e: serr T}:
+      SameState (serr2InternalErr e).
+    Proof.
+      unfold serr2InternalErr.
+      destruct e.
+      apply raise_SameState.
+      apply ret_SameState.
+    Qed.
+    #[local] Opaque serr2InternalErr.
 
     #[local] Instance serr2InternalErr_PreservesInvariant
       {T: Type}
@@ -759,11 +837,8 @@ Module RevocationProofs.
       forall s,
         PreservesInvariant mem_invariant s (serr2InternalErr e).
     Proof.
-      intros s.
-      unfold serr2InternalErr.
-      destruct e.
-      apply raise_PreservesInvariant.
-      apply ret_PreservesInvariant.
+      apply SameStatePreserves.
+      apply serr2InternalErr_SameState.
     Qed.
     #[local] Opaque serr2InternalErr.
 
@@ -1466,42 +1541,53 @@ Module RevocationProofs.
         break_match.
         +
           break_let.
-          (* TODO: [s] is lost here *)
-          preserves_step;[repeat break_if; preserves_step|].
-          intros s' u0.
-          preserves_step;[repeat break_if; preserves_step|].
-          intros s'0 u1.
-          clear u0 u1.
+
+          apply bind_PreservesInvariant_same_state.
+
+          repeat break_if.
+          apply ret_SameState.
+          apply fail_SameState.
+          apply raise_SameState.
+          apply ret_SameState.
+
+          intros u. destruct u.
+
+          apply bind_PreservesInvariant_same_state.
+          repeat break_if.
+          apply fail_SameState.
+          apply ret_SameState.
+
+          intros u. destruct u.
           preserves_step.
           *
             apply bind_PreservesInvariant''.
-            intros H s'1 x0 H0.
+            intros H s' x0 H0.
             split.
-
-            pose proof (revoke_pointers_preserves s'0 a) as R.
-            specialize (R H).
-            unfold post_exec_invariant, lift_sum_p in R.
-            break_match_hyp.
             --
-              unfold execErrS in Heqs0.
-              break_let.
-              tuple_inversion.
-              inl_inr.
-            --
-              unfold execErrS in Heqs0.
-              break_let.
-              tuple_inversion.
-              inl_inr_inv.
-              auto.
+              pose proof (revoke_pointers_preserves s a) as R.
+              specialize (R H).
+              unfold post_exec_invariant, lift_sum_p in R.
+              break_match_hyp.
+              ++
+                unfold execErrS in Heqs0.
+                break_let.
+                tuple_inversion.
+                inl_inr.
+              ++
+                unfold execErrS in Heqs0.
+                break_let.
+                tuple_inversion.
+                inl_inr_inv.
+                auto.
             --
               destruct x0.
               subst.
               rename a into alloc, z into alloc_id.
               apply find_live_allocation_res_consistent in Heqp0.
-              (* TODO: lost link between [s] and [s'0] *)
+              (* TODO: missing invariant on [s']? *)
               admit.
           *
-            intros s'1 u2.
+            intros s' u2.
             preserves_step.
             repeat break_if; preserves_step.
             intros m1 H1.
