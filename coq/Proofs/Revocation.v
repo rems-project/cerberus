@@ -1548,6 +1548,109 @@ Module RevocationProofs.
             inv Heqo.
     Qed.
 
+    Lemma remove_revoked_allocation_preserves
+      (s s' s'': mem_state_r)
+      (alloc_id : Z)
+      (alloc : allocation)
+      (AM: ZMap.MapsTo alloc_id alloc (allocations s)) (* TODO: do we even need this? *)
+      (IS: mem_invariant s)
+      (IS': mem_invariant s'):
+
+      revoke_pointers alloc s = (s', inr tt)
+      -> remove_allocation alloc_id s' = (s'', inr tt)
+      ->  mem_invariant s''.
+    Proof.
+      intros RE RM.
+
+      unfold remove_allocation,ErrorWithState.update in RM.
+      Transparent bind get put.
+      unfold bind, get, put, Monad_errS, State_errS in RM.
+      Opaque bind get put.
+      tuple_inversion.
+
+      destruct IS' as [ISbase' IScap']. clear IS.
+      (* destruct_base_mem_invariant Sbase. *)
+      split;cbn.
+      -
+        (* base *)
+        clear IScap' AM RE.
+        destruct_base_mem_invariant ISbase'.
+        repeat split; cbn.
+        +
+          intros alloc_id0 a H.
+          apply ZMap.remove_3 in H.
+          eapply Bdead;eauto.
+        +
+          intros alloc_id1 alloc_id2 a1 a2 H H0.
+          apply ZMap.remove_3 in H0, H.
+          eapply Bnooverlap.
+          eapply H.
+          eapply H0.
+        +
+          apply Balign.
+      -
+        clear ISbase'.
+        intros addr g A bs F.
+        specialize (IScap' addr g A bs F).
+        destruct IScap' as [IScap1' [c [IScap3' [alloc' [alloc_id' [IScap4' IScap5']]]]]].
+        split.
+        apply IScap1'.
+        exists c.
+        split;auto.
+        exists alloc'.
+        destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
+        +
+          subst alloc_id'.
+          (* [alloc_id] is being removed *)
+          exfalso.
+
+          assert(alloc = alloc').
+          {
+            clear - RE AM IScap4'.
+            unfold revoke_pointers in RE.
+            Transparent bind get ret put ErrorWithState.update.
+            unfold mem_state_with_capmeta, ErrorWithState.update, bind, get, ret, put, memM_monad, Monad_errS, State_errS in RE.
+            Opaque bind get ret put ErrorWithState.update.
+            break_let.
+
+            break_match_hyp.
+            inv RE.
+            apply zmap_mmapi_maybe_revoke_pointer_same_state in Heqp.
+            subst m.
+            subst s0.
+            destruct s.
+            cbn in *.
+            tuple_inversion.
+            cbn in *.
+            eapply MapsTo_fun; eauto.
+          }
+          subst alloc'.
+
+
+          (* TODO:
+          - alloc_id is present in [s] and [s']
+          - we remove it from [s'] via [Zmap.remove] in the goal
+          - after [revoke_pointers] there is no tagged pointers in [s'] with bounds within this alloc
+          - [revoke_pointers] does not change [allocatons]. They only touch [capmeta]
+           *)
+          assert(forall (addr : ZMap.key) (g : CapGhostState),
+                    ZMap.MapsTo addr (true, g) (capmeta s') ->
+                    forall bs : list AbsByte,
+                      fetch_bytes (bytemap s') addr (sizeof_pointer MorelloImpl.get) = bs ->
+                      split_bytes_ptr_spec Prov_disabled bs ->
+                      (forall c : Capability_GS.t,  decode_cap bs true c -> (~ cap_bounds_within_alloc c alloc)))
+            as RESPEC.
+          admit.
+          clear s AM RE.
+
+          specialize (RESPEC addr g A bs F IScap1' c IScap3').
+          congruence.
+        +
+          exists alloc_id'.
+          split;[|auto].
+          apply ZMap.remove_2;auto.
+    Admitted.
+
     #[global] Instance kill_preserves
       (loc : location_ocaml)
       (is_dyn : bool)
@@ -1633,7 +1736,15 @@ Module RevocationProofs.
               rename a into alloc, z into alloc_id.
               apply find_live_allocation_res_consistent in Heqp0.
               (* It looks like we have everything we need here *)
-              admit.
+              unfold post_exec_invariant, lift_sum_p.
+              break_match_goal;[trivial|].
+
+              unfold execErrS in Heqs0.
+              break_let.
+              break_match_hyp;[inl_inr|inl_inr_inv].
+              subst.
+              destruct u.
+              eapply remove_revoked_allocation_preserves; eauto.
           *
             intros s' u2.
             preserves_step.
@@ -1643,7 +1754,7 @@ Module RevocationProofs.
             assumption.
         +
           preserves_step.
-    Admitted.
+    Qed.
 
 
   End CheriMemoryWithoutPNVI.
