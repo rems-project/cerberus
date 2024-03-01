@@ -448,7 +448,7 @@ Module RevocationProofs.
       Qed.
 
       (* More specific, allows reasoning about the value of [x] *)
-      Instance bind_PreservesInvariant'
+      Instance bind_PreservesInvariant_value
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -494,8 +494,59 @@ Module RevocationProofs.
           assumption.
       Qed.
 
-      (* More specific, allows reasoning about the value of [x] *)
-     Instance bind_PreservesInvariant''
+      (* More specific, allows reasoning about the value of [x].
+         Does not require [M] preserve invariant.
+       *)
+      Instance bind_PreservesInvariant_full
+        {T T': Type}
+        {m: memM T'}
+        {c: T' -> memM T}
+        :
+        forall s,
+          (invr s ->
+           (forall s' x, m s = (s', inr x) -> post_exec_invariant s' (c x)))
+          -> PreservesInvariant s (bind m c).
+      Proof.
+        Transparent ret.
+        Transparent raise.
+        intros s MH.
+        unfold PreservesInvariant, post_exec_invariant.
+        intros H0.
+        specialize (MH H0).
+        unfold execErrS, evalErrS, lift_sum_p.
+        repeat break_let.
+        cbn in *.
+        break_let.
+        break_match;auto.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        break_match_hyp.
+        tuple_inversion.
+        subst.
+        specialize (MH m1 t0).
+        autospecialize MH.
+        reflexivity.
+        unfold post_exec_invariant in MH.
+
+        unfold execErrS, evalErrS, lift_sum_p, raise, ret, Exception_either, Monad_either  in MH.
+        break_let.
+        repeat break_match; try break_let;
+          try inl_inr_inv; subst.
+
+        repeat tuple_inversion.
+        repeat tuple_inversion.
+        inl_inr.
+        inl_inr.
+        tuple_inversion.
+        assumption.
+      Qed.
+
+      (* More specific, allows reasoning about the value of [x].
+         Requires [M] preserve invariant.
+       *)
+     Instance bind_PreservesInvariant_full_with_intermediate_state
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -1514,7 +1565,7 @@ Module RevocationProofs.
       intros s.
       break_match;simpl;try preserves_step.
       break_match;simpl;[preserves_step|].
-      apply bind_PreservesInvariant'.
+      apply bind_PreservesInvariant_value.
       intros H s' x H0.
 
       pose proof (find_live_allocation_same_state (Capability_GS.cap_get_value t)) as H2.
@@ -1560,31 +1611,28 @@ Module RevocationProofs.
           intros u. destruct u.
           preserves_step.
           *
-            apply bind_PreservesInvariant''.
-            intros H s' x0 H0.
-            split.
-            --
-              pose proof (revoke_pointers_preserves s a) as R.
-              specialize (R H).
-              unfold post_exec_invariant, lift_sum_p in R.
-              break_match_hyp.
-              ++
-                unfold execErrS in Heqs0.
-                break_let.
-                tuple_inversion.
-                inl_inr.
-              ++
-                unfold execErrS in Heqs0.
-                break_let.
-                tuple_inversion.
-                inl_inr_inv.
-                auto.
-            --
+            apply bind_PreservesInvariant_full.
+            intros _ s' x0 H0.
+
+            pose proof (revoke_pointers_preserves s a) as R.
+            specialize (R A).
+            unfold post_exec_invariant, lift_sum_p in R.
+            break_match_hyp.
+            ++
+              unfold execErrS in Heqs0.
+              break_let.
+              tuple_inversion.
+              inl_inr.
+            ++
+              unfold execErrS in Heqs0.
+              break_let.
+              tuple_inversion.
+              inl_inr_inv.
+              subst m.
               destruct x0.
-              subst.
               rename a into alloc, z into alloc_id.
               apply find_live_allocation_res_consistent in Heqp0.
-              (* TODO: missing invariant on [s']? *)
+              (* It looks like we have everything we need here *)
               admit.
           *
             intros s' u2.
@@ -1596,6 +1644,7 @@ Module RevocationProofs.
         +
           preserves_step.
     Admitted.
+
 
   End CheriMemoryWithoutPNVI.
 
