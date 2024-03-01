@@ -266,17 +266,30 @@ Module RevocationProofs.
     Section MemMwithInvariant.
       Variable invr: mem_state_r -> Prop.
 
-      Class PreservesInvariant
-        {T: Type} (M: memM T): Prop
-        :=
-        preserves_invariant : forall mem_state,
-            invr mem_state
-            ->
-              lift_sum_p
-                (fun _ => True)
-                invr
-                (execErrS M mem_state).
+      Definition memM_same_state
+        {T: Type}
+        (c: memM T)
+        := forall v m0 m1, c m0 = (m1, inr v) -> m0 = m1.
 
+      Class SameState
+        {T: Type}
+        (M: memM T) : Prop
+        :=
+        same_state: forall v m0 m1, M m0 = (m1, inr v) -> m0 = m1.
+
+      Definition post_exec_invariant
+        {T: Type} (mem_state: mem_state_r) (M: memM T) : Prop
+        :=
+        lift_sum_p
+          (fun _ => True)
+          invr
+          (execErrS M mem_state).
+
+      Class PreservesInvariant
+        {T: Type} (s: mem_state_r) (M: memM T) : Prop
+        :=
+        preserves_invariant:
+          invr s -> post_exec_invariant s M.
 
       Lemma update_mem_state_spec
         (f : mem_state -> mem_state)
@@ -291,41 +304,45 @@ Module RevocationProofs.
       Qed.
 
       Lemma ret_PreservesInvariant:
-        forall T (x:T), PreservesInvariant (ret x).
+        forall s T (x:T), PreservesInvariant s (ret x).
       Proof.
-        intros T x.
-        unfold PreservesInvariant.
-        intros m H.
-        apply H.
+        intros s T x I.
+        unfold PreservesInvariant, post_exec_invariant, lift_sum_p.
+        break_match.
+        trivial.
+        cbn in Heqs0.
+        inl_inr_inv.
+        subst.
+        apply I.
       Qed.
       #[local] Opaque ret.
 
       Lemma raise_PreservesInvariant
         {T:Type}:
-        forall x,
-          PreservesInvariant
+        forall s x,
+          PreservesInvariant s
             (@raise memMError (errS mem_state_r memMError)
                (Exception_errS mem_state_r memMError) T
                x).
       Proof.
-        intros x.
+        intros s x.
         split.
       Qed.
       #[local] Opaque raise.
 
-      Lemma bind_PreservesInvariant
+      (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
+      Lemma bind_PreservesInvariant_same_state
         {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
+        {MS: SameState M}
         :
-        PreservesInvariant M ->
-        (forall x, PreservesInvariant (C x))
-        -> PreservesInvariant (bind M C).
+        forall s,
+          (forall x, PreservesInvariant s (C x))
+          -> PreservesInvariant s (bind M C).
       Proof.
-        intros MH MC.
-        unfold PreservesInvariant.
-        intros mem_state0 H0.
-        unfold execErrS, evalErrS, lift_sum_p in *.
+        intros s MC H0.
+        unfold PreservesInvariant, post_exec_invariant, execErrS, evalErrS, lift_sum_p in *.
         repeat break_let.
         cbn in *.
         repeat break_let.
@@ -338,39 +355,69 @@ Module RevocationProofs.
         tuple_inversion.
         subst.
 
-        specialize (MH mem_state0 H0).
-        unfold PreservesInvariant in *.
-        unfold execErrS, evalErrS, lift_sum_p in MH.
-        break_let.
-        tuple_inversion.
-        cbn in MH.
-        specialize (MC t0 m0 MH).
+        specialize (MS t0 s m0 Heqp0).
+        subst m0.
+
+        specialize (MC t0 H0).
         unfold execErrS, evalErrS, lift_sum_p in MC.
         break_let.
         tuple_inversion.
-        cbn in MC.
         apply MC.
       Qed.
 
-      (* More specific, reasoning about value of [x] *)
+      (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
+      Lemma bind_PreservesInvariant
+        {T T': Type}
+        {M: memM T'}
+        {C: T' -> memM T}
+        :
+        forall s,
+          PreservesInvariant s M ->
+          (forall s' x, PreservesInvariant s' (C x))
+          -> PreservesInvariant s (bind M C).
+      Proof.
+        intros s MH MC H0.
+        unfold PreservesInvariant, post_exec_invariant, execErrS, evalErrS, lift_sum_p in *.
+        repeat break_let.
+        cbn in *.
+        repeat break_let.
+        break_match;auto.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        break_match_hyp.
+        tuple_inversion.
+        subst.
+
+        specialize (MH H0).
+        tuple_inversion.
+        break_match_hyp.
+        inl_inr.
+        inl_inr_inv.
+        subst.
+        specialize (MC _ t0 MH).
+        unfold execErrS, evalErrS, lift_sum_p in MC.
+        break_let.
+        tuple_inversion.
+        apply MC.
+      Qed.
+
+      (* More specific, allows reasoning about the value of [x] *)
       Lemma bind_PreservesInvariant'
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
         :
-        (forall s, invr s ->
-              (forall s' x, m s = (s', inr x) -> (invr s' /\ PreservesInvariant (c x))))
-        -> PreservesInvariant (bind m c).
+        forall s,
+          (invr s -> (forall s' x, m s = (s', inr x) -> (invr s' /\ PreservesInvariant s' (c x))))
+          -> PreservesInvariant s (bind m c).
       Proof.
-
         Transparent ret.
         Transparent raise.
-
-        intros MH.
-        unfold PreservesInvariant.
-        intros mem_state0 H0.
-        specialize (MH mem_state0 H0).
-        unfold execErrS, evalErrS, lift_sum_p.
+        intros s MH H0.
+        specialize (MH H0).
+        unfold PreservesInvariant, post_exec_invariant, execErrS, evalErrS, lift_sum_p.
         repeat break_let.
         cbn in *.
 
@@ -388,8 +435,8 @@ Module RevocationProofs.
         - reflexivity.
         -
           clear - MH Heqp MI.
-          unfold PreservesInvariant in MH.
-          specialize (MH m1 MI).
+          unfold PreservesInvariant, post_exec_invariant in MH.
+          specialize (MH MI).
           unfold execErrS, evalErrS, lift_sum_p, raise, ret, Exception_either, Monad_either  in MH.
           break_let.
           repeat break_match; try break_let;
@@ -403,35 +450,26 @@ Module RevocationProofs.
           assumption.
       Qed.
 
-      Definition post_exec_invariant
-        {T: Type} (mem_state: mem_state_r) (M: memM T) : Prop
-        :=
-        lift_sum_p
-          (fun _ => True)
-          invr
-          (execErrS M mem_state).
-
-
-      (* even more specific *)
-      Lemma bind_PreservesInvariant''
+      (* More specific, allows reasoning about the value of [x] *)
+     Lemma bind_PreservesInvariant''
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
         :
-        (forall s, invr s ->
-              (forall s' x, m s = (s', inr x) -> (invr s' /\ post_exec_invariant s' (c x))))
-        -> PreservesInvariant (bind m c).
+        forall s,
+        (invr s ->
+         (forall s' x, m s = (s', inr x) -> (invr s' /\ post_exec_invariant s' (c x))))
+        -> PreservesInvariant s (bind m c).
       Proof.
         Transparent ret.
         Transparent raise.
-        intros MH.
-        unfold PreservesInvariant.
-        intros mem_state0 H0.
-        specialize (MH mem_state0 H0).
+        intros s MH.
+        unfold PreservesInvariant, post_exec_invariant.
+        intros H0.
+        specialize (MH H0).
         unfold execErrS, evalErrS, lift_sum_p.
         repeat break_let.
         cbn in *.
-
         break_let.
         break_match;auto.
         break_match_hyp.
@@ -461,27 +499,38 @@ Module RevocationProofs.
           assumption.
       Qed.
 
+      Instance get_SameState
+        :SameState get.
+      Proof.
+        intros s s' st.
+        intros H.
+        unfold get, State_errS in *.
+        tuple_inversion.
+        reflexivity.
+      Qed.
+
+      (* Special case of bind, where the state is passed to the continuation *)
       Lemma bind_get_PreservesInvariant
         {T: Type}
         {C: mem_state_r -> memM T}
         :
-        (forall m, invr m -> PreservesInvariant (C m))
-        -> PreservesInvariant (bind get C).
+        forall s,
+          PreservesInvariant s (C s)
+          -> PreservesInvariant s (bind get C).
       Proof.
-        intros MH m MI.
-        unfold PreservesInvariant.
+        intros s MH MI.
+        unfold post_exec_invariant.
         cbn.
         unfold execErrS, evalErrS, lift_sum_p in *.
         break_let.
-        cbn in *.
+        cbn.
         break_match;auto.
         break_match_hyp.
         inl_inr.
         inl_inr_inv.
         subst.
-        specialize (MH m MI).
-        unfold PreservesInvariant in MH.
-        specialize (MH m MI).
+        specialize (MH MI).
+        unfold post_exec_invariant in MH.
         unfold execErrS, evalErrS, lift_sum_p in MH.
         break_let.
         tuple_inversion.
@@ -489,49 +538,53 @@ Module RevocationProofs.
         auto.
       Qed.
 
+      (** generic version, where [m] does not depend on [s] *)
       Lemma put_PreservesInvariant:
-        forall m, invr m -> PreservesInvariant (put m).
+        forall s m, invr m -> PreservesInvariant s (put m).
       Proof.
-        intros m H.
-        cbn.
-        intros m0 H0.
-        cbn.
+        intros s m H H0.
         apply H.
       Qed.
 
-      Lemma get_PreservesInvariant:
-        PreservesInvariant get.
+      (** dependent version, where [m] depends on [s] *)
+      Lemma put_PreservesInvariant':
+        forall s m, (invr s -> invr m) -> PreservesInvariant s (put m).
       Proof.
-        intros m H.
-        cbn.
+        intros s m D H0.
+        apply D.
+        apply H0.
+      Qed.
+
+      Lemma get_PreservesInvariant:
+        forall s, PreservesInvariant s get.
+      Proof.
+        intros s H.
         apply H.
       Qed.
 
       Lemma update_PreservesInvariant
-        {f:mem_state_r -> mem_state_r}
+        {f: mem_state_r -> mem_state_r}
         :
-        (forall m, invr m ->  invr (f m)) ->
-        PreservesInvariant (ErrorWithState.update f).
+        forall s,
+          (forall m, invr m ->  invr (f m)) ->
+          PreservesInvariant s (ErrorWithState.update f).
       Proof.
-        intros H.
-        cbn.
-        unfold PreservesInvariant.
-        intros m MI.
-        cbn.
+        intros s H MI.
         apply H, MI.
       Qed.
 
       Instance liftM_PreservesInvariant
         {A T : Type}
-        (a : memM A):
+        {a : memM A}:
 
-        PreservesInvariant a ->
+        forall s,
+            PreservesInvariant s a ->
 
-        forall x : A -> T,
-          PreservesInvariant
-            (@liftM memM (Monad_errS mem_state memMError) A T x a).
+            forall x : A -> T,
+              PreservesInvariant s
+                (@liftM memM (Monad_errS mem_state memMError) A T x a).
       Proof.
-        intros H x.
+        intros s H x.
         unfold liftM.
         apply bind_PreservesInvariant.
         assumption.
@@ -680,10 +733,10 @@ Module RevocationProofs.
     Qed.
 
     #[local] Instance fail_PreservesInvariant {T:Type}:
-      forall l e,
-        PreservesInvariant mem_invariant (@fail T l e).
+      forall s l e,
+        PreservesInvariant mem_invariant s (@fail T l e).
     Proof.
-      intros l e.
+      intros s l e.
       unfold fail.
       break_match;
       apply raise_PreservesInvariant.
@@ -691,10 +744,10 @@ Module RevocationProofs.
     #[local] Opaque fail.
 
     #[local] Instance fail_noloc_PreservesInvariant {T:Type}:
-      forall e,
-        PreservesInvariant mem_invariant (@fail_noloc T e).
+      forall s e,
+        PreservesInvariant mem_invariant s (@fail_noloc T e).
     Proof.
-      intros e.
+      intros s e.
       unfold fail_noloc.
       apply fail_PreservesInvariant.
     Qed.
@@ -703,8 +756,10 @@ Module RevocationProofs.
     #[local] Instance serr2InternalErr_PreservesInvariant
       {T: Type}
       {e: serr T}:
-      PreservesInvariant mem_invariant (serr2InternalErr e).
+      forall s,
+        PreservesInvariant mem_invariant s (serr2InternalErr e).
     Proof.
+      intros s.
       unfold serr2InternalErr.
       destruct e.
       apply raise_PreservesInvariant.
@@ -723,17 +778,17 @@ Module RevocationProofs.
     Ltac preserves_step
       :=
       match goal with
-      |[|- PreservesInvariant _ (bind get _)] => apply bind_get_PreservesInvariant
-      |[|- PreservesInvariant _ (bind _ _)] => apply bind_PreservesInvariant
-      |[|- PreservesInvariant _ (raise _)] => apply raise_PreservesInvariant
-      |[|- PreservesInvariant _ (ret _)] => apply ret_PreservesInvariant
-      |[|- PreservesInvariant _ get] => apply get_PreservesInvariant
-      |[|- PreservesInvariant _ (put _) ] => apply put_PreservesInvariant
-      |[|- PreservesInvariant _ (ErrorWithState.update _)] => apply update_PreservesInvariant
-      |[|- PreservesInvariant _ (fail _ _)] => apply fail_PreservesInvariant
-      |[|- PreservesInvariant _ (fail_noloc _)] => apply fail_noloc_PreservesInvariant
-      |[|- PreservesInvariant _ (serr2InternalErr _)] => apply serr2InternalErr_PreservesInvariant
-      |[|- PreservesInvariant _ (liftM _ _)] => apply liftM_PreservesInvariant
+      |[|- PreservesInvariant _ _ (bind get _)] => apply bind_get_PreservesInvariant
+      |[|- PreservesInvariant _ _ (bind _ _)] => apply bind_PreservesInvariant
+      |[|- PreservesInvariant _ _ (raise _)] => apply raise_PreservesInvariant
+      |[|- PreservesInvariant _ _ (ret _)] => apply ret_PreservesInvariant
+      |[|- PreservesInvariant _ _ get] => apply get_PreservesInvariant
+      |[|- PreservesInvariant _ _ (put _) ] => apply put_PreservesInvariant
+      |[|- PreservesInvariant _ _ (ErrorWithState.update _)] => apply update_PreservesInvariant
+      |[|- PreservesInvariant _ _ (fail _ _)] => apply fail_PreservesInvariant
+      |[|- PreservesInvariant _ _ (fail_noloc _)] => apply fail_noloc_PreservesInvariant
+      |[|- PreservesInvariant _ _ (serr2InternalErr _)] => apply serr2InternalErr_PreservesInvariant
+      |[|- PreservesInvariant _ _ (liftM _ _)] => apply liftM_PreservesInvariant
       end.
 
     Lemma zmap_range_init_spec
@@ -911,74 +966,88 @@ Module RevocationProofs.
     Qed.
 
     #[local] Instance allocator_preserves (size align : Z):
-      PreservesInvariant mem_invariant (allocator size align).
+      forall s,
+      PreservesInvariant mem_invariant s (allocator size align).
     Proof.
+      intros s.
       unfold allocator.
-      preserves_step.
-      intros m H.
-      preserves_step.
+      apply bind_get_PreservesInvariant.
+      apply bind_PreservesInvariant_same_state.
       -
+
+        intros x s0 s1 H.
         break_let.
-        break_if; preserves_step.
+        break_if.
+        +
+          invc H.
+        +
+          Transparent ret.
+          unfold ret, memM_monad, Monad_errS in H.
+          Opaque ret.
+          tuple_inversion.
+          reflexivity.
       -
-        intros x0.
+        intros x.
         preserves_step.
-        preserves_step.
-        apply mem_state_with_next_alloc_id_preserves.
-        apply mem_state_with_last_address_preserves.
-        apply mem_state_after_ghist_tags_preserves.
-        apply H.
-        intros u.
-        preserves_step.
+        +
+          apply put_PreservesInvariant'.
+          intros I.
+          apply mem_state_with_next_alloc_id_preserves.
+          apply mem_state_with_last_address_preserves.
+          apply mem_state_after_ghist_tags_preserves.
+          apply I.
+        +
+          intros s' x0.
+          preserves_step.
     Qed.
     #[local] Opaque allocator.
 
     #[global] Instance find_live_allocation_preserves:
-      forall a, PreservesInvariant mem_invariant
+      forall s a, PreservesInvariant mem_invariant s
              (find_live_allocation a).
     Proof.
-      intros a.
+      intros s a.
       unfold find_live_allocation.
       preserves_step.
-      intros m H.
       preserves_step.
     Qed.
 
     #[global] Instance sequence_preserves
       {A:Type}:
+      forall s,
       forall (ls: list (memM A)),
-        Forall (PreservesInvariant mem_invariant) ls ->
-        PreservesInvariant mem_invariant (sequence ls).
+        Forall (fun e => (forall s':mem_state_r, PreservesInvariant mem_invariant s' e)) ls ->
+        PreservesInvariant mem_invariant s (sequence ls).
     Proof.
-      intros ls H.
+      intros s ls H.
+      revert s.
       unfold sequence.
       cbn.
-      induction ls.
+      induction ls; intros s; cbn.
       -
-        cbn.
         preserves_step.
       -
-        cbn.
         invc H.
         specialize (IHls H3).
         clear H3.
         unfold apM.
         repeat preserves_step.
-        intros x.
+        intros s' x.
         preserves_step.
-        assumption.
-        intros x.
+        apply H2.
+        intros s' x.
         preserves_step.
-        assumption.
+        apply IHls.
     Qed.
 
     #[global] Instance zmap_sequence_preserves
       {A: Type}
       (mv: ZMap.t (memM A)):
-      (forall k v, ZMap.MapsTo k v mv -> PreservesInvariant mem_invariant v) ->
-      PreservesInvariant mem_invariant (zmap_sequence mv).
+      forall s,
+        (forall k v, ZMap.MapsTo k v mv -> forall s', PreservesInvariant mem_invariant s' v) ->
+        PreservesInvariant mem_invariant s (zmap_sequence mv).
     Proof.
-      intros H.
+      intros s H.
       apply zmap_maps_to_elements_p in H.
       unfold zmap_sequence.
       break_let.
@@ -1009,7 +1078,7 @@ Module RevocationProofs.
         tuple_inversion.
         assumption.
       -
-        intros x.
+        intros s' x.
         preserves_step.
     Qed.
 
@@ -1017,10 +1086,11 @@ Module RevocationProofs.
       {A B : Type}
       (f : ZMap.key -> A -> memM B)
       (zm: ZMap.t A):
-      (forall k x, PreservesInvariant mem_invariant (f k x)) ->
-      PreservesInvariant mem_invariant (@zmap_mmapi A B memM memM_monad f zm).
+      forall s,
+        (forall k x, forall s', PreservesInvariant mem_invariant s' (f k x)) ->
+        PreservesInvariant mem_invariant s (@zmap_mmapi A B memM memM_monad f zm).
     Proof.
-      intros H.
+      intros s H.
       unfold zmap_mmapi.
       apply zmap_sequence_preserves.
       intros k v H0.
@@ -1030,25 +1100,24 @@ Module RevocationProofs.
       apply H.
     Qed.
 
-
     #[global] Instance maybe_revoke_pointer_preserves
       allocation
       (st: mem_state)
       (addr: Z)
       (meta: (bool*CapGhostState)):
-      mem_invariant st ->
-      PreservesInvariant mem_invariant
-        (maybe_revoke_pointer allocation st addr meta).
+
+      forall s,
+        PreservesInvariant mem_invariant s
+          (maybe_revoke_pointer allocation st addr meta).
     Proof.
-      intros M.
-      clear M.
+      intros s.
       unfold maybe_revoke_pointer.
       break_let.
       break_if.
       preserves_step.
       preserves_step.
       preserves_step.
-      intros x.
+      intros s' x.
       break_match; try preserves_step.
     Qed.
 
@@ -1067,13 +1136,13 @@ Module RevocationProofs.
     Proof.
       intros a m IM s IS s' x M.
 
-      pose proof (zmap_mmapi_preserves (maybe_revoke_pointer a m) (capmeta m)) as P.
+      pose proof (zmap_mmapi_preserves (maybe_revoke_pointer a m) (capmeta m) s) as P.
       autospecialize P.
       intros k x0.
       apply maybe_revoke_pointer_preserves; auto.
 
-      specialize (P s IS).
-      unfold lift_sum_p in P.
+      specialize (P IS).
+      unfold post_exec_invariant, lift_sum_p in P.
       break_match.
       -
         unfold execErrS in Heqs0.
@@ -1098,11 +1167,6 @@ Module RevocationProofs.
         tuple_inversion.
         assumption.
     Qed.
-
-    Definition memM_same_state
-      {T: Type}
-      (c: memM T)
-      := forall v m0 m1, c m0 = (m1, inr v) -> m0 = m1.
 
     Lemma maybe_revoke_pointer_same_state
       (k : Z)
@@ -1175,11 +1239,12 @@ Module RevocationProofs.
       unfold zmap_mmapi in H.
       unfold zmap_sequence in H.
       break_let.
+      (* TODO: looks provable *)
     Admitted.
 
 
     #[global] Instance revoke_pointers_preserves:
-      forall a,PreservesInvariant mem_invariant (revoke_pointers a).
+      forall s a, PreservesInvariant mem_invariant s (revoke_pointers a).
     Proof.
 
       (* This function is atypical as its state is intricately linked
@@ -1187,12 +1252,12 @@ Module RevocationProofs.
       usual preservation step lemmas and had to brute-force our way
       through. *)
 
-      intros a.
+      intros s a.
       unfold revoke_pointers.
-      intros m H.
+      intros H.
 
       Transparent ret raise bind get.
-      unfold execErrS, evalErrS, lift_sum_p.
+      unfold post_exec_invariant, execErrS, evalErrS, lift_sum_p.
       break_let.
       break_match.
       trivial.
@@ -1214,14 +1279,14 @@ Module RevocationProofs.
       apply update_mem_state_spec in U.
 
       (* [maybe_revoke_pointer] does not change state *)
-      assert(SM0: m = m0).
+      assert(SM0: s = m).
       {
         eapply zmap_mmapi_maybe_revoke_pointer_same_state.
         eauto.
       }
       subst m.
 
-      assert(R: zmap_relate_keys (capmeta m0) newmeta (fun k => revoked_pointer_rel)).
+      assert(R: zmap_relate_keys (capmeta s) newmeta (fun k => revoked_pointer_rel)).
       {
         eapply zmap_mmapi_maybe_revoke_pointer_spec.
         eauto.
@@ -1231,7 +1296,7 @@ Module RevocationProofs.
 
       destruct H as [Sbase Scap].
       destruct_base_mem_invariant Sbase.
-      destruct m1; cbn in *.
+      destruct s; cbn in *.
       invc U.
       split.
       -
@@ -1254,7 +1319,7 @@ Module RevocationProofs.
           apply I.
       -
         clear Bdead Bnooverlap Balign.
-        intros addr g H bs H0.
+        intros addr g H1 bs H0.
         specialize (Scap addr g).
         specialize (R addr).
         cbn in *.
@@ -1264,19 +1329,19 @@ Module RevocationProofs.
           invc R.
           ++
             (* ghost states are same *)
-            pose proof (MapsTo_fun M2 H).
+            pose proof (MapsTo_fun M2 H1).
             subst.
             clear H.
 
             specialize (Scap M1).
-            remember (fetch_bytes (bytemap m0) addr (sizeof_pointer MorelloImpl.get)) as bs.
+            remember (fetch_bytes bytemap0 addr (sizeof_pointer MorelloImpl.get)) as bs.
             specialize (Scap bs).
             autospecialize Scap.
             reflexivity.
             auto.
           ++
             (* revoked *)
-            pose proof (MapsTo_fun M2 H).
+            pose proof (MapsTo_fun M2 H1).
             subst.
             congruence.
         --
@@ -1362,21 +1427,28 @@ Module RevocationProofs.
       (is_dyn : bool)
       (ptr : pointer_value_indt)
       :
-      PreservesInvariant mem_invariant (kill loc is_dyn ptr).
+      forall s,
+        PreservesInvariant mem_invariant s (kill loc is_dyn ptr).
     Proof.
       unfold kill.
       rewrite resolve_has_PNVI.
       rewrite resolve_has_INSTANT.
       destruct ptr.
       destruct p eqn:P.
-      2-4:break_match;simpl; preserves_step.
+      2-4:break_match;intros; simpl; preserves_step.
+      intros s.
       break_match;simpl;try preserves_step.
       break_match;simpl;[preserves_step|].
       apply bind_PreservesInvariant'.
-      intros s H s' x H0.
-      pose proof (find_live_allocation_preserves (Capability_GS.cap_get_value t)) as A.
-      specialize (A s H).
-      unfold lift_sum_p in A.
+      intros H s' x H0.
+
+      pose proof (find_live_allocation_same_state (Capability_GS.cap_get_value t)) as H2.
+      specialize (H2 _ _ _ H0).
+      subst s'.
+      split;[assumption|].
+      pose proof (find_live_allocation_preserves s (Capability_GS.cap_get_value t)) as A.
+      specialize (A H).
+      unfold post_exec_invariant, lift_sum_p in A.
       break_match_hyp.
       -
         clear - H0 Heqs0.
@@ -1389,33 +1461,34 @@ Module RevocationProofs.
         break_let.
         tuple_inversion.
         inl_inr_inv.
-        subst.
-        split;[apply A|].
+        subst m.
+        clear H.
         break_match.
         +
           break_let.
+          (* TODO: [s] is lost here *)
           preserves_step;[repeat break_if; preserves_step|].
-          intros u0.
+          intros s' u0.
           preserves_step;[repeat break_if; preserves_step|].
-          intros u1.
+          intros s'0 u1.
           clear u0 u1.
           preserves_step.
           *
             apply bind_PreservesInvariant''.
-            intros s0 H0 s' x0 H1.
+            intros H s'1 x0 H0.
             split.
 
-            pose proof (revoke_pointers_preserves a) as R.
-            specialize (R s0 H0).
-            unfold lift_sum_p in R.
+            pose proof (revoke_pointers_preserves s'0 a) as R.
+            specialize (R H).
+            unfold post_exec_invariant, lift_sum_p in R.
             break_match_hyp.
             --
-              unfold execErrS in Heqs1.
+              unfold execErrS in Heqs0.
               break_let.
               tuple_inversion.
               inl_inr.
             --
-              unfold execErrS in Heqs1.
+              unfold execErrS in Heqs0.
               break_let.
               tuple_inversion.
               inl_inr_inv.
@@ -1424,15 +1497,12 @@ Module RevocationProofs.
               destruct x0.
               subst.
               rename a into alloc, z into alloc_id.
-              pose proof (find_live_allocation_same_state (Capability_GS.cap_get_value t)) as H2.
-              specialize (H2 _ _ _ Heqp0).
-              subst.
               apply find_live_allocation_res_consistent in Heqp0.
+              (* TODO: lost link between [s] and [s'0] *)
               admit.
           *
-            intros u2.
+            intros s'1 u2.
             preserves_step.
-            intros m0 H0.
             repeat break_if; preserves_step.
             intros m1 H1.
             apply mem_state_with_last_address_preserves.
