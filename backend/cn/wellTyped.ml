@@ -867,23 +867,23 @@ module WRET = struct
           there's no name clashes *)
        (* let p = RET.alpha_rename_qpredicate_type p in *)
        let@ pointer = WIT.check loc BT.Loc p.pointer in
+       let@ qbt = WBT.is_bt loc (snd p.q) in
+       let@ () = ensure_bits_type loc qbt in
+       assert (BT.equal (snd p.q) qbt); (*normalisation does not change bit types. If this assertion fails, we have to adjust the later code to use qbt.*)
        let@ step = WIT.check loc (snd p.q) p.step in
-       let@ simp_ctxt = simp_ctxt () in
-       let step = Simplify.IndexTerms.eval simp_ctxt step in
-       let@ () = match IT.is_const step with
-         | Some (Terms.Z z, _) ->
-           if Z.lt Z.zero z then return ()
+       let@ step = match step with
+         | IT (Const (Bits (bits_bt, z)), _) ->
+           if Z.lt Z.zero z 
+           then return step
            else fail (fun _ -> {loc; msg = Generic
              (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "must be positive")})
-         | Some (Terms.Bits (bits_bt, z), _) ->
-           if Z.lt Z.zero z then return ()
-           else fail (fun _ -> {loc; msg = Generic
-             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "must be positive")})
+         | IT (SizeOf _, _) -> return step
+         | IT (Cast (_, IT (SizeOf _, _)), _) -> return step
          | _ ->
-           let hint = "Only constant iteration steps are allowed" in
+           let hint = "Only constant iteration steps are allowed." in
            fail (fun ctxt -> {loc; msg = NIA {it = p.step; ctxt; hint}})
        in
-       let@ () = match p.name with
+       (*let@ () = match p.name with
          | (Owned (ct, _init)) ->
            let sz = Memory.size_of_ctype ct in
            if IT.equal step (IT.int_lit_ sz (snd p.q)) then return ()
@@ -891,7 +891,7 @@ module WRET = struct
              (!^"Iteration step" ^^^ IT.pp p.step ^^^ parens (IT.pp step) ^^^
                  !^ "different to sizeof" ^^^ Sctypes.pp ct ^^^ parens (!^ (Int.to_string sz)))})
          | _ -> return ()
-       in
+       in*)
        let@ permission, iargs =
          pure begin
              let@ () = add_l (fst p.q) (snd p.q) (loc, lazy (Pp.string "forall-var")) in
