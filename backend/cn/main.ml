@@ -142,6 +142,7 @@ let main
       log_times
       random_seed
       solver_logging
+      output_decorated_dir
       output_decorated
       astprints
       use_vip
@@ -193,16 +194,17 @@ let main
          begin match output_decorated with
          | None -> ()
          | Some output_filename ->
-            let oc = Stdlib.open_out output_filename in
-            let dir_name = String.split_on_char '/' output_filename in
-            let rec take_n n list = match list with 
-              | [] -> []
-              | x :: xs -> if n == 1 then [x] else x :: (take_n (n - 1) xs)
-            in
-            let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in
-            let cn_prefix = if (List.length dir_name != 0) then String.concat "/" cn_prefix_list  ^ "/" else "" in
-            let cn_oc = Stdlib.open_out (cn_prefix ^ "cn.c") in
-            let cn_header_oc = Stdlib.open_out (cn_prefix ^ "cn.h") in
+            let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
+            let oc = Stdlib.open_out (prefix ^ output_filename) in
+            (* let dir_name = String.split_on_char '/' output_filename in *)
+            (* let rec take_n n list = match list with  *)
+              (* | [] -> [] *)
+              (* | x :: xs -> if n == 1 then [x] else x :: (take_n (n - 1) xs) *)
+            (* in *)
+            (* let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in *)
+            (* let cn_prefix = if (List.length dir_name != 0) then String.concat "/" cn_prefix_list  ^ "/" else "" in *)
+            let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
+            let cn_header_oc = Stdlib.open_out (prefix ^ "cn.h") in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog in
             let (c_function_defs, c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
@@ -211,16 +213,16 @@ let main
             let (ownership_function_defs, ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
             let c_structs = Executable_spec_internal.generate_c_structs ail_prog.tag_definitions in 
 
-            let rec repeat n str = 
-              if n <= 0 then [] else 
-                (if n == 1 then [str] else str :: (repeat (n - 1) str)) 
-            in
+            (* let rec repeat n str =  *)
+              (* if n <= 0 then [] else  *)
+                (* (if n == 1 then [str] else str :: (repeat (n - 1) str))  *)
+            (* in *)
             (* Hacky. TODO: Make less hacky *)
-            let dots_repeat_list = repeat ((List.length dir_name) - 2) ".." in
-            let dots_str = String.concat "/" dots_repeat_list in
+            (* let dots_repeat_list = repeat ((List.length dir_name) - 2) ".." in *)
+            (* let dots_str = String.concat "/" dots_repeat_list in *)
 
             (* TODO: Topological sort *)
-            Stdlib.output_string cn_header_oc (generate_include_header (dots_str ^ "/executable-spec/cn_utils.c", false));
+            Stdlib.output_string cn_header_oc (generate_include_header ("./executable-spec/cn_utils.c", false));
             Stdlib.output_string cn_header_oc (generate_include_header ("assert.h", true));
             Stdlib.output_string cn_header_oc c_datatypes;
             Stdlib.output_string cn_header_oc c_structs;
@@ -379,7 +381,12 @@ let skip =
   let doc = "skip type-checking of this function (or comma-separated names)" in
   Arg.(value & opt (some string) None & info ["skip"] ~doc)
 
-(* TODO(Christopher/Rini): I'm adding a tentative cli option, rename/change it to whatever you prefer *)
+
+let output_decorated_dir =
+  let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations to the provided directory" in
+  Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
+  
+
 let output_decorated =
   let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations" in
   Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
@@ -461,6 +468,7 @@ let () =
       log_times $
       random_seed $
       solver_logging $
+      output_decorated_dir $
       output_decorated $
       astprints $
       use_vip $
