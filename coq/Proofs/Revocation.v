@@ -1247,10 +1247,25 @@ Module RevocationProofs.
       break_match; try preserves_step.
     Qed.
 
+
     (* relation of pointer before and afer revocaton (per [maybe_revoke_pointer] *)
-    Inductive revoked_pointer_rel: (bool * CapGhostState) -> (bool * CapGhostState) -> Prop :=
-    | revoked_pointer_rel_same: forall c, revoked_pointer_rel c c
-    | revoked_pointer_rel_revoked: forall gs, revoked_pointer_rel (true, gs) (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |}).
+    Inductive revoked_pointer_rel
+      (a : allocation)
+      (addr : ZMap.key)
+      (bm: ZMap.t AbsByte)
+      : (bool * CapGhostState) -> (bool * CapGhostState) -> Prop :=
+    | revoked_pointer_rel_untagged: forall gs, revoked_pointer_rel a addr bm (false, gs) (false, gs)
+    | revoked_pointer_rel_fetch_err: forall err gs,
+        fetch_and_decode_cap bm addr true = inl err
+        -> revoked_pointer_rel a addr bm (true, gs) (true, gs)
+    | revoked_pointer_rel_out_of_scope: forall gs c,
+        fetch_and_decode_cap bm addr true = inr c
+        -> ~cap_bounds_within_alloc c a
+        -> revoked_pointer_rel a addr bm (true, gs) (true, gs)
+    | revoked_pointer_rel_revoked: forall gs c,
+        fetch_and_decode_cap bm addr true = inr c
+        -> cap_bounds_within_alloc c a
+        -> revoked_pointer_rel a addr bm (true, gs) (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |}).
 
     Lemma zmap_maybe_revoke_pointer_res_invariant:
       forall (a : allocation) (m : mem_state_r),
@@ -1354,11 +1369,11 @@ Module RevocationProofs.
 
     Lemma zmap_mmapi_maybe_revoke_pointer_spec
       (a : allocation)
-      (m0 : mem_state)
+      (s : mem_state)
       (oldmeta newmeta : ZMap.t (bool * CapGhostState)):
 
-      zmap_mmapi (maybe_revoke_pointer a m0) oldmeta m0 = (m0, inr newmeta) ->
-      zmap_relate_keys oldmeta newmeta (fun _ : ZMap.key => revoked_pointer_rel).
+      zmap_mmapi (maybe_revoke_pointer a s) oldmeta s = (s, inr newmeta) ->
+      zmap_relate_keys oldmeta newmeta (fun addr : ZMap.key => revoked_pointer_rel a addr s.(bytemap)).
     Proof.
       intros H.
       intros k.
@@ -1367,7 +1382,6 @@ Module RevocationProofs.
       break_let.
       (* TODO: looks provable *)
     Admitted.
-
 
     #[global] Instance revoke_pointers_preserves:
       forall s a, PreservesInvariant mem_invariant s (revoke_pointers a).
@@ -1412,12 +1426,8 @@ Module RevocationProofs.
       }
       subst m.
 
-      assert(R: zmap_relate_keys (capmeta s) newmeta (fun k => revoked_pointer_rel)).
-      {
-        eapply zmap_mmapi_maybe_revoke_pointer_spec.
-        eauto.
-      }
-
+      apply(zmap_mmapi_maybe_revoke_pointer_spec a s (capmeta s) newmeta) in Heqp0.
+      rename Heqp0 into R.
       unfold mem_state_with_capmeta in U.
 
       destruct H as [Sbase Scap].
@@ -1451,14 +1461,12 @@ Module RevocationProofs.
         cbn in *.
         destruct R as [[v1 [v2 [M1 [M2 R]]]]|[NR0 NR1]].
         --
+          pose proof (MapsTo_fun M2 H1).
+          subst v2.
           (* both keys present *)
           invc R.
           ++
             (* ghost states are same *)
-            pose proof (MapsTo_fun M2 H1).
-            subst.
-            clear H.
-
             specialize (Scap M1).
             remember (fetch_bytes bytemap0 addr (sizeof_pointer MorelloImpl.get)) as bs.
             specialize (Scap bs).
@@ -1467,9 +1475,12 @@ Module RevocationProofs.
             auto.
           ++
             (* revoked *)
-            pose proof (MapsTo_fun M2 H1).
-            subst.
-            congruence.
+            specialize (Scap M1).
+            remember (fetch_bytes bytemap0 addr (sizeof_pointer MorelloImpl.get)) as bs.
+            specialize (Scap bs).
+            autospecialize Scap.
+            reflexivity.
+            apply Scap.
         --
           (* both keys are absent *)
           contradict NR1.
@@ -1546,6 +1557,118 @@ Module RevocationProofs.
             assumption.
           *
             inv Heqo.
+    Qed.
+
+    Fact update_state_capmeta:
+      forall s s' c,
+        @ErrorWithState.update mem_state memMError (mem_state_with_capmeta c) s = (s', inr tt)
+        -> s'.(capmeta) = c /\ s'.(bytemap) = s.(bytemap).
+    Proof.
+      intros s s' c H.
+      Transparent ret bind get put.
+      unfold ErrorWithState.update, memM_monad, Monad_errS, State_errS, ret, bind, get, put, mem_state_with_capmeta in H.
+      Opaque ret bind get put.
+      split;destruct s';inversion H;reflexivity.
+    Qed.
+
+    Lemma fetch_and_decode_cap_success
+      (addr: ZMap.key)
+      (c: Capability_GS.t)
+      (bm: ZMap.t AbsByte):
+      split_bytes_ptr_spec Prov_disabled (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) ->
+      decode_cap (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) true c ->
+      fetch_and_decode_cap bm addr true = inr c.
+    Proof.
+      intros S D.
+      unfold decode_cap in D.
+      destruct S as [S1 S2].
+      unfold fetch_and_decode_cap.
+      Transparent ret bind get.
+      unfold memM_monad, Monad_errS, State_errS, Monad_either, ret, bind.
+      break_match.
+      -
+        exfalso.
+        (* [split_bytes] could not fail! *)
+        admit.
+      -
+        repeat break_let.
+        destruct D as [cs [D1 D2]].
+        assert(extract_unspec l = Some cs) as U.
+        admit.
+        rewrite U.
+        subst.
+        cbn.
+        (* TODO: [rev] is missing!!! *)
+      Opaque ret bind get.
+    Admitted.
+
+    Lemma no_caps_pointing_to_alloc
+      (s s' : mem_state_r)
+      (alloc : allocation)
+      (addr : ZMap.key)
+      (g : CapGhostState)
+      (bs : list AbsByte)
+      (c : Capability_GS.t)
+      :
+      revoke_pointers alloc s = (s', inr tt) ->
+      ZMap.MapsTo addr (true, g) (capmeta s') ->
+      fetch_bytes (bytemap s') addr (sizeof_pointer MorelloImpl.get) = bs ->
+      split_bytes_ptr_spec Prov_disabled bs -> (* TODO: do we need this? *)
+      decode_cap bs true c -> ~ cap_bounds_within_alloc c alloc.
+    Proof.
+      intros R M F S D.
+      unfold revoke_pointers in R.
+      Transparent ret bind get.
+      unfold memM_monad, Monad_errS, State_errS, ret, bind, get in R.
+      Opaque ret bind get.
+      break_let.
+      break_match_hyp;[inversion R|].
+      break_let.
+      break_match_hyp;[inversion R|].
+      destruct u.
+      tuple_inversion.
+
+      pose proof (zmap_mmapi_same_state _ _ _ _ _ Heqp) as E.
+      subst m.
+
+      apply update_state_capmeta in Heqp0.
+      destruct Heqp0 as [E1 E2].
+      subst.
+      generalize dependent (capmeta s').
+      intros cm Z M.
+
+      apply zmap_mmapi_maybe_revoke_pointer_spec in Z.
+      specialize (Z addr).
+      invc Z.
+      -
+        (* both exists in [campeta s] and [cm] *)
+        destruct H as [g1 [g2 [H1 [H2 R]]]].
+        pose proof (MapsTo_fun M H2).
+        subst g2. clear H2.
+        invc R.
+        +
+          (* fetch error - not possible *)
+          exfalso.
+          rewrite E2 in *.
+          clear E2 s'.
+          assert (fetch_and_decode_cap (bytemap s) addr true = inr c).
+          apply fetch_and_decode_cap_success;auto.
+          congruence.
+        +
+
+          rewrite E2 in *.
+          clear E2 s'.
+          assert (fetch_and_decode_cap (bytemap s) addr true = inr c).
+          apply fetch_and_decode_cap_success;auto.
+          rewrite H in H0.
+          inl_inr_inv.
+          assumption.
+      -
+        (* not in capmeta  *)
+        destruct H as [H1 H2].
+        contradict H2.
+        exists (true, g).
+        apply M.
     Qed.
 
     Lemma remove_revoked_allocation_preserves
@@ -1625,31 +1748,19 @@ Module RevocationProofs.
             eapply MapsTo_fun; eauto.
           }
           subst alloc'.
-
-
-          (* TODO:
-          - alloc_id is present in [s] and [s']
-          - we remove it from [s'] via [Zmap.remove] in the goal
-          - after [revoke_pointers] there is no tagged pointers in [s'] with bounds within this alloc
-          - [revoke_pointers] does not change [allocatons]. They only touch [capmeta]
+          (*
+            - alloc_id is present in [s] and [s']
+            - we remove it from [s'] via [Zmap.remove] in the goal
+            - after [revoke_pointers] there is no tagged pointers in [s'] with bounds within this alloc
+            - [revoke_pointers] does not change [allocatons]. They only touch [capmeta]
            *)
-          assert(forall (addr : ZMap.key) (g : CapGhostState),
-                    ZMap.MapsTo addr (true, g) (capmeta s') ->
-                    forall bs : list AbsByte,
-                      fetch_bytes (bytemap s') addr (sizeof_pointer MorelloImpl.get) = bs ->
-                      split_bytes_ptr_spec Prov_disabled bs ->
-                      (forall c : Capability_GS.t,  decode_cap bs true c -> (~ cap_bounds_within_alloc c alloc)))
-            as RESPEC.
-          admit.
-          clear s AM RE.
-
-          specialize (RESPEC addr g A bs F IScap1' c IScap3').
-          congruence.
+          contradict IScap5'.
+          eapply no_caps_pointing_to_alloc; eauto.
         +
           exists alloc_id'.
           split;[|auto].
           apply ZMap.remove_2;auto.
-    Admitted.
+    Qed.
 
     #[global] Instance kill_preserves
       (loc : location_ocaml)
@@ -2092,6 +2203,7 @@ Module RevocationProofs.
     :=
     zmap_relate_keys capmeta1 capmeta2 (addr_cap_meta_same m1 m2).
 
+  (* TODO: Needs to be reviewed wrt revocation. *)
   Definition mem_state_same
     (m1:CheriMemoryWithPNVI.mem_state_r)
     (m2:CheriMemoryWithoutPNVI.mem_state_r)
