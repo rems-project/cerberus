@@ -171,22 +171,25 @@ Module RevocationProofs.
       (* decode without error *)
       /\ Capability_GS.decode ls true = Some c.
 
-  (* [True] if list of bytes starts with given offset and offsets
-     increases by one each step *)
-  Inductive bytes_copy_offset_seq: nat -> list AbsByte -> Prop
-    :=
-  | bytes_copy_offset_seq_nil: forall n, bytes_copy_offset_seq n []
-  | bytes_copy_offset_seq_cons:
-    forall n b bs,
+  (** [True] if the list of bytes starts with given offset and offsets
+      increases by one each step ending with [m] *)
+  Inductive bytes_copy_offset_seq: nat -> nat -> list AbsByte -> Prop :=
+  | bytes_copy_offset_seq_single:
+    forall n b,
       b.(copy_offset) = Some n ->
-      bytes_copy_offset_seq (S n) bs -> bytes_copy_offset_seq n (b::bs).
+      bytes_copy_offset_seq (S n) n [b]
+  | bytes_copy_offset_seq_cons:
+    forall m n b bs,
+      b.(copy_offset) = Some n ->
+      bytes_copy_offset_seq m (S n) bs ->
+      bytes_copy_offset_seq m n (b :: bs).
 
-  (* [True] if all bytes in given list [bl] have given provenance, and
+  (** [True] if all bytes in given list [bl] have given provenance, and
      their offsets are sequential ending with [0] *)
   Definition split_bytes_ptr_spec (p:provenance) (bl:list AbsByte): Prop
     :=
     List.Forall (fun x => provenance_eqb p x.(prov) = true) bl
-    /\ bytes_copy_offset_seq 0 bl.
+    /\ bytes_copy_offset_seq (List.length bl) 0 bl.
 
   Definition allocations_do_no_overlap (a1 a2:allocation) : Prop
     :=
@@ -1577,6 +1580,37 @@ Module RevocationProofs.
       assumption.
     Qed.
 
+    Lemma split_bytes_spec
+      (bs : list AbsByte)
+      (p : provenance)
+      :
+      split_bytes_ptr_spec p bs ->
+      (exists (tag : bool) (cs: list (option ascii)) (p' : provenance),
+          provenance_eqb p p' = true /\
+          split_bytes bs = inr (p', tag, cs)).
+    Proof.
+      intros H.
+      destruct H as [HP HO].
+    Admitted.
+
+    Lemma split_bytes_values
+      (tag : bool)
+      (cs : list (option ascii))
+      (bs : list AbsByte)
+      (p:provenance):
+      split_bytes bs = inr (p, tag, cs) ->
+      Forall2 (fun a ov => ov = value a) bs cs.
+    Proof.
+    Admitted.
+
+    Lemma extract_unspec_spec
+      (cs : list (option ascii))
+      (ls : list ascii):
+      Forall2 (fun ov v => ov = Some v) cs ls ->
+      extract_unspec cs = Some ls.
+    Proof.
+    Admitted.
+
     Lemma fetch_and_decode_cap_success
       (addr: ZMap.key)
       (c: Capability_GS.t)
@@ -1586,40 +1620,52 @@ Module RevocationProofs.
       fetch_and_decode_cap bm addr true = inr c.
     Proof.
       intros S D.
+      remember (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) as bs.
+      apply split_bytes_spec in S.
+
+      destruct S as [tag [cs [p' [P S]]]].
+      invc P.
+      destruct p';try congruence.
+      clear H0.
       unfold decode_cap in D.
-      destruct S as [S1 S2].
       unfold fetch_and_decode_cap.
       Transparent ret bind get.
       unfold memM_monad, Monad_errS, State_errS, Monad_either, ret, bind.
-      remember (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) as bs.
+      generalize dependent (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)).
+      intros bs D S.
       break_match.
       -
-        exfalso.
-        (* [split_bytes] could not fail! *)
-
-        assert(Z.of_nat (List.length bs) = (sizeof_pointer MorelloImpl.get)).
-        {
-          subst bs.
-          apply fetch_bytes_len.
-          (* TODO: need global assumption for this *)
-          admit.
-        }
-        admit.
+        inl_inr.
       -
         repeat break_let.
-        destruct D as [cs [D1 D2]].
-        assert(extract_unspec l = Some cs) as U.
-        {
-          clear - D1 S2 Heqs.
-          admit.
-        }
-        rewrite U.
         subst.
+        inl_inr_inv.
+        subst.
+        destruct D as [ls [BL D]].
+        (* [bs] [cs] and [ls] relation is a bit tricky here, but workable *)
+
+        apply split_bytes_values in Heqs.
+        rename Heqs into BC.
+
+        assert(Forall2 (fun ov v => ov = Some v ) cs ls) as CL.
+        {
+          clear - BC BL.
+          apply Forall2_flip in BC.
+          eapply list.Forall2_transitive;eauto.
+          clear.
+          intros x y z H H0.
+          cbn in *.
+          subst.
+          assumption.
+        }
+
+        apply extract_unspec_spec in CL.
+        rewrite CL.
         cbn.
-        rewrite D2.
+        rewrite D.
         reflexivity.
-      Opaque ret bind get.
-    Admitted.
+        Opaque ret bind get.
+    Qed.
 
     Lemma no_caps_pointing_to_alloc
       (s s' : mem_state_r)

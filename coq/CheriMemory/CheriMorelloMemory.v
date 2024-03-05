@@ -1122,7 +1122,7 @@ Module Type CheriMemoryImpl
     : serr (provenance * bool (*ptr valid *) * list (option ascii)) :=
     match bs with
     | [] => raise "AbsByte.split_bytes: called on an empty list"
-    | b::_ =>
+    | b::bs' =>
         '(prov_maybe, rev_values, offset_status_maybe) <-
           monadic_fold_left
             (fun '(prov_acc_maybe, val_acc, offset_acc_maybe) b =>
@@ -1140,7 +1140,7 @@ Module Type CheriMemoryImpl
                  | _, _ => None
                  end in
                ret (prov_acc', b.(value)::val_acc, offset_acc'))
-            bs ((Some b.(prov), [], Some O)) ;;
+            (b::bs') ((Some b.(prov), [], Some O)) ;;
 
         let values := List.rev rev_values in
         ret (opt_def (PNVI_prov Prov_none) prov_maybe ,
