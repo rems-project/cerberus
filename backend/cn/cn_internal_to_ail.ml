@@ -119,7 +119,7 @@ let rec bt_to_cn_base_type = function
 | BT.Unit -> CN_unit
 | BT.Bool -> CN_bool
 | BT.Integer -> CN_integer
-| BT.Bits _ -> failwith "TODO"
+| BT.Bits (sign, size) -> CN_bits ((match sign with BT.Unsigned -> CN_unsigned  | BT.Signed -> CN_unsigned), size)
 | BT.Real -> CN_real
 | BT.Alloc_id  -> failwith "TODO BT.Alloc_id"
 | BT.CType -> failwith "TODO BT.Ctype"
@@ -164,7 +164,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
   | CN_bool -> C.(Basic (Integer Bool))
   | CN_integer -> C.(Basic (Integer (Signed Long))) 
   (* TODO: Discuss integers *)
-  | CN_bits _ -> failwith "TODO CN_bits"
+  | CN_bits _ -> C.(Basic (Integer (Signed Long))) 
   | CN_real -> failwith "TODO CN_real"
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_alloc_id -> failwith "TODO CN_alloc_id"
@@ -376,11 +376,11 @@ let rec cn_to_ail_const_internal = function
     A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
   | Bool b -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B)))
   | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void)))
-  | Null -> A.AilEconst (ConstantNull)
+  | _ -> A.AilEconst (ConstantNull)
   (* TODO *)
-  | CType_const ct -> failwith "TODO: CType_Const"
+  (* | CType_const ct -> failwith "TODO: CType_Const" *)
   (* | Default of BaseTypes.t  *)
-  | _ -> failwith "TODO cn_to_ail_const_internal"
+  (* | _ -> failwith "TODO cn_to_ail_const_internal" *)
 
 type ail_bindings_and_statements = A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
 
@@ -1566,7 +1566,9 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> (C.union
     (cn_to_ail_logical_constraint_internal dts globals d lc, false)
 
   | Cnprog.M_CN_inline _ -> failwith "TODO M_CN_inline"
-  | Cnprog.M_CN_print _ -> failwith "TODO M_CN_print"
+  | Cnprog.M_CN_print t -> 
+    (default_true_res, true)
+    (* failwith "TODO M_CN_print" *)
 
 
 let rec cn_to_ail_cnprog_internal_aux dts globals = function
