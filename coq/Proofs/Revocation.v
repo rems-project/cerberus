@@ -162,16 +162,6 @@ Module RevocationProofs.
       rewrite H0. apply H2.
   Qed.
 
-  (* Simple function decode capability from memory. We do not check alignment, provenance, etc.
-     Could be proven to be them same as [decode_cap]
-   *)
-  (*
-  Definition decode_cap_fun (abs:list AbsByte) (tag:bool): option Capability_GS.t
-    :=
-    let bs := List.map value abs in
-    cs <- extract_unspec bs ;;
-    Capability_GS.decode (List.rev cs) tag.
-   *)
 
   Definition decode_cap (bs:list AbsByte) (tag:bool) (c:Capability_GS.t): Prop
     :=
@@ -179,7 +169,7 @@ Module RevocationProofs.
       (* have their corrsponding bytes intialized *)
       Forall2 (fun a x => a.(value) = Some x) bs ls
       (* decode without error *)
-      /\ Capability_GS.decode (List.rev ls) true = Some c.
+      /\ Capability_GS.decode ls true = Some c.
 
   (* [True] if list of bytes starts with given offset and offsets
      increases by one each step *)
@@ -196,7 +186,7 @@ Module RevocationProofs.
   Definition split_bytes_ptr_spec (p:provenance) (bl:list AbsByte): Prop
     :=
     List.Forall (fun x => provenance_eqb p x.(prov) = true) bl
-    /\ bytes_copy_offset_seq 0 (List.rev bl).
+    /\ bytes_copy_offset_seq 0 bl.
 
   Definition allocations_do_no_overlap (a1 a2:allocation) : Prop
     :=
@@ -1571,6 +1561,22 @@ Module RevocationProofs.
       split;destruct s';inversion H;reflexivity.
     Qed.
 
+
+    Lemma fetch_bytes_len
+      (addr : ZMap.key)
+      (bm : ZMap.t AbsByte)
+      (sz: Z):
+      0 <= sz ->
+      Z.of_nat (Datatypes.length (fetch_bytes bm addr sz)) = sz.
+    Proof.
+      intros H.
+      unfold fetch_bytes.
+      rewrite map_length.
+      rewrite list_init_len.
+      apply Znat.Z2Nat.id.
+      assumption.
+    Qed.
+
     Lemma fetch_and_decode_cap_success
       (addr: ZMap.key)
       (c: Capability_GS.t)
@@ -1585,20 +1591,33 @@ Module RevocationProofs.
       unfold fetch_and_decode_cap.
       Transparent ret bind get.
       unfold memM_monad, Monad_errS, State_errS, Monad_either, ret, bind.
+      remember (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) as bs.
       break_match.
       -
         exfalso.
         (* [split_bytes] could not fail! *)
+
+        assert(Z.of_nat (List.length bs) = (sizeof_pointer MorelloImpl.get)).
+        {
+          subst bs.
+          apply fetch_bytes_len.
+          (* TODO: need global assumption for this *)
+          admit.
+        }
         admit.
       -
         repeat break_let.
         destruct D as [cs [D1 D2]].
         assert(extract_unspec l = Some cs) as U.
-        admit.
+        {
+          clear - D1 S2 Heqs.
+          admit.
+        }
         rewrite U.
         subst.
         cbn.
-        (* TODO: [rev] is missing!!! *)
+        rewrite D2.
+        reflexivity.
       Opaque ret bind get.
     Admitted.
 
@@ -3418,8 +3437,8 @@ Module RevocationProofs.
       : relation repr_fold_T
       :=
       fun '(funptrmap,capmeta,a,lbytes) '(funptrmap',capmeta',a',lbytes') =>
-        let bs  := List.concat (List.rev lbytes ) in
-        let bs' := List.concat (List.rev lbytes') in
+        let bs  := List.concat (List.rev lbytes ) in (* TODO: do we need 'rev' here? *)
+        let bs' := List.concat (List.rev lbytes') in (* TODO: do we need 'rev' here? *)
         a = a'
         /\ repr_res_eq mem1 mem2 (a - (Z.of_nat (List.length bs)))
              (funptrmap  , capmeta  , bs )

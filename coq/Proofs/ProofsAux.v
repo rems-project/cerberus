@@ -266,6 +266,35 @@ Section ListAux.
   Admitted.
 
 
+
+  Lemma list_init_len {A : Type} (n : nat) (f : nat -> A):
+    List.length (list_init n f) = n.
+  Proof.
+    unfold list_init.
+    remember (@nil A) as l.
+
+    cut(Datatypes.length (list_init_rec n f l) = (n + Datatypes.length l))%nat.
+    {
+      subst l.
+      rewrite <- plus_n_O.
+      intros H.
+      apply H.
+    }
+    clear Heql.
+
+    revert l.
+    induction n.
+    -
+      cbn.
+      reflexivity.
+    -
+      intros l.
+      cbn.
+      rewrite IHn.
+      cbn.
+      lia.
+  Qed.
+
 End ListAux.
 
 Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
