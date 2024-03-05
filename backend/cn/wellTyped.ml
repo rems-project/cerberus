@@ -225,7 +225,6 @@ module WIT = struct
 
   type t = IndexTerms.t
 
-  let eval = Simplify.IndexTerms.eval
 
 
   (* let rec check_and_bind_pattern loc bt pat =  *)
@@ -394,21 +393,21 @@ module WIT = struct
             let@ t' = check loc (IT.bt t) t' in
             return (IT (Binop (Sub, t, t'), IT.bt t))
          | Mul ->
-            let@ simp_ctxt = simp_ctxt () in
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            begin match (IT.bt t), (eval simp_ctxt t), (eval simp_ctxt t') with
-            | Real, _, _ ->
-               return (IT (Binop (Mul, t, t'), IT.bt t))
-            | Integer, simp_t, simp_t' when
-                   Option.is_some (is_const simp_t)
-                   || Option.is_some (is_const simp_t') ->
-               return (IT (Binop (Mul, simp_t, simp_t'), IT.bt t))
-            | Bits _, _, _ -> return (mul_ (t, t'))
+            begin match (IT.bt t), is_const t, is_const t' with
+            | Integer, None, None ->
+               let msg = 
+                !^"Both sides of the integer multiplication" 
+                ^^^ squotes (IT.pp (mul_ (t,t')))
+                ^^^ !^"are not constants." 
+                ^^^ !^"treating the term as uninterpreted." 
+               in
+               warn loc msg;
+               return (IT (Binop (MulNoSMT,t, t'), IT.bt t))
             | _ ->
-               let hint = "Integer multiplication only allowed when one of the arguments is a constant" in
-               fail (fun ctxt -> {loc; msg = NIA {it = IT.mul_ (t, t'); ctxt; hint}})
+               return (IT (Binop (Mul, t, t'), IT.bt t))
             end
          | MulNoSMT ->
             let@ t = infer loc t in
@@ -416,25 +415,29 @@ module WIT = struct
             let@ t' = check loc (IT.bt t) t' in
             return (IT (Binop (MulNoSMT, t, t'), IT.bt t))
          | Div ->
-            let@ simp_ctxt = simp_ctxt () in
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            begin match IT.bt t, eval simp_ctxt t' with
-            | Real, _ ->
-               return (IT (Binop (Div, t, t'), IT.bt t))
-            | Integer, simp_t' when Option.is_some (is_const simp_t') ->
-               let z = Option.get (is_z simp_t') in
-               let@ () = if Z.lt Z.zero z then return ()
-                 else fail (fun _ -> {loc; msg = Generic
-                   (!^"Divisor " ^^^ IT.pp t' ^^^ !^ "must be positive")}) in
-               return (IT (Binop (Div, t, simp_t'), IT.bt t))
-            | Bits _, simp_t' when Option.is_some (is_const simp_t') ->
-               (* TODO: check for a zero divisor *)
-               return (IT (Binop (Div, t, simp_t'), IT.bt t))
+            begin match IT.bt t, is_const t' with
+            | Integer, Some (Z z', _) when Z.leq z' Z.zero ->
+               let msg =
+                 !^"Division" ^^^ squotes (IT.pp (div_ (t,t')))
+                 ^^^ !^"does not have positive right-hand argument."
+                 ^^^ !^"Treating as uninterpreted."
+               in
+               warn loc msg;
+               return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
+            | Integer, None ->
+               let msg =
+                 !^"Division" ^^^ squotes (IT.pp (div_ (t,t')))
+                 ^^^ !^"does not have constant as right-hand argument."
+                 ^^^ !^"Treating as uninterpreted."
+               in
+               warn loc msg;
+               return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
             | _ ->
-               let hint = "Integer division only allowed when divisor is constant" in
-               fail (fun ctxt -> {loc; msg = NIA {it = div_ (t, t'); ctxt; hint}})
+               (* TODO: check for a zero divisor *)
+               return (IT (Binop (Div, t, t'), IT.bt t))
             end
          | DivNoSMT ->
             let@ t = infer loc t in
@@ -442,22 +445,16 @@ module WIT = struct
             let@ t' = check loc (IT.bt t) t' in
             return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
          | Exp ->
-            let@ simp_ctxt = simp_ctxt () in
             let@ t = infer loc t in
-            let bt = IT.bt t in
-            let@ () = ensure_bits_type loc bt in
-            let@ t' = check loc bt t' in
-            begin match get_num_z (eval simp_ctxt t), get_num_z (eval simp_ctxt t') with
-            | Some _, Some z' when Z.lt z' Z.zero ->
-               fail (fun ctxt -> {loc; msg = NegativeExponent {it = exp_ (t, t'); ctxt}})
-            | Some _, Some z' when not (Z.fits_int32 z') ->
-               fail (fun ctxt -> {loc; msg = TooBigExponent {it = exp_ (t, t'); ctxt}})
-            | Some z, Some z' ->
-               return (IT (Binop (Exp, num_lit_ z bt, num_lit_ z' bt), bt))
-            | _ ->
-               let hint = "Only exponentiation of two constants is allowed" in
-               fail (fun ctxt -> {loc; msg = NIA {it = exp_ (t, t'); ctxt; hint}})
-            end
+            let@ () = ensure_bits_type loc (IT.bt t) in
+            let@ t' = check loc (IT.bt t) t' in
+            let msg =
+              !^"Treating exponentiation"
+              ^^^ squotes (IT.pp (exp_ (t, t')))
+              ^^^ !^"as uninterpreted."
+            in
+            warn loc msg;
+            return (IT (Binop (ExpNoSMT, t, t'), IT.bt t))            
            | ExpNoSMT
            | RemNoSMT
            | ModNoSMT
@@ -465,37 +462,13 @@ module WIT = struct
            | BWAndNoSMT
            | BWOrNoSMT
            | ShiftLeft
-           | ShiftRight ->
+           | ShiftRight
+           | Rem
+           | Mod ->
               let@ t = infer loc t in
               let@ () = ensure_bits_type loc (IT.bt t) in
               let@ t' = check loc (IT.bt t) t' in
               return (IT (Binop (arith_op, t, t'), IT.bt t))
-           | Rem ->
-              let@ simp_ctxt = simp_ctxt () in
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              begin match is_z (eval simp_ctxt t') with
-              | None ->
-                 let hint = "Only division (rem) by constants is allowed" in
-                 fail (fun ctxt -> {loc; msg = NIA {it = rem_ (t, t'); ctxt; hint}})
-              | Some z' ->
-                 return (IT (Binop (Rem, t, z_ z'), Integer))
-              end
-           | Mod ->
-              let@ simp_ctxt = simp_ctxt () in
-              let@ t = infer loc t in
-              let@ () = ensure_bits_type loc (IT.bt t) in
-              let@ t' = check loc (IT.bt t) t' in
-              let simp_t' = eval simp_ctxt t' in
-              begin match is_const simp_t' with
-              | None ->
-                 Pp.debug 1 (lazy (Pp.item "mod rhs check: simplified"
-                     (Pp.infix_arrow (IT.pp t') (IT.pp simp_t'))));
-                 let hint = "Only division (mod) by constants is allowed" in
-                 fail (fun ctxt -> {loc; msg = NIA {it = mod_ (t, t'); ctxt; hint}})
-              | Some z' ->
-                 return (IT (Binop (Mod, t, simp_t'), IT.bt t))
-              end
            | LT ->
               let@ t = infer loc t in
               let@ () = ensure_arith_type loc t in
