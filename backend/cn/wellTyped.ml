@@ -1317,7 +1317,7 @@ let rec infer_object_value : 'TY. Locations.t -> 'TY mu_object_value ->
    | M_OVinteger iv ->
      let z = Memory.z_of_ival iv in
      let@ bt = WBT.pick_integer_encoding_type loc z in
-     Pp.warn loc (Pp.item "no type-annotation for integer literal, picking" (BT.pp bt));
+     Pp.debug 2 (lazy (Loc.pp loc ^^ colon ^^^ !^"no type-annotation for integer literal, picking" ^^^ squotes (BT.pp bt)));
      return (bt, M_OVinteger iv)
    | M_OVfloating fv ->
      return (Real, M_OVfloating fv)
