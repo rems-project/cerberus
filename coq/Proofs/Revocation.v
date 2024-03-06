@@ -1131,6 +1131,48 @@ Module RevocationProofs.
       preserves_step.
     Qed.
 
+    #[global] Instance sequence_same_state
+      {A: Type}:
+      forall (ls: list (memM A)),
+        (List.Forall (SameState) ls) ->
+        SameState (sequence ls).
+    Proof.
+      Transparent ret bind.
+      intros ls H.
+      intros ll s s' S.
+      revert ll H S.
+      induction ls; intros.
+      -
+        cbn in S.
+        unfold ret, Monad_errS in S.
+        tuple_inversion.
+        reflexivity.
+      -
+        destruct ll.
+        +
+          cbv in S.
+          unfold ret, bind in S.
+          repeat break_match_hyp;repeat break_let;repeat tuple_inversion.
+          inversion H2.
+        +
+          apply (IHls ll) ; clear IHls.
+          *
+            invc H.
+            auto.
+          *
+            invc H.
+            cbn in S.
+            repeat break_let.
+            repeat break_match_hyp;repeat break_let;repeat tuple_inversion.
+            invc H1.
+            specialize (H2 _ _ _ Heqp1).
+            subst m.
+            clear Heqp1 a a0.
+            rewrite <- Heqp0.
+            reflexivity.
+      Opaque ret bind.
+    Qed.
+
     #[global] Instance sequence_preserves
       {A:Type}:
       forall s,
@@ -1158,6 +1200,19 @@ Module RevocationProofs.
         preserves_step.
         apply IHls.
     Qed.
+
+    (* TODO maybe not needed *)
+    #[global] Instance zmap_sequence_same_state
+      {A: Type}
+      (mv: ZMap.t (memM A)):
+      zmap_forall SameState mv ->
+      SameState (zmap_sequence mv).
+    Proof.
+      intros H.
+      unfold zmap_sequence.
+      break_let.
+      (* apply bind_SameState. *)
+    Admitted.
 
     #[global] Instance zmap_sequence_preserves
       {A: Type}
@@ -1335,6 +1390,7 @@ Module RevocationProofs.
       Opaque ret raise bind serr2InternalErr.
     Qed.
 
+    (* TODO: not sure if provable as stated *)
     Lemma zmap_mmapi_same_state
       {A B: Type}
       (c: ZMap.key -> A -> memM B)
@@ -1344,6 +1400,7 @@ Module RevocationProofs.
     Proof.
       intros v m0 m1 H.
       unfold zmap_mmapi in H.
+      (* TODO: see zmap_sequence_preserves  *)
       remember (ZMap.mapi c zm) as zmm eqn:ZMM.
       unfold zmap_sequence in H.
       remember (ZMap.elements zm) as ze eqn:ZE.

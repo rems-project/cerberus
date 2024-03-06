@@ -302,6 +302,15 @@ Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
 
 Section ZMapAux.
 
+  Definition zmap_Mem {A:Type} (x:A) (m:ZMap.t A) : Prop
+    :=
+    forall k, ZMap.MapsTo k x m.
+
+  Definition zmap_forall {A:Type} (pred: A -> Prop) (m:ZMap.t A) : Prop
+    :=
+    forall k v, ZMap.MapsTo k v m -> pred v.
+
+
   Definition zmap_forall_keys {A:Type} (pred: Z -> Prop) (m:ZMap.t A) : Prop
     :=
     forall k, ZMap.In k m -> pred k.
