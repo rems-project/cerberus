@@ -1440,19 +1440,26 @@ Module RevocationProofs.
       Opaque ret raise bind serr2InternalErr.
     Qed.
 
-    (* TODO: not sure if provable as stated *)
     Lemma zmap_mmapi_same_state
       {A B: Type}
       (c: ZMap.key -> A -> memM B)
       (zm : ZMap.t A):
 
+      (forall k v, SameState (c k v)) ->
       memM_same_state (zmap_mmapi c zm).
     Proof.
-      intros v m0 m1 H.
+      intros C zm' m0 m1 H.
       unfold zmap_mmapi in H.
-      apply zmap_sequence_same_state in H.
-      assumption.
-    Admitted.
+      apply zmap_sequence_same_state in H;[assumption|].
+      clear H.
+
+      unfold zmap_forall.
+      intros k v H.
+      apply mapi_inv in H.
+      destruct H as [a [k' [H1 [H2 H3]]]].
+      subst.
+      apply C.
+    Qed.
 
     Lemma zmap_mmapi_maybe_revoke_pointer_same_state
       (a : allocation)
@@ -1461,6 +1468,8 @@ Module RevocationProofs.
       memM_same_state (zmap_mmapi (maybe_revoke_pointer a m) oldmeta).
     Proof.
       apply zmap_mmapi_same_state.
+      intros k v.
+      apply maybe_revoke_pointer_same_state.
     Qed.
 
     Lemma zmap_mmapi_maybe_revoke_pointer_spec
@@ -1815,7 +1824,7 @@ Module RevocationProofs.
       destruct u.
       tuple_inversion.
 
-      pose proof (zmap_mmapi_same_state _ _ _ _ _ Heqp) as E.
+      pose proof (zmap_mmapi_maybe_revoke_pointer_same_state _ _ _ _ _ _ Heqp) as E.
       subst m.
 
       apply update_state_capmeta in Heqp0.
