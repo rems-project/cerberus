@@ -1694,6 +1694,8 @@ Module RevocationProofs.
     Proof.
       intros H.
       destruct H as [HP HO].
+      (* TODO: This gonna be hard to prove on current implementation
+         of [split_bytes] *)
     Admitted.
 
     Lemma split_bytes_values
@@ -1704,6 +1706,8 @@ Module RevocationProofs.
       split_bytes bs = inr (p, tag, cs) ->
       Forall2 (fun a ov => ov = value a) bs cs.
     Proof.
+      (* TODO: This gonna be hard to prove on current implementation
+         of [split_bytes] *)
     Admitted.
 
     Lemma extract_unspec_spec
@@ -2779,13 +2783,6 @@ Module RevocationProofs.
     forall c : Capability_GS.t,
       Capability_GS.cap_get_value c = Capability_GS.cap_get_value (Capability_GS.cap_invalidate c).
   Proof.
-    intros c.
-    destruct c.
-    unfold Capability_GS.cap_invalidate, Capability_GS.cap_get_value, Capability.cap_get_value, Capability_GS.cap.
-    unfold Capability_GS.set_cap, Capability.cap_invalidate.
-    unfold CapFns.CapWithTagClear, CapFns.CapGetValue.
-    cbn.
-    f_equiv.
   Admitted.
 
   (* TODO: this should be part of capabilities library *)
