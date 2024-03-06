@@ -1609,7 +1609,22 @@ Module RevocationProofs.
       Forall2 (fun ov v => ov = Some v) cs ls ->
       extract_unspec cs = Some ls.
     Proof.
-    Admitted.
+      intros H.
+      unfold extract_unspec.
+      rewrite <- fold_left_rev_right.
+      rewrite rev_involutive.
+      induction H.
+      -
+        cbn.
+        reflexivity.
+      -
+        rewrite list.foldr_cons.
+        rewrite IHForall2. clear IHForall2.
+        destruct x.
+        invc H.
+        reflexivity.
+        inversion H.
+    Qed.
 
     Lemma fetch_and_decode_cap_success
       (addr: ZMap.key)
