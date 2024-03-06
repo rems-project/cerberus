@@ -654,6 +654,25 @@ Section ZMapAux.
         assumption.
   Qed.
 
+  Lemma zmap_forall_elements_split
+    (A : Type)
+    (mv : ZMap.t A)
+    (P: A -> Prop)
+    :
+    zmap_forall P mv <-> Forall (fun '(_, v) => P v) (ZMap.elements mv).
+  Proof.
+    unfold zmap_forall.
+    split.
+    -
+      intros H.
+      apply zmap_maps_to_elements_p.
+      assumption.
+    -
+      intros H.
+      eapply zmap_maps_to_elements_p.
+      assumption.
+  Qed.
+
 End ZMapAux.
 
 Section SimpleError.

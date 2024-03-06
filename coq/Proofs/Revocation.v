@@ -320,7 +320,7 @@ Module RevocationProofs.
         reflexivity.
       Qed.
 
-      Instance ret_SameState:
+      #[global] Instance ret_SameState:
         forall {T} (x:T),  SameState (@ret memM (Monad_errS mem_state memMError) T x).
       Proof.
         intros T x v s s' H.
@@ -331,7 +331,7 @@ Module RevocationProofs.
         reflexivity.
       Qed.
 
-      Instance ret_PreservesInvariant:
+      #[global] Instance ret_PreservesInvariant:
         forall s {T} (x:T), PreservesInvariant s (ret x).
       Proof.
         intros s T x.
@@ -340,7 +340,7 @@ Module RevocationProofs.
       Qed.
       #[local] Opaque ret.
 
-      Instance raise_SameState
+      #[global] Instance raise_SameState
         {T:Type}:
         forall x,
           SameState
@@ -353,7 +353,7 @@ Module RevocationProofs.
       Qed.
       #[local] Opaque raise.
 
-      Instance raise_PreservesInvariant
+      #[global] Instance raise_PreservesInvariant
         {T:Type}:
         forall s x,
           PreservesInvariant s
@@ -367,8 +367,29 @@ Module RevocationProofs.
       Qed.
       #[local] Opaque raise.
 
+
+      #[global] Instance bind_SameState
+        {T T': Type}
+        {M: memM T'}
+        {C: T' -> memM T}
+        {MS: SameState M}
+        :
+        (forall x, SameState (C x)) -> SameState (bind M C).
+      Proof.
+        intros CS.
+        intros x s s' H.
+        unfold bind, Monad_errS in H.
+        break_let.
+        break_match_hyp;[tuple_inversion|].
+        specialize (MS t s m Heqp).
+        subst m.
+        specialize (CS t x s s').
+        apply CS.
+        apply H.
+      Qed.
+
       (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
-      Instance bind_PreservesInvariant_same_state
+      #[global] Instance bind_PreservesInvariant_same_state
         {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
@@ -403,7 +424,7 @@ Module RevocationProofs.
       Qed.
 
       (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
-      Instance bind_PreservesInvariant
+      #[global] Instance bind_PreservesInvariant
         {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
@@ -441,7 +462,7 @@ Module RevocationProofs.
       Qed.
 
       (* More specific, allows reasoning about the value of [x] *)
-      Instance bind_PreservesInvariant_value
+      #[global] Instance bind_PreservesInvariant_value
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -490,7 +511,7 @@ Module RevocationProofs.
       (* More specific, allows reasoning about the value of [x].
          Does not require [M] preserve invariant.
        *)
-      Instance bind_PreservesInvariant_full
+      #[global] Instance bind_PreservesInvariant_full
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -539,7 +560,7 @@ Module RevocationProofs.
       (* More specific, allows reasoning about the value of [x].
          Requires [M] preserve invariant.
        *)
-     Instance bind_PreservesInvariant_full_with_intermediate_state
+     #[global] Instance bind_PreservesInvariant_full_with_intermediate_state
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -587,7 +608,7 @@ Module RevocationProofs.
           assumption.
       Qed.
 
-      Instance get_SameState
+      #[global] Instance get_SameState
         :SameState get.
       Proof.
         intros s s' st.
@@ -598,7 +619,7 @@ Module RevocationProofs.
       Qed.
 
       (* Special case of bind, where the state is passed to the continuation *)
-      Instance bind_get_PreservesInvariant
+      #[global] Instance bind_get_PreservesInvariant
         {T: Type}
         {C: mem_state_r -> memM T}
         :
@@ -627,7 +648,7 @@ Module RevocationProofs.
       Qed.
 
       (** generic version, where [m] does not depend on [s] *)
-      Instance put_PreservesInvariant:
+      #[global] Instance put_PreservesInvariant:
         forall s m, invr m -> PreservesInvariant s (put m).
       Proof.
         intros s m H H0.
@@ -635,7 +656,7 @@ Module RevocationProofs.
       Qed.
 
       (** dependent version, where [m] depends on [s] *)
-      Instance put_PreservesInvariant':
+      #[global] Instance put_PreservesInvariant':
         forall s m, (invr s -> invr m) -> PreservesInvariant s (put m).
       Proof.
         intros s m D H0.
@@ -643,7 +664,7 @@ Module RevocationProofs.
         apply H0.
       Qed.
 
-      Instance get_PreservesInvariant:
+      #[global] Instance get_PreservesInvariant:
         forall s, PreservesInvariant s get.
       Proof.
         intros s H.
@@ -652,7 +673,7 @@ Module RevocationProofs.
         apply H.
       Qed.
 
-      Instance update_PreservesInvariant
+      #[global] Instance update_PreservesInvariant
         {f: mem_state_r -> mem_state_r}
         :
         forall s,
@@ -663,7 +684,7 @@ Module RevocationProofs.
         apply H, MI.
       Qed.
 
-      Instance liftM_PreservesInvariant
+      #[global] Instance liftM_PreservesInvariant
         {A T : Type}
         {a : memM A}:
 
@@ -1201,7 +1222,6 @@ Module RevocationProofs.
         apply IHls.
     Qed.
 
-    (* TODO maybe not needed *)
     #[global] Instance zmap_sequence_same_state
       {A: Type}
       (mv: ZMap.t (memM A)):
@@ -1211,8 +1231,38 @@ Module RevocationProofs.
       intros H.
       unfold zmap_sequence.
       break_let.
-      (* apply bind_SameState. *)
-    Admitted.
+      pose proof (sequence_same_state l0) as SS.
+      autospecialize SS.
+      {
+        (* Maybe this should be a lemma *)
+        replace l0 with (snd (l,l0));[|auto].
+        rewrite <- Heqp.
+        clear Heqp l.
+        apply zmap_forall_elements_split in H.
+        generalize dependent (ZMap.elements (elt:=memM A) mv).
+        intros e.
+        intros H.
+        apply Forall_nth.
+        intros k x K.
+
+
+        pose proof (split_nth e k (Z.of_nat k, x)) as S.
+        rewrite Forall_nth in H.
+        specialize (H k (Z.of_nat k,x)).
+        autospecialize H.
+        {
+          rewrite split_length_r in K.
+          apply K.
+        }
+        rewrite S in H. clear S.
+        cbn in H.
+        apply H.
+      }
+      clear H.
+      apply bind_SameState.
+      intros x.
+      apply ret_SameState.
+    Qed.
 
     #[global] Instance zmap_sequence_preserves
       {A: Type}
@@ -1400,12 +1450,8 @@ Module RevocationProofs.
     Proof.
       intros v m0 m1 H.
       unfold zmap_mmapi in H.
-      (* TODO: see zmap_sequence_preserves  *)
-      remember (ZMap.mapi c zm) as zmm eqn:ZMM.
-      unfold zmap_sequence in H.
-      remember (ZMap.elements zm) as ze eqn:ZE.
-      break_let.
-      (* TODO: seems provable. need to link `elements` with `mapi` and then do induction *)
+      apply zmap_sequence_same_state in H.
+      assumption.
     Admitted.
 
     Lemma zmap_mmapi_maybe_revoke_pointer_same_state
