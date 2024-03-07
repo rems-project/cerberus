@@ -1031,11 +1031,6 @@ Module Type CheriMemoryImpl
   (* Find first live allocation with given starting addrress. We need
      to check for liveness here, instead of later as multiple dead
      allocations may correspond to given address.
-
-    TODO: This is using ZMap fold which processes allocations in
-          arbitrary order and this function is not guaranteed to find
-          allocation with the last allocation id (earliest)!
-
    *)
   Definition find_live_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
     get >>= fun st =>
@@ -2938,9 +2933,6 @@ Module Type CheriMemoryImpl
                              acc)
                         (List.combine bytes1 bytes2) 0)))).
 
-  (* NOTE: Since it uses [ZMap.elements] to get list of allocations,
-     revokes dead allocations list in arbitrary order. This should not
-     pose a problem.  *)
   Definition cornucopiaRevoke (_:unit) : memM unit
     :=
     st <- get ;;
