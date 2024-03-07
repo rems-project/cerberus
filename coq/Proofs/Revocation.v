@@ -1481,14 +1481,36 @@ Module RevocationProofs.
                   forall s, mx s = (s, inr x)
             )) as N.
       {
+        Transparent bind ret serr2InternalErr raise.
+        unfold memM_monad, Monad_errS, bind, ret, serr2InternalErr, Exception_errS, raise in H.
+        Opaque bind ret serr2InternalErr raise.
+        break_let.
+        break_match_hyp;[inversion H|].
+        tuple_inversion.
+        clear k. (* huh? *)
+        rename l into lk, l0 into l.
+        intros k.
         (*
-        pose proof (sequence_same_state l0) as SS.
-        autospecialize SS.
-        eapply zmap_forall_Forall_elements;eauto.
-        apply zmap_forall_elements_split.
-        *)
+        destruct (@In_dec _ oldmeta k) as [I|NI].
+        -
+          (* key originally exists *)
+          left.
+          eapply mapi_in_iff with (f:=(maybe_revoke_pointer a s)) in I.
+          remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as m.
+          apply elements_in_iff in I.
+          remember (ZMap.elements (elt:=memM (bool * CapGhostState)) m) as e.
+          destruct I as [v1 I].
+          exists v1.
+
+          unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in I.
+          apply InA_alt in I.
+          destruct I as [[k' v2] [I1 I2]].
+
+         admit.
+         *)
         admit.
       }
+
       clear H Heqp.
       pose proof (zmap_relate_keys_same_keys _ _ _ N k) as SN.
       destruct (@In_dec _ oldmeta k) as [I|NI].

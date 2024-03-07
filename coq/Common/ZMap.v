@@ -61,6 +61,8 @@ Definition zmap_update
   | Some z => ZMap.add key z m'
   end.
 
+
+(* TODO: This version applies computations in arbitrary order! *)
 Definition zmap_sequence
   {A: Type}
   {m: Type -> Type}
@@ -73,6 +75,7 @@ Definition zmap_sequence
 
 (*
 Alternative defintion. More efficient but harder to prove.
+TODO: also uses "elements!".
 
 Definition zmap_sequence
   {A: Type}
