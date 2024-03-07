@@ -1233,31 +1233,7 @@ Module RevocationProofs.
       break_let.
       pose proof (sequence_same_state l0) as SS.
       autospecialize SS.
-      {
-        (* Maybe this should be a lemma *)
-        replace l0 with (snd (l,l0));[|auto].
-        rewrite <- Heqp.
-        clear Heqp l.
-        apply zmap_forall_elements_split in H.
-        generalize dependent (ZMap.elements (elt:=memM A) mv).
-        intros e.
-        intros H.
-        apply Forall_nth.
-        intros k x K.
-
-
-        pose proof (split_nth e k (Z.of_nat k, x)) as S.
-        rewrite Forall_nth in H.
-        specialize (H k (Z.of_nat k,x)).
-        autospecialize H.
-        {
-          rewrite split_length_r in K.
-          apply K.
-        }
-        rewrite S in H. clear S.
-        cbn in H.
-        apply H.
-      }
+      eapply zmap_forall_Forall_elements;eauto.
       clear H.
       apply bind_SameState.
       intros x.
@@ -1472,6 +1448,18 @@ Module RevocationProofs.
       apply maybe_revoke_pointer_same_state.
     Qed.
 
+    Lemma cap_bounds_within_alloc_true:
+      forall a c,
+        cap_bounds_within_alloc_bool c a = true -> cap_bounds_within_alloc c a.
+    Proof.
+    Admitted.
+
+    Lemma cap_bounds_within_alloc_false:
+      forall a c,
+        cap_bounds_within_alloc_bool c a = false -> ~ cap_bounds_within_alloc c a.
+    Proof.
+    Admitted.
+
     Lemma zmap_mmapi_maybe_revoke_pointer_spec
       (a : allocation)
       (s : mem_state)
@@ -1485,7 +1473,97 @@ Module RevocationProofs.
       unfold zmap_mmapi in H.
       unfold zmap_sequence in H.
       break_let.
-      (* TODO: looks provable *)
+      remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta'.
+
+
+      assert(zmap_relate_keys newmeta' newmeta
+               (fun addr mx x =>
+                  forall s, mx s = (s, inr x)
+            )) as N.
+      {
+        (*
+        pose proof (sequence_same_state l0) as SS.
+        autospecialize SS.
+        eapply zmap_forall_Forall_elements;eauto.
+        apply zmap_forall_elements_split.
+        *)
+        admit.
+      }
+      clear H Heqp.
+      pose proof (zmap_relate_keys_same_keys _ _ _ N k) as SN.
+      destruct (@In_dec _ oldmeta k) as [I|NI].
+      -
+        (* key originally exists *)
+        left.
+        apply zmap_in_mapsto in I.
+        destruct I as [v1 I].
+        exists v1.
+        pose proof (@ZMap.mapi_1 _ _ _ _ _ (maybe_revoke_pointer a s) I) as [y [YH Z]].
+        subst y.
+        rewrite <- Heqnewmeta' in Z.
+        specialize (N k).
+        destruct N as [N|[NN1 NN2]].
+        +
+          destruct N as [v1' [v2 [N1 [N2 N3]]]].
+          apply (MapsTo_fun N1) in Z.
+          subst v1'.
+          exists v2.
+          split;[apply I|].
+          split;[apply N2|].
+          clear - N3.
+          specialize (N3 s).
+          unfold maybe_revoke_pointer in N3.
+          break_let.
+          break_if.
+          *
+            Transparent ret.
+            unfold memM_monad, Monad_errS, ret in N3.
+            Opaque ret.
+            tuple_inversion.
+            destruct b. inversion Heqb0.
+            constructor.
+          *
+            destruct b;[|inversion Heqb0].
+            clear Heqb0.
+            Transparent bind ret serr2InternalErr raise.
+            unfold memM_monad, Monad_errS, bind, ret, serr2InternalErr, Exception_errS, raise in N3.
+            Opaque bind ret serr2InternalErr raise.
+            break_let.
+            subst.
+            destruct s0;[inversion N3|].
+            destruct (fetch_and_decode_cap (bytemap s) k true) eqn:FF;[inversion Heqp0|].
+            Transparent ret.
+            unfold memM_monad, Monad_errS, ret in Heqp0.
+            Opaque ret.
+            tuple_inversion.
+            break_if.
+            --
+              apply cap_bounds_within_alloc_true in Heqb.
+              tuple_inversion.
+              eapply (revoked_pointer_rel_revoked _ _ _ _ t);eauto.
+            --
+              tuple_inversion.
+              apply cap_bounds_within_alloc_false in Heqb.
+              eapply (revoked_pointer_rel_out_of_scope _ _ _ _ t);eauto.
+        +
+          contradict NN1.
+          exists (maybe_revoke_pointer a s k v1).
+          assumption.
+      -
+        right.
+        assert(~ (exists v : bool * CapGhostState, ZMap.MapsTo k v oldmeta)) as NM.
+        intros [v C].
+        apply zmap_mapsto_in in C.
+        congruence.
+        split;[apply NM|].
+        intros [v C].
+        apply zmap_mapsto_in in C.
+        apply SN in C.
+        contradict NM.
+        clear - C Heqnewmeta'.
+        subst.
+        apply ZMap.mapi_2 in C.
+        apply C.
     Admitted.
 
     #[global] Instance revoke_pointers_preserves:

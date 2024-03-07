@@ -673,6 +673,38 @@ Section ZMapAux.
       assumption.
   Qed.
 
+  Lemma zmap_forall_Forall_elements
+    {A : Type}
+    (mv : ZMap.t A)
+    (P: A -> Prop)
+    :
+    zmap_forall P mv ->
+    forall (lk : list ZMap.key) (lv : list A),
+      split (ZMap.elements mv) = (lk, lv) -> Forall P lv.
+  Proof.
+    intros H lk lv S.
+    replace lv with (snd (lk,lv));[|auto].
+    rewrite <- S.
+    clear S lk.
+    apply zmap_forall_elements_split in H.
+    generalize dependent (ZMap.elements (elt:=A) mv).
+    intros e.
+    intros H.
+    apply Forall_nth.
+    intros k x K.
+    pose proof (split_nth e k (Z.of_nat k, x)) as S.
+    rewrite Forall_nth in H.
+    specialize (H k (Z.of_nat k,x)).
+    autospecialize H.
+    {
+      rewrite split_length_r in K.
+      apply K.
+    }
+    rewrite S in H. clear S.
+    cbn in H.
+    apply H.
+  Qed.
+
 End ZMapAux.
 
 Section SimpleError.
