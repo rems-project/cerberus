@@ -38,3 +38,4 @@ public/package-lock.json
 
 # debug stuff
 log*.txt
+*.cache

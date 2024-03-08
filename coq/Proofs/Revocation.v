@@ -66,20 +66,19 @@ End AbstTagDefs.
 
 Lemma sequence_len_errS
   {S E A:Type}
-  (s: S)
+  (s s': S)
   (old : list (errS S E A))
   (new : list A):
-  List.Forall (fun x => forall s, exists y, x s = (s, inr y)) old ->
-  sequence old s = (s, inr new) ->
+  sequence old s = (s', inr new) ->
   List.length old = List.length new.
 Proof.
-  intros C H.
+  intros H.
   unfold sequence, mapT, Traversable_list, mapT_list in H.
   unfold Applicative_Monad, Applicative.pure, Monad_errS, ret,
     Applicative.ap, apM, bind, liftM, ret in H.
   cbn in H.
   generalize dependent new.
-  revert C.
+  revert s s'.
   induction old;intros.
   -
     tuple_inversion.
@@ -89,22 +88,9 @@ Proof.
     repeat break_match; repeat tuple_inversion.
     cbn.
     cut (Datatypes.length old = Datatypes.length l0);[lia|].
-    assert(s = s0).
-    {
-      apply Forall_inv in C.
-      specialize (C s).
-      destruct C.
-      rewrite H in Heqp1.
-      tuple_inversion.
-      reflexivity.
-    }
     subst.
-    apply IHold; clear IHold.
-    +
-      invc C.
-      auto.
-    +
-      auto.
+    apply (IHold s0 s').
+    auto.
 Qed.
 
 Lemma sequence_spec_errS
@@ -112,7 +98,7 @@ Lemma sequence_spec_errS
   (s : S)
   (old : list (errS S E A))
   (new : list A):
-  List.Forall (fun x => forall s, exists y, x s = (s, inr y)) old ->
+  List.Forall (fun x => exists y, x s = (s, inr y)) old ->
   sequence old s = (s, inr new) ->
   Forall2 (fun m r => m s = (s, inr r)) old new.
 Proof.
@@ -134,7 +120,6 @@ Proof.
     assert(s = s0).
     {
       apply Forall_inv in C.
-      specialize (C s).
       destruct C.
       rewrite H in Heqp1.
       tuple_inversion.
@@ -1587,7 +1572,7 @@ Module RevocationProofs.
         tuple_inversion.
         intros k.
         remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta.
-        clear Heqnewmeta oldmeta a.
+
         rename l into rescaps, Heqp0 into SEQ, Heqp into SPL.
         remember (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta) as enewmeta eqn:E.
         (* end of prep *)
@@ -1621,6 +1606,14 @@ Module RevocationProofs.
           inversion N.
           rewrite <- H1, <- H0.
 
+          pose proof (split_length_l enewmeta) as KL. (* will  need later *)
+          rewrite SPL in KL.
+          cbn in KL.
+          pose proof (split_length_r enewmeta) as KR. (* will  need later *)
+          rewrite SPL in KR.
+          cbn in KR.
+          pose proof (@sequence_len_errS _ _ _ _ _ _ _ SEQ) as RL.
+
           apply sequence_spec_errS in SEQ.
           apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
           +
@@ -1629,7 +1622,30 @@ Module RevocationProofs.
             repeat split.
             * apply I.
             *
-              admit.
+              apply ZMap.ZP.of_list_1.
+              --
+                pose proof (ZMap.elements_3w newmeta) as END.
+                rewrite <- E in END.
+                unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in *.
+                clear - END SPL.
+                admit. (* becase `lk` unique *)
+              --
+                apply In_InA.
+                ++
+                  typeclasses eauto.
+                ++
+                  apply in_prod.
+                  tuple_inversion.
+                  **
+                    rewrite H0.
+                    apply nth_In.
+                    lia.
+                  **
+                    eapply list.nth_lookup_Some in A1.
+                    rewrite <- A1.
+                    apply nth_In.
+                    unfold memM in *.
+                    lia.
             *
               apply A2.
           +
@@ -1644,7 +1660,7 @@ Module RevocationProofs.
               cbn in H.
               lia.
           +
-            (* TODO: this require additional assumptins *)
+            (* TODO  *)
             admit.
         -
           (* key does not exists *)
@@ -2049,7 +2065,7 @@ Module RevocationProofs.
       revoke_pointers alloc s = (s', inr tt) ->
       ZMap.MapsTo addr (true, g) (capmeta s') ->
       fetch_bytes (bytemap s') addr (sizeof_pointer MorelloImpl.get) = bs ->
-      split_bytes_ptr_spec Prov_disabled bs -> (* TODO: do we need this? *)
+      split_bytes_ptr_spec Prov_disabled bs ->
       decode_cap bs true c -> ~ cap_bounds_within_alloc c alloc.
     Proof.
       intros R M F S D.
@@ -2111,7 +2127,7 @@ Module RevocationProofs.
       (s s' s'': mem_state_r)
       (alloc_id : Z)
       (alloc : allocation)
-      (AM: ZMap.MapsTo alloc_id alloc (allocations s)) (* TODO: do we even need this? *)
+      (AM: ZMap.MapsTo alloc_id alloc (allocations s))
       (IS: mem_invariant s)
       (IS': mem_invariant s'):
 
@@ -2120,7 +2136,6 @@ Module RevocationProofs.
       ->  mem_invariant s''.
     Proof.
       intros RE RM.
-
       unfold remove_allocation,ErrorWithState.update in RM.
       Transparent bind get put.
       unfold bind, get, put, Monad_errS, State_errS in RM.
