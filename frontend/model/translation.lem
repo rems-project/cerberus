@@ -696,10 +696,12 @@ match Ctype.unatomic_ ty with
                       let promoted_ty =
                         fromJust "Translation.translate_postfix promotion"
                           (AilTypesAux.promotion (Implementation.integerImpl ()) (ctype_of e)) in
+                      let promoted_e = stdlib.mkcall_conv_int promoted_ty obj_wrp.E.sym_pe in
                       stdlib.mkcall_conv_int result_ty begin
       mk_cheri begin
         with_wrapI_or_catch_exceptional_condition promoted_ty int_op
-          obj_wrp.E.sym_pe (Caux.mk_integer_pe 1) (Just core_postfix)
+          promoted_e (Caux.maybe_annotate_integer_type_pexpr promoted_ty (Caux.mk_integer_pe 1))
+          (Just core_postfix)
       end
                       end
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->

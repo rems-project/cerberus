@@ -2118,6 +2118,14 @@ let annotate_integer_type_pexpr ity (Pexpr annot bty expr_) =
   Pexpr annot bty expr_
 
 
+val maybe_annotate_integer_type_pexpr : ctype -> pexpr -> pexpr
+let maybe_annotate_integer_type_pexpr (Ctype _ ctype_) pe =
+  match ctype_ with
+    | Basic (Integer ity) -> annotate_integer_type_pexpr ity pe
+    | _ -> pe
+  end
+
+
 val annotate_integer_type_expr : integerType -> expr unit -> expr unit
 let annotate_integer_type_expr ity (Expr annot expr_) =
   let annot = (Avalue (Ainteger ity)) :: annot in
