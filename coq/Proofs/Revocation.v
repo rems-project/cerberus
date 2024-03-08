@@ -64,6 +64,95 @@ Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
 
+Lemma sequence_len_errS
+  {S E A:Type}
+  (s: S)
+  (old : list (errS S E A))
+  (new : list A):
+  List.Forall (fun x => forall s, exists y, x s = (s, inr y)) old ->
+  sequence old s = (s, inr new) ->
+  List.length old = List.length new.
+Proof.
+  intros C H.
+  unfold sequence, mapT, Traversable_list, mapT_list in H.
+  unfold Applicative_Monad, Applicative.pure, Monad_errS, ret,
+    Applicative.ap, apM, bind, liftM, ret in H.
+  cbn in H.
+  generalize dependent new.
+  revert C.
+  induction old;intros.
+  -
+    tuple_inversion.
+    reflexivity.
+  -
+    repeat break_let.
+    repeat break_match; repeat tuple_inversion.
+    cbn.
+    cut (Datatypes.length old = Datatypes.length l0);[lia|].
+    assert(s = s0).
+    {
+      apply Forall_inv in C.
+      specialize (C s).
+      destruct C.
+      rewrite H in Heqp1.
+      tuple_inversion.
+      reflexivity.
+    }
+    subst.
+    apply IHold; clear IHold.
+    +
+      invc C.
+      auto.
+    +
+      auto.
+Qed.
+
+Lemma sequence_spec_errS
+  {S E A:Type}
+  (s : S)
+  (old : list (errS S E A))
+  (new : list A):
+  List.Forall (fun x => forall s, exists y, x s = (s, inr y)) old ->
+  sequence old s = (s, inr new) ->
+  Forall2 (fun m r => m s = (s, inr r)) old new.
+Proof.
+  intros C H.
+  unfold sequence, mapT, Traversable_list, mapT_list in H.
+  unfold Applicative_Monad, Applicative.pure, Monad_errS, ret,
+    Applicative.ap, apM, bind, liftM, ret in H.
+  cbn in H.
+  generalize dependent new.
+  (* revert C. *)
+  induction old;intros.
+  -
+    tuple_inversion.
+    constructor.
+  -
+    repeat break_let.
+    repeat break_match; repeat tuple_inversion.
+    cbn.
+    assert(s = s0).
+    {
+      apply Forall_inv in C.
+      specialize (C s).
+      destruct C.
+      rewrite H in Heqp1.
+      tuple_inversion.
+      reflexivity.
+    }
+    subst s0.
+    constructor.
+    +
+      assumption.
+    +
+      apply IHold; clear IHold.
+      *
+        invc C.
+        auto.
+      *
+        auto.
+Qed.
+
 Module RevocationProofs.
 
   (* --- Memory models instantiated with and without PNVI --- *)
@@ -1452,13 +1541,21 @@ Module RevocationProofs.
       forall a c,
         cap_bounds_within_alloc_bool c a = true -> cap_bounds_within_alloc c a.
     Proof.
-    Admitted.
+      intros a c H.
+      unfold cap_bounds_within_alloc.
+      unfold cap_bounds_within_alloc_bool in H.
+      lia.
+    Qed.
 
     Lemma cap_bounds_within_alloc_false:
       forall a c,
         cap_bounds_within_alloc_bool c a = false -> ~ cap_bounds_within_alloc c a.
     Proof.
-    Admitted.
+      intros a c H.
+      unfold cap_bounds_within_alloc.
+      unfold cap_bounds_within_alloc_bool in H.
+      lia.
+    Qed.
 
     Lemma zmap_mmapi_maybe_revoke_pointer_spec
       (a : allocation)
@@ -1475,40 +1572,84 @@ Module RevocationProofs.
       break_let.
       remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta'.
 
-
       assert(zmap_relate_keys newmeta' newmeta
-               (fun addr mx x =>
-                  forall s, mx s = (s, inr x)
+               (fun _ mx x =>
+                  mx s = (s, inr x)
             )) as N.
       {
+        clear k.
+        rename l into lk, l0 into newcaps.
         Transparent bind ret serr2InternalErr raise.
         unfold memM_monad, Monad_errS, bind, ret, serr2InternalErr, Exception_errS, raise in H.
         Opaque bind ret serr2InternalErr raise.
         break_let.
         break_match_hyp;[inversion H|].
         tuple_inversion.
-        clear k. (* huh? *)
-        rename l into lk, l0 into l.
         intros k.
-        (*
-        destruct (@In_dec _ oldmeta k) as [I|NI].
+        remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta.
+        clear Heqnewmeta oldmeta a.
+        rename l into rescaps, Heqp0 into SEQ, Heqp into SPL.
+        remember (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta) as enewmeta eqn:E.
+        (* end of prep *)
+        pose proof (@split_nth  _ _ enewmeta) as N.
+        replace (fst (split enewmeta)) with lk in N by (rewrite SPL;reflexivity).
+        replace (snd (split enewmeta)) with newcaps in N by (rewrite SPL;reflexivity).
+
+        destruct (@In_dec _ newmeta k) as [I|NI].
         -
           (* key originally exists *)
           left.
-          eapply mapi_in_iff with (f:=(maybe_revoke_pointer a s)) in I.
-          remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as m.
-          apply elements_in_iff in I.
-          remember (ZMap.elements (elt:=memM (bool * CapGhostState)) m) as e.
+          apply zmap_in_mapsto in I.
           destruct I as [v1 I].
           exists v1.
 
-          unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in I.
-          apply InA_alt in I.
-          destruct I as [[k' v2] [I1 I2]].
+          pose proof (ZMap.elements_1 I) as H.
+          rewrite <- E in H.
+          apply InA_alt in H.
+          destruct H as [(addr,v2') [H1 H2]].
 
-         admit.
-         *)
-        admit.
+          unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
+          destruct H1 as [T1 T2].
+          cbn in T1, T2.
+          subst k v2'.
+
+          apply In_nth with (d:=(addr, v1)) in H2.
+          destruct H2 as [n [H2 H3]].
+          specialize (N n (addr, v1)).
+          rewrite H3 in N.
+          cbn in N.
+          inversion N.
+          rewrite <- H1, <- H0.
+
+          apply sequence_spec_errS in SEQ.
+          apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
+          +
+            destruct SEQ as [v2 [A1 A2]].
+            exists v2.
+            repeat split.
+            * apply I.
+            *
+              admit.
+            *
+              apply A2.
+          +
+            rewrite H1.
+            pose proof (list.nth_lookup_or_length newcaps n v1) as D.
+            destruct D as [L|NL].
+            * assumption.
+            *
+              clear - NL H2 SPL.
+              epose proof (split_length_r enewmeta).
+              rewrite SPL in H.
+              cbn in H.
+              lia.
+          +
+            (* TODO: this require additional assumptins *)
+            admit.
+        -
+          (* key does not exists *)
+          right.
+          admit.
       }
 
       clear H Heqp.
@@ -1533,7 +1674,6 @@ Module RevocationProofs.
           split;[apply I|].
           split;[apply N2|].
           clear - N3.
-          specialize (N3 s).
           unfold maybe_revoke_pointer in N3.
           break_let.
           break_if.
