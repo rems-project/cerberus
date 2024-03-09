@@ -31,6 +31,8 @@ Require Import Tactics.
 
 Section ListAux.
 
+  Import ListNotations.
+
   #[global] Instance List_fold_left_proper
     {A B : Type}
     (Eb: relation B)
@@ -294,6 +296,106 @@ Section ListAux.
       cbn.
       lia.
   Qed.
+
+  Lemma list_split_cons
+    {A B: Type}:
+    forall ab abss a0 ass b0 bs,
+      split (A:=A) (B:=B) (ab::abss) = (a0 :: ass, b0 :: bs) ->
+      ab = (a0,b0) /\ split abss = (ass, bs).
+  Proof.
+    intros ab abss a0 ass b0 bs H.
+    simpl in H.
+    destruct ab as [a b].
+    break_let.
+    tuple_inversion.
+    split;reflexivity.
+  Qed.
+
+  Inductive split_spec {A B: Type}: (list (A * B)) -> (list A) -> (list B) -> Prop
+    :=
+  | split_nil: split_spec [] [] []
+  | split_cons:
+    forall a0 b0 lab la lb,
+      split_spec lab la lb ->
+      split_spec ((a0,b0)::lab) (a0::la) (b0::lb).
+
+  Lemma list_split_spec:
+    forall A B ab a b,
+      split (A:=A) (B:=B) ab = (a,b) -> split_spec ab a b.
+  Proof.
+    intros A B ab a b H.
+
+    revert a b H.
+    induction ab; intros.
+    -
+      destruct a, b; cbn in *; repeat break_let; try tuple_inversion.
+      constructor.
+    -
+      destruct a, b; cbn in *; repeat break_let; try tuple_inversion.
+      constructor.
+      apply IHab.
+      reflexivity.
+  Qed.
+
+  Lemma split_eq_key_not_InA
+    {A : Type}
+    (l : list (Z * A))
+    (la : list Z)
+    (b0 : A)
+    (lb : list A)
+    (a0 : Z):
+    split_spec l la lb -> ~ InA (ZMap.eq_key (elt:=A)) (a0, b0) l -> ~ In a0 la.
+  Proof.
+    intros S N.
+    revert S N.
+    revert la lb a0 b0.
+    dependent induction l;intros.
+    -
+      invc S.
+      auto.
+    -
+      intros C.
+      invc S.
+      invc C.
+      +
+        clear -N.
+        contradict N.
+        constructor.
+        reflexivity.
+      +
+        eapply IHl;eauto.
+  Qed.
+
+  Lemma split_eq_key_NoDup
+    {A:Type}
+    (l: list (Z*A))
+    (lk : list Z)
+    (lv: list A):
+    split l = (lk, lv) ->
+    NoDupA (ZMap.eq_key (elt:=A)) l -> NoDup lk.
+  Proof.
+
+    (* unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk. *)
+    intros S.
+    apply list_split_spec in S.
+    revert lk lv S.
+    dependent induction l; intros.
+    -
+      invc S.
+      constructor.
+    -
+      invcs S.
+      specialize (IHl la lb H4).
+      constructor.
+      +
+        invc H.
+        eapply split_eq_key_not_InA; eauto.
+      +
+        apply IHl.
+        invc H.
+        assumption.
+  Qed.
+
 
 End ListAux.
 

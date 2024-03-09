@@ -1626,9 +1626,13 @@ Module RevocationProofs.
               --
                 pose proof (ZMap.elements_3w newmeta) as END.
                 rewrite <- E in END.
+                assert(NoDup lk).
                 unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in *.
                 clear - END SPL.
-                admit. (* becase `lk` unique *)
+                eapply split_eq_key_NoDup; eauto.
+                clear -H.
+                (* TODO: this is false! *)
+                admit.
               --
                 apply In_InA.
                 ++
