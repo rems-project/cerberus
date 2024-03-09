@@ -1630,26 +1630,22 @@ Module RevocationProofs.
                 unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in *.
                 clear - END SPL.
                 eapply split_eq_key_NoDup; eauto.
-                clear -H.
-                (* TODO: this is false! *)
-                admit.
+                apply combine_eq_key_NoDupA, H.
               --
                 apply In_InA.
                 ++
                   typeclasses eauto.
                 ++
-                  apply in_prod.
-                  tuple_inversion.
-                  **
-                    rewrite H0.
-                    apply nth_In.
-                    lia.
-                  **
-                    eapply list.nth_lookup_Some in A1.
-                    rewrite <- A1.
-                    apply nth_In.
-                    unfold memM in *.
-                    lia.
+                  pose proof (combine_nth lk rescaps n addr v2) as CM.
+                  autospecialize CM.
+                  unfold memM in *; lia.
+                  rewrite <- H0 in CM.
+                  apply list.nth_lookup_Some with (d:=v2) in A1.
+                  rewrite A1 in CM.
+                  rewrite <- CM.
+                  apply nth_In.
+                  pose proof (combine_length lk rescaps).
+                  unfold memM in *; lia.
             *
               apply A2.
           +

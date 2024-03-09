@@ -396,6 +396,36 @@ Section ListAux.
         assumption.
   Qed.
 
+  Lemma combine_spec:
+    forall A B ab a b,
+      length a = length b ->
+      combine (A:=A) (B:=B) a b = ab -> split_spec ab a b.
+  Proof.
+    intros A B ab a b L C.
+
+    revert a b L C.
+    induction ab; intros.
+    -
+      destruct a, b; cbn in *; repeat break_let; try tuple_inversion; try inv L.
+      constructor.
+      inv C.
+    -
+      destruct a0, b; cbn in *; repeat break_let; try tuple_inversion;
+        try inv C.
+      constructor.
+      apply IHab.
+      auto.
+      reflexivity.
+  Qed.
+
+  Lemma combine_eq_key_NoDupA
+    {A:Type}
+    (lk : list ZMap.key)
+    (lv : list A):
+    NoDup lk -> NoDupA (ZMap.eq_key (elt:=A)) (combine lk lv).
+  Proof.
+  Admitted.
+
 
 End ListAux.
 

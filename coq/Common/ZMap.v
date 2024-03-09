@@ -69,7 +69,7 @@ Definition zmap_sequence
   :=
   let (kl,vl) := List.split (ZMap.elements mv) in
   vl' <- sequence (F:=m) (T:=list) vl ;;
-  ret (of_list (list_prod kl vl')).
+  ret (of_list (combine kl vl')).
 
 (*
 Alternative defintion. More efficient but harder to prove.
