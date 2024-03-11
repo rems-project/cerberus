@@ -424,8 +424,34 @@ Section ListAux.
     (lv : list A):
     NoDup lk -> NoDupA (ZMap.eq_key (elt:=A)) (combine lk lv).
   Proof.
-  Admitted.
-
+    intros H.
+    revert lv.
+    induction H; intros.
+    -
+      cbn.
+      constructor.
+    -
+      cbn.
+      destruct lv.
+      +
+        cbn.
+        constructor.
+      +
+        constructor.
+        *
+          clear -H.
+          intros C.
+          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
+          apply InA_alt in C.
+          destruct C as [y [C1 C2]].
+          destruct y.
+          cbn in C1.
+          subst x.
+          apply in_combine_l in C2.
+          congruence.
+        *
+          apply IHNoDup.
+  Qed.
 
 End ListAux.
 
