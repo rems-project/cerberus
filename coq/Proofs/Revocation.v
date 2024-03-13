@@ -1655,50 +1655,51 @@ Module RevocationProofs.
           pose proof (@sequence_len_errS _ _ _ _ _ _ _ SEQ) as RL.
 
           apply sequence_spec_same_state_errS in SEQ.
-          apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
           +
-            destruct SEQ as [v2 [A1 A2]].
-            exists v2.
-            repeat split.
-            * apply I.
+            apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
             *
-              apply ZMap.ZP.of_list_1.
+              destruct SEQ as [v2 [A1 A2]].
+              exists v2.
+              repeat split.
+              -- apply I.
               --
-                pose proof (ZMap.elements_3w newmeta) as END.
-                rewrite <- E in END.
-                assert(NoDup lk).
-                unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in *.
-                clear - END SPL.
-                eapply split_eq_key_NoDup; eauto.
-                apply combine_eq_key_NoDupA, H.
+                apply ZMap.ZP.of_list_1.
+                ++
+                  pose proof (ZMap.elements_3w newmeta) as END.
+                  rewrite <- E in END.
+                  assert(NoDup lk).
+                  unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in *.
+                  clear - END SPL.
+                  eapply split_eq_key_NoDup; eauto.
+                  apply combine_eq_key_NoDupA, H.
+                ++
+                  apply In_InA.
+                  **
+                    typeclasses eauto.
+                  **
+                    pose proof (combine_nth lk rescaps n addr v2) as CM.
+                    autospecialize CM.
+                    unfold memM in *; lia.
+                    rewrite <- H0 in CM.
+                    apply list.nth_lookup_Some with (d:=v2) in A1.
+                    rewrite A1 in CM.
+                    rewrite <- CM.
+                    apply nth_In.
+                    pose proof (combine_length lk rescaps).
+                    unfold memM in *; lia.
               --
-                apply In_InA.
-                ++
-                  typeclasses eauto.
-                ++
-                  pose proof (combine_nth lk rescaps n addr v2) as CM.
-                  autospecialize CM.
-                  unfold memM in *; lia.
-                  rewrite <- H0 in CM.
-                  apply list.nth_lookup_Some with (d:=v2) in A1.
-                  rewrite A1 in CM.
-                  rewrite <- CM.
-                  apply nth_In.
-                  pose proof (combine_length lk rescaps).
-                  unfold memM in *; lia.
+                apply A2.
             *
-              apply A2.
-          +
-            rewrite H1.
-            pose proof (list.nth_lookup_or_length newcaps n v1) as D.
-            destruct D as [L|NL].
-            * assumption.
-            *
-              clear - NL H2 SPL.
-              epose proof (split_length_r enewmeta).
-              rewrite SPL in H.
-              cbn in H.
-              lia.
+              rewrite H1.
+              pose proof (list.nth_lookup_or_length newcaps n v1) as D.
+              destruct D as [L|NL].
+              -- assumption.
+              --
+                clear - NL H2 SPL.
+                epose proof (split_length_r enewmeta).
+                rewrite SPL in H.
+                cbn in H.
+                lia.
           +
             clear n N H2 H3 H0 H1. (* these are for concrete index. We need for all *)
             apply list.Forall_lookup_2.
@@ -1748,7 +1749,6 @@ Module RevocationProofs.
           (* key does not exists *)
           right.
           split;[assumption|].
-
           pose proof (ZMap.elements_3w newmeta) as NDM.
           pose proof (split_eq_key_NoDup _ _ _ SPL).
           rewrite E in H.
