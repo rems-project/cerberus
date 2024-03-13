@@ -3141,13 +3141,6 @@ Module RevocationProofs.
   #[global] Opaque CheriMemoryWithPNVI.fun_ptrval CheriMemoryWithoutPNVI.fun_ptrval.
 
   (* TODO: this should be part of capabilities library *)
-  Lemma cap_invalidate_preserves_value:
-    forall c : Capability_GS.t,
-      Capability_GS.cap_get_value c = Capability_GS.cap_get_value (Capability_GS.cap_invalidate c).
-  Proof.
-  Admitted.
-
-  (* TODO: this should be part of capabilities library *)
   Lemma cap_invalidate_preserves_ghost_state:
     forall c : Capability_GS.t,
       Capability_GS.get_ghost_state c = Capability_GS.get_ghost_state (Capability_GS.cap_invalidate c).
@@ -3169,9 +3162,9 @@ Module RevocationProofs.
     - (* single_cap_cmp_live case *)
       invc Hmatch.
       reflexivity.
-      apply cap_invalidate_preserves_value.
+      apply Capability_GS.cap_invalidate_preserves_value.
     - (* single_cap_cmp_dead case *)
-      apply cap_invalidate_preserves_value.
+      apply Capability_GS.cap_invalidate_preserves_value.
   Qed.
 
   Theorem case_funsym_opt_same:
