@@ -6,7 +6,7 @@ Require Import Coq.Strings.HexString.
 Require Import Coq.ZArith.Zdigits.
 Require Import Coq.Bool.Bool.
 
-From Sail Require Import Values Operators_mwords.
+From SailStdpp Require Import Values Operators_mwords.
 
 From CheriCaps.Morello Require Import CapFns Capabilities.
 From CheriCaps.Common Require Import Utils Capabilities.
@@ -220,8 +220,11 @@ Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Fl
   Lemma cap_invalidate_invalidates: forall c, cap_is_valid (cap_invalidate c) = false.
   Proof.
     intros c.
-    apply MorelloCaps.Capability.cap_invalidate_invalidates.
+    apply Capability.cap_invalidate_invalidates.
   Qed.
+
+  Lemma cap_invalidate_preserves_value: forall c, cap_get_value c = cap_get_value (cap_invalidate c).
+  Proof. intros c. apply Capability.cap_invalidate_preserves_value. Qed.
 
 End Capability_GS.  
 

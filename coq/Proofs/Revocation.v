@@ -17,6 +17,8 @@ Require Import Coq.FSets.FMapFacts.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedTypeEx.
 
+Require Import bbv.ZLib.
+
 Require Import Lia.
 
 Require Import StructTact.StructTactics.
@@ -1100,7 +1102,7 @@ Module RevocationProofs.
           subst a.
           setoid_rewrite Z.mul_comm.
           rewrite <- Z.mul_add_distr_l.
-          apply ZLib.Z_mod_mult'.
+          apply ZLib.Z_mod_mult'. (* Possible TODO: use an alternative function to Z_mod_mult' so the dependency on bbv can be removed. *)
         +
           apply H5.
     Qed.
