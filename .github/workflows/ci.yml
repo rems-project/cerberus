@@ -46,7 +46,7 @@ jobs:
         opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
         opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
         opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
-        opam pin --yes -n coq-sail https://github.com/rems-project/coq-sail.git
+        opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git
         opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
         opam install --deps-only --yes ./cerberus-lib.opam ./cerberus-cheri.opam
     
