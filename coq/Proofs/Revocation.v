@@ -1582,6 +1582,46 @@ Module RevocationProofs.
       lia.
     Qed.
 
+    Lemma sequence_spec_same_state_memM
+      {A:Type}
+      (s : mem_state)
+      (old : list (memM A))
+      (new : list A):
+      List.Forall memM_same_state old ->
+      sequence old s = (s, inr new) ->
+      Forall2 (fun m r => m s = (s, inr r)) old new.
+    Proof.
+      intros C H.
+      unfold sequence, mapT, Traversable_list, mapT_list in H.
+      Transparent ret bind liftM.
+      unfold Applicative_Monad, Applicative.pure, Monad_errS, ret,
+        Applicative.ap, apM, bind, liftM, ret in H.
+      cbn in H.
+      generalize dependent new.
+      dependent induction old;intros.
+      -
+        tuple_inversion.
+        constructor.
+      -
+        repeat break_let.
+        repeat break_match; repeat tuple_inversion.
+        cbn.
+        invc C.
+        assert(m = s).
+        {
+          apply H1 in Heqp1.
+          subst.
+          reflexivity.
+        }
+        subst m.
+        constructor.
+        +
+          assumption.
+        +
+          apply IHold; assumption.
+    Qed.
+
+
     Lemma zmap_mmapi_maybe_revoke_pointer_spec
       (a : allocation)
       (s : mem_state)
@@ -1628,6 +1668,12 @@ Module RevocationProofs.
           destruct I as [v1 I].
           exists v1.
 
+          assert(ZMap.MapsTo k v1 newmeta) as I1 by assumption.
+          rewrite Heqnewmeta in I1.
+          apply mapi_inv in I1.
+          destruct I1 as [v2 [k' [I3 [I4 I5]]]].
+          subst k'.
+
           pose proof (ZMap.elements_1 I) as H.
           rewrite <- E in H.
           apply InA_alt in H.
@@ -1654,11 +1700,40 @@ Module RevocationProofs.
           cbn in KR.
           pose proof (@sequence_len_errS _ _ _ _ _ _ _ SEQ) as RL.
 
-          apply sequence_spec_same_state_errS in SEQ.
+          exists v2.
+          split;[apply I|].
+          split.
+          +
+            admit.
+          +
+            pose proof maybe_revoke_pointer_same_state as MR.
+            apply sequence_spec_same_state_memM in SEQ.
+            apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
+            *
+              (*
+              destruct SEQ as [v2' [A1 A2]].
+              destruct A2 as [m1 [m2 A2]].
+              specialize (MR addr v2 a s).
+              specialize (MR v2 s s).
+               *)
+              admit.
+            *
+              destruct (list.nth_lookup_or_length newcaps n v1) as [L|NL].
+              -- rewrite <-H1 in L.
+                 apply L.
+              --
+                lia.
+            *
+              admit.
+
+
+              (* Old stuff below *)
+              (*
+          apply sequence_spec_errS in SEQ.
           +
             apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
             *
-              destruct SEQ as [v2 [A1 A2]].
+              destruct SEQ as [v2' [A1 A2]].
               exists v2.
               repeat split.
               -- apply I.
@@ -1745,6 +1820,7 @@ Module RevocationProofs.
             eauto.
              *)
             admit.
+               *)
         -
           (* key does not exists *)
           right.
