@@ -80,7 +80,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
   let variables =
     let make s ls =
       {var = Sym.pp s;
-       value = mevaluate (sym_ (s, ls))}
+       value = mevaluate (sym_ (s, ls, Locations.other __FUNCTION__))}
     in
     List.map (fun (s, ls) -> make s ls) quantifier_counter_model @
     List.filter_map (fun (s, (binding, _)) -> match binding with Value _ -> None | BaseType ls -> Some (make s ls)) (SymMap.bindings ctxt.computational) @

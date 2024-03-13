@@ -204,8 +204,9 @@ let model_has_prop () =
 let prove_or_model_with_past_model loc m =
   let@ has_prop = model_has_prop () in
   let@ p_f = provable_inner loc in
+  let loc = Locations.other __FUNCTION__ in
   let res lc = match lc with
-    | LC.T t when has_prop (IT.not_ t) m -> `Counterex (lazy m)
+    | LC.T t when has_prop (IT.not_ t loc) m -> `Counterex (lazy m)
     | _ -> begin match p_f lc with
       | `True -> `True
       | `False -> `Counterex (lazy (Solver.model ()))
@@ -224,14 +225,15 @@ let do_check_model loc m prop =
   let vs = Context.(
     (SymMap.bindings ctxt.computational @ SymMap.bindings ctxt.logical)
     |> List.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
-    |> List.map (fun (nm, (bt_or_v, _)) -> IT.sym_ (nm, bt_of bt_or_v))
+    |> List.map (fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc))
   ) in
+  let here = Locations.other __FUNCTION__ in
   let eqs = List.filter_map (fun v -> match Solver.eval global (fst m) v with
     | None -> None
-    | Some x -> Some (IT.eq_ (v, x))
+    | Some x -> Some (IT.eq_ (v, x) here)
   ) vs in
   let@ prover = provable_inner loc in
-  match prover (LogicalConstraints.T (IT.and_ (prop :: eqs))) with
+  match prover (LogicalConstraints.T (IT.and_ (prop :: eqs) here)) with
   | `False -> return ()
   | `True -> fail (fun _ -> {loc; msg = Generic (Pp.string "Solver model inconsistent")})
 
@@ -247,7 +249,8 @@ let model_with_inner loc prop =
     | Some m -> return (Some m)
     | None -> begin
       let@ prover = provable_inner loc in
-      match prover (LC.t_ (IT.not_ prop)) with
+      let here = Locations.other __FUNCTION__ in
+      match prover (LC.t_ (IT.not_ prop here)) with
         | `True -> return None
         | `False ->
             let@ m = model () in
@@ -380,7 +383,8 @@ let map_and_fold_resources_inner loc
            let (ix, hist) = Context.res_written loc i "changed" (ix, hist) in
            begin match re with
            | (Q {q; permission; _}, _) ->
-              begin match provable_f (LC.forall_ q (IT.not_ permission)) with
+              let here = Locations.other __FUNCTION__ in
+              begin match provable_f (LC.forall_ q (IT.not_ permission here)) with
               | `True -> (resources, ix, hist, i::changed_or_deleted, acc)
               | `False ->
                  let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in
@@ -412,10 +416,10 @@ let make_return_record loc (record_name:string) record_members =
   (* let record_s = Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation) in *)
   let record_bt = BT.Record record_members in
   let@ () = add_l record_s record_bt (loc, lazy (Sym.pp record_s)) in
-  let record_it = IT.sym_ (record_s, record_bt) in
+  let record_it = IT.sym_ (record_s, record_bt, loc) in
   let member_its =
     List.map (fun (s, member_bt) ->
-        IT.recordMember_ ~member_bt (record_it, s)
+        IT.recordMember_ ~member_bt (record_it, s) loc
       ) record_members
   in
   return (record_it, member_its)
@@ -434,7 +438,7 @@ let bind_logical_return_internal loc =
     | member :: members,
       LogicalReturnTypes.Define ((s, it), _, lrt) ->
        let@ () = ensure_base_type loc ~expect:(IT.bt it) (IT.bt member) in
-       let@ () = add_c_internal (LC.t_ (IT.eq__ member it)) in
+       let@ () = add_c_internal (LC.t_ (IT.eq__ member it loc)) in
        aux members (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt)
     | member :: members,
       Resource ((s, (re, bt)), _, lrt) ->
@@ -469,7 +473,8 @@ let do_unfold_resources loc =
     let (resources, orig_ix) = s.resources in
     let _orig_hist = s.resource_history in
     Pp.debug 8 (lazy (Pp.string "-- checking resource unfolds now --"));
-    let@ true_m = model_with_inner loc (IT.bool_ true) in
+    let here = Locations.other __FUNCTION__ in
+    let@ true_m = model_with_inner loc (IT.bool_ true here) in
     match true_m with
     | None -> return () (* contradictory state *)
     | Some model ->
@@ -690,17 +695,18 @@ let value_eq_group guard x =
   return (EqTable.get_eq_vals eqs guard x)
 
 let test_value_eqs loc guard x ys =
+  let here = Locations.other __FUNCTION__ in
   let prop y = match guard with
-    | None -> LC.t_ (IT.eq_ (x, y))
-    | Some t -> LC.t_ (IT.impl_ (t, IT.eq_ (x, y)))
+    | None -> LC.t_ (IT.eq_ (x, y) here)
+    | Some t -> LC.t_ (IT.impl_ (t, IT.eq_ (x, y) here) here)
   in
   let@ prover = provable loc in
-  let guard_it = Option.value guard ~default:(IT.bool_ true) in
+  let guard_it = Option.value guard ~default:(IT.bool_ true here) in
   let rec loop group ms = function
     | [] -> return ()
     | y :: ys ->
       let@ has_prop = model_has_prop () in
-      let counterex = has_prop (IT.not_ (IT.eq_ (x, y))) in
+      let counterex = has_prop (IT.not_ (IT.eq_ (x, y) here) here) in
       if ITSet.mem y group || List.exists counterex ms
       then loop group ms ys
       else match prover (prop y) with

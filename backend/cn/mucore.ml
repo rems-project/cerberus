@@ -388,6 +388,7 @@ let bt_of_pexpr : 'TY. 'TY mu_pexpr -> 'TY =
   fun (M_Pexpr (_loc, _annots, bty, _e)) -> bty
 
 let evaluate_fun mu_fun args =
+  let here = Locations.other __FUNCTION__ in
   match mu_fun with
   | M_F_params_length ->
      begin match args with
@@ -412,7 +413,7 @@ let evaluate_fun mu_fun args =
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] ->
         if Sctypes.equal ct1 ct2
-        then Some (`Result_IT (IT.bool_ true)) else None
+        then Some (`Result_IT (IT.bool_ true here)) else None
      | _ -> None
      end
   | M_F_size_of ->
@@ -431,14 +432,14 @@ let evaluate_fun mu_fun args =
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
-        Some (`Result_IT (IT.num_lit_ (Memory.max_integer_type ity) bt))
+        Some (`Result_IT (IT.num_lit_ (Memory.max_integer_type ity) bt here))
      | _ -> None
      end
   | M_F_min_int ->
      begin match List.map IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
-        Some (`Result_IT (IT.num_lit_ (Memory.min_integer_type ity) bt))
+        Some (`Result_IT (IT.num_lit_ (Memory.min_integer_type ity) bt here))
      | _ -> None
      end
   | M_F_ctype_width ->

@@ -138,12 +138,12 @@ let try_coerce_res (ftyp : AT.lemmat) =
        LRT.Define (v, info, erase_res r t)
     | LRT.Constraint (lc, info, t) ->
        LRT.Constraint (lc, info, erase_res r t)
-    | LRT.Resource ((name, (re, bt)), info, t) ->
+    | LRT.Resource ((name, (re, bt)), ((loc, _) as info), t) ->
         let (arg_name, arg_re) = r in
         if ResourceTypes.alpha_equivalent arg_re re
         then begin
           Pp.debug 2 (lazy (Pp.item "erasing" (Sym.pp name)));
-          LRT.subst (IT.make_subst [(name, IT.sym_ (arg_name, bt))]) t
+          LRT.subst (IT.make_subst [(name, IT.sym_ (arg_name, bt, loc))]) t
         end else LRT.Resource ((name, (re, bt)), info, erase_res r t)
     | LRT.I ->
         Pp.debug 2 (lazy (Pp.string "no counterpart found"));
@@ -312,7 +312,7 @@ let rec new_nm s nms i =
   then new_nm s nms (i + 1)
   else s2
 
-let alpha_rename_if_pp_same (s, bt) body =
+let alpha_rename_if_pp_same (s, bt, loc) body =
   let vs = IT.free_vars body in
   let other_nms = List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
     |> List.map Sym.pp_string in
@@ -321,34 +321,36 @@ let alpha_rename_if_pp_same (s, bt) body =
     Pp.debug 6 (lazy (Pp.item "doing rename"
         (Pp.typ (Sym.pp s) (Pp.braces (Pp.list Pp.string other_nms)))));
     let s2 = Sym.fresh_named (new_nm (Sym.pp_string s) other_nms 0) in
-    let body = IT.subst (IT.make_subst [(s, IT.sym_ (s2, bt))]) body in
+    let body = IT.subst (IT.make_subst [(s, IT.sym_ (s2, bt, loc))]) body in
     (s2, body, IT.free_vars body)
   end
   else (s, body, vs)
 
 let it_adjust (global : Global.t) it =
   let rec f t =
+    let loc = IT.loc t in
     match IT.term t with
         | IT.Binop (And, x1, x2) ->
             let xs = List.map f [x1; x2] |> List.partition IT.is_true |> snd in
-            IT.and_ xs
+            IT.and_ xs loc
         | IT.Binop (Or, x1, x2) ->
             let xs = List.map f [x1; x2] |> List.partition IT.is_false |> snd in
-            IT.or_ xs
+            IT.or_ xs loc
         | IT.Binop (EQ, x, y) ->
             let x = f x in
             let y = f y in
-            if IT.equal x y then IT.bool_ true else IT.eq__ x y
+            if IT.equal x y then IT.bool_ true loc else IT.eq__ x y loc
         | IT.Binop (Impl, x, y) ->
             let x = f x in
             let y = f y in
-            if IT.is_false x || IT.is_true y then IT.bool_ true else IT.impl_ (x, y)
+            if IT.is_false x || IT.is_true y then IT.bool_ true loc else IT.impl_ (x, y) loc
         | IT.EachI ((i1, (s, bt), i2), x) ->
             let x = f x in
-            let (s, x, vs) = alpha_rename_if_pp_same (s, BT.Integer) x in
+            (* TODO revisit this location *)
+            let (s, x, vs) = alpha_rename_if_pp_same (s, BT.Integer, loc) x in
             if not (SymSet.mem s vs)
             then (assert (i1 <= i2); x)
-            else IT.eachI_ (i1, (s, bt), i2) x
+            else IT.eachI_ (i1, (s, bt), i2) x loc
     | IT.Apply (name, args) ->
         let open LogicalFunctions in
         let def = SymMap.find name global.logical_functions in
@@ -357,21 +359,22 @@ let it_adjust (global : Global.t) it =
           | _ -> t
         end
     | IT.Good (ct, t2) -> if Option.is_some (Sctypes.is_struct_ctype ct)
-        then t else f (IT.good_value global.struct_decls ct t2)
+        then t else f (IT.good_value global.struct_decls ct t2 loc)
     | Representable (ct, t2) -> if Option.is_some (Sctypes.is_struct_ctype ct)
-        then t else f (IT.representable global.struct_decls ct t2)
+        then t else f (IT.representable global.struct_decls ct t2 loc)
     | Aligned t ->
-        f (IT.divisible_ (IT.pointerToIntegerCast_ t.t, t.align))
+        f (IT.divisible_ (IT.pointerToIntegerCast_ t.t loc, t.align) loc)
     | IT.Let ((nm, x), y) ->
         let x = f x in
         let y = f y in
-        let (nm, y, vs) = alpha_rename_if_pp_same (nm, IT.bt x) y in
+        (* TODO revisit this location *)
+        let (nm, y, vs) = alpha_rename_if_pp_same (nm, IT.bt x, loc) y in
         if Option.is_some (IT.is_sym x)
         then IT.subst (IT.make_subst [(nm, x)]) y
         else
         if not (SymSet.mem nm vs)
         then y
-        else IT.let_ ((nm, x), y)
+        else IT.let_ ((nm, x), y) loc
     | _ -> t
   in
   let res = f it in
@@ -656,8 +659,9 @@ let ensure_struct_mem is_good global list_mono loc ct aux = match Sctypes.is_str
   (lazy (
       let@ ty = bt_to_coq global list_mono (loc, Pp.string op_nm) bt in
       let x = Pp.parens (Pp.typ (Pp.string "x") ty) in
-      let x_it = IT.sym_ (Sym.fresh_named "x", bt) in
-      let@ rhs = aux (it_adjust global (IT.good_value global.struct_decls ct x_it)) in
+      let loc = Locations.other __FUNCTION__ in
+      let x_it = IT.sym_ (Sym.fresh_named "x", bt, loc) in
+      let@ rhs = aux (it_adjust global (IT.good_value global.struct_decls ct x_it loc)) in
       return (defn op_nm [x] None rhs)
   )) [tag] in
   return op_nm
@@ -666,7 +670,7 @@ let rec unfold_if_possible global it =
   let open IT in
   let open LogicalFunctions in
   match it with
-  | IT (IT.Apply (name, args), _) ->
+  | IT (IT.Apply (name, args), _, _) ->
      let def = Option.get (Global.get_logical_function_def global name) in
      begin match def.definition with
      | Rec_Def _ -> it

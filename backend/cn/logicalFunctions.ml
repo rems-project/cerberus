@@ -47,16 +47,6 @@ let is_recursive def =
   | Uninterp -> false
 
 
-let alpha_rename_definition def =
-  let args, subst =
-    List.fold_right (fun (s, ls) (args, subst) ->
-        let s' = Sym.fresh_same s in
-        ((s', ls) :: args, (s, sym_ (s', ls)) :: subst)
-      ) def.args ([],[])
-  in
-  let definition = subst_def_or_uninterp (IT.make_subst subst) def.definition in
-  {def with args; definition }
-
 let pp_args xs = Pp.flow_map (Pp.break 1)
   (fun (sym, typ) -> Pp.parens (Pp.typ (Sym.pp sym) (BT.pp typ))) xs
 

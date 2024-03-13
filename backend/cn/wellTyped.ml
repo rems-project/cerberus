@@ -36,8 +36,8 @@ let ensure_bits_type (loc : loc) (has : BT.t) =
   | has ->
      fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = !^"bitvector"}})
 
-let ensure_z_fits_bits_type loc (sign, n) v = 
-  if BT.fits_range (sign, n) v then 
+let ensure_z_fits_bits_type loc (sign, n) v =
+  if BT.fits_range (sign, n) v then
     return ()
   else
     let err = !^"Value" ^^^ Pp.z v ^^^ !^"does not fit" ^^^ BT.pp (Bits (sign, n)) in
@@ -328,7 +328,7 @@ module WIT = struct
 
   let rec infer : 'bt. Loc.t -> 'bt term -> (BT.t term) m =
     fun loc orig_it ->
-    let (IT (it, _)) = orig_it in
+    let (IT (it, _, orig_loc)) = orig_it in
     Pp.debug 22 (lazy (Pp.item "Welltyped.WIT.infer" (IT.pp orig_it)));
     let@ it' = match it with
       | Sym s ->
@@ -340,33 +340,33 @@ module WIT = struct
            | () -> fail (fun _ -> {loc; msg = TE.Unknown_variable s})
          in
          begin match binding with
-         | BaseType bt -> return (IT (Sym s, bt))
+         | BaseType bt -> return (IT (Sym s, bt, orig_loc))
          | Value it -> return it
          end
       | Const (Z z) ->
-         return (IT (Const (Z z), Integer))
+         return (IT (Const (Z z), Integer, orig_loc))
       | Const (Bits ((sign,n),v) as c) ->
          let@ () = ensure_z_fits_bits_type loc (sign, n) v in
-         return (IT (Const c, BT.Bits (sign,n)))
+         return (IT (Const c, BT.Bits (sign,n), orig_loc))
       | Const (Q q) ->
-         return (IT (Const (Q q), Real))
+         return (IT (Const (Q q), Real, orig_loc))
       | Const (Pointer p) ->
          let rs = Option.get (BT.is_bits_bt Memory.intptr_bt) in
          let@ () = ensure_z_fits_bits_type loc rs p.addr in
-         return (IT (Const (Pointer p), Loc))
+         return (IT (Const (Pointer p), Loc, orig_loc))
       | Const (Alloc_id p) ->
-         return (IT (Const (Alloc_id p), BT.Alloc_id))
+         return (IT (Const (Alloc_id p), BT.Alloc_id, orig_loc))
       | Const (Bool b) ->
-         return (IT (Const (Bool b), BT.Bool))
+         return (IT (Const (Bool b), BT.Bool, orig_loc))
       | Const Unit ->
-         return (IT (Const Unit, BT.Unit))
+         return (IT (Const Unit, BT.Unit, orig_loc))
       | Const (Default bt) ->
          let@ bt = WBT.is_bt loc bt in
-         return (IT (Const (Default bt), bt))
+         return (IT (Const (Default bt), bt, orig_loc))
       | Const Null ->
-         return (IT (Const Null, BT.Loc))
+         return (IT (Const Null, BT.Loc, orig_loc))
       | Const (CType_const ct) ->
-         return (IT (Const (CType_const ct), BT.CType))
+         return (IT (Const (CType_const ct), BT.CType, orig_loc))
       | Unop (unop, t) ->
          let@ (t, ret_bt) = begin match unop with
          | Not ->
@@ -379,41 +379,41 @@ module WIT = struct
            let@ () = ensure_bits_type loc (IT.bt t) in
            return (t, IT.bt t)
          end in
-         return (IT (Unop (unop, t), ret_bt))
+         return (IT (Unop (unop, t), ret_bt, orig_loc))
       | Binop (arith_op, t, t') ->
          begin match arith_op with
          | Add ->
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            return (IT (Binop (Add, t, t'), IT.bt t))
+            return (IT (Binop (Add, t, t'), IT.bt t, orig_loc))
          | Sub ->
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            return (IT (Binop (Sub, t, t'), IT.bt t))
+            return (IT (Binop (Sub, t, t'), IT.bt t, orig_loc))
          | Mul ->
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
             begin match (IT.bt t), is_const t, is_const t' with
             | Integer, None, None ->
-               let msg = 
-                !^"Both sides of the integer multiplication" 
-                ^^^ squotes (IT.pp (mul_ (t,t')))
-                ^^^ !^"are not constants." 
-                ^^^ !^"treating the term as uninterpreted." 
+               let msg =
+                !^"Both sides of the integer multiplication"
+                ^^^ squotes (IT.pp (mul_ (t,t') orig_loc))
+                ^^^ !^"are not constants."
+                ^^^ !^"treating the term as uninterpreted."
                in
                warn loc msg;
-               return (IT (Binop (MulNoSMT,t, t'), IT.bt t))
+               return (IT (Binop (MulNoSMT,t, t'), IT.bt t, orig_loc))
             | _ ->
-               return (IT (Binop (Mul, t, t'), IT.bt t))
+               return (IT (Binop (Mul, t, t'), IT.bt t, orig_loc))
             end
          | MulNoSMT ->
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            return (IT (Binop (MulNoSMT, t, t'), IT.bt t))
+            return (IT (Binop (MulNoSMT, t, t'), IT.bt t, orig_loc))
          | Div ->
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
@@ -421,40 +421,40 @@ module WIT = struct
             begin match IT.bt t, is_const t' with
             | Integer, Some (Z z', _) when Z.leq z' Z.zero ->
                let msg =
-                 !^"Division" ^^^ squotes (IT.pp (div_ (t,t')))
+                 !^"Division" ^^^ squotes (IT.pp (div_ (t,t') orig_loc))
                  ^^^ !^"does not have positive right-hand argument."
                  ^^^ !^"Treating as uninterpreted."
                in
                warn loc msg;
-               return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
+               return (IT (Binop (DivNoSMT, t, t'), IT.bt t, orig_loc))
             | Integer, None ->
                let msg =
-                 !^"Division" ^^^ squotes (IT.pp (div_ (t,t')))
+                 !^"Division" ^^^ squotes (IT.pp (div_ (t,t') orig_loc))
                  ^^^ !^"does not have constant as right-hand argument."
                  ^^^ !^"Treating as uninterpreted."
                in
                warn loc msg;
-               return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
+               return (IT (Binop (DivNoSMT, t, t'), IT.bt t, orig_loc))
             | _ ->
                (* TODO: check for a zero divisor *)
-               return (IT (Binop (Div, t, t'), IT.bt t))
+               return (IT (Binop (Div, t, t'), IT.bt t, orig_loc))
             end
          | DivNoSMT ->
             let@ t = infer loc t in
             let@ () = ensure_arith_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            return (IT (Binop (DivNoSMT, t, t'), IT.bt t))
+            return (IT (Binop (DivNoSMT, t, t'), IT.bt t, orig_loc))
          | Exp ->
             let@ t = infer loc t in
             let@ () = ensure_bits_type loc (IT.bt t) in
             let@ t' = check loc (IT.bt t) t' in
             let msg =
               !^"Treating exponentiation"
-              ^^^ squotes (IT.pp (exp_ (t, t')))
+              ^^^ squotes (IT.pp (exp_ (t, t') orig_loc))
               ^^^ !^"as uninterpreted."
             in
             warn loc msg;
-            return (IT (Binop (ExpNoSMT, t, t'), IT.bt t))            
+            return (IT (Binop (ExpNoSMT, t, t'), IT.bt t, orig_loc))
            | ExpNoSMT
            | RemNoSMT
            | ModNoSMT
@@ -468,81 +468,81 @@ module WIT = struct
               let@ t = infer loc t in
               let@ () = ensure_bits_type loc (IT.bt t) in
               let@ t' = check loc (IT.bt t) t' in
-              return (IT (Binop (arith_op, t, t'), IT.bt t))
+              return (IT (Binop (arith_op, t, t'), IT.bt t, orig_loc))
            | LT ->
               let@ t = infer loc t in
               let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
-              return (IT (Binop (LT, t, t'), BT.Bool))
+              return (IT (Binop (LT, t, t'), BT.Bool, orig_loc))
            | LE ->
               let@ t = infer loc t in
               let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
-              return (IT (Binop (LE, t, t'), BT.Bool))
+              return (IT (Binop (LE, t, t'), BT.Bool, orig_loc))
            | Min ->
               let@ t = infer loc t in
               let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
-              return (IT (Binop (Min, t, t'), IT.bt t))
+              return (IT (Binop (Min, t, t'), IT.bt t, orig_loc))
            | Max ->
               let@ t = infer loc t in
               let@ () = ensure_arith_type loc t in
               let@ t' = check loc (IT.bt t) t' in
-              return (IT (Binop (Max, t, t'), IT.bt t))
+              return (IT (Binop (Max, t, t'), IT.bt t, orig_loc))
            | EQ ->
               let@ t = infer loc t in
               let@ t' = check loc (IT.bt t) t' in
-              return (IT (Binop (EQ, t,t'),BT.Bool))
+              return (IT (Binop (EQ, t,t'),BT.Bool, orig_loc))
            | LTPointer ->
               let@ t = check loc Loc t in
               let@ t' = check loc Loc t' in
-              return (IT (Binop (LTPointer, t, t'),BT.Bool))
+              return (IT (Binop (LTPointer, t, t'), BT.Bool, orig_loc))
            | LEPointer ->
               let@ t = check loc Loc t in
               let@ t' = check loc Loc t' in
-              return (IT (Binop (LEPointer, t, t'),BT.Bool))
+              return (IT (Binop (LEPointer, t, t'),BT.Bool, orig_loc))
          | SetMember ->
             let@ t = infer loc t in
             let@ t' = check loc (Set (IT.bt t)) t' in
-            return (IT (Binop (SetMember, t, t'), BT.Bool))
+            return (IT (Binop (SetMember, t, t'), BT.Bool, orig_loc))
          | SetUnion ->
             let@ t = infer loc t in
             let@ _itembt = ensure_set_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            return (IT (Binop (SetUnion, t, t'), IT.bt t))
+            return (IT (Binop (SetUnion, t, t'), IT.bt t, orig_loc))
          | SetIntersection ->
             let@ t = infer loc t in
             let@ _itembt = ensure_set_type loc t in
             let@ t' = check loc (IT.bt t) t' in
-            return (IT (Binop (SetIntersection, t, t'), IT.bt t))
+            return (IT (Binop (SetIntersection, t, t'), IT.bt t, orig_loc))
          | SetDifference ->
             let@ t  = infer loc t in
             let@ itembt = ensure_set_type loc t in
             let@ t' = check loc (Set itembt) t' in
-            return (IT (Binop (SetDifference, t, t'), BT.Set itembt))
+            return (IT (Binop (SetDifference, t, t'), BT.Set itembt, orig_loc))
          | Subset ->
             let@ t = infer loc t in
             let@ itembt = ensure_set_type loc t in
             let@ t' = check loc (Set itembt) t' in
-            return (IT (Binop (Subset, t,t'), BT.Bool))
+            return (IT (Binop (Subset, t,t'), BT.Bool, orig_loc))
          | And ->
             let@ t = check loc Bool t in
             let@ t' = check loc Bool t' in
-            return (IT (Binop (And, t, t'), Bool))
+            return (IT (Binop (And, t, t'), Bool, orig_loc))
          | Or ->
             let@ t = check loc Bool t in
             let@ t' = check loc Bool t' in
-            return (IT (Binop (Or, t, t'), Bool))
+            return (IT (Binop (Or, t, t'), Bool, orig_loc))
          | Impl ->
             let@ t = check loc Bool t in
             let@ t' = check loc Bool t' in
-            return (IT (Binop (Impl, t, t'), Bool))
+            return (IT (Binop (Impl, t, t'), Bool, orig_loc))
          end
       | ITE (t,t',t'') ->
          let@ t = check loc Bool t in
          let@ t' = infer loc t' in
          let@ t'' = check loc (IT.bt t') t'' in
-         return (IT (ITE (t, t', t''),IT.bt t'))
+         return (IT (ITE (t, t', t''),IT.bt t', orig_loc))
       | EachI ((i1, (s, bt), i2), t) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
@@ -555,12 +555,12 @@ module WIT = struct
              let@ () = ensure_z_fits_bits_type loc rs (Z.of_int i2) in
              let@ () = add_l s bt (loc, lazy (Pp.string "forall-var")) in
              let@ t = check loc Bool t in
-             return (IT (EachI ((i1, (s, bt), i2), t),BT.Bool))
+             return (IT (EachI ((i1, (s, bt), i2), t),BT.Bool, orig_loc))
            end
       | Tuple ts ->
          let@ ts = ListM.mapM (infer loc) ts in
          let bts = List.map IT.bt ts in
-         return (IT (Tuple ts,BT.Tuple bts))
+         return (IT (Tuple ts,BT.Tuple bts, orig_loc))
       | NthTuple (n, t') ->
          let@ t' = infer loc t' in
          let@ item_bt = match IT.bt t' with
@@ -574,7 +574,7 @@ module WIT = struct
            | has ->
               fail (illtyped_index_term loc t' has "tuple")
          in
-         return (IT (NthTuple (n, t'),item_bt))
+         return (IT (NthTuple (n, t'),item_bt, orig_loc))
       | Struct (tag, members) ->
          let@ layout = get_struct_decl loc tag in
          let decl_members = Memory.member_types layout in
@@ -587,7 +587,7 @@ module WIT = struct
              ) decl_members
          in
          assert (List.length members_sorted = List.length members);
-         return (IT (Struct (tag, members_sorted), BT.Struct tag))
+         return (IT (Struct (tag, members_sorted), BT.Struct tag, orig_loc))
       | StructMember (t, member) ->
          let@ t = infer loc t in
          let@ tag = match IT.bt t with
@@ -595,7 +595,7 @@ module WIT = struct
            | has -> fail (illtyped_index_term loc t has "struct")
          in
          let@ field_ct = get_struct_member_type loc tag member in
-         return (IT (StructMember (t, member),Memory.bt_of_sct field_ct))
+         return (IT (StructMember (t, member),Memory.bt_of_sct field_ct, orig_loc))
       | StructUpdate ((t, member), v) ->
          let@ t = infer loc t in
          let@ tag = match IT.bt t with
@@ -604,7 +604,7 @@ module WIT = struct
          in
          let@ field_ct = get_struct_member_type loc tag member in
          let@ v = check loc (Memory.bt_of_sct field_ct) v in
-         return (IT (StructUpdate ((t, member), v),BT.Struct tag))
+         return (IT (StructUpdate ((t, member), v),BT.Struct tag, orig_loc))
       | Record members ->
          let@ members = no_duplicate_members_sorted loc members in
          let@ members =
@@ -614,7 +614,7 @@ module WIT = struct
              ) members
          in
          let member_types = List.map (fun (id, t) -> (id, IT.bt t)) members in
-         return (IT (IT.Record members,BT.Record member_types))
+         return (IT (IT.Record members,BT.Record member_types, orig_loc))
       | RecordMember (t, member) ->
          let@ t = infer loc t in
          let@ members = match IT.bt t with
@@ -627,7 +627,7 @@ module WIT = struct
               let expected = "struct with member " ^ Id.pp_string member in
               fail (illtyped_index_term loc t (IT.bt t) expected)
          in
-         return (IT (RecordMember (t, member), bt))
+         return (IT (RecordMember (t, member), bt, orig_loc))
       | RecordUpdate ((t, member), v) ->
          let@ t = infer loc t in
          let@ members = match IT.bt t with
@@ -641,7 +641,7 @@ module WIT = struct
               fail (illtyped_index_term loc t (IT.bt t) expected)
          in
          let@ v = check loc bt v in
-         return (IT (RecordUpdate ((t, member), v),IT.bt t))
+         return (IT (RecordUpdate ((t, member), v),IT.bt t, orig_loc))
        | Cast (cbt, t) ->
           let@ cbt = WBT.is_bt loc cbt in
           let@ t = infer loc t in
@@ -663,7 +663,7 @@ module WIT = struct
              in
              fail (fun _ -> {loc; msg = Generic msg})
           in
-          return (IT (Cast (cbt, t), cbt))
+          return (IT (Cast (cbt, t), cbt, orig_loc))
        | MemberShift (t, tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
           let@ t = check loc Loc t in
@@ -671,68 +671,68 @@ module WIT = struct
           let o = Option.get (Memory.member_offset decl member) in
           let rs = Option.get (BT.is_bits_bt Memory.intptr_bt) in
           let@ () = ensure_z_fits_bits_type loc rs (Z.of_int o) in (* looking at solver mapping *)
-          return (IT (MemberShift (t, tag, member), BT.Loc))
+          return (IT (MemberShift (t, tag, member), BT.Loc, orig_loc))
        | ArrayShift { base; ct; index } ->
           let@ () = WCT.is_ct loc ct in
           let@ base = check loc Loc base in
           let@ index = infer loc index in
           let@ () = ensure_bits_type loc (IT.bt index) in
-          return (IT (ArrayShift { base; ct; index }, BT.Loc))
+          return (IT (ArrayShift { base; ct; index }, BT.Loc, orig_loc))
        | CopyAllocId { addr; loc=ptr } ->
           let@ addr = check loc Memory.intptr_bt addr in
           let@ ptr = check loc Loc ptr in
-          return (IT (CopyAllocId { addr; loc=ptr }, BT.Loc))
+          return (IT (CopyAllocId { addr; loc=ptr }, BT.Loc, orig_loc))
        | SizeOf ct ->
           let@ () = WCT.is_ct loc ct in
           let sz = Memory.size_of_ctype ct in
           let rs = Option.get (BT.is_bits_bt Memory.size_bt) in
           let@ () = ensure_z_fits_bits_type loc rs (Z.of_int sz) in
-          return (IT (SizeOf ct, Memory.size_bt))
+          return (IT (SizeOf ct, Memory.size_bt, orig_loc))
        | OffsetOf (tag, member) ->
           let@ _ty = get_struct_member_type loc tag member in
           let@ decl = get_struct_decl loc tag in
           let o = Option.get (Memory.member_offset decl member) in
           let rs = Option.get (BT.is_bits_bt Memory.sint_bt) in
           let@ () = ensure_z_fits_bits_type loc rs (Z.of_int o) in
-          return (IT (OffsetOf (tag, member), Memory.sint_bt))
+          return (IT (OffsetOf (tag, member), Memory.sint_bt, orig_loc))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Memory.intptr_bt t.align in
-          return (IT (Aligned {t = t_t; align=t_align},BT.Bool))
+          return (IT (Aligned {t = t_t; align=t_align},BT.Bool, orig_loc))
        | Representable (ct, t) ->
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc (Memory.bt_of_sct ct) t in
-          return (IT (Representable (ct, t),BT.Bool))
+          return (IT (Representable (ct, t),BT.Bool, orig_loc))
        | Good (ct, t) ->
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc (Memory.bt_of_sct ct) t in
-          return (IT (Good (ct, t),BT.Bool))
+          return (IT (Good (ct, t),BT.Bool, orig_loc))
        | WrapI (ity, t) ->
           let@ () = WCT.is_ct loc (Integer ity) in
           let@ t = infer loc t in
-          return (IT (WrapI (ity, t), Memory.bt_of_sct (Integer ity)))
+          return (IT (WrapI (ity, t), Memory.bt_of_sct (Integer ity), orig_loc))
        | Nil bt ->
           let@ bt = WBT.is_bt loc bt in
-          return (IT (Nil bt, BT.List bt))
+          return (IT (Nil bt, BT.List bt, orig_loc))
        | Cons (t1,t2) ->
           let@ t1 = infer loc t1 in
           let@ t2 = check loc (List (IT.bt t1)) t2 in
-          return (IT (Cons (t1, t2),BT.List (IT.bt t1)))
+          return (IT (Cons (t1, t2),BT.List (IT.bt t1), orig_loc))
        | Head t ->
           let@ t = infer loc t in
           let@ bt = ensure_list_type loc t in
-          return (IT (Head t,bt))
+          return (IT (Head t,bt, orig_loc))
        | Tail t ->
           let@ t = infer loc t in
           let@ bt = ensure_list_type loc t in
-          return (IT (Tail t,BT.List bt))
+          return (IT (Tail t,BT.List bt, orig_loc))
        | NthList (i, xs, d) ->
           let@ i = infer loc i in
           let@ () = ensure_bits_type loc (IT.bt i) in
           let@ xs = infer loc xs in
           let@ bt = ensure_list_type loc xs in
           let@ d = check loc bt d in
-          return (IT (NthList (i, xs, d),bt))
+          return (IT (NthList (i, xs, d),bt, orig_loc))
        | ArrayToList (arr, i, len) ->
           let@ i = infer loc i in
           let@ () = ensure_bits_type loc (IT.bt i) in
@@ -743,22 +743,22 @@ module WIT = struct
             else fail (fun _ -> {loc; msg = Generic
                 (Pp.item "array_to_list: index type disagreement"
                     (Pp.list IT.pp_with_typ [i; arr]))}) in
-          return (IT (ArrayToList (arr, i, len), BT.List bt))
+          return (IT (ArrayToList (arr, i, len), BT.List bt, orig_loc))
       | MapConst (index_bt, t) ->
          let@ index_bt = WBT.is_bt loc index_bt in
          let@ t = infer loc t in
-         return (IT (MapConst (index_bt, t), BT.Map (index_bt, IT.bt t)))
+         return (IT (MapConst (index_bt, t), BT.Map (index_bt, IT.bt t), orig_loc))
       | MapSet (t1, t2, t3) ->
          let@ t1 = infer loc t1 in
          let@ (abt, rbt) = ensure_map_type loc t1 in
          let@ t2 = check loc abt t2 in
          let@ t3 = check loc rbt t3 in
-         return (IT (MapSet (t1, t2, t3), IT.bt t1))
+         return (IT (MapSet (t1, t2, t3), IT.bt t1, orig_loc))
       | MapGet (t, arg) ->
          let@ t = infer loc t in
          let@ (abt, bt) = ensure_map_type loc t in
          let@ arg = check loc abt arg in
-         return (IT (MapGet (t, arg),bt))
+         return (IT (MapGet (t, arg),bt, orig_loc))
       | MapDef ((s, abt), body) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
@@ -767,7 +767,7 @@ module WIT = struct
          pure begin
             let@ () = add_l s abt (loc, lazy (Pp.string "map-def-var")) in
             let@ body = infer loc body in
-            return (IT (MapDef ((s, abt), body), Map (abt, IT.bt body)))
+            return (IT (MapDef ((s, abt), body), Map (abt, IT.bt body), orig_loc))
             end
       | Apply (name, args) ->
          let@ def = Typing.get_logical_function_def loc name in
@@ -778,14 +778,14 @@ module WIT = struct
                check loc def_arg_bt has_arg
              ) args def.args
          in
-         return (IT (Apply (name, args), def.return_bt))
+         return (IT (Apply (name, args), def.return_bt, orig_loc))
       | Let ((name, t1), t2) ->
          let@ t1 = infer loc t1 in
          pure begin
              let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
-             let@ () = add_c loc (LC.t_ (IT.def_ name t1)) in
+             let@ () = add_c loc (LC.t_ (IT.def_ name t1 orig_loc)) in
              let@ t2 = infer loc t2 in
-             return (IT (Let ((name, t1), t2), IT.bt t2))
+             return (IT (Let ((name, t1), t2), IT.bt t2, orig_loc))
            end
       | Constructor (s, args) ->
          let@ info = get_datatype_constr loc s in
@@ -796,7 +796,7 @@ module WIT = struct
                return (id', t')
              ) args_annotated
          in
-         return (IT (Constructor (s, args), Datatype info.c_datatype_tag))
+         return (IT (Constructor (s, args), Datatype info.c_datatype_tag, orig_loc))
       | Match (e, cases) ->
          let@ e = infer loc e in
          let@ rbt, cases =
@@ -817,7 +817,7 @@ module WIT = struct
            | None -> fail (fun _ -> {loc; msg = Empty_pattern})
            | Some rbt -> return rbt
          in
-         return (IT (Match (e, cases), rbt))
+         return (IT (Match (e, cases), rbt, orig_loc))
     in
     Pp.debug 22 (lazy (Pp.item "Welltyped.WIT.infer: inferred" (IT.pp_with_typ it')));
     return it'
@@ -872,13 +872,13 @@ module WRET = struct
        assert (BT.equal (snd p.q) qbt); (*normalisation does not change bit types. If this assertion fails, we have to adjust the later code to use qbt.*)
        let@ step = WIT.check loc (snd p.q) p.step in
        let@ step = match step with
-         | IT (Const (Bits (bits_bt, z)), _) ->
-           if Z.lt Z.zero z 
+         | IT (Const (Bits (bits_bt, z)), _, _) ->
+           if Z.lt Z.zero z
            then return step
            else fail (fun _ -> {loc; msg = Generic
              (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "must be positive")})
-         | IT (SizeOf _, _) -> return step
-         | IT (Cast (_, IT (SizeOf _, _)), _) -> return step
+         | IT (SizeOf _, _, _) -> return step
+         | IT (Cast (_, IT (SizeOf _, _, _)), _, _) -> return step
          | _ ->
            let hint = "Only constant iteration steps are allowed." in
            fail (fun ctxt -> {loc; msg = NIA {it = p.step; ctxt; hint}})
@@ -897,12 +897,14 @@ module WRET = struct
              let@ () = add_l (fst p.q) (snd p.q) (loc, lazy (Pp.string "forall-var")) in
              let@ permission = WIT.check loc BT.Bool p.permission in
              let@ provable = provable loc in
+             let here = Locations.other __FUNCTION__ in
              let only_nonnegative_indices =
                (* It is important to use `permission` here and NOT `p.permission`.
                   If there is a record involved, `permission` is normalised but the `p.permission` is not
                   If there is a subsitution in `provable` then a type check
                   assertion may fail if the non-normalised form is used *)
-               LC.forall_ p.q (impl_ (permission, ge_ (sym_ p.q, int_lit_ 0 (snd p.q))))
+               let sym_args = (fst p.q, snd p.q, p.q_loc) in
+               LC.forall_ p.q (impl_ (permission, ge_ (sym_ sym_args, int_lit_ 0 (snd p.q) here) here) here)
              in
              let@ () = match provable only_nonnegative_indices with
                | `True ->
@@ -919,7 +921,7 @@ module WRET = struct
              return (permission, iargs)
            end
        in
-       return (RET.Q {name = p.name; pointer; q = p.q; step; permission; iargs})
+       return (RET.Q {name = p.name; pointer; q = p.q; q_loc = p.q_loc; step; permission; iargs})
 end
 
 
@@ -986,22 +988,24 @@ module WLRT = struct
 
   let welltyped loc lrt =
     let rec aux = function
-      | Define ((s, it), info, lrt) ->
+      | Define ((s, it), ((loc, _) as info), lrt) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let s, lrt = LRT.alpha_rename (s, IT.bt it) lrt in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it)) in
+         (* TODO revisit this location *)
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it loc)) in
          let@ lrt = aux lrt in
          return (Define ((s, it), info, lrt))
-      | Resource ((s, (re, re_oa_spec)), info, lrt) ->
+      | Resource ((s, (re, re_oa_spec)), ((loc, _) as info), lrt) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in *)
-         let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
+         let@ (re, re_oa_spec) = WRS.welltyped loc (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
+         (* TODO revisit this location *)
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, loc))) in
          let@ lrt = aux lrt in
          return (Resource ((s, (re, re_oa_spec)), info, lrt))
       | Constraint (lc, info, lrt) ->
@@ -1064,16 +1068,18 @@ module WLAT = struct
          (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it)) in
+         (* TODO revisit this location *)
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it loc)) in
          let@ at = aux at in
          return (LAT.Define ((s, it), info, at))
-      | LAT.Resource ((s, (re, re_oa_spec)), info, at) ->
+      | LAT.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
+         (* TODO revisit this location *)
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, loc))) in
          let@ at = aux at in
          return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
       | LAT.Constraint (lc, info, at) ->
@@ -1083,7 +1089,8 @@ module WLAT = struct
          return (LAT.Constraint (lc, info, at))
       | LAT.I i ->
          let@ provable = provable loc in
-         let@ () = match provable (LC.t_ (IT.bool_ false)) with
+         let here = Locations.other __FUNCTION__ in
+         let@ () = match provable (LC.t_ (IT.bool_ false here)) with
            | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
            | `False -> return ()
          in
@@ -1166,22 +1173,24 @@ module WLArgs = struct
         (at : 'i Mu.mu_arguments_l)
       : ('j Mu.mu_arguments_l) m =
     let rec aux = function
-      | Mu.M_Define ((s, it), info, at) ->
+      | Mu.M_Define ((s, it), ((loc, _) as info), at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it)) in
+         (* TODO revisit this location *)
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it loc)) in
          let@ at = aux at in
          return (Mu.M_Define ((s, it), info, at))
-      | Mu.M_Resource ((s, (re, re_oa_spec)), info, at) ->
+      | Mu.M_Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
+         (* TODO revisit this location *)
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, loc))) in
          let@ at = aux at in
          return (Mu.M_Resource ((s, (re, re_oa_spec)), info, at))
       | Mu.M_Constraint (lc, info, at) ->
@@ -1191,7 +1200,8 @@ module WLArgs = struct
          return (Mu.M_Constraint (lc, info, at))
       | Mu.M_I i ->
          let@ provable = provable loc in
-         let@ () = match provable (LC.t_ (IT.bool_ false)) with
+         let here = Locations.other __FUNCTION__ in
+         let@ () = match provable (LC.t_ (IT.bool_ false here)) with
            | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
            | `False -> return ()
          in
@@ -2146,10 +2156,11 @@ module WRPD = struct
              let@ clauses =
                ListM.fold_leftM (fun acc {loc; guard; packing_ft} ->
                    let@ guard = WIT.check loc BT.Bool guard in
-                   let negated_guards = List.map (fun clause -> IT.not_ clause.guard) acc in
+                   let here = Locations.other __FUNCTION__ in
+                   let negated_guards = List.map (fun clause -> IT.not_ clause.guard here) acc in
                    pure begin
                        let@ () = add_c loc (LC.t_ guard) in
-                       let@ () = add_c loc (LC.t_ (IT.and_ negated_guards)) in
+                       let@ () = add_c loc (LC.t_ (IT.and_ negated_guards here)) in
                        let@ packing_ft =
                          WLAT.welltyped IT.subst (fun loc it -> WIT.check loc oarg_bt it)
                            "clause" loc packing_ft
@@ -2246,27 +2257,27 @@ module WDT = struct
   let bts_in_dt_constructor_argument (_name, bt) =
     bt :: BT.contained bt
 
-  let bts_in_dt_case (_constr, args) = 
+  let bts_in_dt_case (_constr, args) =
     List.concat_map bts_in_dt_constructor_argument args
 
-  let bts_in_dt_definition { loc; cases } = 
+  let bts_in_dt_definition { loc; cases } =
     List.concat_map bts_in_dt_case cases
 
-  let dts_in_dt_definition dt_def = 
+  let dts_in_dt_definition dt_def =
     List.filter_map BT.is_datatype_bt (bts_in_dt_definition dt_def)
 
 
-  let check_recursion_ok datatypes = 
+  let check_recursion_ok datatypes =
 
     let graph = G.empty in
 
-    let graph = 
+    let graph =
       List.fold_left (fun graph (dt, _) ->
           G.add_vertex graph dt
         ) graph datatypes
-    in 
+    in
 
-    let graph = 
+    let graph =
       List.fold_left (fun graph (dt, dt_def) ->
           List.fold_left (fun graph dt' ->
               G.add_edge graph dt dt'
@@ -2276,26 +2287,26 @@ module WDT = struct
 
     let sccs = Components.scc_list graph in
 
-    let@ () = 
+    let@ () =
       ListM.iterM (fun scc ->
           let scc_set = SymSet.of_list scc in
           ListM.iterM (fun dt ->
               let {loc;cases} = List.assoc Sym.equal dt datatypes in
               ListM.iterM (fun (ctor,args) ->
                   ListM.iterM (fun (id, bt) ->
-                      let indirect_deps = 
-                        SymSet.of_list 
-                          (List.filter_map BT.is_datatype_bt (BT.contained bt)) 
+                      let indirect_deps =
+                        SymSet.of_list
+                          (List.filter_map BT.is_datatype_bt (BT.contained bt))
                       in
                       let bad = SymSet.inter indirect_deps scc_set in
                       begin match SymSet.elements bad with
                       | [] -> return ()
                       | dt' :: _ ->
-                          let err = 
-                            !^"Illegal datatype definition." 
+                          let err =
+                            !^"Illegal datatype definition."
                             ^^^ !^"Constructor argument" ^^^ squotes (Id.pp id)
                             ^^^ !^"is given type" ^^^ squotes (BT.pp bt) ^^ comma
-                            ^^^ !^"which indirectly refers to" 
+                            ^^^ !^"which indirectly refers to"
                             ^^^ squotes (BT.pp (Datatype dt')) ^^ dot
                             ^^^ !^"Indirect recursion via map, set, record,"
                             ^^^ !^"or tuple types is not permitted."

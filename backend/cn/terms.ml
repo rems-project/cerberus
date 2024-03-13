@@ -1,5 +1,6 @@
 open Pp
 module CT = Sctypes
+type loc = Cerb_location.t
 
 type const =
   | Z of Z.t
@@ -110,7 +111,7 @@ type 'bt term_ =
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
-  | IT of 'bt term_ * 'bt
+  | IT of 'bt term_ * 'bt * (loc [@equal fun _ _ -> true] [@compare fun _ _ -> 0])
 [@@deriving eq, ord, map]
 
 
@@ -133,7 +134,7 @@ let rec pp_pattern (Pat (pat_, _bt)) =
 
 let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -> Pp.doc =
   fun ?(atomic=false) ?(f=fun _ x -> x) ->
-  let rec aux atomic (IT (it, _)) =
+  let rec aux atomic (IT (it, _, _)) =
     let aux b x = f x (aux b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
        by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
@@ -359,7 +360,7 @@ let rec dtree_of_pat (Pat (pat_, _bt)) =
                 ) pats
        )
 
-let rec dtree (IT (it_, bt)) =
+let rec dtree (IT (it_, bt, loc)) =
   let alloc_id z = Dnode (pp_ctor "alloc_id", [Dleaf !^(Z.to_string z)]) in
   match it_ with
   | Sym s ->
@@ -367,7 +368,7 @@ let rec dtree (IT (it_, bt)) =
   | Const (Z z) ->
      Dleaf !^(Z.to_string z)
   | Const (Bits ((sign,n), v)) ->
-     Dleaf (pp (IT (it_,bt)))
+     Dleaf (pp (IT (it_,bt, loc)))
   | Const (Q q) ->
      Dleaf !^(Q.to_string q)
   | Const (Pointer { alloc_id=id; addr }) ->
