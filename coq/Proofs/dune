@@ -3,5 +3,5 @@
  (name Proofs)
  (package cerberus-cheri)
  (modules Tactics Revocation ProofsAux)
- (theories CheriMemory Common Morello)
+ (theories CheriMemory Common Morello bbv)
 )

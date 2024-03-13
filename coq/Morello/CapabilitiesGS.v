@@ -254,4 +254,6 @@ Module Type CAPABILITY_GS
 
   Parameter cap_invalidate_invalidates: forall c, cap_is_valid (cap_invalidate c) = false.
 
+  Parameter cap_invalidate_preserves_value: forall c, cap_get_value c = cap_get_value (cap_invalidate c).
+
 End CAPABILITY_GS.

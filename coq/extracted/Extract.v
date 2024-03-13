@@ -25,7 +25,7 @@ Extraction Blacklist vector Vector String List Char Core Monad Bool Format Nat I
 Extraction NoInline Common.Utils.print_msg.
 Extraction NoInline Common.Utils.sprint_msg.
 Extract Constant Common.Utils.print_msg => "Stdlib.prerr_endline".
-Extract Constant Sail.Values.prerr_endline => "Stdlib.prerr_endline".
+Extract Constant SailStdpp.Values.prerr_endline => "Stdlib.prerr_endline".
 Extract Inlined Constant MorelloCapsGS.Capability_GS.strfcap => "strfcap".
 
 (* Used by Coq's Real library *)
