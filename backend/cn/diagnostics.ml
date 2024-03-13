@@ -47,8 +47,9 @@ let term_with_model_name nm cfg x =
   | Some r ->
     if IT.is_true r || IT.is_false r
     then begin
-      let@ p = provable Locations.unknown in
-      let info = match p (LC.T (IT.eq_ (x, r))) with
+      let here = Locations.other __FUNCTION__ in
+      let@ p = provable here in
+      let info = match p (LC.T (IT.eq_ (x, r) here)) with
         | `True -> (!^ "provably" ^^^ IT.pp r)
         | `False -> (IT.pp r ^^^ !^"in this model")
       in
@@ -117,7 +118,9 @@ let rec investigate_term cfg t =
         continue = fun cfg -> get_eqs_then_investigate cfg x y} in
       let@ split_opts = match split_eq x y with
         | None -> return []
-        | Some bits -> ListM.mapM (fun (x, y) -> rec_opt "parametric eq" (IT.eq_ (x, y))) bits
+        | Some bits ->
+          let here = Locations.other __FUNCTION__ in
+          ListM.mapM (fun (x, y) -> rec_opt "parametric eq" (IT.eq_ (x, y) here)) bits
       in
       return (List.concat trans_opts @ [get_eq_opt] @ split_opts)
   in
@@ -146,7 +149,7 @@ and investigate_eq_side cfg (side_nm, t, t2) =
     [{doc = string "switch with another from" ^^^ string side_nm ^^^ string "eq-group";
       continue = continue_with (List.map (fun t ->
           {doc = IT.pp t; continue = fun cfg ->
-              let eq = IT.eq_ (t, t2) in
+              let eq = IT.eq_ (t, t2) @@ Locations.other __FUNCTION__ in
               print stdout (bold "investigating eq:" ^^^ IT.pp eq);
               investigate_term cfg eq}) xs)}]
   in
@@ -164,7 +167,7 @@ and investigate_trans_eq t cfg =
     |> List.filter (fun x -> Option.is_some (split_eq t x))
     |> ITSet.of_list |> ITSet.elements in
   let opt_of x =
-    let eq = (IT.eq_ (t, x)) in
+    let eq = (IT.eq_ (t, x)) @@ Locations.other __FUNCTION__ in
     let@ doc = term_with_model_name "eq to constraint elem" cfg eq in
     return {doc; continue = fun cfg -> investigate_term cfg eq}
   in
@@ -181,7 +184,7 @@ and get_eqs_then_investigate cfg x y =
   let opt_xs = ITSet.elements x_set in
   let@ () = test_value_eqs Locations.unknown None x opt_xs in
   let@ () = test_value_eqs Locations.unknown None y opt_xs in
-  investigate_term cfg (IT.eq_ (x, y))
+  investigate_term cfg (IT.eq_ (x, y) @@ Locations.other __FUNCTION__)
 
 and investigate_pred cfg nm t =
   let@ cs = constraint_ts () in
@@ -189,7 +192,7 @@ and investigate_pred cfg nm t =
     then t :: acc else acc) [] [] cs in
   let pred_opt p =
     let@ doc = term_with_model_name "eq to pred in constraint" cfg p in
-    return {doc; continue = fun cfg -> investigate_term cfg (IT.eq_ (t, p))}
+    return {doc; continue = fun cfg -> investigate_term cfg (IT.eq_ (t, p) @@ Locations.other __FUNCTION__)}
   in
   ListM.mapM pred_opt ps
 
@@ -206,9 +209,10 @@ and investigate_ite cfg t =
     let@ doc = term_with_model_name ("rewrite ite cond to " ^ nm) cfg x in
     return {doc; continue = fun cfg ->
           let open Pp in
-          let t' = simp x (IT.bool_ b) t in
+          let here = Locations.other __FUNCTION__ in
+          let t' = simp x (IT.bool_ b here) t in
           print stdout (bold "rewrote to:" ^^^ IT.pp t');
-          print stdout (bold "different to previous:" ^^^ IT.pp (IT.bool_ (not (IT.equal t t'))));
+          print stdout (bold "different to previous:" ^^^ IT.pp (IT.bool_ (not (IT.equal t t')) here));
           investigate_term cfg t'}
   in
   let opts x = ListM.mapM (opt x) [true; false] in

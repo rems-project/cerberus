@@ -122,19 +122,22 @@ let subtract_closed_spans_from_tagged closed_ss tagged_ss =
   |> List.concat
 
 let rec perm_spans m_g q perm =
-  let is_q = IT.equal (sym_ (q, BT.Integer)) in
+  (* Using dummy location because spans are not used, and also the location
+     shouldn't "escape" into span results *)
+  let loc = Cerb_location.other __FUNCTION__ in
+  let is_q = IT.equal (sym_ (q, BT.Integer, loc)) in
   match term perm with
   | Binop (And, lhs,rhs) ->
-    perm_spans m_g q (not_ (or2_ (not_ lhs, not_ rhs)))
+    perm_spans m_g q (not_ (or2_ (not_ lhs loc, not_ rhs loc) loc) loc)
   | Binop (Or, lhs, rhs) ->
         let ss = List.map (perm_spans m_g q) [lhs; rhs] in
         norm_spans (List.concat ss)
   | Binop (Impl, lhs, rhs) ->
-        perm_spans m_g q (or_ [not_ lhs; rhs])
+        perm_spans m_g q (or_ [not_ lhs loc; rhs] loc)
   | Unop (Not, x) ->
         let s = perm_spans m_g q x in
         not_flip_spans s
-  | ITE (x,y,z) -> perm_spans m_g q (or_ [and_ [x; y]; and_ [not_ x; z]])
+  | ITE (x,y,z) -> perm_spans m_g q (or_ [and_ [x; y] loc; and_ [not_ x loc; z] loc] loc)
   | Binop (EQ,lhs, rhs) when is_q lhs ->
         let x = eval_extract "idx eq rhs" m_g is_z rhs in
         [(Some x, Some x)]
@@ -161,13 +164,16 @@ let rec perm_spans m_g q perm =
         if x then [(None, None)] else []
 
 let get_active_clause m_g clauses =
+  (* Using dummy location because spans are not used, and also the location
+     shouldn't "escape" into span results *)
+  let loc = Cerb_location.other __FUNCTION__ in
   let rec seek not_prev = function
     | [] -> raise NoResult
     | (c :: clauses) ->
       let gd = c.ResourcePredicates.guard in
       let this = eval_extract "resource predicate clause guard" m_g is_bool gd in
-      if this then (IT.and_ (List.rev (gd :: not_prev)), c)
-      else seek (IT.not_ gd :: not_prev) clauses
+      if this then (IT.and_ (List.rev (gd :: not_prev)) loc, c)
+      else seek (IT.not_ gd loc :: not_prev) clauses
   in
   seek [] clauses
 
@@ -198,8 +204,11 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
 	|> List.concat
         |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))
   | (RET.Q ({name = Owned (ct, _); _} as qpt)) ->
-      if (IT.equal qpt.step (IT.int_lit_ (Memory.size_of_ctype ct) (snd qpt.q)))
-      then () else begin
+      (* This dummy location will not "escape" into other uses *)
+      let loc = Cerb_location.other __FUNCTION__ in
+      if IT.equal qpt.step (IT.int_lit_ (Memory.size_of_ctype ct) (snd qpt.q) loc) then
+        ()
+      else begin
         let msg = Pp.item "q-resource step disagrees with ctype size" (RET.pp res) in
         Pp.warn Locations.unknown msg;
         raise (Failure msg)
@@ -273,11 +282,15 @@ let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
   | Some r -> r :: xs) [] t
 
 (* get concrete objects that (probably) exist in this resource/request *)
-let get_witnesses = function
-  | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, bool_ true)]
+let get_witnesses =
+  (* Using dummy location because spans are not used, and also the location
+     shouldn't "escape" into span results *)
+  let loc = Cerb_location.other __FUNCTION__ in
+  function
+  | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, bool_ true loc)]
   | RET.Q ({name = Owned (ct, _); _} as qpt) ->
-     assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
-     let i = sym_ qpt.q in
+     assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct) loc));
+     let i = sym_ (fst qpt.q, snd qpt.q, loc) in
      let lbs = scan_subterms is_le qpt.permission
        |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
        |> List.map fst in
@@ -289,12 +302,12 @@ let get_witnesses = function
        |> List.filter (fun (lhs, rhs) -> IT.equal i lhs || IT.equal i rhs)
      in
      let lb = match lbs with
-         | [] -> IT.int_ 0
+         | [] -> IT.int_ 0 loc
          | (lb :: _) -> lb
      in
      List.init (List.length eqs + 1)
-       (fun i -> (arrayShift_ ~base:qpt.pointer  ct  ~index:(add_ (lb, z_ (Z.of_int i))),
-           subst (make_subst [(fst qpt.q, z_ (Z.of_int i))]) qpt.permission))
+       (fun i -> (arrayShift_ ~base:qpt.pointer  ct  ~index:(add_ (lb, z_ (Z.of_int i) loc) loc) loc,
+           subst (make_subst [(fst qpt.q, z_ (Z.of_int i) loc)]) qpt.permission))
   | _ -> []
 (*
 let narrow_quantified_to_witness ptr (q_pt : RET.qpredicate_type) =

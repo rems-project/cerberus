@@ -330,7 +330,7 @@ let convert_enum_expr =
       | None -> fail {loc; msg = Generic (Pp.item "no standard encoding type for constant"
             (Pp.z z))}
       in
-      return (IT.sterm_of_term (IT.num_lit_ z bt))
+      return (IT.sterm_of_term (IT.num_lit_ z bt loc))
     | c -> fail {loc; msg = Generic (Pp.item "enum conversion: unhandled constant"
         (CF.Pp_ail_ast.pp_constant c))}
   in
@@ -493,76 +493,78 @@ module EffectfulTranslation = struct
     in
     fail {loc; msg = Generic msg}
 
-  let mk_translate_binop loc bop (e1, e2) =
+  let mk_translate_binop loc' bop (e1, e2) =
     let open IndexTerms in
+    let loc = loc' in
     match bop, IT.bt e1 with
     | CN_add, (SBT.Integer | SBT.Real | SBT.Bits _) ->
-        return (IT (Binop (Add, e1, e2), IT.bt e1))
+        return (IT (Binop (Add, e1, e2), IT.bt e1, loc))
     | CN_add, (SBT.Loc oct) ->
        begin match oct with
        | Some ct ->
-          let (IT (it_, _)) =
-            sterm_of_term (arrayShift_ ~base:(term_of_sterm e1) ct ~index:(term_of_sterm e2)) in
-          return (IT (it_, Loc oct))
+          let (IT (it_, _, _)) =
+            sterm_of_term (arrayShift_ ~base:(term_of_sterm e1) ct ~index:(term_of_sterm e2) loc) in
+          return (IT (it_, Loc oct, loc))
        | None ->
           cannot_tell_pointee_ctype loc e1
        end
     | CN_sub, (SBT.Integer | SBT.Real | SBT.Bits _ ) ->
-        return (IT (Binop (Sub, e1, e2), IT.bt e1))
+        return (IT (Binop (Sub, e1, e2), IT.bt e1, loc))
     | CN_sub, (SBT.Loc oct) ->
        begin match oct with
        | Some ct ->
-          let (IT (it_, _)) =
-            sterm_of_term (arrayShift_ ~base:(term_of_sterm e1) ct ~index:(sub_ (int_ 0, term_of_sterm e2))) in
-          return (IT (it_, Loc oct))
+          let here = Locations.other __FUNCTION__ in
+          let (IT (it_, _, _)) =
+            sterm_of_term (arrayShift_ ~base:(term_of_sterm e1) ct ~index:(sub_ (int_ 0 here, term_of_sterm e2) here) loc) in
+          return (IT (it_, Loc oct, loc))
        | None ->
           cannot_tell_pointee_ctype loc e1
        end
     | CN_mul, _ ->
-        return (IT (Binop (Mul, e1, e2), IT.bt e1))
+        return (IT (Binop (Mul, e1, e2), IT.bt e1, loc))
     | CN_div, _ ->
-        return (IT (Binop (Div, e1, e2), IT.bt e1))
+        return (IT (Binop (Div, e1, e2), IT.bt e1, loc))
     | CN_equal, _ ->
       (match IT.bt e1, IT.bt e2, !pointer_eq_warned with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again)"
        | _, _, _ -> ());
-        return (IT (Binop (EQ, e1, e2), SBT.Bool))
+        return (IT (Binop (EQ, e1, e2), SBT.Bool, loc))
     | CN_inequal, _ ->
       (match IT.bt e1, IT.bt e2, !pointer_eq_warned with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
          Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again)"
        | _, _, _ -> ());
-        return (not_ (IT (Binop (EQ, e1, e2), SBT.Bool)))
+        return (not_ (IT (Binop (EQ, e1, e2), SBT.Bool, loc)) loc)
     | CN_lt, (SBT.Integer | SBT.Real | SBT.Bits _) ->
-        return (IT (Binop (LT, e1, e2), SBT.Bool))
+        return (IT (Binop (LT, e1, e2), SBT.Bool, loc))
     | CN_lt, SBT.Loc _ ->
-        return (IT (Binop (LTPointer, e1, e2), SBT.Bool))
+        return (IT (Binop (LTPointer, e1, e2), SBT.Bool, loc))
     | CN_le, (SBT.Integer | SBT.Real | SBT.Bits _) ->
-        return (IT (Binop (LE, e1, e2), SBT.Bool))
+        return (IT (Binop (LE, e1, e2), SBT.Bool, loc))
     | CN_le, SBT.Loc _ ->
-        return (IT (Binop (LEPointer, e1, e2), SBT.Bool))
+        return (IT (Binop (LEPointer, e1, e2), SBT.Bool, loc))
     | CN_gt, (SBT.Integer | SBT.Real | SBT.Bits _) ->
-        return (IT (Binop (LT, e2, e1), SBT.Bool))
+        return (IT (Binop (LT, e2, e1), SBT.Bool, loc))
     | CN_gt, SBT.Loc _ ->
-        return (IT (Binop (LTPointer, e2, e1), SBT.Bool))
+        return (IT (Binop (LTPointer, e2, e1), SBT.Bool, loc))
     | CN_ge, (SBT.Integer | SBT.Real | SBT.Bits _) ->
-        return (IT (Binop (LE, e2, e1), SBT.Bool))
+        return (IT (Binop (LE, e2, e1), SBT.Bool, loc))
     | CN_ge, SBT.Loc _ ->
-        return (IT (Binop (LEPointer, e2, e1), SBT.Bool))
+        return (IT (Binop (LEPointer, e2, e1), SBT.Bool, loc))
     | CN_or, SBT.Bool ->
-        return (IT (Binop (Or, e1, e2), SBT.Bool))
+        return (IT (Binop (Or, e1, e2), SBT.Bool, loc))
     | CN_and, SBT.Bool ->
-        return (IT (Binop (And, e1, e2), SBT.Bool))
+        return (IT (Binop (And, e1, e2), SBT.Bool, loc))
     | CN_map_get, _ ->
        let@ rbt = match IT.bt e1 with
          | Map (_, rbt) -> return rbt
          | has ->
             fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"; o_ctxt = None}}
        in
-       return (IT ((MapGet (e1, e2)), rbt))
+       return (IT ((MapGet (e1, e2)), rbt, loc))
     | _ ->
         let open Pp in
         let msg =
@@ -582,12 +584,12 @@ module EffectfulTranslation = struct
          | Some member_bt -> return member_bt
          | None -> fail {loc; msg = Unexpected_member (List.map fst members, member)}
        in
-       return (IT.recordMember_ ~member_bt (t, member))
+       return (IT.recordMember_ ~member_bt (t, member) loc)
     | Struct tag ->
        let@ defs_ = lookup_struct loc tag env in
        let@ ty = lookup_member loc (tag, defs_) member in
        let member_bt = Memory.sbt_of_sct ty in
-       return ( IT.IT ((StructMember (t, member)), member_bt) )
+       return ( IT.IT ((StructMember (t, member)), member_bt, loc))
     (* | Datatype tag -> *)
     (*    let@ dt_info = lookup_datatype loc tag env in *)
     (*    let@ bt = match List.assoc_opt Id.equal member dt_info.dt_all_params with *)
@@ -648,19 +650,19 @@ module EffectfulTranslation = struct
       let self = trans evaluation_scope locally_bound env in
       match expr_ with
         | CNExpr_const CNConst_NULL ->
-            return (IT (Const Null, SBT.Loc None))
+            return (IT (Const Null, SBT.Loc None, loc))
         | CNExpr_const (CNConst_integer n) ->
-            return (IT (Const (Z n), SBT.Integer))
+            return (IT (Const (Z n), SBT.Integer, loc))
         | CNExpr_const (CNConst_bits ((sign,n),v)) ->
             let sign = match sign with
               | CN_unsigned -> BT.Unsigned
               | CN_signed -> BT.Signed
             in
-            return (IT (Const (Bits ((sign,n), v)), SBT.Bits (sign,n)))
+            return (IT (Const (Bits ((sign,n), v)), SBT.Bits (sign,n), loc))
         | CNExpr_const (CNConst_bool b) ->
-            return (IT (Const (Bool b), SBT.Bool))
+            return (IT (Const (Bool b), SBT.Bool, loc))
         | CNExpr_const CNConst_unit ->
-            return (IT (Const Unit, SBT.Unit))
+            return (IT (Const Unit, SBT.Unit, loc))
         | CNExpr_var sym ->
             let@ (sym, bTy) = match lookup_computational_or_logical sym env with
               | None ->
@@ -672,13 +674,14 @@ module EffectfulTranslation = struct
               | Some (bt, Some renamed_sym) ->
                  return (renamed_sym, bt)
             in
-            return (IT ((Sym sym), bTy))
+            return (IT ((Sym sym), bTy, loc))
         | CNExpr_list es_ ->
             let@ es = ListM.mapM self es_ in
             let item_bt = basetype (List.hd es) in
+            (* TODO fix CNExpr_list to have locations for each element? *)
             let rec aux = function
-              | [] -> IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt)
-              | x::xs -> IT (Cons (x, aux xs), SBT.List item_bt)
+              | [] -> IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt, loc)
+              | x::xs -> IT (Cons (x, aux xs), SBT.List item_bt, loc)
             in
             return (aux es)
         | CNExpr_memberof (e, xs) ->
@@ -687,7 +690,7 @@ module EffectfulTranslation = struct
         | CNExpr_record members ->
            let@ members = ListM.mapsndM self members in
            let bts = List.map_snd IT.bt members in
-           return (IT (IT.Record members, SBT.Record bts))
+           return (IT (IT.Record members, SBT.Record bts, loc))
         | CNExpr_memberupdates (e, updates) ->
            let@ e = self e in
            let bt = IT.bt e in
@@ -700,7 +703,7 @@ module EffectfulTranslation = struct
                        fail {loc; msg = Generic !^"Repeated definition of struct fields." }
                     | None ->
                        let@ v = self v in
-                       let expr = IT ((StructUpdate ((expr, id), v)), bt) in
+                       let expr = IT ((StructUpdate ((expr, id), v)), bt, loc) in
                        return (expr, StringSet.add (Id.s id) already)
                   ) (e, StringSet.empty) updates
               in
@@ -713,7 +716,7 @@ module EffectfulTranslation = struct
            ListM.fold_leftM (fun acc (i, v) ->
                let@ i = self i in
                let@ v = self v in
-               return (IT ((MapSet (acc, i, v)), IT.bt e))
+               return (IT ((MapSet (acc, i, v)), IT.bt e, loc))
              ) e updates
         | CNExpr_binop (bop, e1_, e2_) ->
             let@ e1 = self e1_ in
@@ -721,10 +724,10 @@ module EffectfulTranslation = struct
             mk_translate_binop loc bop (e1, e2)
         | CNExpr_sizeof ct ->
             let scty = Sctypes.of_ctype_unsafe loc ct in
-            return (IT (SizeOf scty, Memory.size_sbt))
+            return (IT (SizeOf scty, Memory.size_sbt, loc))
         | CNExpr_offsetof (tag, member) ->
             let@ _ = lookup_struct loc tag env in
-            return (IT ((OffsetOf (tag, member)), Memory.sint_sbt))
+            return (IT ((OffsetOf (tag, member)), Memory.sint_sbt, loc))
         | CNExpr_array_shift (base, ty_annot, index) ->
            let@ base = self base in
            let@ ct = match ty_annot, IT.bt base with
@@ -742,7 +745,7 @@ module EffectfulTranslation = struct
               let@ index = self index in
               begin match IT.bt index with
               | Integer | Bits _ ->
-                return (IT (ArrayShift { base; ct; index }, Loc (Some ct)))
+                return (IT (ArrayShift { base; ct; index }, Loc (Some ct), loc))
               | has ->
                  fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer or bits"; o_ctxt = None}}
               end
@@ -754,9 +757,9 @@ module EffectfulTranslation = struct
            let with_tag tag =
               let@ struct_def = lookup_struct loc tag env in
               let@ member_ty = lookup_member loc (tag, struct_def) member in
-              let (IT (it_, _)) = IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member)) in
+              let (IT (it_, _, _)) = IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member) loc) in
               (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on now. *)
-              return (IT (it_, Loc (Some member_ty)))
+              return (IT (it_, Loc (Some member_ty), loc))
            in
            begin match opt_tag, IT.bt e with
            | Some tag, Loc (Some (Struct tag')) ->
@@ -773,14 +776,14 @@ module EffectfulTranslation = struct
               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
            end
         | CNExpr_addr nm ->
-            return (sym_ (nm, SBT.Loc None))
+            return (sym_ (nm, SBT.Loc None, loc))
         | CNExpr_cast (bt, expr) ->
             let@ expr = self expr in
             let bt = translate_cn_base_type env bt in
-            return (IT (Cast (SBT.to_basetype bt, expr), bt))
+            return (IT (Cast (SBT.to_basetype bt, expr), bt, loc))
         | CNExpr_call (fsym, exprs) ->
             let@ args = ListM.mapM self exprs in
-            let@ b = liftResultat (Builtins.apply_builtin_funs loc fsym args) in
+            let@ b = liftResultat (Builtins.apply_builtin_funs fsym args loc) in
             begin match b with
               | Some t -> return t
               | None ->
@@ -790,7 +793,7 @@ module EffectfulTranslation = struct
                       fail {loc; msg = Unknown_logical_function
                           {id = fsym; resource = false}}
                 in
-                return (pred_ fsym args (SurfaceBaseTypes.of_basetype bt))
+                return (pred_ fsym args (SurfaceBaseTypes.of_basetype bt) loc)
             end
         | CNExpr_cons (c_nm, exprs) ->
             let@ cons_info = lookup_constr loc c_nm env in
@@ -800,7 +803,7 @@ module EffectfulTranslation = struct
                   return (nm, expr)
                 ) exprs
             in
-            return (IT (Constructor (c_nm, exprs), SBT.Datatype cons_info.c_datatype_tag))
+            return (IT (Constructor (c_nm, exprs), SBT.Datatype cons_info.c_datatype_tag, loc))
         | CNExpr_each (sym, bt, r, e) ->
             let@ expr =
               trans
@@ -810,7 +813,7 @@ module EffectfulTranslation = struct
                 e
             in
             let@ bt = check_quantified_base_type env loc bt in
-            return (IT ((EachI ((Z.to_int (fst r), (sym, SBT.to_basetype bt), Z.to_int (snd r)), expr)), SBT.Bool))
+            return (IT ((EachI ((Z.to_int (fst r), (sym, SBT.to_basetype bt), Z.to_int (snd r)), expr)), SBT.Bool, loc))
         | CNExpr_match (x, ms) ->
            let@ x = self x in
            let@ ms =
@@ -822,32 +825,32 @@ module EffectfulTranslation = struct
                ) ms
            in
            let rbt = IT.basetype (snd (List.hd ms)) in
-           return (IT (Match (x, ms), rbt))
+           return (IT (Match (x, ms), rbt, loc))
         | CNExpr_let (s, e, body) ->
             let@ e = self e in
             let@ body =
               trans evaluation_scope (SymSet.add s locally_bound)
                 (add_logical s (IT.bt e) env) body
             in
-            return (IT (Let ((s, e), body), IT.bt body))
+            return (IT (Let ((s, e), body), IT.bt body, loc))
         | CNExpr_ite (e1, e2, e3) ->
             let@ e1 = self e1 in
             let@ e2 = self e2 in
             let@ e3 = self e3 in
-            return (ite_ (e1, e2, e3))
+            return (ite_ (e1, e2, e3) loc)
         | CNExpr_good (ty, e) ->
            let scty = Sctypes.of_ctype_unsafe loc ty in
            let@ e = self e in
-           return (IT ((Good (scty, e)), SBT.Bool))
+           return (IT ((Good (scty, e)), SBT.Bool, loc))
         | CNExpr_not e ->
            let@ e = self e in
-           return (not_ e)
+           return (not_ e loc)
         | CNExpr_unchanged e ->
            let@ cur_e = self e in
            let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in
            (* want to bypass the warning for (Loc, Loc) equality *)
            (* mk_translate_binop loc CN_equal (cur_e, old_e) *)
-           return (IT (Binop (EQ, cur_e, old_e), SBT.Bool))
+           return (IT (Binop (EQ, cur_e, old_e), SBT.Bool, loc))
         | CNExpr_at_env (e, scope) ->
            let@ () = match evaluation_scope with
              | None -> return ()
@@ -965,14 +968,14 @@ module EffectfulTranslation = struct
 
 
 
-  let split_pointer_linear_step loc q (ptr_expr : IT.sterm) =
-    let open IndexTerms in
+  let split_pointer_linear_step loc ((q, bt, _) as sym_args) (ptr_expr : IT.sterm) =
     let open Pp in
-    let qs = sym_ q in
+    let qs = IT.sym_ sym_args in
     let msg_s = "Iterated predicate pointer must be array_shift<ctype>(ptr, q_var):" in
-    begin match term ptr_expr with
+    begin match IT.term ptr_expr with
       | ArrayShift { base=p; ct; index=x } when Terms.equal SBT.equal x qs ->
-        return (p, cast_ (SBT.to_basetype (snd q)) (sizeOf_ ct))
+        let here = Locations.other __FUNCTION__ in
+        return (p, IT.cast_ (SBT.to_basetype bt) (IT.sizeOf_ ct here) here)
       | _ ->
       fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
     end
@@ -982,13 +985,15 @@ module EffectfulTranslation = struct
   let owned_good loc sym (res_t, oargs_ty) =
     match res_t with
     | RET.P { name = Owned (scty, Init); _} ->
-       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
-       [(LC.T ((IT.good_ (scty, v))),
+       (* TODO revisit these locations *)
+       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, loc) in
+       [(LC.T ((IT.good_ (scty, v) loc)),
          (loc, Some "default value constraint"))]
-    | RET.Q { name = Owned (scty, Init); q; permission; _} ->
-       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
-       let v_el = IT.map_get_ v (IT.sym_ q) in
-       [(LC.forall_ q (IT.impl_ (permission, IT.good_ (scty, v_el))),
+    | RET.Q { name = Owned (scty, Init); q = (q_sym, q_bt); q_loc; permission; _} ->
+       (* TODO revisit these locations *)
+       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, loc) in
+       let v_el = IT.map_get_ v (IT.sym_ (q_sym, q_bt, q_loc)) loc in
+       [(LC.forall_ (q_sym, q_bt) (IT.impl_ (permission, IT.good_ (scty, v_el) loc) loc),
           (loc, Some "default value constraint"))]
      | _ ->
         []
@@ -1004,22 +1009,27 @@ module EffectfulTranslation = struct
            oargs_ty)
     in
     let pointee_value = match pname with
-      | Owned (_, Init) -> [(ptr_expr, (IT.sym_ (sym, oargs_ty)))]
+      | Owned (_, Init) ->
+        (* TODO revisit this location *)
+        [(ptr_expr, (IT.sym_ (sym, oargs_ty, res_loc)))]
       | _ -> []
     in
     return (pt, pointee_value)
 
-  let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, res, args) =
+  let translate_cn_let_resource__each env res_loc (q, bt, guard, pred_loc, res, args) =
     let@ bt' = check_quantified_base_type env pred_loc bt in
     let env_with_q = add_logical q bt' env in
     let@ guard_expr = translate_cn_expr (SymSet.singleton q) env_with_q guard in
     let@ args = ListM.mapM (translate_cn_expr (SymSet.singleton q) env_with_q) args in
     let@ (pname, ptr_expr, iargs, oargs_ty) =
            translate_cn_res_info res_loc pred_loc env_with_q res args in
-    let@ (ptr_base, step) = split_pointer_linear_step pred_loc (q, bt') ptr_expr in
+    (* TODO revisit this location *)
+    let@ (ptr_base, step) = split_pointer_linear_step pred_loc (q, bt', res_loc) ptr_expr in
     let m_oargs_ty = SBT.make_map_bt bt' oargs_ty in
     let pt = (RET.Q { name = pname
               ; q= (q, SBT.to_basetype bt')
+              (* TODO revisit this location *)
+              ; q_loc = res_loc
               ; pointer= IT.term_of_sterm ptr_base
               ; step = step
               ; permission= IT.term_of_sterm guard_expr
@@ -1034,7 +1044,7 @@ module EffectfulTranslation = struct
          translate_cn_let_resource__pred env res_loc sym
            (pred_loc, res, args)
       | CN_each (q, bt, guard, pred_loc, res, args) ->
-         translate_cn_let_resource__each env res_loc sym
+         translate_cn_let_resource__each env res_loc
            (q, bt, guard, pred_loc, res, args)
     in
     return (pt,
@@ -1054,7 +1064,7 @@ module EffectfulTranslation = struct
        let@ e2 = translate_cn_expr (SymSet.singleton sym) env_with_q e2_ in
        return (LC.Forall ((sym, SBT.to_basetype bt),
                           IT.impl_ (IT.term_of_sterm e1,
-                                    IT.term_of_sterm e2)))
+                                    IT.term_of_sterm e2) loc))
 
 
 end
@@ -1134,7 +1144,7 @@ let ownership (loc, (addr_s, ct)) env =
   let@ (pt_ret, oa_bt), lcs, _ =
     Pure.handle "'Accesses'"
       (ET.translate_cn_let_resource env (loc, name, resource)) in
-  let value = IT.sym_ (name, oa_bt) in
+  let value = IT.sym_ (name, oa_bt, loc) in
   return (name, ((pt_ret, oa_bt), lcs), value)
 
 let allocation_token loc addr_s =
@@ -1142,7 +1152,7 @@ let allocation_token loc addr_s =
     | SD_ObjectAddress obj_name ->
        Sym.fresh_make_uniq ("A_"^obj_name)
     | _ -> assert false in
-  let alloc_ret = Global.mk_alloc (IT.sym_ (addr_s, BT.Loc)) in
+  let alloc_ret = Global.mk_alloc (IT.sym_ (addr_s, BT.Loc, loc)) in
   ((name, (ResourceTypes.P alloc_ret, BT.Unit)), (loc, None))
 
 
@@ -1269,7 +1279,8 @@ let translate_cn_clauses env clauses =
   let rec self acc = function
     | CN_clause (loc, cl_) ->
         let@ cl = translate_cn_clause env cl_ in
-        return (RP.{loc= loc; guard= IT.bool_ true; packing_ft= cl} :: acc)
+        let here = Locations.other __FUNCTION__ in
+        return (RP.{loc= loc; guard= IT.bool_ true here; packing_ft= cl} :: acc)
     | CN_if (loc, e_, cl_, clauses') ->
       let@ e  = Pure.handle "Predicate guards" (ET.translate_cn_expr SymSet.empty env e_) in
       let@ cl = translate_cn_clause env cl_ in
@@ -1369,7 +1380,8 @@ let rec make_lrt_generic env st =
     let bt = SBT.to_basetype sbt in
     let@ lrt = make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures) in
     let info = (loc, Some "return value good") in
-    let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info) lrt in
+    let here = Locations.other __FUNCTION__ in
+    let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt, loc)) here), info) lrt in
     return (RT.mComputational ((s, bt), (loc, None)) lrt)
 
 
@@ -1434,7 +1446,7 @@ module UsingLoads = struct
             aux (k o_v)
          | None ->
             let ct = Sctypes.of_ctype_unsafe loc (allocations sym) in
-            let pointer = IT.sym_ (sym, SBT.Loc (Some ct)) in
+            let pointer = IT.sym_ (sym, SBT.Loc (Some ct), loc) in
             load loc "read" pointer k
          end
       | Deref (loc, pointer, scope, k) ->
@@ -1451,9 +1463,10 @@ module UsingLoads = struct
 
     and load loc action_pp pointer k =
       let@ pointee_ct = pointee_ct loc pointer in
+      let value_loc = Locations.other __FUNCTION__ in
       let value_s = Sym.fresh_make_uniq (action_pp ^ "_" ^ Pp.plain (IT.pp pointer)) in
       let value_bt = Memory.sbt_of_sct pointee_ct in
-      let value = IT.sym_ (value_s, value_bt) in
+      let value = IT.sym_ (value_s, value_bt, value_loc) in
       let@ prog = aux (k (Some value)) in
       let load = {ct = pointee_ct; pointer = IT.term_of_sterm pointer} in
       return (M_CN_let (loc, (value_s, load), prog))

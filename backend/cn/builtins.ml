@@ -8,25 +8,25 @@ open IndexTerms
 
 (* builtin function symbols *)
 
-let mk_arg1 mk loc = function
-  | [x] -> return (mk x)
+let mk_arg1 mk args loc = match args with
+  | [x] -> return (mk x loc)
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 1}}
 
-let mk_arg2_err mk loc = function
-  | [x; y] -> mk loc (x, y)
+let mk_arg2_err mk args loc = match args with
+  | [x; y] -> mk (x, y) loc
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
 
-let mk_arg2 mk = mk_arg2_err (fun loc tup -> return (mk tup))
+let mk_arg2 mk = mk_arg2_err (fun tup loc-> return (mk tup loc))
 
-let mk_arg3_err mk loc = function
-  | [x; y; z] -> mk loc (x, y, z)
+let mk_arg3_err mk args loc = match args with
+  | [x; y; z] -> mk (x, y, z) loc
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 3}}
 
-let mk_arg3 mk = mk_arg3_err (fun loc tup -> return (mk tup))
+let mk_arg3 mk = mk_arg3_err (fun tup loc -> return (mk tup loc))
 
 
-let mk_arg5 mk loc = function
-  | [a;b;c;d;e] -> return (mk (a,b,c,d,e))
+let mk_arg5 mk args loc = match args with
+  | [a;b;c;d;e] -> return (mk (a,b,c,d,e) loc)
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 5}}
 
 
@@ -57,108 +57,107 @@ let nth_list_def = ("nth_list", Sym.fresh_named "nth_list", mk_arg3 nthList_)
 
 let array_to_list_def =
   ("array_to_list", Sym.fresh_named "array_to_list", mk_arg3_err
-  (fun loc (arr, i, len) -> match SBT.is_map_bt (IT.bt arr) with
+  (fun (arr, i, len) loc -> match SBT.is_map_bt (IT.bt arr) with
     | None -> fail {loc; msg = Illtyped_it {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected = "map"; o_ctxt = None}}
-    | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt)
+    | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt loc)
   ))
 
 let in_loc_list_def =
   ("in_loc_list", Sym.fresh_named "in_loc_list",
-    mk_arg2_err (fun loc tup -> return (IT.mk_in_loc_list loc tup)))
+    mk_arg2_err (fun tup loc -> return (IT.mk_in_loc_list tup loc)))
 
 
 let cellpointer_def =
   ("cellPointer",
    Sym.fresh_named "cellPointer",
-   mk_arg5 (fun (base, step, starti, endi, p) ->
+   mk_arg5 (fun (base, step, starti, endi, p) loc ->
        let base = IT.term_of_sterm base in
        let step = IT.term_of_sterm step in
        let starti = IT.term_of_sterm starti in
        let endi = IT.term_of_sterm endi in
        let p = IT.term_of_sterm p in
-       IT.sterm_of_term (IT.cellPointer_ ~base ~step ~starti ~endi ~p)
+       IT.sterm_of_term (IT.cellPointer_ ~base ~step ~starti ~endi ~p loc)
      )
   )
 
 let is_null_def =
   ("is_null",
    Sym.fresh_named "is_null",
-   mk_arg1 (fun p ->
-       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_))
+   mk_arg1 (fun p loc' ->
+       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_ loc') loc')
      )
   )
 
 let ptr_eq_def =
     ("ptr_eq",
         Sym.fresh_named "ptr_eq",
-        mk_arg2 (fun (p1, p2) ->
-       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p1, IT.term_of_sterm p2))
+        mk_arg2 (fun (p1, p2) loc' ->
+       IT.(sterm_of_term @@ eq_ (term_of_sterm p1, term_of_sterm p2) loc')
      )
    )
 
 let prov_eq_def =
     ("prov_eq",
        Sym.fresh_named "prov_eq",
-        mk_arg2 (fun (p1, p2) ->
+        mk_arg2 (fun (p1, p2) loc' ->
           IT.(sterm_of_term @@ eq_ (
-             pointerToAllocIdCast_ @@ term_of_sterm p1,
-             pointerToAllocIdCast_ @@ term_of_sterm p2
-          ))
+             pointerToAllocIdCast_ (term_of_sterm p1) loc',
+             pointerToAllocIdCast_ (term_of_sterm p2) loc'
+          ) loc')
        )
    )
 
 let addr_eq_def =
     ("addr_eq",
        Sym.fresh_named "addr_eq",
-        mk_arg2 (fun (p1, p2) ->
+        mk_arg2 (fun (p1, p2) loc' ->
           IT.(sterm_of_term @@ eq_ (
-             pointerToIntegerCast_ @@ term_of_sterm p1,
-             pointerToIntegerCast_ @@ term_of_sterm p2
-          ))
+             pointerToIntegerCast_ (term_of_sterm p1) loc',
+             pointerToIntegerCast_ (term_of_sterm p2) loc'
+          ) loc')
        )
    )
 
 
-let builtin_funs =
-  [
-      mul_uf_def;
-      div_uf_def;
-      power_uf_def;
-      rem_uf_def;
-      mod_uf_def;
-      xor_uf_def;
-      bw_and_uf_def;
-      bw_or_uf_def;
+let builtin_funs = [
+  mul_uf_def;
+  div_uf_def;
+  power_uf_def;
+  rem_uf_def;
+  mod_uf_def;
+  xor_uf_def;
+  bw_and_uf_def;
+  bw_or_uf_def;
 
-      bw_clz_uf_def;
-      bw_ctz_uf_def;
-      bw_ffs_uf_def;
+  bw_clz_uf_def;
+  bw_ctz_uf_def;
+  bw_ffs_uf_def;
 
-      shift_left_def;
-      shift_right_def;
+  shift_left_def;
+  shift_right_def;
 
-      power_def;
-      rem_def;
-      mod_def;
+  power_def;
+  rem_def;
+  mod_def;
 
-      not_def;
+  not_def;
 
-      nth_list_def;
-      array_to_list_def;
-      in_loc_list_def;
+  nth_list_def;
+  array_to_list_def;
+  in_loc_list_def;
 
-      cellpointer_def;
-      is_null_def;
-      prov_eq_def;
-      ptr_eq_def;
-      addr_eq_def;
-    ]
+  cellpointer_def;
+  is_null_def;
+  prov_eq_def;
+  ptr_eq_def;
+  addr_eq_def;
+]
 
-let apply_builtin_funs loc fsym args =
+let apply_builtin_funs fsym args loc =
   match List.find_opt (fun (_, fsym', _) -> Sym.equal fsym fsym') builtin_funs with
   | None -> return None
   | Some (_, _, mk) ->
-    let@ t = mk loc args in
+    let@ t = mk args loc in
     return (Some t)
 
 let cn_builtin_fun_names =

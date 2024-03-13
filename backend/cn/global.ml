@@ -25,7 +25,7 @@ let mk_alloc : IndexTerms.t -> ResourceTypes.predicate_type =
 
 let empty =
   let [@ocaml.warning "-8"] { name=PName alloc ; _ } : ResourceTypes.predicate_type =
-    mk_alloc IndexTerms.null_  in
+    mk_alloc (IndexTerms.null_ @@ Cerb_location.other __FUNCTION__)  in
   let def : ResourcePredicates.definition =
   { loc = Locations.other (__FILE__ ^ ":" ^ string_of_int __LINE__);
     pointer = Sym.fresh_named "__cn_alloc_ptr";

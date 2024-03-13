@@ -33,8 +33,9 @@ let clause_lrt (pred_oarg : IT.t) clause_packing_ft =
     | LAT.Resource (bound, info, lat) -> LRT.Resource (bound, info, aux lat)
     | LAT.Constraint (lc, info, lat) -> LRT.Constraint (lc, info, aux lat)
     | I output ->
-       let lc = LC.t_ (IT.eq_ (pred_oarg, output)) in
-       LRT.Constraint (lc, (Loc.unknown, None), LRT.I)
+       let loc = Loc.other __FUNCTION__ in
+       let lc = LC.t_ (IT.eq_ (pred_oarg, output) loc) in
+       LRT.Constraint (lc, (loc, None), LRT.I)
   in
   aux clause_packing_ft
 
@@ -48,18 +49,6 @@ type definition = {
     clauses : (clause list) option;
   }
 
-
-let alpha_rename_definition def =
-  let iargs, subst =
-    List.fold_right (fun (s, ls) (iargs, subst) ->
-        let s' = Sym.fresh_same s in
-        ((s', ls) :: iargs, (s, IT.sym_ (s', ls)) :: subst)
-      ) def.iargs ([],[])
-  in
-  let pointer = Sym.fresh_same def.pointer in
-  let subst = IT.make_subst ((def.pointer, IT.sym_ (pointer, BT.Loc)) :: subst) in
-  let clauses = Option.map (List.map (subst_clause subst)) def.clauses in
-  { loc = def.loc; pointer; iargs; oarg_bt = def.oarg_bt; clauses }
 
 
 
@@ -109,7 +98,8 @@ let identify_right_clause provable def pointer iargs =
           match provable (t_ clause.guard) with
           | `True -> Some clause
           | `False ->
-            match provable (t_ (not_ clause.guard)) with
+            let loc = Loc.other __FUNCTION__ in
+            match provable (t_ (not_ clause.guard loc)) with
             | `True -> try_clauses clauses
             | `False ->
               Pp.debug 5 (lazy (Pp.item "cannot prove or disprove clause guard"
