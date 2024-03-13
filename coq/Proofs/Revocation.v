@@ -93,7 +93,7 @@ Proof.
     auto.
 Qed.
 
-Lemma sequence_spec_errS
+Lemma sequence_spec_same_state_errS
   {S E A:Type}
   (s : S)
   (old : list (errS S E A))
@@ -137,6 +137,7 @@ Proof.
       *
         auto.
 Qed.
+
 
 Module RevocationProofs.
 
@@ -1614,7 +1615,7 @@ Module RevocationProofs.
           cbn in KR.
           pose proof (@sequence_len_errS _ _ _ _ _ _ _ SEQ) as RL.
 
-          apply sequence_spec_errS in SEQ.
+          apply sequence_spec_same_state_errS in SEQ.
           apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
           +
             destruct SEQ as [v2 [A1 A2]].
@@ -1660,12 +1661,50 @@ Module RevocationProofs.
               cbn in H.
               lia.
           +
-            (* TODO  *)
+            clear n N H2 H3 H0 H1.
+            apply Forall_nth.
+            intros k m LK.
+            (*
+            (* a bit of duplication from earlier *)
+            pose proof (@split_nth  _ _ enewmeta) as N.
+            replace (fst (split enewmeta)) with lk in N by (rewrite SPL;reflexivity).
+            replace (snd (split enewmeta)) with newcaps in N by (rewrite SPL;reflexivity).
+
+            pose proof (ZMap.elements_1 I) as H.
+            rewrite <- E in H.
+            apply InA_alt in H.
+            destruct H as [(addr',v2') [H1 H2]].
+
+            unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
+            destruct H1 as [T1 T2].
+            cbn in T1, T2.
+            subst addr' v2'.
+            specialize (N k (addr, v1)).
+            cbn in N.
+            eexists.
+            eauto.
+             *)
             admit.
         -
           (* key does not exists *)
           right.
-          admit.
+          split;[assumption|].
+
+          pose proof (ZMap.elements_3w newmeta) as NDM.
+          pose proof (split_eq_key_NoDup _ _ _ SPL).
+          rewrite E in H.
+          specialize (H NDM).
+          intros C.
+          destruct C as [v C].
+          apply ZMap.ZP.of_list_1 in C;[|apply combine_eq_key_NoDupA, H].
+          apply InA_eq_key_combine in C.
+          contradict NI.
+          clear - E SPL C NDM.
+          subst enewmeta.
+          replace lk with (fst (split (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta))) in C.
+          apply In_zmap_elements_split_zmap_in, C.
+          rewrite SPL.
+          reflexivity.
       }
 
       clear H Heqp.
