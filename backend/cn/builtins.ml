@@ -6,15 +6,17 @@ open IndexTerms
 
 
 
+let builtin_loc = Locations.other "built-in"
+
 (* builtin function symbols *)
 
-let mk_arg1 mk loc = function
+let mk_arg1 mk = function
   | [x] -> return (mk x)
-  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 1}}
+  | xs -> fail {loc=builtin_loc; msg = Number_arguments {has = List.length xs; expect = 1}}
 
-let mk_arg2_err mk loc = function
-  | [x; y] -> mk loc (x, y)
-  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
+let mk_arg2_err mk = function
+  | [x; y] -> mk (x, y) builtin_loc
+  | xs -> fail {loc=builtin_loc; msg = Number_arguments {has = List.length xs; expect = 2}}
 
 let mk_arg2 mk = mk_arg2_err (fun loc tup -> return (mk tup))
 
@@ -76,7 +78,7 @@ let cellpointer_def =
        let starti = IT.term_of_sterm starti in
        let endi = IT.term_of_sterm endi in
        let p = IT.term_of_sterm p in
-       IT.sterm_of_term (IT.cellPointer_ ~base ~step ~starti ~endi ~p)
+       IT.sterm_of_term (IT.cellPointer_ ~base ~step ~starti ~endi ~p builtin_loc)
      )
   )
 
@@ -84,7 +86,7 @@ let is_null_def =
   ("is_null",
    Sym.fresh_named "is_null",
    mk_arg1 (fun p ->
-       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_))
+       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_ builtin_loc) builtin_loc)
      )
   )
 
@@ -92,7 +94,7 @@ let ptr_eq_def =
     ("ptr_eq",
         Sym.fresh_named "ptr_eq",
         mk_arg2 (fun (p1, p2) ->
-       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p1, IT.term_of_sterm p2))
+       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p1, IT.term_of_sterm p2) builtin_loc)
      )
    )
 
@@ -101,9 +103,9 @@ let prov_eq_def =
        Sym.fresh_named "prov_eq",
         mk_arg2 (fun (p1, p2) ->
           IT.(sterm_of_term @@ eq_ (
-             pointerToAllocIdCast_ @@ term_of_sterm p1,
-             pointerToAllocIdCast_ @@ term_of_sterm p2
-          ))
+             pointerToAllocIdCast_ (term_of_sterm p1) builtin_loc,
+             pointerToAllocIdCast_ (term_of_sterm p2) builtin_loc
+          ) builtin_loc)
        )
    )
 
@@ -112,9 +114,9 @@ let addr_eq_def =
        Sym.fresh_named "addr_eq",
         mk_arg2 (fun (p1, p2) ->
           IT.(sterm_of_term @@ eq_ (
-             pointerToIntegerCast_ @@ term_of_sterm p1,
-             pointerToIntegerCast_ @@ term_of_sterm p2
-          ))
+             pointerToIntegerCast_ (term_of_sterm p1) builtin_loc,
+             pointerToIntegerCast_ (term_of_sterm p2) builtin_loc
+          ) builtin_loc)
        )
    )
 

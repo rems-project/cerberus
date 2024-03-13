@@ -53,8 +53,9 @@ let alpha_equivalent lc lc' = match lc, lc' with
     then IT.equal c c'
     else begin
       let new_s = Sym.fresh_same s in
-      let c = IT.subst (IT.make_subst [(s, IT.sym_ (new_s, bt))]) c in
-      let c' = IT.subst (IT.make_subst [(s', IT.sym_ (new_s, bt))]) c' in
+      let loc = Cerb_location.other __FUNCTION__ in
+      let c = IT.subst (IT.make_subst [(s, IT.sym_ (new_s, bt, loc))]) c in
+      let c' = IT.subst (IT.make_subst [(s', IT.sym_ (new_s, bt, loc))]) c' in
       IT.equal c c'
     end
   | _ -> false
@@ -91,8 +92,8 @@ let is_sym_equality t = match is_sym_lhs_equality t with
 let is_equality = function
   | T it ->
      begin match it with
-     | IT (Binop (EQ,a, b), _) -> Some ((a, b), true)
-     | IT (Unop (Not, IT (Binop (EQ,a, b), _)), _) -> Some ((a, b), false)
+     | IT (Binop (EQ,a, b), _, _) -> Some ((a, b), true)
+     | IT (Unop (Not, IT (Binop (EQ,a, b), _, _)), _, _) -> Some ((a, b), false)
      | _ -> None
      end
   | _ ->
@@ -101,8 +102,8 @@ let is_equality = function
 let equates_to it2 = function
   | T it ->
      begin match it with
-     | IT (Binop (EQ,a, b), _) when IT.equal a it2 -> Some b
-     | IT (Binop (EQ,a, b), _) when IT.equal b it2 -> Some a
+     | IT (Binop (EQ,a, b), _, _) when IT.equal a it2 -> Some b
+     | IT (Binop (EQ,a, b), _, _) when IT.equal b it2 -> Some a
      | _ -> None
      end
   | _ ->
