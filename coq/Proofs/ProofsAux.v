@@ -337,6 +337,114 @@ Section ListAux.
       reflexivity.
   Qed.
 
+
+  Lemma split_eq_key_InA
+    {A : Type}
+    (l : list (Z * A))
+    (la : list Z)
+    (lb : list A)
+    (a0 : Z)
+    (b0: A)
+    :
+    split_spec l la lb -> (In a0 la <-> InA (ZMap.eq_key (elt:=A)) (a0, b0) l).
+  Proof.
+    intros S.
+    split.
+    -
+      intros N.
+      revert S N.
+      revert la lb a0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          constructor.
+          reflexivity.
+        *
+          apply InA_cons_tl.
+          eapply IHl;eauto.
+    -
+      intros N.
+      revert S N.
+      revert la lb a0 b0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          constructor.
+          invc H0.
+          cbn in H.
+          auto.
+        *
+          cbn.
+          right.
+          eapply IHl;eauto.
+  Qed.
+
+  Lemma split_eq_key_elt_InA
+    {A : Type}
+    (l : list (Z * A))
+    (la : list Z)
+    (lb : list A)
+    (a0 : Z):
+    split_spec l la lb -> (In a0 la <-> (exists b0, InA (ZMap.eq_key_elt (elt:=A)) (a0, b0) l)).
+  Proof.
+    intros S.
+    split.
+    -
+      intros N.
+      revert S N.
+      revert la lb a0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          eexists.
+          constructor.
+          reflexivity.
+        *
+          specialize (IHl la0 lb0 a0 H3 H).
+          destruct IHl as [b1 IHl].
+          exists b1.
+          apply InA_cons_tl.
+          apply IHl.
+    -
+      intros N.
+      destruct N as [b0 N].
+      revert S N.
+      revert la lb a0 b0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          constructor.
+          invc H0.
+          cbn in H.
+          auto.
+        *
+          cbn.
+          right.
+          eapply IHl;eauto.
+  Qed.
+
+
+  (* Strictly speakigg this follows from [split_eq_key_InA] but it was proven earlier *)
   Lemma split_eq_key_not_InA
     {A : Type}
     (l : list (Z * A))
@@ -424,8 +532,34 @@ Section ListAux.
     (lv : list A):
     NoDup lk -> NoDupA (ZMap.eq_key (elt:=A)) (combine lk lv).
   Proof.
-  Admitted.
-
+    intros H.
+    revert lv.
+    induction H; intros.
+    -
+      cbn.
+      constructor.
+    -
+      cbn.
+      destruct lv.
+      +
+        cbn.
+        constructor.
+      +
+        constructor.
+        *
+          clear -H.
+          intros C.
+          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
+          apply InA_alt in C.
+          destruct C as [y [C1 C2]].
+          destruct y.
+          cbn in C1.
+          subst x.
+          apply in_combine_l in C2.
+          congruence.
+        *
+          apply IHNoDup.
+  Qed.
 
 End ListAux.
 
@@ -836,6 +970,60 @@ Section ZMapAux.
     cbn in H.
     apply H.
   Qed.
+
+  Lemma InA_eq_key_combine
+    {A:Type}
+    (lk : list ZMap.key)
+    (lv : list A):
+    forall k v,
+      InA (ZMap.eq_key_elt (elt:=A)) (k, v) (combine lk lv) -> In k lk.
+  Proof.
+    intros k v H.
+    remember (combine lk lv) as e.
+    eapply in_combine_l with (l':=lv) (y:=v).
+    rewrite <- Heqe.
+    apply InA_alt in H.
+    destruct H as [kv [H1 H2]].
+    unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
+    destruct kv.
+    cbn in H1.
+    destruct H1.
+    subst k0 a.
+    apply H2.
+  Qed.
+
+  Lemma In_zmap_elements_split_zmap_in
+    {A:Type}
+    (m : ZMap.t A) (k : ZMap.key):
+    In k (fst (split (ZMap.elements (elt:=A) m))) ->
+    ZMap.In (elt:=A) k m.
+  Proof.
+    intros H.
+    remember (ZMap.elements (elt:=A) m) as e.
+    remember (split e) as p.
+    destruct p as [lk lv].
+    cbn in H.
+    symmetry in Heqp.
+    apply list_split_spec in Heqp.
+
+    apply elements_in_iff.
+    apply split_eq_key_elt_InA with (a0:=k) in Heqp.
+    apply Heqp in H. clear Heqp.
+    destruct H as [v H].
+    subst e.
+    exists v.
+    apply H.
+  Qed.
+
+  Lemma elements_to_list
+    {A:Type}:
+    forall (m:ZMap.t A),
+      ZMap.ZP.to_list m = ZMap.elements m.
+  Proof.
+    intros m.
+    reflexivity.
+  Qed.
+
 
 End ZMapAux.
 
