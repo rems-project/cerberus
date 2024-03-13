@@ -95,6 +95,8 @@ Proof.
     auto.
 Qed.
 
+(** This is a version where initial and final states are the same and each computation
+    is guaranteed to preserve them *)
 Lemma sequence_spec_same_state_errS
   {S E A:Type}
   (s : S)
@@ -138,6 +140,41 @@ Proof.
         auto.
       *
         auto.
+Qed.
+
+(** This is a more generic version than [sequence_spec_same_state_errS], stating
+    that if [sequence] suceeds (returns [inr]) all computations succeed as well.
+    It does not make any assumptions or gurarantees about the states *)
+Lemma sequence_spec_errS
+  {S E A:Type}
+  (s s' : S)
+  (old : list (errS S E A))
+  (new : list A):
+  sequence old s = (s', inr new) ->
+  Forall2 (fun m r => exists s0 s1, m s0 = (s1, inr r)) old new.
+Proof.
+  intros H.
+  unfold sequence, mapT, Traversable_list, mapT_list in H.
+  unfold Applicative_Monad, Applicative.pure, Monad_errS, ret,
+    Applicative.ap, apM, bind, liftM, ret in H.
+  cbn in H.
+  generalize dependent new.
+  revert s s'.
+  induction old;intros.
+  -
+    tuple_inversion.
+    constructor.
+  -
+    repeat break_let.
+    repeat break_match; repeat tuple_inversion.
+    constructor.
+    +
+      exists s.
+      exists s0.
+      apply Heqp1.
+    +
+      eapply IHold.
+      eauto.
 Qed.
 
 
@@ -1663,9 +1700,29 @@ Module RevocationProofs.
               cbn in H.
               lia.
           +
-            clear n N H2 H3 H0 H1.
-            apply Forall_nth.
-            intros k m LK.
+            clear n N H2 H3 H0 H1. (* these are for concrete index. We need for all *)
+            apply list.Forall_lookup_2.
+            intros k m H.
+
+            (*
+            apply sequence_spec_errS in SEQ.
+            epose proof (list.lookup_lt_Some _ _ _ H) as K.
+            assert (exists y, base.lookup k rescaps = Some y) as R.
+            {
+              destruct (base.lookup k rescaps) eqn:D.
+              - exists p. reflexivity.
+              - apply list.lookup_ge_None in D.
+                clear - D K RL.
+                unfold errS in RL.
+                lia.
+            }
+            destruct R as [v2 R].
+            exists v2.
+            epose proof (list.Forall2_lookup_lr _ _ _ k m _ SEQ H R) as SEQF.
+            cbn in SEQF.
+            *)
+
+
             (*
             (* a bit of duplication from earlier *)
             pose proof (@split_nth  _ _ enewmeta) as N.
