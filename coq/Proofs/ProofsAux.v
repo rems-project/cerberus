@@ -443,6 +443,53 @@ Section ListAux.
           eapply IHl;eauto.
   Qed.
 
+  Lemma nth_error_nil
+    {A:Type}:
+    forall k,
+      nth_error (@nil A) k = None.
+  Proof.
+    intros.
+    destruct k;reflexivity.
+  Qed.
+
+  (* Could be extended to go both ways *)
+  Lemma split_eq_key_elt_nth
+    {A : Type}
+    (l : list (Z * A))
+    (la : list Z)
+    (lb : list A)
+    (a0 : Z)
+    (b0: A)
+    (k: nat)
+    :
+    split_spec l la lb
+    -> nth_error la k = Some a0
+    -> nth_error lb k = Some b0
+    -> nth_error l k = Some (a0, b0).
+  Proof.
+    intros S NK NV.
+
+    revert S NK NV.
+    revert la lb a0 b0 k.
+    induction l; intros.
+    -
+      invc S.
+      rewrite nth_error_nil in NK.
+      inversion NK.
+    -
+      invc S.
+      destruct k.
+      +
+        cbn in NK, NV.
+        invc NK.
+        invc NV.
+        reflexivity.
+      +
+        cbn in NK, NV.
+        cbn.
+        eapply IHl;eauto.
+  Qed.
+
 
   (* Strictly speakigg this follows from [split_eq_key_InA] but it was proven earlier *)
   Lemma split_eq_key_not_InA

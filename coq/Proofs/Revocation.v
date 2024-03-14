@@ -1751,6 +1751,7 @@ Module RevocationProofs.
                 specialize (H NDM).
                 apply H.
               --
+                pose proof (combine_length lk rescaps ) as CL.
                 remember (combine lk rescaps) as res eqn:C.
                 symmetry in C.
                 apply combine_spec in C.
@@ -1761,9 +1762,25 @@ Module RevocationProofs.
                     apply nth_In.
                     lia.
                   }
-                  clear - C A1 H0 RL KL KR H2.
-                  (* TODO: should be provable from these premises *)
-                  admit.
+                  clear - C A1 H0 RL KL KR H2 CL.
+                  rewrite MachineWord.MachineWord.nth_error_lookup in A1.
+                  assert(nth_error lk n = Some addr).
+                  {
+                    rewrite H0.
+                    eapply nth_error_nth'.
+                    lia.
+                  }
+                  apply InA_alt.
+                  exists (addr, v2').
+                  split.
+                  reflexivity.
+                  eapply split_eq_key_elt_nth in C; eauto.
+                  apply nth_error_nth with (d:=(addr, v2')) in C.
+                  setoid_rewrite <- C.
+                  apply nth_In.
+                  clear -CL H2 RL KL KR.
+                  unfold memM, ZMap.key in *.
+                  lia.
                 ++
                   clear - RL KL KR.
                   unfold memM in *.
@@ -1910,7 +1927,7 @@ Module RevocationProofs.
         subst.
         apply ZMap.mapi_2 in C.
         apply C.
-    Admitted.
+    Qed.
 
     #[global] Instance revoke_pointers_preserves:
       forall s a, PreservesInvariant mem_invariant s (revoke_pointers a).
