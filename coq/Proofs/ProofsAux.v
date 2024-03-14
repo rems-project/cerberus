@@ -561,6 +561,42 @@ Section ListAux.
           apply IHNoDup.
   Qed.
 
+  Lemma combine_eq_key_elt_NoDupA
+    {A:Type}
+    (lk : list ZMap.key)
+    (lv : list A):
+    NoDup lk -> NoDupA (ZMap.eq_key_elt (elt:=A)) (combine lk lv).
+  Proof.
+    intros H.
+    revert lv.
+    induction H; intros.
+    -
+      cbn.
+      constructor.
+    -
+      cbn.
+      destruct lv.
+      +
+        cbn.
+        constructor.
+      +
+        constructor.
+        *
+          clear -H.
+          intros C.
+          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
+          apply InA_alt in C.
+          destruct C as [y [C1 C2]].
+          destruct y.
+          cbv in C1.
+          destruct C1.
+          subst.
+          apply in_combine_l in C2.
+          congruence.
+        *
+          apply IHNoDup.
+  Qed.
+
 End ListAux.
 
 Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).

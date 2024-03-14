@@ -1729,131 +1729,47 @@ Module RevocationProofs.
             inversion N.
             rewrite <- H1, <- H0.
 
-            exists v2.
+            apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
+            2:{
+              destruct (list.nth_lookup_or_length newcaps n v1) as [L|NL].
+              ++ rewrite <-H1 in L. apply L.
+              ++ lia.
+            }
+
+            destruct SEQ as [v2' [A1 A2]].
+
+            exists v2'.
             split;[apply I|].
             split.
             *
-              admit.
-            *
-              apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
+              apply ZMap.ZP.of_list_1.
               --
-                rewrite I4.
-                symmetry in I4.
-                pose proof maybe_revoke_pointer_same_state as MR.
-                specialize (MR addr v2 a s).
-                unfold memM_same_state in MR.
-                destruct SEQ as [v2' [A1 A2]].
-                rewrite <- I4 in A2.
-                specialize (MR (inr v2') s s).
-
-
-                (*
-                  destruct SEQ as [v2' [A1 A2]].
-                  destruct A2 as [m1 [m2 A2]].
-                  specialize (MR addr v2 a s).
-                  specialize (MR v2 s s).
-                 *)
-                admit.
+                apply combine_eq_key_NoDupA.
+                pose proof (ZMap.elements_3w newmeta) as NDM.
+                pose proof (split_eq_key_NoDup _ _ _ SPL).
+                rewrite E in H.
+                specialize (H NDM).
+                apply H.
               --
-                destruct (list.nth_lookup_or_length newcaps n v1) as [L|NL].
-                ++ rewrite <-H1 in L. apply L.
-                ++ lia.
-
-
-              (* Old stuff below *)
-              (*
-          apply sequence_spec_errS in SEQ.
-          +
-            apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
-            *
-              destruct SEQ as [v2' [A1 A2]].
-              exists v2.
-              repeat split.
-              -- apply I.
-              --
-                apply ZMap.ZP.of_list_1.
+                remember (combine lk rescaps) as res eqn:C.
+                symmetry in C.
+                apply combine_spec in C.
                 ++
-                  pose proof (ZMap.elements_3w newmeta) as END.
-                  rewrite <- E in END.
-                  assert(NoDup lk).
-                  unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in *.
-                  clear - END SPL.
-                  eapply split_eq_key_NoDup; eauto.
-                  apply combine_eq_key_NoDupA, H.
-                ++
-                  apply In_InA.
-                  **
-                    typeclasses eauto.
-                  **
-                    pose proof (combine_nth lk rescaps n addr v2) as CM.
-                    autospecialize CM.
-                    unfold memM in *; lia.
-                    rewrite <- H0 in CM.
-                    apply list.nth_lookup_Some with (d:=v2) in A1.
-                    rewrite A1 in CM.
-                    rewrite <- CM.
+                  assert(In addr lk) as IK.
+                  {
+                    rewrite H0.
                     apply nth_In.
-                    pose proof (combine_length lk rescaps).
-                    unfold memM in *; lia.
-              --
-                apply A2.
+                    lia.
+                  }
+                  clear - C A1 H0 RL KL KR H2.
+                  (* TODO: should be provable from these premises *)
+                  admit.
+                ++
+                  clear - RL KL KR.
+                  unfold memM in *.
+                  lia.
             *
-              rewrite H1.
-              pose proof (list.nth_lookup_or_length newcaps n v1) as D.
-              destruct D as [L|NL].
-              -- assumption.
-              --
-                clear - NL H2 SPL.
-                epose proof (split_length_r enewmeta).
-                rewrite SPL in H.
-                cbn in H.
-                lia.
-          +
-            clear n N H2 H3 H0 H1. (* these are for concrete index. We need for all *)
-            apply list.Forall_lookup_2.
-            intros k m H.
-
-            (*
-            apply sequence_spec_errS in SEQ.
-            epose proof (list.lookup_lt_Some _ _ _ H) as K.
-            assert (exists y, base.lookup k rescaps = Some y) as R.
-            {
-              destruct (base.lookup k rescaps) eqn:D.
-              - exists p. reflexivity.
-              - apply list.lookup_ge_None in D.
-                clear - D K RL.
-                unfold errS in RL.
-                lia.
-            }
-            destruct R as [v2 R].
-            exists v2.
-            epose proof (list.Forall2_lookup_lr _ _ _ k m _ SEQ H R) as SEQF.
-            cbn in SEQF.
-            *)
-
-
-            (*
-            (* a bit of duplication from earlier *)
-            pose proof (@split_nth  _ _ enewmeta) as N.
-            replace (fst (split enewmeta)) with lk in N by (rewrite SPL;reflexivity).
-            replace (snd (split enewmeta)) with newcaps in N by (rewrite SPL;reflexivity).
-
-            pose proof (ZMap.elements_1 I) as H.
-            rewrite <- E in H.
-            apply InA_alt in H.
-            destruct H as [(addr',v2') [H1 H2]].
-
-            unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
-            destruct H1 as [T1 T2].
-            cbn in T1, T2.
-            subst addr' v2'.
-            specialize (N k (addr, v1)).
-            cbn in N.
-            eexists.
-            eauto.
-             *)
-            admit.
-               *)
+              apply A2.
           +
             (* key does not exists *)
             right.
