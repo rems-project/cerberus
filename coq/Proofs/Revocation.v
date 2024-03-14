@@ -375,14 +375,14 @@ Module RevocationProofs.
 
       Definition memM_same_state
         {T: Type}
-        (c: memM T)
-        := forall v m0 m1, c m0 = (m1, inr v) -> m0 = m1.
+        (c: memM T) : Prop
+        := forall v m0 m1, c m0 = (m1, v) -> m0 = m1.
 
       Class SameState
         {T: Type}
-        (M: memM T) : Prop
+        (c: memM T) : Prop
         :=
-        same_state: forall v m0 m1, M m0 = (m1, inr v) -> m0 = m1.
+        same_state: @memM_same_state T c.
 
       Definition post_exec_invariant
         {T: Type} (mem_state: mem_state_r) (M: memM T) : Prop
@@ -407,7 +407,7 @@ Module RevocationProofs.
         SameState M -> forall s, PreservesInvariant s M.
       Proof.
         intros H s I.
-        unfold SameState in H.
+        unfold SameState, memM_same_state in H.
         unfold post_exec_invariant, lift_sum_p.
         break_match.
         trivial.
@@ -417,7 +417,7 @@ Module RevocationProofs.
         inl_inr.
         inl_inr_inv.
         subst.
-        specialize (H t s m Heqp).
+        specialize (H (inr t) s m Heqp).
         subst.
         assumption.
       Qed.
@@ -464,6 +464,7 @@ Module RevocationProofs.
       Proof.
         intros e x s s' H.
         invc H.
+        reflexivity.
       Qed.
       #[local] Opaque raise.
 
@@ -495,11 +496,15 @@ Module RevocationProofs.
         unfold bind, Monad_errS in H.
         break_let.
         break_match_hyp;[tuple_inversion|].
-        specialize (MS t s m Heqp).
-        subst m.
-        specialize (CS t x s s').
-        apply CS.
-        apply H.
+        -
+          specialize (MS _ _ _  Heqp).
+          assumption.
+        -
+          specialize (MS _ _ _  Heqp).
+          subst.
+          specialize (CS t x m s').
+          apply CS.
+          apply H.
       Qed.
 
       (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
@@ -527,7 +532,7 @@ Module RevocationProofs.
         tuple_inversion.
         subst.
 
-        specialize (MS t0 s m0 Heqp0).
+        specialize (MS (inr t0) s m0 Heqp0).
         subst m0.
 
         specialize (MC t0 H0).
@@ -1234,6 +1239,9 @@ Module RevocationProofs.
         break_if.
         +
           invc H.
+          break_let.
+          apply fail_noloc_SameState in Heqp0.
+          assumption.
         +
           Transparent ret.
           unfold ret, memM_monad, Monad_errS in H.
@@ -1288,24 +1296,36 @@ Module RevocationProofs.
           cbv in S.
           unfold ret, bind in S.
           repeat break_match_hyp;repeat break_let;repeat tuple_inversion.
-          inversion H2.
+          *
+            invc H.
+            apply H2 in Heqp0.
+            assumption.
+          *
+            inversion H.
+            subst.
+            apply H2 in Heqp1.
+            subst.
+            eapply IHls;eauto.
         +
-          apply (IHls ll) ; clear IHls.
+          pose proof (sequence_len_errS _ _ _ _ S).
+          destruct l;[inv H0|].
+          invc S.
+          eapply (IHls (inr l)).
           *
             invc H.
             auto.
           *
             invc H.
-            cbn in S.
             repeat break_let.
             repeat break_match_hyp;repeat break_let;repeat tuple_inversion.
-            invc H1.
-            specialize (H2 _ _ _ Heqp1).
+            apply H4 in Heqp1.
             subst m.
-            clear Heqp1 a a0.
-            rewrite <- Heqp0.
+            clear H4 a H0.
+            cbn.
+            rewrite Heqp0.
+            invc H3.
             reflexivity.
-      Opaque ret bind.
+            Opaque ret bind.
     Qed.
 
     #[global] Instance sequence_preserves
@@ -1517,11 +1537,15 @@ Module RevocationProofs.
       break_let.
       break_match.
       tuple_inversion.
-      break_if.
-      tuple_inversion.
       break_match.
       tuple_inversion.
+      reflexivity.
       tuple_inversion.
+      break_match.
+      repeat tuple_inversion.
+      break_match.
+      repeat tuple_inversion.
+      repeat tuple_inversion.
       reflexivity.
       break_match.
       repeat tuple_inversion.
@@ -1660,71 +1684,80 @@ Module RevocationProofs.
         replace (fst (split enewmeta)) with lk in N by (rewrite SPL;reflexivity).
         replace (snd (split enewmeta)) with newcaps in N by (rewrite SPL;reflexivity).
 
-        destruct (@In_dec _ newmeta k) as [I|NI].
+        (* will need lengths later *)
+        pose proof (@sequence_len_errS _ _ _ _ _ _ _ SEQ) as RL.
+        pose proof (split_length_l enewmeta) as KL.
+        rewrite SPL in KL.
+        cbn in KL.
+        pose proof (split_length_r enewmeta) as KR.
+        rewrite SPL in KR.
+        cbn in KR.
+
+        (* end prep *)
+
+        apply sequence_spec_same_state_memM in SEQ.
         -
-          (* key originally exists *)
-          left.
-          apply zmap_in_mapsto in I.
-          destruct I as [v1 I].
-          exists v1.
-
-          assert(ZMap.MapsTo k v1 newmeta) as I1 by assumption.
-          rewrite Heqnewmeta in I1.
-          apply mapi_inv in I1.
-          destruct I1 as [v2 [k' [I3 [I4 I5]]]].
-          subst k'.
-
-          pose proof (ZMap.elements_1 I) as H.
-          rewrite <- E in H.
-          apply InA_alt in H.
-          destruct H as [(addr,v2') [H1 H2]].
-
-          unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
-          destruct H1 as [T1 T2].
-          cbn in T1, T2.
-          subst k v2'.
-
-          apply In_nth with (d:=(addr, v1)) in H2.
-          destruct H2 as [n [H2 H3]].
-          specialize (N n (addr, v1)).
-          rewrite H3 in N.
-          cbn in N.
-          inversion N.
-          rewrite <- H1, <- H0.
-
-          pose proof (split_length_l enewmeta) as KL. (* will  need later *)
-          rewrite SPL in KL.
-          cbn in KL.
-          pose proof (split_length_r enewmeta) as KR. (* will  need later *)
-          rewrite SPL in KR.
-          cbn in KR.
-          pose proof (@sequence_len_errS _ _ _ _ _ _ _ SEQ) as RL.
-
-          exists v2.
-          split;[apply I|].
-          split.
+          destruct (@In_dec _ newmeta k) as [I|NI].
           +
-            admit.
-          +
-            pose proof maybe_revoke_pointer_same_state as MR.
-            apply sequence_spec_same_state_memM in SEQ.
-            apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
+            (* key originally exists *)
+            left.
+            apply zmap_in_mapsto in I.
+            destruct I as [v1 I].
+            exists v1.
+
+            assert(ZMap.MapsTo k v1 newmeta) as I1 by assumption.
+            rewrite Heqnewmeta in I1.
+            apply mapi_inv in I1.
+            destruct I1 as [v2 [k' [I3 [I4 I5]]]].
+            subst k'.
+
+            pose proof (ZMap.elements_1 I) as H.
+            rewrite <- E in H.
+            apply InA_alt in H.
+            destruct H as [(addr,v2') [H1 H2]].
+
+            unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
+            destruct H1 as [T1 T2].
+            cbn in T1, T2.
+            subst k v2'.
+
+            apply In_nth with (d:=(addr, v1)) in H2.
+            destruct H2 as [n [H2 H3]].
+            specialize (N n (addr, v1)).
+            rewrite H3 in N.
+            cbn in N.
+            inversion N.
+            rewrite <- H1, <- H0.
+
+            exists v2.
+            split;[apply I|].
+            split.
             *
-              (*
-              destruct SEQ as [v2' [A1 A2]].
-              destruct A2 as [m1 [m2 A2]].
-              specialize (MR addr v2 a s).
-              specialize (MR v2 s s).
-               *)
               admit.
             *
-              destruct (list.nth_lookup_or_length newcaps n v1) as [L|NL].
-              -- rewrite <-H1 in L.
-                 apply L.
+              apply list.Forall2_lookup_l with (i:=n) (x:=v1) in SEQ.
               --
-                lia.
-            *
-              admit.
+                rewrite I4.
+                symmetry in I4.
+                pose proof maybe_revoke_pointer_same_state as MR.
+                specialize (MR addr v2 a s).
+                unfold memM_same_state in MR.
+                destruct SEQ as [v2' [A1 A2]].
+                rewrite <- I4 in A2.
+                specialize (MR (inr v2') s s).
+
+
+                (*
+                  destruct SEQ as [v2' [A1 A2]].
+                  destruct A2 as [m1 [m2 A2]].
+                  specialize (MR addr v2 a s).
+                  specialize (MR v2 s s).
+                 *)
+                admit.
+              --
+                destruct (list.nth_lookup_or_length newcaps n v1) as [L|NL].
+                ++ rewrite <-H1 in L. apply L.
+                ++ lia.
 
 
               (* Old stuff below *)
@@ -1821,25 +1854,70 @@ Module RevocationProofs.
              *)
             admit.
                *)
+          +
+            (* key does not exists *)
+            right.
+            split;[assumption|].
+            pose proof (ZMap.elements_3w newmeta) as NDM.
+            pose proof (split_eq_key_NoDup _ _ _ SPL).
+            rewrite E in H.
+            specialize (H NDM).
+            intros C.
+            destruct C as [v C].
+            apply ZMap.ZP.of_list_1 in C;[|apply combine_eq_key_NoDupA, H].
+            apply InA_eq_key_combine in C.
+            contradict NI.
+            clear - E SPL C NDM.
+            subst enewmeta.
+            replace lk with (fst (split (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta))) in C.
+            apply In_zmap_elements_split_zmap_in, C.
+            rewrite SPL.
+            reflexivity.
         -
-          (* key does not exists *)
-          right.
-          split;[assumption|].
-          pose proof (ZMap.elements_3w newmeta) as NDM.
-          pose proof (split_eq_key_NoDup _ _ _ SPL).
-          rewrite E in H.
-          specialize (H NDM).
-          intros C.
-          destruct C as [v C].
-          apply ZMap.ZP.of_list_1 in C;[|apply combine_eq_key_NoDupA, H].
-          apply InA_eq_key_combine in C.
-          contradict NI.
-          clear - E SPL C NDM.
-          subst enewmeta.
-          replace lk with (fst (split (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta))) in C.
-          apply In_zmap_elements_split_zmap_in, C.
-          rewrite SPL.
-          reflexivity.
+          clear k. (* used in previous goal *)
+          apply Forall_nth.
+          intros k d H.
+          (* [k] is index, not address *)
+          assert(option.is_Some (base.lookup k enewmeta)) as ES.
+          {
+            apply list.lookup_lt_is_Some.
+            lia.
+          }
+          unfold option.is_Some in ES.
+          destruct ES as [[addr v1] ES].
+          specialize (N k (addr,v1)).
+
+          (* TODO make this lemma *)
+          assert (ZMap.MapsTo addr v1 newmeta).
+          {
+            apply ZMap.elements_2.
+            rewrite <- E.
+            clear -ES.
+            apply list.elem_of_list_lookup_2 in ES.
+            apply base.elem_of_list_In in ES.
+            apply InA_alt.
+            exists (addr,v1).
+            split.
+            -
+              unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke.
+              split; reflexivity.
+            -
+              assumption.
+          }
+          rewrite Heqnewmeta in H0.
+          apply mapi_inv in H0.
+          destruct H0 as [v2 [addr' [E2 [E3 E4]]]].
+          subst addr'.
+          cbn in N.
+
+          (* cleanup nth mess *)
+          rewrite nth_indep with (d':=v1) by auto.
+          rewrite (list.nth_lookup_Some _ _ _ _ ES) in N.
+          clear ES.
+          inversion N.
+          clear N.
+          rewrite <- H2, <- H2, E3.
+          apply maybe_revoke_pointer_same_state.
       }
 
       clear H Heqp.
