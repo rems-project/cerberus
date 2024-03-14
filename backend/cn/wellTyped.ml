@@ -1703,7 +1703,6 @@ let check_cnprog p =
     | M_CN_let (loc, (s, {ct; pointer}), p') ->
        let@ () = WCT.is_ct loc ct in
        let@ pointer = WIT.check loc Loc pointer in
-       Pp.debug 2 (lazy (Pp.item "check_cnprog add_l" (Pp.typ (Sym.pp s) (Sctypes.pp ct))));
        let@ () = add_l s (Memory.bt_of_sct ct) (loc, lazy (Sym.pp s)) in
        let@ p' = aux p' in
        return (M_CN_let (loc, (s, {ct; pointer}), p'))
