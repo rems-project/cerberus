@@ -1228,10 +1228,16 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      | Z3.Solver.SATISFIABLE ->
         rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
+        let () = Z3.Solver.reset solver.non_incremental in
+        let () =
+          List.iter (fun lc ->
+            Z3.Solver.add solver.non_incremental [lc]
+            ) (nlc :: extra @ existing_scs)
+        in
         let (elapsed2, res2) =
           time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)"
               (Z3.Solver.check solver.non_incremental))
-            (nlc :: extra @ existing_scs)
+            []
         in
         maybe_save_slow_problem (res_short_string res2)
             lc expr smt2_doc elapsed2 solver.non_incremental;
