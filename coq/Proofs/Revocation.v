@@ -2148,15 +2148,6 @@ Module RevocationProofs.
          of [split_bytes] *)
     Admitted.
 
-    (* TODO: move *)
-    Ltac bool_inv :=
-      match goal with
-      | [H: true = false |- _] => inversion H
-      | [H: false = true |- _] => inversion H
-      | [H: false = false |- _] => clear H
-      | [H: true = true |- _] => clear H
-      end.
-
     Lemma split_bytes_length
       (tag : bool)
       (cs : list (option ascii))
@@ -2167,7 +2158,7 @@ Module RevocationProofs.
     Proof.
       destruct bs; intros H;[inv H|].
       rename a into b.
-      cbn -[split_bytes_fold] in H.
+      cbn -[split_bytes_aux] in H.
       Transparent bind get put ret.
       unfold Monad_either, bind, get, put, ret, Monad_errS, State_errS in H.
       Opaque bind get put ret.
@@ -2176,12 +2167,13 @@ Module RevocationProofs.
       rename o0 into p, bs into bs'.
       remember (b::bs') as bs.
       remember (prov b) as p0.
-      clear Heqbs Heqp0 b bs'.
-      rename Heqs into H.
-      (* Now we ready to do the actual proof *)
+      clear Heqbs Heqp1 b bs'.
+      rename Heqp0 into H.
+      (* Done with monadic stuff *)
 
+      (* Some generalizations before induction *)
       revert H.
-      unfold split_bytes_fold.
+      unfold split_bytes_aux.
       remember (@nil (option ascii)) as l0.
       setoid_replace (@Datatypes.length AbsByte bs) with ((@Datatypes.length AbsByte bs)  + (@Datatypes.length (option ascii) l0))%nat.
       2:{
@@ -2197,16 +2189,14 @@ Module RevocationProofs.
       induction bs; intros.
       -
         cbn in H.
-        inl_inr_inv.
+        tuple_inversion.
         reflexivity.
       -
-        Transparent bind get put ret.
-        unfold split_bytes_fold, Monad_either, bind, get, put, ret, Monad_errS, State_errS in H, IHbs.
-        cbn in H, IHbs.
-        Opaque bind get put ret.
-
-        repeat break_match_hyp; try inl_inr; try repeat inl_inr_inv; subst; try bool_inv.
-    Admitted.
+        apply IHbs in H.
+        cbn in H.
+        cbn.
+        lia.
+    Qed.
 
     Lemma split_bytes_values
       (tag : bool)

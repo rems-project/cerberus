@@ -1119,25 +1119,26 @@ Module Type CheriMemoryImpl
 
 
   (* Part of [split_bytes] definition factored out to simplify proofs *)
-  Definition split_bytes_fold (bs : list AbsByte) (p0:provenance)
-    : serr ((option provenance) * list (option ascii) * option nat)
+  Definition split_bytes_aux (bs : list AbsByte) (p0:provenance)
+    : ((option provenance) * list (option ascii) * option nat)
     :=
-    monadic_fold_left
+    fold_left
       (fun '(prov_acc_maybe, val_acc, offset_acc_maybe) b =>
-         prov_acc' <-
+         let prov_acc' :=
            match prov_acc_maybe, b.(prov) with
            | Some p1, p2 =>
-               if provenance_eqb p1 p2 then ret prov_acc_maybe else ret None
+               if provenance_eqb p1 p2 then prov_acc_maybe else None
            (* once invalid stays always invalid *)
-           | None, _ => ret None
-           end ;;
+           | None, _ => None
+           end in
          let offset_acc' :=
            match offset_acc_maybe, b.(copy_offset) with
            | Some n1, Some n2 =>
                if Nat.eqb n1 n2 then Some (S n1) else None
            | _, _ => None
            end in
-         ret (prov_acc', b.(value)::val_acc, offset_acc')) bs ((Some p0, [], Some O)).
+         (prov_acc', b.(value)::val_acc, offset_acc'))
+      bs ((Some p0, [], Some O)).
 
   (* Given a (non-empty) list of bytes combine their provenance (if
      compatible). Returns the empty provenance otherwise *)
@@ -1146,8 +1147,8 @@ Module Type CheriMemoryImpl
     match bs with
     | [] => raise "AbsByte.split_bytes: called on an empty list"
     | b::bs' =>
-        '(prov_maybe, rev_values, offset_status_maybe) <-
-          split_bytes_fold bs b.(prov);;
+        let '(prov_maybe, rev_values, offset_status_maybe) :=
+          split_bytes_aux bs b.(prov) in
         let values := List.rev rev_values in
         ret (opt_def (PNVI_prov Prov_none) prov_maybe ,
             is_some offset_status_maybe && is_some prov_maybe,

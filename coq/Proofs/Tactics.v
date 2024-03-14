@@ -115,3 +115,11 @@ Ltac some_inv :=
   match goal with
   | [H: Some ?a = Some ?b |- _ ] => inversion H; clear H
   end.
+
+Ltac bool_inv :=
+  match goal with
+  | [H: true = false |- _] => inversion H
+  | [H: false = true |- _] => inversion H
+  | [H: false = false |- _] => clear H
+  | [H: true = true |- _] => clear H
+  end.
