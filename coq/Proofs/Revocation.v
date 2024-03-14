@@ -2148,6 +2148,66 @@ Module RevocationProofs.
          of [split_bytes] *)
     Admitted.
 
+    (* TODO: move *)
+    Ltac bool_inv :=
+      match goal with
+      | [H: true = false |- _] => inversion H
+      | [H: false = true |- _] => inversion H
+      | [H: false = false |- _] => clear H
+      | [H: true = true |- _] => clear H
+      end.
+
+    Lemma split_bytes_length
+      (tag : bool)
+      (cs : list (option ascii))
+      (bs : list AbsByte)
+      (p: provenance):
+      split_bytes bs = inr (p, tag, cs) ->
+      length bs = length cs.
+    Proof.
+      destruct bs; intros H;[inv H|].
+      rename a into b.
+      cbn -[split_bytes_fold] in H.
+      Transparent bind get put ret.
+      unfold Monad_either, bind, get, put, ret, Monad_errS, State_errS in H.
+      Opaque bind get put ret.
+      repeat break_let.
+      repeat break_match_hyp; try inl_inr; try repeat inl_inr_inv; subst; try bool_inv; rewrite rev_length.
+      rename o0 into p, bs into bs'.
+      remember (b::bs') as bs.
+      remember (prov b) as p0.
+      clear Heqbs Heqp0 b bs'.
+      rename Heqs into H.
+      (* Now we ready to do the actual proof *)
+
+      revert H.
+      unfold split_bytes_fold.
+      remember (@nil (option ascii)) as l0.
+      setoid_replace (@Datatypes.length AbsByte bs) with ((@Datatypes.length AbsByte bs)  + (@Datatypes.length (option ascii) l0))%nat.
+      2:{
+        subst.
+        cbn.
+        lia.
+      }
+      clear Heql0.
+
+      generalize (Some p0) as op0. clear p0.
+      generalize (Some O) as oo0.
+      revert l p o l0.
+      induction bs; intros.
+      -
+        cbn in H.
+        inl_inr_inv.
+        reflexivity.
+      -
+        Transparent bind get put ret.
+        unfold split_bytes_fold, Monad_either, bind, get, put, ret, Monad_errS, State_errS in H, IHbs.
+        cbn in H, IHbs.
+        Opaque bind get put ret.
+
+        repeat break_match_hyp; try inl_inr; try repeat inl_inr_inv; subst; try bool_inv.
+    Admitted.
+
     Lemma split_bytes_values
       (tag : bool)
       (cs : list (option ascii))
@@ -2156,8 +2216,6 @@ Module RevocationProofs.
       split_bytes bs = inr (p, tag, cs) ->
       Forall2 (fun a ov => ov = value a) bs cs.
     Proof.
-      (* TODO: This gonna be hard to prove on current implementation
-         of [split_bytes] *)
     Admitted.
 
     Lemma extract_unspec_spec
