@@ -62,6 +62,9 @@ let init_env tagDefs fetch_enum_expr fetch_typedef =
   }
 
 
+let pointer_eq_warned = ref false
+
+
 (* TODO: ugly hack to get started *)
 module SymTable = Hashtbl.Make(Sym)
 let symtable = SymTable.create 10000
@@ -520,16 +523,18 @@ module EffectfulTranslation = struct
     | CN_div, _ ->
         return (IT (Binop (Div, e1, e2), IT.bt e1))
     | CN_equal, _ ->
-      (match IT.bt e1, IT.bt e2 with
-       | Loc _, Loc _ ->
-         Pp.warn loc !^"pointer equality check"
-       | _, _ -> ());
+      (match IT.bt e1, IT.bt e2, !pointer_eq_warned with
+       | Loc _, Loc _, false ->
+         pointer_eq_warned := true;
+         Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again)"
+       | _, _, _ -> ());
         return (IT (Binop (EQ, e1, e2), SBT.Bool))
     | CN_inequal, _ ->
-      (match IT.bt e1, IT.bt e2 with
-       | Loc _, Loc _ ->
-         Pp.warn loc !^"pointer inequality check"
-       | _, _ -> ());
+      (match IT.bt e1, IT.bt e2, !pointer_eq_warned with
+       | Loc _, Loc _, false ->
+         pointer_eq_warned := true;
+         Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again)"
+       | _, _, _ -> ());
         return (not_ (IT (Binop (EQ, e1, e2), SBT.Bool)))
     | CN_lt, (SBT.Integer | SBT.Real | SBT.Bits _) ->
         return (IT (Binop (LT, e1, e2), SBT.Bool))
