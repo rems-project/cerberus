@@ -2148,6 +2148,40 @@ Module RevocationProofs.
          of [split_bytes] *)
     Admitted.
 
+    Lemma split_bytes_aux_length
+      (o : option nat)
+      (p : option provenance)
+      (l : list (option ascii))
+      (bs : list AbsByte)
+      (p0 : provenance):
+      split_bytes_aux bs p0 = (p, l, o) -> Datatypes.length bs = Datatypes.length l.
+    Proof.
+      unfold split_bytes_aux.
+      (* Some generalizations before induction *)
+      remember (@nil (option ascii)) as l0.
+      setoid_replace (@Datatypes.length AbsByte bs) with ((@Datatypes.length AbsByte bs)  + (@Datatypes.length (option ascii) l0))%nat.
+      2:{
+        subst.
+        cbn.
+        lia.
+      }
+      clear Heql0.
+      generalize (Some p0) as op0. clear p0.
+      generalize (Some O) as oo0.
+      revert l p o l0.
+      (* proof by induction *)
+      induction bs; intros.
+      -
+        cbn in H.
+        tuple_inversion.
+        reflexivity.
+      -
+        apply IHbs in H.
+        cbn in H.
+        cbn.
+        lia.
+    Qed.
+
     Lemma split_bytes_length
       (tag : bool)
       (cs : list (option ascii))
@@ -2170,32 +2204,7 @@ Module RevocationProofs.
       clear Heqbs Heqp1 b bs'.
       rename Heqp0 into H.
       (* Done with monadic stuff *)
-
-      (* Some generalizations before induction *)
-      revert H.
-      unfold split_bytes_aux.
-      remember (@nil (option ascii)) as l0.
-      setoid_replace (@Datatypes.length AbsByte bs) with ((@Datatypes.length AbsByte bs)  + (@Datatypes.length (option ascii) l0))%nat.
-      2:{
-        subst.
-        cbn.
-        lia.
-      }
-      clear Heql0.
-
-      generalize (Some p0) as op0. clear p0.
-      generalize (Some O) as oo0.
-      revert l p o l0.
-      induction bs; intros.
-      -
-        cbn in H.
-        tuple_inversion.
-        reflexivity.
-      -
-        apply IHbs in H.
-        cbn in H.
-        cbn.
-        lia.
+      apply (split_bytes_aux_length _ _ _ _ _ H).
     Qed.
 
     Lemma split_bytes_values
@@ -2206,6 +2215,54 @@ Module RevocationProofs.
       split_bytes bs = inr (p, tag, cs) ->
       Forall2 (fun a ov => ov = value a) bs cs.
     Proof.
+      destruct bs; intros H;[inv H|].
+      rename a into b.
+      cbn -[split_bytes_aux] in H.
+      Transparent bind get put ret.
+      unfold Monad_either, bind, get, put, ret, Monad_errS, State_errS in H.
+      Opaque bind get put ret.
+      repeat break_let.
+      inl_inr_inv.
+      rewrite H3.
+      (* Done with monadic stuff *)
+
+      (* Some generalizations before induction *)
+      clear - Heqp0 H3.
+      rename o0 into p, bs into bs'.
+      remember (b::bs') as bs.
+      remember (prov b) as p0.
+      clear Heqbs Heqp1 b bs'.
+      rename Heqp0 into H, H3 into R.
+
+      pose proof (split_bytes_aux_length _ _ _ _ _ H) as L.
+
+      revert H.
+      unfold split_bytes_aux.
+      generalize (@nil (option ascii)) as l0.
+      generalize (Some p0) as op0. clear p0.
+      generalize (Some O) as oo0.
+      revert R L.
+      revert l p o cs.
+
+      (* proof by induction *)
+      induction bs; intros.
+      -
+        cbn in H.
+        tuple_inversion.
+        destruct l;[constructor|inv L].
+      -
+        destruct l;[inv L|].
+        destruct cs.
+        1:{
+          clear - R.
+          cbn in R.
+          admit.
+        }
+        cbn in H.
+        eapply IHbs in H; clear IHbs; eauto.
+        +
+          constructor.
+
     Admitted.
 
     Lemma extract_unspec_spec
