@@ -95,13 +95,48 @@ let generate_c_datatypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
   let ail_datatypes = List.concat ail_datatypes in
   
   let structs = List.map generate_doc_from_ail_struct ail_datatypes in
-  CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs)
+  "\n/* CN DATATYPES */\n\n" ^ CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs)
 
-let generate_c_structs c_structs = 
+let generate_str_from_ail_struct ail_struct = 
+  CF.Pp_utils.to_plain_pretty_string (generate_doc_from_ail_struct ail_struct)
+
+let generate_str_from_ail_structs ail_structs = 
+  let docs = List.map generate_doc_from_ail_struct ail_structs in 
+  CF.Pp_utils.to_plain_pretty_string (concat_map_newline docs)
+
+let print_c_structs c_structs = 
+  "\n/* ORIGINAL C STRUCTS */\n\n" ^ generate_str_from_ail_structs c_structs
+
+let generate_cn_versions_of_structs c_structs = 
   let ail_structs = List.map Cn_internal_to_ail.cn_to_ail_struct c_structs in 
-  let docs = List.map generate_doc_from_ail_struct (List.concat ail_structs) in
-  let comment = "\n/* CN VERSIONS OF C STRUCTS */\n\n" in
-  comment ^ CF.Pp_utils.to_plain_pretty_string (concat_map_newline docs)
+  "\n/* CN VERSIONS OF C STRUCTS */\n\n" ^ generate_str_from_ail_structs (List.concat ail_structs)
+
+let generate_struct_injs (ail_prog: CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 
+  let generate_struct_inj (((sym, (loc, attrs, tag_def)) as def) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) =
+    match tag_def with 
+    | C.StructDef (members, opt) -> 
+      let c_struct_str = generate_str_from_ail_struct def in
+      let cn_struct_str = generate_str_from_ail_structs (Cn_internal_to_ail.cn_to_ail_struct def) in
+      let xs = Cn_internal_to_ail.generate_struct_conversion_function def in 
+      let ys = Cn_internal_to_ail.generate_struct_equality_function def in
+      let prototypes_str = match (xs, ys) with 
+        | ((conversion_def, _) :: _, (equality_def, _) :: _) -> 
+          let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = [conversion_def; equality_def]; function_definitions = []} in
+          let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
+          CF.Pp_utils.to_plain_pretty_string doc
+        | (_, _) -> ""
+      in
+      let str_list = [c_struct_str; cn_struct_str; prototypes_str] in
+      let filename = Cerb_location.get_filename loc in 
+      let _ = match filename with 
+        | Some fn -> Printf.printf "STRUCT FILENAME: %s\n" fn
+        | None -> ()
+      in
+      [(filename, (loc, str_list))]
+    | C.UnionDef _ -> []
+  in 
+  let struct_injs = List.map generate_struct_inj ail_prog.tag_definitions in 
+  List.concat struct_injs
 
 
 let bt_is_record_or_tuple = function 
