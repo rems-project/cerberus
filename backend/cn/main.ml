@@ -204,51 +204,104 @@ let main
             (* let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in *)
             (* let cn_prefix = if (List.length dir_name != 0) then String.concat "/" cn_prefix_list  ^ "/" else "" in *)
             let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
-            let cn_header_oc = Stdlib.open_out (prefix ^ "cn.h") in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog in
-            let (c_function_defs, c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
-            let (c_predicate_defs, c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
-            let (conversion_function_defs, conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
-            let (ownership_function_defs, ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
-            let c_structs = Executable_spec_internal.generate_c_structs ail_prog.tag_definitions in 
-
-            (* let rec repeat n str =  *)
-              (* if n <= 0 then [] else  *)
-                (* (if n == 1 then [str] else str :: (repeat (n - 1) str))  *)
-            (* in *)
-            (* Hacky. TODO: Make less hacky *)
-            (* let dots_repeat_list = repeat ((List.length dir_name) - 2) ".." in *)
-            (* let dots_str = String.concat "/" dots_repeat_list in *)
+            let (c_function_defs, c_function_decls, _c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+            let (c_predicate_defs, _c_predicate_decls, _c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+            let (conversion_function_defs, _conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
+            let (ownership_function_defs, _ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
+            let c_structs = Executable_spec_internal.print_c_structs ail_prog.tag_definitions in
+            let cn_converted_structs = Executable_spec_internal.generate_cn_versions_of_structs ail_prog.tag_definitions in 
 
             (* TODO: Topological sort *)
-            Stdlib.output_string cn_header_oc (generate_include_header ("./executable-spec/cn_utils.c", false));
-            Stdlib.output_string cn_header_oc (generate_include_header ("assert.h", true));
+            (* Stdlib.output_string cn_header_oc (generate_include_header ("assert.h", true));
             Stdlib.output_string cn_header_oc c_datatypes;
             Stdlib.output_string cn_header_oc c_structs;
             Stdlib.output_string cn_header_oc "\n/* CN RECORDS */\n\n";
             Stdlib.output_string cn_header_oc c_records;
             Stdlib.output_string cn_header_oc c_records';
-            Stdlib.output_string cn_header_oc c_function_decls;
             Stdlib.output_string cn_header_oc c_predicate_decls;
             Stdlib.output_string cn_header_oc conversion_function_decls;
-            Stdlib.output_string cn_header_oc ownership_function_decls;
+            Stdlib.output_string cn_header_oc ownership_function_decls; *)
 
-            Stdlib.output_string cn_oc (generate_include_header ("cn.h", false));
+            (* TODO: Remove - hacky *)
+            let cn_utils_header_pair = ("../../executable-spec/cn_utils.c", false) in
+            let cn_utils_header = generate_include_header cn_utils_header_pair in
+            
+            Stdlib.output_string cn_oc cn_utils_header;
+            Stdlib.output_string cn_oc c_structs;
+            Stdlib.output_string cn_oc cn_converted_structs;
+            Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_function_defs;
             Stdlib.output_string cn_oc c_predicate_defs;
             Stdlib.output_string cn_oc conversion_function_defs;
             Stdlib.output_string cn_oc ownership_function_defs;
 
-            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); ("cn.h", false);] in
+            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n";
+            Stdlib.output_string oc c_datatypes;
+            Stdlib.output_string oc "\n";
+            Stdlib.output_string oc c_function_decls;
+            Stdlib.output_string oc "\n";
+
+
+            let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in 
+
+            let filter_injs_by_filename struct_inj_pairs fn = 
+              let filtered_struct_injs = List.filter (fun (filename', _inj) -> match filename' with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs in 
+              List.map snd filtered_struct_injs
+            in
+            let source_file_struct_injs = filter_injs_by_filename struct_injs_with_filenames filename in
+
+            let included_filenames = List.map fst struct_injs_with_filenames in 
+            let rec open_auxilliary_files included_filenames already_opened_list = match included_filenames with 
+              | [] -> []
+              | fn :: fns -> 
+                (match fn with 
+                  | Some fn' -> 
+                    if String.equal fn' filename || List.mem String.equal fn' already_opened_list then [] else 
+                    let fn_list = String.split_on_char '/' fn' in
+                    let output_fn = List.nth fn_list (List.length fn_list - 1) in 
+                    let output_fn_with_prefix = prefix ^ output_fn in
+                    if Sys.file_exists output_fn_with_prefix then 
+                      (Printf.printf "Error in opening file %s\n" output_fn_with_prefix;
+                      open_auxilliary_files fns (fn' :: already_opened_list))
+                    else
+                      (Printf.printf "REACHED FILENAME: %s\n" output_fn_with_prefix;
+                      let output_channel = Stdlib.open_out output_fn_with_prefix in
+                      (fn', output_channel) :: open_auxilliary_files fns (fn' :: already_opened_list))
+                  | None -> [])
+            in 
+
+            let fns_and_ocs = open_auxilliary_files included_filenames [] in 
+            let rec inject_structs_in_header_files = function 
+              | [] -> ()
+              | (fn', oc') :: xs -> 
+                let header_file_injs = filter_injs_by_filename struct_injs_with_filenames fn' in
+                begin match
+                  Source_injection.(output_injections oc'
+                    { filename=fn'; sigm= ail_prog
+                    ; pre_post=[]
+                    ; in_stmt=header_file_injs}
+                  )
+                with
+                | Ok () ->
+                    ()
+                | Error str ->
+                    (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+                    prerr_endline str
+                end;
+                Stdlib.close_out oc';
+               inject_structs_in_header_files xs
+            in
+
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=executable_spec.pre_post
-                ; in_stmt=executable_spec.in_stmt}
+                ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs)}
               )
             with
             | Ok () ->
@@ -256,7 +309,38 @@ let main
             | Error str ->
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
-            end
+            end;
+            inject_structs_in_header_files fns_and_ocs;
+
+            
+            (* let included_filenames = List.map fst struct_injs_with_filenames in 
+            List.iter (fun fn' -> 
+              match fn' with 
+              | Some fn ->
+                if String.equal fn filename then () else 
+                let fn_list = String.split_on_char '/' fn in
+                let output_fn = List.nth fn_list (List.length fn_list - 1) in 
+                Printf.printf "REACHED FILENAME: %s\n" (prefix ^ output_fn);
+                let include_oc = Stdlib.open_out (prefix ^ output_fn) in
+                let filtered_struct_injs' = List.filter (fun (filename', inj) -> match filename' with | Some name -> (String.equal name fn) | None -> false) struct_injs_with_filenames in 
+                let injs' = List.map snd filtered_struct_injs' in 
+                Printf.printf "Number of injections in %s: %d\n" (prefix ^ output_fn) (List.length injs');
+                begin match
+                Source_injection.(output_injections include_oc
+                  { filename=fn; sigm=ail_prog
+                  ; pre_post=[]
+                  ; in_stmt=injs'}
+                )
+                with
+                | Ok () ->
+                    ()
+                | Error str ->
+                    (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+                    prerr_endline str
+                end
+              | None -> ()
+              )
+            included_filenames *)
          end;
 
         match output_decorated with 
