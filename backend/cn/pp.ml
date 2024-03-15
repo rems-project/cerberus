@@ -88,7 +88,7 @@ let maybe_open_times_channel = function
   | Some (filename, style) ->
      let channel = open_out filename in
      times := Some (channel, style, 0);
-     if style == "csv"
+     if String.equal style "csv"
      then Printf.fprintf channel "lineF, lineT, trace length, time\n"
      else Printf.fprintf channel "{\n  %s: %s" (wrap "name") (wrap "timing")
 
