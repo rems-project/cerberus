@@ -644,6 +644,34 @@ Section ListAux.
           apply IHNoDup.
   Qed.
 
+
+  (* In standard library [Forall2_nth] is defined only for [Vector]. This is missing version for list *)
+  Lemma Forall2_nth_list :
+    forall (A B : Type) (R : A -> B -> Prop) (l1 : list A) (l2 : list B) (default1 : A) (default2 : B),
+      length l1 = length l2 ->
+      (forall i, i < length l1 -> R (nth i l1 default1) (nth i l2 default2))%nat ->
+      Forall2 R l1 l2.
+  Proof.
+    intros A B R l1 l2 default1 default2 Hlen Hnth.
+    generalize dependent l2.
+    induction l1 as [| x1 l1' IHl1'].
+    - intros l2 Hlen. destruct l2 as [| x2 l2'].
+      * constructor.
+      * inv Hlen.
+    - intros l2 Hlen. destruct l2 as [| x2 l2']; try easy.
+      simpl in Hlen. injection Hlen as Hlen'.
+      constructor.
+      + apply (Hnth O). simpl. lia.
+      + eapply IHl1'.
+        * assumption.
+        * intros i.
+          specialize (Hnth (S i)).
+          intros L.
+          apply Hnth.
+          cbn.
+          lia.
+  Qed.
+
 End ListAux.
 
 Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
