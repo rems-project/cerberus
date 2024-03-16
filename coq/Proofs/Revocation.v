@@ -2207,6 +2207,57 @@ Module RevocationProofs.
       apply (split_bytes_aux_length _ _ _ _ _ H).
     Qed.
 
+
+    Lemma split_bytes_aux_values
+      (o : option nat)
+      (p : option provenance)
+      (l : list (option ascii))
+      (bs : list AbsByte)
+      (p0 : provenance):
+      split_bytes_aux bs p0 = (p, l, o) ->
+      Forall2 (fun (a : AbsByte) (ov : option ascii) => ov = value a) bs (rev l).
+    Proof.
+      intros SS.
+
+      (* assert(length bs > 0)%nat as BL. admit. (* maybe needed *) *)
+
+      pose proof (split_bytes_aux_length _ _ _ _ _ SS) as L.
+      apply Forall2_nth_list with
+        (default1:=absbyte_v Prov_disabled None None)
+        (default2:=None)
+      ;[rewrite rev_length;apply L|].
+      intros i H.
+
+      unfold split_bytes_aux in SS.
+      setoid_rewrite rev_nth;[|lia].
+
+      (* Some generalizations before induction *)
+      remember (@nil (option ascii)) as l0.
+
+      setoid_replace (@Datatypes.length AbsByte bs) with ((@Datatypes.length AbsByte bs)  + (@Datatypes.length (option ascii) l0))%nat in L by (subst;cbn;lia).
+
+      replace (Datatypes.length l - Datatypes.S i)%nat with (Datatypes.length l -
+                                                           (Datatypes.length l0 +
+                                                           Datatypes.S i))%nat by (subst;cbn;lia).
+
+
+      clear Heql0.
+      revert SS.
+      generalize (Some p0) as op0. clear p0.
+      generalize (Some O) as oo0.
+      revert L H.
+      revert l p o l0 i.
+
+      (* proof by induction *)
+      induction bs; intros.
+      -
+        cbn in *.
+        tuple_inversion.
+        inv H.
+      -
+        destruct l;[cbn in L; inv L|].
+    Admitted.
+
     Lemma split_bytes_values
       (tag : bool)
       (cs : list (option ascii))
@@ -2233,37 +2284,12 @@ Module RevocationProofs.
       remember (prov b) as p0.
       clear Heqbs Heqp1 b bs'.
       rename Heqp0 into H, H3 into R.
+      subst cs.
 
-      pose proof (split_bytes_aux_length _ _ _ _ _ H) as L.
-
-      revert H.
-      unfold split_bytes_aux.
-      generalize (@nil (option ascii)) as l0.
-      generalize (Some p0) as op0. clear p0.
-      generalize (Some O) as oo0.
-      revert R L.
-      revert l p o cs.
-
-      (* proof by induction *)
-      induction bs; intros.
-      -
-        cbn in H.
-        tuple_inversion.
-        destruct l;[constructor|inv L].
-      -
-        destruct l;[inv L|].
-        destruct cs.
-        1:{
-          clear - R.
-          cbn in R.
-          admit.
-        }
-        cbn in H.
-        eapply IHbs in H; clear IHbs; eauto.
-        +
-          constructor.
-
-    Admitted.
+      (* apply generalized sub-lemma *)
+      apply split_bytes_aux_values in H.
+      apply H.
+    Qed.
 
     Lemma extract_unspec_spec
       (cs : list (option ascii))
