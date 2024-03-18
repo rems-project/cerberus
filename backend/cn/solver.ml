@@ -34,6 +34,7 @@ module Slow_SMT_Tracing = struct
   let dir_exists dirname = Sys.file_exists dirname && Sys.is_directory dirname
 
   let get_tracing_dir dirname =
+    if not (dir_exists dirname) then failwith ("directory does not exist: " ^ dirname) else ();
     let dirname2 = dirname ^ Filename.dir_sep ^ run_name () in
     if not (dir_exists dirname2) then Sys.mkdir dirname2 0o755 else ();
     dirname2
