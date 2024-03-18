@@ -119,7 +119,8 @@ let main
       debug_level
       print_level
       print_sym_nums
-      slow_threshold
+      slow_smt_threshold
+      slow_smt_dir
       no_timestamps
       json
       state_file
@@ -151,7 +152,7 @@ let main
     Pp.print_level := print_level;
     CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
     Pp.print_timestamps := not no_timestamps;
-    Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
+    Solver.set_slow_smt_settings slow_smt_threshold slow_smt_dir;
     Solver.random_seed := random_seed;
     Solver.log_to_temp := solver_logging;
     Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
@@ -263,9 +264,14 @@ let batch =
   Arg.(value & flag & info ["batch"] ~doc)
 
 
-let slow_threshold =
-  let doc = "Set the time threshold (in seconds) for logging to slow_smt.txt temp file." in
+let slow_smt_threshold =
+  let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
   Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
+
+let slow_smt_dir =
+  let doc = "Set the destination dir for logging slow smt queries (default is in system temp-dir)." in
+  Arg.(value & opt (some string) None & info ["slow-smt-dir"] ~docv:"FILE" ~doc)
+
 
 let no_timestamps =
   let doc = "Disable timestamps in print-level debug messages"
@@ -357,7 +363,8 @@ let () =
       debug_level $
       print_level $
       print_sym_nums $
-      slow_threshold $
+      slow_smt_threshold $
+      slow_smt_dir $
       no_timestamps $
       json $
       state_file $

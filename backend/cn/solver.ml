@@ -18,23 +18,55 @@ let random_seed = ref 1
 let log_to_temp = ref false
 let trace_all_queries = ref false
 
-let slow_smt_file () =
-  let open Filename in
-  get_temp_dir_name () ^ dir_sep ^ "slow_smt.txt"
 
+module Slow_SMT_Tracing = struct
 
-let save_slow_problems, saved_slow_problem, set_slow_threshold =
-  (* not yet written this run, > 3.0s counts as slow, append to this fname *)
-  let slow_problem_ref = ref (true, 3.0, None) in
-  let save_slow_problems () = (! slow_problem_ref) in
-  let saved_slow_problem () = match ! slow_problem_ref with
-    | (true, t, fn) -> slow_problem_ref := (false, t, fn)
-    | _ -> ()
-  in
-  let set_slow_threshold t =
-    (slow_problem_ref := (true, t, Some (slow_smt_file ())))
-  in
-  save_slow_problems, saved_slow_problem, set_slow_threshold
+  let settings = ref (None : (string * float) option)
+
+  let num_traced = ref 0
+
+  let run_name () =
+    let open Unix in
+    let tm = Unix.localtime (Unix.time ()) in
+    let tm_str = Printf.sprintf "%d_%02d_%02d" tm.tm_hour tm.tm_min tm.tm_sec in
+    "cn_run_" ^ tm_str
+
+  let dir_exists dirname = Sys.file_exists dirname && Sys.is_directory dirname
+
+  let get_tracing_dir dirname =
+    let dirname2 = dirname ^ Filename.dir_sep ^ run_name () in
+    if not (dir_exists dirname2) then Sys.mkdir dirname2 0o755 else ();
+    dirname2
+
+  let get_tracing_tmp_dir () =
+    let open Filename in
+    let dirname = get_temp_dir_name () ^ dir_sep ^ "slow_smt" in
+    if not (dir_exists dirname) then Sys.mkdir dirname 0o755 else ();
+    get_tracing_dir dirname
+
+  let set_settings threshold_opt dirname_opt = match threshold_opt, dirname_opt with
+    | None, None -> settings := None
+    | _ ->
+     let dirname = match dirname_opt with
+       | None -> get_tracing_tmp_dir ()
+       | Some nm -> get_tracing_dir nm
+     in
+     let threshold = Option.value threshold_opt ~default:1.0 in
+     settings := Some (dirname, threshold)
+
+  let trace_files time = match ! settings with
+    | None -> None
+    | Some (_, threshold) when (Stdlib.Float.compare time threshold < 0) -> None
+    | Some (dirname, _) ->
+      let n = Int.to_string (! num_traced) in
+      num_traced := (! num_traced) + 1;
+      let summ_f = open_out (dirname ^ Filename.dir_sep ^ "slow_prob_" ^ n ^ "_summ.txt") in
+      let smt_f = open_out (dirname ^ Filename.dir_sep ^ "slow_prob_" ^ n ^ ".smt2") in
+      Some (summ_f, smt_f)
+
+end
+
+let set_slow_smt_settings = Slow_SMT_Tracing.set_settings
 
 type query_trace_elem =
   Push | Pop | Assert of (IT.t list) | Check of (IT.t list)
@@ -1167,26 +1199,22 @@ let model () =
      ((context, model), qs)
 
 let maybe_save_slow_problem kind lc lc_t smt2_doc time solver =
-  match save_slow_problems () with
-  | (_, _, None) -> ()
-  | (_, cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
-  | (first_msg, _, Some fname) ->
-    let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
-    output_string channel "\n\n";
-    if first_msg then output_string channel "## New CN run ##\n\n" else ();
+  match Slow_SMT_Tracing.trace_files time with
+  | None -> ()
+  | Some (summ_f, smt2_f) ->
     let lc_doc = Pp.string (Z3.Expr.to_string lc_t) in
-    Cerb_colour.without_colour (fun () -> print channel (item "Slow problem"
+    Cerb_colour.without_colour (fun () -> print summ_f (item "Slow CN problem"
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
           item "result" (Pp.string kind);
           item "SMT constraint" lc_doc;
           item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
-          item "SMT problem" (Lazy.force smt2_doc);
       ]))) ();
-    output_string channel "\n";
-    saved_slow_problem ();
-    close_out channel
+    output_string summ_f "\n";
+    close_out summ_f;
+    print smt2_f (Lazy.force smt2_doc);
+    close_out smt2_f
 
 let print_doc_to fname doc =
   let channel = open_out_gen [Open_wronly; Open_creat] 0o666 fname in
