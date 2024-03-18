@@ -257,7 +257,7 @@ let main
                     let output_fn = List.nth fn_list (List.length fn_list - 1) in 
                     let output_fn_with_prefix = prefix ^ output_fn in
                     if Sys.file_exists output_fn_with_prefix then 
-                      (Printf.printf "Error in opening file %s\n" output_fn_with_prefix;
+                      (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;
                       open_auxilliary_files fns (fn' :: already_opened_list))
                     else
                       (Printf.printf "REACHED FILENAME: %s\n" output_fn_with_prefix;

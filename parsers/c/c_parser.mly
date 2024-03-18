@@ -218,7 +218,7 @@ type asm_qualifier =
 %type<Cabs.cabs_type_specifier>
   struct_or_union_specifier
 
-%type<Annot.attributes -> Symbol.identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
+%type<Annot.attributes -> Symbol.identifier option -> (Cabs.struct_declaration list) option -> Lexing.position -> Cabs.cabs_type_specifier>
   struct_or_union
 
 %type<Cabs.struct_declaration list>
@@ -981,23 +981,23 @@ struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     iopt= general_identifier? LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
     { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
-      ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
+      ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) $endpos }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
-    { ctor (to_attrs attr_opt) (Some i) None }
+    { ctor (to_attrs attr_opt) (Some i) None $endpos }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     iopt= general_identifier? LBRACE RBRACE
     (* GCC extension *)
     (* TODO: forbid union *)
-    { ctor (to_attrs attr_opt) iopt (Some []) }
+    { ctor (to_attrs attr_opt) iopt (Some []) $endpos }
 ;
 
 struct_or_union:
 | STRUCT
-    { fun attrs x y -> TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
+    { fun attrs x y epos -> TSpec (Cerb_location.(region ($startpos, epos) NoCursor),
                               TSpec_struct (attrs, x, y)) }
 | UNION
-    { fun attrs x y -> TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
+    { fun attrs x y epos -> TSpec (Cerb_location.(region ($startpos, epos) NoCursor),
                               TSpec_union (attrs, x, y)) }
 ;
 
