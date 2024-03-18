@@ -128,6 +128,13 @@ let generate_struct_injs (ail_prog: CF.GenTypes.genTypeCategory CF.AilSyntax.sig
       in
       let str_list = [c_struct_str; cn_struct_str; prototypes_str] in
       let filename = Cerb_location.get_filename loc in 
+      Printf.printf "Location of struct: %s\n" (Cerb_location.simple_location loc);
+      let print_msg = match Cerb_location.to_raw loc with 
+        | Cerb_location.Loc_region (start_pos, end_pos, _) -> 
+          "Location is Loc_region"
+        | _ -> "Location is not Loc_region"
+      in
+      Printf.printf "%s\n" print_msg;
       let _ = match filename with 
         | Some fn -> Printf.printf "STRUCT FILENAME: %s\n" fn
         | None -> ()

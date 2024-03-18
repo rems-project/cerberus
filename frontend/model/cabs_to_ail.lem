@@ -1566,12 +1566,12 @@ let rec desugar_type_specifiers specs =
                     end
             end
           end >>= fun flexible_opt ->
-          let loc = match tag_ident_opt with
+          (* let loc = match tag_ident_opt with
             | Nothing ->
                 loc
             | Just tag_ident ->
                 Loc.locOf tag_ident
-          end in
+          end in *)
           E.register_tag_definition loc tag_sym
             match (struct_or_union, flexible_opt) with
               | (UNION, _) ->
