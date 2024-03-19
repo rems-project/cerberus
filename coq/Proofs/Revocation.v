@@ -2207,7 +2207,6 @@ Module RevocationProofs.
       apply (split_bytes_aux_length _ _ _ _ _ H).
     Qed.
 
-
     Lemma split_bytes_aux_values
       (o : option nat)
       (p : option provenance)
@@ -2217,46 +2216,116 @@ Module RevocationProofs.
       split_bytes_aux bs p0 = (p, l, o) ->
       Forall2 (fun (a : AbsByte) (ov : option ascii) => ov = value a) bs (rev l).
     Proof.
+      Local Open Scope nat.
       intros SS.
 
-      (* assert(length bs > 0)%nat as BL. admit. (* maybe needed *) *)
-
-      pose proof (split_bytes_aux_length _ _ _ _ _ SS) as L.
-      apply Forall2_nth_list with
-        (default1:=absbyte_v Prov_disabled None None)
-        (default2:=None)
-      ;[rewrite rev_length;apply L|].
-      intros i H.
-
+      pose proof (split_bytes_aux_length _ _ _ _ _ SS) as LBS.
       unfold split_bytes_aux in SS.
-      setoid_rewrite rev_nth;[|lia].
+      remember (@nil (option ascii)) as l'.
+      assert(length l = length bs + length l') as LL.
+      {
+        subst l'.
+        cbn.
+        lia.
+      }
 
-      (* Some generalizations before induction *)
-      remember (@nil (option ascii)) as l0.
-
-      setoid_replace (@Datatypes.length AbsByte bs) with ((@Datatypes.length AbsByte bs)  + (@Datatypes.length (option ascii) l0))%nat in L by (subst;cbn;lia).
-
-      replace (Datatypes.length l - Datatypes.S i)%nat with (Datatypes.length l -
-                                                           (Datatypes.length l0 +
-                                                           Datatypes.S i))%nat by (subst;cbn;lia).
-
-
-      clear Heql0.
+      clear Heql'.
       revert SS.
       generalize (Some p0) as op0. clear p0.
       generalize (Some O) as oo0.
-      revert L H.
-      revert l p o l0 i.
+      intros oo0 op0 SS.
 
-      (* proof by induction *)
+      cut(Forall2 (fun (a : AbsByte) (ov : option ascii) => ov = value a) bs (rev (firstn (length bs) l)) /\
+            l' = skipn (length bs) l
+         ).
+      {
+        clear SS.
+        intros [H1 _].
+        rewrite LBS in H1.
+        rewrite firstn_all in H1.
+        assumption.
+      }
+      clear LBS.
+
+      (* done with generalization *)
+
+      revert l op0 p oo0 o l' LL SS.
       induction bs; intros.
       -
-        cbn in *.
-        tuple_inversion.
-        inv H.
+        split; cbn.
+        +
+          rewrite firstn_O.
+          cbn.
+          constructor.
+        +
+          rewrite skipn_O.
+          cbn in SS.
+          tuple_inversion.
+          auto.
       -
-        destruct l;[cbn in L; inv L|].
-    Admitted.
+        cbn in SS.
+        apply IHbs in SS; clear IHbs.
+        2:{
+          clear - LL.
+          cbn in LL.
+          cbn.
+          lia.
+        }
+        destruct SS as [SS1 SS2].
+        split.
+        +
+          clear p op0 o oo0.
+          cbn. cbn in *.
+
+          assert(rev (firstn (S (Datatypes.length bs)) l) =
+                   value a :: (rev (firstn (Datatypes.length bs) l))) as LP.
+          {
+            rewrite <- rev_unit.
+            f_equiv.
+            rewrite <- list.take_S_r.
+            reflexivity.
+            clear - SS2.
+            generalize dependent (Datatypes.length bs).
+            intros n H.
+            symmetry in H.
+            rewrite MachineWord.MachineWord.nth_error_lookup.
+            eapply skipn_cons_nth_error;eauto.
+          }
+          rewrite LP.
+          constructor;[reflexivity|assumption].
+        +
+          clear - SS2 LL.
+          cbn in LL.
+          cbn.
+          generalize dependent (length bs).
+          intros n LL SS2. clear bs.
+          destruct l.
+          *
+            rewrite list.drop_nil in SS2.
+            inversion SS2.
+          *
+            cbn.
+            cbn in LL.
+            invc LL.
+            revert l l' a o a H0 SS2.
+            induction n; intros.
+            --
+              rewrite skipn_O.
+              rewrite skipn_O in SS2.
+              inversion SS2.
+              auto.
+            --
+              rewrite skipn_cons in SS2.
+              destruct l.
+              ++
+                rewrite list.drop_nil in SS2.
+                inversion SS2.
+              ++
+                rewrite skipn_cons.
+                eapply IHn; eauto.
+
+      Local Close Scope nat.
+    Qed.
 
     Lemma split_bytes_values
       (tag : bool)

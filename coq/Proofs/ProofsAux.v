@@ -672,6 +672,25 @@ Section ListAux.
           lia.
   Qed.
 
+  Lemma skipn_cons_nth_error
+    {A:Type}
+    (a : A) (l l' : list A)
+    (n : nat):
+    skipn n l = a :: l' -> nth_error l n = Some a.
+  Proof.
+    revert l.
+    induction n as [|n IH]; intros l H.
+    -
+      rewrite skipn_O in H.
+      rewrite H.
+      reflexivity.
+    -
+      destruct l as [|b l''].
+      + simpl in H. discriminate H.
+      + simpl in H. apply IH in H. cbn. assumption.
+  Qed.
+
+
 End ListAux.
 
 Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
