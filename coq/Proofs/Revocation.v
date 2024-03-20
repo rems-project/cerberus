@@ -177,7 +177,6 @@ Proof.
       eauto.
 Qed.
 
-
 Module RevocationProofs.
 
   (* --- Memory models instantiated with and without PNVI --- *)
@@ -193,6 +192,16 @@ Module RevocationProofs.
   (* --- Equality predicates for types used in Memory Models --- *)
 
   Import CheriMemoryTypesExe.
+
+  Lemma provenance_eqb_reflexivity:
+    forall p, provenance_eqb p p = true.
+  Proof.
+    intros p.
+    destruct p;try reflexivity.
+    cbn.
+    unfold CheriMemoryTypesExe.storage_instance_id in *.
+    lia.
+  Qed.
 
   (* Check whether this cap base address is within allocation *)
   #[local] Definition cap_bounds_within_alloc c a : Prop
@@ -248,6 +257,7 @@ Module RevocationProofs.
   | AbsByte_no_prov_eq: forall a1 a2,
       copy_offset a1 = copy_offset a2
       /\ value a1 = value a2 -> AbsByte_eq a1 a2.
+
 
   #[local] Instance AbsByte_Equivalence: Equivalence AbsByte_eq.
   Proof.
@@ -2140,12 +2150,43 @@ Module RevocationProofs.
       split_bytes_ptr_spec p bs ->
       (exists (tag : bool) (cs: list (option ascii)) (p' : provenance),
           provenance_eqb p p' = true /\
-          split_bytes bs = inr (p', tag, cs)).
+            split_bytes bs = inr (p', tag, cs)).
     Proof.
       intros H.
       destruct H as [HP HO].
-      (* TODO: This gonna be hard to prove on current implementation
-         of [split_bytes] *)
+
+      Transparent bind get put ret raise.
+      unfold split_bytes, Monad_either, bind, get, put, ret, Monad_errS, State_errS, Exception_either, raise.
+      Opaque bind get put ret raise.
+      repeat break_let.
+
+      destruct bs.
+      -
+        cbn in HO.
+        inversion HO.
+      -
+        remember (split_bytes_aux (a :: bs) (prov a)) as s eqn:S.
+        destruct s as [[prov_maybe rev_values] offset_status_maybe].
+        symmetry in S.
+        remember (rev rev_values) as cs eqn:CS.
+        remember (CapFns.is_some offset_status_maybe && CapFns.is_some prov_maybe) as tag.
+        remember (Values.opt_def (PNVI_prov Prov_none) prov_maybe) as p'.
+        exists tag, cs, p'.
+        split;[|f_equiv].
+
+        clear HO Heqtag CS.
+        invc HP.
+        revert rev_values offset_status_maybe S.
+        induction H2; intros.
+        +
+          cbn in S.
+          tuple_inversion.
+          break_if;auto.
+          contradict Heqb.
+          apply not_false_iff_true.
+          apply provenance_eqb_reflexivity.
+        +
+          admit.
     Admitted.
 
     Lemma split_bytes_aux_length
