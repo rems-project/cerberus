@@ -1140,6 +1140,8 @@ let _add_simplifiers context solver =
 let make global : solver =
   Z3.Memory.reset ();
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
+  Pp.debug 4 (lazy (Pp.item "Setting up Z3 with params"
+    (flow_map (!^ " ") (fun (s, v) -> !^ s ^^ !^ "=" ^^ !^ v) (params ()))));
   let context = Z3.mk_context [] in
   Translate.init global context;
   let incremental =
