@@ -59,10 +59,10 @@ module Slow_SMT_Tracing = struct
     | None -> None
     | Some (_, threshold) when (Stdlib.Float.compare time threshold < 0) -> None
     | Some (dirname, _) ->
-      let n = Int.to_string (! num_traced) in
+      let nm = Printf.sprintf "slow_prob_%03d" (! num_traced) in
       num_traced := (! num_traced) + 1;
-      let summ_f = open_out (dirname ^ Filename.dir_sep ^ "slow_prob_" ^ n ^ "_summ.txt") in
-      let smt_f = open_out (dirname ^ Filename.dir_sep ^ "slow_prob_" ^ n ^ ".smt2") in
+      let summ_f = open_out (dirname ^ Filename.dir_sep ^ nm ^ ".txt") in
+      let smt_f = open_out (dirname ^ Filename.dir_sep ^ nm ^ ".smt2") in
       Some (summ_f, smt_f)
 
 end
@@ -1201,7 +1201,7 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-let maybe_save_slow_problem kind lc lc_t smt2_doc time solver =
+let maybe_save_slow_problem kind loc lc lc_t smt2_doc time solver =
   match Slow_SMT_Tracing.trace_files time with
   | None -> ()
   | Some (summ_f, smt2_f) ->
@@ -1209,6 +1209,7 @@ let maybe_save_slow_problem kind lc lc_t smt2_doc time solver =
     Cerb_colour.without_colour (fun () -> print summ_f (item "Slow CN problem"
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
+          item "current source location" (Locations.pp loc);
           item "constraint" (LC.pp lc);
           item "result" (Pp.string kind);
           item "SMT constraint" lc_doc;
@@ -1252,7 +1253,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
          (nlc :: extra)
      in
      maybe_save_slow_problem (res_short_string res)
-            lc expr smt2_doc elapsed solver.incremental;
+            loc lc expr smt2_doc elapsed solver.incremental;
      match res with
      | Z3.Solver.UNSATISFIABLE ->
         rtrue ()
@@ -1271,7 +1272,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
             []
         in
         maybe_save_slow_problem (res_short_string res2)
-            lc expr smt2_doc elapsed2 solver.non_incremental;
+            loc lc expr smt2_doc elapsed2 solver.non_incremental;
         match res2 with
         | Z3.Solver.UNSATISFIABLE ->
            rtrue ()
