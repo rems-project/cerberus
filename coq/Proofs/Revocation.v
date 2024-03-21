@@ -336,7 +336,9 @@ Module RevocationProofs.
       let bm := m.(bytemap) in
       let am := m.(allocations) in
 
-      (* All allocations are live *)
+      (* All allocations are live. [allocation.(is_dead)] is only use
+      with Conucopia. For others, the dead allocations are immediately
+      removed.  *)
       (forall alloc_id a, ZMap.MapsTo alloc_id a am ->  a.(is_dead) = false)
 
       (* live allocatoins do not overlap *)
@@ -1691,9 +1693,7 @@ Module RevocationProofs.
 
      It will work only for instant revocation. In the case of
      Cornucopia the invariant will be different.
-
-     NB. [allocation.(is_dead)] is not used. Dead allocations are
-     immediately removed.  *)
+     *)
     Definition mem_invariant (m: mem_state_r) : Prop
       :=
       let cm := m.(capmeta) in
@@ -1703,22 +1703,22 @@ Module RevocationProofs.
       base_mem_invariant m
       /\
         (* All caps which are tagged according to capmeta must: *)
-        (forall addr g, ZMap.MapsTo addr (true,g) cm ->
-                   (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
-                          (
-                            (* Have same provenance and correct sequence bytes *)
-                            split_bytes_ptr_spec Prov_disabled bs
-                            /\ (exists c,
-                                  (* decode without error *)
-                                  decode_cap bs true c
-                                  (* with decoded bounds bounds fitting one of the allocations *)
-                                  /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
-                                                     (* We do not allow escaped pointers to local variables *)
-                                                     (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
-                                                     cap_bounds_within_alloc c a)
-                              )
-                          )
+        (forall addr g,
+            ZMap.MapsTo addr (true,g) cm ->
+            (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
+                   (
+                     (* Have same provenance and correct sequence bytes *)
+                     split_bytes_ptr_spec Prov_disabled bs
+                     /\ (exists c,
+                           (* decode without error *)
+                           decode_cap bs true c
+                           (* with decoded bounds bounds fitting one of the allocations *)
+                           /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
+                                              (* We do not allow escaped pointers to local variables *)
+                                              cap_bounds_within_alloc c a)
+                       )
                    )
+            )
         ).
 
     Lemma initial_mem_state_invariant:
@@ -2654,13 +2654,8 @@ Module RevocationProofs.
      In general we do not enforce where tagged caps are pointing. They
      could be pointing to live, dead, or outside of any allocation.
 
-     However if they are pointing to an allocation they must be within
-     it's bounds.
-
-     NB. [allocation.(is_dead)] is not used. Dead allocations are
-     immediately removed. So in the case of Cornucopia the invariant
-     will be different.
-
+     However if they are pointing to an allocation the cap bounds must
+     be within allocation footprint.
      *)
     Definition mem_invariant (m: mem_state_r) : Prop
       :=
@@ -2676,16 +2671,21 @@ Module RevocationProofs.
             (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
                    (
                      (* Have the same provenance and correct sequence bytes *)
-                     (exists p, split_bytes_ptr_spec p bs)
-                     (* decode without error *)
-                     /\ (exists c, decode_cap bs true c
-                             (* if there is a live allocation, the cap bounds should fit within it *)
-                             /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am ->
-                                                    (* TODO: provenance <> alloc_id *)
-                                                    (* We do not allow escaped pointers to local variables *)
-                                                    (* a.(is_dead) = false /\ -- we need this for Corunucopia only *)
-                                                    cap_bounds_within_alloc c a)
-                       )
+                     (exists p,
+                         split_bytes_ptr_spec p bs
+                         (* decode without error *)
+                         /\ (exists c, decode_cap bs true c
+                                 (* if there is a live allocation, *)
+                                 /\ (forall alloc_id,
+                                       (* if pointer has concerete provenance *)
+                                       p = Prov_some alloc_id ->
+                                       (* if corresponding allocation exists *)
+                                       (forall a, ZMap.MapsTo alloc_id a am ->
+                                             (* the cap bounds must within it *)
+                                             cap_bounds_within_alloc c a)
+                                   )
+                           )
+                     )
                    )
             )
         ).
@@ -2709,10 +2709,7 @@ Module RevocationProofs.
         apply empty_in_iff in H;
           contradiction.
       -
-
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
+        intros addr g H bs H0.
         apply empty_mapsto_iff in H;
           contradiction.
     Qed.
