@@ -2719,6 +2719,9 @@ Module RevocationProofs.
 
   End CheriMemoryWithPNVI.
 
+  (* Equivalence proofs below are temporary commented out
+
+
   (*
     Pointer equality. The first pointer is from the "WithPNVI" memory
     model, while the second one is from the "WithoutPNVI".
@@ -6297,5 +6300,6 @@ Module RevocationProofs.
  *)
   Admitted.
 
- *)
+   *)
+   *)
 End RevocationProofs.
