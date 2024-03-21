@@ -1991,7 +1991,6 @@ Module RevocationProofs.
       (a : allocation)
       (s : mem_state)
       (oldmeta newmeta : ZMap.t (bool * CapGhostState)):
-
       zmap_mmapi (maybe_revoke_pointer a s) oldmeta s = (s, inr newmeta) ->
       zmap_relate_keys oldmeta newmeta (fun addr : ZMap.key => revoked_pointer_rel a addr s.(bytemap)).
     Proof.
@@ -2648,6 +2647,22 @@ Module RevocationProofs.
   Module CheriMemoryWithPNVI.
     Include CheriMemoryImplWithProofsExe(WithPNVISwitches).
 
+    Opaque bind raise ret get put ErrorWithState.update fail fail_noloc serr2InternalErr liftM.
+    Ltac preserves_step
+      :=
+      match goal with
+      |[|- PreservesInvariant _ _ (bind get _)] => apply bind_get_PreservesInvariant
+      |[|- PreservesInvariant _ _ (bind _ _)] => apply bind_PreservesInvariant
+      |[|- PreservesInvariant _ _ (raise _)] => apply raise_PreservesInvariant
+      |[|- PreservesInvariant _ _ (ret _)] => apply ret_PreservesInvariant
+      |[|- PreservesInvariant _ _ get] => apply get_PreservesInvariant
+      |[|- PreservesInvariant _ _ (put _) ] => apply put_PreservesInvariant
+      |[|- PreservesInvariant _ _ (ErrorWithState.update _)] => apply update_PreservesInvariant
+      |[|- PreservesInvariant _ _ (fail _ _)] => apply fail_PreservesInvariant
+      |[|- PreservesInvariant _ _ (fail_noloc _)] => apply fail_noloc_PreservesInvariant
+      |[|- PreservesInvariant _ _ (serr2InternalErr _)] => apply serr2InternalErr_PreservesInvariant
+      |[|- PreservesInvariant _ _ (liftM _ _)] => apply liftM_PreservesInvariant
+      end.
 
     (* CheriMemoryWithPNVI memory invariant.
 
@@ -2713,6 +2728,112 @@ Module RevocationProofs.
         apply empty_mapsto_iff in H;
           contradiction.
     Qed.
+
+    (* this lemma is exactly same as non-PNVI but I do not see how to re-use the proof,
+       as they are using different formulations of the [mem_invariant].
+     *)
+    Lemma mem_state_with_next_alloc_id_preserves:
+      forall m,
+        mem_invariant m ->
+        (forall x, mem_invariant (mem_state_with_next_alloc_id x m)).
+    Proof.
+      intros m H x.
+      destruct H as [MIbase MIcap].
+      destruct_base_mem_invariant MIbase.
+      split;cbn.
+      split;cbn;auto.
+      auto.
+    Qed.
+
+    (* this lemma is exactly same as non-PNVI but I do not see how to re-use the proof,
+       as they are using different formulations of the [mem_invariant].
+     *)
+    Lemma mem_state_with_last_address_preserves:
+      forall m,
+        mem_invariant m ->
+        (forall x, mem_invariant (mem_state_with_last_address x m)).
+    Proof.
+      intros m H x.
+      destruct H as [MIbase MIcap].
+      destruct_base_mem_invariant MIbase.
+      split;cbn.
+      split;cbn;auto.
+      auto.
+    Qed.
+
+    (* this lemma is exactly same as non-PNVI but I do not see how to re-use the proof,
+       as they are using different formulations of the [mem_invariant].
+     *)
+    Lemma mem_state_after_ghost_tags_preserves:
+      forall m addr size,
+        mem_invariant m ->
+        mem_invariant (mem_state_with_capmeta
+                         (init_ghost_tags addr size (capmeta m))
+                         m).
+    Proof.
+      intros m addr sz H.
+      destruct H as [MIbase MIcap].
+      destruct_base_mem_invariant MIbase.
+      split.
+      -
+        (* base invariant *)
+        clear MIcap.
+        split.
+        auto.
+        split;auto.
+
+        (* alignment proof *)
+        intros a E.
+        apply zmap_in_mapsto in E.
+        destruct E as [tg E].
+        unfold mem_state_with_capmeta in E.
+        simpl in E.
+        apply init_ghost_tags_spec in E.
+        destruct E.
+        +
+          (* capmeta unchanged at [a] *)
+          apply zmap_mapsto_in in H.
+          apply Balign.
+          apply H.
+        +
+          (* capmeta cleared *)
+          destruct H as [H1 H2].
+          apply H1.
+      -
+        intros a g E bs F.
+        simpl in *.
+        apply init_ghost_tags_spec in E.
+        destruct E as [E | [A E]].
+        +
+          (* capmeta unchanged at [a] *)
+          specialize (MIcap a g E bs F).
+          apply MIcap.
+        +
+          inversion E.
+    Qed.
+
+    #[local] Instance allocator_preserves (size align : Z):
+      forall s,
+        PreservesInvariant mem_invariant s (allocator size align).
+    Proof.
+      intros s.
+      unfold allocator.
+      apply bind_get_PreservesInvariant.
+      apply bind_PreservesInvariant_same_state.
+
+      break_let.
+      break_if.
+      apply fail_noloc_SameState.
+      apply ret_SameState.
+      intros x.
+      apply put_PreservesInvariant'.
+      intros I.
+      apply mem_state_with_next_alloc_id_preserves.
+      apply mem_state_with_last_address_preserves.
+      apply mem_state_after_ghost_tags_preserves.
+      apply I.
+    Qed.
+    #[local] Opaque allocator.
 
   End CheriMemoryWithPNVI.
 
