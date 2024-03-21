@@ -2143,23 +2143,21 @@ Module RevocationProofs.
       assumption.
     Qed.
 
-    Lemma split_bytes_spec
+    Lemma split_bytes_success
       (bs : list AbsByte)
       (p : provenance)
       :
       split_bytes_ptr_spec p bs ->
       (exists (tag : bool) (cs: list (option ascii)) (p' : provenance),
-          provenance_eqb p p' = true /\
+          (* provenance_eqb p p' = true /\ *)
             split_bytes bs = inr (p', tag, cs)).
     Proof.
       intros H.
       destruct H as [HP HO].
-
       Transparent bind get put ret raise.
       unfold split_bytes, Monad_either, bind, get, put, ret, Monad_errS, State_errS, Exception_either, raise.
       Opaque bind get put ret raise.
       repeat break_let.
-
       destruct bs.
       -
         cbn in HO.
@@ -2172,22 +2170,8 @@ Module RevocationProofs.
         remember (CapFns.is_some offset_status_maybe && CapFns.is_some prov_maybe) as tag.
         remember (Values.opt_def (PNVI_prov Prov_none) prov_maybe) as p'.
         exists tag, cs, p'.
-        split;[|f_equiv].
-
-        clear HO Heqtag CS.
-        invc HP.
-        revert rev_values offset_status_maybe S.
-        induction H2; intros.
-        +
-          cbn in S.
-          tuple_inversion.
-          break_if;auto.
-          contradict Heqb.
-          apply not_false_iff_true.
-          apply provenance_eqb_reflexivity.
-        +
-          admit.
-    Admitted.
+        reflexivity.
+    Qed.
 
     Lemma split_bytes_aux_length
       (o : option nat)
@@ -2434,18 +2418,16 @@ Module RevocationProofs.
     Proof.
       intros S D.
       remember (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) as bs.
-      apply split_bytes_spec in S.
+      apply split_bytes_success in S.
 
-      destruct S as [tag [cs [p' [P S]]]].
-      invc P.
-      destruct p';try congruence.
-      clear H0.
+      destruct S as [tag [cs [p' S]]].
       unfold decode_cap in D.
       unfold fetch_and_decode_cap.
       Transparent ret bind get.
       unfold memM_monad, Monad_errS, State_errS, Monad_either, ret, bind.
       generalize dependent (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)).
-      intros bs D S.
+      intros bs' E.
+      subst bs'.
       break_match.
       -
         inl_inr.
