@@ -2705,6 +2705,44 @@ Module RevocationProofs.
             )
         ).
 
+    Lemma resolve_has_PNVI:
+      has_PNVI (WithPNVISwitches.get_switches tt) = true.
+    Proof.
+      unfold WithPNVISwitches.get_switches.
+      generalize (remove_Revocation (remove_PNVI (abst_get_switches tt))) as s.
+      intros s.
+      unfold has_PNVI in *.
+      apply existsb_exists.
+      exists (SW_PNVI AE_UDI).
+      split.
+      -
+        apply set_add_iff.
+        left.
+        reflexivity.
+      -
+        reflexivity.
+    Qed.
+
+
+    Lemma resolve_has_INSTANT:
+      has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT) = false.
+    Proof.
+      unfold WithPNVISwitches.get_switches.
+      generalize (remove_PNVI (abst_get_switches tt)) as l.
+      intros l.
+      unfold has_PNVI, remove_PNVI, remove_Revocation in *.
+      apply Bool.not_true_is_false.
+      intros E.
+      apply set_mem_correct1 in E.
+      apply set_add_elim2 in E.
+      2:auto.
+      unfold set_In in E.
+      apply filter_In in E.
+      destruct E as [_ E2].
+      cbn in E2.
+      discriminate.
+    Qed.
+
     Lemma initial_mem_state_invariant:
       mem_invariant initial_mem_state.
     Proof.
