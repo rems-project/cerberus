@@ -1154,6 +1154,73 @@ Section ZMapAux.
     reflexivity.
   Qed.
 
+  Lemma zmap_range_init_spec
+    {T:Type}
+    (a0:Z)
+    (n:nat)
+    (step:Z)
+    (v:T)
+    (m:ZMap.t T):
+    forall k x,
+      ZMap.MapsTo k x (zmap_range_init a0 n step v m)
+      ->
+        {
+          ~(exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
+          /\ ZMap.MapsTo k x m
+        }+
+          {
+            (exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
+            /\
+              x=v
+          }.
+  Proof.
+    dependent induction n.
+    -
+      left.
+      split.
+      +
+        intros C.
+        destruct C as [i [C _]].
+        lia.
+      +
+        cbn in H.
+        assumption.
+    -
+      simpl. intros k x Hmap.
+      destruct (Z.eq_dec (a0 + Z.of_nat n * step) k) as [E|NE].
+      + (* Case: k is the newly added key *)
+        right. split. exists n. split; lia.
+        apply add_mapsto_iff in Hmap.
+        destruct Hmap as [[H1 H2] | [H3 H4]];[auto|congruence].
+      + (* Case: k is not the newly added key, apply IH *)
+        apply add_mapsto_iff in Hmap.
+        specialize (IHn step v m k x).
+        autospecialize IHn.
+        {
+          destruct Hmap as [[H1 H2] | [H3 H4]];[congruence|auto].
+        }
+        destruct IHn as [[Hni Hm]|[Hi Hv]].
+        * left. split; auto.
+          intro H.
+          apply Hni. destruct H as [i [Hlt Heq]].
+          exists i. split.
+          --
+            destruct Hmap.
+            ++
+              destruct H.
+              congruence.
+            ++
+              destruct H.
+              assert(i<>n) by lia.
+              lia.
+          --
+            auto.
+        * right. destruct Hi as [i [Hlt Heq]].
+          split.
+          exists i. split; [lia|]. assumption.
+          auto.
+  Qed.
+
 
 End ZMapAux.
 
