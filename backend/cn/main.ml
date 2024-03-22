@@ -222,7 +222,8 @@ let main
             Stdlib.output_string cn_oc cn_utils_header;
             Stdlib.output_string cn_oc c_structs;
             Stdlib.output_string cn_oc cn_converted_structs;
-            Stdlib.output_string cn_oc c_datatypes;
+            Stdlib.output_string cn_oc "\n/* CN DATATYPES */\n\n";
+            Stdlib.output_string cn_oc (String.concat "\n" (List.map snd c_datatypes));
             Stdlib.output_string cn_oc c_function_defs;
             Stdlib.output_string cn_oc c_predicate_defs;
             Stdlib.output_string cn_oc conversion_function_defs;
@@ -232,21 +233,49 @@ let main
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n";
-            Stdlib.output_string oc c_datatypes;
+            (* Stdlib.output_string oc c_datatypes; *)
+            (* Stdlib.output_string oc "\n"; *)
+
+            let is_struct = function 
+              | BaseTypes.Struct _ -> true
+              | _ -> false
+            in
+
+            let logical_predicates_without_struct_dependencies = List.filter 
+              (fun (sym, (def : LogicalFunctions.definition)) -> 
+                let arg_types = List.map snd def.args in 
+                let arg_structs = List.filter is_struct arg_types in 
+                List.empty arg_structs) 
+              prog5.mu_logical_predicates
+            in
+
+            let resource_predicates_without_struct_dependencies = List.filter 
+            (fun (sym, (def : ResourcePredicates.definition)) -> 
+              let arg_types = List.map snd def.iargs in 
+              let arg_structs = List.filter is_struct arg_types in 
+              List.empty arg_structs) 
+              prog5.mu_resource_predicates
+            in
+
+            let (_, c_function_decls_without_struct_dependencies, _) = Executable_spec_internal.generate_c_functions_internal ail_prog logical_predicates_without_struct_dependencies in
+            Stdlib.output_string oc c_function_decls_without_struct_dependencies;
             Stdlib.output_string oc "\n";
-            Stdlib.output_string oc c_function_decls;
+
+            let (_, c_predicate_decls_without_struct_dependencies, _, _) = Executable_spec_internal.generate_c_predicates_internal ail_prog resource_predicates_without_struct_dependencies executable_spec.ownership_ctypes in
+            Stdlib.output_string oc c_predicate_decls_without_struct_dependencies;
             Stdlib.output_string oc "\n";
+
 
 
             let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in 
 
             let filter_injs_by_filename struct_inj_pairs fn = 
-              let filtered_struct_injs = List.filter (fun (filename', inj) -> match filename' with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs in 
-              List.map snd filtered_struct_injs
+              List.filter (fun (loc, inj) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs
             in
-            let source_file_struct_injs = filter_injs_by_filename struct_injs_with_filenames filename in
+            let source_file_struct_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames filename in
+            let source_file_struct_injs = List.map (fun (loc, (sym, strs)) -> (loc, strs)) source_file_struct_injs_with_syms in
 
-            let included_filenames = List.map fst struct_injs_with_filenames in 
+            let included_filenames = List.map (fun (loc, inj) -> Cerb_location.get_filename loc) struct_injs_with_filenames in 
             let rec open_auxilliary_files included_filenames already_opened_list = match included_filenames with 
               | [] -> []
               | fn :: fns -> 
@@ -266,11 +295,32 @@ let main
                   | None -> [])
             in 
 
+            (* let augment_struct_strs_with_fun_pred_prototypes (loc, (sym, strs)) = 
+              let logical_predicates_with_struct_dependencies = List.filter 
+                (fun (sym, (def : LogicalFunctions.definition)) -> 
+                  let arg_types = List.map snd def.args in 
+                  let arg_structs = List.filter is_struct arg_types in 
+                  List.empty arg_structs) 
+                prog5.mu_logical_predicates
+              in
+
+              let resource_predicates_without_struct_dependencies = List.filter 
+                (fun (sym, (def : ResourcePredicates.definition)) -> 
+                  let arg_types = List.map snd def.iargs in 
+                  let arg_structs = List.filter is_struct arg_types in 
+                  List.empty arg_structs) 
+                prog5.mu_resource_predicates
+              in
+              ()
+            in *)
+
             let fns_and_ocs = open_auxilliary_files included_filenames [] in 
             let rec inject_structs_in_header_files = function 
               | [] -> ()
               | (fn', oc') :: xs -> 
-                let header_file_injs = filter_injs_by_filename struct_injs_with_filenames fn' in
+                let header_file_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames fn' in
+                let header_file_injs = List.map (fun (loc, (sym, strs)) -> (loc, strs)) header_file_injs_with_syms in
+                Stdlib.output_string oc' cn_utils_header;
                 begin match
                   Source_injection.(output_injections oc'
                     { filename=fn'; sigm= ail_prog
@@ -288,11 +338,13 @@ let main
                inject_structs_in_header_files xs
             in
 
+            let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in
+
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=executable_spec.pre_post
-                ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs)}
+                ; in_stmt=(executable_spec.in_stmt @ c_datatypes @ source_file_struct_injs)}
               )
             with
             | Ok () ->

@@ -2228,7 +2228,7 @@ cn_datatype:
 | CN_DATATYPE nm= cn_variable
   cases= delimited(LBRACE, cn_cons_cases, RBRACE)
     {
-      { cn_dt_loc= Cerb_location.point $startpos($1)
+      { cn_dt_loc= Cerb_location.(region ($startpos, $endpos) NoCursor)
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
 cn_fun_spec:
