@@ -1007,7 +1007,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let union_member = create_member (mk_ctype C.(Union union_sym), Id.id "u") in
 
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
-  enum :: structs
+  (cn_datatype.cn_dt_loc, enum :: structs)
 
 let generate_datatype_equality_function (cn_datatype : cn_datatype) =
   (* 

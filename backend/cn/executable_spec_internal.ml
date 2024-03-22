@@ -92,10 +92,16 @@ let generate_c_datatypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
         ail_dt1 :: ail_dts
   in
 
-  let ail_datatypes = List.concat ail_datatypes in
-  
-  let structs = List.map generate_doc_from_ail_struct ail_datatypes in
-  "\n/* CN DATATYPES */\n\n" ^ CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs)
+
+  (* let ail_datatypes = List.concat ail_datatypes in *)
+
+
+  let locs_and_structs = List.map (fun (loc, structs) -> (loc, List.map generate_doc_from_ail_struct structs)) ail_datatypes in
+  let locs_and_struct_strs = List.map (fun (loc, ail_structs) -> (loc, CF.Pp_utils.to_plain_pretty_string (concat_map_newline ail_structs))) locs_and_structs in
+  (* let structs = List.map generate_doc_from_ail_struct ail_datatypes in *)
+  (* CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs) *)
+  let _ = List.map (fun (loc, _) -> Printf.printf "Datatype location: %s\n" (Cerb_location.simple_location loc)) locs_and_struct_strs in
+  locs_and_struct_strs
 
 let generate_str_from_ail_struct ail_struct = 
   CF.Pp_utils.to_plain_pretty_string (generate_doc_from_ail_struct ail_struct)
@@ -127,19 +133,8 @@ let generate_struct_injs (ail_prog: CF.GenTypes.genTypeCategory CF.AilSyntax.sig
         | (_, _) -> ""
       in
       let str_list = [c_struct_str; cn_struct_str; prototypes_str] in
-      let filename = Cerb_location.get_filename loc in 
-      Printf.printf "Location of struct: %s\n" (Cerb_location.simple_location loc);
-      let print_msg = match Cerb_location.to_raw loc with 
-        | Cerb_location.Loc_region (start_pos, end_pos, _) -> 
-          "Location is Loc_region"
-        | _ -> "Location is not Loc_region"
-      in
-      Printf.printf "%s\n" print_msg;
-      let _ = match filename with 
-        | Some fn -> Printf.printf "STRUCT FILENAME: %s\n" fn
-        | None -> ()
-      in
-      [(filename, (loc, str_list))]
+      (* let filename = Cerb_location.get_filename loc in  *)
+      [(loc, (sym, str_list))]
     | C.UnionDef _ -> []
   in 
   let struct_injs = List.map generate_struct_inj ail_prog.tag_definitions in 
