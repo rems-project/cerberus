@@ -70,7 +70,6 @@ type cn_dependencies = CF.Symbol.sym list
 
 type cn_dependency_graph = {
   cn_functions_with_dependencies : ( ((CF.Symbol.sym, C.ctype) Cn.cn_function)) list;
-  
 }
 
 let compute_cn_dependencies ail_prog =
