@@ -675,6 +675,17 @@ Module RevocationProofs.
       Opaque ret bind get.
     Qed.
 
+    Lemma get_allocation_opt_same_state
+      (alloc_id : Z):
+      memM_same_state (get_allocation_opt alloc_id).
+    Proof.
+      intros res s s' H.
+      Transparent ret bind get.
+      unfold get_allocation_opt, bind, get, ret, memM_monad, Monad_errS, State_errS in H.
+      tuple_inversion.
+      reflexivity.
+      Opaque ret bind get.
+    Qed.
 
     Lemma find_live_allocation_res_consistent
       (addr : AddressValue.t)
@@ -1683,6 +1694,24 @@ Module RevocationProofs.
       apply set_mem_correct2.
       apply set_add_intro2.
       reflexivity.
+    Qed.
+
+    Lemma resolve_has_CORNUCOPIA:
+      has_switch (WithoutPNVISwitches.get_switches tt) (SW_revocation CORNUCOPIA) = false.
+    Proof.
+      unfold WithoutPNVISwitches.get_switches.
+      generalize (remove_PNVI (abst_get_switches tt)) as l.
+      intros l.
+      unfold has_switch.
+      apply set_mem_complete2.
+      intros E.
+      apply set_add_elim in E.
+      destruct E;[discriminate|].
+      unfold remove_Revocation in H.
+      apply filter_In in H.
+      destruct H as [_ H].
+      apply Bool.negb_true_iff in H.
+      inv H.
     Qed.
 
     (* CheriMemoryWithoutPNVI memory invariant
@@ -2723,7 +2752,6 @@ Module RevocationProofs.
         reflexivity.
     Qed.
 
-
     Lemma resolve_has_INSTANT:
       has_switch (WithPNVISwitches.get_switches tt) (SW_revocation INSTANT) = false.
     Proof.
@@ -2741,6 +2769,24 @@ Module RevocationProofs.
       destruct E as [_ E2].
       cbn in E2.
       discriminate.
+    Qed.
+
+    Lemma resolve_has_CORNUCOPIA:
+      has_switch (WithPNVISwitches.get_switches tt) (SW_revocation CORNUCOPIA) = false.
+    Proof.
+      unfold WithPNVISwitches.get_switches.
+      generalize (remove_PNVI (abst_get_switches tt)) as l.
+      intros l.
+      unfold has_switch.
+      apply set_mem_complete2.
+      intros E.
+      apply set_add_elim in E.
+      destruct E;[discriminate|].
+      unfold remove_Revocation in H.
+      apply filter_In in H.
+      destruct H as [_ H].
+      apply Bool.negb_true_iff in H.
+      inv H.
     Qed.
 
     Lemma initial_mem_state_invariant:
@@ -2872,6 +2918,99 @@ Module RevocationProofs.
       apply I.
     Qed.
     #[local] Opaque allocator.
+
+    Lemma remove_allocation_preserves
+      (alloc_id : CheriMemoryTypesExe.storage_instance_id)
+      (s : mem_state_r):
+      PreservesInvariant mem_invariant s (remove_allocation alloc_id).
+    Proof.
+      unfold remove_allocation.
+      preserves_step.
+      intros m H.
+      destruct H as [Hbase Hcap].
+      (* destruct_base_mem_invariant Sbase. *)
+      split;cbn.
+      -
+        (* base *)
+        clear Hcap.
+        destruct_base_mem_invariant Hbase.
+        repeat split; cbn.
+        +
+          intros alloc_id0 a H.
+          apply ZMap.remove_3 in H.
+          eapply Bdead;eauto.
+        +
+          intros alloc_id1 alloc_id2 a1 a2 H H0.
+          apply ZMap.remove_3 in H0, H.
+          eapply Bnooverlap.
+          eapply H.
+          eapply H0.
+        +
+          apply Balign.
+      -
+        clear Hbase.
+        intros addr g A bs F.
+        specialize (Hcap addr g A bs F).
+        destruct Hcap as [p [H1 [c [H2 H3]]]].
+        exists p. split;[assumption|].
+        exists c. split;[assumption|].
+        intros alloc_id' P a M.
+        destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
+        +
+          (* [alloc_id] is being removed *)
+          exfalso.
+          subst alloc_id'.
+          apply remove_mapsto_iff in M.
+          destruct M as [M _].
+          congruence.
+        +
+          apply remove_neq_mapsto_iff in M;[|assumption].
+          eapply H3;eauto.
+    Qed.
+
+    #[global] Instance kill_preserves
+      (loc : location_ocaml)
+      (is_dyn : bool)
+      (ptr : pointer_value_indt)
+      :
+      forall s,
+        PreservesInvariant mem_invariant s (kill loc is_dyn ptr).
+    Proof.
+      unfold kill.
+      rewrite resolve_has_PNVI.
+      rewrite resolve_has_INSTANT.
+      rewrite resolve_has_CORNUCOPIA.
+      destruct ptr.
+      destruct p eqn:P.
+      all:break_match;intros; simpl; try preserves_step.
+
+      break_if. preserves_step.
+      apply bind_PreservesInvariant_value.
+      intros H s' x H0.
+      pose proof (get_allocation_opt_same_state s) as H2.
+      specialize (H2 _ _ _ H0).
+      subst s'.
+      split;[assumption|].
+
+      break_match.
+      preserves_step.
+      break_if;try preserves_step.
+      break_if;try preserves_step.
+      break_if;try preserves_step.
+      intros s' x0.
+      break_if;try preserves_step.
+      break_if;try preserves_step.
+      break_if;try preserves_step.
+      intros s'0 x1.
+      preserves_step.
+      apply remove_allocation_preserves.
+      intros s'1 x2.
+      preserves_step.
+      break_if;try preserves_step.
+      intros m H1.
+      apply mem_state_with_last_address_preserves, H1.
+      preserves_step.
+    Qed.
 
   End CheriMemoryWithPNVI.
 
