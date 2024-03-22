@@ -1263,7 +1263,7 @@ let register_cn_type_synonym name basety =
     Cn_desugaring.cn_type_synonyms= Map.insert name basety
       st.Cn_desugaring.cn_type_synonyms |>)
 
-let register_cn_datatype ident mk_cases =
+let register_cn_datatype ident loc mk_cases =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
     | Nothing ->
@@ -1273,7 +1273,7 @@ let register_cn_datatype ident mk_cases =
         push_cn_scope >>= fun () ->
         mk_cases >>= fun cases ->
         let dt = <|
-          Cn.cn_dt_loc= Loc.locOf ident;
+          Cn.cn_dt_loc= loc;
           Cn.cn_dt_name= sym;
           Cn.cn_dt_cases= cases;
         |> in
@@ -1285,7 +1285,7 @@ let register_cn_datatype ident mk_cases =
           )
         end
     | Just _ ->
-        fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_datatype_nm))
+        fail loc (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_datatype_nm))
   end
 
 
