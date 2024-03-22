@@ -205,21 +205,11 @@ let main
             let c_structs = Executable_spec_internal.print_c_structs ail_prog.tag_definitions in
             let cn_converted_structs = Executable_spec_internal.generate_cn_versions_of_structs ail_prog.tag_definitions in 
 
-            (* TODO: Topological sort *)
-            (* Stdlib.output_string cn_header_oc (generate_include_header ("assert.h", true));
-            Stdlib.output_string cn_header_oc c_datatypes;
-            Stdlib.output_string cn_header_oc c_structs;
-            Stdlib.output_string cn_header_oc "\n/* CN RECORDS */\n\n";
-            Stdlib.output_string cn_header_oc c_records;
-            Stdlib.output_string cn_header_oc c_records';
-            Stdlib.output_string cn_header_oc c_predicate_decls;
-            Stdlib.output_string cn_header_oc conversion_function_decls;
-            Stdlib.output_string cn_header_oc ownership_function_decls; *)
-
             (* TODO: Remove - hacky *)
             let cn_utils_header_pair = ("../../executable-spec/cn_utils.c", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
             
+            (* TODO: Topological sort *)
             Stdlib.output_string cn_oc cn_utils_header;
             Stdlib.output_string cn_oc c_structs;
             Stdlib.output_string cn_oc cn_converted_structs;
@@ -234,38 +224,6 @@ let main
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n";
-            (* Stdlib.output_string oc c_datatypes; *)
-            (* Stdlib.output_string oc "\n"; *)
-
-            let is_struct = function 
-              | BaseTypes.Struct _ -> true
-              | _ -> false
-            in
-
-            let logical_predicates_without_struct_dependencies = List.filter 
-              (fun (sym, (def : LogicalFunctions.definition)) -> 
-                let arg_types = List.map snd def.args in 
-                let arg_structs = List.filter is_struct arg_types in 
-                List.is_empty arg_structs) 
-              prog5.mu_logical_predicates
-            in
-
-            let resource_predicates_without_struct_dependencies = List.filter 
-            (fun (sym, (def : ResourcePredicates.definition)) -> 
-              let arg_types = List.map snd def.iargs in 
-              let arg_structs = List.filter is_struct arg_types in 
-              List.is_empty arg_structs) 
-              prog5.mu_resource_predicates
-            in
-
-            let (_, c_function_decls_without_struct_dependencies, _) = Executable_spec_internal.generate_c_functions_internal ail_prog logical_predicates_without_struct_dependencies in
-            Stdlib.output_string oc c_function_decls_without_struct_dependencies;
-            Stdlib.output_string oc "\n";
-
-            let (_, c_predicate_decls_without_struct_dependencies, _, _) = Executable_spec_internal.generate_c_predicates_internal ail_prog resource_predicates_without_struct_dependencies executable_spec.ownership_ctypes in
-            Stdlib.output_string oc c_predicate_decls_without_struct_dependencies;
-            Stdlib.output_string oc "\n";
-
 
 
             let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in 
@@ -296,24 +254,6 @@ let main
                   | None -> [])
             in 
 
-            (* let augment_struct_strs_with_fun_pred_prototypes (loc, (sym, strs)) = 
-              let logical_predicates_with_struct_dependencies = List.filter 
-                (fun (sym, (def : LogicalFunctions.definition)) -> 
-                  let arg_types = List.map snd def.args in 
-                  let arg_structs = List.filter is_struct arg_types in 
-                  List.empty arg_structs) 
-                prog5.mu_logical_predicates
-              in
-
-              let resource_predicates_without_struct_dependencies = List.filter 
-                (fun (sym, (def : ResourcePredicates.definition)) -> 
-                  let arg_types = List.map snd def.iargs in 
-                  let arg_structs = List.filter is_struct arg_types in 
-                  List.empty arg_structs) 
-                prog5.mu_resource_predicates
-              in
-              ()
-            in *)
 
             let fns_and_ocs = open_auxilliary_files included_filenames [] in 
             let rec inject_structs_in_header_files = function 
@@ -356,35 +296,6 @@ let main
             end;
             inject_structs_in_header_files fns_and_ocs;
 
-            
-            (* let included_filenames = List.map fst struct_injs_with_filenames in 
-            List.iter (fun fn' -> 
-              match fn' with 
-              | Some fn ->
-                if String.equal fn filename then () else 
-                let fn_list = String.split_on_char '/' fn in
-                let output_fn = List.nth fn_list (List.length fn_list - 1) in 
-                Printf.printf "REACHED FILENAME: %s\n" (prefix ^ output_fn);
-                let include_oc = Stdlib.open_out (prefix ^ output_fn) in
-                let filtered_struct_injs' = List.filter (fun (filename', inj) -> match filename' with | Some name -> (String.equal name fn) | None -> false) struct_injs_with_filenames in 
-                let injs' = List.map snd filtered_struct_injs' in 
-                Printf.printf "Number of injections in %s: %d\n" (prefix ^ output_fn) (List.length injs');
-                begin match
-                Source_injection.(output_injections include_oc
-                  { filename=fn; sigm=ail_prog
-                  ; pre_post=[]
-                  ; in_stmt=injs'}
-                )
-                with
-                | Ok () ->
-                    ()
-                | Error str ->
-                    (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
-                    prerr_endline str
-                end
-              | None -> ()
-              )
-            included_filenames *)
          end;
 
         match output_decorated with 
