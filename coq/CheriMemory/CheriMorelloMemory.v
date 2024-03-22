@@ -1541,29 +1541,32 @@ Module Type CheriMemoryImpl
 
     match ptr with
     | PV Prov_disabled (PVconcrete c) =>
-        if cap_is_null c
-           && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
-        then fail loc MerrFreeNullPtr
+        if CoqSwitches.has_PNVI (SW.get_switches tt) then
+          raise (InternalErr "Unexpected provenance in presence of PNVI")
         else
-          find_live_allocation (C.cap_get_value c) >>=
-            fun x =>
-              match x with
-              | None =>
-                  (* Unfortunately we could not distinguish here
+          if cap_is_null c
+             && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
+          then fail loc MerrFreeNullPtr
+          else
+            find_live_allocation (C.cap_get_value c) >>=
+              fun x =>
+                match x with
+                | None =>
+                    (* Unfortunately we could not distinguish here
                      between the cases where allocation could not be
                      found because of the starting address does not
                      match (`Free_non_matching`) or it was previously
                      killed (`Free_dead_allocation`).
-                   *)
-                  fail loc
-                    (if is_dyn
-                     then MerrUndefinedFree Free_non_matching
-                     else MerrOther "attempted to kill with a pointer not matching any live allocation")
-              | Some (alloc_id,alloc) =>
-                  check_dyn_match alloc.(is_dynamic) ;;
-                  check_cap_alloc_match c alloc ;;
-                  update_allocations alloc alloc_id
-              end
+                     *)
+                    fail loc
+                      (if is_dyn
+                       then MerrUndefinedFree Free_non_matching
+                       else MerrOther "attempted to kill with a pointer not matching any live allocation")
+                | Some (alloc_id,alloc) =>
+                    check_dyn_match alloc.(is_dynamic) ;;
+                    check_cap_alloc_match c alloc ;;
+                    update_allocations alloc alloc_id
+                end
     | PV (Prov_some alloc_id) (PVconcrete c) =>
         if negb (CoqSwitches.has_PNVI (SW.get_switches tt)) then
           raise (InternalErr "Unexpected provenance in absence of PNVI")
