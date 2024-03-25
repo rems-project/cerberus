@@ -6,7 +6,6 @@ open Resources
 open Typing
 open Effectful.Make(Typing)
 open TypeErrors
-open BaseTypes
 open LogicalConstraints
 module LAT = LogicalArgumentTypes
 module RET = ResourceTypes
@@ -31,43 +30,15 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
         global simp_ctxt c =
   let model = fst model_with_q in
   if ! Pp.print_level == 0 then () else
-  let rec split tm = match IT.term tm with
-    | IT.Binop (And, x1, x2)
-    | IT.Binop (Or, x1, x2) -> split x1 @ split x2
-    | IT.StructMember (x, _)
-    | IT.Unop (IT.Not, x) -> split x
-    | IT.Binop (EQ, x, y)
-    | IT.Binop (Impl, x, y)
-    | IT.Binop (IT.LT, x, y)
-    | IT.Binop (IT.LE, x, y) -> List.concat_map split [x; y]
-    | IT.Apply (name, args) when Option.is_some (unpack_def global name args) ->
-        [Option.get (unpack_def global name args)]
-    | _ -> []
-  in
-  let pp_v tm pp =
-    begin match Solver.eval global model tm with
-      | None -> !^"/* NO_EVAL */" ^^ pp
-      | Some (IT (_, Struct _))
-      | Some (IT (_, Record _))
-      | Some (IT (_, Map (_,_))) ->  pp
-      | Some v -> !^"/*" ^^^ IT.pp v ^^^ !^"*/" ^^ pp
-    end in
-  let rec diag_rec i tm =
-    let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
-    begin match Option.map IT.pp @@ Solver.eval global model tm with
-      | None -> Pp.debug lvl (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
-      | Some v -> Pp.debug lvl (lazy (IT.pp ~f:pp_v tm))
-    end;
-    List.iter (diag_rec (i+1)) @@ split tm
-  in
+  let pp_f = pp_with_eval (Solver.eval global model) in
   let diag msg c = match (c, model_with_q) with
       | (LC.T tm, _) ->
         Pp.debug lvl (lazy (Pp.item msg (IT.pp tm)));
-        diag_rec 0 tm
+        Pp.debug lvl (lazy (pp_f tm))
       | (LC.Forall ((sym, bt), tm), (_, [q])) ->
         let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
         Pp.debug lvl (lazy (Pp.item ("quantified " ^ msg) (IT.pp tm)));
-        diag_rec 0 tm'
+        Pp.debug lvl (lazy (pp_f tm'))
       | _ ->
         Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
   in
