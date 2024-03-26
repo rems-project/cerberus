@@ -205,10 +205,10 @@ let prove_or_model_with_past_model loc m =
   let@ has_prop = model_has_prop () in
   let@ p_f = provable_inner loc in
   let res lc = match lc with
-    | LC.T t when has_prop (IT.not_ t) m -> `Counterex m
+    | LC.T t when has_prop (IT.not_ t) m -> `Counterex (lazy m)
     | _ -> begin match p_f lc with
       | `True -> `True
-      | `False -> `Counterex (Solver.model ())
+      | `False -> `Counterex (lazy (Solver.model ()))
     end
   in
   let res2 lc = match res lc with

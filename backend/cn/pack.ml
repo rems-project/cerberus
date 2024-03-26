@@ -169,7 +169,7 @@ let extractable_one global prove_or_model (predicate_name, index, verb) (ret, O 
           tmsg "successfully extracted" (lazy (IT.pp index));
           Some ((Q ret_reduced, O o), at_index)
        | `Counterex m ->
-          let eval_f = Solver.eval global (fst m) in
+          let eval_f = Solver.eval global (fst (Lazy.force m)) in
           tmsg "could not extract, counterexample"
             (lazy (IndexTerms.pp_with_eval eval_f index_permission));
           None
