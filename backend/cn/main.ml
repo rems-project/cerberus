@@ -198,7 +198,7 @@ let main
             let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog in
-            let (c_function_defs, c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+            let (c_function_defs, locs_and_c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             let (c_predicate_defs, c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
             let (conversion_function_defs, conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
             let (ownership_function_defs, ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
@@ -285,7 +285,7 @@ let main
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=executable_spec.pre_post
-                ; in_stmt=(executable_spec.in_stmt @ c_datatypes @ source_file_struct_injs)}
+                ; in_stmt=(executable_spec.in_stmt @ c_datatypes @ locs_and_c_function_decls @ source_file_struct_injs)}
               )
             with
             | Ok () ->

@@ -2179,7 +2179,7 @@ cn_function:
   cn_func_args= delimited(LPAREN, cn_args, RPAREN)
   cn_func_body= cn_option_func_body
     { (* TODO: check the name starts with lower case *)
-      let loc = Cerb_location.point $startpos(str) in
+      let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       { cn_func_loc= loc
       ; cn_func_name= str
       ; cn_func_return_bty

@@ -4433,7 +4433,7 @@ let desugar_and_register_cn_type_synonym ts =
   E.register_cn_type_synonym ts.cn_tysyn_name bt
 
 let desugar_and_register_cn_function func =
-  E.register_cn_function func.cn_func_name begin
+  E.register_cn_function func.cn_func_name func.cn_func_loc begin
     desugar_cn_base_type func.cn_func_loc func.cn_func_return_bty >>= fun return_bty' ->
     E.mapM (desugar_cn_arg CN_vars) func.cn_func_args >>= fun args ->
     desugar_o_cn_func_body func.cn_func_body               >>= fun body ->
