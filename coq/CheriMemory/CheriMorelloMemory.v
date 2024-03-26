@@ -1068,7 +1068,9 @@ Module Type CheriMemoryImpl
    *)
   Definition cap_match_dyn_allocation c alloc : bool :=
     let gs := C.get_ghost_state c in
-    (negb (gs.(tag_unspecified) || gs.(tag_unspecified))) &&
+    (* We check here only [tag_unspecified] because setting [bounds_unspecified]
+       always concides with setting [tag_unspecified] as well *)
+    (negb gs.(tag_unspecified)) &&
       (Permissions.eqb (C.cap_get_perms c) Permissions.perm_alloc
        && alloc.(is_dynamic)
        && AddressValue.eqb alloc.(base) (C.cap_get_value c)
@@ -1618,6 +1620,8 @@ Module Type CheriMemoryImpl
     (intent : access_intention)
     (sz : Z)
     : memM unit :=
+    (* We check here only [tag_unspecified] because setting [bounds_unspecified]
+       always concides with setting [tag_unspecified] as well *)
     if (C.get_ghost_state c).(tag_unspecified) then
       fail loc (MerrCHERI CheriUndefinedTag)
     else
