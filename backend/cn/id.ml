@@ -17,6 +17,8 @@ let parse loc id = CF.Symbol.Identifier (loc,id)
 
 let id id = CF.Symbol.Identifier (Locations.unknown,id)
 
+let is_str str id = String.equal (s id) str
+
 
 let subst _ id = id
 

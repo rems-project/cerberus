@@ -6,6 +6,7 @@ open Memory
 module IT = IndexTerms
 module LAT = LogicalArgumentTypes
 
+open Cerb_pp_prelude
 
 let resource_empty provable resource =
   let constr = match resource with
@@ -142,15 +143,18 @@ let unpack loc global provable (ret, O o) =
 
 
 
-
-
-  let extractable_one loc provable (predicate_name, index) (ret, O o) =
+let extractable_one global prove_or_model (predicate_name, index, verb) (ret, O o) =
+    let tmsg hd tail = if verb
+      then Pp.print stdout (Pp.item hd (ResourceTypes.pp ret ^^ Pp.hardline ^^
+            Pp.string "--" ^^ Pp.hardline ^^ Lazy.force tail))
+      else ()
+    in
     match ret with
     | Q ret when equal_predicate_name predicate_name ret.name &&
              BT.equal (IT.bt index) (snd ret.q) ->
        let su = IT.make_subst [(fst ret.q, index)] in
        let index_permission = IT.subst su ret.permission in
-       begin match provable (LC.t_ index_permission) with
+       begin match prove_or_model (LC.t_ index_permission) with
         | `True ->
           let at_index =
             (P { name = ret.name;
@@ -162,21 +166,34 @@ let unpack loc global provable (ret, O o) =
           let ret_reduced =
             { ret with permission = and_ [ret.permission; ne__ (sym_ ret.q) index ] }
           in
+          tmsg "successfully extracted" (lazy (IT.pp index));
           Some ((Q ret_reduced, O o), at_index)
-       | `False ->
+       | `Counterex m ->
+          let eval_f = Solver.eval global (fst m) in
+          tmsg "could not extract, counterexample"
+            (lazy (IndexTerms.pp_with_eval eval_f index_permission));
           None
        end
+    | Q qret ->
+      if not (equal_predicate_name predicate_name qret.name)
+      then tmsg "not extracting, predicate name differs"
+          (lazy (ResourceTypes.pp_predicate_name predicate_name))
+      else if not (BT.equal (IT.bt index) (snd qret.q))
+      then tmsg "not extracting, index type differs"
+          (lazy (Pp.typ (BT.pp (IT.bt index)) (BT.pp (snd qret.q))))
+      else assert false;
+      None
     | _ ->
       None
 
 
-let extractable_multiple loc provable =
+let extractable_multiple global prove_or_model =
   let rec aux is (re, extracted) =
     match is with
     | [] ->
         (re, extracted)
     | i::is ->
-        match extractable_one loc provable i re with
+        match extractable_one global prove_or_model i re with
         | Some (re_reduced, extracted') ->
             aux is (re_reduced, extracted' :: extracted)
         | None ->

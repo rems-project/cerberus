@@ -4514,7 +4514,7 @@ let desugar_cn_statement (CN_statement loc stmt_) =
   | CN_split_case cond ->
      desugar_cn_assertion cond >>= fun cond ->
      E.return (CN_split_case cond)
-  | CN_extract to_extract expr ->
+  | CN_extract attrs to_extract expr ->
     match to_extract with
     | E_Everything -> E.return E_Everything
     | E_Pred pred -> 
@@ -4522,7 +4522,7 @@ let desugar_cn_statement (CN_statement loc stmt_) =
         E.return (E_Pred pred)
     end >>= fun to_extract ->
     desugar_cn_expr expr >>= fun expr ->
-    E.return (CN_extract to_extract expr)
+    E.return (CN_extract attrs to_extract expr)
   | CN_unfold f args ->
      E.resolve_cn_ident CN_function f >>= fun f_resolved ->
      let f = Cn.ensure_not_c_variable f_resolved in

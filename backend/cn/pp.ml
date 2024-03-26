@@ -283,7 +283,9 @@ let warn (loc : Locations.t) msg =
                 format [Bold; Yellow] "warning:" ^^^ msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos
 
-
+let loc_headline (loc : Locations.t) msg =
+  let (head, pos) = Locations.head_pos_of_location loc in
+  (format [Bold] head ^^^ msg)
 
 
 

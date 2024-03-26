@@ -1637,7 +1637,7 @@ let check_cn_statement loc stmt =
      in
      let@ it = WIT.infer loc it in
      return (M_CN_instantiate (to_instantiate, it))
-  | M_CN_extract ((to_extract, it)) ->
+  | M_CN_extract (attrs, to_extract, it) ->
      let@ () = match to_extract with
        | E_Pred (CN_owned None) ->
           return ()
@@ -1652,7 +1652,7 @@ let check_cn_statement loc stmt =
           return ()
      in
      let@ it = WIT.infer loc it in
-     return (M_CN_extract ((to_extract, it)))
+     return (M_CN_extract (attrs, to_extract, it))
   | M_CN_unfold (f, its) ->
      let@ def = get_logical_function_def loc f in
      if LogicalFunctions.is_recursive def then ()

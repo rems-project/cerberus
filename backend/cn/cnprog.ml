@@ -11,7 +11,7 @@ type have_show =
   | Have
   | Show
 
-type cn_extract = (Sym.t, Sctypes.t) CF.Cn.cn_to_extract * IndexTerms.t
+type cn_extract = Id.t list * (Sym.t, Sctypes.t) CF.Cn.cn_to_extract * IndexTerms.t
 
 type cn_statement =
   | M_CN_pack_unpack of CF.Cn.pack_unpack * ResourceTypes.predicate_type
@@ -56,8 +56,8 @@ let rec subst substitution = function
           M_CN_instantiate (o_s, IT.subst substitution it)
        | M_CN_split_case lc ->
           M_CN_split_case (LC.subst substitution lc)
-       | M_CN_extract (to_extract, it) ->
-           M_CN_extract (to_extract, IT.subst substitution it)
+       | M_CN_extract (attrs, to_extract, it) ->
+           M_CN_extract (attrs, to_extract, IT.subst substitution it)
        | M_CN_unfold (fsym, args) ->
           (* fsym is a function symbol *)
           M_CN_unfold (fsym, List.map (IT.subst substitution) args)
@@ -119,9 +119,10 @@ let dtree_of_cn_statement = function
             [dtree_of_to_instantiate to_instantiate; IT.dtree it])
   | M_CN_split_case lc ->
      Dnode (pp_ctor "Split_case", [LC.dtree lc])
-  | M_CN_extract (to_extract, it) ->
+  | M_CN_extract (attrs, to_extract, it) ->
      Dnode (pp_ctor "Extract",
-            [dtree_of_to_extract to_extract; IT.dtree it])
+            [Dnode (pp_ctor "Attrs", List.map (fun s -> Dleaf (Id.pp s)) attrs);
+                dtree_of_to_extract to_extract; IT.dtree it])
   | M_CN_unfold (s, args) ->
      Dnode (pp_ctor "Unfold", Dleaf (Sym.pp s) :: List.map IT.dtree args)
   | M_CN_apply (s, args) ->

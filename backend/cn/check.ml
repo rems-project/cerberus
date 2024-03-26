@@ -1464,7 +1464,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                instantiate loc filter it
             | M_CN_split_case _ ->
               assert false
-            | M_CN_extract (to_extract, it) ->
+            | M_CN_extract (attrs, to_extract, it) ->
                let@ predicate_name = match to_extract with
                 | E_Everything ->
                     let msg = "'extract' requires a predicate name annotation" in
@@ -1484,7 +1484,11 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                in
                let@ it = WIT.infer loc it in
                let@ (original_rs, _) = all_resources_tagged loc in
-               let@ () = add_movable_index loc (predicate_name, it) in
+               let verbose = List.exists (Id.is_str "verbose") attrs in
+               if verbose
+               then Pp.print stdout (Pp.loc_headline loc (!^ "processing extract[verbose]"))
+               else ();
+               let@ () = add_movable_index loc ~verbose (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
                if List.equal Int.equal (List.map snd original_rs) (List.map snd upd_rs)
                then warn loc !^"Special-case index added by extract, no resource (yet) extracted."

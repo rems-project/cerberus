@@ -232,7 +232,7 @@ type cn_statement_ 'a 'ty =
   | CN_have of cn_assertion 'a 'ty
   | CN_instantiate of cn_to_instantiate 'a 'ty * (cn_expr 'a 'ty)
   | CN_split_case of cn_assertion 'a 'ty
-  | CN_extract of cn_to_extract 'a 'ty * (cn_expr 'a 'ty)
+  | CN_extract of list Symbol.identifier * cn_to_extract 'a 'ty * (cn_expr 'a 'ty)
   | CN_unfold of 'a * list (cn_expr 'a 'ty)
   | CN_assert_stmt of cn_assertion 'a 'ty
   | CN_apply of 'a * list (cn_expr 'a 'ty)

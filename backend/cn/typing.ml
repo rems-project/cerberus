@@ -17,7 +17,7 @@ type s = {
     equalities: bool Simplify.ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
-    movable_indices: (RET.predicate_name * IT.t) list;
+    movable_indices: (RET.predicate_name * IT.t * bool) list;
     unfold_resources_required: bool;
   }
 
@@ -201,14 +201,21 @@ let model_has_prop () =
   let is_some_true t = Option.is_some t && IT.is_true (Option.get t) in
   return (fun prop m -> is_some_true (Solver.eval global (fst m) prop))
 
-let provable_consult_model loc m =
+let prove_or_model_with_past_model loc m =
   let@ has_prop = model_has_prop () in
   let@ p_f = provable_inner loc in
   let res lc = match lc with
-    | LC.T t when has_prop (IT.not_ t) m -> `False
-    | _ -> p_f lc
+    | LC.T t when has_prop (IT.not_ t) m -> `Counterex m
+    | _ -> begin match p_f lc with
+      | `True -> `True
+      | `False -> `Counterex (Solver.model ())
+    end
   in
-  return res
+  let res2 lc = match res lc with
+    | `Counterex m -> `False
+    | `True -> `True
+  in
+  return (res, res2)
 
 let do_check_model loc m prop =
   Pp.warn loc (Pp.string "doing model consistency check");
@@ -446,16 +453,18 @@ let bind_logical_return_internal loc =
   in
   fun members lrt -> aux members lrt
 
+let get_movable_indices_inner () =
+  get_inner (fun s -> s.movable_indices)
+
 let get_movable_indices () =
-  fun s ->
-  Ok (s.movable_indices, s)
+  get_inner (fun s -> List.map (fun (pred, nm, _verb) -> (pred, nm)) s.movable_indices)
 
 
 (* copying and adjusting map_and_fold_resources *)
 let do_unfold_resources loc =
   let rec aux () =
     let@ s = get () in
-    let@ movable_indices = get_movable_indices () in
+    let@ movable_indices = get_movable_indices_inner () in
     let@ provable_f = provable_inner Locations.unknown in
     let (resources, orig_ix) = s.resources in
     let _orig_hist = s.resource_history in
@@ -464,7 +473,7 @@ let do_unfold_resources loc =
     match true_m with
     | None -> return () (* contradictory state *)
     | Some model ->
-    let@ provable_f2 = provable_consult_model loc model in
+    let@ (provable_m, provable_f2) = prove_or_model_with_past_model loc model in
     let keep, unpack, extract =
       List.fold_right (fun (re, i) (keep, unpack, extract) ->
           match Pack.unpack loc s.global provable_f2 re with
@@ -473,7 +482,7 @@ let do_unfold_resources loc =
               (keep, (i, pname, unpackable) :: unpack, extract)
           | None ->
               let re_reduced, extracted =
-                Pack.extractable_multiple loc provable_f2 movable_indices re in
+                Pack.extractable_multiple s.global provable_m movable_indices re in
               let keep' = match extracted with
                | [] -> (re_reduced, i) :: keep
                | _ ->
@@ -499,7 +508,8 @@ let do_unfold_resources loc =
     | _ ->
       aux ()
   in
-  aux ()
+  let@ () = aux () in
+  upd_inner (fun s -> {s with unfold_resources_required = false})
 
 
 let set_unfold_resources () = upd_inner (fun s -> {s with unfold_resources_required = true})
@@ -507,11 +517,7 @@ let set_unfold_resources () = upd_inner (fun s -> {s with unfold_resources_requi
 let sync_unfold_resources loc =
   let@ needed = get_inner (fun s -> s.unfold_resources_required) in
   if not needed then return ()
-  else begin
-    let@ () = do_unfold_resources loc in
-    upd_inner (fun s -> {s with unfold_resources_required = false})
-  end
-
+  else do_unfold_resources loc
 
 
 let provable loc =
@@ -736,14 +742,22 @@ let embed_resultat (m : ('a) Resultat.t) : ('a) m =
   | Error e -> Error e
 
 
-let add_movable_index_internal e : unit m =
+let set_movable_indices ixs : unit m =
   fun s ->
-  Ok ((), {s with movable_indices = e :: s.movable_indices})
+  Ok ((), {s with movable_indices = ixs})
 
 
-let add_movable_index loc e =
-  let@ () = add_movable_index_internal e in
-  set_unfold_resources ()
+let add_movable_index loc ~verbose (pred, ix) =
+  let@ ixs = get_movable_indices_inner () in
+  if verbose then begin
+    let@ () = set_movable_indices ((pred, ix, true) :: ixs) in
+    let@ () = do_unfold_resources loc in
+    set_movable_indices ((pred, ix, false) :: ixs)
+  end
+  else begin
+    let@ () = set_movable_indices ((pred, ix, false) :: ixs) in
+    set_unfold_resources ()
+  end
 
 let add_r loc re =
    let@ () = add_r_internal loc re in

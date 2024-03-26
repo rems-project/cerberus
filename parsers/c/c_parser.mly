@@ -2464,9 +2464,9 @@ cn_statement:
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }
-| CN_EXTRACT tbe=to_be_extracted e=expr SEMICOLON
+| CN_EXTRACT attrs=cn_attrs tbe=to_be_extracted e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
-      CN_statement (loc, CN_extract (tbe, e)) }
+      CN_statement (loc, CN_extract (attrs, tbe, e)) }
 | CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }

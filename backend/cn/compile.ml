@@ -1506,7 +1506,7 @@ let translate_cn_statement
       | CN_split_case e ->
          let@ e = ET.translate_cn_assrt env (loc, e) in
          return (M_CN_statement (loc, M_CN_split_case e))
-      | CN_extract (to_extract, expr) ->
+      | CN_extract (attrs, to_extract, expr) ->
           let@ expr = ET.translate_cn_expr SymSet.empty env expr in
           let expr = IT.term_of_sterm expr in
           let to_extract = match to_extract with
@@ -1515,7 +1515,7 @@ let translate_cn_statement
            | E_Pred (CN_block ty) -> E_Pred (CN_block (Sctypes.of_ctype_unsafe loc ty))
            | E_Pred (CN_named pn) -> E_Pred (CN_named pn)
           in
-          return (M_CN_statement (loc, M_CN_extract (to_extract, expr)))
+          return (M_CN_statement (loc, M_CN_extract (attrs, to_extract, expr)))
       | CN_unfold (s, args) ->
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
          let args = List.map IT.term_of_sterm args in
