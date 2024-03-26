@@ -1231,7 +1231,7 @@ let register_cn_fun_spec loc (ident : Symbol.sym) (marker_id : nat) mk =
     )
   end
 
-let register_cn_predicate ident mk =
+let register_cn_predicate ident loc mk =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
     | Nothing ->
@@ -1240,7 +1240,7 @@ let register_cn_predicate ident mk =
         push_cn_scope >>= fun () ->
         mk >>= fun (attrs, output, iargs, clauses) ->
         let pred = <|
-          Cn.cn_pred_loc= Loc.locOf ident;
+          Cn.cn_pred_loc= loc;
           Cn.cn_pred_name= sym;
           Cn.cn_pred_attrs = attrs;
           Cn.cn_pred_output= output;
@@ -1255,7 +1255,7 @@ let register_cn_predicate ident mk =
           )
         end
     | Just _ ->
-        fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_predicate))
+        fail loc (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_predicate))
   end
 
 let register_cn_type_synonym name basety =
