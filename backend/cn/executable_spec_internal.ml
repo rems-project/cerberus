@@ -157,29 +157,23 @@ let fns_and_preds_with_record_rt (funs, preds) =
 
 
 let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (logical_predicates : Mucore.T.logical_predicates)  =
-  let ail_funs_and_records = List.map (fun ((sym, def) as cn_f) -> 
-    let ((decl, def), ail_record_opt) =  Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes in
-    let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> String.equal (Sym.pp_string cn_fun.cn_func_name) (Sym.pp_string sym)) ail_prog.cn_functions in
-    (* Unsafe - check if list has an element *)
-    let loc = (List.nth matched_cn_functions 0).cn_func_loc in 
-    Printf.printf "CN function location: %s\n" (Cerb_location.simple_location loc);
-    (loc, (decl, def), ail_record_opt)
-    ) logical_predicates in
-  let (locs, ail_funs, ail_records_opt) = Executable_spec_utils.list_split_three ail_funs_and_records in
-  let (decls, defs) = List.split ail_funs in
+  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes ail_prog.cn_functions) logical_predicates in
+  let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
+  let (locs_and_decls, defs) = List.split ail_funs in
+  let (locs, decls) = List.split locs_and_decls in
   let defs = List.filter_map (fun x -> x) defs in
   let modified_prog_1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc_1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_1) in
   let decl_docs = List.map (fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) decls in
   let decl_strs = List.map (fun doc -> [CF.Pp_utils.to_plain_pretty_string doc]) decl_docs in
-  let locs_and_decls = List.combine locs decl_strs in
+  let locs_and_decls' = List.combine locs decl_strs in
   (* let modified_prog_2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in *)
   (* let doc_2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_2) in *)
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let records_str = generate_c_records (List.concat ail_records) in
   let funs_defs_str = CF.Pp_utils.to_plain_pretty_string doc_1 in 
   (* let funs_decls_str = CF.Pp_utils.to_plain_pretty_string doc_2 in  *)
-  ("\n/* CN FUNCTIONS */\n\n" ^ funs_defs_str, locs_and_decls, records_str)
+  ("\n/* CN FUNCTIONS */\n\n" ^ funs_defs_str, locs_and_decls', records_str)
 
 let rec remove_duplicates eq_fun = function 
   | [] -> []
@@ -191,20 +185,16 @@ let rec remove_duplicates eq_fun = function
 
 let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) ownership_ctypes =
   (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates in *)
+  (* TODO: Remove passing of resource_predicates argument twice *)
   let (ail_funs, ail_records_opt, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_predicates_internal resource_predicates ail_prog.cn_datatypes [] ownership_ctypes resource_predicates in 
   let (decls, defs) = List.split ail_funs in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1) in
   let pred_defs_str = 
   CF.Pp_utils.to_plain_pretty_string doc1 in
-  let modified_prog2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in
-  let doc2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog2) in
-  let pred_decls_str = 
-  CF.Pp_utils.to_plain_pretty_string doc2 in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let records_str = generate_c_records (List.concat ail_records) in
-  let comment = "\n/* CN PREDICATES */\n\n" in
-  (comment ^ pred_defs_str, comment ^ pred_decls_str, records_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
+  ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, [], records_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
 let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 
   let ail_funs = List.map Cn_internal_to_ail.generate_ownership_function ctypes in 
