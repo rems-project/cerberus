@@ -175,9 +175,162 @@ Module Symbol_sym_as_OT <: OrderedType.
       lia.
   Qed.
 
+  (* TODO: move *)
+  Ltac Z_compare_iff :=
+    match goal with
+    | [H: (_ ?= _)%Z = Lt |- _] => rewrite Z.compare_lt_iff in H
+    | [H: (_ ?= _)%Z = Gt |- _] => rewrite Z.compare_gt_iff in H
+    | [H: (_ ?= _)%Z = Eq |- _] => rewrite Z.compare_eq_iff in H
+    | [H: (_ =? _)%Z = true |- _] => rewrite Z.eqb_eq in H
+    | [H: (_ =? _)%Z = false |- _] => rewrite Z.eqb_neq in H
+    | [H: (_ <? _)%Z = true |- _] => rewrite Z.ltb_lt in H
+    | [H: (_ <? _)%Z = false |- _] => rewrite Z.ltb_nlt in H
+    end.
+
+  Lemma digest_compare_eq_iff:
+    forall x y, digest_compare x y = 0%Z -> x = y.
+  Proof.
+    intros x y H.
+    unfold digest_compare in *.
+    repeat break_match_hyp;subst;try lia.
+    clear H.
+    apply compare_eq_iff in Heqc.
+    auto.
+  Qed.
+
+  Lemma digest_compare_eq_sym:
+    forall x y, digest_compare x y = 0%Z -> digest_compare y x = 0%Z.
+  Proof.
+    intros x y H.
+    unfold digest_compare in *.
+    repeat break_match_hyp;subst;try lia.
+    clear H.
+    apply compare_eq_iff in Heqc.
+    subst y.
+    rewrite string_eq_refl.
+    reflexivity.
+  Qed.
+
+  Lemma digest_compare_eq_transitive:
+    forall x y z, digest_compare x y = 0%Z -> digest_compare y z = 0%Z -> digest_compare x z = 0%Z.
+  Proof.
+    intros x y z H H0.
+    unfold digest_compare in *.
+    repeat break_match_hyp;subst;try lia.
+    clear H H0.
+    break_match_goal.
+    1: reflexivity.
+    1,2:
+      pose proof (string_eq_trans x y z) as T;
+      specialize (T Heqc0 Heqc);
+      congruence.
+  Qed.
+
+  Lemma digest_compare_lt_gt_antisym:
+    forall x y,
+      (digest_compare x y < 0)%Z -> (digest_compare y x > 0)%Z.
+  Proof.
+    intros x y H.
+    unfold digest_compare in *.
+    repeat break_match_hyp;subst;try lia.
+    clear H.
+    rewrite String_as_OT.cmp_antisym in Heqc.
+    unfold CompOpp in Heqc.
+    repeat break_match_hyp; try discriminate.
+    unfold String_as_OT.cmp in Heqc0.
+    rewrite Heqc0.
+    lia.
+  Qed.
+
+  Lemma digest_compare_lt_transitive:
+    forall x y z, (digest_compare x y < 0)%Z -> (digest_compare y z < 0)%Z -> (digest_compare x z < 0)%Z.
+  Proof.
+    intros x y z H H0.
+    unfold digest_compare in *.
+    repeat break_match_hyp;subst;try lia.
+    clear H H0.
+    break_match_goal.
+    2: lia.
+    1,2: exfalso.
+    -
+      apply String_as_OT.cmp_lt in Heqc, Heqc0.
+      pose proof(String_as_OT.lt_trans x y z Heqc0 Heqc) as T.
+      clear Heqc Heqc0 y.
+      apply String_as_OT.lt_not_eq in T.
+      unfold String_as_OT.eq in T.
+      apply compare_eq_iff in Heqc1.
+      congruence.
+    -
+      apply String_as_OT.cmp_lt in Heqc, Heqc0.
+      pose proof(String_as_OT.lt_trans x y z Heqc0 Heqc) as T.
+      clear Heqc Heqc0 y.
+      rewrite <- String_as_OT.cmp_lt in T.
+      unfold String_as_OT.cmp in T.
+      congruence.
+  Qed.
+
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
-  Admitted.
+    unfold lt.
+    intros x y z H H0.
+    repeat break_match_hyp; try tauto.
+    clear H0 H.
+    rename Heqc0 into Hxy, Heqc into Hyz.
+    break_match_goal; try tauto.
+    -
+      unfold symbol_compare in *.
+      repeat break_match_hyp; subst; try congruence;repeat Z_compare_iff; subst.
+      +
+        lia.
+      +
+        apply digest_compare_eq_sym in Heqb0.
+        pose proof (digest_compare_eq_transitive d d0 d1) as D.
+        lia.
+      +
+        apply digest_compare_eq_sym in Heqb2.
+        pose proof (digest_compare_eq_transitive d1 d d0) as D.
+        lia.
+      +
+        apply digest_compare_eq_iff in Heqb.
+        subst d0.
+        clear - Heqb1 Heqb3.
+        apply digest_compare_lt_gt_antisym in Heqb3.
+        congruence.
+    -
+      unfold symbol_compare in *.
+      repeat break_match_hyp; subst; try congruence;repeat Z_compare_iff.
+      +
+        lia.
+      +
+        apply digest_compare_eq_sym in Heqb0.
+        pose proof (digest_compare_eq_transitive d d0 d1) as D.
+        lia.
+      +
+        apply digest_compare_eq_sym in Heqb2.
+        pose proof (digest_compare_eq_transitive d1 d d0) as D.
+        lia.
+      +
+        apply digest_compare_eq_iff in Heqb.
+        subst d0.
+        clear - Heqb1 Heqb3.
+        apply digest_compare_lt_gt_antisym in Heqb3.
+        congruence.
+      +
+        apply digest_compare_eq_iff in Heqb2.
+        subst d1.
+        congruence.
+      +
+        apply digest_compare_eq_iff in Heqb1.
+        subst d1.
+        lia.
+      +
+        apply digest_compare_eq_iff in Heqb3.
+        subst d1.
+        congruence.
+      +
+        pose proof (digest_compare_lt_transitive d d1 d0) as T.
+        lia.
+  Qed.
 
   Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
   Proof.
@@ -199,7 +352,7 @@ Module Symbol_sym_as_OT <: OrderedType.
     + lia.
   Qed.
 
-  Lemma digest_compare_eq_sym:
+  Lemma digest_compare_eq_bool_sym:
     forall d1 d2,
       (Z.eqb (digest_compare d1 d2) 0) = true ->
       (Z.eqb (digest_compare d2 d1) 0) = true.
@@ -287,7 +440,7 @@ Module Symbol_sym_as_OT <: OrderedType.
           -- rewrite H in Heqc. inversion Heqc.
           -- break_if.
              inversion Heqc.
-             apply digest_compare_eq_sym in Heqb.
+             apply digest_compare_eq_bool_sym in Heqb.
              rewrite Heqb in Heqb0.
              inversion Heqb0.
       + break_if.
@@ -296,14 +449,14 @@ Module Symbol_sym_as_OT <: OrderedType.
           break_match.
           -- cbn in Heqc.
              break_if.
-             ++ apply digest_compare_eq_sym in Heqb1.
+             ++ apply digest_compare_eq_bool_sym in Heqb1.
                 rewrite Heqb in Heqb1.
                 inversion Heqb1.
              ++ break_if;inversion Heqc.
           -- trivial.
           -- cbn in Heqc.
              break_if.
-             ++ apply digest_compare_eq_sym in Heqb1.
+             ++ apply digest_compare_eq_bool_sym in Heqb1.
                 rewrite Heqb in Heqb1.
                 inversion Heqb1.
              ++ break_if.
