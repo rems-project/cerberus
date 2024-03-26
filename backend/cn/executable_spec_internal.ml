@@ -157,20 +157,29 @@ let fns_and_preds_with_record_rt (funs, preds) =
 
 
 let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (logical_predicates : Mucore.T.logical_predicates)  =
-  let ail_funs_and_records = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes) logical_predicates in
-  let (ail_funs, ail_records_opt) = List.split ail_funs_and_records in
+  let ail_funs_and_records = List.map (fun ((sym, def) as cn_f) -> 
+    let ((decl, def), ail_record_opt) =  Cn_internal_to_ail.cn_to_ail_function_internal cn_f ail_prog.cn_datatypes in
+    let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> String.equal (Sym.pp_string cn_fun.cn_func_name) (Sym.pp_string sym)) ail_prog.cn_functions in
+    (* Unsafe - check if list has an element *)
+    let loc = (List.nth matched_cn_functions 0).cn_func_loc in 
+    Printf.printf "CN function location: %s\n" (Cerb_location.simple_location loc);
+    (loc, (decl, def), ail_record_opt)
+    ) logical_predicates in
+  let (locs, ail_funs, ail_records_opt) = Executable_spec_utils.list_split_three ail_funs_and_records in
   let (decls, defs) = List.split ail_funs in
   let defs = List.filter_map (fun x -> x) defs in
   let modified_prog_1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc_1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_1) in
-  let modified_prog_2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in
-  let doc_2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_2) in
+  let decl_docs = List.map (fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) decls in
+  let decl_strs = List.map (fun doc -> [CF.Pp_utils.to_plain_pretty_string doc]) decl_docs in
+  let locs_and_decls = List.combine locs decl_strs in
+  (* let modified_prog_2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in *)
+  (* let doc_2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_2) in *)
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let records_str = generate_c_records (List.concat ail_records) in
   let funs_defs_str = CF.Pp_utils.to_plain_pretty_string doc_1 in 
-  let funs_decls_str = CF.Pp_utils.to_plain_pretty_string doc_2 in 
-  let comment = "\n/* CN FUNCTIONS */\n\n" in
-  (comment ^ funs_defs_str, comment ^ funs_decls_str, records_str)
+  (* let funs_decls_str = CF.Pp_utils.to_plain_pretty_string doc_2 in  *)
+  ("\n/* CN FUNCTIONS */\n\n" ^ funs_defs_str, locs_and_decls, records_str)
 
 let rec remove_duplicates eq_fun = function 
   | [] -> []

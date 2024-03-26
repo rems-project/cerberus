@@ -800,6 +800,39 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)
           ) ^^ P.semi ^^ P.break 1
         ) ^^ P.semi
 
+
+(* Extracted into separate function for use in executable spec printing*)
+let pp_function_prototype ?(executable_spec=false) sym decl = match decl with 
+| Decl_object _ -> P.empty (* shouldn't hit this case *)
+| Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) -> 
+  (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
+      (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
+        begin
+          if !Cerb_debug.debug_level > 5 then
+            (* printing the types in a human readable format *)
+            pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
+          else
+            pp_ctype_declaration ~executable_spec (pp_id_func ~executable_spec sym) ret_qs ret_ty
+        end ^^
+        P.parens (
+          comma_list (fun (qs, ty, isRegister) ->
+            if !Cerb_debug.debug_level > 5 then
+              (* printing the types in a human readable format *)
+              P.parens (
+                (fun z -> if isRegister then !^ "register" ^^^ z else z)
+                  (pp_ctype_human qs ty)
+              )
+            else
+              pp_ctype ~executable_spec qs ty
+          ) params ^^
+          if is_variadic then
+            P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+          else
+            P.empty
+        ) ^^ P.semi
+      )
+    )
+
 let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
 (*  isatty := false; (*TODO: Unix.isatty Unix.stdout;*) *)
   (* Static assertions *)
@@ -859,56 +892,42 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
             ) ^^ P.hardline
           in
           pre ^^
-          (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
-            (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
-              begin
-                if !Cerb_debug.debug_level > 5 then
-                  (* printing the types in a human readable format *)
-                  pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
-                else
-                  pp_ctype_declaration ~executable_spec (pp_id_func ~executable_spec sym) ret_qs ret_ty
-              end ^^
-              (match List.assoc_opt sym sigm.function_definitions with
-                | Some (_, _, _, param_syms, stmt) ->
-                    P.parens (
-                      comma_list (fun (sym, (qs, ty, isRegister)) ->
-                        if !Cerb_debug.debug_level > 5 then
-                          (* printing the types in a human readable format *)
-                          pp_id_obj sym ^^ P.colon ^^^
-                          P.parens (
-                            (fun z -> if isRegister then !^ "register" ^^^ z else z)
-                              (pp_ctype_human qs ty)
-                          )
-                        else
-                          pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec sym) qs ty
-                      ) (List.combine param_syms params) ^^
-                      if is_variadic then
-                        P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+            (match List.assoc_opt sym sigm.function_definitions with
+              | Some (_, _, _, param_syms, stmt) ->
+                ((fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
+                  (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
+                    begin
+                      if !Cerb_debug.debug_level > 5 then
+                        (* printing the types in a human readable format *)
+                        pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
                       else
-                        P.empty
-                    ) ^^^ P.break 1 ^^
-                    pp_statement_aux ~executable_spec ~bs:[] pp_annot stmt
-                | None ->
-                    P.parens (
-                      comma_list (fun (qs, ty, isRegister) ->
-                        if !Cerb_debug.debug_level > 5 then
-                          (* printing the types in a human readable format *)
-                          P.parens (
-                            (fun z -> if isRegister then !^ "register" ^^^ z else z)
-                              (pp_ctype_human qs ty)
-                          )
+                        pp_ctype_declaration ~executable_spec (pp_id_func ~executable_spec sym) ret_qs ret_ty
+                    end ^^
+                      P.parens (
+                        comma_list (fun (sym, (qs, ty, isRegister)) ->
+                          if !Cerb_debug.debug_level > 5 then
+                            (* printing the types in a human readable format *)
+                            pp_id_obj sym ^^ P.colon ^^^
+                            P.parens (
+                              (fun z -> if isRegister then !^ "register" ^^^ z else z)
+                                (pp_ctype_human qs ty)
+                            )
+                          else
+                            pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec sym) qs ty
+                        ) (List.combine param_syms params) ^^
+                        if is_variadic then
+                          P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
                         else
-                          pp_ctype ~executable_spec qs ty
-                      ) params ^^
-                      if is_variadic then
-                        P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-                      else
-                        P.empty
-                    ) ^^ P.semi
+                          P.empty
+                      ) ^^^ P.break 1 ^^
+                      pp_statement_aux ~executable_spec ~bs:[] pp_annot stmt
+                  )
+                )  
               )
+              | None -> pp_function_prototype ~executable_spec sym decl 
             )
           )
-    ) sigm.declarations ^^ P.hardline
+     sigm.declarations ^^ P.hardline
 
 
 

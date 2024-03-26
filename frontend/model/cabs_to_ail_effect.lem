@@ -1157,7 +1157,7 @@ let add_toplevel_magic str =
   update_inner (fun st -> <| st with
     toplevel_magic_statements = str :: st.toplevel_magic_statements |>)
 
-let register_cn_function ident mk =
+let register_cn_function ident loc mk =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_functions with
     | Nothing ->
@@ -1166,7 +1166,7 @@ let register_cn_function ident mk =
         push_cn_scope >>= fun () ->
         mk >>= fun (attrs, return_bty, args, body) ->
         let func = <|
-          Cn.cn_func_loc= Loc.locOf ident;
+          Cn.cn_func_loc= loc;
           Cn.cn_func_name= sym;
           Cn.cn_func_attrs= attrs;
           Cn.cn_func_args= args;
@@ -1181,7 +1181,7 @@ let register_cn_function ident mk =
           )
         end
     | Just _ ->
-        fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_function))
+        fail loc (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_function))
   end
 
 (* copied and adjusted from register_cn_function *)
