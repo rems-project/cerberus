@@ -1377,7 +1377,7 @@ let rec generate_record_opt pred_sym = function
 
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
-let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes = 
+let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes cn_functions = 
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) def.return_bt in
   (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
   let (bs, ail_func_body_opt) =
@@ -1392,14 +1392,17 @@ let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn
   let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) def.args in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
+  let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> String.equal (Sym.pp_string cn_fun.cn_func_name) (Sym.pp_string fn_sym)) cn_functions in
+    (* Unsafe - check if list has an element *)
+  let loc = (List.nth matched_cn_functions 0).cn_func_loc in 
   (* Generating function declaration *)
-  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
+  let decl = (fn_sym, (loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
   let def = match ail_func_body_opt with 
-    | Some ail_func_body -> Some (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body))))
+    | Some ail_func_body -> Some (fn_sym, (loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body))))
     | None -> None
   in
-  ((decl, def), ail_record_opt)
+  (((loc, decl), def), ail_record_opt)
 
 
   

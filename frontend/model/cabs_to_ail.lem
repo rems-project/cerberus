@@ -4407,7 +4407,7 @@ let desugar_cn_output (loc, bt) =
 
 
 let desugar_and_register_cn_predicate pred =
-  E.register_cn_predicate pred.cn_pred_name begin
+  E.register_cn_predicate pred.cn_pred_name pred.cn_pred_loc begin
     desugar_cn_output pred.cn_pred_output >>= fun output   ->
     E.mapM (desugar_cn_arg CN_vars) pred.cn_pred_iargs >>= fun iargs   ->
     desugar_maybe_cn_clauses pred.cn_pred_clauses               >>= fun clauses ->

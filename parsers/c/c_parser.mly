@@ -2194,7 +2194,7 @@ cn_predicate:
   cn_pred_iargs= delimited(LPAREN, cn_args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses
     { (* TODO: check the name starts with upper case *)
-      let loc = Cerb_location.point $startpos(str) in
+      let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       { cn_pred_loc= loc
       ; cn_pred_name= Symbol.Identifier (loc, str)
       ; cn_pred_attrs
