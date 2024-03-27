@@ -582,7 +582,7 @@ Module RevocationProofs.
             Opaque ret bind.
     Qed.
 
-    #[global] Instance zmap_sequence_same_state
+    #[global] Instance zmap_sequence_SameState
       {A: Type}
       (mv: ZMap.t (memM A)):
       zmap_forall SameState mv ->
@@ -611,7 +611,7 @@ Module RevocationProofs.
     Proof.
       intros C zm' m0 m1 H.
       unfold zmap_mmapi in H.
-      apply zmap_sequence_same_state in H;[assumption|].
+      apply zmap_sequence_SameState in H;[assumption|].
       clear H.
 
       unfold zmap_forall.
@@ -736,7 +736,7 @@ Module RevocationProofs.
           invc Heqo.
           assumption.
         +
-          break_if.
+          break_match.
           *
             invc Heqo.
             assumption.
@@ -1505,7 +1505,7 @@ Module RevocationProofs.
         typeclasses eauto.
       Qed.
 
-      #[global] Instance sequence_preserves
+      #[global] Instance sequence_PreservesInvariant
         {A:Type}:
         forall s,
         forall (ls: list (memM A)),
@@ -1534,7 +1534,7 @@ Module RevocationProofs.
           apply IHls.
       Qed.
 
-      #[global] Instance zmap_sequence_preserves
+      #[global] Instance zmap_sequence_PreservesInvariant
         {A: Type}
         (mv: ZMap.t (memM A)):
         forall s,
@@ -1547,7 +1547,7 @@ Module RevocationProofs.
         break_let.
         apply bind_PreservesInvariant.
         -
-          apply sequence_preserves.
+          apply sequence_PreservesInvariant.
           generalize dependent (ZMap.elements (elt:=memM A) mv).
           intros ls H S.
           clear mv.
@@ -1576,7 +1576,7 @@ Module RevocationProofs.
           apply ret_PreservesInvariant.
       Qed.
 
-      #[global] Instance zmap_mmapi_preserves
+      #[global] Instance zmap_mmapi_PreservesInvariant
         {A B : Type}
         (f : ZMap.key -> A -> memM B)
         (zm: ZMap.t A):
@@ -1586,7 +1586,7 @@ Module RevocationProofs.
       Proof.
         intros s H.
         unfold zmap_mmapi.
-        apply zmap_sequence_preserves.
+        apply zmap_sequence_PreservesInvariant.
         intros k v H0.
         apply F.mapi_inv in H0.
         destruct H0 as [v' [k' [E [E1 M]]]].
@@ -1645,8 +1645,15 @@ Module RevocationProofs.
       |[|- PreservesInvariant _ _ (fail_noloc _)] => apply fail_noloc_PreservesInvariant
       |[|- PreservesInvariant _ _ (serr2InternalErr _)] => apply serr2InternalErr_PreservesInvariant
       |[|- PreservesInvariant _ _ (liftM _ _)] => apply liftM_PreservesInvariant
-      end.
+      end ; intros.
 
+    Ltac preserves_steps :=
+      repeat (match goal with
+              | |- PreservesInvariant _ _ (match _ with _ => _ end) => break_match_goal
+              | |- PreservesInvariant _ _ _ => preserves_step
+              | |- context [match _ with _ => _ end] => break_match_goal
+              | |- context [if _ then _ else _] => break_match_goal
+              end; cbn).
 
     Lemma resolve_has_PNVI:
       has_PNVI (WithoutPNVISwitches.get_switches tt) = false.
@@ -1712,7 +1719,8 @@ Module RevocationProofs.
      It will work only for instant revocation. In the case of
      Cornucopia the invariant will be different.
      *)
-    Definition mem_invariant (m: mem_state_r) : Prop
+    Definition mem_invariant
+      (m: mem_state_r) : Prop
       :=
       let cm := m.(capmeta) in
       let bm := m.(bytemap) in
@@ -1842,7 +1850,7 @@ Module RevocationProofs.
       auto.
     Qed.
 
-    #[local] Instance allocator_preserves (size align : Z):
+    #[local] Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
     Proof.
@@ -1852,7 +1860,7 @@ Module RevocationProofs.
       apply bind_PreservesInvariant_same_state.
 
       break_let.
-      break_if.
+      break_match.
       apply fail_noloc_SameState.
       apply ret_SameState.
       intros x.
@@ -1865,17 +1873,17 @@ Module RevocationProofs.
     Qed.
     #[local] Opaque allocator.
 
-    #[global] Instance find_live_allocation_preserves:
+
+    #[global] Instance find_live_allocation_PreservesInvariant:
       forall s a, PreservesInvariant mem_invariant s
                (find_live_allocation a).
     Proof.
       intros s a.
       unfold find_live_allocation.
-      preserves_step.
-      preserves_step.
+      preserves_steps.
     Qed.
 
-    #[global] Instance maybe_revoke_pointer_preserves
+    #[global] Instance maybe_revoke_pointer_PreservesInvariant
       allocation
       (st: mem_state)
       (addr: Z)
@@ -1888,12 +1896,7 @@ Module RevocationProofs.
       intros s.
       unfold maybe_revoke_pointer.
       break_let.
-      break_if.
-      preserves_step.
-      preserves_step.
-      preserves_step.
-      intros s' x.
-      break_match; try preserves_step.
+      preserves_steps.
     Qed.
 
     (* relation of pointer before and afer revocaton (per [maybe_revoke_pointer] *)
@@ -1925,10 +1928,10 @@ Module RevocationProofs.
     Proof.
       intros a m IM s IS s' x M.
 
-      pose proof (zmap_mmapi_preserves mem_invariant (maybe_revoke_pointer a m) (capmeta m) s) as P.
+      pose proof (zmap_mmapi_PreservesInvariant mem_invariant (maybe_revoke_pointer a m) (capmeta m) s) as P.
       autospecialize P.
       intros k x0.
-      apply maybe_revoke_pointer_preserves; auto.
+      apply maybe_revoke_pointer_PreservesInvariant; auto.
 
       specialize (P IS).
       unfold post_exec_invariant, lift_sum_p in P.
@@ -1970,7 +1973,7 @@ Module RevocationProofs.
       unfold maybe_revoke_pointer in H.
       unfold serr2InternalErr, ret, raise, memM_monad, Exception_errS, Exception_either, Monad_errS, Monad_either in H.
       break_let.
-      break_if.
+      break_match.
       tuple_inversion.
       reflexivity.
       unfold bind in H.
@@ -2235,7 +2238,7 @@ Module RevocationProofs.
           clear - N3.
           unfold maybe_revoke_pointer in N3.
           break_let.
-          break_if.
+          break_match.
           *
             Transparent ret.
             unfold memM_monad, Monad_errS, ret in N3.
@@ -2257,7 +2260,7 @@ Module RevocationProofs.
             unfold memM_monad, Monad_errS, ret in Heqp0.
             Opaque ret.
             tuple_inversion.
-            break_if.
+            break_match.
             --
               apply cap_bounds_within_alloc_true in Heqb.
               tuple_inversion.
@@ -2287,19 +2290,16 @@ Module RevocationProofs.
         apply C.
     Qed.
 
-    #[global] Instance revoke_pointers_preserves:
+    (* This function is atypical as its state is intricately linked
+       with the return value in subtle ways. We couldn't apply our
+       usual preservation step lemmas and had to brute-force our way
+       through. *)
+    #[global] Instance revoke_pointers_PreservesInvariant:
       forall s a, PreservesInvariant mem_invariant s (revoke_pointers a).
     Proof.
-
-      (* This function is atypical as its state is intricately linked
-      with the return value in subtle ways. We couldn't apply our
-      usual preservation step lemmas and had to brute-force our way
-      through. *)
-
       intros s a.
       unfold revoke_pointers.
       intros H.
-
       Transparent ret raise bind get.
       unfold post_exec_invariant, execErrS, evalErrS, lift_sum_p.
       break_let.
@@ -2553,7 +2553,7 @@ Module RevocationProofs.
           apply ZMap.remove_2;auto.
     Qed.
 
-    #[global] Instance kill_preserves
+    #[global] Instance kill_PreservesInvariant
       (loc : location_ocaml)
       (is_dyn : bool)
       (ptr : pointer_value_indt)
@@ -2562,14 +2562,12 @@ Module RevocationProofs.
         PreservesInvariant mem_invariant s (kill loc is_dyn ptr).
     Proof.
       unfold kill.
-      rewrite resolve_has_PNVI.
-      rewrite resolve_has_INSTANT.
+      rewrite resolve_has_PNVI, resolve_has_INSTANT.
       destruct ptr.
-      destruct p eqn:P.
-      2-4:break_match;intros; simpl; preserves_step.
-      intros s.
-      break_match;simpl;try preserves_step.
-      break_match;simpl;[preserves_step|].
+      destruct p eqn:P; intros.
+      2-4: preserves_steps.
+      break_match_goal;cbn;[preserves_step|].
+      break_match_goal;cbn;[preserves_step|].
       apply bind_PreservesInvariant_value.
       intros H s' x H0.
 
@@ -2577,7 +2575,7 @@ Module RevocationProofs.
       specialize (H2 _ _ _ H0).
       subst s'.
       split;[assumption|].
-      pose proof (find_live_allocation_preserves s (Capability_GS.cap_get_value t)) as A.
+      pose proof (find_live_allocation_PreservesInvariant s (Capability_GS.cap_get_value t)) as A.
       specialize (A H).
       unfold post_exec_invariant, lift_sum_p in A.
       break_match_hyp.
@@ -2599,27 +2597,17 @@ Module RevocationProofs.
           break_let.
 
           apply bind_PreservesInvariant_same_state.
-
-          repeat break_if.
-          apply ret_SameState.
-          apply fail_SameState.
-          apply raise_SameState.
-          apply ret_SameState.
-
+          repeat break_match; typeclasses eauto.
           intros u. destruct u.
-
           apply bind_PreservesInvariant_same_state.
-          repeat break_if.
-          apply fail_SameState.
-          apply ret_SameState.
-
+          repeat break_match; typeclasses eauto.
           intros u. destruct u.
           preserves_step.
           *
             apply bind_PreservesInvariant_full.
             intros _ s' x0 H0.
 
-            pose proof (revoke_pointers_preserves s a) as R.
+            pose proof (revoke_pointers_PreservesInvariant s a) as R.
             specialize (R A).
             unfold post_exec_invariant, lift_sum_p in R.
             break_match_hyp.
@@ -2648,10 +2636,7 @@ Module RevocationProofs.
               destruct u.
               eapply remove_revoked_allocation_preserves; eauto.
           *
-            intros s' u2.
-            preserves_step.
-            repeat break_if; preserves_step.
-            intros m1 H1.
+            preserves_steps.
             apply mem_state_with_last_address_preserves.
             assumption.
         +
@@ -2680,7 +2665,15 @@ Module RevocationProofs.
       |[|- PreservesInvariant _ _ (fail_noloc _)] => apply fail_noloc_PreservesInvariant
       |[|- PreservesInvariant _ _ (serr2InternalErr _)] => apply serr2InternalErr_PreservesInvariant
       |[|- PreservesInvariant _ _ (liftM _ _)] => apply liftM_PreservesInvariant
-      end.
+      end; intros.
+
+    Ltac preserves_steps :=
+      repeat (match goal with
+              | |- PreservesInvariant _ _ (match _ with _ => _ end) => break_match_goal
+              | |- PreservesInvariant _ _ _ => preserves_step
+              | |- context [match _ with _ => _ end] => break_match_goal
+              | |- context [if _ then _ else _] => break_match_goal
+              end; cbn).
 
     (* CheriMemoryWithPNVI memory invariant.
 
@@ -2885,7 +2878,7 @@ Module RevocationProofs.
           inversion E.
     Qed.
 
-    #[local] Instance allocator_preserves (size align : Z):
+    #[local] Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
     Proof.
@@ -2895,7 +2888,7 @@ Module RevocationProofs.
       apply bind_PreservesInvariant_same_state.
 
       break_let.
-      break_if.
+      break_match.
       apply fail_noloc_SameState.
       apply ret_SameState.
       intros x.
@@ -2908,14 +2901,13 @@ Module RevocationProofs.
     Qed.
     #[local] Opaque allocator.
 
-    Lemma remove_allocation_preserves
+    #[local] Instance  remove_allocation_PreservesInvariant
       (alloc_id : CheriMemoryTypesExe.storage_instance_id)
       (s : mem_state_r):
       PreservesInvariant mem_invariant s (remove_allocation alloc_id).
     Proof.
       unfold remove_allocation.
       preserves_step.
-      intros m H.
       destruct H as [Hbase Hcap].
       (* destruct_base_mem_invariant Sbase. *)
       split;cbn.
@@ -2957,7 +2949,7 @@ Module RevocationProofs.
           eapply H3;eauto.
     Qed.
 
-    #[global] Instance kill_preserves
+    #[global] Instance kill_PreservesInvariant
       (loc : location_ocaml)
       (is_dyn : bool)
       (ptr : pointer_value_indt)
@@ -2966,44 +2958,26 @@ Module RevocationProofs.
         PreservesInvariant mem_invariant s (kill loc is_dyn ptr).
     Proof.
       unfold kill.
-      rewrite resolve_has_PNVI.
-      rewrite resolve_has_INSTANT.
-      rewrite resolve_has_CORNUCOPIA.
+      rewrite resolve_has_PNVI, resolve_has_INSTANT, resolve_has_CORNUCOPIA.
       destruct ptr.
-      destruct p eqn:P.
-      all:break_match;intros; simpl; try preserves_step.
-
-      break_if. preserves_step.
+      destruct p eqn:P; intros.
+      1,2,4: preserves_steps.
+      break_match_goal; [preserves_step|cbn].
+      break_match_goal; [preserves_step|].
       apply bind_PreservesInvariant_value.
       intros H s' x H0.
       pose proof (get_allocation_opt_same_state s) as H2.
       specialize (H2 _ _ _ H0).
       subst s'.
       split;[assumption|].
-
-      break_match.
-      preserves_step.
-      break_if;try preserves_step.
-      break_if;try preserves_step.
-      break_if;try preserves_step.
-      intros s' x0.
-      break_if;try preserves_step.
-      break_if;try preserves_step.
-      break_if;try preserves_step.
-      intros s'0 x1.
-      preserves_step.
-      apply remove_allocation_preserves.
-      intros s'1 x2.
-      preserves_step.
-      break_if;try preserves_step.
-      intros m H1.
-      apply mem_state_with_last_address_preserves, H1.
-      preserves_step.
+      preserves_steps.
+      - typeclasses eauto.
+      - apply mem_state_with_last_address_preserves, H1.
     Qed.
 
   End CheriMemoryWithPNVI.
 
-  (* Equivalence proofs below are temporary commented out
+(* Equivalence proofs below are temporary commented out
 
 
   (*
@@ -3014,7 +2988,7 @@ Module RevocationProofs.
     non-symmetric, non-transitive, and irreflexive!
 
     RHS provenance could only be [Prov_disabled].
-   *)
+ *)
   Inductive ptr_value_same
     (m1: CheriMemoryWithPNVI.mem_state_r)
     (m2: CheriMemoryWithoutPNVI.mem_state_r): relation pointer_value_indt
@@ -3430,7 +3404,7 @@ Module RevocationProofs.
     intros l s H.
     apply Bool.eqb_prop.
     unfold Bool.eqb.
-    break_if;break_if;auto.
+    break_match;break_match;auto.
     -
       apply set_mem_correct1 in Heqb.
       apply set_mem_complete1 in Heqb0.
@@ -3450,7 +3424,7 @@ Module RevocationProofs.
     intros l s H.
     apply Bool.eqb_prop.
     unfold Bool.eqb.
-    break_if;break_if;auto.
+    break_match;break_match;auto.
     -
       apply set_mem_correct1 in Heqb.
       apply set_mem_complete1 in Heqb0.
@@ -3471,11 +3445,11 @@ Module RevocationProofs.
       destruct (cerb_switch_dec a s) as [E|NE].
       +
         subst.
-        break_if.
+        break_match.
         * apply negb_true_iff in Heqb; congruence.
         * apply IHl; auto.
       +
-        break_if.
+        break_match.
         *
           cbn.
           intros [C1 |C2].
@@ -3505,7 +3479,7 @@ Module RevocationProofs.
       unfold Bool.eqb;
       destruct D as [IN | NIN];
       [
-        repeat break_if; try tauto;
+        repeat break_match; try tauto;
         match goal with
         | [H: set_mem _ _ _ = false |- _] =>
             apply set_mem_complete1 in H;
@@ -3515,7 +3489,7 @@ Module RevocationProofs.
             apply -> remove_PNVI_In;auto
         end
       |
-        repeat break_if; try tauto;
+        repeat break_match; try tauto;
         match goal with
         | [H: set_mem _ _ _ = true |- _] =>
             apply set_mem_correct1 in H;
@@ -3533,7 +3507,7 @@ Module RevocationProofs.
     unfold has_switch.
     apply eqb_true_iff.
     unfold Bool.eqb.
-    repeat break_if;auto;
+    repeat break_match;auto;
       match goal with
       | [H: set_mem _ _ _ = true |- _] =>
           apply set_mem_correct1 in H;
@@ -4125,7 +4099,7 @@ Module RevocationProofs.
     intros s.
     unfold CheriMemoryWithPNVI.get_intrinsic_type_spec.
     unfold CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
-    repeat break_if; auto;
+    repeat break_match; auto;
       normalize_switches;congruence.
   Qed.
   #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
@@ -4208,7 +4182,7 @@ Module RevocationProofs.
 
       apply mapi_mapsto_iff in M1; [| intros; subst; reflexivity].
       destruct M1 as [v1' [FE1 M1]].
-       *)
+ *)
       subst tag_unspecified0 bounds_unspecified0.
       remember (f k (false, {| tag_unspecified := false; bounds_unspecified := bounds_unspecified |})) as f1 eqn:F1.
       rewrite Heqf in F1.
@@ -4217,7 +4191,7 @@ Module RevocationProofs.
 
       remember (f k (true, {| tag_unspecified := tag_unspecified; bounds_unspecified := bounds_unspecified |})) as f0 eqn:F0.
       rewrite Heqf in F0.
-      break_if;subst f0; cbn in *.
+      break_match;subst f0; cbn in *.
       +
         clear M0 M1.
         clear f Heqf.
@@ -4594,7 +4568,7 @@ Module RevocationProofs.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
               rewrite is_pointer_algined_same.
-              break_if.
+              break_match.
               ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
@@ -4628,7 +4602,7 @@ Module RevocationProofs.
           *
             repeat break_match_hyp; inl_inr.
           *
-            break_if; [ inl_inr|].
+            break_match; [ inl_inr|].
             break_match_hyp; [ inl_inr|].
             rewrite <- Hserr, <- Hserr0.
             clear Hserr Hserr0.
@@ -4708,7 +4682,7 @@ Module RevocationProofs.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
               rewrite is_pointer_algined_same.
-              break_if.
+              break_match.
               ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
@@ -4731,7 +4705,7 @@ Module RevocationProofs.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
                 rewrite is_pointer_algined_same.
-                break_if.
+                break_match.
                 ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
@@ -4753,7 +4727,7 @@ Module RevocationProofs.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
                 rewrite is_pointer_algined_same.
-                break_if.
+                break_match.
                 ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
@@ -4819,7 +4793,7 @@ Module RevocationProofs.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
               rewrite is_pointer_algined_same.
-              break_if.
+              break_match.
               ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
@@ -4842,7 +4816,7 @@ Module RevocationProofs.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
                 rewrite is_pointer_algined_same.
-                break_if.
+                break_match.
                 ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
@@ -4864,7 +4838,7 @@ Module RevocationProofs.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
                 rewrite is_pointer_algined_same.
-                break_if.
+                break_match.
                 ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
@@ -4930,7 +4904,7 @@ Module RevocationProofs.
             --
               unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
               rewrite is_pointer_algined_same.
-              break_if.
+              break_match.
               ++ apply capmeta_add_eq_same, Ecap.
               ++ assumption.
             --
@@ -4953,7 +4927,7 @@ Module RevocationProofs.
               ++
                 unfold CheriMemoryWithPNVI.update_capmeta, CheriMemoryWithoutPNVI.update_capmeta.
                 rewrite is_pointer_algined_same.
-                break_if.
+                break_match.
                 ** apply capmeta_add_eq_same, Ecap.
                 ** assumption.
               ++
@@ -5043,7 +5017,7 @@ Module RevocationProofs.
               assumption.
             --
               (* rewrite Ecap.
-     *)
+ *)
               admit.
             --
               invc Heqo.
@@ -5486,7 +5460,7 @@ Module RevocationProofs.
           destruct fuel;[reflexivity|].
           eapply IHEmval; assumption.
     Qed.
-     *)
+ *)
     Admitted.
 
   End repr_same_proof.
@@ -5874,7 +5848,7 @@ Module RevocationProofs.
       repeat break_let.
       unfold CheriMemoryWithPNVI.memM in *.
       unfold CheriMemoryWithPNVI.mem_state in *.
-      repeat break_if; repeat break_match;
+      repeat break_match; repeat break_match;
         repeat tuple_inversion;
         rewrite Mlastaddr in *; try congruence; try reflexivity.
       -
@@ -5949,10 +5923,10 @@ Module RevocationProofs.
       split;typeclasses eauto.
     Qed.
     #[global] Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
-   *)
+ *)
   End allocator_proofs.
 
-(*
+   (*
   Lemma num_of_int_same:
     forall x, CheriMemoryWithPNVI.num_of_int x = CheriMemoryWithoutPNVI.num_of_int x.
   Proof.
@@ -6360,7 +6334,7 @@ Module RevocationProofs.
     intros alloc_base alloc_limit st1 st2 addr1 addr2 meta1 meta2 H1 H2 M.
     subst.
     unfold CheriMemoryWithPNVI.maybe_revoke_pointer, CheriMemoryWithoutPNVI.maybe_revoke_pointer.
-    break_if.
+    break_match.
     -
       same_step; reflexivity.
     -
@@ -6383,7 +6357,7 @@ Module RevocationProofs.
         invc Hp.
         break_match.
         apply raise_Same_eq; reflexivity.
-        break_if;
+        break_match;
         apply ret_Same;reflexivity.
   Qed.
 
@@ -6512,7 +6486,7 @@ Module RevocationProofs.
       unfold CheriMemoryWithPNVI.cap_is_null, CheriMemoryWithoutPNVI.cap_is_null.
       unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z.
       repeat normalize_switches.
-      break_if;[apply fail_same; auto|].
+      break_match;[apply fail_same; auto|].
       same_step; split.
       apply find_live_allocation_same.
       intros.
@@ -6520,10 +6494,10 @@ Module RevocationProofs.
       destruct x2 eqn:X2.
       +
         break_let.
-        break_if; break_if;[|apply fail_same; auto|same_step; auto|].
+        break_match; break_match;[|apply fail_same; auto|same_step; auto|].
         *
           same_step;split.
-          repeat break_if.
+          repeat break_match.
           1:apply fail_same; auto.
           1-9:try erewrite cap_match_dyn_allocation_same in * by eauto; try congruence.
           1-5: repeat normalize_switches;try lia.
@@ -6542,7 +6516,7 @@ Module RevocationProofs.
             split;[cbn; apply H0|].
             split.
             cbn.
-            break_if.
+            break_match.
             unfold zmap_update_element.
             apply add_m_Proper;try reflexivity.
             apply remove_m_Proper;[reflexivity| apply H0].
@@ -6574,7 +6548,7 @@ Module RevocationProofs.
       apply get_allocation_same;try reflexivity.
       intros x1 x2 H.
       subst.
-      break_if.
+      break_match.
       repeat break_match; same_step; reflexivity.
       admit.
     -
@@ -6584,6 +6558,6 @@ Module RevocationProofs.
  *)
   Admitted.
 
-   *)
-   *)
+ *)
+ *)
 End RevocationProofs.
