@@ -1130,15 +1130,15 @@ Module RevocationProofs.
 
 
       (* [SameState] is stronger and implies [PreservesInvariant] *)
-      Lemma SameStatePreserves
+      Instance SameStatePreserves
         {T: Type}
         (M: memM T)
-        :
-        SameState M -> forall s, PreservesInvariant s M.
+        `{H: SameState T M}:
+        forall s, PreservesInvariant s M.
       Proof.
-        intros H s I.
+        intros s.
         unfold SameState, memM_same_state in H.
-        unfold post_exec_invariant, lift_sum_p.
+        unfold PreservesInvariant, post_exec_invariant, lift_sum_p.
         break_match.
         trivial.
         unfold execErrS in Heqs0.
@@ -1149,14 +1149,12 @@ Module RevocationProofs.
         subst.
         specialize (H (inr t) s m Heqp).
         subst.
-        assumption.
+        trivial.
       Qed.
 
       #[global] Instance ret_PreservesInvariant:
         forall s {T} (x:T), PreservesInvariant s (ret x).
       Proof.
-        intros s T x.
-        apply SameStatePreserves.
         typeclasses eauto.
       Qed.
       Opaque ret.
@@ -1169,8 +1167,6 @@ Module RevocationProofs.
                (Exception_errS mem_state_r memMError) T
                x).
       Proof.
-        intros s x.
-        apply SameStatePreserves.
         typeclasses eauto.
       Qed.
       Opaque raise.
@@ -1450,10 +1446,7 @@ Module RevocationProofs.
       #[global] Instance get_PreservesInvariant:
         forall s, PreservesInvariant s get.
       Proof.
-        intros s H.
-        apply SameStatePreserves.
         typeclasses eauto.
-        apply H.
       Qed.
 
       #[global] Instance update_PreservesInvariant
@@ -1493,17 +1486,14 @@ Module RevocationProofs.
           PreservesInvariant s (@fail T l e).
       Proof.
         intros s l e.
-        apply SameStatePreserves.
-        apply fail_SameState.
+        typeclasses eauto.
       Qed.
 
       #[global] Instance fail_noloc_PreservesInvariant {T:Type}:
         forall s e,
           PreservesInvariant s (@fail_noloc T e).
       Proof.
-        intros s e.
-        apply SameStatePreserves.
-        apply fail_noloc_SameState.
+        typeclasses eauto.
       Qed.
 
       #[global] Instance serr2InternalErr_PreservesInvariant
@@ -1512,8 +1502,7 @@ Module RevocationProofs.
         forall s,
           PreservesInvariant s (serr2InternalErr e).
       Proof.
-        apply SameStatePreserves.
-        apply serr2InternalErr_SameState.
+        typeclasses eauto.
       Qed.
 
       #[global] Instance sequence_preserves
