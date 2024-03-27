@@ -1490,8 +1490,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                else ();
                let@ () = add_movable_index loc ~verbose (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
+               let msg1 = "extract: index added, no resources (yet) extracted." in
                if List.equal Int.equal (List.map snd original_rs) (List.map snd upd_rs)
-               then warn loc !^"Special-case index added by extract, no resource (yet) extracted."
+               then warn loc (if verbose then (!^ msg1)
+                   else ((!^ msg1) ^^ Pp.hardline ^^ (!^ "    (consider extract[verbose])")))
                else ();
                return ()
             | M_CN_unfold (f, args) ->
