@@ -381,7 +381,9 @@ let string_at_line fname lnum cpos =
                 , if n + 5 <= term_col then
                     "  ..." ^ sub l_ start n
                   else
-                  "  ..." ^ String.sub l_ start (term_col - 5 - 3) ^ "..." )
+                  try 
+                    "  ..." ^ String.sub l_ start (term_col - 5 - 3) ^ "..." 
+                  with _ -> ("OOPS: " ^ l_))
               end else if String.length l_ > term_col then
                 (* The cursor is within the terminal width, but the line needs
                    to be truncated *)
