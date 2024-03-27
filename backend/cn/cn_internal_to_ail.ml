@@ -1377,32 +1377,32 @@ let rec generate_record_opt pred_sym = function
 
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
-let cn_to_ail_function_internal (fn_sym, (def : LogicalFunctions.definition)) cn_datatypes cn_functions = 
-  let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) def.return_bt in
+let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition)) cn_datatypes cn_functions = 
+  let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) lf_def.return_bt in
   (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
   let (bs, ail_func_body_opt) =
-  match def.definition with
+  match lf_def.definition with
     | Def it
     | Rec_Def it ->
       let (bs, ss) = cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return in
       (bs, Some (List.map mk_stmt ss))
     | Uninterp -> ([], None)
   in
-  let ail_record_opt = generate_record_opt fn_sym def.return_bt in
-  let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) def.args in
+  let ail_record_opt = generate_record_opt fn_sym lf_def.return_bt in
+  let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) lf_def.args in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
-  let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> String.equal (Sym.pp_string cn_fun.cn_func_name) (Sym.pp_string fn_sym)) cn_functions in
+  (* let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> String.equal (Sym.pp_string cn_fun.cn_func_name) (Sym.pp_string fn_sym)) cn_functions in *)
     (* Unsafe - check if list has an element *)
-  let loc = (List.nth matched_cn_functions 0).cn_func_loc in 
+  (* let loc = (List.nth matched_cn_functions 0).cn_func_loc in  *)
   (* Generating function declaration *)
-  let decl = (fn_sym, (loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
+  let decl = (fn_sym, (lf_def.loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
   let def = match ail_func_body_opt with 
-    | Some ail_func_body -> Some (fn_sym, (loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body))))
+    | Some ail_func_body -> Some (fn_sym, (lf_def.loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body))))
     | None -> None
   in
-  (((loc, decl), def), ail_record_opt)
+  (((lf_def.loc, decl), def), ail_record_opt)
 
 
   
@@ -1444,8 +1444,8 @@ let rec cn_to_ail_lat_internal dts pred_sym_opt globals ownership_ctypes preds =
 
 
 
-let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition)) dts globals ots preds = 
-  let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) def.oarg_bt in
+let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definition)) dts globals ots preds = 
+  let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
 
   let rec clause_translate (clauses : RP.clause list) ownership_ctypes = 
     match clauses with
@@ -1463,22 +1463,22 @@ let cn_to_ail_predicate_internal (pred_sym, (def : ResourcePredicates.definition
             ([], [ail_if_stat], ownership_ctypes'')
   in
 
-  let (bs, ss, ownership_ctypes') = match def.clauses with 
+  let (bs, ss, ownership_ctypes') = match rp_def.clauses with 
     | Some clauses -> clause_translate clauses ots
     | None -> ([], [], ots)
   in
 
   let pred_body = List.map mk_stmt ss in
 
-  let ail_record_opt = generate_record_opt pred_sym def.oarg_bt in
-  let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) ((def.pointer, BT.Loc) :: def.iargs) in
+  let ail_record_opt = generate_record_opt pred_sym rp_def.oarg_bt in
+  let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) ((rp_def.pointer, BT.Loc) :: rp_def.iargs) in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   (* Generating function declaration *)
-  let decl = (pred_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
+  let decl = (pred_sym, (rp_def.loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (pred_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, pred_body)))) in
-  ((decl, def), ail_record_opt, ownership_ctypes')
+  let def = (pred_sym, (rp_def.loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, pred_body)))) in
+  (((rp_def.loc, decl), def), ail_record_opt, ownership_ctypes')
 
 let rec cn_to_ail_predicates_internal pred_def_list dts globals ots preds = 
   match pred_def_list with 

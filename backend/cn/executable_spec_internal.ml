@@ -184,16 +184,19 @@ let rec remove_duplicates eq_fun = function
 
 let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) ownership_ctypes =
   (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates in *)
-  (* TODO: Remove passing of resource_predicates argument twice *)
+  (* TODO: Remove passing of resource_predicates argument twice - could use counter? *)
   let (ail_funs, ail_records_opt, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_predicates_internal resource_predicates ail_prog.cn_datatypes [] ownership_ctypes resource_predicates in 
-  let (decls, defs) = List.split ail_funs in
+  let (locs_and_decls, defs) = List.split ail_funs in
+  let (locs, decls) = List.split locs_and_decls in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1) in
   let pred_defs_str = 
   CF.Pp_utils.to_plain_pretty_string doc1 in
+  let pred_locs_and_decls = List.map (fun (loc, (sym, (_, _, decl))) ->
+     (loc, [CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)])) locs_and_decls in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let records_str = generate_c_records (List.concat ail_records) in
-  ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, [], records_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
+  ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, records_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
 let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 
   let ail_funs = List.map Cn_internal_to_ail.generate_ownership_function ctypes in 
