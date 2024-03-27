@@ -175,8 +175,7 @@ Module Symbol_sym_as_OT <: OrderedType.
       lia.
   Qed.
 
-  (* TODO: move *)
-  Ltac Z_compare_iff :=
+ Ltac Z_compare_iff :=
     match goal with
     | [H: (_ ?= _)%Z = Lt |- _] => rewrite Z.compare_lt_iff in H
     | [H: (_ ?= _)%Z = Gt |- _] => rewrite Z.compare_gt_iff in H
@@ -226,7 +225,7 @@ Module Symbol_sym_as_OT <: OrderedType.
       congruence.
   Qed.
 
-  Lemma digest_compare_lt_gt_antisym:
+  Lemma digest_compare_lt_gt:
     forall x y,
       (digest_compare x y < 0)%Z -> (digest_compare y x > 0)%Z.
   Proof.
@@ -269,6 +268,29 @@ Module Symbol_sym_as_OT <: OrderedType.
       congruence.
   Qed.
 
+  Lemma digest_compare_eq_bool_sym:
+    forall d1 d2,
+      (digest_compare d1 d2 =? 0)%Z = true ->
+      (digest_compare d2 d1 =? 0)%Z = true.
+  Proof.
+    unfold digest_compare.
+    intros d1 d2.
+    rewrite compare_antisym.
+    destruct (d2 ?= d1)%string; auto.
+  Qed.
+
+  Lemma digest_compare_lt_bool_antisym:
+    forall d1 d2,
+      (digest_compare d1 d2 =? 0)%Z = false ->
+      (digest_compare d1 d2 <? 0 = negb (digest_compare d2 d1 <? 0))%Z.
+  Proof.
+    unfold digest_compare.
+    intros d1 d2.
+    rewrite compare_antisym.
+    destruct (d2 ?= d1)%string; auto.
+  Qed.
+
+
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
     unfold lt.
@@ -294,7 +316,7 @@ Module Symbol_sym_as_OT <: OrderedType.
         apply digest_compare_eq_iff in Heqb.
         subst d0.
         clear - Heqb1 Heqb3.
-        apply digest_compare_lt_gt_antisym in Heqb3.
+        apply digest_compare_lt_gt in Heqb3.
         congruence.
     -
       unfold symbol_compare in *.
@@ -313,7 +335,7 @@ Module Symbol_sym_as_OT <: OrderedType.
         apply digest_compare_eq_iff in Heqb.
         subst d0.
         clear - Heqb1 Heqb3.
-        apply digest_compare_lt_gt_antisym in Heqb3.
+        apply digest_compare_lt_gt in Heqb3.
         congruence.
       +
         apply digest_compare_eq_iff in Heqb2.
@@ -350,28 +372,6 @@ Module Symbol_sym_as_OT <: OrderedType.
       rewrite Z.eqb_eq in E2.
       lia.
     + lia.
-  Qed.
-
-  Lemma digest_compare_eq_bool_sym:
-    forall d1 d2,
-      (Z.eqb (digest_compare d1 d2) 0) = true ->
-      (Z.eqb (digest_compare d2 d1) 0) = true.
-  Proof.
-    unfold digest_compare.
-    intros d1 d2.
-    rewrite compare_antisym.
-    destruct (d2 ?= d1)%string; auto.
-  Qed.
-
-  Lemma digest_compare_antisym:
-    forall d1 d2,
-      (Z.eqb (digest_compare d1 d2) 0) = false ->
-      ((Z.ltb (digest_compare d1 d2) 0) = negb (Z.ltb (digest_compare d2 d1) 0)).
-  Proof.
-    unfold digest_compare.
-    intros d1 d2.
-    rewrite compare_antisym.
-    destruct (d2 ?= d1)%string; auto.
   Qed.
 
   Definition compare : forall x y : t, Compare lt eq x y.
@@ -461,7 +461,7 @@ Module Symbol_sym_as_OT <: OrderedType.
                 inversion Heqb1.
              ++ break_if.
                 inversion Heqc.
-                rewrite digest_compare_antisym in Heqb0.
+                rewrite digest_compare_lt_bool_antisym in Heqb0.
                 rewrite Heqb2 in Heqb0.
                 cbv in Heqb0.
                 inversion Heqb0.
