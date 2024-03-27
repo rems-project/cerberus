@@ -56,6 +56,13 @@ let is_empty_ail_stmt = function
   | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEident sym))) -> String.equal empty_ail_str (Sym.pp_string sym)
   | _ -> false
 
+
+let make_inline = function 
+| A.Decl_object (sd, align_opt, qs, ty) -> A.Decl_object (sd, align_opt, qs, ty)
+| A.Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
+  A.Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, true, is_Noreturn)
+
+
   
 
 

@@ -196,37 +196,33 @@ let main
          | Some output_filename ->
             let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
             let oc = Stdlib.open_out (prefix ^ output_filename) in
-            (* let dir_name = String.split_on_char '/' output_filename in *)
-            (* let rec take_n n list = match list with  *)
-              (* | [] -> [] *)
-              (* | x :: xs -> if n == 1 then [x] else x :: (take_n (n - 1) xs) *)
-            (* in *)
-            (* let cn_prefix_list = take_n ((List.length dir_name) - 1) dir_name in *)
-            (* let cn_prefix = if (List.length dir_name != 0) then String.concat "/" cn_prefix_list  ^ "/" else "" in *)
             let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
-            let c_datatypes = Executable_spec_internal.generate_c_datatypes ail_prog in
-            let (c_function_defs, locs_and_c_function_decls, _c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
-            let (c_predicate_defs, locs_and_c_predicate_decls, _c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+            let (c_datatypes, c_datatype_equality_fun_decls) = Executable_spec_internal.generate_c_datatypes ail_prog in
+            let (c_function_defs, locs_and_c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+            let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
             let (conversion_function_defs, _conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
             let (ownership_function_defs, _ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
             let c_structs = Executable_spec_internal.print_c_structs ail_prog.tag_definitions in
             let cn_converted_structs = Executable_spec_internal.generate_cn_versions_of_structs ail_prog.tag_definitions in 
 
             (* TODO: Remove - hacky *)
-            let cn_utils_header_pair = ("../../executable-spec/cn_utils.c", false) in
+            let cn_utils_header_pair = ("../executable-spec/cn_utils.c", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
             
             (* TODO: Topological sort *)
             Stdlib.output_string cn_oc cn_utils_header;
             Stdlib.output_string cn_oc c_structs;
             Stdlib.output_string cn_oc cn_converted_structs;
+            Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
+            Stdlib.output_string cn_oc c_records;
+            Stdlib.output_string cn_oc c_records';
             Stdlib.output_string cn_oc "\n/* CN DATATYPES */\n\n";
             Stdlib.output_string cn_oc (String.concat "\n" (List.map snd c_datatypes));
-            Stdlib.output_string cn_oc c_function_defs;
-            Stdlib.output_string cn_oc c_predicate_defs;
             Stdlib.output_string cn_oc conversion_function_defs;
             Stdlib.output_string cn_oc ownership_function_defs;
+            Stdlib.output_string cn_oc c_function_defs;
+            Stdlib.output_string cn_oc c_predicate_defs;
 
             let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
             let headers = List.map generate_include_header incls in
@@ -287,13 +283,15 @@ let main
                inject_structs_in_header_files xs
             in
 
-            let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in
+            let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
+            let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
+            (* let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in *)
 
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=executable_spec.pre_post
-                ; in_stmt=(executable_spec.in_stmt @ c_datatypes @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)}
+                ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)}
               )
             with
             | Ok () ->

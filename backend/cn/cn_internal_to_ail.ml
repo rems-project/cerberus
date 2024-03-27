@@ -549,21 +549,16 @@ let rec cn_to_ail_expr_aux_internal
               let val_equality_str =  val_str ^ "_equality" in
               A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
             | _ -> 
-              Printf.printf "ENTERED EQUALITY CASE\n";
               let ctype = (bt_to_ail_ctype (IT.bt t1)) in
               (match get_typedef_string ctype with 
                 | Some str ->
-                  Printf.printf "ENTERED SOME CASE\n";
                   let fn_name = str ^ "_equality" in 
                   A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
                 | None -> 
-                  Printf.printf "ENTERED NONE CASE\n";
                   (match rm_ctype ctype with 
                     | C.(Pointer (_, Ctype (_, Struct sym))) -> 
                       let dt_names = List.map (fun dt -> Sym.pp_string dt.cn_dt_name) dts in 
-                      Printf.printf "ALL DATATYPE NAMES:\n";
                       List.iter (fun dt_str -> Printf.printf "%s\n" dt_str) dt_names;
-                      Printf.printf "THIS STRUCT NAME: %s\n" (Sym.pp_string sym);
                       let is_datatype = List.mem String.equal (Sym.pp_string sym) dt_names in
                       let prefix = if is_datatype then "datatype_" else "struct_" in
                       let str = prefix ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
@@ -795,7 +790,6 @@ let rec cn_to_ail_expr_aux_internal
     prefix d (b1 @ [binding], s1 @ [ail_assign]) (cn_to_ail_expr_aux_internal const_prop pred_name dts globals body d)
 
   | Match (t, ps) -> 
-      Printf.printf "Reached pattern matching case\n";
 
       (* PATTERN COMPILER *)
 
@@ -1019,7 +1013,7 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
     |>   
   *)
   let dt_sym = cn_datatype.cn_dt_name in
-  let fn_sym = Sym.fresh_pretty ("struct_" ^ (Sym.pp_string dt_sym) ^ "_equality") in
+  let fn_sym = Sym.fresh_pretty ("datatype_" ^ (Sym.pp_string dt_sym) ^ "_equality") in
   let param1_sym = Sym.fresh_pretty "x" in 
   let param2_sym = Sym.fresh_pretty "y" in
   let id_tag = Id.id "tag" in
@@ -1069,9 +1063,9 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
   let tag_if_stmt = A.(AilSif (mk_expr tag_check_cond, mk_stmt return_false, mk_stmt switch_stmt)) in
   let ret_type = bt_to_ail_ctype BT.Bool in
   (* Generating function declaration *)
-  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), [param_type; param_type], false, false, false)))) in
+  let decl = (fn_sym, (cn_datatype.cn_dt_loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), [param_type; param_type], false, false, false)))) in
   (* Generating function definition *)
-  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], [mk_stmt tag_if_stmt])))) in
+  let def = (fn_sym, (cn_datatype.cn_dt_loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], [mk_stmt tag_if_stmt])))) in
   [(decl, def)]
 
 let generate_struct_equality_function ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
