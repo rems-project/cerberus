@@ -204,7 +204,7 @@ Module RevocationProofs.
   Qed.
 
   (* Check whether this cap base address is within allocation *)
-  #[local] Definition cap_bounds_within_alloc c a : Prop
+  Definition cap_bounds_within_alloc c a : Prop
     :=
     let alloc_base := AddressValue.to_Z a.(base) in
     let alloc_limit := alloc_base + a.(size) in
@@ -259,7 +259,7 @@ Module RevocationProofs.
       /\ value a1 = value a2 -> AbsByte_eq a1 a2.
 
 
-  #[local] Instance AbsByte_Equivalence: Equivalence AbsByte_eq.
+  Instance AbsByte_Equivalence: Equivalence AbsByte_eq.
   Proof.
     split.
     -
@@ -336,8 +336,8 @@ Module RevocationProofs.
       let bm := m.(bytemap) in
       let am := m.(allocations) in
 
-      (* All allocations are live. [allocation.(is_dead)] is only use
-      with Conucopia. For others, the dead allocations are immediately
+      (* All allocations are live. [allocation.(is_dead)] is only used
+      for Conucopia. For others, the dead allocations are immediately
       removed.  *)
       (forall alloc_id a, ZMap.MapsTo alloc_id a am ->  a.(is_dead) = false)
 
@@ -438,7 +438,7 @@ Module RevocationProofs.
       reflexivity.
     Qed.
 
-    #[global] Instance ret_SameState:
+    Instance ret_SameState:
       forall {T} (x:T),  SameState (@ret memM (Monad_errS mem_state memMError) T x).
     Proof.
       intros T x v s s' H.
@@ -450,7 +450,7 @@ Module RevocationProofs.
     Qed.
     Opaque ret.
 
-    #[global] Instance raise_SameState
+    Instance raise_SameState
       {T:Type}:
       forall x,
         SameState
@@ -464,7 +464,7 @@ Module RevocationProofs.
     Qed.
     Opaque raise.
 
-    #[global] Instance bind_SameState
+    Instance bind_SameState
       {T T': Type}
       {M: memM T'}
       {C: T' -> memM T}
@@ -488,7 +488,7 @@ Module RevocationProofs.
         apply H.
     Qed.
 
-    #[global] Instance get_SameState
+    Instance get_SameState
       :SameState get.
     Proof.
       intros s s' st.
@@ -498,7 +498,7 @@ Module RevocationProofs.
       reflexivity.
     Qed.
 
-    #[global] Instance fail_SameState {T:Type}:
+    Instance fail_SameState {T:Type}:
       forall l e,
         SameState (@fail T l e).
     Proof.
@@ -508,7 +508,7 @@ Module RevocationProofs.
         apply raise_SameState.
     Qed.
 
-    #[global] Instance fail_noloc_SameState {T:Type}:
+    Instance fail_noloc_SameState {T:Type}:
       forall e,
         SameState (@fail_noloc T e).
     Proof.
@@ -517,7 +517,7 @@ Module RevocationProofs.
       apply fail_SameState.
     Qed.
 
-    #[global] Instance serr2InternalErr_SameState
+    Instance serr2InternalErr_SameState
       {T: Type}
       {e: serr T}:
       SameState (serr2InternalErr e).
@@ -528,7 +528,7 @@ Module RevocationProofs.
       apply ret_SameState.
     Qed.
 
-    #[global] Instance sequence_same_state
+    Instance sequence_same_state
       {A: Type}:
       forall (ls: list (memM A)),
         (List.Forall (SameState) ls) ->
@@ -582,7 +582,7 @@ Module RevocationProofs.
             Opaque ret bind.
     Qed.
 
-    #[global] Instance zmap_sequence_SameState
+    Instance zmap_sequence_SameState
       {A: Type}
       (mv: ZMap.t (memM A)):
       zmap_forall SameState mv ->
@@ -1152,14 +1152,14 @@ Module RevocationProofs.
         trivial.
       Qed.
 
-      #[global] Instance ret_PreservesInvariant:
+      Instance ret_PreservesInvariant:
         forall s {T} (x:T), PreservesInvariant s (ret x).
       Proof.
         typeclasses eauto.
       Qed.
       Opaque ret.
 
-      #[global] Instance raise_PreservesInvariant
+      Instance raise_PreservesInvariant
         {T:Type}:
         forall s x,
           PreservesInvariant s
@@ -1172,7 +1172,7 @@ Module RevocationProofs.
       Opaque raise.
 
       (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
-      #[global] Instance bind_PreservesInvariant_same_state
+      Instance bind_PreservesInvariant_same_state
         {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
@@ -1209,7 +1209,7 @@ Module RevocationProofs.
       Qed.
 
       (* Most general form, no connection between [s] and [s'] and nothing is known about [x] *)
-      #[global] Instance bind_PreservesInvariant
+      Instance bind_PreservesInvariant
         {T T': Type}
         {M: memM T'}
         {C: T' -> memM T}
@@ -1249,7 +1249,7 @@ Module RevocationProofs.
       Qed.
 
       (* More specific, allows reasoning about the value of [x] *)
-      #[global] Instance bind_PreservesInvariant_value
+      Instance bind_PreservesInvariant_value
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -1298,7 +1298,7 @@ Module RevocationProofs.
       (* More specific, allows reasoning about the value of [x].
          Does not require [M] preserve invariant.
        *)
-      #[global] Instance bind_PreservesInvariant_full
+      Instance bind_PreservesInvariant_full
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -1347,7 +1347,7 @@ Module RevocationProofs.
       (* More specific, allows reasoning about the value of [x].
          Requires [M] preserve invariant.
        *)
-      #[global] Instance bind_PreservesInvariant_full_with_intermediate_state
+      Instance bind_PreservesInvariant_full_with_intermediate_state
         {T T': Type}
         {m: memM T'}
         {c: T' -> memM T}
@@ -1396,7 +1396,7 @@ Module RevocationProofs.
       Qed.
 
       (* Special case of bind, where the state is passed to the continuation *)
-      #[global] Instance bind_get_PreservesInvariant
+      Instance bind_get_PreservesInvariant
         {T: Type}
         {C: mem_state_r -> memM T}
         :
@@ -1427,7 +1427,7 @@ Module RevocationProofs.
       Qed.
 
       (** generic version, where [m] does not depend on [s] *)
-      #[global] Instance put_PreservesInvariant:
+      Instance put_PreservesInvariant:
         forall s m, invr m -> PreservesInvariant s (put m).
       Proof.
         intros s m H H0.
@@ -1435,7 +1435,7 @@ Module RevocationProofs.
       Qed.
 
       (** dependent version, where [m] depends on [s] *)
-      #[global] Instance put_PreservesInvariant':
+      Instance put_PreservesInvariant':
         forall s m, (invr s -> invr m) -> PreservesInvariant s (put m).
       Proof.
         intros s m D H0.
@@ -1443,13 +1443,13 @@ Module RevocationProofs.
         apply H0.
       Qed.
 
-      #[global] Instance get_PreservesInvariant:
+      Instance get_PreservesInvariant:
         forall s, PreservesInvariant s get.
       Proof.
         typeclasses eauto.
       Qed.
 
-      #[global] Instance update_PreservesInvariant
+      Instance update_PreservesInvariant
         {f: mem_state_r -> mem_state_r}
         :
         forall s,
@@ -1460,7 +1460,7 @@ Module RevocationProofs.
         apply H, MI.
       Qed.
 
-      #[global] Instance liftM_PreservesInvariant
+      Instance liftM_PreservesInvariant
         {A T : Type}
         {a : memM A}:
 
@@ -1481,7 +1481,7 @@ Module RevocationProofs.
         Opaque liftM.
       Qed.
 
-      #[global] Instance fail_PreservesInvariant {T:Type}:
+      Instance fail_PreservesInvariant {T:Type}:
         forall s l e,
           PreservesInvariant s (@fail T l e).
       Proof.
@@ -1489,14 +1489,14 @@ Module RevocationProofs.
         typeclasses eauto.
       Qed.
 
-      #[global] Instance fail_noloc_PreservesInvariant {T:Type}:
+      Instance fail_noloc_PreservesInvariant {T:Type}:
         forall s e,
           PreservesInvariant s (@fail_noloc T e).
       Proof.
         typeclasses eauto.
       Qed.
 
-      #[global] Instance serr2InternalErr_PreservesInvariant
+      Instance serr2InternalErr_PreservesInvariant
         {T: Type}
         {e: serr T}:
         forall s,
@@ -1505,7 +1505,7 @@ Module RevocationProofs.
         typeclasses eauto.
       Qed.
 
-      #[global] Instance sequence_PreservesInvariant
+      Instance sequence_PreservesInvariant
         {A:Type}:
         forall s,
         forall (ls: list (memM A)),
@@ -1534,7 +1534,7 @@ Module RevocationProofs.
           apply IHls.
       Qed.
 
-      #[global] Instance zmap_sequence_PreservesInvariant
+      Instance zmap_sequence_PreservesInvariant
         {A: Type}
         (mv: ZMap.t (memM A)):
         forall s,
@@ -1576,7 +1576,7 @@ Module RevocationProofs.
           apply ret_PreservesInvariant.
       Qed.
 
-      #[global] Instance zmap_mmapi_PreservesInvariant
+      Instance zmap_mmapi_PreservesInvariant
         {A B : Type}
         (f : ZMap.key -> A -> memM B)
         (zm: ZMap.t A):
@@ -1850,7 +1850,7 @@ Module RevocationProofs.
       auto.
     Qed.
 
-    #[local] Instance allocator_PreservesInvariant (size align : Z):
+    Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
     Proof.
@@ -1871,10 +1871,10 @@ Module RevocationProofs.
       apply mem_state_after_ghost_tags_preserves.
       apply I.
     Qed.
-    #[local] Opaque allocator.
+    Opaque allocator.
 
 
-    #[global] Instance find_live_allocation_PreservesInvariant:
+    Instance find_live_allocation_PreservesInvariant:
       forall s a, PreservesInvariant mem_invariant s
                (find_live_allocation a).
     Proof.
@@ -1883,7 +1883,7 @@ Module RevocationProofs.
       preserves_steps.
     Qed.
 
-    #[global] Instance maybe_revoke_pointer_PreservesInvariant
+    Instance maybe_revoke_pointer_PreservesInvariant
       allocation
       (st: mem_state)
       (addr: Z)
@@ -2290,11 +2290,10 @@ Module RevocationProofs.
         apply C.
     Qed.
 
-    (* This function is atypical as its state is intricately linked
-       with the return value in subtle ways. We couldn't apply our
-       usual preservation step lemmas and had to brute-force our way
-       through. *)
-    #[global] Instance revoke_pointers_PreservesInvariant:
+    (* This function stands out because its state is subtly but deeply
+       connected to the return value. We couldn't use our usual preservation
+       step lemmas and had to resort to brute-forcing our way through.  *)
+    Instance revoke_pointers_PreservesInvariant:
       forall s a, PreservesInvariant mem_invariant s (revoke_pointers a).
     Proof.
       intros s a.
@@ -2553,7 +2552,7 @@ Module RevocationProofs.
           apply ZMap.remove_2;auto.
     Qed.
 
-    #[global] Instance kill_PreservesInvariant
+    Instance kill_PreservesInvariant
       (loc : location_ocaml)
       (is_dyn : bool)
       (ptr : pointer_value_indt)
@@ -2878,7 +2877,7 @@ Module RevocationProofs.
           inversion E.
     Qed.
 
-    #[local] Instance allocator_PreservesInvariant (size align : Z):
+    Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
     Proof.
@@ -2899,9 +2898,9 @@ Module RevocationProofs.
       apply mem_state_after_ghost_tags_preserves.
       apply I.
     Qed.
-    #[local] Opaque allocator.
+    Opaque allocator.
 
-    #[local] Instance  remove_allocation_PreservesInvariant
+    Instance  remove_allocation_PreservesInvariant
       (alloc_id : CheriMemoryTypesExe.storage_instance_id)
       (s : mem_state_r):
       PreservesInvariant mem_invariant s (remove_allocation alloc_id).
@@ -2949,7 +2948,7 @@ Module RevocationProofs.
           eapply H3;eauto.
     Qed.
 
-    #[global] Instance kill_PreservesInvariant
+    Instance kill_PreservesInvariant
       (loc : location_ocaml)
       (is_dyn : bool)
       (ptr : pointer_value_indt)
@@ -3599,7 +3598,7 @@ Module RevocationProofs.
     constructor.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.null_ptrval CheriMemoryWithoutPNVI.null_ptrval.
+  Opaque CheriMemoryWithPNVI.null_ptrval CheriMemoryWithoutPNVI.null_ptrval.
 
   Theorem concrete_ptrval_same:
     forall m1 m2 n a,
@@ -3609,7 +3608,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.concrete_ptrval CheriMemoryWithoutPNVI.concrete_ptrval.
+  Opaque CheriMemoryWithPNVI.concrete_ptrval CheriMemoryWithoutPNVI.concrete_ptrval.
 
   Theorem fun_ptrval_same:
     forall m1 m2 s,
@@ -3624,7 +3623,7 @@ Module RevocationProofs.
     constructor.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.fun_ptrval CheriMemoryWithoutPNVI.fun_ptrval.
+  Opaque CheriMemoryWithPNVI.fun_ptrval CheriMemoryWithoutPNVI.fun_ptrval.
 
   (* TODO: this should be part of capabilities library *)
   Lemma cap_invalidate_preserves_ghost_state:
@@ -3666,7 +3665,7 @@ Module RevocationProofs.
       unfold CheriMemoryWithPNVI.case_funsym_opt, CheriMemoryWithPNVI.break_PV,
       CheriMemoryWithoutPNVI.case_funsym_opt, CheriMemoryWithoutPNVI.break_PV.
 
-    #[local] Ltac solve_zmap_find ME Mfuncs :=
+    Ltac solve_zmap_find ME Mfuncs :=
       unfold CheriMemoryWithPNVI.cap_to_Z, CheriMemoryWithoutPNVI.cap_to_Z;
       pose models_compatible as C;
       destruct C as [CI _];
@@ -3701,7 +3700,7 @@ Module RevocationProofs.
       rewrite H0.
       reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.case_funsym_opt CheriMemoryWithoutPNVI.case_funsym_opt.
+  Opaque CheriMemoryWithPNVI.case_funsym_opt CheriMemoryWithoutPNVI.case_funsym_opt.
 
   Theorem derive_cap_same:
     forall is_signed bop ival1 ival2,
@@ -3710,7 +3709,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.derive_cap CheriMemoryWithoutPNVI.derive_cap.
+  Opaque CheriMemoryWithPNVI.derive_cap CheriMemoryWithoutPNVI.derive_cap.
 
   Theorem cap_assign_value_same:
     forall loc ival_cap ival_n,
@@ -3719,7 +3718,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.cap_assign_value CheriMemoryWithoutPNVI.cap_assign_value.
+  Opaque CheriMemoryWithPNVI.cap_assign_value CheriMemoryWithoutPNVI.cap_assign_value.
 
   Theorem ptr_t_int_value_same:
     forall p,
@@ -3728,7 +3727,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.ptr_t_int_value CheriMemoryWithoutPNVI.ptr_t_int_value.
+  Opaque CheriMemoryWithPNVI.ptr_t_int_value CheriMemoryWithoutPNVI.ptr_t_int_value.
 
   Theorem null_cap_same:
     forall f,
@@ -3737,7 +3736,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.null_cap CheriMemoryWithoutPNVI.null_cap.
+  Opaque CheriMemoryWithPNVI.null_cap CheriMemoryWithoutPNVI.null_cap.
 
   Theorem array_shift_ptrval_same:
     forall pv ct iv,
@@ -3746,7 +3745,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.array_shift_ptrval CheriMemoryWithoutPNVI.array_shift_ptrval.
+  Opaque CheriMemoryWithPNVI.array_shift_ptrval CheriMemoryWithoutPNVI.array_shift_ptrval.
 
   Theorem member_shift_ptrval_same:
     forall pv ct ci,
@@ -3755,7 +3754,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.member_shift_ptrval CheriMemoryWithoutPNVI.member_shift_ptrval.
+  Opaque CheriMemoryWithPNVI.member_shift_ptrval CheriMemoryWithoutPNVI.member_shift_ptrval.
 
   Theorem concurRead_ival_same:
     forall ct cs,
@@ -3764,7 +3763,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.concurRead_ival CheriMemoryWithoutPNVI.concurRead_ival.
+  Opaque CheriMemoryWithPNVI.concurRead_ival CheriMemoryWithoutPNVI.concurRead_ival.
 
   Theorem integer_ival_same:
     forall n,
@@ -3773,7 +3772,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.integer_ival CheriMemoryWithoutPNVI.integer_ival.
+  Opaque CheriMemoryWithPNVI.integer_ival CheriMemoryWithoutPNVI.integer_ival.
 
   Theorem max_ival_same:
     forall ct,
@@ -3782,7 +3781,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.max_ival CheriMemoryWithoutPNVI.max_ival.
+  Opaque CheriMemoryWithPNVI.max_ival CheriMemoryWithoutPNVI.max_ival.
 
   Theorem min_ival_same:
     forall ct,
@@ -3791,7 +3790,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.min_ival CheriMemoryWithoutPNVI.min_ival.
+  Opaque CheriMemoryWithPNVI.min_ival CheriMemoryWithoutPNVI.min_ival.
 
   Theorem op_ival_same:
     forall op a b,
@@ -3800,7 +3799,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.op_ival CheriMemoryWithoutPNVI.op_ival.
+  Opaque CheriMemoryWithPNVI.op_ival CheriMemoryWithoutPNVI.op_ival.
 
   Lemma alignof_same:
     forall fuel maybe_tagDefs ty,
@@ -3810,7 +3809,7 @@ Module RevocationProofs.
     intros fuel maybe_tagDefs ty.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.alignof CheriMemoryWithoutPNVI.alignof.
+  Opaque CheriMemoryWithPNVI.alignof CheriMemoryWithoutPNVI.alignof.
 
   Theorem alignof_ival_same:
     forall ty,
@@ -3823,7 +3822,7 @@ Module RevocationProofs.
     cbn.
     repeat break_match;rewrite alignof_same in Heqs;rewrite Heqs in Heqs0;inv Heqs0; reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.alignof_ival CheriMemoryWithoutPNVI.alignof_ival.
+  Opaque CheriMemoryWithPNVI.alignof_ival CheriMemoryWithoutPNVI.alignof_ival.
 
   Lemma offsetof_same:
     forall fuel tagDefs tag_sym,
@@ -3841,7 +3840,7 @@ Module RevocationProofs.
     break_let.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.offsetsof CheriMemoryWithoutPNVI.offsetsof.
+  Opaque CheriMemoryWithPNVI.offsetsof CheriMemoryWithoutPNVI.offsetsof.
 
   Theorem offsetof_ival_same:
     forall tagDefs tag_sym memb_ident,
@@ -3856,7 +3855,7 @@ Module RevocationProofs.
       rewrite Heqo in Heqo0;
       inv Heqo0; reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.offsetof_ival CheriMemoryWithoutPNVI.offsetof_ival.
+  Opaque CheriMemoryWithPNVI.offsetof_ival CheriMemoryWithoutPNVI.offsetof_ival.
 
   (* TODO: [ty] is missing *)
   Lemma sizeof_same:
@@ -3870,7 +3869,7 @@ Module RevocationProofs.
     break_match; [|reflexivity].
     f_equiv.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.sizeof CheriMemoryWithoutPNVI.sizeof.
+  Opaque CheriMemoryWithPNVI.sizeof CheriMemoryWithoutPNVI.sizeof.
 
   Theorem sizeof_ival_same:
     forall ty,
@@ -3884,7 +3883,7 @@ Module RevocationProofs.
       rewrite Heqo in Heqo0;
       inv Heqo0; reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.sizeof_ival CheriMemoryWithoutPNVI.sizeof_ival.
+  Opaque CheriMemoryWithPNVI.sizeof_ival CheriMemoryWithoutPNVI.sizeof_ival.
 
   Theorem bitwise_complement_ival_same:
     forall ty v,
@@ -3893,7 +3892,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.bitwise_complement_ival CheriMemoryWithoutPNVI.bitwise_complement_ival.
+  Opaque CheriMemoryWithPNVI.bitwise_complement_ival CheriMemoryWithoutPNVI.bitwise_complement_ival.
 
   Theorem bitwise_and_ival_same:
     forall ty a b,
@@ -3902,7 +3901,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.bitwise_and_ival CheriMemoryWithoutPNVI.bitwise_and_ival.
+  Opaque CheriMemoryWithPNVI.bitwise_and_ival CheriMemoryWithoutPNVI.bitwise_and_ival.
 
   Theorem bitwise_or_ival_same:
     forall ty a b,
@@ -3911,7 +3910,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.bitwise_or_ival CheriMemoryWithoutPNVI.bitwise_or_ival.
+  Opaque CheriMemoryWithPNVI.bitwise_or_ival CheriMemoryWithoutPNVI.bitwise_or_ival.
 
   Theorem bitwise_xor_ival_same:
     forall ty a b,
@@ -3920,7 +3919,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.bitwise_xor_ival CheriMemoryWithoutPNVI.bitwise_xor_ival.
+  Opaque CheriMemoryWithPNVI.bitwise_xor_ival CheriMemoryWithoutPNVI.bitwise_xor_ival.
 
   Theorem is_specified_ival_same:
     forall v,
@@ -3929,7 +3928,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.is_specified_ival CheriMemoryWithoutPNVI.is_specified_ival.
+  Opaque CheriMemoryWithPNVI.is_specified_ival CheriMemoryWithoutPNVI.is_specified_ival.
 
   Theorem eq_ival_same:
     forall a b,
@@ -3938,7 +3937,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.eq_ival CheriMemoryWithoutPNVI.eq_ival.
+  Opaque CheriMemoryWithPNVI.eq_ival CheriMemoryWithoutPNVI.eq_ival.
 
   Theorem lt_ival_same:
     forall a b,
@@ -3947,7 +3946,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.lt_ival CheriMemoryWithoutPNVI.lt_ival.
+  Opaque CheriMemoryWithPNVI.lt_ival CheriMemoryWithoutPNVI.lt_ival.
 
   Theorem le_ival_same:
     forall a b,
@@ -3956,7 +3955,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.le_ival CheriMemoryWithoutPNVI.le_ival.
+  Opaque CheriMemoryWithPNVI.le_ival CheriMemoryWithoutPNVI.le_ival.
 
   Theorem str_fval_same:
     forall v,
@@ -3965,7 +3964,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.str_fval CheriMemoryWithoutPNVI.str_fval.
+  Opaque CheriMemoryWithPNVI.str_fval CheriMemoryWithoutPNVI.str_fval.
 
   Definition op_fval_same:
     forall fop a b,
@@ -3974,7 +3973,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.op_fval CheriMemoryWithoutPNVI.op_fval.
+  Opaque CheriMemoryWithPNVI.op_fval CheriMemoryWithoutPNVI.op_fval.
 
   Theorem eq_fval_same:
     forall a b,
@@ -3983,7 +3982,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.eq_fval CheriMemoryWithoutPNVI.eq_fval.
+  Opaque CheriMemoryWithPNVI.eq_fval CheriMemoryWithoutPNVI.eq_fval.
 
   Theorem lt_fval_same:
     forall a b,
@@ -3992,7 +3991,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.lt_fval CheriMemoryWithoutPNVI.lt_fval.
+  Opaque CheriMemoryWithPNVI.lt_fval CheriMemoryWithoutPNVI.lt_fval.
 
   Theorem le_fval_same:
     forall a b,
@@ -4001,7 +4000,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.le_fval CheriMemoryWithoutPNVI.le_fval.
+  Opaque CheriMemoryWithPNVI.le_fval CheriMemoryWithoutPNVI.le_fval.
 
   Theorem fvfromint_same:
     forall v,
@@ -4010,7 +4009,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.fvfromint CheriMemoryWithoutPNVI.fvfromint.
+  Opaque CheriMemoryWithPNVI.fvfromint CheriMemoryWithoutPNVI.fvfromint.
 
   Theorem ivfromfloat_same:
     forall t v,
@@ -4019,7 +4018,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.ivfromfloat CheriMemoryWithoutPNVI.ivfromfloat.
+  Opaque CheriMemoryWithPNVI.ivfromfloat CheriMemoryWithoutPNVI.ivfromfloat.
 
   Theorem unspecified_mval_same:
     forall t,
@@ -4028,7 +4027,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.unspecified_mval CheriMemoryWithoutPNVI.unspecified_mval.
+  Opaque CheriMemoryWithPNVI.unspecified_mval CheriMemoryWithoutPNVI.unspecified_mval.
 
   Theorem integer_value_mval_same:
     forall t v,
@@ -4037,7 +4036,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.integer_value_mval CheriMemoryWithoutPNVI.integer_value_mval.
+  Opaque CheriMemoryWithPNVI.integer_value_mval CheriMemoryWithoutPNVI.integer_value_mval.
 
   Theorem floating_value_mval_same:
     forall t v,
@@ -4046,7 +4045,7 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.floating_value_mval CheriMemoryWithoutPNVI.floating_value_mval.
+  Opaque CheriMemoryWithPNVI.floating_value_mval CheriMemoryWithoutPNVI.floating_value_mval.
 
   (* This theorem using weaker equality, since pointers are involved *)
   Theorem pointer_mval_same:
@@ -4102,7 +4101,7 @@ Module RevocationProofs.
     repeat break_match; auto;
       normalize_switches;congruence.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
+  Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
   Definition resolve_function_pointer_res_eq
     : relation ((ZMap.t (digest * string * Capability_GS.t)) * Capability_GS.t)
@@ -4241,7 +4240,7 @@ Module RevocationProofs.
           subst x0.
           reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.ghost_tags CheriMemoryWithoutPNVI.ghost_tags.
+  Opaque CheriMemoryWithPNVI.ghost_tags CheriMemoryWithoutPNVI.ghost_tags.
 
   Theorem cap_match_dyn_allocation_same:
     forall t1 t2 a1 a2,
@@ -4254,7 +4253,7 @@ Module RevocationProofs.
     subst.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.cap_match_dyn_allocation CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
+  Opaque CheriMemoryWithPNVI.cap_match_dyn_allocation CheriMemoryWithoutPNVI.cap_match_dyn_allocation.
 
   Theorem is_pointer_algined_same:
     forall p,
@@ -4262,14 +4261,14 @@ Module RevocationProofs.
   Proof.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.is_pointer_algined CheriMemoryWithoutPNVI.is_pointer_algined.
+  Opaque CheriMemoryWithPNVI.is_pointer_algined CheriMemoryWithoutPNVI.is_pointer_algined.
 
   (* return type of [repr] *)
-  #[local] Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
+  Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
                                          * ZMap.t (bool * CapGhostState)
                                          * list AbsByte.
 
-  #[local] Definition repr_res_eq
+  Definition repr_res_eq
     (mem1:CheriMemoryWithPNVI.mem_state_r)
     (mem2:CheriMemoryWithoutPNVI.mem_state_r)
     (addr : Z)
@@ -4427,13 +4426,13 @@ Module RevocationProofs.
         admit.
     Admitted.
 
-    #[local]Definition repr_fold_T:Type :=
+    Definition repr_fold_T:Type :=
       ZMap.t (digest * string * Capability_GS.t)
       * ZMap.t (bool * CapGhostState)
       * Z
       * list (list AbsByte).
 
-    #[local]Definition repr_fold_eq
+    Definition repr_fold_eq
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       : relation repr_fold_T
@@ -4446,13 +4445,13 @@ Module RevocationProofs.
              (funptrmap  , capmeta  , bs )
              (funptrmap' , capmeta' , bs').
 
-    #[local]Definition repr_fold2_T:Type :=
+    Definition repr_fold2_T:Type :=
       ZMap.t (digest * string * Capability_GS.t)
       * ZMap.t (bool * CapGhostState)
       * Z
       * list AbsByte.
 
-    #[local]Definition repr_fold2_eq
+    Definition repr_fold2_eq
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       (addr : Z)
@@ -5494,7 +5493,7 @@ Module RevocationProofs.
     setoid_rewrite E.
     reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.init_ghost_tags CheriMemoryWithoutPNVI.init_ghost_tags.
+  Opaque CheriMemoryWithPNVI.init_ghost_tags CheriMemoryWithoutPNVI.init_ghost_tags.
 
   Lemma AddressValue_Z_id:
     forall a,
@@ -5532,8 +5531,8 @@ Module RevocationProofs.
     (M1: CheriMemoryWithPNVI.memM T1)
     (M2: CheriMemoryWithoutPNVI.memM T2) : Prop
     := {
-      #[global] Same_Value :: SameValue R M1 M2 ;
-      #[global] Same_State :: SameState M1 M2 ;
+      Same_Value :: SameValue R M1 M2 ;
+      Same_State :: SameState M1 M2 ;
     }.
 
   Lemma ret_Same {T1 T2:Type}
@@ -5565,7 +5564,7 @@ Module RevocationProofs.
     split; intros m1 m2 M;cbn;try reflexivity; try assumption.
   Qed.
 
-  #[local] Instance fail_same {T:Type}:
+  Instance fail_same {T:Type}:
     forall l1 l2 e1 e2, l1 = l2 /\ e1 = e2 ->
 
                         @Same T T (@eq T)
@@ -5578,9 +5577,9 @@ Module RevocationProofs.
     break_match;
       apply raise_Same_eq;reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
+  Opaque CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
 
-  #[local] Instance fail_noloc_same {T:Type}:
+  Instance fail_noloc_same {T:Type}:
     forall e1 e2, e1 = e2 ->
                   @Same T T (@eq T)
                     (CheriMemoryWithPNVI.fail_noloc e1)
@@ -5593,7 +5592,7 @@ Module RevocationProofs.
     split;
       reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc.
+  Opaque CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc.
 
   Lemma bind_Same {T1 T2 T1' T2':Type}
     (R: T1 -> T2 -> Prop) (* relation between values *)
@@ -5833,9 +5832,9 @@ Module RevocationProofs.
     Variable  align : Z.
 
     (* Temporary make these transparent as we have proven some of the lemmas by brute force before introducing [fail_same] and [fail_noloc_same] *)
-    #[local] Transparent CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
+    Transparent CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
 
-    #[local] Instance allocator_same_result:
+    Instance allocator_same_result:
       SameValue eq (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
     Proof.
       intros mem_state1 mem_state2 M.
@@ -5863,7 +5862,7 @@ Module RevocationProofs.
         reflexivity.
     Qed.
 
-    #[local] Instance allocator_same_state:
+    Instance allocator_same_state:
       SameState (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
     Proof.
       intros mem_state1 mem_state2 M.
@@ -5917,12 +5916,12 @@ Module RevocationProofs.
         1,2: apply init_ghost_tags_same; assumption.
     Qed.
 
-    #[local] Instance allocator_same:
+    Instance allocator_same:
       Same eq (CheriMemoryWithPNVI.allocator size align) (CheriMemoryWithoutPNVI.allocator size align).
     Proof.
       split;typeclasses eauto.
     Qed.
-    #[global] Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
+    Opaque CheriMemoryWithPNVI.allocator CheriMemoryWithoutPNVI.allocator.
  *)
   End allocator_proofs.
 
@@ -5932,9 +5931,9 @@ Module RevocationProofs.
   Proof.
     auto.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.num_of_int CheriMemoryWithoutPNVI.num_of_int.
+  Opaque CheriMemoryWithPNVI.num_of_int CheriMemoryWithoutPNVI.num_of_int.
 
-  #[global] Instance allocate_region_same:
+  Instance allocate_region_same:
     forall tid pref align_int size_int,
       Same pointer_value_eq
         (CheriMemoryWithPNVI.allocate_region tid pref align_int size_int)
@@ -5975,9 +5974,9 @@ Module RevocationProofs.
       tuple_inversion.
       reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.allocate_region CheriMemoryWithoutPNVI.allocate_region.
+  Opaque CheriMemoryWithPNVI.allocate_region CheriMemoryWithoutPNVI.allocate_region.
 
-    #[local] Opaque CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
+    Opaque CheriMemoryWithPNVI.fail_noloc CheriMemoryWithoutPNVI.fail_noloc CheriMemoryWithPNVI.fail CheriMemoryWithoutPNVI.fail.
 
   Definition Z_AbsByte_eq (za1: (Z*AbsByte)) (za2: (Z*AbsByte)): Prop
     :=
@@ -5985,7 +5984,7 @@ Module RevocationProofs.
     let '(z2,a2) := za2 in
     z1 = z2 /\ AbsByte_eq a1 a2.
 
-  #[local] Instance Z_AbsByte_Equivalence: Equivalence Z_AbsByte_eq.
+  Instance Z_AbsByte_Equivalence: Equivalence Z_AbsByte_eq.
   Proof.
     split.
     -
@@ -6017,7 +6016,7 @@ Module RevocationProofs.
     Variable  ty : CoqCtype.ctype.
     Variable  init_opt : option CheriMemoryWithPNVI.mem_value.
 
-    #[global] Instance allocate_object_same:
+    Instance allocate_object_same:
       Same pointer_value_eq
         (CheriMemoryWithPNVI.allocate_object tid pref int_val ty init_opt)
         (CheriMemoryWithoutPNVI.allocate_object tid pref int_val ty init_opt).
@@ -6221,11 +6220,11 @@ Module RevocationProofs.
         constructor.
         reflexivity.
     Qed.
-    #[global] Opaque CheriMemoryWithPNVI.allocate_object CheriMemoryWithoutPNVI.allocate_object.
+    Opaque CheriMemoryWithPNVI.allocate_object CheriMemoryWithoutPNVI.allocate_object.
 
   End allocate_object_proofs.
 
-  #[local] Instance find_live_allocation_same (addr:AddressValue.t):
+  Instance find_live_allocation_same (addr:AddressValue.t):
     Same eq
       (CheriMemoryWithPNVI.find_live_allocation addr)
       (CheriMemoryWithoutPNVI.find_live_allocation addr).
@@ -6242,7 +6241,7 @@ Module RevocationProofs.
     subst.
     break_match;reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.find_live_allocation CheriMemoryWithoutPNVI.find_live_allocation.
+  Opaque CheriMemoryWithPNVI.find_live_allocation CheriMemoryWithoutPNVI.find_live_allocation.
 
   Definition abst_res_eq: relation (taint_indt * mem_value_with_err * list AbsByte)
     := fun '(t1,mv1,b1) '(t2,mv2,b2) =>
@@ -6265,7 +6264,7 @@ Module RevocationProofs.
       (CheriMemoryWithoutPNVI.abst fuel find_overlapping2 funptrmap2 tag_query_f addr cty bs2).
   Proof.
   Admitted.
-  #[global] Opaque CheriMemoryWithPNVI.abst CheriMemoryWithoutPNVI.abst.
+  Opaque CheriMemoryWithPNVI.abst CheriMemoryWithoutPNVI.abst.
 
   Lemma fetch_bytes_same:
     forall (bytemap1 bytemap2 : ZMap.t AbsByte)
@@ -6315,7 +6314,7 @@ Module RevocationProofs.
       subst.
       reflexivity.
   Qed.
-  #[global] Opaque CheriMemoryWithPNVI.fetch_bytes CheriMemoryWithoutPNVI.fetch_bytes.
+  Opaque CheriMemoryWithPNVI.fetch_bytes CheriMemoryWithoutPNVI.fetch_bytes.
 
   Lemma maybe_revoke_pointer_same:
     forall
@@ -6463,7 +6462,7 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
-  #[global] Instance kill_same
+  Instance kill_same
     (loc : location_ocaml)
     (is_dyn : bool)
     (ptr1 ptr2 : pointer_value_indt)
