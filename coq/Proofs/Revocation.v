@@ -3104,20 +3104,23 @@ Module RevocationProofs.
     same_state_steps.
   Qed.
 
-(*
-  Instance call_intrinsic_SameState
-    (loc : location_ocaml)
-    (name : string)
-    (args : list mem_value):
-    SameState (call_intrinsic loc name args).
-  Proof.
-    unfold call_intrinsic.
-    rewrite resolve_has_CORNUCOPIA.
-    same_state_steps.
-*)
-  
   (*
+
+TODO: review: wrt [cap_of_mem_value] -> [resolve_function_pointer] logic
 call_intrinsic
+intrinsic_offset_get loc args
+intrinsic_address_get loc args
+intrinsic_base_get loc args
+intrinsic_length_get loc args
+intrinsic_tag_get loc args
+intrinsic_tag_clear loc args
+intrinsic_is_equal_exact loc args
+intrinsic_representable_length loc args
+intrinsic_representable_alignment_mask loc args
+intrinsic_revoke loc
+intrinsic_bounds_set loc args
+intrinsic_strfcap loc args
+intrinsic_perms_and loc args
 
 Preserve:
 store
@@ -3127,7 +3130,6 @@ allocate_region
 
 Misc:
 va_*
-call_intrinsic
 
      *)
 
