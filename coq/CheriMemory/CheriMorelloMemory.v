@@ -558,28 +558,49 @@ Module Type CheriMemoryImpl
          else (t, gs)
       ) capmeta.
 
-  Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * AddressValue.t) :=
-    get >>= fun st =>
-        let alloc_id := st.(next_alloc_id) in
-        (
-          let z := AddressValue.to_Z st.(last_address) - size in
-          let (q,m) := quomod z align in
-          let z' := z - (if Z.ltb q 0 then Z.opp m else m) in
-          if Z.leb z' 0 then
-            fail_noloc (MerrOther "allocator: failed (out of memory)")
-          else
-            ret z'
-        )
-          >>= fun addr =>
-            put
-              (mem_state_with_next_alloc_id (Z.succ alloc_id)
-                 (mem_state_with_last_address (AddressValue.of_Z addr)
-                    (mem_state_with_capmeta (init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta)) st)))
-            ;;
-
-            (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
-
-            ret (alloc_id, (AddressValue.of_Z addr)).
+  Definition allocator
+    (size: Z)
+    (align: Z)
+    (is_dynamic: bool)
+    (pref: CoqSymbol.prefix)
+    (ty: option CoqCtype.ctype)
+    (ro_status: readonly_status)
+    : memM (storage_instance_id * AddressValue.t)
+    :=
+    st <- get ;;
+    let alloc_id := st.(next_alloc_id) in
+    let z := AddressValue.to_Z st.(last_address) - size in
+    let (q,m) := quomod z align in
+    let addr := z - (if Z.ltb q 0 then Z.opp m else m) in
+    if Z.leb addr 0 then
+      fail_noloc (MerrOther "allocator: failed (out of memory)")
+    else
+      put (
+          let alloc :=
+            {|
+              prefix := pref;
+              base:= (AddressValue.of_Z addr);
+              size:= size;
+              ty:= ty;
+              is_dynamic := is_dynamic;
+              is_dead := false;
+              is_readonly:= ro_status;
+              taint:= Unexposed
+            |}
+          in
+          {|
+            next_alloc_id    := Z.succ st.(next_alloc_id);
+            last_address     := AddressValue.of_Z addr;
+            allocations      := ZMap.add alloc_id alloc st.(allocations);
+            funptrmap        := st.(funptrmap);
+            varargs          := st.(varargs);
+            next_varargs_id  := st.(next_varargs_id);
+            bytemap          := st.(bytemap);
+            capmeta          := (init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta));
+          |})
+      ;;
+      (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
+      ret (alloc_id, (AddressValue.of_Z addr)).
 
 
   Definition alignof
@@ -884,12 +905,30 @@ Module Type CheriMemoryImpl
     end.
 
 
+  Definition allocate_region
+    (tid : MC.thread_id)
+    (pref : CoqSymbol.prefix)
+    (align_int : integer_value)
+    (size_int : integer_value)
+    : memM pointer_value
+    :=
+    let align_n := num_of_int align_int in
+    let size_n := num_of_int size_int in
+    let mask := C.representable_alignment_mask size_n in
+    let size_n' := C.representable_length size_n in
+    let align_n' :=
+      Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
+
+    '(alloc_id, addr) <- allocator size_n' align_n' true CoqSymbol.PrefMalloc None IsWritable ;;
+    let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
+    ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c_value)).
+
   Definition allocate_object
-    (tid:MC.thread_id)
-    (pref:CoqSymbol.prefix)
-    (int_val:integer_value)
-    (ty:CoqCtype.ctype)
-    (init_opt:option mem_value)
+    (tid: MC.thread_id)
+    (pref: CoqSymbol.prefix)
+    (int_val: integer_value)
+    (ty: CoqCtype.ctype)
+    (init_opt: option mem_value)
     : memM pointer_value
     :=
     let align_n := num_of_int int_val in
@@ -912,118 +951,59 @@ Module Type CheriMemoryImpl
     else ret tt) ;;
      *)
 
-    allocator size_n' align_n' >>=
-      (fun '(alloc_id, addr) =>
-         (*
-         mprint_msg
-           ("allocate_object addr="  ++ String.hex_str (AddressValue.to_Z addr) ++
-              ", size=" ++ String.dec_str size_n' ++
-              ", align=" ++ String.dec_str align_n' ++
-              ", alloc_id=" ++ String.dec_str alloc_id
-           ) ;;
-          *)
-         (match init_opt with
-          | None =>
-              let alloc := {| prefix := pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_dead := false; is_readonly:= IsWritable; taint:= Unexposed|} in
-              update (fun st =>
-                        {|
-                          next_alloc_id    := st.(next_alloc_id);
-                          last_address     := st.(last_address) ;
-                          allocations      := ZMap.add alloc_id alloc st.(allocations);
-                          funptrmap        := st.(funptrmap);
-                          varargs          := st.(varargs);
-                          next_varargs_id  := st.(next_varargs_id);
-                          bytemap          := st.(bytemap);
-                          capmeta          := st.(capmeta);
-                        |}) ;; ret false
-          | Some mval =>  (* here we allocate an object with initiliazer *)
-              let (ro,readonly_status) :=
-                match pref with
-                | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly ReadonlyStringLiteral)
-                | CoqSymbol.PrefTemporaryLifetime _ _ =>
-                    (true, IsReadOnly ReadonlyTemporaryLifetime)
-                | _ =>
-                    (true, IsReadOnly ReadonlyConstQualified)
-                      (* | _ => (false,IsWritable) *)
-                end
-              in
-              let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_dead := false; is_readonly:= readonly_status; taint:= Unexposed |} in
-
-              st <- get ;;
-              '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) (AddressValue.to_Z addr) mval) ;;
-              let bs := mapi (fun i b => (AddressValue.to_Z addr + (Z.of_nat i), b)) pre_bs in
-              put {|
-                  next_alloc_id    := st.(next_alloc_id);
-                  last_address     := st.(last_address) ;
-                  allocations      := ZMap.add alloc_id alloc st.(allocations);
-                  funptrmap        := funptrmap;
-                  varargs          := st.(varargs);
-                  next_varargs_id  := st.(next_varargs_id);
-                  bytemap          := List.fold_left (fun acc '(addr, b) =>
-                                                        ZMap.add addr b acc
-                                        ) bs st.(bytemap);
-                  capmeta          := capmeta;
-                |}
-              ;;
-              ret ro
-          end)
-           >>=
-           fun ro =>
-             let c := C.alloc_cap addr (AddressValue.of_Z size_n') in
-             (* Check here *)
-             let c :=
-               if ro then
-                 let p := C.cap_get_perms c in
-                 let p := Permissions.perm_clear_store p in
-                 let p := Permissions.perm_clear_store_cap p in
-                 let p := Permissions.perm_clear_store_local_cap p in
-                 C.cap_narrow_perms c p
-               else c
-             in
-             ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c))
-      ).
-
-  Definition allocate_region
-    (tid : MC.thread_id)
-    (pref : CoqSymbol.prefix)
-    (align_int : integer_value)
-    (size_int : integer_value)
-    : memM pointer_value
-    :=
-    let align_n := num_of_int align_int in
-    let size_n := num_of_int size_int in
-    let mask := C.representable_alignment_mask size_n in
-    let size_n' := C.representable_length size_n in
-    let align_n' :=
-      Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
-
-    allocator size_n' align_n' >>=
-      fun '(alloc_id, addr) =>
-        let alloc :=
-          {| prefix := CoqSymbol.PrefMalloc;
-            base := addr;
-            size := size_n';
-            ty := None;
-            is_dynamic := true ;
-            is_dead := false ;
-            is_readonly := IsWritable;
-            taint := Unexposed |}
+    (match init_opt with
+     | None =>
+         '(alloc_id, addr) <- allocator size_n' align_n' false CoqSymbol.PrefMalloc (Some ty) IsWritable ;;
+         ret (alloc_id, addr, false)
+     | Some mval =>  (* here we allocate an object with initiliazer *)
+         let (ro,readonly_status) :=
+           match pref with
+           | CoqSymbol.PrefStringLiteral _ _ => (true, IsReadOnly ReadonlyStringLiteral)
+           | CoqSymbol.PrefTemporaryLifetime _ _ =>
+               (true, IsReadOnly ReadonlyTemporaryLifetime)
+           | _ =>
+               (true, IsReadOnly ReadonlyConstQualified)
+                 (* | _ => (false,IsWritable) *)
+           end
+         in
+         '(alloc_id, addr) <- allocator size_n' align_n' false CoqSymbol.PrefMalloc (Some ty) readonly_status ;;
+         (* We should be careful not to introduce a state change here
+         in case of error which happens after the [allocator]
+         invocation, as [allocator] modifies state. In the current
+         implementation, this is not happening, as errors are handled
+         as [InternalErr] which supposedly should terminate program
+         evaluation.  *)
+         st <- get ;;
+         '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) (AddressValue.to_Z addr) mval) ;;
+         let bs := mapi (fun i b => (AddressValue.to_Z addr + (Z.of_nat i), b)) pre_bs in
+         let bytemap := List.fold_left (fun acc '(addr, b) => ZMap.add addr b acc) bs st.(bytemap) in
+         put {|
+             next_alloc_id    := st.(next_alloc_id);
+             last_address     := st.(last_address) ;
+             allocations      := st.(allocations);
+             funptrmap        := funptrmap;
+             varargs          := st.(varargs);
+             next_varargs_id  := st.(next_varargs_id);
+             bytemap          := bytemap;
+             capmeta          := capmeta;
+           |}
+         ;;
+         ret (alloc_id, addr, ro)
+     end)
+      >>=
+      fun '(alloc_id, addr, ro)  =>
+        let c := C.alloc_cap addr (AddressValue.of_Z size_n') in
+        let c :=
+          if ro then
+            let p := C.cap_get_perms c in
+            let p := Permissions.perm_clear_store p in
+            let p := Permissions.perm_clear_store_cap p in
+            let p := Permissions.perm_clear_store_local_cap p in
+            C.cap_narrow_perms c p
+          else c
         in
-        let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
-        update
-          (fun (st : mem_state) =>
-             {|
-               next_alloc_id    := st.(next_alloc_id);
-               last_address     := st.(last_address) ;
-               allocations      := (ZMap.add alloc_id alloc st.(allocations));
-               funptrmap        := st.(funptrmap);
-               varargs          := st.(varargs);
-               next_varargs_id  := st.(next_varargs_id);
-               bytemap          := st.(bytemap);
-               capmeta          := st.(capmeta);
-             |})
-        ;;
-        ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c_value)).
+        ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c)).
+
 
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (cap_to_Z c) 0.

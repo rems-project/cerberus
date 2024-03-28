@@ -1955,29 +1955,28 @@ Module RevocationProofs.
       auto.
     Qed.
 
+    (*
     Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
     Proof.
       intros s.
       unfold allocator.
-      apply bind_get_PreservesInvariant.
+      preserves_step.
       apply bind_PreservesInvariant_same_state.
-
-      break_let.
-      break_match.
-      apply fail_noloc_SameState.
-      apply ret_SameState.
-      intros x.
-      apply put_PreservesInvariant'.
-      intros I.
-      apply mem_state_with_next_alloc_id_preserves.
-      apply mem_state_with_last_address_preserves.
-      apply mem_state_after_ghost_tags_preserves.
-      apply I.
+      -
+        break_let.
+        break_match_goal; same_state_steps.
+      -
+        intros x.
+        apply put_PreservesInvariant'.
+        intros I.
+        apply mem_state_with_next_alloc_id_preserves,
+          mem_state_with_last_address_preserves,
+          mem_state_after_ghost_tags_preserves,I.
     Qed.
     Opaque allocator.
-
+     *)
 
     Instance find_live_allocation_PreservesInvariant:
       forall s a, PreservesInvariant mem_invariant s
@@ -3105,6 +3104,46 @@ Module RevocationProofs.
   Qed.
 
   (*
+  Instance allocate_object_PreservesInvariant
+    (tid:MemCommonExe.thread_id)
+    (pref:CoqSymbol.prefix)
+    (int_val:integer_value)
+    (ty:CoqCtype.ctype)
+    (init_opt:option mem_value)
+    :
+    forall s, PreservesInvariant mem_invariant s (allocate_object tid pref int_val ty init_opt).
+  Proof.
+    intros s.
+    unfold allocate_object.
+    preserves_step.
+    preserves_step.
+    preserves_step.
+    apply allocator_PreservesInvariant.
+    break_let.
+    preserves_step.
+    break_match_goal.
+    -
+      break_let.
+      preserves_step.
+      preserves_step.
+      preserves_step.
+      repeat break_let.
+      preserves_step.
+      preserves_step.
+      admit.
+      preserves_step.
+    -
+      (* no init *)
+      preserves_step.
+      preserves_step.
+      admit.
+      preserves_step.
+    -
+      preserves_steps.
+  Qed.
+  *)
+
+  (*
 
 TODO: review: wrt [cap_of_mem_value] -> [resolve_function_pointer] logic
 call_intrinsic
@@ -3369,6 +3408,7 @@ va_*
           inversion E.
     Qed.
 
+    (*
     Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
@@ -3391,6 +3431,7 @@ va_*
       apply I.
     Qed.
     Opaque allocator.
+     *)
 
     Instance  remove_allocation_PreservesInvariant
       (alloc_id : CheriMemoryTypesExe.storage_instance_id)
