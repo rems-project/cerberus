@@ -41,8 +41,8 @@ Section ListAux.
     `{Equivalence B Eb}
     (f : A -> B -> A)
     `{f_mor: !Proper ((Ae) ==> (Eb) ==> (Ae)) f}
-  :
-  Proper (eqlistA Eb ==> Ae ==> Ae) (List.fold_left f).
+    :
+    Proper (eqlistA Eb ==> Ae ==> Ae) (List.fold_left f).
   Proof.
     intros x y Exy.
     intros a b Eab.
@@ -259,9 +259,9 @@ Section ListAux.
     {x x' : A}
     {Ex : Ea x x'}
     (Ef : forall (a a' : A), (Ea a a') ->
-                        Forall2 (fun b b' =>
-                                   Forall2 (fun c c' =>
-                                              EMa (f a b c) (f' a' b' c')) l2 l2') l1 l1')
+                             Forall2 (fun b b' =>
+                                        Forall2 (fun c c' =>
+                                                   EMa (f a b c) (f' a' b' c')) l2 l2') l1 l1')
     :
     EMa (monadic_fold_left2 f x l1 l2) (monadic_fold_left2 f' x' l1' l2').
   Proof.
@@ -775,9 +775,9 @@ Section ZMapAux.
   (* Simple case *)
   #[global] Instance zmap_mapi_Proper_equal
     {A B : Type}
-  :
-  Proper ((eq ==> eq ==> eq) ==>
-      (ZMap.Equal) ==> (ZMap.Equal)) (@ZMap.mapi A B ).
+    :
+    Proper ((eq ==> eq ==> eq) ==>
+              (ZMap.Equal) ==> (ZMap.Equal)) (@ZMap.mapi A B ).
   Proof.
     intros f1 f2 Ef a1 a2 H.
     unfold ZMap.Equal in *.
@@ -988,8 +988,8 @@ Section ZMapAux.
   Qed.
 
   Lemma zmap_relate_keys_same_keys {A B:Type} (m1:ZMap.t A) (m2:ZMap.t B) f:
-      zmap_relate_keys m1 m2 f ->
-      (forall k, ZMap.In k m1 <-> ZMap.In k m2).
+    zmap_relate_keys m1 m2 f ->
+    (forall k, ZMap.In k m1 <-> ZMap.In k m2).
   Proof.
     intros H k.
     unfold zmap_relate_keys in H.
@@ -1219,6 +1219,116 @@ Section ZMapAux.
           split.
           exists i. split; [lia|]. assumption.
           auto.
+  Qed.
+
+  Lemma zmap_update_MapsTo_not_at_k
+    {A: Type}
+    (old: ZMap.t A)
+    (f: option A -> option A)
+    (v: A)
+    (k k': Z)
+    :
+    k<>k' ->
+    ZMap.MapsTo k v (zmap_update k' f old) <-> ZMap.MapsTo k v old.
+  Proof.
+    intros K.
+    unfold zmap_update.
+    split.
+    -
+      break_match; intros H.
+      + apply add_neq_mapsto_iff, remove_neq_mapsto_iff in H; auto.
+      + apply remove_neq_mapsto_iff in H; auto.
+    -
+      break_match; intros H.
+      + apply add_neq_mapsto_iff, remove_neq_mapsto_iff;auto.
+      + apply remove_neq_mapsto_iff; auto.
+  Qed.
+
+  Lemma zmap_update_MapsTo_update_at_k
+    {A: Type}
+    {m: ZMap.t A}
+    {f: option A -> option A}
+    {v v': A}
+    {k: Z}
+    :
+    ZMap.MapsTo k v m ->
+    ZMap.MapsTo k v' (zmap_update k f m) ->
+    f (Some v) = Some v'.
+  Proof.
+    intros M U.
+    unfold zmap_update in U.
+    apply ZMap.find_1 in M.
+    rewrite M in U.
+    clear M.
+    destruct (f (Some v)).
+    -
+      apply F.add_mapsto_iff in U.
+      destruct U;destruct H.
+      +
+        subst.
+        reflexivity.
+      +
+        congruence.
+    -
+      apply remove_mapsto_iff in U.
+      destruct U.
+      congruence.
+  Qed.
+
+  Lemma zmap_update_MapsTo_update_at_k'
+    {A: Type}
+    {m: ZMap.t A}
+    {f: option A -> option A}
+    {v v': A}
+    {k: Z}
+    :
+    ZMap.MapsTo k v m ->
+    f (Some v) = Some v' ->
+    ZMap.MapsTo k v' (zmap_update k f m).
+  Proof.
+    intros M U.
+    unfold zmap_update.
+    apply ZMap.find_1 in M.
+    rewrite M.
+    clear M.
+    destruct (f (Some v)).
+    -
+      invc U.
+      apply ZMap.add_1.
+      reflexivity.
+    -
+      congruence.
+  Qed.
+
+  Lemma zmap_update_MapsTo_new_at_k
+    {A: Type}
+    {m: ZMap.t A}
+    {f: option A -> option A}
+    {v': A}
+    {k: Z}
+    :
+    ~ ZMap.In k m ->
+    ZMap.MapsTo k v' (zmap_update k f m) ->
+    f None = Some v'.
+  Proof.
+    intros M U.
+    unfold zmap_update in U.
+    apply not_find_in_iff in M.
+    rewrite M in U.
+    clear M.
+    destruct (f None).
+    -
+      apply F.add_mapsto_iff in U.
+      destruct U;destruct H.
+      +
+        subst.
+        reflexivity.
+      +
+        congruence.
+    -
+      apply remove_mapsto_iff in U.
+      destruct U.
+      congruence.
   Qed.
 
 
