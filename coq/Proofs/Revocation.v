@@ -545,6 +545,17 @@ Module RevocationProofs.
       apply ret_SameState.
     Qed.
 
+    Instance option2memM_SameState
+      {A:Type}
+      (s:string)
+      (v: option A):
+      SameState (option2memM s v).
+    Proof.
+      unfold option2memM.
+      break_match_goal;
+      typeclasses eauto.
+    Qed.
+
     Instance sequence_same_state
       {A: Type}:
       forall (ls: list (memM A)),
@@ -749,6 +760,7 @@ Module RevocationProofs.
       |[|- SameState (serr2InternalErr _)] => apply serr2InternalErr_SameState
       |[|- SameState (liftM _ _)] => apply liftM_SameState
       |[|- SameState (mapT_list _ _)] => apply mapT_list_SameState
+      |[|- SameState (option2memM _ _)] => apply option2memM_SameState
       |[|- SameState _] => typeclasses eauto
       end ; intros.
 
@@ -1727,7 +1739,7 @@ Module RevocationProofs.
               | |- PreservesInvariant _ _ _ => preserves_step
               | |- context [match _ with _ => _ end] => break_match_goal
               | |- context [if _ then _ else _] => break_match_goal
-              end; cbn).
+              end; intros; cbn).
 
     Lemma resolve_has_PNVI:
       has_PNVI (WithoutPNVISwitches.get_switches tt) = false.
@@ -3008,17 +3020,103 @@ Module RevocationProofs.
           eauto.
     Qed.
 
-  (*
-Same:
+    Instance isWellAligned_ptrval_SameState
+      (ref_ty: CoqCtype.ctype)
+      (ptrval: pointer_value):
+      SameState (isWellAligned_ptrval ref_ty ptrval).
+    Proof.
+      unfold isWellAligned_ptrval.
+      same_state_steps.
+    Qed.
 
-validForDeref_ptrval
-isWellAligned_ptrval
-ptrfromint
-intfromptr
-eff_array_shift_ptrval
-eff_member_shift_ptrval
-copy_alloc_id
-sequencePoint
+    Instance validForDeref_ptrval_SameState
+      (ref_ty: CoqCtype.ctype)
+      (ptrval: pointer_value):
+      SameState (validForDeref_ptrval ref_ty ptrval).
+    Proof.
+      unfold validForDeref_ptrval.
+      same_state_steps.
+    Qed.
+
+    (* Without PNVI [ptrfromint] does not modify state. NB: it will not be
+       the case in the presence of PNVI, because of
+       [expose_allocation] *)
+  Instance ptrfromint_SameState
+    (loc : location_ocaml)
+    (int_ty : CoqIntegerType.integerType)
+    (ref_ty : CoqCtype.ctype)
+    (int_v : integer_value):
+    SameState (ptrfromint loc int_ty ref_ty int_v).
+  Proof.
+    unfold ptrfromint.
+    same_state_steps.
+  Qed.
+
+  Instance intfromptr_SameState
+    (loc : location_ocaml)
+    (unused : CoqCtype.ctype)
+    (ity: CoqIntegerType.integerType)
+    (ptr: pointer_value):
+    SameState (intfromptr loc unused ity ptr).
+  Proof.
+    intros.
+    unfold intfromptr.
+    repeat rewrite resolve_has_any_PNVI_flavour.
+    same_state_steps;lia.
+  Qed.
+
+  Instance eff_array_shift_ptrval_SameState
+    (loc : location_ocaml)
+    (ptrval : pointer_value)
+    (ty : CoqCtype.ctype)
+    (ival_int : integer_value):
+    SameState (eff_array_shift_ptrval loc ptrval ty ival_int).
+  Proof.
+    unfold eff_array_shift_ptrval.
+    same_state_steps.
+  Qed.
+
+  Instance eff_member_shift_ptrval_SameState
+    (loc : location_ocaml)
+    (ptr : pointer_value)
+    (tag_sym: CoqSymbol.sym)
+    (memb_ident: CoqSymbol.identifier):
+    SameState (eff_member_shift_ptrval loc ptr tag_sym memb_ident).
+  Proof.
+    unfold eff_member_shift_ptrval.
+    break_let.
+    same_state_steps.
+  Qed.
+
+  Instance copy_alloc_id_SameState
+    (ival : integer_value)
+    (ptrval : pointer_value):
+    SameState  (copy_alloc_id ival ptrval).
+  Proof.
+    unfold copy_alloc_id.
+    same_state_steps.
+  Qed.
+
+  Instance sequencePoint_SameState
+    : SameState  (sequencePoint).
+  Proof.
+    unfold sequencePoint.
+    same_state_steps.
+  Qed.
+
+(*
+  Instance call_intrinsic_SameState
+    (loc : location_ocaml)
+    (name : string)
+    (args : list mem_value):
+    SameState (call_intrinsic loc name args).
+  Proof.
+    unfold call_intrinsic.
+    rewrite resolve_has_CORNUCOPIA.
+    same_state_steps.
+*)
+  
+  (*
 call_intrinsic
 
 Preserve:
