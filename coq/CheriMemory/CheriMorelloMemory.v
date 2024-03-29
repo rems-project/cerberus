@@ -2824,21 +2824,12 @@ Module Type CheriMemoryImpl
           ret (PV prov (PVconcrete c_value))
     end.
 
-  Definition memcpy
+  (* Internal *)
+  Fixpoint memcpy_copy_data
+    (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
-    (size_int: integer_value)
-    : memM pointer_value
-    :=
-    let cap_addr_of_pointer_value (ptr: pointer_value) : serr Z :=
-      match ptr with
-      | PV _ (PVconcrete c_value)
-      | PV _ (PVfunction (FP_invalid c_value)) =>
-          ret (cap_to_Z c_value)
-      | _ => raise "memcpy: invalid pointer value"
-      end in
-    let size_n := num_of_int size_int in
-    let loc := Loc_other "memcpy" in
-    let fix copy_data (index: nat): memM pointer_value :=
+    (index: nat):
+    memM pointer_value :=
       match index with
       | O => ret ptrval1
       | S index =>
@@ -2847,40 +2838,59 @@ Module Type CheriMemoryImpl
           ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV i_value) ;;
           '(_, mval) <- load loc CoqCtype.unsigned_char ptrval2' ;;
           store loc CoqCtype.unsigned_char false ptrval1' mval ;;
-          copy_data index
-      end
+          memcpy_copy_data loc ptrval1 ptrval2 index
+      end.
+
+  (* Internal *)
+  Fixpoint memcpy_copy_tags
+    (loc: location_ocaml)
+    (ptrval1 ptrval2: pointer_value)
+    (index: nat)
+    : memM pointer_value :=
+    let cap_addr_of_pointer_value (ptr: pointer_value) : serr Z :=
+      match ptr with
+      | PV _ (PVconcrete c_value)
+      | PV _ (PVfunction (FP_invalid c_value)) =>
+          ret (cap_to_Z c_value)
+      | _ => raise "memcpy: invalid pointer value"
+      end in
+    let copy_tag (dst_p : pointer_value) (src_p : pointer_value)
+      : memM unit :=
+      dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
+      src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
+      update
+        (fun (st : mem_state) =>
+           match ZMap.find src_a st.(capmeta) with
+           | None => st
+           | Some t_value =>
+               if negb (is_pointer_algined dst_a)
+               then st
+               else mem_state_with_capmeta (ZMap.add dst_a t_value st.(capmeta)) st
+           end)
     in
+    match index with
+    | O => ret ptrval1
+    | S index =>
+        let i_value := IV (Z.of_nat index) in
+        ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char i_value ;;
+        ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char i_value ;;
+        copy_tag ptrval1' ptrval2' ;;
+        memcpy_copy_tags loc ptrval1 ptrval2 index
+    end.
+
+  Definition memcpy
+    (ptrval1 ptrval2: pointer_value)
+    (size_int: integer_value)
+    : memM pointer_value
+    :=
+    let size_n := num_of_int size_int in
+    let loc := Loc_other "memcpy" in
     let pointer_sizeof := IMP.get.(sizeof_pointer) in
     let npointer_sizeof := Z.to_nat pointer_sizeof in
-    let fix copy_tags (index: nat): memM pointer_value :=
-      let copy_tag (dst_p : pointer_value) (src_p : pointer_value)
-        : memM unit :=
-        dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
-        src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
-        update
-          (fun (st : mem_state) =>
-             match ZMap.find src_a st.(capmeta) with
-             | None => st
-             | Some t_value =>
-                 if negb (is_pointer_algined dst_a)
-                 then st
-                 else mem_state_with_capmeta (ZMap.add dst_a t_value st.(capmeta)) st
-             end)
-      in
-      match index with
-      | O => ret ptrval1
-      | S index =>
-          let i_value := IV (Z.of_nat index) in
-          ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char i_value ;;
-          ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char i_value ;;
-          copy_tag ptrval1' ptrval2' ;;
-          copy_tags index
-      end
-    in
-    copy_data (Z.to_nat size_n) ;;
+    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_n) ;;
     let (q,_) := quomod size_n pointer_sizeof in
     let size_n_bottom_aligned := Z.mul q pointer_sizeof in
-    copy_tags (Z.to_nat size_n_bottom_aligned).
+    memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat size_n_bottom_aligned).
 
   Definition memcmp
     (ptrval1 ptrval2 : pointer_value)

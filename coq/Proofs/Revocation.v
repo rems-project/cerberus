@@ -3198,9 +3198,38 @@ Module RevocationProofs.
       +
         intros k g H bs H0.
         cbn in *.
-        (* TODO *)
-        admit.
+        apply ZMap.add_3 in H;[|auto].
+        apply ZMap.find_2 in F.
+        destruct (Z.eq_dec k addr2) as [KE|KNE].
+        *
+          subst addr2.
+          specialize (MIcap k).
+          pose proof (MapsTo_fun F H) as E.
+          subst p.
+          clear H.
+          specialize (MIcap g F bs).
+          auto.
+        *
+          (* TODO: need additional parameter/assumption about bytes *)
+          admit.
   Admitted.
+
+  Instance memcpy_copy_data_PreservesInvariant
+    (loc: location_ocaml)
+    (ptrval1 ptrval2: pointer_value)
+    (index: nat)
+    :
+    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 index).
+  Proof.
+    intros s.
+    unfold memcpy_copy_data.
+    revert ptrval1 ptrval2 s.
+    induction index; intros.
+    + preserves_step.
+    +
+      preserves_steps.
+      all: try typeclasses eauto.
+  Qed.
 
   Instance memcpy_PreservesInvariant
     (ptrval1 ptrval2: pointer_value)
@@ -3210,23 +3239,31 @@ Module RevocationProofs.
   Proof.
     intros s.
     unfold memcpy.
-    preserves_step.
+    apply bind_PreservesInvariant_value.
+    intros M s' x H.
+    split.
     -
-      generalize (Z.to_nat (num_of_int size_int)) as n.
-      clear size_int.
-      intros n.
-      revert ptrval1 ptrval2 s.
-      induction n; intros.
-      + preserves_step.
-      +
-        preserves_steps.
-        all: try typeclasses eauto.
+      remember (Loc_other "memcpy") as loc eqn:L.
+      generalize dependent (Z.to_nat (num_of_int size_int)).
+      intros n H.
+      pose proof (memcpy_copy_data_PreservesInvariant loc ptrval1 ptrval2 n s M) as P.
+      unfold post_exec_invariant, lift_sum_p,execErrS in P.
+      rewrite H in P.
+      break_match_hyp.
+      inl_inr.
+      inl_inr_inv.
+      subst.
+      assumption.
     -
       break_let.
-      generalize (Z.to_nat (z * sizeof_pointer MorelloImpl.get)) as n.
-      clear z z0 Heqp size_int s x.
+      (* TODO: apply memcpy_data_spec in H *)
+      clear H.
+      clear Heqp.
+      generalize dependent (Z.to_nat (z * sizeof_pointer MorelloImpl.get)).
+      clear M z z0 size_int s x.
       intros n.
       revert ptrval1 ptrval2 s'.
+      unfold memcpy_copy_tags.
       induction n; intros.
       + preserves_step.
       +
@@ -3235,6 +3272,7 @@ Module RevocationProofs.
         all: try assumption.
         clear - Heqo Heqb H.
         apply negb_false_iff in Heqb.
+        (* TODO: need extra parameter to [memcpy_PreservesInvariant_fact] *)
         eapply memcpy_PreservesInvariant_fact;eauto.
   Qed.
 
