@@ -1215,7 +1215,7 @@ Module RevocationProofs.
 
 
       (* [SameState] is stronger and implies [PreservesInvariant] *)
-      Instance SameStatePreserves
+      #[global] Instance SameStatePreserves
         {T: Type}
         (M: memM T)
         `{H: SameState T M}:
@@ -1956,6 +1956,8 @@ Module RevocationProofs.
     Qed.
 
     (*
+      TODO: re-state and re-prove
+
     Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
@@ -2283,7 +2285,7 @@ Module RevocationProofs.
           destruct ES as [[addr v1] ES].
           specialize (N k (addr,v1)).
 
-          (* TODO make this lemma *)
+          (* TODO maybe make this lemma *)
           assert (ZMap.MapsTo addr v1 newmeta).
           {
             apply ZMap.elements_2.
@@ -2743,6 +2745,7 @@ Module RevocationProofs.
         +
           preserves_step.
     Qed.
+    Opaque kill.
 
     Instance find_cap_allocation_SameState:
       forall x, SameState (find_cap_allocation x).
@@ -3103,7 +3106,6 @@ Module RevocationProofs.
     same_state_steps.
   Qed.
 
-  (*
   Instance allocate_object_PreservesInvariant
     (tid:MemCommonExe.thread_id)
     (pref:CoqSymbol.prefix)
@@ -3115,33 +3117,142 @@ Module RevocationProofs.
   Proof.
     intros s.
     unfold allocate_object.
+    (* TODO: postponed until I figure out readonly logic and re-prove `allocator` *)
+  Admitted.
+
+  Instance allocate_region_PreservesInvariant
+    (tid : MemCommonExe.thread_id)
+    (pref : CoqSymbol.prefix)
+    (align_int : integer_value)
+    (size_int : integer_value)
+    :
+    forall s, PreservesInvariant mem_invariant s (allocate_region tid pref align_int size_int).
+  Proof.
+    intros s.
+    unfold allocate_region.
+    (* TODO: postponed until I re-prove `allocator` *)
+  Admitted.
+
+  Instance store_PreservesInvariant
+    (loc : location_ocaml)
+    (cty : CoqCtype.ctype)
+    (is_locking : bool)
+    (ptr : pointer_value)
+    (mval : mem_value):
+    forall s, PreservesInvariant mem_invariant s (store loc cty is_locking ptr mval).
+  Proof.
+    (* TODO: postponed until I figure out `is_locking` logic*)
+  Admitted.
+
+  Fact memcpy_PreservesInvariant_fact:
+    forall (x1 x2 : Z)
+      (m : mem_state_r),
+      mem_invariant m ->
+      forall p : bool * CapGhostState,
+        ZMap.find (elt:=bool * CapGhostState) x2 (capmeta m) = Some p ->
+        is_pointer_algined x1 = true -> mem_invariant (mem_state_with_capmeta (ZMap.add x1 p (capmeta m)) m).
+  Proof.
+    intros addr1 addr2 m H p F A.
+    destruct H as [MIbase MIcap].
+    unfold mem_invariant.
+    split.
+    -
+      (* base *)
+      clear MIcap.
+      destruct_base_mem_invariant MIbase.
+      repeat split; auto.
+      cbn.
+      unfold zmap_forall_keys in *.
+      intros k H.
+      destruct (Z.eq_dec k addr1) as [E|NE].
+      +
+        subst.
+        unfold is_pointer_algined in A.
+        lia.
+      +
+        apply add_neq_in_iff in H;[auto|lia].
+    -
+      clear MIbase A.
+      destruct (Z.eq_dec addr1 addr2) as [E|NE].
+      +
+        subst addr2.
+        cbn in *.
+        intros k.
+        destruct (Z.eq_dec k addr1) as [KE|KNE].
+        *
+          subst addr1.
+          intros g H bs H0.
+          apply find_mapsto_iff in F.
+          apply add_mapsto_iff in H.
+          destruct H;[|lia].
+          destruct H as [_ P].
+          subst p.
+          specialize (MIcap k g F bs H0).
+          auto.
+        *
+          intros g H bs H0.
+          apply find_mapsto_iff in F.
+          apply ZMap.add_3 in H;[|auto].
+          specialize (MIcap k g H bs H0).
+          auto.
+      +
+        intros k g H bs H0.
+        cbn in *.
+        (* TODO *)
+        admit.
+  Admitted.
+
+  Instance memcpy_PreservesInvariant
+    (ptrval1 ptrval2: pointer_value)
+    (size_int: integer_value)
+    :
+    forall s, PreservesInvariant mem_invariant s (memcpy ptrval1 ptrval2 size_int).
+  Proof.
+    intros s.
+    unfold memcpy.
     preserves_step.
-    preserves_step.
-    preserves_step.
-    apply allocator_PreservesInvariant.
-    break_let.
-    preserves_step.
-    break_match_goal.
+    -
+      generalize (Z.to_nat (num_of_int size_int)) as n.
+      clear size_int.
+      intros n.
+      revert ptrval1 ptrval2 s.
+      induction n; intros.
+      + preserves_step.
+      +
+        preserves_steps.
+        all: try typeclasses eauto.
     -
       break_let.
-      preserves_step.
-      preserves_step.
-      preserves_step.
-      repeat break_let.
-      preserves_step.
-      preserves_step.
-      admit.
-      preserves_step.
-    -
-      (* no init *)
-      preserves_step.
-      preserves_step.
-      admit.
-      preserves_step.
-    -
-      preserves_steps.
+      generalize (Z.to_nat (z * sizeof_pointer MorelloImpl.get)) as n.
+      clear z z0 Heqp size_int s x.
+      intros n.
+      revert ptrval1 ptrval2 s'.
+      induction n; intros.
+      + preserves_step.
+      +
+        preserves_steps.
+        all: try typeclasses eauto.
+        all: try assumption.
+        clear - Heqo Heqb H.
+        apply negb_false_iff in Heqb.
+        eapply memcpy_PreservesInvariant_fact;eauto.
   Qed.
-  *)
+
+  Instance realloc_PreservesInvariant
+    (loc : location_ocaml)
+    (tid : MemCommonExe.thread_id)
+    (align : integer_value)
+    (ptr : pointer_value)
+    (size : integer_value)
+    :
+    forall s, PreservesInvariant mem_invariant s (realloc loc tid align ptr size).
+  Proof.
+    intros s.
+    unfold realloc.
+    rewrite resolve_has_CORNUCOPIA.
+    preserves_steps. (* TODO: figure out why typeclass resolution is not happening *)
+    all: try typeclasses eauto.
+  Qed.
 
   (*
 
@@ -3162,10 +3273,7 @@ intrinsic_strfcap loc args
 intrinsic_perms_and loc args
 
 Preserve:
-store
 realloc
-allocate_object
-allocate_region
 
 Misc:
 va_*
@@ -3409,6 +3517,8 @@ va_*
     Qed.
 
     (*
+      TODO: re-state and re-prove
+
     Instance allocator_PreservesInvariant (size align : Z):
       forall s,
         PreservesInvariant mem_invariant s (allocator size align).
