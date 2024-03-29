@@ -953,7 +953,7 @@ Module Type CheriMemoryImpl
 
     (match init_opt with
      | None =>
-         '(alloc_id, addr) <- allocator size_n' align_n' false CoqSymbol.PrefMalloc (Some ty) IsWritable ;;
+         '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) IsWritable ;;
          ret (alloc_id, addr, false)
      | Some mval =>  (* here we allocate an object with initiliazer *)
          let (ro,readonly_status) :=
@@ -966,7 +966,7 @@ Module Type CheriMemoryImpl
                  (* | _ => (false,IsWritable) *)
            end
          in
-         '(alloc_id, addr) <- allocator size_n' align_n' false CoqSymbol.PrefMalloc (Some ty) readonly_status ;;
+         '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) readonly_status ;;
          (* We should be careful not to introduce a state change here
          in case of error which happens after the [allocator]
          invocation, as [allocator] modifies state. In the current
