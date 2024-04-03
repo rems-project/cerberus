@@ -3412,48 +3412,84 @@ Module RevocationProofs.
        *)
   Admitted.
 
+  Instance memcpy_args_check_SameState
+    (loc:location_ocaml)
+    (p1 p2: pointer_value_indt)
+    (n:Z ):
+    SameState (memcpy_args_check loc p1 p2 n).
+  Proof.
+    unfold memcpy_args_check.
+    same_state_steps.
+  Qed.
+
+  Lemma memcpy_arg_sane_after_check
+    (ptrval1 ptrval2 : pointer_value)
+    (s s' : mem_state_r)
+    (loc : location_ocaml)
+    (n : Z):
+      memcpy_args_check loc ptrval1 ptrval2 n s = (s', inr tt) -> mempcpy_args_sane ptrval1 ptrval2 n.
+  Proof.
+    intros H.
+    unfold memcpy_args_check in H.
+    Transparent raise ret fail.
+    unfold fail, raise, ret, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H.
+    cbn in H.
+    repeat break_match; try tuple_inversion; try inl_inr.
+    econstructor;eauto.
+    apply orb_prop in Heqb.
+    unfold cap_to_Z in Heqb.
+    destruct Heqb as [H|H]; lia.
+  Qed.
+
   Instance memcpy_PreservesInvariant
     (ptrval1 ptrval2: pointer_value)
     (size_int: integer_value)
     :
-    mempcpy_args_sane ptrval1 ptrval2 (num_of_int size_int) ->
     forall s, PreservesInvariant mem_invariant s (memcpy ptrval1 ptrval2 size_int).
   Proof.
-    (*
-    intros NO s.
+    intros s.
     unfold memcpy.
+    remember (Loc_other "memcpy") as loc eqn:L.
     apply bind_PreservesInvariant_value.
-    intros M s' x H.
+    intros M s' x AC.
+    pose proof (memcpy_args_check_SameState loc ptrval1 ptrval2 (num_of_int size_int)) as SA.
+    specialize (SA _ _ _ AC).
+    subst s'.
+    split;[assumption|].
+
+    destruct x.
+    apply memcpy_arg_sane_after_check in AC.
+
+    apply bind_PreservesInvariant_value.
     split.
     -
-      remember (Loc_other "memcpy") as loc eqn:L.
       generalize dependent (Z.to_nat (num_of_int size_int)).
-      intros n H.
+      intros n H1.
       pose proof (memcpy_copy_data_PreservesInvariant loc ptrval1 ptrval2 n s M) as P.
       unfold post_exec_invariant, lift_sum_p,execErrS in P.
-      rewrite H in P.
+      rewrite H1 in P.
       break_match_hyp.
       inl_inr.
       inl_inr_inv.
       subst.
       assumption.
     -
-      break_let.
-      pose proof (memcpy_copy_data_spec NO H) as DS.
-      clear H.
-      invc NO.
+      pose proof (memcpy_copy_data_spec AC H0) as DS.
+      clear H0 x.
+      invc AC.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as a2 eqn:A2.
+      break_let.
       specialize (DS p1 p2 c1 c2 a1 a2).
       autospecialize DS; [reflexivity|].
       autospecialize DS; [reflexivity|].
       specialize (DS A1 A2).
       clear Heqp.
       generalize dependent (Z.to_nat (z * sizeof_pointer MorelloImpl.get)).
-      clear M z z0 size_int s x H1.
+      clear M z z0 size_int s x H2 H.
       intros n.
-      revert  s' p1 p2 c1 c2 a1 a2 DS A1 A2.
       unfold memcpy_copy_tags.
+      revert  s' p1 p2 c1 c2 a1 a2 DS A1 A2.
       induction n; intros.
       + preserves_step.
       +
@@ -3484,9 +3520,9 @@ Module RevocationProofs.
             repeat break_match_hyp;  try tuple_inversion.
             Opaque serr2InternalErr bind raise ret get fail.
           }
-        apply bind_PreservesInvariant_value_SameState.
-        same_state_steps.
-        intros H4 x H5.
+          apply bind_PreservesInvariant_value_SameState.
+          same_state_steps.
+          intros H4 x H5.
 
           Transparent serr2InternalErr raise ret.
           unfold serr2InternalErr, raise, ret, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H5.
@@ -3507,18 +3543,17 @@ Module RevocationProofs.
 
           clear IHn.
 
-        preserves_steps.
+          preserves_steps.
 
-        all: try typeclasses eauto.
-        all: try assumption.
-        apply negb_false_iff in Heqb.
-        (* TODO: need to generalize IH *)
-        Fail eapply (memcpy_PreservesInvariant_fact Heqo Heqb DS).
-        admit.
+          all: try typeclasses eauto.
+          all: try assumption.
+          apply negb_false_iff in Heqb.
+          (* TODO: need to generalize IH *)
+          Fail eapply (memcpy_PreservesInvariant_fact Heqo Heqb DS).
+          admit.
         *
           (* TODO *)
           eapply IHn; eauto.
-     *)
   Admitted.
 
   Instance realloc_PreservesInvariant
@@ -3535,18 +3570,7 @@ Module RevocationProofs.
     rewrite resolve_has_CORNUCOPIA.
     preserves_steps. (* TODO: figure out why typeclass resolution is not happening *)
     all: try typeclasses eauto.
-
-    -
-      subst.
-      (* TODO: need to preserve x1 *)
-      apply memcpy_PreservesInvariant.
-      admit.
-    -
-      subst.
-      (* TODO: need to preserve x1 *)
-      apply memcpy_PreservesInvariant.
-      admit.
-  Admitted.
+  Qed.
 
   (*
 

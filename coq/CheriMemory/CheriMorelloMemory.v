@@ -2879,6 +2879,19 @@ Module Type CheriMemoryImpl
     end.
 
 
+  (* internal *)
+  Definition memcpy_args_check loc ptrval1 ptrval2 size_n :=
+    match ptrval1, ptrval2 with
+    | PV _ (PVconcrete c1), PV _ (PVconcrete c2) =>
+        let a1 := cap_to_Z c1 in
+        let a2 := cap_to_Z c2 in
+        if (a1 + size_n <? a2)%Z || (a2 + size_n <? a1)%Z
+        then ret tt
+        else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
+    (* memcpy accepts only pointers to C objects *)
+    | _, _ =>  raise (InternalErr "Invalid pointer type for memcpy")
+    end.
+
   Definition memcpy
     (ptrval1 ptrval2: pointer_value)
     (size_int: integer_value)
@@ -2886,18 +2899,7 @@ Module Type CheriMemoryImpl
     :=
     let loc := Loc_other "memcpy" in
     let size_n := num_of_int size_int in
-    let memcpy_args_check :=
-      match ptrval1, ptrval2 with
-      | PV _ (PVconcrete c1), PV _ (PVconcrete c2) =>
-          let a1 := cap_to_Z c1 in
-          let a2 := cap_to_Z c2 in
-          if (a1 + size_n <? a2)%Z || (a2 + size_n <? a1)%Z
-          then ret tt
-          else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
-      (* memcpy accepts only pointers to C objects *)
-    | _, _ =>  raise (InternalErr "Invalid pointer type for memcpy")
-      end in
-    memcpy_args_check ;;
+    memcpy_args_check loc ptrval1 ptrval2 size_n ;;
     let pointer_sizeof := IMP.get.(sizeof_pointer) in
     let npointer_sizeof := Z.to_nat pointer_sizeof in
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_n) ;;
