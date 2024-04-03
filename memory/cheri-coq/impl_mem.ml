@@ -389,6 +389,9 @@ module CHERIMorello : Memory = struct
     | Free_dead_allocation -> Free_dead_allocation
     | Free_out_of_bound -> Free_out_of_bound
 
+  let from_Coq_memcpy_error: MemCommonExe.memcpy_error -> memcpy_error = function
+    | Memcpy_overlap -> Memcpy_overlap
+
   let fromCoq_readonly_kind: MemCommonExe.readonly_kind -> readonly_kind = function
     | ReadonlyConstQualified -> ReadonlyConstQualified
     | ReadonlyStringLiteral -> ReadonlyStringLiteral
@@ -404,6 +407,7 @@ module CHERIMorello : Memory = struct
     | MerrReadUninit -> MerrReadUninit
     | MerrUndefinedFree e -> MerrUndefinedFree ( from_Coq_free_error e)
     | MerrUndefinedRealloc e -> MerrUndefinedRealloc (from_Coq_free_error e)
+    | MerrUndefinedMemcpy e -> MerrUndefinedMemcpy (from_Coq_memcpy_error e)
     | MerrIntFromPtr -> MerrIntFromPtr
     | MerrPtrFromInt -> MerrPtrFromInt
     | MerrPtrComparison -> MerrPtrComparison

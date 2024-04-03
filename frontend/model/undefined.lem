@@ -1211,7 +1211,9 @@ let ub_short_string = function
   | UB088_reached_end_of_function ->
       "the value of a non-void function that ended without a return statement is used"  
   | UB089_tentative_definition_internal_linkage ->
-      "tentative definition with internal linkage and incomplete type"
+     "tentative definition with internal linkage and incomplete type"
+  | UB100 ->
+     "An attempt is made to copy an object to an overlapping object by use of a library function"
   | UB081_scalar_initializer_not_single_expression ->
       "the initializer for a scalar shall be a single expression"
   | UB204_illtyped_Static_assert ->

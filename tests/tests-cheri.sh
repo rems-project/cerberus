@@ -197,6 +197,7 @@ citests=(
   0331-modifying-rvalue-temporary-lifetime.undef.c
   0332-rvalue-temporary-lifetime-pointer-zap.c
   0333-shifts_non_representable.undef.c
+  0336-memcpy-ovelap.undef.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

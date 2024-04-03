@@ -3419,6 +3419,7 @@ Module RevocationProofs.
     mempcpy_args_sane ptrval1 ptrval2 (num_of_int size_int) ->
     forall s, PreservesInvariant mem_invariant s (memcpy ptrval1 ptrval2 size_int).
   Proof.
+    (*
     intros NO s.
     unfold memcpy.
     apply bind_PreservesInvariant_value.
@@ -3517,6 +3518,7 @@ Module RevocationProofs.
         *
           (* TODO *)
           eapply IHn; eauto.
+     *)
   Admitted.
 
   Instance realloc_PreservesInvariant

@@ -57,6 +57,14 @@ let stringFromFree_error = function
       "Free_out_of_bound"
 end
 
+type memcpy_error =
+  | Memcpy_overlap
+
+let stringFromMemcpy_error = function
+  | Memcpy_overlap ->
+      "Memcpy_overlap"
+end
+
 type vip_kind =
   | VIP_null
   | VIP_empty
@@ -119,7 +127,9 @@ type mem_error =
   
   | MerrUndefinedFree of free_error
   | MerrUndefinedRealloc of free_error
-  
+
+  | MerrUndefinedMemcpy of memcpy_error
+
   | MerrIntFromPtr
   | MerrPtrFromInt
   
@@ -166,6 +176,8 @@ instance (Show mem_error)
         "MerrUndefinedFree " ^ stringFromFree_error err
     | MerrUndefinedRealloc err ->
         "MerrUndefinedRealloc " ^ stringFromFree_error err
+    | MerrUndefinedMemcpy err ->
+        "MerrUndefinedMemcpy " ^ stringFromMemcpy_error err
     | MerrIntFromPtr ->
         "MerrIntFromPtr"
     | MerrPtrFromInt ->
@@ -263,7 +275,10 @@ let undefinedFromMem_error = function
   | MerrUndefinedRealloc Free_dead_allocation ->
       Just Undefined.UB179d_dead_allocation_realloc
   | MerrUndefinedRealloc Free_out_of_bound ->
-      Nothing (* this is not a UB but rather an internal error *)
+     Nothing (* this is not a UB but rather an internal error *)
+
+  | MerrUndefinedMemcpy Memcpy_overlap ->
+     Just Undefined.UB100
   
   | MerrWriteOnReadOnly ReadonlyStringLiteral ->
       Just Undefined.UB033_modifying_string_literal

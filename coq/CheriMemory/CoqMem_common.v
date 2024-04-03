@@ -36,6 +36,10 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | Free_dead_allocation : free_error
   | Free_out_of_bound : free_error.
 
+  Inductive memcpy_error : Set :=
+  | Memcpy_overlap : memcpy_error.
+(*   | Memcpy_invalid_pointer : memcpy_error. *)
+
   Inductive vip_kind : Set :=
   | VIP_null : vip_kind
   | VIP_empty : vip_kind
@@ -79,6 +83,7 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | MerrReadUninit : mem_error
   | MerrUndefinedFree : free_error -> mem_error
   | MerrUndefinedRealloc : free_error -> mem_error
+  | MerrUndefinedMemcpy : memcpy_error -> mem_error
   | MerrIntFromPtr : mem_error
   | MerrPtrFromInt : mem_error
   | MerrPtrComparison : mem_error
@@ -267,6 +272,9 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
         Some UB179d_dead_allocation_realloc
     | MerrUndefinedRealloc Free_out_of_bound =>
         Some UB_CERB002d_out_of_bound_realloc
+
+    | MerrUndefinedMemcpy Memcpy_overlap =>
+        Some UB100
 
     | MerrWriteOnReadOnly ReadonlyStringLiteral =>
         Some UB033_modifying_string_literal
