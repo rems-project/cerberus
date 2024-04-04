@@ -28,8 +28,13 @@ Record implementation := {
 Module Type Implementation.
   Parameter get: implementation.
 
-  (* Sanity properties for proofs *)
-  Parameter ichar_size_exists:  (exists csz, sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some csz).
+  (* -- Sanity properties for proofs -- *)
+
+  (* Per C17 (6.5.3.4): "When sizeof is applied to an operand that has type char, unsigned
+     char, or signed char, (or a qualified version thereof) the result
+     is 1." *)
+  Parameter ichar_size:  (sizeof_ity get (CoqIntegerType.Signed CoqIntegerType.Ichar) = Some 1).
+  Parameter uchar_size:  (sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some 1).
 End Implementation.
 
 Module MorelloImpl : Implementation.
@@ -150,12 +155,11 @@ Module MorelloImpl : Implementation.
       typeof_enum     := typeof_enum_impl;
     |}.
 
-  Lemma ichar_size_exists:
-    (exists csz, sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some csz).
-  Proof.
-    exists 1.
-    reflexivity.
-  Qed.
+  Lemma ichar_size:  (sizeof_ity get (CoqIntegerType.Signed CoqIntegerType.Ichar) = Some 1).
+  Proof. reflexivity. Qed.
+
+  Lemma uchar_size:  (sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some 1).
+  Proof. reflexivity. Qed.
 
 
 End MorelloImpl.
