@@ -27,6 +27,9 @@ Record implementation := {
 
 Module Type Implementation.
   Parameter get: implementation.
+
+  (* Sanity properties for proofs *)
+  Parameter ichar_size_exists:  (exists csz, sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some csz).
 End Implementation.
 
 Module MorelloImpl : Implementation.
@@ -147,6 +150,12 @@ Module MorelloImpl : Implementation.
       typeof_enum     := typeof_enum_impl;
     |}.
 
+  Lemma ichar_size_exists:
+    (exists csz, sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some csz).
+  Proof.
+    exists 1.
+    reflexivity.
+  Qed.
 
 
 End MorelloImpl.

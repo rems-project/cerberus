@@ -3559,13 +3559,7 @@ Module RevocationProofs.
         intros _ dst_a H4.
         remember (Loc_other "memcpy") as loc.
 
-
-        assert(exists csz, sizeof_ity MorelloImpl.get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some csz) as SZE.
-        {
-          clear.
-          exists 1.
-          admit.
-        }
+        pose proof MorelloImpl.ichar_size_exists as SZE.
         destruct SZE as [csz SZE].
 
         rewrite (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE) in SH1.
