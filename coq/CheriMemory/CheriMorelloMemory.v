@@ -2879,16 +2879,19 @@ Module Type CheriMemoryImpl
 
   (* internal *)
   Definition memcpy_args_check loc ptrval1 ptrval2 size_n :=
-    match ptrval1, ptrval2 with
-    | PV _ (PVconcrete c1), PV _ (PVconcrete c2) =>
-        let a1 := cap_to_Z c1 in
-        let a2 := cap_to_Z c2 in
-        if (a1 + size_n <? a2)%Z || (a2 + size_n <? a1)%Z
-        then ret tt
-        else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
-    (* memcpy accepts only pointers to C objects *)
-    | _, _ =>  raise (InternalErr "Invalid pointer type for memcpy")
-    end.
+    if Z.ltb size_n 0
+    then raise (InternalErr "negative size passed to memcpy")
+    else
+      match ptrval1, ptrval2 with
+      | PV _ (PVconcrete c1), PV _ (PVconcrete c2) =>
+          let a1 := cap_to_Z c1 in
+          let a2 := cap_to_Z c2 in
+          if (a1 + size_n <? a2)%Z || (a2 + size_n <? a1)%Z
+          then ret tt
+          else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
+      (* memcpy accepts only pointers to C objects *)
+      | _, _ =>  raise (InternalErr "Invalid pointer type for memcpy")
+      end.
 
   Definition memcpy
     (ptrval1 ptrval2: pointer_value)
@@ -2900,7 +2903,7 @@ Module Type CheriMemoryImpl
     (* function signature does not enforce this, but
        [size_int] argument is acutaly unsigned: size_t
      *)
-    let size_z := Z.abs (num_of_int size_int) in
+    let size_z := num_of_int size_int in
     memcpy_args_check loc ptrval1 ptrval2 size_z ;;
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
     let pointer_sizeof := IMP.get.(sizeof_pointer) in

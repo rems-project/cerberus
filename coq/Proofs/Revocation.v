@@ -3179,6 +3179,7 @@ Module RevocationProofs.
   | ptrval_overlap_concrete: forall c1 c2 n a1 a2 p1 p2,
       a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
       a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
+      0 <= n ->
       a1 + n < a2 \/ a2 + n < a1 ->
       mempcpy_args_sane (PV p1 (PVconcrete c1)) (PV p2 (PVconcrete c2)) n .
 
@@ -3364,7 +3365,6 @@ Module RevocationProofs.
     {ptrval1 ptrval2 ptrval1': pointer_value}
     {len: Z}
     :
-    0 <= len ->
     mempcpy_args_sane ptrval1 ptrval2 len ->
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr ptrval1')
     ->
@@ -3375,7 +3375,7 @@ Module RevocationProofs.
         a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
         fetch_bytes (bytemap s') a1 len = fetch_bytes (bytemap s') a2 len.
   Proof.
-    intros LZ H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
+    intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
     unfold fetch_bytes.
     apply list.list_eq_Forall2.
     eapply Forall2_nth_list.
@@ -3400,16 +3400,13 @@ Module RevocationProofs.
       erewrite LI2.
       clear LI2.
 
-
       remember (Z.to_nat len) as n eqn:N.
-      revert len H N LZ.
+      revert len H N.
       induction n.
       +
         inversion H5.
       +
-        intros len H N LZ.
-
-
+        intros len H N.
   Admitted.
 
   Instance memcpy_args_check_SameState
@@ -3518,9 +3515,10 @@ Module RevocationProofs.
     cbn in H.
     repeat break_match; try tuple_inversion; try inl_inr.
     econstructor;eauto.
-    apply orb_prop in Heqb.
-    unfold cap_to_Z in Heqb.
-    destruct Heqb as [H|H]; lia.
+    lia.
+    apply orb_prop in Heqb0.
+    unfold cap_to_Z in Heqb0.
+    destruct Heqb0; lia.
   Qed.
 
   Instance memcpy_PreservesInvariant
@@ -3533,11 +3531,9 @@ Module RevocationProofs.
     unfold memcpy.
     remember (Loc_other "memcpy") as loc eqn:L.
 
-    remember (Z.abs (num_of_int size_int)) as size.
-    assert(0<=size) as LZ by lia .
+    remember (num_of_int size_int) as size.
     clear size_int Heqsize.
     break_let.
-
 
     apply bind_PreservesInvariant_value.
     intros M s' x AC.
@@ -3560,7 +3556,7 @@ Module RevocationProofs.
       inl_inr_inv.
       assumption.
     -
-      pose proof (memcpy_copy_data_spec LZ AC H0) as DS.
+      pose proof (memcpy_copy_data_spec AC H0) as DS.
       clear H0 x.
       invc AC.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
