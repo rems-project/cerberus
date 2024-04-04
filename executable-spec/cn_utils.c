@@ -8,9 +8,13 @@
 
 /* Wrappers for C types */
 
+typedef struct cn_bits_u64 {
+    unsigned long long *val;
+} cn_bits_u64;
+
 
 typedef struct cn_integer {
-    unsigned int *val;
+    signed long *val;
 } cn_integer;
 
 typedef struct cn_pointer {
@@ -81,6 +85,10 @@ void cn_map_set(cn_map *m, cn_integer *key, void *value) {
 }
 
 /* Every equality function needs to take two void pointers for this to work */
+cn_bool *cn_bits_u64_equality(void *i1, void *i2) {
+    return convert_to_cn_bool((*((cn_bits_u64 *) i1)->val) == (*((cn_bits_u64 *) i2)->val));
+}
+
 cn_bool *cn_integer_equality(void *i1, void *i2) {
     return convert_to_cn_bool((*((cn_integer *) i1)->val) == (*((cn_integer *) i2)->val));
 }
@@ -97,7 +105,7 @@ cn_bool *cn_map_subset(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(voi
     hash_table_iterator hti1 = ht_iterator(m1);
 
     while (ht_next(&hti1)) {
-        unsigned int* curr_key = hti1.key;
+        signed long* curr_key = hti1.key;
         void *val1 = ht_get(m1, curr_key);
         void *val2 = ht_get(m2, curr_key);
 
@@ -221,14 +229,30 @@ enum OWNERSHIP {
     TAKE
 };
 
+/* CN: addr_eq(ptr1: cn_pointer, ptr2: cn_pointer) */
+/* Internal CN: cn_pointer_to_bitvector_cast(ptr1) == cn_pointer_to_bitvector_cast(ptr2) */
+/* C: 
+    cn_pointer *ptr1_cn = convert_to_cn_pointer(ptr1);
+    cn_pointer *ptr2_cn = convert_to_cn_pointer(ptr2);
+
+    cn_assert(convert_to_cn_bool(cast_cn_pointer_to_bitvector(ptr1_cn) == cast_cn_pointer_to_bitvector(ptr2_cn)));
+*/
+
+cn_bits_u64 *cast_cn_pointer_to_cn_bits_u64(cn_pointer *ptr) {
+    cn_bits_u64 *res = alloc(sizeof(cn_bits_u64));
+    res->val = alloc(sizeof(unsigned long long));
+    *(res->val) = (unsigned long long) ptr->ptr;
+    return res;
+}
 
 
 cn_integer *cast_cn_pointer_to_cn_integer(cn_pointer *ptr) {
     cn_integer *res = alloc(sizeof(cn_integer));
-    res->val = alloc(sizeof(unsigned int));
-    *(res->val) = (unsigned int) ptr->ptr;
+    res->val = alloc(sizeof(signed long));
+    *(res->val) = (signed long) ptr->ptr;
     return res;
 }
+
 
 cn_pointer *cast_cn_integer_to_cn_pointer(cn_integer *i) {
     cn_pointer *res = alloc(sizeof(cn_pointer));
