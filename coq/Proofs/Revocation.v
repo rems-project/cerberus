@@ -3374,11 +3374,8 @@ Module RevocationProofs.
         a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
         fetch_bytes (bytemap s') a1 len = fetch_bytes (bytemap s') a2 len.
   Proof.
-      (*
     intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
     unfold fetch_bytes.
-    remember (list_init (Z.to_nat (sizeof_pointer MorelloImpl.get)) (fun i : nat => a1 + Z.of_nat i)) as i1 eqn:I1.
-    remember (list_init (Z.to_nat (sizeof_pointer MorelloImpl.get)) (fun i : nat => a2 + Z.of_nat i)) as i2 eqn:I2.
     apply list.list_eq_Forall2.
     eapply Forall2_nth_list.
     -
@@ -3389,27 +3386,20 @@ Module RevocationProofs.
     -
       rewrite map_length.
       intros i H5.
-      rewrite 2!map_nth.
+      rewrite 2!map_nth with (d:=0).
+      rewrite list_init_len in H5.
 
-      TODO:
-      list_init_nth
+      pose proof (list_init_nth _ (fun i : nat => a1 + Z.of_nat i) _ H5) as LI1.
+      eapply nth_error_nth in LI1.
+      erewrite LI1.
+      clear LI1.
 
-      destruct (nth_error i1 i) eqn:E1.
-      2:{
-        apply nth_error_None in E1.
-        unfold Z.t in H5.
-        lia.
-      }
-      eapply nth_error_nth in E1.
-      erewrite E1. clear E1.
+      pose proof (list_init_nth _ (fun i : nat => a2 + Z.of_nat i) _ H5) as LI2.
+      eapply nth_error_nth in LI2.
+      erewrite LI2.
+      clear LI2.
 
-      destruct (nth_error i2 i) eqn:E2.
-      2:{
-        admit.
-      }
-      eapply nth_error_nth in E2.
-      erewrite E2. clear E2.
-       *)
+
   Admitted.
 
   Instance memcpy_args_check_SameState
