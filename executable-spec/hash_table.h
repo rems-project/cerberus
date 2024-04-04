@@ -46,15 +46,15 @@ hash_table *ht_create(void);
 
 // void destroy_hash_table(hash_table *table);
 
-void *ht_get(hash_table *table, unsigned int *key);
+void *ht_get(hash_table *table, signed long *key);
 
-unsigned int* ht_set(hash_table* table, unsigned int *key, void* value);
+signed long* ht_set(hash_table* table, signed long *key, void* value);
 
 int ht_size(hash_table *table);
 
 
 typedef struct {
-    unsigned int *key;  // current key
+    signed long *key;  // current key
     void* value;      // current value
 
     // Don't use these fields directly.

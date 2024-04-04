@@ -165,7 +165,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
   | CN_bool -> C.(Basic (Integer Bool))
   | CN_integer -> C.(Basic (Integer (Signed Long))) 
   (* TODO: Discuss integers *)
-  | CN_bits _ -> C.(Basic (Integer (Signed Long))) 
+  | CN_bits (sign, size) -> C.(Basic (Integer (Signed Long))) 
   | CN_real -> failwith "TODO CN_real"
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_alloc_id -> failwith "TODO CN_alloc_id"
@@ -188,6 +188,10 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
    | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name")
   in 
   let annots = match cn_typ with 
+    | CN_bits (sign, size) -> 
+      let sign_str = match sign with | CN_signed -> "i" | CN_unsigned -> "u" in
+      let size_str = string_of_int size in
+      [CF.Annot.Atypedef (Sym.fresh_pretty ("cn_bits_" ^ sign_str ^ size_str))]
     | CN_integer -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_integer")]
     | CN_bool -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_bool")]
     | CN_map _ -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")]
@@ -914,6 +918,9 @@ let rec cn_to_ail_expr_aux_internal
 
   | Cast (bt, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
+
+    
+
     let ail_expr_ = match ((get_typedef_string (bt_to_ail_ctype bt)), get_typedef_string (bt_to_ail_ctype (IT.bt t))) with 
       | Some cast_type_str, Some original_type_str -> 
         let fn_name = "cast_" ^ original_type_str ^ "_to_" ^ cast_type_str in 
