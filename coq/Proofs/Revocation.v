@@ -3422,6 +3422,21 @@ Module RevocationProofs.
     same_state_steps.
   Qed.
 
+  (* TODO: move *)
+  Lemma zmap_find_first_exists
+    {A:Type}
+    (f:ZMap.key -> A -> bool)
+    (m:ZMap.t A)
+    (k:ZMap.key)
+    (v:A)
+    :
+    zmap_find_first f m = Some (k,v)
+    -> ZMap.find k m = Some v.
+  Proof.
+    intros H.
+    unfold zmap_find_first in H.
+  Admitted.
+
   Fact find_cap_allocation_st_spec
     (s : mem_state_r)
     (c : Capability_GS.t)
@@ -3431,7 +3446,12 @@ Module RevocationProofs.
     find_cap_allocation_st s c = Some (sid, a) ->
     ZMap.find (elt:=allocation) sid (allocations s) = Some a.
   Proof.
-  Admitted.
+    intros H.
+    unfold find_cap_allocation_st in H.
+    break_let.
+    apply zmap_find_first_exists in H.
+    assumption.
+  Qed.
 
   Fact eff_array_shift_ptrval_uchar_spec
     (loc : location_ocaml)
