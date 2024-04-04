@@ -3362,8 +3362,9 @@ Module RevocationProofs.
     {loc:location_ocaml}
     {s s': mem_state_r}
     {ptrval1 ptrval2 ptrval1': pointer_value}
-    {len:Z}
+    {len: Z}
     :
+    0 <= len ->
     mempcpy_args_sane ptrval1 ptrval2 len ->
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr ptrval1')
     ->
@@ -3374,7 +3375,7 @@ Module RevocationProofs.
         a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
         fetch_bytes (bytemap s') a1 len = fetch_bytes (bytemap s') a2 len.
   Proof.
-    intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
+    intros LZ H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
     unfold fetch_bytes.
     apply list.list_eq_Forall2.
     eapply Forall2_nth_list.
@@ -3398,6 +3399,15 @@ Module RevocationProofs.
       eapply nth_error_nth in LI2.
       erewrite LI2.
       clear LI2.
+
+
+      remember (Z.to_nat len) as n eqn:N.
+      revert len H N LZ.
+      induction n.
+      +
+        inversion H5.
+      +
+        intros len H N LZ.
 
 
   Admitted.
@@ -3523,7 +3533,8 @@ Module RevocationProofs.
     unfold memcpy.
     remember (Loc_other "memcpy") as loc eqn:L.
 
-    remember (num_of_int size_int) as size.
+    remember (Z.abs (num_of_int size_int)) as size.
+    assert(0<=size) as LZ by lia .
     clear size_int Heqsize.
     break_let.
 
@@ -3549,7 +3560,7 @@ Module RevocationProofs.
       inl_inr_inv.
       assumption.
     -
-      pose proof (memcpy_copy_data_spec AC H0) as DS.
+      pose proof (memcpy_copy_data_spec LZ AC H0) as DS.
       clear H0 x.
       invc AC.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
@@ -3564,6 +3575,7 @@ Module RevocationProofs.
       induction n; intros.
       + preserves_step.
       +
+        (* !!! TODO:  rewrite [memcpy_copy_tags] similar to [ghost_tags] *)
         apply bind_PreservesInvariant_value_SameState.
         same_state_steps.
         intros M ptrval1' SH1.

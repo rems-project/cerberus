@@ -2896,12 +2896,15 @@ Module Type CheriMemoryImpl
     : memM pointer_value
     :=
     let loc := Loc_other "memcpy" in
-    let size_n := num_of_int size_int in
-    memcpy_args_check loc ptrval1 ptrval2 size_n ;;
+
+    (* function signature does not enforce this, but
+       [size_int] argument is acutaly unsigned: size_t
+     *)
+    let size_z := Z.abs (num_of_int size_int) in
+    memcpy_args_check loc ptrval1 ptrval2 size_z ;;
+    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
     let pointer_sizeof := IMP.get.(sizeof_pointer) in
-    let npointer_sizeof := Z.to_nat pointer_sizeof in
-    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_n) ;;
-    let (q,_) := quomod size_n pointer_sizeof in
+    let (q,_) := quomod size_z pointer_sizeof in
     let size_n_bottom_aligned := Z.mul q pointer_sizeof in
     memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat size_n_bottom_aligned).
 
