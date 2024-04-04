@@ -1195,7 +1195,50 @@ Module RevocationProofs.
       split;destruct s';inversion H;reflexivity.
     Qed.
 
+    Lemma bind_ok_inv
+      {T T': Type}
+      {m: memM T'}
+      {c: T' -> memM T}
+      {x: T}
+      {s s': mem_state}
+      :
+      (bind m c) s = (s', inr x) ->
+      exists s'' y, m s = (s'', inr y) /\ c y s'' = (s', inr x).
+    Proof.
+      Transparent bind ret.
+      unfold bind, ret, memM_monad, Monad_errS, Monad_either.
+      Opaque bind ret.
+      repeat break_let.
+      intros H.
+      break_match.
+      tuple_inversion.
+      subst.
+      eauto.
+    Qed.
 
+    Lemma bind_ok_inv_same_state
+      {T T': Type}
+      {m: memM T'}
+      `{MS: SameState _ m}
+      {c: T' -> memM T}
+      {x: T}
+      {s s': mem_state}
+      :
+      (bind m c) s = (s', inr x) ->
+      exists y, m s = (s, inr y) /\ c y s = (s', inr x).
+    Proof.
+      Transparent bind ret.
+      unfold bind, ret, memM_monad, Monad_errS, Monad_either.
+      Opaque bind ret.
+      repeat break_let.
+      intros H.
+      specialize (MS _ _ _ Heqp).
+      break_match.
+      tuple_inversion.
+      subst.
+      eauto.
+    Qed.
+    
     Section MemMwithInvariant.
       Variable invr: mem_state_r -> Prop.
 
@@ -3359,56 +3402,6 @@ Module RevocationProofs.
         lia.
   Admitted.
 
-  Lemma memcpy_copy_data_spec
-    {loc:location_ocaml}
-    {s s': mem_state_r}
-    {ptrval1 ptrval2 ptrval1': pointer_value}
-    {len: Z}
-    :
-    mempcpy_args_sane ptrval1 ptrval2 len ->
-    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr ptrval1')
-    ->
-      forall p1 p2 c1 c2 a1 a2,
-        ptrval1 = PV p1 (PVconcrete c1) ->
-        ptrval2 = PV p2 (PVconcrete c2) ->
-        a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
-        a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
-        fetch_bytes (bytemap s') a1 len = fetch_bytes (bytemap s') a2 len.
-  Proof.
-    intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
-    unfold fetch_bytes.
-    apply list.list_eq_Forall2.
-    eapply Forall2_nth_list.
-    -
-      rewrite 2!map_length.
-      subst.
-      rewrite 2!list_init_len.
-      reflexivity.
-    -
-      rewrite map_length.
-      intros i H5.
-      rewrite 2!map_nth with (d:=0).
-      rewrite list_init_len in H5.
-
-      pose proof (list_init_nth _ (fun i : nat => a1 + Z.of_nat i) _ H5) as LI1.
-      eapply nth_error_nth in LI1.
-      erewrite LI1.
-      clear LI1.
-
-      pose proof (list_init_nth _ (fun i : nat => a2 + Z.of_nat i) _ H5) as LI2.
-      eapply nth_error_nth in LI2.
-      erewrite LI2.
-      clear LI2.
-
-      remember (Z.to_nat len) as n eqn:N.
-      revert len H N.
-      induction n.
-      +
-        inversion H5.
-      +
-        intros len H N.
-  Admitted.
-
   Instance memcpy_args_check_SameState
     (loc:location_ocaml)
     (p1 p2: pointer_value_indt)
@@ -3472,7 +3465,6 @@ Module RevocationProofs.
     (n : Z)
     (s: mem_state)
     :
-    forall sz, ((MorelloImpl.get.(sizeof_ity)) (CoqIntegerType.Unsigned CoqIntegerType.Ichar)) = Some sz ->
           forall v,
             eff_array_shift_ptrval loc (PV p (PVconcrete c)) CoqCtype.unsigned_char (IV n) s =  (s, inr v) ->
             v =
@@ -3480,26 +3472,129 @@ Module RevocationProofs.
                  (PVconcrete
                     (Capability_GS.cap_set_value c
                        (AddressValue.of_Z
-                          (cap_to_Z c + sz*n)
+                          (cap_to_Z c + n)
                        )
               ))).
   Proof.
-    intros sz SZ ptrval H.
+    intros ptrval H.
     Transparent serr2InternalErr bind raise ret get fail fail_noloc.
     unfold eff_array_shift_ptrval, serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H.
     unfold PNVI_prov in *.
     repeat rewrite resolve_has_PNVI in H.
     cbn in H.
-    rewrite SZ in H. clear SZ.
+    rewrite MorelloImpl.uchar_size in H.
     unfold fail_noloc in H.
-    repeat break_let.
-    cbn in Heqp0.
-    tuple_inversion.
     cbn in H.
-
+    Opaque serr2InternalErr bind raise ret get fail fail_noloc.
+    repeat break_let.
+    cbn in H.
     repeat break_match_hyp;
-      repeat break_let; repeat tuple_inversion; reflexivity.
+      repeat break_let; repeat tuple_inversion; try rewrite Z.mul_1_l; reflexivity.
   Qed.
+
+  Lemma memcpy_copy_data_spec
+    {loc:location_ocaml}
+    {s s': mem_state_r}
+    {ptrval1 ptrval2 ptrval1': pointer_value}
+    {len: Z}
+    :
+    mempcpy_args_sane ptrval1 ptrval2 len ->
+    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr ptrval1')
+    ->
+      forall p1 p2 c1 c2 a1 a2,
+        ptrval1 = PV p1 (PVconcrete c1) ->
+        ptrval2 = PV p2 (PVconcrete c2) ->
+        a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
+        a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
+        fetch_bytes (bytemap s') a1 len = fetch_bytes (bytemap s') a2 len.
+  Proof.
+    intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
+    unfold fetch_bytes.
+    apply list.list_eq_Forall2.
+    eapply Forall2_nth_list.
+    -
+      rewrite 2!map_length.
+      subst.
+      rewrite 2!list_init_len.
+      reflexivity.
+    -
+      rewrite map_length.
+      intros i H5.
+      rewrite 2!map_nth with (d:=0).
+      rewrite list_init_len in H5.
+
+      pose proof (list_init_nth _ (fun i : nat => a1 + Z.of_nat i) _ H5) as LI1.
+      eapply nth_error_nth in LI1.
+      erewrite LI1.
+      clear LI1.
+
+      pose proof (list_init_nth _ (fun i : nat => a2 + Z.of_nat i) _ H5) as LI2.
+      eapply nth_error_nth in LI2.
+      erewrite LI2.
+      clear LI2.
+
+      unfold PNVI_prov.
+      rewrite resolve_has_PNVI.
+
+      remember (Z.to_nat len) as n eqn:N.
+      replace len with (Z.of_nat n) in H by lia.
+      clear N len.
+      revert i H5 H H0.
+      revert s s'.
+      induction n;intros.
+      +
+        inversion H5.
+      +
+        destruct (Nat.eq_dec i n) as [E|NE].
+        *
+          clear IHn.
+          subst i.
+          cbn in H0.
+          apply bind_ok_inv_same_state in H0.
+          destruct H0 as [ptrval1'' [D0 D1]].
+          apply bind_ok_inv_same_state in D1.
+          destruct D1 as [ptrval2'' [D2 D3]].
+          apply bind_ok_inv_same_state in D3.
+          destruct D3 as [y'' [D4 D5]].
+          destruct y'' as [f mval].
+          apply bind_ok_inv in D5.
+          destruct D5 as [s'' [fp [D6 D7]]].
+          subst.
+
+          apply eff_array_shift_ptrval_uchar_spec in D0.
+          apply eff_array_shift_ptrval_uchar_spec in D2.
+
+          (* TODO:
+             1. need 'load_spec' for 1 byte
+             2. need 'store_spec' for 1 byte
+           *)
+          admit.
+        *
+          cbn in H0.
+          apply bind_ok_inv_same_state in H0.
+          destruct H0 as [ptrval1'' [D0 D1]].
+          apply bind_ok_inv_same_state in D1.
+          destruct D1 as [ptrval2'' [D2 D3]].
+          apply bind_ok_inv_same_state in D3.
+          destruct D3 as [y'' [D4 D5]].
+          destruct y'' as [f mval].
+          apply bind_ok_inv in D5.
+          destruct D5 as [s'' [fp [D6 D7]]].
+          subst.
+
+          specialize (IHn s'' s').
+          apply IHn; clear IHn.
+          lia.
+          --
+            clear -H H5 NE.
+            invc H.
+            econstructor; eauto.
+            lia.
+            lia.
+          --
+            assumption.
+  Admitted.
+
 
   Lemma memcpy_arg_sane_after_check
     (ptrval1 ptrval2 : pointer_value)
@@ -3584,16 +3679,8 @@ Module RevocationProofs.
         intros _ dst_a H4.
         remember (Loc_other "memcpy") as loc.
 
-        pose proof MorelloImpl.ichar_size_exists as SZE.
-        destruct SZE as [csz SZE].
-
-        pose proof (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE _ SH1).
-        subst ptrval1'.
-        clear SH1.
-
-        pose proof (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE _ SH2).
-        subst ptrval2'.
-        clear SH2.
+        apply eff_array_shift_ptrval_uchar_spec in SH1; subst ptrval1'.
+        apply eff_array_shift_ptrval_uchar_spec in SH2; subst ptrval2'.
 
         Transparent serr2InternalErr bind raise ret get fail fail_noloc.
         unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H4.
