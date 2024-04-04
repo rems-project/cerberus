@@ -3437,6 +3437,21 @@ Module RevocationProofs.
     unfold zmap_find_first in H.
   Admitted.
 
+  (* TODO: move *)
+  Lemma zmap_find_first_matches
+    {A:Type}
+    (f:ZMap.key -> A -> bool)
+    (m:ZMap.t A)
+    (k:ZMap.key)
+    (v:A)
+    :
+    zmap_find_first f m = Some (k,v)
+    -> f k v = true.
+  Proof.
+    intros H.
+    unfold zmap_find_first in H.
+  Admitted.
+
   Fact find_cap_allocation_st_spec
     (s : mem_state_r)
     (c : Capability_GS.t)
@@ -3461,41 +3476,33 @@ Module RevocationProofs.
     (s: mem_state)
     :
     forall sz, ((MorelloImpl.get.(sizeof_ity)) (CoqIntegerType.Unsigned CoqIntegerType.Ichar)) = Some sz ->
-          eff_array_shift_ptrval loc (PV p (PVconcrete c)) CoqCtype.unsigned_char (IV n) s
-          =
-            (s, inr (PV (PNVI_prov Prov_none)
-                       (PVconcrete
-                          (Capability_GS.cap_set_value c
-                             (AddressValue.of_Z
-                                (cap_to_Z c + sz*n)
-                          ))
-            ))).
+          forall v,
+            eff_array_shift_ptrval loc (PV p (PVconcrete c)) CoqCtype.unsigned_char (IV n) s =  (s, inr v) ->
+            v =
+              (PV p
+                 (PVconcrete
+                    (Capability_GS.cap_set_value c
+                       (AddressValue.of_Z
+                          (cap_to_Z c + sz*n)
+                       )
+              ))).
   Proof.
-    intros sz SZ.
+    intros sz SZ ptrval H.
     Transparent serr2InternalErr bind raise ret get fail fail_noloc.
-    unfold eff_array_shift_ptrval, serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either.
-    unfold PNVI_prov.
-    repeat rewrite resolve_has_PNVI.
-    cbn.
-    rewrite SZ. clear SZ.
-    unfold fail_noloc.
+    unfold eff_array_shift_ptrval, serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H.
+    unfold PNVI_prov in *.
+    repeat rewrite resolve_has_PNVI in H.
+    cbn in H.
+    rewrite SZ in H. clear SZ.
+    unfold fail_noloc in H.
     repeat break_let.
     cbn in Heqp0.
     tuple_inversion.
-    cbn.
+    cbn in H.
 
-
-    destruct p.
-    -
-      repeat break_match;
-        repeat break_let; repeat tuple_inversion; cbn; try reflexivity.
-      +
-        apply find_cap_allocation_st_spec in Heqo; congruence.
-      +
-        exfalso.
-        clear - Heqb0 Heqo.
-  Admitted.
-
+    repeat break_match_hyp;
+      repeat break_let; repeat tuple_inversion; reflexivity.
+  Qed.
 
   Lemma memcpy_arg_sane_after_check
     (ptrval1 ptrval2 : pointer_value)
@@ -3582,10 +3589,13 @@ Module RevocationProofs.
         pose proof MorelloImpl.ichar_size_exists as SZE.
         destruct SZE as [csz SZE].
 
-        rewrite (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE) in SH1.
-        tuple_inversion.
-        rewrite (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE) in SH2.
-        tuple_inversion.
+        pose proof (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE _ SH1).
+        subst ptrval1'.
+        clear SH1.
+
+        pose proof (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE _ SH2).
+        subst ptrval2'.
+        clear SH2.
 
         Transparent serr2InternalErr bind raise ret get fail fail_noloc.
         unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H4.
