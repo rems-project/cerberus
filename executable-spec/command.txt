@@ -1,0 +1,74 @@
+/Library/Developer/CommandLineTools/usr/bin/clang"cc1
+ -triple x86_64-apple-macosx12.0.0
+ -Wundef-prefix=TARGET_OS_
+ -Wdeprecated-objc-isa-usage
+ -Werror=deprecated-objc-isa-usage
+ -Werror=implicit-function-declaration
+ -emit-obj
+ -mrelax-all
+ --mrelax-relocations
+ -disable-free
+ -clear-ast-before-backend
+ -disable-llvm-verifier
+ -discard-value-names
+ -main-file-name memcpy-exec.c
+ -mrelocation-model pic
+ -pic-level 2
+ -mframe-pointer=all
+ -fno-strict-return
+ -fno-rounding-math
+ -funwind-tables=2
+ -target-sdk-version=12.3
+ -fvisibility-inlines-hidden-static-local-var
+ -target-cpu penryn
+ -tune-cpu generic
+ -debugger-tuning=lldb
+ -target-linker-version 819.6
+ -v
+ -resource-dir /Library/Developer/CommandLineTools/usr/lib/clang/14.0.0
+ -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+ -I/usr/local/include
+ -internal-isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/local/include
+ -internal-isystem /Library/Developer/CommandLineTools/usr/lib/clang/14.0.0/include
+ -internal-externc-isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
+ -internal-externc-isystem /Library/Developer/CommandLineTools/usr/include
+ -Wno-reorder-init-list
+ -Wno-implicit-int-float-conversion
+ -Wno-c99-designator
+ -Wno-final-dtor-non-final-class
+ -Wno-extra-semi-stmt
+ -Wno-misleading-indentation
+ -Wno-quoted-include-in-framework-header
+ -Wno-implicit-fallthrough
+ -Wno-enum-enum-conversion
+ -Wno-enum-float-conversion
+ -Wno-elaborated-enum-base
+ -Wno-reserved-identifier
+ -Wno-gnu-folding-constant
+ -Wno-cast-function-type
+ -Wno-bitwise-instead-of-logical
+ -fdebug-compilation-dir=/Users/rinibanerjee/Desktop/PhD/Work/cerberus
+ -ferror-limit 19
+ -stack-protector 1
+ -fstack-check
+ -mdarwin-stkchk-strong-link
+ -fblocks
+ -fencode-extended-block-signature
+ -fregister-global-dtors-with-atexit
+ -fgnuc-version=4.2.1
+ -fmax-type-align=16
+ -fcommon
+ -fcolor-diagnostics
+ -clang-vendor-feature=+messageToSelfInClassMethodIdReturnType
+ -clang-vendor-feature=+disableInferNewAvailabilityFromInit
+ -clang-vendor-feature=+disableNonDependentMemberExprInCurrentInstantiation
+ -fno-odr-hash-protocols
+ -clang-vendor-feature=+enableAggressiveVLAFolding
+ -clang-vendor-feature=+revert09abecef7bbf
+ -clang-vendor-feature=+thisNoAlignAttr
+ -clang-vendor-feature=+thisNoNullAttr
+ -mllvm
+ -disable-aligned-alloc-awareness=1
+ -D__GCC_HAVE_DWARF2_CFI_ASM=1
+ -o /var/folders/5_/0mgrw_n90fb0blnzq7sps11m0000gn/T/memcpy-exec-6578b1.o
+ -x c tests/cn/exec/memcpy/memcpy-exec.c
