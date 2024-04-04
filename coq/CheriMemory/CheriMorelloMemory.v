@@ -2731,7 +2731,7 @@ Module Type CheriMemoryImpl
     sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
     let offset := Z.mul sz ival
     in
-    let shift_concrete c_value shifted_addr alloc_id :=
+    let shift_concrete c_value shifted_addr alloc_id prov :=
       get_allocation alloc_id >>=
         (fun (alloc : allocation) =>
            if Z.leb (AddressValue.to_Z alloc.(base)) shifted_addr
@@ -2739,7 +2739,7 @@ Module Type CheriMemoryImpl
                    (AddressValue.to_Z alloc.(base) + alloc.(size) + sz)
            then
              let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-             ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c_value))
+             ret (PV prov (PVconcrete c_value))
            else
              fail loc MerrArrayShift
         )
@@ -2751,17 +2751,17 @@ Module Type CheriMemoryImpl
         let shifted_addr := cap_to_Z c_value + offset in
         if is_strict_pointer_arith tt
         then
-          shift_concrete c_value shifted_addr alloc_id
+          shift_concrete c_value shifted_addr alloc_id (Prov_some alloc_id)
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
     | PV Prov_none (PVconcrete c_value) =>
-        let shifted_addr := AddressValue.to_Z (C.cap_get_value c_value) + offset in
+        let shifted_addr := cap_to_Z c_value + offset in
         if is_strict_pointer_arith tt
         then fail loc (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-          ret (PV (PNVI_prov Prov_none) (PVconcrete c_value))
+          ret (PV (Prov_none) (PVconcrete c_value))
     | PV Prov_disabled (PVconcrete c_value) =>
         let shifted_addr := cap_to_Z c_value + offset in
         if is_strict_pointer_arith tt
@@ -2769,7 +2769,7 @@ Module Type CheriMemoryImpl
           find_cap_allocation c_value >>= fun x =>
               match x with
               | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-              | Some (alloc_id,_) => shift_concrete c_value shifted_addr  alloc_id
+              | Some (alloc_id,_) => shift_concrete c_value shifted_addr alloc_id Prov_disabled
               end
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
