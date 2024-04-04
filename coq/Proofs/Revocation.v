@@ -1766,11 +1766,12 @@ Module RevocationProofs.
               | |- context [if _ then _ else _] => break_match_goal
               end; intros; cbn).
 
+
     Lemma resolve_has_PNVI:
       has_PNVI (WithoutPNVISwitches.get_switches tt) = false.
     Proof.
       unfold WithoutPNVISwitches.get_switches.
-      generalize (abst_get_switches tt) as l. intros.
+      generalize (abst_get_switches tt) as l. intros l.
       unfold has_PNVI, remove_PNVI, remove_Revocation in *.
       apply Bool.not_true_is_false.
       intros E.
@@ -3360,20 +3361,20 @@ Module RevocationProofs.
   Lemma memcpy_copy_data_spec
     {loc:location_ocaml}
     {s s': mem_state_r}
-    {ptrval1 ptrval2 x: pointer_value}
+    {ptrval1 ptrval2 ptrval1': pointer_value}
     {len:Z}
     :
     mempcpy_args_sane ptrval1 ptrval2 len ->
-    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr x)
+    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr ptrval1')
     ->
       forall p1 p2 c1 c2 a1 a2,
         ptrval1 = PV p1 (PVconcrete c1) ->
         ptrval2 = PV p2 (PVconcrete c2) ->
         a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
         a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
-        fetch_bytes (bytemap s') a1 (sizeof_pointer MorelloImpl.get) =
-          fetch_bytes (bytemap s') a2 (sizeof_pointer MorelloImpl.get).
+        fetch_bytes (bytemap s') a1 len = fetch_bytes (bytemap s') a2 len.
   Proof.
+      (*
     intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
     unfold fetch_bytes.
     remember (list_init (Z.to_nat (sizeof_pointer MorelloImpl.get)) (fun i : nat => a1 + Z.of_nat i)) as i1 eqn:I1.
@@ -3390,7 +3391,6 @@ Module RevocationProofs.
       intros i H5.
       rewrite 2!map_nth.
 
-      (*
       TODO:
       list_init_nth
 
@@ -3422,6 +3422,61 @@ Module RevocationProofs.
     same_state_steps.
   Qed.
 
+  Fact find_cap_allocation_st_spec
+    (s : mem_state_r)
+    (c : Capability_GS.t)
+    (sid : storage_instance_id)
+    (a : allocation)
+    :
+    find_cap_allocation_st s c = Some (sid, a) ->
+    ZMap.find (elt:=allocation) sid (allocations s) = Some a.
+  Proof.
+  Admitted.
+
+  Fact eff_array_shift_ptrval_uchar_spec
+    (loc : location_ocaml)
+    (p : provenance)
+    (c : Capability_GS.t)
+    (n : Z)
+    (s: mem_state)
+    :
+    forall sz, ((MorelloImpl.get.(sizeof_ity)) (CoqIntegerType.Unsigned CoqIntegerType.Ichar)) = Some sz ->
+          eff_array_shift_ptrval loc (PV p (PVconcrete c)) CoqCtype.unsigned_char (IV n) s
+          =
+            (s, inr (PV (PNVI_prov Prov_none)
+                       (PVconcrete
+                          (Capability_GS.cap_set_value c
+                             (AddressValue.of_Z
+                                (cap_to_Z c + sz*n)
+                          ))
+            ))).
+  Proof.
+    intros sz SZ.
+    Transparent serr2InternalErr bind raise ret get fail fail_noloc.
+    unfold eff_array_shift_ptrval, serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either.
+    unfold PNVI_prov.
+    repeat rewrite resolve_has_PNVI.
+    cbn.
+    rewrite SZ. clear SZ.
+    unfold fail_noloc.
+    repeat break_let.
+    cbn in Heqp0.
+    tuple_inversion.
+    cbn.
+
+
+    destruct p.
+    -
+      repeat break_match;
+        repeat break_let; repeat tuple_inversion; cbn; try reflexivity.
+      +
+        apply find_cap_allocation_st_spec in Heqo; congruence.
+      +
+        exfalso.
+        clear - Heqb0 Heqo.
+  Admitted.
+
+
   Lemma memcpy_arg_sane_after_check
     (ptrval1 ptrval2 : pointer_value)
     (s s' : mem_state_r)
@@ -3450,9 +3505,15 @@ Module RevocationProofs.
     intros s.
     unfold memcpy.
     remember (Loc_other "memcpy") as loc eqn:L.
+
+    remember (num_of_int size_int) as size.
+    clear size_int Heqsize.
+    break_let.
+
+
     apply bind_PreservesInvariant_value.
     intros M s' x AC.
-    pose proof (memcpy_args_check_SameState loc ptrval1 ptrval2 (num_of_int size_int)) as SA.
+    pose proof (memcpy_args_check_SameState loc ptrval1 ptrval2 size) as SA.
     specialize (SA _ _ _ AC).
     subst s'.
     split;[assumption|].
@@ -3463,15 +3524,12 @@ Module RevocationProofs.
     apply bind_PreservesInvariant_value.
     split.
     -
-      generalize dependent (Z.to_nat (num_of_int size_int)).
-      intros n H1.
-      pose proof (memcpy_copy_data_PreservesInvariant loc ptrval1 ptrval2 n s M) as P.
+      pose proof (memcpy_copy_data_PreservesInvariant loc ptrval1 ptrval2 (Z.to_nat size) s M) as P.
       unfold post_exec_invariant, lift_sum_p,execErrS in P.
-      rewrite H1 in P.
+      rewrite H0 in P.
       break_match_hyp.
       inl_inr.
       inl_inr_inv.
-      subst.
       assumption.
     -
       pose proof (memcpy_copy_data_spec AC H0) as DS.
@@ -3479,81 +3537,63 @@ Module RevocationProofs.
       invc AC.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as a2 eqn:A2.
-      break_let.
       specialize (DS p1 p2 c1 c2 a1 a2).
       autospecialize DS; [reflexivity|].
       autospecialize DS; [reflexivity|].
       specialize (DS A1 A2).
-      clear Heqp.
-      generalize dependent (Z.to_nat (z * sizeof_pointer MorelloImpl.get)).
-      clear M z z0 size_int s x H2 H.
-      intros n.
+      remember (Z.to_nat (z * sizeof_pointer MorelloImpl.get)) as n.
+      clear s H M.
       unfold memcpy_copy_tags.
-      revert  s' p1 p2 c1 c2 a1 a2 DS A1 A2.
       induction n; intros.
       + preserves_step.
       +
         apply bind_PreservesInvariant_value_SameState.
         same_state_steps.
-        intros H x H0.
+        intros M ptrval1' SH1.
         apply bind_PreservesInvariant_value_SameState.
         same_state_steps.
-        intros H1 x0 H2.
+        intros _ ptrval2' SH2.
         preserves_step. (* _ <- ... *)
         apply bind_PreservesInvariant_value_SameState.
         same_state_steps.
-        intros H3 x1 H4.
-        *
-          Transparent serr2InternalErr raise ret.
-          unfold serr2InternalErr, raise, ret, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H4.
-          Opaque serr2InternalErr raise ret.
-          repeat break_match_hyp; try tuple_inversion; try inl_inr;
-            inl_inr_inv; subst x1.
-          1:{
-            exfalso.
-            clear - H0.
-            unfold eff_array_shift_ptrval in H0.
-            Transparent serr2InternalErr bind raise ret get fail.
-            unfold serr2InternalErr, get, raise, ret, fail, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H0.
-            cbn in H0.
-            break_let.
-            repeat break_match_hyp;  try tuple_inversion.
-            Opaque serr2InternalErr bind raise ret get fail.
-          }
-          apply bind_PreservesInvariant_value_SameState.
-          same_state_steps.
-          intros H4 x H5.
+        intros _ dst_a H4.
+        remember (Loc_other "memcpy") as loc.
 
-          Transparent serr2InternalErr raise ret.
-          unfold serr2InternalErr, raise, ret, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H5.
-          Opaque serr2InternalErr raise ret.
-          repeat break_match_hyp; try tuple_inversion; try inl_inr;
-            inl_inr_inv; subst x.
-          1:{
-            exfalso.
-            clear - H2.
-            unfold eff_array_shift_ptrval in H2.
-            Transparent serr2InternalErr bind raise ret get fail.
-            unfold serr2InternalErr, get, raise, ret, fail, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H2.
-            cbn in H2.
-            break_let.
-            repeat break_match_hyp;  try tuple_inversion.
-            Opaque serr2InternalErr bind raise ret get fail.
-          }
 
-          clear IHn.
-
-          preserves_steps.
-
-          all: try typeclasses eauto.
-          all: try assumption.
-          apply negb_false_iff in Heqb.
-          (* TODO: need to generalize IH *)
-          Fail eapply (memcpy_PreservesInvariant_fact Heqo Heqb DS).
+        assert(exists csz, sizeof_ity MorelloImpl.get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some csz) as SZE.
+        {
+          clear.
+          exists 1.
           admit.
-        *
-          (* TODO *)
-          eapply IHn; eauto.
+        }
+        destruct SZE as [csz SZE].
+
+        rewrite (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE) in SH1.
+        tuple_inversion.
+        rewrite (eff_array_shift_ptrval_uchar_spec _ _ _ _ _ _ SZE) in SH2.
+        tuple_inversion.
+
+        Transparent serr2InternalErr bind raise ret get fail fail_noloc.
+        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H4.
+        Opaque serr2InternalErr bind raise ret get fail fail_noloc.
+        tuple_inversion.
+
+        apply bind_PreservesInvariant_value_SameState.
+        same_state_steps.
+        intros _ src_a H4.
+
+        Transparent serr2InternalErr bind raise ret get fail fail_noloc.
+        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H4.
+        Opaque serr2InternalErr bind raise ret get fail fail_noloc.
+        tuple_inversion.
+
+        preserves_steps.
+        all: try assumption.
+        apply negb_false_iff in Heqb.
+        Fail eapply (memcpy_PreservesInvariant_fact Heqo Heqb DS).
+        admit.
+        (* TODO *)
+        Fail eapply IHn.
   Admitted.
 
   Instance realloc_PreservesInvariant
