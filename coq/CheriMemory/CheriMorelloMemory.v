@@ -2849,9 +2849,7 @@ Module Type CheriMemoryImpl
     : memM pointer_value :=
     let cap_addr_of_pointer_value (ptr: pointer_value) : serr Z :=
       match ptr with
-      | PV _ (PVconcrete c_value)
-      | PV _ (PVfunction (FP_invalid c_value)) =>
-          ret (cap_to_Z c_value)
+      | PV _ (PVconcrete c_value) => ret (cap_to_Z c_value)
       | _ => raise "memcpy: invalid pointer value"
       end in
     let copy_tag (dst_p : pointer_value) (src_p : pointer_value)
