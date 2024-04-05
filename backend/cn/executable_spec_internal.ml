@@ -215,6 +215,7 @@ let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ai
 let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 
   let ail_funs = List.map Cn_internal_to_ail.generate_ownership_function ctypes in 
   let (decls, defs) = List.split ail_funs in
+  let decls = List.map (fun (sym, (loc, attrs, d)) -> (sym, (loc, attrs, make_inline d))) decls in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1) in
   let modified_prog2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in

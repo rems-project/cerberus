@@ -202,12 +202,12 @@ let main
             let (c_function_defs, locs_and_c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
             let (conversion_function_defs, _conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
-            let (ownership_function_defs, _ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
+            let (ownership_function_defs, ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
             let c_structs = Executable_spec_internal.print_c_structs ail_prog.tag_definitions in
             let cn_converted_structs = Executable_spec_internal.generate_cn_versions_of_structs ail_prog.tag_definitions in 
 
             (* TODO: Remove - hacky *)
-            let cn_utils_header_pair = ("../executable-spec/cn_utils.c", false) in
+            let cn_utils_header_pair = ("../executable-spec/cn_utils.h", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
             
             (* TODO: Topological sort *)
@@ -228,6 +228,9 @@ let main
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n";
+            Stdlib.output_string oc ownership_function_decls;
+            Stdlib.output_string oc "\n";
+
 
 
             let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in 

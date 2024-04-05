@@ -113,14 +113,17 @@ let create_binding sym ctype =
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
 let generate_cn_assert ail_expr = 
-  A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr]))
+  let func_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__func__")) in
+  let filename_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__FILE__")) in
+  let linenumber_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__LINE__")) in
+  A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr; func_arg; filename_arg; linenumber_arg]))
   
 
 let rec bt_to_cn_base_type = function
 | BT.Unit -> CN_unit
 | BT.Bool -> CN_bool
 | BT.Integer -> CN_integer
-| BT.Bits (sign, size) -> CN_bits ((match sign with BT.Unsigned -> CN_unsigned  | BT.Signed -> CN_unsigned), size)
+| BT.Bits (sign, size) -> CN_bits ((match sign with BT.Unsigned -> CN_unsigned  | BT.Signed -> CN_signed), size)
 | BT.Real -> CN_real
 | BT.Alloc_id  -> failwith "TODO BT.Alloc_id"
 | BT.CType -> failwith "TODO BT.Ctype"
@@ -136,7 +139,15 @@ let rec bt_to_cn_base_type = function
 | BT.Set bt -> CN_set (bt_to_cn_base_type bt)
 
 
+let str_of_cn_bitvector_type sign size = 
+  let sign_str = match sign with | CN_signed -> "i" | CN_unsigned -> "u" in
+  let size_str = string_of_int size in
+  sign_str ^ size_str
 
+let str_of_bt_bitvector_type sign size = 
+  let sign_str = match sign with | BT.Signed -> "i" | BT.Unsigned -> "u" in
+  let size_str = string_of_int size in
+  sign_str ^ size_str
 
 (* TODO: Complete *)
 let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ = 
@@ -188,10 +199,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
    | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name")
   in 
   let annots = match cn_typ with 
-    | CN_bits (sign, size) -> 
-      let sign_str = match sign with | CN_signed -> "i" | CN_unsigned -> "u" in
-      let size_str = string_of_int size in
-      [CF.Annot.Atypedef (Sym.fresh_pretty ("cn_bits_" ^ sign_str ^ size_str))]
+    | CN_bits (sign, size) -> [CF.Annot.Atypedef (Sym.fresh_pretty ("cn_bits_" ^ (str_of_cn_bitvector_type sign size)))]
     | CN_integer -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_integer")]
     | CN_bool -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_bool")]
     | CN_map _ -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")]
@@ -216,41 +224,40 @@ let cn_to_ail_unop_internal = function
   | _ -> failwith "TODO: unop translation"
 
 (* TODO: Finish *)
-let cn_to_ail_binop_internal bt1 bt2 = function
+let cn_to_ail_binop_internal bt1 bt2 = 
+  let cn_int_type_str = match bt1, bt2 with 
+    | BT.Integer, BT.Integer -> "cn_integer"
+    | BT.Bits (sign, size), BT.Bits _ -> "cn_bits_" ^ (str_of_bt_bitvector_type sign size)
+    | BT.Loc, BT.Integer
+    | BT.Loc, BT.Bits _ -> "cn_pointer"
+    | _, _ -> ""
+  in
+  function
   | Terms.And -> (A.And, Some "cn_bool_and")
   | Or -> (A.Or, Some "cn_bool_or")
   (* | Impl *)
   | Add -> 
-    (let str_opt = match bt1, bt2 with 
-      | BT.Integer, BT.Integer -> Some "cn_integer_add"
-      | BT.Loc, BT.Integer -> Some "cn_pointer_add"
-      | _, _ -> None
-    in
-    (A.(Arithmetic Add), str_opt))
+    (A.(Arithmetic Add), Some (cn_int_type_str ^ "_add"))
   | Sub -> 
-    let str_opt = match bt1, bt2 with 
-      | BT.Integer, BT.Integer -> Some "cn_integer_sub"
-      | BT.Loc, BT.Integer -> Some "cn_pointer_sub"
-      | _, _ -> None
-    in
-    (A.(Arithmetic Sub), str_opt)
+    (A.(Arithmetic Sub), Some (cn_int_type_str ^ "_sub"))
   | Mul 
-  | MulNoSMT -> (A.(Arithmetic Mul), Some "cn_integer_multiply")
+  | MulNoSMT -> (A.(Arithmetic Mul), Some (cn_int_type_str ^ "_multiply"))
   | Div 
-  | DivNoSMT -> (A.(Arithmetic Div), Some "cn_integer_divide")
+  | DivNoSMT -> (A.(Arithmetic Div), Some (cn_int_type_str ^ "_divide"))
   | Exp
-  | ExpNoSMT -> (A.And, Some "cn_integer_pow")
+  | ExpNoSMT -> (A.And, Some (cn_int_type_str ^ "_pow"))
   (* | Rem
   | RemNoSMT *)
   | Mod
-  | ModNoSMT -> (A.(Arithmetic Mod), Some "cn_integer_mod")
+  | ModNoSMT -> (A.(Arithmetic Mod), Some (cn_int_type_str ^ "_mod"))
   | XORNoSMT -> (A.(Arithmetic Bxor), None)
   | BWAndNoSMT -> (A.(Arithmetic Band), None)
   | BWOrNoSMT -> (A.(Arithmetic Bor), None)
-  | LT -> (A.Lt, Some "cn_integer_lt")
-  | LE -> (A.Le, Some "cn_integer_le")
-  | Min -> (A.And, Some "cn_integer_min")
-  | Max -> (A.And, Some "cn_integer_max")
+  | LT -> 
+    (A.Lt, Some (cn_int_type_str ^ "_lt"))
+  | LE -> (A.Le, Some (cn_int_type_str ^ "_le"))
+  | Min -> (A.And, Some (cn_int_type_str ^ "_min"))
+  | Max -> (A.And, Some (cn_int_type_str ^ "_max"))
   | EQ -> (A.Eq, None) 
     (* let fn_str = match get_typedef_string (bt_to_ail_ctype bt1) with 
       | Some str -> Some (str ^ "_equality")
@@ -375,18 +382,19 @@ let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) =
 
 let rec cn_to_ail_const_internal = function
   | Terms.Z z -> A.AilEconst (ConstantInteger (IConstant (z, Decimal, None)))
+  | Bits ((sign, size), i) -> A.AilEconst (ConstantInteger (IConstant (i, Decimal, None)))
   | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
   | Pointer z -> 
     Printf.printf "In Pointer case; const\n";
     A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
+  | Alloc_id _ -> failwith "TODO Alloc_id"
   | Bool b -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B)))
   | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void)))
-  | _ -> A.AilEconst (ConstantNull)
-  (* TODO *)
-  (* | CType_const ct -> failwith "TODO: CType_Const" *)
-  (* | Default of BaseTypes.t  *)
-  (* | _ -> failwith "TODO cn_to_ail_const_internal" *)
+  | Null -> A.AilEconst (ConstantNull)
+  | CType_const _ -> failwith "TODO CType_const"
+  | Default bt -> failwith "TODO Default"
 
+  
 type ail_bindings_and_statements = A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
 
 type ail_executable_spec = {
@@ -563,8 +571,9 @@ let rec cn_to_ail_expr_aux_internal
                     | C.(Pointer (_, Ctype (_, Struct sym))) -> 
                       let dt_names = List.map (fun dt -> Sym.pp_string dt.cn_dt_name) dts in 
                       List.iter (fun dt_str -> Printf.printf "%s\n" dt_str) dt_names;
-                      let is_datatype = List.mem String.equal (Sym.pp_string sym) dt_names in
-                      let prefix = if is_datatype then "datatype_" else "struct_" in
+                      let _is_datatype = List.mem String.equal (Sym.pp_string sym) dt_names in
+                      (* let prefix = if is_datatype then "datatype_" else "struct_" in *)
+                      let prefix = "struct_" in
                       let str = prefix ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
                       let fn_name = str ^ "_equality" in 
                       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
@@ -919,8 +928,6 @@ let rec cn_to_ail_expr_aux_internal
   | Cast (bt, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
 
-    
-
     let ail_expr_ = match ((get_typedef_string (bt_to_ail_ctype bt)), get_typedef_string (bt_to_ail_ctype (IT.bt t))) with 
       | Some cast_type_str, Some original_type_str -> 
         let fn_name = "cast_" ^ original_type_str ^ "_to_" ^ cast_type_str in 
@@ -1020,7 +1027,7 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
     |>   
   *)
   let dt_sym = cn_datatype.cn_dt_name in
-  let fn_sym = Sym.fresh_pretty ("datatype_" ^ (Sym.pp_string dt_sym) ^ "_equality") in
+  let fn_sym = Sym.fresh_pretty ("struct_" ^ (Sym.pp_string dt_sym) ^ "_equality") in
   let param1_sym = Sym.fresh_pretty "x" in 
   let param2_sym = Sym.fresh_pretty "y" in
   let id_tag = Id.id "tag" in
