@@ -76,7 +76,7 @@ static uint64_t hash_key(unsigned int *key) {
 }
 
 
-void* ht_get(hash_table* table, unsigned int *key) {
+void* ht_get(hash_table* table, signed long *key) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(table->capacity - 1));
@@ -95,7 +95,7 @@ void* ht_get(hash_table* table, unsigned int *key) {
             index = 0;
         }
     }
-    printf("Returning NULL from ht_get\n");
+    // printf("Returning NULL from ht_get\n");
     return NULL;
 }
 
@@ -170,7 +170,7 @@ static _Bool ht_expand(hash_table* table) {
 }
 
 
-unsigned int* ht_set(hash_table* table, unsigned int* key, void* value) {
+signed long* ht_set(hash_table* table, signed long* key, void* value) {
     assert(value != NULL);
     if (value == NULL) {
         return NULL;

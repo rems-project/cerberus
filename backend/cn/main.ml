@@ -198,7 +198,7 @@ let main
             let cn_converted_structs = Executable_spec_internal.generate_cn_versions_of_structs ail_prog.tag_definitions in 
 
             (* TODO: Remove - hacky *)
-            let cn_utils_header_pair = ("../executable-spec/cn_utils.c", false) in
+            let cn_utils_header_pair = ("../executable-spec/cn_utils.h", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
             
             (* TODO: Topological sort *)
@@ -219,6 +219,9 @@ let main
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n";
+            Stdlib.output_string oc ownership_function_decls;
+            Stdlib.output_string oc "\n";
+
 
 
             let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in 
