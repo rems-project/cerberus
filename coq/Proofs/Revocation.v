@@ -3462,6 +3462,42 @@ Module RevocationProofs.
       repeat break_let; repeat tuple_inversion; try rewrite Z.mul_1_l; reflexivity.
   Qed.
 
+  Lemma load_uchar_spec
+    {loc : location_ocaml}
+    (p : provenance)
+    {c : Capability_GS.t}
+    {s : mem_state_r}
+    {f : footprint}
+    {mval : mem_value}:
+
+    load loc CoqCtype.unsigned_char (PV p (PVconcrete c)) s = (s, inr (f, mval)) ->
+
+    (
+      mval = MVunspecified CoqCtype.unsigned_char
+      \/
+        exists ab b bv,
+          ZMap.MapsTo
+            (AddressValue.to_Z (Capability_GS.cap_get_value c)) ab (bytemap s)
+          /\
+            mval = MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) (IV b)
+          /\
+            value ab = Some bv
+          /\
+            byte_of_Z b = bv
+    ).
+  Proof.
+    intros H.
+
+    unfold load in H.
+    unfold break_PV in H.
+
+
+    (* TODO: eliminate impossible provenance values *)
+
+  Admitted.
+
+
+
   Lemma memcpy_copy_data_spec
     {loc:location_ocaml}
     {s s': mem_state_r}
@@ -3534,8 +3570,10 @@ Module RevocationProofs.
           apply eff_array_shift_ptrval_uchar_spec in D0.
           apply eff_array_shift_ptrval_uchar_spec in D2.
 
+          subst ptrval2''.
+          apply load_uchar_spec in D4.
+
           (* TODO:
-             1. need 'load_spec' for 1 byte
              2. need 'store_spec' for 1 byte
            *)
           admit.
