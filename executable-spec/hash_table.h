@@ -24,7 +24,7 @@ SOFTWARE.
 
 */
 
-#include "alloc.c"
+#include "alloc.h"
 #include <stdbool.h>
 
 // Hash table entry (slot may be filled or empty).
