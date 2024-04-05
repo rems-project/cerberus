@@ -893,8 +893,6 @@ module CHERIMorello : Memory = struct
        "@empty"
     | Prov_some alloc_id ->
        "@" ^ Z.to_string alloc_id
-    | Prov_device ->
-       "@device"
 
   let pp_pointer_value ?(is_verbose=false) (CheriMemoryTypesExe.PV (prov, ptrval_)) =
     match ptrval_ with
@@ -1133,7 +1131,6 @@ module CHERIMorello : Memory = struct
        if MM.cap_is_null c
        then fconc (Some i) (C.cap_get_value c)
        else ffun None
-    | _ -> failwith "case_ptrval"
 
   let case_funsym_opt (st:MM.mem_state) (pv:pointer_value): Symbol.sym option
     = Option.map fromCoq_Symbol_sym (MM.case_funsym_opt st pv)

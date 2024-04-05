@@ -55,8 +55,7 @@ Module Type CheriMemoryTypes
   Inductive provenance : Set :=
   | Prov_disabled : provenance
   | Prov_none : provenance
-  | Prov_some : storage_instance_id -> provenance
-  | Prov_device : provenance.
+  | Prov_some : storage_instance_id -> provenance.
 
   Definition provenance_eqb: provenance -> provenance -> bool :=
     fun p1 p2 =>
@@ -64,7 +63,6 @@ Module Type CheriMemoryTypes
       | Prov_disabled, Prov_disabled => true
       | Prov_none, Prov_none => true
       | Prov_some alloc_id1, Prov_some alloc_id2 => Z.eqb alloc_id1 alloc_id2
-      | Prov_device, Prov_devie => true
       | _, _ => false
       end.
 
@@ -1145,7 +1143,6 @@ Module Type CheriMemoryImpl
            match b_value.(prov) with
            | Prov_disabled
            | Prov_none
-           | Prov_device
              => acc
            | Prov_some alloc_id => alloc_id::acc
            end) bs [] in
@@ -1574,9 +1571,6 @@ Module Type CheriMemoryImpl
                       check_cap_alloc_match c alloc ;;
                       update_allocations alloc alloc_id
                 end
-    | PV Prov_device (PVconcrete _) =>
-        (* TODO: should that be an error ?? *)
-        ret tt
     | PV _ (PVfunction _) =>
         fail loc (MerrOther "attempted to kill with a function pointer")
     | PV Prov_none (PVconcrete c) =>
@@ -1692,20 +1686,6 @@ Module Type CheriMemoryImpl
             && Z.leb
                  (addr + sz)
                  (AddressValue.to_Z alloc.(base) + alloc.(size)))).
-
-  Definition device_ranges : list (AddressValue.t * AddressValue.t) :=
-    [ (AddressValue.of_Z 0x40000000, AddressValue.of_Z 0x40000004)
-      ; (AddressValue.of_Z 0xABC, AddressValue.of_Z 0XAC0) ].
-
-  Definition is_within_device (ty : CoqCtype.ctype) (addr : Z) : memM bool
-    :=
-    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-    ret
-      (List.existsb
-         (fun '(min, max) =>
-            Z.leb (AddressValue.to_Z min) addr
-            && Z.leb (addr + sz) (AddressValue.to_Z max))
-         device_ranges).
 
   Definition is_atomic_member_access
     (alloc_id : Z.t)
@@ -1833,15 +1813,6 @@ Module Type CheriMemoryImpl
         | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
         | Some (alloc_id,_) => load_concrete alloc_id c
         end
-    | Prov_device, PVconcrete c =>
-        if cap_is_null c then
-          fail loc (MerrAccess LoadAccess NullPtr)
-        else
-          sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-          isdev <- is_within_device ty (cap_to_Z c) ;;
-          if isdev
-          then do_load_cap None c sz
-          else fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     | Prov_some alloc_id, PVconcrete c =>
         load_concrete alloc_id c
     end.
@@ -1959,17 +1930,6 @@ Module Type CheriMemoryImpl
           | None => fail loc (MerrAccess StoreAccess OutOfBoundPtr)
           | Some (alloc_id,_) => store_concrete alloc_id c
           end
-      | Prov_device, PVconcrete c =>
-          if cap_is_null c then
-            fail loc
-              (MerrAccess
-                 StoreAccess
-                 NullPtr)
-          else
-            dev <- is_within_device cty (cap_to_Z c) ;;
-            if dev
-            then do_store_cap None c
-            else fail loc (MerrAccess StoreAccess OutOfBoundPtr)
       | Prov_some alloc_id, PVconcrete c
         => store_concrete alloc_id c
       end.
@@ -2403,10 +2363,6 @@ Module Type CheriMemoryImpl
     in
     match ptrval with
     | PV _ (PVfunction _) => ret false
-    | (PV Prov_device (PVconcrete c_value)) as ptrval =>
-        if cap_is_null c_value
-        then ret false
-        else isWellAligned_ptrval ref_ty ptrval
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         if cap_is_null c_value
         then ret false
@@ -2774,10 +2730,6 @@ Module Type CheriMemoryImpl
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
           ret (PV Prov_disabled (PVconcrete c_value))
-    | PV Prov_device (PVconcrete c_value) =>
-        let shifted_addr := cap_to_Z c_value + offset in
-        let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-        ret (PV Prov_device (PVconcrete c_value))
     end.
 
   Definition offsetof_ival

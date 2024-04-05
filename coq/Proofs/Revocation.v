@@ -2737,7 +2737,7 @@ Module RevocationProofs.
       rewrite resolve_has_PNVI, resolve_has_INSTANT.
       destruct ptr.
       destruct p eqn:P; intros.
-      2-4: preserves_steps.
+      2,3: preserves_steps.
       break_match_goal;cbn;[preserves_step|].
       break_match_goal;cbn;[preserves_step|].
       apply bind_PreservesInvariant_value.
@@ -4078,7 +4078,7 @@ va_*
       rewrite resolve_has_PNVI, resolve_has_INSTANT, resolve_has_CORNUCOPIA.
       destruct ptr.
       destruct p eqn:P; intros.
-      1,2,4: preserves_steps.
+      1,2: preserves_steps.
       break_match_goal; [preserves_step|cbn].
       break_match_goal; [preserves_step|].
       apply bind_PreservesInvariant_value.
