@@ -1331,6 +1331,79 @@ Section ZMapAux.
       congruence.
   Qed.
 
+  Lemma zmap_find_first_exists
+    {A:Type}
+    (f:ZMap.key -> A -> bool)
+    (m:ZMap.t A)
+    (k:ZMap.key)
+    (v:A)
+    :
+    zmap_find_first f m = Some (k,v)
+    -> ZMap.find k m = Some v.
+  Proof.
+    unfold zmap_find_first.
+    intros H.
+    apply find_mapsto_iff.
+    revert H.
+
+
+    apply fold_rec_weak; intros.
+    -
+      apply H0 in H1. clear H0.
+      symmetry in H.
+      eapply Equal_mapsto_iff;eauto.
+    -
+      discriminate.
+    -
+      break_match_hyp.
+      +
+        apply H0 in H1. clear H0.
+        subst.
+        destruct (Z.eq_dec k k0) as [E|NE].
+        *
+          exfalso.
+          subst k0.
+          clear - H H1.
+          contradict H.
+          eapply zmap_mapsto_in.
+          eauto.
+        *
+          apply add_neq_mapsto_iff;auto.
+      +
+        break_match_hyp;[|discriminate].
+        clear H0.
+        invc H1.
+        apply ZMap.add_1.
+        reflexivity.
+  Qed.
+
+  Lemma zmap_find_first_matches
+    {A:Type}
+    (f:ZMap.key -> A -> bool)
+    (m:ZMap.t A)
+    (k:ZMap.key)
+    (v:A)
+    :
+    zmap_find_first f m = Some (k,v)
+    -> f k v = true.
+  Proof.
+    unfold zmap_find_first.
+
+    apply fold_rec_weak; intros.
+    -
+      auto.
+    -
+      discriminate.
+    -
+      break_match_hyp.
+      +
+        auto.
+      +
+        break_match_hyp;[|discriminate].
+        clear H0.
+        invc H1.
+        auto.
+  Qed.
 
 End ZMapAux.
 

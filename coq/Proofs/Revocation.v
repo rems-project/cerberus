@@ -3412,36 +3412,6 @@ Module RevocationProofs.
     same_state_steps.
   Qed.
 
-  (* TODO: move *)
-  Lemma zmap_find_first_exists
-    {A:Type}
-    (f:ZMap.key -> A -> bool)
-    (m:ZMap.t A)
-    (k:ZMap.key)
-    (v:A)
-    :
-    zmap_find_first f m = Some (k,v)
-    -> ZMap.find k m = Some v.
-  Proof.
-    intros H.
-    unfold zmap_find_first in H.
-  Admitted.
-
-  (* TODO: move *)
-  Lemma zmap_find_first_matches
-    {A:Type}
-    (f:ZMap.key -> A -> bool)
-    (m:ZMap.t A)
-    (k:ZMap.key)
-    (v:A)
-    :
-    zmap_find_first f m = Some (k,v)
-    -> f k v = true.
-  Proof.
-    intros H.
-    unfold zmap_find_first in H.
-  Admitted.
-
   Fact find_cap_allocation_st_spec
     (s : mem_state_r)
     (c : Capability_GS.t)
