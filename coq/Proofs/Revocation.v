@@ -1195,7 +1195,47 @@ Module RevocationProofs.
       split;destruct s';inversion H;reflexivity.
     Qed.
 
-    Lemma bind_ok_inv
+    Lemma fail_inr_inv
+      {A:Type}
+      {loc : location_ocaml}
+      {m : MemCommonExe.mem_error}
+      {s s' : mem_state}
+      {v : A}:
+      @fail A loc m s   = (s', inr v) -> False.
+    Proof.
+      intros H.
+      Transparent fail raise.
+      unfold fail, raise, Exception_errS in H.
+      Opaque fail raise.
+      break_match_hyp;discriminate.
+    Qed.
+
+    Lemma raise_inr_inv
+      {A E:Type}
+      {e: E}
+      {s s' : mem_state}
+      {v : A}:
+
+      @raise E (errS mem_state_r E) (Exception_errS mem_state_r E) A e s
+      = (s', inr v) -> False.
+    Proof.
+      intros H.
+      Transparent raise.
+      unfold raise, Exception_errS in H.
+      tuple_inversion.
+    Qed.
+
+    Lemma get_inv
+      {s : mem_state}:
+      @get mem_state_r memM (State_errS mem_state memMError) s = (s, @inr memMError mem_state_r s).
+    Proof.
+      Transparent get.
+      unfold get, State_errS.
+      Opaque get.
+      reflexivity.
+    Qed.
+
+    Lemma bind_memM_inv
       {T T': Type}
       {m: memM T'}
       {c: T' -> memM T}
@@ -1216,7 +1256,7 @@ Module RevocationProofs.
       eauto.
     Qed.
 
-    Lemma bind_ok_inv_same_state
+    Lemma bind_memM_inv_same_state
       {T T': Type}
       {m: memM T'}
       `{MS: SameState _ m}
@@ -1238,7 +1278,173 @@ Module RevocationProofs.
       subst.
       eauto.
     Qed.
-    
+
+    Lemma bind_serr_inv
+      {T T': Type}
+      {m: serr T}
+      {c: T -> serr T'}
+      {x: T'}
+      :
+      (@bind (sum string) (Monad_either string) T T' m c) = inr x ->
+      exists y, m = inr y /\ c y = inr x.
+    Proof.
+      Transparent bind ret.
+      unfold bind, ret, memM_monad, Monad_errS, Monad_either.
+      Opaque bind ret.
+      repeat break_let.
+      intros H.
+      break_match.
+      discriminate.
+      subst.
+      exists t.
+      auto.
+    Qed.
+
+    Lemma sassert_inv
+      {b : bool}
+      {s : string}
+      {u : unit}:
+      sassert b s = inr u -> b = true.
+    Proof.
+      unfold sassert.
+      Transparent ret raise.
+      unfold ret, raise, Monad_either, Exception_serr.
+      Opaque ret raise.
+      intros H.
+      break_match_hyp;[reflexivity|discriminate].
+    Qed.
+
+    Lemma ret_memM_inv
+      {A:Type}
+      {v:A}
+      {s: mem_state}:
+      @ret memM memM_monad A v s = (s, @inr memMError A v).
+    Proof.
+      Transparent ret.
+      unfold ret, memM_monad, Monad_errS, Monad_either.
+      Opaque ret.
+      reflexivity.
+    Qed.
+
+    Lemma ret_serr_inv
+      {A:Type}
+      {x:A}:
+      @ret serr (Monad_either string) A x = @inr string A x.
+    Proof.
+      Transparent ret.
+      unfold ret, memM_monad, Monad_errS, Monad_either.
+      Opaque ret.
+      reflexivity.
+    Qed.
+
+    Lemma serr2InternalErr_inv
+      {A:Type}
+      {x:A}
+      m
+      {s: mem_state}:
+      serr2InternalErr m s = (s, inr x) -> m = inr x.
+    Proof.
+      intros H.
+      Transparent serr2InternalErr ret.
+      unfold serr2InternalErr, ret, memM_monad, Monad_errS, Monad_either in H.
+      Opaque serr2InternalErr ret.
+      destruct m.
+      apply raise_inr_inv in H. tauto.
+      tuple_inversion.
+      reflexivity.
+    Qed.
+
+    Ltac htrim :=
+      repeat break_match_hyp; repeat break_let; try subst; try tuple_inversion; cbn in *.
+
+    Ltac state_inv_step :=
+      repeat match goal with
+        (* memM bind with var name *)
+        |[ H: (bind _ (fun x => _)) ?s = (_ ,inr _) |- _ ] =>
+           tryif (apply bind_memM_inv_same_state in H)
+           then
+             (idtac H "bind (memM, same state)" x;
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let x' := fresh x in
+              destruct H as [x' [H1 H2]]
+              ; htrim)
+           else
+             (idtac H "bind (memM)" x;
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let x' := fresh x in
+              let s' := fresh s in
+              apply bind_memM_inv in H;
+              destruct H as [s' [x [H1 H2]]]
+              ; htrim)
+        (* anonymous memM bind *)
+        |[ H: (bind _ (fun _ => _)) ?s = (_ ,inr _) |- _ ] =>
+           tryif (apply bind_memM_inv_same_state in H)
+           then
+             (idtac H "bind (memM, same_state, anon)";
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let u := fresh "u" in
+              destruct H as [u [H1 H2]]
+              ; htrim)
+           else
+             (idtac H "bind (memM, anon)";
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let u := fresh "u" in
+              let s' := fresh s in
+              apply bind_memM_inv in H;
+              destruct H as [s' [u [H1 H2]]]
+              ; htrim)
+        (* serr bind with var name *)
+        | [ H: bind _ (fun x => _) = inr _ |- _]
+          =>
+            idtac H "bind (serr)" x;
+            apply bind_serr_inv in H;
+            let H1 := fresh H in
+            let H2 := fresh H in
+            let x' := fresh x in
+            destruct H as [x' [H1 H2]]
+            ; htrim
+        (* anonymous serr bind *)
+        | [ H: bind _ (fun _ => _) = inr _ |- _]
+          =>
+            idtac H "bind (serr, anon)";
+            apply bind_serr_inv in H;
+            let H1 := fresh H in
+            let H2 := fresh H in
+            let u := fresh "u" in
+            destruct H as [u [H1 H2]]
+            ; htrim
+        | [H: fail _ _ ?s = (?s, inr _) |- _] =>
+            idtac H "fail";
+            apply fail_inr_inv in H; tauto
+            ; htrim
+        | [H: serr2InternalErr _ ?s = (?s, inr _) |- _] =>
+            idtac H "serr2InternalErr";
+            apply serr2InternalErr_inv in H
+            ; htrim
+        | [H: ret _ _ = (_, inr _) |- _] =>
+            idtac H "ret (memM)";
+            rewrite ret_memM_inv in H
+            ; htrim
+        | [H: @ret serr (Monad_either string) _ ?x = inr _ |- _] =>
+            idtac H "ret (serr)";
+            rewrite ret_serr_inv in H
+            ; htrim
+        | [H: get _ = (_, inr _) |- _] =>
+            idtac H "get";
+            rewrite get_inv in H
+            ; htrim
+        | [H: sassert _ _ = inr _ |- _] =>
+            idtac H "sassert";
+            apply sassert_inv in H
+            ; htrim
+        | [H: inl _ = inl _ |- _] => inversion H; clear H; htrim
+        | [H: inr _ = inr _ |- _] => inversion H; clear H; htrim
+        end.
+
     Section MemMwithInvariant.
       Variable invr: mem_state_r -> Prop.
 
@@ -3490,13 +3696,36 @@ Module RevocationProofs.
 
     unfold load in H.
     unfold break_PV in H.
+    rewrite resolve_has_PNVI in H.
+    repeat rewrite resolve_has_any_PNVI_flavour in H.
+    destruct p.
+    -
 
+      unfold sizeof in H.
+      cbn in H.
+      rewrite MorelloImpl.uchar_size in H.
+      cbn in H.
 
-    (* TODO: eliminate impossible provenance values *)
-
+      state_inv_step; try lia.
+      +
+      (* SW_strict_reads = true
+         extract_unspec l = Some _
+       *)
+        admit.
+      +
+        (* SW_strict_reads = false
+           extract_unspec l = Some _
+         *)
+        admit.
+      +
+        (* SW_strict_reads = true
+           extract_unspec l = None *)
+        admit.
+    -
+      apply fail_inr_inv in H; tauto.
+    -
+      apply raise_inr_inv in H ; tauto.
   Admitted.
-
-
 
   Lemma memcpy_copy_data_spec
     {loc:location_ocaml}
@@ -3556,22 +3785,11 @@ Module RevocationProofs.
           clear IHn.
           subst i.
           cbn in H0.
-          apply bind_ok_inv_same_state in H0.
-          destruct H0 as [ptrval1'' [D0 D1]].
-          apply bind_ok_inv_same_state in D1.
-          destruct D1 as [ptrval2'' [D2 D3]].
-          apply bind_ok_inv_same_state in D3.
-          destruct D3 as [y'' [D4 D5]].
-          destruct y'' as [f mval].
-          apply bind_ok_inv in D5.
-          destruct D5 as [s'' [fp [D6 D7]]].
-          subst.
-
-          apply eff_array_shift_ptrval_uchar_spec in D0.
-          apply eff_array_shift_ptrval_uchar_spec in D2.
-
-          subst ptrval2''.
-          apply load_uchar_spec in D4.
+          state_inv_step.
+          apply eff_array_shift_ptrval_uchar_spec in H0.
+          apply eff_array_shift_ptrval_uchar_spec in H6.
+          subst ptrval2'.
+          apply load_uchar_spec in H2.
 
           (* TODO:
              2. need 'store_spec' for 1 byte
@@ -3579,22 +3797,12 @@ Module RevocationProofs.
           admit.
         *
           cbn in H0.
-          apply bind_ok_inv_same_state in H0.
-          destruct H0 as [ptrval1'' [D0 D1]].
-          apply bind_ok_inv_same_state in D1.
-          destruct D1 as [ptrval2'' [D2 D3]].
-          apply bind_ok_inv_same_state in D3.
-          destruct D3 as [y'' [D4 D5]].
-          destruct y'' as [f mval].
-          apply bind_ok_inv in D5.
-          destruct D5 as [s'' [fp [D6 D7]]].
-          subst.
 
-          specialize (IHn s'' s').
+          state_inv_step.
+          specialize (IHn s0 s').
           apply IHn; clear IHn.
           lia.
           --
-            clear -H H5 NE.
             invc H.
             econstructor; eauto.
             lia.

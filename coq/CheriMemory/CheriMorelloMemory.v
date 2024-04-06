@@ -1521,7 +1521,7 @@ Module Type CheriMemoryImpl
     match ptr with
     | PV Prov_disabled (PVconcrete c) =>
         if CoqSwitches.has_PNVI (SW.get_switches tt) then
-          raise (InternalErr "Unexpected provenance in presence of PNVI")
+          raise (InternalErr "Unexpected provenance in the presence of PNVI")
         else
           if cap_is_null c
              && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
@@ -1548,7 +1548,7 @@ Module Type CheriMemoryImpl
                 end
     | PV (Prov_some alloc_id) (PVconcrete c) =>
         if negb (CoqSwitches.has_PNVI (SW.get_switches tt)) then
-          raise (InternalErr "Unexpected provenance in absence of PNVI")
+          raise (InternalErr "Unexpected provenance in the absence of PNVI")
         else
           if cap_is_null c
              && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
@@ -1808,13 +1808,19 @@ Module Type CheriMemoryImpl
     | Prov_none, PVconcrete c =>
         fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     | Prov_disabled, PVconcrete c =>
-        olp <- find_cap_allocation c ;;
-        match olp with
-        | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-        | Some (alloc_id,_) => load_concrete alloc_id c
-        end
+        if CoqSwitches.has_PNVI (SW.get_switches tt) then
+          raise (InternalErr "Unexpected provenance in the presence of PNVI")
+        else
+          olp <- find_cap_allocation c ;;
+          match olp with
+          | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
+          | Some (alloc_id,_) => load_concrete alloc_id c
+          end
     | Prov_some alloc_id, PVconcrete c =>
-        load_concrete alloc_id c
+        if CoqSwitches.has_PNVI (SW.get_switches tt) then
+          load_concrete alloc_id c
+        else
+          raise (InternalErr "Unexpected provenance in the absence of PNVI")
     end.
 
   Fixpoint typeof (mval : mem_value)
