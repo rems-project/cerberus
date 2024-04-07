@@ -290,14 +290,18 @@ module General = struct
              if is_false needed then continue else
              match re with
              | (Q p', O p'_oarg) when subsumed requested.name p'.name
-                         && IT.equal step p'.step ->
+                         && IT.equal step p'.step
+                         && BT.equal (snd requested.q) (snd p'.q) ->
                 let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
+                let iarg_match = and_ (List.map2 eq__ requested.iargs p'.iargs) in
+                let took = and_ [iarg_match; requested.permission; p'.permission] in
+                begin match provable (LC.Forall (requested.q, not_ took)) with
+                | `True -> continue
+                | `False ->
                 begin match provable (LC.T pmatch) with
                 | `True ->
                    Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
-                   let iarg_match = and_ (List.map2 eq__ requested.iargs p'.iargs) in
-                   let took = and_ [iarg_match; requested.permission; p'.permission] in
                    let needed' = and_ [needed; not_ (and_ [iarg_match; p'.permission])] in
                    let permission' = and_ [p'.permission; not_ (and_ [iarg_match; needed])] in
                    let oarg = add_case (Many {many_guard = took; value = p'_oarg}) oarg in
@@ -308,7 +312,7 @@ module General = struct
                    Pp.debug 9 (lazy (Pp.item "couldn't use q-resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T pmatch);
                    continue
-                end
+                end end
              | re ->
                 continue
            ) (needed, C [])
