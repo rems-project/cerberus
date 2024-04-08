@@ -489,6 +489,8 @@ let multiple_steps step_state (m, st) =
                     None, "freeing " ^ string_of_free_error err
                   | MerrUndefinedRealloc err ->
                     None, "undefined behaviour in realloc (" ^ string_of_free_error err ^ ")"
+                  | MerrUndefinedMemcpy Memcpy_overlap ->
+                    None, "undefined behaviour in memcpy (overlapping)"
                   | MerrIntFromPtr ->
                     None, "invalid cast integer from pointer"
                   | MerrPtrComparison ->
