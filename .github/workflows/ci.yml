@@ -1,11 +1,11 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches:
       - master
       - cheri-tests
-    pull_request: {}
 
 # cancel in-progress job when a new push is performed
 concurrency:
