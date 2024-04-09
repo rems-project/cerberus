@@ -1363,14 +1363,14 @@ Module RevocationProofs.
         |[ H: (bind _ (fun x => _)) ?s = (_ ,inr _) |- _ ] =>
            tryif (apply bind_memM_inv_same_state in H)
            then
-             (idtac H "bind (memM, same state)" x;
+             ((* idtac H "bind (memM, same state)" x; *)
               let H1 := fresh H in
               let H2 := fresh H in
               let x' := fresh x in
               destruct H as [x' [H1 H2]]
               ; htrim)
            else
-             (idtac H "bind (memM)" x;
+             ((*idtac H "bind (memM)" x; *)
               let H1 := fresh H in
               let H2 := fresh H in
               let x' := fresh x in
@@ -1382,14 +1382,14 @@ Module RevocationProofs.
         |[ H: (bind _ (fun _ => _)) ?s = (_ ,inr _) |- _ ] =>
            tryif (apply bind_memM_inv_same_state in H)
            then
-             (idtac H "bind (memM, same_state, anon)";
+             ((*idtac H "bind (memM, same_state, anon)"; *)
               let H1 := fresh H in
               let H2 := fresh H in
               let u := fresh "u" in
               destruct H as [u [H1 H2]]
               ; htrim)
            else
-             (idtac H "bind (memM, anon)";
+             ((*idtac H "bind (memM, anon)"; *)
               let H1 := fresh H in
               let H2 := fresh H in
               let u := fresh "u" in
@@ -1400,7 +1400,7 @@ Module RevocationProofs.
         (* serr bind with var name *)
         | [ H: bind _ (fun x => _) = inr _ |- _]
           =>
-            idtac H "bind (serr)" x;
+            (* idtac H "bind (serr)" x; *)
             apply bind_serr_inv in H;
             let H1 := fresh H in
             let H2 := fresh H in
@@ -1410,7 +1410,7 @@ Module RevocationProofs.
         (* anonymous serr bind *)
         | [ H: bind _ (fun _ => _) = inr _ |- _]
           =>
-            idtac H "bind (serr, anon)";
+            (* idtac H "bind (serr, anon)"; *)
             apply bind_serr_inv in H;
             let H1 := fresh H in
             let H2 := fresh H in
@@ -1418,27 +1418,27 @@ Module RevocationProofs.
             destruct H as [u [H1 H2]]
             ; htrim
         | [H: fail _ _ ?s = (?s, inr _) |- _] =>
-            idtac H "fail";
+            (* idtac H "fail"; *)
             apply fail_inr_inv in H; tauto
             ; htrim
         | [H: serr2InternalErr _ ?s = (?s, inr _) |- _] =>
-            idtac H "serr2InternalErr";
+            (* idtac H "serr2InternalErr"; *)
             apply serr2InternalErr_inv in H
             ; htrim
         | [H: ret _ _ = (_, inr _) |- _] =>
-            idtac H "ret (memM)";
+            (* idtac H "ret (memM)"; *)
             rewrite ret_memM_inv in H
             ; htrim
         | [H: @ret serr (Monad_either string) _ ?x = inr _ |- _] =>
-            idtac H "ret (serr)";
+            (* idtac H "ret (serr)"; *)
             rewrite ret_serr_inv in H
             ; htrim
         | [H: get _ = (_, inr _) |- _] =>
-            idtac H "get";
+            (* idtac H "get"; *)
             rewrite get_inv in H
             ; htrim
         | [H: sassert _ _ = inr _ |- _] =>
-            idtac H "sassert";
+            (* idtac H "sassert"; *)
             apply sassert_inv in H
             ; htrim
         | [H: inl _ = inl _ |- _] => inversion H; clear H; htrim
