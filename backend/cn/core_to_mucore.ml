@@ -1464,7 +1464,7 @@ let register_glob env (sym, glob) =
 
 
 
-let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases} =
+let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases; _} =
   let translate_arg (id, bt) =
     (id, SBT.to_basetype (Compile.translate_cn_base_type env bt)) in
   let cases =
