@@ -36,8 +36,7 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
         Pp.debug lvl (lazy (Pp.item msg (IT.pp tm)));
         Pp.debug lvl (lazy (pp_f tm))
       | (LC.Forall ((sym, bt), tm), (_, [(sym', bt')])) ->
-        let here = Locations.other __FUNCTION__ in
-        let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ (sym', bt', here))]) tm in
+        let tm' = IT.subst (IT.make_rename ~from:sym ~to_:sym') tm in
         Pp.debug lvl (lazy (Pp.item ("quantified " ^ msg) (IT.pp tm)));
         Pp.debug lvl (lazy (pp_f tm'))
       | _ ->
@@ -301,7 +300,7 @@ module General = struct
              | (Q p', O p'_oarg) when subsumed requested.name p'.name
                          && IT.equal step p'.step
                          && BT.equal (snd requested.q) (snd p'.q) ->
-                let p' = alpha_rename_qpredicate_type_ (fst requested.q, requested.q_loc) p' in
+                let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
                 let here = Locations.other __FUNCTION__ in
                 let pmatch = eq_ (requested.pointer, p'.pointer) here in
                 let iarg_match = and_ (List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs) here in

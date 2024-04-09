@@ -464,10 +464,8 @@ module IndexTerms = struct
           eq_ (a, b) the_loc
        end
     | EachI ((i1, (s, s_bt), i2), t) ->
-       (* TODO fix this location/add location info to symbol *)
-       let loc = Cerb_location.other __FUNCTION__ in
        let s' = Sym.fresh_same s in
-       let t = IndexTerms.subst (make_subst [(s, sym_ (s', the_bt, loc))]) t in
+       let t = IndexTerms.subst (make_rename ~from:s ~to_:s') t in
        let t = aux t in
        IT (EachI ((i1, (s', s_bt), i2), t), the_bt, the_loc)
 
@@ -619,10 +617,8 @@ module IndexTerms = struct
        in
        make map index
     | MapDef ((s, abt), body) ->
-       (* TODO fix this location/add location info to symbol *)
-       let loc = Cerb_location.other __FUNCTION__ in
        let s' = Sym.fresh_same s in
-       let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt, loc))]) body in
+       let body = IndexTerms.subst (make_rename ~from:s ~to_:s') body in
        let body = aux body in
        IT (MapDef ((s', abt), body), the_bt, the_loc)
 
@@ -662,7 +658,7 @@ module LogicalConstraints = struct
     match lc with
     | LC.T it -> LC.T (simp simp_ctxt it)
     | LC.Forall ((q, qbt), body) ->
-       let q, body = IT.alpha_rename (q, qbt) body in
+       let q, body = IT.alpha_rename q body in
        let body = simp simp_ctxt body in
        begin match body with
        | IT (Const (Bool true), _, _) -> LC.T (bool_ true (IT.loc body))

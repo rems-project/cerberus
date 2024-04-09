@@ -24,17 +24,15 @@ let mConstraints cons t = List.fold_right mConstraint cons t
 
 
 let rec subst i_subst =
-  let rec aux (substitution: IT.t Subst.t) at =
+  let rec aux (substitution: _ Subst.t) at =
     match at with
-    | Define ((name, it),((loc, _) as info), t) ->
-       (* TODO Check this location *)
+    | Define ((name, it), info, t) ->
        let it = IT.subst substitution it in
-       let name, t = suitably_alpha_rename i_subst substitution.relevant (name, IT.bt it, loc) t in
+       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
        Define ((name, it), info, aux substitution t)
     | Resource ((name, (re, bt)),((loc, _) as info), t) ->
-       (* TODO Check this location *)
        let re = RET.subst substitution re in
-       let name, t = suitably_alpha_rename i_subst substitution.relevant (name, bt, loc) t in
+       let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
        let t = aux substitution t in
        Resource ((name, (re, bt)), info, t)
     | Constraint (lc, info, t) ->
@@ -47,28 +45,26 @@ let rec subst i_subst =
   in
   aux
 
-and alpha_rename i_subst (s, ls, loc) t =
+and alpha_rename i_subst s t =
   let s' = Sym.fresh_same s in
-  (s', subst i_subst (IT.make_subst [(s, IT.sym_ (s', ls, loc))]) t)
+  (s', subst i_subst (IT.make_rename ~from:s ~to_:s') t)
 
-and suitably_alpha_rename i_subst syms (s, ls, loc) t =
+and suitably_alpha_rename i_subst syms s t =
   if SymSet.mem s syms
-  then alpha_rename i_subst (s, ls, loc) t
+  then alpha_rename i_subst s t
   else (s, t)
 
 
 
 let simp i_subst simp_i simp_it simp_lc simp_re =
   let rec aux = function
-    | Define ((s, it), ((loc, _) as info), t) ->
-       (* TODO Check this location *)
+    | Define ((s, it), info, t) ->
        let it = simp_it it in
-       let s, t = alpha_rename i_subst (s, IT.bt it, loc) t in
+       let s, t = alpha_rename i_subst s t in
        Define ((s, it), info, aux t)
-    | Resource ((s, (re, bt)),((loc, _) as info), t) ->
-       (* TODO Check this location *)
+    | Resource ((s, (re, bt)), info, t) ->
        let re = simp_re re in
-       let s, t = alpha_rename i_subst (s, bt, loc) t in
+       let s, t = alpha_rename i_subst s t in
        Resource ((s, (re, bt)), info, aux t)
     | Constraint (lc, info, t) ->
        let lc = simp_lc lc in
@@ -113,14 +109,12 @@ let alpha_unique ss =
   let rename_if ss = suitably_alpha_rename RT.subst ss in
   let rec f ss at =
     match at with
-    | Define ((name, it),((loc, _) as info), t) ->
-       (* TODO Check this location *)
-       let name, t = rename_if ss (name, IT.bt it, loc) t in
+    | Define ((name, it), info, t) ->
+       let name, t = rename_if ss name t in
        let t = f (SymSet.add name ss) t in
        Define ((name, it), info, t)
-    | Resource ((name, (re, bt)),((loc, _) as info), t) ->
-       (* TODO Check this location *)
-       let name, t = rename_if ss (name, bt, loc) t in
+    | Resource ((name, (re, bt)), info, t) ->
+       let name, t = rename_if ss name t in
        let t = f (SymSet.add name ss) t in
        Resource ((name, (re, bt)), info, f ss t)
     | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
@@ -132,10 +126,10 @@ let alpha_unique ss =
 let binders i_binders i_subst =
   let rec aux = function
     | Define ((s, it), (loc, _), t) ->
-       let (s, t) = alpha_rename i_subst (s, IT.bt it, loc) t in
+       let (s, t) = alpha_rename i_subst s t in
        (Id.id (Sym.pp_string s), IT.bt it) :: aux t
     | Resource ((s, (re, bt)), (loc, _), t) ->
-       let (s, t) = alpha_rename i_subst (s, bt, loc) t in
+       let (s, t) = alpha_rename i_subst s t in
        (Id.id (Sym.pp_string s), bt) :: aux t
     | Constraint (lc, _, t) ->
        aux t

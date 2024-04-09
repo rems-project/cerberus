@@ -32,7 +32,7 @@ let subst su c =
   | T it ->
      T (IT.subst su it)
   | Forall ((s, bt), body) ->
-     let s, body = IT.suitably_alpha_rename su.relevant (s, bt) body in
+     let s, body = IT.suitably_alpha_rename su.relevant s body in
      Forall ((s, bt), IT.subst su body)
 
 let subst_ su c =
@@ -53,9 +53,8 @@ let alpha_equivalent lc lc' = match lc, lc' with
     then IT.equal c c'
     else begin
       let new_s = Sym.fresh_same s in
-      let loc = Cerb_location.other __FUNCTION__ in
-      let c = IT.subst (IT.make_subst [(s, IT.sym_ (new_s, bt, loc))]) c in
-      let c' = IT.subst (IT.make_subst [(s', IT.sym_ (new_s, bt, loc))]) c' in
+      let c = IT.subst (IT.make_rename ~from:s ~to_:new_s) c in
+      let c' = IT.subst (IT.make_rename ~from:s' ~to_:new_s) c' in
       IT.equal c c'
     end
   | _ -> false

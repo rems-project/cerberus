@@ -21,43 +21,41 @@ let mComputational (bound, oinfo) t =
 
 
 
-let rec subst (substitution: IT.t Subst.t) at =
+let rec subst (substitution: _ Subst.t) at =
   match at with
-  | Computational ((name, bt), ((loc, _) as info), t) ->
-     (* TODO Check this location *)
-     let name, t = LRT.suitably_alpha_rename substitution.relevant (name, bt, loc) t in
+  | Computational ((name, bt), info, t) ->
+     let name, t = LRT.suitably_alpha_rename substitution.relevant name t in
      Computational ((name, bt), info, LRT.subst substitution t)
 
-and alpha_rename_ s' loc (s, ls) t =
-  (s', subst (IT.make_subst [(s, IT.sym_ (s', ls, loc))]) t)
+and alpha_rename_ ~from ~to_ t =
+  (to_, subst (IT.make_rename ~from ~to_) t)
 
-and alpha_rename (s, ls, loc) t =
-  let s' = Sym.fresh_same s in
-  alpha_rename_ s' loc (s, ls) t
+and alpha_rename from t =
+  let to_ = Sym.fresh_same from in
+  alpha_rename_ ~from ~to_ t
 
-and suitably_alpha_rename syms (s, ls, loc) t =
+and suitably_alpha_rename syms s t =
   if SymSet.mem s syms
-  then alpha_rename (s, ls, loc) t
+  then alpha_rename s t
   else (s, t)
 
 
 let alpha_unique ss = function
-  | Computational ((name, bt),((loc, _) as oinfo), t) ->
+  | Computational ((name, bt), oinfo, t) ->
     let t = LRT.alpha_unique (SymSet.add name ss) t in
-    let (name, t) = LRT.suitably_alpha_rename ss (name, bt, loc) t in
+    let (name, t) = LRT.suitably_alpha_rename ss name t in
     Computational ((name, bt), oinfo, t)
 
 
 let simp simp_it simp_lc simp_re = function
   | Computational ((s, bt),((loc, _) as info), lt) ->
-     let s, lt = LRT.alpha_rename (s, bt, loc) lt in
+     let s, lt = LRT.alpha_rename s lt in
      Computational ((s, bt), info, LRT.simp simp_it simp_lc simp_re lt)
 
 
 let binders = function
-  | Computational ((s, bt), (loc, _), t) ->
-     (* TODO Check this location *)
-     let (s, t) = LRT.alpha_rename (s, bt, loc) t in
+  | Computational ((s, bt), _, t) ->
+     let (s, t) = LRT.alpha_rename s t in
      (Id.id (Sym.pp_string s), bt) :: LRT.binders t
 
 
@@ -100,9 +98,8 @@ let alpha_equivalent rt rt' =
   | Computational ((s, bt), _, t),
     Computational ((s', bt'), _, t') ->
      let new_s = Sym.fresh_same s in
-     let loc = Cerb_location.other __FUNCTION__ in
-     let _, t = LRT.alpha_rename_ new_s loc (s, bt) t in
-     let _, t' = LRT.alpha_rename_ new_s loc (s', bt') t' in
+     let _, t = LRT.alpha_rename_ ~to_:new_s ~from:s t in
+     let _, t' = LRT.alpha_rename_ ~to_:new_s ~from:s' t' in
      BaseTypes.equal bt bt' && LRT.alpha_equivalent t t'
 
 
