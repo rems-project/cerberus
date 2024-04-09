@@ -2180,7 +2180,8 @@ cn_function:
   cn_func_body= cn_option_func_body
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
-      { cn_func_loc= loc
+      { cn_func_magic_loc= Cerb_location.unknown
+      ; cn_func_loc= loc
       ; cn_func_name= str
       ; cn_func_return_bty
       ; cn_func_attrs
@@ -2195,7 +2196,8 @@ cn_predicate:
   cn_pred_clauses= cn_option_pred_clauses
     { (* TODO: check the name starts with upper case *)
       let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
-      { cn_pred_loc= loc
+      { cn_pred_magic_loc= Cerb_location.unknown
+      ; cn_pred_loc= loc
       ; cn_pred_name= Symbol.Identifier (loc, str)
       ; cn_pred_attrs
       ; cn_pred_output
@@ -2209,7 +2211,8 @@ cn_lemma:
   CN_ENSURES cn_lemma_ensures=nonempty_list(condition)
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.point $startpos(str) in
-      { cn_lemma_loc= loc
+      { cn_lemma_magic_loc= Cerb_location.unknown
+      ; cn_lemma_loc= loc
       ; cn_lemma_name= str
       ; cn_lemma_args
       ; cn_lemma_requires
@@ -2218,7 +2221,8 @@ cn_datatype:
 | CN_DATATYPE nm= cn_variable
   cases= delimited(LBRACE, cn_cons_cases, RBRACE)
     {
-      { cn_dt_loc= Cerb_location.(region ($startpos, $endpos) NoCursor)
+      { cn_dt_magic_loc= Cerb_location.unknown
+      ; cn_dt_loc= Cerb_location.(region ($startpos, $endpos) NoCursor)
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
 cn_fun_spec:
@@ -2228,7 +2232,8 @@ cn_fun_spec:
   CN_REQUIRES cn_spec_requires=nonempty_list(condition)
   CN_ENSURES cn_spec_ensures=nonempty_list(condition)
     { let loc = Cerb_location.point $startpos(str) in
-      { cn_spec_loc= loc
+      { cn_spec_magic_loc= Cerb_location.unknown
+      ; cn_spec_loc= loc
       ; cn_spec_name= str
       ; cn_spec_args
       ; cn_spec_requires
@@ -2240,7 +2245,8 @@ cn_type_synonym:
   EQ
   ty= opt_paren(base_type)
     { let loc = Cerb_location.point $startpos(str) in
-      { cn_tysyn_loc= loc
+      { cn_tysyn_magic_loc= Cerb_location.unknown
+      ; cn_tysyn_loc= loc
       ; cn_tysyn_name= str
       ; cn_tysyn_rhs= ty } }
 

@@ -1157,7 +1157,7 @@ let add_toplevel_magic str =
   update_inner (fun st -> <| st with
     toplevel_magic_statements = str :: st.toplevel_magic_statements |>)
 
-let register_cn_function ident loc mk =
+let register_cn_function magic_loc ident loc mk =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_functions with
     | Nothing ->
@@ -1166,6 +1166,7 @@ let register_cn_function ident loc mk =
         push_cn_scope >>= fun () ->
         mk >>= fun (attrs, return_bty, args, body) ->
         let func = <|
+          Cn.cn_func_magic_loc= magic_loc;
           Cn.cn_func_loc= loc;
           Cn.cn_func_name= sym;
           Cn.cn_func_attrs= attrs;
@@ -1185,7 +1186,7 @@ let register_cn_function ident loc mk =
   end
 
 (* copied and adjusted from register_cn_function *)
-let register_cn_lemma ident mk =
+let register_cn_lemma magic_loc ident mk =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_lemmata with
     | Nothing ->
@@ -1193,6 +1194,7 @@ let register_cn_lemma ident mk =
         push_cn_scope >>= fun () ->
         mk >>= fun (args, requires, ensures) ->
         let lmma = <|
+          Cn.cn_lemma_magic_loc= magic_loc;
           Cn.cn_lemma_loc= Loc.locOf ident;
           Cn.cn_lemma_name= sym;
           Cn.cn_lemma_args= args;
@@ -1211,10 +1213,11 @@ let register_cn_lemma ident mk =
   end
 
 (* copied and adjusted from register_cn_function *)
-let register_cn_fun_spec loc (ident : Symbol.sym) (marker_id : nat) mk =
+let register_cn_fun_spec magic_loc loc (ident : Symbol.sym) (marker_id : nat) mk =
   push_cn_scope >>= fun () ->
   mk >>= fun (args, requires, ensures, rsym) ->
   let spec = <|
+    Cn.cn_spec_magic_loc= magic_loc;
     Cn.cn_spec_loc= loc;
     Cn.cn_spec_name= ident;
     Cn.cn_spec_args= args;
@@ -1231,7 +1234,7 @@ let register_cn_fun_spec loc (ident : Symbol.sym) (marker_id : nat) mk =
     )
   end
 
-let register_cn_predicate ident loc mk =
+let register_cn_predicate magic_loc ident loc mk =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
     | Nothing ->
@@ -1240,6 +1243,7 @@ let register_cn_predicate ident loc mk =
         push_cn_scope >>= fun () ->
         mk >>= fun (attrs, output, iargs, clauses) ->
         let pred = <|
+          Cn.cn_pred_magic_loc= magic_loc;
           Cn.cn_pred_loc= loc;
           Cn.cn_pred_name= sym;
           Cn.cn_pred_attrs = attrs;
@@ -1263,7 +1267,7 @@ let register_cn_type_synonym name basety =
     Cn_desugaring.cn_type_synonyms= Map.insert name basety
       st.Cn_desugaring.cn_type_synonyms |>)
 
-let register_cn_datatype ident loc mk_cases =
+let register_cn_datatype magic_loc ident loc mk_cases =
   get_inner >>= fun st ->
   match List.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
     | Nothing ->
@@ -1273,6 +1277,7 @@ let register_cn_datatype ident loc mk_cases =
         push_cn_scope >>= fun () ->
         mk_cases >>= fun cases ->
         let dt = <|
+          Cn.cn_dt_magic_loc= magic_loc;
           Cn.cn_dt_loc= loc;
           Cn.cn_dt_name= sym;
           Cn.cn_dt_cases= cases;
