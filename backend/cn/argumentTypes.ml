@@ -20,30 +20,28 @@ let mComputationals t =
   List.fold_right mComputational t
 
 
-let rec subst i_subst (substitution: IT.t Subst.t) at =
+let rec subst i_subst (substitution: _ Subst.t) at =
   match at with
-  | Computational ((name, bt),((loc, _) as info), t) ->
-     (* TODO Check this location *)
-     let name, t = suitably_alpha_rename i_subst substitution.relevant (name, bt, loc) t in
+  | Computational ((name, bt), info, t) ->
+     let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
      Computational ((name, bt), info, subst i_subst substitution t)
   | L t ->
      L (LAT.subst i_subst substitution t)
 
-and alpha_rename i_subst (s, ls, loc) t =
+and alpha_rename i_subst s t =
   let s' = Sym.fresh_same s in
-  (s', subst i_subst (IT.make_subst [(s, IT.sym_ (s', ls, loc))]) t)
+  (s', subst i_subst (IT.make_rename ~from:s ~to_:s') t)
 
-and suitably_alpha_rename i_subst syms (s, ls, loc) t =
+and suitably_alpha_rename i_subst syms s t =
   if SymSet.mem s syms
-  then alpha_rename i_subst (s, ls, loc) t
+  then alpha_rename i_subst s t
   else (s, t)
 
 
 let simp i_subst simp_i simp_it simp_lc simp_re =
   let rec aux = function
-    | Computational ((s, bt),((loc, _) as info), t) ->
-       (* TODO Check this location *)
-       let s, t = alpha_rename i_subst (s, bt, loc) t in
+    | Computational ((s, bt), info, t) ->
+       let s, t = alpha_rename i_subst s t in
        Computational ((s, bt), info, aux t)
     | L lt ->
        L (LAT.simp i_subst simp_i simp_it simp_lc simp_re lt)
@@ -83,9 +81,8 @@ let alpha_unique ss =
   let rename_if ss = suitably_alpha_rename RT.subst ss in
   let rec f ss at =
     match at with
-    | Computational ((name, bt),((loc, _) as info), t) ->
-       (* TODO Check this location *)
-       let name, t = rename_if ss (name, bt, loc) t in
+    | Computational ((name, bt), info, t) ->
+       let name, t = rename_if ss name t in
        let t = f (SymSet.add name ss) t in
        Computational ((name, bt), info, t)
     | L t ->
@@ -101,9 +98,8 @@ let alpha_unique ss =
 
 let binders i_binders i_subst =
   let rec aux = function
-    | Computational ((s, bt), (loc, _), t) ->
-       (* TODO Check this location *)
-       let (s, t) = alpha_rename i_subst (s, bt, loc) t in
+    | Computational ((s, bt), _, t) ->
+       let (s, t) = alpha_rename i_subst s t in
        (Id.id (Sym.pp_string s), bt) :: aux t
     | L t ->
        LAT.binders i_binders i_subst t

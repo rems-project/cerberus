@@ -42,7 +42,7 @@ let rec subst substitution = function
      let pointer = IT.subst substitution pointer in
      let name, prog =
        suitably_alpha_rename substitution.relevant
-         (name, Memory.bt_of_sct ct, loc) prog
+         name prog
      in
      M_CN_let (loc, (name, {ct; pointer}), subst substitution prog)
   | M_CN_statement (loc, stmt) ->
@@ -74,16 +74,16 @@ let rec subst substitution = function
      M_CN_statement (loc, stmt)
 
 
-and alpha_rename_ s' loc (s, ls) prog =
-  (s', subst (IT.make_subst [(s, IT.sym_ (s', ls, loc))]) prog)
+and alpha_rename_ ~from ~to_ prog =
+  (to_, subst (IT.make_rename ~from ~to_) prog)
 
-and alpha_rename (s, ls, loc) prog =
-  let s' = Sym.fresh_same s in
-  alpha_rename_ s' loc (s, ls) prog
+and alpha_rename from prog =
+  let to_ = Sym.fresh_same from in
+  alpha_rename_ ~from ~to_ prog
 
-and suitably_alpha_rename syms (s, ls, loc) prog =
+and suitably_alpha_rename syms s prog =
   if SymSet.mem s syms
-  then alpha_rename (s, ls, loc) prog
+  then alpha_rename s prog
   else (s, prog)
 
 

@@ -226,19 +226,28 @@ let preds_of t =
 let json it : Yojson.Safe.t =
   `String (Pp.plain (pp it))
 
-let make_subst = Subst.make free_vars
+let free_vars_with_rename = function
+  | `Term t -> free_vars t
+  | `Rename s -> SymSet.singleton s
+
+let make_rename ~from ~to_ = Subst.make free_vars_with_rename [(from, `Rename to_)]
+
+let make_subst assoc = Subst.make free_vars_with_rename (List.map (fun (s, t) -> (s, `Term t)) assoc)
 
 let substitute_lets_flag = Sym.fresh_named "substitute_lets"
 
-let rec subst (su : typed subst) (IT (it, bt, loc)) =
+let rec subst (su : [`Term of typed | `Rename of Sym.t] subst) (IT (it, bt, loc)) =
   match it with
   | Sym sym ->
      begin match List.assoc_opt Sym.equal sym su.replace with
-     | Some after ->
-       if BT.equal bt (basetype after) then ()
-       else failwith ("ill-typed substitution: " ^
-         Pp.plain (Pp.list pp_with_typ [IT (it, bt, loc); after]));
+     | Some (`Term after) ->
+       if BT.equal bt (basetype after) then
+         ()
+       else
+         failwith ("ill-typed substitution: " ^ Pp.plain (Pp.list pp_with_typ [IT (it, bt, loc); after]));
        after
+     | Some (`Rename sym) ->
+           IT (Sym sym, bt, loc)
      | None -> IT (Sym sym, bt, loc)
      end
   | Const const ->
@@ -250,7 +259,7 @@ let rec subst (su : typed subst) (IT (it, bt, loc)) =
   | ITE (it,it',it'') ->
      IT (ITE (subst su it, subst su it', subst su it''), bt, loc)
   | EachI ((i1, (s, s_bt), i2), t) ->
-     let s, t = suitably_alpha_rename su.relevant (s, s_bt) t in
+     let s, t = suitably_alpha_rename su.relevant s t in
      IT (EachI ((i1, (s, s_bt), i2), subst su t), bt, loc)
   | Tuple its ->
      IT (Tuple (map (subst su) its), bt, loc)
@@ -307,17 +316,16 @@ let rec subst (su : typed subst) (IT (it, bt, loc)) =
   | MapGet (it, arg) ->
      IT (MapGet (subst su it, subst su arg), bt, loc)
   | MapDef ((s, abt), body) ->
-     let s, body = suitably_alpha_rename su.relevant (s, abt) body in
+     let s, body = suitably_alpha_rename su.relevant s body in
      IT (MapDef ((s, abt), subst su body), bt, loc)
   | Apply (name, args) ->
      IT (Apply (name, List.map (subst su) args), bt, loc)
   | Let ((name, t1), t2) ->
-     if SymSet.mem substitute_lets_flag su.flags
-     then
+     if SymSet.mem substitute_lets_flag su.flags then
        let t1 = subst su t1 in
-       subst (Subst.add free_vars (name, t1) su) t2
+       subst (Subst.add free_vars_with_rename (name, `Term t1) su) t2
      else begin
-       let name, t2 = suitably_alpha_rename su.relevant (name, basetype t1) t2 in
+       let name, t2 = suitably_alpha_rename su.relevant name t2 in
        IT (Let ((name, subst su t1), subst su t2), bt, loc)
      end
   | Match (e, cases) ->
@@ -332,13 +340,13 @@ let rec subst (su : typed subst) (IT (it, bt, loc)) =
      in
      IT (Constructor (s, args), bt, loc)
 
-and alpha_rename (s, bt) body =
+and alpha_rename s body =
   let s' = Sym.fresh_same s in
-  (s', subst (make_subst [(s, IT (Sym s', bt, Cerb_location.other __FUNCTION__))]) body)
+  (s', subst (make_rename ~from:s ~to_:s') body)
 
-and suitably_alpha_rename syms (s, bt) body =
+and suitably_alpha_rename syms s body =
   if SymSet.mem s syms
-  then alpha_rename (s, bt) body
+  then alpha_rename s body
   else (s, body)
 
 and subst_under_pattern su (pat, body) =
@@ -349,7 +357,7 @@ and subst_under_pattern su (pat, body) =
 and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) =
   match pat_ with
   | PSym s ->
-     let (s, body) = suitably_alpha_rename su.relevant (s, bt) body in
+     let (s, body) = suitably_alpha_rename su.relevant s body in
      (Pat (PSym s, bt), body)
   | PWild ->
      (Pat (PWild, bt), body)

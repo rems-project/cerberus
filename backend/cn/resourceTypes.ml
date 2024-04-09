@@ -120,8 +120,8 @@ let json re : Yojson.Safe.t =
 
 
 
-let alpha_rename_qpredicate_type_ ((q' : Sym.t), loc) (qp : qpredicate_type) =
-  let subst = make_subst [(fst qp.q, sym_ (q', snd qp.q, loc))] in
+let alpha_rename_qpredicate_type_ (q' : Sym.t) (qp : qpredicate_type) =
+  let subst = make_rename ~from:(fst qp.q) ~to_:q' in
   { name = qp.name;
     pointer = qp.pointer;
     q = (q', snd qp.q);
@@ -132,7 +132,7 @@ let alpha_rename_qpredicate_type_ ((q' : Sym.t), loc) (qp : qpredicate_type) =
   }
 
 let alpha_rename_qpredicate_type qp =
-  alpha_rename_qpredicate_type_ (Sym.fresh_same (fst qp.q), qp.q_loc) qp
+  alpha_rename_qpredicate_type_ (Sym.fresh_same (fst qp.q)) qp
 
 
 let subst_predicate_type substitution (p : predicate_type) =
@@ -159,7 +159,7 @@ let subst_qpredicate_type substitution (qp : qpredicate_type) =
   }
 
 
-let subst (substitution : IT.t Subst.t) = function
+let subst (substitution : _ Subst.t) = function
   | P p -> P (subst_predicate_type substitution p)
   | Q qp -> Q (subst_qpredicate_type substitution qp)
 
@@ -192,8 +192,7 @@ let same_predicate_name r1 r2 =
 let alpha_equivalent r1 r2 = match r1, r2 with
   | P x, P y -> equal_resource_type r1 r2
   | Q x, Q y ->
-    let loc = Cerb_location.other __FUNCTION__ in
-    let y2 = alpha_rename_qpredicate_type_ (fst x.q, loc) y in
+    let y2 = alpha_rename_qpredicate_type_ (fst x.q) y in
     equal_resource_type (Q x) (Q y2)
   | _ -> false
 

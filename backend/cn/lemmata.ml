@@ -312,7 +312,7 @@ let rec new_nm s nms i =
   then new_nm s nms (i + 1)
   else s2
 
-let alpha_rename_if_pp_same (s, bt, loc) body =
+let alpha_rename_if_pp_same s body =
   let vs = IT.free_vars body in
   let other_nms = List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
     |> List.map Sym.pp_string in
@@ -321,7 +321,7 @@ let alpha_rename_if_pp_same (s, bt, loc) body =
     Pp.debug 6 (lazy (Pp.item "doing rename"
         (Pp.typ (Sym.pp s) (Pp.braces (Pp.list Pp.string other_nms)))));
     let s2 = Sym.fresh_named (new_nm (Sym.pp_string s) other_nms 0) in
-    let body = IT.subst (IT.make_subst [(s, IT.sym_ (s2, bt, loc))]) body in
+    let body = IT.subst (IT.make_rename ~from:s ~to_:s2) body in
     (s2, body, IT.free_vars body)
   end
   else (s, body, vs)
@@ -346,8 +346,7 @@ let it_adjust (global : Global.t) it =
             if IT.is_false x || IT.is_true y then IT.bool_ true loc else IT.impl_ (x, y) loc
         | IT.EachI ((i1, (s, bt), i2), x) ->
             let x = f x in
-            (* TODO revisit this location *)
-            let (s, x, vs) = alpha_rename_if_pp_same (s, BT.Integer, loc) x in
+            let (s, x, vs) = alpha_rename_if_pp_same s x in
             if not (SymSet.mem s vs)
             then (assert (i1 <= i2); x)
             else IT.eachI_ (i1, (s, bt), i2) x loc
@@ -367,8 +366,7 @@ let it_adjust (global : Global.t) it =
     | IT.Let ((nm, x), y) ->
         let x = f x in
         let y = f y in
-        (* TODO revisit this location *)
-        let (nm, y, vs) = alpha_rename_if_pp_same (nm, IT.bt x, loc) y in
+        let (nm, y, vs) = alpha_rename_if_pp_same nm y in
         if Option.is_some (IT.is_sym x)
         then IT.subst (IT.make_subst [(nm, x)]) y
         else

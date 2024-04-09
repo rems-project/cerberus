@@ -546,7 +546,6 @@ module WIT = struct
       | EachI ((i1, (s, bt), i2), t) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, t = IT.alpha_rename (s, BT.Integer) t in *)
          pure begin
              let@ bt = WBT.is_bt loc bt in
              let@ () = ensure_bits_type loc bt in
@@ -762,7 +761,6 @@ module WIT = struct
       | MapDef ((s, abt), body) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, body = IT.alpha_rename (s, abt) body in *)
          let@ abt = WBT.is_bt loc abt in
          pure begin
             let@ () = add_l s abt (loc, lazy (Pp.string "map-def-var")) in
@@ -865,7 +863,6 @@ module WRET = struct
     | Q p ->
        (* no need to alpha-rename, because context.ml ensures
           there's no name clashes *)
-       (* let p = RET.alpha_rename_qpredicate_type p in *)
        let@ pointer = WIT.check loc BT.Loc p.pointer in
        let@ qbt = WBT.is_bt loc (snd p.q) in
        let@ () = ensure_bits_type loc qbt in
@@ -991,7 +988,6 @@ module WLRT = struct
       | Define ((s, it), ((loc, _) as info), lrt) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, lrt = LRT.alpha_rename (s, IT.bt it) lrt in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          (* TODO revisit this location *)
@@ -1001,7 +997,6 @@ module WLRT = struct
       | Resource ((s, (re, re_oa_spec)), ((loc, _) as info), lrt) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in *)
          let@ (re, re_oa_spec) = WRS.welltyped loc (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          (* TODO revisit this location *)
@@ -1033,7 +1028,6 @@ module WRT = struct
       | RT.Computational ((name,bt), info, lrt) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let name, lrt = LRT.alpha_rename (name, bt) lrt in *)
          let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ lrt = WLRT.welltyped loc lrt in
@@ -1065,7 +1059,6 @@ module WLAT = struct
       | LAT.Define ((s, it), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          (* TODO revisit this location *)
@@ -1075,7 +1068,6 @@ module WLAT = struct
       | LAT.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          (* TODO revisit this location *)
@@ -1112,7 +1104,6 @@ module WAT = struct
       | AT.Computational ((name,bt), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let name, at = AT.alpha_rename i_subst (name, bt) at in *)
          let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ at = aux at in
@@ -1176,7 +1167,6 @@ module WLArgs = struct
       | Mu.M_Define ((s, it), ((loc, _) as info), at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          (* TODO revisit this location *)
@@ -1186,7 +1176,6 @@ module WLArgs = struct
       | Mu.M_Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          (* TODO revisit this location *)
@@ -1233,7 +1222,6 @@ module WArgs = struct
       | Mu.M_Computational ((name,bt), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
-         (* let name, at = AT.alpha_rename i_subst (name, bt) at in *)
          let@ bt = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ at = aux at in

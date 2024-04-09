@@ -28,17 +28,15 @@ let mResources = List.fold_right mResource
 let mConstraints = List.fold_right mConstraint
 
 
-let rec subst (substitution: IT.t Subst.t) lrt =
+let rec subst (substitution: _ Subst.t) lrt =
   match lrt with
   | Define ((name, it), info, t) ->
-     (* TODO Check this location *)
      let it = IT.subst substitution it in
-     let name, t = suitably_alpha_rename substitution.relevant (name, IT.bt it, IT.loc it) t in
+     let name, t = suitably_alpha_rename substitution.relevant name t in
      Define ((name, it), info, subst substitution t)
   | Resource ((name, (re, bt)), ((loc, _) as info), t) ->
-     (* TODO Check this location *)
      let re = RT.subst substitution re in
-     let name, t = suitably_alpha_rename substitution.relevant (name, bt, loc) t in
+     let name, t = suitably_alpha_rename substitution.relevant name t in
      let t = subst substitution t in
      Resource ((name, (re, bt)), info, t)
   | Constraint (lc, info, t) ->
@@ -48,17 +46,17 @@ let rec subst (substitution: IT.t Subst.t) lrt =
   | I ->
      I
 
-and alpha_rename_ s' loc (s, ls) t =
-  (s', if Sym.equal s s' then t
-    else subst (IT.make_subst [(s, IT.sym_ (s', ls, loc))]) t)
+and alpha_rename_ ~from ~to_ t =
+  (to_, if Sym.equal from to_ then t
+    else subst (IT.make_rename ~from ~to_) t)
 
-and alpha_rename (s, ls, loc) t =
-  let s' = Sym.fresh_same s in
-  alpha_rename_ s' loc (s, ls) t
+and alpha_rename from t =
+  let to_ = Sym.fresh_same from in
+  alpha_rename_ ~from ~to_ t
 
-and suitably_alpha_rename syms (s, ls, loc) t =
+and suitably_alpha_rename syms s t =
   if SymSet.mem s syms
-  then alpha_rename (s, ls, loc) t
+  then alpha_rename s t
   else (s, t)
 
 
@@ -73,14 +71,12 @@ let rec bound = function
 let alpha_unique ss =
   let rec f ss = function
   | Resource ((name, (re, bt)),((loc, _) as info), t) ->
-     (* TODO Check this location *)
      let t = f (SymSet.add name ss) t in
-     let (name, t) = suitably_alpha_rename ss (name, bt, loc) t in
+     let (name, t) = suitably_alpha_rename ss name t in
      Resource ((name, (re, bt)), info, t)
   | Define ((name, it),((loc, _) as info), t) ->
-     (* TODO Check this location *)
      let t = f (SymSet.add name ss) t in
-     let name, t = suitably_alpha_rename ss (name, IT.bt it, loc) t in
+     let name, t = suitably_alpha_rename ss name t in
      Define ((name, it), info, t)
   | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
   | I ->
@@ -90,13 +86,11 @@ let alpha_unique ss =
 
 let binders =
   let rec aux = function
-    | Define ((s, it), (loc, _), t) ->
-     (* TODO Check this location *)
-       let (s, t) = alpha_rename (s, IT.bt it, loc) t in
+    | Define ((s, it), _, t) ->
+       let (s, t) = alpha_rename s t in
        (Id.id (Sym.pp_string s), IT.bt it) :: aux t
-    | Resource ((s, (re, bt)), (loc, _), t) ->
-     (* TODO Check this location *)
-       let (s, t) = alpha_rename (s, bt, loc) t in
+    | Resource ((s, (re, bt)), _, t) ->
+       let (s, t) = alpha_rename s t in
        (Id.id (Sym.pp_string s), bt) :: aux t
     | Constraint (lc, _, t) ->
        aux t
@@ -121,18 +115,15 @@ let free_vars lrt =
 
 let simp simp_it simp_lc simp_re =
   let rec aux = function
-    | Define ((s, it), ((loc,_) as info), t) ->
-     (* TODO Check this location *)
+    | Define ((s, it), info, t) ->
        let it = simp_it it in
-       let s, t = alpha_rename (s, IT.bt it, loc) t in
+       let s, t = alpha_rename s t in
        Define ((s, it), info, aux t)
-    | Resource ((s, (re, bt)),((loc, _) as info), t) ->
-     (* TODO Check this location *)
+    | Resource ((s, (re, bt)), info, t) ->
        let re = simp_re re in
-       let s, t = alpha_rename (s, bt, loc) t in
+       let s, t = alpha_rename s t in
        Resource ((s, (re, bt)), info, aux t)
     | Constraint (lc, info, t) ->
-     (* TODO Check this location *)
        let lc = simp_lc lc in
        Constraint (lc, info, aux t)
     | I ->
@@ -197,17 +188,15 @@ let rec alpha_equivalent lrt lrt' =
   | Define ((s,it), _, lrt),
     Define ((s',it'), _, lrt') ->
      let new_s = if Sym.equal s s' then s else Sym.fresh_same s in
-     let loc = Cerb_location.other __FUNCTION__ in
-     let _, lrt = alpha_rename_ new_s loc (s, IT.bt it) lrt in
-     let _, lrt' = alpha_rename_ new_s loc (s', IT.bt it') lrt' in
+     let _, lrt = alpha_rename_ ~to_:new_s ~from:s lrt in
+     let _, lrt' = alpha_rename_ ~to_:new_s ~from:s' lrt' in
      IT.equal it it'
      && alpha_equivalent lrt lrt'
   | Resource ((s, (re, bt)), _, lrt),
     Resource ((s', (re', bt')), _, lrt') ->
-     let loc = Cerb_location.other __FUNCTION__ in
      let new_s = if Sym.equal s s' then s else Sym.fresh_same s in
-     let _, lrt = alpha_rename_ new_s loc (s, bt) lrt in
-     let _, lrt' = alpha_rename_ new_s loc (s', bt') lrt' in
+     let _, lrt = alpha_rename_ ~to_:new_s ~from:s lrt in
+     let _, lrt' = alpha_rename_ ~to_:new_s ~from:s' lrt' in
      RT.alpha_equivalent re re'
      && BT.equal bt bt'
      && alpha_equivalent lrt lrt'
