@@ -203,7 +203,7 @@ module IndexTerms = struct
        | a, _, _, Some z when Z.equal z Z.zero ->
           a
        | _, b, Some z, _ when Z.equal z Z.zero ->
-          a
+          b
        | IT (Binop (Add,c, IT (Const (Z i1), _)), _),
          IT (Const (Z i2), _), _, _ ->
           add_ (c, z_ (Z.add i1 i2))
