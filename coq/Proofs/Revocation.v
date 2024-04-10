@@ -3429,7 +3429,7 @@ Module RevocationProofs.
       a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
       a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
       0 <= n ->
-      a1 + n < a2 \/ a2 + n < a1 ->
+      Z.abs (a1-a2) >= n ->
       mempcpy_args_sane (PV p1 (PVconcrete c1)) (PV p2 (PVconcrete c2)) n .
 
   Fact memcpy_PreservesInvariant_fact
@@ -3827,9 +3827,9 @@ Module RevocationProofs.
     repeat break_match; try tuple_inversion; try inl_inr.
     econstructor;eauto.
     lia.
-    apply orb_prop in Heqb0.
+    apply Values.Z_geb_ge in Heqb0.
     unfold cap_to_Z in Heqb0.
-    destruct Heqb0; lia.
+    lia.
   Qed.
 
   Instance memcpy_PreservesInvariant

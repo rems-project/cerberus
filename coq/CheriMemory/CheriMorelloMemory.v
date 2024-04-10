@@ -2844,7 +2844,7 @@ Module Type CheriMemoryImpl
       | PV _ (PVconcrete c1), PV _ (PVconcrete c2) =>
           let a1 := cap_to_Z c1 in
           let a2 := cap_to_Z c2 in
-          if (a1 + size_n <? a2)%Z || (a2 + size_n <? a1)%Z
+          if Z.abs (a1-a2) >=? size_n
           then ret tt
           else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
       (* memcpy accepts only pointers to C objects *)
