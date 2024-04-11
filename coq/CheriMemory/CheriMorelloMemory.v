@@ -289,7 +289,7 @@ Definition quomod (a b: Z) : (Z*Z) :=
 Definition wrapI min_v max_v n :=
   let dlt := Z.succ (max_v - min_v) in
   let r := Z_integerRem_f n dlt in
-  if Z.leb r max_v then r
+  if r <=? max_v then r
   else r - dlt.
 
 Definition extract_unspec {A : Set} (xs : list (option A))
@@ -504,7 +504,7 @@ Module Type CheriMemoryImpl
     let ptraddr_bits := (Z.of_nat C.sizeof_ptraddr) * 8 in
     let min_v := Z.opp (Z.pow 2 (ptraddr_bits - 1)) in
     let max_v := (Z.pow 2 (ptraddr_bits - 1)) - 1 in
-    if Z.leb n min_v && Z.leb n max_v
+    if (n <=? min_v) && (n <=? max_v)
     then n
     else wrapI min_v max_v n.
 
@@ -553,7 +553,7 @@ Module Type CheriMemoryImpl
     let a1 := lower_a (Z.pred (AddressValue.to_Z addr + size)) in
     ZMap.mapi
       (fun (a:Z) '(t, gs) =>
-         if negb gs.(tag_unspecified) && t && Z.geb a a0 && Z.leb a a1
+         if negb gs.(tag_unspecified) && t && (a >=? a0) && (a <=? a1)
          then
            (true, {| tag_unspecified := true; bounds_unspecified := gs.(bounds_unspecified) |})
          else (t, gs)
@@ -568,14 +568,14 @@ Module Type CheriMemoryImpl
     (ro_status: readonly_status)
     : memM (storage_instance_id * AddressValue.t)
     :=
-    if (size <? 0)%Z
+    if size <? 0
     then raise (InternalErr "negative size passed to allocator")
     else
       st <- get ;;
       let alloc_id := st.(next_alloc_id) in
       let z := AddressValue.to_Z st.(last_address) - size in
       let (q,m) := quomod z align in
-      let addr := z - (if Z.ltb q 0 then Z.opp m else m) in
+      let addr := z - (if q <? 0 then Z.opp m else m) in
       if addr <? 0 then
         fail_noloc (MerrOther "allocator: failed (out of memory)")
       else
@@ -921,7 +921,7 @@ Module Type CheriMemoryImpl
     :=
 
     let size_n := num_of_int size_int in
-    if (size_n <? 0)%Z
+    if size_n <? 0
     then raise (InternalErr "negative size passed to allocate_region")
     else
       let align_n := num_of_int align_int in
@@ -1166,7 +1166,7 @@ Module Type CheriMemoryImpl
 
   (** Convert an arbitrary integer value to unsinged cap value *)
   Definition wrap_cap_value (n_value : Z) : Z :=
-    if Z.leb n_value (AddressValue.to_Z C.min_ptraddr) && Z.leb n_value (AddressValue.to_Z C.max_ptraddr)
+    if (n_value <=? (AddressValue.to_Z C.min_ptraddr)) && (n_value <=? (AddressValue.to_Z C.max_ptraddr))
     then n_value
     else  wrapI (AddressValue.to_Z C.min_ptraddr) (AddressValue.to_Z C.max_ptraddr) n_value.
 
@@ -1397,7 +1397,7 @@ Module Type CheriMemoryImpl
          let alimit := abase + asize in
 
          (negb alloc.(is_dead))
-         && (Z.leb abase cbase && Z.ltb cbase alimit)
+         && ((abase <=? cbase) && (cbase <? alimit))
          && ((require_exposed && (allocation_taint_eqb alloc.(taint) Exposed))
              || negb require_exposed)
       ) st.(allocations).
@@ -1597,7 +1597,7 @@ Module Type CheriMemoryImpl
     :=
     let '(base, limit) := Bounds.to_Zs bounds in
     fun (addr : Z) (sz : Z) =>
-      Z.leb base addr && Z.leb (addr + sz) limit.
+      (base <=? addr) && ((addr + sz) <=? limit).
 
   Definition cap_check
     (loc : location_ocaml)
@@ -1695,10 +1695,9 @@ Module Type CheriMemoryImpl
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
          ret
-           (Z.leb (AddressValue.to_Z alloc.(base)) addr
-            && Z.leb
-                 (addr + sz)
-                 (AddressValue.to_Z alloc.(base) + alloc.(size)))).
+           ((AddressValue.to_Z alloc.(base) <=? addr)
+            && (addr + sz <=?
+                  AddressValue.to_Z alloc.(base) + alloc.(size)))).
 
   Definition is_atomic_member_access
     (alloc_id : Z.t)
@@ -2223,10 +2222,10 @@ Module Type CheriMemoryImpl
     :=
     let precond (alloc: allocation) (addr1 addr2: Z): bool
       :=
-      Z.leb (AddressValue.to_Z alloc.(base)) addr1 &&
-        Z.leb addr1 (AddressValue.to_Z alloc.(base) + alloc.(size)) &&
-        Z.leb (AddressValue.to_Z alloc.(base)) addr2 &&
-        Z.leb addr2 (AddressValue.to_Z alloc.(base) + alloc.(size))
+      (AddressValue.to_Z alloc.(base) <=? addr1) &&
+        (addr1 <=? (AddressValue.to_Z alloc.(base) + alloc.(size))) &&
+        (AddressValue.to_Z alloc.(base) <=? addr2) &&
+        (addr2 <=? (AddressValue.to_Z alloc.(base) + alloc.(size)))
     in
     let valid_postcond  (addr1 addr2: Z) : memM integer_value :=
       let diff_ty' :=
@@ -2284,10 +2283,8 @@ Module Type CheriMemoryImpl
         ret tt
     end.
 
-  Local Open Scope string_scope.
-
-
   (*
+  Local Open Scope string_scope.
   Fixpoint prefix_of_pointer_aux addr alloc x :=
     match x with
     | None
@@ -2315,7 +2312,7 @@ Module Type CheriMemoryImpl
         ret (find offs)
     | Some (CoqCtype.Ctype _ (CoqCtype.Array ty _)) =>
         let offset := Z.sub addr alloc.(base) in
-        if Z.ltb offset alloc.(size) then
+        if offset <? alloc.(size) then
           sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
           let n := Z.div offset sz in
           ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ "[" ++ String.dec_str n ++ "]"))
@@ -2430,7 +2427,7 @@ Module Type CheriMemoryImpl
             (* wrapI *)
             let dlt := Z.succ (AddressValue.to_Z C.max_ptraddr - (AddressValue.to_Z C.min_ptraddr)) in
             let r := Z_integerRem_f n dlt in
-            if Z.leb r (AddressValue.to_Z C.max_ptraddr)
+            if r <=? (AddressValue.to_Z C.max_ptraddr)
             then r
             else r - dlt
           in
@@ -2465,7 +2462,7 @@ Module Type CheriMemoryImpl
           then 0
           else 1
       | _ =>
-          if Z.leb n_value min_ity2 && Z.leb n_value max_ity2
+          if (n_value <=? min_ity2) && (n_value <=? max_ity2)
           then n_value
           else wrapI min_ity2 max_ity2 n_value
       end in
@@ -2617,7 +2614,7 @@ Module Type CheriMemoryImpl
               let ity_max := num_of_int maxival in
               let ity_min := num_of_int minival in
               let addr := (cap_to_Z c_value) in
-              if Z.ltb addr ity_min || Z.ltb ity_max addr
+              if (addr <? ity_min) || (ity_max <? addr)
               then fail loc MerrIntFromPtr
               else ret (IV addr)
           end
@@ -2715,9 +2712,9 @@ Module Type CheriMemoryImpl
     let shift_concrete c_value shifted_addr alloc_id prov :=
       get_allocation alloc_id >>=
         (fun (alloc : allocation) =>
-           if Z.leb (AddressValue.to_Z alloc.(base)) shifted_addr
-              && Z.leb (shifted_addr + sz)
-                   (AddressValue.to_Z alloc.(base) + alloc.(size) + sz)
+           if (AddressValue.to_Z alloc.(base) <=? shifted_addr)
+              && (shifted_addr + sz <=?
+                    (AddressValue.to_Z alloc.(base) + alloc.(size) + sz))
            then
              let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
              ret (PV prov (PVconcrete c_value))
@@ -2807,16 +2804,16 @@ Module Type CheriMemoryImpl
     (ptrval1 ptrval2: pointer_value)
     (index: nat):
     memM pointer_value :=
-      match index with
-      | O => ret ptrval1
-      | S index =>
-          let i_value := Z.of_nat index in
-          ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV i_value) ;;
-          ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV i_value) ;;
-          '(_, mval) <- load loc CoqCtype.unsigned_char ptrval2' ;;
-          store loc CoqCtype.unsigned_char false ptrval1' mval ;;
-          memcpy_copy_data loc ptrval1 ptrval2 index
-      end.
+    match index with
+    | O => ret ptrval1
+    | S index =>
+        let i_value := Z.of_nat index in
+        ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV i_value) ;;
+        ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV i_value) ;;
+        '(_, mval) <- load loc CoqCtype.unsigned_char ptrval2' ;;
+        store loc CoqCtype.unsigned_char false ptrval1' mval ;;
+        memcpy_copy_data loc ptrval1 ptrval2 index
+    end.
 
   (* Internal *)
   Fixpoint memcpy_copy_tags
@@ -2856,7 +2853,7 @@ Module Type CheriMemoryImpl
 
   (* internal *)
   Definition memcpy_args_check loc ptrval1 ptrval2 size_n :=
-    if (size_n <? 0)%Z
+    if size_n <? 0
     then raise (InternalErr "negative size passed to memcpy")
     else
       match ptrval1, ptrval2 with
@@ -2890,7 +2887,7 @@ Module Type CheriMemoryImpl
     : memM integer_value
     :=
     let size_n := num_of_int size_int in
-    if (size_n <? 0)%Z
+    if size_n <? 0
     then raise (InternalErr "negative size passed to memcmp")
     else
       let fix get_bytes
@@ -3166,10 +3163,10 @@ Module Type CheriMemoryImpl
     Some (Z.eqb (num_of_int n1) (num_of_int n2)).
 
   Definition lt_ival (n1 n2: integer_value) :=
-    Some (Z.ltb (num_of_int n1) (num_of_int n2)).
+    Some (num_of_int n1 <? num_of_int n2).
 
   Definition le_ival (n1 n2: integer_value) :=
-    Some (Z.leb (num_of_int n1) (num_of_int n2)).
+    Some (num_of_int n1 <=? num_of_int n2).
 
   Definition zero_fval : float := PrimFloat.zero.
 
@@ -3219,7 +3216,7 @@ Module Type CheriMemoryImpl
         let wrapI (n_value : Z) : Z :=
           let dlt := Z.succ (max - min) in
           let r_value := Z_integerRem_f n_value dlt in
-          if Z.leb r_value max then
+          if r_value <=? max then
             r_value
           else
             r_value - dlt in
@@ -3438,80 +3435,80 @@ Module Type CheriMemoryImpl
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
-             cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-             upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-             get >>=
-               (fun (st : mem_state) =>
-                  match cap_of_mem_value st.(funptrmap) cap_val with
-                  | None =>
-                      fail loc
-                        (MerrOther
-                           (String.append
-                              "call_intrinsic: non-cap 1st argument in: '"
-                              (String.append name "'")))
-                  | Some (funptrmap, c_value) =>
-                      update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
-                      ;;
-                      match upper_val with
-                      | MVinteger CoqIntegerType.Size_t (IV n_value) =>
-                          let x' := (cap_to_Z c_value) in
-                          let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
-                          in ret (Some (update_cap_in_mem_value cap_val c_value))
-                      | _ =>
-                          fail loc
-                            (MerrOther
-                               (String.append
-                                  "call_intrinsic: 2nd argument's type is not size_t in: '"
-                                  (String.append name "'")))
-                      end
-                  end).
+    cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+    upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+    get >>=
+      (fun (st : mem_state) =>
+         match cap_of_mem_value st.(funptrmap) cap_val with
+         | None =>
+             fail loc
+               (MerrOther
+                  (String.append
+                     "call_intrinsic: non-cap 1st argument in: '"
+                     (String.append name "'")))
+         | Some (funptrmap, c_value) =>
+             update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
+             ;;
+             match upper_val with
+             | MVinteger CoqIntegerType.Size_t (IV n_value) =>
+                 let x' := (cap_to_Z c_value) in
+                 let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
+                 in ret (Some (update_cap_in_mem_value cap_val c_value))
+             | _ =>
+                 fail loc
+                   (MerrOther
+                      (String.append
+                         "call_intrinsic: 2nd argument's type is not size_t in: '"
+                         (String.append name "'")))
+             end
+         end).
 
   Definition intrinsic_perms_and
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
-               cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-               mask_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-               get >>=
-                 (fun (st : mem_state) =>
-                    match cap_of_mem_value st.(funptrmap) cap_val with
-                    | None =>
-                        fail loc
-                          (MerrOther
-                             (String.append
-                                "call_intrinsic: non-cap 1st argument in: '"
-                                (String.append name "'")))
-                    | Some (funptrmap, c_value) =>
-                        (update
-                           (fun (st : mem_state) =>
-                              mem_state_with_funptrmap funptrmap st))
-                        ;;
-                        match mask_val with
-                        | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
-                          =>
-                            iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
-                            sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
-                            bytes_value <- serr2InternalErr (bytes_of_Z iss sz n_value) ;;
-                            let bits := bool_bits_of_bytes bytes_value in
-                            match Permissions.of_list bits with
-                            | None =>
-                                fail loc
-                                  (MerrOther
-                                     (String.append
-                                        "call_intrinsic: error decoding permission bits: '"
-                                        (String.append name "'")))
-                            | Some pmask =>
-                                let c_value := C.cap_narrow_perms c_value pmask
-                                in ret (Some (update_cap_in_mem_value cap_val c_value))
-                            end
-                        | _ =>
-                            fail loc
-                              (MerrOther
-                                 (String.append
-                                    "call_intrinsic: 2nd argument's type is not size_t in: '"
-                                    (String.append name "'")))
-                        end
-                    end).
+    cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+    mask_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+    get >>=
+      (fun (st : mem_state) =>
+         match cap_of_mem_value st.(funptrmap) cap_val with
+         | None =>
+             fail loc
+               (MerrOther
+                  (String.append
+                     "call_intrinsic: non-cap 1st argument in: '"
+                     (String.append name "'")))
+         | Some (funptrmap, c_value) =>
+             (update
+                (fun (st : mem_state) =>
+                   mem_state_with_funptrmap funptrmap st))
+             ;;
+             match mask_val with
+             | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
+               =>
+                 iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
+                 sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
+                 bytes_value <- serr2InternalErr (bytes_of_Z iss sz n_value) ;;
+                 let bits := bool_bits_of_bytes bytes_value in
+                 match Permissions.of_list bits with
+                 | None =>
+                     fail loc
+                       (MerrOther
+                          (String.append
+                             "call_intrinsic: error decoding permission bits: '"
+                             (String.append name "'")))
+                 | Some pmask =>
+                     let c_value := C.cap_narrow_perms c_value pmask
+                     in ret (Some (update_cap_in_mem_value cap_val c_value))
+                 end
+             | _ =>
+                 fail loc
+                   (MerrOther
+                      (String.append
+                         "call_intrinsic: 2nd argument's type is not size_t in: '"
+                         (String.append name "'")))
+             end
+         end).
 
   Definition intrinsic_offset_get
     (loc : location_ocaml) (args : list mem_value)
