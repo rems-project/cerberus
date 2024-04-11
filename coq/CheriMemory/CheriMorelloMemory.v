@@ -252,7 +252,7 @@ Module Type CheriMemoryTypes
     {
       prefix : CoqSymbol.prefix;
       base : AddressValue.t;
-      size : Z;
+      size : nat;
       ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
       is_dynamic : bool ;
@@ -479,7 +479,7 @@ Module Type CheriMemoryImpl
 
   Inductive footprint_indt :=
   (* base address, size *)
-  | FP: footprint_kind -> AddressValue.t -> Z -> footprint_indt.
+  | FP: footprint_kind -> AddressValue.t -> nat -> footprint_indt.
 
   Definition footprint := footprint_indt.
 
@@ -490,13 +490,15 @@ Module Type CheriMemoryImpl
     | FP k1 b1 sz1, FP k2 b2 sz2 =>
         match k1, k2 with
         | Read, Read => false
-        | _, _ => negb
-                   (
-                     (AddressValue.to_Z b1 + sz1 <=? AddressValue.to_Z b2)
-                     || (AddressValue.to_Z b2 + sz2 <=? AddressValue.to_Z b1)
-                     || (sz1 =? 0)
-                     || (sz2 =? 0)
-                   )
+        | _, _ =>
+            let zb1 := AddressValue.to_Z b1 in
+            let zb2 := AddressValue.to_Z b2 in
+            negb
+              ((zb1 + Z.of_nat sz1 <=? zb2)
+               || (zb2 + Z.of_nat sz2 <=? zb1)
+               || (sz1 =? 0)%nat
+               || (sz2 =? 0)%nat
+              )
         end
     end.
 
@@ -584,7 +586,7 @@ Module Type CheriMemoryImpl
               {|
                 prefix := pref;
                 base:= (AddressValue.of_Z addr);
-                size:= size;
+                size:= Z.to_nat size;
                 ty:= ty;
                 is_dynamic := is_dynamic;
                 is_dead := false;
@@ -1067,7 +1069,7 @@ Module Type CheriMemoryImpl
        && AddressValue.eqb alloc.(base) (C.cap_get_value c)
        && (let zbounds := Bounds.to_Zs (C.cap_get_bounds c) in
            let csize := (snd zbounds) - (fst zbounds) in
-           Z.eqb alloc.(size) csize)).
+           (Z.of_nat alloc.(size)) =? csize)).
 
   Definition remove_allocation (alloc_id : Z) : memM unit :=
     update (fun st =>
@@ -1393,7 +1395,7 @@ Module Type CheriMemoryImpl
     zmap_find_first
       (fun alloc_id alloc =>
          let abase := AddressValue.to_Z alloc.(base) in
-         let asize := alloc.(size) in
+         let asize := Z.of_nat alloc.(size) in
          let alimit := abase + asize in
 
          (negb alloc.(is_dead))
@@ -1410,7 +1412,7 @@ Module Type CheriMemoryImpl
   Definition cap_bounds_within_alloc_bool (c:C.t) a : bool
     :=
     let alloc_base := AddressValue.to_Z a.(base) in
-    let alloc_limit := alloc_base + a.(size) in
+    let alloc_limit := alloc_base + Z.of_nat a.(size) in
     let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
     (alloc_base <=? ptr_base) && (ptr_base <? alloc_limit).
 
@@ -1488,7 +1490,7 @@ Module Type CheriMemoryImpl
       then
         (* mprint_msg ("Reuse!");; *)
         update (mem_state_with_last_address
-                  (AddressValue.with_offset alloc.(base) alloc.(size)))
+                  (AddressValue.with_offset alloc.(base) (Z.of_nat alloc.(size))))
       else
         ret tt
     in
@@ -1697,7 +1699,7 @@ Module Type CheriMemoryImpl
          ret
            ((AddressValue.to_Z alloc.(base) <=? addr)
             && (addr + sz <=?
-                  AddressValue.to_Z alloc.(base) + alloc.(size)))).
+                  AddressValue.to_Z alloc.(base) + Z.of_nat alloc.(size)))).
 
   Definition is_atomic_member_access
     (alloc_id : Z.t)
@@ -1720,7 +1722,7 @@ Module Type CheriMemoryImpl
              e <- serr2InternalErr (CoqCtype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
              ret
                (negb
-                  (Z.eqb addr (AddressValue.to_Z alloc.(base)) && (Z.eqb sz alloc.(size) && e)))
+                  (Z.eqb addr (AddressValue.to_Z alloc.(base)) && (Nat.eqb szn alloc.(size) && e)))
          | _, _ => ret false
          end).
 
@@ -1770,8 +1772,7 @@ Module Type CheriMemoryImpl
        then expose_allocations taint
        else ret tt) ;;
       szn <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-      let sz := Z.of_nat szn in
-      let fp := FP Read (AddressValue.of_Z addr) sz in
+      let fp := FP Read (AddressValue.of_Z addr) szn in
       match bs' with
       | [] =>
           if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_reads
@@ -1887,8 +1888,8 @@ Module Type CheriMemoryImpl
             (c_value : C.t)
         : memM footprint
         :=
-        nsz <- serr2InternalErr (sizeof DEFAULT_FUEL None cty) ;;
-        let sz := Z.of_nat nsz in
+        szn <- serr2InternalErr (sizeof DEFAULT_FUEL None cty) ;;
+        let sz := Z.of_nat szn in
         cap_check loc c_value 0 WriteIntent sz ;;
         let addr := (cap_to_Z c_value) in
 
@@ -1900,7 +1901,7 @@ Module Type CheriMemoryImpl
         let bytemap := zmap_add_list_at st.(bytemap) pre_bs addr in
         put (mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta st)
         ;;
-        ret (FP Write (AddressValue.of_Z addr) sz)
+        ret (FP Write (AddressValue.of_Z addr) szn)
       in
 
       let store_concrete alloc_id c :=
@@ -2222,10 +2223,11 @@ Module Type CheriMemoryImpl
     :=
     let precond (alloc: allocation) (addr1 addr2: Z): bool
       :=
+      let asize := Z.of_nat alloc.(size) in
       (AddressValue.to_Z alloc.(base) <=? addr1) &&
-        (addr1 <=? (AddressValue.to_Z alloc.(base) + alloc.(size))) &&
+        (addr1 <=? (AddressValue.to_Z alloc.(base) + asize)) &&
         (AddressValue.to_Z alloc.(base) <=? addr2) &&
-        (addr2 <=? (AddressValue.to_Z alloc.(base) + alloc.(size)))
+        (addr2 <=? (AddressValue.to_Z alloc.(base) + asize))
     in
     let valid_postcond  (addr1 addr2: Z) : memM integer_value :=
       let diff_ty' :=
@@ -2714,7 +2716,7 @@ Module Type CheriMemoryImpl
         (fun (alloc : allocation) =>
            if (AddressValue.to_Z alloc.(base) <=? shifted_addr)
               && (shifted_addr + sz <=?
-                    (AddressValue.to_Z alloc.(base) + alloc.(size) + sz))
+                    (AddressValue.to_Z alloc.(base) + (Z.of_nat alloc.(size)) + sz))
            then
              let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
              ret (PV prov (PVconcrete c_value))
@@ -2944,7 +2946,7 @@ Module Type CheriMemoryImpl
   Definition realloc
     (loc : location_ocaml)
     (tid : thread_id) (align : integer_value) (ptr : pointer_value)
-    (size : integer_value) : memM pointer_value
+    (size_v : integer_value) : memM pointer_value
     :=
     (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
      then cornucopiaRevoke tt
@@ -2952,12 +2954,12 @@ Module Type CheriMemoryImpl
     match ptr with
     | PV Prov_none (PVconcrete c) =>
         if cap_is_null c  then
-          allocate_region tid (CoqSymbol.PrefOther "realloc") align size
+          allocate_region tid (CoqSymbol.PrefOther "realloc") align size_v
         else
           fail loc (MerrWIP "realloc no provenance")
     | PV Prov_disabled (PVconcrete c) =>
         if cap_is_null c  then
-          allocate_region tid (CoqSymbol.PrefOther "realloc") align size
+          allocate_region tid (CoqSymbol.PrefOther "realloc") align size_v
         else
           find_live_allocation (C.cap_get_value c) >>=
             fun x =>
@@ -2967,18 +2969,18 @@ Module Type CheriMemoryImpl
                   if negb (cap_match_dyn_allocation c alloc)
                   then fail loc (MerrUndefinedFree Free_non_matching)
                   else
-                    allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
+                    allocate_region tid (CoqSymbol.PrefOther "realloc") align size_v >>=
                       (fun (new_ptr : pointer_value) =>
                          let size_to_copy :=
-                           let size_n := num_of_int size in
-                           IV (Z.min (MT.size alloc) size_n) in
+                           let size_z := num_of_int size_v in
+                           IV (Z.min (Z.of_nat alloc.(size)) size_z) in
                          memcpy new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
               end
     | PV (Prov_some alloc_id) (PVconcrete c) =>
         if cap_is_null c then
-          allocate_region tid (CoqSymbol.PrefOther "realloc") align size
+          allocate_region tid (CoqSymbol.PrefOther "realloc") align size_v
         else
           get_allocation alloc_id >>=
             fun (alloc : allocation) =>
@@ -2990,11 +2992,11 @@ Module Type CheriMemoryImpl
                 else
                   if AddressValue.eqb alloc.(base) (C.cap_get_value c)
                   then
-                    allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
+                    allocate_region tid (CoqSymbol.PrefOther "realloc") align size_v >>=
                       (fun (new_ptr : pointer_value) =>
                          let size_to_copy :=
-                           let size_n := num_of_int size in
-                           IV (Z.min (MT.size alloc) size_n) in
+                           let size_z := num_of_int size_v in
+                           IV (Z.min (Z.of_nat alloc.(size)) size_z) in
                          memcpy new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
