@@ -143,7 +143,7 @@ type message =
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: doc; expect: doc; }
-  | Illtyped_it : {it: Pp.doc; has: Pp.doc; expected: string; o_ctxt : Context.t option} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
+  | Illtyped_it : {it: Pp.doc; has: Pp.doc; expected: string; reason : string; o_ctxt : Context.t option} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
   | NIA : {it: IT.t; hint : string; ctxt : Context.t} -> message
   | TooBigExponent : {it: IT.t; ctxt : Context.t} -> message
   | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
@@ -313,12 +313,13 @@ let pp_message te =
          !^"but found value of type" ^^^ squotes has
      in
      { short; descr = Some descr; state = None;  }
-  | Illtyped_it {it; has; expected; o_ctxt} ->
+  | Illtyped_it {it; has; expected; reason; o_ctxt} ->
      let short = !^"Type error" in
      let descr =
-       !^"Illtyped expression" ^^^ squotes it ^^ dot ^^^
-         !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
-           !^"but is" ^^^ squotes has
+       !^"Expression" ^^^ squotes it
+       ^^^ !^"has type" ^^^ squotes has ^^ dot
+       ^/^ !^"I expected it to have type" ^^^ squotes !^expected
+       ^^^ !^"because of" ^^^ !^reason
      in
      { short; descr = Some descr; state = None;  }
   | NIA {it; hint; ctxt} ->
