@@ -49,4 +49,9 @@ val line_numbers : t -> (int * int) option
 
 val is_region : t -> region option
 
+val start_pos : t -> Lexing.position option
+
+val end_pos : t -> Lexing.position option
+
+val get_region : t -> (Lexing.position * Lexing.position * Cerb_location.cursor) option
 

@@ -94,3 +94,8 @@ let empty = function
   | _ -> false
 
 let non_empty l = not (empty l)
+
+let rec last = function
+  | [] -> None
+  | [x] -> Some x
+  | _ :: tl -> last tl
