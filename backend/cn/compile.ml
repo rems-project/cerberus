@@ -682,12 +682,18 @@ module EffectfulTranslation = struct
         | CNExpr_list es_ ->
             let@ es = ListM.mapM self es_ in
             let item_bt = basetype (List.hd es) in
-            (* TODO fix CNExpr_list to have locations for each element? *)
-            let rec aux = function
-              | [] -> IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt, loc)
-              | x::xs -> IT (Cons (x, aux xs), SBT.List item_bt, loc)
-            in
-            return (aux es)
+            let module CL = Cerb_location in
+            let [@ocaml.warning "-8"] (* parser shouldn't generate anything else *)
+              CL.Loc_region (_, nil_loc, _) = CL.to_raw loc in
+            let cons hd tl =
+               let hd_loc = match CL.to_raw @@ IT.loc hd with
+                 | CL.Loc_point hd_loc
+                 | CL.Loc_region (hd_loc, _, _) -> hd_loc
+                 (* parser shouldn't generate anything else *)
+                 | _ -> assert false in
+               IT (Cons (hd, tl), SBT.List item_bt, CL.(region (hd_loc, nil_loc) NoCursor)) in
+            let nil = IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt, CL.point nil_loc) in
+            return (List.fold_right cons es nil)
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
