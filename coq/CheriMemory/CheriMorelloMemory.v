@@ -521,7 +521,7 @@ Module Type CheriMemoryImpl
   (* Crear new cap meta for region where all tags are unspecified *)
   Program Definition init_ghost_tags
     (addr: AddressValue.t)
-    (size: Z) (* TODO: should be nat *)
+    (size: nat)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
     let align := Z.of_nat (IMP.get.(alignof_pointer)) in
@@ -529,7 +529,7 @@ Module Type CheriMemoryImpl
       let (q,_) := quomod x align in
       Z.mul q align in
     let a0 := lower_a (AddressValue.to_Z addr) in
-    let a1 := lower_a (Z.pred (AddressValue.to_Z addr + size)) in
+    let a1 := lower_a (Z.pred (AddressValue.to_Z addr + Z.of_nat size)) in
     let v := (false, {| tag_unspecified := true; bounds_unspecified := false |}) in
     let n := Z.to_nat (Z.div a1 a0) in
     zmap_range_init a0 n align v capmeta.
@@ -562,7 +562,7 @@ Module Type CheriMemoryImpl
       ) capmeta.
 
   Definition allocator
-    (size: Z)
+    (size: nat)
     (align: Z)
     (is_dynamic: bool)
     (pref: CoqSymbol.prefix)
@@ -570,43 +570,40 @@ Module Type CheriMemoryImpl
     (ro_status: readonly_status)
     : memM (storage_instance_id * AddressValue.t)
     :=
-    if size <? 0
-    then raise (InternalErr "negative size passed to allocator")
+    st <- get ;;
+    let alloc_id := st.(next_alloc_id) in
+    let z := AddressValue.to_Z st.(last_address) - Z.of_nat size in
+    let (q,m) := quomod z align in
+    let addr := z - (if q <? 0 then Z.opp m else m) in
+    if addr <? 0 then
+      fail_noloc (MerrOther "allocator: failed (out of memory)")
     else
-      st <- get ;;
-      let alloc_id := st.(next_alloc_id) in
-      let z := AddressValue.to_Z st.(last_address) - size in
-      let (q,m) := quomod z align in
-      let addr := z - (if q <? 0 then Z.opp m else m) in
-      if addr <? 0 then
-        fail_noloc (MerrOther "allocator: failed (out of memory)")
-      else
-        put (
-            let alloc :=
-              {|
-                prefix := pref;
-                base:= (AddressValue.of_Z addr);
-                size:= Z.to_nat size;
-                ty:= ty;
-                is_dynamic := is_dynamic;
-                is_dead := false;
-                is_readonly:= ro_status;
-                taint:= Unexposed
-              |}
-            in
+      put (
+          let alloc :=
             {|
-              next_alloc_id    := Z.succ st.(next_alloc_id);
-              last_address     := AddressValue.of_Z addr;
-              allocations      := ZMap.add alloc_id alloc st.(allocations);
-              funptrmap        := st.(funptrmap);
-              varargs          := st.(varargs);
-              next_varargs_id  := st.(next_varargs_id);
-              bytemap          := st.(bytemap);
-              capmeta          := (init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta));
-            |})
-        ;;
-        (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
-        ret (alloc_id, (AddressValue.of_Z addr)).
+              prefix := pref;
+              base:= (AddressValue.of_Z addr);
+              size:= size;
+              ty:= ty;
+              is_dynamic := is_dynamic;
+              is_dead := false;
+              is_readonly:= ro_status;
+              taint:= Unexposed
+            |}
+          in
+          {|
+            next_alloc_id    := Z.succ st.(next_alloc_id);
+            last_address     := AddressValue.of_Z addr;
+            allocations      := ZMap.add alloc_id alloc st.(allocations);
+            funptrmap        := st.(funptrmap);
+            varargs          := st.(varargs);
+            next_varargs_id  := st.(next_varargs_id);
+            bytemap          := st.(bytemap);
+            capmeta          := (init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta));
+          |})
+      ;;
+      (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
+      ret (alloc_id, (AddressValue.of_Z addr)).
 
   Definition alignof
     (fuel: nat)
@@ -921,7 +918,6 @@ Module Type CheriMemoryImpl
     (size_int : integer_value)
     : memM pointer_value
     :=
-
     let size_n := num_of_int size_int in
     if size_n <? 0
     then raise (InternalErr "negative size passed to allocate_region")
@@ -932,7 +928,7 @@ Module Type CheriMemoryImpl
       let align_n' :=
         Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
-      '(alloc_id, addr) <- allocator size_n' align_n' true CoqSymbol.PrefMalloc None IsWritable ;;
+      '(alloc_id, addr) <- allocator (Z.to_nat size_n') align_n' true CoqSymbol.PrefMalloc None IsWritable ;;
       let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
       ret (PV (PNVI_prov (Prov_some alloc_id)) (PVconcrete c_value)).
 
@@ -948,7 +944,8 @@ Module Type CheriMemoryImpl
     size_n <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
     let size_z := Z.of_nat size_n in
     let mask := C.representable_alignment_mask size_z in
-    let size_n' := C.representable_length size_z in
+    let size_z' := C.representable_length size_z in
+    let size_n' := Z.to_nat size_z' in
     let align_n' := Z.max align_n (1 + (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     (*
@@ -1005,7 +1002,7 @@ Module Type CheriMemoryImpl
      end)
       >>=
       fun '(alloc_id, addr, ro)  =>
-        let c := C.alloc_cap addr (AddressValue.of_Z size_n') in
+        let c := C.alloc_cap addr (AddressValue.of_Z size_z') in
         let c :=
           if ro then
             let p := C.cap_get_perms c in
