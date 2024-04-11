@@ -62,7 +62,7 @@ Module Type CheriMemoryTypes
       match p1, p2 with
       | Prov_disabled, Prov_disabled => true
       | Prov_none, Prov_none => true
-      | Prov_some alloc_id1, Prov_some alloc_id2 => Z.eqb alloc_id1 alloc_id2
+      | Prov_some alloc_id1, Prov_some alloc_id2 => alloc_id1 =? alloc_id2
       | _, _ => false
       end.
 
@@ -798,7 +798,7 @@ Module Type CheriMemoryImpl
 
   Definition is_pointer_algined (addr : Z) : bool :=
     let align := IMP.get.(alignof_pointer) in
-    Z.eqb (Z.modulo addr (Z.of_nat align)) 0.
+    Z.modulo addr (Z.of_nat align) =? 0.
 
   (** Update [capmeta] dictionary for capability [c] stored at [addr].
       If address is capability-aligned, then the tag and ghost state
@@ -952,7 +952,7 @@ Module Type CheriMemoryImpl
     let align_n' := Z.max align_n (1 + (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     (*
-    (if (negb ((Z.eqb size_n size_n') && (Z.eqb align_n align_n')))
+    (if (negb ((size_n =? size_n') && (align_n =? align_n')))
     then
       mprint_msg
           ("allocate_object CHERI size/alignment adusted. WAS: " ++
@@ -1019,7 +1019,7 @@ Module Type CheriMemoryImpl
 
 
   Definition cap_is_null  (c : C.t) : bool :=
-    Z.eqb (cap_to_Z c) 0.
+    cap_to_Z c =? 0.
 
   (* Find first live allocation with given starting addrress. We need
      to check for liveness here, instead of later as multiple dead
@@ -1722,7 +1722,7 @@ Module Type CheriMemoryImpl
              e <- serr2InternalErr (CoqCtype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
              ret
                (negb
-                  (Z.eqb addr (AddressValue.to_Z alloc.(base)) && (Nat.eqb szn alloc.(size) && e)))
+                  ((addr =? (AddressValue.to_Z alloc.(base))) && (Nat.eqb szn alloc.(size) && e)))
          | _, _ => ret false
          end).
 
@@ -2089,7 +2089,7 @@ Module Type CheriMemoryImpl
                  prov1, prov2,
                  (match prov1, prov2 with
                   | Prov_some alloc1, Prov_some alloc2 =>
-                      Z.eqb alloc1 alloc2
+                      alloc1 =? alloc2
                   | _, _ => false
                   end) with
                | Prov_some alloc1, Prov_some alloc2, true =>
@@ -2127,7 +2127,7 @@ Module Type CheriMemoryImpl
                  prov1, prov2,
                  (match prov1, prov2 with
                   | Prov_some alloc1, Prov_some alloc2 =>
-                      Z.eqb alloc1 alloc2
+                      alloc1 =? alloc2
                   | _, _ => false
                   end) with
                | Prov_some alloc1, Prov_some alloc2, true =>
@@ -2161,7 +2161,7 @@ Module Type CheriMemoryImpl
               prov1, prov2,
               (match prov1, prov2 with
                | Prov_some alloc1, Prov_some alloc2 =>
-                   Z.eqb alloc1 alloc2
+                   alloc1 =? alloc2
                | _, _ => false
                end) with
             | Prov_some alloc1, Prov_some alloc2, true =>
@@ -2196,7 +2196,7 @@ Module Type CheriMemoryImpl
                  prov1, prov2,
                  (match prov1, prov2 with
                   | Prov_some alloc1, Prov_some alloc2 =>
-                      Z.eqb alloc1 alloc2
+                      alloc1 =? alloc2
                   | _, _ => false
                   end) with
                | Prov_some alloc1, Prov_some alloc2, true =>
@@ -2252,7 +2252,7 @@ Module Type CheriMemoryImpl
       match ptrval1, ptrval2 with
       | PV (Prov_some alloc_id1) (PVconcrete addr1),
         PV (Prov_some alloc_id2) (PVconcrete addr2) =>
-          if Z.eqb alloc_id1 alloc_id2 then
+          if alloc_id1 =? alloc_id2 then
             get_allocation alloc_id1 >>=
               (fun (alloc : allocation) =>
                  if precond alloc (cap_to_Z addr1) (cap_to_Z addr2)
@@ -2306,7 +2306,7 @@ Module Type CheriMemoryImpl
           match y with
           | [] => None
           | (CoqSymbol.Identifier _ memb, _, off) :: offs =>
-              if Z.eqb offset off
+              if offset =? off
               then Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ "." ++ memb)
               else find offs
           end
@@ -2361,7 +2361,7 @@ Module Type CheriMemoryImpl
                  "called isWellAligned_ptrval on function pointer")
         | PV _ (PVconcrete addr) =>
             sz <- serr2InternalErr (alignof DEFAULT_FUEL None ref_ty) ;;
-            ret (Z.eqb (Z.modulo (cap_to_Z addr) (Z.of_nat sz)) 0)
+            ret (Z.modulo (cap_to_Z addr) (Z.of_nat sz) =? 0)
         end
     end.
 
@@ -2422,7 +2422,7 @@ Module Type CheriMemoryImpl
     | CoqIntegerType.Signed CoqIntegerType.Intptr_t, IV _ =>
         raise (InternalErr "ptrfromint: invalid encoding for (u)intptr_t")
     | _, IV n =>
-        if Z.eqb n 0
+        if n =? 0
         then ret (PV (PNVI_prov Prov_none) (PVconcrete (C.cap_c0 tt)))
         else
           let addr :=
@@ -2460,7 +2460,7 @@ Module Type CheriMemoryImpl
     let conv_int_to_ity2 (n_value : Z) : Z :=
       match ity2 with
       | CoqIntegerType.Bool =>
-          if Z.eqb n_value 0
+          if n_value =? 0
           then 0
           else 1
       | _ =>
@@ -2483,7 +2483,7 @@ Module Type CheriMemoryImpl
         ret (inr (IV (conv_int_to_ity2 (unwrap_cap_value n_value))))
     | IV n_value, CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
     | IV n_value, CoqIntegerType.Signed CoqIntegerType.Intptr_t =>
-        if Z.eqb n_value 0 then
+        if n_value =? 0 then
           ret (inr (IC false (C.cap_c0 tt)))
         else
           let n_value := wrap_cap_value n_value in
@@ -2791,7 +2791,7 @@ Module Type CheriMemoryImpl
         raise (InternalErr "member_shift_ptrval, PVfunction")
     | PVconcrete c_value =>
         if cap_is_null c_value then
-          if Z.eqb 0 offset
+          if 0 =? offset
           then ret (PV prov (PVconcrete (C.cap_c0 tt)))
           else raise (InternalErr "member_shift_ptrval, shifting NULL")
         else
@@ -2920,7 +2920,7 @@ Module Type CheriMemoryImpl
                 ret (IV
                        (List.fold_left
                           (fun (acc : Z) '(n1, n2) =>
-                             if Z.eqb acc 0 then
+                             if acc =? 0 then
                                match Z.compare n1 n2 with
                                | Eq => 0
                                | Gt => 1
@@ -3115,7 +3115,7 @@ Module Type CheriMemoryImpl
     | IntSub => int_bin Z.sub v1 v2
     | IntMul => int_bin Z.mul v1 v2
     | IntDiv => int_bin (fun n1 n2 =>
-                          if Z.eqb n2 0
+                          if n2 =? 0
                           then 0
                           else Z_integerDiv_t n1 n2) v1 v2
     | IntRem_t => int_bin Z_integerRem_t v1 v2
@@ -3162,7 +3162,7 @@ Module Type CheriMemoryImpl
   Definition is_specified_ival (ival : integer_value) : bool := true.
 
   Definition eq_ival (n1 n2: integer_value) :=
-    Some (Z.eqb (num_of_int n1) (num_of_int n2)).
+    Some (num_of_int n1 =? num_of_int n2).
 
   Definition lt_ival (n1 n2: integer_value) :=
     Some (num_of_int n1 <? num_of_int n2).
