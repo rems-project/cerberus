@@ -207,13 +207,13 @@ Module RevocationProofs.
   Definition cap_bounds_within_alloc c a : Prop
     :=
     let alloc_base := AddressValue.to_Z a.(base) in
-    let alloc_limit := alloc_base + a.(size) in
+    let alloc_limit := alloc_base + Z.of_nat a.(size) in
     let ptr_base := fst (Bounds.to_Zs (Capability_GS.cap_get_bounds c)) in
     alloc_base <= ptr_base /\ ptr_base < alloc_limit.
 
   Lemma cap_bounds_within_alloc_dec c a: {cap_bounds_within_alloc c a}+{~cap_bounds_within_alloc c a}.
     pose (alloc_base := AddressValue.to_Z a.(base)).
-    pose (alloc_limit := alloc_base + a.(size)).
+    pose (alloc_limit := alloc_base + Z.of_nat a.(size)).
     pose (ptr_base := fst (Bounds.to_Zs (Capability_GS.cap_get_bounds c))).
     destruct (Z_le_dec alloc_base ptr_base) as [H1|H1], (Z_lt_dec ptr_base alloc_limit) as [H2|H2].
     - left. split; assumption.
@@ -319,8 +319,8 @@ Module RevocationProofs.
     :=
     let a1_base := AddressValue.to_Z a1.(base) in
     let a2_base := AddressValue.to_Z a2.(base) in
-    let a1_size := a1.(size) in
-    let a2_size := a2.(size) in
+    let a1_size := Z.of_nat a1.(size) in
+    let a2_size := Z.of_nat a2.(size) in
     (a1_base + a1_size <= a2_base) \/ (a2_base + a2_size <= a1_base) \/ a1_size = 0 \/ a2_size = 0.
 
   Module Type CheriMemoryImplWithProofs
@@ -346,7 +346,9 @@ Module RevocationProofs.
             ZMap.MapsTo alloc_id1 a1 am -> ZMap.MapsTo alloc_id2 a2 am -> allocations_do_no_overlap a1 a2)
 
       (* All keys in capmeta must be pointer-aligned addresses *)
-      /\ zmap_forall_keys (fun addr => Z.modulo addr MorelloImpl.get.(alignof_pointer) = 0) cm.
+      /\ zmap_forall_keys (fun addr => Z.modulo addr
+                                     (Z.of_nat MorelloImpl.get.(alignof_pointer))
+                                   = 0) cm.
 
     Ltac destruct_base_mem_invariant H
       :=
@@ -384,14 +386,14 @@ Module RevocationProofs.
 
     Lemma init_ghost_tags_spec
       (addr: AddressValue.t)
-      (size: Z)
-      (c0: ZMap.t (bool*CapGhostState)):
+      (size: nat)
+      (capmeta: ZMap.t (bool*CapGhostState)):
       forall a tg,
-        ZMap.MapsTo a tg (init_ghost_tags addr size c0)
+        ZMap.MapsTo a tg (init_ghost_tags addr size capmeta)
         ->
-          (ZMap.MapsTo a tg c0
+          (ZMap.MapsTo a tg capmeta
            \/
-             (Z.modulo a MorelloImpl.get.(alignof_pointer) = 0
+             (Z.modulo a (Z.of_nat MorelloImpl.get.(alignof_pointer)) = 0
               /\
                 tg = (false, {| tag_unspecified := true; bounds_unspecified := false |}))).
     Proof.
@@ -832,16 +834,13 @@ Module RevocationProofs.
     Lemma fetch_bytes_len
       (addr : ZMap.key)
       (bm : ZMap.t AbsByte)
-      (sz: Z):
-      0 <= sz ->
-      Z.of_nat (Datatypes.length (fetch_bytes bm addr sz)) = sz.
+      (sz: nat):
+      Datatypes.length (fetch_bytes bm addr sz) = sz.
     Proof.
-      intros H.
       unfold fetch_bytes.
       rewrite map_length.
       rewrite list_init_len.
-      apply Znat.Z2Nat.id.
-      assumption.
+      reflexivity.
     Qed.
 
     Lemma split_bytes_success
@@ -3677,19 +3676,14 @@ Module RevocationProofs.
     {mval : mem_value}:
 
     load loc CoqCtype.unsigned_char (PV p (PVconcrete c)) s = (s, inr (f, mval)) ->
-
     (
       mval = MVunspecified CoqCtype.unsigned_char
       \/
         exists ab b bv,
-          ZMap.MapsTo
-            (AddressValue.to_Z (Capability_GS.cap_get_value c)) ab (bytemap s)
-          /\
-            mval = MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) (IV b)
-          /\
-            value ab = Some bv
-          /\
-            byte_of_Z b = bv
+          ZMap.MapsTo (AddressValue.to_Z (Capability_GS.cap_get_value c)) ab (bytemap s)
+          /\ mval = MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) (IV b)
+          /\ value ab = Some bv
+          /\ byte_of_Z b = bv
     ).
   Proof.
     intros H.
@@ -3700,26 +3694,35 @@ Module RevocationProofs.
     repeat rewrite resolve_has_any_PNVI_flavour in H.
     destruct p.
     -
-
       unfold sizeof in H.
       cbn in H.
       rewrite MorelloImpl.uchar_size in H.
       cbn in H.
 
-      state_inv_step; try lia.
+      Opaque extract_unspec split_bytes.
+      state_inv_step; try rewrite Znat.Nat2Z.inj_0 in *;
+        try rewrite Z.add_0_r in *;
+        try lia; try break_match_hyp; try discriminate; auto.
+      Transparent extract_unspec split_bytes.
       +
       (* SW_strict_reads = true
-         extract_unspec l = Some _
+         ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = Some _
+       *)
+        admit.
+      +
+      (* SW_strict_reads = true
+         ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = None
        *)
         admit.
       +
         (* SW_strict_reads = false
-           extract_unspec l = Some _
+           ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = Some _
          *)
         admit.
       +
-        (* SW_strict_reads = true
-           extract_unspec l = None *)
+        (* SW_strict_reads = false
+           ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = None
+         *)
         admit.
     -
       apply fail_inr_inv in H; tauto.
@@ -3741,7 +3744,7 @@ Module RevocationProofs.
         ptrval2 = PV p2 (PVconcrete c2) ->
         a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
         a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
-        fetch_bytes (bytemap s') a1 len = fetch_bytes (bytemap s') a2 len.
+        fetch_bytes (bytemap s') a1 (Z.to_nat len) = fetch_bytes (bytemap s') a2 (Z.to_nat len).
   Proof.
     intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
     unfold fetch_bytes.
@@ -3876,7 +3879,7 @@ Module RevocationProofs.
       autospecialize DS; [reflexivity|].
       autospecialize DS; [reflexivity|].
       specialize (DS A1 A2).
-      remember (Z.to_nat (z * sizeof_pointer MorelloImpl.get)) as n.
+      remember (Z.to_nat (z * Z.of_nat (sizeof_pointer MorelloImpl.get))) as n.
       clear s H M.
       unfold memcpy_copy_tags.
       induction n; intros.
