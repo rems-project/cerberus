@@ -751,8 +751,38 @@ module WIT = struct
           return (IT (Nil bt, BT.List bt, loc))
        | Cons (t1,t2) ->
           let@ t1 = infer t1 in
-          let@ t2 = check (IT.loc t1) (List (IT.bt t1)) t2 in
-          return (IT (Cons (t1, t2),BT.List (IT.bt t1), loc))
+          let t1_loc = IT.loc t1 in
+          let t1_bt = IT.bt t1 in
+          (* This is all a little more complicated than ideal because we use
+             the type of the first element of a list literal (currently always
+             non-empty) is used to annotate the (Nil bt), and so _its_ location
+             is the one which must be passed to `check` - not that of the
+             nearest (Cons _).  Without all of this, we would get this:
+             ```
+             tests/cn/repeat.c:12:16: error: Type error
+              [true,false,3]
+                            ^
+             Expression 'nil<bool>' has type 'list<bool>'.
+             I expected it to have type 'list<integer>' because of tests/cn/repeat.c:12:14:
+              [true,false,3]
+                          ^
+            ``` *)
+          let rest, last =
+            let rec to_list = function
+              | IT (Cons (elem, tl), _, loc) ->
+                 let rest, last = to_list tl in
+                 ((elem, loc) :: rest, last)
+              | it ->
+                ([], it) in
+            to_list t2 in
+          let@ rest =
+            let check_elem (elem, loc) =
+              let@ elem = check t1_loc t1_bt elem in
+              return (elem, loc) in
+            ListM.mapM check_elem rest in
+          let@ last = check t1_loc (List t1_bt) last in
+          let cons (hd, loc) tl = IT (Cons (hd, tl), BT.List t1_bt, loc) in
+          return (List.fold_right cons ((t1, loc) :: rest) last)
        | Head t ->
           let@ t = infer t in
           let@ bt = ensure_list_type t ~reason:loc in
