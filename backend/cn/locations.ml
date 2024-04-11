@@ -153,4 +153,29 @@ let is_region x = match Cerb_location.to_raw x with
     | Cerb_location.Loc_region (l, r, _) -> Some (l, r)
     | _ -> None
 
+let start_pos loc =
+  let open Cerb_location in
+  match to_raw loc with
+  | Loc_point loc
+  | Loc_region (loc, _, _)
+  | Loc_regions ((loc, _) :: _, _) -> Some loc
+  | _ -> None
 
+let end_pos loc =
+  let open Cerb_location in
+  match to_raw loc with
+  | Loc_point loc
+  | Loc_region (_, loc, _) -> Some loc
+  | Loc_regions (list, _) ->
+    (* can't use Option module without a cyclic dependency? *)
+    begin match List.last list with
+    | None -> None
+    | Some (_, loc) -> Some loc
+    end
+  | _ -> None
+
+let get_region loc =
+  let open Cerb_location in
+  match to_raw loc with
+  | Loc_region (start, end_, cursor) -> Some (start, end_, cursor)
+  | _ -> None

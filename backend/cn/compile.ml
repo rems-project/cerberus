@@ -679,20 +679,19 @@ module EffectfulTranslation = struct
                  return (renamed_sym, bt)
             in
             return (IT ((Sym sym), bTy, loc))
-        | CNExpr_list es_ ->
-            let@ es = ListM.mapM self es_ in
+        | CNExpr_list es ->
+            let@ es = ListM.mapM self es in
             let item_bt = basetype (List.hd es) in
-            let module CL = Cerb_location in
-            let [@ocaml.warning "-8"] (* parser shouldn't generate anything else *)
-              CL.Loc_region (_, nil_loc, _) = CL.to_raw loc in
+            let  (_, nil_pos, _) =
+              (* parser should ensure loc is a region *)
+              Option.get @@ Locations.get_region loc in
             let cons hd tl =
-               let hd_loc = match CL.to_raw @@ IT.loc hd with
-                 | CL.Loc_point hd_loc
-                 | CL.Loc_region (hd_loc, _, _) -> hd_loc
-                 (* parser shouldn't generate anything else *)
-                 | _ -> assert false in
-               IT (Cons (hd, tl), SBT.List item_bt, CL.(region (hd_loc, nil_loc) NoCursor)) in
-            let nil = IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt, CL.point nil_loc) in
+              let hd_pos = Option.get @@ Locations.start_pos @@ IT.loc hd in
+              let loc = Locations.(region (hd_pos, nil_pos) NoCursor) in
+               IT (Cons (hd, tl), SBT.List item_bt, loc) in
+            let nil =
+              let nil_loc = Cerb_location.point nil_pos in
+              IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt, nil_loc) in
             return (List.fold_right cons es nil)
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
@@ -723,11 +722,28 @@ module EffectfulTranslation = struct
            end
         | CNExpr_arrayindexupdates (e, updates) ->
            let@ e = self e in
-           ListM.fold_leftM (fun acc (i, v) ->
-               let@ i = self i in
-               let@ v = self v in
-               return (IT ((MapSet (acc, i, v)), IT.bt e, loc))
-             ) e updates
+           let bt = IT.bt e in
+           (* start_pos points to start_pos of e
+              ignored cursor points to '['
+              end_pos points to ']' *)
+           let (start_pos, end_pos, _) =
+             (* parser should ensure loc is a region *)
+             Option.get @@ Locations.get_region loc in
+           let@ IT (e, bt, loc) =
+             ListM.fold_leftM (fun acc (i, v) ->
+                 let@ i = self i in
+                 let@ v = self v in
+                 let end_pos = Option.get @@ Locations.end_pos @@ IT.loc v in
+                 (* cursor for the first update doesn't point to '[' - oh well *)
+                 let cursor = Cerb_location.PointCursor (Option.get @@ Locations.start_pos @@ IT.loc i) in
+                 return (IT ((MapSet (acc, i, v)), bt, Cerb_location.region (start_pos, end_pos) cursor))
+               ) e updates in
+           (* cursor points to start of last index
+              ignored start_pos is just start_pos as above
+              ignored end_pos points to the end last value
+              we want to restore it to point to ']' *)
+            let (_, _, cursor) = Option.get @@ Locations.get_region loc in
+            return (IT (e, bt, Locations.region (start_pos, end_pos) cursor))
         | CNExpr_binop (bop, e1_, e2_) ->
             let@ e1 = self e1_ in
             let@ e2 = self e2_ in
