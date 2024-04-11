@@ -2509,10 +2509,8 @@ cn_toplevel_elem:
 ;
 
 cn_toplevel:
-| EOF
-    { [] }
-| elem= cn_toplevel_elem elems= cn_toplevel
-    { elem :: elems }
+| elems=list(cn_toplevel_elem) EOF
+    { elems }
 
 
 (* END CN *)

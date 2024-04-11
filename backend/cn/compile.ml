@@ -562,7 +562,9 @@ module EffectfulTranslation = struct
        let@ rbt = match IT.bt e1 with
          | Map (_, rbt) -> return rbt
          | has ->
-            fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"; o_ctxt = None}}
+            let expected = "map/array" in
+            let reason = "map/array index" in
+            fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected; reason; o_ctxt = None}}
        in
        return (IT ((MapGet (e1, e2)), rbt, loc))
     | _ ->
@@ -602,7 +604,9 @@ module EffectfulTranslation = struct
     (*    in *)
     (*    return (IT.IT ((IT.DatatypeMember (t, member)), bt)) *)
     | has ->
-       fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
+       let expected = "struct" in
+       let reason = "struct member access" in
+       fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected; reason; o_ctxt = None}}
 
 
 
@@ -747,10 +751,14 @@ module EffectfulTranslation = struct
               | Integer | Bits _ ->
                 return (IT (ArrayShift { base; ct; index }, Loc (Some ct), loc))
               | has ->
-                 fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected = "integer or bits"; o_ctxt = None}}
+                 let expected = "integer or bits" in
+                 let reason = "pointer arithmetic" in
+                 fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected; reason; o_ctxt = None}}
               end
            | has ->
-              fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
+             let expected = "pointer" in
+             let reason = "pointer arithmetic" in
+             fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected; reason; o_ctxt = None}}
            end
         | CNExpr_membershift (e, opt_tag, member) ->
            let@ e = self e in
@@ -766,14 +774,18 @@ module EffectfulTranslation = struct
              if Sym.equal tag tag' then
                with_tag tag
              else
-               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp (Struct tag'); expected = Pp.plain @@ SBT.pp (Struct tag); o_ctxt = None}}
+               let expected = Pp.plain @@ SBT.pp (Struct tag) in
+               let reason = "struct member offset" in
+               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp (Struct tag'); expected; reason; o_ctxt = None}}
            | Some tag, Loc None
            | None, Loc (Some (Struct tag)) ->
               with_tag tag
            | None, Loc None ->
               cannot_tell_pointee_ctype loc e
            | _ , has ->
-              fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
+              let expected = "struct pointer" in
+              let reason = "struct member offset" in
+              fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected; reason; o_ctxt = None}}
            end
         | CNExpr_addr nm ->
             return (sym_ (nm, SBT.Loc None, loc))
@@ -947,7 +959,9 @@ module EffectfulTranslation = struct
               | Loc None ->
                  fail {loc; msg = Generic !^"Cannot tell C-type of pointer. Please use Owned with an annotation: \'Owned<CTYPE>'."}
               | has ->
-                 fail {loc; msg = Illtyped_it {it = Terms.pp ptr_expr; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
+                 let expected = "pointer" in
+                 let reason = "Owned<_> predicate" in
+                 fail {loc; msg = Illtyped_it {it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason; o_ctxt = None}}
          in
          (* we don't take Resources.owned_oargs here because we want to
             maintain the C-type information *)
@@ -1420,7 +1434,9 @@ module UsingLoads = struct
        in
        fail {loc; msg = Generic msg}
     | has ->
-       let msg = Illtyped_it {it= IT.pp it; has= SBT.pp has; expected= "pointer"; o_ctxt = None} in
+       let expected = "pointer" in
+       let reason = "dereferencing" in
+       let msg = Illtyped_it {it= IT.pp it; has= SBT.pp has; expected; reason; o_ctxt = None} in
        fail {loc; msg}
 
 

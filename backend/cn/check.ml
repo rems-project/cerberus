@@ -1478,7 +1478,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                     let@ () = WCT.is_ct loc ct in
                     return (IT.mentions_good ct)
                in
-               let@ it = WIT.infer loc it in
+               let@ it = WIT.infer it in
                instantiate loc filter it
             | M_CN_split_case _ ->
               assert false
@@ -1500,7 +1500,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                     let@ _ = get_resource_predicate_def loc pn in
                     return (PName pn)
                in
-               let@ it = WIT.infer loc it in
+               let@ it = WIT.infer it in
                let@ (original_rs, _) = all_resources_tagged loc in
                let verbose = List.exists (Id.is_str "verbose") attrs in
                let quiet = List.exists (Id.is_str "quiet") attrs in
@@ -1563,7 +1563,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
             | M_CN_inline _nms ->
                return ()
             | M_CN_print it ->
-               let@ it = WellTyped.WIT.infer loc it in
+               let@ it = WellTyped.WIT.infer it in
                let@ simp_ctxt = simp_ctxt () in
                let it = Simplify.IndexTerms.simp simp_ctxt it in
                print stdout (item "printed" (IT.pp it));
