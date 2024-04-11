@@ -1343,7 +1343,7 @@ Module Type CheriMemoryImpl
   Definition fetch_bytes
     (bytemap : ZMap.t AbsByte)
     (base_addr : Z)
-    (n_bytes : Z) (* TODO: shoule be nat *)
+    (n_bytes : nat)
     :
     list AbsByte
     :=
@@ -1353,7 +1353,7 @@ Module Type CheriMemoryImpl
          | Some b_value => b_value
          | None => absbyte_v (PNVI_prov Prov_none) None None
          end)
-      (list_init (Z.to_nat n_bytes)
+      (list_init n_bytes
          (fun (i : nat) => base_addr + (Z.of_nat i))).
 
   Fixpoint mem_value_strip_err
@@ -1417,7 +1417,7 @@ Module Type CheriMemoryImpl
     (alloc_base <=? ptr_base) && (ptr_base <? alloc_limit).
 
   Definition fetch_and_decode_cap bytemap addr tag : serr C.t :=
-    let bs := fetch_bytes bytemap addr (Z.of_nat IMP.get.(sizeof_pointer)) in
+    let bs := fetch_bytes bytemap addr IMP.get.(sizeof_pointer) in
     '(_, _, bs1) <- split_bytes bs ;;
     cs <- option2serr "cap contains unspecified bytes" (extract_unspec bs1) ;;
     option2serr "error decoding cap" (C.decode cs tag).
@@ -1742,7 +1742,7 @@ Module Type CheriMemoryImpl
       : memM (footprint * mem_value)
       :=
       st <- get ;;
-      let bs := fetch_bytes st.(bytemap) addr (Z.of_nat sz) in
+      let bs := fetch_bytes st.(bytemap) addr sz in
       let tag_query (a_value : Z) : bool* CapGhostState :=
         if is_pointer_algined a_value then
           match ZMap.find a_value st.(capmeta) with
