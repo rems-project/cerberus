@@ -491,9 +491,12 @@ Module Type CheriMemoryImpl
         match k1, k2 with
         | Read, Read => false
         | _, _ => negb
-                   (orb
-                      (Z.leb (AddressValue.to_Z b1 + sz1) (AddressValue.to_Z b2))
-                      (Z.leb (AddressValue.to_Z b2 + sz2) (AddressValue.to_Z b1)))
+                   (
+                     (AddressValue.to_Z b1 + sz1 <=? AddressValue.to_Z b2)
+                     || (AddressValue.to_Z b2 + sz2 <=? AddressValue.to_Z b1)
+                     || (sz1 =? 0)
+                     || (sz2 =? 0)
+                   )
         end
     end.
 
@@ -570,7 +573,7 @@ Module Type CheriMemoryImpl
     let z := AddressValue.to_Z st.(last_address) - size in
     let (q,m) := quomod z align in
     let addr := z - (if Z.ltb q 0 then Z.opp m else m) in
-    if Z.leb addr 0 then
+    if addr <? 0 then
       fail_noloc (MerrOther "allocator: failed (out of memory)")
     else
       put (
@@ -2837,7 +2840,7 @@ Module Type CheriMemoryImpl
 
   (* internal *)
   Definition memcpy_args_check loc ptrval1 ptrval2 size_n :=
-    if Z.ltb size_n 0
+    if (size_n <? 0)%Z
     then raise (InternalErr "negative size passed to memcpy")
     else
       match ptrval1, ptrval2 with

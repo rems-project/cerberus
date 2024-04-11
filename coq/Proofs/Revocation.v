@@ -321,7 +321,7 @@ Module RevocationProofs.
     let a2_base := AddressValue.to_Z a2.(base) in
     let a1_size := a1.(size) in
     let a2_size := a2.(size) in
-    (a1_base + a1_size <= a2_base) \/ (a2_base + a2_size <= a1_base).
+    (a1_base + a1_size <= a2_base) \/ (a2_base + a2_size <= a1_base) \/ a1_size = 0 \/ a2_size = 0.
 
   Module Type CheriMemoryImplWithProofs
     (SW: CerbSwitchesDefs) <:
