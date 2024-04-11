@@ -1604,9 +1604,9 @@ Module Type CheriMemoryImpl
   Definition cap_check
     (loc : location_ocaml)
     (c : C.t)
-    (offset : Z)
+    (offset : nat)
     (intent : access_intention)
-    (sz : Z) (* TODO: should be nat *)
+    (size_n : nat)
     : memM unit :=
     (* We check here only [tag_unspecified] because setting [bounds_unspecified]
        always concides with setting [tag_unspecified] as well *)
@@ -1614,7 +1614,7 @@ Module Type CheriMemoryImpl
       fail loc (MerrCHERI CheriUndefinedTag)
     else
       if C.cap_is_valid c then
-        let addr := cap_to_Z c + offset in
+        let addr := cap_to_Z c + (Z.of_nat offset) in
         let pcheck :=
           match intent with
           | ReadIntent =>
@@ -1625,6 +1625,7 @@ Module Type CheriMemoryImpl
               Permissions.has_execute_perm
           end in
         if pcheck (C.cap_get_perms c) then
+          let sz := Z.of_nat size_n in
           let limit := addr + sz in
           if C.cap_bounds_check c (Bounds.of_Zs (addr, sz))
           then ret tt
@@ -1737,11 +1738,11 @@ Module Type CheriMemoryImpl
     let do_load
           (alloc_id_opt : option storage_instance_id)
           (addr : Z)
-          (sz : Z) (* TODO: should be nat *)
+          (sz : nat)
       : memM (footprint * mem_value)
       :=
       st <- get ;;
-      let bs := fetch_bytes st.(bytemap) addr sz in
+      let bs := fetch_bytes st.(bytemap) addr (Z.of_nat sz) in
       let tag_query (a_value : Z) : bool* CapGhostState :=
         if is_pointer_algined a_value then
           match ZMap.find a_value st.(capmeta) with
@@ -1791,7 +1792,7 @@ Module Type CheriMemoryImpl
     let do_load_cap
           (alloc_id_opt : option storage_instance_id)
           (c : C.t)
-          (sz : Z) (* TODO: should be nat *)
+          (sz : nat)
       : memM (footprint * mem_value)
       :=
       cap_check loc c 0 ReadIntent sz ;;
@@ -1813,7 +1814,7 @@ Module Type CheriMemoryImpl
           then fail loc (MerrAccess LoadAccess AtomicMemberof)
           else
             (sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-             do_load_cap (Some alloc_id) c (Z.of_nat sz))
+             do_load_cap (Some alloc_id) c sz)
         else
           fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     in
@@ -1890,7 +1891,7 @@ Module Type CheriMemoryImpl
         :=
         szn <- serr2InternalErr (sizeof DEFAULT_FUEL None cty) ;;
         let sz := Z.of_nat szn in
-        cap_check loc c_value 0 WriteIntent sz ;;
+        cap_check loc c_value 0 WriteIntent szn ;;
         let addr := (cap_to_Z c_value) in
 
         st <- get ;;
@@ -3305,12 +3306,12 @@ Module Type CheriMemoryImpl
 
   Definition load_string (loc: location_ocaml) (c_value: C.t) (max_len: nat) : memM string
     :=
-    let fix loop max_len (acc: string) (offset: Z) : memM string :=
+    let fix loop max_len (acc: string) (offset: nat) : memM string :=
       match max_len with
       | O => raise (InternalErr "string too long")
       | S max_len =>
-          cap_check loc c_value offset ReadIntent 1 ;;
-          let addr := cap_to_Z c_value + offset
+          cap_check loc c_value offset ReadIntent 1%nat ;;
+          let addr := cap_to_Z c_value + Z.of_nat offset
           in
           get >>=
             (fun st =>
@@ -3323,11 +3324,11 @@ Module Type CheriMemoryImpl
                    then ret acc
                    else
                      let s_value := String.append acc (String c_value "")
-                     in loop max_len s_value (Z.succ offset)
+                     in loop max_len s_value (S offset)
                end)
       end
     in
-    loop max_len "" 0.
+    loop max_len "" O.
 
   Definition store_string (loc : location_ocaml) (s_value : string) (n : nat) (c_value : C.t) : memM nat
     :=
@@ -3353,7 +3354,7 @@ Module Type CheriMemoryImpl
             (fun (i_value : nat) (b_value : AbsByte) =>
                (addr + (Z.of_nat i_value), b_value))
             pre_bs in
-        cap_check loc c_value 0 WriteIntent (Z.of_nat (List.length bs)) ;;
+        cap_check loc c_value 0 WriteIntent (List.length bs) ;;
         update
           (fun (st : mem_state) =>
              mem_state_with_bytemap
