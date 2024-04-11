@@ -57,12 +57,19 @@ let stringFromFree_error = function
       "Free_out_of_bound"
 end
 
+(* memcpy and friends *)
 type memcpy_error =
   | Memcpy_overlap
+  | Memcpy_non_object
+  | Memmove_non_object
 
 let stringFromMemcpy_error = function
   | Memcpy_overlap ->
       "Memcpy_overlap"
+  | Memcpy_non_object ->
+     "Memcpy_non_object"
+  | Memmove_non_object ->
+     "Memmove_non_object"
 end
 
 type vip_kind =
@@ -279,7 +286,11 @@ let undefinedFromMem_error = function
 
   | MerrUndefinedMemcpy Memcpy_overlap ->
      Just Undefined.UB100
-  
+  | MerrUndefinedMemcpy Memcpy_non_object ->
+     Just (Undefined.UB_std_omission Undefined.UB_OMIT_memcpy_non_object)
+  | MerrUndefinedMemcpy Memmove_non_object ->
+     Just (Undefined.UB_std_omission Undefined.UB_OMIT_memmove_non_object)
+
   | MerrWriteOnReadOnly ReadonlyStringLiteral ->
       Just Undefined.UB033_modifying_string_literal
   | MerrWriteOnReadOnly ReadonlyConstQualified ->

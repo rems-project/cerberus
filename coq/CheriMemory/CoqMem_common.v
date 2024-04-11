@@ -14,16 +14,16 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   Definition thread_id := Z.
   (* Parameter thread_id:Set. *)
 
-  Inductive overlap_status : Set :=
+  Variant overlap_status : Set :=
   | Disjoint : overlap_status
   | ExactOverlap : overlap_status
   | PartialOverlap : overlap_status.
 
-  Inductive access_kind : Set :=
+  Variant access_kind : Set :=
   | LoadAccess : access_kind
   | StoreAccess : access_kind.
 
-  Inductive access_error : Set :=
+  Variant access_error : Set :=
   | NullPtr : access_error
   | FunctionPtr : access_error
   | DeadPtr : access_error
@@ -31,23 +31,24 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | NoProvPtr : access_error
   | AtomicMemberof : access_error.
 
-  Inductive free_error : Set :=
+  Variant free_error : Set :=
   | Free_non_matching : free_error
   | Free_dead_allocation : free_error
   | Free_out_of_bound : free_error.
 
-  Inductive memcpy_error : Set :=
-  | Memcpy_overlap : memcpy_error.
-(*   | Memcpy_invalid_pointer : memcpy_error. *)
+  Variant memcpy_error : Set :=
+  | Memcpy_overlap : memcpy_error
+  | Memcpy_non_object: memcpy_error
+  | Memmove_non_object: memcpy_error.
 
-  Inductive vip_kind : Set :=
+  Variant vip_kind : Set :=
   | VIP_null : vip_kind
   | VIP_empty : vip_kind
   | VIP_killed : vip_kind
   | VIP_out_of_bound : vip_kind
   | VIP_funptr : vip_kind.
 
-  Inductive vip_error : Set :=
+  Variant vip_error : Set :=
   | VIP_free_invalid_pointer : location_ocaml -> vip_error
   | VIP_relop_killed : vip_error
   | VIP_relop_out_of_bound : vip_error
@@ -60,7 +61,7 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | VIP_copy_alloc_id : vip_kind -> vip_error
   | VIP_copy_alloc_id_invalid : vip_error.
 
-  Inductive mem_cheri_error : Set :=
+  Variant mem_cheri_error : Set :=
   | CheriErrDecodingCap : mem_cheri_error
   | CheriMerrInvalidCap : mem_cheri_error
   | CheriMerrInsufficientPermissions : mem_cheri_error
@@ -68,12 +69,12 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
     B.t * A.t * nat -> mem_cheri_error
   | CheriUndefinedTag: mem_cheri_error.
 
-  Inductive readonly_kind : Set :=
+  Variant readonly_kind : Set :=
   | ReadonlyStringLiteral: readonly_kind
   | ReadonlyTemporaryLifetime: readonly_kind
   | ReadonlyConstQualified: readonly_kind.
 
-  Inductive mem_error : Set :=
+  Variant mem_error : Set :=
   | MerrOutsideLifetime : string -> mem_error
   | MerrInternal : string -> mem_error
   | MerrOther : string -> mem_error
@@ -83,7 +84,7 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | MerrReadUninit : mem_error
   | MerrUndefinedFree : free_error -> mem_error
   | MerrUndefinedRealloc : free_error -> mem_error
-  | MerrUndefinedMemcpy : memcpy_error -> mem_error
+  | MerrUndefinedMemcpy : memcpy_error -> mem_error (* memcpy and friends *)
   | MerrIntFromPtr : mem_error
   | MerrPtrFromInt : mem_error
   | MerrPtrComparison : mem_error
@@ -275,6 +276,10 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
 
     | MerrUndefinedMemcpy Memcpy_overlap =>
         Some UB100
+    | MerrUndefinedMemcpy Memcpy_non_object =>
+        Some (UB_std_omission UB_OMIT_memcpy_non_object)
+    | MerrUndefinedMemcpy Memmove_non_object =>
+        Some (UB_std_omission UB_OMIT_memmove_non_object)
 
     | MerrWriteOnReadOnly ReadonlyStringLiteral =>
         Some UB033_modifying_string_literal
@@ -296,7 +301,7 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
   | _ => None
   end.
 
-Inductive integer_operator : Set :=
+Variant integer_operator : Set :=
 | IntAdd : integer_operator
 | IntSub : integer_operator
 | IntMul : integer_operator
@@ -305,23 +310,23 @@ Inductive integer_operator : Set :=
 | IntRem_f : integer_operator
 | IntExp : integer_operator.
 
-Inductive floating_operator : Set :=
+Variant floating_operator : Set :=
 | FloatAdd : floating_operator
 | FloatSub : floating_operator
 | FloatMul : floating_operator
 | FloatDiv : floating_operator.
 
-Inductive derivecap_op : Set :=
+Variant derivecap_op : Set :=
 | DCunary : CoqAilSyntax.unaryOperator -> derivecap_op
 | DCbinary : CoqAilSyntax.binaryOperator -> derivecap_op.
 
 (*
-Inductive pure_memop : Set :=
+Variant pure_memop : Set :=
 | DeriveCap : derivecap_op -> bool -> pure_memop
 | CapAssignValue : pure_memop
 | Ptr_tIntValue : pure_memop.
 
-Inductive generic_memop (sym : Set) : Set :=
+Variant generic_memop (sym : Set) : Set :=
 | PtrEq : generic_memop sym
 | PtrNe : generic_memop sym
 | PtrLt : generic_memop sym
@@ -454,15 +459,15 @@ Definition instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict
         fun (cs2 : mem_constraint a) => MC_conj [ cs1; cs2 ] |}.
 *)
 
-Inductive type_predicate : Set :=
+Variant type_predicate : Set :=
 | TyPred : (CoqCtype.ctype -> serr bool) -> type_predicate
 | TyIsPointer : type_predicate.
 
-Inductive instrinsics_ret_spec : Set :=
+Variant instrinsics_ret_spec : Set :=
 | ExactRet : CoqCtype.ctype -> instrinsics_ret_spec
 | CopyRet : nat -> instrinsics_ret_spec.
 
-Inductive intrinsics_arg_spec : Set :=
+Variant intrinsics_arg_spec : Set :=
 | ExactArg : CoqCtype.ctype -> intrinsics_arg_spec
 | PolymorphicArg : list type_predicate -> intrinsics_arg_spec
 | CopyArg : nat -> intrinsics_arg_spec.
@@ -492,7 +497,7 @@ Module memory_flags.
 End memory_flags.
 Definition memory_flags := memory_flags.record.
 
-Inductive memory_flag : Set :=
+Variant memory_flag : Set :=
 | Allow_disjoint_alloc_tests : memory_flag.
 
 Fixpoint either_sequence {a b : Set} (xs : list (Either.either a b))

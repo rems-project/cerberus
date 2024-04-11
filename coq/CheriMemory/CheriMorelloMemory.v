@@ -2864,7 +2864,7 @@ Module Type CheriMemoryImpl
           then ret tt
           else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
       (* memcpy accepts only pointers to C objects *)
-      | _, _ =>  raise (InternalErr "Invalid pointer type for memcpy")
+      | _, _ =>  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
       end.
 
   Definition memcpy

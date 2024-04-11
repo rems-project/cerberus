@@ -13,6 +13,10 @@ type unspecified_ub_context =
   | UB_unspec_memberofptr
   | UB_unspec_do
 
+type undefined_by_omission =
+  | UB_OMIT_memcpy_non_object
+  | UB_OMIT_memmove_non_object
+
 (* C undefined behaviours *)
 type undefined_behaviour =
   | DUMMY of string (* TODO: this is a hack (use by the Driver these days) *)
@@ -20,7 +24,9 @@ type undefined_behaviour =
     (* NOTE: this is defacto specific *)
     (* an lvalue evaluated to unspecified *)
   | UB_unspecified_lvalue
-  
+
+  | UB_std_omission of undefined_by_omission
+
   (* A ‘‘shall’’ or ‘‘shall not’’ requirement that appears outside of a constraint is violated
      (clause 4). *)
   | UB001
@@ -834,6 +840,8 @@ let ub_str_bimap =
   Bimap.fromList
     [ (* (DUMMY "parser", "DUMMY[parser]") (* TODO: this is horrible *)
     ; *) (UB_unspecified_lvalue, "UB_unspecified_lvalue")
+    ; (UB_std_omission UB_OMIT_memcpy_non_object, "UB_std_omission_UB_OMIT_memcpy_non_object")
+    ; (UB_std_omission UB_OMIT_memmove_non_object, "UB_std_omission_UB_OMIT_memmove_non_object")
     ; (UB001, "UB001")
     ; (UB002, "UB002")
     ; (UB003, "UB003")
@@ -1247,6 +1255,13 @@ val pretty_string_of_undefined_behaviour: undefined_behaviour -> string
 let pretty_string_of_undefined_behaviour = function
   | DUMMY str ->
       "DUMMY undefined behaviour (" ^ str ^ ")"
+  | UB_std_omission ctx ->
+      match ctx with
+        | UB_OMIT_memcpy_non_object ->
+           "one of the pointers passed to memcpy does not point to an object"
+        | UB_OMIT_memmove_non_object ->
+           "one of the pointers passed to memmove does not point to an object"
+      end
   | UB_unspecified_lvalue ->
       "(defacto) unspecified lvalue"
   | UB005_data_race ->

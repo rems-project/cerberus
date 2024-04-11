@@ -5,14 +5,20 @@ Require Import Coq.Strings.String.
 
 Local Open Scope string_scope.
 
+Variant undefined_by_omission : Type :=
+| UB_OMIT_memcpy_non_object
+| UB_OMIT_memmove_non_object.
+
 (* C undefined behaviours *)
-Inductive undefined_behaviour : Type := 
+Variant undefined_behaviour : Type :=
   | DUMMY:  string  -> undefined_behaviour  (* TODO: this is a hack (use by the Driver these days) *)
   
     (* NOTE: this is defacto specific *)
     (* an lvalue evaluated to unspecified *)
   | UB_unspecified_lvalue: undefined_behaviour 
-  
+
+  | UB_std_omission (om:undefined_by_omission): undefined_behaviour
+
   (* A ââshallââ or ââshall notââ requirement that appears outside of a constraint is violated
      (clause 4). *)
   | UB001: undefined_behaviour 
