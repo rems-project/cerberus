@@ -519,10 +519,10 @@ Module Type CheriMemoryImpl
   (* Crear new cap meta for region where all tags are unspecified *)
   Program Definition init_ghost_tags
     (addr: AddressValue.t)
-    (size: Z)
+    (size: Z) (* TODO: should be nat *)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
-    let align := IMP.get.(alignof_pointer) in
+    let align := Z.of_nat (IMP.get.(alignof_pointer)) in
     let lower_a x :=
       let (q,_) := quomod x align in
       Z.mul q align in
@@ -545,7 +545,7 @@ Module Type CheriMemoryImpl
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
-    let align := IMP.get.(alignof_pointer) in
+    let align := Z.of_nat (IMP.get.(alignof_pointer)) in
     let lower_a x :=
       let (q,_) := quomod x align in
       Z.mul q align in
@@ -609,7 +609,7 @@ Module Type CheriMemoryImpl
   Definition alignof
     (fuel: nat)
     (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
-    (ty: CoqCtype.ctype): serr Z
+    (ty: CoqCtype.ctype): serr nat
     :=
     let tagDefs :=
       match maybe_tagDefs with
@@ -643,14 +643,14 @@ Module Type CheriMemoryImpl
               | Some (CoqCtype.StructDef membrs flexible_opt) =>
                   init <-
                     match flexible_opt with
-                    | None => ret 0
+                    | None => ret 0%nat
                     | Some (CoqCtype.FlexibleArrayMember _ _ _ elem_ty) =>
                         alignof_ fuel (CoqCtype.Ctype [] (CoqCtype.Array elem_ty None))
                     end ;;
                   monadic_fold_left
                     (fun acc '(_, (_, _, _, ty)) =>
                        al <- alignof_ fuel ty ;;
-                       ret (Z.max al acc)
+                       ret (Nat.max al acc)
                     )
                     membrs
                     init
@@ -664,10 +664,10 @@ Module Type CheriMemoryImpl
                   monadic_fold_left
                     (fun acc '(_, (_, _, ty)) =>
                        al <- alignof_ fuel ty ;;
-                       ret (Z.max al acc)
+                       ret (Nat.max al acc)
                     )
                     membrs
-                    0
+                    0%nat
               | None => raise "could not find union tag to compute alignment"
               end
           end
@@ -678,7 +678,7 @@ Module Type CheriMemoryImpl
     (fuel: nat)
     (tagDefs : SymMap.t CoqCtype.tag_definition)
     (tag_sym : CoqSymbol.sym)
-    : serr (list (CoqSymbol.identifier * CoqCtype.ctype * Z) * Z)
+    : serr (list (CoqSymbol.identifier * CoqCtype.ctype * nat) * nat)
     :=
     match fuel with
     | O => raise "offsetof out of fuel"
@@ -696,23 +696,23 @@ Module Type CheriMemoryImpl
                 (fun '(xs, last_offset) '(membr, (_, _, _, ty))  =>
                    size  <- sizeof fuel (Some tagDefs) ty ;;
                    align <- alignof fuel (Some tagDefs) ty ;;
-                   let x_value := Z.modulo last_offset align in
+                   let x_value := Nat.modulo last_offset align in
                    let pad :=
-                     if Z.eqb x_value 0
-                     then 0
-                     else align - x_value in
-                   ret ((membr, ty, last_offset + pad)::xs, last_offset+pad+size)
-                ) membrs ([], 0) ;;
+                     if Nat.eqb x_value O
+                     then O
+                     else (align - x_value)%nat in
+                   ret ((membr, ty, (last_offset + pad)%nat)::xs, (last_offset+pad+size)%nat)
+                ) membrs ([], O) ;;
             ret (List.rev xs, maxoffset)
         | Some (CoqCtype.UnionDef membrs) =>
-            ret ((List.map (fun '(ident, (_, _, _, ty)) => (ident, ty, 0)) membrs), 0)
+            ret ((List.map (fun '(ident, (_, _, _, ty)) => (ident, ty, O)) membrs), O)
         | None => raise "could not find tag"
         end
     end
   with sizeof
          (fuel: nat)
          (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
-    : CoqCtype.ctype -> serr Z
+    : CoqCtype.ctype -> serr nat
        :=
          match fuel with
          | O => fun _ => raise "sizeof out of fuel"
@@ -735,7 +735,7 @@ Module Type CheriMemoryImpl
                    option2serr "sizeof_fty not defined in Implementation" (IMP.get.(sizeof_fty) fty)
                | CoqCtype.Array elem_ty (Some n_value) =>
                    sz <- sizeof fuel (Some tagDefs) elem_ty ;;
-                   ret (n_value * sz)
+                   ret (n_value * sz)%nat
                | CoqCtype.Pointer _ _ =>
                    ret (IMP.get.(sizeof_pointer))
                | CoqCtype.Atomic atom_ty =>
@@ -743,10 +743,10 @@ Module Type CheriMemoryImpl
                | CoqCtype.Struct tag_sym =>
                    '(_, max_offset) <- offsetsof fuel tagDefs tag_sym ;;
                    align <- alignof fuel (Some tagDefs) cty ;;
-                   let x_value := Z.modulo max_offset align in
-                   ret (if Z.eqb x_value 0
+                   let x_value := Nat.modulo max_offset align in
+                   ret (if Nat.eqb x_value 0%nat
                         then max_offset
-                        else max_offset + (align - x_value))
+                        else (max_offset + (align - x_value))%nat)
                | CoqCtype.Union tag_sym =>
                    match SymMap.find tag_sym tagDefs with
                    | Some (CoqCtype.StructDef _ _) =>
@@ -757,13 +757,13 @@ Module Type CheriMemoryImpl
                            (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
                               sz <- sizeof fuel (Some tagDefs) ty ;;
                               al <- alignof fuel (Some tagDefs) ty ;;
-                              ret (Z.max acc_size sz, Z.max acc_align al)
+                              ret (Nat.max acc_size sz, Nat.max acc_align al)
                            )
-                           membrs (0, 0) ;;
-                       let x_value := Z.modulo max_size max_align in
-                       ret (if Z.eqb x_value 0
+                           membrs (0%nat, 0%nat) ;;
+                       let x_value := Nat.modulo max_size max_align in
+                       ret (if Nat.eqb x_value 0%nat
                             then max_size
-                            else max_size + (max_align - x_value))
+                            else (max_size + (max_align - x_value)))%nat
                    | None => raise "could not find union tag to compute sizeof"
                    end
                end
@@ -796,7 +796,7 @@ Module Type CheriMemoryImpl
 
   Definition is_pointer_algined (addr : Z) : bool :=
     let align := IMP.get.(alignof_pointer) in
-    Z.eqb (Z.modulo addr align) 0.
+    Z.eqb (Z.modulo addr (Z.of_nat align)) 0.
 
   (** Update [capmeta] dictionary for capability [c] stored at [addr].
       If address is capability-aligned, then the tag and ghost state
@@ -827,12 +827,12 @@ Module Type CheriMemoryImpl
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
-            ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) sz capmeta),
-                (list_init (Z.to_nat sz) (fun _ => absbyte_v (PNVI_prov Prov_none) None None)))
+            ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat sz) capmeta),
+                (list_init sz (fun _ => absbyte_v (PNVI_prov Prov_none) None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
-            bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
+            bs' <- bytes_of_Z iss sz n_value ;;
             let bs := List.map (fun (x : ascii) => absbyte_v (PNVI_prov Prov_none) None (Some x)) bs' in
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVinteger ity (IC _ c_value) =>
@@ -844,7 +844,7 @@ Module Type CheriMemoryImpl
                       absbyte_v (PNVI_prov Prov_none) None (Some b_value)) cb))
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
-            bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
+            bs' <- bytes_of_Z true sz (bits_of_float fval) ;;
             let bs := List.map (fun (x : ascii) => absbyte_v (PNVI_prov Prov_none) None (Some x)) bs'
             in
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
@@ -879,18 +879,22 @@ Module Type CheriMemoryImpl
             ret (funptrmap, capmeta, (List.concat (List.rev bs_s)))
         | MVstruct tag_sym xs =>
             let padding_byte := absbyte_v (PNVI_prov Prov_none) None None in
-            '(offs, last_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
-            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
+            '(offs, last_offn) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
+            let last_off := Z.of_nat last_offn in
+            szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
+            let sz := Z.of_nat szn in
             let final_pad := sz - last_off in
             '(funptrmap, capmeta, _, bs) <-
               monadic_fold_left2
                 (fun '(funptrmap, capmeta, last_off, acc)
-                   '(ident, ty, off)
+                   '(ident, ty, offn)
                    '(_, _, mval) =>
+                   let off := Z.of_nat offn in
                    let pad := off - last_off in
                    '(funptrmap, capmeta, bs) <-
                      repr fuel funptrmap capmeta (addr + off) mval ;;
-                   sz <- sizeof DEFAULT_FUEL None ty ;;
+                   szn <- sizeof DEFAULT_FUEL None ty ;;
+                   let sz := Z.of_nat szn in
                    ret (funptrmap, capmeta, off + sz,
                        (acc ++
                           (list_init (Z.to_nat pad) (fun _ => padding_byte)) ++ bs)))
@@ -902,7 +906,7 @@ Module Type CheriMemoryImpl
             '(funptrmap', capmeta', bs) <- repr fuel funptrmap capmeta addr mval ;;
             ret (funptrmap', capmeta',
                 bs ++
-                  (list_init (Nat.sub (Z.to_nat size) (List.length bs))
+                  (list_init (Nat.sub size (List.length bs))
                      (fun _ => absbyte_v (PNVI_prov Prov_none) None None)))
         end
     end.
@@ -940,8 +944,9 @@ Module Type CheriMemoryImpl
     :=
     let align_n := num_of_int int_val in
     size_n <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-    let mask := C.representable_alignment_mask size_n in
-    let size_n' := C.representable_length size_n in
+    let size_z := Z.of_nat size_n in
+    let mask := C.representable_alignment_mask size_z in
+    let size_n' := C.representable_length size_z in
     let align_n' := Z.max align_n (1 + (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     (*
@@ -1181,7 +1186,7 @@ Module Type CheriMemoryImpl
         let '(CoqCtype.Ctype _ ty) := cty in
         let self f := abst f find_allocation funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
-        sassert (negb (Nat.ltb (List.length bs) (Z.to_nat sz))) "abst, |bs| < sizeof(ty)" ;;
+        sassert (negb (Nat.ltb (List.length bs) sz)) "abst, |bs| < sizeof(ty)" ;;
         let merge_taint (x_value : taint_indt) (y_value : taint_indt) : taint_indt :=
           match (x_value, y_value) with
           | (NoTaint, NoTaint) => NoTaint
@@ -1197,7 +1202,7 @@ Module Type CheriMemoryImpl
           | CoqCtype.Basic (CoqCtype.Integer ((CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) as ity)))
           =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
+            let '(bs1, bs2) := split_at sz bs in
             '(_, _, bs1') <- split_bytes bs1 ;;
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             let _:bool := iss in (* hack to hint type checker *)
@@ -1221,7 +1226,7 @@ Module Type CheriMemoryImpl
             end
         | CoqCtype.Basic (CoqCtype.Floating fty) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
+            let '(bs1, bs2) := split_at sz bs in
             '(_, _, bs1') <- split_bytes bs1 ;;
             match extract_unspec bs1' with
             | Some cs =>
@@ -1231,7 +1236,7 @@ Module Type CheriMemoryImpl
             end
         | CoqCtype.Basic (CoqCtype.Integer ity) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
+            let '(bs1, bs2) := split_at sz bs in
             '(_, _, bs1') <- split_bytes bs1 ;;
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             match extract_unspec bs1' with
@@ -1242,27 +1247,24 @@ Module Type CheriMemoryImpl
                 ret (provs_of_bytes bs1, MVEunspecified cty, bs2)
             end
         | CoqCtype.Array elem_ty (Some n_value) =>
-            let fix aux (fuel:nat) (n_value : Z) par (cs : list AbsByte)
+            let fix aux (n_value : nat) par (cs : list AbsByte)
               : serr (taint_indt *  mem_value_with_err * list AbsByte)
               :=
-              match fuel with
-              | O => raise "abst.aux out of fuel"
-              | S fuel =>
-                  let '(taint_acc, mval_acc) := par in
-                  if Z.leb n_value 0 then
-                    ret (taint_acc, (MVEarray (List.rev mval_acc)), cs)
-                  else
-                    sz <- sizeof DEFAULT_FUEL None elem_ty ;;
-                    let el_addr := addr + ((n_value - 1) * sz) in
-                    '(taint, mval, cs') <- self fuel el_addr elem_ty cs ;;
-                    aux fuel (n_value - 1)
-                      ((merge_taint taint taint_acc), mval::mval_acc) cs'
+              let '(taint_acc, mval_acc) := par in
+              match n_value with
+              | O => ret (taint_acc, (MVEarray (List.rev mval_acc)), cs)
+              | S n_value =>
+                  sz <- sizeof DEFAULT_FUEL None elem_ty ;;
+                  let el_addr := addr + Z.of_nat (n_value * sz)%nat in
+                  '(taint, mval, cs') <- self fuel el_addr elem_ty cs ;;
+                  aux n_value
+                    ((merge_taint taint taint_acc), mval::mval_acc) cs'
               end
             in
-            aux fuel n_value (NoTaint, []) bs
+            aux n_value (NoTaint, []) bs
         | CoqCtype.Pointer _ ref_ty =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
+            let '(bs1, bs2) := split_at sz bs in
             '(prov, prov_valid, bs1') <- split_bytes bs1 ;;
             match extract_unspec bs1' with
             | Some cs =>
@@ -1315,20 +1317,20 @@ Module Type CheriMemoryImpl
         | CoqCtype.Struct tag_sym =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             '(offsets,_) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
-            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
+            let '(bs1, bs2) := split_at sz bs in
             '(taint, rev_xs, _, bs') <-
               monadic_fold_left
                 (fun '(taint_acc, acc_xs, previous_offset, acc_bs) '(memb_ident, memb_ty, memb_offset) =>
-                   let pad := memb_offset - previous_offset in
-                   let memb_addr := addr + memb_offset in
+                   let pad := (memb_offset - previous_offset)%nat in
+                   let memb_addr := addr + (Z.of_nat memb_offset) in
                    '(taint, mval, acc_bs') <-
-                     self fuel memb_addr memb_ty (List.skipn (Z.to_nat pad) acc_bs) ;;
+                     self fuel memb_addr memb_ty (List.skipn pad acc_bs) ;;
                    sz <- sizeof DEFAULT_FUEL None memb_ty ;;
                    ret ((merge_taint taint taint_acc),
                        (memb_ident, memb_ty, mval)::acc_xs,
-                       memb_offset + sz, acc_bs'))
+                       (memb_offset + sz)%nat, acc_bs'))
                 offsets
-                (NoTaint, [], 0, bs1)
+                (NoTaint, [], O, bs1)
             ;;
             ret (taint, (MVEstruct tag_sym (List.rev rev_xs)), bs2)
         | CoqCtype.Union tag_sym =>
@@ -1339,7 +1341,9 @@ Module Type CheriMemoryImpl
   Definition fetch_bytes
     (bytemap : ZMap.t AbsByte)
     (base_addr : Z)
-    (n_bytes : Z) : list AbsByte
+    (n_bytes : Z) (* TODO: shoule be nat *)
+    :
+    list AbsByte
     :=
     List.map
       (fun (addr : Z.t) =>
@@ -1411,7 +1415,7 @@ Module Type CheriMemoryImpl
     (alloc_base <=? ptr_base) && (ptr_base <? alloc_limit).
 
   Definition fetch_and_decode_cap bytemap addr tag : serr C.t :=
-    let bs := fetch_bytes bytemap addr IMP.get.(sizeof_pointer) in
+    let bs := fetch_bytes bytemap addr (Z.of_nat IMP.get.(sizeof_pointer)) in
     '(_, _, bs1) <- split_bytes bs ;;
     cs <- option2serr "cap contains unspecified bytes" (extract_unspec bs1) ;;
     option2serr "error decoding cap" (C.decode cs tag).
@@ -1600,7 +1604,7 @@ Module Type CheriMemoryImpl
     (c : C.t)
     (offset : Z)
     (intent : access_intention)
-    (sz : Z)
+    (sz : Z) (* TODO: should be nat *)
     : memM unit :=
     (* We check here only [tag_unspecified] because setting [bounds_unspecified]
        always concides with setting [tag_unspecified] as well *)
@@ -1686,7 +1690,8 @@ Module Type CheriMemoryImpl
     (lvalue_ty : CoqCtype.ctype)
     (addr : Z) : memM bool
     :=
-    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    szn <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    let sz := Z.of_nat szn in
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
          ret
@@ -1701,7 +1706,8 @@ Module Type CheriMemoryImpl
     (addr : Z.t)
     : memM bool
     :=
-    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    szn <- serr2InternalErr (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    let sz := Z.of_nat szn in
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
          match
@@ -1730,7 +1736,7 @@ Module Type CheriMemoryImpl
     let do_load
           (alloc_id_opt : option storage_instance_id)
           (addr : Z)
-          (sz : Z)
+          (sz : Z) (* TODO: should be nat *)
       : memM (footprint * mem_value)
       :=
       st <- get ;;
@@ -1764,7 +1770,8 @@ Module Type CheriMemoryImpl
           || CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI)
        then expose_allocations taint
        else ret tt) ;;
-      sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+      szn <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+      let sz := Z.of_nat szn in
       let fp := FP Read (AddressValue.of_Z addr) sz in
       match bs' with
       | [] =>
@@ -1784,7 +1791,7 @@ Module Type CheriMemoryImpl
     let do_load_cap
           (alloc_id_opt : option storage_instance_id)
           (c : C.t)
-          (sz : Z)
+          (sz : Z) (* TODO: should be nat *)
       : memM (footprint * mem_value)
       :=
       cap_check loc c 0 ReadIntent sz ;;
@@ -1806,7 +1813,7 @@ Module Type CheriMemoryImpl
           then fail loc (MerrAccess LoadAccess AtomicMemberof)
           else
             (sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-             do_load_cap (Some alloc_id) c sz)
+             do_load_cap (Some alloc_id) c (Z.of_nat sz))
         else
           fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     in
@@ -1846,7 +1853,7 @@ Module Type CheriMemoryImpl
           raise "ill-formed value"
       | MVarray ((mval::_) as mvals) =>
           mt <- typeof mval ;;
-          ret (CoqCtype.Array mt (Some (Z.of_nat (List.length mvals))))
+          ret (CoqCtype.Array mt (Some (List.length mvals)))
       | MVstruct tag_sym _ => ret (CoqCtype.Struct tag_sym)
       | MVunion tag_sym _ _ => ret (CoqCtype.Union tag_sym)
       end ;;
@@ -1882,7 +1889,8 @@ Module Type CheriMemoryImpl
         : memM footprint
         :=
         nsz <- serr2InternalErr (sizeof DEFAULT_FUEL None cty) ;;
-        cap_check loc c_value 0 WriteIntent nsz ;;
+        let sz := Z.of_nat nsz in
+        cap_check loc c_value 0 WriteIntent sz ;;
         let addr := (cap_to_Z c_value) in
 
         st <- get ;;
@@ -1893,7 +1901,7 @@ Module Type CheriMemoryImpl
         let bytemap := zmap_add_list_at st.(bytemap) pre_bs addr in
         put (mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta st)
         ;;
-        ret (FP Write (AddressValue.of_Z addr) nsz)
+        ret (FP Write (AddressValue.of_Z addr) sz)
       in
 
       let store_concrete alloc_id c :=
@@ -2227,7 +2235,7 @@ Module Type CheriMemoryImpl
         | _ => diff_ty
         end in
       sz <- serr2InternalErr (sizeof DEFAULT_FUEL None diff_ty') ;;
-      ret (IV (Z.div (addr1 - addr2) sz))
+      ret (IV (Z.div (addr1 - addr2) (Z.of_nat sz)))
     in
     let error_postcond := fail loc MerrPtrdiff
     in
@@ -2354,7 +2362,7 @@ Module Type CheriMemoryImpl
                  "called isWellAligned_ptrval on function pointer")
         | PV _ (PVconcrete addr) =>
             sz <- serr2InternalErr (alignof DEFAULT_FUEL None ref_ty) ;;
-            ret (Z.eqb (Z.modulo (cap_to_Z addr) sz) 0)
+            ret (Z.eqb (Z.modulo (cap_to_Z addr) (Z.of_nat sz)) 0)
         end
     end.
 
@@ -2440,7 +2448,8 @@ Module Type CheriMemoryImpl
     (ival : integer_value)
     : serr (sum mem_error integer_value)
     :=
-    nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity2) ;;
+    zbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity2) ;;
+    let nbytes := Z.of_nat zbytes in
     let '(min_ity2, max_ity2) :=
       let nbits := Z.mul 8 nbytes in
       let is_signed := is_signed_ity DEFAULT_FUEL ity2 in
@@ -2499,19 +2508,20 @@ Module Type CheriMemoryImpl
         ret (IV (unsigned_max (Z.of_nat C.sizeof_ptraddr)))
     | _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
+        let z_value := Z.of_nat n_value in
         match ity with
         | CoqIntegerType.Char =>
             if IMP.get.(CoqImplementation.is_signed_ity) CoqIntegerType.Char
-            then ret (IV (signed_max n_value))
-            else ret (IV (unsigned_max n_value))
-        | CoqIntegerType.Bool => ret (IV (unsigned_max n_value))
+            then ret (IV (signed_max z_value))
+            else ret (IV (unsigned_max z_value))
+        | CoqIntegerType.Bool => ret (IV (unsigned_max z_value))
         | CoqIntegerType.Size_t
         | CoqIntegerType.Wchar_t
-        | CoqIntegerType.Unsigned _ => ret (IV (unsigned_max n_value))
+        | CoqIntegerType.Unsigned _ => ret (IV (unsigned_max z_value))
         | CoqIntegerType.Ptrdiff_t
         | CoqIntegerType.Wint_t
-        | CoqIntegerType.Signed _ => ret (IV (signed_max n_value))
-        | CoqIntegerType.Ptraddr_t => ret (IV (unsigned_max n_value))
+        | CoqIntegerType.Signed _ => ret (IV (signed_max z_value))
+        | CoqIntegerType.Ptraddr_t => ret (IV (unsigned_max z_value))
         | CoqIntegerType.Enum _ => ret (IV (signed_max 4))
         end
     end.
@@ -2536,7 +2546,7 @@ Module Type CheriMemoryImpl
     | CoqIntegerType.Ptrdiff_t
     | CoqIntegerType.Signed _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
-        ret (IV (signed_min n_value))
+        ret (IV (signed_min (Z.of_nat n_value)))
     | CoqIntegerType.Ptraddr_t => ret (IV 0)
     | CoqIntegerType.Enum _ => ret (IV (signed_min 4))
     end.
@@ -2698,7 +2708,8 @@ Module Type CheriMemoryImpl
     : memM pointer_value
     :=
     let ival := num_of_int ival_int in
-    sz <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+    szn <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+    let sz := Z.of_nat szn in
     let offset := Z.mul sz ival
     in
     let shift_concrete c_value shifted_addr alloc_id prov :=
@@ -2756,7 +2767,7 @@ Module Type CheriMemoryImpl
       let '(ident, _, _) := x in
       ident_equal ident memb_ident in
     match List.find pred xs with
-    | Some (_, _, offset) => ret (IV offset)
+    | Some (_, _, offset) => ret (IV (Z.of_nat offset))
     | None =>
         raise "offsetof_ival: invalid memb_ident"
     end.
@@ -2868,7 +2879,7 @@ Module Type CheriMemoryImpl
     let size_z := num_of_int size_int in
     memcpy_args_check loc ptrval1 ptrval2 size_z ;;
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
-    let pointer_sizeof := IMP.get.(sizeof_pointer) in
+    let pointer_sizeof := Z.of_nat (IMP.get.(sizeof_pointer)) in
     let (q,_) := quomod size_z pointer_sizeof in
     let size_n_bottom_aligned := Z.mul q pointer_sizeof in
     memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat size_n_bottom_aligned).
@@ -3116,12 +3127,12 @@ Module Type CheriMemoryImpl
   Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
     :=
     sz <- sizeof DEFAULT_FUEL None ty ;;
-    ret (IV sz).
+    ret (IV (Z.of_nat sz)).
 
   Definition alignof_ival (ty: CoqCtype.ctype): serr integer_value
     :=
     a <- alignof DEFAULT_FUEL None ty ;;
-    ret (IV a).
+    ret (IV (Z.of_nat a)).
 
   Definition bitwise_complement_ival
     (ty : CoqIntegerType.integerType)
@@ -3196,7 +3207,8 @@ Module Type CheriMemoryImpl
         ret (IV (if eq_fval fval zero_fval then 0 else 1))
     | _ =>
         nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
-        let nbits := Z.mul 8 nbytes in
+        let zbytes := Z.of_nat nbytes in
+        let nbits := Z.mul 8 zbytes in
         is_signed <- option2serr "no is_signed_ity" (is_signed_ity DEFAULT_FUEL ity) ;;
         let _:bool := is_signed in (* hack to hint type checker *)
         let '(min, max) :=
@@ -3479,7 +3491,7 @@ Module Type CheriMemoryImpl
                           =>
                             iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
                             sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
-                            bytes_value <- serr2InternalErr (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
+                            bytes_value <- serr2InternalErr (bytes_of_Z iss sz n_value) ;;
                             let bits := bool_bits_of_bytes bytes_value in
                             match Permissions.of_list bits with
                             | None =>

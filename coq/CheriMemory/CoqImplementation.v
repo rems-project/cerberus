@@ -7,21 +7,20 @@ Require Import Lia.
 Require Import CoqIntegerType.
 Require Import CoqCtype.
 
-Local Open Scope Z_scope.
 Require Import AltBinNotations.
 
 
 Record implementation := {
     name: string;
     details: string;
-    sizeof_pointer: Z;
-    alignof_pointer: Z;
+    sizeof_pointer: nat;
+    alignof_pointer: nat;
     is_signed_ity: integerType -> bool;
-    sizeof_ity: integerType -> option Z;
+    sizeof_ity: integerType -> option nat;
     precision_ity: integerType -> option Z;
-    sizeof_fty: floatingType -> option Z;
-    alignof_ity: integerType -> Z;
-    alignof_fty: floatingType -> Z;
+    sizeof_fty: floatingType -> option nat;
+    alignof_ity: integerType -> nat;
+    alignof_fty: floatingType -> nat;
     typeof_enum: CoqSymbol.sym -> integerType;
   }.
 
@@ -67,7 +66,7 @@ Module MorelloImpl : Implementation.
             | LongLong => 8
             | IntN_t n
             | Int_leastN_t n
-            | Int_fastN_t n => Z.div (Z.of_nat n) 8
+            | Int_fastN_t n => Nat.div n 8
             | Intmax_t
             | Intptr_t => 16
             end)
@@ -79,13 +78,14 @@ Module MorelloImpl : Implementation.
         | Ptraddr_t => Some 8
         end.
 
-  Definition precision_ity_impl ity :=
+  Definition precision_ity_impl ity : option Z :=
     match sizeof_ity_impl ity with
     | Some n =>
+        let zn := Z.of_nat n in
         if is_signed_ity_impl ity then
-          Some (8*n-1)
+          Some (8*zn-1)%Z
         else
-          Some (8*n)
+          Some (8*zn)%Z
     | None =>
         None
     end.
@@ -100,7 +100,7 @@ Module MorelloImpl : Implementation.
            Some 8 (* TODO:hack ==> 16 *)
        end.
 
-  Definition alignof_fty_impl x
+  Definition alignof_fty_impl x : nat
     := match x with
        | RealFloating Float =>
            8 (* TODO:hack ==> 4 *)
@@ -110,7 +110,7 @@ Module MorelloImpl : Implementation.
            8 (* TODO:hack ==> 16 *)
        end.
 
-  Definition alignof_ity_impl x :=
+  Definition alignof_ity_impl x : nat :=
     match x with
     | Char
     | Bool => 1
@@ -124,7 +124,7 @@ Module MorelloImpl : Implementation.
          | LongLong => 8
          | IntN_t n
          | Int_leastN_t n
-         | Int_fastN_t n => Z.div (Z.of_nat n) 8
+         | Int_fastN_t n => Nat.div n 8%nat
          | Intmax_t
          | Intptr_t => 16
          end)

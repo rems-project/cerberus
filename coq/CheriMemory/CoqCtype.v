@@ -75,7 +75,7 @@ Inductive ctype' : Type := (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*)
     (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
     (* the qualifiers are that of the element type (Â§6.7.3#9) *)
     (* STD Â§6.2.5#20, bullet 1 *)
-  | Array:  ctype  ->  (option  Z  ) -> ctype'
+  | Array:  ctype  ->  (option  nat ) -> ctype'
     (* NOTE: the qualifiers associated to a ctype in the
               list of parameters is that of the parameter lvalue. For example if
               we have a parameter with type "restrict pointer to a const char",
@@ -249,7 +249,7 @@ Fixpoint ctypeEqual (fuel:nat) (cty0 cty1: ctype) : serr bool
               ret (basicTypeEqual bty1 bty2)
           | Array ty1 n1_opt,  Array ty2 n2_opt =>
               e <- ctypeEqual fuel ty1 ty2 ;;
-              ret (e && (maybeEqualBy Z.eqb n1_opt n2_opt))
+              ret (e && (maybeEqualBy Nat.eqb n1_opt n2_opt))
           | Function (qs1,  ty1) params1 b1, Function (qs2,  ty2) params2 b2 =>
               e0 <- ctypeEqual fuel ty1 ty2 ;;
               e1 <- monadic_fold_left2
