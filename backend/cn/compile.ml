@@ -281,7 +281,7 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
     | CN_struct tag_sym ->
         Struct tag_sym
     | CN_record members ->
-        SBT.Record (List.map (fun (bt,m) -> (m, self bt)) members)
+        SBT.Record (List.map (fun (m,bt) -> (m, self bt)) members)
     | CN_datatype dt_sym ->
         Datatype dt_sym
     | CN_map (bTy1, bTy2) ->

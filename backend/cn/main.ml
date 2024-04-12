@@ -85,14 +85,15 @@ let frontend incl_dirs incl_files astprints do_peval filename state_file =
   return (prog4, (markers_env, ail_prog), statement_locs)
 
 
-let handle_frontend_error = function
+let handle_frontend_error ~expect_failure = function
   | CF.Exception.Exception ((_, CF.Errors.CORE_TYPING _) as err) ->
      prerr_string (CF.Pp_errors.to_string err);
      prerr_endline @@ Cerb_colour.(ansi_format ~err:true [Bold; Red] "error: ") ^
        "this is likely a bug in the Core elaboration.";
      exit 2
   | CF.Exception.Exception err ->
-     prerr_endline (CF.Pp_errors.to_string err); exit 2
+     prerr_endline (CF.Pp_errors.to_string err);
+     exit (if expect_failure then 0 else 2)
   | CF.Exception.Result result ->
      result
 
@@ -163,7 +164,7 @@ let main
   end;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
-    handle_frontend_error
+    handle_frontend_error ~expect_failure
       (frontend incl_dirs incl_files astprints use_peval filename state_file)
   in
   Cerb_debug.maybe_open_csv_timing_file ();

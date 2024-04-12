@@ -4083,6 +4083,21 @@ let rec register_labels (CabsStatement _ _ stmt_) =
 
 (* BEGIN CN *)
 open Cn
+
+let unique_record_members f members =
+    E.foldlM (fun acc (member, thing) ->
+      match List.lookup member acc with
+        | Just _ ->
+          E.fail (Loc.locOf member) (Errors.Desugar_CN (CNErr_duplicate_field member))
+        | Nothing ->
+          f thing >>= fun thing ->
+          E.return ((member, thing) :: acc)
+      end) [] members
+
+let sort_record_members f members =
+    let cmp (mem1, _) (mem2, _) = Show.show mem1 < Show.show mem2 in
+    Sorting.sortBy cmp <$> unique_record_members f members
+
 let rec desugar_cn_base_type loc bTy =
   match bTy with
     | CN_unit ->
@@ -4109,11 +4124,7 @@ let rec desugar_cn_base_type loc bTy =
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
         end
     | CN_record members ->
-       E.mapM (fun (m_bt,member) ->
-           desugar_cn_base_type (Loc.locOf member) m_bt >>= fun m_bt' ->
-           E.return (m_bt',member)
-         ) members >>= fun members' ->
-       E.return (CN_record members')
+      CN_record <$> sort_record_members (desugar_cn_base_type loc) members
     | CN_datatype ident ->
        E.resolve_cn_ident CN_datatype_nm ident >>= fun sym_resolved ->
        let sym = Cn.ensure_not_c_variable sym_resolved in
@@ -4174,17 +4185,10 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
         CNExpr_memberof <$> desugar_cn_expr e
                         <*> (E.return ident_membr)
     | CNExpr_record members ->
-        E.mapM (fun (id, e) ->
-          desugar_cn_expr e >>= fun e' ->
-          E.return (id, e')
-          ) members >>= fun members' ->
-      E.return (CNExpr_record members')
+      CNExpr_record <$> sort_record_members desugar_cn_expr members
     | CNExpr_memberupdates e updates ->
         CNExpr_memberupdates <$> desugar_cn_expr e
-                            <*> E.mapM (fun (membr, v) -> 
-                                    desugar_cn_expr v >>= fun v ->
-                                    E.return (membr, v)
-                                  ) updates
+                             <*> unique_record_members desugar_cn_expr updates
     | CNExpr_arrayindexupdates e updates ->
         CNExpr_arrayindexupdates <$> desugar_cn_expr e
                             <*> E.mapM (fun (i, v) -> 

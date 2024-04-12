@@ -2268,13 +2268,6 @@ cn_type_synonym:
     { Symbol.Identifier (Cerb_location.point $startpos(str), str) }
 | str= NAME TYPE
     { Symbol.Identifier (Cerb_location.point $startpos(str), str) }
-/* %inline cn_u_variable: */
-/* | str= UNAME VARIABLE */
-/*     { Symbol.Identifier (Cerb_location.point $startpos(str), str) } */
-/* %inline cn_l_variable: */
-/* | str= LNAME VARIABLE */
-/*     { Symbol.Identifier (Cerb_location.point $startpos(str), str) } */
-
 
 args:
 | xs= separated_list(COMMA, pair(base_type, cn_variable))
@@ -2282,8 +2275,12 @@ args:
 ;
 
 (* copying from "args" *)
+%inline base_type_cn_variable:
+| bt=base_type str=cn_variable
+    { (str, bt) }
+
 nonempty_args:
-| xs= separated_nonempty_list(COMMA, pair(base_type, cn_variable))
+| xs= separated_nonempty_list(COMMA, base_type_cn_variable)
     { xs }
 ;
 

@@ -29,7 +29,7 @@ type cn_base_type 'a =
   | CN_loc
   | CN_alloc_id
   | CN_struct of 'a
-  | CN_record of list (cn_base_type 'a * Symbol.identifier)
+  | CN_record of list (Symbol.identifier * cn_base_type 'a)
   | CN_datatype of 'a
   | CN_map of cn_base_type 'a * cn_base_type 'a
   | CN_list of cn_base_type 'a
@@ -282,6 +282,7 @@ type cn_error =
   | CNErr_unknown_c_identifier of Symbol.identifier
   | CNErr_missing_oarg of Symbol.sym
   | CNErr_general of string
+  | CNErr_duplicate_field of Symbol.identifier
 
 type cn_typing_error =
   | CNErr_typing_TODO

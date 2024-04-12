@@ -42,6 +42,8 @@ let string_of_error = function
       "the C symbol `" ^ str ^ "' is unknown"
   | CNErr_missing_oarg sym ->
       "missing an assignment for the output argument `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
+  | CNErr_duplicate_field (Symbol.Identifier (_, str)) ->
+      "field `" ^ str ^ "' duplicated"
   | CNErr_general s -> s
     
 
@@ -72,7 +74,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_struct ident ->
         pp_type_keyword "struct" ^^^ P.squotes (Conf.pp_ident ident)
     | CN_record members ->
-        pp_type_keyword "record" ^^^ P.braces (P.separate_map P.comma (fun (bt, id) -> pp_base_type bt ^^^  pp_identifier id) members)
+        pp_type_keyword "record" ^^^ P.braces (P.separate_map P.comma (fun (id, bt) -> pp_base_type bt ^^^  pp_identifier id) members)
     | CN_datatype ident ->
         pp_type_keyword "datatype" ^^^ P.squotes (Conf.pp_ident ident)
     | CN_map (bTy1, bTy2) ->
