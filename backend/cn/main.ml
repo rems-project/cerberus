@@ -206,6 +206,20 @@ let main
             let c_structs = Executable_spec_internal.print_c_structs ail_prog.tag_definitions in
             let cn_converted_structs = Executable_spec_internal.generate_cn_versions_of_structs ail_prog.tag_definitions in 
 
+            let rec group_toplevel_defs new_list = function 
+              | [] -> new_list
+              | (loc, strs) :: xs -> 
+                let matching_elems = List.filter (fun (toplevel_loc, _) -> loc == toplevel_loc) new_list in
+                if List.is_empty matching_elems then 
+                  group_toplevel_defs ((loc, strs) :: new_list) xs
+                else
+                  (* Unsafe *)
+                  let (_, toplevel_strs) = List.nth matching_elems 0 in 
+                  let non_matching_elems = List.filter (fun (toplevel_loc, _) -> loc != toplevel_loc) new_list in
+                  group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs
+            in
+
+            
             (* TODO: Remove - hacky *)
             let cn_utils_header_pair = ("../executable-spec/cn_utils.h", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
@@ -290,11 +304,14 @@ let main
             let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
             (* let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in *)
 
+            let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls) in
+
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=executable_spec.pre_post
-                ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)}
+                (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
+                ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs @ toplevel_locs_and_defs)}
               )
             with
             | Ok () ->
