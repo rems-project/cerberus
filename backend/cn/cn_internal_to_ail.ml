@@ -1015,7 +1015,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let union_member = create_member (mk_ctype C.(Union union_sym), Id.id "u") in
 
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
-  (cn_datatype.cn_dt_loc, enum :: structs)
+  (cn_datatype.cn_dt_magic_loc, enum :: structs)
 
 let generate_datatype_equality_function (cn_datatype : cn_datatype) =
   (* 
@@ -1400,9 +1400,9 @@ let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition))
   let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) lf_def.args in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
-  (* let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> String.equal (Sym.pp_string cn_fun.cn_func_name) (Sym.pp_string fn_sym)) cn_functions in *)
-    (* Unsafe - check if list has an element *)
-  (* let loc = (List.nth matched_cn_functions 0).cn_func_loc in  *)
+  let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> String.equal (Sym.pp_string cn_fun.cn_func_name) (Sym.pp_string fn_sym)) cn_functions in
+  (* Unsafe - check if list has an element *)
+  let loc = (List.nth matched_cn_functions 0).cn_func_magic_loc in 
   (* Generating function declaration *)
   let decl = (fn_sym, (lf_def.loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
@@ -1410,7 +1410,7 @@ let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition))
     | Some ail_func_body -> Some (fn_sym, (lf_def.loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, ail_func_body))))
     | None -> None
   in
-  (((lf_def.loc, decl), def), ail_record_opt)
+  (((loc, decl), def), ail_record_opt)
 
 
   
@@ -1452,7 +1452,7 @@ let rec cn_to_ail_lat_internal dts pred_sym_opt globals ownership_ctypes preds =
 
 
 
-let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definition)) dts globals ots preds = 
+let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definition)) dts globals ots preds cn_preds = 
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
 
   let rec clause_translate (clauses : RP.clause list) ownership_ctypes = 
@@ -1486,14 +1486,18 @@ let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definit
   let decl = (pred_sym, (rp_def.loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
   let def = (pred_sym, (rp_def.loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, pred_body)))) in
-  (((rp_def.loc, decl), def), ail_record_opt, ownership_ctypes')
 
-let rec cn_to_ail_predicates_internal pred_def_list dts globals ots preds = 
+  let matched_cn_preds = List.filter (fun (cn_pred : (A.ail_identifier, C.ctype) Cn.cn_predicate) -> String.equal (Sym.pp_string cn_pred.cn_pred_name) (Sym.pp_string pred_sym)) cn_preds in
+  (* Unsafe - check if list has an element *)
+  let loc = (List.nth matched_cn_preds 0).cn_pred_magic_loc in 
+  (((loc, decl), def), ail_record_opt, ownership_ctypes')
+
+let rec cn_to_ail_predicates_internal pred_def_list dts globals ots preds cn_preds = 
   match pred_def_list with 
     | [] -> ([], [], ots)
     | p :: ps ->
-      let (d, r, ots') = cn_to_ail_predicate_internal p dts globals ots preds in 
-      let (ds, rs, ots'') = cn_to_ail_predicates_internal ps dts globals ots' preds in 
+      let (d, r, ots') = cn_to_ail_predicate_internal p dts globals ots preds cn_preds in 
+      let (ds, rs, ots'') = cn_to_ail_predicates_internal ps dts globals ots' preds cn_preds in 
       (d :: ds, r :: rs, ots'')
 
 
