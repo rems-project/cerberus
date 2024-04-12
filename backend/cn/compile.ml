@@ -139,41 +139,42 @@ type cn_datatype =
   (CF.Symbol.sym) CF.Cn.cn_datatype
 
 
-let pp_cnexpr_kind expr_ =
-  let open Pp in
-  match expr_ with
-  | CNExpr_const CNConst_NULL -> !^ "NULL"
-  | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
-  | CNExpr_const (CNConst_bits ((sign,n),v)) ->
-    Pp.string (Z.to_string v ^ (match sign with CN_unsigned -> "u" | CN_signed -> "i") ^ string_of_int n)
-  | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
-  | CNExpr_const CNConst_unit -> !^"void"
-  | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
-  | CNExpr_deref e -> !^ "(deref ...)"
-  | CNExpr_value_of_c_atom (sym, kind) -> parens (typ
-        (CF.Cn_ocaml.PpAil.pp_cn_c_kind kind) (Sym.pp sym))
-  | CNExpr_list es_ -> !^ "[...]"
-  | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
-  | CNExpr_record members -> !^"{ ... }"
-  | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
-  | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
-  | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
-  | CNExpr_sizeof ct -> !^ "(sizeof _)"
-  | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
-  | CNExpr_array_shift (e1, ct, e2) -> !^"(array_shift<_>(_, _)"
-  | CNExpr_membershift (e1, opt_tag, member) -> !^ "&(_ -> _)"
-  | CNExpr_addr nm -> !^ "&_"
-  | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
-  | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
-  | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
-  | CNExpr_each (sym, bt, r, e) -> !^ "(each ...)"
-  | CNExpr_match (x, ms) -> !^ "match ... {...}"
-  | CNExpr_let (s, e, body) -> !^ "let ...; ..."
-  | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
-  | CNExpr_good (ty, e) -> !^ "(good (_, _))"
-  | CNExpr_unchanged e -> !^"(unchanged (_))"
-  | CNExpr_at_env (e, es) -> !^"{_}@_"
-  | CNExpr_not e -> !^"!_"
+(* let pp_cnexpr_kind expr_ = *)
+(*   let open Pp in *)
+(*   match expr_ with *)
+(*   | CNExpr_const CNConst_NULL -> !^ "NULL" *)
+(*   | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n) *)
+(*   | CNExpr_const (CNConst_bits ((sign,n),v)) -> *)
+(*     Pp.string (Z.to_string v ^ (match sign with CN_unsigned -> "u" | CN_signed -> "i") ^ string_of_int n) *)
+(*   | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false") *)
+(*   | CNExpr_const CNConst_unit -> !^"void" *)
+(*   | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym)) *)
+(*   | CNExpr_deref e -> !^ "(deref ...)" *)
+(*   | CNExpr_value_of_c_atom (sym, kind) -> parens (typ *)
+(*         (CF.Cn_ocaml.PpAil.pp_cn_c_kind kind) (Sym.pp sym)) *)
+(*   | CNExpr_list es_ -> !^ "[...]" *)
+(*   | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs *)
+(*   | CNExpr_record members -> !^"{ ... }" *)
+(*   | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}" *)
+(*   | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]" *)
+(*   | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))" *)
+(*   | CNExpr_sizeof ct -> !^ "(sizeof _)" *)
+(*   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))" *)
+(*   | CNExpr_array_shift (e1, ct, e2) -> !^"(array_shift<_>(_, _)" *)
+(*   | CNExpr_membershift (e1, opt_tag, member) -> !^ "&(_ -> _)" *)
+(*   | CNExpr_addr nm -> !^ "&_" *)
+(*   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))" *)
+(*   | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))" *)
+(*   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})" *)
+(*   | CNExpr_each (sym, bt, r, e) -> !^ "(each ...)" *)
+(*   | CNExpr_match (x, ms) -> !^ "match ... {...}" *)
+(*   | CNExpr_let (s, e, body) -> !^ "let ...; ..." *)
+(*   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)" *)
+(*   | CNExpr_good (ty, e) -> !^ "(good (_, _))" *)
+(*   | CNExpr_unchanged e -> !^"(unchanged (_))" *)
+(*   | CNExpr_at_env (e, es) -> !^"{_}@_" *)
+(*   | CNExpr_not e -> !^"!_" *)
+(*   | CNExpr_default bt -> !^"default" *)
 
 
 let rec symset_bigunion = function
@@ -248,6 +249,9 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_expr e
   | CNExpr_not e ->
      free_in_expr e
+  | CNExpr_default _bt ->
+     SymSet.empty
+     
 
 and free_in_exprs = function
   | [] -> SymSet.empty
@@ -879,6 +883,9 @@ module EffectfulTranslation = struct
         | CNExpr_not e ->
            let@ e = self e in
            return (not_ e loc)
+        | CNExpr_default bt ->
+           let bt = translate_cn_base_type env bt in
+           return (IT (Const (Default (SBT.to_basetype bt)), bt, loc))
         | CNExpr_unchanged e ->
            let@ cur_e = self e in
            let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in

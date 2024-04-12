@@ -4287,6 +4287,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_not e ->
        desugar_cn_expr e >>= fun e ->
        E.return (CNExpr_not e)
+    | CNExpr_default bt ->
+       desugar_cn_base_type loc bt >>= fun bt ->
+       E.return (CNExpr_default bt)
   end >>= fun ret ->
   E.return (CNExpr loc ret)
 
