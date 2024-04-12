@@ -92,10 +92,6 @@ let generate_c_datatypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
         ail_dt1 :: ail_dts
   in
 
-
-  (* let ail_datatypes = List.concat ail_datatypes in *)
-
-
   let locs_and_structs = List.map (fun (loc, structs) -> (loc, List.map generate_doc_from_ail_struct structs)) ail_datatypes in
   let locs_and_struct_strs = List.map (fun (loc, ail_structs) -> (loc, CF.Pp_utils.to_plain_pretty_string (concat_map_newline ail_structs))) locs_and_structs in
   (* let structs = List.map generate_doc_from_ail_struct ail_datatypes in *)
@@ -196,7 +192,7 @@ let rec remove_duplicates eq_fun = function
 let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) ownership_ctypes =
   (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f ail_prog.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates in *)
   (* TODO: Remove passing of resource_predicates argument twice - could use counter? *)
-  let (ail_funs, ail_records_opt, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_predicates_internal resource_predicates ail_prog.cn_datatypes [] ownership_ctypes resource_predicates in 
+  let (ail_funs, ail_records_opt, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_predicates_internal resource_predicates ail_prog.cn_datatypes [] ownership_ctypes resource_predicates ail_prog.cn_predicates in 
   let (locs_and_decls, defs) = List.split ail_funs in
   let (locs, decls) = List.split locs_and_decls in
   (* Needed to make extern - using is_inline as is_extern in executable spec context *)
@@ -214,9 +210,9 @@ let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ai
 let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 
   let ail_funs = List.map Cn_internal_to_ail.generate_ownership_function ctypes in 
   let (decls, defs) = List.split ail_funs in
-  let decls = List.map (fun (sym, (loc, attrs, d)) -> (sym, (loc, attrs, make_inline d))) decls in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1) in
+  let decls = List.map (fun (sym, (loc, attrs, d)) -> (sym, (loc, attrs, make_inline d))) decls in
   let modified_prog2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in
   let doc2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog2) in
   let comment = "\n/* OWNERSHIP FUNCTIONS */\n\n" in
