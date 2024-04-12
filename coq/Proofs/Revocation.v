@@ -344,7 +344,10 @@ Module RevocationProofs.
 
       (* live allocatoins do not overlap *)
       /\ (forall alloc_id1 alloc_id2 a1 a2,
-            ZMap.MapsTo alloc_id1 a1 am -> ZMap.MapsTo alloc_id2 a2 am -> allocations_do_no_overlap a1 a2)
+            alloc_id1 <> alloc_id2 ->
+            ZMap.MapsTo alloc_id1 a1 am ->
+            ZMap.MapsTo alloc_id2 a2 am ->
+            allocations_do_no_overlap a1 a2)
 
       (* All keys in capmeta must be pointer-aligned addresses *)
       /\ zmap_forall_keys (fun addr => Z.modulo addr
@@ -353,8 +356,7 @@ Module RevocationProofs.
 
       (* [next_alloc_id] is sane *)
       /\
-        (forall alloc_id, ZMap.In alloc_id am ->  alloc_id < m.(next_alloc_id))
-
+        zmap_forall_keys (fun alloc_id => alloc_id < m.(next_alloc_id)) am
       (* [last_address] is sane *)
       /\
         zmap_forall (fun a => AddressValue.to_Z a.(base) <= AddressValue.to_Z m.(last_address)) am.
@@ -2147,7 +2149,7 @@ Module RevocationProofs.
         apply empty_mapsto_iff in H;
           contradiction.
       -
-        intros alloc_id1 alloc_id2 a1 a2 H H0.
+        intros alloc_id1 alloc_id2 a1 a2 NA H H0.
         apply empty_mapsto_iff in H;
           contradiction.
       -
@@ -2864,11 +2866,12 @@ Module RevocationProofs.
           apply ZMap.remove_3 in H.
           eapply Bdead;eauto.
         +
-          intros alloc_id1 alloc_id2 a1 a2 H H0.
+          intros alloc_id1 alloc_id2 a1 a2 NA H H0.
           apply ZMap.remove_3 in H0, H.
           eapply Bnooverlap.
-          eapply H.
-          eapply H0.
+          eauto.
+          eauto.
+          eauto.
         +
           apply Balign.
         +
@@ -3184,10 +3187,12 @@ Module RevocationProofs.
       destruct_base_mem_invariant MIbase.
       split.
       -
+        (* base invariant *)
         clear MIcap.
         unfold zmap_update.
-        split;cbn.
+        repeat split;cbn.
         +
+          (* Bdead *)
           clear - Bdead Heqnewallocations.
           generalize dependent (allocations m0).
           clear m0.
@@ -3219,12 +3224,11 @@ Module RevocationProofs.
             apply zmap_update_MapsTo_not_at_k in H;auto.
             eapply Bdead; eauto.
         +
-          clear Bdead.
-          split;[|assumption].
-          clear Balign.
+          (* Bnooverlap *)
+          clear Bdead Balign Bnextallocid Blastaddr.
           generalize dependent (allocations m0).
           clear m0.
-          intros old Bnooverlap Heqnewallocations alloc_id1 alloc_id2 a1 a2 M1 M2.
+          intros old Bnooverlap Heqnewallocations alloc_id1 alloc_id2 a1 a2 NA M1 M2.
           rename s0 into alloc_id.
           subst.
 
@@ -3251,12 +3255,86 @@ Module RevocationProofs.
               end.
 
           destruct (Z.eq_dec alloc_id1 alloc_id), (Z.eq_dec alloc_id2 alloc_id),
-            (ZMap.find alloc_id1 old) eqn:F1, (ZMap.find alloc_id2 old) eqn:F2; subst; try solve_cases.
+            (ZMap.find alloc_id1 old) eqn:F1, (ZMap.find alloc_id2 old) eqn:F2; subst ; try solve_cases.
+
           all:
             unfold allocations_do_no_overlap in *;
             unfold allocation_with_prefix;
-            cbn;
-            eapply Bnooverlap;eauto.
+            cbn; eauto.
+        +
+          (* Balign *)
+          auto.
+        +
+          (* Bnextallocid *)
+          clear - Bnextallocid Heqnewallocations.
+          subst newallocations.
+          rename s0 into alloc_id'.
+          intros alloc_id.
+          destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
+          *
+            subst alloc_id'.
+            intros H.
+            unfold zmap_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply Bnextallocid.
+              apply in_find_iff.
+              rewrite Heqo0.
+              auto.
+            --
+              apply ZMap.remove_1 in H.
+              tauto.
+              reflexivity.
+          *
+            intros H.
+            unfold zmap_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply Bnextallocid.
+              apply add_neq_in_iff in H;auto.
+              apply remove_neq_in_iff in H;auto.
+            --
+              apply remove_neq_in_iff in H;auto.
+        +
+          (* Blastaddr *)
+          clear - Blastaddr Heqnewallocations.
+          subst newallocations.
+          rename s0 into alloc_id'.
+          intros alloc_id a.
+          destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
+          *
+            subst alloc_id'.
+            intros H.
+            unfold zmap_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply ZMap.find_2 in Heqo0.
+              apply add_mapsto_iff in H.
+              destruct H;[|destruct H; congruence].
+              destruct H as [_ H3].
+              subst a0.
+              specialize (Blastaddr alloc_id a1 Heqo0).
+              unfold allocation_with_prefix in H1.
+              destruct a.
+              cbn in *.
+              invc H1.
+              auto.
+            --
+              apply zmap_mapsto_in in H.
+              apply ZMap.remove_1 in H.
+              tauto.
+              reflexivity.
+          *
+            intros H.
+            unfold zmap_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply add_neq_mapsto_iff in H; auto.
+              apply remove_neq_mapsto_iff in H; auto.
+              eauto.
+            --
+              apply remove_neq_mapsto_iff in H; auto.
+              eauto.
       -
         rename c into ty, s0 into alloc_id.
         clear Bdead Bnooverlap Balign.
