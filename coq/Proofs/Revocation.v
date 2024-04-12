@@ -323,6 +323,7 @@ Module RevocationProofs.
     let a2_size := Z.of_nat a2.(size) in
     (a1_base + a1_size <= a2_base) \/ (a2_base + a2_size <= a1_base) \/ a1_size = 0 \/ a2_size = 0.
 
+
   Module Type CheriMemoryImplWithProofs
     (SW: CerbSwitchesDefs) <:
     CheriMemoryImpl(MemCommonExe)(Capability_GS)(MorelloImpl)(CheriMemoryTypesExe)(AbstTagDefs)(SW).
@@ -339,7 +340,7 @@ Module RevocationProofs.
       (* All allocations are live. [allocation.(is_dead)] is only used
       for Conucopia. For others, the dead allocations are immediately
       removed.  *)
-      (forall alloc_id a, ZMap.MapsTo alloc_id a am ->  a.(is_dead) = false)
+      zmap_forall (fun a => a.(is_dead) = false) am
 
       (* live allocatoins do not overlap *)
       /\ (forall alloc_id1 alloc_id2 a1 a2,
@@ -348,14 +349,24 @@ Module RevocationProofs.
       (* All keys in capmeta must be pointer-aligned addresses *)
       /\ zmap_forall_keys (fun addr => Z.modulo addr
                                      (Z.of_nat MorelloImpl.get.(alignof_pointer))
-                                   = 0) cm.
+                                   = 0) cm
+
+      (* [next_alloc_id] is sane *)
+      /\
+        (forall alloc_id, ZMap.In alloc_id am ->  alloc_id < m.(next_alloc_id))
+
+      (* [last_address] is sane *)
+      /\
+        zmap_forall (fun a => AddressValue.to_Z a.(base) <= AddressValue.to_Z m.(last_address)) am.
 
     Ltac destruct_base_mem_invariant H
       :=
       let Bdead := fresh "Bdead" in
       let Bnooverlap := fresh "Bnooverlap" in
       let Balign := fresh "Balign" in
-      destruct H as [Bdead [Bnooverlap Balign]].
+      let Bnextallocid := fresh "Bnextallocid" in
+      let Blastaddr := fresh "Blastaddr" in
+      destruct H as [Bdead [Bnooverlap [Balign [Bnextallocid Blastaddr]]]].
 
     Instance memM_MonadLaws: MonadLaws (memM_monad).
     Proof.
@@ -2145,6 +2156,14 @@ Module RevocationProofs.
         apply empty_in_iff in H;
           contradiction.
       -
+        intros alloc_id H.
+        apply empty_in_iff in H.
+        tauto.
+      -
+        intros k a H.
+        apply empty_mapsto_iff in H.
+        tauto.
+      -
         apply empty_mapsto_iff in H;
           contradiction.
       -
@@ -2169,9 +2188,8 @@ Module RevocationProofs.
       -
         (* base invariant *)
         clear MIcap.
-        split.
-        auto.
-        split;auto.
+        repeat split;auto.
+        repeat split;auto.
 
         (* alignment proof *)
         intros a E.
@@ -2201,32 +2219,6 @@ Module RevocationProofs.
           apply MIcap.
         +
           inversion E.
-    Qed.
-
-    Lemma mem_state_with_next_alloc_id_preserves:
-      forall m,
-        mem_invariant m ->
-        (forall x, mem_invariant (mem_state_with_next_alloc_id x m)).
-    Proof.
-      intros m H x.
-      destruct H as [MIbase MIcap].
-      destruct_base_mem_invariant MIbase.
-      split;cbn.
-      split;cbn;auto.
-      auto.
-    Qed.
-
-    Lemma mem_state_with_last_address_preserves:
-      forall m,
-        mem_invariant m ->
-        (forall x, mem_invariant (mem_state_with_last_address x m)).
-    Proof.
-      intros m H x.
-      destruct H as [MIbase MIcap].
-      destruct_base_mem_invariant MIbase.
-      split;cbn.
-      split;cbn;auto.
-      auto.
     Qed.
 
     (*
@@ -2879,6 +2871,18 @@ Module RevocationProofs.
           eapply H0.
         +
           apply Balign.
+        +
+          intros alloc_id' H.
+          destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
+          *
+            apply (ZMap.remove_1 E) in H.
+            inv H.
+          *
+            rewrite (remove_neq_in_iff _ NE) in H.
+            eauto.
+        +
+          apply zmap_forall_remove.
+          auto.
       -
         clear ISbase'.
         intros addr g A bs F.
@@ -2969,55 +2973,44 @@ Module RevocationProofs.
         inl_inr_inv.
         subst m.
         clear H.
-        break_match.
+        break_match;[|preserves_steps].
+        break_let.
+        apply bind_PreservesInvariant_same_state.
+        repeat break_match; typeclasses eauto.
+        intros u. destruct u.
+        apply bind_PreservesInvariant_same_state.
+        repeat break_match; typeclasses eauto.
+        intros u. destruct u.
+        apply bind_PreservesInvariant_full.
+        intros _ s' x0 H0.
+        pose proof (revoke_pointers_PreservesInvariant s a) as R.
+        specialize (R A).
+        unfold post_exec_invariant, lift_sum_p in R.
+        break_match_hyp.
         +
+          unfold execErrS in Heqs0.
           break_let.
-
-          apply bind_PreservesInvariant_same_state.
-          repeat break_match; typeclasses eauto.
-          intros u. destruct u.
-          apply bind_PreservesInvariant_same_state.
-          repeat break_match; typeclasses eauto.
-          intros u. destruct u.
-          preserves_step.
-          *
-            apply bind_PreservesInvariant_full.
-            intros _ s' x0 H0.
-
-            pose proof (revoke_pointers_PreservesInvariant s a) as R.
-            specialize (R A).
-            unfold post_exec_invariant, lift_sum_p in R.
-            break_match_hyp.
-            ++
-              unfold execErrS in Heqs0.
-              break_let.
-              tuple_inversion.
-              inl_inr.
-            ++
-              unfold execErrS in Heqs0.
-              break_let.
-              tuple_inversion.
-              inl_inr_inv.
-              subst m.
-              destruct x0.
-              rename a into alloc, z into alloc_id.
-              apply find_live_allocation_res_consistent in Heqp0.
-              (* It looks like we have everything we need here *)
-              unfold post_exec_invariant, lift_sum_p.
-              break_match_goal;[trivial|].
-
-              unfold execErrS in Heqs0.
-              break_let.
-              break_match_hyp;[inl_inr|inl_inr_inv].
-              subst.
-              destruct u.
-              eapply remove_revoked_allocation_preserves; eauto.
-          *
-            preserves_steps.
-            apply mem_state_with_last_address_preserves.
-            assumption.
+          tuple_inversion.
+          inl_inr.
         +
-          preserves_step.
+          unfold execErrS in Heqs0.
+          break_let.
+          tuple_inversion.
+          inl_inr_inv.
+          subst m.
+          destruct x0.
+          rename a into alloc, z into alloc_id.
+          apply find_live_allocation_res_consistent in Heqp0.
+          (* It looks like we have everything we need here *)
+          unfold post_exec_invariant, lift_sum_p.
+          break_match_goal;[trivial|].
+
+          unfold execErrS in Heqs0.
+          break_let.
+          break_match_hyp;[inl_inr|inl_inr_inv].
+          subst.
+          destruct u.
+          eapply remove_revoked_allocation_preserves; eauto.
     Qed.
     Opaque kill.
 
@@ -4117,38 +4110,6 @@ va_*
         intros addr g H bs H0.
         apply empty_mapsto_iff in H;
           contradiction.
-    Qed.
-
-    (* this lemma is exactly same as non-PNVI but I do not see how to re-use the proof,
-       as they are using different formulations of the [mem_invariant].
-     *)
-    Lemma mem_state_with_next_alloc_id_preserves:
-      forall m,
-        mem_invariant m ->
-        (forall x, mem_invariant (mem_state_with_next_alloc_id x m)).
-    Proof.
-      intros m H x.
-      destruct H as [MIbase MIcap].
-      destruct_base_mem_invariant MIbase.
-      split;cbn.
-      split;cbn;auto.
-      auto.
-    Qed.
-
-    (* this lemma is exactly same as non-PNVI but I do not see how to re-use the proof,
-       as they are using different formulations of the [mem_invariant].
-     *)
-    Lemma mem_state_with_last_address_preserves:
-      forall m,
-        mem_invariant m ->
-        (forall x, mem_invariant (mem_state_with_last_address x m)).
-    Proof.
-      intros m H x.
-      destruct H as [MIbase MIcap].
-      destruct_base_mem_invariant MIbase.
-      split;cbn.
-      split;cbn;auto.
-      auto.
     Qed.
 
     (* this lemma is exactly same as non-PNVI but I do not see how to re-use the proof,
