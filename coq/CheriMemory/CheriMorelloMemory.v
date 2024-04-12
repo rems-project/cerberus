@@ -1510,8 +1510,7 @@ Module Type CheriMemoryImpl
               (* no revocation. remove allocation *)
               remove_allocation alloc_id
       )
-      ;;
-      try_memory_reuse alloc
+      (* ;;  try_memory_reuse alloc *)
     in
 
     (* check if [is_dyn] parameter matches [allocation.(is_dynamic)] *)
