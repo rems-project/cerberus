@@ -4220,9 +4220,8 @@ va_*
       -
         (* base invariant *)
         clear MIcap.
-        split.
-        auto.
-        split;auto.
+        repeat split;auto.
+        repeat split;auto.
 
         (* alignment proof *)
         intros a E.
