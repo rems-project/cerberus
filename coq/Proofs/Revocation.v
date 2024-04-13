@@ -4253,32 +4253,116 @@ va_*
           inversion E.
     Qed.
 
-    (*
-      TODO: re-state and re-prove
+    (* TODO: move *)
+    Lemma AddressValue_of_Z_to_Z:
+      forall x, AddressValue.of_Z  (AddressValue.to_Z x) = x.
+    Proof.
+      intros x.
+      unfold AddressValue.of_Z, AddressValue.to_Z.
+      unfold bv_to_Z_unsigned.
+      apply bitvector.Z_to_bv_bv_unsigned.
+    Qed.
 
-    Instance allocator_PreservesInvariant (size align : Z):
+    Instance allocator_PreservesInvariant
+      (size: nat)
+      (align: Z)
+      (is_dynamic: bool)
+      (pref: CoqSymbol.prefix)
+      (ty: option CoqCtype.ctype)
+      (ro_status: readonly_status)
+      :
       forall s,
-        PreservesInvariant mem_invariant s (allocator size align).
+        PreservesInvariant mem_invariant s (allocator size align is_dynamic pref ty ro_status).
     Proof.
       intros s.
       unfold allocator.
-      apply bind_get_PreservesInvariant.
-      apply bind_PreservesInvariant_same_state.
-
+      apply bind_PreservesInvariant_value_SameState;[same_state_step|].
+      intros I m H.
+      Transparent get.
+      unfold get, State_errS in H.
+      Opaque get.
+      tuple_inversion.
       break_let.
-      break_match.
-      apply fail_noloc_SameState.
-      apply ret_SameState.
-      intros x.
-      apply put_PreservesInvariant'.
-      intros I.
-      apply mem_state_with_next_alloc_id_preserves.
-      apply mem_state_with_last_address_preserves.
-      apply mem_state_after_ghost_tags_preserves.
-      apply I.
-    Qed.
+      break_if;[preserves_step|].
+      preserves_step;[|preserves_step].
+      preserves_step.
+      remember (AddressValue.of_Z
+             (AddressValue.to_Z (last_address m) - Z.of_nat size -
+              (if z <? 0 then - z0 else z0))) as addr.
+      pose proof (mem_state_after_ghost_tags_preserves m addr size I).
+      destruct I as [Ibase I].
+      destruct_base_mem_invariant Ibase.
+      destruct m.
+      cbn in *.
+      split.
+      -
+        (* base *)
+        clear I.
+        repeat split;cbn.
+        +
+          (* dead *)
+          intros alloc_id a H1.
+          destruct (Z.eq_dec next_alloc_id0 alloc_id ) as [E|NE].
+          *
+            apply add_mapsto_iff in H1.
+            destruct H1 as [[H2 H3] | H4].
+            --
+              subst a.
+              auto.
+            --
+              lia.
+          *
+            apply (ZMap.add_3 NE) in H1.
+            apply (Bdead _ _ H1).
+        +
+          (* no-overlap *)
+          intros alloc_id1 alloc_id2 a1 a2 NA M1 M2.
+          admit.
+        +
+          (* align *)
+          intros addr'.
+          apply H.
+        +
+          (* Bnextallocid *)
+          clear H.
+          intros alloc_id.
+          destruct (Z.eq_dec next_alloc_id0 alloc_id ) as [E|NE].
+          *
+            lia.
+          *
+            intros H.
+            apply add_neq_in_iff in H;auto.
+            specialize (Bnextallocid alloc_id H).
+            cbn in Bnextallocid.
+            lia.
+        +
+          (* Blastaddr *)
+          clear Bdead Bnooverlap Bnextallocid H.
+          intros alloc_id a.
+          intros H.
+          destruct (Z.eq_dec next_alloc_id0 alloc_id ) as [E|NE].
+          *
+            apply add_mapsto_iff in H.
+            destruct H as [[H2 H3] | H4].
+            --
+              subst a.
+              cbn.
+              lia.
+            --
+              lia.
+          *
+            apply (ZMap.add_3 NE) in H.
+            specialize (Blastaddr alloc_id a H). clear H.
+            cbn in Blastaddr.
+
+            (* need some relation between [addr] and [last_address0] *)
+
+            admit.
+      -
+        (* mem_invariant *)
+        admit.
+    Admitted.
     Opaque allocator.
-     *)
 
     Instance  remove_allocation_PreservesInvariant
       (alloc_id : CheriMemoryTypesExe.storage_instance_id)
