@@ -4170,24 +4170,37 @@ va_*
       mem_invariant initial_mem_state.
     Proof.
       unfold initial_mem_state, mem_invariant.
-      repeat split; cbn in *.
+      split.
       -
-        intros alloc_id a H.
-        apply empty_mapsto_iff in H;
-          contradiction.
+        (* base invariant *)
+        repeat split; cbn in *.
+        +
+          intros alloc_id a H.
+          apply empty_mapsto_iff in H;
+            contradiction.
+        +
+          intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
+          apply empty_mapsto_iff in H0;
+            contradiction.
+        +
+          unfold zmap_forall_keys.
+          intros k H.
+          apply empty_in_iff in H;
+            contradiction.
+        +
+          unfold zmap_forall_keys.
+          intros k H.
+          apply empty_in_iff in H.
+          tauto.
+        +
+          unfold zmap_forall.
+          intros k v H.
+          apply empty_mapsto_iff in H.
+          tauto.
       -
-        intros alloc_id1 alloc_id2 a1 a2 H H0.
-        apply empty_mapsto_iff in H;
-          contradiction.
-      -
-        unfold zmap_forall_keys.
-        intros k H.
-        apply empty_in_iff in H;
-          contradiction.
-      -
-        intros addr g H bs H0.
-        apply empty_mapsto_iff in H;
-          contradiction.
+          intros addr g H bs H0.
+          apply empty_mapsto_iff in H;
+            contradiction.
     Qed.
 
     (* this lemma is exactly same as non-PNVI but I do not see how to re-use the proof,
