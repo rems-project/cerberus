@@ -4384,13 +4384,18 @@ va_*
           apply ZMap.remove_3 in H.
           eapply Bdead;eauto.
         +
-          intros alloc_id1 alloc_id2 a1 a2 H H0.
+          intros alloc_id1 alloc_id2 a1 a2 N H H0.
           apply ZMap.remove_3 in H0, H.
           eapply Bnooverlap.
-          eapply H.
-          eapply H0.
+          eauto.
+          eauto.
+          eauto.
         +
           apply Balign.
+        +
+          apply zmap_forall_keys_remove, Bnextallocid.
+        +
+          apply zmap_forall_remove, Blastaddr.
       -
         clear Hbase.
         intros addr g A bs F.
@@ -4435,7 +4440,6 @@ va_*
       split;[assumption|].
       preserves_steps.
       - typeclasses eauto.
-      - apply mem_state_with_last_address_preserves, H1.
     Qed.
 
   End CheriMemoryWithPNVI.

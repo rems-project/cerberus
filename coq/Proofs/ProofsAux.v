@@ -1421,6 +1421,23 @@ Section ZMapAux.
       auto.
   Qed.
 
+  Lemma zmap_forall_keys_remove {A:Type} (pred: Z -> Prop) (m:ZMap.t A):
+    forall k, zmap_forall_keys pred m ->
+         zmap_forall_keys pred (ZMap.remove k m).
+  Proof.
+    intros k' H k M.
+    specialize (H k).
+    destruct (Z.eq_dec k' k) as [E|NE].
+    -
+      subst k'.
+      apply remove_in_iff in M.
+      lia.
+    -
+      rewrite (remove_neq_in_iff _ NE) in M.
+      auto.
+  Qed.
+
+
 End ZMapAux.
 
 Section SimpleError.
