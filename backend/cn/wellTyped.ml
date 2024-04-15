@@ -625,12 +625,13 @@ module WIT = struct
          let@ tag = match IT.bt t with
            | Struct tag -> return tag
            | has ->
+             (* this case should have been caught by compile.ml *)
              let expected = "struct" in
-             let reason = Either.Left loc in
+             let reason = Either.Left (IT.loc t) in
              fail (illtyped_index_term loc t has ~expected ~reason)
          in
          let@ field_ct = get_struct_member_type loc tag member in
-         let@ v = check loc (Memory.bt_of_sct field_ct) v in
+         let@ v = check (IT.loc t) (Memory.bt_of_sct field_ct) v in
          return (IT (StructUpdate ((t, member), v),BT.Struct tag, loc))
       | Record members ->
          let@ members = no_duplicate_members_sorted loc members in

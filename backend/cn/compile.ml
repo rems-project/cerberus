@@ -707,22 +707,30 @@ module EffectfulTranslation = struct
         | CNExpr_memberupdates (e, updates) ->
            let@ e = self e in
            let bt = IT.bt e in
+           let end_pos = Option.get @@ Locations.end_pos loc in
            begin match IT.bt e with
            | Struct _ ->
-              let@ expr, _ =
-                ListM.fold_leftM (fun (expr, already) (id, v) ->
-                    match StringSet.find_opt (Id.s id) already with
-                    | Some _ ->
-                       fail {loc; msg = Generic !^"Repeated definition of struct fields." }
-                    | None ->
-                       let@ v = self v in
-                       let expr = IT ((StructUpdate ((expr, id), v)), bt, loc) in
-                       return (expr, StringSet.add (Id.s id) already)
-                  ) (e, StringSet.empty) updates
+              let@ expr =
+                ListM.fold_rightM (fun (id, v) expr ->
+                   let@ v = self v in
+                   let start_pos = Option.get @@ Locations.start_pos @@ Id.loc id in
+                   let cursor = Cerb_location.PointCursor start_pos in
+                   let loc = Locations.region (start_pos, end_pos) cursor in
+                   return (IT ((StructUpdate ((expr, id), v)), bt, loc))
+                ) updates e
               in
               return expr
            | _ ->
-              fail {loc; msg = Generic !^"only struct updates supported" }
+              fail {
+                loc = IT.loc e;
+                msg = Illtyped_it {
+                    it = Terms.pp e;
+                    has = SBT.pp bt;
+                    expected = "struct";
+                    reason = (let (head, pos) = Locations.head_pos_of_location loc in head ^ "\n" ^ pos);
+                    o_ctxt = None
+                  }
+              }
            end
         | CNExpr_arrayindexupdates (e, updates) ->
            let@ e = self e in
