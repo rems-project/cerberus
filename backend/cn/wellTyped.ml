@@ -92,38 +92,17 @@ let ensure_same_argument_number loc input_output has ~expect =
     | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
 
 
-
-
-let compare_by_member_id (id,_) (id',_) = Id.compare id id'
-
-
-let no_duplicate_members loc (have : (Id.t * 'a) list) =
-  let _already =
-    ListM.fold_leftM (fun already (id, _) ->
-        if IdSet.mem id already
-        then fail (fun _ -> {loc; msg = Duplicate_member id})
-        else return (IdSet.add id already)
-      ) IdSet.empty have
-  in
-  return ()
-
-let no_duplicate_members_sorted loc have =
-  let@ () = no_duplicate_members loc have in
-  return (List.sort compare_by_member_id have)
-
+let compare_by_fst_id (x,_) (y,_) = Id.compare x y
 
 let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
   let needed = IdSet.of_list (List.map fst spec) in
-  let already = IdSet.empty in
-  let@ needed, already =
-    ListM.fold_leftM (fun (needed, already) (id, _) ->
-        if IdSet.mem id already then
-          fail (fun _ -> {loc; msg = Duplicate_member id})
-        else if IdSet.mem id needed then
-          return (IdSet.remove id needed, IdSet.add id already)
+  let@ needed =
+    ListM.fold_leftM (fun needed (id, _) ->
+        if IdSet.mem id needed then
+          return (IdSet.remove id needed)
         else
           fail (fun _ -> {loc; msg = Unexpected_member (List.map fst spec, id)})
-      ) (needed, already) have
+      ) needed have
   in
   match IdSet.elements needed with
   | [] -> return ()
@@ -131,7 +110,7 @@ let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
 
 let correct_members_sorted_annotated loc spec have =
   let@ () = correct_members loc spec have in
-  let have = List.sort compare_by_member_id have in
+  let have = List.sort compare_by_fst_id have in
   let have_annotated =
     List.map2 (fun (id,bt) (id',x) ->
         assert (Id.equal id id');
@@ -178,7 +157,7 @@ module WBT = struct
                return (id, bt)
              ) members
          in
-         let@ members = no_duplicate_members_sorted loc members in
+         assert (List.sorted_and_unique compare_by_fst_id members);
          return (Record members)
       | Map (abt, rbt) ->
          let@ abt = aux abt in
@@ -634,7 +613,7 @@ module WIT = struct
          let@ v = check (IT.loc t) (Memory.bt_of_sct field_ct) v in
          return (IT (StructUpdate ((t, member), v),BT.Struct tag, loc))
       | Record members ->
-         let@ members = no_duplicate_members_sorted loc members in
+         assert (List.sorted_and_unique compare_by_fst_id members);
          let@ members =
            ListM.mapM (fun (id, t) ->
                let@ t = infer t in
@@ -2287,9 +2266,11 @@ module WDT = struct
     let@ _ =
       (* all argument members disjoint *)
       ListM.fold_leftM (fun already (id,_) ->
-          if IdSet.mem id already
-          then fail (fun _ -> {loc; msg = Duplicate_member id})
-          else return (IdSet.add id already)
+          if IdSet.mem id already then
+              (* this should have been checked earlier in compile.ml *)
+              assert false
+          else
+             return (IdSet.add id already)
         ) IdSet.empty (List.concat_map snd cases)
     in
     let@ cases =
@@ -2298,7 +2279,7 @@ module WDT = struct
             ListM.mapM (fun (id,bt) ->
                 let@ bt = WBT.is_bt loc bt in
                 return (id, bt)
-              ) (List.sort compare_by_member_id args)
+              ) (List.sort compare_by_fst_id args)
           in
           return (c, args)
         ) cases

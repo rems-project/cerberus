@@ -1776,7 +1776,8 @@ let check_tagdefs tagDefs =
          ListM.fold_rightM (fun piece have ->
              match piece.member_or_padding with
              | Some (name, _) when IdSet.mem name have ->
-                fail (fun _ -> {loc = Loc.unknown; msg = Duplicate_member name})
+                (* this should have been checked earlier by the frontend *)
+                assert false
              | Some (name, ct) ->
                 let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
                 return (IdSet.add name have)

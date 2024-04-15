@@ -84,7 +84,7 @@ type 'bt term_ =
   | StructUpdate of ('bt term * Id.t) * 'bt term
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
-  | RecordUpdate of ('bt term * Id.t) * 'bt term
+  | RecordUpdate of ('bt term * Id.t) * 'bt term (* this is currently unused *)
   | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberShift of 'bt term * Sym.t * Id.t
   | ArrayShift of { base: 'bt term; ct: Sctypes.t; index: 'bt term }

@@ -99,3 +99,11 @@ let rec last = function
   | [] -> None
   | [x] -> Some x
   | _ :: tl -> last tl
+
+let rec sorted_and_unique compare = function
+  | [] | [_] -> true
+  | x :: (y :: _ as tl) ->
+    match compare x y with
+    | -1 -> sorted_and_unique compare tl
+    | _ -> false
+

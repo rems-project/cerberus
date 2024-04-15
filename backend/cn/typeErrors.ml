@@ -132,7 +132,6 @@ type message =
   | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
 
   | Missing_member of Id.t
-  | Duplicate_member of Id.t
 
 
   | Missing_resource of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q; }
@@ -254,9 +253,6 @@ let pp_message te =
      { short; descr = Some descr; state = None;  }
   | Missing_member m ->
      let short = !^"Missing member" ^^^ Id.pp m in
-     { short; descr = None; state = None;  }
-  | Duplicate_member m ->
-     let short = !^"Duplicate member" ^^^ Id.pp m in
      { short; descr = None; state = None;  }
   | Missing_resource {requests; situation; ctxt; model; } ->
      let short = !^"Missing resource" ^^^ for_situation situation in
