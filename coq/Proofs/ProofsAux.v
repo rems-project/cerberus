@@ -1501,3 +1501,26 @@ Definition is_None {A:Type} (x:option A) : Prop
      | Some _ => False
      | None => True
      end.
+
+
+From Coq.Strings Require Import String Ascii.
+Import ListNotations.
+Lemma Z_of_bytes_bytes_of_Z:
+  forall (a : ascii) (z : Z), Z_of_bytes false [a] = inr z -> byte_of_Z z = a.
+Proof.
+  intros a z H.
+  cbn in H.
+  break_match_hyp; try discriminate.
+  break_match_hyp; invc Heqs; invc H.
+  -
+    unfold byte_of_Z.
+    assert (nat_of_ascii a = O) as H by lia.
+    clear Heqz1.
+    rewrite <- (ascii_nat_embedding a).
+    rewrite <- (ascii_nat_embedding zero).
+    auto.
+  -
+    admit.
+  -
+    admit.
+Admitted.

@@ -3776,30 +3776,88 @@ Module RevocationProofs.
         try lia; try break_match_hyp; try discriminate; auto.
       Transparent extract_unspec split_bytes.
       +
-      (* SW_strict_reads = true
+        (* SW_strict_reads = true
          ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = Some _
-       *)
-        admit.
+         *)
+        apply ZMap.find_2 in Heqo0.
+        cbn in H15.
+        inl_inr_inv.
+        rewrite provenance_eqb_reflexivity in H1, H5.
+        cbn in H1.
+        break_match_hyp;
+          cbn in H5;
+          repeat break_match_hyp; try discriminate; subst;
+
+            (cbn in Heqo;
+             repeat break_match_hyp; try discriminate; subst;
+             right;
+             exists a0, zb, a1;
+             repeat split; auto;
+             destruct l0;
+             invc Heqo;
+             apply Z_of_bytes_bytes_of_Z; auto).
       +
-      (* SW_strict_reads = true
+        (* SW_strict_reads = true
          ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = None
-       *)
-        admit.
+         *)
+        exfalso.
+        cbn in H15.
+        break_match_hyp.
+        2:{
+          rewrite provenance_eqb_reflexivity in Heqb1.
+          inv Heqb1.
+        }
+        clear Heqb1 H8 H10.
+        inl_inr_inv.
+        destruct b; [discriminate|].
+        destruct l; [discriminate|].
+        inv H7.
+        cbn in Heqo.
+        discriminate.
       +
         (* SW_strict_reads = false
            ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = Some _
          *)
-        admit.
+        apply ZMap.find_2 in Heqo0.
+        cbn in H15.
+        inl_inr_inv.
+        rewrite provenance_eqb_reflexivity in H1, H5.
+        cbn in H1.
+        break_match_hyp;
+          cbn in H5;
+          repeat break_match_hyp; try discriminate; subst;
+
+            (cbn in Heqo;
+             repeat break_match_hyp; try discriminate; subst;
+             right;
+             exists a0, zb, a1;
+             repeat split; auto;
+             destruct l0;
+             invc Heqo;
+             apply Z_of_bytes_bytes_of_Z; auto).
       +
         (* SW_strict_reads = false
            ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = None
          *)
-        admit.
+        exfalso.
+        cbn in H15.
+        break_match_hyp.
+        2:{
+          rewrite provenance_eqb_reflexivity in Heqb1.
+          inv Heqb1.
+        }
+        clear Heqb1 H8 H10.
+        inl_inr_inv.
+        destruct b; [discriminate|].
+        destruct l; [discriminate|].
+        inv H7.
+        cbn in Heqo.
+        discriminate.
     -
       apply fail_inr_inv in H; tauto.
     -
       apply raise_inr_inv in H ; tauto.
-  Admitted.
+  Qed.
 
   Lemma memcpy_copy_data_spec
     {loc:location_ocaml}
