@@ -3615,69 +3615,6 @@ Module RevocationProofs.
   Qed.
 
 
-  (* TODO: move *)
-  Lemma list_init_rec_len {A : Type} (n : nat) (f : nat -> A) (l0 : list A):
-    length (list_init_rec n f l0) = (n + length l0)%nat.
-  Proof.
-    revert l0.
-    induction n ; intros.
-    -
-      cbn.
-      reflexivity.
-    -
-      simpl.
-      cbn.
-      rewrite IHn.
-      cbn.
-      lia.
-  Qed.
-
-  Lemma list_init_nth {A : Type} (n : nat) (f : nat -> A) :
-    forall i, (i<n)%nat -> nth_error (list_init n f) i = Some (f i).
-  Proof.
-    intros i H.
-    unfold list_init.
-    remember (@nil A) as l0.
-    pose proof (list_init_rec_len n f l0).
-    remember (list_init_rec n f l0) as l eqn:L.
-
-    replace n with (length l - length l0)%nat in H.
-    2:{
-      subst l0 l.
-      cbn in *.
-      lia.
-    }
-
-    clear Heql0.
-    revert i l l0 L H0 H.
-    induction n; intros.
-    -
-      cbn in *.
-      subst l0.
-      lia.
-    -
-      destruct (Nat.eq_dec i n) as [E|NE].
-      +
-        subst i.
-        cbn in L.
-        destruct l;[discriminate|].
-        destruct n.
-        *
-          cbn.
-          cbn in L.
-          inv L.
-          reflexivity.
-        *
-          cbn.
-        admit.
-      +
-        eapply IHn;eauto.
-        cbn.
-        lia.
-        cbn in *.
-        lia.
-  Admitted.
-
   Instance memcpy_args_check_SameState
     (loc:location_ocaml)
     (p1 p2: pointer_value_indt)

@@ -1,4 +1,5 @@
-Require Import Coq.Strings.String.
+From Coq.Strings Require Import String Ascii.
+Require Import Coq.Arith.PeanoNat.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Classes.SetoidClass.
@@ -689,6 +690,68 @@ Section ListAux.
       + simpl in H. discriminate H.
       + simpl in H. apply IH in H. cbn. assumption.
   Qed.
+
+  Lemma list_init_rec_len {A : Type} (n : nat) (f : nat -> A) (l0 : list A):
+    length (list_init_rec n f l0) = (n + length l0)%nat.
+  Proof.
+    revert l0.
+    induction n ; intros.
+    -
+      cbn.
+      reflexivity.
+    -
+      simpl.
+      cbn.
+      rewrite IHn.
+      cbn.
+      lia.
+  Qed.
+
+  Lemma list_init_nth {A : Type} (n : nat) (f : nat -> A) :
+    forall i, (i<n)%nat -> nth_error (list_init n f) i = Some (f i).
+  Proof.
+    intros i H.
+    unfold list_init.
+    remember (@nil A) as l0.
+    pose proof (list_init_rec_len n f l0).
+    remember (list_init_rec n f l0) as l eqn:L.
+
+    replace n with (length l - length l0)%nat in H.
+    2:{
+      subst l0 l.
+      cbn in *.
+      lia.
+    }
+
+    clear Heql0.
+    revert i l l0 L H0 H.
+    induction n; intros.
+    -
+      cbn in *.
+      subst l0.
+      lia.
+    -
+      destruct (Nat.eq_dec i n) as [E|NE].
+      +
+        subst i.
+        cbn in L.
+        destruct l;[discriminate|].
+        destruct n.
+        *
+          cbn.
+          cbn in L.
+          inv L.
+          reflexivity.
+        *
+          cbn.
+          admit.
+      +
+        eapply IHn;eauto.
+        cbn.
+        lia.
+        cbn in *.
+        lia.
+  Admitted.
 
 
 End ListAux.
@@ -1502,11 +1565,8 @@ Definition is_None {A:Type} (x:option A) : Prop
      | None => True
      end.
 
-
-From Coq.Strings Require Import String Ascii.
-Import ListNotations.
 Lemma Z_of_bytes_bytes_of_Z:
-  forall (a : ascii) (z : Z), Z_of_bytes false [a] = inr z -> byte_of_Z z = a.
+  forall (a : ascii) (z : Z), Z_of_bytes false (cons a nil) = inr z -> byte_of_Z z = a.
 Proof.
   intros a z H.
   cbn in H.
