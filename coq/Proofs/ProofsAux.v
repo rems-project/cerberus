@@ -1580,7 +1580,16 @@ Proof.
     rewrite <- (ascii_nat_embedding zero).
     auto.
   -
-    admit.
+    unfold byte_of_Z.
+    assert (nat_of_ascii a = Pos.to_nat p) as H by lia.
+    clear Heqz1.
+    rewrite <- (ascii_nat_embedding a).
+    rewrite H. clear H.
+    unfold ascii_of_nat.
+    rewrite Znat.positive_nat_N.
+    unfold ascii_of_N.
+    reflexivity.
   -
-    admit.
-Admitted.
+    exfalso.
+    lia.
+Qed.
