@@ -2069,6 +2069,7 @@ pattern: (* very limited subset of Rust options *)
     { Cerb_frontend.Cn.(CNPat (Cerb_location.point $startpos, CNPat_wild)) }
 | ident= cn_variable
     { Cerb_frontend.Cn.(CNPat (Cerb_location.point $startpos, CNPat_sym ident)) }
+(* TODO require `ident` starts with an upper case *)
 | ident= cn_variable args= pattern_cons_args
     { Cerb_frontend.Cn.(CNPat ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(args)))
                                , CNPat_constructor (ident, args))) }
@@ -2172,6 +2173,7 @@ cn_option_pred_clauses:
     { None }
 
 
+(* TODO check `nm` starts with upper case *)
 cn_cons_case:
 | nm= cn_variable args= delimited(LBRACE, args, RBRACE)
     {

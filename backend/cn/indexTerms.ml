@@ -54,7 +54,7 @@ let pp_with_eval eval_f =
 
 
 
-let rec bound_by_pattern (Pat (pat_, bt)) =
+let rec bound_by_pattern (Pat (pat_, bt, _)) =
   match pat_ with
   | PSym s -> [(s, bt)]
   | PWild -> []
@@ -128,7 +128,9 @@ let rec fold_ f binders acc = function
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EachI ((_, (s, bt), _), t) ->
-     fold f (binders @ [(Pat (PSym s, bt), None)]) acc t
+     (* TODO - add location information to binders or change `binders` type *)
+     let here = Locations.other __FUNCTION__ in
+     fold f (binders @ [(Pat (PSym s, bt, here), None)]) acc t
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
   | Struct (_tag, members) -> fold_list f binders acc (List.map snd members)
@@ -156,11 +158,16 @@ let rec fold_ f binders acc = function
   | MapConst (_bt, t) -> fold f binders acc t
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
-  | MapDef ((s, bt), t) -> fold f (binders @ [(Pat (PSym s, bt), None)]) acc t
+  | MapDef ((s, bt), t) ->
+    (* TODO - add location information to binders or change `binders` type *)
+    let here = Locations.other __FUNCTION__ in
+    fold f (binders @ [(Pat (PSym s, bt, here), None)]) acc t
   | Apply (_pred, ts) -> fold_list f binders acc ts
   | Let ((nm, t1), t2) ->
     let acc' = fold f binders acc t1 in
-    fold f (binders @ [(Pat (PSym nm, basetype t1), Some t1)]) acc' t2
+    (* TODO - add location information to binders or change `binders` type *)
+    let here = Locations.other __FUNCTION__ in
+    fold f (binders @ [(Pat (PSym nm, basetype t1, here), Some t1)]) acc' t2
   | Match (e, cases) ->
      (* TODO: check this is good *)
      let acc' = fold f binders acc e in
@@ -354,13 +361,13 @@ and subst_under_pattern su (pat, body) =
   (pat, subst su body)
 
 
-and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) =
+and suitably_alpha_rename_pattern su (Pat (pat_, bt, loc), body) =
   match pat_ with
   | PSym s ->
      let (s, body) = suitably_alpha_rename su.relevant s body in
-     (Pat (PSym s, bt), body)
+     (Pat (PSym s, bt, loc), body)
   | PWild ->
-     (Pat (PWild, bt), body)
+     (Pat (PWild, bt, loc), body)
   | PConstructor (s, args) ->
      let body, args =
        fold_left_map (fun body (id, pat') ->
@@ -368,7 +375,7 @@ and suitably_alpha_rename_pattern su (Pat (pat_, bt), body) =
            (body, (id, pat'))
          ) body args
      in
-     (Pat (PConstructor (s, args), bt), body)
+     (Pat (PConstructor (s, args), bt, loc), body)
 
 
 let substitute_lets =
@@ -950,7 +957,9 @@ let rec wrap_bindings_match bs default_v v loc = match bs, v with
     else begin match x with
       | None -> None
       | Some match_e ->
-        Some (IT (Match (match_e, [(pat, v2); (Pat (PWild, basetype match_e), default_v)]), basetype v2, loc))
+        (* TODO - revisit this location *)
+        let here = Locations.other __FUNCTION__ in
+        Some (IT (Match (match_e, [(pat, v2); (Pat (PWild, basetype match_e, here), default_v)]), basetype v2, loc))
     end
   end
 

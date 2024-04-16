@@ -224,28 +224,28 @@ module WIT = struct
   (*   | PSym s ->  *)
 
 
-  let rec check_and_bind_pattern loc bt (Pat (pat_, _)) =
+  let rec check_and_bind_pattern bt (Pat (pat_, _, loc)) =
     match pat_ with
     | PSym s ->
        let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
-       return (Pat (PSym s, bt))
+       return (Pat (PSym s, bt, loc))
     | PWild ->
-       return (Pat (PWild, bt))
+       return (Pat (PWild, bt, loc))
     | PConstructor (s, args) ->
        let@ info = get_datatype_constr loc s in
        let@ () = ensure_base_type loc ~expect:bt (Datatype info.c_datatype_tag) in
        let@ args_annotated = correct_members_sorted_annotated loc info.c_params args in
        let@ args =
          ListM.mapM (fun (bt', (id', pat')) ->
-             let@ pat' = check_and_bind_pattern loc bt' pat' in
+             let@ pat' = check_and_bind_pattern bt' pat' in
              return (id', pat')
            ) args_annotated
        in
-       return (Pat (PConstructor (s, args), bt))
+       return (Pat (PConstructor (s, args), bt, loc))
 
   let leading_sym_or_wild = function
     | [] -> assert false
-    | Pat (pat_, _) :: _ ->
+    | Pat (pat_, _, _) :: _ ->
        match pat_ with
        | PSym _ -> true
        | PWild -> true
@@ -253,14 +253,14 @@ module WIT = struct
 
   let expand_constr (constr, constr_info) (case : (BT.t pattern) list) =
     match case with
-    | Pat (PWild, _) :: pats
-    | Pat (PSym _, _) :: pats ->
-       Some (List.map (fun (_m, bt) -> Pat (PWild, bt)) constr_info.c_params @ pats)
-    | Pat (PConstructor (constr', args), _) :: pats
+    | Pat (PWild, _, loc) :: pats
+    | Pat (PSym _, _, loc) :: pats ->
+       Some (List.map (fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.c_params @ pats)
+    | Pat (PConstructor (constr', args), _, _) :: pats
          when Sym.equal constr constr' ->
        assert (List.for_all2 (fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
        Some (List.map snd args @ pats)
-    | Pat (PConstructor (constr', args), _) :: pats ->
+    | Pat (PConstructor (constr', args), _, _) :: pats ->
        None
     | [] ->
        assert false
@@ -297,24 +297,37 @@ module WIT = struct
               ) dt_info.dt_constrs
          end
 
-  let cases_necessary loc pats =
+  let cases_necessary pats =
     (* checking no case is covered by previous cases (not whether a case is
        covered by a collection of previous cases, that's more work to do *)
     let rec covers p1 p2 = match p1, p2 with
-      | Pat (PWild, _), _ -> true
-      | Pat (PSym _, _), _ -> true
-      | Pat (PConstructor (s1, ps1), _), Pat (PConstructor (s2, ps2), _)
+      | Pat (PWild, _, _), _ -> true
+      | Pat (PSym _, _, _), _ -> true
+      | Pat (PConstructor (s1, ps1), _, _), Pat (PConstructor (s2, ps2), _, _)
         when (Sym.equal s1 s2 && List.equal Id.equal (List.map fst ps1) (List.map fst ps2)) ->
           List.for_all2 covers (List.map snd ps1) (List.map snd ps2)
       | _, _ -> false
     in
-    let@ _ = ListM.fold_leftM (fun prev pat ->
+    let@ _ = ListM.fold_leftM (fun prev (Pat (_, _, pat_loc) as pat) ->
       match List.find_opt (fun p1 -> covers p1 pat) prev with
       | None -> return (pat :: prev)
-      | Some p1 ->
-        let err = (!^"pattern-match case" ^^^ Terms.pp_pattern pat ^^^
-            !^"covered by previous pattern" ^^^ Terms.pp_pattern p1) in
-        fail (fun _ -> {loc; msg = Generic err})
+      | Some (Pat (case, _, p1_loc)) ->
+        let (prev_head, prev_pos) = Locations.head_pos_of_location p1_loc in
+        let case, sym = match case with
+          | PWild -> ("wildcard", None)
+          | PSym sym -> ("variable", Some sym)
+          | PConstructor _ -> ("constructor", None) in
+        let suggestion = Option.(value ~default:"" @@ map (fun sym ->
+            let str = Sym.pp_string sym in
+            let first_letter = String.unsafe_get str 0 in
+            let first_upper = Char.(equal (uppercase_ascii first_letter) first_letter) in
+            if first_upper then
+              "\nIf this is meant to be an nullary constructor, write `" ^ str ^ " {}` instead"
+            else
+              "") sym) in
+        let err = !^"covered by previous" ^^^ !^case ^^^ !^"at" ^^^ !^prev_head
+                  ^/^ !^prev_pos ^^ !^suggestion in
+        fail (fun _ -> {loc=pat_loc; msg = Redundant_pattern err})
     ) [] pats in
     return ()
 
@@ -848,7 +861,7 @@ module WIT = struct
          let@ rbt, cases =
            ListM.fold_leftM (fun (rbt, acc) (pat, body) ->
                pure begin
-                   let@ pat = check_and_bind_pattern loc (IT.bt e) pat in
+                   let@ pat = check_and_bind_pattern (IT.bt e) pat in
                    let@ body = match rbt with
                      | None -> infer body
                      | Some rbt -> check loc rbt body
@@ -858,7 +871,7 @@ module WIT = struct
              ) (None, []) cases
          in
          let@ () = cases_complete loc [IT.bt e] (List.map (fun (pat, _) -> [pat]) cases) in
-         let@ () = cases_necessary loc (List.map (fun (pat, _) -> pat) cases) in
+         let@ () = cases_necessary (List.map (fun (pat, _) -> pat) cases) in
          let@ rbt = match rbt with
            | None -> fail (fun _ -> {loc; msg = Empty_pattern})
            | Some rbt -> return rbt

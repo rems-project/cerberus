@@ -699,9 +699,9 @@ let mk_let sym rhs_doc doc =
   !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
 
 let rec pat_to_coq = function
-  | Terms.Pat (Terms.PSym sym, _) -> return (Sym.pp sym)
-  | Terms.Pat (Terms.PWild, _) -> rets "_"
-  | Terms.Pat (Terms.PConstructor (c_nm, id_ps), _) ->
+  | Terms.Pat (Terms.PSym sym, _, _) -> return (Sym.pp sym)
+  | Terms.Pat (Terms.PWild, _, _) -> rets "_"
+  | Terms.Pat (Terms.PConstructor (c_nm, id_ps), _, _) ->
     (* assuming here that the id's are in canonical order *)
     parensM (build ([return (Sym.pp c_nm)] @ List.map pat_to_coq (List.map snd id_ps)))
 

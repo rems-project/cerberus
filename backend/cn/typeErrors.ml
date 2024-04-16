@@ -161,6 +161,7 @@ type message =
 
   | Empty_pattern
   | Missing_pattern of Pp.document
+  | Redundant_pattern of Pp.document
   | Duplicate_pattern
   | Empty_provenance
 
@@ -419,6 +420,9 @@ let pp_message te =
   | Missing_pattern p' ->
      let short = !^"Missing pattern" ^^^ squotes p' ^^ dot in
      { short; descr = None; state = None;  }
+  | Redundant_pattern p' ->
+     let short = !^"Redundant pattern" in
+     { short; descr = Some p'; state = None;  }
   | Duplicate_pattern ->
      let short = !^"Duplicate pattern" in
      { short; descr = None; state = None;  }

@@ -65,7 +65,7 @@ type 'bt pattern_ =
   | PConstructor of Sym.t * (Id.t * 'bt pattern) list
 
 and 'bt pattern =
-  | Pat of 'bt pattern_ * 'bt
+  | Pat of 'bt pattern_ * 'bt * (loc [@equal fun _ _ -> true] [@compare fun _ _ -> 0])
 [@@deriving eq, ord, map]
 
 (* over integers and reals *)
@@ -120,7 +120,7 @@ let compare = compare_term
 
 
 
-let rec pp_pattern (Pat (pat_, _bt)) =
+let rec pp_pattern (Pat (pat_, _bt, _)) =
   match pat_ with
   | PSym s ->
      Sym.pp s
@@ -346,7 +346,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
 open Cerb_pp_prelude
 open Cerb_frontend.Pp_ast
 
-let rec dtree_of_pat (Pat (pat_, _bt)) =
+let rec dtree_of_pat (Pat (pat_, _bt, _)) =
   match pat_ with
   | PSym s ->
      Dnode (pp_ctor "PSym", [Dleaf (Sym.pp s)])

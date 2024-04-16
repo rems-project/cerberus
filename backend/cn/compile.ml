@@ -622,11 +622,11 @@ module EffectfulTranslation = struct
   let rec translate_cn_pat env locally_bound (CNPat (loc, pat_), bt) =
     match pat_ with
     | CNPat_wild ->
-       return (env, locally_bound, IT.Pat (PWild, bt))
+       return (env, locally_bound, IT.Pat (PWild, bt, loc))
     | CNPat_sym s ->
        let env' = add_logical s bt env in
        let locally_bound' = SymSet.add s locally_bound in
-       return (env', locally_bound', IT.Pat (PSym s, bt))
+       return (env', locally_bound', IT.Pat (PSym s, bt, loc))
     | CNPat_constructor (cons, args) ->
        let@ cons_info = lookup_constr loc cons env in
        let@ env', locally_bound', args =
@@ -640,7 +640,7 @@ module EffectfulTranslation = struct
                 return (env', locally_bound', acc @ [(m, pat')])
            ) (env, locally_bound, []) args
        in
-       return (env', locally_bound', IT.Pat (PConstructor (cons, args), bt))
+       return (env', locally_bound', IT.Pat (PConstructor (cons, args), bt, loc))
 
 
   let check_quantified_base_type env loc bt =

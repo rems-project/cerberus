@@ -951,25 +951,23 @@ module Translate = struct
 
       and translate_case (matched : Z3.Expr.expr) pat =
         match pat with
-        | Pat (PConstructor (c_nm, args), pbt) ->
+        | Pat (PConstructor (c_nm, args), pbt, _) ->
            let m1 = datatypeIsCons (c_nm, matched) in
            let constr_info = SymMap.find c_nm global.datatype_constrs in
            let dt_tag = constr_info.c_datatype_tag in
            assert (List.for_all2 (fun (id,_) (id',_) -> Id.equal id id') constr_info.c_params args);
            let args_conds_substs =
-             List.map (fun (id, (Pat (_, abt) as apat)) ->
+             List.map (fun (id, (Pat (_, abt, _) as apat)) ->
                  let member = datatypeMember ((matched, Datatype dt_tag), (id,abt)) in
                  translate_case member apat
                ) args
            in
            let args_conds, args_substs = List.split args_conds_substs in
            (Z3.Boolean.mk_and context (m1 :: args_conds), List.concat args_substs)
-       | Pat (PSym s, pbt) ->
-          (* TODO fix this - patterns should have location information in them *)
-          let loc = Locations.other __FUNCTION__ in
+       | Pat (PSym s, pbt, loc) ->
           let subst = (term (IT.sym_ (s, pbt, loc)), matched) in
           (Z3.Boolean.mk_true context, [subst])
-       | Pat (PWild, _pbt) ->
+       | Pat (PWild, _pbt, _) ->
           (Z3.Boolean.mk_true context, [])
 
 
