@@ -309,39 +309,33 @@ module MakePp (Conf: PP_CN) = struct
 
   let dtrees_of_attrs xs = List.map (fun ident -> Dleaf (pp_identifier ident)) xs
 
-  let dtrees_of_args xs =
-    List.map (fun (bTy, ident) ->
-        Dleaf (Conf.pp_ident ident ^^ P.colon ^^^ pp_base_type bTy)
+  let dtrees_of_args f xs =
+    List.map (fun (ident, bTy) ->
+        Dleaf (f ident ^^ P.colon ^^^ pp_base_type bTy)
       ) xs
+
 
   let dtree_of_cn_function func =
     Dnode ( pp_ctor "[CN]function" ^^^ P.squotes (Conf.pp_ident func.cn_func_name)
           , [ Dnode (pp_ctor "[CN]attrs", dtrees_of_attrs func.cn_func_attrs)
-            ; Dnode (pp_ctor "[CN]args", dtrees_of_args func.cn_func_args)
+            ; Dnode (pp_ctor "[CN]args", dtrees_of_args Conf.pp_ident func.cn_func_args)
             ; Dnode (pp_ctor "[CN]body", [dtree_of_o_cn_func_body func.cn_func_body])
             ; Dnode (pp_ctor "[CN]return_bty", [Dleaf (pp_base_type func.cn_func_return_bty)]) ] ) 
 
   (* copied and adjusted from dtree_of_cn_function *)
   let dtree_of_cn_lemma lmma =
     Dnode ( pp_ctor "[CN]lemma" ^^^ P.squotes (Conf.pp_ident lmma.cn_lemma_name)
-          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args lmma.cn_lemma_args)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args Conf.pp_ident lmma.cn_lemma_args)
             ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition lmma.cn_lemma_requires)
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
             ] ) 
 
   let dtree_of_cn_spec s =
     Dnode ( pp_ctor "[CN]spec of" ^^^ P.squotes (Conf.pp_ident s.cn_spec_name)
-          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args s.cn_spec_args)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args Conf.pp_ident s.cn_spec_args)
             ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition s.cn_spec_requires)
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition s.cn_spec_ensures)
             ] )
-
-
-(* copying and adjusting dtrees_of_args *)
- let dtrees_of_oargs xs =
-    List.map (fun (bTy, ident) ->
-        Dleaf (pp_identifier ident ^^ P.colon ^^^ pp_base_type bTy)
-      ) xs
 
   let dtree_of_cn_predicate_return (_, bt) =
       [Dleaf (pp_base_type bt)]
@@ -349,18 +343,13 @@ module MakePp (Conf: PP_CN) = struct
   let dtree_of_cn_predicate pred =
     Dnode ( pp_ctor "[CN]predicate" ^^^ P.squotes (Conf.pp_ident pred.cn_pred_name)
           , [ Dnode (pp_ctor "[CN]attrs", dtrees_of_attrs pred.cn_pred_attrs)
-            ; Dnode (pp_ctor "[CN]iargs", dtrees_of_args pred.cn_pred_iargs)
+            ; Dnode (pp_ctor "[CN]iargs", dtrees_of_args Conf.pp_ident pred.cn_pred_iargs)
             ; Dnode (pp_ctor "[CN]output", dtree_of_cn_predicate_return pred.cn_pred_output)
             ; Dnode (pp_ctor "[CN]clauses", [dtree_of_option_cn_clauses pred.cn_pred_clauses]) ] ) 
 
-  let dtrees_of_dt_args xs =
-    List.map (fun (bTy, ident) ->
-        Dleaf (pp_identifier ident ^^ P.colon ^^^ pp_base_type bTy)
-      ) xs
-
   let dtree_of_cn_case (nm, args) =
     Dnode ( pp_ctor "[CN]constructor" ^^^ P.squotes (Conf.pp_ident nm)
-          , [ Dnode (pp_ctor "[CN]args", dtrees_of_dt_args args) ] )
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args pp_identifier args) ] )
 
   let dtree_of_cn_datatype dt =
     Dnode ( pp_ctor "[CN]datatype" ^^^ P.squotes (Conf.pp_ident dt.cn_dt_name)

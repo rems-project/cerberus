@@ -321,24 +321,24 @@ type asm_qualifier =
 %start cn_statements
 %start cn_toplevel
 
-%type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_function> cn_function
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_predicate> cn_predicate
-%type<(Symbol.identifier) Cerb_frontend.Cn.cn_datatype> cn_datatype
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clauses> clauses
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clause> clause
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_resource> resource
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_pred> pred
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_condition> condition
-%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec list> function_spec
-%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
-%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
-%type<((Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement) list> cn_statements
+%type<Symbol.identifier Cn.cn_base_type> base_type
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_function> cn_function
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_predicate> cn_predicate
+%type<(Symbol.identifier) Cn.cn_datatype> cn_datatype
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_clauses> clauses
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_clause> clause
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_resource> resource
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_pred> pred
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_condition> condition
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_function_spec list> function_spec
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_loop_spec> loop_spec
+%type<(Symbol.identifier, Cabs.type_name) Cn.cn_statement> cn_statement
+%type<((Symbol.identifier, Cabs.type_name) Cn.cn_statement) list> cn_statements
+%type<(Symbol.identifier * Symbol.identifier Cn.cn_base_type) list> cn_args
 
 
-
-%type<Cerb_frontend.Cabs.external_declaration> cn_toplevel_elem
-%type<Cerb_frontend.Cabs.external_declaration list> cn_toplevel
+%type<Cabs.external_declaration> cn_toplevel_elem
+%type<Cabs.external_declaration list> cn_toplevel
 
 
 
@@ -2138,7 +2138,7 @@ base_type_explicit:
     { Cerb_frontend.Cn.CN_loc }
 | CN_ALLOC_ID
     { Cerb_frontend.Cn.CN_alloc_id }
-| members= delimited(LBRACE, nonempty_args, RBRACE)
+| members= delimited(LBRACE, nonempty_cn_params, RBRACE)
     { Cerb_frontend.Cn.CN_record members }
 | STRUCT id= cn_variable
     { Cerb_frontend.Cn.CN_struct id }
@@ -2175,10 +2175,8 @@ cn_option_pred_clauses:
 
 (* TODO check `nm` starts with upper case *)
 cn_cons_case:
-| nm= cn_variable args= delimited(LBRACE, args, RBRACE)
-    {
-      (nm, args)
-    }
+| nm= cn_variable args= delimited(LBRACE, cn_args, RBRACE)
+    { (nm, args) }
 
 cn_cons_cases:
 | xs= separated_list (COMMA, cn_cons_case)
@@ -2194,7 +2192,7 @@ cn_function:
 | CN_FUNCTION
   cn_func_attrs= cn_attrs
   cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= cn_variable
-  cn_func_args= delimited(LPAREN, args, RPAREN)
+  cn_func_args= delimited(LPAREN, cn_args, RPAREN)
   cn_func_body= cn_option_func_body
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.point $startpos(str) in
@@ -2209,7 +2207,7 @@ cn_predicate:
   cn_pred_attrs= cn_attrs
   cn_pred_output= cn_pred_output
   str= UNAME VARIABLE
-  cn_pred_iargs= delimited(LPAREN, args, RPAREN)
+  cn_pred_iargs= delimited(LPAREN, cn_args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses
     { (* TODO: check the name starts with upper case *)
       let loc = Cerb_location.point $startpos(str) in
@@ -2222,7 +2220,7 @@ cn_predicate:
 cn_lemma:
 | CN_LEMMA
   str= cn_variable
-  cn_lemma_args= delimited(LPAREN, args, RPAREN)
+  cn_lemma_args= delimited(LPAREN, cn_args, RPAREN)
   CN_REQUIRES cn_lemma_requires=separated_nonempty_list(SEMICOLON, condition)
   CN_ENSURES cn_lemma_ensures=separated_nonempty_list(SEMICOLON, condition)
     { (* TODO: check the name starts with lower case *)
@@ -2242,7 +2240,7 @@ cn_datatype:
 cn_fun_spec:
 | CN_SPEC
   str= cn_variable
-  cn_spec_args= delimited(LPAREN, args, RPAREN)
+  cn_spec_args= delimited(LPAREN, cn_args, RPAREN)
   CN_REQUIRES cn_spec_requires=separated_nonempty_list(SEMICOLON, condition)
   CN_ENSURES cn_spec_ensures=separated_nonempty_list(SEMICOLON, condition)
     { let loc = Cerb_location.point $startpos(str) in
@@ -2271,17 +2269,16 @@ cn_type_synonym:
 | str= NAME TYPE
     { Symbol.Identifier (Cerb_location.point $startpos(str), str) }
 
-args:
-| xs= separated_list(COMMA, pair(base_type, cn_variable))
-    { xs }
-;
-
-(* copying from "args" *)
 %inline base_type_cn_variable:
 | bt=base_type str=cn_variable
     { (str, bt) }
 
-nonempty_args:
+cn_args:
+| xs= separated_list(COMMA, base_type_cn_variable)
+    { xs }
+;
+
+nonempty_cn_params:
 | xs= separated_nonempty_list(COMMA, base_type_cn_variable)
     { xs }
 ;

@@ -4395,10 +4395,10 @@ let desugar_maybe_cn_clauses = function
   | Nothing -> E.return Nothing
 end
 
-let desugar_cn_arg ns (bTy, ident) =
+let desugar_cn_arg ns (ident, bTy) =
   desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy' ->
   E.register_cn_ident ns ident               >>= fun sym ->
-  E.return (bTy', sym)
+  E.return (sym, bTy')
 
 let desugar_cn_oarg (bTy, ident) =
   desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy' ->
@@ -4426,7 +4426,9 @@ let desugar_and_register_cn_datatype dt =
   E.register_cn_datatype dt.cn_dt_name begin
     E.mapM (fun (id, args) ->
       E.register_cn_ident CN_constructor id >>= fun sym ->
-      E.mapM desugar_cn_dt_arg args >>= fun args -> E.return (sym, args)
+      let args = List.map (fun (ident, bTy) -> (ident, (Loc.locOf ident, bTy))) args in
+      unique_record_members (fun (loc, bTy) -> desugar_cn_base_type loc bTy) args >>= fun args ->
+      E.return (sym, args)
     ) dt.cn_dt_cases
   end
 

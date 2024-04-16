@@ -1057,7 +1057,7 @@ let make_function_args f_i loc env args (accesses, requires) =
 
 let make_fun_with_spec_args f_i loc env args requires =
   let rec aux good_lcs env st = function
-    | ((cn_bt, pure_arg), ct_ct) :: rest ->
+    | ((pure_arg, cn_bt), ct_ct) :: rest ->
        let ct = convert_ct loc ct_ct in
        let sbt = Memory.sbt_of_sct ct in
        let bt = SBT.to_basetype sbt in
@@ -1214,7 +1214,7 @@ let normalise_label
 
 
 let add_spec_arg_renames loc args arg_cts (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec) env =
-  List.fold_right (fun ((fun_sym, _), (ct, (_, spec_sym))) env ->
+  List.fold_right (fun ((fun_sym, _), (ct, (spec_sym, _))) env ->
       C.add_renamed_computational spec_sym fun_sym (Memory.sbt_of_sct (convert_ct loc ct)) env)
     (List.combine args (List.combine arg_cts spec.cn_spec_args)) env
 
@@ -1466,7 +1466,7 @@ let register_glob env (sym, glob) =
 
 
 let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases} =
-  let translate_arg (bt, id) =
+  let translate_arg (id, bt) =
     (id, SBT.to_basetype (Compile.translate_cn_base_type env bt)) in
   let cases =
     List.map (fun (c, args) -> (c, List.map translate_arg args)) cn_dt_cases in

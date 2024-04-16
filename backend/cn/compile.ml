@@ -19,7 +19,7 @@ open TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module STermMap = Map.Make(struct type t = IndexTerms.sterm let compare = Terms.compare SBT.compare end)
-module Y = Map.Make(String)
+module StringMap = Map.Make(String)
 
 module StringSet = Set.Make(String)
 
@@ -305,7 +305,7 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
 let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
-      List.map (fun (bTy, id_or_sym) ->
+      List.map (fun (id_or_sym, bTy) ->
         (id_or_sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
@@ -361,7 +361,7 @@ let add_function loc sym func_sig env =
 let register_cn_functions env (defs: cn_function list) =
   let aux env def =
     let args =
-      List.map (fun (bTy, sym) ->
+      List.map (fun (sym, bTy) ->
           (sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) def.cn_func_args
     in
@@ -376,20 +376,24 @@ let register_cn_functions env (defs: cn_function list) =
 
 let add_datatype_info env (dt : cn_datatype) =
   Pp.debug 2 (lazy (Pp.item "translating datatype declaration" (Sym.pp dt.cn_dt_name)));
-  let add_param m (ty, nm) =
-    match Y.find_opt (Id.s nm) m with
+  (* This seems to require that variables aren't simply unique to the
+    constructor, but to the entire datatype declaration.  
+    This is weird, and is probably an arbitrary restriction that should be
+    lifted, but it will require effort. *)
+  let add_param m (nm, ty) =
+    match StringMap.find_opt (Id.s nm) m with
     | None ->
-      return (Y.add (Id.s nm) (nm, SBT.to_basetype (translate_cn_base_type env ty)) m)
+      return (StringMap.add (Id.s nm) (nm, SBT.to_basetype (translate_cn_base_type env ty)) m)
     | Some _ ->
         fail {loc = Id.loc nm;
               msg = Generic (!^"Re-using member name" ^^^ Id.pp nm
                              ^^^ !^"within datatype definition.")}
   in
-  let@ all_params = ListM.fold_leftM add_param Y.empty
+  let@ all_params = ListM.fold_leftM add_param StringMap.empty
     (List.concat_map snd dt.cn_dt_cases) in
   let add_constr env (cname, params) =
     let c_params =
-      List.map (fun (ty, nm) ->
+      List.map (fun (nm, ty) ->
         (nm, SBT.to_basetype (translate_cn_base_type env ty))
         ) params
     in
@@ -397,7 +401,7 @@ let add_datatype_info env (dt : cn_datatype) =
     add_datatype_constr cname info env
   in
   let env = List.fold_left add_constr env dt.cn_dt_cases in
-  let dt_all_params = List.map snd (Y.bindings all_params) in
+  let dt_all_params = List.map snd (StringMap.bindings all_params) in
   let dt_constrs = List.map fst dt.cn_dt_cases in
   return (add_datatype dt.cn_dt_name
     BT.{dt_constrs; dt_all_params} env)
@@ -906,7 +910,7 @@ module EffectfulTranslation = struct
              | Some _ -> fail {loc; msg = Generic !^"Cannot nest evaluation scopes."}
            in
            let@ scope_exists = scope_exists loc scope in
-           (* let@ () = match Y.mem scope env.old_states with *)
+           (* let@ () = match StringMap.mem scope env.old_states with *)
            let@ () = match scope_exists with
              | true -> return ()
              | false -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^scope^"'.") }
@@ -929,7 +933,7 @@ module EffectfulTranslation = struct
            let@ o_v = deref loc expr evaluation_scope in
            (* let@ o_v = match evaluation_scope with *)
            (*   | Some scope -> *)
-           (*      let state = Y.find scope env.old_states in *)
+           (*      let state = StringMap.find scope env.old_states in *)
            (*      return (STermMap.find_opt expr state.pointee_values) *)
            (*   | None -> *)
            (*      deref loc expr *)
@@ -948,7 +952,7 @@ module EffectfulTranslation = struct
            assert (not (SymSet.mem sym locally_bound));
            (* let@ o_v = match evaluation_scope with *)
            (*   | Some scope -> *)
-           (*      let state = Y.find scope env.old_states in *)
+           (*      let state = StringMap.find scope env.old_states in *)
            (*      let o_v =  *)
            (*        Option.map (function *)
            (*            | CVS_Value x -> x *)
@@ -1155,7 +1159,7 @@ let translate_cn_function env (def: cn_function) =
   let open LogicalFunctions in
   Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args =
-    List.map (fun (bTy, sym) -> (sym, translate_cn_base_type env bTy)
+    List.map (fun (sym, bTy) -> (sym, translate_cn_base_type env bTy)
       ) def.cn_func_args in
   let env' =
     List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
@@ -1229,14 +1233,14 @@ module LocalState = struct
 
   type states = {
       state : state;
-      old_states : state Y.t
+      old_states : state StringMap.t
     }
 
-  let init_st = {state = empty_state; old_states = Y.empty}
+  let init_st = {state = empty_state; old_states = StringMap.empty}
 
   let make_state_old {state; old_states} old_name =
     { state = empty_state;
-      old_states = Y.add old_name state old_states }
+      old_states = StringMap.add old_name state old_states }
 
   let add_c_variable_state c_sym cvs {state; old_states} =
     { state = { state with c_variable_state = SymMap.add c_sym cvs state.c_variable_state };
@@ -1262,7 +1266,7 @@ module LocalState = struct
   let handle {state;old_states} : 'a E.m -> 'a Resultat.m =
     let state_for_scope = function
       | None -> state
-      | Some s -> Y.find s old_states
+      | Some s -> StringMap.find s old_states
     in
     let rec aux = function
       | E.Done x ->
@@ -1283,7 +1287,7 @@ module LocalState = struct
          let o_v = STermMap.find_opt it pointee_values in
          aux (k o_v)
       | E.ScopeExists (loc, scope, k) ->
-         aux (k (Y.mem scope old_states))
+         aux (k (StringMap.mem scope old_states))
     in
     aux
 
@@ -1441,7 +1445,7 @@ let rec make_lrt_generic env st =
   let translate_cn_lemma env (def: cn_lemma) =
     Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name)));
     let rec aux env = function
-      | (bTy, sym) :: args' ->
+      | (sym, bTy) :: args' ->
          let bTy = translate_cn_base_type env bTy in
          let env = add_computational sym bTy env in
          let@ at = aux env args' in
@@ -1489,7 +1493,7 @@ module UsingLoads = struct
       | E.Value_of_c_variable (loc,sym,scope,k) ->
          begin match scope with
          | Some scope ->
-            let variable_state = LocalState.((Y.find scope old_states).c_variable_state) in
+            let variable_state = LocalState.((StringMap.find scope old_states).c_variable_state) in
             let o_v =
               Option.map (function
                   | LocalState.CVS_Value x -> x
@@ -1505,14 +1509,14 @@ module UsingLoads = struct
       | Deref (loc, pointer, scope, k) ->
          begin match scope with
          | Some scope ->
-            let pointee_values = (Y.find scope old_states).pointee_values in
+            let pointee_values = (StringMap.find scope old_states).pointee_values in
             let o_v = STermMap.find_opt pointer pointee_values in
             aux (k o_v)
          | None ->
             load loc "deref" pointer k
          end
       | ScopeExists (loc, scope, k) ->
-         aux (k (Y.mem scope old_states))
+         aux (k (StringMap.mem scope old_states))
 
     and load loc action_pp pointer k =
       let@ pointee_ct = pointee_ct loc pointer in

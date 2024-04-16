@@ -35,6 +35,10 @@ let equal = equal_basetype
 let compare = compare_basetype
 
 
+(* This seems to require that variables aren't simply unique to the
+  constructor, but to the entire datatype declaration.  
+  This is weird, and is probably an arbitrary restriction that should be
+  lifted, but it will require effort. *)
 type datatype_info = {
   dt_constrs: Sym.t list;
   dt_all_params: member_types;

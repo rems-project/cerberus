@@ -151,7 +151,7 @@ type cn_function 'a 'ty = <|
   cn_func_loc: Loc.t;
   cn_func_name: 'a;
   cn_func_attrs: list Symbol.identifier;
-  cn_func_args: list (cn_base_type 'a * 'a);
+  cn_func_args: list ('a * cn_base_type 'a);
   cn_func_body: maybe (cn_expr 'a 'ty);
   cn_func_return_bty: cn_base_type 'a;
 |>
@@ -164,7 +164,7 @@ type cn_condition 'a 'ty =
 type cn_lemma 'a 'ty = <|
   cn_lemma_loc: Loc.t;
   cn_lemma_name: 'a;
-  cn_lemma_args: list (cn_base_type 'a * 'a);
+  cn_lemma_args: list ('a * cn_base_type 'a);
   cn_lemma_requires: list (cn_condition 'a 'ty);
   cn_lemma_ensures: list (cn_condition 'a 'ty);
 |>
@@ -172,7 +172,7 @@ type cn_lemma 'a 'ty = <|
 type cn_fun_spec 'a 'ty = <|
   cn_spec_loc: Loc.t;
   cn_spec_name: 'a;
-  cn_spec_args: list (cn_base_type 'a * 'a);
+  cn_spec_args: list ('a * cn_base_type 'a);
   cn_spec_requires: list (cn_condition 'a 'ty);
   cn_spec_ret_name: 'a;
   cn_spec_ensures: list (cn_condition 'a 'ty);
@@ -184,14 +184,14 @@ type cn_predicate 'a 'ty = <|
   cn_pred_name: 'a;
   cn_pred_attrs: list Symbol.identifier;
   cn_pred_output: Loc.t * cn_base_type 'a;
-  cn_pred_iargs: list (cn_base_type 'a * 'a);
+  cn_pred_iargs: list ('a * cn_base_type 'a);
   cn_pred_clauses: maybe (cn_clauses 'a 'ty);
 |>
 
 type cn_datatype 'a = <|
   cn_dt_loc: Loc.t;
   cn_dt_name: 'a;
-  cn_dt_cases: list ('a * list (cn_base_type 'a * Symbol.identifier));
+  cn_dt_cases: list ('a * list (Symbol.identifier * cn_base_type 'a));
 |>
 
 type cn_type_synonym 'a = <|
