@@ -448,10 +448,10 @@ and hash = parse
 (* Entry point *)
 and initial = parse
   (* Magic comments *)
-  | "/*@" { let start_p = lexbuf.lex_start_p in
-            internal_state.start_of_comment <- start_p;
+  | "/*@" { let curr_p = lexbuf.lex_curr_p in
+            internal_state.start_of_comment <- lexbuf.lex_start_p;
             let xs = magic lexbuf in
-            match magic_token start_p lexbuf.lex_start_p ('@' :: xs) with
+            match magic_token curr_p lexbuf.lex_start_p ('@' :: xs) with
             | Some tok -> tok
             | None -> initial lexbuf
             }

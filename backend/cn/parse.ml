@@ -22,15 +22,25 @@ let fiddle_at_hack string =
   in
   fix ss
 
-let diagnostic_get_tokens string =
+let diagnostic_get_tokens (start_pos : Lexing.position) string =
   C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
-  let rec f xs = try begin match C_lexer.lexer lexbuf with
-    | Tokens.EOF -> List.rev ("EOF" :: xs)
-    | t -> f (Tokens.string_of_token t :: xs)
-  end with C_lexer.Error err -> List.rev (CF.Pp_errors.string_of_cparser_cause err :: xs)
+  let rec relex (toks, pos) =
+    try
+      match C_lexer.lexer lexbuf with
+      | Tokens.EOF -> (List.rev ("EOF" :: toks), List.rev pos)
+      | t ->
+        let Lexing.{ pos_lnum; pos_bol; pos_cnum; _ } = lexbuf.lex_start_p in
+        let (line, col) =
+          (* the first line needs to have columns shifted by /*@ but the rest do not *)
+          let col_off = if pos_lnum > 1 then 1 else start_pos.pos_cnum - start_pos.pos_bol + 1 in
+          (pos_lnum + start_pos.pos_lnum, col_off + pos_cnum - pos_bol) in
+        relex (Tokens.string_of_token t :: toks, (line, col) :: pos)
+      with
+        C_lexer.Error err ->
+          (List.rev (CF.Pp_errors.string_of_cparser_cause err :: toks), List.rev pos)
   in
-  f []
+  relex ([], [])
 
 
 (* adapting from core_parser_driver.ml *)
@@ -39,20 +49,9 @@ let parse parser_start (loc, string) =
   let string = fiddle_at_hack string in
   C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
-  let () =
-    let open Cerb_location in
-    Lexing.set_position lexbuf
-      (* revisit *)
-      begin match Cerb_location.to_raw loc with
-      | Loc_unknown -> lexbuf.lex_curr_p
-      | Loc_other _ -> lexbuf.lex_curr_p
-      | Loc_point pos -> pos
-      (* start, end, cursor *)
-      | Loc_region (pos, _, _ ) -> pos
-      | Loc_regions ([],_) -> lexbuf.lex_curr_p
-      | Loc_regions ((pos,_) :: _, _) -> pos
-      end
-  in
+  (* `C_lexer.magic_token' ensures `loc` is a region *)
+  let start_pos = Option.get @@ Locations.start_pos loc in
+  Lexing.set_position lexbuf start_pos;
   let () = match Cerb_location.get_filename loc with
     | Some filename -> lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname= filename }
     | None -> ()
@@ -72,24 +71,23 @@ let parse parser_start (loc, string) =
            Printf.sprintf "Please add error message for state %d to parsers/c/c_parser_error.messages\n" state
        in
        let message = String.sub message 0 (String.length message - 1) in
-       (* the two tokens between which the error occurred *)
-       let where = try MenhirLib.ErrorReports.show (fun (start, curr) ->
-           Lexing.lexeme {
-             lexbuf with
-             lex_start_pos = start.Lexing.pos_cnum - start.pos_bol;
-             lex_curr_pos = curr.Lexing.pos_cnum - curr.pos_bol;
-           }
-         ) buffer
-         with Invalid_argument _ -> "(error in fetching token)" in
-       (* fix caret pointing *)
-       let plus_3 (l : Lexing.position) = { l with pos_cnum = l.pos_cnum + 3 } in
        let start = Lexing.lexeme_start_p lexbuf in
        let end_ = Lexing.lexeme_end_p lexbuf in
-       let loc = Cerb_location.(region (plus_3 start , plus_3 end_) NoCursor) in
+       let loc = Cerb_location.(region (start, end_) NoCursor) in
+       (* the two tokens between which the error occurred *)
+       let where = MenhirLib.ErrorReports.show (fun (start, curr) ->
+           try Lexing.lexeme {
+             lexbuf with
+             lex_start_pos = start.Lexing.pos_cnum - start_pos.pos_cnum;
+             lex_curr_pos = curr.Lexing.pos_cnum - start_pos.pos_cnum;
+           }
+         with Invalid_argument _ -> "(token_err)"
+         ) buffer in
        Pp.debug 6 (lazy (
-           let toks = try diagnostic_get_tokens string
-             with C_lexer.Error _ -> ["(re-parse error)"] in
-           Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))));
+           let (toks, pos) = diagnostic_get_tokens start_pos string in
+           let pp_int_pair (x, y) = Pp.(parens (int x ^^ comma ^^^ int y)) in
+           Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))
+           ^/^ Pp.item "(line, col)" (Pp.braces (Pp.list pp_int_pair pos))));
        fail {loc; msg = Parser (Cparser_unexpected_token (where ^ "\n" ^ message))}
   in
   return parsed_spec
