@@ -2046,6 +2046,8 @@ let check (mu_file : unit mu_file) stmt_locs o_lemma_mode =
 
   let@ () = record_and_check_datatypes mu_file.mu_datatypes in
 
+  let@ () = init_solver () in
+
   let@ () = record_globals mu_file.mu_globs in
 
   let@ () = register_fun_syms mu_file in

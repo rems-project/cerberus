@@ -281,11 +281,7 @@ module Translate = struct
   let dt_recog_name context nm = prefix_symbol context "is_" nm
 
 
-  let translate_datatypes = 
-
-    let already_done = ref false in
-
-    fun other_sort context global ->
+  let translate_datatypes other_sort context global =
 
     let translate_group to_translate =
       let to_translate = List.mapi (fun i nm -> (nm, i)) to_translate in
@@ -327,10 +323,9 @@ module Translate = struct
           end) to_translate sorts
     in
 
-    if !already_done then () else begin
-      already_done := true;
-      List.iter translate_group (Option.get global.datatype_order)
-    end
+
+    List.iter translate_group (Option.get global.datatype_order)
+
 
 
   let sort : Z3.context -> Global.t -> BT.t -> sort =
@@ -394,7 +389,6 @@ module Translate = struct
          Z3.Tuple.mk_sort context struct_symbol
            member_symbols member_sorts
       | Datatype tag ->
-         translate_datatypes sort context global;
          BT_Table.find bt_table (Datatype tag)
       | Record members ->
          let bt_symbol = string (bt_name (Record members)) in
@@ -430,6 +424,7 @@ module Translate = struct
     Sort_Table.clear sort_table;
     let _ = sort context global BT.Integer in
     let _ = sort context global BT.Bool in
+    translate_datatypes (sort context global) context global;
     ()
 
 

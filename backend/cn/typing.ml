@@ -12,7 +12,7 @@ type solver = Solver.solver
 
 type s = {
     typing_context: Context.t;
-    solver : solver;
+    solver : solver option;
     sym_eqs : IT.t SymMap.t;
     equalities: bool Simplify.ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
@@ -27,13 +27,10 @@ type failure = Context.t -> TypeErrors.t
 
 
 let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
-  let solver = Solver.make c.global in
-  let sym_eqs = SymMap.empty in
-  LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
   let s = {
       typing_context = c;
-      solver;
-      sym_eqs;
+      solver = None;
+      sym_eqs = SymMap.empty;
       equalities = Simplify.ITPairMap.empty;
       past_models = [];
       found_equalities = EqTable.empty;
@@ -47,20 +44,30 @@ let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
   | Error e -> Error e
 
 
+let init_solver () =
+  fun s ->
+  let global = s.typing_context.global in
+  let solver = Solver.make global in
+  LCSet.iter (Solver.add_assumption solver global) s.typing_context.constraints;
+  let s = { s with solver = Some solver } in
+  Ok ((), s)
+  
+
+
 
 let sandbox (m : 'a t) : ('a Resultat.t) t =
   fun s ->
-  let n = Solver.num_scopes s.solver in
-  Solver.push s.solver;
+  let n = Solver.num_scopes (Option.get s.solver) in
+  Solver.push (Option.get s.solver);
   let outcome = match m s with
     | Ok (a, _s') ->
-        assert (Solver.num_scopes s.solver = n + 1);
-        Solver.pop s.solver 1;
+        assert (Solver.num_scopes (Option.get s.solver) = n + 1);
+        Solver.pop (Option.get s.solver) 1;
         Ok a
     | Error e ->
-        let n' = Solver.num_scopes s.solver in
+        let n' = Solver.num_scopes (Option.get s.solver) in
         assert (n' > n);
-        Solver.pop s.solver (n' - n);
+        Solver.pop (Option.get s.solver) (n' - n);
         Error e
   in
   Ok (outcome, s)
@@ -90,7 +97,7 @@ let set (c : Context.t) : (unit) t =
   fun s -> Ok ((), {s with typing_context = c})
 
 let solver () : (Solver.solver) t =
-  fun s -> Ok (s.solver, s)
+  fun s -> Ok (Option.get s.solver, s)
 
 let fail (f : failure) : ('a) t =
   fun s -> Error (f s.typing_context)
@@ -98,12 +105,12 @@ let fail (f : failure) : ('a) t =
 
 let pure (m : ('a) t) : ('a) t =
   fun s ->
-  Solver.push s.solver;
+  Solver.push (Option.get s.solver);
   let outcome = match m s with
     | Ok (a, _) -> Ok (a, s)
     | Error e -> Error e
   in
-  Solver.pop s.solver 1;
+  Solver.pop (Option.get s.solver) 1;
   outcome
 
 
@@ -169,7 +176,8 @@ let make_provable loc =
   let f lc =
     Solver.provable
       ~loc
-      ~solver ~global:s.global
+      ~solver:(Option.get solver) 
+      ~global:s.global
       ~assumptions:s.constraints
       ~simp_ctxt
       ~pointer_facts
