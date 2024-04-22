@@ -956,24 +956,24 @@ module WRET = struct
          pure begin
              let@ () = add_l (fst p.q) (snd p.q) (loc, lazy (Pp.string "forall-var")) in
              let@ permission = WIT.check loc BT.Bool p.permission in
-             let@ provable = provable loc in
-             let here = Locations.other __FUNCTION__ in
-             let only_nonnegative_indices =
-               (* It is important to use `permission` here and NOT `p.permission`.
-                  If there is a record involved, `permission` is normalised but the `p.permission` is not
-                  If there is a subsitution in `provable` then a type check
-                  assertion may fail if the non-normalised form is used *)
-               let sym_args = (fst p.q, snd p.q, p.q_loc) in
-               LC.forall_ p.q (impl_ (permission, ge_ (sym_ sym_args, int_lit_ 0 (snd p.q) here) here) here)
-             in
-             let@ () = match provable only_nonnegative_indices with
-               | `True ->
-                  return ()
-               | `False ->
-                  let model = Solver.model () in
-                  let msg = "Iterated resource gives ownership to negative indices." in
-                  fail (fun ctxt -> {loc; msg = Generic_with_model {err= !^msg; ctxt; model}})
-             in
+             (* let@ provable = provable loc in *)
+             (* let here = Locations.other __FUNCTION__ in *)
+             (* let only_nonnegative_indices = *)
+             (*   (\* It is important to use `permission` here and NOT `p.permission`. *)
+             (*      If there is a record involved, `permission` is normalised but the `p.permission` is not *)
+             (*      If there is a subsitution in `provable` then a type check *)
+             (*      assertion may fail if the non-normalised form is used *\) *)
+             (*   let sym_args = (fst p.q, snd p.q, p.q_loc) in *)
+             (*   LC.forall_ p.q (impl_ (permission, ge_ (sym_ sym_args, int_lit_ 0 (snd p.q) here) here) here) *)
+             (* in *)
+             (* let@ () = match provable only_nonnegative_indices with *)
+             (*   | `True -> *)
+             (*      return () *)
+             (*   | `False -> *)
+             (*      let model = Solver.model () in *)
+             (*      let msg = "Iterated resource gives ownership to negative indices." in *)
+             (*      fail (fun ctxt -> {loc; msg = Generic_with_model {err= !^msg; ctxt; model}}) *)
+             (* in *)
              let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
              (* +1 because of pointer argument *)
              let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
