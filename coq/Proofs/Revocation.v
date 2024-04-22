@@ -177,6 +177,30 @@ Proof.
       eauto.
 Qed.
 
+
+(* Should be in ProofAux.v but it depends on stdpp. *)
+Lemma lookup_elements_MapsTo
+  {A: Type}
+  (m : ZMap.t A)
+  (k: ZMap.key)
+  (v : A):
+  (exists k', base.lookup k' (ZMap.elements (elt:=A) m) = Some (k, v)) -> ZMap.MapsTo k v m.
+Proof.
+  intros [k' ES].
+  apply ZMap.elements_2.
+  apply list.elem_of_list_lookup_2 in ES.
+  apply base.elem_of_list_In in ES.
+  apply InA_alt.
+  exists (k,v).
+  split.
+  -
+    unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke.
+    split; reflexivity.
+  -
+    assumption.
+Qed.
+
+
 Module RevocationProofs.
 
   (* --- Memory models instantiated with and without PNVI --- *)
@@ -2553,22 +2577,12 @@ Module RevocationProofs.
           destruct ES as [[addr v1] ES].
           specialize (N k (addr,v1)).
 
-          (* TODO maybe make this lemma *)
           assert (ZMap.MapsTo addr v1 newmeta).
           {
-            apply ZMap.elements_2.
-            rewrite <- E.
-            clear -ES.
-            apply list.elem_of_list_lookup_2 in ES.
-            apply base.elem_of_list_In in ES.
-            apply InA_alt.
-            exists (addr,v1).
-            split.
-            -
-              unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke.
-              split; reflexivity.
-            -
-              assumption.
+            apply lookup_elements_MapsTo.
+            exists k.
+            rewrite E in ES.
+            apply ES.
           }
           rewrite Heqnewmeta in H0.
           apply mapi_inv in H0.
