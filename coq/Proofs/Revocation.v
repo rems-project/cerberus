@@ -3826,9 +3826,11 @@ Module RevocationProofs.
     (A2: a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2))
     (addr:Z):
     ZMap.find (elt:=AbsByte) addr (bytemap s') =
-    if ((a1 <=? addr) && (addr <? (a1 + Z.of_nat n)))
-    then ZMap.find (elt:=AbsByte) (a2+(addr-a1)) (bytemap s')
-    else ZMap.find (elt:=AbsByte) addr (bytemap s).
+      ZMap.find (elt:=AbsByte)
+        (if ((a1 <=? addr) && (addr <? (a1 + Z.of_nat n)))
+        then (a2+(addr-a1))
+        else addr)
+        (bytemap s).
   Proof.
     revert C AG.
     revert s s' addr.
@@ -3872,34 +3874,17 @@ Module RevocationProofs.
             with
             (AddressValue.to_Z (Capability_GS.cap_get_value c2) + Z.of_nat n)
             by lia.
-
-          clear Heqb. (* nothing usefule here:
-          apply andb_prop in Heqb.
-          destruct Heqb.
-          repeat rewrite Z.ltb_lt, Z.leb_le in *.
-                       *)
-
-          (*
-          s'[c1+n] = s0[c1+n]
-          m = load [s->s] (c2+n)
-          store [s->s0] m (c1+n)
-          ----
-          s'[c1+n] = s'[c2+n]
-           *)
-
+          clear Heqb.
           rewrite IHn; clear IHn.
 
           (*
           m = load [s->s] (c2+n)
           store [s->s0] m (c1+n)
           ----
-          s0[c1+n] = s'[c2+n]
+          s0[c1+n] = s[c2+n]
            *)
-
-          (* TODO: nothing is known about s' !*)
-
           apply load_uchar_spec in C1.
-
+          (* TODO: need store spec *)
           admit.
         --
           rewrite IHn; clear IHn s' C1.
@@ -3912,14 +3897,6 @@ Module RevocationProofs.
         state_inv_step.
         apply eff_array_shift_ptrval_uchar_spec in C0, C2.
         subst ptrval2' ptrval1'0.
-        specialize (IHn _ _ addr C5).
-        autospecialize IHn.
-        {
-          invc AG.
-          econstructor; eauto;lia.
-        }
-        clear C5 AG.
-
         replace (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n))
           with (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n).
         2: {
@@ -3927,23 +3904,41 @@ Module RevocationProofs.
           destruct (Z.ltb addr (Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c1)) (Z.of_nat n)))
             eqn:L;
             destruct (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n)) eqn:R;try reflexivity.
-          apply Z.ltb_lt in L.
-          apply Z.ltb_ge in R.
-          lia.
-
-          apply Z.ltb_lt in R.
-          apply Z.ltb_ge in L.
-          lia.
+          -
+            apply Z.ltb_lt in L.
+            apply Z.ltb_ge in R.
+            lia.
+          -
+            apply Z.ltb_lt in R.
+            apply Z.ltb_ge in L.
+            lia.
         }
 
-        break_match_goal; auto.
-        rewrite IHn.
-        clear -C3 NL.
-        unfold cap_to_Z in C3.
-        generalize dependent (AddressValue.to_Z (Capability_GS.cap_get_value c1) +
-                      Z.of_nat n).
+        specialize (IHn _ _ addr C5).
+        autospecialize IHn.
+        {
+          invc AG.
+          econstructor; eauto;lia.
+        }
+        clear C5.
+        rewrite IHn. clear IHn.
 
-        intros addr' C3 NL.
+        clear C1.
+        unfold cap_to_Z in C3.
+        rename addr into foo.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n) as addr.
+        remember  (match andb (Z.leb (AddressValue.to_Z (Capability_GS.cap_get_value c1)) foo) (Z.ltb foo addr) return ZMap.key with
+                   | true => Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c2)) (Z.sub foo (AddressValue.to_Z (Capability_GS.cap_get_value c1)))
+                   | false => foo
+                   end) as addr'.
+
+        assert(addr' <> addr).
+        {
+          subst.
+          invc AG.
+          break_match_goal;lia.
+        }
+        clear - H C3.
         (* store does not modify any other bytes  *)
         (* TODO: store spec here *)
         admit.
@@ -4000,9 +3995,21 @@ Module RevocationProofs.
 
       break_match_hyp.
       +
-        rewrite M.
+        rewrite M. clear M.
         replace (a2 + (a1 + Z.of_nat i - a1)) with (a2 + Z.of_nat i) by lia.
-        reflexivity.
+        pose proof (memcpy_copy_data_spec H H0 H1 H2 H3 H4 (a2 + Z.of_nat i)) as M.
+        break_match_hyp.
+        *
+          exfalso.
+          clear M H0.
+          invc H.
+          subst.
+          invc H9.
+          invc H10.
+          lia.
+        *
+          rewrite M.
+          reflexivity.
       +
         lia.
   Qed.
