@@ -3811,6 +3811,145 @@ Module RevocationProofs.
   Qed.
 
   Lemma memcpy_copy_data_spec
+    {loc : location_ocaml}
+    {s s' : mem_state_r}
+    {ptrval1 ptrval2 ptrval1' : pointer_value}
+    {n : nat}
+    (AG: mempcpy_args_sane ptrval1 ptrval2 (Z.of_nat n))
+    (C: memcpy_copy_data loc ptrval1 ptrval2 n s = (s', inr ptrval1'))
+    {p1 p2 : provenance}
+    {c1 c2 : Capability_GS.t}
+    {a1 a2 : Z}
+    (P1: ptrval1 = PV p1 (PVconcrete c1))
+    (P2: ptrval2 = PV p2 (PVconcrete c2))
+    (A1: a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1))
+    (A2: a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2))
+    (addr:Z):
+    ZMap.find (elt:=AbsByte) addr (bytemap s') =
+    if ((a1 <=? addr) && (addr <? (a1 + Z.of_nat n)))
+    then ZMap.find (elt:=AbsByte) (a2+(addr-a1)) (bytemap s')
+    else ZMap.find (elt:=AbsByte) addr (bytemap s).
+  Proof.
+    revert C AG.
+    revert s s' addr.
+    induction n;intros.
+    +
+      break_if.
+      *
+        apply andb_prop in Heqb.
+        rewrite Z.ltb_lt, Z.leb_le in Heqb.
+        lia.
+      *
+        cbn in C.
+        state_inv_step.
+        reflexivity.
+    +
+      destruct (Z.eq_dec addr (a1 + Z.of_nat n)) as [L|NL].
+      *
+        (* last element *)
+        cbn in C.
+        state_inv_step.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n) as addr.
+        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
+        subst ptrval2' ptrval1'0.
+        rename x into fp.
+        specialize (IHn _ _ addr C5).
+        autospecialize IHn.
+        {
+          invc AG.
+          econstructor; eauto;lia.
+        }
+        clear C5 AG.
+
+        break_match_hyp;[lia|].
+        clear Heqb. (* ? && false = false *)
+        subst addr.
+
+        break_match_goal.
+        --
+          replace (AddressValue.to_Z (Capability_GS.cap_get_value c2) +
+                     (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n - AddressValue.to_Z (Capability_GS.cap_get_value c1)))
+            with
+            (AddressValue.to_Z (Capability_GS.cap_get_value c2) + Z.of_nat n)
+            by lia.
+
+          clear Heqb. (* nothing usefule here:
+          apply andb_prop in Heqb.
+          destruct Heqb.
+          repeat rewrite Z.ltb_lt, Z.leb_le in *.
+                       *)
+
+          (*
+          s'[c1+n] = s0[c1+n]
+          m = load [s->s] (c2+n)
+          store [s->s0] m (c1+n)
+          ----
+          s'[c1+n] = s'[c2+n]
+           *)
+
+          rewrite IHn; clear IHn.
+
+          (*
+          m = load [s->s] (c2+n)
+          store [s->s0] m (c1+n)
+          ----
+          s0[c1+n] = s'[c2+n]
+           *)
+
+          (* TODO: nothing is known about s' !*)
+
+          apply load_uchar_spec in C1.
+
+          admit.
+        --
+          rewrite IHn; clear IHn s' C1.
+          apply andb_false_iff in Heqb.
+          rewrite Z.leb_gt, Z.ltb_ge in Heqb.
+          destruct Heqb;try lia.
+      *
+        (* not last *)
+        cbn in C.
+        state_inv_step.
+        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
+        subst ptrval2' ptrval1'0.
+        specialize (IHn _ _ addr C5).
+        autospecialize IHn.
+        {
+          invc AG.
+          econstructor; eauto;lia.
+        }
+        clear C5 AG.
+
+        replace (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n))
+          with (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n).
+        2: {
+          clear - NL.
+          destruct (Z.ltb addr (Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c1)) (Z.of_nat n)))
+            eqn:L;
+            destruct (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n)) eqn:R;try reflexivity.
+          apply Z.ltb_lt in L.
+          apply Z.ltb_ge in R.
+          lia.
+
+          apply Z.ltb_lt in R.
+          apply Z.ltb_ge in L.
+          lia.
+        }
+
+        break_match_goal; auto.
+        rewrite IHn.
+        clear -C3 NL.
+        unfold cap_to_Z in C3.
+        generalize dependent (AddressValue.to_Z (Capability_GS.cap_get_value c1) +
+                      Z.of_nat n).
+
+        intros addr' C3 NL.
+        (* store does not modify any other bytes  *)
+        (* TODO: store spec here *)
+        admit.
+  Admitted.
+
+  Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
     {s s': mem_state_r}
     {ptrval1 ptrval2 ptrval1': pointer_value}
@@ -3857,43 +3996,16 @@ Module RevocationProofs.
       remember (Z.to_nat len) as n eqn:N.
       replace len with (Z.of_nat n) in H by lia.
       clear N len.
-      revert i H5 H H0.
-      revert s s'.
-      induction n;intros.
+      pose proof (memcpy_copy_data_spec H H0 H1 H2 H3 H4 (a1 + Z.of_nat i)) as M.
+
+      break_match_hyp.
       +
-        inversion H5.
+        rewrite M.
+        replace (a2 + (a1 + Z.of_nat i - a1)) with (a2 + Z.of_nat i) by lia.
+        reflexivity.
       +
-        destruct (Nat.eq_dec i n) as [E|NE].
-        *
-          clear IHn.
-          subst i.
-          cbn in H0.
-          state_inv_step.
-          apply eff_array_shift_ptrval_uchar_spec in H0.
-          apply eff_array_shift_ptrval_uchar_spec in H6.
-          subst ptrval2'.
-          apply load_uchar_spec in H2.
-
-          (* TODO:
-             2. need 'store_spec' for 1 byte
-           *)
-          admit.
-        *
-          cbn in H0.
-
-          state_inv_step.
-          specialize (IHn s0 s').
-          apply IHn; clear IHn.
-          lia.
-          --
-            invc H.
-            econstructor; eauto.
-            lia.
-            lia.
-          --
-            assumption.
-  Admitted.
-
+        lia.
+  Qed.
 
   Lemma memcpy_arg_sane_after_check
     (ptrval1 ptrval2 : pointer_value)
@@ -3950,7 +4062,7 @@ Module RevocationProofs.
       inl_inr_inv.
       assumption.
     -
-      pose proof (memcpy_copy_data_spec AC H0) as DS.
+      pose proof (memcpy_copy_data_fetch_bytes_spec AC H0) as DS.
       clear H0 x.
       invc AC.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
