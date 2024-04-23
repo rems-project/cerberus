@@ -66,6 +66,12 @@ Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
 
+(* TODO: should be in coq-cheri-capabilities *)
+Lemma cap_get_set_value:
+  forall (c : Capability_GS.t) (v : AddressValue.t), Capability_GS.cap_get_value (Capability_GS.cap_set_value c v) = v.
+Proof.
+Admitted.
+
 Lemma sequence_len_errS
   {S E A:Type}
   (s s': S)
@@ -1391,7 +1397,7 @@ Module RevocationProofs.
     Qed.
 
     Ltac htrim :=
-      repeat break_match_hyp; repeat break_let; try subst; try tuple_inversion; cbn in *.
+      repeat break_match_hyp; repeat break_let; try subst; try tuple_inversion; cbn in *; try discriminate.
 
     Ltac state_inv_step :=
       repeat match goal with
@@ -1453,11 +1459,11 @@ Module RevocationProofs.
             let u := fresh "u" in
             destruct H as [u [H1 H2]]
             ; htrim
-        | [H: fail _ _ ?s = (?s, inr _) |- _] =>
+        | [H: fail _ _ _ = (_, inr _) |- _] =>
             (* idtac H "fail"; *)
             apply fail_inr_inv in H; tauto
             ; htrim
-        | [H: serr2InternalErr _ ?s = (?s, inr _) |- _] =>
+        | [H: serr2InternalErr _ _ = (_, inr _) |- _] =>
             (* idtac H "serr2InternalErr"; *)
             apply serr2InternalErr_inv in H
             ; htrim
@@ -3810,6 +3816,68 @@ Module RevocationProofs.
       apply raise_inr_inv in H ; tauto.
   Qed.
 
+  Lemma store_other_spec
+    (loc : location_ocaml)
+    (p : provenance)
+    (c : Capability_GS.t)
+    (s s' : mem_state)
+    (m : mem_value)
+    (fp : footprint)
+    (addr : Z):
+    Capability_GS.cap_get_value c = AddressValue.of_Z addr ->
+    store loc CoqCtype.unsigned_char false (PV p (PVconcrete c)) m s = (s', inr fp) ->
+    forall addr' : ZMap.key, addr' <> addr -> ZMap.find (elt:=AbsByte) addr' (bytemap s') = ZMap.find (elt:=AbsByte) addr' (bytemap s).
+  Proof.
+    intros CV ST addr' NE.
+
+    Opaque repr.
+
+    unfold store in ST.
+    repeat break_let.
+    cbn in Heqp0.
+    tuple_inversion.
+
+    unfold sizeof in ST.
+    cbn in ST.
+    rewrite MorelloImpl.uchar_size in ST.
+    cbn in ST.
+    state_inv_step.
+    -
+      assert(length l = 1%nat) as L.
+      admit. (* property of `repr`. 1 is `sizeof char` *)
+      clear - L NE ST10 CV.
+      Transparent put.
+      unfold put, State_errS in ST10.
+      Opaque put.
+      unfold mem_state_with_funptrmap_bytemap_capmeta in ST10.
+      destruct st, s'.
+      cbn in *.
+      tuple_inversion.
+      unfold cap_to_Z.
+      rewrite CV.
+      clear -L.
+      (* TODO: property of [zmap_add_list_at]. Add lemma *)
+      admit.
+    -
+      (* same as before but w/o `find_cap_allocation c st = (st, inr (Some (s0, a)))` *)
+      assert(length l = 1%nat) as L.
+      admit. (* property of `repr`. 1 is `sizeof char` *)
+      clear - L NE ST9 CV.
+      Transparent put.
+      unfold put, State_errS in ST9.
+      Opaque put.
+      unfold mem_state_with_funptrmap_bytemap_capmeta in ST9.
+      destruct st, s'.
+      cbn in *.
+      tuple_inversion.
+      unfold cap_to_Z.
+      rewrite CV.
+      clear -L.
+      (* TODO: property of [zmap_add_list_at]. Add lemma *)
+      admit.
+      Transparent repr.
+  Admitted.
+
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
@@ -3828,8 +3896,8 @@ Module RevocationProofs.
     ZMap.find (elt:=AbsByte) addr (bytemap s') =
       ZMap.find (elt:=AbsByte)
         (if ((a1 <=? addr) && (addr <? (a1 + Z.of_nat n)))
-        then (a2+(addr-a1))
-        else addr)
+         then (a2+(addr-a1))
+         else addr)
         (bytemap s).
   Proof.
     revert C AG.
@@ -3938,10 +4006,11 @@ Module RevocationProofs.
           invc AG.
           break_match_goal;lia.
         }
-        clear - H C3.
         (* store does not modify any other bytes  *)
-        (* TODO: store spec here *)
-        admit.
+        remember (Capability_GS.cap_set_value c1 (AddressValue.of_Z addr)) as c'.
+        eapply store_other_spec with (c:=c');eauto.
+        subst c'.
+        apply cap_get_set_value.
   Admitted.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
