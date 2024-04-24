@@ -374,10 +374,10 @@ let pp_message te =
          Explain.{no_ex with unproven_constraint = Some constr} in
      let descr =
        let (spec_loc, odescr) = info in
-       let (head, _) = Locations.head_pos_of_location spec_loc in
+       let (head, pos) = Locations.head_pos_of_location spec_loc in
        let doc = match odescr with
-       | None -> !^"Constraint from" ^^^ parens (!^head)
-       | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ parens (!^head)
+       | None -> !^"Constraint from" ^^^ !^head ^/^ !^pos
+       | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ !^head ^/^ !^pos
        in
        match request_chain_description requests with
        | Some doc2 -> doc ^^ hardline ^^ doc2
