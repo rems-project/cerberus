@@ -216,7 +216,7 @@ let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory 
   let modified_prog2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in
   let doc2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog2) in
   let comment = "\n/* OWNERSHIP FUNCTIONS */\n\n" in
-  (comment ^ CF.Pp_utils.to_plain_pretty_string doc1, comment ^ CF.Pp_utils.to_plain_pretty_string doc2)
+  (comment ^ CF.Pp_utils.to_plain_pretty_string doc1, CF.Pp_utils.to_plain_pretty_string doc2)
 
 let generate_conversion_and_equality_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
   let ail_funs = List.map Cn_internal_to_ail.generate_struct_conversion_function ail_prog.tag_definitions in 
