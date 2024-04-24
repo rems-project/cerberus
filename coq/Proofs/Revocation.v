@@ -1267,6 +1267,19 @@ Module RevocationProofs.
       tuple_inversion.
     Qed.
 
+    Lemma raise_serr_inr_inv
+      {A:Type}
+      {e: string}
+      {a : A}:
+      @raise string serr (Exception_either string) A e =
+        @inr string A a -> False.
+    Proof.
+      intros H.
+      Transparent raise.
+      unfold raise, Exception_either in H.
+      inversion H.
+    Qed.
+
     Lemma get_inv
       {s : mem_state}:
       @get mem_state_r memM (State_errS mem_state memMError) s = (s, @inr memMError mem_state_r s).
@@ -3816,6 +3829,36 @@ Module RevocationProofs.
       apply raise_inr_inv in H ; tauto.
   Qed.
 
+
+  (* Probably need to generalize in future for all types via `sizeof` *)
+  Lemma repr_char_bytes_size
+    (fuel: nat)
+    (funptrmap funptrmap': ZMap.t (digest * string * Capability_GS.t))
+    (capmeta capmeta': ZMap.t (bool*CapGhostState))
+    (addr : Z)
+    (m : mem_value)
+    (bs: list AbsByte)
+    (mt : CoqCtype.ctype)
+    (an: list CoqAnnot.annot):
+    typeof m = inr mt ->
+    CoqCtype.unatomic mt =
+          CoqCtype.Ctype an (CoqCtype.Basic (CoqCtype.Integer (CoqIntegerType.Unsigned CoqIntegerType.Ichar))) ->
+    repr fuel funptrmap capmeta addr m = inr (funptrmap', capmeta', bs) ->
+    length bs = 1%nat.
+  Proof.
+    intros T U R.
+    unfold CoqCtype.unatomic in U.
+    destruct mt.
+    admit.
+
+    (*
+    unfold repr in R.
+    destruct fuel;[apply raise_serr_inr_inv in R;tauto|].
+    *)
+
+  Admitted.
+
+  
   Lemma store_other_spec
     (loc : location_ocaml)
     (p : provenance)
@@ -3844,7 +3887,9 @@ Module RevocationProofs.
     state_inv_step.
     -
       assert(length l = 1%nat) as L.
-      admit. (* property of `repr`. 1 is `sizeof char` *)
+      {
+        eapply repr_char_bytes_size;eauto.
+      }
       clear - L NE ST10 CV.
       Transparent put.
       unfold put, State_errS in ST10.
@@ -3861,7 +3906,9 @@ Module RevocationProofs.
     -
       (* same as before but w/o `find_cap_allocation c st = (st, inr (Some (s0, a)))` *)
       assert(length l = 1%nat) as L.
-      admit. (* property of `repr`. 1 is `sizeof char` *)
+      {
+        eapply repr_char_bytes_size;eauto.
+      }
       clear - L NE ST9 CV.
       Transparent put.
       unfold put, State_errS in ST9.
