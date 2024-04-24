@@ -126,7 +126,7 @@ module MakePp (Conf: PP_CN) = struct
          )
 
 
-  let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
+  let rec dtree_of_cn_expr (CNExpr (loc, expr_)) =
     let string_of_cn_const = function
       | CNConst_NULL ->
           "NULL"
@@ -139,13 +139,11 @@ module MakePp (Conf: PP_CN) = struct
       | CNConst_unit ->
          "unit"
     in
-    match expr_ with
+    let dtree = match expr_ with
       | CNExpr_const const ->
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (string_of_cn_const const))
       | CNExpr_var ident ->
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
-      (* | CNExpr_rvar ident -> *)
-      (*     Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident)) *)
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
       | CNExpr_memberof (e, z) ->
@@ -236,7 +234,12 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_not", [dtree_of_cn_expr e])
       | CNExpr_default bt ->
           Dnode (pp_ctor "CNExpr_default", [Dleaf (pp_base_type bt)])
-        
+    in
+    let loc_doc = P.parens !^(Cerb_location.location_to_string loc) in
+    match dtree with
+    | Dnode (header, dtrees) -> Dnode (header ^^^ loc_doc, dtrees)
+    | Dleaf doc -> Dleaf (doc ^^^ loc_doc)
+    | _ -> assert false
 
   let dtree_of_cn_pred = function
     | CN_owned (Some ty) ->

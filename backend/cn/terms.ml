@@ -362,7 +362,7 @@ let rec dtree_of_pat (Pat (pat_, _bt, _)) =
 
 let rec dtree (IT (it_, bt, loc)) =
   let alloc_id z = Dnode (pp_ctor "alloc_id", [Dleaf !^(Z.to_string z)]) in
-  match it_ with
+  let dtree = match it_ with
   | Sym s ->
      Dleaf (Sym.pp s)
   | Const (Z z) ->
@@ -484,3 +484,9 @@ let rec dtree (IT (it_, bt, loc)) =
     Dnode (pp_ctor "OffsetOf", [Dleaf (Sym.pp tag); Dleaf (Id.pp member)])
   | Let ((s, t1), t2) ->
      Dnode (pp_ctor "Let", [Dleaf (Sym.pp s); dtree t1; dtree t2])
+  in
+  let loc_doc = parens !^(Locations.to_string loc) in
+  match dtree with
+  | Dnode (doc, dtrees) -> Dnode (doc ^^^ loc_doc, dtrees)
+  | Dleaf doc -> Dleaf (doc ^^^ loc_doc)
+  | _ -> assert false

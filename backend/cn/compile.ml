@@ -1216,8 +1216,8 @@ module LocalState = struct
 
   (* the expression that encodes the current value of this c variable *)
   type c_variable_state =
-    | CVS_Value of IT.sterm           (* currently the variable is a pure value, this one *)
-    | CVS_Pointer_pointing_to of IT.sterm         (* currently the variable is a pointer to memory holding this value *)
+    | CVS_Value of Sym.t * SBT.t          (* currently the variable is a pure value, this one *)
+    | CVS_Pointer_pointing_to of IT.sterm (* currently the variable is a pointer to memory holding this value *)
 
 
 
@@ -1277,7 +1277,7 @@ module LocalState = struct
          let variable_state = (state_for_scope scope).c_variable_state in
          let o_v =
            Option.map (function
-               | CVS_Value x -> x
+               | CVS_Value (sym', sbt) -> IT.sym_ (sym', sbt, loc)
                | CVS_Pointer_pointing_to x -> x
              ) (SymMap.find_opt sym variable_state)
          in
@@ -1496,7 +1496,7 @@ module UsingLoads = struct
             let variable_state = LocalState.((StringMap.find scope old_states).c_variable_state) in
             let o_v =
               Option.map (function
-                  | LocalState.CVS_Value x -> x
+                  | LocalState.CVS_Value (sym', sbt) -> IT.sym_ (sym', sbt, loc)
                   | LocalState.CVS_Pointer_pointing_to x -> x
                 ) (SymMap.find_opt sym variable_state)
             in
