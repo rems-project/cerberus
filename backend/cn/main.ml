@@ -212,7 +212,7 @@ let main
 
             
             (* TODO: Remove - hacky *)
-            let cn_utils_header_pair = ("../executable-spec/cn_utils.h", false) in
+            let cn_utils_header_pair = ("../../../../executable-spec/cn_utils.h", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
             
             (* TODO: Topological sort *)
@@ -232,7 +232,7 @@ let main
             let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
-            Stdlib.output_string oc "\n";
+            Stdlib.output_string oc "\n/* OWNERSHIP FUNCTIONS */\n\n";
             Stdlib.output_string oc ownership_function_decls;
             Stdlib.output_string oc "\n";
 
