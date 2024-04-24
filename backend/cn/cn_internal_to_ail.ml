@@ -18,6 +18,12 @@ module AT=ArgumentTypes
 
 let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B)))
 
+let standardise_sym sym' = 
+  let sym_str = Sym.pp_string sym' in
+  let new_sym_str = String.mapi (fun i c -> 
+    if (Char.equal c '&') then (if i == 0 then ' ' else '_') else c) sym_str in
+  Sym.fresh_pretty new_sym_str
+
 let map_basetypes = function 
   | BT.Map (bt1, bt2) -> (bt1, bt2)
   | _ -> failwith "Not a map"
@@ -505,6 +511,7 @@ let rec cn_to_ail_expr_aux_internal
         else 
           sym 
       in
+      let sym = standardise_sym sym in
       let ail_expr_ = 
         (match const_prop with
           | Some (sym2, cn_const) ->
@@ -518,6 +525,7 @@ let rec cn_to_ail_expr_aux_internal
       
       (* Check globals *)
       let global_match = List.filter (fun (global_sym, _) -> String.equal (Sym.pp_string sym) (Sym.pp_string global_sym)) globals in
+
       let ail_expr_ = match global_match with 
         | [] -> ail_expr_
         | (_, ctype) :: _ -> 
@@ -775,7 +783,13 @@ let rec cn_to_ail_expr_aux_internal
     cn_to_ail_expr_aux_internal const_prop pred_name dts globals t d
 
   | MapConst (bt, t) -> failwith "TODO18"
-  | MapSet (m, key, value) -> failwith "TODO19"
+  | MapSet (m, key, value) -> 
+    let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack in
+    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals key PassBack in
+    let (b3, s3, e3) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals value PassBack in
+    let map_set_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), [e1; e2; e3])) in
+    dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr map_set_fcall)
+    
   | MapGet (m, key) ->
     (* Only works when index is a cn_integer *)
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack in
@@ -1591,25 +1605,24 @@ let rec cn_to_ail_cnprog_internal_aux dts globals = function
 | Cnprog.M_CN_let (loc, (name, {ct; pointer}), prog) -> 
   
   let (b1, s, e) = cn_to_ail_expr_internal dts globals pointer PassBack in
-  let ail_deref_expr_ = A.(AilEunary (Indirection, e)) in
   (* TODO: Use ct for type binding *)
   (* TODO: Differentiate between read and deref cases for M_CN_let *)
-  let standardise_sym sym' = 
-    let sym_str = Sym.pp_string sym' in
-    let new_sym_str = String.map (fun c -> 
-      if Char.equal c '&' then '_' else c) sym_str in
-    Sym.fresh_pretty new_sym_str
-    in 
+  
   let name = standardise_sym name in
 
-  let ct_ = rm_ctype (Sctypes.to_ctype ct) in
+  (* let ct_ = rm_ctype (Sctypes.to_ctype ct) in
   let ct_without_ptr = match ct_ with 
     | C.(Pointer (_, ct)) -> ct
     | ct_' -> mk_ctype ct_'
-  in
-  let binding = create_binding name ct_without_ptr in
+  in *)
+
+  let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type ct in 
+  let ctype = bt_to_ail_ctype bt in
+
+  
+  let binding = create_binding name ctype in
  
-  let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr ail_deref_expr_))]) in
+  let ail_stat_ = A.(AilSdeclaration [(name, Some (mk_expr (add_conversion_fn (rm_expr e) bt)))]) in
   let ((b2, ss), no_op) = cn_to_ail_cnprog_internal_aux dts globals prog in
   (* let ail_stat_ = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident name), mk_expr ail_deref_expr_)))) in *)
   if no_op then 
