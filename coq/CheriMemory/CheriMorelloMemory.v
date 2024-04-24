@@ -834,13 +834,22 @@ Module Type CheriMemoryImpl
             bs' <- bytes_of_Z iss sz n_value ;;
             let bs := List.map (fun (x : ascii) => absbyte_v (PNVI_prov Prov_none) None (Some x)) bs' in
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
-        | MVinteger ity (IC _ c_value) =>
-            '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
-            let capmeta := update_capmeta c_value addr capmeta in
-            ret (funptrmap, capmeta,
-                (mapi
-                   (fun (i_value : nat) (b_value : ascii) =>
-                      absbyte_v (PNVI_prov Prov_none) None (Some b_value)) cb))
+
+        | MVinteger ity (IC _ c_value)
+          =>
+            match ity with
+            | CoqIntegerType.Signed CoqIntegerType.Intptr_t
+            | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
+              =>
+                '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
+                let capmeta := update_capmeta c_value addr capmeta in
+                ret (funptrmap, capmeta,
+                    (mapi
+                       (fun (i_value : nat) (b_value : ascii) =>
+                          absbyte_v (PNVI_prov Prov_none) None (Some b_value)) cb))
+            | _ =>
+                raise "invalid integer value (capability for non-(u)intptr_t"
+            end
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
             bs' <- bytes_of_Z true sz (bits_of_float fval) ;;

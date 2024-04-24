@@ -3858,11 +3858,8 @@ Module RevocationProofs.
       state_inv_step.
       reflexivity.
     -
-      state_inv_step.
-      (* TODO: Seems to be a bug here! *)
-      admit.
-  Admitted.
-
+      apply raise_serr_inr_inv in R; tauto.
+  Qed.
 
   Fact repr_char_bytes_size_unspec_helper
     (fuel : nat)
