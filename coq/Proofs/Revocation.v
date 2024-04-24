@@ -3829,6 +3829,67 @@ Module RevocationProofs.
       apply raise_inr_inv in H ; tauto.
   Qed.
 
+  Fact repr_char_bytes_size_helper
+    (fuel : nat)
+    (funptrmap0 funptrmap' : ZMap.t (digest * string * Capability_GS.t))
+    (capmeta0 capmeta' : ZMap.t (bool * CapGhostState))
+    (addr : Z)
+    (iv: integer_value_indt)
+    (bs : list AbsByte):
+    repr fuel funptrmap0 capmeta0 addr (MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) iv) =
+      inr (funptrmap', capmeta', bs) -> Datatypes.length bs = 1%nat.
+  Proof.
+    intros R.
+    unfold repr in R.
+    destruct fuel;[apply raise_serr_inr_inv in R;tauto|].
+    break_match_hyp.
+    -
+      state_inv_step.
+      break_match_hyp.
+      apply raise_serr_inr_inv in R1; tauto.
+      rewrite MorelloImpl.uchar_size in R2.
+      cbn in R2.
+      apply ret_inr in R2.
+      invc R2.
+      match goal with
+      | [H: monadic_list_init _ ?f = _ |- _] => generalize dependent f;intros
+      end.
+      cbn in R1.
+      state_inv_step.
+      reflexivity.
+    -
+      state_inv_step.
+      (* TODO: Seems to be a bug here! *)
+      admit.
+  Admitted.
+
+
+  Fact repr_char_bytes_size_unspec_helper
+    (fuel : nat)
+    (funptrmap0 funptrmap' : ZMap.t (digest * string * Capability_GS.t))
+    (capmeta0 capmeta' : ZMap.t (bool * CapGhostState))
+    (addr : Z)
+    (l an: list CoqAnnot.annot)
+    (bs : list AbsByte)
+    (ty: CoqCtype.ctype):
+
+    (ty = (CoqCtype.Ctype l (CoqCtype.Atomic (CoqCtype.Ctype an (CoqCtype.Basic (CoqCtype.Integer (CoqIntegerType.Unsigned CoqIntegerType.Ichar))))))
+     \/ ty = (CoqCtype.Ctype l (CoqCtype.Basic (CoqCtype.Integer (CoqIntegerType.Unsigned CoqIntegerType.Ichar)))))
+    ->
+      repr fuel funptrmap0 capmeta0 addr (MVunspecified ty) = inr (funptrmap', capmeta', bs) -> Datatypes.length bs = 1%nat.
+  Proof.
+    intros T R.
+    unfold repr in R.
+    destruct fuel;[apply raise_serr_inr_inv in R;tauto|].
+    destruct T;
+
+      (state_inv_step;
+       rewrite MorelloImpl.uchar_size in R0;
+       cbn in R0;
+       apply ret_inr in R0;
+       invc R0;
+       apply list_init_len).
+  Qed.
 
   (* Probably need to generalize in future for all types via `sizeof` *)
   Lemma repr_char_bytes_size
@@ -3849,16 +3910,68 @@ Module RevocationProofs.
     intros T U R.
     unfold CoqCtype.unatomic in U.
     destruct mt.
-    admit.
 
-    (*
-    unfold repr in R.
-    destruct fuel;[apply raise_serr_inr_inv in R;tauto|].
-    *)
+    destruct c; try discriminate.
+    -
+      invc U.
+      destruct m;
+        try
+          (cbn in T;
+           rewrite bind_of_return in T;[|typeclasses eauto];
+           apply ret_inr in T;
+           inl_inr_inv).
+      +
+        cbn in T.
+        destruct c.
+        rewrite bind_of_return in T;[|typeclasses eauto].
+        apply ret_inr in T.
+        inl_inr_inv.
+        subst.
+        revert R.
+        apply repr_char_bytes_size_unspec_helper with (l:=l) (an:=l).
+        auto.
+      +
+        subst.
+        eapply repr_char_bytes_size_helper;eauto.
+      +
+        cbn in T.
+        destruct l.
+        *
+          Transparent raise.
+          unfold raise, Exception_either in T.
+          state_inv_step.
+          Opaque raise.
+        *
+          state_inv_step.
+    -
+      destruct m;
+        try
+          (cbn in T;
+           rewrite bind_of_return in T;[|typeclasses eauto];
+           apply ret_inr in T;
+           inl_inr_inv).
+      +
+        cbn in T.
+        destruct c0.
+        rewrite bind_of_return in T;[|typeclasses eauto].
+        apply ret_inr in T.
+        inl_inr_inv.
+        subst.
+        revert R.
+        apply repr_char_bytes_size_unspec_helper with (l:=l0) (an:=an).
+        auto.
+      +
+        cbn in T.
+        destruct l0.
+        *
+          Transparent raise.
+          unfold raise, Exception_either in T.
+          state_inv_step.
+          Opaque raise.
+        *
+          state_inv_step.
+  Qed.
 
-  Admitted.
-
-  
   Lemma store_other_spec
     (loc : location_ocaml)
     (p : provenance)
