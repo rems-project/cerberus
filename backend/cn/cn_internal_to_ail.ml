@@ -355,10 +355,10 @@ let rec get_rest_of_expr_r it = match IT.term it with
   
 
 
-let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) = 
+let gen_bool_while_loop sym bt start_expr while_cond (bs, ss, e) = 
   (* 
      Input:
-     each (integer sym; start_expr <= sym && while_cond) {t}
+     each (bt sym; start_expr <= sym && while_cond) {t}
 
      where (bs, ss, e) = cn_internal_to_ail called on t with PassBack
   *)
@@ -369,14 +369,17 @@ let gen_bool_while_loop sym start_expr while_cond (bs, ss, e) =
   let b_decl = A.(AilSdeclaration [(b, Some (mk_expr (add_conversion_fn true_const BT.Bool)))]) in
 
   let incr_var = A.(AilEident sym) in
-  let incr_var_binding = create_binding sym (bt_to_ail_ctype BT.Integer) in
+  let incr_var_binding = create_binding sym (bt_to_ail_ctype bt) in
   let start_decl = A.(AilSdeclaration [(sym, Some (mk_expr start_expr))]) in
+
+  let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in 
+  let incr_func_name = match typedef_name with Some str -> str ^ "_increment" | None -> "" in
 
   let cn_bool_and_sym = Sym.fresh_pretty "cn_bool_and" in
   let rhs_and_expr_ = A.(AilEcall (mk_expr (AilEident cn_bool_and_sym), [mk_expr b_ident; e])) in
   let b_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_)))) in
   (* let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in *)
-  let incr_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_integer_increment")), [mk_expr incr_var])))) in
+  let incr_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_pretty incr_func_name)), [mk_expr incr_var])))) in
   let convert_from_cn_bool_ident = mk_expr A.(AilEident (Sym.fresh_pretty "convert_from_cn_bool")) in
   let while_cond_with_conversion = mk_expr A.(AilEcall (convert_from_cn_bool_ident, [while_cond])) in
   let while_loop = A.(AilSwhile (while_cond_with_conversion, mk_stmt (AilSblock (bs, List.map mk_stmt (ss @ [b_assign; incr_stat]))), 0)) in
@@ -649,7 +652,7 @@ let rec cn_to_ail_expr_aux_internal
     let while_cond = A.(AilEbinary (mk_expr incr_var, Lt, mk_expr end_int_const)) in
     let translated_t = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
 
-    let (bs, ss, e) = gen_bool_while_loop sym start_int_const (mk_expr while_cond) translated_t in
+    let (bs, ss, e) = gen_bool_while_loop sym bt start_int_const (mk_expr while_cond) translated_t in
     dest d (bs, ss, e)
 
   (* add Z3's Distinct for separation facts  *)
@@ -1263,11 +1266,11 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
     } 
     *)
       
-    let i_sym = fst q.q in
+    let (i_sym, i_bt) = q.q in
     let start_expr = generate_start_expr (get_leftmost_and_expr q.permission) (fst q.q) in
     let (_, _, e_start) = cn_to_ail_expr_internal dts globals start_expr PassBack in 
     (* let (b_end, s_end, e_end) = cn_to_ail_expr_internal dts q.permission PassBack in *)
-    let cn_integer_ptr_ctype = bt_to_ail_ctype BT.Integer in 
+    let cn_integer_ptr_ctype = bt_to_ail_ctype i_bt in 
     (* let convert_to_cn_integer_sym = Sym.fresh_pretty "convert_to_cn_integer" in  *)
     
     let (b2, s2, e2) = cn_to_ail_expr_internal dts globals q.permission PassBack in
@@ -1287,8 +1290,8 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
     let (return_ctype, return_bt) = calculate_return_type q.name in
 
     (* Translation of q.pointer *)
-    let i_it = IT.IT (Terms.(Sym i_sym), BT.Integer) in 
-    let step_binop = IT.IT (Terms.(Binop (Mul, i_it, q.step)), BT.Integer) in 
+    let i_it = IT.IT (Terms.(Sym i_sym), i_bt) in 
+    let step_binop = IT.IT (Terms.(Binop (Mul, i_it, q.step)), i_bt) in 
     let value_it = IT.IT (Terms.(Binop (Add, q.pointer, step_binop)), BT.Loc) in
     let (b4, s4, e4) = cn_to_ail_expr_internal dts globals value_it PassBack in
 
@@ -1315,7 +1318,9 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
         (mk_expr fcall, List.concat bs, List.concat ss, None)
     in
 
-    let increment_fn_sym = Sym.fresh_pretty "cn_integer_increment" in
+    let typedef_name = get_typedef_string (bt_to_ail_ctype i_bt) in 
+    let incr_func_name = match typedef_name with Some str -> str ^ "_increment" | None -> "" in
+    let increment_fn_sym = Sym.fresh_pretty incr_func_name in
     let increment_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident increment_fn_sym), [mk_expr (AilEident i_sym)])))) in 
 
     let convert_from_cn_bool_ident = mk_expr A.(AilEident (Sym.fresh_pretty "convert_from_cn_bool")) in
@@ -1384,7 +1389,7 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> (
           let (b2, s2, e2) = cn_to_ail_expr_internal dts globals while_cond PassBack in
           
           let t_translated = cn_to_ail_expr_internal dts globals t PassBack in
-          let (bs, ss, e) = gen_bool_while_loop sym (rm_expr e1) e2 t_translated in
+          let (bs, ss, e) = gen_bool_while_loop sym bt (rm_expr e1) e2 t_translated in
           dest d (bs, ss, e)
           
     
