@@ -65,26 +65,6 @@ void cn_map_set(cn_map *m, cn_integer *key, void *value) {
     ht_set(m, key->val, value);
 }
 
-/* Every equality function needs to take two void pointers for this to work */
-cn_bool *cn_bits_i32_equality(void *i1, void *i2) {
-    return convert_to_cn_bool((*((cn_bits_i32 *) i1)->val) == (*((cn_bits_i32 *) i2)->val));
-}
-
-cn_bool *cn_bits_i64_equality(void *i1, void *i2) {
-    return convert_to_cn_bool((*((cn_bits_i64 *) i1)->val) == (*((cn_bits_i64 *) i2)->val));
-}
-
-cn_bool *cn_bits_u32_equality(void *i1, void *i2) {
-    return convert_to_cn_bool((*((cn_bits_u32 *) i1)->val) == (*((cn_bits_u32 *) i2)->val));
-}
-
-cn_bool *cn_bits_u64_equality(void *i1, void *i2) {
-    return convert_to_cn_bool((*((cn_bits_u64 *) i1)->val) == (*((cn_bits_u64 *) i2)->val));
-}
-
-cn_bool *cn_integer_equality(void *i1, void *i2) {
-    return convert_to_cn_bool((*((cn_integer *) i1)->val) == (*((cn_integer *) i2)->val));
-}
 
 cn_bool *cn_pointer_equality(void *i1, void *i2) {
     return convert_to_cn_bool((((cn_pointer *) i1)->ptr) == (((cn_pointer *) i2)->ptr));
@@ -120,92 +100,12 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
 
 
 
-
-/* Conversion functions */
-
-cn_bits_i32 *convert_to_cn_bits_i32(signed long i) {
-    cn_bits_i32 *ret = alloc(sizeof(cn_bits_i32));
-    ret->val = alloc(sizeof(signed long));
-    *(ret->val) = i;
-    return ret;
-}
-
-cn_bits_i64 *convert_to_cn_bits_i64(signed long long i) {
-    cn_bits_i64 *ret = alloc(sizeof(cn_bits_i64));
-    ret->val = alloc(sizeof(signed long long));
-    *(ret->val) = i;
-    return ret;
-}
-
-cn_bits_u32 *convert_to_cn_bits_u32(unsigned long i) {
-    cn_bits_u32 *ret = alloc(sizeof(cn_bits_u32));
-    ret->val = alloc(sizeof(unsigned long));
-    *(ret->val) = i;
-    return ret;
-}
-
-cn_bits_u32 *convert_to_cn_bits_u64(unsigned long long i) {
-    cn_bits_u32 *ret = alloc(sizeof(cn_bits_u32));
-    ret->val = alloc(sizeof(unsigned long long));
-    *(ret->val) = i;
-    return ret;
-}
-
-cn_integer *convert_to_cn_integer(signed long i) {
-    cn_integer *ret = alloc(sizeof(cn_integer));
-    ret->val = alloc(sizeof(signed long));
-    *(ret->val) = i;
-    return ret;
-}
-
 cn_pointer *convert_to_cn_pointer(void *ptr) {
     cn_pointer *res = alloc(sizeof(cn_pointer));
     res->ptr = ptr; // Carries around an address
     return res;
 }
 
-/* These should be produced automatically based on binops used in source CN annotations */
-
-cn_bool *cn_bits_i32_lt(cn_bits_i32 *i1, cn_bits_i32 *i2) {
-    return convert_to_cn_bool(*(i1->val) < *(i2->val));
-}
-
-cn_bool *cn_integer_lt(cn_integer *i1, cn_integer *i2) {
-    return convert_to_cn_bool(*(i1->val) < *(i2->val));
-}
-
-cn_bool *cn_integer_le(cn_integer *i1, cn_integer *i2) {
-    return convert_to_cn_bool(*(i1->val) <= *(i2->val));
-}
-
-cn_bool *cn_integer_gt(cn_integer *i1, cn_integer *i2) {
-    return convert_to_cn_bool(*(i1->val) > *(i2->val));
-}
-
-cn_bool *cn_integer_ge(cn_integer *i1, cn_integer *i2) {
-    return convert_to_cn_bool(*(i1->val) >= *(i2->val));
-}
-
-cn_bits_i32 *cn_bits_i32_add(cn_bits_i32 *i1, cn_bits_i32 *i2) {
-    cn_bits_i32 *res = alloc(sizeof(cn_bits_i32));
-    res->val = alloc(sizeof(signed long));
-    *(res->val) = *(i1->val) + *(i2->val);
-    return res;
-}
-
-cn_integer *cn_integer_add(cn_integer *i1, cn_integer *i2) {
-    cn_integer *res = alloc(sizeof(cn_integer));
-    res->val = alloc(sizeof(unsigned int));
-    *(res->val) = *(i1->val) + *(i2->val);
-    return res;
-}
-
-cn_integer *cn_integer_sub(cn_integer *i1, cn_integer *i2) {
-    cn_integer *res = alloc(sizeof(cn_integer));
-    res->val = alloc(sizeof(unsigned int));
-    *(res->val) = *(i1->val) - *(i2->val);
-    return res;
-}
 
 cn_integer *cn_integer_pow(cn_integer *i1, cn_integer *i2) {
     cn_integer *res = alloc(sizeof(cn_integer));
@@ -213,49 +113,6 @@ cn_integer *cn_integer_pow(cn_integer *i1, cn_integer *i2) {
     *(res->val) = pow(*(i1->val), *(i2->val));
     return res;
 }
-
-cn_integer *cn_integer_increment(cn_integer *i) {
-    *(i->val) = *(i->val) + 1;
-    return i;
-}
-
-cn_integer *cn_integer_multiply(cn_integer *i1, cn_integer *i2) {
-    cn_integer *res = alloc(sizeof(cn_integer));
-    res->val = alloc(sizeof(unsigned int));
-    *(res->val) = *(i1->val) * *(i2->val);
-    return res;
-}
-
-cn_integer *cn_integer_divide(cn_integer *i1, cn_integer *i2) {
-    cn_integer *res = alloc(sizeof(cn_integer));
-    res->val = alloc(sizeof(unsigned int));
-    *(res->val) = *(i1->val) / *(i2->val);
-    return res;
-}
-
-cn_integer *cn_integer_mod(cn_integer *i1, cn_integer *i2) {
-    cn_integer *res = alloc(sizeof(cn_integer));
-    res->val = alloc(sizeof(unsigned int));
-    *(res->val) = *(i1->val) % *(i2->val);
-    return res;
-}
-
-cn_integer *cn_integer_min(cn_integer *i1, cn_integer *i2) {
-    return cn_integer_lt(i1, i2) ? i1 : i2;
-}
-
-cn_integer *cn_integer_max(cn_integer *i1, cn_integer *i2) {
-    return cn_integer_gt(i1, i2) ? i1 : i2;
-}
-
-
-cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i) {
-    cn_pointer *res = alloc(sizeof(cn_pointer));
-    res->ptr = (char *) ptr->ptr + *(i->val);
-    return res;
-}
-
-
 
 
 /* CN: addr_eq(ptr1: cn_pointer, ptr2: cn_pointer) */

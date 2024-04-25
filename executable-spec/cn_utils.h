@@ -6,6 +6,16 @@
 
 /* Wrappers for C types */
 
+/* Signed bitvectors */
+
+typedef struct cn_bits_i8 {
+    signed char *val;
+} cn_bits_i8;
+
+typedef struct cn_bits_i16 {
+    signed short *val;
+} cn_bits_i16;
+
 typedef struct cn_bits_i32 {
     signed long *val;
 } cn_bits_i32;
@@ -13,6 +23,16 @@ typedef struct cn_bits_i32 {
 typedef struct cn_bits_i64 {
     signed long long *val;
 } cn_bits_i64;
+
+/* Unsigned bitvectors */
+
+typedef struct cn_bits_u8 {
+    unsigned char *val;
+} cn_bits_u8;
+
+typedef struct cn_bits_u16 {
+    unsigned short *val;
+} cn_bits_u16;
 
 typedef struct cn_bits_u32 {
     unsigned long *val;
@@ -35,6 +55,7 @@ typedef struct cn_bool {
     _Bool val;
 } cn_bool;
 
+
 typedef hash_table cn_map;
 
 /* Conversion functions */
@@ -52,38 +73,156 @@ void *cn_ite(cn_bool *b, void *e1, void *e2);
 cn_map *map_create(void);
 void *cn_map_get(cn_map *m, cn_integer *key);
 void cn_map_set(cn_map *m, cn_integer *key, void *value);
-
-cn_bool *cn_bits_i32_equality(void *i1, void *i2);
-cn_bool *cn_bits_i64_equality(void *i1, void *i2);
-cn_bool *cn_bits_u32_equality(void *i1, void *i2);
-cn_bool *cn_bits_u64_equality(void *i1, void *i2);
-cn_bool *cn_integer_equality(void *i1, void *i2);
-cn_bool *cn_pointer_equality(void *i1, void *i2);
-
 cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
 
-cn_bits_i32 *convert_to_cn_bits_i32(signed long i);
-cn_bits_i64 *convert_to_cn_bits_i64(signed long long i);
-cn_bits_u32 *convert_to_cn_bits_u32(unsigned long i);
-cn_bits_u32 *convert_to_cn_bits_u64(unsigned long long i);
-cn_integer *convert_to_cn_integer(signed long i);
-cn_pointer *convert_to_cn_pointer(void *ptr);
-cn_bool *cn_bits_i32_lt(cn_bits_i32 *i1, cn_bits_i32 *i2);
-cn_bool *cn_integer_lt(cn_integer *i1, cn_integer *i2);
-cn_bool *cn_integer_le(cn_integer *i1, cn_integer *i2);
-cn_bool *cn_integer_gt(cn_integer *i1, cn_integer *i2);
-cn_bool *cn_integer_ge(cn_integer *i1, cn_integer *i2);
+/* CN integer type auxilliary functions */
 
-cn_bits_i32 *cn_bits_i32_add(cn_bits_i32 *i1, cn_bits_i32 *i2);
-cn_integer *cn_integer_add(cn_integer *i1, cn_integer *i2);
-cn_integer *cn_integer_sub(cn_integer *i1, cn_integer *i2);
-cn_integer *cn_integer_pow(cn_integer *i1, cn_integer *i2);
-cn_integer *cn_integer_increment(cn_integer *i);
-cn_integer *cn_integer_multiply(cn_integer *i1, cn_integer *i2);
-cn_integer *cn_integer_divide(cn_integer *i1, cn_integer *i2);
-cn_integer *cn_integer_mod(cn_integer *i1, cn_integer *i2);
-cn_integer *cn_integer_min(cn_integer *i1, cn_integer *i2);
-cn_integer *cn_integer_max(cn_integer *i1, cn_integer *i2);
+#define CN_GEN_EQUALITY(CNTYPE)\
+    inline cn_bool *CNTYPE##_equality(CNTYPE*i1, CNTYPE* i2){\
+        return convert_to_cn_bool((*((CNTYPE *) i1)->val) == (*((CNTYPE *) i2)->val));\
+    }
+
+#define CN_GEN_CONVERT(CTYPE, CNTYPE)\
+    inline CNTYPE *convert_to_##CNTYPE(CTYPE i) {\
+        CNTYPE *ret = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        ret->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(ret->val) = i;\
+        return ret;\
+    }
+
+/* Arithmetic operators */
+
+#define CN_GEN_LT(CNTYPE)\
+    inline cn_bool *CNTYPE##_lt(CNTYPE *i1, CNTYPE *i2) {\
+        return convert_to_cn_bool(*(i1->val) < *(i2->val));\
+    }
+
+#define CN_GEN_LE(CNTYPE)\
+    inline cn_bool *CNTYPE##_le(CNTYPE *i1, CNTYPE *i2) {\
+        return convert_to_cn_bool(*(i1->val) <= *(i2->val));\
+    }
+
+#define CN_GEN_GT(CNTYPE)\
+    inline cn_bool *CNTYPE##_gt(CNTYPE *i1, CNTYPE *i2) {\
+        return convert_to_cn_bool(*(i1->val) > *(i2->val));\
+    }
+
+#define CN_GEN_GE(CNTYPE)\
+    inline cn_bool *CNTYPE##_ge(CNTYPE *i1, CNTYPE *i2) {\
+        return convert_to_cn_bool(*(i1->val) >= *(i2->val));\
+    }
+
+#define CN_GEN_ADD(CTYPE, CNTYPE)\
+    inline CNTYPE *CNTYPE##_add(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) + *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_SUB(CTYPE, CNTYPE)\
+    inline CNTYPE *CNTYPE##_sub(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) - *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_MUL(CTYPE, CNTYPE)\
+    inline CNTYPE *CNTYPE##_multiply(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) * *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_DIV(CTYPE, CNTYPE)\
+    inline CNTYPE *CNTYPE##_divide(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) / *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_MIN(CNTYPE)\
+    inline CNTYPE *CNTYPE##_min(CNTYPE *i1, CNTYPE *i2) {\
+        return CNTYPE##_lt(i1, i2) ? i1 : i2;\
+    }
+
+#define CN_GEN_MAX(CNTYPE)\
+    inline CNTYPE *CNTYPE##_max(CNTYPE *i1, CNTYPE *i2) {\
+        return CNTYPE##_gt(i1, i2) ? i1 : i2;\
+    }
+
+#define CN_GEN_MOD(CTYPE, CNTYPE)\
+    inline CNTYPE *CNTYPE##_mod(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) % *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_INCREMENT(CNTYPE)\
+    CNTYPE *CNTYPE##_increment(CNTYPE *i) {\
+        *(i->val) = *(i->val) + 1;\
+        return i;\
+    }
+
+#define CN_GEN_PTR_ADD(CNTYPE)\
+    cn_pointer *cn_pointer_add_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
+        cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));\
+        res->ptr = (char *) ptr->ptr + *(i->val);\
+        return res;\
+    }
+
+#define CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE)\
+    CNTYPE *cast_cn_pointer_to_##CNTYPE(cn_pointer *ptr) {\
+        CNTYPE *res = alloc(sizeof(CNTYPE));\
+        res->val = alloc(sizeof(CTYPE));\
+        *(res->val) = (CTYPE) ptr->ptr;\
+        return res;\
+    }
+
+#define CN_GEN_CAST_TO_PTR(CNTYPE)\
+    cn_pointer *cast_##CNTYPE_to_cn_pointer(CNTYPE *i) {\
+        cn_pointer *res = alloc(sizeof(cn_pointer));\
+        res->ptr = (void *) *(i->val);\
+        return res;\
+    }
+
+
+#define CN_GEN_ALL(CTYPE, CNTYPE)\
+   CN_GEN_CONVERT(CTYPE, CNTYPE)\
+   CN_GEN_EQUALITY(CNTYPE)\
+   CN_GEN_LT(CNTYPE)\
+   CN_GEN_LE(CNTYPE)\
+   CN_GEN_GT(CNTYPE)\
+   CN_GEN_GE(CNTYPE)\
+   CN_GEN_ADD(CTYPE, CNTYPE)\
+   CN_GEN_SUB(CTYPE, CNTYPE)\
+   CN_GEN_MUL(CTYPE, CNTYPE)\
+   CN_GEN_DIV(CTYPE, CNTYPE)\
+   CN_GEN_MIN(CNTYPE)\
+   CN_GEN_MAX(CNTYPE)\
+   CN_GEN_MOD(CTYPE, CNTYPE)\
+   CN_GEN_INCREMENT(CNTYPE)\
+   CN_GEN_PTR_ADD(CNTYPE)\
+//    CN_GEN_CAST_TO_PTR(CNTYPE)\
+//    CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE)\
+
+CN_GEN_ALL(signed char, cn_bits_i8);
+CN_GEN_ALL(signed short, cn_bits_i16);
+CN_GEN_ALL(signed long, cn_bits_i32);
+CN_GEN_ALL(signed long long, cn_bits_i64);
+CN_GEN_ALL(unsigned char, cn_bits_u8);
+CN_GEN_ALL(unsigned short, cn_bits_u16);
+CN_GEN_ALL(unsigned long, cn_bits_u32);
+CN_GEN_ALL(unsigned long long, cn_bits_u64);
+CN_GEN_ALL(signed long, cn_integer);
+
+
+
+cn_pointer *convert_to_cn_pointer(void *ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
 
 // Ownership functions
