@@ -128,7 +128,7 @@ let rec fold_ f binders acc = function
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EachI ((_, (s, bt), _), t) ->
-     (* TODO - add location information to binders or change `binders` type *)
+     (* TODO - add location information to binders *)
      let here = Locations.other __FUNCTION__ in
      fold f (binders @ [(Pat (PSym s, bt, here), None)]) acc t
   | Tuple ts -> fold_list f binders acc ts
@@ -159,13 +159,13 @@ let rec fold_ f binders acc = function
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
   | MapDef ((s, bt), t) ->
-    (* TODO - add location information to binders or change `binders` type *)
+    (* TODO - add location information to binders *)
     let here = Locations.other __FUNCTION__ in
     fold f (binders @ [(Pat (PSym s, bt, here), None)]) acc t
   | Apply (_pred, ts) -> fold_list f binders acc ts
   | Let ((nm, t1), t2) ->
     let acc' = fold f binders acc t1 in
-    (* TODO - add location information to binders or change `binders` type *)
+    (* TODO - add location information to binders *)
     let here = Locations.other __FUNCTION__ in
     fold f (binders @ [(Pat (PSym nm, basetype t1, here), Some t1)]) acc' t2
   | Match (e, cases) ->
@@ -935,20 +935,23 @@ let promote_to_compare it it' loc =
   let cast it = if BT.equal (bt it) res_bt then it else cast_ res_bt it loc in
   (cast it, cast it')
 
-let nth_array_to_list_fact n xs d loc = match term xs with
+let nth_array_to_list_fact n xs d =
+  let here = Locations.other __FUNCTION__ in
+  match term xs with
   | ArrayToList (arr, i, len) ->
-    let lt_n_len = lt_ (promote_to_compare n len loc) loc in
-    let lhs = nthList_ (n, xs, d) loc in
-    let rhs = ite_ (and_ [le_ (int_lit_ 0 (bt n) loc, n) loc; lt_n_len] loc,
-        map_get_ arr (add_ (i, cast_ (bt i) n loc) loc) loc, d) loc in
-    Some (eq_ (lhs, rhs) loc)
+    let lt_n_len = lt_ (promote_to_compare n len here) here in
+    let lhs = nthList_ (n, xs, d) here in
+    let rhs = ite_ (and_ [le_ (int_lit_ 0 (bt n) here, n) here; lt_n_len] here,
+        map_get_ arr (add_ (i, cast_ (bt i) n here) here) here, d) here in
+    Some (eq_ (lhs, rhs) here)
   | _ -> None
 
-let rec wrap_bindings_match bs default_v v loc = match bs, v with
+let rec wrap_bindings_match bs default_v v =
+  match bs, v with
   | _, None -> None
   | [], _ -> v
   | ((pat, x) :: bindings, _) ->
-  begin match wrap_bindings_match bindings default_v v loc with
+  begin match wrap_bindings_match bindings default_v v with
     | None -> None
     | Some v2 ->
     let pat_ss = SymSet.of_list (List.map fst (bound_by_pattern pat)) in
@@ -957,13 +960,13 @@ let rec wrap_bindings_match bs default_v v loc = match bs, v with
     else begin match x with
       | None -> None
       | Some match_e ->
-        (* TODO - revisit this location *)
         let here = Locations.other __FUNCTION__ in
-        Some (IT (Match (match_e, [(pat, v2); (Pat (PWild, basetype match_e, here), default_v)]), basetype v2, loc))
+        Some (IT (Match (match_e, [(pat, v2); (Pat (PWild, basetype match_e, here), default_v)]), basetype v2, here))
     end
   end
 
-let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) loc =
+let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) =
+  let here = Locations.other __FUNCTION__ in
   let nths = List.filter_map (fun (bs, it) -> match term it with
     | NthList (n, xs, d) -> Some (bs, (n, d, bt xs))
     | _ -> None) binders_terms in
@@ -972,7 +975,7 @@ let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) loc =
     | _ -> None) binders_terms in
   List.concat_map (fun (bs1, (n, d, bt1)) -> List.filter_map (fun (bs2, (xs, bt2)) ->
     if BT.equal bt1 bt2
-    then wrap_bindings_match (bs1 @ bs2) (bool_ true loc) (nth_array_to_list_fact n xs d loc) loc
+    then wrap_bindings_match (bs1 @ bs2) (bool_ true here) (nth_array_to_list_fact n xs d)
     else None) arr_lists
   ) nths
 

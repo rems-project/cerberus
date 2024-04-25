@@ -74,7 +74,6 @@ module General = struct
 
 
   let cases_to_map loc (uiinfo: uiinfo) a_bt item_bt (C cases) =
-    (* TODO revisit this location *)
     let here = Locations.other __FUNCTION__ in
     let update_with_ones base_array ones =
       List.fold_left (fun m {one_index; value} ->
@@ -92,12 +91,6 @@ module General = struct
           return (default_ (BT.Map (a_bt, item_bt)) here)
       | many, _ -> fail (fun ctxt -> {loc; msg = Generic (!^ "Merging multiple arrays with non-void values:" ^^^ Pp.list IT.pp
              (List.map (fun m -> m.value) many))})
-(*
-         let@ model = model () in
-         fail (fun ctxt ->
-             let msg = Merging_multiple_arrays {orequest; situation; oinfo; model =None; ctxt} in
-             {loc; msg})
-*)
     in
     return (update_with_ones base_value ones)
 
@@ -257,7 +250,6 @@ module General = struct
           (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
           return (Some (r, changed_or_deleted))
        | true ->
-          (* TODO revisit this location *)
           let here = Locations.other __FUNCTION__ in
           begin match packing_ft here global provable (P requested) with
           | Some packing_ft ->

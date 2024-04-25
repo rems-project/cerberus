@@ -1005,7 +1005,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
        let good_pointer_lc =
          let info = (loc, Some (Sym.pp_string s ^ " good")) in
          let here = Locations.other __FUNCTION__ in
-         (LC.t_ (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc, loc)) here), info)
+         (LC.t_ (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc, here)) here), info)
        in
        let@ (oa_name, ((pt_ret, oa_bt), lcs), value) = C.ownership (loc, (s, ct)) env in
        let env = C.add_logical oa_name oa_bt env in
@@ -1042,7 +1042,7 @@ let make_function_args f_i loc env args (accesses, requires) =
        let good_lc =
          let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
          let here = Locations.other __FUNCTION__ in
-         (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt, loc)) here), info)
+         (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info)
        in
        let@ at =
          aux (arg_states @ [(mut_arg, arg_state)])
@@ -1069,7 +1069,8 @@ let make_fun_with_spec_args f_i loc env args requires =
        let env = C.add_computational pure_arg sbt env in
        let good_lc =
          let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
-         (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt, loc)) loc), info)
+         let here = Locations.other __FUNCTION__ in
+         (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info)
        in
        let@ at = aux (good_lc :: good_lcs) env st rest in
        return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)

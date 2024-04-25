@@ -491,37 +491,35 @@ module Translate = struct
     let intptr_cast = cast_ Memory.intptr_bt in
 
     fun it ->
-      (* TODO revisit this location - how to manage translations? Should
-         locations never lie, or should they trace where things came from? *)
-      let loc = IT.loc it in
+      let here = Locations.other __FUNCTION__ in
       begin match IT.term it with
-      | Const Null -> Some (pointer_ ~alloc_id:Z.zero ~addr:Z.zero loc)
+      | Const Null -> Some (pointer_ ~alloc_id:Z.zero ~addr:Z.zero here)
       | Unop (op, t1) -> begin match op with
          | BWFFSNoSMT ->
-            let intl i = int_lit_ i (IT.bt t1) loc in
-            Some (ite_ (eq_ (t1, intl 0) loc, intl 0, add_ (arith_unop BWCTZNoSMT t1 loc, intl 1) loc) loc)
+            let intl i = int_lit_ i (IT.bt t1) here in
+            Some (ite_ (eq_ (t1, intl 0) here, intl 0, add_ (arith_unop BWCTZNoSMT t1 here, intl 1) here) here)
          | _ -> None
       end
       | Binop (op, t1, t2) -> begin match op with
          | Exp -> begin match get_num_z t1, get_num_z t2 with
             | Some z1, Some z2 when Z.fits_int z2 ->
-              Some (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.bt t1) loc)
+              Some (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.bt t1) here)
             | _, _ ->
               assert false
             end
-         | Min -> Some (ite_ (le_ (t1, t2) loc, t1, t2) loc)
-         | Max -> Some (ite_ (ge_ (t1, t2) loc, t1, t2) loc)
-         | LTPointer -> Some (lt_ (intptr_cast t1 loc, intptr_cast t2 loc) loc)
-         | LEPointer -> Some (le_ (intptr_cast t1 loc, intptr_cast t2 loc) loc)
+         | Min -> Some (ite_ (le_ (t1, t2) here, t1, t2) here)
+         | Max -> Some (ite_ (ge_ (t1, t2) here, t1, t2) here)
+         | LTPointer -> Some (lt_ (intptr_cast t1 here, intptr_cast t2 here) here)
+         | LEPointer -> Some (le_ (intptr_cast t1 here, intptr_cast t2 here) here)
          | _ -> None
          end
       | EachI ((i1, (s, bt), i2), t) ->
          let rec aux i =
            if i <= i2
-           then IT.subst (make_subst [(s, num_lit_ (Z.of_int i) bt loc)]) t :: aux (i + 1)
+           then IT.subst (make_subst [(s, num_lit_ (Z.of_int i) bt here)]) t :: aux (i + 1)
            else []
          in
-         Some (and_ (aux i1) loc)
+         Some (and_ (aux i1) here)
       | StructUpdate ((t, member), v) ->
          let tag = BT.struct_bt (IT.bt t) in
          let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
@@ -530,39 +528,39 @@ module Translate = struct
            List.map (fun (member', sct) ->
                let value =
                  if Id.equal member member' then v
-                 else member_ ~member_bt:(Memory.bt_of_sct sct) (tag, t, member') loc
+                 else member_ ~member_bt:(Memory.bt_of_sct sct) (tag, t, member') here
                in
                (member', value)
              ) members
          in
-         Some (struct_ (tag, str) loc)
+         Some (struct_ (tag, str) here)
       | RecordUpdate ((t, member), v) ->
          let members = BT.record_bt (IT.bt t) in
          let str =
            List.map (fun (member', bt) ->
                let value =
                  if Id.equal member member' then v
-                 else IT ((RecordMember (t, member')), bt, loc)
+                 else IT ((RecordMember (t, member')), bt, here)
                in
                (member', value)
              ) members
          in
-         Some (IT ((Record str), IT.bt t, loc))
+         Some (IT ((Record str), IT.bt t, here))
       | OffsetOf (tag, member) ->
          let decl = SymMap.find tag struct_decls in
-         Some (int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt loc)
+         Some (int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt here)
       | SizeOf ct ->
-         Some (int_lit_ (Memory.size_of_ctype ct) (IT.bt it) loc)
+         Some (int_lit_ (Memory.size_of_ctype ct) (IT.bt it) here)
       | Aligned t ->
-         let addr = pointerToIntegerCast_ t.t loc in
+         let addr = pointerToIntegerCast_ t.t here in
          assert (BT.equal (IT.bt addr) (IT.bt t.align));
-         Some (divisible_ (addr, t.align) loc)
+         Some (divisible_ (addr, t.align) here)
       | Representable (CT.Pointer _ as ct, t) ->
-         Some (representable struct_decls ct t loc)
+         Some (representable struct_decls ct t here)
       | Representable (ct, t) ->
-         Some (representable struct_decls ct t loc)
+         Some (representable struct_decls ct t here)
       | Good (ct, t) ->
-         Some (good_value struct_decls ct t loc)
+         Some (good_value struct_decls ct t here)
       | WrapI (ity, arg) ->
          (* unlike previously (and std.core), implemented natively using bitvector ops *)
          None
@@ -1076,9 +1074,8 @@ module Translate = struct
     | T it ->
        { expr = term it; it; qs = []; extra = []; focused = []; smt2_doc }
     | Forall ((s, bt), it) ->
-       (* TODO fix this - Foralls hould have location information in them *)
-       let loc =  Locations.other __FUNCTION__ in
-       let v_s, v = IT.fresh_same bt s loc in
+       let here =  Locations.other __FUNCTION__ in
+       let v_s, v = IT.fresh_same bt s here in
        let it = IT.subst (make_subst [(s, v)]) it in
        { expr = term it; it; qs = [(v_s, bt)]; extra = []; focused = []; smt2_doc }
 
@@ -1107,12 +1104,11 @@ module Translate = struct
     let g1 = goal1 solver.context global lc in
     let extra1 = extra_assumptions assumptions g1.qs in
     let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in
-    (* TODO revisit this loc definition - no idea what's going on here *)
-    let loc = Locations.other __FUNCTION__ in
-    let extra2 = IT.nth_array_to_list_facts focused loc in
+    let extra2 = IT.nth_array_to_list_facts focused in
     let extra = List.map (term solver.context global) (extra2 @ extra1) in
     let smt2_doc = lazy (goal_to_smt2_doc solver extra g1.expr) in
-    trace [Check (IT.not_ g1.it loc :: (extra2 @ extra1))] solver;
+    let here =  Locations.other __FUNCTION__ in
+    trace [Check (IT.not_ g1.it here :: (extra2 @ extra1))] solver;
     { g1 with extra = extra; focused = focused; smt2_doc = smt2_doc }
 
 end

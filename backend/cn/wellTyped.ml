@@ -831,9 +831,9 @@ module WIT = struct
          let has_args, expect_args = List.length args, List.length def.args in
          let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
          let@ args =
-           (* TODO revisit this location *)
            ListM.map2M (fun has_arg (_, def_arg_bt) ->
-               check loc def_arg_bt has_arg
+               (* TODO - add location information to binders *)
+               check def.loc def_arg_bt has_arg
              ) args def.args
          in
          return (IT (Apply (name, args), def.return_bt, loc))
@@ -846,11 +846,11 @@ module WIT = struct
              return (IT (Let ((name, t1), t2), IT.bt t2, loc))
            end
       | Constructor (s, args) ->
-         (* TODO revisit this location *)
          let@ info = get_datatype_constr loc s in
          let@ args_annotated = correct_members_sorted_annotated loc info.c_params args in
          let@ args =
            ListM.mapM (fun (bt', (id', t')) ->
+               (* TODO - add location information to binders *)
                let@ t' = check loc bt' t' in
                return (id', t')
              ) args_annotated
@@ -1047,14 +1047,15 @@ module WLRT = struct
   type t = LogicalReturnTypes.t
 
   let welltyped loc lrt =
-    let rec aux = function
+    let rec aux = 
+      let here = Locations.other __FUNCTION__ in 
+      function
       | Define ((s, it), ((loc, _) as info), lrt) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          let@ it = WIT.infer it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         (* TODO revisit this location *)
-         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it loc)) in
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
          let@ lrt = aux lrt in
          return (Define ((s, it), info, lrt))
       | Resource ((s, (re, re_oa_spec)), ((loc, _) as info), lrt) ->
@@ -1062,8 +1063,7 @@ module WLRT = struct
             there's no name clashes *)
          let@ (re, re_oa_spec) = WRS.welltyped loc (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         (* TODO revisit this location *)
-         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, loc))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
          let@ lrt = aux lrt in
          return (Resource ((s, (re, re_oa_spec)), info, lrt))
       | Constraint (lc, info, lrt) ->
@@ -1118,14 +1118,15 @@ end
 module WLAT = struct
 
   let welltyped i_subst i_welltyped kind loc (at : 'i LAT.t) : ('i LAT.t) m =
-    let rec aux = function
+    let rec aux =
+      let here = Locations.other __FUNCTION__ in
+      function
       | LAT.Define ((s, it), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          let@ it = WIT.infer it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         (* TODO revisit this location *)
-         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it loc)) in
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
          let@ at = aux at in
          return (LAT.Define ((s, it), info, at))
       | LAT.Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
@@ -1133,8 +1134,7 @@ module WLAT = struct
             there's no name clashes *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         (* TODO revisit this location *)
-         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, loc))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
          let@ at = aux at in
          return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
       | LAT.Constraint (lc, info, at) ->
@@ -1226,14 +1226,15 @@ module WLArgs = struct
         loc
         (at : 'i Mu.mu_arguments_l)
       : ('j Mu.mu_arguments_l) m =
-    let rec aux = function
+    let rec aux =
+      let here = Locations.other __FUNCTION__ in
+      function
       | Mu.M_Define ((s, it), ((loc, _) as info), at) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          let@ it = WIT.infer it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
-         (* TODO revisit this location *)
-         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it loc)) in
+         let@ () = add_c (fst info) (LC.t_ (IT.def_ s it here)) in
          let@ at = aux at in
          return (Mu.M_Define ((s, it), info, at))
       | Mu.M_Resource ((s, (re, re_oa_spec)), ((loc, _) as info), at) ->
@@ -1241,8 +1242,7 @@ module WLArgs = struct
             there's no name clashes *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         (* TODO revisit this location *)
-         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, loc))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec, here))) in
          let@ at = aux at in
          return (Mu.M_Resource ((s, (re, re_oa_spec)), info, at))
       | Mu.M_Constraint (lc, info, at) ->

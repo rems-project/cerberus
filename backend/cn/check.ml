@@ -124,10 +124,10 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
             unsupported loc !^"invalid function pointer"
         | Some sym ->
             (* just to make sure it exists *)
-            let@ (fun_loc, _, _) = get_fun_decl loc sym in
+            let@ (_fun_loc, _, _) = get_fun_decl loc sym in
             (* the symbol of a function is the same as the symbol of its address *)
-            (* TODO revisit this choice of `fun_loc` *)
-            return (sym_ (sym, BT.Loc, fun_loc)) )
+            let here = Locations.other __FUNCTION__ in
+            return (sym_ (sym, BT.Loc, here)) )
     ( fun prov p ->
        let@ alloc_id =
           match prov with
@@ -1846,7 +1846,7 @@ let record_globals : 'bty. (symbol * 'bty mu_globs) list -> unit m =
          let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp sym))) in
          let@ () = add_a sym bt info in
          let here = Locations.other __FUNCTION__ in
-         let@ () = add_c Loc.unknown (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt, here)) here)) in
+         let@ () = add_c here (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt, here)) here)) in
          return ()
     ) globs
 

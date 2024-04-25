@@ -1037,19 +1037,18 @@ module EffectfulTranslation = struct
 
 
 
-  let owned_good loc sym (res_t, oargs_ty) =
+  let owned_good sym (res_t, oargs_ty) =
+    let here = Locations.other __FUNCTION__ in
     match res_t with
     | RET.P { name = Owned (scty, Init); _} ->
-       (* TODO revisit these locations *)
-       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, loc) in
-       [(LC.T ((IT.good_ (scty, v) loc)),
-         (loc, Some "default value constraint"))]
+       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, here) in
+       [(LC.T ((IT.good_ (scty, v) here)),
+         (here, Some "default value constraint"))]
     | RET.Q { name = Owned (scty, Init); q = (q_sym, q_bt); q_loc; permission; _} ->
-       (* TODO revisit these locations *)
-       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, loc) in
-       let v_el = IT.map_get_ v (IT.sym_ (q_sym, q_bt, q_loc)) loc in
-       [(LC.forall_ (q_sym, q_bt) (IT.impl_ (permission, IT.good_ (scty, v_el) loc) loc),
-          (loc, Some "default value constraint"))]
+       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, here) in
+       let v_el = IT.map_get_ v (IT.sym_ (q_sym, q_bt, q_loc)) here in
+       [(LC.forall_ (q_sym, q_bt) (IT.impl_ (permission, IT.good_ (scty, v_el) here) here),
+          (here, Some "default value constraint"))]
      | _ ->
         []
 
@@ -1065,8 +1064,8 @@ module EffectfulTranslation = struct
     in
     let pointee_value = match pname with
       | Owned (_, Init) ->
-        (* TODO revisit this location *)
-        [(ptr_expr, (IT.sym_ (sym, oargs_ty, res_loc)))]
+        let here = Locations.other __FUNCTION__ in
+        [(ptr_expr, (IT.sym_ (sym, oargs_ty, here)))]
       | _ -> []
     in
     return (pt, pointee_value)
@@ -1078,13 +1077,12 @@ module EffectfulTranslation = struct
     let@ args = ListM.mapM (translate_cn_expr (SymSet.singleton q) env_with_q) args in
     let@ (pname, ptr_expr, iargs, oargs_ty) =
            translate_cn_res_info res_loc pred_loc env_with_q res args in
-    (* TODO revisit this location *)
-    let@ (ptr_base, step) = split_pointer_linear_step pred_loc (q, bt', res_loc) ptr_expr in
+    let here = Locations.other __FUNCTION__ in
+    let@ (ptr_base, step) = split_pointer_linear_step pred_loc (q, bt', here) ptr_expr in
     let m_oargs_ty = SBT.make_map_bt bt' oargs_ty in
     let pt = (RET.Q { name = pname
               ; q= (q, SBT.to_basetype bt')
-              (* TODO revisit this location *)
-              ; q_loc = res_loc
+              ; q_loc = here
               ; pointer= IT.term_of_sterm ptr_base
               ; step = step
               ; permission= IT.term_of_sterm guard_expr
@@ -1103,7 +1101,7 @@ module EffectfulTranslation = struct
            (q, bt, guard, pred_loc, res, args)
     in
     return (pt,
-            owned_good res_loc sym pt,
+            owned_good sym pt,
             pointee_values)
 
 
@@ -1436,7 +1434,7 @@ let rec make_lrt_generic env st =
     let@ lrt = make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures) in
     let info = (loc, Some "return value good") in
     let here = Locations.other __FUNCTION__ in
-    let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt, loc)) here), info) lrt in
+    let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt, here)) here), info) lrt in
     return (RT.mComputational ((s, bt), (loc, None)) lrt)
 
 

@@ -482,9 +482,10 @@ let rec get_ret_it loc body bt = function
 
 let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
+  let here = Locations.other __FUNCTION__ in
   let def_args = def.LogicalFunctions.args
-    (* TODO ideally this would have the actual argument locations *)
-    |> List.map (fun (s, bt) -> IndexTerms.sym_ (s, bt, def.LogicalFunctions.loc)) in
+    (* TODO - add location information to binders *)
+    |> List.map (fun (s, bt) -> IndexTerms.sym_ (s, bt, here)) in
   Pp.debug 3 (lazy (Pp.item "cn_function converting C function to logical"
     (Pp.infix_arrow (Sym.pp fsym) (Sym.pp id))));
   match fn with

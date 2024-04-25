@@ -256,10 +256,7 @@ module PP = struct
 
   let rec dtree_of_expr ((M_Expr (loc, annot, _ty, expr_)) as expr) =
 
-      let pp_ctor str =
-        pp_eff_ctor str ^^^
-          Cerb_location.pp_location ~clever:false loc
-      in
+      let pp_ctor str = pp_eff_ctor str ^^^ Cerb_location.pp_location ~clever:true loc in
 
       match expr_ with
   (*

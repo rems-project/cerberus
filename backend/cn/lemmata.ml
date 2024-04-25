@@ -657,9 +657,9 @@ let ensure_struct_mem is_good global list_mono loc ct aux = match Sctypes.is_str
   (lazy (
       let@ ty = bt_to_coq global list_mono (loc, Pp.string op_nm) bt in
       let x = Pp.parens (Pp.typ (Pp.string "x") ty) in
-      let loc = Locations.other __FUNCTION__ in
-      let x_it = IT.sym_ (Sym.fresh_named "x", bt, loc) in
-      let@ rhs = aux (it_adjust global (IT.good_value global.struct_decls ct x_it loc)) in
+      let here = Locations.other __FUNCTION__ in
+      let x_it = IT.sym_ (Sym.fresh_named "x", bt, here) in
+      let@ rhs = aux (it_adjust global (IT.good_value global.struct_decls ct x_it here)) in
       return (defn op_nm [x] None rhs)
   )) [tag] in
   return op_nm
