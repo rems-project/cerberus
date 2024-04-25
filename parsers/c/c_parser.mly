@@ -1441,17 +1441,11 @@ iteration_statement:
         , magic_to_attrs (List.rev magic)
         , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
 | FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? RPAREN stmt= scoped(statement)
-    { let (inv_attrs, stmt') =
-        match stmt with
-          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
-              (inv_attrs, inner_stmt)
-          | _ ->
-              (Annot.no_attributes, stmt) in
-      CabsStatement
+  expr3_opt= full_expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-        , inv_attrs
-        , CabsSfor (Some (FC_decl xs_decl), expr2_opt, expr3_opt, stmt') ) }
+        , magic_to_attrs(List.rev magic)
+        , CabsSfor (Some (FC_decl xs_decl), expr2_opt, expr3_opt, stmt) ) }
 ;
 
 (* §6.8.6 Jump statements *)
