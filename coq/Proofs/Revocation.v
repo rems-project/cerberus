@@ -3969,6 +3969,27 @@ Module RevocationProofs.
           state_inv_step.
   Qed.
 
+  (* Could be generlized to arbitrary length *)
+  Fact zmap_add_list_not_at
+    (addr : Z)
+    (bytemap0 : ZMap.t AbsByte)
+    (l : list AbsByte)
+    (addr' : ZMap.key):
+    addr' <> addr ->
+    Datatypes.length l = 1%nat ->
+    ZMap.find (elt:=AbsByte) addr'
+      (zmap_add_list_at bytemap0 l addr) =
+      ZMap.find (elt:=AbsByte) addr' bytemap0.
+  Proof.
+    intros NE L.
+    destruct l;[discriminate|].
+    inv L.
+    destruct l;[|discriminate].
+    cbn - [ZMap.add].
+    apply add_neq_o.
+    lia.
+  Qed.
+
   Lemma store_other_spec
     (loc : location_ocaml)
     (p : provenance)
@@ -4008,11 +4029,10 @@ Module RevocationProofs.
       destruct st, s'.
       cbn in *.
       tuple_inversion.
+      clear -L NE CV.
+      apply zmap_add_list_not_at; auto.
       unfold cap_to_Z.
-      rewrite CV.
-      clear -L.
-      (* TODO: property of [zmap_add_list_at]. Add lemma *)
-      admit.
+      admit. (* TODO: addr/Z mismatch issue *)
     -
       (* same as before but w/o `find_cap_allocation c st = (st, inr (Some (s0, a)))` *)
       assert(length l = 1%nat) as L.
@@ -4027,11 +4047,10 @@ Module RevocationProofs.
       destruct st, s'.
       cbn in *.
       tuple_inversion.
+      clear -L NE CV.
+      apply zmap_add_list_not_at; auto.
       unfold cap_to_Z.
-      rewrite CV.
-      clear -L.
-      (* TODO: property of [zmap_add_list_at]. Add lemma *)
-      admit.
+      admit. (* TODO: addr/Z mismatch issue *)
       Transparent repr.
   Admitted.
 
