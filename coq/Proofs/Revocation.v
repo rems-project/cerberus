@@ -4054,6 +4054,7 @@ Module RevocationProofs.
       Transparent repr.
   Admitted.
 
+  (* TODO: this proof depends on https://github.com/rems-project/cerberus/issues/237 *)
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
