@@ -30,6 +30,8 @@ strip:
 
 .PHONY: complete
 complete:
+	rm c_parser_error.messages
+	touch c_parser_error.messages
 	dune exec menhir -- c_parser.mly --list-errors > /tmp/c_parser_error.auto.messages
 	dune exec menhir -- c_parser.mly \
 	    --merge-errors /tmp/c_parser_error.auto.messages \
