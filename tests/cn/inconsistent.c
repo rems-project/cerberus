@@ -6,8 +6,8 @@ predicate void False(pointer p, i32 i) {
 @*/
 
 void f (int *p) 
-/*@ requires take f1 = each(i32 i; 0i32 <= i && i <= 0i32) { False(p + i, i) } @*/
-/*@ ensures false @*/
+/*@ requires take f1 = each(i32 i; 0i32 <= i && i <= 0i32) { False(p + i, i) };
+    ensures false; @*/
 {
   /*@ extract False, 0i32; @*/
 }

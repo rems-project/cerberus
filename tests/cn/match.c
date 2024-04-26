@@ -16,8 +16,9 @@ function (i32) foo (datatype tree t) {
 void
 check_foo (int x)
 /*@ requires let t = Tree_Node {k: 1i32, v: x, l: Tree_Empty {},
-    r: Tree_Node {k: 3i32, v: 0i32, l: Tree_Empty {}, r: Tree_Empty {}}} @*/
-/*@ ensures foo(t) == x + 1i32 @*/
+    r: Tree_Node {k: 3i32, v: 0i32, l: Tree_Empty {}, r: Tree_Empty {}}};
+    ensures foo(t) == x + 1i32; 
+@*/
 {
 }
 

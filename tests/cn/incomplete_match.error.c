@@ -15,7 +15,7 @@ function (integer) snd (datatype mylist t) {
 
 void
 check_foo (int x)
-/*@ ensures snd(Cons {hd: 10, tl: Cons {hd: 20, tl: Nil {}}}) == 20 @*/
+/*@ ensures snd(Cons {hd: 10, tl: Cons {hd: 20, tl: Nil {}}}) == 20; @*/
 {
 }
 

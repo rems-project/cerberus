@@ -3,7 +3,7 @@ int ffs(int x)
             (x == 1i32) ? (return == 1i32) : true;
             (x == 2i32) ? (return == 2i32) : true;
             (x == 3i32) ? (return == 1i32) : true;
-            (x == 8i32) ? (return == 4i32) : true @*/
+            (x == 8i32) ? (return == 4i32) : true; @*/
 {
   return __builtin_ffs(x);
 }

@@ -23,9 +23,9 @@ predicate {integer len} List (pointer p) {
 
 struct node *
 rev_list (struct node *p)
-/*@ requires is_null(p) || !addr_eq(p, NULL) @*/
-/*@ requires take R = List(p) @*/
-/*@ ensures take R2 = List(return) @*/
+/*@ requires is_null(p) || !addr_eq(p, NULL); @*/
+/*@ requires take R = List(p); @*/
+/*@ ensures take R2 = List(return); @*/
 {
   struct node *rev = NULL;
   struct node *p2;
@@ -33,10 +33,10 @@ rev_list (struct node *p)
   /* FIXME: apparently we need to initialise all loop vars */
   p2 = NULL;
   while (p)
-  /*@ inv is_null(p) || !addr_eq(p, NULL) @*/
-  /*@ inv is_null(rev) || !addr_eq(rev, NULL) @*/
-  /*@ inv take R2 = List(p) @*/
-  /*@ inv take R3 = List(rev) @*/
+  /*@ inv is_null(p) || !addr_eq(p, NULL); @*/
+  /*@ inv is_null(rev) || !addr_eq(rev, NULL); @*/
+  /*@ inv take R2 = List(p); @*/
+  /*@ inv take R3 = List(rev); @*/
   {
     p2 = p->next;
     p->next = rev;

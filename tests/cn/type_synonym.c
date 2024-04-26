@@ -9,8 +9,8 @@ function (xy_tup) mk_tup (u32 x, u32 y)
 
 void
 f (unsigned int x, unsigned int y)
-/*@ requires let tup = mk_tup(x, y) @*/ 
-/*@ ensures tup == tup @*/
+/*@ requires let tup = mk_tup(x, y); @*/ 
+/*@ ensures tup == tup; @*/
 {
   return;
 }

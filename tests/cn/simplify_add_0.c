@@ -1,13 +1,13 @@
 signed int left_zero(signed int x, signed int y)                                     
-/*@ requires x == 0i32 @*/                                                          
-/*@ ensures return == y @*/                                                         
+/*@ requires x == 0i32; @*/                                                          
+/*@ ensures return == y; @*/                                                         
 {                                                                                
   return x + y;                                                                  
 }
 
 signed int right_zero(signed int x, signed int y)                                     
-/*@ requires y == 0i32 @*/                                                          
-/*@ ensures return == x @*/                                                         
+/*@ requires y == 0i32; @*/                                                          
+/*@ ensures return == x; @*/                                                         
 {                                                                                
   return x + y;                                                                  
 }

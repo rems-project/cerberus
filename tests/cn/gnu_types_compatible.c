@@ -2,13 +2,13 @@
 
 
 int f (int x) 
-/*@ ensures return == 20i32 @*/
+/*@ ensures return == 20i32; @*/
 {
   return int_typ_20_30(x);
 }
 
 int g (unsigned int x) 
-/*@ ensures return == 30i32 @*/
+/*@ ensures return == 30i32; @*/
 {
   return int_typ_20_30(x);
 }

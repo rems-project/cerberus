@@ -7,7 +7,7 @@ struct str {
 };
 
 int f (int x)
-/*@ requires (0i32 <= x) && (x < 200i32) @*/
+/*@ requires (0i32 <= x) && (x < 200i32); @*/
 {
   struct str str_inst = {
     .x = x + 2,

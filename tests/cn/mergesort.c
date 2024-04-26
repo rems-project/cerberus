@@ -74,13 +74,13 @@ struct int_list_pair {
 };
 
 struct int_list_pair split(struct int_list *xs) 
-/*@ requires is_null(xs) || !addr_eq(xs, NULL) @*/
-/*@ requires take Xs = IntList(xs) @*/
-/*@ ensures take Ys = IntList(return.fst) @*/
-/*@ ensures take Zs = IntList(return.snd) @*/
-/*@ ensures is_null(return.fst) || !addr_eq(return.fst, NULL) @*/
-/*@ ensures is_null(return.snd) || !addr_eq(return.snd, NULL) @*/
-/*@ ensures {fst: Ys, snd: Zs} == split(Xs) @*/
+/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
+/*@ requires take Xs = IntList(xs); @*/
+/*@ ensures take Ys = IntList(return.fst); @*/
+/*@ ensures take Zs = IntList(return.snd); @*/
+/*@ ensures is_null(return.fst) || !addr_eq(return.fst, NULL); @*/
+/*@ ensures is_null(return.snd) || !addr_eq(return.snd, NULL); @*/
+/*@ ensures {fst: Ys, snd: Zs} == split(Xs); @*/
 { 
   if (xs == 0) { 
     /*@ unfold split(Xs); @*/
@@ -104,13 +104,13 @@ struct int_list_pair split(struct int_list *xs)
 }
 
 struct int_list* merge(struct int_list *xs, struct int_list *ys) 
-/*@ requires is_null(xs) || !addr_eq(xs, NULL) @*/
-/*@ requires is_null(ys) || !addr_eq(ys, NULL) @*/
-/*@ requires take Xs = IntList(xs) @*/
-/*@ requires take Ys = IntList(ys) @*/
-/*@ ensures is_null(return) || !addr_eq(return, NULL) @*/
-/*@ ensures take Zs = IntList(return) @*/
-/*@ ensures Zs == merge(Xs, Ys) @*/
+/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
+/*@ requires is_null(ys) || !addr_eq(ys, NULL); @*/
+/*@ requires take Xs = IntList(xs); @*/
+/*@ requires take Ys = IntList(ys); @*/
+/*@ ensures is_null(return) || !addr_eq(return, NULL); @*/
+/*@ ensures take Zs = IntList(return); @*/
+/*@ ensures Zs == merge(Xs, Ys); @*/
 { 
   if (xs == 0) { 
     /*@ unfold merge(Xs, Ys); @*/
@@ -137,11 +137,11 @@ struct int_list* merge(struct int_list *xs, struct int_list *ys)
 }
 
 struct int_list* mergesort(struct int_list *xs) 
-/*@ requires is_null(xs) || !addr_eq(xs, NULL) @*/
-/*@ requires take Xs = IntList(xs) @*/
-/*@ ensures take Ys = IntList(return) @*/
-/*@ ensures is_null(return) || !addr_eq(return, NULL) @*/
-/*@ ensures Ys == mergesort(Xs) @*/
+/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
+/*@ requires take Xs = IntList(xs); @*/
+/*@ ensures take Ys = IntList(return); @*/
+/*@ ensures is_null(return) || !addr_eq(return, NULL); @*/
+/*@ ensures Ys == mergesort(Xs); @*/
 {
   if (xs == 0) { 
     /*@ unfold mergesort(Xs); @*/

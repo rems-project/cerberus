@@ -2,14 +2,14 @@
 
 
 int f () 
-/*@ ensures return == 20i32 @*/
+/*@ ensures return == 20i32; @*/
 {
   return ite(1,20,30);
 }
 
 
 int g () 
-/*@ ensures return == 30i32 @*/
+/*@ ensures return == 30i32; @*/
 {
   return ite(0,20,30);
 }

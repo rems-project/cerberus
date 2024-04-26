@@ -2215,8 +2215,8 @@ cn_lemma:
 | CN_LEMMA
   str= cn_variable
   cn_lemma_args= delimited(LPAREN, cn_args, RPAREN)
-  CN_REQUIRES cn_lemma_requires=separated_nonempty_list(SEMICOLON, condition)
-  CN_ENSURES cn_lemma_ensures=separated_nonempty_list(SEMICOLON, condition)
+  CN_REQUIRES cn_lemma_requires=nonempty_list(condition)
+  CN_ENSURES cn_lemma_ensures=nonempty_list(condition)
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.point $startpos(str) in
       { cn_lemma_loc= loc
@@ -2235,8 +2235,8 @@ cn_fun_spec:
 | CN_SPEC
   str= cn_variable
   cn_spec_args= delimited(LPAREN, cn_args, RPAREN)
-  CN_REQUIRES cn_spec_requires=separated_nonempty_list(SEMICOLON, condition)
-  CN_ENSURES cn_spec_ensures=separated_nonempty_list(SEMICOLON, condition)
+  CN_REQUIRES cn_spec_requires=nonempty_list(condition)
+  CN_ENSURES cn_spec_ensures=nonempty_list(condition)
     { let loc = Cerb_location.point $startpos(str) in
       { cn_spec_loc= loc
       ; cn_spec_name= str
@@ -2392,31 +2392,31 @@ ctype:
 
 /* copying 'clause' and adjusting */
 condition:
-| CN_TAKE str= cn_variable EQ res= resource
+| CN_TAKE str= cn_variable EQ res= resource SEMICOLON
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletResource (loc, str, res) }
-| CN_LET str= cn_variable EQ e= expr
+| CN_LET str= cn_variable EQ e= expr SEMICOLON
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletExpr (loc, str, e) }
-| e= assert_expr
+| e= assert_expr SEMICOLON
     { Cerb_frontend.Cn.CN_cconstr (Cerb_location.region $loc NoCursor, e) }
 ;
 
 
 function_spec_item:
-| CN_TRUSTED
+| CN_TRUSTED SEMICOLON
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_trusted loc }
-| CN_ACCESSES accs=separated_list(SEMICOLON, cn_variable)
+| CN_ACCESSES accs=nonempty_list(terminated(cn_variable,SEMICOLON))
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_accesses (loc, accs) }
-| CN_REQUIRES cs=separated_list(SEMICOLON, condition)
+| CN_REQUIRES cs=nonempty_list(condition)
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_requires (loc, cs) }
-| CN_ENSURES cs=separated_list(SEMICOLON, condition)
+| CN_ENSURES cs=nonempty_list(condition)
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_ensures (loc, cs) }
-| CN_FUNCTION nm=cn_variable
+| CN_FUNCTION nm=cn_variable SEMICOLON
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_mk_function (loc, nm) }
 
@@ -2426,7 +2426,7 @@ function_spec:
 
 
 loop_spec:
-| CN_INV cs=separated_list(SEMICOLON, condition) EOF
+| CN_INV cs=nonempty_list(condition) EOF
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_inv (loc, cs) }
 
@@ -2457,9 +2457,9 @@ cn_statement:
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }
-| CN_EXTRACT attrs=cn_attrs tbe=to_be_extracted e=expr SEMICOLON
+| CN_EXTRACT tbe=to_be_extracted e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
-      CN_statement (loc, CN_extract (attrs, tbe, e)) }
+      CN_statement (loc, CN_extract ([], tbe, e)) }
 | CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }
@@ -2483,7 +2483,7 @@ cn_statement:
       CN_statement (loc, CN_print e) }
 
 cn_statements:
-| ls=list(cn_statement) EOF
+| ls=nonempty_list(cn_statement) EOF
     { ls }
 
 cn_toplevel_elem:

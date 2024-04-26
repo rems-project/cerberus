@@ -93,37 +93,37 @@ lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
     map <i32, datatype tree> t_children)
   requires
     0i32 <= arc.i;
-    arc.len <= LEN_LIMIT
+    arc.len <= LEN_LIMIT;
   ensures
     (tree_v(t, arc)) == (tree_v_step(t, arc));
     (in_tree(t, arc)) == (in_tree_step(t, arc));
     let i = (arc.arr)[arc.i];
     ((0i32 <= i) && (i < NUM_NODES))
     ? (nth_tree_list(array_to_tree_list (t_children, NUM_NODES), i) == t_children[i])
-    : true
+    : true;
 @*/
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
-/*@ requires is_null(t) || ((u64) t != 0u64) @*/
-/*@ requires path_len <= LEN_LIMIT @*/
-/*@ requires take T = Tree(t) @*/
-/*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned(array_shift(path, j))} @*/
-/*@ requires ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len)) @*/
-/*@ requires each (i32 j; (0i32 <= j) && (j < path_len))
-    {(0i32 <= (Xs[j])) && ((Xs[j]) < NUM_NODES)} @*/
-/*@ requires take V = Owned(v) @*/
-/*@ requires let arc = {arr: Xs, i: i, len: path_len} @*/
-/*@ ensures take T2 = Tree(t) @*/
-/*@ ensures T2.t == {T.t}@start @*/
-/*@ ensures T2.children == {T.children}@start @*/
-/*@ ensures take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned(array_shift(path, j))} @*/
-/*@ ensures Xs2 == {Xs}@start @*/
-/*@ ensures take V2 = Owned(v) @*/
-/*@ ensures ((return == 0i32) && (not (in_tree (T2.t, arc))))
-  || ((return == 1i32) && (in_tree (T2.t, arc)) && ((tree_v (T2.t, arc)) == V2)) @*/
+/*@ requires is_null(t) || ((u64) t != 0u64);
+             path_len <= LEN_LIMIT;
+             take T = Tree(t);
+             take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
+    {Owned(array_shift(path, j))};
+             ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len));
+             each (i32 j; (0i32 <= j) && (j < path_len))
+    {(0i32 <= (Xs[j])) && ((Xs[j]) < NUM_NODES)};
+             take V = Owned(v);
+             let arc = {arr: Xs, i: i, len: path_len};
+    ensures take T2 = Tree(t);
+            T2.t == {T.t}@start;
+            T2.children == {T.children}@start;
+            take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
+                            {Owned(array_shift(path, j))};
+            Xs2 == {Xs}@start;
+            take V2 = Owned(v);
+            ((return == 0i32) && (not (in_tree (T2.t, arc))))
+  || ((return == 1i32) && (in_tree (T2.t, arc)) && ((tree_v (T2.t, arc)) == V2)); @*/
 {
   int idx = 0;
   int r = 0;
@@ -152,15 +152,15 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 int
 lookup (tree t, int *path, int path_len, int *v)
 /*@ requires let T = Tree(t) @*/
-/*@ requires let A = Arc(path, 0, path_len) @*/
-/*@ requires let V = Owned(v) @*/
-/*@ ensures let T2 = Tree(t) @*/
-/*@ ensures T2.t == {T.t}@start @*/
-/*@ ensures let A2 = Arc(path, 0, path_len) @*/
-/*@ ensures A2.arc == {A.arc}@start @*/
-/*@ ensures let V2 = Owned(v) @*/
-/*@ ensures ((return == 0) && ((T2.t[A2.arc]) == Node_None {}))
-  || ((return == 1) && ((T2.t[A2.arc]) == Node {v: V2})) @*/
+             let A = Arc(path, 0, path_len);
+             let V = Owned(v);
+    ensures let T2 = Tree(t);
+            T2.t == {T.t}@start;
+            let A2 = Arc(path, 0, path_len);
+            A2.arc == {A.arc}@start;
+            let V2 = Owned(v);
+            ((return == 0) && ((T2.t[A2.arc]) == Node_None {}))
+  || ((return == 1) && ((T2.t[A2.arc]) == Node {v: V2})); @*/
 {
   int i;
 

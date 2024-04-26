@@ -24,8 +24,8 @@ predicate {integer size} Tree (pointer p) {
 
 struct tree_node *
 rev_tree (struct tree_node *t)
-/*@ requires take T = Tree(t) @*/
-/*@ ensures take T2 = Tree(return) @*/
+/*@ requires take T = Tree(t);
+    ensures take T2 = Tree(return); @*/
 {
   struct tree_node *tmp;
 

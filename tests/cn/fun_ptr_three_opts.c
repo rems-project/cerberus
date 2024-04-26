@@ -44,7 +44,7 @@ predicate (void) Is_Binop (pointer f) {
 
 int_binop
 get_int_binop (int x)
-/*@ ensures take X = Is_Binop (return) @*/
+/*@ ensures take X = Is_Binop (return); @*/
 {
   if (x == 0) {
     return f1;

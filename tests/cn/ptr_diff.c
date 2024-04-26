@@ -1,7 +1,7 @@
 
 int
 f (int *p, int *q)
-/*@ requires q == array_shift(p, 10i32) @*/
+/*@ requires q == array_shift(p, 10i32); @*/
 {
   int x;
   x = p - q; // intentionally p - q = -10

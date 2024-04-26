@@ -19,7 +19,7 @@ function (i32) num_nodes ()
 @*/
 
 int cn_get_num_nodes (void)
-/*@ cn_function num_nodes @*/
+/*@ cn_function num_nodes; @*/
 {
   return NUM_NODES;
 }
@@ -82,15 +82,15 @@ predicate {datatype tree_arc arc, map<i32, i32> xs}
 lemma mk_arc_lemma (map <i32, i32> m, i32 i, i32 len)
   requires
     ((0i32 <= len) && (0i32 <= i) && (i <= len));
-    len <= LEN_LIMIT
+    len <= LEN_LIMIT;
   ensures (mk_arc(m, i, len)) ==
     (i < len ?
         Arc_Step {i: m[i], tail: mk_arc(m, i + 1i32, len)} :
-        Arc_End {})
+        Arc_End {});
 
 lemma empty_lemma (datatype tree_arc arc)
-  requires true
-  ensures ((empty ())[arc]) == Node_None {}
+  requires true;
+  ensures ((empty ())[arc]) == Node_None {};
 
 function (datatype tree_node_option) construct_app_rhs (i32 v,
         map<i32, map<datatype tree_arc, datatype tree_node_option> > ns,
@@ -123,32 +123,32 @@ lemma construct_lemma (i32 v,
         map<i32, map<datatype tree_arc, datatype tree_node_option> > ns,
         datatype tree_arc arc)
   requires
-    arc_first_idx_valid(arc)
+    arc_first_idx_valid(arc);
   ensures
-    ((construct(v, ns))[arc]) == (construct_app_rhs(v, ns, arc))
+    ((construct(v, ns))[arc]) == (construct_app_rhs(v, ns, arc));
 
 @*/
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
-/*@ requires is_null(t) || ((u64) t != 0u64) @*/
-/*@ requires path_len <= LEN_LIMIT @*/
-/*@ requires take T = Tree(t) @*/
-/*@ requires take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned(array_shift(path, j))} @*/
-/*@ requires ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len)) @*/
-/*@ requires each (i32 j; (0i32 <= j) && (j < path_len))
-    {(0i32 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
-/*@ requires take V = Owned(v) @*/
-/*@ requires let arc = mk_arc(Xs, i, path_len) @*/
-/*@ ensures take T2 = Tree(t) @*/
-/*@ ensures T2.t == {T.t}@start @*/
-/*@ ensures take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
-    {Owned(array_shift(path, j))} @*/
-/*@ ensures Xs2 == {Xs}@start @*/
-/*@ ensures take V2 = Owned(v) @*/
-/*@ ensures ((return == 0i32) && ((T2.t[arc]) == Node_None {}))
-  || ((return == 1i32) && ((T2.t[arc]) == Node {v: V2})) @*/
+/*@ requires is_null(t) || ((u64) t != 0u64);
+             path_len <= LEN_LIMIT;
+             take T = Tree(t);
+             take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
+                            {Owned(array_shift(path, j))};
+             ((0i32 <= path_len) && (0i32 <= i) && (i <= path_len));
+             each (i32 j; (0i32 <= j) && (j < path_len))
+                  {(0i32 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))};
+             take V = Owned(v);
+             let arc = mk_arc(Xs, i, path_len);
+    ensures take T2 = Tree(t);
+            T2.t == {T.t}@start;
+            take Xs2 = each (i32 j; (0i32 <= j) && (j < path_len))
+                            {Owned(array_shift(path, j))};
+            Xs2 == {Xs}@start;
+            take V2 = Owned(v);
+            ((return == 0i32) && ((T2.t[arc]) == Node_None {}))
+              || ((return == 1i32) && ((T2.t[arc]) == Node {v: V2})); @*/
 {
   int idx = 0;
   int r = 0;

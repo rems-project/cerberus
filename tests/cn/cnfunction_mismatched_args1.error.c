@@ -3,7 +3,7 @@
  @*/
 
 int c_bw_or(int x)
-/*@ cn_function bw_or @*/
+/*@ cn_function bw_or; @*/
 {
     return x | 1;
 }

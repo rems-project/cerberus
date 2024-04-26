@@ -8,7 +8,7 @@ function (x_type) make_x (x_type x)
 @*/
 
 int test (x_type x)
-/*@ requires make_x (x) == x @*/
+/*@ requires make_x (x) == x; @*/
 {
   return 0;
 }

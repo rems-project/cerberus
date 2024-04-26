@@ -17,7 +17,7 @@ function ({u32 x1, u32 x2}) get_globals ()
 
 int
 f (int x)
-/*@ accesses global_x @*/
+/*@ accesses global_x; @*/
 {
   /* resolution of the 'g' & 'extern_f' addrs triggered a bug at one point */
   /*@ assert (((u32) (&x)) == ((u32) (&x))); @*/;
