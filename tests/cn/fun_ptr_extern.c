@@ -11,7 +11,7 @@ f1 (int x, int y) {
 
 extern int f2 (int x, int y);
 /*@
-spec f2 (i32 x, i32 y)
+spec f2 (i32 x, i32 y);
   requires true;
   ensures true;
 @*/

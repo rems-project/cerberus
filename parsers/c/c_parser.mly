@@ -2234,7 +2234,7 @@ cn_datatype:
 cn_fun_spec:
 | CN_SPEC
   str= cn_variable
-  cn_spec_args= delimited(LPAREN, cn_args, RPAREN)
+  cn_spec_args= delimited(LPAREN, cn_args, RPAREN) SEMICOLON
   CN_REQUIRES cn_spec_requires=nonempty_list(condition)
   CN_ENSURES cn_spec_ensures=nonempty_list(condition)
     { let loc = Cerb_location.point $startpos(str) in
