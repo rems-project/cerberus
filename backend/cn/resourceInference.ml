@@ -40,7 +40,7 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
         Pp.debug lvl (lazy (Pp.item ("quantified " ^ msg) (IT.pp tm)));
         Pp.debug lvl (lazy (pp_f tm'))
       | _ ->
-        Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
+        Pp.warn (Locations.other __FUNCTION__) (Pp.bold "unexpected quantifier count with model")
   in
   diag "counterexample, expanding" c;
   let c2 = Simplify.LogicalConstraints.simp simp_ctxt c in

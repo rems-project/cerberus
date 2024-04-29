@@ -296,9 +296,9 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
         failwith "user type-abbreviation not removed by cabs->ail elaboration"
     | CN_c_typedef_name sym ->
         (* FIXME handle errors here properly *)
-        let loc = Locations.unknown in
-        match env.fetch_typedef loc sym with
-          | Result.Ok r -> Memory.sbt_of_sct (Sctypes.of_ctype_unsafe loc r)
+        let here = Locations.other __FUNCTION__ in
+        match env.fetch_typedef here sym with
+          | Result.Ok r -> Memory.sbt_of_sct (Sctypes.of_ctype_unsafe here r)
           | Result.Error e -> failwith (Pp.plain (TypeErrors.((pp_message e.msg).short)))
 
 

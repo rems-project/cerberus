@@ -902,9 +902,11 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
          | Some (abt, _) -> abt
          | _ -> failwith ("value_check: argument not a map: " ^ Pp.plain (pp_with_typ about))
        in
-       let () = if BT.equal ix_bt Memory.intptr_bt then ()
-         else Pp.warn Locations.unknown
-           (Pp.item "unexpected type of array arg" (pp_with_typ about))
+       let () =
+         if BT.equal ix_bt Memory.intptr_bt then
+           ()
+         else
+           Pp.warn (Locations.other __FUNCTION__) (Pp.item "unexpected type of array arg" (pp_with_typ about))
        in
        let i_s, i = fresh ix_bt loc in
        eachI_ (0, (i_s, ix_bt), n - 1) (aux item_ct (map_get_ about i loc)) loc

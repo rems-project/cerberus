@@ -1761,7 +1761,7 @@ let batch = ref false
 let record_tagdefs tagDefs =
   PmapM.iterM (fun tag def ->
       match def with
-      | M_UnionDef _ -> unsupported Loc.unknown !^"todo: union types"
+      | M_UnionDef _ -> unsupported (Loc.other __FUNCTION__) !^"todo: union types"
       | M_StructDef layout -> add_struct_decl tag layout
     ) tagDefs
 
@@ -1770,7 +1770,7 @@ let check_tagdefs tagDefs =
     let open Memory in
     match def with
     | M_UnionDef _ ->
-       unsupported Loc.unknown !^"todo: union types"
+       unsupported (Loc.other __FUNCTION__) !^"todo: union types"
     | M_StructDef layout ->
        let@ _ =
          ListM.fold_rightM (fun piece have ->
@@ -1779,7 +1779,7 @@ let check_tagdefs tagDefs =
                 (* this should have been checked earlier by the frontend *)
                 assert false
              | Some (name, ct) ->
-                let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
+                let@ () = WellTyped.WCT.is_ct (Loc.other __FUNCTION__) ct in
                 return (IdSet.add name have)
              | None ->
                 return have
@@ -1841,9 +1841,9 @@ let record_globals : 'bty. (symbol * 'bty mu_globs) list -> unit m =
       match def with
       | M_GlobalDef (ct, _)
       | M_GlobalDecl ct ->
-         let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
+         let@ () = WellTyped.WCT.is_ct (Loc.other __FUNCTION__) ct in
          let bt = Loc in
-         let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp sym))) in
+         let info = (Loc.other __FUNCTION__, lazy (Pp.item "global" (Sym.pp sym))) in
          let@ () = add_a sym bt info in
          let here = Locations.other __FUNCTION__ in
          let@ () = add_c here (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt, here)) here)) in
@@ -1970,7 +1970,7 @@ let ffs_proxy_ft sz =
   let sz_name = CF.Pp_ail.string_of_integerBaseType sz in
   let bt = Memory.bt_of_sct (Sctypes.(Integer (Signed sz))) in
   let ret_bt = Memory.bt_of_sct (Sctypes.(Integer (Signed Int_))) in
-  let info = (Locations.unknown, Some ("ffs_proxy builtin ft: " ^ sz_name)) in
+  let info = (Locations.other __FUNCTION__, Some ("ffs_proxy builtin ft: " ^ sz_name)) in
   let (n_sym, n) = IT.fresh_named bt "n_" here in
   let (ret_sym, ret) = IT.fresh_named ret_bt "return" here in
   let eq_ffs = LC.T (IT.eq_ (ret, IT.cast_ ret_bt (IT.arith_unop Terms.BWFFSNoSMT n here) here) here) in
@@ -1985,7 +1985,7 @@ let add_stdlib_spec mu_call_sigs fsym =
   | Some s when Setup.unfold_stdlib_name s ->
     let add ft = begin
         Pp.debug 2 (lazy (Pp.headline ("adding builtin spec for procedure " ^ Sym.pp_string fsym)));
-        add_fun_decl fsym (Locations.unknown, Some ft, Pmap.find fsym mu_call_sigs)
+        add_fun_decl fsym (Locations.other __FUNCTION__, Some ft, Pmap.find fsym mu_call_sigs)
       end in
     if String.equal s "ctz_proxy"
     then

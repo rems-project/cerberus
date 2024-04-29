@@ -210,7 +210,7 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
         ()
       else begin
         let msg = Pp.item "q-resource step disagrees with ctype size" (RET.pp res) in
-        Pp.warn Locations.unknown msg;
+        Pp.warn (Locations.other __FUNCTION__) msg;
         raise (Failure msg)
       end;
       let ispans = perm_spans m_g (fst qpt.q) qpt.permission in

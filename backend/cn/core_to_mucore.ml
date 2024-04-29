@@ -1378,7 +1378,7 @@ let normalise_fun_map
 
 
 let normalise_globs env sym g =
-  let loc = Loc.unknown in
+  let loc = Loc.other __FUNCTION__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
      let@ () = check_against_core_bt loc bt BT.Loc in
@@ -1442,14 +1442,14 @@ let make_struct_decl loc fields (tag : Sym.t) =
 
 
 let normalise_tag_definition tag def =
-  let loc = Loc.unknown in
+  let here = Loc.other __FUNCTION__ in
   match def with
   | StructDef(fields, Some flexible_array_member) ->
-     Tools.unsupported loc !^"flexible array member"
+     Tools.unsupported here !^"flexible array member"
   | StructDef (fields, None) ->
-     M_StructDef (make_struct_decl loc fields tag)
+     M_StructDef (make_struct_decl here fields tag)
   | UnionDef l ->
-     Tools.unsupported loc !^"union types"
+     Tools.unsupported here !^"union types are not supported"
 
 
 let normalise_tag_definitions tagDefs =

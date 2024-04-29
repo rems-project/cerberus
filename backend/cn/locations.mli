@@ -9,8 +9,6 @@ type info = loc * string option
 
 type path = t list
 
-val unknown : t
-
 val other : string -> t
 
 val is_unknown_location : t -> bool

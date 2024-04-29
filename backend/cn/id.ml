@@ -15,7 +15,9 @@ let compare id id' = String.compare (s id) (s id')
 
 let parse loc id = CF.Symbol.Identifier (loc,id)
 
-let id id = CF.Symbol.Identifier (Locations.unknown,id)
+let id id =
+  let here = Locations.other __FUNCTION__ in
+  CF.Symbol.Identifier (here,id)
 
 let is_str str id = String.equal (s id) str
 

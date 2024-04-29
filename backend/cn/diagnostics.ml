@@ -182,8 +182,9 @@ and get_eqs_then_investigate cfg x y =
   let x_set = IT.fold_list (fun _ acc t -> if BT.equal (IT.bt t) (IT.bt x)
     then ITSet.add t acc else acc) [] ITSet.empty cs in
   let opt_xs = ITSet.elements x_set in
-  let@ () = test_value_eqs Locations.unknown None x opt_xs in
-  let@ () = test_value_eqs Locations.unknown None y opt_xs in
+  let here = Locations.other __FUNCTION__ in
+  let@ () = test_value_eqs here None x opt_xs in
+  let@ () = test_value_eqs here None y opt_xs in
   investigate_term cfg (IT.eq_ (x, y) @@ Locations.other __FUNCTION__)
 
 and investigate_pred cfg nm t =

@@ -477,7 +477,7 @@ let do_unfold_resources loc =
   let rec aux () =
     let@ s = get () in
     let@ movable_indices = get_movable_indices_inner () in
-    let@ provable_f = provable_inner Locations.unknown in
+    let@ provable_f = provable_inner (Locations.other __FUNCTION__) in
     let (resources, orig_ix) = s.resources in
     let _orig_hist = s.resource_history in
     Pp.debug 8 (lazy (Pp.string "-- checking resource unfolds now --"));

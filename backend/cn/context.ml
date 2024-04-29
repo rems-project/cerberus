@@ -214,9 +214,13 @@ let add_r loc r (ctxt : t) =
 let res_map_history m id =
   match IntMap.find_opt id m with
   | Some h -> h
-  | None -> {last_written = Locations.unknown;
-    reason_written = "unknown"; last_written_id = id;
-    last_read = Locations.unknown; last_read_id = id}
+  | None ->
+    let here = Locations.other __FUNCTION__ in
+    { last_written = here
+    ; reason_written = "unknown"
+    ; last_written_id = id
+    ; last_read = here
+    ; last_read_id = id }
 
 let res_history (ctxt : t) id = res_map_history ctxt.resource_history id
 
