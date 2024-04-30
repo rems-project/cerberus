@@ -408,8 +408,8 @@ let pp_field w = !^ (ansi_format [Bold; Green] w)
 
 
 let dtree_of_tagDefs xs =
-  let aux (sym, tagDef) =
-    Pp_ail_ast.dtree_of_tag_definition (sym, (Cerb_location.unknown, Annot.no_attributes, tagDef)) in
+  let aux (sym, (loc, tagDef)) =
+    Pp_ail_ast.dtree_of_tag_definition (sym, (loc, Annot.no_attributes, tagDef)) in
   Dnode ( pp_field ".tagDefs"
         , List.map aux (Pmap.bindings_list xs) )
 

@@ -181,7 +181,7 @@ val integer_ival: integer -> integer_value
 val max_ival: Ctype.integerType -> integer_value
 val min_ival: Ctype.integerType -> integer_value
 val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-val offsetof_ival: map Symbol.sym Ctype.tag_definition -> Symbol.sym -> Symbol.identifier -> integer_value
+val offsetof_ival: map Symbol.sym (Loc.t * Ctype.tag_definition) -> Symbol.sym -> Symbol.identifier -> integer_value
 val sizeof_ival: Ctype.ctype -> integer_value
 val alignof_ival: Ctype.ctype -> integer_value
 val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value

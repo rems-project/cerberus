@@ -236,10 +236,10 @@ module CerbTagDefs = struct
             ) l)
 
   (* very inefficient! *)
-  let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t =
+  let toCoq_SymMap (m:(Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t =
     let l = Pmap.bindings_list m in
     let (e:CoqCtype.tag_definition CoqSymbol.SymMap.t) = CoqSymbol.SymMap.empty in
-    List.fold_left (fun m (s,d) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
+    List.fold_left (fun m (s,(_, d)) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
 
   let tagDefs _ = toCoq_SymMap (Tags.tagDefs ())
 end

@@ -599,7 +599,7 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
  * program, with exactly the same compiled code. *)
 type 'a core_dump =
   { dump_main: Symbol.sym option;
-    dump_tagDefs: (Symbol.sym * Ctype.tag_definition) list;
+    dump_tagDefs: (Symbol.sym * (Cerb_location.t * Ctype.tag_definition)) list;
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
     dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;

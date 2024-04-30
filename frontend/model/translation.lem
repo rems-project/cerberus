@@ -2586,7 +2586,7 @@ end
       
       | A.AilEstruct tag_sym ident_e_opts ->
           let ident_tys = match Map.lookup tag_sym tagDefs with
-            | Just (Cty.StructDef z _) ->
+            | Just (_, Cty.StructDef z _) ->
                 z
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEstruct"
@@ -2627,9 +2627,9 @@ end
           match Map.lookup tag_sym tagDefs with
             | (*BISECT-IGNORE*) Nothing ->
                 illTypedAil loc "AilEunion: couldn't find the definition"
-            | (*BISECT-IGNORE*) Just (Cty.StructDef _ _) ->
+            | (*BISECT-IGNORE*) Just (_, Cty.StructDef _ _) ->
                 illTypedAil loc "AilEunion: found a struct definition"
-            | Just (Cty.UnionDef ident_tys) ->
+            | Just (_, Cty.UnionDef ident_tys) ->
                 match List.lookup memb_ident ident_tys with
                   | (*BISECT-IGNORE*) Nothing ->
                       illTypedAil loc "AilEunion: couldn't find a union definition"
@@ -3877,7 +3877,7 @@ val translate_tag_definitions:
   list (A.ail_identifier * (Loc.t * Annot.attributes * Ctype.tag_definition)) ->
   C.core_tag_definitions
 let translate_tag_definitions ctx =
-  Map.fromList (List.map (fun (x, (_, _, y)) -> (x, y)) ctx)
+  Map.fromList (List.map (fun (x, (loc, _, y)) -> (x, (loc, y))) ctx)
 
 import Cerb_attributes
 

@@ -180,11 +180,11 @@ module Constraints = struct
       (* FIXME VICTOR *)
       Pmap.iter (fun (Sym.Symbol (_, tag_sym_n, _)) tagDef ->
         let xs = match tagDef with
-          | Ctype.StructDef (z, None) ->
+          | _, Ctype.StructDef (z, None) ->
               z
-          | Ctype.StructDef (z, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty))) ->
+          | _, Ctype.StructDef (z, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty))) ->
               z @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))]
-          | Ctype.UnionDef z ->
+          | _, Ctype.UnionDef z ->
               z in
         List.iter (fun (Sym.Identifier (_, membr_str), _) ->
           let padding_str = "padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str in

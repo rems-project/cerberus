@@ -14,7 +14,7 @@ type parsed_core_file =
   Symbol.sym (* main symbol *) *
   (Symbol.sym * (Core.core_base_type * Ctype.ctype) * unit Core.expr) list (* globals *) *
   unit Core.fun_map (* fun map *) *
-  (Symbol.sym, Ctype.tag_definition) Pmap.map (* tagDefs *)
+  (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map (* tagDefs *)
 
 (* Type of Core parser outputs *)
 type result =
