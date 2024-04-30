@@ -109,7 +109,7 @@ let check_computational_bound loc s =
 
 
 let unsupported loc doc =
-  fail (fun _ -> {loc; msg = Generic (!^"unsupported" ^^^ doc) })
+  fail (fun _ -> {loc; msg = Unsupported (!^"unsupported" ^^^ doc) })
 
 let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
   let@ () = ensure_base_type loc ~expect BT.Loc in

@@ -685,7 +685,7 @@ let n_memop loc memop pexprs =
 
 
 let unsupported loc doc =
-  fail {loc; msg = Generic (!^"unsupported" ^^^ doc) }
+  fail {loc; msg = Unsupported (!^"unsupported" ^^^ doc) }
 
 let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m =
   let (markers_env, cn_desugaring_state) = desugaring_things in

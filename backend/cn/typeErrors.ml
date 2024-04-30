@@ -156,6 +156,7 @@ type message =
   | StaticError of {err : string; ctxt : Context.t; model : Solver.model_with_q}
   | Generic of Pp.document
   | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
+  | Unsupported of Pp.document
 
   | Parser of Cerb_frontend.Errors.cparser_cause
 
@@ -411,6 +412,9 @@ let pp_message te =
      let short = err in
      let state = Explain.state ctxt model Explain.no_ex in
      { short; descr = None; state = Some state;  }
+  | Unsupported err ->
+     let short = err in
+     { short; descr = None; state = None;  }
   | Parser err ->
      let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
      { short; descr = None; state = None;  }
