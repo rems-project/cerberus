@@ -85,6 +85,7 @@ jobs:
       with: 
         repository: rems-project/cn-tutorial
         path: cn-tutorial
+        ref: fix-semicolon-syntax
 
     # copying 'Run Cerberus CI tests'
     - name: Run CN CI tests
