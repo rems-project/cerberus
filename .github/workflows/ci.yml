@@ -96,3 +96,14 @@ jobs:
         eval $(opam env --switch=with_coq)
         cd tests; USE_OPAM='' ./run-cheri.sh
         cd ..
+
+
+    - name: Checkout cn-tutorial
+      uses: actions/checkout@v4
+      with: 
+        repository: rems-project/cn-tutorial
+        path: cn-tutorial
+
+    - name: Run CN CI tests
+      run: |
+        tests/run-cn.sh
