@@ -850,7 +850,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
         match Caux.valueFromPexprs pes' with
           | Just cvals ->
               let xs = List.map (fun (memb_ident, cval) ->
-                match fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs with
+                match snd $ fromJust "Core_eval, PEstruct 1,1" (Map.lookup tag_sym file.tagDefs) with
                   | Ctype.StructDef membrs flexible_opt ->
                       (* let () = match flexible_opt with
                         | Nothing ->
@@ -877,7 +877,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
-              match fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs with
+              match snd $ fromJust "Core_eval, PEunion 1,1" (Map.lookup tag_sym file.tagDefs) with
                 | Ctype.UnionDef membrs ->
                     let (_, _, _, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
                     let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in

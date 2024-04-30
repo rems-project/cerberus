@@ -5,9 +5,9 @@ open import Utils Ctype
 import Map_extra
 
 (* SEE src/tags.mli for the documentation *)
-val tagDefs: unit -> map Symbol.sym tag_definition
-val set_tagDefs: map Symbol.sym tag_definition -> unit
-val with_tagDefs: forall 'a. map Symbol.sym tag_definition -> (unit -> 'a) -> 'a
+val tagDefs: unit -> map Symbol.sym (Loc.t * tag_definition)
+val set_tagDefs: map Symbol.sym (Loc.t * tag_definition) -> unit
+val with_tagDefs: forall 'a. map Symbol.sym (Loc.t * tag_definition) -> (unit -> 'a) -> 'a
 
 declare ocaml target_rep function tagDefs = `Tags.tagDefs`
 declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
@@ -19,16 +19,16 @@ declare hol target_rep function with_tagDefs = `with_tagDefs`
 
 val get_membersDefs: Symbol.sym -> tag_definition
 let get_membersDefs tag_sym =
-  fromJust "Ctype_aux.get_membersDefs" (Map.lookup tag_sym (tagDefs ()))
+  snd $ fromJust "Ctype_aux.get_membersDefs" (Map.lookup tag_sym (tagDefs ()))
 
 val get_membersDefs_with_tagDefs: map Symbol.sym tag_definition -> Symbol.sym -> tag_definition
 let get_membersDefs_with_tagDefs tagDefs tag_sym =
   fromJust ("Ctype_aux._with_tagDefs[" ^ show tag_sym ^ "]") (Map.lookup tag_sym tagDefs)
 
-val get_structDef_with_tagDefs: map Symbol.sym tag_definition -> Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
+val get_structDef_with_tagDefs: map Symbol.sym (Loc.t * tag_definition) -> Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
 let get_structDef_with_tagDefs tagDefs tag_sym =
   match Map.lookup tag_sym tagDefs with
-    | Just (StructDef xs flexible_opt) ->
+    | Just (_, StructDef xs flexible_opt) ->
         (xs, flexible_opt)
     | Just _ ->
         error ("Core_type.aux.get_structDef_with_tagDefs (" ^ show tag_sym ^
@@ -46,10 +46,10 @@ let get_structDef tag_sym =
 val get_unionDef: Symbol.sym -> (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
 let get_unionDef tag_sym =
   match Map.lookup tag_sym (tagDefs ()) with
-    | Just (UnionDef []) ->
+    | Just (_, UnionDef []) ->
         error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
                "): found an empty union definition")
-    | Just (UnionDef (x::xs)) ->
+    | Just (_, UnionDef (x::xs)) ->
         (x, xs)
     | Just _ ->
         error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
@@ -65,7 +65,7 @@ declare ocaml target_rep function reset_tagDefs = `Tags.reset_tagDefs`
 
 
 
-val     are_compatible_aux: (map Symbol.sym tag_definition * map Symbol.sym tag_definition) -> (qualifiers * ctype) -> (qualifiers * ctype) -> bool
+val     are_compatible_aux: (map Symbol.sym (Loc.t * tag_definition) * map Symbol.sym (Loc.t * tag_definition)) -> (qualifiers * ctype) -> (qualifiers * ctype) -> bool
 let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
   let are_compatible_aux qs_ty1 qs_ty2 = are_compatible_aux (tagDefs1, tagDefs2) qs_ty1 qs_ty2 in
   (* qualifiers need to be equal (see §6.7.3#10) *)
@@ -113,7 +113,7 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
                   true
               | (Nothing, Just _) ->
                   true
-              | (Just (StructDef xs1 flexible_opt1), Just (StructDef xs2 flexible_opt2)) ->
+              | (Just (_, StructDef xs1 flexible_opt1), Just (_, StructDef xs2 flexible_opt2)) ->
                   if List.length xs1 <> List.length xs2 then
                     false
                   else
@@ -155,7 +155,7 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
                   true
               | (Nothing, Just _) ->
                   true
-              | (Just (UnionDef xs1), Just (UnionDef xs2)) ->
+              | (Just (_, UnionDef xs1), Just (_, UnionDef xs2)) ->
                   if List.length xs1 <> List.length xs2 then
                     false
                   else

@@ -1443,15 +1443,14 @@ let make_struct_decl loc fields (tag : Sym.t) =
 
 
 
-let normalise_tag_definition tag def =
-  let here = Loc.other __FUNCTION__ in
+let normalise_tag_definition tag (loc, def) =
   match def with
   | StructDef(fields, Some (FlexibleArrayMember (_, (Identifier (loc, _)), _, _))) ->
      unsupported loc !^"flexible array members"
   | StructDef (fields, None) ->
-     return (M_StructDef (make_struct_decl here fields tag))
+     return (M_StructDef (make_struct_decl loc fields tag))
   | UnionDef l ->
-     unsupported here !^"union types"
+     unsupported loc !^"union types"
 
 
 let normalise_tag_definitions tagDefs =

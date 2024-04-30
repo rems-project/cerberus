@@ -543,7 +543,7 @@ type generic_globs_map 'a 'bty =
   map Symbol.sym (generic_globs 'a 'bty)
 
 type core_tag_definitions =
-  map Symbol.sym Ctype.tag_definition
+  map Symbol.sym (Loc.t * Ctype.tag_definition)
 
 type visible_objects_env = map nat (list (Symbol.sym * Ctype.ctype))
 

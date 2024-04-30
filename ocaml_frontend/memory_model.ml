@@ -127,7 +127,7 @@ module type Memory = sig
   val max_ival: Ctype.integerType -> integer_value
   val min_ival: Ctype.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-  val offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
+  val offsetof_ival: (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
   
   val sizeof_ival: Ctype.ctype -> integer_value
   val alignof_ival: Ctype.ctype -> integer_value

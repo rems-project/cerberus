@@ -755,9 +755,12 @@ and pp_action act =
         P.parens (comma_list pp_pexpr [ty;e1;e2] ^^ P.comma ^^^
                   pp_linux_memory_order mo)
 
+let pp_cond loc d =
+  if show_include || Cerb_location.from_main_file loc then d else P.empty
+
 let pp_tagDefinitions tagDefs =
   let tagDefs = Pmap.bindings_list tagDefs in
-  let pp (sym, tagDef) =
+  let pp (sym, (loc, tagDef)) =
     let (ty, tags) = match tagDef with
       | Ctype.StructDef (membrs_, flexible_opt) ->
           let membrs = match flexible_opt with
@@ -771,6 +774,7 @@ let pp_tagDefinitions tagDefs =
     let pp_tag (Symbol.Identifier (_, name), (_, align_opt(*TODO*), _, ty)) =
       !^name ^^ P.colon ^^^ pp_ctype ty
     in
+    pp_cond loc @@
     pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
     ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
   in P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
@@ -782,9 +786,6 @@ let pp_params params =
   P.parens (comma_list pp_argument params)
 
 let pp_fun_map funs =
-  let pp_cond loc d =
-    if show_include || Cerb_location.from_main_file loc then d else P.empty
-  in
   Pmap.fold (fun sym decl acc ->
     acc ^^
     match decl with

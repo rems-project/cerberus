@@ -579,7 +579,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
         E.return (Pexpr annot (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
     | PEmember_shift pe tag_sym memb_ident ->
-        let xs = match fromJust "Core_typing.infer_pexpr, PEmember_shift" (Map.lookup tag_sym tagDefs) with
+        let xs = match snd $ fromJust "Core_typing.infer_pexpr, PEmember_shift" (Map.lookup tag_sym tagDefs) with
           | Cty.StructDef z Nothing -> z
           | Cty.StructDef z (Just _) ->
                 error "TODO: Core_typing, PEmember_shift => struct with flexible array member"
@@ -672,7 +672,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
             (PEcatch_exceptional_condition ity iop pe1' pe2')
         end
     | PEstruct tag_sym fields ->
-        match fromJust "Core_typing.infer_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
+        match snd $ fromJust "Core_typing.infer_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
           | Cty.UnionDef _ ->
               E.fail loc (InvalidTag tag_sym)
           | Cty.StructDef xs _ ->
@@ -698,7 +698,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
             (PEstruct tag_sym fields')
         end
     | PEunion tag_sym ident pe ->
-        match fromJust "Core_typing.infer_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
+        match snd $ fromJust "Core_typing.infer_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
           | Cty.StructDef _ _ ->
               E.fail loc (InvalidTag tag_sym)
           | Cty.UnionDef xs ->
@@ -722,7 +722,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         E.return $ Pexpr annot (InferredType_tuple [InferredType_ctype; InferredType_list InferredType_ctype;
                                          InferredType_boolean; InferredType_boolean]) (PEcfunction pe')
     | PEmemberof tag_sym memb_ident pe ->
-        let (oty_ctor, xs) = match fromJust "Core_typing.infer_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
+        let (oty_ctor, xs) = match snd $ fromJust "Core_typing.infer_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
           | Cty.StructDef xs Nothing ->
               (OTy_struct, xs)
           | Cty.StructDef xs (Just _) ->
@@ -963,7 +963,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                        <*> E.return cTy
                        <*> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2)
     | PEmember_shift pe tag_sym memb_ident ->
-          let xs = match fromJust "Core_typing.typecheck_pexpr, PEmember_shift 1" (Map.lookup tag_sym tagDefs) with
+          let xs = match snd $ fromJust "Core_typing.typecheck_pexpr, PEmember_shift 1" (Map.lookup tag_sym tagDefs) with
             | Cty.StructDef z Nothing -> z
             | Cty.StructDef z (Just _) ->
                 error "TODO: Core_typing, PEmember_shift => struct with flexible array member"
@@ -1057,7 +1057,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
           <*> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2
     | PEstruct tag_sym fields ->
         guard_match loc "struct()" bTy (BTy_object (OTy_struct tag_sym)) >>
-        match fromJust "Core_typing.typecheck_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
+        match snd $ fromJust "Core_typing.typecheck_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
           | Cty.UnionDef _ ->
               E.fail loc (InvalidTag tag_sym)
           | Cty.StructDef xs flexible_opt ->
@@ -1081,7 +1081,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         E.return (PEstruct tag_sym fields')
     | PEunion tag_sym ident pe ->
         guard_match loc "union()" bTy (BTy_object (OTy_union tag_sym)) >>
-        match fromJust "Core_typing.typecheck_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
+        match snd $ fromJust "Core_typing.typecheck_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
           | Cty.StructDef _ _ ->
               E.fail loc (InvalidTag tag_sym)
           | Cty.UnionDef xs ->
@@ -1103,7 +1103,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         guard_match loc "cfunction()" bTy (BTy_tuple [BTy_ctype; BTy_list BTy_ctype; BTy_boolean; BTy_boolean]) >>
         (PEcfunction <$> typecheck_pexpr tagDefs env (BTy_loaded OTy_pointer) pe)
     | PEmemberof tag_sym memb_ident pe ->
-        let (oty_ctor, xs) = match fromJust "Core_typing.typecheck_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
+        let (oty_ctor, xs) = match snd $ fromJust "Core_typing.typecheck_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
           | Cty.StructDef xs Nothing ->
               (OTy_struct, xs)
           | Cty.StructDef xs (Just _) ->

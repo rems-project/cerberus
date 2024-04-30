@@ -954,8 +954,8 @@ let symbolify_impl_or_file decls : ((Core.impl, parsed_core_file) either) Eff.t 
           end
       | Aggregate_decl (_sym, tags) ->
           begin lookup_sym _sym >>= function
-            | Some (decl_sym, _) ->
-                Eff.return (impl_acc, globs_acc, fun_map_acc, Pmap.add decl_sym tags tagDefs_acc)
+            | Some (decl_sym, loc) ->
+                Eff.return (impl_acc, globs_acc, fun_map_acc, Pmap.add decl_sym (loc, tags) tagDefs_acc)
             | None ->
                 assert false
           end

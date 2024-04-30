@@ -7,7 +7,7 @@ let ident_equal x y =
 
 let rec offsetsof tagDefs tag_sym =
   match Pmap.find tag_sym tagDefs with
-    | StructDef (membrs_, flexible_opt) ->
+    | _, StructDef (membrs_, flexible_opt) ->
         (* NOTE: the offset of a flexible array member is just like
            that of any other member *)
         let membrs = match flexible_opt with
@@ -31,7 +31,7 @@ let rec offsetsof tagDefs tag_sym =
             ((membr, ty, last_offset + pad) :: xs, last_offset + pad + size)
           ) ([], 0) membrs in
         (List.rev xs, maxoffset)
-    | UnionDef membrs ->
+    | _, UnionDef membrs ->
         (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, 0)) membrs, 0)
 
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
@@ -75,9 +75,9 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         if x = 0 then max_offset else max_offset + (align - x)
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with
-          | StructDef _ ->
+          | _, StructDef _ ->
               assert false
-          | UnionDef membrs ->
+          | _, UnionDef membrs ->
               let (max_size, max_align) =
                 List.fold_left (fun (acc_size, acc_align) (_, (_, align_opt, _, ty)) ->
                   let align =
@@ -129,9 +129,9 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         alignof ~tagDefs atom_ty
     | Struct tag_sym ->
         begin match Pmap.find tag_sym tagDefs with
-          | UnionDef _ ->
+          | _, UnionDef _ ->
               assert false
-          | StructDef (membrs, flexible_opt)  ->
+          | _, StructDef (membrs, flexible_opt)  ->
               (* NOTE: we take into account the potential flexible array member by tweaking
                  the accumulator init of the fold. *)
               let init = match flexible_opt with
@@ -155,9 +155,9 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         end
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with
-          | StructDef _ ->
+          | _, StructDef _ ->
               assert false
-          | UnionDef membrs ->
+          | _, UnionDef membrs ->
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
               List.fold_left (fun acc (_, (_, align_opt, _, ty)) ->

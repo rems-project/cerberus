@@ -429,7 +429,7 @@ let (set, get) : (implementation -> unit) * (unit -> implementation) =
    (where tagDefs is a bit different from the Ctype version) *)
 let alignof_tagDefs_aux () =
   Pmap.map (function
-    | Ctype.StructDef (xs, flex_opt) ->
+    | _, Ctype.StructDef (xs, flex_opt) ->
       List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) xs @
       begin match flex_opt with
         | None ->
@@ -437,7 +437,7 @@ let alignof_tagDefs_aux () =
         | Some (FlexibleArrayMember (_, _, _, ty)) ->
             [(None, Ctype ([], Array (ty, None)))]
       end
-    | Ctype.UnionDef xs ->
+    | _, Ctype.UnionDef xs ->
         List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) xs
   ) (Tags.tagDefs ())
 

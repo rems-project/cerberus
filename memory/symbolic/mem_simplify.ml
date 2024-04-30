@@ -175,9 +175,9 @@ let rec simplify_integer_value_base ival_ =
               simplify_integer_value_base (IVsizeof atom_ty)
           | Struct tag_sym ->
               let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
-                | StructDef (membrs, None) ->
+                | _, StructDef (membrs, None) ->
                     membrs
-                | StructDef (membrs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty))) ->
+                | _, StructDef (membrs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty))) ->
                     membrs @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))]
                 | _ -> assert false
               in
@@ -193,7 +193,7 @@ let rec simplify_integer_value_base ival_ =
                  just one past the union respect it's own alignment constraint
                  (i.e. we wan't to be able to have arrays of unions) *)
               let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
-                | UnionDef membrs -> membrs
+                | _, UnionDef membrs -> membrs
                 | _ -> assert false
               in
               let align =
@@ -254,7 +254,7 @@ let rec simplify_integer_value_base ival_ =
           | Union tag_sym ->
               (* NOTE: these two partial patterns are ok by typing of Ail *)
               let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
-                | UnionDef membrs -> membrs
+                | _, UnionDef membrs -> membrs
                 | _ -> assert false
               in
               begin match List.map (fun (memb_ident, (_, align_opt, _, ty)) ->
