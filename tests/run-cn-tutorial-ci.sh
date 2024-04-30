@@ -22,20 +22,38 @@ HERE=$(pwd)
 
 cd "$TUTORIAL_PATH"/src/example-archive/
 
+
+
+cd dafny-tutorial
+/bin/bash ../check.sh $CN
+if [ $? != 0 ] 
+then
+   exit 1
+fi
+cd ..
+
 cd SAW
 /bin/bash ../check.sh $CN
+if [ $? != 0 ] 
+then
+   exit 1
+fi
 cd ..
 
 cd c-testsuite
 /bin/bash ../check.sh $CN
-cd ..
-
-cd dafny-tutorial
-/bin/bash ../check.sh $CN
+if [ $? != 0 ] 
+then
+   exit 1
+fi
 cd ..
 
 cd simple-examples
 /bin/bash ../check.sh $CN
+if [ $? != 0 ] 
+then
+   exit 1
+fi
 cd ..
 
 cd $HERE
