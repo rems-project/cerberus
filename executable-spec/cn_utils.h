@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
-#include <inttypes.h>
+#include "stdint.h"
+// #include <inttypes.h>
 
 /* Wrappers for C types */
 
