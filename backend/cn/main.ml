@@ -85,7 +85,7 @@ let frontend incl_dirs incl_files astprints do_peval filename state_file =
   return (prog4, (markers_env, ail_prog), statement_locs)
 
 
-let handle_frontend_error ~expect_failure = function
+let handle_frontend_error = function
   | CF.Exception.Exception ((_, CF.Errors.CORE_TYPING _) as err) ->
      prerr_string (CF.Pp_errors.to_string err);
      prerr_endline @@ Cerb_colour.(ansi_format ~err:true [Bold; Red] "error: ") ^
@@ -93,7 +93,7 @@ let handle_frontend_error ~expect_failure = function
      exit 2
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err);
-     exit (if expect_failure then 0 else 2)
+     exit 2
   | CF.Exception.Result result ->
      result
 
@@ -135,7 +135,6 @@ let main
       solver_logging
       output_decorated
       astprints
-      expect_failure
       use_vip
       no_use_ity
       use_peval
@@ -164,7 +163,7 @@ let main
   end;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
-    handle_frontend_error ~expect_failure
+    handle_frontend_error
       (frontend incl_dirs incl_files astprints use_peval filename state_file)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
@@ -212,10 +211,10 @@ let main
        in
        Pp.maybe_close_times_channel ();
        match result with
-       | Ok () -> exit (if expect_failure then 1 else 0)
+       | Ok () -> exit 0
        | Error e ->
          if json then TypeErrors.report_json ?state_file e else TypeErrors.report ?state_file e;
-         exit (if expect_failure then 0 else 1)
+         exit 1
  with
      | exc ->
         Pp.maybe_close_times_channel ();
@@ -333,10 +332,6 @@ let astprints =
   Arg.(value & opt (list (enum [("cabs", Cabs); ("ail", Ail); ("core", Core); ("types", Types)])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
-let expect_failure =
-  let doc = "invert return value to 1 if type checks pass and 0 on failure" in
-  Arg.(value & flag & info["expect-failure"] ~doc)
-
 (* TODO remove this when VIP impl complete *)
 let use_vip =
   let doc = "use experimental VIP rules" in
@@ -379,7 +374,6 @@ let () =
       solver_logging $
       output_decorated $
       astprints $
-      expect_failure $
       use_vip $
       no_use_ity $
       use_peval $
