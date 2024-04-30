@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 # copying from run-ci.sh
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
@@ -9,37 +9,46 @@ CN=$OPAM_SWITCH_PREFIX/bin/cn
 DIRNAME=$(dirname $0)
 
 SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c')
+FAIL=$(find $DIRNAME/cn -name '*.error.c')
+UNKNOWN=$(find $DIRNAME/cn -name '*.unknown.c')
 
 NUM_FAILED=0
 FAILED=''
 
-# CN="$CN $CN_FLAGS"
 
 for TEST in $SUCC
 do
-  echo $CN $TEST
-  if ! $CN $TEST
+  $CN $TEST
+  RET=$?
+  if [[ "$RET" = 0 ]]
   then
+    echo "$TEST -- OK"
+  else
+    echo "$TEST -- Unexpected"
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
   fi
   echo
 done
-
-FAIL=$(find $DIRNAME/cn -name '*.error.c')
 
 for TEST in $FAIL
 do
-  echo $CN --expect-failure $TEST
-  if ! $CN --expect-failure $TEST
+  $CN $TEST
+  RET=$?
+  if [[ "$RET" = 1 || "$RET" = 2 ]]
   then
+    echo "$TEST -- OK"
+  else
+    echo "$TEST -- Unexpected"
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
   fi
   echo
 done
 
-UNKNOWN=$(find $DIRNAME/cn -name '*.unknown.c')
+
+
+
 
 echo $UNKNOWN | xargs -n 1 cn
 
