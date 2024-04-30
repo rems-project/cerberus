@@ -23,19 +23,19 @@ HERE=$(pwd)
 cd "$TUTORIAL_PATH"/src/example-archive/
 
 cd SAW
-sh ../check.sh $CN
+/bin/bash ../check.sh $CN
 cd ..
 
 cd c-testsuite
-sh ../check.sh $CN
+/bin/bash ../check.sh $CN
 cd ..
 
 cd dafny-tutorial
-sh ../check.sh $CN
+/bin/bash ../check.sh $CN
 cd ..
 
 cd simple-examples
-sh ../check.sh $CN
+/bin/bash ../check.sh $CN
 cd ..
 
 cd $HERE
