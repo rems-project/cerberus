@@ -23,36 +23,37 @@ HERE=$(pwd)
 cd "$TUTORIAL_PATH"/src/example-archive/
 
 
+FAILURE=0
 
 cd dafny-tutorial
-/bin/bash ../check.sh $CN
+../check.sh $CN
 if [ $? != 0 ] 
 then
-   exit 1
+   FAILURE=1
 fi
 cd ..
 
 cd SAW
-/bin/bash ../check.sh $CN
+../check.sh $CN
 if [ $? != 0 ] 
 then
-   exit 1
+   FAILURE=1
 fi
 cd ..
 
 cd c-testsuite
-/bin/bash ../check.sh $CN
+../check.sh $CN
 if [ $? != 0 ] 
 then
-   exit 1
+   FAILURE=1
 fi
 cd ..
 
 cd simple-examples
-/bin/bash ../check.sh $CN
+../check.sh $CN
 if [ $? != 0 ] 
 then
-   exit 1
+   FAILURE=1
 fi
 cd ..
 
@@ -60,3 +61,11 @@ cd $HERE
 
 
 
+if [ $FAILURE == 0 ]
+then
+    echo "Ok"
+    exit 0
+else 
+    echo "There were errors"
+    exit 1
+fi
