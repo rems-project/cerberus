@@ -1,8 +1,10 @@
 #include "hash_table.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <inttypes.h>
 
 /* Wrappers for C types */
 
@@ -74,6 +76,8 @@ cn_map *map_create(void);
 void *cn_map_get(cn_map *m, cn_integer *key);
 void cn_map_set(cn_map *m, cn_integer *key, void *value);
 cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
+
+cn_bool *cn_pointer_equality(void *i1, void *i2);
 
 /* CN integer type auxilliary functions */
 
@@ -163,32 +167,63 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
     }
 
 #define CN_GEN_INCREMENT(CNTYPE)\
-    CNTYPE *CNTYPE##_increment(CNTYPE *i) {\
+    inline CNTYPE *CNTYPE##_increment(CNTYPE *i) {\
         *(i->val) = *(i->val) + 1;\
         return i;\
     }
 
 #define CN_GEN_PTR_ADD(CNTYPE)\
-    cn_pointer *cn_pointer_add_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
+    inline cn_pointer *cn_pointer_add_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
         cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));\
         res->ptr = (char *) ptr->ptr + *(i->val);\
         return res;\
     }
 
-#define CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE)\
-    CNTYPE *cast_cn_pointer_to_##CNTYPE(cn_pointer *ptr) {\
-        CNTYPE *res = alloc(sizeof(CNTYPE));\
-        res->val = alloc(sizeof(CTYPE));\
-        *(res->val) = (CTYPE) ptr->ptr;\
+
+#define CN_GEN_CAST_TO_PTR(CNTYPE, INTPTR_TYPE)\
+    inline cn_pointer *cast_##CNTYPE##_to_cn_pointer(CNTYPE *i) {\
+        cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));\
+        res->ptr = (void *) (INTPTR_TYPE) *(i->val);\
         return res;\
     }
 
-#define CN_GEN_CAST_TO_PTR(CNTYPE)\
-    cn_pointer *cast_##CNTYPE_to_cn_pointer(CNTYPE *i) {\
-        cn_pointer *res = alloc(sizeof(cn_pointer));\
-        res->ptr = (void *) *(i->val);\
+#define CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE, INTPTR_TYPE)\
+    inline CNTYPE *cast_cn_pointer_to_##CNTYPE(cn_pointer *ptr) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = (CTYPE) (INTPTR_TYPE) (ptr->ptr);\
         return res;\
     }
+
+
+#define CN_GEN_CAST_INT_TYPES(CNTYPE1, CTYPE2, CNTYPE2)\
+    inline CNTYPE2 *cast_##CNTYPE1##_to_##CNTYPE2(CNTYPE1 *i) {\
+        CNTYPE2 *res = (CNTYPE2 *) alloc(sizeof(CNTYPE2));\
+        res->val = (CTYPE2 *) alloc(sizeof(CTYPE2));\
+        *(res->val) = (CTYPE2) *(i->val);\
+        return res;\
+    }
+
+#define CN_GEN_CASTS_INNER(CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_i8, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_i16, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_i32, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_i64, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_u8, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_u16, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_u32, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_bits_u64, CTYPE, CNTYPE)\
+    CN_GEN_CAST_INT_TYPES(cn_integer, CTYPE, CNTYPE)\
+
+
+#define CN_GEN_PTR_CASTS_UNSIGNED(CTYPE, CNTYPE)\
+    CN_GEN_CAST_TO_PTR(CNTYPE, uintptr_t)\
+    CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE, uintptr_t)\
+
+#define CN_GEN_PTR_CASTS_SIGNED(CTYPE, CNTYPE)\
+    CN_GEN_CAST_TO_PTR(CNTYPE, intptr_t)\
+    CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE, intptr_t)\
+
 
 
 #define CN_GEN_ALL(CTYPE, CNTYPE)\
@@ -207,8 +242,8 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
    CN_GEN_MOD(CTYPE, CNTYPE)\
    CN_GEN_INCREMENT(CNTYPE)\
    CN_GEN_PTR_ADD(CNTYPE)\
-//    CN_GEN_CAST_TO_PTR(CNTYPE)\
-//    CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE)\
+   CN_GEN_CASTS_INNER(CTYPE, CNTYPE)\
+
 
 CN_GEN_ALL(signed char, cn_bits_i8);
 CN_GEN_ALL(signed short, cn_bits_i16);
@@ -221,6 +256,17 @@ CN_GEN_ALL(unsigned long long, cn_bits_u64);
 CN_GEN_ALL(signed long, cn_integer);
 
 
+CN_GEN_PTR_CASTS_SIGNED(signed char, cn_bits_i8);
+CN_GEN_PTR_CASTS_SIGNED(signed short, cn_bits_i16);
+CN_GEN_PTR_CASTS_SIGNED(signed long, cn_bits_i32);
+CN_GEN_PTR_CASTS_SIGNED(signed long long, cn_bits_i64);
+CN_GEN_PTR_CASTS_UNSIGNED(unsigned char, cn_bits_u8);
+CN_GEN_PTR_CASTS_UNSIGNED(unsigned short, cn_bits_u16);
+CN_GEN_PTR_CASTS_UNSIGNED(unsigned long, cn_bits_u32);
+CN_GEN_PTR_CASTS_UNSIGNED(unsigned long long, cn_bits_u64);
+CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer);
+
+
 
 cn_pointer *convert_to_cn_pointer(void *ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
@@ -230,7 +276,3 @@ enum OWNERSHIP {
     GET,
     TAKE
 };
-
-cn_bits_u64 *cast_cn_pointer_to_cn_bits_u64(cn_pointer *ptr);
-cn_integer *cast_cn_pointer_to_cn_integer(cn_pointer *ptr);
-cn_pointer *cast_cn_integer_to_cn_pointer(cn_integer *i);
