@@ -486,7 +486,7 @@ let use_vip = ref false
 (* lit *)
 let sym_ (sym, bt, loc) = IT (Sym sym, bt, loc)
 let z_ n loc = IT (Const (Z n), BT.Integer, loc)
-let alloc_id_ n loc = IT (Const (Alloc_id (if !use_vip then n else Z.zero)), BT.Alloc_id, loc)
+let alloc_id_ n loc = IT (Const (Alloc_id n), BT.Alloc_id, loc)
 let num_lit_ n bt loc = match bt with
   | BT.Bits (sign, sz) -> 
       assert (BT.fits_range (sign, sz) n);
@@ -854,24 +854,31 @@ let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) loc =
     loc)
 
 
-let value_check_pointer alignment ~pointee_ct about loc =
-  let about_int = pointerToIntegerCast_ about loc in
-  let pointee_size = match pointee_ct with
-    | Sctypes.Void -> 1
-    | Function _ -> 1
-    | _ -> Memory.size_of_ctype pointee_ct
-  in
+(* let _non_vip_constraint about loc =  *)
+(*   eq_ (pointerToAllocIdCast_ about loc, alloc_id_ Z.zero loc) loc *)
+
+(* TODO: are the constraints `0<about` and `about+pointee_size-1 <= max-pointer` required? *)
+let value_check_pointer mode ~pointee_ct about loc =
+  match mode with
+  | `Representable -> bool_ true loc
+  | `Good ->
+  (* let about_int = pointerToIntegerCast_ about loc in *)
+  (* let pointee_size = match pointee_ct with *)
+  (*   | Sctypes.Void -> 1 *)
+  (*   | Function _ -> 1 *)
+  (*   | _ -> Memory.size_of_ctype pointee_ct *)
+  (* in *)
   and_ (List.filter_map Fun.id [
-    Some (le_ (intptr_int_ 0 loc, about_int) loc);
-    Some (le_ (sub_ (add_ (about_int, intptr_int_ pointee_size loc) loc, intptr_int_ 1 loc) loc,
-            intptr_const_ Memory.max_pointer loc) loc);
-    if !use_vip then None else Some (eq_ (pointerToAllocIdCast_ about loc, alloc_id_ Z.zero loc) loc);
-    if alignment then Some (aligned_ (about, pointee_ct) loc) else None;
+    (* Some (le_ (intptr_int_ 0 loc, about_int) loc); *)
+    (* Some (le_ (sub_ (add_ (about_int, intptr_int_ pointee_size loc) loc, intptr_int_ 1 loc) loc, *)
+    (*         intptr_const_ Memory.max_pointer loc) loc); *)
+    (* if !use_vip then None else Some (non_vip_constraint about loc); *)
+    Some (aligned_ (about, pointee_ct) loc);
   ]) loc
 
 let value_check_array_size_warning = ref 100
 
-let value_check alignment (struct_layouts : Memory.struct_decls) ct about loc =
+let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
   let open Sctypes in
   let open Memory in
   let rec aux (ct_ : Sctypes.t) about =
@@ -902,7 +909,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about loc =
        let i_s, i = fresh ix_bt loc in
        eachI_ (0, (i_s, ix_bt), n - 1) (aux item_ct (map_get_ about i loc)) loc
     | Pointer pointee_ct ->
-       value_check_pointer alignment ~pointee_ct about loc
+       value_check_pointer mode ~pointee_ct about loc
     | Struct tag ->
        and_ begin
            List.filter_map (fun piece ->
@@ -920,10 +927,10 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about loc =
   in
   aux ct about
 
-let good_value = value_check true
-let representable = value_check false
+let good_value = value_check `Good
+let representable = value_check `Representable
 
-let good_pointer = value_check_pointer true
+let good_pointer = value_check_pointer `Good
 
 let promote_to_compare it it' loc =
   let res_bt = match bt it, bt it' with

@@ -646,6 +646,8 @@ let ensure_pred global list_mono loc name aux =
     fail_m () def.loc (Pp.item "rec-def not yet handled" (Sym.pp name))
   end
 
+(* FIXME: this looks wrong, especially the fact that `good_value` is
+   used, independent of the value `is_good` *)
 let ensure_struct_mem is_good global list_mono loc ct aux = match Sctypes.is_struct_ctype ct with
   | None -> fail "ensure_struct_mem: not struct" (Sctypes.pp ct)
   | Some tag ->
@@ -868,6 +870,7 @@ let it_to_coq loc global list_mono it =
         parensM (build [rets op_nm; aux t2])
     | IT.Representable (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
         let@ () = fail_on_prop () in
+        (* FIXME: the 'true' looks strange -- fix *)
         let@ op_nm = ensure_struct_mem true global list_mono loc ct aux in
         parensM (build [rets op_nm; aux t2])
     | IT.Constructor (nm, id_args) ->

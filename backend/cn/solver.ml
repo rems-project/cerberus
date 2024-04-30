@@ -261,7 +261,6 @@ module Translate = struct
     end
 
   let is_uninterp_bt (bt : BT.t) = match bt with
-    | Unit -> true
     | CType -> true
     | List bt -> true
     | _ -> false
@@ -280,7 +279,8 @@ module Translate = struct
 
   let dt_recog_name context nm = prefix_symbol context "is_" nm
 
-
+  let unit_value_name =
+    bt_name Unit ^ "_v"
 
 
 
@@ -291,7 +291,7 @@ module Translate = struct
     let string str = string context str in
 
     let rec translate = function
-      | Unit -> Z3.Sort.mk_uninterpreted_s context "unit"
+      | Unit -> Z3.Enumeration.mk_sort_s context (bt_name Unit) [unit_value_name]
       | Bool -> Z3.Boolean.mk_sort context
       | Integer -> Z3.Arithmetic.Integer.mk_sort context
       | Bits (Unsigned, n) ->
@@ -312,7 +312,7 @@ module Translate = struct
          Z3.Tuple.mk_sort context
            (string (bt_name Alloc_id))
            [string "alloc_id_to_integer"]
-           [sort BT.Integer]
+           [sort (if !use_vip then BT.Integer else BT.Unit)]
       | CType -> (* the ctype type is represented as an uninterpreted sort *)
         Z3.Sort.mk_uninterpreted_s context (bt_name CType)
       | List bt -> (* lists are represented as uninterpreted sorts *)
@@ -555,8 +555,8 @@ module Translate = struct
          let addr = pointerToIntegerCast_ t.t here in
          assert (BT.equal (IT.bt addr) (IT.bt t.align));
          Some (divisible_ (addr, t.align) here)
-      | Representable (CT.Pointer _ as ct, t) ->
-         Some (representable struct_decls ct t here)
+      (* | Representable (CT.Pointer _ as ct, t) -> *)
+      (*    Some (representable struct_decls ct t here) *)
       | Representable (ct, t) ->
          Some (representable struct_decls ct t here)
       | Good (ct, t) ->
@@ -587,6 +587,10 @@ module Translate = struct
 
     (* let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl in *)
 
+    let mk_unit () = 
+      Z3.Expr.mk_app context (Z3.Enumeration.get_const_decl (sort Unit) 0) [] in
+
+
     let loc_to_addr l =
       Z3.Expr.mk_app context
         (loc_to_addr_fundecl context global) [l]
@@ -598,8 +602,10 @@ module Translate = struct
     in
 
     let integer_to_alloc_id i =
+      (* ignores i in non-VIP mode *)
       Z3.Expr.mk_app context
-        (integer_to_alloc_id_fundecl context global) [i]
+        (integer_to_alloc_id_fundecl context global) 
+        [(if !use_vip then i else mk_unit ())]
     in
 
     let alloc_id_addr_to_loc id i =
@@ -690,7 +696,7 @@ module Translate = struct
       | Const (Bool false) ->
          Z3.Boolean.mk_false context
       | Const Unit ->
-         Z3.Expr.mk_const context (string "unit") (sort Unit)
+         mk_unit ()
       | Const (Default bt) ->
          let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
          let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
@@ -1491,9 +1497,10 @@ module Eval = struct
                Z3.FuncDecl.equal func_decl
                  (integer_to_alloc_id_fundecl context global) ->
            let i = nth args 0 in
-           begin match IT.is_z i with
-           | Some z -> alloc_id_ z loc
-           | _ -> assert false
+           begin match !use_vip, IT.is_z i with
+           | true, Some z -> alloc_id_ z loc
+           | true, None -> assert false
+           | false, _ -> alloc_id_ Z.zero loc
            end
 
         | () when Z3Symbol_Table.mem z3sym_table func_name ->
@@ -1548,6 +1555,7 @@ module Eval = struct
         | () when BT.equal Unit expr_bt ->
            unit_ loc
 
+        (* TODO: this looks incorrect: nm will not be bound in the typing context *)
         | () when is_uninterp_bt expr_bt && List.length args == 0 ->
            (* Z3 creates unspecified consts within uninterpreted types - map to vars *)
            let nm = Sym.fresh_named (Z3.Symbol.to_string func_name) in

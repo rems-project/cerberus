@@ -1040,15 +1040,12 @@ module EffectfulTranslation = struct
   let owned_good sym (res_t, oargs_ty) =
     let here = Locations.other __FUNCTION__ in
     match res_t with
-    | RET.P { name = Owned (scty, Init); _} ->
-       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, here) in
-       [(LC.T ((IT.good_ (scty, v) here)),
-         (here, Some "default value constraint"))]
-    | RET.Q { name = Owned (scty, Init); q = (q_sym, q_bt); q_loc; permission; _} ->
-       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty, here) in
-       let v_el = IT.map_get_ v (IT.sym_ (q_sym, q_bt, q_loc)) here in
-       [(LC.forall_ (q_sym, q_bt) (IT.impl_ (permission, IT.good_ (scty, v_el) here) here),
-          (here, Some "default value constraint"))]
+    | RET.P { pointer; name = Owned (scty, _); _} ->
+       [(LC.T ((IT.good_ (Pointer scty, pointer) here)),
+         (here, Some "default pointer constraint"))]
+    | RET.Q { pointer; name = Owned (scty, _); _} ->
+       [(LC.T (IT.good_ (Pointer scty, pointer) here),
+          (here, Some "default pointer constraint"))]
      | _ ->
         []
 
@@ -1432,9 +1429,9 @@ let rec make_lrt_generic env st =
     let sbt = Memory.sbt_of_sct ct in
     let bt = SBT.to_basetype sbt in
     let@ lrt = make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures) in
-    let info = (loc, Some "return value good") in
-    let here = Locations.other __FUNCTION__ in
-    let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt, here)) here), info) lrt in
+    (* let info = (loc, Some "return value good") in *)
+    (* let here = Locations.other __FUNCTION__ in *)
+    (* let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt, here)) here), info) lrt in *)
     return (RT.mComputational ((s, bt), (loc, None)) lrt)
 
 

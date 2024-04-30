@@ -1273,7 +1273,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
              IT.fresh Loc loc
         in
         let@ () = add_a ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
-        let@ () = add_c loc (t_ (representable_ (Pointer act.ct, ret) loc)) in
+        (* let@ () = add_c loc (t_ (representable_ (Pointer act.ct, ret) loc)) in *)
         let align_v = cast_ Memory.intptr_bt arg loc in
         let@ () = add_c loc (t_ (alignedI_ ~align:align_v ~t:ret loc)) in
         let@ () =
