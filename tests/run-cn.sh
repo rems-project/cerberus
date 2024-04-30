@@ -1,6 +1,10 @@
 #! /bin/bash
 
-# tests for the CN tool attached to cerberus
+# copying from run-ci.sh
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
+CN=$OPAM_SWITCH_PREFIX/bin/cn
+
 
 DIRNAME=$(dirname $0)
 
@@ -9,7 +13,7 @@ SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\
 NUM_FAILED=0
 FAILED=''
 
-CN="cn $CN_FLAGS"
+# CN="$CN $CN_FLAGS"
 
 for TEST in $SUCC
 do
