@@ -20,7 +20,6 @@ module RI = ResourceInference
 module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
 
-open Tools
 open Sctypes
 open Context
 open IT
@@ -109,6 +108,8 @@ let check_computational_bound loc s =
   else fail (fun _ -> {loc; msg = Unknown_variable s})
 
 
+let unsupported loc doc =
+  fail (fun _ -> {loc; msg = Generic (!^"unsupported" ^^^ doc) })
 
 let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
   let@ () = ensure_base_type loc ~expect BT.Loc in

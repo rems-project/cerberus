@@ -684,6 +684,8 @@ let n_memop loc memop pexprs =
      assert_error loc err
 
 
+let unsupported loc doc =
+  fail {loc; msg = Generic (!^"unsupported" ^^^ doc) }
 
 let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m =
   let (markers_env, cn_desugaring_state) = desugaring_things in
@@ -692,9 +694,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   let wrap pe = M_Expr (loc, annots, (), pe) in
   let wrap_pure pe = wrap (M_Epure (M_Pexpr (loc, [], (), pe))) in
   let n_pexpr = n_pexpr loc in
-  let n_paction = (n_paction loc) in
-  let n_memop = (n_memop loc) in
-  let n_expr = (n_expr loc ((env, old_states), desugaring_things) (global_types, visible_objects_env)) in
+  let n_paction = n_paction loc in
+  let n_memop = n_memop loc in
+  let n_expr = n_expr loc ((env, old_states), desugaring_things) (global_types, visible_objects_env) in
   match pe with
   | Epure pexpr2 ->
      return (wrap (M_Epure (n_pexpr pexpr2)))
@@ -773,23 +775,23 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
        | _ ->
           assert_error loc !^"core_anormalisation: Eccall with non-ctype first argument"
      in
-     let e2 =
-       let err () = Tools.unsupported loc !^"invalid function constant" in
+     let@ e2 =
+       let err () = unsupported loc !^"invalid function constant" in
        match e2 with
        | Core.Pexpr(annots, bty, Core.PEval v) ->
-          let sym = begin match v with
+          let@ sym = begin match v with
           | Vobject (OVpointer ptrval)
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
                ( fun ct -> err ())
                ( function
                    | None -> (* FIXME(CHERI merge) *)err ()
-                   | Some sym -> sym )
+                   | Some sym -> return sym )
                ( fun _prov _ -> err () )
           | _ -> err ()
           end in
-          M_Pexpr (loc, annots, bty, (M_PEval (M_V ((), M_Vfunction_addr sym))))
-       | _ -> n_pexpr e2
+          return (M_Pexpr (loc, annots, bty, (M_PEval (M_V ((), M_Vfunction_addr sym)))))
+       | _ -> return @@ n_pexpr e2
      in
      let es = List.map n_pexpr es in
      return (wrap (M_Eccall(ct1, e2, es)))
@@ -1231,7 +1233,7 @@ let normalise_fun_map_decl
   match Pmap.lookup fname funinfo with
   | None -> return None
   | Some (loc, attrs, ret_ct, arg_cts, variadic, _) ->
-  if variadic then Tools.unsupported loc !^"variadic functions";
+    let@ () = if variadic then unsupported loc !^"variadic functions" else return () in
   match decl with
   | Mi_Fun (bt, args, pe) ->
      assert false
@@ -1445,15 +1447,20 @@ let normalise_tag_definition tag def =
   let here = Loc.other __FUNCTION__ in
   match def with
   | StructDef(fields, Some (FlexibleArrayMember (_, (Identifier (loc, _)), _, _))) ->
-     Tools.unsupported loc (!^"flexible array members are not supported")
+     unsupported loc !^"flexible array members"
   | StructDef (fields, None) ->
-     M_StructDef (make_struct_decl here fields tag)
+     return (M_StructDef (make_struct_decl here fields tag))
   | UnionDef l ->
-     Tools.unsupported here !^"union types are not supported"
+     unsupported here !^"union types are not supported"
 
 
 let normalise_tag_definitions tagDefs =
-   Pmap.mapi normalise_tag_definition tagDefs
+  Pmap.fold (fun tag def acc ->
+      let@ acc = acc in
+      let@ normed = normalise_tag_definition tag def in
+      return (Pmap.add tag normed acc))
+    tagDefs
+    (return (Pmap.empty Sym.compare))
 
 let register_glob env (sym, glob) =
   match glob with
@@ -1477,7 +1484,7 @@ let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases} =
 
 let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
 
-  let tagDefs = normalise_tag_definitions file.mi_tagDefs in
+  let@ tagDefs = normalise_tag_definitions file.mi_tagDefs in
 
   let (fin_marker, markers_env) = fin_markers_env in
   let fin_d_st =
