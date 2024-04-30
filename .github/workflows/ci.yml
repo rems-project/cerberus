@@ -80,6 +80,21 @@ jobs:
         opam pin --yes --no-action add cn .
         opam install --yes cn
 
+    - name: Checkout cn-tutorial
+      uses: actions/checkout@v4
+      with: 
+        repository: rems-project/cn-tutorial
+        path: cn-tutorial
+
+    # copying 'Run Cerberus CI tests'
+    - name: Run CN CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-cn.sh
+        cd ..
+
+
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
       run: |
@@ -98,12 +113,3 @@ jobs:
         cd ..
 
 
-    - name: Checkout cn-tutorial
-      uses: actions/checkout@v4
-      with: 
-        repository: rems-project/cn-tutorial
-        path: cn-tutorial
-
-    - name: Run CN CI tests
-      run: |
-        tests/run-cn.sh
