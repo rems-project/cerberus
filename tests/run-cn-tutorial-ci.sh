@@ -58,8 +58,8 @@ fi
 cd ..
 
 
-cd "$TUTORIAL_PATH"
-check.sh $CN
+cd ../..
+./check.sh $CN
 if [ $? != 0 ] 
 then
    FAILURE=1
