@@ -57,7 +57,7 @@ typedef struct {
     signed long *key;  // current key
     void* value;      // current value
 
-    // Don't use these fields directly.
+    // Dont use these fields directly.
     hash_table* _table;       // reference to hash table being iterated
     int _index;    // current index into ht._entries
 } hash_table_iterator;
