@@ -106,19 +106,7 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
     return res;
 }
 
-// cn_pointer *cast_cn_bits_u64_to_cn_pointer(cn_bits_u64 *i) {
-//     cn_pointer *res = alloc(sizeof(cn_pointer));
-//     res->ptr = (void *) (uintptr_t) *(i->val);
-//     return res;
-// }
 
-
-cn_integer *cn_integer_pow(cn_integer *i1, cn_integer *i2) {
-    cn_integer *res = alloc(sizeof(cn_integer));
-    res->val = alloc(sizeof(unsigned int));
-    *(res->val) = pow(*(i1->val), *(i2->val));
-    return res;
-}
 
 
 /* CN: addr_eq(ptr1: cn_pointer, ptr2: cn_pointer) */
@@ -129,25 +117,3 @@ cn_integer *cn_integer_pow(cn_integer *i1, cn_integer *i2) {
 
     cn_assert(convert_to_cn_bool(cast_cn_pointer_to_bitvector(ptr1_cn) == cast_cn_pointer_to_bitvector(ptr2_cn)));
 */
-
-// cn_bits_u64 *cast_cn_pointer_to_cn_bits_u64(cn_pointer *ptr) {
-//     cn_bits_u64 *res = alloc(sizeof(cn_bits_u64));
-//     res->val = alloc(sizeof(unsigned long long));
-//     *(res->val) = (unsigned long long) ptr->ptr;
-//     return res;
-// }
-
-
-// cn_integer *cast_cn_pointer_to_cn_integer(cn_pointer *ptr) {
-//     cn_integer *res = alloc(sizeof(cn_integer));
-//     res->val = alloc(sizeof(signed long));
-//     *(res->val) = (signed long) ptr->ptr;
-//     return res;
-// }
-
-
-// cn_pointer *cast_cn_integer_to_cn_pointer(cn_integer *i) {
-//     cn_pointer *res = alloc(sizeof(cn_pointer));
-//     res->ptr = (void *) *(i->val);
-//     return res;
-// }
