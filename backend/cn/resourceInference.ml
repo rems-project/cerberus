@@ -147,13 +147,7 @@ module General = struct
            let@ model = model () in
            let@ global = get_global () in
            let@ all_cs = all_constraints () in
-           let@ () = if Context.LCSet.mem c all_cs
-             then begin
-               let@ () = debug_solver_query c in
-               fail (fun _ -> {loc; msg = Generic
-                 (Pp.item "insane situation: failed constraint in context" (LC.pp c))})
-             end
-             else return () in
+           let () = assert (not (Context.LCSet.mem c all_cs)) in
            debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
            let@ () = Diagnostics.investigate model c in
            fail (fun ctxt ->
