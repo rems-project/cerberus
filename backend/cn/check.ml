@@ -1082,7 +1082,6 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
       warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
       return ()
   | Some _ ->
-  let@ () = add_loc_trace loc in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
        debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
@@ -1635,7 +1634,6 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
 
 
 let check_expr_top loc labels rt e =
-  let@ () = add_loc_trace loc in
   let@ () = WellTyped.ensure_base_type loc ~expect:Unit (bt_of_expr e) in
   check_expr labels e (fun lvt ->
         let (RT.Computational ((return_s, return_bt), info, lrt)) = rt in
@@ -2040,7 +2038,7 @@ let check (mu_file : unit mu_file) stmt_locs o_lemma_mode =
 
   (* let@ mu_file = WellTyped.BaseTyping.infer_types_file mu_file in *)
 
-  let@ () = set_statement_locs stmt_locs in
+
 
   let@ () = record_tagdefs mu_file.mu_tagDefs in
   let@ () = check_tagdefs mu_file.mu_tagDefs in

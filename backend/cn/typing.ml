@@ -557,24 +557,7 @@ let model_with loc prop =
 
 
 
-let get_loc_trace () =
-  let@ c = get () in
-  return c.location_trace
 
-let set_loc_trace tr =
-  let@ c = get () in
-  set ({c with location_trace = tr})
-
-let add_loc_trace loc =
-  let@ locs = get_loc_trace () in
-  set_loc_trace (loc :: locs)
-
-(* let in_loc_trace tr f = *)
-(*   let@ prev_tr = get_loc_trace () in *)
-(*   let@ _ = set_loc_trace tr in *)
-(*   let@ x = f () in *)
-(*   let@ _ = set_loc_trace prev_tr in *)
-(*   return x *)
 
 
 let set_datatype_order datatype_order = 
@@ -720,9 +703,7 @@ let test_value_eqs loc guard x ys =
   loop group ms ys
 
 
-let set_statement_locs statement_locs =
-  let@ ctxt = get () in
-  set { ctxt with statement_locs }
+
 
 
 

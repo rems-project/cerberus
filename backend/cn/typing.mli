@@ -41,8 +41,6 @@ val add_c : Locations.t -> LogicalConstraints.t -> (unit) m
 val add_cs : Locations.t -> LogicalConstraints.t list -> (unit) m
 val add_r : Locations.t -> Resources.t -> unit m
 val add_rs : Locations.t -> Resources.t list -> unit m
-val get_loc_trace : unit -> (Locations.loc list) m
-val add_loc_trace : Locations.t -> (unit) m
 
 val set_datatype_order : (Sym.t list list) option -> unit m
 val get_datatype_order : unit -> ((Sym.t list list) option) m
@@ -86,7 +84,7 @@ val add_datatype : Sym.t -> BaseTypes.datatype_info -> (unit) m
 val add_datatype_constr : Sym.t -> BaseTypes.constr_info -> (unit) m
 
 
-val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit) m
+(* val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit) m *)
 
 val value_eq_group : IndexTerms.t option -> IndexTerms.t -> (EqTable.ITSet.t) m
 val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->

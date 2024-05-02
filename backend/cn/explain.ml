@@ -65,10 +65,6 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
 
   let model, quantifier_counter_model = model_with_q in
 
-  let l_tr = let open Context in ctxt.location_trace in
-  let location_trace = List.map (fun l -> Pp.string (Locations.to_string l))
-    (List.rev l_tr) in
-
   let evaluate it = Solver.eval ctxt.global model it in
 
   let mevaluate it =
@@ -210,8 +206,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
 
   Pp.html_escapes := prev;
 
-  { location_trace;
-    variables;
+  { variables;
     requested;
     unproven;
     resources;
