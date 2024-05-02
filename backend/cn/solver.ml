@@ -76,7 +76,6 @@ type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
     non_incremental : Z3.Solver.solver;
-    (* focus_terms : ((IT.t_bindings * IT.t) list) ref; *)
     query_trace : query_trace_elem list ref;
   }
 
@@ -1033,7 +1032,6 @@ module Translate = struct
       it : IT.t;
       qs : (Sym.t * BT.t) list;
       extra : Z3.Expr.expr list;
-      (* focused : (IT.t_bindings * IT.t) list; *)
       smt2_doc : Pp.doc Lazy.t;
     }
 [@@warning "-unused-field"]
@@ -1050,12 +1048,12 @@ module Translate = struct
     let smt2_doc = lazy (!^ "<to be replaced>") in
     match lc with
     | T it ->
-       { expr = term it; it; qs = []; extra = []; (* focused = []; *) smt2_doc }
+       { expr = term it; it; qs = []; extra = []; smt2_doc }
     | Forall ((s, bt), it) ->
        let here =  Locations.other __FUNCTION__ in
        let v_s, v = IT.fresh_same bt s here in
        let it = IT.subst (make_subst [(s, v)]) it in
-       { expr = term it; it; qs = [(v_s, bt)]; extra = []; (* focused = []; *) smt2_doc }
+       { expr = term it; it; qs = [(v_s, bt)]; extra = []; smt2_doc }
 
   let extra_assumptions assumptions qs =
     let loc = Locations.other __FUNCTION__ in
@@ -1081,8 +1079,6 @@ module Translate = struct
   let goal solver global assumptions pointer_facts lc =
     let g1 = goal1 solver.context global lc in
     let extra1 = extra_assumptions assumptions g1.qs in
-    (* let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in *)
-    (* let extra2 = IT.nth_array_to_list_facts focused in *)
     let extra = List.map (term solver.context global) (extra1) in
     let smt2_doc = lazy (goal_to_smt2_doc solver extra g1.expr) in
     let here =  Locations.other __FUNCTION__ in
