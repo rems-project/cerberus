@@ -14,7 +14,6 @@ type s = {
     typing_context: Context.t;
     solver : solver option;
     sym_eqs : IT.t SymMap.t;
-    equalities: bool Simplify.ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
     movable_indices: (RET.predicate_name * IT.t * bool) list;
@@ -31,7 +30,6 @@ let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
       typing_context = c;
       solver = None;
       sym_eqs = SymMap.empty;
-      equalities = Simplify.ITPairMap.empty;
       past_models = [];
       found_equalities = EqTable.empty;
       movable_indices = [];
@@ -326,15 +324,6 @@ let rec add_ls = function
      let@ () = add_l s ls info in
      add_ls lvars
 
-let add_equalities new_equalities =
-  fun s ->
-  let equalities =
-    List.fold_left (fun acc ((a, b), eq_or_not) ->
-        Simplify.ITPairMap.add (a,b) eq_or_not acc
-      )
-      s.equalities new_equalities
-  in
-  Ok ((), { s with equalities })
 
 let add_found_equalities lc =
   let@ eqs = get_found_eqs () in
@@ -350,7 +339,6 @@ let add_c_internal lc =
   let s = Context.add_c lc s in
   let () = Solver.add_assumption solver s.global lc in
   let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
-  let@ _ = add_equalities (List.filter_map LC.is_equality [lc]) in
   let@ _ = add_found_equalities lc in
   let@ () = set s in
   return ()
