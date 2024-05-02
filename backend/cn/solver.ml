@@ -76,7 +76,7 @@ type solver = {
     context : Z3.context;
     incremental : Z3.Solver.solver;
     non_incremental : Z3.Solver.solver;
-    focus_terms : ((IT.t_bindings * IT.t) list) ref;
+    (* focus_terms : ((IT.t_bindings * IT.t) list) ref; *)
     query_trace : query_trace_elem list ref;
   }
 
@@ -1015,43 +1015,15 @@ module Translate = struct
 
 
 
-  let fold_with_adj : 'a. Global.t -> ('bt IT.bindings -> 'a -> 'bt term -> 'a) ->
-        'a -> 'bt term -> 'a =
-    fun global f ->
-    let f2 bs (acc, adj_ts) t =
-      let acc = f bs acc t in
-      match adjust_term global t with
-      | Some t2 ->
-        let t2 = IT.substitute_lets t2 in
-        (acc, (bs, t2) :: adj_ts)
-      | None -> (acc, adj_ts)
-    in
-    let rec fold_list acc = function
-      | [] -> acc
-      | ((bs, t) :: adj_ts) ->
-        let (acc, adj_ts) = IT.fold f2 bs (acc, adj_ts) t in
-        fold_list acc adj_ts
-    in
-    fun acc t ->
-    fold_list acc [([], t)]
 
-  let focus_terms global it = fold_with_adj global
-    (fun bs its it ->
-    let interesting = match IT.term it with
-      | IT.NthList _ -> true
-      | IT.ArrayToList _ -> true
-      | IT.Binop (IT.EQ, x, y) -> Option.is_some (IT.is_sym x) || Option.is_some (IT.is_sym y)
-      | _ -> false
-    in
-    if not interesting then its
-    else (bs, it) :: its)
-    [] it
+
+
 
   let assumption context global c =
     let term it = term context global it in
     match c with
     | T it ->
-       Some (it, term it, focus_terms global it)
+       Some (it, term it)
     | Forall ((s, bt), body) ->
        None
 
@@ -1061,7 +1033,7 @@ module Translate = struct
       it : IT.t;
       qs : (Sym.t * BT.t) list;
       extra : Z3.Expr.expr list;
-      focused : (IT.t_bindings * IT.t) list;
+      (* focused : (IT.t_bindings * IT.t) list; *)
       smt2_doc : Pp.doc Lazy.t;
     }
 [@@warning "-unused-field"]
@@ -1078,12 +1050,12 @@ module Translate = struct
     let smt2_doc = lazy (!^ "<to be replaced>") in
     match lc with
     | T it ->
-       { expr = term it; it; qs = []; extra = []; focused = []; smt2_doc }
+       { expr = term it; it; qs = []; extra = []; (* focused = []; *) smt2_doc }
     | Forall ((s, bt), it) ->
        let here =  Locations.other __FUNCTION__ in
        let v_s, v = IT.fresh_same bt s here in
        let it = IT.subst (make_subst [(s, v)]) it in
-       { expr = term it; it; qs = [(v_s, bt)]; extra = []; focused = []; smt2_doc }
+       { expr = term it; it; qs = [(v_s, bt)]; extra = []; (* focused = []; *) smt2_doc }
 
   let extra_assumptions assumptions qs =
     let loc = Locations.other __FUNCTION__ in
@@ -1109,13 +1081,13 @@ module Translate = struct
   let goal solver global assumptions pointer_facts lc =
     let g1 = goal1 solver.context global lc in
     let extra1 = extra_assumptions assumptions g1.qs in
-    let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in
-    let extra2 = IT.nth_array_to_list_facts focused in
-    let extra = List.map (term solver.context global) (extra2 @ extra1) in
+    (* let focused = List.concat_map (focus_terms global) extra1 @ (! (solver.focus_terms)) in *)
+    (* let extra2 = IT.nth_array_to_list_facts focused in *)
+    let extra = List.map (term solver.context global) (extra1) in
     let smt2_doc = lazy (goal_to_smt2_doc solver extra g1.expr) in
     let here =  Locations.other __FUNCTION__ in
-    trace [Check (IT.not_ g1.it here :: (extra2 @ extra1))] solver;
-    { g1 with extra = extra; focused = focused; smt2_doc = smt2_doc }
+    trace [Check (IT.not_ g1.it here :: (extra1))] solver;
+    { g1 with extra = extra; smt2_doc = smt2_doc }
 
 end
 
@@ -1161,7 +1133,7 @@ let make global : solver =
     s
   in
   let non_incremental = Z3.Solver.mk_solver context None in
-  { context; incremental; non_incremental; focus_terms = ref []; query_trace = ref [] }
+  { context; incremental; non_incremental; query_trace = ref [] }
 
 
 (* do nothing to non-incremental solver, because that is reset for every query *)
@@ -1178,10 +1150,10 @@ let add_assumption solver global lc =
   (* do nothing to non-incremental solver, because that is reset for every query *)
   match Translate.assumption solver.context global lc with
   | None -> ()
-  | Some (it, sc, focus) ->
+  | Some (it, sc) ->
     Z3.Solver.add solver.incremental [sc];
-    trace [Assert [it]] solver;
-    solver.focus_terms := (focus @ (! (solver.focus_terms)))
+    trace [Assert [it]] solver
+
 
 
 (* as similarly suggested by Robbert *)
@@ -1291,9 +1263,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
           let reason = Z3.Solver.get_reason_unknown solver.non_incremental in
           failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
-let get_solver_focused_terms solver ~assumptions ~pointer_facts global =
-  let tr = Translate.goal solver global assumptions pointer_facts (LC.T (IT.bool_ true (Locations.other __FUNCTION__))) in
-  tr.Translate.focused
+
 
 module Eval = struct
 

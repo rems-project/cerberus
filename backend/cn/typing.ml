@@ -725,16 +725,16 @@ let set_statement_locs statement_locs =
   set { ctxt with statement_locs }
 
 
-let get_solver_focused_terms loc =
-  let@ global = get_global () in
-  let@ assumptions = all_constraints () in
-  let@ s = solver () in
-  let@ ctxt = get () in
-  let@ rs = all_resources loc in
-  let pointer_facts = Resources.pointer_facts rs in
-  let assumptions = ctxt.constraints in
-  let terms = Solver.get_solver_focused_terms s ~assumptions ~pointer_facts global in
-  return terms
+(* let get_solver_focused_terms loc = *)
+(*   let@ global = get_global () in *)
+(*   let@ assumptions = all_constraints () in *)
+(*   let@ s = solver () in *)
+(*   let@ ctxt = get () in *)
+(*   let@ rs = all_resources loc in *)
+(*   let pointer_facts = Resources.pointer_facts rs in *)
+(*   let assumptions = ctxt.constraints in *)
+(*   let terms = Solver.get_solver_focused_terms s ~assumptions ~pointer_facts global in *)
+(*   return terms *)
 
 
 let embed_resultat (m : ('a) Resultat.t) : ('a) m =
