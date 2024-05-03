@@ -14,10 +14,10 @@ val fail : failure -> 'a m
 val run : Context.t -> 'a m -> ('a, TypeErrors.t) Result.t
 val sandbox : 'a t -> ('a Resultat.t) t
 
-val get: unit -> Context.t m
+val get_typing_context: unit -> Context.t m
 val print_with_ctxt : (Context.t -> unit) -> unit m
 val get_global : unit -> Global.t m
-val all_constraints : unit -> Context.LCSet.t m
+val get_cs : unit -> Context.LCSet.t m
 val simp_ctxt : unit -> Simplify.simp_ctxt m
 val all_resources : Locations.t -> Resources.t list m
 val all_resources_tagged : Locations.t -> ((Resources.t * int) list * int) m

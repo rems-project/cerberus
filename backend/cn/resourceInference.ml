@@ -146,7 +146,7 @@ module General = struct
        | `False ->
            let@ model = model () in
            let@ global = get_global () in
-           let@ all_cs = all_constraints () in
+           let@ all_cs = get_cs () in
            let () = assert (not (Context.LCSet.mem c all_cs)) in
            debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
            let@ () = Diagnostics.investigate model c in

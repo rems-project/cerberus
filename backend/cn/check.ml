@@ -1029,7 +1029,7 @@ let instantiate loc filter arg =
   let arg_it = sym_ (arg_s, IT.bt arg, loc) in
   let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
   let@ () = add_c loc (LC.t_ (eq__ arg_it arg loc)) in
-  let@ constraints = all_constraints () in
+  let@ constraints = get_cs () in
   let extra_assumptions1 = List.filter_map (function
         | Forall ((s, bt), t) when filter t -> Some ((s, bt), t)
         | _ -> None) (LCSet.elements constraints) in
@@ -1702,7 +1702,7 @@ let post_state_of_rt loc rt =
   pure begin
      let@ False, final_resources = bind_arguments loc rt_as_args in
      let@ () = add_rs loc final_resources in
-     get ()
+     get_typing_context ()
    end
 
 
@@ -1727,7 +1727,7 @@ let check_procedure
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
         pure begin
             let@ () = add_rs loc initial_resources in
-            let@ pre_state = get () in
+            let@ pre_state = get_typing_context () in
             let@ () = add_label_to_trace None in
             let@ () = check_expr_top loc label_context rt body in
             return ((), pre_state)
