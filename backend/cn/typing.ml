@@ -214,14 +214,11 @@ let print_with_ctxt printer =
   return ()
 
 let add_label_to_trace label = 
-  fun s ->
-  let typing_context = Context.add_label_to_trace label s.typing_context in
-  Ok ((), { s with typing_context })  
+  modify_typing_context (fun c -> Context.add_label_to_trace label c)
 
 let add_trace_item_to_trace i = 
-  fun s ->
-  let typing_context = Context.add_trace_item_to_trace i s.typing_context in
-  Ok ((), { s with typing_context })  
+  modify_typing_context (fun c -> Context.add_trace_item_to_trace i c)
+
 
 
 (* similar but less boring functions, where components interact *)
