@@ -216,16 +216,22 @@ let main
             (* TODO: Remove - hacky *)
             let cn_utils_header_pair = ("../../../../executable-spec/cn_utils.h", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
+
+            let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
+            let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
+
             
             (* TODO: Topological sort *)
             Stdlib.output_string cn_oc cn_utils_header;
             Stdlib.output_string cn_oc c_structs;
             Stdlib.output_string cn_oc cn_converted_structs;
             Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
-            Stdlib.output_string cn_oc c_records;
-            Stdlib.output_string cn_oc c_records';
+            Stdlib.output_string cn_oc records_str;
+            Stdlib.output_string cn_oc records_str';
             Stdlib.output_string cn_oc "\n/* CN DATATYPES */\n\n";
             Stdlib.output_string cn_oc (String.concat "\n" (List.map snd c_datatypes));
+            Stdlib.output_string cn_oc record_equality_fun_strs;
+            Stdlib.output_string cn_oc record_equality_fun_strs';
             Stdlib.output_string cn_oc conversion_function_defs;
             Stdlib.output_string cn_oc ownership_function_defs;
             Stdlib.output_string cn_oc c_function_defs;
@@ -235,9 +241,11 @@ let main
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
             Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
-            Stdlib.output_string oc c_records;
-            Stdlib.output_string oc c_records';
-            Stdlib.output_string oc "\n/* OWNERSHIP FUNCTIONS */\n\n";
+            Stdlib.output_string oc records_str;
+            Stdlib.output_string oc records_str';
+            Stdlib.output_string oc record_equality_fun_prot_strs;
+            Stdlib.output_string oc record_equality_fun_prot_strs';
+            Stdlib.output_string oc "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
             Stdlib.output_string oc ownership_function_decls;
             Stdlib.output_string oc "\n";
 
