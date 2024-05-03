@@ -242,7 +242,16 @@ let cn_to_ail_binop_internal bt1 bt2 =
   | Or -> (A.Or, Some "cn_bool_or")
   (* | Impl *)
   | Add -> 
-    (A.(Arithmetic Add), Some (cn_int_type_str ^ "_add"))
+    let bt2_str = 
+      if bt1 == BT.Loc then 
+        (match bt2 with 
+        | BT.Integer -> "_cn_integer"
+        | BT.Bits (sign, size) -> "_cn_bits_" ^ (str_of_bt_bitvector_type sign size)
+        | _ -> "") 
+      else 
+        "" 
+    in
+    (A.(Arithmetic Add), Some (cn_int_type_str ^ "_add" ^ bt2_str))
   | Sub -> 
     (A.(Arithmetic Sub), Some (cn_int_type_str ^ "_sub"))
   | Mul 
@@ -605,7 +614,7 @@ let rec cn_to_ail_expr_aux_internal
 
   | SizeOf sct ->
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in 
-    let ail_call_ = add_conversion_fn ail_expr_ BT.Integer in 
+    let ail_call_ = add_conversion_fn ail_expr_ basetype in 
     dest d ([], [], mk_expr ail_call_)
   | OffsetOf _ -> failwith "TODO OffsetOf"
 
@@ -787,7 +796,8 @@ let rec cn_to_ail_expr_aux_internal
   | MapConst (bt, t) -> failwith "TODO18"
   | MapSet (m, key, value) -> 
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack in
-    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals key PassBack in
+    let key_term = if (IT.bt key == BT.Integer) then key else (IT.IT (Cast (BT.Integer, key), BT.Integer, Cerb_location.unknown)) in
+    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals key_term PassBack in
     let (b3, s3, e3) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals value PassBack in
     let map_set_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), [e1; e2; e3])) in
     dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr map_set_fcall)
@@ -795,7 +805,8 @@ let rec cn_to_ail_expr_aux_internal
   | MapGet (m, key) ->
     (* Only works when index is a cn_integer *)
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack in
-    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals key PassBack in
+    let key_term = if (IT.bt key == BT.Integer) then key else (IT.IT (Cast (BT.Integer, key), BT.Integer, Cerb_location.unknown)) in
+    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals key_term PassBack in
     let map_get_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_get")), [e1; e2])) in
     let (key_bt, val_bt) = BT.map_bt (IT.bt m) in 
     let ctype = bt_to_ail_ctype val_bt in 
@@ -1332,11 +1343,18 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([], [ail_block])
       | _ -> 
+        (* TODO: Change to mostly use index terms rather than Ail directly - avoids duplication between these functions and cn_internal_to_ail *)
         let cn_map_type = mk_ctype ~annots:[CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")] C.Void in
         let sym_binding = create_binding sym (mk_ctype C.(Pointer (empty_qualifiers, cn_map_type))) in
         let create_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "map_create")), [])) in
         let sym_decl = A.(AilSdeclaration [(sym, Some (mk_expr create_call))]) in
-        let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), (List.map mk_expr [AilEident sym; AilEident i_sym]) @ [rhs])) in
+        let i_ident_expr = A.(AilEident i_sym) in
+        let i_bt_str = match get_typedef_string (bt_to_ail_ctype i_bt) with 
+          | Some str -> str
+          | None -> ""
+        in
+        let i_expr = if i_bt == BT.Integer then i_ident_expr else A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("cast_" ^ i_bt_str ^ "_to_cn_integer"))), [mk_expr i_ident_expr])) in
+        let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), (List.map mk_expr [AilEident sym; i_expr]) @ [rhs])) in
         let while_loop = A.(AilSwhile (e2_with_conversion, mk_stmt (AilSblock (ptr_add_binding :: b4, List.map mk_stmt (s4 @ [ptr_add_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat]))), 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([sym_binding], [sym_decl; ail_block])
