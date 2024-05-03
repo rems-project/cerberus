@@ -1114,9 +1114,9 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
   let def = (fn_sym, (cn_datatype.cn_dt_loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], [mk_stmt tag_if_stmt])))) in
   [(decl, def)]
 
-let generate_struct_equality_function ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
+let generate_struct_equality_function ?(is_record=false) ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
     | C.StructDef (members, _) -> 
-      let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
+      let cn_sym = if is_record then sym else generate_sym_with_suffix ~suffix:"_cn" sym in 
       let cn_struct_ctype = mk_ctype C.(Struct cn_sym) in
       let cn_struct_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, cn_struct_ctype)) in
       let fn_sym = Sym.fresh_pretty ("struct_" ^ (Sym.pp_string cn_sym) ^ "_equality") in
