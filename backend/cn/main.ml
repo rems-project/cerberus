@@ -197,6 +197,7 @@ let main
             let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
             let oc = Stdlib.open_out (prefix ^ output_filename) in
             let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
+            Executable_spec_internal.populate_record_map prog5;
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let (c_datatypes, c_datatype_equality_fun_decls) = Executable_spec_internal.generate_c_datatypes ail_prog in
             let (c_function_defs, locs_and_c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
@@ -241,6 +242,9 @@ let main
             let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
             let headers = List.map generate_include_header incls in
             Stdlib.output_string oc (List.fold_left (^) "" headers);
+            Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
+            Stdlib.output_string oc c_records;
+            Stdlib.output_string oc c_records';
             Stdlib.output_string oc "\n/* OWNERSHIP FUNCTIONS */\n\n";
             Stdlib.output_string oc ownership_function_decls;
             Stdlib.output_string oc "\n";
