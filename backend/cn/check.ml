@@ -580,7 +580,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         k (or_ [v1; v2] loc)))
      | _ ->
        Pp.debug 1 (lazy (Pp.item "not yet restored" (Pp_mucore_ast.pp_pexpr orig_pe)));
-       failwith "todo"
+       failwith ("todo: " ^ __FUNCTION__)
      end
   | M_PEapply_fun (fun_id, args) ->
      let@ () = match mu_fun_return_type fun_id args with

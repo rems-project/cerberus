@@ -35,9 +35,9 @@ let label_prefix =
   | LAloop_continue _ -> "continue"
   | LAloop_body _ -> "loop"
   | LAloop_prebody _ -> "pre-loop"
-  | LAswitch -> failwith "todo"
-  | LAcase -> failwith "todo"
-  | LAdefault -> failwith "todo"
+  | LAswitch -> "switch"
+  | LAcase -> "case"
+  | LAdefault -> "default"
   | LAactual_label -> "label"
 
 let call_prefix = function

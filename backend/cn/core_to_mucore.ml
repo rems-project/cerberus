@@ -1451,7 +1451,7 @@ let normalise_tag_definition tag def =
   | StructDef (fields, None) ->
      return (M_StructDef (make_struct_decl here fields tag))
   | UnionDef l ->
-     unsupported here !^"union types are not supported"
+     unsupported here !^"union types"
 
 
 let normalise_tag_definitions tagDefs =
