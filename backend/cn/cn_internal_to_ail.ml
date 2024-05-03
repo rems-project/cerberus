@@ -165,12 +165,14 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
         sym''
       | None ->   
         let map_bindings = RecordMap.bindings !records in
+        Printf.printf "Record table size: %d\n" (List.length map_bindings);
         let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
         match eq_members_bindings with 
         | [] -> 
           (* First time reaching record of this type - add to map *)
           (let count = RecordMap.cardinal !records in
           let sym' = Sym.fresh_pretty ("record_" ^ (string_of_int count)) in
+          Printf.printf "Generating new record with sym %s\n" (Sym.pp_string sym');
           records := RecordMap.add members sym' !records;
           sym')
         | (_, sym') :: _ -> 
@@ -583,6 +585,7 @@ let rec cn_to_ail_expr_aux_internal
               let ctype = (bt_to_ail_ctype (IT.bt t1)) in
               (match get_typedef_string ctype with 
                 | Some str ->
+                  Printf.printf "typedef string when producing equality function: %s\n" str;
                   let fn_name = str ^ "_equality" in 
                   A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
                 | None -> 
@@ -594,6 +597,7 @@ let rec cn_to_ail_expr_aux_internal
                       (* let prefix = if is_datatype then "datatype_" else "struct_" in *)
                       let prefix = "struct_" in
                       let str = prefix ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
+                      Printf.printf "str produced for record: %s\n" str;
                       let fn_name = str ^ "_equality" in 
                       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
                     | _ -> default_ail_binop))
@@ -1220,8 +1224,9 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
     in 
     let cn_bt = bt_to_cn_base_type pred_def'.oarg_bt in
     let ctype = match cn_bt with 
-      | CN_record _ ->
+      | CN_record members ->
         let pred_record_name = generate_sym_with_suffix ~suffix:"_record" pred_sym' in
+        (* records := RecordMap.add members pred_record_name !records; *)
         mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype (Struct pred_record_name))))
       | _ -> cn_to_ail_base_type ~pred_sym:(Some pred_sym') cn_bt
     in 
