@@ -4281,15 +4281,14 @@ Module RevocationProofs.
   Qed.
 
   Instance memcpy_PreservesInvariant
+    (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
     (size_int: integer_value)
     :
-    forall s, PreservesInvariant mem_invariant s (memcpy ptrval1 ptrval2 size_int).
+    forall s, PreservesInvariant mem_invariant s (memcpy loc ptrval1 ptrval2 size_int).
   Proof.
     intros s.
     unfold memcpy.
-    remember (Loc_other "memcpy") as loc eqn:L.
-
     remember (num_of_int size_int) as size.
     clear size_int Heqsize.
     break_let.
@@ -4341,7 +4340,6 @@ Module RevocationProofs.
         apply bind_PreservesInvariant_value_SameState.
         same_state_steps.
         intros _ dst_a H4.
-        remember (Loc_other "memcpy") as loc.
 
         apply eff_array_shift_ptrval_uchar_spec in SH1; subst ptrval1'.
         apply eff_array_shift_ptrval_uchar_spec in SH2; subst ptrval2'.
