@@ -56,7 +56,7 @@ open Log
 
 
 
-let frontend incl_dirs incl_files astprints do_peval filename magic_comment_char_dollar =
+let frontend macros incl_dirs incl_files astprints do_peval filename magic_comment_char_dollar =
   let open CF in
   Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
@@ -67,7 +67,7 @@ let frontend incl_dirs incl_files astprints do_peval filename magic_comment_char
   Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
-  let conf = Setup.conf incl_dirs incl_files astprints in
+  let conf = Setup.conf macros incl_dirs incl_files astprints in
   let@ (_, ail_prog_opt, prog0) = c_frontend_and_elaboration ~cnnames:cn_builtin_fun_names (conf, io) (stdlib, impl) ~filename in
   let@ () =  begin
     if conf.typecheck_core then
@@ -119,6 +119,7 @@ let check_input_file filename =
 
 let main
       filename
+      macros
       incl_dirs
       incl_files
       loc_pp
@@ -171,7 +172,7 @@ let main
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
     handle_frontend_error
-      (frontend incl_dirs incl_files astprints use_peval filename magic_comment_char_dollar)
+      (frontend macros incl_dirs incl_files astprints use_peval filename magic_comment_char_dollar)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel
@@ -363,12 +364,36 @@ let magic_comment_char_dollar =
   let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
   Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
 
+(* copied from cerberus' executable (backend/driver/main.ml) *)
+let macros =
+    let macro_pair =
+      let parser str =
+	match String.index_opt str '=' with
+	  | None ->
+	      Result.Ok (str, None)
+	  | Some i ->
+	      let macro = String.sub str 0 i in
+	      let value = String.sub str (i+1) (String.length str - i - 1) in
+	      let is_digit n = 48 <= n && n <= 57 in
+	      if i = 0 || is_digit (Char.code (String.get macro 0)) then
+		Result.Error (`Msg "macro name must be a C identifier")
+	      else
+		Result.Ok (macro, Some value) in
+      let printer ppf = function
+	| (m, None)   -> Format.pp_print_string ppf m
+	| (m, Some v) -> Format.fprintf ppf "%s=%s" m v in
+      Arg.(conv (parser, printer)) in
+  let doc = "Adds  an  implicit  #define  into the predefines buffer which is \
+             read before the source file is preprocessed." in
+  Arg.(value & opt_all macro_pair [] & info ["D"; "define-macro"]
+         ~docv:"NAME[=VALUE]" ~doc)
 
 let () =
   let open Term in
   let check_t =
     const main $
       file $
+      macros $
       incl_dirs $
       incl_files $
       loc_pp $
