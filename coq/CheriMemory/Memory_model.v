@@ -130,7 +130,7 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
     CoqSymbol.identifier -> memM pointer_value.
 
   Parameter memcpy :
-    pointer_value -> pointer_value -> integer_value -> memM pointer_value.
+    location_ocaml -> pointer_value -> pointer_value -> integer_value -> memM pointer_value.
 
   Parameter memcmp :
     pointer_value -> pointer_value -> integer_value -> memM integer_value.

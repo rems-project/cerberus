@@ -1281,7 +1281,7 @@ module CHERIMorello : Memory = struct
     lift_coq_memM "eff_member_shift_ptrval" (MM.eff_member_shift_ptrval (toCoq_location loc) ptrval (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
 
   let memcpy loc ptrval1 ptrval2 size_int =
-    lift_coq_memM "memcpy" (MM.memcpy ptrval1 ptrval2 size_int)
+    lift_coq_memM "memcpy" (MM.memcpy (toCoq_location loc) ptrval1 ptrval2 size_int)
 
   let memcmp ptrval1 ptrval2 size_int =
     lift_coq_memM "memcmp" (MM.memcmp ptrval1 ptrval2 size_int)

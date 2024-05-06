@@ -2858,7 +2858,6 @@ Module Type CheriMemoryImpl
         memcpy_copy_tags loc ptrval1 ptrval2 index
     end.
 
-
   (* internal *)
   Definition memcpy_args_check loc ptrval1 ptrval2 size_n :=
     if size_n <? 0
@@ -2876,11 +2875,11 @@ Module Type CheriMemoryImpl
       end.
 
   Definition memcpy
+    (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
     (size_int: integer_value)
     : memM pointer_value
     :=
-    let loc := Loc_other "memcpy" in
     let size_z := num_of_int size_int in
     memcpy_args_check loc ptrval1 ptrval2 size_z ;;
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
@@ -2980,7 +2979,7 @@ Module Type CheriMemoryImpl
                          let size_to_copy :=
                            let size_z := num_of_int size_v in
                            IV (Z.min (Z.of_nat alloc.(size)) size_z) in
-                         memcpy new_ptr ptr size_to_copy ;;
+                         memcpy loc new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
               end
@@ -3003,7 +3002,7 @@ Module Type CheriMemoryImpl
                          let size_to_copy :=
                            let size_z := num_of_int size_v in
                            IV (Z.min (Z.of_nat alloc.(size)) size_z) in
-                         memcpy new_ptr ptr size_to_copy ;;
+                         memcpy loc new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
                   else
