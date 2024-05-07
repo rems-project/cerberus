@@ -13,5 +13,6 @@ int main() {
     r=r-1;  // is this free of UB?
     *r=11;  // and this?
     //CN_VIP printf("x=%d y=%d *q=%d *r=%d\n",x,y,*q,*r);
+    /*CN_VIP*//*@ assert (x == 11i32 && y == 2i32 && *q == 2i32 && *r == 11i32); @*/
   }
 }
