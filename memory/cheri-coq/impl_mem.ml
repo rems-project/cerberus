@@ -392,7 +392,8 @@ module CHERIMorello : Memory = struct
   let from_Coq_memcpy_error: MemCommonExe.memcpy_error -> memcpy_error = function
     | Memcpy_overlap -> Memcpy_overlap
     | Memcpy_non_object -> Memcpy_non_object
-    | Memmove_non_object -> Memmove_non_object
+    | Memcpy_dead_object -> Memcpy_non_object
+    | Memcpy_out_of_bound -> Memcpy_non_object
 
   let fromCoq_readonly_kind: MemCommonExe.readonly_kind -> readonly_kind = function
     | ReadonlyConstQualified -> ReadonlyConstQualified
@@ -421,7 +422,7 @@ module CHERIMorello : Memory = struct
 
   let fromCoq_undefined_by_omission: CoqUndefined.undefined_by_omission -> Undefined.undefined_by_omission = function
     | UB_OMIT_memcpy_non_object -> UB_OMIT_memcpy_non_object
-    | UB_OMIT_memmove_non_object -> UB_OMIT_memmove_non_object
+    | UB_OMIT_memcpy_out_of_bound -> UB_OMIT_memcpy_out_of_bound
 
   let fromCoq_undefined_behaviour: CoqUndefined.undefined_behaviour -> Undefined.undefined_behaviour = function
     | DUMMY s                                              -> DUMMY s

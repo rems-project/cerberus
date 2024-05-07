@@ -59,17 +59,20 @@ end
 
 (* memcpy and friends *)
 type memcpy_error =
-  | Memcpy_overlap
-  | Memcpy_non_object
-  | Memmove_non_object
+  | Memcpy_overlap (* memcpy regions overlap *)
+  | Memcpy_non_object (* memcpy pointers are not pointing to objects *)
+  | Memcpy_dead_object (* memcpy: pointer to dead objects *)
+  | Memcpy_out_of_bound (* memcpy region spills outside object allocation *)
 
 let stringFromMemcpy_error = function
   | Memcpy_overlap ->
-      "Memcpy_overlap"
+     "Memcpy_overlap"
   | Memcpy_non_object ->
      "Memcpy_non_object"
-  | Memmove_non_object ->
-     "Memmove_non_object"
+  | Memcpy_dead_object ->
+     "Memcpy_dead_object"
+  | Memcpy_out_of_bound ->
+     "Memcpy_out_of_bound"
 end
 
 type vip_kind =
@@ -288,8 +291,11 @@ let undefinedFromMem_error = function
      Just Undefined.UB100
   | MerrUndefinedMemcpy Memcpy_non_object ->
      Just (Undefined.UB_std_omission Undefined.UB_OMIT_memcpy_non_object)
-  | MerrUndefinedMemcpy Memmove_non_object ->
-     Just (Undefined.UB_std_omission Undefined.UB_OMIT_memmove_non_object)
+  | MerrUndefinedMemcpy Memcpy_dead_object ->
+     Just (Undefined.UB009_outside_lifetime)
+  | MerrUndefinedMemcpy Memcpy_out_of_bound ->
+     Just (Undefined.UB_std_omission Undefined.UB_OMIT_memcpy_out_of_bound)
+
 
   | MerrWriteOnReadOnly ReadonlyStringLiteral ->
       Just Undefined.UB033_modifying_string_literal
