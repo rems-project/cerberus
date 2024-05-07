@@ -120,7 +120,7 @@ val bind_return:
 
 val add_movable_index:
     Locations.t ->
-    verbose:bool ->
+    (* verbose:bool -> *)
     (ResourceTypes.predicate_name * IndexTerms.t) ->
     unit m
 

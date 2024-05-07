@@ -6,7 +6,7 @@ open Memory
 module IT = IndexTerms
 module LAT = LogicalArgumentTypes
 
-open Cerb_pp_prelude
+(* open Cerb_pp_prelude *)
 
 let resource_empty provable resource =
   let loc = Cerb_location.other __FUNCTION__ in
@@ -144,12 +144,13 @@ let unpack loc global provable (ret, O o) =
 
 
 
-let extractable_one global prove_or_model (predicate_name, index, verb) (ret, O o) =
-    let tmsg hd tail = if verb
-      then Pp.print stdout (Pp.item hd (ResourceTypes.pp ret ^^ Pp.hardline ^^
-            Pp.string "--" ^^ Pp.hardline ^^ Lazy.force tail))
-      else ()
-    in
+let extractable_one global prove_or_model (predicate_name, index) (ret, O o) =
+    (* let tmsg hd tail =  *)
+    (*   if verb *)
+    (*   then Pp.print stdout (Pp.item hd (ResourceTypes.pp ret ^^ Pp.hardline ^^ *)
+    (*         Pp.string "--" ^^ Pp.hardline ^^ Lazy.force tail)) *)
+    (*   else () *)
+    (* in *)
     match ret with
     | Q ret when equal_predicate_name predicate_name ret.name &&
              BT.equal (IT.bt index) (snd ret.q) ->
@@ -168,23 +169,26 @@ let extractable_one global prove_or_model (predicate_name, index, verb) (ret, O 
           let ret_reduced =
             { ret with permission = and_ [ret.permission; ne__ (sym_ (fst ret.q, snd ret.q, loc)) index loc ] loc }
           in
-          tmsg "successfully extracted" (lazy (IT.pp index));
+          (* tmsg "successfully extracted" (lazy (IT.pp index)); *)
           Some ((Q ret_reduced, O o), at_index)
        | `Counterex m ->
-          let eval_f = Solver.eval global (fst (Lazy.force m)) in
-          tmsg "could not extract, counterexample"
-            (lazy (IndexTerms.pp_with_eval eval_f index_permission));
+          (* let eval_f = Solver.eval global (fst (Lazy.force m)) in *)
+          (* tmsg "could not extract, counterexample" *)
+          (*   (lazy (IndexTerms.pp_with_eval eval_f index_permission)); *)
           None
        end
-    | Q qret ->
-      if not (equal_predicate_name predicate_name qret.name)
-      then tmsg "not extracting, predicate name differs"
-          (lazy (ResourceTypes.pp_predicate_name predicate_name))
-      else if not (BT.equal (IT.bt index) (snd qret.q))
-      then tmsg "not extracting, index type differs"
-          (lazy (Pp.typ (BT.pp (IT.bt index)) (BT.pp (snd qret.q))))
-      else assert false;
-      None
+    (* | Q qret -> *)
+    (*   if not (equal_predicate_name predicate_name qret.name) *)
+    (*   then () *)
+    (*     (\* tmsg "not extracting, predicate name differs" *\) *)
+    (*     (\*   (lazy (ResourceTypes.pp_predicate_name predicate_name)) *\) *)
+    (*   else if not (BT.equal (IT.bt index) (snd qret.q)) *)
+    (*   then  *)
+    (*     () *)
+    (*     (\* tmsg "not extracting, index type differs" *\) *)
+    (*     (\*   (lazy (Pp.typ (BT.pp (IT.bt index)) (BT.pp (snd qret.q)))) *\) *)
+    (*   else assert false; *)
+    (*   None *)
     | _ ->
       None
 

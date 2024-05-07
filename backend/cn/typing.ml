@@ -16,7 +16,7 @@ type s = {
     sym_eqs : IT.t SymMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
     found_equalities : EqTable.table;
-    movable_indices: (RET.predicate_name * IT.t * bool) list;
+    movable_indices: (RET.predicate_name * IT.t) list;
     unfold_resources_required: bool;
   }
 
@@ -114,6 +114,44 @@ end)
 let iterM = Eff.ListM.iterM
 
 
+(* functions to make values derived from the monad state *)
+
+
+let make_simp_ctxt s =
+  Simplify.{
+      global = s.typing_context.global;
+      values = s.sym_eqs;
+      simp_hook = (fun _ -> None);
+    }
+
+
+let simp_ctxt () =
+  let@ s = get () in
+  return (make_simp_ctxt s)
+
+
+let make_provable loc =
+  fun ({typing_context = s; solver; _} as c) ->
+  let simp_ctxt = make_simp_ctxt c in
+  let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
+  let f lc =
+    Solver.provable
+      ~loc
+      ~solver:(Option.get solver) 
+      ~global:s.global
+      ~assumptions:s.constraints
+      ~simp_ctxt
+      ~pointer_facts
+      lc
+  in
+  f
+
+let provable_internal loc =
+  let@ s = get () in
+  return (make_provable loc s)
+
+
+
 (* boring functions for getting or setting, adding, or removing things
    in the context *)
 
@@ -147,6 +185,8 @@ let get_global () : Global.t t =
 let set_global (g : Global.t) : unit t =
   modify_typing_context (fun s -> {s with global = g})
 
+(* later functions should be rewritten to use `inspect_global` and
+   `modify_global` *)
 let _inspect_global (f : Global.t -> 'a) : 'a t =
   let@ g = get_global () in
   return (f g)
@@ -237,6 +277,38 @@ let init_solver () =
       LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
       { s with solver = Some solver }
     )
+
+let get_movable_indices () =
+  inspect (fun s -> s.movable_indices)
+
+let set_movable_indices ixs : unit m =
+  modify (fun s -> {s with movable_indices = ixs})
+
+
+
+
+
+let add_c_internal lc =
+  let@ _ = drop_past_models () in
+  let@ s = get_typing_context () in
+  let@ solver = get_solver () in
+  let@ simp_ctxt = simp_ctxt () in
+  let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
+  let s = Context.add_c lc s in
+  let () = Solver.add_assumption solver s.global lc in
+  let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
+  let@ _ = add_found_equalities lc in
+  let@ () = set_typing_context s in
+  return ()
+
+let add_r_internal loc (r, RE.O oargs) =
+  let@ s = get_typing_context () in
+  let@ simp_ctxt = simp_ctxt () in
+  let r = Simplify.ResourceTypes.simp simp_ctxt r in
+  let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
+  set_typing_context (Context.add_r loc (r, O oargs) s)
+
+
 
 (* convenient functions for interacting with the global typing context *)
 
@@ -338,42 +410,13 @@ let get_datatype_order () =
 
 
 
-(* functions to make values derived from the monad state *)
 
 
-let make_simp_ctxt s =
-  Simplify.{
-      global = s.typing_context.global;
-      values = s.sym_eqs;
-      simp_hook = (fun _ -> None);
-    }
 
 
-let simp_ctxt () =
-  fun s -> Ok (make_simp_ctxt s, s)
 
 
-let make_provable loc =
-  fun ({typing_context = s; solver; _} as c) ->
-  let simp_ctxt = make_simp_ctxt c in
-  let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
-  let f lc =
-    Solver.provable
-      ~loc
-      ~solver:(Option.get solver) 
-      ~global:s.global
-      ~assumptions:s.constraints
-      ~simp_ctxt
-      ~pointer_facts
-      lc
-  in
-  f
-
-let provable_inner loc =
-  fun s ->
-  Ok (make_provable loc s, s)
-
-
+(* functions to do with satisfying models *)
 
 let check_models = ref false
 
@@ -395,7 +438,7 @@ let model_has_prop () =
 
 let prove_or_model_with_past_model loc m =
   let@ has_prop = model_has_prop () in
-  let@ p_f = provable_inner loc in
+  let@ p_f = provable_internal loc in
   let loc = Locations.other __FUNCTION__ in
   let res lc = match lc with
     | LC.T t when has_prop (IT.not_ t loc) m -> `Counterex (lazy m)
@@ -424,7 +467,7 @@ let do_check_model loc m prop =
     | None -> None
     | Some x -> Some (IT.eq_ (v, x) here)
   ) vs in
-  let@ prover = provable_inner loc in
+  let@ prover = provable_internal loc in
   match prover (LogicalConstraints.T (IT.and_ (prop :: eqs) here)) with
   | `False -> return ()
   | `True -> fail (fun _ -> {loc; msg = Generic (Pp.string "Solver model inconsistent")})
@@ -434,13 +477,13 @@ let cond_check_model loc m prop =
   then do_check_model loc m prop
   else return ()
 
-let model_with_inner loc prop =
+let model_with_internal loc prop =
   let@ ms = get_just_models () in
   let@ has_prop = model_has_prop () in
   match List.find_opt (has_prop prop) ms with
     | Some m -> return (Some m)
     | None -> begin
-      let@ prover = provable_inner loc in
+      let@ prover = provable_internal loc in
       let here = Locations.other __FUNCTION__ in
       match prover (LC.t_ (IT.not_ prop here)) with
         | `True -> return None
@@ -461,25 +504,7 @@ let model_with_inner loc prop =
 
 
 
-let add_c_internal lc =
-  let@ _ = drop_past_models () in
-  let@ s = get_typing_context () in
-  let@ solver = get_solver () in
-  let@ simp_ctxt = simp_ctxt () in
-  let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
-  let s = Context.add_c lc s in
-  let () = Solver.add_assumption solver s.global lc in
-  let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
-  let@ _ = add_found_equalities lc in
-  let@ () = set_typing_context s in
-  return ()
 
-let add_r_internal loc (r, RE.O oargs) =
-  let@ s = get_typing_context () in
-  let@ simp_ctxt = simp_ctxt () in
-  let r = Simplify.ResourceTypes.simp simp_ctxt r in
-  let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
-  set_typing_context (Context.add_r loc (r, O oargs) s)
 
 
 type changed =
@@ -490,11 +515,11 @@ type changed =
 
 
 
-let map_and_fold_resources_inner loc
+let map_and_fold_resources_internal loc
     (f : RE.t -> 'acc -> changed * 'acc)
     (acc : 'acc) =
   let@ s = get_typing_context () in
-  let@ provable_f = provable_inner loc in
+  let@ provable_f = provable_internal loc in
   let (resources, orig_ix) = s.resources in
   let orig_hist = s.resource_history in
   let resources, ix, hist, changed_or_deleted, acc =
@@ -584,24 +609,23 @@ let bind_logical_return_internal loc =
   in
   fun members lrt -> aux members lrt
 
-let get_movable_indices_inner () =
-  inspect (fun s -> s.movable_indices)
 
-let get_movable_indices () =
-  inspect (fun s -> List.map (fun (pred, nm, _verb) -> (pred, nm)) s.movable_indices)
+
+(* let get_movable_indices () = *)
+(*   inspect (fun s -> List.map (fun (pred, nm, _verb) -> (pred, nm)) s.movable_indices) *)
 
 
 (* copying and adjusting map_and_fold_resources *)
 let do_unfold_resources loc =
   let rec aux () =
     let@ s = get_typing_context () in
-    let@ movable_indices = get_movable_indices_inner () in
-    let@ provable_f = provable_inner (Locations.other __FUNCTION__) in
+    let@ movable_indices = get_movable_indices () in
+    let@ provable_f = provable_internal (Locations.other __FUNCTION__) in
     let (resources, orig_ix) = s.resources in
     let _orig_hist = s.resource_history in
     Pp.debug 8 (lazy (Pp.string "-- checking resource unfolds now --"));
     let here = Locations.other __FUNCTION__ in
-    let@ true_m = model_with_inner loc (IT.bool_ true here) in
+    let@ true_m = model_with_internal loc (IT.bool_ true here) in
     match true_m with
     | None -> return () (* contradictory state *)
     | Some model ->
@@ -654,7 +678,7 @@ let sync_unfold_resources loc =
 
 let provable loc =
   let@ () = sync_unfold_resources loc in
-  provable_inner loc
+  provable_internal loc
 
 let all_resources_tagged loc =
   let@ () = sync_unfold_resources loc in
@@ -673,7 +697,7 @@ let res_history loc i =
 
 let map_and_fold_resources loc f acc =
   let@ () = sync_unfold_resources loc in
-  map_and_fold_resources_inner loc f acc
+  map_and_fold_resources_internal loc f acc
 
 let prev_models_with loc prop =
   let@ () = sync_unfold_resources loc in
@@ -683,7 +707,7 @@ let prev_models_with loc prop =
 
 let model_with loc prop =
   let@ () = sync_unfold_resources loc in
-  model_with_inner loc prop
+  model_with_internal loc prop
 
 
 
@@ -732,22 +756,14 @@ let test_value_eqs loc guard x ys =
 
 
 
-let set_movable_indices ixs : unit m =
-  fun s ->
-  Ok ((), {s with movable_indices = ixs})
 
 
-let add_movable_index loc ~verbose (pred, ix) =
-  let@ ixs = get_movable_indices_inner () in
-  if verbose then begin
-    let@ () = set_movable_indices ((pred, ix, true) :: ixs) in
-    let@ () = do_unfold_resources loc in
-    set_movable_indices ((pred, ix, false) :: ixs)
-  end
-  else begin
-    let@ () = set_movable_indices ((pred, ix, false) :: ixs) in
-    set_unfold_resources ()
-  end
+
+let add_movable_index loc (pred, ix) =
+  let@ ixs = get_movable_indices () in
+  let@ () = set_movable_indices ((pred, ix) :: ixs) in
+  set_unfold_resources ()
+
 
 let add_r loc re =
    let@ () = add_r_internal loc re in

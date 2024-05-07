@@ -1504,10 +1504,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                let@ (original_rs, _) = all_resources_tagged loc in
                let verbose = List.exists (Id.is_str "verbose") attrs in
                let quiet = List.exists (Id.is_str "quiet") attrs in
-               if verbose
-               then Pp.print stdout (Pp.loc_headline loc (!^ "processing extract[verbose]"))
-               else ();
-               let@ () = add_movable_index loc ~verbose (predicate_name, it) in
+               (* if verbose *)
+               (* then Pp.print stdout (Pp.loc_headline loc (!^ "processing extract[verbose]")) *)
+               (* else (); *)
+               let@ () = add_movable_index loc (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
                let msg1 = "extract: index added, no resources (yet) extracted." in
                let msg2 = "(consider extract[verbose] or extract[quiet])" in
