@@ -1031,7 +1031,7 @@ Module Type CheriMemoryImpl
      to check for liveness here, instead of later as multiple dead
      allocations may correspond to given address.
    *)
-  Definition find_live_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
+  Definition find_live_allocation (addr:AddressValue.t) : memM (option (storage_instance_id*allocation)) :=
     get >>= fun st =>
         ret
           (ZMap.fold (fun alloc_id alloc acc =>
@@ -2823,7 +2823,6 @@ Module Type CheriMemoryImpl
         memcpy_copy_data loc ptrval1 ptrval2 index
     end.
 
-  (* Internal *)
   Fixpoint memcpy_copy_tags
     (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
@@ -2858,18 +2857,93 @@ Module Type CheriMemoryImpl
         memcpy_copy_tags loc ptrval1 ptrval2 index
     end.
 
-  (* internal *)
-  Definition memcpy_args_check loc ptrval1 ptrval2 size_n :=
-    if size_n <? 0
+
+  (** Helper functoin to checks if regions of size [sz] fit within
+      [allocation1] starting from [c1] and [allocation2] starting from [c2].
+      Additionally, check that they do not overlap.
+   *)
+  Definition memcpy_alloc_bounds_check loc c1 c2 (alloc1 alloc2:allocation) (sz:Z) :=
+    let ptr1_base := cap_to_Z c1 in
+    let ptr1_limit := ptr1_base + sz in
+    let alloc1_base := AddressValue.to_Z alloc1.(base) in
+    let alloc1_limit := alloc1_base + Z.of_nat alloc1.(size) in
+
+    let ptr2_base := cap_to_Z c2 in
+    let ptr2_limit := ptr2_base + sz in
+    let alloc2_base := AddressValue.to_Z alloc2.(base) in
+    let alloc2_limit := alloc2_base + Z.of_nat alloc2.(size) in
+
+    if (ptr1_base <? alloc1_base) || (ptr1_limit >? alloc1_limit) ||
+         (ptr2_base <? alloc2_base) || (ptr2_limit >? alloc2_limit)
+    then fail loc (MerrUndefinedMemcpy Memcpy_out_of_bound)
+    else
+      (* Checking for overlap. This should only be required if
+         allocation IDs are the same, but since live allocations do
+         not overlap, we perform a more general check for
+         simplicity.
+       *)
+      if Z.abs (ptr1_base-ptr2_base) >=? sz
+      then ret tt
+      else fail loc (MerrUndefinedMemcpy Memcpy_overlap).
+
+  (** Check if arguments to memcpy are sane:
+
+     0. Size should be non-negative (corresponds to `size_t` which is unsigned )
+     1. Both pointers should point to C objects
+        (null pointers and pointers to functions is not allowed)
+     2. Corresponding allocations must be live
+     3. Copied regions must be within objects' bounds
+     4. Source and destination must not overlap
+
+     NOTE: We allow to copy parts of static objects.
+           This may be not compatible with optimizations
+           performed by some compilers. Copying parts
+           of objects allocated on heap is non-controversial.
+   *)
+  Definition memcpy_args_check loc ptrval1 ptrval2 (size:Z) :=
+    if size <? 0
     then raise (InternalErr "negative size passed to memcpy")
     else
       match ptrval1, ptrval2 with
-      | PV _ (PVconcrete c1), PV _ (PVconcrete c2) =>
-          let a1 := cap_to_Z c1 in
-          let a2 := cap_to_Z c2 in
-          if Z.abs (a1-a2) >=? size_n
-          then ret tt
-          else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
+      | PV prov1 (PVconcrete c1), PV prov2 (PVconcrete c2) =>
+          if cap_is_null c1 || cap_is_null c2
+          then fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+          else
+            if CoqSwitches.has_PNVI (SW.get_switches tt)
+            then
+              match prov1, prov2 with
+              | (Prov_some alloc_id1), (Prov_some alloc_id2) =>
+                  opt_al1 <- get_allocation_opt alloc_id1 ;;
+                  opt_al2 <- get_allocation_opt alloc_id2 ;;
+                  match opt_al1, opt_al2 with
+                  | Some alloc1, Some alloc2 =>
+                      if alloc1.(is_dead) || alloc2.(is_dead)
+                      then
+                        (* At lease one of allocations is dead *)
+                        fail loc (MerrUndefinedMemcpy Memcpy_dead_object)
+                      else
+                        memcpy_alloc_bounds_check loc c1 c2 alloc1 alloc2 size
+                  | _, _ =>
+                      (* Neither dead nor live allocation was found. *)
+                      fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+                  end
+              | _, _ =>
+                  (* invalid provenance *)
+                  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+              end
+            else
+              opt_al1 <- find_cap_allocation c1 ;;
+              opt_al2 <- find_cap_allocation c2 ;;
+              match opt_al1, opt_al2 with
+              | Some (_,alloc1), Some (_,alloc2) =>
+                  memcpy_alloc_bounds_check loc c1 c2 alloc1 alloc2 size
+              | _, _ =>
+                  (* One of allocations does not exists or dead.
+                     We return [Memcpy_non_object] which is more
+                     general than [Memcpy_dead_object]
+                   *)
+                  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+              end
       (* memcpy accepts only pointers to C objects *)
       | _, _ =>  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
       end.
