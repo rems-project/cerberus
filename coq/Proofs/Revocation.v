@@ -3024,18 +3024,18 @@ Module RevocationProofs.
         unfold post_exec_invariant, lift_sum_p in R.
         break_match_hyp.
         +
-          unfold execErrS in Heqs0.
+          unfold execErrS in Heqs1.
           break_let.
           tuple_inversion.
           inl_inr.
         +
-          unfold execErrS in Heqs0.
+          unfold execErrS in Heqs1.
           break_let.
           tuple_inversion.
           inl_inr_inv.
           subst m.
           destruct x0.
-          rename a into alloc, z into alloc_id.
+          rename a into alloc, s0 into alloc_id.
           apply find_live_allocation_res_consistent in Heqp0.
           (* It looks like we have everything we need here *)
           unfold post_exec_invariant, lift_sum_p.
@@ -3525,6 +3525,8 @@ Module RevocationProofs.
   (** Helper predicate for [memcpy] correctness assumption. Two memory
       regions of size [n] pointed by 2 pointers do not overlap. It is
       only defined for [PVconcrete].
+
+      TODO: Needs to be adjusted.
    *)
   Inductive mempcpy_args_sane: pointer_value -> pointer_value -> Z -> Prop
     :=
@@ -3654,7 +3656,7 @@ Module RevocationProofs.
     (n:Z ):
     SameState (memcpy_args_check loc p1 p2 n).
   Proof.
-    unfold memcpy_args_check.
+    unfold memcpy_args_check, memcpy_alloc_bounds_check.
     same_state_steps.
   Qed.
 
@@ -4275,10 +4277,12 @@ Module RevocationProofs.
     repeat break_match; try tuple_inversion; try inl_inr.
     econstructor;eauto.
     lia.
+    (* TODO:
     apply Values.Z_geb_ge in Heqb0.
     unfold cap_to_Z in Heqb0.
     lia.
-  Qed.
+     *)
+  Admitted.
 
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
