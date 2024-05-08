@@ -386,6 +386,10 @@ module WIT = struct
          | Not ->
            let@ t = check loc BT.Bool t in
            return (t, BT.Bool)
+         | Negate ->
+           let@ t = infer t in
+           let@ () = ensure_arith_type ~reason:loc t in
+           return (t, IT.bt t)
          | BWCLZNoSMT
          | BWCTZNoSMT
          | BWFFSNoSMT ->

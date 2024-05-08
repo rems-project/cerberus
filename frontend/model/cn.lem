@@ -113,6 +113,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_unchanged of cn_expr 'a 'ty
   | CNExpr_at_env of cn_expr 'a 'ty * string
   | CNExpr_not of cn_expr 'a 'ty
+  | CNExpr_negate of cn_expr 'a 'ty
   | CNExpr_default of cn_base_type 'a
 
 and cn_expr 'a 'ty =

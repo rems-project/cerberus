@@ -19,6 +19,7 @@ type const =
 
 type unop =
   | Not
+  | Negate
   | BWCLZNoSMT
   | BWCTZNoSMT
   | BWFFSNoSMT
@@ -179,6 +180,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"bw_ffs_uf" [aux false it1]
        | Not ->
           mparens (!^"!" ^^ parens (aux false it1))
+       | Negate ->
+          mparens (!^"-" ^^ parens (aux false it1))
        end
     | Binop (bop, it1, it2) ->
        begin match bop with

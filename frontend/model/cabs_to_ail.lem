@@ -4274,26 +4274,22 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
                     <*> desugar_cn_expr e2
                     <*> desugar_cn_expr e3
     | CNExpr_good ty e ->
-        desugar_type_name ty >>= fun (_, ty) ->
-        desugar_cn_expr e >>= fun e ->
-        E.return (CNExpr_good ty e)
+        CNExpr_good <$> (snd <$> desugar_type_name ty)
+                    <*> desugar_cn_expr e
     | CNExpr_deref e ->
-        desugar_cn_expr e >>= fun e ->
-        E.return (CNExpr_deref e)
+        CNExpr_deref <$> desugar_cn_expr e
     | CNExpr_value_of_c_atom _ _ ->
         Assert_extra.failwith "CNExpr_var_of_c_atom"
     | CNExpr_unchanged e ->
-       desugar_cn_expr e >>= fun e ->
-       E.return (CNExpr_unchanged e)
+       CNExpr_unchanged <$> desugar_cn_expr e
     | CNExpr_at_env e envname ->
-       desugar_cn_expr e >>= fun e ->
-       E.return (CNExpr_at_env e envname)
+       CNExpr_at_env <$> desugar_cn_expr e <*> (E.return envname)
     | CNExpr_not e ->
-       desugar_cn_expr e >>= fun e ->
-       E.return (CNExpr_not e)
+       CNExpr_not <$> desugar_cn_expr e
+    | CNExpr_negate e ->
+       CNExpr_negate <$> desugar_cn_expr e
     | CNExpr_default bt ->
-       desugar_cn_base_type loc bt >>= fun bt ->
-       E.return (CNExpr_default bt)
+       CNExpr_default <$> desugar_cn_base_type loc bt
   end >>= fun ret ->
   E.return (CNExpr loc ret)
 

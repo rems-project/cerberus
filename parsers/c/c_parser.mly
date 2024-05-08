@@ -1831,13 +1831,6 @@ cn_assertion:
     | Env of term * string
 *)
 
-ominus:
-| 
-    { false }
-| MINUS
-    { true }
-
-
 prim_expr:
 | CN_NULL
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const CNConst_NULL)) }
@@ -1845,24 +1838,23 @@ prim_expr:
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool true))) }
 | CN_FALSE
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool false))) }
-| negate=ominus cst= CONSTANT
+| cst= CONSTANT
     {
       match cst with
         | Cabs.CabsInteger_const (str, None) ->
-            let v = if negate then Z.of_string ("-"^str) else Z.of_string str in
+            let v = Z.of_string str in
             Cerb_frontend.Cn.(CNExpr ( Cerb_location.point $startpos
                                      , CNExpr_const (CNConst_integer v) ))
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| negate=ominus cst= CN_CONSTANT
+| cst= CN_CONSTANT
     {
         let (str,sign,n) = cst in
         let sign = match sign with
          | `U -> Cerb_frontend.Cn.CN_unsigned
-         | `I -> Cerb_frontend.Cn.CN_signed
-         in
-         let v = if negate then Z.of_string ("-"^str) else Z.of_string str in
+         | `I -> Cerb_frontend.Cn.CN_signed in
+         let v = Z.of_string str in
          Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bits ((sign,n),v))))
     }
 | ident= cn_variable
@@ -1930,6 +1922,9 @@ unary_expr:
 | LBRACE e= expr RBRACE CN_UNCHANGED
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_unchanged e)) }
+| MINUS e= prim_expr
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_negate e )) }
 | BANG e= prim_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_not e )) }

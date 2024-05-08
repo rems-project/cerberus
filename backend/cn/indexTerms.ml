@@ -455,6 +455,11 @@ let is_not = function
   | IT (Unop (Not, it), _, _) -> Some it
   | _ -> None
 
+let is_negate = function
+  | IT (Unop (Negate, it), _, _) -> Some it
+  | _ -> None
+
+
 let is_lt = function
   | IT (Binop (LT,x, y), _, _) -> Some (x, y)
   | _ -> None
@@ -561,6 +566,7 @@ let eachI_ (i1, (s, bt), i2) t loc =
 
 
 (* arith_op *)
+let negate it loc = IT (Unop (Negate, it), bt it, loc)
 let add_ (it, it') loc = IT (Binop (Add,it, it'), bt it, loc)
 let sub_ (it, it') loc = IT (Binop (Sub,it, it'), bt it, loc)
 let mul_ (it, it') loc =

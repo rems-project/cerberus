@@ -705,6 +705,12 @@ module Translate = struct
       | Unop (uop, t) ->
          begin match uop with
            | Not -> Z3.Boolean.mk_not context (term t)
+           | Negate -> begin match IT.bt t with
+             | BT.Bits (BT.Unsigned, _) -> Z3.BitVector.mk_neg context (term t)
+             | BT.Bits (BT.Signed, _) -> via_unsigned1 context (IT.bt t) (Z3.BitVector.mk_neg context) (term t)
+             | BT.Integer | BT.Real -> Z3.Arithmetic.mk_unary_minus context (term t)
+             | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)")
+             end
            | BWFFSNoSMT -> adj ()
            | BWCLZNoSMT -> begin match IT.bt t with
                | BT.Bits (BT.Unsigned, sz) -> mk_clz context sz sz (term t)
