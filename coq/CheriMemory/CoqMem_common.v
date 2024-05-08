@@ -38,8 +38,9 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
 
   Variant memcpy_error : Set :=
   | Memcpy_overlap : memcpy_error
-  | Memcpy_non_object: memcpy_error
-  | Memmove_non_object: memcpy_error.
+  | Memcpy_non_object : memcpy_error
+  | Memcpy_dead_object : memcpy_error
+  | Memcpy_out_of_bound : memcpy_error.
 
   Variant vip_kind : Set :=
   | VIP_null : vip_kind
@@ -278,8 +279,10 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
         Some UB100
     | MerrUndefinedMemcpy Memcpy_non_object =>
         Some (UB_std_omission UB_OMIT_memcpy_non_object)
-    | MerrUndefinedMemcpy Memmove_non_object =>
-        Some (UB_std_omission UB_OMIT_memmove_non_object)
+    | MerrUndefinedMemcpy Memcpy_dead_object =>
+        Some UB009_outside_lifetime
+    | MerrUndefinedMemcpy Memcpy_out_of_bound =>
+        Some (UB_std_omission UB_OMIT_memcpy_out_of_bound)
 
     | MerrWriteOnReadOnly ReadonlyStringLiteral =>
         Some UB033_modifying_string_literal
