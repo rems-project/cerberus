@@ -786,11 +786,13 @@ let map_get_ v arg loc =
 let map_def_ (s, abt) body loc =
   IT (MapDef ((s, abt), body), BT.Map (abt, bt body), loc)
 
-let make_array_ ~item_bt items (* assumed all of item_bt *) loc =
+let make_array_ ~index_bt ~item_bt items (* assumed all of item_bt *) loc =
+  let base_value = const_map_ index_bt (default_ item_bt loc) loc in
   let (_, value) =
     List.fold_left (fun (index, value) item ->
-        (index + 1, map_set_ value (int_ index loc, item) loc)
-      ) (0, const_map_ Integer (default_ item_bt loc) loc) items
+        let index_it = num_lit_ (Z.of_int index) index_bt loc in
+        (index + 1, map_set_ value (index_it, item) loc)
+      ) (0, base_value) items
   in
   value
 

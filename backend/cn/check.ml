@@ -136,6 +136,13 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
             | None -> fail (fun _ -> {loc; msg = Empty_provenance }) in
         return (pointer_ ~alloc_id ~addr:p loc) )
 
+let expect_must_be_map_bt loc ~expect = 
+  match expect with
+  | BT.Map (index_bt, item_bt) -> return (index_bt, item_bt)
+  | _ ->
+     let msg = Mismatch {has = !^"array"; expect = BT.pp expect} in
+     fail (fun _ -> {loc; msg})
+
 let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
   CF.Impl_mem.case_mem_value mem
     ( fun ct ->
@@ -155,15 +162,10 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
       let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
       check_ptrval loc ~expect ptrval )
     ( fun mem_values ->
-      let@ index_bt, item_bt = match expect with
-        | BT.Map (index_bt, item_bt) -> return (index_bt, item_bt)
-        | _ ->
-           let msg = Mismatch {has = !^"array"; expect = BT.pp expect} in
-           fail (fun _ -> {loc; msg})
-      in
-      assert (BT.equal index_bt Integer);
+      let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
+      assert (Option.is_some (BT.is_bits_bt index_bt));
       let@ values = ListM.mapM (check_mem_value loc ~expect:item_bt) mem_values in
-      return (make_array_ ~item_bt values loc) )
+      return (make_array_ ~index_bt ~item_bt values loc) )
     ( fun tag mvals ->
       let@ () = WellTyped.WCT.is_ct loc (Struct tag) in
       let@ () = WellTyped.ensure_base_type loc ~expect (Struct tag) in
@@ -212,11 +214,11 @@ let rec check_object_value (loc : loc) (M_OV (expect, ov)) : IT.t m =
   | M_OVpointer p ->
      check_ptrval loc ~expect p
   | M_OVarray items ->
-     let item_bt = bt_of_object_value (List.hd items) in
-     let@ () = ensure_base_type loc ~expect (Map (Integer, item_bt)) in
+     let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
+     assert (Option.is_some (BT.is_bits_bt index_bt));
      let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_object_value i)) items in
      let@ values = ListM.mapM (check_object_value loc) items in
-     return (make_array_ ~item_bt values loc)
+     return (make_array_ ~index_bt ~item_bt values loc)
   | M_OVstruct (tag, fields) ->
      let@ () = ensure_base_type loc ~expect (Struct tag) in
      check_struct loc tag fields
@@ -452,11 +454,11 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         let@ () = ensure_base_type loc ~expect (Tuple (List.map bt_of_pexpr pes)) in
         check_pexprs pes (fun values -> k (tuple_ values loc))
      | M_Carray, _ ->
-        let item_bt = bt_of_pexpr (List.hd pes) in
-        let@ () = ensure_base_type loc ~expect (Map (Integer, item_bt)) in
+        let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
+        assert (Option.is_some (BT.is_bits_bt index_bt));
         let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_pexpr i)) pes in
         check_pexprs pes (fun values ->
-        k (make_array_ ~item_bt values loc))
+        k (make_array_ ~index_bt ~item_bt values loc))
      | M_Cnil item_cbt, [] ->
         let@ item_bt = match expect with
           | List item_bt -> return item_bt

@@ -1596,12 +1596,19 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pes = ListM.mapM infer_pexpr pes in
         let@ bt = match ctor with
         | M_Cnil _ -> todo ()
-        | M_Ccons -> begin match pes with
-            | [x; xs] -> return (bt_of_pexpr xs)
-            | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
-        end
+        | M_Ccons -> 
+           begin match pes with
+           | [x; xs] -> 
+              let ibt = bt_of_pexpr x in
+              let@ () = ensure_base_type loc ~expect:(List ibt) (bt_of_pexpr xs) in
+              return (bt_of_pexpr xs)
+           | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
+           end
         | M_Ctuple -> return (BT.Tuple (List.map bt_of_pexpr pes))
-        | M_Carray -> todo ()
+        | M_Carray -> 
+           let ibt = bt_of_pexpr (List.hd pes) in
+           let@ () = ListM.iterM (fun pe -> ensure_base_type loc ~expect:ibt (bt_of_pexpr pe)) pes in
+           return (Map (Memory.intptr_bt, ibt))
         in
         return (bt, M_PEctor (ctor, pes))
       | M_PEcfunction pe ->
