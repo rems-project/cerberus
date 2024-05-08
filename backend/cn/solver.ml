@@ -13,6 +13,8 @@ module LCSet = Set.Make(LC)
 module BT = BaseTypes
 module StringSet = Set.Make(String)
 
+(* XXX: temporary *)
+let _dummy = Solver2.translate_term
 
 let random_seed = ref 1
 let log_to_temp = ref false
