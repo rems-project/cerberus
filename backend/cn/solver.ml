@@ -816,10 +816,11 @@ module Translate = struct
       | RecordUpdate _ -> adj ()
       | Cast (cbt, t) ->
          begin match IT.bt t, cbt with
-         | Integer, Loc ->
-            alloc_id_addr_to_loc (term (alloc_id_ Z.zero loc)) (term t)
          | Bits _, Loc ->
-            alloc_id_addr_to_loc (term (alloc_id_ Z.zero loc)) (term t)
+            if BT.equal (IT.bt t) Memory.intptr_bt then
+              alloc_id_addr_to_loc (term (alloc_id_ Z.zero loc)) (term t)
+            else
+              term (cast_ cbt (cast_ Memory.intptr_bt t loc) loc)
          | Loc, Bits _ ->
            (* Recall above
            | Loc -> translate BT.(Tuple [Alloc_id; Memory.intptr_bt]) *)
