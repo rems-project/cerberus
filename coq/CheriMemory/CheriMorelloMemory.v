@@ -2858,10 +2858,10 @@ Module Type CheriMemoryImpl
     end.
 
 
-  (** Helper functoin to checks if regions of size [sz] fit within
-      [allocation1] starting from [c1] and [allocation2] starting from [c2].
-      Additionally, check that they do not overlap.
-   *)
+  (** Helper function checks if regions of size [sz] fit within
+      [allocation1] starting from [c1] and [allocation2] starting from
+      [c2]. Additionally, it checks that they do not overlap.
+  *)
   Definition memcpy_alloc_bounds_check loc c1 c2 (alloc1 alloc2:allocation) (sz:Z) :=
     let ptr1_base := cap_to_Z c1 in
     let ptr1_limit := ptr1_base + sz in
