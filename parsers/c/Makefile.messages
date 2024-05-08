@@ -1,26 +1,5 @@
 # Based on https://gitlab.inria.fr/fpottier/menhir/-/blob/master/demos/calc-syntax-errors/Makefile.messages.maintenance
 
-# [make update] is used under the programmer's manual control, after the
-# grammar in [c_parser.mly] has been modified.
-
-# It updates the file [c_parser_error.messages] with new auto-generated
-# comments for all error states.
-
-.PHONY: update
-update:
-	cp -f c_parser_error.messages /tmp/c_parser_error.messages.bak
-	dune exec menhir -- c_parser.mly --update-errors c_parser_error.messages > /tmp/c_parser_error.updated
-	./err_msg.py /tmp/c_parser_error.updated > /tmp/c_parser_error.easy
-	mv /tmp/c_parser_error.easy c_parser_error.messages
-
-# [make strip] strips away the auto-generated comments found in the file
-# c_parser_error.messages. It is typically used after [make update], which
-# creates many such comments.
-
-.PHONY: strip
-strip:
-	@ sed -e "/^##/d" -i.bak c_parser_error.messages
-
 # [make complete] is used when the completeness check fails, that is, when
 # there exist error states that are not reached by any of the sentences in the
 # file c_parser_error.messages. [make complete] adds the missing sentences
@@ -28,6 +7,7 @@ strip:
 # succeeds. It is then up to the programmer to study these sentences and
 # replace the dummy messages with suitable messages.
 
+.DEFAULT: complete
 .PHONY: complete
 complete:
 	dune exec menhir -- c_parser.mly --list-errors > /tmp/c_parser_error.auto.messages
@@ -37,4 +17,25 @@ complete:
 	    > /tmp/c_parser_error.merged
 	./err_msg.py /tmp/c_parser_error.merged > /tmp/c_parser_error.easy
 	mv /tmp/c_parser_error.easy c_parser_error.messages
+
+# [make regen-comments] is used under the programmer's manual control, after the
+# grammar in [c_parser.mly] has been modified.
+
+# It updates the file [c_parser_error.messages] with new auto-generated
+# comments for all error states.
+
+.PHONY: regen-comments
+regen-comments:
+	cp -f c_parser_error.messages /tmp/c_parser_error.messages.bak
+	dune exec menhir -- c_parser.mly --update-errors c_parser_error.messages > /tmp/c_parser_error.updated
+	./err_msg.py /tmp/c_parser_error.updated > /tmp/c_parser_error.easy
+	mv /tmp/c_parser_error.easy c_parser_error.messages
+
+# [make rm-comments] strips away the auto-generated comments found in the file
+# c_parser_error.messages. It is typically used after [make regen-comments], which
+# creates many such comments.
+
+.PHONY: rm-comments
+rm-comments:
+	@ sed -e "/^##/d" -i.bak c_parser_error.messages
 

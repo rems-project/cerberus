@@ -1922,10 +1922,10 @@ unary_expr:
 | LBRACE e= expr RBRACE CN_UNCHANGED
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_unchanged e)) }
-| MINUS e= prim_expr
+| MINUS e= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_negate e )) }
-| BANG e= prim_expr
+| BANG e= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_not e )) }
 | DEFAULT LT bt= base_type GT
@@ -1937,7 +1937,7 @@ unary_expr:
 | AMPERSAND name=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_addr name)) }
-| LPAREN ty= base_type_explicit RPAREN expr= prim_expr
+| LPAREN ty= base_type_explicit RPAREN expr= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
 
