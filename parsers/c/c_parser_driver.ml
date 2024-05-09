@@ -43,7 +43,7 @@ let after_before_msg offset buffer (lexbuf : Lexing.lexbuf) =
      lex_curr_pos = curr.Lexing.pos_cnum - offset;
    }
    with Invalid_argument _ ->
-       Printf.sprintf "CPARSER_DRIVER(lex_buffer_len = %d; offset = %d; start.pos_cnum = %d; curr.pos_cnum = %d)"
+       Printf.sprintf "CPARSER_DRIVER(lex_buffer_len = %d; offset = %d; start_index = %d; end_index = %d)"
           lexbuf.lex_buffer_len offset (start.pos_cnum - offset) (curr.pos_cnum - offset)
     ) buffer
 
