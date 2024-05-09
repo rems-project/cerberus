@@ -1402,42 +1402,53 @@ Section ZMapAux.
     (v:A)
     :
     zmap_find_first f m = Some (k,v)
-    -> ZMap.find k m = Some v.
+    ->
+      ZMap.find k m = Some v /\ f k v = true.
   Proof.
     unfold zmap_find_first.
     intros H.
-    apply find_mapsto_iff.
     revert H.
-
 
     apply fold_rec_weak; intros.
     -
       apply H0 in H1. clear H0.
       symmetry in H.
-      eapply Equal_mapsto_iff;eauto.
+      destruct H1 as [H2 H3].
+      split.
+      +
+        rewrite H.
+        assumption.
+      +
+        assumption.
     -
       discriminate.
     -
       break_match_hyp.
       +
         apply H0 in H1. clear H0.
+        destruct H1 as [H2 H3].
         subst.
         destruct (Z.eq_dec k k0) as [E|NE].
         *
           exfalso.
           subst k0.
-          clear - H H1.
           contradict H.
-          eapply zmap_mapsto_in.
-          eauto.
+          apply in_find_iff.
+          rewrite H2.
+          discriminate.
         *
-          apply add_neq_mapsto_iff;auto.
+          split.
+          rewrite add_neq_o;auto.
+          assumption.
       +
         break_match_hyp;[|discriminate].
         clear H0.
         invc H1.
-        apply ZMap.add_1.
-        reflexivity.
+        split.
+        *
+          rewrite add_eq_o;auto.
+        *
+          assumption.
   Qed.
 
   Lemma zmap_find_first_matches

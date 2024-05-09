@@ -3522,20 +3522,48 @@ Module RevocationProofs.
     (* TODO: postponed until I figure out `is_locking` logic*)
   Admitted.
 
-  (** Helper predicate for [memcpy] correctness assumption. Two memory
-      regions of size [n] pointed by 2 pointers do not overlap. It is
-      only defined for [PVconcrete].
-
-      TODO: Needs to be adjusted.
-   *)
-  Inductive mempcpy_args_sane: pointer_value -> pointer_value -> Z -> Prop
+  Definition memcpy_alloc_bounds_check_p
+    (c1 c2: Capability_GS.t)
+    (alloc1 alloc2: allocation)
+    (sz:Z)
+    : Prop
     :=
-  | ptrval_overlap_concrete: forall c1 c2 n a1 a2 p1 p2,
-      a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
-      a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
-      0 <= n ->
-      Z.abs (a1-a2) >= n ->
-      mempcpy_args_sane (PV p1 (PVconcrete c1)) (PV p2 (PVconcrete c2)) n .
+    let ptr1_base := cap_to_Z c1 in
+    let ptr1_limit := ptr1_base + sz in
+    let alloc1_base := AddressValue.to_Z alloc1.(base) in
+    let alloc1_limit := alloc1_base + Z.of_nat alloc1.(size) in
+
+    let ptr2_base := cap_to_Z c2 in
+    let ptr2_limit := ptr2_base + sz in
+    let alloc2_base := AddressValue.to_Z alloc2.(base) in
+    let alloc2_limit := alloc2_base + Z.of_nat alloc2.(size) in
+
+    ptr1_base >= alloc1_base
+    /\ ptr1_limit <= alloc1_limit
+    /\ ptr2_base  >= alloc2_base
+    /\ ptr2_limit <= alloc2_limit
+    /\ Z.abs (ptr1_base-ptr2_base) >= sz.
+
+  Inductive mempcpy_args_sane: ZMap.t allocation -> pointer_value -> pointer_value -> Z -> Prop
+    :=
+    (*
+  | mempcpy_args_sane_wihtPNVI: forall allocations c1 c2 sz alloc_id1 alloc_id2 alloc1 alloc2,
+      ZMap.MapsTo alloc_id1 alloc1 allocations ->
+      ZMap.MapsTo alloc_id2 alloc2 allocations ->
+      alloc1.(is_dead) = false ->
+      alloc2.(is_dead) = false ->
+      memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 sz ->
+      mempcpy_args_sane allocations (PV (Prov_some alloc_id1) (PVconcrete c1)) (PV (Prov_some alloc_id2) (PVconcrete c2)) sz
+*)
+  | mempcpy_args_sane_wihtoutPNVI: forall allocations c1 c2 sz alloc_id1 alloc_id2 alloc1 alloc2 prov1 prov2,
+      ZMap.MapsTo alloc_id1 alloc1 allocations ->
+      ZMap.MapsTo alloc_id2 alloc2 allocations ->
+      alloc1.(is_dead) = false ->
+      alloc2.(is_dead) = false ->
+      cap_bounds_within_alloc c1 alloc1 ->
+      cap_bounds_within_alloc c2 alloc2 ->
+      memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 sz ->
+      mempcpy_args_sane allocations (PV prov1 (PVconcrete c1)) (PV prov2 (PVconcrete c2)) sz.
 
   Fact memcpy_PreservesInvariant_fact
     {addr1 addr2 : Z}
@@ -3649,7 +3677,6 @@ Module RevocationProofs.
       all: try typeclasses eauto.
   Qed.
 
-
   Instance memcpy_args_check_SameState
     (loc:location_ocaml)
     (p1 p2: pointer_value_indt)
@@ -3667,13 +3694,49 @@ Module RevocationProofs.
     (a : allocation)
     :
     find_cap_allocation_st s c = Some (sid, a) ->
-    ZMap.find (elt:=allocation) sid (allocations s) = Some a.
+    ZMap.find (elt:=allocation) sid (allocations s) = Some a
+    /\ a.(is_dead) = false
+    /\ cap_bounds_within_alloc c a.
   Proof.
     intros H.
     unfold find_cap_allocation_st in H.
     break_let.
+    repeat rewrite resolve_has_any_PNVI_flavour in H.
     apply zmap_find_first_exists in H.
-    assumption.
+    destruct H as [H1 H2].
+    repeat split.
+    - assumption.
+    -
+      apply andb_prop in H2.
+      destruct H2.
+      apply andb_prop in H.
+      destruct H.
+      apply negb_true_iff.
+      auto.
+    -
+      apply andb_prop in H2.
+      destruct H2 as [H2 _].
+      apply andb_prop in H2.
+      destruct H2 as [_ H2].
+      apply andb_prop in H2.
+      destruct H2 as [H2 H3].
+
+      bool_to_prop_hyp.
+      rewrite Heqp.
+      cbn.
+      lia.
+    -
+      apply andb_prop in H2.
+      destruct H2 as [H2 _].
+      apply andb_prop in H2.
+      destruct H2 as [_ H2].
+      apply andb_prop in H2.
+      destruct H2 as [H2 H3].
+
+      bool_to_prop_hyp.
+      rewrite Heqp.
+      cbn.
+      lia.
   Qed.
 
   Fact eff_array_shift_ptrval_uchar_spec
@@ -4056,13 +4119,59 @@ Module RevocationProofs.
       Transparent repr.
   Admitted.
 
-  (* TODO: this proof depends on https://github.com/rems-project/cerberus/issues/237 *)
+  (* Non-locking store does not change allocations (without PNVI).
+
+     Probably could be generalized for other types, this is all we need for now.
+   *)
+  Lemma store_char_preserves_allocations:
+    forall (loc : location_ocaml) (prov : provenance) (ptr:pointer_value_base)
+      (s0 : mem_state) (s : mem_state_r) (m : mem_value) (fp : footprint),
+      store loc CoqCtype.unsigned_char false
+        (PV prov ptr) m s =
+        (s0, inr fp)
+      -> allocations s0 = allocations s.
+  Proof.
+    intros loc prov0 ptr s0 s m fp ST.
+    Opaque repr.
+    unfold store in ST.
+    repeat break_let.
+    cbn in Heqp.
+    tuple_inversion.
+    unfold sizeof in ST.
+    cbn in ST.
+    rewrite MorelloImpl.uchar_size in ST.
+    cbn in ST.
+    state_inv_step.
+    -
+      clear - ST10.
+      Transparent put.
+      unfold put, State_errS in ST10.
+      Opaque put.
+      unfold mem_state_with_funptrmap_bytemap_capmeta in ST10.
+      destruct st, s0.
+      cbn in *.
+      tuple_inversion.
+      reflexivity.
+    -
+      clear - ST9.
+      Transparent put.
+      unfold put, State_errS in ST9.
+      Opaque put.
+      unfold mem_state_with_funptrmap_bytemap_capmeta in ST9.
+      destruct st, s0.
+      cbn in *.
+      tuple_inversion.
+      reflexivity.
+
+      Transparent repr.
+  Qed.
+
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
     {ptrval1 ptrval2 ptrval1' : pointer_value}
     {n : nat}
-    (AG: mempcpy_args_sane ptrval1 ptrval2 (Z.of_nat n))
+    (AG: mempcpy_args_sane s.(allocations) ptrval1 ptrval2 (Z.of_nat n))
     (C: memcpy_copy_data loc ptrval1 ptrval2 n s = (s', inr ptrval1'))
     {p1 p2 : provenance}
     {c1 c2 : Capability_GS.t}
@@ -4103,10 +4212,24 @@ Module RevocationProofs.
         subst ptrval2' ptrval1'0.
         rename x into fp.
         specialize (IHn _ _ addr C5).
+
         autospecialize IHn.
         {
+          assert(s0.(allocations) = s.(allocations)) as AE.
+          {
+            eapply store_char_preserves_allocations.
+            eauto.
+          }
+
+          rewrite AE.
           invc AG.
-          econstructor; eauto;lia.
+          econstructor.
+          eapply H3.
+          eapply H4.
+          all: auto.
+          clear - H11.
+          unfold memcpy_alloc_bounds_check_p in *.
+          lia.
         }
         clear C5 AG.
 
@@ -4164,8 +4287,21 @@ Module RevocationProofs.
         specialize (IHn _ _ addr C5).
         autospecialize IHn.
         {
+          assert(s0.(allocations) = s.(allocations)) as AE.
+          {
+            eapply store_char_preserves_allocations.
+            eauto.
+          }
+
+          rewrite AE.
           invc AG.
-          econstructor; eauto;lia.
+          econstructor.
+          eapply H3.
+          eapply H4.
+          all: auto.
+          clear - H11.
+          unfold memcpy_alloc_bounds_check_p in *.
+          lia.
         }
         clear C5.
         rewrite IHn. clear IHn.
@@ -4183,6 +4319,8 @@ Module RevocationProofs.
         {
           subst.
           invc AG.
+          unfold memcpy_alloc_bounds_check_p in H11.
+          unfold cap_to_Z in H11.
           break_match_goal;lia.
         }
         (* store does not modify any other bytes  *)
@@ -4198,7 +4336,7 @@ Module RevocationProofs.
     {ptrval1 ptrval2 ptrval1': pointer_value}
     {len: Z}
     :
-    mempcpy_args_sane ptrval1 ptrval2 len ->
+    mempcpy_args_sane s.(allocations) ptrval1 ptrval2 len ->
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr ptrval1')
     ->
       forall p1 p2 c1 c2 a1 a2,
@@ -4251,9 +4389,9 @@ Module RevocationProofs.
           exfalso.
           clear M H0.
           invc H.
-          subst.
-          invc H9.
-          invc H10.
+          invc H13.
+          invc H14.
+          unfold memcpy_alloc_bounds_check_p, cap_to_Z in H11.
           lia.
         *
           rewrite M.
@@ -4267,22 +4405,61 @@ Module RevocationProofs.
     (s s' : mem_state_r)
     (loc : location_ocaml)
     (n : Z):
-      memcpy_args_check loc ptrval1 ptrval2 n s = (s', inr tt) -> mempcpy_args_sane ptrval1 ptrval2 n.
+    memcpy_args_check loc ptrval1 ptrval2 n s = (s', inr tt) ->
+    mempcpy_args_sane s.(allocations) ptrval1 ptrval2 n.
   Proof.
     intros H.
+
+    pose proof (memcpy_args_check_SameState loc ptrval1 ptrval2 n) as SA.
+    specialize (SA _ _ _ H).
+    subst s'.
+
     unfold memcpy_args_check in H.
     Transparent raise ret fail.
     unfold fail, raise, ret, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H.
     cbn in H.
+    rewrite resolve_has_PNVI in H.
     repeat break_match; try tuple_inversion; try inl_inr.
-    econstructor;eauto.
-    lia.
-    (* TODO:
-    apply Values.Z_geb_ge in Heqb0.
-    unfold cap_to_Z in Heqb0.
-    lia.
-     *)
-  Admitted.
+    repeat state_inv_step.
+
+    unfold find_cap_allocation in *.
+    repeat state_inv_step.
+    tuple_inversion.
+    apply find_cap_allocation_st_spec in H0, H1.
+    destruct H0 as [H0 [D0 B0]].
+    destruct H1 as [H1 [D1 B1]].
+    apply ZMap.find_2 in H0, H1.
+
+    apply orb_false_elim in Heqb0.
+    destruct Heqb0.
+
+    unfold memcpy_alloc_bounds_check in H3.
+    break_match_hyp. state_inv_step.
+    break_match_hyp; state_inv_step.
+    bool_to_prop_hyp.
+
+    econstructor.
+    - eapply H1.
+    - eapply H0.
+    - auto.
+    - auto.
+    - auto.
+    - auto.
+    -
+      unfold cap_bounds_within_alloc in B0,B1.
+      destruct B0.
+      destruct B1.
+      constructor; try split.
+      +
+        unfold cap_to_Z in *.
+        lia.
+      +
+        unfold cap_to_Z in *.
+        lia.
+      +
+        unfold cap_to_Z in *.
+        lia.
+  Qed.
 
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
@@ -4323,12 +4500,12 @@ Module RevocationProofs.
       invc AC.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
       remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as a2 eqn:A2.
-      specialize (DS p1 p2 c1 c2 a1 a2).
+      specialize (DS prov1 prov2 c1 c2 a1 a2).
       autospecialize DS; [reflexivity|].
       autospecialize DS; [reflexivity|].
       specialize (DS A1 A2).
       remember (Z.to_nat (z * Z.of_nat (sizeof_pointer MorelloImpl.get))) as n.
-      clear s H M.
+      clear H M.
       unfold memcpy_copy_tags.
       induction n; intros.
       + preserves_step.
@@ -4343,22 +4520,22 @@ Module RevocationProofs.
         preserves_step. (* _ <- ... *)
         apply bind_PreservesInvariant_value_SameState.
         same_state_steps.
-        intros _ dst_a H4.
+        intros _ dst_a H14.
 
         apply eff_array_shift_ptrval_uchar_spec in SH1; subst ptrval1'.
         apply eff_array_shift_ptrval_uchar_spec in SH2; subst ptrval2'.
 
         Transparent serr2InternalErr bind raise ret get fail fail_noloc.
-        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H4.
+        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H14.
         Opaque serr2InternalErr bind raise ret get fail fail_noloc.
         tuple_inversion.
 
         apply bind_PreservesInvariant_value_SameState.
         same_state_steps.
-        intros _ src_a H4.
+        intros _ src_a H14.
 
         Transparent serr2InternalErr bind raise ret get fail fail_noloc.
-        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H4.
+        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H14.
         Opaque serr2InternalErr bind raise ret get fail fail_noloc.
         tuple_inversion.
 

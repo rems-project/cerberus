@@ -1,3 +1,8 @@
+Require Import Coq.Arith.PeanoNat.
+Require Import Coq.Numbers.BinNums.
+Require Import Coq.ZArith.Zcompare.
+Require Import Coq.Bool.Bool.
+
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 Require Import Common.SimpleError.
@@ -11,7 +16,6 @@ Require Import Common.SimpleError.
  *)
 Ltac cbn_hyp H :=
   let T := type of H in let T' := eval cbn in T in replace T with T' in H by (cbn;reflexivity).
-
 
 Lemma ret_inr
   {T E:Type}
@@ -123,3 +127,13 @@ Ltac bool_inv :=
   | [H: false = false |- _] => clear H
   | [H: true = true |- _] => clear H
   end.
+
+Ltac bool_to_prop_hyp :=
+  repeat match goal with
+    | [H: orb _ _ = false |- _] => apply orb_false_elim in H; destruct H
+    | [H: Z.geb _ _ = true |- _ ] => apply Z.geb_ge in H
+    | [H: Z.ltb _ _ = true |- _ ] => apply Z.ltb_lt in H
+    | [H: Z.ltb _ _ = false |- _ ] => apply Z.ltb_ge in H
+    | [H: Z.leb _ _ = true |- _ ] => apply Z.leb_le in H
+    | [H: Z.gtb _ _ = _ |- _ ] => rewrite Z.gtb_ltb in H
+    end.
