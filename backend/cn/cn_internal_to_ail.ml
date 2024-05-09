@@ -718,7 +718,9 @@ let rec cn_to_ail_expr_aux_internal
           let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct sym_name)))])) in
           let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
           ([res_binding], [alloc_stat])
-      | None -> ([], [])
+      | None -> 
+        Printf.printf "None case in record instantiation\n";
+        ([], [])
     in
     
     let (bs, ss, assign_stats) = list_split_three (List.map generate_ail_stat ms) in
