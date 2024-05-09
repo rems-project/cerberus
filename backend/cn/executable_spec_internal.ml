@@ -39,6 +39,7 @@ let populate_record_map_aux (sym, bt_ret_type) =
     | _ -> ()
 
 
+(* Populate record table with function and predicate record return types *)
 let populate_record_map (prog5: unit Mucore.mu_file) = 
   let fun_syms_and_ret_types = List.map (fun (sym, (def : LogicalFunctions.definition)) -> (sym, def.return_bt)) prog5.mu_logical_predicates in
   let pred_syms_and_ret_types = List.map (fun (sym, (def : ResourcePredicates.definition)) -> (sym, def.oarg_bt)) prog5.mu_resource_predicates in
@@ -96,7 +97,7 @@ let generate_c_records ail_structs =
   let struct_docs = List.map generate_doc_from_ail_struct ail_structs in
   CF.Pp_utils.to_plain_pretty_string (PPrint.concat struct_docs)
 
-let generate_record_equality_fun_strs ail_prog ail_records = 
+let generate_record_strs ail_prog ail_records = 
   let records_str = generate_c_records ail_records in
   let ail_record_equality_functions = List.map (fun r -> Cn_internal_to_ail.generate_struct_equality_function ~is_record:true r) ail_records in
   let ail_record_equality_functions = List.concat ail_record_equality_functions in
@@ -203,7 +204,7 @@ let generate_c_functions_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ail
   (* let modified_prog_2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = []} in *)
   (* let doc_2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_2) in *)
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
-  let record_triple_str = generate_record_equality_fun_strs ail_prog (List.concat ail_records) in
+  let record_triple_str = generate_record_strs ail_prog (List.concat ail_records) in
   let funs_defs_str = CF.Pp_utils.to_plain_pretty_string doc_1 in 
   (* let funs_decls_str = CF.Pp_utils.to_plain_pretty_string doc_2 in  *)
   ("\n/* CN FUNCTIONS */\n\n" ^ funs_defs_str, locs_and_decls', record_triple_str)
@@ -231,7 +232,7 @@ let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ai
   let pred_locs_and_decls = List.map (fun (loc, (sym, (_, _, decl))) ->
      (loc, [CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)])) (List.combine locs inline_decls) in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
-  let record_triple_str = generate_record_equality_fun_strs ail_prog (List.concat ail_records) in
+  let record_triple_str = generate_record_strs ail_prog (List.concat ail_records) in
   ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
 let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  = 

@@ -2,27 +2,27 @@
 
 # tests for the CN tool attached to cerberus
 
-DIRNAME=$(dirname $0)
+DIRNAME=$1
 
-SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c' | grep -v '\-exec\.c')
+SUCC=$(find $DIRNAME -maxdepth 1 -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c' | grep -v '\-exec\.c')
 
 NUM_FAILED=0
 FAILED=''
 
-mkdir -p $DIRNAME/cn/exec
+mkdir -p $DIRNAME/exec
 
 for TEST in $SUCC
 do
-  mkdir -p $DIRNAME/cn/exec/$(basename $TEST .c)
-  echo cn $TEST --output_decorated=$DIRNAME/cn/exec/$(basename $TEST .c)/$(basename $TEST .c)-exec.c
-  if ! cn $TEST --output_decorated=$DIRNAME/cn/exec/$(basename $TEST .c)/$(basename $TEST .c)-exec.c
+  mkdir -p $DIRNAME/exec/$(basename $TEST .c)
+  echo cn $TEST --output_decorated=$(basename $TEST .c)-exec.c --output_decorated_dir=$DIRNAME/exec/$(basename $TEST .c)/
+  if ! ~/.opam/4.14.0/bin/cn $TEST --output_decorated=$(basename $TEST .c)-exec.c --output_decorated_dir=$DIRNAME/exec/$(basename $TEST .c)/
   then
     NUM_FAILED=$(( $NUM_FAILED + 1 ))
     FAILED="$FAILED $TEST"
   fi
 done
 
-FAIL=$(find $DIRNAME/cn -name '*.error.c')
+FAIL=$(find $DIRNAME -name '*.error.c')
 
 for TEST in $FAIL
 do
@@ -34,7 +34,7 @@ do
   fi
 done
 
-UNKNOWN=$(find $DIRNAME/cn -name '*.unknown.c')
+UNKNOWN=$(find $DIRNAME -name '*.unknown.c')
 
 echo $UNKNOWN | xargs -n 1 cn
 
