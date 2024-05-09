@@ -22,26 +22,6 @@ let cpp_str incl_dirs incl_files =
 
     )
 
-let with_cn_keywords str =
-  let cn_keywords =
-    [ "predicate"
-    ; "lemma"
-    ; "function"
-    ; "datatype"
-    ; "pack"
-    ; "unpack"
-    ; "pack_struct"
-    ; "unpack_struct"
-    ; "have"
-    ; "show"
-    ; "instantiate"
-    ]
-  in
-  List.fold_left (fun acc kw ->
-    acc ^ " -D" ^ kw ^ "=__cerb_" ^ kw
-  ) str cn_keywords
-
-
 let conf incl_dirs incl_files astprints =
   { debug_level = 0
   ; pprints = []
@@ -51,7 +31,7 @@ let conf incl_dirs incl_files astprints =
   ; typecheck_core = true
   ; rewrite_core = true
   ; sequentialise_core = true
-  ; cpp_cmd = with_cn_keywords (cpp_str incl_dirs incl_files)
+  ; cpp_cmd = cpp_str incl_dirs incl_files
   ; cpp_stderr = true
   }
 
