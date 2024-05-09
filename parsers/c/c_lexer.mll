@@ -219,16 +219,17 @@ let lex_magic remainder lexbuf =
 
 let magic_token start_pos end_pos chars =
   let len = List.length chars in
-  let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
   if len < 2 then None
   else
   let first, last = List.hd chars, List.nth chars (len - 1) in
   match get_magic_comment_mode () with
   | Magic_At _ when first == '@' && last == '@' ->
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
+    let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
     internal_state.last_magic_comment <- Some (end_pos, loc);
     Some (CERB_MAGIC (loc, str))
   | Magic_At warn when first == '@' && warn -> begin
+    let loc = Cerb_location.point end_pos in
     prerr_endline (Pp_errors.make_message loc
                     Errors.(CPARSER Cparser_mismatched_magic_comment)
                     Warning);
