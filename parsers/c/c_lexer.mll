@@ -119,19 +119,6 @@ let keywords: (string * Tokens.token) list = [
     "__builtin_types_compatible_p", BUILTIN_TYPES_COMPATIBLE_P;
     "__builtin_choose_expr", BUILTIN_CHOOSE_EXPR;
 
-    (* BEGIN CN *)
-    "__cerb_predicate"     , CN_PREDICATE;
-    "__cerb_function"      , CN_FUNCTION;
-    "__cerb_lemma"         , CN_LEMMA;
-    "__cerb_datatype"      , CN_DATATYPE;
-    "__cerb_pack"          , CN_PACK;
-    "__cerb_unpack"        , CN_UNPACK;
-    "__cerb_have"          , CN_HAVE;
-    "__cerb_instantiate"   , CN_INSTANTIATE;
-    "__cerb_split_case"    , CN_SPLIT_CASE;
-    "__cerb_extract"       , CN_EXTRACT;
-    "__cerb_print"         , CN_PRINT;
-    (* END CN *)
   ]
 
 let lexicon: (string, token) Hashtbl.t =
