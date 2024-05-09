@@ -14,17 +14,14 @@ type internal_state = {
   mutable magic_comment_mode: magic_comment_mode option;
 
   mutable inside_cn: bool;
-  (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
-  mutable cnum_hack: int;
   mutable start_of_comment: Lexing.position;
-  mutable last_magic_comment: (Lexing.position * Cerb_location.t) option;
-  mutable ignore_magic: bool;
-  mutable magic_acc: (Cerb_location.t * string) list;
+  mutable last_magic_comment: (Lexing.position * Cerb_location.t) option; (* unused, need to delete *)
+  mutable ignore_magic: bool; (* unusued, need to delete *)
+  mutable magic_acc: (Cerb_location.t * string) list; (* unused, need to delete *)
 }
 let internal_state = {
   magic_comment_mode= None;
   inside_cn= false;
-  cnum_hack= 0;
   start_of_comment= Lexing.dummy_pos;
   last_magic_comment= None;
   ignore_magic= false;
@@ -43,8 +40,6 @@ let get_magic_comment_mode () = match internal_state.magic_comment_mode with
   | Some mode -> mode
 
 let new_line lexbuf =
-  (* the hacked col offset MUST be reset after every newline *)
-  internal_state.cnum_hack <- 0;
   Lexing.new_line lexbuf
 
 let offset_location lexbuf pos_fname pos_lnum =
@@ -212,6 +207,7 @@ let magic_token start_pos end_pos chars =
   match get_magic_comment_mode () with
   | Magic_At _ when first == '@' && last == '@' ->
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
+    let str = str in
     let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
     internal_state.last_magic_comment <- Some (end_pos, loc);
     Some (CERB_MAGIC (loc, str))
