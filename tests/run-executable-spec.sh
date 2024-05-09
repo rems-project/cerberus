@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# tests for the CN tool attached to cerberus
+# tests for the CN executable spec tool attached to cerberus
 
 DIRNAME=$1
 
