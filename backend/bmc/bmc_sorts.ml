@@ -222,7 +222,7 @@ let rec alignof_type (Ctype (_, ctype): ctype) (file: unit typed_file) : int =
       Option.get ((Ocaml_implementation.get ()).alignof_pointer)
   | Struct sym ->
       begin match Pmap.lookup sym file.tagDefs with
-      | Some (StructDef (members, _)) ->
+      | Some (_, StructDef (members, _)) ->
           (* Let alignment be max alignment of a member? *)
           let alignments =
             List.map (fun (_, (_, _, _, mem_ctype)) -> alignof_type mem_ctype file)
@@ -333,7 +333,7 @@ module AddressSortPNVI = struct
   and struct_member_index_list tag (file: unit typed_file) =
     (* Compute offset of member from base addr *)
     begin match Pmap.lookup tag file.tagDefs with
-    | Some (StructDef (members, _)) ->
+    | Some (_, StructDef (members, _)) ->
         let rec helper rest total_size acc : int * ((int list) * int list) =
           begin match rest with
           | [] -> (total_size, acc)
@@ -1154,7 +1154,7 @@ module CtypeToZ3 = struct
                             (file: unit typed_file)
                             : Sort.sort =
     match Pmap.lookup struct_sym file.tagDefs with
-    | Some (StructDef (memlist, _)) ->
+    | Some (_, StructDef (memlist, _)) ->
         let sortlist =
             List.map (fun (_,(_, _, _, ctype)) -> ctype_to_z3_sort ctype file)
                      memlist in
