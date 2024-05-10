@@ -1,4 +1,3 @@
-(* open Cerb_frontend *)
 open Cerb_frontend.Annot
 open Resultat
 open Effectful.Make(Resultat)
@@ -6,8 +5,20 @@ open TypeErrors
 open Pp
 module Cn = Cerb_frontend.Cn
 
+(* NOTE: There are four types of CN parsing constructs, each with
+   a different entry point from which a parser can be started:
+     - cn_statement: for proof guidance, debugging
+     - cn_function_spec: pre and post conditions
+     - cn_loop_spec: loop invariants
+     - cn_toplevel: for declarations
 
-module Loc = Locations
+   1. C program is parsed into a C abstract sytnax tree (Cabs)
+   2. Toplevel magic comments are turned into CN toplevel declarations.
+   3. Magic statements, function specifications and loop specifications are
+      inserted as string annotations (attributes).
+   4. Cabs is desugared, then elaborated into Core (including the CN toplevel declarations).
+   5. Core is turned into mucore, during which process the remaining magic
+      comments are parsed and desugared into mucore as well. *)
 
 (* the character @ is not a separator in C, so supporting @start as a
    legacy syntax requires special hacks *)
@@ -40,23 +51,16 @@ let parse parser_start (loc, string) =
   | Exn.Exception _ ->
     assert false
 
-let parse_function_spec (Attrs attributes) =
-  let attributes = List.rev attributes in
+let cn_statements annots =
+  annots
+  |> get_cerb_magic_attr
+  |> ListM.concat_mapM (parse C_parser.cn_statements)
+
+let function_spec (Attrs attributes) =
   let@ conditions =
-    ListM.concat_mapM (fun attr ->
-        let k = (Option.value ~default:"<>" (Option.map Id.s attr.attr_ns), Id.s attr.attr_id) in
-        (* FIXME (TS): I'm not sure if the check against cerb::magic was strange,
-            or if it was checking the wrong thing the whole time *)
-        let use = List.exists (fun (x, y) -> String.equal x (fst k) && String.equal y (snd k))
-            [("cerb", "magic"); ("cn", "requires"); ("cn", "ensures");
-                ("cn", "accesses"); ("cn", "trusted")] in
-        if use then
-          ListM.concat_mapM (fun (loc, arg, _) ->
-              parse C_parser.function_spec (loc, arg)
-            ) attr.attr_args
-        else return []
-      ) attributes
-  in
+    [Aattrs (Attrs (List.rev attributes))]
+    |> get_cerb_magic_attr
+    |> ListM.concat_mapM (parse C_parser.function_spec) in
   ListM.fold_leftM (fun acc cond ->
     match cond, acc with
     | (Cn.CN_trusted loc), (_, [], [], [], []) ->
@@ -78,16 +82,11 @@ let parse_function_spec (Attrs attributes) =
     )
     (Mucore.Checked, [], [], [], []) conditions
 
-let parse_inv_spec (Attrs attributes) =
-  ListM.concat_mapM (fun attr ->
-      match Option.map Id.s (attr.attr_ns), Id.s (attr.attr_id) with
-      | Some "cerb", "magic" ->
-         ListM.concat_mapM (fun (loc, arg, _) ->
-             let@ (Cn.CN_inv (_loc, conds)) = parse C_parser.loop_spec (loc, arg) in
-             return conds
-           ) attr.attr_args
-      | _ ->
-         return []
-    ) attributes
+let loop_spec attrs =
+  [Aattrs attrs]
+  |> get_cerb_magic_attr
+  |> ListM.concat_mapM (fun (loc, arg) ->
+      let@ (Cn.CN_inv (_loc, conds)) = parse C_parser.loop_spec (loc, arg) in
+      return conds)
 
 

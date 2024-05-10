@@ -820,11 +820,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
-          let magic_attrs = get_cerb_magic_attr annots in
+          let@ parsed_stmts = Parse.cn_statements annots in
           let marker_id = Option.get (get_marker annots) in
           let marker_id_object_types = Option.get (get_marker_object_types annots) in
-          let@ parsed_stmts = ListM.concat_mapM (Parse.parse C_parser.cn_statements) magic_attrs
-          in
           let@ desugared_stmts_and_stmts =
             ListM.mapM (fun parsed_stmt ->
                 let@ desugared_stmt =
@@ -1159,7 +1157,7 @@ let normalise_label
         let@ desugared_inv, cn_desugaring_state =
           match Pmap.lookup loop_id loop_attributes with
           | Some (marker_id, attrs) ->
-             let@ inv = Parse.parse_inv_spec attrs in
+             let@ inv = Parse.loop_spec attrs in
              let d_st = CAE.{
                  markers_env = markers_env;
                  inner = { (Pmap.find marker_id markers_env) with cn_state = precondition_cn_desugaring_state };
@@ -1242,7 +1240,7 @@ let normalise_fun_map_decl
        CAE.{ inner = Pmap.find ail_marker markers_env;
                markers_env = markers_env }
      in
-     let@ trusted, accesses, requires, ensures, mk_functions = Parse.parse_function_spec attrs in
+     let@ trusted, accesses, requires, ensures, mk_functions = Parse.function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
      let@ mk_functions =
        ListM.mapM (fun (loc, Make_Logical_Function id) ->
