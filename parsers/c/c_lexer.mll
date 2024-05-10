@@ -6,40 +6,23 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
-type magic_comment_mode =
-  | Magic_None
-  | Magic_At of bool
-
-type flag = {
+type flags = {
   inside_cn : bool;
+  at_magic_comments : bool;
 }
 
 type internal_state = {
-  mutable magic_comment_mode: magic_comment_mode option;
-
   mutable start_of_comment: Lexing.position;
   mutable last_magic_comment: (Lexing.position * Cerb_location.t) option; (* unused, need to delete *)
   mutable ignore_magic: bool; (* unusued, need to delete *)
   mutable magic_acc: (Cerb_location.t * string) list; (* unused, need to delete *)
 }
 let internal_state = {
-  magic_comment_mode= None;
   start_of_comment= Lexing.dummy_pos;
   last_magic_comment= None;
   ignore_magic= false;
   magic_acc= [];
 }
-
-let get_magic_comment_mode () = match internal_state.magic_comment_mode with
-  | None ->
-    (* fetch the mode from the global switches and cache for faster lookup *)
-    let mode = if Switches.(has_switch SW_at_magic_comments)
-      then Magic_At (Switches.(has_switch SW_warn_mismatched_magic_comments))
-      else Magic_None
-    in
-    internal_state.magic_comment_mode <- Some mode;
-    mode
-  | Some mode -> mode
 
 let new_line lexbuf =
   Lexing.new_line lexbuf
@@ -201,26 +184,24 @@ let lex_magic remainder lexbuf =
   if ch = '\n' then new_line lexbuf;
   ch :: remainder lexbuf
 
-let magic_token start_pos end_pos chars =
+let magic_token flags start_pos end_pos chars =
   let len = List.length chars in
-  if len < 2 then None
-  else
-  let first, last = List.hd chars, List.nth chars (len - 1) in
-  match get_magic_comment_mode () with
-  | Magic_At _ when first == '@' && last == '@' ->
+  if not flags.at_magic_comments || len < 2 || List.hd chars != '@' then
+    None
+  else if List.nth chars (len - 1) != '@' then (
+    prerr_endline
+      (Pp_errors.make_message
+         (Cerb_location.point end_pos)
+         Errors.(CPARSER Cparser_mismatched_magic_comment)
+         Warning);
+    None
+  ) else (
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
     let str = str in
     let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
     internal_state.last_magic_comment <- Some (end_pos, loc);
     Some (CERB_MAGIC (loc, str))
-  | Magic_At warn when first == '@' && warn -> begin
-    let loc = Cerb_location.point end_pos in
-    prerr_endline (Pp_errors.make_message loc
-                    Errors.(CPARSER Cparser_mismatched_magic_comment)
-                    Warning);
-    None
-    end
-  | _ -> None
+  )
 
 }
 
@@ -437,7 +418,7 @@ and initial flags = parse
   | "/*@" { let curr_p = lexbuf.lex_curr_p in
             internal_state.start_of_comment <- lexbuf.lex_start_p;
             let xs = magic lexbuf in
-            match magic_token curr_p lexbuf.lex_start_p ('@' :: xs) with
+            match magic_token flags curr_p lexbuf.lex_start_p ('@' :: xs) with
             | Some tok -> tok
             | None -> initial flags lexbuf
             }
@@ -619,7 +600,8 @@ let lexer_state = ref LSRegular
 let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
   match !lexer_state with
   | LSRegular ->
-      begin match initial { inside_cn } lexbuf with
+      let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
+      begin match initial { inside_cn; at_magic_comments } lexbuf with
       | LNAME i as tok -> lexer_state := LSIdentifier i; tok
       | UNAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok
