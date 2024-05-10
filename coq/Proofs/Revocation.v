@@ -4495,18 +4495,18 @@ Module RevocationProofs.
 
   Lemma fetch_bytes_subset
     {a1 a2 a1' a2':Z}
-    {s s':nat}
+    {n n':nat}
     {bm:ZMap.t AbsByte}
     :
-    fetch_bytes bm a1 s = fetch_bytes bm a2 s ->
+    fetch_bytes bm a1 n = fetch_bytes bm a2 n ->
     (exists (off:Z),
         off >= 0
         /\ a1' = a1 + off
         /\ a2' = a2 + off
-        /\ off < Z.of_nat s
-        /\ (s' + (Z.to_nat off) <= s)%nat)
+        /\ off <= Z.of_nat n
+        /\ (n' + (Z.to_nat off) <= n)%nat)
     ->
-      fetch_bytes bm a1' s' = fetch_bytes bm a2' s'.
+      fetch_bytes bm a1' n' = fetch_bytes bm a2' n'.
   Proof.
   Admitted.
 
@@ -4551,6 +4551,9 @@ Module RevocationProofs.
       (memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat (q * Z.of_nat (sizeof_pointer MorelloImpl.get)))).
   Proof.
     invc AS.
+    (* it looks like we do not need any allocation stuff from [mempcpy_args_sane].
+       we will remove it for now but this may change. *)
+    clear H0 H1 H2 H3 H4 H5 H6.
     remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
     remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as a2 eqn:A2.
     specialize (DS prov1 prov2 c1 c2 a1 a2).
@@ -4589,9 +4592,22 @@ Module RevocationProofs.
           tuple_inversion.
           lia.
     }
-    clear Q q r Heqn.
+    clear Q r.
+    (* clear Q q r Heqn. *)
+
+    assert(fetch_bytes (bytemap s) a1 n = fetch_bytes (bytemap s) a2 n) as F.
+    {
+      clear - DS H NS.
+      apply (fetch_bytes_subset DS).
+      exists 0.
+      repeat split;try lia.
+    }
+
+    clear size DS NS H.
+
     unfold memcpy_copy_tags.
-    revert s DS H0 H1.
+
+    revert s F Heqn.
     induction n; intros.
     +
       preserves_step.
@@ -4601,6 +4617,7 @@ Module RevocationProofs.
       intros M ptrval1' SH1.
       apply bind_PreservesInvariant_value_SameState;[same_state_steps|].
       intros _ ptrval2' SH2.
+      cbn.
       preserves_step. (* _ <- ... *)
       *
         clear IHn.
@@ -4632,21 +4649,32 @@ Module RevocationProofs.
         eapply (copy_pointer_PreservesInvariant M Heqo Heqb).
         unfold cap_to_Z.
         repeat rewrite cap_get_set_value.
-        apply (fetch_bytes_subset DS).
+        apply (fetch_bytes_subset F).
         exists (Z.of_nat n).
         repeat split ; try lia.
         --
+          (* need some assumptions about range of [n].
+             specifcally that [c1.value + n] is in [AddressValue] range
+           *)
           admit.
         --
+          (* need some assumptions about range of [n].
+             specifcally that [c2.value + n] is in [AddressValue] range
+           *)
           admit.
         --
+          clear - Heqn.
+          revert Heqn.
+          generalize (sizeof_pointer MorelloImpl.get) as ps.
+          replace (Z.to_nat (Z.of_nat n)) with n by lia.
+          intros ps H.
+          rewrite H. clear H.
+          assert(0<=q) by admit.
+          (* TODO: nope! *)
           admit.
       *
         eapply IHn;clear IHn.
-        lia.
         admit. (* need prove bytemap preservaton in s->s' transition *)
-        admit. (* need prove allocations preservaton in s->s' transition *)
-        admit. (* need prove allocations preservaton in s->s' transition *)
   Admitted.
 
   Instance memcpy_PreservesInvariant
