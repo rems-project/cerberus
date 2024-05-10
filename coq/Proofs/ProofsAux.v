@@ -1604,3 +1604,50 @@ Proof.
     exfalso.
     lia.
 Qed.
+
+
+Section Z_arith.
+  Local Open Scope Z_scope.
+
+  Lemma sign_nonneg:
+    forall x, (sign x >=? 0) = true -> x>=0.
+  Proof.
+    intros x H.
+    unfold sign in H.
+    destruct x;lia.
+  Qed.
+
+  Lemma sign_neg:
+    forall x, (sign x >=? 0) = false -> x<0.
+  Proof.
+    intros x H.
+    unfold sign in H.
+    destruct x;lia.
+  Qed.
+
+  Lemma quotrem_pos:
+    forall a b,
+      0<=a ->
+      0<=b ->
+      let (q, r) := Z.quotrem a b in
+      0<=q /\ 0<=r.
+  Proof.
+    intros a b H H0.
+    break_let.
+    rename z into q, z0 into r.
+    split.
+    -
+      unfold Z.quotrem in Heqp.
+      destruct a,b; try tuple_inversion; try lia.
+      break_let.
+      tuple_inversion.
+      lia.
+    -
+      unfold Z.quotrem in Heqp.
+      destruct a,b; try tuple_inversion; try lia.
+      break_let.
+      tuple_inversion.
+      lia.
+  Qed.
+
+End Z_arith.

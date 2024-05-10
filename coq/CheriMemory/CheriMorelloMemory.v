@@ -269,23 +269,6 @@ Module Type CheriMemoryTypes
 
 End CheriMemoryTypes.
 
-
-(* OCaml Z.sign *)
-Definition sign (x:Z) : Z :=
-  match x with
-  | Z0 => 0
-  | Zpos _ => 1
-  | Zneg _ => (-1)
-  end.
-
-(* See [Z.ediv_rem] in OCaml ZArith *)
-Definition quomod (a b: Z) : (Z*Z) :=
-  let (q,r) := Z.quotrem a b in
-  if Z.geb (sign r) 0 then (q,r) else
-    if Z.geb (sign b) 0 then (Z.pred q, r + b)
-    else (Z.succ q, r - b).
-
-
 Definition wrapI min_v max_v n :=
   let dlt := Z.succ (max_v - min_v) in
   let r := Z_integerRem_f n dlt in
