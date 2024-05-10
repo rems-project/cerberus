@@ -11,18 +11,6 @@ type flags = {
   at_magic_comments : bool;
 }
 
-type internal_state = {
-  mutable last_magic_comment: (Lexing.position * Cerb_location.t) option; (* unused, need to delete *)
-  mutable magic_acc: (Cerb_location.t * string) list; (* unused, need to delete *)
-}
-let internal_state = {
-  last_magic_comment= None;
-  magic_acc= [];
-}
-
-let new_line lexbuf =
-  Lexing.new_line lexbuf
-
 let offset_location lexbuf pos_fname pos_lnum =
   if pos_lnum > 0 then
     let pos_lnum = pos_lnum - 1 in
@@ -195,7 +183,6 @@ let magic_token flags start_pos end_pos chars =
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
     let str = str in
     let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
-    internal_state.last_magic_comment <- Some (end_pos, loc);
     Some (CERB_MAGIC (loc, str))
   )
 
