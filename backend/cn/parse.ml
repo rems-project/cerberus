@@ -22,71 +22,23 @@ let fiddle_at_hack string =
   in
   fix ss
 
-let diagnostic_get_tokens (start_pos : Lexing.position) string =
-  let lexbuf = Lexing.from_string string in
-  let rec relex (toks, pos) =
-    try
-      match C_lexer.lexer ~inside_cn:true lexbuf with
-      | Tokens.EOF -> (List.rev ("EOF" :: toks), List.rev pos)
-      | t ->
-        let Lexing.{ pos_lnum; pos_bol; pos_cnum; _ } = lexbuf.lex_start_p in
-        let (line, col) =
-          (* the first line needs to have columns shifted by /*@ but the rest do not *)
-          let col_off = if pos_lnum > 1 then 1 else start_pos.pos_cnum - start_pos.pos_bol + 1 in
-          (pos_lnum + start_pos.pos_lnum, col_off + pos_cnum - pos_bol) in
-        relex (Tokens.string_of_token t :: toks, (line, col) :: pos)
-      with
-        C_lexer.Error err ->
-          (List.rev (CF.Pp_errors.string_of_cparser_cause err :: toks), List.rev pos)
-  in
-  relex ([], [])
-
-
-(* adapting from core_parser_driver.ml *)
+let debug_tokens loc string =
+  let (toks, pos) = C_parser_driver.diagnostic_get_tokens ~inside_cn:true loc string in
+  let pp_int_pair (x, y) = Pp.(parens (int x ^^ comma ^^^ int y)) in
+  Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))
+    ^/^ Pp.item "(line, col)" (Pp.braces (Pp.list pp_int_pair pos))
 
 let parse parser_start (loc, string) =
   let string = fiddle_at_hack string in
-  let lexbuf = Lexing.from_string string in
-  (* `C_lexer.magic_token' ensures `loc` is a region *)
-  let start_pos = Option.get @@ Locations.start_pos loc in
-  Lexing.set_position lexbuf start_pos;
-  Lexing.set_filename lexbuf (Option.value ~default:"<none>" (Cerb_location.get_filename loc));
-  let buffer, lexer = MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:true) in
-  let@ parsed_spec =
-    try return (parser_start lexer lexbuf) with
-    | C_lexer.Error err ->
-       let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
-       fail {loc; msg = Parser err}
-    | C_parser.Error state ->
-       let message =
-         try
-           let msg = C_parser_error.message state in
-           if String.equal msg "<YOUR SYNTAX ERROR MESSAGE HERE>\n" then raise Not_found else msg
-         with Not_found ->
-           Printf.sprintf "Please add error message for state %d to parsers/c/c_parser_error.messages\n" state
-       in
-       let message = String.sub message 0 (String.length message - 1) in
-       let start = Lexing.lexeme_start_p lexbuf in
-       let end_ = Lexing.lexeme_end_p lexbuf in
-       let loc = Cerb_location.(region (start, end_) NoCursor) in
-       (* the two tokens between which the error occurred *)
-       let where = MenhirLib.ErrorReports.show (fun (start, curr) ->
-           try Lexing.lexeme {
-             lexbuf with
-             lex_start_pos = start.Lexing.pos_cnum - start_pos.pos_cnum;
-             lex_curr_pos = curr.Lexing.pos_cnum - start_pos.pos_cnum;
-           }
-         with Invalid_argument _ -> "(token_err)"
-         ) buffer in
-       Pp.debug 6 (lazy (
-           let (toks, pos) = diagnostic_get_tokens start_pos string in
-           let pp_int_pair (x, y) = Pp.(parens (int x ^^ comma ^^^ int y)) in
-           Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))
-           ^/^ Pp.item "(line, col)" (Pp.braces (Pp.list pp_int_pair pos))));
-       fail {loc; msg = Parser (Cparser_unexpected_token (where ^ "\n" ^ message))}
-  in
-  return parsed_spec
-
+  let module Exn = Cerb_frontend.Exception in
+  match C_parser_driver.parse_loc_string parser_start (loc, string) with
+  | Exn.Result spec ->
+    return spec
+  | Exn.Exception (loc, Cerb_frontend.Errors.CPARSER err) ->
+    Pp.debug 6 (lazy (debug_tokens loc string));
+    fail {loc; msg = Parser err}
+  | Exn.Exception _ ->
+    assert false
 
 let parse_function_spec (Attrs attributes) =
   let attributes = List.rev attributes in
@@ -98,7 +50,7 @@ let parse_function_spec (Attrs attributes) =
         let use = List.exists (fun (x, y) -> String.equal x (fst k) && String.equal y (snd k))
             [("cerb", "magic"); ("cn", "requires"); ("cn", "ensures");
                 ("cn", "accesses"); ("cn", "trusted")] in
-        if use then 
+        if use then
           ListM.concat_mapM (fun (loc, arg, _) ->
               parse C_parser.function_spec (loc, arg)
             ) attr.attr_args
