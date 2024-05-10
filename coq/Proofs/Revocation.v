@@ -4533,6 +4533,122 @@ Module RevocationProofs.
       assumption.
   Qed.
 
+  Instance memcpy_copy_tags_PreservesInvariant
+    (loc : location_ocaml)
+    (ptrval1 ptrval2 : pointer_value)
+    (s: mem_state)
+    (size q r : Z) (* [r] unused *)
+    (Q: quomod size (Z.of_nat (sizeof_pointer MorelloImpl.get)) = (q, r))
+    (AS: mempcpy_args_sane (allocations s) ptrval1 ptrval2 size)
+    (DS: forall (p1 p2 : provenance) (c1 c2 : Capability_GS.t) (a1 a2 : Z),
+        ptrval1 = PV p1 (PVconcrete c1) ->
+        ptrval2 = PV p2 (PVconcrete c2) ->
+        a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
+        a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
+        fetch_bytes (bytemap s) a1 (Z.to_nat size) = fetch_bytes (bytemap s) a2 (Z.to_nat size))
+    :
+    PreservesInvariant mem_invariant s
+      (memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat (q * Z.of_nat (sizeof_pointer MorelloImpl.get)))).
+  Proof.
+    invc AS.
+    remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
+    remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as a2 eqn:A2.
+    specialize (DS prov1 prov2 c1 c2 a1 a2).
+    autospecialize DS; [reflexivity|].
+    autospecialize DS; [reflexivity|].
+    specialize (DS A1 A2).
+    remember (Z.to_nat (q * Z.of_nat (sizeof_pointer MorelloImpl.get))) as n.
+
+    assert(Z.of_nat n <= size) as NS.
+    {
+      clear - Heqn Q H.
+      remember (Z.of_nat (sizeof_pointer MorelloImpl.get)) as ps.
+      assert(0<=ps) by (subst ps;apply Znat.Nat2Z.is_nonneg).
+      clear Heqps.
+      unfold quomod in Q.
+      pose proof (Z.quotrem_eq size ps).
+      break_let.
+      rename z into q', z0 into r'.
+      pose proof (quotrem_pos size ps H H0).
+      rewrite Heqp in H2.
+      destruct H2.
+      break_match_hyp.
+      -
+        tuple_inversion.
+        apply sign_nonneg in Heqb.
+        lia.
+      -
+        apply sign_neg in Heqb.
+        break_match_hyp.
+        +
+          apply sign_nonneg in Heqb0.
+          tuple_inversion.
+          lia.
+        +
+          apply sign_neg in Heqb0.
+          tuple_inversion.
+          lia.
+    }
+    clear Q q r Heqn.
+    unfold memcpy_copy_tags.
+    revert s DS H0 H1.
+    induction n; intros.
+    +
+      preserves_step.
+    +
+      (* !!! TODO:  rewrite [memcpy_copy_tags] similar to [ghost_tags] *)
+      apply bind_PreservesInvariant_value_SameState;[same_state_steps|].
+      intros M ptrval1' SH1.
+      apply bind_PreservesInvariant_value_SameState;[same_state_steps|].
+      intros _ ptrval2' SH2.
+      preserves_step. (* _ <- ... *)
+      *
+        clear IHn.
+        apply bind_PreservesInvariant_value_SameState.
+        same_state_steps.
+        intros _ dst_a H14.
+
+        apply eff_array_shift_ptrval_uchar_spec in SH1; subst ptrval1'.
+        apply eff_array_shift_ptrval_uchar_spec in SH2; subst ptrval2'.
+
+        Transparent serr2InternalErr bind raise ret get fail fail_noloc.
+        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H14.
+        Opaque serr2InternalErr bind raise ret get fail fail_noloc.
+        tuple_inversion.
+
+        apply bind_PreservesInvariant_value_SameState.
+        same_state_steps.
+        intros _ src_a H14.
+
+        Transparent serr2InternalErr bind raise ret get fail fail_noloc.
+        unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H14.
+        Opaque serr2InternalErr bind raise ret get fail fail_noloc.
+        tuple_inversion.
+
+        preserves_steps.
+        clear H.
+        all: try assumption.
+        apply negb_false_iff in Heqb.
+        eapply (copy_pointer_PreservesInvariant M Heqo Heqb).
+        unfold cap_to_Z.
+        repeat rewrite cap_get_set_value.
+        apply (fetch_bytes_subset DS).
+        exists (Z.of_nat n).
+        repeat split ; try lia.
+        --
+          admit.
+        --
+          admit.
+        --
+          admit.
+      *
+        eapply IHn;clear IHn.
+        lia.
+        admit. (* need prove bytemap preservaton in s->s' transition *)
+        admit. (* need prove allocations preservaton in s->s' transition *)
+        admit. (* need prove allocations preservaton in s->s' transition *)
+  Admitted.
+
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
@@ -4567,77 +4683,11 @@ Module RevocationProofs.
       inl_inr_inv.
       assumption.
     -
+      pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ _ H0).
       pose proof (memcpy_copy_data_fetch_bytes_spec AC H0) as DS.
-      invc AC.
-
-      remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1 eqn:A1.
-      remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as a2 eqn:A2.
-      specialize (DS prov1 prov2 c1 c2 a1 a2).
-      autospecialize DS; [reflexivity|].
-      autospecialize DS; [reflexivity|].
-      specialize (DS A1 A2).
-      remember (Z.to_nat (z * Z.of_nat (sizeof_pointer MorelloImpl.get))) as n.
-      clear H M.
-      unfold memcpy_copy_tags.
-      induction n; intros.
-      + preserves_step.
-      +
-        (* !!! TODO:  rewrite [memcpy_copy_tags] similar to [ghost_tags] *)
-        apply bind_PreservesInvariant_value_SameState.
-        same_state_steps.
-        intros M ptrval1' SH1.
-        apply bind_PreservesInvariant_value_SameState.
-        same_state_steps.
-        intros _ ptrval2' SH2.
-        preserves_step. (* _ <- ... *)
-        *
-          apply bind_PreservesInvariant_value_SameState.
-          same_state_steps.
-          intros _ dst_a H14.
-
-          apply eff_array_shift_ptrval_uchar_spec in SH1; subst ptrval1'.
-          apply eff_array_shift_ptrval_uchar_spec in SH2; subst ptrval2'.
-
-          Transparent serr2InternalErr bind raise ret get fail fail_noloc.
-          unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H14.
-          Opaque serr2InternalErr bind raise ret get fail fail_noloc.
-          tuple_inversion.
-
-          apply bind_PreservesInvariant_value_SameState.
-          same_state_steps.
-          intros _ src_a H14.
-
-          Transparent serr2InternalErr bind raise ret get fail fail_noloc.
-          unfold serr2InternalErr, option2serr, raise, bind, ret, Exception_serr, Exception_errS, Exception_either, memM_monad, Monad_errS, Monad_either in H14.
-          Opaque serr2InternalErr bind raise ret get fail fail_noloc.
-          tuple_inversion.
-
-          preserves_steps.
-          clear H.
-          all: try assumption.
-          apply negb_false_iff in Heqb.
-          eapply (copy_pointer_PreservesInvariant M Heqo Heqb).
-          unfold cap_to_Z.
-          repeat rewrite cap_get_set_value.
-          apply (fetch_bytes_subset DS).
-          exists (Z.of_nat n).
-          clear - Heqn Heqp H7 H1.
-          (* invc H7. maybe not needed *)
-          repeat split ; try lia.
-          --
-            admit.
-          --
-            admit.
-          --
-            admit.
-          --
-            admit.
-        *
-        (* TODO *)
-          Fail eapply IHn.
-        admit.
-
-  Admitted.
+      rewrite H1 in AC.
+      eapply memcpy_copy_tags_PreservesInvariant; eauto.
+  Qed.
 
   Instance realloc_PreservesInvariant
     (loc : location_ocaml)
