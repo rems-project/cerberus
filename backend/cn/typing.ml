@@ -582,6 +582,24 @@ let bind_logical_return_internal loc =
 
 
 
+let bind_logical_return loc members lrt =
+  let@ () = bind_logical_return_internal loc members lrt in
+  set_unfold_resources ()
+
+(* Same for return types *)
+let bind_return loc members (rt : ReturnTypes.t) =
+  match members, rt with
+  | member :: members,
+    Computational ((s, bt), _, lrt) ->
+     let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
+     let@ () = bind_logical_return loc members
+                 (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt) in
+     return member
+  | _ ->
+     assert false
+
+
+
 
 (* functions for resource inference *)
 
@@ -769,43 +787,5 @@ let test_value_eqs loc guard x ys =
   let@ group = value_eq_group guard x in
   let@ ms = prev_models_with loc guard_it in
   loop group ms ys
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-let bind_logical_return loc members lrt =
-  let@ () = bind_logical_return_internal loc members lrt in
-  set_unfold_resources ()
-
-(* Same for return types *)
-let bind_return loc members (rt : ReturnTypes.t) =
-  match members, rt with
-  | member :: members,
-    Computational ((s, bt), _, lrt) ->
-     let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
-     let@ () = bind_logical_return loc members
-                 (LogicalReturnTypes.subst (IT.make_subst [(s, member)]) lrt) in
-     return member
-  | _ ->
-     assert false
-
-
-
-
-
-
-
 
 
