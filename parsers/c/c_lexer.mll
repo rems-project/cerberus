@@ -13,12 +13,10 @@ type flags = {
 
 type internal_state = {
   mutable last_magic_comment: (Lexing.position * Cerb_location.t) option; (* unused, need to delete *)
-  mutable ignore_magic: bool; (* unusued, need to delete *)
   mutable magic_acc: (Cerb_location.t * string) list; (* unused, need to delete *)
 }
 let internal_state = {
   last_magic_comment= None;
-  ignore_magic= false;
   magic_acc= [];
 }
 
