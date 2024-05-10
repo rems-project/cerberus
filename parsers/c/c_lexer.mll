@@ -12,13 +12,11 @@ type flags = {
 }
 
 type internal_state = {
-  mutable start_of_comment: Lexing.position;
   mutable last_magic_comment: (Lexing.position * Cerb_location.t) option; (* unused, need to delete *)
   mutable ignore_magic: bool; (* unusued, need to delete *)
   mutable magic_acc: (Cerb_location.t * string) list; (* unused, need to delete *)
 }
 let internal_state = {
-  start_of_comment= Lexing.dummy_pos;
   last_magic_comment= None;
   ignore_magic= false;
   magic_acc= [];
@@ -367,23 +365,23 @@ rule s_char_sequence = parse
   | '"'
       { [] }
 
-and magic = parse
+and magic start_of_comment = parse
   (* End of the magic comment *)
   | "*/" {[]}
   | "/*" { raise (Error Errors.Cparser_nested_comment) }
-  | eof  { lexbuf.lex_start_p <- internal_state.start_of_comment;
+  | eof  { lexbuf.lex_start_p <- start_of_comment;
            raise (Error (Errors.Cparser_unterminated_comment "/*@")) }
-  | _    {lex_magic magic lexbuf}
+  | _    {lex_magic (magic start_of_comment) lexbuf}
 
 (* Consume a comment: /* ... */ *)
 (* STD §6.4.9#1 *)
-and comment = parse
+and comment start_of_comment = parse
   (* End of the comment *)
   | "*/" {()}
   | "/*" { raise (Error Errors.Cparser_nested_comment) }
-  | eof  { lexbuf.lex_start_p <- internal_state.start_of_comment;
+  | eof  { lexbuf.lex_start_p <- start_of_comment;
            raise (Error (Errors.Cparser_unterminated_comment "/*")) }
-  | _    {lex_comment comment lexbuf}
+  | _    {lex_comment (comment start_of_comment) lexbuf}
 
 
 (* Consume a singleline comment: // ... *)
@@ -416,15 +414,13 @@ and hash = parse
 and initial flags = parse
   (* Magic comments *)
   | "/*@" { let curr_p = lexbuf.lex_curr_p in
-            internal_state.start_of_comment <- lexbuf.lex_start_p;
-            let xs = magic lexbuf in
+            let xs = magic lexbuf.lex_start_p lexbuf in
             match magic_token flags curr_p lexbuf.lex_start_p ('@' :: xs) with
             | Some tok -> tok
             | None -> initial flags lexbuf
             }
   (* Beginning of a comment *)
-  | "/*" { internal_state.start_of_comment <- lexbuf.lex_start_p;
-           ignore (comment lexbuf); initial flags lexbuf}
+  | "/*" { ignore (comment lexbuf.lex_start_p lexbuf); initial flags lexbuf}
 
   (* Single-line comment *)
   | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial flags lexbuf}
