@@ -93,9 +93,7 @@ let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
       Exception.except_return [decl] in
   decls
   |> Exception.except_mapM magic_comments_to_cn_toplevel
-  |> Exception.except_fmap List.concat
-  |> Exception.rbind (fun decls ->
-    Exception.except_return (Cabs.TUnit decls))
+  |> Exception.except_fmap (fun decls -> Cabs.TUnit (List.concat decls))
 
 let parse_with_magic_comments lexbuf =
   handle
