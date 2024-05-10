@@ -2368,11 +2368,11 @@ module WDT = struct
                       | dt' :: _ ->
                           let err =
                             !^"Illegal datatype definition."
-                            ^^^ !^"Constructor argument" ^^^ squotes (Id.pp id)
+                            ^/^ !^"Constructor argument" ^^^ squotes (Id.pp id)
                             ^^^ !^"is given type" ^^^ squotes (BT.pp bt) ^^ comma
                             ^^^ !^"which indirectly refers to"
                             ^^^ squotes (BT.pp (Datatype dt')) ^^ dot
-                            ^^^ !^"Indirect recursion via map, set, record,"
+                            ^/^ !^"Indirect recursion via map, set, record,"
                             ^^^ !^"or tuple types is not permitted."
                           in
                           fail (fun _ -> {loc; msg = Generic err})
