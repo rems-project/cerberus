@@ -823,15 +823,10 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
           let magic_attrs = get_cerb_magic_attr annots in
           let marker_id = Option.get (get_marker annots) in
           let marker_id_object_types = Option.get (get_marker_object_types annots) in
-          let@ parsed_stmts =
-            ListM.concat_mapM (fun (stmt_loc, stmt_str) ->
-                let@ parsed_stmts = Parse.parse C_parser.cn_statements (stmt_loc, stmt_str) in
-                let with_locs = List.map (fun stmt -> (stmt_loc, stmt)) parsed_stmts in
-                return with_locs
-              ) magic_attrs
+          let@ parsed_stmts = ListM.concat_mapM (Parse.parse C_parser.cn_statements) magic_attrs
           in
           let@ desugared_stmts_and_stmts =
-            ListM.mapM (fun (stmt_loc, parsed_stmt) ->
+            ListM.mapM (fun parsed_stmt ->
                 let@ desugared_stmt =
                   do_ail_desugar_rdonly (CAE.{
                         markers_env = markers_env;
