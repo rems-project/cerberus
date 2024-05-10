@@ -181,7 +181,6 @@ let magic_token flags start_pos end_pos chars =
     None
   ) else (
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
-    let str = str in
     let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
     Some (CERB_MAGIC (loc, str))
   )
