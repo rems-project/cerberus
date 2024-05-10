@@ -1,12 +1,5 @@
 open Cerb_frontend
 
-let warn_toplevel_deprecated loc = prerr_endline (Pp_utils.to_plain_pretty_string (
-  let open Cerb_pp_prelude in
-  let open Cerb_colour in
-  pp_ansi_format [Bold; Yellow] (fun () -> !^ "warning:") ^^^
-  !^ "deprecated CN declaration: use /*@ @*/ comment:" ^^ PPrint.break 1 ^^^
-  Cerb_location.pp_location ~clever:false loc))
-
 let after_before_msg offset buffer (lexbuf : Lexing.lexbuf) =
   MenhirLib.ErrorReports.show (fun (start, curr) ->
    try Lexing.lexeme {
@@ -73,12 +66,6 @@ let magic_comments_to_cn (Cabs.TUnit decls) =
         (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:true))
         ~offset:start_pos.pos_cnum
         lexbuf
-    | EDecl_predCN _
-    | EDecl_funcCN _
-    | EDecl_lemmaCN _
-    | EDecl_datatypeCN _ as decl ->
-      (warn_toplevel_deprecated (Cabs.loc_of_edecl decl);
-       Exception.except_return [decl])
     | decl -> Exception.except_return [decl] in
 
   let decls = Exception.except_mapM convert_toplevel_magic decls in
