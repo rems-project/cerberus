@@ -83,7 +83,7 @@ let parse_loc_string parse (loc, str) =
     parse
     (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:true))
     ~offset:start_pos.pos_cnum
-      lexbuf
+    lexbuf
 
 let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
   let magic_comments_to_cn_toplevel = function
@@ -91,9 +91,10 @@ let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
       parse_loc_string C_parser.cn_toplevel (loc, str)
     | decl ->
       Exception.except_return [decl] in
-  let decls = Exception.except_mapM magic_comments_to_cn_toplevel decls in
-  let decls = Exception.except_fmap List.concat decls in
-  Exception.except_bind decls (fun decls ->
+  decls
+  |> Exception.except_mapM magic_comments_to_cn_toplevel
+  |> Exception.except_fmap List.concat
+  |> Exception.rbind (fun decls ->
     Exception.except_return (Cabs.TUnit decls))
 
 let parse_with_magic_comments lexbuf =
