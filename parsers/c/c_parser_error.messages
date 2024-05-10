@@ -8,7 +8,8 @@ cn_statements: WHILE
 ##
 ##
 
-parsing "cn_statements'": expected "cn_statements"
+You're inside a function - so I'm expecting a CN statement.
+Hint: these start with 'extract', 'instantiate', 'split_case', 'assert', 'print', 'apply'.
 
 cn_statements: INLINE WHILE
 ##
