@@ -23,11 +23,10 @@ let fiddle_at_hack string =
   fix ss
 
 let diagnostic_get_tokens (start_pos : Lexing.position) string =
-  C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
   let rec relex (toks, pos) =
     try
-      match C_lexer.lexer lexbuf with
+      match C_lexer.lexer ~inside_cn:true lexbuf with
       | Tokens.EOF -> (List.rev ("EOF" :: toks), List.rev pos)
       | t ->
         let Lexing.{ pos_lnum; pos_bol; pos_cnum; _ } = lexbuf.lex_start_p in
@@ -47,16 +46,12 @@ let diagnostic_get_tokens (start_pos : Lexing.position) string =
 
 let parse parser_start (loc, string) =
   let string = fiddle_at_hack string in
-  C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
   (* `C_lexer.magic_token' ensures `loc` is a region *)
   let start_pos = Option.get @@ Locations.start_pos loc in
   Lexing.set_position lexbuf start_pos;
-  let () = match Cerb_location.get_filename loc with
-    | Some filename -> lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname= filename }
-    | None -> ()
-  in
-  let buffer, lexer = MenhirLib.ErrorReports.wrap C_lexer.lexer in
+  Lexing.set_filename lexbuf (Option.value ~default:"<none>" (Cerb_location.get_filename loc));
+  let buffer, lexer = MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:true) in
   let@ parsed_spec =
     try return (parser_start lexer lexbuf) with
     | C_lexer.Error err ->

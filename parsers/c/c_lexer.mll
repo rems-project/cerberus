@@ -10,10 +10,13 @@ type magic_comment_mode =
   | Magic_None
   | Magic_At of bool
 
+type flag = {
+  inside_cn : bool;
+}
+
 type internal_state = {
   mutable magic_comment_mode: magic_comment_mode option;
 
-  mutable inside_cn: bool;
   mutable start_of_comment: Lexing.position;
   mutable last_magic_comment: (Lexing.position * Cerb_location.t) option; (* unused, need to delete *)
   mutable ignore_magic: bool; (* unusued, need to delete *)
@@ -21,7 +24,6 @@ type internal_state = {
 }
 let internal_state = {
   magic_comment_mode= None;
-  inside_cn= false;
   start_of_comment= Lexing.dummy_pos;
   last_magic_comment= None;
   ignore_magic= false;
@@ -236,7 +238,7 @@ let long_suffix = ['l' 'L']
 let unsigned_suffix = ['u' 'U']
 
 let integer_suffix =
-    unsigned_suffix long_long_suffix 
+    unsigned_suffix long_long_suffix
   | unsigned_suffix long_suffix?
   | long_long_suffix unsigned_suffix?
   | long_suffix unsigned_suffix?
@@ -430,25 +432,25 @@ and hash = parse
       { raise (Error Errors.Cparser_invalid_symbol) }
 
 (* Entry point *)
-and initial = parse
+and initial flags = parse
   (* Magic comments *)
   | "/*@" { let curr_p = lexbuf.lex_curr_p in
             internal_state.start_of_comment <- lexbuf.lex_start_p;
             let xs = magic lexbuf in
             match magic_token curr_p lexbuf.lex_start_p ('@' :: xs) with
             | Some tok -> tok
-            | None -> initial lexbuf
+            | None -> initial flags lexbuf
             }
   (* Beginning of a comment *)
   | "/*" { internal_state.start_of_comment <- lexbuf.lex_start_p;
-           ignore (comment lexbuf); initial lexbuf}
+           ignore (comment lexbuf); initial flags lexbuf}
 
   (* Single-line comment *)
-  | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial lexbuf}
+  | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial flags lexbuf}
 
-  | '\n'             { new_line lexbuf; initial lexbuf }
-  | whitespace_char+ { initial lexbuf }
-  | '#'              { hash lexbuf; initial lexbuf }
+  | '\n'             { new_line lexbuf; initial flags lexbuf }
+  | whitespace_char+ { initial flags lexbuf }
+  | '#'              { hash lexbuf; initial flags lexbuf }
 
   (* NOTE: we decode integer constants here *)
   | (integer_constant as str) unsigned_suffix
@@ -569,10 +571,10 @@ and initial = parse
   | "%>" { RBRACE }
 (*  | "%:"   *)
 (*  | "%:%:" *)
-  
+
   (* NON-STD GNU extensions *)
   | "?:" { QUESTION_COLON }
-  
+
   (* NON-STD (cppmem-like thread syntax) *)
   | "{-{" { LBRACES }
   | "|||" { PIPES   }
@@ -580,8 +582,8 @@ and initial = parse
 
     (* copied over from backend/cn/assertion_lexer.mll *)
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
-      { 
-        if internal_state.inside_cn then
+      {
+        if flags.inside_cn then
           try Hashtbl.find cn_lexicon id
           with Not_found ->
             UNAME id
@@ -593,7 +595,7 @@ and initial = parse
     { try
         Hashtbl.find lexicon id
       with Not_found ->
-        if internal_state.inside_cn then
+        if flags.inside_cn then
           try Hashtbl.find cn_lexicon id
           with Not_found ->
             LNAME id
@@ -614,10 +616,10 @@ type lexer_state =
 
 let lexer_state = ref LSRegular
 
-let lexer : lexbuf -> token = fun lexbuf ->
+let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
   match !lexer_state with
   | LSRegular ->
-      begin match initial lexbuf with
+      begin match initial { inside_cn } lexbuf with
       | LNAME i as tok -> lexer_state := LSIdentifier i; tok
       | UNAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok
