@@ -7,4 +7,5 @@ int main() {
   memcpy (&q, &p, sizeof p);
   *q = 11; // is this free of undefined behaviour?
   //CN_VIP printf("*p=%d  *q=%d\n",*p,*q);
+  /*CN_VIP*//*@ assert(*p == 11i32 && *q == 11i32); @*/
 }

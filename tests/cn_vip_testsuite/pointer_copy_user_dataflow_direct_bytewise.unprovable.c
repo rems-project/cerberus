@@ -34,9 +34,8 @@ ensures
 {
     return (unsigned char*)addr_p;
 }
-void byte_ptr_to_int_ptr_ptr(unsigned char *addr_p)
 /*@
-trusted;
+lemma byte_ptr_to_int_ptr_ptr(pointer addr_p)
 
 requires
     take B = Owned<unsigned char[(sizeof(int*))]>(addr_p);
@@ -52,9 +51,7 @@ ensures
                 + shift_left((u64)B[1u64], 8u64)
                 + (u64)B[0u64];
 @*/
-{
-    return;
-}
+
 //CN_VIP #include <stdio.h>
 //CN_VIP #include <string.h>
 #include <stddef.h>
@@ -129,8 +126,8 @@ int main()
   /*CN_VIP*/unsigned char *p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
   user_memcpy(q_bytes, p_bytes, sizeof(int *));
   /*CN_VIP*/byte_arrays_equal(q_bytes, p_bytes, sizeof(int*));
-  /*CN_VIP*/byte_ptr_to_int_ptr_ptr(q_bytes);
-  /*CN_VIP*/byte_ptr_to_int_ptr_ptr(p_bytes);
+  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
+  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(p_bytes); @*/
   *q = 11; // is this free of undefined behaviour?
   //CN_VIP printf("*p=%d  *q=%d\n",*p,*q);
   /*CN_VIP*//*@ assert(*q == 11i32 && *p == 11i32); @*/
