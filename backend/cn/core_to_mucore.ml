@@ -821,38 +821,43 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
           let@ parsed_stmts = Parse.cn_statements annots in
-          let marker_id = Option.get (get_marker annots) in
-          let marker_id_object_types = Option.get (get_marker_object_types annots) in
-          let@ desugared_stmts_and_stmts =
-            ListM.mapM (fun parsed_stmt ->
-                let@ desugared_stmt =
-                  do_ail_desugar_rdonly (CAE.{
-                        markers_env = markers_env;
-                        inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
-                    })
-                    (CA.desugar_cn_statement parsed_stmt)
-                in
-                let visible_objects=
-                  global_types @
-                  Pmap.find marker_id_object_types visible_objects_env
-                in
-                (* debug 6 (lazy (!^"CN statement before translation"));
-                debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt))); *)
+          begin match parsed_stmts with
+          | _ :: _ ->
+            let marker_id = Option.get (get_marker annots) in
+            let marker_id_object_types = Option.get (get_marker_object_types annots) in
+            let@ desugared_stmts_and_stmts =
+              ListM.mapM (fun parsed_stmt ->
+                  let@ desugared_stmt =
+                    do_ail_desugar_rdonly (CAE.{
+                          markers_env = markers_env;
+                          inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
+                      })
+                      (CA.desugar_cn_statement parsed_stmt)
+                  in
+                  let visible_objects=
+                    global_types @
+                    Pmap.find marker_id_object_types visible_objects_env
+                  in
+                  (* debug 6 (lazy (!^"CN statement before translation"));
+                  debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt))); *)
 
-                let get_c_obj sym = match List.assoc_opt Sym.equal sym visible_objects with
-                  | Some obj_ty -> obj_ty
-                  | None -> failwith ("use of C obj without known type: " ^ Sym.pp_string sym)
-                in
-                let@ stmt =
-                  Compile.translate_cn_statement get_c_obj old_states env desugared_stmt
-                in
-                (* debug 6 (lazy (!^"CN statement after translation"));
-                debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
-                return (desugared_stmt, stmt)
-            ) parsed_stmts
-          in
-          let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
-          return (M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))
+                  let get_c_obj sym = match List.assoc_opt Sym.equal sym visible_objects with
+                    | Some obj_ty -> obj_ty
+                    | None -> failwith ("use of C obj without known type: " ^ Sym.pp_string sym)
+                  in
+                  let@ stmt =
+                    Compile.translate_cn_statement get_c_obj old_states env desugared_stmt
+                  in
+                  (* debug 6 (lazy (!^"CN statement after translation"));
+                  debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
+                  return (desugared_stmt, stmt)
+              ) parsed_stmts
+            in
+            let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
+            return (M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))
+          | [] ->
+             n_expr e1
+          end
        | _, _ ->
           n_expr e1
      in
