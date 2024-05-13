@@ -446,7 +446,7 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
           else
             Map.insert (to_init_path pos.cursor) d_e inits_acc in
         E.return (max_index, inits_acc', false, pos)
-  | Cabs.Init_list xs ->
+  | Cabs.Init_list _ xs ->
       (* NOTE: we go on step down (an mark the opening of a block { ... }) *)
       (* NOTE: this moves the cursor to the first member/index of the struct/array *)
       liftM (go_down_entering_block tagDefs pos) >>= fun pos ->

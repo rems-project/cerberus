@@ -626,7 +626,7 @@ and dtree_of_direct_abstract_declarator = function
 and dtree_of_initializer_ = function
   | Init_expr e ->
       Dnode (pp_decl_ctor "Init_expr", [dtree_of_cabs_expression e])
-  | Init_list inits ->
+  | Init_list (_, inits) ->
       Dnode (pp_decl_ctor "Init_list", [dtree_of_initializer_list inits])
 
 and dtree_of_designator = function

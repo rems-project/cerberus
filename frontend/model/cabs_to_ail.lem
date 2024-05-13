@@ -1283,7 +1283,7 @@ let rec _UNUSED_is_fully_non_designated xs =
   List.all function
     | (Nothing, Init_expr _) ->
         true
-    | (Nothing, Init_list xs') ->
+    | (Nothing, Init_list _ xs') ->
         _UNUSED_is_fully_non_designated xs'
     | _ ->
         false
@@ -2287,7 +2287,7 @@ STD_ "§6.5.2.1#2, sentence 2" $
         desugar_type_name tyname >>= fun (qs, ty)    ->
         E.is_inside_function     >>= fun inside_func ->
         (* NOTE: there is no need to do the check for STD §6.7.9#3 here, because of the ail typing *)
-        wip_desugar_initializer_ loc (if inside_func then Automatic else Static) ty (Init_list inits) >>= fun (ty', d_e) ->
+        wip_desugar_initializer_ loc (if inside_func then Automatic else Static) ty (Init_list loc inits) >>= fun (ty', d_e) ->
         E.return (AilEcompound qs ty' d_e)
     | CabsEpreincr e ->
 STD_ "§6.5.3.1#2, sentence 3" $
@@ -3095,7 +3095,7 @@ and foo_aux
                       do_scalar_with_desugar e
                     else
                       do_string_literal loc lit
-                | Init_list [(Nothing, Init_expr (CabsExpression loc (CabsEstring lit) as e))] ->
+                | Init_list _ [(Nothing, Init_expr (CabsExpression loc (CabsEstring lit) as e))] ->
                     if AilTypesAux.is_scalar outer_ty then
                       do_scalar_with_desugar e
                     else
@@ -3158,7 +3158,7 @@ and foo_aux
                             do_scalar d_e
                     end
 (*                    do_scalar e *)
-                | Init_list ys ->
+                | Init_list _ ys ->
                     E.print_debugM 2 (fun () -> "HELLO 4") >>= fun () ->
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in
@@ -3221,7 +3221,7 @@ and bar i elems acc xs =
 and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression unit)) =
   E.get_tag_definitions >>= fun tagDefs ->
   match (entity_ty, init_) with
-    | (Ctype.Ctype annots (Ctype.Array elem_ty Nothing), Init_list xs) ->
+    | (Ctype.Ctype annots (Ctype.Array elem_ty Nothing), Init_list _ xs) ->
         E.print_debugM 2 (fun () ->
           "HELLO 5"
         ) >>= fun () ->
@@ -3237,7 +3237,7 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
           | Just n ->
               E.return (Ctype.Ctype annots (Ctype.Array elem_ty (Just (n+1))), ret)
         end
-    | (Ctype.Ctype _ (Ctype.Array _ _), Init_list xs) ->
+    | (Ctype.Ctype _ (Ctype.Array _ _), Init_list _ xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
         E.print_debugM 2 (fun () ->
           "HELLO 2\n" ^
@@ -3248,7 +3248,7 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
         ) >>= fun () ->
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
-    | (Ctype.Ctype _ (Ctype.Struct _), Init_list xs) ->
+    | (Ctype.Ctype _ (Ctype.Struct _), Init_list _ xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
         E.print_debugM 2 (fun () ->
           "HELLO 1\n" ^
@@ -3295,7 +3295,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
   let is_string_literal_init = function
     | Init_expr (CabsExpression _ (CabsEstring _)) ->
         true
-    | Init_list [(Nothing, Init_expr (CabsExpression _ (CabsEstring _)))] ->
+    | Init_list _ [(Nothing, Init_expr (CabsExpression _ (CabsEstring _)))] ->
         true
     | _ ->
         false
@@ -3305,7 +3305,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
     match init with
       | Init_expr e ->
           E.return e
-      | Init_list [(Nothing, Init_expr e)] ->
+      | Init_list _ [(Nothing, Init_expr e)] ->
           (* NOTE: scalar can be initialised with optional enclosing braces *)
           E.return e
       | _ ->
@@ -3342,7 +3342,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
     translate_cabs_string_literal <$> match init with
       | Init_expr (CabsExpression _ (CabsEstring lit)) ->
           E.return lit
-      | Init_list [(Nothing, Init_expr (CabsExpression _ (CabsEstring lit)))] ->
+      | Init_list _ [(Nothing, Init_expr (CabsExpression _ (CabsEstring lit)))] ->
           E.return lit
       | _ ->
           (* TODO: KAYVAN CHECK: this is dead code, `_is_string_literal_init` will filter this out! *)

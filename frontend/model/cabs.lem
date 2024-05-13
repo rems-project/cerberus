@@ -279,7 +279,7 @@ and direct_abstract_declarator =
 (* §6.7.9 Initialization, Syntax *)
 and initializer_ =
   | Init_expr of cabs_expression
-  | Init_list of list (maybe (list designator) * initializer_)
+  | Init_list of Loc.t * list (maybe (list designator) * initializer_)
 
 and designator =
   | Desig_array of cabs_expression

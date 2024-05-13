@@ -1247,7 +1247,7 @@ initializer_:
     { Init_expr expr }
 | LBRACE inits= initializer_list RBRACE
 | LBRACE inits= initializer_list COMMA RBRACE
-    { Init_list (List.rev inits) }
+    { Init_list (Cerb_location.(region ($startpos, $endpos) NoCursor), List.rev inits) }
 ;
 
 initializer_list: (* NOTE: the list is in reverse *)
