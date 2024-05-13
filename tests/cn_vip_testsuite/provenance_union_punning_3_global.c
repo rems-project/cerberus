@@ -11,4 +11,5 @@ int main() {
   int *q = (int*)i;
   *q = 11;  // does this have UB?
   //CN_VIP printf("x=%d *p=%d *q=%d\n",x,*p,*q);
+  /*CN_VIP*//*@ assert(true); @*/ // no restrictions on the values
 }

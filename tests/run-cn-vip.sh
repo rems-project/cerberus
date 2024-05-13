@@ -11,14 +11,16 @@ DIRNAME=$(dirname $0)
 
 SUCC=$(
     find $DIRNAME/cn_vip_testsuite -name '*.c' \
-        \! -name 'pointer_copy_user_ctrlflow_bytewise.c' \
         \! -name '*.annot.c' \
         \! -name '*.error.c' \
         \! -name '*.unprovable.c' \
 )
 FAIL=$(find $DIRNAME/cn -name '*.error.c')
 ANNOT=$(find $DIRNAME/cn -name '*.annot.c')
-UNPROV=$(find $DIRNAME/cn -name '*.unprovable.c')
+UNPROV=$(
+    find $DIRNAME/cn -name '*.unprovable.c' \
+        \! -name 'pointer_copy_user_ctrlflow_bytewise.unprovable.c'
+)
 
 NUM_FAILED=0
 FAILED=''

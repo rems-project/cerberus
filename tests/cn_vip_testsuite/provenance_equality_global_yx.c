@@ -8,5 +8,6 @@ int main() {
   _Bool b = (p==q);
   // can this be false even with identical addresses?
   //CN_VIP printf("(p==q) = %s\n", b?"true":"false");
+  /*CN_VIP*//*@ assert (b == 1u8); @*/ // non-det in PNVI-ae-udi; true in VIP
   return 0;
 }
