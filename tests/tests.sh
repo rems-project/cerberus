@@ -201,6 +201,8 @@ citests=(
   0333-shifts_non_representable.undef.c
   0334-non_decimal_long_int_constants.c
   0335-non_decimal_unsigned_long_int_constants.c
+  0336-scalar-init-with_braces.syntax-only.c
+  0337-scalar-init-with_braces.undef.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

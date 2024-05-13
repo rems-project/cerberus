@@ -446,60 +446,68 @@ let rec interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_in
           else
             Map.insert (to_init_path pos.cursor) d_e inits_acc in
         E.return (max_index, inits_acc', false, pos)
-  | Cabs.Init_list _ xs ->
-      (* NOTE: we go on step down (an mark the opening of a block { ... }) *)
-      (* NOTE: this moves the cursor to the first member/index of the struct/array *)
-      liftM (go_down_entering_block tagDefs pos) >>= fun pos ->
-      (* NOTE: for each element of the init list *)
-      on_list (max_index, inits_acc, pos) (fun is_last (max_index, inits_acc, pos) (desigs_opt, init) ->
-        (* NOTE: we move to the position specified by the designators *)
-        moveTo tagDefs funcs pos desigs_opt >>= fun pos' ->
-        (* this keeps track of the largest index used when initialising an array with unknown size *)
-        let max_index' =
-          if is_inner then
-            max_index
-          else match pos'.cursor with
-            | [] -> max_index
-            | elem :: _ ->
-                match elem.kind with
-                  | Init_array idx Nothing ->
-                      if idx > max_index then idx else max_index
-                  | _ ->
-                      max_index
-                end
-          end in
-        (* NOTE: we recursively interpret the inner initializer (this may move the cursor) *)
-        (* NOTE: the max_index doesn't matter here because we can only have an aray with unknown size at the top-level *)
-        interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc true 0 pos' init
-          >>= fun (_, inits_acc', finished_list, pos') ->
-        begin if is_last then
-          if not is_inner then
-            (* NOTE: the whole initiliazer_ has been interpreted *)
-            E.return pos'
+  | Cabs.Init_list loc xs ->
+      if AilTypesAux.is_scalar (unatomic pos.ty) then
+        match xs with
+          | [(Nothing, Cabs.Init_expr e)] ->
+              interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc is_inner max_index pos (Cabs.Init_expr e)
+          | _ ->
+              E.undef loc Undefined.UB081_scalar_initializer_not_single_expression
+        end
+      else
+        (* NOTE: we go on step down (an mark the opening of a block { ... }) *)
+        (* NOTE: this moves the cursor to the first member/index of the struct/array *)
+        liftM (go_down_entering_block tagDefs pos) >>= fun pos ->
+        (* NOTE: for each element of the init list *)
+        on_list (max_index, inits_acc, pos) (fun is_last (max_index, inits_acc, pos) (desigs_opt, init) ->
+          (* NOTE: we move to the position specified by the designators *)
+          moveTo tagDefs funcs pos desigs_opt >>= fun pos' ->
+          (* this keeps track of the largest index used when initialising an array with unknown size *)
+          let max_index' =
+            if is_inner then
+              max_index
+            else match pos'.cursor with
+              | [] -> max_index
+              | elem :: _ ->
+                  match elem.kind with
+                    | Init_array idx Nothing ->
+                        if idx > max_index then idx else max_index
+                    | _ ->
+                        max_index
+                  end
+            end in
+          (* NOTE: we recursively interpret the inner initializer (this may move the cursor) *)
+          (* NOTE: the max_index doesn't matter here because we can only have an aray with unknown size at the top-level *)
+          interp_initializer_aux tagDefs funcs is_static_or_thread inits_acc true 0 pos' init
+            >>= fun (_, inits_acc', finished_list, pos') ->
+          begin if is_last then
+            if not is_inner then
+              (* NOTE: the whole initiliazer_ has been interpreted *)
+              E.return pos'
+            else
+              (* NOTE: if we are dealing with the LAST element of the init list *)
+              (* NOTE: we move the cursor back to the level of the block we just opened *)
+              let pos' = go_top_of_block pos' in
+              (* NOTE: we move up from this block *)
+              (* TODO: if we were overflowing before entering the block we need to STILL be overflowing *)
+              liftM (go_up (unmark_as_overflowing pos')) >>= fun pos' ->
+              liftM (do_next_in_same_level tagDefs pos') >>= fun pos' ->
+              E.return pos'
           else
-            (* NOTE: if we are dealing with the LAST element of the init list *)
-            (* NOTE: we move the cursor back to the level of the block we just opened *)
-            let pos' = go_top_of_block pos' in
-            (* NOTE: we move up from this block *)
-            (* TODO: if we were overflowing before entering the block we need to STILL be overflowing *)
-            liftM (go_up (unmark_as_overflowing pos')) >>= fun pos' ->
-            liftM (do_next_in_same_level tagDefs pos') >>= fun pos' ->
-            E.return pos'
-        else
-          (* NOTE: otherwise (not the last element), we move to the next (logical) position *)
-          if cursor_overflowing pos'.cursor then
-            (* NOTE: if there is another initialiser in the list,
-              we are un excess (we'll ignore, maybe warn) *)
-            E.return pos'
-          else if finished_list then
-            E.return pos'
-          else
-            liftM (go_next tagDefs pos')
-        end >>= fun pos' ->
-        (* NOTE: in the union, the bindings of the second map take precedence *)
-        E.return (max_index', inits_acc', pos')
-      ) xs >>= fun (max_index, inits, pos) ->
-      E.return (max_index, inits, true, pos)
+            (* NOTE: otherwise (not the last element), we move to the next (logical) position *)
+            if cursor_overflowing pos'.cursor then
+              (* NOTE: if there is another initialiser in the list,
+                we are un excess (we'll ignore, maybe warn) *)
+              E.return pos'
+            else if finished_list then
+              E.return pos'
+            else
+              liftM (go_next tagDefs pos')
+          end >>= fun pos' ->
+          (* NOTE: in the union, the bindings of the second map take precedence *)
+          E.return (max_index', inits_acc', pos')
+        ) xs >>= fun (max_index, inits, pos) ->
+        E.return (max_index, inits, true, pos)
 end
 
 let interp_initializer_ tagDefs funcs is_static_or_thread pos xs =
