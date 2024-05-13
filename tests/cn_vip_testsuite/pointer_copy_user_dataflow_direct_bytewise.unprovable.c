@@ -1,79 +1,8 @@
-unsigned char* block_int_ptr_to_block_uchar_arr(int **addr_p)
-/*@
-trusted;
-
-requires
-    take P = Block<int*>(addr_p);
-
-ensures
-    return == addr_p;
-    take B = Block<unsigned char[sizeof(int*)]>(return);
-@*/
-{
-    return (unsigned char*)addr_p;
-}
-unsigned char* owned_int_ptr_to_owned_uchar_arr(int **addr_p)
-/*@
-trusted;
-
-requires
-    take P = Owned<int*>(addr_p);
-
-ensures
-    return == addr_p;
-    take B = Owned<unsigned char[(sizeof(int*))]>(return);
-    (u64) P == shift_left((u64)B[7u64], 56u64)
-                + shift_left((u64)B[6u64], 48u64)
-                + shift_left((u64)B[5u64], 40u64)
-                + shift_left((u64)B[4u64], 32u64)
-                + shift_left((u64)B[3u64], 24u64)
-                + shift_left((u64)B[2u64], 16u64)
-                + shift_left((u64)B[1u64], 8u64)
-                + (u64)B[0u64];
-@*/
-{
-    return (unsigned char*)addr_p;
-}
-/*@
-lemma byte_ptr_to_int_ptr_ptr(pointer addr_p)
-
-requires
-    take B = Owned<unsigned char[(sizeof(int*))]>(addr_p);
-
-ensures
-    take P = Owned<int*>(addr_p);
-    (u64) P == shift_left((u64)B[7u64], 56u64)
-                + shift_left((u64)B[6u64], 48u64)
-                + shift_left((u64)B[5u64], 40u64)
-                + shift_left((u64)B[4u64], 32u64)
-                + shift_left((u64)B[3u64], 24u64)
-                + shift_left((u64)B[2u64], 16u64)
-                + shift_left((u64)B[1u64], 8u64)
-                + (u64)B[0u64];
-@*/
-
 //CN_VIP #include <stdio.h>
 //CN_VIP #include <string.h>
 #include <stddef.h>
 #include <inttypes.h>
-void byte_arrays_equal(unsigned char *x, unsigned char *y, size_t n)
-/*@
-trusted;
-
-requires
-    take X = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(x, i)) };
-    take Y = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(y, i)) };
-    each (u64 i; 0u64 <= i && i < n) { X[i] == Y[i] };
-
-ensures
-    take XR = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(x, i)) };
-    take YR = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(y, i)) };
-    X == XR; Y == YR;
-    XR == YR;
-@*/
-{
-    return;
-}
+#include "cn_lemmas.h"
 int  x=1;
 void user_memcpy(unsigned char *dest,
                  unsigned char *src, size_t n)
@@ -125,7 +54,7 @@ int main()
   /*CN_VIP*/unsigned char *q_bytes = block_int_ptr_to_block_uchar_arr(&q);
   /*CN_VIP*/unsigned char *p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
   user_memcpy(q_bytes, p_bytes, sizeof(int *));
-  /*CN_VIP*/byte_arrays_equal(q_bytes, p_bytes, sizeof(int*));
+  /*CN_VIP*//*@ apply byte_arrays_equal(q_bytes, p_bytes, sizeof<int*>); @*/
   /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
   /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(p_bytes); @*/
   *q = 11; // is this free of undefined behaviour?
