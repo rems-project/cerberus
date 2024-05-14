@@ -136,7 +136,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
             | None -> fail (fun _ -> {loc; msg = Empty_provenance }) in
         return (pointer_ ~alloc_id ~addr:p loc) )
 
-let expect_must_be_map_bt loc ~expect = 
+let expect_must_be_map_bt loc ~expect =
   match expect with
   | BT.Map (index_bt, item_bt) -> return (index_bt, item_bt)
   | _ ->
@@ -420,7 +420,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
   let (M_Pexpr (loc, _, expect, pe_)) = pe in
   let@ omodel = model_with loc (bool_ true @@ Locations.other __FUNCTION__) in
   match omodel with
-  | None -> 
+  | None ->
       warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
       return ()
   | Some _ ->
@@ -876,7 +876,7 @@ end = struct
       )
     in
 
-    let check = 
+    let check =
       let rec aux args_acc args ftyp k =
         match args, ftyp with
         | (arg :: args), (Computational ((s, bt), _info, ftyp)) ->
@@ -1013,7 +1013,7 @@ let _check_used_distinct loc used =
 
 
 let load loc pointer ct =
-  let@ value = 
+  let@ value =
     pure begin
       let@ (point, O value), _ =
         RI.Special.predicate_request loc (Access Load)
@@ -1048,24 +1048,24 @@ let instantiate loc filter arg =
   add_cs loc extra_assumptions
 
 
-  
+
 let add_trace_information labels annots =
   let open CF.Annot in
-  let inlined_labels = 
+  let inlined_labels =
     List.filter_map (function Ainlined_label l -> Some l | _ -> None) annots in
-  let stmt_locs = 
-    List.filter_map (function Astmt loc -> Some loc | _ -> None) annots in 
-  let expr_locs = 
+  let stmt_locs =
+    List.filter_map (function Astmt loc -> Some loc | _ -> None) annots in
+  let expr_locs =
     List.filter_map (function Aexpr loc -> Some loc | _ -> None) annots in
   let@ () = match inlined_labels with
     | [] -> return ()
-    | [(lloc,lsym,lannot)] -> 
-      add_label_to_trace (Some (lloc,lannot)) 
+    | [(lloc,lsym,lannot)] ->
+      add_label_to_trace (Some (lloc,lannot))
     | _ -> assert false
   in
   let@ () = match stmt_locs with
     | [] -> return ()
-    | l :: _ -> add_trace_item_to_trace (Stmt, l) 
+    | l :: _ -> add_trace_item_to_trace (Stmt, l)
   in
   let@ () = match expr_locs with
     | [] -> return ()
@@ -1080,7 +1080,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
   let here = Locations.other __FUNCTION__ in
   let@ omodel = model_with loc (bool_ true here) in
   match omodel with
-  | None -> 
+  | None ->
       warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
       return ()
   | Some _ ->
@@ -1172,24 +1172,21 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act_to.ct) in
         let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
-        let here = Locations.other __FUNCTION__ in
-        (* TODO: is this good? *)
-        let test_value = cast_ Memory.uintptr_bt arg here in
         let actual_value = cast_ (Memory.bt_of_sct act_to.ct) arg loc in
+        (* after discussing with Kavyan *)
+        let@ provable = provable loc in
+        let here = Locations.other __FUNCTION__ in
+        let lc = t_ (representable_ (act_to.ct, arg) here) in
         let@ () =
-          (* after discussing with Kavyan *)
-          let@ provable = provable loc in
-          let lc = t_ (representable_ (act_to.ct, test_value) here) in
           begin match provable lc with
           | `True -> return ()
           | `False ->
              let@ model = model () in
              fail (fun ctxt ->
                  let ict = act_to.ct in
-                 {loc; msg = Int_unrepresentable {value = test_value; ict; ctxt; model}}
+                 {loc; msg = Int_unrepresentable {value = arg; ict; ctxt; model}}
                )
-          end
-        in
+          end in
         k actual_value)
      | M_PtrFromInt (act_from, act_to, pe) ->
         let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in

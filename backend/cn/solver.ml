@@ -834,7 +834,7 @@ module Translate = struct
              loc_to_addr (term t)
            else
              (* But if we need to cast a pointer to any other type (e.g. signed, or of a different
-                length) first we need to cast the pointer to the intptr type, and then cast to the
+                length) first we need to cast the pointer to uintptr_t, and then cast to the
                 requested one *)
              term (cast_ cbt (cast_ Memory.uintptr_bt t loc) loc)
          | Loc, Alloc_id ->
