@@ -4,8 +4,11 @@
 #include <string.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include "cn_lemmas.h"
 int x=1, y=2;
-int main() {
+int main()
+/*CN_VIP*//*@ accesses x; accesses y; requires x == 1i32; @*/
+{
   uintptr_t ux = (uintptr_t)&x;
   uintptr_t uy = (uintptr_t)&y;
   uintptr_t offset = uy - ux;
@@ -17,8 +20,17 @@ int main() {
   int *p = (int *)(ux + offset);
 #endif
   int *q = &y;
-  if (memcmp(&p, &q, sizeof(p)) == 0) {
+  /*CN_VIP*/if (&p == &q) return 0;                                         // CN used to derive disjointness and non-null
+  /*CN_VIP*/if ((uintptr_t)&p + sizeof(int*) < (uintptr_t)&p) return 0;     // constraints from resource ownership, but this
+  /*CN_VIP*/if ((uintptr_t)&q + sizeof(int*) < (uintptr_t)&q) return 0;     // was removed for performance reasons.
+  /*CN_VIP*/unsigned char *p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
+  /*CN_VIP*/unsigned char *q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
+  /*CN_VIP*/int result = _memcmp(p_bytes, q_bytes, sizeof(p));
+  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(p_bytes); @*/
+  /*CN_VIP*//*@ apply byte_ptr_to_int_ptr_ptr(q_bytes); @*/
+  if (result == 0) {
     *p = 11; // is this free of UB?
     //CN_VIP printf("x=%d y=%d *p=%d *q=%d\n",x,y,*p,*q);
+    /*@ assert (x == 1i32 && y == 11i32 && *p == 11i32 && *q == 11i32); @*/
   }
 }

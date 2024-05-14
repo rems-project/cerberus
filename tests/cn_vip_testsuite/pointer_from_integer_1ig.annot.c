@@ -10,8 +10,11 @@ void f(uintptr_t i) {
 #else
   int *p = (int*)i;
 #endif
-  if (p==&j)
+  /*CN_VIP*/ /*@ assert ((alloc_id) p == (alloc_id) &j);@*/
+  if (p==&j) {
     *p=7;
+    /*CN_VIP*//*@ assert (j == 7i32); @*/
+  }
   //CN_VIP printf("j=%d &j=%p\n",j,(void*)&j);
 }
 int main() {

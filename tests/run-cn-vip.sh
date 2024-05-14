@@ -28,8 +28,7 @@ FAILED=''
 
 for TEST in $SUCC $ANNOT
 do
-  # TODO add -D flags to CN for these ones
-  $CN $TEST
+  $CN -DVIP -DANNOT $TEST
   RET=$?
   if [[ "$RET" = 0 ]]
   then
