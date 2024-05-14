@@ -4198,10 +4198,10 @@ Module RevocationProofs.
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
-    {ptrval1 ptrval2 ptrval1' : pointer_value}
+    {ptrval1 ptrval2 : pointer_value}
     {n : nat}
     (AG: mempcpy_args_sane s.(allocations) ptrval1 ptrval2 (Z.of_nat n))
-    (C: memcpy_copy_data loc ptrval1 ptrval2 n s = (s', inr ptrval1'))
+    (C: memcpy_copy_data loc ptrval1 ptrval2 n s = (s', inr tt))
     {p1 p2 : provenance}
     {c1 c2 : Capability_GS.t}
     {a1 a2 : Z}
@@ -4238,7 +4238,7 @@ Module RevocationProofs.
         state_inv_step.
         remember (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n) as addr.
         apply eff_array_shift_ptrval_uchar_spec in C0, C2.
-        subst ptrval2' ptrval1'0.
+        subst ptrval2' ptrval1'.
         rename x into fp.
         specialize (IHn _ _ addr C5).
 
@@ -4296,7 +4296,7 @@ Module RevocationProofs.
         cbn in C.
         state_inv_step.
         apply eff_array_shift_ptrval_uchar_spec in C0, C2.
-        subst ptrval2' ptrval1'0.
+        subst ptrval2' ptrval1'.
         replace (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n))
           with (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n).
         2: {
@@ -4364,11 +4364,11 @@ Module RevocationProofs.
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
     {s s': mem_state_r}
-    {ptrval1 ptrval2 ptrval1': pointer_value}
+    {ptrval1 ptrval2: pointer_value}
     {len: Z}
     :
     mempcpy_args_sane s.(allocations) ptrval1 ptrval2 len ->
-    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr ptrval1')
+    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr tt)
     ->
       forall p1 p2 c1 c2 a1 a2,
         ptrval1 = PV p1 (PVconcrete c1) ->
@@ -4512,12 +4512,12 @@ Module RevocationProofs.
 
   Lemma memcpy_copy_data_preserves_allocations:
     forall (loc : location_ocaml) (ptrval1 ptrval2 : pointer_value) (s : mem_state_r)
-      (size : nat) (s' : mem_state) (x : pointer_value),
-      memcpy_copy_data loc ptrval1 ptrval2 size s = (s', inr x)
+      (size : nat) (s' : mem_state),
+      memcpy_copy_data loc ptrval1 ptrval2 size s = (s', inr tt)
       ->
         allocations s = allocations s'.
   Proof.
-    intros loc ptrval1 ptrval2 s size s' x M.
+    intros loc ptrval1 ptrval2 s size s' M.
     revert s s' M.
     induction size; intros.
     -
@@ -4537,19 +4537,19 @@ Module RevocationProofs.
     (loc : location_ocaml)
     (ptrval1 ptrval2 : pointer_value)
     (s: mem_state)
-    (size q r : Z) (* [r] unused *)
-    (Q: quomod size (Z.of_nat (sizeof_pointer MorelloImpl.get)) = (q, r))
-    (AS: mempcpy_args_sane (allocations s) ptrval1 ptrval2 size)
+    (sz : Z)
+    (AS: mempcpy_args_sane (allocations s) ptrval1 ptrval2 sz)
     (DS: forall (p1 p2 : provenance) (c1 c2 : Capability_GS.t) (a1 a2 : Z),
         ptrval1 = PV p1 (PVconcrete c1) ->
         ptrval2 = PV p2 (PVconcrete c2) ->
         a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
         a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
-        fetch_bytes (bytemap s) a1 (Z.to_nat size) = fetch_bytes (bytemap s) a2 (Z.to_nat size))
+        fetch_bytes (bytemap s) a1 (Z.to_nat sz) = fetch_bytes (bytemap s) a2 (Z.to_nat sz))
     :
     PreservesInvariant mem_invariant s
-      (memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat (q * Z.of_nat (sizeof_pointer MorelloImpl.get)))).
+      (memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat sz)).
   Proof.
+(*
     invc AS.
     (* it looks like we do not need any allocation stuff from [mempcpy_args_sane].
        we will remove it for now but this may change. *)
@@ -4675,6 +4675,7 @@ Module RevocationProofs.
       *
         eapply IHn;clear IHn.
         admit. (* need prove bytemap preservaton in s->s' transition *)
+*)
   Admitted.
 
   Instance memcpy_PreservesInvariant
@@ -4688,7 +4689,6 @@ Module RevocationProofs.
     unfold memcpy.
     remember (num_of_int size_int) as size.
     clear size_int Heqsize.
-    break_let.
 
     apply bind_PreservesInvariant_value.
     intros M s' x AC.
@@ -4711,10 +4711,15 @@ Module RevocationProofs.
       inl_inr_inv.
       assumption.
     -
-      pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ _ H0).
-      pose proof (memcpy_copy_data_fetch_bytes_spec AC H0) as DS.
-      rewrite H1 in AC.
-      eapply memcpy_copy_tags_PreservesInvariant; eauto.
+      preserves_step.
+      +
+        destruct x.
+        pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H0).
+        pose proof (memcpy_copy_data_fetch_bytes_spec AC H0) as DS.
+        rewrite H1 in AC.
+        eapply memcpy_copy_tags_PreservesInvariant; eauto.
+      +
+        preserves_step.
   Qed.
 
   Instance realloc_PreservesInvariant
