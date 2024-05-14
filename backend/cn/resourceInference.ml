@@ -328,8 +328,8 @@ module General = struct
                      predicate_request loc uiinfo
                        { name = requested.name;
                          pointer = pointer_offset_ (requested.pointer,
-                             (mul_ (cast_ Memory.intptr_bt requested.step here,
-                                 cast_ Memory.intptr_bt index here) here)) here;
+                             (mul_ (cast_ Memory.uintptr_bt requested.step here,
+                                 cast_ Memory.uintptr_bt index here) here)) here;
                          iargs = List.map (IT.subst su) requested.iargs;
                        }
                    in

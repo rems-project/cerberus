@@ -658,11 +658,11 @@ let cast_ bt it loc =
 let integerToPointerCast_ it loc =
   cast_ Loc it loc
 let intptr_const_ n loc =
-  num_lit_ n Memory.intptr_bt loc
+  num_lit_ n Memory.uintptr_bt loc
 let intptr_int_ n loc = intptr_const_ (Z.of_int n) loc
   (* for integer-mode: z_ n *)
 let pointerToIntegerCast_ it loc =
-  cast_ Memory.intptr_bt it loc
+  cast_ Memory.uintptr_bt it loc
   (* for integer-mode: cast_ Integer it *)
 let pointerToAllocIdCast_ it loc =
   cast_ Alloc_id it loc
@@ -766,10 +766,10 @@ let wrapI_ (ity, arg) loc =
   IT (WrapI (ity, arg), Memory.bt_of_sct (Sctypes.Integer ity), loc)
 let alignedI_ ~t ~align loc =
   assert (BT.equal (bt t) Loc);
-  assert (BT.equal Memory.intptr_bt (bt align));
+  assert (BT.equal Memory.uintptr_bt (bt align));
   IT (Aligned {t; align}, BT.Bool, loc)
 let aligned_ (t, ct) loc =
-  alignedI_ ~t ~align:(int_lit_ (Memory.align_of_ctype ct) Memory.intptr_bt loc) loc
+  alignedI_ ~t ~align:(int_lit_ (Memory.align_of_ctype ct) Memory.uintptr_bt loc) loc
 
 
 let const_map_ index_bt t loc =
@@ -911,7 +911,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
          | _ -> failwith ("value_check: argument not a map: " ^ Pp.plain (pp_with_typ about))
        in
        let () =
-         if BT.equal ix_bt Memory.intptr_bt then
+         if BT.equal ix_bt Memory.uintptr_bt then
            ()
          else
            Pp.warn (Locations.other __FUNCTION__) (Pp.item "unexpected type of array arg" (pp_with_typ about))

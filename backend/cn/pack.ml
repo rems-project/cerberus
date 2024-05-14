@@ -21,11 +21,11 @@ let resource_empty provable resource =
 
 let unfolded_array loc init (ict, olength) pointer =
   let length = Option.get olength in
-  let q_s, q = IT.fresh_named Memory.intptr_bt "i" loc in
+  let q_s, q = IT.fresh_named Memory.uintptr_bt "i" loc in
   Q {
     name = Owned (ict, init);
     pointer = pointer;
-    q = (q_s, Memory.intptr_bt);
+    q = (q_s, Memory.uintptr_bt);
     q_loc = loc;
     step = intptr_int_ (Memory.size_of_ctype ict) loc;
     iargs = [];
@@ -162,7 +162,7 @@ let extractable_one global prove_or_model (predicate_name, index) (ret, O o) =
           let at_index =
             (P { name = ret.name;
                 pointer = pointer_offset_ (ret.pointer,
-                    mul_ (cast_ Memory.intptr_bt ret.step loc, cast_ Memory.intptr_bt index loc) loc) loc;
+                    mul_ (cast_ Memory.uintptr_bt ret.step loc, cast_ Memory.uintptr_bt index loc) loc) loc;
                 iargs = List.map (IT.subst su) ret.iargs; },
             O  (map_get_ o index loc))
           in

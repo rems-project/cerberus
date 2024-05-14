@@ -514,7 +514,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
      check_pexpr pe1 (fun vt1 ->
      check_pexpr pe2 (fun vt2 ->
-     k (arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.intptr_bt vt2 loc) loc)))
+     k (arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc)))
   | M_PEmember_shift (pe, tag, member) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Loc in
      let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
@@ -1174,7 +1174,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         check_pexpr pe (fun arg ->
         let here = Locations.other __FUNCTION__ in
         (* TODO: is this good? *)
-        let test_value = cast_ Memory.intptr_bt arg here in
+        let test_value = cast_ Memory.uintptr_bt arg here in
         let actual_value = cast_ (Memory.bt_of_sct act_to.ct) arg loc in
         let@ () =
           (* after discussing with Kavyan *)
@@ -1233,7 +1233,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
         Cerb_debug.error "todo: M_PtrMemberShift"
      | M_CopyAllocId (pe1, pe2) ->
-        let@ () = WellTyped.ensure_base_type loc ~expect:Memory.intptr_bt (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Memory.uintptr_bt (bt_of_pexpr pe1) in
         let@ () = WellTyped.ensure_base_type loc ~expect:BT.Loc (bt_of_pexpr pe2) in
         check_pexpr pe1 (fun vt1 ->
         check_pexpr pe2 (fun vt2 ->
@@ -1276,7 +1276,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         in
         let@ () = add_a ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
         (* let@ () = add_c loc (t_ (representable_ (Pointer act.ct, ret) loc)) in *)
-        let align_v = cast_ Memory.intptr_bt arg loc in
+        let align_v = cast_ Memory.uintptr_bt arg loc in
         let@ () = add_c loc (t_ (alignedI_ ~align:align_v ~t:ret loc)) in
         let@ () =
           add_r loc

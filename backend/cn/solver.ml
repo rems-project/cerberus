@@ -306,7 +306,7 @@ module Translate = struct
             [field_symbol]
             [sort (Bits (Unsigned, n))]
       | Real -> Z3.Arithmetic.Real.mk_sort context
-      | Loc -> translate BT.(Tuple [Alloc_id; Memory.intptr_bt])
+      | Loc -> translate BT.(Tuple [Alloc_id; Memory.uintptr_bt])
       | Alloc_id ->
          Z3.Tuple.mk_sort context
            (string (bt_name Alloc_id))
@@ -487,7 +487,7 @@ module Translate = struct
 
     let struct_decls = global.struct_decls in
 
-    let intptr_cast = cast_ Memory.intptr_bt in
+    let intptr_cast = cast_ Memory.uintptr_bt in
 
     fun it ->
       let here = Locations.other __FUNCTION__ in
@@ -547,7 +547,7 @@ module Translate = struct
          Some (IT ((Record str), IT.bt t, here))
       | OffsetOf (tag, member) ->
          let decl = SymMap.find tag struct_decls in
-         Some (int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt here)
+         Some (int_lit_ (Option.get (Memory.member_offset decl member)) Memory.uintptr_bt here)
       | SizeOf ct ->
          Some (int_lit_ (Memory.size_of_ctype ct) (IT.bt it) here)
       | Aligned t ->
@@ -686,7 +686,7 @@ module Translate = struct
       | Const (Pointer { alloc_id; addr }) ->
          alloc_id_addr_to_loc
            (term (alloc_id_ alloc_id loc))
-           (term (num_lit_ addr Memory.intptr_bt loc))
+           (term (num_lit_ addr Memory.uintptr_bt loc))
       | Const (Alloc_id z) ->
          integer_to_alloc_id
            (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
@@ -823,20 +823,20 @@ module Translate = struct
       | Cast (cbt, t) ->
          begin match IT.bt t, cbt with
          | Bits _, Loc ->
-            if BT.equal (IT.bt t) Memory.intptr_bt then
+            if BT.equal (IT.bt t) Memory.uintptr_bt then
               alloc_id_addr_to_loc (term (alloc_id_ Z.zero loc)) (term t)
             else
-              term (cast_ cbt (cast_ Memory.intptr_bt t loc) loc)
+              term (cast_ cbt (cast_ Memory.uintptr_bt t loc) loc)
          | Loc, Bits _ ->
            (* Recall above
-           | Loc -> translate BT.(Tuple [Alloc_id; Memory.intptr_bt]) *)
-           if BT.equal cbt Memory.intptr_bt then
+           | Loc -> translate BT.(Tuple [Alloc_id; Memory.uintptr_bt]) *)
+           if BT.equal cbt Memory.uintptr_bt then
              loc_to_addr (term t)
            else
              (* But if we need to cast a pointer to any other type (e.g. signed, or of a different
                 length) first we need to cast the pointer to the intptr type, and then cast to the
                 requested one *)
-             term (cast_ cbt (cast_ Memory.intptr_bt t loc) loc)
+             term (cast_ cbt (cast_ Memory.uintptr_bt t loc) loc)
          | Loc, Alloc_id ->
             loc_to_alloc_id (term t)
          | Real, Integer ->
@@ -853,13 +853,13 @@ module Translate = struct
          let decl = SymMap.find tag struct_decls in
          let t = term t in
          let (alloc_id, addr) = (loc_to_alloc_id t, loc_to_addr t) in
-         let offset = int_lit_ (Option.get (Memory.member_offset decl member)) Memory.intptr_bt loc in
+         let offset = int_lit_ (Option.get (Memory.member_offset decl member)) Memory.uintptr_bt loc in
          alloc_id_addr_to_loc
            alloc_id
            (Z3.BitVector.mk_add context addr (term offset))
       | ArrayShift { base; ct; index } ->
-        let offset = mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt loc,
-            cast_ Memory.intptr_bt index loc) loc in
+        let offset = mul_ (int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt loc,
+            cast_ Memory.uintptr_bt index loc) loc in
         let base = term base in
         let (alloc_id, addr) = (loc_to_alloc_id base, loc_to_addr base) in
         alloc_id_addr_to_loc
