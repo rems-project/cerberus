@@ -238,7 +238,6 @@ let main
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
             end;
-            let num_unit_tests = Option.value num_unit_tests ~default:10 in
             generate_tests instrumentation ail_prog 10000 oc num_unit_tests;
          end;
          return res
@@ -365,7 +364,7 @@ let output_with_unit_tests =
 
 let num_unit_tests =
   let doc = "number of unit tests to try and generate" in
-  Arg.(value & opt (some int) None & info ["num_unit_tests"] ~docv:"FILE" ~doc)
+  Arg.(value & opt int 10 & info ["num_unit_tests"] ~docv:"FILE" ~doc)
 
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
