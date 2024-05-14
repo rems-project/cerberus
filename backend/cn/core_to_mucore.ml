@@ -1667,7 +1667,7 @@ let collect_instrumentation (file : _ mu_file) =
          in
          { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
       | M_ProcDecl (fn_loc, _ft) ->
-         failwith "todo: support function prototypes"
+         acc
     ) file.mu_funs []
    in
    (instrs, C.symtable)

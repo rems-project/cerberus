@@ -3,6 +3,7 @@ module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
 open Setup
+open Generator
 
 
 let return = CF.Exception.except_return
@@ -134,6 +135,8 @@ let main
       random_seed
       solver_logging
       output_decorated
+      output_with_unit_tests
+      num_unit_tests
       astprints
       use_vip
       no_use_ity
@@ -176,7 +179,7 @@ let main
       let result =
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
-         (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
+         let (instrumentation, type_map) = Core_to_mucore.collect_instrumentation prog5 in
          (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
          print_log_file ("mucore", MUCORE prog5);
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
@@ -206,6 +209,37 @@ let main
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
             end
+         end;
+         begin match output_with_unit_tests with
+         | None -> ()
+         | Some output_filename ->
+            let oc = Stdlib.open_out output_filename in
+            (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
+            (* List.iter (fun (_, (_, _, _, _, stmt)) ->
+              List.iteri(fun i xs ->
+                List.iteri (fun j (loc, str) ->
+                  Printf.fprintf stderr "[%d] [%d] ==> %s -- '%s'\n"
+                  i j (Cerb_location.simple_location loc) (String.escaped str)
+                ) xs
+              ) (Source_injection.get_magics_of_statement stmt)
+            ) ail_prog.function_definitions; *)
+            output_string oc "#include \"stdlib.h\"\n\n";
+            output_string oc "#include <gtest/gtest.h>\n\n";
+            begin match
+              Source_injection.(output_injections oc
+                { filename; sigm= ail_prog
+                ; pre_post=[]
+                ; in_stmt=[] }
+              )
+            with
+            | Ok () ->
+                ()
+            | Error str ->
+                (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+                prerr_endline str
+            end;
+            let num_unit_tests = Option.value num_unit_tests ~default:10 in
+            generate_tests instrumentation ail_prog 10000 oc num_unit_tests;
          end;
          return res
        in
@@ -325,6 +359,14 @@ let output_decorated =
   let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations" in
   Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
 
+let output_with_unit_tests =
+  let doc = "output a version of the translation unit decorated with unit tests of the CN annotations" in
+  Arg.(value & opt (some string) None & info ["output_with_unit_tests"] ~docv:"FILE" ~doc)
+
+let num_unit_tests =
+  let doc = "number of unit tests to try and generate" in
+  Arg.(value & opt (some int) None & info ["num_unit_tests"] ~docv:"FILE" ~doc)
+
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
@@ -373,6 +415,8 @@ let () =
       random_seed $
       solver_logging $
       output_decorated $
+      output_with_unit_tests $
+      num_unit_tests $
       astprints $
       use_vip $
       no_use_ity $

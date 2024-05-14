@@ -7,7 +7,7 @@
   (package cn)
   (flags (:standard -w -37 -w -27 -open Monomorphic.Int))
   (libraries cmdliner str unix z3 monomorphic
-   cerb_frontend cerb_backend mem_concrete menhirLib cerb_util ocamlgraph)
+   cerb_frontend cerb_backend mem_concrete menhirLib cerb_util ocamlgraph qcheck)
   (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord ppx_deriving.map ppx_deriving.fold))
 )
 
