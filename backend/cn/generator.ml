@@ -640,7 +640,7 @@ let codify_heap (h : heap) (max_size : int) (oc : out_channel) : unit =
       Cerb_colour.do_colour := false;
       output_string oc (String_ail.string_of_ctype ~is_human:true no_quals ty ^ " ");
       Cerb_colour.do_colour := true;
-      output_string oc "*)((unsigned long)h + ";
+      output_string oc "*)((uintptr_t)h + ";
       output_string oc (string_of_int p);
       output_string oc ") = ";
       output_string oc (codify_value v);
@@ -664,7 +664,7 @@ let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc 
               match v with
               | CNVal_integer n
               | CNVal_bits (_, n) ->
-                ("(" ^ ty_str ^ ")((unsigned long)h + " ^ Z.to_string n ^ "UL)")
+                ("(" ^ ty_str ^ ")((uintptr_t)h + " ^ Z.to_string n ^ "ULL)")
               | _ -> failwith ("Invalid pointer value" ^ codify_value v)
             else
               codify_value v
