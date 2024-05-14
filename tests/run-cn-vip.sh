@@ -42,6 +42,11 @@ do
   echo
 done
 
+# TODO add below with both -DNON_DET_TRUE and -DNON_DET_FALSE
+# provenance_equality_auto_yx.c
+# provenance_equality_global_fn_yx.c
+# provenance_equality_global_yx.c
+
 for TEST in $FAIL $ANNOT $UNPROV
 do
   $CN $TEST
