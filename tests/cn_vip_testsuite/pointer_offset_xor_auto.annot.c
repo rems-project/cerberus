@@ -18,6 +18,6 @@ int main() {
   // are r and q now equivalent?
   *r = 11;     // does this have defined behaviour?
   _Bool b = (r==q);
-  //CN_VIP printf("x=%i y=%i *r=%i (r==p)=%s\n",x,y,*r,
-         b?"true":"false");
+  /*CN_VIP*//*@ assert (x == 1i32 && y == 11i32 && *r == 11i32 && b == 1u8); @*/
+  //CN_VIP printf("x=%i y=%i *r=%i (r==p)=%s\n",x,y,*r, b?"true":"false");
 }

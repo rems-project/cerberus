@@ -44,7 +44,7 @@ ensures
   }
 }
 int main()
-/*@ accesses x; @*/
+/*CN_VIP*//*@ accesses x; @*/
 {
   int *p = &x;
   int *q;
