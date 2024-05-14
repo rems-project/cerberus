@@ -640,7 +640,7 @@ let codify_heap (h : heap) (max_size : int) (oc : out_channel) : unit =
       Cerb_colour.do_colour := false;
       output_string oc (String_ail.string_of_ctype ~is_human:true no_quals ty ^ " ");
       Cerb_colour.do_colour := true;
-      output_string oc "*)(h + ";
+      output_string oc "*)((unsigned long)h + ";
       output_string oc (string_of_int p);
       output_string oc ") = ";
       output_string oc (codify_value v);
@@ -651,6 +651,9 @@ let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc 
   List.iter
     (fun (x, ty) ->
       let name = Pp_symbol.to_string_pretty x in
+      Cerb_colour.do_colour := false;
+      let ty_str = String_ail.string_of_ctype ~is_human:true no_quals ty in
+      Cerb_colour.do_colour := true;
       let value =
         match List.assoc_opt Symbol.equal_sym x ctx with
         | Some (ty', v) ->
@@ -661,7 +664,7 @@ let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc 
               match v with
               | CNVal_integer n
               | CNVal_bits (_, n) ->
-                ("h + " ^ Z.to_string n ^ "UL")
+                ("(" ^ ty_str ^ ")((unsigned long)h + " ^ Z.to_string n ^ "UL)")
               | _ -> failwith ("Invalid pointer value" ^ codify_value v)
             else
               codify_value v
@@ -674,7 +677,7 @@ let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc 
         | None -> failwith ("Could not find '" ^ name ^ "' in generated context")
       in
       Cerb_colour.do_colour := false;
-      output_string oc (String_ail.string_of_ctype ~is_human:true no_quals ty ^ " ");
+      output_string oc (ty_str ^ " ");
       Cerb_colour.do_colour := true;
       output_string oc name;
       output_string oc " = ";
@@ -683,12 +686,18 @@ let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc 
     )
     args
 
-let codify (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (args : (Symbol.sym * Ctype.ctype) list) (ctx : context) (h : heap) (index : int) (max_size : int) (oc : out_channel) : unit =
-  output_string oc "\nTEST(";
-  output_string oc (Pp_symbol.to_string_pretty instrumentation.fn |> String.capitalize_ascii);
-  output_string oc ", Test";
-  output_string oc (string_of_int index);
-  output_string oc ") {\n";
+type test_framework =
+  | GTest
+  | Catch2
+
+let codify_header (tf : test_framework) (suite : string) (test : string) (oc : out_channel) : unit =
+  match tf with
+  | GTest -> output_string oc ("\nTEST(" ^ String.capitalize_ascii suite ^ ", " ^ test ^ "){\n")
+  | Catch2 -> output_string oc ("\nTEST_CASE(\"" ^ test ^ "\", \"[" ^ String.lowercase_ascii suite ^ "]\"){\n");
+;;
+
+let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (args : (Symbol.sym * Ctype.ctype) list) (ctx : context) (h : heap) (index : int) (max_size : int) (oc : out_channel) : unit =
+  codify_header tf (Pp_symbol.to_string_pretty instrumentation.fn) ("Test" ^ string_of_int index) oc;
 
   let (ctx, h) = expand_heap ctx h in
   codify_heap h max_size oc;
@@ -701,7 +710,9 @@ let codify (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTyp
   output_string oc "}\n";
 ;;
 
-let generate_unit_test (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (generated : 'ty goal list) (tolerance : int) : 'ty goal list =
+
+
+let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (generated : 'ty goal list) (tolerance : int) : 'ty goal list =
   let psi = List.map (fun pred -> (pred.cn_pred_name, pred)) ail_prog.cn_predicates in
   let lookup_fn = fun (x, _) -> Symbol.equal_sym x instrumentation.fn in
   let fn_decl = List.filter lookup_fn ail_prog.declarations in
@@ -724,7 +735,7 @@ let generate_unit_test (instrumentation : Core_to_mucore.instrumentation) (ail_p
   let (g, ctx, h) = QCheck.Gen.generate1 (generate psi args (instrumentation.surface.requires) max_size) in
   if tolerance == 0 || (List.find_opt (fun g' -> Stdlib.(=) g g') generated |> Option.is_none)
   then (
-    codify instrumentation ail_prog args ctx h (List.length generated + 1) max_size oc;
+    codify tf instrumentation ail_prog args ctx h (List.length generated + 1) max_size oc;
     g::generated
   ) else generated
 ;;
@@ -735,17 +746,17 @@ let range i j =
   in aux (j-1) []
 ;;
 
-let rec generate_unit_tests (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (generated : 'ty goal list) (num_tests : int) (tolerance : int) : unit =
+let rec generate_unit_tests (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (generated : 'ty goal list) (num_tests : int) (tolerance : int) : unit =
   let n = num_tests - List.length generated in
   let generated = ref generated in
   List.iter
-    (fun _ -> generated := generate_unit_test instrumentation ail_prog max_size oc !generated tolerance)
+    (fun _ -> generated := generate_unit_test tf instrumentation ail_prog max_size oc !generated tolerance)
     (range 0 n);
   let num_generated = List.length !generated in
   if tolerance >= 0 && num_generated < num_tests
   then
-    generate_unit_tests instrumentation ail_prog max_size oc !generated num_tests (tolerance - 1)
+    generate_unit_tests tf instrumentation ail_prog max_size oc !generated num_tests (tolerance - 1)
 ;;
 
-let generate_tests (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (num_tests : int) : unit =
-  List.iter (fun inst -> generate_unit_tests inst ail_prog max_size oc [] num_tests (10 * num_tests)) instrumentation_list
+let generate_tests (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (num_tests : int) : unit =
+  List.iter (fun inst -> generate_unit_tests tf inst ail_prog max_size oc [] num_tests (10 * num_tests)) instrumentation_list

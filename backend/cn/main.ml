@@ -137,6 +137,7 @@ let main
       output_decorated
       output_with_unit_tests
       num_unit_tests
+      test_framework
       astprints
       use_vip
       no_use_ity
@@ -214,17 +215,10 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
-            (* List.iter (fun (_, (_, _, _, _, stmt)) ->
-              List.iteri(fun i xs ->
-                List.iteri (fun j (loc, str) ->
-                  Printf.fprintf stderr "[%d] [%d] ==> %s -- '%s'\n"
-                  i j (Cerb_location.simple_location loc) (String.escaped str)
-                ) xs
-              ) (Source_injection.get_magics_of_statement stmt)
-            ) ail_prog.function_definitions; *)
             output_string oc "#include \"stdlib.h\"\n\n";
-            output_string oc "#include <gtest/gtest.h>\n\n";
+            (match test_framework with
+            | GTest -> output_string oc "#include <gtest/gtest.h>\n\n"
+            | Catch2 -> output_string oc "#include <catch2/catch_test_macros.hpp>\n\n");
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
@@ -238,7 +232,7 @@ let main
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
             end;
-            generate_tests instrumentation ail_prog 10000 oc num_unit_tests;
+            generate_tests test_framework instrumentation ail_prog 10000 oc num_unit_tests;
          end;
          return res
        in
@@ -366,6 +360,10 @@ let num_unit_tests =
   let doc = "number of unit tests to try and generate" in
   Arg.(value & opt int 10 & info ["num_unit_tests"] ~docv:"FILE" ~doc)
 
+let test_framework =
+  let doc = "testing framework to use (gtest or catch)" in
+  Arg.(value & opt (enum [("gtest", GTest); "catch", Catch2]) GTest & info ["test_framework"] ~docv:"FILE" ~doc)
+
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
@@ -416,6 +414,7 @@ let () =
       output_decorated $
       output_with_unit_tests $
       num_unit_tests $
+      test_framework $
       astprints $
       use_vip $
       no_use_ity $
