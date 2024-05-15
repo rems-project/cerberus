@@ -11,7 +11,7 @@ open Global
 (** Functions that pick names for things. *)
 module CN_Names = struct
   let var_name x            = Sym.pp_string x
-  let let_name x            = Sym.pp_string x
+  let wild_var_name n       = "_" ^ string_of_int n
   let uninterpreted_name x  = Sym.pp_string x
 
   let struct_name x         = Sym.pp_string x
@@ -31,11 +31,6 @@ type solver_frame =
   ; declared_defaults: SMT.sexp BT_Table.t
     (** The names of the "default" constant for a type. *)
 
-  ; mutable defined_lets: SMT.sexp SymMap.t
-    (** The names of variables defined with a [let].
-    We keep a map of these, as in theory they could shadow, but
-    SMTLIB does not allow for multiple variables with the same name. *)
-
   ; mutable uninterpreted_functions: SMT.sexp SymMap.t
     (** Uninterpreted functions that we've declared. *)
   }
@@ -43,7 +38,6 @@ type solver_frame =
 let empty_solver_frame =
   { commands                = []
   ; declared_defaults       = BT_Table.create 50
-  ; defined_lets            = SymMap.empty
   ; uninterpreted_functions = SymMap.empty
   }
 
@@ -151,6 +145,19 @@ module CN_Tuple = struct
   let get arity field tup = SMT.app_ (selector arity field) [tup]
 end
 
+
+module CN_AllocId = struct
+  (** The type to use  for allocation ids *)
+  let t           = if !use_vip then SMT.t_int else CN_Tuple.t []
+
+  (** Parse an allocation id from an S-expression *)
+  let from_sexp s = if !use_vip then SMT.to_z s else Z.zero
+
+  (** Convert an allocation id to an S-expression *)
+  let to_sexp s   = if !use_vip then SMT.int_zk s else CN_Tuple.con []
+end
+
+
 module CN_Pointer = struct
   let name        = "cn_pointer"
   let alloc_name  = "cn_pointer_alloc"
@@ -170,7 +177,7 @@ module CN_Pointer = struct
       SMT.declare_datatype
         name []
         [ (name,
-            [ (alloc_name,  SMT.t_int)
+            [ (alloc_name, CN_AllocId.t)
             ; (addr_name, SMT.t_bits width)
             ]
           )
@@ -212,10 +219,6 @@ module CN_CType = struct
 end
 
 
-let sort_record (xs: (Id.t * 'a) list): (Id.t * 'a) list  =
-  let cmpKey (k1,_) (k2,_) = Id.compare k1 k2 in
-  List.sort cmpKey xs
-
 
 (** {1 Type to SMT } *)
 
@@ -227,7 +230,7 @@ let rec translate_base_type = function
   | Bits (_, n)     -> SMT.t_bits n
   | Real            -> SMT.t_real
   | Loc             -> CN_Pointer.t
-  | Alloc_id        -> translate_base_type BT.Integer
+  | Alloc_id        -> CN_AllocId.t
   | CType           -> CN_CType.t
   | List bt         -> CN_List.t (translate_base_type bt)
   | Set bt          -> SMT.t_set (translate_base_type bt)
@@ -237,9 +240,8 @@ let rec translate_base_type = function
   | Struct tag      -> SMT.atom (CN_Names.struct_name tag)
   | Datatype tag    -> SMT.atom (CN_Names.datatype_name tag)
   | Record members  ->
-    let sorted = sort_record members in
     let get_val (_,v) = v in
-    translate_base_type (Tuple (List.map get_val sorted))
+    translate_base_type (Tuple (List.map get_val members))
 
 
 
@@ -268,19 +270,18 @@ and
   | Loc ->
       begin match SMT.to_con sexp with
       | (_con, [sbase;saddr]) ->
-        let base = SMT.to_z sbase in
+        let base = CN_AllocId.from_sexp sbase in
         let addr = match get_value Memory.intptr_bt saddr with
                    | Const (Bits (_,z)) -> z
                    | _ -> raise Unsupported
-        in Const (if Z.equal base Z.zero &&
-                     Z.equal addr Z.zero
+        in Const (if Z.equal base Z.zero && Z.equal addr Z.zero
                     then Null
                     else Pointer { alloc_id = base; addr = addr }
                  )
       | _ -> bad ()
       end
 
-  | Alloc_id        -> Const (Alloc_id (SMT.to_z sexp))
+  | Alloc_id        -> Const (Alloc_id (CN_AllocId.from_sexp sexp))
 
   | CType           -> raise Unsupported    (* ? *)
 
@@ -304,9 +305,8 @@ and
 
   | Record members  ->
     let (_con,vals) = SMT.to_con sexp in
-    let sorted = sort_record members in
     let mk_field (l,bt) e = (l, get_ivalue bt e) in
-    Record (List.map2 mk_field sorted vals)
+    Record (List.map2 mk_field members vals)
 
 
 (** {1 Term to SMT} *)
@@ -322,18 +322,18 @@ let declare_var s x bt =
 (** Translate a constant to SMT *)
 let rec translate_const s co =
   match co with
-  | Z z             -> SMT.num_zk z
+  | Z z             -> SMT.int_zk z
   | Bits ((_,w), z) -> SMT.bv_k w z
-  | Q q             -> SMT.num_qk q
+  | Q q             -> SMT.real_k q
 
   | Pointer p ->
     begin match Memory.intptr_bt with
     | Bits (_,w) ->
-        SMT.app_ CN_Pointer.name [ SMT.num_zk p.alloc_id; SMT.bv_k w p.addr ]
+        SMT.app_ CN_Pointer.name [ SMT.int_zk p.alloc_id; SMT.bv_k w p.addr ]
     | _ -> raise Unsupported
     end
 
-  | Alloc_id z -> SMT.num_zk z
+  | Alloc_id z -> CN_AllocId.to_sexp z
   | Bool b     -> SMT.bool_k b
   | Unit       -> SMT.atom (CN_Tuple.name 0)
 
@@ -353,7 +353,6 @@ let rec translate_const s co =
       let e     = SMT.atom name in
       BT_Table.add s.cur_frame.declared_defaults t e;
       e
-
 
 (** Casting between bit-vector types *)
 let bv_cast to_bt from_bt x =
@@ -380,20 +379,63 @@ let rec translate_term s iterm =
   match IT.term iterm with
   | Const c -> translate_const s c
 
-  | Sym x ->
-    let check f = SymMap.find_opt x f.defined_lets in
-    begin match search_frames s check with
-    | Some e -> e
-    | None   -> SMT.atom (CN_Names.var_name x)
+  | Sym x -> SMT.atom (CN_Names.var_name x)
+
+  | Unop (op,e1) ->
+    begin match op with
+    | BWFFSNoSMT ->
+      (* XXX: This desugaring duplicates e1 *)
+      let intl i = int_lit_ i (IT.bt e1) here in
+      translate_term s
+        (ite_ ( eq_ (e1, intl 0) here
+              , intl 0
+              , add_ (arith_unop BWCTZNoSMT e1 here, intl 1) here
+              ) here
+        )
+    | Not        -> SMT.bool_not (translate_term s e1)
+    | BWCLZNoSMT -> xxx ()
+    | BWCTZNoSMT -> xxx ()
     end
 
-  | Unop (op,e1) -> xxx ()
-  | Binop (op,e1,e2) -> xxx ()
+  | Binop (op,e1,e2) ->
+    begin match op with
+    | And -> xxx ()
+    | Or -> xxx ()
+    | Impl -> xxx ()
+    | Add -> xxx ()
+    | Sub -> xxx ()
+    | Mul -> xxx ()
+    | MulNoSMT -> xxx ()
+    | Div -> xxx ()
+    | DivNoSMT -> xxx ()
+    | Exp -> xxx ()
+    | ExpNoSMT -> xxx ()
+    | Rem -> xxx ()
+    | RemNoSMT -> xxx ()
+    | Mod -> xxx ()
+    | ModNoSMT -> xxx ()
+    | XORNoSMT -> xxx ()
+    | BWAndNoSMT -> xxx ()
+    | BWOrNoSMT -> xxx ()
+    | ShiftLeft -> xxx ()
+    | ShiftRight -> xxx ()
+    | LT -> xxx ()
+    | LE -> xxx ()
+    | Min -> xxx ()
+    | Max -> xxx ()
+    | EQ -> xxx ()
+    | LTPointer -> xxx ()
+    | LEPointer -> xxx ()
+    | SetUnion -> xxx ()
+    | SetIntersection -> xxx ()
+    | SetDifference -> xxx ()
+    | SetMember -> xxx ()
+    | Subset -> xxx ()
+    end
+
 
   | ITE (b,e1,e2) ->
-    SMT.ite (translate_term s b)
-            (translate_term s e1)
-            (translate_term s e2)
+    SMT.ite (translate_term s b) (translate_term s e1) (translate_term s e2)
 
   | EachI ((i1, (x,bt), i2), t) ->
     let rec aux i =
@@ -452,18 +494,16 @@ let rec translate_term s iterm =
 
 
   (* Records *)
-  | Record fs ->
-    let sorted      = sort_record fs in
+  | Record members ->
     let field (_,e) = translate_term s e in
-    CN_Tuple.con (List.map field sorted)
+    CN_Tuple.con (List.map field members)
 
   | RecordMember (e1,f) ->
     begin match IT.basetype e1 with
-    | Record fs ->
-        let sorted      = sort_record fs in
+    | Record members ->
         let check (x,_) = Id.equal f x in
-        let arity       = List.length sorted in
-        begin match List.find_index check sorted with
+        let arity       = List.length members in
+        begin match List.find_index check members with
         | Some n -> CN_Tuple.get arity n (translate_term s e1)
         | None -> raise Unsupported
         end
@@ -551,7 +591,6 @@ let rec translate_term s iterm =
 
   | MapDef ((x,y),z) -> xxx ()
 
-
   | Apply (name, args) ->
     let def = Option.get (get_logical_function_def s.globals name) in
     begin match def.definition with
@@ -565,35 +604,59 @@ let rec translate_term s iterm =
       SMT.app fu (List.map (translate_term s) args)
     end
 
-
-  (* XXX: Original solver always inlines these, but here we are naming
-     them to avoid exponential explosion.  However, in some cases we may want
-     to inline the lets anyway, for example if `e1` was a constant,
-     especially if we are planning to do some manual simplification
-     (probably better to do such simplifications in a separate pass, though).
-     Perhaps this behaviour should be controlled by a flag?
-    *)
   | Let ((x,e1),e2) ->
-    let ty   = translate_base_type (IT.basetype e1) in
     let se1  = translate_term s e1 in
-    let name = fresh_name s (CN_Names.let_name x) in
-    let var  = SMT.atom name in
-    ack_command s (SMT.define name ty se1);
-    s.cur_frame.defined_lets <- SymMap.add x var (s.cur_frame.defined_lets);
-    let res  = translate_term s e2 in
-    s.cur_frame.defined_lets <- SymMap.remove x (s.cur_frame.defined_lets);
-    res
+    let name = CN_Names.var_name x in
+    let se2  = translate_term s e2 in
+    SMT.let_ [(name,se1)] se2
 
 
   (* Datatypes *)
 
-    (* Assuems the fields are in the correct order *)
+  (* Assumes the fields are in the correct order *)
   | Constructor (c,fields) ->
     let con = CN_Names.datatype_con_name c in
     let field (_,e) = translate_term s e in
     SMT.app_ con (List.map field fields)
 
-  | Match (e1,alts) -> xxx ()
+    (* CN supports nested patterns, while SMTLIB does not,
+       so we compile patterns to a optional predicate, and defined variables.
+    *)
+  | Match (e1,alts) ->
+
+    let rec match_pat v (Pat (pat,_,_)) =
+      match pat with
+      | PSym x  -> (None, [(CN_Names.var_name x,v)])
+      | PWild   -> (None, [])
+      | PConstructor (c,fs) ->
+        let field (f,nested) =
+          let new_v = SMT.app_ (CN_Names.datatype_field_name f) [v] in
+          match_pat new_v nested in
+
+        let (conds,defs) = List.split (List.map field fs) in
+        let nested_cond = SMT.bool_ands (List.filter_map (fun x -> x) conds) in
+        let cname = CN_Names.datatype_con_name c in
+        let vars  = List.mapi (fun i _x -> CN_Names.wild_var_name i) fs in
+        let cond  = SMT.match_datatype v
+                      [ (SMT.PCon (cname,vars), nested_cond)
+                      ; (SMT.PVar (CN_Names.wild_var_name 0), SMT.bool_k false)
+                      ] in
+        (Some cond, List.concat defs)
+    in
+    let rec do_alts v alts =
+      match alts with
+      | [] -> translate_term s (default_ (IT.basetype iterm) here)
+      | (pat,rhs) :: more ->
+        let (mb_cond,binds) = match_pat v pat in
+        let k               = SMT.let_ binds (translate_term s rhs) in
+        match mb_cond with
+        | Some cond -> SMT.ite cond k (do_alts v more)
+        | None      -> k
+    in
+    let x = fresh_name s "match" in
+    SMT.let_ [(x, translate_term s e1)] (do_alts (SMT.atom x) alts)
+
+
 
 
   (* Casts *)
@@ -607,7 +670,7 @@ let rec translate_term s iterm =
     begin match IT.bt t, cbt with
 
     | Bits _, Loc ->
-      CN_Pointer.con (SMT.num_k 0) (bv_cast Memory.intptr_bt (IT.bt t) smt_term)
+      CN_Pointer.con (SMT.int_k 0) (bv_cast Memory.intptr_bt (IT.bt t) smt_term)
 
     | Loc, Bits _ ->
       bv_cast cbt Memory.intptr_bt (CN_Pointer.get_addr smt_term)
@@ -655,8 +718,10 @@ let declare_solver_basics s =
   CN_CType.declare s;
   CN_List.declare s;
   CN_Pointer.declare s;
-  SymMap.iter (declare_datatype s) s.globals.datatypes;
-  SymMap.iter (declare_struct s) s.globals.struct_decls
+
+  (* structs should go before datatypes *)
+  SymMap.iter (declare_struct s) s.globals.struct_decls;
+  SymMap.iter (declare_datatype s) s.globals.datatypes
 
 
 let make globals =

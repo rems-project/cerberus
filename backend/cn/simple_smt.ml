@@ -18,6 +18,14 @@ let app_ f (args: sexp list): sexp = app (atom f) args
 (** Type annotation *)
 let as_type x t = app_ "as" [x;t]
 
+(** Let expression *)
+let let_ xs e =
+  match xs with
+  | [] -> e
+  | _  ->
+    let mk_def (x,e) = app_ x [e] in
+    app_ "let" [ list (List.map mk_def xs); e ]
+
 (** Non-negative numeric constant. *)
 let nat_k x = atom (string_of_int x)
 
@@ -113,17 +121,17 @@ let t_real = atom "Real"
 (** Numeric negation. *)
 let num_neg x = app_ "-" [x]
 
-(** Numeric constant *)
-let num_k x = if x < 0 then num_neg (nat_k (-x)) else nat_k x
+(** Integer constant *)
+let int_k x = if x < 0 then num_neg (nat_k (-x)) else nat_k x
 
-(** Numeric constant *)
-let num_zk x = if Z.lt x Z.zero then num_neg (nat_zk (Z.neg x)) else nat_zk x
+(** Integer constant *)
+let int_zk x = if Z.lt x Z.zero then num_neg (nat_zk (Z.neg x)) else nat_zk x
 
 (** Division of real numbers. *)
 let real_div x y = app_ "/" [x;y]
 
 (** Real constant. *)
-let num_qk (q: Q.t) = real_div (num_zk q.num) (num_zk q.den)
+let real_k (q: Q.t) = real_div (int_zk q.num) (int_zk q.den)
 
 (** Greater-then for numbers. *)
 let gt x y = app_ ">" [x;y]
@@ -139,9 +147,6 @@ let leq x y = app_ "<=" [x;y]
 
 (** Numeric addition. *)
 let num_add x y = app_ "+" [x;y]
-
-(** Numeric addition. *)
-let num_adds xs = if List.is_empty xs then num_k 0 else app_ "+" xs
 
 (** Numeric subtraction. *)
 let num_sub x y = app_ "-" [x;y]
@@ -434,10 +439,18 @@ let declare_datatype name type_params cons =
   in
   app_ "declare-datatype" [ atom name; def ]
 
+type pat = PVar of string | PCon of (string * string list)
+
 let match_datatype e alts =
-  let do_pat (c,xs)   = list (atom c :: List.map atom xs) in
+  let do_pat pat =
+      match pat with
+      | PCon (c,xs) -> list (atom c :: List.map atom xs)
+      | PVar x      -> atom x
+  in
   let do_alt (pat,e)  = list [do_pat pat; e] in
   app_ "match" [e; list (List.map do_alt alts)]
+
+
 
 (** Add an assertion to the current scope. *)
 let assume e = app_ "assert" [e]
