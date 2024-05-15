@@ -5,6 +5,7 @@ module BT = BaseTypes
 open BaseTypes
 module SymMap = Map.Make(Sym)
 module BT_Table = Hashtbl.Make(BT)
+module Int_Table = Hashtbl.Make(Int)
 open Global
 
 (* XXX: probably should add some prefixes to try to avoid name collisions. *)
@@ -25,21 +26,33 @@ module CN_Names = struct
 end
 
 
+
+(** Names for constants that may be uninterpreted.  See [bt_uninterpreted] *)
+module CN_Constant = struct
+  let default = ("default_uf",  0)
+  let mul     = ("mul_uf",      1)
+  let div     = ("div_uf",      2)
+  let exp     = ("exp_uf",      3)
+  let rem     = ("rem_uf",      4)
+  let mod'    = ("mod_uf",      5)
+end
+
+
 type solver_frame =
   { mutable commands: SMT.sexp list
     (** Ack-style SMT commands, most recent first. *)
 
-  ; declared_defaults: SMT.sexp BT_Table.t
-    (** The names of the "default" constant for a type. *)
-
-  ; mutable uninterpreted_functions: SMT.sexp SymMap.t
+  ; mutable uninterpreted: SMT.sexp SymMap.t
     (** Uninterpreted functions that we've declared. *)
+
+  ; bt_uninterpreted: (SMT.sexp BT_Table.t) Int_Table.t
+    (** Uninterpreted constants, indexed by base type. *)
   }
 
 let empty_solver_frame =
-  { commands                = []
-  ; declared_defaults       = BT_Table.create 50
-  ; uninterpreted_functions = SymMap.empty
+  { commands          = []
+  ; uninterpreted     = SymMap.empty
+  ; bt_uninterpreted  = Int_Table.create 50
   }
 
 
@@ -95,15 +108,34 @@ let fresh_name s x =
 
 (** Declare an uninterpreted function *)
 let declare_uninterpreted s name args_ts res_t =
-  let check f = SymMap.find_opt name f.uninterpreted_functions in
+  let check f = SymMap.find_opt name f.uninterpreted in
   match search_frames s check with
   | Some e -> e
   | None ->
     let sname = CN_Names.uninterpreted_name name in
     ack_command s (SMT.declare_fun sname args_ts res_t);
     let e = SMT.atom sname in
-    s.cur_frame.uninterpreted_functions <-
-      SymMap.add name e s.cur_frame.uninterpreted_functions;
+    s.cur_frame.uninterpreted <- SymMap.add name e s.cur_frame.uninterpreted;
+    e
+
+(** Declare an uninterpreted function, indexed by a base type. *)
+let declare_bt_uninterpreted s (name,k) bt args_ts res_t =
+  let check f = Option.bind (Int_Table.find_opt f.bt_uninterpreted k)
+                            (fun m -> BT_Table.find_opt m bt) in
+  match search_frames s check with
+  | Some e -> e
+  | None ->
+    let sname = fresh_name s name in
+    ack_command s (SMT.declare_fun sname args_ts res_t);
+    let e = SMT.atom sname in
+    let top_map = s.cur_frame.bt_uninterpreted in
+    let mp = match Int_Table.find_opt top_map k with
+             | Some m -> m
+             | None   ->
+               let m = BT_Table.create 20 in
+               Int_Table.add top_map k m;
+               m in
+    BT_Table.add mp bt e;
     e
 
 
@@ -344,16 +376,7 @@ let rec translate_const s co =
   | CType_const _ -> raise Unsupported (* XXX *)
 
   | Default t ->
-    let check f = BT_Table.find_opt f.declared_defaults t in
-    match search_frames s check with
-    | Some e -> e
-    | None ->
-      let name  = fresh_name s "cn_default" in
-      let ty    = translate_base_type t in
-      ack_command s (SMT.declare name ty);
-      let e     = SMT.atom name in
-      BT_Table.add s.cur_frame.declared_defaults t e;
-      e
+    declare_bt_uninterpreted s CN_Constant.default t [] (translate_base_type t)
 
 (** Casting between bit-vector types *)
 let bv_cast to_bt from_bt x =
@@ -425,6 +448,7 @@ let rec translate_term s iterm =
           else let x = fresh_name s CN_Names.named_expr_name in
                SMT.let_ [(x,e)] (k (SMT.atom x)) in
 
+
   match IT.term iterm with
   | Const c -> translate_const s c
 
@@ -459,39 +483,150 @@ let rec translate_term s iterm =
     end
 
   | Binop (op,e1,e2) ->
+    let s1 = translate_term s e1 in
+    let s2 = translate_term s e2 in
+
+    (* binary uninterpreted function, same type for arguments and result. *)
+    let uninterp_same_type k =
+      let bt    = IT.basetype iterm in
+      let smt_t = translate_base_type bt in
+      let f     = declare_bt_uninterpreted s k bt [smt_t;smt_t] smt_t in
+      SMT.app f [s1;s2]
+    in
+
     begin match op with
-    | And -> xxx ()
-    | Or -> xxx ()
-    | Impl -> xxx ()
-    | Add -> xxx ()
-    | Sub -> xxx ()
-    | Mul -> xxx ()
-    | MulNoSMT -> xxx ()
-    | Div -> xxx ()
-    | DivNoSMT -> xxx ()
-    | Exp -> xxx ()
-    | ExpNoSMT -> xxx ()
-    | Rem -> xxx ()
-    | RemNoSMT -> xxx ()
-    | Mod -> xxx ()
-    | ModNoSMT -> xxx ()
-    | XORNoSMT -> xxx ()
-    | BWAndNoSMT -> xxx ()
-    | BWOrNoSMT -> xxx ()
-    | ShiftLeft -> xxx ()
-    | ShiftRight -> xxx ()
-    | LT -> xxx ()
-    | LE -> xxx ()
-    | Min -> xxx ()
-    | Max -> xxx ()
-    | EQ -> xxx ()
-    | LTPointer -> xxx ()
-    | LEPointer -> xxx ()
-    | SetUnion -> xxx ()
-    | SetIntersection -> xxx ()
-    | SetDifference -> xxx ()
-    | SetMember -> xxx ()
-    | Subset -> xxx ()
+    | And   -> SMT.bool_and s1 s2
+    | Or    -> SMT.bool_or s1 s2
+    | Impl  -> SMT.bool_implies s1 s2
+
+    | Add -> begin match IT.basetype iterm with
+      | BT.Bits _            -> SMT.bv_add s1 s2
+      | BT.Integer | BT.Real -> SMT.num_add s1 s2
+      | _ -> failwith "Add"
+      end
+
+    | Sub -> begin match IT.basetype iterm with
+      | BT.Bits _            -> SMT.bv_sub s1 s2
+      | BT.Integer | BT.Real -> SMT.num_sub s1 s2
+      | _ -> failwith "Sub"
+      end
+
+    | Mul -> begin match IT.basetype iterm with
+      | BT.Bits _            -> SMT.bv_mul s1 s2
+      | BT.Integer | BT.Real -> SMT.num_mul s1 s2
+      | _  -> failwith "Mul"
+      end
+
+    | MulNoSMT -> uninterp_same_type CN_Constant.mul
+
+    | Div -> begin match IT.basetype iterm with
+      | BT.Bits (BT.Signed,_)   -> SMT.bv_sdiv s1 s2
+      | BT.Bits (BT.Unsigned,_) -> SMT.bv_udiv s1 s2
+      | BT.Integer | BT.Real    -> SMT.num_div s1 s2
+      | _  -> failwith "Div"
+      end
+
+    | DivNoSMT -> uninterp_same_type CN_Constant.div
+
+    | Exp -> begin match get_num_z e1, get_num_z e2 with
+      | Some z1, Some z2 when Z.fits_int z2 ->
+        translate_term s (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.bt e1) here)
+      | _, _ -> failwith "Exp"
+      end
+
+    | ExpNoSMT -> uninterp_same_type CN_Constant.exp
+
+    | Rem -> begin match IT.basetype iterm with
+      | BT.Bits (BT.Signed,_)   -> SMT.bv_srem s1 s2
+      | BT.Bits (BT.Unsigned,_) -> SMT.bv_urem s1 s2
+      (* | BT.Integer              -> ??? *)
+      | _                       -> failwith "Rem"
+      end
+
+    | RemNoSMT -> uninterp_same_type CN_Constant.rem
+
+    | Mod -> begin match IT.basetype iterm with
+      (* | BT.Bits (BT.Signed,_)   -> ??? *)
+      | BT.Bits (BT.Unsigned,_) -> SMT.bv_urem s1 s2
+      | BT.Integer              -> SMT.num_mod s1 s2
+      | _                       -> failwith "Mod"
+      end
+
+    | ModNoSMT -> uninterp_same_type CN_Constant.mod'
+
+    (* XXX: Should this be names BWXor instead? *)
+    | XORNoSMT -> begin match IT.basetype iterm with
+      | BT.Bits _ -> SMT.bv_xor s1 s2
+      | _         -> failwith "XORNoSMT"
+      end
+
+    (* XXX: Why no SMT? *)
+    | BWAndNoSMT -> begin match IT.basetype iterm with
+      | BT.Bits _ -> SMT.bv_and s1 s2
+      | _         -> failwith "BWAndNoSMT"
+      end
+
+    (* XXX: Why no SMT? *)
+    | BWOrNoSMT -> begin match IT.basetype iterm with
+      | BT.Bits _ -> SMT.bv_or s1 s2
+      | _         -> failwith "BWOrNoSMT"
+      end
+
+    (* Shift amount should be positive? *)
+    | ShiftLeft -> begin match IT.basetype iterm with
+      | BT.Bits _ -> SMT.bv_shl s1 s2
+      | _         -> failwith "ShiftLeft"
+      end
+
+    (* Amount should be positive? *)
+    | ShiftRight -> begin match IT.basetype iterm with
+      | BT.Bits (BT.Signed,_)   -> SMT.bv_ashr s1 s2
+      | BT.Bits (BT.Unsigned,_) -> SMT.bv_lshr s1 s2
+      | _                       -> failwith "ShiftRight"
+      end
+
+    | LT -> begin match IT.basetype iterm with
+      | BT.Bits (BT.Signed,_)   -> SMT.bv_slt s1 s2
+      | BT.Bits (BT.Unsigned,_) -> SMT.bv_ult s1 s2
+      | BT.Integer | BT.Real    -> SMT.num_lt s1 s2
+      | _  -> failwith "LT"
+      end
+
+    | LE -> begin match IT.basetype iterm with
+      | BT.Bits (BT.Signed,_)   -> SMT.bv_sleq s1 s2
+      | BT.Bits (BT.Unsigned,_) -> SMT.bv_uleq s1 s2
+      | BT.Integer | BT.Real    -> SMT.num_leq s1 s2
+      | _  -> failwith "LE"
+      end
+
+    (* XXX: duplicates terms *)
+    | Min -> translate_term s (ite_ (le_ (e1, e2) here, e1, e2) here)
+
+    (* XXX: duplicates terms *)
+    | Max -> translate_term s (ite_ (ge_ (e1, e2) here, e1, e2) here)
+
+    | EQ -> SMT.eq s1 s2
+
+    | LTPointer ->
+      let intptr_cast = cast_ Memory.intptr_bt in
+      translate_term s (lt_ (intptr_cast e1 here, intptr_cast e2 here) here)
+
+    | LEPointer ->
+      let intptr_cast = cast_ Memory.intptr_bt in
+      translate_term s (le_ (intptr_cast e1 here, intptr_cast e2 here) here)
+
+    | SetUnion -> SMT.set_union s.smt_solver.config.exts s1 s2
+    | SetIntersection ->
+      SMT.set_intersection s.smt_solver.config.exts s1 s2
+
+    | SetDifference ->
+      SMT.set_difference s.smt_solver.config.exts s1 s2
+
+    | SetMember ->
+      SMT.set_member s.smt_solver.config.exts s1 s2
+
+    | Subset ->
+      SMT.set_subset s.smt_solver.config.exts s1 s2
     end
 
 

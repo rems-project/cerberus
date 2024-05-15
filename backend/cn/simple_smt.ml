@@ -139,16 +139,16 @@ let real_div x y = app_ "/" [x;y]
 let real_k (q: Q.t) = real_div (int_zk q.num) (int_zk q.den)
 
 (** Greater-then for numbers. *)
-let gt x y = app_ ">" [x;y]
+let num_gt x y = app_ ">" [x;y]
 
 (** Less-then for numbers. *)
-let lt x y = app_ "<" [x;y]
+let num_lt x y = app_ "<" [x;y]
 
 (** Greater-than-or-equal-to for numbers. *)
-let geq x y = app_ ">=" [x;y]
+let num_geq x y = app_ ">=" [x;y]
 
 (** Less-than-or-equal-to for numbers. *)
-let leq x y = app_ "<=" [x;y]
+let num_leq x y = app_ "<=" [x;y]
 
 (** Numeric addition. *)
 let num_add x y = app_ "+" [x;y]
