@@ -8,6 +8,11 @@ type sexp = Sexp.t
 let atom f: sexp                = Sexp.Atom f
 let list (xs: sexp list): sexp  = Sexp.List xs
 
+let is_atom (f: sexp) =
+  match f with
+  | Sexp.Atom _ -> true
+  | Sexp.List _ -> false
+
 (** Apply a function to some arguments. *)
 let app f args =
   if List.is_empty args then f else list (f :: args)

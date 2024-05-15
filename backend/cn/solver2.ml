@@ -12,6 +12,7 @@ open Global
 module CN_Names = struct
   let var_name x            = Sym.pp_string x
   let wild_var_name n       = "_" ^ string_of_int n
+  let named_expr_name       = "_cn_named"
   let uninterpreted_name x  = Sym.pp_string x
 
   let struct_name x         = Sym.pp_string x
@@ -369,12 +370,39 @@ let bv_cast to_bt from_bt x =
   | _                       -> SMT.bv_zero_extend (to_sz - from_sz) x
 
 
+(** [bv rw w e] counts the leading zeroes in [e], which should
+be a bit-vector of width `[w]`.  The result is a bit-vector of with `[rw]`.
+Note that this duplicates `e`, so it should be a simple expression.
+*)
+let bv_clz result_sz =
+  let result k   = SMT.bv_k result_sz k in
+  let eq_0 sz tm = SMT.eq tm (SMT.bv_k sz Z.zero) in
+
+  let rec count w e =
+    if w == 1
+    then SMT.ite (eq_0 w e) (result Z.one) (result Z.zero)
+    else
+      let top_w = w / 2 in
+      let bot_w = w - top_w in
+      let top    = SMT.bv_extract (w - 1) (w - top_w) e in
+      let bot    = SMT.bv_extract (bot_w - 1) 0 e in
+      SMT.ite (eq_0 top_w top)
+        (SMT.bv_add (count bot_w bot) (result (Z.of_int top_w)))
+        (count top_w top)
+  in count
+
+
 (** Translat a CN term to SMT *)
 let rec translate_term s iterm =
   let xxx ()        = raise Unsupported in
   let bad ()        = assert false in
   let here          = IT.loc iterm in
   let struct_decls  = s.globals.struct_decls in
+  let maybe_name e k =
+        if SMT.is_atom e
+          then k e
+          else let x = fresh_name s CN_Names.named_expr_name in
+               SMT.let_ [(x,e)] (k (SMT.atom x)) in
 
   match IT.term iterm with
   | Const c -> translate_const s c
@@ -383,6 +411,7 @@ let rec translate_term s iterm =
 
   | Unop (op,e1) ->
     begin match op with
+
     | BWFFSNoSMT ->
       (* XXX: This desugaring duplicates e1 *)
       let intl i = int_lit_ i (IT.bt e1) here in
@@ -392,8 +421,15 @@ let rec translate_term s iterm =
               , add_ (arith_unop BWCTZNoSMT e1 here, intl 1) here
               ) here
         )
+
     | Not        -> SMT.bool_not (translate_term s e1)
-    | BWCLZNoSMT -> xxx ()
+
+    | BWCLZNoSMT ->
+      begin match IT.basetype iterm with
+      | BT.Bits (_,w) -> maybe_name (translate_term s e1) (bv_clz w w)
+      | _             -> failwith "solver: BWCLZNoSMT: not a bitwise type"
+      end
+
     | BWCTZNoSMT -> xxx ()
     end
 
@@ -732,6 +768,8 @@ let make globals =
           ; globals     = globals
           }
   in declare_solver_basics s; s
+
+
 
 
 
