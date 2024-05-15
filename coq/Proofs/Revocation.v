@@ -4566,6 +4566,7 @@ Module RevocationProofs.
 
   Lemma mem_state_after_bytmeta_copy_tags_preserves:
     forall m dst src n,
+      (* TODO probably need to pass `memcpy_copy_data_fetch_bytes_spec` to be able to prove this *)
       (Z.modulo src (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
       (Z.modulo dst (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
       mem_invariant m ->
@@ -4581,7 +4582,7 @@ Module RevocationProofs.
     -
       (* base invariant *)
       clear MIcap.
-      repeat split ;auto.
+      repeat split; auto.
 
       (* alignment proof *)
       intros a E.
@@ -4598,12 +4599,12 @@ Module RevocationProofs.
           assumption.
         *
           subst step.
-          admit.
+          apply zmap_mapsto_in in H1.
+          specialize (Balign a H1).
+          auto.
       +
         subst step.
-        clear.
-        (* TODO: need assumption in IMP *)
-        admit.
+        apply MorelloImpl.alignof_pointer_pos.
     -
       (* the rest of the invariant *)
       intros a g E bs F.
