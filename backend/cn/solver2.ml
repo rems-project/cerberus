@@ -370,13 +370,12 @@ let bv_cast to_bt from_bt x =
   | _                       -> SMT.bv_zero_extend (to_sz - from_sz) x
 
 
-(** [bv rw w e] counts the leading zeroes in [e], which should
-be a bit-vector of width `[w]`.  The result is a bit-vector of with `[rw]`.
-Note that this duplicates `e`, so it should be a simple expression.
-*)
-let bv_clz result_sz =
-  let result k   = SMT.bv_k result_sz k in
-  let eq_0 sz tm = SMT.eq tm (SMT.bv_k sz Z.zero) in
+(** [bv_clz rw w e] counts the leading zeroes in [e], which should
+be a bit-vector of width [w].  The result is a bit-vector of width [rw].
+Note that this duplicates [e]. *)
+let bv_clz result_w =
+  let result k  = SMT.bv_k result_w k in
+  let eq_0 w e  = SMT.eq e (SMT.bv_k w Z.zero) in
 
   let rec count w e =
     if w == 1
@@ -390,6 +389,28 @@ let bv_clz result_sz =
         (SMT.bv_add (count bot_w bot) (result (Z.of_int top_w)))
         (count top_w top)
   in count
+
+
+(** [bv_ctz rw w e] counts the tailing zeroes in [e], which should
+be a bit-vector of width [w].  The result is a bit-vector of width [rw].
+Note that this duplicates [e]. *)
+let bv_ctz result_w =
+  let result k  = SMT.bv_k result_w k in
+  let eq_0 w e  = SMT.eq e (SMT.bv_k w Z.zero) in
+
+  let rec count w e =
+    if w == 1
+      then SMT.ite (eq_0 w e) (result Z.one) (result Z.zero)
+      else
+        let top_w = w / 2 in
+        let bot_w = w - top_w in
+        let top = SMT.bv_extract (w - 1) (w - top_w) e in
+        let bot = SMT.bv_extract (bot_w - 1) 0 e in
+        SMT.ite (eq_0 bot_w bot)
+          (SMT.bv_add (count top_w top) (result (Z.of_int bot_w)))
+          (count bot_w bot)
+  in count
+
 
 
 (** Translat a CN term to SMT *)
@@ -430,7 +451,11 @@ let rec translate_term s iterm =
       | _             -> failwith "solver: BWCLZNoSMT: not a bitwise type"
       end
 
-    | BWCTZNoSMT -> xxx ()
+    | BWCTZNoSMT ->
+      begin match IT.basetype iterm with
+      | BT.Bits (_,w) -> maybe_name (translate_term s e1) (bv_ctz w w)
+      | _             -> failwith "solver: BWCTZNoSMT: not a bitwise type"
+      end
     end
 
   | Binop (op,e1,e2) ->
