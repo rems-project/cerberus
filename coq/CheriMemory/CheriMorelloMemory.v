@@ -2800,8 +2800,7 @@ Module Type CheriMemoryImpl
     match n with
     | O => cm
     | S n =>
-        let off := Z.of_nat (n*step) in
-        bytmeta_copy_tags (dst+off) (src+off) n step
+        bytmeta_copy_tags (dst + Z.of_nat step) (src + Z.of_nat step) n step
           (match ZMap.find src cm with
            | None => cm
            | Some meta => ZMap.add dst meta cm
@@ -2809,16 +2808,16 @@ Module Type CheriMemoryImpl
     end.
 
   (** Copy caps meta-information between `memcpy` source and
-     destinations, only for positions where both source and desination
-     addresses align *)
+      destinations, only for positions where both source and desination
+      addresses align *)
   Definition memcpy_copy_tags
     (loc: location_ocaml)
     (dst_p src_p: pointer_value)
     (sz: nat)
     : memM unit
     :=
-    let pointer_sizeof_n := IMP.get.(sizeof_pointer) in
-    let pointer_sizeof := Z.of_nat pointer_sizeof_n in
+    let pointer_alignof_n := IMP.get.(alignof_pointer) in
+    let pointer_alignof := Z.of_nat pointer_alignof_n in
 
     let cap_addr_of_pointer_value (ptr: pointer_value) : serr Z :=
       match ptr with
@@ -2829,17 +2828,17 @@ Module Type CheriMemoryImpl
     dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
     src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
 
-    if Z.modulo dst_a pointer_sizeof =? Z.modulo src_a pointer_sizeof
+    if Z.modulo dst_a pointer_alignof =? Z.modulo src_a pointer_alignof
     then
       let off :=
-        let r := Z.modulo dst_a pointer_sizeof in
-        if r =? 0 then 0 else pointer_sizeof-r
+        let r := Z.modulo dst_a pointer_alignof in
+        if r =? 0 then 0 else pointer_alignof-r
       in
       let dst_1st := dst_a + off in
 
       let n :=
         if dst_1st >=? (dst_a+Z.of_nat sz) then 0
-        else ((dst_a+Z.of_nat sz)-dst_1st) / pointer_sizeof
+        else ((dst_a+Z.of_nat sz)-dst_1st) / pointer_alignof
       in
       update
         (fun (st : mem_state) =>
@@ -2847,7 +2846,7 @@ Module Type CheriMemoryImpl
                                      (dst_a+off)
                                      (src_a+off)
                                      (Z.to_nat n)
-                                     pointer_sizeof_n
+                                     pointer_alignof_n
                                      st.(capmeta))
              st
         )

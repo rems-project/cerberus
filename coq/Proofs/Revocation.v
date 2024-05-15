@@ -4533,6 +4533,98 @@ Module RevocationProofs.
       assumption.
   Qed.
 
+  Lemma bytmeta_copy_tags_spec
+    (dst src: Z)
+    (n: nat)
+    (step: nat)
+    (cm: ZMap.t (bool * CapGhostState)):
+    (0<step)%nat ->
+    (Z.modulo src (Z.of_nat step) = 0) ->
+    (Z.modulo dst (Z.of_nat step) = 0) ->
+    forall a tg,
+      ZMap.MapsTo a tg (bytmeta_copy_tags dst src n step cm) ->
+      (exists k, 0 <= k < Z.of_nat n /\ a = dst + k * Z.of_nat step /\ ZMap.MapsTo (src + k * Z.of_nat step) tg cm) \/
+        (ZMap.MapsTo a tg cm /\ forall k, 0 <= k < Z.of_nat n -> a <> dst + k * Z.of_nat step).
+  Proof.
+    intros Hstep Hsrc_mod Hdst_mod.
+    revert cm Hsrc_mod Hdst_mod.
+    induction n as [|n' IH]; intros cm Hsrc_mod Hdst_mod a tg Hmaps.
+    - (* Base case: n = 0 *)
+      simpl in Hmaps.
+      right. split.
+      + assumption.
+      + intros k Hk. lia.
+    - (* Inductive case: n = S n' *)
+      simpl in Hmaps.
+      remember (bytmeta_copy_tags (dst + Z.of_nat step) (src + Z.of_nat step) n' step
+                  (match ZMap.find src cm with
+                   | None => cm
+                   | Some meta => ZMap.add dst meta cm
+                   end)) as cm'.
+      admit.
+  Admitted.
+
+  Lemma mem_state_after_bytmeta_copy_tags_preserves:
+    forall m dst src n,
+      (Z.modulo src (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
+      (Z.modulo dst (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
+      mem_invariant m ->
+      mem_invariant (mem_state_with_capmeta
+                       (bytmeta_copy_tags dst src n (alignof_pointer MorelloImpl.get) (capmeta m))
+                       m).
+  Proof.
+    intros m dst src n Hsrc Hdst M.
+    remember (alignof_pointer MorelloImpl.get) as step.
+    destruct M as [MIbase MIcap].
+    destruct_base_mem_invariant MIbase.
+    split.
+    -
+      (* base invariant *)
+      clear MIcap.
+      repeat split ;auto.
+
+      (* alignment proof *)
+      intros a E.
+      apply zmap_in_mapsto in E.
+      destruct E as [tg E].
+      unfold mem_state_with_capmeta in E.
+      simpl in E.
+      apply bytmeta_copy_tags_spec in E; try lia.
+      +
+        destruct E as [[k [H1 [H2 H3]]]| [H1 H2]].
+        *
+          subst a step.
+          rewrite Zdiv.Z_mod_plus_full.
+          assumption.
+        *
+          subst step.
+          admit.
+      +
+        subst step.
+        clear.
+        (* TODO: need assumption in IMP *)
+        admit.
+    -
+      (* the rest of the invariant *)
+      intros a g E bs F.
+      simpl in *.
+      apply bytmeta_copy_tags_spec in E; try lia.
+      +
+        (* TODO: this part of proof needs to be repaired *)
+        destruct E as [[k [H1 [H2 H3]]]| [H1 H2]].
+        *
+          (* capmeta unchanged at [a] *)
+          (*
+          subst a.
+          specialize (MIcap _ _ H3 bs F).
+          apply MIcap.
+           *)
+          admit.
+        *
+          admit.
+
+  Admitted.
+
   Instance memcpy_copy_tags_PreservesInvariant
     (loc : location_ocaml)
     (ptrval1 ptrval2 : pointer_value)
@@ -4549,7 +4641,6 @@ Module RevocationProofs.
     PreservesInvariant mem_invariant s
       (memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat sz)).
   Proof.
-(*
     invc AS.
     (* it looks like we do not need any allocation stuff from [mempcpy_args_sane].
        we will remove it for now but this may change. *)
@@ -4560,6 +4651,25 @@ Module RevocationProofs.
     autospecialize DS; [reflexivity|].
     autospecialize DS; [reflexivity|].
     specialize (DS A1 A2).
+
+    unfold memcpy_copy_tags.
+    preserves_step.
+    preserves_step.
+    preserves_step.
+    preserves_step.
+    break_if;[|preserves_step].
+    preserves_step.
+
+    apply mem_state_after_bytmeta_copy_tags_preserves.
+
+  Admitted.
+
+
+
+
+
+(*
+
     remember (Z.to_nat (q * Z.of_nat (sizeof_pointer MorelloImpl.get))) as n.
 
     assert(Z.of_nat n <= size) as NS.
@@ -4676,7 +4786,6 @@ Module RevocationProofs.
         eapply IHn;clear IHn.
         admit. (* need prove bytemap preservaton in s->s' transition *)
 *)
-  Admitted.
 
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
