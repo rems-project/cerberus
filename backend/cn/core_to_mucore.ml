@@ -510,10 +510,10 @@ let n_action loc action =
      let e1 = n_pexpr loc e1 in
      wrap (M_Create(e1, ctype1, sym1))
   | CreateReadOnly(e1, e2, e3, sym1) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"CreateReadOnly: not a constant ctype" e1) in
+     let ctype = (ensure_pexpr_ctype loc !^"CreateReadOnly: not a constant ctype" e2) in
      let e1 = n_pexpr loc e1 in
      let e3 = n_pexpr loc e3 in
-     wrap (M_CreateReadOnly(e1, ctype1, e3, sym1))
+     wrap (M_CreateReadOnly(e1, ctype, e3, sym1))
   | Alloc0(e1, e2, sym1) ->
      let e1 = n_pexpr loc e1 in
      let e2 = n_pexpr loc e2 in
