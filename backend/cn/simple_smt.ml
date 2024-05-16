@@ -168,6 +168,9 @@ let num_div x y = app_ "div" [x;y]
 (** Numeric modulus. *)
 let num_mod x y = app_ "mod" [x;y]
 
+(** Numeric reminder. Nonstandard. *)
+let num_rem x y = app_ "rem" [x;y]
+
 (** Is the number divisible by the given constant? *)
 let num_divisible x n = app (fam "divisible" [n]) [x]
 
@@ -282,6 +285,9 @@ let bv_sdiv x y = app_ "bvsdiv" [x;y]
 
 (** Bit vector signed reminder. *)
 let bv_srem x y = app_ "bvsrem" [x;y]
+
+(** Bit vector signed modulus. Nonstandard? *)
+let bv_smod x y = app_ "bvsmod" [x;y]
 
 (** Shift left. *)
 let bv_shl x y = app_ "bvshl" [x;y]

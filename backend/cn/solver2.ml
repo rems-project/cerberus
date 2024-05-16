@@ -539,14 +539,14 @@ let rec translate_term s iterm =
     | Rem -> begin match IT.basetype iterm with
       | BT.Bits (BT.Signed,_)   -> SMT.bv_srem s1 s2
       | BT.Bits (BT.Unsigned,_) -> SMT.bv_urem s1 s2
-      (* | BT.Integer              -> ??? *)
+      | BT.Integer              -> SMT.num_rem s1 s2 (* CVC5 ?? *)
       | _                       -> failwith "Rem"
       end
 
     | RemNoSMT -> uninterp_same_type CN_Constant.rem
 
     | Mod -> begin match IT.basetype iterm with
-      (* | BT.Bits (BT.Signed,_)   -> ??? *)
+      | BT.Bits (BT.Signed,_)   -> SMT.bv_smod s1 s2
       | BT.Bits (BT.Unsigned,_) -> SMT.bv_urem s1 s2
       | BT.Integer              -> SMT.num_mod s1 s2
       | _                       -> failwith "Mod"
