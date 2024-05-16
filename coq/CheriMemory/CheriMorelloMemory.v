@@ -2828,13 +2828,15 @@ Module Type CheriMemoryImpl
     dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
     src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
 
-    if Z.modulo dst_a pointer_alignof =? Z.modulo src_a pointer_alignof
+    let dst_align := Z.modulo dst_a pointer_alignof in
+    let src_align := Z.modulo src_a pointer_alignof in
+    if dst_align =? src_align
     then
       let off :=
-        let r := Z.modulo dst_a pointer_alignof in
-        if r =? 0 then 0 else pointer_alignof-r
+        if dst_align =? 0 then 0 else pointer_alignof-dst_align
       in
       let dst_1st := dst_a + off in
+      let src_1st := src_a + off in
 
       let n :=
         if dst_1st >=? (dst_a+Z.of_nat sz) then 0
@@ -2843,8 +2845,8 @@ Module Type CheriMemoryImpl
       update
         (fun (st : mem_state) =>
            mem_state_with_capmeta (bytmeta_copy_tags
-                                     (dst_a+off)
-                                     (src_a+off)
+                                     dst_1st
+                                     src_1st
                                      (Z.to_nat n)
                                      pointer_alignof_n
                                      st.(capmeta))
