@@ -4687,32 +4687,62 @@ Module RevocationProofs.
     autospecialize DS; [reflexivity|].
     specialize (DS A1 A2).
 
+    subst a1 a2.
     unfold memcpy_copy_tags.
-    rewrite <- A1, <- A2.
-    preserves_step.
-    preserves_step.
-    preserves_step.
-    preserves_step.
-    break_if;[|preserves_step].
-    preserves_step.
 
+    apply bind_PreservesInvariant_value_SameState.
+    same_state_step.
+    intros H0 x H1.
+    state_inv_step.
 
-    bool_to_prop_hyp.
-    apply mem_state_after_bytmeta_copy_tags_preserves with (sz:=Z.to_nat sz).
+    apply bind_PreservesInvariant_value_SameState.
+    same_state_step.
+    intros H1 x H2.
+    state_inv_step.
+    break_if;bool_to_prop_hyp.
     -
-      admit.
-    -
-      break_if; bool_to_prop_hyp.
-      + rewrite Z.add_0_r; lia.
-      + admit.
-    -
-      break_if; bool_to_prop_hyp.
-      + rewrite Z.add_0_r; lia.
-      + admit.
-    -
+      preserves_step.
+      apply mem_state_after_bytmeta_copy_tags_preserves with (sz:=Z.to_nat sz).
+      +
+        (* correct relation between `n` and `sz` wrt `alighof_pointer` *)
+        admit.
+      +
+        (* [bytmeta_copy_tags] [dst] is aligned *)
+        break_if; bool_to_prop_hyp.
+        * rewrite Z.add_0_r; lia.
+        * admit.
+      +
+        (* [bytmeta_copy_tags] [src] is aligned *)
+        break_if; bool_to_prop_hyp.
+        * rewrite Z.add_0_r; lia.
+        * admit.
+      +
+        symmetry in DS.
+        apply (fetch_bytes_subset DS).
+        rewrite Heqb.
+        exists (if cap_to_Z c2 mod Z.of_nat (alignof_pointer MorelloImpl.get) =? 0
+                  then 0
+                  else Z.of_nat (alignof_pointer MorelloImpl.get) -
+                         cap_to_Z c2 mod Z.of_nat (alignof_pointer MorelloImpl.get)).
 
+        all: break_if;repeat split; bool_to_prop_hyp; try lia.
+        *
+          pose proof (Z.mod_pos_bound (cap_to_Z c2) (Z.of_nat (alignof_pointer MorelloImpl.get))) as B.
+          autospecialize B.
+          {
+            pose proof MorelloImpl.alignof_pointer_pos; lia.
+          }
+          lia.
+        *
+          admit.
+        *
+          admit. (* TODO: not sure if provable *)
+      +
+        assumption.
+    -
+      (* mis-aligned copy *)
+      admit. (* TODO: do we need this or it is just optimization? *)
   Admitted.
-
 
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
