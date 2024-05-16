@@ -72,7 +72,7 @@ Lemma cap_get_set_value:
 Proof.
 Admitted.
 
-(* TODO: generalize. Maybe <=? *)
+(* This is a Morello-specific requirement. *)
 Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
 
 (* TODO: move *)
