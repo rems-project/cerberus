@@ -37,8 +37,12 @@ let nat_k x = atom (string_of_int x)
 (** Non-negative numeric constant. *)
 let nat_zk x = atom (Z.to_string x)
 
+
+(** Indexed family *)
+let fam f is = list (atom "_" :: atom f :: is)
+
 (** Int-indexed family *)
-let fam f is = list (atom "_" :: atom f :: List.map nat_k is)
+let ifam f is = fam f (List.map nat_k is)
 
 (** Attribute *)
 let named x e = app_ "!" [e; atom ":named"; atom x ]
@@ -172,7 +176,7 @@ let num_mod x y = app_ "mod" [x;y]
 let num_rem x y = app_ "rem" [x;y]
 
 (** Is the number divisible by the given constant? *)
-let num_divisible x n = app (fam "divisible" [n]) [x]
+let num_divisible x n = app (ifam "divisible" [n]) [x]
 
 
 (** Satisfies [real_to_int x <= x] (i.e., this is like [floor]) *)
@@ -185,7 +189,7 @@ let int_to_real e = app_ "to_real" [e]
 (** {1 Bit-vectors} *)
 
 (** [t_bits w] is the type of bit vectors of width [w]. *)
-let t_bits w = fam "BitVec" [w]
+let t_bits w = ifam "BitVec" [w]
 
 (** A bit-vector represented in binary.
 - The number should be non-negative.
@@ -243,15 +247,15 @@ let bv_sleq x y = app_ "bvsle" [x;y]
 let bv_concat x y = app_ "concat" [x;y]
 
 (** Extend to the signed equivalent bitvector by the given number of bits. *)
-let bv_sign_extend i x = app (fam "sign_extend" [i]) [x]
+let bv_sign_extend i x = app (ifam "sign_extend" [i]) [x]
 
 (** Zero extend by the given number of bits. *)
-let bv_zero_extend i x = app (fam "zero_extend" [i]) [x]
+let bv_zero_extend i x = app (ifam "zero_extend" [i]) [x]
 
 (** [bv_extract i j x] is a sub-vector of [x].
     [i] is the larger bit index, [j] is the smaller one, and indexing
     is inclusive. *)
-let bv_extract last_ix first_ix x = app (fam "extract" [last_ix;first_ix]) [ x ]
+let bv_extract last_ix first_ix x = app (ifam "extract" [last_ix;first_ix]) [ x ]
 
 (** Bitwise negation. *)
 let bv_not x = app_ "bvnot" [x]
@@ -461,6 +465,8 @@ let match_datatype e alts =
   let do_alt (pat,e)  = list [do_pat pat; e] in
   app_ "match" [e; list (List.map do_alt alts)]
 
+(** [is_con c e] is true if [e] is an expression constructed with [c] *)
+let is_con c e = app (fam "is" [atom c]) [e]
 
 
 (** Add an assertion to the current scope. *)
@@ -667,7 +673,11 @@ type model_evaluator =
 
 (* Start a new solver process, used to evaluate expressions in a model.
 Unlike a normal solver, the [command] field expects an expression to
-evaluate, and gives the value of the expression in the context of the model. *)
+evaluate, and gives the value of the expression in the context of the model.
+
+XXX: This does not work correctly with data declarations, because
+the model does not contain those.  We need to explicitly add them.
+*)
 let model_eval (cfg: solver_config) (m: sexp) =
   let bad () = raise (UnexpectedSolverResponse m) in
   match m with

@@ -12,7 +12,6 @@ open Global
 (** Functions that pick names for things. *)
 module CN_Names = struct
   let var_name x            = Sym.pp_string x
-  let wild_var_name n       = "_" ^ string_of_int n
   let named_expr_name       = "_cn_named"
   let uninterpreted_name x  = Sym.pp_string x
 
@@ -29,12 +28,14 @@ end
 
 (** Names for constants that may be uninterpreted.  See [bt_uninterpreted] *)
 module CN_Constant = struct
-  let default = ("default_uf",  0)
-  let mul     = ("mul_uf",      1)
-  let div     = ("div_uf",      2)
-  let exp     = ("exp_uf",      3)
-  let rem     = ("rem_uf",      4)
-  let mod'    = ("mod_uf",      5)
+  let default       = ("default_uf",  0)
+  let mul           = ("mul_uf",      1)
+  let div           = ("div_uf",      2)
+  let exp           = ("exp_uf",      3)
+  let rem           = ("rem_uf",      4)
+  let mod'          = ("mod_uf",      5)
+  let nth_list      = ("nth_list_uf", 6)
+  let array_to_list = ("array_to_list_uf", 7)
 end
 
 
@@ -199,7 +200,7 @@ module CN_Pointer = struct
   (** Bit-width of pointers *)
   let width = match Memory.intptr_bt with
               | Bits (_,w) -> w
-              | _ -> raise Unsupported
+              | _ -> failwith "Ponter is not bits"
 
   (** The name of the pointer type *)
   let t = SMT.atom name
@@ -242,6 +243,15 @@ module CN_List = struct
       [ (nil_name, [])
       ; (cons_name, [ (head_name, a); (tail_name, t a) ])
       ])
+
+  let nil elT   = SMT.as_type (SMT.atom nil_name) (t elT)
+  let cons x xs = SMT.app_ cons_name [x;xs]
+
+  let head xs orelse = SMT.ite (SMT.is_con cons_name xs)
+                               (SMT.app_ head_name [xs]) orelse
+
+  let tail xs orelse = SMT.ite (SMT.is_con cons_name xs)
+                               (SMT.app_ tail_name [xs]) orelse
 end
 
 (* XXX: we should define a datatype to match the CN C types? *)
@@ -281,14 +291,11 @@ let rec translate_base_type = function
 (** {1 SMT to Term} *)
 
 
-let to_iterm bt t = IT (t, bt, Cerb_location.unknown) (* XXX? *)
-
 (** Translate an SMT value to a CN term *)
 let rec
-  get_ivalue bt sexp = to_iterm bt (get_value bt sexp)
+  get_ivalue bt sexp = IT (get_value bt sexp, bt, Cerb_location.unknown)
 and
   get_value bt (sexp: SMT.sexp) =
-  let bad () = raise (SMT.UnexpectedSolverResponse sexp) in
   match bt with
   | Unit            -> Const Unit
   | Bool            -> Const (Bool (SMT.to_bool sexp))
@@ -306,12 +313,12 @@ and
         let base = CN_AllocId.from_sexp sbase in
         let addr = match get_value Memory.intptr_bt saddr with
                    | Const (Bits (_,z)) -> z
-                   | _ -> raise Unsupported
+                   | _ -> failwith "Pointer value is not bits"
         in Const (if Z.equal base Z.zero && Z.equal addr Z.zero
                     then Null
                     else Pointer { alloc_id = base; addr = addr }
                  )
-      | _ -> bad ()
+      | _ -> failwith "Loc"
       end
 
   | Alloc_id        -> Const (Alloc_id (CN_AllocId.from_sexp sexp))
@@ -323,7 +330,7 @@ and
     | (con,[])    when String.equal con CN_List.nil_name -> Nil elT
     | (con,[h;t]) when String.equal con CN_List.cons_name ->
         Cons (get_ivalue elT h, get_ivalue bt t)
-    | _ -> bad ()
+    | _ -> failwith "List"
     end
 
   | Set bt          -> raise Unsupported
@@ -438,8 +445,6 @@ let bv_ctz result_w =
 
 (** Translat a CN term to SMT *)
 let rec translate_term s iterm =
-  let xxx ()        = raise Unsupported in
-  let bad ()        = assert false in
   let here          = IT.loc iterm in
   let struct_decls  = s.globals.struct_decls in
   let maybe_name e k =
@@ -642,7 +647,7 @@ let rec translate_term s iterm =
              if i == i2
               then t1
               else IT.and2_ (t1, aux (i + 1)) here
-           else bad ()
+           else failwith "EachI"
          in
          if i1 > i2 then translate_term s (IT.bool_ true here)
                     else translate_term s (aux i1)
@@ -654,7 +659,7 @@ let rec translate_term s iterm =
   | NthTuple (n, e1) ->
     begin match IT.basetype e1 with
     | Tuple ts ->  CN_Tuple.get (List.length ts) n (translate_term s e1)
-    | _ -> bad ()
+    | _ -> failwith "NthTuple: not a tuple"
     end
 
 
@@ -703,7 +708,7 @@ let rec translate_term s iterm =
         | Some n -> CN_Tuple.get arity n (translate_term s e1)
         | None -> raise Unsupported
         end
-    | _ -> bad ()
+    | _ -> failwith "RecordMemmber"
     end
 
   | RecordUpdate ((t, member),v) ->
@@ -750,13 +755,32 @@ let rec translate_term s iterm =
     CN_Pointer.con (CN_Pointer.get_alloc smt_loc) smt_addr
 
   (* Lists *)
-  | Nil bt -> xxx ()
-  | Cons (e1,e2) -> xxx ()
-  | Head e1 -> xxx ()
-  | Tail e1 -> xxx ()
-  | NthList (x,y,z) -> xxx ()
-  | ArrayToList (x,y,z) -> xxx ()
+  | Nil bt       -> CN_List.nil (translate_base_type bt)
+  | Cons (e1,e2) -> CN_List.cons (translate_term s e1) (translate_term s e2)
+  | Head e1 ->
+    maybe_name (translate_term s e1) (fun xs ->
+    CN_List.head xs (translate_term s (default_ (IT.basetype iterm) here)))
 
+  | Tail e1 ->
+    maybe_name (translate_term s e1) (fun xs ->
+    CN_List.tail xs (translate_term s (default_ (IT.basetype iterm) here)))
+
+  | NthList (x,y,z) ->
+    let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
+    let (arg_ts,args) = List.split (List.map arg [x;y;z]) in
+    let bt      = IT.basetype iterm in
+    let res_t   = translate_base_type bt in
+    let f = declare_bt_uninterpreted s CN_Constant.nth_list bt arg_ts res_t in
+    SMT.app f args
+
+  | ArrayToList (x,y,z) ->
+    let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
+    let (arg_ts,args) = List.split (List.map arg [x;y;z]) in
+    let bt      = IT.basetype iterm in
+    let res_t   = translate_base_type bt in
+    let f = declare_bt_uninterpreted s
+                                CN_Constant.array_to_list bt arg_ts res_t in
+    SMT.app f args
 
   | SizeOf ct ->
     translate_term s
@@ -785,7 +809,7 @@ let rec translate_term s iterm =
 
   | MapGet (mp,k) -> SMT.arr_select (translate_term s mp) (translate_term s k)
 
-  | MapDef ((x,y),z) -> xxx ()
+  | MapDef _ -> failwith "MapDef"
 
   | Apply (name, args) ->
     let def = Option.get (get_logical_function_def s.globals name) in
@@ -832,11 +856,7 @@ let rec translate_term s iterm =
         let (conds,defs) = List.split (List.map field fs) in
         let nested_cond = SMT.bool_ands (List.filter_map (fun x -> x) conds) in
         let cname = CN_Names.datatype_con_name c in
-        let vars  = List.mapi (fun i _x -> CN_Names.wild_var_name i) fs in
-        let cond  = SMT.match_datatype v
-                      [ (SMT.PCon (cname,vars), nested_cond)
-                      ; (SMT.PVar (CN_Names.wild_var_name 0), SMT.bool_k false)
-                      ] in
+        let cond  = SMT.bool_and (SMT.is_con cname v) nested_cond in
         (Some cond, List.concat defs)
     in
     let rec do_alts v alts =
