@@ -485,7 +485,7 @@ let generate_ownership_function ctype =
     A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
   in
   (* Function body *)
-  let switch_stmt = A.(AilSswitch (mk_expr (AilEident param2_sym), mk_stmt (AilSblock ([], List.map generate_case ["GET"; "TAKE"])))) in
+  let switch_stmt = A.(AilSswitch (mk_expr (AilEident param2_sym), mk_stmt (AilSblock ([], List.map generate_case ["GET"; "PUT"])))) in
   let cast_expr_ = A.(AilEcast (empty_qualifiers, (mk_ctype C.(Pointer (empty_qualifiers, ctype))), mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.id "ptr")))) in
   let deref_expr_ = A.(AilEunary (Indirection, mk_expr cast_expr_)) in
   let sct_opt = Sctypes.of_ctype ctype in
@@ -921,7 +921,7 @@ let rec cn_to_ail_expr_aux_internal
                             let constr_binding = create_binding count_sym (mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype C.(Struct lc_sym))))) in
                             let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
 
-                            let (ids, ts) = List.split members_with_types in
+                            let (ids, ts) = List.split (List.rev members_with_types) in
                             let bts = List.map cn_base_type_to_bt ts in
                             let new_constr_it = IT.IT (Sym count_sym, BT.Struct lc_sym, Cerb_location.unknown) in
                             let vars' = List.map (fun id -> T.StructMember (new_constr_it, id)) ids in
@@ -942,7 +942,10 @@ let rec cn_to_ail_expr_aux_internal
                       )
                   | _ -> 
                     (* Cannot have non-variable, non-wildcard pattern besides struct *)
-                    failwith "Unexpected pattern"
+                    let bt_string_opt = get_typedef_string (bt_to_ail_ctype (IT.bt term)) in
+                    let bt_string = match bt_string_opt with Some str -> str | None -> failwith "no typedef string" in 
+                    let err_msg = "Unexpected pattern from term with type " ^ bt_string in
+                    failwith err_msg
       in
 
       let translate_real : type a. (BT.basetype Terms.term) list -> (BT.basetype Terms.pattern list * BT.basetype Terms.term) list -> a dest -> a =
