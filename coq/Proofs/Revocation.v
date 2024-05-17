@@ -4719,20 +4719,21 @@ Module RevocationProofs.
     break_if;bool_to_prop_hyp.
     -
       (* src and dst are aligned *)
-      preserves_step.
       rewrite Heqb.
       remember (if cap_to_Z c2 mod Z.of_nat (alignof_pointer MorelloImpl.get) =? 0
             then 0
             else
              Z.of_nat (alignof_pointer MorelloImpl.get) -
                cap_to_Z c2 mod Z.of_nat (alignof_pointer MorelloImpl.get)) as off.
+      break_if;[unfold PreservesInvariant;auto|].
+      bool_to_prop_hyp.
       remember (Z.to_nat
              (if cap_to_Z c1 + off >=? cap_to_Z c1 + Z.of_nat (Z.to_nat sz)
               then 0
               else
                (cap_to_Z c1 + Z.of_nat (Z.to_nat sz) - (cap_to_Z c1 + off)) /
                  Z.of_nat (alignof_pointer MorelloImpl.get))) as n.
-
+      preserves_step.
       apply mem_state_after_bytmeta_copy_tags_preserves with (sz:=(n *(alignof_pointer MorelloImpl.get))%nat).
       +
         lia.
@@ -4774,34 +4775,58 @@ Module RevocationProofs.
           pose proof MorelloImpl.alignof_pointer_pos; lia.
           lia.
         *
-          (* TODO: Not enough premises! *)
-          admit.
+          lia.
         *
-          (*
           subst off n.
-          clear - H.
+          clear - H Heqb0.
           repeat break_if;repeat split; bool_to_prop_hyp; subst; try lia.
           --
+            clear Heqb Heqb0.
             rewrite Znat.Z2Nat.inj_0.
-            rewrite Nat.mul_0_l.
-            rewrite Nat.add_0_l.
-
-            lia.
+            rewrite Nat.add_0_r.
+            rewrite Z.add_0_r.
+            rewrite Znat.Z2Nat.id by lia.
+            replace (cap_to_Z c1 + sz - cap_to_Z c1) with sz by lia.
+            pose proof MorelloImpl.alignof_pointer_pos.
+            rewrite Znat.Z2Nat.inj_div;try lia.
+            rewrite Nat.mul_comm.
+            rewrite Znat.Nat2Z.id.
+            apply Nat.Div0.mul_div_le.
+          --
+            remember (cap_to_Z c1) as a1; clear Heqa1.
+            remember (cap_to_Z c2) as a2; clear Heqa2.
+            pose proof MorelloImpl.alignof_pointer_pos.
+            remember (alignof_pointer MorelloImpl.get) as ps; clear Heqps.
+            replace (a1 + Z.of_nat (Z.to_nat sz) - (a1 + (Z.of_nat ps - a2 mod Z.of_nat ps)))
+              with
+              (Z.of_nat (Z.to_nat sz) - (Z.of_nat ps - a2 mod Z.of_nat ps)) by lia.
+            remember (Z.of_nat ps - a2 mod Z.of_nat ps) as foo.
+            assert(0<foo).
+            {
+              subst foo.
+              pose proof (Z.mod_pos_bound a2 (Z.of_nat ps)).
+              lia.
+            }
+            rewrite Znat.Z2Nat.id in Heqb by assumption.
+            rewrite Znat.Z2Nat.id in Heqb0 by assumption.
+            rewrite Znat.Z2Nat.id by assumption.
+            rewrite Znat.Z2Nat.inj_div;try lia.
             rewrite Znat.Nat2Z.id.
 
-            pose proof (Z.mod_pos_bound (cap_to_Z c2) (Z.of_nat (alignof_pointer MorelloImpl.get))) as B.
-            autospecialize B.
-            {
-              pose proof MorelloImpl.alignof_pointer_pos; lia.
-            }
-            lia.
-           *)
-          admit.
+            (*
+              Sketch:
+              ((sz - foo) / ps) * ps + foo <= sz
+              sz  <= sz
+             *)
+            cut((sz - foo) / (Z.of_nat ps) * (Z.of_nat ps) + foo <= sz).
+            admit.
+            rewrite div_mul_undo; try lia.
+            admit.
+            (* TODO: problem here! *)
       +
         assumption.
     -
-      unfold PreservesInvariant.
-      auto.
+      unfold PreservesInvariant;auto.
   Admitted.
 
   Instance memcpy_PreservesInvariant

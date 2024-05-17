@@ -2835,23 +2835,27 @@ Module Type CheriMemoryImpl
       let off :=
         if dst_align =? 0 then 0 else pointer_alignof-dst_align
       in
-      let dst_1st := dst_a + off in
-      let src_1st := src_a + off in
+      let zsz := Z.of_nat sz in
+      if off >=? zsz
+      then ret tt
+      else
+        let dst_1st := dst_a + off in
+        let src_1st := src_a + off in
 
-      let n :=
-        if dst_1st >=? (dst_a+Z.of_nat sz) then 0
-        else ((dst_a+Z.of_nat sz)-dst_1st) / pointer_alignof
-      in
-      update
-        (fun (st : mem_state) =>
-           mem_state_with_capmeta (bytmeta_copy_tags
-                                     dst_1st
-                                     src_1st
-                                     (Z.to_nat n)
-                                     pointer_alignof_n
-                                     st.(capmeta))
-             st
-        )
+        let n :=
+          if dst_1st >=? (dst_a+zsz) then 0
+          else ((dst_a+zsz)-dst_1st) / pointer_alignof
+        in
+        update
+          (fun (st : mem_state) =>
+             mem_state_with_capmeta (bytmeta_copy_tags
+                                       dst_1st
+                                       src_1st
+                                       (Z.to_nat n)
+                                       pointer_alignof_n
+                                       st.(capmeta))
+               st
+          )
     else
       (* Source and destination regions are mis-aligned, hence
          no tags will be copied *)
