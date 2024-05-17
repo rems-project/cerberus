@@ -89,6 +89,11 @@ let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
   let magic_comments_to_cn_toplevel = function
     | Cabs.EDecl_magic (loc, str) ->
         Exception.except_bind (parse_loc_string C_parser.cn_toplevel (loc, str)) (fun xs ->
+          let loc = match Cerb_location.to_raw loc with
+            | Cerb_location.Loc_region (start_pos, end_pos, cursor) -> 
+                Cerb_location.(region ({start_pos with pos_cnum=start_pos.pos_cnum - 3}, {end_pos with pos_cnum=end_pos.pos_cnum + 2}) cursor)
+            | _ -> assert false (* loc should always be a region *)
+          in
           Exception.except_return @@
             List.map (function
               | Cabs.EDecl_funcCN func ->
