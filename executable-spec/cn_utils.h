@@ -304,5 +304,5 @@ cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
 // Ownership
 enum OWNERSHIP {
     GET,
-    TAKE
+    PUT
 };
