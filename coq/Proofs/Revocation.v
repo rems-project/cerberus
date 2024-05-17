@@ -4781,6 +4781,7 @@ Module RevocationProofs.
           clear - H Heqb0.
           repeat break_if;repeat split; bool_to_prop_hyp; subst; try lia.
           --
+            (* off = 0 *)
             clear Heqb Heqb0.
             rewrite Znat.Z2Nat.inj_0.
             rewrite Nat.add_0_r.
@@ -4793,6 +4794,7 @@ Module RevocationProofs.
             rewrite Znat.Nat2Z.id.
             apply Nat.Div0.mul_div_le.
           --
+            (* off != 0 *)
             remember (cap_to_Z c1) as a1; clear Heqa1.
             remember (cap_to_Z c2) as a2; clear Heqa2.
             pose proof MorelloImpl.alignof_pointer_pos.

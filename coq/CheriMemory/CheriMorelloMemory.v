@@ -2844,6 +2844,7 @@ Module Type CheriMemoryImpl
 
         let n :=
           if dst_1st >=? (dst_a+zsz) then 0
+                                            (* TODO: simplify to sz - off *)
           else ((dst_a+zsz)-dst_1st) / pointer_alignof
         in
         update
