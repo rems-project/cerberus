@@ -66,7 +66,15 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
   let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal dts preds globals c_return_type instrumentation.internal in 
   let pre_str = generate_ail_stat_strs ail_executable_spec.pre in
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
-  let in_stmt = List.map (fun (loc, bs_and_ss) -> (loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
+
+  (* Needed for extracting correct location for CN statement injection *)
+  let modify_magic_comment_loc loc = match loc with
+    | Cerb_location.Loc_region (start_pos, end_pos, cursor) -> 
+        Cerb_location.(region ({start_pos with pos_cnum=start_pos.pos_cnum - 3}, {end_pos with pos_cnum=end_pos.pos_cnum + 2}) cursor)
+    | _ -> assert false (* loc should always be a region *)
+  in
+
+  let in_stmt = List.map (fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
   ([(instrumentation.fn, (pre_str, post_str))], in_stmt, ail_executable_spec.ownership_ctypes)
 
 
