@@ -2814,8 +2814,7 @@ Module Type CheriMemoryImpl
     (loc: location_ocaml)
     (dst_p src_p: pointer_value)
     (sz: nat)
-    : memM unit
-    :=
+    : memM unit :=
     let pointer_alignof_n := IMP.get.(alignof_pointer) in
     let pointer_alignof := Z.of_nat pointer_alignof_n in
 
@@ -2828,37 +2827,42 @@ Module Type CheriMemoryImpl
     dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
     src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
 
+    (* Calculate alignments *)
     let dst_align := Z.modulo dst_a pointer_alignof in
     let src_align := Z.modulo src_a pointer_alignof in
-    if dst_align =? src_align
-    then
-      let off :=
-        if dst_align =? 0 then 0 else pointer_alignof-dst_align
-      in
+
+    if dst_align =? src_align then
+      (* Calculate the offset to the next aligned address *)
+      let off := if dst_align =? 0 then 0 else pointer_alignof - dst_align in
       let zsz := Z.of_nat sz in
-      if off >=? zsz
-      then ret tt
+
+      if off >=? zsz then
+        ret tt
       else
+        (* Calculate the aligned starting addresses *)
         let dst_1st := dst_a + off in
         let src_1st := src_a + off in
 
-        let n :=
-          if dst_1st >=? (dst_a+zsz) then 0
-          else (zsz - off) / pointer_alignof
-        in
-        update
-          (fun (st : mem_state) =>
-             mem_state_with_capmeta (bytmeta_copy_tags
-                                       dst_1st
-                                       src_1st
-                                       (Z.to_nat n)
-                                       pointer_alignof_n
-                                       st.(capmeta))
-               st
-          )
+        (* Calculate the number of fully aligned regions *)
+        let n := (zsz - off) / pointer_alignof in
+
+        (* Ensure dst_1st and src_1st are within bounds *)
+        if dst_1st >=? (dst_a + zsz) then
+          ret tt
+        else
+          (* Update memory state with aligned regions *)
+          update
+            (fun (st : mem_state) =>
+               mem_state_with_capmeta
+                 (bytmeta_copy_tags
+                    dst_1st
+                    src_1st
+                    (Z.to_nat n)
+                    pointer_alignof_n
+                    st.(capmeta))
+                 st)
     else
-      (* Source and destination regions are mis-aligned, hence
-         no tags will be copied *)
+      (* Source and destination regions are misaligned, no tags will be copied *)
       ret tt.
 
   (** Helper function checks if regions of size [sz] fit within
