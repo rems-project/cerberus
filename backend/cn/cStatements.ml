@@ -21,7 +21,7 @@ let to_pre_cmp = function
   | Cerb_location.Loc_regions (xs, _) -> (4,
         List.map lex_to_cmp (List.concat (List.map (fun (x, y) -> [x; y]) xs)), [])
 
-let mk_cmp (x : t) = to_pre_cmp (Cerb_location.to_raw x)
+let mk_cmp (x : t) = to_pre_cmp x
 
 let compare x y = compare_pre_cmp (mk_cmp x) (mk_cmp y)
 let equal x y = equal_pre_cmp (mk_cmp x) (mk_cmp y)

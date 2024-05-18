@@ -56,7 +56,7 @@ module CerbTagDefs = struct
     | RegionCursor (lp1,lp2) -> RegionCursor (toCoq_lexing_position lp1, toCoq_lexing_position lp2)
 
   let toCoq_location (l:Cerb_location.t): CoqLocation.location_ocaml =
-    match (Cerb_location.to_raw l) with
+    match l with
     | Loc_unknown -> Loc_unknown
     | Loc_other s -> Loc_other s
     | Loc_point p -> Loc_point (toCoq_lexing_position p)

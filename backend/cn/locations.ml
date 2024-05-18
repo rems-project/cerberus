@@ -124,7 +124,7 @@ let json_raw_loc loc : Yojson.Safe.t =
   json
 
 let json_loc loc : Yojson.Safe.t =
-  json_raw_loc (Cerb_location.to_raw loc)
+  json_raw_loc loc
 
 
 let json_path locs : Yojson.Safe.t =
@@ -147,22 +147,18 @@ let simple_location = Cerb_location.simple_location
 
 let line_numbers = Cerb_location.line_numbers
 
-let is_region x = match Cerb_location.to_raw x with
-    | Cerb_location.Loc_region (l, r, _) -> Some (l, r)
-    | _ -> None
+let is_region = function
+  | Cerb_location.Loc_region (l, r, _) -> Some (l, r)
+  | _ -> None
 
-let start_pos loc =
-  let open Cerb_location in
-  match to_raw loc with
-  | Loc_point loc
+let start_pos = function
+  | Cerb_location.Loc_point loc
   | Loc_region (loc, _, _)
   | Loc_regions ((loc, _) :: _, _) -> Some loc
   | _ -> None
 
-let end_pos loc =
-  let open Cerb_location in
-  match to_raw loc with
-  | Loc_point loc
+let end_pos = function
+  | Cerb_location.Loc_point loc
   | Loc_region (_, loc, _) -> Some loc
   | Loc_regions (list, _) ->
     (* can't use Option module without a cyclic dependency? *)
@@ -172,8 +168,6 @@ let end_pos loc =
     end
   | _ -> None
 
-let get_region loc =
-  let open Cerb_location in
-  match to_raw loc with
-  | Loc_region (start, end_, cursor) -> Some (start, end_, cursor)
+let get_region = function
+  | Cerb_location.Loc_region (start, end_, cursor) -> Some (start, end_, cursor)
   | _ -> None

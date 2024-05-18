@@ -44,10 +44,8 @@ let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
     let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
     failwith @@ "CPARSER_DRIVER(" ^ Cerb_location.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
 
-let start_pos loc =
-  let open Cerb_location in
-  match to_raw loc with
-  | Loc_point loc
+let start_pos = function
+  | Cerb_location.Loc_point loc
   | Loc_region (loc, _, _)
   | Loc_regions ((loc, _) :: _, _) -> Some loc
   | _ -> None
