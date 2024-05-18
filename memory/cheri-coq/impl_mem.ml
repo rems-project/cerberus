@@ -928,7 +928,7 @@ module CHERIMorello : Memory = struct
   let pp_integer_value_for_core = pp_integer_value
 
   let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
-  let pp_pretty_integer_value _ = pp_integer_value
+  let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
 
   let rec pp_mem_value = function
     | CheriMemoryTypesExe.MVunspecified _ ->
@@ -957,7 +957,7 @@ module CHERIMorello : Memory = struct
                pp_mem_value mval
            )
 
-  let pp_pretty_mem_value _ = pp_mem_value
+  let pp_pretty_mem_value ?basis ~use_upper = pp_mem_value
 
   (* --- debugging --- *)
 

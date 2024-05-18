@@ -1144,8 +1144,8 @@ let rec pp_mem_value = function
       )
 
 let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
-let pp_pretty_integer_value _ = pp_integer_value
-let pp_pretty_mem_value _ = pp_mem_value
+let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
+let pp_pretty_mem_value ?basis ~use_upper = pp_mem_value
 
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)

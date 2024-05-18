@@ -16,6 +16,9 @@ module type Constraints = sig
   val with_constraints: 'b -> t -> 'a eff -> 'a eff
 end
 
+type basis =
+  [ `Octal | `Decimal | `Hexadecimal | `Binary ]
+
 module type Memory = sig
   val name: string
 (*  include (module type of Mem_common) *)
@@ -209,8 +212,9 @@ module type Memory = sig
   val pp_integer_value_for_core: integer_value -> PPrint.document
   val pp_mem_value: mem_value -> PPrint.document
   val pp_pretty_pointer_value: pointer_value -> PPrint.document
-  val pp_pretty_integer_value: Boot_printf.formatting -> integer_value -> PPrint.document
-  val pp_pretty_mem_value: Boot_printf.formatting -> mem_value -> PPrint.document
+
+  val pp_pretty_integer_value: ?basis:basis -> use_upper:bool -> integer_value -> PPrint.document
+  val pp_pretty_mem_value: ?basis:basis -> use_upper:bool -> mem_value -> PPrint.document
   
 (*
   val string_of_pointer_value: pointer_value -> string

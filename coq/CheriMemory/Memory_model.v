@@ -257,9 +257,9 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A) (MC:Mem_common(A)(B)).
     pp_mem_value : mem_value -> PPrint.document.
     pp_pretty_pointer_value : pointer_value -> PPrint.document.
     pp_pretty_integer_value :
-      Cerb_frontend.Boot_printf.formatting -> integer_value -> PPrint.document.
+      ?basis:Memory_model.basis -> use_upper:bool -> integer_value -> PPrint.document.
     pp_pretty_mem_value :
-      Cerb_frontend.Boot_printf.formatting -> mem_value -> PPrint.document.
+      ?basis:Memory_model.basis -> use_upper:bool -> mem_value -> PPrint.document.
 
     serialise_mem_state : Stdlib.Digest.t -> mem_state -> Cerb_json.json.
  *)

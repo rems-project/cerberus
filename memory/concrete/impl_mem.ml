@@ -2566,8 +2566,8 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
 
 
   let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
-  let pp_pretty_integer_value _ = pp_integer_value
-  let pp_pretty_mem_value _ = pp_mem_value
+  let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
+  let pp_pretty_mem_value ?basis ~use_upper = pp_mem_value
   
   (* TODO check *)
   let memcpy loc ptrval1 ptrval2 (IV (_, size_n)) =
