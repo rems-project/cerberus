@@ -4512,10 +4512,47 @@ Module RevocationProofs.
     ->
       fetch_bytes bm a1' n' = fetch_bytes bm a2' n'.
   Proof.
+    assert (length (fetch_bytes bm a1 n) = n) by apply fetch_bytes_len.
+    assert (length (fetch_bytes bm a2 n) = n) by apply fetch_bytes_len.
+    assert (length (fetch_bytes bm a1' n') = n') by apply fetch_bytes_len.
+    assert (length (fetch_bytes bm a2' n') = n') by apply fetch_bytes_len.
+
+    intros E [off [E1 [E2 [E3 [E4 E5]]]]].
+    apply list.list_eq_Forall2.
+
+    eapply Forall2_nth_list; [lia|].
+    intros i I.
+
+    rewrite H1 in I.
+    unfold fetch_bytes, list_init.
+    rewrite 4!map_nth.
+    rewrite 2!seq_nth; try lia.
+    rewrite plus_O_n.
+
+    apply list.list_eq_Forall2 in E.
+    eapply Forall2_nth_list' with (i:=Z.to_nat (off+(Z.of_nat i))) in E.
+    2:{
+      rewrite H.
+      lia.
+    }
 
 
+    unfold fetch_bytes, list_init in E.
+    rewrite 4!map_nth in E.
+    rewrite 2!seq_nth in E; try lia.
+    rewrite plus_O_n in E.
 
-  Admitted.
+
+    rewrite Z2Nat.id in E by lia.
+    subst a1' a2'.
+    rewrite 2!Z.add_assoc in E.
+    apply E.
+
+    Unshelve. exact O.
+    Unshelve. exact O.
+    Unshelve. exact O.
+    Unshelve. exact O.
+  Qed.
 
   Lemma memcpy_copy_data_preserves_allocations:
     forall (loc : location_ocaml) (ptrval1 ptrval2 : pointer_value) (s : mem_state_r)

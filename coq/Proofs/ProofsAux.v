@@ -649,6 +649,27 @@ Section ListAux.
           lia.
   Qed.
 
+  (* Similar to previous one, but in the opposite direction.
+     We do not want to use `<->` there because in this case the lenght
+     equality is implied *)
+  Theorem Forall2_nth_list':
+    forall (A B : Type) (R : A -> B -> Prop) (l1 : list A) (l2 : list B) (default1 : A) (default2 : B),
+      Forall2 R l1 l2 ->
+      (forall i : nat, (i < Datatypes.length l1)%nat -> R (nth i l1 default1) (nth i l2 default2)).
+  Proof.
+    intros A B R2 l1 l2 default1 default2 H i H0.
+    generalize dependent i.
+    induction H; intros.
+    -
+      cbn in H0.
+      inv H0.
+    -
+      destruct i as [| i']; simpl.
+      + assumption.
+      + apply IHForall2.
+        simpl in H1. apply Nat.succ_lt_mono. assumption.
+  Qed.
+
   Lemma skipn_cons_nth_error
     {A:Type}
     (a : A) (l l' : list A)
