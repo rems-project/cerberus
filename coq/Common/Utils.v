@@ -34,14 +34,8 @@ Definition sprint_msg (msg : string) : serr unit :=
   else 
     ret tt.
 
-Fixpoint list_init_rec {A : Type} (i : nat) (f : nat -> A) (acc : list A) :=
-    match i with
-    | O => acc
-    | S i' => list_init_rec i' f ((f i') :: acc)
-    end.
-
 Definition list_init {A : Type} (n : nat) (f : nat -> A) : list A :=
-  list_init_rec n f [].
+  List.map f (List.seq 0 n).
 
 Fixpoint monadic_list_init_rec
   {A: Type}

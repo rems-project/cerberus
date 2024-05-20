@@ -4512,6 +4512,9 @@ Module RevocationProofs.
     ->
       fetch_bytes bm a1' n' = fetch_bytes bm a2' n'.
   Proof.
+
+
+
   Admitted.
 
   Lemma memcpy_copy_data_preserves_allocations:

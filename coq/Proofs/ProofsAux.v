@@ -107,7 +107,7 @@ Section ListAux.
     (pA: relation A)
     (pB: relation B)
     :
-    Proper (pointwise_relation _ (pA ==> pB) ==> (eqlistA pA ==> eqlistA pB))
+    Proper (pointwise_relation _ (pA ==> pB) ==> eqlistA pA ==> eqlistA pB)
       mapi.
   Proof.
     intros f g Hfg l1 l2 Heql.
@@ -115,20 +115,17 @@ Section ListAux.
     eapply list_mapi_aux_Proper;eauto.
   Qed.
 
-  Lemma list_init_rec_proper_aux :
-    forall (A : Type) (Ae : relation A),
-      Proper (eq ==> (eq ==> Ae) ==> eqlistA Ae ==> eqlistA Ae) (@list_init_rec A).
+  #[global] Instance list_map_Proper
+    {A B : Type}
+    (pA: relation A)
+    (pB: relation B)
+    :
+    Proper ((pA ==> pB) ==> eqlistA pA ==> eqlistA pB)
+      (@List.map A B).
   Proof.
-    intros A Ae. unfold Proper, respectful.
-    intros i i' Hi f g Hfg acc acc' Hacc. subst i'.
-    revert acc acc' Hacc.
-    induction i as [|i IH]; intros acc acc' Hacc.
-    - (* Base case *)
-      simpl. assumption.
-    - (* Inductive step *)
-      simpl. apply IH.
-      + constructor; [apply Hfg | assumption].
-        reflexivity.
+    intros f g Hfg l1 l2 Hl. induction Hl.
+    - constructor.
+    - simpl. constructor; [apply Hfg | apply IHHl]; assumption.
   Qed.
 
   #[global] Instance list_init_proper
@@ -137,13 +134,12 @@ Section ListAux.
     :
     Proper (eq ==> (eq ==> (Ae)) ==> eqlistA Ae) list_init.
   Proof.
-    intros x y Hxy f g Hfg.
-    subst.
+    intros n1 n2 Hn f1 f2 Hf.
+    subst n2.  (* Since n1 = n2 *)
     unfold list_init.
-    apply list_init_rec_proper_aux.
-    - constructor.
-    - assumption.
-    - constructor.
+    apply (list_map_Proper eq Ae).
+    - intros x y Hxy. subst y. apply Hf. reflexivity.
+    - reflexivity.
   Qed.
 
   #[global] Instance eqlistA_Reflexive
@@ -274,28 +270,8 @@ Section ListAux.
     List.length (list_init n f) = n.
   Proof.
     unfold list_init.
-    remember (@nil A) as l.
-
-    cut(Datatypes.length (list_init_rec n f l) = (n + Datatypes.length l))%nat.
-    {
-      subst l.
-      rewrite <- plus_n_O.
-      intros H.
-      apply H.
-    }
-    clear Heql.
-
-    revert l.
-    induction n.
-    -
-      cbn.
-      reflexivity.
-    -
-      intros l.
-      cbn.
-      rewrite IHn.
-      cbn.
-      lia.
+    rewrite map_length.
+    apply seq_length.
   Qed.
 
   Lemma list_split_cons
@@ -691,67 +667,23 @@ Section ListAux.
       + simpl in H. apply IH in H. cbn. assumption.
   Qed.
 
-  Lemma list_init_rec_len {A : Type} (n : nat) (f : nat -> A) (l0 : list A):
-    length (list_init_rec n f l0) = (n + length l0)%nat.
-  Proof.
-    revert l0.
-    induction n ; intros.
-    -
-      cbn.
-      reflexivity.
-    -
-      simpl.
-      cbn.
-      rewrite IHn.
-      cbn.
-      lia.
-  Qed.
-
   Lemma list_init_nth {A : Type} (n : nat) (f : nat -> A) :
     forall i, (i<n)%nat -> nth_error (list_init n f) i = Some (f i).
   Proof.
     intros i H.
     unfold list_init.
-    remember (@nil A) as l0.
-    pose proof (list_init_rec_len n f l0).
-    remember (list_init_rec n f l0) as l eqn:L.
-
-    replace n with (length l - length l0)%nat in H.
-    2:{
-      subst l0 l.
-      cbn in *.
-      lia.
-    }
-
-    clear Heql0.
-    revert i l l0 L H0 H.
-    induction n; intros.
-    -
-      cbn in *.
-      subst l0.
-      lia.
-    -
-      destruct (Nat.eq_dec i n) as [E|NE].
-      +
-        subst i.
-        cbn in L.
-        destruct l;[discriminate|].
-        destruct n.
-        *
-          cbn.
-          cbn in L.
-          inv L.
-          reflexivity.
-        *
-          cbn.
-          admit.
-      +
-        eapply IHn;eauto.
-        cbn.
-        lia.
-        cbn in *.
-        lia.
-  Admitted.
+    apply map_nth_error.
+    remember (seq 0 n) as s.
+    pose proof (seq_length n 0).
+    replace i with (nth i s O) at 2.
+    apply nth_error_nth'.
+    subst s.
+    lia.
+    replace i with (0+i)%nat at 2 by lia.
+    subst s.
+    apply seq_nth.
+    assumption.
+  Qed.
 
 
 End ListAux.
