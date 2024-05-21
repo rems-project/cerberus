@@ -67,12 +67,6 @@ Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
 
-(* TODO: should be in coq-cheri-capabilities *)
-Lemma cap_get_set_value:
-  forall (c : Capability_GS.t) (v : AddressValue.t), Capability_GS.cap_get_value (Capability_GS.cap_set_value c v) = v.
-Proof.
-Admitted.
-
 (* This is a Morello-specific requirement. *)
 Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
 
@@ -4362,7 +4356,7 @@ Module RevocationProofs.
         remember (Capability_GS.cap_set_value c1 (AddressValue.of_Z addr)) as c'.
         eapply store_other_spec with (c:=c');eauto.
         subst c'.
-        apply cap_get_set_value.
+        apply Capability.cap_get_set_value.
   Admitted.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
