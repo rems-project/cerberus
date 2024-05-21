@@ -1,2 +1,2 @@
 #!/bin/sh
-eval `opam env` && cerberus $*
+eval `opam env` && $*
