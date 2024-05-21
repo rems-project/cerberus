@@ -18,6 +18,9 @@ LINKING_FAILED=''
 NUM_RUNNING_BINARY_FAILED=0
 RUNNING_BINARY_FAILED=''
 
+NUM_SUCC=0
+SUCC_FILES=''
+
 EXECUTABLE_SPEC_DIR='../executable-spec'
 
 mkdir -p $DIRNAME/exec
@@ -26,21 +29,23 @@ clang -fno-lto -c $EXECUTABLE_SPEC_DIR/hash_table.c $EXECUTABLE_SPEC_DIR/alloc.c
 for TEST in $SUCC
 do
   TEST_BASENAME=$(basename $TEST .c)
-  mkdir -p $DIRNAME/exec/$TEST_BASENAME
-  echo Generating $DIRNAME/exec/$TEST_BASENAME/$TEST_BASENAME-exec.c ...
-  if ! ~/.opam/4.14.0/bin/cn $TEST --output_decorated=$TEST_BASENAME-exec.c --output_decorated_dir=$DIRNAME/exec/$TEST_BASENAME/
+  EXEC_C_DIRECTORY=$DIRNAME/exec/$TEST_BASENAME
+  EXEC_C_FILE=$EXEC_C_DIRECTORY/$TEST_BASENAME-exec.c
+  mkdir -p $EXEC_C_DIRECTORY
+  echo Generating $EXEC_C_FILE ...
+  if ! ~/.opam/4.14.0/bin/cn $TEST --output_decorated=$TEST_BASENAME-exec.c --output_decorated_dir=$EXEC_C_DIRECTORY/
   then
     echo Generation failed.
     NUM_GENERATION_FAILED=$(( $NUM_GENERATION_FAILED + 1 ))
     GENERATION_FAILED="$GENERATION_FAILED $TEST"
   else 
     echo Generation succeeded!
-    echo Compiling $DIRNAME/exec/$TEST_BASENAME/$TEST_BASENAME-exec.c ...
-    if ! clang -fno-lto -c $DIRNAME/exec/$TEST_BASENAME/$TEST_BASENAME-exec.c $DIRNAME/exec/$TEST_BASENAME/cn.c   
+    echo Compiling $EXEC_C_FILE ...
+    if ! clang -fno-lto -c $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
     then
       echo Compilation failed.
       NUM_COMPILATION_FAILED=$(( $NUM_COMPILATION_FAILED + 1 ))
-      COMPILATION_FAILED="$COMPILATION_FAILED $TEST"
+      COMPILATION_FAILED="$COMPILATION_FAILED $EXEC_C_FILE"
     else 
       echo Compilation succeeded!
       echo Linking $TEST_BASENAME-exec.o with other files ...
@@ -48,7 +53,7 @@ do
       then 
         echo Linking failed.
         NUM_LINKING_FAILED=$(( $NUM_LINKING_FAILED + 1 ))
-        LINKING_FAILED="$LINKING_FAILED $TEST"
+        LINKING_FAILED="$LINKING_FAILED $EXEC_C_FILE"
       else 
         echo Linking succeeded!
         echo Running the $TEST_BASENAME-output binary ...
@@ -56,9 +61,11 @@ do
         then 
             echo Running binary failed.
             NUM_RUNNING_BINARY_FAILED=$(( $NUM_RUNNING_BINARY_FAILED + 1 ))
-            RUNNING_BINARY_FAILED="$RUNNING_BINARY_FAILED $TEST"
+            RUNNING_BINARY_FAILED="$RUNNING_BINARY_FAILED $EXEC_C_FILE"
         else 
             echo Running binary succeeded!
+            NUM_SUCC=$(( $NUM_SUCC + 1 ))
+            SUCC_FILES="$SUCC_FILES $EXEC_C_FILE"
         fi
       fi
     fi
@@ -103,6 +110,9 @@ else
   echo " "
   echo "$NUM_RUNNING_BINARY_FAILED tests failed to be run as binaries:"
   echo "  $RUNNING_BINARY_FAILED"
+  echo " "
+  echo "$NUM_SUCC tests passed:"
+  echo "  $SUCC_FILES"
   exit 1
 fi
 
