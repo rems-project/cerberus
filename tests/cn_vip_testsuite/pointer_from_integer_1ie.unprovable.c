@@ -12,6 +12,7 @@ void f(uintptr_t i) {
   int *p = (int*)i;
 #endif
   *p=7;
+  /*CN_VIP*//*@ assert (j == 7i32); @*/
   //CN_VIP printf("j=%d\n",j);
 }
 int main() {
