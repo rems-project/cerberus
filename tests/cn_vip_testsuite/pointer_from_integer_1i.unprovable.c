@@ -12,6 +12,7 @@ void f(uintptr_t i) {
 #endif
   *p=7;
   //CN_VIP printf("j=%d\n",j);
+  /*CN_VIP*//*@ assert (j == 7i32); @*/
 }
 int main() {
   uintptr_t j = ADDRESS_PFI_1I;
