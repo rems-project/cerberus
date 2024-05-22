@@ -1,4 +1,3 @@
-Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedTypeEx.
@@ -90,15 +89,15 @@ Definition zmap_sequence
   loop (ZMap.elements mv) (ZMap.empty A).
  *)
 
-(** Adds elements of given [list] to a [map] starting at [index]. *)
+(** Adds elements of given [list] to a [map] starting at [addr]. *)
 Definition zmap_add_list_at
   {T:Type}
   (map: ZMap.t T)
   (list: list T)
-  (offset: Z)
+  (addr: Z)
   : ZMap.t T
   :=
-  let ilist := mapi (fun (i: nat) (v: T) => ((Z.add offset (Z.of_nat i)), v)) list in
+  let ilist := mapi (fun (i: nat) (v: T) => ((Z.add addr (Z.of_nat i)), v)) list in
   List.fold_left (fun acc '(k, v) =>  ZMap.add k v acc) ilist map.
 
 (* Monadic mapi *)

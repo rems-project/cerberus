@@ -124,6 +124,7 @@
 (copy_files extracted/Ring_theory.{ml,mli})
 (copy_files extracted/SimpleError.{ml,mli})
 (copy_files extracted/ZMap.{ml,mli})
+(copy_files extracted/AMap.{ml,mli})
 (copy_files extracted/Specif.{ml,mli})
 (copy_files extracted/String0.{ml,mli})
 (copy_files extracted/String1.{ml,mli})

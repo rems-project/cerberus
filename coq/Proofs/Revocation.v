@@ -33,7 +33,7 @@ From Coq.Lists Require Import List SetoidList. (* after exltlib *)
 From CheriCaps.Morello Require Import Capabilities.
 From CheriCaps.Common Require Import Capabilities.
 
-From Common Require Import SimpleError Utils ZMap.
+From Common Require Import SimpleError Utils ZMap AMap.
 From Morello Require Import CapabilitiesGS MorelloCapsGS.
 
 From CheriMemory Require Import CheriMorelloMemory Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CerbSwitches CoqAilTypesAux.
@@ -372,7 +372,6 @@ Module RevocationProofs.
     Definition base_mem_invariant (m: mem_state_r) : Prop
       :=
       let cm := m.(capmeta) in
-      let bm := m.(bytemap) in
       let am := m.(allocations) in
 
       (* All allocations are live. [allocation.(is_dead)] is only used
@@ -388,7 +387,7 @@ Module RevocationProofs.
             allocations_do_no_overlap a1 a2)
 
       (* All keys in capmeta must be pointer-aligned addresses *)
-      /\ zmap_forall_keys (fun addr => Z.modulo addr
+      /\ amap_forall_keys (fun addr => Z.modulo (AddressValue.to_Z addr)
                                      (Z.of_nat MorelloImpl.get.(alignof_pointer))
                                    = 0) cm
 
@@ -438,34 +437,162 @@ Module RevocationProofs.
     Lemma init_ghost_tags_spec
       (addr: AddressValue.t)
       (size: nat)
-      (capmeta: ZMap.t (bool*CapGhostState)):
+      (capmeta: AMap.t (bool*CapGhostState)):
+      (AddressValue.to_Z addr) + (Z.of_nat size) <= AddressValue.ADDR_LIMIT ->
       forall a tg,
-        ZMap.MapsTo a tg (init_ghost_tags addr size capmeta)
+        AMap.MapsTo a tg (init_ghost_tags addr size capmeta)
         ->
-          (ZMap.MapsTo a tg capmeta
-           \/
-             (Z.modulo a (Z.of_nat MorelloImpl.get.(alignof_pointer)) = 0
-              /\
-                tg = (false, {| tag_unspecified := true; bounds_unspecified := false |}))).
+          ( (* existing *)
+            AMap.MapsTo a tg capmeta
+            \/
+              ( (* new *)
+                Z.modulo (AddressValue.to_Z a) (Z.of_nat MorelloImpl.get.(alignof_pointer)) = 0
+                /\
+                  tg = (false, {| tag_unspecified := true; bounds_unspecified := false |})
+              )
+          ).
     Proof.
-      intros a tg H.
-      unfold init_ghost_tags in *.
-      repeat break_let.
-      apply zmap_range_init_spec in H.
+      intros L a tg H.
+      unfold init_ghost_tags, align_down in *.
+      break_match_hyp;[left;assumption|].
+      clear size Heqn.
+      rename n into size'. (* size - 1 *)
+      apply amap_range_init_spec in H.
       destruct H as [[H1 H2] | [[i [H3 H4]] H5]].
       -
+        (* Not in range *)
         left.
         apply H2.
       -
+        (* in range *)
         right.
-        split.
+        split;[|assumption].
+
+        (* prep work *)
+        clear H5 tg capmeta.
+        pose proof (AddressValue.to_Z_in_bounds addr) as H.
+        destruct H as [LA HA].
+        remember (Z.of_nat (alignof_pointer MorelloImpl.get)) as ps.
+        assert(0<ps).
+        {
+          pose proof MorelloImpl.alignof_pointer_pos.
+          subst ps.
+          lia.
+        }
+        clear Heqps.
+        rename addr into addr'.
+        remember (AddressValue.to_Z addr') as addr.
+        clear addr' Heqaddr.
+        (* end prep *)
+
+
+        (* used twice below *)
+        assert(MorelloCaps.AddressValue.ADDR_MIN <= addr - addr mod ps < MorelloCaps.AddressValue.ADDR_LIMIT) as A.
+        {
+          unfold AddressValue.ADDR_MIN,
+            AddressValue.ADDR_LIMIT,
+            MorelloCaps.AddressValue.len,
+            bitvector.bv_modulus
+            in *.
+          split.
+          --
+            pose proof (Z.mod_le addr ps LA H).
+            lia.
+          --
+            pose proof (Z.mod_le addr ps LA H).
+            cut(addr - addr mod ps <= addr).
+            lia.
+            cut (0 <= addr mod ps).
+            lia.
+            apply numbers.Z.mod_pos.
+            assumption.
+        }
+
+        subst a.
+        setoid_rewrite Z.mul_comm.
+        rewrite AddressValue.with_offset_no_wrap.
         +
-          subst a.
-          setoid_rewrite Z.mul_comm.
-          rewrite <- Z.mul_add_distr_l.
-          apply ZLib.Z_mod_mult'. (* Possible TODO: use an alternative function to Z_mod_mult' so the dependency on bbv can be removed. *)
+          rewrite MorelloCaps.AddressValue.of_Z_roundtrip by auto.
+          rewrite Z.mul_comm, Zdiv.Z_mod_plus_full.
+          unfold AddressValue.ADDR_MIN in *.
+          apply align_bottow_correct;assumption.
         +
-          apply H5.
+          rewrite MorelloCaps.AddressValue.of_Z_roundtrip by auto.
+          unfold AddressValue.ADDR_MIN,
+            AddressValue.ADDR_LIMIT,
+            MorelloCaps.AddressValue.len,
+            bitvector.bv_modulus
+            in *.
+          split.
+          --
+            pose proof (Z.mod_le addr ps LA H).
+            lia.
+          --
+            replace (Z.of_N 64) with 64 in * by lia.
+
+            remember (Z.to_nat ((addr + Z.of_nat size' - (addr + Z.of_nat size') mod ps - (addr - addr mod ps)) / ps)) as n.
+            assert(i<=n)%nat by lia; clear H3.
+
+            cut(addr - addr mod ps + ps * Z.of_nat n < 2 ^ 64).
+            {
+              intros H1.
+              clear Heqn.
+              revert i H0.
+              induction n; intros.
+              -
+                lia.
+              -
+                destruct (Nat.eq_dec i (S n)).
+                lia.
+                apply IHn;try lia.
+            }
+            zify.
+            destruct H2;
+              clear __sat3 __sat4;
+              destruct H1; [|lia].
+            ++
+              rewrite <- H2 in H1.
+
+
+              rename size' into tmp;
+                remember (Z.of_nat tmp) as size';
+                clear tmp Heqsize'.
+              rename z2 into zn.
+
+              rename i into i';
+                remember (Z.of_nat i') as i;
+                clear i' Heqi.
+
+              destruct A as [A0 A].
+
+              rewrite Z.add_assoc in L.
+              remember (addr + size') as lastaddr.
+              remember (addr - addr mod ps) as a0.
+              remember (lastaddr - lastaddr mod ps) as a1.
+
+              assert(i <= zn) by lia ; clear H3.
+
+              subst zn.
+              rewrite H2.
+              rewrite <- Zdiv.Z_div_exact_2.
+              2: lia.
+              2: {
+                subst a1 a0.
+
+                apply sub_mod_0.
+                apply align_bottow_correct.
+                assumption.
+                apply align_bottow_correct.
+                assumption.
+              }
+              replace (a0 + (a1 - a0)) with a1 by lia.
+              subst a1.
+              assert(0<=lastaddr mod ps).
+              {
+                apply numbers.Z.mod_pos.
+                lia.
+              }
+              lia.
     Qed.
 
     Definition memM_same_state
@@ -883,8 +1010,8 @@ Module RevocationProofs.
     Qed.
 
     Lemma fetch_bytes_len
-      (addr : ZMap.key)
-      (bm : ZMap.t AbsByte)
+      (addr : AMap.key)
+      (bm : AMap.t AbsByte)
       (sz: nat):
       Datatypes.length (fetch_bytes bm addr sz) = sz.
     Proof.
@@ -1160,9 +1287,9 @@ Module RevocationProofs.
     Qed.
 
     Lemma fetch_and_decode_cap_success
-      (addr: ZMap.key)
+      (addr: AMap.key)
       (c: Capability_GS.t)
-      (bm: ZMap.t AbsByte):
+      (bm: AMap.t AbsByte):
       split_bytes_ptr_spec Prov_disabled (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) ->
       decode_cap (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) true c ->
       fetch_and_decode_cap bm addr true = inr c.
@@ -2188,7 +2315,7 @@ Module RevocationProofs.
       /\
         (* All caps which are tagged according to capmeta must: *)
         (forall addr g,
-            ZMap.MapsTo addr (true,g) cm ->
+            AMap.MapsTo addr (true,g) cm ->
             (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
                    (
                      (* Have same provenance and correct sequence bytes *)
@@ -2219,7 +2346,7 @@ Module RevocationProofs.
         apply empty_mapsto_iff in H;
           contradiction.
       -
-        unfold zmap_forall_keys.
+        unfold amap_forall_keys.
         intros k H.
         apply empty_in_iff in H;
           contradiction.

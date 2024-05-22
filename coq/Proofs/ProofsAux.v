@@ -17,9 +17,9 @@ Require Import Coq.Lists.SetoidList.
 
 Require Import Lia.
 
-Require Import Common.SimpleError.
-Require Import Common.Utils.
-Require Import Common.ZMap.
+From Common Require Import SimpleError ZMap AMap Utils.
+
+From CheriCaps.Morello Require Import Capabilities. (* For AMap-related lemmas *)
 
 Require Import ExtLib.Structures.Monads.
 Require Import ExtLib.Structures.Monad.
@@ -708,6 +708,93 @@ Section ListAux.
 
 
 End ListAux.
+
+
+Module Import AP := FMapFacts.WProperties_fun(AddressValue_as_OT)(AMap).
+Module Import WAP := FMapFacts.WFacts_fun(AddressValue_as_OT)(AMap).
+
+Section AMapAux.
+
+  Definition amap_forall_keys {A:Type} (pred: AddressValue.t -> Prop) (m:AMap.t A) : Prop
+    :=
+    forall k, AMap.In k m -> pred k.
+
+  Lemma amap_range_init_spec
+    {T:Type}
+    (a0:AddressValue.t)
+    (n:nat)
+    (step:Z)
+    (v:T)
+    (m:AMap.t T):
+    forall k x,
+      AMap.MapsTo k x (amap_range_init a0 n step v m)
+      ->
+        {
+          ~(exists i, (i<n)%nat /\ AddressValue.with_offset a0 (Z.mul (Z.of_nat i) step) = k)
+          /\ AMap.MapsTo k x m
+        }+
+          {
+            (exists i, (i<n)%nat /\ AddressValue.with_offset a0 (Z.mul (Z.of_nat i) step) = k)
+            /\
+              x=v
+          }.
+  Proof.
+    dependent induction n.
+    -
+      left.
+      split.
+      +
+        intros C.
+        destruct C as [i [C _]].
+        lia.
+      +
+        cbn in H.
+        assumption.
+    -
+      simpl. intros k x Hmap.
+      destruct (eq_dec (AddressValue.with_offset a0 (Z.of_nat n * step)%Z) k) as [E|NE].
+      + (* Case: k is the newly added key *)
+        right. split. exists n. split; [lia|assumption].
+        apply add_mapsto_iff in Hmap.
+        destruct Hmap as [[H1 H2] | [H3 H4]];[auto|congruence].
+      + (* Case: k is not the newly added key, apply IH *)
+        apply add_mapsto_iff in Hmap.
+        specialize (IHn step v m k x).
+        autospecialize IHn.
+        {
+          destruct Hmap as [[H1 H2] | [H3 H4]];[congruence|auto].
+        }
+        destruct IHn as [[Hni Hm]|[Hi Hv]].
+        * left. split; auto.
+          intro H.
+          apply Hni. destruct H as [i [Hlt Heq]].
+          exists i. split.
+          --
+            destruct Hmap.
+            ++
+              destruct H.
+              congruence.
+            ++
+              destruct H.
+              assert(i<>n).
+              {
+                clear - H Heq.
+                rewrite <- Heq in H.
+                contradict H.
+                rewrite H.
+                reflexivity.
+              }
+              lia.
+          --
+            auto.
+        * right. destruct Hi as [i [Hlt Heq]].
+          split.
+          exists i. split; [lia|]. assumption.
+          auto.
+  Qed.
+
+
+End AMapAux.
 
 Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
 Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
@@ -1537,6 +1624,7 @@ Proof.
   break_match_hyp; try discriminate.
   break_match_hyp; invc Heqs; invc H.
   -
+    rewrite Z.lxor_0_l, Z.shiftl_0_l.
     unfold byte_of_Z.
     assert (nat_of_ascii a = O) as H by lia.
     clear Heqz1.
@@ -1544,6 +1632,7 @@ Proof.
     rewrite <- (ascii_nat_embedding zero).
     auto.
   -
+    rewrite Z.shiftl_0_l, Z.lxor_0_r.
     unfold byte_of_Z.
     assert (nat_of_ascii a = Pos.to_nat p) as H by lia.
     clear Heqz1.
@@ -1602,5 +1691,16 @@ Section Z_arith.
       tuple_inversion.
       lia.
   Qed.
+
+  Lemma align_bottow_correct:
+    forall ps addr : Z, 0 < ps -> (addr - addr mod ps) mod ps = 0.
+  Proof.
+    intros b a B.
+    rewrite Zdiv.Zminus_mod.
+    rewrite Z.mod_mod by lia.
+    rewrite Z.sub_diag.
+    apply Zdiv.Zmod_0_l.
+  Qed.
+
 
 End Z_arith.

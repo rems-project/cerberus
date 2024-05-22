@@ -980,7 +980,7 @@ module CHERIMorello : Memory = struct
 
   let print_bytemap str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
-    let l = ZMap.elements st.bytemap in
+    let l = AMap.AMap.elements st.bytemap in
     List.iter (fun (addr, b) ->
         Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
           (Z.format "%x" addr)
@@ -997,7 +997,7 @@ module CHERIMorello : Memory = struct
   (** Prints provided capability tags table *)
   let print_captags str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
-    let l = ZMap.elements st.capmeta in
+    let l = AMap.AMap.elements st.capmeta in
     List.iter (fun (addr, (b,gs)) ->
         Printf.fprintf stderr "@0x%s ==> %s%s\n"
           (Z.format "%x" addr)
