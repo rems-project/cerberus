@@ -1,7 +1,7 @@
-FROM ubuntu
+FROM ubuntu:23.10
 RUN apt-get update
 RUN apt-get upgrade -y
-RUN apt-get install -y opam libgmp-dev libmpfr-dev
+RUN apt-get install -y opam libgmp-dev libmpfr-dev pkg-config python3-distutils
 RUN mkdir /etc/sudoers.d/ && \
   echo 'user1 ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/user1 && \
   chmod 440 /etc/sudoers.d/user1 && \
