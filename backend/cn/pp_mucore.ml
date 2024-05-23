@@ -661,14 +661,9 @@ module Make (Config: CONFIG) = struct
           | M_End es ->
               pp_keyword "nd" ^^ P.parens (comma_list pp es)
           | M_Ebound e ->
-              pp_keyword "bound" ^/^
-              P.parens (pp e)
+              Pp.c_app (pp_keyword "bound") [pp e]
           | M_Erun (sym, pes) ->
-              pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
-          (* | M_Eundef (_, ub) -> *)
-          (*     pp_keyword "undef" ^^ P.parens (pp_undef ub)         *)
-          (* | M_Eerror (str, pe) -> *)
-          (*     pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_pexpr pe) *)
+              pp_keyword "run" ^^^ Pp.c_app (pp_symbol sym) (List.map pp_pexpr pes)
         end
       end
       in pp budget None expr
