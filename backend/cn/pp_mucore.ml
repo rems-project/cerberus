@@ -545,18 +545,6 @@ module Make (Config: CONFIG) = struct
       do_annots annot
       begin
         (maybe_print_location loc) ^^
-        begin
-          (* Here we check whether parentheses are needed *)
-          (* if compare_precedence prec' prec then
-           *   (\* right associativity of ; *\)
-           *   match (is_semi, e) with
-           *     | (true, M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), _, _)) ->
-           *         P.parens
-           *     | _ ->
-           *         fun z -> z
-           * else *)
-            P.parens
-        end
         begin match (e : 'ty mu_expr_) with
           | M_Epure pe ->
               pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
