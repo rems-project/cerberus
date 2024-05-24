@@ -347,14 +347,14 @@ Module Type CheriMemoryImpl
     {
       next_alloc_id : storage_instance_id;
       last_address : AddressValue.t;
-      allocations : ZMap.t allocation;
-      funptrmap : ZMap.t
+      allocations : ZMap.M.t allocation;
+      funptrmap : ZMap.M.t
                     (digest * string * C.t);
-      varargs : ZMap.t
+      varargs : ZMap.M.t
                   (Z * list (CoqCtype.ctype * pointer_value));
       next_varargs_id : Z;
-      bytemap : AMap.t AbsByte;
-      capmeta : AMap.t (bool* CapGhostState);
+      bytemap : AMap.M.t AbsByte;
+      capmeta : AMap.M.t (bool* CapGhostState);
     }.
 
   (*
@@ -407,12 +407,12 @@ Module Type CheriMemoryImpl
     {|
       next_alloc_id := Z0;
       last_address := initial_address;
-      allocations := ZMap.empty allocation;
-      funptrmap := ZMap.empty (digest * string * C.t);
-      varargs := ZMap.empty (Z * list (CoqCtype.ctype * pointer_value));
+      allocations := ZMap.M.empty allocation;
+      funptrmap := ZMap.M.empty (digest * string * C.t);
+      varargs := ZMap.M.empty (Z * list (CoqCtype.ctype * pointer_value));
       next_varargs_id := Z0;
-      bytemap := AMap.empty _;
-      capmeta := AMap.empty _;
+      bytemap := AMap.M.empty _;
+      capmeta := AMap.M.empty _;
     |}.
 
   Definition memM := errS mem_state memMError.
@@ -505,11 +505,12 @@ Module Type CheriMemoryImpl
   Definition align_down (addr alignment:Z)
     := addr - (addr mod alignment).
 
+
   (* Crear new cap meta for region where all tags are unspecified *)
   Definition init_ghost_tags
     (addr: AddressValue.t)
     (size: nat)
-    (capmeta: AMap.t (bool*CapGhostState)): AMap.t (bool*CapGhostState)
+    (capmeta: AMap.M.t (bool*CapGhostState)): AMap.M.t (bool*CapGhostState)
     :=
     match size with
     | O => capmeta
@@ -519,7 +520,7 @@ Module Type CheriMemoryImpl
         let a1 := align_down (AddressValue.to_Z addr + (Z.of_nat size')) alignment in
         let n := Z.to_nat ((a1-a0)/alignment) in
         let v := (false, {| tag_unspecified := true; bounds_unspecified := false |}) in
-        amap_range_init (AddressValue.of_Z a0) (S n) alignment v capmeta
+        AMap.map_range_init (AddressValue.of_Z a0) (S n) alignment v capmeta
     end.
 
   (** "Ghost" capability existing tags for memory region starting from [addr]
@@ -533,7 +534,7 @@ Module Type CheriMemoryImpl
   Definition ghost_tags
     (addr: AddressValue.t)
     (size: nat)
-    (capmeta: AMap.t (bool*CapGhostState)): AMap.t (bool*CapGhostState)
+    (capmeta: AMap.M.t (bool*CapGhostState)): AMap.M.t (bool*CapGhostState)
     :=
     match size with
     | O => capmeta
@@ -541,7 +542,7 @@ Module Type CheriMemoryImpl
         let alignment := Z.of_nat (IMP.get.(alignof_pointer)) in
         let a0 := align_down (AddressValue.to_Z addr) alignment in
         let a1 := align_down (AddressValue.to_Z addr + (Z.of_nat size')) alignment in
-        AMap.mapi
+        AMap.M.mapi
           (fun (a:AddressValue.t) '(t, gs) =>
              let az := AddressValue.to_Z a in
              if negb gs.(tag_unspecified) && t && (az >=? a0) && (az <=? a1)
@@ -589,7 +590,7 @@ Module Type CheriMemoryImpl
             {|
               next_alloc_id    := Z.succ st.(next_alloc_id);
               last_address     := AddressValue.of_Z addr;
-              allocations      := ZMap.add alloc_id alloc st.(allocations);
+              allocations      := ZMap.M.add alloc_id alloc st.(allocations);
               funptrmap        := st.(funptrmap);
               varargs          := st.(varargs);
               next_varargs_id  := st.(next_varargs_id);
@@ -764,19 +765,19 @@ Module Type CheriMemoryImpl
          end.
 
   Definition resolve_function_pointer
-    (funptrmap : ZMap.t (digest * string * C.t))
+    (funptrmap : ZMap.M.t (digest * string * C.t))
     (fp : function_pointer)
-    : ZMap.t (digest * string * C.t) * C.t
+    : ZMap.M.t (digest * string * C.t) * C.t
     :=
     match fp with
     | FP_valid (CoqSymbol.Symbol file_dig n opt_name) =>
-        match ZMap.find n funptrmap with
+        match ZMap.M.find n funptrmap with
         | Some (_, _, c) => (funptrmap, c)
         | None =>
             let c := C.alloc_fun (AddressValue.of_Z (AddressValue.to_Z initial_address+ n)) in
             (match opt_name with
              | CoqSymbol.SD_Id name =>
-                 ZMap.add n (file_dig, name, c) funptrmap
+                 ZMap.M.add n (file_dig, name, c) funptrmap
              | _ => funptrmap
              end, c)
         end
@@ -798,21 +799,21 @@ Module Type CheriMemoryImpl
   Definition update_capmeta
     (c: C.t)
     (addr: AddressValue.t)
-    (capmeta : AMap.t (bool*CapGhostState))
-    : AMap.t (bool*CapGhostState)
+    (capmeta : AMap.M.t (bool*CapGhostState))
+    : AMap.M.t (bool*CapGhostState)
     :=
     if is_pointer_algined addr
-    then AMap.add addr (C.cap_is_valid c, C.get_ghost_state c) capmeta
+    then AMap.M.add addr (C.cap_is_valid c, C.get_ghost_state c) capmeta
     else capmeta.
 
   Fixpoint repr
     (fuel: nat)
-    (funptrmap: ZMap.t (digest * string * C.t))
-    (capmeta : AMap.t (bool*CapGhostState))
+    (funptrmap: ZMap.M.t (digest * string * C.t))
+    (capmeta : AMap.M.t (bool*CapGhostState))
     (addr : AddressValue.t)
     (mval : mem_value)
-    : serr ((ZMap.t (digest * string * C.t))
-            * (AMap.t (bool*CapGhostState))
+    : serr ((ZMap.M.t (digest * string * C.t))
+            * (AMap.M.t (bool*CapGhostState))
             * (list AbsByte))
     :=
     match fuel with
@@ -990,7 +991,7 @@ Module Type CheriMemoryImpl
          st <- get ;;
          '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval) ;;
          let bs := mapi (fun i b => (AddressValue.with_offset addr (Z.of_nat i), b)) pre_bs in
-         let bytemap := List.fold_left (fun acc '(addr, b) => AMap.add addr b acc) bs st.(bytemap) in
+         let bytemap := List.fold_left (fun acc '(addr, b) => AMap.M.add addr b acc) bs st.(bytemap) in
          put {|
              next_alloc_id    := st.(next_alloc_id);
              last_address     := st.(last_address) ;
@@ -1029,7 +1030,7 @@ Module Type CheriMemoryImpl
   Definition find_live_allocation (addr:AddressValue.t) : memM (option (storage_instance_id*allocation)) :=
     get >>= fun st =>
         ret
-          (ZMap.fold (fun alloc_id alloc acc =>
+          (ZMap.M.fold (fun alloc_id alloc acc =>
                         match acc with
                         | None =>
                             if AddressValue.eqb alloc.(base) addr && negb alloc.(is_dead)
@@ -1077,7 +1078,7 @@ Module Type CheriMemoryImpl
               {|
                 next_alloc_id    := st.(next_alloc_id);
                 last_address     := st.(last_address) ;
-                allocations      := ZMap.remove alloc_id st.(allocations);
+                allocations      := ZMap.M.remove alloc_id st.(allocations);
                 funptrmap        := st.(funptrmap);
                 varargs          := st.(varargs);
                 next_varargs_id  := st.(next_varargs_id);
@@ -1086,12 +1087,12 @@ Module Type CheriMemoryImpl
               |}).
 
   Definition get_allocation_opt (alloc_id : Z) : memM (option allocation) :=
-    get >>= fun st => ret (ZMap.find alloc_id st.(allocations)).
+    get >>= fun st => ret (ZMap.M.find alloc_id st.(allocations)).
 
   Definition get_allocation (alloc_id : Z) : memM allocation :=
     get >>=
       fun st =>
-        match ZMap.find alloc_id st.(allocations) with
+        match ZMap.M.find alloc_id st.(allocations) with
         | Some v => ret v
         | None =>
             fail_noloc (MerrOutsideLifetime
@@ -1102,7 +1103,7 @@ Module Type CheriMemoryImpl
   Definition is_dead_allocation (alloc_id : storage_instance_id) : memM bool :=
     get >>=
       fun st =>
-        match ZMap.find alloc_id st.(allocations) with
+        match ZMap.M.find alloc_id st.(allocations) with
         | Some a => ret a.(is_dead)
         | None => ret true
         end.
@@ -1176,7 +1177,7 @@ Module Type CheriMemoryImpl
   Fixpoint abst
     (fuel: nat)
     (find_allocation : C.t -> option (storage_instance_id * allocation))
-    (funptrmap : ZMap.t (digest * string * C.t))
+    (funptrmap : ZMap.M.t (digest * string * C.t))
     (tag_query_f : AddressValue.t -> (bool* CapGhostState))
     (addr : AddressValue.t)
     (cty : CoqCtype.ctype)
@@ -1279,7 +1280,7 @@ Module Type CheriMemoryImpl
                     match ref_ty with
                     | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
                         let n_value := cap_to_Z c_value - (AddressValue.to_Z initial_address) in
-                        match ZMap.find n_value funptrmap with
+                        match ZMap.M.find n_value funptrmap with
                         | Some (file_dig, name, c') =>
                             if C.eqb c_value c' then
                               ret (NoTaint, MVEpointer ref_ty
@@ -1342,7 +1343,7 @@ Module Type CheriMemoryImpl
     end.
 
   Definition fetch_bytes
-    (bytemap : AMap.t AbsByte)
+    (bytemap : AMap.M.t AbsByte)
     (base_addr : AddressValue.t)
     (n_bytes : nat)
     :
@@ -1350,7 +1351,7 @@ Module Type CheriMemoryImpl
     :=
     List.map
       (fun (addr : AddressValue.t) =>
-         match AMap.find addr bytemap with
+         match AMap.M.find addr bytemap with
          | Some b_value => b_value
          | None => absbyte_v (PNVI_prov Prov_none) None None
          end)
@@ -1393,7 +1394,7 @@ Module Type CheriMemoryImpl
     let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
     let csize := climit - cbase in
 
-    zmap_find_first
+    ZMap.map_find_first
       (fun alloc_id alloc =>
          let abase := AddressValue.to_Z alloc.(base) in
          let asize := Z.of_nat alloc.(size) in
@@ -1454,7 +1455,7 @@ Module Type CheriMemoryImpl
     :=
     (* mprint_msg ("revoke_pointers " ++ (String.hex_str base) ++ " - "  ++ (String.hex_str limit)) ;; *)
     st <- get ;;
-    newmeta <- amap_mmapi (maybe_revoke_pointer allocation st) st.(capmeta) ;;
+    newmeta <- AMap.map_mmapi (maybe_revoke_pointer allocation st) st.(capmeta) ;;
     update (mem_state_with_capmeta newmeta) ;;
     ret tt.
 
@@ -1508,7 +1509,7 @@ Module Type CheriMemoryImpl
               (* delayed revocation. Mark allocation as 'dead'.
                 NB: Cornucopia revokes only dynamic allocations.*)
               st <- get ;;
-              let newallocs := zmap_update_element alloc_id (allocation_with_dead alloc) st.(allocations) in
+              let newallocs := ZMap.map_update_element alloc_id (allocation_with_dead alloc) st.(allocations) in
               update (mem_state_with_allocations newallocs)
             else
               (* no revocation. remove allocation *)
@@ -1642,7 +1643,7 @@ Module Type CheriMemoryImpl
     : memM unit :=
     update (fun (st: mem_state) =>
               mem_state_with_allocations
-                (zmap_update alloc_id
+                (ZMap.map_update alloc_id
                    (fun (x : option allocation) =>
                       match x with
                       | Some alloc => Some
@@ -1668,7 +1669,7 @@ Module Type CheriMemoryImpl
                 mem_state_with_allocations
                   (List.fold_left
                      (fun acc alloc_id =>
-                        zmap_update alloc_id
+                        ZMap.map_update alloc_id
                           (fun x =>
                              match x with
                              | Some alloc => Some
@@ -1745,7 +1746,7 @@ Module Type CheriMemoryImpl
       let bs := fetch_bytes st.(bytemap) addr sz in
       let tag_query (a_value : AddressValue.t) : bool* CapGhostState :=
         if is_pointer_algined a_value then
-          match AMap.find a_value st.(capmeta) with
+          match AMap.M.find a_value st.(capmeta) with
           | Some x => x
           | None =>
               (* this should not happen *)
@@ -1899,7 +1900,7 @@ Module Type CheriMemoryImpl
           serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
         ;;
 
-        let bytemap := amap_add_list_at st.(bytemap) pre_bs addr in
+        let bytemap := AMap.map_add_list_at st.(bytemap) pre_bs addr in
         put (mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta st)
         ;;
         ret (FP Write addr szn)
@@ -1925,7 +1926,7 @@ Module Type CheriMemoryImpl
                       update
                         (fun (st : mem_state) =>
                            mem_state_with_allocations
-                             (zmap_update alloc_id
+                             (ZMap.map_update alloc_id
                                 (fun (oa:option allocation) =>
                                    a <- oa ;;
                                    ret (allocation_with_is_readonly a (IsReadOnly (select_ro_kind a.(prefix))))
@@ -2010,7 +2011,7 @@ Module Type CheriMemoryImpl
     | PVconcrete c_value =>
         let n_value :=
           Z.sub (C.cap_get_value c_value) initial_address in
-        match ZMap.find n_value st.(funptrmap) with
+        match ZMap.M.find n_value st.(funptrmap) with
         | Some (file_dig, name, _) =>
             Some
               (CoqSymbol.Symbol file_dig n_value
@@ -2028,7 +2029,7 @@ Module Type CheriMemoryImpl
     | PVfunction (FP_invalid c)
     | PVconcrete c =>
         let n := cap_to_Z c - (AddressValue.to_Z initial_address) in
-        match ZMap.find n st.(funptrmap) with
+        match ZMap.M.find n st.(funptrmap) with
         | Some (file_dig, name, _) =>
             Some (CoqSymbol.Symbol file_dig n (SD_Id name))
         | None =>
@@ -2054,7 +2055,7 @@ Module Type CheriMemoryImpl
              let n_value :=
                cap_to_Z c_value - (AddressValue.to_Z initial_address)
              in
-             match ZMap.find n_value st.(funptrmap) with
+             match ZMap.M.find n_value st.(funptrmap) with
              | Some (file_dig, name, _) =>
                  let sym2 := CoqSymbol.Symbol file_dig n_value (CoqSymbol.SD_Id name) in
                  ret (CoqSymbol.symbolEquality sym sym2)
@@ -2281,7 +2282,7 @@ Module Type CheriMemoryImpl
         in
         update
           (fun (st : mem_state) =>
-             mem_state_with_allocations (zmap_update alloc_id upd_alloc st.(allocations)) st)
+             mem_state_with_allocations (ZMap.map_update alloc_id upd_alloc st.(allocations)) st)
     | _ =>
         ret tt
     end.
@@ -2577,7 +2578,7 @@ Module Type CheriMemoryImpl
              |
                (CoqIntegerType.Signed CoqIntegerType.Intptr_t |
                  CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) =>
-                 match ZMap.find n_value st.(funptrmap) with
+                 match ZMap.M.find n_value st.(funptrmap) with
                  | Some (file_dig, name, c_value) =>
                      wrap_intcast ity (IC false c_value)
                  | None =>
@@ -2806,8 +2807,8 @@ Module Type CheriMemoryImpl
     (dst src: AddressValue.t)
     (n: nat)
     (step: nat)
-    (cm: AMap.t (bool * CapGhostState))
-    : AMap.t (bool * CapGhostState)
+    (cm: AMap.M.t (bool * CapGhostState))
+    : AMap.M.t (bool * CapGhostState)
     :=
     match n with
     | O => cm
@@ -2817,9 +2818,9 @@ Module Type CheriMemoryImpl
           (AddressValue.with_offset src (Z.of_nat step))
           n
           step
-          (match AMap.find src cm with
+          (match AMap.M.find src cm with
            | None => cm
-           | Some meta => AMap.add dst meta cm
+           | Some meta => AMap.M.add dst meta cm
            end)
     end.
 
@@ -3054,7 +3055,7 @@ Module Type CheriMemoryImpl
             remove_allocation allloc_id)
          else ret tt
       )
-      (ZMap.elements st.(allocations)) tt.
+      (ZMap.M.elements st.(allocations)) tt.
 
   Definition realloc
     (loc : location_ocaml)
@@ -3122,7 +3123,7 @@ Module Type CheriMemoryImpl
   Definition va_start (args:  list (CoqCtype.ctype * pointer_value)) : memM integer_value :=
     get >>= fun st =>
         let id := st.(next_varargs_id) in
-        update (fun st => mem_state_with_varargs_next_varargs_id (ZMap.add id (0, args) st.(varargs)) (Z.succ st.(next_varargs_id)) st) ;;
+        update (fun st => mem_state_with_varargs_next_varargs_id (ZMap.M.add id (0, args) st.(varargs)) (Z.succ st.(next_varargs_id)) st) ;;
         ret (IV id).
 
   Definition va_copy (va : integer_value) : memM integer_value :=
@@ -3130,13 +3131,13 @@ Module Type CheriMemoryImpl
     | IV id =>
         get >>=
           fun st =>
-            match ZMap.find id st.(varargs) with
+            match ZMap.M.find id st.(varargs) with
             | Some args =>
                 let id := st.(next_varargs_id) in
                 update
                   (fun st =>
                      mem_state_with_varargs_next_varargs_id
-                       (ZMap.add id args st.(varargs))
+                       (ZMap.M.add id args st.(varargs))
                        (Z.succ st.(next_varargs_id))
                        st) ;;
                 ret (IV id)
@@ -3151,14 +3152,14 @@ Module Type CheriMemoryImpl
     | IV id =>
         get >>=
           fun st =>
-            match ZMap.find id st.(varargs) with
+            match ZMap.M.find id st.(varargs) with
             | Some (i_value, args) =>
                 match Lists.List.nth_error args (Z.to_nat i_value) with
                 | Some (_, ptr) =>
                     update
                       (fun st =>
                          mem_state_with_varargs_next_varargs_id
-                           (ZMap.add id (i_value + 1, args) st.(varargs))
+                           (ZMap.M.add id (i_value + 1, args) st.(varargs))
                            st.(next_varargs_id) (* unchanged *)
                                 st) ;;
                     ret ptr
@@ -3178,12 +3179,12 @@ Module Type CheriMemoryImpl
     | IV id =>
         get >>=
           fun st =>
-            match ZMap.find id st.(varargs) with
+            match ZMap.M.find id st.(varargs) with
             | Some _ =>
                 update
                   (fun (st : mem_state) =>
                      mem_state_with_varargs_next_varargs_id
-                       (ZMap.remove id st.(varargs))
+                       (ZMap.M.remove id st.(varargs))
                        st.(next_varargs_id) (* unchanged *)
                             st)
             | None =>
@@ -3195,7 +3196,7 @@ Module Type CheriMemoryImpl
   Definition va_list (va_idx:Z) : memM (list (CoqCtype.ctype * pointer_value)) :=
     get >>=
       fun st=>
-        match ZMap.find va_idx st.(varargs) with
+        match ZMap.M.find va_idx st.(varargs) with
         | Some (n_value, args) => ret args
         | None => fail_noloc (MerrWIP "va_list")
         end.
@@ -3393,9 +3394,9 @@ Module Type CheriMemoryImpl
     ret tt.
 
   Definition cap_of_mem_value
-    (funptrmap : ZMap.t (digest * string * C.t))
+    (funptrmap : ZMap.M.t (digest * string * C.t))
     (mv : mem_value)
-    : option  (ZMap.t (digest * string * C.t) * C.t)
+    : option  (ZMap.M.t (digest * string * C.t) * C.t)
     :=
     match mv with
     | MVinteger _ (IC _ c_value) => Some (funptrmap, c_value)
@@ -3470,7 +3471,7 @@ Module Type CheriMemoryImpl
           (fun (st : mem_state) =>
              mem_state_with_bytemap
                (List.fold_left
-                  (fun acc '(addr, b_value) => AMap.add addr b_value acc)
+                  (fun acc '(addr, b_value) => AMap.M.add addr b_value acc)
                   bs st.(bytemap)) st)
         ;;
         ret (List.length bs)

@@ -2,6 +2,6 @@
  (mode vo)
  (name Common)
  (package cerberus-cheri)
- (modules SimpleError Utils ZMap AMap)
+ (modules SimpleError Utils FMapExt ZMap AMap)
  (theories ExtLib StructTact SailStdpp stdpp CheriCaps)
 )

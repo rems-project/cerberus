@@ -8,6 +8,7 @@ Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Program.Equality. (* for dep. destruction *)
 Require Import Coq.FSets.FMapFacts.
 Require Import Coq.FSets.FMapAVL.
+Require Import Coq.Structures.OrderedType.
 Require Import Coq.Structures.OrderedTypeEx.
 
 Require Import ExtLib.Data.List.
@@ -20,6 +21,7 @@ Require Import Lia.
 Require Import Common.SimpleError.
 Require Import Common.AMap.
 Require Import Common.ZMap.
+Require Import Common.FMapExt.
 Require Import Common.Utils.
 
 From CheriCaps.Morello Require Import Capabilities. (* For AMap-related lemmas *)
@@ -318,111 +320,6 @@ Section ListAux.
   Qed.
 
 
-  Lemma split_eq_key_InA
-    {A : Type}
-    (l : list (Z * A))
-    (la : list Z)
-    (lb : list A)
-    (a0 : Z)
-    (b0: A)
-    :
-    split_spec l la lb -> (In a0 la <-> InA (ZMap.eq_key (elt:=A)) (a0, b0) l).
-  Proof.
-    intros S.
-    split.
-    -
-      intros N.
-      revert S N.
-      revert la lb a0.
-      dependent induction l;intros.
-      +
-        invc S.
-        inv N.
-      +
-        invc S.
-        invc N.
-        *
-          constructor.
-          reflexivity.
-        *
-          apply InA_cons_tl.
-          eapply IHl;eauto.
-    -
-      intros N.
-      revert S N.
-      revert la lb a0 b0.
-      dependent induction l;intros.
-      +
-        invc S.
-        inv N.
-      +
-        invc S.
-        invc N.
-        *
-          constructor.
-          invc H0.
-          cbn in H.
-          auto.
-        *
-          cbn.
-          right.
-          eapply IHl;eauto.
-  Qed.
-
-  Lemma split_eq_key_elt_InA
-    {A : Type}
-    (l : list (Z * A))
-    (la : list Z)
-    (lb : list A)
-    (a0 : Z):
-    split_spec l la lb -> (In a0 la <-> (exists b0, InA (ZMap.eq_key_elt (elt:=A)) (a0, b0) l)).
-  Proof.
-    intros S.
-    split.
-    -
-      intros N.
-      revert S N.
-      revert la lb a0.
-      dependent induction l;intros.
-      +
-        invc S.
-        inv N.
-      +
-        invc S.
-        invc N.
-        *
-          eexists.
-          constructor.
-          reflexivity.
-        *
-          specialize (IHl la0 lb0 a0 H3 H).
-          destruct IHl as [b1 IHl].
-          exists b1.
-          apply InA_cons_tl.
-          apply IHl.
-    -
-      intros N.
-      destruct N as [b0 N].
-      revert S N.
-      revert la lb a0 b0.
-      dependent induction l;intros.
-      +
-        invc S.
-        inv N.
-      +
-        invc S.
-        invc N.
-        *
-          constructor.
-          invc H0.
-          cbn in H.
-          auto.
-        *
-          cbn.
-          right.
-          eapply IHl;eauto.
-  Qed.
-
   Lemma nth_error_nil
     {A:Type}:
     forall k,
@@ -470,66 +367,6 @@ Section ListAux.
         eapply IHl;eauto.
   Qed.
 
-
-  (* Strictly speakigg this follows from [split_eq_key_InA] but it was proven earlier *)
-  Lemma split_eq_key_not_InA
-    {A : Type}
-    (l : list (Z * A))
-    (la : list Z)
-    (b0 : A)
-    (lb : list A)
-    (a0 : Z):
-    split_spec l la lb -> ~ InA (ZMap.eq_key (elt:=A)) (a0, b0) l -> ~ In a0 la.
-  Proof.
-    intros S N.
-    revert S N.
-    revert la lb a0 b0.
-    dependent induction l;intros.
-    -
-      invc S.
-      auto.
-    -
-      intros C.
-      invc S.
-      invc C.
-      +
-        clear -N.
-        contradict N.
-        constructor.
-        reflexivity.
-      +
-        eapply IHl;eauto.
-  Qed.
-
-  Lemma split_eq_key_NoDup
-    {A:Type}
-    (l: list (Z*A))
-    (lk : list Z)
-    (lv: list A):
-    split l = (lk, lv) ->
-    NoDupA (ZMap.eq_key (elt:=A)) l -> NoDup lk.
-  Proof.
-
-    (* unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk. *)
-    intros S.
-    apply list_split_spec in S.
-    revert lk lv S.
-    dependent induction l; intros.
-    -
-      invc S.
-      constructor.
-    -
-      invcs S.
-      specialize (IHl la lb H4).
-      constructor.
-      +
-        invc H.
-        eapply split_eq_key_not_InA; eauto.
-      +
-        apply IHl.
-        invc H.
-        assumption.
-  Qed.
 
   Lemma combine_spec:
     forall A B ab a b,
@@ -641,321 +478,120 @@ Section ListAux.
 
 End ListAux.
 
+Module FMapExtProofs
+  (OT:OrderedTypeExt)
+  (FM: FMapExt OT).
 
-Module Import AP := FMapFacts.WProperties_fun(AddressValue_as_OT)(AMap).
-Module Import WAP := FMapFacts.WFacts_fun(AddressValue_as_OT)(AMap).
-
-Section AMapAux.
-
-  Lemma amap_combine_eq_key_NoDupA
-    {A:Type}
-    (lk : list AMap.key)
-    (lv : list A):
-    NoDup lk -> NoDupA (AMap.eq_key (elt:=A)) (combine lk lv).
-  Proof.
-    intros H.
-    revert lv.
-    induction H; intros.
-    -
-      cbn.
-      constructor.
-    -
-      cbn.
-      destruct lv.
-      +
-        cbn.
-        constructor.
-      +
-        constructor.
-        *
-          clear -H.
-          intros C.
-          unfold AMap.eq_key, AMap.Raw.Proofs.PX.eqk in C.
-          apply InA_alt in C.
-          destruct C as [y [C1 C2]].
-          destruct y.
-          cbn in C1.
-          subst x.
-          apply in_combine_l in C2.
-          congruence.
-        *
-          apply IHNoDup.
-  Qed.
-
-  Lemma amap_combine_eq_key_elt_NoDupA
-    {A:Type}
-    (lk : list AMap.key)
-    (lv : list A):
-    NoDup lk -> NoDupA (AMap.eq_key_elt (elt:=A)) (combine lk lv).
-  Proof.
-    intros H.
-    revert lv.
-    induction H; intros.
-    -
-      cbn.
-      constructor.
-    -
-      cbn.
-      destruct lv.
-      +
-        cbn.
-        constructor.
-      +
-        constructor.
-        *
-          clear -H.
-          intros C.
-          unfold AMap.eq_key, AMap.Raw.Proofs.PX.eqk in C.
-          apply InA_alt in C.
-          destruct C as [y [C1 C2]].
-          destruct y.
-          cbv in C1.
-          destruct C1.
-          subst.
-          apply in_combine_l in C2.
-          congruence.
-        *
-          apply IHNoDup.
-  Qed.
-
-  Definition amap_Mem {A:Type} (x:A) (m:AMap.t A) : Prop
-    :=
-    forall k, AMap.MapsTo k x m.
-
-  Definition amap_forall {A:Type} (pred: A -> Prop) (m:AMap.t A) : Prop
-    :=
-    forall k v, AMap.MapsTo k v m -> pred v.
-
-
-  Definition amap_forall_keys {A:Type} (pred: AddressValue.t -> Prop) (m:AMap.t A) : Prop
-    :=
-    forall k, AMap.In k m -> pred k.
-
-
-  (* A predicate that accepts two ZMaps `map1` and `map2` of
-     potentially different value types `A` and `B`, and a relation
-     `R`. It ensures that for every key in these AMaps, `R` holds for
-     the corresponding values if the key exists in both maps, or that
-     the key does not exist in either map. *)
-  Definition amap_relate_keys {A B : Type} (map1: AMap.t A) (map2: AMap.t B)
-    (R: AMap.key -> A -> B -> Prop) : Prop :=
-    forall k,
-      (exists v1 v2, AMap.MapsTo k v1 map1 /\ AMap.MapsTo k v2 map2 /\ R k v1 v2)
-      \/ ((~exists v, AMap.MapsTo k v map1) /\ (~exists v, AMap.MapsTo k v map2)).
-
-  Lemma amap_in_mapsto {T:Type} (k:AMap.key) (m:AMap.t T):
-    AMap.In k m -> (exists v, @AMap.MapsTo T k v m).
-  Proof.
-    intros H.
-    destruct H.
-    exists x.
-    unfold AMap.MapsTo.
-    apply H.
-  Qed.
-
-  Lemma amap_in_mapsto' {T:Type} k (m: AMap.t T):
-    AMap.In k m -> {v | @AMap.MapsTo T k v m}.
-  Proof.
-    intros H.
-    apply in_find_iff in H.
-    destruct (AMap.find k m) eqn:Hfind.
-    - exists t. apply AMap.find_2. assumption.
-    - contradiction.
-  Qed.
-
-  Lemma amap_MapsTo_dec
-    {A:Type}
-    {Adec: forall x y:A, {x = y} + {x <> y}}
-    (k: AMap.key)
-    (v:A)
-    (m: AMap.t A)
-    :
-    {AMap.MapsTo (elt:=A) k v m} + {~ AMap.MapsTo (elt:=A) k v m}.
-  Proof.
-    destruct (AMap.find (elt:=A) k m) eqn:H.
-    - destruct (Adec v a).
-      * left. apply AMap.find_2 in H. subst. assumption.
-      * right. intro Hcontra. apply AMap.find_1 in Hcontra. congruence.
-    - right. intro Hcontra. apply AMap.find_1 in Hcontra. congruence.
-  Qed.
-
-  Lemma amap_mapsto_in {T:Type} (k:AMap.key) (m:AMap.t T) (v:T):
-    AMap.MapsTo k v m -> AMap.In k m.
-  Proof.
-    intros H.
-    apply AMap.find_1 in H.
-    apply in_find_iff.
-    rewrite H.
-    congruence.
-  Qed.
-
-  Lemma amap_range_init_spec
-    {T:Type}
-    (a0:AddressValue.t)
-    (n:nat)
-    (step:Z)
-    (v:T)
-    (m:AMap.t T):
-    forall k x,
-      AMap.MapsTo k x (amap_range_init a0 n step v m)
-      ->
-        {
-          ~(exists i, (i<n)%nat /\ AddressValue.with_offset a0 (Z.mul (Z.of_nat i) step) = k)
-          /\ AMap.MapsTo k x m
-        }+
-          {
-            (exists i, (i<n)%nat /\ AddressValue.with_offset a0 (Z.mul (Z.of_nat i) step) = k)
-            /\
-              x=v
-          }.
-  Proof.
-    dependent induction n.
-    -
-      left.
-      split.
-      +
-        intros C.
-        destruct C as [i [C _]].
-        lia.
-      +
-        cbn in H.
-        assumption.
-    -
-      simpl. intros k x Hmap.
-      destruct (eq_dec (AddressValue.with_offset a0 (Z.of_nat n * step)%Z) k) as [E|NE].
-      + (* Case: k is the newly added key *)
-        right. split. exists n. split; [lia|assumption].
-        apply add_mapsto_iff in Hmap.
-        destruct Hmap as [[H1 H2] | [H3 H4]];[auto|congruence].
-      + (* Case: k is not the newly added key, apply IH *)
-        apply add_mapsto_iff in Hmap.
-        specialize (IHn step v m k x).
-        autospecialize IHn.
-        {
-          destruct Hmap as [[H1 H2] | [H3 H4]];[congruence|auto].
-        }
-        destruct IHn as [[Hni Hm]|[Hi Hv]].
-        * left. split; auto.
-          intro H.
-          apply Hni. destruct H as [i [Hlt Heq]].
-          exists i. split.
-          --
-            destruct Hmap.
-            ++
-              destruct H.
-              congruence.
-            ++
-              destruct H.
-              assert(i<>n).
-              {
-                clear - H Heq.
-                rewrite <- Heq in H.
-                contradict H.
-                rewrite H.
-                reflexivity.
-              }
-              lia.
-          --
-            auto.
-        * right. destruct Hi as [i [Hlt Heq]].
-          split.
-          exists i. split; [lia|]. assumption.
-          auto.
-  Qed.
-
-  Lemma amap_maps_to_elements_p
-    {A: Type}
-    `{Ae: Equivalence A (@eq A)}
-    (P: A -> Prop)
-    (mv: AMap.t A)
-    :
-    (forall k v, AMap.MapsTo k v mv -> P v) <-> (List.Forall (fun '(k,v) => P v) (AMap.elements mv)).
-  Proof.
-    split.
-    - intros HMapsTo.
-      apply List.Forall_forall.
-      intros (k, v) Hin.
-      apply In_InA with (eqA:=(AMap.eq_key_elt (elt:=A))) in Hin.
-      apply WAP.elements_mapsto_iff in Hin.
-      apply HMapsTo in Hin.
-      assumption.
-      typeclasses eauto.
-    - intros HForall k v HMapsTo.
-      apply WAP.elements_mapsto_iff in HMapsTo.
-      apply List.Forall_forall with (x := (k, v)) in HForall.
-      + apply HForall.
-      +
-        apply InA_alt in HMapsTo.
-        destruct HMapsTo as [(k',v') [ [Ek Ev] HM]].
-        cbn in Ek, Ev.
-        subst.
-        assumption.
-  Qed.
-
-  Lemma amap_forall_elements_split
-    (A : Type)
-    (mv : AMap.t A)
-    (P: A -> Prop)
-    :
-    amap_forall P mv <-> Forall (fun '(_, v) => P v) (AMap.elements mv).
-  Proof.
-    unfold amap_forall.
-    split.
-    -
-      intros H.
-      apply amap_maps_to_elements_p.
-      assumption.
-    -
-      intros H.
-      eapply amap_maps_to_elements_p.
-      assumption.
-  Qed.
-
-  Lemma amap_forall_Forall_elements
+  Lemma split_eq_key_InA
     {A : Type}
-    (mv : AMap.t A)
-    (P: A -> Prop)
+    (l : list (FM.M.key * A))
+    (la : list FM.M.key)
+    (lb : list A)
+    (a0 : FM.M.key)
+    (b0: A)
     :
-    amap_forall P mv ->
-    forall (lk : list AMap.key) (lv : list A),
-      split (AMap.elements mv) = (lk, lv) -> Forall P lv.
+    split_spec l la lb -> (In a0 la <-> InA (FM.M.eq_key (elt:=A)) (a0, b0) l).
   Proof.
-    intros H lk lv S.
-    replace lv with (snd (lk,lv));[|auto].
-    rewrite <- S.
-    clear S lk.
-    apply amap_forall_elements_split in H.
-    generalize dependent (AMap.elements (elt:=A) mv).
-    intros e.
-    intros H.
-    apply Forall_nth.
-    intros k x K.
-    pose proof (split_nth e k (AddressValue.of_Z (Z.of_nat k), x)) as S.
-    rewrite Forall_nth in H.
-    specialize (H k (AddressValue.of_Z (Z.of_nat k),x)).
-    autospecialize H.
-    {
-      rewrite split_length_r in K.
-      apply K.
-    }
-    rewrite S in H. clear S.
-    cbn in H.
-    apply H.
+    intros S.
+    split.
+    -
+      intros N.
+      revert S N.
+      revert la lb a0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          constructor.
+          reflexivity.
+        *
+          apply InA_cons_tl.
+          eapply IHl;eauto.
+    -
+      intros N.
+      revert S N.
+      revert la lb a0 b0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          constructor.
+          invc H0.
+          cbn in H.
+          auto.
+        *
+          cbn.
+          right.
+          eapply IHl;eauto.
   Qed.
 
+  Lemma split_eq_key_elt_InA
+    {A : Type}
+    (l : list (FM.M.key * A))
+    (la : list FM.M.key)
+    (lb : list A)
+    (a0 : FM.M.key):
+    split_spec l la lb -> (In a0 la <-> (exists b0, InA (FM.M.eq_key_elt (elt:=A)) (a0, b0) l)).
+  Proof.
+    intros S.
+    split.
+    -
+      intros N.
+      revert S N.
+      revert la lb a0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          eexists.
+          constructor.
+          reflexivity.
+        *
+          specialize (IHl la0 lb0 a0 H3 H).
+          destruct IHl as [b1 IHl].
+          exists b1.
+          apply InA_cons_tl.
+          apply IHl.
+    -
+      intros N.
+      destruct N as [b0 N].
+      revert S N.
+      revert la lb a0 b0.
+      dependent induction l;intros.
+      +
+        invc S.
+        inv N.
+      +
+        invc S.
+        invc N.
+        *
+          constructor.
+          invc H0.
+          cbn in H.
+          auto.
+        *
+          cbn.
+          right.
+          eapply IHl;eauto.
+  Qed.
 
-End AMapAux.
-
-Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
-Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
-
-Section ZMapAux.
-
-  Lemma zmap_combine_eq_key_NoDupA
+  Lemma map_combine_eq_key_NoDupA
     {A:Type}
-    (lk : list ZMap.key)
+    (lk : list FM.M.key)
     (lv : list A):
-    NoDup lk -> NoDupA (ZMap.eq_key (elt:=A)) (combine lk lv).
+    NoDup lk -> NoDupA (FM.M.eq_key (elt:=A)) (combine lk lv).
   Proof.
     intros H.
     revert lv.
@@ -974,7 +610,7 @@ Section ZMapAux.
         *
           clear -H.
           intros C.
-          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
+          unfold FM.M.eq_key, FM.M.Raw.Proofs.PX.eqk in C.
           apply InA_alt in C.
           destruct C as [y [C1 C2]].
           destruct y.
@@ -986,11 +622,11 @@ Section ZMapAux.
           apply IHNoDup.
   Qed.
 
-  Lemma zmap_combine_eq_key_elt_NoDupA
+  Lemma map_combine_eq_key_elt_NoDupA
     {A:Type}
-    (lk : list ZMap.key)
+    (lk : list FM.M.key)
     (lv : list A):
-    NoDup lk -> NoDupA (ZMap.eq_key_elt (elt:=A)) (combine lk lv).
+    NoDup lk -> NoDupA (FM.M.eq_key_elt (elt:=A)) (combine lk lv).
   Proof.
     intros H.
     revert lv.
@@ -1009,7 +645,7 @@ Section ZMapAux.
         *
           clear -H.
           intros C.
-          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
+          unfold FM.M.eq_key, FM.M.Raw.Proofs.PX.eqk in C.
           apply InA_alt in C.
           destruct C as [y [C1 C2]].
           destruct y.
@@ -1022,94 +658,140 @@ Section ZMapAux.
           apply IHNoDup.
   Qed.
 
+  (* Strictly speakigg this follows from [split_eq_key_InA] but it was proven earlier *)
+  Lemma split_eq_key_not_InA
+    {A : Type}
+    (l : list (FM.M.key * A))
+    (la : list FM.M.key)
+    (b0 : A)
+    (lb : list A)
+    (a0 : FM.M.key):
+    split_spec l la lb -> ~ InA (FM.M.eq_key (elt:=A)) (a0, b0) l -> ~ In a0 la.
+  Proof.
+    intros S N.
+    revert S N.
+    revert la lb a0 b0.
+    dependent induction l;intros.
+    -
+      invc S.
+      auto.
+    -
+      intros C.
+      invc S.
+      invc C.
+      +
+        clear -N.
+        contradict N.
+        constructor.
+        reflexivity.
+      +
+        eapply IHl;eauto.
+  Qed.
 
-  Definition zmap_Mem {A:Type} (x:A) (m:ZMap.t A) : Prop
+  Lemma split_eq_key_NoDup
+    {A:Type}
+    (l: list (FM.M.key*A))
+    (lk : list FM.M.key)
+    (lv: list A):
+    split l = (lk, lv) ->
+    NoDupA (FM.M.eq_key (elt:=A)) l -> NoDup lk.
+  Proof.
+
+    (* unfold FM.M.eq_key, FM.M.Raw.Proofs.PX.eqk. *)
+    intros S.
+    apply list_split_spec in S.
+    revert lk lv S.
+    dependent induction l; intros.
+    -
+      invc S.
+      constructor.
+    -
+      invcs S.
+      specialize (IHl la lb H4).
+      constructor.
+      +
+        invc H.
+        eapply split_eq_key_not_InA; eauto.
+      +
+        apply IHl.
+        invc H.
+        assumption.
+  Qed.
+
+
+  Definition map_Mem {A:Type} (x:A) (m:FM.M.t A) : Prop
     :=
-    forall k, ZMap.MapsTo k x m.
+    forall k, FM.M.MapsTo k x m.
 
-  Definition zmap_forall {A:Type} (pred: A -> Prop) (m:ZMap.t A) : Prop
+  Definition map_forall {A:Type} (pred: A -> Prop) (m:FM.M.t A) : Prop
     :=
-    forall k v, ZMap.MapsTo k v m -> pred v.
+    forall k v, FM.M.MapsTo k v m -> pred v.
 
 
-  Definition zmap_forall_keys {A:Type} (pred: Z -> Prop) (m:ZMap.t A) : Prop
+  Definition map_forall_keys {A:Type} (pred: FM.M.key -> Prop) (m:FM.M.t A) : Prop
     :=
-    forall k, ZMap.In k m -> pred k.
+    forall k, FM.M.In k m -> pred k.
 
   (* A predicate that accepts two ZMaps `map1` and `map2` of
      potentially different value types `A` and `B`, and a relation
      `R`. It ensures that for every key in these ZMaps, `R` holds for
      the corresponding values if the key exists in both maps, or that
      the key does not exist in either map. *)
-  Definition zmap_relate_keys {A B : Type} (map1: ZMap.t A) (map2: ZMap.t B)
-    (R: ZMap.key -> A -> B -> Prop) : Prop :=
+  Definition map_relate_keys {A B : Type} (map1: FM.M.t A) (map2: FM.M.t B)
+    (R: FM.M.key -> A -> B -> Prop) : Prop :=
     forall k,
-      (exists v1 v2, ZMap.MapsTo k v1 map1 /\ ZMap.MapsTo k v2 map2 /\ R k v1 v2)
-      \/ ((~exists v, ZMap.MapsTo k v map1) /\ (~exists v, ZMap.MapsTo k v map2)).
+      (exists v1 v2, FM.M.MapsTo k v1 map1 /\ FM.M.MapsTo k v2 map2 /\ R k v1 v2)
+      \/ ((~exists v, FM.M.MapsTo k v map1) /\ (~exists v, FM.M.MapsTo k v map2)).
 
-  (* TODO: maybe not needed! *)
-  (*
-  #[global] Instance zmap_mapi_Proper
-    {A B : Type}
-    (pA: relation A)
-    (pB: relation B)
-    (f : ZMap.key -> A -> B)
-    {Hf: Proper (eq ==> pA ==> pB) f}
-    :
-    Proper ((ZMap.Equiv pA) ==> (ZMap.Equiv pB)) (ZMap.mapi f).
-  Proof.
-  Admitted.
-   *)
-
-  Lemma zmap_in_mapsto {T:Type} (k:ZMap.key) (m:ZMap.t T):
-    ZMap.In k m -> (exists v, @ZMap.MapsTo T k v m).
+  Lemma map_in_mapsto {T:Type} (k:FM.M.key) (m:FM.M.t T):
+    FM.M.In k m -> (exists v, @FM.M.MapsTo T k v m).
   Proof.
     intros H.
     destruct H.
     exists x.
-    unfold ZMap.MapsTo.
+    unfold FM.M.MapsTo.
     apply H.
   Qed.
 
-  Lemma zmap_in_mapsto' {T:Type} k (m: ZMap.t T):
-    ZMap.In k m -> {v | @ZMap.MapsTo T k v m}.
+  Lemma map_in_mapsto' {T:Type} k (m: FM.M.t T):
+    FM.M.In k m -> {v | @FM.M.MapsTo T k v m}.
   Proof.
     intros H.
-    apply in_find_iff in H.
-    destruct (ZMap.find k m) eqn:Hfind.
-    - exists t. apply ZMap.find_2. assumption.
+    apply FM.P.F.in_find_iff in H.
+    destruct (FM.M.find k m) eqn:Hfind.
+    - exists t. apply FM.M.find_2. assumption.
     - contradiction.
   Qed.
 
-  Lemma zmap_MapsTo_dec
+  Lemma map_MapsTo_dec
     {A:Type}
     {Adec: forall x y:A, {x = y} + {x <> y}}
-    (k: ZMap.key)
+    (k: FM.M.key)
     (v:A)
-    (m: ZMap.t A)
+    (m: FM.M.t A)
     :
-    {ZMap.MapsTo (elt:=A) k v m} + {~ ZMap.MapsTo (elt:=A) k v m}.
+    {FM.M.MapsTo (elt:=A) k v m} + {~ FM.M.MapsTo (elt:=A) k v m}.
   Proof.
-    destruct (ZMap.find (elt:=A) k m) eqn:H.
+    destruct (FM.M.find (elt:=A) k m) eqn:H.
     - destruct (Adec v a).
-      * left. apply ZMap.find_2 in H. subst. assumption.
-      * right. intro Hcontra. apply ZMap.find_1 in Hcontra. congruence.
-    - right. intro Hcontra. apply ZMap.find_1 in Hcontra. congruence.
+      * left. apply FM.M.find_2 in H. subst. assumption.
+      * right. intro Hcontra. apply FM.M.find_1 in Hcontra. congruence.
+    - right. intro Hcontra. apply FM.M.find_1 in Hcontra. congruence.
   Qed.
 
   (* Simple case *)
-  #[global] Instance zmap_mapi_Proper_equal
+  #[global] Instance map_mapi_Proper_equal
     {A B : Type}
     :
     Proper ((eq ==> eq ==> eq) ==>
-              (ZMap.Equal) ==> (ZMap.Equal)) (@ZMap.mapi A B ).
+              (FM.M.Equal) ==> (FM.M.Equal)) (@FM.M.mapi A B ).
   Proof.
     intros f1 f2 Ef a1 a2 H.
-    unfold ZMap.Equal in *.
+    unfold FM.M.Equal in *.
     intros k.
     specialize (H k).
-    rewrite mapi_o.
-    rewrite mapi_o.
+    rewrite FM.P.F.mapi_o.
+    rewrite FM.P.F.mapi_o.
     -
       unfold option_map.
       repeat break_match;invc H.
@@ -1126,7 +808,7 @@ Section ZMapAux.
     (elt : Type)
     (R: relation elt)
     :
-    Proper (eq ==> ZMap.Equiv R ==> iff) (ZMap.In (elt:=elt)).
+    Proper (eq ==> FM.M.Equiv R ==> iff) (FM.M.In (elt:=elt)).
   Proof.
     intros k1 k2 EE m1 m2 [ME1 _].
     subst. rename k2 into k.
@@ -1134,12 +816,12 @@ Section ZMapAux.
     assumption.
   Qed.
 
-  #[global] Instance zmap_Equiv_Reflexive
+  #[global] Instance map_Equiv_Reflexive
     (elt: Type)
     (R: relation elt)
     `{EE: Equivalence elt R}
     :
-    Reflexive (ZMap.Equiv R).
+    Reflexive (FM.M.Equiv R).
   Proof.
     intros m.
     constructor.
@@ -1149,17 +831,17 @@ Section ZMapAux.
     +
       intros k e e' H0 H1.
       auto.
-      assert(E: e = e') by (eapply MapsTo_fun;eauto).
+      assert(E: e = e') by (eapply FM.P.F.MapsTo_fun;eauto).
       rewrite E.
       reflexivity.
   Qed.
 
-  #[global] Instance zmap_Equiv_Symmetric
+  #[global] Instance map_Equiv_Symmetric
     (elt: Type)
     (R: relation elt)
     `{EE: Equivalence elt R}
     :
-    Symmetric (ZMap.Equiv R).
+    Symmetric (FM.M.Equiv R).
   Proof.
     intros a b [H1 H2].
     split.
@@ -1176,12 +858,12 @@ Section ZMapAux.
       apply H2;assumption.
   Qed.
 
-  #[global] Instance zmap_Equiv_Transitive
+  #[global] Instance map_Equiv_Transitive
     (elt: Type)
     (R: relation elt)
     `{EE: Equivalence elt R}
     :
-    Transitive (ZMap.Equiv R).
+    Transitive (FM.M.Equiv R).
   Proof.
     intros a b c.
     intros Eab Ebc.
@@ -1206,23 +888,23 @@ Section ZMapAux.
       destruct EE as [_ _ RT].
       unfold Transitive in RT.
 
-      destruct (ZMap.find k b) eqn:Hb.
+      destruct (FM.M.find k b) eqn:Hb.
       *
         rename e into e2.
-        apply ZMap.find_2 in Hb.
+        apply FM.M.find_2 in Hb.
         specialize (H2 e1 e2 Ha Hb).
         eapply RT.
         eapply H2.
         eapply H4; assumption.
       *
-        apply not_find_in_iff in Hb.
+        apply FM.P.F.not_find_in_iff in Hb.
         destruct H1 as [H1 _].
 
-        assert(ZMap.In (elt:=elt) k a) as HaI.
+        assert(FM.M.In (elt:=elt) k a) as HaI.
         {
           clear -Ha.
-          apply in_find_iff.
-          apply ZMap.find_1 in Ha.
+          apply FM.P.F.in_find_iff.
+          apply FM.M.find_1 in Ha.
           rewrite Ha.
           intros H.
           inv H.
@@ -1233,19 +915,19 @@ Section ZMapAux.
         apply HaI.
   Qed.
 
-  #[global] Instance zmap_Equiv_Equivalence
+  #[global] Instance map_Equiv_Equivalence
     (elt: Type)
     (R: relation elt)
     `{H: Equivalence elt R}
     :
-    Equivalence (ZMap.Equiv R).
+    Equivalence (FM.M.Equiv R).
   Proof.
     split;typeclasses eauto.
   Qed.
 
-  #[global] Instance zmap_range_init_Proper:
-    forall [elt : Type], Proper (eq ==> eq ==> eq ==> eq ==> ZMap.Equal ==> ZMap.Equal)
-                           (zmap_range_init (T:=elt)).
+  #[global] Instance map_range_init_Proper:
+    forall [elt : Type], Proper (eq ==> eq ==> eq ==> eq ==> FM.M.Equal ==> FM.M.Equal)
+                           (FM.map_range_init (T:=elt)).
   Proof.
     intros elt a1 a0 EA n0 n EN s0 s ES v0 v EV m0 m1 EM k.
     subst.
@@ -1255,69 +937,70 @@ Section ZMapAux.
       apply EM.
     -
       simpl.
-      repeat rewrite add_o.
+      repeat rewrite FM.F.add_o.
       break_if.
       reflexivity.
       apply IHn.
       assumption.
   Qed.
 
-  #[global] Instance zmap_add_Proper
+  #[global] Instance map_add_Proper
     {elt : Type}
     (R: relation elt)
     :
-    Proper ((eq) ==> R ==> (ZMap.Equiv R) ==> (ZMap.Equiv R)) (ZMap.add (elt:=elt)).
+    Proper ((eq) ==> R ==> (FM.M.Equiv R) ==> (FM.M.Equiv R)) (FM.M.add (elt:=elt)).
   Proof.
     intros k' k Ek e e' Ee m m' [Em1 Em2].
     subst.
     split.
     -
       intros k0.
-      destruct (Z.eq_dec k k0); subst; split; intros H; apply add_in_iff.
+      destruct (OT.eq_dec k k0); unfold OT.eq in *; subst; split; intros H; apply FM.F.add_in_iff.
       1,2: left; reflexivity.
-      1,2: right; apply Em1; apply add_in_iff in H;
+      1,2: right; apply Em1; apply FM.F.add_in_iff in H;
       destruct H; [congruence|assumption].
     -
       intros k0 e0 e'0 H H0.
-      destruct (Z.eq_dec k k0).
+      destruct (OT.eq_dec k k0).
       + (* k=k0 *)
+        unfold OT.eq in *.
         clear Em1.
         subst k0.
-        apply add_mapsto_iff in H.
-        apply add_mapsto_iff in H0.
+        apply FM.F.add_mapsto_iff in H.
+        apply FM.F.add_mapsto_iff in H0.
         destruct H as [ [Hk He] | [Hk He]],
             H0 as [ [H0k H0e] | [H0k H0e]]; subst; try congruence.
       + (* k<>k0 *)
-        apply ZMap.add_3 in H ; [|assumption].
-        apply ZMap.add_3 in H0 ; [|assumption].
+        apply FM.M.add_3 in H ; [|assumption].
+        apply FM.M.add_3 in H0 ; [|assumption].
         apply Em2 with (k:=k0);assumption.
   Qed.
 
-  #[global] Instance zmap_fold_proper
+  #[global] Instance map_fold_proper
     {A elt : Type}
     (Ae: relation A)
     (Eelt: relation elt)
     :
-    Proper (((eq) ==> Eelt ==> Ae ==> Ae) ==> ZMap.Equal ==> Ae ==> Ae) (@ZMap.fold elt A).
+    Proper (((eq) ==> Eelt ==> Ae ==> Ae) ==> FM.M.Equal ==> Ae ==> Ae) (@FM.M.fold elt A).
   Proof.
   Admitted.
 
-  Lemma zmap_mapsto_in {T:Type} (k:ZMap.key) (m:ZMap.t T) (v:T):
-    ZMap.MapsTo k v m -> ZMap.In k m.
+  Lemma map_mapsto_in {T:Type} (k:FM.M.key) (m:FM.M.t T) (v:T):
+    FM.M.MapsTo k v m -> FM.M.In k m.
   Proof.
     intros H.
-    apply ZMap.find_1 in H.
-    apply in_find_iff.
+    apply FM.M.find_1 in H.
+    apply FM.P.F.in_find_iff.
     rewrite H.
     congruence.
   Qed.
 
-  Lemma zmap_relate_keys_same_keys {A B:Type} (m1:ZMap.t A) (m2:ZMap.t B) f:
-    zmap_relate_keys m1 m2 f ->
-    (forall k, ZMap.In k m1 <-> ZMap.In k m2).
+  Lemma map_relate_keys_same_keys {A B:Type} (m1:FM.M.t A) (m2:FM.M.t B) f:
+    map_relate_keys m1 m2 f ->
+    (forall k, FM.M.In k m1 <-> FM.M.In k m2).
   Proof.
     intros H k.
-    unfold zmap_relate_keys in H.
+    unfold map_relate_keys in H.
     specialize (H k).
     split.
     -
@@ -1325,46 +1008,46 @@ Section ZMapAux.
       destruct H.
       +
         destruct H as [v1 [v2 [H1 [H2 H3]]]].
-        apply zmap_mapsto_in in H2.
+        apply map_mapsto_in in H2.
         apply H2.
       +
         destruct H.
         contradict H.
-        apply zmap_in_mapsto in M.
+        apply map_in_mapsto in M.
         apply M.
     -
       intros M.
       destruct H.
       +
         destruct H as [v1 [v2 [H1 [H2 H3]]]].
-        apply zmap_mapsto_in in H1.
+        apply map_mapsto_in in H1.
         apply H1.
       +
         destruct H.
         contradict H0.
-        apply zmap_in_mapsto in M.
+        apply map_in_mapsto in M.
         apply M.
   Qed.
 
-  Lemma zmap_maps_to_elements_p
+  Lemma map_maps_to_elements_p
     {A: Type}
     `{Ae: Equivalence A (@eq A)}
     (P: A -> Prop)
-    (mv: ZMap.t A)
+    (mv: FM.M.t A)
     :
-    (forall k v, ZMap.MapsTo k v mv -> P v) <-> (List.Forall (fun '(k,v) => P v) (ZMap.elements mv)).
+    (forall k v, FM.M.MapsTo k v mv -> P v) <-> (List.Forall (fun '(k,v) => P v) (FM.M.elements mv)).
   Proof.
     split.
     - intros HMapsTo.
       apply List.Forall_forall.
       intros (k, v) Hin.
-      apply In_InA with (eqA:=(ZMap.eq_key_elt (elt:=A))) in Hin.
-      apply WZP.elements_mapsto_iff in Hin.
+      apply In_InA with (eqA:=(FM.M.eq_key_elt (elt:=A))) in Hin.
+      apply FM.P.F.elements_mapsto_iff in Hin.
       apply HMapsTo in Hin.
       assumption.
       typeclasses eauto.
     - intros HForall k v HMapsTo.
-      apply WZP.elements_mapsto_iff in HMapsTo.
+      apply FM.P.F.elements_mapsto_iff in HMapsTo.
       apply List.Forall_forall with (x := (k, v)) in HForall.
       + apply HForall.
       +
@@ -1375,47 +1058,47 @@ Section ZMapAux.
         assumption.
   Qed.
 
-  Lemma zmap_forall_elements_split
+  Lemma map_forall_elements_split
     (A : Type)
-    (mv : ZMap.t A)
+    (mv : FM.M.t A)
     (P: A -> Prop)
     :
-    zmap_forall P mv <-> Forall (fun '(_, v) => P v) (ZMap.elements mv).
+    map_forall P mv <-> Forall (fun '(_, v) => P v) (FM.M.elements mv).
   Proof.
-    unfold zmap_forall.
+    unfold map_forall.
     split.
     -
       intros H.
-      apply zmap_maps_to_elements_p.
+      apply map_maps_to_elements_p.
       assumption.
     -
       intros H.
-      eapply zmap_maps_to_elements_p.
+      eapply map_maps_to_elements_p.
       assumption.
   Qed.
 
-  Lemma zmap_forall_Forall_elements
+  Lemma map_forall_Forall_elements
     {A : Type}
-    (mv : ZMap.t A)
+    (mv : FM.M.t A)
     (P: A -> Prop)
     :
-    zmap_forall P mv ->
-    forall (lk : list ZMap.key) (lv : list A),
-      split (ZMap.elements mv) = (lk, lv) -> Forall P lv.
+    map_forall P mv ->
+    forall (lk : list FM.M.key) (lv : list A),
+      split (FM.M.elements mv) = (lk, lv) -> Forall P lv.
   Proof.
     intros H lk lv S.
     replace lv with (snd (lk,lv));[|auto].
     rewrite <- S.
     clear S lk.
-    apply zmap_forall_elements_split in H.
-    generalize dependent (ZMap.elements (elt:=A) mv).
+    apply map_forall_elements_split in H.
+    generalize dependent (FM.M.elements (elt:=A) mv).
     intros e.
     intros H.
     apply Forall_nth.
     intros k x K.
-    pose proof (split_nth e k (Z.of_nat k, x)) as S.
+    pose proof (split_nth e k (OT.of_nat k, x)) as S.
     rewrite Forall_nth in H.
-    specialize (H k (Z.of_nat k,x)).
+    specialize (H k (OT.of_nat k,x)).
     autospecialize H.
     {
       rewrite split_length_r in K.
@@ -1428,10 +1111,10 @@ Section ZMapAux.
 
   Lemma InA_eq_key_combine
     {A:Type}
-    (lk : list ZMap.key)
+    (lk : list FM.M.key)
     (lv : list A):
     forall k v,
-      InA (ZMap.eq_key_elt (elt:=A)) (k, v) (combine lk lv) -> In k lk.
+      InA (FM.M.eq_key_elt (elt:=A)) (k, v) (combine lk lv) -> In k lk.
   Proof.
     intros k v H.
     remember (combine lk lv) as e.
@@ -1439,7 +1122,7 @@ Section ZMapAux.
     rewrite <- Heqe.
     apply InA_alt in H.
     destruct H as [kv [H1 H2]].
-    unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
+    unfold FM.M.eq_key_elt, FM.M.Raw.Proofs.PX.eqke in H1.
     destruct kv.
     cbn in H1.
     destruct H1.
@@ -1449,19 +1132,19 @@ Section ZMapAux.
 
   Lemma In_zmap_elements_split_zmap_in
     {A:Type}
-    (m : ZMap.t A) (k : ZMap.key):
-    In k (fst (split (ZMap.elements (elt:=A) m))) ->
-    ZMap.In (elt:=A) k m.
+    (m : FM.M.t A) (k : FM.M.key):
+    In k (fst (split (FM.M.elements (elt:=A) m))) ->
+    FM.M.In (elt:=A) k m.
   Proof.
     intros H.
-    remember (ZMap.elements (elt:=A) m) as e.
+    remember (FM.M.elements (elt:=A) m) as e.
     remember (split e) as p.
     destruct p as [lk lv].
     cbn in H.
     symmetry in Heqp.
     apply list_split_spec in Heqp.
 
-    apply elements_in_iff.
+    apply FM.F.elements_in_iff.
     apply split_eq_key_elt_InA with (a0:=k) in Heqp.
     apply Heqp in H. clear Heqp.
     destruct H as [v H].
@@ -1472,122 +1155,56 @@ Section ZMapAux.
 
   Lemma elements_to_list
     {A:Type}:
-    forall (m:ZMap.t A),
-      ZMap.ZP.to_list m = ZMap.elements m.
+    forall (m:FM.M.t A),
+      FM.P.to_list m = FM.M.elements m.
   Proof.
     intros m.
     reflexivity.
   Qed.
 
-  Lemma zmap_range_init_spec
-    {T:Type}
-    (a0:Z)
-    (n:nat)
-    (step:Z)
-    (v:T)
-    (m:ZMap.t T):
-    forall k x,
-      ZMap.MapsTo k x (zmap_range_init a0 n step v m)
-      ->
-        {
-          ~(exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
-          /\ ZMap.MapsTo k x m
-        }+
-          {
-            (exists i, (i<n)%nat /\ Z.add a0 (Z.mul (Z.of_nat i) step) = k)
-            /\
-              x=v
-          }.
-  Proof.
-    dependent induction n.
-    -
-      left.
-      split.
-      +
-        intros C.
-        destruct C as [i [C _]].
-        lia.
-      +
-        cbn in H.
-        assumption.
-    -
-      simpl. intros k x Hmap.
-      destruct (Z.eq_dec (a0 + Z.of_nat n * step) k) as [E|NE].
-      + (* Case: k is the newly added key *)
-        right. split. exists n. split; lia.
-        apply add_mapsto_iff in Hmap.
-        destruct Hmap as [[H1 H2] | [H3 H4]];[auto|congruence].
-      + (* Case: k is not the newly added key, apply IH *)
-        apply add_mapsto_iff in Hmap.
-        specialize (IHn step v m k x).
-        autospecialize IHn.
-        {
-          destruct Hmap as [[H1 H2] | [H3 H4]];[congruence|auto].
-        }
-        destruct IHn as [[Hni Hm]|[Hi Hv]].
-        * left. split; auto.
-          intro H.
-          apply Hni. destruct H as [i [Hlt Heq]].
-          exists i. split.
-          --
-            destruct Hmap.
-            ++
-              destruct H.
-              congruence.
-            ++
-              destruct H.
-              assert(i<>n) by lia.
-              lia.
-          --
-            auto.
-        * right. destruct Hi as [i [Hlt Heq]].
-          split.
-          exists i. split; [lia|]. assumption.
-          auto.
-  Qed.
 
-  Lemma zmap_update_MapsTo_not_at_k
+  Lemma map_update_MapsTo_not_at_k
     {A: Type}
-    (old: ZMap.t A)
+    (old: FM.M.t A)
     (f: option A -> option A)
     (v: A)
-    (k k': Z)
+    (k k': FM.M.key)
     :
     k<>k' ->
-    ZMap.MapsTo k v (zmap_update k' f old) <-> ZMap.MapsTo k v old.
+    FM.M.MapsTo k v (FM.map_update k' f old) <-> FM.M.MapsTo k v old.
   Proof.
     intros K.
-    unfold zmap_update.
+    unfold FM.map_update.
     split.
     -
       break_match; intros H.
-      + apply add_neq_mapsto_iff, remove_neq_mapsto_iff in H; auto.
-      + apply remove_neq_mapsto_iff in H; auto.
+      + apply FM.F.add_neq_mapsto_iff, FM.F.remove_neq_mapsto_iff in H; auto.
+      + apply FM.F.remove_neq_mapsto_iff in H; auto.
     -
       break_match; intros H.
-      + apply add_neq_mapsto_iff, remove_neq_mapsto_iff;auto.
-      + apply remove_neq_mapsto_iff; auto.
+      + apply FM.F.add_neq_mapsto_iff, FM.F.remove_neq_mapsto_iff;auto.
+      + apply FM.F.remove_neq_mapsto_iff; auto.
   Qed.
 
-  Lemma zmap_update_MapsTo_update_at_k
+  Lemma map_update_MapsTo_update_at_k
     {A: Type}
-    {m: ZMap.t A}
+    {m: FM.M.t A}
     {f: option A -> option A}
     {v v': A}
-    {k: Z}
+    {k: FM.M.key}
     :
-    ZMap.MapsTo k v m ->
-    ZMap.MapsTo k v' (zmap_update k f m) ->
+    FM.M.MapsTo k v m ->
+    FM.M.MapsTo k v' (FM.map_update k f m) ->
     f (Some v) = Some v'.
   Proof.
     intros M U.
-    unfold zmap_update in U.
-    apply ZMap.find_1 in M.
+    unfold FM.map_update in U.
+    apply FM.M.find_1 in M.
     rewrite M in U.
     clear M.
     destruct (f (Some v)).
     -
-      apply F.add_mapsto_iff in U.
+      apply FM.F.add_mapsto_iff in U.
       destruct U;destruct H.
       +
         subst.
@@ -1595,55 +1212,55 @@ Section ZMapAux.
       +
         congruence.
     -
-      apply remove_mapsto_iff in U.
+      apply FM.F.remove_mapsto_iff in U.
       destruct U.
       congruence.
   Qed.
 
-  Lemma zmap_update_MapsTo_update_at_k'
+  Lemma map_update_MapsTo_update_at_k'
     {A: Type}
-    {m: ZMap.t A}
+    {m: FM.M.t A}
     {f: option A -> option A}
     {v v': A}
-    {k: Z}
+    {k: FM.M.key}
     :
-    ZMap.MapsTo k v m ->
+    FM.M.MapsTo k v m ->
     f (Some v) = Some v' ->
-    ZMap.MapsTo k v' (zmap_update k f m).
+    FM.M.MapsTo k v' (FM.map_update k f m).
   Proof.
     intros M U.
-    unfold zmap_update.
-    apply ZMap.find_1 in M.
+    unfold FM.map_update.
+    apply FM.M.find_1 in M.
     rewrite M.
     clear M.
     destruct (f (Some v)).
     -
       invc U.
-      apply ZMap.add_1.
+      apply FM.M.add_1.
       reflexivity.
     -
       congruence.
   Qed.
 
-  Lemma zmap_update_MapsTo_new_at_k
+  Lemma map_update_MapsTo_new_at_k
     {A: Type}
-    {m: ZMap.t A}
+    {m: FM.M.t A}
     {f: option A -> option A}
     {v': A}
-    {k: Z}
+    {k: FM.M.key}
     :
-    ~ ZMap.In k m ->
-    ZMap.MapsTo k v' (zmap_update k f m) ->
+    ~ FM.M.In k m ->
+    FM.M.MapsTo k v' (FM.map_update k f m) ->
     f None = Some v'.
   Proof.
     intros M U.
-    unfold zmap_update in U.
-    apply not_find_in_iff in M.
+    unfold FM.map_update in U.
+    apply FM.F.not_find_in_iff in M.
     rewrite M in U.
     clear M.
     destruct (f None).
     -
-      apply F.add_mapsto_iff in U.
+      apply FM.F.add_mapsto_iff in U.
       destruct U;destruct H.
       +
         subst.
@@ -1651,27 +1268,27 @@ Section ZMapAux.
       +
         congruence.
     -
-      apply remove_mapsto_iff in U.
+      apply FM.F.remove_mapsto_iff in U.
       destruct U.
       congruence.
   Qed.
 
-  Lemma zmap_find_first_exists
+  Lemma map_find_first_exists
     {A:Type}
-    (f:ZMap.key -> A -> bool)
-    (m:ZMap.t A)
-    (k:ZMap.key)
+    (f:FM.M.key -> A -> bool)
+    (m:FM.M.t A)
+    (k:FM.M.key)
     (v:A)
     :
-    zmap_find_first f m = Some (k,v)
+    FM.map_find_first f m = Some (k,v)
     ->
-      ZMap.find k m = Some v /\ f k v = true.
+      FM.M.find k m = Some v /\ f k v = true.
   Proof.
-    unfold zmap_find_first.
+    unfold FM.map_find_first.
     intros H.
     revert H.
 
-    apply fold_rec_weak; intros.
+    apply FM.P.fold_rec_weak; intros.
     -
       apply H0 in H1. clear H0.
       symmetry in H.
@@ -1690,17 +1307,18 @@ Section ZMapAux.
         apply H0 in H1. clear H0.
         destruct H1 as [H2 H3].
         subst.
-        destruct (Z.eq_dec k k0) as [E|NE].
+        destruct (OT.eq_dec k k0) as [E|NE].
         *
           exfalso.
+          unfold OT.eq in *.
           subst k0.
           contradict H.
-          apply in_find_iff.
+          apply FM.P.F.in_find_iff.
           rewrite H2.
           discriminate.
         *
           split.
-          rewrite add_neq_o;auto.
+          rewrite FM.F.add_neq_o;auto.
           assumption.
       +
         break_match_hyp;[|discriminate].
@@ -1708,24 +1326,24 @@ Section ZMapAux.
         invc H1.
         split.
         *
-          rewrite add_eq_o;auto.
+          rewrite FM.F.add_eq_o;auto.
         *
           assumption.
   Qed.
 
-  Lemma zmap_find_first_matches
+  Lemma map_find_first_matches
     {A:Type}
-    (f:ZMap.key -> A -> bool)
-    (m:ZMap.t A)
-    (k:ZMap.key)
+    (f:FM.M.key -> A -> bool)
+    (m:FM.M.t A)
+    (k:FM.M.key)
     (v:A)
     :
-    zmap_find_first f m = Some (k,v)
+    FM.map_find_first f m = Some (k,v)
     -> f k v = true.
   Proof.
-    unfold zmap_find_first.
+    unfold FM.map_find_first.
 
-    apply fold_rec_weak; intros.
+    apply FM.P.fold_rec_weak; intros.
     -
       auto.
     -
@@ -1741,40 +1359,130 @@ Section ZMapAux.
         auto.
   Qed.
 
-  Lemma zmap_forall_remove {A:Type} (pred: A -> Prop) (m:ZMap.t A) :
-    forall k, zmap_forall pred m ->
-         zmap_forall pred (ZMap.remove k m).
+  Lemma map_forall_remove {A:Type} (pred: A -> Prop) (m:FM.M.t A) :
+    forall k, map_forall pred m ->
+         map_forall pred (FM.M.remove k m).
   Proof.
     intros k' H k v M.
     specialize (H k v).
-    destruct (Z.eq_dec k' k) as [E|NE].
+    destruct (OT.eq_dec k' k) as [E|NE].
     *
-      apply zmap_mapsto_in in M.
-      apply (ZMap.remove_1 E) in M.
+      unfold OT.eq in *.
+      apply map_mapsto_in in M.
+      apply (FM.M.remove_1 E) in M.
       inversion M.
     *
-      apply ZMap.remove_3 in M.
+      apply FM.M.remove_3 in M.
       auto.
   Qed.
 
-  Lemma zmap_forall_keys_remove {A:Type} (pred: Z -> Prop) (m:ZMap.t A):
-    forall k, zmap_forall_keys pred m ->
-         zmap_forall_keys pred (ZMap.remove k m).
+  Lemma map_forall_keys_remove {A:Type} (pred: FM.M.key -> Prop) (m:FM.M.t A):
+    forall k, map_forall_keys pred m ->
+         map_forall_keys pred (FM.M.remove k m).
   Proof.
     intros k' H k M.
     specialize (H k).
-    destruct (Z.eq_dec k' k) as [E|NE].
+    destruct (OT.eq_dec k' k) as [E|NE].
     -
+      unfold OT.eq in *.
       subst k'.
-      apply remove_in_iff in M.
-      lia.
+      apply FM.F.remove_in_iff in M.
+      destruct M.
+      congruence.
     -
-      rewrite (remove_neq_in_iff _ NE) in M.
+      rewrite (FM.F.remove_neq_in_iff _ NE) in M.
       auto.
   Qed.
 
 
-End ZMapAux.
+End FMapExtProofs.
+
+
+(* This sections contains proofs which could not be generalized between
+   [ZMap] and [AMap] and could only be proven for [AMap]. *)
+Section AMapProofs.
+
+  (* TODO: fix this proof *)
+  Lemma map_range_init_spec
+    {T:Type}
+    (a0:AddressValue.t)
+    (n:nat)
+    (step:Z)
+    (v:T)
+    (m:AMap.M.t T):
+    (*
+    (AddressValue.ADDR_MIN <= AddressValue.to_Z a0 + Z.of_nat n * step < AddressValue.ADDR_LIMIT)%Z ->
+     *)
+    forall k x,
+      AMap.M.MapsTo k x (AMap.map_range_init a0 n step v m)
+      ->
+        {
+          ~(exists i, (i<n)%nat /\ AddressValue.with_offset a0 (Z.mul (Z.of_nat i) step) = k)
+          /\ AMap.M.MapsTo k x m
+        }+
+          {
+            (exists i, (i<n)%nat /\ AddressValue.with_offset a0 (Z.mul (Z.of_nat i) step) = k)
+            /\
+              x=v
+          }.
+  Proof.
+    dependent induction n.
+    -
+      left.
+      split.
+      +
+        intros C.
+        destruct C as [i [C _]].
+        lia.
+      +
+        cbn in H.
+        assumption.
+    -
+      simpl.
+      unfold AddressValue_as_ExtOT.with_offset.
+      intros k x Hmap.
+      destruct (AddressValue_as_ExtOT.eq_dec (AddressValue.with_offset a0 (Z.of_nat n * step)) k) as [E|NE].
+      + (* Case: k is the newly added key *)
+        unfold AddressValue_as_ExtOT.eq in E.
+        right. split. exists n. split; [lia|assumption].
+        apply AMap.F.add_mapsto_iff in Hmap.
+        destruct Hmap as [[H1 H2] | [H3 H4]] ;[auto|congruence].
+      + (* Case: k is not the newly added key, apply IH *)
+        apply AMap.F.add_mapsto_iff in Hmap.
+        specialize (IHn step v m k x).
+        autospecialize IHn.
+        {
+          destruct Hmap as [[H1 H2] | [H3 H4]];[congruence|auto].
+        }
+        destruct IHn as [[Hni Hm]|[Hi Hv]].
+        * left. split; auto.
+          intro H.
+          apply Hni. destruct H as [i [Hlt Heq]].
+          exists i. split.
+          --
+            destruct Hmap.
+            ++
+              destruct H.
+              congruence.
+            ++
+              destruct H.
+              assert(i<>n).
+              {
+                clear - H Heq.
+                (* TODO: could not be proven in general! *)
+                (* pose proof (AddressValue.with_offset_no_wrap a0 (Z.of_nat n * step)). *)
+                admit.
+              }
+              lia.
+          --
+            auto.
+        * right. destruct Hi as [i [Hlt Heq]].
+          split.
+          exists i. split; [lia|]. assumption.
+          auto.
+  Admitted.
+
+End AMapProofs.
 
 Section SimpleError.
 
