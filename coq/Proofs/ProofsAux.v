@@ -331,11 +331,11 @@ Section ListAux.
 
   (* Could be extended to go both ways *)
   Lemma split_eq_key_elt_nth
-    {A : Type}
-    (l : list (Z * A))
-    (la : list Z)
+    {A B: Type}
+    (l : list (B * A))
+    (la : list B)
     (lb : list A)
-    (a0 : Z)
+    (a0 : B)
     (b0: A)
     (k: nat)
     :
@@ -1402,17 +1402,13 @@ End FMapExtProofs.
    [ZMap] and [AMap] and could only be proven for [AMap]. *)
 Section AMapProofs.
 
-  (* TODO: fix this proof *)
-  Lemma map_range_init_spec
+  Lemma amap_range_init_spec
     {T:Type}
     (a0:AddressValue.t)
     (n:nat)
     (step:Z)
     (v:T)
     (m:AMap.M.t T):
-    (*
-    (AddressValue.ADDR_MIN <= AddressValue.to_Z a0 + Z.of_nat n * step < AddressValue.ADDR_LIMIT)%Z ->
-     *)
     forall k x,
       AMap.M.MapsTo k x (AMap.map_range_init a0 n step v m)
       ->
@@ -1438,16 +1434,15 @@ Section AMapProofs.
         cbn in H.
         assumption.
     -
-      simpl.
-      unfold AddressValue_as_ExtOT.with_offset.
-      intros k x Hmap.
-      destruct (AddressValue_as_ExtOT.eq_dec (AddressValue.with_offset a0 (Z.of_nat n * step)) k) as [E|NE].
+      simpl. intros k x Hmap.
+      destruct (AddressValue_as_ExtOT.eq_dec (AddressValue.with_offset a0 (Z.of_nat n * step)%Z) k) as [E|NE].
       + (* Case: k is the newly added key *)
-        unfold AddressValue_as_ExtOT.eq in E.
+        unfold AddressValue_as_ExtOT.eq, AddressValue_as_ExtOT.with_offset in *.
         right. split. exists n. split; [lia|assumption].
         apply AMap.F.add_mapsto_iff in Hmap.
-        destruct Hmap as [[H1 H2] | [H3 H4]] ;[auto|congruence].
+        destruct Hmap as [[H1 H2] | [H3 H4]];[auto|congruence].
       + (* Case: k is not the newly added key, apply IH *)
+        unfold AddressValue_as_ExtOT.eq, AddressValue_as_ExtOT.with_offset in *.
         apply AMap.F.add_mapsto_iff in Hmap.
         specialize (IHn step v m k x).
         autospecialize IHn.
@@ -1469,9 +1464,10 @@ Section AMapProofs.
               assert(i<>n).
               {
                 clear - H Heq.
-                (* TODO: could not be proven in general! *)
-                (* pose proof (AddressValue.with_offset_no_wrap a0 (Z.of_nat n * step)). *)
-                admit.
+                rewrite <- Heq in H.
+                contradict H.
+                rewrite H.
+                reflexivity.
               }
               lia.
           --
@@ -1480,7 +1476,7 @@ Section AMapProofs.
           split.
           exists i. split; [lia|]. assumption.
           auto.
-  Admitted.
+  Qed.
 
 End AMapProofs.
 
