@@ -25,7 +25,6 @@ module Loc = Cerb_location
 module type CONFIG = sig
   val ansi_format: ansi_style list -> string -> string
   val show_locations : bool
-  val show_std: bool
 end
 
 let pp_symbol  a = !^ (Pp_symbol.to_string_pretty_cn a)
@@ -85,11 +84,13 @@ module Make (Config: CONFIG) = struct
 
 
   let maybe_print_location : Loc.t -> P.document =
-    if not show_locations then
-      fun loc -> P.empty
-    else
       fun loc ->
-      P.parens (Cerb_location.pp_location ~clever:true loc) ^^ P.space
+      if not show_locations then
+        P.empty
+      else if Locations.is_unknown_location loc then
+        !^"{--}"
+      else
+        !^"{-" ^^ (Cerb_location.pp_location ~clever:true loc) ^^ !^"-}"
 
 
 
@@ -333,7 +334,7 @@ module Make (Config: CONFIG) = struct
       let prec' = precedence pe in
       let pp z = P.group (pp budget' prec' z) in
       let pp_pexpr pe = P.group (pp_pexpr budget' pe) in
-      (maybe_print_location loc) ^^
+      (maybe_print_location loc) ^^^
       (if compare_precedence prec' prec then fun z -> z else P.parens)
       begin
         match pe with
@@ -493,8 +494,8 @@ module Make (Config: CONFIG) = struct
                     pp_linux_memory_order mo)
 
   let pp_str_annot = function
-              | Aloc loc -> [!^"TODO(loc)"]
-              | Astd str -> if show_std then [!^ str] else []
+              | Aloc _ -> []
+              | Astd str -> []
               | Auid uid -> [!^"TODO(uid)"]
               | Amarker n -> [!^("marker " ^ string_of_int n)]
               | Amarker_object_types n ->
@@ -519,7 +520,7 @@ module Make (Config: CONFIG) = struct
     Pp.flow_map (Pp.break 0) (fun annot -> !^"{-#" ^^ annot ^^ !^"#-}")
       (List.concat_map pp_str_annot annots)
 
-  let do_annots annot doc = pp_annots annot ^/^ doc
+  let do_annots annot doc = pp_annots annot ^^ doc
 
   let pp_expr budget (expr : 'ty mu_expr) =
 
@@ -544,7 +545,7 @@ module Make (Config: CONFIG) = struct
 
       do_annots annot
       begin
-        (maybe_print_location loc) ^^
+        (maybe_print_location loc) ^^^
         begin match (e : 'ty mu_expr_) with
           | M_Epure pe ->
               pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
@@ -859,19 +860,11 @@ end
 module Basic = Make(struct
   let ansi_format _ s = s
   let show_locations = false
-  let show_std = false
-end)
-
-module All = Make(struct
-  let ansi_format _ s = s
-  let show_locations = true
-  let show_std = false
 end)
 
 module WithLocations = Make(struct
   let ansi_format _ s = s
   let show_locations = true
-  let show_std = false
 end)
 
 
@@ -880,3 +873,4 @@ let pp_pexpr_w b e = Basic.pp_pexpr b e
 let pp_pexpr e = pp_pexpr_w (pp_budget ()) e
 let pp_expr_w b e = Basic.pp_expr b e
 let pp_expr e = pp_expr_w (pp_budget ()) e
+let pp_file file = if !Cerb_debug.debug_level > 1 then WithLocations.pp_file None file else Basic.pp_file None file

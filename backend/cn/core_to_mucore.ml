@@ -151,16 +151,14 @@ let ensure_pexpr_ctype loc err pe : act =
 
 
 
-
-let rec core_to_mu__pattern loc (Pattern (annots, pat_)) =
-  let loc = Loc.update loc (Annot.get_loc_ annots) in
-
+let rec core_to_mu__pattern ~inherit_loc loc (Pattern (annots, pat_)) =
+  let loc = (if inherit_loc then Loc.update loc else Fun.id) (get_loc_ annots) in
   let wrap pat_ = M_Pattern(loc, annots, (), pat_) in
   match pat_ with
   | CaseBase (msym, cbt1) ->
      wrap (M_CaseBase (msym, cbt1))
   | CaseCtor(ctor, pats) ->
-     let pats = map (core_to_mu__pattern loc) pats in
+     let pats = map (core_to_mu__pattern ~inherit_loc loc) pats in
      match ctor with
      | Cnil cbt1 -> wrap (M_CaseCtor (M_Cnil cbt1, pats))
      | Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
@@ -222,8 +220,9 @@ let function_ids = [
 let ity_act loc ity = {loc; annot = []; (* type_annot = (); *)
   ct = (Sctypes.Integer ity)}
 
-let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
-  let loc = Loc.update loc (get_loc_ annots) in
+let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
+  let loc = (if inherit_loc then Loc.update loc else Fun.id) (get_loc_ annots) in
+  let n_pexpr = n_pexpr ~inherit_loc in
   let annotate pe = M_Pexpr (loc, annots, bty, pe) in
   match pe with
   | PEsym sym1 ->
@@ -444,7 +443,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
 
 
      | _ ->
-        let pat = core_to_mu__pattern loc pat in
+        let pat = core_to_mu__pattern ~inherit_loc loc pat in
         let e' = n_pexpr loc e' in
         let e'' = n_pexpr loc e'' in
         annotate (M_PElet (pat, e', e''))
@@ -500,9 +499,10 @@ let n_kill_kind loc = function
   | Static0 ct -> M_Static (convert_ct loc ct)
 
 
-let n_action loc action =
+let n_action ~inherit_loc loc action =
   let (Action (loc', _, a1)) = action in
-  let loc = Loc.update loc loc' in
+  let loc = (if inherit_loc then Loc.update loc else Fun.id) loc' in
+  let n_pexpr = n_pexpr ~inherit_loc in
   let wrap a1 = M_Action(loc, a1) in
   match a1 with
   | Create(e1, e2, sym1) ->
@@ -577,8 +577,8 @@ let n_action loc action =
 
 
 
-let n_paction loc (Paction(pol, a)) =
-  M_Paction (pol, n_action loc a)
+let n_paction ~inherit_loc loc (Paction(pol, a)) =
+  M_Paction (pol, n_action ~inherit_loc loc a)
 
 
 
@@ -587,7 +587,8 @@ let n_paction loc (Paction(pol, a)) =
 let show_n_memop =
   Mem_common.(instance_Show_Show_Mem_common_generic_memop_dict Symbol.instance_Show_Show_Symbol_sym_dict).show_method
 
-let n_memop loc memop pexprs =
+let n_memop ~inherit_loc loc memop pexprs =
+  let n_pexpr = n_pexpr ~inherit_loc in
   match (memop, pexprs) with
   | (Mem_common.PtrEq, [pe1;pe2]) ->
      let pe1 = n_pexpr loc pe1 in
@@ -687,16 +688,16 @@ let n_memop loc memop pexprs =
 let unsupported loc doc =
   fail {loc; msg = Unsupported (!^"unsupported" ^^^ doc) }
 
-let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m =
+let rec n_expr ~inherit_loc (loc : Loc.t) ((env, old_states), desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m =
   let (markers_env, cn_desugaring_state) = desugaring_things in
   let (Expr (annots, pe)) = e in
-  let loc = Loc.update loc (get_loc_ annots) in
+  let loc = (if inherit_loc then Loc.update loc else Fun.id) (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, (), pe) in
   let wrap_pure pe = wrap (M_Epure (M_Pexpr (loc, [], (), pe))) in
-  let n_pexpr = n_pexpr loc in
-  let n_paction = n_paction loc in
-  let n_memop = n_memop loc in
-  let n_expr = n_expr loc ((env, old_states), desugaring_things) (global_types, visible_objects_env) in
+  let n_pexpr = n_pexpr ~inherit_loc loc in
+  let n_paction = n_paction ~inherit_loc loc in
+  let n_memop = n_memop ~inherit_loc loc in
+  let n_expr = n_expr ~inherit_loc loc ((env, old_states), desugaring_things) (global_types, visible_objects_env) in
   match pe with
   | Epure pexpr2 ->
      return (wrap (M_Epure (n_pexpr pexpr2)))
@@ -706,16 +707,6 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      return (wrap (M_Eaction (n_paction paction2)))
   | Ecase(pexpr, pats_es) ->
      assert_error loc !^"Ecase"
-     (* let pexpr = n_pexpr pexpr in *)
-     (* let pats_es =  *)
-     (*   (map (fun (pat,e) ->  *)
-     (*       let pat = core_to_mu__pattern loc pat in *)
-     (*       let pe = (n_expr e k) in *)
-     (*       (pat, pe) *)
-     (*    )  *)
-     (*     pats_es)  *)
-     (* in *)
-     (* twrap (M_Ecase(pexpr, pats_es)) *)
   | Elet(pat, e1, e2) ->
      begin match pat, e1 with
      | Pattern (annots, CaseBase (Some sym, _)),
@@ -744,7 +735,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
 
      | _ ->
         let e1 = n_pexpr e1 in
-        let pat = core_to_mu__pattern loc pat in
+        let pat = core_to_mu__pattern ~inherit_loc loc pat in
         let@ e2 = n_expr e2 in
         return (wrap (M_Elet(pat, e1, e2)))
      end
@@ -770,7 +761,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
        | Core.Pexpr(annot, bty, Core.PEval (Core.Vctype ct1)) ->
-          let loc = Loc.update loc (get_loc_ annots) in
+          let loc = (if inherit_loc then Loc.update loc else Fun.id)(get_loc_ annots) in
           {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct1}
        | _ ->
           assert_error loc !^"core_anormalisation: Eccall with non-ctype first argument"
@@ -810,7 +801,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      return (wrap (M_Eunseq es))
   | Ewseq(pat, e1, e2) ->
      let@ e1 = n_expr e1 in
-     let pat = core_to_mu__pattern loc pat in
+     let pat = core_to_mu__pattern ~inherit_loc loc pat in
      let@ e2 = n_expr e2 in
      return (wrap (M_Ewseq(pat, e1, e2)))
   | Esseq(pat, e1, e2) ->
@@ -861,7 +852,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
        | _, _ ->
           n_expr e1
      in
-     let pat = core_to_mu__pattern loc pat in
+     let pat = core_to_mu__pattern ~inherit_loc loc pat in
      let@ e2 = n_expr e2 in
      return (wrap (M_Esseq(pat, e1, e2)))
   | Ebound e ->
@@ -1149,6 +1140,7 @@ let dtree_of_accesses accesses =
 
 
 let normalise_label
+      ~inherit_loc
       fsym
       (markers_env, precondition_cn_desugaring_state)
       (global_types, visible_objects_env)
@@ -1178,7 +1170,7 @@ let normalise_label
 
         let@ label_args_and_body =
           make_label_args (fun env st ->
-              n_expr loc ((env, st.old_states), (markers_env, cn_desugaring_state))
+              n_expr ~inherit_loc loc ((env, st.old_states), (markers_env, cn_desugaring_state))
                 (global_types, visible_objects_env) label_body
             )
             loc
@@ -1220,6 +1212,7 @@ let add_spec_arg_renames loc args arg_cts (spec : (Symbol.sym, Ctype.ctype) cn_f
     (List.combine args (List.combine arg_cts spec.cn_spec_args)) env
 
 let normalise_fun_map_decl
+      ~inherit_loc
       (markers_env, ail_prog)
       (global_types, visible_objects_env)
       env
@@ -1295,13 +1288,13 @@ let normalise_fun_map_decl
      let@ args_and_body =
        make_function_args (fun arg_states env st ->
            let st = C.LocalState.make_state_old st C.start_evaluation_scope in
-           let@ body = n_expr loc ((env,st.old_states), (markers_env, d_st.inner.cn_state)) (global_types, visible_objects_env) body in
+           let@ body = n_expr ~inherit_loc loc ((env,st.old_states), (markers_env, d_st.inner.cn_state)) (global_types, visible_objects_env) body in
            let@ returned =
              C.make_rt loc env (C.LocalState.add_c_variable_states arg_states st)
                (ret_s, ret_ct) (accesses, ensures)
            in
            let@ labels =
-             PmapM.mapM (normalise_label fname
+             PmapM.mapM (normalise_label ~inherit_loc fname
                            (markers_env,CAE.(d_st.inner.cn_state))
                            (global_types, visible_objects_env)
                            (accesses, loop_attributes) env st)
@@ -1343,6 +1336,7 @@ let normalise_fun_map_decl
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
 let normalise_fun_map
+      ~inherit_loc
       (markers_env, ail_prog)
       (global_types, visible_objects_env)
       env
@@ -1354,7 +1348,7 @@ let normalise_fun_map
   let@ (fmap, mk_functions, failed) =
   PmapM.foldM (fun fsym fdecl (fmap, mk_functions, failed) ->
       try begin
-      let@ r = normalise_fun_map_decl (markers_env, ail_prog)
+      let@ r = normalise_fun_map_decl ~inherit_loc (markers_env, ail_prog)
                  (global_types, visible_objects_env)
                  env fun_specs funinfo loop_attributes fsym fdecl in
       match r with
@@ -1377,14 +1371,14 @@ let normalise_fun_map
 
 
 
-let normalise_globs env sym g =
+let normalise_globs ~inherit_loc env sym g =
   let loc = Loc.other __FUNCTION__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
      let@ () = check_against_core_bt loc bt BT.Loc in
      (* this may have to change *)
      let@ e =
-       n_expr loc
+       n_expr ~inherit_loc loc
          ((env, (C.LocalState.init_st).old_states),
           (Pmap.empty Int.compare,
            CF.Cn_desugaring.initial_cn_desugaring_state []))
@@ -1397,9 +1391,9 @@ let normalise_globs env sym g =
      return (M_GlobalDecl (convert_ct loc ct))
 
 
-let normalise_globs_list env gs =
+let normalise_globs_list ~inherit_loc env gs =
    ListM.mapM (fun (sym,g) ->
-       let@ g = normalise_globs env sym g in
+       let@ g = normalise_globs ~inherit_loc env sym g in
        return (sym, g)
      ) gs
 
@@ -1479,7 +1473,7 @@ let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases} =
 
 
 
-let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
+let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
 
   let@ tagDefs = normalise_tag_definitions file.mi_tagDefs in
 
@@ -1505,7 +1499,7 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
       ) file.mi_globs
   in
 
-  let@ globs = normalise_globs_list env file.mi_globs in
+  let@ globs = normalise_globs_list ~inherit_loc env file.mi_globs in
 
   let env = List.fold_left register_glob env globs in
 
@@ -1514,7 +1508,7 @@ let normalise_file ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
     ail_prog.cn_fun_specs SymMap.empty in
 
   let@ (funs, mk_functions) =
-    normalise_fun_map (markers_env, ail_prog) (global_types, file.mi_visible_objects_env)
+    normalise_fun_map ~inherit_loc (markers_env, ail_prog) (global_types, file.mi_visible_objects_env)
       env fun_specs_map
       file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in

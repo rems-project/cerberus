@@ -26,7 +26,7 @@ let print_file filename file =
      Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file);
   | MUCORE file ->
      Pp.print_file (filename ^ ".mucore")
-       (Pp_mucore.Basic.pp_file None file);
+       (Pp_mucore.pp_file file);
 
 
 module Log : sig
@@ -139,6 +139,7 @@ let main
       no_use_ity
       use_peval
       batch
+      no_inherit_loc
   =
   if json then begin
       if debug_level > 0 then
@@ -156,7 +157,7 @@ let main
     Solver.random_seed := random_seed;
     Solver.log_to_temp := solver_logging;
     Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
-  IndexTerms.use_vip := use_vip;
+    IndexTerms.use_vip := use_vip;
     Check.batch := batch;
     Diagnostics.diag_string := diag;
     WellTyped.use_ity := not no_use_ity
@@ -175,7 +176,7 @@ let main
   try
       let result =
         let open Resultat in
-         let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
+         let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, ail_prog) prog4 in
          (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
          (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
          print_log_file ("mucore", MUCORE prog5);
@@ -347,6 +348,10 @@ let use_peval =
   let doc = "(this switch should go away) run the Core partial evaluation phase" in
   Arg.(value & flag & info["use-peval"] ~doc)
 
+let no_inherit_loc =
+  let doc = "debugging: stop mucore terms inheriting location information from parents" in
+  Arg.(value & flag & info["no-inherit-loc"] ~doc)
+
 
 
 
@@ -379,6 +384,7 @@ let () =
       use_vip $
       no_use_ity $
       use_peval $
-      batch
+      batch $
+      no_inherit_loc
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
