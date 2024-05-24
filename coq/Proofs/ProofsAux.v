@@ -550,77 +550,6 @@ Section ListAux.
       reflexivity.
   Qed.
 
-  Lemma combine_eq_key_NoDupA
-    {A:Type}
-    (lk : list ZMap.key)
-    (lv : list A):
-    NoDup lk -> NoDupA (ZMap.eq_key (elt:=A)) (combine lk lv).
-  Proof.
-    intros H.
-    revert lv.
-    induction H; intros.
-    -
-      cbn.
-      constructor.
-    -
-      cbn.
-      destruct lv.
-      +
-        cbn.
-        constructor.
-      +
-        constructor.
-        *
-          clear -H.
-          intros C.
-          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
-          apply InA_alt in C.
-          destruct C as [y [C1 C2]].
-          destruct y.
-          cbn in C1.
-          subst x.
-          apply in_combine_l in C2.
-          congruence.
-        *
-          apply IHNoDup.
-  Qed.
-
-  Lemma combine_eq_key_elt_NoDupA
-    {A:Type}
-    (lk : list ZMap.key)
-    (lv : list A):
-    NoDup lk -> NoDupA (ZMap.eq_key_elt (elt:=A)) (combine lk lv).
-  Proof.
-    intros H.
-    revert lv.
-    induction H; intros.
-    -
-      cbn.
-      constructor.
-    -
-      cbn.
-      destruct lv.
-      +
-        cbn.
-        constructor.
-      +
-        constructor.
-        *
-          clear -H.
-          intros C.
-          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
-          apply InA_alt in C.
-          destruct C as [y [C1 C2]].
-          destruct y.
-          cbv in C1.
-          destruct C1.
-          subst.
-          apply in_combine_l in C2.
-          congruence.
-        *
-          apply IHNoDup.
-  Qed.
-
 
   (* In standard library [Forall2_nth] is defined only for [Vector]. This is missing version for list *)
   Lemma Forall2_nth_list :
@@ -715,9 +644,147 @@ Module Import WAP := FMapFacts.WFacts_fun(AddressValue_as_OT)(AMap).
 
 Section AMapAux.
 
+  Lemma amap_combine_eq_key_NoDupA
+    {A:Type}
+    (lk : list AMap.key)
+    (lv : list A):
+    NoDup lk -> NoDupA (AMap.eq_key (elt:=A)) (combine lk lv).
+  Proof.
+    intros H.
+    revert lv.
+    induction H; intros.
+    -
+      cbn.
+      constructor.
+    -
+      cbn.
+      destruct lv.
+      +
+        cbn.
+        constructor.
+      +
+        constructor.
+        *
+          clear -H.
+          intros C.
+          unfold AMap.eq_key, AMap.Raw.Proofs.PX.eqk in C.
+          apply InA_alt in C.
+          destruct C as [y [C1 C2]].
+          destruct y.
+          cbn in C1.
+          subst x.
+          apply in_combine_l in C2.
+          congruence.
+        *
+          apply IHNoDup.
+  Qed.
+
+  Lemma amap_combine_eq_key_elt_NoDupA
+    {A:Type}
+    (lk : list AMap.key)
+    (lv : list A):
+    NoDup lk -> NoDupA (AMap.eq_key_elt (elt:=A)) (combine lk lv).
+  Proof.
+    intros H.
+    revert lv.
+    induction H; intros.
+    -
+      cbn.
+      constructor.
+    -
+      cbn.
+      destruct lv.
+      +
+        cbn.
+        constructor.
+      +
+        constructor.
+        *
+          clear -H.
+          intros C.
+          unfold AMap.eq_key, AMap.Raw.Proofs.PX.eqk in C.
+          apply InA_alt in C.
+          destruct C as [y [C1 C2]].
+          destruct y.
+          cbv in C1.
+          destruct C1.
+          subst.
+          apply in_combine_l in C2.
+          congruence.
+        *
+          apply IHNoDup.
+  Qed.
+
+  Definition amap_Mem {A:Type} (x:A) (m:AMap.t A) : Prop
+    :=
+    forall k, AMap.MapsTo k x m.
+
+  Definition amap_forall {A:Type} (pred: A -> Prop) (m:AMap.t A) : Prop
+    :=
+    forall k v, AMap.MapsTo k v m -> pred v.
+
+
   Definition amap_forall_keys {A:Type} (pred: AddressValue.t -> Prop) (m:AMap.t A) : Prop
     :=
     forall k, AMap.In k m -> pred k.
+
+
+  (* A predicate that accepts two ZMaps `map1` and `map2` of
+     potentially different value types `A` and `B`, and a relation
+     `R`. It ensures that for every key in these AMaps, `R` holds for
+     the corresponding values if the key exists in both maps, or that
+     the key does not exist in either map. *)
+  Definition amap_relate_keys {A B : Type} (map1: AMap.t A) (map2: AMap.t B)
+    (R: AMap.key -> A -> B -> Prop) : Prop :=
+    forall k,
+      (exists v1 v2, AMap.MapsTo k v1 map1 /\ AMap.MapsTo k v2 map2 /\ R k v1 v2)
+      \/ ((~exists v, AMap.MapsTo k v map1) /\ (~exists v, AMap.MapsTo k v map2)).
+
+  Lemma amap_in_mapsto {T:Type} (k:AMap.key) (m:AMap.t T):
+    AMap.In k m -> (exists v, @AMap.MapsTo T k v m).
+  Proof.
+    intros H.
+    destruct H.
+    exists x.
+    unfold AMap.MapsTo.
+    apply H.
+  Qed.
+
+  Lemma amap_in_mapsto' {T:Type} k (m: AMap.t T):
+    AMap.In k m -> {v | @AMap.MapsTo T k v m}.
+  Proof.
+    intros H.
+    apply in_find_iff in H.
+    destruct (AMap.find k m) eqn:Hfind.
+    - exists t. apply AMap.find_2. assumption.
+    - contradiction.
+  Qed.
+
+  Lemma amap_MapsTo_dec
+    {A:Type}
+    {Adec: forall x y:A, {x = y} + {x <> y}}
+    (k: AMap.key)
+    (v:A)
+    (m: AMap.t A)
+    :
+    {AMap.MapsTo (elt:=A) k v m} + {~ AMap.MapsTo (elt:=A) k v m}.
+  Proof.
+    destruct (AMap.find (elt:=A) k m) eqn:H.
+    - destruct (Adec v a).
+      * left. apply AMap.find_2 in H. subst. assumption.
+      * right. intro Hcontra. apply AMap.find_1 in Hcontra. congruence.
+    - right. intro Hcontra. apply AMap.find_1 in Hcontra. congruence.
+  Qed.
+
+  Lemma amap_mapsto_in {T:Type} (k:AMap.key) (m:AMap.t T) (v:T):
+    AMap.MapsTo k v m -> AMap.In k m.
+  Proof.
+    intros H.
+    apply AMap.find_1 in H.
+    apply in_find_iff.
+    rewrite H.
+    congruence.
+  Qed.
 
   Lemma amap_range_init_spec
     {T:Type}
@@ -793,6 +860,86 @@ Section AMapAux.
           auto.
   Qed.
 
+  Lemma amap_maps_to_elements_p
+    {A: Type}
+    `{Ae: Equivalence A (@eq A)}
+    (P: A -> Prop)
+    (mv: AMap.t A)
+    :
+    (forall k v, AMap.MapsTo k v mv -> P v) <-> (List.Forall (fun '(k,v) => P v) (AMap.elements mv)).
+  Proof.
+    split.
+    - intros HMapsTo.
+      apply List.Forall_forall.
+      intros (k, v) Hin.
+      apply In_InA with (eqA:=(AMap.eq_key_elt (elt:=A))) in Hin.
+      apply WAP.elements_mapsto_iff in Hin.
+      apply HMapsTo in Hin.
+      assumption.
+      typeclasses eauto.
+    - intros HForall k v HMapsTo.
+      apply WAP.elements_mapsto_iff in HMapsTo.
+      apply List.Forall_forall with (x := (k, v)) in HForall.
+      + apply HForall.
+      +
+        apply InA_alt in HMapsTo.
+        destruct HMapsTo as [(k',v') [ [Ek Ev] HM]].
+        cbn in Ek, Ev.
+        subst.
+        assumption.
+  Qed.
+
+  Lemma amap_forall_elements_split
+    (A : Type)
+    (mv : AMap.t A)
+    (P: A -> Prop)
+    :
+    amap_forall P mv <-> Forall (fun '(_, v) => P v) (AMap.elements mv).
+  Proof.
+    unfold amap_forall.
+    split.
+    -
+      intros H.
+      apply amap_maps_to_elements_p.
+      assumption.
+    -
+      intros H.
+      eapply amap_maps_to_elements_p.
+      assumption.
+  Qed.
+
+  Lemma amap_forall_Forall_elements
+    {A : Type}
+    (mv : AMap.t A)
+    (P: A -> Prop)
+    :
+    amap_forall P mv ->
+    forall (lk : list AMap.key) (lv : list A),
+      split (AMap.elements mv) = (lk, lv) -> Forall P lv.
+  Proof.
+    intros H lk lv S.
+    replace lv with (snd (lk,lv));[|auto].
+    rewrite <- S.
+    clear S lk.
+    apply amap_forall_elements_split in H.
+    generalize dependent (AMap.elements (elt:=A) mv).
+    intros e.
+    intros H.
+    apply Forall_nth.
+    intros k x K.
+    pose proof (split_nth e k (AddressValue.of_Z (Z.of_nat k), x)) as S.
+    rewrite Forall_nth in H.
+    specialize (H k (AddressValue.of_Z (Z.of_nat k),x)).
+    autospecialize H.
+    {
+      rewrite split_length_r in K.
+      apply K.
+    }
+    rewrite S in H. clear S.
+    cbn in H.
+    apply H.
+  Qed.
+
 
 End AMapAux.
 
@@ -800,6 +947,78 @@ Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
 Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
 
 Section ZMapAux.
+
+  Lemma zmap_combine_eq_key_NoDupA
+    {A:Type}
+    (lk : list ZMap.key)
+    (lv : list A):
+    NoDup lk -> NoDupA (ZMap.eq_key (elt:=A)) (combine lk lv).
+  Proof.
+    intros H.
+    revert lv.
+    induction H; intros.
+    -
+      cbn.
+      constructor.
+    -
+      cbn.
+      destruct lv.
+      +
+        cbn.
+        constructor.
+      +
+        constructor.
+        *
+          clear -H.
+          intros C.
+          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
+          apply InA_alt in C.
+          destruct C as [y [C1 C2]].
+          destruct y.
+          cbn in C1.
+          subst x.
+          apply in_combine_l in C2.
+          congruence.
+        *
+          apply IHNoDup.
+  Qed.
+
+  Lemma zmap_combine_eq_key_elt_NoDupA
+    {A:Type}
+    (lk : list ZMap.key)
+    (lv : list A):
+    NoDup lk -> NoDupA (ZMap.eq_key_elt (elt:=A)) (combine lk lv).
+  Proof.
+    intros H.
+    revert lv.
+    induction H; intros.
+    -
+      cbn.
+      constructor.
+    -
+      cbn.
+      destruct lv.
+      +
+        cbn.
+        constructor.
+      +
+        constructor.
+        *
+          clear -H.
+          intros C.
+          unfold ZMap.eq_key, ZMap.Raw.Proofs.PX.eqk in C.
+          apply InA_alt in C.
+          destruct C as [y [C1 C2]].
+          destruct y.
+          cbv in C1.
+          destruct C1.
+          subst.
+          apply in_combine_l in C2.
+          congruence.
+        *
+          apply IHNoDup.
+  Qed.
+
 
   Definition zmap_Mem {A:Type} (x:A) (m:ZMap.t A) : Prop
     :=

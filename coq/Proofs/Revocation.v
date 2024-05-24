@@ -810,6 +810,25 @@ Module RevocationProofs.
       apply ret_SameState.
     Qed.
 
+    Instance amap_sequence_SameState
+      {A: Type}
+      (mv: AMap.t (memM A)):
+      amap_forall SameState mv ->
+      SameState (amap_sequence mv).
+    Proof.
+      intros H.
+      unfold amap_sequence.
+      break_let.
+      pose proof (sequence_same_state l0) as SS.
+      autospecialize SS.
+      eapply amap_forall_Forall_elements;eauto.
+      clear H.
+      apply bind_SameState.
+      assumption.
+      intros x.
+      apply ret_SameState.
+    Qed.
+
 
     Instance zmap_mmapi_SameState
       {A B: Type}
@@ -827,6 +846,27 @@ Module RevocationProofs.
       unfold zmap_forall.
       intros k v H.
       apply mapi_inv in H.
+      destruct H as [a [k' [H1 [H2 H3]]]].
+      subst.
+      apply C.
+    Qed.
+
+    Instance amap_mmapi_SameState
+      {A B: Type}
+      (c: AMap.key -> A -> memM B)
+      (zm : AMap.t A):
+
+      (forall k v, SameState (c k v)) ->
+      SameState (amap_mmapi c zm).
+    Proof.
+      intros C zm' m0 m1 H.
+      unfold amap_mmapi in H.
+      apply amap_sequence_SameState in H;[assumption|].
+      clear H.
+
+      unfold amap_forall.
+      intros k v H.
+      apply AP.F.mapi_inv in H.
       destruct H as [a [k' [H1 [H2 H3]]]].
       subst.
       apply C.
@@ -2140,6 +2180,48 @@ Module RevocationProofs.
           apply ret_PreservesInvariant.
       Qed.
 
+      Instance amap_sequence_PreservesInvariant
+        {A: Type}
+        (mv: AMap.t (memM A)):
+        forall s,
+          (forall k v, AMap.MapsTo k v mv -> forall s', PreservesInvariant s' v) ->
+          PreservesInvariant s (amap_sequence mv).
+      Proof.
+        intros s H.
+        apply amap_maps_to_elements_p in H.
+        unfold amap_sequence.
+        break_let.
+        apply bind_PreservesInvariant.
+        -
+          apply sequence_PreservesInvariant.
+          generalize dependent (AMap.elements (elt:=memM A) mv).
+          intros ls H S.
+          clear mv.
+          rename l into lk, l0 into lv.
+          apply Forall_nth.
+          intros k v L.
+          rewrite Forall_nth in H.
+          specialize (H k (nth k lk (AddressValue.of_Z 0), v)).
+
+          break_let.
+          autospecialize H.
+          {
+            rewrite <- split_length_r.
+            rewrite S.
+            cbn.
+            assumption.
+          }
+
+          rewrite split_nth in Heqp.
+          rewrite S in Heqp.
+          cbn in *.
+          tuple_inversion.
+          assumption.
+        -
+          intros s' x.
+          apply ret_PreservesInvariant.
+      Qed.
+
       Instance zmap_mmapi_PreservesInvariant
         {A B : Type}
         (f : ZMap.key -> A -> memM B)
@@ -2153,6 +2235,24 @@ Module RevocationProofs.
         apply zmap_sequence_PreservesInvariant.
         intros k v H0.
         apply F.mapi_inv in H0.
+        destruct H0 as [v' [k' [E [E1 M]]]].
+        subst.
+        apply H.
+      Qed.
+
+      Instance amap_mmapi_PreservesInvariant
+        {A B : Type}
+        (f : AMap.key -> A -> memM B)
+        (zm: AMap.t A):
+        forall s,
+          (forall k x, forall s', PreservesInvariant s' (f k x)) ->
+          PreservesInvariant s (@amap_mmapi A B memM memM_monad f zm).
+      Proof.
+        intros s H.
+        unfold amap_mmapi.
+        apply amap_sequence_PreservesInvariant.
+        intros k v H0.
+        apply AP.F.mapi_inv in H0.
         destruct H0 as [v' [k' [E [E1 M]]]].
         subst.
         apply H.
@@ -2348,7 +2448,7 @@ Module RevocationProofs.
       -
         unfold amap_forall_keys.
         intros k H.
-        apply empty_in_iff in H;
+        apply WAP.empty_in_iff in H;
           contradiction.
       -
         intros alloc_id H.
@@ -2359,24 +2459,25 @@ Module RevocationProofs.
         apply empty_mapsto_iff in H.
         tauto.
       -
-        apply empty_mapsto_iff in H;
+        apply WAP.empty_mapsto_iff in H;
           contradiction.
       -
-        apply empty_mapsto_iff in H;
+        apply WAP.empty_mapsto_iff in H;
           contradiction.
       -
-        apply empty_mapsto_iff in H;
+        apply WAP.empty_mapsto_iff in H;
           contradiction.
     Qed.
 
     Lemma mem_state_after_ghost_tags_preserves:
       forall m addr size,
+        AddressValue.to_Z addr + Z.of_nat size <= AddressValue.ADDR_LIMIT ->
         mem_invariant m ->
         mem_invariant (mem_state_with_capmeta
                          (init_ghost_tags addr size (capmeta m))
                          m).
     Proof.
-      intros m addr sz H.
+      intros m addr sz L H.
       destruct H as [MIbase MIcap].
       destruct_base_mem_invariant MIbase.
       split.
@@ -2388,32 +2489,38 @@ Module RevocationProofs.
 
         (* alignment proof *)
         intros a E.
-        apply zmap_in_mapsto in E.
+        apply amap_in_mapsto in E.
         destruct E as [tg E].
         unfold mem_state_with_capmeta in E.
         simpl in E.
         apply init_ghost_tags_spec in E.
-        destruct E.
         +
-          (* capmeta unchanged at [a] *)
-          apply zmap_mapsto_in in H.
-          apply Balign.
-          apply H.
+          destruct E.
+          *
+            (* capmeta unchanged at [a] *)
+            apply amap_mapsto_in in H.
+            apply Balign.
+            apply H.
+          *
+            (* capmeta cleared *)
+            destruct H as [H1 H2].
+            apply H1.
         +
-          (* capmeta cleared *)
-          destruct H as [H1 H2].
-          apply H1.
+          apply L.
       -
         intros a g E bs F.
         simpl in *.
         apply init_ghost_tags_spec in E.
-        destruct E as [E | [A E]].
         +
-          (* capmeta unchanged at [a] *)
-          specialize (MIcap a g E bs F).
-          apply MIcap.
+          destruct E as [E | [A E]].
+          *
+            (* capmeta unchanged at [a] *)
+            specialize (MIcap a g E bs F).
+            apply MIcap.
+          *
+            inversion E.
         +
-          inversion E.
+          apply L.
     Qed.
 
     (*
@@ -2453,7 +2560,7 @@ Module RevocationProofs.
     Instance maybe_revoke_pointer_PreservesInvariant
       allocation
       (st: mem_state)
-      (addr: Z)
+      (addr: AddressValue.t)
       (meta: (bool*CapGhostState)):
 
       forall s,
@@ -2469,8 +2576,8 @@ Module RevocationProofs.
     (* relation of pointer before and afer revocaton (per [maybe_revoke_pointer] *)
     Inductive revoked_pointer_rel
       (a : allocation)
-      (addr : ZMap.key)
-      (bm: ZMap.t AbsByte)
+      (addr : AddressValue.t)
+      (bm: AMap.t AbsByte)
       : (bool * CapGhostState) -> (bool * CapGhostState) -> Prop :=
     | revoked_pointer_rel_untagged: forall gs, revoked_pointer_rel a addr bm (false, gs) (false, gs)
     | revoked_pointer_rel_fetch_err: forall err gs,
@@ -2490,12 +2597,12 @@ Module RevocationProofs.
         mem_invariant m ->
         forall s : mem_state_r,
           mem_invariant s ->
-          forall (s' : mem_state) (x : ZMap.t (bool * CapGhostState)),
-            zmap_mmapi (maybe_revoke_pointer a m) (capmeta m) s = (s', inr x) -> mem_invariant s'.
+          forall (s' : mem_state) (x : AMap.t (bool * CapGhostState)),
+            amap_mmapi (maybe_revoke_pointer a m) (capmeta m) s = (s', inr x) -> mem_invariant s'.
     Proof.
       intros a m IM s IS s' x M.
 
-      pose proof (zmap_mmapi_PreservesInvariant mem_invariant (maybe_revoke_pointer a m) (capmeta m) s) as P.
+      pose proof (amap_mmapi_PreservesInvariant mem_invariant (maybe_revoke_pointer a m) (capmeta m) s) as P.
       autospecialize P.
       intros k x0.
       apply maybe_revoke_pointer_PreservesInvariant; auto.
@@ -2528,7 +2635,7 @@ Module RevocationProofs.
     Qed.
 
     Instance maybe_revoke_pointer_SameState
-      (k : Z)
+      (k : AddressValue.t)
       (meta: bool * CapGhostState)
       (a : allocation)
       (m : mem_state):
@@ -2564,11 +2671,11 @@ Module RevocationProofs.
       Opaque ret raise bind serr2InternalErr.
     Qed.
 
-    Instance zmap_mmapi_maybe_revoke_pointer_same_state
-      (a : allocation)
+    Instance amap_mmapi_maybe_revoke_pointer_same_state
+      (a: allocation)
       (m: mem_state)
-      (oldmeta : ZMap.t (bool * CapGhostState)):
-      SameState (zmap_mmapi (maybe_revoke_pointer a m) oldmeta).
+      (oldmeta : AMap.t (bool * CapGhostState)):
+      SameState (amap_mmapi (maybe_revoke_pointer a m) oldmeta).
     Proof.
       typeclasses eauto.
     Qed.
@@ -2576,18 +2683,18 @@ Module RevocationProofs.
     Lemma zmap_mmapi_maybe_revoke_pointer_spec
       (a : allocation)
       (s : mem_state)
-      (oldmeta newmeta : ZMap.t (bool * CapGhostState)):
-      zmap_mmapi (maybe_revoke_pointer a s) oldmeta s = (s, inr newmeta) ->
-      zmap_relate_keys oldmeta newmeta (fun addr : ZMap.key => revoked_pointer_rel a addr s.(bytemap)).
+      (oldmeta newmeta : AMap.t (bool * CapGhostState)):
+      amap_mmapi (maybe_revoke_pointer a s) oldmeta s = (s, inr newmeta) ->
+      amap_relate_keys oldmeta newmeta (fun addr : AMap.key => revoked_pointer_rel a addr s.(bytemap)).
     Proof.
       intros H.
       intros k.
-      unfold zmap_mmapi in H.
-      unfold zmap_sequence in H.
+      unfold amap_mmapi in H.
+      unfold amap_sequence in H.
       break_let.
-      remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta'.
+      remember (AMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta'.
 
-      assert(zmap_relate_keys newmeta' newmeta
+      assert(amap_relate_keys newmeta' newmeta
                (fun _ mx x =>
                   mx s = (s, inr x)
             )) as N.
@@ -2601,10 +2708,10 @@ Module RevocationProofs.
         break_match_hyp;[inversion H|].
         tuple_inversion.
         intros k.
-        remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta.
+        remember (AMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta.
 
         rename l into rescaps, Heqp0 into SEQ, Heqp into SPL.
-        remember (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta) as enewmeta eqn:E.
+        remember (AMap.elements (elt:=memM (bool * CapGhostState)) newmeta) as enewmeta eqn:E.
         (* end of prep *)
         pose proof (@split_nth  _ _ enewmeta) as N.
         replace (fst (split enewmeta)) with lk in N by (rewrite SPL;reflexivity).
@@ -2623,26 +2730,26 @@ Module RevocationProofs.
 
         apply sequence_spec_same_state_memM in SEQ.
         -
-          destruct (@In_dec _ newmeta k) as [I|NI].
+          destruct (@AP.F.In_dec _ newmeta k) as [I|NI].
           +
             (* key originally exists *)
             left.
-            apply zmap_in_mapsto in I.
+            apply amap_in_mapsto in I.
             destruct I as [v1 I].
             exists v1.
 
-            assert(ZMap.MapsTo k v1 newmeta) as I1 by assumption.
+            assert(AMap.MapsTo k v1 newmeta) as I1 by assumption.
             rewrite Heqnewmeta in I1.
-            apply mapi_inv in I1.
+            apply AP.F.mapi_inv in I1.
             destruct I1 as [v2 [k' [I3 [I4 I5]]]].
             subst k'.
 
-            pose proof (ZMap.elements_1 I) as H.
+            pose proof (AMap.elements_1 I) as H.
             rewrite <- E in H.
             apply InA_alt in H.
             destruct H as [(addr,v2') [H1 H2]].
 
-            unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
+            unfold AMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
             destruct H1 as [T1 T2].
             cbn in T1, T2.
             subst k v2'.
@@ -2668,11 +2775,11 @@ Module RevocationProofs.
             split;[apply I|].
             split.
             *
-              apply ZMap.ZP.of_list_1.
+              apply AP.of_list_1.
               --
-                apply combine_eq_key_NoDupA.
-                pose proof (ZMap.elements_3w newmeta) as NDM.
-                pose proof (split_eq_key_NoDup _ _ _ SPL).
+                apply amap_combine_eq_key_NoDupA.
+                pose proof (AMap.elements_3w newmeta) as NDM.
+                pose proof (amap_split_eq_key_NoDup _ _ _ SPL).
                 rewrite E in H.
                 specialize (H NDM).
                 apply H.
