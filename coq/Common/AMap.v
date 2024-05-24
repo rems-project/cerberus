@@ -8,7 +8,7 @@ From Coq.Lists Require Import List. (* after exltlib *)
 
 From CheriCaps.Morello Require Import Capabilities.
 
-From Common Require Import Utils.
+Require Import Utils.
 
 Local Open Scope type_scope.
 Local Open Scope list_scope.

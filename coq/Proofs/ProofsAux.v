@@ -17,7 +17,10 @@ Require Import Coq.Lists.SetoidList.
 
 Require Import Lia.
 
-From Common Require Import SimpleError ZMap AMap Utils.
+Require Import Common.SimpleError.
+Require Import Common.AMap.
+Require Import Common.ZMap.
+Require Import Common.Utils.
 
 From CheriCaps.Morello Require Import Capabilities. (* For AMap-related lemmas *)
 
