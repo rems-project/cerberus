@@ -2103,13 +2103,13 @@ let add_loc loc (Expr annot expr_) =
   end in
   Expr (update_annot pred (Aloc loc) annot) expr_
 
-val add_stmt_loc: Loc.t -> expr unit -> expr unit
-let add_stmt_loc loc (Expr annot expr_) =
-  Expr (Astmt loc :: annot) expr_
+val add_stmt: expr unit -> expr unit
+let add_stmt (Expr annot expr_) =
+  Expr (Astmt :: annot) expr_
 
-val add_expr_loc: Loc.t -> expr unit -> expr unit
-let add_expr_loc loc (Expr annot expr_) =
-  Expr (Aexpr loc :: annot) expr_
+val add_expr: expr unit -> expr unit
+let add_expr (Expr annot expr_) =
+  Expr (Aexpr :: annot) expr_
 
 
 val annotate_integer_type_pexpr : integerType -> pexpr -> pexpr

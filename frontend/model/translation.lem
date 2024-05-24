@@ -1397,7 +1397,7 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
     E.return (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe result_ty)))
   else
     let A.AnnotatedExpression annot std_annots loc expr = a_expr in
-    (comb (comb (Caux.add_loc loc) (Caux.add_expr_loc loc))
+    (comb (comb (Caux.add_loc loc) Caux.add_expr)
           (if is_lvalue then (fun z -> z) else Caux.maybe_annotate_integer_type result_ty)) <$>
       match expr with
       | A.AilEunary A.Plus e ->
@@ -3364,7 +3364,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             "** TRANSLATING ** " ^
             Pp.stringFromAil_statement (A.AnnotatedStatement loc stmt_attrs stmt)
           ) in
-  (Caux.add_loc loc -| Caux.add_stmt_loc loc -| Caux.add_attrs stmt_attrs) <$>
+  (Caux.add_loc loc -| Caux.add_stmt -| Caux.add_attrs stmt_attrs) <$>
   match stmt with
     | A.AilSskip ->
         E.return Caux.mk_skip_e
