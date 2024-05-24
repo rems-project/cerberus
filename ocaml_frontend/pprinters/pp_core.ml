@@ -610,9 +610,9 @@ let rec pp_expr expr =
                   acc
             | Ainlined_label s ->
                 acc
-            | Astmt _ ->
+            | Astmt ->
                 acc
-            | Aexpr _ ->
+            | Aexpr ->
                 acc
         ) doc annot
     end

@@ -512,8 +512,8 @@ module Make (Config: CONFIG) = struct
                  Pp_core_ctype.pp_integer_ctype ity]
               | Ainlined_label (_, s, _) ->
                  [!^"inlined" ^^^ pp_symbol s]
-              | Astmt loc -> [!^"TODO(stmt)"]
-              | Aexpr loc -> [!^"TODO(expr)"]
+              | Astmt -> [!^"stmt"]
+              | Aexpr -> [!^"expr"]
 
   let pp_annots annots =
     Pp.flow_map (Pp.break 0) (fun annot -> !^"{-#" ^^ annot ^^ !^"#-}")

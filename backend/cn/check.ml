@@ -1053,23 +1053,26 @@ let add_trace_information labels annots =
   let open CF.Annot in
   let inlined_labels =
     List.filter_map (function Ainlined_label l -> Some l | _ -> None) annots in
-  let stmt_locs =
-    List.filter_map (function Astmt loc -> Some loc | _ -> None) annots in
-  let expr_locs =
-    List.filter_map (function Aexpr loc -> Some loc | _ -> None) annots in
+  let locs =
+    List.filter_map (function Aloc l -> Some l | _ -> None) annots in
+  let is_stmt = List.exists (function Astmt -> true | _ -> false) annots in
+  let is_expr = List.exists (function Aexpr -> true | _ -> false) annots in
   let@ () = match inlined_labels with
     | [] -> return ()
     | [(lloc,lsym,lannot)] ->
       add_label_to_trace (Some (lloc,lannot))
     | _ -> assert false
   in
-  let@ () = match stmt_locs with
-    | [] -> return ()
-    | l :: _ -> add_trace_item_to_trace (Stmt, l)
-  in
-  let@ () = match expr_locs with
-    | [] -> return ()
-    | l :: _ -> add_trace_item_to_trace (Context.Expr, l)
+  let@ () = match locs with
+    | [] ->
+      return ()
+    | l :: _ ->
+      if is_stmt then
+        add_trace_item_to_trace (Stmt, l)
+      else if is_expr then
+        add_trace_item_to_trace (Expr, l)
+      else
+        return ()
   in
   return ()
 
