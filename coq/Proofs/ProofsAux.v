@@ -1394,6 +1394,27 @@ Module FMapExtProofs
       auto.
   Qed.
 
+  (* Could be generlized to arbitrary length *)
+  Fact map_add_list_not_at
+    {T: Type}
+    (addr' addr : FM.M.key)
+    (bytemap0 : FM.M.t T)
+    (l : list T):
+    addr' <> addr ->
+    Datatypes.length l = 1%nat ->
+    FM.M.find (elt:=T) addr'
+      (FM.map_add_list_at bytemap0 l addr) =
+      FM.M.find (elt:=T) addr' bytemap0.
+  Proof.
+    intros NE L.
+    destruct l;[discriminate|].
+    inv L.
+    destruct l;[|discriminate].
+    cbn - [FM.M.add].
+    apply FM.F.add_neq_o.
+    rewrite Znat.Nat2Z.inj_0, OT.with_offset_0.
+    auto.
+  Qed.
 
 End FMapExtProofs.
 

@@ -24,6 +24,14 @@ Module Type OrderedTypeExt.
   Parameter with_offset: t -> Z -> t.
   Parameter of_nat: nat -> t.
   Parameter of_Z: Z -> t.
+  Parameter to_Z: t -> Z.
+
+  Parameter OT_of_Z_to_Z:
+    forall (x:t), of_Z  (to_Z x) = x.
+
+  Parameter with_offset_0:
+    forall (a:t), with_offset a 0 = a.
+
 End OrderedTypeExt.
 
 (* FMap with additional operatons and properties. *)

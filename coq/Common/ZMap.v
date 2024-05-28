@@ -11,6 +11,21 @@ Module Z_as_ExtOT : OrderedTypeExt with Definition t:=Z.
   Definition with_offset := Z.add.
   Definition of_nat := Z.of_nat.
   Definition of_Z (x:Z) := x.
+  Definition to_Z (x:t) := x.
+
+  Lemma OT_of_Z_to_Z:
+    forall (x:t), of_Z  (to_Z x) = x.
+  Proof.
+    auto.
+  Qed.
+
+  Lemma with_offset_0:
+    forall (a:t), with_offset a 0 = a.
+  Proof.
+    intros.
+    unfold with_offset.
+    apply Z.add_0_r.
+  Qed.
 
 End Z_as_ExtOT.
 
