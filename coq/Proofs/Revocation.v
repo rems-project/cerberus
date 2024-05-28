@@ -95,6 +95,25 @@ Proof.
     lia.
 Qed.
 
+Lemma AdddressValue_eqb_neq:
+  forall (a b: AddressValue.t),
+    eqb a b = false <-> a <> b.
+Proof.
+  intros a b.
+  split.
+  -
+    intros H.
+    unfold eqb in H.
+    bool_to_prop_hyp.
+    apply bitvector.bv_neq.
+    assumption.
+  -
+    intros H.
+    unfold eqb.
+    apply bitvector.bv_neq in H.
+    lia.
+Qed.
+
 Lemma sequence_len_errS
   {S E A:Type}
   (s s': S)
