@@ -392,7 +392,7 @@ let rec pow a p =
     let b = pow a (n / 2) in
     b * b * (if n mod 2 = 0 then 1 else a)
 
-let type_gen (ty : Ctype.ctype) : cn_value QCheck.Gen.t =
+let rec type_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ty : Ctype.ctype) : cn_value QCheck.Gen.t =
   QCheck.Gen.(
     let Ctype (_, cty) = ty in
     match cty with
@@ -407,6 +407,17 @@ let type_gen (ty : Ctype.ctype) : cn_value QCheck.Gen.t =
         else CN_unsigned
       in
       return (CNVal_bits ((sgn, Memory.size_of_integer_type ity), Z.of_int n))
+    | Struct n ->
+      (match List.assoc (Symbol.equal_sym) n ail_prog.tag_definitions with
+      | (_, _, StructDef (members, _)) ->
+        let f m =
+          let (Symbol.Identifier (_, id), (_, _, _, ty')) = m in
+          type_gen ail_prog ty' >>= fun v ->
+          return (id, v)
+        in
+        flatten_l (List.map f members) >>= fun ms ->
+        return (CNVal_struct (ty, ms))
+      | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
     | Pointer _ ->
       failwith (
         "Tried using type-based generator on pointer type '" ^
@@ -482,20 +493,20 @@ let is_pointer_ctype (ty : Ctype.ctype) : bool =
   | _ -> false
 ;;
 
-let rec concretize_context_generate ((vars, locs, cs) : 'ty goal) (ctx : context) : ('ty goal * context) QCheck.Gen.t =
+let rec concretize_context_generate ail_prog ((vars, locs, cs) : 'ty goal) (ctx : context) : ('ty goal * context) QCheck.Gen.t =
   QCheck.Gen.(
     match vars with
     | (x, (ty, CNExpr_var x'))::vars'
     | (x, (ty, CNExpr_value_of_c_atom (x', _)))::vars'
       when Symbol.equal_sym x x' && not (is_pointer_ctype ty) ->
-        type_gen ty >>= fun v ->
+        type_gen ail_prog ty >>= fun v ->
         (match check_constraints ((x, (ty, v))::ctx) cs with
-        | Some cs -> concretize_context_generate (vars', locs, cs) ((x, (ty, v))::ctx)
+        | Some cs -> concretize_context_generate ail_prog (vars', locs, cs) ((x, (ty, v))::ctx)
         | None ->
-          concretize_context_generate (vars', locs, cs) ctx >>= fun ((vars, locs, cs), ctx) ->
+          concretize_context_generate ail_prog (vars', locs, cs) ctx >>= fun ((vars, locs, cs), ctx) ->
           return (((x, (ty, CNExpr_var x))::vars, locs, cs), ctx))
     | v::vars' ->
-      concretize_context_generate (vars', locs, cs) ctx >>= fun ((vars, locs, cs), ctx) ->
+      concretize_context_generate ail_prog (vars', locs, cs) ctx >>= fun ((vars, locs, cs), ctx) ->
       return ((v::vars, locs, cs), ctx)
     | [] -> return ((vars, locs, cs), ctx)
   )
@@ -513,11 +524,11 @@ let rec concretize_context_evaluate ((vars, locs, cs) : 'ty goal) (ctx : context
   | [] -> ((vars, locs, cs), ctx)
 ;;
 
-let rec concretize_context' (g : 'ty goal) (ctx : context) (tolerance : int) : context QCheck.Gen.t =
+let rec concretize_context' ail_prog (g : 'ty goal) (ctx : context) (tolerance : int) : context QCheck.Gen.t =
   QCheck.Gen.(
     let (vars, _, _) = g in
     let old_num_left = List.length (List.filter (fun (_, (ty, _)) -> not (is_pointer_ctype ty)) vars) in
-    concretize_context_generate g ctx >>= fun (g, ctx) ->
+    concretize_context_generate ail_prog g ctx >>= fun (g, ctx) ->
     let ((vars, locs, cs), ctx) = concretize_context_evaluate g ctx in
     let num_left = List.length (List.filter (fun (_, (ty, _)) -> not (is_pointer_ctype ty)) vars) in
     if num_left = 0
@@ -525,16 +536,16 @@ let rec concretize_context' (g : 'ty goal) (ctx : context) (tolerance : int) : c
       return ctx
     else if num_left <> old_num_left
     then
-      concretize_context' (vars, locs, cs) ctx tolerance
+      concretize_context' ail_prog (vars, locs, cs) ctx tolerance
     else if tolerance > 0
     then
-      concretize_context' (vars, locs, cs) ctx (tolerance - 1)
+      concretize_context' ail_prog (vars, locs, cs) ctx (tolerance - 1)
     else
       failwith "Failed to concretize"
   )
 
-let concretize_context (g : 'ty goal) : context QCheck.Gen.t =
-  concretize_context' g [] 10
+let concretize_context ail_prog (g : 'ty goal) : context QCheck.Gen.t =
+  concretize_context' ail_prog g [] 10
 
 let generate_location (max_size : int) (h : heap) : int QCheck.Gen.t =
   QCheck.Gen.(
@@ -572,25 +583,32 @@ let concretize_heap (max_size : int) (ctx : context) (g : 'ty goal) : (context *
   let (_, locs, _) = g in
   concretize_heap' max_size ctx locs []
 
-let concretize (max_size : int) (g : 'ty goal) : ('ty goal * context * heap) QCheck.Gen.t =
+let concretize ail_prog (max_size : int) (g : 'ty goal) : ('ty goal * context * heap) QCheck.Gen.t =
   QCheck.Gen.(
-    concretize_context g >>= fun ctx ->
+    concretize_context ail_prog g >>= fun ctx ->
     concretize_heap max_size ctx g >>= fun (ctx, h) ->
     return (g, ctx, h)
   )
 
-let generate (psi : (Symbol.sym * (Symbol.sym, 'ty) cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : (Symbol.sym, 'ty) cn_condition list) (max_size : int) : ('ty goal * context * heap) QCheck.Gen.t =
+let generate ail_prog (psi : (Symbol.sym * (Symbol.sym, 'ty) cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : (Symbol.sym, 'ty) cn_condition list) (max_size : int) : ('ty goal * context * heap) QCheck.Gen.t =
   QCheck.Gen.(
     collect_conditions psi (List.map (fun (x, ty) -> (x, (ty, CNExpr_var x))) args) c
     |> map simplify
-    >>= concretize max_size
+    >>= concretize ail_prog max_size
   )
 
 let string_of_list f l =
   (List.fold_left (fun acc s -> acc ^ (if String.equal acc "[" then "" else "; ") ^ f s) "[" l) ^ "]"
 ;;
 
-let codify_value (v : cn_value) : string =
+let codify_type (ty : Ctype.ctype) : string =
+  Cerb_colour.do_colour := false;
+  let tmp = String_ail.string_of_ctype ~is_human:true no_quals ty ^ " " in
+  Cerb_colour.do_colour := true;
+  tmp
+;;
+
+let rec codify_value (v : cn_value) : string =
   match v with
   | CNVal_null -> "NULL"
   | CNVal_bits ((CN_signed, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
@@ -600,7 +618,14 @@ let codify_value (v : cn_value) : string =
   | CNVal_bits ((CN_signed, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "LL"
   | CNVal_bits ((CN_unsigned, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "ULL"
 
-  | _ -> failwith "todo: support other argument types"
+  | CNVal_struct (_, ms) -> "{ " ^ String.concat ", " (List.map (fun (x, v) -> "." ^ x ^ " = " ^ codify_value v) ms) ^ "}"
+
+  | CNVal_bool _ -> failwith "Booleans aren't yet supported in unit test generation"
+  | CNVal_integer _ -> failwith "Can't generate mathematical integers"
+
+  | CNVal_constr _ 
+  | CNVal_unit
+  | CNVal_bits _ -> failwith "unreachable"
 
 let expand_heap (ctx : context) (h : heap) : (context * heap) =
   let root = ref (-1) in
@@ -622,7 +647,8 @@ let expand_heap (ctx : context) (h : heap) : (context * heap) =
                 if Z.to_int n = p
                 then (i, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int res)))
                 else (i, (ty, v))
-              | _ -> failwith ("Invalid pointer value" ^ codify_value v)
+              | _ -> failwith ("Invalid pointer value")
+                (* TODO: ^ codify_value v) *)
           ) !ctx);
       (res, (ty, v)))
     (List.sort (fun (i, _) (j, _) -> compare i j) h)
@@ -636,13 +662,9 @@ let codify_heap (h : heap) (max_size : int) (oc : out_channel) : unit =
   output_string oc ");\n";
   List.iter
     (fun (p, (ty, v)) ->
-      output_string oc "*(";
-      Cerb_colour.do_colour := false;
-      output_string oc (String_ail.string_of_ctype ~is_human:true no_quals ty ^ " ");
-      Cerb_colour.do_colour := true;
-      output_string oc "*)((uintptr_t)h + ";
-      output_string oc (string_of_int p);
-      output_string oc ") = ";
+      let ty_str = codify_type ty in
+      let rhs = "*(" ^ ty_str ^ "*)((uintptr_t)h + " ^ string_of_int p ^ ") = " in
+      output_string oc rhs;
       output_string oc (codify_value v);
       output_string oc ";\n")
     h
@@ -652,8 +674,7 @@ let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc 
     (fun (x, ty) ->
       let name = Pp_symbol.to_string_pretty x in
       Cerb_colour.do_colour := false;
-      let ty_str = String_ail.string_of_ctype ~is_human:true no_quals ty in
-      Cerb_colour.do_colour := true;
+      let ty_str = codify_type ty in
       let value =
         match List.assoc_opt Symbol.equal_sym x ctx with
         | Some (ty', v) ->
@@ -732,7 +753,7 @@ let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.i
        (* failwith "Only support unit tests for integers") *)
     arg_types;
   let args = List.combine arg_syms arg_types in
-  let (g, ctx, h) = QCheck.Gen.generate1 (generate psi args (instrumentation.surface.requires) max_size) in
+  let (g, ctx, h) = QCheck.Gen.generate1 (generate ail_prog psi args (instrumentation.surface.requires) max_size) in
   if tolerance == 0 || (List.find_opt (fun g' -> Stdlib.(=) g g') generated |> Option.is_none)
   then (
     codify tf instrumentation ail_prog args ctx h (List.length generated + 1) max_size oc;
