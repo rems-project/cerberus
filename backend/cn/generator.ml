@@ -941,4 +941,10 @@ let rec generate_unit_tests (tf : test_framework) (instrumentation : Core_to_muc
 ;;
 
 let generate_tests (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (num_tests : int) : unit =
-  List.iter (fun inst -> generate_unit_tests tf inst ail_prog max_size oc [] num_tests (10 * num_tests)) instrumentation_list
+  List.iter
+    (fun inst ->
+      try
+        generate_unit_tests tf inst ail_prog max_size oc [] num_tests (10 * num_tests)
+      with Failure m ->
+        print_string ("Failed to generate all tests for `" ^ Sym.pp_string inst.fn ^ "` due to the following:\n" ^ m ^ "\n")
+    ) instrumentation_list
