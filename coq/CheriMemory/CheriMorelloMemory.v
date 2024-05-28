@@ -33,6 +33,10 @@ Import MonadNotation.
 Local Notation opt_def := Values.opt_def.
 Local Notation is_some := CapFns.is_some.
 
+Definition AddressValue_with_offset_safe (v:AddressValue.t) (o:Z): option AddressValue.t
+  :=
+  AddressValue.of_Z_safe (AddressValue.to_Z v + o).
+
 Module Type CheriMemoryTypes
   (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS

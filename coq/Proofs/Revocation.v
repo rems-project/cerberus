@@ -71,48 +71,59 @@ End AbstTagDefs.
 Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
 
 (* TODO: move *)
-(** [a1] - [a2] for addresses *)
-Definition addr_offset (a1 a2:AddressValue.t) : Z
-  := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
+Section AddressValue_Lemmas.
 
-(* TODO: move *)
-Lemma AdddressValue_eqb_eq:
-  forall (a b: AddressValue.t),
-    eqb a b = true <-> a = b.
-Proof.
-  intros a b.
-  split.
-  -
-    intros H.
-    unfold eqb in H.
-    bool_to_prop_hyp.
-    apply bitvector.bv_eq.
-    assumption.
-  -
-    intros H.
-    unfold eqb.
-    subst.
-    lia.
-Qed.
+  (** [a1] - [a2] for addresses *)
+  Definition addr_offset (a1 a2:AddressValue.t) : Z
+    := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
 
-Lemma AdddressValue_eqb_neq:
-  forall (a b: AddressValue.t),
-    eqb a b = false <-> a <> b.
-Proof.
-  intros a b.
-  split.
-  -
-    intros H.
-    unfold eqb in H.
-    bool_to_prop_hyp.
-    apply bitvector.bv_neq.
-    assumption.
-  -
-    intros H.
-    unfold eqb.
-    apply bitvector.bv_neq in H.
-    lia.
-Qed.
+  (* TODO: move *)
+  Lemma AdddressValue_eqb_eq:
+    forall (a b: AddressValue.t),
+      eqb a b = true <-> a = b.
+  Proof.
+    intros a b.
+    split.
+    -
+      intros H.
+      unfold eqb in H.
+      bool_to_prop_hyp.
+      apply bitvector.bv_eq.
+      assumption.
+    -
+      intros H.
+      unfold eqb.
+      subst.
+      lia.
+  Qed.
+
+  Lemma AdddressValue_eqb_neq:
+    forall (a b: AddressValue.t),
+      eqb a b = false <-> a <> b.
+  Proof.
+    intros a b.
+    split.
+    -
+      intros H.
+      unfold eqb in H.
+      bool_to_prop_hyp.
+      apply bitvector.bv_neq.
+      assumption.
+    -
+      intros H.
+      unfold eqb.
+      apply bitvector.bv_neq in H.
+      lia.
+  Qed.
+
+  Fact AddressValue_ltb_Z_ltb:
+    forall a b,
+      AddressValue.ltb a b = Z.ltb (AddressValue.to_Z a) (AddressValue.to_Z b).
+  Proof.
+    reflexivity.
+  Qed.
+
+End AddressValue_Lemmas.
 
 Lemma sequence_len_errS
   {S E A:Type}
@@ -4464,14 +4475,13 @@ Module RevocationProofs.
     revert s s' addr.
     induction n;intros.
     +
-      break_if.
+      break_match_goal.
       *
-        apply andb_prop in Heqb.
-        rewrite AddressValue_as_ExtOT.with_offset_0 in Heqb.
-        unfold AddressValue.leb, AddressValue.ltb, leb, ltb in Heqb.
-        rewrite Z.ltb_lt in Heqb.
-        destruct Heqb.
-        bool_to_prop_hyp; try lia.
+        bool_to_prop_hyp.
+        rewrite AddressValue_as_ExtOT.with_offset_0 in H0.
+        unfold AddressValue.leb, AddressValue.ltb, leb, ltb in H, H0.
+        rewrite Z.ltb_lt in H0.
+        bool_to_prop_hyp; [lia|].
         apply AdddressValue_eqb_eq in H.
         subst.
         lia.
@@ -4480,12 +4490,12 @@ Module RevocationProofs.
         state_inv_step.
         reflexivity.
     +
-      destruct (Z.eq_dec addr (a1 + Z.of_nat n)) as [L|NL].
+      destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset a1 (Z.of_nat n))) as [L|NL].
       *
         (* last element *)
         cbn in C.
         state_inv_step.
-        remember (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n) as addr.
+        remember (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n)) as addr.
         apply eff_array_shift_ptrval_uchar_spec in C0, C2.
         subst ptrval2' ptrval1'.
         rename x into fp.
@@ -4510,19 +4520,24 @@ Module RevocationProofs.
           unfold memcpy_alloc_bounds_check_p in *.
           lia.
         }
-        clear C5 AG.
+        clear C5.
 
-        break_match_hyp;[lia|].
-        clear Heqb. (* ? && false = false *)
         subst addr.
-
         break_match_goal.
         --
-          replace (AddressValue.to_Z (Capability_GS.cap_get_value c2) +
-                     (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n - AddressValue.to_Z (Capability_GS.cap_get_value c1)))
+          replace (AddressValue.with_offset (Capability_GS.cap_get_value c2)
+                     (addr_offset
+                        (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n))
+                        (Capability_GS.cap_get_value c1)))
             with
-            (AddressValue.to_Z (Capability_GS.cap_get_value c2) + Z.of_nat n)
-            by lia.
+            (AddressValue.with_offset (Capability_GS.cap_get_value c2) (Z.of_nat n)) in *.
+          2: {
+            invc AG.
+            clear -H12.
+            invc H12.
+            destruct H0 as [H1 [H2 [H3 H4]]].
+            admit. (*TODO *)
+          }
           clear Heqb.
           rewrite IHn; clear IHn.
 
@@ -4538,21 +4553,36 @@ Module RevocationProofs.
         --
           rewrite IHn; clear IHn s' C1.
           apply andb_false_iff in Heqb.
-          rewrite Z.leb_gt, Z.ltb_ge in Heqb.
-          destruct Heqb;try lia.
+          unfold AddressValue.leb, AddressValue.ltb, leb, ltb in Heqb.
+          destruct Heqb as [H1 | H2].
+          ++
+            bool_to_prop_hyp; try lia.
+            apply AdddressValue_eqb_neq in H0.
+            admit.
+          ++
+            bool_to_prop_hyp; try lia.
+            admit.
       *
         (* not last *)
         cbn in C.
         state_inv_step.
         apply eff_array_shift_ptrval_uchar_spec in C0, C2.
         subst ptrval2' ptrval1'.
-        replace (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n))
-          with (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n).
+        replace (AddressValue.ltb
+                   addr
+                   (AddressValue.with_offset (Capability_GS.cap_get_value c1)
+                      (Z.of_nat (S n))))
+          with (AddressValue.ltb
+                   addr
+                   (AddressValue.with_offset (Capability_GS.cap_get_value c1)
+                      (Z.of_nat n))).
         2: {
           clear - NL.
-          destruct (Z.ltb addr (Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c1)) (Z.of_nat n)))
+          rewrite 2!AddressValue_ltb_Z_ltb.
+
+          destruct (Z.ltb (AddressValue.to_Z addr) (Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c1)) (Z.of_nat n)))
             eqn:L;
-            destruct (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n)) eqn:R;try reflexivity.
+            destruct (AddressValue.to_Z addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n)) eqn:R;try reflexivity.
           -
             apply Z.ltb_lt in L.
             apply Z.ltb_ge in R.
