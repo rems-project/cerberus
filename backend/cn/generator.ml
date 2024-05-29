@@ -286,13 +286,7 @@ and eval_expr (ctx : context) (e : cn_expr) : cn_value =
 type variables = (Symbol.sym * (Ctype.ctype * cn_expr_)) list
 
 let string_of_variables (vars : variables) : string =
-  "{ " ^ (
-    List.fold_left (
-      fun a b ->
-        if String.equal a ""
-        then b
-        else a ^ "; " ^ b
-    ) "" (
+  "{ " ^ (String.concat "; " (
       List.map (
         fun (x, (ty, e)) ->
           Pp_symbol.to_string_pretty x ^ " -> (" ^ string_of_ctype ty ^ ", " ^ string_of_expr_ e ^ ")"
@@ -304,17 +298,31 @@ let string_of_variables (vars : variables) : string =
 type locations = (cn_expr_ * Symbol.sym) list
 
 let string_of_locations (locs : locations) : string =
-  "{ " ^ (
-    List.fold_left (
-      fun a b ->
-        if String.equal a ""
-        then b
-        else a ^ "; " ^ b
-    ) "" (
+  "{ " ^ (String.concat "; " (
       List.map (
         fun (e, x) ->
-           "(" ^ string_of_expr_ e ^ ") -> " ^ Pp_symbol.to_string_pretty x
+           "(*" ^ string_of_expr_ e ^ ") -> " ^ Pp_symbol.to_string_pretty x
       ) locs
+    )
+  ) ^ " }"
+;;
+
+type members = (Symbol.sym * (string * (Ctype.ctype * Symbol.sym)) list) list
+
+let string_of_members (ms : members) : string =
+  "{ " ^ (
+    String.concat "; " (
+      List.map (
+        fun (x, ms) ->
+          Pp_symbol.to_string_pretty x ^
+          " -> {" ^ String.concat ", " (
+            List.map (
+              fun (y, (ty, z)) ->
+                "." ^ y ^ ": " ^
+                string_of_ctype ty ^
+                " = " ^ Pp_symbol.to_string_pretty z
+            ) ms)
+      ) ms
     )
   ) ^ " }"
 ;;
@@ -322,24 +330,16 @@ let string_of_locations (locs : locations) : string =
 type constraints = cn_expr_ list
 
 let string_of_constraints (cs : constraints) : string =
-  "{ " ^ (
-    List.fold_left (
-      fun a b ->
-        if String.equal a ""
-        then b
-        else a ^ "; " ^ b
-    ) "" (
-      List.map string_of_expr_ cs
-    )
-  ) ^ " }"
+  "{ " ^ String.concat "; " (List.map string_of_expr_ cs) ^ " }"
 ;;
 
-type goal = variables * locations * constraints
+type goal = variables * members * locations * constraints
 
-let string_of_goal ((vars, locs, cs) : goal) : string =
-  string_of_variables vars ^ "\n" ^
-  string_of_locations locs ^ "\n" ^
-  string_of_constraints cs ^ "\n"
+let string_of_goal ((vars, ms, locs, cs) : goal) : string =
+  "Vars: " ^ string_of_variables vars ^ "\n" ^
+  "Ms: " ^ string_of_members ms ^ "\n" ^
+  "Locs: " ^ string_of_locations locs ^ "\n" ^
+  "Cs: " ^ string_of_constraints cs ^ "\n"
 
 let get_builtin_name fsym =
   let (name, _) =
@@ -359,71 +359,91 @@ let apply_builtins e =
   in
   Cn.CNExpr (Cerb_location.unknown, res)
 
-let rec collect_resource (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (r : cn_resource) : (cn_expr_ * variables * locations * constraints) QCheck.Gen.t =
+let is_pointer_ctype (ty : Ctype.ctype) : bool =
+  match ty with
+  | Ctype (_, Pointer _) -> true
+  | _ -> false
+;;
+
+let add_to_vars_ms (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (sym : Symbol.sym) (ty : Ctype.ctype) (vars : variables) (ms : members) : variables * members =
+  match ty with
+  | Ctype (_, Struct n) ->
+    (match List.assoc (Symbol.equal_sym) n ail_prog.tag_definitions with
+    | (_, _, StructDef (membs, _)) ->
+      let f (Symbol.Identifier (_, id), (_, _, _, ty)) =
+        let sym = Symbol.fresh () in
+        (id, (ty, sym)), (sym, (ty, Cn.CNExpr_var sym))
+      in
+      let member_data, vars' = List.split (List.map f membs) in
+      ((sym, (ty, Cn.CNExpr_var sym))::vars @ vars', (sym, member_data)::ms)
+    | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
+  | _ -> ((sym, (ty, Cn.CNExpr_var sym))::vars, ms)
+
+let rec collect_resource (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (r : cn_resource) : (cn_expr_ * variables * members * locations * constraints) QCheck.Gen.t =
   match r with
   | CN_pred (_, CN_owned (Some ty), [Cn.CNExpr (_, e)])
   | CN_pred (_, CN_block ty, [Cn.CNExpr (_, e)]) ->
     let sym = Symbol.fresh () in
-    let e' = Cn.CNExpr_var sym in
-    QCheck.Gen.return (e', (sym, (ty, e'))::vars, [(e, sym)], [])
+    let vars, ms = add_to_vars_ms ail_prog sym ty vars ms in
+    QCheck.Gen.return (Cn.CNExpr_var sym, vars, ms, [(e, sym)], [])
   | CN_pred (_, CN_named x, es) ->
     let pred = List.assoc Symbol.equal_sym x psi in
     let es' = List.map (fun (Cn.CNExpr (_, e')) -> e') es in
-    collect_clauses psi vars (sub_sym_predicate pred es')
+    collect_clauses ail_prog psi vars ms (sub_sym_predicate pred es')
 
   | CN_pred (_, CN_owned (Some _), _) -> failwith "incorrect number of args for Owned"
   | CN_pred (_, CN_block _, _) -> failwith "incorrect number of args for Block"
   | CN_pred (_, CN_owned None, _) -> failwith "requires type for Owned"
   | CN_each _ -> failwith "each not supported"
 
-and collect_clause (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (c : cn_clause) : (cn_expr_ * variables * locations * constraints) QCheck.Gen.t =
+and collect_clause (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (c : cn_clause) : (cn_expr_ * variables * members * locations * constraints) QCheck.Gen.t =
   QCheck.Gen.(
     match c with
     | CN_letResource (_, x, r, c') ->
-      collect_resource psi vars r >>= fun (e, vars, locs, cs) ->
-      collect_clause psi vars (sub_sym_clause x e c') >>= fun (e', vars, locs', cs') ->
-      return (e', vars, locs @ locs', cs @ cs')
+      collect_resource ail_prog psi vars ms r >>= fun (e, vars, ms, locs, cs) ->
+      collect_clause ail_prog psi vars ms (sub_sym_clause x e c') >>= fun (e', vars, ms, locs', cs') ->
+      return (e', vars, ms, locs @ locs', cs @ cs')
     | CN_letExpr (_, x, CNExpr (_, e), c') ->
-      collect_clause psi vars (sub_sym_clause x e c')
+      collect_clause ail_prog psi vars ms (sub_sym_clause x e c')
     | CN_assert (_, CN_assert_exp (Cn.CNExpr (_, e)), c') ->
-      collect_clause psi vars c' >>= fun (e', vars, locs, cs) ->
-      return (e', vars, locs, e::cs)
+      collect_clause ail_prog psi vars ms c' >>= fun (e', vars, ms, locs, cs) ->
+      return (e', vars, ms, locs, e::cs)
     | CN_return (_, Cn.CNExpr (_, e)) ->
-      return (e, vars, [], [])
+      return (e, vars, ms, [], [])
     | CN_assert (_, CN_assert_qexp _, _) -> failwith "quantified assert not supported"
   )
 
-and collect_clauses (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (s : cn_clauses) : (cn_expr_ * variables * locations * constraints) QCheck.Gen.t =
+and collect_clauses (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (s : cn_clauses) : (cn_expr_ * variables * members * locations * constraints) QCheck.Gen.t =
   match s with
-  | CN_clause (_, c) -> collect_clause psi vars c
+  | CN_clause (_, c) -> collect_clause ail_prog psi vars ms c
   | CN_if (_, e_if, c_then, s_else) ->
     let e_if = apply_builtins e_if in
     QCheck.Gen.(
       bool >>= fun b ->
         if b
         then
-          collect_clause psi vars c_then >>= fun (e, vars, locs, cs) ->
+          collect_clause ail_prog psi vars ms c_then >>= fun (e, vars, ms, locs, cs) ->
           let Cn.CNExpr (_, e_if) = e_if in
-          return (e, vars, locs, e_if::cs)
+          return (e, vars, ms, locs, e_if::cs)
         else
-          collect_clauses psi vars s_else >>= fun (e, vars, locs, cs) ->
-          return (e, vars, locs, (Cn.CNExpr_not e_if)::cs)
+          collect_clauses ail_prog psi vars ms s_else >>= fun (e, vars, ms, locs, cs) ->
+          return (e, vars, ms, locs, (Cn.CNExpr_not e_if)::cs)
     )
 
-let rec collect_conditions (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (c : cn_condition list) : goal QCheck.Gen.t =
+let rec collect_conditions (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (c : cn_condition list) : goal QCheck.Gen.t =
   QCheck.Gen.(
     match c with
     | (CN_cletResource (_, x, r))::c' ->
-      collect_resource psi vars r >>= fun (e, vars, locs, cs) ->
-      collect_conditions psi vars (sub_sym_conditions x e c') >>= fun (vars, locs', cs') ->
-      return (vars, locs @ locs', cs @ cs')
+      collect_resource ail_prog psi vars ms r >>= fun (e, vars, ms, locs, cs) ->
+      collect_conditions ail_prog psi vars ms (sub_sym_conditions x e c') >>= fun (vars, ms, locs', cs') ->
+      return (vars, ms, locs @ locs', cs @ cs')
     | (CN_cletExpr (_, x, CNExpr (_, e)))::c' ->
-      collect_conditions psi vars (sub_sym_conditions x e c')
+      collect_conditions ail_prog psi vars ms (sub_sym_conditions x e c')
     | (CN_cconstr (_, CN_assert_exp Cn.CNExpr (_, e)))::c' ->
-      collect_conditions psi vars c' >>= fun (vars, locs, cs) ->
-      return (vars, locs, e::cs)
+      collect_conditions ail_prog psi vars ms c' >>= fun (vars, ms, locs, cs) ->
+      return (vars, ms, locs, e::cs)
     | (CN_cconstr (_, CN_assert_qexp _))::_ -> failwith "quantified assert not supported"
-    | [] -> return (vars, [], [])
+    | [] -> return (vars, ms, [], [])
   )
 
 let sub_sym_variables (x : Symbol.sym) (v : cn_expr_) (vars : variables) : variables =
@@ -435,8 +455,8 @@ let sub_sym_locations (x : Symbol.sym) (v : cn_expr_) (locs : locations) : locat
 let sub_sym_constraints (x : Symbol.sym) (v : cn_expr_) (cs : constraints) : constraints =
   List.map (fun e -> sub_sym_expr_ x v e) cs
 
-let sub_sym_goal (x : Symbol.sym) (v : cn_expr_) ((vars, locs, cs) : goal) : goal =
-  (sub_sym_variables x v vars, sub_sym_locations x v locs, sub_sym_constraints x v cs)
+let sub_sym_goal (x : Symbol.sym) (v : cn_expr_) ((vars, ms, locs, cs) : goal) : goal =
+  (sub_sym_variables x v vars, ms, sub_sym_locations x v locs, sub_sym_constraints x v cs)
 
 let rec inline_constants (g : goal) (iter : constraints) : goal =
   match iter with
@@ -450,20 +470,20 @@ let rec inline_constants (g : goal) (iter : constraints) : goal =
   | [] -> g
 ;;
 
-let rec remove_tautologies ((vars, locs, cs) : goal) : goal =
+let rec remove_tautologies ((vars, ms, locs, cs) : goal) : goal =
   match cs with
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_var x), CNExpr (_, CNExpr_var y)))::cs when Symbol.equal_sym x y ->
-    remove_tautologies (vars, locs, cs)
+    remove_tautologies (vars, ms, locs, cs)
   | c::cs ->
     (try
       let v = eval_expr_ [] c in
       if Stdlib.(=) v (CNVal_bool true)
-      then remove_tautologies (vars, locs, cs)
+      then remove_tautologies (vars, ms, locs, cs)
       else failwith "Inconsistent constraints"
     with Not_found ->
-      let (vars, locs, cs) = remove_tautologies (vars, locs, cs) in
-      (vars, locs, c::cs))
-  | [] -> (vars, locs, cs)
+      let (vars, ms, locs, cs) = remove_tautologies (vars, ms, locs, cs) in
+      (vars, ms, locs, c::cs))
+  | [] -> (vars, ms, locs, cs)
 
 let rec distribute_negation_ (e : cn_expr_) : cn_expr_ =
   Cn.(
@@ -505,7 +525,7 @@ let rec inline_aliasing (g : goal) (iter : constraints) : goal =
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_var x), CNExpr (_, CNExpr_value_of_c_atom (y, _))))::iter'
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_value_of_c_atom (x, _)), CNExpr (_, CNExpr_var y)))::iter'
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_value_of_c_atom (x, _)), CNExpr (_, CNExpr_value_of_c_atom (y, _))))::iter' ->
-    let (vars, locs, cs) = g in
+    let (vars, ms, locs, cs) = g in
     (match List.assoc Symbol.equal_sym x vars, List.assoc Symbol.equal_sym y vars with
     | (_, CNExpr_var x'), (_, e) when Symbol.equal_sym x x' -> sub_sym_goal x (CNExpr_var y) g
     | _ -> sub_sym_goal y (CNExpr_var x) g)
@@ -513,24 +533,80 @@ let rec inline_aliasing (g : goal) (iter : constraints) : goal =
   | [] -> g
 ;;
 
-let rec remove_nonnull_for_locs ((vars, locs, cs) : goal) : goal =
+let rec remove_nonnull_for_locs ((vars, ms, locs, cs) : goal) : goal =
   match cs with
   | (CNExpr_binop (CN_inequal, CNExpr (_, e), CNExpr (_, CNExpr_const CNConst_NULL)))::cs
     when List.assoc_opt Stdlib.(=) e locs |> Option.is_some ->
-    remove_nonnull_for_locs (vars, locs, cs)
+    remove_nonnull_for_locs (vars, ms, locs, cs)
   | c::cs ->
-    let (vars, locs, cs) = remove_nonnull_for_locs (vars, locs, cs) in
-    (vars, locs, c::cs)
-  | [] -> (vars, locs, [])
+    let (vars, ms, locs, cs) = remove_nonnull_for_locs (vars, ms, locs, cs) in
+    (vars, ms, locs, c::cs)
+  | [] -> (vars, ms, locs, [])
+
+let rec indirect_members_expr_ (ms : members) (e : cn_expr_) : cn_expr_ =
+  match e with
+  | CNExpr_memberof (CNExpr (_, CNExpr_var x), Symbol.Identifier (_, y)) ->
+    let new_sym =
+      List.assoc Symbol.equal_sym x ms
+      |> List.assoc String.equal y
+      |> snd
+    in
+    CNExpr_var new_sym
+  | CNExpr_list es -> CNExpr_list (List.map (indirect_members_expr ms) es)
+  | CNExpr_memberof (e', x') -> CNExpr_memberof (indirect_members_expr ms e', x')
+  | CNExpr_record fs -> CNExpr_record (List.map (fun (x', e') -> (x', indirect_members_expr ms e')) fs)
+  | CNExpr_memberupdates (e', xes) -> CNExpr_memberupdates (indirect_members_expr ms e', List.map (fun (x', e') -> (x', indirect_members_expr ms e')) xes)
+  | CNExpr_arrayindexupdates (e', ees) -> CNExpr_arrayindexupdates (indirect_members_expr ms e', List.map (fun (e1, e2) -> (indirect_members_expr ms e1, indirect_members_expr ms e2)) ees)
+  | CNExpr_binop (op, e1, e2) -> CNExpr_binop (op, indirect_members_expr ms e1, indirect_members_expr ms e2)
+  | CNExpr_membershift (e', tag, id) -> CNExpr_membershift (indirect_members_expr ms e', tag, id)
+  | CNExpr_cast (ty, e') -> CNExpr_cast (ty, indirect_members_expr ms e')
+  | CNExpr_array_shift (e1, ty, e2) -> CNExpr_array_shift (indirect_members_expr ms e1, ty, indirect_members_expr ms e2)
+  | CNExpr_call (f, args) -> CNExpr_call (f, List.map (indirect_members_expr ms) args)
+  | CNExpr_cons (constr, exprs) -> CNExpr_cons (constr, List.map (fun (x, e') -> (x, indirect_members_expr ms e')) exprs)
+  | CNExpr_each (x, ty, r, e') -> CNExpr_each (x, ty, r, indirect_members_expr ms e')
+  | CNExpr_let (x, e1, e2) ->
+    CNExpr_let (
+      x,
+      indirect_members_expr ms e1,
+      indirect_members_expr ms e2
+    )
+  | CNExpr_match (e', ps) -> CNExpr_match (indirect_members_expr ms e', List.map (fun (p, e') -> (p, indirect_members_expr ms e')) ps)
+  | CNExpr_ite (e1, e2, e3) -> CNExpr_ite (indirect_members_expr ms e1, indirect_members_expr ms e2, indirect_members_expr ms e3)
+  | CNExpr_good (ty, e') -> CNExpr_good (ty, indirect_members_expr ms e')
+  | CNExpr_deref e' -> CNExpr_deref (indirect_members_expr ms e')
+  | CNExpr_unchanged e' -> CNExpr_unchanged (indirect_members_expr ms e')
+  | CNExpr_at_env (e', x') -> CNExpr_at_env (indirect_members_expr ms e', x')
+  | CNExpr_not e' -> CNExpr_not (indirect_members_expr ms e')
+
+  | CNExpr_var _
+  | CNExpr_value_of_c_atom _
+  | CNExpr_const _
+  | CNExpr_sizeof _
+  | CNExpr_offsetof _
+  | CNExpr_addr _
+  | CNExpr_default _ -> e
+
+and indirect_members_expr (ms : members) (e : cn_expr) : cn_expr =
+  let CNExpr (l, e) = e in
+  CNExpr (l, indirect_members_expr_ ms e)
+
+let indirect_members ((vars, ms, locs, cs) : goal) : goal =
+  (
+    List.map (fun (x, (ty, e)) -> (x, (ty, indirect_members_expr_ ms e))) vars,
+    ms,
+    List.map (fun (e, x) -> (indirect_members_expr_ ms e, x)) locs,
+    List.map (fun e -> indirect_members_expr_ ms e) cs
+  )
 
 let rec simplify (g : goal) : goal =
   let og = g in
-  let (vars, locs, cs) = g in
+  let (vars, ms, locs, cs) = g in
   let g = inline_constants g cs in
   let g = inline_aliasing g cs in
-  let (vars, locs, cs) = remove_tautologies g in
-  let g = (vars, locs, List.map distribute_negation_ cs) in
+  let (vars, ms, locs, cs) = remove_tautologies g in
+  let g = (vars, ms, locs, List.map distribute_negation_ cs) in
   let g = remove_nonnull_for_locs g in
+  (* let g = indirect_members g in *)
   if Stdlib.(<>) og g
   then
     simplify g
@@ -544,12 +620,6 @@ let rec pow a p =
   | n ->
     let b = pow a (n / 2) in
     b * b * (if n mod 2 = 0 then 1 else a)
-
-let is_pointer_ctype (ty : Ctype.ctype) : bool =
-  match ty with
-  | Ctype (_, Pointer _) -> true
-  | _ -> false
-;;
 
 let rec type_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ty : Ctype.ctype) : cn_value QCheck.Gen.t =
   QCheck.Gen.(
@@ -569,11 +639,10 @@ let rec type_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ty : Cty
     | Struct n ->
       (match List.assoc (Symbol.equal_sym) n ail_prog.tag_definitions with
       | (_, _, StructDef (members, _)) ->
-        let f m =
-          let (Symbol.Identifier (_, id), (_, _, _, ty')) = m in
+        let f (Symbol.Identifier (_, id), (_, _, _, ty')) =
           if is_pointer_ctype ty'
           then
-            return (id, failwith "TODO")
+            return (id, failwith "unreachable")
           else
             type_gen ail_prog ty' >>= fun v ->
             return (id, v)
@@ -609,21 +678,6 @@ let rec check_constraints (ctx : context) (cs : constraints) : constraints optio
   | [] -> Some []
 ;;
 
-(* let rec concretize_context_constants ((vars, locs, cs) : goal) (ctx : context) : goal * context =
-  match vars with
-  | (x, (ty, CNExpr_const c))::vars' ->
-    (try
-      let v = eval_expr_ ctx (CNExpr_const c) in
-      concretize_context_constants (vars', locs, cs) ((x, v)::ctx)
-    with Failure _ ->
-      let ((vars, locs, cs), ctx) = concretize_context_constants (vars', locs, cs) ctx in
-      (((x, (ty, CNExpr_const c))::vars, locs, cs), ctx))
-  | v::vars' ->
-    let ((vars, locs, cs), ctx) = concretize_context_constants (vars', locs, cs) ctx in
-    ((v::vars, locs, cs), ctx)
-  | [] -> ((vars, locs, cs), ctx)
-;; *)
-
 let rec string_of_value (v : cn_value) : string =
   match v with
   | CNVal_null -> "NULL"
@@ -645,12 +699,7 @@ let rec string_of_value (v : cn_value) : string =
 
 let string_of_context (ctx : context) : string =
   "{ " ^ (
-    List.fold_left (
-      fun a b ->
-        if String.equal a ""
-        then b
-        else a ^ "; " ^ b
-    ) "" (
+    String.concat "; " (
       List.map (
         fun (x, (ty, v)) ->
           Pp_symbol.to_string_pretty x ^ " -> (" ^ string_of_ctype ty ^ ", " ^ string_of_value v ^ ")"
@@ -659,53 +708,58 @@ let string_of_context (ctx : context) : string =
   ) ^ " }"
 ;;
 
-let rec concretize_context_generate ail_prog ((vars, locs, cs) : goal) (ctx : context) : (goal * context) QCheck.Gen.t =
+let is_integer_ctype (ty : Ctype.ctype) : bool =
+  match ty with
+  | Ctype (_, Basic (Integer _)) -> true
+  | _ -> false
+
+let rec concretize_context_generate ail_prog ((vars, ms, locs, cs) : goal) (ctx : context) : (goal * context) QCheck.Gen.t =
   QCheck.Gen.(
     match vars with
     | (x, (ty, CNExpr_var x'))::vars'
     | (x, (ty, CNExpr_value_of_c_atom (x', _)))::vars'
-      when Symbol.equal_sym x x' && not (is_pointer_ctype ty) ->
+      when Symbol.equal_sym x x' && is_integer_ctype ty ->
         type_gen ail_prog ty >>= fun v ->
         (match check_constraints ((x, (ty, v))::ctx) cs with
-        | Some cs -> concretize_context_generate ail_prog (vars', locs, cs) ((x, (ty, v))::ctx)
+        | Some cs -> concretize_context_generate ail_prog (vars', ms, locs, cs) ((x, (ty, v))::ctx)
         | None ->
-          concretize_context_generate ail_prog (vars', locs, cs) ctx >>= fun ((vars, locs, cs), ctx) ->
-          return (((x, (ty, Cn.CNExpr_var x))::vars, locs, cs), ctx))
+          concretize_context_generate ail_prog (vars', ms, locs, cs) ctx >>= fun ((vars, ms, locs, cs), ctx) ->
+          return (((x, (ty, Cn.CNExpr_var x))::vars, ms, locs, cs), ctx))
     | v::vars' ->
-      concretize_context_generate ail_prog (vars', locs, cs) ctx >>= fun ((vars, locs, cs), ctx) ->
-      return ((v::vars, locs, cs), ctx)
-    | [] -> return ((vars, locs, cs), ctx)
+      concretize_context_generate ail_prog (vars', ms, locs, cs) ctx >>= fun ((vars, ms, locs, cs), ctx) ->
+      return ((v::vars, ms, locs, cs), ctx)
+    | [] -> return ((vars, ms, locs, cs), ctx)
   )
 ;;
 
-let rec concretize_context_evaluate ((vars, locs, cs) : goal) (ctx : context) : goal * context =
+let rec concretize_context_evaluate ((vars, ms, locs, cs) : goal) (ctx : context) : goal * context =
   match vars with
   | (x, (ty, e))::vars' ->
     (try
       let v = eval_expr_ ctx e in
-      concretize_context_evaluate (vars', locs, cs) ((x, (ty, v))::ctx)
+      concretize_context_evaluate (vars', ms, locs, cs) ((x, (ty, v))::ctx)
     with Not_found ->
-      let ((vars, locs, cs), ctx) = concretize_context_evaluate (vars', locs, cs) ctx in
-      (((x, (ty, e))::vars, locs, cs), ctx))
-  | [] -> ((vars, locs, cs), ctx)
+      let ((vars, ms, locs, cs), ctx) = concretize_context_evaluate (vars', ms, locs, cs) ctx in
+      (((x, (ty, e))::vars, ms, locs, cs), ctx))
+  | [] -> ((vars, ms, locs, cs), ctx)
 ;;
 
 let rec concretize_context' ail_prog (g : goal) (ctx : context) (tolerance : int) : context QCheck.Gen.t =
   QCheck.Gen.(
-    let (vars, _, _) = g in
-    let old_num_left = List.length (List.filter (fun (_, (ty, _)) -> not (is_pointer_ctype ty)) vars) in
+    let (vars, _, _, _) = g in
+    let old_num_left = List.length (List.filter (fun (_, (ty, _)) -> is_integer_ctype ty) vars) in
     concretize_context_generate ail_prog g ctx >>= fun (g, ctx) ->
-    let ((vars, locs, cs), ctx) = concretize_context_evaluate g ctx in
-    let num_left = List.length (List.filter (fun (_, (ty, _)) -> not (is_pointer_ctype ty)) vars) in
+    let ((vars, ms, locs, cs), ctx) = concretize_context_evaluate g ctx in
+    let num_left = List.length (List.filter (fun (_, (ty, _)) -> is_integer_ctype ty) vars) in
     if num_left = 0
     then
       return ctx
     else if num_left <> old_num_left
     then
-      concretize_context' ail_prog (vars, locs, cs) ctx tolerance
+      concretize_context' ail_prog (vars, ms, locs, cs) ctx tolerance
     else if tolerance > 0
     then
-      concretize_context' ail_prog (vars, locs, cs) ctx (tolerance - 1)
+      concretize_context' ail_prog (vars, ms, locs, cs) ctx (tolerance - 1)
     else
       failwith "Failed to concretize"
   )
@@ -723,6 +777,19 @@ let generate_location (max_size : int) (h : heap) : int QCheck.Gen.t =
       |> List.fold_left (fun acc i -> if n >= i then n + 1 else n) n
     )
   )
+
+let construct_structs (vars : variables) (ms : members) (ctx : context) : context =
+  List.fold_left (
+    fun ctx (x, (ty, _)) ->
+      (match ty with
+      | Ctype.Ctype (_, Struct _) ->
+        let fs =
+          List.assoc Symbol.equal_sym x ms
+          |> List.map (fun (x, (_, y)) -> (x, List.assoc Symbol.equal_sym y ctx |> snd))
+        in
+        (x, (ty, CNVal_struct (ty, fs)))::ctx
+      | _ -> ctx)
+  ) ctx vars
 
 let rec concretize_heap' (max_size : int) (ctx : context) (locs : locations) (h : heap) : (context * heap) QCheck.Gen.t =
   QCheck.Gen.(
@@ -746,26 +813,34 @@ let rec concretize_heap' (max_size : int) (ctx : context) (locs : locations) (h 
   )
 
 let concretize_heap (max_size : int) (ctx : context) (g : goal) : (context * heap) QCheck.Gen.t =
-  let (_, locs, _) = g in
+  let (_, _, locs, _) = g in
   concretize_heap' max_size ctx locs []
 
 let concretize ail_prog (max_size : int) (g : goal) : (goal * context * heap) QCheck.Gen.t =
   QCheck.Gen.(
     concretize_context ail_prog g >>= fun ctx ->
+    let (vars, ms, _, _) = g in
+    let ctx = construct_structs vars ms ctx in
     concretize_heap max_size ctx g >>= fun (ctx, h) ->
     return (g, ctx, h)
   )
 
 let generate ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : cn_condition list) (max_size : int) : (goal * context * heap) QCheck.Gen.t =
   QCheck.Gen.(
-    let vars = List.map (fun (x, ty) -> (x, (ty, Cn.CNExpr_var x))) args in
-    collect_conditions psi vars c >>= fun g ->
+    let vars, ms =
+      (List.fold_left
+        (fun (vars, ms) (x, ty) ->
+          add_to_vars_ms ail_prog x ty vars ms
+        ) ([], []) args)
+    in
+
+    collect_conditions ail_prog psi vars ms c >>= fun g ->
     let g = simplify g in
     concretize ail_prog max_size g
   )
 
 let string_of_list f l =
-  (List.fold_left (fun acc s -> acc ^ (if String.equal acc "[" then "" else "; ") ^ f s) "[" l) ^ "]"
+  "[" ^ (List.map f l |> String.concat "; ") ^ "]"
 ;;
 
 let rec codify_value (v : cn_value) : string =
@@ -816,20 +891,20 @@ let expand_heap (ctx : context) (h : heap) : (context * heap) =
   (!ctx, h)
 ;;
 
-let codify_heap (h : heap) (max_size : int) (oc : out_channel) : unit =
-  output_string oc "void *h = malloc(";
+let codify_heap (root : string) (h : heap) (max_size : int) (oc : out_channel) : unit =
+  output_string oc ("void *" ^ root ^ " = malloc(");
   output_string oc (string_of_int max_size);
   output_string oc ");\n";
   List.iter
     (fun (p, (ty, v)) ->
       let ty_str = string_of_ctype ty in
-      let rhs = "*(" ^ ty_str ^ "*)((uintptr_t)h + " ^ string_of_int p ^ ") = " in
+      let rhs = "*(" ^ ty_str ^ "*)((uintptr_t)" ^ root ^ " + " ^ string_of_int p ^ ") = " in
       output_string oc rhs;
       output_string oc (codify_value v);
       output_string oc ";\n")
     h
 
-let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc : out_channel) : unit =
+let codify_context (root : string) (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc : out_channel) : unit =
   List.iter
     (fun (x, ty) ->
       let name = Pp_symbol.to_string_pretty x in
@@ -845,8 +920,8 @@ let codify_context (ctx : context) (args : (Symbol.sym * Ctype.ctype) list) (oc 
               match v with
               | CNVal_integer n
               | CNVal_bits (_, n) ->
-                ("(" ^ ty_str ^ ")((uintptr_t)h + " ^ Z.to_string n ^ "ULL)")
-              | CNVal_null -> "nullptr"
+                ("(" ^ ty_str ^ ")((uintptr_t)" ^ root ^ " + " ^ Z.to_string n ^ "ULL)")
+              | CNVal_null -> "NULL"
               | _ -> failwith ("Invalid pointer value " ^ string_of_value v)
             else
               codify_value v
@@ -882,8 +957,9 @@ let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentati
   codify_header tf (Pp_symbol.to_string_pretty instrumentation.fn) ("Test" ^ string_of_int index) oc;
 
   let (ctx, h) = expand_heap ctx h in
-  codify_heap h max_size oc;
-  codify_context ctx args oc;
+  let root = Symbol.fresh () |> Sym.pp_string in
+  codify_heap root h max_size oc;
+  codify_context root ctx args oc;
   output_string oc (Pp_symbol.to_string_pretty instrumentation.fn);
   output_string oc "(";
   output_string oc (args |> List.map fst |> List.map Pp_symbol.to_string_pretty |> String.concat ", ");
@@ -891,8 +967,6 @@ let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentati
 
   output_string oc "}\n";
 ;;
-
-
 
 let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (generated : goal list) (tolerance : int) : goal list =
   let psi = List.map (fun (pred : cn_predicate) -> (pred.cn_pred_name, pred)) ail_prog.cn_predicates in
@@ -906,13 +980,6 @@ let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.i
         (arg_types, arg_syms)
       | _ -> ([], [])
   in
-  List.iter
-    (fun (ty : Ctype.ctype) ->
-      match ty with
-      | Ctype (_, Basic (Integer ity)) -> ()
-      | _ -> ())
-       (* failwith "Only support unit tests for integers") *)
-    arg_types;
   let args = List.combine arg_syms arg_types in
   let (g, ctx, h) = QCheck.Gen.generate1 (generate ail_prog psi args (instrumentation.surface.requires) max_size) in
   if tolerance == 0 || (List.find_opt (fun g' -> Stdlib.(=) g g') generated |> Option.is_none)
