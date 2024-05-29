@@ -107,8 +107,10 @@ let opt_comma_split = function
 let check_input_file filename =
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
-  else if not (String.equal (Filename.extension filename) ".c") then
-    CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
+  else
+    let ext = String.equal (Filename.extension filename) in
+    if not (ext ".c" || ext ".h") then
+      CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
 
 
