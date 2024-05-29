@@ -444,6 +444,9 @@ Module RevocationProofs.
             ZMap.M.MapsTo alloc_id1 a1 am ->
             ZMap.M.MapsTo alloc_id2 a2 am ->
             allocations_do_no_overlap a1 a2)
+      (* all allocations have upper bound *)
+      /\
+        ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) + (Z.of_nat a.(size)) <= AddressValue.ADDR_LIMIT) am
 
       (* All keys in capmeta must be pointer-aligned addresses *)
       /\ AMapProofs.map_forall_keys (fun addr => Z.modulo (AddressValue.to_Z addr)
@@ -461,10 +464,11 @@ Module RevocationProofs.
       :=
       let Bdead := fresh "Bdead" in
       let Bnooverlap := fresh "Bnooverlap" in
+      let Bfit := fresh "Bfit" in
       let Balign := fresh "Balign" in
       let Bnextallocid := fresh "Bnextallocid" in
       let Blastaddr := fresh "Blastaddr" in
-      destruct H as [Bdead [Bnooverlap [Balign [Bnextallocid Blastaddr]]]].
+      destruct H as [Bdead [Bnooverlap [Bfit [Balign [Bnextallocid Blastaddr]]]]].
 
     Instance memM_MonadLaws: MonadLaws (memM_monad).
     Proof.
@@ -2505,6 +2509,10 @@ Module RevocationProofs.
         apply ZMap.F.empty_mapsto_iff in H;
           contradiction.
       -
+        intros k a H.
+        apply ZMap.F.empty_mapsto_iff in H.
+        tauto.
+      -
         unfold AMapProofs.map_forall_keys.
         intros k H.
         apply AMap.F.empty_in_iff in H;
@@ -3222,6 +3230,9 @@ Module RevocationProofs.
           eauto.
           eauto.
         +
+          apply ZMapProofs.map_forall_remove.
+          auto.
+        +
           apply Balign.
         +
           intros alloc_id' H.
@@ -3573,7 +3584,7 @@ Module RevocationProofs.
             eapply Bdead; eauto.
         +
           (* Bnooverlap *)
-          clear Bdead Balign Bnextallocid Blastaddr.
+          clear Bfit Bdead Balign Bnextallocid Blastaddr.
           generalize dependent (allocations s).
           clear s.
           intros old Bnooverlap Heqnewallocations alloc_id1 alloc_id2 a1 a2 NA M1 M2.
@@ -3609,6 +3620,47 @@ Module RevocationProofs.
             unfold allocations_do_no_overlap in *;
             unfold allocation_with_prefix;
             cbn; eauto.
+        +
+        (* Bfit *)
+          (* Blastaddr *)
+          clear - Bfit Heqnewallocations.
+          subst newallocations.
+          rename s0 into alloc_id'.
+          intros alloc_id a.
+          destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
+          *
+            subst alloc_id'.
+            intros H.
+            unfold ZMap.map_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply ZMap.M.find_2 in Heqo0.
+              apply ZMap.F.add_mapsto_iff in H.
+              destruct H;[|destruct H; congruence].
+              destruct H as [_ H3].
+              subst a0.
+              specialize (Bfit alloc_id a1 Heqo0).
+              unfold allocation_with_prefix in H1.
+              destruct a.
+              cbn in *.
+              invc H1.
+              auto.
+            --
+              apply ZMapProofs.map_mapsto_in in H.
+              apply ZMap.M.remove_1 in H.
+              tauto.
+              reflexivity.
+          *
+            intros H.
+            unfold ZMap.map_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply ZMap.F.add_neq_mapsto_iff in H; auto.
+              apply ZMap.F.remove_neq_mapsto_iff in H; auto.
+              eauto.
+            --
+              apply ZMap.F.remove_neq_mapsto_iff in H; auto.
+              eauto.
         +
           (* Balign *)
           auto.
@@ -4462,15 +4514,12 @@ Module RevocationProofs.
       Transparent repr.
   Qed.
 
-      (* TODO: need
-
-      (AddressValue.ADDR_MIN <=
-         AddressValue.to_Z (base a) + (Z.of_nat (size a)) <
-         AddressValue.ADDR_LIMIT).
-       *)
   Fact memcpy_alloc_bounds_check_p_c_bounds:
     forall (n : nat) (c1 c2 : Capability_GS.t) (alloc1 alloc2 : allocation),
       memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 (Z.of_nat (S n)) ->
+
+      (AddressValue.to_Z (base alloc1) + Z.of_nat (size alloc1) <= AddressValue.ADDR_LIMIT) ->
+      (AddressValue.to_Z (base alloc2) + Z.of_nat (size alloc2) <= AddressValue.ADDR_LIMIT) ->
 
       forall x, Nat.lt x (S n) ->
            ((AddressValue.ADDR_MIN <=
@@ -4481,7 +4530,7 @@ Module RevocationProofs.
                  AddressValue.to_Z (Capability_GS.cap_get_value c2) + Z.of_nat n <
                  AddressValue.ADDR_LIMIT)).
   Proof.
-    intros n c1 c2 alloc1 alloc2 [H2 [H3 [H4 [H5 H6]]]].
+    intros n c1 c2 alloc1 alloc2 [H2 [H3 [H4 [H5 H6]]]] AL1 AL2.
     unfold cap_to_Z in *.
     generalize dependent (Capability_GS.cap_get_value c1); intros a1.
     generalize dependent (Capability_GS.cap_get_value c2); intros a2.
@@ -4490,13 +4539,21 @@ Module RevocationProofs.
     generalize dependent (size alloc1); intros s1.
     generalize dependent (size alloc2); intros s2.
     clear alloc1 alloc2.
-    intros H4 H5 H2 H3 H6 x H.
+    intros AL2 AL1 H4 H5 H2 H3 H6 x H.
 
-  Admitted.
+    pose proof (AddressValue.to_Z_in_bounds a1).
+    pose proof (AddressValue.to_Z_in_bounds a2).
+    pose proof (AddressValue.to_Z_in_bounds b1).
+    pose proof (AddressValue.to_Z_in_bounds b2).
+
+    unfold AddressValue.ADDR_MIN, AddressValue.ADDR_LIMIT in *.
+    lia.
+  Qed.
 
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
+    {Mbase: base_mem_invariant s}
     {ptrval1 ptrval2 : pointer_value}
     {n : nat}
     (AG: mempcpy_args_sane s.(allocations) ptrval1 ptrval2 (Z.of_nat n))
@@ -4517,8 +4574,12 @@ Module RevocationProofs.
          else addr)
         (bytemap s).
   Proof.
-    revert C AG.
-    revert s s' addr.
+    (* We only need Bfit from Mbase *)
+
+    destruct_base_mem_invariant Mbase.
+    clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
+
+    revert s s' addr C Bfit AG.
     induction n;intros.
     +
       break_match_goal.
@@ -4547,14 +4608,20 @@ Module RevocationProofs.
         rename x into fp.
         specialize (IHn _ _ addr C5).
 
+        assert(s0.(allocations) = s.(allocations)) as AE.
+        {
+          eapply store_char_preserves_allocations.
+          eauto.
+        }
+
         autospecialize IHn.
         {
-          assert(s0.(allocations) = s.(allocations)) as AE.
-          {
-            eapply store_char_preserves_allocations.
-            eauto.
-          }
+          rewrite AE.
+          auto.
+        }
 
+        autospecialize IHn.
+        {
           rewrite AE.
           invc AG.
           econstructor.
@@ -4579,7 +4646,7 @@ Module RevocationProofs.
             (AddressValue.with_offset (Capability_GS.cap_get_value c2) (Z.of_nat n)) in *.
           2: {
             invc AG.
-            clear -H12.
+            clear -H12 H4 H5 Bfit.
 
             apply memcpy_alloc_bounds_check_p_c_bounds with (x:=n) in H12 .
             destruct H12.
@@ -4587,7 +4654,10 @@ Module RevocationProofs.
             apply AddressValue_eq_via_to_Z.
             unfold addr_offset.
             repeat rewrite AddressValue.with_offset_no_wrap.
-            all: lia.
+            all: try lia.
+
+            eapply Bfit; eauto.
+            eapply Bfit; eauto.
           }
           clear Heqb.
           rewrite IHn; clear IHn.
