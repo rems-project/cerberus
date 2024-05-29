@@ -37,6 +37,9 @@ type cerb_switch =
   (* parsing of magic comments (e.g. "/*@ magic() @*/" as statements *)
   | SW_at_magic_comments
 
+  (* set magic comment syntax to "/*$ ... $*/" *)
+  | SW_magic_comment_char_dollar
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option

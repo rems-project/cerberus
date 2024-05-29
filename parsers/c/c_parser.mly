@@ -71,7 +71,7 @@ let magic_to_attr magik : Annot.attribute =
   let open Annot in
   { attr_ns= Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
   ; attr_id= Symbol.Identifier (Cerb_location.unknown, "magic")
-  ; attr_args= List.map (fun (loc, str) -> (loc, str, [loc, str])) magik }
+  ; attr_args= List.map (fun (loc, (_,str)) -> (loc, str, [loc, str])) magik }
 
 let magic_to_attrs = function
   | [] ->
@@ -140,7 +140,7 @@ type asm_qualifier =
 %token BMC_ASSUME
 
 (* magic comment token *)
-%token<Cerb_location.t * string> CERB_MAGIC
+%token<Cerb_location.t * (char * string)> CERB_MAGIC
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
@@ -1553,7 +1553,7 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 
 external_declaration:
 | magic= CERB_MAGIC
-    { EDecl_magic magic }
+    { EDecl_magic (fst magic, snd (snd magic)) }
 | fdef= function_definition
     { EDecl_func fdef }
 | xs_decl= declaration

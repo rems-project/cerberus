@@ -56,11 +56,14 @@ open Log
 
 
 
-let frontend incl_dirs incl_files astprints do_peval filename state_file =
+let frontend incl_dirs incl_files astprints do_peval filename state_file magic_comment_char_dollar =
   let open CF in
   Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
-  Switches.set ["inner_arg_temps"; "at_magic_comments"];
+  Switches.set 
+    (["inner_arg_temps"; "at_magic_comments"] 
+     @ (if magic_comment_char_dollar then ["magic_comment_char_dollar"] else []))
+  ;
   Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
@@ -142,6 +145,7 @@ let main
       use_peval
       batch
       no_inherit_loc
+      magic_comment_char_dollar
   =
   if json then begin
       if debug_level > 0 then
@@ -167,7 +171,7 @@ let main
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
     handle_frontend_error
-      (frontend incl_dirs incl_files astprints use_peval filename state_file)
+      (frontend incl_dirs incl_files astprints use_peval filename state_file magic_comment_char_dollar)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel
@@ -354,7 +358,9 @@ let no_inherit_loc =
   let doc = "debugging: stop mucore terms inheriting location information from parents" in
   Arg.(value & flag & info["no-inherit-loc"] ~doc)
 
-
+let magic_comment_char_dollar =
+  let doc = "Override CN's default magic comment syntax to be \"/*$ ... $*/\"" in
+  Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
 
 
 let () =
@@ -387,6 +393,7 @@ let () =
       no_use_ity $
       use_peval $
       batch $
-      no_inherit_loc
+      no_inherit_loc $
+      magic_comment_char_dollar
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))

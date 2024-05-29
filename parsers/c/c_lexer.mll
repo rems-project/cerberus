@@ -8,6 +8,7 @@ exception Error of Errors.cparser_cause
 
 type flags = {
   inside_cn : bool;
+  magic_comment_char : char;
   at_magic_comments : bool;
 }
 
@@ -170,9 +171,9 @@ let lex_magic remainder lexbuf =
 
 let magic_token flags start_pos end_pos chars =
   let len = List.length chars in
-  if not flags.at_magic_comments || len < 2 || List.hd chars != '@' then
+  if not flags.at_magic_comments || len < 2 || List.hd chars != flags.magic_comment_char then
     None
-  else if List.nth chars (len - 1) != '@' then (
+  else if List.nth chars (len - 1) != flags.magic_comment_char then (
     prerr_endline
       (Pp_errors.make_message
          (Cerb_location.point end_pos)
@@ -182,7 +183,8 @@ let magic_token flags start_pos end_pos chars =
   ) else (
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
     let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
-    Some (CERB_MAGIC (loc, str))
+    let c = List.hd chars in
+    Some (CERB_MAGIC (loc, (c,str)))
   )
 
 }
@@ -349,13 +351,13 @@ rule s_char_sequence = parse
   | '"'
       { [] }
 
-and magic start_of_comment = parse
+and magic flags start_of_comment = parse
   (* End of the magic comment *)
   | "*/" {[]}
   | "/*" { raise (Error Errors.Cparser_nested_comment) }
   | eof  { lexbuf.lex_start_p <- start_of_comment;
-           raise (Error (Errors.Cparser_unterminated_comment "/*@")) }
-  | _    {lex_magic (magic start_of_comment) lexbuf}
+           raise (Error (Errors.Cparser_unterminated_comment (Printf.sprintf "/*%c" flags.magic_comment_char))) }
+  | _    {lex_magic (magic flags start_of_comment) lexbuf}
 
 (* Consume a comment: /* ... */ *)
 (* STD §6.4.9#1 *)
@@ -398,8 +400,15 @@ and hash = parse
 and initial flags = parse
   (* Magic comments *)
   | "/*@" { let curr_p = lexbuf.lex_curr_p in
-            let xs = magic lexbuf.lex_start_p lexbuf in
+            let xs = magic flags lexbuf.lex_start_p lexbuf in
             match magic_token flags curr_p lexbuf.lex_start_p ('@' :: xs) with
+            | Some tok -> tok
+            | None -> initial flags lexbuf
+            }
+  (* Alternative magic comments *)
+  | "/*$" { let curr_p = lexbuf.lex_curr_p in
+            let xs = magic flags lexbuf.lex_start_p lexbuf in
+            match magic_token flags curr_p lexbuf.lex_start_p ('$' :: xs) with
             | Some tok -> tok
             | None -> initial flags lexbuf
             }
@@ -581,7 +590,12 @@ let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
   match !lexer_state with
   | LSRegular ->
       let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
-      begin match initial { inside_cn; at_magic_comments } lexbuf with
+      let magic_comment_char = 
+        if Switches.(has_switch SW_magic_comment_char_dollar)
+        then '$'
+        else '@'
+      in
+      begin match initial { inside_cn; at_magic_comments; magic_comment_char } lexbuf with
       | LNAME i as tok -> lexer_state := LSIdentifier i; tok
       | UNAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok

@@ -37,6 +37,9 @@ type cerb_switch =
   (* parsing of magic comments (e.g. "/*@ magic() @*/" as statements *)
   | SW_at_magic_comments
 
+  (* set magic comment syntax to "/*$ ... $*/" *)
+  | SW_magic_comment_char_dollar
+
 
 let internal_ref =
   ref []
@@ -89,6 +92,8 @@ let set strs =
         Some (SW_revocation `CORNUCOPIA)
     | "at_magic_comments" ->
         Some SW_at_magic_comments
+    | "magic_comment_char_dollar" ->
+        Some (SW_magic_comment_char_dollar)
     | _ ->
         None in
   List.iter (fun str ->
