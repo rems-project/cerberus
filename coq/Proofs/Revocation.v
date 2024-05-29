@@ -116,11 +116,25 @@ Section AddressValue_Lemmas.
       lia.
   Qed.
 
-  Fact AddressValue_ltb_Z_ltb:
+  Lemma AddressValue_ltb_Z_ltb:
     forall a b,
       AddressValue.ltb a b = Z.ltb (AddressValue.to_Z a) (AddressValue.to_Z b).
   Proof.
     reflexivity.
+  Qed.
+
+  Lemma AddressValue_eq_via_to_Z:
+    forall a b,
+      AddressValue.to_Z a = AddressValue.to_Z b <-> (a=b).
+  Proof.
+    split ; intros H.
+    -
+      unfold AddressValue.to_Z, bv_to_Z_unsigned in H.
+      apply bitvector.bv_unsigned_inj.
+      assumption.
+    -
+      subst.
+      reflexivity.
   Qed.
 
 End AddressValue_Lemmas.
@@ -4448,6 +4462,38 @@ Module RevocationProofs.
       Transparent repr.
   Qed.
 
+      (* TODO: need
+
+      (AddressValue.ADDR_MIN <=
+         AddressValue.to_Z (base a) + (Z.of_nat (size a)) <
+         AddressValue.ADDR_LIMIT).
+       *)
+  Fact memcpy_alloc_bounds_check_p_c_bounds:
+    forall (n : nat) (c1 c2 : Capability_GS.t) (alloc1 alloc2 : allocation),
+      memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 (Z.of_nat (S n)) ->
+
+      forall x, Nat.lt x (S n) ->
+           ((AddressValue.ADDR_MIN <=
+               AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n <
+               AddressValue.ADDR_LIMIT)
+            /\
+              (AddressValue.ADDR_MIN <=
+                 AddressValue.to_Z (Capability_GS.cap_get_value c2) + Z.of_nat n <
+                 AddressValue.ADDR_LIMIT)).
+  Proof.
+    intros n c1 c2 alloc1 alloc2 [H2 [H3 [H4 [H5 H6]]]].
+    unfold cap_to_Z in *.
+    generalize dependent (Capability_GS.cap_get_value c1); intros a1.
+    generalize dependent (Capability_GS.cap_get_value c2); intros a2.
+    generalize dependent (base alloc1); intros b1.
+    generalize dependent (base alloc2); intros b2.
+    generalize dependent (size alloc1); intros s1.
+    generalize dependent (size alloc2); intros s2.
+    clear alloc1 alloc2.
+    intros H4 H5 H2 H3 H6 x H.
+
+  Admitted.
+
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
@@ -4534,9 +4580,14 @@ Module RevocationProofs.
           2: {
             invc AG.
             clear -H12.
-            invc H12.
-            destruct H0 as [H1 [H2 [H3 H4]]].
-            admit. (*TODO *)
+
+            apply memcpy_alloc_bounds_check_p_c_bounds with (x:=n) in H12 .
+            destruct H12.
+
+            apply AddressValue_eq_via_to_Z.
+            unfold addr_offset.
+            repeat rewrite AddressValue.with_offset_no_wrap.
+            all: lia.
           }
           clear Heqb.
           rewrite IHn; clear IHn.
