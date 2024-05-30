@@ -216,6 +216,7 @@ let main
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
             output_string oc "#include \"stdlib.h\"\n\n";
+            output_string oc "#include \"stdint.h\"\n\n";
             (match test_framework with
             | GTest -> output_string oc "#include <gtest/gtest.h>\n\n"
             | Catch2 -> output_string oc "#include <catch2/catch_test_macros.hpp>\n\n");
@@ -232,7 +233,7 @@ let main
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
             end;
-            generate_tests test_framework instrumentation ail_prog 10000 oc num_unit_tests;
+            generate_tests test_framework instrumentation ail_prog oc num_unit_tests;
          end;
          return res
        in

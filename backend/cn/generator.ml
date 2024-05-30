@@ -10,6 +10,10 @@ type cn_clauses = (Symbol.sym, Ctype.ctype) Cn.cn_clauses
 type cn_condition = (Symbol.sym, Ctype.ctype) Cn.cn_condition
 type cn_predicate = (Symbol.sym, Ctype.ctype) Cn.cn_predicate
 
+let string_of_list f l =
+  "[" ^ (List.map f l |> String.concat "; ") ^ "]"
+;;
+
 let no_quals : Ctype.qualifiers = {const=false;restrict=false;volatile=false};;
 
 let string_of_ctype (ty : Ctype.ctype) : string =
@@ -21,6 +25,65 @@ let string_of_ctype (ty : Ctype.ctype) : string =
 
 let string_of_ctype_ (ty : Ctype.ctype_) : string =
   string_of_ctype (Ctype ([], ty))
+;;
+
+let rec string_of_expr_ (e : cn_expr_) : string =
+  match e with
+  | CNExpr_const c ->
+    (match c with
+    | CNConst_NULL -> "NULL"
+    | CNConst_integer n -> Z.to_string n
+    | CNConst_bits ((sign, bits), n) ->
+      let s =
+        match sign with
+        | CN_signed -> "i"
+        | CN_unsigned -> "u"
+      in
+      let b = string_of_int bits in
+      Z.to_string n ^ s ^ b
+    | CNConst_bool b -> string_of_bool b |> String.uppercase_ascii
+    | CNConst_unit -> "()")
+  | CNExpr_var x -> Pp_symbol.to_string_pretty x
+  | CNExpr_list _ -> failwith "unsupported expression 'CNExpr_List' (Generator.string_of_expr_)"
+  | CNExpr_memberof (e', Symbol.Identifier (_, x)) -> string_of_expr e' ^ "." ^ x
+  | CNExpr_record _ -> failwith "unsupported expression 'CNExpr_record' (Generator.string_of_expr_)"
+  | CNExpr_memberupdates _ -> failwith "unsupported expression 'CNExpr_memberupdates' (Generator.string_of_expr_)"
+  | CNExpr_arrayindexupdates _ -> failwith "unsupported expression 'CNExpr_arrayindexupdates' (Generator.string_of_expr_)"
+  | CNExpr_binop (CN_add, e1, e2) -> "(" ^ string_of_expr e1 ^ " + " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_sub, e1, e2) -> "(" ^ string_of_expr e1 ^ " - " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_mul, e1, e2) -> "(" ^ string_of_expr e1 ^ " * " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_div, e1, e2) -> "(" ^ string_of_expr e1 ^ " / " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_equal, e1, e2) -> "(" ^ string_of_expr e1 ^ " == " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_inequal, e1, e2) -> "(" ^ string_of_expr e1 ^ " != " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_lt, e1, e2) -> "(" ^ string_of_expr e1 ^ " < " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_le, e1, e2) -> "(" ^ string_of_expr e1 ^ " <= " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_gt, e1, e2) -> "(" ^ string_of_expr e1 ^ " > " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_ge, e1, e2) -> "(" ^ string_of_expr e1 ^ " >= " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_or, e1, e2) -> "(" ^ string_of_expr e1 ^ " || " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_and, e1, e2) -> "(" ^ string_of_expr e1 ^ " && " ^ string_of_expr e2 ^ ")"
+  | CNExpr_binop (CN_map_get, _, _) -> failwith "unsupported binop 'CN_map_get' (Generator.string_of_expr_)"
+  | CNExpr_sizeof _ -> failwith "unsupported expression 'CNExpr_sizeof' (Generator.string_of_expr_)"
+  | CNExpr_offsetof _ -> failwith "unsupported expression 'CNExpr_offsetof' (Generator.string_of_expr_)"
+  | CNExpr_membershift _ -> failwith "unsupported expression 'CNExpr_membershift' (Generator.string_of_expr_)"
+  | CNExpr_addr _ -> failwith "unsupported expression 'CNExpr_addr' (Generator.string_of_expr_)"
+  | CNExpr_cast _ -> failwith "unsupported expression 'CNExpr_cast' (Generator.string_of_expr_)"
+  | CNExpr_array_shift _ -> failwith "unsupported expression 'CNExpr_array_shift' (Generator.string_of_expr_)"
+  | CNExpr_call (f, args) -> Pp_symbol.to_string_pretty f ^ "(" ^ String.concat ", " (List.map string_of_expr args) ^ ")"
+  | CNExpr_cons (constr, es) -> Pp_symbol.to_string_pretty constr ^ "{" ^ String.concat ", " (List.map (fun (Symbol.Identifier (_, x), e) -> x ^ ": " ^ string_of_expr e) es) ^ "}"
+  | CNExpr_each _ -> failwith "unsupported expression 'CNExpr_each' (Generator.string_of_expr_)"
+  | CNExpr_let (x, e1, e2) -> "let " ^ Pp_symbol.to_string_pretty x ^ " = " ^ string_of_expr e1 ^ " in " ^ string_of_expr e2
+  | CNExpr_match _ -> failwith "unsupported expression 'CNExpr_match' (Generator.string_of_expr_)"
+  | CNExpr_ite _ -> failwith "unsupported expression 'CNExpr_ite' (Generator.string_of_expr_)"
+  | CNExpr_good _ -> failwith "unsupported expression 'CNExpr_good' (Generator.string_of_expr_)"
+  | CNExpr_deref _ -> failwith "unsupported expression 'CNExpr_deref' (Generator.string_of_expr_)"
+  | CNExpr_value_of_c_atom (x, _) -> Pp_symbol.to_string_pretty x
+  | CNExpr_unchanged _ -> failwith "unsupported expression 'CNExpr_unchanged' (Generator.string_of_expr_)"
+  | CNExpr_at_env _ -> failwith "unsupported expression 'CNExpr_at_env' (Generator.string_of_expr_)"
+  | CNExpr_not e' -> "!" ^ string_of_expr e'
+  | CNExpr_default _ -> failwith "unsupported expression 'CNExpr_default' (Generator.string_of_expr_)"
+
+and string_of_expr (Cn.CNExpr (_, e) : cn_expr) : string =
+  string_of_expr_ e
 ;;
 
 let rec sub_sym_expr_' (x : Symbol.sym) (v : cn_expr_) (e : cn_expr_) : cn_expr_ =
@@ -158,70 +221,11 @@ type cn_value =
   | CNVal_bool of bool
   | CNVal_unit
 
-  | CNVal_struct of Ctype.ctype * (string * cn_value) list
+  | CNVal_struct of (string * (Ctype.ctype * cn_value)) list
   | CNVal_constr of Symbol.identifier * (string * cn_value) list
 
 type context = (Symbol.sym * (Ctype.ctype * cn_value)) list
 type heap = (int * (Ctype.ctype * cn_value)) list
-
-let rec string_of_expr_ (e : cn_expr_) : string =
-  match e with
-  | CNExpr_const c ->
-    (match c with
-    | CNConst_NULL -> "NULL"
-    | CNConst_integer n -> Z.to_string n
-    | CNConst_bits ((sign, bits), n) ->
-      let s =
-        match sign with
-        | CN_signed -> "i"
-        | CN_unsigned -> "u"
-      in
-      let b = string_of_int bits in
-      Z.to_string n ^ s ^ b
-    | CNConst_bool b -> string_of_bool b |> String.uppercase_ascii
-    | CNConst_unit -> "()")
-  | CNExpr_var x -> Pp_symbol.to_string_pretty x
-  | CNExpr_list _ -> failwith "unsupported expression 'CNExpr_List' (Generator.string_of_expr_)"
-  | CNExpr_memberof (e', Symbol.Identifier (_, x)) -> string_of_expr e' ^ "." ^ x
-  | CNExpr_record _ -> failwith "unsupported expression 'CNExpr_record' (Generator.string_of_expr_)"
-  | CNExpr_memberupdates _ -> failwith "unsupported expression 'CNExpr_memberupdates' (Generator.string_of_expr_)"
-  | CNExpr_arrayindexupdates _ -> failwith "unsupported expression 'CNExpr_arrayindexupdates' (Generator.string_of_expr_)"
-  | CNExpr_binop (CN_add, e1, e2) -> "(" ^ string_of_expr e1 ^ " + " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_sub, e1, e2) -> "(" ^ string_of_expr e1 ^ " - " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_mul, e1, e2) -> "(" ^ string_of_expr e1 ^ " * " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_div, e1, e2) -> "(" ^ string_of_expr e1 ^ " / " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_equal, e1, e2) -> "(" ^ string_of_expr e1 ^ " == " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_inequal, e1, e2) -> "(" ^ string_of_expr e1 ^ " != " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_lt, e1, e2) -> "(" ^ string_of_expr e1 ^ " < " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_le, e1, e2) -> "(" ^ string_of_expr e1 ^ " <= " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_gt, e1, e2) -> "(" ^ string_of_expr e1 ^ " > " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_ge, e1, e2) -> "(" ^ string_of_expr e1 ^ " >= " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_or, e1, e2) -> "(" ^ string_of_expr e1 ^ " || " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_and, e1, e2) -> "(" ^ string_of_expr e1 ^ " && " ^ string_of_expr e2 ^ ")"
-  | CNExpr_binop (CN_map_get, _, _) -> failwith "unsupported binop 'CN_map_get' (Generator.string_of_expr_)"
-  | CNExpr_sizeof _ -> failwith "unsupported expression 'CNExpr_sizeof' (Generator.string_of_expr_)"
-  | CNExpr_offsetof _ -> failwith "unsupported expression 'CNExpr_offsetof' (Generator.string_of_expr_)"
-  | CNExpr_membershift _ -> failwith "unsupported expression 'CNExpr_membershift' (Generator.string_of_expr_)"
-  | CNExpr_addr _ -> failwith "unsupported expression 'CNExpr_addr' (Generator.string_of_expr_)"
-  | CNExpr_cast _ -> failwith "unsupported expression 'CNExpr_cast' (Generator.string_of_expr_)"
-  | CNExpr_array_shift _ -> failwith "unsupported expression 'CNExpr_array_shift' (Generator.string_of_expr_)"
-  | CNExpr_call (f, args) -> Pp_symbol.to_string_pretty f ^ "(" ^ String.concat ", " (List.map string_of_expr args) ^ ")"
-  | CNExpr_cons (constr, es) -> Pp_symbol.to_string_pretty constr ^ "{" ^ String.concat ", " (List.map (fun (Symbol.Identifier (_, x), e) -> x ^ ": " ^ string_of_expr e) es) ^ "}"
-  | CNExpr_each _ -> failwith "unsupported expression 'CNExpr_each' (Generator.string_of_expr_)"
-  | CNExpr_let (x, e1, e2) -> "let " ^ Pp_symbol.to_string_pretty x ^ " = " ^ string_of_expr e1 ^ " in " ^ string_of_expr e2
-  | CNExpr_match _ -> failwith "unsupported expression 'CNExpr_match' (Generator.string_of_expr_)"
-  | CNExpr_ite _ -> failwith "unsupported expression 'CNExpr_ite' (Generator.string_of_expr_)"
-  | CNExpr_good _ -> failwith "unsupported expression 'CNExpr_good' (Generator.string_of_expr_)"
-  | CNExpr_deref _ -> failwith "unsupported expression 'CNExpr_deref' (Generator.string_of_expr_)"
-  | CNExpr_value_of_c_atom (x, _) -> Pp_symbol.to_string_pretty x
-  | CNExpr_unchanged _ -> failwith "unsupported expression 'CNExpr_unchanged' (Generator.string_of_expr_)"
-  | CNExpr_at_env _ -> failwith "unsupported expression 'CNExpr_at_env' (Generator.string_of_expr_)"
-  | CNExpr_not e' -> "!" ^ string_of_expr e'
-  | CNExpr_default _ -> failwith "unsupported expression 'CNExpr_default' (Generator.string_of_expr_)"
-
-and string_of_expr (Cn.CNExpr (_, e) : cn_expr) : string =
-  string_of_expr_ e
-;;
 
 let rec eval_expr_ (ctx : context) (e : cn_expr_) : cn_value =
   match e with
@@ -236,7 +240,7 @@ let rec eval_expr_ (ctx : context) (e : cn_expr_) : cn_value =
   | CNExpr_value_of_c_atom (x, _) -> List.assoc Symbol.equal_sym x ctx |> snd
   | CNExpr_memberof (e', x) ->
     (match eval_expr ctx e', x with
-    | CNVal_struct (_, fs), Symbol.Identifier (_, x)
+    | CNVal_struct fs, Symbol.Identifier (_, x) -> List.assoc String.equal x fs |> snd
     | CNVal_constr (_, fs), Symbol.Identifier (_, x) -> List.assoc String.equal x fs
     | _ -> failwith "unsupported 'memberof' (Generator.eval_expr_)")
   | CNExpr_binop (op, e1, e2) ->
@@ -447,7 +451,7 @@ let rec collect_conditions (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma)
   )
 
 let sub_sym_variables (x : Symbol.sym) (v : cn_expr_) (vars : variables) : variables =
-  List.map (fun (x, (ty, e)) -> (x, (ty, sub_sym_expr_ x v e))) vars
+  List.map (fun (x', (ty, e)) -> (x', (ty, sub_sym_expr_ x v e))) vars
 
 let sub_sym_locations (x : Symbol.sym) (v : cn_expr_) (locs : locations) : locations =
   List.map (fun (e, y) -> (sub_sym_expr_ x v e, y)) locs
@@ -458,17 +462,21 @@ let sub_sym_constraints (x : Symbol.sym) (v : cn_expr_) (cs : constraints) : con
 let sub_sym_goal (x : Symbol.sym) (v : cn_expr_) ((vars, ms, locs, cs) : goal) : goal =
   (sub_sym_variables x v vars, ms, sub_sym_locations x v locs, sub_sym_constraints x v cs)
 
-let rec inline_constants (g : goal) (iter : constraints) : goal =
+let rec inline_constants' (g : goal) (iter : constraints) : goal =
   match iter with
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_const c), CNExpr (_, CNExpr_var x)))::iter'
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_var x), CNExpr (_, CNExpr_const c)))::iter'
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_const c), CNExpr (_, CNExpr_value_of_c_atom (x, _))))::iter'
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_value_of_c_atom (x, _)), CNExpr (_, CNExpr_const c)))::iter' ->
     let g = sub_sym_goal x (CNExpr_const c) g in
-    inline_constants g iter'
-  | _::iter' -> inline_constants g iter'
+    inline_constants' g iter'
+  | _::iter' -> inline_constants' g iter'
   | [] -> g
 ;;
+
+let inline_constants (g : goal) : goal =
+  let (_, _, _, cs) = g in
+  inline_constants' g cs
 
 let rec remove_tautologies ((vars, ms, locs, cs) : goal) : goal =
   match cs with
@@ -519,7 +527,7 @@ and distribute_negation (e : cn_expr) : cn_expr =
   CNExpr (l, distribute_negation_ e)
 ;;
 
-let rec inline_aliasing (g : goal) (iter : constraints) : goal =
+let rec inline_aliasing' (g : goal) (iter : constraints) : goal =
   match iter with
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_var x), CNExpr (_, CNExpr_var y)))::iter'
   | (CNExpr_binop (CN_equal, CNExpr (_, CNExpr_var x), CNExpr (_, CNExpr_value_of_c_atom (y, _))))::iter'
@@ -529,9 +537,13 @@ let rec inline_aliasing (g : goal) (iter : constraints) : goal =
     (match List.assoc Symbol.equal_sym x vars, List.assoc Symbol.equal_sym y vars with
     | (_, CNExpr_var x'), (_, e) when Symbol.equal_sym x x' -> sub_sym_goal x (CNExpr_var y) g
     | _ -> sub_sym_goal y (CNExpr_var x) g)
-  | _::iter' -> inline_aliasing g iter'
+  | _::iter' -> inline_aliasing' g iter'
   | [] -> g
 ;;
+
+let inline_aliasing (g : goal) : goal =
+  let (_, _, _, cs) = g in
+  inline_aliasing' g cs
 
 let rec remove_nonnull_for_locs ((vars, ms, locs, cs) : goal) : goal =
   match cs with
@@ -598,20 +610,23 @@ let indirect_members ((vars, ms, locs, cs) : goal) : goal =
     List.map (fun e -> indirect_members_expr_ ms e) cs
   )
 
-let rec simplify (g : goal) : goal =
+let rec simplify' (g : goal) : goal =
   let og = g in
-  let (vars, ms, locs, cs) = g in
-  let g = inline_constants g cs in
-  let g = inline_aliasing g cs in
-  let (vars, ms, locs, cs) = remove_tautologies g in
-  let g = (vars, ms, locs, List.map distribute_negation_ cs) in
-  let g = remove_nonnull_for_locs g in
-  (* let g = indirect_members g in *)
+  let g = inline_constants g in
+  let g = inline_aliasing g in
+  let g = remove_tautologies g in
   if Stdlib.(<>) og g
   then
-    simplify g
+    simplify' g
   else
     g
+
+let simplify (g : goal) : goal =
+  let g = indirect_members g in
+  let (vars, ms, locs, cs) = g in
+  let g = (vars, ms, locs, List.map distribute_negation_ cs) in
+  let g = remove_nonnull_for_locs g in
+  simplify' g
 
 let rec pow a p =
   match p with
@@ -645,10 +660,10 @@ let rec type_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ty : Cty
             return (id, failwith "unreachable")
           else
             type_gen ail_prog ty' >>= fun v ->
-            return (id, v)
+            return (id, (ty', v))
         in
         flatten_l (List.map f members) >>= fun ms ->
-        return (CNVal_struct (ty, ms))
+        return (CNVal_struct ms)
       | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
     | Pointer _ ->
       failwith (
@@ -688,7 +703,7 @@ let rec string_of_value (v : cn_value) : string =
   | CNVal_bits ((CN_signed, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "LL"
   | CNVal_bits ((CN_unsigned, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "ULL"
 
-  | CNVal_struct (_, ms) -> "{ " ^ String.concat ", " (List.map (fun (x, v) -> "." ^ x ^ " = " ^ string_of_value v) ms) ^ "}"
+  | CNVal_struct ms -> "{ " ^ String.concat ", " (List.map (fun (x, (ty, v)) -> "." ^ x ^ ": " ^ string_of_ctype ty ^ " = " ^ string_of_value v) ms) ^ "}"
 
   | CNVal_bool b -> string_of_bool b
   | CNVal_integer n -> Int64.to_string (Z.to_int64 n)
@@ -767,15 +782,30 @@ let rec concretize_context' ail_prog (g : goal) (ctx : context) (tolerance : int
 let concretize_context ail_prog (g : goal) : context QCheck.Gen.t =
   concretize_context' ail_prog g [] 10
 
-let generate_location (max_size : int) (h : heap) : int QCheck.Gen.t =
+let generate_location (max_size : int) (ps : int list) : int QCheck.Gen.t =
   QCheck.Gen.(
-    int_range 1 (max_size / 8 - List.length h) >>= fun n ->
+    int_range 1 (max_size - List.length ps) >>= fun n ->
     return (
-      h
-      |> List.map fst
+      ps
       |> List.sort compare
-      |> List.fold_left (fun acc i -> if n >= i then n + 1 else n) n
+      |> List.fold_left (fun acc i -> if acc >= i then acc + 1 else acc) n
     )
+  )
+
+let concretize_pointers ((vars, ms, locs, cs) : goal) : goal QCheck.Gen.t =
+  QCheck.Gen.(
+    let max_size = List.length locs in
+    let csps = List.fold_left
+      (fun csps (e, x) ->
+        csps >>= fun (cs, ps) ->
+        generate_location max_size ps >>= fun p ->
+        let e1 = Cn.CNExpr (Cerb_location.unknown, e) in
+        let e2 = Cn.CNExpr (Cerb_location.unknown, CNExpr_const (CNConst_bits ((CN_unsigned, 64), Z.of_int p))) in
+        return ((Cn.CNExpr_binop (CN_equal, e1, e2))::cs, p::ps)
+      ) (return (cs, [])) locs
+    in
+    csps >>= fun (cs, _) ->
+    return (simplify' (vars, ms, locs, cs))
   )
 
 let construct_structs (vars : variables) (ms : members) (ctx : context) : context =
@@ -785,47 +815,53 @@ let construct_structs (vars : variables) (ms : members) (ctx : context) : contex
       | Ctype.Ctype (_, Struct _) ->
         let fs =
           List.assoc Symbol.equal_sym x ms
-          |> List.map (fun (x, (_, y)) -> (x, List.assoc Symbol.equal_sym y ctx |> snd))
+          |> List.map (fun (x, (_, y)) ->
+            (x,
+              match List.assoc_opt Symbol.equal_sym y ctx with
+              | Some (ty, v) -> (ty, v)
+              | None -> failwith (Sym.pp_string y)
+            ))
         in
-        (x, (ty, CNVal_struct (ty, fs)))::ctx
+        (x, (ty, CNVal_struct fs))::ctx
       | _ -> ctx)
   ) ctx vars
 
-let rec concretize_heap' (max_size : int) (ctx : context) (locs : locations) (h : heap) : (context * heap) QCheck.Gen.t =
+let rec concretize_heap' (max_size : int) (ctx : context) (vars : variables) (locs : locations) (h : heap) : (context * heap) QCheck.Gen.t =
   QCheck.Gen.(
     match locs with
     | (e, x)::locs' ->
-      generate_location max_size h >>= fun l ->
       let (ty, v) = List.assoc Symbol.equal_sym x ctx in
-      let ctx =
-        match e with
-        | CNExpr_var x'
-        | CNExpr_value_of_c_atom (x', _) ->
-          let ty = Ctype.Ctype ([], Pointer (no_quals, ty)) in
-          (x', (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int l)))::ctx
-        | _ -> ctx
-      in
       (match eval_expr_ ctx e with
       | CNVal_integer n
-      | CNVal_bits ((_, _), n) -> concretize_heap' max_size ctx locs' ((Z.to_int n, (ty, v))::h)
+      | CNVal_bits ((_, _), n) -> concretize_heap' max_size ctx vars locs' ((Z.to_int n, (ty, v))::h)
       | _ -> failwith "Invalid pointer (Generator.concretize_heap)")
     | [] -> return (ctx, h)
   )
 
-let concretize_heap (max_size : int) (ctx : context) (g : goal) : (context * heap) QCheck.Gen.t =
-  let (_, _, locs, _) = g in
-  concretize_heap' max_size ctx locs []
+let concretize_heap (ctx : context) (g : goal) : (context * heap) QCheck.Gen.t =
+  let (vars, _, locs, _) = g in
+  let max_size =
+    locs
+    |> List.map snd
+    |> List.map (fun x -> List.assoc Symbol.equal_sym x ctx)
+    |> List.map fst
+    |> List.map Sctypes.of_ctype
+    |> List.map Option.get
+    |> List.map Memory.size_of_ctype
+    |> List.fold_left (+) 0 in
+  concretize_heap' max_size ctx vars locs []
 
-let concretize ail_prog (max_size : int) (g : goal) : (goal * context * heap) QCheck.Gen.t =
+let concretize ail_prog (g : goal) : (goal * context * heap) QCheck.Gen.t =
   QCheck.Gen.(
+    concretize_pointers g >>= fun g ->
     concretize_context ail_prog g >>= fun ctx ->
     let (vars, ms, _, _) = g in
     let ctx = construct_structs vars ms ctx in
-    concretize_heap max_size ctx g >>= fun (ctx, h) ->
+    concretize_heap ctx g >>= fun (ctx, h) ->
     return (g, ctx, h)
   )
 
-let generate ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : cn_condition list) (max_size : int) : (goal * context * heap) QCheck.Gen.t =
+let generate ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : cn_condition list) : (goal * context * heap) QCheck.Gen.t =
   QCheck.Gen.(
     let vars, ms =
       (List.fold_left
@@ -836,14 +872,10 @@ let generate ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.s
 
     collect_conditions ail_prog psi vars ms c >>= fun g ->
     let g = simplify g in
-    concretize ail_prog max_size g
+    concretize ail_prog g
   )
 
-let string_of_list f l =
-  "[" ^ (List.map f l |> String.concat "; ") ^ "]"
-;;
-
-let rec codify_value (v : cn_value) : string =
+let rec codify_value' (root : string) (v : cn_value) : string =
   match v with
   | CNVal_null -> "NULL"
   | CNVal_bits ((CN_signed, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
@@ -853,7 +885,13 @@ let rec codify_value (v : cn_value) : string =
   | CNVal_bits ((CN_signed, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "LL"
   | CNVal_bits ((CN_unsigned, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "ULL"
 
-  | CNVal_struct (_, ms) -> "{ " ^ String.concat ", " (List.map (fun (x, v) -> "." ^ x ^ " = " ^ codify_value v) ms) ^ "}"
+  | CNVal_struct ms ->
+    "{ " ^
+    String.concat ", " (
+      List.map (
+        fun (x, (ty, v)) ->
+          "." ^ x ^ " = " ^ codify_value root ty v) ms) ^
+    "}"
 
   | CNVal_bool _ -> failwith "Booleans aren't yet supported in unit test generation"
   | CNVal_integer _ -> failwith "Can't generate mathematical integers"
@@ -862,36 +900,79 @@ let rec codify_value (v : cn_value) : string =
   | CNVal_unit
   | CNVal_bits _ -> failwith "unreachable"
 
-let expand_heap (ctx : context) (h : heap) : (context * heap) =
-  let root = ref (-1) in
-  let ctx = ref ctx in
-  let h = List.map
-    (fun (p, (ty, v)) ->
-      let res = (!root + p) in
-      root := !root + (Memory.size_of_ctype (Sctypes.of_ctype_unsafe Cerb_location.unknown ty)) - 1;
-      ctx :=
-        (List.map
-          (fun (i, (ty, v)) ->
-            if not (is_pointer_ctype ty)
-            then
-              (i, (ty, v))
-            else
-             match v with
-              | CNVal_integer n
-              | CNVal_bits (_, n) ->
-                if Z.to_int n = p
-                then (i, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int res)))
-                else (i, (ty, v))
-              | CNVal_null -> (i, (ty, v))
-              | _ -> failwith ("Invalid pointer value " ^ string_of_value v)
-          ) !ctx);
-      (res, (ty, v)))
-    (List.sort (fun (i, _) (j, _) -> compare i j) h)
-  in
-  (!ctx, h)
+and codify_value root ty v =
+  if is_pointer_ctype ty
+  then
+    match v with
+    | CNVal_integer n
+    | CNVal_bits (_, n) ->
+      ("(" ^ string_of_ctype ty ^ ")((uintptr_t)" ^ root ^ " + " ^ Z.to_string n ^ "ULL)")
+    | CNVal_null -> "NULL"
+    | _ -> failwith ("Invalid pointer value " ^ string_of_value v)
+  else
+    codify_value' root v
+
+let rec remap_pointer_value (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (old_p : int) (new_p : int) (ty : Ctype.ctype) (v : cn_value) : cn_value =
+  let Ctype (_, cty) = ty in
+  match cty, v with
+  | Pointer _, CNVal_integer n
+  | Pointer _, CNVal_bits (_, n) ->
+    if Z.to_int n = old_p
+    then CNVal_bits ((CN_unsigned, 64), Z.of_int new_p)
+    else v
+  | Pointer _, v when Stdlib.(<>) v CNVal_null -> failwith ("Invalid pointer value " ^ string_of_value v)
+  | Struct n, CNVal_struct fs ->
+    (match List.assoc (Symbol.equal_sym) n ail_prog.tag_definitions with
+      | (_, _, StructDef (members, _)) ->
+        let f (Symbol.Identifier (_, id), (_, _, _, ty')) =
+          let v = List.assoc String.equal id fs |> snd in
+          let v =  remap_pointer_value ail_prog old_p new_p ty' v in
+          (id, (ty', v))
+        in
+        CNVal_struct (List.map f members)
+      | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
+  | _, _ -> v
+
+let rec remap_pointer_context (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (old_p : int) (new_p : int) (ctx : context) : context =
+  match ctx with
+  | (x, (ty, v))::ctx' ->
+    let v = remap_pointer_value ail_prog old_p new_p ty v in
+    (x, (ty, v))::(remap_pointer_context ail_prog old_p new_p ctx')
+  | [] -> []
+
+let rec remap_pointer_heap (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (old_p : int) (new_p : int) (h : heap) : heap =
+  match h with
+  | (p, (ty, v))::h' ->
+    let p = if p = old_p then new_p else p in
+    let v = remap_pointer_value ail_prog old_p new_p ty v in
+    (p, (ty, v))::(remap_pointer_heap ail_prog old_p new_p h')
+  | [] -> []
+
+let remap_pointer (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (old_p : int) (new_p : int) (ctx : context) (h : heap) : context * heap =
+  (remap_pointer_context ail_prog old_p new_p ctx, remap_pointer_heap ail_prog old_p new_p h)
+
+let rec expand_heap' (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ctx : context) (h : heap) (root : int) (iter : heap) : context * heap =
+  match iter with
+  | (p, (ty, _))::iter' ->
+    let (ctx, h) = remap_pointer ail_prog p (root + p) ctx h in
+    let sz = Sctypes.of_ctype ty |> Option.get |> Memory.size_of_ctype in
+    expand_heap' ail_prog ctx h (root + sz - 1) iter'
+  | [] -> (ctx, h)
+
+let expand_heap (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ctx : context) (h : heap) : (context * heap) =
+  let h = List.sort (fun (i, _) (j, _) -> compare i j) h in
+  expand_heap' ail_prog ctx h (-1) h
 ;;
 
-let codify_heap (root : string) (h : heap) (max_size : int) (oc : out_channel) : unit =
+let codify_heap (root : string) (h : heap) (oc : out_channel) : unit =
+  let max_size =
+    h
+    |> List.map snd
+    |> List.map fst
+    |> List.map Sctypes.of_ctype
+    |> List.map Option.get
+    |> List.map Memory.size_of_ctype
+    |> List.fold_left (+) 0 in
   output_string oc ("void *" ^ root ^ " = malloc(");
   output_string oc (string_of_int max_size);
   output_string oc ");\n";
@@ -900,7 +981,7 @@ let codify_heap (root : string) (h : heap) (max_size : int) (oc : out_channel) :
       let ty_str = string_of_ctype ty in
       let rhs = "*(" ^ ty_str ^ "*)((uintptr_t)" ^ root ^ " + " ^ string_of_int p ^ ") = " in
       output_string oc rhs;
-      output_string oc (codify_value v);
+      output_string oc (codify_value root ty v);
       output_string oc ";\n")
     h
 
@@ -915,16 +996,7 @@ let codify_context (root : string) (ctx : context) (args : (Symbol.sym * Ctype.c
         | Some (ty', v) ->
           if Ctype.ctypeEqual ty ty'
           then
-            if is_pointer_ctype ty
-            then
-              match v with
-              | CNVal_integer n
-              | CNVal_bits (_, n) ->
-                ("(" ^ ty_str ^ ")((uintptr_t)" ^ root ^ " + " ^ Z.to_string n ^ "ULL)")
-              | CNVal_null -> "NULL"
-              | _ -> failwith ("Invalid pointer value " ^ string_of_value v)
-            else
-              codify_value v
+            codify_value root ty v
           else failwith (
             "Type mismatch '" ^
             string_of_ctype ty ^
@@ -953,12 +1025,12 @@ let codify_header (tf : test_framework) (suite : string) (test : string) (oc : o
   | Catch2 -> output_string oc ("\nTEST_CASE(\"" ^ test ^ "\", \"[" ^ String.lowercase_ascii suite ^ "]\"){\n");
 ;;
 
-let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (args : (Symbol.sym * Ctype.ctype) list) (ctx : context) (h : heap) (index : int) (max_size : int) (oc : out_channel) : unit =
+let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (args : (Symbol.sym * Ctype.ctype) list) (ctx : context) (h : heap) (index : int) (oc : out_channel) : unit =
   codify_header tf (Pp_symbol.to_string_pretty instrumentation.fn) ("Test" ^ string_of_int index) oc;
 
-  let (ctx, h) = expand_heap ctx h in
+  let (ctx, h) = expand_heap ail_prog ctx h in
   let root = Symbol.fresh () |> Sym.pp_string in
-  codify_heap root h max_size oc;
+  codify_heap root h oc;
   codify_context root ctx args oc;
   output_string oc (Pp_symbol.to_string_pretty instrumentation.fn);
   output_string oc "(";
@@ -968,7 +1040,7 @@ let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentati
   output_string oc "}\n";
 ;;
 
-let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (generated : goal list) (tolerance : int) : goal list =
+let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (generated : goal list) (tolerance : int) : goal list =
   let psi = List.map (fun (pred : cn_predicate) -> (pred.cn_pred_name, pred)) ail_prog.cn_predicates in
   let lookup_fn = fun (x, _) -> Symbol.equal_sym x instrumentation.fn in
   let fn_decl = List.filter lookup_fn ail_prog.declarations in
@@ -981,10 +1053,10 @@ let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.i
       | _ -> ([], [])
   in
   let args = List.combine arg_syms arg_types in
-  let (g, ctx, h) = QCheck.Gen.generate1 (generate ail_prog psi args (instrumentation.surface.requires) max_size) in
+  let (g, ctx, h) = QCheck.Gen.generate1 (generate ail_prog psi args (instrumentation.surface.requires)) in
   if tolerance == 0 || (List.find_opt (fun g' -> Stdlib.(=) g g') generated |> Option.is_none)
   then (
-    codify tf instrumentation ail_prog args ctx h (List.length generated + 1) max_size oc;
+    codify tf instrumentation ail_prog args ctx h (List.length generated + 1) oc;
     g::generated
   ) else generated
 ;;
@@ -995,23 +1067,23 @@ let range i j =
   in aux (j-1) []
 ;;
 
-let rec generate_unit_tests (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (generated : goal list) (num_tests : int) (tolerance : int) : unit =
+let rec generate_unit_tests (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (generated : goal list) (num_tests : int) (tolerance : int) : unit =
   let n = num_tests - List.length generated in
   let generated = ref generated in
   List.iter
-    (fun _ -> generated := generate_unit_test tf instrumentation ail_prog max_size oc !generated tolerance)
+    (fun _ -> generated := generate_unit_test tf instrumentation ail_prog oc !generated tolerance)
     (range 0 n);
   let num_generated = List.length !generated in
   if tolerance >= 0 && num_generated < num_tests
   then
-    generate_unit_tests tf instrumentation ail_prog max_size oc !generated num_tests (tolerance - 1)
+    generate_unit_tests tf instrumentation ail_prog oc !generated num_tests (tolerance - 1)
 ;;
 
-let generate_tests (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (max_size : int) (oc : out_channel) (num_tests : int) : unit =
+let generate_tests (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (num_tests : int) : unit =
   List.iter
     (fun inst ->
       try
-        generate_unit_tests tf inst ail_prog max_size oc [] num_tests (10 * num_tests)
+        generate_unit_tests tf inst ail_prog oc [] num_tests (10 * num_tests)
       with Failure m ->
         print_string ("Failed to generate all tests for `" ^ Sym.pp_string inst.fn ^ "` due to the following:\n" ^ m ^ "\n")
     ) instrumentation_list
