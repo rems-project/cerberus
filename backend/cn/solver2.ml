@@ -474,6 +474,14 @@ let rec translate_term s iterm =
 
     | Not        -> SMT.bool_not (translate_term s e1)
 
+    | Negate ->
+      begin match IT.basetype iterm with
+      | BT.Bits _ -> SMT.bv_neg (translate_term s e1)
+      | BT.Integer
+      | BT.Real   -> SMT.num_neg (translate_term s e1)
+      | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)")
+      end
+
     | BWCLZNoSMT ->
       begin match IT.basetype iterm with
       | BT.Bits (_,w) -> maybe_name (translate_term s e1) (bv_clz w w)
