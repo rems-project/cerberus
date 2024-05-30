@@ -8,7 +8,7 @@ deps :
 
 release: deps
 	docker build --tag cerberus:release -f Dockerfile.release .
-	@echo 'for example: docker run --volume `PWD`:/data/ cerberus:release tests/tcc/00_assignment.c --pp=core'
+	@echo 'for example: docker run --volume `PWD`:/data/ cerberus:release cerberus tests/tcc/00_assignment.c --pp=core'
 
 dev-env: deps
 	docker build --tag cerberus:dev-env -f Dockerfile.dev-env .
