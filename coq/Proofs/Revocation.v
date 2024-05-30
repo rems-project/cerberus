@@ -158,6 +158,31 @@ Section AddressValue_Lemmas.
     apply AddressValue_of_Z_to_Z.
   Qed.
 
+  Lemma with_pos_offset_assoc:
+    forall v a b,
+      (0 <= a) ->
+      (0 <= b) ->
+      (0 <= (AddressValue.to_Z v) + (a + b) < AddressValue.ADDR_LIMIT) ->
+      AddressValue.with_offset (AddressValue.with_offset v a) b = AddressValue.with_offset v (a + b).
+  Proof.
+    intros v a b A B [H1 H2].
+
+    pose proof (AddressValue.to_Z_in_bounds v) as [V1 V2].
+    apply AddressValue_eq_via_to_Z.
+    rewrite 3!AddressValue.with_offset_no_wrap.
+    lia.
+    all: unfold AddressValue.ADDR_MIN in *; try lia.
+    split.
+    -
+      rewrite AddressValue.with_offset_no_wrap;[lia|].
+      unfold AddressValue.ADDR_MIN.
+      lia.
+    -
+      rewrite AddressValue.with_offset_no_wrap;[lia|].
+      unfold AddressValue.ADDR_MIN.
+      lia.
+  Qed.
+
 End AddressValue_Lemmas.
 
 Lemma sequence_len_errS
@@ -4535,23 +4560,27 @@ Module RevocationProofs.
       Transparent repr.
   Qed.
 
-  Fact memcpy_alloc_bounds_check_p_c_bounds:
-    forall (n : nat) (c1 c2 : Capability_GS.t) (alloc1 alloc2 : allocation),
-      memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 (Z.of_nat (S n)) ->
+  Fact memcpy_alloc_bounds_check_p_c_bounds
+    (sz : Z)
+    (c1 c2 : Capability_GS.t)
+    (alloc1 alloc2 : allocation)
+    (* allocations must be sane *)
+    (AL1: AddressValue.to_Z (base alloc1) + Z.of_nat (size alloc1) <= AddressValue.ADDR_LIMIT)
+    (AL2: AddressValue.to_Z (base alloc2) + Z.of_nat (size alloc2) <= AddressValue.ADDR_LIMIT)
+    (SZ: 0 <= sz):
 
-      (AddressValue.to_Z (base alloc1) + Z.of_nat (size alloc1) <= AddressValue.ADDR_LIMIT) ->
-      (AddressValue.to_Z (base alloc2) + Z.of_nat (size alloc2) <= AddressValue.ADDR_LIMIT) ->
+    memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 sz ->
 
-      forall x, Nat.lt x (S n) ->
-           ((AddressValue.ADDR_MIN <=
-               AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n <
-               AddressValue.ADDR_LIMIT)
-            /\
-              (AddressValue.ADDR_MIN <=
-                 AddressValue.to_Z (Capability_GS.cap_get_value c2) + Z.of_nat n <
-                 AddressValue.ADDR_LIMIT)).
+    (forall x, 0<x<sz  ->
+          ((AddressValue.ADDR_MIN <=
+              AddressValue.to_Z (Capability_GS.cap_get_value c1) + x <
+              AddressValue.ADDR_LIMIT)
+           /\
+             (AddressValue.ADDR_MIN <=
+                AddressValue.to_Z (Capability_GS.cap_get_value c2) + x <
+                AddressValue.ADDR_LIMIT))).
   Proof.
-    intros n c1 c2 alloc1 alloc2 [H2 [H3 [H4 [H5 H6]]]] AL1 AL2.
+    intros [H2 [H3 [H4 [H5 H6]]]] x XC.
     unfold cap_to_Z in *.
     generalize dependent (Capability_GS.cap_get_value c1); intros a1.
     generalize dependent (Capability_GS.cap_get_value c2); intros a2.
@@ -4560,7 +4589,8 @@ Module RevocationProofs.
     generalize dependent (size alloc1); intros s1.
     generalize dependent (size alloc2); intros s2.
     clear alloc1 alloc2.
-    intros AL2 AL1 H4 H5 H2 H3 H6 x H.
+    intros AL2 AL1 H4 H5 H2 H3 H6.
+
 
     pose proof (AddressValue.to_Z_in_bounds a1).
     pose proof (AddressValue.to_Z_in_bounds a2).
@@ -4585,39 +4615,40 @@ Module RevocationProofs.
     (P1: ptrval1 = PV p1 (PVconcrete c1))
     (P2: ptrval2 = PV p2 (PVconcrete c2))
     (A1: a1 = Capability_GS.cap_get_value c1)
-    (A2: a2 = Capability_GS.cap_get_value c2)
-    (addr:  AddressValue.t):
-    AMap.M.find (elt:=AbsByte) addr (bytemap s') =
-      AMap.M.find (elt:=AbsByte)
-        (if ((AddressValue.leb a1 addr) &&
-               (AddressValue.ltb addr (AddressValue.with_offset a1 (Z.of_nat n))))
-         then (AddressValue.with_offset a2 (addr_offset addr a1))
-         else addr)
-        (bytemap s).
+    (A2: a2 = Capability_GS.cap_get_value c2):
+
+    forall (addr:  AddressValue.t),
+      AMap.M.find (elt:=AbsByte) addr (bytemap s') =
+        AMap.M.find (elt:=AbsByte)
+          (if (0 <=? (addr_offset addr a1)) && ((addr_offset addr a1) <? (Z.of_nat n))
+           then (AddressValue.with_offset a2 (addr_offset addr a1))
+           else addr)
+          (bytemap s).
   Proof.
     (* We only need Bfit from Mbase *)
-
     destruct_base_mem_invariant Mbase.
     clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
 
-    revert s s' addr C Bfit AG.
+    invc AG.
+    invc H8.
+    invc H9.
+    pose proof (memcpy_alloc_bounds_check_p_c_bounds (Z.of_nat n) c1 c2 alloc1 alloc2) as B.
+    autospecialize B;[apply (Bfit alloc_id1 alloc1 H0)|].
+    autospecialize B;[apply (Bfit alloc_id2 alloc2 H1)|].
+    autospecialize B;[lia|].
+    autospecialize B;[assumption|].
+
+    clear H H0 H1 H2 H3 H4 H5 H6 Bfit alloc1 alloc2 alloc_id1 alloc_id2.
+
+    revert s s' C B.
     induction n;intros.
     -
-      break_match_goal.
-      +
-        bool_to_prop_hyp.
-        rewrite AddressValue_as_ExtOT.with_offset_0 in H0.
-        unfold AddressValue.leb, AddressValue.ltb, leb, ltb in H, H0.
-        rewrite Z.ltb_lt in H0.
-        bool_to_prop_hyp; [lia|].
-        apply AdddressValue_eqb_eq in H.
-        subst.
-        lia.
-      +
-        cbn in C.
-        state_inv_step.
-        reflexivity.
+      break_match_goal;bool_to_prop_hyp.
+      + lia.
+      + bool_to_prop_hyp;(cbn in C;state_inv_step;reflexivity).
+      + bool_to_prop_hyp;(cbn in C;state_inv_step;reflexivity).
     -
+      (*
       destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset a1 (Z.of_nat n))) as [L|NL].
       +
         (* last element *)
@@ -4880,7 +4911,8 @@ Module RevocationProofs.
           reflexivity.
       +
         lia.
-  Qed.
+       *)
+  Admitted.
 
   Lemma memcpy_arg_sane_after_check
     (ptrval1 ptrval2 : pointer_value)
@@ -4945,15 +4977,17 @@ Module RevocationProofs.
   Qed.
 
   Lemma fetch_bytes_subset
-    {a1 a2 a1' a2':Z}
+    {a1 a2 a1' a2':AddressValue.t}
     {n n':nat}
-    {bm:ZMap.M.t AbsByte}
-    :
+    {bm:AMap.M.t AbsByte}
+    (A1: 0 <= AddressValue.to_Z a1 + Z.of_nat n <= AddressValue.ADDR_LIMIT)
+    (A2: 0 <= AddressValue.to_Z a2 + Z.of_nat n <= AddressValue.ADDR_LIMIT):
+
     fetch_bytes bm a1 n = fetch_bytes bm a2 n ->
     (exists (off:Z),
         off >= 0
-        /\ a1' = a1 + off
-        /\ a2' = a2 + off
+        /\ a1' = AddressValue.with_offset a1 off
+        /\ a2' = AddressValue.with_offset a2 off
         /\ off <= Z.of_nat n
         /\ (n' + (Z.to_nat off) <= n)%nat)
     ->
@@ -4991,9 +5025,35 @@ Module RevocationProofs.
 
 
     rewrite Z2Nat.id in E by lia.
+
+
+    assert(0 <= off ) by lia.
+    assert(0 <= Z.of_nat i) by lia.
+
+    assert(0 <= AddressValue.to_Z a1 + (off + Z.of_nat i) < AddressValue.ADDR_LIMIT).
+    {
+      clear - A1 E1 E4 E5 I. destruct A1.
+      pose proof (AddressValue.to_Z_in_bounds a1) as [B0 B1].
+      remember (AddressValue.to_Z a1) as az1.
+      clear Heqaz1.
+      zify.
+      unfold AddressValue.ADDR_MIN in *.
+      lia.
+    }
+
+    assert(0 <= AddressValue.to_Z a2 + (off + Z.of_nat i) < AddressValue.ADDR_LIMIT).
+    {
+      clear - A2 E1 E4 E5 I. destruct A2.
+      pose proof (AddressValue.to_Z_in_bounds a2) as [B0 B1].
+      remember (AddressValue.to_Z a2) as az2.
+      clear Heqaz2.
+      zify.
+      unfold AddressValue.ADDR_MIN in *.
+      lia.
+    }
+
     subst a1' a2'.
-    rewrite 2!Z.add_assoc in E.
-    apply E.
+    setoid_rewrite <- with_pos_offset_assoc in E; auto.
 
     Unshelve. exact O.
     Unshelve. exact O.
@@ -5025,17 +5085,17 @@ Module RevocationProofs.
   Qed.
 
   Lemma bytmeta_copy_tags_spec
-    (dst src: Z)
+    (dst src: AddressValue.t)
     (n: nat)
     (step: nat)
-    (cm: ZMap.M.t (bool * CapGhostState)):
+    (cm: AMap.M.t (bool * CapGhostState)):
     (0<step)%nat ->
-    (Z.modulo src (Z.of_nat step) = 0) ->
-    (Z.modulo dst (Z.of_nat step) = 0) ->
+    (Z.modulo (AddressValue.to_Z src) (Z.of_nat step) = 0) ->
+    (Z.modulo (AddressValue.to_Z dst) (Z.of_nat step) = 0) ->
     forall a tg,
-      ZMap.M.MapsTo a tg (bytmeta_copy_tags dst src n step cm) ->
-      (exists k, 0 <= k < Z.of_nat n /\ a = dst + k * Z.of_nat step /\ ZMap.M.MapsTo (src + k * Z.of_nat step) tg cm) \/
-        (ZMap.M.MapsTo a tg cm /\ forall k, 0 <= k < Z.of_nat n -> a <> dst + k * Z.of_nat step).
+      AMap.M.MapsTo a tg (bytmeta_copy_tags dst src n step cm) ->
+      (exists k, 0 <= k < Z.of_nat n /\ a = AddressValue.with_offset dst (k * Z.of_nat step) /\ AMap.M.MapsTo (AddressValue.with_offset src (k * Z.of_nat step)) tg cm) \/
+        (AMap.M.MapsTo a tg cm /\ forall k, 0 <= k < Z.of_nat n -> a <> AddressValue.with_offset dst (k * Z.of_nat step)).
   Proof.
     intros Hstep Hsrc_mod Hdst_mod.
     revert cm Hsrc_mod Hdst_mod.
@@ -5047,11 +5107,12 @@ Module RevocationProofs.
       + intros k Hk. lia.
     - (* Inductive case: n = S n' *)
       simpl in Hmaps.
-      remember (bytmeta_copy_tags (dst + Z.of_nat step) (src + Z.of_nat step) n' step
-                  (match ZMap.M.find src cm with
-                   | None => cm
-                   | Some meta => ZMap.M.add dst meta cm
-                   end)) as cm'.
+      remember (bytmeta_copy_tags (AddressValue.with_offset dst (Z.of_nat step))
+               (AddressValue.with_offset src (Z.of_nat step)) n' step
+               match AMap.M.find (elt:=bool * CapGhostState) src cm with
+               | Some meta => AMap.M.add dst meta cm
+               | None => cm
+               end) as cm'.
       admit.
   Admitted.
 
