@@ -137,6 +137,27 @@ Section AddressValue_Lemmas.
       reflexivity.
   Qed.
 
+  Lemma AddressValue_of_Z_to_Z:
+    forall a,
+      AddressValue.of_Z (AddressValue.to_Z a) = a.
+  Proof.
+    intros a.
+    unfold AddressValue.of_Z, AddressValue.to_Z.
+    unfold bv_to_Z_unsigned.
+    apply bitvector.Z_to_bv_bv_unsigned.
+  Qed.
+
+  Lemma with_offset_0:
+    forall a,
+      AddressValue.with_offset a (Z.of_nat 0) = a.
+  Proof.
+    intros a.
+    unfold AddressValue.with_offset.
+    replace (Z.of_nat O) with 0 by lia.
+    rewrite Z.add_0_r.
+    apply AddressValue_of_Z_to_Z.
+  Qed.
+
 End AddressValue_Lemmas.
 
 Lemma sequence_len_errS
@@ -4581,9 +4602,9 @@ Module RevocationProofs.
 
     revert s s' addr C Bfit AG.
     induction n;intros.
-    +
+    -
       break_match_goal.
-      *
+      +
         bool_to_prop_hyp.
         rewrite AddressValue_as_ExtOT.with_offset_0 in H0.
         unfold AddressValue.leb, AddressValue.ltb, leb, ltb in H, H0.
@@ -4592,13 +4613,13 @@ Module RevocationProofs.
         apply AdddressValue_eqb_eq in H.
         subst.
         lia.
-      *
+      +
         cbn in C.
         state_inv_step.
         reflexivity.
-    +
+    -
       destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset a1 (Z.of_nat n))) as [L|NL].
-      *
+      +
         (* last element *)
         cbn in C.
         state_inv_step.
@@ -4637,7 +4658,7 @@ Module RevocationProofs.
 
         subst addr.
         break_match_goal.
-        --
+        *
           replace (AddressValue.with_offset (Capability_GS.cap_get_value c2)
                      (addr_offset
                         (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n))
@@ -4671,19 +4692,49 @@ Module RevocationProofs.
           apply load_uchar_spec in C1.
           (* TODO: need store spec *)
           admit.
-        --
+        *
           rewrite IHn; clear IHn s' C1.
           apply andb_false_iff in Heqb.
           unfold AddressValue.leb, AddressValue.ltb, leb, ltb in Heqb.
           destruct Heqb as [H1 | H2].
-          ++
+          --
             bool_to_prop_hyp; try lia.
             apply AdddressValue_eqb_neq in H0.
-            admit.
-          ++
+            assert(n = O).
+            {
+              (* (c + n <= n) -> n=0 *)
+              rewrite AddressValue.with_offset_no_wrap in H.
+              -
+                unfold AddressValue.to_Z, bv_to_Z_unsigned in H.
+                lia.
+              -
+                invc AG.
+                apply memcpy_alloc_bounds_check_p_c_bounds with (x:=n) in H14 .
+                + destruct H14; lia.
+                + apply (Bfit alloc_id1 alloc1 H6).
+                + apply (Bfit alloc_id2 alloc2 H7).
+                + lia.
+            }
+            subst n.
+            clear H.
+            rewrite with_offset_0 in H0.
+            congruence.
+          --
+            exfalso.
             bool_to_prop_hyp; try lia.
-            admit.
-      *
+
+            invc AG.
+            apply memcpy_alloc_bounds_check_p_c_bounds with (x:=n) in H13.
+            2: apply (Bfit alloc_id1 alloc1 H5).
+            2: apply (Bfit alloc_id2 alloc2 H6).
+            2: lia.
+            clear - H2 H13.
+            destruct H13.
+            rewrite 2!AddressValue.with_offset_no_wrap in H2; try lia.
+            clear H0.
+            (* TODO: could not be proven! *)
+
+      +
         (* not last *)
         cbn in C.
         state_inv_step.
