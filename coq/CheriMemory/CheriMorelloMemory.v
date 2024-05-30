@@ -2976,17 +2976,17 @@ Module Type CheriMemoryImpl
   Fixpoint memcpy_copy_data
     (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
-    (index: nat):
+    (size: nat):
     memM unit :=
-    match index with
+    match size with
     | O => ret tt
-    | S index =>
-        let i_value := Z.of_nat index in
-        ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV i_value) ;;
-        ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV i_value) ;;
+    | S size =>
+        let sizen := Z.of_nat size in
+        ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV sizen) ;;
+        ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV sizen) ;;
         '(_, mval) <- load loc CoqCtype.unsigned_char ptrval2' ;;
         store loc CoqCtype.unsigned_char false ptrval1' mval ;;
-        memcpy_copy_data loc ptrval1 ptrval2 index
+        memcpy_copy_data loc ptrval1 ptrval2 size
     end.
 
   Definition memcpy
