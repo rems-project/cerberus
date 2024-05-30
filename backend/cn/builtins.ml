@@ -7,6 +7,9 @@ open IndexTerms
 
 
 (* builtin function symbols *)
+let mk_arg0 mk args loc = match args with
+  | [] -> return (mk loc)
+  | _ :: _ as xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 0}}
 
 let mk_arg1 mk args loc = match args with
   | [x] -> return (mk x loc)
@@ -29,6 +32,22 @@ let mk_arg5 mk args loc = match args with
   | [a;b;c;d;e] -> return (mk (a,b,c,d,e) loc)
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 5}}
 
+
+let min_bits_def (sign, n) =
+  let (num, letter) = match sign with
+    | BT.Unsigned -> (Z.zero, "u")
+    | Signed -> (Z.(neg @@ shift_left one (Int.sub n 1)), "i") in
+  let name = "MIN" ^ letter ^ Int.to_string n in
+  (name, Sym.fresh_named name, mk_arg0 (fun loc ->
+        IT.sterm_of_term @@ num_lit_ num (BT.Bits (sign, n)) loc))
+
+let max_bits_def (sign, n) =
+  let (num, letter) = match sign with
+    | BT.Unsigned -> (Z.(shift_left one n - one), "u")
+    | Signed -> (Z.(shift_left one (Int.sub n 1) - one), "i") in
+  let name = "MAX" ^ letter ^ Int.to_string n in
+  (name, Sym.fresh_named name, mk_arg0 (fun loc ->
+       IT.sterm_of_term @@ num_lit_ num (BT.Bits (sign, n)) loc))
 
 let mul_uf_def = ("mul_uf", Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
 let div_uf_def = ("div_uf", Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
@@ -121,8 +140,21 @@ let addr_eq_def =
        )
    )
 
+let max_min_bits =
+  let sizes = [8; 16; 32; 64] in
+  let signs = [BT.Unsigned; Signed] in
+  List.fold_left
+    (fun acc sign ->
+      List.fold_left
+        (fun acc size -> max_bits_def (sign, size) :: min_bits_def (sign, size) :: acc)
+        acc
+        sizes)
+    []
+    signs
 
-let builtin_funs = [
+
+let builtin_funs = max_min_bits @ [
+
   mul_uf_def;
   div_uf_def;
   power_uf_def;

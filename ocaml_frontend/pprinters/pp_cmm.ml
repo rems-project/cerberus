@@ -48,7 +48,7 @@ let string_of_memory_order = function
 
 
 let string_of_location ptr_val = Pp_utils.to_plain_string (Pp_mem.pp_pretty_pointer_value ptr_val)
-let string_of_cvalue mval = Pp_utils.to_plain_string (Pp_mem.pp_pretty_mem_value Boot_printf.({basis=None; use_upper= false}) mval)
+let string_of_cvalue mval = Pp_utils.to_plain_string (Pp_mem.pp_pretty_mem_value ~use_upper:false mval)
 
 
 let string_of_action_aux = function

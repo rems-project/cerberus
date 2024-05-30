@@ -26,7 +26,7 @@ let print_file filename file =
      Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file);
   | MUCORE file ->
      Pp.print_file (filename ^ ".mucore")
-       (Pp_mucore.Basic.pp_file None file);
+       (Pp_mucore.pp_file file);
 
 
 module Log : sig
@@ -56,11 +56,14 @@ open Log
 
 
 
-let frontend incl_dirs incl_files astprints do_peval filename state_file =
+let frontend incl_dirs incl_files astprints do_peval filename state_file magic_comment_char_dollar =
   let open CF in
   Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
-  Switches.set ["inner_arg_temps"; "at_magic_comments"; "warn_mismatched_magic_comments"];
+  Switches.set 
+    (["inner_arg_temps"; "at_magic_comments"] 
+     @ (if magic_comment_char_dollar then ["magic_comment_char_dollar"] else []))
+  ;
   Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
@@ -107,8 +110,10 @@ let opt_comma_split = function
 let check_input_file filename =
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
-  else if not (String.equal (Filename.extension filename) ".c") then
-    CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
+  else
+    let ext = String.equal (Filename.extension filename) in
+    if not (ext ".c" || ext ".h") then
+      CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
 
 
@@ -139,6 +144,8 @@ let main
       no_use_ity
       use_peval
       batch
+      no_inherit_loc
+      magic_comment_char_dollar
   =
   if json then begin
       if debug_level > 0 then
@@ -156,7 +163,7 @@ let main
     Solver.random_seed := random_seed;
     Solver.log_to_temp := solver_logging;
     Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
-  IndexTerms.use_vip := use_vip;
+    IndexTerms.use_vip := use_vip;
     Check.batch := batch;
     Diagnostics.diag_string := diag;
     WellTyped.use_ity := not no_use_ity
@@ -164,7 +171,7 @@ let main
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
     handle_frontend_error
-      (frontend incl_dirs incl_files astprints use_peval filename state_file)
+      (frontend incl_dirs incl_files astprints use_peval filename state_file magic_comment_char_dollar)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel
@@ -175,7 +182,7 @@ let main
   try
       let result =
         let open Resultat in
-         let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
+         let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, ail_prog) prog4 in
          (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
          (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
          print_log_file ("mucore", MUCORE prog5);
@@ -347,7 +354,13 @@ let use_peval =
   let doc = "(this switch should go away) run the Core partial evaluation phase" in
   Arg.(value & flag & info["use-peval"] ~doc)
 
+let no_inherit_loc =
+  let doc = "debugging: stop mucore terms inheriting location information from parents" in
+  Arg.(value & flag & info["no-inherit-loc"] ~doc)
 
+let magic_comment_char_dollar =
+  let doc = "Override CN's default magic comment syntax to be \"/*$ ... $*/\"" in
+  Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
 
 
 let () =
@@ -379,6 +392,8 @@ let () =
       use_vip $
       no_use_ity $
       use_peval $
-      batch
+      batch $
+      no_inherit_loc $
+      magic_comment_char_dollar
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))

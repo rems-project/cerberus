@@ -269,23 +269,6 @@ Module Type CheriMemoryTypes
 
 End CheriMemoryTypes.
 
-
-(* OCaml Z.sign *)
-Definition sign (x:Z) : Z :=
-  match x with
-  | Z0 => 0
-  | Zpos _ => 1
-  | Zneg _ => (-1)
-  end.
-
-(* See [Z.ediv_rem] in OCaml ZArith *)
-Definition quomod (a b: Z) : (Z*Z) :=
-  let (q,r) := Z.quotrem a b in
-  if Z.geb (sign r) 0 then (q,r) else
-    if Z.geb (sign b) 0 then (Z.pred q, r + b)
-    else (Z.succ q, r - b).
-
-
 Definition wrapI min_v max_v n :=
   let dlt := Z.succ (max_v - min_v) in
   let r := Z_integerRem_f n dlt in
@@ -1031,7 +1014,7 @@ Module Type CheriMemoryImpl
      to check for liveness here, instead of later as multiple dead
      allocations may correspond to given address.
    *)
-  Definition find_live_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
+  Definition find_live_allocation (addr:AddressValue.t) : memM (option (storage_instance_id*allocation)) :=
     get >>= fun st =>
         ret
           (ZMap.fold (fun alloc_id alloc acc =>
@@ -2806,14 +2789,184 @@ Module Type CheriMemoryImpl
           ret (PV prov (PVconcrete c_value))
     end.
 
-  (* Internal *)
+  (* Helper function *)
+  Fixpoint bytmeta_copy_tags
+    (dst src: Z)
+    (n: nat)
+    (step: nat)
+    (cm: ZMap.t (bool * CapGhostState))
+    : ZMap.t (bool * CapGhostState)
+    :=
+    match n with
+    | O => cm
+    | S n =>
+        bytmeta_copy_tags (dst + Z.of_nat step) (src + Z.of_nat step) n step
+          (match ZMap.find src cm with
+           | None => cm
+           | Some meta => ZMap.add dst meta cm
+           end)
+    end.
+
+  (** Copy caps meta-information between `memcpy` source and
+      destinations, only for positions where both source and desination
+      addresses align *)
+  Definition memcpy_copy_tags
+    (loc: location_ocaml)
+    (dst_p src_p: pointer_value)
+    (sz: nat)
+    : memM unit :=
+    let pointer_alignof_n := IMP.get.(alignof_pointer) in
+    let pointer_alignof := Z.of_nat pointer_alignof_n in
+
+    let cap_addr_of_pointer_value (ptr: pointer_value) : serr Z :=
+      match ptr with
+      | PV _ (PVconcrete c_value) => ret (cap_to_Z c_value)
+      | _ => raise "memcpy: invalid pointer value"
+      end
+    in
+    dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
+    src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
+
+    (* Calculate alignments *)
+    let dst_align := Z.modulo dst_a pointer_alignof in
+    let src_align := Z.modulo src_a pointer_alignof in
+
+    if dst_align =? src_align then
+      (* Calculate the offset to the next aligned address *)
+      let off := if dst_align =? 0 then 0 else pointer_alignof - dst_align in
+      let zsz := Z.of_nat sz in
+
+      if off >=? zsz then
+        ret tt
+      else
+        (* Calculate the aligned starting addresses *)
+        let dst_1st := dst_a + off in
+        let src_1st := src_a + off in
+
+        (* Calculate the number of fully aligned regions *)
+        let n := (zsz - off) / pointer_alignof in
+
+        (* Ensure dst_1st and src_1st are within bounds *)
+        if dst_1st >=? (dst_a + zsz) then
+          ret tt
+        else
+          (* Update memory state with aligned regions *)
+          update
+            (fun (st : mem_state) =>
+               mem_state_with_capmeta
+                 (bytmeta_copy_tags
+                    dst_1st
+                    src_1st
+                    (Z.to_nat n)
+                    pointer_alignof_n
+                    st.(capmeta))
+                 st)
+    else
+      (* Source and destination regions are misaligned, no tags will be copied *)
+      ret tt.
+
+  (** Helper function checks if regions of size [sz] fit within
+      [allocation1] starting from [c1] and [allocation2] starting from
+      [c2]. Additionally, it checks that they do not overlap.
+  *)
+  Definition memcpy_alloc_bounds_check loc c1 c2 (alloc1 alloc2:allocation) (sz:Z)
+    : memM unit :=
+    let ptr1_base := cap_to_Z c1 in
+    let ptr1_limit := ptr1_base + sz in
+    let alloc1_base := AddressValue.to_Z alloc1.(base) in
+    let alloc1_limit := alloc1_base + Z.of_nat alloc1.(size) in
+
+    let ptr2_base := cap_to_Z c2 in
+    let ptr2_limit := ptr2_base + sz in
+    let alloc2_base := AddressValue.to_Z alloc2.(base) in
+    let alloc2_limit := alloc2_base + Z.of_nat alloc2.(size) in
+
+    if (ptr1_base <? alloc1_base) || (ptr1_limit >? alloc1_limit) ||
+         (ptr2_base <? alloc2_base) || (ptr2_limit >? alloc2_limit)
+    then fail loc (MerrUndefinedMemcpy Memcpy_out_of_bound)
+    else
+      (* Checking for overlap. This should only be required if
+         allocation IDs are the same, but since live allocations do
+         not overlap, we perform a more general check for
+         simplicity.
+       *)
+      if Z.abs (ptr1_base-ptr2_base) >=? sz
+      then ret tt
+      else fail loc (MerrUndefinedMemcpy Memcpy_overlap).
+
+  (** Check if arguments to memcpy are sane:
+
+     0. Size should be non-negative (corresponds to `size_t` which is unsigned )
+     1. Both pointers should point to C objects
+        (null pointers and pointers to functions is not allowed)
+     2. Corresponding allocations must be live
+     3. Copied regions must be within objects' bounds
+     4. Source and destination must not overlap
+
+     NOTE: We allow to copy parts of static objects.
+           This may be not compatible with optimizations
+           performed by some compilers. Copying parts
+           of objects allocated on heap is non-controversial.
+   *)
+  Definition memcpy_args_check loc ptrval1 ptrval2 (size:Z):
+    memM unit :=
+    if size <? 0
+    then raise (InternalErr "negative size passed to memcpy")
+    else
+      match ptrval1, ptrval2 with
+      | PV prov1 (PVconcrete c1), PV prov2 (PVconcrete c2) =>
+          if cap_is_null c1 || cap_is_null c2
+          then fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+          else
+            if CoqSwitches.has_PNVI (SW.get_switches tt)
+            then
+              match prov1, prov2 with
+              | (Prov_some alloc_id1), (Prov_some alloc_id2) =>
+                  opt_al1 <- get_allocation_opt alloc_id1 ;;
+                  opt_al2 <- get_allocation_opt alloc_id2 ;;
+                  match opt_al1, opt_al2 with
+                  | Some alloc1, Some alloc2 =>
+                      if alloc1.(is_dead) || alloc2.(is_dead)
+                      then
+                        (* At lease one of allocations is dead *)
+                        fail loc (MerrUndefinedMemcpy Memcpy_dead_object)
+                      else
+                        memcpy_alloc_bounds_check loc c1 c2 alloc1 alloc2 size
+                  | _, _ =>
+                      (* Neither dead nor live allocation was found. *)
+                      fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+                  end
+              | _, _ =>
+                  (* invalid provenance *)
+                  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+              end
+            else
+              opt_al1 <- find_cap_allocation c1 ;;
+              opt_al2 <- find_cap_allocation c2 ;;
+              match opt_al1, opt_al2 with
+              | Some (_,alloc1), Some (_,alloc2) =>
+                  memcpy_alloc_bounds_check loc c1 c2 alloc1 alloc2 size
+              | _, _ =>
+                  (* One of allocations does not exists or dead.
+                     We return [Memcpy_non_object] which is more
+                     general than [Memcpy_dead_object]
+                   *)
+                  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+              end
+      (* memcpy accepts only pointers to C objects *)
+      | _, _ =>  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
+      end.
+
+  (** Copy byte content of memory in given region.
+      Tags in this region will be "ghosted" per [ghost_tags].
+   *)
   Fixpoint memcpy_copy_data
     (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
     (index: nat):
-    memM pointer_value :=
+    memM unit :=
     match index with
-    | O => ret ptrval1
+    | O => ret tt
     | S index =>
         let i_value := Z.of_nat index in
         ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV i_value) ;;
@@ -2823,71 +2976,17 @@ Module Type CheriMemoryImpl
         memcpy_copy_data loc ptrval1 ptrval2 index
     end.
 
-  (* Internal *)
-  Fixpoint memcpy_copy_tags
-    (loc: location_ocaml)
-    (ptrval1 ptrval2: pointer_value)
-    (index: nat)
-    : memM pointer_value :=
-    let cap_addr_of_pointer_value (ptr: pointer_value) : serr Z :=
-      match ptr with
-      | PV _ (PVconcrete c_value) => ret (cap_to_Z c_value)
-      | _ => raise "memcpy: invalid pointer value"
-      end in
-    let copy_tag (dst_p : pointer_value) (src_p : pointer_value)
-      : memM unit :=
-      dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
-      src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
-      update
-        (fun (st : mem_state) =>
-           match ZMap.find src_a st.(capmeta) with
-           | None => st
-           | Some t_value =>
-               if negb (is_pointer_algined dst_a)
-               then st
-               else mem_state_with_capmeta (ZMap.add dst_a t_value st.(capmeta)) st
-           end)
-    in
-    match index with
-    | O => ret ptrval1
-    | S index =>
-        let i_value := IV (Z.of_nat index) in
-        ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char i_value ;;
-        ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char i_value ;;
-        copy_tag ptrval1' ptrval2' ;;
-        memcpy_copy_tags loc ptrval1 ptrval2 index
-    end.
-
-
-  (* internal *)
-  Definition memcpy_args_check loc ptrval1 ptrval2 size_n :=
-    if size_n <? 0
-    then raise (InternalErr "negative size passed to memcpy")
-    else
-      match ptrval1, ptrval2 with
-      | PV _ (PVconcrete c1), PV _ (PVconcrete c2) =>
-          let a1 := cap_to_Z c1 in
-          let a2 := cap_to_Z c2 in
-          if Z.abs (a1-a2) >=? size_n
-          then ret tt
-          else fail loc (MerrUndefinedMemcpy Memcpy_overlap)
-      (* memcpy accepts only pointers to C objects *)
-      | _, _ =>  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
-      end.
-
   Definition memcpy
+    (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
     (size_int: integer_value)
     : memM pointer_value
     :=
-    let loc := Loc_other "memcpy" in
     let size_z := num_of_int size_int in
     memcpy_args_check loc ptrval1 ptrval2 size_z ;;
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
-    let pointer_sizeof := Z.of_nat (IMP.get.(sizeof_pointer)) in
-    let (q,_) := quomod size_z pointer_sizeof in
-    let size_n_bottom_aligned := Z.mul q pointer_sizeof in
-    memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat size_n_bottom_aligned).
+    memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
+    ret ptrval1.
 
   Definition memcmp
     (ptrval1 ptrval2 : pointer_value)
@@ -2980,7 +3079,7 @@ Module Type CheriMemoryImpl
                          let size_to_copy :=
                            let size_z := num_of_int size_v in
                            IV (Z.min (Z.of_nat alloc.(size)) size_z) in
-                         memcpy new_ptr ptr size_to_copy ;;
+                         memcpy loc new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
               end
@@ -3003,7 +3102,7 @@ Module Type CheriMemoryImpl
                          let size_to_copy :=
                            let size_z := num_of_int size_v in
                            IV (Z.min (Z.of_nat alloc.(size)) size_z) in
-                         memcpy new_ptr ptr size_to_copy ;;
+                         memcpy loc new_ptr ptr size_to_copy ;;
                          kill (Loc_other "realloc") true ptr ;;
                          ret new_ptr)
                   else

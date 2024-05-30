@@ -16,6 +16,9 @@ module type Constraints = sig
   val with_constraints: 'b -> t -> 'a eff -> 'a eff
 end
 
+type basis =
+  [ `Octal | `Decimal | `Hexadecimal | `Binary ]
+
 module type Memory = sig
   val name: string
 (*  include (module type of Mem_common) *)
@@ -127,7 +130,7 @@ module type Memory = sig
   val max_ival: Ctype.integerType -> integer_value
   val min_ival: Ctype.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-  val offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
+  val offsetof_ival: (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
   
   val sizeof_ival: Ctype.ctype -> integer_value
   val alignof_ival: Ctype.ctype -> integer_value
@@ -209,8 +212,9 @@ module type Memory = sig
   val pp_integer_value_for_core: integer_value -> PPrint.document
   val pp_mem_value: mem_value -> PPrint.document
   val pp_pretty_pointer_value: pointer_value -> PPrint.document
-  val pp_pretty_integer_value: Boot_printf.formatting -> integer_value -> PPrint.document
-  val pp_pretty_mem_value: Boot_printf.formatting -> mem_value -> PPrint.document
+
+  val pp_pretty_integer_value: ?basis:basis -> use_upper:bool -> integer_value -> PPrint.document
+  val pp_pretty_mem_value: ?basis:basis -> use_upper:bool -> mem_value -> PPrint.document
   
 (*
   val string_of_pointer_value: pointer_value -> string

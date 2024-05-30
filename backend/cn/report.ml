@@ -30,7 +30,6 @@ type per_label_trace_report = {
 type trace_report = per_label_trace_report list
 
 type state_report = {
-    location_trace: Pp.doc list;
     variables : var_entry list;
     requested : resource_entry option;
     unproven : (Pp.doc * Pp.doc) option;

@@ -39,10 +39,7 @@ val eval :
   IndexTerms.t option
 
 
-val get_solver_focused_terms : solver ->
-  assumptions:Context.LCSet.t ->
-  pointer_facts:IndexTerms.t list ->
-  Global.t -> (IndexTerms.t_bindings * IndexTerms.t) list
+
 
 val debug_solver_to_string : solver -> unit
 

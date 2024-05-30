@@ -109,17 +109,19 @@ let make_map_bt abt rbt = Map (abt, rbt)
 let rec of_sct is_signed size_of = function
   | Sctypes.Void -> Unit
   | Integer ity -> Bits ((if is_signed ity then Signed else Unsigned), size_of ity * 8)
-  | Array (sct, _) -> Map (intptr_bt is_signed size_of, of_sct is_signed size_of sct)
+  | Array (sct, _) -> Map (uintptr_bt is_signed size_of, of_sct is_signed size_of sct)
   | Pointer ct -> Loc (Some ct)
   | Struct tag -> Struct tag
   | Function _ -> Cerb_debug.error "todo: function types"
 
-and intptr_bt is_signed size_of = 
+and uintptr_bt is_signed size_of =
   of_sct is_signed size_of Sctypes.(Integer (Unsigned Intptr_t))
 
-and size_bt is_signed size_of = 
-  of_sct is_signed size_of Sctypes.(Integer Size_t)
+and intptr_bt is_signed size_of =
+  of_sct is_signed size_of Sctypes.(Integer (Signed Intptr_t))
 
+and size_bt is_signed size_of =
+  of_sct is_signed size_of Sctypes.(Integer Size_t)
 
 module BT = BaseTypes
 

@@ -31,7 +31,6 @@ module CerbSwitchesProxy = struct
     | SW_revocation `INSTANT -> SW_revocation INSTANT
     | SW_revocation `CORNUCOPIA -> SW_revocation CORNUCOPIA
     | SW_at_magic_comments -> SW_at_magic_comments
-    | SW_warn_mismatched_magic_comments -> SW_warn_mismatched_magic_comments
 
   let toCoq_switches (cs: cerb_switch list): CoqSwitches.cerb_switches_t =
     let open ListSet in
@@ -57,7 +56,7 @@ module CerbTagDefs = struct
     | RegionCursor (lp1,lp2) -> RegionCursor (toCoq_lexing_position lp1, toCoq_lexing_position lp2)
 
   let toCoq_location (l:Cerb_location.t): CoqLocation.location_ocaml =
-    match (Cerb_location.to_raw l) with
+    match l with
     | Loc_unknown -> Loc_unknown
     | Loc_other s -> Loc_other s
     | Loc_point p -> Loc_point (toCoq_lexing_position p)
@@ -183,8 +182,8 @@ module CerbTagDefs = struct
     | Avalue va -> Avalue (toCoq_value_annot va)
     | Ainlined_label (l,s,la) ->
        Ainlined_label (toCoq_location l, toCoq_Symbol_sym s, toCoq_label_annot la)
-    | Astmt l -> Astmt (toCoq_location l)
-    | Aexpr l -> Aexpr (toCoq_location l)
+    | Astmt -> Astmt
+    | Aexpr -> Aexpr
 
   let toCoq_basicType: basicType -> CoqCtype.basicType = function
     | Integer ity -> Integer (toCoq_integerType ity)
@@ -236,10 +235,10 @@ module CerbTagDefs = struct
             ) l)
 
   (* very inefficient! *)
-  let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t =
+  let toCoq_SymMap (m:(Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t =
     let l = Pmap.bindings_list m in
     let (e:CoqCtype.tag_definition CoqSymbol.SymMap.t) = CoqSymbol.SymMap.empty in
-    List.fold_left (fun m (s,d) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
+    List.fold_left (fun m (s,(_, d)) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
 
   let tagDefs _ = toCoq_SymMap (Tags.tagDefs ())
 end
@@ -392,7 +391,8 @@ module CHERIMorello : Memory = struct
   let from_Coq_memcpy_error: MemCommonExe.memcpy_error -> memcpy_error = function
     | Memcpy_overlap -> Memcpy_overlap
     | Memcpy_non_object -> Memcpy_non_object
-    | Memmove_non_object -> Memmove_non_object
+    | Memcpy_dead_object -> Memcpy_non_object
+    | Memcpy_out_of_bound -> Memcpy_non_object
 
   let fromCoq_readonly_kind: MemCommonExe.readonly_kind -> readonly_kind = function
     | ReadonlyConstQualified -> ReadonlyConstQualified
@@ -421,7 +421,7 @@ module CHERIMorello : Memory = struct
 
   let fromCoq_undefined_by_omission: CoqUndefined.undefined_by_omission -> Undefined.undefined_by_omission = function
     | UB_OMIT_memcpy_non_object -> UB_OMIT_memcpy_non_object
-    | UB_OMIT_memmove_non_object -> UB_OMIT_memmove_non_object
+    | UB_OMIT_memcpy_out_of_bound -> UB_OMIT_memcpy_out_of_bound
 
   let fromCoq_undefined_behaviour: CoqUndefined.undefined_behaviour -> Undefined.undefined_behaviour = function
     | DUMMY s                                              -> DUMMY s
@@ -769,8 +769,8 @@ module CHERIMorello : Memory = struct
                                     (fromCoq_location l,
                                      fromCoq_Symbol_sym s,
                                      fromCoq_label_annot la)
-  | Astmt loc -> Astmt (fromCoq_location loc)
-  | Aexpr loc -> Aexpr (fromCoq_location loc)
+  | Astmt -> Astmt
+  | Aexpr -> Aexpr
 
   let fromCoq_basicType: CoqCtype.basicType -> basicType = function
     | Integer ity -> Integer (fromCoq_integerType ity)
@@ -928,7 +928,7 @@ module CHERIMorello : Memory = struct
   let pp_integer_value_for_core = pp_integer_value
 
   let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
-  let pp_pretty_integer_value _ = pp_integer_value
+  let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
 
   let rec pp_mem_value = function
     | CheriMemoryTypesExe.MVunspecified _ ->
@@ -957,7 +957,7 @@ module CHERIMorello : Memory = struct
                pp_mem_value mval
            )
 
-  let pp_pretty_mem_value _ = pp_mem_value
+  let pp_pretty_mem_value ?basis ~use_upper = pp_mem_value
 
   (* --- debugging --- *)
 
@@ -1281,7 +1281,7 @@ module CHERIMorello : Memory = struct
     lift_coq_memM "eff_member_shift_ptrval" (MM.eff_member_shift_ptrval (toCoq_location loc) ptrval (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
 
   let memcpy loc ptrval1 ptrval2 size_int =
-    lift_coq_memM "memcpy" (MM.memcpy ptrval1 ptrval2 size_int)
+    lift_coq_memM "memcpy" (MM.memcpy (toCoq_location loc) ptrval1 ptrval2 size_int)
 
   let memcmp ptrval1 ptrval2 size_int =
     lift_coq_memM "memcmp" (MM.memcmp ptrval1 ptrval2 size_int)

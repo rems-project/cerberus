@@ -133,7 +133,7 @@ type token =
   | BUILTIN_CHOOSE_EXPR
 
   (* Magic comments as tokens *)
-  | CERB_MAGIC of (Cerb_location.t * string)
+  | CERB_MAGIC of (Cerb_location.t * (char * string))
 
   (* CN syntax *)
   | CN_CONSTANT of (string * [`I|`U] * int)
@@ -302,7 +302,7 @@ let string_of_token = function
   | BUILTIN_TYPES_COMPATIBLE_P -> "BUILTIN_TYPES_COMPATIBLE_P"
   | BUILTIN_CHOOSE_EXPR -> "BUILTIN_CHOOSE_EXPR"
   | EOF -> "EOF"
-  | CERB_MAGIC (_, str) -> "/*@ " ^ str ^ " @*/"
+  | CERB_MAGIC (_, (c,str)) -> Printf.sprintf "/*%c %s %c*/" c str c
   | CN_CONSTANT _ -> "CN_CONSTANT"
   | CN_GOOD -> "CN_GOOD"
   | CN_PACK -> "CN_PACK"

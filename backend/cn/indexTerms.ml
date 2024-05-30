@@ -455,6 +455,11 @@ let is_not = function
   | IT (Unop (Not, it), _, _) -> Some it
   | _ -> None
 
+let is_negate = function
+  | IT (Unop (Negate, it), _, _) -> Some it
+  | _ -> None
+
+
 let is_lt = function
   | IT (Binop (LT,x, y), _, _) -> Some (x, y)
   | _ -> None
@@ -561,6 +566,7 @@ let eachI_ (i1, (s, bt), i2) t loc =
 
 
 (* arith_op *)
+let negate it loc = IT (Unop (Negate, it), bt it, loc)
 let add_ (it, it') loc = IT (Binop (Add,it, it'), bt it, loc)
 let sub_ (it, it') loc = IT (Binop (Sub,it, it'), bt it, loc)
 let mul_ (it, it') loc =
@@ -652,11 +658,11 @@ let cast_ bt it loc =
 let integerToPointerCast_ it loc =
   cast_ Loc it loc
 let intptr_const_ n loc =
-  num_lit_ n Memory.intptr_bt loc
+  num_lit_ n Memory.uintptr_bt loc
 let intptr_int_ n loc = intptr_const_ (Z.of_int n) loc
   (* for integer-mode: z_ n *)
 let pointerToIntegerCast_ it loc =
-  cast_ Memory.intptr_bt it loc
+  cast_ Memory.uintptr_bt it loc
   (* for integer-mode: cast_ Integer it *)
 let pointerToAllocIdCast_ it loc =
   cast_ Alloc_id it loc
@@ -760,10 +766,10 @@ let wrapI_ (ity, arg) loc =
   IT (WrapI (ity, arg), Memory.bt_of_sct (Sctypes.Integer ity), loc)
 let alignedI_ ~t ~align loc =
   assert (BT.equal (bt t) Loc);
-  assert (BT.equal Memory.intptr_bt (bt align));
+  assert (BT.equal Memory.uintptr_bt (bt align));
   IT (Aligned {t; align}, BT.Bool, loc)
 let aligned_ (t, ct) loc =
-  alignedI_ ~t ~align:(int_lit_ (Memory.align_of_ctype ct) Memory.intptr_bt loc) loc
+  alignedI_ ~t ~align:(int_lit_ (Memory.align_of_ctype ct) Memory.uintptr_bt loc) loc
 
 
 let const_map_ index_bt t loc =
@@ -780,11 +786,13 @@ let map_get_ v arg loc =
 let map_def_ (s, abt) body loc =
   IT (MapDef ((s, abt), body), BT.Map (abt, bt body), loc)
 
-let make_array_ ~item_bt items (* assumed all of item_bt *) loc =
+let make_array_ ~index_bt ~item_bt items (* assumed all of item_bt *) loc =
+  let base_value = const_map_ index_bt (default_ item_bt loc) loc in
   let (_, value) =
     List.fold_left (fun (index, value) item ->
-        (index + 1, map_set_ value (int_ index loc, item) loc)
-      ) (0, const_map_ Integer (default_ item_bt loc) loc) items
+        let index_it = num_lit_ (Z.of_int index) index_bt loc in
+        (index + 1, map_set_ value (index_it, item) loc)
+      ) (0, base_value) items
   in
   value
 
@@ -824,7 +832,7 @@ let def_ sym e loc = eq_ (sym_ (sym, bt e, loc), e) loc
 let in_range within (min, max) loc =
   and_ [le_ (min, within) loc; le_ (within, max) loc] loc
 
-let in_z_range within (min_z, max_z) loc = match bt within with
+let rec in_z_range within (min_z, max_z) loc = match bt within with
   | BT.Integer -> in_range within (z_ min_z loc, z_ max_z loc) loc
   | BT.Bits (sign, sz) ->
     let the_bt = bt within in
@@ -836,6 +844,13 @@ let in_z_range within (min_z, max_z) loc = match bt within with
       else if Z.leq min_possible max_z then le_ (within, num_lit_ max_z the_bt loc) loc
       else bool_ false loc in
     and_ [min_c; max_c] loc
+  | Loc ->
+    (* §6.3.2.3#6 allows converting pointers to any integer type so long as
+       the value of the pointer fits. If uintptr_t and intptr_t exist,
+       then they are guaranteed to be big enough to fit any valid pointer
+       (to void). From there, it's just a matter of checking the bits fit. *)
+    or_ [ in_z_range (cast_ Memory.uintptr_bt within loc) (min_z, max_z) loc
+      	; in_z_range (cast_ Memory.intptr_bt within loc) (min_z, max_z) loc ] loc
   | _ -> failwith ("in_z_range: unsupported type: " ^ Pp.plain (pp_with_typ within))
 
 let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) loc =
@@ -903,7 +918,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
          | _ -> failwith ("value_check: argument not a map: " ^ Pp.plain (pp_with_typ about))
        in
        let () =
-         if BT.equal ix_bt Memory.intptr_bt then
+         if BT.equal ix_bt Memory.uintptr_bt then
            ()
          else
            Pp.warn (Locations.other __FUNCTION__) (Pp.item "unexpected type of array arg" (pp_with_typ about))

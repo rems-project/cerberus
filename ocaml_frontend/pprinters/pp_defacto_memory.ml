@@ -189,7 +189,7 @@ let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
         assert false
 
 
-let pp_pretty_integer_value format (IV (_, ival_)) =
+let pp_pretty_integer_value ?basis ~use_upper (IV (_, ival_)) =
   let rec aux = function
     | IVconcurRead (_, sym) ->
         !^ ("concur(" ^ Pp_symbol.to_string_pretty sym ^ ")")
@@ -197,16 +197,16 @@ let pp_pretty_integer_value format (IV (_, ival_)) =
         !^ "UNSPEC"
     | IVconcrete n ->
         !^ begin
-            let b = match format.Boot_printf.basis with
-              | Some AilSyntax.Octal ->
+            let b = match basis with
+              | Some `Octal ->
                   8
-              | Some AilSyntax.Decimal | None ->
+              | Some `Decimal | None ->
                   10
-              | Some AilSyntax.Hexadecimal ->
+              | Some `Hexadecimal ->
                   16
-              | Some AilSyntax.Binary ->
+              | Some `Binary ->
                   2 in
-             let chars = String_nat_big_num.chars_of_num_with_basis b format.Boot_printf.use_upper n in
+             let chars = String_nat_big_num.chars_of_num_with_basis b use_upper n in
              let bts = Bytes.create (List.length chars) in
              List.iteri (Bytes.set bts) chars;
              Bytes.to_string bts
@@ -257,9 +257,9 @@ let pp_pretty_integer_value format (IV (_, ival_)) =
   in
   aux ival_
 
-let pp_pretty_mem_value format = function
+let pp_pretty_mem_value ?basis ~use_upper = function
   | MVinteger (_, ival) ->
-      pp_pretty_integer_value format ival
+      pp_pretty_integer_value ?basis ~use_upper ival
   | MVfloating (fty, FVconcrete fval) ->
       !^(string_of_float fval)
   | MVfloating (fty, FVunspecified) ->

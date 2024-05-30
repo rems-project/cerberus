@@ -249,6 +249,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_expr e
   | CNExpr_not e ->
      free_in_expr e
+  | CNExpr_negate e ->
+     free_in_expr e
   | CNExpr_default _bt ->
      SymSet.empty
      
@@ -895,6 +897,17 @@ module EffectfulTranslation = struct
         | CNExpr_not e ->
            let@ e = self e in
            return (not_ e loc)
+        | CNExpr_negate e ->
+           let@ e = self e in
+           begin match e with
+           | IT (Const (Z z), bt, _) ->
+             return (IT (Const (Z (Z.neg z)), SBT.Integer, loc))
+           | IT (Const (Bits ((sign, width), z)), bt, _) ->
+             (* this will be checked to fit in WellTyped.infer *)
+             return (IT (Const (Bits ((sign,width), Z.neg z)), SBT.Bits (sign,width), loc))
+           | _ ->
+             return (negate e loc)
+           end
         | CNExpr_default bt ->
            let bt = translate_cn_base_type env bt in
            return (IT (Const (Default (SBT.to_basetype bt)), bt, loc))

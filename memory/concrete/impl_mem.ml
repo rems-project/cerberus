@@ -95,7 +95,7 @@ end)
 let rec offsetsof ?(ignore_flexible=false) tagDefs tag_sym =
   let open N in
   match Pmap.find tag_sym tagDefs with
-    | StructDef (membrs_, flexible_opt) ->
+    | _, StructDef (membrs_, flexible_opt) ->
         (* NOTE: the offset of a flexible array member is just like
            that of any other member *)
         let membrs = match flexible_opt with
@@ -122,7 +122,7 @@ let rec offsetsof ?(ignore_flexible=false) tagDefs tag_sym =
             ((membr, ty, add last_offset pad) :: xs, add (add last_offset pad) size)
           ) ([], zero) membrs in
         (List.rev xs, maxoffset)
-    | UnionDef membrs ->
+    | _, UnionDef membrs ->
         (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, zero)) membrs, zero)
 
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : N.num =
@@ -168,9 +168,9 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : N.num =
         if equal x zero then max_offset else N.add max_offset (N.sub align x)
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with
-          | StructDef _ ->
+          | _, StructDef _ ->
               assert false
-          | UnionDef membrs ->
+          | _, UnionDef membrs ->
               let (max_size, max_align) =
                 List.fold_left (fun (acc_size, acc_align) (_, (_, align_opt, _, ty)) ->
                   let align =
@@ -222,9 +222,9 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         alignof ~tagDefs atom_ty
     | Struct tag_sym ->
         begin match Pmap.find tag_sym tagDefs with
-          | UnionDef _ ->
+          | _, UnionDef _ ->
               assert false
-          | StructDef (membrs, flexible_opt)  ->
+          | _, StructDef (membrs, flexible_opt)  ->
               (* NOTE: we take into account the potential flexible array member by tweaking
                  the accumulator init of the fold. *)
               let init = match flexible_opt with
@@ -248,9 +248,9 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         end
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with
-          | StructDef _ ->
+          | _, StructDef _ ->
               assert false
-          | UnionDef membrs ->
+          | _, UnionDef membrs ->
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
               List.fold_left (fun acc (_, (_, align_opt, _, ty)) ->
@@ -1046,7 +1046,7 @@ module Concrete : Memory = struct
             (* TODO: hack to prevent pointer zap from crashing if a union is in the memory *)
             ( `NoTaint, MVunspecified cty, bs2)
           else match Pmap.find tag_sym (Tags.tagDefs ()) with
-            | UnionDef ((first_membr_def :: _) as membrs) ->
+            | _, UnionDef ((first_membr_def :: _) as membrs) ->
                 let (membr_ident, (_, _, _, membr_ty)) =
                   match IntMap.find_opt addr unionmap with
                     | None ->
@@ -2190,7 +2190,7 @@ module Concrete : Memory = struct
     let IV (_, offset) = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
     let membr_opt =
       match Pmap.lookup tag_sym (Tags.tagDefs ()) with
-        | Some (UnionDef _) ->
+        | Some (_, UnionDef _) ->
             Some memb_ident
         | _ ->
             None in
@@ -2566,8 +2566,8 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
 
 
   let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
-  let pp_pretty_integer_value _ = pp_integer_value
-  let pp_pretty_mem_value _ = pp_mem_value
+  let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
+  let pp_pretty_mem_value ?basis ~use_upper = pp_mem_value
   
   (* TODO check *)
   let memcpy loc ptrval1 ptrval2 (IV (_, size_n)) =

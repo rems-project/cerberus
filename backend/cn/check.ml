@@ -136,6 +136,13 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : IT.t m =
             | None -> fail (fun _ -> {loc; msg = Empty_provenance }) in
         return (pointer_ ~alloc_id ~addr:p loc) )
 
+let expect_must_be_map_bt loc ~expect =
+  match expect with
+  | BT.Map (index_bt, item_bt) -> return (index_bt, item_bt)
+  | _ ->
+     let msg = Mismatch {has = !^"array"; expect = BT.pp expect} in
+     fail (fun _ -> {loc; msg})
+
 let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
   CF.Impl_mem.case_mem_value mem
     ( fun ct ->
@@ -155,15 +162,10 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
       let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
       check_ptrval loc ~expect ptrval )
     ( fun mem_values ->
-      let@ index_bt, item_bt = match expect with
-        | BT.Map (index_bt, item_bt) -> return (index_bt, item_bt)
-        | _ ->
-           let msg = Mismatch {has = !^"array"; expect = BT.pp expect} in
-           fail (fun _ -> {loc; msg})
-      in
-      assert (BT.equal index_bt Integer);
+      let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
+      assert (Option.is_some (BT.is_bits_bt index_bt));
       let@ values = ListM.mapM (check_mem_value loc ~expect:item_bt) mem_values in
-      return (make_array_ ~item_bt values loc) )
+      return (make_array_ ~index_bt ~item_bt values loc) )
     ( fun tag mvals ->
       let@ () = WellTyped.WCT.is_ct loc (Struct tag) in
       let@ () = WellTyped.ensure_base_type loc ~expect (Struct tag) in
@@ -212,11 +214,11 @@ let rec check_object_value (loc : loc) (M_OV (expect, ov)) : IT.t m =
   | M_OVpointer p ->
      check_ptrval loc ~expect p
   | M_OVarray items ->
-     let item_bt = bt_of_object_value (List.hd items) in
-     let@ () = ensure_base_type loc ~expect (Map (Integer, item_bt)) in
+     let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
+     assert (Option.is_some (BT.is_bits_bt index_bt));
      let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_object_value i)) items in
      let@ values = ListM.mapM (check_object_value loc) items in
-     return (make_array_ ~item_bt values loc)
+     return (make_array_ ~index_bt ~item_bt values loc)
   | M_OVstruct (tag, fields) ->
      let@ () = ensure_base_type loc ~expect (Struct tag) in
      check_struct loc tag fields
@@ -418,7 +420,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
   let (M_Pexpr (loc, _, expect, pe_)) = pe in
   let@ omodel = model_with loc (bool_ true @@ Locations.other __FUNCTION__) in
   match omodel with
-  | None -> 
+  | None ->
       warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
       return ()
   | Some _ ->
@@ -452,11 +454,11 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         let@ () = ensure_base_type loc ~expect (Tuple (List.map bt_of_pexpr pes)) in
         check_pexprs pes (fun values -> k (tuple_ values loc))
      | M_Carray, _ ->
-        let item_bt = bt_of_pexpr (List.hd pes) in
-        let@ () = ensure_base_type loc ~expect (Map (Integer, item_bt)) in
+        let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
+        assert (Option.is_some (BT.is_bits_bt index_bt));
         let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_pexpr i)) pes in
         check_pexprs pes (fun values ->
-        k (make_array_ ~item_bt values loc))
+        k (make_array_ ~index_bt ~item_bt values loc))
      | M_Cnil item_cbt, [] ->
         let@ item_bt = match expect with
           | List item_bt -> return item_bt
@@ -512,7 +514,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
      check_pexpr pe1 (fun vt1 ->
      check_pexpr pe2 (fun vt2 ->
-     k (arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.intptr_bt vt2 loc) loc)))
+     k (arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc)))
   | M_PEmember_shift (pe, tag, member) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Loc in
      let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
@@ -580,7 +582,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         k (or_ [v1; v2] loc)))
      | _ ->
        Pp.debug 1 (lazy (Pp.item "not yet restored" (Pp_mucore_ast.pp_pexpr orig_pe)));
-       failwith "todo"
+       failwith ("todo: " ^ __FUNCTION__)
      end
   | M_PEapply_fun (fun_id, args) ->
      let@ () = match mu_fun_return_type fun_id args with
@@ -874,7 +876,7 @@ end = struct
       )
     in
 
-    let check = 
+    let check =
       let rec aux args_acc args ftyp k =
         match args, ftyp with
         | (arg :: args), (Computational ((s, bt), _info, ftyp)) ->
@@ -1011,7 +1013,7 @@ let _check_used_distinct loc used =
 
 
 let load loc pointer ct =
-  let@ value = 
+  let@ value =
     pure begin
       let@ (point, O value), _ =
         RI.Special.predicate_request loc (Access Load)
@@ -1029,7 +1031,7 @@ let instantiate loc filter arg =
   let arg_it = sym_ (arg_s, IT.bt arg, loc) in
   let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
   let@ () = add_c loc (LC.t_ (eq__ arg_it arg loc)) in
-  let@ constraints = all_constraints () in
+  let@ constraints = get_cs () in
   let extra_assumptions1 = List.filter_map (function
         | Forall ((s, bt), t) when filter t -> Some ((s, bt), t)
         | _ -> None) (LCSet.elements constraints) in
@@ -1046,28 +1048,31 @@ let instantiate loc filter arg =
   add_cs loc extra_assumptions
 
 
-  
+
 let add_trace_information labels annots =
   let open CF.Annot in
-  let inlined_labels = 
+  let inlined_labels =
     List.filter_map (function Ainlined_label l -> Some l | _ -> None) annots in
-  let stmt_locs = 
-    List.filter_map (function Astmt loc -> Some loc | _ -> None) annots in 
-  let expr_locs = 
-    List.filter_map (function Aexpr loc -> Some loc | _ -> None) annots in
+  let locs =
+    List.filter_map (function Aloc l -> Some l | _ -> None) annots in
+  let is_stmt = List.exists (function Astmt -> true | _ -> false) annots in
+  let is_expr = List.exists (function Aexpr -> true | _ -> false) annots in
   let@ () = match inlined_labels with
     | [] -> return ()
-    | [(lloc,lsym,lannot)] -> 
-      add_label_to_trace (Some (lloc,lannot)) 
+    | [(lloc,lsym,lannot)] ->
+      add_label_to_trace (Some (lloc,lannot))
     | _ -> assert false
   in
-  let@ () = match stmt_locs with
-    | [] -> return ()
-    | l :: _ -> add_trace_item_to_trace (Stmt, l) 
-  in
-  let@ () = match expr_locs with
-    | [] -> return ()
-    | l :: _ -> add_trace_item_to_trace (Context.Expr, l)
+  let@ () = match locs with
+    | [] ->
+      return ()
+    | l :: _ ->
+      if is_stmt then
+        add_trace_item_to_trace (Stmt, l)
+      else if is_expr then
+        add_trace_item_to_trace (Expr, l)
+      else
+        return ()
   in
   return ()
 
@@ -1078,11 +1083,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
   let here = Locations.other __FUNCTION__ in
   let@ omodel = model_with loc (bool_ true here) in
   match omodel with
-  | None -> 
+  | None ->
       warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
       return ()
   | Some _ ->
-  let@ () = add_loc_trace loc in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
        debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
@@ -1171,24 +1175,21 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act_to.ct) in
         let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
         check_pexpr pe (fun arg ->
-        let here = Locations.other __FUNCTION__ in
-        (* TODO: is this good? *)
-        let test_value = cast_ Memory.intptr_bt arg here in
         let actual_value = cast_ (Memory.bt_of_sct act_to.ct) arg loc in
+        (* after discussing with Kavyan *)
+        let@ provable = provable loc in
+        let here = Locations.other __FUNCTION__ in
+        let lc = t_ (representable_ (act_to.ct, arg) here) in
         let@ () =
-          (* after discussing with Kavyan *)
-          let@ provable = provable loc in
-          let lc = t_ (representable_ (act_to.ct, test_value) here) in
           begin match provable lc with
           | `True -> return ()
           | `False ->
              let@ model = model () in
              fail (fun ctxt ->
                  let ict = act_to.ct in
-                 {loc; msg = Int_unrepresentable {value = test_value; ict; ctxt; model}}
+                 {loc; msg = Int_unrepresentable {value = arg; ict; ctxt; model}}
                )
-          end
-        in
+          end in
         k actual_value)
      | M_PtrFromInt (act_from, act_to, pe) ->
         let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
@@ -1232,7 +1233,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
         Cerb_debug.error "todo: M_PtrMemberShift"
      | M_CopyAllocId (pe1, pe2) ->
-        let@ () = WellTyped.ensure_base_type loc ~expect:Memory.intptr_bt (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_base_type loc ~expect:Memory.uintptr_bt (bt_of_pexpr pe1) in
         let@ () = WellTyped.ensure_base_type loc ~expect:BT.Loc (bt_of_pexpr pe2) in
         check_pexpr pe1 (fun vt1 ->
         check_pexpr pe2 (fun vt2 ->
@@ -1275,7 +1276,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         in
         let@ () = add_a ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
         (* let@ () = add_c loc (t_ (representable_ (Pointer act.ct, ret) loc)) in *)
-        let align_v = cast_ Memory.intptr_bt arg loc in
+        let align_v = cast_ Memory.uintptr_bt arg loc in
         let@ () = add_c loc (t_ (alignedI_ ~align:align_v ~t:ret loc)) in
         let@ () =
           add_r loc
@@ -1505,10 +1506,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                let@ (original_rs, _) = all_resources_tagged loc in
                let verbose = List.exists (Id.is_str "verbose") attrs in
                let quiet = List.exists (Id.is_str "quiet") attrs in
-               if verbose
-               then Pp.print stdout (Pp.loc_headline loc (!^ "processing extract[verbose]"))
-               else ();
-               let@ () = add_movable_index loc ~verbose (predicate_name, it) in
+               (* if verbose *)
+               (* then Pp.print stdout (Pp.loc_headline loc (!^ "processing extract[verbose]")) *)
+               (* else (); *)
+               let@ () = add_movable_index loc (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
                let msg1 = "extract: index added, no resources (yet) extracted." in
                let msg2 = "(consider extract[verbose] or extract[quiet])" in
@@ -1635,7 +1636,6 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
 
 
 let check_expr_top loc labels rt e =
-  let@ () = add_loc_trace loc in
   let@ () = WellTyped.ensure_base_type loc ~expect:Unit (bt_of_expr e) in
   check_expr labels e (fun lvt ->
         let (RT.Computational ((return_s, return_bt), info, lrt)) = rt in
@@ -1704,7 +1704,7 @@ let post_state_of_rt loc rt =
   pure begin
      let@ False, final_resources = bind_arguments loc rt_as_args in
      let@ () = add_rs loc final_resources in
-     get ()
+     get_typing_context ()
    end
 
 
@@ -1729,7 +1729,7 @@ let check_procedure
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
         pure begin
             let@ () = add_rs loc initial_resources in
-            let@ pre_state = get () in
+            let@ pre_state = get_typing_context () in
             let@ () = add_label_to_trace None in
             let@ () = check_expr_top loc label_context rt body in
             return ((), pre_state)
@@ -2040,7 +2040,7 @@ let check (mu_file : unit mu_file) stmt_locs o_lemma_mode =
 
   (* let@ mu_file = WellTyped.BaseTyping.infer_types_file mu_file in *)
 
-  let@ () = set_statement_locs stmt_locs in
+
 
   let@ () = record_tagdefs mu_file.mu_tagDefs in
   let@ () = check_tagdefs mu_file.mu_tagDefs in

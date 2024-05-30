@@ -107,7 +107,7 @@ Section ListAux.
     (pA: relation A)
     (pB: relation B)
     :
-    Proper (pointwise_relation _ (pA ==> pB) ==> (eqlistA pA ==> eqlistA pB))
+    Proper (pointwise_relation _ (pA ==> pB) ==> eqlistA pA ==> eqlistA pB)
       mapi.
   Proof.
     intros f g Hfg l1 l2 Heql.
@@ -115,20 +115,17 @@ Section ListAux.
     eapply list_mapi_aux_Proper;eauto.
   Qed.
 
-  Lemma list_init_rec_proper_aux :
-    forall (A : Type) (Ae : relation A),
-      Proper (eq ==> (eq ==> Ae) ==> eqlistA Ae ==> eqlistA Ae) (@list_init_rec A).
+  #[global] Instance list_map_Proper
+    {A B : Type}
+    (pA: relation A)
+    (pB: relation B)
+    :
+    Proper ((pA ==> pB) ==> eqlistA pA ==> eqlistA pB)
+      (@List.map A B).
   Proof.
-    intros A Ae. unfold Proper, respectful.
-    intros i i' Hi f g Hfg acc acc' Hacc. subst i'.
-    revert acc acc' Hacc.
-    induction i as [|i IH]; intros acc acc' Hacc.
-    - (* Base case *)
-      simpl. assumption.
-    - (* Inductive step *)
-      simpl. apply IH.
-      + constructor; [apply Hfg | assumption].
-        reflexivity.
+    intros f g Hfg l1 l2 Hl. induction Hl.
+    - constructor.
+    - simpl. constructor; [apply Hfg | apply IHHl]; assumption.
   Qed.
 
   #[global] Instance list_init_proper
@@ -137,13 +134,12 @@ Section ListAux.
     :
     Proper (eq ==> (eq ==> (Ae)) ==> eqlistA Ae) list_init.
   Proof.
-    intros x y Hxy f g Hfg.
-    subst.
+    intros n1 n2 Hn f1 f2 Hf.
+    subst n2.  (* Since n1 = n2 *)
     unfold list_init.
-    apply list_init_rec_proper_aux.
-    - constructor.
-    - assumption.
-    - constructor.
+    apply (list_map_Proper eq Ae).
+    - intros x y Hxy. subst y. apply Hf. reflexivity.
+    - reflexivity.
   Qed.
 
   #[global] Instance eqlistA_Reflexive
@@ -274,28 +270,8 @@ Section ListAux.
     List.length (list_init n f) = n.
   Proof.
     unfold list_init.
-    remember (@nil A) as l.
-
-    cut(Datatypes.length (list_init_rec n f l) = (n + Datatypes.length l))%nat.
-    {
-      subst l.
-      rewrite <- plus_n_O.
-      intros H.
-      apply H.
-    }
-    clear Heql.
-
-    revert l.
-    induction n.
-    -
-      cbn.
-      reflexivity.
-    -
-      intros l.
-      cbn.
-      rewrite IHn.
-      cbn.
-      lia.
+    rewrite map_length.
+    apply seq_length.
   Qed.
 
   Lemma list_split_cons
@@ -673,6 +649,27 @@ Section ListAux.
           lia.
   Qed.
 
+  (* Similar to previous one, but in the opposite direction.
+     We do not want to use `<->` there because in this case the lenght
+     equality is implied *)
+  Theorem Forall2_nth_list':
+    forall (A B : Type) (R : A -> B -> Prop) (l1 : list A) (l2 : list B) (default1 : A) (default2 : B),
+      Forall2 R l1 l2 ->
+      (forall i : nat, (i < Datatypes.length l1)%nat -> R (nth i l1 default1) (nth i l2 default2)).
+  Proof.
+    intros A B R2 l1 l2 default1 default2 H i H0.
+    generalize dependent i.
+    induction H; intros.
+    -
+      cbn in H0.
+      inv H0.
+    -
+      destruct i as [| i']; simpl.
+      + assumption.
+      + apply IHForall2.
+        simpl in H1. apply Nat.succ_lt_mono. assumption.
+  Qed.
+
   Lemma skipn_cons_nth_error
     {A:Type}
     (a : A) (l l' : list A)
@@ -691,67 +688,23 @@ Section ListAux.
       + simpl in H. apply IH in H. cbn. assumption.
   Qed.
 
-  Lemma list_init_rec_len {A : Type} (n : nat) (f : nat -> A) (l0 : list A):
-    length (list_init_rec n f l0) = (n + length l0)%nat.
-  Proof.
-    revert l0.
-    induction n ; intros.
-    -
-      cbn.
-      reflexivity.
-    -
-      simpl.
-      cbn.
-      rewrite IHn.
-      cbn.
-      lia.
-  Qed.
-
   Lemma list_init_nth {A : Type} (n : nat) (f : nat -> A) :
     forall i, (i<n)%nat -> nth_error (list_init n f) i = Some (f i).
   Proof.
     intros i H.
     unfold list_init.
-    remember (@nil A) as l0.
-    pose proof (list_init_rec_len n f l0).
-    remember (list_init_rec n f l0) as l eqn:L.
-
-    replace n with (length l - length l0)%nat in H.
-    2:{
-      subst l0 l.
-      cbn in *.
-      lia.
-    }
-
-    clear Heql0.
-    revert i l l0 L H0 H.
-    induction n; intros.
-    -
-      cbn in *.
-      subst l0.
-      lia.
-    -
-      destruct (Nat.eq_dec i n) as [E|NE].
-      +
-        subst i.
-        cbn in L.
-        destruct l;[discriminate|].
-        destruct n.
-        *
-          cbn.
-          cbn in L.
-          inv L.
-          reflexivity.
-        *
-          cbn.
-          admit.
-      +
-        eapply IHn;eauto.
-        cbn.
-        lia.
-        cbn in *.
-        lia.
-  Admitted.
+    apply map_nth_error.
+    remember (seq 0 n) as s.
+    pose proof (seq_length n 0).
+    replace i with (nth i s O) at 2.
+    apply nth_error_nth'.
+    subst s.
+    lia.
+    replace i with (0+i)%nat at 2 by lia.
+    subst s.
+    apply seq_nth.
+    assumption.
+  Qed.
 
 
 End ListAux.
@@ -1402,42 +1355,53 @@ Section ZMapAux.
     (v:A)
     :
     zmap_find_first f m = Some (k,v)
-    -> ZMap.find k m = Some v.
+    ->
+      ZMap.find k m = Some v /\ f k v = true.
   Proof.
     unfold zmap_find_first.
     intros H.
-    apply find_mapsto_iff.
     revert H.
-
 
     apply fold_rec_weak; intros.
     -
       apply H0 in H1. clear H0.
       symmetry in H.
-      eapply Equal_mapsto_iff;eauto.
+      destruct H1 as [H2 H3].
+      split.
+      +
+        rewrite H.
+        assumption.
+      +
+        assumption.
     -
       discriminate.
     -
       break_match_hyp.
       +
         apply H0 in H1. clear H0.
+        destruct H1 as [H2 H3].
         subst.
         destruct (Z.eq_dec k k0) as [E|NE].
         *
           exfalso.
           subst k0.
-          clear - H H1.
           contradict H.
-          eapply zmap_mapsto_in.
-          eauto.
+          apply in_find_iff.
+          rewrite H2.
+          discriminate.
         *
-          apply add_neq_mapsto_iff;auto.
+          split.
+          rewrite add_neq_o;auto.
+          assumption.
       +
         break_match_hyp;[|discriminate].
         clear H0.
         invc H1.
-        apply ZMap.add_1.
-        reflexivity.
+        split.
+        *
+          rewrite add_eq_o;auto.
+        *
+          assumption.
   Qed.
 
   Lemma zmap_find_first_matches
@@ -1593,3 +1557,50 @@ Proof.
     exfalso.
     lia.
 Qed.
+
+
+Section Z_arith.
+  Local Open Scope Z_scope.
+
+  Lemma sign_nonneg:
+    forall x, (sign x >=? 0) = true -> x>=0.
+  Proof.
+    intros x H.
+    unfold sign in H.
+    destruct x;lia.
+  Qed.
+
+  Lemma sign_neg:
+    forall x, (sign x >=? 0) = false -> x<0.
+  Proof.
+    intros x H.
+    unfold sign in H.
+    destruct x;lia.
+  Qed.
+
+  Lemma quotrem_pos:
+    forall a b,
+      0<=a ->
+      0<=b ->
+      let (q, r) := Z.quotrem a b in
+      0<=q /\ 0<=r.
+  Proof.
+    intros a b H H0.
+    break_let.
+    rename z into q, z0 into r.
+    split.
+    -
+      unfold Z.quotrem in Heqp.
+      destruct a,b; try tuple_inversion; try lia.
+      break_let.
+      tuple_inversion.
+      lia.
+    -
+      unfold Z.quotrem in Heqp.
+      destruct a,b; try tuple_inversion; try lia.
+      break_let.
+      tuple_inversion.
+      lia.
+  Qed.
+
+End Z_arith.

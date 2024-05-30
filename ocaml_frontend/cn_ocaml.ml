@@ -232,6 +232,8 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_at_env", [dtree_of_cn_expr e; Dleaf !^"env_name"])
       | CNExpr_not e ->
           Dnode (pp_ctor "CNExpr_not", [dtree_of_cn_expr e])
+      | CNExpr_negate e ->
+          Dnode (pp_ctor "CNExpr_negate", [dtree_of_cn_expr e])
       | CNExpr_default bt ->
           Dnode (pp_ctor "CNExpr_default", [Dleaf (pp_base_type bt)])
     in

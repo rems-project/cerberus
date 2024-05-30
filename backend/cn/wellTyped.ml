@@ -365,7 +365,7 @@ module WIT = struct
       | Const (Q q) ->
          return (IT (Const (Q q), Real, loc))
       | Const (Pointer p) ->
-         let rs = Option.get (BT.is_bits_bt Memory.intptr_bt) in
+         let rs = Option.get (BT.is_bits_bt Memory.uintptr_bt) in
          let@ () = ensure_z_fits_bits_type loc rs p.addr in
          return (IT (Const (Pointer p), Loc, loc))
       | Const (Alloc_id p) ->
@@ -386,6 +386,10 @@ module WIT = struct
          | Not ->
            let@ t = check loc BT.Bool t in
            return (t, BT.Bool)
+         | Negate ->
+           let@ t = infer t in
+           let@ () = ensure_arith_type ~reason:loc t in
+           return (t, IT.bt t)
          | BWCLZNoSMT
          | BWCTZNoSMT
          | BWFFSNoSMT ->
@@ -697,7 +701,7 @@ module WIT = struct
           let@ t = check loc Loc t in
           let@ decl = get_struct_decl loc tag in
           let o = Option.get (Memory.member_offset decl member) in
-          let rs = Option.get (BT.is_bits_bt Memory.intptr_bt) in
+          let rs = Option.get (BT.is_bits_bt Memory.uintptr_bt) in
           let@ () = ensure_z_fits_bits_type loc rs (Z.of_int o) in (* looking at solver mapping *)
           return (IT (MemberShift (t, tag, member), BT.Loc, loc))
        | ArrayShift { base; ct; index } ->
@@ -707,7 +711,7 @@ module WIT = struct
           let@ () = ensure_bits_type loc (IT.bt index) in
           return (IT (ArrayShift { base; ct; index }, BT.Loc, loc))
        | CopyAllocId { addr; loc=ptr } ->
-          let@ addr = check loc Memory.intptr_bt addr in
+          let@ addr = check loc Memory.uintptr_bt addr in
           let@ ptr = check loc Loc ptr in
           return (IT (CopyAllocId { addr; loc=ptr }, BT.Loc, loc))
        | SizeOf ct ->
@@ -725,7 +729,7 @@ module WIT = struct
           return (IT (OffsetOf (tag, member), Memory.sint_bt, loc))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
-          let@ t_align = check loc Memory.intptr_bt t.align in
+          let@ t_align = check loc Memory.uintptr_bt t.align in
           return (IT (Aligned {t = t_t; align=t_align},BT.Bool, loc))
        | Representable (ct, t) ->
           let@ () = WCT.is_ct loc ct in
@@ -1592,12 +1596,19 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pes = ListM.mapM infer_pexpr pes in
         let@ bt = match ctor with
         | M_Cnil _ -> todo ()
-        | M_Ccons -> begin match pes with
-            | [x; xs] -> return (bt_of_pexpr xs)
-            | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
-        end
+        | M_Ccons -> 
+           begin match pes with
+           | [x; xs] -> 
+              let ibt = bt_of_pexpr x in
+              let@ () = ensure_base_type loc ~expect:(List ibt) (bt_of_pexpr xs) in
+              return (bt_of_pexpr xs)
+           | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
+           end
         | M_Ctuple -> return (BT.Tuple (List.map bt_of_pexpr pes))
-        | M_Carray -> todo ()
+        | M_Carray -> 
+           let ibt = bt_of_pexpr (List.hd pes) in
+           let@ () = ListM.iterM (fun pe -> ensure_base_type loc ~expect:ibt (bt_of_pexpr pe)) pes in
+           return (Map (Memory.uintptr_bt, ibt))
         in
         return (bt, M_PEctor (ctor, pes))
       | M_PEcfunction pe ->
@@ -1869,7 +1880,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
      | M_Ememop (M_Va_end _) (* (asym 'bty) *) ->
         todo ()
      | M_Ememop (M_CopyAllocId (pe1, pe2)) ->
-        let@ pe1 = check_pexpr Memory.intptr_bt pe1 in
+        let@ pe1 = check_pexpr Memory.uintptr_bt pe1 in
         let@ pe2 = check_pexpr BT.Loc pe2 in
         return (Loc, M_Ememop (M_CopyAllocId (pe1, pe2)))
      | M_Eaction (M_Paction (pol, M_Action (aloc, action_))) ->
@@ -2357,11 +2368,11 @@ module WDT = struct
                       | dt' :: _ ->
                           let err =
                             !^"Illegal datatype definition."
-                            ^^^ !^"Constructor argument" ^^^ squotes (Id.pp id)
+                            ^/^ !^"Constructor argument" ^^^ squotes (Id.pp id)
                             ^^^ !^"is given type" ^^^ squotes (BT.pp bt) ^^ comma
                             ^^^ !^"which indirectly refers to"
                             ^^^ squotes (BT.pp (Datatype dt')) ^^ dot
-                            ^^^ !^"Indirect recursion via map, set, record,"
+                            ^/^ !^"Indirect recursion via map, set, record,"
                             ^^^ !^"or tuple types is not permitted."
                           in
                           fail (fun _ -> {loc; msg = Generic err})

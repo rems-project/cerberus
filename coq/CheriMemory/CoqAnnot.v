@@ -68,8 +68,8 @@ Inductive annot : Type :=
   | Acerb: cerb_attribute -> annot
   | Avalue: value_annot -> annot
   | Ainlined_label: location_ocaml -> CoqSymbol.sym -> label_annot -> annot
-  | Astmt: location_ocaml -> annot
-  | Aexpr: location_ocaml -> annot.
+  | Astmt: annot
+  | Aexpr: annot.
 
 
 (*

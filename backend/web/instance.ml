@@ -489,8 +489,17 @@ let multiple_steps step_state (m, st) =
                     None, "freeing " ^ string_of_free_error err
                   | MerrUndefinedRealloc err ->
                     None, "undefined behaviour in realloc (" ^ string_of_free_error err ^ ")"
-                  | MerrUndefinedMemcpy Memcpy_overlap ->
-                    None, "undefined behaviour in memcpy (overlapping)"
+                  | MerrUndefinedMemcpy memcpy_err ->
+                      begin match memcpy_err with
+                        | Memcpy_overlap ->
+                            None, "undefined behaviour in memcpy (overlapping)"
+                        | Memcpy_non_object ->
+                            None, "undefined behaviour in memcpy/memmove/memcmp (not a pointer to an object)"
+                        | Memcpy_dead_object ->
+                            None, "undefined behaviour in memcpy/memmove/memcmp (dead object)"
+                        | Memcpy_out_of_bound ->
+                            None, "undefined behaviour in memcpy/memmove/memcmp (region spills outside object allocation)"
+                      end
                   | MerrIntFromPtr ->
                     None, "invalid cast integer from pointer"
                   | MerrPtrComparison ->
@@ -633,7 +642,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let tagDefs  = encode @@ Tags.tagDefs () in
     return @@ Interactive (tagDefs, ranges, ([n], []))
   | Some n ->
-    let tagsMap : (Symbol.sym, Ctype.tag_definition) Pmap.map = decode n.tagDefs in
+    let tagsMap : (Symbol.sym, Cerb_location.t * Ctype.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;
     hack ~conf Random;
     Switches.set conf.instance.switches;

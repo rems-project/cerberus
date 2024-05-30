@@ -71,7 +71,7 @@ let magic_to_attr magik : Annot.attribute =
   let open Annot in
   { attr_ns= Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
   ; attr_id= Symbol.Identifier (Cerb_location.unknown, "magic")
-  ; attr_args= List.map (fun (loc, str) -> (loc, str, [loc, str])) magik }
+  ; attr_args= List.map (fun (loc, (_,str)) -> (loc, str, [loc, str])) magik }
 
 let magic_to_attrs = function
   | [] ->
@@ -140,7 +140,7 @@ type asm_qualifier =
 %token BMC_ASSUME
 
 (* magic comment token *)
-%token<Cerb_location.t * string> CERB_MAGIC
+%token<Cerb_location.t * (char * string)> CERB_MAGIC
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
@@ -476,16 +476,6 @@ declarator_typedefname:
     { LF.declare_typedefname (LF.identifier decl); decl }
 ;
 
-start_ignore:
-| (* empty *)
-  { (*C_lexer.internal_state.ignore_magic <- true*) }
-;
-
-end_ignore:
-| (* empty *)
-  { C_lexer.internal_state.ignore_magic <- false }
-;
-
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
 | i= general_identifier
@@ -494,13 +484,13 @@ enumeration_constant:
 
 (* §6.5.1 Primary expressions *)
 primary_expression:
-| str= var_name start_ignore
+| str= var_name
     { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
         CabsEident (Symbol.Identifier (Cerb_location.point $startpos(str), str))) }
-| cst= CONSTANT start_ignore
+| cst= CONSTANT
     { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEconst cst) }
-| lit= string_literal start_ignore
+| lit= string_literal
     { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
@@ -820,10 +810,6 @@ expression:
     { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEcomma (expr1, expr2) ) }
 ;
-
-full_expression:
-| expr= terminated(expression, end_ignore)
-    { expr }
 
 (* §6.6 Constant expressions *)
 constant_expression:
@@ -1261,7 +1247,7 @@ initializer_:
     { Init_expr expr }
 | LBRACE inits= initializer_list RBRACE
 | LBRACE inits= initializer_list COMMA RBRACE
-    { Init_list (List.rev inits) }
+    { Init_list (Cerb_location.(region ($startpos, $endpos) NoCursor), List.rev inits) }
 ;
 
 initializer_list: (* NOTE: the list is in reverse *)
@@ -1383,12 +1369,12 @@ block_item:
 
 (* §6.8.3 Expression and null statements *)
 expression_statement:
-| expr_opt= full_expression? SEMICOLON
+| expr_opt= expression? SEMICOLON
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , option CabsSnull (fun z -> CabsSexpr z) expr_opt ) }
-| attr= attribute_specifier_sequence expr= full_expression SEMICOLON
+| attr= attribute_specifier_sequence expr= expression SEMICOLON
     { CabsStatement
         (Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs (Some attr)
@@ -1397,18 +1383,18 @@ expression_statement:
 
 (* §6.8.4 Selection statements *)
 selection_statement:
-| IF LPAREN expr= full_expression RPAREN stmt= scoped(statement) %prec THEN
+| IF LPAREN expr= expression RPAREN stmt= scoped(statement) %prec THEN
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSif (expr, stmt, None) ) }
-| IF LPAREN expr= full_expression RPAREN stmt1= scoped(statement)
+| IF LPAREN expr= expression RPAREN stmt1= scoped(statement)
   ELSE stmt2= scoped(statement)
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSif (expr, stmt1, Some stmt2) ) }
-| SWITCH LPAREN expr= full_expression RPAREN stmt= scoped(statement)
+| SWITCH LPAREN expr= expression RPAREN stmt= scoped(statement)
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
@@ -1423,25 +1409,25 @@ magic_comment_list:
 
 (* §6.8.5 Iteration statements *)
 iteration_statement:
-| WHILE LPAREN expr= full_expression RPAREN magic= magic_comment_list stmt= scoped(statement)
+| WHILE LPAREN expr= expression RPAREN magic= magic_comment_list stmt= scoped(statement)
     {
       CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , magic_to_attrs (List.rev magic)
         , CabsSwhile (expr, stmt) ) }
-| DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
+| DO stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSdo (expr, stmt) ) }
-| FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
+| FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
+  expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , magic_to_attrs (List.rev magic)
         , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
-| FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
+| FOR LPAREN xs_decl= declaration expr2_opt= expression? SEMICOLON
+  expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , magic_to_attrs(List.rev magic)
@@ -1465,7 +1451,7 @@ jump_statement:
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSbreak ) }
-| RETURN expr_opt= full_expression? SEMICOLON
+| RETURN expr_opt= expression? SEMICOLON
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
@@ -1567,7 +1553,7 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 
 external_declaration:
 | magic= CERB_MAGIC
-    { EDecl_magic magic }
+    { EDecl_magic (fst magic, snd (snd magic)) }
 | fdef= function_definition
     { EDecl_func fdef }
 | xs_decl= declaration
@@ -1831,13 +1817,6 @@ cn_assertion:
     | Env of term * string
 *)
 
-ominus:
-| 
-    { false }
-| MINUS
-    { true }
-
-
 prim_expr:
 | CN_NULL
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const CNConst_NULL)) }
@@ -1845,24 +1824,23 @@ prim_expr:
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool true))) }
 | CN_FALSE
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool false))) }
-| negate=ominus cst= CONSTANT
+| cst= CONSTANT
     {
       match cst with
         | Cabs.CabsInteger_const (str, None) ->
-            let v = if negate then Z.of_string ("-"^str) else Z.of_string str in
+            let v = Z.of_string str in
             Cerb_frontend.Cn.(CNExpr ( Cerb_location.point $startpos
                                      , CNExpr_const (CNConst_integer v) ))
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| negate=ominus cst= CN_CONSTANT
+| cst= CN_CONSTANT
     {
         let (str,sign,n) = cst in
         let sign = match sign with
          | `U -> Cerb_frontend.Cn.CN_unsigned
-         | `I -> Cerb_frontend.Cn.CN_signed
-         in
-         let v = if negate then Z.of_string ("-"^str) else Z.of_string str in
+         | `I -> Cerb_frontend.Cn.CN_signed in
+         let v = Z.of_string str in
          Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bits ((sign,n),v))))
     }
 | ident= cn_variable
@@ -1930,7 +1908,10 @@ unary_expr:
 | LBRACE e= expr RBRACE CN_UNCHANGED
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_unchanged e)) }
-| BANG e= prim_expr
+| MINUS e= unary_expr
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_negate e )) }
+| BANG e= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_not e )) }
 | DEFAULT LT bt= base_type GT
@@ -1942,7 +1923,7 @@ unary_expr:
 | AMPERSAND name=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_addr name)) }
-| LPAREN ty= base_type_explicit RPAREN expr= prim_expr
+| LPAREN ty= base_type_explicit RPAREN expr= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
 

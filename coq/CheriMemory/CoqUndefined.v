@@ -7,7 +7,7 @@ Local Open Scope string_scope.
 
 Variant undefined_by_omission : Type :=
 | UB_OMIT_memcpy_non_object
-| UB_OMIT_memmove_non_object.
+| UB_OMIT_memcpy_out_of_bound.
 
 (* C undefined behaviours *)
 Variant undefined_behaviour : Type :=

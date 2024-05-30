@@ -3,19 +3,13 @@ type cursor =
   | PointCursor of Lexing.position
   | RegionCursor of Lexing.position * Lexing.position
 
-type raw =
+type t = private
   | Loc_unknown
   | Loc_other of string
   | Loc_point of Lexing.position
     (* start, end, cursor *)
   | Loc_region of Lexing.position * Lexing.position * cursor
   | Loc_regions of (Lexing.position * Lexing.position) list * cursor
-
-type t
-
-(* doing this so other modules can inspect all the data but not forge
-   location information *)
-val to_raw : t -> raw
 
 val unknown: t
 val is_unknown_location: t -> bool

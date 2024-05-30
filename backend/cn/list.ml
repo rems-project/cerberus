@@ -89,11 +89,12 @@ let rec separate_and_group (by : 'b -> 'a option) : 'b list -> ('a option * 'b l
         (None, [b]) :: abs
 
 
-let empty = function
+(* NOTE: this exists in Stdlib since 5.1 *)
+let is_empty = function
   | [] -> true
   | _ -> false
 
-let non_empty l = not (empty l)
+let non_empty l = not (is_empty l)
 
 let rec last = function
   | [] -> None
@@ -107,3 +108,9 @@ let rec sorted_and_unique compare = function
     | -1 -> sorted_and_unique compare tl
     | _ -> false
 
+(* NOTE: this exists in Stdlib since 5.1 *)
+let find_index pred xs =
+  let rec aux idx = function
+    | [] -> None
+    | x::xs -> if pred x then Some idx else aux (idx+1) xs in
+  aux 0 xs

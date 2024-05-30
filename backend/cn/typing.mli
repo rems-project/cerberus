@@ -14,10 +14,10 @@ val fail : failure -> 'a m
 val run : Context.t -> 'a m -> ('a, TypeErrors.t) Result.t
 val sandbox : 'a t -> ('a Resultat.t) t
 
-val get: unit -> Context.t m
+val get_typing_context: unit -> Context.t m
 val print_with_ctxt : (Context.t -> unit) -> unit m
 val get_global : unit -> Global.t m
-val all_constraints : unit -> Context.LCSet.t m
+val get_cs : unit -> Context.LCSet.t m
 val simp_ctxt : unit -> Simplify.simp_ctxt m
 val all_resources : Locations.t -> Resources.t list m
 val all_resources_tagged : Locations.t -> ((Resources.t * int) list * int) m
@@ -41,8 +41,6 @@ val add_c : Locations.t -> LogicalConstraints.t -> (unit) m
 val add_cs : Locations.t -> LogicalConstraints.t list -> (unit) m
 val add_r : Locations.t -> Resources.t -> unit m
 val add_rs : Locations.t -> Resources.t list -> unit m
-val get_loc_trace : unit -> (Locations.loc list) m
-val add_loc_trace : Locations.t -> (unit) m
 
 val set_datatype_order : (Sym.t list list) option -> unit m
 val get_datatype_order : unit -> ((Sym.t list list) option) m
@@ -86,13 +84,12 @@ val add_datatype : Sym.t -> BaseTypes.datatype_info -> (unit) m
 val add_datatype_constr : Sym.t -> BaseTypes.constr_info -> (unit) m
 
 
-val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit) m
+(* val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit) m *)
 
 val value_eq_group : IndexTerms.t option -> IndexTerms.t -> (EqTable.ITSet.t) m
 val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->
     IndexTerms.t list -> (unit) m
 
-val get_solver_focused_terms : Locations.t -> ((IndexTerms.t_bindings * IndexTerms.t) list) m
 
 val embed_resultat : 'a Resultat.t -> 'a m
 
@@ -123,7 +120,7 @@ val bind_return:
 
 val add_movable_index:
     Locations.t ->
-    verbose:bool ->
+    (* verbose:bool -> *)
     (ResourceTypes.predicate_name * IndexTerms.t) ->
     unit m
 
@@ -131,8 +128,6 @@ val get_movable_indices:
     unit ->
     ((ResourceTypes.predicate_name * IndexTerms.t) list) m
 
-val debug_solver_to_string: unit -> unit m
-val debug_solver_query: LogicalConstraints.t -> unit m
 
 val add_label_to_trace : (Locations.t * Context.label_kind) option -> unit m
 val add_trace_item_to_trace : Context.trace_item * Locations.t -> unit m

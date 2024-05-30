@@ -1,0 +1,1 @@
+Undefined {ub: "UB081_scalar_initializer_not_single_expression", stderr: "", loc: "<2:13--2:21>"}

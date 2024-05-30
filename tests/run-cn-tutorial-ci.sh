@@ -57,6 +57,14 @@ then
 fi
 cd ..
 
+
+cd ../..
+./check.sh $CN
+if [ $? != 0 ] 
+then
+   FAILURE=1
+fi
+
 cd $HERE
 
 

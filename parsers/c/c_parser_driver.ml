@@ -1,89 +1,28 @@
 open Cerb_frontend
 
-(* DIRTY hack to fix col positions when seing a CN keyword *)
-(* obviously this messes-up the col positions when using __cerb_{CN_keyword} directly *)
-let lexer_cn_hack ~c_lexer lexbuf =
-  let open Lexing in
-  if C_lexer.internal_state.inside_cn then
-    let tok = c_lexer lexbuf in
-    let pos_cnum' = lexbuf.lex_start_p.pos_cnum + C_lexer.internal_state.cnum_hack in
-    (* this should never fail, but better being careful ... *)
-    if pos_cnum' - lexbuf.lex_start_p.pos_bol >= 0 then
-      lexbuf.lex_start_p <- {lexbuf.lex_start_p with pos_cnum=pos_cnum' };
-    begin match tok with
-      | Tokens.CN_PREDICATE ->
-          (* removing the length of "__cerb_" *)
-          C_lexer.internal_state.cnum_hack <- C_lexer.internal_state.cnum_hack - 7
-      | _ ->
-          ()
-    end;
-    lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= lexbuf.lex_curr_p.pos_cnum + C_lexer.internal_state.cnum_hack };
-    tok
-  else
-    c_lexer lexbuf
+let after_before_msg offset buffer (lexbuf : Lexing.lexbuf) =
+  let show_token (start, curr) =
+    try
+      Lexing.lexeme {
+        lexbuf with
+        lex_start_pos = start.Lexing.pos_cnum - offset;
+        lex_curr_pos = curr.Lexing.pos_cnum - offset;
+      }
+    with Invalid_argument _ ->
+      Printf.sprintf
+        "CPARSER_DRIVER(lex_buffer_len = %d; offset = %d; start_index = %d; end_index = %d)"
+        lexbuf.lex_buffer_len
+        offset
+        (start.pos_cnum - offset)
+        (curr.pos_cnum - offset) in
+  MenhirLib.ErrorReports.show show_token buffer
 
-let warn_toplevel_deprecated loc = prerr_endline (Pp_utils.to_plain_pretty_string (
-  let open Cerb_pp_prelude in
-  let open Cerb_colour in
-  pp_ansi_format [Bold; Yellow] (fun () -> !^ "warning:") ^^^
-  !^ "deprecated CN declaration: use /*@ @*/ comment:" ^^ PPrint.break 1 ^^^
-  Cerb_location.pp_location ~clever:false loc))
-
-let most_recent_lexbuf = ref (Lexing.from_string "foo")
-
-let convert_toplevel_magic c_lexer = function
-  | Cabs.EDecl_magic (loc, str) ->
-    let lexbuf = Lexing.from_string str in
-    begin match Cerb_location.to_raw loc with
-      | Cerb_location.Loc_region (pos, pos2, _) ->
-          (Lexing.set_filename lexbuf (Lexing.(pos.pos_fname));
-          Lexing.set_position lexbuf pos)
-      | _ -> ()
-    end;
-    C_lexer.internal_state.inside_cn <- true;
-    most_recent_lexbuf := lexbuf;
-    C_parser.cn_toplevel c_lexer lexbuf
-  | EDecl_predCN _
-  | EDecl_funcCN _
-  | EDecl_lemmaCN _
-  | EDecl_datatypeCN _ as decl ->
-    (warn_toplevel_deprecated (Cabs.loc_of_edecl decl);
-     [decl])
-  | decl -> [decl]
-
-let parse_with_cn ~c_lexer lexbuf =
-  let Cabs.TUnit decls = C_parser.translation_unit (lexer_cn_hack ~c_lexer) lexbuf in
-  Cabs.TUnit (List.concat (List.map (convert_toplevel_magic c_lexer) decls))
-
-let after_before_msg buffer ~cnum_hack (lexbuf : Lexing.lexbuf) = try
-  MenhirLib.ErrorReports.show (fun (start, curr) ->
-      let start_pos = start.Lexing.pos_cnum - cnum_hack in
-      let curr_pos = curr.Lexing.pos_cnum - cnum_hack in
-      if start_pos < lexbuf.lex_buffer_len && curr_pos < lexbuf.lex_buffer_len then
-        Lexing.lexeme {
-            lexbuf with
-            lex_curr_pos = curr_pos;
-            lex_start_pos = start_pos;
-          }
-      else (
-        Printf.sprintf "CPARSER_DRIVER(lex_buffer_len = %d; start_pos = %d; curr_pos = %d; cnum_hack = %d)"
-          lexbuf.lex_buffer_len start_pos curr_pos cnum_hack;
-      )
-    ) buffer
-  with Invalid_argument _ -> "(error formatting 'where' information)"
-
-let parse lexbuf =
-  let c_buffer, c_lexer = MenhirLib.ErrorReports.wrap C_lexer.lexer in
-  try
-    most_recent_lexbuf := lexbuf;
-    Exception.except_return (parse_with_cn ~c_lexer lexbuf)
-  with
+let handle parse (token_pos_buffer, lexer) ~offset lexbuf =
+  try Exception.except_return (parse lexer lexbuf) with
   | C_lexer.Error err ->
-    let lexbuf = ! most_recent_lexbuf in
     let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
     Exception.fail (loc, Errors.CPARSER err)
   | C_parser.Error state ->
-    let lexbuf = ! most_recent_lexbuf in
     let message =
       try
         let msg = C_parser_error.message state in
@@ -92,16 +31,9 @@ let parse lexbuf =
         Printf.sprintf "Please add error message for state %d to parsers/c/c_parser_error.messages\n" state
     in
     let message = String.sub message 0 (String.length message - 1) in
-    let tok = Lexing.lexeme lexbuf in
-    let cnum_hack = lexbuf.lex_start_p.pos_cnum - lexbuf.lex_start_pos in
-    assert (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_pos = cnum_hack);
-    let (tok_str, start_p, end_p) =
-      if String.equal tok "*/"
-        then ("(magic comment)", C_lexer.internal_state.start_of_comment, Lexing.lexeme_end_p lexbuf)
-        else (tok, Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
-    in
-    let loc = Cerb_location.(region (start_p, end_p) NoCursor) in
-    let where = after_before_msg ~cnum_hack c_buffer lexbuf in
+    let range = (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) in
+    let loc = Cerb_location.(region range NoCursor) in
+    let where = after_before_msg offset token_pos_buffer lexbuf in
     Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token  (where ^ "\n" ^ message)))
   | Failure msg ->
     prerr_endline "CPARSER_DRIVER (Failure)";
@@ -109,9 +41,68 @@ let parse lexbuf =
   | Lexer_feedback.KnR_declaration loc ->
     Exception.fail (loc, Errors.CPARSER Errors.Cparser_KnR_declaration)
   | exn ->
-    let lexbuf = ! most_recent_lexbuf in
     let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
     failwith @@ "CPARSER_DRIVER(" ^ Cerb_location.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
+
+let start_pos = function
+  | Cerb_location.Loc_point loc
+  | Loc_region (loc, _, _)
+  | Loc_regions ((loc, _) :: _, _) -> Some loc
+  | _ -> None
+
+let diagnostic_get_tokens ~inside_cn loc string =
+  (* `C_lexer.magic_token' ensures `loc` is a region *)
+  let start_pos = Option.get @@ start_pos loc in
+  let lexbuf = Lexing.from_string string in
+  let rec relex (toks, pos) =
+    try
+      match C_lexer.lexer ~inside_cn lexbuf with
+      | Tokens.EOF -> (List.rev ("EOF" :: toks), List.rev pos)
+      | t ->
+        let Lexing.{ pos_lnum; pos_bol; pos_cnum; _ } = lexbuf.lex_start_p in
+        let (line, col) =
+          (* the first line needs to have columns shifted by /*@ but the rest do not *)
+          let col_off = if pos_lnum > 1 then 1 else start_pos.pos_cnum - start_pos.pos_bol + 1 in
+          (pos_lnum + start_pos.pos_lnum, col_off + pos_cnum - pos_bol) in
+        relex (Tokens.string_of_token t :: toks, (line, col) :: pos)
+      with
+        C_lexer.Error err ->
+          (List.rev (Pp_errors.string_of_cparser_cause err :: toks), List.rev pos)
+  in
+  relex ([], [])
+
+let parse_loc_string parse (loc, str) =
+  let lexbuf = Lexing.from_string str in
+  (* `C_lexer.magic_token' ensures `loc` is a region *)
+  let start_pos = Option.get @@ start_pos loc in
+  Lexing.set_position lexbuf start_pos;
+  Lexing.set_filename lexbuf (Option.value ~default:"<none>" (Cerb_location.get_filename loc));
+  handle
+    parse
+    (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:true))
+    ~offset:start_pos.pos_cnum
+    lexbuf
+
+let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
+  let magic_comments_to_cn_toplevel = function
+    | Cabs.EDecl_magic (loc, str) ->
+      parse_loc_string C_parser.cn_toplevel (loc, str)
+    | decl ->
+      Exception.except_return [decl] in
+  decls
+  |> Exception.except_mapM magic_comments_to_cn_toplevel
+  |> Exception.except_fmap (fun decls -> Cabs.TUnit (List.concat decls))
+
+let parse_with_magic_comments lexbuf =
+  handle
+    C_parser.translation_unit
+    (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:false))
+    ~offset:0
+    lexbuf
+
+let parse lexbuf =
+  Exception.except_bind (parse_with_magic_comments lexbuf)
+    magic_comments_to_cn_toplevel
 
 let parse_from_channel input =
   let read f input =

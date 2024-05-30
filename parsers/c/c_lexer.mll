@@ -6,46 +6,11 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
-type magic_comment_mode =
-  | Magic_None
-  | Magic_At of bool
-
-type internal_state = {
-  mutable magic_comment_mode: magic_comment_mode option;
-
-  mutable inside_cn: bool;
-  (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
-  mutable cnum_hack: int;
-  mutable start_of_comment: Lexing.position;
-  mutable last_magic_comment: (Lexing.position * Cerb_location.t) option;
-  mutable ignore_magic: bool;
-  mutable magic_acc: (Cerb_location.t * string) list;
+type flags = {
+  inside_cn : bool;
+  magic_comment_char : char;
+  at_magic_comments : bool;
 }
-let internal_state = {
-  magic_comment_mode= None;
-  inside_cn= false;
-  cnum_hack= 0;
-  start_of_comment= Lexing.dummy_pos;
-  last_magic_comment= None;
-  ignore_magic= false;
-  magic_acc= [];
-}
-
-let get_magic_comment_mode () = match internal_state.magic_comment_mode with
-  | None ->
-    (* fetch the mode from the global switches and cache for faster lookup *)
-    let mode = if Switches.(has_switch SW_at_magic_comments)
-      then Magic_At (Switches.(has_switch SW_warn_mismatched_magic_comments))
-      else Magic_None
-    in
-    internal_state.magic_comment_mode <- Some mode;
-    mode
-  | Some mode -> mode
-
-let new_line lexbuf =
-  (* the hacked col offset MUST be reset after every newline *)
-  internal_state.cnum_hack <- 0;
-  Lexing.new_line lexbuf
 
 let offset_location lexbuf pos_fname pos_lnum =
   if pos_lnum > 0 then
@@ -119,19 +84,6 @@ let keywords: (string * Tokens.token) list = [
     "__builtin_types_compatible_p", BUILTIN_TYPES_COMPATIBLE_P;
     "__builtin_choose_expr", BUILTIN_CHOOSE_EXPR;
 
-    (* BEGIN CN *)
-    "__cerb_predicate"     , CN_PREDICATE;
-    "__cerb_function"      , CN_FUNCTION;
-    "__cerb_lemma"         , CN_LEMMA;
-    "__cerb_datatype"      , CN_DATATYPE;
-    "__cerb_pack"          , CN_PACK;
-    "__cerb_unpack"        , CN_UNPACK;
-    "__cerb_have"          , CN_HAVE;
-    "__cerb_instantiate"   , CN_INSTANTIATE;
-    "__cerb_split_case"    , CN_SPLIT_CASE;
-    "__cerb_extract"       , CN_EXTRACT;
-    "__cerb_print"         , CN_PRINT;
-    (* END CN *)
   ]
 
 let lexicon: (string, token) Hashtbl.t =
@@ -217,24 +169,23 @@ let lex_magic remainder lexbuf =
   if ch = '\n' then new_line lexbuf;
   ch :: remainder lexbuf
 
-let magic_token start_pos end_pos chars =
+let magic_token flags start_pos end_pos chars =
   let len = List.length chars in
-  let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
-  if len < 2 then None
-  else
-  let first, last = List.hd chars, List.nth chars (len - 1) in
-  match get_magic_comment_mode () with
-  | Magic_At _ when first == '@' && last == '@' ->
-    let str = String.init (len - 2) (List.nth (List.tl chars)) in
-    internal_state.last_magic_comment <- Some (end_pos, loc);
-    Some (CERB_MAGIC (loc, str))
-  | Magic_At warn when first == '@' && warn -> begin
-    prerr_endline (Pp_errors.make_message loc
-                    Errors.(CPARSER Cparser_mismatched_magic_comment)
-                    Warning);
+  if not flags.at_magic_comments || len < 2 || List.hd chars != flags.magic_comment_char then
     None
-    end
-  | _ -> None
+  else if List.nth chars (len - 1) != flags.magic_comment_char then (
+    prerr_endline
+      (Pp_errors.make_message
+         (Cerb_location.point end_pos)
+         Errors.(CPARSER Cparser_mismatched_magic_comment)
+         Warning);
+    None
+  ) else (
+    let str = String.init (len - 2) (List.nth (List.tl chars)) in
+    let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
+    let c = List.hd chars in
+    Some (CERB_MAGIC (loc, (c,str)))
+  )
 
 }
 
@@ -252,7 +203,7 @@ let long_suffix = ['l' 'L']
 let unsigned_suffix = ['u' 'U']
 
 let integer_suffix =
-    unsigned_suffix long_long_suffix 
+    unsigned_suffix long_long_suffix
   | unsigned_suffix long_suffix?
   | long_long_suffix unsigned_suffix?
   | long_suffix unsigned_suffix?
@@ -400,23 +351,23 @@ rule s_char_sequence = parse
   | '"'
       { [] }
 
-and magic = parse
+and magic flags start_of_comment = parse
   (* End of the magic comment *)
   | "*/" {[]}
   | "/*" { raise (Error Errors.Cparser_nested_comment) }
-  | eof  { lexbuf.lex_start_p <- internal_state.start_of_comment;
-           raise (Error (Errors.Cparser_unterminated_comment "/*@")) }
-  | _    {lex_magic magic lexbuf}
+  | eof  { lexbuf.lex_start_p <- start_of_comment;
+           raise (Error (Errors.Cparser_unterminated_comment (Printf.sprintf "/*%c" flags.magic_comment_char))) }
+  | _    {lex_magic (magic flags start_of_comment) lexbuf}
 
 (* Consume a comment: /* ... */ *)
 (* STD §6.4.9#1 *)
-and comment = parse
+and comment start_of_comment = parse
   (* End of the comment *)
   | "*/" {()}
   | "/*" { raise (Error Errors.Cparser_nested_comment) }
-  | eof  { lexbuf.lex_start_p <- internal_state.start_of_comment;
+  | eof  { lexbuf.lex_start_p <- start_of_comment;
            raise (Error (Errors.Cparser_unterminated_comment "/*")) }
-  | _    {lex_comment comment lexbuf}
+  | _    {lex_comment (comment start_of_comment) lexbuf}
 
 
 (* Consume a singleline comment: // ... *)
@@ -446,25 +397,30 @@ and hash = parse
       { raise (Error Errors.Cparser_invalid_symbol) }
 
 (* Entry point *)
-and initial = parse
+and initial flags = parse
   (* Magic comments *)
   | "/*@" { let curr_p = lexbuf.lex_curr_p in
-            internal_state.start_of_comment <- lexbuf.lex_start_p;
-            let xs = magic lexbuf in
-            match magic_token curr_p lexbuf.lex_start_p ('@' :: xs) with
+            let xs = magic flags lexbuf.lex_start_p lexbuf in
+            match magic_token flags curr_p lexbuf.lex_start_p ('@' :: xs) with
             | Some tok -> tok
-            | None -> initial lexbuf
+            | None -> initial flags lexbuf
+            }
+  (* Alternative magic comments *)
+  | "/*$" { let curr_p = lexbuf.lex_curr_p in
+            let xs = magic flags lexbuf.lex_start_p lexbuf in
+            match magic_token flags curr_p lexbuf.lex_start_p ('$' :: xs) with
+            | Some tok -> tok
+            | None -> initial flags lexbuf
             }
   (* Beginning of a comment *)
-  | "/*" { internal_state.start_of_comment <- lexbuf.lex_start_p;
-           ignore (comment lexbuf); initial lexbuf}
+  | "/*" { ignore (comment lexbuf.lex_start_p lexbuf); initial flags lexbuf}
 
   (* Single-line comment *)
-  | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial lexbuf}
+  | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial flags lexbuf}
 
-  | '\n'             { new_line lexbuf; initial lexbuf }
-  | whitespace_char+ { initial lexbuf }
-  | '#'              { hash lexbuf; initial lexbuf }
+  | '\n'             { new_line lexbuf; initial flags lexbuf }
+  | whitespace_char+ { initial flags lexbuf }
+  | '#'              { hash lexbuf; initial flags lexbuf }
 
   (* NOTE: we decode integer constants here *)
   | (integer_constant as str) unsigned_suffix
@@ -585,10 +541,10 @@ and initial = parse
   | "%>" { RBRACE }
 (*  | "%:"   *)
 (*  | "%:%:" *)
-  
+
   (* NON-STD GNU extensions *)
   | "?:" { QUESTION_COLON }
-  
+
   (* NON-STD (cppmem-like thread syntax) *)
   | "{-{" { LBRACES }
   | "|||" { PIPES   }
@@ -596,8 +552,8 @@ and initial = parse
 
     (* copied over from backend/cn/assertion_lexer.mll *)
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
-      { 
-        if internal_state.inside_cn then
+      {
+        if flags.inside_cn then
           try Hashtbl.find cn_lexicon id
           with Not_found ->
             UNAME id
@@ -609,7 +565,7 @@ and initial = parse
     { try
         Hashtbl.find lexicon id
       with Not_found ->
-        if internal_state.inside_cn then
+        if flags.inside_cn then
           try Hashtbl.find cn_lexicon id
           with Not_found ->
             LNAME id
@@ -630,10 +586,16 @@ type lexer_state =
 
 let lexer_state = ref LSRegular
 
-let lexer : lexbuf -> token = fun lexbuf ->
+let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
   match !lexer_state with
   | LSRegular ->
-      begin match initial lexbuf with
+      let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
+      let magic_comment_char = 
+        if Switches.(has_switch SW_magic_comment_char_dollar)
+        then '$'
+        else '@'
+      in
+      begin match initial { inside_cn; at_magic_comments; magic_comment_char } lexbuf with
       | LNAME i as tok -> lexer_state := LSIdentifier i; tok
       | UNAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok

@@ -70,7 +70,7 @@ let rec bool_subterms_of t =
   t :: List.concat (List.map bool_subterms_of (bool_subterms1 t))
 
 let constraint_ts () =
-  let@ cs = all_constraints () in
+  let@ cs = get_cs () in
   let ts = List.filter_map (function
     | LC.T t -> Some t
     | _ -> None) (LCSet.elements cs)

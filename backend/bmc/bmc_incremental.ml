@@ -1380,7 +1380,7 @@ module BmcZ3 = struct
         z3_pe ptr >>= fun z3d_ptr ->
         get_file  >>= fun file ->
         begin match Pmap.lookup sym file.tagDefs with
-        | Some (StructDef (memlist, _)) ->
+        | Some (_, StructDef (memlist, _)) ->
             let (size, (index_list, _)) =
               PointerSort.struct_member_index_list sym file in
             let member_indices = zip index_list memlist in

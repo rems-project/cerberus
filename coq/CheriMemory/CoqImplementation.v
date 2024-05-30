@@ -29,6 +29,11 @@ Module Type Implementation.
 
   (* -- Sanity properties for proofs -- *)
 
+  (* alignments start from 1 *)
+  Parameter alignof_pointer_pos: 0 < (alignof_pointer get).
+  Parameter alignof_ity_pos: forall ty, 0 < (alignof_ity get ty).
+  Parameter alignof_fty_pos: forall ty, 0 < (alignof_fty get ty).
+
   (* Per C17 (6.5.3.4): "When sizeof is applied to an operand that has type char, unsigned
      char, or signed char, (or a qualified version thereof) the result
      is 1." *)
@@ -66,7 +71,7 @@ Module MorelloImpl : Implementation.
             | LongLong => 8
             | IntN_t n
             | Int_leastN_t n
-            | Int_fastN_t n => Nat.div n 8
+            | Int_fastN_t n => max 1 (Nat.div n 8)
             | Intmax_t
             | Intptr_t => 16
             end)
@@ -124,7 +129,7 @@ Module MorelloImpl : Implementation.
          | LongLong => 8
          | IntN_t n
          | Int_leastN_t n
-         | Int_fastN_t n => Nat.div n 8%nat
+         | Int_fastN_t n => max 1 (Nat.div n 8)
          | Intmax_t
          | Intptr_t => 16
          end)
@@ -160,6 +165,32 @@ Module MorelloImpl : Implementation.
 
   Lemma uchar_size:  (sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some 1).
   Proof. reflexivity. Qed.
+
+  Lemma alignof_pointer_pos: 0 < (alignof_pointer get).
+  Proof. cbn; lia. Qed.
+
+  Lemma alignof_ity_pos: forall ty, 0< (alignof_ity get ty).
+  Proof.
+    intros ty.
+    destruct ty; cbn;try lia.
+    1,2: destruct i; cbn;try lia.
+
+    all: pose proof (Nat.divmod_spec n 7 0 7) as DM;
+      assert(7<=7) as SV by lia;
+      specialize (DM SV);
+      remember (Nat.divmod n 7 0 7) as dm;
+      destruct dm;
+      cbn;
+      destruct DM;
+      destruct n0;lia.
+  Qed.
+
+  Lemma alignof_fty_pos: forall ty, 0< (alignof_fty get ty).
+  Proof.
+    intros ty.
+    destruct ty; cbn;try lia.
+    destruct r; lia.
+  Qed.
 
 
 End MorelloImpl.

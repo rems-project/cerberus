@@ -1,7 +1,6 @@
 (* stealing from pp_core_ast *)
 
 open Cerb_pp_prelude
-(*open Pp_ail*)
 
 module CF = Cerb_frontend
 open CF
@@ -24,28 +23,6 @@ module PP = struct
   let pp_eff_ctor w =
     !^ (ansi_format [Bold; Magenta] w)
 
-
-    (* type 'sym generic_object_value =  (* C object values *)
-    | OVinteger of Impl_mem.integer_value (* integer value *)
-    | OVfloating of Impl_mem.floating_value (* floating-point value *)
-    | OVpointer of Impl_mem.pointer_value (* pointer value *)
-    | OVarray of ( 'sym generic_loaded_value) list (* C array value *)
-    | OVstruct of Symbol.sym * (Symbol.identifier * ctype * Impl_mem.mem_value) list (* C struct value *)
-    | OVunion of Symbol.sym * Symbol.identifier * Impl_mem.mem_value (* C union value *)
-
-   and 'sym generic_loaded_value =  (* potentially unspecified C object values *)
-    | LVspecified of ( 'sym generic_object_value) (* non-unspecified loaded value *)
-    | LVunspecified of ctype (* unspecified loaded value *)
-
-    *)
-
-  (* let pp_asym asym =  *)
-  (*   let open Mucore in *)
-  (*   pp_symbol asym.sym ^^^ Cerb_location.pp_location ~clever:false asym.loc *)
-
-  (* let dtree_of_asym asym =  *)
-  (*   Pp_ast.Dleaf (pp_asym asym) *)
-
   open Mucore
 
   module Pp_typ = Pp_mucore.Pp_typ
@@ -55,7 +32,6 @@ module PP = struct
 
   let dtree_of_act act =
     Pp_ast.Dleaf (pp_act act)
-
 
   let rec dtree_of_object_value (M_OV (_bty, ov)) =
     match ov with
@@ -72,20 +48,14 @@ module PP = struct
         Dnode ( pp_pure_ctor "OVarray"
               , List.map dtree_of_object_value lvals)
     | M_OVstruct (tag_sym, xs) ->
-        (* (Symbol.identifier * Ctype.ctype * Impl_mem.mem_value) list *)
         Dleaf (pp_pure_ctor "OVstruct" ^^^ !^ (ansi_format [Red] "TODO"))
     | M_OVunion (tag_sym, membr_ident, mval) ->
         Dleaf (pp_pure_ctor "OVunion" ^^^ !^ (ansi_format [Red] "TODO"))
-  (* and dtree_of_loaded_value = function *)
-  (*   | M_LVspecified oval -> *)
-  (*       Dnode (pp_pure_ctor "LVspecified", [dtree_of_object_value oval]) *)
 
   and dtree_of_value (M_V (_bty, v)) =
     match v with
     | M_Vobject oval ->
         Dnode (pp_pure_ctor "Vobject", [dtree_of_object_value oval])
-    (* | M_Vloaded lval -> *)
-    (*     Dnode (pp_pure_ctor "Vloaded", [dtree_of_loaded_value lval]) *)
     | M_Vunit ->
         Dleaf (pp_pure_ctor "Vunit")
     | M_Vtrue ->
@@ -100,16 +70,6 @@ module PP = struct
         Dleaf (pp_pure_ctor "Vctype" ^^^ !^ (ansi_format [Red] "TODO"))
     | M_Vfunction_addr sym ->
         Dleaf (pp_pure_ctor "Vfunction_addr"  ^^^ !^ (ansi_format [Red] "TODO"))
-   (* type 'sym generic_value =  (* Core values *)
-    | Vobject of ( 'sym generic_object_value) (* C object value *)
-    | Vloaded of ( 'sym generic_loaded_value) (* loaded C object value *)
-    | Vunit
-    | Vtrue
-    | Vfalse
-    | Vctype of ctype (* C type as value *)
-    | Vlist of core_base_type * ( 'sym generic_value) list
-    | Vtuple of ( 'sym generic_value) list tuple *)
-
 
   let string_of_bop = Pp_core_ast.string_of_bop
 
@@ -126,8 +86,6 @@ module PP = struct
 
         | M_PEsym sym ->
             Dleaf (pp_ctor "PEsym" ^^^ pp_symbol sym)
-        (* | M_PEimpl iCst -> *)
-        (*     Dleaf (pp_ctor "PEimpl" ^^^ !^ (ansi_format [Red] "TODO")) *)
         | M_PEval cval ->
             Dnode (pp_ctor "PEval", [dtree_of_value cval])
         | M_PEconstrained xs ->
@@ -144,11 +102,8 @@ module PP = struct
             Dnode ( pp_ctor "PEop" ^^^ P.squotes (!^ (string_of_bop bop))
                   , [self pe1; self pe2] )
 
-
-        (* | M_PEcase (pe, xs) -> *)
-        (*     Dleaf (pp_ctor "PEcase" ^^^ !^ (ansi_format [Red] "TODO")) *)
         | M_PElet (pat, pe1, pe2) ->
-            Dnode ( pp_ctor "PElet" (* ^^^ Pp_core.Basic.pp_pattern pat *)
+            Dnode ( pp_ctor "PElet"
                   , [ self pe1; self pe2] )
         | M_PEif (pe1, pe2, pe3) ->
             Dnode ( pp_ctor "PEif"
@@ -253,15 +208,11 @@ module PP = struct
     Dnode ( !^ (ansi_format [Bold; Magenta] "Eaction") ^^^ pp_keyword str
           , dtrees )
 
-
   let rec dtree_of_expr ((M_Expr (loc, annot, _ty, expr_)) as expr) =
 
       let pp_ctor str = pp_eff_ctor str ^^^ Cerb_location.pp_location ~clever:true loc in
 
       match expr_ with
-  (*
-        | Ememop of Mem_common.memop * ('bty, 'sym) generic_pexpr list
-  *)
         | M_Epure pe ->
             Dnode ( pp_ctor "Epure"
                   , (*add_std_annot*) [dtree_of_pexpr pe] )
@@ -270,17 +221,6 @@ module PP = struct
         | M_Eaction (M_Paction (p, M_Action (act_loc, act))) ->
             dtree_of_action act
 
-  (*
-      | Eccall of 'a * ('bty, 'sym) generic_pexpr *
-          ('bty, 'sym) generic_pexpr * ('bty, 'sym) generic_pexpr list
-      | Eproc of 'a * 'sym generic_name * ('bty, 'sym) generic_pexpr list
-  *)
-        (* | _ -> *)
-        (*    Dleaf (pp_ctor ("Expr(TODO): " ^ MuPP.string_of_expr expr)) *)
-
-  (*
-        | Ecase of ('bty, 'sym) generic_pexpr * ('sym generic_pattern * ('a, 'bty, 'sym) generic_expr) list
-  *)
       | M_Eif (pe, e1, e2) ->
           Dnode ( pp_ctor "Eif"
                 , (*add_std_annot*) [ dtree_of_pexpr pe
@@ -302,49 +242,23 @@ module PP = struct
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_expr e1
                                     ; dtree_of_expr e2 ] )
-      (* | M_Eundef (loc, ub) -> *)
-      (*    Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO")) *)
-
-      (* | M_Eerror (str, pe) -> *)
-      (*     Dnode ( pp_ctor "Eerror" ^^^ P.dquotes (!^ (ansi_format [Red] str)) *)
-      (*           , [dtree_of_pexpr pe] ) *)
       | M_Erun (l, asyms) ->
          Dnode ( pp_pure_ctor "Erun"
                , List.map dtree_of_pexpr asyms)
 
-  (*
-      | Easeq of ('sym * core_base_type) * ('a, 'bty, 'sym) generic_action *
-          ('a, 'bty, 'sym) generic_paction
-  *)
       | M_Ebound e ->
           Dnode (pp_ctor "Ebound", [dtree_of_expr e])
-  (*
-      | End of ('a, 'bty, 'sym) generic_expr list
-  *)
 
-  (*
-
-      | Epar of ('a, 'bty, 'sym) generic_expr list
-      | Ewait of Mem_common.thread_id
-  *)
-        | _ ->
+      |M_Ememop _ | M_Eccall (_, _, _) | M_Eunseq _ 
+      | M_End _ | M_CN_progs (_, _) ->
            Dnode ( pp_ctor ("TExpr(TODO)")
                   , [Dleaf (Pp_mucore.pp_expr expr)])
-            (* Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_texpr expr)) *)
-
-
-  (*
-  Expr of Annot.annot list * ('a, 'bty, 'sym) generic_expr_
-  *)
-
 
   let pp_expr expr =
     pp_doc_tree (dtree_of_expr expr)
 
 
-
   let pp_field w = !^ (ansi_format [Bold; Green] w)
-
 
   let dtree_of_tagDefs xs =
     let aux (sym, tagDef) =
@@ -352,17 +266,7 @@ module PP = struct
     Dnode ( pp_field ".tagDefs"
           , List.map aux (Pmap.bindings_list xs) )
 
-
   let dtree_of_funinfo xs =
-  (*
-  (
-    Symbol.sym
-  ,
-   Cerb_location.t * Annot.attributes * Ctype.ctype *
-     (Symbol.sym option * Ctype.ctype) list * bool * bool
-  )
-  Pmap.map
-  *)
     let pp_ctype (Ctype.Ctype (annots, _) as ty) =
       begin match Annot.get_typedef  annots with
         | Some sym ->
@@ -394,7 +298,6 @@ module PP = struct
     Dnode ( pp_field ".funinfo"
           , List.map aux (Pmap.bindings_list xs) )
 
-
   let dtree_of_globs xs =
     let aux (sym, glob) =
       match glob with
@@ -406,7 +309,6 @@ module PP = struct
                 , [Dleaf (Pp_typ.pp_ct ct)] )
     in
     Dnode (pp_field ".globs", List.map aux xs)
-
 
   let dtree_of_label l def =
     match def with
@@ -437,7 +339,6 @@ module PP = struct
     in
     Dnode ( pp_field ".funs"
           , List.map aux (Pmap.bindings_list xs) )
-
 
   let pp_file file =
     pp_doc_tree begin

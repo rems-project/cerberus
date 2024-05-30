@@ -5,17 +5,13 @@ type cursor =
   | PointCursor of Lexing.position
   | RegionCursor of Lexing.position * Lexing.position
 
-type raw =
+type t =
   | Loc_unknown
   | Loc_other of string
   | Loc_point of Lexing.position
     (* start, end, cursor *)
   | Loc_region of Lexing.position * Lexing.position * cursor
   | Loc_regions of (Lexing.position * Lexing.position) list * cursor
-
-type t = raw
-
-let to_raw t = t
 
 
 let unknown =

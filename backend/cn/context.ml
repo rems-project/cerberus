@@ -70,8 +70,6 @@ type t = {
     resource_history : resource_history IntMap.t;
     constraints : LCSet.t;
     global : Global.t;
-    location_trace : Locations.loc list;
-    statement_locs : Locations.loc CStatements.LocMap.t;
     trace : trace; (* most recent first*)
   }
 
@@ -89,8 +87,6 @@ let empty =
     resource_history = IntMap.empty;
     constraints = LCSet.empty;
     global = Global.empty;
-    location_trace = [];
-    statement_locs  = CStatements.LocMap.empty;
     trace = [];
   }
 

@@ -400,8 +400,12 @@ module IndexTerms = struct
        begin match op, IT.term a with
        | Not, Const (Bool b) ->
           bool_ (not b) the_loc
-       | Not, Unop (Not, b) ->
-          b
+       | Negate, Const (Z z) ->
+          z_ (Z.neg z) the_loc
+       | Negate, Const (Bits ((sign, width), z)) ->
+          num_lit_ (Z.neg z) (BT.Bits(sign, width)) the_loc
+       | Negate, Const (Q q) ->
+          q1_ (Q.neg q) the_loc
        | BWCTZNoSMT, Const (Z z) ->
           begin match do_ctz_z z with
           | None -> IT (Unop (op, a), the_bt, the_loc)

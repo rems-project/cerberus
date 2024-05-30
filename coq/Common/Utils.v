@@ -34,14 +34,8 @@ Definition sprint_msg (msg : string) : serr unit :=
   else 
     ret tt.
 
-Fixpoint list_init_rec {A : Type} (i : nat) (f : nat -> A) (acc : list A) :=
-    match i with
-    | O => acc
-    | S i' => list_init_rec i' f ((f i') :: acc)
-    end.
-
 Definition list_init {A : Type} (n : nat) (f : nat -> A) : list A :=
-  list_init_rec n f [].
+  List.map f (List.seq 0 n).
 
 Fixpoint monadic_list_init_rec
   {A: Type}
@@ -238,13 +232,37 @@ Fixpoint try_map {A B:Type} (f : A -> option B) (l:list A) : option (list B)
       end
   end.
 
-Definition Z_integerRem_t := Z.rem.
+Section Z_arith.
 
-Definition Z_integerRem_f a b :=
-  let r := Z.rem a b in
-  if Z.geb (Z.sgn r) 0 then r else Z.add r (Z.abs b).
+  Definition Z_integerRem_t := Z.rem.
 
-Definition Z_integerDiv_t := Z.div.
+  Definition Z_integerRem_f a b :=
+    let r := Z.rem a b in
+    if Z.geb (Z.sgn r) 0 then r else Z.add r (Z.abs b).
+
+  Definition Z_integerDiv_t := Z.div.
+
+  (** OCaml Z.sign *)
+  Definition sign (x:Z) : Z :=
+    match x with
+    | Z0 => 0
+    | Zpos _ => 1
+    | Zneg _ => (-1)
+    end.
+
+  (** Euclidean division and remainder. [quomod a b] returns a pair [(q,r)]
+      such that [a = b * q + r] and [0 <= r < |b|].
+
+      TODO: how b=0 is  handled?
+
+      See also [Z.ediv_rem] in OCaml ZArith
+   *)
+  Definition quomod (a b: Z) : (Z*Z) :=
+    let (q,r) := Z.quotrem a b in
+    if Z.geb (sign r) 0 then (q,r) else
+      if Z.geb (sign b) 0 then (Z.pred q, r + b)
+      else (Z.succ q, r - b).
+End Z_arith.
 
 Definition float_of_bits (_:Z): float := PrimFloat.zero. (* TODO: implement *)
 

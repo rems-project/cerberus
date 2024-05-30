@@ -447,7 +447,7 @@ let do_globs_list (gs : (Symbol.sym *  ('a, 'bty) generic_globs) list) =
 
 
 let do_tagDefs tagDefs =
-  pmap_iterM (fun sym tagDef ->
+  pmap_iterM (fun sym (loc, tagDef) ->
     record_keep (Sym sym) >>
     let name_collector = deps_of (Sym sym) in
     match tagDef with
