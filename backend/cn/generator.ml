@@ -906,7 +906,7 @@ and codify_value root ty v =
     match v with
     | CNVal_integer n
     | CNVal_bits (_, n) ->
-      ("(" ^ string_of_ctype ty ^ ")((uintptr_t)" ^ root ^ " + " ^ Z.to_string n ^ "ULL)")
+      ("(" ^ string_of_ctype ty ^ ")((uintptr_t)" ^ root ^ " + " ^ Z.to_string n ^ ")")
     | CNVal_null -> "NULL"
     | _ -> failwith ("Invalid pointer value " ^ string_of_value v)
   else
@@ -964,15 +964,7 @@ let expand_heap (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ctx : con
   expand_heap' ail_prog ctx h (-1) h
 ;;
 
-let codify_heap (root : string) (h : heap) (oc : out_channel) : unit =
-  let max_size =
-    h
-    |> List.map snd
-    |> List.map fst
-    |> List.map Sctypes.of_ctype
-    |> List.map Option.get
-    |> List.map Memory.size_of_ctype
-    |> List.fold_left (+) 0 in
+let codify_heap (root : string) (max_size : int) (h : heap) (oc : out_channel) : unit =
   output_string oc ("void *" ^ root ^ " = malloc(");
   output_string oc (string_of_int max_size);
   output_string oc ");\n";
@@ -1030,7 +1022,17 @@ let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentati
 
   let (ctx, h) = expand_heap ail_prog ctx h in
   let root = Symbol.fresh () |> Sym.pp_string in
-  codify_heap root h oc;
+  let max_size =
+    h
+    |> List.map snd
+    |> List.map fst
+    |> List.map Sctypes.of_ctype
+    |> List.map Option.get
+    |> List.map Memory.size_of_ctype
+    |> List.fold_left (+) 0 in
+  (if max_size > 0
+  then
+    codify_heap root max_size h oc);
   codify_context root ctx args oc;
   output_string oc (Pp_symbol.to_string_pretty instrumentation.fn);
   output_string oc "(";
