@@ -4176,11 +4176,8 @@ Module RevocationProofs.
             v =
               (PV p
                  (PVconcrete
-                    (Capability_GS.cap_set_value c
-                       (AddressValue.of_Z
-                          (cap_to_Z c + n)
-                       )
-              ))).
+                    (Capability_GS.cap_set_value c (AddressValue.with_offset (Capability_GS.cap_get_value c) n))
+              )).
   Proof.
     intros ptrval H.
     Transparent serr2InternalErr bind raise ret get fail fail_noloc.
@@ -4197,6 +4194,7 @@ Module RevocationProofs.
     repeat break_match_hyp;
       repeat break_let; repeat tuple_inversion; try rewrite Z.mul_1_l; reflexivity.
   Qed.
+
 
   Lemma load_uchar_spec
     {loc : location_ocaml}
@@ -4571,7 +4569,7 @@ Module RevocationProofs.
 
     memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 sz ->
 
-    (forall x, 0<x<sz  ->
+    (forall x, 0<=x<sz  ->
           ((AddressValue.ADDR_MIN <=
               AddressValue.to_Z (Capability_GS.cap_get_value c1) + x <
               AddressValue.ADDR_LIMIT)
@@ -4640,7 +4638,11 @@ Module RevocationProofs.
 
     clear H H0 H1 H2 H3 H4 H5 H6 Bfit alloc1 alloc2 alloc_id1 alloc_id2.
 
-    revert s s' C B.
+    intros addr.
+    remember (addr_offset addr (Capability_GS.cap_get_value c1)) as x.
+    specialize (B x).
+
+    revert s s' C B Heqx.
     induction n;intros.
     -
       break_match_goal;bool_to_prop_hyp.
@@ -4648,6 +4650,49 @@ Module RevocationProofs.
       + bool_to_prop_hyp;(cbn in C;state_inv_step;reflexivity).
       + bool_to_prop_hyp;(cbn in C;state_inv_step;reflexivity).
     -
+      destruct (Z.eq_dec x (Z.of_nat n)) as [L|NL].
+      +
+        (* last element *)
+        cbn in C.
+        state_inv_step;[lia|].
+
+        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
+        subst ptrval2' ptrval1'.
+        rename x into fp.
+        specialize (IHn _ _ C5).
+
+        assert(s0.(allocations) = s.(allocations)) as AE.
+        {
+          eapply store_char_preserves_allocations.
+          eauto.
+        }
+        autospecialize IHn;[lia|].
+        autospecialize IHn;[lia|].
+        bool_to_prop_hyp;[lia|].
+        autospecialize B;[lia|].
+        destruct B.
+
+        break_match_goal.
+        *
+          rewrite L.
+          bool_to_prop_hyp.
+
+          admit.
+        *
+          rewrite IHn.
+          bool_to_prop_hyp.
+          lia.
+
+
+
+
+
+
+
+
+
+
+
       (*
       destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset a1 (Z.of_nat n))) as [L|NL].
       +
