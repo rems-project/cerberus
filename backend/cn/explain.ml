@@ -111,7 +111,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
       List.map (fun it -> 
           {term = IT.pp it; value = mevaluate it}
         (* deduplicate *)
-        ) (Simplify.ITSet.(to_list (of_list (subterms1 @ subterms2))))
+        ) (Simplify.ITSet.(elements (of_list (subterms1 @ subterms2))))
     in
     variables @ subterms
   in
