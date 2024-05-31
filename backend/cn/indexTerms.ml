@@ -61,7 +61,7 @@ let rec bound_by_pattern (Pat (pat_, bt, _)) =
   | PConstructor (_s, args) ->
      List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
-let rec free_vars_ = function
+let rec free_vars_ : 'a. 'a term_ -> SymSet.t = function
   | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
   | Unop (_uop, t1) -> free_vars t1
@@ -110,10 +110,12 @@ let rec free_vars_ = function
   | Constructor (_s, args) ->
      free_vars_list (List.map snd args)
 
-and free_vars (IT (term_, _bt, _)) =
+and free_vars : 'a term -> SymSet.t =
+  fun (IT (term_, _bt, _)) ->
   free_vars_ term_
 
-and free_vars_list xs =
+and free_vars_list : 'a term list -> SymSet.t = 
+  fun xs ->
   List.fold_left (fun ss t ->
       SymSet.union ss (free_vars t)
     ) SymSet.empty xs
@@ -195,12 +197,15 @@ and fold_list f binders acc xs =
 let fold_subterms : 'a. ?bindings:('bt bindings) -> ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
   fun ?(bindings=[]) f acc t -> fold f bindings acc t
 
-let subterms_without_bound_variables bindings it = 
+let subterms_without_bound_variables bindings = 
   fold_subterms ~bindings (fun bindings acc t ->
-      match bindings with 
-      | [] -> t :: acc
-      | _ -> acc
-    ) [] it
+      let pats = List.map fst bindings in
+      let bound = List.concat_map bound_by_pattern pats in
+      let bound = SymSet.of_list (List.map fst bound) in
+      if SymSet.(is_empty (inter bound (free_vars t))) 
+      then t :: acc
+      else acc
+    ) []
 
 
 let is_call (f: Sym.t) (IT (it_, bt, _loc)) =
