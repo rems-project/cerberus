@@ -75,12 +75,44 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
 
   let variables =
     let make s ls =
-      {var = Sym.pp s;
+      {term = Sym.pp s;
        value = mevaluate (sym_ (s, ls, Locations.other __FUNCTION__))}
     in
     List.map (fun (s, ls) -> make s ls) quantifier_counter_model @
     List.filter_map (fun (s, (binding, _)) -> match binding with Value _ -> None | BaseType ls -> Some (make s ls)) (SymMap.bindings ctxt.computational) @
     List.filter_map (fun (s, (binding, _)) -> match binding with Value _ -> None | BaseType ls -> Some (make s ls)) (SymMap.bindings ctxt.logical)
+  in
+
+  let terms = 
+    let subterms1 = match extras.unproven_constraint with
+      | Some (T lc) -> 
+         IT.subterms_without_bound_variables [] lc
+      | Some (Forall ((s,bt), lc)) ->
+         let binder = (Pat (PSym s, bt, Loc.other __FUNCTION__), None) in
+         IT.subterms_without_bound_variables [binder] lc
+      | None -> 
+         []
+    in
+    let subterms2 = match extras.request with
+      | Some (P ret) ->
+         List.concat_map (IT.subterms_without_bound_variables []) 
+           (ret.pointer :: ret.iargs)
+      | Some (Q ret) ->
+         List.concat_map (IT.subterms_without_bound_variables [])
+           [ret.pointer; ret.step]
+         @ 
+         (let binder = (Pat (PSym (fst ret.q), snd ret.q, Loc.other __FUNCTION__), None) in
+          List.concat_map (IT.subterms_without_bound_variables [binder])
+           (ret.permission :: ret.iargs))
+      | None -> 
+         []
+    in
+    let subterms = 
+      List.map (fun it -> 
+          {term = IT.pp it; value = mevaluate it}
+        ) (subterms1 @ subterms2)
+    in
+    variables @ subterms
   in
 
   let constraints = List.map LC.pp (LCSet.elements ctxt.constraints) in
@@ -206,7 +238,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
 
   Pp.html_escapes := prev;
 
-  { variables;
+  { terms;
     requested;
     unproven;
     resources;

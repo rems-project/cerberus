@@ -192,10 +192,15 @@ and fold_list f binders acc xs =
      let acc' = fold f binders acc x in
      fold_list f binders acc' xs
 
-let fold_subterms : 'a. ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
-  fun f acc t -> fold f [] acc t
+let fold_subterms : 'a. ?bindings:('bt bindings) -> ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
+  fun ?(bindings=[]) f acc t -> fold f bindings acc t
 
-
+let subterms_without_bound_variables bindings it = 
+  fold_subterms ~bindings (fun bindings acc t ->
+      match bindings with 
+      | [] -> t :: acc
+      | _ -> acc
+    ) [] it
 
 
 let is_call (f: Sym.t) (IT (it_, bt, _loc)) =

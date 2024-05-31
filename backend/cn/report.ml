@@ -4,8 +4,8 @@ type state_entry = {
     state : Pp.doc option;
   }
 
-type var_entry = {
-    var : Pp.doc;
+type term_entry = {
+    term : Pp.doc;
     value : Pp.doc;
   }
 
@@ -30,7 +30,7 @@ type per_label_trace_report = {
 type trace_report = per_label_trace_report list
 
 type state_report = {
-    variables : var_entry list;
+    terms : term_entry list;
     requested : resource_entry option;
     unproven : (Pp.doc * Pp.doc) option;
     resources : resource_entry list;
@@ -115,13 +115,13 @@ let make_resources resources =
         (List.map (fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources)
   )
 
-let make_variables variables =
-  h 1 "Variables" (
-    match variables with
+let make_terms terms =
+  h 1 "Terms" (
+    match terms with
     | [] -> "(none)"
     | _ ->
       table ["variable"; "value"]
-        (List.map (fun v -> [Pp.plain v.var; Pp.plain v.value]) variables)
+        (List.map (fun v -> [Pp.plain v.term; Pp.plain v.value]) terms)
   )
 
 let make_constraints constraints = 
@@ -143,7 +143,7 @@ let make report =
       make_unproven report.unproven;
       make_predicate_hints report.predicate_hints;
       make_resources report.resources;
-      make_variables report.variables;
+      make_terms report.terms;
       make_constraints report.constraints;
     ]
   ] 
