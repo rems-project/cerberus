@@ -141,7 +141,10 @@ Ltac bool_to_prop_hyp :=
     | [H: Z.ltb _ _ = true |- _ ] => apply Z.ltb_lt in H
     | [H: Z.ltb _ _ = false |- _ ] => apply Z.ltb_ge in H
     | [H: Z.leb _ _ = true |- _ ] => apply Z.leb_le in H
+    | [H: Z.leb _ _ = false |- _ ] => apply Z.leb_gt in H
     | [H: Z.gtb _ _ = _ |- _ ] => rewrite Z.gtb_ltb in H
+    | [H: Nat.ltb _ _ = true |- _ ] => apply Nat.ltb_lt in H
     | [H: Nat.ltb _ _ = false |- _ ] => apply Nat.ltb_ge in H
+    | [H: Nat.eqb _ _ = true |- _] => apply Nat.eqb_eq in H
     | [H: Nat.eqb _ _ = false |- _] => apply Nat.eqb_neq in H
     end.

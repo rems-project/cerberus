@@ -183,6 +183,19 @@ Section AddressValue_Lemmas.
       lia.
   Qed.
 
+  Lemma addr_offset_with_offset
+    (a:AddressValue.t)
+    (x:Z)
+    (H: AddressValue.ADDR_MIN <= AddressValue.to_Z a + x < AddressValue.ADDR_LIMIT):
+
+    addr_offset (AddressValue.with_offset a x) a = x.
+  Proof.
+    unfold addr_offset.
+    rewrite AddressValue.with_offset_no_wrap.
+    lia.
+    apply H.
+  Qed.
+
 End AddressValue_Lemmas.
 
 Lemma sequence_len_errS
@@ -346,7 +359,7 @@ Module RevocationProofs.
     lia.
   Qed.
 
-  (* Check whether this cap base address is within allocation *)
+  (* Check whether this cap base address within allocation *)
   Definition cap_bounds_within_alloc c a : Prop
     :=
     let alloc_base := AddressValue.to_Z a.(base) in
@@ -4602,9 +4615,9 @@ Module RevocationProofs.
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
-    {Mbase: base_mem_invariant s}
     {ptrval1 ptrval2 : pointer_value}
     {n : nat}
+    (Mbase: base_mem_invariant s)
     (AG: mempcpy_args_sane s.(allocations) ptrval1 ptrval2 (Z.of_nat n))
     (C: memcpy_copy_data loc ptrval1 ptrval2 n s = (s', inr tt))
     {p1 p2 : provenance}
@@ -4655,7 +4668,7 @@ Module RevocationProofs.
         (* last element *)
         cbn in C.
         state_inv_step;[lia|].
-
+        
         apply eff_array_shift_ptrval_uchar_spec in C0, C2.
         subst ptrval2' ptrval1'.
         rename x into fp.
@@ -4666,6 +4679,8 @@ Module RevocationProofs.
           eapply store_char_preserves_allocations.
           eauto.
         }
+
+        (* TODO: we should not need IH here *)
         autospecialize IHn;[lia|].
         autospecialize IHn;[lia|].
         bool_to_prop_hyp;[lia|].
@@ -4682,18 +4697,49 @@ Module RevocationProofs.
           rewrite IHn.
           bool_to_prop_hyp.
           lia.
+          admit.
+      +
+        (* not last element *)
+        cbn in C.
 
+        (* TODO: the problem here is this tactics breaks match in the goal.
+           Perhaps we want to avoid it.
+         *)
+        state_inv_step.
+        *
+          bool_to_prop_hyp.
+          apply eff_array_shift_ptrval_uchar_spec in C0, C2.
+          subst ptrval2' ptrval1'.
+          rename x into fp.
+          specialize (IHn _ _ C5).
 
+          assert(s0.(allocations) = s.(allocations)) as AE.
+          {
+            eapply store_char_preserves_allocations.
+            eauto.
+          }
 
+          autospecialize IHn;[lia|].
+          autospecialize IHn;[lia|].
+          autospecialize B;[lia|].
+          destruct B.
 
-
-
-
-
-
-
-
-      (*
+          rewrite IHn; clear IHn.
+          break_match_goal.
+          --
+            (* goal: s[addr] = s[c2+(addr-c1)] *)
+            bool_to_prop_hyp.
+            (* Load/store: s0[c1+n] = s[c2+n] *)
+            apply load_uchar_spec in C1.
+            (* TODO: need store spec *)
+            admit.
+          --
+            (* goal: s'[addr] = s[c2+(addr-c1)] *)
+            (* Heqb: (addr-c1)<0 || (addr-c1) >= S n *)
+            bool_to_prop_hyp;lia.
+        *
+          admit.
+      (* OLD
       destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset a1 (Z.of_nat n))) as [L|NL].
       +
         (* last element *)
@@ -4886,11 +4932,14 @@ Module RevocationProofs.
         eapply store_other_spec with (c:=c');eauto.
         subst c'.
         apply Capability.cap_get_set_value.
+*)
   Admitted.
+
 
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
     {s s': mem_state_r}
+    {Mbase: base_mem_invariant s}
     {ptrval1 ptrval2: pointer_value}
     {len: Z}
     :
@@ -4900,8 +4949,8 @@ Module RevocationProofs.
       forall p1 p2 c1 c2 a1 a2,
         ptrval1 = PV p1 (PVconcrete c1) ->
         ptrval2 = PV p2 (PVconcrete c2) ->
-        a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
-        a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
+        a1 = Capability_GS.cap_get_value c1 ->
+        a2 = Capability_GS.cap_get_value c2 ->
         fetch_bytes (bytemap s') a1 (Z.to_nat len) = fetch_bytes (bytemap s') a2 (Z.to_nat len).
   Proof.
     intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
@@ -4914,17 +4963,16 @@ Module RevocationProofs.
       rewrite 2!list_init_len.
       reflexivity.
     -
-      rewrite map_length.
+      rewrite map_length, list_init_len.
       intros i H5.
-      rewrite 2!map_nth with (d:=0).
-      rewrite list_init_len in H5.
+      rewrite 2!map_nth with (d:=(AddressValue.of_Z AddressValue.ADDR_MIN)).
 
-      pose proof (list_init_nth _ (fun i : nat => a1 + Z.of_nat i) _ H5) as LI1.
+      pose proof (list_init_nth _ (fun i : nat => AddressValue.with_offset a1 (Z.of_nat i)) _ H5) as LI1.
       eapply nth_error_nth in LI1.
-      erewrite LI1.
+      rewrite LI1.
       clear LI1.
 
-      pose proof (list_init_nth _ (fun i : nat => a2 + Z.of_nat i) _ H5) as LI2.
+      pose proof (list_init_nth _ (fun i : nat => AddressValue.with_offset a2 (Z.of_nat i)) _ H5) as LI2.
       eapply nth_error_nth in LI2.
       erewrite LI2.
       clear LI2.
@@ -4935,29 +4983,113 @@ Module RevocationProofs.
       remember (Z.to_nat len) as n eqn:N.
       replace len with (Z.of_nat n) in H by lia.
       clear N len.
-      pose proof (memcpy_copy_data_spec H H0 H1 H2 H3 H4 (a1 + Z.of_nat i)) as M.
 
+      (* mem copy with dst= s'[a1+i] *)
+      pose proof (memcpy_copy_data_spec Mbase H H0 H1 H2 H3 H4 (AddressValue.with_offset a1 (Z.of_nat i)))
+        as M1.
+
+      (* goal s'[a2+i] = s'[a1+i]. English: source and destination regions equal in s' *)
       break_match_hyp.
       +
-        rewrite M. clear M.
-        replace (a2 + (a1 + Z.of_nat i - a1)) with (a2 + Z.of_nat i) by lia.
-        pose proof (memcpy_copy_data_spec H H0 H1 H2 H3 H4 (a2 + Z.of_nat i)) as M.
+        (* destination `a1+i` within bounds [a1,a1+n) *)
+        rewrite M1; clear M1.
+
+        replace (AddressValue.with_offset a2 (addr_offset (AddressValue.with_offset a1 (Z.of_nat i)) a1))
+          with (AddressValue.with_offset a2 (Z.of_nat i)).
+        2:{
+          bool_to_prop_hyp.
+          rewrite addr_offset_with_offset.
+          reflexivity.
+
+          (* We only need Bfit from Mbase *)
+          destruct_base_mem_invariant Mbase.
+          clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
+
+          invc H.
+          invc H17.
+          invc H18.
+          pose proof (memcpy_alloc_bounds_check_p_c_bounds (Z.of_nat n) c1 c2 alloc1 alloc2) as B.
+
+          autospecialize B;[apply (Bfit alloc_id1 alloc1 H9)|].
+          autospecialize B;[apply (Bfit alloc_id2 alloc2 H10)|].
+          autospecialize B;[lia|].
+          autospecialize B;[assumption|].
+          specialize (B (Z.of_nat i)).
+          autospecialize B;[lia|].
+          lia.
+        }
+
+        (* goal s[a2+i] = s'[a2+i]. English: source region unchanged *)
+
+        (* mem copy with dst= s'[a2+i] *)
+        pose proof (memcpy_copy_data_spec Mbase H H0 H1 H2 H3 H4 (AddressValue.with_offset a2 (Z.of_nat i))) as M2.
         break_match_hyp.
         *
+          (* destination `a2+i` is in bounds [a1,a1+n). This is is an overlap! *)
           exfalso.
-          clear M H0.
+          (* We only need Bfit from Mbase *)
+          destruct_base_mem_invariant Mbase.
+          clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
           invc H.
-          invc H14.
           invc H15.
-          unfold memcpy_alloc_bounds_check_p, cap_to_Z in H12.
+          invc H16.
+          pose proof (memcpy_alloc_bounds_check_p_c_bounds (Z.of_nat n) c1 c2 alloc1 alloc2) as B.
+          autospecialize B;[apply (Bfit alloc_id1 alloc1 H7)|].
+          autospecialize B;[apply (Bfit alloc_id2 alloc2 H8)|].
+          autospecialize B;[lia|].
+          autospecialize B;[assumption|].
+          specialize (B (Z.of_nat i)).
+          autospecialize B;[lia|].
+          bool_to_prop_hyp.
+          clear - H5 H2 H3 H H1 H6 B H13.
+          invc H13.
+          clear H0.
+          destruct H4 as [_ [_ [_ H11]]].
+          unfold cap_to_Z in *.
+          destruct B.
+          destruct H0.
+          destruct H4.
+          rewrite addr_offset_with_offset in * by lia.
+          unfold addr_offset in *.
+          rewrite AddressValue.with_offset_no_wrap in * by lia.
+          pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c1)).
+          pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
+          destruct H7.
+          destruct H8.
+          unfold AddressValue.ADDR_MIN in *.
           lia.
+          (* phew! *)
         *
-          rewrite M.
+          rewrite M2;
           reflexivity.
       +
+
+        (* We only need Bfit from Mbase *)
+        destruct_base_mem_invariant Mbase.
+        clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
+        invc H.
+        invc H15.
+        invc H16.
+        pose proof (memcpy_alloc_bounds_check_p_c_bounds (Z.of_nat n) c1 c2 alloc1 alloc2) as B.
+        autospecialize B;[apply (Bfit alloc_id1 alloc1 H7)|].
+        autospecialize B;[apply (Bfit alloc_id2 alloc2 H8)|].
+        autospecialize B;[lia|].
+        autospecialize B;[assumption|].
+        specialize (B (Z.of_nat i)).
+        autospecialize B;[lia|].
+
+        invc H13.
+        clear H.
+        destruct H0 as [_ [_ [_ H99]]].
+        unfold cap_to_Z in *.
+        destruct B.
+        rewrite addr_offset_with_offset in * by lia.
+        unfold addr_offset in *.
+        pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c1)).
+        pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
+        unfold AddressValue.ADDR_MIN in *.
         lia.
-       *)
-  Admitted.
+  Qed.
 
   Lemma memcpy_arg_sane_after_check
     (ptrval1 ptrval2 : pointer_value)
