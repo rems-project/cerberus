@@ -196,6 +196,19 @@ Section AddressValue_Lemmas.
     apply H.
   Qed.
 
+  Lemma with_offset_addr_offset:
+    forall a1 a2,
+      (AddressValue.with_offset a1 (addr_offset a2 a1)) = a2.
+  Proof.
+    intros a1 a2.
+    unfold addr_offset.
+    unfold AddressValue.with_offset.
+    replace (AddressValue.to_Z a1 + (AddressValue.to_Z a2 - AddressValue.to_Z a1))
+      with (AddressValue.to_Z a2) by lia.
+    rewrite AddressValue_of_Z_to_Z.
+    reflexivity.
+  Qed.
+
 End AddressValue_Lemmas.
 
 Lemma sequence_len_errS
@@ -4672,32 +4685,31 @@ Module RevocationProofs.
         apply eff_array_shift_ptrval_uchar_spec in C0, C2.
         subst ptrval2' ptrval1'.
         rename x into fp.
-        specialize (IHn _ _ C5).
 
-        assert(s0.(allocations) = s.(allocations)) as AE.
-        {
-          eapply store_char_preserves_allocations.
-          eauto.
-        }
-
-        (* TODO: we should not need IH here *)
-        autospecialize IHn;[lia|].
-        autospecialize IHn;[lia|].
-        bool_to_prop_hyp;[lia|].
-        autospecialize B;[lia|].
-        destruct B.
+        clear IHn.
 
         break_match_goal.
         *
-          rewrite L.
-          bool_to_prop_hyp.
+          (* addr within [c1,c1+(n+1)) *)
+          rewrite <- L in C3.
+          rewrite with_offset_addr_offset in C3.
+          rewrite L in *.
+          (* C1: load from c2+n *)
+          (* C3: store to addr *)
 
+          (* TODO: load/store matches goal. prove using load/store specs *)
+          (*
+          assert(s0.(allocations) = s.(allocations)) as AE.
+          {
+            eapply store_char_preserves_allocations.
+            eauto.
+          }
+          *)
           admit.
         *
-          rewrite IHn.
-          bool_to_prop_hyp.
+          autospecialize B.
           lia.
-          admit.
+          bool_to_prop_hyp; lia.
       +
         (* not last element *)
         cbn in C.
