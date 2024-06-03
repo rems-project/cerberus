@@ -137,6 +137,13 @@ Section AddressValue_Lemmas.
       reflexivity.
   Qed.
 
+  Lemma AddressValue_neq_via_to_Z:
+    forall a b,
+      AddressValue.to_Z a <> AddressValue.to_Z b <-> (a<>b).
+  Proof.
+    split ; intros; apply bitvector.bv_neq; assumption.
+  Qed.
+
   Lemma AddressValue_of_Z_to_Z:
     forall a,
       AddressValue.of_Z (AddressValue.to_Z a) = a.
@@ -207,6 +214,17 @@ Section AddressValue_Lemmas.
       with (AddressValue.to_Z a2) by lia.
     rewrite AddressValue_of_Z_to_Z.
     reflexivity.
+  Qed.
+
+  Lemma addr_offset_bounds:
+    forall a b,
+      (AddressValue.ADDR_MIN - AddressValue.ADDR_LIMIT + 1) <= (addr_offset a b) <= (AddressValue.ADDR_LIMIT - AddressValue.ADDR_MIN - 1).
+  Proof.
+    intros a b.
+    pose proof (AddressValue.to_Z_in_bounds a).
+    pose proof (AddressValue.to_Z_in_bounds b).
+    unfold addr_offset.
+    lia.
   Qed.
 
 End AddressValue_Lemmas.
@@ -4682,269 +4700,85 @@ Module RevocationProofs.
         cbn in C.
         state_inv_step;[lia|].
         
-        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
-        subst ptrval2' ptrval1'.
-        rename x into fp.
+        apply eff_array_shift_ptrval_uchar_spec in C0, C2;
+          subst ptrval2' ptrval1';
+          rename x into fp.
+        break_match_goal;[|autospecialize B;try lia;bool_to_prop_hyp;lia].
 
-        clear IHn.
+        specialize (IHn _ _ C5). clear C5.
+        autospecialize IHn;[lia|].
+        autospecialize IHn;[lia|].
+        autospecialize B;[lia|].
+        destruct B.
 
-        break_match_goal.
-        *
-          (* addr within [c1,c1+(n+1)) *)
-          rewrite <- L in C3.
-          rewrite with_offset_addr_offset in C3.
-          rewrite L in *.
-          (* C1: load from c2+n *)
-          (* C3: store to addr *)
+        rewrite IHn; clear IHn.
 
-          (* TODO: load/store matches goal. prove using load/store specs *)
-          (*
-          assert(s0.(allocations) = s.(allocations)) as AE.
-          {
-            eapply store_char_preserves_allocations.
-            eauto.
-          }
-          *)
-          admit.
-        *
-          autospecialize B.
-          lia.
-          bool_to_prop_hyp; lia.
+        rewrite <- L in C3.
+        rewrite with_offset_addr_offset in C3.
+        rewrite L in *.
+
+        (* Goal: s0[addr] = s[c2+n]
+           Load/store: s0[addr] = s[c2+n]
+         *)
+
+        (* Load and Store match. TODO: prove using load/store specs *)
+
+        apply load_uchar_spec in C1.
+        admit.
       +
         (* not last element *)
+
         cbn in C.
 
-        (* TODO: the problem here is this tactics breaks match in the goal.
-           Perhaps we want to avoid it.
-         *)
-        state_inv_step.
-        *
-          bool_to_prop_hyp.
-          apply eff_array_shift_ptrval_uchar_spec in C0, C2.
-          subst ptrval2' ptrval1'.
-          rename x into fp.
-          specialize (IHn _ _ C5).
+        (* not using [state_inv_step] as it destructs `if` in the IH *)
+        apply bind_memM_inv_same_state in C.
+        destruct C as [ptrval1' [SH1 C]].
+        apply bind_memM_inv_same_state in C.
+        destruct C as [ptrval2' [SH2 C]].
+        apply bind_memM_inv_same_state in C.
+        destruct C as [v [LD C]].
+        break_let. clear v Heqp.
+        apply bind_memM_inv in C.
+        destruct C as [s0 [fp [ST MC]]].
 
-          assert(s0.(allocations) = s.(allocations)) as AE.
-          {
-            eapply store_char_preserves_allocations.
-            eauto.
-          }
-
-          autospecialize IHn;[lia|].
-          autospecialize IHn;[lia|].
-          autospecialize B;[lia|].
-          destruct B.
-
-          rewrite IHn; clear IHn.
-          break_match_goal.
-          --
-            (* goal: s[addr] = s[c2+(addr-c1)] *)
-            bool_to_prop_hyp.
-            (* Load/store: s0[c1+n] = s[c2+n] *)
-            apply load_uchar_spec in C1.
-            (* TODO: need store spec *)
-            admit.
-          --
-            (* goal: s'[addr] = s[c2+(addr-c1)] *)
-            (* Heqb: (addr-c1)<0 || (addr-c1) >= S n *)
-            bool_to_prop_hyp;lia.
-        *
-          admit.
-      (* OLD
-      destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset a1 (Z.of_nat n))) as [L|NL].
-      +
-        (* last element *)
-        cbn in C.
-        state_inv_step.
-        remember (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n)) as addr.
-        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
+        apply eff_array_shift_ptrval_uchar_spec in SH1, SH2.
         subst ptrval2' ptrval1'.
-        rename x into fp.
-        specialize (IHn _ _ addr C5).
 
-        assert(s0.(allocations) = s.(allocations)) as AE.
-        {
-          eapply store_char_preserves_allocations.
-          eauto.
-        }
+        specialize (IHn _ _ MC). clear MC.
+        autospecialize IHn;[lia|].
+        autospecialize IHn;[lia|].
 
-        autospecialize IHn.
-        {
-          rewrite AE.
-          auto.
-        }
-
-        autospecialize IHn.
-        {
-          rewrite AE.
-          invc AG.
-          econstructor.
-          lia.
-          eapply H4.
-          eapply H5.
-          all: auto.
-          clear - H12.
-          unfold memcpy_alloc_bounds_check_p in *.
-          lia.
-        }
-        clear C5.
-
-        subst addr.
         break_match_goal.
-        *
-          replace (AddressValue.with_offset (Capability_GS.cap_get_value c2)
-                     (addr_offset
-                        (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n))
-                        (Capability_GS.cap_get_value c1)))
-            with
-            (AddressValue.with_offset (Capability_GS.cap_get_value c2) (Z.of_nat n)) in *.
-          2: {
-            invc AG.
-            clear -H12 H4 H5 Bfit.
+        --
+          bool_to_prop_hyp.
+          break_match_hyp;[bool_to_prop_hyp|bool_to_prop_hyp;lia].
+          rewrite IHn.
+          subst x.
+          (* Goal: s0[c2+(addr-c1) = s[c+(addr-c1)]
+               Load/store: s0[c1+n] = s[c2+n]
 
-            apply memcpy_alloc_bounds_check_p_c_bounds with (x:=n) in H12 .
-            destruct H12.
-
-            apply AddressValue_eq_via_to_Z.
-            unfold addr_offset.
-            repeat rewrite AddressValue.with_offset_no_wrap.
-            all: try lia.
-
-            eapply Bfit; eauto.
-            eapply Bfit; eauto.
-          }
-          clear Heqb.
-          rewrite IHn; clear IHn.
-
-          (*
-          m = load [s->s] (c2+n)
-          store [s->s0] m (c1+n)
-          ----
-          s0[c1+n] = s[c2+n]
+              According to NL: (addr-c1) <> n.
+              TODO: so we just need `store` spec to prove this.
            *)
-          apply load_uchar_spec in C1.
-          (* TODO: need store spec *)
           admit.
-        *
-          rewrite IHn; clear IHn s' C1.
-          apply andb_false_iff in Heqb.
-          unfold AddressValue.leb, AddressValue.ltb, leb, ltb in Heqb.
-          destruct Heqb as [H1 | H2].
-          --
-            bool_to_prop_hyp; try lia.
-            apply AdddressValue_eqb_neq in H0.
-            assert(n = O).
-            {
-              (* (c + n <= n) -> n=0 *)
-              rewrite AddressValue.with_offset_no_wrap in H.
-              -
-                unfold AddressValue.to_Z, bv_to_Z_unsigned in H.
-                lia.
-              -
-                invc AG.
-                apply memcpy_alloc_bounds_check_p_c_bounds with (x:=n) in H14 .
-                + destruct H14; lia.
-                + apply (Bfit alloc_id1 alloc1 H6).
-                + apply (Bfit alloc_id2 alloc2 H7).
-                + lia.
-            }
-            subst n.
-            clear H.
-            rewrite with_offset_0 in H0.
-            congruence.
-          --
+        --
+          break_match_hyp;[bool_to_prop_hyp;lia|].
+          rewrite IHn. clear IHn.
+
+          (* Goal: s0[addr] = s[addr]
+             Load/store: s0[c1+n] = s[c2+n]
+           *)
+          destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n))) as [AE|ANE].
+          ++
             exfalso.
-            bool_to_prop_hyp; try lia.
+            clear LD ST s s' s0 f m p1 p2 loc fp Heqb.
 
-            invc AG.
-            apply memcpy_alloc_bounds_check_p_c_bounds with (x:=n) in H13.
-            2: apply (Bfit alloc_id1 alloc1 H5).
-            2: apply (Bfit alloc_id2 alloc2 H6).
-            2: lia.
-            clear - H2 H13.
-            destruct H13.
-            rewrite 2!AddressValue.with_offset_no_wrap in H2; try lia.
-            clear H0.
-            (* TODO: could not be proven! *)
-
-      +
-        (* not last *)
-        cbn in C.
-        state_inv_step.
-        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
-        subst ptrval2' ptrval1'.
-        replace (AddressValue.ltb
-                   addr
-                   (AddressValue.with_offset (Capability_GS.cap_get_value c1)
-                      (Z.of_nat (S n))))
-          with (AddressValue.ltb
-                   addr
-                   (AddressValue.with_offset (Capability_GS.cap_get_value c1)
-                      (Z.of_nat n))).
-        2: {
-          clear - NL.
-          rewrite 2!AddressValue_ltb_Z_ltb.
-
-          destruct (Z.ltb (AddressValue.to_Z addr) (Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c1)) (Z.of_nat n)))
-            eqn:L;
-            destruct (AddressValue.to_Z addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n)) eqn:R;try reflexivity.
-          -
-            apply Z.ltb_lt in L.
-            apply Z.ltb_ge in R.
-            lia.
-          -
-            apply Z.ltb_lt in R.
-            apply Z.ltb_ge in L.
-            lia.
-        }
-
-        specialize (IHn _ _ addr C5).
-        autospecialize IHn.
-        {
-          assert(s0.(allocations) = s.(allocations)) as AE.
-          {
-            eapply store_char_preserves_allocations.
-            eauto.
-          }
-
-          rewrite AE.
-          invc AG.
-          econstructor.
-          lia.
-          eapply H4.
-          eapply H5.
-          all: auto.
-          clear - H12.
-          unfold memcpy_alloc_bounds_check_p in *.
-          lia.
-        }
-        clear C5.
-        rewrite IHn. clear IHn.
-
-        clear C1.
-        unfold cap_to_Z in C3.
-        rename addr into foo.
-        remember (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n) as addr.
-        remember  (match andb (Z.leb (AddressValue.to_Z (Capability_GS.cap_get_value c1)) foo) (Z.ltb foo addr) return ZMap.M.key with
-                   | true => Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c2)) (Z.sub foo (AddressValue.to_Z (Capability_GS.cap_get_value c1)))
-                   | false => foo
-                   end) as addr'.
-
-        assert(addr' <> addr).
-        {
-          subst.
-          invc AG.
-          unfold memcpy_alloc_bounds_check_p in H12.
-          unfold cap_to_Z in H12.
-          break_match_goal;lia.
-        }
-        (* store does not modify any other bytes  *)
-        remember (Capability_GS.cap_set_value c1 (AddressValue.of_Z addr)) as c'.
-        eapply store_other_spec with (c:=c');eauto.
-        subst c'.
-        apply Capability.cap_get_set_value.
-*)
+            (* TODO: this could not be proven because we could not use B to guarantee that there will
+               be no overflow *)
+            admit.
+          ++
+            (* TODO: We can show this from `store` spec *)
+          admit.
   Admitted.
 
 
