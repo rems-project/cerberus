@@ -4680,13 +4680,13 @@ Module RevocationProofs.
     autospecialize B;[lia|].
     autospecialize B;[assumption|].
 
+    destruct H6 as [_ [ _ [_ [ H6]]]].
+
     clear H H0 H1 H2 H3 H4 H5 H6 Bfit alloc1 alloc2 alloc_id1 alloc_id2.
 
     intros addr.
-    remember (addr_offset addr (Capability_GS.cap_get_value c1)) as x.
-    specialize (B x).
 
-    revert s s' C B Heqx.
+    revert s s' C B H7.
     induction n;intros.
     -
       break_match_goal;bool_to_prop_hyp.
@@ -4694,7 +4694,7 @@ Module RevocationProofs.
       + bool_to_prop_hyp;(cbn in C;state_inv_step;reflexivity).
       + bool_to_prop_hyp;(cbn in C;state_inv_step;reflexivity).
     -
-      destruct (Z.eq_dec x (Z.of_nat n)) as [L|NL].
+      destruct (Z.eq_dec (addr_offset addr (Capability_GS.cap_get_value c1)) (Z.of_nat n)) as [L|NL].
       +
         (* last element *)
         cbn in C.
@@ -4703,11 +4703,19 @@ Module RevocationProofs.
         apply eff_array_shift_ptrval_uchar_spec in C0, C2;
           subst ptrval2' ptrval1';
           rename x into fp.
-        break_match_goal;[|autospecialize B;try lia;bool_to_prop_hyp;lia].
+
+        break_match_goal;bool_to_prop_hyp;try lia.
 
         specialize (IHn _ _ C5). clear C5.
+        autospecialize IHn.
+        1:{
+          intros x.
+          specialize (B x).
+          lia.
+        }
+
         autospecialize IHn;[lia|].
-        autospecialize IHn;[lia|].
+        specialize (B (addr_offset addr (Capability_GS.cap_get_value c1))).
         autospecialize B;[lia|].
         destruct B.
 
@@ -4745,15 +4753,19 @@ Module RevocationProofs.
         subst ptrval2' ptrval1'.
 
         specialize (IHn _ _ MC). clear MC.
+        autospecialize IHn.
+        1:{
+          intros x.
+          specialize (B x).
+          lia.
+        }
         autospecialize IHn;[lia|].
-        autospecialize IHn;[lia|].
-
         break_match_goal.
         --
+          (* goal: RHS in the range *)
           bool_to_prop_hyp.
           break_match_hyp;[bool_to_prop_hyp|bool_to_prop_hyp;lia].
           rewrite IHn.
-          subst x.
           (* Goal: s0[c2+(addr-c1) = s[c+(addr-c1)]
                Load/store: s0[c1+n] = s[c2+n]
 
@@ -4762,6 +4774,7 @@ Module RevocationProofs.
            *)
           admit.
         --
+          (* goal: RHS is outside of the range *)
           break_match_hyp;[bool_to_prop_hyp;lia|].
           rewrite IHn. clear IHn.
 
@@ -4770,15 +4783,14 @@ Module RevocationProofs.
            *)
           destruct (AddressValue_as_OT.eq_dec addr (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n))) as [AE|ANE].
           ++
-            exfalso.
-            clear LD ST s s' s0 f m p1 p2 loc fp Heqb.
-
-            (* TODO: this could not be proven because we could not use B to guarantee that there will
-               be no overflow *)
-            admit.
+            subst addr.
+            rewrite addr_offset_with_offset in *; try lia.
+            **
+              specialize (B (Z.of_nat n)).
+              autospecialize B; lia.
           ++
             (* TODO: We can show this from `store` spec *)
-          admit.
+            admit.
   Admitted.
 
 
