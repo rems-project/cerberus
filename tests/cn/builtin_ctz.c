@@ -20,3 +20,8 @@ f (unsigned int x)
   }
 }
 
+
+int main(void) {
+  int r = f(5);
+  return 0;
+}

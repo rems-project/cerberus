@@ -9,3 +9,8 @@ int for_with_decl()
   }; 
   return acc;
 }
+
+int main(void) {
+  int r = for_with_decl();
+  return 0;
+}

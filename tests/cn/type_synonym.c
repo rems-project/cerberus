@@ -15,4 +15,8 @@ f (unsigned int x, unsigned int y)
   return;
 }
 
+int main(void) {
+  f(4, 5);
+  return 0;
+}
 

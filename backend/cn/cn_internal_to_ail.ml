@@ -1606,7 +1606,9 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> (C.union
   | Cnprog.M_CN_instantiate (to_instantiate, it) -> 
     Printf.printf "Translating CN instantiate\n";
     (default_true_res, true)
-  | Cnprog.M_CN_split_case _ -> failwith "TODO M_CN_split_case"
+  | Cnprog.M_CN_split_case _ -> 
+    (default_true_res, true)
+    (* failwith "TODO M_CN_split_case" *)
 
 
   | Cnprog.M_CN_extract (_, _, it) -> 

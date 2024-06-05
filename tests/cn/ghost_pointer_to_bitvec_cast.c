@@ -9,3 +9,9 @@ test_cast_loc_to_various (int *p)
 {
   return 1;
 }
+
+int main(void) {
+  int p[1];
+  test_cast_loc_to_various(p);
+  return 0;
+}

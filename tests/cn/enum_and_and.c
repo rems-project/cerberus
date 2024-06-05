@@ -18,3 +18,7 @@ void foo(enum flags flag, u32 level)
 	}
 }
 
+int main(void) {
+  foo(flag_1, 1);
+  return 0;
+}

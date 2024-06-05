@@ -14,3 +14,10 @@ f (int x, int *p, int *q)
   /*@ extract Owned<int>, 12; @*/
   return 1;
 }
+
+int main(void) {
+  int p[5] = {1, 2, 3, 4, 5};
+  int q[5] = {6, 7, 8, 9, 10};
+  f(42, p, q);
+  return 0;
+}

@@ -7,3 +7,8 @@ int ffs(int x)
 {
   return __builtin_ffs(x);
 }
+
+int main(void) {
+  int r = ffs(1);
+  return 0;
+}

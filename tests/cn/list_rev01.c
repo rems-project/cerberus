@@ -46,3 +46,10 @@ rev_list (struct node *p)
   return rev;
 }
 
+int main(void) {
+  struct node n3 = {.next = NULL, .v = 3};
+  struct node n2 = {.next = &n3, .v = 2};
+  struct node n1 = {.next = &n2, .v = 1};
+  struct node *rev = rev_list(&n1);
+  return 0;
+}

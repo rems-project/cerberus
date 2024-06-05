@@ -32,3 +32,10 @@ indirect (unsigned char *p, struct has_short *q)
   q->x++;
   *r++;
 }
+
+int main(void) {
+  struct has_short hs = {.x = 5};
+  unsigned char p[1] = {'a'};
+  indirect(p, &hs);
+  return 0;
+}

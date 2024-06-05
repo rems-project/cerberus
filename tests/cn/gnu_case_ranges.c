@@ -8,3 +8,8 @@ int f(int x)
       return 0;    
   }
 }
+
+int main(void) {
+  int r = f(29);
+  return 0;
+}

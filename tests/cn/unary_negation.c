@@ -16,3 +16,8 @@ void check_simplify()
 {
     /*@ assert(negate_paren() == 127i8); @*/
 }
+
+int main(void) {
+    check_simplify();
+    return 0;
+}

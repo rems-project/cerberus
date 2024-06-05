@@ -25,3 +25,7 @@ void check_cn_max_min_consts()
     /*@ assert(-9223372036854775808i64 == MINi64()); @*/
 }
 
+int main(void) {
+    check_cn_max_min_consts();
+    return 0;
+}
