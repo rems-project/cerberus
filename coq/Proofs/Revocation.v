@@ -4680,13 +4680,11 @@ Module RevocationProofs.
     autospecialize B;[lia|].
     autospecialize B;[assumption|].
 
-    destruct H6 as [_ [ _ [_ [ H6]]]].
-
     clear H H0 H1 H2 H3 H4 H5 H6 Bfit alloc1 alloc2 alloc_id1 alloc_id2.
 
     intros addr.
 
-    revert s s' C B H7.
+    revert s s' C B.
     induction n;intros.
     -
       break_match_goal;bool_to_prop_hyp.
@@ -4713,8 +4711,6 @@ Module RevocationProofs.
           specialize (B x).
           lia.
         }
-
-        autospecialize IHn;[lia|].
         specialize (B (addr_offset addr (Capability_GS.cap_get_value c1))).
         autospecialize B;[lia|].
         destruct B.
@@ -4759,14 +4755,13 @@ Module RevocationProofs.
           specialize (B x).
           lia.
         }
-        autospecialize IHn;[lia|].
         break_match_goal.
         --
           (* goal: RHS in the range *)
           bool_to_prop_hyp.
           break_match_hyp;[bool_to_prop_hyp|bool_to_prop_hyp;lia].
           rewrite IHn.
-          (* Goal: s0[c2+(addr-c1) = s[c+(addr-c1)]
+          (* Goal: s0[c2+(addr-c1) = s[c2+(addr-c1)]
                Load/store: s0[c1+n] = s[c2+n]
 
               According to NL: (addr-c1) <> n.
