@@ -106,6 +106,13 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
     return res;
 }
 
+cn_pointer *cn_array_shift(cn_pointer *ptr, cn_integer *i) {
+    cn_pointer *res = alloc(sizeof(cn_pointer));
+    res->ptr = ptr->ptr - *(i->val);
+    return res;
+}
+
+
 
 
 
