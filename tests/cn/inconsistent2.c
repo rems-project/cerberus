@@ -5,4 +5,9 @@ void f (int *p)
   /*@ instantiate 0i32; @*/
 }
 
+int main(void) {
+  int p[5] = {1, 2, 3, 4, 5};
+  f(p);
+  return 0;
+}
 

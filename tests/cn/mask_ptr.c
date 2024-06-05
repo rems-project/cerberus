@@ -37,4 +37,9 @@ foo (int *p)
   return p2;
 }
 
-
+int main(void) {
+  int r1 = foo_integer(42);
+  int p[1] = {5};
+  int *r2 = foo(p);
+  return 0;
+}

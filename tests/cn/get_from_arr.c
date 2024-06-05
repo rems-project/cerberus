@@ -18,3 +18,8 @@ get_from_arr (char *in_arr)
   return c;
 }
 
+int main(void) {
+  char *str = "hello";
+  char c = get_from_arr(str);
+  return 0;
+}

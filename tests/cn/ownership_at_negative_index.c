@@ -6,3 +6,9 @@ int f(int *p)
   /*@ extract Owned<int>, -1i32; @*/
   return p[-1];
 }
+
+int main(void) {
+  int p[5] = {1, 2, 3, 4, 5};
+  int r = f(p);
+  return 0;
+}

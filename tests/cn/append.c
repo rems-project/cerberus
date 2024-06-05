@@ -53,7 +53,7 @@ struct int_list* IntList_append(struct int_list* xs, struct int_list* ys)
 }
 
 /*@
-function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs) 
+function [rec] ({datatype seq fst, datatype seq snd}) split_cn(datatype seq xs) 
 {
   match xs {
     Seq_Nil {} => { 
@@ -63,7 +63,7 @@ function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs)
       {fst: Seq_Nil{}, snd: xs} 
     }
     Seq_Cons {head: h1, tail: Seq_Cons {head : h2, tail : tl2 }} => {
-      let P = split(tl2);
+      let P = split_cn(tl2);
       {fst: Seq_Cons { head: h1, tail: P.fst},
        snd: Seq_Cons { head: h2, tail: P.snd}}
     }
@@ -111,5 +111,12 @@ struct int_list_pair split(struct int_list *xs)
   }
 }
 
-      
+int main(void) {
+  struct int_list i1 = {.head = 2, .tail = 0};
+  struct int_list i3 = {.head = 4, .tail = 0};
+  struct int_list i2 = {.head = 3, .tail = &i3};
+
+  struct int_list *il3 = IntList_append(&i1, &i2);
+  return 0;
+}      
 

@@ -8,3 +8,7 @@ f (int x) {
   return 0;
 }
 
+int main(void) {
+  int r = f(5);
+  return 0;
+}

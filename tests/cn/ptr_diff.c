@@ -8,3 +8,8 @@ f (int *p, int *q)
 
   return x;
 }
+
+int main(void) {
+  
+  return 0;
+}

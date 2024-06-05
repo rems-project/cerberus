@@ -23,4 +23,7 @@ check_foo (int x)
   ;
 }
 
-
+int main(void) {
+  check_foo(5);
+  return 0;
+}
