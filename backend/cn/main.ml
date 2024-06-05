@@ -217,6 +217,7 @@ let main
             let cn_utils_header_pair = ("../../../../executable-spec/cn_utils.h", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
 
+            (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = Executable_spec_internal.generate_all_record_strs ail_prog in *)
             let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
             let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
 
