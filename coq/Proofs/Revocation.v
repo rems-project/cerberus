@@ -73,6 +73,10 @@ Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer M
 (* TODO: move *)
 Section AddressValue_Lemmas.
 
+  (** Predicate to check if address is pointer-aligned *)
+  Definition addr_ptr_aligned (a:AddressValue.t) :=
+    Z.modulo (AddressValue.to_Z a) (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
+
   (** [a1] - [a2] for addresses *)
   Definition addr_offset (a1 a2:AddressValue.t) : Z
     := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
@@ -539,9 +543,7 @@ Module RevocationProofs.
         ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) + (Z.of_nat a.(size)) <= AddressValue.ADDR_LIMIT) am
 
       (* All keys in capmeta must be pointer-aligned addresses *)
-      /\ AMapProofs.map_forall_keys (fun addr => Z.modulo (AddressValue.to_Z addr)
-                                     (Z.of_nat MorelloImpl.get.(alignof_pointer))
-                                   = 0) cm
+      /\ AMapProofs.map_forall_keys addr_ptr_aligned cm
 
       (* [next_alloc_id] is sane *)
       /\
@@ -599,13 +601,14 @@ Module RevocationProofs.
             AMap.M.MapsTo a tg capmeta
             \/
               ( (* new *)
-                Z.modulo (AddressValue.to_Z a) (Z.of_nat MorelloImpl.get.(alignof_pointer)) = 0
+                addr_ptr_aligned a
                 /\
                   tg = (false, {| tag_unspecified := true; bounds_unspecified := false |})
               )
           ).
     Proof.
       intros L a tg H.
+      unfold addr_ptr_aligned.
       unfold init_ghost_tags, align_down in *.
       break_match_hyp;[left;assumption|].
       clear size Heqn.
@@ -4053,6 +4056,7 @@ Module RevocationProofs.
       +
         subst.
         unfold is_pointer_algined in A.
+        unfold addr_ptr_aligned.
         lia.
       +
         apply AMap.F.add_neq_in_iff in H;auto.
@@ -5053,9 +5057,9 @@ Module RevocationProofs.
   Qed.
 
   Lemma fetch_bytes_subset
-    {a1 a2 a1' a2':AddressValue.t}
-    {n n':nat}
-    {bm:AMap.M.t AbsByte}
+    (a1 a2 a1' a2':AddressValue.t)
+    (n n':nat)
+    (bm: AMap.M.t AbsByte)
     (A1: 0 <= AddressValue.to_Z a1 + Z.of_nat n <= AddressValue.ADDR_LIMIT)
     (A2: 0 <= AddressValue.to_Z a2 + Z.of_nat n <= AddressValue.ADDR_LIMIT):
 
@@ -5195,18 +5199,25 @@ Module RevocationProofs.
   Lemma mem_state_after_bytmeta_copy_tags_preserves:
     forall m dst src n sz,
       (Z.of_nat n * Z.of_nat (alignof_pointer MorelloImpl.get) = Z.of_nat sz) ->
-      (Z.modulo src (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
-      (Z.modulo dst (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
+      addr_ptr_aligned src ->
+      addr_ptr_aligned dst ->
+
+      (forall x : Z,
+      0 <= x <= Z.of_nat sz ->
+      AddressValue.ADDR_MIN <= AddressValue.to_Z src + x < AddressValue.ADDR_LIMIT /\
+      AddressValue.ADDR_MIN <= AddressValue.to_Z dst + x < AddressValue.ADDR_LIMIT) ->
+
       (fetch_bytes (bytemap m) src sz = fetch_bytes (bytemap m) dst sz) ->
       mem_invariant m ->
       mem_invariant (mem_state_with_capmeta
                        (bytmeta_copy_tags dst src n (alignof_pointer MorelloImpl.get) (capmeta m))
                        m).
   Proof.
-    intros m dst src n sz Hsz Hsrc Hdst DS M.
+    intros m dst src n sz Hsz Hsrc Hdst B DS M.
     remember (alignof_pointer MorelloImpl.get) as step.
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
+    unfold addr_ptr_aligned in *.
     split.
     -
       (* base invariant *)
@@ -5215,7 +5226,7 @@ Module RevocationProofs.
 
       (* alignment proof *)
       intros a E.
-      apply zmap_in_mapsto in E.
+      apply AMapProofs.map_in_mapsto in E.
       destruct E as [tg E].
       unfold mem_state_with_capmeta in E.
       simpl in E.
@@ -5224,16 +5235,34 @@ Module RevocationProofs.
         destruct E as [[k [H1 [H2 H3]]]| [H1 H2]].
         *
           subst a step.
-          rewrite Zdiv.Z_mod_plus_full.
-          assumption.
+          unfold addr_ptr_aligned.
+          rewrite MorelloCaps.AddressValue.with_offset_no_wrap.
+          --
+            rewrite Zdiv.Z_mod_plus_full.
+            assumption.
+          --
+            clear - H1 Hsz B.
+            unfold MorelloCaps.AddressValue.ADDR_MIN.
+            specialize (B (k * Z.of_nat (alignof_pointer MorelloImpl.get))).
+            autospecialize B.
+            pose proof MorelloImpl.alignof_pointer_pos.
+            nia.
+            apply B.
         *
+          unfold addr_ptr_aligned.
           subst step.
-          apply ZMapProofs.map_mapsto_in in H1.
+          apply AMapProofs.map_mapsto_in in H1.
           specialize (Balign a H1).
           auto.
       +
         subst step.
         apply MorelloImpl.alignof_pointer_pos.
+      +
+        subst step.
+        auto.
+      +
+        subst step.
+        auto.
     -
       (* the rest of the invariant *)
       intros a g E bs F.
@@ -5247,11 +5276,18 @@ Module RevocationProofs.
       +
         (* in copied meta range *)
         destruct E1 as [k [H1 [H2 H3]]].
-        specialize (MIcap (src + k * Z.of_nat step) g H3 bs).
+        specialize (MIcap (AddressValue.with_offset src (k * Z.of_nat step)) g H3 bs).
         autospecialize MIcap.
         {
           subst a bs.
-          eapply fetch_bytes_subset.
+
+          specialize (B (Z.of_nat sz)).
+          autospecialize B. lia.
+          unfold AddressValue.ADDR_MIN in B.
+          destruct B.
+          apply fetch_bytes_subset with (a1:=src) (a2:=dst) (n:=sz).
+          lia.
+          lia.
           apply DS.
           exists (k * Z.of_nat step).
           repeat split.
@@ -5282,6 +5318,12 @@ Module RevocationProofs.
           exists c.
           split;[apply M2|].
           eauto.
+      +
+        subst step.
+        auto.
+      +
+        subst step.
+        auto.
   Qed.
 
   Fact alignment_correction_correct:
