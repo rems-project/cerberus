@@ -12,3 +12,9 @@ int g (unsigned int x)
 {
   return int_typ_20_30(x);
 }
+
+int main(void) {
+  int r1 = f(5);
+  int r2 = g(42);
+  return 0;
+}

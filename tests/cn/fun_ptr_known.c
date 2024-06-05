@@ -35,4 +35,7 @@ f3 (int x, int y) {
   return z;
 }
 
-
+int main(void) {
+  int r = f3(1, 2);
+  return 0;
+}

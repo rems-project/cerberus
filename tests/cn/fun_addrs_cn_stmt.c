@@ -27,3 +27,8 @@ f (int x)
 
   return x == global_x;
 }
+
+int main(void) {
+  int r = f(42);
+  return 0;
+}

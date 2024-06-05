@@ -14,3 +14,9 @@ void swap_pair(unsigned long int *pair_p)
     /*@ instantiate good<unsigned long int>, 1i32; @*/
     pair_p[1] = tmp;
 }
+
+int main(void) {
+  unsigned long int pair_p[2] = {1, 5};
+  swap_pair(pair_p);
+  return 0;
+}

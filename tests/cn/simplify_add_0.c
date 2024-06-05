@@ -11,3 +11,9 @@ signed int right_zero(signed int x, signed int y)
 {                                                                                
   return x + y;                                                                  
 }
+
+int main(void) {
+  int r1 = left_zero(0, 42);
+  int r2 = right_zero(5, 0);
+  return 0;
+}

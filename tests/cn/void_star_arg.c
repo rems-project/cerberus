@@ -47,7 +47,12 @@ f (void *p, int k)
   }
   else {
     /*@ assert (false); @*/
+    return 0;
   }
 }
 
-
+int main(void) {
+  struct two_ints two_ints = {.x = 4, .y = 5};
+  int r = f(&two_ints, 2);
+  return 0;
+}
