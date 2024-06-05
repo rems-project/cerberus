@@ -300,6 +300,7 @@ CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer);
 
 cn_pointer *convert_to_cn_pointer(void *ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
+cn_pointer *cn_array_shift(cn_pointer *ptr, cn_integer *i);
 
 // Ownership
 enum OWNERSHIP {
