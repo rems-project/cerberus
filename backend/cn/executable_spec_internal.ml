@@ -47,6 +47,8 @@ let populate_record_map (prog5: unit Mucore.mu_file) =
   let _ = List.map populate_record_map_aux (fun_syms_and_ret_types @ pred_syms_and_ret_types) in 
   ()
 
+
+
 let rec extract_global_variables = function
   | [] -> []
   | (sym, (_, _, decl)) :: ds -> 
@@ -118,6 +120,9 @@ let generate_record_strs ail_prog ail_records =
   let equality_fun_prot_strs = List.map (fun doc -> [CF.Pp_utils.to_plain_pretty_string doc]) decl_docs in
   let equality_fun_prot_strs = String.concat "\n" (List.concat equality_fun_prot_strs) in
   (records_str, CF.Pp_utils.to_plain_pretty_string equality_fun_strs, equality_fun_prot_strs)
+
+let generate_all_record_strs ail_prog = 
+  generate_record_strs ail_prog (Cn_internal_to_ail.cn_to_ail_pred_records (Cn_internal_to_ail.RecordMap.bindings !(Cn_internal_to_ail.records)))
 
 (* TODO: Use Mucore datatypes instead of CN datatypes from Ail program *)
 let generate_c_datatypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 

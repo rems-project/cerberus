@@ -14,3 +14,7 @@ predicate {integer len} IntList(pointer l) {
   }
 }
 @*/
+
+int main(void) {
+  return 0;
+}
