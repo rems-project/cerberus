@@ -42,3 +42,7 @@ predicate {datatype int_list v} IntList(pointer l) {
   }
 }
 @*/
+
+int main(void) {
+  return 0;
+}

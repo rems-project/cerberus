@@ -155,30 +155,30 @@ let str_of_bt_bitvector_type sign size =
   let size_str = string_of_int size in
   sign_str ^ size_str
 
+let generate_record_sym sym members =  
+  (match sym with
+    | Some sym' -> 
+      let sym'' = generate_sym_with_suffix ~suffix:"_record" sym' in
+      records := RecordMap.add members sym'' !records;
+      sym''
+    | None ->   
+      let map_bindings = RecordMap.bindings !records in
+      Printf.printf "Record table size: %d\n" (List.length map_bindings);
+      let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
+      match eq_members_bindings with 
+      | [] -> 
+        (* First time reaching record of this type - add to map *)
+        (let count = RecordMap.cardinal !records in
+        let sym' = Sym.fresh_pretty ("record_" ^ (string_of_int count)) in
+        Printf.printf "Generating new record with sym %s\n" (Sym.pp_string sym');
+        records := RecordMap.add members sym' !records;
+        sym')
+      | (_, sym') :: _ -> 
+        sym')
+
 (* TODO: Complete *)
 let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ = 
   let generate_ail_array bt = C.(Array (cn_to_ail_base_type bt, None)) in 
-  let generate_record_sym sym members =  
-    (match sym with
-      | Some sym' -> 
-        let sym'' = generate_sym_with_suffix ~suffix:"_record" sym' in
-        records := RecordMap.add members sym'' !records;
-        sym''
-      | None ->   
-        let map_bindings = RecordMap.bindings !records in
-        Printf.printf "Record table size: %d\n" (List.length map_bindings);
-        let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
-        match eq_members_bindings with 
-        | [] -> 
-          (* First time reaching record of this type - add to map *)
-          (let count = RecordMap.cardinal !records in
-          let sym' = Sym.fresh_pretty ("record_" ^ (string_of_int count)) in
-          Printf.printf "Generating new record with sym %s\n" (Sym.pp_string sym');
-          records := RecordMap.add members sym' !records;
-          sym')
-        | (_, sym') :: _ -> 
-          sym')
-  in
   let typ = (match cn_typ with
   | CN_unit -> C.Void
   | CN_bool -> C.(Basic (Integer Bool))
@@ -710,19 +710,16 @@ let rec cn_to_ail_expr_aux_internal
       (b, s, assign_stat)
     in
 
-    let (b, s) = match pred_name with 
-      (* Assuming records only get instantiated at point of return for predicates *)
-      | Some sym -> 
-          let sym_name = generate_sym_with_suffix ~suffix:"_record" sym in
-          let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct sym_name)))) in
-          let res_binding = create_binding res_sym (mk_ctype ctype_) in
-          let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct sym_name)))])) in
-          let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
-          ([res_binding], [alloc_stat])
-      | None -> 
-        Printf.printf "None case in record instantiation\n";
-        ([], [])
-    in
+    let transformed_ms = List.map (fun (id, it) -> (id, bt_to_cn_base_type (IT.bt it))) ms in
+
+    let sym_name = generate_record_sym pred_name transformed_ms in
+    let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct sym_name)))) in
+    let res_binding = create_binding res_sym (mk_ctype ctype_) in
+    let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct sym_name)))])) in
+    let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
+
+    
+    let (b, s) = ([res_binding], [alloc_stat]) in
     
     let (bs, ss, assign_stats) = list_split_three (List.map generate_ail_stat ms) in
     dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
@@ -1004,8 +1001,7 @@ let generate_struct_definition ?(lc=true) (constructor, members) =
   (constr_sym, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
 
 
-let cn_to_ail_pred_records = 
-  let map_bindings = RecordMap.bindings !records in
+let cn_to_ail_pred_records map_bindings = 
   let flipped_bindings = List.map (fun (ms, sym) -> (sym, ms)) map_bindings in
   List.map generate_struct_definition flipped_bindings
 

@@ -16,3 +16,8 @@ void swap_pair(unsigned long int *pair)
     pair[1] = tmp;
 }
 
+int main(void) {
+  unsigned long int pair[2] = {4, 5};
+  swap_pair(pair);
+  return 0;
+}

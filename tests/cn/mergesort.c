@@ -59,7 +59,7 @@ function [rec] (datatype seq) cn_mergesort(datatype seq xs) {
       Seq_Nil{} => { xs }
       Seq_Cons{head: x, tail: Seq_Nil{}} => { xs }
       Seq_Cons{head: x, tail: Seq_Cons{head: y, tail: zs}} => {
-	let P = split(xs);
+	let P = cn_split(xs);
 	let L1 = cn_mergesort(P.fst);
 	let L2 = cn_mergesort(P.snd);
 	cn_merge(L1, L2)
@@ -136,7 +136,7 @@ struct int_list* merge(struct int_list *xs, struct int_list *ys)
   }
 }
 
-struct int_list* mergesort(struct int_list *xs) 
+struct int_list* naive_mergesort(struct int_list *xs) 
 /*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
 /*@ requires take Xs = IntList(xs); @*/
 /*@ ensures take Ys = IntList(return); @*/
@@ -154,8 +154,8 @@ struct int_list* mergesort(struct int_list *xs)
     } else { 
       /*@ unfold cn_mergesort(Xs); @*/
       struct int_list_pair p = split(xs);
-      p.fst = mergesort(p.fst);
-      p.snd = mergesort(p.snd);
+      p.fst = naive_mergesort(p.fst);
+      p.snd = naive_mergesort(p.snd);
       return merge(p.fst, p.snd);
     }
   }
@@ -166,6 +166,6 @@ int main(void) {
   struct int_list i2 = {.head = 4, .tail = &i3};
   struct int_list i1 = {.head = 2, .tail = &i2};
 
-  struct int_list *sorted_i1 = mergesort(&i1);
+  struct int_list *sorted_i1 = naive_mergesort(&i1);
   return 0;
 }   

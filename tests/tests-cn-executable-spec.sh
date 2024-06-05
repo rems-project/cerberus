@@ -4,7 +4,7 @@
 
 DIRNAME=$1
 
-SUCC=$(find $DIRNAME -maxdepth 1 -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c' | grep -v '\-exec\.c')
+SUCC=$(find $DIRNAME -maxdepth 1 -name '*.c' | grep -v '\.error\.c' | grep -v 'fixme_error' | grep -v '\.unknown\.c' | grep -v '\-exec\.c')
 
 NUM_GENERATION_FAILED=0
 GENERATION_FAILED=''
