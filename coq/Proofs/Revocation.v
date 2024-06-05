@@ -4680,11 +4680,13 @@ Module RevocationProofs.
     autospecialize B;[lia|].
     autospecialize B;[assumption|].
 
-    clear H H0 H1 H2 H3 H4 H5 H6 Bfit alloc1 alloc2 alloc_id1 alloc_id2.
+    destruct H6 as [_ [_ [_ [_ H6]]]].
+
+    clear H H0 H1 H2 H3 H4 H5 Bfit alloc1 alloc2 alloc_id1 alloc_id2.
 
     intros addr.
 
-    revert s s' C B.
+    revert s s' C B H6.
     induction n;intros.
     -
       break_match_goal;bool_to_prop_hyp.
@@ -4711,6 +4713,8 @@ Module RevocationProofs.
           specialize (B x).
           lia.
         }
+        autospecialize IHn;[lia|].
+
         specialize (B (addr_offset addr (Capability_GS.cap_get_value c1))).
         autospecialize B;[lia|].
         destruct B.
@@ -4723,11 +4727,16 @@ Module RevocationProofs.
 
         (* Goal: s0[addr] = s[c2+n]
            Load/store: s0[addr] = s[c2+n]
-         *)
 
-        (* Load and Store match. TODO: prove using load/store specs *)
+            Load and Store match. *)
 
-        apply load_uchar_spec in C1.
+        rename C1 into LD, C3 into ST.
+
+        apply load_uchar_spec in LD.
+        rewrite Capability_GS.cap_get_set_value in LD.
+
+        (* TODO: store spec *)
+
         admit.
       +
         (* not last element *)
@@ -4755,19 +4764,40 @@ Module RevocationProofs.
           specialize (B x).
           lia.
         }
+        autospecialize IHn;[lia|].
+
         break_match_goal.
         --
           (* goal: RHS in the range *)
           bool_to_prop_hyp.
           break_match_hyp;[bool_to_prop_hyp|bool_to_prop_hyp;lia].
-          rewrite IHn.
+          rewrite IHn. clear IHn.
           (* Goal: s0[c2+(addr-c1) = s[c2+(addr-c1)]
                Load/store: s0[c1+n] = s[c2+n]
 
               According to NL: (addr-c1) <> n.
               TODO: so we just need `store` spec to prove this.
            *)
-          admit.
+          clear LD.
+
+          rename addr into oldaddr.
+          remember (AddressValue.with_offset (Capability_GS.cap_get_value c2)
+                      (addr_offset oldaddr (Capability_GS.cap_get_value c1))) as addr'.
+          remember  (Capability_GS.cap_set_value c1
+                       (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n))) as c.
+
+          remember (Capability_GS.cap_get_value c) as addr.
+
+          symmetry in Heqaddr.
+          apply (store_other_spec _ _ _ _ _ _ _ _ Heqaddr ST).
+          subst.
+          clear ST m f s s' s0 loc p1 p2 fp.
+
+          apply AddressValue_neq_via_to_Z.
+          rewrite Capability_GS.cap_get_set_value.
+          repeat (rewrite AddressValue.with_offset_no_wrap; [|apply B;lia]).
+          unfold cap_to_Z in *.
+          lia.
         --
           (* goal: RHS is outside of the range *)
           break_match_hyp;[bool_to_prop_hyp;lia|].
@@ -4785,7 +4815,23 @@ Module RevocationProofs.
               autospecialize B; lia.
           ++
             (* TODO: We can show this from `store` spec *)
-            admit.
+            clear LD.
+
+            rename addr into addr'.
+            remember  (Capability_GS.cap_set_value c1
+                  (AddressValue.with_offset (Capability_GS.cap_get_value c1) (Z.of_nat n))) as c.
+            remember (Capability_GS.cap_get_value c) as addr.
+
+            symmetry in Heqaddr.
+            apply (store_other_spec _ _ _ _ _ _ _ _ Heqaddr ST).
+            subst.
+            clear ST m f s s' s0 loc p1 p2 fp Heqb0.
+
+            apply AddressValue_neq_via_to_Z.
+            rewrite Capability_GS.cap_get_set_value.
+            repeat (rewrite AddressValue.with_offset_no_wrap; [|apply B;lia]).
+            unfold cap_to_Z, addr_offset in *.
+            bool_to_prop_hyp;try lia.
   Admitted.
 
 

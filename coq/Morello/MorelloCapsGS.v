@@ -226,6 +226,9 @@ Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Fl
   Lemma cap_invalidate_preserves_value: forall c, cap_get_value c = cap_get_value (cap_invalidate c).
   Proof. intros c. apply Capability.cap_invalidate_preserves_value. Qed.
 
+  Lemma cap_get_set_value: forall (c:t) (a:AddressValue.t), cap_get_value (cap_set_value c a) = a.
+  Proof. intros. apply Capability.cap_get_set_value. Qed.
+
 End Capability_GS.  
 
 
