@@ -130,7 +130,7 @@ let rec bt_to_cn_base_type = function
 | BT.Integer -> CN_integer
 | BT.Bits (sign, size) -> CN_bits ((match sign with BT.Unsigned -> CN_unsigned  | BT.Signed -> CN_signed), size)
 | BT.Real -> CN_real
-| BT.Alloc_id  -> failwith "TODO BT.Alloc_id"
+| BT.Alloc_id  -> CN_loc
 | BT.CType -> failwith "TODO BT.Ctype"
 | BT.Loc -> CN_loc
 | BT.Struct tag -> CN_struct tag
@@ -222,7 +222,6 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
 
 let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn_base_type t)
 
-(* TODO: Finish *)
 let cn_to_ail_unop_internal = function 
   | Terms.Not -> (A.Bnot, Some "cn_bool_not")
   (* | BWCLZNoSMT
@@ -774,7 +773,12 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
     dest d ([], [], mk_expr ail_expr_)
 
-  | ArrayShift _ -> failwith "TODO7"
+  | ArrayShift params ->
+    let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals params.base PassBack in
+    let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals params.index PassBack in
+    let ail_expr_ = A.(AilEcall ((mk_expr (AilEident (Sym.fresh_pretty "cn_array_shift"))), [e1; e2])) in
+    dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
+
   | CopyAllocId _ -> failwith "TODO CopyAllocId"
   | Nil bt -> failwith "TODO8"
   | Cons (x, xs) -> failwith "TODO9"
