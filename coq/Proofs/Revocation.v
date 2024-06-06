@@ -5493,10 +5493,33 @@ Module RevocationProofs.
           -- rewrite Heqb; assumption.
           -- pose proof MorelloImpl.alignof_pointer_pos;lia.
         *
-          admit.
+          apply B.
+          clear B.
+          split; try lia.
+          pose proof MorelloImpl.alignof_pointer_pos.
+          pose proof (Z.mod_pos_bound
+                        (AddressValue.to_Z (Capability_GS.cap_get_value c1))
+                        (Z.of_nat (alignof_pointer MorelloImpl.get))).
+          lia.
     -
       intros x H0.
-      admit.
+      clear H3 DS H2.
+      break_match.
+      +
+        subst off.
+        rewrite 2!with_offset_0.
+        apply and_comm, B.
+        clear B BL1 BL2 Heqb0 Heqb1 Heqb c1 c2 H7 s.
+        pose proof MorelloImpl.alignof_pointer_pos.
+        rewrite Znat.Z2Nat.id in * by lia.
+        rewrite Z.sub_0_r in Heqn.
+        split;try lia.
+        cut (Z.of_nat (n * alignof_pointer MorelloImpl.get) < sz).
+        lia.
+        clear x H0.
+        admit.
+      +
+        admit.
     -
       symmetry in DS.
       apply fetch_bytes_subset
