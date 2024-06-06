@@ -53,6 +53,10 @@ cn_map *map_create(void) {
     return ht_create();
 }
 
+ownership_ghost_state *initialise_ownership_ghost_state(void) {
+    return ht_create();
+}
+
 
 void *cn_map_get(cn_map *m, cn_integer *key) {
     // const char key_arr[1] = {key};
