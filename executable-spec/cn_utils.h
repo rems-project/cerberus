@@ -58,6 +58,9 @@ typedef struct cn_bool {
 
 
 typedef hash_table cn_map;
+typedef hash_table ownership_ghost_state;
+
+ownership_ghost_state *initialise_ownership_ghost_state(void);
 
 /* Conversion functions */
 

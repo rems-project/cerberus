@@ -213,7 +213,9 @@ let inject st inj =
           begin if AilTypesAux.is_void ret_ty then
             ""
           else
-            String_ail.string_of_ctype Ctype.no_qualifiers ret_ty ^ " __cn_ret;\n" ^ indent
+             (let cn_ret_sym = Sym.fresh_pretty "__cn_ret"  in
+              let ret_type_doc = Pp_ail.pp_ctype_declaration ~executable_spec:true (Pp_ail.pp_id_obj ~executable_spec:true cn_ret_sym) Ctype.no_qualifiers ret_ty in
+              Pp_utils.to_plain_pretty_string ret_type_doc ^ ";\n" ^ indent)
           end ^
           str
         end
@@ -441,6 +443,7 @@ let output_injections oc cn_inj =
             acc_
     ) (Ok []) cn_inj.sigm.A.function_definitions in
 
+    
     let* in_stmt = in_stmt_injs cn_inj.in_stmt 0 in
     let injs = in_stmt @ injs in
     ignore (inject_all oc cn_inj.filename injs);
