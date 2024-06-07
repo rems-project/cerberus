@@ -835,9 +835,6 @@ end = struct
 
     let start_spine = time_log_start "spine_l" "" in
 
-    (* record the resources now, so errors are raised with all
-       the resources present, rather than those that remain after some
-       arguments are claimed *)
     let@ original_resources = all_resources_tagged loc in
 
     let@ rt =
@@ -847,7 +844,7 @@ end = struct
             debug 6 (lazy (item "spec" (LAT.pp rt_pp ftyp)));
           )
         in
-        let uiinfo = (Call situation, []) in
+        let uiinfo = ((Call situation : situation), []) in
         let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc uiinfo
                       original_resources ftyp in
         match ftyp with
@@ -885,13 +882,13 @@ end = struct
         | [], (L ftyp) ->
            let@ () = match situation with
              | FunctionCall fsym ->
-                 add_trace_item_to_trace (Call (fsym, args_acc),loc)
+                 record_action (Call (fsym, args_acc),loc)
              | (Subtyping | LabelCall LAreturn) ->
                  let returned = match args_acc with
                    | [v] -> v
                    | _ -> assert false
                  in
-                 add_trace_item_to_trace (Return returned, loc)
+                 record_action (Return returned, loc)
              | _ -> return ()
            in
            k ftyp
@@ -964,7 +961,7 @@ let all_empty loc original_resources =
       let@ simp_ctxt = simp_ctxt () in
       RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt constr;
       fail(fun ctxt ->
-            let ctxt = { ctxt with resources = original_resources } in
+            (* let ctxt = { ctxt with resources = original_resources } in *)
             {loc; msg = Unused_resource {resource; ctxt; model; }})
 
 
@@ -1022,7 +1019,7 @@ let load loc pointer ct =
       return value
     end
   in
-  let@ () = add_trace_item_to_trace (Read (pointer, value), loc) in
+  let@ () = record_action (Read (pointer, value), loc) in
   return value
 
 
@@ -1050,6 +1047,7 @@ let instantiate loc filter arg =
 
 
 let add_trace_information labels annots =
+  let open Where in
   let open CF.Annot in
   let inlined_labels =
     List.filter_map (function Ainlined_label l -> Some l | _ -> None) annots in
@@ -1060,7 +1058,7 @@ let add_trace_information labels annots =
   let@ () = match inlined_labels with
     | [] -> return ()
     | [(lloc,lsym,lannot)] ->
-      add_label_to_trace (Some (lloc,lannot))
+      modify_where (set_section (Label {loc=lloc;label=lannot}))
     | _ -> assert false
   in
   let@ () = match locs with
@@ -1068,9 +1066,9 @@ let add_trace_information labels annots =
       return ()
     | l :: _ ->
       if is_stmt then
-        add_trace_item_to_trace (Stmt, l)
+        modify_where (set_statement l)
       else if is_expr then
-        add_trace_item_to_trace (Expr, l)
+        modify_where (set_expression l)
       else
         return ()
   in
@@ -1287,7 +1285,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
              O (default_ (Memory.bt_of_sct act.ct) loc))
         in
         let@ () = add_r loc (P (Global.mk_alloc ret), O (IT.unit_ loc)) in
-        let@ () = add_trace_item_to_trace (Create ret, loc) in
+        let@ () = record_action (Create ret, loc) in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) ->
         Cerb_debug.error "todo: CreateReadOnly"
@@ -1310,7 +1308,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         let@ _ =
           RI.Special.predicate_request loc (Access Kill) (Global.mk_alloc arg, None)
         in
-        let@ () = add_trace_item_to_trace (Kill arg, loc) in
+        let@ () = record_action (Kill arg, loc) in
         k (unit_ loc))
      | M_Store (_is_locking, act, p_pe, v_pe, mo) ->
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
@@ -1359,7 +1357,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                },
              O varg)
         in
-        let@ () = add_trace_item_to_trace (Write (parg, varg), loc) in
+        let@ () = record_action (Write (parg, varg), loc) in
         k (unit_ loc)))
      | M_Load (act, p_pe, _mo) ->
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
@@ -1720,6 +1718,8 @@ let check_procedure
 
   pure begin
 
+      let@ () = modify_where (Where.set_function fsym) in
+
       let@ ((body, label_defs, rt), initial_resources) = bind_arguments loc args_and_body in
 
       let label_context = WellTyped.WProc.label_context rt label_defs in
@@ -1730,7 +1730,7 @@ let check_procedure
         pure begin
             let@ () = add_rs loc initial_resources in
             let@ pre_state = get_typing_context () in
-            let@ () = add_label_to_trace None in
+            let@ () = modify_where (Where.set_section Body) in
             let@ () = check_expr_top loc label_context rt body in
             return ((), pre_state)
           end
@@ -1746,7 +1746,7 @@ let check_procedure
              let@ (label_body, label_resources) = bind_arguments loc label_args_and_body in
              let@ () = add_rs loc label_resources in
              let (_,label_kind,loc) = SymMap.find lsym label_context in
-             let@ () = add_label_to_trace (Some (loc,label_kind)) in
+             let@ () = modify_where Where.(set_section (Label {loc;label=label_kind})) in
              check_expr_top loc label_context rt label_body
           end
         ) label_defs

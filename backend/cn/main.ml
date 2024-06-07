@@ -220,7 +220,8 @@ let main
        match result with
        | Ok () -> exit 0
        | Error e ->
-         if json then TypeErrors.report_json ?state_file e else TypeErrors.report ?state_file e;
+         if json then TypeErrors.report_json ?state_file e 
+         else TypeErrors.report ?state_file e;
          match e.msg with
          | TypeErrors.Unsupported _ -> exit 2
          | _ -> exit 1

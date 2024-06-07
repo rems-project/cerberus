@@ -574,7 +574,7 @@ module EffectfulTranslation = struct
          | has ->
             let expected = "map/array" in
             let reason = "map/array index" in
-            fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected; reason; o_ctxt = None}}
+            fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected; reason; }}
        in
        return (IT ((MapGet (e1, e2)), rbt, loc))
     | _ ->
@@ -616,7 +616,7 @@ module EffectfulTranslation = struct
     | has ->
        let expected = "struct" in
        let reason = "struct member access" in
-       fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected; reason; o_ctxt = None}}
+       fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected; reason; }}
 
 
 
@@ -734,7 +734,6 @@ module EffectfulTranslation = struct
                     has = SBT.pp bt;
                     expected = "struct";
                     reason = (let (head, pos) = Locations.head_pos_of_location loc in head ^ "\n" ^ pos);
-                    o_ctxt = None
                   }
               }
            end
@@ -793,12 +792,12 @@ module EffectfulTranslation = struct
               | has ->
                  let expected = "integer or bits" in
                  let reason = "pointer arithmetic" in
-                 fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected; reason; o_ctxt = None}}
+                 fail {loc; msg = Illtyped_it {it = Terms.pp index; has = SBT.pp has; expected; reason; }}
               end
            | has ->
              let expected = "pointer" in
              let reason = "pointer arithmetic" in
-             fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected; reason; o_ctxt = None}}
+             fail {loc; msg = Illtyped_it {it = Terms.pp base; has = SBT.pp has; expected; reason; }}
            end
         | CNExpr_membershift (e, opt_tag, member) ->
            let@ e = self e in
@@ -816,7 +815,7 @@ module EffectfulTranslation = struct
              else
                let expected = Pp.plain @@ SBT.pp (Struct tag) in
                let reason = "struct member offset" in
-               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp (Struct tag'); expected; reason; o_ctxt = None}}
+               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp (Struct tag'); expected; reason; }}
            | Some tag, Loc None
            | None, Loc (Some (Struct tag)) ->
               with_tag tag
@@ -825,7 +824,7 @@ module EffectfulTranslation = struct
            | _ , has ->
               let expected = "struct pointer" in
               let reason = "struct member offset" in
-              fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected; reason; o_ctxt = None}}
+              fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected; reason; }}
            end
         | CNExpr_addr nm ->
             return (sym_ (nm, SBT.Loc None, loc))
@@ -1015,7 +1014,7 @@ module EffectfulTranslation = struct
               | has ->
                  let expected = "pointer" in
                  let reason = "Owned<_> predicate" in
-                 fail {loc; msg = Illtyped_it {it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason; o_ctxt = None}}
+                 fail {loc; msg = Illtyped_it {it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason; }}
          in
          (* we don't take Resources.owned_oargs here because we want to
             maintain the C-type information *)
@@ -1485,7 +1484,7 @@ module UsingLoads = struct
     | has ->
        let expected = "pointer" in
        let reason = "dereferencing" in
-       let msg = Illtyped_it {it= IT.pp it; has= SBT.pp has; expected; reason; o_ctxt = None} in
+       let msg = Illtyped_it {it= IT.pp it; has= SBT.pp has; expected; reason; } in
        fail {loc; msg}
 
 

@@ -122,7 +122,7 @@ module General = struct
             let@ model = model_with loc (bool_ true here) in
             let model = Option.get model in
             fail (fun ctxt ->
-                let ctxt = { ctxt with resources = original_resources } in
+                (* let ctxt = { ctxt with resources = original_resources } in *)
                 let msg = Missing_resource
                            {requests = request_chain; situation; model; ctxt} in
                 {loc; msg}
@@ -151,7 +151,7 @@ module General = struct
            debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
            let@ () = Diagnostics.investigate model c in
            fail (fun ctxt ->
-                  let ctxt = { ctxt with resources = original_resources } in
+                  (* let ctxt = { ctxt with resources = original_resources } in *)
                   {loc; msg = Unproven_constraint {constr = c; info;
                       requests = snd uiinfo; ctxt; model; }}
                 )

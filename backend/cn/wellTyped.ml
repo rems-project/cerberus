@@ -26,7 +26,7 @@ let use_ity = ref false
 
 let ensure_base_type = Typing.ensure_base_type
 
-let illtyped_index_term (loc: loc) it has ~expected ~reason ctxt =
+let illtyped_index_term (loc: loc) it has ~expected ~reason (_ctxt,_log) =
   let reason =
     match reason with
     | Either.Left reason ->
@@ -34,7 +34,7 @@ let illtyped_index_term (loc: loc) it has ~expected ~reason ctxt =
         head ^ "\n" ^ pos
     | Either.Right reason ->
         reason in
-  {loc; msg = TypeErrors.Illtyped_it {it = IT.pp it; has = BT.pp has; expected; reason; o_ctxt = Some ctxt}}
+  {loc; msg = TypeErrors.Illtyped_it {it = IT.pp it; has = BT.pp has; expected; reason }}
 
 
 let ensure_bits_type (loc : loc) (has : BT.t) =
@@ -945,7 +945,7 @@ module WRET = struct
          | IT (Cast (_, IT (SizeOf _, _, _)), _, _) -> return step
          | _ ->
            let hint = "Only constant iteration steps are allowed." in
-           fail (fun ctxt -> {loc; msg = NIA {it = p.step; ctxt; hint}})
+           fail (fun _ -> {loc; msg = NIA {it = p.step; hint}})
        in
        (*let@ () = match p.name with
          | (Owned (ct, _init)) ->

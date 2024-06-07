@@ -10,6 +10,9 @@ open TypeErrors
 
 type solver = Solver.solver
 
+
+
+
 type s = {
     typing_context: Context.t;
     solver : solver option;
@@ -18,6 +21,7 @@ type s = {
     found_equalities : EqTable.table;
     movable_indices: (RET.predicate_name * IT.t) list;
     unfold_resources_required: bool;
+    log : Explain.log;
   }
 
 let empty_s (c : Context.t) =
@@ -29,12 +33,13 @@ let empty_s (c : Context.t) =
     found_equalities = EqTable.empty;
     movable_indices = [];
     unfold_resources_required = false;
+    log = [];
   }
 
 
 type 'a t = s -> ('a * s, TypeErrors.t) Result.t
 type 'a m = 'a t
-type failure = Context.t -> TypeErrors.t
+type failure = Context.t * Explain.log -> TypeErrors.t
 
 
 (* basic functions *)
@@ -43,7 +48,7 @@ let return (a : 'a) : ('a) t =
   fun s -> Ok (a, s)
 
 let fail (f : failure) : ('a) t =
-  fun s -> Error (f s.typing_context)
+  fun s -> Error (f (s.typing_context,s.log))
 
 let bind (m : ('a) t) (f : 'a -> ('b) t) : ('b) t =
   fun s ->
@@ -200,6 +205,19 @@ let _modify_global (f : Global.t -> Global.t) : unit t =
   set_global (f g)
 
 
+let record_action ((a : Explain.action), (loc : Loc.t)) : unit t =
+  modify (fun s ->
+      { s with log = (Action (a,loc)) :: s.log }
+    )
+
+let modify_where (f : Where.t -> Where.t) : unit t =
+  modify (fun s ->
+      let log = (Explain.State s.typing_context) :: s.log in
+      let typing_context = Context.modify_where f s.typing_context in
+      { s with log; typing_context }
+    )
+
+
 (* convenient functions for global typing context *)
 
 let get_logical_function_def loc id =
@@ -354,11 +372,13 @@ let remove_as = iterM remove_a
 
 
 
-let add_label_to_trace label = 
-  modify_typing_context (fun c -> Context.add_label_to_trace label c)
+(* let add_label_to_trace label =  *)
+(*   modify_typing_context (fun c -> Context.add_label_to_trace label c) *)
 
-let add_trace_item_to_trace i = 
-  modify_typing_context (fun c -> Context.add_trace_item_to_trace i c)
+(* let add_trace_item_to_trace i =  *)
+(*   modify_typing_context (fun c -> Context.add_trace_item_to_trace i c) *)
+
+
 
 
 

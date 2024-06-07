@@ -21,6 +21,7 @@ end
 
 
 
+open TypeErrors
 open Core
 open Annot
 module BT = BaseTypes
@@ -33,7 +34,6 @@ module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IdMap = Map.Make(Id)
 open Print
-open TypeErrors
 open Cn
 open Resultat
 open Effectful.Make(Resultat)

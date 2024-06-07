@@ -2,9 +2,11 @@ type solver
 
 
 
+
+
 type 'a t
 type 'a m = 'a t
-type failure = Context.t -> TypeErrors.t
+type failure = Context.t * Explain.log -> TypeErrors.t
 
 val return : 'a -> 'a m
 val bind : 'a m -> ('a -> 'b m) -> 'b m
@@ -129,7 +131,10 @@ val get_movable_indices:
     ((ResourceTypes.predicate_name * IndexTerms.t) list) m
 
 
-val add_label_to_trace : (Locations.t * Context.label_kind) option -> unit m
-val add_trace_item_to_trace : Context.trace_item * Locations.t -> unit m
+val record_action : Explain.action * Locations.t -> unit m
+val modify_where : (Where.t -> Where.t) -> unit m
+
+(* val add_label_to_trace : (Locations.t * Context.label_kind) option -> unit m *)
+(* val add_trace_item_to_trace : Context.trace_item * Locations.t -> unit m *)
 
 val init_solver : unit -> unit m

@@ -19,26 +19,37 @@ type resource_entry = {
     res_span : Pp.doc;
   }
 
-type intra_label_trace_item_report = { 
-  stmt : Pp.doc; 
-  within : Pp.doc list 
-}
-type per_label_trace_report = { 
-  label : Pp.doc; 
-  trace : intra_label_trace_item_report list;
-}
-type trace_report = per_label_trace_report list
+(* type intra_label_trace_item_report = {  *)
+(*   stmt : Pp.doc;  *)
+(*   within : Pp.doc list  *)
+(* } *)
+(* type per_label_trace_report = {  *)
+(*   label : Pp.doc;  *)
+(*   trace : intra_label_trace_item_report list; *)
+(* } *)
+(* type trace_report = per_label_trace_report list *)
 
-type state_report = {
-    terms : term_entry list;
-    requested : resource_entry option;
-    unproven : (Pp.doc * Pp.doc) option;
-    resources : resource_entry list;
-    predicate_hints : predicate_clause_entry list;
-    constraints: Pp.doc list;
-    trace: trace_report;
+type where_report = {
+    fnction: string;
+    section: string;
+    loc_head: string;
+    loc_pos: string;
   }
 
+type state_report = {
+    where: where_report;
+    (* variables : var_entry list; *)
+    resources : Pp.doc list;
+    constraints: Pp.doc list;
+    terms : term_entry list;
+  }
+
+type report = {
+    trace : state_report list;
+    requested : Pp.doc option;
+    unproven : (Pp.doc * Pp.doc) option;
+    predicate_hints : predicate_clause_entry list;
+  }
 
 
 let list elements = String.concat "" elements
@@ -46,6 +57,20 @@ let enclose tag what = "<"^tag^">" ^ what ^ "</"^tag^">"
 let html elements = enclose "html" (list elements)
 let head = enclose "head"
 let style = enclose "style"
+let link ~url ~text = "<a href=\""^url^"\">"^text^"</a>"
+let div ?(clss=None) ?(id=None) elements =
+  let clss = match clss with
+    | Some clss -> " class=\""^clss^"\""
+    | None -> ""
+  in
+  let id = match id with
+    | Some id -> " id=\""^id^"\""
+    | None -> ""
+  in
+  let opent = "<div" ^ clss ^ id ^ ">" in
+  let closet = "</div>" in
+  opent ^ (list elements) ^ closet
+let pre code = enclose "pre" code
 let body elements = enclose "body" (list elements)
 let h i title body = list [enclose ("h"^string_of_int i) title; body]
 let table_row cols = enclose "tr" (list (List.map (enclose "td") cols))
@@ -59,34 +84,49 @@ let oguard o f = match o with None -> "" | Some x -> f x
 let lguard l f = match l with [] -> "" | _ -> f l
 let details_with_table summary detail_list = details summary (table_without_head detail_list)
 
-let make_per_stmt_trace {stmt; within} =
-  match within with 
-  | [] ->
-     Pp.plain stmt
-  | _ ->
-    details_with_table (Pp.plain stmt) 
-      (List.map (fun i -> [Pp.plain i]) within)
+(* let make_per_stmt_trace {stmt; within} = *)
+(*   match within with  *)
+(*   | [] -> *)
+(*      Pp.plain stmt *)
+(*   | _ -> *)
+(*     details_with_table (Pp.plain stmt)  *)
+(*       (List.map (fun i -> [Pp.plain i]) within) *)
 
-let make_per_label_trace {label; trace} = 
-  match trace with
-  | [] -> Pp.plain label
-  | _ -> 
-    details_with_table (Pp.plain label)
-      (List.map (fun i -> [make_per_stmt_trace i]) trace)
+(* let make_per_label_trace {label; trace} =  *)
+(*   match trace with *)
+(*   | [] -> Pp.plain label *)
+(*   | _ ->  *)
+(*     details_with_table (Pp.plain label) *)
+(*       (List.map (fun i -> [make_per_stmt_trace i]) trace) *)
 
-let make_trace trace = 
-  lguard trace (fun trace ->
-    h 1 "Path to error" (
-      table_without_head 
-        (List.map (fun i -> [make_per_label_trace i]) trace)
-    )
-  )
+(* let make_trace trace =  *)
+(*   lguard trace (fun trace -> *)
+(*     h 1 "Path to error" ( *)
+(*       table_without_head  *)
+(*         (List.map (fun i -> [make_per_label_trace i]) trace) *)
+(*     ) *)
+(*   ) *)
+
+(* let make_requested requested =  *)
+(*   oguard requested (fun re -> *)
+(*     h 1 "Requested resource" ( *)
+(*       table ["requested"; "byte span"] *)
+(*         [[Pp.plain re.res; Pp.plain re.res_span]] *)
+(*     ) *)
+(*   ) *)
+
+let make_where where =
+  table ["function"; "section"; "location"; ""]
+    [[where.fnction; 
+      where.section; 
+      where.loc_head; 
+      pre (where.loc_pos)]]
 
 let make_requested requested = 
   oguard requested (fun re ->
     h 1 "Requested resource" (
-      table ["requested"; "byte span"]
-        [[Pp.plain re.res; Pp.plain re.res_span]]
+      table ["requested"; (* "byte span" *)]
+        [[Pp.plain re; (* Pp.plain re.res_span *)]]
     )
   )
 
@@ -106,13 +146,22 @@ let make_predicate_hints predicate_hints =
     )
   )
 
+(* let make_resources resources =  *)
+(*   h 1 "Available resources" ( *)
+(*     match resources with *)
+(*     | [] -> "(no available resources)" *)
+(*     | _ -> *)
+(*       table ["resource"; "byte span and match"] *)
+(*         (List.map (fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources) *)
+(*   ) *)
+
 let make_resources resources = 
   h 1 "Available resources" (
     match resources with
     | [] -> "(no available resources)"
     | _ ->
-      table ["resource"; "byte span and match"]
-        (List.map (fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources)
+      table ["resource"; (* "byte span and match" *)]
+        (List.map (fun re -> [Pp.plain re; (* Pp.plain re.res_span *)]) resources)
   )
 
 let make_terms terms =
@@ -134,22 +183,83 @@ let make_constraints constraints =
   )
 
 
-let make report = 
-  html [
-    head (style Style.style); 
-    body [
-      make_trace report.trace;
-      make_requested report.requested;
-      make_unproven report.unproven;
-      make_predicate_hints report.predicate_hints;
-      make_resources report.resources;
-      make_terms report.terms;
-      make_constraints report.constraints;
+
+let page_name i = "p" ^ string_of_int i
+
+
+(* Doing multiple 'pages' within one html file based on this scheme:
+   https://www.w3.org/Style/Examples/007/target.en.html *)
+
+
+let make_state (report: state_report) requested unproven predicate_hints i total = 
+  let links = 
+    let first = 
+      if i = 0 
+      then div ~clss:(Some "inactive_button") ["first"]
+      else div ~clss:(Some "button") [(link ~url:("#"^page_name 0) ~text:"first")] 
+    in
+    let prev = 
+      if i = 0 
+      then div ~clss:(Some "inactive_button") ["prev"]
+      else div ~clss:(Some "button") [(link ~url:("#"^page_name (i-1)) ~text:"prev")] 
+    in
+    let next = 
+      if i = total - 1
+      then div ~clss:(Some "inactive_button") ["next"]
+      else div ~clss:(Some "button") [(link ~url:("#"^page_name (i+1)) ~text:"next")] 
+    in
+    let last = 
+      if i = total - 1
+      then div ~clss:(Some "inactive_button") ["last"]
+      else div ~clss:(Some "button") [(link ~url:("#"^page_name (total - 1)) ~text:"last")] 
+    in
+    [ first; prev; next; last ]  
+  in
+  div ~clss:(Some "page") ~id:(Some (page_name i)) [
+      div ~clss:(Some "pagelinks") links;
+      div ~clss:(Some "pagecontent") [
+        make_where report.where;
+        make_requested requested;
+        make_unproven unproven;
+        make_predicate_hints predicate_hints;
+        make_resources report.resources;
+        make_terms report.terms;
+        make_constraints report.constraints;
+      ]
     ]
-  ] 
 
 
+let make filename (report : report) = 
 
+  let channel = open_out filename in
+
+  let total = List.length report.trace in
+  assert (total > 0);
+
+  let contents = 
+    let pages = 
+      List.mapi (fun i state ->
+          make_state 
+            state 
+            report.requested 
+            report.unproven 
+            report.predicate_hints
+            i total
+        ) report.trace
+    in
+    html [
+      head (style Style.style);
+      body [
+          div ~id:(Some "pages") pages
+        ]
+    ] 
+  in
+
+  let () = Printf.fprintf channel "%s" contents in
+
+  close_out channel;
+
+  filename ^ "#" ^ page_name (total-1)
 
 
 

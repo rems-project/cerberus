@@ -1,3 +1,4 @@
+open Explain
 open Pp
 open Locations
 module BT=BaseTypes
@@ -5,12 +6,11 @@ module IT=IndexTerms
 module LS=LogicalSorts
 module CF=Cerb_frontend
 module Loc = Locations
-open Report
 module RE = Resources
 module LC = LogicalConstraints
 module RET = ResourceTypes
 
-type label_kind = Context.label_kind
+type label_kind = Where.label
 
 type access =
   | Load
@@ -27,23 +27,12 @@ type call_situation =
   | LabelCall of label_kind
   | Subtyping
 
-let label_prefix = 
-  let open CF.Annot in
-  function
-  | LAreturn -> "return"
-  | LAloop_break _ -> "break"
-  | LAloop_continue _ -> "continue"
-  | LAloop_body _ -> "loop"
-  | LAloop_prebody _ -> "pre-loop"
-  | LAswitch -> "switch"
-  | LAcase -> "case"
-  | LAdefault -> "default"
-  | LAactual_label -> "label"
+
 
 let call_prefix = function
   | FunctionCall fsym -> "call_" ^ Sym.pp_string fsym
   | LemmaApplication l -> "apply_" ^ Sym.pp_string l
-  | LabelCall la -> label_prefix la
+  | LabelCall la -> Where.label_prefix la
   | Subtyping -> "return"
 
 type situation =
@@ -111,9 +100,7 @@ type request_chain = request_chain_elem list
 
 
 
-type sym_or_string =
-  | Sym of Sym.t
-  | String of string
+
 
 
 type message =
@@ -134,28 +121,28 @@ type message =
   | Missing_member of Id.t
 
 
-  | Missing_resource of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q; }
-  | Merging_multiple_arrays of {requests : request_chain; situation : situation; ctxt : Context.t; model: Solver.model_with_q }
-  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; }
+  | Missing_resource of {requests : request_chain; situation : situation; ctxt : Context.t * log; model: Solver.model_with_q; }
+  | Merging_multiple_arrays of {requests : request_chain; situation : situation; ctxt : Context.t * log; model: Solver.model_with_q }
+  | Unused_resource of {resource: RE.t; ctxt : Context.t * log; model : Solver.model_with_q; }
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: doc; expect: doc; }
-  | Illtyped_it : {it: Pp.doc; has: Pp.doc; expected: string; reason : string; o_ctxt : Context.t option} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
-  | NIA : {it: IT.t; hint : string; ctxt : Context.t} -> message
-  | TooBigExponent : {it: IT.t; ctxt : Context.t} -> message
-  | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
-  | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
-  | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
-  | Unproven_constraint of {constr : LC.t; requests: request_chain; info : info; ctxt : Context.t; model : Solver.model_with_q; }
+  | Illtyped_it : {it: Pp.doc; has: Pp.doc; expected: string; reason : string} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
+  | NIA : {it: IT.t; hint : string} -> message
+  | TooBigExponent : {it: IT.t} -> message
+  | NegativeExponent : {it: IT.t} -> message
+  | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t * log; model : Solver.model_with_q }
+  | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t * log; model : Solver.model_with_q}
+  | Unproven_constraint of {constr : LC.t; requests: request_chain; info : info; ctxt : Context.t * log; model : Solver.model_with_q; }
 
-  | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Solver.model_with_q}
-  | Implementation_defined_behaviour of document * state_report
+  | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t * log; model : Solver.model_with_q}
+  (* | Implementation_defined_behaviour of document * state_report *)
   | Unspecified of CF.Ctype.ctype
-  | StaticError of {err : string; ctxt : Context.t; model : Solver.model_with_q}
+  | StaticError of {err : string; ctxt : Context.t * log; model : Solver.model_with_q}
   | Generic of Pp.document
-  | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
+  | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t * log}
   | Unsupported of Pp.document
 
   | Parser of Cerb_frontend.Errors.cparser_cause
@@ -179,7 +166,7 @@ type type_error = {
 type report = {
     short : Pp.doc;
     descr : Pp.doc option;
-    state : state_report option;
+    state : Report.report option;
   }
 
 
@@ -260,7 +247,7 @@ let pp_message te =
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = request_chain_description requests in
      let orequest = Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0) in
-     let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
+     let state = trace ctxt model Explain.{no_ex with request = orequest} in
      { short; descr = descr; state = Some state; }
   | Merging_multiple_arrays {requests; situation; ctxt; model} ->
      let short =
@@ -269,12 +256,12 @@ let pp_message te =
      in
      let descr = request_chain_description requests in
      let orequest = Option.map (fun r -> r.resource) (List.nth_opt (List.rev requests) 0) in
-     let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
+     let state = trace ctxt model Explain.{no_ex with request = orequest} in
      { short; descr = descr; state = Some state;  }
   | Unused_resource {resource; ctxt; model; } ->
      let resource = RE.pp resource in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
-     let state = Explain.state ctxt model Explain.no_ex in
+     let state = trace ctxt model Explain.no_ex in
      { short; descr = None; state = Some state; }
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
@@ -311,7 +298,7 @@ let pp_message te =
          !^"but found value of type" ^^^ squotes has
      in
      { short; descr = Some descr; state = None;  }
-  | Illtyped_it {it; has; expected; reason; o_ctxt} ->
+  | Illtyped_it {it; has; expected; reason} ->
      let short = !^"Type error" in
      let descr =
        !^"Expression" ^^^ squotes it
@@ -320,7 +307,7 @@ let pp_message te =
        ^^^ !^"because of" ^^^ !^reason
      in
      { short; descr = Some descr; state = None;  }
-  | NIA {it; hint; ctxt} ->
+  | NIA {it; hint} ->
      let it = IT.pp it in
      let short = !^"Type error" in
      let descr =
@@ -329,7 +316,7 @@ let pp_message te =
            !^hint
      in
      { short; descr = Some descr; state = None; }
-  | TooBigExponent {it; ctxt} ->
+  | TooBigExponent {it} ->
      let it = IT.pp it in
      let short = !^"Type error" in
      let descr =
@@ -338,7 +325,7 @@ let pp_message te =
            !^("Exponent must fit int32 type")
      in
      { short; descr = Some descr; state = None; }
-  | NegativeExponent {it; ctxt} ->
+  | NegativeExponent {it} ->
      let it = IT.pp it in
      let short = !^"Type error" in
      let descr =
@@ -354,7 +341,7 @@ let pp_message te =
      in
      let location = IT.pp (location) in
      let value = IT.pp (value) in
-     let state = Explain.state ctxt model Explain.no_ex in
+     let state = trace ctxt model Explain.no_ex in
      let descr =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
@@ -367,11 +354,11 @@ let pp_message te =
      in
      let value = IT.pp (value) in
      let descr = !^"Value" ^^ colon ^^^ value in
-     let state = Explain.state ctxt model Explain.no_ex in
+     let state = trace ctxt model Explain.no_ex in
      { short; descr = Some descr; state = Some state; }
   | Unproven_constraint {constr; requests; info; ctxt; model; } ->
      let short = !^"Unprovable constraint" in
-     let state = Explain.state ctxt model
+     let state = trace ctxt model
          Explain.{no_ex with unproven_constraint = Some constr} in
      let descr =
        let (spec_loc, odescr) = info in
@@ -387,22 +374,22 @@ let pp_message te =
      { short; descr = Some descr; state = Some state; }
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
-     let state = Explain.state ctxt model Explain.no_ex in
+     let state = trace ctxt model Explain.no_ex in
      let descr = match CF.Undefined.std_of_undefined_behaviour ub with
       | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
       | None -> !^(CF.Undefined.ub_short_string ub)
      in
      { short; descr = Some descr; state = Some state;  }
-  | Implementation_defined_behaviour (impl, state) ->
-     let short = !^"Implementation defined behaviour" in
-     let descr = impl in
-     { short; descr = Some descr; state = Some state;  }
+  (* | Implementation_defined_behaviour (impl, state) -> *)
+  (*    let short = !^"Implementation defined behaviour" in *)
+  (*    let descr = impl in *)
+  (*    { short; descr = Some descr; state = Some state;  } *)
   | Unspecified ctype ->
      let short = !^"Unspecified value of C-type" ^^^ CF.Pp_core_ctype.pp_ctype ctype in
      { short; descr = None; state = None;  }
   | StaticError {err; ctxt; model} ->
      let short = !^"Static error" in
-     let state = Explain.state ctxt model Explain.no_ex in
+     let state = trace ctxt model Explain.no_ex in
      let descr = !^err in
      { short; descr = Some descr; state = Some state;  }
   | Generic err ->
@@ -410,7 +397,7 @@ let pp_message te =
      { short; descr = None; state = None;  }
   | Generic_with_model {err; model; ctxt} ->
      let short = err in
-     let state = Explain.state ctxt model Explain.no_ex in
+     let state = trace ctxt model Explain.no_ex in
      { short; descr = None; state = Some state;  }
   | Unsupported err ->
      let short = err in
@@ -438,11 +425,6 @@ let pp_message te =
 type t = type_error
 
 
-let output_state state_error_file state =
-  let channel = open_out state_error_file in
-  let () = Printf.fprintf channel "%s" (Report.make state) in
-  close_out channel
-
 (* stealing some logic from pp_errors *)
 let report ?state_file:to_ {loc; msg} =
   let report = pp_message msg in
@@ -452,8 +434,8 @@ let report ?state_file:to_ {loc; msg} =
          | Some file -> file
          | None -> Filename.temp_file "state_" ".html"
        in
-       output_state state_error_file state;
-       let msg = !^"Consider the state in" ^^^ !^state_error_file in
+       let link = Report.make state_error_file state in
+       let msg = !^"Consider the state in" ^^^ !^("file://"^link) in
        Some msg
     | None ->
        None
@@ -472,8 +454,8 @@ let report_json ?state_file:to_ {loc; msg} =
          | Some file -> file
          | None -> Filename.temp_file "" ".cn-state"
        in
-       output_state file state;
-       `String file
+       let link = Report.make file state in
+       `String link
     | None -> `Null in
   let descr = match report.descr with
     | None -> `Null
