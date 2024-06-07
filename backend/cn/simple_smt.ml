@@ -13,6 +13,12 @@ let is_atom (f: sexp) =
   | Sexp.Atom _ -> true
   | Sexp.List _ -> false
 
+let to_list (f: sexp) =
+  match f with
+  | Sexp.Atom _ -> None
+  | Sexp.List xs -> Some xs
+
+
 (** Apply a function to some arguments. *)
 let app f args =
   if List.is_empty args then f else list (f :: args)
@@ -629,7 +635,7 @@ let new_solver (cfg: solver_config): solver =
   let in_buf = Lexing.from_channel in_chan in
 
   let send_string s =
-        (*printf "[->] %s\n%!" s;*)
+        printf "[->] %s\n%!" s;
         fprintf out_chan "%s\n%!" s in
 
   let send_command c =
@@ -637,7 +643,7 @@ let new_solver (cfg: solver_config): solver =
         let ans = match Sexp.scan_sexp_opt in_buf with
                     | Some x -> x
                     | None -> Sexp.Atom (In_channel.input_all in_err_chan)
-        in (*printf "[<-] %s\n%!" (Sexp.to_string ans);*) ans
+        in printf "[<-] %s\n%!" (Sexp.to_string ans); ans
   in
 
   let stop_command () =
@@ -657,6 +663,7 @@ let new_solver (cfg: solver_config): solver =
   in
     ack_command s (set_option ":print-success" "true");
     ack_command s (set_option ":produce-models" "true");
+    Gc.finalise (fun me -> let _ = me.stop () in ()) s;
     s
 
 (** A connection to a solver,
@@ -678,12 +685,13 @@ evaluate, and gives the value of the expression in the context of the model.
 XXX: This does not work correctly with data declarations, because
 the model does not contain those.  We need to explicitly add them.
 *)
-let model_eval (cfg: solver_config) (m: sexp) =
+let model_eval (cfg: solver_config) init (m: sexp) =
   let bad () = raise (UnexpectedSolverResponse m) in
   match m with
   | Sexp.Atom _ -> bad ()
   | Sexp.List defs ->
     let s = new_solver cfg in
+    init s;
     List.iter (ack_command s) defs;
     let have_model = ref false in
     let get_model () =
