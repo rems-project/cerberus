@@ -629,7 +629,7 @@ let new_solver (cfg: solver_config): solver =
   let in_buf = Lexing.from_channel in_chan in
 
   let send_string s =
-        printf "[->] %s\n%!" s;
+        (*printf "[->] %s\n%!" s;*)
         fprintf out_chan "%s\n%!" s in
 
   let send_command c =
@@ -637,7 +637,7 @@ let new_solver (cfg: solver_config): solver =
         let ans = match Sexp.scan_sexp_opt in_buf with
                     | Some x -> x
                     | None -> Sexp.Atom (In_channel.input_all in_err_chan)
-        in printf "[<-] %s\n%!" (Sexp.to_string ans); ans
+        in (*printf "[<-] %s\n%!" (Sexp.to_string ans);*) ans
   in
 
   let stop_command () =
