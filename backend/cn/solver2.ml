@@ -156,8 +156,6 @@ let declare_bt_uninterpreted s (name,k) bt args_ts res_t =
 
 
 
-exception Unsupported
-
 (* Note: CVC5 has support for arbitrary tuples without declaring them.
    Also, instead of declaring a fixed number of tuples ahead of time,
    we could declare the types on demand when we need them, with another
@@ -266,14 +264,6 @@ module CN_List = struct
                                (SMT.app_ tail_name [xs]) orelse
 end
 
-(* XXX: we should define a datatype to match the CN C types? *)
-module CN_CType = struct
-  let name      = "cn_ctype"
-  let t         = SMT.atom name
-  let declare s = ack_command s (SMT.declare_sort name 0)
-end
-
-
 
 (** {1 Type to SMT } *)
 
@@ -286,7 +276,7 @@ let rec translate_base_type = function
   | Real            -> SMT.t_real
   | Loc             -> CN_Pointer.t
   | Alloc_id        -> CN_AllocId.t
-  | CType           -> CN_CType.t
+  | CType           -> CN_Tuple.t []
   | List bt         -> CN_List.t (translate_base_type bt)
   | Set bt          -> SMT.t_set (translate_base_type bt)
   | Map (k, v)      -> SMT.t_array (translate_base_type k)
@@ -335,7 +325,7 @@ and
 
   | Alloc_id        -> Const (Alloc_id (CN_AllocId.from_sexp sexp))
 
-  | CType           -> raise Unsupported    (* ? *)
+  | CType           -> Const (Default CType)
 
   | List elT ->
     begin match SMT.to_con sexp with
@@ -345,15 +335,15 @@ and
     | _ -> failwith "List"
     end
 
-  | Set bt          -> raise Unsupported
-  | Map (k, v)      -> raise Unsupported
+  | Set bt          -> Const (Default bt) (* XXX *)
+  | Map (k, v)      -> Const (Default bt) (* XXX *)
 
   | Tuple bts ->
     let (_con,vals) = SMT.to_con sexp in
     Tuple (List.map2 get_ivalue bts vals)
 
-  | Struct tag      -> raise Unsupported (** XXX *)
-  | Datatype tag    -> raise Unsupported (** XXX *)
+  | Struct tag      -> Const (Default bt) (* XXX *)
+  | Datatype tag    -> Const (Default bt) (* XXX *)
 
   | Record members  ->
     let (_con,vals) = SMT.to_con sexp in
@@ -392,7 +382,7 @@ let rec translate_const s co =
   | Null ->
     translate_const s (Pointer { alloc_id = Z.of_int 0; addr = Z.of_int 0 })
 
-  | CType_const _ -> raise Unsupported (* XXX *)
+  | CType_const _ -> SMT.atom (CN_Tuple.name 0)
 
   | Default t ->
     declare_bt_uninterpreted s CN_Constant.default t [] (translate_base_type t)
@@ -963,26 +953,6 @@ let translate_goal solver assumptions pointer_facts lc =
 
 
 
-(* GLOBAL STATE: Models *)
-
-type model = SMT.sexp
-type model_with_q = model * (Sym.t * LogicalSorts.t) list
-
-type model_state =
-  | Model of model_with_q
-  | No_model
-
-let model_state =
-  ref No_model
-
-let model () =
-  match !model_state with
-  | No_model ->
-     assert false
-  | Model mo -> mo
-
-(* ---------------------------------------------------------------------------*)
-
 
 
 (* as similarly suggested by Robbert *)
@@ -991,57 +961,6 @@ let shortcut simp_ctxt lc =
   match lc with
   | LC.T (IT (Const (Bool true), _, _)) -> `True
   | _ -> `No_shortcut lc
-
-
-let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
-  let rtrue () = model_state := No_model; `True in
-  match shortcut simp_ctxt lc with
-  | `True -> rtrue ()
-
-  | `No_shortcut lc ->
-     let {expr; qs; extra} = translate_goal solver assumptions pointer_facts lc
-     in
-     let model_from solver =
-           let mo = SMT.get_model solver in
-           model_state := Model (mo, qs)
-     in
-
-     let nlc = SMT.bool_not expr in
-
-     let inc = solver.smt_solver in
-     SMT.ack_command inc (SMT.push 1);
-     SMT.ack_command inc (SMT.assume (SMT.bool_ands (nlc :: extra)));
-     let res = SMT.check inc in
-     match res with
-     | SMT.Unsat   -> SMT.ack_command inc (SMT.pop 1); rtrue ()
-     | SMT.Sat -> model_from inc; SMT.ack_command inc (SMT.pop 1); `False
-     | SMT.Unknown ->
-      SMT.ack_command inc (SMT.pop 1);
-      raise Unsupported
-(*
-        let () = Z3.Solver.reset solver.non_incremental in
-        let () =
-          List.iter (fun lc ->
-            Z3.Solver.add solver.non_incremental [lc]
-            ) (nlc :: extra @ existing_scs)
-        in
-        let (elapsed2, res2) =
-          time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)"
-              (Z3.Solver.check solver.non_incremental))
-            []
-        in
-        maybe_save_slow_problem (res_short_string res2)
-            loc lc expr smt2_doc elapsed2 solver.non_incremental;
-        match res2 with
-        | Z3.Solver.UNSATISFIABLE ->
-           rtrue ()
-        | Z3.Solver.SATISFIABLE ->
-           rfalse qs solver.non_incremental
-        | Z3.Solver.UNKNOWN ->
-          let reason = Z3.Solver.get_reason_unknown solver.non_incremental in
-          failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
-*)
-
 
 
 
@@ -1073,10 +992,9 @@ let declare_struct s name decl =
 
 
 let declare_solver_basics s =
-  for arity = 0 to 32 do
+  for arity = 0 to 8 do
     CN_Tuple.declare s arity
   done;
-  CN_CType.declare s;
   CN_List.declare s;
   CN_Pointer.declare s;
 
@@ -1086,7 +1004,7 @@ let declare_solver_basics s =
 
 
 let make globals =
-  let s = { smt_solver  = SMT.new_solver SMT.z3
+  let s = { smt_solver  = SMT.new_solver SMT.cvc5
           ; cur_frame   = empty_solver_frame
           ; prev_frames = []
           ; name_seed   = 0
@@ -1095,10 +1013,111 @@ let make globals =
   in declare_solver_basics s; s
 
 
-(* XXXX *)
-let eval globs mo t =
-  let _x = get_value in
-  None
+let model_evaluator solver mo =
+  match SMT.to_list mo with
+  | None -> failwith "model is an atom"
+  | Some defs ->
+    let s = SMT.new_solver solver.smt_solver.config in
+    let evaluator = { smt_solver = s
+                    ; cur_frame = empty_solver_frame
+                    ; prev_frames = []
+                    ; name_seed = 0
+                    ; globals = solver.globals
+                    } in
+    declare_solver_basics evaluator;
+    List.iter (SMT.ack_command s) defs;
+
+    fun e ->
+      SMT.ack_command s (SMT.push 1);
+      let inp = translate_term evaluator e in
+      match SMT.check s with
+      | SMT.Sat ->
+          let res = SMT.get_expr s inp in
+          SMT.ack_command s (SMT.pop 1);
+          Some (get_ivalue (basetype e) res)
+      | _ ->
+          SMT.ack_command s (SMT.pop 1);
+          None
+
+(* ---------------------------------------------------------------------------*)
+(* GLOBAL STATE: Models *)
+(* ---------------------------------------------------------------------------*)
+
+type model = IT.t -> IT.t option
+type model_with_q = model * (Sym.t * LogicalSorts.t) list
+
+type model_state =
+  | Model of model_with_q
+  | No_model
+
+let model_state =
+  ref No_model
+
+let model () =
+  match !model_state with
+  | No_model ->
+     assert false
+  | Model mo -> mo
+
+(* ---------------------------------------------------------------------------*)
+
+
+
+let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
+  let rtrue () = model_state := No_model; `True in
+  match shortcut simp_ctxt lc with
+  | `True -> rtrue ()
+
+  | `No_shortcut lc ->
+     let {expr; qs; extra} = translate_goal solver assumptions pointer_facts lc
+     in
+     let model_from sol =
+           let defs = SMT.get_model sol in
+           let mo   = model_evaluator solver defs in
+           model_state := Model (mo, qs)
+     in
+
+     let nlc = SMT.bool_not expr in
+
+     let inc = solver.smt_solver in
+     SMT.ack_command inc (SMT.push 1);
+     SMT.ack_command inc (SMT.assume (SMT.bool_ands (nlc :: extra)));
+     let res = SMT.check inc in
+     match res with
+     | SMT.Unsat   -> SMT.ack_command inc (SMT.pop 1); rtrue ()
+     | SMT.Sat -> model_from inc; SMT.ack_command inc (SMT.pop 1); `False
+     | SMT.Unknown ->
+      SMT.ack_command inc (SMT.pop 1);
+      failwith "Unknown"
+(*
+        let () = Z3.Solver.reset solver.non_incremental in
+        let () =
+          List.iter (fun lc ->
+            Z3.Solver.add solver.non_incremental [lc]
+            ) (nlc :: extra @ existing_scs)
+        in
+        let (elapsed2, res2) =
+          time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)"
+              (Z3.Solver.check solver.non_incremental))
+            []
+        in
+        maybe_save_slow_problem (res_short_string res2)
+            loc lc expr smt2_doc elapsed2 solver.non_incremental;
+        match res2 with
+        | Z3.Solver.UNSATISFIABLE ->
+           rtrue ()
+        | Z3.Solver.SATISFIABLE ->
+           rfalse qs solver.non_incremental
+        | Z3.Solver.UNKNOWN ->
+          let reason = Z3.Solver.get_reason_unknown solver.non_incremental in
+          failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
+*)
+
+
+
+
+
+let eval globs mo t = mo t
 
 
 (* Dummy implementations *)
