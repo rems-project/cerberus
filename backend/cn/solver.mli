@@ -11,6 +11,7 @@ val num_scopes : solver -> int
 val push : solver -> unit
 val pop : solver -> int -> unit
 val add_assumption : solver -> Global.t -> LogicalConstraints.t -> unit
+val declare_var: solver -> Sym.t -> BaseTypes.t -> unit
 
 val set_slow_smt_settings : float option -> string option -> unit
 

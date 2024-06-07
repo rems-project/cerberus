@@ -3,9 +3,12 @@ module IT = IndexTerms
 open IndexTerms
 module BT = BaseTypes
 open BaseTypes
+module LC = LogicalConstraints
+open LogicalConstraints
 module SymMap = Map.Make(Sym)
 module BT_Table = Hashtbl.Make(BT)
 module Int_Table = Hashtbl.Make(Int)
+module LCSet = Set.Make(LC)
 open Global
 
 (* XXX: probably should add some prefixes to try to avoid name collisions. *)
@@ -85,16 +88,24 @@ let push s =
 
 (** Return to the previous scope.  Assumes that there is a previous scope. *)
 let pop s n =
-  SMT.ack_command s.smt_solver (SMT.pop n);
-  let rec drop count xs =
-            match xs with
-            | new_cur :: new_rest ->
-              if count = 1
-                then begin s.cur_frame <- new_cur; s.prev_frames <- new_rest end
-                else drop (count - 1) new_rest
-            | _ -> assert false
-  in
-  drop n s.prev_frames
+  if n == 0
+    then ()
+    else begin
+      SMT.ack_command s.smt_solver (SMT.pop n);
+      let rec drop count xs =
+                match xs with
+                | new_cur :: new_rest ->
+                  if count = 1
+                    then begin
+                      s.cur_frame <- new_cur;
+                      s.prev_frames <- new_rest
+                    end else drop (count - 1) new_rest
+                | _ -> assert false
+      in
+      drop n s.prev_frames
+    end
+
+let num_scopes s = List.length s.prev_frames
 
 (** Do an ack_style command. These are logged. *)
 let ack_command s cmd =
@@ -370,7 +381,7 @@ let rec translate_const s co =
     begin match Memory.intptr_bt with
     | Bits (_,w) ->
         SMT.app_ CN_Pointer.name [ SMT.int_zk p.alloc_id; SMT.bv_k w p.addr ]
-    | _ -> raise Unsupported
+    | _ -> failwith "translate_const: Pointer is not Bits."
     end
 
   | Alloc_id z -> CN_AllocId.to_sexp z
@@ -714,7 +725,7 @@ let rec translate_term s iterm =
         let arity       = List.length members in
         begin match List.find_index check members with
         | Some n -> CN_Tuple.get arity n (translate_term s e1)
-        | None -> raise Unsupported
+        | None -> failwith "Missing record field."
         end
     | _ -> failwith "RecordMemmber"
     end
@@ -910,6 +921,131 @@ let rec translate_term s iterm =
     end
 
 
+
+let add_assumption solver global lc =
+  match lc with
+    | T it -> ack_command solver (SMT.assume (translate_term solver it))
+    | Forall _ -> ()
+
+
+(** Goals are translated to this type *)
+type reduction = {
+  expr  : SMT.sexp;             (* translation of `it` *)
+  qs    : (Sym.t * BT.t) list;  (* quantifier instantiation *)
+  extra : SMT.sexp list;        (* additional assumptions *)
+}
+
+(* XXX: `pointer_facts` are unused? *)
+let translate_goal solver assumptions pointer_facts lc =
+  let here =  Locations.other __FUNCTION__ in
+
+  let instantiated =
+        match lc with
+        | T it -> { expr = translate_term solver it; qs = []; extra = [] }
+        | Forall ((s, bt), it) ->
+          let v_s, v = IT.fresh_same bt s here in
+          let it = IT.subst (make_subst [(s, v)]) it in
+          { expr = translate_term solver it; qs = [(v_s, bt)]; extra = [] }
+  in
+  let add_asmps acc0 (s,bt) =
+        let v = sym_ (s, bt, here) in
+        let check_asmp lc acc =
+            match lc with
+            | Forall ((s', bt'), it') when BT.equal bt bt' ->
+              let new_asmp = IT.subst (make_subst [(s', v)]) it' in
+              translate_term solver new_asmp :: acc
+            | _ -> acc
+        in LCSet.fold check_asmp assumptions acc0
+  in
+  { instantiated with extra = List.fold_left add_asmps [] instantiated.qs }
+
+
+
+
+(* GLOBAL STATE: Models *)
+
+type model = SMT.sexp
+type model_with_q = model * (Sym.t * LogicalSorts.t) list
+
+type model_state =
+  | Model of model_with_q
+  | No_model
+
+let model_state =
+  ref No_model
+
+let model () =
+  match !model_state with
+  | No_model ->
+     assert false
+  | Model mo -> mo
+
+(* ---------------------------------------------------------------------------*)
+
+
+
+(* as similarly suggested by Robbert *)
+let shortcut simp_ctxt lc =
+  let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
+  match lc with
+  | LC.T (IT (Const (Bool true), _, _)) -> `True
+  | _ -> `No_shortcut lc
+
+
+let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
+  let rtrue () = model_state := No_model; `True in
+  match shortcut simp_ctxt lc with
+  | `True -> rtrue ()
+
+  | `No_shortcut lc ->
+     let {expr; qs; extra} = translate_goal solver assumptions pointer_facts lc
+     in
+     let model_from solver =
+           let mo = SMT.get_model solver in
+           model_state := Model (mo, qs)
+     in
+
+     let nlc = SMT.bool_not expr in
+
+     let inc = solver.smt_solver in
+     SMT.ack_command inc (SMT.push 1);
+     SMT.ack_command inc (SMT.assume (SMT.bool_ands (nlc :: extra)));
+     let res = SMT.check inc in
+     match res with
+     | SMT.Unsat   -> SMT.ack_command inc (SMT.pop 1); rtrue ()
+     | SMT.Sat -> model_from inc; SMT.ack_command inc (SMT.pop 1); `False
+     | SMT.Unknown ->
+      SMT.ack_command inc (SMT.pop 1);
+      raise Unsupported
+(*
+        let () = Z3.Solver.reset solver.non_incremental in
+        let () =
+          List.iter (fun lc ->
+            Z3.Solver.add solver.non_incremental [lc]
+            ) (nlc :: extra @ existing_scs)
+        in
+        let (elapsed2, res2) =
+          time_f_elapsed (time_f_logs loc 5 "Z3(non-inc)"
+              (Z3.Solver.check solver.non_incremental))
+            []
+        in
+        maybe_save_slow_problem (res_short_string res2)
+            loc lc expr smt2_doc elapsed2 solver.non_incremental;
+        match res2 with
+        | Z3.Solver.UNSATISFIABLE ->
+           rtrue ()
+        | Z3.Solver.SATISFIABLE ->
+           rfalse qs solver.non_incremental
+        | Z3.Solver.UNKNOWN ->
+          let reason = Z3.Solver.get_reason_unknown solver.non_incremental in
+          failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
+*)
+
+
+
+
+
+
 (** {1 Solver Initialization} *)
 
 let declare_datatype s name info =
@@ -957,6 +1093,19 @@ let make globals =
           }
   in declare_solver_basics s; s
 
+
+(* XXXX *)
+let eval globs mo t =
+  let _x = get_value in
+  None
+
+
+(* Dummy implementations *)
+let random_seed = ref 0
+let log_to_temp = ref false
+let set_slow_smt_settings _ _ = ()
+let debug_solver_to_string _ = ()
+let debug_solver_query _ _ _ _ _ = ()
 
 
 
