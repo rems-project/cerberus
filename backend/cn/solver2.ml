@@ -10,6 +10,7 @@ module BT_Table = Hashtbl.Make(BT)
 module Int_Table = Hashtbl.Make(Int)
 module LCSet = Set.Make(LC)
 open Global
+open Pp
 
 (* XXX: probably should add some prefixes to try to avoid name collisions. *)
 (** Functions that pick names for things. *)
@@ -609,18 +610,18 @@ let rec translate_term s iterm =
       | _                       -> failwith "ShiftRight"
       end
 
-    | LT -> begin match IT.basetype iterm with
+    | LT -> begin match IT.basetype e1 with
       | BT.Bits (BT.Signed,_)   -> SMT.bv_slt s1 s2
       | BT.Bits (BT.Unsigned,_) -> SMT.bv_ult s1 s2
       | BT.Integer | BT.Real    -> SMT.num_lt s1 s2
       | _  -> failwith "LT"
       end
 
-    | LE -> begin match IT.basetype iterm with
+    | LE -> begin match IT.basetype e1 with
       | BT.Bits (BT.Signed,_)   -> SMT.bv_sleq s1 s2
       | BT.Bits (BT.Unsigned,_) -> SMT.bv_uleq s1 s2
       | BT.Integer | BT.Real    -> SMT.num_leq s1 s2
-      | _  -> failwith "LE"
+      | ty  -> Pp.print stdout (!^ "LE" ^^^ BT.pp ty); failwith "LE"
       end
 
     (* XXX: duplicates terms *)
