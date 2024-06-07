@@ -169,7 +169,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Null -> !^"null"
        | CType_const ct -> Pp.squotes (Sctypes.pp ct)
        end
-    | Sym sym -> Sym.pp sym
+    | Sym sym -> Sym.pp_debug sym
     | Unop (uop, it1) ->
        begin match uop with
        | BWCLZNoSMT ->

@@ -64,11 +64,15 @@ let pp_definition def =
 
 let instantiate_clauses def ptr_arg iargs = match def.clauses with
   | Some clauses ->
+    Pp.debug 8 (lazy (Pp.item "def.pointer" (Sym.pp def.pointer)));
+    Pp.debug 8 (lazy (Pp.item "ptr_arg" (IT.pp ptr_arg)));
     let subst = IT.make_subst (
         (def.pointer, ptr_arg) ::
         List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
       )
     in
+    Pp.debug 8 (lazy (Pp.item "subst.free_vars" (Pp.list Sym.pp (LAT.SymSet.fold (List.cons) subst.relevant []))));
+    Pp.debug 8 (lazy (Pp.item "subst.replace" (Subst.pp (function `Rename sym -> Sym.pp sym | `Term t -> IT.pp t) subst.replace)));
     Some (List.map (subst_clause subst) clauses)
   | None -> None
 

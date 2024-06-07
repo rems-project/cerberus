@@ -171,9 +171,11 @@ let get_active_clause m_g clauses =
     | [] -> raise NoResult
     | (c :: clauses) ->
       let gd = c.ResourcePredicates.guard in
-      let this = eval_extract "resource predicate clause guard" m_g is_bool gd in
-      if this then (IT.and_ (List.rev (gd :: not_prev)) loc, c)
-      else seek (IT.not_ gd loc :: not_prev) clauses
+      let cond = IT.and_ (List.rev (gd :: not_prev)) loc in
+      Pp.debug 8 (lazy (Pp.item "cond" (IT.pp cond)));
+      let this = eval_extract "resource predicate clause guard" m_g is_bool cond in
+      if this then (Pp.debug 8 (lazy (Pp.string "proven cond")); (cond, c))
+      else (Pp.debug 8 (lazy (Pp.string "next cond"));seek (IT.not_ gd loc :: not_prev) clauses)
   in
   seek [] clauses
 
@@ -187,6 +189,7 @@ let rec get_packing_ft_owned_resources = function
     resource :: get_packing_ft_owned_resources ftyp
 
 let rec model_res_spans m_g (res : ResourceTypes.t) =
+  Pp.debug 8 (lazy (Pp.item "res" (Pp.brackets (ResourceTypes.pp res))));
   match res with
   | (RET.P ({name = Owned (ct, _); _} as pt)) ->
       (* FIXME: use alloc id provenance for VIP *)
@@ -196,10 +199,14 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
   | (RET.P ({name = PName pname; _} as r_pt)) ->
       let rpreds = (snd m_g).Global.resource_predicates in
       let def = SymMap.find_opt pname rpreds |> some_result in
+      Pp.debug 8 (lazy (Pp.item "clauses - before" (Pp.brackets (Pp.option (Pp.list ResourcePredicates.pp_clause) "noclause" def.ResourcePredicates.clauses))));
       let clauses = ResourcePredicates.instantiate_clauses def r_pt.pointer r_pt.iargs
         |> some_result in
+      Pp.debug 8 (lazy (Pp.item "clauses" (Pp.brackets (Pp.list ResourcePredicates.pp_clause clauses))));
       let (cond, active_clause) = get_active_clause m_g clauses in
+      Pp.debug 8 (lazy (Pp.item "packing_ft" (Pp.brackets (LAT.pp IT.pp active_clause.ResourcePredicates.packing_ft))));
       let ress = get_packing_ft_owned_resources active_clause.ResourcePredicates.packing_ft in
+      Pp.debug 8 (lazy (Pp.item "ress" (Pp.brackets (Pp.list RET.pp ress))));
       ress |> List.map (note_failure_empty (model_res_spans m_g))
 	|> List.concat
         |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))

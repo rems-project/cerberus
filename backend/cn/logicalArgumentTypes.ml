@@ -50,9 +50,11 @@ and alpha_rename i_subst s t =
   (s', subst i_subst (IT.make_rename ~from:s ~to_:s') t)
 
 and suitably_alpha_rename i_subst syms s t =
+  Pp.debug 8 (lazy (Pp.item __FUNCTION__ (Pp.list Sym.pp_debug (SymSet.fold (List.cons) syms []))));
+  Pp.debug 8 (lazy (Pp.item "bound" (Sym.pp_debug s)));
   if SymSet.mem s syms
-  then alpha_rename i_subst s t
-  else (s, t)
+  then (Pp.debug 8 (lazy (Pp.string "renaming..")); alpha_rename i_subst s t)
+  else (Pp.debug 8 (lazy (Pp.string "skipping.."));(s, t))
 
 
 
@@ -82,7 +84,7 @@ let rec pp_aux i_pp = function
   | Define ((name, it), _info, t) ->
      group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux i_pp t
   | Resource ((name, (re, _bt)), _info, t) ->
-     group (!^"take" ^^^ (Sym.pp name) ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
+     group (!^"take" ^^^ (Sym.pp_debug name) ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
   | Constraint (lc, _info, t) ->
      let op = equals ^^ rangle () in
      group (LC.pp lc ^^^ op) :: pp_aux i_pp t
