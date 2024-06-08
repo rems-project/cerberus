@@ -919,10 +919,10 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                       match Mem.case_funsym_opt mem_st pv with
                       | Just sym ->
                           case_funptrval (Just sym)
-                      | None ->
+                      | Nothing ->
                           EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": does not point to a function")
                       end
-                  | None ->
+                  | Nothing ->
                       EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": does not point to a function")
                   end)
           | Just (Vloaded (LVunspecified _)) ->

@@ -4206,7 +4206,7 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
       E.resolve_extraordinary_identifier struct_tag E.Namespace_tag >>= function
           | Just (_, (tag_sym, _)) ->
               E.return (CNExpr_offsetof tag_sym memb)
-          | None ->
+          | Nothing ->
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
       end
     | CNExpr_membershift e Nothing memb ->
@@ -4217,14 +4217,18 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
           | Just (_, (tag_sym, _)) ->
               desugar_cn_expr e >>= fun e ->
               E.return (CNExpr_membershift e (Just tag_sym) memb)
-          | None ->
+          | Nothing ->
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
       end
     | CNExpr_addr nm ->
        E.resolve_ordinary_identifier loc nm >>= function
           | Just (_, E.OReg_other nm_sym _ _) ->
               E.return (CNExpr_addr nm_sym)
-          | None ->
+          | Just (_, E.OReg_enum_constant _) ->
+              E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+          | Just (_, E.OReg_typedef _) ->
+              E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+          | Nothing ->
               E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
       end
     | CNExpr_cast ty e ->
@@ -4478,7 +4482,11 @@ let desugar_and_register_cn_fun_spec spec =
   E.resolve_ordinary_identifier loc spec.cn_spec_name >>= function
     | Just (_, E.OReg_other nm_sym _ _) ->
         E.return nm_sym
-    | None ->
+    | Just (_, E.OReg_enum_constant _) ->
+        E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier spec.cn_spec_name))
+    | Just (_, E.OReg_typedef _) ->
+        E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier spec.cn_spec_name))
+    | Nothing ->
         E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier spec.cn_spec_name))
   end
   >>= fun fun_sym ->
@@ -4546,7 +4554,11 @@ let desugar_cn_statement (CN_statement loc stmt_) =
        E.resolve_ordinary_identifier loc nm >>= function
          | Just (_, E.OReg_other nm_sym _ _) ->
            E.return nm_sym
-         | None ->
+         | Just (_, E.OReg_enum_constant _) ->
+           E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+         | Just (_, E.OReg_typedef _) ->
+           E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
+         | Nothing ->
            E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier nm))
          end) nms
   | CN_print e ->

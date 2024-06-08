@@ -985,7 +985,7 @@ BEFORE EVAL_PEXPR2
                   match Mem.case_funsym_opt mem_st pv with
                   | Just sym ->
                       case_funptrval (Just sym)
-                  | None ->
+                  | Nothing ->
                       error ("the address does not point to a function (Eccall)")
                   end)
           | Just cval ->
