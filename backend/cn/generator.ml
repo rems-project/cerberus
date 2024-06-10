@@ -383,72 +383,83 @@ let add_to_vars_ms (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (sym : 
     | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
   | _ -> ((sym, (ty, Cn.CNExpr_var sym))::vars, ms)
 
-let rec collect_resource (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (r : cn_resource) : (cn_expr_ * variables * members * locations * constraints) QCheck.Gen.t =
+
+let (>>=) (x : 'a list QCheck.Gen.t) (f : 'a -> 'b list QCheck.Gen.t) : 'b list QCheck.Gen.t =
+  QCheck.Gen.(map List.flatten ((x >>= fun l -> (List.map f l |> flatten_l))))
+
+let return (x : 'a) : 'a list QCheck.Gen.t =
+  QCheck.Gen.return [x]
+
+let lift_gen (x : 'a QCheck.Gen.t) : 'a list QCheck.Gen.t =
+  QCheck.Gen.(x >>= fun v -> return [v])
+
+let lift_list (x : 'a list) : 'a list QCheck.Gen.t =
+  QCheck.Gen.return x
+
+let rec collect_resource (depth : int) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (r : cn_resource) : (cn_expr_ * variables * members * locations * constraints) list QCheck.Gen.t =
   match r with
   | CN_pred (_, CN_owned (Some ty), [Cn.CNExpr (_, e)])
   | CN_pred (_, CN_block ty, [Cn.CNExpr (_, e)]) ->
     let sym = Symbol.fresh () in
     let vars, ms = add_to_vars_ms ail_prog sym ty vars ms in
-    QCheck.Gen.return (Cn.CNExpr_var sym, vars, ms, [(e, sym)], [])
+    return (Cn.CNExpr_var sym, vars, ms, [(e, sym)], [])
   | CN_pred (_, CN_named x, es) ->
     let pred = List.assoc Symbol.equal_sym x psi in
     let es' = List.map (fun (Cn.CNExpr (_, e')) -> e') es in
-    collect_clauses ail_prog psi vars ms (sub_sym_predicate pred es')
+    collect_clauses depth ail_prog psi vars ms (sub_sym_predicate pred es')
 
   | CN_pred (_, CN_owned (Some _), _) -> failwith "incorrect number of args for Owned"
   | CN_pred (_, CN_block _, _) -> failwith "incorrect number of args for Block"
   | CN_pred (_, CN_owned None, _) -> failwith "requires type for Owned"
   | CN_each _ -> failwith "each not supported"
 
-and collect_clause (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (c : cn_clause) : (cn_expr_ * variables * members * locations * constraints) QCheck.Gen.t =
-  QCheck.Gen.(
+and collect_clause (depth : int) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (c : cn_clause) : (cn_expr_ * variables * members * locations * constraints) list QCheck.Gen.t =
     match c with
     | CN_letResource (_, x, r, c') ->
-      collect_resource ail_prog psi vars ms r >>= fun (e, vars, ms, locs, cs) ->
-      collect_clause ail_prog psi vars ms (sub_sym_clause x e c') >>= fun (e', vars, ms, locs', cs') ->
+      collect_resource depth ail_prog psi vars ms r >>= fun (e, vars, ms, locs, cs) ->
+      collect_clause depth ail_prog psi vars ms (sub_sym_clause x e c') >>= fun (e', vars, ms, locs', cs') ->
       return (e', vars, ms, locs @ locs', cs @ cs')
     | CN_letExpr (_, x, CNExpr (_, e), c') ->
-      collect_clause ail_prog psi vars ms (sub_sym_clause x e c')
+      collect_clause depth ail_prog psi vars ms (sub_sym_clause x e c')
     | CN_assert (_, CN_assert_exp (Cn.CNExpr (_, e)), c') ->
-      collect_clause ail_prog psi vars ms c' >>= fun (e', vars, ms, locs, cs) ->
+      collect_clause depth ail_prog psi vars ms c' >>= fun (e', vars, ms, locs, cs) ->
       return (e', vars, ms, locs, e::cs)
     | CN_return (_, Cn.CNExpr (_, e)) ->
       return (e, vars, ms, [], [])
     | CN_assert (_, CN_assert_qexp _, _) -> failwith "quantified assert not supported"
-  )
 
-and collect_clauses (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (s : cn_clauses) : (cn_expr_ * variables * members * locations * constraints) QCheck.Gen.t =
+and collect_clauses (depth : int) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (s : cn_clauses) : (cn_expr_ * variables * members * locations * constraints) list QCheck.Gen.t =
   match s with
-  | CN_clause (_, c) -> collect_clause ail_prog psi vars ms c
+  | CN_clause (_, c) -> collect_clause depth ail_prog psi vars ms c
   | CN_if (_, e_if, c_then, s_else) ->
+    if depth <= 0 then lift_list [] else
     let e_if = apply_builtins e_if in
-    QCheck.Gen.(
-      bool >>= fun b ->
-        if b
-        then
-          collect_clause ail_prog psi vars ms c_then >>= fun (e, vars, ms, locs, cs) ->
-          let Cn.CNExpr (_, e_if) = e_if in
-          return (e, vars, ms, locs, e_if::cs)
-        else
-          collect_clauses ail_prog psi vars ms s_else >>= fun (e, vars, ms, locs, cs) ->
-          return (e, vars, ms, locs, (Cn.CNExpr_not e_if)::cs)
-    )
+    let t =
+      collect_clause (depth - 1) ail_prog psi vars ms c_then >>= fun (e, vars, ms, locs, cs) ->
+      let Cn.CNExpr (_, e_if) = e_if in
+      return (e, vars, ms, locs, e_if::cs)
+    in
+    let f =
+      collect_clauses (depth - 1) ail_prog psi vars ms s_else >>= fun (e, vars, ms, locs, cs) ->
+      return (e, vars, ms, locs, (Cn.CNExpr_not e_if)::cs)
+    in
+    QCheck.Gen.map
+      (List.flatten)
+      (QCheck.Gen.flatten_l [t; f])
 
-let rec collect_conditions (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (c : cn_condition list) : goal QCheck.Gen.t =
-  QCheck.Gen.(
-    match c with
-    | (CN_cletResource (_, x, r))::c' ->
-      collect_resource ail_prog psi vars ms r >>= fun (e, vars, ms, locs, cs) ->
-      collect_conditions ail_prog psi vars ms (sub_sym_conditions x e c') >>= fun (vars, ms, locs', cs') ->
-      return (vars, ms, locs @ locs', cs @ cs')
-    | (CN_cletExpr (_, x, CNExpr (_, e)))::c' ->
-      collect_conditions ail_prog psi vars ms (sub_sym_conditions x e c')
-    | (CN_cconstr (_, CN_assert_exp Cn.CNExpr (_, e)))::c' ->
-      collect_conditions ail_prog psi vars ms c' >>= fun (vars, ms, locs, cs) ->
-      return (vars, ms, locs, e::cs)
-    | (CN_cconstr (_, CN_assert_qexp _))::_ -> failwith "quantified assert not supported"
-    | [] -> return (vars, ms, [], [])
-  )
+let rec collect_conditions (depth : int) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (psi : (Symbol.sym * cn_predicate) list) (vars : variables) (ms : members) (c : cn_condition list) : goal list QCheck.Gen.t =
+  match c with
+  | (CN_cletResource (_, x, r))::c' ->
+    collect_resource depth ail_prog psi vars ms r >>= fun (e, vars, ms, locs, cs) ->
+    collect_conditions depth ail_prog psi vars ms (sub_sym_conditions x e c') >>= fun (vars, ms, locs', cs') ->
+    return (vars, ms, locs @ locs', cs @ cs')
+  | (CN_cletExpr (_, x, CNExpr (_, e)))::c' ->
+    collect_conditions depth ail_prog psi vars ms (sub_sym_conditions x e c')
+  | (CN_cconstr (_, CN_assert_exp Cn.CNExpr (_, e)))::c' ->
+    collect_conditions depth ail_prog psi vars ms c' >>= fun (vars, ms, locs, cs) ->
+    return (vars, ms, locs, e::cs)
+  | (CN_cconstr (_, CN_assert_qexp _))::_ -> failwith "quantified assert not supported"
+  | [] -> return (vars, ms, [], [])
 
 let sub_sym_variables (x : Symbol.sym) (v : cn_expr_) (vars : variables) : variables =
   List.map (fun (x', (ty, e)) -> (x', (ty, sub_sym_expr_ x v e))) vars
@@ -861,7 +872,7 @@ let concretize ail_prog (g : goal) : (goal * context * heap) QCheck.Gen.t =
     return (g, ctx, h)
   )
 
-let generate ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : cn_condition list) : (goal * context * heap) QCheck.Gen.t =
+let generate (depth : int) ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : cn_condition list) : (goal * context * heap) QCheck.Gen.t =
   QCheck.Gen.(
     let vars, ms =
       (List.fold_left
@@ -870,7 +881,8 @@ let generate ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.s
         ) ([], []) args)
     in
 
-    collect_conditions ail_prog psi vars ms c >>= fun g ->
+    collect_conditions depth ail_prog psi vars ms c >>= fun gs ->
+    oneofl gs >>= fun g ->
     let g = simplify g in
     concretize ail_prog g
   )
@@ -1042,7 +1054,7 @@ let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentati
   output_string oc "}\n";
 ;;
 
-let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (generated : goal list) (tolerance : int) : goal list =
+let generate_unit_test (depth : int) (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (generated : goal list) (tolerance : int) : goal list =
   let psi = List.map (fun (pred : cn_predicate) -> (pred.cn_pred_name, pred)) ail_prog.cn_predicates in
   let lookup_fn = fun (x, _) -> Symbol.equal_sym x instrumentation.fn in
   let fn_decl = List.filter lookup_fn ail_prog.declarations in
@@ -1055,7 +1067,7 @@ let generate_unit_test (tf : test_framework) (instrumentation : Core_to_mucore.i
       | _ -> ([], [])
   in
   let args = List.combine arg_syms arg_types in
-  let (g, ctx, h) = QCheck.Gen.generate1 (generate ail_prog psi args (instrumentation.surface.requires)) in
+  let (g, ctx, h) = QCheck.Gen.generate1 (generate depth ail_prog psi args (instrumentation.surface.requires)) in
   if tolerance == 0 || (List.find_opt (fun g' -> Stdlib.(=) g g') generated |> Option.is_none)
   then (
     codify tf instrumentation ail_prog args ctx h (List.length generated + 1) oc;
@@ -1069,23 +1081,23 @@ let range i j =
   in aux (j-1) []
 ;;
 
-let rec generate_unit_tests (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (generated : goal list) (num_tests : int) (tolerance : int) : unit =
+let rec generate_unit_tests (depth : int) (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (generated : goal list) (num_tests : int) (tolerance : int) : unit =
   let n = num_tests - List.length generated in
   let generated = ref generated in
   List.iter
-    (fun _ -> generated := generate_unit_test tf instrumentation ail_prog oc !generated tolerance)
+    (fun _ -> generated := generate_unit_test depth tf instrumentation ail_prog oc !generated tolerance)
     (range 0 n);
   let num_generated = List.length !generated in
   if tolerance >= 0 && num_generated < num_tests
   then
-    generate_unit_tests tf instrumentation ail_prog oc !generated num_tests (tolerance - 1)
+    generate_unit_tests depth tf instrumentation ail_prog oc !generated num_tests (tolerance - 1)
 ;;
 
-let generate_tests (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (num_tests : int) : unit =
+let generate_tests (depth : int) (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (num_tests : int) : unit =
   List.iter
     (fun inst ->
       try
-        generate_unit_tests tf inst ail_prog oc [] num_tests (10 * num_tests)
+        generate_unit_tests depth tf inst ail_prog oc [] num_tests (10 * num_tests)
       with Failure m ->
         print_string ("Failed to generate all tests for `" ^ Sym.pp_string inst.fn ^ "` due to the following:\n" ^ m ^ "\n")
     ) instrumentation_list

@@ -138,6 +138,7 @@ let main
       output_with_unit_tests
       num_unit_tests
       test_framework
+      test_depth
       astprints
       use_vip
       no_use_ity
@@ -233,7 +234,7 @@ let main
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
             end;
-            generate_tests test_framework instrumentation ail_prog oc num_unit_tests;
+            generate_tests test_depth test_framework instrumentation ail_prog oc num_unit_tests;
          end;
          return res
        in
@@ -365,6 +366,10 @@ let test_framework =
   let doc = "testing framework to use (gtest or catch)" in
   Arg.(value & opt (enum [("gtest", GTest); "catch", Catch2]) GTest & info ["test_framework"] ~docv:"FILE" ~doc)
 
+let test_depth =
+  let doc = "depth of branching to consider for test generation" in
+  Arg.(value & opt int 10 & info ["test_depth"] ~docv:"FILE" ~doc)
+
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
@@ -416,6 +421,7 @@ let () =
       output_with_unit_tests $
       num_unit_tests $
       test_framework $
+      test_depth $
       astprints $
       use_vip $
       no_use_ity $
