@@ -136,7 +136,6 @@ let main
       solver_logging
       output_decorated
       output_with_unit_tests
-      num_unit_tests
       test_framework
       test_depth
       astprints
@@ -234,7 +233,7 @@ let main
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
             end;
-            generate_tests test_depth test_framework instrumentation ail_prog oc num_unit_tests;
+            generate_tests test_depth test_framework instrumentation ail_prog oc;
          end;
          return res
        in
@@ -358,10 +357,6 @@ let output_with_unit_tests =
   let doc = "output a version of the translation unit decorated with unit tests of the CN annotations" in
   Arg.(value & opt (some string) None & info ["output_with_unit_tests"] ~docv:"FILE" ~doc)
 
-let num_unit_tests =
-  let doc = "number of unit tests to try and generate" in
-  Arg.(value & opt int 10 & info ["num_unit_tests"] ~docv:"FILE" ~doc)
-
 let test_framework =
   let doc = "testing framework to use (gtest or catch)" in
   Arg.(value & opt (enum [("gtest", GTest); "catch", Catch2]) GTest & info ["test_framework"] ~docv:"FILE" ~doc)
@@ -419,7 +414,6 @@ let () =
       solver_logging $
       output_decorated $
       output_with_unit_tests $
-      num_unit_tests $
       test_framework $
       test_depth $
       astprints $
