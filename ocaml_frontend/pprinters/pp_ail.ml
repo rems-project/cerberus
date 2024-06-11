@@ -763,8 +763,8 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)
           P.nest 2 (
             P.break 1 ^^
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
-              pp_ctype_declaration ~executable_spec (Pp_symbol.pp_identifier ident) qs ty ^^
-              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
+              P.optional (fun align -> pp_alignment align ^^ P.space) align_opt ^^ 
+              pp_ctype_declaration ~executable_spec (Pp_symbol.pp_identifier ident) qs ty
             ) ident_qs_tys
           ) ^^ P.semi ^^ P.break 1 ^^
           P.optional (fun (FlexibleArrayMember (_, ident, qs, elem_ty)) ->
@@ -784,8 +784,8 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)
           P.nest 2 (
             P.break 1 ^^
             P.separate_map (P.comma ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
-              Pp_symbol.pp_identifier ident ^^
-              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
+              P.optional (fun align -> pp_alignment align ^^ P.space) align_opt ^^
+              Pp_symbol.pp_identifier ident
             ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi
@@ -794,8 +794,8 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)
           P.nest 2 (
             P.break 1 ^^
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
-              pp_ctype_declaration ~executable_spec (Pp_symbol.pp_identifier ident) qs ty ^^
-              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
+              P.optional (fun align -> pp_alignment align ^^ P.space) align_opt ^^
+              pp_ctype_declaration ~executable_spec (Pp_symbol.pp_identifier ident) qs ty
             ) ident_qs_tys
           ) ^^ P.semi ^^ P.break 1
         ) ^^ P.semi
@@ -866,7 +866,7 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
           pp_ansi_format [Red] (
             fun () ->
               !^ "// declare" ^^^ pp_id ~executable_spec sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
-              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
+              P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
           ) ^^
           P.hardline ^^
           
