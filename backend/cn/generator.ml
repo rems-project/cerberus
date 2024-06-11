@@ -383,7 +383,6 @@ let add_to_vars_ms (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (sym : 
     | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
   | _ -> ((sym, (ty, Cn.CNExpr_var sym))::vars, ms)
 
-
 let (>>=) (x : 'a list QCheck.Gen.t) (f : 'a -> 'b list QCheck.Gen.t) : 'b list QCheck.Gen.t =
   QCheck.Gen.(map List.flatten ((x >>= fun l -> (List.map f l |> flatten_l))))
 
@@ -515,38 +514,52 @@ let rec remove_tautologies ((vars, ms, locs, cs) : goal) : goal =
       (vars, ms, locs, c::cs))
   | [] -> (vars, ms, locs, cs)
 
-let rec distribute_negation_ (e : cn_expr_) : cn_expr_ =
+let rec cnf_ (e : cn_expr_) : cn_expr_ =
   Cn.(
     match e with
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_equal, e1, e2)))) ->
-      CNExpr_binop (CN_inequal, distribute_negation e1, distribute_negation e2)
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_inequal, e1, e2)))) ->
-      CNExpr_binop (CN_equal, distribute_negation e1, distribute_negation e2)
+    (* Double negation elimination *)
+    | CNExpr_not (CNExpr (_, CNExpr_not (CNExpr (_, e)))) ->
+      e
 
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_lt, e1, e2)))) ->
-      CNExpr_binop (CN_ge, distribute_negation e1, distribute_negation e2)
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_le, e1, e2)))) ->
-      CNExpr_binop (CN_gt, distribute_negation e1, distribute_negation e2)
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_gt, e1, e2)))) ->
-      CNExpr_binop (CN_le, distribute_negation e1, distribute_negation e2)
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_ge, e1, e2)))) ->
-      CNExpr_binop (CN_lt, distribute_negation e1, distribute_negation e2)
+    (* Flip equalities *)
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_equal, e1, e2))) ->
+      CNExpr_binop (CN_inequal, cnf e1, cnf e2)
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_inequal, e1, e2))) ->
+      CNExpr_binop (CN_equal, cnf e1, cnf e2)
 
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_and, e1, e2)))) ->
+    (* Flip inequalities *)
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_lt, e1, e2))) ->
+      CNExpr_binop (CN_ge, cnf e1, cnf e2)
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_le, e1, e2))) ->
+      CNExpr_binop (CN_gt, cnf e1, cnf e2)
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_gt, e1, e2))) ->
+      CNExpr_binop (CN_le, cnf e1, cnf e2)
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_ge, e1, e2))) ->
+      CNExpr_binop (CN_lt, cnf e1, cnf e2)
+
+    (* De Morgan's Law *)
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_and, e1, e2))) ->
       CNExpr_binop (CN_or,
-        CNExpr (l, CNExpr_not (distribute_negation e1)),
-        CNExpr (l, CNExpr_not (distribute_negation e2)))
-    | (CNExpr_not (CNExpr (l, CNExpr_binop (CN_or, e1, e2)))) ->
+        CNExpr (l, CNExpr_not (cnf e1)),
+        CNExpr (l, CNExpr_not (cnf e2)))
+    | CNExpr_not (CNExpr (l, CNExpr_binop (CN_or, e1, e2))) ->
       CNExpr_binop (CN_and,
-        CNExpr (l, CNExpr_not (distribute_negation e1)),
-        CNExpr (l, CNExpr_not (distribute_negation e2)))
+        CNExpr (l, CNExpr_not (cnf e1)),
+        CNExpr (l, CNExpr_not (cnf e2)))
+
+    (* Distribute disjunction *)
+    | CNExpr_binop (CN_or, e1, CNExpr (l, CNExpr_binop (CN_and, e2, e3)))
+    | CNExpr_binop (CN_or, CNExpr (l, CNExpr_binop (CN_and, e2, e3)), e1) ->
+      CNExpr_binop (CN_and,
+        CNExpr (l, CNExpr_binop (CN_or, e1, e2)),
+        CNExpr (l, CNExpr_binop (CN_or, e1, e3)))
 
     | _ -> e
   )
 
-and distribute_negation (e : cn_expr) : cn_expr =
+and cnf (e : cn_expr) : cn_expr =
   let CNExpr (l, e) = e in
-  CNExpr (l, distribute_negation_ e)
+  CNExpr (l, cnf_ e)
 ;;
 
 let rec inline_aliasing' (g : goal) (iter : constraints) : goal =
@@ -646,7 +659,7 @@ let rec simplify' (g : goal) : goal =
 let simplify (g : goal) : goal =
   let g = indirect_members g in
   let (vars, ms, locs, cs) = g in
-  let g = (vars, ms, locs, List.map distribute_negation_ cs) in
+  let g = (vars, ms, locs, List.map cnf_ cs) in
   let g = remove_nonnull_for_locs g in
   simplify' g
 
