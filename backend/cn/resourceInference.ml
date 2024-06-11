@@ -73,7 +73,7 @@ module General = struct
 
 
 
-  let cases_to_map loc (uiinfo: uiinfo) a_bt item_bt (C cases) =
+  let cases_to_map loc (situation, requests) a_bt item_bt (C cases) =
     let here = Locations.other __FUNCTION__ in
     let update_with_ones base_array ones =
       List.fold_left (fun m {one_index; value} ->
@@ -89,8 +89,12 @@ module General = struct
       | [], _
       | _, BT.Unit ->
           return (default_ (BT.Map (a_bt, item_bt)) here)
-      | many, _ -> fail (fun ctxt -> {loc; msg = Generic (!^ "Merging multiple arrays with non-void values:" ^^^ Pp.list IT.pp
-             (List.map (fun m -> m.value) many))})
+      | many, _ ->
+        let term = IndexTerms.bool_ true here in
+        let@ model = model_with here term in
+        let model = Option.get model in
+        fail (fun ctxt ->
+          {loc; msg = Merging_multiple_arrays { requests; situation; ctxt; model; }})
     in
     return (update_with_ones base_value ones)
 
