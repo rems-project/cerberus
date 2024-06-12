@@ -199,6 +199,8 @@ let main
             let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
             Executable_spec_internal.populate_record_map prog5;
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
+
+
             let (c_datatypes, c_datatype_equality_fun_decls) = Executable_spec_internal.generate_c_datatypes ail_prog in
             let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
@@ -222,7 +224,7 @@ let main
 
             
             (* TODO: Remove - hacky *)
-            let cn_utils_header_pair = ("../../../../executable-spec/cn_utils.h", false) in
+            let cn_utils_header_pair = ("../executable-spec/cn_utils.h", false) in
             let cn_utils_header = generate_include_header cn_utils_header_pair in
 
             (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = Executable_spec_internal.generate_all_record_strs ail_prog in *)
