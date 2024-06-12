@@ -192,7 +192,7 @@ let main
             Executable_spec_internal.populate_record_map prog5;
             let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
             let (c_datatypes, c_datatype_equality_fun_decls) = Executable_spec_internal.generate_c_datatypes ail_prog in
-            let (c_function_defs, locs_and_c_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+            let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
             let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
             let (conversion_function_defs, conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
             let (ownership_function_defs, ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
@@ -235,6 +235,7 @@ let main
             Stdlib.output_string cn_oc record_equality_fun_strs';
             Stdlib.output_string cn_oc conversion_function_defs;
             Stdlib.output_string cn_oc ownership_function_defs;
+            Stdlib.output_string cn_oc c_function_decls;
             Stdlib.output_string cn_oc c_function_defs;
             Stdlib.output_string cn_oc c_predicate_defs;
 
@@ -309,7 +310,7 @@ let main
             let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
             (* let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in *)
 
-            let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls) in
+            let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
 
             begin match
               Source_injection.(output_injections oc
