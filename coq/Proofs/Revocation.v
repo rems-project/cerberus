@@ -4625,7 +4625,7 @@ Module RevocationProofs.
               AddressValue.to_Z (Capability_GS.cap_get_value c2) + sz <=
        AddressValue.ADDR_LIMIT) /\
 
-      (* all addresses are within bounds *)
+    (* all addresses are within bounds *)
     (forall x, 0<=x<sz  ->
           ((AddressValue.ADDR_MIN <=
               AddressValue.to_Z (Capability_GS.cap_get_value c1) + x <
@@ -4871,10 +4871,10 @@ Module RevocationProofs.
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
     {s s': mem_state_r}
-    {Mbase: base_mem_invariant s}
     {ptrval1 ptrval2: pointer_value}
     {len: Z}
     :
+    base_mem_invariant s ->
     mempcpy_args_sane s.(allocations) ptrval1 ptrval2 len ->
     memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr tt)
     ->
@@ -4885,7 +4885,7 @@ Module RevocationProofs.
         a2 = Capability_GS.cap_get_value c2 ->
         fetch_bytes (bytemap s') a1 (Z.to_nat len) = fetch_bytes (bytemap s') a2 (Z.to_nat len).
   Proof.
-    intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
+    intros Mbase H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
     unfold fetch_bytes.
     apply list.list_eq_Forall2.
     eapply Forall2_nth_list.
@@ -5090,8 +5090,8 @@ Module RevocationProofs.
     (a1 a2 a1' a2':AddressValue.t)
     (n n':nat)
     (bm: AMap.M.t AbsByte)
-    (A1: 0 <= AddressValue.to_Z a1 + Z.of_nat n <= AddressValue.ADDR_LIMIT)
-    (A2: 0 <= AddressValue.to_Z a2 + Z.of_nat n <= AddressValue.ADDR_LIMIT)
+    (A1: forall x, 0<=x<Z.of_nat n -> 0 <= AddressValue.to_Z a1 + x < AddressValue.ADDR_LIMIT)
+    (A2: forall x, 0<=x<Z.of_nat n -> 0 <= AddressValue.to_Z a2 + x < AddressValue.ADDR_LIMIT)
     (E: fetch_bytes bm a1 n = fetch_bytes bm a2 n):
 
     (exists (off:Z),
@@ -5142,23 +5142,25 @@ Module RevocationProofs.
 
     assert(0 <= AddressValue.to_Z a1 + (off + Z.of_nat i) < AddressValue.ADDR_LIMIT).
     {
-      clear - A1 E1 E4 E5 I. destruct A1.
+      clear - A1 E1 E4 E5 I.
       pose proof (AddressValue.to_Z_in_bounds a1) as [B0 B1].
       remember (AddressValue.to_Z a1) as az1.
       clear Heqaz1.
       zify.
       unfold AddressValue.ADDR_MIN in *.
+      specialize (A1 (off + Z.of_nat i)).
       lia.
     }
 
     assert(0 <= AddressValue.to_Z a2 + (off + Z.of_nat i) < AddressValue.ADDR_LIMIT).
     {
-      clear - A2 E1 E4 E5 I. destruct A2.
+      clear - A2 E1 E4 E5 I.
       pose proof (AddressValue.to_Z_in_bounds a2) as [B0 B1].
       remember (AddressValue.to_Z a2) as az2.
       clear Heqaz2.
       zify.
       unfold AddressValue.ADDR_MIN in *.
+      specialize (A2 (off + Z.of_nat i)).
       lia.
     }
 
@@ -5233,7 +5235,7 @@ Module RevocationProofs.
       addr_ptr_aligned dst ->
 
       (forall x : Z,
-      0 <= x <= Z.of_nat sz ->
+      0 <= x < Z.of_nat sz ->
       AddressValue.ADDR_MIN <= AddressValue.to_Z src + x < AddressValue.ADDR_LIMIT /\
       AddressValue.ADDR_MIN <= AddressValue.to_Z dst + x < AddressValue.ADDR_LIMIT) ->
 
@@ -5310,24 +5312,33 @@ Module RevocationProofs.
         autospecialize MIcap.
         {
           subst a bs.
-
+          (*
           specialize (B (Z.of_nat sz)).
           autospecialize B. lia.
           unfold AddressValue.ADDR_MIN in B.
           destruct B.
+           *)
           apply fetch_bytes_subset with (a1:=src) (a2:=dst) (n:=sz).
-          lia.
-          lia.
-          apply DS.
-          exists (k * Z.of_nat step).
-          repeat split.
-          * nia.
-          * nia.
-          *
-            subst.
-            clear - Hdst Hsrc Hsz H1.
-            pose proof pointer_sizeof_alignof.
-            nia.
+          -
+            clear - B.
+            unfold AddressValue.ADDR_MIN in *.
+            apply B.
+          -
+            clear - B.
+            unfold AddressValue.ADDR_MIN in *.
+            apply B.
+          -
+            apply DS.
+          -
+            exists (k * Z.of_nat step).
+            repeat split.
+            * nia.
+            * nia.
+            *
+              subst.
+              clear - Hdst Hsrc Hsz H1.
+              pose proof pointer_sizeof_alignof.
+              nia.
         }
         destruct MIcap as [M1 [c [M2 [alloc [alloc_id [M3 M4]]]]]].
         repeat split.
@@ -5504,21 +5515,34 @@ Module RevocationProofs.
     -
       intros x H0.
       clear H3 DS H2.
-      break_match.
+      pose proof MorelloImpl.alignof_pointer_pos.
+      break_match_hyp.
       +
+        (* c2 is ptr aligned *)
         subst off.
         rewrite 2!with_offset_0.
-        apply and_comm, B.
-        clear B BL1 BL2 Heqb0 Heqb1 Heqb c1 c2 H7 s.
-        pose proof MorelloImpl.alignof_pointer_pos.
-        rewrite Znat.Z2Nat.id in * by lia.
         rewrite Z.sub_0_r in Heqn.
+        apply and_comm, B.
+        rewrite Znat.Z2Nat.id in Heqn by lia.
+        bool_to_prop_hyp.
+
+        (* clear B BL1 BL2 Heqb0 Heqb1 Heqb c1 c2 H7 s. *)
         split;try lia.
-        cut (Z.of_nat (n * alignof_pointer MorelloImpl.get) < sz).
+        cut (Z.of_nat (n * alignof_pointer MorelloImpl.get) <= sz).
         lia.
-        clear x H0.
-        admit.
+        assert(0 <= Z.of_nat (n * alignof_pointer MorelloImpl.get)) by lia.
+        subst n.
+        rewrite Nat2Z.inj_mul in *.
+        rewrite Z2Nat.id in * by (apply Z.div_pos;lia).
+        pose proof (div_mul_undo_le sz (Z.of_nat (alignof_pointer MorelloImpl.get)) H).
+        autospecialize H3.
+        lia.
+        lia.
       +
+        (* c2 is not ptr aligned *)
+        apply and_comm.
+        rewrite Znat.Z2Nat.id in Heqn by lia.
+        bool_to_prop_hyp.
         admit.
     -
       symmetry in DS.
@@ -5527,7 +5551,8 @@ Module RevocationProofs.
         (a1:=Capability_GS.cap_get_value c2)
         (a2:=Capability_GS.cap_get_value c1)
         (n:=Z.to_nat sz).
-      1,2: (rewrite Znat.Z2Nat.id by lia;unfold AddressValue.ADDR_MIN in *;lia).
+
+      1,2: (rewrite Znat.Z2Nat.id by lia;unfold AddressValue.ADDR_MIN in *;apply B).
       apply DS.
       clear DS.
       exists off.
@@ -5579,7 +5604,7 @@ Module RevocationProofs.
         lia.
     -
       assumption.
-  Qed.
+  Admitted.
 
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
@@ -5618,7 +5643,8 @@ Module RevocationProofs.
       +
         destruct x.
         pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H0).
-        pose proof (memcpy_copy_data_fetch_bytes_spec AC H0) as DS.
+        destruct M.
+        pose proof (memcpy_copy_data_fetch_bytes_spec H2 AC H0) as DS.
         rewrite H1 in AC.
         eapply memcpy_copy_tags_PreservesInvariant; eauto.
       +
