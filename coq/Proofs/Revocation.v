@@ -5013,7 +5013,6 @@ Module RevocationProofs.
 
         invc H13.
         clear H.
-        destruct H0 as [_ [_ [_ H99]]].
         unfold cap_to_Z in *.
         destruct B.
         rewrite addr_offset_with_offset in * by lia.
