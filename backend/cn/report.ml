@@ -119,7 +119,7 @@ let make_where where =
   table ["function"; "section"; "location"; ""]
     [[where.fnction; 
       where.section; 
-      where.loc_head; 
+      div ~clss:"loc" [where.loc_head]; 
       pre (where.loc_pos)]]
 
 let make_requested requested = 
@@ -261,6 +261,395 @@ let make filename (report : report) =
 
   filename ^ "#" ^ page_name (total-1)
 
+
+let css = {|
+html {
+  font-family: sans-serif;
+  font-size: 11pt
+}
+
+body {
+  padding: 0 10px 10px 10px;
+  margin: 0;
+  overflow: hidden;
+}
+
+table {
+  width: 100%;
+  border: 1px solid;
+  border-collapse: collapse;
+}
+
+h1 {
+  font-size: 11pt;
+  margin-top: 16pt;
+}
+
+tr {
+  padding: 0;
+  margin: 0;
+}
+
+th, td {
+  text-align: left;
+  vertical-align: top;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  padding-left: 5px;
+  padding-right: 5px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+th {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+th {
+  font-weight: normal;
+  font-style: italic;
+}
+
+#pages .page { display: none }
+#pages .page:target { display: block }
+
+#pages .pagelinks .button, 
+#pages .pagelinks .inactive_button { 
+  padding-top: 5px; 
+  padding-bottom: 5px;
+  padding-left: 10px; 
+  padding-right: 10px;
+  display: inline-block;
+}
+
+/* @media (prefers-color-scheme: dark) {
+
+html {
+    background-color: black;
+    color: lightgray;
+}
+
+table, th, td {
+    border-color: #303030;
+}
+
+tr {
+    background-color: #181818;
+}
+
+th {
+    background-color: #252525;
+    border-bottom: 1px solid #303030;
+}
+
+tr:hover {
+    background-color: #101044;
+}
+
+#pages .pagelinks .button, 
+#pages .pagelinks .inactive_button { 
+    background-color: white;
+    border: 1px solid #EEEEEE;
+}
+
+#pages .pagelinks .button:hover {
+    background-color: #BBBBBB;
+}
+
+#pages .pagelinks .button a { 
+    color: black;
+    text-decoration: none;
+}
+
+.pagelinks .inactive_button {
+    color: #AAAAAA;
+}
+
+} */
+
+
+
+/* @media (prefers-color-scheme: light) { */
+
+html {
+  background-color: white;
+  color: black;
+}
+
+table, th, td {
+  border-color: #E9E9E9;
+}
+
+tr {
+  background-color: #F8F8F8;
+}
+
+th {
+  background-color: #F0F0F0;
+  border-bottom: 1px solid #E9E9E9;
+}
+
+tr:hover {
+  background-color: #E2F0FF;
+}
+
+/* #pages .pagelinks .button, 
+#pages .pagelinks .inactive_button { 
+  background-color: black;
+  border: 1px solid #111111;
+}
+
+#pages .pagelinks .button:hover {
+  background-color: #444444;
+}
+
+#pages .pagelinks .button a { 
+  color: white;
+  text-decoration: none;
+}
+
+.pagelinks .inactive_button {
+  color: #555555;
+} */
+/* } */
+
+.hl {
+  display: inline;
+  background-color: lightpink;
+/*  text-decoration: red wavy underline 1px; */
+}
+
+#root {
+  display: flex;
+  height: 100vh;
+}
+
+#menu {
+  padding-top: 5px;
+  padding-bottom: 10px;
+}
+
+#cn_state {
+  width: 50%;
+  overflow:scroll;
+}
+
+#cn_code {
+  width: 50%;
+  overflow:scroll;
+  padding: 5px;
+  font-family: monospace;
+  white-space-collapse: preserve;
+  /* text-wrap: nowrap; */
+  background-color: rgb(235, 235, 235);
+}
+
+.nb {
+  color: rgb(150, 150, 150);
+}
+
+.line {
+  padding-left: 8px;
+  /* overflow:scroll; */
+}
+|}
+
+let script = {|
+var current_page = 1
+const menu = document.getElementById("menu").children
+const pages = document.getElementById("pages").children
+const cn_code = document.getElementById("cn_code")
+const n_pages = pages.length
+
+
+function clear_highlight() {
+  Array.from(document.getElementById("cn_code").children).forEach((e) => {
+    div = e.children[1]
+    div.replaceChildren(div.textContent)
+  })
+}
+
+function highlight(line, start_col, end_col) {
+  // console.log(`HIGHLIGHT(${line}, ${start_col}, ${end_col})`)
+  if (end_col <= start_col) {
+    end_col = start_col+1
+  }
+  Array.from(cn_code.children).forEach((e, n) => {
+    div = e.children[1]
+    if (n != line-1) {
+      div.replaceChildren(div.textContent)
+    } else {
+      str = div.textContent
+      before = str.substring(0, start_col-1)
+      hl = document.createElement("span")
+      hl.classList.add("hl")
+      hl.textContent = str.substring(start_col-1,end_col-1)
+      after = str.substring(end_col-1)
+      div.replaceChildren(before,hl,after)
+      cn_code.scrollTop = div.offsetTop
+    }
+  })
+}
+
+function decode_loc(n) {
+  loc = pages[n-1].getElementsByClassName("loc")[0].textContent
+  if (loc == "") {
+    // console.log("NO LOC")
+    clear_highlight()
+  } else {
+    xs = loc.split(" ")[1].split(":")
+    line = xs[1]
+    col = parseInt(xs[2])
+    // console.log(`LOC ==> line: ${line} -- col: ${col}`)
+    highlight(line, col, col+1)
+  }
+}
+
+function goto_page(n) {
+  if (0 < n && n <= n_pages ) {
+    // console.log(`GOTO_PAGE(${n} ==> current: ${current_page})`)
+    decode_loc(n)
+    pages[current_page - 1].style.display = "none"
+    pages[n-1].style.display = "block"
+    current_page = n
+
+    menu[0].disabled = false
+    menu[1].disabled = false
+    menu[2].disabled = false
+    menu[3].disabled = false
+    if (current_page == 1) {
+      menu[0].disabled = true
+      menu[1].disabled = true
+    } else if (current_page == n_pages) {
+      menu[2].disabled = true
+      menu[3].disabled = true
+    }
+  }
+}
+
+function goto_prev() {
+  goto_page(current_page-1)
+}
+
+function goto_next() {
+  goto_page(current_page+1)
+}
+
+function create_line(n, str) {
+  nb_div = document.createElement("div")
+  str_div = document.createElement("div")
+  nb_div.textContent = n
+  nb_div.classList.add("nb")
+  str_div.textContent = str
+  str_div.classList.add("line")
+  ret = document.createElement("div")
+  ret.style.display = "flex"
+  ret.replaceChildren(nb_div, str_div)
+  return ret
+}
+
+function init() {
+  lines = cn_code.textContent.split("\n")
+  lines.forEach((e, n) => {
+    if (n == 0) {
+      cn_code.replaceChildren(create_line(1, e))
+    } else {
+      cn_code.appendChild(create_line(n+1, e))
+    }
+  })
+
+  goto_page(1)
+
+  Array.from(pages).forEach((e, i) => {
+    if (i != 0) {
+      e.style.display = "none"
+    }
+  })
+}
+
+init()
+|}
+
+
+let make_state2 (report: state_report) requested unproven predicate_hints i =
+  div ~clss:"page" [
+    make_where report.where;
+    make_requested requested;
+    make_unproven unproven;
+    make_predicate_hints predicate_hints;
+    make_resources report.resources;
+    make_terms report.terms;
+    make_constraints report.constraints;
+  ]
+
+
+let mk_html ~title ~pages ~file_content ~n_pages= {|
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>|} ^ title ^ {|</title>
+<style>|} ^ css ^ {|</style>
+</head>
+
+<div id="root">
+<div id="cn_state">
+<div id="menu">
+<input type="button" class="kbutton" value="first" onclick="goto_page(1)"/>
+<input type="button" class="kbutton" value="prev" onclick="goto_prev()"/>
+<input type="button" class="kbutton" value="next" onclick="goto_next()"/>
+<input type="button" class="kbutton" value="last" onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>
+</div>
+|} ^ pages ^ {|
+</div>
+|} ^ file_content ^ {|
+</div>
+
+<script defer>|} ^ script ^ {|</script>
+</html>
+|}
+
+let read_file filename =
+  try
+    let ic = open_in filename in
+    Some (In_channel.input_all ic)
+  with
+    | _ -> None
+
+let make2 filename source_filename_opt (report: report) =
+  let n_pages = List.length report.trace in
+  assert (n_pages > 0);
+
+  let _menu = div ~id:"menu"
+    [ {|<input type="button" value="first" onclick="goto_page(|} ^ string_of_int 1 ^ {|)"/>|}
+    ; {|<input type="button" value="prev" onclick="goto_prev()"/>|}
+    ; {|<input type="button" value="next" onclick="goto_next()"/>|}
+    ; {|<input type="button" value="last" onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>|} ] in
+  
+  let pages = div ~id:"pages" begin
+    List.mapi (fun i state ->
+      make_state2
+        state 
+        report.requested 
+        report.unproven 
+        report.predicate_hints
+        i
+    ) report.trace
+  end in
+
+  let file_content = match Option.bind source_filename_opt read_file with
+    | None -> "NO FILE CONTENT FOUND"
+    | Some str -> str in
+  let oc = open_out filename in
+  output_string oc begin
+    mk_html ~title:"CN state explorer"
+      ~pages
+      ~file_content:(div ~id:"cn_code" [file_content])
+      ~n_pages
+  end;
+  close_out oc;
+  filename
 
 
 (*

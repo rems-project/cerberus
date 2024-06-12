@@ -434,7 +434,7 @@ let report ?state_file:to_ {loc; msg} =
          | Some file -> file
          | None -> Filename.temp_file "state_" ".html"
        in
-       let link = Report.make state_error_file state in
+       let link = Report.make2 state_error_file (Cerb_location.get_filename loc) state in
        let msg = !^"Consider the state in" ^^^ !^("file://"^link) in
        Some msg
     | None ->
