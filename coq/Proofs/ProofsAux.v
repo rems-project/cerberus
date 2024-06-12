@@ -476,6 +476,15 @@ Section ListAux.
   Qed.
 
 
+  Lemma rev_1:
+    forall {A:Type} (a:A),
+      List.rev [a] = [a].
+  Proof.
+    intros A a.
+    reflexivity.
+  Qed.
+
+
 End ListAux.
 
 Module FMapExtProofs
