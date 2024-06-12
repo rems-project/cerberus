@@ -5543,7 +5543,45 @@ Module RevocationProofs.
         apply and_comm.
         rewrite Znat.Z2Nat.id in Heqn by lia.
         bool_to_prop_hyp.
-        admit.
+        clear BL1 BL2.
+        assert(0 < off).
+        {
+          pose proof (Z.mod_bound_pos (AddressValue.to_Z (Capability_GS.cap_get_value c2)) (Z.of_nat (alignof_pointer MorelloImpl.get))).
+          autospecialize H2.
+          apply AddressValue.to_Z_in_bounds.
+          autospecialize H2.
+          lia.
+          lia.
+        }
+        rewrite 2!AddressValue.with_offset_no_wrap.
+        2,3:(apply B;lia).
+        rewrite <- 2!Z.add_assoc.
+        apply B.
+        split; [lia|].
+        clear B Heqb c1 s.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)
+                    mod Z.of_nat (alignof_pointer MorelloImpl.get)) as rem.
+        remember (alignof_pointer MorelloImpl.get) as psize. clear Heqpsize.
+        pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as addr. clear Heqaddr c2.
+        unfold AddressValue.ADDR_MIN in *.
+        pose proof (Z.mod_bound_pos addr (Z.of_nat psize)).
+        autospecialize H4. lia.
+        autospecialize H4. lia.
+        subst.
+        rewrite Nat2Z.inj_mul in H0.
+        rewrite Z2Nat.id in * by (apply Z.div_pos;lia).
+        zify.
+        remember (Z.of_nat psize) as zpsize.
+        clear Heqzpsize cstr psize.
+        rename zpsize into psize.
+        clear H7.
+        destruct H3, H4, H0.
+        remember (psize - addr mod psize) as off.
+        pose proof (div_mul_undo_le (sz-off) psize).
+        autospecialize H8. lia.
+        autospecialize H8. lia.
+        lia.
     -
       symmetry in DS.
       apply fetch_bytes_subset
@@ -5604,7 +5642,7 @@ Module RevocationProofs.
         lia.
     -
       assumption.
-  Admitted.
+  Qed.
 
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
