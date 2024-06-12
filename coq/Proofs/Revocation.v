@@ -5782,7 +5782,7 @@ va_*
       /\
         (* All caps which are tagged according to capmeta must: *)
         (forall addr g,
-            ZMap.M.MapsTo addr (true,g) cm ->
+            AMap.M.MapsTo addr (true,g) cm ->
             (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
                    (
                      (* Have the same provenance and correct sequence bytes *)
@@ -5870,30 +5870,35 @@ va_*
         repeat split; cbn in *.
         +
           intros alloc_id a H.
-          apply empty_mapsto_iff in H;
+          apply ZMap.F.empty_mapsto_iff in H;
             contradiction.
         +
           intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
-          apply empty_mapsto_iff in H0;
+          apply ZMap.F.empty_mapsto_iff in H0;
             contradiction.
+        +
+          unfold ZMapProofs.map_forall.
+          intros k a H.
+          apply ZMap.F.empty_mapsto_iff in H;
+            contradiction.
+        +
+          unfold AMapProofs.map_forall_keys.
+          intros k H.
+          apply AMap.F.empty_in_iff in H.
+          tauto.
         +
           unfold ZMapProofs.map_forall_keys.
           intros k H.
-          apply empty_in_iff in H;
-            contradiction.
-        +
-          unfold ZMapProofs.map_forall_keys.
-          intros k H.
-          apply empty_in_iff in H.
+          apply ZMap.F.empty_in_iff in H.
           tauto.
         +
           unfold ZMapProofs.map_forall.
-          intros k v H.
-          apply empty_mapsto_iff in H.
-          tauto.
+          intros k a H.
+          apply ZMap.F.empty_mapsto_iff in H;
+            contradiction.
       -
           intros addr g H bs H0.
-          apply empty_mapsto_iff in H;
+          apply AMap.F.empty_mapsto_iff in H;
             contradiction.
     Qed.
 
