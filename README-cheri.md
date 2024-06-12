@@ -30,7 +30,7 @@ First set up additional repositories for Coq and Iris packages:
 opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
 opam pin -ny coq-struct-tact https://github.com/uwplse/StructTact.git
 opam repo add --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
-opam pin -ny coq-sail-stdpp https://github.com/rems-project/coq-sail.git
+opam pin -ny coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
 opam pin -ny coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
 ```
 
