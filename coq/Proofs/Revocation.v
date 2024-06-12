@@ -5907,12 +5907,13 @@ va_*
      *)
     Lemma mem_state_after_ghost_tags_preserves:
       forall m addr size,
+        AddressValue.to_Z addr + Z.of_nat size <= AddressValue.ADDR_LIMIT ->
         mem_invariant m ->
         mem_invariant (mem_state_with_capmeta
                          (init_ghost_tags addr size (capmeta m))
                          m).
     Proof.
-      intros m addr sz H.
+      intros m addr sz L H.
       destruct H as [MIbase MIcap].
       destruct_base_mem_invariant MIbase.
       split.
@@ -5920,11 +5921,11 @@ va_*
         (* base invariant *)
         clear MIcap.
         repeat split;auto.
-        repeat split;auto.
 
         (* alignment proof *)
         intros a E.
-        apply zmap_in_mapsto in E.
+        unfold addr_ptr_aligned in *.
+        apply AMapProofs.map_in_mapsto in E.
         destruct E as [tg E].
         unfold mem_state_with_capmeta in E.
         simpl in E.
@@ -5932,13 +5933,15 @@ va_*
         destruct E.
         +
           (* capmeta unchanged at [a] *)
-          apply ZMapProofs.map_mapsto_in in H.
+          apply AMapProofs.map_mapsto_in in H.
           apply Balign.
           apply H.
         +
           (* capmeta cleared *)
           destruct H as [H1 H2].
           apply H1.
+        +
+          apply L.
       -
         intros a g E bs F.
         simpl in *.
@@ -5950,6 +5953,8 @@ va_*
           apply MIcap.
         +
           inversion E.
+        +
+          apply L.
     Qed.
 
     Instance allocator_PreservesInvariant
