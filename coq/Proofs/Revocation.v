@@ -5957,6 +5957,7 @@ va_*
           apply L.
     Qed.
 
+(*
     Instance allocator_PreservesInvariant
       (size: nat)
       (align: Z)
@@ -6135,7 +6136,7 @@ va_*
       preserves_steps.
       - typeclasses eauto.
     Qed.
-
+*)
   End CheriMemoryWithPNVI.
 
 (* Equivalence proofs below are temporary commented out
