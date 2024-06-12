@@ -23,7 +23,8 @@ Inductive cerb_switch : Set :=
 | SW_permissive_printf : cerb_switch
 | SW_zero_initialised : cerb_switch
 | SW_revocation: SW_revocation_values -> cerb_switch
-| SW_at_magic_comments : cerb_switch.
+| SW_at_magic_comments : cerb_switch
+| SW_magic_comment_char_dollar: cerb_switch.
 
 Lemma SW_pointer_arith_values_dec: forall x y:SW_pointer_arith_values, {x = y} + {x <> y}.
 Proof. decide equality. Qed.
