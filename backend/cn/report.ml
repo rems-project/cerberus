@@ -58,7 +58,7 @@ let html elements = enclose "html" (list elements)
 let head = enclose "head"
 let style = enclose "style"
 let link ~url ~text = "<a href=\""^url^"\">"^text^"</a>"
-let div ?(clss=None) ?(id=None) elements =
+let div ?clss ?id elements =
   let clss = match clss with
     | Some clss -> " class=\""^clss^"\""
     | None -> ""
@@ -195,29 +195,29 @@ let make_state (report: state_report) requested unproven predicate_hints i total
   let links = 
     let first = 
       if i = 0 
-      then div ~clss:(Some "inactive_button") ["first"]
-      else div ~clss:(Some "button") [(link ~url:("#"^page_name 0) ~text:"first")] 
+      then div ~clss:"inactive_button" ["first"]
+      else div ~clss:"button" [(link ~url:("#"^page_name 0) ~text:"first")] 
     in
     let prev = 
       if i = 0 
-      then div ~clss:(Some "inactive_button") ["prev"]
-      else div ~clss:(Some "button") [(link ~url:("#"^page_name (i-1)) ~text:"prev")] 
+      then div ~clss:"inactive_button" ["prev"]
+      else div ~clss:"button" [(link ~url:("#"^page_name (i-1)) ~text:"prev")] 
     in
     let next = 
       if i = total - 1
-      then div ~clss:(Some "inactive_button") ["next"]
-      else div ~clss:(Some "button") [(link ~url:("#"^page_name (i+1)) ~text:"next")] 
+      then div ~clss:"inactive_button" ["next"]
+      else div ~clss:"button" [(link ~url:("#"^page_name (i+1)) ~text:"next")] 
     in
     let last = 
       if i = total - 1
-      then div ~clss:(Some "inactive_button") ["last"]
-      else div ~clss:(Some "button") [(link ~url:("#"^page_name (total - 1)) ~text:"last")] 
+      then div ~clss:"inactive_button" ["last"]
+      else div ~clss:"button" [(link ~url:("#"^page_name (total - 1)) ~text:"last")] 
     in
     [ first; prev; next; last ]  
   in
-  div ~clss:(Some "page") ~id:(Some (page_name i)) [
-      div ~clss:(Some "pagelinks") links;
-      div ~clss:(Some "pagecontent") [
+  div ~clss:"page" ~id:(page_name i) [
+      div ~clss:"pagelinks" links;
+      div ~clss:"pagecontent" [
         make_where report.where;
         make_requested requested;
         make_unproven unproven;
@@ -250,7 +250,7 @@ let make filename (report : report) =
     html [
       head (style Style.style);
       body [
-          div ~id:(Some "pages") pages
+          div ~id:"pages" pages
         ]
     ] 
   in
