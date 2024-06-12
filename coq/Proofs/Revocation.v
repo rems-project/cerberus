@@ -1621,6 +1621,21 @@ Module RevocationProofs.
       reflexivity.
     Qed.
 
+    Lemma put_inv:
+      forall s s' st u,
+        @put mem_state_r memM (State_errS mem_state memMError)
+          s st =
+          (s', @inr memMError unit u) -> s = s'.
+    Proof.
+      intros s s' st u H.
+
+      Transparent put.
+      unfold put, State_errS in H.
+      Opaque put.
+      inversion H.
+      reflexivity.
+    Qed.
+
     Lemma bind_memM_inv
       {T T': Type}
       {m: memM T'}
@@ -1822,6 +1837,10 @@ Module RevocationProofs.
         | [H: get _ = (_, inr _) |- _] =>
             (* idtac H "get"; *)
             rewrite get_inv in H
+            ; htrim
+        | [H: put _ _ = (_, inr _) |- _] =>
+            (* idtac H "put"; *)
+            apply put_inv in H
             ; htrim
         | [H: sassert _ _ = inr _ |- _] =>
             (* idtac H "sassert"; *)
@@ -4533,28 +4552,10 @@ Module RevocationProofs.
     state_inv_step.
     -
       assert(length l = 1%nat) as L by (eapply repr_char_bytes_size;eauto).
-      clear - L NE ST10.
-      Transparent put.
-      unfold put, State_errS in ST10.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST10.
-      destruct st, s'.
-      cbn in *.
-      tuple_inversion.
-      clear -L NE.
       apply AMapProofs.map_add_list_not_at; auto.
     -
       (* same as before but w/o `find_cap_allocation c st = (st, inr (Some (s0, a)))` *)
       assert(length l = 1%nat) as L by (eapply repr_char_bytes_size;eauto).
-      clear - L NE ST9.
-      Transparent put.
-      unfold put, State_errS in ST9.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST9.
-      destruct st, s'.
-      cbn in *.
-      tuple_inversion.
-      clear -L NE.
       apply AMapProofs.map_add_list_not_at; auto.
   Qed.
 
@@ -4581,29 +4582,8 @@ Module RevocationProofs.
     cbn in ST.
     rewrite MorelloImpl.uchar_size in ST.
     cbn in ST.
-    state_inv_step.
-    -
-      clear - ST10.
-      Transparent put.
-      unfold put, State_errS in ST10.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST10.
-      destruct st, s0.
-      cbn in *.
-      tuple_inversion.
-      reflexivity.
-    -
-      clear - ST9.
-      Transparent put.
-      unfold put, State_errS in ST9.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST9.
-      destruct st, s0.
-      cbn in *.
-      tuple_inversion.
-      reflexivity.
-
-      Transparent repr.
+    state_inv_step; reflexivity.
+    Transparent repr.
   Qed.
 
   Fact memcpy_alloc_bounds_check_p_c_bounds
@@ -4654,6 +4634,56 @@ Module RevocationProofs.
     unfold AddressValue.ADDR_MIN, AddressValue.ADDR_LIMIT in *.
 
     repeat split; intros; lia.
+  Qed.
+
+  Lemma store_unspecified_uchar_spec
+    {loc: location_ocaml}
+    {p: provenance}
+    {c: Capability_GS.t}
+    {s s0: mem_state}
+    {fp: footprint}
+    :
+    store loc CoqCtype.unsigned_char false
+      (PV p (PVconcrete c))
+      (MVunspecified CoqCtype.unsigned_char) s = (s0, inr fp) ->
+
+    AMap.M.MapsTo (Capability_GS.cap_get_value c)
+                  {|
+                    prov := PNVI_prov Prov_none;
+                    copy_offset := None;
+                    value := None
+                  |}
+                  (bytemap s0).
+  Proof.
+    intros H.
+    unfold PNVI_prov.
+    rewrite resolve_has_PNVI.
+
+    unfold store in H.
+    break_let.
+    state_inv_step.
+    -
+      rewrite MorelloImpl.uchar_size in H6, H11.
+      cbn in H6. apply ret_inr in H6. invc H6.
+      cbn in H11. apply ret_inr in H11. invc H11.
+      cbn.
+      rewrite AddressValue_as_ExtOT.with_offset_0.
+      unfold absbyte_v.
+      unfold PNVI_prov.
+      rewrite resolve_has_PNVI.
+      apply AMap.M.add_1.
+      reflexivity.
+    -
+      rewrite MorelloImpl.uchar_size in H5, H10.
+      cbn in H5. apply ret_inr in H5. invc H5.
+      cbn in H10. apply ret_inr in H10. invc H10.
+      cbn.
+      rewrite AddressValue_as_ExtOT.with_offset_0.
+      unfold absbyte_v.
+      unfold PNVI_prov.
+      rewrite resolve_has_PNVI.
+      apply AMap.M.add_1.
+      reflexivity.
   Qed.
 
   Lemma memcpy_copy_data_spec
@@ -4758,9 +4788,15 @@ Module RevocationProofs.
         apply load_uchar_spec in LD.
         rewrite Capability_GS.cap_get_set_value in LD.
 
-        (* TODO: store spec *)
-
-        admit.
+        destruct LD.
+        *
+          (* MVunspecified *)
+          subst m.
+          apply store_unspecified_uchar_spec in ST.
+          admit.
+        *
+          (* specified *)
+          admit.
       +
         (* not last element *)
 
