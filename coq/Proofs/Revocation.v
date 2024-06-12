@@ -1248,11 +1248,11 @@ Module RevocationProofs.
     Qed.
 
     Lemma split_bytes_aux_length
-      (o : option nat)
-      (p : option provenance)
-      (l : list (option ascii))
-      (bs : list AbsByte)
-      (p0 : provenance):
+      {o : option nat}
+      {p : option provenance}
+      {l : list (option ascii)}
+      {bs : list AbsByte}
+      {p0 : provenance}:
       split_bytes_aux bs p0 = (p, l, o) -> Datatypes.length bs = Datatypes.length l.
     Proof.
       unfold split_bytes_aux.
@@ -1303,22 +1303,22 @@ Module RevocationProofs.
       clear Heqbs Heqp1 b bs'.
       rename Heqp0 into H.
       (* Done with monadic stuff *)
-      apply (split_bytes_aux_length _ _ _ _ _ H).
+      apply (split_bytes_aux_length H).
     Qed.
 
     Lemma split_bytes_aux_values
-      (o : option nat)
-      (p : option provenance)
-      (l : list (option ascii))
-      (bs : list AbsByte)
-      (p0 : provenance):
+      {o : option nat}
+      {p : option provenance}
+      {l : list (option ascii)}
+      {bs : list AbsByte}
+      {p0 : provenance}:
       split_bytes_aux bs p0 = (p, l, o) ->
       Forall2 (fun (a : AbsByte) (ov : option ascii) => ov = value a) bs (rev l).
     Proof.
       Local Open Scope nat.
       intros SS.
 
-      pose proof (split_bytes_aux_length _ _ _ _ _ SS) as LBS.
+      pose proof (split_bytes_aux_length SS) as LBS.
       unfold split_bytes_aux in SS.
       remember (@nil (option ascii)) as l'.
       assert(length l = length bs + length l') as LL.
@@ -4273,13 +4273,20 @@ Module RevocationProofs.
 
     load loc CoqCtype.unsigned_char (PV p (PVconcrete c)) s = (s, inr (f, mval)) ->
     (
-      mval = MVunspecified CoqCtype.unsigned_char
+      (mval = MVunspecified CoqCtype.unsigned_char
+       /\ AMap.M.MapsTo (Capability_GS.cap_get_value c)
+                       {|
+                         prov := Prov_disabled; (* we can get away with this w/o PNVI but it will get more difficult with PNVI *)
+                         copy_offset := None;
+                         value := None
+                       |} (bytemap s)
+      )
       \/
-        exists ab b bv,
+        (exists ab b bv,
           AMap.M.MapsTo (Capability_GS.cap_get_value c) ab (bytemap s)
           /\ mval = MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) (IV b)
           /\ value ab = Some bv
-          /\ byte_of_Z b = bv
+          /\ byte_of_Z b = bv)
     ).
   Proof.
     intros H.
@@ -4378,11 +4385,37 @@ Module RevocationProofs.
         inv H7.
         cbn in Heqo.
         discriminate.
+      +
+        left.
+        split;[reflexivity|].
+        rewrite with_offset_0 in Heqo0.
+        apply AMap.F.find_mapsto_iff.
+        rewrite Heqo0.
+        f_equiv.
+        clear -H15 Heqo.
+        unfold split_bytes in H15.
+        repeat break_let.
+        apply ret_inr in H15.
+        invc H15.
+        pose proof (split_bytes_aux_length Heqp) as L.
+        destruct l0; invc L.
+        symmetry in H0.
+        apply list.nil_length_inv in H0.
+        subst l0.
+        rewrite rev_1 in Heqo.
+        apply split_bytes_aux_values in Heqp.
+        invc Heqp.
+        invc H4.
+        admit.
+      +
+        left.
+        split;[reflexivity|].
+        admit.
     -
       apply fail_inr_inv in H; tauto.
     -
       apply raise_inr_inv in H ; tauto.
-  Qed.
+  Admitted.
 
   Fact repr_char_bytes_size_helper
     (fuel : nat)
@@ -4788,7 +4821,7 @@ Module RevocationProofs.
         apply load_uchar_spec in LD.
         rewrite Capability_GS.cap_get_set_value in LD.
 
-        destruct LD.
+        destruct LD as [[V M]| LD].
         *
           (* MVunspecified *)
           subst m.
