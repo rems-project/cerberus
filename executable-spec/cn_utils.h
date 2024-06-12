@@ -1,9 +1,11 @@
-#include "hash_table.h"
+// #include "hash_table.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 // #include <math.h>
 // #include <assert.h>
 #include "stdint.h"
+#include "alloc.h"
 
 /* Wrappers for C types */
 
@@ -57,16 +59,16 @@ typedef struct cn_bool {
 } cn_bool;
 
 
-typedef hash_table cn_map;
-typedef hash_table ownership_ghost_state;
+// typedef hash_table cn_map;
+// typedef hash_table ownership_ghost_state;
 
-ownership_ghost_state *initialise_ownership_ghost_state(void);
+// ownership_ghost_state *initialise_ownership_ghost_state(void);
 
 /* Conversion functions */
 
 cn_bool *convert_to_cn_bool(_Bool b);
 _Bool convert_from_cn_bool(cn_bool *b);
-void cn_assert(cn_bool *cn_b, const char *function_name, char *file_name, int line_number);
+void cn_assert(cn_bool *cn_b, const char *function_name, char *file_name, int line_number, const char *cn_source_loc);
 
 cn_bool *cn_bool_and(cn_bool *b1, cn_bool *b2);
 cn_bool *cn_bool_or(cn_bool *b1, cn_bool *b2);
@@ -74,12 +76,13 @@ cn_bool *cn_bool_not(cn_bool *b);
 cn_bool *cn_bool_equality(cn_bool *b1, cn_bool *b2);
 void *cn_ite(cn_bool *b, void *e1, void *e2);
 
-cn_map *map_create(void);
-void *cn_map_get(cn_map *m, cn_integer *key);
-void cn_map_set(cn_map *m, cn_integer *key, void *value);
-cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
+// cn_map *map_create(void);
+// void *cn_map_get(cn_map *m, cn_integer *key);
+// void cn_map_set(cn_map *m, cn_integer *key, void *value);
+// cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
 
 cn_bool *cn_pointer_equality(void *i1, void *i2);
+cn_bool *cn_pointer_is_null(cn_pointer *);
 
 /* CN integer type auxilliary functions */
 
@@ -97,6 +100,11 @@ cn_bool *cn_pointer_equality(void *i1, void *i2);
         ret->val = (CTYPE *) alloc(sizeof(CTYPE));\
         *(ret->val) = i;\
         return ret;\
+    }
+
+#define CN_GEN_CONVERT_FROM(CTYPE, CNTYPE)\
+    static inline CTYPE convert_from_##CNTYPE(CNTYPE *i) {\
+        return *i->val;\
     }
 
 /* Arithmetic operators */
@@ -261,6 +269,7 @@ static inline int ipow(int base, int exp)
 
 #define CN_GEN_ALL_(CTYPE, CNTYPE)\
    CN_GEN_CONVERT(CTYPE, CNTYPE)\
+   CN_GEN_CONVERT_FROM(CTYPE, CNTYPE)\
    CN_GEN_EQUALITY(CNTYPE)\
    CN_GEN_LT(CNTYPE)\
    CN_GEN_LE(CNTYPE)\

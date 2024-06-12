@@ -41,7 +41,7 @@ do
   else 
     echo Generation succeeded!
     echo Compiling $EXEC_C_FILE ...
-    if ! clang -fno-lto -c $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
+    if ! clang -pedantic -Wall -std=c11 -fno-lto -c $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
     then
       echo Compilation failed.
       NUM_COMPILATION_FAILED=$(( $NUM_COMPILATION_FAILED + 1 ))

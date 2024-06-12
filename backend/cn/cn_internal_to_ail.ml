@@ -117,11 +117,20 @@ let create_binding sym ctype =
 
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
-let generate_cn_assert ail_expr = 
+let generate_cn_assert ?(cn_source_loc_opt=None) ail_expr = 
   let func_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__func__")) in
   let filename_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__FILE__")) in
   let linenumber_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__LINE__")) in
-  A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr; func_arg; filename_arg; linenumber_arg]))
+  let cn_source_loc_arg = match cn_source_loc_opt with 
+    | Some loc -> 
+      let loc_str = Cerb_location.location_to_string loc in
+      let (_, loc_str_2) = Cerb_location.head_pos_of_location loc in
+      let loc_str_2_escaped = Str.global_replace (Str.regexp_string "\n") "\\n" loc_str_2 in
+      A.(AilEstr (None, [(Cerb_location.unknown, [loc_str_2_escaped ^ loc_str])]))
+    | None -> A.(AilEconst ConstantNull)
+  in
+
+  A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr; func_arg; filename_arg; linenumber_arg; mk_expr cn_source_loc_arg]))
   
 
 let rec bt_to_cn_base_type = function
@@ -743,16 +752,17 @@ let rec cn_to_ail_expr_aux_internal
     let res_ident = A.(AilEident res_sym) in
     let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct parent_dt.cn_dt_name)))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
-    let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct parent_dt.cn_dt_name)))])) in
+    let alloc_sym = Sym.fresh_pretty "alloc" in
+    let fn_call = A.(AilEcall (mk_expr (AilEident alloc_sym), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct parent_dt.cn_dt_name)))])) in
     let ail_decl = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
 
     let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true sym in 
-
+    let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.id "u")) in
+    let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
+    
     let generate_ail_stat (id, it) = 
       let (b, s, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack in
       let ail_memberof = if (Id.equal id (Id.id "tag")) then e else 
-        let e_ = A.(AilEmemberofptr (mk_expr res_ident, Id.id "u")) in
-        let e_' = A.(AilEmemberof (mk_expr e_, create_id_from_sym lc_constr_sym)) in
         let e_'' = A.(AilEmemberofptr (mk_expr e_', id)) in
         mk_expr e_''
       in
@@ -760,13 +770,15 @@ let rec cn_to_ail_expr_aux_internal
       (b, s, assign_stat)
     in
 
+    let constr_alloc_call = A.(AilEcall (mk_expr (AilEident alloc_sym), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct lc_constr_sym)))])) in
+    let constr_allocation_stat = if List.is_empty ms then [] else [A.(AilSexpr (mk_expr (AilEassign (mk_expr e_', mk_expr constr_alloc_call))))] in
     let (bs, ss, assign_stats) = list_split_three (List.map generate_ail_stat ms) in
 
     let uc_constr_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true sym in
     let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.id "tag")) in
     let tag_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr tag_member_ptr, mk_expr (AilEident uc_constr_sym))))) in
 
-    dest d ((List.concat bs) @ [res_binding], [ail_decl; tag_assign] @ (List.concat ss) @ assign_stats, mk_expr res_ident)
+    dest d ((List.concat bs) @ [res_binding], [ail_decl; tag_assign] @ (List.concat ss) @ constr_allocation_stat @ assign_stats, mk_expr res_ident)
 
 
   | MemberShift (_, tag, member) -> 
@@ -1514,7 +1526,8 @@ let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definit
           | _ -> 
             let (b1, s1, e) = cn_to_ail_expr_internal_with_pred_name (Some pred_sym) dts [] c.guard PassBack in
             let (bs'', ss'', ownership_ctypes'') = clause_translate cs ownership_ctypes' in
-            let ail_if_stat = A.(AilSif (e, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
+            let conversion_from_cn_bool = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "convert_from_cn_bool")), [e])) in
+            let ail_if_stat = A.(AilSif (mk_expr conversion_from_cn_bool, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
             ([], [ail_if_stat], ownership_ctypes'')
   in
 
@@ -1550,7 +1563,7 @@ let rec cn_to_ail_predicates_internal pred_def_list dts globals ots preds cn_pre
 
 (* TODO: Add destination passing? *)
 let rec cn_to_ail_post_aux_internal dts globals ownership_ctypes preds = function
-  | LRT.Define ((name, it), info, t) ->
+  | LRT.Define ((name, it), (loc, _), t) ->
     Printf.printf "LRT.Define\n";
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
     let new_lrt = Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, IT.bt it, new_name) t in 
@@ -1578,7 +1591,7 @@ let rec cn_to_ail_post_aux_internal dts globals ownership_ctypes preds = functio
       | Some info -> 
         []
       | None -> 
-        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
+        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert ~cn_source_loc_opt:(Some loc) e))) in
         s @ [ail_stat_]
     in
     let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals ownership_ctypes preds t in
