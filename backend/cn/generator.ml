@@ -1140,7 +1140,7 @@ let get_min_max_expr (ty : Ctype.ctype) : cn_expr * cn_expr =
     mult_range_gen x ty mult min max cs
   | cty -> failwith ("Tried to generate multiple of invalid type '" ^ string_of_ctype_ cty ^ "'") *)
 
-let compile_gen' (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constraints) : gen =
+let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constraints) : gen =
   match e with
   | CNExpr (_, CNExpr_var x') when Sym.equal_sym x x' ->
     let l = Cerb_location.unknown in
@@ -1220,14 +1220,6 @@ let compile_gen' (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constra
   | _ -> Return (ty, e)
 ;;
 
-let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constraints) (loc : Sym.sym option) : gen =
-  match loc with
-  | Some loc ->
-    let gen = compile_gen' x ty e cs in
-    Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), loc, gen)
-  | None -> compile_gen' x ty e cs
-;;
-
 let rec compile_singles' (gtx : gen_context) (locs : locations) (cs : constraints) (iter : variables) : gen_context * variables =
   let get_loc x =
     List.find_map (
@@ -1253,8 +1245,13 @@ let rec compile_singles' (gtx : gen_context) (locs : locations) (cs : constraint
         (get_free_vars_ c)) relevant_cs in
     if no_free_vars
     then
-      let gen = compile_gen x ty (CNExpr (Cerb_location.unknown, e)) cs (get_loc x) in
-      compile_singles' ((x, gen)::gtx) locs cs iter'
+      let l = Cerb_location.unknown in
+      let gen = compile_gen x ty (CNExpr (l, e)) cs in
+      let y = Sym.fresh () in
+      let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), y, Return (ty, CNExpr (l, CNExpr_var x))) in
+      match get_loc x with
+      | Some x_loc -> compile_singles' ((x, gen)::(x_loc, gen_loc)::gtx) locs cs iter'
+      | None -> compile_singles' ((x, gen)::gtx) locs cs iter'
     else
       let (gtx, iter') = compile_singles' gtx locs cs iter' in
       (gtx, (x, (ty, e))::iter')
@@ -1296,8 +1293,9 @@ let rec compile_structs' (gtx : gen_context) (vars : variables) (ms : members) (
     (match get_loc x with
     | Some loc ->
       let gen = Struct (ty, mems) in
-      let loc_gen = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), loc, gen) in
-      ((loc, loc_gen)::gtx, ms')
+      let y = Sym.fresh () in
+      let loc_gen = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), y, gen) in
+      ((x, gen)::(loc, loc_gen)::gtx, ms')
     | None -> ((x, Struct (ty, mems))::gtx, ms'))
   | [] -> (gtx, [])
 
@@ -1357,11 +1355,11 @@ let rec interpret_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (x :
     | Map (y, ty, e, g) ->
       interpret_gen ail_prog y g ctx h >>= fun (ctx, h) ->
       return ((x, (ty, eval_expr ctx e))::ctx, h)
-    | Alloc (ty, loc, g') ->
-      interpret_gen ail_prog x g' ctx h >>= fun (ctx, h) ->
+    | Alloc (ty, y, g') ->
+      interpret_gen ail_prog y g' ctx h >>= fun (ctx, h) ->
       (* TODO: Calculate max heap size *)
       generate_location 10000 (List.map fst h) >>= fun l ->
-      return ((loc, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int l)))::ctx, (l, List.assoc Sym.equal_sym x ctx)::h)
+      return ((x, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int l)))::ctx, (l, List.assoc Sym.equal_sym y ctx)::h)
     | Struct (ty, ms) ->
       QCheck.Gen.(
         let vs =
