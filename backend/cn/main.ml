@@ -136,6 +136,7 @@ let main
       solver_logging
       output_decorated
       output_with_unit_tests
+      output_with_pbt
       test_framework
       test_depth
       astprints
@@ -233,7 +234,36 @@ let main
                 (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
                 prerr_endline str
             end;
-            generate_tests test_depth test_framework instrumentation ail_prog oc;
+            generate_unit_tests test_depth test_framework instrumentation ail_prog oc;
+         end;
+         begin match output_with_pbt with
+         | None -> ()
+         | Some output_filename ->
+            let oc = Stdlib.open_out output_filename in
+            output_string oc "#include \"stdlib.h\"\n";
+            output_string oc "#include \"stdint.h\"\n";
+            output_string oc "#include <rapidcheck.h>\n";
+            (match test_framework with
+            | GTest ->
+              output_string oc "#include <gtest/gtest.h>\n";
+              output_string oc "#include <rapidcheck/gtest.h>\n\n"
+            | Catch2 ->
+              output_string oc "#include <catch2/catch_test_macros.hpp>\n";
+              output_string oc "#include <rapidcheck/catch.h>\n\n");
+            begin match
+              Source_injection.(output_injections oc
+                { filename; sigm= ail_prog
+                ; pre_post=[]
+                ; in_stmt=[] }
+              )
+            with
+            | Ok () ->
+                ()
+            | Error str ->
+                (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+                prerr_endline str
+            end;
+            generate_pbt test_depth test_framework instrumentation ail_prog oc;
          end;
          return res
        in
@@ -357,6 +387,10 @@ let output_with_unit_tests =
   let doc = "output a version of the translation unit decorated with unit tests of the CN annotations" in
   Arg.(value & opt (some string) None & info ["output_with_unit_tests"] ~docv:"FILE" ~doc)
 
+let output_with_pbt =
+  let doc = "output a version of the translation unit decorated with property-based tests of the CN annotations" in
+  Arg.(value & opt (some string) None & info ["output_with_pbt"] ~docv:"FILE" ~doc)
+
 let test_framework =
   let doc = "testing framework to use (gtest or catch)" in
   Arg.(value & opt (enum [("gtest", GTest); "catch", Catch2]) GTest & info ["test_framework"] ~docv:"FILE" ~doc)
@@ -414,6 +448,7 @@ let () =
       solver_logging $
       output_decorated $
       output_with_unit_tests $
+      output_with_pbt $
       test_framework $
       test_depth $
       astprints $

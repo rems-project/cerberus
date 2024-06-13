@@ -1002,18 +1002,18 @@ and get_free_vars (e : cn_expr) : Symbol.sym list =
 type gen =
   | Arbitrary of Ctype.ctype
   | Return of Ctype.ctype * cn_expr
-  | Filter of gen * Sym.sym * cn_expr
+  | Filter of Sym.sym * Ctype.ctype * cn_expr * gen
   | Map of Sym.sym * Ctype.ctype * cn_expr * gen
-  | Alloc of Ctype.ctype * Sym.sym * gen
+  | Alloc of Ctype.ctype * gen
   | Struct of Ctype.ctype * (string * Sym.sym) list
 
 let rec string_of_gen (g : gen) : string =
   match g with
   | Arbitrary ty -> "arbitrary<" ^ string_of_ctype ty ^ ">"
   | Return (ty, e) -> "return<" ^ string_of_ctype ty ^ ">(" ^ string_of_expr e ^ ")"
-  | Filter (g', x, e) -> "filter(" ^ string_of_gen g' ^ ", |" ^ Pp_symbol.to_string_pretty x ^ "| " ^ string_of_expr e ^ ")"
+  | Filter (x, ty, e, g') -> "filter(" ^ "|" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ "| " ^ string_of_expr e ^ ", " ^ string_of_gen g' ^ ")"
   | Map (x, ty, e, g') -> "map(" ^ "|" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ "| " ^ string_of_expr e ^ ", " ^ string_of_gen g' ^ ")"
-  | Alloc (ty, x, g') -> "alloc((" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ ")," ^ string_of_gen g' ^ ")"
+  | Alloc (ty, g') -> "alloc<" ^ string_of_ctype ty ^ ">(" ^ string_of_gen g' ^ ")"
   | Struct (ty, ms) -> "struct<" ^ string_of_ctype ty ^ ">(" ^ String.concat ", " (List.map (fun (x, g') -> "." ^ x ^ ": " ^ Pp_symbol.to_string_pretty g') ms) ^ ")"
 ;;
 
@@ -1034,7 +1034,7 @@ let filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
   match cs with
   | c::cs' ->
     Filter (
-      Arbitrary ty, x,
+      x, ty,
       List.fold_left (
         fun acc c' ->
           Cn.CNExpr (
@@ -1042,7 +1042,8 @@ let filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
             CNExpr_binop (
               CN_and, acc,
               CNExpr (Cerb_location.unknown, c'))))
-        (Cn.CNExpr (Cerb_location.unknown, c)) cs')
+        (Cn.CNExpr (Cerb_location.unknown, c)) cs',
+      Arbitrary ty)
   | [] -> Arbitrary ty
 ;;
 
@@ -1061,7 +1062,7 @@ let range_gen (x : Symbol.sym) (ty : Ctype.ctype) (min : cn_expr) (max : cn_expr
   match cs with
   | c::cs' ->
     Filter (
-      gen, x,
+      x, ty,
       List.fold_left (
         fun acc c' ->
           Cn.CNExpr (
@@ -1069,7 +1070,8 @@ let range_gen (x : Symbol.sym) (ty : Ctype.ctype) (min : cn_expr) (max : cn_expr
             CNExpr_binop (
               CN_and, acc,
               CNExpr (l, c'))))
-        (Cn.CNExpr (l, c)) cs')
+        (Cn.CNExpr (l, c)) cs',
+      gen)
   | [] -> gen
 ;;
 
@@ -1091,7 +1093,7 @@ let mult_range_gen (x : Symbol.sym) (ty : Ctype.ctype) (mult : cn_expr) (min : c
   match cs with
   | c::cs' ->
     Filter (
-      gen, x,
+      x, ty,
       List.fold_left (
         fun acc c' ->
           Cn.CNExpr (
@@ -1099,7 +1101,8 @@ let mult_range_gen (x : Symbol.sym) (ty : Ctype.ctype) (mult : cn_expr) (min : c
             CNExpr_binop (
               CN_and, acc,
               CNExpr (l, c'))))
-        (Cn.CNExpr (l, c)) cs')
+        (Cn.CNExpr (l, c)) cs',
+      gen)
   | [] -> gen
 ;;
 
@@ -1247,8 +1250,7 @@ let rec compile_singles' (gtx : gen_context) (locs : locations) (cs : constraint
     then
       let l = Cerb_location.unknown in
       let gen = compile_gen x ty (CNExpr (l, e)) cs in
-      let y = Sym.fresh () in
-      let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), y, Return (ty, CNExpr (l, CNExpr_var x))) in
+      let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), Return (ty, CNExpr (l, CNExpr_var x))) in
       match get_loc x with
       | Some x_loc -> compile_singles' ((x, gen)::(x_loc, gen_loc)::gtx) locs cs iter'
       | None -> compile_singles' ((x, gen)::gtx) locs cs iter'
@@ -1293,8 +1295,7 @@ let rec compile_structs' (gtx : gen_context) (vars : variables) (ms : members) (
     (match get_loc x with
     | Some loc ->
       let gen = Struct (ty, mems) in
-      let y = Sym.fresh () in
-      let loc_gen = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), y, gen) in
+      let loc_gen = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), gen) in
       ((x, gen)::(loc, loc_gen)::gtx, ms')
     | None -> ((x, Struct (ty, mems))::gtx, ms'))
   | [] -> (gtx, [])
@@ -1324,41 +1325,31 @@ let compile ((vars, ms, locs, cs) : goal) : gen_context =
   let gtx = compile_singles [] vars' locs cs in
   compile_structs gtx vars ms locs |> List.rev
 
-let generate_location (max_size : int) (ps : int list) : int QCheck.Gen.t =
-  QCheck.Gen.(
-    int_range 1 (max_size - List.length ps) >>= fun n ->
-    return (
-      ps
-      |> List.sort compare
-      |> List.fold_left (fun acc i -> if acc >= i then acc + 1 else acc) n
-    )
-  )
-
-let rec interpret_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (x : Symbol.sym) (g : gen) (ctx : context) (h : heap) : (context * heap) QCheck.Gen.t =
+let rec interpret_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (x : Symbol.sym) (g : gen) (max_size : int) (ctx : context) (h : heap) : (context * heap) QCheck.Gen.t =
   QCheck.Gen.(
     match g with
     | Arbitrary ty ->
       type_gen ail_prog ty >>= fun v ->
       return ((x, (ty, v))::ctx, h)
     | Return (ty, e) -> return ((x, (ty, eval_expr ctx e))::ctx, h)
-    | Filter (g', y, e) ->
+    | Filter (y, ty, e, g') ->
       if not (Sym.equal_sym x y) then failwith "Mismatch" else
-      interpret_gen ail_prog x g' ctx h >>= fun (ctx', h') ->
+      interpret_gen ail_prog x g' max_size ctx h >>= fun (ctx', h') ->
       (match eval_expr ctx' e with
       | CNVal_bool b ->
         if b
         then
           return (ctx', h')
         else
-          interpret_gen ail_prog x g ctx h
+          interpret_gen ail_prog x g max_size ctx h
       | _ -> failwith "Type error")
     | Map (y, ty, e, g) ->
-      interpret_gen ail_prog y g ctx h >>= fun (ctx, h) ->
+      interpret_gen ail_prog y g max_size ctx h >>= fun (ctx, h) ->
       return ((x, (ty, eval_expr ctx e))::ctx, h)
-    | Alloc (ty, y, g') ->
-      interpret_gen ail_prog y g' ctx h >>= fun (ctx, h) ->
-      (* TODO: Calculate max heap size *)
-      generate_location 10000 (List.map fst h) >>= fun l ->
+    | Alloc (ty, g') ->
+      let y = Sym.fresh () in
+      interpret_gen ail_prog y g' max_size ctx h >>= fun (ctx, h) ->
+      generate_location max_size (List.map fst h) >>= fun l ->
       return ((x, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int l)))::ctx, (l, List.assoc Sym.equal_sym y ctx)::h)
     | Struct (ty, ms) ->
       QCheck.Gen.(
@@ -1369,17 +1360,17 @@ let rec interpret_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (x :
       )
   )
 
-let rec interpret' (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (gtx : gen_context) (ctx : context) (h : heap) : (context * heap) QCheck.Gen.t =
+let rec interpret' (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (gtx : gen_context) (max_size : int) (ctx : context) (h : heap) : (context * heap) QCheck.Gen.t =
   QCheck.Gen.(
     match gtx with
     | (x, g)::gtx' ->
-      interpret_gen ail_prog x g ctx h >>= fun (ctx, h) ->
-      interpret' ail_prog gtx' ctx h
+      interpret_gen ail_prog x g max_size ctx h >>= fun (ctx, h) ->
+      interpret' ail_prog gtx' max_size ctx h
     | [] -> return (ctx, h)
   )
 
-let interpret (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (gtx : gen_context) : (context * heap) QCheck.Gen.t =
-  interpret' ail_prog gtx [] []
+let interpret (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (gtx : gen_context) (max_size : int) : (context * heap) QCheck.Gen.t =
+  interpret' ail_prog gtx max_size [] []
 
 (************************)
 (* Unit Test Generation *)
@@ -1398,7 +1389,8 @@ let generate (depth : int) ail_prog (psi : (Symbol.sym * cn_predicate) list) (ar
   let g = simplify g in
   let gtx = compile g in
   lift_gen QCheck.Gen.(
-    interpret ail_prog gtx >>= fun (ctx, h) ->
+    let (_, _, locs, _) = g in
+    interpret ail_prog gtx (List.length locs) >>= fun (ctx, h) ->
     let ctx = List.filter (
       fun (x, _) ->
         List.assoc_opt Sym.equal_sym x args
@@ -1543,14 +1535,14 @@ type test_framework =
   | GTest
   | Catch2
 
-let codify_header (tf : test_framework) (suite : string) (test : string) (oc : out_channel) : unit =
+let codify_unit_header (tf : test_framework) (suite : string) (test : string) (oc : out_channel) : unit =
   match tf with
-  | GTest -> output_string oc ("\nTEST(" ^ String.capitalize_ascii suite ^ ", " ^ test ^ "){\n")
+  | GTest -> output_string oc ("\nTEST(Test" ^ String.capitalize_ascii suite ^ ", " ^ test ^ "){\n")
   | Catch2 -> output_string oc ("\nTEST_CASE(\"" ^ test ^ "\", \"[" ^ String.lowercase_ascii suite ^ "]\"){\n");
 ;;
 
-let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (args : (Symbol.sym * Ctype.ctype) list) (ctx : context) (h : heap) (index : int) (oc : out_channel) : unit =
-  codify_header tf (Pp_symbol.to_string_pretty instrumentation.fn) ("Test" ^ string_of_int index) oc;
+let codify_unit (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (args : (Symbol.sym * Ctype.ctype) list) (ctx : context) (h : heap) (index : int) (oc : out_channel) : unit =
+  codify_unit_header tf (Pp_symbol.to_string_pretty instrumentation.fn) ("Test" ^ string_of_int index) oc;
 
   let (ctx, h) = expand_heap ail_prog ctx h in
   let root = Symbol.fresh () |> Sym.pp_string in
@@ -1562,9 +1554,7 @@ let codify (tf : test_framework) (instrumentation : Core_to_mucore.instrumentati
     |> List.map Option.get
     |> List.map Memory.size_of_ctype
     |> List.fold_left (+) 0 in
-  (if max_size > 0
-  then
-    codify_heap root max_size h oc);
+  (if max_size > 0 then codify_heap root max_size h oc);
   codify_context root ctx args oc;
   output_string oc (Pp_symbol.to_string_pretty instrumentation.fn);
   output_string oc "(";
@@ -1580,7 +1570,7 @@ let range i j =
   in aux (j-1) []
 ;;
 
-let generate_unit_tests (depth : int) (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (tolerance : int) : unit =
+let generate_unit_tests' (depth : int) (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) (tolerance : int) : unit =
   let psi = List.map (fun (pred : cn_predicate) -> (pred.cn_pred_name, pred)) ail_prog.cn_predicates in
   let lookup_fn = fun (x, _) -> Symbol.equal_sym x instrumentation.fn in
   let fn_decl = List.filter lookup_fn ail_prog.declarations in
@@ -1594,15 +1584,119 @@ let generate_unit_tests (depth : int) (tf : test_framework) (instrumentation : C
   in
   let args = List.combine arg_syms arg_types in
   let gs = QCheck.Gen.map (List.mapi (fun i g -> (i, g))) (generate depth ail_prog psi args (instrumentation.surface.requires)) in
-  let g : unit list QCheck.Gen.t = map (fun (i, (ctx, h)) -> codify tf instrumentation ail_prog args ctx h (i + 1) oc) gs in
-  sample (unlift_gen g)
+  let runners : unit list QCheck.Gen.t = map (fun (i, (ctx, h)) -> codify_unit tf instrumentation ail_prog args ctx h (i + 1) oc) gs in
+  sample (unlift_gen runners)
 ;;
 
-let generate_tests (depth : int) (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) : unit =
+let generate_unit_tests (depth : int) (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) : unit =
   List.iter
     (fun inst ->
       try
-        generate_unit_tests depth tf inst ail_prog oc 10
+        generate_unit_tests' depth tf inst ail_prog oc 10
       with Failure m ->
         print_string ("Failed to generate all tests for `" ^ Sym.pp_string inst.fn ^ "` due to the following:\n" ^ m ^ "\n")
+    ) instrumentation_list
+
+(******************)
+(* PBT Generation *)
+(******************)
+
+let rec codify_gen' (g : gen) : string =
+  match g with
+  | Arbitrary ty -> "rc::gen::arbitrary<" ^ string_of_ctype ty ^ ">()"
+  | Return (ty, e) -> "rc::gen::just<" ^ string_of_ctype ty ^ ">(" ^ string_of_expr e ^ ")"
+  | Filter (x', ty, e, g') ->
+    let gen = codify_gen' g' in
+    "rc::gen::suchThat(" ^ gen ^ ", [=](" ^ string_of_ctype ty ^ " " ^ Pp_symbol.to_string_pretty x' ^ "){ return " ^ string_of_expr e ^ "; })"
+  | Map (x', ty, e, g') ->
+    let gen = codify_gen' g' in
+    "rc::gen::map(" ^ gen ^ ", [=](" ^ string_of_ctype ty ^ " " ^ Pp_symbol.to_string_pretty x' ^ "){ return " ^ string_of_expr e ^ "; })"
+  | Alloc (ty, g') ->
+    (match ty with
+    | Ctype (_, Pointer (_, ty')) ->
+      "rc::gen::exec([=](){ return new (" ^ string_of_ctype ty' ^ ") {*" ^ codify_gen' g' ^ "}; })"
+    | _ -> failwith "Tried allocation without pointer type (Generator.codify_gen')")
+  | Struct (ty, ms) ->
+    "rc::gen::just((" ^ string_of_ctype ty ^ "){ " ^
+    String.concat ", " (
+      List.map (
+        fun (x, y) ->
+          "." ^ x ^ " = " ^ Pp_symbol.to_string_pretty y) ms) ^
+    "})"
+
+let get_gen_ty (g : gen) : Ctype.ctype =
+  match g with
+  | Arbitrary ty
+  | Return (ty, _) 
+  | Filter (_, ty, _, _)
+  | Map (_, ty, _, _)
+  | Alloc (ty, _)
+  | Struct (ty, _) -> ty
+
+let codify_gen (x : Sym.sym) (g : gen) : string =
+  string_of_ctype (get_gen_ty g) ^ " " ^ Pp_symbol.to_string_pretty x ^ " = *" ^ codify_gen' g ^ ";\n"
+
+let rec codify_gen_context (gtx : gen_context) : string =
+  match gtx with
+  | (x, g)::gtx' -> codify_gen x g ^ codify_gen_context gtx'
+  | [] -> ""
+
+let codify_pbt_header (tf : test_framework) (suite : string) (test : string) (oc : out_channel) : unit =
+  match tf with
+  | GTest -> output_string oc ("\nRC_GTEST_PROP(Test" ^ String.capitalize_ascii suite ^ ", " ^ test ^ ", ()){\n")
+  | Catch2 -> output_string oc ("\nTEST_CASE(\"" ^ test ^ "\"){\n\trc::prop(\"[" ^ String.lowercase_ascii suite ^ "]\"), [](){\n")
+;;
+
+let codify_pbt (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (args : (Symbol.sym * Ctype.ctype) list) (gtx : gen_context) (index : int) (oc : out_channel) : unit =
+  codify_pbt_header tf (Pp_symbol.to_string_pretty instrumentation.fn) ("Test" ^ string_of_int index) oc;
+
+  output_string oc (codify_gen_context gtx);
+
+  output_string oc (Pp_symbol.to_string_pretty instrumentation.fn);
+  output_string oc "(";
+  output_string oc (args |> List.map fst |> List.map Pp_symbol.to_string_pretty |> String.concat ", ");
+  output_string oc ");\n";
+
+  match tf with
+  | GTest -> output_string oc "}\n";
+  | Catch2 -> output_string oc "})}\n"
+;;
+
+let full_compile (depth : int) ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : cn_condition list) : gen_context list QCheck.Gen.t =
+  let vars, ms =
+    (List.fold_left
+      (fun (vars, ms) (x, ty) ->
+        add_to_vars_ms ail_prog x ty vars ms
+      ) ([], []) args)
+  in
+
+  let gs = collect_conditions depth ail_prog psi vars ms c in
+  gs >>= fun g ->
+  return (g |> simplify |> compile)
+
+let generate_pbt' (depth : int) (tf : test_framework) (instrumentation : Core_to_mucore.instrumentation) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) : unit =
+  let psi = List.map (fun (pred : cn_predicate) -> (pred.cn_pred_name, pred)) ail_prog.cn_predicates in
+  let lookup_fn = fun (x, _) -> Symbol.equal_sym x instrumentation.fn in
+  let fn_decl = List.filter lookup_fn ail_prog.declarations in
+  let fn_def = List.filter lookup_fn ail_prog.function_definitions in
+  let (arg_types, arg_syms) =
+    match (fn_decl, fn_def) with 
+      | ((_, (_, _, (Decl_function (_, _, arg_types, _, _, _)))) :: _), ((_, (_, _, _, arg_syms, _)) :: _) -> 
+        let arg_types = List.map (fun (_, ctype, _) -> ctype) arg_types in
+        (arg_types, arg_syms)
+      | _ -> ([], [])
+  in
+  let args = List.combine arg_syms arg_types in
+  let gtxs = QCheck.Gen.map (List.mapi (fun i g -> (i, g))) (full_compile depth ail_prog psi args (instrumentation.surface.requires)) in
+  let runners : unit list QCheck.Gen.t = map (fun (i, gtx) -> codify_pbt tf instrumentation ail_prog args gtx (i + 1) oc) gtxs in
+  sample (unlift_gen runners)
+;;
+
+let generate_pbt (depth : int) (tf : test_framework) (instrumentation_list : Core_to_mucore.instrumentation list) (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (oc : out_channel) : unit =
+  List.iter
+    (fun inst ->
+      try
+        generate_pbt' depth tf inst ail_prog oc
+      with Failure m ->
+        print_string ("Failed to generate PBT tests for `" ^ Sym.pp_string inst.fn ^ "` due to the following:\n" ^ m ^ "\n")
     ) instrumentation_list
