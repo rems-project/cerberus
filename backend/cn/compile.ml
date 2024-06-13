@@ -538,14 +538,14 @@ module EffectfulTranslation = struct
       (match IT.bt e1, IT.bt e2, !pointer_eq_warned with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
-         Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again)"
+         Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again). Please use `ptr_eq` or `is_null` (maybe `addr_eq`)."
        | _, _, _ -> ());
         return (IT (Binop (EQ, e1, e2), SBT.Bool, loc))
     | CN_inequal, _ ->
       (match IT.bt e1, IT.bt e2, !pointer_eq_warned with
        | Loc _, Loc _, false ->
          pointer_eq_warned := true;
-         Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again)"
+         Pp.warn loc !^"CN pointer equality is not the same as C's (will not warn again). Please use `ptr_eq` or `is_null` (maybe `addr_eq`)."
        | _, _, _ -> ());
         return (not_ (IT (Binop (EQ, e1, e2), SBT.Bool, loc)) loc)
     | CN_lt, (SBT.Integer | SBT.Real | SBT.Bits _) ->
