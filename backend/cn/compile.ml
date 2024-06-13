@@ -223,7 +223,7 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs es
   | CNExpr_cons (_c, args) ->
      free_in_exprs (List.map snd args)
-  | CNExpr_each (s, bt, range, e) ->
+  | CNExpr_each (s, _bt, _range, e) ->
      SymSet.remove s (free_in_expr e)
   | CNExpr_match (x, ms) ->
      let free_per_case =
@@ -237,7 +237,7 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
       (SymSet.remove s (free_in_expr body))
   | CNExpr_ite (e1, e2, e3) ->
      free_in_exprs [e1; e2; e3]
-  | CNExpr_good (typ, e) ->
+  | CNExpr_good (_typ, e) ->
      free_in_expr e
   | CNExpr_deref e ->
      free_in_expr e
@@ -342,7 +342,7 @@ let convert_enum_expr =
   in
   let rec conv_expr_ e1 loc = function
     | AilEconst const -> conv_const loc const
-    | AilEannot (cty, expr) -> conv_expr expr
+    | AilEannot (_cty, expr) -> conv_expr expr
     | _ -> fail {loc; msg = Generic (Pp.item "enum conversion: unhandled expression kind"
         (CF.Pp_ast.doc_tree_toplevel (CF.Pp_ail_ast.dtree_of_expression (fun _ -> (!^ "()")) e1)))}
   and conv_expr e = match e with
@@ -356,7 +356,7 @@ let do_decode_enum env loc sym =
 
 
 
-let add_function loc sym func_sig env =
+let add_function _loc sym func_sig env =
   return {env with functions= SymMap.add sym func_sig env.functions }
 
 
@@ -482,7 +482,7 @@ module EffectfulTranslation = struct
 
 
 
-  let lookup_member loc (tag, def) member =
+  let lookup_member loc (_tag, def) member =
     let member_types = Memory.member_types def in
     match List.assoc_opt Id.equal member member_types with
     | Some ty -> return ty
@@ -899,9 +899,9 @@ module EffectfulTranslation = struct
         | CNExpr_negate e ->
            let@ e = self e in
            begin match e with
-           | IT (Const (Z z), bt, _) ->
+           | IT (Const (Z z), _bt, _) ->
              return (IT (Const (Z (Z.neg z)), SBT.Integer, loc))
-           | IT (Const (Bits ((sign, width), z)), bt, _) ->
+           | IT (Const (Bits ((sign, width), z)), _bt, _) ->
              (* this will be checked to fit in WellTyped.infer *)
              return (IT (Const (Bits ((sign,width), Z.neg z)), SBT.Bits (sign,width), loc))
            | _ ->
@@ -1035,7 +1035,7 @@ module EffectfulTranslation = struct
 
 
 
-  let split_pointer_linear_step loc ((q, bt, _) as sym_args) (ptr_expr : IT.sterm) =
+  let split_pointer_linear_step loc ((_q, bt, _) as sym_args) (ptr_expr : IT.sterm) =
     let open Pp in
     let qs = IT.sym_ sym_args in
     let msg_s = "Iterated predicate pointer must be array_shift<ctype>(ptr, q_var):" in
@@ -1049,7 +1049,7 @@ module EffectfulTranslation = struct
 
 
 
-  let owned_good sym (res_t, oargs_ty) =
+  let owned_good _sym (res_t, _oargs_ty) =
     let here = Locations.other __FUNCTION__ in
     match res_t with
     | RET.P { pointer; name = Owned (scty, _); _} ->
@@ -1289,11 +1289,11 @@ module LocalState = struct
              ) (SymMap.find_opt sym variable_state)
          in
          aux (k o_v)
-      | E.Deref (loc, it, scope, k) ->
+      | E.Deref (_loc, it, scope, k) ->
          let pointee_values = (state_for_scope scope).pointee_values in
          let o_v = STermMap.find_opt it pointee_values in
          aux (k o_v)
-      | E.ScopeExists (loc, scope, k) ->
+      | E.ScopeExists (_loc, scope, k) ->
          aux (k (StringMap.mem scope old_states))
     in
     aux
@@ -1328,7 +1328,7 @@ let translate_cn_clause env clause =
          let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
          let acc' z = acc (LAT.mConstraint ( lc, (loc, None) ) z) in
          translate_cn_clause_aux env st acc' cl
-      | CN_return (loc, e_) ->
+      | CN_return (_loc, e_) ->
           let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
           let e = IT.term_of_sterm e in
           acc (LAT.I e)
@@ -1420,7 +1420,7 @@ let rec make_lrt_generic env st =
   let make_lat env st (requires, ensures) =
     let@ args_lrt, env, st = make_lrt_generic env st requires in
     let st = LocalState.make_state_old st start_evaluation_scope in
-    let@ ret_lrt, env, st = make_lrt_generic env st ensures in
+    let@ ret_lrt, _env, _st = make_lrt_generic env st ensures in
     return (LAT.of_lrt args_lrt (LAT.I ret_lrt))
 
 
@@ -1522,7 +1522,7 @@ module UsingLoads = struct
          | None ->
             load loc "deref" pointer k
          end
-      | ScopeExists (loc, scope, k) ->
+      | ScopeExists (_loc, scope, k) ->
          aux (k (StringMap.mem scope old_states))
 
     and load loc action_pp pointer k =
@@ -1557,7 +1557,7 @@ let translate_cn_statement
       match stmt_ with
       | CN_pack_unpack (pack_unpack, pred, args) ->
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
-         let@ name, pointer, iargs, oargs_ty =
+         let@ name, pointer, iargs, _oargs_ty =
            ET.translate_cn_res_info loc loc env pred args in
          let stmt =
            M_CN_pack_unpack

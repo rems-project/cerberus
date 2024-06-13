@@ -82,10 +82,10 @@ let rec subtype ct ct' =
      true
   | Integer it, Integer it' ->
      IntegerTypes.equal it it'
-  | Array (ct, olength), Array (ct', None) ->
+  | Array (ct, _length_opt), Array (ct', None) ->
      subtype ct ct'
-  | Array (ct, olength), Array (ct', olength') ->
-     subtype ct ct' && Option.equal Int.equal olength olength'
+  | Array (ct, length_opt), Array (ct', length_opt') ->
+     subtype ct ct' && Option.equal Int.equal length_opt length_opt'
   | Pointer ct, Pointer ct' ->
      subtype ct ct'
   | Struct tag, Struct tag' ->
@@ -152,7 +152,7 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
      return Void
   | Ctype.Basic (Integer it) ->
      return (Integer it)
-  | Ctype.Basic (Floating it) ->
+  | Ctype.Basic (Floating _) ->
      fail
   | Ctype.Array (ct,nopt) ->
      let@ ct = of_ctype ct in
@@ -168,7 +168,7 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
      return (Function ((ret_q, ret_ct), args, variadic))
   | Ctype.FunctionNoParams _ ->
       fail
-  | Ctype.Pointer (qualifiers,ctype) ->
+  | Ctype.Pointer (_qualifiers,ctype) ->
      let@ t = of_ctype ctype in
      return (Pointer t)
   | Ctype.Atomic _ ->

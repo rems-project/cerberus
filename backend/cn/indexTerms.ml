@@ -81,7 +81,7 @@ let rec free_vars_ : 'a. 'a term_ -> SymSet.t = function
   | ArrayShift { base; ct=_; index } -> free_vars_list [base; index]
   | CopyAllocId { addr; loc } -> free_vars_list [addr; loc]
   | SizeOf _t -> SymSet.empty
-  | OffsetOf (tag, member) -> SymSet.empty
+  | OffsetOf (_tag, _member) -> SymSet.empty
   | Nil _bt -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
   | Head t -> free_vars t
@@ -180,7 +180,7 @@ let rec fold_ f binders acc = function
           aux acc' cases
      in
      aux acc' cases
-  | Constructor (s, args) ->
+  | Constructor (_sym, args) ->
      fold_list f binders acc (List.map snd args)
 
 and fold f binders acc (IT (term_, _bt, loc)) =
@@ -208,12 +208,12 @@ let subterms_without_bound_variables bindings =
     ) []
 
 
-let is_call (f: Sym.t) (IT (it_, bt, _loc)) =
+let is_call (f: Sym.t) (IT (it_, _bt, _loc)) =
   match it_ with
   | Apply (f', _) when Sym.equal f f' -> true
   | _ -> false
 
-let is_good (ct : Sctypes.t) (IT (it_, bt, _loc)) =
+let is_good (ct : Sctypes.t) (IT (it_, _bt, _loc)) =
   match it_ with
   | Good (ct', _) when Sctypes.equal ct ct' -> true
   | _ -> false
@@ -395,11 +395,11 @@ let substitute_lets =
 
 
 let is_const = function
-  | IT (Const const, bt, loc) -> Some (const, bt)
+  | IT (Const const, bt, _loc) -> Some (const, bt)
   | _ -> None
 
 let is_z = function
-  | IT (Const (Z z), bt, loc) -> Some z
+  | IT (Const (Z z), _bt, _loc) -> Some z
   | _ -> None
 
 let is_z_ it = Option.is_some (is_z it)
@@ -414,11 +414,11 @@ let is_bits_const = function
   | _ -> None
 
 let is_pointer = function
-  | IT (Const (Pointer { alloc_id; addr }), bt, _) -> Some (alloc_id, addr)
+  | IT (Const (Pointer { alloc_id; addr }), _bt, _) -> Some (alloc_id, addr)
   | _ -> None
 
 let is_alloc_id = function
-  | IT (Const (Alloc_id alloc_id), bt, _) -> Some alloc_id
+  | IT (Const (Alloc_id alloc_id), _bt, _) -> Some alloc_id
   | _ -> None
 
 let is_sym = function
@@ -629,7 +629,7 @@ let nthTuple_ ~item_bt (n, it) loc = IT (NthTuple (n, it), item_bt, loc)
 (* struct_op *)
 let struct_ (tag, members)  loc =
   IT (Struct (tag, members), BT.Struct tag, loc)
-let member_ ~member_bt (tag, it, member) loc =
+let member_ ~member_bt (it, member) loc =
   IT (StructMember (it, member), member_bt, loc)
 
 let (%.) struct_decls t member =
@@ -644,7 +644,7 @@ let (%.) struct_decls t member =
     | None -> Cerb_debug.error ("struct " ^ Sym.pp_string tag ^
         " does not have member " ^ (Id.pp_string member))
   in
-  member_ ~member_bt (tag, t, member)
+  member_ ~member_bt (t, member)
 
 
 
@@ -759,7 +759,7 @@ let mk_in_loc_list (ptr, opts) loc = match dest_list opts with
     sym_ (Sym.fresh_named "unspecified_in_loc_list", SurfaceBaseTypes.Bool, loc)
 
 (* set_op *)
-let setMember_ bt (it, it') loc = IT (Binop (SetMember,it, it'), BT.Bool, loc)
+let setMember_ (it, it') loc = IT (Binop (SetMember,it, it'), BT.Bool, loc)
 (* let setUnion_ its = IT (Set_op (SetUnion its), bt (hd its))
  * let setIntersection_ its = IT (Set_op (SetIntersection its), bt (hd its)) *)
 let setDifference_ (it, it') loc = IT (Binop (SetDifference,it, it'), bt it, loc)
@@ -912,7 +912,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
        bool_ true loc
     | Integer it ->
        in_z_range about (Memory.min_integer_type it, Memory.max_integer_type it) loc
-    | Array (it, None) ->
+    | Array (_, None) ->
        Cerb_debug.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) ->
        if n > ! value_check_array_size_warning
@@ -943,7 +943,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
                match piece.member_or_padding with
                | Some (member, mct) ->
                   let member_bt = Memory.bt_of_sct mct in
-                  let member_it = member_ ~member_bt (tag, about, member) loc in
+                  let member_it = member_ ~member_bt (about, member) loc in
                   Some (aux mct member_it)
                | None ->
                   None

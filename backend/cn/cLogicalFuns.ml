@@ -13,7 +13,7 @@ open Mucore
 
 module IT = IndexTerms
 
-let fail_n m = fail (fun ctxt -> m)
+let fail_n m = fail (fun _ctxt -> m)
 
 type 'a exec_result =
   | Call_Ret of IT.t
@@ -81,7 +81,7 @@ let triv_simp_ctxt = Simplify.default Global.empty
 let simp_const loc lpp it =
   let it2 = Simplify.IndexTerms.simp triv_simp_ctxt it in
   match IT.is_z it2, IT.bt it2 with
-  | Some z, _ -> return it2
+  | Some _z, _ -> return it2
   | _, BT.Integer -> fail_n {loc; msg = Generic (Pp.item
       "getting expr from C syntax: failed to simplify integer to numeral"
       (Pp.typ (Lazy.force lpp) (IT.pp it2)))}
@@ -155,7 +155,7 @@ let bool_ite_1_0 bt b loc =
 
 (* FIXME: find a home for this, also needed in check, needs the Typing monad *)
 let eval_mu_fun f args orig_pexpr =
-  let (M_Pexpr (loc, _, bt, pe)) = orig_pexpr in
+  let (M_Pexpr (loc, _, bt, _pe)) = orig_pexpr in
   begin match Mucore.evaluate_fun f args with
     | Some (`Result_IT it) -> return it
     | Some (`Result_Integer z) ->
@@ -391,7 +391,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
   | M_Ebound ex -> symb_exec_mu_expr ctxt (state, var_map) ex
   | M_Eaction (M_Paction (_, M_Action (_, action))) ->
     begin match action with
-    | M_Create (pe, act, prefix) ->
+    | M_Create (_pe, _act, _prefix) ->
       let (ptr, state) = mk_local_ptr state loc in
       rcval ptr state
     | M_Store (_, _, p_pe, v_pe, _) ->
@@ -415,7 +415,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     | _ -> fail_n {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported memory op"
         (Pp_mucore.pp_expr expr))}
     end
-  | M_Eccall (act, fun_pe, args_pe) ->
+  | M_Eccall (_act, fun_pe, args_pe) ->
     let@ fun_it = symb_exec_mu_pexpr ctxt var_map fun_pe in
     let@ args_its = ListM.mapM (symb_exec_mu_pexpr ctxt var_map) args_pe in
     let fail_fun_it msg = fail_n {loc;
@@ -514,7 +514,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
         fail_n {loc; msg = Generic Pp.(!^"mismatched argument number for" ^^^ (Pp.infix_arrow (Sym.pp fsym) (Sym.pp id)) )}
     in
     let rec in_computational_ctxt args_and_body m = match args_and_body with
-      | M_Computational ((s, bt), (loc, info), args_and_body) ->
+      | M_Computational ((s, bt), (loc, _info), args_and_body) ->
         Typing.bind (Typing.add_a s bt (loc, lazy (Pp.item "argument" (Sym.pp s))))
             (fun () -> in_computational_ctxt args_and_body m)
       | M_L _ -> m

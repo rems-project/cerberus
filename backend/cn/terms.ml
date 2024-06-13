@@ -370,8 +370,8 @@ let rec dtree (IT (it_, bt, loc)) =
      Dleaf (Sym.pp s)
   | Const (Z z) ->
      Dleaf !^(Z.to_string z)
-  | Const (Bits ((sign,n), v)) ->
-     Dleaf (pp (IT (it_,bt, loc)))
+  | Const (Bits _) ->
+     Dleaf (pp (IT (it_, bt, loc)))
   | Const (Q q) ->
      Dleaf !^(Q.to_string q)
   | Const (Pointer { alloc_id=id; addr }) ->
@@ -431,7 +431,7 @@ let rec dtree (IT (it_, bt, loc)) =
   | MemberShift (t, tag, id) ->
     Dnode (pp_ctor "MemberShift", [dtree t; Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
   | ArrayShift { base; ct=ty; index=t } ->
-     Dnode (pp_ctor "ArrayShift", [Dleaf (Sctypes.pp ty); dtree t])
+    Dnode (pp_ctor "ArrayShift", [Dleaf (Sctypes.pp ty); dtree base; dtree t])
   | CopyAllocId { addr; loc } ->
      Dnode (pp_ctor "CopyAllocId", [dtree addr; dtree loc])
   | Representable (ty, t) ->
@@ -440,13 +440,13 @@ let rec dtree (IT (it_, bt, loc)) =
      Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
   | Aligned a ->
      Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
-  | MapConst (bt, t) ->
+  | MapConst (_bt, t) ->
      Dnode (pp_ctor "MapConst", [dtree t])
   | MapSet (t1, t2, t3) ->
      Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
   | MapGet (t1, t2) ->
      Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
-  | MapDef ((s, bt), t) ->
+  | MapDef ((s, _bt), t) ->
      Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
   | Apply (f, args) ->
      Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))

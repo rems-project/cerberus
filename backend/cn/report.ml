@@ -623,7 +623,7 @@ init()
 |}
 
 
-let make_state2 (report: state_report) requested unproven predicate_hints i =
+let make_state2 (report: state_report) requested unproven predicate_hints =
   div ~clss:"page" [
     make_where ~is_javascript:true report.where;
     make_requested requested;
@@ -680,13 +680,12 @@ let make2 filename source_filename_opt (report: report) =
     ; {|<input type="button" value="last" onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>|} ] in
   
   let pages = div ~id:"pages" begin
-    List.mapi (fun i state ->
+    List.map (fun state ->
       make_state2
         state 
         report.requested 
         report.unproven 
         report.predicate_hints
-        i
     ) report.trace
   end in
 

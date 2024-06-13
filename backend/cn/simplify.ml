@@ -61,7 +61,7 @@ module IndexTerms = struct
           let (a_xs, a_r) = dest_int_addition ts a in
           let a_xs_mul = List.map (fun (it, i) -> (it, Z.mul i b_i)) a_xs in
           (a_xs_mul, if IT.equal a_r z0 then z0 else mul_ (a_r, z_ b_i z_loc) loc)
-      | Binop (Mul, IT (Const (Z a_i), _, z_loc), b) ->
+      | Binop (Mul, IT (Const (Z a_i), _, _z_loc), b) ->
           let (b_xs, b_r) = dest_int_addition ts b in
           let b_xs_mul = List.map (fun (it, i) -> (it, Z.mul i a_i)) b_xs in
           (b_xs_mul, if IT.equal b_r z0 then z0 else mul_ (z_ a_i loc, b_r) loc)
@@ -456,7 +456,7 @@ module IndexTerms = struct
             and_ [impl_ (cond, eq_ (t1, t3) the_loc) the_loc;
                   impl_ (not_ cond the_loc, eq_ (t2, t3) the_loc) the_loc] the_loc
             )
-       | t3, IT (ITE (cond, t1, t2), _, _) when is_c t3 -> aux (eq_ (b, a) the_loc)
+       | t3, IT (ITE _, _, _) when is_c t3 -> aux (eq_ (b, a) the_loc)
        | IT (Tuple items1, _, _),
          IT (Tuple items2, _, _)  ->
           aux (and_ (List.map2 (fun a b -> eq__ a b the_loc) items1 items2) the_loc)
@@ -560,7 +560,7 @@ module IndexTerms = struct
        begin match get_num_z t with
        | None -> IT (WrapI (ity, t), the_bt, the_loc)
        | Some z -> begin match Memory.bt_of_sct (Sctypes.Integer ity) with
-         | BT.Bits (sign, sz) -> num_lit_norm the_bt z the_loc
+         | BT.Bits _ -> num_lit_norm the_bt z the_loc
          | _ -> IT (WrapI (ity, t), the_bt, the_loc)
          end
        end

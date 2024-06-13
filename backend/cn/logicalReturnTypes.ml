@@ -34,7 +34,7 @@ let rec subst (substitution: _ Subst.t) lrt =
      let it = IT.subst substitution it in
      let name, t = suitably_alpha_rename substitution.relevant name t in
      Define ((name, it), info, subst substitution t)
-  | Resource ((name, (re, bt)), ((loc, _) as info), t) ->
+  | Resource ((name, (re, bt)), info, t) ->
      let re = RT.subst substitution re in
      let name, t = suitably_alpha_rename substitution.relevant name t in
      let t = subst substitution t in
@@ -70,11 +70,11 @@ let rec bound = function
 
 let alpha_unique ss =
   let rec f ss = function
-  | Resource ((name, (re, bt)),((loc, _) as info), t) ->
+  | Resource ((name, (re, bt)), info, t) ->
      let t = f (SymSet.add name ss) t in
      let (name, t) = suitably_alpha_rename ss name t in
      Resource ((name, (re, bt)), info, t)
-  | Define ((name, it),((loc, _) as info), t) ->
+  | Define ((name, it), info, t) ->
      let t = f (SymSet.add name ss) t in
      let name, t = suitably_alpha_rename ss name t in
      Define ((name, it), info, t)
@@ -89,10 +89,10 @@ let binders =
     | Define ((s, it), _, t) ->
        let (s, t) = alpha_rename s t in
        (Id.id (Sym.pp_string s), IT.bt it) :: aux t
-    | Resource ((s, (re, bt)), _, t) ->
+    | Resource ((s, (_, bt)), _, t) ->
        let (s, t) = alpha_rename s t in
        (Id.id (Sym.pp_string s), bt) :: aux t
-    | Constraint (lc, _, t) ->
+    | Constraint (_, _, t) ->
        aux t
     | I ->
        []
@@ -140,7 +140,7 @@ let rec pp_aux lrt =
   match lrt with
   | Define ((name, it), _info, t) ->
      group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux t
-  | Resource ((name, (re, bt)), _info, t) ->
+  | Resource ((name, (re, _bt)), _info, t) ->
      group (!^"take" ^^^ (Sym.pp name) ^^^ equals ^^^ RT.pp re ^^ semi) :: pp_aux t
   | Constraint (lc, _info, t) ->
      let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in

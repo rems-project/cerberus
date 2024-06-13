@@ -35,7 +35,7 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
       | (LC.T tm, _) ->
         Pp.debug lvl (lazy (Pp.item msg (IT.pp tm)));
         Pp.debug lvl (lazy (pp_f tm))
-      | (LC.Forall ((sym, bt), tm), (_, [(sym', bt')])) ->
+      | (LC.Forall ((sym, _bt), tm), (_, [(sym', _bt')])) ->
         let tm' = IT.subst (IT.make_rename ~from:sym ~to_:sym') tm in
         Pp.debug lvl (lazy (Pp.item ("quantified " ^ msg) (IT.pp tm)));
         Pp.debug lvl (lazy (pp_f tm'))
@@ -89,7 +89,7 @@ module General = struct
       | [], _
       | _, BT.Unit ->
           return (default_ (BT.Map (a_bt, item_bt)) here)
-      | many, _ ->
+      | _many, _ ->
         let term = IndexTerms.bool_ true here in
         let@ model = model_with here term in
         let model = Option.get model in
@@ -104,7 +104,7 @@ module General = struct
   (* this version is parametric in resource_request (defined below) to ensure
      the return-type (also parametric) is as general as possible *)
   let parametric_ftyp_args_request_step resource_request rt_subst loc
-        (uiinfo : uiinfo) original_resources ftyp changed_or_deleted =
+        (uiinfo : uiinfo) _original_resources ftyp changed_or_deleted =
     (* take one step of the "spine" judgement, reducing a function-type
        by claiming an argument resource or otherwise reducing towards
        an instantiated return-type *)
@@ -112,7 +112,7 @@ module General = struct
     let@ simp_ctxt = simp_ctxt () in
 
     begin match ftyp with
-    | LAT.Resource ((s, (resource, bt)), info, ftyp) ->
+    | LAT.Resource ((s, (resource, _bt)), info, ftyp) ->
        let resource = Simplify.ResourceTypes.simp simp_ctxt resource in
        let (situation, request_chain) = uiinfo in
        let step = TypeErrors.{resource; loc = Some (fst info);
@@ -137,7 +137,7 @@ module General = struct
             let changed_or_deleted = changed_or_deleted @ changed_or_deleted' in
             return ((LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp), changed_or_deleted)
        end
-    | Define ((s, it), info, ftyp) ->
+    | Define ((s, it), _info, ftyp) ->
        let it = Simplify.IndexTerms.simp simp_ctxt it in
        return (LAT.subst rt_subst (IT.make_subst [(s, it)]) ftyp, changed_or_deleted)
     | Constraint (c, info, ftyp) ->
@@ -160,7 +160,7 @@ module General = struct
                       requests = snd uiinfo; ctxt; model; }}
                 )
        end
-    | I rt ->
+    | I _rt ->
        return (ftyp, changed_or_deleted)
     end
 
@@ -227,7 +227,7 @@ module General = struct
                     continue
                   end
                 end
-             | re ->
+             | _re ->
                 continue
        in
        let here = Locations.other __FUNCTION__ in
@@ -312,7 +312,7 @@ module General = struct
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T pmatch);
                    continue
                 end end
-             | re ->
+             | _re ->
                 continue
            ) (needed, C [])
        in
@@ -339,7 +339,7 @@ module General = struct
                    in
                    match o_re_index with
                    | None -> continue
-                   | Some ((p', O p'_oarg), _) ->
+                   | Some ((_p', O p'_oarg), _) ->
                       let oarg = add_case (One {one_index = index; value = p'_oarg}) oarg in
                       let (sym, bt) = requested.q in
                       let needed' = and_ [needed; ne__ (sym_ (sym, bt, here)) index here] here in

@@ -110,7 +110,7 @@ let convert_core_bt_for_list loc =
 
 let ensure_pexpr_ctype loc err pe : act =
   match pe with
-  | Pexpr (annot, bty, PEval (Vctype ct)) ->
+  | Pexpr (annot, _bty, PEval (Vctype ct)) ->
      {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct}
   | _ ->
      assert_error loc (err ^^ P.colon ^^^ Pp_core.Basic.pp_pexpr pe)
@@ -189,7 +189,7 @@ and n_lv loc v =
   match v with
   | LVspecified ov ->
      n_ov loc ov
-  | LVunspecified ct1 ->
+  | LVunspecified _ct1 ->
      assert_error loc (!^"core_anormalisation: LVunspecified")
 
 
@@ -227,7 +227,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   match pe with
   | PEsym sym1 ->
      annotate (M_PEsym sym1)
-  | PEimpl i ->
+  | PEimpl _i ->
      assert_error loc (!^"PEimpl not inlined")
   | PEval v ->
      annotate (M_PEval (n_val loc v))
@@ -310,7 +310,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         assert_error loc (Print.item "core_to_mucore: unsupported ctor application"
             (Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe))))
      end
-  | PEcase(e', pats_pes) ->
+  | PEcase(_e', _pats_pes) ->
      assert_error loc !^"PEcase"
   | PEarray_shift(e', ct, e'') ->
      let e' = n_pexpr loc e' in
@@ -319,7 +319,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEmember_shift(e', sym1, id1) ->
      let e' = n_pexpr loc e' in
      annotate (M_PEmember_shift(e', sym1, id1))
-  | PEmemop(mop, pes) ->
+  | PEmemop(_mop, _pes) ->
       (* FIXME(CHERI merge) *)
       (* this construct is currently only used by the CHERI switch *)
       assert_error loc !^"PEmemop"
@@ -414,9 +414,9 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      end
   | PElet(pat, e', e'') ->
      begin match pat, e' with
-     | Pattern (annots, CaseBase (Some sym, _)),
+     | Pattern (_annots, CaseBase (Some sym, _)),
        Pexpr (annots2, _, PEsym sym2)
-     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])),
+     | Pattern (_annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])),
        Pexpr (annots2, _, PEsym sym2)
        ->
         let e'' = Core_peval.subst_sym_pexpr2 sym
@@ -424,11 +424,11 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         n_pexpr loc e''
 
 
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+     | Pattern (_annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
                                            Pattern (_, CaseBase (Some sym', _))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
+     | Pattern (_annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
                                            Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
@@ -477,15 +477,15 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         | _ -> annotate (M_PEif (e1, e2, e3))
         end
      end
-  | PEis_scalar e' ->
+  | PEis_scalar _e' ->
      assert_error loc !^"core_anormalisation: PEis_scalar"
-  | PEis_integer e' ->
+  | PEis_integer _e' ->
      assert_error loc !^"core_anormalisation: PEis_integer"
-  | PEis_signed e' ->
+  | PEis_signed _e' ->
      assert_error loc !^"core_anormalisation: PEis_signed"
-  | PEis_unsigned e' ->
+  | PEis_unsigned _e' ->
      assert_error loc !^"core_anormalisation: PEis_unsigned"
-  | PEbmc_assume e' ->
+  | PEbmc_assume _e' ->
      assert_error loc !^"core_anormalisation: PEbmc_assume"
   | PEare_compatible(e1, e2) ->
      let e1 = n_pexpr loc e1 in
@@ -530,7 +530,7 @@ let n_action ~inherit_loc loc action =
      let ctype1 = (ensure_pexpr_ctype loc !^"Load: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      wrap (M_Load(ctype1, e2, mo1))
-  | SeqRMW (b, e1, e2, sym, e3) ->
+  | SeqRMW (_b, _e1, _e2, _sym, _e3) ->
       assert_error loc !^"TODO: SeqRMW"
 (*
      let ctype1 = (ensure_pexpr_ctype loc !^"SeqRMW: not a constant ctype" e1) in
@@ -705,23 +705,23 @@ let rec n_expr ~inherit_loc (loc : Loc.t) ((env, old_states), desugaring_things)
      return (wrap (M_Ememop (n_memop memop1 pexprs1)))
   | Eaction paction2 ->
      return (wrap (M_Eaction (n_paction paction2)))
-  | Ecase(pexpr, pats_es) ->
+  | Ecase(_pexpr, _pats_es) ->
      assert_error loc !^"Ecase"
   | Elet(pat, e1, e2) ->
      begin match pat, e1 with
-     | Pattern (annots, CaseBase (Some sym, _)),
+     | Pattern (_annots, CaseBase (Some sym, _)),
        Pexpr (annots2, _, PEsym sym2)
-     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])),
+     | Pattern (_annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])),
        Pexpr (annots2, _, PEsym sym2)
        ->
         let e2 = Core_peval.subst_sym_expr2 sym
                    (get_loc annots2, `SYM sym2) e2 in
         n_expr e2
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+     | Pattern (_annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
                                            Pattern (_, CaseBase (Some sym', _))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
+     | Pattern (_annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
                                            Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])),
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
@@ -760,7 +760,7 @@ let rec n_expr ~inherit_loc (loc : Loc.t) ((env, old_states), desugaring_things)
      end
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
-       | Core.Pexpr(annot, bty, Core.PEval (Core.Vctype ct1)) ->
+       | Core.Pexpr(annot, _bty, Core.PEval (Core.Vctype ct1)) ->
           let loc = (if inherit_loc then Loc.update loc else Fun.id)(get_loc_ annots) in
           {loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct1}
        | _ ->
@@ -774,7 +774,7 @@ let rec n_expr ~inherit_loc (loc : Loc.t) ((env, old_states), desugaring_things)
           | Vobject (OVpointer ptrval)
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
-               ( fun ct -> err ())
+               ( fun _ct -> err ())
                ( function
                    | None -> (* FIXME(CHERI merge) *)err ()
                    | Some sym -> return sym )
@@ -861,14 +861,14 @@ let rec n_expr ~inherit_loc (loc : Loc.t) ((env, old_states), desugaring_things)
   | End es ->
      let@ es = ListM.mapM n_expr es in
      return (wrap (M_End es))
-  | Esave((sym1,bt1), syms_typs_pes, e) ->
+  | Esave((_sym1,_bt1), _syms_typs_pes, _e) ->
      assert_error loc !^"core_anormalisation: Esave"
   | Erun(_a, sym1, pes) ->
      let pes = List.map n_pexpr pes in
      return (wrap (M_Erun(sym1, pes)))
-  | Epar es ->
+  | Epar _es ->
      assert_error loc !^"core_anormalisation: Epar"
-  | Ewait tid1 ->
+  | Ewait _tid1 ->
      assert_error loc !^"core_anormalisation: Ewait"
   | Eannot _ ->
       assert_error loc !^"core_anormalisation: Eannot"
@@ -1121,7 +1121,7 @@ let fetch_enum d_st loc sym =
   let@ expr_ = do_ail_desugar_rdonly d_st (CAE.resolve_enum_constant sym) in
   return (AnnotatedExpression ((), [], loc, expr_))
 
-let fetch_typedef d_st loc sym =
+let fetch_typedef d_st _loc sym =
   let@ (_, _, cty) = do_ail_desugar_rdonly d_st (CAE.resolve_typedef sym) in
   return cty
 
@@ -1144,7 +1144,7 @@ let normalise_label
       fsym
       (markers_env, precondition_cn_desugaring_state)
       (global_types, visible_objects_env)
-      (accesses, loop_attributes) (env : C.env) st label_name label =
+      (accesses, loop_attributes) (env : C.env) st _label_name label =
   match label with
   | Mi_Return loc ->
      return (M_Return loc)
@@ -1185,11 +1185,11 @@ let normalise_label
         (*     ) label_args_and_body  *)
         (* in *)
         return (M_Label (loc, label_args_and_body, annots, {label_spec = desugared_inv}))
-     | Some (LAloop_body loop_id) ->
+     | Some (LAloop_body _loop_id) ->
         assert_error loc !^"body label has not been inlined"
-     | Some (LAloop_continue loop_id) ->
+     | Some (LAloop_continue _loop_id) ->
         assert_error loc !^"continue label has not been inlined"
-     | Some (LAloop_break loop_id) ->
+     | Some (LAloop_break _loop_id) ->
         assert_error loc !^"break label has not been inlined"
      | Some LAreturn ->
         assert_error loc !^"return label has not been inlined"
@@ -1226,9 +1226,9 @@ let normalise_fun_map_decl
   | Some (loc, attrs, ret_ct, arg_cts, variadic, _) ->
     let@ () = if variadic then unsupported loc !^"variadic functions" else return () in
   match decl with
-  | Mi_Fun (bt, args, pe) ->
+  | Mi_Fun (_bt, _args, _pe) ->
      assert false
-  | Mi_Proc (loc, _mrk, ret_bt, args, body, labels) ->
+  | Mi_Proc (loc, _mrk, _ret_bt, args, body, labels) ->
      Print.debug 2 (lazy (Print.item ("normalising procedure") (Sym.pp fname)));
      let (_, ail_marker, _, ail_args, _) = List.assoc
          Sym.equal fname ail_prog.function_definitions in
@@ -1259,7 +1259,7 @@ let normalise_fun_map_decl
      assertl loc (BT.equal bt1 bt2)
        !^"function return type mismatch" (lazy (Print.ineq (BT.pp bt1) (BT.pp bt2)));
 *)
-     let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
+     let@ (ensures, _ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
 
      let@ (spec_req, spec_ens, env) = match SymMap.find_opt fname fun_specs with
@@ -1312,9 +1312,9 @@ let normalise_fun_map_decl
 
      return (Some (M_Proc(loc, args_and_body, trusted, desugared_spec), mk_functions))
 
-  | Mi_ProcDecl(loc, ret_bt, bts) ->
+  | Mi_ProcDecl(loc, ret_bt, _bts) ->
      begin match SymMap.find_opt fname fun_specs with
-     | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
+     | Some (_ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
        let@ () = check_against_core_bt loc ret_bt (Memory.bt_of_sct (convert_ct loc ret_ct)) in
        (* let@ (requires, d_st2) = desugar_conds d_st spec.cn_spec_requires in *)
        (* FIXME: do we need to note the return var somehow? *)
@@ -1331,7 +1331,7 @@ let normalise_fun_map_decl
        return (Some (M_ProcDecl (loc, Some ft), []))
      | _ -> return (Some (M_ProcDecl (loc, None), []))
      end
-  | Mi_BuiltinDecl(loc, bt, bts) ->
+  | Mi_BuiltinDecl(_loc, _bt, _bts) ->
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
@@ -1371,7 +1371,7 @@ let normalise_fun_map
 
 
 
-let normalise_globs ~inherit_loc env sym g =
+let normalise_globs ~inherit_loc env _sym g =
   let loc = Loc.other __FUNCTION__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
@@ -1415,7 +1415,7 @@ let make_struct_decl loc fields (tag : Sym.t) =
        if position < final_position
        then [{offset = position; size = final_position - position; member_or_padding = None}]
        else []
-    | (member, (attrs, _(*align_opt*), qualifiers, ct)) :: members ->
+    | (member, (_attrs, _(*align_opt*), _qualifiers, ct)) :: members ->
        (* TODO: support for any alignment specifier *)
        let sct = convert_ct loc ct in
        let offset = member_offset member in
@@ -1437,11 +1437,11 @@ let make_struct_decl loc fields (tag : Sym.t) =
 
 let normalise_tag_definition tag (loc, def) =
   match def with
-  | StructDef(fields, Some (FlexibleArrayMember (_, (Identifier (loc, _)), _, _))) ->
+  | StructDef(_fields, Some (FlexibleArrayMember (_, (Identifier (loc, _)), _, _))) ->
      unsupported loc !^"flexible array members"
   | StructDef (fields, None) ->
      return (M_StructDef (make_struct_decl loc fields tag))
-  | UnionDef l ->
+  | UnionDef _l ->
      unsupported loc !^"union types"
 
 
@@ -1455,7 +1455,7 @@ let normalise_tag_definitions tagDefs =
 
 let register_glob env (sym, glob) =
   match glob with
-  | M_GlobalDef (ct, e) ->
+  | M_GlobalDef (ct, _e) ->
      C.add_computational sym (SBT.Loc (Some ct)) env
      (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
   | M_GlobalDecl ct ->
@@ -1513,7 +1513,7 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
       file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in
 
-  let mu_call_funinfo = Pmap.mapi (fun fsym (_, _, ret, args, variadic, has_proto) ->
+  let mu_call_funinfo = Pmap.mapi (fun _fsym (_, _, ret, args, variadic, has_proto) ->
     Sctypes.{ sig_return_ty = ret; sig_arg_tys = List.map snd args;
       sig_variadic = variadic; sig_has_proto = has_proto;
     }) file.mi_funinfo in
@@ -1602,7 +1602,7 @@ let rec stmts_in_args f_i = function
   | M_L a -> stmts_in_largs f_i a
 
 let stmts_in_labels labels =
-  Pmap.fold (fun s def acc ->
+  Pmap.fold (fun _s def acc ->
       match def with
       | M_Return _ -> acc
       | M_Label (_, a, _, _) -> concat2 (stmts_in_args stmts_in_expr a) acc
@@ -1664,7 +1664,7 @@ let collect_instrumentation (file : _ mu_file) =
            }
          in
          { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
-      | M_ProcDecl (fn_loc, _ft) ->
+      | M_ProcDecl (_fn_loc, _ft) ->
          failwith "todo: support function prototypes"
     ) file.mu_funs []
    in

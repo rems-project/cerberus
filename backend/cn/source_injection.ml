@@ -58,7 +58,7 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
       st.last_indent
     else
       ident_of_line str in
-  let rec aux last_indent st =
+  let rec aux st =
     if st.current_pos.line = pos.line then
       let len = pos.col - st.current_pos.col in
       let str =
@@ -73,18 +73,17 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
       ({ st with current_pos= pos; last_indent; }, str)
     else match Stdlib.input_line st.input with
       | str ->
-          let last_indent = ident_of_line st str in
             if print then begin
               Stdlib.output_string st.output (str ^ "\n");
             end;
-            aux last_indent
+            aux
               { st with current_pos= { line= st.current_pos.line + 1; col= 1 } }
       | exception End_of_file -> begin
           Printf.fprintf stderr "st.line= %d\npos.line= %d\n"
             st.current_pos.line pos.line;
           failwith "end of file"
       end in
-  aux st.last_indent st
+  aux st
 
 type injection_kind =
   | InStmt of string
@@ -230,9 +229,9 @@ let in_stmt_injs xs =
 let pre_post_injs fun_sym is_void (A.AnnotatedStatement (loc, _, stmt_)) =
   let* (pre_pos, post_pos) =
     match stmt_ with
-      | AilSblock (bs, []) ->
+      | AilSblock (_bindings, []) ->
           Pos.of_location loc
-      | AilSblock (bs, ss) ->
+      | AilSblock (_bindings, ss) ->
           let first = List.hd ss in
           let last = Lem_list_extra.last ss in
           let* (pre_pos, _) = posOf_stmt first in
@@ -293,7 +292,7 @@ let output_injections oc cn_inj =
 open Cerb_frontend
 let get_magics_of_statement stmt =
   let open AilSyntax in
-  let rec aux acc (AnnotatedStatement (loc, Annot.Attrs xs, stmt_)) =
+  let rec aux acc (AnnotatedStatement (_loc, Annot.Attrs xs, stmt_)) =
     let acc =
       List.fold_left (fun acc attr ->
         let open Annot in

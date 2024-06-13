@@ -39,7 +39,7 @@ let illtyped_index_term (loc: loc) it has ~expected ~reason (_ctxt,_log) =
 
 let ensure_bits_type (loc : loc) (has : BT.t) =
   match has with
-  | BT.Bits (sign,n) -> return ()
+  | BT.Bits (_sign,_n) -> return ()
   | has ->
      fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = !^"bitvector"}})
 
@@ -260,7 +260,7 @@ module WIT = struct
          when Sym.equal constr constr' ->
        assert (List.for_all2 (fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
        Some (List.map snd args @ pats)
-    | Pat (PConstructor (constr', args), _, _) :: pats ->
+    | Pat (PConstructor (_constr', _args), _, _) :: _pats ->
        None
     | [] ->
        assert false
@@ -332,7 +332,7 @@ module WIT = struct
     return ()
 
   let rec get_location_for_type = function
-    | IT (Apply (name, args), _, loc) ->
+    | IT (Apply (name, _args), _, loc) ->
          let@ def = Typing.get_logical_function_def loc name in
          return def.loc
     | IT ((MapSet(t, _, _) |  Let (_, t)), _, _) ->
@@ -683,7 +683,7 @@ module WIT = struct
            | Loc, Alloc_id -> return ()
            | Integer, Real -> return ()
            | Real, Integer -> return ()
-           | Bits (sign,n), Bits (sign',n')
+           | Bits (_sign,_n), Bits (_sign',_n')
                (* FIXME: seems too restrictive when not (equal_sign sign sign' ) && n = n' *)
                -> return ()
            | Bits _, Loc -> return ()
@@ -936,7 +936,7 @@ module WRET = struct
        assert (BT.equal (snd p.q) qbt); (*normalisation does not change bit types. If this assertion fails, we have to adjust the later code to use qbt.*)
        let@ step = WIT.check loc (snd p.q) p.step in
        let@ step = match step with
-         | IT (Const (Bits (bits_bt, z)), _, _) ->
+         | IT (Const (Bits (_bits_bt, z)), _, _) ->
            if Z.lt Z.zero z
            then return step
            else fail (fun _ -> {loc; msg = Generic
@@ -1050,7 +1050,7 @@ module WLRT = struct
   open LRT
   type t = LogicalReturnTypes.t
 
-  let welltyped loc lrt =
+  let welltyped _loc lrt =
     let rec aux = 
       let here = Locations.other __FUNCTION__ in 
       function
@@ -1121,7 +1121,7 @@ end
 
 module WLAT = struct
 
-  let welltyped i_subst i_welltyped kind loc (at : 'i LAT.t) : ('i LAT.t) m =
+  let welltyped _i_subst i_welltyped kind loc (at : 'i LAT.t) : ('i LAT.t) m =
     let rec aux =
       let here = Locations.other __FUNCTION__ in
       function
@@ -1348,7 +1348,7 @@ let rec check_and_bind_pattern bt = function
     in
     let@ (ctor, pats) = begin match ctor, pats with
     | M_Cnil cbt, [] ->
-       let@ item_bt = get_item_bt bt in
+       let@ _item_bt = get_item_bt bt in
        return (M_Cnil cbt, [])
     | M_Cnil _, _ ->
        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
@@ -1389,7 +1389,7 @@ let rec infer_object_value : 'TY. Locations.t -> 'TY mu_object_value ->
    | M_OVpointer pv ->
      return (Loc, M_OVpointer pv)
    | M_OVarray xs ->
-     let@ bt_xs = ListM.mapM (infer_object_value loc) xs in
+     let@ _bt_xs = ListM.mapM (infer_object_value loc) xs in
      todo ()
    | M_OVstruct (nm, xs) ->
      return (Struct nm, M_OVstruct (nm, xs))
@@ -1653,7 +1653,7 @@ and check_pexpr (expect : BT.t) expr =
       let@ v = check_value loc expect v in
       return (annot expect (M_PEval v))
     | M_PEapply_fun (fname, pes) ->
-      let@ (bt, pes) = check_infer_apply_fun (Some expect) fname pes expr in
+      let@ (_bt, pes) = check_infer_apply_fun (Some expect) fname pes expr in
       return (annot expect (M_PEapply_fun (fname, pes)))
     | _ -> begin
       let@ expr = infer_pexpr expr in
@@ -1666,7 +1666,7 @@ and check_pexpr (expect : BT.t) expr =
     end
 
 and check_infer_apply_fun (expect : BT.t option) fname pexps orig_pe =
-  let (M_Pexpr (loc, annots, _, _)) = orig_pe in
+  let (M_Pexpr (loc, _annots, _, _)) = orig_pe in
   let param_tys = Mucore.mu_fun_param_types fname in
   let@ () = ensure_same_argument_number loc `Input (List.length pexps)
       ~expect:(List.length param_tys) in
@@ -1744,7 +1744,7 @@ let check_cn_statement loc stmt =
        in
        let rec check_args lemma_typ its =
          match lemma_typ, its with
-         | (AT.Computational ((_s,bt), info, lemma_typ')), (it :: its') ->
+         | (AT.Computational ((_s,bt), _info, lemma_typ')), (it :: its') ->
             let@ it = WIT.check loc bt it in
             let@ its' = check_args lemma_typ' its' in
             return (it :: its')
@@ -1970,7 +1970,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         return (Tuple bts, M_Eunseq es)
      | M_Erun (l, pes) ->
         (* copying from check.ml *)
-        let@ (lt,lkind) = match SymMap.find_opt l label_context with
+        let@ (lt,_lkind) = match SymMap.find_opt l label_context with
           | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp l)})
           | Some (lt,lkind,_) -> return (lt,lkind)
         in
@@ -2123,7 +2123,7 @@ module WLabel = struct
    let welltyped (loc : Loc.t) (lt : _ mu_expr mu_arguments)
        : (_ mu_expr mu_arguments) m
      =
-     WArgs.welltyped (fun loc body ->
+     WArgs.welltyped (fun _loc body ->
          return body
        ) "loop/label" loc lt
  end
@@ -2143,7 +2143,7 @@ module WProc = struct
             match def with
             | M_Return loc ->
                (AT.of_rt function_rt (LAT.I False.False), CF.Annot.LAreturn, loc)
-            | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
+            | M_Label (loc, label_args_and_body, annots, _parsed_spec) ->
                let lt = WLabel.typ label_args_and_body in
                let kind = Option.get (CF.Annot.get_label_annot annots) in
                (lt, kind, loc)
@@ -2161,7 +2161,7 @@ module WProc = struct
     WArgs.welltyped (fun loc (body, labels, rt) ->
         let@ rt = pure (WRT.welltyped loc rt) in
         let@ labels =
-          PmapM.mapM (fun sym def ->
+          PmapM.mapM (fun _sym def ->
             match def with
             | M_Return loc ->
                return (M_Return loc)
@@ -2172,14 +2172,14 @@ module WProc = struct
         in
         let label_context = label_context rt labels in
         let@ labels =
-          PmapM.mapM (fun sym def ->
+          PmapM.mapM (fun _sym def ->
               match def with
               | M_Return loc ->
                  return (M_Return loc)
               | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
                  let@ label_args_and_body =
                    pure begin
-                     WArgs.welltyped (fun loc label_body ->
+                     WArgs.welltyped (fun _loc label_body ->
                          BaseTyping.check_expr label_context (Unit) label_body
                         ) "label" loc label_args_and_body
                      end
@@ -2276,7 +2276,7 @@ end
 
 module WLemma = struct
 
-  let welltyped loc lemma_s lemma_typ =
+  let welltyped loc _lemma_s lemma_typ =
     WAT.welltyped LRT.subst WLRT.welltyped "lemma" loc lemma_typ
 
 end
@@ -2324,7 +2324,7 @@ module WDT = struct
   let bts_in_dt_case (_constr, args) =
     List.concat_map bts_in_dt_constructor_argument args
 
-  let bts_in_dt_definition { loc; cases } =
+  let bts_in_dt_definition { loc = _; cases } =
     List.concat_map bts_in_dt_case cases
 
   let dts_in_dt_definition dt_def =
@@ -2356,7 +2356,7 @@ module WDT = struct
           let scc_set = SymSet.of_list scc in
           ListM.iterM (fun dt ->
               let {loc;cases} = List.assoc Sym.equal dt datatypes in
-              ListM.iterM (fun (ctor,args) ->
+              ListM.iterM (fun (_ctor,args) ->
                   ListM.iterM (fun (id, bt) ->
                       let indirect_deps =
                         SymSet.of_list

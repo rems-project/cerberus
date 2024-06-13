@@ -294,7 +294,7 @@ type 'i mu_arguments =
 
 let dtree_of_mu_arguments dtree_i =
   let rec aux = function
-  | M_Computational ((s, bt), _, lat) ->
+  | M_Computational ((s, _bt), _, lat) ->
      Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); aux lat])
   | M_L l ->
      dtree_of_mu_arguments_l dtree_i l
@@ -331,7 +331,7 @@ let mu_fun_param_types mu_fun =
   | M_F_ctype_width -> [CType]
 
 let is_ctype_const pe =
-  let M_Pexpr (loc, _, _, pe_) = pe in
+  let M_Pexpr (_loc, _, _, pe_) = pe in
   match pe_ with
   | M_PEval (M_V (_, M_Vctype ct)) -> Some ct
   | _ -> None
@@ -363,14 +363,14 @@ let pp_function = function
   | M_F_ctype_width -> !^ "ctype_width"
 
 let is_undef_or_error_pexpr pexpr =
-  let (M_Pexpr (loc, _, _, pe)) = pexpr in
+  let (M_Pexpr (_, _, _, pe)) = pexpr in
   match pe with
   | M_PEundef _
   | M_PEerror _ -> true
   | _ -> false
 
 let is_undef_or_error_expr expr =
-  let (M_Expr (loc, _, _, e)) = expr in
+  let (M_Expr (_, _, _, e)) = expr in
   match e with
   | M_Epure pe -> is_undef_or_error_pexpr pe
   | _ -> false
@@ -462,8 +462,8 @@ type 'TY mu_label_def =
 let dtree_of_label_def = function
   | M_Return _ ->
      Dleaf !^"return label"
-  | M_Label (_loc, args_and_body, _, _) ->
-     dtree_of_mu_arguments (fun body ->
+  | M_Label (_, args_and_body, _, _) ->
+     dtree_of_mu_arguments (fun _body ->
          Dleaf !^"(body)"
        ) args_and_body
 

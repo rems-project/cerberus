@@ -48,7 +48,7 @@ let alpha_unique ss = function
 
 
 let simp simp_it simp_lc simp_re = function
-  | Computational ((s, bt),((loc, _) as info), lt) ->
+  | Computational ((s, bt), info, lt) ->
      let s, lt = LRT.alpha_rename s lt in
      Computational ((s, bt), info, LRT.simp simp_it simp_lc simp_re lt)
 
@@ -72,7 +72,7 @@ let bound = function
 let pp_aux rt =
   let open Pp in
   match rt with
-  | Computational ((name, bt), oinfo, t) ->
+  | Computational ((name, bt), _info, t) ->
      let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
      (op ^^^ typ (Sym.pp name) (BaseTypes.pp bt) ^^ dot) :: LRT.pp_aux t
 
@@ -82,7 +82,7 @@ let pp rt =
 
 
 let json = function
-  | Computational ((s, bt), oinfo, t) ->
+  | Computational ((s, bt), _info, t) ->
      let args = [
          ("symbol", Sym.json s);
          ("basetype", BaseTypes.json bt);
@@ -109,6 +109,6 @@ open Cerb_frontend.Pp_ast
 
 
 let dtree = function
-  | Computational ((s, bt), _, lrt) ->
+  | Computational ((s, _bt), _, lrt) ->
      Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); LRT.dtree lrt])
 

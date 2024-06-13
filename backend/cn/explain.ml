@@ -213,7 +213,7 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
        match predicate_name req with
        | Owned _ -> []
        | PName pname ->
-          let doc_clause (nm, c) = {
+          let doc_clause (_name, c) = {
               cond = IT.pp c.guard;
               clause = LogicalArgumentTypes.pp IT.pp c.packing_ft
             }

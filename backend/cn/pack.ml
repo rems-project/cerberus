@@ -11,7 +11,7 @@ module LAT = LogicalArgumentTypes
 let resource_empty provable resource =
   let loc = Cerb_location.other __FUNCTION__ in
   let constr = match resource with
-    | (P p, _) -> LC.t_ (bool_ false loc)
+    | (P _, _) -> LC.t_ (bool_ false loc)
     | (Q p, _) -> LC.forall_ p.q (not_ p.permission loc)
   in
   match provable constr with
@@ -108,7 +108,7 @@ let unpack_owned loc global (ct, init) pointer (O o) =
               pointer = memberShift_ (pointer, tag, member) loc;
               iargs = [];
             },
-            O (member_ ~member_bt:(Memory.bt_of_sct mct) (tag, o, member) loc))
+            O (member_ ~member_bt:(Memory.bt_of_sct mct) (o, member) loc))
           in
           (mresource :: res)
         | None ->
@@ -144,7 +144,7 @@ let unpack loc global provable (ret, O o) =
 
 
 
-let extractable_one global prove_or_model (predicate_name, index) (ret, O o) =
+let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O o) =
     (* let tmsg hd tail =  *)
     (*   if verb *)
     (*   then Pp.print stdout (Pp.item hd (ResourceTypes.pp ret ^^ Pp.hardline ^^ *)
@@ -171,7 +171,7 @@ let extractable_one global prove_or_model (predicate_name, index) (ret, O o) =
           in
           (* tmsg "successfully extracted" (lazy (IT.pp index)); *)
           Some ((Q ret_reduced, O o), at_index)
-       | `Counterex m ->
+       | `Counterex _ ->
           (* let eval_f = Solver.eval global (fst (Lazy.force m)) in *)
           (* tmsg "could not extract, counterexample" *)
           (*   (lazy (IndexTerms.pp_with_eval eval_f index_permission)); *)
@@ -193,13 +193,13 @@ let extractable_one global prove_or_model (predicate_name, index) (ret, O o) =
       None
 
 
-let extractable_multiple global prove_or_model =
+let extractable_multiple (* global *) prove_or_model =
   let rec aux is (re, extracted) =
     match is with
     | [] ->
         (re, extracted)
     | i::is ->
-        match extractable_one global prove_or_model i re with
+        match extractable_one (* global *) prove_or_model i re with
         | Some (re_reduced, extracted') ->
             aux is (re_reduced, extracted' :: extracted)
         | None ->

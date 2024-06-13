@@ -138,7 +138,7 @@ open Cerb_frontend.Pp_ast
 
 let dtree dtree_i =
   let rec aux = function
-  | Computational ((s, bt), _, lat) ->
+  | Computational ((s, _bt), _, lat) ->
      Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); aux lat])
   | L l ->
      LAT.dtree dtree_i l

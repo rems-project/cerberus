@@ -56,7 +56,7 @@ open Log
 
 
 
-let frontend incl_dirs incl_files astprints do_peval filename state_file magic_comment_char_dollar =
+let frontend incl_dirs incl_files astprints do_peval filename magic_comment_char_dollar =
   let open CF in
   Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
@@ -171,7 +171,7 @@ let main
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
     handle_frontend_error
-      (frontend incl_dirs incl_files astprints use_peval filename state_file magic_comment_char_dollar)
+      (frontend incl_dirs incl_files astprints use_peval filename magic_comment_char_dollar)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel

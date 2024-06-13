@@ -39,7 +39,7 @@ let fresh_same (s : t) : t =
   fresh_description (S.symbol_description s)
 
 let has_id = function
-  | CF.Symbol.Symbol (digest, nat, SD_Id str) ->
+  | CF.Symbol.Symbol (_digest, _nat, SD_Id str) ->
      Some str
   | _ ->
      None
