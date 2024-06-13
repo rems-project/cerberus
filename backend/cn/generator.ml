@@ -443,10 +443,10 @@ let add_to_vars_ms (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (sym : 
     (match List.assoc (Symbol.equal_sym) n ail_prog.tag_definitions with
     | (_, _, StructDef (membs, _)) ->
       let f (Symbol.Identifier (_, id), (_, _, _, ty)) =
-        let sym = Symbol.fresh () in
-        (id, (ty, sym)), (sym, (ty, Cn.CNExpr_var sym))
+        let sym' = Symbol.fresh () in
+        ((sym', (ty, Cn.CNExpr_var sym')), (id, (ty, sym')))
       in
-      let member_data, vars' = List.split (List.map f membs) in
+      let vars', member_data = List.split (List.map f membs) in
       ((sym, (ty, Cn.CNExpr_var sym))::vars @ vars', (sym, member_data)::ms)
     | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
   | _ -> ((sym, (ty, Cn.CNExpr_var sym))::vars, ms)
@@ -1005,6 +1005,7 @@ type gen =
   | Filter of gen * Sym.sym * cn_expr
   | Map of Sym.sym * Ctype.ctype * cn_expr * gen
   | Alloc of Ctype.ctype * Sym.sym * gen
+  | Struct of Ctype.ctype * (string * Sym.sym) list
 
 let rec string_of_gen (g : gen) : string =
   match g with
@@ -1013,12 +1014,21 @@ let rec string_of_gen (g : gen) : string =
   | Filter (g', x, e) -> "filter(" ^ string_of_gen g' ^ ", |" ^ Pp_symbol.to_string_pretty x ^ "| " ^ string_of_expr e ^ ")"
   | Map (x, ty, e, g') -> "map(" ^ "|" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ "| " ^ string_of_expr e ^ ", " ^ string_of_gen g' ^ ")"
   | Alloc (ty, x, g') -> "alloc((" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ ")," ^ string_of_gen g' ^ ")"
+  | Struct (ty, ms) -> "struct<" ^ string_of_ctype ty ^ ">(" ^ String.concat ", " (List.map (fun (x, g') -> "." ^ x ^ ": " ^ Pp_symbol.to_string_pretty g') ms) ^ ")"
 ;;
 
 type gen_context = (Symbol.sym * gen) list
 
-let return_gen (ty : Ctype.ctype) (e : cn_expr) : gen =
-  Return (ty, e)
+let string_of_gen_context (gtx : gen_context) : string =
+  "{ " ^ (
+    String.concat "; " (
+      List.map (
+        fun (x, g) ->
+          "\"" ^ Pp_symbol.to_string_pretty x ^ "\" <- \"" ^ string_of_gen g ^ "\""
+      ) gtx
+    )
+  ) ^ " }"
+;;
 
 let filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
   match cs with
@@ -1207,29 +1217,27 @@ let compile_gen' (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constra
       else
         Arbitrary ty)
 
-  | _ -> return_gen ty e
+  | _ -> Return (ty, e)
 ;;
 
 let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constraints) (loc : Sym.sym option) : gen =
-  let res =
-    match loc with
-    | Some loc ->
-      let gen = compile_gen' x ty e cs in
-      Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), loc, gen)
-    | None -> compile_gen' x ty e cs
-  in
-  let loc = Option.map (fun l -> "Some(" ^ Pp_symbol.to_string_pretty l ^ ")") loc |> Option.value ~default:"None" in
-  res
+  match loc with
+  | Some loc ->
+    let gen = compile_gen' x ty e cs in
+    Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), loc, gen)
+  | None -> compile_gen' x ty e cs
 ;;
 
-let rec compile_loop (gtx : gen_context) (locs : locations) (cs : constraints) (iter : variables) : gen_context * variables =
-  let get_loc x = List.find_map (
+let rec compile_singles' (gtx : gen_context) (locs : locations) (cs : constraints) (iter : variables) : gen_context * variables =
+  let get_loc x =
+    List.find_map (
       fun (e, y) ->
         if Sym.equal x y
         then
           match e with
           | Cn.CNExpr_var z
-          | Cn.CNExpr_value_of_c_atom (z, _) -> Some z
+          | Cn.CNExpr_value_of_c_atom (z, _) ->
+            Some z
           | _ -> None
         else
           None
@@ -1246,20 +1254,62 @@ let rec compile_loop (gtx : gen_context) (locs : locations) (cs : constraints) (
     if no_free_vars
     then
       let gen = compile_gen x ty (CNExpr (Cerb_location.unknown, e)) cs (get_loc x) in
-      compile_loop ((x, gen)::gtx) locs cs iter'
+      compile_singles' ((x, gen)::gtx) locs cs iter'
     else
-      let (gtx, iter') = compile_loop gtx locs cs iter' in
+      let (gtx, iter') = compile_singles' gtx locs cs iter' in
       (gtx, (x, (ty, e))::iter')
   | [] -> (gtx, iter)
 
-let rec compile' (gtx : gen_context) (vars : variables) (locs : locations) (cs : constraints) : gen_context =
-  let (gtx, vars) = compile_loop gtx locs cs vars in
+let rec compile_singles (gtx : gen_context) (vars : variables) (locs : locations) (cs : constraints) : gen_context =
+  let (gtx, vars) = compile_singles' gtx locs cs vars in
   if List.non_empty vars
-  then compile' gtx vars locs cs
+  then compile_singles gtx vars locs cs
   else gtx
 
-let compile ((vars, _, locs, cs) : goal) : gen_context =
-  let vars = List.filter (
+let rec compile_structs' (gtx : gen_context) (vars : variables) (ms : members) (locs : locations) : gen_context * members =
+  let get_loc x =
+    List.find_map (
+      fun (e, y) ->
+        if Sym.equal x y
+        then
+          match e with
+          | Cn.CNExpr_var z
+          | Cn.CNExpr_value_of_c_atom (z, _) ->
+            Some z
+          | _ -> None
+        else
+          None
+    ) locs
+  in
+  match ms with
+  | (x, syms)::ms' ->
+    let (gtx, ms') = compile_structs' gtx vars ms' locs in
+    let free_vars =
+      not (List.for_all (
+        fun (_, (ty, sym)) ->
+          (List.assoc_opt Sym.equal_sym sym gtx
+          |> Option.is_some)) syms)
+    in
+    if free_vars then (gtx, (x, syms)::ms') else
+    let (_, (ty, _)) = List.find (fun (y, _) -> Sym.equal_sym x y) vars in
+    let mems = List.map (fun (id, (ty, sym)) -> (id, sym)) syms in
+    (match get_loc x with
+    | Some loc ->
+      let gen = Struct (ty, mems) in
+      let loc_gen = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), loc, gen) in
+      ((loc, loc_gen)::gtx, ms')
+    | None -> ((x, Struct (ty, mems))::gtx, ms'))
+  | [] -> (gtx, [])
+
+let rec compile_structs (gtx : gen_context) (vars : variables) (ms : members) (locs : locations) : gen_context =
+  let (gtx, ms) = compile_structs' gtx vars ms locs in
+  if List.non_empty ms
+  then compile_structs gtx vars ms locs
+  else gtx
+
+let compile ((vars, ms, locs, cs) : goal) : gen_context =
+  (* Not a location *)
+  let vars' = List.filter (
     fun (x, _) -> List.for_all (
       fun (e, _) ->
         match e with
@@ -1268,7 +1318,13 @@ let compile ((vars, _, locs, cs) : goal) : gen_context =
           not (Sym.equal_sym x y)
         | e -> true) locs) vars
   in
-  compile' [] vars locs cs |> List.rev
+  (* Not a struct *)
+  let vars' = List.filter (
+    fun (x, _) -> List.for_all (
+      fun (y, _) -> not (Sym.equal_sym x y)) ms) vars'
+  in
+  let gtx = compile_singles [] vars' locs cs in
+  compile_structs gtx vars ms locs |> List.rev
 
 let generate_location (max_size : int) (ps : int list) : int QCheck.Gen.t =
   QCheck.Gen.(
@@ -1306,6 +1362,13 @@ let rec interpret_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (x :
       (* TODO: Calculate max heap size *)
       generate_location 10000 (List.map fst h) >>= fun l ->
       return ((loc, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int l)))::ctx, (l, List.assoc Sym.equal_sym x ctx)::h)
+    | Struct (ty, ms) ->
+      QCheck.Gen.(
+        let vs =
+          List.map (fun (x, sym) -> (x, List.assoc Sym.equal_sym sym ctx)) ms
+        in
+        return ((x, (ty, CNVal_struct vs))::ctx, h)
+      )
   )
 
 let rec interpret' (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (gtx : gen_context) (ctx : context) (h : heap) : (context * heap) QCheck.Gen.t =
