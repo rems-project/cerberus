@@ -1252,7 +1252,7 @@ let rec compile_singles' (gtx : gen_context) (locs : locations) (cs : constraint
       let gen = compile_gen x ty (CNExpr (l, e)) cs in
       let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), Return (ty, CNExpr (l, CNExpr_var x))) in
       match get_loc x with
-      | Some x_loc -> compile_singles' ((x, gen)::(x_loc, gen_loc)::gtx) locs cs iter'
+      | Some x_loc -> compile_singles' ((x_loc, gen_loc)::(x, gen)::gtx) locs cs iter'
       | None -> compile_singles' ((x, gen)::gtx) locs cs iter'
     else
       let (gtx, iter') = compile_singles' gtx locs cs iter' in
@@ -1295,8 +1295,8 @@ let rec compile_structs' (gtx : gen_context) (vars : variables) (ms : members) (
     (match get_loc x with
     | Some loc ->
       let gen = Struct (ty, mems) in
-      let loc_gen = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), gen) in
-      ((x, gen)::(loc, loc_gen)::gtx, ms')
+      let loc_gen = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), Return (ty, CNExpr (Cerb_location.unknown, CNExpr_var x))) in
+      ((loc, loc_gen)::(x, gen)::gtx, ms')
     | None -> ((x, Struct (ty, mems))::gtx, ms'))
   | [] -> (gtx, [])
 
