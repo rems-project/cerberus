@@ -1,6 +1,20 @@
 module B = Builtins
 open Cerb_frontend
 
+let get_builtin_name (fsym : Sym.sym) : string option =
+  Option.map
+    (fun (fname, _) -> fname)
+    (List.find_opt
+      (fun (_, fsym') -> Sym.equal fsym fsym')
+      B.cn_builtin_fun_names)
+
+let get_builtin_sym (fname : string) : Sym.sym option =
+  Option.map
+    (fun (_, fsym) -> fsym)
+    (List.find_opt
+      (fun (name, _) -> String.equal fname name)
+      B.cn_builtin_fun_names)
+
 type cn_expr = (Symbol.sym, Ctype.ctype) Cn.cn_expr
 type cn_expr_ = (Symbol.sym, Ctype.ctype) Cn.cn_expr_
 type cn_resource = (Symbol.sym, Ctype.ctype) Cn.cn_resource
@@ -43,7 +57,8 @@ let rec string_of_expr_ (e : cn_expr_) : string =
       Z.to_string n ^ s ^ b
     | CNConst_bool b -> string_of_bool b |> String.uppercase_ascii
     | CNConst_unit -> "()")
-  | CNExpr_var x -> Pp_symbol.to_string_pretty x
+  | CNExpr_var x
+  | CNExpr_value_of_c_atom (x, _) -> Pp_symbol.to_string_pretty x
   | CNExpr_list _ -> failwith "unsupported expression 'CNExpr_List' (Generator.string_of_expr_)"
   | CNExpr_memberof (e', Symbol.Identifier (_, x)) -> string_of_expr e' ^ "." ^ x
   | CNExpr_record _ -> failwith "unsupported expression 'CNExpr_record' (Generator.string_of_expr_)"
@@ -76,7 +91,6 @@ let rec string_of_expr_ (e : cn_expr_) : string =
   | CNExpr_ite _ -> failwith "unsupported expression 'CNExpr_ite' (Generator.string_of_expr_)"
   | CNExpr_good _ -> failwith "unsupported expression 'CNExpr_good' (Generator.string_of_expr_)"
   | CNExpr_deref _ -> failwith "unsupported expression 'CNExpr_deref' (Generator.string_of_expr_)"
-  | CNExpr_value_of_c_atom (x, _) -> Pp_symbol.to_string_pretty x
   | CNExpr_unchanged _ -> failwith "unsupported expression 'CNExpr_unchanged' (Generator.string_of_expr_)"
   | CNExpr_at_env _ -> failwith "unsupported expression 'CNExpr_at_env' (Generator.string_of_expr_)"
   | CNExpr_not e' -> "!" ^ string_of_expr e'
@@ -104,7 +118,13 @@ let rec sub_sym_expr_' (x : Symbol.sym) (v : cn_expr_) (e : cn_expr_) : cn_expr_
   | CNExpr_array_shift (e1, ty, e2) -> CNExpr_array_shift (sub_sym_expr' x v e1, ty, sub_sym_expr' x v e2)
   | CNExpr_call (f, args) -> CNExpr_call (f, List.map (sub_sym_expr' x v) args)
   | CNExpr_cons (constr, exprs) -> CNExpr_cons (constr, List.map (fun (x', e') -> (x', sub_sym_expr' x v e')) exprs)
-  | CNExpr_each (x', ty, r, e') when not (Symbol.equal_sym x x') -> CNExpr_each (x', ty, r, sub_sym_expr' x v e')
+  | CNExpr_each (x', ty, rng, e') ->
+    CNExpr_each (
+      x', ty, rng,
+      if Symbol.equal_sym x x'
+      then e'
+      else sub_sym_expr' x v e'
+    )
   | CNExpr_let (x', e1, e2) ->
     CNExpr_let (
       x',
@@ -113,7 +133,7 @@ let rec sub_sym_expr_' (x : Symbol.sym) (v : cn_expr_) (e : cn_expr_) : cn_expr_
       then e2
       else sub_sym_expr' x v e2
     )
-  | CNExpr_match (e', ms) -> CNExpr_match (sub_sym_expr' x v e', List.map (fun (p, e') -> (p, sub_sym_expr' x v e')) ms)
+  | CNExpr_match (e', ms) -> failwith "TODO: Support match in test generation (Generator.sub_sym_expr_')"
   | CNExpr_ite (e1, e2, e3) -> CNExpr_ite (sub_sym_expr' x v e1, sub_sym_expr' x v e2, sub_sym_expr' x v e3)
   | CNExpr_good (ty, e') -> CNExpr_good (ty, sub_sym_expr' x v e')
   | CNExpr_deref e' -> CNExpr_deref (sub_sym_expr' x v e')
@@ -125,7 +145,6 @@ let rec sub_sym_expr_' (x : Symbol.sym) (v : cn_expr_) (e : cn_expr_) : cn_expr_
   | CNExpr_sizeof _
   | CNExpr_offsetof _
   | CNExpr_addr _
-  | CNExpr_each _ 
   | CNExpr_default _ -> e
 
 and sub_sym_expr' (x : Symbol.sym) (v : cn_expr_) (e : cn_expr) : cn_expr =
@@ -224,6 +243,26 @@ type cn_value =
   | CNVal_struct of (string * (Ctype.ctype * cn_value)) list
   | CNVal_constr of Symbol.identifier * (string * cn_value) list
 
+let rec string_of_value (v : cn_value) : string =
+  match v with
+  | CNVal_null -> "NULL"
+  | CNVal_bits ((CN_signed, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
+  | CNVal_bits ((CN_unsigned, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n) ^ "U"
+  | CNVal_bits ((CN_signed, bits), n) when bits <= 32 -> Int64.to_string (Z.to_int64 n) ^ "L"
+  | CNVal_bits ((CN_unsigned, bits), n) when bits <= 32 -> string_of_int (Z.to_int n) ^ "UL"
+  | CNVal_bits ((CN_signed, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "LL"
+  | CNVal_bits ((CN_unsigned, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "ULL"
+
+  | CNVal_struct ms -> "{ " ^ String.concat ", " (List.map (fun (x, (ty, v)) -> "." ^ x ^ ": " ^ string_of_ctype ty ^ " = " ^ string_of_value v) ms) ^ "}"
+
+  | CNVal_bool b -> string_of_bool b
+  | CNVal_integer n -> Int64.to_string (Z.to_int64 n)
+
+  | CNVal_constr (_, ms) -> "{ " ^ String.concat ", " (List.map (fun (x, v) -> x ^ " = " ^ string_of_value v) ms) ^ "}"
+  | CNVal_unit -> "()"
+  | CNVal_bits _ -> failwith "unreachable (Generator.string_of_value)"
+
+
 type context = (Symbol.sym * (Ctype.ctype * cn_value)) list
 type heap = (int * (Ctype.ctype * cn_value)) list
 
@@ -248,11 +287,28 @@ let rec eval_expr_ (ctx : context) (e : cn_expr_) : cn_value =
     let v2 = eval_expr ctx e2 in
     (match op, v1, v2 with
     | CN_add, CNVal_integer n1, CNVal_integer n2 ->
-      CNVal_integer (Z.(+) n1 n2)
-    | CN_add, CNVal_bits ((CN_signed, 32), n1), CNVal_bits ((CN_signed, 32), n2) ->
-      CNVal_bits ((CN_signed, 32), Z.of_int32 (Int32.add (Z.to_int32 n1) (Z.to_int32 n2)))
-    | CN_add, CNVal_bits ((CN_signed, 64), n1), CNVal_bits ((CN_signed, 64), n2) ->
-      CNVal_bits ((CN_signed, 64), Z.of_int64 (Int64.add (Z.to_int64 n1) (Z.to_int64 n2)))
+      CNVal_integer (Z.add n1 n2)
+    | CN_add, CNVal_bits ((sgn1, bits1), n1), CNVal_bits ((sgn2, bits2), n2)
+      when Stdlib.(=) sgn1 sgn2 && bits1 = bits2 ->
+      CNVal_bits ((sgn1, bits1), Z.add n1 n2)
+
+    | CN_sub, CNVal_integer n1, CNVal_integer n2 ->
+      CNVal_integer (Z.sub n1 n2)
+    | CN_sub, CNVal_bits ((sgn1, bits1), n1), CNVal_bits ((sgn2, bits2), n2)
+      when Stdlib.(=) sgn1 sgn2 && bits1 = bits2 ->
+      CNVal_bits ((sgn1, bits1), Z.sub n1 n2)
+
+    | CN_mul, CNVal_integer n1, CNVal_integer n2 ->
+      CNVal_integer (Z.mul n1 n2)
+    | CN_mul, CNVal_bits ((sgn1, bits1), n1), CNVal_bits ((sgn2, bits2), n2)
+      when Stdlib.(=) sgn1 sgn2 && bits1 = bits2 ->
+      CNVal_bits ((sgn1, bits1), Z.mul n1 n2)
+
+    | CN_div, CNVal_integer n1, CNVal_integer n2 ->
+      CNVal_integer (Z.div n1 n2)
+    | CN_div, CNVal_bits ((sgn1, bits1), n1), CNVal_bits ((sgn2, bits2), n2)
+      when Stdlib.(=) sgn1 sgn2 && bits1 = bits2 ->
+      CNVal_bits ((sgn1, bits1), Z.div n1 n2)
 
     | CN_equal, _, _ ->
       CNVal_bool (Stdlib.(=) v1 v2)
@@ -276,12 +332,32 @@ let rec eval_expr_ (ctx : context) (e : cn_expr_) : cn_value =
       CNVal_bool (b1 || b2)
     | CN_and, CNVal_bool b1, CNVal_bool b2 ->
       CNVal_bool (b1 && b2)
-    | _ -> failwith "unsupported binop (Generator.eval_expr_)")
+    | _ -> failwith ("unsupported binop (Generator.eval_expr_) '" ^ string_of_expr_ e ^ "'"))
   | CNExpr_not e' ->
     let v = eval_expr ctx e' in
     (match v with
     | CNVal_bool b -> CNVal_bool (not b)
     | _ -> failwith "cannot 'not' a non-bool value (Generator.eval_expr_)")
+  
+  | CNExpr_call (fsym, [e']) when Stdlib.(=) (get_builtin_name fsym) (Some "is_null") ->
+    let v = eval_expr ctx e' in
+    (match v with
+    | CNVal_bits (_, n)
+    | CNVal_integer n -> CNVal_bool (Z.equal n Z.zero)
+    | CNVal_null -> CNVal_bool true
+    | _ -> CNVal_bool false)
+
+  | CNExpr_call (fsym, [e1; e2]) when Stdlib.(=) (get_builtin_name fsym) (Some "mod") ->
+    let v1 = eval_expr ctx e1 in
+    let v2 = eval_expr ctx e2 in
+    (match v1, v2 with
+    | CNVal_bits ((sgn1, bits1), n1), CNVal_bits ((sgn2, bits2), n2)
+      when Stdlib.(=) sgn1 sgn2 && bits1 = bits2 ->
+      CNVal_bits ((sgn1, bits1), Z.(mod) n1 n2)
+    | CNVal_integer n1, CNVal_integer n2 ->
+      CNVal_integer (Z.(mod) n1 n2)
+    | _ -> failwith ("Invalid values for `mod` '" ^ string_of_value v1 ^ "', '" ^ string_of_value v2 ^ "'"))
+
   | _ -> failwith ("unsupported expression `" ^ string_of_expr_ e ^ "` (Generator.eval_expr_)")
 
 and eval_expr (ctx : context) (e : cn_expr) : cn_value =
@@ -345,19 +421,11 @@ let string_of_goal ((vars, ms, locs, cs) : goal) : string =
   "Locs: " ^ string_of_locations locs ^ "\n" ^
   "Cs: " ^ string_of_constraints cs ^ "\n"
 
-let get_builtin_name fsym =
-  let (name, _) =
-    List.find
-      (fun (_, fsym') -> Sym.equal fsym fsym')
-      B.cn_builtin_fun_names
-  in
-  name
-
 let apply_builtins e =
   let Cn.CNExpr (_, e) = e in
   let res =
     match e with
-    | CNExpr_call (fsym, [e]) when String.equal (get_builtin_name fsym) "is_null"->
+    | CNExpr_call (fsym, [e]) when Stdlib.(=) (get_builtin_name fsym) (Some "is_null") ->
       Cn.CNExpr_binop (CN_equal, e, CNExpr (Cerb_location.unknown, CNExpr_const CNConst_NULL))
     | _ -> e
   in
@@ -645,11 +713,22 @@ let indirect_members ((vars, ms, locs, cs) : goal) : goal =
     List.map (fun e -> indirect_members_expr_ ms e) cs
   )
 
+let rec listify_constraints' (c : cn_expr_) : constraints =
+  match c with
+  | CNExpr_binop (CN_and, CNExpr (_, e1), CNExpr (_, e2)) ->
+    listify_constraints' e1 @ listify_constraints' e2
+  | _ -> [c]
+
+let listify_constraints (cs : constraints) : constraints =
+  List.map listify_constraints' cs |> List.flatten
+
 let rec simplify' (g : goal) : goal =
   let og = g in
   let g = inline_constants g in
   let g = inline_aliasing g in
-  let g = remove_tautologies g in
+  let (vars, ms, locs, cs) = remove_tautologies g in
+  let cs = listify_constraints cs in
+  let g = (vars, ms, locs, cs) in
   if Stdlib.(<>) og g
   then
     simplify' g
@@ -685,14 +764,14 @@ let rec type_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ty : Cty
         then Cn.CN_signed
         else Cn.CN_unsigned
       in
-      return (CNVal_bits ((sgn, Memory.size_of_integer_type ity), Z.of_int n))
+      return (CNVal_bits ((sgn, Memory.size_of_integer_type ity |> Int.mul 8), Z.of_int n))
     | Struct n ->
       (match List.assoc (Symbol.equal_sym) n ail_prog.tag_definitions with
       | (_, _, StructDef (members, _)) ->
         let f (Symbol.Identifier (_, id), (_, _, _, ty')) =
           if is_pointer_ctype ty'
           then
-            return (id, failwith "unreachable")
+            return (id, failwith "unreachable (Generator.type_gen)")
           else
             type_gen ail_prog ty' >>= fun v ->
             return (id, (ty', v))
@@ -700,12 +779,12 @@ let rec type_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ty : Cty
         flatten_l (List.map f members) >>= fun ms ->
         return (CNVal_struct ms)
       | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
-    | Pointer _ ->
-      failwith (
+    | Pointer _ -> type_gen ail_prog (Ctype ([], Basic (Integer Ptraddr_t)))
+      (* failwith (
         "Tried using type-based generator on pointer type '" ^
         string_of_ctype_ cty ^
         "' (Generator.type_gen)"
-      )
+      ) *)
     | _ ->
       failwith (
         "Unsupported type '" ^
@@ -727,25 +806,6 @@ let rec check_constraints (ctx : context) (cs : constraints) : constraints optio
       Option.map (fun cs -> c::cs) (check_constraints ctx cs'))
   | [] -> Some []
 ;;
-
-let rec string_of_value (v : cn_value) : string =
-  match v with
-  | CNVal_null -> "NULL"
-  | CNVal_bits ((CN_signed, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
-  | CNVal_bits ((CN_unsigned, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n) ^ "U"
-  | CNVal_bits ((CN_signed, bits), n) when bits <= 32 -> Int64.to_string (Z.to_int64 n) ^ "L"
-  | CNVal_bits ((CN_unsigned, bits), n) when bits <= 32 -> string_of_int (Z.to_int n) ^ "UL"
-  | CNVal_bits ((CN_signed, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "LL"
-  | CNVal_bits ((CN_unsigned, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "ULL"
-
-  | CNVal_struct ms -> "{ " ^ String.concat ", " (List.map (fun (x, (ty, v)) -> "." ^ x ^ ": " ^ string_of_ctype ty ^ " = " ^ string_of_value v) ms) ^ "}"
-
-  | CNVal_bool b -> string_of_bool b
-  | CNVal_integer n -> Int64.to_string (Z.to_int64 n)
-
-  | CNVal_constr (_, ms) -> "{ " ^ String.concat ", " (List.map (fun (x, v) -> x ^ " = " ^ string_of_value v) ms) ^ "}"
-  | CNVal_unit -> "()"
-  | CNVal_bits _ -> failwith "unreachable"
 
 let string_of_context (ctx : context) : string =
   "{ " ^ (
@@ -895,6 +955,375 @@ let concretize ail_prog (g : goal) : (context * heap) QCheck.Gen.t =
     concretize_heap ctx g
   )
 
+(***************)
+(* Compilation *)
+(***************)
+
+let rec get_free_vars_ (e : cn_expr_) : Symbol.sym list =
+  match e with
+  | CNExpr_var x
+  | CNExpr_value_of_c_atom (x, _) -> [x]
+
+  | CNExpr_memberof (e', _)
+  | CNExpr_membershift (e', _, _)
+  | CNExpr_cast (_, e')
+  | CNExpr_good (_, e')
+  | CNExpr_deref e'
+  | CNExpr_unchanged e'
+  | CNExpr_at_env (e', _)
+  | CNExpr_not e' -> get_free_vars e'
+
+  | CNExpr_list es -> List.fold_left (fun acc e -> acc @ get_free_vars e) [] es
+  | CNExpr_record fs -> List.fold_left (fun acc (_, e') -> acc @ get_free_vars e') [] fs
+  | CNExpr_memberupdates (e', xes) -> List.fold_left (fun acc (_, e') -> acc @ get_free_vars e') (get_free_vars e') xes
+  | CNExpr_arrayindexupdates (e', ees) -> List.fold_left (fun acc (e1, e2) -> acc @ get_free_vars e1 @ get_free_vars e2) (get_free_vars e') ees
+  | CNExpr_binop (_, e1, e2)
+  | CNExpr_array_shift (e1, _, e2) -> get_free_vars e1 @ get_free_vars e2
+  | CNExpr_call (_, args) -> List.fold_left (fun acc arg -> acc @ get_free_vars arg) [] args
+  | CNExpr_cons (_, es) -> List.fold_left (fun acc (_, e') -> acc @ get_free_vars e') [] es
+  | CNExpr_each (x, _, _, e') -> List.filter (fun x' -> not (Symbol.equal_sym x x')) (get_free_vars e')
+  | CNExpr_let (x', e1, e2) ->
+    let xs1 = get_free_vars e1 in
+    let xs2 = List.filter (fun x -> not (Symbol.equal_sym x x')) (get_free_vars e2) in
+    xs1 @ xs2
+  | CNExpr_match _ -> failwith "TODO: Support match in test generation (Generator.get_free_vars_)"
+  | CNExpr_ite (e1, e2, e3) -> get_free_vars e1 @ get_free_vars e2 @ get_free_vars e3
+
+  | CNExpr_const _
+  | CNExpr_sizeof _
+  | CNExpr_offsetof _
+  | CNExpr_addr _
+  | CNExpr_default _ -> []
+
+and get_free_vars (e : cn_expr) : Symbol.sym list =
+  let CNExpr (_, e) = e in get_free_vars_ e
+;;
+
+type gen =
+  | Arbitrary of Ctype.ctype
+  | Return of Ctype.ctype * cn_expr
+  | Filter of gen * Sym.sym * cn_expr
+  | Map of Sym.sym * Ctype.ctype * cn_expr * gen
+  | Alloc of Ctype.ctype * Sym.sym * gen
+
+let rec string_of_gen (g : gen) : string =
+  match g with
+  | Arbitrary ty -> "arbitrary<" ^ string_of_ctype ty ^ ">"
+  | Return (ty, e) -> "return<" ^ string_of_ctype ty ^ ">(" ^ string_of_expr e ^ ")"
+  | Filter (g', x, e) -> "filter(" ^ string_of_gen g' ^ ", |" ^ Pp_symbol.to_string_pretty x ^ "| " ^ string_of_expr e ^ ")"
+  | Map (x, ty, e, g') -> "map(" ^ "|" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ "| " ^ string_of_expr e ^ ", " ^ string_of_gen g' ^ ")"
+  | Alloc (ty, x, g') -> "alloc((" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ ")," ^ string_of_gen g' ^ ")"
+;;
+
+type gen_context = (Symbol.sym * gen) list
+
+let return_gen (ty : Ctype.ctype) (e : cn_expr) : gen =
+  Return (ty, e)
+
+let filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
+  match cs with
+  | c::cs' ->
+    Filter (
+      Arbitrary ty, x,
+      List.fold_left (
+        fun acc c' ->
+          Cn.CNExpr (
+            Cerb_location.unknown,
+            CNExpr_binop (
+              CN_and, acc,
+              CNExpr (Cerb_location.unknown, c'))))
+        (Cn.CNExpr (Cerb_location.unknown, c)) cs')
+  | [] -> Arbitrary ty
+;;
+
+let range_gen (x : Symbol.sym) (ty : Ctype.ctype) (min : cn_expr) (max : cn_expr) (cs : constraints) : gen =
+  let l = Cerb_location.unknown in
+  let y = Symbol.fresh () in
+  (* max - min *)
+  let e = Cn.CNExpr (l, CNExpr_binop (CN_sub, max, min)) in
+  (* mod(y, (max - min)) *)
+  let e = Cn.CNExpr (l, CNExpr_call (get_builtin_sym "mod" |> Option.get, [CNExpr (l, CNExpr_var y); e])) in
+  (* mod(y, (max - min)) + min *)
+  let e = Cn.CNExpr (l, CNExpr_binop (CN_add, e, min)) in
+  (* map y (mod(y, (max - min)) + min) arbitrary *)
+  let gen = Map (y, ty, e, Arbitrary ty) in
+  (* filter (map y (mod(y, (max - min)) + min) arbitrary) cs *)
+  match cs with
+  | c::cs' ->
+    Filter (
+      gen, x,
+      List.fold_left (
+        fun acc c' ->
+          Cn.CNExpr (
+            l,
+            CNExpr_binop (
+              CN_and, acc,
+              CNExpr (l, c'))))
+        (Cn.CNExpr (l, c)) cs')
+  | [] -> gen
+;;
+
+let mult_range_gen (x : Symbol.sym) (ty : Ctype.ctype) (mult : cn_expr) (min : cn_expr) (max : cn_expr) (cs : constraints) : gen =
+  let l = Cerb_location.unknown in
+  let y = Symbol.fresh () in
+  let e_y = Cn.CNExpr (l, CNExpr_var y) in
+  (* mult * y *)
+  let e_map = Cn.CNExpr (l, CNExpr_binop (CN_mul, mult, e_y)) in
+  (* min / mult *)
+  let e_min = Cn.CNExpr (l, CNExpr_binop (CN_div, min, mult)) in
+  (* max / mult *)
+  let e_max = Cn.CNExpr (l, CNExpr_binop (CN_div, max, mult)) in
+  (* range (min / mult) (max / mult) *)
+  let gen = range_gen y ty e_min e_max [] in
+  (* map y (mult * y) (range (min / mult) (max / mult)) *)
+  let gen = Map (y, ty, e_map, gen) in
+  (* filter (map y (mult * y) (range (min / mult) (max / mult))) cs *)
+  match cs with
+  | c::cs' ->
+    Filter (
+      gen, x,
+      List.fold_left (
+        fun acc c' ->
+          Cn.CNExpr (
+            l,
+            CNExpr_binop (
+              CN_and, acc,
+              CNExpr (l, c'))))
+        (Cn.CNExpr (l, c)) cs')
+  | [] -> gen
+;;
+
+let get_const_expr (ty : Ctype.ctype) (n : Z.t) : cn_expr =
+  let l = Cerb_location.unknown in
+  let Ctype (_, cty) = ty in
+  match cty with
+  | Basic (Integer ity) ->
+    let sgn =
+      if Memory.is_signed_integer_type ity
+      then Cn.CN_signed
+      else Cn.CN_unsigned
+    in
+    CNExpr (l, CNExpr_const (CNConst_bits ((sgn, Memory.size_of_integer_type ity |> Int.mul 8), n)))
+  | _ -> failwith ("Tried to generate multiple of invalid type '" ^ string_of_ctype_ cty ^ "'")
+
+let get_min_max_expr (ty : Ctype.ctype) : cn_expr * cn_expr =
+  let Ctype (_, cty) = ty in
+  match cty with
+  | Basic (Integer ity) ->
+    (get_const_expr ty (Memory.min_integer_type ity), get_const_expr ty (Memory.max_integer_type ity))
+  | _ -> failwith ("Tried to generate multiple of invalid type '" ^ string_of_ctype_ cty ^ "'")
+;;
+
+(* let mult_gen (x : Symbol.sym) (ty : Ctype.ctype) (mult : cn_expr) (cs : constraints) : gen =
+  let Ctype (_, cty) = ty in
+  match cty with
+  | Basic (Integer ity) ->
+    let sgn =
+      if Memory.is_signed_integer_type ity
+      then Cn.CN_signed
+      else Cn.CN_unsigned
+    in
+    let l = Cerb_location.unknown in
+    let get_val n = Cn.CNExpr (l, CNExpr_const (CNConst_bits ((sgn, Memory.size_of_integer_type ity |> Int.mul 8), n))) in
+    let min = get_val (Memory.min_integer_type ity) in
+    let max = get_val (Memory.max_integer_type ity) in
+    mult_range_gen x ty mult min max cs
+  | cty -> failwith ("Tried to generate multiple of invalid type '" ^ string_of_ctype_ cty ^ "'") *)
+
+let compile_gen' (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constraints) : gen =
+  match e with
+  | CNExpr (_, CNExpr_var x') when Sym.equal_sym x x' ->
+    let l = Cerb_location.unknown in
+    let mult = List.find_map (
+      fun (c : cn_expr_) ->
+        match c with
+        | CNExpr_binop (
+            CN_equal,
+            CNExpr (_, CNExpr_call (fsym, [CNExpr (_, CNExpr_var x'); e2])),
+            CNExpr (_, CNExpr_const (CNConst_bits (_, n))))
+        | CNExpr_binop (
+          CN_equal,
+          CNExpr (_, CNExpr_call (fsym, [CNExpr (_, CNExpr_var x'); e2])),
+          CNExpr (_, CNExpr_const (CNConst_integer n)))
+        | CNExpr_binop (
+            CN_equal,
+            CNExpr (_, CNExpr_const (CNConst_bits (_, n))),
+            CNExpr (_, CNExpr_call (fsym, [CNExpr (_, CNExpr_var x'); e2])))
+        | CNExpr_binop (
+          CN_equal,
+          CNExpr (_, CNExpr_const (CNConst_integer n)),
+          CNExpr (_, CNExpr_call (fsym, [CNExpr (_, CNExpr_var x'); e2])))
+          when
+            Stdlib.(=) (get_builtin_name fsym) (Some "mod") &&
+            Sym.equal_sym x x' &&
+            Z.equal n (Z.of_int 0)->
+          Some e2
+        | _ -> None
+        ) cs
+    in
+    let min = List.find_map (
+      fun (c : cn_expr_) ->
+        match c with
+        | CNExpr_binop (CN_gt, CNExpr (_, CNExpr_var x'), e')
+        | CNExpr_binop (CN_lt, e', CNExpr (_, CNExpr_var x'))
+          when Sym.equal_sym x x' ->
+          let e_one = get_const_expr ty (Z.of_int 1) in
+          Some (Cn.CNExpr (l, CNExpr_binop (CN_add, e', e_one)))
+        | CNExpr_binop (CN_ge, CNExpr (_, CNExpr_var x'), e')
+        | CNExpr_binop (CN_le, e', CNExpr (_, CNExpr_var x'))
+          when Sym.equal_sym x x' ->
+          Some e'
+        | _ -> None
+        ) cs
+    in
+    let max = List.find_map (
+      fun (c : cn_expr_) ->
+        match c with
+        | CNExpr_binop (CN_gt, e', CNExpr (_, CNExpr_var x'))
+        | CNExpr_binop (CN_lt, CNExpr (_, CNExpr_var x'), e')
+          when Sym.equal_sym x x' ->
+          let e_one = get_const_expr ty (Z.of_int 1) in
+          Some (Cn.CNExpr (l, CNExpr_binop (CN_sub, e', e_one)))
+        | CNExpr_binop (CN_ge, e', CNExpr (_, CNExpr_var x'))
+        | CNExpr_binop (CN_le, CNExpr (_, CNExpr_var x'), e')
+          when Sym.equal_sym x x' ->
+          Some e'
+        | _ -> None
+        ) cs
+    in
+    (match mult with
+    | Some mult ->
+      let (def_min, def_max) = get_min_max_expr ty in
+      mult_range_gen x ty mult
+        (Option.value min ~default:def_min)
+        (Option.value max ~default:def_max) cs
+    | None ->
+      if Option.is_some min || Option.is_some max
+      then
+        let (def_min, def_max) = get_min_max_expr ty in
+        range_gen x ty
+          (Option.value min ~default:def_min)
+          (Option.value max ~default:def_max) cs
+      else
+        Arbitrary ty)
+
+  | _ -> return_gen ty e
+;;
+
+let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constraints) (loc : Sym.sym option) : gen =
+  let res =
+    match loc with
+    | Some loc ->
+      let gen = compile_gen' x ty e cs in
+      Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), loc, gen)
+    | None -> compile_gen' x ty e cs
+  in
+  let loc = Option.map (fun l -> "Some(" ^ Pp_symbol.to_string_pretty l ^ ")") loc |> Option.value ~default:"None" in
+  res
+;;
+
+let rec compile_loop (gtx : gen_context) (locs : locations) (cs : constraints) (iter : variables) : gen_context * variables =
+  let get_loc x = List.find_map (
+      fun (e, y) ->
+        if Sym.equal x y
+        then
+          match e with
+          | Cn.CNExpr_var z
+          | Cn.CNExpr_value_of_c_atom (z, _) -> Some z
+          | _ -> None
+        else
+          None
+    ) locs
+  in
+  match iter with
+  | (x, (ty, e))::iter' ->
+    let var_in_gtx y = List.find_opt (fun (z, _) -> Symbol.equal_sym y z) gtx |> Option.is_some in
+    let relevant_cs = List.filter (fun c -> List.exists (Sym.equal_sym x) (get_free_vars_ c)) cs in
+    let no_free_vars = List.for_all (
+      fun c -> List.for_all
+        (fun y -> Sym.equal_sym x y || var_in_gtx y)
+        (get_free_vars_ c)) relevant_cs in
+    if no_free_vars
+    then
+      let gen = compile_gen x ty (CNExpr (Cerb_location.unknown, e)) cs (get_loc x) in
+      compile_loop ((x, gen)::gtx) locs cs iter'
+    else
+      let (gtx, iter') = compile_loop gtx locs cs iter' in
+      (gtx, (x, (ty, e))::iter')
+  | [] -> (gtx, iter)
+
+let rec compile' (gtx : gen_context) (vars : variables) (locs : locations) (cs : constraints) : gen_context =
+  let (gtx, vars) = compile_loop gtx locs cs vars in
+  if List.non_empty vars
+  then compile' gtx vars locs cs
+  else gtx
+
+let compile ((vars, _, locs, cs) : goal) : gen_context =
+  let vars = List.filter (
+    fun (x, _) -> List.for_all (
+      fun (e, _) ->
+        match e with
+        | Cn.CNExpr_var y
+        | Cn.CNExpr_value_of_c_atom (y, _) ->
+          not (Sym.equal_sym x y)
+        | e -> true) locs) vars
+  in
+  compile' [] vars locs cs |> List.rev
+
+let generate_location (max_size : int) (ps : int list) : int QCheck.Gen.t =
+  QCheck.Gen.(
+    int_range 1 (max_size - List.length ps) >>= fun n ->
+    return (
+      ps
+      |> List.sort compare
+      |> List.fold_left (fun acc i -> if acc >= i then acc + 1 else acc) n
+    )
+  )
+
+let rec interpret_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (x : Symbol.sym) (g : gen) (ctx : context) (h : heap) : (context * heap) QCheck.Gen.t =
+  QCheck.Gen.(
+    match g with
+    | Arbitrary ty ->
+      type_gen ail_prog ty >>= fun v ->
+      return ((x, (ty, v))::ctx, h)
+    | Return (ty, e) -> return ((x, (ty, eval_expr ctx e))::ctx, h)
+    | Filter (g', y, e) ->
+      if not (Sym.equal_sym x y) then failwith "Mismatch" else
+      interpret_gen ail_prog x g' ctx h >>= fun (ctx', h') ->
+      (match eval_expr ctx' e with
+      | CNVal_bool b ->
+        if b
+        then
+          return (ctx', h')
+        else
+          interpret_gen ail_prog x g ctx h
+      | _ -> failwith "Type error")
+    | Map (y, ty, e, g) ->
+      interpret_gen ail_prog y g ctx h >>= fun (ctx, h) ->
+      return ((x, (ty, eval_expr ctx e))::ctx, h)
+    | Alloc (ty, loc, g') ->
+      interpret_gen ail_prog x g' ctx h >>= fun (ctx, h) ->
+      (* TODO: Calculate max heap size *)
+      generate_location 10000 (List.map fst h) >>= fun l ->
+      return ((loc, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int l)))::ctx, (l, List.assoc Sym.equal_sym x ctx)::h)
+  )
+
+let rec interpret' (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (gtx : gen_context) (ctx : context) (h : heap) : (context * heap) QCheck.Gen.t =
+  QCheck.Gen.(
+    match gtx with
+    | (x, g)::gtx' ->
+      interpret_gen ail_prog x g ctx h >>= fun (ctx, h) ->
+      interpret' ail_prog gtx' ctx h
+    | [] -> return (ctx, h)
+  )
+
+let interpret (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (gtx : gen_context) : (context * heap) QCheck.Gen.t =
+  interpret' ail_prog gtx [] []
+
+(************************)
+(* Unit Test Generation *)
+(************************)
+
 let generate (depth : int) ail_prog (psi : (Symbol.sym * cn_predicate) list) (args : (Symbol.sym * Ctype.ctype) list) (c : cn_condition list) : (context * heap) list QCheck.Gen.t =
   let vars, ms =
     (List.fold_left
@@ -906,7 +1335,16 @@ let generate (depth : int) ail_prog (psi : (Symbol.sym * cn_predicate) list) (ar
   let gs = collect_conditions depth ail_prog psi vars ms c in
   gs >>= fun g ->
   let g = simplify g in
-  lift_gen (concretize ail_prog g)
+  let gtx = compile g in
+  lift_gen QCheck.Gen.(
+    interpret ail_prog gtx >>= fun (ctx, h) ->
+    let ctx = List.filter (
+      fun (x, _) ->
+        List.assoc_opt Sym.equal_sym x args
+        |> Option.is_some) ctx
+    in
+    return (ctx, h)
+  )
 
 let rec codify_value' (root : string) (v : cn_value) : string =
   match v with
@@ -931,7 +1369,7 @@ let rec codify_value' (root : string) (v : cn_value) : string =
 
   | CNVal_constr _ 
   | CNVal_unit
-  | CNVal_bits _ -> failwith "unreachable"
+  | CNVal_bits _ -> failwith ("unreachable (Generator.codify_value')")
 
 and codify_value root ty v =
   if is_pointer_ctype ty
