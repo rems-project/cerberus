@@ -1971,18 +1971,22 @@ rel_expr:
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_ge, e1, e2))) }
 
-bool_bin_expr:
+    
+bool_and_expr:
 | e= rel_expr
     { e }
-| e1= bool_bin_expr AMPERSAND_AMPERSAND e2= rel_expr
+| e1= bool_and_expr AMPERSAND_AMPERSAND e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
-| e1= bool_bin_expr PIPE_PIPE e2= rel_expr
+bool_or_expr:
+| e = bool_and_expr
+    { e }
+| e1= bool_or_expr PIPE_PIPE e2= bool_and_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
 list_expr:
-| e= bool_bin_expr
+| e= bool_or_expr
     { e }
 | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
