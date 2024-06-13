@@ -32,6 +32,7 @@ type resource_entry = {
 type where_report = {
     fnction: string;
     section: string;
+    loc_cartesian: ((int * int) * (int * int)) option;
     loc_head: string;
     loc_pos: string;
   }
@@ -115,11 +116,16 @@ let details_with_table summary detail_list = details summary (table_without_head
 (*     ) *)
 (*   ) *)
 
-let make_where where =
+let cartesian_to_string = function
+  | None -> ""
+  | Some ((start_line, start_col), (end_line, end_col)) ->
+      Printf.sprintf "%d:%d-%d:%d" start_line start_col end_line end_col
+
+let make_where ?(is_javascript=false) where =
   table ["function"; "section"; "location"; ""]
     [[where.fnction; 
       where.section; 
-      div ~clss:"loc" [where.loc_head]; 
+      div ~clss:"loc" [if is_javascript then cartesian_to_string where.loc_cartesian else where.loc_head]; 
       pre (where.loc_pos)]]
 
 let make_requested requested = 
@@ -269,7 +275,6 @@ html {
 }
 
 body {
-  padding: 0 10px 10px 10px;
   margin: 0;
   overflow: hidden;
 }
@@ -311,134 +316,39 @@ th {
   font-style: italic;
 }
 
-#pages .page { display: none }
-#pages .page:target { display: block }
-
-#pages .pagelinks .button, 
-#pages .pagelinks .inactive_button { 
-  padding-top: 5px; 
-  padding-bottom: 5px;
-  padding-left: 10px; 
-  padding-right: 10px;
-  display: inline-block;
-}
-
-/* @media (prefers-color-scheme: dark) {
-
-html {
-    background-color: black;
-    color: lightgray;
-}
-
-table, th, td {
-    border-color: #303030;
-}
-
-tr {
-    background-color: #181818;
-}
-
-th {
-    background-color: #252525;
-    border-bottom: 1px solid #303030;
-}
-
-tr:hover {
-    background-color: #101044;
-}
-
-#pages .pagelinks .button, 
-#pages .pagelinks .inactive_button { 
-    background-color: white;
-    border: 1px solid #EEEEEE;
-}
-
-#pages .pagelinks .button:hover {
-    background-color: #BBBBBB;
-}
-
-#pages .pagelinks .button a { 
-    color: black;
-    text-decoration: none;
-}
-
-.pagelinks .inactive_button {
-    color: #AAAAAA;
-}
-
-} */
-
-
-
-/* @media (prefers-color-scheme: light) { */
-
-html {
-  background-color: white;
-  color: black;
-}
-
-table, th, td {
-  border-color: #E9E9E9;
-}
-
-tr {
-  background-color: #F8F8F8;
-}
-
-th {
-  background-color: #F0F0F0;
-  border-bottom: 1px solid #E9E9E9;
-}
-
-tr:hover {
-  background-color: #E2F0FF;
-}
-
-/* #pages .pagelinks .button, 
-#pages .pagelinks .inactive_button { 
-  background-color: black;
-  border: 1px solid #111111;
-}
-
-#pages .pagelinks .button:hover {
-  background-color: #444444;
-}
-
-#pages .pagelinks .button a { 
-  color: white;
-  text-decoration: none;
-}
-
-.pagelinks .inactive_button {
-  color: #555555;
-} */
-/* } */
-
-.hl {
-  display: inline;
-  background-color: lightpink;
-/*  text-decoration: red wavy underline 1px; */
-}
-
 #root {
   display: flex;
   height: 100vh;
 }
 
 #menu {
+  padding-left: 5px;
   padding-top: 5px;
-  padding-bottom: 10px;
+  padding-bottom: 5px;
+  background-color: lavender;
+}
+
+#pageinfo {
+  padding-top: 5px;
+  padding-right: 5px;
+  float: right;
 }
 
 #cn_state {
   width: 50%;
-  overflow:scroll;
+  align-content: flex-start;
+  display: grid;
+}
+
+#pages {
+  padding: 10px;
+  overflow-y:scroll;
 }
 
 #cn_code {
   width: 50%;
-  overflow:scroll;
-  padding: 5px;
+  overflow-y:scroll;
+  /* padding: 5px; */
   font-family: monospace;
   white-space-collapse: preserve;
   /* text-wrap: nowrap; */
@@ -446,18 +356,111 @@ tr:hover {
 }
 
 .nb {
+  padding-left: 5px;
+  /* TODO this will clip if there are more than 999 lines */
+  width: 35px;
   color: rgb(150, 150, 150);
+  background-color: rgb(220, 220, 220);
 }
 
 .line {
   padding-left: 8px;
   /* overflow:scroll; */
 }
+
+@media (prefers-color-scheme: dark) {
+  html {
+    background-color: black;
+    color: lightgray;
+  }
+
+  table, th, td {
+    border-color: #303030;
+  }
+
+  tr {
+    background-color: #181818;
+  }
+
+  th {
+    background-color: #252525;
+    border-bottom: 1px solid #303030;
+  }
+
+  tr:hover {
+    background-color: #101044;
+  }
+
+  .hl {
+    display: inline;
+    background-color: rgb(123, 53, 64);
+  /*  text-decoration: red wavy underline 1px; */
+  }
+
+  #menu {
+    background-color: rgb(29, 29, 41);
+  }
+
+  #cn_code {
+    background-color: rgb(30, 30, 30);
+  }
+
+  .nb {
+    width: 35px;
+    color: rgb(150, 150, 150);
+    background-color: rgb(50, 50, 50);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  html {
+    background-color: white;
+    color: black;
+  }
+
+  table, th, td {
+    border-color: #E9E9E9;
+  }
+
+  tr {
+    background-color: #F8F8F8;
+  }
+
+  th {
+    background-color: #F0F0F0;
+    border-bottom: 1px solid #E9E9E9;
+  }
+
+  tr:hover {
+    background-color: #E2F0FF;
+  }
+
+  .hl {
+    display: inline;
+    background-color: lightpink;
+  /*  text-decoration: red wavy underline 1px; */
+  }
+
+  #menu {
+    background-color: lavender;
+  }
+
+  #cn_code {
+    background-color: rgb(235, 235, 235);
+  }
+
+  .nb {
+    width: 35px;
+    color: rgb(150, 150, 150);
+    background-color: rgb(220, 220, 220);
+  }
+}
 |}
 
 let script = {|
 var current_page = 1
 const menu = document.getElementById("menu").children
+const pageinfo = document.getElementById("pageinfo")
 const pages = document.getElementById("pages").children
 const cn_code = document.getElementById("cn_code")
 const n_pages = pages.length
@@ -492,17 +495,64 @@ function highlight(line, start_col, end_col) {
   })
 }
 
+function multiline_highlight(start_line, start_col, end_line, end_col) {
+  Array.from(cn_code.children).forEach((e, n) => {
+    div = e.children[1]
+    if (n < start_line || end_line < n) {
+      div.replaceChildren(div.textContent)
+    } else {
+      str = div.textContent
+      if (n == start_line) {
+        cn_code.scrollTop = div.offsetTop
+      }
+      hl = document.createElement("span")
+      hl.classList.add("hl")
+      // TODO: probably could be written nicer
+      if (start_line == end_line) {
+        before = str.substring(0, start_col)
+        hl.textContent = str.substring(start_col,end_col)
+        after = str.substring(end_col)
+        div.replaceChildren(before,hl,after)
+      } else if (n == start_line) {
+        before = str.substring(0, start_col)
+        hl.textContent = str.substring(start_col)
+        div.replaceChildren(before,hl)
+      } else if (n == end_line) {
+        hl.textContent = str.substring(0,end_col)
+        after = str.substring(end_col)
+        div.replaceChildren(hl,after)
+      } else {
+        hl.textContent = str
+        div.replaceChildren(hl)
+      }
+    }
+  })
+}
+
+// function decode_loc(n) {
+//   loc = pages[n-1].getElementsByClassName("loc")[0].textContent
+//   console.log("DECODING ==> ", loc)
+//   if (loc == "") {
+//     // console.log("NO LOC")
+//     clear_highlight()
+//   } else {
+//     xs = loc.split(" ")[1].split(":")
+//     line = xs[1]
+//     col = parseInt(xs[2])
+//     // console.log(`LOC ==> line: ${line} -- col: ${col}`)
+//     highlight(line, col, col+1)
+//   }
+// }
+
 function decode_loc(n) {
   loc = pages[n-1].getElementsByClassName("loc")[0].textContent
   if (loc == "") {
-    // console.log("NO LOC")
     clear_highlight()
   } else {
-    xs = loc.split(" ")[1].split(":")
-    line = xs[1]
-    col = parseInt(xs[2])
-    // console.log(`LOC ==> line: ${line} -- col: ${col}`)
-    highlight(line, col, col+1)
+    pair = loc.split("-")
+    start = pair[0].split(":")
+    end = pair[1].split(":")
+    multiline_highlight(start[0], start[1], end[0], end[1])
   }
 }
 
@@ -514,6 +564,7 @@ function goto_page(n) {
     pages[n-1].style.display = "block"
     current_page = n
 
+    pageinfo.textContent = `page ${current_page} of ${n_pages}`
     menu[0].disabled = false
     menu[1].disabled = false
     menu[2].disabled = false
@@ -574,7 +625,7 @@ init()
 
 let make_state2 (report: state_report) requested unproven predicate_hints i =
   div ~clss:"page" [
-    make_where report.where;
+    make_where ~is_javascript:true report.where;
     make_requested requested;
     make_unproven unproven;
     make_predicate_hints predicate_hints;
@@ -600,6 +651,7 @@ let mk_html ~title ~pages ~file_content ~n_pages= {|
 <input type="button" class="kbutton" value="prev" onclick="goto_prev()"/>
 <input type="button" class="kbutton" value="next" onclick="goto_next()"/>
 <input type="button" class="kbutton" value="last" onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>
+<div id="pageinfo"></div>
 </div>
 |} ^ pages ^ {|
 </div>

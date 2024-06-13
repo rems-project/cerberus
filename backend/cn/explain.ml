@@ -83,11 +83,11 @@ let state ctxt model_with_q extras =
       let head,pos = Loc.head_pos_of_location loc in
       ((prfx^" "^head), pos)
     in
-    let loc_head, loc_pos = 
+    let loc_cartesian, (loc_head, loc_pos) = 
       match ctxt.where.statement, ctxt.where.expression with
-      | _, Some loc -> head_pos "expr" loc
-      | Some loc, None -> head_pos "stmt" loc
-      | None, None -> "", "\n"
+      | _, Some loc -> Cerb_location.to_cartesian loc, head_pos "expr" loc
+      | Some loc, None -> Cerb_location.to_cartesian loc, head_pos "stmt" loc
+      | None, None -> None, ("", "\n")
     in
     let fnction = match ctxt.where.fnction with
       | None -> "(none)"
@@ -97,7 +97,7 @@ let state ctxt model_with_q extras =
       | None -> "(none)"
       | Some s -> Pp.plain (Where.pp_section s)
     in
-    let result = Report.{ fnction; section; loc_head; loc_pos; } in
+    let result = Report.{ fnction; section; loc_cartesian; loc_head; loc_pos; } in
     Cerb_colour.do_colour := cur_colour;
     result
   in
