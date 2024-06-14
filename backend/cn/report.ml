@@ -40,9 +40,9 @@ type where_report = {
 type state_report = {
     where: where_report;
     (* variables : var_entry list; *)
-    resources : Pp.doc list;
-    constraints: Pp.doc list;
-    terms : term_entry list;
+    resources : (Pp.doc list * Pp.doc list);
+    constraints: (Pp.doc list * Pp.doc list); (* interesting/uninteresting *)
+    terms : (term_entry list * term_entry list);
   }
 
 type report = {
@@ -83,7 +83,10 @@ let table_without_head rows = enclose "table" (list [table_body rows])
 let details summary more = enclose "details" (list [enclose "summary" summary; more])
 let oguard o f = match o with None -> "" | Some x -> f x 
 let lguard l f = match l with [] -> "" | _ -> f l
-let details_with_table summary detail_list = details summary (table_without_head detail_list)
+(* let details_with_table_without_head summary detail_list =  *)
+(*   details summary (table_without_head detail_list) *)
+(* let details_with_table summary head detail_list =  *)
+(*   details summary (table head detail_list) *)
 
 (* let make_per_stmt_trace {stmt; within} = *)
 (*   match within with  *)
@@ -162,32 +165,49 @@ let make_predicate_hints predicate_hints =
 (*         (List.map (fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources) *)
 (*   ) *)
 
-let make_resources resources = 
+
+
+
+let interesting_uninteresting 
+      (interesting_table, interesting_data)
+      (uninteresting_table, uninteresting_data)
+  =
+  match interesting_data, uninteresting_data with
+  | [], [] -> "(none)"
+  | _ , [] -> interesting_table
+  | [], _  -> details "more" uninteresting_table
+  | _ , _  -> interesting_table ^ details "more" uninteresting_table
+
+
+let make_resources (interesting, uninteresting) = 
+  let make = List.map (fun re -> [Pp.plain re; (* Pp.plain re.res_span *)]) in
+  let interesting_table = table_without_head (make interesting) in
+  let uninteresting_table = table_without_head (make uninteresting) in
   h 1 "Available resources" (
-    match resources with
-    | [] -> "(no available resources)"
-    | _ ->
-      table ["resource"; (* "byte span and match" *)]
-        (List.map (fun re -> [Pp.plain re; (* Pp.plain re.res_span *)]) resources)
+      interesting_uninteresting
+        (interesting_table, interesting)
+        (uninteresting_table, uninteresting)
   )
 
-let make_terms terms =
-  h 1 "Terms" (
-    match terms with
-    | [] -> "(none)"
-    | _ ->
-      table ["variable"; "value"]
-        (List.map (fun v -> [Pp.plain v.term; Pp.plain v.value]) terms)
-  )
 
-let make_constraints constraints = 
-  h 1 "Constraints" (
-    match constraints with
-    | [] -> "(none)"
-    | _ -> 
-      table ["constraint"]
-        (List.map (fun c -> [Pp.plain c]) constraints)
-  )
+
+let make_terms (interesting, uninteresting) =
+  let make = List.map (fun v -> [Pp.plain v.term; Pp.plain v.value]) in
+  let interesting_table = table ["variable"; "value"] (make interesting) in
+  let uninteresting_table = table ["variable"; "value"] (make uninteresting) in
+  h 1 "Terms" 
+    (interesting_uninteresting 
+       (interesting_table, interesting) 
+       (uninteresting_table, uninteresting))
+
+let make_constraints (interesting, uninteresting) = 
+  let make = List.map (fun c -> [Pp.plain c]) in
+  let interesting_table = table_without_head (make interesting) in
+  let uninteresting_table = table_without_head (make uninteresting) in
+  h 1 "Constraints" 
+    (interesting_uninteresting 
+       (interesting_table, interesting) 
+       (uninteresting_table, uninteresting))
 
 
 

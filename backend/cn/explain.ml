@@ -183,26 +183,67 @@ let state ctxt model_with_q extras =
     in
 
 
-    List.filter_map (fun it -> 
-        match evaluate it with
-        | Some value when not (IT.equal value it) ->
-           Some {term = IT.pp it; value = IT.pp value}
-        | Some _ -> 
-           None
-        | None -> 
-           None
-      ) (ITSet.elements subterms)
+    let filtered = 
+      List.filter_map (fun it -> 
+          match evaluate it with
+          | Some value when not (IT.equal value it) ->
+             Some (it, {term = IT.pp it; value = IT.pp value})
+          | Some _ -> 
+             None
+          | None -> 
+             None
+        ) (ITSet.elements subterms)
+    in
+
+    let interesting, uninteresting = 
+      List.partition (fun (it, _entry) ->
+          match IT.bt it with
+          | BT.Unit -> false
+          | BT.Loc -> false
+          | _ -> true
+        ) filtered
+    in
+
+    (List.map snd interesting, 
+     List.map snd uninteresting)
+
   in
 
-  let constraints = List.map LC.pp (LCSet.elements ctxt.constraints) in
+  let constraints =
+    let interesting, uninteresting = 
+      List.partition (fun lc ->
+          match lc with
+          (* | LC.T (IT (Aligned _, _, _)) -> false *)
+          | LC.T (IT (Representable _, _, _)) -> false
+          | LC.T (IT (Good _, _, _)) -> false
+          | _ -> true
+        ) (LCSet.elements ctxt.constraints)
+    in
+    (List.map LC.pp interesting, 
+     List.map LC.pp uninteresting)
+  in
 
   let resources =
     let (same_res, diff_res) = match extras.request with
       | None -> ([], get_rs ctxt)
       | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
     in
-    List.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res 
-    @ List.map RE.pp diff_res
+    let interesting_diff_res, uninteresting_diff_res = 
+      List.partition (fun (ret, _o) ->
+          match ret with
+          | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
+          | _ -> true
+        ) diff_res
+    in
+
+    let interesting = 
+      List.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res 
+      @ List.map RE.pp interesting_diff_res
+    in
+    let uninteresting = 
+      List.map RE.pp uninteresting_diff_res
+    in
+    (interesting, uninteresting)
   in
 
   { where;

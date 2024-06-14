@@ -26,7 +26,8 @@ let pp_predicate_name = function
   | Owned (ct, Uninit) -> !^"Block" ^^ angles (Sctypes.pp ct)
   | PName pn -> Sym.pp pn
 
-
+let alloc_name : predicate_name = 
+  PName (Sym.fresh_named "__CN_Alloc")
 
 
 type predicate_type = {
