@@ -138,7 +138,7 @@ let generate_c_datatypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
   let locs_and_struct_strs = List.map (fun (loc, ail_structs) -> (loc, CF.Pp_utils.to_plain_pretty_string (concat_map_newline ail_structs))) locs_and_structs in
   (* let structs = List.map generate_doc_from_ail_struct ail_datatypes in *)
   (* CF.Pp_utils.to_plain_pretty_string (concat_map_newline structs) *)
-  let _ = List.map (fun (loc, _) -> Printf.printf "Datatype location: %s\n" (Cerb_location.simple_location loc)) locs_and_struct_strs in
+  (* let _ = List.map (fun (loc, _) -> Printf.printf "Datatype location: %s\n" (Cerb_location.simple_location loc)) locs_and_struct_strs in *)
 
   (* Need to generate extern function prototype for corresponding equality function *)
   let datatype_equality_funs = List.map Cn_internal_to_ail.generate_datatype_equality_function ail_prog.cn_datatypes in
