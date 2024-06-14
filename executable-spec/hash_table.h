@@ -29,7 +29,7 @@ SOFTWARE.
 
 // Hash table entry (slot may be filled or empty).
 typedef struct {
-    unsigned int *key;  // key is NULL if this slot is empty
+    signed long *key;  // key is NULL if this slot is empty
     void* value;
 } ht_entry;
 
