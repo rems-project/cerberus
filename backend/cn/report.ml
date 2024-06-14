@@ -34,7 +34,7 @@ type where_report = {
     section: string;
     loc_cartesian: ((int * int) * (int * int)) option;
     loc_head: string;
-    loc_pos: string;
+    (* loc_pos: string; *)
   }
 
 type state_report = {
@@ -48,7 +48,7 @@ type state_report = {
 type report = {
     trace : state_report list;
     requested : Pp.doc option;
-    unproven : (Pp.doc * Pp.doc) option;
+    unproven : (Pp.doc (* * Pp.doc *)) option;
     predicate_hints : predicate_clause_entry list;
   }
 
@@ -122,25 +122,26 @@ let cartesian_to_string = function
       Printf.sprintf "%d:%d-%d:%d" start_line start_col end_line end_col
 
 let make_where ?(is_javascript=false) where =
-  table ["function"; "section"; "location"; ""]
+  table ["function"; "section"; "location"]
     [[where.fnction; 
       where.section; 
       div ~clss:"loc" [if is_javascript then cartesian_to_string where.loc_cartesian else where.loc_head]; 
-      pre (where.loc_pos)]]
+      (* pre (where.loc_pos) *)
+    ]]
 
 let make_requested requested = 
   oguard requested (fun re ->
     h 1 "Requested resource" (
-      table ["requested"; (* "byte span" *)]
+      table_without_head (* ["requested"; (\* "byte span" *\)] *)
         [[Pp.plain re; (* Pp.plain re.res_span *)]]
     )
   )
 
 let make_unproven unproven = 
   oguard unproven (fun c ->
-    h 1 "Unproven constraint" (
-      table ["constraint"; "simplified constraint"]
-        [[Pp.plain (fst c); Pp.plain (snd c)]]
+    h 1 "Unproven constraint (simplified)" (
+      table_without_head (* ["constraint"; "simplified constraint"] *)
+        [[Pp.plain c; (* Pp.plain (snd c) *)]]
     )
   )  
 

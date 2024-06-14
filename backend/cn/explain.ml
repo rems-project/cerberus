@@ -106,7 +106,7 @@ let state ctxt model_with_q extras =
       let head,pos = Loc.head_pos_of_location loc in
       ((prfx^" "^head), pos)
     in
-    let loc_cartesian, (loc_head, loc_pos) = 
+    let loc_cartesian, (loc_head, _loc_pos) = 
       match ctxt.where.statement, ctxt.where.expression with
       | _, Some loc -> Cerb_location.to_cartesian loc, head_pos "expr" loc
       | Some loc, None -> Cerb_location.to_cartesian loc, head_pos "stmt" loc
@@ -120,7 +120,7 @@ let state ctxt model_with_q extras =
       | None -> "(none)"
       | Some s -> Pp.plain (Where.pp_section s)
     in
-    let result = Report.{ fnction; section; loc_cartesian; loc_head; loc_pos; } in
+    let result = Report.{ fnction; section; loc_cartesian; loc_head } in
     Cerb_colour.do_colour := cur_colour;
     result
   in
@@ -255,11 +255,14 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
           List.map doc_clause (relevant_predicate_clauses ctxt.global pname req)
   in
   let requested = Option.map req_entry extras.request in
-  let pp_with_simp lc = 
-    let lc_simp = Simplify.LogicalConstraints.simp (Simplify.default ctxt.global) lc in 
-    (LC.pp lc, LC.pp lc_simp)
+
+  let unproven = match extras.unproven_constraint with
+    | Some lc -> 
+       let lc_simp = Simplify.LogicalConstraints.simp (Simplify.default ctxt.global) lc in 
+       Some (LC.pp lc_simp)
+    | None ->
+       None
   in
-  let unproven = Option.map pp_with_simp extras.unproven_constraint in
 
     
 
