@@ -74,6 +74,29 @@ type state_extras = {
 let no_ex = {request = None; unproven_constraint = None}
 
 
+module ITSet = struct 
+  include Simplify.ITSet
+
+  let rec bigunion_map f = function
+    | [] -> empty
+    | x :: xs -> union (f x) (bigunion_map f xs)
+
+end
+
+  
+
+
+let subterms_without_bound_variables bindings = 
+  fold_subterms ~bindings (fun bindings acc t ->
+      let pats = List.map fst bindings in
+      let bound = List.concat_map bound_by_pattern pats in
+      let bound = SymSet.of_list (List.map fst bound) in
+      if SymSet.(is_empty (inter bound (IT.free_vars t))) 
+      then ITSet.add t acc
+      else acc
+    ) ITSet.empty
+
+
 let state ctxt model_with_q extras = 
 
   let where = 
@@ -112,52 +135,57 @@ let state ctxt model_with_q extras =
     | None -> parens !^"not evaluated"
   in
 
-  let variables =
-    let make s ls =
-      {term = Sym.pp s;
-       value = mevaluate (sym_ (s, ls, Locations.other __FUNCTION__))}
-    in
-    let make_basetype_binding (s, (binding, _)) = 
-      match binding with 
-      | Value _ -> None 
-      | BaseType ls -> Some (make s ls)
-    in
-    List.map (fun (s, ls) -> make s ls) quantifier_counter_model @
-    List.filter_map make_basetype_binding (SymMap.bindings ctxt.computational) @
-    List.filter_map make_basetype_binding (SymMap.bindings ctxt.logical)
-  in
+
 
   let terms = 
-    let subterms1 = match extras.unproven_constraint with
+
+    let variables =
+      let make s ls = sym_ (s, ls, Locations.other __FUNCTION__) in
+      let basetype_binding (s, (binding, _)) = 
+        match binding with 
+        | Value _ -> None 
+        | BaseType ls -> Some (make s ls)
+      in
+      ITSet.of_list
+          (List.map (fun (s, ls) -> make s ls) quantifier_counter_model
+           @ List.filter_map basetype_binding (SymMap.bindings ctxt.computational)
+           @ List.filter_map basetype_binding (SymMap.bindings ctxt.logical))
+    in
+
+    let unproven = match extras.unproven_constraint with
       | Some (T lc) -> 
-         IT.subterms_without_bound_variables [] lc
+         subterms_without_bound_variables [] lc
       | Some (Forall ((s,bt), lc)) ->
          let binder = (Pat (PSym s, bt, Loc.other __FUNCTION__), None) in
-         IT.subterms_without_bound_variables [binder] lc
+         subterms_without_bound_variables [binder] lc
       | None -> 
-         []
+         ITSet.empty
     in
-    let subterms2 = match extras.request with
+
+    let request = match extras.request with
       | Some (P ret) ->
-         List.concat_map (IT.subterms_without_bound_variables []) 
+         ITSet.bigunion_map (subterms_without_bound_variables []) 
            (ret.pointer :: ret.iargs)
       | Some (Q ret) ->
-         List.concat_map (IT.subterms_without_bound_variables [])
-           [ret.pointer; ret.step]
-         @ 
-         (let binder = (Pat (PSym (fst ret.q), snd ret.q, Loc.other __FUNCTION__), None) in
-          List.concat_map (IT.subterms_without_bound_variables [binder])
-           (ret.permission :: ret.iargs))
+         let binder = (Pat (PSym (fst ret.q), snd ret.q, Loc.other __FUNCTION__), None) in
+         ITSet.union
+           (ITSet.bigunion_map (subterms_without_bound_variables [])
+              [ret.pointer; ret.step])
+           (ITSet.bigunion_map (subterms_without_bound_variables [binder])
+              (ret.permission :: ret.iargs))
       | None -> 
-         []
+         ITSet.empty
     in
+
     let subterms = 
-      List.map (fun it -> 
-          {term = IT.pp it; value = mevaluate it}
-        (* deduplicate *)
-        ) (Simplify.ITSet.(elements (of_list (subterms1 @ subterms2))))
+      List.fold_left ITSet.union ITSet.empty 
+        [variables; unproven; request] 
     in
-    variables @ subterms
+
+
+    List.map (fun it -> 
+        {term = IT.pp it; value = mevaluate it}
+      ) (ITSet.elements subterms)
   in
 
   let constraints = List.map LC.pp (LCSet.elements ctxt.constraints) in

@@ -197,15 +197,7 @@ and fold_list f binders acc xs =
 let fold_subterms : 'a. ?bindings:('bt bindings) -> ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
   fun ?(bindings=[]) f acc t -> fold f bindings acc t
 
-let subterms_without_bound_variables bindings = 
-  fold_subterms ~bindings (fun bindings acc t ->
-      let pats = List.map fst bindings in
-      let bound = List.concat_map bound_by_pattern pats in
-      let bound = SymSet.of_list (List.map fst bound) in
-      if SymSet.(is_empty (inter bound (free_vars t))) 
-      then t :: acc
-      else acc
-    ) []
+
 
 
 let is_call (f: Sym.t) (IT (it_, _bt, _loc)) =
