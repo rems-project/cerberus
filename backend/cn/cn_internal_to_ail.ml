@@ -171,14 +171,14 @@ let generate_record_sym sym members =
       sym''
     | None ->   
       let map_bindings = RecordMap.bindings !records in
-      Printf.printf "Record table size: %d\n" (List.length map_bindings);
+      (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
       let eq_members_bindings = List.filter (fun (k, v) -> members_equal k members) map_bindings in
       match eq_members_bindings with 
       | [] -> 
         (* First time reaching record of this type - add to map *)
         (let count = RecordMap.cardinal !records in
         let sym' = Sym.fresh_pretty ("record_" ^ (string_of_int count)) in
-        Printf.printf "Generating new record with sym %s\n" (Sym.pp_string sym');
+        (* Printf.printf "Generating new record with sym %s\n" (Sym.pp_string sym'); *)
         records := RecordMap.add members sym' !records;
         sym')
       | (_, sym') :: _ -> 
@@ -205,7 +205,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
    | CN_map (_, cn_bt) -> generate_ail_array cn_bt
    | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
    | CN_tuple ts -> 
-      Printf.printf "Entered CN_tuple case\n";
+      (* Printf.printf "Entered CN_tuple case\n"; *)
       let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
       let members = List.map (fun t -> (some_id, t)) ts in
       let sym = generate_record_sym pred_sym members in
@@ -412,7 +412,7 @@ let rec cn_to_ail_const_internal = function
   | Bits ((sign, size), i) -> A.AilEconst (ConstantInteger (IConstant (i, Decimal, None)))
   | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
   | Pointer z -> 
-    Printf.printf "In Pointer case; const\n";
+    (* Printf.printf "In Pointer case; const\n"; *)
     A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
   | Alloc_id _ -> failwith "TODO Alloc_id"
   | Bool b -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B)))
@@ -593,19 +593,19 @@ let rec cn_to_ail_expr_aux_internal
               let ctype = (bt_to_ail_ctype (IT.bt t1)) in
               (match get_typedef_string ctype with 
                 | Some str ->
-                  Printf.printf "typedef string when producing equality function: %s\n" str;
+                  (* Printf.printf "typedef string when producing equality function: %s\n" str; *)
                   let fn_name = str ^ "_equality" in 
                   A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
                 | None -> 
                   (match rm_ctype ctype with 
                     | C.(Pointer (_, Ctype (_, Struct sym))) -> 
                       let dt_names = List.map (fun dt -> Sym.pp_string dt.cn_dt_name) dts in 
-                      List.iter (fun dt_str -> Printf.printf "%s\n" dt_str) dt_names;
+                      (* List.iter (fun dt_str -> Printf.printf "%s\n" dt_str) dt_names; *)
                       let _is_datatype = List.mem String.equal (Sym.pp_string sym) dt_names in
                       (* let prefix = if is_datatype then "datatype_" else "struct_" in *)
                       let prefix = "struct_" in
                       let str = prefix ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
-                      Printf.printf "str produced for record: %s\n" str;
+                      (* Printf.printf "str produced for record: %s\n" str; *)
                       let fn_name = str ^ "_equality" in 
                       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
                     | _ -> default_ail_binop))
@@ -1143,13 +1143,13 @@ let generate_struct_equality_function ?(is_record=false) ((sym, (loc, attrs, tag
       let cast_assignments = List.map (fun (cast_sym, sym) -> A.(AilSdeclaration [cast_sym, Some (mk_expr (AilEcast (empty_qualifiers, cn_struct_ptr_ctype, (mk_expr (AilEident sym)))))])) (List.combine cast_param_syms param_syms) in 
       (* Function body *)
       let generate_member_equality (id, (_, _, _, ctype)) = 
-        let doc = (CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype) in 
-        Printf.printf "%s\n" (CF.Pp_utils.to_plain_pretty_string doc);
+        let _doc = (CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype) in 
+        (* Printf.printf "%s\n" (CF.Pp_utils.to_plain_pretty_string doc); *)
         let sct_opt = Sctypes.of_ctype ctype in 
         let sct = match sct_opt with 
           | Some t -> t
           | None -> 
-            Printf.printf "None case\n";
+            (* Printf.printf "None case\n"; *)
             failwith "Bad sctype"
         in
         let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
@@ -1564,7 +1564,7 @@ let rec cn_to_ail_predicates_internal pred_def_list dts globals ots preds cn_pre
 (* TODO: Add destination passing? *)
 let rec cn_to_ail_post_aux_internal dts globals ownership_ctypes preds = function
   | LRT.Define ((name, it), (loc, _), t) ->
-    Printf.printf "LRT.Define\n";
+    (* Printf.printf "LRT.Define\n"; *)
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
     let new_lrt = Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, IT.bt it, new_name) t in 
     let binding = create_binding new_name (bt_to_ail_ctype (IT.bt it)) in
@@ -1617,7 +1617,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> (C.union
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
   | Cnprog.M_CN_instantiate (to_instantiate, it) -> 
-    Printf.printf "Translating CN instantiate\n";
+    (* Printf.printf "Translating CN instantiate\n"; *)
     (default_true_res, true)
   | Cnprog.M_CN_split_case _ -> 
     (default_true_res, true)
@@ -1625,7 +1625,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> (C.union
 
 
   | Cnprog.M_CN_extract (_, _, it) -> 
-    Printf.printf "Translating CN extract\n";
+    (* Printf.printf "Translating CN extract\n"; *)
     (default_true_res, true)
 
 
