@@ -68,7 +68,7 @@ hash_table* ht_create(void) {
 
 // Return 64-bit FNV-1a hash for key (NUL-terminated). See description:
 // https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
-static uint64_t hash_key(unsigned int *key) {
+static uint64_t hash_key(signed long *key) {
     uint64_t hash = FNV_OFFSET;
     hash ^= *key;
     hash *= FNV_PRIME;
@@ -99,15 +99,15 @@ void* ht_get(hash_table* table, signed long *key) {
     return NULL;
 }
 
-unsigned int *duplicate_key(unsigned int *key) {
-    unsigned int *new_key = alloc(sizeof(unsigned int));
+signed long *duplicate_key(signed long *key) {
+    signed long *new_key = alloc(sizeof(signed long));
     *new_key = *key;
     return new_key;
 }
 
 // Internal function to set an entry (without expanding table).
-static unsigned int* ht_set_entry(ht_entry* entries, size_t capacity,
-        unsigned int *key, void* value, int* plength) {
+static signed long* ht_set_entry(ht_entry* entries, size_t capacity,
+        signed long *key, void* value, int* plength) {
     // AND hash with capacity-1 to ensure it's within entries array.
     unsigned long hash = hash_key(key);
     size_t index = (size_t)(hash & (unsigned long)(capacity - 1));
