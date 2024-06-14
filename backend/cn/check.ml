@@ -1856,9 +1856,9 @@ let register_fun_syms mu_file =
   let add fsym loc =
     (* add to context *)
     (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
-    let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc, loc)) loc) in
+    (* let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc, loc)) loc) in *)
     let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
-    let@ () = add_cs loc [(* lc1; *) lc2] in
+    (* let@ () = add_cs loc [(\* lc1; *\) lc2] in *)
     return ()
   in
   PmapM.iterM (fun fsym def -> match def with
