@@ -129,11 +129,11 @@ let state ctxt model_with_q extras =
 
   let evaluate it = Solver.eval ctxt.global model it in
 
-  let mevaluate it =
-    match evaluate it with
-    | Some v -> IT.pp v
-    | None -> parens !^"not evaluated"
-  in
+  (* let _mevaluate it = *)
+  (*   match evaluate it with *)
+  (*   | Some v -> IT.pp v *)
+  (*   | None -> parens !^"not evaluated" *)
+  (* in *)
 
 
 
@@ -183,8 +183,14 @@ let state ctxt model_with_q extras =
     in
 
 
-    List.map (fun it -> 
-        {term = IT.pp it; value = mevaluate it}
+    List.filter_map (fun it -> 
+        match evaluate it with
+        | Some value when not (IT.equal value it) ->
+           Some {term = IT.pp it; value = IT.pp value}
+        | Some _ -> 
+           None
+        | None -> 
+           None
       ) (ITSet.elements subterms)
   in
 
