@@ -397,7 +397,7 @@ let test_framework =
 
 let test_depth =
   let doc = "depth of branching to consider for test generation" in
-  Arg.(value & opt int 10 & info ["test-depth"] ~docv:"FILE" ~doc)
+  Arg.(value & opt int 5 & info ["test-depth"] ~docv:"FILE" ~doc)
 
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
