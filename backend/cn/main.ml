@@ -385,19 +385,19 @@ let output_decorated =
 
 let output_with_unit_tests =
   let doc = "output a version of the translation unit decorated with unit tests of the CN annotations" in
-  Arg.(value & opt (some string) None & info ["output_with_unit_tests"] ~docv:"FILE" ~doc)
+  Arg.(value & opt (some string) None & info ["output-with-unit-tests"] ~docv:"FILE" ~doc)
 
 let output_with_pbt =
   let doc = "output a version of the translation unit decorated with property-based tests of the CN annotations" in
-  Arg.(value & opt (some string) None & info ["output_with_pbt"] ~docv:"FILE" ~doc)
+  Arg.(value & opt (some string) None & info ["output-with-pbt"] ~docv:"FILE" ~doc)
 
 let test_framework =
   let doc = "testing framework to use (gtest or catch)" in
-  Arg.(value & opt (enum [("gtest", GTest); "catch", Catch2]) GTest & info ["test_framework"] ~docv:"FILE" ~doc)
+  Arg.(value & opt (enum [("gtest", GTest); "catch", Catch2]) GTest & info ["test-framework"] ~docv:"FILE" ~doc)
 
 let test_depth =
   let doc = "depth of branching to consider for test generation" in
-  Arg.(value & opt int 10 & info ["test_depth"] ~docv:"FILE" ~doc)
+  Arg.(value & opt int 10 & info ["test-depth"] ~docv:"FILE" ~doc)
 
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
