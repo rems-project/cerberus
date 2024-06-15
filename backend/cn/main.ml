@@ -360,7 +360,7 @@ let no_inherit_loc =
   Arg.(value & flag & info["no-inherit-loc"] ~doc)
 
 let magic_comment_char_dollar =
-  let doc = "Override CN's default magic comment syntax to be \"/*$ ... $*/\"" in
+  let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
   Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
 
 
