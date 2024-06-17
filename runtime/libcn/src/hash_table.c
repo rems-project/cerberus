@@ -24,7 +24,7 @@ SOFTWARE.
 
 */
 
-#include "hash_table.h"
+#include <cn-executable/hash_table.h>
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>

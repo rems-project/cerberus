@@ -24,8 +24,8 @@ SOFTWARE.
 
 */
 
-#include "alloc.h"
 #include <stdbool.h>
+#include <cn-executable/alloc.h>
 
 // Hash table entry (slot may be filled or empty).
 typedef struct {

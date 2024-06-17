@@ -1,11 +1,13 @@
-#include "hash_table.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 // #include <math.h>
 // #include <assert.h>
-#include "stdint.h"
-#include "alloc.h"
+// #include "stdint.h"
+#include <stdint.h>
+
+#include <cn-executable/alloc.h>
+#include <cn-executable/hash_table.h>
 
 struct cn_error_message_info {
     char *function_name;
