@@ -33,7 +33,7 @@ do
   EXEC_C_FILE=$EXEC_C_DIRECTORY/$TEST_BASENAME-exec.c
   mkdir -p $EXEC_C_DIRECTORY
   echo Generating $EXEC_C_FILE ...
-  if ! ~/.opam/4.14.0/bin/cn $TEST --output_decorated=$TEST_BASENAME-exec.c --output_decorated_dir=$EXEC_C_DIRECTORY/
+  if ! cn $TEST --output_decorated=$TEST_BASENAME-exec.c --output_decorated_dir=$EXEC_C_DIRECTORY/
   then
     echo Generation failed.
     NUM_GENERATION_FAILED=$(( $NUM_GENERATION_FAILED + 1 ))
@@ -41,7 +41,7 @@ do
   else 
     echo Generation succeeded!
     echo Compiling $EXEC_C_FILE ...
-    if ! clang -pedantic -Wall -std=c11 -fno-lto -c $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
+    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -pedantic -Wall -std=c11 -fno-lto -c $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
     then
       echo Compilation failed.
       NUM_COMPILATION_FAILED=$(( $NUM_COMPILATION_FAILED + 1 ))
@@ -49,7 +49,7 @@ do
     else 
       echo Compilation succeeded!
       echo Linking $TEST_BASENAME-exec.o with other files ...
-      if ! clang -o $TEST_BASENAME-output $TEST_BASENAME-exec.o cn.o hash_table.o alloc.o cn_utils.o
+      if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -o $TEST_BASENAME-output $TEST_BASENAME-exec.o cn.o hash_table.o alloc.o cn_utils.o
       then 
         echo Linking failed.
         NUM_LINKING_FAILED=$(( $NUM_LINKING_FAILED + 1 ))
@@ -73,22 +73,6 @@ do
   
 done
 
-
-# FAIL=$(find $DIRNAME -name '*.error.c')
-
-# for TEST in $FAIL
-# do
-#   echo cn $TEST
-#   if ! cn $TEST
-#   then
-#     NUM_FAILED=$(( $NUM_FAILED + 1 ))
-#     FAILED="$FAILED $TEST"
-#   fi
-# done
-
-# UNKNOWN=$(find $DIRNAME -name '*.unknown.c')
-
-# echo $UNKNOWN | xargs -n 1 cn
 
 echo
 echo 'Done running tests.'
