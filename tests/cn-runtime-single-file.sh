@@ -12,32 +12,25 @@ echo "Creating $INPUT_EXEC_DIR directory..."
 mkdir $INPUT_EXEC_DIR
 
 
-echo "Generating C files from CN-annotated source..."
+echo Generating C files from CN-annotated source...
 if ! cn $INPUT_FN --output_decorated=$INPUT_BASENAME-exec.c --output_decorated_dir=$INPUT_EXEC_DIR/
 then
     echo Generation failed.
 else 
     echo Done!
     cd $INPUT_EXEC_DIR
-    echo Compiling...
-    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a $INPUT_BASENAME-exec.c cn.c
+    echo Compiling and linking...
+    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -o $INPUT_BASENAME-exec-output $INPUT_BASENAME-exec.c cn.c
     then
-        echo Compilation failed.
+        echo Compiling/linking failed.
     else 
         echo Done!
-        echo Linking...
-        if ! cc -o $INPUT_BASENAME-exec-output -g $INPUT_BASENAME-exec.o cn.o alloc.o hash_table.o cn_utils.o
+        echo Running binary...
+        if ./${INPUT_BASENAME}-exec-output
         then 
-            echo Linking failed.
-        else 
-            echo Done!
-            echo Running binary...
-            if ./${INPUT_BASENAME}-exec-output
-            then 
-                echo "Success!"
-            else
-                echo "Test failed."
-            fi
+            echo "Success!"
+        else
+            echo "Test failed."
         fi
     fi
 fi
