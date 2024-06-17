@@ -12,19 +12,13 @@ GENERATION_FAILED=''
 NUM_COMPILATION_FAILED=0
 COMPILATION_FAILED=''
 
-NUM_LINKING_FAILED=0
-LINKING_FAILED=''
-
 NUM_RUNNING_BINARY_FAILED=0
 RUNNING_BINARY_FAILED=''
 
 NUM_SUCC=0
 SUCC_FILES=''
 
-EXECUTABLE_SPEC_DIR='../executable-spec'
-
 mkdir -p $DIRNAME/exec
-clang -fno-lto -c $EXECUTABLE_SPEC_DIR/hash_table.c $EXECUTABLE_SPEC_DIR/alloc.c $EXECUTABLE_SPEC_DIR/cn_utils.c
 
 for TEST in $SUCC
 do
@@ -40,33 +34,24 @@ do
     GENERATION_FAILED="$GENERATION_FAILED $TEST"
   else 
     echo Generation succeeded!
-    echo Compiling $EXEC_C_FILE ...
-    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -pedantic -Wall -std=c11 -fno-lto -c $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
+    echo Compiling and linking...
+    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -pedantic -Wall -std=c11 -fno-lto -o $TEST_BASENAME-output $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
     then
-      echo Compilation failed.
+      echo Compiling/linking failed.
       NUM_COMPILATION_FAILED=$(( $NUM_COMPILATION_FAILED + 1 ))
       COMPILATION_FAILED="$COMPILATION_FAILED $EXEC_C_FILE"
     else 
-      echo Compilation succeeded!
-      echo Linking $TEST_BASENAME-exec.o with other files ...
-      if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -o $TEST_BASENAME-output $TEST_BASENAME-exec.o cn.o hash_table.o alloc.o cn_utils.o
+      echo Compiling and linking succeeded!
+      echo Running the $TEST_BASENAME-output binary ...
+      if ! ./$TEST_BASENAME-output
       then 
-        echo Linking failed.
-        NUM_LINKING_FAILED=$(( $NUM_LINKING_FAILED + 1 ))
-        LINKING_FAILED="$LINKING_FAILED $EXEC_C_FILE"
+          echo Running binary failed.
+          NUM_RUNNING_BINARY_FAILED=$(( $NUM_RUNNING_BINARY_FAILED + 1 ))
+          RUNNING_BINARY_FAILED="$RUNNING_BINARY_FAILED $EXEC_C_FILE"
       else 
-        echo Linking succeeded!
-        echo Running the $TEST_BASENAME-output binary ...
-        if ! ./$TEST_BASENAME-output
-        then 
-            echo Running binary failed.
-            NUM_RUNNING_BINARY_FAILED=$(( $NUM_RUNNING_BINARY_FAILED + 1 ))
-            RUNNING_BINARY_FAILED="$RUNNING_BINARY_FAILED $EXEC_C_FILE"
-        else 
-            echo Running binary succeeded!
-            NUM_SUCC=$(( $NUM_SUCC + 1 ))
-            SUCC_FILES="$SUCC_FILES $EXEC_C_FILE"
-        fi
+          echo Running binary succeeded!
+          NUM_SUCC=$(( $NUM_SUCC + 1 ))
+          SUCC_FILES="$SUCC_FILES $EXEC_C_FILE"
       fi
     fi
   fi
@@ -86,11 +71,8 @@ else
   echo "$NUM_GENERATION_FAILED tests failed to have executable specs generated:"
   echo "  $GENERATION_FAILED"
   echo " "
-  echo "$NUM_COMPILATION_FAILED tests failed to be compiled:"
+  echo "$NUM_COMPILATION_FAILED tests failed to be compiled/linked:"
   echo "  $COMPILATION_FAILED"
-  echo " "
-  echo "$NUM_LINKING_FAILED tests failed to be linked:"
-  echo "  $LINKING_FAILED"
   echo " "
   echo "$NUM_RUNNING_BINARY_FAILED tests failed to be run as binaries:"
   echo "  $RUNNING_BINARY_FAILED"
