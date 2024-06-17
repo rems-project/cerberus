@@ -100,6 +100,64 @@ and string_of_expr (Cn.CNExpr (_, e) : cn_expr) : string =
   string_of_expr_ e
 ;;
 
+let rec codify_expr_ (e : cn_expr_) : string =
+  match e with
+  | CNExpr_const c ->
+    (match c with
+    | CNConst_NULL -> "NULL"
+    | CNConst_integer n -> failwith "Mathematical integer"
+    | CNConst_bits ((CN_signed, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
+    | CNConst_bits ((CN_unsigned, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n) ^ "U"
+    | CNConst_bits ((CN_signed, bits), n) when bits <= 32 -> Int64.to_string (Z.to_int64 n) ^ "L"
+    | CNConst_bits ((CN_unsigned, bits), n) when bits <= 32 -> string_of_int (Z.to_int n) ^ "UL"
+    | CNConst_bits ((CN_signed, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "LL"
+    | CNConst_bits ((CN_unsigned, bits), n) when bits <= 64 -> Int64.to_string (Z.to_int64 n) ^ "ULL"
+    | CNConst_bits _ -> failwith "too many bits"
+    | CNConst_bool b -> string_of_bool b |> String.uppercase_ascii
+    | CNConst_unit -> "()")
+  | CNExpr_var x
+  | CNExpr_value_of_c_atom (x, _) -> Pp_symbol.to_string_pretty x
+  | CNExpr_list _ -> failwith "unsupported expression 'CNExpr_List' (Generator.codify_expr_)"
+  | CNExpr_memberof (e', Symbol.Identifier (_, x)) -> codify_expr e' ^ "." ^ x
+  | CNExpr_record _ -> failwith "unsupported expression 'CNExpr_record' (Generator.codify_expr_)"
+  | CNExpr_memberupdates _ -> failwith "unsupported expression 'CNExpr_memberupdates' (Generator.codify_expr_)"
+  | CNExpr_arrayindexupdates _ -> failwith "unsupported expression 'CNExpr_arrayindexupdates' (Generator.codify_expr_)"
+  | CNExpr_binop (CN_add, e1, e2) -> "(" ^ codify_expr e1 ^ " + " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_sub, e1, e2) -> "(" ^ codify_expr e1 ^ " - " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_mul, e1, e2) -> "(" ^ codify_expr e1 ^ " * " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_div, e1, e2) -> "(" ^ codify_expr e1 ^ " / " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_equal, e1, e2) -> "(" ^ codify_expr e1 ^ " == " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_inequal, e1, e2) -> "(" ^ codify_expr e1 ^ " != " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_lt, e1, e2) -> "(" ^ codify_expr e1 ^ " < " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_le, e1, e2) -> "(" ^ codify_expr e1 ^ " <= " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_gt, e1, e2) -> "(" ^ codify_expr e1 ^ " > " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_ge, e1, e2) -> "(" ^ codify_expr e1 ^ " >= " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_or, e1, e2) -> "(" ^ codify_expr e1 ^ " || " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_and, e1, e2) -> "(" ^ codify_expr e1 ^ " && " ^ codify_expr e2 ^ ")"
+  | CNExpr_binop (CN_map_get, _, _) -> failwith "unsupported binop 'CN_map_get' (Generator.codify_expr_)"
+  | CNExpr_sizeof _ -> failwith "unsupported expression 'CNExpr_sizeof' (Generator.codify_expr_)"
+  | CNExpr_offsetof _ -> failwith "unsupported expression 'CNExpr_offsetof' (Generator.codify_expr_)"
+  | CNExpr_membershift _ -> failwith "unsupported expression 'CNExpr_membershift' (Generator.codify_expr_)"
+  | CNExpr_addr _ -> failwith "unsupported expression 'CNExpr_addr' (Generator.codify_expr_)"
+  | CNExpr_cast _ -> failwith "unsupported expression 'CNExpr_cast' (Generator.codify_expr_)"
+  | CNExpr_array_shift _ -> failwith "unsupported expression 'CNExpr_array_shift' (Generator.codify_expr_)"
+  | CNExpr_call (f, args) -> Pp_symbol.to_string_pretty f ^ "(" ^ String.concat ", " (List.map codify_expr args) ^ ")"
+  | CNExpr_cons (constr, es) -> Pp_symbol.to_string_pretty constr ^ "{" ^ String.concat ", " (List.map (fun (Symbol.Identifier (_, x), e) -> x ^ ": " ^ codify_expr e) es) ^ "}"
+  | CNExpr_each _ -> failwith "unsupported expression 'CNExpr_each' (Generator.codify_expr_)"
+  | CNExpr_let (x, e1, e2) -> "let " ^ Pp_symbol.to_string_pretty x ^ " = " ^ codify_expr e1 ^ " in " ^ codify_expr e2
+  | CNExpr_match _ -> failwith "unsupported expression 'CNExpr_match' (Generator.codify_expr_)"
+  | CNExpr_ite _ -> failwith "unsupported expression 'CNExpr_ite' (Generator.codify_expr_)"
+  | CNExpr_good _ -> failwith "unsupported expression 'CNExpr_good' (Generator.codify_expr_)"
+  | CNExpr_deref _ -> failwith "unsupported expression 'CNExpr_deref' (Generator.codify_expr_)"
+  | CNExpr_unchanged _ -> failwith "unsupported expression 'CNExpr_unchanged' (Generator.codify_expr_)"
+  | CNExpr_at_env _ -> failwith "unsupported expression 'CNExpr_at_env' (Generator.codify_expr_)"
+  | CNExpr_not e' -> "!" ^ codify_expr e'
+  | CNExpr_default _ -> failwith "unsupported expression 'CNExpr_default' (Generator.codify_expr_)"
+
+and codify_expr (Cn.CNExpr (_, e) : cn_expr) : string =
+  codify_expr_ e
+;;
+
 let rec sub_sym_expr_' (x : Symbol.sym) (v : cn_expr_) (e : cn_expr_) : cn_expr_ =
   match e with
   | CNExpr_var x'
@@ -755,16 +813,23 @@ let rec type_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (ty : Cty
     let Ctype (_, cty) = ty in
     match cty with
     | Basic (Integer ity) ->
-      int_range
-        (Memory.min_integer_type ity |> Z.to_int)
-        (Memory.max_integer_type ity |> Z.to_int)
-      >>= fun n ->
       let sgn =
         if Memory.is_signed_integer_type ity
         then Cn.CN_signed
         else Cn.CN_unsigned
       in
-      return (CNVal_bits ((sgn, Memory.size_of_integer_type ity |> Int.mul 8), Z.of_int n))
+      bool >>= fun b ->
+      let n =
+        let min = Memory.min_integer_type ity in
+        let max = Memory.max_integer_type ity in
+        match sgn with
+        | CN_unsigned -> Z.random_int (Z.succ max)
+        | CN_signed ->
+          if b
+          then Z.random_int (Z.succ max)
+          else Z.abs (Z.random_int (Z.succ (Z.abs min)))
+      in
+      return (CNVal_bits ((sgn, Memory.size_of_integer_type ity |> Int.mul 8), n))
     | Struct n ->
       (match List.assoc (Symbol.equal_sym) n ail_prog.tag_definitions with
       | (_, _, StructDef (members, _)) ->
@@ -1047,7 +1112,7 @@ let filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
   | [] -> Arbitrary ty
 ;;
 
-let range_gen (x : Symbol.sym) (ty : Ctype.ctype) (min : cn_expr) (max : cn_expr) (cs : constraints) : gen =
+(* let range_gen (x : Symbol.sym) (ty : Ctype.ctype) (min : cn_expr) (max : cn_expr) (cs : constraints) : gen =
   let l = Cerb_location.unknown in
   let y = Symbol.fresh () in
   (* max - min *)
@@ -1073,9 +1138,9 @@ let range_gen (x : Symbol.sym) (ty : Ctype.ctype) (min : cn_expr) (max : cn_expr
         (Cn.CNExpr (l, c)) cs',
       gen)
   | [] -> gen
-;;
+;; *)
 
-let mult_range_gen (x : Symbol.sym) (ty : Ctype.ctype) (mult : cn_expr) (min : cn_expr) (max : cn_expr) (cs : constraints) : gen =
+(* let mult_range_gen (x : Symbol.sym) (ty : Ctype.ctype) (mult : cn_expr) (min : cn_expr) (max : cn_expr) (cs : constraints) : gen =
   let l = Cerb_location.unknown in
   let y = Symbol.fresh () in
   let e_y = Cn.CNExpr (l, CNExpr_var y) in
@@ -1104,7 +1169,7 @@ let mult_range_gen (x : Symbol.sym) (ty : Ctype.ctype) (mult : cn_expr) (min : c
         (Cn.CNExpr (l, c)) cs',
       gen)
   | [] -> gen
-;;
+;; *)
 
 let get_const_expr (ty : Ctype.ctype) (n : Z.t) : cn_expr =
   let l = Cerb_location.unknown in
@@ -1146,8 +1211,8 @@ let get_min_max_expr (ty : Ctype.ctype) : cn_expr * cn_expr =
 let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constraints) : gen =
   match e with
   | CNExpr (_, CNExpr_var x') when Sym.equal_sym x x' ->
-    let l = Cerb_location.unknown in
-    let mult = List.find_map (
+    (* let l = Cerb_location.unknown in *)
+    (* let mult = List.find_map (
       fun (c : cn_expr_) ->
         match c with
         | CNExpr_binop (
@@ -1173,8 +1238,8 @@ let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constrai
           Some e2
         | _ -> None
         ) cs
-    in
-    let min = List.find_map (
+    in *)
+    (* let min = List.find_map (
       fun (c : cn_expr_) ->
         match c with
         | CNExpr_binop (CN_gt, CNExpr (_, CNExpr_var x'), e')
@@ -1188,8 +1253,8 @@ let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constrai
           Some e'
         | _ -> None
         ) cs
-    in
-    let max = List.find_map (
+    in *)
+    (* let max = List.find_map (
       fun (c : cn_expr_) ->
         match c with
         | CNExpr_binop (CN_gt, e', CNExpr (_, CNExpr_var x'))
@@ -1203,8 +1268,8 @@ let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constrai
           Some e'
         | _ -> None
         ) cs
-    in
-    (match mult with
+    in *)
+    (* (match mult with
     | Some mult ->
       let (def_min, def_max) = get_min_max_expr ty in
       mult_range_gen x ty mult
@@ -1218,7 +1283,8 @@ let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : cn_expr) (cs : constrai
           (Option.value min ~default:def_min)
           (Option.value max ~default:def_max) cs
       else
-        Arbitrary ty)
+        Arbitrary ty) *)
+  filter_gen x ty cs
 
   | _ -> Return (ty, e)
 ;;
@@ -1604,13 +1670,13 @@ let generate_unit_tests (depth : int) (tf : test_framework) (instrumentation_lis
 let rec codify_gen' (g : gen) : string =
   match g with
   | Arbitrary ty -> "rc::gen::arbitrary<" ^ string_of_ctype ty ^ ">()"
-  | Return (ty, e) -> "rc::gen::just<" ^ string_of_ctype ty ^ ">(" ^ string_of_expr e ^ ")"
+  | Return (ty, e) -> "rc::gen::just<" ^ string_of_ctype ty ^ ">(" ^ codify_expr e ^ ")"
   | Filter (x', ty, e, g') ->
     let gen = codify_gen' g' in
-    "rc::gen::suchThat(" ^ gen ^ ", [=](" ^ string_of_ctype ty ^ " " ^ Pp_symbol.to_string_pretty x' ^ "){ return " ^ string_of_expr e ^ "; })"
+    "rc::gen::suchThat(" ^ gen ^ ", [=](" ^ string_of_ctype ty ^ " " ^ Pp_symbol.to_string_pretty x' ^ "){ return " ^ codify_expr e ^ "; })"
   | Map (x', ty, e, g') ->
     let gen = codify_gen' g' in
-    "rc::gen::map(" ^ gen ^ ", [=](" ^ string_of_ctype ty ^ " " ^ Pp_symbol.to_string_pretty x' ^ "){ return " ^ string_of_expr e ^ "; })"
+    "rc::gen::map(" ^ gen ^ ", [=](" ^ string_of_ctype ty ^ " " ^ Pp_symbol.to_string_pretty x' ^ "){ return " ^ codify_expr e ^ "; })"
   | Alloc (ty, g') ->
     (match ty with
     | Ctype (_, Pointer (_, ty')) ->
