@@ -1,37 +1,46 @@
-#! /bin/bash
+#!/bin/bash
+
+RUNTIME_PREFIX="$OPAM_SWITCH_PREFIX/lib/cn/runtime/"
+
+if [ ! -d $RUNTIME_PREFIX ]; then
+  echo "Could not find CN's runtime directory (looked at: '$RUNTIME_PREFIX')";
+  exit 1
+fi
+
+if [ $# -ne 1 ]; then
+  echo "USAGE $0 FILE.c";
+  exit 1;
+fi
+
+EXEC_DIR=$(mktemp -t 'cn-exec' -d)
+echo "Creating $EXEC_DIR directory..."
 
 INPUT_FN=$1
 INPUT_BASENAME=$(basename $INPUT_FN .c)
-INPUT_DIRNAME=$(dirname $INPUT_FN)
-INPUT_EXEC_DIR=$INPUT_DIRNAME/exec/$INPUT_BASENAME-exec
-INPUT_EXEC_FILE=$INPUT_EXEC_DIR/$INPUT_BASENAME-exec.c
 
-mkdir $INPUT_DIRNAME/exec
-rm -rf $INPUT_EXEC_DIR
-echo "Creating $INPUT_EXEC_DIR directory..."
-mkdir $INPUT_EXEC_DIR
+trap - 0
 
-
-echo Generating C files from CN-annotated source...
-if ! cn $INPUT_FN --output_decorated=$INPUT_BASENAME-exec.c --output_decorated_dir=$INPUT_EXEC_DIR/
+echo -n "Generating C files from CN-annotated source... "
+if ! cn $INPUT_FN --output_decorated=$INPUT_BASENAME-exec.c --output_decorated_dir=$EXEC_DIR/
 then
-    echo Generation failed.
+  echo generation failed.
 else 
-    echo Done!
-    cd $INPUT_EXEC_DIR
-    echo Compiling and linking...
-    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -o $INPUT_BASENAME-exec-output $INPUT_BASENAME-exec.c cn.c
-    then
-        echo Compiling/linking failed.
-    else 
-        echo Done!
-        echo Running binary...
-        if ./${INPUT_BASENAME}-exec-output
-        then 
-            echo "Success!"
-        else
-            echo "Test failed."
-        fi
+  echo done!
+  cd $EXEC_DIR
+  echo -n "Compiling and linking... "
+  if ! cc -I$RUNTIME_PREFIX/include/ $RUNTIME_PREFIX/libcn.a -o $INPUT_BASENAME-exec-output $INPUT_BASENAME-exec.c cn.c
+  then
+    echo "compiling/linking failed."
+  else 
+    echo "done!"
+    echo "Running binary..."
+    if ./$INPUT_BASENAME-exec-output
+    then 
+      echo "Success!"
+    else
+      echo "Test failed."
+      exit 1
     fi
+  fi
 fi
 
