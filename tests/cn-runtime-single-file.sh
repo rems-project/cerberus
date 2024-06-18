@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 RUNTIME_PREFIX="$OPAM_SWITCH_PREFIX/lib/cn/runtime/"
 
 if [ ! -d $RUNTIME_PREFIX ]; then
@@ -33,8 +34,8 @@ else
     echo "compiling/linking failed."
   else 
     echo "done!"
-    echo "Running binary..."
-    if ./$INPUT_BASENAME-exec-output
+    echo "Running binary with CN runtime checking..."
+    if "./${INPUT_BASENAME}-exec-output"
     then 
       echo "Success!"
     else

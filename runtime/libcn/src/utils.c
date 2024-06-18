@@ -30,7 +30,7 @@ void cn_assert(cn_bool *cn_b, const char *function_name, char *file_name, int li
         if (cn_source_loc) {
             printf("CN source location: \n%s\n", cn_source_loc);
         }
-        abort();
+        exit(SIGABRT);
     }
     // assert(cn_b->val);
 }
