@@ -48,13 +48,13 @@ type solver_frame =
     (** Ack-style SMT commands, most recent first. *)
 
   ; mutable uninterpreted: SMT.sexp SymMap.t
-    (** Uninterpreted functions that we've declared. *)
+    (** Uninterpreted functions and variables that we've declared. *)
 
   ; bt_uninterpreted: (SMT.sexp BT_Table.t) Int_Table.t
     (** Uninterpreted constants, indexed by base type. *)
   }
 
-let empty_solver_frame =
+let empty_solver_frame () =
   { commands          = []
   ; uninterpreted     = SymMap.empty
   ; bt_uninterpreted  = Int_Table.create 50
@@ -77,6 +77,19 @@ type solver =
   ; globals: Global.t
   }
 
+module Debug = struct
+  let dump_frame f =
+    let dump k v = Printf.printf "| %s\n%!" (Sym.pp_string k) in
+    SymMap.iter dump f.uninterpreted;
+    Printf.printf "+--------------------\n%!"
+
+  let _dump_solver solver =
+    Printf.printf "| Start Solver Dump\n%!";
+    dump_frame solver.cur_frame;
+    List.iter dump_frame solver.prev_frames;
+    Printf.printf "| End Solver Dump\n%!"
+end
+
 (** Lookup something in one of the existing frames *)
 let search_frames s f = List.find_map f (s.cur_frame :: s.prev_frames)
 
@@ -85,7 +98,7 @@ let search_frames s f = List.find_map f (s.cur_frame :: s.prev_frames)
 let push s =
   SMT.ack_command s.smt_solver (SMT.push 1);
   s.prev_frames <- s.cur_frame :: s.prev_frames;
-  s.cur_frame   <- empty_solver_frame
+  s.cur_frame   <- empty_solver_frame ()
 
 (** Return to the previous scope.  Assumes that there is a previous scope. *)
 let pop s n =
@@ -119,7 +132,7 @@ let fresh_name s x =
   s.name_seed <- s.name_seed + 1;
   x ^ "_" ^ string_of_int n
 
-(** Declare an uninterpreted function *)
+(** Declare an uninterpreted function. *)
 let declare_uninterpreted s name args_ts res_t =
   let check f = SymMap.find_opt name f.uninterpreted in
   match search_frames s check with
@@ -131,6 +144,7 @@ let declare_uninterpreted s name args_ts res_t =
     s.cur_frame.uninterpreted <- SymMap.add name e s.cur_frame.uninterpreted;
     e
 
+ 
 (** Declare an uninterpreted function, indexed by a base type. *)
 let declare_bt_uninterpreted s (name,k) bt args_ts res_t =
   let check f = Option.bind (Int_Table.find_opt f.bt_uninterpreted k)
@@ -353,13 +367,6 @@ and
 
 (** {1 Term to SMT} *)
 
-(** Declare a variable of the given type.  Should be called by typing,
-    when variables are added to the current scope. *)
-let declare_var s x bt =
-  let ty   = translate_base_type bt in
-  let name = CN_Names.var_name x in
-  SMT.ack_command s.smt_solver (SMT.declare name ty)
-
 
 (** Translate a constant to SMT *)
 let rec translate_const s co =
@@ -443,6 +450,17 @@ let bv_ctz result_w =
           (count bot_w bot)
   in count
 
+(** Translate a vraible to SMT.  Declare if needed. *)
+let translate_var s name bt =
+  let check f = SymMap.find_opt name f.uninterpreted in
+  match search_frames s check with
+  | Some e -> e
+  | None ->
+    let sname = CN_Names.var_name name in
+    ack_command s (SMT.declare sname (translate_base_type bt));
+    let e = SMT.atom sname in
+    s.cur_frame.uninterpreted <- SymMap.add name e s.cur_frame.uninterpreted;
+    e
 
 
 (** Translat a CN term to SMT *)
@@ -459,7 +477,7 @@ let rec translate_term s iterm =
   match IT.term iterm with
   | Const c -> translate_const s c
 
-  | Sym x -> SMT.atom (CN_Names.var_name x)
+  | Sym x -> translate_var s x (IT.basetype iterm)
 
   | Unop (op,e1) ->
     begin match op with
@@ -1003,9 +1021,16 @@ let declare_solver_basics s =
   SymMap.iter (declare_datatype s) s.globals.datatypes
 
 
+let logger base lab =
+  { SMT.send    = (fun s -> base.SMT.send (lab ^ s))
+  ; SMT.receive = (fun s -> base.SMT.receive (lab ^ s))
+  }
+
+
 let make globals =
-  let s = { smt_solver  = SMT.new_solver SMT.cvc5
-          ; cur_frame   = empty_solver_frame
+  let cfg = { SMT.cvc5 with log = logger SMT.quiet_log "cvc5: " } in
+  let s = { smt_solver  = SMT.new_solver cfg
+          ; cur_frame   = empty_solver_frame ()
           ; prev_frames = []
           ; name_seed   = 0
           ; globals     = globals
@@ -1017,26 +1042,32 @@ let model_evaluator solver mo =
   match SMT.to_list mo with
   | None -> failwith "model is an atom"
   | Some defs ->
-    let s = SMT.new_solver solver.smt_solver.config in
+    let scfg = solver.smt_solver.config in
+    let cfg = { scfg with log = logger scfg.log ":model: " } in
+    let s = SMT.new_solver cfg in
     let evaluator = { smt_solver = s
-                    ; cur_frame = empty_solver_frame
-                    ; prev_frames = []
-                    ; name_seed = 0
+                    ; cur_frame = empty_solver_frame ()
+                    ; prev_frames = solver.cur_frame :: solver.prev_frames
+                      (* we keep the prev_frames because things that were
+                         declared, would now be defined by the model.
+                         Do we need to copy?
+                       *)
+                    ; name_seed = solver.name_seed
                     ; globals = solver.globals
                     } in
     declare_solver_basics evaluator;
     List.iter (SMT.ack_command s) defs;
 
     fun e ->
-      SMT.ack_command s (SMT.push 1);
+      push evaluator;
       let inp = translate_term evaluator e in
       match SMT.check s with
       | SMT.Sat ->
           let res = SMT.get_expr s inp in
-          SMT.ack_command s (SMT.pop 1);
+          pop evaluator 1;
           Some (get_ivalue (basetype e) res)
       | _ ->
-          SMT.ack_command s (SMT.pop 1);
+          pop evaluator 1;
           None
 
 (* ---------------------------------------------------------------------------*)

@@ -331,18 +331,13 @@ let get_a sym = inspect_typing_context (fun s -> Context.get_a sym s)
 let get_l sym = inspect_typing_context (fun s -> Context.get_l sym s)
 
 
-let declare_in_solver x t =
-  fun s -> Ok (Solver.declare_var (Option.get s.solver) x t, s)
-
 let add_a sym bt info = 
-  let@ _ = declare_in_solver sym bt in
   modify_typing_context (fun s -> Context.add_a sym bt info s)
 
 let add_a_value sym value info =
   modify_typing_context (fun s -> (Context.add_a_value sym value info s))
 
 let add_l sym bt info =
-  let@ _ = declare_in_solver sym bt in
   modify_typing_context (fun s -> Context.add_l sym bt info s)
 
 let rec add_ls = function

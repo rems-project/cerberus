@@ -17,8 +17,6 @@ let random_seed = ref 1
 let log_to_temp = ref false
 let trace_all_queries = ref false
 
-let declare_var _ _ _ = ()
-
 module Slow_SMT_Tracing = struct
 
   let settings = ref (None : (string * float) option)
