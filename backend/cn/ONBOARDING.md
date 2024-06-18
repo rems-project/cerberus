@@ -51,6 +51,11 @@ a different entry point from which a parser can be started:
 5. Core is turned into mucore, during which process the remaining magic
   comments are parsed and desugared into mucore as well. *)
 
+### Example commits
+* [CN VIP: Add split_case](https://github.com/rems-project/cerberus/commit/67e60e701fefbcfb6c581a6c18eb2355a277afc4)
+* [CN Bitvectors: Update EachI construct w/ type annot](https://github.com/rems-project/cerberus/commit/79ddfa37fd199a147e6f4f55e2d5b73cea6b9d83)
+* [CN VIP: Add index term for CopyAllocId](https://github.com/rems-project/cerberus/commit/4081026bd0e9a27ad536e31713766cb275242d73)
+
 ## Key types
 
 * Basetypes: `backend/cn/baseTypes.ml`
