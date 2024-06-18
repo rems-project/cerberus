@@ -1658,5 +1658,59 @@ Section Z_arith.
     apply Zdiv.Zmod_0_l.
   Qed.
 
+  Lemma ltb_propositional a b c d :
+    Z.ltb a b = Z.ltb c d -> (a < b <-> c < d).
+  Proof.
+    intro H.
+    (* Introduce hypotheses for Z.ltb a b and Z.ltb c d *)
+    assert (Hab: Z.ltb a b = true \/ Z.ltb a b = false) by (destruct (Z.ltb a b); auto).
+    assert (Hcd: Z.ltb c d = true \/ Z.ltb c d = false) by (destruct (Z.ltb c d); auto).
+    destruct Hab as [Hab_true | Hab_false];
+      destruct Hcd as [Hcd_true | Hcd_false].
+    - (* Case: Z.ltb a b = true and Z.ltb c d = true *)
+      rewrite Hab_true in H.
+      rewrite Hcd_true in H.
+      split; intros.
+      + apply Z.ltb_lt. apply Z.ltb_lt in Hab_true. assumption.
+      + apply Z.ltb_lt. apply Z.ltb_lt in Hcd_true. assumption.
+    - (* Case: Z.ltb a b = true and Z.ltb c d = false *)
+      rewrite Hab_true in H.
+      rewrite Hcd_false in H.
+      discriminate.
+    - (* Case: Z.ltb a b = false and Z.ltb c d = true *)
+      rewrite Hab_false in H.
+      rewrite Hcd_true in H.
+      discriminate.
+    - (* Case: Z.ltb a b = false and Z.ltb c d = false *)
+      rewrite Hab_false in H.
+      rewrite Hcd_false in H.
+      split; intros.
+      + apply Z.ltb_nlt in Hab_false. exfalso. apply Hab_false. assumption.
+      + apply Z.ltb_nlt in Hcd_false. exfalso. apply Hcd_false. assumption.
+  Qed.
+
+  Lemma ltb_equiv_propositional a b c d :
+    (a < b <-> c < d) -> Z.ltb a b = Z.ltb c d.
+  Proof.
+    intros H.
+    destruct (Z.ltb a b) eqn:Hab;
+      destruct (Z.ltb c d) eqn:Hcd.
+    - (* Case: Z.ltb a b = true and Z.ltb c d = true *)
+      apply Z.ltb_lt in Hab.
+      apply Z.ltb_lt in Hcd.
+      reflexivity.
+    - (* Case: Z.ltb a b = true and Z.ltb c d = false *)
+      apply Z.ltb_lt in Hab.
+      apply Z.ltb_ge in Hcd.
+      exfalso. apply H in Hab. lia.
+    - (* Case: Z.ltb a b = false and Z.ltb c d = true *)
+      apply Z.ltb_ge in Hab.
+      apply Z.ltb_lt in Hcd.
+      exfalso. apply H in Hcd. lia.
+    - (* Case: Z.ltb a b = false and Z.ltb c d = false *)
+      apply Z.ltb_ge in Hab.
+      apply Z.ltb_ge in Hcd.
+      reflexivity.
+  Qed.
 
 End Z_arith.

@@ -2829,25 +2829,27 @@ Module Type CheriMemoryImpl
            end)
     end.
 
+  (* Helpe function *)
+  Definition cap_addr_of_pointer_value (ptr: pointer_value) : serr AddressValue.t :=
+    match ptr with
+    | PV _ (PVconcrete c) => ret (C.cap_get_value c)
+    | _ => raise "memcpy: invalid pointer value"
+    end.
+
   (** Copy caps meta-information between `memcpy` source and
-      destinations, only for positions where both source and desination
-      addresses align *)
+      destinations, only for positions where both source and
+      desination addresses align.
+
+      All tags in the destinaion region are ghosted (per [ghost_tags])
+      before copying.
+   *)
   Definition memcpy_copy_tags
     (loc: location_ocaml)
-    (dst_p src_p: pointer_value)
+    (dst_a src_a: AddressValue.t)
     (sz: nat)
     : memM unit :=
     let pointer_alignof_n := IMP.get.(alignof_pointer) in
     let pointer_alignof := Z.of_nat pointer_alignof_n in
-
-    let cap_addr_of_pointer_value (ptr: pointer_value) : serr AddressValue.t :=
-      match ptr with
-      | PV _ (PVconcrete c) => ret (C.cap_get_value c)
-      | _ => raise "memcpy: invalid pointer value"
-      end
-    in
-    dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
-    src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
 
     (* Calculate alignments *)
     let dst_align := (AddressValue.to_Z dst_a) mod pointer_alignof in
@@ -2873,7 +2875,7 @@ Module Type CheriMemoryImpl
                   (AddressValue.with_offset src_a off)
                   (Z.to_nat n)
                   pointer_alignof_n
-                  st.(capmeta))
+                  (ghost_tags src_a sz st.(capmeta)))
                st)
     else
       (* Source and destination regions are misaligned, no tags will be copied *)
@@ -2971,36 +2973,54 @@ Module Type CheriMemoryImpl
       | _, _ =>  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
       end.
 
-  (** Copy byte content of memory in given region.
-      Tags in this region will be "ghosted" per [ghost_tags].
-   *)
-  Fixpoint memcpy_copy_data
-    (loc: location_ocaml)
-    (ptrval1 ptrval2: pointer_value)
-    (size: nat):
-    memM unit :=
-    match size with
-    | O => ret tt
-    | S size =>
-        let sizen := Z.of_nat size in
-        ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV sizen) ;;
-        ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV sizen) ;;
-        '(_, mval) <- load loc CoqCtype.unsigned_char ptrval2' ;;
-        store loc CoqCtype.unsigned_char false ptrval1' mval ;;
-        memcpy_copy_data loc ptrval1 ptrval2 size
+  (* Helper function *)
+  Fixpoint bytmeta_copy_data
+    (dst src: AddressValue.t)
+    (n: nat)
+    (bm: AMap.M.t AbsByte)
+    : AMap.M.t AbsByte
+    :=
+    match n with
+    | O => bm
+    | S n =>
+        let bm' := bytmeta_copy_data dst src n bm in
+        match AMap.M.find (AddressValue.with_offset src (Z.of_nat n)) bm with
+        | None => AMap.M.remove (AddressValue.with_offset dst (Z.of_nat n)) bm'
+        | Some b => AMap.M.add (AddressValue.with_offset dst (Z.of_nat n)) b bm'
+        end
     end.
+
+  (** Copy byte content of memory in given region. No sanity checks
+      perfomed as it is supposed to be guarded by [memcpy_args_check].
+   *)
+  Definition memcpy_copy_data
+    (loc: location_ocaml)
+    (dst_a src_a: AddressValue.t)
+    (size: nat): memM unit :=
+    update (fun (st : mem_state) =>
+              mem_state_with_bytemap
+                (bytmeta_copy_data
+                   dst_a
+                   src_a
+                   size
+                   st.(bytemap))
+                st).
 
   Definition memcpy
     (loc: location_ocaml)
-    (ptrval1 ptrval2: pointer_value)
+    (dst_p src_p: pointer_value)
     (size_int: integer_value)
     : memM pointer_value
     :=
     let size_z := num_of_int size_int in
-    memcpy_args_check loc ptrval1 ptrval2 size_z ;;
-    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
-    memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat size_z) ;;
-    ret ptrval1.
+    memcpy_args_check loc dst_p src_p size_z ;;
+
+    dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
+    src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
+
+    memcpy_copy_data loc dst_a src_a (Z.to_nat size_z) ;;
+    memcpy_copy_tags loc dst_a src_a (Z.to_nat size_z) ;;
+    ret dst_p.
 
   Definition memcmp
     (ptrval1 ptrval2 : pointer_value)
