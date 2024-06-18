@@ -86,8 +86,9 @@ In the test/ directory:
 
 ---
 
-In the `executable-spec` directory:
+In the CN executable checks runtime:
 
-| License      | Files                                           | From                                 |
-| ------------ | ----------------------------------------------- | ------------------------------------ |
-| MIT          | executable-spec/{hash_table.c, hash_table.h}    | benhoyt                              |
+| License      | Files                                          - | From                                 |
+| ------------ | ------------------------------------------------ | ------------------------------------ |
+| MIT          | runtime/libcn/src/hash_table.c                   | benhoyt                              |
+| MIT          | runtime/libcn/include/cn-executable/hash_table.h | benhoyt                              |
