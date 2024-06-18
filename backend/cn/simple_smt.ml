@@ -460,6 +460,28 @@ let declare_datatype name type_params cons =
   in
   app_ "declare-datatype" [ atom name; def ]
 
+(** [declare_datatypes tys] defines a group of mutually recursive ADTs.
+Each element if `tys` is (name,type params,cons).
+*)
+let declare_datatypes tys =
+  let mk_field ((f,argTy):con_field)  = list [atom f; argTy] in
+  let mk_con (c,fs)       = list (atom c :: List.map mk_field fs) in
+  let mk_cons cons        = list (List.map mk_con cons) in
+  let def (_,type_params,cons) =
+    match type_params with
+    | [] -> mk_cons cons
+    | _  -> app_ "par" [ List (List.map atom type_params); mk_cons cons ]
+  in
+  let arity (name,ty_params,_) =
+        let n = List.length ty_params in
+        list [atom name; atom (string_of_int n) ]
+  in
+  app_ "declare-datatypes" [ list (List.map arity tys)
+                           ; list (List.map def tys)
+                           ]
+
+
+
 type pat = PVar of string | PCon of (string * string list)
 
 let match_datatype e alts =

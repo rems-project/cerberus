@@ -992,14 +992,20 @@ let shortcut simp_ctxt lc =
 
 (** {1 Solver Initialization} *)
 
-let declare_datatype s name info =
+let declare_datatype_group s names =
   let mk_con_field (l,t) =
         (CN_Names.datatype_field_name l, translate_base_type t) in
   let mk_con c =
     let ci = SymMap.find c s.globals.datatype_constrs in
     (CN_Names.datatype_con_name c, List.map mk_con_field ci.c_params) in
-  let cons = List.map mk_con info.dt_constrs in
-  ack_command s (SMT.declare_datatype (CN_Names.datatype_name name) [] cons)
+  let cons info = List.map mk_con info.dt_constrs in
+  let to_smt (x: Sym.t) =
+        let info = SymMap.find x s.globals.datatypes in
+        (CN_Names.datatype_name x, [], cons info)
+  in
+  ack_command s (SMT.declare_datatypes (List.map to_smt names))
+
+
 
 let declare_struct s name decl =
   let mk_field (l,t) =
@@ -1024,7 +1030,7 @@ let declare_solver_basics s =
 
   (* structs should go before datatypes *)
   SymMap.iter (declare_struct s) s.globals.struct_decls;
-  SymMap.iter (declare_datatype s) s.globals.datatypes
+  List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
 let logger base lab =
@@ -1034,7 +1040,7 @@ let logger base lab =
 
 
 let make globals =
-  let cfg = { SMT.z3 with log = logger SMT.printf_log "z3: " } in
+  let cfg = { SMT.z3 with log = logger SMT.quiet_log "z3: " } in
   let s = { smt_solver  = SMT.new_solver cfg
           ; cur_frame   = ref (empty_solver_frame ())
           ; prev_frames = ref []
