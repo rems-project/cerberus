@@ -7,8 +7,8 @@ void f (int *p)
   /*@ assert (ptr_eq(p, q)); @*/
 }
 
-int main(void) {
+int main(void)
+{
   int p[1] = {1};
   f(p);
-  return 0;
 }

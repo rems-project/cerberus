@@ -31,9 +31,10 @@ naive_memcpy (char *dst, char *src, int n)
   }
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   char *src = "hello";
   char dst[5];
   naive_memcpy(dst, src, 5);
-  return 0;
 }

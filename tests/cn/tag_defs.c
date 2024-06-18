@@ -9,8 +9,9 @@ int f(int *p)
     return 0;
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   int p[1] = {1};
   int r = f(p);
-  return 0;
 }

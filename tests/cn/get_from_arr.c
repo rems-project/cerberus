@@ -18,8 +18,9 @@ get_from_arr (char *in_arr)
   return c;
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   char *str = "hello";
   char c = get_from_arr(str);
-  return 0;
 }

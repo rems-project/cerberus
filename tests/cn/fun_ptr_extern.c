@@ -53,8 +53,7 @@ call_site (int x, int y) {
   return z;
 }
 
-int main(void) {
+int main(void)
+{
   int r = call_site(5, 42);
-  return 0;
 }
-
