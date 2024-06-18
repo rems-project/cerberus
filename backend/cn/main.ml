@@ -3,9 +3,8 @@ module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
 open Setup
-open Executable_spec_utils
 
-module A=CF.AilSyntax 
+module A=CF.AilSyntax
 
 
 let return = CF.Exception.except_return
@@ -120,7 +119,7 @@ let check_input_file filename =
 
 
 
-let main 
+let main
       filename
       macros
       incl_dirs
@@ -185,183 +184,32 @@ let main
      | (_, Some times) -> Some (times, "log")
      | _ -> None);
   try
-      let result =
-        let open Resultat in
-         let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, ail_prog) prog4 in
-         let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
-         print_log_file ("mucore", MUCORE prog5);
-         Cerb_colour.do_colour := false; (* Needed for executable spec printing *)
-         begin match output_decorated with
-         | None -> ()
-         | Some output_filename ->
-            let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
-            let oc = Stdlib.open_out (prefix ^ output_filename) in
-            let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
-            Executable_spec_internal.populate_record_map prog5;
-            let executable_spec = Executable_spec_internal.generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
-
-
-            let (c_datatypes, c_datatype_equality_fun_decls) = Executable_spec_internal.generate_c_datatypes ail_prog in
-            let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) = Executable_spec_internal.generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
-            let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) = Executable_spec_internal.generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
-            let (conversion_function_defs, _conversion_function_decls) = Executable_spec_internal.generate_conversion_and_equality_functions ail_prog in 
-            let (ownership_function_defs, ownership_function_decls) = Executable_spec_internal.generate_ownership_functions ownership_ctypes ail_prog in
-            let c_structs = Executable_spec_internal.print_c_structs ail_prog.tag_definitions in
-            let cn_converted_structs = Executable_spec_internal.generate_cn_versions_of_structs ail_prog.tag_definitions in 
-
-            let rec group_toplevel_defs new_list = function 
-              | [] -> new_list
-              | (loc, strs) :: xs -> 
-                let matching_elems = List.filter (fun (toplevel_loc, _) -> loc == toplevel_loc) new_list in
-                if List.is_empty matching_elems then 
-                  group_toplevel_defs ((loc, strs) :: new_list) xs
-                else
-                  (* Unsafe *)
-                  let (_, toplevel_strs) = List.nth matching_elems 0 in 
-                  let non_matching_elems = List.filter (fun (toplevel_loc, _) -> loc != toplevel_loc) new_list in
-                  group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs
-            in
-
-            
-            (* TODO: Remove - hacky *)
-            let cn_utils_header_pair = ("cn-executable/utils.h", true) in
-            let cn_utils_header = generate_include_header cn_utils_header_pair in
-
-            (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = Executable_spec_internal.generate_all_record_strs ail_prog in *)
-            let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
-            let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
-
-            
-            (* TODO: Topological sort *)
-            Stdlib.output_string cn_oc cn_utils_header;
-            Stdlib.output_string cn_oc c_structs;
-            Stdlib.output_string cn_oc cn_converted_structs;
-            Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
-            Stdlib.output_string cn_oc records_str;
-            Stdlib.output_string cn_oc records_str';
-            Stdlib.output_string cn_oc "\n/* CN DATATYPES */\n\n";
-            Stdlib.output_string cn_oc (String.concat "\n" (List.map snd c_datatypes));
-            Stdlib.output_string cn_oc record_equality_fun_strs;
-            Stdlib.output_string cn_oc record_equality_fun_strs';
-            Stdlib.output_string cn_oc conversion_function_defs;
-            Stdlib.output_string cn_oc ownership_function_defs;
-            Stdlib.output_string cn_oc c_function_decls;
-            Stdlib.output_string cn_oc c_function_defs;
-            Stdlib.output_string cn_oc c_predicate_defs;
-
-            let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
-            let headers = List.map generate_include_header incls in
-            Stdlib.output_string oc (List.fold_left (^) "" headers);
-            Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
-            Stdlib.output_string oc records_str;
-            Stdlib.output_string oc records_str';
-            Stdlib.output_string oc record_equality_fun_prot_strs;
-            Stdlib.output_string oc record_equality_fun_prot_strs';
-            Stdlib.output_string oc "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
-            Stdlib.output_string oc ownership_function_decls;
-            Stdlib.output_string oc "\n";
-
-
-
-            let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in 
-
-            let filter_injs_by_filename struct_inj_pairs fn = 
-              List.filter (fun (loc, _inj) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs
-            in
-            let source_file_struct_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames filename in
-            let source_file_struct_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) source_file_struct_injs_with_syms in
-
-            let included_filenames = List.map (fun (loc, _inj) -> Cerb_location.get_filename loc) struct_injs_with_filenames in 
-            let rec open_auxilliary_files included_filenames already_opened_list = match included_filenames with 
-              | [] -> []
-              | fn :: fns -> 
-                (match fn with 
-                  | Some fn' -> 
-                    if String.equal fn' filename || List.mem String.equal fn' already_opened_list then [] else 
-                    let fn_list = String.split_on_char '/' fn' in
-                    let output_fn = List.nth fn_list (List.length fn_list - 1) in 
-                    let output_fn_with_prefix = prefix ^ output_fn in
-                    if Sys.file_exists output_fn_with_prefix then 
-                      (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;
-                      open_auxilliary_files fns (fn' :: already_opened_list))
-                    else
-                      (Printf.printf "REACHED FILENAME: %s\n" output_fn_with_prefix;
-                      let output_channel = Stdlib.open_out output_fn_with_prefix in
-                      (fn', output_channel) :: open_auxilliary_files fns (fn' :: already_opened_list))
-                  | None -> [])
-            in 
-
-
-            let fns_and_ocs = open_auxilliary_files included_filenames [] in 
-            let rec inject_structs_in_header_files = function 
-              | [] -> ()
-              | (fn', oc') :: xs -> 
-                let header_file_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames fn' in
-                let header_file_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) header_file_injs_with_syms in
-                Stdlib.output_string oc' cn_utils_header;
-                begin match
-                  Source_injection.(output_injections oc'
-                    { filename=fn'; sigm= ail_prog
-                    ; pre_post=[]
-                    ; in_stmt=header_file_injs}
-                  )
-                with
-                | Ok () ->
-                    ()
-                | Error str ->
-                    (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
-                    prerr_endline str
-                end;
-                Stdlib.close_out oc';
-               inject_structs_in_header_files xs
-            in
-
-            let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
-            let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
-            (* let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in *)
-
-            let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
-
-            begin match
-              Source_injection.(output_injections oc
-                { filename; sigm= ail_prog
-                ; pre_post=executable_spec.pre_post
-                (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
-                ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs @ toplevel_locs_and_defs)}
-              )
-            with
-            | Ok () ->
-                ()
-            | Error str ->
-                (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
-                prerr_endline str
-            end;
-            inject_structs_in_header_files fns_and_ocs;
-
-         end;
-
-        match output_decorated with 
-          | None -> 
-            let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in 
-            return res
-          | Some _ -> 
+    let result =
+      let open Resultat in
+      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, ail_prog) prog4 in
+      print_log_file ("mucore", MUCORE prog5);
+      begin match output_decorated with
+      | None -> Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
+      | Some output_filename ->
+          Cerb_colour.without_colour begin fun () ->
+            Executable_spec.main filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
             return ()
-
-       in
-       Pp.maybe_close_times_channel ();
-       match result with
-       | Ok () -> exit 0
-       | Error e ->
-         if json then TypeErrors.report_json ?state_file e 
-         else TypeErrors.report ?state_file e;
-         match e.msg with
-         | TypeErrors.Unsupported _ -> exit 2
-         | _ -> exit 1
- with
-     | exc ->
-        Pp.maybe_close_times_channel ();
-        Cerb_debug.maybe_close_csv_timing_file_no_err ();
-        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ());
+          end ()
+      end in
+    Pp.maybe_close_times_channel ();
+    match result with
+    | Ok () -> exit 0
+    | Error e ->
+      if json then TypeErrors.report_json ?state_file e
+      else TypeErrors.report ?state_file e;
+      match e.msg with
+      | TypeErrors.Unsupported _ -> exit 2
+      | _ -> exit 1
+  with
+  | exc ->
+      Pp.maybe_close_times_channel ();
+      Cerb_debug.maybe_close_csv_timing_file_no_err ();
+      Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
 
 
 open Cmdliner
@@ -466,7 +314,6 @@ let skip =
 let output_decorated_dir =
   let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations to the provided directory" in
   Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
-  
 
 let output_decorated =
   let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations" in
