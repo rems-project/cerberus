@@ -5198,15 +5198,17 @@ Module RevocationProofs.
     (s: mem_state)
     (sz : Z)
     (AS: mempcpy_args_sane (allocations s) ptrval1 ptrval2 sz)
-    (DS: forall (p1 p2 : provenance) (c1 c2 : Capability_GS.t) (a1 a2 : AddressValue.t),
-        ptrval1 = PV p1 (PVconcrete c1) ->
-        ptrval2 = PV p2 (PVconcrete c2) ->
-        a1 = Capability_GS.cap_get_value c1 ->
-        a2 = Capability_GS.cap_get_value c2 ->
-        fetch_bytes (bytemap s) a1 (Z.to_nat sz) = fetch_bytes (bytemap s) a2 (Z.to_nat sz))
+    (p1 p2 : provenance)
+    (c1 c2 : Capability_GS.t)
+    (a1 a2 : AddressValue.t)
+    (P1: ptrval1 = PV p1 (PVconcrete c1))
+    (P2: ptrval2 = PV p2 (PVconcrete c2))
+    (A1: a1 = Capability_GS.cap_get_value c1)
+    (A2: a2 = Capability_GS.cap_get_value c2)
+    (F: fetch_bytes (bytemap s) a1 (Z.to_nat sz) = fetch_bytes (bytemap s) a2 (Z.to_nat sz))
     :
     PreservesInvariant mem_invariant s
-      (memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat sz)).
+      (memcpy_copy_tags loc a1 a2 (Z.to_nat sz)).
   Proof.
     inv AS.
     (* it looks, for now like we do not need any allocation stuff from [mempcpy_args_sane].
@@ -5214,23 +5216,9 @@ Module RevocationProofs.
     clear H0 H1 H2 H3 H4 H5 H6.
     remember (Capability_GS.cap_get_value c1) as a1 eqn:A1.
     remember (Capability_GS.cap_get_value c2) as a2 eqn:A2.
-    specialize (DS prov1 prov2 c1 c2 a1 a2).
-    autospecialize DS; [reflexivity|].
-    autospecialize DS; [reflexivity|].
-    specialize (DS A1 A2).
-
-    subst a1 a2.
+    invc H8.
+    invc H9.
     unfold memcpy_copy_tags.
-
-    apply bind_PreservesInvariant_value_SameState.
-    same_state_step.
-    intros H0 x H1.
-    state_inv_step.
-
-    apply bind_PreservesInvariant_value_SameState.
-    same_state_step.
-    intros H1 x H2.
-    state_inv_step.
 
     (* same alignment check *)
     break_if;bool_to_prop_hyp;[bool_to_prop_hyp|unfold PreservesInvariant;auto].
@@ -5249,19 +5237,19 @@ Module RevocationProofs.
     remember (Z.to_nat ((Z.of_nat (Z.to_nat sz) - off) / Z.of_nat (alignof_pointer MorelloImpl.get))) as n.
     preserves_step.
 
-    inversion AS. clear AS. subst allocations0 prov1 prov2 c0 c3 sz0. clear H1.
-    inversion H0. clear H0.
+    inversion AS. clear AS. subst allocations0 prov1 prov2 c0 c3 sz0.
+    inversion H0. rename H0 into MM.
     destruct_base_mem_invariant H1.
 
     pose proof (memcpy_alloc_bounds_check_p_c_bounds sz c1 c2 alloc0 alloc3) as [BL1 [BL2 B]].
-    apply (Bfit alloc_id0 alloc0 H8).
-    apply (Bfit alloc_id3 alloc3 H9).
+    apply (Bfit alloc_id0 alloc0 H6).
+    apply (Bfit alloc_id3 alloc3 H7).
     lia.
     assumption.
-    clear H8 H9 H10 H12 H13 H15 H16
+    clear H6 H7 H8 H10 H11 H13 H14
       alloc0 alloc3 alloc_id0 alloc_id3
       loc alloc_id1 alloc_id2 alloc1 alloc2
-      prov0 prov3.
+      p1 p2.
     clear Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr.
 
     apply mem_state_after_bytmeta_copy_tags_preserves with (sz:=(n *(alignof_pointer MorelloImpl.get))%nat).
@@ -5322,7 +5310,6 @@ Module RevocationProofs.
           lia.
     -
       intros x H0.
-      clear H3 DS H2.
       pose proof MorelloImpl.alignof_pointer_pos.
       break_match_hyp.
       +
@@ -5343,8 +5330,6 @@ Module RevocationProofs.
         rewrite Nat2Z.inj_mul in *.
         rewrite Z2Nat.id in * by (apply Z.div_pos;lia).
         pose proof (div_mul_undo_le sz (Z.of_nat (alignof_pointer MorelloImpl.get)) H).
-        autospecialize H3.
-        lia.
         lia.
       +
         (* c2 is not ptr aligned *)
@@ -5355,9 +5340,9 @@ Module RevocationProofs.
         assert(0 < off).
         {
           pose proof (Z.mod_bound_pos (AddressValue.to_Z (Capability_GS.cap_get_value c2)) (Z.of_nat (alignof_pointer MorelloImpl.get))).
-          autospecialize H2.
+          autospecialize H3.
           apply AddressValue.to_Z_in_bounds.
-          autospecialize H2.
+          autospecialize H3.
           lia.
           lia.
         }
@@ -5366,16 +5351,15 @@ Module RevocationProofs.
         rewrite <- 2!Z.add_assoc.
         apply B.
         split; [lia|].
-        clear B Heqb c1 s.
         remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)
                     mod Z.of_nat (alignof_pointer MorelloImpl.get)) as rem.
         remember (alignof_pointer MorelloImpl.get) as psize. clear Heqpsize.
         pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
-        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as addr. clear Heqaddr c2.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as addr.
         unfold AddressValue.ADDR_MIN in *.
         pose proof (Z.mod_bound_pos addr (Z.of_nat psize)).
-        autospecialize H4. lia.
-        autospecialize H4. lia.
+        autospecialize H6. lia.
+        autospecialize H6. lia.
         subst.
         rewrite Nat2Z.inj_mul in H0.
         rewrite Z2Nat.id in * by (apply Z.div_pos;lia).
@@ -5383,15 +5367,15 @@ Module RevocationProofs.
         remember (Z.of_nat psize) as zpsize.
         clear Heqzpsize cstr psize.
         rename zpsize into psize.
-        clear H7.
         destruct H3, H4, H0.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as addr.
         remember (psize - addr mod psize) as off.
         pose proof (div_mul_undo_le (sz-off) psize).
         autospecialize H8. lia.
         autospecialize H8. lia.
         lia.
     -
-      symmetry in DS.
+      symmetry in F.
       apply fetch_bytes_subset
         with
         (a1:=Capability_GS.cap_get_value c2)
@@ -5399,8 +5383,7 @@ Module RevocationProofs.
         (n:=Z.to_nat sz).
 
       1,2: (rewrite Znat.Z2Nat.id by lia;unfold AddressValue.ADDR_MIN in *;apply B).
-      apply DS.
-      clear DS.
+      apply F. clear F.
       exists off.
 
       repeat split; break_match_hyp; bool_to_prop_hyp; try lia.

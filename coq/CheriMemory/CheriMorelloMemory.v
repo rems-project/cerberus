@@ -2839,9 +2839,6 @@ Module Type CheriMemoryImpl
   (** Copy caps meta-information between `memcpy` source and
       destinations, only for positions where both source and
       desination addresses align.
-
-      All tags in the destinaion region are ghosted (per [ghost_tags])
-      before copying.
    *)
   Definition memcpy_copy_tags
     (loc: location_ocaml)
@@ -2875,7 +2872,7 @@ Module Type CheriMemoryImpl
                   (AddressValue.with_offset src_a off)
                   (Z.to_nat n)
                   pointer_alignof_n
-                  (ghost_tags src_a sz st.(capmeta)))
+                  st.(capmeta))
                st)
     else
       (* Source and destination regions are misaligned, no tags will be copied *)
@@ -3019,6 +3016,15 @@ Module Type CheriMemoryImpl
     src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
 
     memcpy_copy_data loc dst_a src_a (Z.to_nat size_z) ;;
+    (*
+      All tags in the destinaion region are ghosted (per [ghost_tags])
+      before copying.
+     *)
+
+    update (fun st =>
+              mem_state_with_capmeta
+                (ghost_tags src_a (Z.to_nat size_z) st.(capmeta)) st) ;;
+
     memcpy_copy_tags loc dst_a src_a (Z.to_nat size_z) ;;
     ret dst_p.
 
