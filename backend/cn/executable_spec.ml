@@ -1,109 +1,147 @@
-(* module CF=Cerb_frontend
-module CB=Cerb_backend
-open PPrint
-open CF.Cn
+let rec group_toplevel_defs new_list = function
+  | [] -> new_list
+  | (loc, strs) :: xs ->
+      let matching_elems = List.filter (fun (toplevel_loc, _) ->
+        loc == toplevel_loc
+      ) new_list in
+      if List.is_empty matching_elems then
+        group_toplevel_defs ((loc, strs) :: new_list) xs
+      else
+        (* Unsafe *)
+        let (_, toplevel_strs) = List.nth matching_elems 0 in
+        let non_matching_elems = List.filter (fun (toplevel_loc, _) ->
+          loc != toplevel_loc
+        ) new_list in
+        group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs
 
-module A=CF.AilSyntax 
-(* Executable spec helper functions *)
+open Executable_spec_internal
 
-type executable_spec = {
-    pre_post: (CF.Symbol.sym * (string list * string list)) list;
-    in_stmt: (Cerb_location.t * string) list;
-}
+let main filename ail_prog output_decorated_dir output_filename prog5 statement_locs =
+  let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
+  let oc = Stdlib.open_out (prefix ^ output_filename) in
+  let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
+  populate_record_map prog5;
+  let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
+  let executable_spec = generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
+  let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes ail_prog in
+  let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
+    generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+  let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) =
+    generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+  let (conversion_function_defs, _conversion_function_decls) =
+    generate_conversion_and_equality_functions ail_prog in
 
+  let ownership_function_defs, ownership_function_decls = generate_ownership_functions ownership_ctypes ail_prog in
+  let c_structs = print_c_structs ail_prog.tag_definitions in
+  let cn_converted_structs = generate_cn_versions_of_structs ail_prog.tag_definitions in
 
-let generate_c_statements cn_statements cn_datatypes =
-  let generate_c_statement (CN_statement (loc, stmt_)) = 
-    (* TODO: Remove pattern matching here - should only be in cn_to_ail.ml *)
-    let pp_statement =
-      match stmt_ with
-      | CN_assert_stmt e -> 
-        let ail_stats = Cn_to_ail.cn_to_ail_assertion e cn_datatypes in
-        let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in
-        CF.Pp_utils.to_plain_pretty_string (List.fold_left (^^) empty doc)
-      | _ -> ""
-    in 
-  (loc, pp_statement)
+  (* TODO: Remove - hacky *)
+  let cn_utils_header_pair = ("cn-executable/utils.h", true) in
+  let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
+
+  (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs ail_prog in *)
+  let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
+  let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
+
+  (* TODO: Topological sort *)
+  Stdlib.output_string cn_oc cn_utils_header;
+  Stdlib.output_string cn_oc c_structs;
+  Stdlib.output_string cn_oc cn_converted_structs;
+  Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
+  Stdlib.output_string cn_oc records_str;
+  Stdlib.output_string cn_oc records_str';
+  Stdlib.output_string cn_oc "\n/* CN DATATYPES */\n\n";
+  Stdlib.output_string cn_oc (String.concat "\n" (List.map snd c_datatypes));
+  Stdlib.output_string cn_oc record_equality_fun_strs;
+  Stdlib.output_string cn_oc record_equality_fun_strs';
+  Stdlib.output_string cn_oc conversion_function_defs;
+  Stdlib.output_string cn_oc ownership_function_defs;
+  Stdlib.output_string cn_oc c_function_decls;
+  Stdlib.output_string cn_oc c_function_defs;
+  Stdlib.output_string cn_oc c_predicate_defs;
+
+  let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
+  let headers = List.map Executable_spec_utils.generate_include_header incls in
+  Stdlib.output_string oc (List.fold_left (^) "" headers);
+  Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
+  Stdlib.output_string oc records_str;
+  Stdlib.output_string oc records_str';
+  Stdlib.output_string oc record_equality_fun_prot_strs;
+  Stdlib.output_string oc record_equality_fun_prot_strs';
+  Stdlib.output_string oc "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
+  Stdlib.output_string oc ownership_function_decls;
+  Stdlib.output_string oc "\n";
+
+  let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in
+
+  let filter_injs_by_filename struct_inj_pairs fn =
+    List.filter (fun (loc, _inj) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs
   in
-  List.map generate_c_statement cn_statements
+  let source_file_struct_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames filename in
+  let source_file_struct_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) source_file_struct_injs_with_syms in
 
-let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) type_map ail_prog =
-  let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in
-  let fn_decl = List.filter sym_equality ail_prog.A.declarations in
-  let fn_def = List.filter sym_equality ail_prog.A.function_definitions in
-  let (arg_types, arg_syms) = 
-  match (fn_decl, fn_def) with 
-    | ((_, (_, _, A.(Decl_function (_, _, arg_types, _, _, _)))) :: _), ((_, (_, _, _, arg_syms, _)) :: _) -> 
-      let arg_types = List.map (fun (_, ctype, _) -> ctype) arg_types in
-      (arg_types, arg_syms)
-    | _ -> ([], [])
-  in
-  let gen_old_var_fn = (fun sym -> (CF.Pp_symbol.to_string_pretty sym) ^ "_old") in
-  let empty_qualifiers : CF.Ctype.qualifiers = {const = false; restrict = false; volatile = false} in
-  let pp_ctype ctype = CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_ctype empty_qualifiers ctype) in
-  let arg_str_fn (ctype, sym) =
-    pp_ctype ctype ^
-    " " ^
-    gen_old_var_fn sym ^
-    " = " ^
-    CF.Pp_symbol.to_string_pretty sym ^
-    ";\n"
-  in
-  let arg_names = List.map CF.Pp_symbol.to_string_pretty arg_syms in
-  let arg_strs = List.map arg_str_fn (List.combine arg_types arg_syms) in
-  let generate_condition_str cn_condition arg_names_opt =
-    (let (ail_stats, type_info) = Cn_to_ail.cn_to_ail_condition cn_condition type_map ail_prog.cn_datatypes in
-    let strs = List.map (fun s -> Ail_to_c.pp_ail_stmt (s, type_info) arg_names_opt) ail_stats in
-    (List.fold_left (^) "" strs) ^ ";\n")
-  in
-  let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in
-  let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.surface.ensures in
-  [(instrumentation.fn, (arg_strs @ pres, posts))]
-
-
-
-(* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs instrumentation_list type_map (ail_prog : _ CF.AilSyntax.sigma) =
-  let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let c_pres_and_posts = generate_c_pres_and_posts instrumentation type_map ail_prog in 
-    let c_statements = generate_c_statements instrumentation.surface.statements ail_prog.cn_datatypes in
-    (c_pres_and_posts, c_statements)
-  in
-  let specs = List.map generate_c_spec instrumentation_list in 
-  let (pre_post, in_stmt) = List.split specs in
-  let pre_post = List.fold_left List.append [] pre_post in
-  let in_stmt = List.fold_left List.append [] in_stmt in
-  let executable_spec = {pre_post = pre_post; in_stmt = in_stmt} in
-  executable_spec
-
-let concat_map_newline docs = 
-  PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs
-
-let generate_c_datatypes cn_datatypes = 
-  let ail_datatypes = match cn_datatypes with
+  let included_filenames = List.map (fun (loc, _inj) -> Cerb_location.get_filename loc) struct_injs_with_filenames in
+  let rec open_auxilliary_files included_filenames already_opened_list = match included_filenames with
     | [] -> []
-    | (d :: ds) ->
-        let ail_dt1 = Cn_to_ail.cn_to_ail_datatype ~first:true d in
-        let ail_dts = List.map Cn_to_ail.cn_to_ail_datatype ds in
-        ail_dt1 :: ail_dts
+    | fn :: fns ->
+        begin match fn with
+        | Some fn' ->
+          if String.equal fn' filename || List.mem String.equal fn' already_opened_list then [] else
+          let fn_list = String.split_on_char '/' fn' in
+          let output_fn = List.nth fn_list (List.length fn_list - 1) in
+          let output_fn_with_prefix = prefix ^ output_fn in
+          if Sys.file_exists output_fn_with_prefix then
+            (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;
+            open_auxilliary_files fns (fn' :: already_opened_list))
+          else
+            (Printf.printf "REACHED FILENAME: %s\n" output_fn_with_prefix;
+            let output_channel = Stdlib.open_out output_fn_with_prefix in
+            (fn', output_channel) :: open_auxilliary_files fns (fn' :: already_opened_list))
+        | None -> []
+        end
   in
-  (* TODO: Fix number of newlines generated using fold *)
-  let generate_str_from_ail_dt (ail_dt: CF.GenTypes.genTypeCategory Cn_to_ail.ail_datatype) = 
-    let stats = List.map (fun c -> CF.Pp_ail.pp_statement ~executable_spec:true c ^^ PPrint.hardline) ail_dt.stats in
-    let stats = List.fold_left (^^) empty stats in
-    let decls_doc = List.map Ail_to_c.pp_ail_declaration ail_dt.decls in
-    let decls_doc = List.fold_left (^^) empty decls_doc in
-    let structs_doc = PPrint.concat_map (fun s -> CF.Pp_ail.pp_tag_definition ~executable_spec:true s ^^ PPrint.hardline) ail_dt.structs in 
-    (decls_doc ^^ PPrint.hardline ^^ stats, structs_doc)
-  in
-  let docs = List.map generate_str_from_ail_dt ail_datatypes in
-  let (consts, structs) = List.split docs in
-  CF.Pp_utils.to_plain_pretty_string (concat_map_newline consts ^^ concat_map_newline structs)
 
-let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
-  let cn_functions = ail_prog.cn_functions in 
-  let ail_funs = List.map (fun cn_f -> Cn_to_ail.cn_to_ail_function cn_f ail_prog.cn_datatypes) cn_functions in
-  let (decls, defs) = List.split ail_funs in
-  let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
-  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
-  CF.Pp_utils.to_plain_pretty_string doc *)
+  let fns_and_ocs = open_auxilliary_files included_filenames [] in
+  let rec inject_structs_in_header_files = function
+  | [] -> ()
+  | (fn', oc') :: xs ->
+    let header_file_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames fn' in
+    let header_file_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) header_file_injs_with_syms in
+    Stdlib.output_string oc' cn_utils_header;
+    begin match
+      Source_injection.(output_injections oc'
+        { filename=fn'; sigm= ail_prog
+        ; pre_post=[]
+        ; in_stmt=header_file_injs}
+      )
+    with
+    | Ok () ->
+        ()
+    | Error str ->
+        (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+        prerr_endline str
+    end;
+    Stdlib.close_out oc';
+    inject_structs_in_header_files xs
+  in
+
+  let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
+  let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
+  (* let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in *)
+
+  let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
+  begin match
+  Source_injection.(output_injections oc
+    { filename; sigm= ail_prog
+    ; pre_post=executable_spec.pre_post
+    (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
+    ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs @ toplevel_locs_and_defs)}
+  )
+with
+| Ok () ->
+    ()
+| Error str ->
+    (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+    prerr_endline str
+end;
+inject_structs_in_header_files fns_and_ocs
