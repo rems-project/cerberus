@@ -15,7 +15,7 @@ open Pp
 (* XXX: probably should add some prefixes to try to avoid name collisions. *)
 (** Functions that pick names for things. *)
 module CN_Names = struct
-  let var_name x            = Sym.pp_string x
+  let var_name x            = Sym.pp_string x ^ string_of_int (Sym.num x)
   let named_expr_name       = "_cn_named"
   let uninterpreted_name x  = Sym.pp_string x
 
@@ -65,11 +65,11 @@ type solver =
   { smt_solver: SMT.solver
     (** The SMT solver connection. *)
 
-  ; mutable cur_frame:   solver_frame
-  ; mutable prev_frames: solver_frame list
+  ; cur_frame:   solver_frame ref
+  ; prev_frames: (solver_frame list) ref
     (** Push/pop model. Current frame, and previous frames. *)
 
-  ; mutable name_seed: int
+  ; name_seed: int ref
     (** Used to generate names. *)
     (* XXX: This could, perhaps, go in the frame.  Then when we pop frames,
        we'd go back to the old numbers, which should be OK, I think? *)
@@ -78,27 +78,27 @@ type solver =
   }
 
 module Debug = struct
-  let dump_frame f =
+  let dump_frame (f: solver_frame) =
     let dump k v = Printf.printf "| %s\n%!" (Sym.pp_string k) in
     SymMap.iter dump f.uninterpreted;
     Printf.printf "+--------------------\n%!"
 
   let _dump_solver solver =
     Printf.printf "| Start Solver Dump\n%!";
-    dump_frame solver.cur_frame;
-    List.iter dump_frame solver.prev_frames;
+    dump_frame !(solver.cur_frame);
+    List.iter dump_frame !(solver.prev_frames);
     Printf.printf "| End Solver Dump\n%!"
 end
 
 (** Lookup something in one of the existing frames *)
-let search_frames s f = List.find_map f (s.cur_frame :: s.prev_frames)
+let search_frames s f = List.find_map f (!(s.cur_frame) :: !(s.prev_frames))
 
 
 (** Start a new scope. *)
 let push s =
   SMT.ack_command s.smt_solver (SMT.push 1);
-  s.prev_frames <- s.cur_frame :: s.prev_frames;
-  s.cur_frame   <- empty_solver_frame ()
+  s.prev_frames := !(s.cur_frame) :: !(s.prev_frames);
+  s.cur_frame   := empty_solver_frame ()
 
 (** Return to the previous scope.  Assumes that there is a previous scope. *)
 let pop s n =
@@ -111,26 +111,28 @@ let pop s n =
                 | new_cur :: new_rest ->
                   if count = 1
                     then begin
-                      s.cur_frame <- new_cur;
-                      s.prev_frames <- new_rest
+                      s.cur_frame := new_cur;
+                      s.prev_frames := new_rest
                     end else drop (count - 1) new_rest
                 | _ -> assert false
       in
-      drop n s.prev_frames
+      drop n !(s.prev_frames)
     end
 
-let num_scopes s = List.length s.prev_frames
+let num_scopes s = List.length !(s.prev_frames)
 
 (** Do an ack_style command. These are logged. *)
 let ack_command s cmd =
   SMT.ack_command s.smt_solver cmd;
-  s.cur_frame.commands <- cmd :: s.cur_frame.commands
+  let f = !(s.cur_frame) in
+  f.commands <- cmd :: f.commands
 
 (** Generate a fersh name *)
 let fresh_name s x =
-  let n = s.name_seed in
-  s.name_seed <- s.name_seed + 1;
-  x ^ "_" ^ string_of_int n
+  let n = !(s.name_seed) in
+  s.name_seed := n + 1;
+  let res = x ^ "_" ^ string_of_int n in
+  res
 
 (** Declare an uninterpreted function. *)
 let declare_uninterpreted s name args_ts res_t =
@@ -141,7 +143,8 @@ let declare_uninterpreted s name args_ts res_t =
     let sname = CN_Names.uninterpreted_name name in
     ack_command s (SMT.declare_fun sname args_ts res_t);
     let e = SMT.atom sname in
-    s.cur_frame.uninterpreted <- SymMap.add name e s.cur_frame.uninterpreted;
+    let f = !(s.cur_frame) in
+    f.uninterpreted <- SymMap.add name e f.uninterpreted;
     e
 
  
@@ -155,7 +158,7 @@ let declare_bt_uninterpreted s (name,k) bt args_ts res_t =
     let sname = fresh_name s name in
     ack_command s (SMT.declare_fun sname args_ts res_t);
     let e = SMT.atom sname in
-    let top_map = s.cur_frame.bt_uninterpreted in
+    let top_map = !(s.cur_frame).bt_uninterpreted in
     let mp = match Int_Table.find_opt top_map k with
              | Some m -> m
              | None   ->
@@ -378,7 +381,7 @@ let rec translate_const s co =
   | Pointer p ->
     begin match Memory.intptr_bt with
     | Bits (_,w) ->
-        SMT.app_ CN_Pointer.name [ SMT.int_zk p.alloc_id; SMT.bv_k w p.addr ]
+        CN_Pointer.con (CN_AllocId.to_sexp p.alloc_id) (SMT.bv_k w p.addr)
     | _ -> failwith "translate_const: Pointer is not Bits."
     end
 
@@ -459,7 +462,8 @@ let translate_var s name bt =
     let sname = CN_Names.var_name name in
     ack_command s (SMT.declare sname (translate_base_type bt));
     let e = SMT.atom sname in
-    s.cur_frame.uninterpreted <- SymMap.add name e s.cur_frame.uninterpreted;
+    let f = !(s.cur_frame) in
+    f.uninterpreted <- SymMap.add name e f.uninterpreted;
     e
 
 
@@ -914,7 +918,8 @@ let rec translate_term s iterm =
     begin match IT.bt t, cbt with
 
     | Bits _, Loc ->
-      CN_Pointer.con (SMT.int_k 0) (bv_cast Memory.intptr_bt (IT.bt t) smt_term)
+      CN_Pointer.con (CN_AllocId.to_sexp Z.zero)
+                     (bv_cast Memory.intptr_bt (IT.bt t) smt_term)
 
     | Loc, Bits _ ->
       bv_cast cbt Memory.intptr_bt (CN_Pointer.get_addr smt_term)
@@ -932,8 +937,9 @@ let rec translate_term s iterm =
 
 
 let add_assumption solver global lc =
+  let s1 = { solver with globals = global } in
   match lc with
-    | T it -> ack_command solver (SMT.assume (translate_term solver it))
+    | T it -> ack_command solver (SMT.assume (translate_term s1 it))
     | Forall _ -> ()
 
 
@@ -1028,17 +1034,20 @@ let logger base lab =
 
 
 let make globals =
-  let cfg = { SMT.cvc5 with log = logger SMT.quiet_log "cvc5: " } in
+  let cfg = { SMT.z3 with log = logger SMT.printf_log "z3: " } in
   let s = { smt_solver  = SMT.new_solver cfg
-          ; cur_frame   = empty_solver_frame ()
-          ; prev_frames = []
-          ; name_seed   = 0
+          ; cur_frame   = ref (empty_solver_frame ())
+          ; prev_frames = ref []
+          ; name_seed   = ref 0
           ; globals     = globals
           }
   in declare_solver_basics s; s
 
 
 let model_evaluator solver mo =
+  match None with
+  | None -> fun _ -> None
+  | _ ->
   match SMT.to_list mo with
   | None -> failwith "model is an atom"
   | Some defs ->
@@ -1046,8 +1055,9 @@ let model_evaluator solver mo =
     let cfg = { scfg with log = logger scfg.log ":model: " } in
     let s = SMT.new_solver cfg in
     let evaluator = { smt_solver = s
-                    ; cur_frame = empty_solver_frame ()
-                    ; prev_frames = solver.cur_frame :: solver.prev_frames
+                    ; cur_frame = ref (empty_solver_frame ())
+                    ; prev_frames = ref (!(solver.cur_frame) ::
+                                         !(solver.prev_frames))
                       (* we keep the prev_frames because things that were
                          declared, would now be defined by the model.
                          Do we need to copy?
@@ -1095,22 +1105,23 @@ let model () =
 
 
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
+  let s1 = { solver with globals = global } in
   let rtrue () = model_state := No_model; `True in
   match shortcut simp_ctxt lc with
   | `True -> rtrue ()
 
   | `No_shortcut lc ->
-     let {expr; qs; extra} = translate_goal solver assumptions pointer_facts lc
+     let {expr; qs; extra} = translate_goal s1 assumptions pointer_facts lc
      in
      let model_from sol =
            let defs = SMT.get_model sol in
-           let mo   = model_evaluator solver defs in
+           let mo   = model_evaluator s1 defs in
            model_state := Model (mo, qs)
      in
 
      let nlc = SMT.bool_not expr in
 
-     let inc = solver.smt_solver in
+     let inc = s1.smt_solver in
      SMT.ack_command inc (SMT.push 1);
      SMT.ack_command inc (SMT.assume (SMT.bool_ands (nlc :: extra)));
      let res = SMT.check inc in
