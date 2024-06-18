@@ -83,15 +83,6 @@ let magic_to_opt_attrs = function
   | [] -> None
   | magic -> Some (magic_to_attrs magic)
 
-let append_magic loc magic stmt =
-  match magic with
-    | [] -> stmt
-    | _  -> (* let loc = Location_ocaml.bbox_location (List.map fst magic) in *)
-            CabsStatement (loc, magic_to_attrs magic, CabsSmarker stmt)
-
-let mk_statement magic (loc, attrs, stmt_) =
-  append_magic loc magic (CabsStatement (loc, attrs, stmt_))
-
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
   if not (Cerb_global.isPermissive ()) then
