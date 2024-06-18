@@ -16,30 +16,30 @@ let rec group_toplevel_defs new_list = function
 
 open Executable_spec_internal
 
-let main filename ail_prog output_decorated_dir output_filename prog5 statement_locs =
+let main filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
   let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
   let oc = Stdlib.open_out (prefix ^ output_filename) in
   let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
   populate_record_map prog5;
   let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
-  let executable_spec = generate_c_specs_internal instrumentation symbol_table statement_locs ail_prog prog5 in
-  let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes ail_prog in
+  let executable_spec = generate_c_specs_internal instrumentation symbol_table statement_locs sigm prog5 in
+  let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
   let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
-    generate_c_functions_internal ail_prog prog5.mu_logical_predicates in
+    generate_c_functions_internal sigm prog5.mu_logical_predicates in
   let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) =
-    generate_c_predicates_internal ail_prog prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+    generate_c_predicates_internal sigm prog5.mu_resource_predicates executable_spec.ownership_ctypes in
   let (conversion_function_defs, _conversion_function_decls) =
-    generate_conversion_and_equality_functions ail_prog in
+    generate_conversion_and_equality_functions sigm in
 
-  let ownership_function_defs, ownership_function_decls = generate_ownership_functions ownership_ctypes ail_prog in
-  let c_structs = print_c_structs ail_prog.tag_definitions in
-  let cn_converted_structs = generate_cn_versions_of_structs ail_prog.tag_definitions in
+  let ownership_function_defs, ownership_function_decls = generate_ownership_functions ownership_ctypes sigm in
+  let c_structs = print_c_structs sigm.tag_definitions in
+  let cn_converted_structs = generate_cn_versions_of_structs sigm.tag_definitions in
 
   (* TODO: Remove - hacky *)
   let cn_utils_header_pair = ("cn-executable/utils.h", true) in
   let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
 
-  (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs ail_prog in *)
+  (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs sigm in *)
   let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
   let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
 
@@ -72,7 +72,7 @@ let main filename ail_prog output_decorated_dir output_filename prog5 statement_
   Stdlib.output_string oc ownership_function_decls;
   Stdlib.output_string oc "\n";
 
-  let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs ail_prog in
+  let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
 
   let filter_injs_by_filename struct_inj_pairs fn =
     List.filter (fun (loc, _inj) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs
@@ -110,7 +110,7 @@ let main filename ail_prog output_decorated_dir output_filename prog5 statement_
     Stdlib.output_string oc' cn_utils_header;
     begin match
       Source_injection.(output_injections oc'
-        { filename=fn'; sigm= ail_prog
+        { filename=fn'; program= ail_prog
         ; pre_post=[]
         ; in_stmt=header_file_injs}
       )
@@ -132,7 +132,7 @@ let main filename ail_prog output_decorated_dir output_filename prog5 statement_
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
   begin match
   Source_injection.(output_injections oc
-    { filename; sigm= ail_prog
+    { filename; program= ail_prog
     ; pre_post=executable_spec.pre_post
     (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
     ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs @ toplevel_locs_and_defs)}

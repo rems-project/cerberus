@@ -418,7 +418,7 @@ let return_injs stmt =
 (* EXTERNAL *)
 type 'a cn_injection = {
   filename: string;
-  sigm: 'a A.sigma;
+  program: 'a A.ail_program;
   pre_post: (Symbol.sym * (string list * string list)) list;
   in_stmt: (Cerb_location.t * string list) list;
 }
@@ -432,9 +432,11 @@ let output_injections oc cn_inj =
         acc_
       else match List.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
         | Some pre_post_strs ->
-            begin match acc_, List.assoc Symbol.equal_sym fun_sym cn_inj.sigm.A.declarations with
+            begin match acc_, List.assoc Symbol.equal_sym fun_sym (snd cn_inj.program).A.declarations with
               | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
-                  let is_main = String.equal (Sym.pp_string fun_sym) "main" in
+                  let is_main = match fst cn_inj.program with
+                    | Some main_sym when Symbol.equal_sym main_sym fun_sym -> true
+                    | _ -> false in
                   let* (pre, post) = pre_post_injs pre_post_strs ret_ty is_main stmt in
                   let* rets = return_injs stmt in
                   Ok (pre :: post ::  rets @ acc)
@@ -443,7 +445,7 @@ let output_injections oc cn_inj =
             end
         | None ->
             acc_
-    ) (Ok []) cn_inj.sigm.A.function_definitions in
+    ) (Ok []) (snd cn_inj.program).A.function_definitions in
 
     let* in_stmt = in_stmt_injs cn_inj.in_stmt 0 in
     let injs = in_stmt @ injs in
