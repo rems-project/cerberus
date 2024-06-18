@@ -211,11 +211,11 @@ static inline int ipow(int base, int exp)
         return res;\
     }
 
-/* TODO: Fix to work with size of CNTYPE, not just generic addition */
-#define CN_GEN_ARRAY_SHIFT(CNTYPE)\
+
+#define CN_GEN_ARRAY_SHIFT(CTYPE, CNTYPE)\
     static inline cn_pointer *cn_array_shift_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
         cn_pointer *res = alloc(sizeof(cn_pointer));\
-        res->ptr = ptr->ptr + *(i->val);\
+        res->ptr = (CTYPE *) ptr->ptr + (*(i->val) * sizeof(CTYPE));\
         return res;\
     }
 
@@ -302,7 +302,7 @@ static inline int ipow(int base, int exp)
    CN_GEN_INCREMENT(CNTYPE)\
    CN_GEN_PTR_ADD(CNTYPE)\
    CN_GEN_CASTS_INNER(CTYPE, CNTYPE)\
-   CN_GEN_ARRAY_SHIFT(CNTYPE)\
+   CN_GEN_ARRAY_SHIFT(CTYPE, CNTYPE)\
 
 CN_GEN_ALL(signed char, cn_bits_i8)
 CN_GEN_ALL(signed short, cn_bits_i16)
