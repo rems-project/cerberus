@@ -7,6 +7,8 @@ perhaps request a pair-programming time to get started with it, and get stuck
 in. However, this document should provide a conceptual structure on which to
 hang the details as one fills them in.
 
+* [(video) 18/06/2024: Walkthrough with Q&A](https://drive.google.com/file/d/15aoDeTGtcx_JbESEli6aICcSC5eo8fEV/view?usp=sharing)
+
 ## Submitting PRs
 
 General principles:
