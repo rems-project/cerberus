@@ -2,7 +2,7 @@ open Cerb_frontend
 
 type 'a cn_injection = {
   filename: string;
-  sigm: 'a AilSyntax.sigma;
+  program: 'a AilSyntax.ail_program;
   pre_post: (Symbol.sym * (string list * string list)) list;
   in_stmt: (Cerb_location.t * string list) list;
 }

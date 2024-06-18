@@ -77,13 +77,13 @@ let frontend macros incl_dirs incl_files astprints do_peval filename magic_comme
     else
       return ()
   end in
-  let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
+  let markers_env, ail_prog = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
   let prog2 = if do_peval then Core_peval.rewrite_file prog1 else prog1 in
   let prog3 = Milicore.core_to_micore__file Locations.update prog2 in
   let prog4 = Milicore_label_inline.rewrite_file prog3 in
-  let statement_locs = CStatements.search ail_prog in
+  let statement_locs = CStatements.search (snd ail_prog) in
   print_log_file ("original", CORE prog0);
   print_log_file ("without_unspec", CORE prog1);
   print_log_file ("after_peval", CORE prog2);
@@ -186,7 +186,7 @@ let main
   try
     let result =
       let open Resultat in
-      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, ail_prog) prog4 in
+      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
       print_log_file ("mucore", MUCORE prog5);
       begin match output_decorated with
       | None -> Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
