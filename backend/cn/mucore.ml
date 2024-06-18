@@ -312,7 +312,7 @@ let rec argument_type = function
       AT.L (largument_type a)
 
 
-let dtree_of_mu_arguments dtree_i = 
+let dtree_of_mu_arguments dtree_i =
   let rec aux = function
   | M_Computational ((s, _bt), _, lat) ->
      Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); aux lat])
