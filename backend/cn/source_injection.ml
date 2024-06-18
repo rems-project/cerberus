@@ -1,4 +1,3 @@
-[@@@warning "-27"]
 open Cerb_frontend
 
 module Pos : sig
@@ -19,10 +18,10 @@ end = struct
     line: int;
     col: int;
   }
-  
+
   let compare pos1 pos2 =
     Stdlib.compare (pos1.line, pos1.col) (pos2.line, pos2.col)
-  
+
   let to_string pos =
     Printf.sprintf "{line: %d, col: %d}" pos.line pos.col
 
@@ -31,13 +30,13 @@ end = struct
 
   let initial =
     v 1 1
-  
+
   let newline pos =
     { line= pos.line + 1; col= 1 }
-  
+
   let offset_col ~off pos =
     if pos.col + off < 0 then
-      Error (__FUNCTION__ ^ ": pos.col < off") 
+      Error (__FUNCTION__ ^ ": pos.col < off")
     else
       Ok { pos with col= pos.col+off}
   let increment_line pos n =
@@ -87,7 +86,8 @@ let decorate_injection str =
   else
     str
 
-let move_to_line ?(print=true) ?(no_ident=false) st line =
+(* TODO: why isn't no_ident used? *)
+let [@warning "-27"] move_to_line ?(print=true) ?(no_ident=false) st line =
   assert (line > 0);
   assert (line >= st.current_pos.line);
   let rec aux st n =
@@ -363,12 +363,12 @@ let in_stmt_injs xs num_headers =
           end_pos= Pos.v (end_pos.line + num_headers) end_pos.col;
       }
       ; kind= InStmt (List.length strs, String.concat "\n" strs) }
-  ) 
+  )
   xs
   (* (List.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs) *)
 
 (* build the injections for the pre/post conditions of a C function *)
-let pre_post_injs pre_post is_void (A.AnnotatedStatement (loc, _, stmt_)) =
+let pre_post_injs pre_post is_void (A.AnnotatedStatement (loc, _, _)) =
   let* (pre_pos, post_pos) =
     let* (pre_pos, post_pos) = Pos.of_location loc in
     let* pre_pos = Pos.offset_col ~off:1 pre_pos in
@@ -443,13 +443,11 @@ let output_injections oc cn_inj =
             acc_
     ) (Ok []) cn_inj.sigm.A.function_definitions in
 
-    
     let* in_stmt = in_stmt_injs cn_inj.in_stmt 0 in
     let injs = in_stmt @ injs in
     ignore (inject_all oc cn_inj.filename injs);
     Ok ()
   end ()
-
 
 
 open Cerb_frontend

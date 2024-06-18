@@ -1552,7 +1552,7 @@ type internal = {
 
 type statements = (Locations.t * Cnprog.cn_prog list) list
 
-type fn_spec_instrumentation = 
+type fn_spec_instrumentation =
   (ReturnTypes.t * statements) ArgumentTypes.t
 
 type instrumentation = {
@@ -1563,13 +1563,13 @@ type instrumentation = {
 
 let rt_stmts_subst = (fun subst (rt, stmts) ->
    let rt = ReturnTypes.subst subst rt in
-   let stmts = 
+   let stmts =
      List.map (fun (loc, cn_progs) ->
        (loc, List.map (Cnprog.subst subst) cn_progs)
      ) stmts
    in
    (rt, stmts)
- ) 
+ )
 
 let fn_spec_instrumentation_subst_at : _ Subst.t -> fn_spec_instrumentation -> fn_spec_instrumentation =
   ArgumentTypes.subst rt_stmts_subst
@@ -1579,15 +1579,15 @@ let fn_spec_instrumentation_subst_lat : _ Subst.t -> (ReturnTypes.t * statements
 
 
 (* substitute `s_with` for `s_replace` of basetype `bt` *)
-let fn_spec_instrumentation_sym_subst_at (s_replace, bt, s_with) fn_spec = 
+let fn_spec_instrumentation_sym_subst_at (s_replace, bt, s_with) fn_spec =
   let subst = IT.make_subst [(s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown))] in
   fn_spec_instrumentation_subst_at subst fn_spec
 
-let fn_spec_instrumentation_sym_subst_lat (s_replace, bt, s_with) fn_spec = 
+let fn_spec_instrumentation_sym_subst_lat (s_replace, bt, s_with) fn_spec =
    let subst = IT.make_subst [(s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown))] in
    fn_spec_instrumentation_subst_lat subst fn_spec
 
-let fn_spec_instrumentation_sym_subst_lrt (s_replace, bt, s_with) fn_spec = 
+let fn_spec_instrumentation_sym_subst_lrt (s_replace, bt, s_with) fn_spec =
    let subst = IT.make_subst [(s_replace, IT.sym_ (s_with, bt, Cerb_location.unknown))] in
    LRT.subst subst fn_spec
 
@@ -1643,12 +1643,12 @@ let stmts_in_function args_and_body =
 
 
 let collect_instrumentation (file : _ mu_file) =
-  let instrs = 
+  let instrs =
     List.map (fun (fn, decl) ->
         match decl with
         | M_Proc (fn_loc, args_and_body, _trusted, _spec) ->
             let args_and_body = argument_type args_and_body in
-            let internal = 
+            let internal =
               ArgumentTypes.map (fun (body, labels, rt) ->
                   let _, stmts = concat2 (stmts_in_expr body) (stmts_in_labels labels) in
                   (rt, stmts)
