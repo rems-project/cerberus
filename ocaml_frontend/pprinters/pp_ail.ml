@@ -395,16 +395,13 @@ let pp_integerSuffix =
     | UL  -> "UL"
     | ULL -> "ULL"
     | L   -> "L"
-    | LL  -> "LL"
-    | B -> "B" in
+    | LL  -> "LL" in
   fun z -> P.string (to_string z)
 
 
 (* TODO: should reverse the decoding of n *)
 let pp_integerConstant = function
   (* Case only generated during executable spec translation *)
-  | IConstant (n, Decimal, Some B) ->
-    !^ (Bool.to_string (Z.to_int n == 1))
   | IConstant (n, basis, suff_opt) ->
       !^ (match basis with
             | Octal       -> String_nat_big_num.string_of_octal n
@@ -475,6 +472,10 @@ let rec pp_constant ?(executable_spec=false) = function
      )
  | ConstantUnion (tag_sym, memb_ident, cst) ->
      P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant ~executable_spec cst)
+  | ConstantPredefined PConstantFalse ->
+      pp_keyword "false"
+  | ConstantPredefined PConstantTrue ->
+      pp_keyword "true"
  
 let pp_ail_builtin = function
   | AilBatomic b ->

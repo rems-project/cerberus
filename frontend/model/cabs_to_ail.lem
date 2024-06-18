@@ -652,6 +652,10 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         E.return false
     | AilEconst (ConstantCharacter _) ->
         E.return true
+    | AilEconst (ConstantPredefined PConstantFalse) ->
+        E.return true
+    | AilEconst (ConstantPredefined PConstantTrue) ->
+        E.return true
     | AilEsizeof _ ty ->
         if AilTypesAux.is_vla ty then
           (* STD §6.5.3.4#2, sentence 4 *)
@@ -788,6 +792,10 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
     | AilEconst (ConstantFloating _) ->
         E.return true
     | AilEconst (ConstantCharacter _) ->
+        E.return true
+    | AilEconst (ConstantPredefined PConstantFalse) ->
+        E.return true
+    | AilEconst (ConstantPredefined PConstantTrue) ->
         E.return true
 (*
     | AilEconst (ConstantArray _) ->

@@ -17,7 +17,7 @@ module LRT=LogicalReturnTypes
 module LAT=LogicalArgumentTypes
 module AT=ArgumentTypes
 
-let true_const = A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int true), Decimal, Some B)))
+let true_const = A.AilEconst (ConstantPredefined PConstantTrue)
 
 let standardise_sym sym' = 
   let sym_str = Sym.pp_string sym' in
@@ -417,7 +417,7 @@ let rec cn_to_ail_const_internal = function
     (* Printf.printf "In Pointer case; const\n"; *)
     A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
   | Alloc_id _ -> failwith "TODO Alloc_id"
-  | Bool b -> A.AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B)))
+  | Bool b -> A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse))
   | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void)))
   | Null -> A.AilEconst (ConstantNull)
   | CType_const _ -> failwith "TODO CType_const"
