@@ -427,6 +427,11 @@ module IndexTerms = struct
            let z1 = BT.normalise_to_range bits_info1 z1 in
            let z2 = BT.normalise_to_range bits_info2 z2 in
            bool_ (Z.equal z1 z2) the_loc
+         (* Work-around for https://github.com/Z3Prover/z3/issues/7352 *)
+         | ( IT (ArrayShift { base = base1; ct = ct1; index = index1 }, _, _),
+             IT (ArrayShift { base = base2; ct = ct2; index = index2 }, _, _) )
+           when Sctypes.equal ct1 ct2 && IT.equal index1 index2 ->
+           eq_ (base1, base2) the_loc
          (* (cond ? const-1 : const-2) == const-3 *)
          | IT (ITE (cond, t1, t2), _, _), t3 when (is_c t1 || is_c t2) && is_c t3 ->
            aux
@@ -502,7 +507,7 @@ module IndexTerms = struct
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
           let loc = Cerb_location.other __FUNCTION__ in
-          aux (lt_ (pointerToIntegerCast_ a loc, pointerToIntegerCast_ b loc) the_loc))
+          aux (lt_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ false the_loc
         else
@@ -512,7 +517,7 @@ module IndexTerms = struct
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
           let loc = Cerb_location.other __FUNCTION__ in
-          aux (le_ (pointerToIntegerCast_ a loc, pointerToIntegerCast_ b loc) the_loc))
+          aux (le_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ true the_loc
         else

@@ -57,7 +57,7 @@ let init_state = { loc_map = IntMap.empty; next_loc = 1 }
 let mk_local_ptr state src_loc =
   let loc_ix = state.next_loc in
   let here = Locations.other __FUNCTION__ in
-  let ptr = IT.pred_ local_sym_ptr [ IT.int_ loc_ix here ] BT.Loc src_loc in
+  let ptr = IT.apply_ local_sym_ptr [ IT.int_ loc_ix here ] BT.Loc src_loc in
   let loc_map = IntMap.add loc_ix None state.loc_map in
   let state = { loc_map; next_loc = loc_ix + 1 } in
   (ptr, state)
@@ -548,7 +548,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     if SymMap.mem nm ctxt.c_fun_pred_map then (
       let loc, l_sym = SymMap.find nm ctxt.c_fun_pred_map in
       let@ def = get_logical_function_def loc l_sym in
-      rcval (IT.pred_ l_sym args_its def.LogicalFunctions.return_bt loc) state)
+      rcval (IT.apply_ l_sym args_its def.LogicalFunctions.return_bt loc) state)
     else if Sym.has_id_with Setup.unfold_stdlib_name nm then (
       let s = Option.get (Sym.has_id nm) in
       let wrap_int x = IT.wrapI_ (signed_int_ity, x) in

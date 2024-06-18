@@ -1,17 +1,22 @@
 
 int
 test_cast_loc_to_various (int *p)
-/*@ requires let x1 = ((u64) p); @*/
-/*@ requires let x2 = ((u32) p); @*/
-/*@ requires let x3 = ((i64) p); @*/
-/*@ requires let x4 = ((i32) p); @*/
-/*@ requires (x1 > 0u64) && (x2 > 0u32) && (x3 > 0i64) && (x4 > 0i32); @*/
+/*@
+requires
+    let p_u64 = (u64)p;
+    let p_u32 = (u32)p;
+    let p_i64 = (i64)p;
+    let p_i32 = (i32)p;
+    p_u64 <= MAXu64() - 3u64;
+    p_u32 <= MAXu32() - 3u32;
+    MINi64() <= p_i64 && p_i64 <= MAXi64() - 3i64;
+    MINi32() <= p_i32 && p_i32 <= MAXi32() - 3i32;
+@*/
 {
   return 1;
 }
 
 int main(void)
-/*@ trusted; @*/
 {
   int p[1] = {0};
   test_cast_loc_to_various(p);

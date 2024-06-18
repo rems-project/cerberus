@@ -856,7 +856,7 @@ module EffectfulTranslation = struct
                fail
                  { loc; msg = Unknown_logical_function { id = fsym; resource = false } }
            in
-           return (pred_ fsym args (SurfaceBaseTypes.of_basetype bt) loc))
+           return (apply_ fsym args (SurfaceBaseTypes.of_basetype bt) loc))
       | CNExpr_cons (c_nm, exprs) ->
         let@ cons_info = lookup_constr loc c_nm env in
         let@ exprs =

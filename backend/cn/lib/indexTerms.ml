@@ -76,6 +76,7 @@ let rec free_vars_bts (it : 'a term) : BT.t SymMap.t =
   | MemberShift (t, _tag, _id) -> free_vars_bts t
   | ArrayShift { base; ct = _; index } -> free_vars_bts_list [ base; index ]
   | CopyAllocId { addr; loc } -> free_vars_bts_list [ addr; loc ]
+  | HasAllocId loc -> free_vars_bts_list [ loc ]
   | SizeOf _t -> SymMap.empty
   | OffsetOf (_tag, _member) -> SymMap.empty
   | Nil _bt -> SymMap.empty
@@ -175,6 +176,7 @@ let rec fold_ f binders acc = function
   | MemberShift (t, _tag, _id) -> fold f binders acc t
   | ArrayShift { base; ct = _; index } -> fold_list f binders acc [ base; index ]
   | CopyAllocId { addr; loc } -> fold_list f binders acc [ addr; loc ]
+  | HasAllocId loc -> fold_list f binders acc [ loc ]
   | SizeOf _ct -> acc
   | OffsetOf (_tag, _member) -> acc
   | Nil _bt -> acc
@@ -300,6 +302,7 @@ let rec subst (su : [ `Term of typed | `Rename of Sym.t ] subst) (IT (it, bt, lo
     IT (ArrayShift { base = subst su base; ct; index = subst su index }, bt, loc)
   | CopyAllocId { addr; loc = ptr } ->
     IT (CopyAllocId { addr = subst su addr; loc = subst su ptr }, bt, loc)
+  | HasAllocId ptr -> IT (HasAllocId (subst su ptr), bt, loc)
   | SizeOf t -> IT (SizeOf t, bt, loc)
   | OffsetOf (tag, member) -> IT (OffsetOf (tag, member), bt, loc)
   | Aligned t -> IT (Aligned { t = subst su t.t; align = subst su t.align }, bt, loc)
@@ -712,10 +715,10 @@ let uintptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
 let uintptr_int_ n loc = uintptr_const_ (Z.of_int n) loc
 (* for integer-mode: z_ n *)
 
-let pointerToIntegerCast_ it loc = cast_ Memory.uintptr_bt it loc
+let addr_ it loc = cast_ Memory.uintptr_bt it loc
 (* for integer-mode: cast_ Integer it *)
 
-let pointerToAllocIdCast_ it loc = cast_ Alloc_id it loc
+let allocId_ it loc = cast_ Alloc_id it loc
 
 let memberShift_ (base, tag, member) loc =
   IT (MemberShift (base, tag, member), BT.Loc, loc)
@@ -724,6 +727,8 @@ let memberShift_ (base, tag, member) loc =
 let arrayShift_ ~base ~index ct loc = IT (ArrayShift { base; ct; index }, BT.Loc, loc)
 
 let copyAllocId_ ~addr ~loc:ptr loc = IT (CopyAllocId { addr; loc = ptr }, BT.Loc, loc)
+
+let hasAllocId_ ptr loc = IT (HasAllocId ptr, BT.Bool, loc)
 
 let sizeOf_ ct loc = IT (SizeOf ct, Memory.size_bt, loc)
 
@@ -824,7 +829,7 @@ let make_array_ ~index_bt ~item_bt items (* assumed all of item_bt *) loc =
   value
 
 
-let pred_ name args rbt loc = IT (Apply (name, args), rbt, loc)
+let apply_ name args rbt loc = IT (Apply (name, args), rbt, loc)
 
 (* let let_ sym e body = *)
 (*   subst (make_subst [(sym, e)]) body *)
@@ -904,7 +909,7 @@ let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) loc =
 
 
 (* let _non_vip_constraint about loc =  *)
-(*   eq_ (pointerToAllocIdCast_ about loc, alloc_id_ Z.zero loc) loc *)
+(*   eq_ (allocId_ about loc, alloc_id_ Z.zero loc) loc *)
 
 (* TODO: are the constraints `0<about` and `about+pointee_size-1 <= max-pointer`
    required? *)
@@ -912,7 +917,7 @@ let value_check_pointer mode ~pointee_ct about loc =
   match mode with
   | `Representable -> bool_ true loc
   | `Good ->
-    (* let about_int = pointerToIntegerCast_ about loc in *)
+    (* let about_int = addr_ about loc in *)
     (* let pointee_size = match pointee_ct with *)
     (*   | Sctypes.Void -> 1 *)
     (*   | Function _ -> 1 *)

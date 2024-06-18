@@ -103,6 +103,7 @@ type 'bt term_ =
       { addr : 'bt term;
         loc : 'bt term
       }
+  | HasAllocId of 'bt term
   | SizeOf of Sctypes.t
   | OffsetOf of Sym.t * Id.t
   | Nil of BaseTypes.t
@@ -317,6 +318,7 @@ let pp
     | ArrayShift { base; ct = _ct; index } ->
       wrap_after 14 (ampersand ^^ aux 15 base ^^ brackets (aux 0 index))
     | CopyAllocId { addr; loc } -> c_app !^"copy_alloc_id" [ aux 0 addr; aux 0 loc ]
+    | HasAllocId loc -> c_app !^"has_alloc_id" [ aux 0 loc ]
     | SizeOf t -> c_app !^"sizeof" [ Sctypes.pp t ]
     | OffsetOf (tag, member) -> c_app !^"offsetof" [ Sym.pp tag; Id.pp member ]
     | Aligned t -> c_app !^"aligned" [ aux 0 t.t; aux 0 t.align ]
@@ -435,6 +437,7 @@ let rec dtree (IT (it_, bt, loc)) =
     | ArrayShift { base; ct = ty; index = t } ->
       Dnode (pp_ctor "ArrayShift", [ Dleaf (Sctypes.pp ty); dtree base; dtree t ])
     | CopyAllocId { addr; loc } -> Dnode (pp_ctor "CopyAllocId", [ dtree addr; dtree loc ])
+    | HasAllocId loc -> Dnode (pp_ctor "HasAllocId", [ dtree loc ])
     | Representable (ty, t) ->
       Dnode (pp_ctor "Representable", [ Dleaf (Sctypes.pp ty); dtree t ])
     | Good (ty, t) -> Dnode (pp_ctor "Good", [ Dleaf (Sctypes.pp ty); dtree t ])

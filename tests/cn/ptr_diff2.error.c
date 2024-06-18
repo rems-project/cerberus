@@ -1,10 +1,5 @@
 int* f(int *p)
-/*@
-requires
-    has_alloc_id(p);
-ensures
-    ptr_eq(return, array_shift(p, -1i32));
-@*/
+/*@ ensures ptr_eq(return, array_shift(p, -1i32)); @*/
 {
   return p - 1;
 }

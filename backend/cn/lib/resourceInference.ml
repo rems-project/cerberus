@@ -197,18 +197,12 @@ module General = struct
         | P p', p'_oarg when RET.subsumed requested.name p'.name ->
           let here = Locations.other __FUNCTION__ in
           let pmatch =
-            eq_
-              ( (pointerToIntegerCast_ requested.pointer) here,
-                pointerToIntegerCast_ p'.pointer here )
-              here
+            eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here
             :: List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs
           in
           let took = and_ pmatch here in
           let prov =
-            eq_
-              ( pointerToAllocIdCast_ requested.pointer here,
-                pointerToAllocIdCast_ p'.pointer here )
-              here
+            eq_ (allocId_ requested.pointer here, allocId_ p'.pointer here) here
           in
           let debug_failure model msg term =
             Pp.debug 9 (lazy (Pp.item msg (RET.pp (fst re))));
@@ -329,7 +323,11 @@ module General = struct
                    && BT.equal (snd requested.q) (snd p'.q) ->
               let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
               let here = Locations.other __FUNCTION__ in
-              let pmatch = eq_ (requested.pointer, p'.pointer) here in
+              let pmatch =
+                (* Work-around for https://github.com/Z3Prover/z3/issues/7352 *)
+                Simplify.IndexTerms.simp simp_ctxt
+                @@ eq_ (requested.pointer, p'.pointer) here
+              in
               let iarg_match =
                 and_ (List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs) here
               in

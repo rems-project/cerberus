@@ -141,6 +141,13 @@ let is_null_def =
       IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_ loc') loc')) )
 
 
+let has_alloc_id_def =
+  ( "has_alloc_id",
+    Sym.fresh_named "has_alloc_id",
+    mk_arg1 (fun p loc' -> IT.sterm_of_term @@ IT.hasAllocId_ (IT.term_of_sterm p) loc')
+  )
+
+
 let ptr_eq_def =
   ( "ptr_eq",
     Sym.fresh_named "ptr_eq",
@@ -154,10 +161,8 @@ let prov_eq_def =
     mk_arg2 (fun (p1, p2) loc' ->
       IT.(
         sterm_of_term
-        @@ eq_
-             ( pointerToAllocIdCast_ (term_of_sterm p1) loc',
-               pointerToAllocIdCast_ (term_of_sterm p2) loc' )
-             loc')) )
+        @@ eq_ (allocId_ (term_of_sterm p1) loc', allocId_ (term_of_sterm p2) loc') loc'))
+  )
 
 
 let addr_eq_def =
@@ -166,10 +171,7 @@ let addr_eq_def =
     mk_arg2 (fun (p1, p2) loc' ->
       IT.(
         sterm_of_term
-        @@ eq_
-             ( pointerToIntegerCast_ (term_of_sterm p1) loc',
-               pointerToIntegerCast_ (term_of_sterm p2) loc' )
-             loc')) )
+        @@ eq_ (addr_ (term_of_sterm p1) loc', addr_ (term_of_sterm p2) loc') loc')) )
 
 
 let max_min_bits =
@@ -208,6 +210,7 @@ let builtin_funs =
       nth_list_def;
       array_to_list_def;
       is_null_def;
+      has_alloc_id_def;
       prov_eq_def;
       ptr_eq_def;
       addr_eq_def

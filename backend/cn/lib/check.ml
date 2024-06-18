@@ -410,18 +410,22 @@ let check_conv_int loc ~expect ct arg =
   return value
 
 
-let _check_array_shift loc ~expect vt1 (loc_ct, ct) vt2 =
-  let@ () = WellTyped.ensure_base_type loc ~expect Loc in
-  let@ () = WellTyped.WCT.is_ct loc_ct ct in
-  return (arrayShift_ ~base:vt1 ct ~index:vt2)
-
-
 let check_against_core_bt loc msg2 cbt bt =
   Typing.embed_resultat
     (CoreTypeChecks.check_against_core_bt
        (fun msg -> Resultat.fail { loc; msg = Generic (msg ^^ Pp.hardline ^^ msg2) })
        cbt
        bt)
+
+
+let check_has_alloc_id loc k ~ptr ~result ub_unspec =
+  let@ provable = provable loc in
+  match provable (t_ (hasAllocId_ ptr loc)) with
+  | `True -> k result
+  | `False ->
+    let@ model = model () in
+    let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
+    fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
 
 
 let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
@@ -522,13 +526,17 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
        check_pexpr pe1 (fun vt1 ->
          check_pexpr pe2 (fun vt2 ->
-           k (arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc)))
+           let result =
+             arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc
+           in
+           check_has_alloc_id loc k ~ptr:vt1 ~result CF.Undefined.UB_unspec_pointer_add))
      | M_PEmember_shift (pe, tag, member) ->
        let@ () = WellTyped.ensure_base_type loc ~expect Loc in
        let@ () = ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
        check_pexpr pe (fun vt ->
          let@ _ = get_struct_member_type loc tag member in
-         k (memberShift_ (vt, tag, member) loc))
+         let result = memberShift_ (vt, tag, member) loc in
+         check_has_alloc_id loc k ~ptr:vt ~result CF.Undefined.UB_unspec_pointer_add)
      | M_PEnot pe ->
        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
        let@ () = ensure_base_type loc ~expect:Bool (bt_of_pexpr pe) in
@@ -1204,45 +1212,74 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
      | M_Ememop memop ->
        let here = Locations.other __FUNCTION__ in
        let pointer_eq ?(negate = false) pe1 pe2 =
+         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+         let k, case, res =
+           if negate then ((fun x -> k (not_ x loc)), "in", "ptrNeq") else (k, "", "ptrEq")
+         in
          check_pexpr pe1 (fun arg1 ->
            check_pexpr pe2 (fun arg2 ->
-             let prov1, prov2 =
-               (pointerToAllocIdCast_ arg1 here, pointerToAllocIdCast_ arg2 here)
+             let bind name term =
+               let sym, it = IT.fresh_named Bool name loc in
+               let@ _ = add_a sym Bool (here, lazy (Sym.pp sym)) in
+               let@ () = add_c loc (LC.t_ (term it)) in
+               return it
              in
-             let addr1, addr2 =
-               (pointerToIntegerCast_ arg1 here, pointerToIntegerCast_ arg2 here)
+             let@ ambiguous =
+               bind "ambiguous"
+               @@ fun ambiguous ->
+               eq_
+                 ( ambiguous,
+                   and_
+                     [ hasAllocId_ arg1 here;
+                       hasAllocId_ arg2 here;
+                       ne_ (allocId_ arg1 here, allocId_ arg2 here) here;
+                       eq_ (addr_ arg1 here, addr_ arg2 here) here
+                     ]
+                     here )
+                 here
              in
-             let addr_eq = eq_ (addr1, addr2) loc in
-             let prov_eq = eq_ (prov1, prov2) loc in
-             let prov_neq = ne_ (prov1, prov2) loc in
              let@ provable = provable loc in
              let@ () =
-               match provable @@ t_ @@ and_ [ prov_neq; addr_eq ] here with
+               match provable @@ t_ ambiguous with
                | `False -> return ()
                | `True ->
-                 warn
-                   loc
-                   !^"ambiguous pointer (in)equality case: addresses equal, but \
-                      provenances differ";
+                 let msg =
+                   Printf.sprintf
+                     "ambiguous pointer %sequality case: addresses equal, but \
+                      provenances differ"
+                     case
+                 in
+                 warn loc !^msg;
                  return ()
              in
-             let res_sym, res =
-               IT.fresh_named Bool (if negate then "ptrNeq" else "ptrEq") loc
+             let@ both_eq =
+               bind "both_eq" @@ fun both_eq -> eq_ (both_eq, eq_ (arg1, arg2) here) here
              in
-             let@ _result = add_a res_sym Bool (loc, lazy (Sym.pp res_sym)) in
-             let@ () = add_c loc @@ t_ @@ impl_ (prov_eq, eq_ (res, addr_eq) loc) loc in
-             (* this constraint may make the result non-deterministic *)
-             let@ () =
-               add_c loc
-               @@ t_
-               @@ impl_
-                    ( prov_neq,
-                      or_ [ eq_ (res, addr_eq) loc; eq_ (res, bool_ false here) loc ] loc
-                    )
-                    loc
+             let@ neither =
+               bind "neither"
+               @@ fun neither ->
+               eq_ (neither, and_ [ not_ both_eq here; not_ ambiguous here ] here) here
              in
-             let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt res) in
-             k (if negate then not_ res loc else res)))
+             let@ res =
+               bind res
+               @@ fun res ->
+               (* NOTE: ambiguous case is intentionally under-specified *)
+               and_ [ impl_ (both_eq, res) here; impl_ (neither, not_ res here) here ] loc
+             in
+             k res
+             (* (* TODO: use this if SW_strict_pointer_equality is enabled *)
+                k
+                (or_
+                [ and_ [ eq_ (null_ here, arg1) here; eq_ (null_ here, arg2) here ] here;
+                       and_
+                         [ hasAllocId_ arg1 here;
+                           hasAllocId_ arg2 here;
+                           eq_ (addr_ arg1 here, addr_ arg2 here) here
+                         ]
+                         here
+                     ]
+                here)
+             *)))
        in
        let pointer_op op pe1 pe2 =
          let@ () = ensure_base_type loc ~expect Bool in
@@ -1270,21 +1307,26 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 | Array (item_ty, _) -> Memory.size_of_ctype item_ty
                 | ct -> Memory.size_of_ctype ct
               in
-              let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
-              let value =
-                (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
-                   yields the expected result. *)
-                div_
-                  ( cast_
-                      ptr_diff_bt
-                      (sub_
-                         (pointerToIntegerCast_ arg1 loc, pointerToIntegerCast_ arg2 loc)
-                         loc)
-                      loc,
-                    int_lit_ divisor ptr_diff_bt loc )
-                  loc
+              let both_alloc =
+                and_ [ hasAllocId_ arg1 here; hasAllocId_ arg2 here ] here
               in
-              k value))
+              let@ provable = provable loc in
+              match provable @@ t_ @@ both_alloc with
+              | `False ->
+                let@ model = model () in
+                let ub = CF.Undefined.(UB_CERB004_unspecified UB_unspec_pointer_sub) in
+                fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
+              | `True ->
+                let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
+                let value =
+                  (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
+                     yields the expected result. *)
+                  div_
+                    ( cast_ ptr_diff_bt (sub_ (addr_ arg1 loc, addr_ arg2 loc) loc) loc,
+                      int_lit_ divisor ptr_diff_bt loc )
+                    loc
+                in
+                k value))
         | M_IntFromPtr (act_from, act_to, pe) ->
           let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
           let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
@@ -1346,7 +1388,11 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
           check_pexpr pe1 (fun vt1 ->
-            check_pexpr pe2 (fun vt2 -> k (arrayShift_ ~base:vt1 act.ct ~index:vt2 loc)))
+            check_pexpr pe2 (fun vt2 ->
+              let result =
+                arrayShift_ ~base:vt1 ~index:(cast_ Memory.uintptr_bt vt2 loc) act.ct loc
+              in
+              check_has_alloc_id loc k ~ptr:vt1 ~result CF.Undefined.UB_unspec_pointer_add))
         | M_PtrMemberShift (_tag_sym, _memb_ident, _pe) ->
           (* FIXME(CHERI merge) *)
           (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
@@ -1357,7 +1403,14 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
           in
           let@ () = WellTyped.ensure_base_type loc ~expect:BT.Loc (bt_of_pexpr pe2) in
           check_pexpr pe1 (fun vt1 ->
-            check_pexpr pe2 (fun vt2 -> k (copyAllocId_ ~addr:vt1 ~loc:vt2 loc)))
+            check_pexpr pe2 (fun vt2 ->
+              let result = copyAllocId_ ~addr:vt1 ~loc:vt2 loc in
+              check_has_alloc_id
+                loc
+                k
+                ~ptr:vt2
+                ~result
+                CF.Undefined.UB_unspec_copy_alloc_id))
         | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Cerb_debug.error "todo: M_Memcpy"
         | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -1648,7 +1701,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
               in
               fail (fun _ -> { loc; msg = Generic msg })
             | Some body ->
-              add_c loc (LC.t_ (eq_ (pred_ f args def.return_bt loc, body) loc)))
+              add_c loc (LC.t_ (eq_ (apply_ f args def.return_bt loc, body) loc)))
          | M_CN_apply (lemma, args) ->
            let@ _loc, lemma_typ = get_lemma loc lemma in
            let args = List.map (fun arg -> (loc, arg)) args in
@@ -1968,6 +2021,7 @@ let record_globals : 'bty. (symbol * 'bty mu_globs) list -> unit m =
         let@ () =
           add_c here (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt, here)) here))
         in
+        let@ () = add_c here (t_ (IT.hasAllocId_ (sym_ (sym, bt, here)) here)) in
         return ())
     globs
 

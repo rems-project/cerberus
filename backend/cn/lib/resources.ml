@@ -41,21 +41,18 @@ let upper_bound addr ct =
 
 let addr_of pointer =
   let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
-  IT.cast_ Memory.uintptr_bt pointer here
+  IT.addr_ pointer here
 
 
 (* assumption: the resource is owned *)
 let derived_lc1 (resource, _) =
+  let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
   match resource with
   | P { name = Owned (ct, _); pointer; iargs = _ } ->
-    let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
     let addr = addr_of pointer in
-    (* TODO: change to specifying positive case rather than not null when a separate
-       constructor for function pointers are added *)
-    [ IT.(not_ (eq_ (pointer, null_ here) here) here);
-      IT.(lt_ (addr, upper_bound addr ct) here)
-    ]
-  | P { name = PName _; pointer = _; iargs = _ } | Q _ -> []
+    [ IT.hasAllocId_ pointer here; IT.(lt_ (addr, upper_bound addr ct) here) ]
+  | Q { name = Owned _; pointer; _ } -> [ IT.hasAllocId_ pointer here ]
+  | P { name = PName _; pointer = _; iargs = _ } | Q { name = PName _; _ } -> []
 
 
 (* assumption: both resources are owned at the same *)
@@ -72,15 +69,6 @@ let derived_lc2 (resource, _) (resource', _) =
     [ IT.(or2_ (le_ (up2, addr1) here, le_ (up1, addr2) here) here) ]
   | _ -> []
 
-
-(* let pointer_facts = *)
-(*   let rec aux acc = function *)
-(*     | [] -> acc *)
-(*     | (r, _) :: rs -> *)
-(*       let acc = derived_lc1 r @ List.concat_map (derived_lc2 r) rs @ acc in *)
-(*       aux acc rs *)
-(*   in *)
-(*   fun resources -> aux [] resources *)
 
 let pointer_facts ~new_resource ~old_resources =
   derived_lc1 new_resource @ List.concat_map (derived_lc2 new_resource) old_resources

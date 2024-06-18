@@ -421,7 +421,7 @@ let it_adjust (global : Global.t) it =
         t
       else
         f (IT.representable global.struct_decls ct t2 loc)
-    | Aligned t -> f (IT.divisible_ (IT.pointerToIntegerCast_ t.t loc, t.align) loc)
+    | Aligned t -> f (IT.divisible_ (IT.addr_ t.t loc, t.align) loc)
     | IT.Let ((nm, x), y) ->
       let x = f x in
       let y = f y in
