@@ -157,7 +157,7 @@ type injection_kind =
   | InStmt of int * string
   (* | Return of (Pos.t * Pos.t) option *)
   | Return of Pos.t option
-  | Pre of string list * Cerb_frontend.Ctype.ctype
+  | Pre of string list * Cerb_frontend.Ctype.ctype * bool (* flag for whether injection is for main function *)
   | Post of string list * Cerb_frontend.Ctype.ctype
 
 type injection_footprint =
@@ -205,7 +205,7 @@ let inject st inj =
           | _ -> assert false
         end in
         do_output st (indent ^ "  goto __cn_epilogue;\n" ^ indent ^ "}\n")
-    | Pre (strs, ret_ty) ->
+    | Pre (strs, ret_ty, is_main) ->
         let indent = String.make st.last_indent ' ' in
         let indented_strs = List.map (fun str -> str ^ indent) strs in
         let str = List.fold_left (^) "" indented_strs in
@@ -215,7 +215,8 @@ let inject st inj =
           else
              (let cn_ret_sym = Sym.fresh_pretty "__cn_ret"  in
               let ret_type_doc = Pp_ail.pp_ctype_declaration ~executable_spec:true (Pp_ail.pp_id_obj ~executable_spec:true cn_ret_sym) Ctype.no_qualifiers ret_ty in
-              Pp_utils.to_plain_pretty_string ret_type_doc ^ ";\n" ^ indent)
+              let initialisation_str = if is_main then " = 0" else "" in
+              Pp_utils.to_plain_pretty_string ret_type_doc ^ initialisation_str ^ ";\n" ^ indent)
           end ^
           str
         end
@@ -368,7 +369,7 @@ let in_stmt_injs xs num_headers =
   (* (List.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs) *)
 
 (* build the injections for the pre/post conditions of a C function *)
-let pre_post_injs pre_post is_void (A.AnnotatedStatement (loc, _, _)) =
+let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =
   let* (pre_pos, post_pos) =
     let* (pre_pos, post_pos) = Pos.of_location loc in
     let* pre_pos = Pos.offset_col ~off:1 pre_pos in
@@ -393,7 +394,7 @@ let pre_post_injs pre_post is_void (A.AnnotatedStatement (loc, _, _)) =
     (Pos.to_string post_pos); *)
   Ok
     ( { footprint= InLine { start_pos= pre_pos; end_pos= pre_pos }
-      ; kind= Pre (fst pre_post, is_void) }
+      ; kind= Pre (fst pre_post, is_void, is_main) }
     , { footprint= InLine { start_pos= post_pos; end_pos= post_pos }
       ; kind= Post (snd pre_post, is_void) } )
 
@@ -433,7 +434,8 @@ let output_injections oc cn_inj =
         | Some pre_post_strs ->
             begin match acc_, List.assoc Symbol.equal_sym fun_sym cn_inj.sigm.A.declarations with
               | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
-                  let* (pre, post) = pre_post_injs pre_post_strs ret_ty stmt in
+                  let is_main = String.equal (Sym.pp_string fun_sym) "main" in
+                  let* (pre, post) = pre_post_injs pre_post_strs ret_ty is_main stmt in
                   let* rets = return_injs stmt in
                   Ok (pre :: post ::  rets @ acc)
               | _ ->
