@@ -156,7 +156,7 @@ let macro_string_of_integerBaseType = function
  | Intptr_t       -> "INTPTR"
 
 
-let pp_integerType ?(executable_spec=false) = function
+let pp_integerType = function
  | Char ->
      pp_type_keyword "char"
  | Bool ->
@@ -221,9 +221,9 @@ let pp_floatingType = function
       pp_realFloatingType ft
 
 
-let pp_basicType ?(executable_spec=false) = function
+let pp_basicType = function
   | Integer it ->
-      pp_integerType ~executable_spec it
+      pp_integerType it
   | Floating rft ->
       pp_floatingType rft
 
@@ -261,7 +261,7 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
           | Void ->
               fun k -> pp_qualifiers qs ^^ pp_type_keyword "void" ^^ k
           | Basic bty ->
-              fun k -> pp_qualifiers qs ^^ pp_basicType ~executable_spec bty ^^ k
+              fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
           | Array (elem_ty, n_opt) ->
               fun k -> aux ~executable_spec p' qs elem_ty (k ^^ (P.brackets (P.optional pp_integer n_opt)))
           | Function ((ret_qs, ret_ty), params, isVariadic) ->
