@@ -1,4 +1,3 @@
-[@@@warning "-27"]
 module CF=Cerb_frontend
 open Executable_spec_utils
 module A=CF.AilSyntax
@@ -84,7 +83,7 @@ let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ai
 
 
 (* TODO: Remove dependence on this function *)
-let pp_ail_stmt ((ail_stmt, extra) as ail_info) arg_names_opt = 
+let pp_ail_stmt ((ail_stmt, _) as ail_info) arg_names_opt = 
   match ail_info with
   | (A.AilSdeclaration ((name, Some decl) :: _), ct) -> 
     let type_str = (match ct with 
@@ -98,7 +97,7 @@ let pp_ail_stmt ((ail_stmt, extra) as ail_info) arg_names_opt =
 
 let pp_ail_declaration (id, decl) =
   match decl with
-    | A.Decl_object (msd, _, qs, cty) ->
+    | A.Decl_object (_, _, qs, cty) ->
          CF.Pp_ail.pp_ctype qs cty 
          ^^ PPrint.break 1 
          ^^ CF.Pp_ail.pp_id_obj ~executable_spec:true id 
