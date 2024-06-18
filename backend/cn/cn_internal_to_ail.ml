@@ -1259,9 +1259,9 @@ let cn_to_ail_resource_internal sym dts globals (preds : Mucore.T.resource_predi
     let (b, s, e) = cn_to_ail_expr_internal dts globals p.pointer PassBack in
     let (rhs, bs, ss, owned_ctype) = match p.name with 
       | Owned (sct, _) ->
-        let sct_str = CF.Pp_utils.to_plain_pretty_string (Sctypes.pp sct) in 
-        let sct_str = String.concat "_" (String.split_on_char ' ' sct_str) in
-        let owned_fn_name = "owned_" ^ sct_str in 
+        let ct_str = str_of_ctype (Sctypes.to_ctype sct) in 
+        let ct_str = String.concat "_" (String.split_on_char ' ' ct_str) in
+        let owned_fn_name = "owned_" ^ ct_str in 
         (* Hack with enum as sym *)
         let enum_sym = Sym.fresh_pretty "GET" in
         let enum_val_get = IT.(IT (Sym enum_sym, BT.Integer, Cerb_location.unknown)) in
