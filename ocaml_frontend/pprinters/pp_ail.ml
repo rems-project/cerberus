@@ -85,11 +85,11 @@ let pp_const c        = !^ (ansi_format [Magenta] c)
 let pp_comment str    = !^ (ansi_format [Red] str)
 
 
-let pp_id ?(is_human=false) ?(executable_spec = false) id = !^ (Pp_symbol.to_string_pretty ~is_human ~executable_spec id)
-let pp_id_obj ?(executable_spec = false) id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty ~executable_spec id))
-let pp_id_label ?(executable_spec = false) id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty ~executable_spec id))
-let pp_id_type ?(executable_spec = false) ?(is_human=false) id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty ~executable_spec ~is_human id))
-let pp_id_func ?(executable_spec = false) id = !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty ~executable_spec id))
+let pp_id ?(is_human=false) id = !^ (Pp_symbol.to_string_pretty ~is_human id)
+let pp_id_obj id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty id))
+let pp_id_label id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty id))
+let pp_id_type ?(is_human=false) id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty ~is_human id))
+let pp_id_func id = !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty id))
 
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
@@ -180,7 +180,7 @@ let pp_integerType ?(executable_spec=false) = function
  | Unsigned ibty ->
      pp_type_keyword "unsigned" ^^^ !^ (string_of_integerBaseType ibty)
  | Enum sym ->
-     pp_type_keyword "enum" ^^^ pp_id ~executable_spec sym
+     pp_type_keyword "enum" ^^^ pp_id sym
 
 let macro_string_of_integerType = function
  | Char ->
@@ -246,7 +246,7 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
   let rec aux ?(executable_spec=false) p qs (Ctype (annots, ty)) : P.document -> P.document =
     let annot_doc = if executable_spec then 
       (match annots with 
-        | Annot.Atypedef sym :: _ -> Some (pp_id ~executable_spec sym)
+        | Annot.Atypedef sym :: _ -> Some (pp_id sym)
         | _ -> None)
     else
       None 
@@ -292,10 +292,10 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
                 P.parens (aux ~executable_spec p' no_qualifiers ty P.empty) ^^ k
           | Struct sym ->
               fun k ->
-                pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type ~executable_spec ~is_human sym ^^ k
+                pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type ~is_human sym ^^ k
           | Union sym ->
               fun k ->
-                pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type ~executable_spec ~is_human sym ^^ k
+                pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type ~is_human sym ^^ k
         end) 
     in
   let pp_spaced_ident =
@@ -566,7 +566,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
               Option.(value (map (fun e -> pp ~executable_spec e) e_opt) ~default:(!^ "_")) in
             P.braces (P.separate (P.comma ^^ P.space) (List.mapi f e_opts))
         | AilEstruct (tag_sym, xs) ->
-            let output_doc = !^ "struct" ^^^ pp_id ~executable_spec tag_sym in
+            let output_doc = !^ "struct" ^^^ pp_id tag_sym in
             let output_doc = if executable_spec then output_doc else P.parens output_doc in 
             let output_doc = output_doc ^^ P.braces (
               comma_list (function (ident, e_opt) ->
@@ -578,7 +578,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
             let output_doc = if executable_spec then output_doc ^^ (!^ ";") else output_doc in 
             output_doc
         | AilEunion (tag_sym, memb_ident, e_opt) ->
-            P.parens (!^ "union" ^^^ pp_id ~executable_spec tag_sym) ^^ P.braces (
+            P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
               P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp ~executable_spec e) e_opt
             )
         | AilEcompound (qs, ty, e) ->
@@ -590,7 +590,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEconst c ->
             pp_constant ~executable_spec c
         | AilEident x ->
-            pp_id ~executable_spec x
+            pp_id x
         | AilEsizeof (qs, ty) ->
             if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
@@ -618,7 +618,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEannot (_, e) ->
             !^ "/* annot */" ^^^ pp ~executable_spec e
         | AilEva_start (e, sym) ->
-            pp_keyword "va_start" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_id ~executable_spec sym)
+            pp_keyword "va_start" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_id sym)
         | AilEva_copy (e1, e2) ->
             pp_keyword "va_copy" ^^ P.parens (pp ~executable_spec e1 ^^ P.comma ^^^ pp ~executable_spec e2)
         | AilEva_arg (e, ty) ->
@@ -715,19 +715,16 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSlabel (l, s, _) ->
         pp_id_label l ^^ P.colon ^/^ pp_statement ~executable_spec s
     | AilSgoto l ->
-        pp_keyword "goto" ^^^ pp_id_label ~executable_spec l ^^ P.semi
+        pp_keyword "goto" ^^^ pp_id_label l ^^ P.semi
     | AilSdeclaration [] ->
         pp_comment "// empty decl"
     | AilSdeclaration defs ->
       comma_list (fun (id, e_opt) ->
         let doc = 
-          (* if executable_spec then 
-            pp_id_obj ~executable_spec id 
-          else *)
           (match List.assoc_opt id bs with
             | Some (_, align_opt, qs, ty) ->
                 pp_alignment_opt align_opt ^^
-                pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
+                pp_ctype_declaration ~executable_spec (pp_id_obj id) qs ty
             | None ->
                 !^ "BINDING_NO_FOUND")
         in
@@ -757,7 +754,7 @@ let pp_alignment = function
       pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
 let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)) =
-  let id_doc = if executable_spec then pp_id ~executable_spec tag else pp_id_type tag in 
+  let id_doc = if executable_spec then pp_id tag else pp_id_type tag in 
   match def with
     | StructDef (ident_qs_tys, flexible_opt) ->
         pp_keyword "struct" ^^^ id_doc ^^^ P.braces (
@@ -814,7 +811,7 @@ let pp_function_prototype ?(executable_spec=false) sym decl = match decl with
             (* printing the types in a human readable format *)
             pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
           else
-            pp_ctype_declaration ~executable_spec (pp_id_func ~executable_spec sym) ret_qs ret_ty
+            pp_ctype_declaration ~executable_spec (pp_id_func sym) ret_qs ret_ty
         end ^^
         P.parens (
           comma_list (fun (qs, ty, isRegister) ->
@@ -866,16 +863,16 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
           (* TODO: colour hack *)
           pp_ansi_format [Red] (
             fun () ->
-              !^ "// declare" ^^^ pp_id ~executable_spec sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
+              !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
               P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
           ) ^^
           P.hardline ^^
           
           (if !Cerb_debug.debug_level > 5 then
             (* printing the types in a human readable format *)
-            pp_id_obj ~executable_spec sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
+            pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
           else
-            pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec sym) qs ty) ^^
+            pp_ctype_declaration ~executable_spec (pp_id_obj sym) qs ty) ^^
           
           P.optional (fun e ->
             P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e
@@ -903,7 +900,7 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
                         (* printing the types in a human readable format *)
                         pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
                       else
-                        pp_ctype_declaration ~executable_spec (pp_id_func ~executable_spec sym) ret_qs ret_ty
+                        pp_ctype_declaration ~executable_spec (pp_id_func sym) ret_qs ret_ty
                     end ^^
                       P.parens (
                         comma_list (fun (sym, (qs, ty, isRegister)) ->
@@ -915,7 +912,7 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
                                 (pp_ctype_human qs ty)
                             )
                           else
-                            pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec sym) qs ty
+                            pp_ctype_declaration ~executable_spec (pp_id_obj sym) qs ty
                         ) (List.combine param_syms params) ^^
                         if is_variadic then
                           P.comma ^^^ P.dot ^^ P.dot ^^ P.dot

@@ -6,9 +6,9 @@ val pp_keyword: string -> PPrint.document
 val pp_const: string -> PPrint.document
 
 
-val pp_id: ?is_human:bool -> ?executable_spec:bool -> ail_identifier -> PPrint.document
-val pp_id_obj: ?executable_spec:bool -> ail_identifier -> PPrint.document
-val pp_id_func: ?executable_spec:bool -> ail_identifier -> PPrint.document
+val pp_id: ?is_human:bool -> ail_identifier -> PPrint.document
+val pp_id_obj: ail_identifier -> PPrint.document
+val pp_id_func: ail_identifier -> PPrint.document
 
 val pp_storageDuration: storageDuration -> PPrint.document
 

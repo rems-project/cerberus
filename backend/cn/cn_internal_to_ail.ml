@@ -106,7 +106,7 @@ let create_sym_from_id id =
 
 let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=false) constructor =  
   let doc = 
-  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ suffix) in 
+  CF.Pp_ail.pp_id constructor ^^ (!^ suffix) in
   let str = 
   CF.Pp_utils.to_plain_string doc in 
   let str = if uppercase then String.uppercase_ascii str else str in
@@ -1030,7 +1030,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let enum_sym = generate_sym_with_suffix cn_datatype.cn_dt_name in
   let constructor_syms = List.map fst cn_datatype.cn_dt_cases in
   let generate_enum_member sym = 
-    let doc = CF.Pp_ail.pp_id ~executable_spec:true sym in 
+    let doc = CF.Pp_ail.pp_id sym in
     let str = CF.Pp_utils.to_plain_string doc in 
     let str = String.uppercase_ascii str in
     Id.id str
