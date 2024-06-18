@@ -1661,7 +1661,7 @@ let register_tag_definition loc tag_sym tag_decl =
     Map.member tag_sym st.tag_definitions
   ) >>= function
     | true ->
-        constraint_violation loc (Constraint.TagRedefinition tag_sym)
+        constraint_violation (Loc.with_cursor loc) (Constraint.TagRedefinition tag_sym)
     | false ->
         return ()
   end >>
