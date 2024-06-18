@@ -1,10 +1,11 @@
 # Onboarding Developer Guide to CN
 
 This is a work-in-progress document to guide new developers to the CN codebase.
-Of course, the best way to get to grips with the code is to pick a starter
-issue, perhaps request a pair-programming time to get started with it, and get
-stuck in.  However, this document should provide a conceptual structure on
-which to hang the details as one fills them in.
+Of course, the best way to get to grips with the code is to pick a [starter
+issue](https://github.com/orgs/GaloisInc/projects/23/views/9?filterQuery=label%3Acn+is%3Aopen+expertise%3Aonboarding),
+perhaps request a pair-programming time to get started with it, and get stuck
+in. However, this document should provide a conceptual structure on which to
+hang the details as one fills them in.
 
 ## Submitting PRs
 
