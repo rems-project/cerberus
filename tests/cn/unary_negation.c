@@ -17,7 +17,8 @@ void check_simplify()
     /*@ assert(negate_paren() == 127i8); @*/
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
     check_simplify();
-    return 0;
 }

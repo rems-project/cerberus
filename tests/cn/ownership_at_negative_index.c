@@ -7,8 +7,9 @@ int f(int *p)
   return p[-1];
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   int p[5] = {1, 2, 3, 4, 5};
   int r = f(p);
-  return 0;
 }

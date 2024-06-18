@@ -33,9 +33,10 @@ void __list_del(struct list_head * prev, struct list_head * next)
         prev->next = next;
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   struct list_head next = {.next = 0, .prev = 0};
   struct list_head prev = {.next = 0, .prev = 0};
   __list_del(&next, &prev);
-  return 0;
 }

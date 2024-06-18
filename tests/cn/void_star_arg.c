@@ -51,8 +51,9 @@ f (void *p, int k)
   }
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   struct two_ints two_ints = {.x = 4, .y = 5};
   int r = f(&two_ints, 2);
-  return 0;
 }

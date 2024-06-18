@@ -11,7 +11,8 @@ unsigned int add_x_y (void)
   return num_x + num_y;
 }
 
-int main(void) {
-  int r = add_x_y();
-  return 0;
+int main(void)
+/*@ trusted; @*/
+{
+  unsigned int r = add_x_y();
 }

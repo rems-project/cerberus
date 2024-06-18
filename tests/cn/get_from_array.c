@@ -42,8 +42,9 @@ void set_a_pointer(int *p, int x)
   *p = x;
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   int p[1];
   set_a_pointer(p, 5);
-  return 0;
 }

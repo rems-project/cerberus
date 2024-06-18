@@ -28,7 +28,8 @@ f (int x)
   return x == global_x;
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   int r = f(42);
-  return 0;
 }

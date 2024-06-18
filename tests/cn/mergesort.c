@@ -160,12 +160,13 @@ struct int_list* naive_mergesort(struct int_list *xs)
     }
   }
 }
-    
-int main(void) {
+
+int main(void)
+/*@ trusted; @*/
+{
   struct int_list i3 = {.head = 3, .tail = 0};
   struct int_list i2 = {.head = 4, .tail = &i3};
   struct int_list i1 = {.head = 2, .tail = &i2};
 
   struct int_list *sorted_i1 = naive_mergesort(&i1);
-  return 0;
-}   
+}

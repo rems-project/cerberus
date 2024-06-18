@@ -111,12 +111,12 @@ struct int_list_pair split(struct int_list *xs)
   }
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   struct int_list i1 = {.head = 2, .tail = 0};
   struct int_list i3 = {.head = 4, .tail = 0};
   struct int_list i2 = {.head = 3, .tail = &i3};
 
   struct int_list *il3 = IntList_append(&i1, &i2);
-  return 0;
-}      
-
+}

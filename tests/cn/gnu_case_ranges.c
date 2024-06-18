@@ -9,7 +9,7 @@ int f(int x)
   }
 }
 
-int main(void) {
+int main(void)
+{
   int r = f(29);
-  return 0;
 }

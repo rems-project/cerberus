@@ -114,12 +114,13 @@ struct node *reverse(struct node *xs)
   }
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   struct node n3 = {.head = 3, .tail = 0};
   struct node n2 = {.head = 5, .tail = &n3};
   struct node n1 = {.head = 1, .tail = &n2};
 
   struct node *rev_n1 = reverse(&n1);
-  
   return 0;
 }

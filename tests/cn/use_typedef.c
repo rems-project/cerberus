@@ -13,8 +13,9 @@ int test (x_type x)
   return 0;
 }
 
-int main(void) {
+int main(void)
+/*@ trusted; @*/
+{
   x_type x = 5;
   int r = test(x);
-  return 0;
 }
