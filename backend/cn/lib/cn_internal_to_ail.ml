@@ -1191,6 +1191,7 @@ let rec cn_to_ail_expr_aux_internal
     in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
   | CopyAllocId _ -> failwith "TODO CopyAllocId"
+  | HasAllocId _ -> failwith "TODO HasAllocId"
   | Nil bt -> failwith "TODO8"
   | Cons (x, xs) -> failwith "TODO9"
   | Head xs ->

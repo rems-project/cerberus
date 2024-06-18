@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail -o noclobber
 
+# set -xv # uncomment for debugging
+
 function echo_and_err() {
     printf "$1\n"
     exit 1
@@ -45,12 +47,12 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "mod_with_constants.c" \
     ! -name "inconsistent.c" \
     ! -name "forloop_with_decl.c" \
-    ! -name "tree16/as_partial_map/tree16.c" \
-    ! -name "tree16/as_mutual_dt/tree16.c" \
+    ! -path "tree16/as_partial_map/tree16.c" \
+    ! -path "tree16/as_mutual_dt/tree16.c" \
     ! -name "mod.c" \
     ! -name "mod_precedence.c" \
-    ! -name "multifile/g.c" \
-    ! -name "multifile/f.c" \
+    ! -path "multifile/g.c" \
+    ! -path "multifile/f.c" \
     ! -name "left_shift_const.c" \
     ! -name "bitwise_compl_precedence.c" \
     ! -name "fun_ptr_three_opts.c" \
@@ -65,10 +67,9 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "split_case.c" \
     ! -name "mod_casting.c" \
     ! -name "arrow_access.c" \
-    ! -name "ghost_pointer_to_bitvec_cast.c" \
     ! -name "tag_defs.c" \
     ! -name "cn_inline.c" \
-    ! -name "mutual_rec/mutual_rec.c" \
+    ! -path "mutual_rec/mutual_rec.c" \
     ! -name "bitwise_and.c" \
     ! -name "test_pointer_eq.c" \
     ! -name "get_from_array.c" \
@@ -84,6 +85,11 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "fun_ptr_extern.c" \
     ! -name "b_xor.c" \
     ! -name "mask_ptr.c" \
+    ! -name "copy_alloc_id.c" \
+    ! -name "has_alloc_id.c" \
+    ! -name "ptr_diff2.c" \
+    ! -name "has_alloc_id_ptr_neq.c" \
+    ! -name "spec_null_shift.c" \
 )
 
 # Include files which cause error for proof but not testing
@@ -115,7 +121,6 @@ BUGGY="cn/division_casting.c \
        cn/split_case.c \
        cn/mod_casting.c \
        cn/arrow_access.c \
-       cn/ghost_pointer_to_bitvec_cast.c \
        cn/tag_defs.c \
        cn/cn_inline.c \
        cn/mutual_rec/mutual_rec.c \
@@ -134,13 +139,19 @@ BUGGY="cn/division_casting.c \
        cn/fun_ptr_extern.c \
        cn/b_xor.c \
        cn/mask_ptr.c \
+       cn/copy_alloc_id.c \
+       cn/has_alloc_id.c \
+       cn/ptr_diff2.c \
+       cn/has_alloc_id_ptr_neq.c \
+       cn/spec_null_shift.c \
        "
 
 # Exclude files which cause error for proof but not testing
 SHOULD_FAIL=$(find cn -name '*.error.c' \
   ! -name "merging_arrays.error.c" \
   ! -name "pointer_to_char_cast.error.c" \
-  ! -name "pointer_to_unsigned_int_cast.error.c"
+  ! -name "pointer_to_unsigned_int_cast.error.c" \
+  ! -name "ptr_diff2.error.c" \
 )
 
 FAILED=""

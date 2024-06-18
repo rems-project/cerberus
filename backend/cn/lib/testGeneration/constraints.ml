@@ -479,6 +479,7 @@ module Simplify = struct
     | CopyAllocId { addr; loc } ->
       CopyAllocId
         { addr = indirect_members_expr ms addr; loc = indirect_members_expr ms loc }
+    | HasAllocId loc -> HasAllocId (indirect_members_expr ms loc)
     | Cons (e1, e2) -> Cons (indirect_members_expr ms e1, indirect_members_expr ms e2)
     | Head e' -> Head (indirect_members_expr ms e')
     | Tail e' -> Tail (indirect_members_expr ms e')

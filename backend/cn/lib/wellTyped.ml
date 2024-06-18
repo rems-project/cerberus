@@ -760,6 +760,9 @@ module WIT = struct
         let@ addr = check loc Memory.uintptr_bt addr in
         let@ ptr = check loc Loc ptr in
         return (IT (CopyAllocId { addr; loc = ptr }, BT.Loc, loc))
+      | HasAllocId ptr ->
+        let@ ptr = check loc Loc ptr in
+        return (IT (HasAllocId ptr, BT.Bool, loc))
       | SizeOf ct ->
         let@ () = WCT.is_ct loc ct in
         let sz = Memory.size_of_ctype ct in
