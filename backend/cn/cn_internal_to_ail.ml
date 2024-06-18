@@ -790,7 +790,9 @@ let rec cn_to_ail_expr_aux_internal
   | ArrayShift params ->
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals params.base PassBack in
     let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals params.index PassBack in
-    let ail_expr_ = A.(AilEcall ((mk_expr (AilEident (Sym.fresh_pretty "cn_array_shift"))), [e1; e2])) in
+    let bt_string_opt = get_typedef_string (bt_to_ail_ctype (IT.bt params.index)) in
+    let bt_string = match bt_string_opt with Some str -> str | None -> failwith "no typedef string" in 
+    let ail_expr_ = A.(AilEcall ((mk_expr (AilEident (Sym.fresh_pretty ("cn_array_shift_" ^ bt_string)))), [e1; e2])) in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
 
   | CopyAllocId _ -> failwith "TODO CopyAllocId"

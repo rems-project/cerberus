@@ -211,6 +211,14 @@ static inline int ipow(int base, int exp)
         return res;\
     }
 
+/* TODO: Fix to work with size of CNTYPE, not just generic addition */
+#define CN_GEN_ARRAY_SHIFT(CNTYPE)\
+    static inline cn_pointer *cn_array_shift_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
+        cn_pointer *res = alloc(sizeof(cn_pointer));\
+        res->ptr = ptr->ptr + *(i->val);\
+        return res;\
+    }
+
 #define CN_GEN_INCREMENT(CNTYPE)\
     static inline CNTYPE *CNTYPE##_increment(CNTYPE *i) {\
         *(i->val) = *(i->val) + 1;\
@@ -294,7 +302,7 @@ static inline int ipow(int base, int exp)
    CN_GEN_INCREMENT(CNTYPE)\
    CN_GEN_PTR_ADD(CNTYPE)\
    CN_GEN_CASTS_INNER(CTYPE, CNTYPE)\
-
+   CN_GEN_ARRAY_SHIFT(CNTYPE)\
 
 CN_GEN_ALL(signed char, cn_bits_i8)
 CN_GEN_ALL(signed short, cn_bits_i16)
@@ -320,7 +328,6 @@ CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer)
 
 cn_pointer *convert_to_cn_pointer(void *ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
-cn_pointer *cn_array_shift(cn_pointer *ptr, cn_integer *i);
 
 // Ownership
 enum OWNERSHIP {
