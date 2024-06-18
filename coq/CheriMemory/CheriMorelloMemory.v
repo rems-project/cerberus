@@ -2808,7 +2808,7 @@ Module Type CheriMemoryImpl
     end.
 
   (* Helper function *)
-  Fixpoint bytmeta_copy_tags
+  Fixpoint capmeta_copy_tags
     (dst src: AddressValue.t)
     (n: nat)
     (step: nat)
@@ -2818,7 +2818,7 @@ Module Type CheriMemoryImpl
     match n with
     | O => cm
     | S n =>
-        bytmeta_copy_tags
+        capmeta_copy_tags
           (AddressValue.with_offset dst (Z.of_nat step))
           (AddressValue.with_offset src (Z.of_nat step))
           n
@@ -2867,7 +2867,7 @@ Module Type CheriMemoryImpl
         update
           (fun (st : mem_state) =>
              mem_state_with_capmeta
-               (bytmeta_copy_tags
+               (capmeta_copy_tags
                   (AddressValue.with_offset dst_a off)
                   (AddressValue.with_offset src_a off)
                   (Z.to_nat n)
@@ -2971,7 +2971,7 @@ Module Type CheriMemoryImpl
       end.
 
   (* Helper function *)
-  Fixpoint bytmeta_copy_data
+  Fixpoint bytemap_copy_data
     (dst src: AddressValue.t)
     (n: nat)
     (bm: AMap.M.t AbsByte)
@@ -2980,7 +2980,7 @@ Module Type CheriMemoryImpl
     match n with
     | O => bm
     | S n =>
-        let bm' := bytmeta_copy_data dst src n bm in
+        let bm' := bytemap_copy_data dst src n bm in
         match AMap.M.find (AddressValue.with_offset src (Z.of_nat n)) bm with
         | None => AMap.M.remove (AddressValue.with_offset dst (Z.of_nat n)) bm'
         | Some b => AMap.M.add (AddressValue.with_offset dst (Z.of_nat n)) b bm'
@@ -2996,7 +2996,7 @@ Module Type CheriMemoryImpl
     (size: nat): memM unit :=
     update (fun (st : mem_state) =>
               mem_state_with_bytemap
-                (bytmeta_copy_data
+                (bytemap_copy_data
                    dst_a
                    src_a
                    size

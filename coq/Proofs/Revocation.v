@@ -4549,34 +4549,14 @@ Module RevocationProofs.
       reflexivity.
   Qed.
 
-  (*
-    TODO: Do we need this?
-  Instance memcpy_copy_data_PreservesInvariant
-    (loc: location_ocaml)
-    (ptrval1 ptrval2: AddressValue.t)
-    (index: nat)
-    :
-    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 index).
-  Proof.
-    intros s.
-    unfold memcpy_copy_data.
-    revert ptrval1 ptrval2 s.
-    induction index; intros.
-    + preserves_step.
-    +
-      preserves_steps.
-      all: try typeclasses eauto.
-  Qed.
-   *)
-
-  Lemma bytmeta_copy_data_spec
+  Lemma bytemap_copy_data_spec
     {a1 a2 : AddressValue.t}
     {n : nat}
     {bm: AMap.M.t AbsByte}
     :
     AddressValue.to_Z a1 + Z.of_nat n <= AddressValue.ADDR_LIMIT ->
     forall (addr:  AddressValue.t),
-      AMap.M.find (elt:=AbsByte) addr (bytmeta_copy_data a1 a2 n bm) =
+      AMap.M.find (elt:=AbsByte) addr (bytemap_copy_data a1 a2 n bm) =
         AMap.M.find (elt:=AbsByte)
           (if (0 <=? (addr_offset addr a1)) && ((addr_offset addr a1) <? (Z.of_nat n))
            then (AddressValue.with_offset a2 (addr_offset addr a1))
@@ -4666,7 +4646,7 @@ Module RevocationProofs.
     unfold memcpy_copy_data in C.
     apply update_mem_state_spec in C.
     subst.
-    apply (bytmeta_copy_data_spec L).
+    apply (bytemap_copy_data_spec L).
   Qed.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
@@ -5004,7 +4984,31 @@ Module RevocationProofs.
     reflexivity.
   Qed.
 
-  Lemma bytmeta_copy_tags_spec
+  Instance memcpy_copy_data_PreservesInvariant
+    (loc: location_ocaml)
+    (ptrval1 ptrval2: AddressValue.t)
+    (index: nat)
+    :
+    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 index).
+  Proof.
+    intros s.
+    unfold memcpy_copy_data.
+    revert ptrval1 ptrval2 s.
+    induction index; intros.
+    + preserves_step.
+      cbn.
+      unfold mem_state_with_bytemap.
+      destruct s.
+      auto.
+    +
+      preserves_steps.
+      *
+        admit.
+      *
+        admit.
+  Admitted.
+
+  Lemma capmeta_copy_tags_spec
     (dst src: AddressValue.t)
     (n: nat)
     (step: nat)
@@ -5013,7 +5017,7 @@ Module RevocationProofs.
     (Z.modulo (AddressValue.to_Z src) (Z.of_nat step) = 0) ->
     (Z.modulo (AddressValue.to_Z dst) (Z.of_nat step) = 0) ->
     forall a tg,
-      AMap.M.MapsTo a tg (bytmeta_copy_tags dst src n step cm) ->
+      AMap.M.MapsTo a tg (capmeta_copy_tags dst src n step cm) ->
       (exists k, 0 <= k < Z.of_nat n /\ a = AddressValue.with_offset dst (k * Z.of_nat step) /\ AMap.M.MapsTo (AddressValue.with_offset src (k * Z.of_nat step)) tg cm) \/
         (AMap.M.MapsTo a tg cm /\ forall k, 0 <= k < Z.of_nat n -> a <> AddressValue.with_offset dst (k * Z.of_nat step)).
   Proof.
@@ -5027,7 +5031,7 @@ Module RevocationProofs.
       + intros k Hk. lia.
     - (* Inductive case: n = S n' *)
       simpl in Hmaps.
-      remember (bytmeta_copy_tags (AddressValue.with_offset dst (Z.of_nat step))
+      remember (capmeta_copy_tags (AddressValue.with_offset dst (Z.of_nat step))
                (AddressValue.with_offset src (Z.of_nat step)) n' step
                match AMap.M.find (elt:=bool * CapGhostState) src cm with
                | Some meta => AMap.M.add dst meta cm
@@ -5036,7 +5040,7 @@ Module RevocationProofs.
       admit.
   Admitted.
 
-  Lemma mem_state_after_bytmeta_copy_tags_preserves:
+  Lemma mem_state_after_capmeta_copy_tags_preserves:
     forall m dst src n sz,
       (Z.of_nat n * Z.of_nat (alignof_pointer MorelloImpl.get) = Z.of_nat sz) ->
       addr_ptr_aligned src ->
@@ -5050,7 +5054,7 @@ Module RevocationProofs.
       (fetch_bytes (bytemap m) src sz = fetch_bytes (bytemap m) dst sz) ->
       mem_invariant m ->
       mem_invariant (mem_state_with_capmeta
-                       (bytmeta_copy_tags dst src n (alignof_pointer MorelloImpl.get) (capmeta m))
+                       (capmeta_copy_tags dst src n (alignof_pointer MorelloImpl.get) (capmeta m))
                        m).
   Proof.
     intros m dst src n sz Hsz Hsrc Hdst B DS M.
@@ -5070,7 +5074,7 @@ Module RevocationProofs.
       destruct E as [tg E].
       unfold mem_state_with_capmeta in E.
       simpl in E.
-      apply bytmeta_copy_tags_spec in E; try lia.
+      apply capmeta_copy_tags_spec in E; try lia.
       +
         destruct E as [[k [H1 [H2 H3]]]| [H1 H2]].
         *
@@ -5107,7 +5111,7 @@ Module RevocationProofs.
       (* the rest of the invariant *)
       intros a g E bs F.
       simpl in *.
-      apply bytmeta_copy_tags_spec in E; try lia.
+      apply capmeta_copy_tags_spec in E; try lia.
       2:{
         subst step.
         apply MorelloImpl.alignof_pointer_pos.
@@ -5252,11 +5256,11 @@ Module RevocationProofs.
       p1 p2.
     clear Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr.
 
-    apply mem_state_after_bytmeta_copy_tags_preserves with (sz:=(n *(alignof_pointer MorelloImpl.get))%nat).
+    apply mem_state_after_capmeta_copy_tags_preserves with (sz:=(n *(alignof_pointer MorelloImpl.get))%nat).
     -
       lia.
     -
-      (* [bytmeta_copy_tags] [dst] is aligned *)
+      (* [capmeta_copy_tags] [dst] is aligned *)
       subst.
       (* correct relation between `n` and `sz` wrt `alighof_pointer` *)
       break_if; bool_to_prop_hyp.
@@ -5289,7 +5293,7 @@ Module RevocationProofs.
           -- specialize (B (align - addr mod align)); lia.
     -
       subst.
-      (* [bytmeta_copy_tags] [dst] is aligned *)
+      (* [capmeta_copy_tags] [dst] is aligned *)
       unfold addr_ptr_aligned.
       break_if; bool_to_prop_hyp.
       + rewrite with_offset_0; lia.
