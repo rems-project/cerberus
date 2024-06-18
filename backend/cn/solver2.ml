@@ -15,17 +15,17 @@ open Pp
 (* XXX: probably should add some prefixes to try to avoid name collisions. *)
 (** Functions that pick names for things. *)
 module CN_Names = struct
-  let var_name x            = Sym.pp_string x ^ string_of_int (Sym.num x)
+  let var_name x            = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
   let named_expr_name       = "_cn_named"
-  let uninterpreted_name x  = Sym.pp_string x
+  let uninterpreted_name x  = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
 
-  let struct_name x         = Sym.pp_string x
-  let struct_con_name x     = Sym.pp_string x
-  let struct_field_name x   = Id.pp_string x
+  let struct_name x         = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
+  let struct_con_name x     = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
+  let struct_field_name x   = Id.pp_string x ^ "_fld"
 
-  let datatype_name x       = Sym.pp_string x
-  let datatype_con_name x   = Sym.pp_string x
-  let datatype_field_name x = Id.pp_string x
+  let datatype_name x       = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
+  let datatype_con_name x   = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
+  let datatype_field_name x = Id.pp_string x ^ "_fld"
 end
 
 
@@ -1040,7 +1040,7 @@ let logger base lab =
 
 
 let make globals =
-  let cfg = { SMT.z3 with log = logger SMT.quiet_log "z3: " } in
+  let cfg = { SMT.cvc5 with log = logger SMT.quiet_log "z3: " } in
   let s = { smt_solver  = SMT.new_solver cfg
           ; cur_frame   = ref (empty_solver_frame ())
           ; prev_frames = ref []
