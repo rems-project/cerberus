@@ -483,10 +483,16 @@ let assume e = app_ "assert" [e]
 
 (** {1 Solver} *)
 
+type solver_log =
+  { send:    string -> unit   (** We sent this to the solver. *)
+  ; receive: string -> unit   (** We got this from the solver. *)
+  }
+
 type solver_config =
-  { exe: string
+  { exe:  string
   ; opts: string list
   ; exts: solver_extensions
+  ; log:  solver_log
   }
 
 (** A connection to a solver *)
@@ -635,7 +641,7 @@ let new_solver (cfg: solver_config): solver =
   let in_buf = Lexing.from_channel in_chan in
 
   let send_string s =
-        printf "[->] %s\n%!" s;
+        cfg.log.send s;
         fprintf out_chan "%s\n%!" s in
 
   let send_command c =
@@ -643,7 +649,7 @@ let new_solver (cfg: solver_config): solver =
         let ans = match Sexp.scan_sexp_opt in_buf with
                     | Some x -> x
                     | None -> Sexp.Atom (In_channel.input_all in_err_chan)
-        in printf "[<-] %s\n%!" (Sexp.to_string ans); ans
+        in cfg.log.receive (Sexp.to_string ans); ans
   in
 
   let stop_command () =
@@ -685,13 +691,12 @@ evaluate, and gives the value of the expression in the context of the model.
 XXX: This does not work correctly with data declarations, because
 the model does not contain those.  We need to explicitly add them.
 *)
-let model_eval (cfg: solver_config) init (m: sexp) =
+let model_eval (cfg: solver_config) (m: sexp) =
   let bad () = raise (UnexpectedSolverResponse m) in
   match m with
   | Sexp.Atom _ -> bad ()
   | Sexp.List defs ->
     let s = new_solver cfg in
-    init s;
     List.iter (ack_command s) defs;
     let have_model = ref false in
     let get_model () =
@@ -722,14 +727,26 @@ let model_eval (cfg: solver_config) init (m: sexp) =
 
 (** {2 Solver Configurations} *)
 
+let quiet_log =
+  { send    = (fun _ -> ())
+  ; receive = (fun _ -> ())
+  }
+
+let printf_log =
+  { send    = (fun s -> printf "[->] %s\n%!" s)
+  ; receive = (fun s -> printf "[<-] %s\n%!" s)
+  }
+
 let cvc5 : solver_config =
-  { exe = "cvc5"
-  ; opts = ["--incremental"; "--sets-ext"]
-  ; exts = CVC5
+  { exe   = "cvc5"
+  ; opts  = ["--incremental"; "--sets-ext"]
+  ; exts  = CVC5
+  ; log   = quiet_log
   }
 
 let z3 : solver_config =
-  { exe = "z3"
-  ; opts = ["-in"; "-smt2" ]
-  ; exts = Z3
+  { exe   = "z3"
+  ; opts  = ["-in"; "-smt2" ]
+  ; exts  = Z3
+  ; log   = quiet_log
   }
