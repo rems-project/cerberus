@@ -19,8 +19,6 @@ echo "Creating $EXEC_DIR directory..."
 INPUT_FN=$1
 INPUT_BASENAME=$(basename $INPUT_FN .c)
 
-trap - 0
-
 echo -n "Generating C files from CN-annotated source... "
 if ! cn $INPUT_FN --output_decorated=$INPUT_BASENAME-exec.c --output_decorated_dir=$EXEC_DIR/
 then
