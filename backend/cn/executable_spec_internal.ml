@@ -19,7 +19,7 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
   let is_assert_true = function
     | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEassert expr))) ->
       (match (rm_expr expr) with
-        | A.(AilEconst (ConstantInteger (IConstant (z, Decimal, Some B)))) -> Z.equal z (Z.of_int 1)
+        | A.(AilEconst (ConstantPredefined PConstantTrue)) -> true
         | _ -> false
         )
     | _ -> false

@@ -332,7 +332,6 @@ let signed_integerSuffix = function
   | U   -> false
   | UL  -> false
   | ULL -> false
-  | B -> false
 end
 
 val min_interpret_integerSuffix: integerSuffix -> integerBaseType
@@ -342,7 +341,6 @@ let min_interpret_integerSuffix = function
   | U   -> Int_
   | UL  -> Long
   | ULL -> LongLong
-  | B -> Int_
 end
 
 val min_interpret_optionIntegerSuffix: maybe integerSuffix -> integerBaseType

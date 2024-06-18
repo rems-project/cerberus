@@ -11,7 +11,6 @@ type integerSuffix =
  | ULL
  | L
  | LL
- | B (* For executable specs - boolean type *)
 
 type basis =
   | Octal
@@ -36,6 +35,12 @@ type characterPrefix =
   | Pref_U
 
 type characterConstant = maybe characterPrefix * string
+
+(* since C23 *)
+type predefinedConstant =
+  | PConstantFalse
+  | PConstantTrue
+(*  | PConstantNullptr *)
 
 type encodingPrefix =
   | Enc_u8
@@ -68,6 +73,7 @@ type constant [name = "c*"] =
   | ConstantArray         of ctype * list constant
   | ConstantStruct        of Symbol.sym * list (Symbol.identifier * constant)
   | ConstantUnion         of Symbol.sym * Symbol.identifier * constant
+  | ConstantPredefined    of predefinedConstant (* since C23 *)
 
 type unaryOperator =
   | Plus

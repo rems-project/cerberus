@@ -226,6 +226,10 @@ let rec pp_constant = function
  | ConstantUnion (tag_sym, memb_ident, cst) ->
    P.parens (!^ "union" ^^^ Pp_ail.pp_id ~is_human:true tag_sym)
    ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
+| ConstantPredefined PConstantFalse ->
+    pp_keyword "false"
+| ConstantPredefined PConstantTrue ->
+    pp_keyword "true"
 
 let pp_stringLiteral (pref_opt, strs) =
   let strs = List.concat (List.map snd strs) in

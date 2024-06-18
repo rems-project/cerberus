@@ -28,6 +28,7 @@ let rec is_null_pointer_constant expr =
     | AilEatomic e ->
         is_null_pointer_constant e
     | _ ->
+        (* TODO: should this return true for 'ConstantPredefined PConstantFalse' ? *)
         false
   end
 
