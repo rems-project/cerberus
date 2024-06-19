@@ -56,11 +56,6 @@ let is_empty_ail_stmt = function
   | _ -> false
 
 
-let make_inline = function
-| A.Decl_object (sd, align_opt, qs, ty) -> A.Decl_object (sd, align_opt, qs, ty)
-| A.Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, _, is_Noreturn) ->
-  A.Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, true, is_Noreturn)
-
 
 
 

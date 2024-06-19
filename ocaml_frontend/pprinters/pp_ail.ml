@@ -803,8 +803,7 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)
 let pp_function_prototype ?(executable_spec=false) sym decl = match decl with 
 | Decl_object _ -> P.empty (* shouldn't hit this case *)
 | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) -> 
-  (* Using is_inline flag for extern printing in CN - flag set to true when injecting prototypes into modified source *)
-  (fun k -> if is_inline   then (if executable_spec then !^ "extern" else !^ "inline") ^^^ k else k) (
+  (fun k -> if is_inline then !^ "inline" ^^^ k else k) (
       (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
         begin
           if !Cerb_debug.debug_level > 5 then
