@@ -71,10 +71,6 @@ let to_list = function
   | Some a -> [a]
   | None -> []
 
-let list (o_xs : ('a option) list) : 'a list =
-  List.filter_map (fun o -> o) o_xs
-
-
 module ListM = struct
 
   let rec mapM f xs =
