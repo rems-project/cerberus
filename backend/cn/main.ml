@@ -73,8 +73,7 @@ let frontend ~macros ~incl_dirs ~incl_files astprints ~do_peval ~filename ~magic
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
   Switches.set 
     (["inner_arg_temps"; "at_magic_comments"] 
-     @ (if magic_comment_char_dollar then ["magic_comment_char_dollar"] else []))
-  ;
+     @ (if magic_comment_char_dollar then ["magic_comment_char_dollar"] else []));
   Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
@@ -197,6 +196,8 @@ let main
       let open Resultat in
       let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
       print_log_file ("mucore", MUCORE prog5);
+      (* TODO: Factor out Check.check so that well-formedness checks can be separately.
+               Otherwise one might get a lot of noise. *)
       begin match output_decorated with
       | None -> Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
       | Some output_filename ->
@@ -325,7 +326,9 @@ let output_decorated_dir =
   Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
 
 let output_decorated =
-  let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations" in
+  let doc = "output a version of the translation unit decorated with C runtime
+  translations of the CN annotations. Warning: this does not check whether
+  specifications are well-formed." in
   Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
 
 (* copy-pasting from backend/driver/main.ml *)
@@ -416,3 +419,4 @@ let () =
       magic_comment_char_dollar
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
+
