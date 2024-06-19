@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 
 RUNTIME_PREFIX="$OPAM_SWITCH_PREFIX/lib/cn/runtime/"
 
@@ -13,8 +13,16 @@ if [ $# -ne 1 ]; then
   exit 1;
 fi
 
-EXEC_DIR=$(mktemp -t 'cn-exec' -d)
-echo "Creating $EXEC_DIR directory..."
+# the XXXX is ignored by Darwin's mktemp but needed
+# by the GNU version
+EXEC_DIR=$(mktemp -d -t 'cn-exec.XXXX')
+echo -n "Creating $EXEC_DIR directory... "
+if [ ! -d $EXEC_DIR ]; then
+  echo "FAILED"
+  exit 1
+else
+  echo "done"
+fi
 
 INPUT_FN=$1
 INPUT_BASENAME=$(basename $INPUT_FN .c)
@@ -42,4 +50,3 @@ else
     fi
   fi
 fi
-
