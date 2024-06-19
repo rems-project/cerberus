@@ -1,6 +1,5 @@
 module CF = Cerb_frontend
 module S = CF.Symbol
-open Pp
 
 include S
 

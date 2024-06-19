@@ -2,21 +2,16 @@ module CF = Cerb_frontend
 
 include PPrint
 
-type doc = document
-
 (* copying from backend.ml *)
 let term_col = match Cerb_util.terminal_size () with
   | Some (_, col) -> col - 1
   | _ -> 80 - 1
-
 
 type loc_pp =
   | Hex
   | Dec
 
 let loc_pp = ref Dec
-
-
 
 let int i = string (string_of_int i)
 let z i = string (Z.to_string i)
@@ -155,8 +150,9 @@ let list f l =
   | [] -> !^"(empty)"
   | l -> flow_map (comma ^^ break 1) f l
 
+(*
 let commas l = list (fun pp -> pp) l
-
+*)
 
 let list_filtered f l =
   match List.filter_map f l with
@@ -169,12 +165,13 @@ let option f none_msg opt = match opt with
   | Some v -> f v
 
 
-
+(*
 let nats n =
   let rec aux n = if n < 0 then [] else n :: aux (n - 1) in
   List.rev (aux n)
+*)
 
-module IntMap = Map.Make(Int)
+(* module IntMap = Map.Make(Int) *)
 
 
 
@@ -334,4 +331,3 @@ let progress_simple title name =
 
 let of_total cur total =
   Printf.sprintf "[%d/%d]" cur total
-
