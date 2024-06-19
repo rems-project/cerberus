@@ -2818,15 +2818,19 @@ Module Type CheriMemoryImpl
     match n with
     | O => cm
     | S n =>
-        capmeta_copy_tags
-          (AddressValue.with_offset dst (Z.of_nat step))
-          (AddressValue.with_offset src (Z.of_nat step))
-          n
-          step
-          (match AMap.M.find src cm with
-           | None => cm
-           | Some meta => AMap.M.add dst meta cm
-           end)
+        let cm' := capmeta_copy_tags dst src n step cm in
+        let src' := AddressValue.with_offset src (Z.of_nat (n*step)) in
+        let dst' := AddressValue.with_offset dst (Z.of_nat (n*step)) in
+        match AMap.M.find src' cm' with
+        | None =>
+            (* This is the case where a pointer-aligned address does
+               not have any meta information associated with
+               it. Normally, it should not happen, but instead of
+               enforcing this via an additional clause in the memory
+               invariant, we just propagate this situation further. *)
+            AMap.M.remove dst' cm'
+        | Some meta => AMap.M.add dst' meta cm'
+        end
     end.
 
   (* Helpe function *)

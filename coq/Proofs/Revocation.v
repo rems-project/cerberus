@@ -5029,8 +5029,13 @@ Module RevocationProofs.
     (Z.modulo (AddressValue.to_Z dst) (Z.of_nat step) = 0) ->
     forall a tg,
       AMap.M.MapsTo a tg (capmeta_copy_tags dst src n step cm) ->
-      (exists k, 0 <= k < Z.of_nat n /\ a = AddressValue.with_offset dst (k * Z.of_nat step) /\ AMap.M.MapsTo (AddressValue.with_offset src (k * Z.of_nat step)) tg cm) \/
-        (AMap.M.MapsTo a tg cm /\ forall k, 0 <= k < Z.of_nat n -> a <> AddressValue.with_offset dst (k * Z.of_nat step)).
+      (exists k,
+          0 <= k < Z.of_nat n
+          /\ a = AddressValue.with_offset dst (k * Z.of_nat step)
+          /\ AMap.M.MapsTo (AddressValue.with_offset src (k * Z.of_nat step)) tg cm)
+      \/
+        (AMap.M.MapsTo a tg cm
+         /\ forall k, 0 <= k < Z.of_nat n -> a <> AddressValue.with_offset dst (k * Z.of_nat step)).
   Proof.
     intros Hstep Hsrc_mod Hdst_mod.
     revert cm Hsrc_mod Hdst_mod.
@@ -5041,13 +5046,19 @@ Module RevocationProofs.
       + assumption.
       + intros k Hk. lia.
     - (* Inductive case: n = S n' *)
+      cbn.
       simpl in Hmaps.
+      (*
       remember (capmeta_copy_tags (AddressValue.with_offset dst (Z.of_nat step))
                (AddressValue.with_offset src (Z.of_nat step)) n' step
                match AMap.M.find (elt:=bool * CapGhostState) src cm with
                | Some meta => AMap.M.add dst meta cm
                | None => cm
                end) as cm'.
+       *)
+      specialize (IH cm Hsrc_mod Hdst_mod a tg).
+      break_match_hyp.
+
       admit.
   Admitted.
 
