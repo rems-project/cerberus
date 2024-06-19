@@ -1741,9 +1741,9 @@ Module RevocationProofs.
     Lemma serr2InternalErr_inv
       {A:Type}
       {x:A}
-      m
-      {s: mem_state}:
-      serr2InternalErr m s = (s, inr x) -> m = inr x.
+      {m: serr A}
+      {s s': mem_state}:
+      serr2InternalErr m s = (s', inr x) -> m = inr x.
     Proof.
       intros H.
       Transparent serr2InternalErr ret.
@@ -5461,6 +5461,25 @@ Module RevocationProofs.
       assumption.
   Qed.
 
+  Lemma cap_addr_of_pointer_value_inv
+    {ptr : pointer_value}
+    {a : AddressValue.t}:
+    cap_addr_of_pointer_value ptr = inr a ->
+    exists prov c, ptr = PV prov (PVconcrete c) /\ a = Capability_GS.cap_get_value c.
+  Proof.
+    intros H.
+    unfold cap_addr_of_pointer_value in H.
+    repeat break_match_hyp.
+    inv H.
+    apply ret_inr in H.
+    exists p.
+    exists t.
+    split.
+    reflexivity.
+    inv H.
+    reflexivity.
+  Qed.
+
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
@@ -5479,31 +5498,52 @@ Module RevocationProofs.
     specialize (SA _ _ _ AC).
     subst s'.
     split;[assumption|].
-
     destruct x.
     apply memcpy_arg_sane_after_check in AC.
 
     apply bind_PreservesInvariant_value.
+    intros _ s' a1 H0.
+    pose proof (serr2InternalErr_inv H0).
+    apply serr2InternalErr_SameState in H0.
+    subst s'.
+    split;[assumption|].
+    apply cap_addr_of_pointer_value_inv in H.
+    destruct H as [p1 [c1 [P1 A1]]].
+
+    apply bind_PreservesInvariant_value.
+    intros _ s' a2 H2.
+    pose proof (serr2InternalErr_inv H2).
+    apply serr2InternalErr_SameState in H2.
+    subst s'.
+    split;[assumption|].
+    apply cap_addr_of_pointer_value_inv in H.
+    destruct H as [p2 [c2 [P2 A2]]].
+
+    apply bind_PreservesInvariant_value.
+    intros H s' x H0.
+    destruct x.
     split.
     -
-      pose proof (memcpy_copy_data_PreservesInvariant loc ptrval1 ptrval2 (Z.to_nat size) s M) as P.
-      unfold post_exec_invariant, lift_sum_p,execErrS in P.
-      rewrite H0 in P.
-      break_match_hyp.
-      inl_inr.
-      inl_inr_inv.
-      assumption.
+      pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s H) as P.
+      unfold post_exec_invariant, lift_sum_p, execErrS in P.
+      break_let.
+      repeat break_match_hyp.
+      2,3: inv Heqs1.
+      +
+        tuple_inversion.
+      +
+        apply ret_inr in Heqs1.
+        invc Heqs1.
+        tuple_inversion.
+        auto.
     -
+      pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H0).
+      destruct M.
+      epose proof (memcpy_copy_data_fetch_bytes_spec H2 AC) as DS.
+      rewrite H1 in AC.
       preserves_step.
-      +
-        destruct x.
-        pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H0).
-        destruct M.
-        pose proof (memcpy_copy_data_fetch_bytes_spec H2 AC H0) as DS.
-        rewrite H1 in AC.
-        eapply memcpy_copy_tags_PreservesInvariant; eauto.
-      +
-        preserves_step.
+      eapply memcpy_copy_tags_PreservesInvariant; eauto.
+      preserves_step.
   Qed.
 
   Instance realloc_PreservesInvariant
