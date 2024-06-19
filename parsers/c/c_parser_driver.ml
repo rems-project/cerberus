@@ -83,34 +83,39 @@ let parse_loc_string parse (loc, str) =
     ~offset:start_pos.pos_cnum
     lexbuf
 
+let update_enclosing_region payload_region xs =
+  let slash_inclusive_region = match payload_region with
+    | Cerb_location.Loc_region (start_pos, end_pos, cursor) ->
+      (* TODO: adjust CERB_MAGIC and EDecl_magic to carry a record:
+         { slash_inclusive_region: Cerb_location.t; payload_region: Cerb_location.t } *)
+        Cerb_location.region ( { start_pos with pos_cnum=start_pos.pos_cnum - 3 }
+                             , { end_pos with pos_cnum=end_pos.pos_cnum + 2 }) cursor
+    | _ -> assert false (* loc should always be a region *)
+  in
+  let update_decl_with_enclosing_region = function
+    | Cabs.EDecl_funcCN func ->
+        Cabs.EDecl_funcCN { func with Cn.cn_func_magic_loc= slash_inclusive_region }
+    | Cabs.EDecl_lemmaCN lmma ->
+        Cabs.EDecl_lemmaCN { lmma with Cn.cn_lemma_magic_loc= slash_inclusive_region }
+    | Cabs.EDecl_predCN pred ->
+        Cabs.EDecl_predCN { pred with Cn.cn_pred_magic_loc= slash_inclusive_region }
+    | Cabs.EDecl_datatypeCN dt ->
+        Cabs.EDecl_datatypeCN { dt with Cn.cn_dt_magic_loc= slash_inclusive_region }
+    | Cabs.EDecl_type_synCN ts ->
+        Cabs.EDecl_type_synCN { ts with Cn.cn_tysyn_loc= slash_inclusive_region }
+    | Cabs.EDecl_fun_specCN spec ->
+        Cabs.EDecl_fun_specCN { spec with Cn.cn_spec_magic_loc= slash_inclusive_region }
+    | _ ->
+        (* C_parser.cn_toplevel only returns CN external declarations *)
+        assert false
+  in
+  List.map update_decl_with_enclosing_region xs
+
 let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
   let magic_comments_to_cn_toplevel = function
     | Cabs.EDecl_magic (loc, str) ->
-        Exception.except_bind (parse_loc_string C_parser.cn_toplevel (loc, str)) (fun xs ->
-          let loc = match loc with
-            | Cerb_location.Loc_region (start_pos, end_pos, cursor) -> 
-                Cerb_location.(region ({start_pos with pos_cnum=start_pos.pos_cnum - 3}, {end_pos with pos_cnum=end_pos.pos_cnum + 2}) cursor)
-            | _ -> assert false (* loc should always be a region *)
-          in
-          Exception.except_return @@
-            List.map (function
-              | Cabs.EDecl_funcCN func ->
-                  Cabs.EDecl_funcCN { func with Cn.cn_func_magic_loc= loc }
-              | Cabs.EDecl_lemmaCN lmma ->
-                  Cabs.EDecl_lemmaCN { lmma with Cn.cn_lemma_magic_loc= loc }
-              | Cabs.EDecl_predCN pred ->
-                  Cabs.EDecl_predCN { pred with Cn.cn_pred_magic_loc= loc }
-              | Cabs.EDecl_datatypeCN dt ->
-                  Cabs.EDecl_datatypeCN { dt with Cn.cn_dt_magic_loc= loc }
-              | Cabs.EDecl_type_synCN ts ->
-                  Cabs.EDecl_type_synCN { ts with Cn.cn_tysyn_loc= loc }
-              | Cabs.EDecl_fun_specCN spec ->
-                  Cabs.EDecl_fun_specCN { spec with Cn.cn_spec_magic_loc= loc }
-              | _ ->
-                  (* C_parser.cn_toplevel only returns CN external declarations *)
-                  assert false
-            ) xs
-        )
+      parse_loc_string C_parser.cn_toplevel (loc, str)
+      |> Exception.except_fmap (update_enclosing_region loc)
     | decl ->
       Exception.except_return [decl] in
   decls
