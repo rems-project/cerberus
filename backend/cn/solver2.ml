@@ -12,7 +12,6 @@ module LCSet = Set.Make(LC)
 open Global
 open Pp
 
-(* XXX: probably should add some prefixes to try to avoid name collisions. *)
 (** Functions that pick names for things. *)
 module CN_Names = struct
   let var_name x            = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
