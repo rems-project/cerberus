@@ -1,7 +1,7 @@
 
 // #include "alloc.c"
 #include <cn-executable/utils.h>
-
+#include <signal.h> // for SIGABRT
 
 /*
 
