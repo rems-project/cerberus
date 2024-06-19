@@ -70,3 +70,12 @@ a different entry point from which a parser can be started:
     ```
 * Resource Types: the "signatures" of predicates, in `backend/cn/resourceTypes.ml`
 * Resource Predicates: the defintion of predicates, in `backend/cn/resourcePredicates.ml`
+
+
+## Dependency Graph
+
+```
+opam install codept
+codept backend/cn/*.ml > cn-modules.dot
+dot -Tpdf -o cn-modules.pdf # -x optionally to "simplify"
+```
