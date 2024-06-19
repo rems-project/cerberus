@@ -35,7 +35,7 @@ else
   echo done!
   cd $EXEC_DIR
   echo -n "Compiling and linking... "
-  if ! cc -I$RUNTIME_PREFIX/include/ $RUNTIME_PREFIX/libcn.a -o $INPUT_BASENAME-exec-output $INPUT_BASENAME-exec.c cn.c
+  if ! cc -I$RUNTIME_PREFIX/include/ -o $INPUT_BASENAME-exec-output $INPUT_BASENAME-exec.c cn.c $RUNTIME_PREFIX/libcn.a
   then
     echo "compiling/linking failed."
   else 
