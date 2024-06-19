@@ -243,7 +243,7 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
     | Pointer _ ->
         3
   in
-  let rec aux ?(executable_spec=false) p qs (Ctype (annots, ty)) : P.document -> P.document =
+  let rec aux p qs (Ctype (annots, ty)) : P.document -> P.document =
     let annot_doc = if executable_spec then 
       (match annots with 
         | Annot.Atypedef sym :: _ -> Some (pp_id sym)
@@ -255,7 +255,7 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
       | Some doc -> (fun k -> doc ^^ k)
       | None ->
         (let p' = precOf ty in
-        (* let aux = aux ~executable_spec p' in *)
+        (* let aux = aux p' in *)
         let wrap z = if p' > 0 && p' >= p then z else P.parens z in
         begin match ty with
           | Void ->
@@ -263,33 +263,33 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
           | Basic bty ->
               fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
           | Array (elem_ty, n_opt) ->
-              fun k -> aux ~executable_spec p' qs elem_ty (k ^^ (P.brackets (P.optional pp_integer n_opt)))
+              fun k -> aux p' qs elem_ty (k ^^ (P.brackets (P.optional pp_integer n_opt)))
           | Function ((ret_qs, ret_ty), params, isVariadic) ->
-              fun k -> aux ~executable_spec p' ret_qs ret_ty P.empty ^^^
+              fun k -> aux p' ret_qs ret_ty P.empty ^^^
                       P.parens k ^^
                       P.parens (
-                        (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux ~executable_spec p' qs ty P.empty) params) ^^
+                        (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux p' qs ty P.empty) params) ^^
                         (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                       )
           | FunctionNoParams ((ret_qs, ret_ty)) ->
-              fun k -> aux ~executable_spec p' ret_qs ret_ty P.empty ^^^
+              fun k -> aux p' ret_qs ret_ty P.empty ^^^
               P.parens k ^^ P.parens (P.empty)
           | Pointer (ref_qs, ref_ty) ->
               fun k ->
                 begin match ref_ty with
                   | Ctype (_, Function ((ret_qs, ret_ty), params, isVariadic)) ->
-                      aux ~executable_spec p' ret_qs ret_ty P.empty ^^^ P.parens (P.star ^^ k) ^^^
+                    aux p' ret_qs ret_ty P.empty ^^^ P.parens (P.star ^^ k) ^^^
                       P.parens (
-                        (if List.length params = 0 then !^ "void" else comma_list (fun (qs, ty, _) -> aux ~executable_spec p' qs ty P.empty) params) ^^
+                        (if List.length params = 0 then !^ "void" else comma_list (fun (qs, ty, _) -> aux p' qs ty P.empty) params) ^^
                         (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                       )
                   | _ ->
-                      aux ~executable_spec p' ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
+                      aux p' ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
                 end
           | Atomic ty ->
               fun k ->
                 pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^
-                P.parens (aux ~executable_spec p' no_qualifiers ty P.empty) ^^ k
+                P.parens (aux p' no_qualifiers ty P.empty) ^^ k
           | Struct sym ->
               fun k ->
                 pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type ~is_human sym ^^ k
@@ -300,7 +300,7 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
     in
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
-  (aux ~executable_spec 1 qs cty) pp_spaced_ident
+  (aux 1 qs cty) pp_spaced_ident
   
 
 let pp_ctype ?(executable_spec=false) ?(is_human=false) qs ty =
@@ -401,7 +401,6 @@ let pp_integerSuffix =
 
 (* TODO: should reverse the decoding of n *)
 let pp_integerConstant = function
-  (* Case only generated during executable spec translation *)
   | IConstant (n, basis, suff_opt) ->
       !^ (match basis with
             | Octal       -> String_nat_big_num.string_of_octal n
@@ -452,6 +451,7 @@ let pp_stringLiteral (pref_opt, strs) =
 let rec pp_constant ?(executable_spec=false) = function
   | ConstantIndeterminate ty ->
       (* NOTE: this is not in C11 *)
+      (* TODO(Rini) I don't see how that can do the right thing in general *)
       if executable_spec then P.empty else
       pp_keyword "indet" ^^ P.parens (pp_ctype no_qualifiers ty)
   | ConstantNull ->
@@ -510,79 +510,94 @@ let pp_alignment_opt align_opt =
   P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
 
 let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
-  let rec pp ?(executable_spec=false) p (AnnotatedExpression (annot, strs, loc, expr)) =
+  let pp_ctype qs ty = pp_ctype ~executable_spec qs ty in
+  let rec pp p (AnnotatedExpression (annot, strs, loc, expr)) =
     let p' = precedence expr in
-    let pp ?(executable_spec=false) z = P.group (pp ~executable_spec p' z) in
+    let pp z = P.group (pp p' z) in
     (if lt_precedence p' p then fun z -> z else P.parens)
       (mk_pp_annot annot (match expr with
         | AilEunary (PostfixIncr as o, e)
         | AilEunary (PostfixDecr as o, e) ->
-            pp ~executable_spec e ^^ pp_unaryOperator o
+            pp e ^^ pp_unaryOperator o
         | AilEunary (Bnot, e) ->
-            let e_doc = pp ~executable_spec e in
-            (match strs with 
-              | [x] -> !^ x ^^ P.lparen ^^ e_doc ^^ P.rparen
-              | _ -> P.tilde ^^ pp ~executable_spec e)
+            if executable_spec then
+              (* TODO(Rini): remove this, this is horrible and will break in impredicable ways with
+                 changes to the desugaring/Ail type *)
+              let e_doc = pp e in
+              (match strs with
+                | [x] -> !^ x ^^ P.lparen ^^ e_doc ^^ P.rparen
+                | _ -> P.tilde ^^ pp e)
+            else
+              P.tilde ^^ pp e
         | AilEunary (o, e) ->
-            pp_unaryOperator o ^^ pp ~executable_spec e
+            pp_unaryOperator o ^^ pp e
         | AilEbinary (e1, (Comma as o), e2) ->
-            pp ~executable_spec e1 ^^ pp_binaryOperator o ^^ P.space ^^ pp ~executable_spec e2
+            pp e1 ^^ pp_binaryOperator o ^^ P.space ^^ pp e2
         | AilEbinary (e1, o, e2) ->
-            let e1_doc = pp ~executable_spec e1 in
-            let e2_doc = pp ~executable_spec e2 in
-            (match strs with 
-              | [x] -> 
-                  !^ x ^^ P.lparen ^^ e1_doc ^^ P.comma ^^^ e2_doc ^^ P.rparen 
-              | _ -> e1_doc ^^^ pp_binaryOperator o ^^^ e2_doc)
+            let e1_doc = pp e1 in
+            let e2_doc = pp e2 in
+            if executable_spec then
+              (* TODO(Rini): remove this, this is horrible and will break in impredicable ways with
+                 changes to the desugaring/Ail type *)
+              (match strs with
+                | [x] ->
+                    !^ x ^^ P.lparen ^^ e1_doc ^^ P.comma ^^^ e2_doc ^^ P.rparen
+                | _ -> e1_doc ^^^ pp_binaryOperator o ^^^ e2_doc)
+            else
+              e1_doc ^^^ pp_binaryOperator o ^^^ e2_doc
         | AilEassign (e1, e2) ->
-            pp ~executable_spec e1 ^^^ P.equals ^^^ pp ~executable_spec e2
+            pp e1 ^^^ P.equals ^^^ pp e2
         | AilEreg_load r ->
             !^("r" ^ string_of_int r)
         | AilEbmc_assume e ->
-            !^ "__bmc_assume" ^^ P.parens (pp ~executable_spec e)
+            !^ "__bmc_assume" ^^ P.parens (pp e)
         | AilEcompoundAssign (e1, o, e2) ->
-            pp ~executable_spec e1 ^^^ pp_arithmeticOperator o ^^ P.equals ^^^ pp ~executable_spec e2
+            pp e1 ^^^ pp_arithmeticOperator o ^^ P.equals ^^^ pp e2
         | AilEcond (e1, None, e3) ->
-            P.group (pp ~executable_spec e1 ^^^ P.qmark ^^ P.colon ^^^ pp ~executable_spec e3)
+            P.group (pp e1 ^^^ P.qmark ^^ P.colon ^^^ pp e3)
         | AilEcond (e1, Some e2, e3) ->
-            P.group (pp ~executable_spec e1 ^^^ P.qmark ^^^ pp ~executable_spec e2 ^^^ P.colon ^^^ pp ~executable_spec e3)
+            P.group (pp e1 ^^^ P.qmark ^^^ pp e2 ^^^ P.colon ^^^ pp e3)
         | AilEcast (qs, ty, e) ->
             if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
-              P.parens (pp_ctype_human qs ty) ^^^ pp ~executable_spec e
+              P.parens (pp_ctype_human qs ty) ^^^ pp e
             else
-              P.parens (pp_ctype ~executable_spec qs ty) ^^^ pp ~executable_spec e
+              P.parens (pp_ctype qs ty) ^^^ pp e
         | AilEcall (e, es) ->
-            pp ~executable_spec e ^^ P.parens (comma_list (fun e -> pp ~executable_spec e) es)
+            pp e ^^ P.parens (comma_list pp es)
         | AilEassert e ->
-            !^ "assert" ^^ P.parens (pp ~executable_spec e)
+            !^ "assert" ^^ P.parens (pp e)
         | AilEoffsetof (ty, ident) ->
             !^ "offsetof" ^^ P.parens (pp_ctype no_qualifiers ty ^^ P.comma ^^^ Pp_symbol.pp_identifier ident)
         | AilEgeneric (e, gas) ->
-            pp_keyword "_Generic" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
+            pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
         | AilEarray (_, ty, e_opts) ->
             let f i e_opt =
               P.brackets (!^ (string_of_int i)) ^^ P.equals ^^^
-              Option.(value (map (fun e -> pp ~executable_spec e) e_opt) ~default:(!^ "_")) in
+              Option.(value (map pp e_opt) ~default:(!^ "_")) in
             P.braces (P.separate (P.comma ^^ P.space) (List.mapi f e_opts))
         | AilEstruct (tag_sym, xs) ->
-            let output_doc = !^ "struct" ^^^ pp_id tag_sym in
-            let output_doc = if executable_spec then output_doc else P.parens output_doc in 
-            let output_doc = output_doc ^^ P.braces (
-              comma_list (function (ident, e_opt) ->
-                P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
-                Option.(value (map (fun e -> pp ~executable_spec e) e_opt) ~default:(!^ "_"))
-              ) xs
-            )
-            in
-            let output_doc = if executable_spec then output_doc ^^ (!^ ";") else output_doc in 
-            output_doc
+            (* TODO(rini) the executable_spec version looks wrong, these are not declarations *)
+            if executable_spec then
+              !^ "struct" ^^^ pp_id tag_sym ^^ P.braces (
+                comma_list (function (ident, e_opt) ->
+                  P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
+                  Option.(value (map pp e_opt) ~default:(!^ "_"))
+                ) xs
+              ) ^^ (!^ ";")
+            else
+              P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
+                comma_list (function (ident, e_opt) ->
+                  P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
+                  Option.(value (map pp e_opt) ~default:(!^ "_"))
+                ) xs
+              )
         | AilEunion (tag_sym, memb_ident, e_opt) ->
             P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
-              P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp ~executable_spec e) e_opt
+              P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
             )
         | AilEcompound (qs, ty, e) ->
-            P.parens (pp_ctype qs ty) ^^ P.braces (pp ~executable_spec e)
+            P.parens (pp_ctype qs ty) ^^ P.braces (pp e)
         | AilEbuiltin b ->
             pp_ail_builtin b
         | AilEstr lit ->
@@ -596,9 +611,9 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
               (* printing the types in a human readable format *)
               pp_keyword "sizeof" ^^ P.parens (pp_ctype_human qs ty)
             else
-              pp_keyword "sizeof" ^^ P.parens (pp_ctype ~executable_spec qs ty)
+              pp_keyword "sizeof" ^^ P.parens (pp_ctype qs ty)
         | AilEsizeof_expr e ->
-            pp_keyword "sizeof" ^^^ pp ~executable_spec e
+            pp_keyword "sizeof" ^^^ pp e
         | AilEalignof (qs, ty) ->
             if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
@@ -606,9 +621,10 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
             else
               pp_keyword "_Alignof" ^^ P.parens (pp_ctype qs ty)
         | AilEmemberof (e, ident) ->
-            pp ~executable_spec e ^^ P.dot ^^ Pp_symbol.pp_identifier ident
+            pp e ^^ P.dot ^^ Pp_symbol.pp_identifier ident
         | AilEmemberofptr (e, ident) ->
-            let ptr_var = pp ~executable_spec e in
+            (*TODO: do the parenthesis thing with the precedence function instead... *)
+            let ptr_var = pp e in
             let pre = 
               match e with 
               | AnnotatedExpression (_, _, _, AilEcast _) -> P.parens ptr_var
@@ -616,30 +632,30 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
             in
             pre ^^ (!^ "->") ^^ Pp_symbol.pp_identifier ident
         | AilEannot (_, e) ->
-            !^ "/* annot */" ^^^ pp ~executable_spec e
+            !^ "/* annot */" ^^^ pp e
         | AilEva_start (e, sym) ->
-            pp_keyword "va_start" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_id sym)
+            pp_keyword "va_start" ^^ P.parens (pp e ^^ P.comma ^^^ pp_id sym)
         | AilEva_copy (e1, e2) ->
-            pp_keyword "va_copy" ^^ P.parens (pp ~executable_spec e1 ^^ P.comma ^^^ pp ~executable_spec e2)
+            pp_keyword "va_copy" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         | AilEva_arg (e, ty) ->
-            pp_keyword "va_arg" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_ctype no_qualifiers ty)
+            pp_keyword "va_arg" ^^ P.parens (pp e ^^ P.comma ^^^ pp_ctype no_qualifiers ty)
         | AilEva_end e ->
-            pp_keyword "va_end" ^^ P.parens (pp ~executable_spec e)
+            pp_keyword "va_end" ^^ P.parens (pp e)
         | AilErvalue e ->
-            pp_ail_keyword "rvalue" ^^ P.parens (pp ~executable_spec e)
+            pp_ail_keyword "rvalue" ^^ P.parens (pp e)
         | AilEarray_decay e ->
-            pp_ail_keyword "array_decay" ^^ P.parens (pp ~executable_spec e)
+            pp_ail_keyword "array_decay" ^^ P.parens (pp e)
         | AilEfunction_decay e ->
-            pp_ail_keyword "function_decay" ^^ P.parens (pp ~executable_spec e)
+            pp_ail_keyword "function_decay" ^^ P.parens (pp e)
         | AilEatomic e ->
-            pp_ail_keyword "atomic" ^^ P.parens (pp ~executable_spec e)
+            pp_ail_keyword "atomic" ^^ P.parens (pp e)
         | AilEprint_type e ->
-              pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp ~executable_spec e)
+              pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
         | AilEgcc_statement (bs, ss) ->
             P.parens (pp_statement_aux mk_pp_annot ~bs:[] (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
 
       )) in
-  pp ~executable_spec None a_expr
+  pp None a_expr
 
 and pp_generic_association_aux pp_annot = function
   | AilGAtype (ty, e) ->
@@ -649,7 +665,8 @@ and pp_generic_association_aux pp_annot = function
 
 
 and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (_, Annot.Attrs attrs, stmt_)) =
-  let pp_statement ?(executable_spec=false) ?(bs=bs) ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
+  let pp_expression_aux pp_annot e = pp_expression_aux ~executable_spec pp_annot e in
+  let pp_statement ?(bs=bs) ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
     begin match stmt_ with
       | AilSblock _ ->
           P.empty
@@ -664,28 +681,28 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSskip ->
         P.semi
     | AilSexpr e ->
-        pp_expression_aux ~executable_spec pp_annot e ^^ P.semi
+        pp_expression_aux pp_annot e ^^ P.semi
     | AilSblock ([], []) ->
         P.lbrace ^^ P.rbrace
     | AilSblock ([], ss) ->
         P.lbrace ^^ P.nest 2 (
-          P.break 1 ^^ (P.separate_map (P.break 1) (fun s -> pp_statement ~executable_spec ~bs s) ss)
+          P.break 1 ^^ (P.separate_map (P.break 1) (fun s -> pp_statement ~bs s) ss)
         ) ^^ (if List.length ss > 0 then P.break 1 else P.empty) ^^
         P.rbrace
     | AilSblock (bindings, ss) ->
-      let block =
-        P.separate_map (P.break 1) (pp_statement ~executable_spec ~bs:(bindings@bs)) ss in
-      P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
-      (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
+        let block =
+          P.separate_map (P.break 1) (pp_statement ~bs:(bindings@bs)) ss in
+        P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
+        (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
     | AilSif (e, s1, s2) ->
-        pp_keyword "if" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^^^
-          pp_statement ~executable_spec ~is_control:true s1 ^/^
+        pp_keyword "if" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^
+          pp_statement ~is_control:true s1 ^/^
         pp_keyword "else" ^^^
-          pp_statement ~executable_spec ~is_control:true s2
+          pp_statement ~is_control:true s2
     | AilSwhile (e, s, _) ->
-        pp_keyword "while" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^^^ pp_statement ~executable_spec ~is_control:true s
+        pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^ pp_statement ~is_control:true s
     | AilSdo (s, e, _) ->
-        pp_keyword "do" ^^^ pp_statement ~executable_spec ~is_control:true s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^^ P.semi
+        pp_keyword "do" ^^^ pp_statement ~is_control:true s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^ P.semi
     | AilSbreak ->
         pp_keyword "break" ^^ P.semi
     | AilScontinue ->
@@ -693,55 +710,55 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSreturnVoid ->
         pp_keyword "return" ^^ P.semi
     | AilSreturn e ->
-      let e_doc = pp_expression_aux ~executable_spec pp_annot e in
-      if e_doc == P.empty then pp_keyword "return" ^^ P.semi else
-        pp_keyword "return" ^^^ e_doc ^^ P.semi
+        if executable_spec then
+          (* TODO(Rini): this looks wrong. I doubt the == test is working as expected. Why is this needed? *)
+          let e_doc = pp_expression_aux pp_annot e in
+          if e_doc == P.empty then pp_keyword "return" ^^ P.semi else
+            pp_keyword "return" ^^^ e_doc ^^ P.semi
+        else
+          pp_keyword "return" ^^^ pp_expression_aux pp_annot e ^^ P.semi
     | AilSswitch (e, s) ->
-        pp_keyword "switch" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^/^ pp_statement ~executable_spec ~is_control:true s
+        pp_keyword "switch" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^ pp_statement ~is_control:true s
     | AilScase (n, s) ->
-        let case_str = 
-          if executable_spec then
-            (let attr = List.nth attrs 0 in
-            match attr.attr_id with
-              | Identifier (_, str) -> str)
-          else
-            Z.to_string n
-        in
-        pp_keyword "case" ^^^ !^ case_str ^^ P.colon ^/^ pp_statement ~executable_spec s
+        if executable_spec then
+          (* TODO(Rini): this is very brittle *)
+          let case_str = match (List.nth attrs 0).attr_id with
+            | Identifier (_, str) -> str in
+          pp_keyword "case" ^^^ !^ case_str ^^ P.colon ^/^ pp_statement s
+        else
+          pp_keyword "case" ^^^ !^ (Z.to_string n) ^^ P.colon ^/^ pp_statement s
     | AilScase_rangeGNU (n1, n2, s) ->
-        pp_keyword "case" ^^^ !^ (Z.to_string n1 ^ " ... " ^ Z.to_string n2) ^^ P.colon ^/^ pp_statement ~executable_spec s
+        pp_keyword "case" ^^^ !^ (Z.to_string n1 ^ " ... " ^ Z.to_string n2) ^^ P.colon ^/^ pp_statement s
     | AilSdefault s ->
-        pp_keyword "default" ^^ P.colon ^/^ pp_statement ~executable_spec s
+        pp_keyword "default" ^^ P.colon ^/^ pp_statement s
     | AilSlabel (l, s, _) ->
-        pp_id_label l ^^ P.colon ^/^ pp_statement ~executable_spec s
+        pp_id_label l ^^ P.colon ^/^ pp_statement s
     | AilSgoto l ->
         pp_keyword "goto" ^^^ pp_id_label l ^^ P.semi
     | AilSdeclaration [] ->
         pp_comment "// empty decl"
     | AilSdeclaration defs ->
-      comma_list (fun (id, e_opt) ->
-        let doc = 
-          (match List.assoc_opt id bs with
+        comma_list (fun (id, e_opt) ->
+          begin match List.assoc_opt id bs with
             | Some (_, align_opt, qs, ty) ->
                 pp_alignment_opt align_opt ^^
                 pp_ctype_declaration ~executable_spec (pp_id_obj id) qs ty
             | None ->
-                !^ "BINDING_NO_FOUND")
-        in
-        doc
-        (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) e_opt
+                !^ "BINDING_NO_FOUND"
+          end
+          (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e) e_opt
       ) defs ^^
       P.semi
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
-          P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) (fun s -> pp_statement ~executable_spec ~bs s) ss
+          P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) (fun s -> pp_statement ~bs s) ss
         ) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
     | AilSreg_store (r, e) ->
-        !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e ^^ P.semi
+        !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux pp_annot e ^^ P.semi
 
     | AilSmarker (_, s) ->
         pp_comment "// marker" ^^ P.break 1 ^^
-        pp_statement ~executable_spec s
+        pp_statement s
 
 
 let pp_static_assertion pp_annot (e, lit) =
@@ -754,10 +771,9 @@ let pp_alignment = function
       pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
 let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)) =
-  let id_doc = if executable_spec then pp_id tag else pp_id_type tag in 
   match def with
     | StructDef (ident_qs_tys, flexible_opt) ->
-        pp_keyword "struct" ^^^ id_doc ^^^ P.braces (
+        pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (
           P.nest 2 (
             P.break 1 ^^
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
@@ -770,38 +786,39 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)
           ) flexible_opt
           ) ^^ P.semi
     | UnionDef ident_qs_tys ->
-      let s (Symbol.Identifier (_,s)) = s in
-      let is_enum = match attrs with 
-        | [] -> false
-        | attr :: _ -> 
-          let str = s attr.attr_id in 
-          String.equal str "enum"
-      in
-      if is_enum then
-        pp_keyword "enum" ^^^ id_doc ^^^ P.braces (
-          P.nest 2 (
-            P.break 1 ^^
-            P.separate_map (P.comma ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
-              P.optional (fun align -> pp_alignment align ^^ P.space) align_opt ^^
-              Pp_symbol.pp_identifier ident
-            ) ident_qs_tys
-          ) ^^ P.break 1
-        ) ^^ P.semi
-      else
-        pp_keyword "union" ^^^ id_doc ^^^ P.braces (
-          P.nest 2 (
-            P.break 1 ^^
-            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
-              P.optional (fun align -> pp_alignment align ^^ P.space) align_opt ^^
-              pp_ctype_declaration ~executable_spec (Pp_symbol.pp_identifier ident) qs ty
-            ) ident_qs_tys
-          ) ^^ P.semi ^^ P.break 1
-        ) ^^ P.semi
+        let s (Symbol.Identifier (_,s)) = s in
+        let is_enum = match attrs with 
+          | [] -> false
+          | attr :: _ -> 
+            let str = s attr.attr_id in 
+            String.equal str "enum"
+        in
+        if executable_spec && is_enum then
+          (* TODO(Rini): this is wrong *)
+          pp_keyword "enum" ^^^ pp_id_type tag ^^^ P.braces (
+            P.nest 2 (
+              P.break 1 ^^
+              P.separate_map (P.comma ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
+                P.optional (fun align -> pp_alignment align ^^ P.space) align_opt ^^
+                Pp_symbol.pp_identifier ident
+              ) ident_qs_tys
+            ) ^^ P.break 1
+          ) ^^ P.semi
+        else
+          pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (
+            P.nest 2 (
+              P.break 1 ^^
+              P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
+                P.optional (fun align -> pp_alignment align ^^ P.space) align_opt ^^
+                pp_ctype_declaration ~executable_spec (Pp_symbol.pp_identifier ident) qs ty
+              ) ident_qs_tys
+            ) ^^ P.semi ^^ P.break 1
+          ) ^^ P.semi
 
 
 (* Extracted into separate function for use in executable spec printing*)
 let pp_function_prototype ?(executable_spec=false) sym decl = match decl with 
-| Decl_object _ -> P.empty (* shouldn't hit this case *)
+| Decl_object _ -> assert false
 | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) -> 
   (fun k -> if is_inline then !^ "inline" ^^^ k else k) (
       (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
@@ -838,10 +855,10 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
     | [] ->
         P.empty
     | xs ->
-        if executable_spec then 
-          P.empty 
+        if executable_spec then
+          P.empty
         else
-          P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 
+          P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1
   end ^^
   
   (* Tag declarations *)
@@ -849,8 +866,8 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
     | [] ->
         P.empty
     | xs ->
-        if executable_spec then 
-          P.empty 
+        if executable_spec then
+          P.empty
         else
           P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1
   end ^^
@@ -881,9 +898,9 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
           let pre = if executable_spec then 
-            P.empty 
+            P.empty
           else
-            pp_ansi_format [Red] (fun () -> 
+            pp_ansi_format [Red] (fun () ->
               !^ "// declare" ^^^ pp_id sym ^^^
               (if has_proto then !^ "WITH PROTO " else P.empty) ^^
               !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function ((ret_qs, ret_ty), params, is_variadic)))
@@ -922,7 +939,7 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
                   )
                 )  
               )
-              | None -> pp_function_prototype ~executable_spec sym decl 
+              | None -> pp_function_prototype ~executable_spec sym decl
             )
           )
      sigm.declarations ^^ P.hardline
