@@ -7,11 +7,13 @@ typedef __cerbty_size_t size_t;
 
 typedef struct _IO_FILE FILE;
 
-typedef union _G_fpos64_t {
-  char __opaque[16];
-  long long __lldata;
-  double __align;
-} fpos_t;
+// typedef union _G_fpos64_t {
+//   char __opaque[16];
+//   long long __lldata;
+//   double __align;
+// } fpos_t;
+// We don't currently need the type other than 'long long'
+typedef long long fpos_t;
 
 #define NULL          __cerbvar_NULL
 

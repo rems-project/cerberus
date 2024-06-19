@@ -239,7 +239,7 @@ module Make (Config: CONFIG) = struct
     | Linux.RcuUnlock -> pp_keyword "rcu-unlock"
     | Linux.SyncRcu   -> pp_keyword "sync-rcu"
 
-  let pp_mem_addr (pref, addr) =
+  let pp_mem_addr (pref, _addr) =
     P.at ^^ P.braces (Pp_symbol.pp_prefix pref ^^ P.colon ^^^ (!^ "TODO(addr)"))
 
   let pp_actype (actype : act) = pp_ct actype.ct
@@ -323,7 +323,7 @@ module Make (Config: CONFIG) = struct
 
     let open PPrint in
 
-    let rec pp budget prec (M_Pexpr (loc, annot, _, pe)) =
+    let rec pp budget prec (M_Pexpr (loc, _annots, _, pe)) =
       match budget with
       | Some 0 -> abbreviated
       | _ ->
@@ -349,7 +349,7 @@ module Make (Config: CONFIG) = struct
               )
           | M_PEsym sym ->
               pp_symbol sym
-          | M_PEctor (M_Cnil _, pes) ->
+          | M_PEctor (M_Cnil _, _) ->
              P.brackets P.empty
           | M_PEctor (M_Ctuple, pes) ->
               P.parens (comma_list pp_pexpr pes)
@@ -495,8 +495,8 @@ module Make (Config: CONFIG) = struct
 
   let pp_str_annot = function
               | Aloc _ -> []
-              | Astd str -> []
-              | Auid uid -> [!^"TODO(uid)"]
+              | Astd _str -> []
+              | Auid _uid -> [!^"TODO(uid)"]
               | Amarker n -> [!^("marker " ^ string_of_int n)]
               | Amarker_object_types n ->
                   [!^("marker_object_types " ^ string_of_int n)]
@@ -528,7 +528,7 @@ module Make (Config: CONFIG) = struct
     let pp_actype_or_pexpr = pp_actype_or_pexpr budget in
     let pp_action = pp_action budget in
 
-    let rec pp budget prec (M_Expr (loc, annot, _, e) : 'ty mu_expr) =
+    let rec pp budget (M_Expr (loc, annot, _, e) : 'ty mu_expr) =
 
       match budget with
       | Some 0 -> abbreviated
@@ -539,9 +539,7 @@ module Make (Config: CONFIG) = struct
         | None -> None
       in
 
-      let prec' = precedence_expr e in
-
-      let pp z = pp budget' prec' z in
+      let pp z = pp budget' z in
 
       do_annots annot
       begin
@@ -667,7 +665,7 @@ module Make (Config: CONFIG) = struct
               pp_keyword "run" ^^^ Pp.c_app (pp_symbol sym) (List.map pp_pexpr pes)
         end
       end
-      in pp budget None expr
+      in pp budget expr
 
 
   let symbol_compare =
@@ -724,7 +722,7 @@ module Make (Config: CONFIG) = struct
         | M_Proc (loc, args_and_body, _trusted, _) ->
             pp_cond loc @@
             pp_keyword "proc" ^^^ pp_symbol sym ^^^ Pp.equals ^^^
-            pp_mu_arguments begin fun (body, labels, rt) ->
+            pp_mu_arguments begin fun (body, labels, _rt) ->
               P.equals ^^^
               P.hardline ^^
               P.nest 2 (
@@ -734,7 +732,7 @@ module Make (Config: CONFIG) = struct
                      begin match def with
                      | M_Return _ ->
                         P.break 1 ^^ !^"return label" ^^^ pp_symbol sym
-                     | M_Label (_loc , label_args_and_body, annots, _) ->
+                     | M_Label (_loc , label_args_and_body, _annots, _) ->
                         P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ Pp.equals ^^^
                           pp_mu_arguments begin fun label_body ->
                             (* label core function definition *)
@@ -822,7 +820,7 @@ module Pp_standard_typ = struct
   let pp_ct ty = P.squotes (Pp_core_ctype.pp_ctype ty)
 
   let pp_ut (membrs) =
-    let (ty, tags) = ("union", membrs) in
+    let (_ty, tags) = ("union", membrs) in
     let pp_tag (Symbol.Identifier (_, name), (_,_,_,ct)) =
       !^name ^^ P.colon ^^^ pp_ct ct
     in
@@ -835,7 +833,7 @@ module Pp_standard_typ = struct
       | _ ->
          failwith "have to implement that again"
     in
-    let (ty, tags) = ("struct", membrs) in
+    let (_ty, tags) = ("struct", membrs) in
     let pp_tag (Symbol.Identifier (_, name), (_,_,_,ct)) =
       !^name ^^ P.colon ^^^ pp_ct ct
     in

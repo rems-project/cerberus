@@ -259,7 +259,7 @@ module Translate = struct
 
   let is_uninterp_bt (bt : BT.t) = match bt with
     | CType -> true
-    | List bt -> true
+    | List _bt -> true
     | _ -> false
 
   let tuple_field_name bts i =
@@ -347,7 +347,7 @@ module Translate = struct
          let bt_symbol = string (bt_name (Record members)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (RecordFunc {mbts=members});
          let member_symbols =
-           map (fun (member, bt) ->
+           map (fun (member, _bt) ->
                let sym = string (record_member_name members member) in
                Z3Symbol_Table.add z3sym_table sym (RecordMemberFunc {mbts=members; member});
                sym
@@ -525,7 +525,7 @@ module Translate = struct
            List.map (fun (member', sct) ->
                let value =
                  if Id.equal member member' then v
-                 else member_ ~member_bt:(Memory.bt_of_sct sct) (tag, t, member') here
+                 else member_ ~member_bt:(Memory.bt_of_sct sct) (t, member') here
                in
                (member', value)
              ) members
@@ -558,7 +558,7 @@ module Translate = struct
          Some (representable struct_decls ct t here)
       | Good (ct, t) ->
          Some (good_value struct_decls ct t here)
-      | WrapI (ity, arg) ->
+      | WrapI (_ity, _arg) ->
          (* unlike previously (and std.core), implemented natively using bitvector ops *)
          None
       | Apply (name, args) ->
@@ -568,7 +568,7 @@ module Translate = struct
             Some (LogicalFunctions.open_fun def.args body args)
          | _ -> None
          end
-      | Let ((nm, t1), t2) ->
+      | Let ((_nm, _t1), _t2) ->
          Some (IT.substitute_lets it)
       | _ ->
          None
@@ -699,7 +699,7 @@ module Translate = struct
          let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
          Z3.Expr.mk_const context sym (sort bt)
       | Const Null -> adj ()
-      | Const (CType_const ct) -> uninterp_term context (sort bt) it
+      | Const (CType_const _ct) -> uninterp_term context (sort bt) it
       | Unop (uop, t) ->
          begin match uop with
            | Not -> Z3.Boolean.mk_not context (term t)
@@ -745,7 +745,7 @@ module Translate = struct
          let l_bop f ctxt x y = f ctxt [x; y] in
          let via_u t op ctxt = via_unsigned ctxt (IT.bt t) (op ctxt) in
          let cmp_u t op ctxt = cmp_in_unsigned ctxt (IT.bt t) (op ctxt) in
-         let fail_on str ctxt = failwith ("solver: unexpected value type for: " ^ str) in
+         let fail_on str _ctxt = failwith ("solver: unexpected value type for: " ^ str) in
          begin match bop with
          | Add -> (bv_arith_case t1 ~signed:(via_u t1 BV.mk_add) ~unsigned:BV.mk_add ~int_real:(l_bop mk_add))
                  context (term t1) (term t2)
@@ -799,7 +799,7 @@ module Translate = struct
       | NthTuple (n, t) ->
          let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
          Z3.Expr.mk_app context (nth destructors n) [term t]
-      | Struct (tag, mts) ->
+      | Struct (_tag, mts) ->
          let constructor = Z3.Tuple.get_mk_decl (sort bt) in
          Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
       | StructMember (t, member) ->
@@ -907,7 +907,7 @@ module Translate = struct
       | Apply (name, args) ->
          let def = Option.get (get_logical_function_def global name) in
          begin match def.definition with
-         | Def body -> adj ()
+         | Def _body -> adj ()
          | _ ->
             let decl =
               Z3.FuncDecl.mk_func_decl context (symbol name)
@@ -957,7 +957,7 @@ module Translate = struct
 
       and translate_case (matched : Z3.Expr.expr) pat =
         match pat with
-        | Pat (PConstructor (c_nm, args), pbt, _) ->
+        | Pat (PConstructor (c_nm, args), _pbt, _) ->
            let m1 = datatypeIsCons (c_nm, matched) in
            let constr_info = SymMap.find c_nm global.datatype_constrs in
            let dt_tag = constr_info.c_datatype_tag in
@@ -1028,7 +1028,7 @@ module Translate = struct
     match c with
     | T it ->
        Some (it, term it)
-    | Forall ((s, bt), body) ->
+    | Forall ((_s, _bt), _body) ->
        None
 
 
@@ -1081,7 +1081,7 @@ module Translate = struct
         extra @ [Z3.Boolean.mk_not solver.context lc_expr]);
     Pp.string (Z3.Solver.to_string simple) ^^ check_doc
 
-  let goal solver global assumptions pointer_facts lc =
+  let goal solver global assumptions _pointer_facts lc =
     let g1 = goal1 solver.context global lc in
     let extra1 = extra_assumptions assumptions g1.qs in
     let extra = List.map (term solver.context global) (extra1) in
@@ -1481,14 +1481,14 @@ module Eval = struct
            | MemberFunc {tag; member} ->
               let sd = Memory.member_types (SymMap.find tag global.struct_decls) in
               let member_bt = Memory.bt_of_sct (List.assoc Id.equal member sd) in
-              member_ ~member_bt (tag, nth args 0, member) loc
+              member_ ~member_bt (nth args 0, member) loc
            | StructFunc {tag} ->
               let sd = Memory.members (SymMap.find tag global.struct_decls) in
               struct_ (tag, List.combine sd args) loc
            | CompFunc {bts; i} ->
               let comp_bt = List.nth bts i in
               nthTuple_ ~item_bt:comp_bt (i, nth args 0) loc
-           | TupleFunc {bts} ->
+           | TupleFunc {bts=_} ->
               tuple_ args loc
            | RecordFunc {mbts} ->
               IT ((Record (List.combine (List.map fst mbts) args)),
@@ -1500,10 +1500,10 @@ module Eval = struct
               let info = SymMap.find nm global.datatype_constrs in
                IT (Constructor (nm, (List.combine (List.map fst info.c_params) args)),
                    Datatype info.c_datatype_tag, loc)
-           | DatatypeConsRecogFunc {nm} ->
+           | DatatypeConsRecogFunc {nm=_} ->
               (* not supported inside CN, hopefully we shouldn't need it *)
               unsupported expr ("Reconstructing Z3 term with datatype recogniser")
-           | DatatypeAccFunc xs ->
+           | DatatypeAccFunc _ ->
               unsupported expr ("Reconstructing Z3 term with datatype accessor")
               (* Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt *)
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt, loc)
@@ -1563,11 +1563,4 @@ let debug_solver_query solver global assumptions pointer_facts lc =
          global assumptions pointer_facts lc in
     Pp.item "debug solver query" (Lazy.force smt2_doc)
   end)
-
-let debug_solver_incremental_trace solver =
-  ()
-
-let _d = debug_solver_incremental_trace
-
-
 

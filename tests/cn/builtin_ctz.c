@@ -20,3 +20,9 @@ f (unsigned int x)
   }
 }
 
+
+int main(void)
+/*@ trusted; @*/
+{
+  int r = f(5);
+}

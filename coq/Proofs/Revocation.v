@@ -33,7 +33,7 @@ From Coq.Lists Require Import List SetoidList. (* after exltlib *)
 From CheriCaps.Morello Require Import Capabilities.
 From CheriCaps.Common Require Import Capabilities.
 
-From Common Require Import SimpleError Utils ZMap.
+From Common Require Import SimpleError Utils ZMap AMap FMapExt.
 From Morello Require Import CapabilitiesGS MorelloCapsGS.
 
 From CheriMemory Require Import CheriMorelloMemory Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CerbSwitches CoqAilTypesAux.
@@ -52,9 +52,6 @@ Import MonadNotation.
 
 Require Import ProofsAux.
 
-Module Import ZP := FMapFacts.WProperties_fun(Z_as_OT)(ZMap).
-Module Import WZP := FMapFacts.WFacts_fun(Z_as_OT)(ZMap).
-
 (* Abstract set of switches *)
 Parameter abst_get_switches: unit -> cerb_switches_t.
 
@@ -62,6 +59,9 @@ Parameter abst_get_switches: unit -> cerb_switches_t.
 Parameter abst_tagDefs: unit -> (SymMap.t CoqCtype.tag_definition).
 
 Require Import ListSet.
+
+Module ZMapProofs:= FMapExtProofs(Z_as_ExtOT)(ZMap).
+Module AMapProofs:= FMapExtProofs(AddressValue_as_ExtOT)(AMap).
 
 Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
@@ -71,14 +71,167 @@ End AbstTagDefs.
 Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
 
 (* TODO: move *)
-Lemma AddressValue_of_Z_to_Z:
-  forall x, AddressValue.of_Z  (AddressValue.to_Z x) = x.
-Proof.
-  intros x.
-  unfold AddressValue.of_Z, AddressValue.to_Z.
-  unfold bv_to_Z_unsigned.
-  apply bitvector.Z_to_bv_bv_unsigned.
-Qed.
+Section AddressValue_Lemmas.
+
+  (** Predicate to check if address is pointer-aligned *)
+  Definition addr_ptr_aligned (a:AddressValue.t) :=
+    Z.modulo (AddressValue.to_Z a) (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
+
+  (** [a1] - [a2] for addresses *)
+  Definition addr_offset (a1 a2:AddressValue.t) : Z
+    := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
+
+  (* TODO: move *)
+  Lemma AdddressValue_eqb_eq:
+    forall (a b: AddressValue.t),
+      eqb a b = true <-> a = b.
+  Proof.
+    intros a b.
+    split.
+    -
+      intros H.
+      unfold eqb in H.
+      bool_to_prop_hyp.
+      apply bitvector.bv_eq.
+      assumption.
+    -
+      intros H.
+      unfold eqb.
+      subst.
+      lia.
+  Qed.
+
+  Lemma AdddressValue_eqb_neq:
+    forall (a b: AddressValue.t),
+      eqb a b = false <-> a <> b.
+  Proof.
+    intros a b.
+    split.
+    -
+      intros H.
+      unfold eqb in H.
+      bool_to_prop_hyp.
+      apply bitvector.bv_neq.
+      assumption.
+    -
+      intros H.
+      unfold eqb.
+      apply bitvector.bv_neq in H.
+      lia.
+  Qed.
+
+  Lemma AddressValue_ltb_Z_ltb:
+    forall a b,
+      AddressValue.ltb a b = Z.ltb (AddressValue.to_Z a) (AddressValue.to_Z b).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma AddressValue_eq_via_to_Z:
+    forall a b,
+      AddressValue.to_Z a = AddressValue.to_Z b <-> (a=b).
+  Proof.
+    split ; intros H.
+    -
+      unfold AddressValue.to_Z, bv_to_Z_unsigned in H.
+      apply bitvector.bv_unsigned_inj.
+      assumption.
+    -
+      subst.
+      reflexivity.
+  Qed.
+
+  Lemma AddressValue_neq_via_to_Z:
+    forall a b,
+      AddressValue.to_Z a <> AddressValue.to_Z b <-> (a<>b).
+  Proof.
+    split ; intros; apply bitvector.bv_neq; assumption.
+  Qed.
+
+  Lemma AddressValue_of_Z_to_Z:
+    forall a,
+      AddressValue.of_Z (AddressValue.to_Z a) = a.
+  Proof.
+    intros a.
+    unfold AddressValue.of_Z, AddressValue.to_Z.
+    unfold bv_to_Z_unsigned.
+    apply bitvector.Z_to_bv_bv_unsigned.
+  Qed.
+
+  Lemma with_offset_0:
+    forall a,
+      AddressValue.with_offset a (Z.of_nat 0) = a.
+  Proof.
+    intros a.
+    unfold AddressValue.with_offset.
+    replace (Z.of_nat O) with 0 by lia.
+    rewrite Z.add_0_r.
+    apply AddressValue_of_Z_to_Z.
+  Qed.
+
+  Lemma with_pos_offset_assoc:
+    forall v a b,
+      (0 <= a) ->
+      (0 <= b) ->
+      (0 <= (AddressValue.to_Z v) + (a + b) < AddressValue.ADDR_LIMIT) ->
+      AddressValue.with_offset (AddressValue.with_offset v a) b = AddressValue.with_offset v (a + b).
+  Proof.
+    intros v a b A B [H1 H2].
+
+    pose proof (AddressValue.to_Z_in_bounds v) as [V1 V2].
+    apply AddressValue_eq_via_to_Z.
+    rewrite 3!AddressValue.with_offset_no_wrap.
+    lia.
+    all: unfold AddressValue.ADDR_MIN in *; try lia.
+    split.
+    -
+      rewrite AddressValue.with_offset_no_wrap;[lia|].
+      unfold AddressValue.ADDR_MIN.
+      lia.
+    -
+      rewrite AddressValue.with_offset_no_wrap;[lia|].
+      unfold AddressValue.ADDR_MIN.
+      lia.
+  Qed.
+
+  Lemma addr_offset_with_offset
+    (a:AddressValue.t)
+    (x:Z)
+    (H: AddressValue.ADDR_MIN <= AddressValue.to_Z a + x < AddressValue.ADDR_LIMIT):
+
+    addr_offset (AddressValue.with_offset a x) a = x.
+  Proof.
+    unfold addr_offset.
+    rewrite AddressValue.with_offset_no_wrap.
+    lia.
+    apply H.
+  Qed.
+
+  Lemma with_offset_addr_offset:
+    forall a1 a2,
+      (AddressValue.with_offset a1 (addr_offset a2 a1)) = a2.
+  Proof.
+    intros a1 a2.
+    unfold addr_offset.
+    unfold AddressValue.with_offset.
+    replace (AddressValue.to_Z a1 + (AddressValue.to_Z a2 - AddressValue.to_Z a1))
+      with (AddressValue.to_Z a2) by lia.
+    rewrite AddressValue_of_Z_to_Z.
+    reflexivity.
+  Qed.
+
+  Lemma addr_offset_bounds:
+    forall a b,
+      (AddressValue.ADDR_MIN - AddressValue.ADDR_LIMIT + 1) <= (addr_offset a b) <= (AddressValue.ADDR_LIMIT - AddressValue.ADDR_MIN - 1).
+  Proof.
+    intros a b.
+    pose proof (AddressValue.to_Z_in_bounds a).
+    pose proof (AddressValue.to_Z_in_bounds b).
+    unfold addr_offset.
+    lia.
+  Qed.
+
+End AddressValue_Lemmas.
 
 Lemma sequence_len_errS
   {S E A:Type}
@@ -195,20 +348,20 @@ Qed.
 (* Should be in ProofAux.v but it depends on stdpp. *)
 Lemma lookup_elements_MapsTo
   {A: Type}
-  (m : ZMap.t A)
-  (k: ZMap.key)
+  (m : AMap.M.t A)
+  (k: AMap.M.key)
   (v : A):
-  (exists k', base.lookup k' (ZMap.elements (elt:=A) m) = Some (k, v)) -> ZMap.MapsTo k v m.
+  (exists k', base.lookup k' (AMap.M.elements (elt:=A) m) = Some (k, v)) -> AMap.M.MapsTo k v m.
 Proof.
   intros [k' ES].
-  apply ZMap.elements_2.
+  apply AMap.M.elements_2.
   apply list.elem_of_list_lookup_2 in ES.
   apply base.elem_of_list_In in ES.
   apply InA_alt.
   exists (k,v).
   split.
   -
-    unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke.
+    unfold AMap.M.eq_key_elt, AMap.M.Raw.Proofs.PX.eqke.
     split; reflexivity.
   -
     assumption.
@@ -241,7 +394,7 @@ Module RevocationProofs.
     lia.
   Qed.
 
-  (* Check whether this cap base address is within allocation *)
+  (* Check whether this cap base address within allocation *)
   Definition cap_bounds_within_alloc c a : Prop
     :=
     let alloc_base := AddressValue.to_Z a.(base) in
@@ -275,16 +428,16 @@ Module RevocationProofs.
      they are just removed. Also, without PNVI, instant revocation is
      assumed
    *)
-  Inductive single_alloc_id_cap_cmp (allocs: ZMap.t allocation) (alloc_id: Z) c1 c2 : Prop
+  Inductive single_alloc_id_cap_cmp (allocs: ZMap.M.t allocation) (alloc_id: Z) c1 c2 : Prop
     :=
   | single_cap_cmp_live:
     (* The allocation ID is mapped to an allocation *)
-    forall a, ZMap.MapsTo alloc_id a allocs ->
+    forall a, ZMap.M.MapsTo alloc_id a allocs ->
          cap_match_with_alloc a c1 c2 -> (* then match c1 to c2 based on alloc_id *)
          single_alloc_id_cap_cmp allocs alloc_id c1 c2
   | single_cap_cmp_dead:
     (* The allocation ID is not mapped to an allocation *)
-    ~ ZMap.In alloc_id allocs ->
+    ~ ZMap.M.In alloc_id allocs ->
     Capability_GS.cap_invalidate c1 = c2 ->
     single_alloc_id_cap_cmp allocs alloc_id c1 c2.
 
@@ -372,41 +525,42 @@ Module RevocationProofs.
     Definition base_mem_invariant (m: mem_state_r) : Prop
       :=
       let cm := m.(capmeta) in
-      let bm := m.(bytemap) in
       let am := m.(allocations) in
 
       (* All allocations are live. [allocation.(is_dead)] is only used
       for Conucopia. For others, the dead allocations are immediately
       removed.  *)
-      zmap_forall (fun a => a.(is_dead) = false) am
+      ZMapProofs.map_forall (fun a => a.(is_dead) = false) am
 
       (* live allocatoins do not overlap *)
       /\ (forall alloc_id1 alloc_id2 a1 a2,
             alloc_id1 <> alloc_id2 ->
-            ZMap.MapsTo alloc_id1 a1 am ->
-            ZMap.MapsTo alloc_id2 a2 am ->
+            ZMap.M.MapsTo alloc_id1 a1 am ->
+            ZMap.M.MapsTo alloc_id2 a2 am ->
             allocations_do_no_overlap a1 a2)
+      (* all allocations have upper bound *)
+      /\
+        ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) + (Z.of_nat a.(size)) <= AddressValue.ADDR_LIMIT) am
 
       (* All keys in capmeta must be pointer-aligned addresses *)
-      /\ zmap_forall_keys (fun addr => Z.modulo addr
-                                     (Z.of_nat MorelloImpl.get.(alignof_pointer))
-                                   = 0) cm
+      /\ AMapProofs.map_forall_keys addr_ptr_aligned cm
 
       (* [next_alloc_id] is sane *)
       /\
-        zmap_forall_keys (fun alloc_id => alloc_id < m.(next_alloc_id)) am
+        ZMapProofs.map_forall_keys (fun alloc_id => alloc_id < m.(next_alloc_id)) am
       (* [last_address] is sane *)
       /\
-        zmap_forall (fun a => AddressValue.to_Z a.(base) <= AddressValue.to_Z m.(last_address)) am.
+        ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) <= AddressValue.to_Z m.(last_address)) am.
 
     Ltac destruct_base_mem_invariant H
       :=
       let Bdead := fresh "Bdead" in
       let Bnooverlap := fresh "Bnooverlap" in
+      let Bfit := fresh "Bfit" in
       let Balign := fresh "Balign" in
       let Bnextallocid := fresh "Bnextallocid" in
       let Blastaddr := fresh "Blastaddr" in
-      destruct H as [Bdead [Bnooverlap [Balign [Bnextallocid Blastaddr]]]].
+      destruct H as [Bdead [Bnooverlap [Bfit [Balign [Bnextallocid Blastaddr]]]]].
 
     Instance memM_MonadLaws: MonadLaws (memM_monad).
     Proof.
@@ -438,34 +592,163 @@ Module RevocationProofs.
     Lemma init_ghost_tags_spec
       (addr: AddressValue.t)
       (size: nat)
-      (capmeta: ZMap.t (bool*CapGhostState)):
+      (capmeta: AMap.M.t (bool*CapGhostState)):
+      (AddressValue.to_Z addr) + (Z.of_nat size) <= AddressValue.ADDR_LIMIT ->
       forall a tg,
-        ZMap.MapsTo a tg (init_ghost_tags addr size capmeta)
+        AMap.M.MapsTo a tg (init_ghost_tags addr size capmeta)
         ->
-          (ZMap.MapsTo a tg capmeta
-           \/
-             (Z.modulo a (Z.of_nat MorelloImpl.get.(alignof_pointer)) = 0
-              /\
-                tg = (false, {| tag_unspecified := true; bounds_unspecified := false |}))).
+          ( (* existing *)
+            AMap.M.MapsTo a tg capmeta
+            \/
+              ( (* new *)
+                addr_ptr_aligned a
+                /\
+                  tg = (false, {| tag_unspecified := true; bounds_unspecified := false |})
+              )
+          ).
     Proof.
-      intros a tg H.
-      unfold init_ghost_tags in *.
-      repeat break_let.
-      apply zmap_range_init_spec in H.
+      intros L a tg H.
+      unfold addr_ptr_aligned.
+      unfold init_ghost_tags, align_down in *.
+      break_match_hyp;[left;assumption|].
+      clear size Heqn.
+      rename n into size'. (* size - 1 *)
+      apply amap_range_init_spec in H.
       destruct H as [[H1 H2] | [[i [H3 H4]] H5]].
       -
+        (* Not in range *)
         left.
         apply H2.
       -
+        (* in range *)
         right.
-        split.
+        split;[|assumption].
+
+        (* prep work *)
+        clear H5 tg capmeta.
+        pose proof (AddressValue.to_Z_in_bounds addr) as H.
+        destruct H as [LA HA].
+        remember (Z.of_nat (alignof_pointer MorelloImpl.get)) as ps.
+        assert(0<ps).
+        {
+          pose proof MorelloImpl.alignof_pointer_pos.
+          subst ps.
+          lia.
+        }
+        clear Heqps.
+        rename addr into addr'.
+        remember (AddressValue.to_Z addr') as addr.
+        clear addr' Heqaddr.
+        (* end prep *)
+
+
+        (* used twice below *)
+        assert(AddressValue.ADDR_MIN <= addr - addr mod ps < AddressValue.ADDR_LIMIT) as A.
+        {
+          unfold AddressValue.ADDR_MIN,
+            AddressValue.ADDR_LIMIT,
+            AddressValue.len,
+            bitvector.bv_modulus
+            in *.
+          split.
+          --
+            pose proof (Z.mod_le addr ps LA H).
+            lia.
+          --
+            pose proof (Z.mod_le addr ps LA H).
+            cut(addr - addr mod ps <= addr).
+            lia.
+            cut (0 <= addr mod ps).
+            lia.
+            apply numbers.Z.mod_pos.
+            assumption.
+        }
+
+        subst a.
+        setoid_rewrite Z.mul_comm.
+        rewrite AddressValue.with_offset_no_wrap.
         +
-          subst a.
-          setoid_rewrite Z.mul_comm.
-          rewrite <- Z.mul_add_distr_l.
-          apply ZLib.Z_mod_mult'. (* Possible TODO: use an alternative function to Z_mod_mult' so the dependency on bbv can be removed. *)
+          rewrite AddressValue.of_Z_roundtrip by auto.
+          rewrite Z.mul_comm, Zdiv.Z_mod_plus_full.
+          unfold AddressValue.ADDR_MIN in *.
+          apply align_bottow_correct;assumption.
         +
-          apply H5.
+          rewrite AddressValue.of_Z_roundtrip by auto.
+          unfold AddressValue.ADDR_MIN,
+            AddressValue.ADDR_LIMIT,
+            AddressValue.len,
+            bitvector.bv_modulus
+            in *.
+          split.
+          --
+            pose proof (Z.mod_le addr ps LA H).
+            lia.
+          --
+            replace (Z.of_N 64) with 64 in * by lia.
+
+            remember (Z.to_nat ((addr + Z.of_nat size' - (addr + Z.of_nat size') mod ps - (addr - addr mod ps)) / ps)) as n.
+            assert(i<=n)%nat by lia; clear H3.
+
+            cut(addr - addr mod ps + ps * Z.of_nat n < 2 ^ 64).
+            {
+              intros H1.
+              clear Heqn.
+              revert i H0.
+              induction n; intros.
+              -
+                lia.
+              -
+                destruct (Nat.eq_dec i (S n)).
+                lia.
+                apply IHn;try lia.
+            }
+            zify.
+            destruct H2;
+              clear __sat3 __sat4;
+              destruct H1; [|lia].
+            ++
+              rewrite <- H2 in H1.
+
+
+              rename size' into tmp;
+                remember (Z.of_nat tmp) as size';
+                clear tmp Heqsize'.
+              rename z2 into zn.
+
+              rename i into i';
+                remember (Z.of_nat i') as i;
+                clear i' Heqi.
+
+              destruct A as [A0 A].
+
+              rewrite Z.add_assoc in L.
+              remember (addr + size') as lastaddr.
+              remember (addr - addr mod ps) as a0.
+              remember (lastaddr - lastaddr mod ps) as a1.
+
+              assert(i <= zn) by lia ; clear H3.
+
+              subst zn.
+              rewrite H2.
+              rewrite <- Zdiv.Z_div_exact_2.
+              2: lia.
+              2: {
+                subst a1 a0.
+
+                apply sub_mod_0.
+                apply align_bottow_correct.
+                assumption.
+                apply align_bottow_correct.
+                assumption.
+              }
+              replace (a0 + (a1 - a0)) with a1 by lia.
+              subst a1.
+              assert(0<=lastaddr mod ps).
+              {
+                apply numbers.Z.mod_pos.
+                lia.
+              }
+              lia.
     Qed.
 
     Definition memM_same_state
@@ -666,16 +949,35 @@ Module RevocationProofs.
 
     Instance zmap_sequence_SameState
       {A: Type}
-      (mv: ZMap.t (memM A)):
-      zmap_forall SameState mv ->
-      SameState (zmap_sequence mv).
+      (mv: ZMap.M.t (memM A)):
+      ZMapProofs.map_forall SameState mv ->
+      SameState (ZMap.map_sequence mv).
     Proof.
       intros H.
-      unfold zmap_sequence.
+      unfold ZMap.map_sequence.
       break_let.
       pose proof (sequence_same_state l0) as SS.
       autospecialize SS.
-      eapply zmap_forall_Forall_elements;eauto.
+      eapply ZMapProofs.map_forall_Forall_elements;eauto.
+      clear H.
+      apply bind_SameState.
+      assumption.
+      intros x.
+      apply ret_SameState.
+    Qed.
+
+    Instance amap_sequence_SameState
+      {A: Type}
+      (mv: AMap.M.t (memM A)):
+      AMapProofs.map_forall SameState mv ->
+      SameState (AMap.map_sequence mv).
+    Proof.
+      intros H.
+      unfold AMap.map_sequence.
+      break_let.
+      pose proof (sequence_same_state l0) as SS.
+      autospecialize SS.
+      eapply AMapProofs.map_forall_Forall_elements;eauto.
       clear H.
       apply bind_SameState.
       assumption.
@@ -686,20 +988,41 @@ Module RevocationProofs.
 
     Instance zmap_mmapi_SameState
       {A B: Type}
-      (c: ZMap.key -> A -> memM B)
-      (zm : ZMap.t A):
+      (c: ZMap.M.key -> A -> memM B)
+      (zm : ZMap.M.t A):
 
       (forall k v, SameState (c k v)) ->
-      SameState (zmap_mmapi c zm).
+      SameState (ZMap.map_mmapi c zm).
     Proof.
       intros C zm' m0 m1 H.
-      unfold zmap_mmapi in H.
+      unfold ZMap.map_mmapi in H.
       apply zmap_sequence_SameState in H;[assumption|].
       clear H.
 
-      unfold zmap_forall.
+      unfold ZMapProofs.map_forall.
       intros k v H.
-      apply mapi_inv in H.
+      apply ZMap.F.mapi_inv in H.
+      destruct H as [a [k' [H1 [H2 H3]]]].
+      subst.
+      apply C.
+    Qed.
+
+    Instance amap_mmapi_SameState
+      {A B: Type}
+      (c: AMap.M.key -> A -> memM B)
+      (zm : AMap.M.t A):
+
+      (forall k v, SameState (c k v)) ->
+      SameState (AMap.map_mmapi c zm).
+    Proof.
+      intros C zm' m0 m1 H.
+      unfold AMap.map_mmapi in H.
+      apply amap_sequence_SameState in H;[assumption|].
+      clear H.
+
+      unfold AMapProofs.map_forall.
+      intros k v H.
+      apply AMap.F.mapi_inv in H.
       destruct H as [a [k' [H1 [H2 H3]]]].
       subst.
       apply C.
@@ -831,7 +1154,7 @@ Module RevocationProofs.
       (alloc_id : Z)
       (s s' : mem_state):
       find_live_allocation addr s = (s', inr (Some (alloc_id, alloc))) ->
-      ZMap.MapsTo alloc_id alloc s'.(allocations).
+      ZMap.M.MapsTo alloc_id alloc s'.(allocations).
     Proof.
       intros H.
       unfold find_live_allocation in H.
@@ -841,7 +1164,7 @@ Module RevocationProofs.
       tuple_inversion.
       revert H2.
       match goal with
-      | [ |- context[ZMap.fold ?f _ _]] =>
+      | [ |- context[ZMap.M.fold ?f _ _]] =>
           remember f as ff
       end.
       revert alloc_id alloc.
@@ -849,8 +1172,8 @@ Module RevocationProofs.
           (fun res =>
              match res with
              | None => True
-             | Some (alloc_id, alloc) => ZMap.MapsTo alloc_id alloc (allocations s')
-             end) (ZMap.fold ff (allocations s') None)).
+             | Some (alloc_id, alloc) => ZMap.M.MapsTo alloc_id alloc (allocations s')
+             end) (ZMap.M.fold ff (allocations s') None)).
       {
         clear.
         intros H alloc_id alloc H2.
@@ -863,7 +1186,7 @@ Module RevocationProofs.
         -
           inv H2.
       }
-      apply fold_rec_nodep.
+      apply ZMap.P.fold_rec_nodep.
       -
         trivial.
       -
@@ -883,8 +1206,8 @@ Module RevocationProofs.
     Qed.
 
     Lemma fetch_bytes_len
-      (addr : ZMap.key)
-      (bm : ZMap.t AbsByte)
+      (addr : AMap.M.key)
+      (bm : AMap.M.t AbsByte)
       (sz: nat):
       Datatypes.length (fetch_bytes bm addr sz) = sz.
     Proof.
@@ -925,11 +1248,11 @@ Module RevocationProofs.
     Qed.
 
     Lemma split_bytes_aux_length
-      (o : option nat)
-      (p : option provenance)
-      (l : list (option ascii))
-      (bs : list AbsByte)
-      (p0 : provenance):
+      {o : option nat}
+      {p : option provenance}
+      {l : list (option ascii)}
+      {bs : list AbsByte}
+      {p0 : provenance}:
       split_bytes_aux bs p0 = (p, l, o) -> Datatypes.length bs = Datatypes.length l.
     Proof.
       unfold split_bytes_aux.
@@ -980,22 +1303,22 @@ Module RevocationProofs.
       clear Heqbs Heqp1 b bs'.
       rename Heqp0 into H.
       (* Done with monadic stuff *)
-      apply (split_bytes_aux_length _ _ _ _ _ H).
+      apply (split_bytes_aux_length H).
     Qed.
 
     Lemma split_bytes_aux_values
-      (o : option nat)
-      (p : option provenance)
-      (l : list (option ascii))
-      (bs : list AbsByte)
-      (p0 : provenance):
+      {o : option nat}
+      {p : option provenance}
+      {l : list (option ascii)}
+      {bs : list AbsByte}
+      {p0 : provenance}:
       split_bytes_aux bs p0 = (p, l, o) ->
       Forall2 (fun (a : AbsByte) (ov : option ascii) => ov = value a) bs (rev l).
     Proof.
       Local Open Scope nat.
       intros SS.
 
-      pose proof (split_bytes_aux_length _ _ _ _ _ SS) as LBS.
+      pose proof (split_bytes_aux_length SS) as LBS.
       unfold split_bytes_aux in SS.
       remember (@nil (option ascii)) as l'.
       assert(length l = length bs + length l') as LL.
@@ -1160,9 +1483,9 @@ Module RevocationProofs.
     Qed.
 
     Lemma fetch_and_decode_cap_success
-      (addr: ZMap.key)
+      (addr: AMap.M.key)
       (c: Capability_GS.t)
-      (bm: ZMap.t AbsByte):
+      (bm: AMap.M.t AbsByte):
       split_bytes_ptr_spec Prov_disabled (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) ->
       decode_cap (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) true c ->
       fetch_and_decode_cap bm addr true = inr c.
@@ -1298,6 +1621,21 @@ Module RevocationProofs.
       reflexivity.
     Qed.
 
+    Lemma put_inv:
+      forall s s' st u,
+        @put mem_state_r memM (State_errS mem_state memMError)
+          s st =
+          (s', @inr memMError unit u) -> s = s'.
+    Proof.
+      intros s s' st u H.
+
+      Transparent put.
+      unfold put, State_errS in H.
+      Opaque put.
+      inversion H.
+      reflexivity.
+    Qed.
+
     Lemma bind_memM_inv
       {T T': Type}
       {m: memM T'}
@@ -1403,9 +1741,9 @@ Module RevocationProofs.
     Lemma serr2InternalErr_inv
       {A:Type}
       {x:A}
-      m
-      {s: mem_state}:
-      serr2InternalErr m s = (s, inr x) -> m = inr x.
+      {m: serr A}
+      {s s': mem_state}:
+      serr2InternalErr m s = (s', inr x) -> m = inr x.
     Proof.
       intros H.
       Transparent serr2InternalErr ret.
@@ -1499,6 +1837,10 @@ Module RevocationProofs.
         | [H: get _ = (_, inr _) |- _] =>
             (* idtac H "get"; *)
             rewrite get_inv in H
+            ; htrim
+        | [H: put _ _ = (_, inr _) |- _] =>
+            (* idtac H "put"; *)
+            apply put_inv in H
             ; htrim
         | [H: sassert _ _ = inr _ |- _] =>
             (* idtac H "sassert"; *)
@@ -1973,19 +2315,19 @@ Module RevocationProofs.
 
       Instance zmap_sequence_PreservesInvariant
         {A: Type}
-        (mv: ZMap.t (memM A)):
+        (mv: ZMap.M.t (memM A)):
         forall s,
-          (forall k v, ZMap.MapsTo k v mv -> forall s', PreservesInvariant s' v) ->
-          PreservesInvariant s (zmap_sequence mv).
+          (forall k v, ZMap.M.MapsTo k v mv -> forall s', PreservesInvariant s' v) ->
+          PreservesInvariant s (ZMap.map_sequence mv).
       Proof.
         intros s H.
-        apply zmap_maps_to_elements_p in H.
-        unfold zmap_sequence.
+        apply ZMapProofs.map_maps_to_elements_p in H.
+        unfold ZMap.map_sequence.
         break_let.
         apply bind_PreservesInvariant.
         -
           apply sequence_PreservesInvariant.
-          generalize dependent (ZMap.elements (elt:=memM A) mv).
+          generalize dependent (ZMap.M.elements (elt:=memM A) mv).
           intros ls H S.
           clear mv.
           rename l into lk, l0 into lv.
@@ -2013,19 +2355,79 @@ Module RevocationProofs.
           apply ret_PreservesInvariant.
       Qed.
 
-      Instance zmap_mmapi_PreservesInvariant
-        {A B : Type}
-        (f : ZMap.key -> A -> memM B)
-        (zm: ZMap.t A):
+      Instance amap_sequence_PreservesInvariant
+        {A: Type}
+        (mv: AMap.M.t (memM A)):
         forall s,
-          (forall k x, forall s', PreservesInvariant s' (f k x)) ->
-          PreservesInvariant s (@zmap_mmapi A B memM memM_monad f zm).
+          (forall k v, AMap.M.MapsTo k v mv -> forall s', PreservesInvariant s' v) ->
+          PreservesInvariant s (AMap.map_sequence mv).
       Proof.
         intros s H.
-        unfold zmap_mmapi.
+        apply AMapProofs.map_maps_to_elements_p in H.
+        unfold AMap.map_sequence.
+        break_let.
+        apply bind_PreservesInvariant.
+        -
+          apply sequence_PreservesInvariant.
+          generalize dependent (AMap.M.elements (elt:=memM A) mv).
+          intros ls H S.
+          clear mv.
+          rename l into lk, l0 into lv.
+          apply Forall_nth.
+          intros k v L.
+          rewrite Forall_nth in H.
+          specialize (H k (nth k lk (AddressValue.of_Z 0), v)).
+
+          break_let.
+          autospecialize H.
+          {
+            rewrite <- split_length_r.
+            rewrite S.
+            cbn.
+            assumption.
+          }
+
+          rewrite split_nth in Heqp.
+          rewrite S in Heqp.
+          cbn in *.
+          tuple_inversion.
+          assumption.
+        -
+          intros s' x.
+          apply ret_PreservesInvariant.
+      Qed.
+
+      Instance zmap_mmapi_PreservesInvariant
+        {A B : Type}
+        (f : ZMap.M.key -> A -> memM B)
+        (zm: ZMap.M.t A):
+        forall s,
+          (forall k x, forall s', PreservesInvariant s' (f k x)) ->
+          PreservesInvariant s (@ZMap.map_mmapi A B memM memM_monad f zm).
+      Proof.
+        intros s H.
+        unfold ZMap.map_mmapi.
         apply zmap_sequence_PreservesInvariant.
         intros k v H0.
-        apply F.mapi_inv in H0.
+        apply ZMap.F.mapi_inv in H0.
+        destruct H0 as [v' [k' [E [E1 M]]]].
+        subst.
+        apply H.
+      Qed.
+
+      Instance amap_mmapi_PreservesInvariant
+        {A B : Type}
+        (f : AMap.M.key -> A -> memM B)
+        (zm: AMap.M.t A):
+        forall s,
+          (forall k x, forall s', PreservesInvariant s' (f k x)) ->
+          PreservesInvariant s (@AMap.map_mmapi A B memM memM_monad f zm).
+      Proof.
+        intros s H.
+        unfold AMap.map_mmapi.
+        apply amap_sequence_PreservesInvariant.
+        intros k v H0.
+        apply AMap.F.mapi_inv in H0.
         destruct H0 as [v' [k' [E [E1 M]]]].
         subst.
         apply H.
@@ -2188,7 +2590,7 @@ Module RevocationProofs.
       /\
         (* All caps which are tagged according to capmeta must: *)
         (forall addr g,
-            ZMap.MapsTo addr (true,g) cm ->
+            AMap.M.MapsTo addr (true,g) cm ->
             (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
                    (
                      (* Have same provenance and correct sequence bytes *)
@@ -2197,7 +2599,7 @@ Module RevocationProofs.
                            (* decode without error *)
                            decode_cap bs true c
                            (* with decoded bounds bounds fitting one of the allocations *)
-                           /\ (exists a alloc_id, ZMap.MapsTo alloc_id a am /\
+                           /\ (exists a alloc_id, ZMap.M.MapsTo alloc_id a am /\
                                               (* We do not allow escaped pointers to local variables *)
                                               cap_bounds_within_alloc c a)
                        )
@@ -2212,44 +2614,49 @@ Module RevocationProofs.
       repeat split; cbn in *.
       -
         intros alloc_id a H.
-        apply empty_mapsto_iff in H;
+        apply ZMap.F.empty_mapsto_iff in H;
           contradiction.
       -
         intros alloc_id1 alloc_id2 a1 a2 NA H H0.
-        apply empty_mapsto_iff in H;
+        apply ZMap.F.empty_mapsto_iff in H;
           contradiction.
       -
-        unfold zmap_forall_keys.
+        intros k a H.
+        apply ZMap.F.empty_mapsto_iff in H.
+        tauto.
+      -
+        unfold AMapProofs.map_forall_keys.
         intros k H.
-        apply empty_in_iff in H;
+        apply AMap.F.empty_in_iff in H;
           contradiction.
       -
         intros alloc_id H.
-        apply empty_in_iff in H.
+        apply ZMap.F.empty_in_iff in H.
         tauto.
       -
         intros k a H.
-        apply empty_mapsto_iff in H.
+        apply ZMap.F.empty_mapsto_iff in H.
         tauto.
       -
-        apply empty_mapsto_iff in H;
+        apply AMap.F.empty_mapsto_iff in H;
           contradiction.
       -
-        apply empty_mapsto_iff in H;
+        apply AMap.F.empty_mapsto_iff in H;
           contradiction.
       -
-        apply empty_mapsto_iff in H;
+        apply AMap.F.empty_mapsto_iff in H;
           contradiction.
     Qed.
 
     Lemma mem_state_after_ghost_tags_preserves:
       forall m addr size,
+        AddressValue.to_Z addr + Z.of_nat size <= AddressValue.ADDR_LIMIT ->
         mem_invariant m ->
         mem_invariant (mem_state_with_capmeta
                          (init_ghost_tags addr size (capmeta m))
                          m).
     Proof.
-      intros m addr sz H.
+      intros m addr sz L H.
       destruct H as [MIbase MIcap].
       destruct_base_mem_invariant MIbase.
       split.
@@ -2261,32 +2668,38 @@ Module RevocationProofs.
 
         (* alignment proof *)
         intros a E.
-        apply zmap_in_mapsto in E.
+        apply AMapProofs.map_in_mapsto in E.
         destruct E as [tg E].
         unfold mem_state_with_capmeta in E.
         simpl in E.
         apply init_ghost_tags_spec in E.
-        destruct E.
         +
-          (* capmeta unchanged at [a] *)
-          apply zmap_mapsto_in in H.
-          apply Balign.
-          apply H.
+          destruct E.
+          *
+            (* capmeta unchanged at [a] *)
+            apply AMapProofs.map_mapsto_in in H.
+            apply Balign.
+            apply H.
+          *
+            (* capmeta cleared *)
+            destruct H as [H1 H2].
+            apply H1.
         +
-          (* capmeta cleared *)
-          destruct H as [H1 H2].
-          apply H1.
+          apply L.
       -
         intros a g E bs F.
         simpl in *.
         apply init_ghost_tags_spec in E.
-        destruct E as [E | [A E]].
         +
-          (* capmeta unchanged at [a] *)
-          specialize (MIcap a g E bs F).
-          apply MIcap.
+          destruct E as [E | [A E]].
+          *
+            (* capmeta unchanged at [a] *)
+            specialize (MIcap a g E bs F).
+            apply MIcap.
+          *
+            inversion E.
         +
-          inversion E.
+          apply L.
     Qed.
 
     (*
@@ -2326,7 +2739,7 @@ Module RevocationProofs.
     Instance maybe_revoke_pointer_PreservesInvariant
       allocation
       (st: mem_state)
-      (addr: Z)
+      (addr: AddressValue.t)
       (meta: (bool*CapGhostState)):
 
       forall s,
@@ -2342,8 +2755,8 @@ Module RevocationProofs.
     (* relation of pointer before and afer revocaton (per [maybe_revoke_pointer] *)
     Inductive revoked_pointer_rel
       (a : allocation)
-      (addr : ZMap.key)
-      (bm: ZMap.t AbsByte)
+      (addr : AddressValue.t)
+      (bm: AMap.M.t AbsByte)
       : (bool * CapGhostState) -> (bool * CapGhostState) -> Prop :=
     | revoked_pointer_rel_untagged: forall gs, revoked_pointer_rel a addr bm (false, gs) (false, gs)
     | revoked_pointer_rel_fetch_err: forall err gs,
@@ -2363,12 +2776,12 @@ Module RevocationProofs.
         mem_invariant m ->
         forall s : mem_state_r,
           mem_invariant s ->
-          forall (s' : mem_state) (x : ZMap.t (bool * CapGhostState)),
-            zmap_mmapi (maybe_revoke_pointer a m) (capmeta m) s = (s', inr x) -> mem_invariant s'.
+          forall (s' : mem_state) (x : AMap.M.t (bool * CapGhostState)),
+            AMap.map_mmapi (maybe_revoke_pointer a m) (capmeta m) s = (s', inr x) -> mem_invariant s'.
     Proof.
       intros a m IM s IS s' x M.
 
-      pose proof (zmap_mmapi_PreservesInvariant mem_invariant (maybe_revoke_pointer a m) (capmeta m) s) as P.
+      pose proof (amap_mmapi_PreservesInvariant mem_invariant (maybe_revoke_pointer a m) (capmeta m) s) as P.
       autospecialize P.
       intros k x0.
       apply maybe_revoke_pointer_PreservesInvariant; auto.
@@ -2401,7 +2814,7 @@ Module RevocationProofs.
     Qed.
 
     Instance maybe_revoke_pointer_SameState
-      (k : Z)
+      (k : AddressValue.t)
       (meta: bool * CapGhostState)
       (a : allocation)
       (m : mem_state):
@@ -2437,30 +2850,30 @@ Module RevocationProofs.
       Opaque ret raise bind serr2InternalErr.
     Qed.
 
-    Instance zmap_mmapi_maybe_revoke_pointer_same_state
-      (a : allocation)
+    Instance amap_mmapi_maybe_revoke_pointer_same_state
+      (a: allocation)
       (m: mem_state)
-      (oldmeta : ZMap.t (bool * CapGhostState)):
-      SameState (zmap_mmapi (maybe_revoke_pointer a m) oldmeta).
+      (oldmeta : AMap.M.t (bool * CapGhostState)):
+      SameState (AMap.map_mmapi (maybe_revoke_pointer a m) oldmeta).
     Proof.
       typeclasses eauto.
     Qed.
 
-    Lemma zmap_mmapi_maybe_revoke_pointer_spec
+    Lemma amap_mmapi_maybe_revoke_pointer_spec
       (a : allocation)
       (s : mem_state)
-      (oldmeta newmeta : ZMap.t (bool * CapGhostState)):
-      zmap_mmapi (maybe_revoke_pointer a s) oldmeta s = (s, inr newmeta) ->
-      zmap_relate_keys oldmeta newmeta (fun addr : ZMap.key => revoked_pointer_rel a addr s.(bytemap)).
+      (oldmeta newmeta : AMap.M.t (bool * CapGhostState)):
+      AMap.map_mmapi (maybe_revoke_pointer a s) oldmeta s = (s, inr newmeta) ->
+      AMapProofs.map_relate_keys oldmeta newmeta (fun addr : AMap.M.key => revoked_pointer_rel a addr s.(bytemap)).
     Proof.
       intros H.
       intros k.
-      unfold zmap_mmapi in H.
-      unfold zmap_sequence in H.
+      unfold AMap.map_mmapi in H.
+      unfold AMap.map_sequence in H.
       break_let.
-      remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta'.
+      remember (AMap.M.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta'.
 
-      assert(zmap_relate_keys newmeta' newmeta
+      assert(AMapProofs.map_relate_keys newmeta' newmeta
                (fun _ mx x =>
                   mx s = (s, inr x)
             )) as N.
@@ -2474,10 +2887,10 @@ Module RevocationProofs.
         break_match_hyp;[inversion H|].
         tuple_inversion.
         intros k.
-        remember (ZMap.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta.
+        remember (AMap.M.mapi (maybe_revoke_pointer a s) oldmeta) as newmeta.
 
         rename l into rescaps, Heqp0 into SEQ, Heqp into SPL.
-        remember (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta) as enewmeta eqn:E.
+        remember (AMap.M.elements (elt:=memM (bool * CapGhostState)) newmeta) as enewmeta eqn:E.
         (* end of prep *)
         pose proof (@split_nth  _ _ enewmeta) as N.
         replace (fst (split enewmeta)) with lk in N by (rewrite SPL;reflexivity).
@@ -2496,26 +2909,26 @@ Module RevocationProofs.
 
         apply sequence_spec_same_state_memM in SEQ.
         -
-          destruct (@In_dec _ newmeta k) as [I|NI].
+          destruct (@AMap.F.In_dec _ newmeta k) as [I|NI].
           +
             (* key originally exists *)
             left.
-            apply zmap_in_mapsto in I.
+            apply AMapProofs.map_in_mapsto in I.
             destruct I as [v1 I].
             exists v1.
 
-            assert(ZMap.MapsTo k v1 newmeta) as I1 by assumption.
+            assert(AMap.M.MapsTo k v1 newmeta) as I1 by assumption.
             rewrite Heqnewmeta in I1.
-            apply mapi_inv in I1.
+            apply AMap.F.mapi_inv in I1.
             destruct I1 as [v2 [k' [I3 [I4 I5]]]].
             subst k'.
 
-            pose proof (ZMap.elements_1 I) as H.
+            pose proof (AMap.M.elements_1 I) as H.
             rewrite <- E in H.
             apply InA_alt in H.
             destruct H as [(addr,v2') [H1 H2]].
 
-            unfold ZMap.eq_key_elt, ZMap.Raw.Proofs.PX.eqke in H1.
+            unfold AMap.M.eq_key_elt, ZMap.M.Raw.Proofs.PX.eqke in H1.
             destruct H1 as [T1 T2].
             cbn in T1, T2.
             subst k v2'.
@@ -2541,11 +2954,11 @@ Module RevocationProofs.
             split;[apply I|].
             split.
             *
-              apply ZMap.ZP.of_list_1.
+              apply AMap.P.of_list_1.
               --
-                apply combine_eq_key_NoDupA.
-                pose proof (ZMap.elements_3w newmeta) as NDM.
-                pose proof (split_eq_key_NoDup _ _ _ SPL).
+                apply AMapProofs.map_combine_eq_key_NoDupA.
+                pose proof (AMap.M.elements_3w newmeta) as NDM.
+                pose proof (AMapProofs.split_eq_key_NoDup _ _ _ SPL).
                 rewrite E in H.
                 specialize (H NDM).
                 apply H.
@@ -2578,7 +2991,7 @@ Module RevocationProofs.
                   setoid_rewrite <- C.
                   apply nth_In.
                   clear -CL H2 RL KL KR.
-                  unfold memM, ZMap.key in *.
+                  unfold memM, ZMap.M.key in *.
                   lia.
                 ++
                   clear - RL KL KR.
@@ -2590,19 +3003,19 @@ Module RevocationProofs.
             (* key does not exists *)
             right.
             split;[assumption|].
-            pose proof (ZMap.elements_3w newmeta) as NDM.
-            pose proof (split_eq_key_NoDup _ _ _ SPL).
+            pose proof (AMap.M.elements_3w newmeta) as NDM.
+            pose proof (AMapProofs.split_eq_key_NoDup _ _ _ SPL).
             rewrite E in H.
             specialize (H NDM).
             intros C.
             destruct C as [v C].
-            apply ZMap.ZP.of_list_1 in C;[|apply combine_eq_key_NoDupA, H].
-            apply InA_eq_key_combine in C.
+            apply AMap.P.of_list_1 in C;[|apply AMapProofs.map_combine_eq_key_NoDupA, H].
+            apply AMapProofs.InA_eq_key_combine in C.
             contradict NI.
             clear - E SPL C NDM.
             subst enewmeta.
-            replace lk with (fst (split (ZMap.elements (elt:=memM (bool * CapGhostState)) newmeta))) in C.
-            apply In_zmap_elements_split_zmap_in, C.
+            replace lk with (fst (split (AMap.M.elements (elt:=memM (bool * CapGhostState)) newmeta))) in C.
+            apply AMapProofs.In_zmap_elements_split_zmap_in, C.
             rewrite SPL.
             reflexivity.
         -
@@ -2619,7 +3032,7 @@ Module RevocationProofs.
           destruct ES as [[addr v1] ES].
           specialize (N k (addr,v1)).
 
-          assert (ZMap.MapsTo addr v1 newmeta).
+          assert (AMap.M.MapsTo addr v1 newmeta).
           {
             apply lookup_elements_MapsTo.
             exists k.
@@ -2627,7 +3040,7 @@ Module RevocationProofs.
             apply ES.
           }
           rewrite Heqnewmeta in H0.
-          apply mapi_inv in H0.
+          apply AMap.F.mapi_inv in H0.
           destruct H0 as [v2 [addr' [E2 [E3 E4]]]].
           subst addr'.
           cbn in N.
@@ -2643,22 +3056,22 @@ Module RevocationProofs.
       }
 
       clear H Heqp.
-      pose proof (zmap_relate_keys_same_keys _ _ _ N k) as SN.
-      destruct (@In_dec _ oldmeta k) as [I|NI].
+      pose proof (AMapProofs.map_relate_keys_same_keys _ _ _ N k) as SN.
+      destruct (@AMap.F.In_dec _ oldmeta k) as [I|NI].
       -
         (* key originally exists *)
         left.
-        apply zmap_in_mapsto in I.
+        apply AMapProofs.map_in_mapsto in I.
         destruct I as [v1 I].
         exists v1.
-        pose proof (@ZMap.mapi_1 _ _ _ _ _ (maybe_revoke_pointer a s) I) as [y [YH Z]].
+        pose proof (@AMap.M.mapi_1 _ _ _ _ _ (maybe_revoke_pointer a s) I) as [y [YH Z]].
         subst y.
         rewrite <- Heqnewmeta' in Z.
         specialize (N k).
         destruct N as [N|[NN1 NN2]].
         +
           destruct N as [v1' [v2 [N1 [N2 N3]]]].
-          apply (MapsTo_fun N1) in Z.
+          apply (AMap.F.MapsTo_fun N1) in Z.
           subst v1'.
           exists v2.
           split;[apply I|].
@@ -2703,18 +3116,18 @@ Module RevocationProofs.
           assumption.
       -
         right.
-        assert(~ (exists v : bool * CapGhostState, ZMap.MapsTo k v oldmeta)) as NM.
+        assert(~ (exists v : bool * CapGhostState, AMap.M.MapsTo k v oldmeta)) as NM.
         intros [v C].
-        apply zmap_mapsto_in in C.
+        apply AMapProofs.map_mapsto_in in C.
         congruence.
         split;[apply NM|].
         intros [v C].
-        apply zmap_mapsto_in in C.
+        apply AMapProofs.map_mapsto_in in C.
         apply SN in C.
         contradict NM.
         clear - C Heqnewmeta'.
         subst.
-        apply ZMap.mapi_2 in C.
+        apply AMap.M.mapi_2 in C.
         apply C.
     Qed.
 
@@ -2752,12 +3165,12 @@ Module RevocationProofs.
       (* [maybe_revoke_pointer] does not change state *)
       assert(SM0: s = m).
       {
-        eapply zmap_mmapi_maybe_revoke_pointer_same_state.
+        eapply amap_mmapi_maybe_revoke_pointer_same_state.
         eauto.
       }
       subst m.
 
-      apply(zmap_mmapi_maybe_revoke_pointer_spec a s (capmeta s) newmeta) in Heqp0.
+      apply(amap_mmapi_maybe_revoke_pointer_spec a s (capmeta s) newmeta) in Heqp0.
       rename Heqp0 into R.
       unfold mem_state_with_capmeta in U.
 
@@ -2778,11 +3191,11 @@ Module RevocationProofs.
         destruct R as [[v1 [v2 [M1 [M2 R]]]]|[NR0 NR1]].
         +
           apply Balign.
-          eapply zmap_mapsto_in.
+          eapply AMapProofs.map_mapsto_in.
           eauto.
         +
           contradict NR1.
-          eapply zmap_in_mapsto in I.
+          eapply AMapProofs.map_in_mapsto in I.
           apply I.
       -
         clear Bdead Bnooverlap Balign.
@@ -2792,7 +3205,7 @@ Module RevocationProofs.
         cbn in *.
         destruct R as [[v1 [v2 [M1 [M2 R]]]]|[NR0 NR1]].
         --
-          pose proof (MapsTo_fun M2 H1).
+          pose proof (AMap.F.MapsTo_fun M2 H1).
           subst v2.
           (* both keys present *)
           invc R.
@@ -2823,13 +3236,13 @@ Module RevocationProofs.
     Lemma no_caps_pointing_to_alloc
       (s s' : mem_state_r)
       (alloc : allocation)
-      (addr : ZMap.key)
+      (addr : AMap.M.key)
       (g : CapGhostState)
       (bs : list AbsByte)
       (c : Capability_GS.t)
       :
       revoke_pointers alloc s = (s', inr tt) ->
-      ZMap.MapsTo addr (true, g) (capmeta s') ->
+      AMap.M.MapsTo addr (true, g) (capmeta s') ->
       fetch_bytes (bytemap s') addr (sizeof_pointer MorelloImpl.get) = bs ->
       split_bytes_ptr_spec Prov_disabled bs ->
       decode_cap bs true c -> ~ cap_bounds_within_alloc c alloc.
@@ -2846,7 +3259,7 @@ Module RevocationProofs.
       destruct u.
       tuple_inversion.
 
-      pose proof (zmap_mmapi_maybe_revoke_pointer_same_state _ _ _ _ _ _ Heqp) as E.
+      pose proof (amap_mmapi_maybe_revoke_pointer_same_state _ _ _ _ _ _ Heqp) as E.
       subst m.
 
       apply update_state_capmeta in Heqp0.
@@ -2855,13 +3268,13 @@ Module RevocationProofs.
       generalize dependent (capmeta s').
       intros cm Z M.
 
-      apply zmap_mmapi_maybe_revoke_pointer_spec in Z.
+      apply amap_mmapi_maybe_revoke_pointer_spec in Z.
       specialize (Z addr).
       invc Z.
       -
         (* both exists in [campeta s] and [cm] *)
         destruct H as [g1 [g2 [H1 [H2 R]]]].
-        pose proof (MapsTo_fun M H2).
+        pose proof (AMap.F.MapsTo_fun M H2).
         subst g2. clear H2.
         invc R.
         +
@@ -2893,7 +3306,7 @@ Module RevocationProofs.
       (s s' s'': mem_state_r)
       (alloc_id : Z)
       (alloc : allocation)
-      (AM: ZMap.MapsTo alloc_id alloc (allocations s))
+      (AM: ZMap.M.MapsTo alloc_id alloc (allocations s))
       (IS: mem_invariant s)
       (IS': mem_invariant s'):
 
@@ -2919,28 +3332,31 @@ Module RevocationProofs.
         repeat split; cbn.
         +
           intros alloc_id0 a H.
-          apply ZMap.remove_3 in H.
+          apply ZMap.M.remove_3 in H.
           eapply Bdead;eauto.
         +
           intros alloc_id1 alloc_id2 a1 a2 NA H H0.
-          apply ZMap.remove_3 in H0, H.
+          apply ZMap.M.remove_3 in H0, H.
           eapply Bnooverlap.
           eauto.
           eauto.
           eauto.
+        +
+          apply ZMapProofs.map_forall_remove.
+          auto.
         +
           apply Balign.
         +
           intros alloc_id' H.
           destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
           *
-            apply (ZMap.remove_1 E) in H.
+            apply (ZMap.M.remove_1 E) in H.
             inv H.
           *
-            rewrite (remove_neq_in_iff _ NE) in H.
+            rewrite (ZMap.F.remove_neq_in_iff _ NE) in H.
             eauto.
         +
-          apply zmap_forall_remove.
+          apply ZMapProofs.map_forall_remove.
           auto.
       -
         clear ISbase'.
@@ -2969,14 +3385,14 @@ Module RevocationProofs.
 
             break_match_hyp.
             inv RE.
-            apply zmap_mmapi_maybe_revoke_pointer_same_state in Heqp.
+            apply amap_mmapi_maybe_revoke_pointer_same_state in Heqp.
             subst m.
             subst s0.
             destruct s.
             cbn in *.
             tuple_inversion.
             cbn in *.
-            eapply MapsTo_fun; eauto.
+            eapply ZMap.F.MapsTo_fun; eauto.
           }
           subst alloc'.
           (*
@@ -2990,7 +3406,7 @@ Module RevocationProofs.
         +
           exists alloc_id'.
           split;[|auto].
-          apply ZMap.remove_2;auto.
+          apply ZMap.M.remove_2;auto.
     Qed.
 
     Instance kill_PreservesInvariant
@@ -3237,7 +3653,7 @@ Module RevocationProofs.
       unfold update_prefix.
       preserves_steps.
       subst.
-      remember (zmap_update _ _ _) as newallocations.
+      remember (ZMap.map_update _ _ _) as newallocations.
       unfold mem_state_with_allocations.
       destruct H as [MIbase MIcap].
       destruct_base_mem_invariant MIbase.
@@ -3258,29 +3674,29 @@ Module RevocationProofs.
           *
             specialize (Bdead alloc_id).
             subst alloc_id'.
-            destruct (ZMap.find alloc_id old) eqn:F.
+            destruct (ZMap.M.find alloc_id old) eqn:F.
             --
-              apply ZMap.find_2 in F.
+              apply ZMap.M.find_2 in F.
               specialize (Bdead a0 F).
-              pose proof (zmap_update_MapsTo_update_at_k F H).
+              pose proof (ZMapProofs.map_update_MapsTo_update_at_k F H).
               clear H F.
               cbn in H0.
               invc H0.
               cbn.
               assumption.
             --
-              apply not_find_in_iff in F.
+              apply ZMap.F.not_find_in_iff in F.
               clear Bdead.
-              pose proof (zmap_update_MapsTo_new_at_k F H).
+              pose proof (ZMapProofs.map_update_MapsTo_new_at_k F H).
               clear H F.
               cbn in H0.
               inversion H0.
           *
-            apply zmap_update_MapsTo_not_at_k in H;auto.
+            apply ZMapProofs.map_update_MapsTo_not_at_k in H;auto.
             eapply Bdead; eauto.
         +
           (* Bnooverlap *)
-          clear Bdead Balign Bnextallocid Blastaddr.
+          clear Bfit Bdead Balign Bnextallocid Blastaddr.
           generalize dependent (allocations s).
           clear s.
           intros old Bnooverlap Heqnewallocations alloc_id1 alloc_id2 a1 a2 NA M1 M2.
@@ -3290,32 +3706,73 @@ Module RevocationProofs.
           Ltac solve_cases :=
             repeat match goal with
               (* absurd cases *)
-              | [H: ZMap.find ?alloc_id _ = None, M: ZMap.MapsTo ?alloc_id _ _ |- _]
+              | [H: ZMap.M.find ?alloc_id _ = None, M: ZMap.M.MapsTo ?alloc_id _ _ |- _]
                 =>
                   let X := fresh "X" in
-                  apply not_find_in_iff in H;
-                  pose proof (zmap_update_MapsTo_new_at_k H M) as X;
+                  apply ZMap.F.not_find_in_iff in H;
+                  pose proof (ZMapProofs.map_update_MapsTo_new_at_k H M) as X;
                   cbn in X; inversion X
-              | [H: ZMap.find ?alloc_id _ = Some _, M: ZMap.MapsTo ?alloc_id _ _ |- _]
+              | [H: ZMap.M.find ?alloc_id _ = Some _, M: ZMap.M.MapsTo ?alloc_id _ _ |- _]
                 =>
                   let X := fresh "X" in
-                  apply ZMap.find_2 in H;
-                  pose proof (zmap_update_MapsTo_update_at_k H M) as X;
+                  apply ZMap.M.find_2 in H;
+                  pose proof (ZMapProofs.map_update_MapsTo_update_at_k H M) as X;
                   cbn in X;
                   clear M;
                   some_inv
-              | [H:  ?alloc_id' <> ?alloc_id, M: ZMap.MapsTo ?alloc_id' _ (zmap_update ?alloc_id _ _) |- _]
+              | [H:  ?alloc_id' <> ?alloc_id, M: ZMap.M.MapsTo ?alloc_id' _ (ZMap.map_update ?alloc_id _ _) |- _]
                 =>
-                  apply zmap_update_MapsTo_not_at_k in M;auto
+                  apply ZMapProofs.map_update_MapsTo_not_at_k in M;auto
               end.
 
           destruct (Z.eq_dec alloc_id1 alloc_id), (Z.eq_dec alloc_id2 alloc_id),
-            (ZMap.find alloc_id1 old) eqn:F1, (ZMap.find alloc_id2 old) eqn:F2; subst ; try solve_cases.
+            (ZMap.M.find alloc_id1 old) eqn:F1, (ZMap.M.find alloc_id2 old) eqn:F2; subst ; try solve_cases.
 
           all:
             unfold allocations_do_no_overlap in *;
             unfold allocation_with_prefix;
             cbn; eauto.
+        +
+        (* Bfit *)
+          (* Blastaddr *)
+          clear - Bfit Heqnewallocations.
+          subst newallocations.
+          rename s0 into alloc_id'.
+          intros alloc_id a.
+          destruct (Z.eq_dec alloc_id alloc_id') as [E|NE].
+          *
+            subst alloc_id'.
+            intros H.
+            unfold ZMap.map_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply ZMap.M.find_2 in Heqo0.
+              apply ZMap.F.add_mapsto_iff in H.
+              destruct H;[|destruct H; congruence].
+              destruct H as [_ H3].
+              subst a0.
+              specialize (Bfit alloc_id a1 Heqo0).
+              unfold allocation_with_prefix in H1.
+              destruct a.
+              cbn in *.
+              invc H1.
+              auto.
+            --
+              apply ZMapProofs.map_mapsto_in in H.
+              apply ZMap.M.remove_1 in H.
+              tauto.
+              reflexivity.
+          *
+            intros H.
+            unfold ZMap.map_update in H.
+            repeat break_match_hyp;try some_none; try some_inv.
+            --
+              apply ZMap.F.add_neq_mapsto_iff in H; auto.
+              apply ZMap.F.remove_neq_mapsto_iff in H; auto.
+              eauto.
+            --
+              apply ZMap.F.remove_neq_mapsto_iff in H; auto.
+              eauto.
         +
           (* Balign *)
           auto.
@@ -3329,27 +3786,27 @@ Module RevocationProofs.
           *
             subst alloc_id'.
             intros H.
-            unfold zmap_update in H.
+            unfold ZMap.map_update in H.
             repeat break_match_hyp;try some_none; try some_inv.
             --
               apply Bnextallocid.
-              apply in_find_iff.
+              apply ZMap.F.in_find_iff.
               rewrite Heqo0.
               auto.
             --
-              apply ZMap.remove_1 in H.
+              apply ZMap.M.remove_1 in H.
               tauto.
               reflexivity.
           *
             intros H.
-            unfold zmap_update in H.
+            unfold ZMap.map_update in H.
             repeat break_match_hyp;try some_none; try some_inv.
             --
               apply Bnextallocid.
-              apply add_neq_in_iff in H;auto.
-              apply remove_neq_in_iff in H;auto.
+              apply ZMap.F.add_neq_in_iff in H;auto.
+              apply ZMap.F.remove_neq_in_iff in H;auto.
             --
-              apply remove_neq_in_iff in H;auto.
+              apply ZMap.F.remove_neq_in_iff in H;auto.
         +
           (* Blastaddr *)
           clear - Blastaddr Heqnewallocations.
@@ -3360,11 +3817,11 @@ Module RevocationProofs.
           *
             subst alloc_id'.
             intros H.
-            unfold zmap_update in H.
+            unfold ZMap.map_update in H.
             repeat break_match_hyp;try some_none; try some_inv.
             --
-              apply ZMap.find_2 in Heqo0.
-              apply add_mapsto_iff in H.
+              apply ZMap.M.find_2 in Heqo0.
+              apply ZMap.F.add_mapsto_iff in H.
               destruct H;[|destruct H; congruence].
               destruct H as [_ H3].
               subst a0.
@@ -3375,20 +3832,20 @@ Module RevocationProofs.
               invc H1.
               auto.
             --
-              apply zmap_mapsto_in in H.
-              apply ZMap.remove_1 in H.
+              apply ZMapProofs.map_mapsto_in in H.
+              apply ZMap.M.remove_1 in H.
               tauto.
               reflexivity.
           *
             intros H.
-            unfold zmap_update in H.
+            unfold ZMap.map_update in H.
             repeat break_match_hyp;try some_none; try some_inv.
             --
-              apply add_neq_mapsto_iff in H; auto.
-              apply remove_neq_mapsto_iff in H; auto.
+              apply ZMap.F.add_neq_mapsto_iff in H; auto.
+              apply ZMap.F.remove_neq_mapsto_iff in H; auto.
               eauto.
             --
-              apply remove_neq_mapsto_iff in H; auto.
+              apply ZMap.F.remove_neq_mapsto_iff in H; auto.
               eauto.
       -
         rename c into ty, s0 into alloc_id.
@@ -3404,7 +3861,7 @@ Module RevocationProofs.
         +
           subst alloc_id'.
           subst newallocations.
-          epose proof (zmap_update_MapsTo_update_at_k' M).
+          epose proof (ZMapProofs.map_update_MapsTo_update_at_k' M).
           eexists.
           eexists.
           split.
@@ -3413,7 +3870,7 @@ Module RevocationProofs.
           eauto.
         +
           subst newallocations.
-          eapply zmap_update_MapsTo_not_at_k in M.
+          eapply ZMapProofs.map_update_MapsTo_not_at_k in M.
           eexists.
           eexists.
           split.
@@ -3566,12 +4023,12 @@ Module RevocationProofs.
     /\ ptr2_limit <= alloc2_limit
     /\ Z.abs (ptr1_base-ptr2_base) >= sz.
 
-  Inductive mempcpy_args_sane: ZMap.t allocation -> pointer_value -> pointer_value -> Z -> Prop
+  Inductive mempcpy_args_sane: ZMap.M.t allocation -> pointer_value -> pointer_value -> Z -> Prop
     :=
     (*
   | mempcpy_args_sane_wihtPNVI: forall allocations c1 c2 sz alloc_id1 alloc_id2 alloc1 alloc2,
-      ZMap.MapsTo alloc_id1 alloc1 allocations ->
-      ZMap.MapsTo alloc_id2 alloc2 allocations ->
+      ZMap.M.MapsTo alloc_id1 alloc1 allocations ->
+      ZMap.M.MapsTo alloc_id2 alloc2 allocations ->
       alloc1.(is_dead) = false ->
       alloc2.(is_dead) = false ->
       memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 sz ->
@@ -3579,8 +4036,8 @@ Module RevocationProofs.
 *)
   | mempcpy_args_sane_wihtoutPNVI: forall allocations c1 c2 sz alloc_id1 alloc_id2 alloc1 alloc2 prov1 prov2,
       0 <= sz ->
-      ZMap.MapsTo alloc_id1 alloc1 allocations ->
-      ZMap.MapsTo alloc_id2 alloc2 allocations ->
+      ZMap.M.MapsTo alloc_id1 alloc1 allocations ->
+      ZMap.M.MapsTo alloc_id2 alloc2 allocations ->
       alloc1.(is_dead) = false ->
       alloc2.(is_dead) = false ->
       cap_bounds_within_alloc c1 alloc1 ->
@@ -3591,16 +4048,16 @@ Module RevocationProofs.
   (* Copying pointer from `addr2` to `addr1` in capmeta
      preserves invariant *)
   Fact copy_pointer_PreservesInvariant
-    {addr1 addr2 : Z}
+    {addr1 addr2 : AddressValue.t}
     {m : mem_state_r}
     {p : bool * CapGhostState}:
     mem_invariant m ->
-    ZMap.find addr2 (capmeta m) = Some p ->
+    AMap.M.find addr2 (capmeta m) = Some p ->
     is_pointer_algined addr1 = true ->
     (fetch_bytes (bytemap m) addr1 (sizeof_pointer MorelloImpl.get)  =
        fetch_bytes (bytemap m) addr2 (sizeof_pointer MorelloImpl.get))
     ->
-    mem_invariant (mem_state_with_capmeta (ZMap.add addr1 p (capmeta m)) m).
+    mem_invariant (mem_state_with_capmeta (AMap.M.add addr1 p (capmeta m)) m).
   Proof.
     intros H F A B.
     destruct H as [MIbase MIcap].
@@ -3612,63 +4069,72 @@ Module RevocationProofs.
       destruct_base_mem_invariant MIbase.
       repeat split; auto.
       cbn.
-      unfold zmap_forall_keys in *.
+      unfold ZMapProofs.map_forall_keys, AMapProofs.map_forall_keys in *.
       intros k H.
-      destruct (Z.eq_dec k addr1) as [E|NE].
+      destruct (AddressValue_as_OT.eq_dec k addr1) as [E|NE].
       +
         subst.
         unfold is_pointer_algined in A.
+        unfold addr_ptr_aligned.
         lia.
       +
-        apply add_neq_in_iff in H;[auto|lia].
+        apply AMap.F.add_neq_in_iff in H;auto.
     -
       clear MIbase A.
-      destruct (Z.eq_dec addr1 addr2) as [E|NE].
+      destruct (AddressValue_as_OT.eq_dec addr1 addr2) as [E|NE].
       +
         subst addr2.
         cbn in *.
         intros k.
-        destruct (Z.eq_dec k addr1) as [KE|KNE].
+        destruct (AddressValue_as_OT.eq_dec k addr1) as [KE|KNE].
         *
           subst addr1.
           intros g H bs H0.
-          apply find_mapsto_iff in F.
-          apply add_mapsto_iff in H.
-          destruct H;[|lia].
-          destruct H as [_ P].
-          subst p.
-          specialize (MIcap k g F bs H0).
-          auto.
+          apply AMap.F.find_mapsto_iff in F.
+          apply AMap.F.add_mapsto_iff in H.
+          destruct H.
+          --
+            destruct H as [_ P].
+            subst p.
+            specialize (MIcap k g F bs H0).
+            auto.
+          --
+            destruct H.
+            congruence.
         *
           intros g H bs H0.
-          apply find_mapsto_iff in F.
-          apply ZMap.add_3 in H;[|auto].
+          apply AMap.F.find_mapsto_iff in F.
+          apply AMap.M.add_3 in H;[|auto].
           specialize (MIcap k g H bs H0).
           auto.
       +
         intros k g H bs H0.
         cbn in *.
 
-        destruct (Z.eq_dec k addr1) as [KE1|KNE1].
+        destruct (AddressValue_as_OT.eq_dec k addr1) as [KE1|KNE1].
         *
           subst addr1.
-          apply find_mapsto_iff in F.
-          apply add_mapsto_iff in H.
-          destruct H;[|lia].
-          destruct H as [_ P].
-          subst p.
-          rewrite B in H0.
-          specialize (MIcap addr2 g F bs H0).
-          auto.
-        *
-          apply ZMap.add_3 in H;[|auto].
+          apply AMap.F.find_mapsto_iff in F.
+          apply AMap.F.add_mapsto_iff in H.
+          destruct H.
           --
-            apply ZMap.find_2 in F.
-            destruct (Z.eq_dec k addr2) as [KE|KNE].
+            destruct H as [_ P].
+            subst p.
+            rewrite B in H0.
+            specialize (MIcap addr2 g F bs H0).
+            auto.
+          --
+            destruct H.
+            congruence.
+        *
+          apply AMap.M.add_3 in H;[|auto].
+          --
+            apply AMap.M.find_2 in F.
+            destruct (AddressValue_as_OT.eq_dec k addr2) as [KE|KNE].
             ++
               subst addr2.
               specialize (MIcap k).
-              pose proof (MapsTo_fun F H) as E.
+              pose proof (AMap.F.MapsTo_fun F H) as E.
               subst p.
               clear H.
               specialize (MIcap g F bs).
@@ -3686,23 +4152,6 @@ Module RevocationProofs.
               assumption.
   Qed.
 
-  Instance memcpy_copy_data_PreservesInvariant
-    (loc: location_ocaml)
-    (ptrval1 ptrval2: pointer_value)
-    (index: nat)
-    :
-    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 index).
-  Proof.
-    intros s.
-    unfold memcpy_copy_data.
-    revert ptrval1 ptrval2 s.
-    induction index; intros.
-    + preserves_step.
-    +
-      preserves_steps.
-      all: try typeclasses eauto.
-  Qed.
-
   Instance memcpy_args_check_SameState
     (loc:location_ocaml)
     (p1 p2: pointer_value_indt)
@@ -3713,6 +4162,7 @@ Module RevocationProofs.
     same_state_steps.
   Qed.
 
+
   Fact find_cap_allocation_st_spec
     (s : mem_state_r)
     (c : Capability_GS.t)
@@ -3720,7 +4170,7 @@ Module RevocationProofs.
     (a : allocation)
     :
     find_cap_allocation_st s c = Some (sid, a) ->
-    ZMap.find (elt:=allocation) sid (allocations s) = Some a
+    ZMap.M.find (elt:=allocation) sid (allocations s) = Some a
     /\ a.(is_dead) = false
     /\ cap_bounds_within_alloc c a.
   Proof.
@@ -3728,7 +4178,7 @@ Module RevocationProofs.
     unfold find_cap_allocation_st in H.
     break_let.
     repeat rewrite resolve_has_any_PNVI_flavour in H.
-    apply zmap_find_first_exists in H.
+    apply ZMapProofs.map_find_first_exists in H.
     destruct H as [H1 H2].
     repeat split.
     - assumption.
@@ -3777,11 +4227,8 @@ Module RevocationProofs.
             v =
               (PV p
                  (PVconcrete
-                    (Capability_GS.cap_set_value c
-                       (AddressValue.of_Z
-                          (cap_to_Z c + n)
-                       )
-              ))).
+                    (Capability_GS.cap_set_value c (AddressValue.with_offset (Capability_GS.cap_get_value c) n))
+              )).
   Proof.
     intros ptrval H.
     Transparent serr2InternalErr bind raise ret get fail fail_noloc.
@@ -3799,132 +4246,12 @@ Module RevocationProofs.
       repeat break_let; repeat tuple_inversion; try rewrite Z.mul_1_l; reflexivity.
   Qed.
 
-  Lemma load_uchar_spec
-    {loc : location_ocaml}
-    (p : provenance)
-    {c : Capability_GS.t}
-    {s : mem_state_r}
-    {f : footprint}
-    {mval : mem_value}:
-
-    load loc CoqCtype.unsigned_char (PV p (PVconcrete c)) s = (s, inr (f, mval)) ->
-    (
-      mval = MVunspecified CoqCtype.unsigned_char
-      \/
-        exists ab b bv,
-          ZMap.MapsTo (AddressValue.to_Z (Capability_GS.cap_get_value c)) ab (bytemap s)
-          /\ mval = MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) (IV b)
-          /\ value ab = Some bv
-          /\ byte_of_Z b = bv
-    ).
-  Proof.
-    intros H.
-
-    unfold load in H.
-    unfold break_PV in H.
-    rewrite resolve_has_PNVI in H.
-    repeat rewrite resolve_has_any_PNVI_flavour in H.
-    destruct p.
-    -
-      unfold sizeof in H.
-      cbn in H.
-      rewrite MorelloImpl.uchar_size in H.
-      cbn in H.
-
-      Opaque extract_unspec split_bytes.
-      state_inv_step; try rewrite Znat.Nat2Z.inj_0 in *;
-        try rewrite Z.add_0_r in *;
-        try lia; try break_match_hyp; try discriminate; auto.
-      Transparent extract_unspec split_bytes.
-      +
-        (* SW_strict_reads = true
-         ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = Some _
-         *)
-        apply ZMap.find_2 in Heqo0.
-        cbn in H15.
-        inl_inr_inv.
-        rewrite provenance_eqb_reflexivity in H1, H5.
-        cbn in H1.
-        break_match_hyp;
-          cbn in H5;
-          repeat break_match_hyp; try discriminate; subst;
-
-            (cbn in Heqo;
-             repeat break_match_hyp; try discriminate; subst;
-             right;
-             exists a0, zb, a1;
-             repeat split; auto;
-             destruct l0;
-             invc Heqo;
-             apply Z_of_bytes_bytes_of_Z; auto).
-      +
-        (* SW_strict_reads = true
-         ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = None
-         *)
-        exfalso.
-        cbn in H15.
-        break_match_hyp.
-        2:{
-          rewrite provenance_eqb_reflexivity in Heqb1.
-          inv Heqb1.
-        }
-        clear Heqb1 H8 H10.
-        inl_inr_inv.
-        destruct b; [discriminate|].
-        destruct l; [discriminate|].
-        inv H7.
-        cbn in Heqo.
-        discriminate.
-      +
-        (* SW_strict_reads = false
-           ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = Some _
-         *)
-        apply ZMap.find_2 in Heqo0.
-        cbn in H15.
-        inl_inr_inv.
-        rewrite provenance_eqb_reflexivity in H1, H5.
-        cbn in H1.
-        break_match_hyp;
-          cbn in H5;
-          repeat break_match_hyp; try discriminate; subst;
-
-            (cbn in Heqo;
-             repeat break_match_hyp; try discriminate; subst;
-             right;
-             exists a0, zb, a1;
-             repeat split; auto;
-             destruct l0;
-             invc Heqo;
-             apply Z_of_bytes_bytes_of_Z; auto).
-      +
-        (* SW_strict_reads = false
-           ZMap.find (elt:=AbsByte) (cap_to_Z c) (bytemap st) = None
-         *)
-        exfalso.
-        cbn in H15.
-        break_match_hyp.
-        2:{
-          rewrite provenance_eqb_reflexivity in Heqb1.
-          inv Heqb1.
-        }
-        clear Heqb1 H8 H10.
-        inl_inr_inv.
-        destruct b; [discriminate|].
-        destruct l; [discriminate|].
-        inv H7.
-        cbn in Heqo.
-        discriminate.
-    -
-      apply fail_inr_inv in H; tauto.
-    -
-      apply raise_inr_inv in H ; tauto.
-  Qed.
 
   Fact repr_char_bytes_size_helper
     (fuel : nat)
-    (funptrmap0 funptrmap' : ZMap.t (digest * string * Capability_GS.t))
-    (capmeta0 capmeta' : ZMap.t (bool * CapGhostState))
-    (addr : Z)
+    (funptrmap0 funptrmap' : ZMap.M.t (digest * string * Capability_GS.t))
+    (capmeta0 capmeta' : AMap.M.t (bool * CapGhostState))
+    (addr : AddressValue.t)
     (iv: integer_value_indt)
     (bs : list AbsByte):
     repr fuel funptrmap0 capmeta0 addr (MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) iv) =
@@ -3954,9 +4281,9 @@ Module RevocationProofs.
 
   Fact repr_char_bytes_size_unspec_helper
     (fuel : nat)
-    (funptrmap0 funptrmap' : ZMap.t (digest * string * Capability_GS.t))
-    (capmeta0 capmeta' : ZMap.t (bool * CapGhostState))
-    (addr : Z)
+    (funptrmap0 funptrmap' : ZMap.M.t (digest * string * Capability_GS.t))
+    (capmeta0 capmeta' : AMap.M.t (bool * CapGhostState))
+    (addr : AddressValue.t)
     (l an: list CoqAnnot.annot)
     (bs : list AbsByte)
     (ty: CoqCtype.ctype):
@@ -3982,9 +4309,9 @@ Module RevocationProofs.
   (* Probably need to generalize in future for all types via `sizeof` *)
   Lemma repr_char_bytes_size
     (fuel: nat)
-    (funptrmap funptrmap': ZMap.t (digest * string * Capability_GS.t))
-    (capmeta capmeta': ZMap.t (bool*CapGhostState))
-    (addr : Z)
+    (funptrmap funptrmap': ZMap.M.t (digest * string * Capability_GS.t))
+    (capmeta capmeta': AMap.M.t (bool*CapGhostState))
+    (addr : AddressValue.t)
     (m : mem_value)
     (bs: list AbsByte)
     (mt : CoqCtype.ctype)
@@ -4060,27 +4387,6 @@ Module RevocationProofs.
           state_inv_step.
   Qed.
 
-  (* Could be generlized to arbitrary length *)
-  Fact zmap_add_list_not_at
-    (addr : Z)
-    (bytemap0 : ZMap.t AbsByte)
-    (l : list AbsByte)
-    (addr' : ZMap.key):
-    addr' <> addr ->
-    Datatypes.length l = 1%nat ->
-    ZMap.find (elt:=AbsByte) addr'
-      (zmap_add_list_at bytemap0 l addr) =
-      ZMap.find (elt:=AbsByte) addr' bytemap0.
-  Proof.
-    intros NE L.
-    destruct l;[discriminate|].
-    inv L.
-    destruct l;[|discriminate].
-    cbn - [ZMap.add].
-    apply add_neq_o.
-    lia.
-  Qed.
-
   Lemma store_other_spec
     (loc : location_ocaml)
     (p : provenance)
@@ -4088,10 +4394,10 @@ Module RevocationProofs.
     (s s' : mem_state)
     (m : mem_value)
     (fp : footprint)
-    (addr : Z):
-    Capability_GS.cap_get_value c = AddressValue.of_Z addr ->
+    (addr : AddressValue.t):
+    Capability_GS.cap_get_value c = addr ->
     store loc CoqCtype.unsigned_char false (PV p (PVconcrete c)) m s = (s', inr fp) ->
-    forall addr' : ZMap.key, addr' <> addr -> ZMap.find (elt:=AbsByte) addr' (bytemap s') = ZMap.find (elt:=AbsByte) addr' (bytemap s).
+    forall addr' : AMap.M.key, addr' <> addr -> AMap.M.find (elt:=AbsByte) addr' (bytemap s') = AMap.M.find (elt:=AbsByte) addr' (bytemap s).
   Proof.
     intros CV ST addr' NE.
 
@@ -4108,42 +4414,13 @@ Module RevocationProofs.
     cbn in ST.
     state_inv_step.
     -
-      assert(length l = 1%nat) as L.
-      {
-        eapply repr_char_bytes_size;eauto.
-      }
-      clear - L NE ST10 CV.
-      Transparent put.
-      unfold put, State_errS in ST10.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST10.
-      destruct st, s'.
-      cbn in *.
-      tuple_inversion.
-      clear -L NE CV.
-      apply zmap_add_list_not_at; auto.
-      unfold cap_to_Z.
-      admit. (* TODO: addr/Z mismatch issue *)
+      assert(length l = 1%nat) as L by (eapply repr_char_bytes_size;eauto).
+      apply AMapProofs.map_add_list_not_at; auto.
     -
       (* same as before but w/o `find_cap_allocation c st = (st, inr (Some (s0, a)))` *)
-      assert(length l = 1%nat) as L.
-      {
-        eapply repr_char_bytes_size;eauto.
-      }
-      clear - L NE ST9 CV.
-      Transparent put.
-      unfold put, State_errS in ST9.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST9.
-      destruct st, s'.
-      cbn in *.
-      tuple_inversion.
-      clear -L NE CV.
-      apply zmap_add_list_not_at; auto.
-      unfold cap_to_Z.
-      admit. (* TODO: addr/Z mismatch issue *)
-      Transparent repr.
-  Admitted.
+      assert(length l = 1%nat) as L by (eapply repr_char_bytes_size;eauto).
+      apply AMapProofs.map_add_list_not_at; auto.
+  Qed.
 
   (* Non-locking store does not change allocations (without PNVI).
 
@@ -4168,196 +4445,209 @@ Module RevocationProofs.
     cbn in ST.
     rewrite MorelloImpl.uchar_size in ST.
     cbn in ST.
+    state_inv_step; reflexivity.
+    Transparent repr.
+  Qed.
+
+  Fact memcpy_alloc_bounds_check_p_c_bounds
+    (sz : Z)
+    (c1 c2 : Capability_GS.t)
+    (alloc1 alloc2 : allocation)
+    (* allocations must be sane *)
+    (AL1: AddressValue.to_Z (base alloc1) + Z.of_nat (size alloc1) <= AddressValue.ADDR_LIMIT)
+    (AL2: AddressValue.to_Z (base alloc2) + Z.of_nat (size alloc2) <= AddressValue.ADDR_LIMIT)
+    (SZ: 0 <= sz):
+
+    memcpy_alloc_bounds_check_p c1 c2 alloc1 alloc2 sz ->
+
+    (* upper limit is within bounds. NB [<= AddressValue.ADDR_LIMIT] *)
+    (AddressValue.ADDR_MIN <=
+              AddressValue.to_Z (Capability_GS.cap_get_value c1) + sz <=
+              AddressValue.ADDR_LIMIT) /\
+    (AddressValue.ADDR_MIN <=
+              AddressValue.to_Z (Capability_GS.cap_get_value c2) + sz <=
+       AddressValue.ADDR_LIMIT) /\
+
+    (* all addresses are within bounds *)
+    (forall x, 0<=x<sz  ->
+          ((AddressValue.ADDR_MIN <=
+              AddressValue.to_Z (Capability_GS.cap_get_value c1) + x <
+              AddressValue.ADDR_LIMIT)
+           /\
+             (AddressValue.ADDR_MIN <=
+                AddressValue.to_Z (Capability_GS.cap_get_value c2) + x <
+                AddressValue.ADDR_LIMIT))).
+  Proof.
+    intros [H2 [H3 [H4 [H5 H6]]]].
+
+    unfold cap_to_Z in *.
+    generalize dependent (Capability_GS.cap_get_value c1); intros a1.
+    generalize dependent (Capability_GS.cap_get_value c2); intros a2.
+    generalize dependent (base alloc1); intros b1.
+    generalize dependent (base alloc2); intros b2.
+    generalize dependent (size alloc1); intros s1.
+    generalize dependent (size alloc2); intros s2.
+    clear alloc1 alloc2.
+    intros AL2 AL1 H4 H5 H2 H3 H6.
+    pose proof (AddressValue.to_Z_in_bounds a1).
+    pose proof (AddressValue.to_Z_in_bounds a2).
+    pose proof (AddressValue.to_Z_in_bounds b1).
+    pose proof (AddressValue.to_Z_in_bounds b2).
+
+    unfold AddressValue.ADDR_MIN, AddressValue.ADDR_LIMIT in *.
+
+    repeat split; intros; lia.
+  Qed.
+
+  Lemma store_unspecified_uchar_spec
+    {loc: location_ocaml}
+    {p: provenance}
+    {c: Capability_GS.t}
+    {s s0: mem_state}
+    {fp: footprint}
+    :
+    store loc CoqCtype.unsigned_char false
+      (PV p (PVconcrete c))
+      (MVunspecified CoqCtype.unsigned_char) s = (s0, inr fp) ->
+
+    AMap.M.MapsTo (Capability_GS.cap_get_value c)
+                  {|
+                    prov := PNVI_prov Prov_none;
+                    copy_offset := None;
+                    value := None
+                  |}
+                  (bytemap s0).
+  Proof.
+    intros H.
+    unfold PNVI_prov.
+    rewrite resolve_has_PNVI.
+
+    unfold store in H.
+    break_let.
     state_inv_step.
     -
-      clear - ST10.
-      Transparent put.
-      unfold put, State_errS in ST10.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST10.
-      destruct st, s0.
-      cbn in *.
-      tuple_inversion.
+      rewrite MorelloImpl.uchar_size in H6, H11.
+      cbn in H6. apply ret_inr in H6. invc H6.
+      cbn in H11. apply ret_inr in H11. invc H11.
+      cbn.
+      rewrite AddressValue_as_ExtOT.with_offset_0.
+      unfold absbyte_v.
+      unfold PNVI_prov.
+      rewrite resolve_has_PNVI.
+      apply AMap.M.add_1.
       reflexivity.
     -
-      clear - ST9.
-      Transparent put.
-      unfold put, State_errS in ST9.
-      Opaque put.
-      unfold mem_state_with_funptrmap_bytemap_capmeta in ST9.
-      destruct st, s0.
-      cbn in *.
-      tuple_inversion.
+      rewrite MorelloImpl.uchar_size in H5, H10.
+      cbn in H5. apply ret_inr in H5. invc H5.
+      cbn in H10. apply ret_inr in H10. invc H10.
+      cbn.
+      rewrite AddressValue_as_ExtOT.with_offset_0.
+      unfold absbyte_v.
+      unfold PNVI_prov.
+      rewrite resolve_has_PNVI.
+      apply AMap.M.add_1.
       reflexivity.
+  Qed.
 
-      Transparent repr.
+  Lemma bytemap_copy_data_spec
+    {a1 a2 : AddressValue.t}
+    {n : nat}
+    {bm: AMap.M.t AbsByte}
+    :
+    AddressValue.to_Z a1 + Z.of_nat n <= AddressValue.ADDR_LIMIT ->
+    forall (addr:  AddressValue.t),
+      AMap.M.find (elt:=AbsByte) addr (bytemap_copy_data a1 a2 n bm) =
+        AMap.M.find (elt:=AbsByte)
+          (if (0 <=? (addr_offset addr a1)) && ((addr_offset addr a1) <? (Z.of_nat n))
+           then (AddressValue.with_offset a2 (addr_offset addr a1))
+           else addr) bm.
+  Proof.
+    intros L addr.
+    induction n.
+    -
+      cbn.
+      break_match_goal.
+      +
+        bool_to_prop_hyp.
+        lia.
+      +
+        reflexivity.
+    -
+      cbn.
+      destruct (Z.eq_dec (addr_offset addr a1) (Z.of_nat n)) as [E|NE].
+      +
+        repeat break_if;bool_to_prop_hyp;try lia.
+        rewrite E in *.
+        clear H H1 H0.
+        assert(addr = AddressValue.with_offset a1 (Z.of_nat n)).
+        {
+          assert(0<=addr_offset addr a1) by lia.
+          rewrite <- E.
+          clear -H.
+          symmetry.
+          apply with_offset_addr_offset.
+        }
+        rewrite <- H.
+
+        break_match_goal.
+        *
+          rewrite AMap.F.add_eq_o by reflexivity.
+          reflexivity.
+        *
+          rewrite AMap.F.remove_eq_o by reflexivity.
+          reflexivity.
+      +
+        replace (addr_offset addr a1 <? Z.of_nat (S n)) with
+          (addr_offset addr a1 <? Z.of_nat n).
+        2:{
+          clear -NE.
+          apply ltb_equiv_propositional.
+          lia.
+        }
+        rewrite <- IHn. clear IHn.
+        *
+          assert(OE: AddressValue.with_offset a1 (Z.of_nat n) <> addr).
+          {
+            clear - L NE.
+            contradict NE.
+            rewrite <- NE. clear NE.
+            apply addr_offset_with_offset.
+            pose proof (AddressValue.to_Z_in_bounds a1).
+            unfold AddressValue.ADDR_MIN in *.
+            lia.
+          }
+          break_match_goal.
+          --
+            apply AMap.F.add_neq_o, OE.
+          --
+            rewrite AMap.F.remove_neq_o; [reflexivity|apply OE].
+        *
+          lia.
   Qed.
 
   Lemma memcpy_copy_data_spec
     {loc : location_ocaml}
     {s s' : mem_state_r}
-    {ptrval1 ptrval2 : pointer_value}
+    {a1 a2 : AddressValue.t}
     {n : nat}
-    (AG: mempcpy_args_sane s.(allocations) ptrval1 ptrval2 (Z.of_nat n))
-    (C: memcpy_copy_data loc ptrval1 ptrval2 n s = (s', inr tt))
-    {p1 p2 : provenance}
-    {c1 c2 : Capability_GS.t}
-    {a1 a2 : Z}
-    (P1: ptrval1 = PV p1 (PVconcrete c1))
-    (P2: ptrval2 = PV p2 (PVconcrete c2))
-    (A1: a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1))
-    (A2: a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2))
-    (addr:Z):
-    ZMap.find (elt:=AbsByte) addr (bytemap s') =
-      ZMap.find (elt:=AbsByte)
-        (if ((a1 <=? addr) && (addr <? (a1 + Z.of_nat n)))
-         then (a2+(addr-a1))
-         else addr)
-        (bytemap s).
+    (C: memcpy_copy_data loc a1 a2 n s = (s', inr tt))
+    (L: AddressValue.to_Z a1 + Z.of_nat n <= AddressValue.ADDR_LIMIT)
+    :
+
+    forall (addr:  AddressValue.t),
+      AMap.M.find (elt:=AbsByte) addr (bytemap s') =
+        AMap.M.find (elt:=AbsByte)
+          (if (0 <=? (addr_offset addr a1)) && ((addr_offset addr a1) <? (Z.of_nat n))
+           then (AddressValue.with_offset a2 (addr_offset addr a1))
+           else addr)
+          (bytemap s).
   Proof.
-    revert C AG.
-    revert s s' addr.
-    induction n;intros.
-    +
-      break_if.
-      *
-        apply andb_prop in Heqb.
-        rewrite Z.ltb_lt, Z.leb_le in Heqb.
-        lia.
-      *
-        cbn in C.
-        state_inv_step.
-        reflexivity.
-    +
-      destruct (Z.eq_dec addr (a1 + Z.of_nat n)) as [L|NL].
-      *
-        (* last element *)
-        cbn in C.
-        state_inv_step.
-        remember (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n) as addr.
-        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
-        subst ptrval2' ptrval1'.
-        rename x into fp.
-        specialize (IHn _ _ addr C5).
-
-        autospecialize IHn.
-        {
-          assert(s0.(allocations) = s.(allocations)) as AE.
-          {
-            eapply store_char_preserves_allocations.
-            eauto.
-          }
-
-          rewrite AE.
-          invc AG.
-          econstructor.
-          lia.
-          eapply H4.
-          eapply H5.
-          all: auto.
-          clear - H12.
-          unfold memcpy_alloc_bounds_check_p in *.
-          lia.
-        }
-        clear C5 AG.
-
-        break_match_hyp;[lia|].
-        clear Heqb. (* ? && false = false *)
-        subst addr.
-
-        break_match_goal.
-        --
-          replace (AddressValue.to_Z (Capability_GS.cap_get_value c2) +
-                     (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n - AddressValue.to_Z (Capability_GS.cap_get_value c1)))
-            with
-            (AddressValue.to_Z (Capability_GS.cap_get_value c2) + Z.of_nat n)
-            by lia.
-          clear Heqb.
-          rewrite IHn; clear IHn.
-
-          (*
-          m = load [s->s] (c2+n)
-          store [s->s0] m (c1+n)
-          ----
-          s0[c1+n] = s[c2+n]
-           *)
-          apply load_uchar_spec in C1.
-          (* TODO: need store spec *)
-          admit.
-        --
-          rewrite IHn; clear IHn s' C1.
-          apply andb_false_iff in Heqb.
-          rewrite Z.leb_gt, Z.ltb_ge in Heqb.
-          destruct Heqb;try lia.
-      *
-        (* not last *)
-        cbn in C.
-        state_inv_step.
-        apply eff_array_shift_ptrval_uchar_spec in C0, C2.
-        subst ptrval2' ptrval1'.
-        replace (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n))
-          with (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n).
-        2: {
-          clear - NL.
-          destruct (Z.ltb addr (Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c1)) (Z.of_nat n)))
-            eqn:L;
-            destruct (addr <? AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat (S n)) eqn:R;try reflexivity.
-          -
-            apply Z.ltb_lt in L.
-            apply Z.ltb_ge in R.
-            lia.
-          -
-            apply Z.ltb_lt in R.
-            apply Z.ltb_ge in L.
-            lia.
-        }
-
-        specialize (IHn _ _ addr C5).
-        autospecialize IHn.
-        {
-          assert(s0.(allocations) = s.(allocations)) as AE.
-          {
-            eapply store_char_preserves_allocations.
-            eauto.
-          }
-
-          rewrite AE.
-          invc AG.
-          econstructor.
-          lia.
-          eapply H4.
-          eapply H5.
-          all: auto.
-          clear - H12.
-          unfold memcpy_alloc_bounds_check_p in *.
-          lia.
-        }
-        clear C5.
-        rewrite IHn. clear IHn.
-
-        clear C1.
-        unfold cap_to_Z in C3.
-        rename addr into foo.
-        remember (AddressValue.to_Z (Capability_GS.cap_get_value c1) + Z.of_nat n) as addr.
-        remember  (match andb (Z.leb (AddressValue.to_Z (Capability_GS.cap_get_value c1)) foo) (Z.ltb foo addr) return ZMap.key with
-                   | true => Z.add (AddressValue.to_Z (Capability_GS.cap_get_value c2)) (Z.sub foo (AddressValue.to_Z (Capability_GS.cap_get_value c1)))
-                   | false => foo
-                   end) as addr'.
-
-        assert(addr' <> addr).
-        {
-          subst.
-          invc AG.
-          unfold memcpy_alloc_bounds_check_p in H12.
-          unfold cap_to_Z in H12.
-          break_match_goal;lia.
-        }
-        (* store does not modify any other bytes  *)
-        remember (Capability_GS.cap_set_value c1 (AddressValue.of_Z addr)) as c'.
-        eapply store_other_spec with (c:=c');eauto.
-        subst c'.
-        apply Capability.cap_get_set_value.
-  Admitted.
+    intros addr.
+    unfold memcpy_copy_data in C.
+    apply update_mem_state_spec in C.
+    subst.
+    apply (bytemap_copy_data_spec L).
+  Qed.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
@@ -4365,17 +4655,17 @@ Module RevocationProofs.
     {ptrval1 ptrval2: pointer_value}
     {len: Z}
     :
+    base_mem_invariant s ->
     mempcpy_args_sane s.(allocations) ptrval1 ptrval2 len ->
-    memcpy_copy_data loc ptrval1 ptrval2 (Z.to_nat len) s = (s', inr tt)
-    ->
-      forall p1 p2 c1 c2 a1 a2,
-        ptrval1 = PV p1 (PVconcrete c1) ->
-        ptrval2 = PV p2 (PVconcrete c2) ->
-        a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
-        a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
-        fetch_bytes (bytemap s') a1 (Z.to_nat len) = fetch_bytes (bytemap s') a2 (Z.to_nat len).
+    forall p1 p2 c1 c2 a1 a2,
+      ptrval1 = PV p1 (PVconcrete c1) ->
+      ptrval2 = PV p2 (PVconcrete c2) ->
+      a1 = Capability_GS.cap_get_value c1 ->
+      a2 = Capability_GS.cap_get_value c2 ->
+      memcpy_copy_data loc a1 a2 (Z.to_nat len) s = (s', inr tt) ->
+      fetch_bytes (bytemap s') a1 (Z.to_nat len) = fetch_bytes (bytemap s') a2 (Z.to_nat len).
   Proof.
-    intros H H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4.
+    intros Mbase H0 p1 p2 c1 c2 a1 a2 H1 H2 H3 H4 H5.
     unfold fetch_bytes.
     apply list.list_eq_Forall2.
     eapply Forall2_nth_list.
@@ -4385,17 +4675,16 @@ Module RevocationProofs.
       rewrite 2!list_init_len.
       reflexivity.
     -
-      rewrite map_length.
-      intros i H5.
-      rewrite 2!map_nth with (d:=0).
-      rewrite list_init_len in H5.
+      rewrite map_length, list_init_len.
+      intros i H.
+      rewrite 2!map_nth with (d:=(AddressValue.of_Z AddressValue.ADDR_MIN)).
 
-      pose proof (list_init_nth _ (fun i : nat => a1 + Z.of_nat i) _ H5) as LI1.
+      pose proof (list_init_nth _ (fun i : nat => AddressValue.with_offset a1 (Z.of_nat i)) _ H) as LI1.
       eapply nth_error_nth in LI1.
-      erewrite LI1.
+      rewrite LI1.
       clear LI1.
 
-      pose proof (list_init_nth _ (fun i : nat => a2 + Z.of_nat i) _ H5) as LI2.
+      pose proof (list_init_nth _ (fun i : nat => AddressValue.with_offset a2 (Z.of_nat i)) _ H) as LI2.
       eapply nth_error_nth in LI2.
       erewrite LI2.
       clear LI2.
@@ -4404,28 +4693,128 @@ Module RevocationProofs.
       rewrite resolve_has_PNVI.
 
       remember (Z.to_nat len) as n eqn:N.
-      replace len with (Z.of_nat n) in H by lia.
-      clear N len.
-      pose proof (memcpy_copy_data_spec H H0 H1 H2 H3 H4 (a1 + Z.of_nat i)) as M.
+      replace len with (Z.of_nat n) in H0 by lia.
+      clear len N.
 
+      (* mem copy with dst= s'[a1+i] *)
+      assert(AddressValue.to_Z a1 + Z.of_nat n <= AddressValue.ADDR_LIMIT) as L.
+      {
+        clear H5.
+        invc H0.
+        invc H14.
+        invc H15.
+        invc H10.
+        invc H11.
+        invc H12.
+
+        (* We only need Bfit from Mbase *)
+        destruct_base_mem_invariant Mbase.
+        clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
+
+        unfold cap_to_Z in *.
+        specialize (Bfit alloc_id1 alloc1 H6).
+        cbn in Bfit.
+
+        clear  - Bfit H4 H10.
+        destruct H10 as [H1 [_ [_ _]]].
+        lia.
+      }
+      pose proof (memcpy_copy_data_spec H5 L (AddressValue.with_offset a1 (Z.of_nat i)))
+        as M1.
+
+      (* goal s'[a2+i] = s'[a1+i]. English: source and destination regions equal in s' *)
       break_match_hyp.
       +
-        rewrite M. clear M.
-        replace (a2 + (a1 + Z.of_nat i - a1)) with (a2 + Z.of_nat i) by lia.
-        pose proof (memcpy_copy_data_spec H H0 H1 H2 H3 H4 (a2 + Z.of_nat i)) as M.
+        (* destination `a1+i` within bounds [a1,a1+n) *)
+        rewrite M1; clear M1.
+
+        replace (AddressValue.with_offset a2 (addr_offset (AddressValue.with_offset a1 (Z.of_nat i)) a1))
+          with (AddressValue.with_offset a2 (Z.of_nat i)).
+        2:{
+          bool_to_prop_hyp.
+          rewrite addr_offset_with_offset.
+          reflexivity.
+
+          (* We only need Bfit from Mbase *)
+          destruct_base_mem_invariant Mbase.
+          clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
+
+          invc H0.
+          invc H17.
+          invc H18.
+
+          pose proof (memcpy_alloc_bounds_check_p_c_bounds (Z.of_nat n) c1 c2 alloc1 alloc2) as [BL1 [BL2 B]].
+          apply (Bfit alloc_id1 alloc1 H9).
+          apply (Bfit alloc_id2 alloc2 H10).
+          lia.
+          assumption.
+          specialize (B (Z.of_nat i)).
+          autospecialize B;[lia|].
+          lia.
+        }
+
+        (* goal s[a2+i] = s'[a2+i]. English: source region unchanged *)
+
+        (* mem copy with dst= s'[a2+i] *)
+        pose proof (memcpy_copy_data_spec H5 L (AddressValue.with_offset a2 (Z.of_nat i))) as M2.
         break_match_hyp.
         *
+          (* destination `a2+i` is in bounds [a1,a1+n). This is is an overlap! *)
           exfalso.
-          clear M H0.
-          invc H.
-          invc H14.
+          (* We only need Bfit from Mbase *)
+          destruct_base_mem_invariant Mbase.
+          clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
+          invc H0.
           invc H15.
-          unfold memcpy_alloc_bounds_check_p, cap_to_Z in H12.
+          invc H16.
+          pose proof (memcpy_alloc_bounds_check_p_c_bounds (Z.of_nat n)  c1 c2 alloc1 alloc2) as [BL1 [BL2 B]].
+          apply (Bfit alloc_id1 alloc1 H7).
+          apply (Bfit alloc_id2 alloc2 H8).
           lia.
+          assumption.
+          specialize (B (Z.of_nat i)).
+          autospecialize B;[lia|].
+          bool_to_prop_hyp.
+          invc H13.
+          (* destruct H4 as [_ [_ [_ H11]]]. *)
+          unfold cap_to_Z in *.
+          destruct B.
+          rewrite addr_offset_with_offset in * by lia.
+          unfold addr_offset in *.
+          rewrite AddressValue.with_offset_no_wrap in * by lia.
+          pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c1)).
+          pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
+          unfold AddressValue.ADDR_MIN in *.
+          lia.
+          (* phew! *)
         *
-          rewrite M.
+          rewrite M2;
           reflexivity.
       +
+        (* We only need Bfit from Mbase *)
+        destruct_base_mem_invariant Mbase.
+        clear Bdead Bnooverlap Balign Bnextallocid Blastaddr.
+        invc H0.
+        invc H15.
+        invc H16.
+
+        pose proof (memcpy_alloc_bounds_check_p_c_bounds (Z.of_nat n)  c1 c2 alloc1 alloc2) as [BL1 [BL2 B]].
+        apply (Bfit alloc_id1 alloc1 H7).
+        apply (Bfit alloc_id2 alloc2 H8).
+        lia.
+        assumption.
+        specialize (B (Z.of_nat i)).
+        autospecialize B;[lia|].
+
+        invc H13.
+        unfold cap_to_Z in *.
+        destruct B.
+        rewrite addr_offset_with_offset in * by lia.
+        unfold addr_offset in *.
+        pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c1)).
+        pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
+        unfold AddressValue.ADDR_MIN in *.
+
         lia.
   Qed.
 
@@ -4457,7 +4846,7 @@ Module RevocationProofs.
     apply find_cap_allocation_st_spec in H0, H1.
     destruct H0 as [H0 [D0 B0]].
     destruct H1 as [H1 [D1 B1]].
-    apply ZMap.find_2 in H0, H1.
+    apply ZMap.M.find_2 in H0, H1.
 
     apply orb_false_elim in Heqb0.
     destruct Heqb0.
@@ -4492,15 +4881,17 @@ Module RevocationProofs.
   Qed.
 
   Lemma fetch_bytes_subset
-    {a1 a2 a1' a2':Z}
-    {n n':nat}
-    {bm:ZMap.t AbsByte}
-    :
-    fetch_bytes bm a1 n = fetch_bytes bm a2 n ->
+    (a1 a2 a1' a2':AddressValue.t)
+    (n n':nat)
+    (bm: AMap.M.t AbsByte)
+    (A1: forall x, 0<=x<Z.of_nat n -> 0 <= AddressValue.to_Z a1 + x < AddressValue.ADDR_LIMIT)
+    (A2: forall x, 0<=x<Z.of_nat n -> 0 <= AddressValue.to_Z a2 + x < AddressValue.ADDR_LIMIT)
+    (E: fetch_bytes bm a1 n = fetch_bytes bm a2 n):
+
     (exists (off:Z),
         off >= 0
-        /\ a1' = a1 + off
-        /\ a2' = a2 + off
+        /\ a1' = AddressValue.with_offset a1 off
+        /\ a2' = AddressValue.with_offset a2 off
         /\ off <= Z.of_nat n
         /\ (n' + (Z.to_nat off) <= n)%nat)
     ->
@@ -4511,7 +4902,7 @@ Module RevocationProofs.
     assert (length (fetch_bytes bm a1' n') = n') by apply fetch_bytes_len.
     assert (length (fetch_bytes bm a2' n') = n') by apply fetch_bytes_len.
 
-    intros E [off [E1 [E2 [E3 [E4 E5]]]]].
+    intros [off [E1 [E2 [E3 [E4 E5]]]]].
     apply list.list_eq_Forall2.
 
     eapply Forall2_nth_list; [lia|].
@@ -4538,9 +4929,37 @@ Module RevocationProofs.
 
 
     rewrite Z2Nat.id in E by lia.
+
+
+    assert(0 <= off ) by lia.
+    assert(0 <= Z.of_nat i) by lia.
+
+    assert(0 <= AddressValue.to_Z a1 + (off + Z.of_nat i) < AddressValue.ADDR_LIMIT).
+    {
+      clear - A1 E1 E4 E5 I.
+      pose proof (AddressValue.to_Z_in_bounds a1) as [B0 B1].
+      remember (AddressValue.to_Z a1) as az1.
+      clear Heqaz1.
+      zify.
+      unfold AddressValue.ADDR_MIN in *.
+      specialize (A1 (off + Z.of_nat i)).
+      lia.
+    }
+
+    assert(0 <= AddressValue.to_Z a2 + (off + Z.of_nat i) < AddressValue.ADDR_LIMIT).
+    {
+      clear - A2 E1 E4 E5 I.
+      pose proof (AddressValue.to_Z_in_bounds a2) as [B0 B1].
+      remember (AddressValue.to_Z a2) as az2.
+      clear Heqaz2.
+      zify.
+      unfold AddressValue.ADDR_MIN in *.
+      specialize (A2 (off + Z.of_nat i)).
+      lia.
+    }
+
     subst a1' a2'.
-    rewrite 2!Z.add_assoc in E.
-    apply E.
+    setoid_rewrite <- with_pos_offset_assoc in E; auto.
 
     Unshelve. exact O.
     Unshelve. exact O.
@@ -4549,40 +4968,74 @@ Module RevocationProofs.
   Qed.
 
   Lemma memcpy_copy_data_preserves_allocations:
-    forall (loc : location_ocaml) (ptrval1 ptrval2 : pointer_value) (s : mem_state_r)
+    forall (loc : location_ocaml) (dst_a src_a : AddressValue.t) (s : mem_state_r)
       (size : nat) (s' : mem_state),
-      memcpy_copy_data loc ptrval1 ptrval2 size s = (s', inr tt)
+      memcpy_copy_data loc dst_a src_a size s = (s', inr tt)
       ->
         allocations s = allocations s'.
   Proof.
-    intros loc ptrval1 ptrval2 s size s' M.
-    revert s s' M.
-    induction size; intros.
-    -
-      cbn in M.
-      tuple_inversion.
-      reflexivity.
-    -
-      cbn in M.
-      state_inv_step.
-      apply store_char_preserves_allocations in M3.
-      rewrite <- M3.
-      apply IHsize. clear IHsize.
-      assumption.
+    intros loc dst_a src_a s size s' M.
+    unfold memcpy_copy_data in M.
+    apply update_mem_state_spec in M.
+    unfold mem_state_with_bytemap in M.
+    destruct s'.
+    cbn.
+    invc M.
+    reflexivity.
   Qed.
 
-  Lemma bytmeta_copy_tags_spec
-    (dst src: Z)
+  Instance memcpy_copy_data_PreservesInvariant
+    (loc: location_ocaml)
+    (ptrval1 ptrval2: AddressValue.t)
+    (n: nat)
+    :
+    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 n).
+  Proof.
+    intros s.
+    unfold memcpy_copy_data.
+    revert s.
+    induction n; intros.
+    + preserves_step.
+      cbn.
+      unfold mem_state_with_bytemap.
+      destruct s.
+      auto.
+    +
+      preserves_steps.
+      *
+        (* adding *)
+        split.
+        --
+          (* base *)
+          apply H.
+        --
+          destruct H.
+          destruct_base_mem_invariant H.
+          intros addr g H bs H1.
+          specialize (H0 addr g H bs).
+          cbn in *.
+        admit.
+      *
+        admit.
+  Admitted.
+
+  Lemma capmeta_copy_tags_spec
+    (dst src: AddressValue.t)
     (n: nat)
     (step: nat)
-    (cm: ZMap.t (bool * CapGhostState)):
+    (cm: AMap.M.t (bool * CapGhostState)):
     (0<step)%nat ->
-    (Z.modulo src (Z.of_nat step) = 0) ->
-    (Z.modulo dst (Z.of_nat step) = 0) ->
+    (Z.modulo (AddressValue.to_Z src) (Z.of_nat step) = 0) ->
+    (Z.modulo (AddressValue.to_Z dst) (Z.of_nat step) = 0) ->
     forall a tg,
-      ZMap.MapsTo a tg (bytmeta_copy_tags dst src n step cm) ->
-      (exists k, 0 <= k < Z.of_nat n /\ a = dst + k * Z.of_nat step /\ ZMap.MapsTo (src + k * Z.of_nat step) tg cm) \/
-        (ZMap.MapsTo a tg cm /\ forall k, 0 <= k < Z.of_nat n -> a <> dst + k * Z.of_nat step).
+      AMap.M.MapsTo a tg (capmeta_copy_tags dst src n step cm) ->
+      (exists k,
+          0 <= k < Z.of_nat n
+          /\ a = AddressValue.with_offset dst (k * Z.of_nat step)
+          /\ AMap.M.MapsTo (AddressValue.with_offset src (k * Z.of_nat step)) tg cm)
+      \/
+        (AMap.M.MapsTo a tg cm
+         /\ forall k, 0 <= k < Z.of_nat n -> a <> AddressValue.with_offset dst (k * Z.of_nat step)).
   Proof.
     intros Hstep Hsrc_mod Hdst_mod.
     revert cm Hsrc_mod Hdst_mod.
@@ -4593,30 +5046,44 @@ Module RevocationProofs.
       + assumption.
       + intros k Hk. lia.
     - (* Inductive case: n = S n' *)
+      cbn.
       simpl in Hmaps.
-      remember (bytmeta_copy_tags (dst + Z.of_nat step) (src + Z.of_nat step) n' step
-                  (match ZMap.find src cm with
-                   | None => cm
-                   | Some meta => ZMap.add dst meta cm
-                   end)) as cm'.
+      (*
+      remember (capmeta_copy_tags (AddressValue.with_offset dst (Z.of_nat step))
+               (AddressValue.with_offset src (Z.of_nat step)) n' step
+               match AMap.M.find (elt:=bool * CapGhostState) src cm with
+               | Some meta => AMap.M.add dst meta cm
+               | None => cm
+               end) as cm'.
+       *)
+      specialize (IH cm Hsrc_mod Hdst_mod a tg).
+      break_match_hyp.
+
       admit.
   Admitted.
 
-  Lemma mem_state_after_bytmeta_copy_tags_preserves:
+  Lemma mem_state_after_capmeta_copy_tags_preserves:
     forall m dst src n sz,
       (Z.of_nat n * Z.of_nat (alignof_pointer MorelloImpl.get) = Z.of_nat sz) ->
-      (Z.modulo src (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
-      (Z.modulo dst (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0) ->
+      addr_ptr_aligned src ->
+      addr_ptr_aligned dst ->
+
+      (forall x : Z,
+      0 <= x < Z.of_nat sz ->
+      AddressValue.ADDR_MIN <= AddressValue.to_Z src + x < AddressValue.ADDR_LIMIT /\
+      AddressValue.ADDR_MIN <= AddressValue.to_Z dst + x < AddressValue.ADDR_LIMIT) ->
+
       (fetch_bytes (bytemap m) src sz = fetch_bytes (bytemap m) dst sz) ->
       mem_invariant m ->
       mem_invariant (mem_state_with_capmeta
-                       (bytmeta_copy_tags dst src n (alignof_pointer MorelloImpl.get) (capmeta m))
+                       (capmeta_copy_tags dst src n (alignof_pointer MorelloImpl.get) (capmeta m))
                        m).
   Proof.
-    intros m dst src n sz Hsz Hsrc Hdst DS M.
+    intros m dst src n sz Hsz Hsrc Hdst B DS M.
     remember (alignof_pointer MorelloImpl.get) as step.
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
+    unfold addr_ptr_aligned in *.
     split.
     -
       (* base invariant *)
@@ -4625,30 +5092,48 @@ Module RevocationProofs.
 
       (* alignment proof *)
       intros a E.
-      apply zmap_in_mapsto in E.
+      apply AMapProofs.map_in_mapsto in E.
       destruct E as [tg E].
       unfold mem_state_with_capmeta in E.
       simpl in E.
-      apply bytmeta_copy_tags_spec in E; try lia.
+      apply capmeta_copy_tags_spec in E; try lia.
       +
         destruct E as [[k [H1 [H2 H3]]]| [H1 H2]].
         *
           subst a step.
-          rewrite Zdiv.Z_mod_plus_full.
-          assumption.
+          unfold addr_ptr_aligned.
+          rewrite AddressValue.with_offset_no_wrap.
+          --
+            rewrite Zdiv.Z_mod_plus_full.
+            assumption.
+          --
+            clear - H1 Hsz B.
+            unfold AddressValue.ADDR_MIN.
+            specialize (B (k * Z.of_nat (alignof_pointer MorelloImpl.get))).
+            autospecialize B.
+            pose proof MorelloImpl.alignof_pointer_pos.
+            nia.
+            apply B.
         *
+          unfold addr_ptr_aligned.
           subst step.
-          apply zmap_mapsto_in in H1.
+          apply AMapProofs.map_mapsto_in in H1.
           specialize (Balign a H1).
           auto.
       +
         subst step.
         apply MorelloImpl.alignof_pointer_pos.
+      +
+        subst step.
+        auto.
+      +
+        subst step.
+        auto.
     -
       (* the rest of the invariant *)
       intros a g E bs F.
       simpl in *.
-      apply bytmeta_copy_tags_spec in E; try lia.
+      apply capmeta_copy_tags_spec in E; try lia.
       2:{
         subst step.
         apply MorelloImpl.alignof_pointer_pos.
@@ -4657,21 +5142,37 @@ Module RevocationProofs.
       +
         (* in copied meta range *)
         destruct E1 as [k [H1 [H2 H3]]].
-        specialize (MIcap (src + k * Z.of_nat step) g H3 bs).
+        specialize (MIcap (AddressValue.with_offset src (k * Z.of_nat step)) g H3 bs).
         autospecialize MIcap.
         {
           subst a bs.
-          eapply fetch_bytes_subset.
-          apply DS.
-          exists (k * Z.of_nat step).
-          repeat split.
-          * nia.
-          * nia.
-          *
-            subst.
-            clear - Hdst Hsrc Hsz H1.
-            pose proof pointer_sizeof_alignof.
-            nia.
+          (*
+          specialize (B (Z.of_nat sz)).
+          autospecialize B. lia.
+          unfold AddressValue.ADDR_MIN in B.
+          destruct B.
+           *)
+          apply fetch_bytes_subset with (a1:=src) (a2:=dst) (n:=sz).
+          -
+            clear - B.
+            unfold AddressValue.ADDR_MIN in *.
+            apply B.
+          -
+            clear - B.
+            unfold AddressValue.ADDR_MIN in *.
+            apply B.
+          -
+            apply DS.
+          -
+            exists (k * Z.of_nat step).
+            repeat split.
+            * nia.
+            * nia.
+            *
+              subst.
+              clear - Hdst Hsrc Hsz H1.
+              pose proof pointer_sizeof_alignof.
+              nia.
         }
         destruct MIcap as [M1 [c [M2 [alloc [alloc_id [M3 M4]]]]]].
         repeat split.
@@ -4692,6 +5193,12 @@ Module RevocationProofs.
           exists c.
           split;[apply M2|].
           eauto.
+      +
+        subst step.
+        auto.
+      +
+        subst step.
+        auto.
   Qed.
 
   Fact alignment_correction_correct:
@@ -4717,96 +5224,205 @@ Module RevocationProofs.
     (s: mem_state)
     (sz : Z)
     (AS: mempcpy_args_sane (allocations s) ptrval1 ptrval2 sz)
-    (DS: forall (p1 p2 : provenance) (c1 c2 : Capability_GS.t) (a1 a2 : Z),
-        ptrval1 = PV p1 (PVconcrete c1) ->
-        ptrval2 = PV p2 (PVconcrete c2) ->
-        a1 = AddressValue.to_Z (Capability_GS.cap_get_value c1) ->
-        a2 = AddressValue.to_Z (Capability_GS.cap_get_value c2) ->
-        fetch_bytes (bytemap s) a1 (Z.to_nat sz) = fetch_bytes (bytemap s) a2 (Z.to_nat sz))
+    (p1 p2 : provenance)
+    (c1 c2 : Capability_GS.t)
+    (a1 a2 : AddressValue.t)
+    (P1: ptrval1 = PV p1 (PVconcrete c1))
+    (P2: ptrval2 = PV p2 (PVconcrete c2))
+    (A1: a1 = Capability_GS.cap_get_value c1)
+    (A2: a2 = Capability_GS.cap_get_value c2)
+    (F: fetch_bytes (bytemap s) a1 (Z.to_nat sz) = fetch_bytes (bytemap s) a2 (Z.to_nat sz))
     :
     PreservesInvariant mem_invariant s
-      (memcpy_copy_tags loc ptrval1 ptrval2 (Z.to_nat sz)).
+      (memcpy_copy_tags loc a1 a2 (Z.to_nat sz)).
   Proof.
-    invc AS.
-    (* it looks like we do not need any allocation stuff from [mempcpy_args_sane].
+    inv AS.
+    (* it looks, for now like we do not need any allocation stuff from [mempcpy_args_sane].
        we will remove it for now but this may change. *)
     clear H0 H1 H2 H3 H4 H5 H6.
-    remember (cap_to_Z c1) as a1 eqn:A1.
-    remember (cap_to_Z c2) as a2 eqn:A2.
-    specialize (DS prov1 prov2 c1 c2 a1 a2).
-    autospecialize DS; [reflexivity|].
-    autospecialize DS; [reflexivity|].
-    specialize (DS A1 A2).
-
-    subst a1 a2.
+    remember (Capability_GS.cap_get_value c1) as a1 eqn:A1.
+    remember (Capability_GS.cap_get_value c2) as a2 eqn:A2.
+    invc H8.
+    invc H9.
     unfold memcpy_copy_tags.
-
-    apply bind_PreservesInvariant_value_SameState.
-    same_state_step.
-    intros H0 x H1.
-    state_inv_step.
-
-    apply bind_PreservesInvariant_value_SameState.
-    same_state_step.
-    intros H1 x H2.
-    state_inv_step.
 
     (* same alignment check *)
     break_if;bool_to_prop_hyp;[bool_to_prop_hyp|unfold PreservesInvariant;auto].
     rewrite Heqb in *.
-    remember (if cap_to_Z c2 mod Z.of_nat (alignof_pointer MorelloImpl.get) =? 0
-              then 0 else Z.of_nat (alignof_pointer MorelloImpl.get) -
-                            cap_to_Z c2 mod Z.of_nat (alignof_pointer MorelloImpl.get))
+    remember (if
+        AddressValue.to_Z (Capability_GS.cap_get_value c2) mod Z.of_nat (alignof_pointer MorelloImpl.get) =? 0
+       then 0
+       else
+        Z.of_nat (alignof_pointer MorelloImpl.get) -
+        AddressValue.to_Z (Capability_GS.cap_get_value c2) mod Z.of_nat (alignof_pointer MorelloImpl.get))
       as off.
     (* ensure off < zsz *)
     break_if;bool_to_prop_hyp;[unfold PreservesInvariant;auto| bool_to_prop_hyp].
-    (* ensure cap_to_Z c1 + off < c1 + sz *)
-    break_if;bool_to_prop_hyp;[unfold PreservesInvariant;auto| bool_to_prop_hyp].
+    rewrite Znat.Z2Nat.id in Heqb0 by lia.
 
     remember (Z.to_nat ((Z.of_nat (Z.to_nat sz) - off) / Z.of_nat (alignof_pointer MorelloImpl.get))) as n.
     preserves_step.
-    apply mem_state_after_bytmeta_copy_tags_preserves with (sz:=(n *(alignof_pointer MorelloImpl.get))%nat).
-    +
+
+    inversion AS. clear AS. subst allocations0 prov1 prov2 c0 c3 sz0.
+    inversion H0. rename H0 into MM.
+    destruct_base_mem_invariant H1.
+
+    pose proof (memcpy_alloc_bounds_check_p_c_bounds sz c1 c2 alloc0 alloc3) as [BL1 [BL2 B]].
+    apply (Bfit alloc_id0 alloc0 H6).
+    apply (Bfit alloc_id3 alloc3 H7).
+    lia.
+    assumption.
+    clear H6 H7 H8 H10 H11 H13 H14
+      alloc0 alloc3 alloc_id0 alloc_id3
+      loc alloc_id1 alloc_id2 alloc1 alloc2
+      p1 p2.
+    clear Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr.
+
+    apply mem_state_after_capmeta_copy_tags_preserves with (sz:=(n *(alignof_pointer MorelloImpl.get))%nat).
+    -
       lia.
-    +
-      (* [bytmeta_copy_tags] [dst] is aligned *)
+    -
+      (* [capmeta_copy_tags] [dst] is aligned *)
       subst.
       (* correct relation between `n` and `sz` wrt `alighof_pointer` *)
       break_if; bool_to_prop_hyp.
-      *
-        rewrite Z.add_0_r.
+      +
+        rewrite with_offset_0.
         assumption.
-      *
-        apply alignment_correction_correct.
-        -- assumption.
-        -- pose proof MorelloImpl.alignof_pointer_pos;lia.
-    +
+      +
+        unfold addr_ptr_aligned.
+        rewrite AddressValue.with_offset_no_wrap.
+        *
+          apply alignment_correction_correct.
+          -- assumption.
+          -- pose proof MorelloImpl.alignof_pointer_pos;lia.
+        *
+          clear - H Heqb1 Heqb0 B.
+
+          pose proof MorelloImpl.alignof_pointer_pos.
+          pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
+          unfold AddressValue.ADDR_MIN in *.
+
+          generalize dependent (AddressValue.to_Z (Capability_GS.cap_get_value c2)).
+          generalize dependent (alignof_pointer MorelloImpl.get).
+          intros nalign H0 addr Heqb1 Heqb0 B H1.
+          remember (Z.of_nat nalign) as align.
+          assert(0<align) by lia.
+          clear nalign Heqalign H0.
+          assert (0 <= addr mod align < align) by (apply Z.mod_pos_bound; assumption).
+          split.
+          -- lia.
+          -- specialize (B (align - addr mod align)); lia.
+    -
       subst.
-      (* [bytmeta_copy_tags] [dst] is aligned *)
+      (* [capmeta_copy_tags] [dst] is aligned *)
+      unfold addr_ptr_aligned.
       break_if; bool_to_prop_hyp.
-      * rewrite Z.add_0_r; lia.
-      *
-        rewrite <- Heqb.
-        apply alignment_correction_correct.
-        -- rewrite Heqb; assumption.
-        -- pose proof MorelloImpl.alignof_pointer_pos;lia.
-    +
-      symmetry in DS.
-      apply (fetch_bytes_subset DS).
+      + rewrite with_offset_0; lia.
+      + rewrite <- Heqb.
+        rewrite AddressValue.with_offset_no_wrap.
+        *
+          apply alignment_correction_correct.
+          -- rewrite Heqb; assumption.
+          -- pose proof MorelloImpl.alignof_pointer_pos;lia.
+        *
+          apply B.
+          clear B.
+          split; try lia.
+          pose proof MorelloImpl.alignof_pointer_pos.
+          pose proof (Z.mod_pos_bound
+                        (AddressValue.to_Z (Capability_GS.cap_get_value c1))
+                        (Z.of_nat (alignof_pointer MorelloImpl.get))).
+          lia.
+    -
+      intros x H0.
+      pose proof MorelloImpl.alignof_pointer_pos.
+      break_match_hyp.
+      +
+        (* c2 is ptr aligned *)
+        subst off.
+        rewrite 2!with_offset_0.
+        rewrite Z.sub_0_r in Heqn.
+        apply and_comm, B.
+        rewrite Znat.Z2Nat.id in Heqn by lia.
+        bool_to_prop_hyp.
+
+        (* clear B BL1 BL2 Heqb0 Heqb1 Heqb c1 c2 H7 s. *)
+        split;try lia.
+        cut (Z.of_nat (n * alignof_pointer MorelloImpl.get) <= sz).
+        lia.
+        assert(0 <= Z.of_nat (n * alignof_pointer MorelloImpl.get)) by lia.
+        subst n.
+        rewrite Nat2Z.inj_mul in *.
+        rewrite Z2Nat.id in * by (apply Z.div_pos;lia).
+        pose proof (div_mul_undo_le sz (Z.of_nat (alignof_pointer MorelloImpl.get)) H).
+        lia.
+      +
+        (* c2 is not ptr aligned *)
+        apply and_comm.
+        rewrite Znat.Z2Nat.id in Heqn by lia.
+        bool_to_prop_hyp.
+        clear BL1 BL2.
+        assert(0 < off).
+        {
+          pose proof (Z.mod_bound_pos (AddressValue.to_Z (Capability_GS.cap_get_value c2)) (Z.of_nat (alignof_pointer MorelloImpl.get))).
+          autospecialize H3.
+          apply AddressValue.to_Z_in_bounds.
+          autospecialize H3.
+          lia.
+          lia.
+        }
+        rewrite 2!AddressValue.with_offset_no_wrap.
+        2,3:(apply B;lia).
+        rewrite <- 2!Z.add_assoc.
+        apply B.
+        split; [lia|].
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)
+                    mod Z.of_nat (alignof_pointer MorelloImpl.get)) as rem.
+        remember (alignof_pointer MorelloImpl.get) as psize. clear Heqpsize.
+        pose proof (AddressValue.to_Z_in_bounds (Capability_GS.cap_get_value c2)).
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as addr.
+        unfold AddressValue.ADDR_MIN in *.
+        pose proof (Z.mod_bound_pos addr (Z.of_nat psize)).
+        autospecialize H6. lia.
+        autospecialize H6. lia.
+        subst.
+        rewrite Nat2Z.inj_mul in H0.
+        rewrite Z2Nat.id in * by (apply Z.div_pos;lia).
+        zify.
+        remember (Z.of_nat psize) as zpsize.
+        clear Heqzpsize cstr psize.
+        rename zpsize into psize.
+        destruct H3, H4, H0.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as addr.
+        remember (psize - addr mod psize) as off.
+        pose proof (div_mul_undo_le (sz-off) psize).
+        autospecialize H8. lia.
+        autospecialize H8. lia.
+        lia.
+    -
+      symmetry in F.
+      apply fetch_bytes_subset
+        with
+        (a1:=Capability_GS.cap_get_value c2)
+        (a2:=Capability_GS.cap_get_value c1)
+        (n:=Z.to_nat sz).
+
+      1,2: (rewrite Znat.Z2Nat.id by lia;unfold AddressValue.ADDR_MIN in *;apply B).
+      apply F. clear F.
       exists off.
 
       repeat split; break_match_hyp; bool_to_prop_hyp; try lia.
-      *
+      +
         subst off.
         pose proof (Zdiv.Z_mod_lt (cap_to_Z c2) (Z.of_nat (alignof_pointer MorelloImpl.get))).
-        autospecialize H3.
+        autospecialize H0.
         pose proof MorelloImpl.alignof_pointer_pos; lia.
+        unfold cap_to_Z in H0.
         lia.
-      *
+      +
         (* off = 0 *)
         subst off n.
-        clear - H Heqb Heqb0 Heqb1 Heqb2.
-
         rewrite Znat.Z2Nat.inj_0.
         rewrite Nat.add_0_r.
         rewrite Z.sub_0_r.
@@ -4816,12 +5432,11 @@ Module RevocationProofs.
         rewrite Nat.mul_comm.
         rewrite Znat.Nat2Z.id.
         apply Nat.Div0.mul_div_le.
-      *
+      +
         (* off != 0 *)
         subst off n.
-        clear - H Heqb Heqb0 Heqb1 Heqb2.
-        remember (cap_to_Z c1) as a1; clear Heqa1.
-        remember (cap_to_Z c2) as a2; clear Heqa2.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c1)) as a1; clear Heqa1.
+        remember (AddressValue.to_Z (Capability_GS.cap_get_value c2)) as a2; clear Heqa2.
         pose proof MorelloImpl.alignof_pointer_pos.
         remember (alignof_pointer MorelloImpl.get) as ps; clear Heqps.
         remember (Z.of_nat ps - a2 mod Z.of_nat ps) as off.
@@ -4839,12 +5454,30 @@ Module RevocationProofs.
         autospecialize D. lia.
         specialize (D PSP).
         zify.
-        destruct H3, H2, H4, H4; try lia.
         rewrite Nat2Z.inj_div.
         rewrite Znat.Z2Nat.id in * by lia.
         lia.
-    +
+    -
       assumption.
+  Qed.
+
+  Lemma cap_addr_of_pointer_value_inv
+    {ptr : pointer_value}
+    {a : AddressValue.t}:
+    cap_addr_of_pointer_value ptr = inr a ->
+    exists prov c, ptr = PV prov (PVconcrete c) /\ a = Capability_GS.cap_get_value c.
+  Proof.
+    intros H.
+    unfold cap_addr_of_pointer_value in H.
+    repeat break_match_hyp.
+    inv H.
+    apply ret_inr in H.
+    exists p.
+    exists t.
+    split.
+    reflexivity.
+    inv H.
+    reflexivity.
   Qed.
 
   Instance memcpy_PreservesInvariant
@@ -4865,30 +5498,52 @@ Module RevocationProofs.
     specialize (SA _ _ _ AC).
     subst s'.
     split;[assumption|].
-
     destruct x.
     apply memcpy_arg_sane_after_check in AC.
 
     apply bind_PreservesInvariant_value.
+    intros _ s' a1 H0.
+    pose proof (serr2InternalErr_inv H0).
+    apply serr2InternalErr_SameState in H0.
+    subst s'.
+    split;[assumption|].
+    apply cap_addr_of_pointer_value_inv in H.
+    destruct H as [p1 [c1 [P1 A1]]].
+
+    apply bind_PreservesInvariant_value.
+    intros _ s' a2 H2.
+    pose proof (serr2InternalErr_inv H2).
+    apply serr2InternalErr_SameState in H2.
+    subst s'.
+    split;[assumption|].
+    apply cap_addr_of_pointer_value_inv in H.
+    destruct H as [p2 [c2 [P2 A2]]].
+
+    apply bind_PreservesInvariant_value.
+    intros H s' x H0.
+    destruct x.
     split.
     -
-      pose proof (memcpy_copy_data_PreservesInvariant loc ptrval1 ptrval2 (Z.to_nat size) s M) as P.
-      unfold post_exec_invariant, lift_sum_p,execErrS in P.
-      rewrite H0 in P.
-      break_match_hyp.
-      inl_inr.
-      inl_inr_inv.
-      assumption.
+      pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s H) as P.
+      unfold post_exec_invariant, lift_sum_p, execErrS in P.
+      break_let.
+      repeat break_match_hyp.
+      2,3: inv Heqs1.
+      +
+        tuple_inversion.
+      +
+        apply ret_inr in Heqs1.
+        invc Heqs1.
+        tuple_inversion.
+        auto.
     -
+      pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H0).
+      destruct M.
+      epose proof (memcpy_copy_data_fetch_bytes_spec H2 AC) as DS.
+      rewrite H1 in AC.
       preserves_step.
-      +
-        destruct x.
-        pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H0).
-        pose proof (memcpy_copy_data_fetch_bytes_spec AC H0) as DS.
-        rewrite H1 in AC.
-        eapply memcpy_copy_tags_PreservesInvariant; eauto.
-      +
-        preserves_step.
+      eapply memcpy_copy_tags_PreservesInvariant; eauto.
+      preserves_step.
   Qed.
 
   Instance realloc_PreservesInvariant
@@ -4984,7 +5639,7 @@ va_*
       /\
         (* All caps which are tagged according to capmeta must: *)
         (forall addr g,
-            ZMap.MapsTo addr (true,g) cm ->
+            AMap.M.MapsTo addr (true,g) cm ->
             (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
                    (
                      (* Have the same provenance and correct sequence bytes *)
@@ -4997,7 +5652,7 @@ va_*
                                        (* if pointer has concerete provenance *)
                                        p = Prov_some alloc_id ->
                                        (* if corresponding allocation exists *)
-                                       (forall a, ZMap.MapsTo alloc_id a am ->
+                                       (forall a, ZMap.M.MapsTo alloc_id a am ->
                                              (* the cap bounds must within it *)
                                              cap_bounds_within_alloc c a)
                                    )
@@ -5072,30 +5727,35 @@ va_*
         repeat split; cbn in *.
         +
           intros alloc_id a H.
-          apply empty_mapsto_iff in H;
+          apply ZMap.F.empty_mapsto_iff in H;
             contradiction.
         +
           intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
-          apply empty_mapsto_iff in H0;
+          apply ZMap.F.empty_mapsto_iff in H0;
             contradiction.
         +
-          unfold zmap_forall_keys.
-          intros k H.
-          apply empty_in_iff in H;
+          unfold ZMapProofs.map_forall.
+          intros k a H.
+          apply ZMap.F.empty_mapsto_iff in H;
             contradiction.
         +
-          unfold zmap_forall_keys.
+          unfold AMapProofs.map_forall_keys.
           intros k H.
-          apply empty_in_iff in H.
+          apply AMap.F.empty_in_iff in H.
           tauto.
         +
-          unfold zmap_forall.
-          intros k v H.
-          apply empty_mapsto_iff in H.
+          unfold ZMapProofs.map_forall_keys.
+          intros k H.
+          apply ZMap.F.empty_in_iff in H.
           tauto.
+        +
+          unfold ZMapProofs.map_forall.
+          intros k a H.
+          apply ZMap.F.empty_mapsto_iff in H;
+            contradiction.
       -
           intros addr g H bs H0.
-          apply empty_mapsto_iff in H;
+          apply AMap.F.empty_mapsto_iff in H;
             contradiction.
     Qed.
 
@@ -5104,12 +5764,13 @@ va_*
      *)
     Lemma mem_state_after_ghost_tags_preserves:
       forall m addr size,
+        AddressValue.to_Z addr + Z.of_nat size <= AddressValue.ADDR_LIMIT ->
         mem_invariant m ->
         mem_invariant (mem_state_with_capmeta
                          (init_ghost_tags addr size (capmeta m))
                          m).
     Proof.
-      intros m addr sz H.
+      intros m addr sz L H.
       destruct H as [MIbase MIcap].
       destruct_base_mem_invariant MIbase.
       split.
@@ -5117,11 +5778,11 @@ va_*
         (* base invariant *)
         clear MIcap.
         repeat split;auto.
-        repeat split;auto.
 
         (* alignment proof *)
         intros a E.
-        apply zmap_in_mapsto in E.
+        unfold addr_ptr_aligned in *.
+        apply AMapProofs.map_in_mapsto in E.
         destruct E as [tg E].
         unfold mem_state_with_capmeta in E.
         simpl in E.
@@ -5129,13 +5790,15 @@ va_*
         destruct E.
         +
           (* capmeta unchanged at [a] *)
-          apply zmap_mapsto_in in H.
+          apply AMapProofs.map_mapsto_in in H.
           apply Balign.
           apply H.
         +
           (* capmeta cleared *)
           destruct H as [H1 H2].
           apply H1.
+        +
+          apply L.
       -
         intros a g E bs F.
         simpl in *.
@@ -5147,8 +5810,11 @@ va_*
           apply MIcap.
         +
           inversion E.
+        +
+          apply L.
     Qed.
 
+(*
     Instance allocator_PreservesInvariant
       (size: nat)
       (align: Z)
@@ -5190,7 +5856,7 @@ va_*
           intros alloc_id a H1.
           destruct (Z.eq_dec next_alloc_id0 alloc_id ) as [E|NE].
           *
-            apply add_mapsto_iff in H1.
+            apply ZMap.F.add_mapsto_iff in H1.
             destruct H1 as [[H2 H3] | H4].
             --
               subst a.
@@ -5198,7 +5864,7 @@ va_*
             --
               lia.
           *
-            apply (ZMap.add_3 NE) in H1.
+            apply (ZMap.M.add_3 NE) in H1.
             apply (Bdead _ _ H1).
         +
           (* no-overlap *)
@@ -5217,7 +5883,7 @@ va_*
             lia.
           *
             intros H.
-            apply add_neq_in_iff in H;auto.
+            apply ZMap.F.add_neq_in_iff in H;auto.
             specialize (Bnextallocid alloc_id H).
             cbn in Bnextallocid.
             lia.
@@ -5228,7 +5894,7 @@ va_*
           intros H.
           destruct (Z.eq_dec next_alloc_id0 alloc_id ) as [E|NE].
           *
-            apply add_mapsto_iff in H.
+            apply ZMap.F.add_mapsto_iff in H.
             destruct H as [[H2 H3] | H4].
             --
               subst a.
@@ -5237,7 +5903,7 @@ va_*
             --
               lia.
           *
-            apply (ZMap.add_3 NE) in H.
+            apply (ZMap.M.add_3 NE) in H.
             specialize (Blastaddr alloc_id a H). clear H.
             cbn in Blastaddr.
 
@@ -5267,11 +5933,11 @@ va_*
         repeat split; cbn.
         +
           intros alloc_id0 a H.
-          apply ZMap.remove_3 in H.
+          apply ZMap.M.remove_3 in H.
           eapply Bdead;eauto.
         +
           intros alloc_id1 alloc_id2 a1 a2 N H H0.
-          apply ZMap.remove_3 in H0, H.
+          apply ZMap.M.remove_3 in H0, H.
           eapply Bnooverlap.
           eauto.
           eauto.
@@ -5279,9 +5945,9 @@ va_*
         +
           apply Balign.
         +
-          apply zmap_forall_keys_remove, Bnextallocid.
+          apply ZMapProofs.map_forall_keys_remove, Bnextallocid.
         +
-          apply zmap_forall_remove, Blastaddr.
+          apply ZMapProofs.map_forall_remove, Blastaddr.
       -
         clear Hbase.
         intros addr g A bs F.
@@ -5299,7 +5965,7 @@ va_*
           destruct M as [M _].
           congruence.
         +
-          apply remove_neq_mapsto_iff in M;[|assumption].
+          apply ZMap.F.remove_neq_mapsto_iff in M;[|assumption].
           eapply H3;eauto.
     Qed.
 
@@ -5327,7 +5993,7 @@ va_*
       preserves_steps.
       - typeclasses eauto.
     Qed.
-
+*)
   End CheriMemoryWithPNVI.
 
 (* Equivalence proofs below are temporary commented out
@@ -5599,11 +6265,11 @@ va_*
     :=
     m1.(CheriMemoryWithPNVI.next_alloc_id) = m2.(CheriMemoryWithoutPNVI.next_alloc_id)
     /\ m1.(CheriMemoryWithPNVI.last_address) = m2.(CheriMemoryWithoutPNVI.last_address)
-    /\ ZMap.Equal m1.(CheriMemoryWithPNVI.allocations) m2.(CheriMemoryWithoutPNVI.allocations)
-    /\ ZMap.Equal m1.(CheriMemoryWithPNVI.funptrmap) m2.(CheriMemoryWithoutPNVI.funptrmap)
-    /\ ZMap.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
+    /\ ZMap.M.Equal m1.(CheriMemoryWithPNVI.allocations) m2.(CheriMemoryWithoutPNVI.allocations)
+    /\ ZMap.M.Equal m1.(CheriMemoryWithPNVI.funptrmap) m2.(CheriMemoryWithoutPNVI.funptrmap)
+    /\ ZMap.M.Equiv (varargs_same m1 m2) m1.(CheriMemoryWithPNVI.varargs) m2.(CheriMemoryWithoutPNVI.varargs)
     /\ m1.(CheriMemoryWithPNVI.next_varargs_id) = m2.(CheriMemoryWithoutPNVI.next_varargs_id)
-    /\ ZMap.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
+    /\ ZMap.M.Equiv AbsByte_eq m1.(CheriMemoryWithPNVI.bytemap) m2.(CheriMemoryWithoutPNVI.bytemap)
     /\ capmeta_same m1 m2 m1.(CheriMemoryWithPNVI.capmeta) m2.(CheriMemoryWithoutPNVI.capmeta).
 
 
@@ -5649,10 +6315,10 @@ va_*
         rewrite Mallocs.
         eapply H0.
       +
-        (* zmap_forall_keys (fun addr : Z => addr mod alignof_pointer MorelloImpl.get = 0)  (CheriMemoryWithoutPNVI.capmeta m2) *)
+        (* ZMapProofs.map_forall_keys (fun addr : Z => addr mod alignof_pointer MorelloImpl.get = 0)  (CheriMemoryWithoutPNVI.capmeta m2) *)
 
         unfold capmeta_same in Mcapmeta.
-        unfold zmap_forall_keys in *.
+        unfold ZMapProofs.map_forall_keys in *.
         intros k I.
         specialize (H2 k).
         apply zmap_relate_keys_same_keys with (k:=k) in Mcapmeta.
@@ -5681,9 +6347,9 @@ va_*
         rewrite <- Mallocs.
         eapply H0.
       +
-        (* zmap_forall_keys (fun addr : Z => addr mod alignof_pointer MorelloImpl.get = 0)  (CheriMemoryWithPNVI.capmeta m1) *)
+        (* ZMapProofs.map_forall_keys (fun addr : Z => addr mod alignof_pointer MorelloImpl.get = 0)  (CheriMemoryWithPNVI.capmeta m1) *)
         unfold capmeta_same in Mcapmeta.
-        unfold zmap_forall_keys in *.
+        unfold ZMapProofs.map_forall_keys in *.
         intros k I.
         specialize (H2 k).
         apply zmap_relate_keys_same_keys with (k:=k) in Mcapmeta.
@@ -6025,7 +6691,7 @@ va_*
       destruct C as [CI _];
       rewrite CI;
       destruct_mem_state_same ME;
-      unfold ZMap.Equal in Mfuncs;
+      unfold ZMap.M.Equal in Mfuncs;
       rewrite Mfuncs;
       reflexivity.
 
@@ -6047,7 +6713,7 @@ va_*
       destruct C as [CI _].
       rewrite CI. clear CI.
       destruct_mem_state_same ME.
-      unfold ZMap.Equal in Mfuncs.
+      unfold ZMap.M.Equal in Mfuncs.
       rewrite Mfuncs; clear Mfuncs.
 
       apply single_alloc_id_cap_cmp_value_eq in H0.
@@ -6458,15 +7124,15 @@ va_*
   Opaque CheriMemoryWithPNVI.get_intrinsic_type_spec CheriMemoryWithoutPNVI.get_intrinsic_type_spec.
 
   Definition resolve_function_pointer_res_eq
-    : relation ((ZMap.t (digest * string * Capability_GS.t)) * Capability_GS.t)
+    : relation ((ZMap.M.t (digest * string * Capability_GS.t)) * Capability_GS.t)
     :=
     fun '(m,c) '(m',c') =>
-      c=c' /\ ZMap.Equal m m'.
+      c=c' /\ ZMap.M.Equal m m'.
 
   Lemma resolve_function_pointer_same:
-    forall (m1 m2 : ZMap.t (digest * string * Capability_GS.t)) (fp1 fp2 : function_pointer),
+    forall (m1 m2 : ZMap.M.t (digest * string * Capability_GS.t)) (fp1 fp2 : function_pointer),
       fp1 = fp2 ->
-      ZMap.Equal m1 m2 ->
+      ZMap.M.Equal m1 m2 ->
       resolve_function_pointer_res_eq
         (CheriMemoryWithPNVI.resolve_function_pointer m1 fp1)
         (CheriMemoryWithoutPNVI.resolve_function_pointer m2 fp2).
@@ -6492,7 +7158,7 @@ va_*
   Qed.
 
   Lemma ghost_tags_same:
-    forall m1 m2 (addr : AddressValue.t) (sz0 sz1:Z) (capmeta0 capmeta1 : ZMap.t (bool * CapGhostState)),
+    forall m1 m2 (addr : AddressValue.t) (sz0 sz1:Z) (capmeta0 capmeta1 : ZMap.M.t (bool * CapGhostState)),
       sz0 = sz1 ->
       capmeta_same m1 m2 capmeta0 capmeta1 ->
       capmeta_same m1 m2
@@ -6504,7 +7170,7 @@ va_*
     unfold CheriMemoryWithPNVI.ghost_tags, CheriMemoryWithoutPNVI.ghost_tags.
 
     match goal with
-      [ |- context[ZMap.mapi ?ff _]] => remember ff as f
+      [ |- context[ZMap.M.mapi ?ff _]] => remember ff as f
     end.
 
     unfold capmeta_same, zmap_relate_keys.
@@ -6514,7 +7180,7 @@ va_*
     -
       (* [k] in [capmeta0] and [capmeta1] *)
       left.
-      apply ZMap.mapi_1 with (f:=f) in I0, I1.
+      apply ZMap.M.mapi_1 with (f:=f) in I0, I1.
       destruct I0 as [k0 [E0 M0]].
       destruct I1 as [k1 [E1 M1]].
       subst k0 k1.
@@ -6618,8 +7284,8 @@ va_*
   Opaque CheriMemoryWithPNVI.is_pointer_algined CheriMemoryWithoutPNVI.is_pointer_algined.
 
   (* return type of [repr] *)
-  Definition repr_res_t:Type := ZMap.t (digest * string * Capability_GS.t)
-                                         * ZMap.t (bool * CapGhostState)
+  Definition repr_res_t:Type := ZMap.M.t (digest * string * Capability_GS.t)
+                                         * ZMap.M.t (bool * CapGhostState)
                                          * list AbsByte.
 
   Definition repr_res_eq
@@ -6637,7 +7303,7 @@ va_*
       let mem2' :=
         CheriMemoryWithoutPNVI.mem_state_with_funptrmap_bytemap_capmeta funptrmap' bytemap' capmeta' mem2 in
 
-      ZMap.Equal funptrmap funptrmap'
+      ZMap.M.Equal funptrmap funptrmap'
       /\ capmeta_same mem1' mem2' capmeta capmeta'
       /\ eqlistA AbsByte_eq bytes bytes'.
 
@@ -6647,12 +7313,12 @@ va_*
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       (addr : Z)
-      (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState)):
+      (capmeta1 capmeta2 : ZMap.M.t (bool * CapGhostState)):
       capmeta_same mem1 mem2 capmeta1 capmeta2 ->
       forall t : Capability_GS.t,
         capmeta_same mem1 mem2
-          (ZMap.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta1)
-          (ZMap.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta2).
+          (ZMap.M.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta1)
+          (ZMap.M.add addr (Capability_GS.cap_is_valid t, Capability_GS.get_ghost_state t) capmeta2).
     Proof.
       intros Ecap c.
       unfold capmeta_same, zmap_relate_keys in *.
@@ -6666,13 +7332,13 @@ va_*
           subst k.
           exists (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c), (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c).
           repeat split.
-          1,2: apply ZMap.add_1;reflexivity.
+          1,2: apply ZMap.M.add_1;reflexivity.
           constructor;split;reflexivity.
         +
           eexists.
           eexists.
           repeat split.
-          1,2: apply ZMap.add_2;auto;eassumption.
+          1,2: apply ZMap.M.add_2;auto;eassumption.
           assumption.
       -
         destruct (Z.eq_dec k addr).
@@ -6681,7 +7347,7 @@ va_*
           subst k.
           exists (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c), (Capability_GS.cap_is_valid c, Capability_GS.get_ghost_state c).
           repeat split.
-          1,2: apply ZMap.add_1;reflexivity.
+          1,2: apply ZMap.M.add_1;reflexivity.
           constructor;split;reflexivity.
         +
           right.
@@ -6690,12 +7356,12 @@ va_*
             contradict N1.
             destruct N1.
             exists x.
-            apply ZMap.add_3 in H;auto.
+            apply ZMap.M.add_3 in H;auto.
           *
             contradict N2.
             destruct N2.
             exists x.
-            apply ZMap.add_3 in H;auto.
+            apply ZMap.M.add_3 in H;auto.
     Qed.
 
 
@@ -6703,9 +7369,9 @@ va_*
       (mem1:CheriMemoryWithPNVI.mem_state_r)
       (mem2:CheriMemoryWithoutPNVI.mem_state_r)
       (c2 c1 : Capability_GS.t)
-      (alloc_id : ZMap.key)
+      (alloc_id : ZMap.M.key)
       (addr : Z)
-      (capmeta1 capmeta2 : ZMap.t (bool * CapGhostState))
+      (capmeta1 capmeta2 : ZMap.M.t (bool * CapGhostState))
       (bytes1 bytes2: list ascii)
       (tag1 tag2: bool)
       :
@@ -6735,10 +7401,10 @@ va_*
             subst k.
             exists (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2), (Capability_GS.cap_is_valid c2, Capability_GS.get_ghost_state c2).
             repeat split.
-            1,2: apply ZMap.add_1;reflexivity.
+            1,2: apply ZMap.M.add_1;reflexivity.
             constructor;split;try reflexivity.
           *
-            setoid_rewrite add_neq_mapsto_iff;auto.
+            setoid_rewrite ZMap.F.add_neq_mapsto_iff;auto.
         + (* `cap_match_with_alloc_mismatch` constructor: alloc/cap mis-match *)
           destruct (Z.eq_dec k addr).
           * (* cap which is being added *)
@@ -6748,8 +7414,8 @@ va_*
             repeat rewrite <- cap_invalidate_preserves_ghost_state.
             exists (Capability_GS.cap_is_valid c1, Capability_GS.get_ghost_state c1).
             exists (false, Capability_GS.get_ghost_state c1).
-            split. apply ZMap.add_1; reflexivity.
-            split. apply ZMap.add_1; reflexivity.
+            split. apply ZMap.M.add_1; reflexivity.
+            split. apply ZMap.M.add_1; reflexivity.
             destruct (Capability_GS.cap_is_valid c1).
             --
               (* revocation case *)
@@ -6775,14 +7441,14 @@ va_*
             --
               constructor.
           * (* all other caps unchanged *)
-            setoid_rewrite add_neq_mapsto_iff;auto.
+            setoid_rewrite ZMap.F.add_neq_mapsto_iff;auto.
       - (* `single_cap_cmp_dead` consturctor: `alloc_id` is dead *)
         admit.
     Admitted.
 
     Definition repr_fold_T:Type :=
-      ZMap.t (digest * string * Capability_GS.t)
-      * ZMap.t (bool * CapGhostState)
+      ZMap.M.t (digest * string * Capability_GS.t)
+      * ZMap.M.t (bool * CapGhostState)
       * Z
       * list (list AbsByte).
 
@@ -6800,8 +7466,8 @@ va_*
              (funptrmap' , capmeta' , bs').
 
     Definition repr_fold2_T:Type :=
-      ZMap.t (digest * string * Capability_GS.t)
-      * ZMap.t (bool * CapGhostState)
+      ZMap.M.t (digest * string * Capability_GS.t)
+      * ZMap.M.t (bool * CapGhostState)
       * Z
       * list AbsByte.
 
@@ -6819,7 +7485,7 @@ va_*
 
     Theorem repr_same:
       forall m1 m2 fuel funptrmap1 funptrmap2 capmeta1 capmeta2 addr1 addr2 mval1 mval2,
-        ZMap.Equal funptrmap1 funptrmap2
+        ZMap.M.Equal funptrmap1 funptrmap2
         /\ capmeta_same m1 m2 capmeta1 capmeta2
         /\ addr1 = addr2
         /\  mem_value_indt_same m1 m2 mval1 mval2 ->
@@ -7833,9 +8499,9 @@ va_*
     end.
 
   Lemma init_ghost_tags_same:
-    forall (sz : Z) (addr : AddressValue.t) (c1 c0 : ZMap.t (bool * CapGhostState)),
-      ZMap.Equal (elt:=bool * CapGhostState) c0 c1 ->
-      ZMap.Equal (elt:=bool * CapGhostState)
+    forall (sz : Z) (addr : AddressValue.t) (c1 c0 : ZMap.M.t (bool * CapGhostState)),
+      ZMap.M.Equal (elt:=bool * CapGhostState) c0 c1 ->
+      ZMap.M.Equal (elt:=bool * CapGhostState)
         (CheriMemoryWithPNVI.init_ghost_tags addr sz c0)
         (CheriMemoryWithoutPNVI.init_ghost_tags addr sz c1).
   Proof.
@@ -8465,9 +9131,9 @@ va_*
               apply H.
             }
             match goal with
-            | [H0: ZMap.MapsTo k e ?L1,
-                  H1: ZMap.MapsTo k e' ?L2 |- _] =>
-                cut(ZMap.Equiv AbsByte_eq L1 L2)
+            | [H0: ZMap.M.MapsTo k e ?L1,
+                  H1: ZMap.M.MapsTo k e' ?L2 |- _] =>
+                cut(ZMap.M.Equiv AbsByte_eq L1 L2)
             end.
             {
               intros E.
@@ -8504,9 +9170,9 @@ va_*
               apply H.
             }
             match goal with
-            | [H0: ZMap.MapsTo k e ?L1,
-                  H1: ZMap.MapsTo k e' ?L2 |- _] =>
-                cut(ZMap.Equiv AbsByte_eq L1 L2)
+            | [H0: ZMap.M.MapsTo k e ?L1,
+                  H1: ZMap.M.MapsTo k e' ?L2 |- _] =>
+                cut(ZMap.M.Equiv AbsByte_eq L1 L2)
             end.
             {
               intros E.
@@ -8605,13 +9271,13 @@ va_*
     (fuel: nat)
     (find_overlapping1 : Z -> CheriMemoryWithPNVI.overlap_indt)
     (find_overlapping2 : Z -> CheriMemoryWithoutPNVI.overlap_indt)
-    (funptrmap1 funptrmap2 : ZMap.t (digest * string * Capability_GS.t))
+    (funptrmap1 funptrmap2 : ZMap.M.t (digest * string * Capability_GS.t))
     (tag_query_f : Z -> (bool* CapGhostState))
     (addr : Z)
     (cty : CoqCtype.ctype)
     (bs1 bs2 : list AbsByte)
     :
-    ZMap.Equal funptrmap1 funptrmap2 ->
+    ZMap.M.Equal funptrmap1 funptrmap2 ->
     eqlistA AbsByte_eq bs1 bs2 ->
     serr_eq abst_res_eq
       (CheriMemoryWithPNVI.abst fuel find_overlapping1 funptrmap1 tag_query_f addr cty bs1)
@@ -8621,10 +9287,10 @@ va_*
   Opaque CheriMemoryWithPNVI.abst CheriMemoryWithoutPNVI.abst.
 
   Lemma fetch_bytes_same:
-    forall (bytemap1 bytemap2 : ZMap.t AbsByte)
+    forall (bytemap1 bytemap2 : ZMap.M.t AbsByte)
       (base_addr : Z)
       (n_bytes : Z),
-      ZMap.Equiv AbsByte_eq bytemap1 bytemap2 ->
+      ZMap.M.Equiv AbsByte_eq bytemap1 bytemap2 ->
       eqlistA AbsByte_eq
         (CheriMemoryWithPNVI.fetch_bytes bytemap1 base_addr n_bytes)
         (CheriMemoryWithoutPNVI.fetch_bytes bytemap2 base_addr n_bytes).
@@ -8635,7 +9301,7 @@ va_*
     -
       intros x y E.
       subst y. rename x into k.
-      unfold ZMap.Equiv in B.
+      unfold ZMap.M.Equiv in B.
       destruct B as [B1 B2].
       break_match;break_match.
       +
@@ -8643,18 +9309,18 @@ va_*
         apply find_mapsto_iff; assumption.
       +
         exfalso.
-        apply not_find_in_iff in Heqo0.
+        apply ZMap.F.not_find_in_iff in Heqo0.
         destruct Heqo0.
         apply B1.
-        apply in_find_iff.
+        apply ZMap.F.in_find_iff.
         rewrite Heqo.
         auto.
       +
         exfalso.
-        apply not_find_in_iff in Heqo.
+        apply ZMap.F.not_find_in_iff in Heqo.
         destruct Heqo.
         apply B1.
-        apply in_find_iff.
+        apply ZMap.F.in_find_iff.
         rewrite Heqo0.
         auto.
       +
@@ -8715,10 +9381,10 @@ va_*
   Qed.
 
   Lemma zmap_mmapi_same:
-    forall (A B:Type) (R: relation B) f1 f2 (m1 m2:ZMap.t A),
-      ZMap.Equal m1 m2 ->
+    forall (A B:Type) (R: relation B) f1 f2 (m1 m2:ZMap.M.t A),
+      ZMap.M.Equal m1 m2 ->
       (forall k1 k2 v1 v2, k1=k2 -> v1=v2 -> Same R (f1 k1 v1) (f2 k2 v2)) ->
-      Same ZMap.Equal
+      Same ZMap.M.Equal
         (zmap_mmapi f1 m1)
         (zmap_mmapi f2 m2).
   Proof.
@@ -8739,7 +9405,7 @@ va_*
     split.
     same_step.
     intros x1 x2 H.
-    eapply bind_Same with (R':=ZMap.Equal).
+    eapply bind_Same with (R':=ZMap.M.Equal).
     split.
     -
       eapply zmap_mmapi_same.
@@ -8802,8 +9468,8 @@ va_*
     split.
     same_step.
     intros x1 x2 H.
-    replace (ZMap.find (elt:=allocation) s2 (CheriMemoryWithoutPNVI.allocations x2))
-      with (ZMap.find (elt:=allocation) s2 (CheriMemoryWithPNVI.allocations x1)).
+    replace (ZMap.M.find (elt:=allocation) s2 (CheriMemoryWithoutPNVI.allocations x2))
+      with (ZMap.M.find (elt:=allocation) s2 (CheriMemoryWithPNVI.allocations x1)).
     2: {
       apply find_m_Proper.
       reflexivity.
@@ -8870,7 +9536,7 @@ va_*
             split.
             cbn.
             break_match.
-            unfold zmap_update_element.
+            unfold ZMap.map_update_element.
             apply add_m_Proper;try reflexivity.
             apply remove_m_Proper;[reflexivity| apply H0].
             apply remove_m_Proper;[reflexivity| apply H0].

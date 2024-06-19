@@ -4,6 +4,8 @@ module CB=Cerb_backend
 open CB.Pipeline
 open Setup
 
+module A=CF.AilSyntax
+
 
 let return = CF.Exception.except_return
 let (let@) = CF.Exception.except_bind
@@ -56,7 +58,7 @@ open Log
 
 
 
-let frontend incl_dirs incl_files astprints do_peval filename state_file magic_comment_char_dollar =
+let frontend macros incl_dirs incl_files astprints do_peval filename magic_comment_char_dollar =
   let open CF in
   Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
@@ -67,7 +69,7 @@ let frontend incl_dirs incl_files astprints do_peval filename state_file magic_c
   Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
-  let conf = Setup.conf incl_dirs incl_files astprints in
+  let conf = Setup.conf macros incl_dirs incl_files astprints in
   let@ (_, ail_prog_opt, prog0) = c_frontend_and_elaboration ~cnnames:cn_builtin_fun_names (conf, io) (stdlib, impl) ~filename in
   let@ () =  begin
     if conf.typecheck_core then
@@ -75,13 +77,13 @@ let frontend incl_dirs incl_files astprints do_peval filename state_file magic_c
     else
       return ()
   end in
-  let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
+  let markers_env, ail_prog = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
   let prog2 = if do_peval then Core_peval.rewrite_file prog1 else prog1 in
   let prog3 = Milicore.core_to_micore__file Locations.update prog2 in
   let prog4 = Milicore_label_inline.rewrite_file prog3 in
-  let statement_locs = CStatements.search ail_prog in
+  let statement_locs = CStatements.search (snd ail_prog) in
   print_log_file ("original", CORE prog0);
   print_log_file ("without_unspec", CORE prog1);
   print_log_file ("after_peval", CORE prog2);
@@ -119,6 +121,7 @@ let check_input_file filename =
 
 let main
       filename
+      macros
       incl_dirs
       incl_files
       loc_pp
@@ -138,6 +141,7 @@ let main
       log_times
       random_seed
       solver_logging
+      output_decorated_dir
       output_decorated
       astprints
       use_vip
@@ -171,7 +175,7 @@ let main
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
     handle_frontend_error
-      (frontend incl_dirs incl_files astprints use_peval filename state_file magic_comment_char_dollar)
+      (frontend macros incl_dirs incl_files astprints use_peval filename magic_comment_char_dollar)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel
@@ -180,55 +184,32 @@ let main
      | (_, Some times) -> Some (times, "log")
      | _ -> None);
   try
-      let result =
-        let open Resultat in
-         let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, ail_prog) prog4 in
-         (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
-         (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
-         print_log_file ("mucore", MUCORE prog5);
-         let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
-         begin match output_decorated with
-         | None -> ()
-         | Some output_filename ->
-            let oc = Stdlib.open_out output_filename in
-            (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
-            (* List.iter (fun (_, (_, _, _, _, stmt)) ->
-              List.iteri(fun i xs ->
-                List.iteri (fun j (loc, str) ->
-                  Printf.fprintf stderr "[%d] [%d] ==> %s -- '%s'\n"
-                  i j (Cerb_location.simple_location loc) (String.escaped str)
-                ) xs
-              ) (Source_injection.get_magics_of_statement stmt)
-            ) ail_prog.function_definitions; *)
-            begin match
-              Source_injection.(output_injections oc
-                { filename; sigm= ail_prog
-                ; pre_post=[(*TODO(Rini): add here the pprints of functions pre/post conditions*)]
-                ; in_stmt=[(*TODO(Rini): add here the pprints of annotations preceding statements *)] }
-              )
-            with
-            | Ok () ->
-                ()
-            | Error str ->
-                (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
-                prerr_endline str
-            end
-         end;
-         return res
-       in
-       Pp.maybe_close_times_channel ();
-       match result with
-       | Ok () -> exit 0
-       | Error e ->
-         if json then TypeErrors.report_json ?state_file e else TypeErrors.report ?state_file e;
-         match e.msg with
-         | TypeErrors.Unsupported _ -> exit 2
-         | _ -> exit 1
- with
-     | exc ->
-        Pp.maybe_close_times_channel ();
-        Cerb_debug.maybe_close_csv_timing_file_no_err ();
-        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ());
+    let result =
+      let open Resultat in
+      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
+      print_log_file ("mucore", MUCORE prog5);
+      begin match output_decorated with
+      | None -> Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
+      | Some output_filename ->
+          Cerb_colour.without_colour begin fun () ->
+            Executable_spec.main filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
+            return ()
+          end ()
+      end in
+    Pp.maybe_close_times_channel ();
+    match result with
+    | Ok () -> exit 0
+    | Error e ->
+      if json then TypeErrors.report_json ?state_file e
+      else TypeErrors.report ?state_file e;
+      match e.msg with
+      | TypeErrors.Unsupported _ -> exit 2
+      | _ -> exit 1
+  with
+  | exc ->
+      Pp.maybe_close_times_channel ();
+      Cerb_debug.maybe_close_csv_timing_file_no_err ();
+      Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
 
 
 open Cmdliner
@@ -329,7 +310,11 @@ let skip =
   let doc = "skip type-checking of this function (or comma-separated names)" in
   Arg.(value & opt (some string) None & info ["skip"] ~doc)
 
-(* TODO(Christopher/Rini): I'm adding a tentative cli option, rename/change it to whatever you prefer *)
+
+let output_decorated_dir =
+  let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations to the provided directory" in
+  Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
+
 let output_decorated =
   let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations" in
   Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
@@ -359,15 +344,39 @@ let no_inherit_loc =
   Arg.(value & flag & info["no-inherit-loc"] ~doc)
 
 let magic_comment_char_dollar =
-  let doc = "Override CN's default magic comment syntax to be \"/*$ ... $*/\"" in
+  let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
   Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
 
+(* copied from cerberus' executable (backend/driver/main.ml) *)
+let macros =
+    let macro_pair =
+      let parser str =
+	match String.index_opt str '=' with
+	  | None ->
+	      Result.Ok (str, None)
+	  | Some i ->
+	      let macro = String.sub str 0 i in
+	      let value = String.sub str (i+1) (String.length str - i - 1) in
+	      let is_digit n = 48 <= n && n <= 57 in
+	      if i = 0 || is_digit (Char.code (String.get macro 0)) then
+		Result.Error (`Msg "macro name must be a C identifier")
+	      else
+		Result.Ok (macro, Some value) in
+      let printer ppf = function
+	| (m, None)   -> Format.pp_print_string ppf m
+	| (m, Some v) -> Format.fprintf ppf "%s=%s" m v in
+      Arg.(conv (parser, printer)) in
+  let doc = "Adds  an  implicit  #define  into the predefines buffer which is \
+             read before the source file is preprocessed." in
+  Arg.(value & opt_all macro_pair [] & info ["D"; "define-macro"]
+         ~docv:"NAME[=VALUE]" ~doc)
 
 let () =
   let open Term in
   let check_t =
     const main $
       file $
+      macros $
       incl_dirs $
       incl_files $
       loc_pp $
@@ -387,6 +396,7 @@ let () =
       log_times $
       random_seed $
       solver_logging $
+      output_decorated_dir $
       output_decorated $
       astprints $
       use_vip $

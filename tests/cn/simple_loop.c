@@ -10,3 +10,6 @@ simple_loop (int y)
   return y;
 }
 
+int main(void)
+{
+}

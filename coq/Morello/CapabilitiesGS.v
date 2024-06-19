@@ -256,4 +256,6 @@ Module Type CAPABILITY_GS
 
   Parameter cap_invalidate_preserves_value: forall c, cap_get_value c = cap_get_value (cap_invalidate c).
 
+  Parameter cap_get_set_value: forall (c:t) (a:V.t), cap_get_value (cap_set_value c a) = a.
+
 End CAPABILITY_GS.

@@ -209,7 +209,7 @@ type asm_qualifier =
 %type<Cabs.cabs_type_specifier>
   struct_or_union_specifier
 
-%type<Annot.attributes -> Symbol.identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
+%type<Annot.attributes -> Symbol.identifier option -> (Cabs.struct_declaration list) option -> Lexing.position -> Cabs.cabs_type_specifier>
   struct_or_union
 
 %type<Cabs.struct_declaration list>
@@ -961,23 +961,23 @@ struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     iopt= general_identifier? LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
     { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
-      ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
+      ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) $endpos }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
-    { ctor (to_attrs attr_opt) (Some i) None }
+    { ctor (to_attrs attr_opt) (Some i) None $endpos }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     iopt= general_identifier? LBRACE RBRACE
     (* GCC extension *)
     (* TODO: forbid union *)
-    { ctor (to_attrs attr_opt) iopt (Some []) }
+    { ctor (to_attrs attr_opt) iopt (Some []) $endpos }
 ;
 
 struct_or_union:
 | STRUCT
-    { fun attrs x y -> TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
+    { fun attrs x y epos -> TSpec (Cerb_location.(region ($startpos, epos) NoCursor),
                               TSpec_struct (attrs, x, y)) }
 | UNION
-    { fun attrs x y -> TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
+    { fun attrs x y epos -> TSpec (Cerb_location.(region ($startpos, epos) NoCursor),
                               TSpec_union (attrs, x, y)) }
 ;
 
@@ -1971,18 +1971,22 @@ rel_expr:
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_ge, e1, e2))) }
 
-bool_bin_expr:
+    
+bool_and_expr:
 | e= rel_expr
     { e }
-| e1= bool_bin_expr AMPERSAND_AMPERSAND e2= rel_expr
+| e1= bool_and_expr AMPERSAND_AMPERSAND e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
-| e1= bool_bin_expr PIPE_PIPE e2= rel_expr
+bool_or_expr:
+| e = bool_and_expr
+    { e }
+| e1= bool_or_expr PIPE_PIPE e2= bool_and_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
 list_expr:
-| e= bool_bin_expr
+| e= bool_or_expr
     { e }
 | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
@@ -2170,8 +2174,9 @@ cn_function:
   cn_func_args= delimited(LPAREN, cn_args, RPAREN)
   cn_func_body= cn_option_func_body
     { (* TODO: check the name starts with lower case *)
-      let loc = Cerb_location.point $startpos(str) in
-      { cn_func_loc= loc
+      let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      { cn_func_magic_loc= Cerb_location.unknown
+      ; cn_func_loc= loc
       ; cn_func_name= str
       ; cn_func_return_bty
       ; cn_func_attrs
@@ -2185,8 +2190,9 @@ cn_predicate:
   cn_pred_iargs= delimited(LPAREN, cn_args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses
     { (* TODO: check the name starts with upper case *)
-      let loc = Cerb_location.point $startpos(str) in
-      { cn_pred_loc= loc
+      let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      { cn_pred_magic_loc= Cerb_location.unknown
+      ; cn_pred_loc= loc
       ; cn_pred_name= Symbol.Identifier (loc, str)
       ; cn_pred_attrs
       ; cn_pred_output
@@ -2200,7 +2206,8 @@ cn_lemma:
   CN_ENSURES cn_lemma_ensures=nonempty_list(condition)
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.point $startpos(str) in
-      { cn_lemma_loc= loc
+      { cn_lemma_magic_loc= Cerb_location.unknown
+      ; cn_lemma_loc= loc
       ; cn_lemma_name= str
       ; cn_lemma_args
       ; cn_lemma_requires
@@ -2209,7 +2216,8 @@ cn_datatype:
 | CN_DATATYPE nm= cn_variable
   cases= delimited(LBRACE, cn_cons_cases, RBRACE)
     {
-      { cn_dt_loc= Cerb_location.point $startpos($1)
+      { cn_dt_magic_loc= Cerb_location.unknown
+      ; cn_dt_loc= Cerb_location.(region ($startpos, $endpos) NoCursor)
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
 cn_fun_spec:
@@ -2219,7 +2227,8 @@ cn_fun_spec:
   CN_REQUIRES cn_spec_requires=nonempty_list(condition)
   CN_ENSURES cn_spec_ensures=nonempty_list(condition)
     { let loc = Cerb_location.point $startpos(str) in
-      { cn_spec_loc= loc
+      { cn_spec_magic_loc= Cerb_location.unknown
+      ; cn_spec_loc= loc
       ; cn_spec_name= str
       ; cn_spec_args
       ; cn_spec_requires
@@ -2231,7 +2240,8 @@ cn_type_synonym:
   EQ
   ty= opt_paren(base_type)
     { let loc = Cerb_location.point $startpos(str) in
-      { cn_tysyn_loc= loc
+      { cn_tysyn_magic_loc= Cerb_location.unknown
+      ; cn_tysyn_loc= loc
       ; cn_tysyn_name= str
       ; cn_tysyn_rhs= ty } }
 

@@ -1357,7 +1357,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         (* match Mem.case_funsym_opt mem_st pv with
                           | Just sym ->
                               case_funptrval sym
-                          | None ->
+                          | Nothing ->
                               error (show addr ^ " does not point to a function (Eccall)")
                         end *) )
                   | _ ->

@@ -13,3 +13,9 @@ int g ()
 {
   return ite(0,20,30);
 }
+
+int main(void)
+{
+  int r1 = f();
+  int r2 = g();
+}

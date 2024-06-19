@@ -1,18 +1,18 @@
-FROM ubuntu
+FROM ubuntu:22.04
+
 RUN apt-get update
 RUN apt-get upgrade -y
 RUN apt-get install -y opam libgmp-dev libmpfr-dev
-RUN mkdir /etc/sudoers.d/ && \
-  echo 'user1 ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/user1 && \
-  chmod 440 /etc/sudoers.d/user1 && \
-  chown root:root /etc/sudoers.d/user1 && \
-  adduser --disabled-password --gecos '' user1 && \
-  passwd -l user1 && \
-  chown -R user1:user1 /home/user1
-USER user1
-ENV HOME /home/user1
-WORKDIR /home/user1
+
+ENV OPAMCONFIRMLEVEL=unsafe-yes
 RUN opam init --disable-sandboxing
-RUN eval `opam env` && \
-  opam repository add rems https://github.com/rems-project/opam-repository.git && \
-  opam install -y ocamlfind ocamlbuild pprint yojson ppx_sexp_conv sexplib ppx_deriving cmdliner menhir z3 dune lem sha apron
+RUN opam install dune lem
+
+ADD . /opt/cerberus
+WORKDIR /opt/cerberus
+RUN opam install --deps-only  ./cerberus-lib.opam ./cn.opam
+RUN eval `opam env` \
+  && make install \
+  && make install_cn
+
+WORKDIR /opt

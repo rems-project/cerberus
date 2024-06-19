@@ -19,3 +19,8 @@ f (void)
   return 1;
 }
 
+int main(void)
+/*@ trusted; @*/
+{
+  int r = f();
+}

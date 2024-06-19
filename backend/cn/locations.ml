@@ -32,7 +32,7 @@ let dirs_to_ignore =
 let good_location (loc : Cerb_location.t) =
   match Cerb_location.get_filename loc, Cerb_location.is_other loc with
   | Some file, _ -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
-  | _, Some other -> true
+  | _, Some _other -> true
   | None, _ -> false
 
 

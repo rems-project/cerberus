@@ -15,4 +15,8 @@ f (unsigned int x, unsigned int y)
   return;
 }
 
-
+int main(void)
+/*@ trusted; @*/
+{
+  f(4, 5);
+}

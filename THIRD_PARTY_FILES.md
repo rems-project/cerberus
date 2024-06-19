@@ -83,3 +83,12 @@ In the test/ directory:
 | BSD 2-Clause | tests/csmith/runtime/custom_stdint_x86.h        | Csmith                               |
 | LGPL         | tests/csmith/runtime/custom_limits.h            | Csmith                               |
 | BSD 2-Clause | tests/csmith/runtime/safe_math.h                | Csmith                               |
+
+---
+
+In the CN executable checks runtime:
+
+| License      | Files                                          - | From                                 |
+| ------------ | ------------------------------------------------ | ------------------------------------ |
+| MIT          | runtime/libcn/src/hash_table.c                   | benhoyt                              |
+| MIT          | runtime/libcn/include/cn-executable/hash_table.h | benhoyt                              |

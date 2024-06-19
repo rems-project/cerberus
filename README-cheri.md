@@ -20,17 +20,17 @@ Print _Core_ elaboration for `test.c` using ISO C semantics:
 
 ## Local install
 
-To build Cerberus, you need opam (>= 2.0.0, see
+To build Cerberus, you need opam >= 2.0.0 (see
 [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml
-(>= 4.12.0). Current developement is using Coq 8.16.1.
+(>= 4.12.0). The developers are currently using OCaml 5.1.1 and Coq 8.18.0.
 
 First set up additional repositories for Coq and Iris packages:
 
-```sh
+```bash
 opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
 opam pin -ny coq-struct-tact https://github.com/uwplse/StructTact.git
 opam repo add --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
-opam pin -ny coq-sail-stdpp https://github.com/rems-project/coq-sail.git
+opam pin -ny coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
 opam pin -ny coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
 ```
 

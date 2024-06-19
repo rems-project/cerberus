@@ -9,3 +9,9 @@ int for_with_decl()
   }; 
   return acc;
 }
+
+int main(void)
+/*@ trusted; @*/
+{
+  int r = for_with_decl();
+}

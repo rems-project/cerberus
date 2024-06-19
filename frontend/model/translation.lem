@@ -218,6 +218,12 @@ let rec translate_constant cst =
         end
     | A.ConstantUnion tag_sym memb_ident pe ->
         Caux.mk_specified_pe (Caux.mk_union_pe tag_sym memb_ident (translate_constant pe))
+    | A.ConstantPredefined A.PConstantFalse ->
+        (* STD C23 §6.4.4.5#3 *)
+        Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival 0))))
+    | A.ConstantPredefined A.PConstantTrue ->
+        (* STD C23 §6.4.4.5#3 *)
+        Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival 1))))
   end
 
 

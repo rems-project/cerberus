@@ -235,14 +235,14 @@ let time_f_debug level msg f x =
 
 let time_log_start kind detail =
   match !times with
-  | Some (channel, "log", _) ->
+  | Some (_channel, "log", _) ->
     write_time_log_start kind detail;
     Unix.gettimeofday ()
   | _ -> 0.0
 
 let time_log_end prev_time =
   match !times with
-  | Some (channel, "log", _) ->
+  | Some (_channel, "log", _) ->
     let fin_time = Unix.gettimeofday () in
     let d = fin_time -. prev_time in
     write_time_log_end (Some d)
@@ -284,7 +284,7 @@ let warn (loc : Locations.t) msg =
   if Locations.is_unknown_location loc then () else print stderr !^pos
 
 let loc_headline (loc : Locations.t) msg =
-  let (head, pos) = Locations.head_pos_of_location loc in
+  let (head, _pos) = Locations.head_pos_of_location loc in
   (format [Bold] head ^^^ msg)
 
 

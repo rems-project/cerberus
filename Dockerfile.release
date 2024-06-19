@@ -1,11 +1,7 @@
 FROM cerberus:deps
 
-COPY --chown=user1 . /home/opam/cerberus/
-RUN eval `opam env` && \
-  cd /home/opam/cerberus/ && \
-  make && \
-  make install
-COPY --chown=user1 docker_entry_point.sh /home/user1/
-RUN chmod +x docker_entry_point.sh
+RUN rm -rf /opt/cerberus
+COPY docker_entry_point.sh /opt/docker_entry_point.sh
+RUN chmod +x /opt/docker_entry_point.sh
 WORKDIR /data
-ENTRYPOINT ["/home/user1/docker_entry_point.sh"]
+ENTRYPOINT ["/opt/docker_entry_point.sh"]

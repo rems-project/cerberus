@@ -43,25 +43,7 @@ type resource_history =
   }
 
 
-type trace_item = 
-  | Stmt
-  | Expr 
-  | Read of IndexTerms.t * IndexTerms.t
-  | Write of IndexTerms.t * IndexTerms.t
-  | Create of IndexTerms.t 
-  | Kill of IndexTerms.t
-  | Call of Sym.t * IndexTerms.t list
-  | Return of IndexTerms.t
 
-
-type label_kind = CF.Annot.label_annot
-
-type per_label_trace = {
-  label: (Locations.t * label_kind) option; (*None for main function body*)
-  trace: (trace_item * Locations.t) list;
-}
-
-type trace = per_label_trace list
 
 type t = {
     computational : (basetype_or_value * l_info) SymMap.t;
@@ -70,7 +52,7 @@ type t = {
     resource_history : resource_history IntMap.t;
     constraints : LCSet.t;
     global : Global.t;
-    trace : trace; (* most recent first*)
+    where: Where.t;
   }
 
 
@@ -87,7 +69,7 @@ let empty =
     resource_history = IntMap.empty;
     constraints = LCSet.empty;
     global = Global.empty;
-    trace = [];
+    where = Where.empty;
   }
 
 
@@ -164,21 +146,26 @@ let add_c c (ctxt : t) =
   else { ctxt with constraints = LCSet.add c s }
 
 
-let add_label_to_trace label ctxt =
-  { ctxt with trace = { label; trace = [] } :: ctxt.trace }
+
+let modify_where (f : Where.t -> Where.t) ctxt = 
+  { ctxt with where = f ctxt.where }
 
 
-let modify_current_label_trace f ctxt = 
-  let label, labels = match ctxt.trace with
-    | hd::tl -> hd, tl
-    | [] -> assert false
-  in
-  { ctxt with trace = f label :: labels } 
+(* let add_label_to_trace label ctxt = *)
+(*   { ctxt with trace = { label; trace = [] } :: ctxt.trace } *)
 
-let add_trace_item_to_trace i ctxt =
-  modify_current_label_trace (fun label ->
-      { label with trace = i :: label.trace}
-    ) ctxt
+
+(* let modify_current_label_trace f ctxt =  *)
+(*   let label, labels = match ctxt.trace with *)
+(*     | hd::tl -> hd, tl *)
+(*     | [] -> assert false *)
+(*   in *)
+(*   { ctxt with trace = f label :: labels }  *)
+
+(* let add_trace_item_to_trace i ctxt = *)
+(*   modify_current_label_trace (fun label -> *)
+(*       { label with trace = i :: label.trace} *)
+(*     ) ctxt *)
 
 
 

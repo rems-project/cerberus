@@ -7,7 +7,7 @@ type t = False
 [@@deriving eq, ord]
 
 
-let subst substitution = function
+let subst _substitution = function
   | False -> False
 
 let free_vars = function

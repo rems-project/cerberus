@@ -169,7 +169,7 @@ let with_regions_and_cursor locs loc_opt =
 let to_cartesian loc =
   let point_of_pos pos = Lexing.(pos.pos_lnum-1, pos.pos_cnum-pos.pos_bol) in
   match loc with
-    | Loc_point p -> Some (point_of_pos p, (0,0))
+    | Loc_point p -> Some (point_of_pos p, point_of_pos p)
     | Loc_region (p1, p2, _) -> Some (point_of_pos p1, point_of_pos p2)
     | _ -> None
 

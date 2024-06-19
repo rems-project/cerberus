@@ -10,6 +10,9 @@ open TypeErrors
 
 type solver = Solver.solver
 
+
+
+
 type s = {
     typing_context: Context.t;
     solver : solver option;
@@ -18,6 +21,7 @@ type s = {
     found_equalities : EqTable.table;
     movable_indices: (RET.predicate_name * IT.t) list;
     unfold_resources_required: bool;
+    log : Explain.log;
   }
 
 let empty_s (c : Context.t) =
@@ -29,12 +33,13 @@ let empty_s (c : Context.t) =
     found_equalities = EqTable.empty;
     movable_indices = [];
     unfold_resources_required = false;
+    log = [];
   }
 
 
 type 'a t = s -> ('a * s, TypeErrors.t) Result.t
 type 'a m = 'a t
-type failure = Context.t -> TypeErrors.t
+type failure = Context.t * Explain.log -> TypeErrors.t
 
 
 (* basic functions *)
@@ -43,7 +48,7 @@ let return (a : 'a) : ('a) t =
   fun s -> Ok (a, s)
 
 let fail (f : failure) : ('a) t =
-  fun s -> Error (f s.typing_context)
+  fun s -> Error (f (s.typing_context,s.log))
 
 let bind (m : ('a) t) (f : 'a -> ('b) t) : ('b) t =
   fun s ->
@@ -200,6 +205,19 @@ let _modify_global (f : Global.t -> Global.t) : unit t =
   set_global (f g)
 
 
+let record_action ((a : Explain.action), (loc : Loc.t)) : unit t =
+  modify (fun s ->
+      { s with log = (Action (a,loc)) :: s.log }
+    )
+
+let modify_where (f : Where.t -> Where.t) : unit t =
+  modify (fun s ->
+      let log = (Explain.State s.typing_context) :: s.log in
+      let typing_context = Context.modify_where f s.typing_context in
+      { s with log; typing_context }
+    )
+
+
 (* convenient functions for global typing context *)
 
 let get_logical_function_def loc id =
@@ -229,7 +247,7 @@ let get_datatype_constr loc tag =
 
 
 
-let get_member_type loc tag member layout : (Sctypes.t) m =
+let get_member_type loc _tag member layout : (Sctypes.t) m =
   let member_types = Memory.member_types layout in
   match List.assoc_opt Id.equal member member_types with
   | Some membertyp -> return membertyp
@@ -356,11 +374,13 @@ let remove_as = iterM remove_a
 
 
 
-let add_label_to_trace label = 
-  modify_typing_context (fun c -> Context.add_label_to_trace label c)
+(* let add_label_to_trace label =  *)
+(*   modify_typing_context (fun c -> Context.add_label_to_trace label c) *)
 
-let add_trace_item_to_trace i = 
-  modify_typing_context (fun c -> Context.add_trace_item_to_trace i c)
+(* let add_trace_item_to_trace i =  *)
+(*   modify_typing_context (fun c -> Context.add_trace_item_to_trace i c) *)
+
+
 
 
 
@@ -416,7 +436,7 @@ let add_r_internal loc (r, RE.O oargs) =
 
 
 
-let add_movable_index loc (pred, ix) =
+let add_movable_index _loc (pred, ix) =
   let@ ixs = get_movable_indices () in
   let@ () = set_movable_indices ((pred, ix) :: ixs) in
   set_unfold_resources ()
@@ -430,11 +450,11 @@ let add_rs loc rs =
   let@ () = iterM (add_r_internal loc) rs in
   set_unfold_resources ()
 
-let add_c loc c =
+let add_c _loc c =
   let@ () = add_c_internal c in
   set_unfold_resources ()
 
-let add_cs loc cs =
+let add_cs _loc cs =
   let@ () = iterM add_c_internal cs in
   set_unfold_resources ()
 
@@ -480,7 +500,7 @@ let prove_or_model_with_past_model loc m =
     end
   in
   let res2 lc = match res lc with
-    | `Counterex m -> `False
+    | `Counterex _m -> `False
     | `True -> `True
   in
   return (res, res2)
@@ -663,7 +683,7 @@ let do_unfold_resources loc =
   let rec aux () =
     let@ s = get_typing_context () in
     let@ movable_indices = get_movable_indices () in
-    let@ provable_f = provable_internal (Locations.other __FUNCTION__) in
+    let@ _provable_f = provable_internal (Locations.other __FUNCTION__) in
     let (resources, orig_ix) = s.resources in
     let _orig_hist = s.resource_history in
     Pp.debug 8 (lazy (Pp.string "-- checking resource unfolds now --"));
@@ -681,7 +701,7 @@ let do_unfold_resources loc =
               (keep, (i, pname, unpackable) :: unpack, extract)
           | None ->
               let re_reduced, extracted =
-                Pack.extractable_multiple s.global provable_m movable_indices re in
+                Pack.extractable_multiple provable_m movable_indices re in
               let keep' = match extracted with
                | [] -> (re_reduced, i) :: keep
                | _ ->

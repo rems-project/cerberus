@@ -30,7 +30,7 @@ let rec subst i_subst =
        let it = IT.subst substitution it in
        let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
        Define ((name, it), info, aux substitution t)
-    | Resource ((name, (re, bt)),((loc, _) as info), t) ->
+    | Resource ((name, (re, bt)), info, t) ->
        let re = RET.subst substitution re in
        let name, t = suitably_alpha_rename i_subst substitution.relevant name t in
        let t = aux substitution t in
@@ -125,13 +125,13 @@ let alpha_unique ss =
 
 let binders i_binders i_subst =
   let rec aux = function
-    | Define ((s, it), (loc, _), t) ->
+    | Define ((s, it), _, t) ->
        let (s, t) = alpha_rename i_subst s t in
        (Id.id (Sym.pp_string s), IT.bt it) :: aux t
-    | Resource ((s, (re, bt)), (loc, _), t) ->
+    | Resource ((s, (_, bt)), _, t) ->
        let (s, t) = alpha_rename i_subst s t in
        (Id.id (Sym.pp_string s), bt) :: aux t
-    | Constraint (lc, _, t) ->
+    | Constraint (_, _, t) ->
        aux t
     | I i ->
        i_binders i
@@ -168,7 +168,7 @@ let rec r_resource_requests r =
   match r with
   | Define (_, _, t) ->
      r_resource_requests t
-  | Resource (resource, info, t) ->
+  | Resource (resource, _info, t) ->
      resource :: r_resource_requests t
   | Constraint (_, _, t) ->
      r_resource_requests t

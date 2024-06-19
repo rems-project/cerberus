@@ -18,3 +18,8 @@ void foo(enum flags flag, u32 level)
 	}
 }
 
+int main(void)
+/*@ trusted; @*/
+{
+  foo(flag_1, 1);
+}

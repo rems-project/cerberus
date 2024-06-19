@@ -80,7 +80,7 @@ let array_to_list_def =
     | None ->
       let reason = "map/array operation" in
       let expected = "map/array" in
-      fail {loc; msg = Illtyped_it {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected; reason; o_ctxt = None}}
+      fail {loc; msg = Illtyped_it {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected; reason}}
     | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt loc)
   ))
 

@@ -10,6 +10,7 @@ open Strfcap
 open CoqSwitches
 open Switches
 open ZMap
+open AMap
 
 module CerbSwitchesProxy = struct
 
@@ -31,6 +32,7 @@ module CerbSwitchesProxy = struct
     | SW_revocation `INSTANT -> SW_revocation INSTANT
     | SW_revocation `CORNUCOPIA -> SW_revocation CORNUCOPIA
     | SW_at_magic_comments -> SW_at_magic_comments
+    | SW_magic_comment_char_dollar -> SW_magic_comment_char_dollar
 
   let toCoq_switches (cs: cerb_switch list): CoqSwitches.cerb_switches_t =
     let open ListSet in
@@ -963,7 +965,7 @@ module CHERIMorello : Memory = struct
 
   let print_allocations str st =
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
-    let l = ZMap.elements st.MM.allocations in
+    let l = ZMap.M.elements st.MM.allocations in
     List.iter (fun (aid,a) ->
         Printf.fprintf stderr "@%s: 0x%s,%s (%s,%s%s)\n"
           (Z.format "%d" aid)
@@ -980,7 +982,7 @@ module CHERIMorello : Memory = struct
 
   let print_bytemap str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
-    let l = ZMap.elements st.bytemap in
+    let l = AMap.M.elements st.bytemap in
     List.iter (fun (addr, b) ->
         Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
           (Z.format "%x" addr)
@@ -997,7 +999,7 @@ module CHERIMorello : Memory = struct
   (** Prints provided capability tags table *)
   let print_captags str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
-    let l = ZMap.elements st.capmeta in
+    let l = AMap.M.elements st.capmeta in
     List.iter (fun (addr, (b,gs)) ->
         Printf.fprintf stderr "@0x%s ==> %s%s\n"
           (Z.format "%x" addr)

@@ -125,7 +125,7 @@ let rec investigate_term cfg t =
       return (List.concat trans_opts @ [get_eq_opt] @ split_opts)
   in
   let@ pred_opts = match IT.term t with
-    | IT.Apply (nm, xs) -> investigate_pred cfg nm t
+    | IT.Apply (nm, _xs) -> investigate_pred cfg nm t
     | _ -> return []
   in
   let@ ite_opts = investigate_ite cfg t in
@@ -135,7 +135,7 @@ let rec investigate_term cfg t =
   else ();
   continue_with opts cfg
 
-and investigate_eq_side cfg (side_nm, t, t2) =
+and investigate_eq_side _cfg (side_nm, t, t2) =
   let@ eq_group = value_eq_group None t in
   let xs = ITSet.elements eq_group |> List.filter (fun x -> not (IT.equal t x)) in
   let open Pp in
@@ -199,7 +199,7 @@ and investigate_pred cfg nm t =
 
 and investigate_ite cfg t =
   let ites = IT.fold (fun _ acc t -> match IT.term t with
-    | ITE (x, y, z) -> x :: acc
+    | ITE (x, _y, _z) -> x :: acc
     | _ -> acc) [] [] t in
   let@ g = get_global () in
   let sc x b = Simplify.{(default g) with simp_hook = (fun y ->
@@ -222,7 +222,7 @@ and investigate_ite cfg t =
 
 let investigate_lc cfg lc = match lc with
   | LC.T t -> investigate_term cfg t
-  | LC.Forall (q, t) -> investigate_term cfg t
+  | LC.Forall (_q, t) -> investigate_term cfg t
 
 let diag_string = ref (None : string option)
 

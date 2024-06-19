@@ -13,14 +13,14 @@ let to_string (Symbol (_, n, sd)) =
 
 let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
-  let maybe_add_number name = 
+  let maybe_add_number name =
    if !Cerb_debug.debug_level > 4 then
       add_number name
      else
       name
   in
   match sd with
-    | SD_Id str 
+    | SD_Id str
     | SD_ObjectAddress str
     | SD_FunArgValue str ->
         maybe_add_number str
@@ -29,6 +29,8 @@ let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
           "(unnamed tag at " ^ Cerb_location.location_to_string loc ^ ")"
         else
           "__cerbty_unnamed_tag_" ^ string_of_int n
+    | SD_CN_Id str ->
+        str
     | _ ->
         "a_" ^ string_of_int n
 

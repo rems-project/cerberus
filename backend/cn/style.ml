@@ -11,7 +11,9 @@ html {
 }
 
 body {
-    padding: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 10px;
     margin: 0;
     max-width: 800px;
 }
@@ -55,6 +57,26 @@ th {
     font-style: italic;
 }
 
+.pagelinks {
+    padding-top: 10px;
+    padding-bottom: 30px;
+}
+
+#pages .page { display: none }
+#pages .page:target { display: block }
+
+#pages .pagelinks .button, 
+#pages .pagelinks .inactive_button { 
+  padding-top: 5px; 
+  padding-bottom: 5px;
+  padding-left: 10px; 
+  padding-right: 10px;
+  display: inline-block;
+}
+
+
+
+
 
 @media (prefers-color-scheme: dark) {
 
@@ -79,6 +101,26 @@ th {
     tr:hover {
         background-color: #101044;
     }
+
+    #pages .pagelinks .button, 
+    #pages .pagelinks .inactive_button { 
+        background-color: white;
+        border: 1px solid #EEEEEE;
+    }
+
+    #pages .pagelinks .button:hover {
+        background-color: #BBBBBB;
+    }
+
+    #pages .pagelinks .button a { 
+        color: black;
+        text-decoration: none;
+    }
+
+    .pagelinks .inactive_button {
+        color: #AAAAAA;
+    }
+
 }
 
 
@@ -105,6 +147,25 @@ th {
 
     tr:hover {
         background-color: #E2F0FF;
+    }
+
+    #pages .pagelinks .button, 
+    #pages .pagelinks .inactive_button { 
+        background-color: black;
+        border: 1px solid #111111;
+    }
+
+    #pages .pagelinks .button:hover {
+        background-color: #444444;
+    }
+
+    #pages .pagelinks .button a { 
+        color: white;
+        text-decoration: none;
+    }
+
+    .pagelinks .inactive_button {
+        color: #555555;
     }
 }
 "

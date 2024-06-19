@@ -9,8 +9,11 @@ let string_of_integerType_raw ity =
 let string_of_ctype ?(is_human=false) qs ty =
   Pp_utils.to_plain_string (pp_ctype ~is_human qs ty)
 
-let string_of_expression e =
-  Pp_utils.to_plain_string (pp_expression e)
+let string_of_id sym
+  = Pp_utils.to_plain_string (pp_id sym)
+
+let string_of_expression ?(executable_spec=false) e =
+  Pp_utils.to_plain_string (pp_expression ~executable_spec e)
 
 let string_of_statement s =
   Pp_utils.to_plain_string (pp_statement s)

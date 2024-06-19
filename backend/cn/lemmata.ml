@@ -59,7 +59,7 @@ module PrevDefs = struct
     {st with dt_params = x :: st.dt_params})
 
   let get_dt_param it m_nm = bind get (fun st ->
-    return (List.find_opt (fun (it2, m2, sym) -> IT.equal it it2 && Id.equal m_nm m2)
+    return (List.find_opt (fun (it2, m2, _sym) -> IT.equal it it2 && Id.equal m_nm m2)
         st.dt_params |> Option.map (fun (_, _, sym) -> sym)))
 
   let debug_dt_params i = bind get (fun st ->
@@ -188,7 +188,7 @@ let init_scan_res = {res = None; res_coerce = None}
    of uninterpreted functions used. *)
 let scan (ftyp : AT.lemmat) =
   let rec scan_lrt t = match t with
-    | LRT.Define ((_, it), _, t) -> scan_lrt t
+    | LRT.Define ((_, _it), _, t) -> scan_lrt t
     | LRT.Resource ((name, _), _, t) -> {(scan_lrt t) with res = Some (Sym.pp_string name)}
     | LRT.Constraint (_, _, t) -> scan_lrt t
     | LRT.I -> init_scan_res
@@ -393,7 +393,7 @@ let tuple_syn xs =
 
 let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.doc) (ys : 'a list) =
   let n_ys = List.mapi (fun i y -> (i, y)) ys in
-  match List.find_opt (fun (i, y) -> eq x y) n_ys with
+  match List.find_opt (fun (_i, y) -> eq x y) n_ys with
     | None -> fail "tuple element not found" (pp x)
     | Some (i, _) -> (i, List.length ys)
 
@@ -479,7 +479,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
   | BaseTypes.Datatype tag ->
     let@ () = ensure_datatype global list_mono (fst loc_info) tag in
     return (Sym.pp tag)
-  | BaseTypes.List bt2 -> begin match mono_list_bt list_mono bt with
+  | BaseTypes.List _bt2 -> begin match mono_list_bt list_mono bt with
     | Some bt3 -> f bt3
     | _ -> do_fail "polymorphic list" bt
   end
@@ -573,7 +573,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
   in
   return op_nm
 
-let ensure_list global list_mono loc bt =
+let ensure_list global list_mono _loc bt =
   let@ dt_bt = match mono_list_bt list_mono bt with
     | Some x -> return x
     | None -> fail ("ensure_list: not a monomorphised list") (BT.pp bt)
@@ -642,7 +642,7 @@ let ensure_pred global list_mono loc name aux =
              def.args in
          return (defn (Sym.pp_string name) args None rhs)
        )) []
-  | Rec_Def body ->
+  | Rec_Def _body ->
     fail_m () def.loc (Pp.item "rec-def not yet handled" (Sym.pp name))
   end
 
@@ -739,7 +739,7 @@ let it_to_coq loc global list_mono it =
     let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
       else parensM (rets (Z.to_string z))
     in
-    let check_pos t f =
+    let check_pos _t f =
       (* FIXME turning this off for now to test stuff
       let t = unfold_if_possible global t in
       match IT.is_z t with
@@ -833,7 +833,7 @@ let it_to_coq loc global list_mono it =
         parensM (return (flow (comma ^^ break 1) xs))
     | IT.StructMember (t, m) ->
         let tag = BaseTypes.struct_bt (IT.bt t) in
-        let (mems, bts) = get_struct_xs global.struct_decls tag in
+        let (mems, _bts) = get_struct_xs global.struct_decls tag in
         let ix = find_tuple_element Id.equal m Id.pp mems in
         if List.length mems == 1
         then aux t
@@ -842,7 +842,7 @@ let it_to_coq loc global list_mono it =
         parensM (build [rets op_nm; aux t])
     | IT.StructUpdate ((t, m), x) ->
         let tag = BaseTypes.struct_bt (IT.bt t) in
-        let (mems, bts) = get_struct_xs global.struct_decls tag in
+        let (mems, _bts) = get_struct_xs global.struct_decls tag in
         let ix = find_tuple_element Id.equal m Id.pp mems in
         if List.length mems == 1
         then aux x
@@ -1088,7 +1088,7 @@ type scanned = {
 
 let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemmat)) list) =
   (* let open Mu in *)
-  let (filename, kinds) = parse_directions directions in
+  let (filename, _kinds) = parse_directions directions in
   let channel = open_out filename in
   Pp.print channel (header filename);
   Pp.debug 1 (lazy (Pp.item "lemmata generation"

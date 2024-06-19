@@ -5,16 +5,9 @@
   (modes exe)
   (public_name cn)
   (package cn)
-  (flags (:standard -w -37 -w -27 -open Monomorphic.Int))
-  (libraries cmdliner str unix z3 monomorphic
+  (flags (:standard -w -37 -open Monomorphic.Int))
+  (libraries cmdliner str unix z3 monomorphic result
    cerb_frontend cerb_backend mem_concrete menhirLib cerb_util ocamlgraph)
   (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord ppx_deriving.map ppx_deriving.fold))
 )
-
-;; from parsers/core/dune
-
-(ocamllex assertion_lexer)
-(menhir
- (flags (--external-tokens Assertion_parser_util --explain --dump))
- (modules assertion_parser))
 

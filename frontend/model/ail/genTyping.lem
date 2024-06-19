@@ -499,6 +499,12 @@ let rec typecheck_constant loc cst =
           (* TODO: need to check that the members type match ... *)
         typecheck_constant loc cst >>= fun gty_membr ->
         E.return (GenTypes.GenUnion tag_sym)
+    | ConstantPredefined PConstantFalse ->
+        (* STD C23 §6.4.4.5#3 *)
+        E.return (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete Bool)))
+    | ConstantPredefined PConstantTrue ->
+        (* STD C23 §6.4.4.5#3 *)
+        E.return (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete Bool)))
   end
 
 val annotate_rvalue:

@@ -17,7 +17,7 @@ type clause = {
     packing_ft : LAT.packing_ft
   }
 
-let pp_clause {loc; guard; packing_ft} =
+let pp_clause {loc=_; guard; packing_ft} =
   item "condition" (IT.pp guard) ^^ comma ^^^
   item "return type" (LAT.pp IT.pp packing_ft)
 
@@ -71,16 +71,6 @@ let instantiate_clauses def ptr_arg iargs = match def.clauses with
     in
     Some (List.map (subst_clause subst) clauses)
   | None -> None
-
-
-
-
-
-
-let predicate_list struct_decls logical_pred_syms =
-  []
-
-
 
 
 open IndexTerms

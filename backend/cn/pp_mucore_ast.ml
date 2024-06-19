@@ -47,9 +47,9 @@ module PP = struct
     | M_OVarray lvals ->
         Dnode ( pp_pure_ctor "OVarray"
               , List.map dtree_of_object_value lvals)
-    | M_OVstruct (tag_sym, xs) ->
+    | M_OVstruct (_tag_sym, _xs) ->
         Dleaf (pp_pure_ctor "OVstruct" ^^^ !^ (ansi_format [Red] "TODO"))
-    | M_OVunion (tag_sym, membr_ident, mval) ->
+    | M_OVunion (_tag_sym, _membr_ident, _mval) ->
         Dleaf (pp_pure_ctor "OVunion" ^^^ !^ (ansi_format [Red] "TODO"))
 
   and dtree_of_value (M_V (_bty, v)) =
@@ -62,13 +62,13 @@ module PP = struct
         Dleaf (pp_pure_ctor "Vtrue")
     | M_Vfalse ->
         Dleaf (pp_pure_ctor "Vfalse")
-    | M_Vlist (bTy, cvals) ->
+    | M_Vlist (_bTy, _cvals) ->
         Dleaf (pp_pure_ctor "Vlist" ^^^ !^ (ansi_format [Red] "TODO"))
-    | M_Vtuple cvals ->
+    | M_Vtuple _cvals ->
         Dleaf (pp_pure_ctor "Vtuple" ^^^ !^ (ansi_format [Red] "TODO"))
-    | M_Vctype ctype ->
+    | M_Vctype _ctype ->
         Dleaf (pp_pure_ctor "Vctype" ^^^ !^ (ansi_format [Red] "TODO"))
-    | M_Vfunction_addr sym ->
+    | M_Vfunction_addr _sym ->
         Dleaf (pp_pure_ctor "Vfunction_addr"  ^^^ !^ (ansi_format [Red] "TODO"))
 
   let string_of_bop = Pp_core_ast.string_of_bop
@@ -88,13 +88,13 @@ module PP = struct
             Dleaf (pp_ctor "PEsym" ^^^ pp_symbol sym)
         | M_PEval cval ->
             Dnode (pp_ctor "PEval", [dtree_of_value cval])
-        | M_PEconstrained xs ->
+        | M_PEconstrained _xs ->
             Dleaf (pp_ctor "PEconstrained" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEctor (ctor, pes) ->
             Dnode (pp_ctor "PEctor", [Dleaf (Pp_mucore.Basic.pp_ctor ctor)] @ List.map self pes)
-        | M_PEarray_shift (pe1, ty, pe2) ->
+        | M_PEarray_shift (_pe1, _ty, _pe2) ->
             Dleaf (pp_ctor "PEarray_shift" ^^^ !^ (ansi_format [Red] "TODO"))
-        | M_PEmember_shift (pe, sym, ident) ->
+        | M_PEmember_shift (_pe, _sym, _ident) ->
             Dleaf (pp_ctor "PEmember_shift" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEnot pe ->
             Dnode (pp_ctor "PEnot", [self pe])
@@ -102,13 +102,13 @@ module PP = struct
             Dnode ( pp_ctor "PEop" ^^^ P.squotes (!^ (string_of_bop bop))
                   , [self pe1; self pe2] )
 
-        | M_PElet (pat, pe1, pe2) ->
+        | M_PElet (_pat, pe1, pe2) ->
             Dnode ( pp_ctor "PElet"
                   , [ self pe1; self pe2] )
         | M_PEif (pe1, pe2, pe3) ->
             Dnode ( pp_ctor "PEif"
                   , [ self pe1; self pe2; self pe3 ] )
-        | M_PEundef (loc, ub) ->
+        | M_PEundef (_loc, _ub) ->
             Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEerror (str, pe) ->
             Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
@@ -177,7 +177,7 @@ module PP = struct
         | M_Store _ ->
             ( "store"
             , [] )
-        | M_Load (pe1, pe2, mo) ->
+        | M_Load (pe1, pe2, _mo) ->
             ( "load"
             , [ dtree_of_act pe1
               ; dtree_of_pexpr pe2 ] )
@@ -208,7 +208,7 @@ module PP = struct
     Dnode ( !^ (ansi_format [Bold; Magenta] "Eaction") ^^^ pp_keyword str
           , dtrees )
 
-  let rec dtree_of_expr ((M_Expr (loc, annot, _ty, expr_)) as expr) =
+  let rec dtree_of_expr ((M_Expr (loc, _annot, _ty, expr_)) as expr) =
 
       let pp_ctor str = pp_eff_ctor str ^^^ Cerb_location.pp_location ~clever:true loc in
 
@@ -218,7 +218,7 @@ module PP = struct
                   , (*add_std_annot*) [dtree_of_pexpr pe] )
          | M_Eskip ->
              Dleaf (pp_ctor "Eskip")
-        | M_Eaction (M_Paction (p, M_Action (act_loc, act))) ->
+        | M_Eaction (M_Paction (_p, M_Action (_act_loc, act))) ->
             dtree_of_action act
 
       | M_Eif (pe, e1, e2) ->
@@ -227,22 +227,22 @@ module PP = struct
                                     ; dtree_of_expr e1
                                     ; dtree_of_expr e2 ] )
 
-      | M_Elet (pat, e1, e2) ->
+      | M_Elet (_pat, e1, e2) ->
           Dnode ( pp_ctor "Elet" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_pexpr e1
                                     ; dtree_of_expr e2 ] )
-      | M_Ewseq (pat, e1, e2) ->
+      | M_Ewseq (_pat, e1, e2) ->
           Dnode ( pp_ctor "Ewseq" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_expr e1
                                     ; dtree_of_expr e2 ] )
-      | M_Esseq (pat, e1, e2) ->
+      | M_Esseq (_pat, e1, e2) ->
           Dnode ( pp_ctor "Esseq" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_expr e1
                                     ; dtree_of_expr e2 ] )
-      | M_Erun (l, asyms) ->
+      | M_Erun (_l, asyms) ->
          Dnode ( pp_pure_ctor "Erun"
                , List.map dtree_of_pexpr asyms)
 
@@ -275,7 +275,7 @@ module PP = struct
           P.empty
       end ^^
       Pp_ail.pp_ctype Ctype.no_qualifiers ty in
-    let aux (sym, (loc, attrs, ty, params, is_variadic, has_proto)) =
+    let aux (sym, (_loc, _attrs, ty, params, is_variadic, has_proto)) =
       Dleaf (pp_symbol sym ^^ P.colon ^^^
              begin if has_proto then
               P.string "PROTO" ^^ P.space
@@ -326,14 +326,14 @@ module PP = struct
   let dtree_of_funs xs =
     let aux (sym, decl) =
       match decl with
-        | M_Proc (loc, args_and_body, _, _) ->
+        | M_Proc (_loc, args_and_body, _, _) ->
             Dnode ( pp_field "Proc" ^^^ pp_symbol sym
-                  , [ dtree_of_mu_arguments (fun (body, labels, rt) ->
+                  , [ dtree_of_mu_arguments (fun (body, labels, _rt) ->
                       Dnode ( !^"proc_body"
                             , [ Dnode (pp_field ".body", [dtree_of_expr body])
                               ; Dnode (pp_field ".labels", dtrees_of_labels labels) ] ))
                       args_and_body] )
-        | M_ProcDecl (loc, ft) ->
+        | M_ProcDecl (_loc, _ft) ->
             (* TODO: loc*)
             Dleaf ( pp_field "ProcDecl" ^^^ pp_symbol sym (* TODO: spec *))
     in

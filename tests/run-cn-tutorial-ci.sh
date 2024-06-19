@@ -22,6 +22,10 @@ HERE=$(pwd)
 
 cd "$TUTORIAL_PATH"/src/example-archive/
 
+if [ -f ./check-all.sh ]; then
+    ./check-all.sh $CN
+    exit $?
+fi
 
 FAILURE=0
 

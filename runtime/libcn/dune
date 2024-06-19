@@ -1,0 +1,18 @@
+; (include_subdirs unqualified)
+(rule
+ (target libcn.a)
+ (deps (:headers (glob_files include/cn-executable/*.h))
+       (:src (glob_files src/*.c)))
+ (action
+  (progn
+   (run cc -Iinclude/ -c %{src})
+   (run ar -rcs %{target} alloc.o hash_table.o utils.o))))
+
+(install
+ (files
+  (include/cn-executable/alloc.h as runtime/include/cn-executable/alloc.h)
+  (include/cn-executable/hash_table.h as runtime/include/cn-executable/hash_table.h)
+  (include/cn-executable/utils.h as runtime/include/cn-executable/utils.h)
+  (libcn.a as runtime/libcn.a))
+ (section lib)
+ (package cn))

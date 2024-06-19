@@ -42,3 +42,27 @@ rev_tree (struct tree_node *t)
   return t;
 }
 
+/*
+
+      Tree:
+
+        2
+    /      \
+   1         3
+  / \       /  \
+null null  null  4
+                / \
+              null null
+
+*/
+
+int main(void)
+/*@ trusted; @*/
+{
+  struct tree_node l = {.v = 1, .left = 0, .right = 0};
+  struct tree_node r2 = {.v = 4, .left = 0, .right = 0};
+  struct tree_node r = {.v = 3, .left = 0, .right = &r2};
+  struct tree_node tree = {.v = 2, .left = &l, .right = &r};
+
+  struct tree_node *reversed_tree = rev_tree(&tree);
+}

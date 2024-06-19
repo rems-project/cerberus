@@ -14,5 +14,8 @@ add_self_twice (unsigned int x)
   return y + y;
 }
 
-
-
+int main(void)
+/*@ trusted; @*/
+{
+  unsigned int r = add_self_twice(5);
+}

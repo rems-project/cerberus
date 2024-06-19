@@ -8,3 +8,6 @@ predicate (map <integer, integer>) Foo (pointer p) {
 @*/
 
 
+int main(void)
+{
+}

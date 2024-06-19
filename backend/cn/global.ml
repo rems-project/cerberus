@@ -20,8 +20,7 @@ type t =
   }
 
 let mk_alloc : IndexTerms.t -> ResourceTypes.predicate_type =
-  let name : ResourceTypes.predicate_name = PName (Sym.fresh_named "__CN_Alloc") in
-  fun pointer -> { name; pointer; iargs = []; }
+  fun pointer -> { name = ResourceTypes.alloc_name; pointer; iargs = []; }
 
 let empty =
   let [@ocaml.warning "-8"] { name=PName alloc ; _ } : ResourceTypes.predicate_type =

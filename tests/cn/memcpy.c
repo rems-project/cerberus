@@ -1,5 +1,5 @@
 void
-memcpy (char *dst, char *src, int n)
+naive_memcpy (char *dst, char *src, int n)
 /*@ requires take dstStart = each (i32 j; 0i32 <= j && j < n)
                                   {Owned(array_shift(dst, j))};
              take srcStart = each (i32 j; 0i32 <= j && j < n)
@@ -29,4 +29,12 @@ memcpy (char *dst, char *src, int n)
     /*@ instantiate good<char>, (i32)i; @*/
     dst[i] = src[i];
   }
+}
+
+int main(void)
+/*@ trusted; @*/
+{
+  char *src = "hello";
+  char dst[5];
+  naive_memcpy(dst, src, 5);
 }
