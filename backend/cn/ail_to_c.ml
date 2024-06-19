@@ -1,3 +1,4 @@
+(*
 module CF=Cerb_frontend
 open Executable_spec_utils
 module A=CF.AilSyntax
@@ -55,7 +56,7 @@ let pp_ail_post_helper ident_name arg_names_opt =
 let rec pp_ail_expr ?(arg_names_opt=None) ail_expr =
   match ail_expr with
     | A.(AilEident sym) -> 
-      let sym_str = CF.String_ail.string_of_cn_id sym in
+      let sym_str = CF.String_ail.string_of_id sym in
       let str_from_list_opt = List.assoc_opt String.equal sym_str ident_list in
       let ident_str =
       (match str_from_list_opt with
@@ -100,7 +101,8 @@ let pp_ail_declaration (id, decl) =
     | A.Decl_object (_, _, qs, cty) ->
          CF.Pp_ail.pp_ctype qs cty 
          ^^ PPrint.break 1 
-         ^^ CF.Pp_ail.pp_id_obj ~executable_spec:true id 
+         ^^ CF.Pp_ail.pp_id_obj id
          ^^ PPrint.semi 
          ^^ PPrint.hardline
     | _ -> failwith "TODO"
+*)
