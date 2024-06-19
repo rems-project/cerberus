@@ -26,16 +26,15 @@ val (!!): (unit -> 'a) ref -> 'a
 val cerb_conf: (unit -> cerberus_conf) ref
 
 val set_cerb_conf:
-    string -> 
-    bool ->
+    backend_name:string ->
+    exec:bool ->
     execution_mode ->
-    bool ->
+    concurrency:bool ->
     error_verbosity ->
-    bool ->
-    bool ->
-    bool ->
-    bool ->
-    bool ->
+    defacto:bool ->
+    permissive:bool ->
+    agnostic:bool ->
+    ignore_bitfields:bool ->
     unit
 
 (* NOTE: used in driver.lem *)

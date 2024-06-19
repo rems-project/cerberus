@@ -32,7 +32,7 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-let set_cerb_conf backend_name exec exec_mode concurrency error_verbosity defacto permissive agnostic ignore_bitfields _bmc =
+let set_cerb_conf ~backend_name ~exec exec_mode ~concurrency error_verbosity ~defacto ~permissive ~agnostic ~ignore_bitfields =
   let exec_mode_opt = if exec then Some exec_mode else None in
   let n1570 =
     if error_verbosity <> QuoteStd then None else Some (Lazy.force N1570.data)
