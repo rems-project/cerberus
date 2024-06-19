@@ -451,8 +451,6 @@ let pp_stringLiteral (pref_opt, strs) =
 let rec pp_constant ?(executable_spec=false) = function
   | ConstantIndeterminate ty ->
       (* NOTE: this is not in C11 *)
-      (* TODO(Rini) I don't see how that can do the right thing in general *)
-      if executable_spec then P.empty else
       pp_keyword "indet" ^^ P.parens (pp_ctype no_qualifiers ty)
   | ConstantNull ->
       pp_const "NULL"
@@ -520,31 +518,13 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEunary (PostfixDecr as o, e) ->
             pp e ^^ pp_unaryOperator o
         | AilEunary (Bnot, e) ->
-            if executable_spec then
-              (* TODO(Rini): remove this, this is horrible and will break in impredicable ways with
-                 changes to the desugaring/Ail type *)
-              let e_doc = pp e in
-              (match strs with
-                | [x] -> !^ x ^^ P.lparen ^^ e_doc ^^ P.rparen
-                | _ -> P.tilde ^^ pp e)
-            else
               P.tilde ^^ pp e
         | AilEunary (o, e) ->
             pp_unaryOperator o ^^ pp e
         | AilEbinary (e1, (Comma as o), e2) ->
             pp e1 ^^ pp_binaryOperator o ^^ P.space ^^ pp e2
         | AilEbinary (e1, o, e2) ->
-            let e1_doc = pp e1 in
-            let e2_doc = pp e2 in
-            if executable_spec then
-              (* TODO(Rini): remove this, this is horrible and will break in impredicable ways with
-                 changes to the desugaring/Ail type *)
-              (match strs with
-                | [x] ->
-                    !^ x ^^ P.lparen ^^ e1_doc ^^ P.comma ^^^ e2_doc ^^ P.rparen
-                | _ -> e1_doc ^^^ pp_binaryOperator o ^^^ e2_doc)
-            else
-              e1_doc ^^^ pp_binaryOperator o ^^^ e2_doc
+              pp e1 ^^^ pp_binaryOperator o ^^^ pp e2
         | AilEassign (e1, e2) ->
             pp e1 ^^^ P.equals ^^^ pp e2
         | AilEreg_load r ->
@@ -577,15 +557,6 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
               Option.(value (map pp e_opt) ~default:(!^ "_")) in
             P.braces (P.separate (P.comma ^^ P.space) (List.mapi f e_opts))
         | AilEstruct (tag_sym, xs) ->
-            (* TODO(rini) the executable_spec version looks wrong, these are not declarations *)
-            if executable_spec then
-              !^ "struct" ^^^ pp_id tag_sym ^^ P.braces (
-                comma_list (function (ident, e_opt) ->
-                  P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
-                  Option.(value (map pp e_opt) ~default:(!^ "_"))
-                ) xs
-              ) ^^ (!^ ";")
-            else
               P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
                 comma_list (function (ident, e_opt) ->
                   P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
@@ -710,12 +681,6 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSreturnVoid ->
         pp_keyword "return" ^^ P.semi
     | AilSreturn e ->
-        if executable_spec then
-          (* TODO(Rini): this looks wrong. I doubt the == test is working as expected. Why is this needed? *)
-          let e_doc = pp_expression_aux pp_annot e in
-          if e_doc == P.empty then pp_keyword "return" ^^ P.semi else
-            pp_keyword "return" ^^^ e_doc ^^ P.semi
-        else
           pp_keyword "return" ^^^ pp_expression_aux pp_annot e ^^ P.semi
     | AilSswitch (e, s) ->
         pp_keyword "switch" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^ pp_statement ~is_control:true s

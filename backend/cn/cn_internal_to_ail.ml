@@ -242,12 +242,12 @@ let cn_to_ail_unop_internal = function
 
 (* TODO: Finish *)
 let cn_to_ail_binop_internal bt1 bt2 = 
-  let cn_int_type_str = match bt1, bt2 with 
+  let get_cn_int_type_str bt1 bt2 = match bt1, bt2 with 
     | BT.Integer, BT.Integer -> "cn_integer"
     | BT.Bits (sign, size), BT.Bits _ -> "cn_bits_" ^ (str_of_bt_bitvector_type sign size)
     | BT.Loc, BT.Integer
     | BT.Loc, BT.Bits _ -> "cn_pointer"
-    | _, _ -> ""
+    | _, _ -> failwith "Incompatible CN integer types"
   in
   function
   | Terms.And -> (A.And, Some "cn_bool_and")
@@ -263,28 +263,28 @@ let cn_to_ail_binop_internal bt1 bt2 =
       else 
         "" 
     in
-    (A.(Arithmetic Add), Some (cn_int_type_str ^ "_add" ^ bt2_str))
+    (A.(Arithmetic Add), Some (get_cn_int_type_str bt1 bt2 ^ "_add" ^ bt2_str))
   | Sub -> 
-    (A.(Arithmetic Sub), Some (cn_int_type_str ^ "_sub"))
+    (A.(Arithmetic Sub), Some (get_cn_int_type_str bt1 bt2 ^ "_sub"))
   | Mul 
-  | MulNoSMT -> (A.(Arithmetic Mul), Some (cn_int_type_str ^ "_multiply"))
+  | MulNoSMT -> (A.(Arithmetic Mul), Some (get_cn_int_type_str bt1 bt2 ^ "_multiply"))
   | Div 
-  | DivNoSMT -> (A.(Arithmetic Div), Some (cn_int_type_str ^ "_divide"))
+  | DivNoSMT -> (A.(Arithmetic Div), Some (get_cn_int_type_str bt1 bt2 ^ "_divide"))
   | Exp
-  | ExpNoSMT -> (A.And, Some (cn_int_type_str ^ "_pow"))
+  | ExpNoSMT -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_pow"))
   (* | Rem
   | RemNoSMT *)
   | Mod
-  | ModNoSMT -> (A.(Arithmetic Mod), Some (cn_int_type_str ^ "_mod"))
+  | ModNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_mod"))
   | XORNoSMT -> (A.(Arithmetic Bxor), None)
   | BWAndNoSMT -> (A.(Arithmetic Band), None)
   | BWOrNoSMT -> (A.(Arithmetic Bor), None)
   | LT -> 
-    (A.Lt, Some (cn_int_type_str ^ "_lt"))
-  | LE -> (A.Le, Some (cn_int_type_str ^ "_le"))
-  | Min -> (A.And, Some (cn_int_type_str ^ "_min"))
-  | Max -> (A.And, Some (cn_int_type_str ^ "_max"))
-  | EQ -> (A.Eq, None) 
+    (A.Lt, Some (get_cn_int_type_str bt1 bt2 ^ "_lt"))
+  | LE -> (A.Le, Some (get_cn_int_type_str bt1 bt2 ^ "_le"))
+  | Min -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_min"))
+  | Max -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_max"))
+  | EQ -> (A.Eq, Some "eq") (* placeholder - equality dealt with in a special way *) 
     (* let fn_str = match get_typedef_string (bt_to_ail_ctype bt1) with 
       | Some str -> Some (str ^ "_equality")
       | None -> None
@@ -563,11 +563,11 @@ let rec cn_to_ail_expr_aux_internal
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack in
     let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t2 PassBack in
     let (ail_bop, annot) = cn_to_ail_binop_internal (IT.basetype t1) (IT.basetype t2) bop in
-    let strs = match annot with 
-      | Some str -> [str]
-      | None -> []
+    let str = match annot with 
+      | Some str -> str
+      | None -> failwith "No CN binop function found"
     in
-    let default_ail_binop = A.AilEbinary (e1, ail_bop, e2) in
+    let default_ail_binop = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty str)), [e1; e2])) in 
 
 (*   
     let is_map it = 
@@ -614,17 +614,17 @@ let rec cn_to_ail_expr_aux_internal
         )
       | _ -> default_ail_binop
     in 
-    dest d (b1 @ b2, s1 @ s2, mk_expr ~strs ail_expr_) 
+    dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_) 
 
   | Unop (unop, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
     let (ail_unop, annot)  = cn_to_ail_unop_internal unop in
-    let strs = match annot with 
-      | Some str -> [str]
-      | None -> []
+    let str = match annot with 
+      | Some str -> str
+      | None -> failwith "No CN unop function found"
     in
-    let ail_expr_ = A.(AilEunary (ail_unop, e)) in 
-    dest d (b, s, mk_expr ~strs ail_expr_)
+    let ail_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty str)), [e])) in 
+    dest d (b, s, mk_expr ail_expr_)
 
   | SizeOf sct ->
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in 
