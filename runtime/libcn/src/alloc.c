@@ -17,7 +17,7 @@
 //     foo(CN_POINTER),
 // };
 
-static const signed int MEM_SIZE = 1024 * 1024 * 1024;
+#define MEM_SIZE (64 * 1024 * 1024)
 char buf[MEM_SIZE];
 static void *curr = buf;
 
