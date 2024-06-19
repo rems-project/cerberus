@@ -24,10 +24,10 @@ let get_typedef_string (C.(Ctype (_, ctype_))) =
     | _ -> None
 
 
-let mk_expr ?(strs=[]) expr_ =
+let mk_expr expr_ =
   A.AnnotatedExpression (
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
-     strs, Cerb_location.unknown, expr_)
+     [], Cerb_location.unknown, expr_)
 
 let get_expr_strs = function
   | (A.AnnotatedExpression (CF.GenTypes.GenLValueType (_, _, _), strs, _, _)) -> strs

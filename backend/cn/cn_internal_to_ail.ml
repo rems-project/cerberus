@@ -120,20 +120,35 @@ let create_binding sym ctype =
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
 let generate_cn_assert ?(cn_source_loc_opt=None) ail_expr = 
-  let func_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__func__")) in
+  let error_msg_info_sym = Sym.fresh_pretty "error_msg_info" in
+  let error_msg_info_ident = mk_expr A.(AilEident error_msg_info_sym) in
+  (* let func_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__func__")) in
   let filename_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__FILE__")) in
   let linenumber_arg = mk_expr A.(AilEident (Sym.fresh_pretty "__LINE__")) in
-  let cn_source_loc_arg = match cn_source_loc_opt with 
+   *)
+  let line_number_member_lhs = mk_expr A.(AilEmemberof (error_msg_info_ident, Id.id "line_number")) in
+  let curr_line_number = mk_expr A.(AilEident (Sym.fresh_pretty "__LINE__")) in
+  let addition_expr = mk_expr A.(AilEbinary (curr_line_number, Arithmetic Add, mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None)))))) in
+  let line_number_assign_stat_ = A.(AilSexpr (mk_expr (AilEassign (line_number_member_lhs, addition_expr)))) in
+
+  let error_msg_info_address = mk_expr A.(AilEunary (Address, error_msg_info_ident)) in
+  let assertion_expr_ = A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr; error_msg_info_address])) in
+  let assertion_stat = A.(AilSexpr (mk_expr assertion_expr_)) in
+
+  let stats_ = match cn_source_loc_opt with 
     | Some loc -> 
       let loc_str = Cerb_location.location_to_string loc in
       let (_, loc_str_2) = Cerb_location.head_pos_of_location loc in
       let loc_str_2_escaped = Str.global_replace (Str.regexp_string "\n") "\\n" loc_str_2 in
-      A.(AilEstr (None, [(Cerb_location.unknown, [loc_str_2_escaped ^ loc_str])]))
-    | None -> A.(AilEconst ConstantNull)
+      let cn_source_loc_str = mk_expr A.(AilEstr (None, [(Cerb_location.unknown, [loc_str_2_escaped ^ loc_str])])) in 
+      let cn_source_loc_member_lhs = mk_expr A.(AilEmemberof (error_msg_info_ident, Id.id "cn_source_loc")) in
+      let cn_source_loc_assign_stat_ = A.(AilSexpr (mk_expr (AilEassign (cn_source_loc_member_lhs, cn_source_loc_str)))) in
+      [cn_source_loc_assign_stat_; line_number_assign_stat_; assertion_stat]
+    | None -> [line_number_assign_stat_; assertion_stat]
   in
+  stats_
 
-  A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr; func_arg; filename_arg; linenumber_arg; mk_expr cn_source_loc_arg]))
-  
+
 
 let rec bt_to_cn_base_type = function
 | BT.Unit -> CN_unit
@@ -450,8 +465,8 @@ let dest : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statemen
   fun d (b, s, e) -> 
     match d with
     | Assert -> 
-      let assert_stmt = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
-      (b, s @ [assert_stmt])
+      let assert_stmts = generate_cn_assert e in
+      (b, s @ assert_stmts)
     | Return ->
       let return_stmt = A.(AilSreturn e) in
       (b, s @ [return_stmt])
@@ -1503,8 +1518,8 @@ let rec cn_to_ail_lat_internal dts pred_sym_opt globals ownership_ctypes preds =
         []
       | None -> 
         (* Printf.printf "No logical constraint info\n"; *)
-        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
-        s @ [ail_stat_]
+        let ail_stats_ = generate_cn_assert e in
+        s @ ail_stats_
     in
     let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal dts pred_sym_opt globals ownership_ctypes preds lat in
     (b1 @ b2, ss @ s2, ownership_ctypes')
@@ -1595,8 +1610,8 @@ let rec cn_to_ail_post_aux_internal dts globals ownership_ctypes preds = functio
       | Some info -> 
         []
       | None -> 
-        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert ~cn_source_loc_opt:(Some loc) e))) in
-        s @ [ail_stat_]
+        let ail_stats_ = generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
+        s @ ail_stats_
     in
     let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals ownership_ctypes preds t in
 
@@ -1734,8 +1749,8 @@ let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_typ
         []
       | None -> 
         (* Printf.printf "No logical constraint info\n"; *)
-        let ail_stat_ = A.(AilSexpr (mk_expr (generate_cn_assert e))) in
-        s @ [ail_stat_]
+        let ail_stats_ = generate_cn_assert e in
+        s @ ail_stats_
     in
     let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type lat in
     prepend_to_precondition ail_executable_spec (b1, ss)
@@ -1791,5 +1806,16 @@ let rec cn_to_ail_pre_post_aux_internal dts preds globals c_return_type = functi
     cn_to_ail_lat_internal_2 dts globals [] preds c_return_type lat
   
 let cn_to_ail_pre_post_internal dts preds globals c_return_type = function 
-  | Some internal -> cn_to_ail_pre_post_aux_internal dts preds globals c_return_type internal
+  | Some internal -> 
+    let error_msg_info_sym = Sym.fresh_pretty "error_msg_info" in
+    let error_msg_struct_tag = Sym.fresh_pretty "cn_error_message_info" in
+    let error_msg_info_ctype = C.Struct error_msg_struct_tag in 
+    let error_msg_info_binding = create_binding error_msg_info_sym (mk_ctype error_msg_info_ctype) in
+    let struct_members = [("function_name", "__func__"); ("file_name", "__FILE__"); ("line_number", "__LINE__")] in
+    let struct_members = List.map (fun (arg_str, value_str) -> (Id.id arg_str, Some (mk_expr A.(AilEident (Sym.fresh_pretty value_str))))) struct_members in
+    let struct_members = struct_members @ [(Id.id "cn_source_loc", Some (mk_expr A.(AilEconst (ConstantNull))))] in
+    let struct_init = A.(AilEstruct (error_msg_struct_tag, struct_members)) in
+    let error_msg_info_decl = A.(AilSdeclaration [(error_msg_info_sym, Some (mk_expr struct_init))]) in
+    let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds globals c_return_type internal in
+    prepend_to_precondition ail_executable_spec ([error_msg_info_binding], [error_msg_info_decl])
   | None -> empty_ail_executable_spec
