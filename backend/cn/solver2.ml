@@ -78,7 +78,7 @@ type solver =
 
 module Debug = struct
   let dump_frame (f: solver_frame) =
-    let dump k v = Printf.printf "| %s\n%!" (Sym.pp_string k) in
+    let dump k _v = Printf.printf "| %s\n%!" (Sym.pp_string k) in
     SymMap.iter dump f.uninterpreted;
     Printf.printf "+--------------------\n%!"
 
@@ -351,15 +351,15 @@ and
     | _ -> failwith "List"
     end
 
-  | Set bt          -> Const (Default bt) (* XXX *)
-  | Map (k, v)      -> Const (Default bt) (* XXX *)
+  | Set _bt          -> Const (Default bt) (* XXX *)
+  | Map (_k, _v)     -> Const (Default bt) (* XXX *)
 
   | Tuple bts ->
     let (_con,vals) = SMT.to_con sexp in
     Tuple (List.map2 get_ivalue bts vals)
 
-  | Struct tag      -> Const (Default bt) (* XXX *)
-  | Datatype tag    -> Const (Default bt) (* XXX *)
+  | Struct _tag      -> Const (Default bt) (* XXX *)
+  | Datatype _tag    -> Const (Default bt) (* XXX *)
 
   | Record members  ->
     let (_con,vals) = SMT.to_con sexp in
@@ -402,7 +402,7 @@ let bv_cast to_bt from_bt x =
     | Some (sign, sz) -> (BT.equal_sign sign BT.Signed, sz)
     | None -> failwith ("mk_bv_cast: non-bv type: " ^ Pp.plain (BT.pp bt))
   in
-  let (to_signed,   to_sz)   = bits_info to_bt in
+  let (_to_signed,   to_sz) = bits_info to_bt in
   let (from_signed, from_sz) = bits_info from_bt in
   match () with
   | _ when to_sz == from_sz -> x
@@ -706,14 +706,14 @@ let rec translate_term s iterm =
     SMT.app_ (CN_Names.struct_field_name f) [translate_term s e1]
 
   | StructUpdate ((t, member), v) ->
-    let tag     = BT.struct_bt (IT.bt t) in
-    let layout  = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+    let tag = BT.struct_bt (IT.bt t) in
+    let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
     let members = Memory.member_types layout in
     let str =
       List.map (fun (member', sct) ->
           let value =
             if Id.equal member member' then v
-            else member_ ~member_bt:(Memory.bt_of_sct sct) (tag, t, member') here
+            else member_ ~member_bt:(Memory.bt_of_sct sct) (t, member') here
           in
           (member', value)
         ) members
@@ -950,7 +950,7 @@ type reduction = {
 }
 
 (* XXX: `pointer_facts` are unused? *)
-let translate_goal solver assumptions pointer_facts lc =
+let translate_goal solver assumptions _pointer_facts lc =
   let here =  Locations.other __FUNCTION__ in
 
   let instantiated =
@@ -1039,7 +1039,7 @@ let logger base lab =
 
 
 let make globals =
-  let cfg = { SMT.cvc5 with log = logger SMT.quiet_log "z3: " } in
+  let cfg = { SMT.z3 with log = logger SMT.quiet_log "z3: " } in
   let s = { smt_solver  = SMT.new_solver cfg
           ; cur_frame   = ref (empty_solver_frame ())
           ; prev_frames = ref []
@@ -1110,6 +1110,7 @@ let model () =
 
 
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
+  let _ = loc in
   let s1 = { solver with globals = global } in
   let rtrue () = model_state := No_model; `True in
   match shortcut simp_ctxt lc with
@@ -1163,8 +1164,8 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
 
 
 
-
-let eval globs mo t = mo t
+(* XXX: Could these globs be different from the saved ones? *)
+let eval _globs mo t = mo t
 
 
 (* Dummy implementations *)
