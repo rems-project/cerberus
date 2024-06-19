@@ -4987,14 +4987,14 @@ Module RevocationProofs.
   Instance memcpy_copy_data_PreservesInvariant
     (loc: location_ocaml)
     (ptrval1 ptrval2: AddressValue.t)
-    (index: nat)
+    (n: nat)
     :
-    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 index).
+    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 n).
   Proof.
     intros s.
     unfold memcpy_copy_data.
-    revert ptrval1 ptrval2 s.
-    induction index; intros.
+    revert s.
+    induction n; intros.
     + preserves_step.
       cbn.
       unfold mem_state_with_bytemap.
@@ -5003,6 +5003,17 @@ Module RevocationProofs.
     +
       preserves_steps.
       *
+        (* adding *)
+        split.
+        --
+          (* base *)
+          apply H.
+        --
+          destruct H.
+          destruct_base_mem_invariant H.
+          intros addr g H bs H1.
+          specialize (H0 addr g H bs).
+          cbn in *.
         admit.
       *
         admit.
