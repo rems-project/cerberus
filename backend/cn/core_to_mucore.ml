@@ -1464,7 +1464,7 @@ let register_glob env (sym, glob) =
 
 
 
-let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases; _} =
+let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases; cn_dt_magic_loc = _ } =
   let translate_arg (id, bt) =
     (id, SBT.to_basetype (Compile.translate_cn_base_type env bt)) in
   let cases =
@@ -1647,7 +1647,7 @@ let collect_instrumentation (file : _ mu_file) =
     List.map (fun (fn, decl) ->
         match decl with
         | M_Proc (fn_loc, args_and_body, _trusted, _spec) ->
-            let args_and_body = argument_type args_and_body in
+            let args_and_body = at_of_arguments Fun.id args_and_body in
             let internal =
               ArgumentTypes.map (fun (body, labels, rt) ->
                   let _, stmts = concat2 (stmts_in_expr body) (stmts_in_labels labels) in
