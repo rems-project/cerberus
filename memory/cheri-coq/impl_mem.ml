@@ -737,8 +737,7 @@ module CHERIMorello : Memory = struct
     Attrs (List.map fromCoq_attribute ats)
 
   let fromCoq_label_annot: CoqAnnot.label_annot -> Annot.label_annot = function
-  | LAloop_prebody lid  -> LAloop_prebody (Z.to_int lid)
-  | LAloop_body lid     -> LAloop_body (Z.to_int lid)
+  | LAloop lid          -> LAloop (Z.to_int lid)
   | LAloop_continue lid -> LAloop_continue (Z.to_int lid)
   | LAloop_break lid    -> LAloop_break (Z.to_int lid)
   | LAreturn            -> LAreturn
