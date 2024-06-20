@@ -1678,7 +1678,7 @@ let rec codify_gen' (g : gen) : string =
   | Alloc (ty, x) ->
     "rc::gen::just<" ^ string_of_ctype ty ^ ">(&" ^ Pp_symbol.to_string_pretty x ^ ")"
   | Struct (ty, ms) ->
-    "rc::gen::just((" ^ string_of_ctype ty ^ "){ " ^
+    "rc::gen::just<" ^ string_of_ctype ty ^ ">({ " ^
     String.concat ", " (
       List.map (
         fun (x, y) ->
