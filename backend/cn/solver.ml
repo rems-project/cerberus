@@ -60,6 +60,7 @@ let empty_solver_frame () =
   ; bt_uninterpreted  = Int_Table.create 50
   }
 
+let copy_solver_frame f = { f with commands = f.commands }
 
 type solver =
   { smt_solver: SMT.solver
@@ -147,7 +148,7 @@ let declare_uninterpreted s name args_ts res_t =
     f.uninterpreted <- SymMap.add name e f.uninterpreted;
     e
 
- 
+
 (** Declare an uninterpreted function, indexed by a base type. *)
 let declare_bt_uninterpreted s (name,k) bt args_ts res_t =
   let check f = Option.bind (Int_Table.find_opt f.bt_uninterpreted k)
@@ -467,7 +468,7 @@ let translate_var s name bt =
     e
 
 
-(** Translat a CN term to SMT *)
+(** Translate a CN term to SMT *)
 let rec translate_term s iterm =
   let here          = IT.loc iterm in
   let struct_decls  = s.globals.struct_decls in
@@ -936,6 +937,7 @@ let rec translate_term s iterm =
 
 
 
+(** Add an assertion.  Quantified predicates are ignored. *)
 let add_assumption solver global lc =
   let s1 = { solver with globals = global } in
   match lc with
@@ -950,7 +952,7 @@ type reduction = {
   extra : SMT.sexp list;        (* additional assumptions *)
 }
 
-(* XXX: `pointer_facts` are unused? *)
+
 let translate_goal solver assumptions _pointer_facts lc =
   let here =  Locations.other __FUNCTION__ in
 
@@ -992,6 +994,7 @@ let shortcut simp_ctxt lc =
 
 (** {1 Solver Initialization} *)
 
+(** Declare a group of (possibly) mutually recursive datatypes *)
 let declare_datatype_group s names =
   let mk_con_field (l,t) =
         (CN_Names.datatype_field_name l, translate_base_type t) in
@@ -1007,7 +1010,7 @@ let declare_datatype_group s names =
 
 
 
-(* Declare a struct type and all struc types that it depends on.
+(** Declare a struct type and all struct types that it depends on.
 The `done_struct` keeps track of which structs we've already declared. *)
 let rec declare_struct s done_struct name decl =
   let mp = !done_struct in
@@ -1040,6 +1043,7 @@ let rec declare_struct s done_struct name decl =
 
 
 
+(** Declare various types always available to the solver. *)
 let declare_solver_basics s =
   for arity = 0 to 8 do
     CN_Tuple.declare s arity
@@ -1054,12 +1058,14 @@ let declare_solver_basics s =
   List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
+(** Augment a logger with an additional label. *)
 let logger base lab =
   { SMT.send    = (fun s -> base.SMT.send (lab ^ s))
   ; SMT.receive = (fun s -> base.SMT.receive (lab ^ s))
   }
 
 
+(** Make a new solver instance *)
 let make globals =
   let cfg = { SMT.z3 with log = logger SMT.quiet_log "z3: " } in
   let s = { smt_solver  = SMT.new_solver cfg
@@ -1071,6 +1077,7 @@ let make globals =
   in declare_solver_basics s; s
 
 
+(** Evaluate terms in the context of a model computed by the solver. *)
 let model_evaluator solver mo =
 (*
   match None with
@@ -1085,11 +1092,11 @@ let model_evaluator solver mo =
     let s = SMT.new_solver cfg in
     let evaluator = { smt_solver = s
                     ; cur_frame = ref (empty_solver_frame ())
-                    ; prev_frames = ref (!(solver.cur_frame) ::
-                                         !(solver.prev_frames))
+                    ; prev_frames = ref (List.map copy_solver_frame
+                                         ( (!(solver.cur_frame) ::
+                                           !(solver.prev_frames)) ))
                       (* we keep the prev_frames because things that were
                          declared, would now be defined by the model.
-                         Do we need to copy?
                        *)
                     ; name_seed = solver.name_seed
                     ; globals = solver.globals
@@ -1134,7 +1141,7 @@ let model () =
 
 
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
-  let _ = loc in
+  let _ = loc in (* XXX: should we use this somehow? *)
   let s1 = { solver with globals = global } in
   let rtrue () = model_state := No_model; `True in
   match shortcut simp_ctxt lc with
