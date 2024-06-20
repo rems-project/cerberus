@@ -54,8 +54,11 @@ via `opam init` after the installation of opam.)
 
 ## Contributing
 
-Please see our [onboarding
-guide](https://github.com/rems-project/cerberus/blob/master/backend/cn/ONBOARDING.md).
+Please see our [contributing
+guide](https://github.com/rems-project/cerberus/blob/master/backend/cn/ONBOARDING.md)
+for logistics and our [onboarding
+guide](https://github.com/rems-project/cerberus/blob/master/backend/cn/ONBOARDING.md)
+for learning the code base.
 
 ## Funding Acknowledgements
 
