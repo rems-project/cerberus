@@ -1069,7 +1069,7 @@ type gen =
   | Return of Ctype.ctype * cn_expr
   | Filter of Sym.sym * Ctype.ctype * cn_expr * gen
   | Map of Sym.sym * Ctype.ctype * cn_expr * gen
-  | Alloc of Ctype.ctype * gen
+  | Alloc of Ctype.ctype * Sym.sym
   | Struct of Ctype.ctype * (string * Sym.sym) list
 
 let rec string_of_gen (g : gen) : string =
@@ -1078,7 +1078,7 @@ let rec string_of_gen (g : gen) : string =
   | Return (ty, e) -> "return<" ^ string_of_ctype ty ^ ">(" ^ string_of_expr e ^ ")"
   | Filter (x, ty, e, g') -> "filter(" ^ "|" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ "| " ^ string_of_expr e ^ ", " ^ string_of_gen g' ^ ")"
   | Map (x, ty, e, g') -> "map(" ^ "|" ^ Pp_symbol.to_string_pretty x ^ ": " ^ string_of_ctype ty ^ "| " ^ string_of_expr e ^ ", " ^ string_of_gen g' ^ ")"
-  | Alloc (ty, g') -> "alloc<" ^ string_of_ctype ty ^ ">(" ^ string_of_gen g' ^ ")"
+  | Alloc (ty, x) -> "alloc<" ^ string_of_ctype ty ^ ">(" ^ Pp_symbol.to_string_pretty x ^ ")"
   | Struct (ty, ms) -> "struct<" ^ string_of_ctype ty ^ ">(" ^ String.concat ", " (List.map (fun (x, g') -> "." ^ x ^ ": " ^ Pp_symbol.to_string_pretty g') ms) ^ ")"
 ;;
 
@@ -1316,7 +1316,7 @@ let rec compile_singles' (gtx : gen_context) (locs : locations) (cs : constraint
     then
       let l = Cerb_location.unknown in
       let gen = compile_gen x ty (CNExpr (l, e)) cs in
-      let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), gen) in
+      let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), x) in
       match get_loc x with
       | Some x_loc -> compile_singles' ((x_loc, gen_loc)::(x, gen)::gtx) locs cs iter'
       | None -> compile_singles' ((x, gen)::gtx) locs cs iter'
@@ -1361,7 +1361,7 @@ let rec compile_structs' (gtx : gen_context) (vars : variables) (ms : members) (
     (match get_loc x with
     | Some loc ->
       let gen = Struct (ty, mems) in
-      let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), gen) in
+      let gen_loc = Alloc (Ctype.Ctype ([], Pointer (no_quals, ty)), x) in
       ((loc, gen_loc)::(x, gen)::gtx, ms')
     | None -> ((x, Struct (ty, mems))::gtx, ms'))
   | [] -> (gtx, [])
@@ -1412,9 +1412,7 @@ let rec interpret_gen (ail_prog : GenTypes.genTypeCategory AilSyntax.sigma) (x :
     | Map (y, ty, e, g) ->
       interpret_gen ail_prog y g max_size ctx h >>= fun (ctx, h) ->
       return ((x, (ty, eval_expr ctx e))::ctx, h)
-    | Alloc (ty, g') ->
-      let y = Sym.fresh () in
-      interpret_gen ail_prog y g' max_size ctx h >>= fun (ctx, h) ->
+    | Alloc (ty, y) ->
       generate_location max_size (List.map fst h) >>= fun l ->
       return ((x, (ty, CNVal_bits ((CN_unsigned, 64), Z.of_int l)))::ctx, (l, List.assoc Sym.equal_sym y ctx)::h)
     | Struct (ty, ms) ->
@@ -1677,11 +1675,8 @@ let rec codify_gen' (g : gen) : string =
   | Map (x', ty, e, g') ->
     let gen = codify_gen' g' in
     "rc::gen::map(" ^ gen ^ ", [=](" ^ string_of_ctype ty ^ " " ^ Pp_symbol.to_string_pretty x' ^ "){ return " ^ codify_expr e ^ "; })"
-  | Alloc (ty, g') ->
-    (match ty with
-    | Ctype (_, Pointer (_, ty')) ->
-      "rc::gen::exec([=](){ return new (" ^ string_of_ctype ty' ^ ") {*" ^ codify_gen' g' ^ "}; })"
-    | _ -> failwith "Tried allocation without pointer type (Generator.codify_gen')")
+  | Alloc (ty, x) ->
+    "rc::gen::just<" ^ string_of_ctype ty ^ ">(&" ^ Pp_symbol.to_string_pretty x ^ ")"
   | Struct (ty, ms) ->
     "rc::gen::just((" ^ string_of_ctype ty ^ "){ " ^
     String.concat ", " (
