@@ -653,6 +653,21 @@ let to_con (exp: sexp): string * sexp list =
     | _ -> bad ()
 
 
+(** Try to decode an s-expression as an array. The result is `(is,v)`
+where is are (key,value) pairs, and `v` is the default array value.
+Throws {!UnexpectedSolverResponse}. *)
+let to_array (exp0: sexp): (sexp * sexp) list * sexp =
+  let bad () = raise (UnexpectedSolverResponse exp0) in
+  let rec loop is exp =
+      match exp with
+      | Sexp.List [ Sexp.List [Sexp.Atom "as"; Sexp.Atom "const"; _]; k ] ->
+        (List.rev is, k)
+      | Sexp.List [ Sexp.List [Sexp.Atom "store"; a; i; v] ] ->
+        loop ((i,v)::is) a
+      | _ -> bad ()
+  in loop [] exp0
+
+
 (** {2 Creating Solvers} *)
 
 let new_solver (cfg: solver_config): solver =

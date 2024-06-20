@@ -353,8 +353,16 @@ and
     | _ -> failwith "List"
     end
 
-  | Set _bt          -> Const (Default bt) (* XXX *)
-  | Map (_k, _v)     -> Const (Default bt) (* XXX *)
+  | Set _bt  -> Const (Default bt) (* XXX *)
+
+  | Map (kt, vt) ->
+    let (els,dflt) = SMT.to_array sexp in
+    let base = MapConst (kt, get_ivalue gs vt dflt) in
+    let add_el (k,v) a = MapSet ( get_ivalue gs kt k
+                                , get_ivalue gs vt v
+                                , IT (a, bt, Cerb_location.unknown)
+                                ) in
+    List.fold_right add_el els base
 
   | Tuple bts ->
     let (_con,vals) = SMT.to_con sexp in
