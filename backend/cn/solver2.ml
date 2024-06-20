@@ -1072,9 +1072,11 @@ let make globals =
 
 
 let model_evaluator solver mo =
+(*
   match None with
   | None -> fun _ -> None
   | _ ->
+*)
   match SMT.to_list mo with
   | None -> failwith "model is an atom"
   | Some defs ->
