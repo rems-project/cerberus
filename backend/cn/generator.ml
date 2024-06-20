@@ -1695,7 +1695,7 @@ let get_gen_ty (g : gen) : Ctype.ctype =
   | Struct (ty, _) -> ty
 
 let codify_gen (x : Sym.sym) (g : gen) : string =
-  string_of_ctype (get_gen_ty g) ^ " " ^ Pp_symbol.to_string_pretty x ^ " = *" ^ codify_gen' g ^ ";\n"
+  "auto " ^ Pp_symbol.to_string_pretty x ^ " = *" ^ codify_gen' g ^ ";\n"
 
 let rec codify_gen_context (gtx : gen_context) : string =
   match gtx with
