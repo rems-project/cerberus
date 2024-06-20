@@ -8,10 +8,7 @@
    modules. *)
 type t = Cerb_location.t
 
-(* TODO: BCP: It's a bit hideous to to export two different names for the same (morally abstract) type. *)
-type loc = t
-
-type info = loc * string option
+type info = t * string option
 
 type path = t list
 

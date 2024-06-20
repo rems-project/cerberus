@@ -192,7 +192,7 @@ and check_union (_loc : loc) (_tag : Sym.t) (_id : Id.t)
                 (_mv : mem_value) : IT.t m =
   Cerb_debug.error "todo: union types"
 
-let ensure_bitvector_type (loc : Loc.loc) ~(expect : BT.t) : (sign * int) m =
+let ensure_bitvector_type (loc : Loc.t) ~(expect : BT.t) : (sign * int) m =
   match BT.is_bits_bt expect with
   | Some (sign, n) -> return (sign, n)
   | None -> fail (fun _ -> {loc; msg = Mismatch {has = !^"(unspecified) bitvector type";

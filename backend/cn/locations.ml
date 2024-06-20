@@ -4,9 +4,7 @@ module StringSet = Set.Make(String)
 
 type t = Cerb_location.t
 
-type loc = t
-
-type info = loc * string option
+type info = t * string option
 
 type path = t list
 
@@ -57,10 +55,10 @@ let unpack l = l
 
 
 (* type position = {
- *   	pos_fname : string;
- *   	pos_lnum : int;
- *   	pos_bol : int;
- *   	pos_cnum : int;
+ *      pos_fname : string;
+ *      pos_lnum : int;
+ *      pos_bol : int;
+ *      pos_cnum : int;
  * } *)
 
 
