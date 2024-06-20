@@ -12,7 +12,7 @@ module IntMap = Map.Make(Int)
 
 
 
-type l_info = (Locations.t * Pp.doc Lazy.t)
+type l_info = (Locations.t * Pp.document Lazy.t)
 
 let pp_l_info doc (l : l_info) =
   typ doc (Lazy.force (snd l) ^^ break 1 ^^ Locations.pp (fst l))
@@ -147,7 +147,7 @@ let add_c c (ctxt : t) =
 
 
 
-let modify_where (f : Where.t -> Where.t) ctxt = 
+let modify_where (f : Where.t -> Where.t) ctxt =
   { ctxt with where = f ctxt.where }
 
 
@@ -251,4 +251,3 @@ let json (ctxt : t) : Yojson.Safe.t =
       ]
   in
   `Variant ("Context", Some json_record)
-

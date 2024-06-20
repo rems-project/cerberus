@@ -1,8 +1,11 @@
+(* This file re-exports the standard List library functions together
+   with a bunch of other useful list utilities. *)
+(* TODO: BCP: Probably not worth bothering with an mli file for this one... *)
+
 include Stdlib.List
 
 let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list =
     concat (map f xs)
-
 
 let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
   match xs with
@@ -12,13 +15,11 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | None -> filter_map f xs
      | Some y -> y :: filter_map f xs
 
-
 let rec equal (equality : 'a -> 'a -> bool) (xs : 'a list) (xs' : 'a list) : bool =
   match xs, xs' with
   | [], [] -> true
   | x::xs, x'::xs' -> equality x x' && equal equality xs xs'
   | _, _ -> false
-
 
 let rec compare (comparison : 'a -> 'a -> int) (xs : 'a list) (xs' : 'a list) =
   match xs, xs' with
@@ -29,14 +30,12 @@ let rec compare (comparison : 'a -> 'a -> int) (xs : 'a list) (xs' : 'a list) =
   | [], _ -> -1
   | _, [] -> 1
 
-
 let mem equality y xs =
   let rec aux = function
     | [] -> false
     | x :: xs -> equality y x || aux xs
   in
   aux xs
-
 
 let assoc_opt (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v option =
   match find_opt (fun (k',_) -> equality k k') l with
@@ -51,13 +50,8 @@ let mem_assoc (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : bool
   | Some _ -> true
   | None -> false
 
-
 let json jsonf list =
   `List (map jsonf list)
-
-
-
-
 
 let map_split (f : 'a -> 'b * 'c) (xs : 'a list) : 'b list * 'c list =
   fold_right (fun x (ys, zs) ->
@@ -65,21 +59,18 @@ let map_split (f : 'a -> 'b * 'c) (xs : 'a list) : 'b list * 'c list =
       (y :: ys, z :: zs)
     ) xs ([], [])
 
-
-
 let map_fst (f : 'a -> 'c) (xs : ('a * 'b) list) : ('c * 'b) list =
   map (fun (a, b) -> (f a, b)) xs
 
 let map_snd (f : 'b -> 'c) (xs : ('a * 'b) list) : ('a * 'c) list =
   map (fun (a, b) -> (a, f b)) xs
 
-
 let rec separate_and_group (by : 'b -> 'a option) : 'b list -> ('a option * 'b list) list =
   function
   | [] -> []
-  | b :: bs -> 
+  | b :: bs ->
     match by b, separate_and_group by bs with
-    | Some a, ((None, bs') :: abs) -> 
+    | Some a, ((None, bs') :: abs) ->
         (Some a, bs') :: abs
     | Some a, abs ->
         (Some a, []) :: abs
@@ -87,7 +78,6 @@ let rec separate_and_group (by : 'b -> 'a option) : 'b list -> ('a option * 'b l
         (None, b :: bs') :: abs
     | None, abs ->
         (None, [b]) :: abs
-
 
 (* NOTE: this exists in Stdlib since 5.1 *)
 let is_empty = function

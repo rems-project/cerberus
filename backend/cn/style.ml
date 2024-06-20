@@ -65,16 +65,14 @@ th {
 #pages .page { display: none }
 #pages .page:target { display: block }
 
-#pages .pagelinks .button, 
-#pages .pagelinks .inactive_button { 
-  padding-top: 5px; 
+#pages .pagelinks .button,
+#pages .pagelinks .inactive_button {
+  padding-top: 5px;
   padding-bottom: 5px;
-  padding-left: 10px; 
+  padding-left: 10px;
   padding-right: 10px;
   display: inline-block;
 }
-
-
 
 
 
@@ -102,8 +100,8 @@ th {
         background-color: #101044;
     }
 
-    #pages .pagelinks .button, 
-    #pages .pagelinks .inactive_button { 
+    #pages .pagelinks .button,
+    #pages .pagelinks .inactive_button {
         background-color: white;
         border: 1px solid #EEEEEE;
     }
@@ -112,7 +110,7 @@ th {
         background-color: #BBBBBB;
     }
 
-    #pages .pagelinks .button a { 
+    #pages .pagelinks .button a {
         color: black;
         text-decoration: none;
     }
@@ -149,8 +147,8 @@ th {
         background-color: #E2F0FF;
     }
 
-    #pages .pagelinks .button, 
-    #pages .pagelinks .inactive_button { 
+    #pages .pagelinks .button,
+    #pages .pagelinks .inactive_button {
         background-color: black;
         border: 1px solid #111111;
     }
@@ -159,7 +157,7 @@ th {
         background-color: #444444;
     }
 
-    #pages .pagelinks .button a { 
+    #pages .pagelinks .button a {
         color: white;
         text-decoration: none;
     }

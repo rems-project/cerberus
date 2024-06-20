@@ -31,7 +31,7 @@ open Cerb_pp_prelude
    they may be defined into. *)
 module PrevDefs = struct
   type t = {present: (Sym.t list) StringListMap.t;
-        defs: (Pp.doc list) IntMap.t;
+        defs: (Pp.document list) IntMap.t;
         dt_params: (IT.t * Id.t * Sym.t) list;
         failures: TypeErrors.type_error list}
   let init_t = {present = StringListMap.empty; defs = IntMap.empty; dt_params = []; failures = []}
@@ -391,7 +391,7 @@ let tuple_syn xs =
   let open Pp in
   parens (flow (comma ^^^ !^ "") xs)
 
-let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.doc) (ys : 'a list) =
+let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.document) (ys : 'a list) =
   let n_ys = List.mapi (fun i y -> (i, y)) ys in
   match List.find_opt (fun (_i, y) -> eq x y) n_ys with
     | None -> fail "tuple element not found" (pp x)

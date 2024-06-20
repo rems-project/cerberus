@@ -1,4 +1,3 @@
-
 open Typing
 module LC = LogicalConstraints
 module LCSet = Set.Make(LC)
@@ -13,7 +12,7 @@ type cfg = {
   arc_index : int}
 
 type opt = {
-  doc : Pp.doc;
+  doc : Pp.document;
   continue : cfg -> (unit) m
 }
 
@@ -237,7 +236,3 @@ let investigate model lc =
     let cfg = {arc; model; arc_index = 0} in
     Pp.print stdout (Pp.item "investigating unproven constraint" (LC.pp lc));
     investigate_lc cfg lc
-
-
-
-

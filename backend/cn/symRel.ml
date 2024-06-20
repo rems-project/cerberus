@@ -5,6 +5,8 @@ end
 
 
 include Pset
+(*
 type t = SymPair.t Pset.set
 let empty = Pset.empty SymPair.compare
 let transitiveClosure = Pset.tc SymPair.compare
+*)
