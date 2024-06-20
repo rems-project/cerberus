@@ -2,6 +2,7 @@
 
 (* TODO: BCP: Some filenames use_underscores, while some areInCamlCase
    -- any compelling reason for that? *)
+(* Dhruv: prefer snake_case *)
 
 module SymPair :
   sig
