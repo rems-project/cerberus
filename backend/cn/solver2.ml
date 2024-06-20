@@ -6,6 +6,7 @@ open BaseTypes
 module LC = LogicalConstraints
 open LogicalConstraints
 module SymMap = Map.Make(Sym)
+module SymSet = Set.Make(Sym)
 module BT_Table = Hashtbl.Make(BT)
 module Int_Table = Hashtbl.Make(Int)
 module LCSet = Set.Make(LC)
@@ -1006,18 +1007,37 @@ let declare_datatype_group s names =
 
 
 
-let declare_struct s name decl =
-  let mk_field (l,t) =
-        (CN_Names.struct_field_name l, translate_base_type (Memory.bt_of_sct t))
-  in
-  let mk_piece (x: Memory.struct_piece) =
-        Option.map mk_field x.member_or_padding
-  in
-  ack_command s
-    (SMT.declare_datatype
-       (CN_Names.struct_name name) []
-         [ (CN_Names.struct_con_name name, List.filter_map mk_piece decl) ]
-    )
+(* Declare a struct type and all struc types that it depends on.
+The `done_struct` keeps track of which structs we've already declared. *)
+let rec declare_struct s done_struct name decl =
+  let mp = !done_struct in
+  if SymSet.mem name mp
+      then ()
+      else begin
+        done_struct := SymSet.add name mp;
+        let mk_field (l,t) =
+               let ty = Memory.bt_of_sct t in
+               begin match ty with
+               | Struct name' ->
+                 let decl = SymMap.find name' s.globals.struct_decls in
+                 declare_struct s done_struct name' decl;
+               | _ -> ()
+               end;
+               (CN_Names.struct_field_name l, translate_base_type ty)
+         in
+         let mk_piece (x: Memory.struct_piece) =
+               Option.map mk_field x.member_or_padding
+         in
+         ack_command s
+           (SMT.declare_datatype
+              (CN_Names.struct_name name) []
+                [ ( CN_Names.struct_con_name name
+                  , List.filter_map mk_piece decl
+                  )
+                ]
+           )
+      end
+
 
 
 let declare_solver_basics s =
@@ -1027,8 +1047,10 @@ let declare_solver_basics s =
   CN_List.declare s;
   CN_Pointer.declare s;
 
-  (* structs should go before datatypes *)
-  SymMap.iter (declare_struct s) s.globals.struct_decls;
+  (* structs may depend only on other structs.
+     datatypes may depend on other datatypes and structs. *)
+  let done_strcuts = ref SymSet.empty in
+  SymMap.iter (declare_struct s done_strcuts) s.globals.struct_decls;
   List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
