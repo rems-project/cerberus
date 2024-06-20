@@ -1,75 +1,62 @@
-# Things to do
+# CN
 
-## Small pending tasks
+CN is tool for verifying C code is free of undefined behaviour and meets
+user-written specifications. It can also convert those specifications into
+assertions to be checked at runtime during test cases.
 
-   - More polishing on pp.mli
+## Installation
 
-## Information that would be useful to add, generally
+Below are the installation instructions for installing Cerberus, CN,
+and their dependencies.
 
-Some useful high-level information we could add (e.g. to this file :-)...
 
-   - Where is the parser?  How does it connect to the rest?
-   - What is the relation between the Cerberus and CN codebases?
-   - What are the main starting points in this directory?
-   - If I want an overview of the code, in what order should I look at
-     things?
-   - What are the most important top-level modules, and what is the
-     overall flow of information between them?
-   - "If I want to add <common sort of thing to add>, where do I look?"
+1. Install a recent version of OCaml (we are using 5.0.0) and the opam
+package manager for OCaml, following the instructions at
+<https://ocaml.org/docs/install.html>. (Remember to initialise opam
+via `opam init` after the installation of opam.)
 
--------------------------------------------------------------------------
-# Useful recipies
+2. Install the GMP and MPFR libraries, and Python (a dependency of
+   Z3). On a Ubuntu system this is done via `sudo apt install libgmp-dev libmpfr-dev python2.7` .
 
-## To add a .mli file for a given .ml file
+3. Install the `dune` OCaml build system and Lem via
 
-`cd backend/cn`
+    ```
+    opam install dune lem
+    ```
 
-`(cd ../..; dune exec -- ocaml-print-intf backend/cn/XXXXX.ml) > XXXXX.mli`
+4. Obtain a copy of Cerberus (including CN) by running
 
-inspect XXXXX.mli to make sure that it looks semi-reasonable
+    ```
+    git clone https://github.com/rems-project/cerberus.git
+    ```
 
-`make -C ../.. cn`
+5. In the downloaded `cerberus` directory run the following opam
+   command to install CN's opam-package dependencies, including
+   Z3. (Installation of Z3 usually takes relatively long.)
 
-inspect XXXXX.mli more closely
+    ```
+    opam install --deps-only ./cerberus-lib.opam ./cn.opam
+    ```
 
-  - remove instances of `Dune__exe.`
+6. then run
 
-  - if you see something like
+   ```
+   make install
+   ```
 
-       module SymSet :
-         sig
-           ... enormous amount of stuff
+   and finally
 
-    replace it with
+   ```
+   make install_cn
+   ```
 
-       module SymSet = Set.Make(Sym)
+   which installs Cerberus, CN, and dependencies.
 
-    You may need to add a bit more information to help typechecking --
-    e.g., in setup.mli we have
+## Contributing
 
-       module StringSet : Set.S with type elt = string
+Please see our [onboarding
+guide](https://github.com/rems-project/cerberus/blob/master/backend/cn/ONBOARDING.md).
 
-  - Go through the .mli file and try to remove as many declarations as
-    possible
+## Funding Acknowledgements
 
-  - Add a header, if you have enough information to write one.
-    Headers look like this:
-
-       (* Module Locations -- Utility functions for Cerberus locations
-
-          This module adds a number of useful functions on locations to the
-          ones already provided by Cerberus. *)
-
-    If not, add a comment noting that it needs a header.  Comments
-    should look like this:
-
-       (* TODO: BCP: Describe what's needed... *)
-
-  - Leave comments about anything else that needs a look from others
-
-  - Recompile again to make sure nothing is broken
-
-## To rebuild the dependency diagram of the CN codebase:
-
-codept backend/cn/*.ml -dot > cn-modules.dot
-dot -Tpdf -O -x cn-modules.dot
+TODO (PS?)
