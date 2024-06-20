@@ -104,7 +104,7 @@ let rec codify_expr_ (e : cn_expr_) : string =
   match e with
   | CNExpr_const c ->
     (match c with
-    | CNConst_NULL -> "NULL"
+    | CNConst_NULL -> "nullptr"
     | CNConst_integer n -> failwith "Mathematical integer"
     | CNConst_bits ((CN_signed, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
     | CNConst_bits ((CN_unsigned, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n) ^ "U"
@@ -1465,7 +1465,7 @@ let generate (depth : int) ail_prog (psi : (Symbol.sym * cn_predicate) list) (ar
 
 let rec codify_value' (root : string) (v : cn_value) : string =
   match v with
-  | CNVal_null -> "NULL"
+  | CNVal_null -> "nullptr"
   | CNVal_bits ((CN_signed, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
   | CNVal_bits ((CN_unsigned, bits), n) when bits <= 16 -> Int64.to_string (Z.to_int64 n) ^ "U"
   | CNVal_bits ((CN_signed, bits), n) when bits <= 32 -> Int64.to_string (Z.to_int64 n) ^ "L"
