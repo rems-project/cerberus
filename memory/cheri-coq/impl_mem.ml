@@ -153,8 +153,7 @@ module CerbTagDefs = struct
     | RealFloating rft -> (toCoq_realFloatingType rft)
 
   let [@warning "-8"] toCoq_label_annot: Annot.label_annot -> CoqAnnot.label_annot = function
-    | LAloop_prebody lid  -> LAloop_prebody (Z.of_int lid)
-    | LAloop_body lid     -> LAloop_body (Z.of_int lid)
+    | LAloop lid          -> LAloop (Z.of_int lid)
     | LAloop_continue lid -> LAloop_continue (Z.of_int lid)
     | LAloop_break lid    -> LAloop_break (Z.of_int lid)
     | LAreturn            -> LAreturn
