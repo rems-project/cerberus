@@ -3505,7 +3505,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
           E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
         ) visible_syms >>= fun args ->
         E.return begin
-          Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_prebody loop_id)] (sym_loop, C.BTy_unit) args begin
+          Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop loop_id)] (sym_loop, C.BTy_unit) args begin
             Caux.mk_sseq_e test_wrp.E.sym_pat core_test begin
               Caux.mk_sseq_e do_loop_wrp.E.sym_pat begin
                 Caux.mk_case_e test_wrp.E.sym_pe
@@ -3540,7 +3540,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return begin
-          Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_body loop_id)] (sym_loop, C.BTy_unit) args (
+          Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop loop_id)] (sym_loop, C.BTy_unit) args (
             (* loop body *)
             Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
               (* controlling expression *)

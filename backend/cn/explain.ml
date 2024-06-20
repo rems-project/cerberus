@@ -112,14 +112,8 @@ let state ctxt model_with_q extras =
       | Some loc, None -> Cerb_location.to_cartesian loc, head_pos "stmt" loc
       | None, None -> None, ("", "\n")
     in
-    let fnction = match ctxt.where.fnction with
-      | None -> "(none)"
-      | Some sym -> Sym.pp_string sym
-    in
-    let section = match ctxt.where.section with
-      | None -> "(none)"
-      | Some s -> Pp.plain (Where.pp_section s)
-    in
+    let fnction = Option.map (Sym.pp_string) ctxt.where.fnction in
+    let section = Option.map (fun s -> Pp.plain (Where.pp_section s)) ctxt.where.section in
     let result = Report.{ fnction; section; loc_cartesian; loc_head } in
     Cerb_colour.do_colour := cur_colour;
     result
