@@ -313,9 +313,9 @@ let rec translate_base_type = function
 
 (** Translate an SMT value to a CN term *)
 let rec
-  get_ivalue bt sexp = IT (get_value bt sexp, bt, Cerb_location.unknown)
+  get_ivalue gs bt sexp = IT (get_value gs bt sexp, bt, Cerb_location.unknown)
 and
-  get_value bt (sexp: SMT.sexp) =
+  get_value gs bt (sexp: SMT.sexp) =
   match bt with
   | Unit            -> Const Unit
   | Bool            -> Const (Bool (SMT.to_bool sexp))
@@ -331,7 +331,7 @@ and
       begin match SMT.to_con sexp with
       | (_con, [sbase;saddr]) ->
         let base = CN_AllocId.from_sexp sbase in
-        let addr = match get_value Memory.intptr_bt saddr with
+        let addr = match get_value gs Memory.intptr_bt saddr with
                    | Const (Bits (_,z)) -> z
                    | _ -> failwith "Pointer value is not bits"
         in Const (if Z.equal base Z.zero && Z.equal addr Z.zero
@@ -349,7 +349,7 @@ and
     begin match SMT.to_con sexp with
     | (con,[])    when String.equal con CN_List.nil_name -> Nil elT
     | (con,[h;t]) when String.equal con CN_List.cons_name ->
-        Cons (get_ivalue elT h, get_ivalue bt t)
+        Cons (get_ivalue gs elT h, get_ivalue gs bt t)
     | _ -> failwith "List"
     end
 
@@ -358,14 +358,33 @@ and
 
   | Tuple bts ->
     let (_con,vals) = SMT.to_con sexp in
-    Tuple (List.map2 get_ivalue bts vals)
+    Tuple (List.map2 (get_ivalue gs) bts vals)
 
-  | Struct _tag      -> Const (Default bt) (* XXX *)
-  | Datatype _tag    -> Const (Default bt) (* XXX *)
+  | Struct tag ->
+    let (_con,vals) = SMT.to_con sexp in
+    let decl = SymMap.find tag gs.struct_decls in
+    let fields = List.filter_map (fun x -> x.Memory.member_or_padding) decl in
+    let mk_field (l,t) v = (l,get_ivalue gs (Memory.bt_of_sct t) v) in
+    Struct (tag, List.map2 mk_field fields vals)
+
+  | Datatype tag ->
+    let (con,vals) = SMT.to_con sexp in
+    let cons = (SymMap.find tag gs.datatypes).dt_constrs in
+    let do_con c =
+          let fields = (SymMap.find c gs.datatype_constrs).c_params in
+          let mk_field (l,t) v = (l, get_ivalue gs t v) in
+          Constructor (c, List.map2 mk_field fields vals) in
+    let try_con c =
+          if con == CN_Names.datatype_con_name c then Some (do_con c) else None
+    in
+    begin match List.find_map try_con cons with
+    | Some yes -> yes
+    | None -> failwith "Missing constructor"
+    end
 
   | Record members  ->
     let (_con,vals) = SMT.to_con sexp in
-    let mk_field (l,bt) e = (l, get_ivalue bt e) in
+    let mk_field (l,bt) e = (l, get_ivalue gs bt e) in
     Record (List.map2 mk_field members vals)
 
 
@@ -1090,6 +1109,7 @@ let model_evaluator solver mo =
     let scfg = solver.smt_solver.config in
     let cfg = { scfg with log = logger scfg.log ":model: " } in
     let s = SMT.new_solver cfg in
+    let gs = solver.globals in
     let evaluator = { smt_solver = s
                     ; cur_frame = ref (empty_solver_frame ())
                     ; prev_frames = ref (List.map copy_solver_frame
@@ -1099,7 +1119,7 @@ let model_evaluator solver mo =
                          declared, would now be defined by the model.
                        *)
                     ; name_seed = solver.name_seed
-                    ; globals = solver.globals
+                    ; globals = gs
                     } in
     declare_solver_basics evaluator;
     List.iter (SMT.ack_command s) defs;
@@ -1111,7 +1131,7 @@ let model_evaluator solver mo =
       | SMT.Sat ->
           let res = SMT.get_expr s inp in
           pop evaluator 1;
-          Some (get_ivalue (basetype e) res)
+          Some (get_ivalue gs (basetype e) res)
       | _ ->
           pop evaluator 1;
           None
