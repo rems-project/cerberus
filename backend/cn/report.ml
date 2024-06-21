@@ -192,6 +192,7 @@ html {
 }
 
 body {
+  padding: 0;
   margin: 0;
   overflow: hidden;
 }
@@ -240,10 +241,14 @@ th {
 #root {
   display: flex;
   height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 .menu {
-  height: 32px;
+  font-size: 15px;
+  margin: 0px;
+  padding: 0px;
   vertical-align: middle;
 }
 
@@ -255,6 +260,8 @@ th {
 }
 
 .menu li {
+  padding: 0px;
+  margin: 0px;
   float: left;
 }
 
@@ -529,7 +536,7 @@ function goto_page(n) {
     pages[n-1].style.display = "block"
     current_page = n
 
-    pageinfo.textContent = `page ${current_page} of ${n_pages}`
+    pageinfo.textContent = `[${current_page} / ${n_pages}]`
     menu[0].disabled = false
     menu[1].disabled = false
     menu[2].disabled = false
@@ -617,7 +624,7 @@ let mk_html ~title ~pages ~file_content ~n_pages= {|
     <li><button onclick="goto_prev()"/>prev</button></li>
     <li><button onclick="goto_next()"/>next</button></li>
     <li><button onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>last</button></li>
-    <ul>
+    </ul>
     <div id="pageinfo"></div>
   </div>
   |} ^ pages ^ {|
