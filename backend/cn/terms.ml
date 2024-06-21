@@ -260,7 +260,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.document -> Pp.document) -> 
        | Tuple its ->
           braces (separate_map (semi ^^ space) (aux false) its)
        | Struct (_tag, members) ->
-         lbrace ^^ hardline ^^ flow_map hardline (fun (member,it) ->
+         lbrace ^^ hardline ^^ flow_map (comma ^^ hardline) (fun (member,it) ->
              Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux false it)
            ) members ^^^ rbrace
        | StructMember (t, member) ->

@@ -243,6 +243,7 @@ th {
 }
 
 .menu {
+  height: 32px;
   vertical-align: middle;
 }
 
@@ -286,6 +287,7 @@ th {
 #cn_code_display {
   width: 50%;
   display: grid;
+  align-content: flex-start;
 }
 
 #cn_code {
