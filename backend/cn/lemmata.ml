@@ -687,7 +687,7 @@ let mk_forall global list_mono loc sym bt doc =
   let inf = (loc, !^"forall of" ^^^ Sym.pp sym) in
   let@ coq_bt = bt_to_coq global list_mono inf bt in
   return (!^ "forall" ^^^ parens (typ (Sym.pp sym) coq_bt)
-      ^^ !^"," ^^ break 1 ^^ doc)
+      ^^ !^","  ^^ doc)
 
 let add_dt_param_counted (it, (m_nm : Id.t)) =
   let@ st = get in
