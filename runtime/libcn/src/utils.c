@@ -11,6 +11,14 @@ typedef struct cn_bool {
 
 */
 
+
+void cn_exit_aux(void) {
+    exit(SIGABRT);
+}
+
+void (*cn_exit)(void) = &cn_exit_aux;
+
+
 cn_bool *convert_to_cn_bool(_Bool b) {
     cn_bool *res = alloc(sizeof(cn_bool));
     if (!res) exit(1);
@@ -30,7 +38,7 @@ void cn_assert(cn_bool *cn_b, struct cn_error_message_info *error_msg_info) {
         if (error_msg_info->cn_source_loc) {
             printf("CN source location: \n%s\n", error_msg_info->cn_source_loc);
         }
-        exit(SIGABRT);
+        cn_exit();
     }
     // assert(cn_b->val);
 }
@@ -149,7 +157,7 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
 
 
 cn_pointer *convert_to_cn_pointer(void *ptr) {
-    cn_pointer *res = alloc(sizeof(cn_pointer));
+    cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));
     res->ptr = ptr; // Carries around an address
     return res;
 }
