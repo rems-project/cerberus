@@ -296,6 +296,7 @@ th {
   font-family: monospace;
   white-space-collapse: preserve;
   /* text-wrap: nowrap; */
+  white-space: pre;
 }
 
 .nb {
