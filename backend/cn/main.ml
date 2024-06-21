@@ -151,6 +151,7 @@ let main
       solver_logging
       output_decorated_dir
       output_decorated
+      with_ownership_checking
       astprints
       use_vip
       no_use_ity
@@ -202,7 +203,7 @@ let main
       | None -> Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
       | Some output_filename ->
           Cerb_colour.without_colour begin fun () ->
-            Executable_spec.main filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
+            Executable_spec.main ~with_ownership_checking filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
             return ()
           end ()
       end in
@@ -331,6 +332,10 @@ let output_decorated =
   specifications are well-formed." in
   Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
 
+let with_ownership_checking =
+  let doc = "Enable ownership checking within CN runtime testing" in
+  Arg.(value & flag & info ["with_ownership_checking"] ~doc)
+
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
@@ -410,6 +415,7 @@ let () =
       solver_logging $
       output_decorated_dir $
       output_decorated $
+      with_ownership_checking $
       astprints $
       use_vip $
       no_use_ity $

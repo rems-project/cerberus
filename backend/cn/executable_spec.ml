@@ -16,7 +16,7 @@ let rec group_toplevel_defs new_list = function
 
 open Executable_spec_internal
 
-let main filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
+let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
   let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
   let oc = Stdlib.open_out (prefix ^ output_filename) in
   let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
@@ -25,19 +25,29 @@ let main filename ((_, sigm) as ail_prog) output_decorated_dir output_filename p
   let executable_spec = generate_c_specs_internal instrumentation symbol_table statement_locs sigm prog5 in
   let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
   let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
-    generate_c_functions_internal sigm prog5.mu_logical_predicates in
+  generate_c_functions_internal sigm prog5.mu_logical_predicates in
   let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) =
-    generate_c_predicates_internal sigm prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+  generate_c_predicates_internal sigm prog5.mu_resource_predicates executable_spec.ownership_ctypes in
   let (conversion_function_defs, _conversion_function_decls) =
-    generate_conversion_and_equality_functions sigm in
+  generate_conversion_and_equality_functions sigm in
+  
+  let cn_utils_header_pair = ("cn-executable/utils.h", true) in
+  let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
 
-  let ownership_function_defs, ownership_function_decls = generate_ownership_functions ownership_ctypes sigm in
+  (* Ownership checking *)
+  if with_ownership_checking then 
+    (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.h") in 
+    let ownership_globals = generate_ownership_globals sigm in 
+    Stdlib.output_string ownership_oc cn_utils_header;
+    Stdlib.output_string ownership_oc "\n";
+    Stdlib.output_string ownership_oc ownership_globals;
+    )
+  ;
+
+  let ownership_function_defs, ownership_function_decls = generate_ownership_functions ~with_ownership_checking ownership_ctypes sigm in
   let c_structs = print_c_structs sigm.tag_definitions in
   let cn_converted_structs = generate_cn_versions_of_structs sigm.tag_definitions in
 
-  (* TODO: Remove - hacky *)
-  let cn_utils_header_pair = ("cn-executable/utils.h", true) in
-  let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
 
   (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs sigm in *)
   let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in

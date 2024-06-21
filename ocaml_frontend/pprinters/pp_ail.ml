@@ -842,12 +842,16 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
       | Decl_object (sd, align_opt, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
-          pp_ansi_format [Red] (
+        
+          let comment = if executable_spec then P.empty else 
+          (pp_ansi_format [Red] (
             fun () ->
               !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
               P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
           ) ^^
-          P.hardline ^^
+          P.hardline)
+          in
+          comment ^^
           
           (if !Cerb_debug.debug_level > 5 then
             (* printing the types in a human readable format *)

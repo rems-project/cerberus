@@ -19,6 +19,7 @@ module AT=ArgumentTypes
 
 let true_const = A.AilEconst (ConstantPredefined PConstantTrue)
 
+
 let standardise_sym sym' = 
   let sym_str = Sym.pp_string sym' in
   let new_sym_str = String.mapi (fun i c -> 
@@ -114,8 +115,7 @@ let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=fal
   (* Printf.printf "%s\n" str; *)
   Sym.fresh_pretty str
 
-let create_binding sym ctype = 
-  A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
+
 
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
@@ -494,7 +494,7 @@ let empty_for_dest : type a. a dest -> a =
 
 
 
-let generate_ownership_function ctype = 
+let generate_ownership_function ?(with_ownership_checking=false) ctype = 
   let ctype_str = str_of_ctype ctype in
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
