@@ -3,9 +3,6 @@
    This module adds a number of useful functions on locations to the
    ones already provided by Cerberus. *)
 
-(* TODO: BCP: I think this type could be made abstract with only a little
-   work -- its identity seems to be used in just a few places in other
-   modules. *)
 type t = Cerb_location.t
 
 type info = t * string option
