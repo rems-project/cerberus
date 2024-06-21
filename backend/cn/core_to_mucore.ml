@@ -1150,7 +1150,7 @@ let normalise_label
      return (M_Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
      begin match CF.Annot.get_label_annot annots with
-     | Some (LAloop_prebody loop_id) ->
+     | Some (LAloop loop_id) ->
         let@ desugared_inv, cn_desugaring_state =
           match Pmap.lookup loop_id loop_attributes with
           | Some (marker_id, attrs) ->
@@ -1185,8 +1185,8 @@ let normalise_label
         (*     ) label_args_and_body  *)
         (* in *)
         return (M_Label (loc, label_args_and_body, annots, {label_spec = desugared_inv}))
-     | Some (LAloop_body _loop_id) ->
-        assert_error loc !^"body label has not been inlined"
+     (* | Some (LAloop_body _loop_id) -> *)
+     (*    assert_error loc !^"body label has not been inlined" *)
      | Some (LAloop_continue _loop_id) ->
         assert_error loc !^"continue label has not been inlined"
      | Some (LAloop_break _loop_id) ->
@@ -1464,7 +1464,7 @@ let register_glob env (sym, glob) =
 
 
 
-let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases; _} =
+let translate_datatype env {cn_dt_loc; cn_dt_name; cn_dt_cases; cn_dt_magic_loc = _ } =
   let translate_arg (id, bt) =
     (id, SBT.to_basetype (Compile.translate_cn_base_type env bt)) in
   let cases =
@@ -1647,7 +1647,7 @@ let collect_instrumentation (file : _ mu_file) =
     List.map (fun (fn, decl) ->
         match decl with
         | M_Proc (fn_loc, args_and_body, _trusted, _spec) ->
-            let args_and_body = argument_type args_and_body in
+            let args_and_body = at_of_arguments Fun.id args_and_body in
             let internal =
               ArgumentTypes.map (fun (body, labels, rt) ->
                   let _, stmts = concat2 (stmts_in_expr body) (stmts_in_labels labels) in

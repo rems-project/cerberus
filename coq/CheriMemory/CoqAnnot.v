@@ -36,8 +36,7 @@ Definition loop_id : Set :=  nat .
 
 (* records where a label comes from *)
 Inductive label_annot : Type :=  
-  | LAloop_prebody:  loop_id  -> label_annot 
-  | LAloop_body:  loop_id  -> label_annot 
+  | LAloop:  loop_id  -> label_annot 
   | LAloop_continue:  loop_id  -> label_annot 
   | LAloop_break:  loop_id  -> label_annot 
   | LAreturn: label_annot  (* when an Esave is annotated with this it indicates it is the

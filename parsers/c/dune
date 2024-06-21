@@ -30,9 +30,45 @@
 ; "c_parser_error.messages"
 
 (rule
-  (with-stdout-to c_parser_error.check
+  (with-outputs-to c_parser_error.check
   (run menhir
     %{dep:c_parser.mly}
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;
+    ; If you're seeing this `cat  _build/default/c_parser_error.check`
+    ; Ignore the warnings (they are ambiguities in the ISO C spec)
+    ;
+    ; # Updating for new error states
+    ; ```
+    ; File "c_parser_error.auto.messages", line XXXX, characters 0-XX:
+    ; Error: this sentence leads to an error in state XXX.
+    ; No sentence that leads to this state exists in "c_parser_error.messages".
+    ; ```
+    ;
+    ; This means should run `make -f Makefile.messages complete` and then re-build.
+    ;
+    ; # Duplicate states
+    ; ```
+    ; Read XXXX sample input sentences and XXXX error messages.
+    ; File "c_parser_error.messages", line XXXX, characters 0-XX:
+    ; File "c_parser_error.messages", line XXXXX, characters 0-XX:
+    ; Error: these sentences both cause an error in state XXX.
+    ; ```
+    ;
+    ; Delete one of the lines, optional comments and error messages.
+    ;
+    ; # Not error states (syntax becomes more permissive)
+    ; ```
+    ; File "c_parser_error.messages", line XXXXX, characters 0-XX:
+    ; Error: this sentence does not end with a syntax error, as it should:
+    ; no syntax error occurs.
+    ;
+    ; Delete one of the lines, optional comments and error messages.
+    ;
+    ; # Something else
+    ; Please update this dune file with the right instructions after you figure it out.
+    ;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     --compare-errors %{dep:c_parser_error.auto.messages}
     --compare-errors %{dep:c_parser_error.messages})))
 

@@ -246,8 +246,8 @@ let generate_c_predicates_internal (ail_prog : CF.GenTypes.genTypeCategory CF.Ai
   let record_triple_str = generate_record_strs ail_prog (List.concat ail_records) in
   ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
-let generate_ownership_functions ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
-  let ail_funs = List.map Cn_internal_to_ail.generate_ownership_function ctypes in
+let generate_ownership_functions ?(with_ownership_checking=false) ctypes (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
+  let ail_funs = List.map (fun ctype -> Cn_internal_to_ail.generate_ownership_function ~with_ownership_checking ctype) ctypes in
   let (decls, defs) = List.split ail_funs in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1) in
@@ -269,3 +269,13 @@ let generate_conversion_and_equality_functions (ail_prog : CF.GenTypes.genTypeCa
   let doc2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog2) in
   let comment = "\n/* CONVERSION AND EQUALITY FUNCTIONS */\n\n" in
   (comment ^ CF.Pp_utils.to_plain_pretty_string doc1, comment ^ CF.Pp_utils.to_plain_pretty_string doc2)
+
+
+(* Ownership *)
+
+let generate_ownership_globals (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
+  let ownership_decls = Ownership_exec.create_ail_ownership_global_decls () in 
+  let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = ownership_decls; function_definitions = []} in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
+  CF.Pp_utils.to_plain_pretty_string doc
+  

@@ -58,14 +58,22 @@ open Log
 
 
 
-let frontend macros incl_dirs incl_files astprints do_peval filename magic_comment_char_dollar =
+let frontend ~macros ~incl_dirs ~incl_files astprints ~do_peval ~filename ~magic_comment_char_dollar =
   let open CF in
-  Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false false;
+  Cerb_global.set_cerb_conf
+    ~backend_name:"Cn"
+    ~exec:false
+    (* execution mode *) Random
+    ~concurrency:false
+    (* error verbosity *) Basic
+    ~defacto:false
+    ~permissive:false
+    ~agnostic:false
+    ~ignore_bitfields:false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
   Switches.set 
     (["inner_arg_temps"; "at_magic_comments"] 
-     @ (if magic_comment_char_dollar then ["magic_comment_char_dollar"] else []))
-  ;
+     @ (if magic_comment_char_dollar then ["magic_comment_char_dollar"] else []));
   Core_peval.config_unfold_stdlib := Sym.has_id_with Setup.unfold_stdlib_name;
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
@@ -117,7 +125,12 @@ let check_input_file filename =
     if not (ext ".c" || ext ".h") then
       CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
-
+let maybe_executable_check ~with_ownership_checking ~filename ?output_filename ?output_dir ail_prog mu_file statement_locs =
+  Option.iter (fun output_filename ->
+      Cerb_colour.without_colour (fun () ->
+          Executable_spec.main ~with_ownership_checking filename ail_prog output_dir output_filename mu_file statement_locs)
+        ())
+    output_filename
 
 let main
       filename
@@ -143,6 +156,7 @@ let main
       solver_logging
       output_decorated_dir
       output_decorated
+      with_ownership_checking
       astprints
       use_vip
       no_use_ity
@@ -175,7 +189,7 @@ let main
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
     handle_frontend_error
-      (frontend macros incl_dirs incl_files astprints use_peval filename magic_comment_char_dollar)
+      (frontend ~macros ~incl_dirs ~incl_files astprints ~do_peval:use_peval ~filename ~magic_comment_char_dollar)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel
@@ -184,27 +198,30 @@ let main
      | (_, Some times) -> Some (times, "log")
      | _ -> None);
   try
-    let result =
-      let open Resultat in
-      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
-      print_log_file ("mucore", MUCORE prog5);
-      begin match output_decorated with
-      | None -> Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
-      | Some output_filename ->
-          Cerb_colour.without_colour begin fun () ->
-            Executable_spec.main filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
-            return ()
-          end ()
-      end in
-    Pp.maybe_close_times_channel ();
-    match result with
-    | Ok () -> exit 0
-    | Error e ->
+    let handle_error e =
       if json then TypeErrors.report_json ?state_file e
       else TypeErrors.report ?state_file e;
       match e.msg with
       | TypeErrors.Unsupported _ -> exit 2
-      | _ -> exit 1
+      | _ -> exit 1 in
+    let result =
+      let open Resultat in
+      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
+      print_log_file ("mucore", MUCORE prog5);
+      let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
+      Result.iter_error handle_error (Typing.pause_to_result paused);
+      maybe_executable_check
+        ~with_ownership_checking
+        ~filename
+        ?output_filename:output_decorated
+        ?output_dir:output_decorated_dir
+        ail_prog
+        prog5
+        statement_locs;
+      Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
+    in
+    Pp.maybe_close_times_channel ();
+    Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
   with
   | exc ->
       Pp.maybe_close_times_channel ();
@@ -312,12 +329,18 @@ let skip =
 
 
 let output_decorated_dir =
-  let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations to the provided directory" in
+  let doc = "output a version of the translation unit decorated with C runtime
+  translations of the CN annotations to the provided directory" in
   Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
 
 let output_decorated =
-  let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations" in
+  let doc = "output a version of the translation unit decorated with C runtime
+  translations of the CN annotations." in
   Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
+
+let with_ownership_checking =
+  let doc = "Enable ownership checking within CN runtime testing" in
+  Arg.(value & flag & info ["with_ownership_checking"] ~doc)
 
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
@@ -332,7 +355,8 @@ let use_vip =
   Arg.(value & flag & info["vip"] ~doc)
 
 let no_use_ity =
-  let doc = "(this switch should go away) in WellTyped.BaseTyping, do not use integer type annotations placed by the Core elaboration" in
+  let doc = "(this switch should go away) in WellTyped.BaseTyping, do not use
+  integer type annotations placed by the Core elaboration" in
   Arg.(value & flag & info["no-use-ity"] ~doc)
 
 let use_peval =
@@ -398,6 +422,7 @@ let () =
       solver_logging $
       output_decorated_dir $
       output_decorated $
+      with_ownership_checking $
       astprints $
       use_vip $
       no_use_ity $
@@ -407,3 +432,4 @@ let () =
       magic_comment_char_dollar
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
+

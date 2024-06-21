@@ -10,7 +10,7 @@
 #include <cn-executable/hash_table.h>
 
 struct cn_error_message_info {
-    char *function_name;
+    const char *function_name;
     char *file_name;
     int line_number;
     char *cn_source_loc;
@@ -77,7 +77,7 @@ ownership_ghost_state *initialise_ownership_ghost_state(void);
 
 cn_bool *convert_to_cn_bool(_Bool b);
 _Bool convert_from_cn_bool(cn_bool *b);
-void cn_assert(cn_bool *cn_b, const char *function_name, char *file_name, int line_number, const char *cn_source_loc);
+void cn_assert(cn_bool *cn_b, struct cn_error_message_info *error_msg_info);
 cn_bool *cn_bool_and(cn_bool *b1, cn_bool *b2);
 cn_bool *cn_bool_or(cn_bool *b1, cn_bool *b2);
 cn_bool *cn_bool_not(cn_bool *b);
@@ -336,4 +336,5 @@ enum OWNERSHIP {
 };
 
 
-void get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, int cn_stack_depth, const char *function_name, char *file_name, int line_number);
+void get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+void put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);

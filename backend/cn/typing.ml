@@ -37,6 +37,8 @@ let empty_s (c : Context.t) =
   }
 
 
+type 'a pause = ('a * s, TypeErrors.t) Result.t
+
 type 'a t = s -> ('a * s, TypeErrors.t) Result.t
 type 'a m = 'a t
 type failure = Context.t * Explain.log -> TypeErrors.t
@@ -71,6 +73,19 @@ let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t =
   match m (empty_s c) with
   | Ok (a, _) -> Ok a
   | Error e -> Error e
+
+let run_to_pause (c : Context.t) (m : ('a) t) : 'a pause =
+  match m (empty_s c) with
+  | Ok (a, s) -> Ok (a, s)
+  | Error e -> Error e
+
+let run_from_pause (f : 'a -> 'b t) (pause: 'a pause) =
+  match pause with
+  | Ok (a, s) -> Result.map fst @@ f a s
+  | Error e -> Error e
+
+let pause_to_result (pause : 'a pause) : 'a Resultat.t =
+  Result.map fst pause
 
 let pure (m : ('a) t) : ('a) t =
   fun s ->

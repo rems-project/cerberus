@@ -72,7 +72,6 @@ let should_be_inlined label_name annots =
   match label_annot with
   | LAloop_break _ -> true
   | LAloop_continue _ -> true
-  | LAloop_body _ -> true
   | LAswitch -> warn "switch"; true
   | LAcase -> warn "case"; true
   | LAdefault -> warn "default"; true

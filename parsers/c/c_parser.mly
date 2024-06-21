@@ -1415,10 +1415,10 @@ iteration_statement:
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , magic_to_attrs (List.rev magic)
         , CabsSwhile (expr, stmt) ) }
-| DO stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
+| DO magic= magic_comment_list stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-        , Annot.no_attributes
+        , magic_to_attrs (List.rev magic)
         , CabsSdo (expr, stmt) ) }
 | FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN magic= magic_comment_list stmt= scoped(statement)

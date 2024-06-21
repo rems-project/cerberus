@@ -1,13 +1,29 @@
 (include_subdirs unqualified)
 
 (executable
-  (name main)
-  (modes exe)
-  (public_name cn)
-  (package cn)
-  (flags (:standard -w -37 -open Monomorphic.Int))
-  (libraries cmdliner str unix z3 monomorphic result
-   cerb_frontend cerb_backend mem_concrete menhirLib cerb_util ocamlgraph)
-  (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord ppx_deriving.map ppx_deriving.fold))
-)
-
+ (name main)
+ (modes exe)
+ (public_name cn)
+ (package cn)
+ (flags
+  (:standard -w -37 -open Monomorphic.Int))
+ (libraries
+  cerb_backend
+  cerb_frontend
+  cerb_util
+  cmdliner
+  mem_concrete
+  menhirLib
+  monomorphic
+  ocamlgraph
+  result
+  str
+  unix
+  z3)
+ (preprocess
+  (pps
+   ppx_deriving.eq
+   ppx_deriving.fold
+   ppx_deriving.map
+   ppx_deriving.ord
+   ppx_deriving.show)))

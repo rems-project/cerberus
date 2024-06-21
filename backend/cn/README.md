@@ -1,4 +1,10 @@
-# Installation instructions for CN
+# CN
+
+CN is tool for verifying C code is free of undefined behaviour and meets
+user-written specifications. It can also convert those specifications into
+assertions to be checked at runtime during test cases.
+
+## Installation
 
 Below are the installation instructions for installing Cerberus, CN,
 and their dependencies.
@@ -45,3 +51,15 @@ via `opam init` after the installation of opam.)
    ```
 
    which installs Cerberus, CN, and dependencies.
+
+## Contributing
+
+Please see our [contributing
+guide](https://github.com/rems-project/cerberus/blob/master/backend/cn/ONBOARDING.md)
+for logistics and our [onboarding
+guide](https://github.com/rems-project/cerberus/blob/master/backend/cn/ONBOARDING.md)
+for learning the code base.
+
+## Funding Acknowledgements
+
+TODO (PS?)

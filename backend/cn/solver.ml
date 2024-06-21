@@ -377,8 +377,8 @@ module Translate = struct
       let arg_sort bt = match bt with
         | BT.Datatype nm -> begin match BT_Table.find_opt bt_table bt with
             | Some sort -> (Some sort, 0)
-            | None -> 
-                (* if nm is not in BT_Table, then nm must be in the current 
+            | None ->
+                (* if nm is not in BT_Table, then nm must be in the current
                    `to_translate` group (otherwise the topological order
                    would be different *)
                 (None, List.assoc Sym.equal nm to_translate)
@@ -584,7 +584,7 @@ module Translate = struct
 
     (* let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl in *)
 
-    let mk_unit () = 
+    let mk_unit () =
       Z3.Expr.mk_app context (Z3.Enumeration.get_const_decl (sort Unit) 0) [] in
 
 
@@ -601,7 +601,7 @@ module Translate = struct
     let integer_to_alloc_id i =
       (* ignores i in non-VIP mode *)
       Z3.Expr.mk_app context
-        (integer_to_alloc_id_fundecl context global) 
+        (integer_to_alloc_id_fundecl context global)
         [(if !use_vip then i else mk_unit ())]
     in
 
@@ -1037,15 +1037,9 @@ module Translate = struct
       it : IT.t;
       qs : (Sym.t * BT.t) list;
       extra : Z3.Expr.expr list;
-      smt2_doc : Pp.doc Lazy.t;
+      smt2_doc : Pp.document Lazy.t;
     }
 [@@warning "-unused-field"]
-
-
-
-
-
-
 
 
   let goal1 context global lc =
@@ -1563,4 +1557,3 @@ let debug_solver_query solver global assumptions pointer_facts lc =
          global assumptions pointer_facts lc in
     Pp.item "debug solver query" (Lazy.force smt2_doc)
   end)
-

@@ -32,8 +32,7 @@ type loop_id = nat
 
 (* records where a label comes from *)
 type label_annot = 
-  | LAloop_prebody of loop_id
-  | LAloop_body of loop_id
+  | LAloop of loop_id
   | LAloop_continue of loop_id
   | LAloop_break of loop_id
   | LAreturn (* when an Esave is annotated with this it indicates it is the
@@ -46,8 +45,7 @@ type label_annot =
 
 instance (Show label_annot)
   let show = function
-    | LAloop_prebody id -> "loop pre-body " ^ show id
-    | LAloop_body id -> "loop body " ^ show id
+    | LAloop id -> "loop " ^ show id
     | LAloop_continue id -> "loop continue " ^ show id
     | LAloop_break id -> "loop break " ^ show id
     | LAreturn -> "return"

@@ -24,10 +24,10 @@ let get_typedef_string (C.(Ctype (_, ctype_))) =
     | _ -> None
 
 
-let mk_expr ?(strs=[]) expr_ =
+let mk_expr expr_ =
   A.AnnotatedExpression (
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
-     strs, Cerb_location.unknown, expr_)
+     [], Cerb_location.unknown, expr_)
 
 let get_expr_strs = function
   | (A.AnnotatedExpression (CF.GenTypes.GenLValueType (_, _, _), strs, _, _)) -> strs
@@ -101,3 +101,13 @@ let str_of_it_ = function
   | Terms.Sym sym -> Sym.pp_string sym
   | _ -> ""
 
+let create_binding sym ctype = 
+    A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
+
+(* Decl_object  of (storageDuration * bool) * maybe alignment * qualifiers * ctype*)
+let create_decl_object ctype = 
+  A.(Decl_object ((Automatic, false), None, empty_qualifiers, ctype))
+
+(*  declarations: list (ail_identifier * (Loc.t * Annot.attributes * declaration)) *)
+let create_declaration sym decl = 
+  (sym, (Cerb_location.unknown, CF.Annot.Attrs [], decl))

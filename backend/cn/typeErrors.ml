@@ -47,8 +47,7 @@ let call_situation= function
      | LAreturn -> !^"checking return"
      | LAloop_break _ -> !^"checking loop break"
      | LAloop_continue _ -> !^"checking loop continue"
-     | LAloop_body _ -> !^"checking loop entry"
-     | LAloop_prebody _ -> !^"checking loop pre-body"
+     | LAloop _ -> !^"checking loop entry"
      | LAswitch -> !^"todo: checking LAswitch"
      | LAcase -> !^"todo: checking LAcase"
      | LAdefault -> !^"todo: checking LAdefault"
@@ -72,7 +71,7 @@ let for_access = function
 
 let for_situation = function
   | Access access -> for_access access
-  | Call s -> 
+  | Call s ->
       match s with
       | FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
       | LemmaApplication l -> !^"for applying lemma" ^^^ Sym.pp l
@@ -81,11 +80,10 @@ let for_situation = function
          | LAreturn -> !^"for returning"
          | LAloop_break _ -> !^"for breaking from loop"
          | LAloop_continue _ -> !^"for loop continue"
-         | LAloop_body _ -> !^"for looping"
-         | LAloop_prebody _ -> !^"for entering loop pre-body"
-         | LAswitch -> !^"todo: LAswitch"
-         | LAcase -> !^"todo: LAcase"
-         | LAdefault -> !^"todo: LAdefault"
+         | LAloop _ -> !^"for loop"
+         | LAswitch -> !^"for switch statement"
+         | LAcase -> !^"for case switch"
+         | LAdefault -> !^"for default case"
          | LAactual_label -> !^"for jumping to label"
          end
       | Subtyping -> !^"for returning"
@@ -128,8 +126,8 @@ type message =
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
-  | Mismatch of { has: doc; expect: doc; }
-  | Illtyped_it : {it: Pp.doc; has: Pp.doc; expected: string; reason : string} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
+  | Mismatch of { has: document; expect: document; }
+  | Illtyped_it : {it: Pp.document; has: Pp.document; expected: string; reason : string} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
   | NIA : {it: IT.t; hint : string} -> message
   | TooBigExponent : {it: IT.t} -> message
   | NegativeExponent : {it: IT.t} -> message
@@ -164,8 +162,8 @@ type type_error = {
 
 
 type report = {
-    short : Pp.doc;
-    descr : Pp.doc option;
+    short : Pp.document;
+    descr : Pp.document option;
     state : Report.report option;
   }
 
@@ -434,7 +432,7 @@ let report ?state_file:to_ {loc; msg} =
          | Some file -> file
          | None -> Filename.temp_file "state_" ".html"
        in
-       let link = Report.make2 state_error_file (Cerb_location.get_filename loc) state in
+       let link = Report.make state_error_file (Cerb_location.get_filename loc) state in
        (* let link = Report.make state_error_file state in *)
        let msg = !^"Consider the state in" ^^^ !^("file://"^link) in
        Some msg
@@ -455,7 +453,7 @@ let report_json ?state_file:to_ {loc; msg} =
          | Some file -> file
          | None -> Filename.temp_file "" ".cn-state"
        in
-       let link = Report.make file state in
+       let link = Report.make file (Cerb_location.get_filename loc) state in
        `String link
     | None -> `Null in
   let descr = match report.descr with
@@ -469,5 +467,3 @@ let report_json ?state_file:to_ {loc; msg} =
             ("state", state_error_file)]
   in
   Yojson.Safe.to_channel ~std:true stderr json
-
-
