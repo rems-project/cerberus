@@ -34,7 +34,6 @@ open LogicalConstraints
 open List
 open Typing
 open Effectful.Make(Typing)
-open WellTyped
 
 
 
@@ -587,7 +586,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
   | M_PEapply_fun (fun_id, args) ->
      let@ () = match mu_fun_return_type fun_id args with
        | Some (`Returns_BT bt) -> ensure_base_type loc ~expect bt
-       | Some (`Returns_Integer) -> ensure_bits_type loc expect
+       | Some (`Returns_Integer) -> WellTyped.ensure_bits_type loc expect
        | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "untypeable mucore function"
               (Pp_mucore_ast.pp_pexpr orig_pe))})
      in
@@ -652,8 +651,8 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      assert (match act.ct with Integer ity when is_unsigned_integer_type ity -> true | _ -> false);
      let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
-     let@ () = ensure_bits_type loc expect in
-     let@ () = ensure_bits_type loc (bt_of_pexpr pe2) in
+     let@ () = WellTyped.ensure_bits_type loc expect in
+     let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
      let@ () = match iop with
        | IOpShl | IOpShr -> return ()
        | _ -> ensure_base_type loc ~expect (bt_of_pexpr pe2)
@@ -1465,7 +1464,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                     warn loc !^"Explicit pack/unpack unsupported.";
                     return ()
             | M_CN_have lc ->
-               let@ _lc = WLC.welltyped loc lc in
+               let@ _lc = WellTyped.WLC.welltyped loc lc in
                fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
             | M_CN_instantiate (to_instantiate, it) ->
                let@ filter = match to_instantiate with
@@ -1475,10 +1474,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                     let@ _ = get_logical_function_def loc f in
                     return (IT.mentions_call f)
                  | I_Good ct ->
-                    let@ () = WCT.is_ct loc ct in
+                    let@ () = WellTyped.WCT.is_ct loc ct in
                     return (IT.mentions_good ct)
                in
-               let@ it = WIT.infer it in
+               let@ it = WellTyped.WIT.infer it in
                instantiate loc filter it
             | M_CN_split_case _ ->
               assert false
@@ -1500,7 +1499,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                     let@ _ = get_resource_predicate_def loc pn in
                     return (PName pn)
                in
-               let@ it = WIT.infer it in
+               let@ it = WellTyped.WIT.infer it in
                let@ (original_rs, _) = all_resources_tagged loc in
                let verbose = List.exists (Id.is_str "verbose") attrs in
                let quiet = List.exists (Id.is_str "quiet") attrs in
@@ -1573,7 +1572,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
        | [] -> k (unit_ loc)
        | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) :: cn_progs ->
           let@ pointer = WellTyped.WIT.check loc Loc pointer in
-          let@ () = WCT.is_ct loc ct in
+          let@ () = WellTyped.WCT.is_ct loc ct in
           let@ value = load loc pointer ct in
           let subbed = Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog in
           loop (subbed :: cn_progs)
@@ -2032,15 +2031,10 @@ let record_and_check_datatypes datatypes =
 
 
 
-
-let check (mu_file : unit mu_file) _stmt_locs o_lemma_mode =
-  Cerb_debug.begin_csv_timing () (*total*);
-
-  Pp.debug 3 (lazy (Pp.headline "beginning type-checking mucore file."));
-
-  (* let@ mu_file = WellTyped.BaseTyping.infer_types_file mu_file in *)
-
-
+(** Note: this does not check loop invariants and CN statements! *)
+let check_decls_lemmata_fun_specs (mu_file : unit mu_file) =
+  Cerb_debug.begin_csv_timing (); (* decl, lemmata, function specification checking *)
+  Pp.debug 3 (lazy (Pp.headline "checking decls, lemmata and function specifications"));
 
   let@ () = record_tagdefs mu_file.mu_tagDefs in
   let@ () = check_tagdefs mu_file.mu_tagDefs in
@@ -2073,30 +2067,21 @@ let check (mu_file : unit mu_file) _stmt_locs o_lemma_mode =
   in
 
   Pp.debug 3 (lazy (Pp.headline "type-checked C functions and specifications."));
+  Cerb_debug.end_csv_timing "decl, lemmata, function specification checking";
+  return (checked, lemmata)
+
+let check (checked, lemmata) o_lemma_mode =
 
   Cerb_debug.begin_csv_timing () (*type checking functions*);
   let@ () = check_c_functions checked in
   Cerb_debug.end_csv_timing "type checking functions";
 
   let@ global = get_global () in
-  let@ () = match o_lemma_mode with
-  | Some mode -> embed_resultat (Lemmata.generate global mode lemmata)
+  match o_lemma_mode with
+  | Some mode ->
+    let@ _ = embed_resultat (Lemmata.generate global mode lemmata) in
+    return ()
   | None -> return ()
-  in
-  Cerb_debug.end_csv_timing "total";
-  Pp.debug 3 (lazy (Pp.headline "done type-checking mucore file."));
-  return ()
-
-
-
-
-
-
-
-
-
-
-
 
 (* TODO:
    - sequencing strength

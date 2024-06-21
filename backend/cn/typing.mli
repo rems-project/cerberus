@@ -7,6 +7,7 @@ type solver
 type 'a t
 type 'a m = 'a t
 type failure = Context.t * Explain.log -> TypeErrors.t
+type 'a pause
 
 val return : 'a -> 'a m
 val bind : 'a m -> ('a -> 'b m) -> 'b m
@@ -14,6 +15,8 @@ val pure : 'a m -> 'a m
 val (let@) : 'a m -> ('a -> 'b m) -> 'b m
 val fail : failure -> 'a m
 val run : Context.t -> 'a m -> ('a, TypeErrors.t) Result.t
+val run_to_pause : Context.t -> 'a m -> 'a pause
+val run_from_pause : ('a -> 'b m) -> 'a pause -> ('b, TypeErrors.t) Result.t
 val sandbox : 'a t -> ('a Resultat.t) t
 
 val get_typing_context: unit -> Context.t m

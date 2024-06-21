@@ -1,5 +1,4 @@
 (* include Result *)
-module Loc = Locations
 
 type 'a t =  ('a, TypeErrors.t) Result.t
 type 'a m = 'a t

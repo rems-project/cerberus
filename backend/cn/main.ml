@@ -197,16 +197,14 @@ let main
       let open Resultat in
       let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
       print_log_file ("mucore", MUCORE prog5);
-      (* TODO: Factor out Check.check so that well-formedness checks can be separately.
-               Otherwise one might get a lot of noise. *)
-      begin match output_decorated with
-      | None -> Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
-      | Some output_filename ->
-          Cerb_colour.without_colour begin fun () ->
-            Executable_spec.main ~with_ownership_checking filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
-            return ()
-          end ()
-      end in
+      let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
+      Option.iter (fun output_filename ->
+          Cerb_colour.without_colour (fun () ->
+              Executable_spec.main ~with_ownership_checking filename ail_prog output_decorated_dir output_filename prog5 statement_locs)
+            ())
+        output_decorated ;
+    Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
+    in
     Pp.maybe_close_times_channel ();
     match result with
     | Ok () -> exit 0
