@@ -11,9 +11,6 @@ int main()
   int *q = &y;
   ptrdiff_t offset = q - p;
   int *r = p + offset;
-  /*CN_VIP*/if (&r == &q) return 0;                                         // CN used to derive disjointness and non-null
-  /*CN_VIP*/if ((uintptr_t)&r + sizeof(uintptr_t) < (uintptr_t)&r) return 0;// constraints from resource ownership, but this
-  /*CN_VIP*/if ((uintptr_t)&q + sizeof(uintptr_t) < (uintptr_t)&q) return 0;// was removed for performance reasons.
   /*CN_VIP*/unsigned char* r_bytes = owned_int_ptr_to_owned_uchar_arr(&r);
   /*CN_VIP*/unsigned char* q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
   /*CN_VIP*/int result = _memcmp(r_bytes, q_bytes, sizeof(r));

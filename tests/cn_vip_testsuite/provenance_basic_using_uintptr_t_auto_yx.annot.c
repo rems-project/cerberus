@@ -19,9 +19,6 @@ int main() {
   int *q = &y;
   //CN_VIP printf("Addresses: &x=%p p=%p &y=%"PRIxPTR\
          "\n",(void*)&x,(void*)p,(unsigned long)uy);
-  /*CN_VIP*/if (&p == &q) return 0;                                         // CN used to derive disjointness and non-null
-  /*CN_VIP*/if ((uintptr_t)&p + sizeof(int*) < (uintptr_t)&p) return 0;     // constraints from resource ownership, but this
-  /*CN_VIP*/if ((uintptr_t)&q + sizeof(int*) < (uintptr_t)&q) return 0;     // was removed for performance reasons.
   /*CN_VIP*/unsigned char* p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
   /*CN_VIP*/unsigned char* q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
   /*CN_VIP*/int result = _memcmp(p_bytes, q_bytes, sizeof(p));
