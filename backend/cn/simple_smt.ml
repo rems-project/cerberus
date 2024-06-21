@@ -662,7 +662,7 @@ let to_array (exp0: sexp): (sexp * sexp) list * sexp =
       match exp with
       | Sexp.List [ Sexp.List [Sexp.Atom "as"; Sexp.Atom "const"; _]; k ] ->
         (List.rev is, k)
-      | Sexp.List [ Sexp.List [Sexp.Atom "store"; a; i; v] ] ->
+      | Sexp.List [Sexp.Atom "store"; a; i; v] ->
         loop ((i,v)::is) a
       | _ -> bad ()
   in loop [] exp0

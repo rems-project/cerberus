@@ -358,9 +358,9 @@ and
   | Map (kt, vt) ->
     let (els,dflt) = SMT.to_array sexp in
     let base = MapConst (kt, get_ivalue gs vt dflt) in
-    let add_el (k,v) a = MapSet ( get_ivalue gs kt k
+    let add_el (k,v) a = MapSet ( IT (a, bt, Cerb_location.unknown)
+                                , get_ivalue gs kt k
                                 , get_ivalue gs vt v
-                                , IT (a, bt, Cerb_location.unknown)
                                 ) in
     List.fold_right add_el els base
 
