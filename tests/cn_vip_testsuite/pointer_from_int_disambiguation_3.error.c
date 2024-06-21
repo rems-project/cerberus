@@ -13,9 +13,6 @@ int main()
   int *q = &y;
   uintptr_t i = (uintptr_t)p;
   uintptr_t j = (uintptr_t)q;
-  /*CN_VIP*/if (&p == &q) return 0;                                         // CN used to derive disjointness and non-null
-  /*CN_VIP*/if ((uintptr_t)&p + sizeof(uintptr_t) < (uintptr_t)&p) return 0;// constraints from resource ownership, but this
-  /*CN_VIP*/if ((uintptr_t)&q + sizeof(uintptr_t) < (uintptr_t)&q) return 0;// was removed for performance reasons.
   /*CN_VIP*/unsigned char* p_bytes = owned_int_ptr_to_owned_uchar_arr(&p);
   /*CN_VIP*/unsigned char* q_bytes = owned_int_ptr_to_owned_uchar_arr(&q);
   /*CN_VIP*/int result = _memcmp(p_bytes, q_bytes, sizeof(p));
