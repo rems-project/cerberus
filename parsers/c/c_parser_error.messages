@@ -8,7 +8,8 @@ cn_statements: WHILE
 ##
 ##
 
-parsing "cn_statements'": expected "cn_statements"
+You're inside a function - so I'm expecting a CN statement.
+Hint: these start with 'extract', 'instantiate', 'split_case', 'assert', 'print', 'apply'.
 
 cn_statements: INLINE WHILE
 ##
@@ -1568,7 +1569,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE RETURN WHILE
 ## RETURN
 ##
 
-parsing "jump_statement": seen "RETURN", expecting "option(expression) SEMICOLON"
+parsing "jump_statement": seen "RETURN", expecting "option(full_expression) SEMICOLON"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE GOTO WHILE
 ##
@@ -1736,7 +1737,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE WHILE WHILE
 ## WHILE
 ##
 
-parsing "iteration_statement": seen "WHILE", expecting "LPAREN expression RPAREN magic_comment_list scoped(statement)"
+parsing "iteration_statement": seen "WHILE", expecting "LPAREN full_expression RPAREN magic_comment_list scoped(statement)"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE WHILE LPAREN WHILE
 ##
@@ -1748,16 +1749,17 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE WHILE LPAREN WHILE
 ## WHILE LPAREN
 ##
 
-parsing "iteration_statement": seen "WHILE LPAREN", expecting "expression RPAREN magic_comment_list scoped(statement)"
+parsing "iteration_statement": seen "WHILE LPAREN", expecting "full_expression RPAREN magic_comment_list scoped(statement)"
 
-translation_unit: ALIGNAS LPAREN LPAREN LBRACE IF LPAREN STRING_LITERAL RPAREN VOLATILE
+translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO VOLATILE
 ##
-## Ends in an error in state: 658.
+## Ends in an error in state: 781.
 ##
-## scoped(statement) -> save_context . statement [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
+## iteration_statement -> DO magic_comment_list . scoped(statement) WHILE LPAREN expression RPAREN SEMICOLON [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
+## magic_comment_list -> magic_comment_list . CERB_MAGIC [ WHILE VA_START VA_END VA_COPY VA_ARG UNAME TILDE SWITCH STRING_LITERAL STAR SIZEOF SEMICOLON RETURN PRINT_TYPE PLUS_PLUS PLUS OFFSETOF MINUS_MINUS MINUS LPAREN LNAME LBRACK_LBRACK LBRACES LBRACE IF GOTO GENERIC FOR DO DEFAULT CONTINUE CONSTANT CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BMC_ASSUME BANG ASSERT ASM AMPERSAND ALIGNOF ]
 ##
 ## The known suffix of the stack is as follows:
-## save_context
+## DO magic_comment_list
 ##
 
 parsing "scoped(statement)": seen "save_context", expecting "statement"
@@ -1772,7 +1774,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE SWITCH WHILE
 ## SWITCH
 ##
 
-parsing "selection_statement": seen "SWITCH", expecting "LPAREN expression RPAREN scoped(statement)"
+parsing "selection_statement": seen "SWITCH", expecting "LPAREN full_expression RPAREN scoped(statement)"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE SWITCH LPAREN WHILE
 ##
@@ -1784,7 +1786,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE SWITCH LPAREN WHILE
 ## SWITCH LPAREN
 ##
 
-parsing "selection_statement": seen "SWITCH LPAREN", expecting "expression RPAREN scoped(statement)"
+parsing "selection_statement": seen "SWITCH LPAREN", expecting "full_expression RPAREN scoped(statement)"
 
 translation_unit: BOOL LNAME TYPE LBRACES VOLATILE
 ##
@@ -1988,7 +1990,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN SEMICOLON WHILE
 ## FOR LPAREN option(expression) SEMICOLON
 ##
 
-parsing "iteration_statement": seen "FOR LPAREN option(expression) SEMICOLON", expecting "option(expression) SEMICOLON option(expression) RPAREN magic_comment_list scoped(statement)"
+parsing "iteration_statement": seen "FOR LPAREN option(full_expression) SEMICOLON", expecting "option(full_expression) SEMICOLON option(full_expression) RPAREN magic_comment_list scoped(statement)"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN SEMICOLON SEMICOLON WHILE
 ##
@@ -2000,7 +2002,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN SEMICOLON SEMICOLON WH
 ## FOR LPAREN option(expression) SEMICOLON option(expression) SEMICOLON
 ##
 
-parsing "iteration_statement": seen "FOR LPAREN option(expression) SEMICOLON option(expression) SEMICOLON", expecting "option(expression) RPAREN magic_comment_list scoped(statement)"
+parsing "iteration_statement": seen "FOR LPAREN option(full_expression) SEMICOLON option(full_expression) SEMICOLON", expecting "option(full_expression) RPAREN magic_comment_list scoped(statement)"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN BOOL SEMICOLON WHILE
 ##
@@ -2012,7 +2014,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN BOOL SEMICOLON WHILE
 ## FOR LPAREN declaration
 ##
 
-parsing "iteration_statement": seen "FOR LPAREN declaration", expecting "option(expression) SEMICOLON option(expression) RPAREN magic_comment_list scoped(statement)"
+parsing "iteration_statement": seen "FOR LPAREN declaration", expecting "option(full_expression) SEMICOLON option(full_expression) RPAREN magic_comment_list scoped(statement)"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN BOOL SEMICOLON SEMICOLON WHILE
 ##
@@ -2024,7 +2026,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN BOOL SEMICOLON SEMICOL
 ## FOR LPAREN declaration option(expression) SEMICOLON
 ##
 
-parsing "iteration_statement": seen "FOR LPAREN declaration option(expression) SEMICOLON", expecting "option(expression) RPAREN magic_comment_list scoped(statement)"
+parsing "iteration_statement": seen "FOR LPAREN declaration option(full_expression) SEMICOLON", expecting "option(full_expression) RPAREN magic_comment_list scoped(statement)"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON VOLATILE
 ##
@@ -2036,7 +2038,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON VOLATILE
 ## DO magic_comment_list scoped(statement)
 ##
 
-parsing "iteration_statement": seen "DO magic_comment_list scoped(statement)", expecting "WHILE LPAREN expression RPAREN SEMICOLON"
+parsing "iteration_statement": seen "DO scoped(statement)", expecting "WHILE LPAREN full_expression RPAREN SEMICOLON"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON WHILE WHILE
 ##
@@ -2048,7 +2050,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON WHILE WHILE
 ## DO magic_comment_list scoped(statement) WHILE
 ##
 
-parsing "iteration_statement": seen "DO magic_comment_list scoped(statement) WHILE", expecting "LPAREN expression RPAREN SEMICOLON"
+parsing "iteration_statement": seen "DO scoped(statement) WHILE", expecting "LPAREN full_expression RPAREN SEMICOLON"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON WHILE LPAREN WHILE
 ##
@@ -2060,7 +2062,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON WHILE LPAREN WHILE
 ## DO magic_comment_list scoped(statement) WHILE LPAREN
 ##
 
-parsing "iteration_statement": seen "DO magic_comment_list scoped(statement) WHILE LPAREN", expecting "expression RPAREN SEMICOLON"
+parsing "iteration_statement": seen "DO scoped(statement) WHILE LPAREN", expecting "full_expression RPAREN SEMICOLON"
 
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON WHILE LPAREN STRING_LITERAL RPAREN WHILE
 ##
@@ -2072,7 +2074,7 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO SEMICOLON WHILE LPAREN STRING_
 ## DO magic_comment_list scoped(statement) WHILE LPAREN expression RPAREN
 ##
 
-parsing "iteration_statement": seen "DO magic_comment_list scoped(statement) WHILE LPAREN expression RPAREN", expecting "SEMICOLON"
+parsing "iteration_statement": seen "DO scoped(statement) WHILE LPAREN full_expression RPAREN", expecting "SEMICOLON"
 
 translation_unit: ALIGNAS LPAREN LPAREN BOOL RPAREN LBRACE WHILE
 ##
@@ -2469,18 +2471,6 @@ cn_statements: CN_EXTRACT OFFSETOF LPAREN LNAME TYPE COMMA LNAME TYPE WHILE
 ##
 
 parsing "unary_expr": seen "OFFSETOF LPAREN LNAME TYPE COMMA LNAME TYPE", expecting "RPAREN"
-
-cn_statements: CN_EXTRACT MINUS WHILE
-##
-## Ends in an error in state: 919.
-##
-## unary_expr -> MINUS . unary_expr [ STAR SLASH SEMICOLON RPAREN RBRACK RBRACE QUESTION PLUS PIPE_PIPE MINUS LT_EQ LT GT_EQ GT EQ_EQ COMMA COLON BANG_EQ AMPERSAND_AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## MINUS
-##
-
-parsing "unary_expr": seen "MINUS", expecting "unary_expr"
 
 cn_statements: CN_EXTRACT LNAME VARIABLE LPAREN WHILE
 ##
@@ -3020,19 +3010,32 @@ cn_statements: CN_EXTRACT BANG WHILE
 ## BANG
 ##
 
-parsing "unary_expr": seen "BANG", expecting "unary_expr"
+parsing "unary_expr": seen "BANG", expecting "prim_expr"
 
-cn_statements: CN_EXTRACT AMPERSAND LPAREN LPAREN WHILE
+cn_statements: CN_EXTRACT BANG LPAREN WHILE
 ##
-## Ends in an error in state: 1053.
+## Ends in an error in state: 920.
 ##
-## prim_expr -> LPAREN . expr RPAREN [ MINUS_GT LBRACK DOT COLON ]
+## prim_expr -> LPAREN . expr RPAREN [ STAR SLASH SEMICOLON RPAREN RBRACK RBRACE QUESTION PLUS PIPE_PIPE MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT COMMA COLON BANG_EQ AMPERSAND_AMPERSAND ]
+## unary_expr -> LPAREN . base_type_explicit RPAREN unary_expr [ STAR SLASH SEMICOLON RPAREN RBRACK RBRACE QUESTION PLUS PIPE_PIPE MINUS LT_EQ LT GT_EQ GT EQ_EQ COMMA COLON BANG_EQ AMPERSAND_AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## LPAREN
 ##
 
 parsing "prim_expr": seen "LPAREN", expecting "expr RPAREN"
+
+cn_statements: CN_EXTRACT LBRACE LNAME VARIABLE COLON WHILE
+##
+## Ends in an error in state: 1112.
+##
+## member_def -> LNAME VARIABLE COLON . expr [ RBRACE COMMA ]
+##
+## The known suffix of the stack is as follows:
+## LNAME VARIABLE COLON
+##
+
+parsing "member_def": seen "LNAME VARIABLE COLON", expecting "expr"
 
 cn_statements: CN_EXTRACT CN_CONSTANT LT_EQ WHILE
 ##
@@ -3057,6 +3060,18 @@ cn_statements: CN_EXTRACT CN_CONSTANT LBRACK CN_CONSTANT COLON WHILE
 ##
 
 parsing "index_update": seen "prim_expr COLON", expecting "expr"
+
+cn_statements: CN_EXTRACT MINUS WHILE
+##
+## Ends in an error in state: 919.
+##
+## unary_expr -> MINUS . unary_expr [ STAR SLASH SEMICOLON RPAREN RBRACK RBRACE QUESTION PLUS PIPE_PIPE MINUS LT_EQ LT GT_EQ GT EQ_EQ COMMA COLON BANG_EQ AMPERSAND_AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## MINUS
+##
+
+parsing "unary_expr": seen "MINUS", expecting "prim_expr"
 
 cn_statements: CN_EXTRACT CN_CONSTANT STAR WHILE
 ##
@@ -3128,19 +3143,7 @@ cn_statements: CN_EXTRACT CN_CONSTANT PIPE_PIPE WHILE
 ## bool_or_expr PIPE_PIPE
 ##
 
-parsing "bool_or_expr": seen "bool_or_expr PIPE_PIPE", expecting "bool_and_expr"
-
-cn_statements: CN_EXTRACT CN_CONSTANT AMPERSAND_AMPERSAND WHILE
-##
-## Ends in an error in state: 1083.
-##
-## bool_and_expr -> bool_and_expr AMPERSAND_AMPERSAND . rel_expr [ SEMICOLON RPAREN RBRACK RBRACE QUESTION PIPE_PIPE COMMA COLON AMPERSAND_AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## bool_and_expr AMPERSAND_AMPERSAND
-##
-
-parsing "bool_and_expr": seen "bool_and_expr AMPERSAND_AMPERSAND", expecting "rel_expr"
+parsing "bool_bin_expr": seen "bool_bin_expr PIPE_PIPE", expecting "rel_expr"
 
 cn_statements: CN_EXTRACT CN_CONSTANT LT WHILE
 ##
@@ -3238,6 +3241,18 @@ cn_statements: CN_EXTRACT CN_CONSTANT BANG_EQ WHILE
 
 parsing "rel_expr": seen "rel_expr BANG_EQ", expecting "add_expr"
 
+cn_statements: CN_EXTRACT CN_CONSTANT AMPERSAND_AMPERSAND WHILE
+##
+## Ends in an error in state: 1083.
+##
+## bool_and_expr -> bool_and_expr AMPERSAND_AMPERSAND . rel_expr [ SEMICOLON RPAREN RBRACK RBRACE QUESTION PIPE_PIPE COMMA COLON AMPERSAND_AMPERSAND ]
+##
+## The known suffix of the stack is as follows:
+## bool_and_expr AMPERSAND_AMPERSAND
+##
+
+parsing "bool_bin_expr": seen "bool_bin_expr AMPERSAND_AMPERSAND", expecting "rel_expr"
+
 cn_statements: CN_EXTRACT CN_CONSTANT LBRACK CN_CONSTANT COLON CN_CONSTANT COMMA WHILE
 ##
 ## Ends in an error in state: 1108.
@@ -3249,18 +3264,6 @@ cn_statements: CN_EXTRACT CN_CONSTANT LBRACK CN_CONSTANT COLON CN_CONSTANT COMMA
 ##
 
 parsing "separated_nonempty_list(COMMA,index_update)": seen "index_update COMMA", expecting "separated_nonempty_list(COMMA,index_update)"
-
-cn_statements: CN_EXTRACT LBRACE LNAME VARIABLE COLON WHILE
-##
-## Ends in an error in state: 1112.
-##
-## member_def -> LNAME VARIABLE COLON . expr [ RBRACE COMMA ]
-##
-## The known suffix of the stack is as follows:
-## LNAME VARIABLE COLON
-##
-
-parsing "member_def": seen "LNAME VARIABLE COLON", expecting "expr"
 
 cn_statements: CN_EXTRACT LNAME TYPE LPAREN WHILE
 ##
@@ -4280,7 +4283,7 @@ cn_statements: CN_EXTRACT LPAREN CN_ALLOC_ID WHILE
 ## LPAREN base_type_explicit
 ##
 
-parsing "unary_expr": seen "LPAREN base_type_explicit", expecting "RPAREN unary_expr"
+parsing "unary_expr": seen "LPAREN base_type_explicit", expecting "RPAREN prim_expr"
 
 cn_statements: CN_EXTRACT LPAREN CN_ALLOC_ID RPAREN WHILE
 ##
@@ -4292,7 +4295,7 @@ cn_statements: CN_EXTRACT LPAREN CN_ALLOC_ID RPAREN WHILE
 ## LPAREN base_type_explicit RPAREN
 ##
 
-parsing "unary_expr": seen "LPAREN base_type_explicit RPAREN", expecting "unary_expr"
+parsing "unary_expr": seen "LPAREN base_type_explicit RPAREN", expecting "prim_expr"
 
 cn_statements: CN_UNPACK CN_OWNED LPAREN RPAREN WHILE
 ##
@@ -7293,6 +7296,18 @@ translation_unit: BOOL LNAME TYPE LBRACE RBRACE WHILE
 ##
 
 parsing "function_definition": seen "function_definition1 option(declaration_list) magic_comment_list compound_statement", expecting "boption(SEMICOLON)"
+
+cn_statements: CN_EXTRACT AMPERSAND LPAREN LPAREN WHILE
+##
+## Ends in an error in state: 1053.
+##
+## prim_expr -> LPAREN . expr RPAREN [ MINUS_GT LBRACK DOT COLON ]
+##
+## The known suffix of the stack is as follows:
+## LPAREN
+##
+
+parsing "prim_expr": seen "LPAREN", expecting "expr RPAREN"
 
 cn_statements: INLINE UNAME WHILE
 ##
@@ -10877,6 +10892,18 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE WHILE LPAREN STRING_LITERAL RPARE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
+translation_unit: ALIGNAS LPAREN LPAREN LBRACE IF LPAREN STRING_LITERAL RPAREN VOLATILE
+##
+## Ends in an error in state: 658.
+##
+## scoped(statement) -> save_context . statement [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## save_context
+##
+
+parsing "scoped(statement)": seen "save_context", expecting "statement"
+
 translation_unit: ALIGNAS LPAREN LPAREN LBRACE SWITCH LPAREN STRING_LITERAL RBRACK
 ##
 ## Ends in an error in state: 662.
@@ -11723,19 +11750,6 @@ translation_unit: ALIGNAS LPAREN LPAREN LBRACE FOR LPAREN LBRACK_LBRACK ALIGNAS 
 ##
 ## The known suffix of the stack is as follows:
 ## attribute_specifier_sequence
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-translation_unit: ALIGNAS LPAREN LPAREN LBRACE DO VOLATILE
-##
-## Ends in an error in state: 781.
-##
-## iteration_statement -> DO magic_comment_list . scoped(statement) WHILE LPAREN expression RPAREN SEMICOLON [ WHILE VOLATILE VOID VA_START VA_END VA_COPY VA_ARG UNSIGNED UNION UNAME TYPEOF TYPEDEF TILDE THREAD_LOCAL SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACES RBRACE PRINT_TYPE PLUS_PLUS PLUS PIPES OFFSETOF NORETURN MINUS_MINUS MINUS LPAREN LONG LNAME LBRACK_LBRACK LBRACES LBRACE INT INLINE IF GOTO GENERIC FOR FLOAT EXTERN ENUM ELSE DOUBLE DO DEFAULT CONTINUE CONSTANT CONST COMPLEX CHAR CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BOOL BMC_ASSUME BANG AUTO ATOMIC ASSERT ASM AMPERSAND ALIGNOF ALIGNAS ]
-## magic_comment_list -> magic_comment_list . CERB_MAGIC [ WHILE VA_START VA_END VA_COPY VA_ARG UNAME TILDE SWITCH STRING_LITERAL STAR SIZEOF SEMICOLON RETURN PRINT_TYPE PLUS_PLUS PLUS OFFSETOF MINUS_MINUS MINUS LPAREN LNAME LBRACK_LBRACK LBRACES LBRACE IF GOTO GENERIC FOR DO DEFAULT CONTINUE CONSTANT CERB_MAGIC CASE BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR BREAK BMC_ASSUME BANG ASSERT ASM AMPERSAND ALIGNOF ]
-##
-## The known suffix of the stack is as follows:
-## DO magic_comment_list
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -12820,19 +12834,6 @@ cn_statements: CN_EXTRACT OFFSETOF LPAREN LNAME TYPE COMMA LNAME WHILE
 ##
 ## The known suffix of the stack is as follows:
 ## OFFSETOF LPAREN LNAME TYPE COMMA LNAME
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-cn_statements: CN_EXTRACT LPAREN WHILE
-##
-## Ends in an error in state: 920.
-##
-## prim_expr -> LPAREN . expr RPAREN [ STAR SLASH SEMICOLON RPAREN RBRACK RBRACE QUESTION PLUS PIPE_PIPE MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT COMMA COLON BANG_EQ AMPERSAND_AMPERSAND ]
-## unary_expr -> LPAREN . base_type_explicit RPAREN unary_expr [ STAR SLASH SEMICOLON RPAREN RBRACK RBRACE QUESTION PLUS PIPE_PIPE MINUS LT_EQ LT GT_EQ GT EQ_EQ COMMA COLON BANG_EQ AMPERSAND_AMPERSAND ]
-##
-## The known suffix of the stack is as follows:
-## LPAREN
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
