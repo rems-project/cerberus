@@ -215,5 +215,21 @@ and initial = parse
 (* ========================================================================== *)
 
 {
+type lexer_state =
+  | LSRegular
+  | LSIdentifier of string
 
+let lexer_state = ref LSRegular
+
+let lexer lexbuf : token =
+  match !lexer_state with
+  | LSRegular ->
+      begin match initial lexbuf with
+      | LNAME i as tok -> lexer_state := LSIdentifier i; tok
+      | UNAME i as tok -> lexer_state := LSIdentifier i; tok
+      | _      as tok -> lexer_state := LSRegular; tok
+      end
+  | LSIdentifier i ->
+      lexer_state := LSRegular;
+      if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
 }

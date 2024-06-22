@@ -80,7 +80,7 @@ let parse_loc_string parse (loc, str) =
   Lexing.set_filename lexbuf (Option.value ~default:"<none>" (Cerb_location.get_filename loc));
   handle
     parse
-    (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:true))
+    (MenhirLib.ErrorReports.wrap (Cn_lexer.lexer))
     ~offset:start_pos.pos_cnum
     lexbuf
 
@@ -115,7 +115,7 @@ let update_enclosing_region payload_region xs =
 let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
   let magic_comments_to_cn_toplevel = function
     | Cabs.EDecl_magic (loc, str) ->
-      parse_loc_string C_parser.cn_toplevel (loc, str)
+      parse_loc_string Cn_parser.cn_toplevel (loc, str)
       |> Exception.except_fmap (update_enclosing_region loc)
     | decl ->
       Exception.except_return [decl] in
