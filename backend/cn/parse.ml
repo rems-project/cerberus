@@ -34,7 +34,7 @@ let fiddle_at_hack string =
   fix ss
 
 let debug_tokens loc string =
-  let (toks, pos) = C_parser_driver.diagnostic_get_tokens ~inside_cn:true loc string in
+  let (toks, pos) = C_parser_driver.diagnostic_get_cn_tokens loc string in
   let pp_int_pair (x, y) = Pp.(parens (int x ^^ comma ^^^ int y)) in
   Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))
     ^/^ Pp.item "(line, col)" (Pp.braces (Pp.list pp_int_pair pos))

@@ -51,21 +51,22 @@ let start_pos = function
   | Loc_regions ((loc, _) :: _, _) -> Some loc
   | _ -> None
 
-let diagnostic_get_tokens ~inside_cn loc string =
+(* TODO(K): move this to the CN backend *)
+let diagnostic_get_cn_tokens loc string =
   (* `C_lexer.magic_token' ensures `loc` is a region *)
   let start_pos = Option.get @@ start_pos loc in
   let lexbuf = Lexing.from_string string in
   let rec relex (toks, pos) =
     try
-      match C_lexer.lexer ~inside_cn lexbuf with
-      | Tokens.EOF -> (List.rev ("EOF" :: toks), List.rev pos)
+      match Cn_lexer.lexer lexbuf with
+      | Cn_tokens.EOF -> (List.rev ("EOF" :: toks), List.rev pos)
       | t ->
         let Lexing.{ pos_lnum; pos_bol; pos_cnum; _ } = lexbuf.lex_start_p in
         let (line, col) =
           (* the first line needs to have columns shifted by /*@ but the rest do not *)
           let col_off = if pos_lnum > 1 then 1 else start_pos.pos_cnum - start_pos.pos_bol + 1 in
           (pos_lnum + start_pos.pos_lnum, col_off + pos_cnum - pos_bol) in
-        relex (Tokens.string_of_token t :: toks, (line, col) :: pos)
+        relex (Cn_tokens.string_of_token t :: toks, (line, col) :: pos)
       with
         C_lexer.Error err ->
           (List.rev (Pp_errors.string_of_cparser_cause err :: toks), List.rev pos)
@@ -126,7 +127,7 @@ let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
 let parse_with_magic_comments lexbuf =
   handle
     C_parser.translation_unit
-    (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:false))
+    (MenhirLib.ErrorReports.wrap (C_lexer.lexer))
     ~offset:0
     lexbuf
 
