@@ -198,7 +198,7 @@ let inject st inj =
         do_output st "goto __cn_epilogue;\n"
     | Return (Some start_pos) ->
         let indent = String.make st.last_indent ' ' in
-        let st = do_output st ("{\n" ^ indent ^ "  __cn_ret = ") in
+        let st = do_output st (indent ^ "{\n" ^ indent ^ "  __cn_ret = ") in
         let (st, _) = move_to ~print:false st start_pos in
         let st = begin match inj.footprint with
           | WholeLine line -> move_to_line ~print:true st (line+1)
@@ -206,10 +206,12 @@ let inject st inj =
         end in
         do_output st (indent ^ "  goto __cn_epilogue;\n" ^ indent ^ "}\n")
     | Pre (strs, ret_ty, is_main) ->
-        let indent = String.make st.last_indent ' ' in
+        let indent = String.make (st.last_indent + 2) ' ' in
         let indented_strs = List.map (fun str -> str ^ indent) strs in
         let str = List.fold_left (^) "" indented_strs in
         do_output st begin
+          "\n" ^ indent ^ "/* EXECUTABLE CN PRECONDITION */" ^
+          "\n" ^ indent ^
           begin if AilTypesAux.is_void ret_ty then
             ""
           else
@@ -222,15 +224,21 @@ let inject st inj =
         end
     | Post (strs, ret_ty) ->
         let indent = String.make st.last_indent ' ' in
-        let indented_strs = List.map (fun str -> "\n" ^ indent ^ str) strs in
+        let epilogue_indent = String.make (st.last_indent + 2) ' ' in
+        let indented_strs = List.map (fun str -> 
+          let indent = if (String.contains str '{') then indent else epilogue_indent in
+          "\n" ^ indent ^ str) 
+        strs 
+        in
         let str = List.fold_left (^) "" indented_strs in
         do_output st begin
+          "\n" ^ indent ^ "/* EXECUTABLE CN POSTCONDITION */" ^
           "\n__cn_epilogue:\n" ^
           str ^
           begin if Cerb_frontend.AilTypesAux.is_void ret_ty then
-            indent ^ ";"
+            indent ^ ";\n"
           else
-            indent ^ "return __cn_ret;"
+            indent ^ "\nreturn __cn_ret;\n\n"
           end 
         end
   end in
