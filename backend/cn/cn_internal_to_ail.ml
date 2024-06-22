@@ -486,10 +486,10 @@ let prefix : type a. a dest -> (A.bindings * CF.GenTypes.genTypeCategory A.state
 let empty_for_dest : type a. a dest -> a = 
   fun d ->
     match d with 
-      | Assert -> ([], [empty_ail_stmt])
-      | Return -> ([], [empty_ail_stmt])
-      | AssignVar _ -> ([], [empty_ail_stmt])
-      | PassBack -> ([], [empty_ail_stmt], mk_expr empty_ail_expr)
+      | Assert -> ([], [])
+      | Return -> ([], [])
+      | AssignVar _ -> ([], [])
+      | PassBack -> ([], [], mk_expr empty_ail_expr)
 
 
 
@@ -1627,35 +1627,34 @@ let cn_to_ail_post_internal dts globals ownership_ctypes preds (RT.Computational
 (* TODO: Add destination passing *)
 let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> (C.union_tag * C.ctype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
 = fun dts globals d cnstatement ->
-  let true_it = IT.IT (Const (Bool true), BT.Bool, Cerb_location.unknown) in
-  let default_true_res = cn_to_ail_expr_internal dts globals true_it d in
+  let default_res = empty_for_dest d in
   match cnstatement with
   | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> 
-    (default_true_res, true)
+    (default_res, true)
 
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
 
   | Cnprog.M_CN_instantiate (to_instantiate, it) -> 
     (* Printf.printf "Translating CN instantiate\n"; *)
-    (default_true_res, true)
+    (default_res, true)
   | Cnprog.M_CN_split_case _ -> 
-    (default_true_res, true)
+    (default_res, true)
     (* failwith "TODO M_CN_split_case" *)
 
 
   | Cnprog.M_CN_extract (_, _, it) -> 
     (* Printf.printf "Translating CN extract\n"; *)
-    (default_true_res, true)
+    (default_res, true)
 
 
   | Cnprog.M_CN_unfold (fsym, args) -> 
-    (default_true_res, true)
+    (default_res, true)
     (* fsym is a function symbol *)
 
   | Cnprog.M_CN_apply (fsym, args) -> 
     (* Can ignore *)
     (* TODO: Make type correct from return type of top-level CN functions - although it shouldn't really matter (?) *)
-    (default_true_res, true)
+    (default_res, true)
     (* fsym is a lemma symbol *)
 
   | Cnprog.M_CN_assert lc -> 
@@ -1663,7 +1662,7 @@ let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> (C.union
 
   | Cnprog.M_CN_inline _ -> failwith "TODO M_CN_inline"
   | Cnprog.M_CN_print t -> 
-    (default_true_res, true)
+    (default_res, true)
     (* failwith "TODO M_CN_print" *)
 
 
