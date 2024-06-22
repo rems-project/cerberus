@@ -1,4 +1,5 @@
 open Cerb_frontend
+[@@@warning "-33"] open Cn_lexer (* TODO: working-in-progress. this is to get the module built *)
 
 let after_before_msg offset buffer (lexbuf : Lexing.lexbuf) =
   let show_token (start, curr) =
