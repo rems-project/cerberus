@@ -1,11 +1,11 @@
 {
 open Cerb_frontend
 
-open Tokens
+open Cn_tokens
 
 exception Cn_lexer_error
 
-let keywords: (string * Tokens.token) list = [
+let keywords: (string * Cn_tokens.token) list = [
   "accesses", CN_ACCESSES;
   "alloc_id", CN_ALLOC_ID;
   "apply", CN_APPLY;

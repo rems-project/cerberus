@@ -14,7 +14,7 @@
 
 (ocamllex cn_lexer)
 (menhir
- (flags (--strict --external-tokens Tokens --explain --exn-carries-state))
+ (flags (--strict --external-tokens Cn_tokens --explain --exn-carries-state))
  (modules cn_parser))
 
 ;; integrating and checking .messages file

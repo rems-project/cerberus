@@ -3,10 +3,6 @@
 open Cerb_frontend
 open Cn
 
-(* TODO(K): work-in-progress *)
-(* this is needed while this module uses a subset of Tokens.token *)
-[@@@warning "-8"]
-
 %}
 
 %token<Cabs.cabs_constant> CONSTANT
