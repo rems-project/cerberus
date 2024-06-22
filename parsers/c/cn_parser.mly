@@ -5,7 +5,7 @@ open Cn
 
 %}
 
-%token<Cabs.cabs_constant> CONSTANT
+%token<Cabs.cabs_constant> INTEGER_CONSTANT
 
 %token ASSERT DEFAULT ELSE IF INLINE OFFSETOF RETURN SIZEOF STRUCT VOID
 
@@ -28,15 +28,15 @@ open Cn
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
-%token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_PRINT
-%token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
-%token <[`U|`I] * int>CN_BITS
-%token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
-%token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
-%token CN_UNCHANGED CN_WILD CN_MATCH
-%token CN_GOOD CN_NULL CN_TRUE CN_FALSE
-%token <string * [`U|`I] * int> CN_CONSTANT
+%token ACCESSES TRUSTED REQUIRES ENSURES INV
+%token PACK UNPACK HAVE EXTRACT INSTANTIATE SPLIT_CASE UNFOLD APPLY PRINT
+%token BOOL INTEGER REAL POINTER ALLOC_ID MAP LIST TUPLE SET
+%token <[`U|`I] * int>BITS_TYPE
+%token LET TAKE OWNED BLOCK EACH FUNCTION LEMMA PREDICATE
+%token DATATYPE TYPE_SYNONYM SPEC ARRAY_SHIFT MEMBER_SHIFT
+%token UNCHANGED UNDERSCORE MATCH
+%token GOOD NULL TRUE FALSE
+%token <string * [`U|`I] * int> BITS_CONSTANT
 
 
 %start function_spec
@@ -72,13 +72,13 @@ open Cn
 
 
 prim_expr:
-| CN_NULL
+| NULL
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const CNConst_NULL)) }
-| CN_TRUE
+| TRUE
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool true))) }
-| CN_FALSE
+| FALSE
     { Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bool false))) }
-| cst= CONSTANT
+| cst= INTEGER_CONSTANT
     {
       match cst with
         | Cabs.CabsInteger_const (str, None) ->
@@ -88,7 +88,7 @@ prim_expr:
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| cst= CN_CONSTANT
+| cst= BITS_CONSTANT
     {
         let (str,sign,n) = cst in
         let sign = match sign with
@@ -108,16 +108,16 @@ prim_expr:
                                , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
-| CN_ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
+| ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_array_shift (base, Some ty, index))) }
-| CN_ARRAY_SHIFT LPAREN base=expr COMMA index=expr RPAREN
+| ARRAY_SHIFT LPAREN base=expr COMMA index=expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_array_shift (base, None, index))) }
-| CN_MEMBER_SHIFT LPAREN base=expr COMMA member=cn_variable RPAREN
+| MEMBER_SHIFT LPAREN base=expr COMMA member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_membershift (base, None, member))) }
-| CN_MEMBER_SHIFT LT tag=cn_variable GT LPAREN base=expr COMMA member=cn_variable RPAREN
+| MEMBER_SHIFT LT tag=cn_variable GT LPAREN base=expr COMMA member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_membershift (base, Some tag, member))) }
 | ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
@@ -159,7 +159,7 @@ unary_expr:
 | OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_offsetof (tag, member))) }
-| LBRACE e= expr RBRACE CN_UNCHANGED
+| LBRACE e= expr RBRACE UNCHANGED
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_unchanged e)) }
 | MINUS e= unary_expr
@@ -255,7 +255,7 @@ list_expr:
 *)
 
 int_range:
-| l= CONSTANT COMMA r= CONSTANT
+| l= INTEGER_CONSTANT COMMA r= INTEGER_CONSTANT
     {
       match (l, r) with
         | (Cabs.CabsInteger_const (l_str, None), Cabs.CabsInteger_const (r_str, None)) ->
@@ -298,7 +298,7 @@ pattern_cons_args:
     { xs }
 
 pattern: (* very limited subset of Rust options *)
-| CN_WILD
+| UNDERSCORE
     { Cerb_frontend.Cn.(CNPat (Cerb_location.point $startpos, CNPat_wild)) }
 | ident= cn_variable
     { Cerb_frontend.Cn.(CNPat (Cerb_location.point $startpos, CNPat_sym ident)) }
@@ -328,11 +328,11 @@ expr_without_let:
 | IF e1= delimited(LPAREN, expr, RPAREN) e2= delimited(LBRACE, expr, RBRACE) ELSE e3= delimited(LBRACE,expr,RBRACE)
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_ite (e1, e2, e3))) }
-| CN_EACH LPAREN bTy= base_type str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
+| EACH LPAREN bTy= base_type str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                ,
                                CNExpr_each (str, bTy, r, e1))) }
-| CN_MATCH e= match_target LBRACE ms= match_cases RBRACE
+| MATCH e= match_target LBRACE ms= match_cases RBRACE
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                ,
                                CNExpr_match (e, List.rev ms))) }
@@ -340,7 +340,7 @@ expr_without_let:
 expr:
 | e=expr_without_let
     { e }
-| CN_LET str= cn_variable EQ e1= expr SEMICOLON e2= expr
+| LET str= cn_variable EQ e1= expr SEMICOLON e2= expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.region ($startpos(e1), $endpos(e1)) NoCursor,
                                  CNExpr_let (str, e1, e2))) }
 ;
@@ -353,11 +353,11 @@ expr:
 base_type_explicit:
 | VOID
     { Cerb_frontend.Cn.CN_unit }
-| CN_BOOL
+| BOOL
     { Cerb_frontend.Cn.CN_bool }
-| CN_INTEGER
+| INTEGER
     { Cerb_frontend.Cn.CN_integer }
-| bit_ty=CN_BITS
+| bit_ty=BITS_TYPE
     { let (sign,n) = bit_ty in 
       let sign = match sign with
        | `U -> CN_unsigned
@@ -365,25 +365,25 @@ base_type_explicit:
       in
       Cerb_frontend.Cn.CN_bits (sign,n)
     }
-| CN_REAL
+| REAL
     { Cerb_frontend.Cn.CN_real }
-| CN_POINTER
+| POINTER
     { Cerb_frontend.Cn.CN_loc }
-| CN_ALLOC_ID
+| ALLOC_ID
     { Cerb_frontend.Cn.CN_alloc_id }
 | members= delimited(LBRACE, nonempty_cn_params, RBRACE)
     { Cerb_frontend.Cn.CN_record members }
 | STRUCT id= cn_variable
     { Cerb_frontend.Cn.CN_struct id }
-| CN_DATATYPE id= cn_variable
+| DATATYPE id= cn_variable
     { Cerb_frontend.Cn.CN_datatype id }
-| CN_MAP LT bTy1= base_type COMMA bTy2= base_type GT
+| MAP LT bTy1= base_type COMMA bTy2= base_type GT
     { Cerb_frontend.Cn.CN_map (bTy1, bTy2) }
-| CN_LIST LT bTy= base_type GT
+| LIST LT bTy= base_type GT
     { Cerb_frontend.Cn.CN_list bTy }
-| CN_TUPLE LT bTys= separated_list(COMMA, base_type) GT
+| TUPLE LT bTys= separated_list(COMMA, base_type) GT
     { Cerb_frontend.Cn.CN_tuple bTys }
-| CN_SET LT bTy= base_type GT
+| SET LT bTy= base_type GT
     { Cerb_frontend.Cn.CN_set bTy }
 ;
 
@@ -395,7 +395,7 @@ base_type:
 ;
 
 cn_good:
-| CN_GOOD ty= delimited(LT, ctype, GT)
+| GOOD ty= delimited(LT, ctype, GT)
     { ty }
 
 
@@ -422,7 +422,7 @@ cn_attrs:
     { [] }
 
 cn_function:
-| CN_FUNCTION
+| FUNCTION
   cn_func_attrs= cn_attrs
   cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= cn_variable
   cn_func_args= delimited(LPAREN, cn_args, RPAREN)
@@ -437,7 +437,7 @@ cn_function:
       ; cn_func_args
       ; cn_func_body} }
 cn_predicate:
-| CN_PREDICATE
+| PREDICATE
   cn_pred_attrs= cn_attrs
   cn_pred_output= cn_pred_output
   str= UNAME VARIABLE
@@ -453,11 +453,11 @@ cn_predicate:
       ; cn_pred_iargs
       ; cn_pred_clauses} }
 cn_lemma:
-| CN_LEMMA
+| LEMMA
   str= cn_variable
   cn_lemma_args= delimited(LPAREN, cn_args, RPAREN)
-  CN_REQUIRES cn_lemma_requires=nonempty_list(condition)
-  CN_ENSURES cn_lemma_ensures=nonempty_list(condition)
+  REQUIRES cn_lemma_requires=nonempty_list(condition)
+  ENSURES cn_lemma_ensures=nonempty_list(condition)
     { (* TODO: check the name starts with lower case *)
       let loc = Cerb_location.point $startpos(str) in
       { cn_lemma_magic_loc= Cerb_location.unknown
@@ -467,7 +467,7 @@ cn_lemma:
       ; cn_lemma_requires
       ; cn_lemma_ensures } }
 cn_datatype:
-| CN_DATATYPE nm= cn_variable
+| DATATYPE nm= cn_variable
   cases= delimited(LBRACE, cn_cons_cases, RBRACE)
     {
       { cn_dt_magic_loc= Cerb_location.unknown
@@ -475,11 +475,11 @@ cn_datatype:
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
 cn_fun_spec:
-| CN_SPEC
+| SPEC
   str= cn_variable
   cn_spec_args= delimited(LPAREN, cn_args, RPAREN) SEMICOLON
-  CN_REQUIRES cn_spec_requires=nonempty_list(condition)
-  CN_ENSURES cn_spec_ensures=nonempty_list(condition)
+  REQUIRES cn_spec_requires=nonempty_list(condition)
+  ENSURES cn_spec_ensures=nonempty_list(condition)
     { let loc = Cerb_location.point $startpos(str) in
       { cn_spec_magic_loc= Cerb_location.unknown
       ; cn_spec_loc= loc
@@ -489,7 +489,7 @@ cn_fun_spec:
       ; cn_spec_ret_name = Symbol.Identifier (Cerb_location.unknown, "dummy")
       ; cn_spec_ensures } }
 cn_type_synonym:
-| CN_TYPE_SYNONYM
+| TYPE_SYNONYM
   str= cn_variable
   EQ
   ty= opt_paren(base_type)
@@ -562,7 +562,7 @@ cn_option_func_body:
 
 (*
 cn_func_body:
-| CN_LET str= cn_variable EQ e= expr SEMICOLON c= cn_func_body
+| LET str= cn_variable EQ e= expr SEMICOLON c= cn_func_body
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_fb_letExpr (loc, str, e, c) }
 | RETURN e= expr SEMICOLON
@@ -578,10 +578,10 @@ cn_func_body_case:
 *)
 
 clause:
-| CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
+| TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_letResource (loc, str, res, c) }
-| CN_LET str= cn_variable EQ e= expr SEMICOLON c= clause
+| LET str= cn_variable EQ e= expr SEMICOLON c= clause
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_letExpr (loc, str, e, c) }
 | ASSERT e= delimited(LPAREN, assert_expr, RPAREN) SEMICOLON c= clause
@@ -596,7 +596,7 @@ clause:
 
 
 assert_expr:
-| CN_EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
+| EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
       LBRACE e2= expr RBRACE
     { Cerb_frontend.Cn.CN_assert_qexp ( str
                                       , bTy, e1, e2) }
@@ -608,7 +608,7 @@ assert_expr:
 resource:
 | p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Cerb_frontend.Cn.CN_pred (Cerb_location.region $loc(p) NoCursor, p, es) }
-| CN_EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
+| EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
     { Cerb_frontend.Cn.CN_each ( str
                                , bTy
@@ -619,11 +619,11 @@ resource:
 ;
 
 pred:
-| CN_OWNED ty= delimited(LT, ctype, GT)
+| OWNED ty= delimited(LT, ctype, GT)
     { Cerb_frontend.Cn.CN_owned (Some ty) }
-| CN_OWNED
+| OWNED
     { Cerb_frontend.Cn.CN_owned None }
-| CN_BLOCK ty= delimited(LT, ctype, GT)
+| BLOCK ty= delimited(LT, ctype, GT)
     { Cerb_frontend.Cn.CN_block ty }
 | str= UNAME VARIABLE
     { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Cerb_location.point $startpos(str), str)) }
@@ -639,10 +639,10 @@ ctype:
 
 /* copying 'clause' and adjusting */
 condition:
-| CN_TAKE str= cn_variable EQ res= resource SEMICOLON
+| TAKE str= cn_variable EQ res= resource SEMICOLON
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletResource (loc, str, res) }
-| CN_LET str= cn_variable EQ e= expr SEMICOLON
+| LET str= cn_variable EQ e= expr SEMICOLON
     { let loc = Cerb_location.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletExpr (loc, str, e) }
 | e= assert_expr SEMICOLON
@@ -651,19 +651,19 @@ condition:
 
 
 function_spec_item:
-| CN_TRUSTED SEMICOLON
+| TRUSTED SEMICOLON
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_trusted loc }
-| CN_ACCESSES accs=nonempty_list(terminated(cn_variable,SEMICOLON))
+| ACCESSES accs=nonempty_list(terminated(cn_variable,SEMICOLON))
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_accesses (loc, accs) }
-| CN_REQUIRES cs=nonempty_list(condition)
+| REQUIRES cs=nonempty_list(condition)
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_requires (loc, cs) }
-| CN_ENSURES cs=nonempty_list(condition)
+| ENSURES cs=nonempty_list(condition)
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_ensures (loc, cs) }
-| CN_FUNCTION nm=cn_variable SEMICOLON
+| FUNCTION nm=cn_variable SEMICOLON
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_mk_function (loc, nm) }
 
@@ -673,7 +673,7 @@ function_spec:
 
 
 loop_spec:
-| CN_INV cs=nonempty_list(condition) EOF
+| INV cs=nonempty_list(condition) EOF
   { let loc = Cerb_location.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_inv (loc, cs) }
 
@@ -694,29 +694,29 @@ loop_spec:
 
 cn_statement:
 /* copying from 'resource' rule */
-| CN_PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+| PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc , CN_pack_unpack (Pack, p, es)) }
 /* copying from 'resource' rule */
-| CN_UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+| UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc , CN_pack_unpack (Unpack, p, es)) }
-| CN_HAVE a=assert_expr SEMICOLON
+| HAVE a=assert_expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }
-| CN_EXTRACT tbe=to_be_extracted e=expr SEMICOLON
+| EXTRACT tbe=to_be_extracted e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_extract ([], tbe, e)) }
-| CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
+| INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }
-| CN_SPLIT_CASE a=assert_expr SEMICOLON
+| SPLIT_CASE a=assert_expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_split_case a) }
-| CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+| UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_unfold (id, es)) }
-| CN_APPLY id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+| APPLY id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_apply (id, es)) }
 | ASSERT LPAREN e=assert_expr RPAREN SEMICOLON
@@ -725,7 +725,7 @@ cn_statement:
 | INLINE names= separated_list(COMMA, cn_variable) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_inline names) }
-| CN_PRINT LPAREN e=expr RPAREN SEMICOLON
+| PRINT LPAREN e=expr RPAREN SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_print e) }
 

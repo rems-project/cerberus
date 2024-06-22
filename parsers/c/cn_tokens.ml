@@ -8,62 +8,62 @@ type token =
   | TYPE
 
   (* Keywords *)
-  | CN_ACCESSES
-  | CN_ALLOC_ID
-  | CN_APPLY
-  | CN_ARRAY_SHIFT
+  | ACCESSES
+  | ALLOC_ID
+  | APPLY
+  | ARRAY_SHIFT
   | ASSERT
-  | CN_BLOCK
-  | CN_BOOL
-  | CN_BITS of ([`U|`I] * int)
-  | CN_DATATYPE
+  | BLOCK
+  | BOOL
+  | BITS_TYPE of ([`U|`I] * int)
+  | DATATYPE
   | DEFAULT
-  | CN_EACH
+  | EACH
   | ELSE
-  | CN_ENSURES
-  | CN_EXTRACT
-  | CN_FALSE
-  | CN_FUNCTION
-  | CN_GOOD
-  | CN_HAVE
+  | ENSURES
+  | EXTRACT
+  | FALSE
+  | FUNCTION
+  | GOOD
+  | HAVE
   | IF
   | INLINE
-  | CN_INSTANTIATE
-  | CN_INTEGER
-  | CN_INV
-  | CN_LEMMA
-  | CN_LET
-  | CN_LIST
-  | CN_MAP
-  | CN_MATCH
-  | CN_MEMBER_SHIFT
-  | CN_NULL
+  | INSTANTIATE
+  | INTEGER
+  | INV
+  | LEMMA
+  | LET
+  | LIST
+  | MAP
+  | MATCH
+  | MEMBER_SHIFT
+  | NULL
   | OFFSETOF
-  | CN_OWNED
-  | CN_PACK
-  | CN_POINTER
-  | CN_PREDICATE
-  | CN_PRINT
-  | CN_REAL
-  | CN_REQUIRES
+  | OWNED
+  | PACK
+  | POINTER
+  | PREDICATE
+  | PRINT
+  | REAL
+  | REQUIRES
   | RETURN
-  | CN_SET
+  | SET
   | SIZEOF
-  | CN_SPEC
-  | CN_SPLIT_CASE
+  | SPEC
+  | SPLIT_CASE
   | STRUCT
-  | CN_TAKE
-  | CN_TRUE
-  | CN_TRUSTED
-  | CN_TUPLE
-  | CN_TYPE_SYNONYM
-  | CN_UNCHANGED
-  | CN_UNFOLD
-  | CN_UNPACK
+  | TAKE
+  | TRUE
+  | TRUSTED
+  | TUPLE
+  | TYPE_SYNONYM
+  | UNCHANGED
+  | UNFOLD
+  | UNPACK
   | VOID
 
-  | CONSTANT of Cerb_frontend.Cabs.cabs_constant
-  | CN_CONSTANT of (string * [`I|`U] * int)
+  | INTEGER_CONSTANT of Cerb_frontend.Cabs.cabs_constant (* TODO(K): replace the payload with a plain Z.t s*)
+  | BITS_CONSTANT of (string * [`I|`U] * int)
 
   (* Punctuators *)
   | LBRACK
@@ -95,7 +95,7 @@ type token =
   | EQ
   | COMMA
   (* TODO(K): add ==> *)
-  | CN_WILD
+  | UNDERSCORE
 
 
 let string_of_token = function
@@ -106,62 +106,62 @@ let string_of_token = function
   | VARIABLE -> "VARIABLE"
   | TYPE -> "TYPE"
 
-  | CN_ACCESSES -> "CN_ACCESSES"
-  | CN_ALLOC_ID -> "CN_ALLOC_ID"
-  | CN_APPLY -> "CN_APPLY"
-  | CN_ARRAY_SHIFT -> "CN_ARRAY_SHIFT"
+  | ACCESSES -> "ACCESSES"
+  | ALLOC_ID -> "ALLOC_ID"
+  | APPLY -> "APPLY"
+  | ARRAY_SHIFT -> "ARRAY_SHIFT"
   | ASSERT -> "ASSERT"
-  | CN_BLOCK -> "CN_BLOCK"
-  | CN_BOOL -> "CN_BOOL"
-  | CN_BITS _ -> "CN_BITS"
-  | CN_DATATYPE -> "CN_DATATYPE"
+  | BLOCK -> "BLOCK"
+  | BOOL -> "BOOL"
+  | BITS_TYPE _ -> "BITS_TYPE"
+  | DATATYPE -> "DATATYPE"
   | DEFAULT -> "DEFAULT"
-  | CN_EACH -> "CN_EACH"
+  | EACH -> "EACH"
   | ELSE -> "ELSE"
-  | CN_ENSURES -> "CN_ENSURES"
-  | CN_EXTRACT -> "CN_EXTRACT"
-  | CN_FALSE -> "CN_FALSE"
-  | CN_FUNCTION -> "CN_FUNCTION"
-  | CN_GOOD -> "CN_GOOD"
-  | CN_HAVE -> "CN_HAVE"
+  | ENSURES -> "ENSURES"
+  | EXTRACT -> "EXTRACT"
+  | FALSE -> "FALSE"
+  | FUNCTION -> "FUNCTION"
+  | GOOD -> "GOOD"
+  | HAVE -> "HAVE"
   | IF -> "IF"
   | INLINE -> "INLINE"
-  | CN_INSTANTIATE -> "CN_INSTANTIATE"
-  | CN_INTEGER -> "CN_INTEGER"
-  | CN_INV -> "CN_INV"
-  | CN_LEMMA -> "CN_LEMMA"
-  | CN_LET -> "CN_LET"
-  | CN_LIST -> "CN_LIST"
-  | CN_MAP -> "CN_MAP"
-  | CN_MATCH -> "CN_MATCH"
-  | CN_MEMBER_SHIFT -> "CN_MEMBER_SHIFT"
-  | CN_NULL -> "CN_NULL"
+  | INSTANTIATE -> "INSTANTIATE"
+  | INTEGER -> "INTEGER"
+  | INV -> "INV"
+  | LEMMA -> "LEMMA"
+  | LET -> "LET"
+  | LIST -> "LIST"
+  | MAP -> "MAP"
+  | MATCH -> "MATCH"
+  | MEMBER_SHIFT -> "MEMBER_SHIFT"
+  | NULL -> "NULL"
   | OFFSETOF -> "OFFSETOF"
-  | CN_OWNED -> "CN_OWNED"
-  | CN_PACK -> "CN_PACK"
-  | CN_POINTER -> "CN_POINTER"
-  | CN_PREDICATE -> "CN_PREDICATE"
-  | CN_PRINT -> "CN_PRINT"
-  | CN_REAL -> "CN_REAL"
-  | CN_REQUIRES -> "CN_REQUIRES"
+  | OWNED -> "OWNED"
+  | PACK -> "PACK"
+  | POINTER -> "POINTER"
+  | PREDICATE -> "PREDICATE"
+  | PRINT -> "PRINT"
+  | REAL -> "REAL"
+  | REQUIRES -> "REQUIRES"
   | RETURN -> "RETURN"
-  | CN_SET -> "CN_SET"
+  | SET -> "SET"
   | SIZEOF -> "SIZEOF"
-  | CN_SPEC -> "CN_SPEC"
-  | CN_SPLIT_CASE -> "CN_SPLIT_CASE"
+  | SPEC -> "SPEC"
+  | SPLIT_CASE -> "SPLIT_CASE"
   | STRUCT -> "STRUCT"
-  | CN_TAKE -> "CN_TAKE"
-  | CN_TRUE -> "CN_TRUE"
-  | CN_TRUSTED -> "CN_TRUSTED"
-  | CN_TUPLE -> "CN_TUPLE"
-  | CN_TYPE_SYNONYM -> "CN_TYPE_SYNONYM"
-  | CN_UNCHANGED -> "CN_UNCHANGED"
-  | CN_UNFOLD -> "CN_UNFOLD"
-  | CN_UNPACK -> "CN_UNPACK"
+  | TAKE -> "TAKE"
+  | TRUE -> "TRUE"
+  | TRUSTED -> "TRUSTED"
+  | TUPLE -> "TUPLE"
+  | TYPE_SYNONYM -> "TYPE_SYNONYM"
+  | UNCHANGED -> "UNCHANGED"
+  | UNFOLD -> "UNFOLD"
+  | UNPACK -> "UNPACK"
   | VOID -> "VOID"
 
-  | CONSTANT _ -> "CONSTANT"
-  | CN_CONSTANT _ -> "CN_CONSTANT"
+  | INTEGER_CONSTANT _ -> "INTEGER_CONSTANT"
+  | BITS_CONSTANT _ -> "BITS_CONSTANT"
 
   | AMPERSAND -> "AMPERSAND"
   | AMPERSAND_AMPERSAND -> "AMPERSAND_AMPERSAND"
@@ -192,4 +192,4 @@ let string_of_token = function
   | SLASH -> "SLASH"
   | STAR -> "STAR"
 
-  | CN_WILD -> "CN_WILD"
+  | UNDERSCORE -> "UNDERSCORE"

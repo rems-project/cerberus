@@ -6,70 +6,70 @@ open Cn_tokens
 exception Cn_lexer_error
 
 let keywords: (string * Cn_tokens.token) list = [
-  "accesses", CN_ACCESSES;
-  "alloc_id", CN_ALLOC_ID;
-  "apply", CN_APPLY;
-  "array_shift", CN_ARRAY_SHIFT;
+  "accesses", ACCESSES;
+  "alloc_id", ALLOC_ID;
+  "apply", APPLY;
+  "array_shift", ARRAY_SHIFT;
   "assert", ASSERT;
-  "Block", CN_BLOCK;
-  "bool", CN_BOOL; (* shared with C23 *)
-  "boolean", CN_BOOL; (* TODO(Christopher/Dhruv): are all these variants of BOOL needed? *)
-  "CN_bool", CN_BOOL; (* TODO(Christopher/Dhruv): are all these variants of BOOL needed? *)
-  "cn_function", CN_FUNCTION; (* TODO(Christopher/Dhruv): is this variant still needed? *)
-  "datatype", CN_DATATYPE;
+  "Block", BLOCK;
+  "bool", BOOL; (* shared with C23 *)
+  "boolean", BOOL; (* TODO(Christopher/Dhruv): are all these variants of BOOL needed? *)
+  "CN_bool", BOOL; (* TODO(Christopher/Dhruv): are all these variants of BOOL needed? *)
+  "cn_function", FUNCTION; (* TODO(Christopher/Dhruv): is this variant still needed? *)
+  "datatype", DATATYPE;
   "default", DEFAULT; (* shared with C11 *)
-  "each", CN_EACH;
+  "each", EACH;
   "else", ELSE; (* shared with C11 *)
-  "ensures", CN_ENSURES;
-  "extract", CN_EXTRACT;
-  "false", CN_FALSE;
-  "function", CN_FUNCTION;
-  "good", CN_GOOD;
-  "have", CN_HAVE;
-  "i128", CN_BITS (`I,128);
-  "i16", CN_BITS (`I,16);
-  "i32", CN_BITS (`I,32);
-  "i64", CN_BITS (`I,64);
-  "i8", CN_BITS (`I,8);
+  "ensures", ENSURES;
+  "extract", EXTRACT;
+  "false", FALSE;
+  "function", FUNCTION;
+  "good", GOOD;
+  "have", HAVE;
+  "i128", BITS_TYPE (`I,128);
+  "i16", BITS_TYPE (`I,16);
+  "i32", BITS_TYPE (`I,32);
+  "i64", BITS_TYPE (`I,64);
+  "i8", BITS_TYPE (`I,8);
   "if", IF; (* shared with C11 *)
   "inline", INLINE; (* shared with C11 *)
-  "instantiate", CN_INSTANTIATE;
-  "integer", CN_INTEGER;
-  "inv", CN_INV;
-  "lemma", CN_LEMMA;
-  "let", CN_LET;
-  "list", CN_LIST;
-  "map", CN_MAP;
-  "match", CN_MATCH;
-  "member_shift", CN_MEMBER_SHIFT;
-  "NULL", CN_NULL;
+  "instantiate", INSTANTIATE;
+  "integer", INTEGER;
+  "inv", INV;
+  "lemma", LEMMA;
+  "let", LET;
+  "list", LIST;
+  "map", MAP;
+  "match", MATCH;
+  "member_shift", MEMBER_SHIFT;
+  "NULL", NULL;
   "offsetof", OFFSETOF;
-  "Owned", CN_OWNED;
-  "pack", CN_PACK;
-  "pointer", CN_POINTER;
-  "predicate", CN_PREDICATE;
-  "print", CN_PRINT;
-  "real", CN_REAL;
-  "requires", CN_REQUIRES;
+  "Owned", OWNED;
+  "pack", PACK;
+  "pointer", POINTER;
+  "predicate", PREDICATE;
+  "print", PRINT;
+  "real", REAL;
+  "requires", REQUIRES;
   "return", RETURN; (* shared with C11 *)
-  "set", CN_SET;
+  "set", SET;
   "sizeof", SIZEOF; (* shared with C11 *)
-  "spec", CN_SPEC;
-  "split_case", CN_SPLIT_CASE;
+  "spec", SPEC;
+  "split_case", SPLIT_CASE;
   "struct", STRUCT; (* shared with C11 *)
-  "take", CN_TAKE;
-  "true", CN_TRUE;
-  "trusted", CN_TRUSTED;
-  "tuple", CN_TUPLE;
-  "type_synonym", CN_TYPE_SYNONYM;
-  "u128", CN_BITS (`U,128);
-  "u16", CN_BITS (`U,16);
-  "u32", CN_BITS (`U,32);
-  "u64", CN_BITS (`U,64);
-  "u8", CN_BITS (`U,8);
-  "unchanged", CN_UNCHANGED;
-  "unfold", CN_UNFOLD;
-  "unpack", CN_UNPACK;
+  "take", TAKE;
+  "true", TRUE;
+  "trusted", TRUSTED;
+  "tuple", TUPLE;
+  "type_synonym", TYPE_SYNONYM;
+  "u128", BITS_TYPE (`U,128);
+  "u16", BITS_TYPE (`U,16);
+  "u32", BITS_TYPE (`U,32);
+  "u64", BITS_TYPE (`U,64);
+  "u8", BITS_TYPE (`U,8);
+  "unchanged", UNCHANGED;
+  "unfold", UNFOLD;
+  "unpack", UNPACK;
   "void", VOID; (* shared with C11 *)
 ]
 
@@ -154,13 +154,13 @@ and initial = parse
   | whitespace_char+ { initial lexbuf }
 
   | (integer_constant as str) 'u' (integer_width as n)
-      { CN_CONSTANT (str, `U, int_of_string n) }
+      { BITS_CONSTANT (str, `U, int_of_string n) }
   | (integer_constant as str) 'i' (integer_width as n)
-      { CN_CONSTANT (str, `I, int_of_string n) }
+      { BITS_CONSTANT (str, `I, int_of_string n) }
   | (integer_constant as str)
       (* TODO(K): (!!!) when moving away froms Cabs.constant in this token, be careful about the
           decoding of octal constants. Z.of_string won't do the right (C behaviour) thing. *)
-      { CONSTANT (Cabs.CabsInteger_const (str, None)) }
+      { INTEGER_CONSTANT (Cabs.CabsInteger_const (str, None)) }
 
   (* Punctuators *)
   | '['   { LBRACK              }
@@ -191,7 +191,7 @@ and initial = parse
   | ';'   { SEMICOLON           }
   | '='   { EQ                  }
   | ','   { COMMA               }
-  | "_"   { CN_WILD             }
+  | "_"   { UNDERSCORE          }
 
     (* copied over from backend/cn/assertion_lexer.mll *)
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
