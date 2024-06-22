@@ -125,7 +125,7 @@ let check_input_file filename =
     if not (ext ".c" || ext ".h") then
       CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
-let maybe_executable_check ~with_ownership_checking ~filename ?output_filename ?output_dir ail_prog mu_file statement_locs =
+let _maybe_executable_check ~with_ownership_checking ~filename ?output_filename ?output_dir ail_prog mu_file statement_locs =
   Option.iter (fun output_filename ->
       Cerb_colour.without_colour (fun () ->
           Executable_spec.main ~with_ownership_checking filename ail_prog output_dir output_filename mu_file statement_locs)
@@ -208,19 +208,18 @@ let main
       let open Resultat in
       let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
       print_log_file ("mucore", MUCORE prog5);
-      let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
-      Result.iter_error handle_error (Typing.pause_to_result paused);
-      maybe_executable_check
-        ~with_ownership_checking
-        ~filename
-        ?output_filename:output_decorated
-        ?output_dir:output_decorated_dir
-        ail_prog
-        prog5
-        statement_locs;
-      Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
-    in
-    Pp.maybe_close_times_channel ();
+      begin match output_decorated with
+      | None -> 
+          let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
+          Result.iter_error handle_error (Typing.pause_to_result paused);
+          Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
+      | Some output_filename ->
+          Cerb_colour.without_colour begin fun () ->
+            Executable_spec.main ~with_ownership_checking filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
+            return ()
+          end ()
+      end in
+      Pp.maybe_close_times_channel ();
     Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
   with
   | exc ->
