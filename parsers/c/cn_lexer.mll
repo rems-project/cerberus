@@ -83,6 +83,9 @@ let lex_comment remainder lexbuf =
   if ch = '\n' then Lexing.new_line lexbuf;
   remainder lexbuf
 
+let relexbuf_opt: (Lexing.lexbuf option) ref =
+  ref None
+
 }
 
 (* ========================================================================== *)
@@ -162,6 +165,16 @@ and initial = parse
           decoding of octal constants. Z.of_string won't do the right (C behaviour) thing. *)
       { INTEGER_CONSTANT (Cabs.CabsInteger_const (str, None)) }
 
+  | '<' ([^'='][^'<' '>']+ as str) '>'
+      {
+        try
+          LT_CTYPE_GT (C_parser.type_name_eof C_lexer.lexer (Lexing.from_string str))
+        with
+          | _ ->
+              relexbuf_opt := Some (Lexing.from_string (str ^ ">"));
+              LT
+      }
+
   (* Punctuators *)
   | '['   { LBRACK              }
   | ']'   { RBRACK              }
@@ -215,6 +228,19 @@ and initial = parse
 (* ========================================================================== *)
 
 {
+let initial lexbuf =
+  (* TODO(K) ===> do we need a stack of redos *)
+  (* TODO(K) ==> we don't because the ctype regexp excludes any '<' (?) *)
+  match !relexbuf_opt with
+    | None ->
+        initial lexbuf
+    | Some relexbuf ->
+        begin match initial relexbuf with
+          | EOF -> relexbuf_opt := None; initial lexbuf
+          | tok -> tok
+        end
+
+
 type lexer_state =
   | LSRegular
   | LSIdentifier of string

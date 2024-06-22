@@ -5,6 +5,8 @@ open Cn
 
 %}
 
+%token<Cabs.type_name> LT_CTYPE_GT
+
 %token<Cabs.cabs_constant> INTEGER_CONSTANT
 %token <string * [`U|`I] * int> BITS_CONSTANT
 
@@ -98,7 +100,7 @@ prim_expr:
                                , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
-| ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
+| ARRAY_SHIFT ty=LT_CTYPE_GT LPAREN base=expr COMMA index=expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_array_shift (base, Some ty, index))) }
 | ARRAY_SHIFT LPAREN base=expr COMMA index=expr RPAREN
@@ -143,7 +145,7 @@ unary_expr:
 | STAR arg = unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_deref arg)) }
-| SIZEOF LT ty= ctype GT
+| SIZEOF ty= LT_CTYPE_GT
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_sizeof ty)) }
 | OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
@@ -385,7 +387,7 @@ base_type:
 ;
 
 cn_good:
-| GOOD ty= delimited(LT, ctype, GT)
+| GOOD ty= LT_CTYPE_GT
     { ty }
 
 
@@ -609,21 +611,14 @@ resource:
 ;
 
 pred:
-| OWNED ty= delimited(LT, ctype, GT)
+| OWNED ty= LT_CTYPE_GT
     { Cerb_frontend.Cn.CN_owned (Some ty) }
 | OWNED
     { Cerb_frontend.Cn.CN_owned None }
-| BLOCK ty= delimited(LT, ctype, GT)
+| BLOCK ty= LT_CTYPE_GT
     { Cerb_frontend.Cn.CN_block ty }
 | str= UNAME VARIABLE
     { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Cerb_location.point $startpos(str), str)) }
-;
-
-ctype:
-| NAME (* TODO(K): work-in-progress *)
-    { failwith "WIP: type_name" }
-(*| ty= type_name *)
-(*    { ty } *)
 ;
 
 

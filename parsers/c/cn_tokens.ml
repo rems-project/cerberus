@@ -1,6 +1,9 @@
 type token =
   | EOF
 
+  (* '<' "C type-name" '>' *)
+  | LT_CTYPE_GT of Cerb_frontend.Cabs.type_name
+
   (* Identifiers *)
   | UNAME of string
   | LNAME of string
@@ -100,6 +103,8 @@ type token =
 
 let string_of_token = function
   | EOF -> "EOF"
+
+  | LT_CTYPE_GT _ -> "LT_CTYPE_GT"
 
   | UNAME s -> "UNAME(" ^ s ^ ")"
   | LNAME s -> "LNAME(" ^ s ^ ")"
