@@ -125,12 +125,20 @@ let check_input_file filename =
     if not (ext ".c" || ext ".h") then
       CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
-let _maybe_executable_check ~with_ownership_checking ~filename ?output_filename ?output_dir ail_prog mu_file statement_locs =
+let maybe_executable_check ~with_ownership_checking ~filename ?output_filename ?output_dir ail_prog mu_file statement_locs =
   Option.iter (fun output_filename ->
       Cerb_colour.without_colour (fun () ->
           Executable_spec.main ~with_ownership_checking filename ail_prog output_dir output_filename mu_file statement_locs)
         ())
     output_filename
+
+let maybe_generate_tests output_test_dir ail_prog prog5 =
+  Option.iter (fun output_dir ->
+    let (_, sigma) = ail_prog in
+    Cerb_colour.without_colour (fun () ->
+      TestGeneration.main output_dir sigma prog5)
+    ())
+    output_test_dir
 
 let main
       filename
@@ -164,6 +172,7 @@ let main
       batch
       no_inherit_loc
       magic_comment_char_dollar
+      output_test_dir
   =
   if json then begin
       if debug_level > 0 then
@@ -208,18 +217,25 @@ let main
       let open Resultat in
       let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
       print_log_file ("mucore", MUCORE prog5);
-      begin match output_decorated with
-      | None -> 
-          let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
-          Result.iter_error handle_error (Typing.pause_to_result paused);
-          Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
-      | Some output_filename ->
-          Cerb_colour.without_colour begin fun () ->
-            Executable_spec.main ~with_ownership_checking filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
-            return ()
-          end ()
-      end in
-      Pp.maybe_close_times_channel ();
+      begin match output_decorated, output_test_dir with
+      | None, None ->
+        let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
+        Result.iter_error handle_error (Typing.pause_to_result paused);
+        Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
+      | _, _ ->
+        maybe_executable_check
+          ~with_ownership_checking
+          ~filename
+          ?output_filename:output_decorated
+          ?output_dir:output_decorated_dir
+          ail_prog
+          prog5
+          statement_locs;
+        maybe_generate_tests output_test_dir ail_prog prog5;
+        return ()
+      end
+    in
+    Pp.maybe_close_times_channel ();
     Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
   with
   | exc ->
@@ -370,6 +386,10 @@ let magic_comment_char_dollar =
   let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
   Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
 
+let output_test_dir =
+  let doc = "TODO: does nothing" in
+  Arg.(value & opt (some string) None & info ["output-test-dir"] ~docv:"FILE" ~doc)
+
 (* copied from cerberus' executable (backend/driver/main.ml) *)
 let macros =
     let macro_pair =
@@ -428,7 +448,8 @@ let () =
       use_peval $
       batch $
       no_inherit_loc $
-      magic_comment_char_dollar
+      magic_comment_char_dollar $
+      output_test_dir
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
 
