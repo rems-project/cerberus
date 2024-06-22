@@ -37,7 +37,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   (* Ownership checking *)
   if with_ownership_checking then 
     (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.h") in 
-    let ownership_globals = generate_ownership_globals sigm in 
+    let ownership_globals = generate_ownership_globals () in 
     Stdlib.output_string ownership_oc cn_utils_header;
     Stdlib.output_string ownership_oc "\n";
     Stdlib.output_string ownership_oc ownership_globals;

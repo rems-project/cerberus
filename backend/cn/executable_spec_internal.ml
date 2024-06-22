@@ -273,9 +273,10 @@ let generate_conversion_and_equality_functions (ail_prog : CF.GenTypes.genTypeCa
 
 (* Ownership *)
 
-let generate_ownership_globals (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
+let generate_ownership_globals () = 
   let ownership_decls = Ownership_exec.create_ail_ownership_global_decls () in 
-  let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = ownership_decls; function_definitions = []} in
-  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
+  let docs = List.map (fun (sym, ty) ->
+     CF.Pp_ail.pp_ctype_declaration ~executable_spec:true (CF.Pp_ail.pp_id_obj sym) empty_qualifiers ty) ownership_decls 
+  in
+  let doc = PPrint.concat docs in
   CF.Pp_utils.to_plain_pretty_string doc
-  
