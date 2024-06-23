@@ -16,9 +16,10 @@ module T=Terms
 module LRT=LogicalReturnTypes
 module LAT=LogicalArgumentTypes
 module AT=ArgumentTypes
+module OE=Ownership_exec
 
 let true_const = A.AilEconst (ConstantPredefined PConstantTrue)
-
+let error_msg_info_sym = Sym.fresh_pretty "error_msg_info"
 
 let standardise_sym sym' = 
   let sym_str = Sym.pp_string sym' in
@@ -499,6 +500,16 @@ let generate_ownership_function ?(with_ownership_checking=false) ctype =
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
+  let cast_expr = mk_expr A.(AilEcast (empty_qualifiers, (mk_ctype C.(Pointer (empty_qualifiers, ctype))), mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.id "ptr")))) in
+  let generic_c_ptr_sym = Sym.fresh_pretty "generic_c_ptr" in
+  let (generic_c_ptr_bs, generic_c_ptr_ss) = if with_ownership_checking then
+    let uintptr_t_type = C.uintptr_t in
+    let generic_c_ptr_binding = create_binding generic_c_ptr_sym uintptr_t_type in
+    let uintptr_t_cast_expr = mk_expr A.(AilEcast (empty_qualifiers, uintptr_t_type, cast_expr)) in
+    let generic_c_ptr_assign_stat_ = A.(AilSdeclaration [(generic_c_ptr_sym, Some uintptr_t_cast_expr)]) in
+    ([generic_c_ptr_binding], [generic_c_ptr_assign_stat_])
+  else ([], [])
+  in 
   let param2_sym = Sym.fresh_pretty "owned_enum" in
   let param1 = (param1_sym, bt_to_ail_ctype BT.Loc) in
   let param2 = (param2_sym, mk_ctype (C.(Basic (Integer (Enum (Sym.fresh_pretty "OWNERSHIP")))))) in
@@ -506,13 +517,22 @@ let generate_ownership_function ?(with_ownership_checking=false) ctype =
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let generate_case enum_str = 
     let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in
-    let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt AilSbreak)) in 
+    let lc_enum_str = String.lowercase_ascii enum_str in
+    let block_stats_ = if with_ownership_checking then
+      let ownership_fn_sym = Sym.fresh_pretty (lc_enum_str ^ "_ownership") in
+      let ownership_fn_args = A.[AilEident generic_c_ptr_sym; AilEident OE.cn_ghost_state_sym; AilEsizeof (empty_qualifiers, ctype); AilEident OE.cn_stack_depth_sym; AilEunary (Address, mk_expr (AilEident error_msg_info_sym))] in
+      let ownership_fcall = mk_expr A.(AilEcall (mk_expr (AilEident ownership_fn_sym), List.map mk_expr ownership_fn_args)) in
+      A.[AilSexpr ownership_fcall; AilSbreak]
+    else 
+      [AilSbreak]
+    in
+    let block = A.(AilSblock ([], List.map mk_stmt block_stats_)) in
+    let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt block)) in 
     A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
   in
   (* Function body *)
   let switch_stmt = A.(AilSswitch (mk_expr (AilEident param2_sym), mk_stmt (AilSblock ([], List.map generate_case ["GET"; "PUT"])))) in
-  let cast_expr_ = A.(AilEcast (empty_qualifiers, (mk_ctype C.(Pointer (empty_qualifiers, ctype))), mk_expr (AilEmemberofptr (mk_expr (AilEident param1_sym), Id.id "ptr")))) in
-  let deref_expr_ = A.(AilEunary (Indirection, mk_expr cast_expr_)) in
+  let deref_expr_ = A.(AilEunary (Indirection, cast_expr)) in
   let sct_opt = Sctypes.of_ctype ctype in
   let sct = match sct_opt with 
     | Some sct -> sct
@@ -524,7 +544,7 @@ let generate_ownership_function ?(with_ownership_checking=false) ctype =
   (* Generating function declaration *)
   let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], List.map mk_stmt [switch_stmt; return_stmt])))) in
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (generic_c_ptr_bs, List.map mk_stmt (generic_c_ptr_ss @ [switch_stmt; return_stmt]))))) in
   (decl, def)
 
 
@@ -1800,7 +1820,6 @@ let rec cn_to_ail_pre_post_aux_internal dts preds globals c_return_type = functi
   
 let cn_to_ail_pre_post_internal dts preds globals c_return_type = function 
   | Some internal -> 
-    let error_msg_info_sym = Sym.fresh_pretty "error_msg_info" in
     let error_msg_struct_tag = Sym.fresh_pretty "cn_error_message_info" in
     let error_msg_info_ctype = C.Struct error_msg_struct_tag in 
     let error_msg_info_binding = create_binding error_msg_info_sym (mk_ctype error_msg_info_ctype) in

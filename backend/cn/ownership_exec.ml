@@ -14,4 +14,4 @@ let cn_stack_depth_ctype = C.mk_ctype_integer (Signed Long)
 
 
 let create_ail_ownership_global_decls () = 
-  [(cn_ghost_state_sym, cn_ghost_state_struct_type); (cn_stack_depth_sym, cn_stack_depth_ctype)]
+  [(cn_ghost_state_sym, C.mk_ctype_pointer empty_qualifiers cn_ghost_state_struct_type); (cn_stack_depth_sym, cn_stack_depth_ctype)]

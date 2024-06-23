@@ -278,5 +278,6 @@ let generate_ownership_globals () =
   let docs = List.map (fun (sym, ty) ->
      CF.Pp_ail.pp_ctype_declaration ~executable_spec:true (CF.Pp_ail.pp_id_obj sym) empty_qualifiers ty) ownership_decls 
   in
-  let doc = PPrint.concat docs in
+  let doc = PPrint.concat_map (fun d -> d ^^ PPrint.semi ^^ PPrint.hardline) docs in
   CF.Pp_utils.to_plain_pretty_string doc
+
