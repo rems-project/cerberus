@@ -273,9 +273,11 @@ let generate_conversion_and_equality_functions (ail_prog : CF.GenTypes.genTypeCa
 
 (* Ownership *)
 
-let generate_ownership_globals () = 
+let generate_ownership_globals ?(is_extern=false) () = 
   let ownership_decls = Ownership_exec.create_ail_ownership_global_decls () in 
   let docs = List.map (fun (sym, ty) ->
+     let maybe_extern = if is_extern then PPrint.(!^) "extern " else PPrint.empty in
+     maybe_extern ^^ 
      CF.Pp_ail.pp_ctype_declaration ~executable_spec:true (CF.Pp_ail.pp_id_obj sym) empty_qualifiers ty) ownership_decls 
   in
   let doc = PPrint.concat_map (fun d -> d ^^ PPrint.semi ^^ PPrint.hardline) docs in

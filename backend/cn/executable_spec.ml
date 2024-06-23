@@ -37,7 +37,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   (* Ownership checking *)
   if with_ownership_checking then 
     (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.h") in 
-    let ownership_globals = generate_ownership_globals () in 
+    let ownership_globals = generate_ownership_globals ~is_extern:false () in 
     Stdlib.output_string ownership_oc cn_utils_header;
     Stdlib.output_string ownership_oc "\n";
     Stdlib.output_string ownership_oc ownership_globals;
@@ -53,8 +53,16 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
   let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
 
+  let extern_ownership_globals = 
+    if with_ownership_checking then 
+      generate_ownership_globals ~is_extern:true ()
+    else "" 
+  in
+
   (* TODO: Topological sort *)
   Stdlib.output_string cn_oc cn_utils_header;
+  Stdlib.output_string cn_oc "\n";
+  Stdlib.output_string cn_oc extern_ownership_globals;
   Stdlib.output_string cn_oc c_structs;
   Stdlib.output_string cn_oc cn_converted_structs;
   Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
@@ -73,6 +81,8 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
   let headers = List.map Executable_spec_utils.generate_include_header incls in
   Stdlib.output_string oc (List.fold_left (^) "" headers);
+  Stdlib.output_string oc "\n";
+  Stdlib.output_string oc extern_ownership_globals;
   Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
   Stdlib.output_string oc records_str;
   Stdlib.output_string oc records_str';
