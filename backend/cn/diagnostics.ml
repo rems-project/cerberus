@@ -28,7 +28,7 @@ let continue_with (opts : opt list) cfg =
     (c, opt.continue)) opts in
   let next = if cfg.arc_index >= String.length cfg.arc
     then None
-    else List.Old.find_opt (fun (c, _) -> Char.equal c (String.get cfg.arc cfg.arc_index)) xs
+    else List.find ~f:(fun (c, _) -> Char.equal c (String.get cfg.arc cfg.arc_index)) xs
   in
   match next with
   | None -> return ()

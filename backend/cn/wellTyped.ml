@@ -309,7 +309,7 @@ module WIT = struct
       | _, _ -> false
     in
     let@ _ = ListM.fold_leftM (fun prev (Pat (_, _, pat_loc) as pat) ->
-      match List.Old.find_opt (fun p1 -> covers p1 pat) prev with
+      match List.find ~f:(fun p1 -> covers p1 pat) prev with
       | None -> return (pat :: prev)
       | Some (Pat (case, _, p1_loc)) ->
         let (prev_head, prev_pos) = Locations.head_pos_of_location p1_loc in

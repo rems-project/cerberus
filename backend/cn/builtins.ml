@@ -191,7 +191,7 @@ let builtin_funs = max_min_bits @ [
 ]
 
 let apply_builtin_funs fsym args loc =
-  match List.Old.find_opt (fun (_, fsym', _) -> Sym.equal fsym fsym') builtin_funs with
+  match List.find ~f:(fun (_, fsym', _) -> Sym.equal fsym fsym') builtin_funs with
   | None -> return None
   | Some (_, _, mk) ->
     let@ t = mk args loc in

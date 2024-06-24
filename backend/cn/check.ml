@@ -289,7 +289,7 @@ let eq_value_with f expr = match f expr with
   | Some y -> return (Some (expr, y))
   | None -> begin
     let@ group = value_eq_group None expr in
-    match List.Old.find_opt (fun t -> Option.is_some (f t)) (EqTable.ITSet.elements group) with
+    match List.find ~f:(fun t -> Option.is_some (f t)) (EqTable.ITSet.elements group) with
     | Some x ->
       let y = Option.get (f x) in
       return (Some (x, y))

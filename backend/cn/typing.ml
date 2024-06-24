@@ -547,7 +547,7 @@ let cond_check_model loc m prop =
 let model_with_internal loc prop =
   let@ ms = get_just_models () in
   let@ has_prop = model_has_prop () in
-  match List.Old.find_opt (has_prop prop) ms with
+  match List.find ~f:(has_prop prop) ms with
     | Some m -> return (Some m)
     | None -> begin
       let@ prover = provable_internal loc in

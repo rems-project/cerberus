@@ -59,7 +59,7 @@ module PrevDefs = struct
     {st with dt_params = x :: st.dt_params})
 
   let get_dt_param it m_nm = bind get (fun st ->
-    return (List.Old.find_opt (fun (it2, m2, _sym) -> IT.equal it it2 && Id.equal m_nm m2)
+    return (List.find ~f:(fun (it2, m2, _sym) -> IT.equal it it2 && Id.equal m_nm m2)
         st.dt_params |> Option.map (fun (_, _, sym) -> sym)))
 
   let debug_dt_params i = bind get (fun st ->
@@ -281,7 +281,7 @@ let add_list_mono_datatype (bt, nm) global =
 
 let mono_list_bt list_mono bt = Option.bind (BT.is_list_bt bt)
   (fun arg_bt -> Option.bind
-    (List.Old.find_opt (fun (bt2, _) -> BT.equal arg_bt bt2) list_mono)
+    (List.find ~f:(fun (bt2, _) -> BT.equal arg_bt bt2) list_mono)
     (fun (_, dt_sym) -> Some (BT.Datatype dt_sym)))
 
 let monomorphise_dt_lists global =
@@ -393,7 +393,7 @@ let tuple_syn xs =
 
 let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.document) (ys : 'a list) =
   let n_ys = List.Old.mapi (fun i y -> (i, y)) ys in
-  match List.Old.find_opt (fun (_i, y) -> eq x y) n_ys with
+  match List.find ~f:(fun (_i, y) -> eq x y) n_ys with
     | None -> fail "tuple element not found" (pp x)
     | Some (i, _) -> (i, List.length ys)
 

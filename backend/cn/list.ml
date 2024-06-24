@@ -135,4 +135,6 @@ let map2 [@deprecated "Use List.map2_exn xs ~f"] = map2
 
 let partition [@deprecated "Use List.partition_tf xs ~f"] = partition
 
+let find_opt [@deprecated "Use List.find xs ~f"] = find_opt
+
 end
