@@ -138,7 +138,7 @@ module IndexTerms = struct
   let rec tuple_nth_reduce it n item_bt =
     let loc = IT.loc it in
     match IT.term it with
-      | Tuple items -> List.Old.nth items n
+      | Tuple items -> List.nth_exn items n
       | ITE (cond, it1, it2) ->
         ite_ (cond, tuple_nth_reduce it1 n item_bt, tuple_nth_reduce it2 n item_bt) loc
       | _ -> IT.nthTuple_ ~item_bt (n, it) loc

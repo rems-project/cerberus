@@ -8,7 +8,7 @@ let rec group_toplevel_defs new_list = function
         group_toplevel_defs ((loc, strs) :: new_list) xs
       else
         (* Unsafe *)
-        let (_, toplevel_strs) = List.Old.nth matching_elems 0 in
+        let (_, toplevel_strs) = List.nth_exn matching_elems 0 in
         let non_matching_elems = List.Old.filter (fun (toplevel_loc, _) ->
           loc != toplevel_loc
         ) new_list in
@@ -21,7 +21,7 @@ let rec open_auxilliary_files source_filename prefix included_filenames already_
     | Some fn' ->
       if String.equal fn' source_filename || List.Old.mem String.equal fn' already_opened_list then [] else
       let fn_list = String.split_on_char '/' fn' in
-      let output_fn = List.Old.nth fn_list (List.length fn_list - 1) in
+      let output_fn = List.nth_exn fn_list (List.length fn_list - 1) in
       let output_fn_with_prefix = prefix ^ output_fn in
       if Sys.file_exists output_fn_with_prefix then
         (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;

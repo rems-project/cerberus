@@ -823,7 +823,7 @@ let rec cn_to_ail_expr_aux_internal
     let struct_tag = match IT.bt struct_term with | BT.Struct tag -> tag | _ -> failwith "Cannot do StructUpdate on non-struct term" in 
     let tag_defs = Pmap.bindings_list (CF.Tags.tagDefs ()) in 
     let matching_tag_defs = List.Old.filter (fun (sym, (_, def)) -> Sym.equal struct_tag sym) tag_defs in 
-    let (_, (_, tag_def)) = if List.Old.is_empty matching_tag_defs then failwith "Struct not found in tagDefs" else List.Old.nth matching_tag_defs 0 in 
+    let (_, (_, tag_def)) = if List.Old.is_empty matching_tag_defs then failwith "Struct not found in tagDefs" else List.nth_exn matching_tag_defs 0 in 
     (match tag_def with 
       | C.StructDef (members, _) -> 
         let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals struct_term PassBack in
@@ -1394,7 +1394,7 @@ let generate_struct_equality_function ?(is_record=false) dts ((sym, (loc, attrs,
         let args = List.map ~f:(fun cast_sym -> mk_expr (AilEmemberofptr (mk_expr (AilEident cast_sym), id))) cast_param_syms in 
         (* List length of args guaranteed to be 2 by construction *)
         assert(List.length args == 2);
-        let equality_fn_call = get_equality_fn_call bt (List.Old.nth args 0) (List.Old.nth args 1) dts in 
+        let equality_fn_call = get_equality_fn_call bt (List.nth_exn args 0) (List.nth_exn args 1) dts in 
         mk_expr equality_fn_call
       in
       let member_equality_exprs = List.map ~f:generate_member_equality members in 
@@ -1540,7 +1540,7 @@ let generate_record_equality_function dts (sym, (members: BT.member_types)) =
       let args = List.map ~f:(fun cast_sym -> mk_expr (AilEmemberofptr (mk_expr (AilEident cast_sym), id))) cast_param_syms in 
       (* List length of args guaranteed to be 2 by construction *)
       assert(List.length args == 2);
-      let equality_fn_call = get_equality_fn_call bt (List.Old.nth args 0) (List.Old.nth args 1) dts in 
+      let equality_fn_call = get_equality_fn_call bt (List.nth_exn args 0) (List.nth_exn args 1) dts in 
       mk_expr equality_fn_call
     in
     let member_equality_exprs = List.map ~f:generate_member_equality members in 
@@ -1899,7 +1899,7 @@ let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition))
   let param_types = List.map ~f:(fun t -> (empty_qualifiers, t, false)) param_types in
   let matched_cn_functions = List.Old.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> Sym.equal cn_fun.cn_func_name fn_sym) cn_functions in
   (* Unsafe - check if list has an element *)
-  let loc = (List.Old.nth matched_cn_functions 0).cn_func_magic_loc in 
+  let loc = (List.nth_exn matched_cn_functions 0).cn_func_magic_loc in 
   (* Generating function declaration *)
   let decl = (fn_sym, (lf_def.loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
@@ -1985,7 +1985,7 @@ let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definit
 
   let matched_cn_preds = List.Old.filter (fun (cn_pred : (A.ail_identifier, C.ctype) Cn.cn_predicate) -> Sym.equal cn_pred.cn_pred_name pred_sym) cn_preds in
   (* Unsafe - check if list has an element *)
-  let loc = (List.Old.nth matched_cn_preds 0).cn_pred_magic_loc in 
+  let loc = (List.nth_exn matched_cn_preds 0).cn_pred_magic_loc in 
   (((loc, decl), def), ail_record_opt)
 
 let rec cn_to_ail_predicates_internal pred_def_list dts globals preds cn_preds = 

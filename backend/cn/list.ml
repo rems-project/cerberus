@@ -111,4 +111,6 @@ let map [@deprecated "Use List.map xs ~f"] = map
 
 let length [@deprecated "Use List.length"] = length
 
+let nth [@deprecated "Use List.nth_exn"] = nth
+
 end
