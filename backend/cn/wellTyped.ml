@@ -280,7 +280,7 @@ module WIT = struct
        end
     | bt::bts ->
        if List.for_all ~f:leading_sym_or_wild cases then
-         cases_complete loc bts (List.map ~f:List.Old.tl cases)
+         cases_complete loc bts (List.map ~f:List.tl_exn cases)
        else
          begin match bt with
          | (Unit|Bool|Integer|Bits _|Real|Alloc_id|Loc|CType|Struct _|

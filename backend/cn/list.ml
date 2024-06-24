@@ -147,4 +147,6 @@ let nth_opt [@deprecated "Use List.nth xs"] = nth_opt
 
 let for_all [@deprecated "Use List.for_all xs ~f"] = for_all
 
+let tl [@deprecated "Use List.tl_ex"] = tl
+
 end

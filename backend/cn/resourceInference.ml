@@ -223,7 +223,7 @@ module General = struct
                     debug_failure
                       (Solver.model ())
                       "couldn't use resource"
-                      (and_ (eq_ (requested.pointer, p'.pointer) here :: List.Old.tl pmatch) here);
+                      (and_ (eq_ (requested.pointer, p'.pointer) here :: List.tl_exn pmatch) here);
                     continue
                   end
                 end
