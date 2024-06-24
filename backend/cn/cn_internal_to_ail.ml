@@ -803,7 +803,7 @@ let rec cn_to_ail_expr_aux_internal
     let (b, s) = ([res_binding], [alloc_stat]) in
     
     let (bs, ss, assign_stats) = list_split_three (List.map ~f:generate_ail_stat ms) in
-    dest d (List.Old.concat bs @ b, List.Old.concat ss @ s @ assign_stats, mk_expr res_ident)
+    dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
 
   | RecordMember (t, m) ->
     (* Currently assuming records only exist  *)
@@ -875,7 +875,7 @@ let rec cn_to_ail_expr_aux_internal
     let (b, s) = ([res_binding], [alloc_stat]) in
     
     let (bs, ss, assign_stats) = list_split_three (List.map ~f:generate_ail_stat ms) in
-    dest d (List.Old.concat bs @ b, List.Old.concat ss @ s @ assign_stats, mk_expr res_ident)
+    dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
 
   | RecordUpdate ((t1, m), t2) -> failwith "TODO6"
 
@@ -924,7 +924,7 @@ let rec cn_to_ail_expr_aux_internal
     let tag_member_ptr = A.(AilEmemberofptr (mk_expr res_ident, Id.id "tag")) in
     let tag_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr tag_member_ptr, mk_expr (AilEident uc_constr_sym))))) in
 
-    dest d ((List.Old.concat bs) @ [res_binding], [ail_decl; tag_assign] @ (List.Old.concat ss) @ constr_allocation_stat @ assign_stats, mk_expr res_ident)
+    dest d ((List.concat bs) @ [res_binding], [ail_decl; tag_assign] @ (List.concat ss) @ constr_allocation_stat @ assign_stats, mk_expr res_ident)
 
 
   | MemberShift (it, tag, member) -> 
@@ -995,7 +995,7 @@ let rec cn_to_ail_expr_aux_internal
       let f = (mk_expr A.(AilEident sym)) in
       let ail_expr_ = A.AilEcall (f, es) in 
       let error_msg_update_stats_ = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
-      dest d (List.Old.concat bs, List.Old.concat ss @ error_msg_update_stats_, mk_expr ail_expr_)
+      dest d (List.concat bs, List.concat ss @ error_msg_update_stats_, mk_expr ail_expr_)
       
   | Let ((var, t1), body) -> 
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack in
@@ -1684,7 +1684,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
         let error_msg_update_stats_ = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
         let fcall = A.(AilEcall (mk_expr (AilEident pname), e :: es @ [mk_expr (AilEident enum_sym)])) in
         let binding = create_binding sym (bt_to_ail_ctype ~pred_sym:(Some pname) bt) in
-        (mk_expr fcall, binding :: (List.Old.concat bs), List.Old.concat ss @ error_msg_update_stats_, None)
+        (mk_expr fcall, binding :: (List.concat bs), List.concat ss @ error_msg_update_stats_, None)
     in
     let s_decl = match rm_ctype ctype with 
       | C.Void -> A.(AilSexpr rhs)
@@ -1774,7 +1774,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
         let (bs, ss, es) = list_split_three (List.map ~f:(fun it -> cn_to_ail_expr_internal dts globals it PassBack) q.iargs) in
         let error_msg_update_stats_ = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
         let fcall = A.(AilEcall (mk_expr (AilEident pname), (mk_expr (AilEident ptr_add_sym)) :: es @ [mk_expr (AilEident enum_sym)])) in
-        (mk_expr fcall, List.Old.concat bs, List.Old.concat ss @ error_msg_update_stats_, None)
+        (mk_expr fcall, List.concat bs, List.concat ss @ error_msg_update_stats_, None)
     in
 
     let typedef_name = get_typedef_string (bt_to_ail_ctype i_bt) in 
@@ -2108,7 +2108,7 @@ let cn_to_ail_cnprog_internal dts globals cn_prog =
 let cn_to_ail_statements dts globals (loc, cn_progs) = 
   let bs_and_ss = List.map ~f:(fun prog -> cn_to_ail_cnprog_internal dts globals prog) cn_progs in 
   let (bs, ss) = List.Old.split bs_and_ss in 
-  (loc, (List.Old.concat bs, List.Old.concat ss))
+  (loc, (List.concat bs, List.concat ss))
 
 let prepend_to_precondition ail_executable_spec (b1, s1) = 
   let (b2, s2) = ail_executable_spec.pre in

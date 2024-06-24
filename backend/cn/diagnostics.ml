@@ -66,7 +66,7 @@ let bool_subterms1 t = match IT.term t with
   | _ -> []
 
 let rec bool_subterms_of t =
-  t :: List.Old.concat (List.map ~f:bool_subterms_of (bool_subterms1 t))
+  t :: List.concat (List.map ~f:bool_subterms_of (bool_subterms1 t))
 
 let constraint_ts () =
   let@ cs = get_cs () in
@@ -121,7 +121,7 @@ let rec investigate_term cfg t =
           let here = Locations.other __FUNCTION__ in
           ListM.mapM (fun (x, y) -> rec_opt "parametric eq" (IT.eq_ (x, y) here)) bits
       in
-      return (List.Old.concat trans_opts @ [get_eq_opt] @ split_opts)
+      return (List.concat trans_opts @ [get_eq_opt] @ split_opts)
   in
   let@ pred_opts = match IT.term t with
     | IT.Apply (nm, _xs) -> investigate_pred cfg nm t
@@ -217,7 +217,7 @@ and investigate_ite cfg t =
   in
   let opts x = ListM.mapM (opt x) [true; false] in
   let@ xs = ListM.mapM opts ites in
-  return (List.Old.concat xs)
+  return (List.concat xs)
 
 let investigate_lc cfg lc = match lc with
   | LC.T t -> investigate_term cfg t

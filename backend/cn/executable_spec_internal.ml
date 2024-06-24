@@ -114,7 +114,7 @@ let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
 in
 let specs = List.map ~f:generate_c_spec instrumentation_list in
 let (pre_post, in_stmt, returns) = Executable_spec_utils.list_split_three specs in
-let executable_spec = {pre_post = List.Old.concat pre_post; in_stmt = List.Old.concat in_stmt; returns = List.Old.concat returns} in
+let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt; returns = List.concat returns} in
 executable_spec
 
 let concat_map_newline docs =
@@ -138,11 +138,11 @@ let generate_record_strs (_sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma
   (record_def_strs, record_decl_strs)
 
   (* let ail_record_equality_functions = List.map ~f:(fun r -> Cn_internal_to_ail.generate_struct_equality_function ~is_record:true sigm.cn_datatypes r) ail_records in
-  let ail_record_equality_functions = List.Old.concat ail_record_equality_functions in
+  let ail_record_equality_functions = List.concat ail_record_equality_functions in
   let ail_record_default_functions = List.map ~f:(fun r -> Cn_internal_to_ail.generate_struct_default_function ~is_record:true sigm.cn_datatypes r) ail_records in
-  let ail_record_default_functions = List.Old.concat ail_record_default_functions in 
+  let ail_record_default_functions = List.concat ail_record_default_functions in 
   let ail_record_mapget_functions = List.map ~f:(fun r -> Cn_internal_to_ail.generate_struct_map_get ~is_record:true sigm.cn_datatypes r) ail_records in
-  let ail_record_mapget_functions = List.Old.concat ail_record_mapget_functions in  *)
+  let ail_record_mapget_functions = List.concat ail_record_mapget_functions in  *)
   (* let (eq_decls, eq_defs) = List.Old.split ail_record_equality_functions in
   let (default_decls, default_defs) = List.Old.split ail_record_default_functions in 
   let (mapget_decls, mapget_defs) = List.Old.split ail_record_mapget_functions in  *)
@@ -150,7 +150,7 @@ let generate_record_strs (_sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma
   let equality_fun_strs = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1) in
   let decl_docs = List.map ~f:(fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) eq_decls in
   let equality_fun_prot_strs = List.map ~f:(fun doc -> [CF.Pp_utils.to_plain_pretty_string doc]) decl_docs in
-  let equality_fun_prot_strs = String.concat "\n" (List.Old.concat equality_fun_prot_strs) in *)
+  let equality_fun_prot_strs = String.concat "\n" (List.concat equality_fun_prot_strs) in *)
   (* (record_def_strs, record_decl_strs, CF.Pp_utils.to_plain_pretty_string equality_fun_strs, equality_fun_prot_strs) *)
 
 let generate_all_record_strs sigm =
@@ -173,7 +173,7 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
         ail_dt1 :: ail_dts
       in
 
-  let ail_datatype_decls = List.map ~f:generate_struct_decl_str (List.Old.concat (List.map ~f:snd ail_datatypes)) in 
+  let ail_datatype_decls = List.map ~f:generate_struct_decl_str (List.concat (List.map ~f:snd ail_datatypes)) in 
   let locs_and_structs = List.map ~f:(fun (loc, structs) -> (loc, List.map ~f:generate_doc_from_ail_struct structs)) ail_datatypes in
   let locs_and_struct_strs = List.map ~f:(fun (loc, ail_structs) -> (loc, CF.Pp_utils.to_plain_pretty_string (concat_map_newline ail_structs))) locs_and_structs in
   (* let structs = List.map ~f:generate_doc_from_ail_struct ail_datatypes in *)
@@ -182,7 +182,7 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
 
   (* Need to generate function prototype for corresponding equality function *)
   let datatype_equality_funs = List.map ~f:Cn_internal_to_ail.generate_datatype_equality_function sigm.cn_datatypes in
-  let datatype_equality_funs = List.Old.concat datatype_equality_funs in
+  let datatype_equality_funs = List.concat datatype_equality_funs in
   let (dt_eq_decls, _) = List.Old.split datatype_equality_funs in
   let decl_docs = List.map ~f:(fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) dt_eq_decls in
   let decl_strs = List.map ~f:(fun doc -> CF.Pp_utils.to_plain_pretty_string doc) decl_docs in
@@ -195,7 +195,7 @@ let print_c_structs c_structs =
   ("\n/* ORIGINAL C STRUCTS */\n\n" ^ struct_defs_str, String.concat "" struct_decls_str)
 
 let generate_cn_versions_of_structs c_structs =
-  let ail_structs = List.Old.concat (List.map ~f:Cn_internal_to_ail.cn_to_ail_struct c_structs) in
+  let ail_structs = List.concat (List.map ~f:Cn_internal_to_ail.cn_to_ail_struct c_structs) in
   let struct_decls = List.map ~f:generate_struct_decl_str ail_structs in
   ("\n/* CN VERSIONS OF C STRUCTS */\n\n" ^ generate_str_from_ail_structs ail_structs, String.concat "" struct_decls)
 
@@ -222,7 +222,7 @@ let generate_struct_injs (sigm: CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) 
     | C.UnionDef _ -> []
   in
   let struct_injs = List.map ~f:generate_struct_inj sigm.tag_definitions in
-  List.Old.concat struct_injs
+  List.concat struct_injs
 
 
 let bt_is_record_or_tuple = function
@@ -242,10 +242,10 @@ let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigm
     match def.return_bt with | BT.Record ms -> [(Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym, ms)] | _ -> []) logical_predicates in 
   let cn_record_info' = List.map ~f:(fun (sym, (def : ResourcePredicates.definition)) ->
     match def.oarg_bt with | BT.Record ms -> [(Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym, ms)] | _ -> []) resource_predicates in 
-  let cn_record_info = List.Old.concat (cn_record_info @ cn_record_info') in 
-  let record_equality_functions = List.Old.concat (List.map ~f:(Cn_internal_to_ail.generate_record_equality_function sigm.cn_datatypes) cn_record_info) in 
-  let record_default_functions = List.Old.concat (List.map ~f:(Cn_internal_to_ail.generate_record_default_function sigm.cn_datatypes) cn_record_info) in 
-  let record_map_get_functions = List.Old.concat (List.map ~f:(Cn_internal_to_ail.generate_record_map_get sigm.cn_datatypes) cn_record_info) in 
+  let cn_record_info = List.concat (cn_record_info @ cn_record_info') in 
+  let record_equality_functions = List.concat (List.map ~f:(Cn_internal_to_ail.generate_record_equality_function sigm.cn_datatypes) cn_record_info) in 
+  let record_default_functions = List.concat (List.map ~f:(Cn_internal_to_ail.generate_record_default_function sigm.cn_datatypes) cn_record_info) in 
+  let record_map_get_functions = List.concat (List.map ~f:(Cn_internal_to_ail.generate_record_map_get sigm.cn_datatypes) cn_record_info) in 
   let (eq_decls, eq_defs) = List.Old.split record_equality_functions in
   let (default_decls, default_defs) = List.Old.split record_default_functions in 
   let (mapget_decls, mapget_defs) = List.Old.split record_map_get_functions in 
@@ -254,7 +254,7 @@ let generate_c_record_funs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigm
   let fun_strs = CF.Pp_utils.to_plain_pretty_string fun_doc in
   let decl_docs = List.map ~f:(fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) (eq_decls @ default_decls @ mapget_decls) in
   let fun_prot_strs = List.map ~f:(fun doc -> [CF.Pp_utils.to_plain_pretty_string doc]) decl_docs in
-  let fun_prot_strs = String.concat "\n" (List.Old.concat fun_prot_strs) in
+  let fun_prot_strs = String.concat "\n" (List.concat fun_prot_strs) in
   (fun_strs, fun_prot_strs)
 
 
@@ -277,7 +277,7 @@ let generate_c_functions_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSynt
   (* let modified_prog_2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = decls; function_definitions = []} in *)
   (* let doc_2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_2) in *)
   let ail_records = List.map ~f:(fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
-  let record_triple_str = generate_record_strs sigm (List.Old.concat ail_records) in
+  let record_triple_str = generate_record_strs sigm (List.concat ail_records) in
   let funs_defs_str = CF.Pp_utils.to_plain_pretty_string doc_1 in
   (* let funs_decls_str = CF.Pp_utils.to_plain_pretty_string doc_2 in  *)
   (funs_defs_str, "\n/* CN FUNCTIONS */\n\n" ^ decl_str, locs_and_decls', record_triple_str)
@@ -303,7 +303,7 @@ let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyn
   let pred_locs_and_decls = List.map ~f:(fun (loc, (sym, (_, _, decl))) ->
      (loc, [CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)])) (List.Old.combine locs decls) in
   let ail_records = List.map ~f:(fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
-  let record_triple_str = generate_record_strs sigm (List.Old.concat ail_records) in
+  let record_triple_str = generate_record_strs sigm (List.concat ail_records) in
   ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str)
 
 let generate_ownership_functions with_ownership_checking ownership_ctypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
@@ -333,8 +333,8 @@ let generate_conversion_and_equality_functions (sigm : CF.GenTypes.genTypeCatego
   let ail_funs'' = List.map ~f:Cn_internal_to_ail.generate_datatype_equality_function sigm.cn_datatypes in
   let ail_funs''' = List.map ~f:(Cn_internal_to_ail.generate_struct_map_get sigm.cn_datatypes) sigm.tag_definitions in
   let ail_funs'''' = List.map ~f:(Cn_internal_to_ail.generate_struct_default_function sigm.cn_datatypes) sigm.tag_definitions in
-  let ail_funs = List.Old.concat ail_funs in
-  let ail_funs = ail_funs @ List.Old.concat ail_funs' @ List.Old.concat ail_funs'' @ List.Old.concat ail_funs''' @ List.Old.concat ail_funs'''' in
+  let ail_funs = List.concat ail_funs in
+  let ail_funs = ail_funs @ List.concat ail_funs' @ List.concat ail_funs'' @ List.concat ail_funs''' @ List.concat ail_funs'''' in
   let (decls, defs) = List.Old.split ail_funs in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = decls; function_definitions = defs} in
   let doc1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog1) in

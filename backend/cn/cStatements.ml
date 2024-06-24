@@ -19,7 +19,7 @@ let to_pre_cmp = function
   | Cerb_location.Loc_point p -> (2, [lex_to_cmp p], [])
   | Cerb_location.Loc_region (x, y, _) -> (3, [lex_to_cmp x; lex_to_cmp y], [])
   | Cerb_location.Loc_regions (xs, _) -> (4,
-        List.map ~f:lex_to_cmp (List.Old.concat (List.map ~f:(fun (x, y) -> [x; y]) xs)), [])
+        List.map ~f:lex_to_cmp (List.concat (List.map ~f:(fun (x, y) -> [x; y]) xs)), [])
 
 let mk_cmp (x : t) = to_pre_cmp x
 

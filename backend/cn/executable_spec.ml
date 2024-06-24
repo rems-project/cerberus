@@ -182,7 +182,7 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
     else "" 
   in *)
   let datatype_strs = String.concat "\n" (List.map ~f:snd c_datatype_defs) in 
-  let predicate_decls = String.concat "\n" (List.Old.concat (List.map ~f:snd locs_and_c_predicate_decls)) in
+  let predicate_decls = String.concat "\n" (List.concat (List.map ~f:snd locs_and_c_predicate_decls)) in
 
   let cn_header_decls_list = 
     [cn_utils_header;

@@ -113,4 +113,6 @@ let length [@deprecated "Use List.length"] = length
 
 let nth [@deprecated "Use List.nth_exn"] = nth
 
+let concat [@deprecated "Use List.concat"] = concat
+
 end

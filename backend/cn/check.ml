@@ -84,7 +84,7 @@ let rec check_and_match_pattern (M_Pattern (loc, _, bty, pattern)) it =
                check_and_match_pattern p ith
              ) pats
          in
-         return (List.Old.concat all_as)
+         return (List.concat all_as)
       | M_Carray, _ ->
          Cerb_debug.error "todo: array patterns"
       | _ ->
@@ -994,7 +994,7 @@ let _check_used_distinct loc used =
           (RE.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
     end
   in
-  let@ w_map = check_ws IntMap.empty (List.Old.concat (List.map ~f:snd used)) in
+  let@ w_map = check_ws IntMap.empty (List.concat (List.map ~f:snd used)) in
   let check_rd (r, h, i) = match IntMap.find_opt i w_map with
     | None -> return ()
     | Some h2 ->
@@ -1002,7 +1002,7 @@ let _check_used_distinct loc used =
       fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
         (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
   in
-  ListM.iterM check_rd (List.Old.concat (List.map ~f:fst used))
+  ListM.iterM check_rd (List.concat (List.map ~f:fst used))
 
 (*type labels = (AT.lt * label_kind) SymMap.t*)
 

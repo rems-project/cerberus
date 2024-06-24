@@ -976,7 +976,7 @@ let rec translate_term s iterm =
         let nested_cond = SMT.bool_ands (List.Old.filter_map (fun x -> x) conds) in
         let cname = CN_Names.datatype_con_name c in
         let cond  = SMT.bool_and (SMT.is_con cname v) nested_cond in
-        (Some cond, List.Old.concat defs)
+        (Some cond, List.concat defs)
     in
     let rec do_alts v alts =
       match alts with

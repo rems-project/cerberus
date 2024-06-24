@@ -61,7 +61,7 @@ module Make(T : S) = struct
 
     let concat_mapM f l =
       let@ xs = mapM f l in
-      return (List.Old.concat xs)
+      return (List.concat xs)
 
     let filter_mapM f l =
       let@ xs = mapM f l in
