@@ -1068,7 +1068,7 @@ let rec cn_to_ail_expr_aux_internal
               
               let cases = List.map ~f:(simplify_leading_variable term) cases in
 
-              if List.Old.for_all leading_wildcard cases then
+              if List.for_all ~f:leading_wildcard cases then
                 let cases = List.map ~f:(fun (ps, e) -> (List.Old.tl ps, e)) cases in
                 let (bindings', stats') = translate count vs cases in 
                 (bindings', stats')

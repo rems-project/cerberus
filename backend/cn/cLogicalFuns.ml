@@ -458,7 +458,7 @@ let rec filter_syms ss p =
   | M_CaseBase (None, _) -> p
   | M_CaseCtor (M_Ctuple, ps) ->
     let ps = List.map ~f:(filter_syms ss) ps in
-    if List.Old.for_all is_wild_pat ps
+    if List.for_all ~f:is_wild_pat ps
     then mk (M_CaseBase (None, CF.Core.BTy_unit))
     else mk (M_CaseCtor (M_Ctuple, ps))
   | _ -> p

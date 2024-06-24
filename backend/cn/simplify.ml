@@ -483,7 +483,7 @@ module IndexTerms = struct
        begin match members with
        | (_, IT (StructMember (str, _), _, _)) :: _ when
               BT.equal (Struct tag) (IT.bt str) &&
-              List.Old.for_all (function
+              List.for_all ~f:(function
                   | (mem, IT (StructMember (str', mem'), _, _)) ->
                     Id.equal mem mem' && IT.equal str str'
                   | _ -> false

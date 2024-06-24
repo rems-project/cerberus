@@ -271,7 +271,7 @@ module WIT = struct
   let rec cases_complete loc (bts : BT.t list) (cases : ((BT.t pattern) list) list) =
     match bts with
     | [] ->
-       assert (List.Old.for_all (function [] -> true | _ -> false) cases);
+       assert (List.for_all ~f:(function [] -> true | _ -> false) cases);
        begin match cases with
        | [] -> fail (fun _ -> {loc; msg = Generic !^"Incomplete pattern"})
        | _ -> return ()
@@ -279,7 +279,7 @@ module WIT = struct
        (* | _::_::_ -> fail (fun _ -> {loc; msg = Generic !^"Duplicate pattern"}) *)
        end
     | bt::bts ->
-       if List.Old.for_all leading_sym_or_wild cases then
+       if List.for_all ~f:leading_sym_or_wild cases then
          cases_complete loc bts (List.map ~f:List.Old.tl cases)
        else
          begin match bt with
