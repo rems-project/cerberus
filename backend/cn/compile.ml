@@ -1178,9 +1178,9 @@ let translate_cn_function env (def: cn_function) =
   let env' =
     List.Old.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
       ) env args in
-  let is_rec = List.Old.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
-  let coq_unfold = List.Old.exists (fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs in
-  let@ () = ListM.iterM (fun id -> if List.Old.exists (String.equal (Id.s id)) known_attrs
+  let is_rec = List.exists ~f:(fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
+  let coq_unfold = List.exists ~f:(fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs in
+  let@ () = ListM.iterM (fun id -> if List.exists ~f:(String.equal (Id.s id)) known_attrs
     then return ()
     else fail {loc = def.cn_func_loc; msg = Generic (Pp.item "Unknown attribute" (Id.pp id))}
   ) def.cn_func_attrs in

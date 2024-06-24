@@ -127,4 +127,6 @@ let rev [@deprecated "Use List.rev"] = rev
 
 let combine [@deprecated "Use List.zip_exn"] = combine
 
+let exists [@deprecated "Use List.exists xs ~f"] = exists
+
 end

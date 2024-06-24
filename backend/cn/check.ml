@@ -1051,8 +1051,8 @@ let add_trace_information _labels annots =
     List.filter_map ~f:(function Ainlined_label l -> Some l | _ -> None) annots in
   let locs =
     List.filter_map ~f:(function Aloc l -> Some l | _ -> None) annots in
-  let is_stmt = List.Old.exists (function Astmt -> true | _ -> false) annots in
-  let is_expr = List.Old.exists (function Aexpr -> true | _ -> false) annots in
+  let is_stmt = List.exists ~f:(function Astmt -> true | _ -> false) annots in
+  let is_expr = List.exists ~f:(function Aexpr -> true | _ -> false) annots in
   let@ () = match inlined_labels with
     | [] -> return ()
     | [(lloc,_lsym,lannot)] ->
@@ -1500,8 +1500,8 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                in
                let@ it = WellTyped.WIT.infer it in
                let@ (original_rs, _) = all_resources_tagged loc in
-               (* let verbose = List.Old.exists (Id.is_str "verbose") attrs in *)
-               let quiet = List.Old.exists (Id.is_str "quiet") attrs in
+               (* let verbose = List.exists ~f:(Id.is_str "verbose") attrs in *)
+               let quiet = List.exists ~f:(Id.is_str "quiet") attrs in
                let@ () = add_movable_index loc (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
                if (List.Old.equal Int.equal (List.map ~f:snd original_rs) (List.map ~f:snd upd_rs)

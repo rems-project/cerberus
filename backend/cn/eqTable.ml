@@ -26,7 +26,7 @@ let guard_implies guard1 guard2 = match (guard1, guard2) with
   | _ -> false
 
 let eq_is_known tab (guard, lhs, rhs) =
-  List.Old.exists (fun info -> IT.equal rhs info.rhs && guard_implies guard info.guard)
+  List.exists ~f:(fun info -> IT.equal rhs info.rhs && guard_implies guard info.guard)
     (fetch_eqs tab lhs)
 
 let add_eq (guard, lhs, rhs) (tab : table) =

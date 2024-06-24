@@ -308,7 +308,7 @@ let monomorphise_dt_lists global =
 
 let rec new_nm s nms i =
   let s2 = s ^ "_" ^ Int.to_string i in
-  if List.Old.exists (String.equal s2) nms
+  if List.exists ~f:(String.equal s2) nms
   then new_nm s nms (i + 1)
   else s2
 
@@ -316,7 +316,7 @@ let alpha_rename_if_pp_same s body =
   let vs = IT.free_vars body in
   let other_nms = List.filter ~f:(fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
     |> List.map ~f:Sym.pp_string in
-  if List.Old.exists (String.equal (Sym.pp_string s)) other_nms
+  if List.exists ~f:(String.equal (Sym.pp_string s)) other_nms
   then begin
     Pp.debug 6 (lazy (Pp.item "doing rename"
         (Pp.typ (Sym.pp s) (Pp.braces (Pp.list Pp.string other_nms)))));
@@ -492,7 +492,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
   let dt_tag = List.hd_exn family in
   let inf = (loc, Pp.typ (Pp.string "datatype") (Sym.pp dt_tag)) in
   let bt_to_coq2 bt = match BT.is_datatype_bt bt with
-    | Some dt_tag2 -> if List.Old.exists (Sym.equal dt_tag2) family
+    | Some dt_tag2 -> if List.exists ~f:(Sym.equal dt_tag2) family
       then return (Sym.pp dt_tag2)
       else bt_to_coq global list_mono inf bt
     | _ -> bt_to_coq global list_mono inf bt
@@ -534,7 +534,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
     in
     let open Pp in
     !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^
-    if List.Old.exists (Id.equal mem_tag) (List.map ~f:fst c_info.c_params)
+    if List.exists ~f:(Id.equal mem_tag) (List.map ~f:fst c_info.c_params)
     then Id.pp mem_tag
     else !^"default"
   in

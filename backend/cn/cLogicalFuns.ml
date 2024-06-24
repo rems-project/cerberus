@@ -436,7 +436,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
       let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
       if String.equal s "ctz_proxy"
       then rcval (wrap_int (IT.arith_unop Terms.BWCTZNoSMT (List.hd_exn args_its) loc) loc) state
-      else if List.Old.exists (String.equal s) ["ffs_proxy"; "ffsl_proxy"; "ffsll_proxy"]
+      else if List.exists ~f:(String.equal s) ["ffs_proxy"; "ffsl_proxy"; "ffsll_proxy"]
       then rcval (wrap_int (IT.arith_unop Terms.BWFFSNoSMT (List.hd_exn args_its) loc) loc) state
       else failwith ("unknown stdlib function: " ^ s)
     end else fail_fun_it "not a function with a pure/logical interpretation"

@@ -127,7 +127,7 @@ module IndexTerms = struct
   (*   match IT.term it with *)
   (*     | DatatypeCons (nm, members_rec) -> *)
   (*       let members = BT.record_bt (IT.bt members_rec) in *)
-  (*       if List.Old.exists (Id.equal member) (List.map ~f:fst members) *)
+  (*       if List.exists ~f:(Id.equal member) (List.map ~f:fst members) *)
   (*       then record_member_reduce members_rec member *)
   (*       else IT.IT (DatatypeMember (it, member), member_bt) *)
   (*     | ITE (cond, it1, it2) -> *)

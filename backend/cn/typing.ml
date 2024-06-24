@@ -809,7 +809,7 @@ let test_value_eqs loc guard x ys =
     | y :: ys ->
       let@ has_prop = model_has_prop () in
       let counterex = has_prop (IT.not_ (IT.eq_ (x, y) here) here) in
-      if ITSet.mem y group || List.Old.exists counterex ms
+      if ITSet.mem y group || List.exists ~f:counterex ms
       then loop group ms ys
       else match prover (prop y) with
         | `True ->
