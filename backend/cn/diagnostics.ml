@@ -19,7 +19,7 @@ type opt = {
 let opt_key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 let continue_with (opts : opt list) cfg =
-  assert (List.Old.length opts <= String.length opt_key);
+  assert (List.length opts <= String.length opt_key);
   let xs = List.Old.mapi (fun i opt ->
     let c = String.get opt_key i in
     let s = String.make 1 c in
@@ -129,7 +129,7 @@ let rec investigate_term cfg t =
   in
   let@ ite_opts = investigate_ite cfg t in
   let opts = sub_t_opts @ simp_opts @ simp_opts2 @ eq_opts @ pred_opts @ ite_opts in
-  if List.Old.length opts == 0
+  if List.length opts == 0
   then Pp.print stdout (Pp.item "out of diagnostic options at" (IT.pp t))
   else ();
   continue_with opts cfg
@@ -144,7 +144,7 @@ and investigate_eq_side _cfg (side_nm, t, t2) =
     []
     | _ ->
     print stdout (string side_nm ^^^ string "is in an equality group of size"
-      ^^^ int (List.Old.length xs + 1) ^^^ string "with:" ^^^ brackets (list IT.pp xs));
+      ^^^ int (List.length xs + 1) ^^^ string "with:" ^^^ brackets (list IT.pp xs));
     [{doc = string "switch with another from" ^^^ string side_nm ^^^ string "eq-group";
       continue = continue_with (List.map ~f:(fun t ->
           {doc = IT.pp t; continue = fun cfg ->
@@ -171,7 +171,7 @@ and investigate_trans_eq t cfg =
     return {doc; continue = fun cfg -> investigate_term cfg eq}
   in
   let@ opts = ListM.mapM opt_of opt_xs in
-  if List.Old.length opts == 0
+  if List.length opts == 0
   then Pp.print stdout (Pp.item "no interesting transitive options for" (IT.pp t))
   else ();
   continue_with opts cfg

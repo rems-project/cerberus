@@ -158,7 +158,7 @@ let pop s n =
       drop n !(s.prev_frames)
     end
 
-let num_scopes s = List.Old.length !(s.prev_frames)
+let num_scopes s = List.length !(s.prev_frames)
 
 (** Do an ack_style command. These are logged. *)
 let ack_command s cmd =
@@ -224,7 +224,7 @@ module CN_Tuple = struct
 
   (** A tuple type with the given name *)
   let t tys =
-    let arity = List.Old.length tys in
+    let arity = List.length tys in
     SMT.app_ (name arity) tys
 
   (** Declare a datatype for a struct *)
@@ -238,7 +238,7 @@ module CN_Tuple = struct
 
   (** Make a tuple value *)
   let con es =
-    let arity = List.Old.length es in
+    let arity = List.length es in
     SMT.app_ (name arity) es
 
   (** Get a field of a tuple *)
@@ -777,7 +777,7 @@ let rec translate_term s iterm =
   | Tuple es -> CN_Tuple.con (List.map ~f:(translate_term s) es)
   | NthTuple (n, e1) ->
     begin match IT.basetype e1 with
-    | Tuple ts ->  CN_Tuple.get (List.Old.length ts) n (translate_term s e1)
+    | Tuple ts ->  CN_Tuple.get (List.length ts) n (translate_term s e1)
     | _ -> failwith "NthTuple: not a tuple"
     end
 
@@ -822,7 +822,7 @@ let rec translate_term s iterm =
     begin match IT.basetype e1 with
     | Record members ->
         let check (x,_) = Id.equal f x in
-        let arity       = List.Old.length members in
+        let arity       = List.length members in
         begin match List.Old.find_index check members with
         | Some n -> CN_Tuple.get arity n (translate_term s e1)
         | None -> failwith "Missing record field."

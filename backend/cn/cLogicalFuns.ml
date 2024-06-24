@@ -130,7 +130,7 @@ let rec add_pattern p v var_map =
       fail_n {loc; msg = Generic (Pp.item "getting expr from C syntax: cannot tuple-split val"
         (Pp.typ (IT.pp it) (Pp_mucore.Basic.pp_pattern p)))}
     end in
-    assert (List.Old.length vs == List.Old.length ps);
+    assert (List.length vs == List.length ps);
     ListM.fold_rightM (fun (p, v) var_map -> add_pattern p v var_map)
       (List.Old.combine ps vs) var_map
   | _ ->
@@ -383,7 +383,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     let@ arg_vs = ListM.mapM (symb_exec_mu_pexpr ctxt var_map) args in
     begin match Pmap.lookup sym ctxt.label_defs with
     | Some (M_Return _) ->
-      assert (List.Old.length args == 1);
+      assert (List.length args == 1);
       return (Call_Ret (List.Old.hd arg_vs))
     | _ ->
        fail_n {loc; msg = Generic Pp.(!^"function has goto-labels in control-flow")}

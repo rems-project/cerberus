@@ -433,7 +433,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
        (* pairwise disjoint *)
-       when (List.Old.length (List.Old.sort_uniq Sym.compare [sym; sym'; sym2; sym2']) = 4) ->
+       when (List.length (List.Old.sort_uniq Sym.compare [sym; sym'; sym2; sym2']) = 4) ->
         let e'' = Core_peval.subst_sym_pexpr2 sym
                    (get_loc annots2, `SYM sym2) e'' in
         let e'' = Core_peval.subst_sym_pexpr2 sym'
@@ -679,7 +679,7 @@ let n_memop ~inherit_loc loc memop pexprs =
      let err =
        !^(show_n_memop memop)
        ^^^ !^"applied to"
-       ^^^ Print.int (List.Old.length pexprs1)
+       ^^^ Print.int (List.length pexprs1)
        ^^^ !^"arguments"
      in
      assert_error loc err
@@ -726,7 +726,7 @@ let rec n_expr ~inherit_loc (loc : Loc.t) ((env, old_states), desugaring_things)
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
        (* pairwise disjoint *)
-       when (List.Old.length (List.Old.sort_uniq Sym.compare [sym; sym'; sym2; sym2']) = 4) ->
+       when (List.length (List.Old.sort_uniq Sym.compare [sym; sym'; sym2; sym2']) = 4) ->
         let e2 = Core_peval.subst_sym_expr2 sym
                    (get_loc annots2, `SYM sym2) e2 in
         let e2 = Core_peval.subst_sym_expr2 sym'

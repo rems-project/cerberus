@@ -37,7 +37,7 @@ let check_against_core_bt fail_op core_bt cn_bt =
     | BTy_object ot, bt -> check_object_type (ot, bt)
     | BTy_loaded ot, bt -> check_object_type (ot, bt)
     | BTy_list cbt, BT.List bt -> check_core_base_type (cbt, bt)
-    | BTy_tuple cbts, BT.Tuple bts when List.Old.length bts == List.Old.length bts ->
+    | BTy_tuple cbts, BT.Tuple bts when List.length bts == List.length bts ->
         let@ _ = ListM.map2M (Tools.curry check_core_base_type) cbts bts in
         return ()
     | BTy_storable, _ -> fail_op (Pp.string "unsupported: BTy_storable")

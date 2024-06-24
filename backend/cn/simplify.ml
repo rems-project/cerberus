@@ -83,7 +83,7 @@ module IndexTerms = struct
       let b_elems = dest_int_addition (true, ITSet.empty) b |> fst |> List.map ~f:fst in
       let repeated = List.Old.sort IT.compare (a_elems @ b_elems)
           |> group IT.equal
-          |> List.Old.filter (fun xs -> List.Old.length xs >= 2)
+          |> List.Old.filter (fun xs -> List.length xs >= 2)
           |> List.map ~f:List.Old.hd |> ITSet.of_list in
       let (a_xs, a_r) = dest_int_addition (false, repeated) a in
       let (b_xs, b_r) = dest_int_addition (false, repeated) b in

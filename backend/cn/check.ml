@@ -467,7 +467,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         let@ () = check_against_core_bt loc (!^ "checking Cnil") item_cbt item_bt in
         k (nil_ ~item_bt loc)
      | M_Cnil _item_bt, _ ->
-        fail (fun _ -> {loc; msg = Number_arguments {has = List.Old.length pes; expect=0}})
+        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect=0}})
      | M_Ccons, [pe1; pe2] ->
         let@ () = ensure_base_type loc ~expect (List (bt_of_pexpr pe1)) in
         let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe2) in
@@ -475,7 +475,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         check_pexpr pe2 (fun vt2 ->
         k (cons_ (vt1, vt2) loc)))
      | M_Ccons, _ ->
-        fail (fun _ -> {loc; msg = Number_arguments {has = List.Old.length pes; expect = 2}})
+        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
      end
   | M_PEbitwise_unop (unop, pe1) ->
      let@ _ = ensure_bitvector_type loc ~expect in
@@ -591,8 +591,8 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      in
      let expect_args = Mucore.mu_fun_param_types fun_id in
      let@ () =
-       let has = List.Old.length args in
-       let expect = List.Old.length expect_args in
+       let has = List.length args in
+       let expect = List.length expect_args in
        if expect = has then return ()
        else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
      in
@@ -892,7 +892,7 @@ end = struct
            k ftyp
         | _ ->
            let expect = count_computational original_ftyp in
-           let has = List.Old.length original_args in
+           let has = List.length original_args in
            fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
       in
       fun args ftyp k -> aux [] args ftyp k
@@ -1035,7 +1035,7 @@ let instantiate loc filter arg =
   let extra_assumptions = List.map ~f:(fun ((s, _), t) ->
         LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t)) extra_assumptions2
   in
-  if List.Old.length extra_assumptions == 0 then Pp.warn loc (!^ "nothing instantiated")
+  if List.length extra_assumptions == 0 then Pp.warn loc (!^ "nothing instantiated")
   else ();
   List.Old.iteri (fun i ((_, bt), _) -> if i < 2
     then Pp.warn loc (!^ "did not instantiate on basetype mismatch:" ^^^
@@ -1511,7 +1511,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                return ()
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_function_def loc f in
-               let has_args, expect_args = List.Old.length args, List.Old.length def.args in
+               let has_args, expect_args = List.length args, List.length def.args in
                let@ () = WellTyped.ensure_same_argument_number loc `General has_args ~expect:expect_args in
                let@ args =
                  ListM.map2M (fun has_arg (_, def_arg_bt) ->
@@ -1791,7 +1791,7 @@ let record_and_check_logical_functions funs =
       ) funs
   in
 
-  let n_funs = List.Old.length funs in
+  let n_funs = List.length funs in
 
   (* Add all recursive functions (without their actual bodies), so that they
      can depend on themselves and each other. *)
@@ -1820,7 +1820,7 @@ let record_and_check_resource_predicates preds =
   in
   ListM.iteriM (fun i (name, def) ->
       debug 2 (lazy (headline ("checking welltypedness of resource pred" ^
-          Pp.of_total i (List.Old.length preds) ^ ": " ^ Sym.pp_string name)));
+          Pp.of_total i (List.length preds) ^ ": " ^ Sym.pp_string name)));
       let@ def = WellTyped.WRPD.welltyped def in
       (* add simplified def to the context *)
       add_resource_predicate name def
@@ -1860,7 +1860,7 @@ let register_fun_syms mu_file =
 
 
 let wf_check_and_record_functions mu_funs mu_call_sigs =
-  let n_syms = List.Old.length (Pmap.bindings_list mu_funs) in
+  let n_syms = List.length (Pmap.bindings_list mu_funs) in
   let welltyped_ping i fsym =
     debug 2 (lazy (headline ("checking welltypedness of procedure" ^
         Pp.of_total i n_syms ^ ": " ^ Sym.pp_string fsym)))
@@ -1909,7 +1909,7 @@ let check_c_functions funs =
     | _ss -> List.Old.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
   in
   let selected_funs = List.Old.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs in
-  let number_entries = List.Old.length selected_funs in
+  let number_entries = List.length selected_funs in
   match !batch with
   | false ->
      let@ _ =

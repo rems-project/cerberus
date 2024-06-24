@@ -395,7 +395,7 @@ let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.document)
   let n_ys = List.Old.mapi (fun i y -> (i, y)) ys in
   match List.Old.find_opt (fun (_i, y) -> eq x y) n_ys with
     | None -> fail "tuple element not found" (pp x)
-    | Some (i, _) -> (i, List.Old.length ys)
+    | Some (i, _) -> (i, List.length ys)
 
 let tuple_element t (i, len) =
   let open Pp in
@@ -691,7 +691,7 @@ let mk_forall global list_mono loc sym bt doc =
 
 let add_dt_param_counted (it, (m_nm : Id.t)) =
   let@ st = get in
-  let idx = List.Old.length (st.dt_params) in
+  let idx = List.length (st.dt_params) in
   let sym = Sym.fresh_named (Id.pp_string m_nm ^ "_" ^ Int.to_string idx) in
   let@ () = add_dt_param (it, m_nm, sym) in
   return sym
@@ -814,7 +814,7 @@ let it_to_coq loc global list_mono it =
     | IT.MapGet (m, x) -> parensM (build [aux m; aux x])
     | IT.RecordMember (t, m) ->
         let flds = BT.record_bt (IT.bt t) in
-        if List.Old.length flds == 1
+        if List.length flds == 1
         then aux t
         else
         let ix = find_tuple_element Id.equal m Id.pp (List.map ~f:fst flds) in
@@ -822,7 +822,7 @@ let it_to_coq loc global list_mono it =
         parensM (build [rets op_nm; aux t])
     | IT.RecordUpdate ((t, m), x) ->
         let flds = BT.record_bt (IT.bt t) in
-        if List.Old.length flds == 1
+        if List.length flds == 1
         then aux x
         else
         let ix = find_tuple_element Id.equal m Id.pp (List.map ~f:fst flds) in
@@ -835,7 +835,7 @@ let it_to_coq loc global list_mono it =
         let tag = BaseTypes.struct_bt (IT.bt t) in
         let (mems, _bts) = get_struct_xs global.struct_decls tag in
         let ix = find_tuple_element Id.equal m Id.pp mems in
-        if List.Old.length mems == 1
+        if List.length mems == 1
         then aux t
         else
         let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
@@ -844,7 +844,7 @@ let it_to_coq loc global list_mono it =
         let tag = BaseTypes.struct_bt (IT.bt t) in
         let (mems, _bts) = get_struct_xs global.struct_decls tag in
         let ix = find_tuple_element Id.equal m Id.pp mems in
-        if List.Old.length mems == 1
+        if List.length mems == 1
         then aux x
         else
         let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
@@ -920,7 +920,7 @@ let types_spec types =
   let open Pp in
   !^"Module Types."
   ^^ hardline ^^ hardline
-  ^^ (if List.Old.length types == 0
+  ^^ (if List.length types == 0
     then !^ "  (* no type definitions required *)" ^^ hardline
     else flow hardline types)
   ^^ hardline
@@ -932,7 +932,7 @@ let param_spec params =
   !^"Module Type Parameters." ^^ hardline
   ^^ !^"  Import Types."
   ^^ hardline ^^ hardline
-  ^^ (if List.Old.length params == 0
+  ^^ (if List.length params == 0
     then !^ "  (* no parameters required *)" ^^ hardline
     else flow hardline params)
   ^^ hardline

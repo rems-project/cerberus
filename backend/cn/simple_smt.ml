@@ -476,7 +476,7 @@ let declare_datatypes tys =
     | _  -> app_ "par" [ List (List.map ~f:atom type_params); mk_cons cons ]
   in
   let arity (name,ty_params,_) =
-        let n = List.Old.length ty_params in
+        let n = List.length ty_params in
         list [atom name; atom (string_of_int n) ]
   in
   app_ "declare-datatypes" [ list (List.map ~f:arity tys)

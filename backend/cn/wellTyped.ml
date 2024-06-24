@@ -604,7 +604,7 @@ module WIT = struct
                return (id, t)
              ) decl_members
          in
-         assert (List.Old.length members_sorted = List.Old.length members);
+         assert (List.length members_sorted = List.length members);
          return (IT (Struct (tag, members_sorted), BT.Struct tag, loc))
       | StructMember (t, member) ->
          let@ t = infer t in
@@ -833,7 +833,7 @@ module WIT = struct
             end
       | Apply (name, args) ->
          let@ def = Typing.get_logical_function_def loc name in
-         let has_args, expect_args = List.Old.length args, List.Old.length def.args in
+         let has_args, expect_args = List.length args, List.length def.args in
          let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
          let@ args =
            ListM.map2M (fun has_arg (_, def_arg_bt) ->
@@ -923,7 +923,7 @@ module WRET = struct
     match r with
     | P p ->
        let@ pointer = WIT.check loc BT.Loc p.pointer in
-       let has_iargs, expect_iargs = List.Old.length p.iargs, List.Old.length spec_iargs in
+       let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
        let@ iargs = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) spec_iargs p.iargs in
@@ -979,7 +979,7 @@ module WRET = struct
              (*      let msg = "Iterated resource gives ownership to negative indices." in *)
              (*      fail (fun ctxt -> {loc; msg = Generic_with_model {err= !^msg; ctxt; model}}) *)
              (* in *)
-             let has_iargs, expect_iargs = List.Old.length p.iargs, List.Old.length spec_iargs in
+             let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
              (* +1 because of pointer argument *)
              let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
              let@ iargs = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) spec_iargs p.iargs in
@@ -1352,19 +1352,19 @@ let rec check_and_bind_pattern bt = function
        let@ _item_bt = get_item_bt bt in
        return (M_Cnil cbt, [])
     | M_Cnil _, _ ->
-       fail (fun _ -> {loc; msg = Number_arguments {has = List.Old.length pats; expect = 0}})
+       fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
     | M_Ccons, [p1; p2] ->
        let@ item_bt = get_item_bt bt in
        let@ p1 = check_and_bind_pattern item_bt p1 in
        let@ p2 = check_and_bind_pattern bt p2 in
        return (M_Ccons, [p1; p2])
     | M_Ccons, _ ->
-        fail (fun _ -> {loc; msg = Number_arguments {has = List.Old.length pats; expect = 2}})
+        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
     | M_Ctuple, pats ->
         let@ bts = match BT.is_tuple_bt bt with
-          | Some bts when List.Old.length bts == List.Old.length pats -> return bts
+          | Some bts when List.length bts == List.length pats -> return bts
           | _ -> fail (fun _ -> {loc; msg = Generic
-              (Pp.item (Int.to_string (List.Old.length pats) ^ "-length tuple pattern match against")
+              (Pp.item (Int.to_string (List.length pats) ^ "-length tuple pattern match against")
                   (BT.pp bt))})
         in
         let@ pats = ListM.map2M check_and_bind_pattern bts pats in
@@ -1603,7 +1603,7 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
               let ibt = bt_of_pexpr x in
               let@ () = ensure_base_type loc ~expect:(List ibt) (bt_of_pexpr xs) in
               return (bt_of_pexpr xs)
-           | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.Old.length pes; expect = 2}})
+           | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
            end
         | M_Ctuple -> return (BT.Tuple (List.map ~f:bt_of_pexpr pes))
         | M_Carray -> 
@@ -1669,8 +1669,8 @@ and check_pexpr (expect : BT.t) expr =
 and check_infer_apply_fun (expect : BT.t option) fname pexps orig_pe =
   let (M_Pexpr (loc, _annots, _, _)) = orig_pe in
   let param_tys = Mucore.mu_fun_param_types fname in
-  let@ () = ensure_same_argument_number loc `Input (List.Old.length pexps)
-      ~expect:(List.Old.length param_tys) in
+  let@ () = ensure_same_argument_number loc `Input (List.length pexps)
+      ~expect:(List.length param_tys) in
   let@ pexps = ListM.map2M check_pexpr param_tys pexps in
   let@ bt = match Mucore.mu_fun_return_type fname pexps, expect with
     | Some (`Returns_BT bt), _ -> return bt
@@ -1731,7 +1731,7 @@ let check_cn_statement loc stmt =
      if LogicalFunctions.is_recursive def then ()
      else Pp.warn loc (Pp.item "unfold of function not marked [rec] (no effect)" (Sym.pp f));
      let@ () = ensure_same_argument_number loc `General
-                 (List.Old.length its) ~expect:(List.Old.length def.args)
+                 (List.length its) ~expect:(List.length def.args)
      in
      let@ its = ListM.map2M (fun (_,bt) it -> WIT.check loc bt it) def.args its in
      return (M_CN_unfold (f, its))
@@ -1739,7 +1739,7 @@ let check_cn_statement loc stmt =
      let@ (_lemma_loc, lemma_typ) = get_lemma loc l in
      let@ its =
        let wrong_number_arguments () =
-         let has = List.Old.length its in
+         let has = List.length its in
          let expect = AT.count_computational lemma_typ in
          fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
        in
@@ -1977,7 +1977,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         in
         let@ pes =
           let wrong_number_arguments () =
-            let has = List.Old.length pes in
+            let has = List.length pes in
             let expect = AT.count_computational lt in
             fail (fun _ -> {loc; msg = Number_arguments {has;expect}})
           in

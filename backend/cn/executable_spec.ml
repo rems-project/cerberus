@@ -21,7 +21,7 @@ let rec open_auxilliary_files source_filename prefix included_filenames already_
     | Some fn' ->
       if String.equal fn' source_filename || List.Old.mem String.equal fn' already_opened_list then [] else
       let fn_list = String.split_on_char '/' fn' in
-      let output_fn = List.Old.nth fn_list (List.Old.length fn_list - 1) in
+      let output_fn = List.Old.nth fn_list (List.length fn_list - 1) in
       let output_fn_with_prefix = prefix ^ output_fn in
       if Sys.file_exists output_fn_with_prefix then
         (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;

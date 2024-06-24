@@ -66,8 +66,8 @@ end
 
 
 let members_equal ms ms' = 
-  if ((List.Old.length ms) != (List.Old.length ms')) then false else
-  (if (List.Old.length ms == 0) then true else (
+  if ((List.length ms) != (List.length ms')) then false else
+  (if (List.length ms == 0) then true else (
   let (ids, cn_bts) = List.Old.split ms in
   let (ids', cn_bts') = List.Old.split ms' in
   let ctypes_eq = List.Old.map2 (fun cn_bt cn_bt'->
@@ -174,7 +174,7 @@ let generate_record_sym sym members =
       sym''
     | None ->   
       let map_bindings = RecordMap.bindings !records in
-      (* Printf.printf "Record table size: %d\n" (List.Old.length map_bindings); *)
+      (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
       let eq_members_bindings = List.Old.filter (fun (k, v) -> members_equal k members) map_bindings in
       match eq_members_bindings with 
       | [] -> 
@@ -886,7 +886,7 @@ let rec cn_to_ail_expr_aux_internal
         | [] -> failwith "Datatype not found" (* Not found *)
         | dt :: dts' ->
           let matching_cases = List.Old.filter (fun (c_sym, members) -> Sym.equal c_sym constr_sym) dt.cn_dt_cases in
-          if List.Old.length matching_cases != 0 then
+          if List.length matching_cases != 0 then
             let (_, members) = List.Old.hd matching_cases in
             (dt, members)
           else 
@@ -1393,7 +1393,7 @@ let generate_struct_equality_function ?(is_record=false) dts ((sym, (loc, attrs,
         let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
         let args = List.map ~f:(fun cast_sym -> mk_expr (AilEmemberofptr (mk_expr (AilEident cast_sym), id))) cast_param_syms in 
         (* List length of args guaranteed to be 2 by construction *)
-        assert(List.Old.length args == 2);
+        assert(List.length args == 2);
         let equality_fn_call = get_equality_fn_call bt (List.Old.nth args 0) (List.Old.nth args 1) dts in 
         mk_expr equality_fn_call
       in
@@ -1539,7 +1539,7 @@ let generate_record_equality_function dts (sym, (members: BT.member_types)) =
     let generate_member_equality (id, bt) = 
       let args = List.map ~f:(fun cast_sym -> mk_expr (AilEmemberofptr (mk_expr (AilEident cast_sym), id))) cast_param_syms in 
       (* List length of args guaranteed to be 2 by construction *)
-      assert(List.Old.length args == 2);
+      assert(List.length args == 2);
       let equality_fn_call = get_equality_fn_call bt (List.Old.nth args 0) (List.Old.nth args 1) dts in 
       mk_expr equality_fn_call
     in

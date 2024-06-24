@@ -649,7 +649,7 @@ let read_file filename =
     | _ -> None
 
 let make filename source_filename_opt (report: report) =
-  let n_pages = List.Old.length report.trace in
+  let n_pages = List.length report.trace in
   assert (n_pages > 0);
 
   let _menu = div ~id:"menu"

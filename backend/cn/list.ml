@@ -107,6 +107,8 @@ let find_index pred xs =
     | x::xs -> if pred x then Some idx else aux (idx+1) xs in
   aux 0 xs
 
-let map [@deprecated "Use List.map ~f xs"] = map
+let map [@deprecated "Use List.map xs ~f"] = map
+
+let length [@deprecated "Use List.length"] = length
 
 end
