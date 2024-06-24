@@ -19,7 +19,7 @@ let to_pre_cmp = function
   | Cerb_location.Loc_point p -> (2, [lex_to_cmp p], [])
   | Cerb_location.Loc_region (x, y, _) -> (3, [lex_to_cmp x; lex_to_cmp y], [])
   | Cerb_location.Loc_regions (xs, _) -> (4,
-        List.map lex_to_cmp (List.concat (List.map (fun (x, y) -> [x; y]) xs)), [])
+        List.Old.map lex_to_cmp (List.Old.concat (List.Old.map (fun (x, y) -> [x; y]) xs)), [])
 
 let mk_cmp (x : t) = to_pre_cmp x
 
@@ -57,9 +57,9 @@ let expr_locs (expr : 'a expression) =
     | AilEcast (_, _, x) -> f ls (x :: exprs)
     | AilEcall (f_x, xs) -> f ls (f_x :: xs @ exprs)
     | AilEassert x -> f ls (x :: exprs)
-    | AilEgeneric (x, xs) -> f ls (x :: List.map gen_expr xs @ exprs)
-    | AilEarray (_, _, xs) -> f ls (List.filter_map (fun x -> x) xs @ exprs)
-    | AilEstruct (_, xs) -> f ls (List.filter_map snd xs @ exprs)
+    | AilEgeneric (x, xs) -> f ls (x :: List.Old.map gen_expr xs @ exprs)
+    | AilEarray (_, _, xs) -> f ls (List.Old.filter_map (fun x -> x) xs @ exprs)
+    | AilEstruct (_, xs) -> f ls (List.Old.filter_map snd xs @ exprs)
     | AilEunion (_, _, opt_x) -> f ls (Option.to_list opt_x @ exprs)
     | AilEcompound (_, _, x) -> f ls (x :: exprs)
     | AilEmemberof (x, _) -> f ls (x :: exprs)
@@ -83,8 +83,8 @@ let add_map_stmt (stmt : 'a statement) m =
   let map stmt_loc m expr_loc = if LocMap.mem expr_loc m
     then m else LocMap.add expr_loc stmt_loc m
   in
-  let do_x stmt_loc m expr = List.fold_left (map stmt_loc) m (expr_locs expr) in
-  let do_xs stmt_loc m exprs = List.fold_left (do_x stmt_loc) m exprs in
+  let do_x stmt_loc m expr = List.Old.fold_left (map stmt_loc) m (expr_locs expr) in
+  let do_xs stmt_loc m exprs = List.Old.fold_left (do_x stmt_loc) m exprs in
   let rec f stmts m = match stmts with
     | [] -> m
     | (AnnotatedStatement (l, _, x) :: ss) ->
@@ -101,7 +101,7 @@ let add_map_stmt (stmt : 'a statement) m =
     | AilSpar ss2 -> f (ss2 @ ss) m
     | AilSexpr e -> f ss (do_x l m e)
     | AilSreturn e -> f ss (do_x l m e)
-    | AilSdeclaration xs -> f ss (do_xs l m (List.filter_map snd xs))
+    | AilSdeclaration xs -> f ss (do_xs l m (List.Old.filter_map snd xs))
     | AilSreg_store (_, x) -> f ss (do_x l m x)
     | _ -> f ss m
     end
@@ -109,7 +109,7 @@ let add_map_stmt (stmt : 'a statement) m =
   f [stmt] m
 
 let search (sigma : 'a sigma) =
-  List.fold_right (fun (_, (_, _, _, _, stmt)) m -> add_map_stmt stmt m)
+  List.Old.fold_right (fun (_, (_, _, _, _, stmt)) m -> add_map_stmt stmt m)
     sigma.function_definitions LocMap.empty
 
 

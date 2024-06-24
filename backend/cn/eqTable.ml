@@ -26,7 +26,7 @@ let guard_implies guard1 guard2 = match (guard1, guard2) with
   | _ -> false
 
 let eq_is_known tab (guard, lhs, rhs) =
-  List.exists (fun info -> IT.equal rhs info.rhs && guard_implies guard info.guard)
+  List.Old.exists (fun info -> IT.equal rhs info.rhs && guard_implies guard info.guard)
     (fetch_eqs tab lhs)
 
 let add_eq (guard, lhs, rhs) (tab : table) =
@@ -45,7 +45,7 @@ let add_one_eq (tab : table) (it : IT.t) = match IT.term it with
   | _ -> tab
 
 let add_eqs tab (it : IT.t) = match IT.is_and it with
-  | Some (it1,it2) -> List.fold_left add_one_eq tab [it1;it2]
+  | Some (it1,it2) -> List.Old.fold_left add_one_eq tab [it1;it2]
   | _ -> add_one_eq tab it
 
 let add_lc_eqs tab (lc : LogicalConstraints.t) = match lc with
@@ -53,7 +53,7 @@ let add_lc_eqs tab (lc : LogicalConstraints.t) = match lc with
   | _ -> tab
 
 let fetch_implied_eqs tab guard lhs = fetch_eqs tab lhs
-  |> List.filter_map (fun info -> if guard_implies guard info.guard
+  |> List.Old.filter_map (fun info -> if guard_implies guard info.guard
     then Some info.rhs else None)
 
 (* computing the closure of the above *)

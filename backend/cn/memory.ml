@@ -72,13 +72,13 @@ type struct_decls = struct_layout SymMap.t
 
 
 let members =
-  List.filter_map (fun {member_or_padding; _} ->
+  List.Old.filter_map (fun {member_or_padding; _} ->
       Option.map fst member_or_padding
     )
 
 
 let member_types =
-  List.filter_map (fun {member_or_padding; _} ->
+  List.Old.filter_map (fun {member_or_padding; _} ->
       member_or_padding
     )
 
@@ -100,7 +100,7 @@ let member_number layout member =
 
 
 let member_offset (layout : struct_layout) member : int option =
-  List.find_map (fun sp ->
+  List.Old.find_map (fun sp ->
       match sp.member_or_padding with
       | Some (member', _) when Id.equal member member' -> Some sp.offset
       | _ -> None

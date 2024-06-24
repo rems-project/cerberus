@@ -22,7 +22,7 @@ let get_start_loc ?(offset=0) = function
   | Cerb_location.Loc_region (start_pos, _, _) ->
     let new_start_pos = {start_pos with pos_cnum=start_pos.pos_cnum + offset} in 
     Cerb_location.point new_start_pos 
-  | Loc_regions (pos_list, _) -> (match List.last pos_list with 
+  | Loc_regions (pos_list, _) -> (match List.Old.last pos_list with 
       | Some (_, start_pos) -> 
         let new_start_pos = {start_pos with pos_cnum=start_pos.pos_cnum + offset} in 
         Cerb_location.point new_start_pos 
@@ -36,7 +36,7 @@ let get_end_loc ?(offset=0) = function
   | Cerb_location.Loc_region (_, end_pos, _) ->
     let new_end_pos = {end_pos with pos_cnum=end_pos.pos_cnum + offset} in 
     Cerb_location.point new_end_pos 
-  | Loc_regions (pos_list, _) -> (match List.last pos_list with 
+  | Loc_regions (pos_list, _) -> (match List.Old.last pos_list with 
       | Some (_, end_pos) -> 
         let new_end_pos = {end_pos with pos_cnum=end_pos.pos_cnum + offset} in 
         Cerb_location.point new_end_pos 
@@ -53,7 +53,7 @@ let create_ail_ownership_global_decls () =
 let get_ownership_global_init_stats () = 
   let cn_ghost_state_init_fcall = mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "initialise_ownership_ghost_state")), [])) in
   let cn_ghost_stack_depth_init_fcall = mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "initialise_ghost_stack_depth")), [])) in
-  List.map (fun e -> A.(AilSexpr e)) [cn_ghost_state_init_fcall; cn_ghost_stack_depth_init_fcall]
+  List.Old.map (fun e -> A.(AilSexpr e)) [cn_ghost_state_init_fcall; cn_ghost_stack_depth_init_fcall]
   
 
 (*   
@@ -64,7 +64,7 @@ let generate_c_local_ownership_entry_fcall (local_sym, local_ctype) =
   let local_ident = mk_expr A.(AilEident local_sym) in
   let arg1 = A.(AilEcast (empty_qualifiers, C.uintptr_t, mk_expr (AilEunary (Address, local_ident)))) in 
   let arg2 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in 
-  mk_expr (AilEcall (mk_expr (AilEident c_map_local_ownership_fn_sym), List.map mk_expr [arg1; arg2]))
+  mk_expr (AilEcall (mk_expr (AilEident c_map_local_ownership_fn_sym), List.Old.map mk_expr [arg1; arg2]))
 
 
 (* 
@@ -85,7 +85,7 @@ let rec gen_loop_ownership_entry_decls bindings = function
       let entry_fcall = generate_c_local_ownership_entry_fcall (sym, ctype) in 
       let zero_const = A.(AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None)))) in
       let dummy_rhs = mk_expr A.(AilEbinary (entry_fcall, Comma, mk_expr zero_const)) in 
-      let new_bindings = List.map (fun sym -> create_binding sym ctype) [sym; dummy_sym] in 
+      let new_bindings = List.Old.map (fun sym -> create_binding sym ctype) [sym; dummy_sym] in 
       let (bindings', decls') = gen_loop_ownership_entry_decls bindings xs in 
       (new_bindings @ bindings', (sym, expr_opt) :: (dummy_sym, Some dummy_rhs) :: decls')
 
@@ -94,7 +94,7 @@ let generate_c_local_ownership_entry_inj dest_is_loop loc decls bindings =
     (let (new_bindings, new_decls) = gen_loop_ownership_entry_decls bindings decls in
     [loc, new_bindings, [A.AilSdeclaration new_decls]])
   else 
-    (let stats_ = List.map (fun (sym, _) -> 
+    (let stats_ = List.Old.map (fun (sym, _) -> 
       let ctype = find_ctype_from_bindings bindings sym in 
       let entry_fcall = generate_c_local_ownership_entry_fcall (sym, ctype) in 
       A.(AilSexpr entry_fcall))
@@ -109,12 +109,12 @@ let generate_c_local_ownership_exit (local_sym, local_ctype) =
   let local_ident = mk_expr A.(AilEident local_sym) in
   let arg1 = A.(AilEcast (empty_qualifiers, C.uintptr_t, mk_expr (AilEunary (Address, local_ident)))) in 
   let arg2 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in 
-  A.(AilSexpr (mk_expr A.(AilEcall (mk_expr (AilEident c_remove_local_ownership_fn_sym), List.map mk_expr [arg1; arg2]))))
+  A.(AilSexpr (mk_expr A.(AilEcall (mk_expr (AilEident c_remove_local_ownership_fn_sym), List.Old.map mk_expr [arg1; arg2]))))
 
 
 let get_c_local_ownership_checking params = 
-  let entry_ownership_stats = List.map (fun param -> A.(AilSexpr (generate_c_local_ownership_entry_fcall param))) params in 
-  let exit_ownership_stats = List.map generate_c_local_ownership_exit params in 
+  let entry_ownership_stats = List.Old.map (fun param -> A.(AilSexpr (generate_c_local_ownership_entry_fcall param))) params in 
+  let exit_ownership_stats = List.Old.map generate_c_local_ownership_exit params in 
   (entry_ownership_stats, exit_ownership_stats)
 
 
@@ -122,10 +122,10 @@ let rec collect_visibles bindings = function
   | [] -> []
   | A.(AnnotatedStatement (_, _, AilSdeclaration decls)) :: ss -> 
     (* Printf.printf "Bindings: \n" ;
-    List.iter (fun (b_sym, _) -> Printf.printf "%s\n" (Sym.pp_string b_sym)) bindings;
+    List.Old.iter (fun (b_sym, _) -> Printf.printf "%s\n" (Sym.pp_string b_sym)) bindings;
     Printf.printf "Decl syms: \n" ;
-    List.iter (fun (decl_sym, _) -> Printf.printf "%s\n" (Sym.pp_string decl_sym)) decls; *)
-    let decl_syms_and_ctypes = List.map (fun (sym, _) -> (sym, find_ctype_from_bindings bindings sym)) decls in 
+    List.Old.iter (fun (decl_sym, _) -> Printf.printf "%s\n" (Sym.pp_string decl_sym)) decls; *)
+    let decl_syms_and_ctypes = List.Old.map (fun (sym, _) -> (sym, find_ctype_from_bindings bindings sym)) decls in 
     decl_syms_and_ctypes @ collect_visibles bindings ss
   | _ :: ss -> collect_visibles bindings ss
 
@@ -140,12 +140,12 @@ let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars
   match s_ with 
     | A.(AilSdeclaration _) -> []
     | (AilSblock (bs, ss)) ->
-      let injs = List.mapi (fun i s ->
+      let injs = List.Old.mapi (fun i s ->
         let ss_ = take (i + 1) ss in 
         let visibles = collect_visibles (bs @ bindings) ss_ in 
         get_c_control_flow_block_unmaps_aux (visibles @ break_vars) (visibles @ continue_vars) (visibles @ return_vars) (bs @ bindings) s 
       ) ss in 
-      List.concat injs
+      List.Old.concat injs
     | (AilSif (_, s1, s2)) -> 
       let injs = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s1 in 
       let injs' = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s2  in 
@@ -159,15 +159,15 @@ let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars
     | AilSlabel (_, s, _) -> get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s
     | AilSgoto _ -> [] (* TODO *)
     | AilSreturnVoid ->
-      [(loc, Some (None), [], List.map generate_c_local_ownership_exit return_vars)]
+      [(loc, Some (None), [], List.Old.map generate_c_local_ownership_exit return_vars)]
     | AilSreturn e -> 
-      [(loc, Some (Some e), [], List.map generate_c_local_ownership_exit return_vars)]
+      [(loc, Some (Some e), [], List.Old.map generate_c_local_ownership_exit return_vars)]
     | AilScontinue ->
       let loc_before_continue = get_start_loc loc in 
-      [(loc_before_continue, None, [], List.map generate_c_local_ownership_exit continue_vars)]
+      [(loc_before_continue, None, [], List.Old.map generate_c_local_ownership_exit continue_vars)]
     | AilSbreak -> 
       let loc_before_break = get_start_loc loc in 
-      [(loc_before_break, None, [], List.map generate_c_local_ownership_exit break_vars)]
+      [(loc_before_break, None, [], List.Old.map generate_c_local_ownership_exit break_vars)]
     | AilSskip 
     | AilSexpr _
     | AilSpar _
@@ -191,10 +191,10 @@ let rec get_c_block_entry_exit_injs_aux bindings A.(AnnotatedStatement (loc, _, 
       let injs' = get_c_block_entry_exit_injs_aux [] s in 
       inj @ injs'
     | (AilSblock (bs, ss)) ->
-      let exit_injs = List.map (fun (b_sym, ((_, _, _), _, _, b_ctype)) -> (get_end_loc ~offset:(-1) loc, [generate_c_local_ownership_exit (b_sym, b_ctype)])) bs in 
-      let exit_injs' = List.map (fun (loc, stats) -> (loc, [], stats)) exit_injs in 
-      let stat_injs = List.map (fun s -> get_c_block_entry_exit_injs_aux  bs s) ss in 
-      (List.concat stat_injs) @ exit_injs'
+      let exit_injs = List.Old.map (fun (b_sym, ((_, _, _), _, _, b_ctype)) -> (get_end_loc ~offset:(-1) loc, [generate_c_local_ownership_exit (b_sym, b_ctype)])) bs in 
+      let exit_injs' = List.Old.map (fun (loc, stats) -> (loc, [], stats)) exit_injs in 
+      let stat_injs = List.Old.map (fun s -> get_c_block_entry_exit_injs_aux  bs s) ss in 
+      (List.Old.concat stat_injs) @ exit_injs'
     | (AilSif (_, s1, s2)) -> 
       let injs = get_c_block_entry_exit_injs_aux bindings s1 in 
       let injs' = get_c_block_entry_exit_injs_aux bindings s2  in 
@@ -219,7 +219,7 @@ let rec get_c_block_entry_exit_injs_aux bindings A.(AnnotatedStatement (loc, _, 
 
 let get_c_block_entry_exit_injs stat = 
   let injs = get_c_block_entry_exit_injs_aux [] stat in 
-  List.map (fun (loc, bs, ss) -> (loc, None, bs, ss)) injs
+  List.Old.map (fun (loc, bs, ss) -> (loc, None, bs, ss)) injs
 
 let rec combine_injs_over_location loc = function 
   | [] -> []
@@ -239,7 +239,7 @@ let rec remove_duplicates ds = function
   | [] -> []
   | l :: ls -> 
     let loc_eq_fn = fun loc loc' -> String.equal (Cerb_location.location_to_string loc) (Cerb_location.location_to_string loc') in 
-    if List.mem loc_eq_fn l ds then 
+    if List.Old.mem loc_eq_fn l ds then 
       remove_duplicates ds ls 
     else 
       l :: (remove_duplicates (l::ds) ls)
@@ -249,13 +249,13 @@ let get_c_block_local_ownership_checking_injs A.(AnnotatedStatement (_, _, fn_bl
     let injs = get_c_block_entry_exit_injs statement in 
     let injs' = get_c_control_flow_block_unmaps statement in
     let injs = injs @ injs' in 
-    let locs = List.map (fun (l, _, _, _) -> l) injs in 
+    let locs = List.Old.map (fun (l, _, _, _) -> l) injs in 
     let locs = remove_duplicates [] locs in 
-    let combined_injs = List.map (fun l -> 
+    let combined_injs = List.Old.map (fun l -> 
       let injs' = combine_injs_over_location l injs in 
       let (expr_opt_list, bs_list, stats_list) = Executable_spec_utils.list_split_three injs' in 
       let return_expr_opt = get_return_expr_opt expr_opt_list in 
-      (l, return_expr_opt, List.concat bs_list, List.concat stats_list))
+      (l, return_expr_opt, List.Old.concat bs_list, List.Old.concat stats_list))
     locs in 
     combined_injs
   | _ -> Printf.printf "Ownership_exec: function body is not a block"; []
@@ -263,10 +263,10 @@ let get_c_block_local_ownership_checking_injs A.(AnnotatedStatement (_, _, fn_bl
 
 (* Ghost state *)
 let get_c_fn_local_ownership_checking_injs sym (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
-  match (List.assoc_opt Sym.equal sym sigm.function_definitions, List.assoc_opt Sym.equal sym sigm.declarations) with 
+  match (List.Old.assoc_opt Sym.equal sym sigm.function_definitions, List.Old.assoc_opt Sym.equal sym sigm.declarations) with 
     | (Some (_, _, _, param_syms, fn_body), Some (_, _, Decl_function (_, _, param_types, _, _, _))) -> 
-      let param_types = List.map (fun (_, ctype, _) -> ctype) param_types in
-      let params = List.combine param_syms param_types in
+      let param_types = List.Old.map (fun (_, ctype, _) -> ctype) param_types in
+      let params = List.Old.combine param_syms param_types in
       let ownership_stats_pair = get_c_local_ownership_checking params in
       let block_ownership_injs = get_c_block_local_ownership_checking_injs fn_body in 
       (Some ownership_stats_pair, block_ownership_injs)

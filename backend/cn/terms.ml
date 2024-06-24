@@ -320,7 +320,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.document -> Pp.document) -> 
        | MapDef ((s,_), t) ->
           brackets (Sym.pp s ^^^ !^"->" ^^^ aux false t)
     | Apply (name, args) ->
-       c_app (Sym.pp name) (List.map (aux false) args)
+       c_app (Sym.pp name) (List.Old.map (aux false) args)
     | Let ((name, x1), x2) ->
        parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
                  aux false x1 ^^^ !^ "in" ^^^ aux false x2)
@@ -361,7 +361,7 @@ let rec dtree_of_pat (Pat (pat_, _bt, _)) =
   | PConstructor (s, pats) ->
      Dnode (pp_ctor "PConstructor",
             Dleaf (Sym.pp s) ::
-              List.map (fun (id, pat) ->
+              List.Old.map (fun (id, pat) ->
                   Dnode (pp_ctor "Arg", [Dleaf (Id.pp id); dtree_of_pat pat])
                 ) pats
        )
@@ -405,12 +405,12 @@ let rec dtree (IT (it_, bt, loc)) =
            dtree body
        ])
   | Tuple its ->
-     Dnode (pp_ctor "Tuple", List.map dtree its)
+     Dnode (pp_ctor "Tuple", List.Old.map dtree its)
   | NthTuple (i, t) ->
      Dnode (pp_ctor "NthTuple", [Dleaf !^(string_of_int i); dtree t])
   | Struct (tag, members) ->
      Dnode (pp_ctor ("Struct("^Sym.pp_string tag^")"),
-            List.map (fun (member,e) ->
+            List.Old.map (fun (member,e) ->
                 Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])
               ) members)
   | StructMember (e, member) ->
@@ -422,7 +422,7 @@ let rec dtree (IT (it_, bt, loc)) =
        ])
   | Record members ->
      Dnode (pp_ctor "Record",
-            List.map (fun (member,e) ->
+            List.Old.map (fun (member,e) ->
                 Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])
               ) members)
   | RecordMember (e, member) ->
@@ -452,18 +452,18 @@ let rec dtree (IT (it_, bt, loc)) =
   | MapDef ((s, _bt), t) ->
      Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
   | Apply (f, args) ->
-     Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))
+     Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.Old.map dtree args))
   | Constructor (s, args) ->
      Dnode (pp_ctor "Constructor",
            Dleaf (Sym.pp s) ::
-           List.map (fun (id, t) ->
+           List.Old.map (fun (id, t) ->
                Dnode (pp_ctor "Arg", [Dleaf (Id.pp id); dtree t])
              ) args
        )
   | Match (t, pats) ->
      Dnode (pp_ctor "Match",
             dtree t ::
-              List.map (fun (pat, body) ->
+              List.Old.map (fun (pat, body) ->
                   Dnode (pp_ctor "Case", [dtree_of_pat pat; dtree body])
                 ) pats
        )

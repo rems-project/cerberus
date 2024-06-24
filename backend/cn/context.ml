@@ -1,5 +1,4 @@
 open Pp
-open List
 
 module BT = BaseTypes
 module LS = LogicalSorts
@@ -74,7 +73,7 @@ let empty =
 
 
 
-let get_rs (ctxt : t) = List.map fst (fst ctxt.resources)
+let get_rs (ctxt : t) = List.Old.map fst (fst ctxt.resources)
 
 let pp_basetype_or_value = function
   | BaseType bt -> BaseTypes.pp bt
@@ -219,7 +218,7 @@ let res_written loc id reason (ix, m) =
 (* used during unfold, clone one history to a list of new ids *)
 let clone_history id ids m =
   let h = res_map_history m id in
-  List.fold_right (fun id2 m -> set_map_history id2 h m) ids m
+  List.Old.fold_right (fun id2 m -> set_map_history id2 h m) ids m
 
 
 let json (ctxt : t) : Yojson.Safe.t =
@@ -230,19 +229,19 @@ let json (ctxt : t) : Yojson.Safe.t =
   in
 
   let computational  =
-    List.map (fun (sym, (binding, _)) ->
+    List.Old.map (fun (sym, (binding, _)) ->
         `Assoc [("name", Sym.json sym);
                 ("type", basetype_or_value binding)]
       ) (SymMap.bindings ctxt.computational)
   in
   let logical =
-    List.map (fun (sym, (binding, _)) ->
+    List.Old.map (fun (sym, (binding, _)) ->
         `Assoc [("name", Sym.json sym);
                 ("type", basetype_or_value binding)]
       ) (SymMap.bindings ctxt.logical)
   in
-  let resources = List.map RE.json (get_rs ctxt) in
-  let constraints = List.map LC.json (LCSet.elements ctxt.constraints) in
+  let resources = List.Old.map RE.json (get_rs ctxt) in
+  let constraints = List.Old.map LC.json (LCSet.elements ctxt.constraints) in
   let json_record =
     `Assoc [("computational", `List computational);
             ("logical", `List logical);

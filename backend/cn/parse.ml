@@ -58,7 +58,7 @@ let cn_statements annots =
 
 let function_spec (Attrs attributes) =
   let@ conditions =
-    [Aattrs (Attrs (List.rev attributes))]
+    [Aattrs (Attrs (List.Old.rev attributes))]
     |> get_cerb_magic_attr
     |> ListM.concat_mapM (parse C_parser.function_spec) in
   ListM.fold_leftM (fun acc cond ->
@@ -68,15 +68,15 @@ let function_spec (Attrs attributes) =
     | (Cn.CN_trusted loc), _ ->
        fail {loc; msg= Generic !^"Please specify 'trusted' before other conditions"}
     | (CN_accesses (loc, ids)), (trusted, accs, [], [], ex) ->
-       return (trusted, accs @ List.map (fun id -> (loc, id)) ids, [], [], ex)
+       return (trusted, accs @ List.Old.map (fun id -> (loc, id)) ids, [], [], ex)
     | (CN_accesses (loc, _)), _ ->
        fail { loc; msg= Generic !^"Please specify 'accesses' before any 'requires' and 'ensures'" }
     | (CN_requires (loc, cond)), (trusted, accs, reqs, [], ex) ->
-       return (trusted, accs, reqs @ List.map (fun c -> (loc, c)) cond, [], ex)
+       return (trusted, accs, reqs @ List.Old.map (fun c -> (loc, c)) cond, [], ex)
     | (CN_requires (loc, _)), _ ->
        fail {loc; msg = Generic !^"Please specify 'requires' before any 'ensures'"}
     | (CN_ensures (loc, cond)), (trusted, accs, reqs, enss, ex) ->
-       return (trusted, accs, reqs, enss @ List.map (fun c -> (loc, c)) cond, ex)
+       return (trusted, accs, reqs, enss @ List.Old.map (fun c -> (loc, c)) cond, ex)
     | (CN_mk_function (loc, nm)), (trusted, accs, reqs, enss, ex) ->
        return (trusted, accs, reqs, enss, ex @ [(loc, Mucore.Make_Logical_Function nm)])
     )

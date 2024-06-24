@@ -155,7 +155,7 @@ let commas l = list (fun pp -> pp) l
 *)
 
 let list_filtered f l =
-  match List.filter_map f l with
+  match List.Old.filter_map f l with
   | [] -> !^"(empty)"
   | l -> flow (comma ^^ break 1) l
 
@@ -168,7 +168,7 @@ let option f none_msg opt = match opt with
 (*
 let nats n =
   let rec aux n = if n < 0 then [] else n :: aux (n - 1) in
-  List.rev (aux n)
+  List.Old.rev (aux n)
 *)
 
 (* module IntMap = Map.Make(Int) *)
@@ -270,7 +270,7 @@ let error (loc : Locations.t) (msg : document) extras =
                 format [Bold; Red] "error:" ^^^
                 format [Bold] @@ plain msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos;
-  List.iter (fun pp -> print stderr pp) extras
+  List.Old.iter (fun pp -> print stderr pp) extras
 
 
 (* stealing some logic from pp_errors *)

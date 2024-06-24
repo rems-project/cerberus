@@ -24,7 +24,7 @@ let to_list (f: sexp) =
 
 (** Apply a function to some arguments. *)
 let app f args =
-  if List.is_empty args then f else list (f :: args)
+  if List.Old.is_empty args then f else list (f :: args)
 
 (** Apply a function to some arguments *)
 let app_ f (args: sexp list): sexp = app (atom f) args
@@ -38,7 +38,7 @@ let let_ xs e =
   | [] -> e
   | _  ->
     let mk_def (x,e) = app_ x [e] in
-    app_ "let" [ list (List.map mk_def xs); e ]
+    app_ "let" [ list (List.Old.map mk_def xs); e ]
 
 (** Non-negative numeric constant. *)
 let nat_k x = atom (string_of_int x)
@@ -51,7 +51,7 @@ let nat_zk x = atom (Z.to_string x)
 let fam f is = list (atom "_" :: atom f :: is)
 
 (** Int-indexed family *)
-let ifam f is = fam f (List.map nat_k is)
+let ifam f is = fam f (List.Old.map nat_k is)
 
 (** Attribute *)
 let named x e = app_ "!" [e; atom ":named"; atom x ]
@@ -102,7 +102,7 @@ let ite x y z = app_ "ite" [x;y;z]
 let eq x y = app_ "=" [x;y]
 
 (** All arguments are pairwise different. *)
-let distinct xs = if List.is_empty xs then bool_k true else app_ "distinct" xs
+let distinct xs = if List.Old.is_empty xs then bool_k true else app_ "distinct" xs
 
 (** Logical negation. *)
 let bool_not p = app_ "not" [p]
@@ -111,13 +111,13 @@ let bool_not p = app_ "not" [p]
 let bool_and p q = app_ "and" [p;q]
 
 (** Conjunction. *)
-let bool_ands ps = if List.is_empty ps then bool_k true else app_ "and" ps
+let bool_ands ps = if List.Old.is_empty ps then bool_k true else app_ "and" ps
 
 (** Disjunction. *)
 let bool_or p q = app_ "or" [p;q]
 
 (** Disjunction. *)
-let bool_ors ps = if List.is_empty ps then bool_k false else app_ "or" ps
+let bool_ors ps = if List.Old.is_empty ps then bool_k false else app_ "or" ps
 
 (** Exclusive-or. *)
 let bool_xor p q = app_ "xor" [p;q]
@@ -407,7 +407,7 @@ These can be sent to solver using {!ack_command}.
 *)
 
 (** A command made out of just atoms. *)
-let simple_command xs   = list (List.map atom xs)
+let simple_command xs   = list (List.Old.map atom xs)
 
 (** [set_option opt val] sets option [opt] to value [val]. *)
 let set_option x y      = simple_command [ "set-option"; x; y ]
@@ -440,7 +440,7 @@ defines a function called [name], with the given parameters
 [(name, type)], that computes a value of [result_type], using [definition]. *)
 let define_fun f ps r d =
   let mk_param (x,a) = list [atom x; a] in
-  app_ "define-fun" [ atom f; list (List.map mk_param ps); r; d ]
+  app_ "define-fun" [ atom f; list (List.Old.map mk_param ps); r; d ]
 
 (** [define name type definition] defines a constant [name], of type
     [type] defined as [definition]. *)
@@ -454,12 +454,12 @@ called [name] with type parameters [type_params] and constructors [cons].
 Each constructor is of the form [(name, fields)]. *)
 let declare_datatype name type_params cons =
   let mk_field ((f,argTy):con_field)  = list [atom f; argTy] in
-  let mk_con (c,fs)       = list (atom c :: List.map mk_field fs) in
-  let mk_cons             = list (List.map mk_con cons) in
+  let mk_con (c,fs)       = list (atom c :: List.Old.map mk_field fs) in
+  let mk_cons             = list (List.Old.map mk_con cons) in
   let def =
     match type_params with
     | [] -> mk_cons
-    | _  -> app_ "par" [ List (List.map atom type_params); mk_cons ]
+    | _  -> app_ "par" [ List (List.Old.map atom type_params); mk_cons ]
   in
   app_ "declare-datatype" [ atom name; def ]
 
@@ -468,19 +468,19 @@ Each element if `tys` is (name,type params,cons).
 *)
 let declare_datatypes tys =
   let mk_field ((f,argTy):con_field)  = list [atom f; argTy] in
-  let mk_con (c,fs)       = list (atom c :: List.map mk_field fs) in
-  let mk_cons cons        = list (List.map mk_con cons) in
+  let mk_con (c,fs)       = list (atom c :: List.Old.map mk_field fs) in
+  let mk_cons cons        = list (List.Old.map mk_con cons) in
   let def (_,type_params,cons) =
     match type_params with
     | [] -> mk_cons cons
-    | _  -> app_ "par" [ List (List.map atom type_params); mk_cons cons ]
+    | _  -> app_ "par" [ List (List.Old.map atom type_params); mk_cons cons ]
   in
   let arity (name,ty_params,_) =
-        let n = List.length ty_params in
+        let n = List.Old.length ty_params in
         list [atom name; atom (string_of_int n) ]
   in
-  app_ "declare-datatypes" [ list (List.map arity tys)
-                           ; list (List.map def tys)
+  app_ "declare-datatypes" [ list (List.Old.map arity tys)
+                           ; list (List.Old.map def tys)
                            ]
 
 
@@ -490,11 +490,11 @@ type pat = PVar of string | PCon of (string * string list)
 let match_datatype e alts =
   let do_pat pat =
       match pat with
-      | PCon (c,xs) -> list (atom c :: List.map atom xs)
+      | PCon (c,xs) -> list (atom c :: List.Old.map atom xs)
       | PVar x      -> atom x
   in
   let do_alt (pat,e)  = list [do_pat pat; e] in
-  app_ "match" [e; list (List.map do_alt alts)]
+  app_ "match" [e; list (List.Old.map do_alt alts)]
 
 (** [is_con c e] is true if [e] is an expression constructed with [c] *)
 let is_con c e = app (fam "is" [atom c]) [e]
@@ -576,7 +576,7 @@ let get_model s =
       let rec drop_as_array x =
           match x with
           | Sexp.List [ _; Sexp.Atom "as-array"; f ] -> f
-          | Sexp.List xs -> Sexp.List (List.map drop_as_array xs)
+          | Sexp.List xs -> Sexp.List (List.Old.map drop_as_array xs)
           | _ -> x
       in
 
@@ -586,7 +586,7 @@ let get_model s =
             | Sexp.List [Sexp.Atom v; _ty_or_term ] -> StrSet.add v bound
             | _ -> raise (UnexpectedSolverResponse x)
       in
-      let add_bound = List.fold_left add_binder in
+      let add_bound = List.Old.fold_left add_binder in
 
       let rec free bound vars x =
             match x with
@@ -595,7 +595,7 @@ let get_model s =
               when String.equal q "forall"
                 || String.equal q "exist"
                 || String.equal q "let" -> free (add_bound bound vs) vars body
-            | Sexp.List xs -> List.fold_left (free bound) vars xs
+            | Sexp.List xs -> List.Old.fold_left (free bound) vars xs
       in
       let check_def x =
             match x with
@@ -608,9 +608,9 @@ let get_model s =
       match ans with
       | Sexp.Atom _ -> raise (UnexpectedSolverResponse ans)
       | Sexp.List xs ->
-        let defs                = List.map check_def xs in
+        let defs                = List.Old.map check_def xs in
         let add_dep mp (x,xs,e) = StrMap.add x (xs,e) mp in
-        let deps                = List.fold_left add_dep StrMap.empty defs in
+        let deps                = List.Old.fold_left add_dep StrMap.empty defs in
 
         let processing = ref StrSet.empty in
         let processed  = ref StrSet.empty in
@@ -637,8 +637,8 @@ let get_model s =
                 end
             | [] -> ()
            in
-        arrange (List.map (fun (x,_,_) -> x) defs);
-        list (List.rev !decls)
+        arrange (List.Old.map (fun (x,_,_) -> x) defs);
+        list (List.Old.rev !decls)
 
 (** Get the values of some s-expressions. Only valid after a [Sat] result.
     Throws {!UnexpectedSolverResponse}. *)
@@ -650,7 +650,7 @@ let get_exprs s vals: sexp list =
           match pair with
           | Sexp.List [_;x] -> x
           | _ -> raise (UnexpectedSolverResponse res)
-    in List.map get_val xs
+    in List.Old.map get_val xs
   | _ -> raise (UnexpectedSolverResponse res)
 
 (** Evalute the given expression in the current context.
@@ -747,7 +747,7 @@ let to_array (exp0: sexp): (sexp * sexp) list * sexp =
   let rec loop is exp =
       match exp with
       | Sexp.List [ Sexp.List [Sexp.Atom "as"; Sexp.Atom "const"; _]; k ] ->
-        (List.rev is, k)
+        (List.Old.rev is, k)
       | Sexp.List [Sexp.Atom "store"; a; i; v] ->
         loop ((i,v)::is) a
       | _ -> bad ()
@@ -822,7 +822,7 @@ let model_eval (cfg: solver_config) (m: sexp) =
   | Sexp.Atom _ -> bad ()
   | Sexp.List defs ->
     let s = new_solver cfg in
-    List.iter (ack_command s) defs;
+    List.Old.iter (ack_command s) defs;
     let have_model = ref false in
     let get_model () =
           if !have_model
@@ -838,7 +838,7 @@ let model_eval (cfg: solver_config) (m: sexp) =
         let cleanup () = ack_command s (pop 1); have_model := false in
         ack_command s (push 1);
         let mk_def (f,ps,r,d) = ack_command s (define_fun f ps r d) in
-        List.iter mk_def defs;
+        List.Old.iter mk_def defs;
         have_model := false;
         if get_model ()
           then begin let res = get_expr s e in cleanup(); res end

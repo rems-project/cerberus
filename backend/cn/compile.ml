@@ -187,7 +187,7 @@ let rec bound_by_pattern (CNPat (_loc, pat_)) =
   | CNPat_sym s -> SymSet.singleton s
   | CNPat_wild -> SymSet.empty
   | CNPat_constructor (_, args) ->
-     symset_bigunion (List.map (fun (_,p) -> bound_by_pattern p) args)
+     symset_bigunion (List.Old.map (fun (_,p) -> bound_by_pattern p) args)
 
 let rec free_in_expr (CNExpr (_loc, expr_)) =
   match expr_ with
@@ -200,13 +200,13 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
   | CNExpr_memberof (e, _id) ->
      free_in_expr e
   | CNExpr_record members ->
-     free_in_exprs (List.map snd members)
+     free_in_exprs (List.Old.map snd members)
   | CNExpr_struct (_tag, members) ->
-     free_in_exprs (List.map snd members)
+     free_in_exprs (List.Old.map snd members)
   | CNExpr_memberupdates (e, updates) ->
-     free_in_exprs (e :: List.map snd updates)
+     free_in_exprs (e :: List.Old.map snd updates)
   | CNExpr_arrayindexupdates (e, updates) ->
-     free_in_exprs (e :: List.concat_map (fun (e1, e2) -> [e1; e2]) updates)
+     free_in_exprs (e :: List.Old.concat_map (fun (e1, e2) -> [e1; e2]) updates)
   | CNExpr_binop (_binop, e1, e2) ->
      free_in_exprs [e1; e2]
   | CNExpr_sizeof _ ->
@@ -224,12 +224,12 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
   | CNExpr_call (_id, es) ->
      free_in_exprs es
   | CNExpr_cons (_c, args) ->
-     free_in_exprs (List.map snd args)
+     free_in_exprs (List.Old.map snd args)
   | CNExpr_each (s, _bt, _range, e) ->
      SymSet.remove s (free_in_expr e)
   | CNExpr_match (x, ms) ->
      let free_per_case =
-       List.map (fun (pat, body) ->
+       List.Old.map (fun (pat, body) ->
            SymSet.diff (free_in_expr body) (bound_by_pattern pat)
          ) ms
      in
@@ -285,7 +285,7 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
     | CN_struct tag_sym ->
         Struct tag_sym
     | CN_record members ->
-        SBT.Record (List.map (fun (m,bt) -> (m, self bt)) members)
+        SBT.Record (List.Old.map (fun (m,bt) -> (m, self bt)) members)
     | CN_datatype dt_sym ->
         Datatype dt_sym
     | CN_map (bTy1, bTy2) ->
@@ -293,7 +293,7 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
     | CN_list bTy' ->
         List (self bTy')
     | CN_tuple bTys ->
-        Tuple (List.map self bTys)
+        Tuple (List.Old.map self bTys)
     | CN_set bTy' ->
         Set (self bTy')
     | CN_user_type_name _ ->
@@ -309,7 +309,7 @@ let rec translate_cn_base_type env (bTy: CF.Symbol.sym cn_base_type) =
 let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
-      List.map (fun (id_or_sym, bTy) ->
+      List.Old.map (fun (id_or_sym, bTy) ->
         (id_or_sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
@@ -321,7 +321,7 @@ let register_cn_predicates env (defs: cn_predicate list) =
         pred_output= output
       } env
   in
-  List.fold_left aux env defs
+  List.Old.fold_left aux env defs
 
 
 open Resultat
@@ -365,7 +365,7 @@ let add_function _loc sym func_sig env =
 let register_cn_functions env (defs: cn_function list) =
   let aux env def =
     let args =
-      List.map (fun (sym, bTy) ->
+      List.Old.map (fun (sym, bTy) ->
           (sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) def.cn_func_args
     in
@@ -394,19 +394,19 @@ let add_datatype_info env (dt : cn_datatype) =
                              ^^^ !^"within datatype definition.")}
   in
   let@ all_params = ListM.fold_leftM add_param StringMap.empty
-    (List.concat_map snd dt.cn_dt_cases) in
+    (List.Old.concat_map snd dt.cn_dt_cases) in
   let add_constr env (cname, params) =
     let c_params =
-      List.map (fun (nm, ty) ->
+      List.Old.map (fun (nm, ty) ->
         (nm, SBT.to_basetype (translate_cn_base_type env ty))
         ) params
     in
     let info = BT.{c_params; c_datatype_tag = dt.cn_dt_name} in
     add_datatype_constr cname info env
   in
-  let env = List.fold_left add_constr env dt.cn_dt_cases in
-  let dt_all_params = List.map snd (StringMap.bindings all_params) in
-  let dt_constrs = List.map fst dt.cn_dt_cases in
+  let env = List.Old.fold_left add_constr env dt.cn_dt_cases in
+  let dt_all_params = List.Old.map snd (StringMap.bindings all_params) in
+  let dt_constrs = List.Old.map fst dt.cn_dt_cases in
   return (add_datatype dt.cn_dt_name
     BT.{dt_constrs; dt_all_params} env)
 
@@ -486,9 +486,9 @@ module EffectfulTranslation = struct
 
   let lookup_member loc (_tag, def) member =
     let member_types = Memory.member_types def in
-    match List.assoc_opt Id.equal member member_types with
+    match List.Old.assoc_opt Id.equal member member_types with
     | Some ty -> return ty
-    | None -> fail {loc; msg = Unexpected_member (List.map fst member_types, member)}
+    | None -> fail {loc; msg = Unexpected_member (List.Old.map fst member_types, member)}
 
   let lookup_datatype loc sym env = match SymMap.find_opt sym env.datatypes with
     | Some info -> return info
@@ -596,9 +596,9 @@ module EffectfulTranslation = struct
   let translate_member_access loc env (t : IT.sterm) member =
     match IT.bt t with
     | SBT.Record members ->
-       let@ member_bt = match List.assoc_opt Id.equal member members with
+       let@ member_bt = match List.Old.assoc_opt Id.equal member members with
          | Some member_bt -> return member_bt
-         | None -> fail {loc; msg = Unexpected_member (List.map fst members, member)}
+         | None -> fail {loc; msg = Unexpected_member (List.Old.map fst members, member)}
        in
        return (IT.recordMember_ ~member_bt (t, member) loc)
     | Struct tag ->
@@ -608,7 +608,7 @@ module EffectfulTranslation = struct
        return ( IT.IT ((StructMember (t, member)), member_bt, loc))
     (* | Datatype tag -> *)
     (*    let@ dt_info = lookup_datatype loc tag env in *)
-    (*    let@ bt = match List.assoc_opt Id.equal member dt_info.dt_all_params with *)
+    (*    let@ bt = match List.Old.assoc_opt Id.equal member dt_info.dt_all_params with *)
     (*      | None ->  *)
     (*          let msg = !^"Unknown member" ^^^ squotes (Id.pp member) *)
     (*                    ^^^ !^"of datatype" ^^^ squotes (Sym.pp tag) *)
@@ -641,9 +641,9 @@ module EffectfulTranslation = struct
        let@ cons_info = lookup_constr loc cons env in
        let@ env', locally_bound', args =
          ListM.fold_leftM (fun (env, locally_bound, acc) (m, pat') ->
-             match List.assoc_opt Id.equal m cons_info.c_params with
+             match List.Old.assoc_opt Id.equal m cons_info.c_params with
              | None ->
-                fail {loc; msg= Unexpected_member (List.map fst cons_info.c_params,m)}
+                fail {loc; msg= Unexpected_member (List.Old.map fst cons_info.c_params,m)}
              | Some mbt ->
                 let@ env', locally_bound', pat' =
                   translate_cn_pat env locally_bound (pat', SBT.of_basetype mbt) in
@@ -695,7 +695,7 @@ module EffectfulTranslation = struct
             return (IT ((Sym sym), bTy, loc))
         | CNExpr_list es ->
             let@ es = ListM.mapM self es in
-            let item_bt = basetype (List.hd es) in
+            let item_bt = basetype (List.Old.hd es) in
             let  (_, nil_pos, _) =
               (* parser should ensure loc is a region *)
               Option.get @@ Locations.get_region loc in
@@ -706,13 +706,13 @@ module EffectfulTranslation = struct
             let nil =
               let nil_loc = Cerb_location.point nil_pos in
               IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt, nil_loc) in
-            return (List.fold_right cons es nil)
+            return (List.Old.fold_right cons es nil)
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
         | CNExpr_record members ->
            let@ members = ListM.mapsndM self members in
-           let bts = List.map_snd IT.bt members in
+           let bts = List.Old.map_snd IT.bt members in
            return (IT (IT.Record members, SBT.Record bts, loc))
         | CNExpr_struct (tag, members) ->
            let@ members = ListM.mapsndM self members in
@@ -882,7 +882,7 @@ module EffectfulTranslation = struct
                  return (pat, body)
                ) ms
            in
-           let rbt = IT.basetype (snd (List.hd ms)) in
+           let rbt = IT.basetype (snd (List.Old.hd ms)) in
            return (IT (Match (x, ms), rbt, loc))
         | CNExpr_let (s, e, body) ->
             let@ e = self e in
@@ -1075,7 +1075,7 @@ module EffectfulTranslation = struct
            translate_cn_res_info res_loc pred_loc env res args in
     let pt = (RET.P { name = pname
               ; pointer= IT.term_of_sterm ptr_expr
-              ; iargs = List.map IT.term_of_sterm iargs},
+              ; iargs = List.Old.map IT.term_of_sterm iargs},
            oargs_ty)
     in
     let pointee_value = match pname with
@@ -1102,7 +1102,7 @@ module EffectfulTranslation = struct
               ; pointer= IT.term_of_sterm ptr_base
               ; step = step
               ; permission= IT.term_of_sterm guard_expr
-              ; iargs = List.map IT.term_of_sterm iargs},
+              ; iargs = List.Old.map IT.term_of_sterm iargs},
            m_oargs_ty)
     in
     return (pt, [])
@@ -1173,14 +1173,14 @@ let translate_cn_function env (def: cn_function) =
   let open LogicalFunctions in
   Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args =
-    List.map (fun (sym, bTy) -> (sym, translate_cn_base_type env bTy)
+    List.Old.map (fun (sym, bTy) -> (sym, translate_cn_base_type env bTy)
       ) def.cn_func_args in
   let env' =
-    List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
+    List.Old.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
       ) env args in
-  let is_rec = List.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
-  let coq_unfold = List.exists (fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs in
-  let@ () = ListM.iterM (fun id -> if List.exists (String.equal (Id.s id)) known_attrs
+  let is_rec = List.Old.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
+  let coq_unfold = List.Old.exists (fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs in
+  let@ () = ListM.iterM (fun id -> if List.Old.exists (String.equal (Id.s id)) known_attrs
     then return ()
     else fail {loc = def.cn_func_loc; msg = Generic (Pp.item "Unknown attribute" (Id.pp id))}
   ) def.cn_func_attrs in
@@ -1192,7 +1192,7 @@ let translate_cn_function env (def: cn_function) =
   let return_bt = translate_cn_base_type env def.cn_func_return_bty in
   let def2 = {
       loc = def.cn_func_loc;
-      args = List.map_snd SBT.to_basetype args;
+      args = List.Old.map_snd SBT.to_basetype args;
       return_bt = SBT.to_basetype return_bt;
       emit_coq = not coq_unfold;
       definition
@@ -1266,12 +1266,12 @@ module LocalState = struct
 
 
   let add_c_variable_states cvss st =
-    List.fold_left (fun st (sym, cvs) ->
+    List.Old.fold_left (fun st (sym, cvs) ->
         add_c_variable_state sym cvs st
       ) st cvss
 
   let add_pointee_values pvs st =
-    List.fold_left (fun st (p, v) ->
+    List.Old.fold_left (fun st (p, v) ->
         add_pointee_value p v st
       ) st pvs
 
@@ -1358,7 +1358,7 @@ let translate_cn_clauses env clauses =
       end clauses'
   in
   let@ xs = self [] clauses in
-  return (List.rev xs)
+  return (List.Old.rev xs)
 
 let translate_option_cn_clauses env = function
   | Some clauses ->
@@ -1377,7 +1377,7 @@ let translate_cn_predicate env (def: cn_predicate) =
       | Some pred_sig ->
           (pred_sig.pred_iargs, pred_sig.pred_output) in
   let env' =
-    List.fold_left (fun acc (sym, bTy) ->
+    List.Old.fold_left (fun acc (sym, bTy) ->
       add_logical sym (SBT.of_basetype bTy) acc
     ) env iargs in
   let@ clauses = translate_option_cn_clauses env' def.cn_pred_clauses in
@@ -1571,7 +1571,7 @@ let translate_cn_statement
              (pack_unpack, {
                name = name;
                pointer = IT.term_of_sterm pointer;
-               iargs = List.map IT.term_of_sterm iargs;
+               iargs = List.Old.map IT.term_of_sterm iargs;
              })
          in
          return (M_CN_statement (loc, stmt))
@@ -1602,14 +1602,14 @@ let translate_cn_statement
           return (M_CN_statement (loc, M_CN_extract (attrs, to_extract, expr)))
       | CN_unfold (s, args) ->
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
-         let args = List.map IT.term_of_sterm args in
+         let args = List.Old.map IT.term_of_sterm args in
          return (M_CN_statement (loc, M_CN_unfold (s, args)))
       | CN_assert_stmt e ->
          let@ e = ET.translate_cn_assrt env (loc, e) in
          return (M_CN_statement (loc, M_CN_assert e))
       | CN_apply (s, args) ->
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
-         let args = List.map IT.term_of_sterm args in
+         let args = List.Old.map IT.term_of_sterm args in
          return (M_CN_statement (loc, M_CN_apply (s, args)))
       | CN_inline nms ->
          return (M_CN_statement (loc, M_CN_inline nms))

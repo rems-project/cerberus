@@ -55,13 +55,13 @@ let relevant_predicate_clauses global name req =
   let open ResourcePredicates in
   let clauses =
     let defs = SymMap.bindings global.resource_predicates in
-    List.concat_map (fun (nm, def) ->
+    List.Old.concat_map (fun (nm, def) ->
         match def.clauses with
-        | Some clauses -> List.map (fun c -> (nm, c)) clauses
+        | Some clauses -> List.Old.map (fun c -> (nm, c)) clauses
         | None -> []
       ) defs
   in
-  List.filter (fun (nm, c) -> 
+  List.Old.filter (fun (nm, c) -> 
       Sym.equal nm name
       || clause_has_resource req c
     ) clauses
@@ -88,9 +88,9 @@ end
 
 let subterms_without_bound_variables bindings = 
   fold_subterms ~bindings (fun bindings acc t ->
-      let pats = List.map fst bindings in
-      let bound = List.concat_map bound_by_pattern pats in
-      let bound = SymSet.of_list (List.map fst bound) in
+      let pats = List.Old.map fst bindings in
+      let bound = List.Old.concat_map bound_by_pattern pats in
+      let bound = SymSet.of_list (List.Old.map fst bound) in
       if SymSet.(is_empty (inter bound (IT.free_vars t))) 
       then ITSet.add t acc
       else acc
@@ -141,9 +141,9 @@ let state ctxt model_with_q extras =
         | BaseType ls -> Some (make s ls)
       in
       ITSet.of_list
-          (List.map (fun (s, ls) -> make s ls) quantifier_counter_model
-           @ List.filter_map basetype_binding (SymMap.bindings ctxt.computational)
-           @ List.filter_map basetype_binding (SymMap.bindings ctxt.logical))
+          (List.Old.map (fun (s, ls) -> make s ls) quantifier_counter_model
+           @ List.Old.filter_map basetype_binding (SymMap.bindings ctxt.computational)
+           @ List.Old.filter_map basetype_binding (SymMap.bindings ctxt.logical))
     in
 
     let unproven = match extras.unproven_constraint with
@@ -172,13 +172,13 @@ let state ctxt model_with_q extras =
     in
 
     let subterms = 
-      List.fold_left ITSet.union ITSet.empty 
+      List.Old.fold_left ITSet.union ITSet.empty 
         [variables; unproven; request] 
     in
 
 
     let filtered = 
-      List.filter_map (fun it -> 
+      List.Old.filter_map (fun it -> 
           match evaluate it with
           | Some value when not (IT.equal value it) ->
              Some (it, {term = IT.pp it; value = IT.pp value})
@@ -190,7 +190,7 @@ let state ctxt model_with_q extras =
     in
 
     let interesting, uninteresting = 
-      List.partition (fun (it, _entry) ->
+      List.Old.partition (fun (it, _entry) ->
           match IT.bt it with
           | BT.Unit -> false
           | BT.Loc -> false
@@ -198,14 +198,14 @@ let state ctxt model_with_q extras =
         ) filtered
     in
 
-    (List.map snd interesting, 
-     List.map snd uninteresting)
+    (List.Old.map snd interesting, 
+     List.Old.map snd uninteresting)
 
   in
 
   let constraints =
     let interesting, uninteresting = 
-      List.partition (fun lc ->
+      List.Old.partition (fun lc ->
           match lc with
           (* | LC.T (IT (Aligned _, _, _)) -> false *)
           | LC.T (IT (Representable _, _, _)) -> false
@@ -213,17 +213,17 @@ let state ctxt model_with_q extras =
           | _ -> true
         ) (LCSet.elements ctxt.constraints)
     in
-    (List.map LC.pp interesting, 
-     List.map LC.pp uninteresting)
+    (List.Old.map LC.pp interesting, 
+     List.Old.map LC.pp uninteresting)
   in
 
   let resources =
     let (same_res, diff_res) = match extras.request with
       | None -> ([], get_rs ctxt)
-      | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
+      | Some req -> List.Old.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
     in
     let interesting_diff_res, uninteresting_diff_res = 
-      List.partition (fun (ret, _o) ->
+      List.Old.partition (fun (ret, _o) ->
           match ret with
           | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
           | _ -> true
@@ -231,11 +231,11 @@ let state ctxt model_with_q extras =
     in
 
     let interesting = 
-      List.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res 
-      @ List.map RE.pp interesting_diff_res
+      List.Old.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res 
+      @ List.Old.map RE.pp interesting_diff_res
     in
     let uninteresting = 
-      List.map RE.pp uninteresting_diff_res
+      List.Old.map RE.pp uninteresting_diff_res
     in
     (interesting, uninteresting)
   in
@@ -271,7 +271,7 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
 
   let trace = 
     let statef ctxt = state ctxt model_with_q extras in
-    List.rev (statef ctxt :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
+    List.Old.rev (statef ctxt :: List.Old.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
 
 
@@ -287,7 +287,7 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
               clause = LogicalArgumentTypes.pp IT.pp c.packing_ft
             }
           in
-          List.map doc_clause (relevant_predicate_clauses ctxt.global pname req)
+          List.Old.map doc_clause (relevant_predicate_clauses ctxt.global pname req)
   in
   let requested = Option.map req_entry extras.request in
 

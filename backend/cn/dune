@@ -12,6 +12,7 @@
   cerb_frontend
   cerb_util
   cmdliner
+  base
   mem_concrete
   menhirLib
   monomorphic

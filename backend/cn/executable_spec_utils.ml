@@ -130,9 +130,9 @@ let rec execCtypeEqual (C.Ctype (_, ty1)) (C.Ctype (_, ty2)) =
       execCtypeEqual ty1 ty2 && n1_opt == n2_opt
     | (Function ((qs1, ty1), params1, b1),
         Function ((qs2, ty2), params2, b2)) ->
-        let bools = List.map paramsEqual (List.combine params1 params2) in 
+        let bools = List.Old.map paramsEqual (List.Old.combine params1 params2) in 
         C.qualifiersEqual qs1 qs2 && execCtypeEqual ty1 ty2 &&
-        List.fold_left (&&) true bools && b1 == b2
+        List.Old.fold_left (&&) true bools && b1 == b2
     | (FunctionNoParams (qs1, ty1),
         FunctionNoParams (qs2, ty2)) ->
         C.qualifiersEqual qs1 qs2 && execCtypeEqual ty1 ty2
@@ -157,7 +157,7 @@ let create_binding sym ctype =
     A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
 
 let find_ctype_from_bindings bindings sym = 
-  let (_, (_, _, _, ctype)) = List.find (fun (sym', _) -> Sym.equal sym sym') bindings in 
+  let (_, (_, _, _, ctype)) = List.Old.find (fun (sym', _) -> Sym.equal sym sym') bindings in 
   ctype
 
 (* Decl_object  of (storageDuration * bool) * maybe alignment * qualifiers * ctype*)

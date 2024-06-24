@@ -136,10 +136,10 @@ let rec of_basetype = function
   | BT.Loc -> Loc None
   | BT.Struct tag -> Struct tag
   | BT.Datatype tag -> Datatype tag
-  | BT.Record member_types -> Record (List.map_snd of_basetype member_types)
+  | BT.Record member_types -> Record (List.Old.map_snd of_basetype member_types)
   | BT.Map (bt1, bt2) -> Map (of_basetype bt1, of_basetype bt2)
   | BT.List bt -> List (of_basetype bt)
-  | BT.Tuple bts -> Tuple (List.map of_basetype bts)
+  | BT.Tuple bts -> Tuple (List.Old.map of_basetype bts)
   | BT.Set bt -> Set (of_basetype bt)
 
 
@@ -154,8 +154,8 @@ let rec to_basetype = function
   | Loc _ -> BT.Loc
   | Struct tag -> BT.Struct tag
   | Datatype tag -> BT.Datatype tag
-  | Record member_types -> BT.Record (List.map_snd to_basetype member_types)
+  | Record member_types -> BT.Record (List.Old.map_snd to_basetype member_types)
   | Map (bt1, bt2) -> BT.Map (to_basetype bt1, to_basetype bt2)
   | List bt -> BT.List (to_basetype bt)
-  | Tuple bts -> BT.Tuple (List.map to_basetype bts)
+  | Tuple bts -> BT.Tuple (List.Old.map to_basetype bts)
   | Set bt -> BT.Set (to_basetype bt)

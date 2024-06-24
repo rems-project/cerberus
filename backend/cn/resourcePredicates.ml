@@ -66,10 +66,10 @@ let instantiate_clauses def ptr_arg iargs = match def.clauses with
   | Some clauses ->
     let subst = IT.make_subst (
         (def.pointer, ptr_arg) ::
-        List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
+        List.Old.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
       )
     in
-    Some (List.map (subst_clause subst) clauses)
+    Some (List.Old.map (subst_clause subst) clauses)
   | None -> None
 
 

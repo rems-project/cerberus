@@ -17,8 +17,6 @@ module Make(T : S) = struct
 
   module ListM = struct
 
-    open List
-
     let rec mapM (f : 'a -> 'b m) (l : 'a list) : ('b list) m =
       match l with
       | [] -> return []
@@ -51,7 +49,7 @@ module Make(T : S) = struct
               (l1 : 'a list)
               (l2 : 'b list)
             : ('c list) m =
-      let l12 = List.combine l1 l2 in
+      let l12 = List.Old.combine l1 l2 in
       mapM (Tools.uncurry f) l12
 
     let iteriM (f : (int -> 'a -> unit m)) (l : 'a list) : unit m =
@@ -63,23 +61,23 @@ module Make(T : S) = struct
 
     let concat_mapM f l =
       let@ xs = mapM f l in
-      return (concat xs)
+      return (List.Old.concat xs)
 
     let filter_mapM f l =
       let@ xs = mapM f l in
-      return (filter_map (fun x -> x) xs)
+      return (List.Old.filter_map (fun x -> x) xs)
 
     let filterM f xs =
       let@ ys = mapM (fun x -> let@ b = f x in return (b, x)) xs in
-      return (List.map snd (List.filter fst ys))
+      return (List.Old.map snd (List.Old.filter fst ys))
 
 
     let fold_leftM (f : 'a -> 'b -> 'c m) (a : 'a) (bs : 'b list) =
-      Stdlib.List.fold_left (fun aM b -> let@ a = aM in f a b) (return a) bs
+      List.Old.fold_left (fun aM b -> let@ a = aM in f a b) (return a) bs
 
     (* maybe from Exception.lem *)
     let fold_rightM (f : 'b -> 'a -> 'c m) (bs : 'b list) (a : 'a) =
-      Stdlib.List.fold_right (fun b aM -> let@ a = aM in f b a) bs (return a)
+      List.Old.fold_right (fun b aM -> let@ a = aM in f b a) bs (return a)
 
   end
 
@@ -95,7 +93,7 @@ module Make(T : S) = struct
           (map : ('k,'x) Pmap.map) (init: 'y) : 'y m =
       ListM.fold_leftM (fun y (i, (k, x)) -> f i k x y)
           init
-          (List.mapi (fun i (k, x) -> (i, (k, x))) (Pmap.bindings_list map))
+          (List.Old.mapi (fun i (k, x) -> (i, (k, x))) (Pmap.bindings_list map))
 
     let iterM f m =
       Pmap.fold (fun k v m -> let@ () = m in f k v)

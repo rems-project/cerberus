@@ -17,7 +17,7 @@ let mComputational (name, bound, info) t =
   Computational ((name, bound), info, t)
 
 let mComputationals t =
-  List.fold_right mComputational t
+  List.Old.fold_right mComputational t
 
 
 let rec subst i_subst (substitution: _ Subst.t) at =

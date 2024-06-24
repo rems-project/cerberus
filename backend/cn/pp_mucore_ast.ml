@@ -46,7 +46,7 @@ module PP = struct
         Dleaf (pp_pure_ctor "OVpointer" ^^^ Impl_mem.pp_pointer_value ptrval)
     | M_OVarray lvals ->
         Dnode ( pp_pure_ctor "OVarray"
-              , List.map dtree_of_object_value lvals)
+              , List.Old.map dtree_of_object_value lvals)
     | M_OVstruct (_tag_sym, _xs) ->
         Dleaf (pp_pure_ctor "OVstruct" ^^^ !^ (ansi_format [Red] "TODO"))
     | M_OVunion (_tag_sym, _membr_ident, _mval) ->
@@ -91,7 +91,7 @@ module PP = struct
         | M_PEconstrained _xs ->
             Dleaf (pp_ctor "PEconstrained" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEctor (ctor, pes) ->
-            Dnode (pp_ctor "PEctor", [Dleaf (Pp_mucore.Basic.pp_ctor ctor)] @ List.map self pes)
+            Dnode (pp_ctor "PEctor", [Dleaf (Pp_mucore.Basic.pp_ctor ctor)] @ List.Old.map self pes)
         | M_PEarray_shift (_pe1, _ty, _pe2) ->
             Dleaf (pp_ctor "PEarray_shift" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEmember_shift (_pe, _sym, _ident) ->
@@ -121,8 +121,8 @@ module PP = struct
         | [], dtree -> dtree
         | annots, Dnode (nm, xs) ->
             Dnode (nm, xs @ [Dnode (pp_ctor "Annot",
-                List.map (fun ann -> Dleaf ann)
-                    (List.concat_map Pp_mucore.Basic.pp_str_annot annots))])
+                List.Old.map (fun ann -> Dleaf ann)
+                    (List.Old.concat_map Pp_mucore.Basic.pp_str_annot annots))])
         | _, dtree -> dtree
     in
     self pexpr
@@ -244,7 +244,7 @@ module PP = struct
                                     ; dtree_of_expr e2 ] )
       | M_Erun (_l, asyms) ->
          Dnode ( pp_pure_ctor "Erun"
-               , List.map dtree_of_pexpr asyms)
+               , List.Old.map dtree_of_pexpr asyms)
 
       | M_Ebound e ->
           Dnode (pp_ctor "Ebound", [dtree_of_expr e])
@@ -264,7 +264,7 @@ module PP = struct
     let aux (sym, tagDef) =
       Pp_ail_ast.dtree_of_tag_definition (sym, (Cerb_location.unknown, Annot.no_attributes, tagDef)) in
     Dnode ( pp_field ".tagDefs"
-          , List.map aux (Pmap.bindings_list xs) )
+          , List.Old.map aux (Pmap.bindings_list xs) )
 
   let dtree_of_funinfo xs =
     let pp_ctype (Ctype.Ctype (annots, _) as ty) =
@@ -296,7 +296,7 @@ module PP = struct
              pp_ctype ty)
     in
     Dnode ( pp_field ".funinfo"
-          , List.map aux (Pmap.bindings_list xs) )
+          , List.Old.map aux (Pmap.bindings_list xs) )
 
   let dtree_of_globs xs =
     let aux (sym, glob) =
@@ -308,7 +308,7 @@ module PP = struct
           Dnode ( pp_field "GlobalDecl" ^^^ pp_symbol sym
                 , [Dleaf (Pp_typ.pp_ct ct)] )
     in
-    Dnode (pp_field ".globs", List.map aux xs)
+    Dnode (pp_field ".globs", List.Old.map aux xs)
 
   let dtree_of_label l def =
     match def with
@@ -338,7 +338,7 @@ module PP = struct
             Dleaf ( pp_field "ProcDecl" ^^^ pp_symbol sym (* TODO: spec *))
     in
     Dnode ( pp_field ".funs"
-          , List.map aux (Pmap.bindings_list xs) )
+          , List.Old.map aux (Pmap.bindings_list xs) )
 
   let pp_file file =
     pp_doc_tree begin

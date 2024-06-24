@@ -100,12 +100,12 @@ module Debug = struct
   let _dump_solver solver =
     Printf.printf "| Start Solver Dump\n%!";
     dump_frame !(solver.cur_frame);
-    List.iter dump_frame !(solver.prev_frames);
+    List.Old.iter dump_frame !(solver.prev_frames);
     Printf.printf "| End Solver Dump\n%!"
 end
 
 (** Lookup something in one of the existing frames *)
-let search_frames s f = List.find_map f (!(s.cur_frame) :: !(s.prev_frames))
+let search_frames s f = List.Old.find_map f (!(s.cur_frame) :: !(s.prev_frames))
 
 (** Lookup the `int` corresponding to a C type in the current stack.
     If it is not found, add it to the current frame, and return the new int. *)
@@ -129,7 +129,7 @@ let get_ctype_table s =
   let table         = Int_Table.create 50 in
   let add_entry t n = Int_Table.add table n t in
   let do_frame f    = CTypeMap.iter add_entry f.ctypes in
-  List.iter do_frame (!(s.cur_frame) :: !(s.prev_frames));
+  List.Old.iter do_frame (!(s.cur_frame) :: !(s.prev_frames));
   table
 
 
@@ -158,7 +158,7 @@ let pop s n =
       drop n !(s.prev_frames)
     end
 
-let num_scopes s = List.length !(s.prev_frames)
+let num_scopes s = List.Old.length !(s.prev_frames)
 
 (** Do an ack_style command. These are logged. *)
 let ack_command s cmd =
@@ -224,21 +224,21 @@ module CN_Tuple = struct
 
   (** A tuple type with the given name *)
   let t tys =
-    let arity = List.length tys in
+    let arity = List.Old.length tys in
     SMT.app_ (name arity) tys
 
   (** Declare a datatype for a struct *)
   let declare s arity =
     let name    = name arity in
     let param i = "a" ^ string_of_int i in
-    let params  = List.init arity param in
+    let params  = List.Old.init arity param in
     let field i = (selector arity i, SMT.atom (param i)) in
-    let fields  = List.init arity field in
+    let fields  = List.Old.init arity field in
     ack_command s (SMT.declare_datatype name params [ (name, fields) ])
 
   (** Make a tuple value *)
   let con es =
-    let arity = List.length es in
+    let arity = List.Old.length es in
     SMT.app_ (name arity) es
 
   (** Get a field of a tuple *)
@@ -337,12 +337,12 @@ let rec translate_base_type = function
   | Set bt          -> SMT.t_set (translate_base_type bt)
   | Map (k, v)      -> SMT.t_array (translate_base_type k)
                                    (translate_base_type v)
-  | Tuple bts       -> CN_Tuple.t (List.map translate_base_type bts)
+  | Tuple bts       -> CN_Tuple.t (List.Old.map translate_base_type bts)
   | Struct tag      -> SMT.atom (CN_Names.struct_name tag)
   | Datatype tag    -> SMT.atom (CN_Names.datatype_name tag)
   | Record members  ->
     let get_val (_,v) = v in
-    translate_base_type (Tuple (List.map get_val members))
+    translate_base_type (Tuple (List.Old.map get_val members))
 
 
 
@@ -405,18 +405,18 @@ and
                                 , get_ivalue gs ctys kt k
                                 , get_ivalue gs ctys vt v
                                 ) in
-    List.fold_right add_el els base
+    List.Old.fold_right add_el els base
 
   | Tuple bts ->
     let (_con,vals) = SMT.to_con sexp in
-    Tuple (List.map2 (get_ivalue gs ctys) bts vals)
+    Tuple (List.Old.map2 (get_ivalue gs ctys) bts vals)
 
   | Struct tag ->
     let (_con,vals) = SMT.to_con sexp in
     let decl = SymMap.find tag gs.struct_decls in
-    let fields = List.filter_map (fun x -> x.Memory.member_or_padding) decl in
+    let fields = List.Old.filter_map (fun x -> x.Memory.member_or_padding) decl in
     let mk_field (l,t) v = (l,get_ivalue gs ctys (Memory.bt_of_sct t) v) in
-    Struct (tag, List.map2 mk_field fields vals)
+    Struct (tag, List.Old.map2 mk_field fields vals)
 
   | Datatype tag ->
     let (con,vals) = SMT.to_con sexp in
@@ -424,11 +424,11 @@ and
     let do_con c =
           let fields = (SymMap.find c gs.datatype_constrs).c_params in
           let mk_field (l,t) v = (l, get_ivalue gs ctys t v) in
-          Constructor (c, List.map2 mk_field fields vals) in
+          Constructor (c, List.Old.map2 mk_field fields vals) in
     let try_con c =
           if String.equal con (CN_Names.datatype_con_name c) then Some (do_con c) else None
     in
-    begin match List.find_map try_con cons with
+    begin match List.Old.find_map try_con cons with
     | Some yes -> yes
     | None -> failwith "Missing constructor"
     end
@@ -436,7 +436,7 @@ and
   | Record members  ->
     let (_con,vals) = SMT.to_con sexp in
     let mk_field (l,bt) e = (l, get_ivalue gs ctys bt e) in
-    Record (List.map2 mk_field members vals)
+    Record (List.Old.map2 mk_field members vals)
 
 
 (** {1 Term to SMT} *)
@@ -774,10 +774,10 @@ let rec translate_term s iterm =
 
   (* Tuples *)
 
-  | Tuple es -> CN_Tuple.con (List.map (translate_term s) es)
+  | Tuple es -> CN_Tuple.con (List.Old.map (translate_term s) es)
   | NthTuple (n, e1) ->
     begin match IT.basetype e1 with
-    | Tuple ts ->  CN_Tuple.get (List.length ts) n (translate_term s e1)
+    | Tuple ts ->  CN_Tuple.get (List.Old.length ts) n (translate_term s e1)
     | _ -> failwith "NthTuple: not a tuple"
     end
 
@@ -788,7 +788,7 @@ let rec translate_term s iterm =
   | Struct (tag, fields) ->
     let con         = CN_Names.struct_con_name tag in
     let field (_,e) = translate_term s e in
-    SMT.app_ con (List.map field fields)
+    SMT.app_ con (List.Old.map field fields)
 
   | StructMember (e1,f) ->
     SMT.app_ (CN_Names.struct_field_name f) [translate_term s e1]
@@ -798,7 +798,7 @@ let rec translate_term s iterm =
     let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
     let members = Memory.member_types layout in
     let str =
-      List.map (fun (member', sct) ->
+      List.Old.map (fun (member', sct) ->
           let value =
             if Id.equal member member' then v
             else member_ ~member_bt:(Memory.bt_of_sct sct) (t, member') here
@@ -816,14 +816,14 @@ let rec translate_term s iterm =
   (* Records *)
   | Record members ->
     let field (_,e) = translate_term s e in
-    CN_Tuple.con (List.map field members)
+    CN_Tuple.con (List.Old.map field members)
 
   | RecordMember (e1,f) ->
     begin match IT.basetype e1 with
     | Record members ->
         let check (x,_) = Id.equal f x in
-        let arity       = List.length members in
-        begin match List.find_index check members with
+        let arity       = List.Old.length members in
+        begin match List.Old.find_index check members with
         | Some n -> CN_Tuple.get arity n (translate_term s e1)
         | None -> failwith "Missing record field."
         end
@@ -833,7 +833,7 @@ let rec translate_term s iterm =
   | RecordUpdate ((t, member),v) ->
     let members = BT.record_bt (IT.bt t) in
     let str =
-      List.map (fun (member', bt) ->
+      List.Old.map (fun (member', bt) ->
           let value =
             if Id.equal member member' then v
             else IT ((RecordMember (t, member')), bt, here)
@@ -886,7 +886,7 @@ let rec translate_term s iterm =
 
   | NthList (x,y,z) ->
     let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
-    let (arg_ts,args) = List.split (List.map arg [x;y;z]) in
+    let (arg_ts,args) = List.Old.split (List.Old.map arg [x;y;z]) in
     let bt      = IT.basetype iterm in
     let res_t   = translate_base_type bt in
     let f = declare_bt_uninterpreted s CN_Constant.nth_list bt arg_ts res_t in
@@ -894,7 +894,7 @@ let rec translate_term s iterm =
 
   | ArrayToList (x,y,z) ->
     let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
-    let (arg_ts,args) = List.split (List.map arg [x;y;z]) in
+    let (arg_ts,args) = List.Old.split (List.Old.map arg [x;y;z]) in
     let bt      = IT.basetype iterm in
     let res_t   = translate_base_type bt in
     let f = declare_bt_uninterpreted s
@@ -937,10 +937,10 @@ let rec translate_term s iterm =
       translate_term s (LogicalFunctions.open_fun def.args body args)
     | _ ->
       let do_arg arg = translate_base_type (IT.basetype arg) in
-      let args_ts    = List.map do_arg args in
+      let args_ts    = List.Old.map do_arg args in
       let res_t      = translate_base_type def.return_bt in
       let fu         = declare_uninterpreted s name args_ts res_t in
-      SMT.app fu (List.map (translate_term s) args)
+      SMT.app fu (List.Old.map (translate_term s) args)
     end
 
   | Let ((x,e1),e2) ->
@@ -956,7 +956,7 @@ let rec translate_term s iterm =
   | Constructor (c,fields) ->
     let con = CN_Names.datatype_con_name c in
     let field (_,e) = translate_term s e in
-    SMT.app_ con (List.map field fields)
+    SMT.app_ con (List.Old.map field fields)
 
     (* CN supports nested patterns, while SMTLIB does not,
        so we compile patterns to a optional predicate, and defined variables.
@@ -972,11 +972,11 @@ let rec translate_term s iterm =
           let new_v = SMT.app_ (CN_Names.datatype_field_name f) [v] in
           match_pat new_v nested in
 
-        let (conds,defs) = List.split (List.map field fs) in
-        let nested_cond = SMT.bool_ands (List.filter_map (fun x -> x) conds) in
+        let (conds,defs) = List.Old.split (List.Old.map field fs) in
+        let nested_cond = SMT.bool_ands (List.Old.filter_map (fun x -> x) conds) in
         let cname = CN_Names.datatype_con_name c in
         let cond  = SMT.bool_and (SMT.is_con cname v) nested_cond in
-        (Some cond, List.concat defs)
+        (Some cond, List.Old.concat defs)
     in
     let rec do_alts v alts =
       match alts with
@@ -1060,7 +1060,7 @@ let translate_goal solver assumptions _pointer_facts lc =
             | _ -> acc
         in LCSet.fold check_asmp assumptions acc0
   in
-  { instantiated with extra = List.fold_left add_asmps [] instantiated.qs }
+  { instantiated with extra = List.Old.fold_left add_asmps [] instantiated.qs }
 
 
 
@@ -1086,13 +1086,13 @@ let declare_datatype_group s names =
         (CN_Names.datatype_field_name l, translate_base_type t) in
   let mk_con c =
     let ci = SymMap.find c s.globals.datatype_constrs in
-    (CN_Names.datatype_con_name c, List.map mk_con_field ci.c_params) in
-  let cons info = List.map mk_con info.dt_constrs in
+    (CN_Names.datatype_con_name c, List.Old.map mk_con_field ci.c_params) in
+  let cons info = List.Old.map mk_con info.dt_constrs in
   let to_smt (x: Sym.t) =
         let info = SymMap.find x s.globals.datatypes in
         (CN_Names.datatype_name x, [], cons info)
   in
-  ack_command s (SMT.declare_datatypes (List.map to_smt names))
+  ack_command s (SMT.declare_datatypes (List.Old.map to_smt names))
 
 
 
@@ -1121,7 +1121,7 @@ let rec declare_struct s done_struct name decl =
            (SMT.declare_datatype
               (CN_Names.struct_name name) []
                 [ ( CN_Names.struct_con_name name
-                  , List.filter_map mk_piece decl
+                  , List.Old.filter_map mk_piece decl
                   )
                 ]
            )
@@ -1141,7 +1141,7 @@ let declare_solver_basics s =
      datatypes may depend on other datatypes and structs. *)
   let done_strcuts = ref SymSet.empty in
   SymMap.iter (declare_struct s done_strcuts) s.globals.struct_decls;
-  List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
+  List.Old.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
 
@@ -1252,7 +1252,7 @@ let model_evaluator solver mo =
     let gs = solver.globals in
     let evaluator = { smt_solver = s
                     ; cur_frame = ref (empty_solver_frame ())
-                    ; prev_frames = ref (List.map copy_solver_frame
+                    ; prev_frames = ref (List.Old.map copy_solver_frame
                                          ( (!(solver.cur_frame) ::
                                            !(solver.prev_frames)) ))
                       (* We keep the prev_frames because things that were
@@ -1263,7 +1263,7 @@ let model_evaluator solver mo =
                     ; globals = gs
                     } in
     declare_solver_basics evaluator;
-    List.iter (SMT.ack_command s) defs;
+    List.Old.iter (SMT.ack_command s) defs;
 
     fun e ->
       push evaluator;
@@ -1334,7 +1334,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
 (*
         let () = Z3.Solver.reset solver.non_incremental in
         let () =
-          List.iter (fun lc ->
+          List.Old.iter (fun lc ->
             Z3.Solver.add solver.non_incremental [lc]
             ) (nlc :: extra @ existing_scs)
         in

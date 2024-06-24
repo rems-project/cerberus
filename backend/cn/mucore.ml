@@ -314,8 +314,8 @@ let mResource (bound, info) t = M_Resource (bound, info, t)
 let mConstraint (lc, info) t = M_Constraint (lc, info, t)
 let mComputational (bound, info) t = M_Computational (bound, info, t)
 
-let mConstraints lcs t = List.fold_right mConstraint lcs t
-let mResources res t = List.fold_right mResource res t
+let mConstraints lcs t = List.Old.fold_right mConstraint lcs t
+let mResources res t = List.Old.fold_right mResource res t
 
 let mu_fun_param_types mu_fun =
   let open BaseTypes in
@@ -394,7 +394,7 @@ let evaluate_fun mu_fun args =
      begin match args with
      | [arg] ->
         Option.bind (IT.dest_list arg) (fun xs ->
-        Some (`Result_Integer (Z.of_int (List.length xs))))
+        Some (`Result_Integer (Z.of_int (List.Old.length xs))))
      | _ -> None
      end
   | M_F_params_nth ->
@@ -403,47 +403,47 @@ let evaluate_fun mu_fun args =
         Option.bind (IT.dest_list arg1) (fun xs ->
         Option.bind (IT.is_bits_const arg2) (fun (bits_info, i) ->
             assert (BaseTypes.fits_range bits_info i);
-            if Z.lt i (Z.of_int (List.length xs)) && Z.leq Z.zero i
-            then Option.bind (List.nth_opt xs (Z.to_int i)) (fun it -> Some (`Result_IT it))
+            if Z.lt i (Z.of_int (List.Old.length xs)) && Z.leq Z.zero i
+            then Option.bind (List.Old.nth_opt xs (Z.to_int i)) (fun it -> Some (`Result_IT it))
             else None
         ))
      | _ -> None
      end
   | M_F_are_compatible ->
-     begin match List.map IT.is_const args with
+     begin match List.Old.map IT.is_const args with
      | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] ->
         if Sctypes.equal ct1 ct2
         then Some (`Result_IT (IT.bool_ true here)) else None
      | _ -> None
      end
   | M_F_size_of ->
-     begin match List.map IT.is_const args with
+     begin match List.Old.map IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
         Some (`Result_Integer (Z.of_int (Memory.size_of_ctype ct)))
      | _ -> None
      end
   | M_F_align_of ->
-     begin match List.map IT.is_const args with
+     begin match List.Old.map IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
         Some (`Result_Integer (Z.of_int (Memory.align_of_ctype ct)))
      | _ -> None
      end
   | M_F_max_int ->
-     begin match List.map IT.is_const args with
+     begin match List.Old.map IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
         Some (`Result_IT (IT.num_lit_ (Memory.max_integer_type ity) bt here))
      | _ -> None
      end
   | M_F_min_int ->
-     begin match List.map IT.is_const args with
+     begin match List.Old.map IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
         Some (`Result_IT (IT.num_lit_ (Memory.min_integer_type ity) bt here))
      | _ -> None
      end
   | M_F_ctype_width ->
-     begin match List.map IT.is_const args with
+     begin match List.Old.map IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
         Some (`Result_Integer (Z.of_int (Memory.size_of_ctype ct * 8)))
      | _ -> None

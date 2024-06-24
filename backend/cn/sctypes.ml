@@ -135,7 +135,7 @@ let rec to_ctype (ct_ : ctype) =
        Struct t
     | Function ((ret_q,ret_ct), args, variadic) ->
        let args =
-         List.map (fun (arg_ct, is_reg) ->
+         List.Old.map (fun (arg_ct, is_reg) ->
              (Ctype.no_qualifiers, to_ctype arg_ct, is_reg)
            ) args
        in

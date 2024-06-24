@@ -130,9 +130,9 @@ let rec add_pattern p v var_map =
       fail_n {loc; msg = Generic (Pp.item "getting expr from C syntax: cannot tuple-split val"
         (Pp.typ (IT.pp it) (Pp_mucore.Basic.pp_pattern p)))}
     end in
-    assert (List.length vs == List.length ps);
+    assert (List.Old.length vs == List.Old.length ps);
     ListM.fold_rightM (fun (p, v) var_map -> add_pattern p v var_map)
-      (List.combine ps vs) var_map
+      (List.Old.combine ps vs) var_map
   | _ ->
     fail_n {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
         (Pp_mucore.Basic.pp_pattern p))}
@@ -364,7 +364,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
   | M_Eunseq exps ->
     let orig_expr = expr in
     let rec cont1 state exp_vals = function
-      | [] -> rcval (IT.tuple_ (List.rev exp_vals) loc) state
+      | [] -> rcval (IT.tuple_ (List.Old.rev exp_vals) loc) state
       | (exp :: exps) ->
         let@ r = symb_exec_mu_expr ctxt (state, var_map) exp in
         cont2 exp_vals exps r
@@ -383,8 +383,8 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     let@ arg_vs = ListM.mapM (symb_exec_mu_pexpr ctxt var_map) args in
     begin match Pmap.lookup sym ctxt.label_defs with
     | Some (M_Return _) ->
-      assert (List.length args == 1);
-      return (Call_Ret (List.hd arg_vs))
+      assert (List.Old.length args == 1);
+      return (Call_Ret (List.Old.hd arg_vs))
     | _ ->
        fail_n {loc; msg = Generic Pp.(!^"function has goto-labels in control-flow")}
     end
@@ -435,9 +435,9 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
       let s = Option.get (Sym.has_id nm) in
       let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
       if String.equal s "ctz_proxy"
-      then rcval (wrap_int (IT.arith_unop Terms.BWCTZNoSMT (List.hd args_its) loc) loc) state
-      else if List.exists (String.equal s) ["ffs_proxy"; "ffsl_proxy"; "ffsll_proxy"]
-      then rcval (wrap_int (IT.arith_unop Terms.BWFFSNoSMT (List.hd args_its) loc) loc) state
+      then rcval (wrap_int (IT.arith_unop Terms.BWCTZNoSMT (List.Old.hd args_its) loc) loc) state
+      else if List.Old.exists (String.equal s) ["ffs_proxy"; "ffsl_proxy"; "ffsll_proxy"]
+      then rcval (wrap_int (IT.arith_unop Terms.BWFFSNoSMT (List.Old.hd args_its) loc) loc) state
       else failwith ("unknown stdlib function: " ^ s)
     end else fail_fun_it "not a function with a pure/logical interpretation"
   | M_CN_progs _ ->
@@ -457,8 +457,8 @@ let rec filter_syms ss p =
     if SymSet.mem s ss then p else mk (M_CaseBase (None, bt))
   | M_CaseBase (None, _) -> p
   | M_CaseCtor (M_Ctuple, ps) ->
-    let ps = List.map (filter_syms ss) ps in
-    if List.for_all is_wild_pat ps
+    let ps = List.Old.map (filter_syms ss) ps in
+    if List.Old.for_all is_wild_pat ps
     then mk (M_CaseBase (None, CF.Core.BTy_unit))
     else mk (M_CaseCtor (M_Ctuple, ps))
   | _ -> p
@@ -485,7 +485,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
   let here = Locations.other __FUNCTION__ in
   let def_args = def.LogicalFunctions.args
     (* TODO - add location information to binders *)
-    |> List.map (fun (s, bt) -> IndexTerms.sym_ (s, bt, here)) in
+    |> List.Old.map (fun (s, bt) -> IndexTerms.sym_ (s, bt, here)) in
   Pp.debug 3 (lazy (Pp.item "cn_function converting C function to logical"
     (Pp.infix_arrow (Sym.pp fsym) (Sym.pp id))));
   match fn with
@@ -549,7 +549,7 @@ let upd_def (loc, sym, def_tm) =
         msg = Generic (Pp.typ (Pp.string "logical predicate already defined") (Sym.pp sym))}
 
 let add_logical_funs_from_c mu_call_funinfo funs_to_convert mu_funs =
-  let c_fun_pred_map = List.fold_left (fun m {c_fun_sym; loc; l_fun_sym} ->
+  let c_fun_pred_map = List.Old.fold_left (fun m {c_fun_sym; loc; l_fun_sym} ->
     SymMap.add c_fun_sym (loc, l_fun_sym) m) SymMap.empty funs_to_convert in
   let global_context = {label_defs = Pmap.empty Sym.compare; c_fun_pred_map; mu_call_funinfo} in
   let@ conv_defs = ListM.mapM (fun {c_fun_sym; loc; l_fun_sym} ->

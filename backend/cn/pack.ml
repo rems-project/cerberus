@@ -50,7 +50,7 @@ let packing_ft loc global provable ret =
       | Owned (Struct tag, init) ->
           let layout = SymMap.find tag global.Global.struct_decls in
           let lrt, value =
-            List.fold_right (fun {offset; size; member_or_padding} (lrt, value) ->
+            List.Old.fold_right (fun {offset; size; member_or_padding} (lrt, value) ->
               match member_or_padding with
               | Some (member, mct) ->
                 let request =
@@ -99,7 +99,7 @@ let unpack_owned loc global (ct, init) pointer (O o) =
   | Struct tag ->
     let layout = SymMap.find tag global.Global.struct_decls in
     let res =
-      List.fold_right (fun {offset; size; member_or_padding} res ->
+      List.Old.fold_right (fun {offset; size; member_or_padding} res ->
         match member_or_padding with
         | Some (member, mct) ->
           let mresource =
@@ -163,7 +163,7 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
             (P { name = ret.name;
                 pointer = pointer_offset_ (ret.pointer,
                     mul_ (cast_ Memory.uintptr_bt ret.step loc, cast_ Memory.uintptr_bt index loc) loc) loc;
-                iargs = List.map (IT.subst su) ret.iargs; },
+                iargs = List.Old.map (IT.subst su) ret.iargs; },
             O  (map_get_ o index loc))
           in
           let ret_reduced =

@@ -187,8 +187,8 @@ let inject st inj =
         do_output st str
     | Pre (strs, ret_ty, is_main) ->
         let indent = String.make (st.last_indent + 2) ' ' in
-        let indented_strs = List.map (fun str -> str ^ indent) strs in
-        let str = List.fold_left (^) "" indented_strs in
+        let indented_strs = List.Old.map (fun str -> str ^ indent) strs in
+        let str = List.Old.fold_left (^) "" indented_strs in
         do_output st begin
           "\n" ^ indent ^ "/* EXECUTABLE CN PRECONDITION */" ^
           "\n" ^ indent ^
@@ -205,12 +205,12 @@ let inject st inj =
     | Post (strs, ret_ty) ->
         let indent = String.make st.last_indent ' ' in
         let epilogue_indent = String.make (st.last_indent + 2) ' ' in
-        let indented_strs = List.map (fun str -> 
+        let indented_strs = List.Old.map (fun str -> 
           let indent = if (String.contains str '{') then indent else epilogue_indent in
           "\n" ^ indent ^ str) 
         strs 
         in
-        let str = List.fold_left (^) "" indented_strs in
+        let str = List.Old.fold_left (^) "" indented_strs in
         do_output st begin
           "\n" ^ indent ^ "/* EXECUTABLE CN POSTCONDITION */" ^
           "\n__cn_epilogue:\n" ^
@@ -232,15 +232,15 @@ let sort_injects xs =
     else
       c
   in
-  let xs = List.sort cmp xs in
-  (* List.iteri (fun i inj ->
+  let xs = List.Old.sort cmp xs in
+  (* List.Old.iteri (fun i inj ->
     Printf.fprintf stderr "\x1b[35m[%d] -> %s @ %s\x1b[0\n"
       i
       begin match inj.kind with
         | InStmt (n,  str) ->
             "InStmt["^ string_of_int n ^ "] ==> '" ^ String.escaped str ^ "'"
         | Pre (strs, _, _) ->
-            "Pre ==> [" ^ String.concat "," (List.map (fun s -> "\"" ^ String.escaped s ^ "\"" ) strs) ^ "]"
+            "Pre ==> [" ^ String.concat "," (List.Old.map (fun s -> "\"" ^ String.escaped s ^ "\"" ) strs) ^ "]"
         | Post _ ->
             "Post"
       end
@@ -256,7 +256,7 @@ let inject_all oc filename xs =
     last_indent= 0;
   } in
   let st =
-    List.fold_left (fun st m ->
+    List.Old.fold_left (fun st m ->
       inject st m
     ) st (sort_injects xs) in
   let rec aux () =
@@ -296,15 +296,15 @@ let in_stmt_injs xs num_headers =
     (* Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s ---> [%s]\n"
       (Cerb_location.location_to_string loc)
       (Pos.to_string start_pos) (Pos.to_string end_pos)
-      (String.concat "; " (List.map (fun str -> "'" ^ String.escaped str ^ "'") strs)); *)
+      (String.concat "; " (List.Old.map (fun str -> "'" ^ String.escaped str ^ "'") strs)); *)
     Ok
       { footprint=
           { start_pos= Pos.increment_line start_pos num_headers
           ; end_pos= Pos.v (end_pos.line + num_headers) end_pos.col }
-      ; kind= InStmt (List.length strs, String.concat "\n" strs) }
+      ; kind= InStmt (List.Old.length strs, String.concat "\n" strs) }
   )
   xs
-  (* (List.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs) *)
+  (* (List.Old.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs) *)
 
 (* build the injections for the pre/post conditions of a C function *)
 let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =
@@ -317,7 +317,7 @@ let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =
       | AilSblock (_bindings, []) ->
           Pos.of_location loc
       | AilSblock (_bindings, ss) ->
-          let first = List.hd ss in
+          let first = List.Old.hd ss in
           let last = Lem_list_extra.last ss in
           let* (pre_pos, _) = posOf_stmt first in
           let* (_, post_pos) = posOf_stmt last in
@@ -369,13 +369,13 @@ type 'a cn_injection = {
 let output_injections oc cn_inj =
   Cerb_colour.without_colour begin fun () ->
   let* injs =
-    List.fold_left (fun acc_ (fun_sym, (loc, _, _, _, stmt)) ->
+    List.Old.fold_left (fun acc_ (fun_sym, (loc, _, _, _, stmt)) ->
       if not (Cerb_location.from_main_file loc) then
         (* let () = Printf.fprintf stderr "\x1b[31mSKIPPING ==> %s\x1b[0m\n" (Cerb_location.simple_location loc) in *)
         acc_
-      else match List.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
+      else match List.Old.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
         | Some pre_post_strs ->
-            begin match acc_, List.assoc Symbol.equal_sym fun_sym (snd cn_inj.program).A.declarations with
+            begin match acc_, List.Old.assoc Symbol.equal_sym fun_sym (snd cn_inj.program).A.declarations with
               | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
                   let is_main = match fst cn_inj.program with
                     | Some main_sym when Symbol.equal_sym main_sym fun_sym -> true
@@ -402,11 +402,11 @@ let get_magics_of_statement stmt =
   let open AilSyntax in
   let rec aux acc (AnnotatedStatement (_loc, Annot.Attrs xs, stmt_)) =
     let acc =
-      List.fold_left (fun acc attr ->
+      List.Old.fold_left (fun acc attr ->
         let open Annot in
         match (attr.attr_ns, attr.attr_id, attr.attr_args) with
           | (Some (Symbol.Identifier (_, "cerb")), Symbol.Identifier (_, "magic"), xs) ->
-              List.map (fun (loc, str, _) -> (loc, str)) xs :: acc
+              List.Old.map (fun (loc, str, _) -> (loc, str)) xs :: acc
          | _ ->
             acc
       ) acc xs in
@@ -425,7 +425,7 @@ let get_magics_of_statement stmt =
       | AilSblock (_, ss)
       | AilSpar ss ->
 
-          List.fold_left aux acc ss
+          List.Old.fold_left aux acc ss
       | AilSif (_, s1, s2) ->
           aux (aux acc s1) s2
       | AilSwhile (_, s, _)

@@ -78,7 +78,7 @@ let pp_maybe_oargs = function
 
 
 let pp_predicate_type_aux (p : predicate_type) oargs =
-  let args = List.map IT.pp (p.pointer :: p.iargs) in
+  let args = List.Old.map IT.pp (p.pointer :: p.iargs) in
   c_app (pp_predicate_name p.name) args
   ^^ pp_maybe_oargs oargs
 
@@ -91,7 +91,7 @@ let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
     ^^^ star
     ^^^ IT.pp p.step
   in
-  let args = pointer :: List.map IT.pp (p.iargs) in
+  let args = pointer :: List.Old.map IT.pp (p.iargs) in
 
   !^"each" ^^
     parens (BT.pp (snd p.q) ^^^ Sym.pp (fst p.q) ^^ semi ^^^ IT.pp p.permission)
@@ -129,7 +129,7 @@ let alpha_rename_qpredicate_type_ (q' : Sym.t) (qp : qpredicate_type) =
     q_loc = qp.q_loc;
     step = qp.step;
     permission = IT.subst subst qp.permission;
-    iargs = List.map (IT.subst subst) qp.iargs;
+    iargs = List.Old.map (IT.subst subst) qp.iargs;
   }
 
 let alpha_rename_qpredicate_type qp =
@@ -140,7 +140,7 @@ let subst_predicate_type substitution (p : predicate_type) =
   {
     name = p.name;
     pointer = IT.subst substitution p.pointer;
-    iargs = List.map (IT.subst substitution) p.iargs;
+    iargs = List.Old.map (IT.subst substitution) p.iargs;
   }
 
 let subst_qpredicate_type substitution (qp : qpredicate_type) =
@@ -156,7 +156,7 @@ let subst_qpredicate_type substitution (qp : qpredicate_type) =
     q_loc = qp.q_loc;
     step = IT.subst substitution qp.step;
     permission = IT.subst substitution qp.permission;
-    iargs = List.map (IT.subst substitution) qp.iargs;
+    iargs = List.Old.map (IT.subst substitution) qp.iargs;
   }
 
 
@@ -222,7 +222,7 @@ let dtree_of_predicate_type (pred : predicate_type) =
   Dnode (pp_ctor "pred",
         dtree_of_predicate_name pred.name ::
         IT.dtree pred.pointer ::
-        List.map IT.dtree pred.iargs)
+        List.Old.map IT.dtree pred.iargs)
 
 let dtree_of_qpredicate_type (pred : qpredicate_type) =
   Dnode (pp_ctor "qpred",
@@ -231,7 +231,7 @@ let dtree_of_qpredicate_type (pred : qpredicate_type) =
         IT.dtree pred.permission ::
         dtree_of_predicate_name pred.name ::
         IT.dtree pred.pointer ::
-        List.map IT.dtree pred.iargs)
+        List.Old.map IT.dtree pred.iargs)
 
 
 let dtree = function

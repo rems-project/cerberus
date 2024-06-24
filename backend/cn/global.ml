@@ -49,7 +49,7 @@ let get_logical_function_def global id = SymMap.find_opt id global.logical_funct
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_lemma global sym = SymMap.find_opt sym global.lemmata
 
-let sym_map_from_bindings xs = List.fold_left (fun m (nm, x) -> SymMap.add nm x m)
+let sym_map_from_bindings xs = List.Old.fold_left (fun m (nm, x) -> SymMap.add nm x m)
     SymMap.empty xs
 
 
@@ -91,7 +91,7 @@ let pp global =
 let mutual_datatypes (global : t) tag =
   let deps tag =
     let info = SymMap.find tag global.datatypes in
-    info.dt_all_params |> List.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
+    info.dt_all_params |> List.Old.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
   in
   let rec seek tags = function
     | [] -> tags

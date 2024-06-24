@@ -76,12 +76,12 @@ module General = struct
   let cases_to_map loc (situation, requests) a_bt item_bt (C cases) =
     let here = Locations.other __FUNCTION__ in
     let update_with_ones base_array ones =
-      List.fold_left (fun m {one_index; value} ->
+      List.Old.fold_left (fun m {one_index; value} ->
           map_set_ m (one_index, value) here
         ) base_array ones
     in
     let ones, manys =
-      List.partition_map (function One c -> Left c | Many c -> Right c) cases in
+      List.Old.partition_map (function One c -> Left c | Many c -> Right c) cases in
     let@ base_value =
       match manys, item_bt with
       | [{many_guard = _; value}], _ ->
@@ -188,7 +188,7 @@ module General = struct
                 let here = Locations.other __FUNCTION__ in
                 let pmatch =
                   eq_ ((pointerToIntegerCast_ requested.pointer) here, (pointerToIntegerCast_ p'.pointer here)) here
-                  :: List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs
+                  :: List.Old.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs
                 in
                 let took = and_ pmatch here in
                 let prov =
@@ -223,7 +223,7 @@ module General = struct
                     debug_failure
                       (Solver.model ())
                       "couldn't use resource"
-                      (and_ (eq_ (requested.pointer, p'.pointer) here :: List.tl pmatch) here);
+                      (and_ (eq_ (requested.pointer, p'.pointer) here :: List.Old.tl pmatch) here);
                     continue
                   end
                 end
@@ -293,7 +293,7 @@ module General = struct
                 let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
                 let here = Locations.other __FUNCTION__ in
                 let pmatch = eq_ (requested.pointer, p'.pointer) here in
-                let iarg_match = and_ (List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs) here in
+                let iarg_match = and_ (List.Old.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs) here in
                 let took = and_ [iarg_match; requested.permission; p'.permission] here in
                 begin match provable (LC.Forall (requested.q, not_ took here)) with
                 | `True -> continue
@@ -334,7 +334,7 @@ module General = struct
                          pointer = pointer_offset_ (requested.pointer,
                              (mul_ (cast_ Memory.uintptr_bt requested.step here,
                                  cast_ Memory.uintptr_bt index here) here)) here;
-                         iargs = List.map (IT.subst su) requested.iargs;
+                         iargs = List.Old.map (IT.subst su) requested.iargs;
                        }
                    in
                    match o_re_index with

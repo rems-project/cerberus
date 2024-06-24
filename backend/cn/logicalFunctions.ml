@@ -62,7 +62,7 @@ let pp_def nm def =
 
 
 let open_fun def_args def_body args =
-  let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
+  let su = make_subst (List.Old.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
   IT.subst su def_body
 
 
@@ -123,13 +123,13 @@ let add_unfolds_to_terms preds terms =
 (*     | [] -> None *)
 (*     | (nm, Some path) :: q -> if SymSet.mem nm known_ok *)
 (*       then search known_ok q *)
-(*       else if List.exists (Sym.equal nm) path *)
-(*       then Some (List.rev path @ [nm]) *)
+(*       else if List.Old.exists (Sym.equal nm) path *)
+(*       then Some (List.Old.rev path @ [nm]) *)
 (*       else *)
-(*         let deps = List.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
+(*         let deps = List.Old.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
 (*         search known_ok (deps @ [(nm, None)] @ q) *)
 (*     | (nm, None) :: q -> search (SymSet.add nm known_ok) q *)
-(*   in search SymSet.empty (List.map (fun (p, _) -> (p, Some [])) (SymMap.bindings defs)) *)
+(*   in search SymSet.empty (List.Old.map (fun (p, _) -> (p, Some [])) (SymMap.bindings defs)) *)
 
 
 
