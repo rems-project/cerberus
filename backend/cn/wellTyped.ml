@@ -583,7 +583,7 @@ module WIT = struct
          let@ t' = infer t' in
          let@ item_bt = match IT.bt t' with
            | Tuple bts ->
-              begin match List.Old.nth_opt bts n with
+              begin match List.nth bts n with
               | Some t -> return t
               | None ->
                  let expected = string_of_int n ^ "-tuple" in

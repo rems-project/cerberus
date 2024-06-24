@@ -404,7 +404,7 @@ let evaluate_fun mu_fun args =
         Option.bind (IT.is_bits_const arg2) (fun (bits_info, i) ->
             assert (BaseTypes.fits_range bits_info i);
             if Z.lt i (Z.of_int (List.length xs)) && Z.leq Z.zero i
-            then Option.bind (List.Old.nth_opt xs (Z.to_int i)) (fun it -> Some (`Result_IT it))
+            then Option.bind (List.nth xs (Z.to_int i)) (fun it -> Some (`Result_IT it))
             else None
         ))
      | _ -> None

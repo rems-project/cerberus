@@ -914,7 +914,7 @@ let lc_to_coq_check_triv loc global list_mono = function
       let@ enc = mk_forall global list_mono loc sym bt v in
       return (Some (Pp.parens enc))
 
-let nth_str_eq n s ss = Option.equal String.equal (List.Old.nth_opt ss n) (Some s)
+let nth_str_eq n s ss = Option.equal String.equal (List.nth ss n) (Some s)
 
 let types_spec types =
   let open Pp in
