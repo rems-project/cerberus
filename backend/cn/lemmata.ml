@@ -224,7 +224,7 @@ let scan (ftyp : AT.lemmat) =
 
 let struct_layout_field_bts xs =
   let open Memory in
-  let xs2 = List.Old.filter (fun x -> Option.is_some x.member_or_padding) xs
+  let xs2 = List.filter ~f:(fun x -> Option.is_some x.member_or_padding) xs
     |> List.Old.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
     |> List.filter_map ~f:(fun x -> x.member_or_padding)
   in
@@ -314,7 +314,7 @@ let rec new_nm s nms i =
 
 let alpha_rename_if_pp_same s body =
   let vs = IT.free_vars body in
-  let other_nms = List.Old.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
+  let other_nms = List.filter ~f:(fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
     |> List.map ~f:Sym.pp_string in
   if List.Old.exists (String.equal (Sym.pp_string s)) other_nms
   then begin

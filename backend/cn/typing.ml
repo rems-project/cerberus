@@ -526,7 +526,7 @@ let do_check_model loc m prop =
   let@ global = get_global () in
   let vs = Context.(
     (SymMap.bindings ctxt.computational @ SymMap.bindings ctxt.logical)
-    |> List.Old.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
+    |> List.filter ~f:(fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
     |> List.map ~f:(fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc))
   ) in
   let here = Locations.other __FUNCTION__ in
@@ -782,7 +782,7 @@ let prev_models_with loc prop =
   let@ () = sync_unfold_resources loc in
   let@ ms = get_just_models () in
   let@ has_prop = model_has_prop () in
-  return (List.Old.filter (has_prop prop) ms)
+  return (List.filter ~f:(has_prop prop) ms)
 
 let model_with loc prop =
   let@ () = sync_unfold_resources loc in

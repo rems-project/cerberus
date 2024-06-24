@@ -1,7 +1,7 @@
 let rec group_toplevel_defs new_list = function
   | [] -> new_list
   | (loc, strs) :: xs ->
-      let matching_elems = List.Old.filter (fun (toplevel_loc, _) ->
+      let matching_elems = List.filter ~f:(fun (toplevel_loc, _) ->
         loc == toplevel_loc
       ) new_list in
       if List.Old.is_empty matching_elems then
@@ -9,7 +9,7 @@ let rec group_toplevel_defs new_list = function
       else
         (* Unsafe *)
         let (_, toplevel_strs) = List.nth_exn matching_elems 0 in
-        let non_matching_elems = List.Old.filter (fun (toplevel_loc, _) ->
+        let non_matching_elems = List.filter ~f:(fun (toplevel_loc, _) ->
           loc != toplevel_loc
         ) new_list in
         group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs
@@ -33,7 +33,7 @@ let rec open_auxilliary_files source_filename prefix included_filenames already_
     end
 
 let filter_injs_by_filename inj_pairs fn =
-  List.Old.filter (fun (loc, _) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) inj_pairs
+  List.filter ~f:(fun (loc, _) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) inj_pairs
 
 let rec inject_injs_to_multiple_files ail_prog in_stmt_injs block_return_injs cn_header = function
   | [] -> ()
@@ -74,8 +74,8 @@ let copy_source_dir_files_into_output_dir filename already_opened_fns_and_ocs pr
   let source_dir_path = String.concat "/" (remove_last_elem split_str_list) in 
   let source_dir_all_files_without_path = Array.to_list (Sys.readdir source_dir_path) in
   let source_dir_all_files_with_path = List.map ~f:(fun fn -> String.concat "/" [source_dir_path; fn]) source_dir_all_files_without_path in 
-  let remaining_source_dir_files = List.Old.filter (fun fn -> not (List.Old.mem String.equal fn source_files_already_opened)) source_dir_all_files_with_path in
-  let remaining_source_dir_files = List.Old.filter (fun fn -> List.Old.mem String.equal (Filename.extension fn) [".c"; ".h"]) remaining_source_dir_files in
+  let remaining_source_dir_files = List.filter ~f:(fun fn -> not (List.Old.mem String.equal fn source_files_already_opened)) source_dir_all_files_with_path in
+  let remaining_source_dir_files = List.filter ~f:(fun fn -> List.Old.mem String.equal (Filename.extension fn) [".c"; ".h"]) remaining_source_dir_files in
   let remaining_source_dir_files_opt = List.map ~f:(fun str -> Some str) remaining_source_dir_files in
   let remaining_fns_and_ocs = open_auxilliary_files filename prefix remaining_source_dir_files_opt [] in 
   let read_file file =

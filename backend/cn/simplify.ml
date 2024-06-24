@@ -83,7 +83,7 @@ module IndexTerms = struct
       let b_elems = dest_int_addition (true, ITSet.empty) b |> fst |> List.map ~f:fst in
       let repeated = List.Old.sort IT.compare (a_elems @ b_elems)
           |> group IT.equal
-          |> List.Old.filter (fun xs -> List.length xs >= 2)
+          |> List.filter ~f:(fun xs -> List.length xs >= 2)
           |> List.map ~f:List.Old.hd |> ITSet.of_list in
       let (a_xs, a_r) = dest_int_addition (false, repeated) a in
       let (b_xs, b_r) = dest_int_addition (false, repeated) b in
@@ -91,7 +91,7 @@ module IndexTerms = struct
       let xs = List.Old.sort (fun a b -> IT.compare (fst a) (fst b)) (a_xs_neg @ b_xs)
           |> group (fun a b -> IT.equal (fst a) (fst b))
           |> List.map ~f:(fun xs -> (fst (List.Old.hd xs), List.Old.fold_left Z.add Z.zero (List.map ~f:snd xs)))
-          |> List.Old.filter (fun t -> not (Z.equal (snd t) Z.zero))
+          |> List.filter ~f:(fun t -> not (Z.equal (snd t) Z.zero))
       in
       let mul_z t i = if Z.equal i Z.one then t
           else if IT.equal z1 t then z_ i loc else mul_ (t, z_ i loc) loc in

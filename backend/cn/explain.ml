@@ -61,7 +61,7 @@ let relevant_predicate_clauses global name req =
         | None -> []
       ) defs
   in
-  List.Old.filter (fun (nm, c) -> 
+  List.filter ~f:(fun (nm, c) -> 
       Sym.equal nm name
       || clause_has_resource req c
     ) clauses

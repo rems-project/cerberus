@@ -304,7 +304,7 @@ let in_stmt_injs xs num_headers =
       ; kind= InStmt (List.length strs, String.concat "\n" strs) }
   )
   xs
-  (* (List.Old.filter (fun (loc, _) -> Cerb_location.from_main_file loc) xs) *)
+  (* (List.filter ~f:(fun (loc, _) -> Cerb_location.from_main_file loc) xs) *)
 
 (* build the injections for the pre/post conditions of a C function *)
 let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =

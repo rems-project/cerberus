@@ -136,7 +136,7 @@ let rec investigate_term cfg t =
 
 and investigate_eq_side _cfg (side_nm, t, t2) =
   let@ eq_group = value_eq_group None t in
-  let xs = ITSet.elements eq_group |> List.Old.filter (fun x -> not (IT.equal t x)) in
+  let xs = ITSet.elements eq_group |> List.filter ~f:(fun x -> not (IT.equal t x)) in
   let open Pp in
   let clique_opts = match xs with
     | [] ->
@@ -163,7 +163,7 @@ and investigate_trans_eq t cfg =
     | Some (x, y) -> if BT.equal (IT.bt x) (IT.bt t) then [x; y] @ acc else acc
   ) [] [] cs in
   let opt_xs = eq_xs
-    |> List.Old.filter (fun x -> Option.is_some (split_eq t x))
+    |> List.filter ~f:(fun x -> Option.is_some (split_eq t x))
     |> ITSet.of_list |> ITSet.elements in
   let opt_of x =
     let eq = (IT.eq_ (t, x)) @@ Locations.other __FUNCTION__ in

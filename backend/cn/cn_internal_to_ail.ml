@@ -175,7 +175,7 @@ let generate_record_sym sym members =
     | None ->   
       let map_bindings = RecordMap.bindings !records in
       (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
-      let eq_members_bindings = List.Old.filter (fun (k, v) -> members_equal k members) map_bindings in
+      let eq_members_bindings = List.filter ~f:(fun (k, v) -> members_equal k members) map_bindings in
       match eq_members_bindings with 
       | [] -> 
         (* First time reaching record of this type - add to map *)
@@ -822,7 +822,7 @@ let rec cn_to_ail_expr_aux_internal
   | StructUpdate ((struct_term, m), new_val) ->
     let struct_tag = match IT.bt struct_term with | BT.Struct tag -> tag | _ -> failwith "Cannot do StructUpdate on non-struct term" in 
     let tag_defs = Pmap.bindings_list (CF.Tags.tagDefs ()) in 
-    let matching_tag_defs = List.Old.filter (fun (sym, (_, def)) -> Sym.equal struct_tag sym) tag_defs in 
+    let matching_tag_defs = List.filter ~f:(fun (sym, (_, def)) -> Sym.equal struct_tag sym) tag_defs in 
     let (_, (_, tag_def)) = if List.Old.is_empty matching_tag_defs then failwith "Struct not found in tagDefs" else List.nth_exn matching_tag_defs 0 in 
     (match tag_def with 
       | C.StructDef (members, _) -> 
@@ -885,9 +885,9 @@ let rec cn_to_ail_expr_aux_internal
       match dts with 
         | [] -> failwith "Datatype not found" (* Not found *)
         | dt :: dts' ->
-          let matching_cases = List.Old.filter (fun (c_sym, members) -> Sym.equal c_sym constr_sym) dt.cn_dt_cases in
+          let matching_cases = List.filter ~f:(fun (c_sym, members) -> Sym.equal c_sym constr_sym) dt.cn_dt_cases in
           if List.length matching_cases != 0 then
-            let (_, members) = List.Old.hd matching_cases in
+            let (_, members) = List.hd_exn matching_cases in
             (dt, members)
           else 
             find_dt_from_constructor constr_sym dts'
@@ -1075,7 +1075,7 @@ let rec cn_to_ail_expr_aux_internal
               else
                 match IT.bt term with
                   | BT.Datatype sym -> 
-                      let cn_dt = List.Old.filter (fun dt -> Sym.equal sym dt.cn_dt_name) dts in 
+                      let cn_dt = List.filter ~f:(fun dt -> Sym.equal sym dt.cn_dt_name) dts in 
                       (match cn_dt with 
                         | [] -> failwith "Datatype not found"
                         | dt :: _ ->
@@ -1643,7 +1643,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
   let calculate_return_type = function 
   | ResourceTypes.Owned (sct, _) -> (Sctypes.to_ctype sct, BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct)
   | PName pname -> 
-    let matching_preds = List.Old.filter (fun (pred_sym', def) -> Sym.equal pname pred_sym') preds in
+    let matching_preds = List.filter ~f:(fun (pred_sym', def) -> Sym.equal pname pred_sym') preds in
     let (pred_sym', pred_def') = match matching_preds with 
       | [] -> failwith "Predicate not found"
       | p :: _ -> p
@@ -1897,7 +1897,7 @@ let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition))
   let params = List.map ~f:(fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) lf_def.args in
   let (param_syms, param_types) = List.Old.split params in
   let param_types = List.map ~f:(fun t -> (empty_qualifiers, t, false)) param_types in
-  let matched_cn_functions = List.Old.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> Sym.equal cn_fun.cn_func_name fn_sym) cn_functions in
+  let matched_cn_functions = List.filter ~f:(fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> Sym.equal cn_fun.cn_func_name fn_sym) cn_functions in
   (* Unsafe - check if list has an element *)
   let loc = (List.nth_exn matched_cn_functions 0).cn_func_magic_loc in 
   (* Generating function declaration *)
@@ -1983,7 +1983,7 @@ let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definit
   (* Generating function definition *)
   let def = (pred_sym, (rp_def.loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (bs, pred_body)))) in
 
-  let matched_cn_preds = List.Old.filter (fun (cn_pred : (A.ail_identifier, C.ctype) Cn.cn_predicate) -> Sym.equal cn_pred.cn_pred_name pred_sym) cn_preds in
+  let matched_cn_preds = List.filter ~f:(fun (cn_pred : (A.ail_identifier, C.ctype) Cn.cn_predicate) -> Sym.equal cn_pred.cn_pred_name pred_sym) cn_preds in
   (* Unsafe - check if list has an element *)
   let loc = (List.nth_exn matched_cn_preds 0).cn_pred_magic_loc in 
   (((loc, decl), def), ail_record_opt)

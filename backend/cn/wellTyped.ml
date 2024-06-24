@@ -1467,7 +1467,7 @@ let integer_annot annots =
 
 
 let remove_integer_annot annots =
-  List.Old.filter (fun a -> Option.is_none (is_integer_annot a)) annots
+  List.filter ~f:(fun a -> Option.is_none (is_integer_annot a)) annots
 
 let remove_integer_annot_expr (M_Expr (loc, annots, bty, e_)) =
   M_Expr (loc, remove_integer_annot annots, bty, e_)

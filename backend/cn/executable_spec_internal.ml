@@ -25,7 +25,7 @@ let generate_ail_stat_strs ?(with_newline=false) (bs, (ail_stats_ : CF.GenTypes.
     | _ -> false
   in
 
-  let ail_stats_ = List.Old.filter (fun s -> not (is_assert_true s)) ail_stats_ in
+  let ail_stats_ = List.filter ~f:(fun s -> not (is_assert_true s)) ail_stats_ in
   let doc = List.map ~f:(fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s)) ail_stats_ in
   let doc = List.map ~f:(fun d ->
     let newline = if with_newline then PPrint.hardline else PPrint.empty in
@@ -94,7 +94,7 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
 
   let in_stmt = List.map ~f:(fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
   let return_injs = List.filter_map ~f:(fun (loc, e_opt, bs, ss) -> match e_opt with | Some e_opt' -> Some (loc, e_opt', bs, ss) | None -> None ) block_ownership_injs in 
-  let non_return_injs = List.Old.filter (fun (_, e_opt, _, _) -> Option.is_none e_opt) block_ownership_injs in 
+  let non_return_injs = List.filter ~f:(fun (_, e_opt, _, _) -> Option.is_none e_opt) block_ownership_injs in 
   let block_ownership_stmts = List.map ~f:(fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss))) non_return_injs in 
   let block_ownership_stmts = List.map ~f:(fun (loc, strs) -> (loc, [String.concat "\n" strs])) block_ownership_stmts in 
   let return_ownership_stmts = List.map ~f:(fun (loc, e_opt, bs, ss) -> (loc, e_opt, generate_ail_stat_strs ~with_newline:true (bs, ss))) return_injs in 
@@ -231,9 +231,9 @@ let bt_is_record_or_tuple = function
   | _ -> false
 
 let fns_and_preds_with_record_rt (funs, preds) =
-  let funs' = List.Old.filter (fun (_, (def : LogicalFunctions.definition)) -> bt_is_record_or_tuple def.return_bt) funs in
+  let funs' = List.filter ~f:(fun (_, (def : LogicalFunctions.definition)) -> bt_is_record_or_tuple def.return_bt) funs in
   let fun_syms = List.map ~f:(fun (fn_sym, _) -> fn_sym) funs' in
-  let preds' = List.Old.filter (fun (_, (def : ResourcePredicates.definition)) -> bt_is_record_or_tuple def.oarg_bt) preds in
+  let preds' = List.filter ~f:(fun (_, (def : ResourcePredicates.definition)) -> bt_is_record_or_tuple def.oarg_bt) preds in
   let pred_syms = List.map ~f:(fun (pred_sym, _) -> pred_sym) preds' in
   (fun_syms, pred_syms)
 
@@ -345,7 +345,7 @@ let generate_conversion_and_equality_functions (sigm : CF.GenTypes.genTypeCatego
 
 
 let generate_ownership_global_assignments (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) = 
-  let main_fn_sym_list = List.Old.filter (fun (fn_sym, _) -> String.equal "main" (Sym.pp_string fn_sym)) sigm.function_definitions in 
+  let main_fn_sym_list = List.filter ~f:(fun (fn_sym, _) -> String.equal "main" (Sym.pp_string fn_sym)) sigm.function_definitions in 
   match main_fn_sym_list with 
     | [] -> failwith "CN-exec: No main function so ownership globals cannot be initialised"
     | (main_sym, _) :: _ ->

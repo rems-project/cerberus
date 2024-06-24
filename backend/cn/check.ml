@@ -967,7 +967,7 @@ let compute_used loc (prev_rs, prev_ix) (post_rs, _) =
   let post_ixs = IntSet.of_list (List.map ~f:snd post_rs) in
   (* restore previous resources that have disappeared from the context, since they
      might participate in a race *)
-  let all_rs = post_rs @ List.Old.filter (fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
+  let all_rs = post_rs @ List.filter ~f:(fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
   ListM.fold_leftM (fun (rs, ws) (r, i) ->
     let@ h = res_history loc i in
     if h.last_written_id >= prev_ix
@@ -1895,7 +1895,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
 
 let check_c_functions funs =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
-  let str_fsyms s = match List.Old.filter (matches_str s) (List.map ~f:fst funs) with
+  let str_fsyms s = match List.filter ~f:(matches_str s) (List.map ~f:fst funs) with
     | [] ->
       Pp.warn_noloc (!^"function" ^^^ !^s ^^^ !^"not found");
       []
@@ -1906,9 +1906,9 @@ let check_c_functions funs =
   let only = strs_fsyms (snd (! skip_and_only)) in
   let only_funs = match (snd (! skip_and_only)) with
     | [] -> funs
-    | _ss -> List.Old.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
+    | _ss -> List.filter ~f:(fun (fsym, _) -> SymSet.mem fsym only) funs
   in
-  let selected_funs = List.Old.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs in
+  let selected_funs = List.filter ~f:(fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs in
   let number_entries = List.length selected_funs in
   match !batch with
   | false ->
