@@ -61,7 +61,7 @@ let pointer_facts =
   let rec aux acc = function
     | [] -> acc
     | r :: rs ->
-       let acc = derived_lc1 r @ (List.Old.concat_map (derived_lc2 r) rs) @ acc in
+       let acc = derived_lc1 r @ (List.concat_map ~f:(derived_lc2 r) rs) @ acc in
        aux acc rs
   in
   fun resources -> aux [] resources

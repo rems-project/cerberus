@@ -518,7 +518,7 @@ module Make (Config: CONFIG) = struct
 
   let pp_annots annots =
     Pp.flow_map (Pp.break 0) (fun annot -> !^"{-#" ^^ annot ^^ !^"#-}")
-      (List.Old.concat_map pp_str_annot annots)
+      (List.concat_map ~f:pp_str_annot annots)
 
   let do_annots annot doc = pp_annots annot ^^ doc
 

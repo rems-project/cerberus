@@ -129,4 +129,6 @@ let combine [@deprecated "Use List.zip_exn"] = combine
 
 let exists [@deprecated "Use List.exists xs ~f"] = exists
 
+let concat_map [@deprecated "Use List.concat_map xs ~f"] = concat_map
+
 end

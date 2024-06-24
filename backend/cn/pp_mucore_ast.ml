@@ -122,7 +122,7 @@ module PP = struct
         | annots, Dnode (nm, xs) ->
             Dnode (nm, xs @ [Dnode (pp_ctor "Annot",
                 List.map ~f:(fun ann -> Dleaf ann)
-                    (List.Old.concat_map Pp_mucore.Basic.pp_str_annot annots))])
+                    (List.concat_map ~f:Pp_mucore.Basic.pp_str_annot annots))])
         | _, dtree -> dtree
     in
     self pexpr

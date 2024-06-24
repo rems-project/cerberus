@@ -55,7 +55,7 @@ let relevant_predicate_clauses global name req =
   let open ResourcePredicates in
   let clauses =
     let defs = SymMap.bindings global.resource_predicates in
-    List.Old.concat_map (fun (nm, def) ->
+    List.concat_map ~f:(fun (nm, def) ->
         match def.clauses with
         | Some clauses -> List.map ~f:(fun c -> (nm, c)) clauses
         | None -> []
@@ -89,7 +89,7 @@ end
 let subterms_without_bound_variables bindings = 
   fold_subterms ~bindings (fun bindings acc t ->
       let pats = List.map ~f:fst bindings in
-      let bound = List.Old.concat_map bound_by_pattern pats in
+      let bound = List.concat_map ~f:bound_by_pattern pats in
       let bound = SymSet.of_list (List.map ~f:fst bound) in
       if SymSet.(is_empty (inter bound (IT.free_vars t))) 
       then ITSet.add t acc

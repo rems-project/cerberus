@@ -206,7 +206,7 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
   | CNExpr_memberupdates (e, updates) ->
      free_in_exprs (e :: List.map ~f:snd updates)
   | CNExpr_arrayindexupdates (e, updates) ->
-     free_in_exprs (e :: List.Old.concat_map (fun (e1, e2) -> [e1; e2]) updates)
+     free_in_exprs (e :: List.concat_map ~f:(fun (e1, e2) -> [e1; e2]) updates)
   | CNExpr_binop (_binop, e1, e2) ->
      free_in_exprs [e1; e2]
   | CNExpr_sizeof _ ->
@@ -394,7 +394,7 @@ let add_datatype_info env (dt : cn_datatype) =
                              ^^^ !^"within datatype definition.")}
   in
   let@ all_params = ListM.fold_leftM add_param StringMap.empty
-    (List.Old.concat_map snd dt.cn_dt_cases) in
+    (List.concat_map ~f:snd dt.cn_dt_cases) in
   let add_constr env (cname, params) =
     let c_params =
       List.map ~f:(fun (nm, ty) ->

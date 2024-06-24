@@ -1901,7 +1901,7 @@ let check_c_functions funs =
       []
     | ss -> ss
   in
-  let strs_fsyms ss = SymSet.of_list (List.Old.concat_map str_fsyms ss) in
+  let strs_fsyms ss = SymSet.of_list (List.concat_map ~f:str_fsyms ss) in
   let skip = strs_fsyms (fst (! skip_and_only)) in
   let only = strs_fsyms (snd (! skip_and_only)) in
   let only_funs = match (snd (! skip_and_only)) with
@@ -2014,7 +2014,7 @@ let record_and_check_datatypes datatypes =
       let@ () =
         add_datatype s {
             dt_constrs = List.map ~f:fst cases;
-            dt_all_params = List.Old.concat_map snd cases
+            dt_all_params = List.concat_map ~f:snd cases
           }
       in
       ListM.iterM (fun (c,c_params) ->

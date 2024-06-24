@@ -2296,7 +2296,7 @@ module WDT = struct
               assert false
           else
              return (IdSet.add id already)
-        ) IdSet.empty (List.Old.concat_map snd cases)
+        ) IdSet.empty (List.concat_map ~f:snd cases)
     in
     let@ cases =
       ListM.mapM (fun (c, args) ->
@@ -2323,10 +2323,10 @@ module WDT = struct
     bt :: BT.contained bt
 
   let bts_in_dt_case (_constr, args) =
-    List.Old.concat_map bts_in_dt_constructor_argument args
+    List.concat_map ~f:bts_in_dt_constructor_argument args
 
   let bts_in_dt_definition { loc = _; cases } =
-    List.Old.concat_map bts_in_dt_case cases
+    List.concat_map ~f:bts_in_dt_case cases
 
   let dts_in_dt_definition dt_def =
     List.filter_map ~f:BT.is_datatype_bt (bts_in_dt_definition dt_def)

@@ -58,7 +58,7 @@ let rec bound_by_pattern (Pat (pat_, bt, _)) =
   | PSym s -> [(s, bt)]
   | PWild -> []
   | PConstructor (_s, args) ->
-     List.Old.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
+     List.concat_map ~f:(fun (_id, pat) -> bound_by_pattern pat) args
 
 let rec free_vars_ : 'a. 'a term_ -> SymSet.t = function
   | Const _ -> SymSet.empty
@@ -1002,7 +1002,7 @@ let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) =
   let arr_lists = List.filter_map ~f:(fun (bs, it) -> match term it with
     | ArrayToList _ -> Some (bs, (it, bt it))
     | _ -> None) binders_terms in
-  List.Old.concat_map (fun (bs1, (n, d, bt1)) -> List.filter_map ~f:(fun (bs2, (xs, bt2)) ->
+  List.concat_map ~f:(fun (bs1, (n, d, bt1)) -> List.filter_map ~f:(fun (bs2, (xs, bt2)) ->
     if BT.equal bt1 bt2
     then wrap_bindings_match (bs1 @ bs2) (bool_ true here) (nth_array_to_list_fact n xs d)
     else None) arr_lists

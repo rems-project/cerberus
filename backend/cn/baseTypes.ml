@@ -90,7 +90,7 @@ let rec contained : t -> t list =
   | Tuple bts -> bts @ containeds bts
   | Set bt -> bt :: contained bt
 
-and containeds bts = List.Old.concat_map contained bts
+and containeds bts = List.concat_map ~f:contained bts
 
 
 
