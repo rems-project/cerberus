@@ -141,4 +141,6 @@ let mapi [@deprecated "Use List.mapi xs ~f"] = mapi
 
 let iter [@deprecated "Use List.iter xs ~f"] = iter
 
+let for_all2 [@deprecated "Use List.for_all2_exn xs ys ~f"] = for_all2
+
 end

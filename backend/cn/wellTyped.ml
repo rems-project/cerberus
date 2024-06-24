@@ -258,7 +258,7 @@ module WIT = struct
        Some (List.map ~f:(fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.c_params @ pats)
     | Pat (PConstructor (constr', args), _, _) :: pats
          when Sym.equal constr constr' ->
-       assert (List.Old.for_all2 (fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
+       assert (List.for_all2_exn ~f:(fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
        Some (List.map ~f:snd args @ pats)
     | Pat (PConstructor (_constr', _args), _, _) :: _pats ->
        None
@@ -305,7 +305,7 @@ module WIT = struct
       | Pat (PSym _, _, _), _ -> true
       | Pat (PConstructor (s1, ps1), _, _), Pat (PConstructor (s2, ps2), _, _)
         when (Sym.equal s1 s2 && List.Old.equal Id.equal (List.map ~f:fst ps1) (List.map ~f:fst ps2)) ->
-          List.Old.for_all2 covers (List.map ~f:snd ps1) (List.map ~f:snd ps2)
+          List.for_all2_exn ~f:covers (List.map ~f:snd ps1) (List.map ~f:snd ps2)
       | _, _ -> false
     in
     let@ _ = ListM.fold_leftM (fun prev (Pat (_, _, pat_loc) as pat) ->

@@ -177,7 +177,7 @@ and check_struct (loc : loc)
                  (member_values : (Id.t * Sctypes.t * mem_value) list) : IT.t m =
   let@ layout = get_struct_decl loc tag in
   let member_types = Memory.member_types layout in
-  assert (List.Old.for_all2 (fun (id,ct) (id',ct',_mv') -> Id.equal id id' && Sctypes.equal ct ct')
+  assert (List.for_all2_exn ~f:(fun (id,ct) (id',ct',_mv') -> Id.equal id id' && Sctypes.equal ct ct')
             member_types member_values);
   let@ member_its =
     ListM.mapM (fun (member, sct, mv) ->
