@@ -331,10 +331,10 @@ let it_adjust (global : Global.t) it =
     let loc = IT.loc t in
     match IT.term t with
         | IT.Binop (And, x1, x2) ->
-            let xs = List.map ~f:f [x1; x2] |> List.Old.partition IT.is_true |> snd in
+            let xs = List.map ~f:f [x1; x2] |> List.partition_tf ~f:IT.is_true |> snd in
             IT.and_ xs loc
         | IT.Binop (Or, x1, x2) ->
-            let xs = List.map ~f:f [x1; x2] |> List.Old.partition IT.is_false |> snd in
+            let xs = List.map ~f:f [x1; x2] |> List.partition_tf ~f:IT.is_false |> snd in
             IT.or_ xs loc
         | IT.Binop (EQ, x, y) ->
             let x = f x in
@@ -1099,9 +1099,9 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
       ) lemmata
     |> List.Old.sort (fun x (y : scanned) -> cmp_loc_line_numbers x.loc y.loc)
   in
-  let (impure, pure) = List.Old.partition (fun x -> Option.is_some x.scan_res.res) scan_lemmata in
-  let (coerce, skip) = List.Old.partition
-        (fun x -> Option.is_some x.scan_res.res_coerce) impure in
+  let (impure, pure) = List.partition_tf ~f:(fun x -> Option.is_some x.scan_res.res) scan_lemmata in
+  let (coerce, skip) = List.partition_tf
+        ~f:(fun x -> Option.is_some x.scan_res.res_coerce) impure in
   List.Old.iter (fun x ->
     Pp.progress_simple "skipping trusted fun with resource"
         (Sym.pp_string x.sym ^ ": " ^ (Option.get x.scan_res.res))

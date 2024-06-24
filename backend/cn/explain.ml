@@ -190,7 +190,7 @@ let state ctxt model_with_q extras =
     in
 
     let interesting, uninteresting = 
-      List.Old.partition (fun (it, _entry) ->
+      List.partition_tf ~f:(fun (it, _entry) ->
           match IT.bt it with
           | BT.Unit -> false
           | BT.Loc -> false
@@ -205,7 +205,7 @@ let state ctxt model_with_q extras =
 
   let constraints =
     let interesting, uninteresting = 
-      List.Old.partition (fun lc ->
+      List.partition_tf ~f:(fun lc ->
           match lc with
           (* | LC.T (IT (Aligned _, _, _)) -> false *)
           | LC.T (IT (Representable _, _, _)) -> false
@@ -220,10 +220,10 @@ let state ctxt model_with_q extras =
   let resources =
     let (same_res, diff_res) = match extras.request with
       | None -> ([], get_rs ctxt)
-      | Some req -> List.Old.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
+      | Some req -> List.partition_tf ~f:(fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
     in
     let interesting_diff_res, uninteresting_diff_res = 
-      List.Old.partition (fun (ret, _o) ->
+      List.partition_tf ~f:(fun (ret, _o) ->
           match ret with
           | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
           | _ -> true

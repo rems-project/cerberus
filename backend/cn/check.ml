@@ -1030,7 +1030,7 @@ let instantiate loc filter arg =
   let extra_assumptions1 = List.filter_map ~f:(function
         | Forall ((s, bt), t) when filter t -> Some ((s, bt), t)
         | _ -> None) (LCSet.elements constraints) in
-  let extra_assumptions2, type_mismatch = List.Old.partition (fun ((_, bt), _) ->
+  let extra_assumptions2, type_mismatch = List.partition_tf ~f:(fun ((_, bt), _) ->
         BT.equal bt (IT.bt arg_it)) extra_assumptions1 in
   let extra_assumptions = List.map ~f:(fun ((s, _), t) ->
         LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t)) extra_assumptions2
@@ -1786,7 +1786,7 @@ let check_tagdefs tagDefs =
 let record_and_check_logical_functions funs =
 
   let recursive, _nonrecursive =
-    List.Old.partition (fun (_, def) ->
+    List.partition_tf ~f:(fun (_, def) ->
         LogicalFunctions.is_recursive def
       ) funs
   in
