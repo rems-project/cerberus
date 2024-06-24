@@ -273,7 +273,7 @@ let generate_c_functions_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSynt
   let doc_1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_1) in
   let inline_decl_docs = List.map ~f:(fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) decls in
   let inline_decl_strs = List.map ~f:(fun doc -> [CF.Pp_utils.to_plain_pretty_string doc]) inline_decl_docs in
-  let locs_and_decls' = List.Old.combine locs inline_decl_strs in
+  let locs_and_decls' = List.zip_exn locs inline_decl_strs in
   (* let modified_prog_2 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = decls; function_definitions = []} in *)
   (* let doc_2 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_2) in *)
   let ail_records = List.map ~f:(fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
@@ -301,7 +301,7 @@ let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyn
   let pred_defs_str =
   CF.Pp_utils.to_plain_pretty_string doc1 in
   let pred_locs_and_decls = List.map ~f:(fun (loc, (sym, (_, _, decl))) ->
-     (loc, [CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)])) (List.Old.combine locs decls) in
+     (loc, [CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)])) (List.zip_exn locs decls) in
   let ail_records = List.map ~f:(fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let record_triple_str = generate_record_strs sigm (List.concat ail_records) in
   ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str)

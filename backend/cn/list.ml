@@ -125,4 +125,6 @@ let split [@deprecated "Use List.unzip"] = split
 
 let rev [@deprecated "Use List.rev"] = rev
 
+let combine [@deprecated "Use List.zip_exn"] = combine
+
 end

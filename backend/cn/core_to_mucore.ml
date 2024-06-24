@@ -1176,7 +1176,7 @@ let normalise_label
             loc
             env
             st
-            (List.Old.combine lt label_args)
+            (List.zip_exn lt label_args)
             (accesses, desugared_inv)
         in
         (* let lt =  *)
@@ -1209,7 +1209,7 @@ let normalise_label
 let add_spec_arg_renames loc args arg_cts (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec) env =
   List.Old.fold_right (fun ((fun_sym, _), (ct, (spec_sym, _))) env ->
       C.add_renamed_computational spec_sym fun_sym (Memory.sbt_of_sct (convert_ct loc ct)) env)
-    (List.Old.combine args (List.Old.combine arg_cts spec.cn_spec_args)) env
+    (List.zip_exn args (List.zip_exn arg_cts spec.cn_spec_args)) env
 
 let normalise_fun_map_decl
       ~inherit_loc
@@ -1303,7 +1303,7 @@ let normalise_fun_map_decl
          )
          loc
          env
-         (List.Old.combine (List.Old.combine ail_args arg_cts) args)
+         (List.zip_exn (List.zip_exn ail_args arg_cts) args)
          (accesses, requires)
      in
      (* let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in *)
@@ -1325,7 +1325,7 @@ let normalise_fun_map_decl
                (spec.cn_spec_ret_name, ret_ct) ([], spec.cn_spec_ensures)
            in
            return returned
-         ) loc env (List.Old.combine spec.cn_spec_args (List.map ~f:snd arg_cts)) spec.cn_spec_requires
+         ) loc env (List.zip_exn spec.cn_spec_args (List.map ~f:snd arg_cts)) spec.cn_spec_requires
        in
        let ft = at_of_arguments Tools.id args_and_rt in
        return (Some (M_ProcDecl (loc, Some ft), []))

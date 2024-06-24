@@ -235,7 +235,7 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
 
   output_to_oc oc source_file_strs_list;
   
-  let c_datatypes_with_fn_prots = List.Old.combine c_datatype_defs c_datatype_equality_fun_decls in
+  let c_datatypes_with_fn_prots = List.zip_exn  c_datatype_defs c_datatype_equality_fun_decls in
   let c_datatypes_locs_and_strs = List.map ~f:(fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
   
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in

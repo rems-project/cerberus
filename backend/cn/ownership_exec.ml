@@ -266,7 +266,7 @@ let get_c_fn_local_ownership_checking_injs sym (sigm : CF.GenTypes.genTypeCatego
   match (List.Old.assoc_opt Sym.equal sym sigm.function_definitions, List.Old.assoc_opt Sym.equal sym sigm.declarations) with 
     | (Some (_, _, _, param_syms, fn_body), Some (_, _, Decl_function (_, _, param_types, _, _, _))) -> 
       let param_types = List.map ~f:(fun (_, ctype, _) -> ctype) param_types in
-      let params = List.Old.combine param_syms param_types in
+      let params = List.zip_exn param_syms param_types in
       let ownership_stats_pair = get_c_local_ownership_checking params in
       let block_ownership_injs = get_c_block_local_ownership_checking_injs fn_body in 
       (Some ownership_stats_pair, block_ownership_injs)

@@ -132,7 +132,7 @@ let rec add_pattern p v var_map =
     end in
     assert (List.length vs == List.length ps);
     ListM.fold_rightM (fun (p, v) var_map -> add_pattern p v var_map)
-      (List.Old.combine ps vs) var_map
+      (List.zip_exn ps vs) var_map
   | _ ->
     fail_n {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
         (Pp_mucore.Basic.pp_pattern p))}

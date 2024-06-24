@@ -130,7 +130,7 @@ let rec execCtypeEqual (C.Ctype (_, ty1)) (C.Ctype (_, ty2)) =
       execCtypeEqual ty1 ty2 && n1_opt == n2_opt
     | (Function ((qs1, ty1), params1, b1),
         Function ((qs2, ty2), params2, b2)) ->
-        let bools = List.map ~f:paramsEqual (List.Old.combine params1 params2) in 
+        let bools = List.map ~f:paramsEqual (List.zip_exn params1 params2) in 
         C.qualifiersEqual qs1 qs2 && execCtypeEqual ty1 ty2 &&
         List.Old.fold_left (&&) true bools && b1 == b2
     | (FunctionNoParams (qs1, ty1),

@@ -1094,7 +1094,7 @@ let rec cn_to_ail_expr_aux_internal
                             let bts = List.map ~f:cn_base_type_to_bt ts in
                             let new_constr_it = IT.IT (Sym count_sym, BT.Struct lc_sym, Cerb_location.unknown) in
                             let vars' = List.map ~f:(fun id -> T.StructMember (new_constr_it, id)) ids in
-                            let terms' = List.map ~f:(fun (var', bt') -> T.IT (var', bt', Cerb_location.unknown)) (List.Old.combine vars' bts) in
+                            let terms' = List.map ~f:(fun (var', bt') -> T.IT (var', bt', Cerb_location.unknown)) (List.zip_exn vars' bts) in
 
                             let (bindings, member_stats) = translate (count + 1) (terms' @ vs) cases' in
                             (* TODO: Check *)
@@ -1276,7 +1276,7 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
         let constr_struct_type = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct lc_constr_sym))) in
         let bindings = List.map ~f:(fun sym -> create_binding sym constr_struct_type) constr_syms in 
         let memberof_ptr_es = List.map ~f:(fun sym -> mk_expr A.(AilEmemberofptr (mk_expr (AilEident sym), Id.id "u"))) param_syms in
-        let decls = List.map ~f:(fun (constr_sym, e) -> A.(AilSdeclaration [(constr_sym, Some (mk_expr (AilEmemberof (e, constr_id))))])) (List.Old.combine constr_syms memberof_ptr_es) in
+        let decls = List.map ~f:(fun (constr_sym, e) -> A.(AilSdeclaration [(constr_sym, Some (mk_expr (AilEmemberof (e, constr_id))))])) (List.zip_exn constr_syms memberof_ptr_es) in
         (bindings, List.map ~f:mk_stmt decls)
     in
     let equality_expr = generate_equality_expr members x_constr_sym y_constr_sym in
@@ -1378,7 +1378,7 @@ let generate_struct_equality_function ?(is_record=false) dts ((sym, (loc, attrs,
       let param_type = (empty_qualifiers, mk_ctype (C.Pointer (empty_qualifiers, mk_ctype Void)), false) in
       let cast_param_syms = List.map ~f:(fun sym -> generate_sym_with_suffix ~suffix:"_cast" sym) param_syms in 
       let cast_bindings = List.map ~f:(fun sym -> create_binding sym cn_struct_ptr_ctype) cast_param_syms in 
-      let cast_assignments = List.map ~f:(fun (cast_sym, sym) -> A.(AilSdeclaration [cast_sym, Some (mk_expr (AilEcast (empty_qualifiers, cn_struct_ptr_ctype, (mk_expr (AilEident sym)))))])) (List.Old.combine cast_param_syms param_syms) in 
+      let cast_assignments = List.map ~f:(fun (cast_sym, sym) -> A.(AilSdeclaration [cast_sym, Some (mk_expr (AilEcast (empty_qualifiers, cn_struct_ptr_ctype, (mk_expr (AilEident sym)))))])) (List.zip_exn cast_param_syms param_syms) in 
       (* Function body *)
       let generate_member_equality (id, (_, _, _, ctype)) = 
         let _doc = (CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype) in 
@@ -1534,7 +1534,7 @@ let generate_record_equality_function dts (sym, (members: BT.member_types)) =
     let param_type = (empty_qualifiers, mk_ctype (C.Pointer (empty_qualifiers, mk_ctype Void)), false) in
     let cast_param_syms = List.map ~f:(fun sym -> generate_sym_with_suffix ~suffix:"_cast" sym) param_syms in 
     let cast_bindings = List.map ~f:(fun sym -> create_binding sym cn_struct_ptr_ctype) cast_param_syms in 
-    let cast_assignments = List.map ~f:(fun (cast_sym, sym) -> A.(AilSdeclaration [cast_sym, Some (mk_expr (AilEcast (empty_qualifiers, cn_struct_ptr_ctype, (mk_expr (AilEident sym)))))])) (List.Old.combine cast_param_syms param_syms) in 
+    let cast_assignments = List.map ~f:(fun (cast_sym, sym) -> A.(AilSdeclaration [cast_sym, Some (mk_expr (AilEcast (empty_qualifiers, cn_struct_ptr_ctype, (mk_expr (AilEident sym)))))])) (List.zip_exn cast_param_syms param_syms) in 
     (* Function body *)
     let generate_member_equality (id, bt) = 
       let args = List.map ~f:(fun cast_sym -> mk_expr (AilEmemberofptr (mk_expr (AilEident cast_sym), id))) cast_param_syms in 

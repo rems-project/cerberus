@@ -49,7 +49,7 @@ module Make(T : S) = struct
               (l1 : 'a list)
               (l2 : 'b list)
             : ('c list) m =
-      let l12 = List.Old.combine l1 l2 in
+      let l12 = List.zip_exn l1 l2 in
       mapM (Tools.uncurry f) l12
 
     let iteriM (f : (int -> 'a -> unit m)) (l : 'a list) : unit m =
