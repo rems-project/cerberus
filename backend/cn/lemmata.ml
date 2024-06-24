@@ -392,7 +392,7 @@ let tuple_syn xs =
   parens (flow (comma ^^^ !^ "") xs)
 
 let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.document) (ys : 'a list) =
-  let n_ys = List.Old.mapi (fun i y -> (i, y)) ys in
+  let n_ys = List.mapi ~f:(fun i y -> (i, y)) ys in
   match List.find ~f:(fun (_i, y) -> eq x y) n_ys with
     | None -> fail "tuple element not found" (pp x)
     | Some (i, _) -> (i, List.length ys)
@@ -513,7 +513,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
               hardline ^^ flow hardline c_lines)
       ) family in
       return (flow hardline
-          (List.Old.mapi (fun i doc -> !^ (if i = 0 then "  Inductive" else "    with") ^^
+          (List.mapi ~f:(fun i doc -> !^ (if i = 0 then "  Inductive" else "    with") ^^
               hardline ^^ doc) dt_eqs) ^^ !^ "." ^^ hardline)
   )) [dt_tag]
 

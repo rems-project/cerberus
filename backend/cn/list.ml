@@ -137,4 +137,6 @@ let partition [@deprecated "Use List.partition_tf xs ~f"] = partition
 
 let find_opt [@deprecated "Use List.find xs ~f"] = find_opt
 
+let mapi [@deprecated "Use List.mapi xs ~f"] = mapi
+
 end

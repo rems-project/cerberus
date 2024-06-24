@@ -93,7 +93,7 @@ module Make(T : S) = struct
           (map : ('k,'x) Pmap.map) (init: 'y) : 'y m =
       ListM.fold_leftM (fun y (i, (k, x)) -> f i k x y)
           init
-          (List.Old.mapi (fun i (k, x) -> (i, (k, x))) (Pmap.bindings_list map))
+          (List.mapi ~f:(fun i (k, x) -> (i, (k, x))) (Pmap.bindings_list map))
 
     let iterM f m =
       Pmap.fold (fun k v m -> let@ () = m in f k v)

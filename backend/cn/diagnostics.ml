@@ -20,7 +20,7 @@ let opt_key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 let continue_with (opts : opt list) cfg =
   assert (List.length opts <= String.length opt_key);
-  let xs = List.Old.mapi (fun i opt ->
+  let xs = List.mapi ~f:(fun i opt ->
     let c = String.get opt_key i in
     let s = String.make 1 c in
     Pp.print stdout (Pp.string (s ^ " to continue with:"));
