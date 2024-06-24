@@ -459,11 +459,11 @@ module IndexTerms = struct
        | t3, IT (ITE _, _, _) when is_c t3 -> aux (eq_ (b, a) the_loc)
        | IT (Tuple items1, _, _),
          IT (Tuple items2, _, _)  ->
-          aux (and_ (List.Old.map2 (fun a b -> eq__ a b the_loc) items1 items2) the_loc)
+          aux (and_ (List.map2_exn ~f:(fun a b -> eq__ a b the_loc) items1 items2) the_loc)
        | IT (Record members1, _, _),
          IT (Record members2, _, _)  ->
           assert (List.Old.for_all2 (fun x y -> Id.equal (fst x) (fst y)) members1 members2);
-          aux (and_ (List.Old.map2 (fun x y -> eq_ (snd x, snd y) the_loc) members1 members2) the_loc)
+          aux (and_ (List.map2_exn ~f:(fun x y -> eq_ (snd x, snd y) the_loc) members1 members2) the_loc)
        | _, _ ->
           eq_ (a, b) the_loc
        end

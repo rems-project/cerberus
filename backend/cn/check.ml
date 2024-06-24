@@ -617,7 +617,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
          ) member_types xs
      in
      check_pexprs (List.map ~f:snd xs) (fun vs ->
-     let members = List.Old.map2 (fun (nm, _) v -> (nm, v)) xs vs in
+     let members = List.map2_exn ~f:(fun (nm, _) v -> (nm, v)) xs vs in
      k (struct_ (tag, members) loc))
   | M_PEunion _ ->
      Cerb_debug.error "todo: PEunion"

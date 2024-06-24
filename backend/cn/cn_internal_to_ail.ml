@@ -70,12 +70,12 @@ let members_equal ms ms' =
   (if (List.length ms == 0) then true else (
   let (ids, cn_bts) = List.unzip  ms in
   let (ids', cn_bts') = List.unzip  ms' in
-  let ctypes_eq = List.Old.map2 (fun cn_bt cn_bt'->
+  let ctypes_eq = List.map2_exn ~f:(fun cn_bt cn_bt'->
     let bt = cn_base_type_to_bt cn_bt in
     let bt' = cn_base_type_to_bt cn_bt' in
     BT.equal bt bt') cn_bts cn_bts' in
   let ctypes_eq = List.Old.fold_left (&&) true ctypes_eq in
-  let ids_eq = List.Old.map2 Id.equal ids ids' in
+  let ids_eq = List.map2_exn ~f:Id.equal ids ids' in
   let ids_eq = List.Old.fold_left (&&) true ids_eq in
   ctypes_eq && ids_eq))
 

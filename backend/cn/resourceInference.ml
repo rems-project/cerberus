@@ -188,7 +188,7 @@ module General = struct
                 let here = Locations.other __FUNCTION__ in
                 let pmatch =
                   eq_ ((pointerToIntegerCast_ requested.pointer) here, (pointerToIntegerCast_ p'.pointer here)) here
-                  :: List.Old.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs
+                  :: List.map2_exn ~f:(fun x y -> eq__ x y here) requested.iargs p'.iargs
                 in
                 let took = and_ pmatch here in
                 let prov =
@@ -293,7 +293,7 @@ module General = struct
                 let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
                 let here = Locations.other __FUNCTION__ in
                 let pmatch = eq_ (requested.pointer, p'.pointer) here in
-                let iarg_match = and_ (List.Old.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs) here in
+                let iarg_match = and_ (List.map2_exn ~f:(fun x y -> eq__ x y here) requested.iargs p'.iargs) here in
                 let took = and_ [iarg_match; requested.permission; p'.permission] here in
                 begin match provable (LC.Forall (requested.q, not_ took here)) with
                 | `True -> continue

@@ -131,4 +131,5 @@ let exists [@deprecated "Use List.exists xs ~f"] = exists
 
 let concat_map [@deprecated "Use List.concat_map xs ~f"] = concat_map
 
+let map2 [@deprecated "Use List.map2_exn xs ~f"] = map2
 end

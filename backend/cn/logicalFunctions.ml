@@ -62,7 +62,7 @@ let pp_def nm def =
 
 
 let open_fun def_args def_body args =
-  let su = make_subst (List.Old.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
+  let su = make_subst (List.map2_exn ~f:(fun (s, _) arg -> (s, arg)) def_args args) in
   IT.subst su def_body
 
 

@@ -112,7 +112,7 @@ let correct_members_sorted_annotated loc spec have =
   let@ () = correct_members loc spec have in
   let have = List.Old.sort compare_by_fst_id have in
   let have_annotated =
-    List.Old.map2 (fun (id,bt) (id',x) ->
+    List.map2_exn ~f:(fun (id,bt) (id',x) ->
         assert (Id.equal id id');
         (bt, (id', x))
       ) spec have

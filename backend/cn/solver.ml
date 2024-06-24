@@ -409,14 +409,14 @@ and
 
   | Tuple bts ->
     let (_con,vals) = SMT.to_con sexp in
-    Tuple (List.Old.map2 (get_ivalue gs ctys) bts vals)
+    Tuple (List.map2_exn ~f:(get_ivalue gs ctys) bts vals)
 
   | Struct tag ->
     let (_con,vals) = SMT.to_con sexp in
     let decl = SymMap.find tag gs.struct_decls in
     let fields = List.filter_map ~f:(fun x -> x.Memory.member_or_padding) decl in
     let mk_field (l,t) v = (l,get_ivalue gs ctys (Memory.bt_of_sct t) v) in
-    Struct (tag, List.Old.map2 mk_field fields vals)
+    Struct (tag, List.map2_exn ~f:mk_field fields vals)
 
   | Datatype tag ->
     let (con,vals) = SMT.to_con sexp in
@@ -424,7 +424,7 @@ and
     let do_con c =
           let fields = (SymMap.find c gs.datatype_constrs).c_params in
           let mk_field (l,t) v = (l, get_ivalue gs ctys t v) in
-          Constructor (c, List.Old.map2 mk_field fields vals) in
+          Constructor (c, List.map2_exn ~f:mk_field fields vals) in
     let try_con c =
           if String.equal con (CN_Names.datatype_con_name c) then Some (do_con c) else None
     in
@@ -436,7 +436,7 @@ and
   | Record members  ->
     let (_con,vals) = SMT.to_con sexp in
     let mk_field (l,bt) e = (l, get_ivalue gs ctys bt e) in
-    Record (List.Old.map2 mk_field members vals)
+    Record (List.map2_exn ~f:mk_field members vals)
 
 
 (** {1 Term to SMT} *)
