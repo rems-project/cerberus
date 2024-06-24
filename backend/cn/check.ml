@@ -256,7 +256,7 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
      let@ _ = get_fun_decl loc sym in
      return (IT.sym_ (sym, Loc, loc))
   | M_Vlist (_item_cbt, vals) ->
-     let item_bt = bt_of_value (List.Old.hd vals) in
+     let item_bt = bt_of_value (List.hd_exn vals) in
      let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
      let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_value i)) vals in
      let@ values = ListM.mapM (check_value loc) vals in

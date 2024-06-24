@@ -1433,7 +1433,7 @@ let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t mu_value) m =
       return (Loc, M_Vfunction_addr sym)
    | M_Vlist (item_cbt, vals) ->
       let@ vals = ListM.mapM (infer_value loc) vals in
-      let item_bt = bt_of_value (List.Old.hd vals) in
+      let item_bt = bt_of_value (List.hd_exn vals) in
       return (List item_bt, M_Vlist (item_cbt, vals))
    | M_Vtuple vals ->
       let@ vals = ListM.mapM (infer_value loc) vals in
@@ -1607,7 +1607,7 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
            end
         | M_Ctuple -> return (BT.Tuple (List.map ~f:bt_of_pexpr pes))
         | M_Carray -> 
-           let ibt = bt_of_pexpr (List.Old.hd pes) in
+           let ibt = bt_of_pexpr (List.hd_exn pes) in
            let@ () = ListM.iterM (fun pe -> ensure_base_type loc ~expect:ibt (bt_of_pexpr pe)) pes in
            return (Map (Memory.uintptr_bt, ibt))
         in

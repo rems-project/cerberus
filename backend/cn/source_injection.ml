@@ -317,7 +317,7 @@ let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =
       | AilSblock (_bindings, []) ->
           Pos.of_location loc
       | AilSblock (_bindings, ss) ->
-          let first = List.Old.hd ss in
+          let first = List.hd_exn ss in
           let last = Lem_list_extra.last ss in
           let* (pre_pos, _) = posOf_stmt first in
           let* (_, post_pos) = posOf_stmt last in

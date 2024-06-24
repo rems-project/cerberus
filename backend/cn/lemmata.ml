@@ -119,7 +119,7 @@ let release_failures () =
   let@ st = get in
   match st.failures with
   | [] -> return ()
-  | fs -> (fun _ -> Result.Error (List.Old.hd (List.Old.rev fs)))
+  | fs -> (fun _ -> Result.Error (List.hd_exn (List.Old.rev fs)))
 
 (* set of functions with boolean return type that we want to use
    as toplevel propositions, i.e. return Prop rather than bool
@@ -489,7 +489,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
 
 and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
   let family = Global.mutual_datatypes global dt_tag in
-  let dt_tag = List.Old.hd family in
+  let dt_tag = List.hd_exn family in
   let inf = (loc, Pp.typ (Pp.string "datatype") (Sym.pp dt_tag)) in
   let bt_to_coq2 bt = match BT.is_datatype_bt bt with
     | Some dt_tag2 -> if List.Old.exists (Sym.equal dt_tag2) family

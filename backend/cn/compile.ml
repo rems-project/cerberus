@@ -695,7 +695,7 @@ module EffectfulTranslation = struct
             return (IT ((Sym sym), bTy, loc))
         | CNExpr_list es ->
             let@ es = ListM.mapM self es in
-            let item_bt = basetype (List.Old.hd es) in
+            let item_bt = basetype (List.hd_exn es) in
             let  (_, nil_pos, _) =
               (* parser should ensure loc is a region *)
               Option.get @@ Locations.get_region loc in
@@ -882,7 +882,7 @@ module EffectfulTranslation = struct
                  return (pat, body)
                ) ms
            in
-           let rbt = IT.basetype (snd (List.Old.hd ms)) in
+           let rbt = IT.basetype (snd (List.hd_exn ms)) in
            return (IT (Match (x, ms), rbt, loc))
         | CNExpr_let (s, e, body) ->
             let@ e = self e in

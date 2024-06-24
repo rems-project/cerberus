@@ -119,4 +119,6 @@ let filter_map [@deprecated "Use List.filter_map xs ~f"] = filter_map
 
 let filter [@deprecated "Use List.filter xs ~f"] = filter
 
+let hd [@deprecated "Use List.hd_exn"] = hd
+
 end

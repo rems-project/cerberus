@@ -384,7 +384,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
     begin match Pmap.lookup sym ctxt.label_defs with
     | Some (M_Return _) ->
       assert (List.length args == 1);
-      return (Call_Ret (List.Old.hd arg_vs))
+      return (Call_Ret (List.hd_exn arg_vs))
     | _ ->
        fail_n {loc; msg = Generic Pp.(!^"function has goto-labels in control-flow")}
     end
@@ -435,9 +435,9 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
       let s = Option.get (Sym.has_id nm) in
       let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
       if String.equal s "ctz_proxy"
-      then rcval (wrap_int (IT.arith_unop Terms.BWCTZNoSMT (List.Old.hd args_its) loc) loc) state
+      then rcval (wrap_int (IT.arith_unop Terms.BWCTZNoSMT (List.hd_exn args_its) loc) loc) state
       else if List.Old.exists (String.equal s) ["ffs_proxy"; "ffsl_proxy"; "ffsll_proxy"]
-      then rcval (wrap_int (IT.arith_unop Terms.BWFFSNoSMT (List.Old.hd args_its) loc) loc) state
+      then rcval (wrap_int (IT.arith_unop Terms.BWFFSNoSMT (List.hd_exn args_its) loc) loc) state
       else failwith ("unknown stdlib function: " ^ s)
     end else fail_fun_it "not a function with a pure/logical interpretation"
   | M_CN_progs _ ->

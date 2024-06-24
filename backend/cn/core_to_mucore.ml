@@ -164,7 +164,7 @@ let rec core_to_mu__pattern ~inherit_loc loc (Pattern (annots, pat_)) =
      | Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
      | Ctuple -> wrap (M_CaseCtor (M_Ctuple, pats))
      | Carray -> wrap (M_CaseCtor (M_Carray, pats))
-     | Cspecified -> List.Old.hd pats
+     | Cspecified -> List.hd_exn pats
      | _ -> assert_error loc (!^"core_to_mucore: unsupported pattern")
 
 
@@ -289,7 +289,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      | Core.Carray, _ ->
         annotate (M_PEctor (M_Carray, List.map ~f:(n_pexpr loc) args))
      | Core.Cspecified, _ ->
-        n_pexpr loc (List.Old.hd args)
+        n_pexpr loc (List.hd_exn args)
      | Core.Civsizeof, [ct_expr] ->
         annotate (M_PEapply_fun (M_F_size_of, [n_pexpr loc ct_expr]))
      | Core.Civsizeof, _ ->

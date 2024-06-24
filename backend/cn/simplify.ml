@@ -84,13 +84,13 @@ module IndexTerms = struct
       let repeated = List.Old.sort IT.compare (a_elems @ b_elems)
           |> group IT.equal
           |> List.filter ~f:(fun xs -> List.length xs >= 2)
-          |> List.map ~f:List.Old.hd |> ITSet.of_list in
+          |> List.map ~f:List.hd_exn |> ITSet.of_list in
       let (a_xs, a_r) = dest_int_addition (false, repeated) a in
       let (b_xs, b_r) = dest_int_addition (false, repeated) b in
       let a_xs_neg = List.map ~f:(fun (it, i) -> (it, Z.sub Z.zero i)) a_xs in
       let xs = List.Old.sort (fun a b -> IT.compare (fst a) (fst b)) (a_xs_neg @ b_xs)
           |> group (fun a b -> IT.equal (fst a) (fst b))
-          |> List.map ~f:(fun xs -> (fst (List.Old.hd xs), List.Old.fold_left Z.add Z.zero (List.map ~f:snd xs)))
+          |> List.map ~f:(fun xs -> (fst (List.hd_exn xs), List.Old.fold_left Z.add Z.zero (List.map ~f:snd xs)))
           |> List.filter ~f:(fun t -> not (Z.equal (snd t) Z.zero))
       in
       let mul_z t i = if Z.equal i Z.one then t
