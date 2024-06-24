@@ -31,7 +31,7 @@ General principles:
 * Make commits atomic (if it has an "and", probably split it up).
 * Make PRs logically coherent (refactoring vs new features separate).
 * Keep the build and CI working.
-* Rebase on master frequently (daily: `git pull --rebase master`).
+* Rebase on master frequently (daily: `git pull --rebase upstream master`).
 * As much as possible, break-up features to be reviewed piecemeal.
 * Gate big features behind a flag.
 
