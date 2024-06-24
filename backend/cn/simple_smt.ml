@@ -822,7 +822,7 @@ let model_eval (cfg: solver_config) (m: sexp) =
   | Sexp.Atom _ -> bad ()
   | Sexp.List defs ->
     let s = new_solver cfg in
-    List.Old.iter (ack_command s) defs;
+    List.iter ~f:(ack_command s) defs;
     let have_model = ref false in
     let get_model () =
           if !have_model
@@ -838,7 +838,7 @@ let model_eval (cfg: solver_config) (m: sexp) =
         let cleanup () = ack_command s (pop 1); have_model := false in
         ack_command s (push 1);
         let mk_def (f,ps,r,d) = ack_command s (define_fun f ps r d) in
-        List.Old.iter mk_def defs;
+        List.iter ~f:mk_def defs;
         have_model := false;
         if get_model ()
           then begin let res = get_expr s e in cleanup(); res end

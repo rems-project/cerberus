@@ -100,7 +100,7 @@ module Debug = struct
   let _dump_solver solver =
     Printf.printf "| Start Solver Dump\n%!";
     dump_frame !(solver.cur_frame);
-    List.Old.iter dump_frame !(solver.prev_frames);
+    List.iter ~f:dump_frame !(solver.prev_frames);
     Printf.printf "| End Solver Dump\n%!"
 end
 
@@ -129,7 +129,7 @@ let get_ctype_table s =
   let table         = Int_Table.create 50 in
   let add_entry t n = Int_Table.add table n t in
   let do_frame f    = CTypeMap.iter add_entry f.ctypes in
-  List.Old.iter do_frame (!(s.cur_frame) :: !(s.prev_frames));
+  List.iter ~f:do_frame (!(s.cur_frame) :: !(s.prev_frames));
   table
 
 
@@ -1141,7 +1141,7 @@ let declare_solver_basics s =
      datatypes may depend on other datatypes and structs. *)
   let done_strcuts = ref SymSet.empty in
   SymMap.iter (declare_struct s done_strcuts) s.globals.struct_decls;
-  List.Old.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
+  List.iter ~f:(declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
 
@@ -1263,7 +1263,7 @@ let model_evaluator solver mo =
                     ; globals = gs
                     } in
     declare_solver_basics evaluator;
-    List.Old.iter (SMT.ack_command s) defs;
+    List.iter ~f:(SMT.ack_command s) defs;
 
     fun e ->
       push evaluator;
@@ -1334,7 +1334,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
 (*
         let () = Z3.Solver.reset solver.non_incremental in
         let () =
-          List.Old.iter (fun lc ->
+          List.iter ~f:(fun lc ->
             Z3.Solver.add solver.non_incremental [lc]
             ) (nlc :: extra @ existing_scs)
         in

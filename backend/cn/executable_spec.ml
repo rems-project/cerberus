@@ -99,7 +99,7 @@ let memory_accesses_injections ail_prog =
     | `Bbox (b, e) -> (b, e) in
   let acc = ref [] in
   let xs = Ail_analysis.collect_memory_accesses ail_prog in
-  List.Old.iter (fun access ->
+  List.iter ~f:(fun access ->
     match access with
     | Ail_analysis.Load {loc; _} ->
         let b, e = pos_bbox loc in
@@ -139,7 +139,7 @@ let memory_accesses_injections ail_prog =
   !acc
 
 let output_to_oc oc str_list =
-  List.Old.iter (Stdlib.output_string oc) str_list 
+  List.iter ~f:(Stdlib.output_string oc) str_list 
 
 open Executable_spec_internal
 

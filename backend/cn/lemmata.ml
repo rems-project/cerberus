@@ -1102,7 +1102,7 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
   let (impure, pure) = List.partition_tf ~f:(fun x -> Option.is_some x.scan_res.res) scan_lemmata in
   let (coerce, skip) = List.partition_tf
         ~f:(fun x -> Option.is_some x.scan_res.res_coerce) impure in
-  List.Old.iter (fun x ->
+  List.iter ~f:(fun x ->
     Pp.progress_simple "skipping trusted fun with resource"
         (Sym.pp_string x.sym ^ ": " ^ (Option.get x.scan_res.res))
   ) skip;

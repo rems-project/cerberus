@@ -122,9 +122,9 @@ let rec collect_visibles bindings = function
   | [] -> []
   | A.(AnnotatedStatement (_, _, AilSdeclaration decls)) :: ss -> 
     (* Printf.printf "Bindings: \n" ;
-    List.Old.iter (fun (b_sym, _) -> Printf.printf "%s\n" (Sym.pp_string b_sym)) bindings;
+    List.iter ~f:(fun (b_sym, _) -> Printf.printf "%s\n" (Sym.pp_string b_sym)) bindings;
     Printf.printf "Decl syms: \n" ;
-    List.Old.iter (fun (decl_sym, _) -> Printf.printf "%s\n" (Sym.pp_string decl_sym)) decls; *)
+    List.iter ~f:(fun (decl_sym, _) -> Printf.printf "%s\n" (Sym.pp_string decl_sym)) decls; *)
     let decl_syms_and_ctypes = List.map ~f:(fun (sym, _) -> (sym, find_ctype_from_bindings bindings sym)) decls in 
     decl_syms_and_ctypes @ collect_visibles bindings ss
   | _ :: ss -> collect_visibles bindings ss
