@@ -58,7 +58,7 @@ let cn_statements annots =
 
 let function_spec (Attrs attributes) =
   let@ conditions =
-    [Aattrs (Attrs (List.Old.rev attributes))]
+    [Aattrs (Attrs (List.rev attributes))]
     |> get_cerb_magic_attr
     |> ListM.concat_mapM (parse C_parser.function_spec) in
   ListM.fold_leftM (fun acc cond ->

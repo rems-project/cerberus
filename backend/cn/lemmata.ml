@@ -119,7 +119,7 @@ let release_failures () =
   let@ st = get in
   match st.failures with
   | [] -> return ()
-  | fs -> (fun _ -> Result.Error (List.hd_exn (List.Old.rev fs)))
+  | fs -> (fun _ -> Result.Error (List.hd_exn (List.rev fs)))
 
 (* set of functions with boolean return type that we want to use
    as toplevel propositions, i.e. return Prop rather than bool
@@ -1008,8 +1008,8 @@ let convert_lemma_defs global list_mono lemma_typs =
   Pp.debug 4 (lazy (Pp.item "saved conversion elements"
     (Pp.list (fun (ss, _) -> Pp.parens (Pp.list Pp.string ss))
         (StringListMap.bindings st.present))));
-  return (tys, List.Old.rev (get_section 0 st),
-        List.Old.rev (get_section 1 st), List.Old.rev (get_section 2 st))
+  return (tys, List.rev (get_section 0 st),
+        List.rev (get_section 1 st), List.rev (get_section 2 st))
 
 let defs_module aux_defs lemma_tys =
   let open Pp in

@@ -128,7 +128,7 @@ let json_loc loc : Yojson.Safe.t =
 
 
 let json_path locs : Yojson.Safe.t =
-  let locs_json = List.map ~f:json_loc (List.Old.rev locs) in
+  let locs_json = List.map ~f:json_loc (List.rev locs) in
   `Variant ("path", Some (`List locs_json))
 
 

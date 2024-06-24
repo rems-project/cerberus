@@ -638,7 +638,7 @@ let get_model s =
             | [] -> ()
            in
         arrange (List.map ~f:(fun (x,_,_) -> x) defs);
-        list (List.Old.rev !decls)
+        list (List.rev !decls)
 
 (** Get the values of some s-expressions. Only valid after a [Sat] result.
     Throws {!UnexpectedSolverResponse}. *)
@@ -747,7 +747,7 @@ let to_array (exp0: sexp): (sexp * sexp) list * sexp =
   let rec loop is exp =
       match exp with
       | Sexp.List [ Sexp.List [Sexp.Atom "as"; Sexp.Atom "const"; _]; k ] ->
-        (List.Old.rev is, k)
+        (List.rev is, k)
       | Sexp.List [Sexp.Atom "store"; a; i; v] ->
         loop ((i,v)::is) a
       | _ -> bad ()

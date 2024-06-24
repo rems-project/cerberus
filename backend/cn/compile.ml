@@ -1358,7 +1358,7 @@ let translate_cn_clauses env clauses =
       end clauses'
   in
   let@ xs = self [] clauses in
-  return (List.Old.rev xs)
+  return (List.rev xs)
 
 let translate_option_cn_clauses env = function
   | Some clauses ->

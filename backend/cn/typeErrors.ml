@@ -244,7 +244,7 @@ let pp_message te =
   | Missing_resource {requests; situation; ctxt; model; } ->
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = request_chain_description requests in
-     let orequest = Option.map (fun r -> r.resource) (List.Old.nth_opt (List.Old.rev requests) 0) in
+     let orequest = Option.map (fun r -> r.resource) (List.Old.nth_opt (List.rev requests) 0) in
      let state = trace ctxt model Explain.{no_ex with request = orequest} in
      { short; descr = descr; state = Some state; }
   | Merging_multiple_arrays {requests; situation; ctxt; model} ->
@@ -253,7 +253,7 @@ let pp_message te =
          !^"It requires merging multiple arrays."
      in
      let descr = request_chain_description requests in
-     let orequest = Option.map (fun r -> r.resource) (List.Old.nth_opt (List.Old.rev requests) 0) in
+     let orequest = Option.map (fun r -> r.resource) (List.Old.nth_opt (List.rev requests) 0) in
      let state = trace ctxt model Explain.{no_ex with request = orequest} in
      { short; descr = descr; state = Some state;  }
   | Unused_resource {resource; ctxt; model; } ->

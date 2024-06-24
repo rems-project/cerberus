@@ -1258,7 +1258,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
         check_pexpr pe (fun arg ->
         let ret_s, ret = match prefix with
           | PrefSource (_loc, syms) ->
-             let syms = List.Old.rev syms in
+             let syms = List.rev syms in
              begin match syms with
              | (Symbol (_, _, SD_ObjectAddress str)) :: _ ->
                 IT.fresh_named Loc ("&" ^ str) loc
@@ -1451,7 +1451,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
           aux es' (v :: vs) (used :: prev_used))
        | [] ->
           (* let@ () = check_used_distinct loc prev_used in *)
-          k (tuple_ (List.Old.rev vs) loc)
+          k (tuple_ (List.rev vs) loc)
      in
      aux es [] []
   | M_CN_progs (_, cn_progs) ->

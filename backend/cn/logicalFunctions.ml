@@ -124,7 +124,7 @@ let add_unfolds_to_terms preds terms =
 (*     | (nm, Some path) :: q -> if SymSet.mem nm known_ok *)
 (*       then search known_ok q *)
 (*       else if List.Old.exists (Sym.equal nm) path *)
-(*       then Some (List.Old.rev path @ [nm]) *)
+(*       then Some (List.rev path @ [nm]) *)
 (*       else *)
 (*         let deps = List.map ~f:(fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
 (*         search known_ok (deps @ [(nm, None)] @ q) *)

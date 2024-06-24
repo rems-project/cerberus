@@ -123,4 +123,6 @@ let hd [@deprecated "Use List.hd_exn"] = hd
 
 let split [@deprecated "Use List.unzip"] = split
 
+let rev [@deprecated "Use List.rev"] = rev
+
 end

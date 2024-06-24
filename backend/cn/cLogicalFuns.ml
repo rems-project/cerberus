@@ -364,7 +364,7 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
   | M_Eunseq exps ->
     let orig_expr = expr in
     let rec cont1 state exp_vals = function
-      | [] -> rcval (IT.tuple_ (List.Old.rev exp_vals) loc) state
+      | [] -> rcval (IT.tuple_ (List.rev exp_vals) loc) state
       | (exp :: exps) ->
         let@ r = symb_exec_mu_expr ctxt (state, var_map) exp in
         cont2 exp_vals exps r

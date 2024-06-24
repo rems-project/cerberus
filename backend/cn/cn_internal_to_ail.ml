@@ -1090,7 +1090,7 @@ let rec cn_to_ail_expr_aux_internal
                             let constr_binding = create_binding count_sym (mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype C.(Struct lc_sym))))) in
                             let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
 
-                            let (ids, ts) = List.unzip  (List.Old.rev members_with_types) in
+                            let (ids, ts) = List.unzip  (List.rev members_with_types) in
                             let bts = List.map ~f:cn_base_type_to_bt ts in
                             let new_constr_it = IT.IT (Sym count_sym, BT.Struct lc_sym, Cerb_location.unknown) in
                             let vars' = List.map ~f:(fun id -> T.StructMember (new_constr_it, id)) ids in

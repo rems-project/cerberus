@@ -271,7 +271,7 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
 
   let trace = 
     let statef ctxt = state ctxt model_with_q extras in
-    List.Old.rev (statef ctxt :: List.filter_map ~f:(function State ctxt -> Some (statef ctxt) | _ -> None) log)
+    List.rev (statef ctxt :: List.filter_map ~f:(function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
 
 

@@ -168,7 +168,7 @@ let option f none_msg opt = match opt with
 (*
 let nats n =
   let rec aux n = if n < 0 then [] else n :: aux (n - 1) in
-  List.Old.rev (aux n)
+  List.rev (aux n)
 *)
 
 (* module IntMap = Map.Make(Int) *)

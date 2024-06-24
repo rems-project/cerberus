@@ -1042,7 +1042,7 @@ let make_function_args f_i loc env args (accesses, requires) =
        return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] ->
        let@ lat = make_largs_with_accesses (f_i arg_states) env st (accesses, requires) in
-       return (M_L (Mu.mConstraints (List.Old.rev good_lcs) lat))
+       return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
   in
   aux [] [] env (C.LocalState.init_st) args
 
@@ -1067,7 +1067,7 @@ let make_fun_with_spec_args f_i loc env args requires =
        return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] ->
        let@ lat = make_largs_with_accesses f_i env st ([], requires) in
-       return (M_L (Mu.mConstraints (List.Old.rev good_lcs) lat))
+       return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
   in
   aux [] env (C.LocalState.init_st) args
 
@@ -1115,7 +1115,7 @@ let desugar_conds d_st conds =
   let@ (conds, d_st) = ListM.fold_leftM (fun (conds, d_st) cond ->
     let@ (cond, d_st) = desugar_cond d_st cond in
     return (cond :: conds, d_st)) ([], d_st) conds in
-  return (List.Old.rev conds, d_st)
+  return (List.rev conds, d_st)
 
 let fetch_enum d_st loc sym =
   let@ expr_ = do_ail_desugar_rdonly d_st (CAE.resolve_enum_constant sym) in
