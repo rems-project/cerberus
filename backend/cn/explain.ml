@@ -142,8 +142,8 @@ let state ctxt model_with_q extras =
       in
       ITSet.of_list
           (List.map ~f:(fun (s, ls) -> make s ls) quantifier_counter_model
-           @ List.Old.filter_map basetype_binding (SymMap.bindings ctxt.computational)
-           @ List.Old.filter_map basetype_binding (SymMap.bindings ctxt.logical))
+           @ List.filter_map ~f:basetype_binding (SymMap.bindings ctxt.computational)
+           @ List.filter_map ~f:basetype_binding (SymMap.bindings ctxt.logical))
     in
 
     let unproven = match extras.unproven_constraint with
@@ -178,7 +178,7 @@ let state ctxt model_with_q extras =
 
 
     let filtered = 
-      List.Old.filter_map (fun it -> 
+      List.filter_map ~f:(fun it -> 
           match evaluate it with
           | Some value when not (IT.equal value it) ->
              Some (it, {term = IT.pp it; value = IT.pp value})
@@ -271,7 +271,7 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
 
   let trace = 
     let statef ctxt = state ctxt model_with_q extras in
-    List.Old.rev (statef ctxt :: List.Old.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
+    List.Old.rev (statef ctxt :: List.filter_map ~f:(function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
 
 

@@ -1081,7 +1081,7 @@ let rec cn_to_ail_expr_aux_internal
                         | dt :: _ ->
                           let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals term PassBack in
                           let build_case (constr_sym, members_with_types) = 
-                            let cases' = List.Old.filter_map (expand_datatype constr_sym) cases in 
+                            let cases' = List.filter_map ~f:(expand_datatype constr_sym) cases in 
                             let suffix = "_" ^ (string_of_int count) in
                             let lc_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constr_sym in 
                             let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 

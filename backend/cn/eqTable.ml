@@ -53,7 +53,7 @@ let add_lc_eqs tab (lc : LogicalConstraints.t) = match lc with
   | _ -> tab
 
 let fetch_implied_eqs tab guard lhs = fetch_eqs tab lhs
-  |> List.Old.filter_map (fun info -> if guard_implies guard info.guard
+  |> List.filter_map ~f:(fun info -> if guard_implies guard info.guard
     then Some info.rhs else None)
 
 (* computing the closure of the above *)

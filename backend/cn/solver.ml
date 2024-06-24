@@ -414,7 +414,7 @@ and
   | Struct tag ->
     let (_con,vals) = SMT.to_con sexp in
     let decl = SymMap.find tag gs.struct_decls in
-    let fields = List.Old.filter_map (fun x -> x.Memory.member_or_padding) decl in
+    let fields = List.filter_map ~f:(fun x -> x.Memory.member_or_padding) decl in
     let mk_field (l,t) v = (l,get_ivalue gs ctys (Memory.bt_of_sct t) v) in
     Struct (tag, List.Old.map2 mk_field fields vals)
 
@@ -973,7 +973,7 @@ let rec translate_term s iterm =
           match_pat new_v nested in
 
         let (conds,defs) = List.Old.split (List.map ~f:field fs) in
-        let nested_cond = SMT.bool_ands (List.Old.filter_map (fun x -> x) conds) in
+        let nested_cond = SMT.bool_ands (List.filter_map ~f:(fun x -> x) conds) in
         let cname = CN_Names.datatype_con_name c in
         let cond  = SMT.bool_and (SMT.is_con cname v) nested_cond in
         (Some cond, List.concat defs)
@@ -1121,7 +1121,7 @@ let rec declare_struct s done_struct name decl =
            (SMT.declare_datatype
               (CN_Names.struct_name name) []
                 [ ( CN_Names.struct_con_name name
-                  , List.Old.filter_map mk_piece decl
+                  , List.filter_map ~f:mk_piece decl
                   )
                 ]
            )

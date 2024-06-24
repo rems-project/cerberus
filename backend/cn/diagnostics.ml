@@ -70,7 +70,7 @@ let rec bool_subterms_of t =
 
 let constraint_ts () =
   let@ cs = get_cs () in
-  let ts = List.Old.filter_map (function
+  let ts = List.filter_map ~f:(function
     | LC.T t -> Some t
     | _ -> None) (LCSet.elements cs)
   in

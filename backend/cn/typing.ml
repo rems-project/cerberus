@@ -436,7 +436,7 @@ let add_c_internal lc =
   let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
   let s = Context.add_c lc s in
   let () = Solver.add_assumption solver s.global lc in
-  let@ _ = add_sym_eqs (List.Old.filter_map (LC.is_sym_lhs_equality) [lc]) in
+  let@ _ = add_sym_eqs (List.filter_map ~f:(LC.is_sym_lhs_equality) [lc]) in
   let@ _ = add_found_equalities lc in
   let@ () = set_typing_context s in
   return ()
@@ -530,7 +530,7 @@ let do_check_model loc m prop =
     |> List.map ~f:(fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc))
   ) in
   let here = Locations.other __FUNCTION__ in
-  let eqs = List.Old.filter_map (fun v -> match Solver.eval global (fst m) v with
+  let eqs = List.filter_map ~f:(fun v -> match Solver.eval global (fst m) v with
     | None -> None
     | Some x -> Some (IT.eq_ (v, x) here)
   ) vs in

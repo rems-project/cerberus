@@ -65,7 +65,7 @@ module Make(T : S) = struct
 
     let filter_mapM f l =
       let@ xs = mapM f l in
-      return (List.Old.filter_map (fun x -> x) xs)
+      return (List.filter_map ~f:(fun x -> x) xs)
 
     let filterM f xs =
       let@ ys = mapM (fun x -> let@ b = f x in return (b, x)) xs in

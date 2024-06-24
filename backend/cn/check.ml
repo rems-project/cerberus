@@ -1027,7 +1027,7 @@ let instantiate loc filter arg =
   let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
   let@ () = add_c loc (LC.t_ (eq__ arg_it arg loc)) in
   let@ constraints = get_cs () in
-  let extra_assumptions1 = List.Old.filter_map (function
+  let extra_assumptions1 = List.filter_map ~f:(function
         | Forall ((s, bt), t) when filter t -> Some ((s, bt), t)
         | _ -> None) (LCSet.elements constraints) in
   let extra_assumptions2, type_mismatch = List.Old.partition (fun ((_, bt), _) ->
@@ -1048,9 +1048,9 @@ let add_trace_information _labels annots =
   let open Where in
   let open CF.Annot in
   let inlined_labels =
-    List.Old.filter_map (function Ainlined_label l -> Some l | _ -> None) annots in
+    List.filter_map ~f:(function Ainlined_label l -> Some l | _ -> None) annots in
   let locs =
-    List.Old.filter_map (function Aloc l -> Some l | _ -> None) annots in
+    List.filter_map ~f:(function Aloc l -> Some l | _ -> None) annots in
   let is_stmt = List.Old.exists (function Astmt -> true | _ -> false) annots in
   let is_expr = List.Old.exists (function Aexpr -> true | _ -> false) annots in
   let@ () = match inlined_labels with

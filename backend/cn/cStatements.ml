@@ -58,8 +58,8 @@ let expr_locs (expr : 'a expression) =
     | AilEcall (f_x, xs) -> f ls (f_x :: xs @ exprs)
     | AilEassert x -> f ls (x :: exprs)
     | AilEgeneric (x, xs) -> f ls (x :: List.map ~f:gen_expr xs @ exprs)
-    | AilEarray (_, _, xs) -> f ls (List.Old.filter_map (fun x -> x) xs @ exprs)
-    | AilEstruct (_, xs) -> f ls (List.Old.filter_map snd xs @ exprs)
+    | AilEarray (_, _, xs) -> f ls (List.filter_map ~f:(fun x -> x) xs @ exprs)
+    | AilEstruct (_, xs) -> f ls (List.filter_map ~f:snd xs @ exprs)
     | AilEunion (_, _, opt_x) -> f ls (Option.to_list opt_x @ exprs)
     | AilEcompound (_, _, x) -> f ls (x :: exprs)
     | AilEmemberof (x, _) -> f ls (x :: exprs)
@@ -101,7 +101,7 @@ let add_map_stmt (stmt : 'a statement) m =
     | AilSpar ss2 -> f (ss2 @ ss) m
     | AilSexpr e -> f ss (do_x l m e)
     | AilSreturn e -> f ss (do_x l m e)
-    | AilSdeclaration xs -> f ss (do_xs l m (List.Old.filter_map snd xs))
+    | AilSdeclaration xs -> f ss (do_xs l m (List.filter_map ~f:snd xs))
     | AilSreg_store (_, x) -> f ss (do_x l m x)
     | _ -> f ss m
     end

@@ -291,7 +291,7 @@ module WIT = struct
             ListM.iterM (fun constr ->
                 let@ constr_info = get_datatype_constr loc constr  in
                 let relevant_cases =
-                  List.Old.filter_map (expand_constr (constr, constr_info)) cases in
+                  List.filter_map ~f:(expand_constr (constr, constr_info)) cases in
                 let member_bts = List.map ~f:snd constr_info.c_params in
                 cases_complete loc (member_bts @ bts) relevant_cases
               ) dt_info.dt_constrs
@@ -1460,7 +1460,7 @@ let is_integer_annot = function
 
 
 let integer_annot annots =
-  match List.Old.sort_uniq CF.IntegerType.setElemCompare_integerType (List.Old.filter_map is_integer_annot annots) with
+  match List.Old.sort_uniq CF.IntegerType.setElemCompare_integerType (List.filter_map ~f:is_integer_annot annots) with
   | [] -> None
   | [ity] -> Some ity
   | _ -> assert false
@@ -2329,7 +2329,7 @@ module WDT = struct
     List.Old.concat_map bts_in_dt_case cases
 
   let dts_in_dt_definition dt_def =
-    List.Old.filter_map BT.is_datatype_bt (bts_in_dt_definition dt_def)
+    List.filter_map ~f:BT.is_datatype_bt (bts_in_dt_definition dt_def)
 
 
   let check_recursion_ok datatypes =
@@ -2361,7 +2361,7 @@ module WDT = struct
                   ListM.iterM (fun (id, bt) ->
                       let indirect_deps =
                         SymSet.of_list
-                          (List.Old.filter_map BT.is_datatype_bt (BT.contained bt))
+                          (List.filter_map ~f:BT.is_datatype_bt (BT.contained bt))
                       in
                       let bad = SymSet.inter indirect_deps scc_set in
                       begin match SymSet.elements bad with

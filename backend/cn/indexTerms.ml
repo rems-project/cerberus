@@ -888,7 +888,7 @@ let value_check_pointer mode ~pointee_ct about loc =
   (*   | Function _ -> 1 *)
   (*   | _ -> Memory.size_of_ctype pointee_ct *)
   (* in *)
-  and_ (List.Old.filter_map Fun.id [
+  and_ (List.filter_map ~f:Fun.id [
     (* Some (le_ (intptr_int_ 0 loc, about_int) loc); *)
     (* Some (le_ (sub_ (add_ (about_int, intptr_int_ pointee_size loc) loc, intptr_int_ 1 loc) loc, *)
     (*         intptr_const_ Memory.max_pointer loc) loc); *)
@@ -934,7 +934,7 @@ let value_check mode (struct_layouts : Memory.struct_decls) ct about loc =
        value_check_pointer mode ~pointee_ct about loc
     | Struct tag ->
        and_ begin
-           List.Old.filter_map (fun piece ->
+           List.filter_map ~f:(fun piece ->
                match piece.member_or_padding with
                | Some (member, mct) ->
                   let member_bt = Memory.bt_of_sct mct in
@@ -996,13 +996,13 @@ let rec wrap_bindings_match bs default_v v =
 
 let nth_array_to_list_facts (binders_terms : (t_bindings * t) list) =
   let here = Locations.other __FUNCTION__ in
-  let nths = List.Old.filter_map (fun (bs, it) -> match term it with
+  let nths = List.filter_map ~f:(fun (bs, it) -> match term it with
     | NthList (n, xs, d) -> Some (bs, (n, d, bt xs))
     | _ -> None) binders_terms in
-  let arr_lists = List.Old.filter_map (fun (bs, it) -> match term it with
+  let arr_lists = List.filter_map ~f:(fun (bs, it) -> match term it with
     | ArrayToList _ -> Some (bs, (it, bt it))
     | _ -> None) binders_terms in
-  List.Old.concat_map (fun (bs1, (n, d, bt1)) -> List.Old.filter_map (fun (bs2, (xs, bt2)) ->
+  List.Old.concat_map (fun (bs1, (n, d, bt1)) -> List.filter_map ~f:(fun (bs2, (xs, bt2)) ->
     if BT.equal bt1 bt2
     then wrap_bindings_match (bs1 @ bs2) (bool_ true here) (nth_array_to_list_fact n xs d)
     else None) arr_lists

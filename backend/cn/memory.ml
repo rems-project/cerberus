@@ -72,13 +72,13 @@ type struct_decls = struct_layout SymMap.t
 
 
 let members =
-  List.Old.filter_map (fun {member_or_padding; _} ->
+  List.filter_map ~f:(fun {member_or_padding; _} ->
       Option.map fst member_or_padding
     )
 
 
 let member_types =
-  List.Old.filter_map (fun {member_or_padding; _} ->
+  List.filter_map ~f:(fun {member_or_padding; _} ->
       member_or_padding
     )
 

@@ -155,7 +155,7 @@ let commas l = list (fun pp -> pp) l
 *)
 
 let list_filtered f l =
-  match List.Old.filter_map f l with
+  match List.filter_map ~f:f l with
   | [] -> !^"(empty)"
   | l -> flow (comma ^^ break 1) l
 

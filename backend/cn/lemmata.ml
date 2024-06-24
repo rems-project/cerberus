@@ -226,7 +226,7 @@ let struct_layout_field_bts xs =
   let open Memory in
   let xs2 = List.Old.filter (fun x -> Option.is_some x.member_or_padding) xs
     |> List.Old.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
-    |> List.Old.filter_map (fun x -> x.member_or_padding)
+    |> List.filter_map ~f:(fun x -> x.member_or_padding)
   in
   (List.map ~f:fst xs2, List.map ~f:(fun x -> Memory.bt_of_sct (snd x)) xs2)
 
@@ -290,7 +290,7 @@ let monomorphise_dt_lists global =
     | _ -> None
   in
   let all_dt_types = SymMap.fold (fun _ dt_info ss ->
-        List.Old.filter_map dt_lists (List.map ~f:snd dt_info.BT.dt_all_params) @ ss)
+        List.filter_map ~f:dt_lists (List.map ~f:snd dt_info.BT.dt_all_params) @ ss)
     global.Global.datatypes [] in
   let uniq_dt_types = SymSet.elements (SymSet.of_list all_dt_types) in
   let new_sym sym = (sym, Sym.fresh_named ("list_of_" ^ Sym.pp_string sym)) in

@@ -91,7 +91,7 @@ let pp global =
 let mutual_datatypes (global : t) tag =
   let deps tag =
     let info = SymMap.find tag global.datatypes in
-    info.dt_all_params |> List.Old.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
+    info.dt_all_params |> List.filter_map ~f:(fun (_, bt) -> BaseTypes.is_datatype_bt bt)
   in
   let rec seek tags = function
     | [] -> tags

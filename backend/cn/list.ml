@@ -115,4 +115,6 @@ let nth [@deprecated "Use List.nth_exn"] = nth
 
 let concat [@deprecated "Use List.concat"] = concat
 
+let filter_map [@deprecated "Use List.filter_map xs ~f"] = filter_map
+
 end

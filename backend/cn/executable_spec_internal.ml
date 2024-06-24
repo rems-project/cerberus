@@ -93,7 +93,7 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
 
 
   let in_stmt = List.map ~f:(fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
-  let return_injs = List.Old.filter_map (fun (loc, e_opt, bs, ss) -> match e_opt with | Some e_opt' -> Some (loc, e_opt', bs, ss) | None -> None ) block_ownership_injs in 
+  let return_injs = List.filter_map ~f:(fun (loc, e_opt, bs, ss) -> match e_opt with | Some e_opt' -> Some (loc, e_opt', bs, ss) | None -> None ) block_ownership_injs in 
   let non_return_injs = List.Old.filter (fun (_, e_opt, _, _) -> Option.is_none e_opt) block_ownership_injs in 
   let block_ownership_stmts = List.map ~f:(fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss))) non_return_injs in 
   let block_ownership_stmts = List.map ~f:(fun (loc, strs) -> (loc, [String.concat "\n" strs])) block_ownership_stmts in 
@@ -268,7 +268,7 @@ let generate_c_functions_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSynt
   let decl_strs = List.map ~f:(fun doc -> CF.Pp_utils.to_plain_pretty_string doc) decl_docs in
   let decl_str = String.concat "\n" decl_strs in
 
-  let defs = List.Old.filter_map (fun x -> x) defs in
+  let defs = List.filter_map ~f:(fun x -> x) defs in
   let modified_prog_1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = decls; function_definitions = defs} in
   let doc_1 = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog_1) in
   let inline_decl_docs = List.map ~f:(fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) decls in
