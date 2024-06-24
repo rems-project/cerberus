@@ -95,13 +95,13 @@ let ensure_same_argument_number loc input_output has ~expect =
 let compare_by_fst_id (x,_) (y,_) = Id.compare x y
 
 let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
-  let needed = IdSet.of_list (List.Old.map fst spec) in
+  let needed = IdSet.of_list (List.map ~f:fst spec) in
   let@ needed =
     ListM.fold_leftM (fun needed (id, _) ->
         if IdSet.mem id needed then
           return (IdSet.remove id needed)
         else
-          fail (fun _ -> {loc; msg = Unexpected_member (List.Old.map fst spec, id)})
+          fail (fun _ -> {loc; msg = Unexpected_member (List.map ~f:fst spec, id)})
       ) needed have
   in
   match IdSet.elements needed with
@@ -202,7 +202,7 @@ module WCT = struct
       | Array (ct, _) -> aux ct
       | Pointer ct -> aux ct
       | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
-      | Function ((_, rct), args, _) -> ListM.iterM aux (rct :: List.Old.map fst args)
+      | Function ((_, rct), args, _) -> ListM.iterM aux (rct :: List.map ~f:fst args)
     in
     fun ct -> aux ct
 
@@ -255,11 +255,11 @@ module WIT = struct
     match case with
     | Pat (PWild, _, loc) :: pats
     | Pat (PSym _, _, loc) :: pats ->
-       Some (List.Old.map (fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.c_params @ pats)
+       Some (List.map ~f:(fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.c_params @ pats)
     | Pat (PConstructor (constr', args), _, _) :: pats
          when Sym.equal constr constr' ->
        assert (List.Old.for_all2 (fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
-       Some (List.Old.map snd args @ pats)
+       Some (List.map ~f:snd args @ pats)
     | Pat (PConstructor (_constr', _args), _, _) :: _pats ->
        None
     | [] ->
@@ -280,7 +280,7 @@ module WIT = struct
        end
     | bt::bts ->
        if List.Old.for_all leading_sym_or_wild cases then
-         cases_complete loc bts (List.Old.map List.Old.tl cases)
+         cases_complete loc bts (List.map ~f:List.Old.tl cases)
        else
          begin match bt with
          | (Unit|Bool|Integer|Bits _|Real|Alloc_id|Loc|CType|Struct _|
@@ -292,7 +292,7 @@ module WIT = struct
                 let@ constr_info = get_datatype_constr loc constr  in
                 let relevant_cases =
                   List.Old.filter_map (expand_constr (constr, constr_info)) cases in
-                let member_bts = List.Old.map snd constr_info.c_params in
+                let member_bts = List.map ~f:snd constr_info.c_params in
                 cases_complete loc (member_bts @ bts) relevant_cases
               ) dt_info.dt_constrs
          end
@@ -304,8 +304,8 @@ module WIT = struct
       | Pat (PWild, _, _), _ -> true
       | Pat (PSym _, _, _), _ -> true
       | Pat (PConstructor (s1, ps1), _, _), Pat (PConstructor (s2, ps2), _, _)
-        when (Sym.equal s1 s2 && List.Old.equal Id.equal (List.Old.map fst ps1) (List.Old.map fst ps2)) ->
-          List.Old.for_all2 covers (List.Old.map snd ps1) (List.Old.map snd ps2)
+        when (Sym.equal s1 s2 && List.Old.equal Id.equal (List.map ~f:fst ps1) (List.map ~f:fst ps2)) ->
+          List.Old.for_all2 covers (List.map ~f:snd ps1) (List.map ~f:snd ps2)
       | _, _ -> false
     in
     let@ _ = ListM.fold_leftM (fun prev (Pat (_, _, pat_loc) as pat) ->
@@ -577,7 +577,7 @@ module WIT = struct
            end
       | Tuple ts ->
          let@ ts = ListM.mapM (infer) ts in
-         let bts = List.Old.map IT.bt ts in
+         let bts = List.map ~f:IT.bt ts in
          return (IT (Tuple ts,BT.Tuple bts, loc))
       | NthTuple (n, t') ->
          let@ t' = infer t' in
@@ -638,7 +638,7 @@ module WIT = struct
                return (id, t)
              ) members
          in
-         let member_types = List.Old.map (fun (id, t) -> (id, IT.bt t)) members in
+         let member_types = List.map ~f:(fun (id, t) -> (id, IT.bt t)) members in
          return (IT (IT.Record members,BT.Record member_types, loc))
       | RecordMember (t, member) ->
          let@ t = infer t in
@@ -875,8 +875,8 @@ module WIT = struct
                  end
              ) (None, []) cases
          in
-         let@ () = cases_complete loc [IT.bt e] (List.Old.map (fun (pat, _) -> [pat]) cases) in
-         let@ () = cases_necessary (List.Old.map (fun (pat, _) -> pat) cases) in
+         let@ () = cases_complete loc [IT.bt e] (List.map ~f:(fun (pat, _) -> [pat]) cases) in
+         let@ () = cases_necessary (List.map ~f:(fun (pat, _) -> pat) cases) in
          let@ rbt = match rbt with
            | None -> fail (fun _ -> {loc; msg = Empty_pattern})
            | Some rbt -> return rbt
@@ -1437,7 +1437,7 @@ let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t mu_value) m =
       return (List item_bt, M_Vlist (item_cbt, vals))
    | M_Vtuple vals ->
       let@ vals = ListM.mapM (infer_value loc) vals in
-      let bt = Tuple (List.Old.map bt_of_value vals) in
+      let bt = Tuple (List.map ~f:bt_of_value vals) in
       return (bt, M_Vtuple vals)
   in
   return (M_V (bt, v))
@@ -1605,7 +1605,7 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
               return (bt_of_pexpr xs)
            | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.Old.length pes; expect = 2}})
            end
-        | M_Ctuple -> return (BT.Tuple (List.Old.map bt_of_pexpr pes))
+        | M_Ctuple -> return (BT.Tuple (List.map ~f:bt_of_pexpr pes))
         | M_Carray -> 
            let ibt = bt_of_pexpr (List.Old.hd pes) in
            let@ () = ListM.iterM (fun pe -> ensure_base_type loc ~expect:ibt (bt_of_pexpr pe)) pes in
@@ -1918,14 +1918,14 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         let@ (ret_ct, arg_cts) = match act.ct with
           | Sctypes.(Pointer (Function (ret_v_ct, arg_r_cts, is_variadic))) ->
               assert (not is_variadic);
-              return (snd ret_v_ct, List.Old.map fst arg_r_cts)
+              return (snd ret_v_ct, List.map ~f:fst arg_r_cts)
           | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "not a function pointer at call-site"
               (Sctypes.pp act.ct))})
         in
         let@ f_pe = check_pexpr (Loc) f_pe in
         (* TODO: we'd have to check the arguments against the function
            type, but we can't when f_pe is dynamic *)
-        let arg_bt_specs = List.Old.map (fun ct -> (Memory.bt_of_sct ct)) arg_cts in
+        let arg_bt_specs = List.map ~f:(fun ct -> (Memory.bt_of_sct ct)) arg_cts in
         let@ pes = ListM.map2M check_pexpr arg_bt_specs pes in
         return (Memory.bt_of_sct ret_ct, M_Eccall (act, f_pe, pes))
      | M_Eif (c_pe, e1, e2) ->
@@ -1967,7 +1967,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         end
      | M_Eunseq es ->
         let@ es = ListM.mapM (infer_expr label_context) es in
-        let bts = List.Old.map bt_of_expr es in
+        let bts = List.map ~f:bt_of_expr es in
         return (Tuple bts, M_Eunseq es)
      | M_Erun (l, pes) ->
         (* copying from check.ml *)
@@ -2220,7 +2220,7 @@ module WRPD = struct
                ListM.fold_leftM (fun acc {loc; guard; packing_ft} ->
                    let@ guard = WIT.check loc BT.Bool guard in
                    let here = Locations.other __FUNCTION__ in
-                   let negated_guards = List.Old.map (fun clause -> IT.not_ clause.guard here) acc in
+                   let negated_guards = List.map ~f:(fun clause -> IT.not_ clause.guard here) acc in
                    pure begin
                        let@ () = add_c loc (LC.t_ guard) in
                        let@ () = add_c loc (LC.t_ (IT.and_ negated_guards here)) in

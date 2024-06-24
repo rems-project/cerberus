@@ -19,7 +19,7 @@ let to_pre_cmp = function
   | Cerb_location.Loc_point p -> (2, [lex_to_cmp p], [])
   | Cerb_location.Loc_region (x, y, _) -> (3, [lex_to_cmp x; lex_to_cmp y], [])
   | Cerb_location.Loc_regions (xs, _) -> (4,
-        List.Old.map lex_to_cmp (List.Old.concat (List.Old.map (fun (x, y) -> [x; y]) xs)), [])
+        List.map ~f:lex_to_cmp (List.Old.concat (List.map ~f:(fun (x, y) -> [x; y]) xs)), [])
 
 let mk_cmp (x : t) = to_pre_cmp x
 
@@ -57,7 +57,7 @@ let expr_locs (expr : 'a expression) =
     | AilEcast (_, _, x) -> f ls (x :: exprs)
     | AilEcall (f_x, xs) -> f ls (f_x :: xs @ exprs)
     | AilEassert x -> f ls (x :: exprs)
-    | AilEgeneric (x, xs) -> f ls (x :: List.Old.map gen_expr xs @ exprs)
+    | AilEgeneric (x, xs) -> f ls (x :: List.map ~f:gen_expr xs @ exprs)
     | AilEarray (_, _, xs) -> f ls (List.Old.filter_map (fun x -> x) xs @ exprs)
     | AilEstruct (_, xs) -> f ls (List.Old.filter_map snd xs @ exprs)
     | AilEunion (_, _, opt_x) -> f ls (Option.to_list opt_x @ exprs)

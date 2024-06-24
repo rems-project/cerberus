@@ -163,7 +163,7 @@ let extractable_one (* global *) prove_or_model (predicate_name, index) (ret, O 
             (P { name = ret.name;
                 pointer = pointer_offset_ (ret.pointer,
                     mul_ (cast_ Memory.uintptr_bt ret.step loc, cast_ Memory.uintptr_bt index loc) loc) loc;
-                iargs = List.Old.map (IT.subst su) ret.iargs; },
+                iargs = List.map ~f:(IT.subst su) ret.iargs; },
             O  (map_get_ o index loc))
           in
           let ret_reduced =

@@ -126,10 +126,10 @@ let add_unfolds_to_terms preds terms =
 (*       else if List.Old.exists (Sym.equal nm) path *)
 (*       then Some (List.Old.rev path @ [nm]) *)
 (*       else *)
-(*         let deps = List.Old.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
+(*         let deps = List.map ~f:(fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
 (*         search known_ok (deps @ [(nm, None)] @ q) *)
 (*     | (nm, None) :: q -> search (SymSet.add nm known_ok) q *)
-(*   in search SymSet.empty (List.Old.map (fun (p, _) -> (p, Some [])) (SymMap.bindings defs)) *)
+(*   in search SymSet.empty (List.map ~f:(fun (p, _) -> (p, Some [])) (SymMap.bindings defs)) *)
 
 
 

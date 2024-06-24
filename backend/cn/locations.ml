@@ -22,7 +22,7 @@ let other str = Cerb_location.other str
 
 let dirs_to_ignore =
   StringSet.of_list
-    (List.Old.map Cerb_runtime.in_runtime
+    (List.map ~f:Cerb_runtime.in_runtime
        [ "libc/include"
        ; "libcore"
        ; ("impls/" ^ Setup.impl_name ^ ".impl")
@@ -100,7 +100,7 @@ let json_raw_loc loc : Yojson.Safe.t =
        `Variant ("Region", Some (`Assoc args))
     | Loc_regions (starts_ends,cursor) ->
        let starts_ends' =
-         List.Old.map (fun (startp, endp) ->
+         List.map ~f:(fun (startp, endp) ->
              let startp' = json_lexing_position startp in
              let endp' = json_lexing_position endp in
              `Assoc [("regions_start", startp'); ("regions_end", endp')]
@@ -128,7 +128,7 @@ let json_loc loc : Yojson.Safe.t =
 
 
 let json_path locs : Yojson.Safe.t =
-  let locs_json = List.Old.map json_loc (List.Old.rev locs) in
+  let locs_json = List.map ~f:json_loc (List.Old.rev locs) in
   `Variant ("path", Some (`List locs_json))
 
 

@@ -84,7 +84,7 @@ let rec contained : t -> t list =
   | CType -> []
   | Struct _ -> []
   | Datatype _ -> []
-  | Record ms -> let mts = List.Old.map snd ms in mts @ containeds mts
+  | Record ms -> let mts = List.map ~f:snd ms in mts @ containeds mts
   | Map (abt,rbt) -> abt :: rbt :: containeds [abt; rbt]
   | List bt -> bt :: contained bt
   | Tuple bts -> bts @ containeds bts

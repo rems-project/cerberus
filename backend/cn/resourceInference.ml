@@ -334,7 +334,7 @@ module General = struct
                          pointer = pointer_offset_ (requested.pointer,
                              (mul_ (cast_ Memory.uintptr_bt requested.step here,
                                  cast_ Memory.uintptr_bt index here) here)) here;
-                         iargs = List.Old.map (IT.subst su) requested.iargs;
+                         iargs = List.map ~f:(IT.subst su) requested.iargs;
                        }
                    in
                    match o_re_index with

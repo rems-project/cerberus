@@ -386,7 +386,7 @@ module Make (Config: CONFIG) = struct
           | M_PEop (bop, pe1, pe2) ->
               pp_pexpr pe1 ^^^ pp_binop bop ^^^ pp_pexpr pe2
           | M_PEapply_fun (f, args) ->
-              Pp.c_app (pp_function f) (List.Old.map pp_pexpr args)
+              Pp.c_app (pp_function f) (List.map ~f:pp_pexpr args)
           | M_PEstruct (tag_sym, xs) ->
               P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
               P.braces (
@@ -629,7 +629,7 @@ module Make (Config: CONFIG) = struct
                 P.parens (comma_list pp_actype_or_pexpr (Right pe :: (map (fun pe -> Right pe)) pes))
           | M_CN_progs (_, stmts) -> pp_keyword "cn_prog" ^^ P.parens
               (* use the AST printer to at least print something, TODO improve *)
-              (Pp.list Pp_ast.pp_doc_tree (List.Old.map Cnprog.dtree stmts))
+              (Pp.list Pp_ast.pp_doc_tree (List.map ~f:Cnprog.dtree stmts))
           | M_Eunseq es ->
               pp_control "unseq" ^^ P.parens (comma_list pp es)
           | M_Elet (pat, pe1, e2) ->
@@ -662,7 +662,7 @@ module Make (Config: CONFIG) = struct
           | M_Ebound e ->
               Pp.c_app (pp_keyword "bound") [pp e]
           | M_Erun (sym, pes) ->
-              pp_keyword "run" ^^^ Pp.c_app (pp_symbol sym) (List.Old.map pp_pexpr pes)
+              pp_keyword "run" ^^^ Pp.c_app (pp_symbol sym) (List.map ~f:pp_pexpr pes)
         end
       end
       in pp budget expr

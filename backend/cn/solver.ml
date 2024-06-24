@@ -337,12 +337,12 @@ let rec translate_base_type = function
   | Set bt          -> SMT.t_set (translate_base_type bt)
   | Map (k, v)      -> SMT.t_array (translate_base_type k)
                                    (translate_base_type v)
-  | Tuple bts       -> CN_Tuple.t (List.Old.map translate_base_type bts)
+  | Tuple bts       -> CN_Tuple.t (List.map ~f:translate_base_type bts)
   | Struct tag      -> SMT.atom (CN_Names.struct_name tag)
   | Datatype tag    -> SMT.atom (CN_Names.datatype_name tag)
   | Record members  ->
     let get_val (_,v) = v in
-    translate_base_type (Tuple (List.Old.map get_val members))
+    translate_base_type (Tuple (List.map ~f:get_val members))
 
 
 
@@ -774,7 +774,7 @@ let rec translate_term s iterm =
 
   (* Tuples *)
 
-  | Tuple es -> CN_Tuple.con (List.Old.map (translate_term s) es)
+  | Tuple es -> CN_Tuple.con (List.map ~f:(translate_term s) es)
   | NthTuple (n, e1) ->
     begin match IT.basetype e1 with
     | Tuple ts ->  CN_Tuple.get (List.Old.length ts) n (translate_term s e1)
@@ -788,7 +788,7 @@ let rec translate_term s iterm =
   | Struct (tag, fields) ->
     let con         = CN_Names.struct_con_name tag in
     let field (_,e) = translate_term s e in
-    SMT.app_ con (List.Old.map field fields)
+    SMT.app_ con (List.map ~f:field fields)
 
   | StructMember (e1,f) ->
     SMT.app_ (CN_Names.struct_field_name f) [translate_term s e1]
@@ -798,7 +798,7 @@ let rec translate_term s iterm =
     let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
     let members = Memory.member_types layout in
     let str =
-      List.Old.map (fun (member', sct) ->
+      List.map ~f:(fun (member', sct) ->
           let value =
             if Id.equal member member' then v
             else member_ ~member_bt:(Memory.bt_of_sct sct) (t, member') here
@@ -816,7 +816,7 @@ let rec translate_term s iterm =
   (* Records *)
   | Record members ->
     let field (_,e) = translate_term s e in
-    CN_Tuple.con (List.Old.map field members)
+    CN_Tuple.con (List.map ~f:field members)
 
   | RecordMember (e1,f) ->
     begin match IT.basetype e1 with
@@ -833,7 +833,7 @@ let rec translate_term s iterm =
   | RecordUpdate ((t, member),v) ->
     let members = BT.record_bt (IT.bt t) in
     let str =
-      List.Old.map (fun (member', bt) ->
+      List.map ~f:(fun (member', bt) ->
           let value =
             if Id.equal member member' then v
             else IT ((RecordMember (t, member')), bt, here)
@@ -886,7 +886,7 @@ let rec translate_term s iterm =
 
   | NthList (x,y,z) ->
     let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
-    let (arg_ts,args) = List.Old.split (List.Old.map arg [x;y;z]) in
+    let (arg_ts,args) = List.Old.split (List.map ~f:arg [x;y;z]) in
     let bt      = IT.basetype iterm in
     let res_t   = translate_base_type bt in
     let f = declare_bt_uninterpreted s CN_Constant.nth_list bt arg_ts res_t in
@@ -894,7 +894,7 @@ let rec translate_term s iterm =
 
   | ArrayToList (x,y,z) ->
     let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
-    let (arg_ts,args) = List.Old.split (List.Old.map arg [x;y;z]) in
+    let (arg_ts,args) = List.Old.split (List.map ~f:arg [x;y;z]) in
     let bt      = IT.basetype iterm in
     let res_t   = translate_base_type bt in
     let f = declare_bt_uninterpreted s
@@ -937,10 +937,10 @@ let rec translate_term s iterm =
       translate_term s (LogicalFunctions.open_fun def.args body args)
     | _ ->
       let do_arg arg = translate_base_type (IT.basetype arg) in
-      let args_ts    = List.Old.map do_arg args in
+      let args_ts    = List.map ~f:do_arg args in
       let res_t      = translate_base_type def.return_bt in
       let fu         = declare_uninterpreted s name args_ts res_t in
-      SMT.app fu (List.Old.map (translate_term s) args)
+      SMT.app fu (List.map ~f:(translate_term s) args)
     end
 
   | Let ((x,e1),e2) ->
@@ -956,7 +956,7 @@ let rec translate_term s iterm =
   | Constructor (c,fields) ->
     let con = CN_Names.datatype_con_name c in
     let field (_,e) = translate_term s e in
-    SMT.app_ con (List.Old.map field fields)
+    SMT.app_ con (List.map ~f:field fields)
 
     (* CN supports nested patterns, while SMTLIB does not,
        so we compile patterns to a optional predicate, and defined variables.
@@ -972,7 +972,7 @@ let rec translate_term s iterm =
           let new_v = SMT.app_ (CN_Names.datatype_field_name f) [v] in
           match_pat new_v nested in
 
-        let (conds,defs) = List.Old.split (List.Old.map field fs) in
+        let (conds,defs) = List.Old.split (List.map ~f:field fs) in
         let nested_cond = SMT.bool_ands (List.Old.filter_map (fun x -> x) conds) in
         let cname = CN_Names.datatype_con_name c in
         let cond  = SMT.bool_and (SMT.is_con cname v) nested_cond in
@@ -1086,13 +1086,13 @@ let declare_datatype_group s names =
         (CN_Names.datatype_field_name l, translate_base_type t) in
   let mk_con c =
     let ci = SymMap.find c s.globals.datatype_constrs in
-    (CN_Names.datatype_con_name c, List.Old.map mk_con_field ci.c_params) in
-  let cons info = List.Old.map mk_con info.dt_constrs in
+    (CN_Names.datatype_con_name c, List.map ~f:mk_con_field ci.c_params) in
+  let cons info = List.map ~f:mk_con info.dt_constrs in
   let to_smt (x: Sym.t) =
         let info = SymMap.find x s.globals.datatypes in
         (CN_Names.datatype_name x, [], cons info)
   in
-  ack_command s (SMT.declare_datatypes (List.Old.map to_smt names))
+  ack_command s (SMT.declare_datatypes (List.map ~f:to_smt names))
 
 
 
@@ -1252,7 +1252,7 @@ let model_evaluator solver mo =
     let gs = solver.globals in
     let evaluator = { smt_solver = s
                     ; cur_frame = ref (empty_solver_frame ())
-                    ; prev_frames = ref (List.Old.map copy_solver_frame
+                    ; prev_frames = ref (List.map ~f:copy_solver_frame
                                          ( (!(solver.cur_frame) ::
                                            !(solver.prev_frames)) ))
                       (* We keep the prev_frames because things that were

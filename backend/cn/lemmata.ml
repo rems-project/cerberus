@@ -228,7 +228,7 @@ let struct_layout_field_bts xs =
     |> List.Old.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
     |> List.Old.filter_map (fun x -> x.member_or_padding)
   in
-  (List.Old.map fst xs2, List.Old.map (fun x -> Memory.bt_of_sct (snd x)) xs2)
+  (List.map ~f:fst xs2, List.map ~f:(fun x -> Memory.bt_of_sct (snd x)) xs2)
 
 let get_struct_xs struct_decls tag = match SymMap.find_opt tag struct_decls with
   | Some def -> struct_layout_field_bts def
@@ -290,15 +290,15 @@ let monomorphise_dt_lists global =
     | _ -> None
   in
   let all_dt_types = SymMap.fold (fun _ dt_info ss ->
-        List.Old.filter_map dt_lists (List.Old.map snd dt_info.BT.dt_all_params) @ ss)
+        List.Old.filter_map dt_lists (List.map ~f:snd dt_info.BT.dt_all_params) @ ss)
     global.Global.datatypes [] in
   let uniq_dt_types = SymSet.elements (SymSet.of_list all_dt_types) in
   let new_sym sym = (sym, Sym.fresh_named ("list_of_" ^ Sym.pp_string sym)) in
-  let new_syms = List.Old.map new_sym uniq_dt_types in
-  let list_mono = List.Old.map (fun (s1, s2) -> (BT.Datatype s1, s2)) new_syms in
+  let new_syms = List.map ~f:new_sym uniq_dt_types in
+  let list_mono = List.map ~f:(fun (s1, s2) -> (BT.Datatype s1, s2)) new_syms in
   let global = List.Old.fold_right add_list_mono_datatype list_mono global in
   let map_bt bt = Option.value ~default:bt (mono_list_bt list_mono bt) in
-  let map_mems = List.Old.map (fun (nm, bt) -> (nm, map_bt bt)) in
+  let map_mems = List.map ~f:(fun (nm, bt) -> (nm, map_bt bt)) in
   let datatypes = SymMap.map (fun info ->
     BT.{info with dt_all_params = map_mems info.dt_all_params}) global.Global.datatypes in
   let datatype_constrs = SymMap.map (fun info ->
@@ -315,7 +315,7 @@ let rec new_nm s nms i =
 let alpha_rename_if_pp_same s body =
   let vs = IT.free_vars body in
   let other_nms = List.Old.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
-    |> List.Old.map Sym.pp_string in
+    |> List.map ~f:Sym.pp_string in
   if List.Old.exists (String.equal (Sym.pp_string s)) other_nms
   then begin
     Pp.debug 6 (lazy (Pp.item "doing rename"
@@ -331,10 +331,10 @@ let it_adjust (global : Global.t) it =
     let loc = IT.loc t in
     match IT.term t with
         | IT.Binop (And, x1, x2) ->
-            let xs = List.Old.map f [x1; x2] |> List.Old.partition IT.is_true |> snd in
+            let xs = List.map ~f:f [x1; x2] |> List.Old.partition IT.is_true |> snd in
             IT.and_ xs loc
         | IT.Binop (Or, x1, x2) ->
-            let xs = List.Old.map f [x1; x2] |> List.Old.partition IT.is_false |> snd in
+            let xs = List.map ~f:f [x1; x2] |> List.Old.partition IT.is_false |> snd in
             IT.or_ xs loc
         | IT.Binop (EQ, x, y) ->
             let x = f x in
@@ -431,7 +431,7 @@ let defn nm args opt_ty rhs =
   ^^ hardline ^^ !^"    " ^^ rhs ^^ !^ "." ^^ hardline
 
 let fun_upd_def =
-  defn "fun_upd" (List.Old.map Pp.string ["{A B : Type}"; "(eq : A -> A -> bool)";
+  defn "fun_upd" (List.map ~f:Pp.string ["{A B : Type}"; "(eq : A -> A -> bool)";
         "(f : A -> B)"; "x"; "y"; "z"]) None
     (Pp.string "if eq x z then y else f z")
 
@@ -473,7 +473,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
     let@ enc_fld_bts = ListM.mapM f fld_bts in
     return (tuple_coq_ty (Sym.pp tag) enc_fld_bts)
   | BaseTypes.Record mems ->
-    let@ enc_mem_bts = ListM.mapM f (List.Old.map snd mems) in
+    let@ enc_mem_bts = ListM.mapM f (List.map ~f:snd mems) in
     return (tuple_coq_ty (!^ "record") enc_mem_bts)
   | BaseTypes.Loc -> return (!^ "CN_Lib.Loc")
   | BaseTypes.Datatype tag ->
@@ -526,7 +526,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
   let cons_line c =
     let c_info = SymMap.find c global.Global.datatype_constrs in
     let pats =
-      List.Old.map (fun (m2, _) ->
+      List.map ~f:(fun (m2, _) ->
         if Id.equal mem_tag m2
         then Id.pp mem_tag
         else Pp.string "_"
@@ -534,7 +534,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
     in
     let open Pp in
     !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^
-    if List.Old.exists (Id.equal mem_tag) (List.Old.map fst c_info.c_params)
+    if List.Old.exists (Id.equal mem_tag) (List.map ~f:fst c_info.c_params)
     then Id.pp mem_tag
     else !^"default"
   in
@@ -544,7 +544,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
       let open Pp in
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag)); !^ "default"] (Some bt_doc)
-      (flow hardline (!^ "match dt with" :: List.Old.map cons_line dt_info.dt_constrs @ eline)))
+      (flow hardline (!^ "match dt with" :: List.map ~f:cons_line dt_info.dt_constrs @ eline)))
     )) [dt_tag]
   in
   return op_nm
@@ -555,7 +555,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
   let dt_info = SymMap.find dt_tag global.Global.datatypes in
   let cons_line c =
     let c_info = SymMap.find c global.Global.datatype_constrs in
-    let pats = List.Old.map (fun (m2, _) -> if Id.equal mem_tag m2
+    let pats = List.map ~f:(fun (m2, _) -> if Id.equal mem_tag m2
         then Id.pp mem_tag else Pp.string "_") c_info.c_params in
     let open Pp in
     !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^ Id.pp mem_tag
@@ -568,7 +568,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
       let open Pp in
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag))] (Some bt_doc)
-          (flow hardline (!^ "match dt with" :: List.Old.map cons_line dt_info.dt_constrs @ eline)))
+          (flow hardline (!^ "match dt with" :: List.map ~f:cons_line dt_info.dt_constrs @ eline)))
   )) [dt_tag]
   in
   return op_nm
@@ -705,7 +705,7 @@ let rec pat_to_coq = function
   | Terms.Pat (Terms.PWild, _, _) -> rets "_"
   | Terms.Pat (Terms.PConstructor (c_nm, id_ps), _, _) ->
     (* assuming here that the id's are in canonical order *)
-    parensM (build ([return (Sym.pp c_nm)] @ List.Old.map pat_to_coq (List.Old.map snd id_ps)))
+    parensM (build ([return (Sym.pp c_nm)] @ List.map ~f:pat_to_coq (List.map ~f:snd id_ps)))
 
 let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
   else parensM (rets (Z.to_string z))
@@ -795,7 +795,7 @@ let it_to_coq loc global list_mono it =
         let comp = Some (t, "case-discriminant") in
         let br (pat, rhs) = build ([rets "|"; pat_to_coq pat; rets "=>"; aux rhs]) in
         parensM (build ([rets "match"; f comp x; rets "with"]
-            @ List.Old.map br cases @ [rets "end"]))
+            @ List.map ~f:br cases @ [rets "end"]))
     | IT.ITE (sw, x, y) ->
         let comp = Some (t, "if-condition") in
         parensM (build [rets "if"; f comp sw; rets "then"; aux x; rets "else"; aux y])
@@ -817,7 +817,7 @@ let it_to_coq loc global list_mono it =
         if List.Old.length flds == 1
         then aux t
         else
-        let ix = find_tuple_element Id.equal m Id.pp (List.Old.map fst flds) in
+        let ix = find_tuple_element Id.equal m Id.pp (List.map ~f:fst flds) in
         let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
         parensM (build [rets op_nm; aux t])
     | IT.RecordUpdate ((t, m), x) ->
@@ -825,11 +825,11 @@ let it_to_coq loc global list_mono it =
         if List.Old.length flds == 1
         then aux x
         else
-        let ix = find_tuple_element Id.equal m Id.pp (List.Old.map fst flds) in
+        let ix = find_tuple_element Id.equal m Id.pp (List.map ~f:fst flds) in
         let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
         parensM (build [rets op_nm; aux t; aux x])
     | IT.Record mems ->
-        let@ xs = ListM.mapM aux (List.Old.map snd mems) in
+        let@ xs = ListM.mapM aux (List.map ~f:snd mems) in
         parensM (return (flow (comma ^^ break 1) xs))
     | IT.StructMember (t, m) ->
         let tag = BaseTypes.struct_bt (IT.bt t) in
@@ -862,7 +862,7 @@ let it_to_coq loc global list_mono it =
         let prop_ret = fun_prop_ret global name in
         let body_aux = f (if prop_ret then None else Some (t, "fun-arg")) in
         let@ () = ensure_pred global list_mono loc name body_aux in
-        let@ r = parensM (build ([return (Sym.pp name)] @ List.Old.map body_aux args)) in
+        let@ r = parensM (build ([return (Sym.pp name)] @ List.map ~f:body_aux args)) in
         if prop_ret then return r else with_is_true (return r)
     | IT.Good (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
         let@ () = fail_on_prop () in
@@ -878,7 +878,7 @@ let it_to_coq loc global list_mono it =
        let comp = Some (t, "datatype contents") in
        let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in
        (* assuming here that the id's are in canonical order *)
-       parensM (build ([return (Sym.pp nm)] @ List.Old.map (f comp) (List.Old.map snd id_args)))
+       parensM (build ([return (Sym.pp nm)] @ List.map ~f:(f comp) (List.map ~f:snd id_args)))
     | IT.NthList (n, xs, d) ->
        let@ (_, _, dest) = ensure_list global list_mono loc (IT.bt xs) in
        parensM (build [rets "CN_Lib.nth_list_z"; return dest;
@@ -1034,7 +1034,7 @@ let mod_spec lemma_nms =
   ^^ hardline ^^ hardline
   ^^ !^"  Module D := Defs(P)." ^^ hardline
   ^^ !^"  Import D." ^^ hardline ^^ hardline
-  ^^ flow hardline (List.Old.map lemma lemma_nms)
+  ^^ flow hardline (List.map ~f:lemma lemma_nms)
   ^^ hardline
   ^^ !^"End Lemma_Spec."
   ^^ hardline ^^ hardline
@@ -1045,7 +1045,7 @@ let convert_and_print channel global list_mono conv =
   Pp.print channel (types_spec types);
   Pp.print channel (param_spec params);
   Pp.print channel (defs_module defs conv_defs);
-  Pp.print channel (mod_spec (List.Old.map (fun (nm, _, _, _) -> nm) conv));
+  Pp.print channel (mod_spec (List.map ~f:(fun (nm, _, _, _) -> nm) conv));
   return ()
 
 let cmp_line_numbers = function
@@ -1092,9 +1092,9 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
   let channel = open_out filename in
   Pp.print channel (header filename);
   Pp.debug 1 (lazy (Pp.item "lemmata generation"
-    (Pp.braces (Pp.list Sym.pp (List.Old.map fst lemmata)))));
+    (Pp.braces (Pp.list Sym.pp (List.map ~f:fst lemmata)))));
   let scan_lemmata =
-    List.Old.map (fun (sym, (loc, typ)) ->
+    List.map ~f:(fun (sym, (loc, typ)) ->
         {sym; loc; typ; scan_res = scan typ}
       ) lemmata
     |> List.Old.sort (fun x (y : scanned) -> cmp_loc_line_numbers x.loc y.loc)
@@ -1112,8 +1112,8 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
   (* let global = Global.{ctxt.Context.global with struct_decls} in *)
   let (list_mono, global) = monomorphise_dt_lists global in
   (* let ci = {global; fun_info; list_mono} in *)
-  let conv = List.Old.map (fun x -> (x.sym, x.typ, x.loc, "pure")) pure
-    @ List.Old.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, x.loc, "coerced")) coerce in
+  let conv = List.map ~f:(fun x -> (x.sym, x.typ, x.loc, "pure")) pure
+    @ List.map ~f:(fun x -> (x.sym, Option.get x.scan_res.res_coerce, x.loc, "coerced")) coerce in
   match convert_and_print channel global list_mono conv init_t with
   | Result.Ok _ -> Result.Ok ()
   | Result.Error e -> Result.Error e

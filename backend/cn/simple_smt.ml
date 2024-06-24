@@ -38,7 +38,7 @@ let let_ xs e =
   | [] -> e
   | _  ->
     let mk_def (x,e) = app_ x [e] in
-    app_ "let" [ list (List.Old.map mk_def xs); e ]
+    app_ "let" [ list (List.map ~f:mk_def xs); e ]
 
 (** Non-negative numeric constant. *)
 let nat_k x = atom (string_of_int x)
@@ -51,7 +51,7 @@ let nat_zk x = atom (Z.to_string x)
 let fam f is = list (atom "_" :: atom f :: is)
 
 (** Int-indexed family *)
-let ifam f is = fam f (List.Old.map nat_k is)
+let ifam f is = fam f (List.map ~f:nat_k is)
 
 (** Attribute *)
 let named x e = app_ "!" [e; atom ":named"; atom x ]
@@ -407,7 +407,7 @@ These can be sent to solver using {!ack_command}.
 *)
 
 (** A command made out of just atoms. *)
-let simple_command xs   = list (List.Old.map atom xs)
+let simple_command xs   = list (List.map ~f:atom xs)
 
 (** [set_option opt val] sets option [opt] to value [val]. *)
 let set_option x y      = simple_command [ "set-option"; x; y ]
@@ -440,7 +440,7 @@ defines a function called [name], with the given parameters
 [(name, type)], that computes a value of [result_type], using [definition]. *)
 let define_fun f ps r d =
   let mk_param (x,a) = list [atom x; a] in
-  app_ "define-fun" [ atom f; list (List.Old.map mk_param ps); r; d ]
+  app_ "define-fun" [ atom f; list (List.map ~f:mk_param ps); r; d ]
 
 (** [define name type definition] defines a constant [name], of type
     [type] defined as [definition]. *)
@@ -454,12 +454,12 @@ called [name] with type parameters [type_params] and constructors [cons].
 Each constructor is of the form [(name, fields)]. *)
 let declare_datatype name type_params cons =
   let mk_field ((f,argTy):con_field)  = list [atom f; argTy] in
-  let mk_con (c,fs)       = list (atom c :: List.Old.map mk_field fs) in
-  let mk_cons             = list (List.Old.map mk_con cons) in
+  let mk_con (c,fs)       = list (atom c :: List.map ~f:mk_field fs) in
+  let mk_cons             = list (List.map ~f:mk_con cons) in
   let def =
     match type_params with
     | [] -> mk_cons
-    | _  -> app_ "par" [ List (List.Old.map atom type_params); mk_cons ]
+    | _  -> app_ "par" [ List (List.map ~f:atom type_params); mk_cons ]
   in
   app_ "declare-datatype" [ atom name; def ]
 
@@ -468,19 +468,19 @@ Each element if `tys` is (name,type params,cons).
 *)
 let declare_datatypes tys =
   let mk_field ((f,argTy):con_field)  = list [atom f; argTy] in
-  let mk_con (c,fs)       = list (atom c :: List.Old.map mk_field fs) in
-  let mk_cons cons        = list (List.Old.map mk_con cons) in
+  let mk_con (c,fs)       = list (atom c :: List.map ~f:mk_field fs) in
+  let mk_cons cons        = list (List.map ~f:mk_con cons) in
   let def (_,type_params,cons) =
     match type_params with
     | [] -> mk_cons cons
-    | _  -> app_ "par" [ List (List.Old.map atom type_params); mk_cons cons ]
+    | _  -> app_ "par" [ List (List.map ~f:atom type_params); mk_cons cons ]
   in
   let arity (name,ty_params,_) =
         let n = List.Old.length ty_params in
         list [atom name; atom (string_of_int n) ]
   in
-  app_ "declare-datatypes" [ list (List.Old.map arity tys)
-                           ; list (List.Old.map def tys)
+  app_ "declare-datatypes" [ list (List.map ~f:arity tys)
+                           ; list (List.map ~f:def tys)
                            ]
 
 
@@ -490,11 +490,11 @@ type pat = PVar of string | PCon of (string * string list)
 let match_datatype e alts =
   let do_pat pat =
       match pat with
-      | PCon (c,xs) -> list (atom c :: List.Old.map atom xs)
+      | PCon (c,xs) -> list (atom c :: List.map ~f:atom xs)
       | PVar x      -> atom x
   in
   let do_alt (pat,e)  = list [do_pat pat; e] in
-  app_ "match" [e; list (List.Old.map do_alt alts)]
+  app_ "match" [e; list (List.map ~f:do_alt alts)]
 
 (** [is_con c e] is true if [e] is an expression constructed with [c] *)
 let is_con c e = app (fam "is" [atom c]) [e]
@@ -576,7 +576,7 @@ let get_model s =
       let rec drop_as_array x =
           match x with
           | Sexp.List [ _; Sexp.Atom "as-array"; f ] -> f
-          | Sexp.List xs -> Sexp.List (List.Old.map drop_as_array xs)
+          | Sexp.List xs -> Sexp.List (List.map ~f:drop_as_array xs)
           | _ -> x
       in
 
@@ -608,7 +608,7 @@ let get_model s =
       match ans with
       | Sexp.Atom _ -> raise (UnexpectedSolverResponse ans)
       | Sexp.List xs ->
-        let defs                = List.Old.map check_def xs in
+        let defs                = List.map ~f:check_def xs in
         let add_dep mp (x,xs,e) = StrMap.add x (xs,e) mp in
         let deps                = List.Old.fold_left add_dep StrMap.empty defs in
 
@@ -637,7 +637,7 @@ let get_model s =
                 end
             | [] -> ()
            in
-        arrange (List.Old.map (fun (x,_,_) -> x) defs);
+        arrange (List.map ~f:(fun (x,_,_) -> x) defs);
         list (List.Old.rev !decls)
 
 (** Get the values of some s-expressions. Only valid after a [Sat] result.
@@ -650,7 +650,7 @@ let get_exprs s vals: sexp list =
           match pair with
           | Sexp.List [_;x] -> x
           | _ -> raise (UnexpectedSolverResponse res)
-    in List.Old.map get_val xs
+    in List.map ~f:get_val xs
   | _ -> raise (UnexpectedSolverResponse res)
 
 (** Evalute the given expression in the current context.

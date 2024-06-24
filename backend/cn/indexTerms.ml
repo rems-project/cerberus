@@ -69,10 +69,10 @@ let rec free_vars_ : 'a. 'a term_ -> SymSet.t = function
   | EachI ((_, (s, _), _), t) -> SymSet.remove s (free_vars t)
   | Tuple ts -> free_vars_list ts
   | NthTuple (_, t) -> free_vars t
-  | Struct (_tag, members) -> free_vars_list (List.Old.map snd members)
+  | Struct (_tag, members) -> free_vars_list (List.map ~f:snd members)
   | StructMember (t, _member) -> free_vars t
   | StructUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
-  | Record members -> free_vars_list (List.Old.map snd members)
+  | Record members -> free_vars_list (List.map ~f:snd members)
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
   | Cast (_cbt, t) -> free_vars t
@@ -101,13 +101,13 @@ let rec free_vars_ : 'a. 'a term_ -> SymSet.t = function
      let rec aux acc = function
        | [] -> acc
        | (pat, body) :: cases ->
-          let bound = SymSet.of_list (List.Old.map fst (bound_by_pattern pat)) in
+          let bound = SymSet.of_list (List.map ~f:fst (bound_by_pattern pat)) in
           let more = SymSet.diff (free_vars body) bound in
           aux (SymSet.union more acc) cases
      in
      aux (free_vars e) cases
   | Constructor (_s, args) ->
-     free_vars_list (List.Old.map snd args)
+     free_vars_list (List.map ~f:snd args)
 
 and free_vars : 'a term -> SymSet.t =
   fun (IT (term_, _bt, _)) ->
@@ -134,10 +134,10 @@ let rec fold_ f binders acc = function
      fold f (binders @ [(Pat (PSym s, bt, here), None)]) acc t
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
-  | Struct (_tag, members) -> fold_list f binders acc (List.Old.map snd members)
+  | Struct (_tag, members) -> fold_list f binders acc (List.map ~f:snd members)
   | StructMember (t, _member) -> fold f binders acc t
   | StructUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
-  | Record members -> fold_list f binders acc (List.Old.map snd members)
+  | Record members -> fold_list f binders acc (List.map ~f:snd members)
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
   | Cast (_cbt, t) -> fold f binders acc t
@@ -180,7 +180,7 @@ let rec fold_ f binders acc = function
      in
      aux acc' cases
   | Constructor (_sym, args) ->
-     fold_list f binders acc (List.Old.map snd args)
+     fold_list f binders acc (List.map ~f:snd args)
 
 and fold f binders acc (IT (term_, _bt, loc)) =
   let acc' = fold_ f binders acc term_ in
@@ -240,7 +240,7 @@ let free_vars_with_rename = function
 
 let make_rename ~from ~to_ = Subst.make free_vars_with_rename [(from, `Rename to_)]
 
-let make_subst assoc = Subst.make free_vars_with_rename (List.Old.map (fun (s, t) -> (s, `Term t)) assoc)
+let make_subst assoc = Subst.make free_vars_with_rename (List.map ~f:(fun (s, t) -> (s, `Term t)) assoc)
 
 let substitute_lets_flag = Sym.fresh_named "substitute_lets"
 
@@ -270,7 +270,7 @@ let rec subst (su : [`Term of typed | `Rename of Sym.t] subst) (IT (it, bt, loc)
      let s, t = suitably_alpha_rename su.relevant s t in
      IT (EachI ((i1, (s, s_bt), i2), subst su t), bt, loc)
   | Tuple its ->
-     IT (Tuple (List.Old.map (subst su) its), bt, loc)
+     IT (Tuple (List.map ~f:(subst su) its), bt, loc)
   | NthTuple (n, it') ->
      IT (NthTuple (n, subst su it'), bt, loc)
   | Struct (tag, members) ->
@@ -327,7 +327,7 @@ let rec subst (su : [`Term of typed | `Rename of Sym.t] subst) (IT (it, bt, loc)
      let s, body = suitably_alpha_rename su.relevant s body in
      IT (MapDef ((s, abt), subst su body), bt, loc)
   | Apply (name, args) ->
-     IT (Apply (name, List.Old.map (subst su) args), bt, loc)
+     IT (Apply (name, List.map ~f:(subst su) args), bt, loc)
   | Let ((name, t1), t2) ->
      if SymSet.mem substitute_lets_flag su.flags then
        let t1 = subst su t1 in
@@ -338,11 +338,11 @@ let rec subst (su : [`Term of typed | `Rename of Sym.t] subst) (IT (it, bt, loc)
      end
   | Match (e, cases) ->
      let e = subst su e in
-     let cases = List.Old.map (subst_under_pattern su) cases in
+     let cases = List.map ~f:(subst_under_pattern su) cases in
      IT (Match (e, cases), bt, loc)
   | Constructor (s, args) ->
      let args =
-       List.Old.map (fun (id, e) ->
+       List.map ~f:(fun (id, e) ->
            (id, subst su e)
          ) args
      in
@@ -559,8 +559,8 @@ let let_ ((nm, x), y) loc = IT (Let ((nm, x), y), basetype y, loc)
 
 (* let disperse_not_ it = *)
 (*   match term it with *)
-(*   | And xs -> or_ (List.Old.map not_ xs) *)
-(*   | Or xs -> and_ (List.Old.map not_ xs) *)
+(*   | And xs -> or_ (List.map ~f:not_ xs) *)
+(*   | Or xs -> and_ (List.map ~f:not_ xs) *)
 (*   | Implies (x, y) -> and_ [x; not_ y] *)
 (*   | _ -> not_ it *)
 
@@ -618,7 +618,7 @@ let (%>=) t t' = ge_ (t, t')
 
 
 (* tuple_op *)
-let tuple_ its loc = IT (Tuple its, BT.Tuple (List.Old.map bt its), loc)
+let tuple_ its loc = IT (Tuple its, BT.Tuple (List.map ~f:bt its), loc)
 let nthTuple_ ~item_bt (n, it) loc = IT (NthTuple (n, it), item_bt, loc)
 
 (* struct_op *)
@@ -646,7 +646,7 @@ let (%.) struct_decls t member =
 
 let record_ members loc =
   IT (Record members,
-      BT.Record (List.Old.map (fun (s,t) -> (s, basetype t)) members), loc)
+      BT.Record (List.map ~f:(fun (s,t) -> (s, basetype t)) members), loc)
 let recordMember_ ~member_bt (t, member) loc =
   IT (RecordMember (t, member), member_bt, loc)
 
@@ -747,7 +747,7 @@ let rec dest_list it =
 
 
 let mk_in_loc_list (ptr, opts) loc = match dest_list opts with
-  | Some xs -> or_sterm_ (List.Old.map (fun x -> eq_sterm_ (ptr, x) loc) xs) loc
+  | Some xs -> or_sterm_ (List.map ~f:(fun x -> eq_sterm_ (ptr, x) loc) xs) loc
   | None ->
     Pp.warn loc (Pp.item "cannot enumerate in_loc_list arg, treating as unspecified"
         (pp opts));
@@ -863,7 +863,7 @@ let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) loc =
   let open Option in
   let@ ret_ct = Sctypes.of_ctype c_sig.sig_return_ty in
   let@ arg_cts = ListM.mapM Sctypes.of_ctype c_sig.sig_arg_tys in
-  let arg_cts = List.Old.map (Fun.flip const_ctype_ loc) arg_cts in
+  let arg_cts = List.map ~f:(Fun.flip const_ctype_ loc) arg_cts in
   let arg_v = list_ ~item_bt:BT.CType arg_cts ~nil_loc:loc in
   return (tuple_
     [ const_ctype_ ret_ct loc
@@ -983,7 +983,7 @@ let rec wrap_bindings_match bs default_v v =
   begin match wrap_bindings_match bindings default_v v with
     | None -> None
     | Some v2 ->
-    let pat_ss = SymSet.of_list (List.Old.map fst (bound_by_pattern pat)) in
+    let pat_ss = SymSet.of_list (List.map ~f:fst (bound_by_pattern pat)) in
     if SymSet.is_empty (SymSet.inter pat_ss (free_vars v2))
     then Some v2
     else begin match x with

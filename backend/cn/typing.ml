@@ -266,7 +266,7 @@ let get_member_type loc _tag member layout : (Sctypes.t) m =
   let member_types = Memory.member_types layout in
   match List.Old.assoc_opt Id.equal member member_types with
   | Some membertyp -> return membertyp
-  | None -> fail (fun _ -> {loc; msg = Unexpected_member (List.Old.map fst member_types, member)})
+  | None -> fail (fun _ -> {loc; msg = Unexpected_member (List.map ~f:fst member_types, member)})
 
 let get_struct_member_type loc tag member =
   let@ decl = get_struct_decl loc tag in
@@ -496,7 +496,7 @@ let model () =
 
 let get_just_models () =
   let@ ms = get_past_models () in
-  return (List.Old.map fst ms)
+  return (List.map ~f:fst ms)
 
 let model_has_prop () =
   let@ global = get_global () in
@@ -527,7 +527,7 @@ let do_check_model loc m prop =
   let vs = Context.(
     (SymMap.bindings ctxt.computational @ SymMap.bindings ctxt.logical)
     |> List.Old.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
-    |> List.Old.map (fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc))
+    |> List.map ~f:(fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc))
   ) in
   let here = Locations.other __FUNCTION__ in
   let eqs = List.Old.filter_map (fun v -> match Solver.eval global (fst m) v with
@@ -582,7 +582,7 @@ let make_return_record loc (record_name:string) record_members =
   let@ () = add_l record_s record_bt (loc, lazy (Sym.pp record_s)) in
   let record_it = IT.sym_ (record_s, record_bt, loc) in
   let member_its =
-    List.Old.map (fun (s, member_bt) ->
+    List.map ~f:(fun (s, member_bt) ->
         IT.recordMember_ ~member_bt (record_it, s) loc
       ) record_members
   in
@@ -690,7 +690,7 @@ let map_and_fold_resources_internal loc
 
 
 (* let get_movable_indices () = *)
-(*   inspect (fun s -> List.Old.map (fun (pred, nm, _verb) -> (pred, nm)) s.movable_indices) *)
+(*   inspect (fun s -> List.map ~f:(fun (pred, nm, _verb) -> (pred, nm)) s.movable_indices) *)
 
 
 (* the main inference loop *)

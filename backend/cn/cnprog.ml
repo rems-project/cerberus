@@ -60,10 +60,10 @@ let rec subst substitution = function
            M_CN_extract (attrs, to_extract, IT.subst substitution it)
        | M_CN_unfold (fsym, args) ->
           (* fsym is a function symbol *)
-          M_CN_unfold (fsym, List.Old.map (IT.subst substitution) args)
+          M_CN_unfold (fsym, List.map ~f:(IT.subst substitution) args)
        | M_CN_apply (fsym, args) ->
           (* fsym is a lemma symbol *)
-          M_CN_apply (fsym, List.Old.map (IT.subst substitution) args)
+          M_CN_apply (fsym, List.map ~f:(IT.subst substitution) args)
        | M_CN_assert lc ->
           M_CN_assert (LC.subst substitution lc)
        | M_CN_inline nms ->
@@ -121,16 +121,16 @@ let dtree_of_cn_statement = function
      Dnode (pp_ctor "Split_case", [LC.dtree lc])
   | M_CN_extract (attrs, to_extract, it) ->
      Dnode (pp_ctor "Extract",
-            [Dnode (pp_ctor "Attrs", List.Old.map (fun s -> Dleaf (Id.pp s)) attrs);
+            [Dnode (pp_ctor "Attrs", List.map ~f:(fun s -> Dleaf (Id.pp s)) attrs);
                 dtree_of_to_extract to_extract; IT.dtree it])
   | M_CN_unfold (s, args) ->
-     Dnode (pp_ctor "Unfold", Dleaf (Sym.pp s) :: List.Old.map IT.dtree args)
+     Dnode (pp_ctor "Unfold", Dleaf (Sym.pp s) :: List.map ~f:IT.dtree args)
   | M_CN_apply (s, args) ->
-     Dnode (pp_ctor "Apply", Dleaf (Sym.pp s) :: List.Old.map IT.dtree args)
+     Dnode (pp_ctor "Apply", Dleaf (Sym.pp s) :: List.map ~f:IT.dtree args)
   | M_CN_assert lc ->
      Dnode (pp_ctor "Assert", [LC.dtree lc])
   | M_CN_inline nms ->
-     Dnode (pp_ctor "Inline", List.Old.map (fun nm -> Dleaf (Sym.pp nm)) nms)
+     Dnode (pp_ctor "Inline", List.map ~f:(fun nm -> Dleaf (Sym.pp nm)) nms)
   | M_CN_print it ->
      Dnode (pp_ctor "Print", [IT.dtree it])
 

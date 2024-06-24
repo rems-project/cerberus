@@ -410,40 +410,40 @@ let evaluate_fun mu_fun args =
      | _ -> None
      end
   | M_F_are_compatible ->
-     begin match List.Old.map IT.is_const args with
+     begin match List.map ~f:IT.is_const args with
      | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] ->
         if Sctypes.equal ct1 ct2
         then Some (`Result_IT (IT.bool_ true here)) else None
      | _ -> None
      end
   | M_F_size_of ->
-     begin match List.Old.map IT.is_const args with
+     begin match List.map ~f:IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
         Some (`Result_Integer (Z.of_int (Memory.size_of_ctype ct)))
      | _ -> None
      end
   | M_F_align_of ->
-     begin match List.Old.map IT.is_const args with
+     begin match List.map ~f:IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
         Some (`Result_Integer (Z.of_int (Memory.align_of_ctype ct)))
      | _ -> None
      end
   | M_F_max_int ->
-     begin match List.Old.map IT.is_const args with
+     begin match List.map ~f:IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
         Some (`Result_IT (IT.num_lit_ (Memory.max_integer_type ity) bt here))
      | _ -> None
      end
   | M_F_min_int ->
-     begin match List.Old.map IT.is_const args with
+     begin match List.map ~f:IT.is_const args with
      | [Some (IT.CType_const (Sctypes.Integer ity), _)] ->
         let bt = Memory.bt_of_sct (Sctypes.Integer ity) in
         Some (`Result_IT (IT.num_lit_ (Memory.min_integer_type ity) bt here))
      | _ -> None
      end
   | M_F_ctype_width ->
-     begin match List.Old.map IT.is_const args with
+     begin match List.map ~f:IT.is_const args with
      | [Some (IT.CType_const ct, _)] ->
         Some (`Result_Integer (Z.of_int (Memory.size_of_ctype ct * 8)))
      | _ -> None

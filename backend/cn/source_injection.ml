@@ -187,7 +187,7 @@ let inject st inj =
         do_output st str
     | Pre (strs, ret_ty, is_main) ->
         let indent = String.make (st.last_indent + 2) ' ' in
-        let indented_strs = List.Old.map (fun str -> str ^ indent) strs in
+        let indented_strs = List.map ~f:(fun str -> str ^ indent) strs in
         let str = List.Old.fold_left (^) "" indented_strs in
         do_output st begin
           "\n" ^ indent ^ "/* EXECUTABLE CN PRECONDITION */" ^
@@ -205,7 +205,7 @@ let inject st inj =
     | Post (strs, ret_ty) ->
         let indent = String.make st.last_indent ' ' in
         let epilogue_indent = String.make (st.last_indent + 2) ' ' in
-        let indented_strs = List.Old.map (fun str -> 
+        let indented_strs = List.map ~f:(fun str -> 
           let indent = if (String.contains str '{') then indent else epilogue_indent in
           "\n" ^ indent ^ str) 
         strs 
@@ -240,7 +240,7 @@ let sort_injects xs =
         | InStmt (n,  str) ->
             "InStmt["^ string_of_int n ^ "] ==> '" ^ String.escaped str ^ "'"
         | Pre (strs, _, _) ->
-            "Pre ==> [" ^ String.concat "," (List.Old.map (fun s -> "\"" ^ String.escaped s ^ "\"" ) strs) ^ "]"
+            "Pre ==> [" ^ String.concat "," (List.map ~f:(fun s -> "\"" ^ String.escaped s ^ "\"" ) strs) ^ "]"
         | Post _ ->
             "Post"
       end
@@ -296,7 +296,7 @@ let in_stmt_injs xs num_headers =
     (* Printf.fprintf stderr "IN_STMT_INJS[%s], start: %s -- end: %s ---> [%s]\n"
       (Cerb_location.location_to_string loc)
       (Pos.to_string start_pos) (Pos.to_string end_pos)
-      (String.concat "; " (List.Old.map (fun str -> "'" ^ String.escaped str ^ "'") strs)); *)
+      (String.concat "; " (List.map ~f:(fun str -> "'" ^ String.escaped str ^ "'") strs)); *)
     Ok
       { footprint=
           { start_pos= Pos.increment_line start_pos num_headers
@@ -406,7 +406,7 @@ let get_magics_of_statement stmt =
         let open Annot in
         match (attr.attr_ns, attr.attr_id, attr.attr_args) with
           | (Some (Symbol.Identifier (_, "cerb")), Symbol.Identifier (_, "magic"), xs) ->
-              List.Old.map (fun (loc, str, _) -> (loc, str)) xs :: acc
+              List.map ~f:(fun (loc, str, _) -> (loc, str)) xs :: acc
          | _ ->
             acc
       ) acc xs in

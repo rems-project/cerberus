@@ -73,7 +73,7 @@ let empty =
 
 
 
-let get_rs (ctxt : t) = List.Old.map fst (fst ctxt.resources)
+let get_rs (ctxt : t) = List.map ~f:fst (fst ctxt.resources)
 
 let pp_basetype_or_value = function
   | BaseType bt -> BaseTypes.pp bt
@@ -229,19 +229,19 @@ let json (ctxt : t) : Yojson.Safe.t =
   in
 
   let computational  =
-    List.Old.map (fun (sym, (binding, _)) ->
+    List.map ~f:(fun (sym, (binding, _)) ->
         `Assoc [("name", Sym.json sym);
                 ("type", basetype_or_value binding)]
       ) (SymMap.bindings ctxt.computational)
   in
   let logical =
-    List.Old.map (fun (sym, (binding, _)) ->
+    List.map ~f:(fun (sym, (binding, _)) ->
         `Assoc [("name", Sym.json sym);
                 ("type", basetype_or_value binding)]
       ) (SymMap.bindings ctxt.logical)
   in
-  let resources = List.Old.map RE.json (get_rs ctxt) in
-  let constraints = List.Old.map LC.json (LCSet.elements ctxt.constraints) in
+  let resources = List.map ~f:RE.json (get_rs ctxt) in
+  let constraints = List.map ~f:LC.json (LCSet.elements ctxt.constraints) in
   let json_record =
     `Assoc [("computational", `List computational);
             ("logical", `List logical);

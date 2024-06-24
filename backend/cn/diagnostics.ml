@@ -66,7 +66,7 @@ let bool_subterms1 t = match IT.term t with
   | _ -> []
 
 let rec bool_subterms_of t =
-  t :: List.Old.concat (List.Old.map bool_subterms_of (bool_subterms1 t))
+  t :: List.Old.concat (List.map ~f:bool_subterms_of (bool_subterms1 t))
 
 let constraint_ts () =
   let@ cs = get_cs () in
@@ -146,7 +146,7 @@ and investigate_eq_side _cfg (side_nm, t, t2) =
     print stdout (string side_nm ^^^ string "is in an equality group of size"
       ^^^ int (List.Old.length xs + 1) ^^^ string "with:" ^^^ brackets (list IT.pp xs));
     [{doc = string "switch with another from" ^^^ string side_nm ^^^ string "eq-group";
-      continue = continue_with (List.Old.map (fun t ->
+      continue = continue_with (List.map ~f:(fun t ->
           {doc = IT.pp t; continue = fun cfg ->
               let eq = IT.eq_ (t, t2) @@ Locations.other __FUNCTION__ in
               print stdout (bold "investigating eq:" ^^^ IT.pp eq);

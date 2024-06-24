@@ -55,15 +55,15 @@ module IndexTerms = struct
       | Binop (Sub, a, b) ->
           let (a_xs, a_r) = dest_int_addition ts a in
           let (b_xs, b_r) = dest_int_addition ts b in
-          let b_xs_neg = List.Old.map (fun (it, i) -> (it, Z.sub Z.zero i)) b_xs in
+          let b_xs_neg = List.map ~f:(fun (it, i) -> (it, Z.sub Z.zero i)) b_xs in
           (a_xs @ b_xs_neg, if IT.equal b_r z0 then a_r else sub_ (a_r, b_r) loc)
       | Binop (Mul, a, IT (Const (Z b_i), _, z_loc)) ->
           let (a_xs, a_r) = dest_int_addition ts a in
-          let a_xs_mul = List.Old.map (fun (it, i) -> (it, Z.mul i b_i)) a_xs in
+          let a_xs_mul = List.map ~f:(fun (it, i) -> (it, Z.mul i b_i)) a_xs in
           (a_xs_mul, if IT.equal a_r z0 then z0 else mul_ (a_r, z_ b_i z_loc) loc)
       | Binop (Mul, IT (Const (Z a_i), _, _z_loc), b) ->
           let (b_xs, b_r) = dest_int_addition ts b in
-          let b_xs_mul = List.Old.map (fun (it, i) -> (it, Z.mul i a_i)) b_xs in
+          let b_xs_mul = List.map ~f:(fun (it, i) -> (it, Z.mul i a_i)) b_xs in
           (b_xs_mul, if IT.equal b_r z0 then z0 else mul_ (z_ a_i loc, b_r) loc)
       | _ -> if fst ts || ITSet.mem it (snd ts) then ([(it, Z.of_int 1)], z0) else ([], it)
 
@@ -79,18 +79,18 @@ module IndexTerms = struct
         | (x :: xs) -> f x [] [] xs
 
   let simp_int_comp a b loc =
-      let a_elems = dest_int_addition (true, ITSet.empty) a |> fst |> List.Old.map fst in
-      let b_elems = dest_int_addition (true, ITSet.empty) b |> fst |> List.Old.map fst in
+      let a_elems = dest_int_addition (true, ITSet.empty) a |> fst |> List.map ~f:fst in
+      let b_elems = dest_int_addition (true, ITSet.empty) b |> fst |> List.map ~f:fst in
       let repeated = List.Old.sort IT.compare (a_elems @ b_elems)
           |> group IT.equal
           |> List.Old.filter (fun xs -> List.Old.length xs >= 2)
-          |> List.Old.map List.Old.hd |> ITSet.of_list in
+          |> List.map ~f:List.Old.hd |> ITSet.of_list in
       let (a_xs, a_r) = dest_int_addition (false, repeated) a in
       let (b_xs, b_r) = dest_int_addition (false, repeated) b in
-      let a_xs_neg = List.Old.map (fun (it, i) -> (it, Z.sub Z.zero i)) a_xs in
+      let a_xs_neg = List.map ~f:(fun (it, i) -> (it, Z.sub Z.zero i)) a_xs in
       let xs = List.Old.sort (fun a b -> IT.compare (fst a) (fst b)) (a_xs_neg @ b_xs)
           |> group (fun a b -> IT.equal (fst a) (fst b))
-          |> List.Old.map (fun xs -> (fst (List.Old.hd xs), List.Old.fold_left Z.add Z.zero (List.Old.map snd xs)))
+          |> List.map ~f:(fun xs -> (fst (List.Old.hd xs), List.Old.fold_left Z.add Z.zero (List.map ~f:snd xs)))
           |> List.Old.filter (fun t -> not (Z.equal (snd t) Z.zero))
       in
       let mul_z t i = if Z.equal i Z.one then t
@@ -127,7 +127,7 @@ module IndexTerms = struct
   (*   match IT.term it with *)
   (*     | DatatypeCons (nm, members_rec) -> *)
   (*       let members = BT.record_bt (IT.bt members_rec) in *)
-  (*       if List.Old.exists (Id.equal member) (List.Old.map fst members) *)
+  (*       if List.Old.exists (Id.equal member) (List.map ~f:fst members) *)
   (*       then record_member_reduce members_rec member *)
   (*       else IT.IT (DatatypeMember (it, member), member_bt) *)
   (*     | ITE (cond, it1, it2) -> *)
@@ -474,7 +474,7 @@ module IndexTerms = struct
        IT (EachI ((i1, (s', s_bt), i2), t), the_bt, the_loc)
 
     | Tuple its ->
-       let its = List.Old.map aux its in
+       let its = List.map ~f:aux its in
        IT (Tuple its, the_bt, the_loc)
     | NthTuple (n, it) ->
        let it = aux it in
@@ -492,7 +492,7 @@ module IndexTerms = struct
            str
        | _ ->
           let members =
-            List.Old.map (fun (member, it) ->
+            List.map ~f:(fun (member, it) ->
                 (member, aux it)
               ) members
           in
@@ -518,7 +518,7 @@ module IndexTerms = struct
        IT (StructUpdate ((t, m), v), the_bt, the_loc)
     | IT.Record members ->
        let members =
-         List.Old.map (fun (member, it) ->
+         List.map ~f:(fun (member, it) ->
              (member, aux it)
            ) members
        in
@@ -628,7 +628,7 @@ module IndexTerms = struct
 
     | Apply (name, args) ->
 
-      let args = List.Old.map aux args in
+      let args = List.map ~f:aux args in
       let t = IT (Apply (name, args), the_bt, the_loc) in
       if not inline_functions then t
       else begin
@@ -681,7 +681,7 @@ module ResourceTypes = struct
   let simp_predicate_type simp_ctxt (p : predicate_type) = {
       name = p.name;
       pointer = simp simp_ctxt p.pointer;
-      iargs = List.Old.map (simp simp_ctxt) p.iargs;
+      iargs = List.map ~f:(simp simp_ctxt) p.iargs;
     }
 
   let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
@@ -694,7 +694,7 @@ module ResourceTypes = struct
       q_loc = qp.q_loc;
       step = simp simp_ctxt qp.step;
       permission = and_ permission (IT.loc qp.permission);
-      iargs = List.Old.map (simp simp_ctxt) qp.iargs;
+      iargs = List.map ~f:(simp simp_ctxt) qp.iargs;
     }
 
 

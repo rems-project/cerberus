@@ -57,7 +57,7 @@ let relevant_predicate_clauses global name req =
     let defs = SymMap.bindings global.resource_predicates in
     List.Old.concat_map (fun (nm, def) ->
         match def.clauses with
-        | Some clauses -> List.Old.map (fun c -> (nm, c)) clauses
+        | Some clauses -> List.map ~f:(fun c -> (nm, c)) clauses
         | None -> []
       ) defs
   in
@@ -88,9 +88,9 @@ end
 
 let subterms_without_bound_variables bindings = 
   fold_subterms ~bindings (fun bindings acc t ->
-      let pats = List.Old.map fst bindings in
+      let pats = List.map ~f:fst bindings in
       let bound = List.Old.concat_map bound_by_pattern pats in
-      let bound = SymSet.of_list (List.Old.map fst bound) in
+      let bound = SymSet.of_list (List.map ~f:fst bound) in
       if SymSet.(is_empty (inter bound (IT.free_vars t))) 
       then ITSet.add t acc
       else acc
@@ -141,7 +141,7 @@ let state ctxt model_with_q extras =
         | BaseType ls -> Some (make s ls)
       in
       ITSet.of_list
-          (List.Old.map (fun (s, ls) -> make s ls) quantifier_counter_model
+          (List.map ~f:(fun (s, ls) -> make s ls) quantifier_counter_model
            @ List.Old.filter_map basetype_binding (SymMap.bindings ctxt.computational)
            @ List.Old.filter_map basetype_binding (SymMap.bindings ctxt.logical))
     in
@@ -198,8 +198,8 @@ let state ctxt model_with_q extras =
         ) filtered
     in
 
-    (List.Old.map snd interesting, 
-     List.Old.map snd uninteresting)
+    (List.map ~f:snd interesting, 
+     List.map ~f:snd uninteresting)
 
   in
 
@@ -213,8 +213,8 @@ let state ctxt model_with_q extras =
           | _ -> true
         ) (LCSet.elements ctxt.constraints)
     in
-    (List.Old.map LC.pp interesting, 
-     List.Old.map LC.pp uninteresting)
+    (List.map ~f:LC.pp interesting, 
+     List.map ~f:LC.pp uninteresting)
   in
 
   let resources =
@@ -231,11 +231,11 @@ let state ctxt model_with_q extras =
     in
 
     let interesting = 
-      List.Old.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res 
-      @ List.Old.map RE.pp interesting_diff_res
+      List.map ~f:(fun re -> RE.pp re ^^^ parens !^"same type") same_res 
+      @ List.map ~f:RE.pp interesting_diff_res
     in
     let uninteresting = 
-      List.Old.map RE.pp uninteresting_diff_res
+      List.map ~f:RE.pp uninteresting_diff_res
     in
     (interesting, uninteresting)
   in
@@ -287,7 +287,7 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
               clause = LogicalArgumentTypes.pp IT.pp c.packing_ft
             }
           in
-          List.Old.map doc_clause (relevant_predicate_clauses ctxt.global pname req)
+          List.map ~f:doc_clause (relevant_predicate_clauses ctxt.global pname req)
   in
   let requested = Option.map req_entry extras.request in
 

@@ -1,6 +1,5 @@
-(* This file re-exports the standard List library functions together
-   with a bunch of other useful list utilities. *)
-(* TODO: BCP: Probably not worth bothering with an mli file for this one... *)
+(* This file is in a state of transition from the old re-exports of the
+   standard List library functions plus extras to Base. *)
 
 include Base.List
 
@@ -107,5 +106,7 @@ let find_index pred xs =
     | [] -> None
     | x::xs -> if pred x then Some idx else aux (idx+1) xs in
   aux 0 xs
+
+let map [@deprecated "Use List.map ~f xs"] = map
 
 end

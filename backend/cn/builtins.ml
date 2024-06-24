@@ -198,4 +198,4 @@ let apply_builtin_funs fsym args loc =
     return (Some t)
 
 let cn_builtin_fun_names =
-  List.Old.map (fun (str,sym,_) -> (str, sym)) builtin_funs
+  List.map ~f:(fun (str,sym,_) -> (str, sym)) builtin_funs

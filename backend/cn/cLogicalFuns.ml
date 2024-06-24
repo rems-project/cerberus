@@ -457,7 +457,7 @@ let rec filter_syms ss p =
     if SymSet.mem s ss then p else mk (M_CaseBase (None, bt))
   | M_CaseBase (None, _) -> p
   | M_CaseCtor (M_Ctuple, ps) ->
-    let ps = List.Old.map (filter_syms ss) ps in
+    let ps = List.map ~f:(filter_syms ss) ps in
     if List.Old.for_all is_wild_pat ps
     then mk (M_CaseBase (None, CF.Core.BTy_unit))
     else mk (M_CaseCtor (M_Ctuple, ps))
@@ -485,7 +485,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def
   let here = Locations.other __FUNCTION__ in
   let def_args = def.LogicalFunctions.args
     (* TODO - add location information to binders *)
-    |> List.Old.map (fun (s, bt) -> IndexTerms.sym_ (s, bt, here)) in
+    |> List.map ~f:(fun (s, bt) -> IndexTerms.sym_ (s, bt, here)) in
   Pp.debug 3 (lazy (Pp.item "cn_function converting C function to logical"
     (Pp.infix_arrow (Sym.pp fsym) (Sym.pp id))));
   match fn with

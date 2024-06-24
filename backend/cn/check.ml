@@ -77,7 +77,7 @@ let rec check_and_match_pattern (M_Pattern (loc, _, bty, pattern)) it =
          let@ () = add_c loc (LC.t_ (ne_ (it, nil_ ~item_bt loc) loc)) in
          return (a1 @ a2)
       | M_Ctuple, pats ->
-         let@ () = ensure_base_type loc ~expect:bty (Tuple (List.Old.map bt_of_pattern pats)) in
+         let@ () = ensure_base_type loc ~expect:bty (Tuple (List.map ~f:bt_of_pattern pats)) in
          let@ all_as =
            ListM.mapiM (fun i p ->
                let ith = Simplify.IndexTerms.tuple_nth_reduce it i (bt_of_pattern p) in
@@ -167,7 +167,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
     ( fun tag mvals ->
       let@ () = WellTyped.WCT.is_ct loc (Struct tag) in
       let@ () = WellTyped.ensure_base_type loc ~expect (Struct tag) in
-      let mvals = List.Old.map (fun (id,ct,mv) -> (id, Sctypes.of_ctype_unsafe loc ct, mv)) mvals in
+      let mvals = List.map ~f:(fun (id,ct,mv) -> (id, Sctypes.of_ctype_unsafe loc ct, mv)) mvals in
       check_struct loc tag mvals )
     ( fun tag id mv ->
       check_union loc tag id mv )
@@ -262,7 +262,7 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
      let@ values = ListM.mapM (check_value loc) vals in
      return (list_ ~item_bt values ~nil_loc:loc)
   | M_Vtuple vals ->
-     let item_bts = List.Old.map bt_of_value vals in
+     let item_bts = List.map ~f:bt_of_value vals in
      let@ () = ensure_base_type loc ~expect (Tuple item_bts) in
      let@ values = ListM.mapM (check_value loc) vals in
      return (tuple_ values loc)
@@ -352,7 +352,7 @@ let known_function_pointer loc p =
     | Some _ -> (* no need to find more eqs *) return ()
     | None ->
       let global_funs = SymMap.bindings global.Global.fun_decls in
-      let fun_addrs = List.Old.map (fun (sym, (loc, _, _)) -> IT.sym_ (sym, BT.Loc, loc)) global_funs in
+      let fun_addrs = List.map ~f:(fun (sym, (loc, _, _)) -> IT.sym_ (sym, BT.Loc, loc)) global_funs in
       test_value_eqs loc None p fun_addrs
   in
   let@ now_known = eq_value_with (is_fun_addr global) p in
@@ -449,7 +449,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
   | M_PEctor (ctor, pes) ->
      begin match ctor, pes with
      | M_Ctuple, _ ->
-        let@ () = ensure_base_type loc ~expect (Tuple (List.Old.map bt_of_pexpr pes)) in
+        let@ () = ensure_base_type loc ~expect (Tuple (List.map ~f:bt_of_pexpr pes)) in
         check_pexprs pes (fun values -> k (tuple_ values loc))
      | M_Carray, _ ->
         let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
@@ -616,7 +616,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
            ensure_base_type loc ~expect:(Memory.bt_of_sct ct) (bt_of_pexpr pe')
          ) member_types xs
      in
-     check_pexprs (List.Old.map snd xs) (fun vs ->
+     check_pexprs (List.map ~f:snd xs) (fun vs ->
      let members = List.Old.map2 (fun (nm, _) v -> (nm, v)) xs vs in
      k (struct_ (tag, members) loc))
   | M_PEunion _ ->
@@ -964,7 +964,7 @@ let all_empty loc _original_resources =
 
 
 let compute_used loc (prev_rs, prev_ix) (post_rs, _) =
-  let post_ixs = IntSet.of_list (List.Old.map snd post_rs) in
+  let post_ixs = IntSet.of_list (List.map ~f:snd post_rs) in
   (* restore previous resources that have disappeared from the context, since they
      might participate in a race *)
   let all_rs = post_rs @ List.Old.filter (fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
@@ -994,7 +994,7 @@ let _check_used_distinct loc used =
           (RE.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
     end
   in
-  let@ w_map = check_ws IntMap.empty (List.Old.concat (List.Old.map snd used)) in
+  let@ w_map = check_ws IntMap.empty (List.Old.concat (List.map ~f:snd used)) in
   let check_rd (r, h, i) = match IntMap.find_opt i w_map with
     | None -> return ()
     | Some h2 ->
@@ -1002,7 +1002,7 @@ let _check_used_distinct loc used =
       fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
         (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
   in
-  ListM.iterM check_rd (List.Old.concat (List.Old.map fst used))
+  ListM.iterM check_rd (List.Old.concat (List.map ~f:fst used))
 
 (*type labels = (AT.lt * label_kind) SymMap.t*)
 
@@ -1032,7 +1032,7 @@ let instantiate loc filter arg =
         | _ -> None) (LCSet.elements constraints) in
   let extra_assumptions2, type_mismatch = List.Old.partition (fun ((_, bt), _) ->
         BT.equal bt (IT.bt arg_it)) extra_assumptions1 in
-  let extra_assumptions = List.Old.map (fun ((s, _), t) ->
+  let extra_assumptions = List.map ~f:(fun ((s, _), t) ->
         LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t)) extra_assumptions2
   in
   if List.Old.length extra_assumptions == 0 then Pp.warn loc (!^ "nothing instantiated")
@@ -1390,7 +1390,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      (* let@ (_ret_ct, _arg_cts) = match act.ct with *)
      (*     | Pointer (Function (ret_v_ct, arg_r_cts, is_variadic)) -> *)
      (*         assert (not is_variadic); *)
-     (*         return (snd ret_v_ct, List.Old.map fst arg_r_cts) *)
+     (*         return (snd ret_v_ct, List.map ~f:fst arg_r_cts) *)
      (*     | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "not a function pointer at call-site" *)
      (*                                                  (Sctypes.pp act.ct))}) *)
      (* in *)
@@ -1440,7 +1440,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
          k rt
      ))
   | M_Eunseq es ->
-     let@ () = ensure_base_type loc ~expect (Tuple (List.Old.map bt_of_expr es)) in
+     let@ () = ensure_base_type loc ~expect (Tuple (List.map ~f:bt_of_expr es)) in
      let rec aux es vs prev_used =
        match es with
        | e :: es' ->
@@ -1504,7 +1504,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                let quiet = List.Old.exists (Id.is_str "quiet") attrs in
                let@ () = add_movable_index loc (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
-               if (List.Old.equal Int.equal (List.Old.map snd original_rs) (List.Old.map snd upd_rs)
+               if (List.Old.equal Int.equal (List.map ~f:snd original_rs) (List.map ~f:snd upd_rs)
                    && not quiet)
                then warn loc (!^ "extract: index added, no resources (yet) extracted.")
                else ();
@@ -1530,7 +1530,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                end
             | M_CN_apply (lemma, args) ->
                let@ (_loc, lemma_typ) = get_lemma loc lemma in
-               let args = List.Old.map (fun arg -> (loc, arg)) args in
+               let args = List.map ~f:(fun arg -> (loc, arg)) args in
                Spine.calltype_lemma loc ~lemma args lemma_typ (fun lrt ->
                    let@ _, members = make_return_record loc (TypeErrors.call_prefix (LemmaApplication lemma)) (LRT.binders lrt) in
                    let@ () = bind_logical_return loc members lrt in
@@ -1895,7 +1895,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
 
 let check_c_functions funs =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
-  let str_fsyms s = match List.Old.filter (matches_str s) (List.Old.map fst funs) with
+  let str_fsyms s = match List.Old.filter (matches_str s) (List.map ~f:fst funs) with
     | [] ->
       Pp.warn_noloc (!^"function" ^^^ !^s ^^^ !^"not found");
       []
@@ -2013,7 +2013,7 @@ let record_and_check_datatypes datatypes =
   ListM.iterM (fun (s, {loc=_; cases}) ->
       let@ () =
         add_datatype s {
-            dt_constrs = List.Old.map fst cases;
+            dt_constrs = List.map ~f:fst cases;
             dt_all_params = List.Old.concat_map snd cases
           }
       in
