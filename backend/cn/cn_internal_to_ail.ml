@@ -68,8 +68,8 @@ end
 let members_equal ms ms' = 
   if ((List.length ms) != (List.length ms')) then false else
   (if (List.length ms == 0) then true else (
-  let (ids, cn_bts) = List.Old.split ms in
-  let (ids', cn_bts') = List.Old.split ms' in
+  let (ids, cn_bts) = List.unzip  ms in
+  let (ids', cn_bts') = List.unzip  ms' in
   let ctypes_eq = List.Old.map2 (fun cn_bt cn_bt'->
     let bt = cn_base_type_to_bt cn_bt in
     let bt' = cn_base_type_to_bt cn_bt' in
@@ -615,7 +615,7 @@ let generate_ownership_function with_ownership_checking ctype =
   let param2_sym = Sym.fresh_pretty "owned_enum" in
   let param1 = (param1_sym, bt_to_ail_ctype BT.Loc) in
   let param2 = (param2_sym, mk_ctype (C.(Basic (Integer (Enum (Sym.fresh_pretty "OWNERSHIP")))))) in
-  let (param_syms, param_types) = List.Old.split [param1; param2] in
+  let (param_syms, param_types) = List.unzip  [param1; param2] in
   let param_types = List.map ~f:(fun t -> (empty_qualifiers, t, false)) param_types in
   let ownership_fcall_maybe = 
   if with_ownership_checking then 
@@ -1090,7 +1090,7 @@ let rec cn_to_ail_expr_aux_internal
                             let constr_binding = create_binding count_sym (mk_ctype C.(Pointer (empty_qualifiers, (mk_ctype C.(Struct lc_sym))))) in
                             let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
 
-                            let (ids, ts) = List.Old.split (List.Old.rev members_with_types) in
+                            let (ids, ts) = List.unzip  (List.Old.rev members_with_types) in
                             let bts = List.map ~f:cn_base_type_to_bt ts in
                             let new_constr_it = IT.IT (Sym count_sym, BT.Struct lc_sym, Cerb_location.unknown) in
                             let vars' = List.map ~f:(fun id -> T.StructMember (new_constr_it, id)) ids in
@@ -1311,7 +1311,7 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
   let rec get_constrs_and_ms = function 
   | [] -> failwith "Datatype default generation failure: datatype has no constructors"
   | ((_, members) as x) :: xs -> 
-    let (ids, basetypes) = List.Old.split members in 
+    let (ids, basetypes) = List.unzip  members in 
     if List.Old.mem BT.equal (Datatype cn_sym) (List.map ~f:cn_base_type_to_bt basetypes) then 
       get_constrs_and_ms xs 
     else 
@@ -1895,7 +1895,7 @@ let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition))
   in
   let ail_record_opt = generate_record_opt fn_sym lf_def.return_bt in
   let params = List.map ~f:(fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) lf_def.args in
-  let (param_syms, param_types) = List.Old.split params in
+  let (param_syms, param_types) = List.unzip  params in
   let param_types = List.map ~f:(fun t -> (empty_qualifiers, t, false)) param_types in
   let matched_cn_functions = List.filter ~f:(fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> Sym.equal cn_fun.cn_func_name fn_sym) cn_functions in
   (* Unsafe - check if list has an element *)
@@ -1976,7 +1976,7 @@ let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definit
   let params = List.map ~f:(fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) ((rp_def.pointer, BT.Loc) :: rp_def.iargs) in
   let enum_param_sym = Sym.fresh_pretty "owned_enum" in
   let params = params @ [(enum_param_sym, mk_ctype (C.(Basic (Integer (Enum (Sym.fresh_pretty "OWNERSHIP"))))))] in
-  let (param_syms, param_types) = List.Old.split params in
+  let (param_syms, param_types) = List.unzip  params in
   let param_types = List.map ~f:(fun t -> (empty_qualifiers, t, false)) param_types in
   (* Generating function declaration *)
   let decl = (pred_sym, (rp_def.loc, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
@@ -2107,7 +2107,7 @@ let cn_to_ail_cnprog_internal dts globals cn_prog =
 
 let cn_to_ail_statements dts globals (loc, cn_progs) = 
   let bs_and_ss = List.map ~f:(fun prog -> cn_to_ail_cnprog_internal dts globals prog) cn_progs in 
-  let (bs, ss) = List.Old.split bs_and_ss in 
+  let (bs, ss) = List.unzip  bs_and_ss in 
   (loc, (List.concat bs, List.concat ss))
 
 let prepend_to_precondition ail_executable_spec (b1, s1) = 

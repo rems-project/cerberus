@@ -844,7 +844,7 @@ let rec n_expr ~inherit_loc (loc : Loc.t) ((env, old_states), desugaring_things)
                   return (desugared_stmt, stmt)
               ) parsed_stmts
             in
-            let desugared_stmts, stmts = List.Old.split desugared_stmts_and_stmts in
+            let desugared_stmts, stmts = List.unzip desugared_stmts_and_stmts in
             return (M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))
           | [] ->
              n_expr e1

@@ -886,7 +886,7 @@ let rec translate_term s iterm =
 
   | NthList (x,y,z) ->
     let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
-    let (arg_ts,args) = List.Old.split (List.map ~f:arg [x;y;z]) in
+    let (arg_ts,args) = List.unzip  (List.map ~f:arg [x;y;z]) in
     let bt      = IT.basetype iterm in
     let res_t   = translate_base_type bt in
     let f = declare_bt_uninterpreted s CN_Constant.nth_list bt arg_ts res_t in
@@ -894,7 +894,7 @@ let rec translate_term s iterm =
 
   | ArrayToList (x,y,z) ->
     let arg x   = (translate_base_type (IT.basetype x), translate_term s x) in
-    let (arg_ts,args) = List.Old.split (List.map ~f:arg [x;y;z]) in
+    let (arg_ts,args) = List.unzip  (List.map ~f:arg [x;y;z]) in
     let bt      = IT.basetype iterm in
     let res_t   = translate_base_type bt in
     let f = declare_bt_uninterpreted s
@@ -972,7 +972,7 @@ let rec translate_term s iterm =
           let new_v = SMT.app_ (CN_Names.datatype_field_name f) [v] in
           match_pat new_v nested in
 
-        let (conds,defs) = List.Old.split (List.map ~f:field fs) in
+        let (conds,defs) = List.unzip  (List.map ~f:field fs) in
         let nested_cond = SMT.bool_ands (List.filter_map ~f:(fun x -> x) conds) in
         let cname = CN_Names.datatype_con_name c in
         let cond  = SMT.bool_and (SMT.is_con cname v) nested_cond in

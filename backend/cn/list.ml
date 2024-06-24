@@ -121,4 +121,6 @@ let filter [@deprecated "Use List.filter xs ~f"] = filter
 
 let hd [@deprecated "Use List.hd_exn"] = hd
 
+let split [@deprecated "Use List.unzip"] = split
+
 end
