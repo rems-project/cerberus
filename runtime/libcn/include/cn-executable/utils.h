@@ -16,8 +16,6 @@ struct cn_error_message_info {
     char *cn_source_loc;
 };
 
-void (*cn_exit)(void);
-
 /* Wrappers for C types */
 
 /* Signed bitvectors */
