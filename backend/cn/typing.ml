@@ -264,9 +264,9 @@ let get_datatype_constr loc tag =
 
 let get_member_type loc _tag member layout : (Sctypes.t) m =
   let member_types = Memory.member_types layout in
-  match List.assoc_opt Id.equal member member_types with
+  match List.Old.assoc_opt Id.equal member member_types with
   | Some membertyp -> return membertyp
-  | None -> fail (fun _ -> {loc; msg = Unexpected_member (List.map fst member_types, member)})
+  | None -> fail (fun _ -> {loc; msg = Unexpected_member (List.map ~f:fst member_types, member)})
 
 let get_struct_member_type loc tag member =
   let@ decl = get_struct_decl loc tag in
@@ -338,7 +338,7 @@ let get_datatype_order () =
 let add_sym_eqs sym_eqs =
   modify (fun s ->
     let sym_eqs =
-      List.fold_left (fun acc (s, v) ->
+      List.Old.fold_left (fun acc (s, v) ->
           SymMap.add s v acc
         ) s.sym_eqs sym_eqs
     in
@@ -434,7 +434,7 @@ let add_c_internal lc =
   let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
   let s = Context.add_c lc s in
   let () = Solver.add_assumption solver s.global lc in
-  let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
+  let@ _ = add_sym_eqs (List.filter_map ~f:(LC.is_sym_lhs_equality) [lc]) in
   let@ _ = add_found_equalities lc in
   let@ () = set_typing_context s in
   return ()
@@ -494,7 +494,7 @@ let model () =
 
 let get_just_models () =
   let@ ms = get_past_models () in
-  return (List.map fst ms)
+  return (List.map ~f:fst ms)
 
 let model_has_prop () =
   let@ global = get_global () in
@@ -524,11 +524,11 @@ let do_check_model loc m prop =
   let@ global = get_global () in
   let vs = Context.(
     (SymMap.bindings ctxt.computational @ SymMap.bindings ctxt.logical)
-    |> List.filter (fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
-    |> List.map (fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc))
+    |> List.filter ~f:(fun (_, (bt_or_v, _)) -> not (has_value bt_or_v))
+    |> List.map ~f:(fun (nm, (bt_or_v, (loc, _))) -> IT.sym_ (nm, bt_of bt_or_v, loc))
   ) in
   let here = Locations.other __FUNCTION__ in
-  let eqs = List.filter_map (fun v -> match Solver.eval global (fst m) v with
+  let eqs = List.filter_map ~f:(fun v -> match Solver.eval global (fst m) v with
     | None -> None
     | Some x -> Some (IT.eq_ (v, x) here)
   ) vs in
@@ -545,7 +545,7 @@ let cond_check_model loc m prop =
 let model_with_internal loc prop =
   let@ ms = get_just_models () in
   let@ has_prop = model_has_prop () in
-  match List.find_opt (has_prop prop) ms with
+  match List.find ~f:(has_prop prop) ms with
     | Some m -> return (Some m)
     | None -> begin
       let@ prover = provable_internal loc in
@@ -580,7 +580,7 @@ let make_return_record loc (record_name:string) record_members =
   let@ () = add_l record_s record_bt (loc, lazy (Sym.pp record_s)) in
   let record_it = IT.sym_ (record_s, record_bt, loc) in
   let member_its =
-    List.map (fun (s, member_bt) ->
+    List.map ~f:(fun (s, member_bt) ->
         IT.recordMember_ ~member_bt (record_it, s) loc
       ) record_members
   in
@@ -655,7 +655,7 @@ let map_and_fold_resources_internal loc
   let (resources, orig_ix) = s.resources in
   let orig_hist = s.resource_history in
   let resources, ix, hist, changed_or_deleted, acc =
-    List.fold_right (fun (re, i) (resources, ix, hist, changed_or_deleted, acc) ->
+    List.Old.fold_right (fun (re, i) (resources, ix, hist, changed_or_deleted, acc) ->
         let (changed, acc) = f re acc in
         match changed with
         | Deleted ->
@@ -688,7 +688,7 @@ let map_and_fold_resources_internal loc
 
 
 (* let get_movable_indices () = *)
-(*   inspect (fun s -> List.map (fun (pred, nm, _verb) -> (pred, nm)) s.movable_indices) *)
+(*   inspect (fun s -> List.map ~f:(fun (pred, nm, _verb) -> (pred, nm)) s.movable_indices) *)
 
 
 (* the main inference loop *)
@@ -707,7 +707,7 @@ let do_unfold_resources loc =
     | Some model ->
     let@ (provable_m, provable_f2) = prove_or_model_with_past_model loc model in
     let keep, unpack, extract =
-      List.fold_right (fun (re, i) (keep, unpack, extract) ->
+      List.Old.fold_right (fun (re, i) (keep, unpack, extract) ->
           match Pack.unpack loc s.global provable_f2 re with
           | Some unpackable ->
               let pname = RET.pp_predicate_name (RET.predicate_name (fst re)) in
@@ -780,7 +780,7 @@ let prev_models_with loc prop =
   let@ () = sync_unfold_resources loc in
   let@ ms = get_just_models () in
   let@ has_prop = model_has_prop () in
-  return (List.filter (has_prop prop) ms)
+  return (List.filter ~f:(has_prop prop) ms)
 
 let model_with loc prop =
   let@ () = sync_unfold_resources loc in
@@ -807,7 +807,7 @@ let test_value_eqs loc guard x ys =
     | y :: ys ->
       let@ has_prop = model_has_prop () in
       let counterex = has_prop (IT.not_ (IT.eq_ (x, y) here) here) in
-      if ITSet.mem y group || List.exists counterex ms
+      if ITSet.mem y group || List.exists ~f:counterex ms
       then loop group ms ys
       else match prover (prop y) with
         | `True ->

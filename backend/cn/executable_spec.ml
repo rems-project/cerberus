@@ -1,15 +1,15 @@
 let rec group_toplevel_defs new_list = function
   | [] -> new_list
   | (loc, strs) :: xs ->
-      let matching_elems = List.filter (fun (toplevel_loc, _) ->
+      let matching_elems = List.filter ~f:(fun (toplevel_loc, _) ->
         loc == toplevel_loc
       ) new_list in
-      if List.is_empty matching_elems then
+      if List.Old.is_empty matching_elems then
         group_toplevel_defs ((loc, strs) :: new_list) xs
       else
         (* Unsafe *)
-        let (_, toplevel_strs) = List.nth matching_elems 0 in
-        let non_matching_elems = List.filter (fun (toplevel_loc, _) ->
+        let (_, toplevel_strs) = List.nth_exn matching_elems 0 in
+        let non_matching_elems = List.filter ~f:(fun (toplevel_loc, _) ->
           loc != toplevel_loc
         ) new_list in
         group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs
@@ -69,7 +69,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   Stdlib.output_string cn_oc records_str;
   Stdlib.output_string cn_oc records_str';
   Stdlib.output_string cn_oc "\n/* CN DATATYPES */\n\n";
-  Stdlib.output_string cn_oc (String.concat "\n" (List.map snd c_datatypes));
+  Stdlib.output_string cn_oc (String.concat "\n" (List.map ~f:snd c_datatypes));
   Stdlib.output_string cn_oc record_equality_fun_strs;
   Stdlib.output_string cn_oc record_equality_fun_strs';
   Stdlib.output_string cn_oc conversion_function_defs;
@@ -79,8 +79,8 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   Stdlib.output_string cn_oc c_predicate_defs;
 
   let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
-  let headers = List.map Executable_spec_utils.generate_include_header incls in
-  Stdlib.output_string oc (List.fold_left (^) "" headers);
+  let headers = List.map ~f:Executable_spec_utils.generate_include_header incls in
+  Stdlib.output_string oc (List.Old.fold_left (^) "" headers);
   Stdlib.output_string oc "\n";
   Stdlib.output_string oc extern_ownership_globals;
   Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
@@ -95,20 +95,20 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
 
   let filter_injs_by_filename struct_inj_pairs fn =
-    List.filter (fun (loc, _inj) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs
+    List.filter ~f:(fun (loc, _inj) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs
   in
   let source_file_struct_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames filename in
-  let source_file_struct_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) source_file_struct_injs_with_syms in
+  let source_file_struct_injs = List.map ~f:(fun (loc, (_sym, strs)) -> (loc, strs)) source_file_struct_injs_with_syms in
 
-  let included_filenames = List.map (fun (loc, _inj) -> Cerb_location.get_filename loc) struct_injs_with_filenames in
+  let included_filenames = List.map ~f:(fun (loc, _inj) -> Cerb_location.get_filename loc) struct_injs_with_filenames in
   let rec open_auxilliary_files included_filenames already_opened_list = match included_filenames with
     | [] -> []
     | fn :: fns ->
         begin match fn with
         | Some fn' ->
-          if String.equal fn' filename || List.mem String.equal fn' already_opened_list then [] else
+          if String.equal fn' filename || List.Old.mem String.equal fn' already_opened_list then [] else
           let fn_list = String.split_on_char '/' fn' in
-          let output_fn = List.nth fn_list (List.length fn_list - 1) in
+          let output_fn = List.nth_exn fn_list (List.length fn_list - 1) in
           let output_fn_with_prefix = prefix ^ output_fn in
           if Sys.file_exists output_fn_with_prefix then
             (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;
@@ -128,7 +128,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   | [] -> ()
   | (fn', oc') :: xs ->
     let header_file_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames fn' in
-    let header_file_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) header_file_injs_with_syms in
+    let header_file_injs = List.map ~f:(fun (loc, (_sym, strs)) -> (loc, strs)) header_file_injs_with_syms in
     Stdlib.output_string oc' cn_utils_header;
     begin match
       Source_injection.(output_injections oc'
@@ -147,8 +147,8 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
     inject_structs_in_header_files xs
   in
 
-  let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
-  let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
+  let c_datatypes_with_fn_prots = List.zip_exn c_datatypes c_datatype_equality_fun_decls in
+  let c_datatypes_locs_and_strs = List.map ~f:(fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
 
   
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in

@@ -2,6 +2,9 @@
    with a bunch of other useful list utilities. *)
 (* TODO: BCP: Probably not worth bothering with an mli file for this one... *)
 
+include Base.List
+
+module Old = struct
 include Stdlib.List
 
 let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list =
@@ -104,3 +107,5 @@ let find_index pred xs =
     | [] -> None
     | x::xs -> if pred x then Some idx else aux (idx+1) xs in
   aux 0 xs
+
+end

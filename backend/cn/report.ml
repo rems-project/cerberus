@@ -64,10 +64,10 @@ let div ?clss ?id elements =
 (* let pre code = enclose "pre" code *)
 (* let body elements = enclose "body" (list elements) *)
 let h i title body = list [enclose ("h"^string_of_int i) title; body]
-let table_row cols = enclose "tr" (list (List.map (enclose "td") cols))
-let table_head_row cols = enclose "tr" (list (List.map (enclose "th") cols))
+let table_row cols = enclose "tr" (list (List.map ~f:(enclose "td") cols))
+let table_head_row cols = enclose "tr" (list (List.map ~f:(enclose "th") cols))
 let table_head cols = enclose "thead" (table_head_row cols)
-let table_body rows = enclose "tbody" (list (List.map table_row rows))
+let table_body rows = enclose "tbody" (list (List.map ~f:table_row rows))
 let table head rows = enclose "table" (list [table_head head; table_body rows])
 let table_without_head rows = enclose "table" (list [table_body rows])
 let details summary more = enclose "details" (list [enclose "summary" summary; more])
@@ -122,7 +122,7 @@ let make_predicate_hints predicate_hints =
   lguard predicate_hints (fun predicate_hints ->
     h 1 "Possibly relevant predicate clauses" (
       table ["condition"; "clause"]
-        (List.map (fun pce -> [Pp.plain pce.cond; Pp.plain pce.clause]) predicate_hints)
+        (List.map ~f:(fun pce -> [Pp.plain pce.cond; Pp.plain pce.clause]) predicate_hints)
     )
   )
 
@@ -132,7 +132,7 @@ let make_predicate_hints predicate_hints =
 (*     | [] -> "(no available resources)" *)
 (*     | _ -> *)
 (*       table ["resource"; "byte span and match"] *)
-(*         (List.map (fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources) *)
+(*         (List.map ~f:(fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources) *)
 (*   ) *)
 
 
@@ -150,7 +150,7 @@ let interesting_uninteresting
 
 
 let make_resources (interesting, uninteresting) =
-  let make = List.map (fun re -> [Pp.plain re; (* Pp.plain re.res_span *)]) in
+  let make = List.map ~f:(fun re -> [Pp.plain re; (* Pp.plain re.res_span *)]) in
   let interesting_table = table_without_head (make interesting) in
   let uninteresting_table = table_without_head (make uninteresting) in
   h 1 "Available resources" (
@@ -162,7 +162,7 @@ let make_resources (interesting, uninteresting) =
 
 
 let make_terms (interesting, uninteresting) =
-  let make = List.map (fun v -> [Pp.plain v.term; Pp.plain v.value]) in
+  let make = List.map ~f:(fun v -> [Pp.plain v.term; Pp.plain v.value]) in
   let interesting_table = table ["term"; "value"] (make interesting) in
   let uninteresting_table = table ["term"; "value"] (make uninteresting) in
   h 1 "Terms" 
@@ -171,7 +171,7 @@ let make_terms (interesting, uninteresting) =
        (uninteresting_table, uninteresting))
 
 let make_constraints (interesting, uninteresting) =
-  let make = List.map (fun c -> [Pp.plain c]) in
+  let make = List.map ~f:(fun c -> [Pp.plain c]) in
   let interesting_table = table_without_head (make interesting) in
   let uninteresting_table = table_without_head (make uninteresting) in
   h 1 "Constraints"
@@ -447,7 +447,7 @@ function highlight(line, start_col, end_col) {
       str = div.textContent
       before = str.substring(0, start_col-1)
       hl = document.createElement("span")
-      hl.classList.add("hl")
+      hl.classList.Old.add("hl")
       hl.textContent = str.substring(start_col-1,end_col-1)
       after = str.substring(end_col-1)
       div.replaceChildren(before,hl,after)
@@ -467,7 +467,7 @@ function multiline_highlight(start_line, start_col, end_line, end_col) {
         cn_code.scrollTop = div.offsetTop
       }
       hl = document.createElement("span")
-      hl.classList.add("hl")
+      hl.classList.Old.add("hl")
       // TODO: probably could be written nicer
       if (start_line == end_line) {
         before = str.substring(0, start_col)
@@ -563,9 +563,9 @@ function create_line(n, str) {
   nb_div = document.createElement("div")
   str_div = document.createElement("div")
   nb_div.textContent = n
-  nb_div.classList.add("nb")
+  nb_div.classList.Old.add("nb")
   str_div.textContent = str
-  str_div.classList.add("line")
+  str_div.classList.Old.add("line")
   ret = document.createElement("div")
   ret.style.display = "flex"
   ret.replaceChildren(nb_div, str_div)
@@ -659,7 +659,7 @@ let make filename source_filename_opt (report: report) =
     ; {|<input type="button" value="last" onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>|} ] in
 
   let pages = div ~id:"pages" begin
-    List.map (fun state ->
+    List.map ~f:(fun state ->
       make_state
         state
         report.requested

@@ -155,7 +155,7 @@ let commas l = list (fun pp -> pp) l
 *)
 
 let list_filtered f l =
-  match List.filter_map f l with
+  match List.filter_map ~f:f l with
   | [] -> !^"(empty)"
   | l -> flow (comma ^^ break 1) l
 
@@ -270,7 +270,7 @@ let error (loc : Locations.t) (msg : document) extras =
                 format [Bold; Red] "error:" ^^^
                 format [Bold] @@ plain msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos;
-  List.iter (fun pp -> print stderr pp) extras
+  List.iter ~f:(fun pp -> print stderr pp) extras
 
 
 (* stealing some logic from pp_errors *)

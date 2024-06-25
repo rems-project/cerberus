@@ -95,13 +95,13 @@ let ensure_same_argument_number loc input_output has ~expect =
 let compare_by_fst_id (x,_) (y,_) = Id.compare x y
 
 let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
-  let needed = IdSet.of_list (List.map fst spec) in
+  let needed = IdSet.of_list (List.map ~f:fst spec) in
   let@ needed =
     ListM.fold_leftM (fun needed (id, _) ->
         if IdSet.mem id needed then
           return (IdSet.remove id needed)
         else
-          fail (fun _ -> {loc; msg = Unexpected_member (List.map fst spec, id)})
+          fail (fun _ -> {loc; msg = Unexpected_member (List.map ~f:fst spec, id)})
       ) needed have
   in
   match IdSet.elements needed with
@@ -110,9 +110,9 @@ let correct_members loc (spec : (Id.t * 'a) list) (have : (Id.t * 'b) list) =
 
 let correct_members_sorted_annotated loc spec have =
   let@ () = correct_members loc spec have in
-  let have = List.sort compare_by_fst_id have in
+  let have = List.Old.sort compare_by_fst_id have in
   let have_annotated =
-    List.map2 (fun (id,bt) (id',x) ->
+    List.map2_exn ~f:(fun (id,bt) (id',x) ->
         assert (Id.equal id id');
         (bt, (id', x))
       ) spec have
@@ -157,7 +157,7 @@ module WBT = struct
                return (id, bt)
              ) members
          in
-         assert (List.sorted_and_unique compare_by_fst_id members);
+         assert (List.Old.sorted_and_unique compare_by_fst_id members);
          return (Record members)
       | Map (abt, rbt) ->
          let@ abt = aux abt in
@@ -202,7 +202,7 @@ module WCT = struct
       | Array (ct, _) -> aux ct
       | Pointer ct -> aux ct
       | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
-      | Function ((_, rct), args, _) -> ListM.iterM aux (rct :: List.map fst args)
+      | Function ((_, rct), args, _) -> ListM.iterM aux (rct :: List.map ~f:fst args)
     in
     fun ct -> aux ct
 
@@ -255,11 +255,11 @@ module WIT = struct
     match case with
     | Pat (PWild, _, loc) :: pats
     | Pat (PSym _, _, loc) :: pats ->
-       Some (List.map (fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.c_params @ pats)
+       Some (List.map ~f:(fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.c_params @ pats)
     | Pat (PConstructor (constr', args), _, _) :: pats
          when Sym.equal constr constr' ->
-       assert (List.for_all2 (fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
-       Some (List.map snd args @ pats)
+       assert (List.for_all2_exn ~f:(fun (m,_) (m',_) -> Id.equal m m') constr_info.c_params args);
+       Some (List.map ~f:snd args @ pats)
     | Pat (PConstructor (_constr', _args), _, _) :: _pats ->
        None
     | [] ->
@@ -271,7 +271,7 @@ module WIT = struct
   let rec cases_complete loc (bts : BT.t list) (cases : ((BT.t pattern) list) list) =
     match bts with
     | [] ->
-       assert (List.for_all (function [] -> true | _ -> false) cases);
+       assert (List.for_all ~f:(function [] -> true | _ -> false) cases);
        begin match cases with
        | [] -> fail (fun _ -> {loc; msg = Generic !^"Incomplete pattern"})
        | _ -> return ()
@@ -279,8 +279,8 @@ module WIT = struct
        (* | _::_::_ -> fail (fun _ -> {loc; msg = Generic !^"Duplicate pattern"}) *)
        end
     | bt::bts ->
-       if List.for_all leading_sym_or_wild cases then
-         cases_complete loc bts (List.map List.tl cases)
+       if List.for_all ~f:leading_sym_or_wild cases then
+         cases_complete loc bts (List.map ~f:List.tl_exn cases)
        else
          begin match bt with
          | (Unit|Bool|Integer|Bits _|Real|Alloc_id|Loc|CType|Struct _|
@@ -291,8 +291,8 @@ module WIT = struct
             ListM.iterM (fun constr ->
                 let@ constr_info = get_datatype_constr loc constr  in
                 let relevant_cases =
-                  List.filter_map (expand_constr (constr, constr_info)) cases in
-                let member_bts = List.map snd constr_info.c_params in
+                  List.filter_map ~f:(expand_constr (constr, constr_info)) cases in
+                let member_bts = List.map ~f:snd constr_info.c_params in
                 cases_complete loc (member_bts @ bts) relevant_cases
               ) dt_info.dt_constrs
          end
@@ -304,12 +304,12 @@ module WIT = struct
       | Pat (PWild, _, _), _ -> true
       | Pat (PSym _, _, _), _ -> true
       | Pat (PConstructor (s1, ps1), _, _), Pat (PConstructor (s2, ps2), _, _)
-        when (Sym.equal s1 s2 && List.equal Id.equal (List.map fst ps1) (List.map fst ps2)) ->
-          List.for_all2 covers (List.map snd ps1) (List.map snd ps2)
+        when (Sym.equal s1 s2 && List.Old.equal Id.equal (List.map ~f:fst ps1) (List.map ~f:fst ps2)) ->
+          List.for_all2_exn ~f:covers (List.map ~f:snd ps1) (List.map ~f:snd ps2)
       | _, _ -> false
     in
     let@ _ = ListM.fold_leftM (fun prev (Pat (_, _, pat_loc) as pat) ->
-      match List.find_opt (fun p1 -> covers p1 pat) prev with
+      match List.find ~f:(fun p1 -> covers p1 pat) prev with
       | None -> return (pat :: prev)
       | Some (Pat (case, _, p1_loc)) ->
         let (prev_head, prev_pos) = Locations.head_pos_of_location p1_loc in
@@ -576,13 +576,13 @@ module WIT = struct
            end
       | Tuple ts ->
          let@ ts = ListM.mapM (infer) ts in
-         let bts = List.map IT.bt ts in
+         let bts = List.map ~f:IT.bt ts in
          return (IT (Tuple ts,BT.Tuple bts, loc))
       | NthTuple (n, t') ->
          let@ t' = infer t' in
          let@ item_bt = match IT.bt t' with
            | Tuple bts ->
-              begin match List.nth_opt bts n with
+              begin match List.nth bts n with
               | Some t -> return t
               | None ->
                  let expected = string_of_int n ^ "-tuple" in
@@ -599,7 +599,7 @@ module WIT = struct
          (* "sort" according to declaration *)
          let@ members_sorted =
            ListM.mapM (fun (id, ct) ->
-               let@ t = check loc (Memory.bt_of_sct ct) (List.assoc Id.equal id members) in
+               let@ t = check loc (Memory.bt_of_sct ct) (List.Old.assoc Id.equal id members) in
                return (id, t)
              ) decl_members
          in
@@ -630,14 +630,14 @@ module WIT = struct
          let@ v = check (IT.loc t) (Memory.bt_of_sct field_ct) v in
          return (IT (StructUpdate ((t, member), v),BT.Struct tag, loc))
       | Record members ->
-         assert (List.sorted_and_unique compare_by_fst_id members);
+         assert (List.Old.sorted_and_unique compare_by_fst_id members);
          let@ members =
            ListM.mapM (fun (id, t) ->
                let@ t = infer t in
                return (id, t)
              ) members
          in
-         let member_types = List.map (fun (id, t) -> (id, IT.bt t)) members in
+         let member_types = List.map ~f:(fun (id, t) -> (id, IT.bt t)) members in
          return (IT (IT.Record members,BT.Record member_types, loc))
       | RecordMember (t, member) ->
          let@ t = infer t in
@@ -648,7 +648,7 @@ module WIT = struct
              let reason = Either.Left loc in
              fail (illtyped_index_term loc t has ~expected ~reason)
          in
-         let@ bt = match List.assoc_opt Id.equal member members with
+         let@ bt = match List.Old.assoc_opt Id.equal member members with
            | Some bt -> return bt
            | None ->
               let expected = "struct with member " ^ Id.pp_string member in
@@ -665,7 +665,7 @@ module WIT = struct
              let reason = Either.Left loc in
              fail (illtyped_index_term loc t has ~expected ~reason)
          in
-         let@ bt = match List.assoc_opt Id.equal member members with
+         let@ bt = match List.Old.assoc_opt Id.equal member members with
            | Some bt -> return bt
            | None ->
               let expected = "struct with member " ^ Id.pp_string member in
@@ -779,7 +779,7 @@ module WIT = struct
             ListM.mapM check_elem rest in
           let@ last = check t1_loc (List t1_bt) last in
           let cons (hd, loc) tl = IT (Cons (hd, tl), BT.List t1_bt, loc) in
-          return (List.fold_right cons ((t1, loc) :: rest) last)
+          return (List.Old.fold_right cons ((t1, loc) :: rest) last)
        | Head t ->
           let@ t = infer t in
           let@ bt = ensure_list_type t ~reason:loc in
@@ -874,8 +874,8 @@ module WIT = struct
                  end
              ) (None, []) cases
          in
-         let@ () = cases_complete loc [IT.bt e] (List.map (fun (pat, _) -> [pat]) cases) in
-         let@ () = cases_necessary (List.map (fun (pat, _) -> pat) cases) in
+         let@ () = cases_complete loc [IT.bt e] (List.map ~f:(fun (pat, _) -> [pat]) cases) in
+         let@ () = cases_necessary (List.map ~f:(fun (pat, _) -> pat) cases) in
          let@ rbt = match rbt with
            | None -> fail (fun _ -> {loc; msg = Empty_pattern})
            | Some rbt -> return rbt
@@ -1432,11 +1432,11 @@ let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> (BT.t mu_value) m =
       return (Loc, M_Vfunction_addr sym)
    | M_Vlist (item_cbt, vals) ->
       let@ vals = ListM.mapM (infer_value loc) vals in
-      let item_bt = bt_of_value (List.hd vals) in
+      let item_bt = bt_of_value (List.hd_exn vals) in
       return (List item_bt, M_Vlist (item_cbt, vals))
    | M_Vtuple vals ->
       let@ vals = ListM.mapM (infer_value loc) vals in
-      let bt = Tuple (List.map bt_of_value vals) in
+      let bt = Tuple (List.map ~f:bt_of_value vals) in
       return (bt, M_Vtuple vals)
   in
   return (M_V (bt, v))
@@ -1459,14 +1459,14 @@ let is_integer_annot = function
 
 
 let integer_annot annots =
-  match List.sort_uniq CF.IntegerType.setElemCompare_integerType (List.filter_map is_integer_annot annots) with
+  match List.Old.sort_uniq CF.IntegerType.setElemCompare_integerType (List.filter_map ~f:is_integer_annot annots) with
   | [] -> None
   | [ity] -> Some ity
   | _ -> assert false
 
 
 let remove_integer_annot annots =
-  List.filter (fun a -> Option.is_none (is_integer_annot a)) annots
+  List.filter ~f:(fun a -> Option.is_none (is_integer_annot a)) annots
 
 let remove_integer_annot_expr (M_Expr (loc, annots, bty, e_)) =
   M_Expr (loc, remove_integer_annot annots, bty, e_)
@@ -1604,9 +1604,9 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
               return (bt_of_pexpr xs)
            | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
            end
-        | M_Ctuple -> return (BT.Tuple (List.map bt_of_pexpr pes))
+        | M_Ctuple -> return (BT.Tuple (List.map ~f:bt_of_pexpr pes))
         | M_Carray -> 
-           let ibt = bt_of_pexpr (List.hd pes) in
+           let ibt = bt_of_pexpr (List.hd_exn pes) in
            let@ () = ListM.iterM (fun pe -> ensure_base_type loc ~expect:ibt (bt_of_pexpr pe)) pes in
            return (Map (Memory.uintptr_bt, ibt))
         in
@@ -1917,14 +1917,14 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         let@ (ret_ct, arg_cts) = match act.ct with
           | Sctypes.(Pointer (Function (ret_v_ct, arg_r_cts, is_variadic))) ->
               assert (not is_variadic);
-              return (snd ret_v_ct, List.map fst arg_r_cts)
+              return (snd ret_v_ct, List.map ~f:fst arg_r_cts)
           | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "not a function pointer at call-site"
               (Sctypes.pp act.ct))})
         in
         let@ f_pe = check_pexpr (Loc) f_pe in
         (* TODO: we'd have to check the arguments against the function
            type, but we can't when f_pe is dynamic *)
-        let arg_bt_specs = List.map (fun ct -> (Memory.bt_of_sct ct)) arg_cts in
+        let arg_bt_specs = List.map ~f:(fun ct -> (Memory.bt_of_sct ct)) arg_cts in
         let@ pes = ListM.map2M check_pexpr arg_bt_specs pes in
         return (Memory.bt_of_sct ret_ct, M_Eccall (act, f_pe, pes))
      | M_Eif (c_pe, e1, e2) ->
@@ -1966,7 +1966,7 @@ let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
         end
      | M_Eunseq es ->
         let@ es = ListM.mapM (infer_expr label_context) es in
-        let bts = List.map bt_of_expr es in
+        let bts = List.map ~f:bt_of_expr es in
         return (Tuple bts, M_Eunseq es)
      | M_Erun (l, pes) ->
         (* copying from check.ml *)
@@ -2219,7 +2219,7 @@ module WRPD = struct
                ListM.fold_leftM (fun acc {loc; guard; packing_ft} ->
                    let@ guard = WIT.check loc BT.Bool guard in
                    let here = Locations.other __FUNCTION__ in
-                   let negated_guards = List.map (fun clause -> IT.not_ clause.guard here) acc in
+                   let negated_guards = List.map ~f:(fun clause -> IT.not_ clause.guard here) acc in
                    pure begin
                        let@ () = add_c loc (LC.t_ guard) in
                        let@ () = add_c loc (LC.t_ (IT.and_ negated_guards here)) in
@@ -2295,7 +2295,7 @@ module WDT = struct
               assert false
           else
              return (IdSet.add id already)
-        ) IdSet.empty (List.concat_map snd cases)
+        ) IdSet.empty (List.concat_map ~f:snd cases)
     in
     let@ cases =
       ListM.mapM (fun (c, args) ->
@@ -2303,7 +2303,7 @@ module WDT = struct
             ListM.mapM (fun (id,bt) ->
                 let@ bt = WBT.is_bt loc bt in
                 return (id, bt)
-              ) (List.sort compare_by_fst_id args)
+              ) (List.Old.sort compare_by_fst_id args)
           in
           return (c, args)
         ) cases
@@ -2322,13 +2322,13 @@ module WDT = struct
     bt :: BT.contained bt
 
   let bts_in_dt_case (_constr, args) =
-    List.concat_map bts_in_dt_constructor_argument args
+    List.concat_map ~f:bts_in_dt_constructor_argument args
 
   let bts_in_dt_definition { loc = _; cases } =
-    List.concat_map bts_in_dt_case cases
+    List.concat_map ~f:bts_in_dt_case cases
 
   let dts_in_dt_definition dt_def =
-    List.filter_map BT.is_datatype_bt (bts_in_dt_definition dt_def)
+    List.filter_map ~f:BT.is_datatype_bt (bts_in_dt_definition dt_def)
 
 
   let check_recursion_ok datatypes =
@@ -2336,14 +2336,14 @@ module WDT = struct
     let graph = G.empty in
 
     let graph =
-      List.fold_left (fun graph (dt, _) ->
+      List.Old.fold_left (fun graph (dt, _) ->
           G.add_vertex graph dt
         ) graph datatypes
     in
 
     let graph =
-      List.fold_left (fun graph (dt, dt_def) ->
-          List.fold_left (fun graph dt' ->
+      List.Old.fold_left (fun graph (dt, dt_def) ->
+          List.Old.fold_left (fun graph dt' ->
               G.add_edge graph dt dt'
             ) graph (dts_in_dt_definition dt_def)
         ) graph datatypes
@@ -2355,12 +2355,12 @@ module WDT = struct
       ListM.iterM (fun scc ->
           let scc_set = SymSet.of_list scc in
           ListM.iterM (fun dt ->
-              let {loc;cases} = List.assoc Sym.equal dt datatypes in
+              let {loc;cases} = List.Old.assoc Sym.equal dt datatypes in
               ListM.iterM (fun (_ctor,args) ->
                   ListM.iterM (fun (id, bt) ->
                       let indirect_deps =
                         SymSet.of_list
-                          (List.filter_map BT.is_datatype_bt (BT.contained bt))
+                          (List.filter_map ~f:BT.is_datatype_bt (BT.contained bt))
                       in
                       let bad = SymSet.inter indirect_deps scc_set in
                       begin match SymSet.elements bad with
