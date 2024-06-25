@@ -56,13 +56,12 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
 
   let extern_ownership_globals = 
     if with_ownership_checking then 
-      generate_ownership_globals ~is_extern:true ()
+      "\n" ^ generate_ownership_globals ~is_extern:true ()
     else "" 
   in
 
   (* TODO: Topological sort *)
   Stdlib.output_string cn_oc cn_utils_header;
-  Stdlib.output_string cn_oc "\n";
   Stdlib.output_string cn_oc extern_ownership_globals;
   Stdlib.output_string cn_oc c_structs;
   Stdlib.output_string cn_oc cn_converted_structs;

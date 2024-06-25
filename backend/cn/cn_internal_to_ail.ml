@@ -426,19 +426,25 @@ let gen_bool_while_loop sym bt start_expr while_cond (bs, ss, e) =
   ([b_binding], [b_decl; block], mk_expr b_ident)
 
 
-let rec cn_to_ail_const_internal = function
+let rec cn_to_ail_const_internal const = 
+  let ail_const = 
+  (match const with
   | Terms.Z z -> A.AilEconst (ConstantInteger (IConstant (z, Decimal, None)))
   | Bits ((sign, size), i) -> A.AilEconst (ConstantInteger (IConstant (i, Decimal, None)))
   | Q q -> A.AilEconst (ConstantFloating (Q.to_string q, None))
   | Pointer z -> 
     (* Printf.printf "In Pointer case; const\n"; *)
-    A.AilEunary (Address, mk_expr (cn_to_ail_const_internal (Terms.Z z.addr)))
+    let (ail_const', _) = cn_to_ail_const_internal (Terms.Z z.addr) in
+    A.AilEunary (Address, mk_expr ail_const')
   | Alloc_id _ -> failwith "TODO Alloc_id"
   | Bool b -> A.AilEconst (ConstantPredefined (if b then PConstantTrue else PConstantFalse))
-  | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void)))
+  | Unit -> A.AilEconst (ConstantIndeterminate C.(Ctype ([], Void))) (* Gets overridden by dest_with_unit_check *)
   | Null -> A.AilEconst (ConstantNull)
   | CType_const _ -> failwith "TODO CType_const"
-  | Default bt -> failwith "TODO Default"
+  | Default bt -> failwith "TODO Default")
+  in 
+  let is_unit = const == Unit in 
+  (ail_const, is_unit)
 
   
 type ail_bindings_and_statements = A.bindings * CF.GenTypes.genTypeCategory A.statement_ list
@@ -463,19 +469,25 @@ type 'a dest =
 | AssignVar : C.union_tag -> ail_bindings_and_statements dest
 | PassBack : (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression) dest
 
-let dest : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression -> a = 
-  fun d (b, s, e) -> 
+(* bool flag for checking if expression is unit - needs special treatment *)
+let dest_with_unit_check : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression * bool -> a = 
+  fun d (b, s, e, is_unit) -> 
     match d with
     | Assert -> 
       let assert_stmts = generate_cn_assert e in
       (b, s @ assert_stmts)
     | Return ->
-      let return_stmt = A.(AilSreturn e) in
+      let return_stmt = if is_unit then A.(AilSreturnVoid) else A.(AilSreturn e) in
       (b, s @ [return_stmt])
     | AssignVar x -> 
       let assign_stmt = A.(AilSdeclaration [(x, Some e)]) in
       (b, s @ [assign_stmt])
     | PassBack -> (b, s, e)
+
+let dest : type a. a dest -> A.bindings * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression -> a = 
+  fun d (b, s, e) -> 
+    dest_with_unit_check d (b, s, e, false)
+
 
 let prefix : type a. a dest -> (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) -> a -> a = 
   fun d (b1, s1) u -> 
@@ -561,8 +573,8 @@ let rec cn_to_ail_expr_aux_internal
 = fun const_prop pred_name dts globals (IT (term_, basetype, loc)) d ->
   match term_ with
   | Const const ->
-    let ail_expr_ = cn_to_ail_const_internal const in
-    dest d ([], [], mk_expr (add_conversion_fn ail_expr_ basetype))
+    let (ail_expr_, is_unit) = cn_to_ail_const_internal const in
+    dest_with_unit_check d ([], [], mk_expr (add_conversion_fn ail_expr_ basetype), is_unit)
 
   | Sym sym ->
       let sym = 
@@ -576,7 +588,8 @@ let rec cn_to_ail_expr_aux_internal
         (match const_prop with
           | Some (sym2, cn_const) ->
               if CF.Symbol.equal_sym sym sym2 then
-                cn_to_ail_const_internal cn_const
+                (let (ail_const, _) = cn_to_ail_const_internal cn_const in 
+                ail_const)
               else
                 A.(AilEident sym)
           | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
