@@ -1242,7 +1242,6 @@ Module Type CheriMemoryImpl
     end.
 
 
-  (* formerly `find_overlapping` *)
   Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
     :=
     let require_exposed := CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE)

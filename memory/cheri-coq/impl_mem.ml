@@ -893,16 +893,8 @@ module CHERIMorello : Memory = struct
   open PPrint
   open Cerb_pp_prelude
 
-  let string_of_provenance = function
-    | CheriMemoryTypesExe.Prov_disabled ->
-       "@disabled"
-    | CheriMemoryTypesExe.Prov_none ->
-       "@empty"
-    | Prov_some alloc_id ->
-       "@" ^ Z.to_string alloc_id
-
-  let pp_pointer_value ?(is_verbose=false) (CheriMemoryTypesExe.PV (prov, ptrval_)) =
-    match ptrval_ with
+  let pp_pointer_value ?(is_verbose=false) ptrval =
+    match ptrval with
     | CheriMemoryTypesExe.PVfunction (FP_valid sym) ->
        !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty
                                          (fromCoq_Symbol_sym sym)))
@@ -914,7 +906,7 @@ module CHERIMorello : Memory = struct
          !^ "NULL"
        else
          (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
-         P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string c))
+         (!^ (C.to_string c))
 
   let pp_integer_value = function
     | (CheriMemoryTypesExe.IV n) ->
@@ -965,14 +957,10 @@ module CHERIMorello : Memory = struct
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
     let l = ZMap.M.elements st.MM.allocations in
     List.iter (fun (aid,a) ->
-        Printf.fprintf stderr "@%s: 0x%s,%s (%s,%s%s)\n"
+        Printf.fprintf stderr "@%s: 0x%s,%s (%s%s)\n"
           (Z.format "%d" aid)
           (Z.format "%x" a.CheriMemoryTypesExe.base)
           (Z.format "%d" a.size)
-          (match a.taint with
-           | CheriMemoryTypesExe.Exposed -> "exposed"
-           | CheriMemoryTypesExe.Unexposed -> "unexposed"
-          )
           (if a.is_dynamic then "dynamic" else "static")
           (if a.is_dead then ", dead" else "")
       ) l;
@@ -982,11 +970,9 @@ module CHERIMorello : Memory = struct
     Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
     let l = AMap.M.elements st.bytemap in
     List.iter (fun (addr, b) ->
-        Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
+        Printf.fprintf stderr "@0x%s ==> %s\n"
           (Z.format "%x" addr)
-          (string_of_provenance b.CheriMemoryTypesExe.prov)
-          (match b.CheriMemoryTypesExe.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
-          (match b.CheriMemoryTypesExe.copy_offset with None -> "" | Some n -> " [" ^ Z.to_string n ^ "]")
+          (match b with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
       ) l;
     prerr_endline "END BYTEMAP"
 
@@ -1124,19 +1110,14 @@ module CHERIMorello : Memory = struct
   (*TODO: revise that, just a hack for codegen*)
   let case_ptrval (pv:pointer_value) fnull ffun fconc =
     match pv with
-    | CheriMemoryTypesExe.PV (_, PVfunction (FP_valid sym)) -> ffun (Some (fromCoq_Symbol_sym sym))
-    | PV (_, PVfunction (FP_invalid c)) ->
+    | PVfunction (FP_valid sym) -> ffun (Some (fromCoq_Symbol_sym sym))
+    | PVfunction (FP_invalid c) ->
        if MM.cap_is_null c
        then fnull Ctype.void
        else ffun None
-    | PV (Prov_none, PVconcrete c)
-      | PV (Prov_disabled, PVconcrete c) ->
+    | PVconcrete c ->
        if MM.cap_is_null c
        then fconc None (C.cap_get_value c)
-       else ffun None
-    | PV (Prov_some i, PVconcrete c) ->
-       if MM.cap_is_null c
-       then fconc (Some i) (C.cap_get_value c)
        else ffun None
 
   let case_funsym_opt (st:MM.mem_state) (pv:pointer_value): Symbol.sym option
@@ -1175,7 +1156,7 @@ module CHERIMorello : Memory = struct
   (* There is a sketch of implementation of this function in Coq but
      it requires some dependencies and fixpoint magic.  It OK to have
      in in OCaml for now *)
-  let prefix_of_pointer (CheriMemoryTypesExe.PV (prov, pv)) : string option memM =
+  let prefix_of_pointer (pv:pointer_value) : string option memM =
     if !Cerb_debug.debug_level >= 2 then
       Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
     let open String_symbol in
@@ -1213,39 +1194,24 @@ module CHERIMorello : Memory = struct
       | Some (Ctype (_, Atomic ty)) ->
          aux addr alloc @@ Some ty
     in
-    match prov with
-    | Prov_some alloc_id ->
-       bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
-           begin match pv with
-           | PVconcrete addr ->
-              if C.cap_get_value addr = alloc.base then
-                return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
-              else
-                return @@ aux C.(cap_get_value addr) alloc (Option.map fromCoq_ctype alloc.ty)
-           | _ ->
-              return None
-           end)
-    | Prov_disabled ->
-       begin match pv with
-       | PVconcrete c ->
-          let addr = C.cap_get_value c in
-          bind (lift_coq_memM ~print_mem_state:false "find_cap_allocation" (MM.find_cap_allocation c)) (fun x ->
-              let loc = Cerb_location.unknown in
-              match x with
-              | None -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
-              | Some (alloc_id,_) ->
-                 bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
-                     if addr = alloc.base then
-                       return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
-                     else
-                       return @@ aux addr alloc (Option.map fromCoq_ctype alloc.ty)
-                   )
-            )
-       | _ ->
-          return None
-       end
+    match pv with
+    | PVconcrete c ->
+       let addr = C.cap_get_value c in
+       bind (lift_coq_memM ~print_mem_state:false "find_cap_allocation" (MM.find_cap_allocation c)) (fun x ->
+           let loc = Cerb_location.unknown in
+           match x with
+           | None -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
+           | Some (alloc_id,_) ->
+              bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+                  if addr = alloc.base then
+                    return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
+                  else
+                    return @@ aux addr alloc (Option.map fromCoq_ctype alloc.ty)
+                )
+         )
     | _ ->
        return None
+
 
   let validForDeref_ptrval ref_ty ptrval
     = lift_coq_memM "validForDeref_ptrval" (MM.validForDeref_ptrval (toCoq_ctype ref_ty) ptrval)
