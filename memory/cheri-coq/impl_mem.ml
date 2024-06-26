@@ -245,7 +245,7 @@ module CerbTagDefs = struct
 end
 
 
-module MM = CheriMemoryExe(MemCommonExe)(MorelloCapabilityWithStrfcap)(MorelloImpl)(CheriMemoryTypesExe)(CerbTagDefs:CoqTags.TagDefs)(CerbSwitchesProxy)
+module MM = CheriMemoryExe(MemCommonExe)(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs:CoqTags.TagDefs)(CerbSwitchesProxy)
 module C = MorelloCapabilityWithStrfcap
 
 module Z = struct
@@ -882,7 +882,7 @@ module CHERIMorello : Memory = struct
      List.map fromCoq_intrinsics_arg_spec asigs)
 
   (* memMerror *)
-  let fromCoq_memMError (e:CheriMemoryTypesExe.memMError) : mem_error Nondeterminism.kill_reason =
+  let fromCoq_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
     match e with
     | Other me -> Other (fromCoq_mem_error me)
     | Undef0 (loc, ubs) ->
@@ -895,7 +895,7 @@ module CHERIMorello : Memory = struct
 
   let pp_pointer_value ?(is_verbose=false) ptrval =
     match ptrval with
-    | CheriMemoryTypesExe.PVfunction (FP_valid sym) ->
+    | MM.PVfunction (FP_valid sym) ->
        !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty
                                          (fromCoq_Symbol_sym sym)))
     | PVfunction (FP_invalid c) ->
@@ -909,7 +909,7 @@ module CHERIMorello : Memory = struct
          (!^ (C.to_string c))
 
   let pp_integer_value = function
-    | (CheriMemoryTypesExe.IV n) ->
+    | (MM.IV n) ->
        !^ (Z.to_string n)
     | (IC (is_signed, c)) ->
        let cs = (C.to_string c)
@@ -923,7 +923,7 @@ module CHERIMorello : Memory = struct
   let pp_pretty_integer_value ?basis ~use_upper = pp_integer_value
 
   let rec pp_mem_value = function
-    | CheriMemoryTypesExe.MVunspecified _ ->
+    | MM.MVunspecified _ ->
        PPrint.string "UNSPEC"
     | MVinteger (_, ival) ->
        pp_integer_value ival
@@ -959,7 +959,7 @@ module CHERIMorello : Memory = struct
     List.iter (fun (aid,a) ->
         Printf.fprintf stderr "@%s: 0x%s,%s (%s%s)\n"
           (Z.format "%d" aid)
-          (Z.format "%x" a.CheriMemoryTypesExe.base)
+          (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
           (if a.is_dynamic then "dynamic" else "static")
           (if a.is_dead then ", dead" else "")
@@ -1160,7 +1160,7 @@ module CHERIMorello : Memory = struct
     if !Cerb_debug.debug_level >= 2 then
       Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
     let open String_symbol in
-    let rec aux addr (alloc:CheriMemoryTypesExe.allocation) = function
+    let rec aux addr (alloc:MM.allocation) = function
       | None
         | Some (Ctype (_, Void))
         | Some (Ctype (_, Function _))

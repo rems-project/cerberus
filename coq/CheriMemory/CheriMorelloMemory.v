@@ -37,7 +37,24 @@ Definition AddressValue_with_offset_safe (v:AddressValue.t) (o:Z): option Addres
   :=
   AddressValue.of_Z_safe (AddressValue.to_Z v + o).
 
-Module Type CheriMemoryTypes
+Definition wrapI min_v max_v n :=
+  let dlt := Z.succ (max_v - min_v) in
+  let r := Z_integerRem_f n dlt in
+  if r <=? max_v then r
+  else r - dlt.
+
+Definition extract_unspec {A : Set} (xs : list (option A))
+  : option (list A) :=
+  List.fold_left
+    (fun (acc_opt : option (list A)) =>
+     fun (c_opt : option A) =>
+       match (acc_opt, c_opt) with
+       | (None, _) => None
+       | (_, None) => None
+       | (Some acc, Some c_value) => Some (cons c_value acc)
+       end) (List.rev xs) (Some []) .
+
+Module Type CheriMemoryImpl
   (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS
        (AddressValue)
@@ -47,7 +64,14 @@ Module Type CheriMemoryTypes
        (Bounds)
        (Permissions)
   )
-  (IMP: Implementation).
+  (IMP: Implementation)
+  (TD: TagDefs)
+  (SW: CerbSwitchesDefs)
+<: Memory(AddressValue)(Bounds)(MC).
+
+  Import MC.
+
+  Definition name := "cheri-coq".
 
   Import MC.
   Include AilTypesAux(IMP).
@@ -231,51 +255,9 @@ Module Type CheriMemoryTypes
       is_dead : bool ; (* only used in cornucopia *)
     }.
 
-End CheriMemoryTypes.
-
-Definition wrapI min_v max_v n :=
-  let dlt := Z.succ (max_v - min_v) in
-  let r := Z_integerRem_f n dlt in
-  if r <=? max_v then r
-  else r - dlt.
-
-Definition extract_unspec {A : Set} (xs : list (option A))
-  : option (list A) :=
-  List.fold_left
-    (fun (acc_opt : option (list A)) =>
-     fun (c_opt : option A) =>
-       match (acc_opt, c_opt) with
-       | (None, _) => None
-       | (_, None) => None
-       | (Some acc, Some c_value) => Some (cons c_value acc)
-       end) (List.rev xs) (Some []) .
-
-Module Type CheriMemoryImpl
-  (MC:Mem_common(AddressValue)(Bounds))
-  (C:CAPABILITY_GS
-       (AddressValue)
-       (Flags)
-       (ObjType)
-       (SealType)
-       (Bounds)
-       (Permissions)
-  )
-  (IMP: Implementation)
-  (MT: CheriMemoryTypes(MC)(C)(IMP))
-  (TD: TagDefs)
-  (SW: CerbSwitchesDefs)
-<: Memory(AddressValue)(Bounds)(MC).
-
-  Import MC.
-  Import MT.
-
-  Definition name := "cheri-coq".
 
   Definition pointer_value := pointer_value_indt.
   Definition integer_value := integer_value_indt.
-  Definition floating_value : Set := MT.floating_value.
-  Definition symbolic_storage_instance_id : Set := MT.symbolic_storage_instance_id.
-  Definition storage_instance_id : Set := MT.storage_instance_id.
   Definition mem_value := mem_value_indt.
 
 
@@ -3703,11 +3685,6 @@ Module MemCommonExe:Mem_common(AddressValue)(Bounds).
   Include Mem_common(AddressValue)(Bounds).
 End MemCommonExe.
 
-Module CheriMemoryTypesExe: CheriMemoryTypes(MemCommonExe)(Capability_GS)(MorelloImpl).
-  Include CheriMemoryTypes(MemCommonExe)(Capability_GS)(MorelloImpl).
-End CheriMemoryTypesExe.
-
-(* TODO: see if we can instantiate it in OCaml *)
 Module CheriMemoryExe
   (MC:Mem_common(AddressValue)(Bounds))
   (C:CAPABILITY_GS
@@ -3719,11 +3696,10 @@ Module CheriMemoryExe
        (Permissions)
   )
   (IMP: Implementation)
-  (MT: CheriMemoryTypes(MC)(C)(IMP))
   (TD: TagDefs)
   (SW: CerbSwitchesDefs)
-<: CheriMemoryImpl(MC)(C)(IMP)(MT)(TD)(SW).
+<: CheriMemoryImpl(MC)(C)(IMP)(TD)(SW).
 
-  Include CheriMemoryImpl(MC)(C)(IMP)(MT)(TD)(SW).
+  Include CheriMemoryImpl(MC)(C)(IMP)(TD)(SW).
 
 End CheriMemoryExe.
