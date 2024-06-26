@@ -1751,7 +1751,7 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
   {ail_executable_spec with pre = (b1 @ b2, s1 @ s2)}
 
 (* Precondition and postcondition translation - LAT.I case means precondition translation finished *)
-let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type = function
+let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ownership_ctypes preds c_return_type = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
@@ -1759,7 +1759,7 @@ let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_typ
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding new_name ctype in
     let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type new_lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals ownership_ctypes preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (binding :: b1, s1)
 
   | LAT.Resource ((name, (ret, bt)), (loc, str_opt), lat) -> 
@@ -1770,7 +1770,7 @@ let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_typ
       | None -> []
     in
     let new_lat = Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, bt, new_name) lat in 
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals (ct @ ownership_ctypes) preds c_return_type new_lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals (ct @ ownership_ctypes) preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (b1, s1)
 
   | LAT.Constraint (lc, (loc, str_opt), lat) -> 
@@ -1785,7 +1785,7 @@ let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_typ
         let ail_stats_ = generate_cn_assert e in
         s @ ail_stats_
     in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_type lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals ownership_ctypes preds c_return_type lat in
     prepend_to_precondition ail_executable_spec (b1, ss)
 
   (* Postcondition *)
@@ -1822,12 +1822,17 @@ let rec cn_to_ail_lat_internal_2 dts globals ownership_ctypes preds c_return_typ
     let stats = remove_duplicates [] stats in
     let ail_statements = List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats in 
     let (post_bs, post_ss, ownership_ctypes') = cn_to_ail_post_internal dts globals ownership_ctypes preds post in 
-    let cn_stack_depth_decr_stat = mk_stmt A.(AilSexpr (mk_expr (AilEunary (PostfixDecr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
-    let block = A.(AilSblock (return_cn_binding @ post_bs, return_cn_decl @ post_ss @ [cn_stack_depth_decr_stat])) in
+    let ownership_stat_ = if with_ownership_checking then 
+      (let cn_stack_depth_decr_stat = mk_stmt A.(AilSexpr (mk_expr (AilEunary (PostfixDecr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
+      [cn_stack_depth_decr_stat])
+    else 
+      []
+    in
+    let block = A.(AilSblock (return_cn_binding @ post_bs, return_cn_decl @ post_ss @ ownership_stat_)) in
     {pre = ([], []); post = ([], [block]); in_stmt = ail_statements; ownership_ctypes = ownership_ctypes'}
 
 
-let rec cn_to_ail_pre_post_aux_internal dts preds globals c_return_type = function 
+let rec cn_to_ail_pre_post_aux_internal ?(with_ownership_checking=false) dts preds globals c_return_type = function 
   | AT.Computational ((sym, bt), info, at) -> 
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
     let cn_ctype = bt_to_ail_ctype bt in 
@@ -1835,12 +1840,12 @@ let rec cn_to_ail_pre_post_aux_internal dts preds globals c_return_type = functi
     let rhs = add_conversion_fn A.(AilEident sym) bt in 
     let decl = A.(AilSdeclaration [(cn_sym, Some (mk_expr rhs))]) in
     let subst_at = Core_to_mucore.fn_spec_instrumentation_sym_subst_at (sym, bt, cn_sym) at in
-    let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds globals c_return_type subst_at in 
+    let ail_executable_spec = cn_to_ail_pre_post_aux_internal ~with_ownership_checking dts preds globals c_return_type subst_at in 
     prepend_to_precondition ail_executable_spec ([binding], [decl])
   | AT.L lat -> 
-    cn_to_ail_lat_internal_2 dts globals [] preds c_return_type lat
+    cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals [] preds c_return_type lat
   
-let cn_to_ail_pre_post_internal dts preds globals c_return_type = function 
+let cn_to_ail_pre_post_internal ?(with_ownership_checking=false) dts preds globals c_return_type = function 
   | Some internal -> 
     let error_msg_info_binding = create_binding error_msg_info_sym (C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype) in
     let struct_members = [("function_name", "__func__"); ("file_name", "__FILE__"); ("line_number", "__LINE__")] in
@@ -1849,7 +1854,12 @@ let cn_to_ail_pre_post_internal dts preds globals c_return_type = function
     let struct_init = A.(AilEstruct (error_msg_struct_tag, struct_members)) in
     let addr_struct_init = A.(AilEunary (Address, mk_expr struct_init)) in
     let error_msg_info_decl = A.(AilSdeclaration [(error_msg_info_sym, Some (mk_expr addr_struct_init))]) in
-    let ail_executable_spec = cn_to_ail_pre_post_aux_internal dts preds globals c_return_type internal in
-    let cn_stack_depth_incr_stat_ = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
-    prepend_to_precondition ail_executable_spec ([error_msg_info_binding], [error_msg_info_decl; cn_stack_depth_incr_stat_])
+    let ail_executable_spec = cn_to_ail_pre_post_aux_internal ~with_ownership_checking dts preds globals c_return_type internal in
+    let extra_stats_ = if with_ownership_checking then 
+      (let cn_stack_depth_incr_stat_ = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
+      [error_msg_info_decl; cn_stack_depth_incr_stat_])
+    else 
+      [error_msg_info_decl] 
+    in 
+    prepend_to_precondition ail_executable_spec ([error_msg_info_binding], extra_stats_)
   | None -> empty_ail_executable_spec

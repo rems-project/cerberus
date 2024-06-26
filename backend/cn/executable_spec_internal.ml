@@ -55,7 +55,7 @@ let rec extract_global_variables = function
         | A.Decl_object (_, _, _, ctype) -> (sym, ctype) :: extract_global_variables ds
         | A.Decl_function _ -> extract_global_variables ds)
 
-let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrumentation) _ (sigm: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
+let generate_c_pres_and_posts_internal ?(with_ownership_checking=false) (instrumentation : Core_to_mucore.instrumentation) _ (sigm: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = sigm.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
   let c_return_type = match List.assoc CF.Symbol.equal_sym instrumentation.fn sigm.A.declarations with
@@ -63,7 +63,7 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
     | _ -> failwith "TODO"
   in
   let globals = extract_global_variables sigm.declarations in
-  let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal dts preds globals c_return_type instrumentation.internal in
+  let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal ~with_ownership_checking dts preds globals c_return_type instrumentation.internal in
   let pre_str = generate_ail_stat_strs ail_executable_spec.pre in
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
 
@@ -82,12 +82,12 @@ let generate_c_pres_and_posts_internal (instrumentation : Core_to_mucore.instrum
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs_internal instrumentation_list type_map (_ : Cerb_location.t CStatements.LocMap.t)
+let generate_c_specs_internal ?(with_ownership_checking=false) instrumentation_list type_map (_ : Cerb_location.t CStatements.LocMap.t)
 (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
 (prog5: unit Mucore.mu_file)
 =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let (c_pres_and_posts, c_in_stmt, ownership_ctypes) = generate_c_pres_and_posts_internal instrumentation type_map sigm prog5 in
+    let (c_pres_and_posts, c_in_stmt, ownership_ctypes) = generate_c_pres_and_posts_internal ~with_ownership_checking instrumentation type_map sigm prog5 in
     (c_pres_and_posts, c_in_stmt, ownership_ctypes)
   in
   let specs = List.map generate_c_spec instrumentation_list in
