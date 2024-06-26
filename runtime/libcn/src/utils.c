@@ -78,29 +78,34 @@ ownership_ghost_state *initialise_ownership_ghost_state(void) {
     return ht_create();
 }
 
+int ghost_state_get(ownership_ghost_state *cn_ownership_global_ghost_state, signed long *address_key) {
+    int *curr_depth_maybe = (int *) ht_get(cn_ownership_global_ghost_state, address_key);
+    return curr_depth_maybe ? *curr_depth_maybe : -1;
+}
+
+void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key, int stack_depth_val) {
+    int *new_depth = alloc(sizeof(int));
+    *new_depth = stack_depth_val;
+    ht_set(cn_ownership_global_ghost_state, address_key, new_depth);
+}
+
 void get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
     for (int i = 0; i < size; i++) {
-        long *key = alloc(sizeof(long));
-        *key = generic_c_ptr + (i * size);
-        int *curr_depth = (int *) ht_get(cn_ownership_global_ghost_state, key);
-        cn_assert(convert_to_cn_bool(*curr_depth == cn_stack_depth - 1), error_msg_info);
-
-        int *new_depth = alloc(sizeof(int));
-        *new_depth = cn_stack_depth;
-        ht_set(cn_ownership_global_ghost_state, key, new_depth);
+        signed long *address_key = alloc(sizeof(long));
+        *address_key = generic_c_ptr + i;
+        int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
+        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1), error_msg_info);
+        ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
     }
 }
 
 void put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
     for (int i = 0; i < size; i++) { 
-        long *key = alloc(sizeof(long));
-        *key = generic_c_ptr + (i * size);
-        int *curr_depth = (int *) ht_get(cn_ownership_global_ghost_state, key);
-        cn_assert(convert_to_cn_bool(*curr_depth == cn_stack_depth), error_msg_info);
-
-        int *new_depth = alloc(sizeof(int));
-        *new_depth = cn_stack_depth - 1;
-        ht_set(cn_ownership_global_ghost_state, key, new_depth);
+        signed long *address_key = alloc(sizeof(long));
+        *address_key = generic_c_ptr + i;
+        int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
+        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth), error_msg_info);
+        ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth - 1);
     }
 }
 
@@ -162,7 +167,21 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
     return res;
 }
 
+/*
+struct cn_error_message_info {
+    const char *function_name;
+    char *file_name;
+    int line_number;
+    char *cn_source_loc;
+};
+*/
 
+void update_error_message_info_(struct cn_error_message_info *error_msg_info, const char *function_name, char *file_name, int line_number, char *cn_source_loc) {
+    error_msg_info->function_name = function_name;
+    error_msg_info->file_name = file_name;
+    error_msg_info->line_number = line_number;
+    error_msg_info->cn_source_loc = cn_source_loc;
+}
 
 
 

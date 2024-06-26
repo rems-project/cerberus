@@ -16,6 +16,11 @@ struct cn_error_message_info {
     char *cn_source_loc;
 };
 
+void update_error_message_info_(struct cn_error_message_info *error_msg_info, const char *function_name, char *file_name, int line_number, char *cn_source_loc);
+
+#define update_cn_error_message_info(x, y)\
+    update_error_message_info_(x, __func__, __FILE__, __LINE__ + 1, y)
+
 /* Wrappers for C types */
 
 /* Signed bitvectors */
