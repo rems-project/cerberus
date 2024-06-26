@@ -1,8 +1,4 @@
 module CF=Cerb_frontend
-(* module CB=Cerb_backend
-open CB.Pipeline
-open Setup *)
-(* open CF.Cn *)
 open Executable_spec_utils
 module A=CF.AilSyntax
 module C=CF.Ctype
@@ -22,3 +18,14 @@ let get_ownership_global_init_stats () =
   let cn_stack_depth_init_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_stack_depth_sym), (mk_expr (A.AilEconst (ConstantInteger (IConstant (Z.of_int (-1), Decimal, None))))))))) in
   [cn_ghost_state_init_assign; cn_stack_depth_init_assign]
   
+(* TODO: C ownership checking
+
+1. Collect all C functions in program from Ail.
+2. For each function, add ownership checking on every function entry and block entry, and equivalent for function exit and block exit.
+3. Inject.
+  a. For function injections, can add to existing injection and corresponds to where pre and postcondition are executed.
+  b. For block injections, new injection machinery needed - unless we adapt the block itself to include these statements and then pretty-print this modified program? Function modification would be harder - precondition
+  would be fine but postcondition would need existing cn_epilogue machinery to ensure the correct removal is happening at modified return statements.
+  For blocks, could edit `program` member of `cn_injection` type in `Source_injection` module.
+
+*)

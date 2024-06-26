@@ -89,9 +89,14 @@ void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, sig
     ht_set(cn_ownership_global_ghost_state, address_key, new_depth);
 }
 
-void get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
+void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key) {
+    ghost_state_set(cn_ownership_global_ghost_state, address_key, -1);
+}
+
+void cn_get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
+        // printf("Getting ownership for: %lu\n", generic_c_ptr + i);
         *address_key = generic_c_ptr + i;
         int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
         cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1), error_msg_info);
@@ -99,7 +104,7 @@ void get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_
     }
 }
 
-void put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
+void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;

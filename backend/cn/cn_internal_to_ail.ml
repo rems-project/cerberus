@@ -529,7 +529,7 @@ let generate_ownership_function ?(with_ownership_checking=false) ctype =
     let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in
     let lc_enum_str = String.lowercase_ascii enum_str in
     let block_stats_ = if with_ownership_checking then
-      let ownership_fn_sym = Sym.fresh_pretty (lc_enum_str ^ "_ownership") in
+      let ownership_fn_sym = Sym.fresh_pretty ("cn_" ^ lc_enum_str ^ "_ownership") in
       let ownership_fn_args = A.[AilEident generic_c_ptr_sym; AilEident OE.cn_ghost_state_sym; AilEsizeof (empty_qualifiers, ctype); AilEident OE.cn_stack_depth_sym; AilEident error_msg_info_sym] in
       let ownership_fcall = mk_expr A.(AilEcall (mk_expr (AilEident ownership_fn_sym), List.map mk_expr ownership_fn_args)) in
       A.[AilSexpr ownership_fcall; AilSbreak]

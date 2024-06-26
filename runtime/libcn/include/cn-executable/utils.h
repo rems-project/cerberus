@@ -16,6 +16,12 @@ struct cn_error_message_info {
     char *cn_source_loc;
 };
 
+/* TODO: Implement */
+struct cn_error_messages {
+    struct cn_error_message_info *top_level_error_msg_info;
+    struct cn_error_message_info *nested_error_msg_info;
+};
+
 void update_error_message_info_(struct cn_error_message_info *error_msg_info, const char *function_name, char *file_name, int line_number, char *cn_source_loc);
 
 #define update_cn_error_message_info(x, y)\
@@ -340,6 +346,11 @@ enum OWNERSHIP {
     PUT
 };
 
+/* To be used directly for C ownership checking */
+int ghost_state_get(ownership_ghost_state *cn_ownership_global_ghost_state, signed long *address_key);
+void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key, int stack_depth_val);
+void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key);
 
-void get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
-void put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+/* CN ownership checking */
+void cn_get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
