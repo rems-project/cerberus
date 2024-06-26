@@ -346,7 +346,6 @@ enum OWNERSHIP {
     PUT
 };
 
-/* To be used directly for C ownership checking */
 int ghost_state_get(ownership_ghost_state *cn_ownership_global_ghost_state, signed long *address_key);
 void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key, int stack_depth_val);
 void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key);
@@ -354,3 +353,8 @@ void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, 
 /* CN ownership checking */
 void cn_get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
 void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+void cn_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+
+/* C ownership checking */
+void c_map_local_to_stack_depth(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
+void c_remove_local_footprint(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);

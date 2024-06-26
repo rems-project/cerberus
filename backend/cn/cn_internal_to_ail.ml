@@ -504,7 +504,7 @@ let empty_for_dest : type a. a dest -> a =
 
 
 
-let generate_ownership_function ?(with_ownership_checking=false) ctype = 
+let generate_ownership_function ?(with_ownership_checking=true) ctype = 
   let ctype_str = str_of_ctype ctype in
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
@@ -1751,7 +1751,7 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
   {ail_executable_spec with pre = (b1 @ b2, s1 @ s2)}
 
 (* Precondition and postcondition translation - LAT.I case means precondition translation finished *)
-let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ownership_ctypes preds c_return_type = function
+let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=true) dts globals ownership_ctypes preds c_return_type = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
@@ -1832,7 +1832,7 @@ let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ow
     {pre = ([], []); post = ([], [block]); in_stmt = ail_statements; ownership_ctypes = ownership_ctypes'}
 
 
-let rec cn_to_ail_pre_post_aux_internal ?(with_ownership_checking=false) dts preds globals c_return_type = function 
+let rec cn_to_ail_pre_post_aux_internal ?(with_ownership_checking=true) dts preds globals c_return_type = function 
   | AT.Computational ((sym, bt), info, at) -> 
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
     let cn_ctype = bt_to_ail_ctype bt in 
@@ -1845,7 +1845,7 @@ let rec cn_to_ail_pre_post_aux_internal ?(with_ownership_checking=false) dts pre
   | AT.L lat -> 
     cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals [] preds c_return_type lat
   
-let cn_to_ail_pre_post_internal ?(with_ownership_checking=false) dts preds globals c_return_type = function 
+let cn_to_ail_pre_post_internal ?(with_ownership_checking=true) dts preds globals c_return_type = function 
   | Some internal -> 
     let error_msg_info_binding = create_binding error_msg_info_sym (C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype) in
     let struct_members = [("function_name", "__func__"); ("file_name", "__FILE__"); ("line_number", "__LINE__")] in

@@ -55,7 +55,7 @@ let rec extract_global_variables = function
         | A.Decl_object (_, _, _, ctype) -> (sym, ctype) :: extract_global_variables ds
         | A.Decl_function _ -> extract_global_variables ds)
 
-let generate_c_pres_and_posts_internal ?(with_ownership_checking=false) (instrumentation : Core_to_mucore.instrumentation) _ (sigm: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
+let generate_c_pres_and_posts_internal ?(with_ownership_checking=true) (instrumentation : Core_to_mucore.instrumentation) _ (sigm: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = sigm.cn_datatypes in
   let preds = prog5.mu_resource_predicates in
   let c_return_type = match List.assoc CF.Symbol.equal_sym instrumentation.fn sigm.A.declarations with
@@ -66,6 +66,20 @@ let generate_c_pres_and_posts_internal ?(with_ownership_checking=false) (instrum
   let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal ~with_ownership_checking dts preds globals c_return_type instrumentation.internal in
   let pre_str = generate_ail_stat_strs ail_executable_spec.pre in
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
+
+  (* C ownership checking *)
+  let (pre_str, post_str) = 
+  if with_ownership_checking then 
+    (let fn_ownership_stats_opt = Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm in
+    match fn_ownership_stats_opt with 
+      | Some (entry_ownership_stats, exit_ownership_stats) -> 
+         let entry_ownership_str = generate_ail_stat_strs ([], entry_ownership_stats) in 
+         let exit_ownership_str = generate_ail_stat_strs ([], exit_ownership_stats) in 
+         (pre_str @ ("\n\t/* C OWNERSHIP */\n\n" :: entry_ownership_str), post_str @ ("\n\t/* C OWNERSHIP */\n\n" :: exit_ownership_str))
+      | None -> (pre_str, post_str))
+  else 
+    (pre_str, post_str)
+  in 
 
   (* Needed for extracting correct location for CN statement injection *)
   let modify_magic_comment_loc loc = match loc with
@@ -82,7 +96,7 @@ let generate_c_pres_and_posts_internal ?(with_ownership_checking=false) (instrum
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs_internal ?(with_ownership_checking=false) instrumentation_list type_map (_ : Cerb_location.t CStatements.LocMap.t)
+let generate_c_specs_internal ?(with_ownership_checking=true) instrumentation_list type_map (_ : Cerb_location.t CStatements.LocMap.t)
 (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
 (prog5: unit Mucore.mu_file)
 =
@@ -246,7 +260,7 @@ let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyn
   let record_triple_str = generate_record_strs sigm (List.concat ail_records) in
   ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
-let generate_ownership_functions ?(with_ownership_checking=false) ctypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
+let generate_ownership_functions ?(with_ownership_checking=true) ctypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
   let ail_funs = List.map (fun ctype -> Cn_internal_to_ail.generate_ownership_function ~with_ownership_checking ctype) ctypes in
   let (decls, defs) = List.split ail_funs in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = decls; function_definitions = defs} in
