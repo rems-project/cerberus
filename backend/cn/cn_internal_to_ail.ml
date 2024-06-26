@@ -525,23 +525,14 @@ let generate_ownership_function ?(with_ownership_checking=true) ctype =
   let param3 = (error_msg_info_sym, C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype) in
   let (param_syms, param_types) = List.split [param1; param2; param3] in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
-  let generate_case enum_str = 
-    let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in
-    let lc_enum_str = String.lowercase_ascii enum_str in
-    let block_stats_ = if with_ownership_checking then
-      let ownership_fn_sym = Sym.fresh_pretty ("cn_" ^ lc_enum_str ^ "_ownership") in
-      let ownership_fn_args = A.[AilEident generic_c_ptr_sym; AilEident OE.cn_ghost_state_sym; AilEsizeof (empty_qualifiers, ctype); AilEident OE.cn_stack_depth_sym; AilEident error_msg_info_sym] in
-      let ownership_fcall = mk_expr A.(AilEcall (mk_expr (AilEident ownership_fn_sym), List.map mk_expr ownership_fn_args)) in
-      A.[AilSexpr ownership_fcall; AilSbreak]
-    else 
-      [AilSbreak]
-    in
-    let block = A.(AilSblock ([], List.map mk_stmt block_stats_)) in
-    let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt block)) in 
-    A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
+  let ownership_fcall_maybe = 
+  if with_ownership_checking then 
+    (let ownership_fn_sym = Sym.fresh_pretty "cn_check_ownership" in 
+    let ownership_fn_args = A.[AilEident param2_sym; AilEident generic_c_ptr_sym; AilEident OE.cn_ghost_state_sym; AilEsizeof (empty_qualifiers, ctype); AilEident OE.cn_stack_depth_sym; AilEident error_msg_info_sym] in
+    [A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident ownership_fn_sym), List.map mk_expr ownership_fn_args))))])
+  else  
+    []
   in
-  (* Function body *)
-  let switch_stmt = A.(AilSswitch (mk_expr (AilEident param2_sym), mk_stmt (AilSblock ([], List.map generate_case ["GET"; "PUT"])))) in
   let deref_expr_ = A.(AilEunary (Indirection, cast_expr)) in
   let sct_opt = Sctypes.of_ctype ctype in
   let sct = match sct_opt with 
@@ -554,7 +545,7 @@ let generate_ownership_function ?(with_ownership_checking=true) ctype =
   (* Generating function declaration *)
   let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (generic_c_ptr_bs, List.map mk_stmt (generic_c_ptr_ss @ [switch_stmt; return_stmt]))))) in
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (generic_c_ptr_bs, List.map mk_stmt (generic_c_ptr_ss @ ownership_fcall_maybe @ [return_stmt]))))) in
   (decl, def)
 
 

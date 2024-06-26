@@ -115,7 +115,7 @@ void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownersh
     }
 }
 
-void cn_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
+void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
   switch (owned_enum)
     {
       case GET:

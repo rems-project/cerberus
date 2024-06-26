@@ -65,20 +65,6 @@ let get_c_local_ownership_checking_fn_stats params =
 
 
 let get_c_fn_local_ownership_checking_injs sym (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
-  (* let sym_stat_pairs = List.map (fun (sym, (_, _, decl)) ->
-    (match decl with
-      | A.Decl_object _ -> []
-      | Decl_function (_, _, param_types, _, _, _) -> 
-       let param_types = List.map (fun (_, ctype, _) -> ctype) param_types in
-        (match List.assoc_opt Sym.equal_sym sym sigm.function_definitions with
-        | Some (_, _, _, param_syms, _) -> 
-            let params = List.combine param_syms param_types in
-            let ownership_stats_entry_exit = get_c_local_ownership_checking_fn_stats params in 
-            [(sym, ownership_stats_entry_exit)]
-        | None -> [])
-      )
-    ) *)
-  (* sigm.declarations in  *)
   match (List.assoc_opt Sym.equal sym sigm.function_definitions, List.assoc_opt Sym.equal sym sigm.declarations) with 
     | (Some (_, _, _, param_syms, _), Some (_, _, Decl_function (_, _, param_types, _, _, _))) -> 
       let param_types = List.map (fun (_, ctype, _) -> ctype) param_types in
@@ -86,6 +72,4 @@ let get_c_fn_local_ownership_checking_injs sym (sigm : CF.GenTypes.genTypeCatego
       let ownership_stats_pair = get_c_local_ownership_checking_fn_stats params in
       Some ownership_stats_pair
     | (_, _) -> None
-
-
 
