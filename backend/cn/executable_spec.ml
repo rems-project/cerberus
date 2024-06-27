@@ -22,7 +22,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
   populate_record_map prog5;
   let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
-  let executable_spec = generate_c_specs_internal instrumentation symbol_table statement_locs sigm prog5 in
+  let executable_spec = generate_c_specs_internal with_ownership_checking instrumentation symbol_table statement_locs sigm prog5 in
   let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
   let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
   generate_c_functions_internal sigm prog5.mu_logical_predicates in
@@ -44,7 +44,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
     )
   ;
 
-  let ownership_function_defs, ownership_function_decls = generate_ownership_functions ~with_ownership_checking ownership_ctypes sigm in
+  let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking ownership_ctypes sigm in
   let c_structs = print_c_structs sigm.tag_definitions in
   let cn_converted_structs = generate_cn_versions_of_structs sigm.tag_definitions in
 
