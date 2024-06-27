@@ -9,7 +9,7 @@ type info = t * string option
 
 type path = t list
 
-(* TODO: BCP: All the rest could perhaps be organized a little... *)
+(* TODO: BCP: All the rest could be organized a little better... *)
 
 val other : string -> t
 

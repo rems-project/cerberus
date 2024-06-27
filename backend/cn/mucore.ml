@@ -1,3 +1,8 @@
+(*
+A more specialized version of Core – this is what CN actually uses
+Core can pass around C types as values – CN is more restrictive, for simplicity
+*)
+
 open Pp
 module CF=Cerb_frontend
 open Cerb_frontend
