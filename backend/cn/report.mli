@@ -17,13 +17,8 @@ type resource_entry = {
 }
 
 type where_report = {
-<<<<<<< HEAD
   fnction : string option;
   section : string option;
-=======
-  fnction : string;
-  section : string;
->>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
   loc_cartesian : ((int * int) * (int * int)) option;
   loc_head : string;
 }
@@ -42,10 +37,4 @@ type report = {
   predicate_hints : predicate_clause_entry list;
 }
 
-<<<<<<< HEAD
 val make : string -> string Option.m -> report -> string
-=======
-val make : string -> report -> string
-
-val make2 : string -> string Option.m -> report -> string
->>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93

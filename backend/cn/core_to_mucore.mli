@@ -2,6 +2,7 @@
 
 (* TODO: BCP: I'm sure there are a bunch of things here that don't need to be exported... *)
 
+module Print = Pp
 module CF = Cerb_frontend
 module CA = Cerb_frontend.Cabs_to_ail
 module CAE = Cerb_frontend.Cabs_to_ail_effect
@@ -12,16 +13,20 @@ module Loc = Locations
 module C = Compile
 module IT = IndexTerms
 
-(* TODO: BCP: In the .ml file this is just
-     module Pmap = struct
-       include Pmap
-       let filter_map compare f map =
-         Pmap.fold (fun key value acc ->
-             match f key value with
-             | Some value' -> Pmap.add key value' acc
-             | None -> acc
-           ) map (Pmap.empty compare)
-     end
+module SymSet : Set.S with type elt = Sym.t
+module SymMap : Map.S with type key = Sym.t
+module IdMap : Map.S with type key = Id.t
+
+(* TODO: BCP: Needs cleaning up here -- In the .ml file this is just:
+            module Pmap = struct
+              include Pmap
+              let filter_map compare f map =
+                Pmap.fold (fun key value acc ->
+                    match f key value with
+                    | Some value' -> Pmap.add key value' acc
+                    | None -> acc
+                  ) map (Pmap.empty compare)
+            end
 *)
 module Pmap :
   sig
@@ -70,10 +75,6 @@ module Pmap :
       ('a -> 'b -> 'c option) -> ('a, 'b) Pmap.map -> ('a, 'c) Pmap.map
   end
 
-module SymSet : Set.S with type elt = Sym.t
-module SymMap : Map.S with type key = Sym.t
-module IdMap : Map.S with type key = Id.t
-
 val do_ail_desugar_op :
   'a ->
   ('a ->
@@ -97,10 +98,10 @@ type mu_pexpr = unit Mu.mu_pexpr
 type mu_pexprs = mu_pexpr list
 type mu_expr = unit Mu.mu_expr
 exception ConversionFailed
-val assert_error : Locations.t -> Pp.document -> 'a
+val assert_error : Locations.t -> Print.document -> 'a
 val assertl :
   Locations.t ->
-  bool -> Pp.document -> Pp.document Lazy.t -> unit
+  bool -> Print.document -> Print.document Lazy.t -> unit
 val convert_ct :
   Locations.t ->
   Cerb_frontend.Ctype.ctype -> Sctypes.ctype
@@ -108,11 +109,11 @@ val convert_core_bt_for_list :
   Locations.t -> Cerb_frontend.Core.core_base_type -> BT.basetype
 val ensure_pexpr_ctype :
   Mu.loc ->
-  Pp.document ->
+  Print.document ->
   ('a, Cerb_frontend.Symbol.sym) Cerb_frontend.Core.generic_pexpr -> Mu.act
 val core_to_mu__pattern :
   inherit_loc:bool ->
-  Resultat.Loc.t ->
+  Loc.t ->
   Cerb_frontend.Symbol.sym Cerb_frontend.Core.generic_pattern ->
   unit Mu.mu_pattern
 val n_ov :
@@ -128,25 +129,24 @@ val function_ids : (string * Mu.mu_function) list
 val ity_act : Mu.loc -> Sctypes.IntegerTypes.integerType -> Mu.act
 val n_pexpr :
   inherit_loc:bool ->
-  Resultat.Loc.t ->
-  (unit, Mu.symbol) Cerb_frontend.Core.generic_pexpr -> mu_pexpr
+  Loc.t -> (unit, Mu.symbol) Cerb_frontend.Core.generic_pexpr -> mu_pexpr
 val n_kill_kind :
   Locations.t -> Cerb_frontend.Core.kill_kind -> Mu.m_kill_kind
 val n_action :
   inherit_loc:bool ->
-  Resultat.Loc.t ->
+  Loc.t ->
   ('a, unit, Cerb_frontend.Symbol.sym) Cerb_frontend.Core.generic_action ->
   unit Mu.mu_action
 val n_paction :
   inherit_loc:bool ->
-  Resultat.Loc.t ->
+  Loc.t ->
   ('a, unit, Cerb_frontend.Symbol.sym) Cerb_frontend.Core.generic_paction ->
   unit Mu.mu_paction
 val show_n_memop :
   Cerb_frontend.Symbol.sym Cerb_frontend.Mem_common.generic_memop -> string
 val n_memop :
   inherit_loc:bool ->
-  Resultat.Loc.t ->
+  Loc.t ->
   Cerb_frontend.Symbol.sym Cerb_frontend.Mem_common.generic_memop ->
   (unit, Mu.symbol) Cerb_frontend.Core.generic_pexpr list -> unit Mu.mu_memop
 val unsupported :
@@ -154,7 +154,7 @@ val unsupported :
   Cerb_pp_prelude.P.document -> 'a Resultat.t
 val n_expr :
   inherit_loc:bool ->
-  Resultat.Loc.t ->
+  Loc.t ->
   (Compile.env *
    Compile.LocalState.state Compile.StringMap.t) *
   ((int, CAE.state) Pmap.map *
@@ -168,6 +168,9 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
+val lat_of_arguments : ('a -> 'b) -> 'a Mu.mu_arguments_l -> 'b LAT.t
+val at_of_arguments : ('a -> 'b) -> 'a Mu.mu_arguments -> 'b AT.t
+val arguments_of_lat : ('a -> 'b) -> 'a LAT.t -> 'b Mu.mu_arguments_l
 val arguments_of_at : ('a -> 'b) -> 'a AT.t -> 'b Mu.mu_arguments
 type identifier_env = Cerb_frontend.Annot.identifier_env
 val make_largs :
@@ -247,6 +250,27 @@ val desugar_conds :
    Cerb_frontend.Cn.cn_condition list *
    Cerb_frontend.Cabs_to_ail_effect.state_with_markers)
   Resultat.m
+val fetch_enum :
+  CAE.state_with_markers ->
+  Cerb_location.t ->
+  CAE.A.ail_identifier ->
+  unit Cerb_frontend.AilSyntax.expression Resultat.m
+val fetch_typedef :
+  CAE.state_with_markers ->
+  'a ->
+  CAE.A.ail_identifier -> Cerb_frontend.Ctype.ctype Resultat.m
+val dtree_of_inv :
+  (Cerb_frontend.Symbol.sym, Cerb_frontend.Ctype.ctype)
+  Cerb_frontend.Cn.cn_condition list -> Cerb_frontend.Pp_ast.doc_tree
+val dtree_of_requires :
+  (Cerb_frontend.Symbol.sym, Cerb_frontend.Ctype.ctype)
+  Cerb_frontend.Cn.cn_condition list -> Cerb_frontend.Pp_ast.doc_tree
+val dtree_of_ensures :
+  (Cerb_frontend.Symbol.sym, Cerb_frontend.Ctype.ctype)
+  Cerb_frontend.Cn.cn_condition list -> Cerb_frontend.Pp_ast.doc_tree
+val dtree_of_accesses :
+  ('a * (Cerb_frontend.Symbol.sym * Cerb_frontend.Ctype.ctype)) list ->
+  Cerb_frontend.Pp_ast.doc_tree
 val normalise_label :
   inherit_loc:bool ->
   Cerb_frontend.Symbol.sym ->
@@ -269,6 +293,55 @@ val add_spec_arg_renames :
   Cerb_frontend.Ctype.ctype list ->
   (Cerb_frontend.Symbol.sym, Cerb_frontend.Ctype.ctype)
   Cerb_frontend.Cn.cn_fun_spec -> C.env -> C.env
+val normalise_fun_map_decl :
+  inherit_loc:bool ->
+  (int, CAE.state) Pmap.map * 'a Cerb_frontend.AilSyntax.sigma ->
+  (Sym.S.sym * TypeErrors.CF.Ctype.ctype) list *
+  (int, (Sym.S.sym * TypeErrors.CF.Ctype.ctype) list)
+  Pmap.map ->
+  C.env ->
+  ('b *
+   (Cerb_frontend.Symbol.sym, Cerb_frontend.Ctype.ctype)
+   Cerb_frontend.Cn.cn_fun_spec)
+  SymMap.t ->
+  Cerb_frontend.Milicore.mi_funinfo ->
+  (Cerb_frontend.Annot.loop_id, int * Cerb_frontend.Annot.attributes)
+  Pmap.map ->
+  Cerb_frontend.Symbol.sym ->
+  'c Cerb_frontend.Milicore.mi_fun_map_decl ->
+  (unit Mu.mu_fun_map_decl *
+   (Cerb_location.t * Cerb_frontend.Symbol.sym) list)
+  option Resultat.t
+val normalise_fun_map :
+  inherit_loc:bool ->
+  (int, CAE.state) Pmap.map * 'a Cerb_frontend.AilSyntax.sigma ->
+  (Sym.S.sym * TypeErrors.CF.Ctype.ctype) list *
+  (int, (Sym.S.sym * TypeErrors.CF.Ctype.ctype) list)
+  Pmap.map ->
+  C.env ->
+  ('b *
+   (Cerb_frontend.Symbol.sym, Cerb_frontend.Ctype.ctype)
+   Cerb_frontend.Cn.cn_fun_spec)
+  SymMap.t ->
+  Cerb_frontend.Milicore.mi_funinfo ->
+  (Cerb_frontend.Annot.loop_id, int * Cerb_frontend.Annot.attributes)
+  Pmap.map ->
+  (Cerb_frontend.Symbol.sym, 'c Cerb_frontend.Milicore.mi_fun_map_decl)
+  Pmap.map ->
+  ((Cerb_frontend.Symbol.sym, unit Mu.mu_fun_map_decl) Pmap.map *
+   Mu.mu_function_to_convert list)
+  Resultat.m
+val normalise_globs :
+  inherit_loc:bool ->
+  Compile.env ->
+  'a ->
+  ('b, unit) Cerb_frontend.Core.generic_globs ->
+  unit Mu.mu_globs Resultat.m
+val normalise_globs_list :
+  inherit_loc:bool ->
+  Compile.env ->
+  ('a * ('b, unit) Cerb_frontend.Core.generic_globs) list ->
+  ('a * unit Mu.mu_globs) list Resultat.m
 val make_struct_decl :
   Locations.t ->
   (Cerb_frontend.Symbol.identifier *
@@ -299,7 +372,7 @@ type fn_spec_instrumentation =
     (ReturnTypes.t * statements) ArgumentTypes.t
 type instrumentation = {
   fn : Sym.t;
-  fn_loc : Resultat.Loc.t;
+  fn_loc : Loc.t;
   internal : fn_spec_instrumentation option;
 }
 val rt_stmts_subst :

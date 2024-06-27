@@ -144,8 +144,8 @@ with a different entry point from which a parser can be started:
 ## Adding \*.mli files
 
 You can generate them using the below **from the root of the repo** and **on a working build**:
-``` 
-[ ! -d backend/cn ] && echo "DO NOT PROCEED: Go to cerberus repo root" 
+```
+[ ! -d backend/cn ] && echo "DO NOT PROCEED: Go to cerberus repo root"
 make && make install && make install_cn
 opam install ocaml-print-intf
 dune exec -- ocaml-print-intf backend/cn/XXXXX.ml | sed 's/Dune__exe.//g' > XXXXX.mli
@@ -170,7 +170,7 @@ make && make install && make install_cn
   Headers look like this:
   ```
   (* Module Locations -- Utility functions for Cerberus locations
- 
+
      This module adds a number of useful functions on locations to the
      ones already provided by Cerberus. *)
   ```
