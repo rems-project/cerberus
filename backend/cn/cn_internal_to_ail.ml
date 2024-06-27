@@ -299,6 +299,8 @@ let cn_to_ail_binop_internal bt1 bt2 =
   | XORNoSMT -> (A.(Arithmetic Bxor), None)
   | BWAndNoSMT -> (A.(Arithmetic Band), None)
   | BWOrNoSMT -> (A.(Arithmetic Bor), None)
+  | ShiftLeft -> (A.(Arithmetic Shl), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left"))
+  | ShiftRight -> (A.(Arithmetic Shr), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right"))
   | LT -> 
     (A.Lt, Some (get_cn_int_type_str bt1 bt2 ^ "_lt"))
   | LE -> (A.Le, Some (get_cn_int_type_str bt1 bt2 ^ "_le"))
@@ -310,7 +312,7 @@ let cn_to_ail_binop_internal bt1 bt2 =
       | None -> None
     in
     (A.Eq, fn_str) *)
-  | _ -> (A.And, None) (* TODO: Change *)
+  | _ -> failwith "TODO cn_to_ail_binop: Translation not implemented"
   (* | LTPointer
   | LEPointer
   | SetUnion

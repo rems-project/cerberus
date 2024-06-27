@@ -186,6 +186,22 @@ cn_bool *cn_pointer_is_null(cn_pointer *);
         return res;\
     }
 
+#define CN_GEN_SHIFT_LEFT(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_shift_left(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) << *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_SHIFT_RIGHT(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_shift_right(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) >> *(i2->val);\
+        return res;\
+    }
+
 #define CN_GEN_MIN(CNTYPE)\
     static inline CNTYPE *CNTYPE##_min(CNTYPE *i1, CNTYPE *i2) {\
         return CNTYPE##_lt(i1, i2) ? i1 : i2;\
@@ -313,6 +329,8 @@ static inline int ipow(int base, int exp)
    CN_GEN_SUB(CTYPE, CNTYPE)\
    CN_GEN_MUL(CTYPE, CNTYPE)\
    CN_GEN_DIV(CTYPE, CNTYPE)\
+   CN_GEN_SHIFT_LEFT(CTYPE, CNTYPE)\
+   CN_GEN_SHIFT_RIGHT(CTYPE, CNTYPE)\
    CN_GEN_MIN(CNTYPE)\
    CN_GEN_MAX(CNTYPE)\
    CN_GEN_MOD(CTYPE, CNTYPE)\
