@@ -51,9 +51,6 @@ General principles:
 * Core to mucore: `backend/cn/core_to_mucore.ml`
 * Mucore: This is the thing that CN typechecks.
 
-<<<<<<< HEAD
-### CN Pipeline Entry
-=======
 ### Some external Cerberus modules
 
 [Some notes from Christopher's tour of CN on parts of Cerberus that CN
@@ -79,7 +76,30 @@ cabs.lem
 * This then gets turned into Core
 
 ### Entry Points:
->>>>>>> 859b4d7b6 (CN: A bit more progress on mli files)
+
+[Some notes from Christopher's tour of CN on parts of Cerberus that CN
+depends on...]
+
+These bits are not part of CN – this is the Cerberus C semantics – but
+important as background and context.  CN uses Cerberus to translate
+C/CN to Core.
+
+frontend/model/core.lem
+* Lem is “sort of OCaml” but can also export to theorem provers
+* `funs` is the map of all the functions in scope
+* Body of a function is a “generic_expr_”
+* Grammar of expressions: generic_expr
+* Stack local variable in C program: generic_action_
+* Core is general, while mucore (part of CN) is more specific
+
+cabs.lem
+* The first level of abstract syntax
+* frontend/model/ail/ailSyntax.lem
+* Clarifies some issues with scoping, structs, for loops get turned into while loops
+* Still distinguishes statements and expressions
+* This then gets turned into Core
+
+### Entry Points:
 
 There are four types of CN parsing constructs (`parsers/c/c_parser.mly`), each
 with a different entry point from which a parser can be started:
@@ -119,7 +139,6 @@ with a different entry point from which a parser can be started:
 * Resource Types: the "signatures" of predicates, in `backend/cn/resourceTypes.ml`
 * Resource Predicates: the defintion of predicates, in `backend/cn/resourcePredicates.ml`
 
-<<<<<<< HEAD
 ## Code Cleanup
 
 ## Adding \*.mli files
@@ -164,10 +183,6 @@ make && make install && make install_cn
   This way they will be notified via GitHub.
 
 ## Dependency graph
-=======
-## Dependency Graph
->>>>>>> 859b4d7b6 (CN: A bit more progress on mli files)
-
 ```
 opam install codept
 codept backend/cn/*.ml > cn-modules.dot

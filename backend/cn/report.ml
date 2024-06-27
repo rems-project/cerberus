@@ -19,6 +19,19 @@ type resource_entry = {
     res_span : Pp.document;
   }
 
+<<<<<<< HEAD
+=======
+(* type intra_label_trace_item_report = {  *)
+(*   stmt : Pp.document;  *)
+(*   within : Pp.document list  *)
+(* } *)
+(* type per_label_trace_report = {  *)
+(*   label : Pp.document;  *)
+(*   trace : intra_label_trace_item_report list; *)
+(* } *)
+(* type trace_report = per_label_trace_report list *)
+
+>>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
 type where_report = {
     fnction: string option;
     section: string option;
@@ -62,7 +75,11 @@ let div ?clss ?id elements =
   let closet = "</div>" in
   opent ^ (list elements) ^ closet
 (* let pre code = enclose "pre" code *)
+<<<<<<< HEAD
 (* let body elements = enclose "body" (list elements) *)
+=======
+let body elements = enclose "body" (list elements)
+>>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
 let h i title body = list [enclose ("h"^string_of_int i) title; body]
 let table_row cols = enclose "tr" (list (List.map (enclose "td") cols))
 let table_head_row cols = enclose "tr" (list (List.map (enclose "th") cols))
@@ -96,9 +113,15 @@ let make_where where =
   in
 
   table ["function"; "section"; "location"]
+<<<<<<< HEAD
     [[div ~clss:"loc_function" [or_empty where.fnction];
       div ~clss:"loc_section" [or_empty where.section];
       div ~clss:"loc" [cartesian_to_string where.loc_cartesian];
+=======
+    [[where.fnction;
+      where.section;
+      div ~clss:"loc" [if is_javascript then cartesian_to_string where.loc_cartesian else where.loc_head];
+>>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
       (* pre (where.loc_pos) *)
     ]]
 
@@ -163,11 +186,19 @@ let make_resources (interesting, uninteresting) =
 
 let make_terms (interesting, uninteresting) =
   let make = List.map (fun v -> [Pp.plain v.term; Pp.plain v.value]) in
+<<<<<<< HEAD
   let interesting_table = table ["term"; "value"] (make interesting) in
   let uninteresting_table = table ["term"; "value"] (make uninteresting) in
   h 1 "Terms" 
     (interesting_uninteresting 
        (interesting_table, interesting) 
+=======
+  let interesting_table = table ["variable"; "value"] (make interesting) in
+  let uninteresting_table = table ["variable"; "value"] (make uninteresting) in
+  h 1 "Terms"
+    (interesting_uninteresting
+       (interesting_table, interesting)
+>>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
        (uninteresting_table, uninteresting))
 
 let make_constraints (interesting, uninteresting) =
@@ -183,6 +214,82 @@ let make_constraints (interesting, uninteresting) =
 
 
 
+<<<<<<< HEAD
+=======
+(* Doing multiple 'pages' within one html file based on this scheme:
+   https://www.w3.org/Style/Examples/007/target.en.html *)
+
+
+let make_state (report: state_report) requested unproven predicate_hints i total =
+  let links =
+    let first =
+      if i = 0
+      then div ~clss:"inactive_button" ["first"]
+      else div ~clss:"button" [(link ~url:("#"^page_name 0) ~text:"first")]
+    in
+    let prev =
+      if i = 0
+      then div ~clss:"inactive_button" ["prev"]
+      else div ~clss:"button" [(link ~url:("#"^page_name (i-1)) ~text:"prev")]
+    in
+    let next =
+      if i = total - 1
+      then div ~clss:"inactive_button" ["next"]
+      else div ~clss:"button" [(link ~url:("#"^page_name (i+1)) ~text:"next")]
+    in
+    let last =
+      if i = total - 1
+      then div ~clss:"inactive_button" ["last"]
+      else div ~clss:"button" [(link ~url:("#"^page_name (total - 1)) ~text:"last")]
+    in
+    [ first; prev; next; last ]
+  in
+  div ~clss:"page" ~id:(page_name i) [
+      div ~clss:"pagelinks" links;
+      div ~clss:"pagecontent" [
+        make_where report.where;
+        make_requested requested;
+        make_unproven unproven;
+        make_predicate_hints predicate_hints;
+        make_resources report.resources;
+        make_terms report.terms;
+        make_constraints report.constraints;
+      ]
+    ]
+
+
+let make filename (report : report) =
+
+  let channel = open_out filename in
+
+  let total = List.length report.trace in
+  assert (total > 0);
+
+  let contents =
+    let pages =
+      List.mapi (fun i state ->
+          make_state
+            state
+            report.requested
+            report.unproven
+            report.predicate_hints
+            i total
+        ) report.trace
+    in
+    html [
+      head (style Style.style);
+      body [
+          div ~id:"pages" pages
+        ]
+    ]
+  in
+
+  let () = Printf.fprintf channel "%s" contents in
+
+  close_out channel;
+
+  filename ^ "#" ^ page_name (total-1)
+>>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
 
 
 let css = {|
@@ -660,7 +767,11 @@ let make filename source_filename_opt (report: report) =
 
   let pages = div ~id:"pages" begin
     List.map (fun state ->
+<<<<<<< HEAD
       make_state
+=======
+      make_state2
+>>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
         state
         report.requested
         report.unproven
@@ -683,3 +794,209 @@ let make filename source_filename_opt (report: report) =
 
 
 
+<<<<<<< HEAD
+=======
+
+type column = {
+    classes : string list;
+    content : string;
+    colspan : int
+  }
+type row = {
+    header : bool;
+    classes : string list;
+    columns : column list
+  }
+
+
+type table = {
+    rows : row list;
+    column_info : string list
+  }
+
+type element =
+  | H of int * string
+  | P of string
+  | UL of element list
+  | Details of { summary : string; contents : element }
+  | Table of table
+
+type html = {style : string; body : element list}
+
+let classes = function
+  | [] -> ""
+  | cs -> "class=\""^String.concat " " cs^"\""
+
+let column header {classes = cs; content; colspan} =
+  let tag = if header then "th" else "td" in
+  "<"^tag^" "^classes cs^" colspan=\"" ^ string_of_int colspan ^ "\">" ^
+    content ^
+  "</"^tag^">"
+
+let row {header; classes = cs; columns} =
+  let content =
+    "<tr "^classes cs^">" ^
+      String.concat "" (List.map (column header) columns) ^
+    "</tr>"
+  in
+  if header then "<thead>"^content^"</thead>" else content
+
+let column_info column_class =
+  "<col class = \""^column_class^"\">"
+
+let table {rows; column_info = ci} =
+  "<table>" ^
+    String.concat "" (List.map row rows) ^
+  "</table>"
+
+let p text =
+  "<p>" ^
+    text ^
+  "</p>"
+
+let h i text =
+  "<h"^string_of_int i^">" ^
+  text ^
+  "</h"^string_of_int i^">"
+
+let ul l =
+  "<ul>" ^
+  String.concat "" (List.map (fun i -> "<li>" ^ i ^ "</li>") l) ^
+  "</ul>"
+
+let details summary contents =
+  "<details>" ^
+  "<summary>" ^ summary ^ "</summary>" ^
+  contents
+
+let rec element = function
+  | H (i,text) -> h i text
+  | P text-> p text
+  | Details { summary; contents } -> details summary (element contents)
+  | Table tablecontent -> table tablecontent
+
+
+
+let to_html report =
+
+  let sdoc doc = Pp.plain doc in
+
+  (* let o_sdoc o_doc =  *)
+  (*   match o_doc with *)
+  (*   | Some doc -> sdoc doc *)
+  (*   | None -> "" *)
+  (* in *)
+
+  (* let state_entry {loc_e; loc_v; state} = *)
+  (*   { header = false; *)
+  (*     classes = ["memory_entry"]; *)
+  (*     columns = [ *)
+  (*         { classes = ["loc_e"]; content = o_sdoc loc_e; colspan = 1}; *)
+  (*         { classes = ["loc_v"]; content = o_sdoc loc_v; colspan = 1}; *)
+  (*         { classes = ["state"]; content = o_sdoc state; colspan = 1}; *)
+  (*       ] *)
+  (*   } *)
+  (* in *)
+
+  let variable_entry {var; value} =
+    { header = false;
+      classes = ["variable_entry"];
+      columns = [
+          { classes = ["expression"]; content = sdoc var; colspan = 1 };
+          { classes = ["value"]; content = sdoc value; colspan = 2 };
+        ]
+    }
+  in
+
+  let predicate_info_entry {cond; clause} =
+    { header = false;
+      classes = ["predicate_info_entry"];
+      columns = [
+          { classes = ["condition"]; content = sdoc cond; colspan = 1 };
+          { classes = ["clause"]; content = sdoc clause; colspan = 2 };
+        ]
+    }
+  in
+
+  let resource_entry {res; res_span} =
+    { header = false;
+      classes = ["resource entry"];
+      columns = [
+          { classes = ["res"]; content = sdoc res; colspan = 2};
+          { classes = ["span"]; content = sdoc res_span; colspan = 1};
+        ]
+    }
+  in
+
+
+  let full_row_entry nm doc =
+    { header = false;
+      classes = [nm ^ "_entry"];
+      columns = [
+          { classes = [nm]; content = sdoc doc; colspan = 3 };
+        ]
+    }
+  in
+
+  let constraint_entry = full_row_entry "constraint" in
+  let location_entry = full_row_entry "location" in
+  let trace_item_entry = full_row_entry "trace_item" in
+
+  let header hds =
+    let columns =
+      List.map (fun (name, colspan) ->
+          {classes = [];
+           content = name;
+           colspan = colspan}
+        ) hds
+    in
+    { header = true;
+      columns;
+      classes = ["table_header"]}
+  in
+
+  let opt_header xs hds = if List.length xs = 0
+    then [] else [header hds] in
+
+
+  let table =
+    { column_info = ["column1"; "column2"; "column3"];
+      rows = (
+        (* header [("pointer",1); ("addr",1); ("state",1)] :: *)
+        (* List.map state_entry report.memory @ *)
+        opt_header report.location_trace [("path to error",3)] @
+        make_trace report.trace
+        @
+        opt_header report.requested [("requested resource", 2); ("byte span", 1)] @
+        List.map resource_entry report.requested
+        @
+        opt_header report.unproven [("unproven constraint", 3)] @
+        List.map constraint_entry report.unproven
+        @
+        opt_header report.predicate_hints [("possibly relevant predicate clauses", 3)] @
+        List.map predicate_info_entry report.predicate_hints
+        @
+        opt_header report.resources [("available resources", 2); ("byte span and match", 1)] @
+        List.map resource_entry report.resources
+        @
+        header [("expression",1); ("value",2)] ::
+        List.map variable_entry report.variables
+        @
+        header [("constraints",3)] ::
+        List.map constraint_entry report.constraints
+    )}
+  in
+
+  let body = [
+
+      Table table
+    ]
+  in
+
+  { style = Style.style; body }
+
+
+let print_report report = html (to_html report)
+
+*)
+>>>>>>> 859b4d7b6db6a6ff3877c39c7f0b83f7dda60f93
