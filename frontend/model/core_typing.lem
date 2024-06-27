@@ -1631,6 +1631,7 @@ let rec collect_labels env (Expr _ expr_) =
 
 (* val     typecheck_expr: Loc.t -> typing_env -> core_base_type -> Core.expr unit -> E.eff (typed_expr unit) *)
 and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
+  let typecheck_expr env expected_bTy expr = typecheck_expr tagDefs env expected_bTy expr in
   let loc = Annot.get_loc_ annot in
   Expr annot <$> match expr_ with
     | Epure pe ->
@@ -1653,9 +1654,9 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
           | Just case_bTy ->
               export_pexpr pe' >>= fun pe' ->
               E.mapM (fun (pat, e) ->
-                typecheck_pattern case_bTy pat                             >>= fun (env', pat') ->
-                export_pattern loc pat'                                    >>= fun pat'         ->
-                typecheck_expr tagDefs (env_union env env') expected_bTy e >>= fun e'           ->
+                typecheck_pattern case_bTy pat                     >>= fun (env', pat') ->
+                export_pattern loc pat'                            >>= fun pat'         ->
+                typecheck_expr (env_union env env') expected_bTy e >>= fun e'           ->
                 E.return (pat', e')
               ) cases >>= fun cases' ->
               E.return (Ecase pe' cases')
@@ -1666,15 +1667,15 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
           | Nothing ->
               E.fail (locOf pat) TooGeneral
           | Just pat_bTy ->
-              typecheck_pexpr tagDefs env pat_bTy pe1 >>= export_pexpr       >>= fun pe1' ->
-              export_pattern loc _pat'                                       >>= fun pat' ->
-              typecheck_expr tagDefs (env_union env pat_env) expected_bTy e2 >>= fun e2'  ->
+              typecheck_pexpr tagDefs env pat_bTy pe1 >>= export_pexpr >>= fun pe1' ->
+              export_pattern loc _pat'                                 >>= fun pat' ->
+              typecheck_expr (env_union env pat_env) expected_bTy e2   >>= fun e2'  ->
               E.return (Elet pat' pe1' e2')
         end
     | Eif pe1 e2 e3 ->
         Eif <$> typecheck_export_pexpr tagDefs env BTy_boolean pe1
-            <*> typecheck_expr tagDefs env expected_bTy e2
-            <*> typecheck_expr tagDefs env expected_bTy e3
+            <*> typecheck_expr env expected_bTy e2
+            <*> typecheck_expr env expected_bTy e3
     | Eccall annot pe_ty pe pes ->
         infer_pexpr tagDefs env pe_ty >>= export_pexpr >>= fun pe_ty' ->
         infer_pexpr tagDefs env pe    >>= export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
@@ -1739,7 +1740,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         (* TODO: forbid jumps, par(), ... *)
         match expected_bTy with
           | BTy_tuple bTys ->
-              Eunseq <$> E.mapM (fun (bTy, e) -> typecheck_expr tagDefs env bTy e)
+              Eunseq <$> E.mapM (fun (bTy, e) -> typecheck_expr env bTy e)
                           (List.zip bTys es)
           | _ -> E.fail loc (CoreTyping_TODO "UNSEQ illtyped")
         end
@@ -1750,8 +1751,8 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
               E.fail loc TooGeneral
           | Just pat_bTy ->
               Ewseq <$> export_pattern loc _pat'
-                    <*> typecheck_expr tagDefs env pat_bTy e1
-                    <*> typecheck_expr tagDefs (env_union env env') expected_bTy e2
+                    <*> typecheck_expr env pat_bTy e1
+                    <*> typecheck_expr (env_union env env') expected_bTy e2
         end
     | Esseq pat e1 e2 ->
         infer_pattern pat >>= fun (env', infer, _pat') ->
@@ -1760,17 +1761,17 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
               E.fail loc TooGeneral
           | Just pat_bTy ->
               Esseq <$> export_pattern loc _pat'
-                    <*> typecheck_expr tagDefs env pat_bTy e1
-                    <*> typecheck_expr tagDefs (env_union env env') expected_bTy e2
+                    <*> typecheck_expr env pat_bTy e1
+                    <*> typecheck_expr (env_union env env') expected_bTy e2
         end
     | Ebound e ->
         (* TODO *)
-        Ebound <$> typecheck_expr tagDefs env expected_bTy e
+        Ebound <$> typecheck_expr env expected_bTy e
     | End es ->
         if List.length es < 2 then
           E.fail loc (CoreTyping_TODO "nd() should have at least 2 operand")
         else
-          E.mapM (typecheck_expr tagDefs env expected_bTy) es >>= fun es' ->
+          E.mapM (typecheck_expr env expected_bTy) es >>= fun es' ->
           E.return (End es')
     | Esave sym_bTy sym_bTy_pes e ->
         (* TODO: check *)
@@ -1780,7 +1781,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
            E.return (sym, (((bTy,ct), pe')))
         ) sym_bTy_pes >>= fun sym_bTy_pes' ->
         let env' = <| decls= Map.fromList (List.map (fun (sym, ((bTy,_), _)) -> (Sym sym, TDsym bTy)) sym_bTy_pes'); labs= Map.empty |> in
-        Esave sym_bTy sym_bTy_pes' <$> typecheck_expr tagDefs (env_union env env') expected_bTy e
+        Esave sym_bTy sym_bTy_pes' <$> typecheck_expr (env_union env env') expected_bTy e
     | Erun annot sym pes ->
         match Map.lookup sym env.labs with
           | Just (bTy, bTys) ->
@@ -1800,7 +1801,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
           E.fail loc (CoreTyping_TODO "Epar must have at least 2 operands")
         else match expected_bTy with
           | BTy_tuple bTys ->
-              Epar <$> E.mapM (uncurry $ typecheck_expr tagDefs env) (List.zip bTys es)
+              Epar <$> E.mapM (uncurry $ typecheck_expr env) (List.zip bTys es)
           | _ ->
               E.fail loc (CoreTyping_TODO "Epar has as tuple type")
         end
