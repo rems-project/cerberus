@@ -246,12 +246,19 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
 
 let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn_base_type t)
 
-let cn_to_ail_unop_internal = function 
+let cn_to_ail_unop_internal bt = function 
   | Terms.Not -> (A.Bnot, Some "cn_bool_not")
-  (* | BWCLZNoSMT
+  | Negate -> 
+    let typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in
+    let typedef_str = match typedef_str_opt with 
+      | Some str -> str
+      | None -> failwith "Negate unop translation: typedef string not found"
+    in
+    (A.Minus, Some (typedef_str ^ "_negate"))
+  | BWCLZNoSMT
   | BWCTZNoSMT
-  | BWFFSNoSMT *)
-  | _ -> failwith "TODO: unop translation"
+  | BWFFSNoSMT -> failwith "Failure: Trying to translate SMT-only unop from C source"
+
 
 (* TODO: Finish *)
 let cn_to_ail_binop_internal bt1 bt2 = 
@@ -655,7 +662,7 @@ let rec cn_to_ail_expr_aux_internal
 
   | Unop (unop, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
-    let (ail_unop, annot)  = cn_to_ail_unop_internal unop in
+    let (ail_unop, annot)  = cn_to_ail_unop_internal (IT.bt t) unop in
     let str = match annot with 
       | Some str -> str
       | None -> failwith "No CN unop function found"

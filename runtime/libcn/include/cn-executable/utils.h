@@ -148,6 +148,12 @@ cn_bool *cn_pointer_is_null(cn_pointer *);
         return convert_to_cn_bool(*(i1->val) >= *(i2->val));\
     }
 
+#define CN_GEN_NEGATE(CNTYPE)\
+    static inline CNTYPE *CNTYPE##_negate(CNTYPE *i) {\
+        return convert_to_##CNTYPE(-(*i->val));\
+    }
+
+
 #define CN_GEN_ADD(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_add(CNTYPE *i1, CNTYPE *i2) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
@@ -302,6 +308,7 @@ static inline int ipow(int base, int exp)
    CN_GEN_LE(CNTYPE)\
    CN_GEN_GT(CNTYPE)\
    CN_GEN_GE(CNTYPE)\
+   CN_GEN_NEGATE(CNTYPE)\
    CN_GEN_ADD(CTYPE, CNTYPE)\
    CN_GEN_SUB(CTYPE, CNTYPE)\
    CN_GEN_MUL(CTYPE, CNTYPE)\
@@ -358,3 +365,4 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, owne
 /* C ownership checking */
 void c_map_local_to_stack_depth(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
 void c_remove_local_footprint(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);
+
