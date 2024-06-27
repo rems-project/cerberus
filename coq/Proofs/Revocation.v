@@ -1177,12 +1177,8 @@ Module CheriMemoryImplWithProofs
     decode_cap (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) true c ->
     fetch_and_decode_cap bm addr true = inr c.
   Proof.
-  (*
       intros D.
       remember (fetch_bytes bm addr (sizeof_pointer MorelloImpl.get)) as bs.
-      apply split_bytes_success in S.
-
-      destruct S as [tag [cs [p' S]]].
       unfold decode_cap in D.
       unfold fetch_and_decode_cap.
       Transparent ret bind get.
@@ -1192,38 +1188,26 @@ Module CheriMemoryImplWithProofs
       subst bs'.
       break_match.
       -
-        inl_inr.
+        exfalso.
+        unfold option2serr in Heqs.
+        break_match_hyp.
+        inv Heqs.
+        destruct D as [ls [BL D]].
+        rename Heqs into BC.
+        apply extract_unspec_spec in BL.
+        congruence.
       -
-        repeat break_let.
-        subst.
-        inl_inr_inv.
-        subst.
         destruct D as [ls [BL D]].
         (* [bs] [cs] and [ls] relation is a bit tricky here, but workable *)
 
-        apply split_bytes_values in Heqs.
-        rename Heqs into BC.
-
-        assert(Forall2 (fun ov v => ov = Some v ) cs ls) as CL.
-        {
-          clear - BC BL.
-          apply Forall2_flip in BC.
-          eapply list.Forall2_transitive;eauto.
-          clear.
-          intros x y z H H0.
-          cbn in *.
-          subst.
-          assumption.
-        }
-
-        apply extract_unspec_spec in CL.
-        rewrite CL.
-        cbn.
+        apply extract_unspec_spec in BL.
+        rewrite BL in Heqs.
+        cbn in Heqs.
+        invc Heqs.
         rewrite D.
         reflexivity.
-        Opaque ret bind get.
-   *)
-  Admitted.
+  Qed.
+  Opaque ret bind get.
 
   Lemma cap_bounds_within_alloc_true:
     forall a c,
