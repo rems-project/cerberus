@@ -666,6 +666,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        | IOpAdd -> add_ (arg1, arg2) loc
        | IOpSub -> sub_ (arg1, arg2) loc
        | IOpMul -> mul_ (arg1, arg2) loc
+       | IOpDiv -> div_ (arg1, arg2) loc
        | IOpShl -> ite_ (arg2_bits_lost, IT.int_lit_ 0 expect loc,
                arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2 loc) loc) loc
        | IOpShr -> ite_ (arg2_bits_lost, IT.int_lit_ 0 expect loc,
@@ -696,6 +697,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        | IOpAdd -> (add_ (arg1, arg2) loc, add_ (large arg1, large arg2) loc, bool_ true here)
        | IOpSub -> (sub_ (arg1, arg2) loc, sub_ (large arg1, large arg2) loc, bool_ true here)
        | IOpMul -> (mul_ (arg1, arg2) loc, mul_ (large arg1, large arg2) loc, bool_ true here)
+       | IOpDiv -> (div_ (arg1, arg2) loc, div_ (large arg1, large arg2) loc, bool_ true here)
        | IOpShl ->
          ( arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2 loc) loc
          , arith_binop Terms.ShiftLeft (large arg1, large arg2) loc
