@@ -2695,10 +2695,10 @@ Module Type CheriMemoryImpl
           find_live_allocation (C.cap_get_value c) >>=
             fun x =>
               match x with
-              | None => fail loc (MerrUndefinedFree Free_non_matching)
+              | None => fail loc (MerrUndefinedRealloc Free_non_matching)
               | Some (alloc_id,alloc) =>
                   if negb (cap_match_dyn_allocation c alloc)
-                  then fail loc (MerrUndefinedFree Free_non_matching)
+                  then fail loc (MerrUndefinedRealloc Free_non_matching)
                   else
                     allocate_region tid (CoqSymbol.PrefOther "realloc") align size_v >>=
                       (fun (new_ptr : pointer_value) =>
