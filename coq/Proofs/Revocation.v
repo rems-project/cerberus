@@ -3171,13 +3171,22 @@ Module CheriMemoryImplWithProofs
     same_state_steps.
   Qed.
 
+  Instance compare_ptrval_SameState
+    (label: string)
+    (loc : location_ocaml)
+    (ptr1 ptr2 : pointer_value) :
+    SameState (compare_ptrval label loc ptr1 ptr2).
+  Proof.
+    unfold compare_ptrval.
+    same_state_steps.
+  Qed.
+
   Instance lt_ptrval_SameState
     (loc : location_ocaml)
     (ptr1 ptr2 : pointer_value) :
     SameState (lt_ptrval loc ptr1 ptr2).
   Proof.
     unfold lt_ptrval.
-    repeat break_let.
     same_state_steps.
   Qed.
 
@@ -3187,7 +3196,6 @@ Module CheriMemoryImplWithProofs
     SameState (gt_ptrval loc ptr1 ptr2).
   Proof.
     unfold gt_ptrval.
-    repeat break_let.
     same_state_steps.
   Qed.
 
@@ -3197,7 +3205,6 @@ Module CheriMemoryImplWithProofs
     SameState (le_ptrval loc ptr1 ptr2).
   Proof.
     unfold le_ptrval.
-    repeat break_let.
     same_state_steps.
   Qed.
 
@@ -3207,7 +3214,6 @@ Module CheriMemoryImplWithProofs
     SameState (ge_ptrval loc ptr1 ptr2).
   Proof.
     unfold ge_ptrval.
-    repeat break_let.
     same_state_steps.
   Qed.
 

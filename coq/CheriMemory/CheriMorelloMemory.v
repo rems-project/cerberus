@@ -1223,7 +1223,7 @@ Module Type CheriMemoryImpl
     | MVErr err => fail loc err
     end.
 
-
+  (** Find the first live allocation which fully contains the bounds of the given capability. *)
   Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
     :=
     let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
@@ -1239,6 +1239,7 @@ Module Type CheriMemoryImpl
          && ((abase <=? cbase) && (cbase <? alimit))
       ) st.(allocations).
 
+  (** Find the first live allocation which fully contains the bounds of the given capability. *)
   Definition find_cap_allocation c : memM (option (storage_instance_id * allocation))
     :=  st <- get ;; ret (find_cap_allocation_st st c).
 
@@ -1804,77 +1805,73 @@ Module Type CheriMemoryImpl
     :=
     eq_ptrval loc ptr1 ptr2 >>= (fun (x : bool) => ret (negb x)).
 
+  Definition compare_ptrval
+    (label: string)
+    (loc : location_ocaml)
+    (ptrval_1 ptrval_2 : pointer_value) : memM comparison
+    :=
+    match ptrval_1, ptrval_2 with
+    | PVconcrete c1, PVconcrete c2 =>
+        if cap_is_null c1 || cap_is_null c2 then
+          fail loc (MerrWIP ("one of pointers is NULL in " ++ label))
+        else
+          oa1 <- find_cap_allocation c1 ;;
+          oa2 <- find_cap_allocation c2 ;;
+          match oa1, oa2 with
+          | Some (alloc_id1, _), Some (alloc_id2, _)
+            =>
+              if alloc_id1 =? alloc_id2 then
+                ret (C.value_compare c1 c2)
+              else
+                fail loc MerrPtrComparison
+          | _, _ => fail loc MerrPtrComparison
+          end
+    | _, _ => fail loc (MerrWIP ("incompatible pointers in " ++ label))
+    end.
+
   Definition lt_ptrval
     (loc : location_ocaml)
     (ptrval_1 ptrval_2 : pointer_value) : memM bool
     :=
-    match ptrval_1, ptrval_2 with
-    | PVconcrete addr1, PVconcrete addr2 =>
-        if cap_is_null addr1 || cap_is_null addr2 then
-          fail loc (MerrWIP "lt_ptrval ==> one null pointer")
-        else
-          ret (match C.value_compare addr1 addr2 with
-               | Lt => true
-               | _ => false
-               end)
-    | _, _ => fail loc (MerrWIP "lt_ptrval")
-    end.
-
-
-  Definition is_strict_pointer_arith (_:unit) :=
-    CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_pointer_arith STRICT)
-    || negb (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_pointer_arith PERMISSIVE)).
+    cp <- compare_ptrval "lt_ptrval" loc ptrval_1 ptrval_2 ;;
+    ret (match cp with
+         | Lt => true
+         | _ => false
+         end).
 
   Definition gt_ptrval
     (loc : location_ocaml)
     (ptrval_1 ptrval_2 : pointer_value) : memM bool
     :=
-    match ptrval_1, ptrval_2 with
-    | PVconcrete addr1, PVconcrete addr2 =>
-        if cap_is_null addr1 || cap_is_null addr2 then
-          fail loc (MerrWIP "gt_ptrval ==> one null pointer")
-        else
-          ret (match C.value_compare addr1 addr2 with
-               | Gt => true
-               | _ => false
-               end)
-    | _, _ => fail loc (MerrWIP "gt_ptrval")
-    end.
+    cp <- compare_ptrval "gt_ptrval" loc ptrval_1 ptrval_2 ;;
+    ret (match cp with
+         | Gt => true
+         | _ => false
+         end).
 
   Definition le_ptrval
     (loc : location_ocaml)
     (ptrval_1 ptrval_2 : pointer_value) : memM bool
     :=
-    match ptrval_1, ptrval_2 with
-    | PVconcrete addr1, PVconcrete addr2 =>
-        if cap_is_null addr1 || cap_is_null addr2
-        then fail loc (MerrWIP "le_ptrval ==> one null pointer")
-        else
-          ret (match C.value_compare addr1 addr2 with
-               | Lt => true
-               | Eq => true
-               | _ => false
-               end)
-    | _, _ => fail loc (MerrWIP "le_ptrval")
-    end.
+    cp <- compare_ptrval "le_ptrval" loc ptrval_1 ptrval_2 ;;
+    ret (match cp with
+         | Lt => true
+         | Eq => true
+         | _ => false
+         end).
 
   Definition ge_ptrval
     (loc : location_ocaml)
     (ptrval_1 ptrval_2 : pointer_value) : memM bool
     :=
-    match ptrval_1, ptrval_2 with
-    | PVconcrete addr1, PVconcrete addr2 =>
-        if cap_is_null addr1 || cap_is_null addr2 then
-          fail loc (MerrWIP "ge_ptrval ==> one null pointer")
-        else
-          ret (match C.value_compare addr1 addr2 with
-               | Gt => true
-               | Eq => true
-               | _ => false
-               end)
-    | _, _ => fail loc (MerrWIP "ge_ptrval")
-    end.
+    cp <- compare_ptrval "gt_ptrval" loc ptrval_1 ptrval_2 ;;
+    ret (match cp with
+         | Gt => true
+         | Eq => true
+         | _ => false
+         end).
 
+  (* TODO: this one needs more work *)
   Definition diff_ptrval
     (loc : location_ocaml)
     (diff_ty : CoqCtype.ctype) (ptrval1 ptrval2 : pointer_value)
@@ -1926,7 +1923,7 @@ Module Type CheriMemoryImpl
       | _,_ => error_postcond
       end.
        *)
-      raise (InternalErr "permissive pointer arith is not supported").
+      raise (InternalErr "TODO: strict pointer arith is not supported").
 
   Definition update_prefix
     (x : CoqSymbol.prefix * mem_value)
@@ -2371,16 +2368,11 @@ Module Type CheriMemoryImpl
         raise (InternalErr "eff_array_shift_ptrval, PVfunction")
     | PVconcrete c_value =>
         let shifted_addr := AddressValue.with_offset (C.cap_get_value c_value) offset in
-        if is_strict_pointer_arith tt
-        then
-          find_cap_allocation c_value >>= fun x =>
-              match x with
-              | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
-              | Some (alloc_id,_) => shift_concrete c_value shifted_addr alloc_id
-              end
-        else
-          let c_value := C.cap_set_value c_value shifted_addr in
-          ret (PVconcrete c_value)
+        oa <- find_cap_allocation c_value ;;
+        match oa with
+        | None => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
+        | Some (alloc_id,_) => shift_concrete c_value shifted_addr alloc_id
+        end
     end.
 
   Definition offsetof_ival
