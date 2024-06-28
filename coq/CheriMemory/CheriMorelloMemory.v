@@ -1871,22 +1871,21 @@ Module Type CheriMemoryImpl
          | _ => false
          end).
 
-  (* TODO: this one needs more work *)
   Definition diff_ptrval
-    (loc : location_ocaml)
-    (diff_ty : CoqCtype.ctype) (ptrval1 ptrval2 : pointer_value)
+    (loc: location_ocaml)
+    (diff_ty : CoqCtype.ctype)
+    (ptrval1 ptrval2 : pointer_value)
     : memM integer_value
     :=
-    (*
+
+    (* TODO: this check may be uncessary under strict pointer arith *)
     let precond (alloc: allocation) (addr1 addr2: Z): bool
       :=
       let asize := Z.of_nat alloc.(size) in
-      (AddressValue.to_Z alloc.(base) <=? addr1) &&
-        (addr1 <=? (AddressValue.to_Z alloc.(base) + asize)) &&
-        (AddressValue.to_Z alloc.(base) <=? addr2) &&
-        (addr2 <=? (AddressValue.to_Z alloc.(base) + asize))
+      (AddressValue.to_Z alloc.(base) <=? addr1) &&   (addr1 <=? (AddressValue.to_Z alloc.(base) + asize)) &&
+        (AddressValue.to_Z alloc.(base) <=? addr2) && (addr2 <=? (AddressValue.to_Z alloc.(base) + asize))
     in
-     *)
+
     let valid_postcond  (addr1 addr2: Z) : memM integer_value :=
       let diff_ty' :=
         match diff_ty with
@@ -1896,34 +1895,27 @@ Module Type CheriMemoryImpl
       sz <- serr2InternalErr (sizeof DEFAULT_FUEL None diff_ty') ;;
       ret (IV (Z.div (addr1 - addr2) (Z.of_nat sz)))
     in
+
     let error_postcond := fail loc MerrPtrdiff
     in
 
-    if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_pointer_arith PERMISSIVE)
-    then
-      match ptrval1, ptrval2 with
-      | PVconcrete addr1, PVconcrete addr2 =>
-          valid_postcond (cap_to_Z addr1) (cap_to_Z addr2)
-      | _, _=> error_postcond
-      end
-    else
-      (*
-      match ptrval1, ptrval2 with
-      | PVconcrete addr1, PVconcrete addr2 =>
-          if alloc_id1 =? alloc_id2 then
-            get_allocation alloc_id1 >>=
-              (fun (alloc : allocation) =>
-                 if precond alloc (cap_to_Z addr1) (cap_to_Z addr2)
-                 then
-                   valid_postcond (cap_to_Z addr1) (cap_to_Z addr2)
-                 else
-                   error_postcond)
-          else
-            error_postcond
-      | _,_ => error_postcond
-      end.
-       *)
-      raise (InternalErr "TODO: strict pointer arith is not supported").
+    match ptrval1, ptrval2 with
+    | PVconcrete c1, PVconcrete c2 =>
+        oa1 <- find_cap_allocation c1 ;;
+        oa2 <- find_cap_allocation c2 ;;
+        match oa1, oa2 with
+        | Some (alloc_id1, alloc1), Some (alloc_id2, alloc2)
+          =>
+            if alloc_id1 =? alloc_id2 then
+              if precond alloc1 (cap_to_Z c1) (cap_to_Z c2)
+              then valid_postcond (cap_to_Z c1) (cap_to_Z c2)
+              else error_postcond
+            else
+              error_postcond
+        | _, _ => error_postcond
+        end
+    | _, _ => error_postcond
+    end.
 
   Definition update_prefix
     (x : CoqSymbol.prefix * mem_value)
