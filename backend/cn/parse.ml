@@ -34,7 +34,7 @@ let fiddle_at_hack string =
   fix ss
 
 let debug_tokens loc string =
-  let (toks, pos) = C_parser_driver.diagnostic_get_tokens ~inside_cn:true loc string in
+  let (toks, pos) = C_parser_driver.diagnostic_get_cn_tokens loc string in
   let pp_int_pair (x, y) = Pp.(parens (int x ^^ comma ^^^ int y)) in
   Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))
     ^/^ Pp.item "(line, col)" (Pp.braces (Pp.list pp_int_pair pos))
@@ -54,13 +54,13 @@ let parse parser_start (loc, string) =
 let cn_statements annots =
   annots
   |> get_cerb_magic_attr
-  |> ListM.concat_mapM (parse C_parser.cn_statements)
+  |> ListM.concat_mapM (parse Cn_parser.cn_statements)
 
 let function_spec (Attrs attributes) =
   let@ conditions =
     [Aattrs (Attrs (List.rev attributes))]
     |> get_cerb_magic_attr
-    |> ListM.concat_mapM (parse C_parser.function_spec) in
+    |> ListM.concat_mapM (parse Cn_parser.function_spec) in
   ListM.fold_leftM (fun acc cond ->
     match cond, acc with
     | (Cn.CN_trusted loc), (_, [], [], [], []) ->
@@ -86,7 +86,7 @@ let loop_spec attrs =
   [Aattrs attrs]
   |> get_cerb_magic_attr
   |> ListM.concat_mapM (fun (loc, arg) ->
-      let@ (Cn.CN_inv (_loc, conds)) = parse C_parser.loop_spec (loc, arg) in
+      let@ (Cn.CN_inv (_loc, conds)) = parse Cn_parser.loop_spec (loc, arg) in
       return conds)
 
 

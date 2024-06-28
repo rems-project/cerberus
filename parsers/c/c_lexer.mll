@@ -7,7 +7,6 @@ open Tokens
 exception Error of Errors.cparser_cause
 
 type flags = {
-  inside_cn : bool;
   magic_comment_char : char;
   at_magic_comments : bool;
 }
@@ -90,74 +89,6 @@ let lexicon: (string, token) Hashtbl.t =
   let lexicon = Hashtbl.create 0 in
   let add (key, builder) = Hashtbl.add lexicon key builder in
   List.iter add keywords; lexicon
-
-
-(* BEGIN CN *)
-let cn_keywords: (string * Tokens.token) list = [
-    "good"          , CN_GOOD;
-    "bool"          , CN_BOOL;
-    "boolean"       , CN_BOOL;
-    "CN_bool"       , CN_BOOL;
-    "integer"       , CN_INTEGER;
-    "u8"           , CN_BITS (`U,8);
-    "u16"           , CN_BITS (`U,16);
-    "u32"           , CN_BITS (`U,32);
-    "u64"           , CN_BITS (`U,64);
-    "u128"           , CN_BITS (`U,128);
-    "i8"           , CN_BITS (`I,8);
-    "i16"           , CN_BITS (`I,16);
-    "i32"           , CN_BITS (`I,32);
-    "i64"           , CN_BITS (`I,64);
-    "i128"           , CN_BITS (`I,128);
-    "real"          , CN_REAL;
-    "pointer"       , CN_POINTER;
-    "alloc_id"      , CN_ALLOC_ID;
-    "map"           , CN_MAP;
-    "list"          , CN_LIST;
-    "tuple"         , CN_TUPLE;
-    "set"           , CN_SET;
-    "let"           , CN_LET;
-    "take"          , CN_TAKE;
-    "Owned"         , CN_OWNED;
-    "Block"         , CN_BLOCK;
-    "each"          , CN_EACH;
-    "NULL"          , CN_NULL;
-    "true"          , CN_TRUE;
-    "false"         , CN_FALSE;
-    "requires"      , CN_REQUIRES;
-    "ensures"       , CN_ENSURES;
-    "inv"           , CN_INV;
-    "accesses"      , CN_ACCESSES;
-    "trusted"       , CN_TRUSTED;
-    "cn_function"   , CN_FUNCTION;
-    "spec"          , CN_SPEC;
-    "unchanged"     , CN_UNCHANGED;
-    "pack"          , CN_PACK;
-    "unpack"        , CN_UNPACK;
-    "instantiate"   , CN_INSTANTIATE;
-    "print"         , CN_PRINT;
-    "split_case"    , CN_SPLIT_CASE;
-    "extract"       , CN_EXTRACT;
-    "array_shift"   , CN_ARRAY_SHIFT;
-    "member_shift"  , CN_MEMBER_SHIFT;
-    "have"          , CN_HAVE;
-    "unfold"        , CN_UNFOLD;
-    "apply"         , CN_APPLY;
-    "match"         , CN_MATCH;
-    "predicate"     , CN_PREDICATE;
-    "function"      , CN_FUNCTION;
-    "lemma"         , CN_LEMMA;
-    "datatype"      , CN_DATATYPE;
-    "type_synonym"  , CN_TYPE_SYNONYM;
-    "_"             , CN_WILD;
-  ]
-
-let cn_lexicon: (string, token) Hashtbl.t =
-  let cn_lexicon = Hashtbl.create 0 in
-  let add (key, builder) = Hashtbl.add cn_lexicon key builder in
-  List.iter add cn_keywords; cn_lexicon
-(* END CN *)
-
 
 let lex_comment remainder lexbuf =
   let ch = lexeme_char lexbuf 0 in
@@ -339,9 +270,6 @@ let whitespace_char = [' ' '\t' (*'\n'*) '\012' '\r']
 let lbrack_lbrack = '[' whitespace_char* '['
 (*let rbrack_rbrack = ']' whitespace_char* ']'*)
 
-(* For CN *)
-let cn_integer_width = ("8" | "16" | "32" | "64" | "128")
-
 (* ========================================================================== *)
 
 rule s_char_sequence = parse
@@ -437,12 +365,6 @@ and initial flags = parse
       { CONSTANT (Cabs.CabsInteger_const (str, Some Cabs.CabsSuffix_UL)) }
   | (integer_constant as str) long_long_suffix unsigned_suffix
       { CONSTANT (Cabs.CabsInteger_const (str, Some Cabs.CabsSuffix_ULL)) }
-    (* For CN. Copying and adjusting Kayvan's code from above. *)
-  | (integer_constant as str) 'u' (cn_integer_width as n)
-      { CN_CONSTANT (str, `U, int_of_string n) }
-  | (integer_constant as str) 'i' (cn_integer_width as n)
-      { CN_CONSTANT (str, `I, int_of_string n) }
-    (* /For CN. *)
   | (integer_constant as str)
       { CONSTANT (Cabs.CabsInteger_const (str, None)) }
 
@@ -550,26 +472,10 @@ and initial flags = parse
   | "|||" { PIPES   }
   | "}-}" { RBRACES }
 
-    (* copied over from backend/cn/assertion_lexer.mll *)
-  | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
-      {
-        if flags.inside_cn then
-          try Hashtbl.find cn_lexicon id
-          with Not_found ->
-            UNAME id
-        else
-          UNAME id
-      }
-
   | identifier as id
     { try
         Hashtbl.find lexicon id
       with Not_found ->
-        if flags.inside_cn then
-          try Hashtbl.find cn_lexicon id
-          with Not_found ->
-            LNAME id
-        else
           LNAME id
     }
   | eof
@@ -586,7 +492,7 @@ type lexer_state =
 
 let lexer_state = ref LSRegular
 
-let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
+let lexer : lexbuf -> token = fun lexbuf ->
   match !lexer_state with
   | LSRegular ->
       let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
@@ -595,7 +501,7 @@ let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
         then '$'
         else '@'
       in
-      begin match initial { inside_cn; at_magic_comments; magic_comment_char } lexbuf with
+      begin match initial { at_magic_comments; magic_comment_char } lexbuf with
       | LNAME i as tok -> lexer_state := LSIdentifier i; tok
       | UNAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok

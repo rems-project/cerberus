@@ -316,6 +316,7 @@ type asm_qualifier =
   located_string_literal
 
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
+%start<Cerb_frontend.Cabs.type_name> type_name_eof
 %start function_spec
 %start loop_spec
 %start cn_statements
@@ -1777,6 +1778,10 @@ balanced_token:
 | strs= separated_nonempty_list(COMMA, located_string_literal)
    { strs }
 ;
+
+type_name_eof:
+| ty= type_name EOF
+    { ty }
 
 (* BEGIN CN *)
 (* CN assertion language *****************************************************)

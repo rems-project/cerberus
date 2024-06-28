@@ -12,6 +12,11 @@
  (flags (--external-tokens Tokens --explain --exn-carries-state))
  (modules c_parser))
 
+(ocamllex cn_lexer)
+(menhir
+ (flags (--strict --external-tokens Cn_tokens --explain --exn-carries-state))
+ (modules cn_parser))
+
 ;; integrating and checking .messages file
 ;; based on https://gitlab.inria.fr/fpottier/menhir/-/blob/master/demos/calc-syntax-errors/dune
 
