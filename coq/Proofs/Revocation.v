@@ -4972,6 +4972,15 @@ Module CheriMemoryImplWithProofs
     reflexivity.
   Qed.
 
+  Instance memcpy_ghost_partial_tags_PreservesInvariant
+    (loc: location_ocaml)
+    (dst_a src_a: AddressValue.t)
+    (sz: nat)
+    :
+    forall s, PreservesInvariant mem_invariant s (memcpy_ghost_partial_tags loc dst_a src_a sz).
+  Proof.
+  Admitted.
+
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
     (ptrval1 ptrval2: pointer_value)
@@ -5035,6 +5044,8 @@ Module CheriMemoryImplWithProofs
       rewrite H1 in AC.
       preserves_step.
       eapply memcpy_copy_tags_PreservesInvariant; eauto.
+      preserves_step.
+      apply memcpy_ghost_partial_tags_PreservesInvariant.
       preserves_step.
   Qed.
 
