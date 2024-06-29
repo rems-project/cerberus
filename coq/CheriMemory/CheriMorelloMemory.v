@@ -2445,7 +2445,7 @@ Module Type CheriMemoryImpl
 
   (** Copy caps meta-information between `memcpy` source and
       destinations, only for positions where both source and
-      desination addresses align.
+      desination addresses align and capability fully fits.
    *)
   Definition memcpy_copy_tags
     (loc: location_ocaml)
@@ -2484,6 +2484,94 @@ Module Type CheriMemoryImpl
     else
       (* Source and destination regions are misaligned, no tags will be copied *)
       ret tt.
+
+  (** "Ghost" capability existing tag at [addr]
+
+      A "true" tags associated with address will be marked as unspecified.
+      A "false" tags will be left intact.
+   *)
+  Definition ghost_one_tag
+    (addr: AddressValue.t)
+    (capmeta: AMap.M.t (bool*CapGhostState)): AMap.M.t (bool*CapGhostState)
+    :=
+    match AMap.M.find addr capmeta with
+    | Some (true, gs) =>
+        if negb gs.(tag_unspecified)
+        then
+          AMap.M.add addr
+            (true, {| tag_unspecified := true; bounds_unspecified := gs.(bounds_unspecified) |})
+            capmeta
+        else
+          capmeta
+    | _ => capmeta
+    end.
+
+  (** Ghost tags for capabilities at the beginning and the end of
+      copied region which are partially copied
+   *)
+  Definition memcpy_ghost_partial_tags
+    (loc: location_ocaml)
+    (dst_a src_a: AddressValue.t)
+    (sz: nat)
+    : memM unit :=
+    let pointer_alignof_n := IMP.get.(alignof_pointer) in
+    let pointer_alignof := Z.of_nat pointer_alignof_n in
+
+    (* Calculate alignments *)
+    let dst_align := (AddressValue.to_Z dst_a) mod pointer_alignof in
+    let src_align := (AddressValue.to_Z src_a) mod pointer_alignof in
+
+    if dst_align =? src_align then
+      (* See if the start of region is pointer-aligned *)
+      (if dst_align =? 0 then
+         ret tt
+       else
+         let first_cap := AddressValue.with_offset dst_a (Z.opp dst_align) in
+         update
+           (fun (st : mem_state) =>
+              mem_state_with_capmeta
+                (ghost_one_tag first_cap st.(capmeta))
+                st))
+
+      ;;
+
+      (* See if the end of region is pointer-aligned *)
+      let zsz := Z.of_nat sz in
+      let dst_limit := AddressValue.with_offset dst_a zsz in
+      let dst_limit_align := (AddressValue.to_Z dst_limit) mod pointer_alignof in
+      if dst_limit_align =? 0 then
+        ret tt
+      else
+        let off := pointer_alignof - dst_limit_align in
+        if off <=? zsz then
+          let last_cap := AddressValue.with_offset dst_a (Z.opp off) in
+          update
+            (fun (st : mem_state) =>
+               mem_state_with_capmeta
+                 (ghost_one_tag last_cap st.(capmeta))
+                 st)
+        else
+          ret tt
+    else
+      (* Source and destination regions are misaligned, no tags will be copied *)
+      ret tt.
+
+  (* Helper function *)
+  Fixpoint bytemap_copy_data
+    (dst src: AddressValue.t)
+    (n: nat)
+    (bm: AMap.M.t (option ascii))
+    : AMap.M.t (option ascii)
+    :=
+    match n with
+    | O => bm
+    | S n =>
+        let bm' := bytemap_copy_data dst src n bm in
+        match AMap.M.find (AddressValue.with_offset src (Z.of_nat n)) bm with
+        | None => AMap.M.remove (AddressValue.with_offset dst (Z.of_nat n)) bm'
+        | Some b => AMap.M.add (AddressValue.with_offset dst (Z.of_nat n)) b bm'
+        end
+    end.
 
   (** Helper function checks if regions of size [sz] fit within
       [allocation1] starting from [c1] and [allocation2] starting from
@@ -2554,23 +2642,6 @@ Module Type CheriMemoryImpl
       | _, _ =>  fail loc (MerrUndefinedMemcpy Memcpy_non_object)
       end.
 
-  (* Helper function *)
-  Fixpoint bytemap_copy_data
-    (dst src: AddressValue.t)
-    (n: nat)
-    (bm: AMap.M.t (option ascii))
-    : AMap.M.t (option ascii)
-    :=
-    match n with
-    | O => bm
-    | S n =>
-        let bm' := bytemap_copy_data dst src n bm in
-        match AMap.M.find (AddressValue.with_offset src (Z.of_nat n)) bm with
-        | None => AMap.M.remove (AddressValue.with_offset dst (Z.of_nat n)) bm'
-        | Some b => AMap.M.add (AddressValue.with_offset dst (Z.of_nat n)) b bm'
-        end
-    end.
-
   (** Copy byte content of memory in given region. No sanity checks
       perfomed as it is supposed to be guarded by [memcpy_args_check].
    *)
@@ -2599,8 +2670,11 @@ Module Type CheriMemoryImpl
     dst_a <- serr2InternalErr (cap_addr_of_pointer_value dst_p) ;;
     src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
 
-    memcpy_copy_data loc dst_a src_a (Z.to_nat size_z) ;;
-    memcpy_copy_tags loc dst_a src_a (Z.to_nat size_z) ;;
+    let size := Z.to_nat size_z in
+    memcpy_copy_data loc dst_a src_a size ;;
+
+    memcpy_copy_tags loc dst_a src_a size ;;
+    memcpy_ghost_partial_tags loc dst_a src_a size ;;
     ret dst_p.
 
   Definition memcmp
