@@ -220,6 +220,30 @@ cn_bool *cn_pointer_is_null(cn_pointer *);
         return res;\
     }
 
+#define CN_GEN_XOR(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_xor(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) ^ *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_BWAND(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_bwand(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) & *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_BWOR(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_bwor(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) | *(i2->val);\
+        return res;\
+    }
+
 static inline int ipow(int base, int exp)
 {
     int result = 1;

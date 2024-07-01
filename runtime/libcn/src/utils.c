@@ -186,6 +186,14 @@ cn_bool *cn_pointer_is_null(cn_pointer *p) {
     return convert_to_cn_bool(p->ptr == NULL);
 }
 
+cn_bool *cn_pointer_lt(cn_pointer *p1, cn_pointer *p2) {
+    return convert_to_cn_bool(p1->ptr < p2->ptr);
+}
+
+cn_bool *cn_pointer_le(cn_pointer *p1, cn_pointer *p2) {
+    return convert_to_cn_bool(p1->ptr <= p2->ptr);
+}
+
 
 
 // Check if m2 is a subset of m1

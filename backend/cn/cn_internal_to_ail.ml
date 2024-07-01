@@ -51,8 +51,8 @@ let rec cn_base_type_to_bt = function
   | CN_list typ -> cn_base_type_to_bt typ
   | CN_tuple ts -> BT.Tuple (List.map cn_base_type_to_bt ts)
   | CN_set typ -> cn_base_type_to_bt typ
-  | CN_user_type_name _ -> failwith "TODO"
-  | CN_c_typedef_name _ -> failwith "TODO"
+  | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
+  | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
   
 
 module MembersKey = struct
@@ -242,7 +242,6 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
     | C.Void -> ret 
     | _ -> mk_ctype C.(Pointer (empty_qualifiers, ret))
 
- 
 
 let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn_base_type t)
 
@@ -263,11 +262,15 @@ let cn_to_ail_unop_internal bt = function
 (* TODO: Finish *)
 let cn_to_ail_binop_internal bt1 bt2 = 
   let get_cn_int_type_str bt1 bt2 = match bt1, bt2 with 
-    | BT.Integer, BT.Integer -> "cn_integer"
-    | BT.Bits (sign, size), BT.Bits _ -> "cn_bits_" ^ (str_of_bt_bitvector_type sign size)
     | BT.Loc, BT.Integer
     | BT.Loc, BT.Bits _ -> "cn_pointer"
-    | _, _ -> failwith "Incompatible CN integer types"
+    | BT.Integer, BT.Integer -> "cn_integer"
+    | _, BT.Bits (sign, size)
+    | BT.Bits (sign, size), _ -> "cn_bits_" ^ (str_of_bt_bitvector_type sign size)
+    | _, _ -> 
+      let bt1_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt1) in
+      let bt2_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt2) in
+      failwith ("Incompatible CN integer types: " ^ bt1_str ^ " with " ^ bt2_str)
   in
   function
   | Terms.And -> (A.And, Some "cn_bool_and")
@@ -292,13 +295,13 @@ let cn_to_ail_binop_internal bt1 bt2 =
   | DivNoSMT -> (A.(Arithmetic Div), Some (get_cn_int_type_str bt1 bt2 ^ "_divide"))
   | Exp
   | ExpNoSMT -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_pow"))
-  (* | Rem
-  | RemNoSMT *)
+  | Rem
+  | RemNoSMT -> failwith "TODO cn_to_ail_binop: rem"
   | Mod
   | ModNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_mod"))
-  | XORNoSMT -> (A.(Arithmetic Bxor), None)
-  | BWAndNoSMT -> (A.(Arithmetic Band), None)
-  | BWOrNoSMT -> (A.(Arithmetic Bor), None)
+  | XORNoSMT -> (A.(Arithmetic Bxor), Some (get_cn_int_type_str bt1 bt2 ^ "_xor"))
+  | BWAndNoSMT -> (A.(Arithmetic Band), Some (get_cn_int_type_str bt1 bt2 ^ "_bwand"))
+  | BWOrNoSMT -> (A.(Arithmetic Bor), Some (get_cn_int_type_str bt1 bt2 ^ "_bwor"))
   | ShiftLeft -> (A.(Arithmetic Shl), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left"))
   | ShiftRight -> (A.(Arithmetic Shr), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right"))
   | LT -> 
@@ -312,14 +315,15 @@ let cn_to_ail_binop_internal bt1 bt2 =
       | None -> None
     in
     (A.Eq, fn_str) *)
-  | _ -> failwith "TODO cn_to_ail_binop: Translation not implemented"
-  (* | LTPointer
-  | LEPointer
-  | SetUnion
-  | SetIntersection
-  | SetDifference
-  | SetMember
-  | Subset *)
+  (* | _ -> failwith "TODO cn_to_ail_binop: Translation not implemented" *)
+  | LTPointer -> (A.And, Some "cn_pointer_lt")
+  | LEPointer -> (A.And, Some "cn_pointer_le")
+  | SetUnion -> failwith "TODO cn_to_ail_binop: SetUnion"
+  | SetIntersection -> failwith "TODO cn_to_ail_binop: SetIntersection"
+  | SetDifference -> failwith "TODO cn_to_ail_binop: SetDifference"
+  | SetMember -> failwith "TODO cn_to_ail_binop: SetMember"
+  | Subset  -> failwith "TODO cn_to_ail_binop: Subset"
+  | Impl -> failwith "TODO cn_to_ail_binop: Impl"
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
 
@@ -338,7 +342,7 @@ let add_conversion_fn ail_expr_ bt =
     )
     
 
-let rearrange_start_inequality sym e1 e2 = 
+let rearrange_start_inequality sym (IT.(IT (_, _, loc)) as e1) e2 = 
   match IT.term e2 with 
     | Terms.Binop (binop, (IT.IT (Sym sym1, _, _) as expr1), (IT.IT (Sym sym2, _, _) as expr2)) -> 
       (if String.equal (Sym.pp_string sym) (Sym.pp_string sym1) then
@@ -358,13 +362,13 @@ let rearrange_start_inequality sym e1 e2 =
           failwith "Not of correct form"
         )
       )
-    | _ -> failwith "TODO"
+    | _ -> failwith ("TODO rearrange_start_inequality at " ^ Cerb_location.simple_location loc)
 
 
 
 let generate_start_expr start_cond sym = 
   let (start_expr, binop) = 
-    match IT.term start_cond with
+    (match IT.term start_cond with
       | Terms.(Binop (binop, expr1, IT.IT (Sym sym', _, _))) ->
           (if String.equal (Sym.pp_string sym) (Sym.pp_string sym') then
             (expr1, binop)
@@ -372,7 +376,7 @@ let generate_start_expr start_cond sym =
             failwith "Not of correct form (unlikely case - i's not matching)")
       | Terms.(Binop (binop, expr1, expr2)) ->
           (IT.IT ((rearrange_start_inequality sym expr1 expr2), BT.Integer, Cerb_location.unknown), binop)
-      | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
+      | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i")
     in
     match binop with 
       | LE -> 
@@ -1567,6 +1571,7 @@ let rec cn_to_ail_lat_internal ?(is_toplevel=true) dts pred_sym_opt globals owne
 
 
 let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definition)) dts globals ots preds cn_preds = 
+  Printf.printf "Translating predicate: %s\n" (Sym.pp_string pred_sym);
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
 
   let rec clause_translate (clauses : RP.clause list) ownership_ctypes = 
