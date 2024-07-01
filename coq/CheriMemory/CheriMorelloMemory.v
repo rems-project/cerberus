@@ -2519,42 +2519,37 @@ Module Type CheriMemoryImpl
 
     (* Calculate alignments *)
     let dst_align := (AddressValue.to_Z dst_a) mod pointer_alignof in
-    let src_align := (AddressValue.to_Z src_a) mod pointer_alignof in
 
-    if dst_align =? src_align then
-      (* See if the start of region is pointer-aligned *)
-      (if dst_align =? 0 then
-         ret tt
-       else
-         let first_cap := AddressValue.with_offset dst_a (Z.opp dst_align) in
-         update
-           (fun (st : mem_state) =>
-              mem_state_with_capmeta
-                (ghost_one_tag first_cap st.(capmeta))
-                st))
+    (* See if the start of region is pointer-aligned *)
+    (if dst_align =? 0 then
+       ret tt
+     else
+       let first_cap := AddressValue.with_offset dst_a (Z.opp dst_align) in
+       update
+         (fun (st : mem_state) =>
+            mem_state_with_capmeta
+              (ghost_one_tag first_cap st.(capmeta))
+              st))
 
-      ;;
+    ;;
 
-      (* See if the end of region is pointer-aligned *)
-      let zsz := Z.of_nat sz in
-      let dst_limit := AddressValue.with_offset dst_a zsz in
-      let dst_limit_align := (AddressValue.to_Z dst_limit) mod pointer_alignof in
-      if dst_limit_align =? 0 then
-        ret tt
-      else
-        let off := pointer_alignof - dst_limit_align in
-        if off <=? zsz then
-          let last_cap := AddressValue.with_offset dst_a (Z.opp off) in
-          update
-            (fun (st : mem_state) =>
-               mem_state_with_capmeta
-                 (ghost_one_tag last_cap st.(capmeta))
-                 st)
-        else
-          ret tt
+    (* See if the end of region is pointer-aligned *)
+    let zsz := Z.of_nat sz in
+    let dst_limit := AddressValue.with_offset dst_a zsz in
+    let dst_limit_align := (AddressValue.to_Z dst_limit) mod pointer_alignof in
+    if dst_limit_align =? 0 then
+      ret tt
     else
-      (* Source and destination regions are misaligned, no tags will be copied *)
-      ret tt.
+      let off := pointer_alignof - dst_limit_align in
+      if off <=? zsz then
+        let last_cap := AddressValue.with_offset dst_a (Z.opp off) in
+        update
+          (fun (st : mem_state) =>
+             mem_state_with_capmeta
+               (ghost_one_tag last_cap st.(capmeta))
+               st)
+      else
+        ret tt.
 
   (* Helper function *)
   Fixpoint bytemap_copy_data
