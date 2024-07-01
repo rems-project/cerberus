@@ -4,3 +4,8 @@ void f() {
   (uintptr_t) &x;
   return;
 }
+
+int main(void) {
+  f();
+  return 0;
+}

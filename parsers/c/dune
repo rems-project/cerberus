@@ -35,7 +35,7 @@
     %{dep:c_parser.mly}
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;
-    ; If you're seeing this `cat  _build/default/c_parser_error.check`
+    ; If you're seeing this `cat  _build/default/parsers/c_parser_error.check`
     ; Ignore the warnings (they are ambiguities in the ISO C spec)
     ;
     ; # Updating for new error states

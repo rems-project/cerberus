@@ -51,8 +51,8 @@ let rec cn_base_type_to_bt = function
   | CN_list typ -> cn_base_type_to_bt typ
   | CN_tuple ts -> BT.Tuple (List.map cn_base_type_to_bt ts)
   | CN_set typ -> cn_base_type_to_bt typ
-  | CN_user_type_name _ -> failwith "TODO"
-  | CN_c_typedef_name _ -> failwith "TODO"
+  | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
+  | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
   
 
 module MembersKey = struct
@@ -242,25 +242,35 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
     | C.Void -> ret 
     | _ -> mk_ctype C.(Pointer (empty_qualifiers, ret))
 
- 
 
 let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn_base_type t)
 
-let cn_to_ail_unop_internal = function 
+let cn_to_ail_unop_internal bt = function 
   | Terms.Not -> (A.Bnot, Some "cn_bool_not")
-  (* | BWCLZNoSMT
+  | Negate -> 
+    let typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in
+    let typedef_str = match typedef_str_opt with 
+      | Some str -> str
+      | None -> failwith "Negate unop translation: typedef string not found"
+    in
+    (A.Minus, Some (typedef_str ^ "_negate"))
+  | BWCLZNoSMT
   | BWCTZNoSMT
-  | BWFFSNoSMT *)
-  | _ -> failwith "TODO: unop translation"
+  | BWFFSNoSMT -> failwith "Failure: Trying to translate SMT-only unop from C source"
+
 
 (* TODO: Finish *)
 let cn_to_ail_binop_internal bt1 bt2 = 
   let get_cn_int_type_str bt1 bt2 = match bt1, bt2 with 
-    | BT.Integer, BT.Integer -> "cn_integer"
-    | BT.Bits (sign, size), BT.Bits _ -> "cn_bits_" ^ (str_of_bt_bitvector_type sign size)
     | BT.Loc, BT.Integer
     | BT.Loc, BT.Bits _ -> "cn_pointer"
-    | _, _ -> failwith "Incompatible CN integer types"
+    | BT.Integer, BT.Integer -> "cn_integer"
+    | _, BT.Bits (sign, size)
+    | BT.Bits (sign, size), _ -> "cn_bits_" ^ (str_of_bt_bitvector_type sign size)
+    | _, _ -> 
+      let bt1_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt1) in
+      let bt2_str = CF.Pp_utils.to_plain_pretty_string (BT.pp bt2) in
+      failwith ("Incompatible CN integer types: " ^ bt1_str ^ " with " ^ bt2_str)
   in
   function
   | Terms.And -> (A.And, Some "cn_bool_and")
@@ -285,13 +295,15 @@ let cn_to_ail_binop_internal bt1 bt2 =
   | DivNoSMT -> (A.(Arithmetic Div), Some (get_cn_int_type_str bt1 bt2 ^ "_divide"))
   | Exp
   | ExpNoSMT -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_pow"))
-  (* | Rem
-  | RemNoSMT *)
+  | Rem
+  | RemNoSMT -> failwith "TODO cn_to_ail_binop: rem"
   | Mod
   | ModNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_mod"))
-  | XORNoSMT -> (A.(Arithmetic Bxor), None)
-  | BWAndNoSMT -> (A.(Arithmetic Band), None)
-  | BWOrNoSMT -> (A.(Arithmetic Bor), None)
+  | XORNoSMT -> (A.(Arithmetic Bxor), Some (get_cn_int_type_str bt1 bt2 ^ "_xor"))
+  | BWAndNoSMT -> (A.(Arithmetic Band), Some (get_cn_int_type_str bt1 bt2 ^ "_bwand"))
+  | BWOrNoSMT -> (A.(Arithmetic Bor), Some (get_cn_int_type_str bt1 bt2 ^ "_bwor"))
+  | ShiftLeft -> (A.(Arithmetic Shl), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left"))
+  | ShiftRight -> (A.(Arithmetic Shr), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right"))
   | LT -> 
     (A.Lt, Some (get_cn_int_type_str bt1 bt2 ^ "_lt"))
   | LE -> (A.Le, Some (get_cn_int_type_str bt1 bt2 ^ "_le"))
@@ -303,14 +315,15 @@ let cn_to_ail_binop_internal bt1 bt2 =
       | None -> None
     in
     (A.Eq, fn_str) *)
-  | _ -> (A.And, None) (* TODO: Change *)
-  (* | LTPointer
-  | LEPointer
-  | SetUnion
-  | SetIntersection
-  | SetDifference
-  | SetMember
-  | Subset *)
+  (* | _ -> failwith "TODO cn_to_ail_binop: Translation not implemented" *)
+  | LTPointer -> (A.And, Some "cn_pointer_lt")
+  | LEPointer -> (A.And, Some "cn_pointer_le")
+  | SetUnion -> failwith "TODO cn_to_ail_binop: SetUnion"
+  | SetIntersection -> failwith "TODO cn_to_ail_binop: SetIntersection"
+  | SetDifference -> failwith "TODO cn_to_ail_binop: SetDifference"
+  | SetMember -> failwith "TODO cn_to_ail_binop: SetMember"
+  | Subset  -> failwith "TODO cn_to_ail_binop: Subset"
+  | Impl -> failwith "TODO cn_to_ail_binop: Impl"
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
 
@@ -329,7 +342,7 @@ let add_conversion_fn ail_expr_ bt =
     )
     
 
-let rearrange_start_inequality sym e1 e2 = 
+let rearrange_start_inequality sym (IT.(IT (_, _, loc)) as e1) e2 = 
   match IT.term e2 with 
     | Terms.Binop (binop, (IT.IT (Sym sym1, _, _) as expr1), (IT.IT (Sym sym2, _, _) as expr2)) -> 
       (if String.equal (Sym.pp_string sym) (Sym.pp_string sym1) then
@@ -349,13 +362,13 @@ let rearrange_start_inequality sym e1 e2 =
           failwith "Not of correct form"
         )
       )
-    | _ -> failwith "TODO"
+    | _ -> failwith ("TODO rearrange_start_inequality at " ^ Cerb_location.simple_location loc)
 
 
 
 let generate_start_expr start_cond sym = 
   let (start_expr, binop) = 
-    match IT.term start_cond with
+    (match IT.term start_cond with
       | Terms.(Binop (binop, expr1, IT.IT (Sym sym', _, _))) ->
           (if String.equal (Sym.pp_string sym) (Sym.pp_string sym') then
             (expr1, binop)
@@ -363,7 +376,7 @@ let generate_start_expr start_cond sym =
             failwith "Not of correct form (unlikely case - i's not matching)")
       | Terms.(Binop (binop, expr1, expr2)) ->
           (IT.IT ((rearrange_start_inequality sym expr1 expr2), BT.Integer, Cerb_location.unknown), binop)
-      | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i"
+      | _ -> failwith "Not of correct form: more complicated RHS of binexpr than just i")
     in
     match binop with 
       | LE -> 
@@ -504,7 +517,7 @@ let empty_for_dest : type a. a dest -> a =
 
 
 
-let generate_ownership_function ?(with_ownership_checking=false) ctype = 
+let generate_ownership_function with_ownership_checking ctype = 
   let ctype_str = str_of_ctype ctype in
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
@@ -525,23 +538,14 @@ let generate_ownership_function ?(with_ownership_checking=false) ctype =
   let param3 = (error_msg_info_sym, C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype) in
   let (param_syms, param_types) = List.split [param1; param2; param3] in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
-  let generate_case enum_str = 
-    let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in
-    let lc_enum_str = String.lowercase_ascii enum_str in
-    let block_stats_ = if with_ownership_checking then
-      let ownership_fn_sym = Sym.fresh_pretty ("cn_" ^ lc_enum_str ^ "_ownership") in
-      let ownership_fn_args = A.[AilEident generic_c_ptr_sym; AilEident OE.cn_ghost_state_sym; AilEsizeof (empty_qualifiers, ctype); AilEident OE.cn_stack_depth_sym; AilEident error_msg_info_sym] in
-      let ownership_fcall = mk_expr A.(AilEcall (mk_expr (AilEident ownership_fn_sym), List.map mk_expr ownership_fn_args)) in
-      A.[AilSexpr ownership_fcall; AilSbreak]
-    else 
-      [AilSbreak]
-    in
-    let block = A.(AilSblock ([], List.map mk_stmt block_stats_)) in
-    let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt block)) in 
-    A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case))
+  let ownership_fcall_maybe = 
+  if with_ownership_checking then 
+    (let ownership_fn_sym = Sym.fresh_pretty "cn_check_ownership" in 
+    let ownership_fn_args = A.[AilEident param2_sym; AilEident generic_c_ptr_sym; AilEident OE.cn_ghost_state_sym; AilEsizeof (empty_qualifiers, ctype); AilEident OE.cn_stack_depth_sym; AilEident error_msg_info_sym] in
+    [A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident ownership_fn_sym), List.map mk_expr ownership_fn_args))))])
+  else  
+    []
   in
-  (* Function body *)
-  let switch_stmt = A.(AilSswitch (mk_expr (AilEident param2_sym), mk_stmt (AilSblock ([], List.map generate_case ["GET"; "PUT"])))) in
   let deref_expr_ = A.(AilEunary (Indirection, cast_expr)) in
   let sct_opt = Sctypes.of_ctype ctype in
   let sct = match sct_opt with 
@@ -554,7 +558,7 @@ let generate_ownership_function ?(with_ownership_checking=false) ctype =
   (* Generating function declaration *)
   let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
-  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (generic_c_ptr_bs, List.map mk_stmt (generic_c_ptr_ss @ [switch_stmt; return_stmt]))))) in
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock (generic_c_ptr_bs, List.map mk_stmt (generic_c_ptr_ss @ ownership_fcall_maybe @ [return_stmt]))))) in
   (decl, def)
 
 
@@ -664,7 +668,7 @@ let rec cn_to_ail_expr_aux_internal
 
   | Unop (unop, t) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
-    let (ail_unop, annot)  = cn_to_ail_unop_internal unop in
+    let (ail_unop, annot)  = cn_to_ail_unop_internal (IT.bt t) unop in
     let str = match annot with 
       | Some str -> str
       | None -> failwith "No CN unop function found"
@@ -1567,6 +1571,7 @@ let rec cn_to_ail_lat_internal ?(is_toplevel=true) dts pred_sym_opt globals owne
 
 
 let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definition)) dts globals ots preds cn_preds = 
+  Printf.printf "Translating predicate: %s\n" (Sym.pp_string pred_sym);
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
 
   let rec clause_translate (clauses : RP.clause list) ownership_ctypes = 
@@ -1751,7 +1756,7 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
   {ail_executable_spec with pre = (b1 @ b2, s1 @ s2)}
 
 (* Precondition and postcondition translation - LAT.I case means precondition translation finished *)
-let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ownership_ctypes preds c_return_type = function
+let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_ctypes preds c_return_type = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
@@ -1759,7 +1764,7 @@ let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ow
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding new_name ctype in
     let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals ownership_ctypes preds c_return_type new_lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_ctypes preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (binding :: b1, s1)
 
   | LAT.Resource ((name, (ret, bt)), (loc, str_opt), lat) -> 
@@ -1770,7 +1775,7 @@ let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ow
       | None -> []
     in
     let new_lat = Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, bt, new_name) lat in 
-    let ail_executable_spec = cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals (ct @ ownership_ctypes) preds c_return_type new_lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals (ct @ ownership_ctypes) preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (b1, s1)
 
   | LAT.Constraint (lc, (loc, str_opt), lat) -> 
@@ -1785,7 +1790,7 @@ let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ow
         let ail_stats_ = generate_cn_assert e in
         s @ ail_stats_
     in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals ownership_ctypes preds c_return_type lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_ctypes preds c_return_type lat in
     prepend_to_precondition ail_executable_spec (b1, ss)
 
   (* Postcondition *)
@@ -1832,7 +1837,7 @@ let rec cn_to_ail_lat_internal_2 ?(with_ownership_checking=false) dts globals ow
     {pre = ([], []); post = ([], [block]); in_stmt = ail_statements; ownership_ctypes = ownership_ctypes'}
 
 
-let rec cn_to_ail_pre_post_aux_internal ?(with_ownership_checking=false) dts preds globals c_return_type = function 
+let rec cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds globals c_return_type = function 
   | AT.Computational ((sym, bt), info, at) -> 
     let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
     let cn_ctype = bt_to_ail_ctype bt in 
@@ -1840,12 +1845,12 @@ let rec cn_to_ail_pre_post_aux_internal ?(with_ownership_checking=false) dts pre
     let rhs = add_conversion_fn A.(AilEident sym) bt in 
     let decl = A.(AilSdeclaration [(cn_sym, Some (mk_expr rhs))]) in
     let subst_at = Core_to_mucore.fn_spec_instrumentation_sym_subst_at (sym, bt, cn_sym) at in
-    let ail_executable_spec = cn_to_ail_pre_post_aux_internal ~with_ownership_checking dts preds globals c_return_type subst_at in 
+    let ail_executable_spec = cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds globals c_return_type subst_at in 
     prepend_to_precondition ail_executable_spec ([binding], [decl])
   | AT.L lat -> 
-    cn_to_ail_lat_internal_2 ~with_ownership_checking dts globals [] preds c_return_type lat
+    cn_to_ail_lat_internal_2 with_ownership_checking dts globals [] preds c_return_type lat
   
-let cn_to_ail_pre_post_internal ?(with_ownership_checking=false) dts preds globals c_return_type = function 
+let cn_to_ail_pre_post_internal with_ownership_checking dts preds globals c_return_type = function 
   | Some internal -> 
     let error_msg_info_binding = create_binding error_msg_info_sym (C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype) in
     let struct_members = [("function_name", "__func__"); ("file_name", "__FILE__"); ("line_number", "__LINE__")] in
@@ -1854,7 +1859,7 @@ let cn_to_ail_pre_post_internal ?(with_ownership_checking=false) dts preds globa
     let struct_init = A.(AilEstruct (error_msg_struct_tag, struct_members)) in
     let addr_struct_init = A.(AilEunary (Address, mk_expr struct_init)) in
     let error_msg_info_decl = A.(AilSdeclaration [(error_msg_info_sym, Some (mk_expr addr_struct_init))]) in
-    let ail_executable_spec = cn_to_ail_pre_post_aux_internal ~with_ownership_checking dts preds globals c_return_type internal in
+    let ail_executable_spec = cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds globals c_return_type internal in
     let extra_stats_ = if with_ownership_checking then 
       (let cn_stack_depth_incr_stat_ = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
       [error_msg_info_decl; cn_stack_depth_incr_stat_])

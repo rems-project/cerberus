@@ -5,3 +5,8 @@ void f() {
     (char)&x;
   return;
 }
+
+int main(void) {
+  f();
+  return 0;
+}

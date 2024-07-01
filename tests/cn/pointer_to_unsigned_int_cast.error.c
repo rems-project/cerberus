@@ -3,3 +3,8 @@ void f() {
   (unsigned int)&x;
   return;
 }
+
+int main(void) {
+  f();
+  return 0;
+}
