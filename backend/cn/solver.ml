@@ -8,7 +8,11 @@ open LogicalConstraints
 module SymMap = Map.Make(Sym)
 module SymSet = Set.Make(Sym)
 module BT_Table = Hashtbl.Make(BT)
-module Int_Table = Hashtbl.Make(Int)
+module IntWithHash = struct  (* For compatability with older ocamls *)
+  include Int
+  let hash x = x
+end
+module Int_Table = Hashtbl.Make(IntWithHash)
 module LCSet = Set.Make(LC)
 open Global
 open Pp
