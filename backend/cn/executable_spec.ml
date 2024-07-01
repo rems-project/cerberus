@@ -22,7 +22,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
   populate_record_map prog5;
   let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
-  let executable_spec = generate_c_specs_internal instrumentation symbol_table statement_locs sigm prog5 in
+  let executable_spec = generate_c_specs_internal with_ownership_checking instrumentation symbol_table statement_locs sigm prog5 in
   let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
   let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
   generate_c_functions_internal sigm prog5.mu_logical_predicates in
@@ -36,25 +36,33 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
 
   (* Ownership checking *)
   if with_ownership_checking then 
-    (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.h") in 
-    let ownership_globals = generate_ownership_globals sigm in 
+    (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.c") in 
+    let ownership_globals = generate_ownership_globals ~is_extern:false () in 
     Stdlib.output_string ownership_oc cn_utils_header;
     Stdlib.output_string ownership_oc "\n";
     Stdlib.output_string ownership_oc ownership_globals;
     )
   ;
 
-  let ownership_function_defs, ownership_function_decls = generate_ownership_functions ~with_ownership_checking ownership_ctypes sigm in
+  let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking ownership_ctypes sigm in
   let c_structs = print_c_structs sigm.tag_definitions in
   let cn_converted_structs = generate_cn_versions_of_structs sigm.tag_definitions in
 
+  
 
   (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs sigm in *)
   let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
   let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
 
+  let extern_ownership_globals = 
+    if with_ownership_checking then 
+      "\n" ^ generate_ownership_globals ~is_extern:true ()
+    else "" 
+  in
+
   (* TODO: Topological sort *)
   Stdlib.output_string cn_oc cn_utils_header;
+  Stdlib.output_string cn_oc extern_ownership_globals;
   Stdlib.output_string cn_oc c_structs;
   Stdlib.output_string cn_oc cn_converted_structs;
   Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
@@ -73,6 +81,8 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
   let headers = List.map Executable_spec_utils.generate_include_header incls in
   Stdlib.output_string oc (List.fold_left (^) "" headers);
+  Stdlib.output_string oc "\n";
+  Stdlib.output_string oc extern_ownership_globals;
   Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
   Stdlib.output_string oc records_str;
   Stdlib.output_string oc records_str';
@@ -111,6 +121,8 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
         end
   in
 
+
+
   let fns_and_ocs = open_auxilliary_files included_filenames [] in
   let rec inject_structs_in_header_files = function
   | [] -> ()
@@ -137,13 +149,21 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
 
   let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
   let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
-  (* let c_datatypes = List.map (fun (loc, strs) -> (loc, [strs])) c_datatypes in *)
 
+  
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
+
+  let pre_post_pairs = if with_ownership_checking then 
+    let global_ownership_init_pair = generate_ownership_global_assignments sigm in 
+    global_ownership_init_pair @ executable_spec.pre_post
+  else 
+    executable_spec.pre_post
+  in
+
   begin match
   Source_injection.(output_injections oc
     { filename; program= ail_prog
-    ; pre_post=executable_spec.pre_post
+    ; pre_post=pre_post_pairs
     (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
     ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs @ toplevel_locs_and_defs)}
   )

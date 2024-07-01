@@ -16,6 +16,17 @@ struct cn_error_message_info {
     char *cn_source_loc;
 };
 
+/* TODO: Implement */
+struct cn_error_messages {
+    struct cn_error_message_info *top_level_error_msg_info;
+    struct cn_error_message_info *nested_error_msg_info;
+};
+
+void update_error_message_info_(struct cn_error_message_info *error_msg_info, const char *function_name, char *file_name, int line_number, char *cn_source_loc);
+
+#define update_cn_error_message_info(x, y)\
+    update_error_message_info_(x, __func__, __FILE__, __LINE__ + 1, y)
+
 /* Wrappers for C types */
 
 /* Signed bitvectors */
@@ -137,6 +148,12 @@ cn_bool *cn_pointer_is_null(cn_pointer *);
         return convert_to_cn_bool(*(i1->val) >= *(i2->val));\
     }
 
+#define CN_GEN_NEGATE(CNTYPE)\
+    static inline CNTYPE *CNTYPE##_negate(CNTYPE *i) {\
+        return convert_to_##CNTYPE(-(*i->val));\
+    }
+
+
 #define CN_GEN_ADD(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_add(CNTYPE *i1, CNTYPE *i2) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
@@ -169,6 +186,22 @@ cn_bool *cn_pointer_is_null(cn_pointer *);
         return res;\
     }
 
+#define CN_GEN_SHIFT_LEFT(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_shift_left(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) << *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_SHIFT_RIGHT(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_shift_right(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) >> *(i2->val);\
+        return res;\
+    }
+
 #define CN_GEN_MIN(CNTYPE)\
     static inline CNTYPE *CNTYPE##_min(CNTYPE *i1, CNTYPE *i2) {\
         return CNTYPE##_lt(i1, i2) ? i1 : i2;\
@@ -184,6 +217,30 @@ cn_bool *cn_pointer_is_null(cn_pointer *);
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
         res->val = (CTYPE *) alloc(sizeof(CTYPE));\
         *(res->val) = *(i1->val) % *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_XOR(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_xor(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) ^ *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_BWAND(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_bwand(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) & *(i2->val);\
+        return res;\
+    }
+
+#define CN_GEN_BWOR(CTYPE, CNTYPE)\
+    static inline CNTYPE *CNTYPE##_bwor(CNTYPE *i1, CNTYPE *i2) {\
+        CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
+        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
+        *(res->val) = *(i1->val) | *(i2->val);\
         return res;\
     }
 
@@ -291,10 +348,13 @@ static inline int ipow(int base, int exp)
    CN_GEN_LE(CNTYPE)\
    CN_GEN_GT(CNTYPE)\
    CN_GEN_GE(CNTYPE)\
+   CN_GEN_NEGATE(CNTYPE)\
    CN_GEN_ADD(CTYPE, CNTYPE)\
    CN_GEN_SUB(CTYPE, CNTYPE)\
    CN_GEN_MUL(CTYPE, CNTYPE)\
    CN_GEN_DIV(CTYPE, CNTYPE)\
+   CN_GEN_SHIFT_LEFT(CTYPE, CNTYPE)\
+   CN_GEN_SHIFT_RIGHT(CTYPE, CNTYPE)\
    CN_GEN_MIN(CNTYPE)\
    CN_GEN_MAX(CNTYPE)\
    CN_GEN_MOD(CTYPE, CNTYPE)\
@@ -335,6 +395,16 @@ enum OWNERSHIP {
     PUT
 };
 
+int ghost_state_get(ownership_ghost_state *cn_ownership_global_ghost_state, signed long *address_key);
+void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key, int stack_depth_val);
+void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key);
 
-void get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
-void put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+/* CN ownership checking */
+void cn_get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+
+/* C ownership checking */
+void c_map_local_to_stack_depth(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
+void c_remove_local_footprint(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);
+
