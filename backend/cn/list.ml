@@ -1,6 +1,5 @@
 (* This file re-exports the standard List library functions together
    with a bunch of other useful list utilities. *)
-(* TODO: BCP: Probably not worth bothering with an mli file for this one... *)
 
 include Stdlib.List
 

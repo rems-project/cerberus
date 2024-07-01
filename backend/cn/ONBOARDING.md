@@ -51,7 +51,55 @@ General principles:
 * Core to mucore: `backend/cn/core_to_mucore.ml`
 * Mucore: This is the thing that CN typechecks.
 
-### CN Pipeline Entry
+### Some external Cerberus modules
+
+[Some notes from Christopher's tour of CN on parts of Cerberus that CN
+depends on...]
+
+These bits are not part of CN – this is the Cerberus C semantics – but
+important as background and context.  CN uses Cerberus to translate
+C/CN to Core.
+
+frontend/model/core.lem
+* Lem is “sort of OCaml” but can also export to theorem provers
+* `funs` is the map of all the functions in scope
+* Body of a function is a “generic_expr_”
+* Grammar of expressions: generic_expr
+* Stack local variable in C program: generic_action_
+* Core is general, while mucore (part of CN) is more specific
+
+cabs.lem
+* The first level of abstract syntax
+* frontend/model/ail/ailSyntax.lem
+* Clarifies some issues with scoping, structs, for loops get turned into while loops
+* Still distinguishes statements and expressions
+* This then gets turned into Core
+
+### Entry Points:
+
+[Some notes from Christopher's tour of CN on parts of Cerberus that CN
+depends on...]
+
+These bits are not part of CN – this is the Cerberus C semantics – but
+important as background and context.  CN uses Cerberus to translate
+C/CN to Core.
+
+frontend/model/core.lem
+* Lem is “sort of OCaml” but can also export to theorem provers
+* `funs` is the map of all the functions in scope
+* Body of a function is a “generic_expr_”
+* Grammar of expressions: generic_expr
+* Stack local variable in C program: generic_action_
+* Core is general, while mucore (part of CN) is more specific
+
+cabs.lem
+* The first level of abstract syntax
+* frontend/model/ail/ailSyntax.lem
+* Clarifies some issues with scoping, structs, for loops get turned into while loops
+* Still distinguishes statements and expressions
+* This then gets turned into Core
+
+### Entry Points:
 
 There are four types of CN parsing constructs (`parsers/c/c_parser.mly`), each
 with a different entry point from which a parser can be started:
@@ -96,8 +144,8 @@ with a different entry point from which a parser can be started:
 ## Adding \*.mli files
 
 You can generate them using the below **from the root of the repo** and **on a working build**:
-``` 
-[ ! -d backend/cn ] && echo "DO NOT PROCEED: Go to cerberus repo root" 
+```
+[ ! -d backend/cn ] && echo "DO NOT PROCEED: Go to cerberus repo root"
 make && make install && make install_cn
 opam install ocaml-print-intf
 dune exec -- ocaml-print-intf backend/cn/XXXXX.ml | sed 's/Dune__exe.//g' > XXXXX.mli
@@ -122,7 +170,7 @@ make && make install && make install_cn
   Headers look like this:
   ```
   (* Module Locations -- Utility functions for Cerberus locations
- 
+
      This module adds a number of useful functions on locations to the
      ones already provided by Cerberus. *)
   ```
@@ -135,14 +183,83 @@ make && make install && make install_cn
   This way they will be notified via GitHub.
 
 ## Dependency graph
-
 ```
 opam install codept
 codept backend/cn/*.ml > cn-modules.dot
 dot -Tpdf -o cn-modules.pdf # -x optionally to "simplify"
 ```
 
-### Pending 
+## Useful recipies
 
-* Polishing pp.mli
+### To add a .mli file for a given .ml file
 
+`cd backend/cn`
+
+`(cd ../..; dune exec -- ocaml-print-intf backend/cn/XXXXX.ml) > XXXXX.mli`
+
+inspect XXXXX.mli to make sure that it looks semi-reasonable
+
+`make -C ../.. cn`
+
+inspect XXXXX.mli more closely
+
+  - remove instances of `Dune__exe.`
+
+  - if you see something like
+
+       module SymSet :
+         sig
+           ... enormous amount of stuff
+
+    replace it with
+
+       module SymSet = Set.Make(Sym)
+
+    You may need to add a bit more information to help typechecking --
+    e.g., in setup.mli we have
+
+       module StringSet : Set.S with type elt = string
+
+  - Go through the .mli file and try to remove as many declarations as
+    possible
+
+  - Add a header, if you have enough information to write one.
+    Headers look like this:
+
+       (* Module Locations -- Utility functions for Cerberus locations
+
+          This module adds a number of useful functions on locations to the
+          ones already provided by Cerberus. *)
+
+    If not, add a comment noting that it needs a header.  Comments
+    should look like this:
+
+       (* TODO: BCP: Describe what's needed... *)
+
+  - Leave comments about anything else that needs a look from others
+
+  - Recompile again to make sure nothing is broken
+
+# Things to do
+
+## Information that would be useful to add, generally
+
+Some useful high-level information we could add (e.g. to this file :-)...
+
+   - Where is the parser?  How does it connect to the rest?
+   - What is the relation between the Cerberus and CN codebases?
+   - What are the main starting points in this directory?
+   - If I want an overview of the code, in what order should I look at
+     things?
+   - What are the most important top-level modules, and what is the
+     overall flow of information between them?
+   - "If I want to add <common sort of thing to add>, where do I look?"
+
+## Small pending tasks
+
+- More polishing on pp.mli
+
+- incorporate the comments from
+https://docs.google.com/document/d/1AVRjj9dWcfOskDe_Fmdwu2pfARcQ985sgW3LR6gVtXY/edit
+
+- change all filenames to snake_case

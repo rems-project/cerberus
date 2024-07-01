@@ -35,10 +35,10 @@ let has_value = function
    id, so that the final deletion of a resource remains in the history. *)
 type resource_history =
   {
-    last_written: Locations.loc;
+    last_written: Locations.t;
     reason_written: string;
     last_written_id: int;
-    last_read: Locations.loc;
+    last_read: Locations.t;
     last_read_id: int;
   }
 

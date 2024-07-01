@@ -3,22 +3,13 @@
    This module adds a number of useful functions on locations to the
    ones already provided by Cerberus. *)
 
-(* taking things from ocaml_locations *)
-(* TODO: BCP: What does that mean? *)
-
-(* TODO: BCP: I think this type could be made abstract with only a little
-   work -- its identity seems to be used in just a few places in other
-   modules. *)
 type t = Cerb_location.t
 
-(* TODO: BCP: It's a bit hideous to to export two different names for the same (morally abstract) type. *)
-type loc = t
-
-type info = loc * string option
+type info = t * string option
 
 type path = t list
 
-(* TODO: BCP: All the rest could perhaps be organized a little... *)
+(* TODO: BCP: All the rest could be organized a little better... *)
 
 val other : string -> t
 
@@ -40,8 +31,6 @@ val head_pos_of_location : t -> string * string
 
 val unpack : t -> Cerb_location.t
 
-(* TODO: BCP: What's to do? *)
-(* todo *)
 val json_loc : t -> Yojson.Safe.t
 val json_path : path -> Yojson.Safe.t
 
