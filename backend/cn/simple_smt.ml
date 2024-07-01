@@ -527,6 +527,15 @@ type solver =
 
 exception UnexpectedSolverResponse of sexp
 
+let () =
+  Printexc.register_printer
+    (function
+      | UnexpectedSolverResponse s ->
+        Some (Printf.sprintf "UnexpectedSolverResponse(%s)" (Sexp.to_string s))
+      | _ -> None
+    )
+
+
 (** Issue a command and wait for it to succeed.
     Throws {! UnexpectedSolverResponse} *)
 let ack_command (s: solver) cmd =
