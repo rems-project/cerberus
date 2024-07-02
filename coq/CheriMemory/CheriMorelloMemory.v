@@ -472,7 +472,7 @@ Module Type CheriMemoryImpl
 
       All "false" tags will be left intact.
    *)
-  Definition ghost_tags
+  Definition capmeta_ghost_tags
     (addr: AddressValue.t)
     (size: nat)
     (capmeta: AMap.M.t (bool*CapGhostState)): AMap.M.t (bool*CapGhostState)
@@ -759,13 +759,13 @@ Module Type CheriMemoryImpl
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
             let bs := List.repeat None sz in
-            ret (funptrmap, (ghost_tags addr sz capmeta), bs)
+            ret (funptrmap, (capmeta_ghost_tags addr sz capmeta), bs)
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss sz n_value ;;
             let bs := List.map (Some) bs' in
-            ret (funptrmap, (ghost_tags addr (List.length bs) capmeta), bs)
+            ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
         | MVinteger ity (IC _ c_value)
           =>
             match ity with
@@ -782,7 +782,7 @@ Module Type CheriMemoryImpl
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
             bs' <- bytes_of_Z true sz (bits_of_float fval) ;;
             let bs := List.map (Some) bs' in
-            ret (funptrmap, (ghost_tags addr (List.length bs) capmeta), bs)
+            ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
         | MVpointer ref_ty ptrval_ =>
             match ptrval_ with
             | PVfunction
@@ -2443,6 +2443,19 @@ Module Type CheriMemoryImpl
     | _ => raise "memcpy: invalid pointer value"
     end.
 
+  Definition ghost_tags
+    (addr: AddressValue.t)
+    (size: nat) : memM unit
+    :=
+    update
+      (fun (st : mem_state) =>
+         mem_state_with_capmeta
+           (capmeta_ghost_tags
+              addr
+              size
+              st.(capmeta))
+           st).
+
   (** Copy caps meta-information between `memcpy` source and
       destinations, only for positions where both source and
       desination addresses align and capability fully fits.
@@ -2484,72 +2497,6 @@ Module Type CheriMemoryImpl
     else
       (* Source and destination regions are misaligned, no tags will be copied *)
       ret tt.
-
-  (** "Ghost" capability existing tag at [addr]
-
-      A "true" tags associated with address will be marked as unspecified.
-      A "false" tags will be left intact.
-   *)
-  Definition ghost_one_tag
-    (addr: AddressValue.t)
-    (capmeta: AMap.M.t (bool*CapGhostState)): AMap.M.t (bool*CapGhostState)
-    :=
-    match AMap.M.find addr capmeta with
-    | Some (true, gs) =>
-        if negb gs.(tag_unspecified)
-        then
-          AMap.M.add addr
-            (true, {| tag_unspecified := true; bounds_unspecified := gs.(bounds_unspecified) |})
-            capmeta
-        else
-          capmeta
-    | _ => capmeta
-    end.
-
-  (** Ghost tags for capabilities at the beginning and the end of
-      copied region which are partially copied
-   *)
-  Definition memcpy_ghost_partial_tags
-    (loc: location_ocaml)
-    (dst_a src_a: AddressValue.t)
-    (sz: nat)
-    : memM unit :=
-    let pointer_alignof_n := IMP.get.(alignof_pointer) in
-    let pointer_alignof := Z.of_nat pointer_alignof_n in
-
-    (* Calculate alignments *)
-    let dst_align := (AddressValue.to_Z dst_a) mod pointer_alignof in
-
-    (* See if the start of region is pointer-aligned *)
-    (if dst_align =? 0 then
-       ret tt
-     else
-       let first_cap := AddressValue.with_offset dst_a (Z.opp dst_align) in
-       update
-         (fun (st : mem_state) =>
-            mem_state_with_capmeta
-              (ghost_one_tag first_cap st.(capmeta))
-              st))
-
-    ;;
-
-    (* See if the end of region is pointer-aligned *)
-    let zsz := Z.of_nat sz in
-    let dst_limit := AddressValue.with_offset dst_a zsz in
-    let dst_limit_align := (AddressValue.to_Z dst_limit) mod pointer_alignof in
-    if dst_limit_align =? 0 then
-      ret tt
-    else
-      let off := pointer_alignof - dst_limit_align in
-      if off <=? zsz then
-        let last_cap := AddressValue.with_offset dst_a (Z.opp off) in
-        update
-          (fun (st : mem_state) =>
-             mem_state_with_capmeta
-               (ghost_one_tag last_cap st.(capmeta))
-               st)
-      else
-        ret tt.
 
   (* Helper function *)
   Fixpoint bytemap_copy_data
@@ -2666,10 +2613,10 @@ Module Type CheriMemoryImpl
     src_a <- serr2InternalErr (cap_addr_of_pointer_value src_p) ;;
 
     let size := Z.to_nat size_z in
-    memcpy_copy_data loc dst_a src_a size ;;
 
+    ghost_tags dst_a size ;;
+    memcpy_copy_data loc dst_a src_a size ;;
     memcpy_copy_tags loc dst_a src_a size ;;
-    memcpy_ghost_partial_tags loc dst_a src_a size ;;
     ret dst_p.
 
   Definition memcmp

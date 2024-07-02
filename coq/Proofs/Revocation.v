@@ -682,6 +682,59 @@ Module CheriMemoryImplWithProofs
             lia.
   Qed.
 
+  (* This is a loose specificaton not taking into account address range check.
+     The primary purpose is to show:
+     1. No new keys introduced to [capmeta]
+     2. Tag change monotonicity
+   *)
+  Lemma capmeta_ghost_tags_spec
+    (addr: AddressValue.t)
+    (size: nat)
+    (capmeta: AMap.M.t (bool*CapGhostState)):
+    forall a tg' gs',
+      AMap.M.MapsTo a (tg',gs') (capmeta_ghost_tags addr size capmeta)
+      ->
+        exists tg gs,
+          AMap.M.MapsTo a (tg,gs) capmeta /\
+            (
+              (* unchanged. outside of range, was false or was unspecified *)
+              (tg = tg' /\ gs = gs')
+              \/
+                (* ghosted. only when in range and was true and specified *)
+                (tg = true /\ gs.(tag_unspecified) = false /\
+                   tg' = true /\ gs'.(tag_unspecified) = true)
+            ).
+  Proof.
+    intros a tg' gs' H.
+    destruct size.
+    -
+      exists tg', gs'.
+      split;auto.
+    -
+      cbn in *.
+      apply AMap.F.mapi_inv in H.
+      destruct H as [(tg,gs) [a' [E H]]].
+      subst a'.
+      break_match_hyp.
+      +
+        destruct H.
+        tuple_inversion.
+        bool_to_prop_hyp.
+        subst.
+        exists true, gs.
+        split;auto.
+        right.
+        split;auto.
+        split.
+        apply negb_true_iff in H.
+        apply H.
+        split;tauto.
+      +
+        destruct H.
+        tuple_inversion.
+        bool_to_prop_hyp;(exists tg,gs;split;auto).
+  Qed.
+
   Definition memM_same_state
     {T: Type}
     (c: memM T) : Prop
@@ -4972,14 +5025,70 @@ Module CheriMemoryImplWithProofs
     reflexivity.
   Qed.
 
-  Instance memcpy_ghost_partial_tags_PreservesInvariant
-    (loc: location_ocaml)
-    (dst_a src_a: AddressValue.t)
-    (sz: nat)
-    :
-    forall s, PreservesInvariant mem_invariant s (memcpy_ghost_partial_tags loc dst_a src_a sz).
+  Lemma ghost_tags_preserves_allocations:
+    forall addr size s s',
+      ghost_tags addr size s = (s', inr tt)
+      ->
+        allocations s = allocations s'.
   Proof.
-  Admitted.
+    intros addr size0 s s' H.
+    unfold ghost_tags in H.
+    apply update_mem_state_spec in H.
+    unfold mem_state_with_capmeta in H.
+    destruct s'.
+    cbn.
+    invc H.
+    reflexivity.
+  Qed.
+
+  Lemma capmeta_ghost_tags_preserves:
+    forall m addr size,
+      mem_invariant m ->
+      mem_invariant (mem_state_with_capmeta
+                       (capmeta_ghost_tags addr size (capmeta m))
+                       m).
+  Proof.
+    intros m addr sz H.
+    destruct H as [MIbase MIcap].
+    destruct_base_mem_invariant MIbase.
+    split.
+    -
+      (* base invariant *)
+      clear MIcap.
+      repeat split;auto.
+      (* alignment proof *)
+      intros a E.
+      apply AMapProofs.map_in_mapsto in E.
+      destruct E as [tg E].
+      unfold mem_state_with_capmeta in E.
+      simpl in E.
+      destruct tg as (tg,gs).
+      apply capmeta_ghost_tags_spec in E.
+      +
+        destruct E as [tg' [gs' [E1 _]]].
+        apply AMapProofs.map_mapsto_in in E1.
+        apply Balign.
+        apply E1.
+    -
+      intros a g E bs F.
+      simpl in *.
+      apply capmeta_ghost_tags_spec in E.
+      destruct E as [tg' [gs' [E1 [[E2g E2u]|[E3g E3u]] ]]]; subst.
+      *
+        eapply MIcap; eauto.
+      *
+        eapply MIcap; eauto.
+  Qed.
+
+  Instance ghost_tags_PreservesInvariant
+    (addr: AddressValue.t)
+    (size: nat)
+    :
+    forall s, PreservesInvariant mem_invariant s (ghost_tags addr size).
+  Proof.
+    intros s M.
+    apply capmeta_ghost_tags_preserves, M.
+  Qed.
 
   Instance memcpy_PreservesInvariant
     (loc: location_ocaml)
@@ -5025,8 +5134,8 @@ Module CheriMemoryImplWithProofs
     destruct x.
     split.
     -
-      pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s H) as P.
-      unfold post_exec_invariant, lift_sum_p, execErrS in P.
+      pose proof (ghost_tags_PreservesInvariant a1 (Z.to_nat size) s H) as G.
+      unfold post_exec_invariant, lift_sum_p, execErrS in G.
       break_let.
       repeat break_match_hyp.
       2,3: inv Heqs1.
@@ -5038,15 +5147,38 @@ Module CheriMemoryImplWithProofs
         tuple_inversion.
         auto.
     -
-      pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H0).
-      destruct M.
-      epose proof (memcpy_copy_data_fetch_bytes_spec H2 AC) as DS.
+      pose proof (ghost_tags_preserves_allocations _ _ _ _ H0).
       rewrite H1 in AC.
-      preserves_step.
-      eapply memcpy_copy_tags_PreservesInvariant; eauto.
-      preserves_step.
-      apply memcpy_ghost_partial_tags_PreservesInvariant.
-      preserves_step.
+      apply bind_PreservesInvariant_value.
+      intros H2 s'' x H3.
+      destruct x.
+      split.
+      +
+        pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s' H2) as P.
+        unfold post_exec_invariant, lift_sum_p, execErrS in P.
+        break_let.
+        repeat break_match_hyp.
+        2,3: inv Heqs1.
+        *
+          tuple_inversion.
+        *
+          apply ret_inr in Heqs1.
+          invc Heqs1.
+          tuple_inversion.
+          auto.
+      +
+        pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H3).
+        destruct M.
+        epose proof (memcpy_copy_data_fetch_bytes_spec _ AC) as DS.
+        preserves_step.
+        eapply memcpy_copy_tags_PreservesInvariant
+          with (ptrval1:=ptrval1) (ptrval2:=ptrval2)
+        ; eauto.
+        rewrite H4 in AC.
+        apply AC.
+        preserves_step.
+        Unshelve.
+        apply H2.
   Qed.
 
   Instance realloc_PreservesInvariant
