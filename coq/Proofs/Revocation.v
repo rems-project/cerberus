@@ -4575,16 +4575,79 @@ Module CheriMemoryImplWithProofs
         admit.
   Admitted.
 
+  (* TODO: move *)
+  Lemma CapGhostState_eq_dec:
+    forall x y : bool * CapGhostState, {x = y} + {x <> y}.
+  Proof.
+    intros x y.
+    decide equality;subst.
+    decide equality;subst.
+    apply bool_dec.
+    apply bool_dec.
+    decide equality;subst.
+  Qed.
+
+  (* Lemma capmeta_copy_tags_spec
+    (dst src: AddressValue.t)
+    (n: nat)
+    (step: nat)
+    (cm: AMap.M.t (bool * CapGhostState)):
+    (0<step)%nat ->
+    forall k, 0 <= k < Z.of_nat n ->
+         AMap.M.find (AddressValue.with_offset src (k * Z.of_nat step)) cm =
+         AMap.M.find (AddressValue.with_offset dst (k * Z.of_nat step)) (capmeta_copy_tags dst src n step cm).
+  Proof.
+    intros H_step k Hk.
+    induction n as [|n IH].
+    - (* Base case: n = 0 *)
+      lia.
+    - (* Inductive step: n = S n *)
+      simpl.
+      break_match_goal.
+      +
+        (* found in src. adding *)
+        destruct (Z.eq_dec k (Z.of_nat n)) as [E|NE].
+        *
+          subst k.
+          rewrite AMap.P.F.add_eq_o.
+          1,2: rewrite <- Nat2Z.inj_mul.
+          2:reflexivity.
+          rewrite Heqo.
+          reflexivity.
+        *
+          rewrite AMap.P.F.add_neq_o.
+          2:{
+            admit.
+          }
+          apply IH;lia.
+      +
+        (* not found in src. removeing *)
+        destruct (Z.eq_dec k (Z.of_nat n)) as [E|NE].
+        *
+          subst k.
+          rewrite AMap.P.F.remove_eq_o.
+          1,2: rewrite <- Nat2Z.inj_mul.
+          2:reflexivity.
+          rewrite Heqo.
+          reflexivity.
+        *
+          rewrite AMap.P.F.remove_neq_o.
+          2:{
+            admit.
+          }
+          apply IH;lia.
+  Admitted.
+  *)
+
   Lemma capmeta_copy_tags_spec
     (dst src: AddressValue.t)
     (n: nat)
     (step: nat)
     (cm: AMap.M.t (bool * CapGhostState)):
     (0<step)%nat ->
-    (Z.modulo (AddressValue.to_Z src) (Z.of_nat step) = 0) ->
-    (Z.modulo (AddressValue.to_Z dst) (Z.of_nat step) = 0) ->
     forall a tg,
       AMap.M.MapsTo a tg (capmeta_copy_tags dst src n step cm) ->
+      (* there was a matching tag in src *)
       (exists k,
           0 <= k < Z.of_nat n
           /\ a = AddressValue.with_offset dst (k * Z.of_nat step)
@@ -4593,30 +4656,107 @@ Module CheriMemoryImplWithProofs
         (AMap.M.MapsTo a tg cm
          /\ forall k, 0 <= k < Z.of_nat n -> a <> AddressValue.with_offset dst (k * Z.of_nat step)).
   Proof.
-    intros Hstep Hsrc_mod Hdst_mod.
-    revert cm Hsrc_mod Hdst_mod.
-    induction n as [|n' IH]; intros cm Hsrc_mod Hdst_mod a tg Hmaps.
+    intros Hstep.
+    intros a tg H.
+    induction n as [|n' IH]; intros.
     - (* Base case: n = 0 *)
-      simpl in Hmaps.
+      simpl in H.
       right. split.
       + assumption.
       + intros k Hk. lia.
     - (* Inductive case: n = S n' *)
-      cbn.
-      simpl in Hmaps.
-      (*
-      remember (capmeta_copy_tags (AddressValue.with_offset dst (Z.of_nat step))
-               (AddressValue.with_offset src (Z.of_nat step)) n' step
-               match AMap.M.find (elt:=bool * CapGhostState) src cm with
-               | Some meta => AMap.M.add dst meta cm
-               | None => cm
-               end) as cm'.
-       *)
-      specialize (IH cm Hsrc_mod Hdst_mod a tg).
+      cbn in H.
       break_match_hyp.
+      +
+        (* found, adding *)
+        apply AMap.M.find_1 in H.
+        rewrite AMap.F.add_o in H.
+        break_match_hyp.
+        *
+          (* a = dst+n*step *)
+          invc H.
+          rename e into E.
+          unfold AddressValue_as_ExtOT.eq in E.
+          apply AMap.F.find_mapsto_iff in Heqo.
+          subst a.
 
-      admit.
-  Admitted.
+          destruct (AMapProofs.map_MapsTo_dec (Adec:=CapGhostState_eq_dec) (AddressValue.with_offset src (Z.of_nat n' * Z.of_nat step)) tg cm) as [DE|DNE].
+          --
+            left.
+            exists (Z.of_nat n').
+            split. lia.
+            split.
+            rewrite <- Nat2Z.inj_mul.
+            reflexivity.
+            apply DE.
+          --
+            clear IH.
+            apply AMap.F.find_mapsto_iff in Heqo.
+            contradict DNE.
+            apply AMap.F.find_mapsto_iff.
+            rewrite <- Heqo.
+            rewrite Nat2Z.inj_mul.
+            symmetry.
+            reflexivity.
+        *
+          (* a <> dst+n*step *)
+          rename n into NE.
+          unfold AddressValue_as_ExtOT.eq in NE.
+          apply AMap.M.find_2 in H.
+          specialize (IH H).
+          destruct IH.
+          --
+            left.
+            destruct H0 as [k [H1 [H2 H3]]].
+            exists k.
+            repeat split; try lia;auto.
+          --
+            right.
+            destruct H0.
+            split.
+            auto.
+            intros k H2.
+            unfold AddressValue_as_ExtOT.eq in NE.
+            destruct (Z.eq_dec k (Z.of_nat n')) as [KE|KNE].
+            ++
+              subst k.
+              clear - NE.
+              rewrite <- Nat2Z.inj_mul.
+              auto.
+            ++
+              apply H1.
+              lia.
+      +
+        (* Not found, removing *)
+        apply AMap.M.find_1 in H.
+        rewrite AMap.F.remove_o in H.
+        break_match_hyp;[inv H|].
+        rename n into NE.
+        apply AMap.F.find_mapsto_iff  in H.
+        specialize (IH H).
+        destruct IH.
+        *
+          left.
+          destruct H0 as [k [H1 [H2 H3]]].
+          exists k.
+          repeat split; try lia;auto.
+        *
+          right.
+          destruct H0.
+          split.
+          auto.
+          intros k H2.
+          unfold AddressValue_as_ExtOT.eq in NE.
+          destruct (Z.eq_dec k (Z.of_nat n')) as [KE|KNE].
+          --
+            subst k.
+            clear - NE.
+            rewrite <- Nat2Z.inj_mul.
+            auto.
+          --
+            apply H1.
+            lia.
+  Qed.
 
   Lemma mem_state_after_capmeta_copy_tags_preserves:
     forall m dst src n sz,
@@ -4679,12 +4819,6 @@ Module CheriMemoryImplWithProofs
       +
         subst step.
         apply MorelloImpl.alignof_pointer_pos.
-      +
-        subst step.
-        auto.
-      +
-        subst step.
-        auto.
     -
       (* the rest of the invariant *)
       intros a g E bs F.
@@ -4741,12 +4875,6 @@ Module CheriMemoryImplWithProofs
         exists c.
         split;[apply M2|].
         eauto.
-      +
-        subst step.
-        auto.
-      +
-        subst step.
-        auto.
   Qed.
 
   Fact alignment_correction_correct:

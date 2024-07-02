@@ -2424,7 +2424,7 @@ Module Type CheriMemoryImpl
         let cm' := capmeta_copy_tags dst src n step cm in
         let src' := AddressValue.with_offset src (Z.of_nat (n*step)) in
         let dst' := AddressValue.with_offset dst (Z.of_nat (n*step)) in
-        match AMap.M.find src' cm' with
+        match AMap.M.find src' cm with
         | None =>
             (* This is the case where a pointer-aligned address does
                not have any meta information associated with
