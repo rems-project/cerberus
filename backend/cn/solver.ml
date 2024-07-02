@@ -1107,7 +1107,10 @@ let logger lab =
   log_counter := log_id + 1;
   let get_file suf =
         let dir = match !log_dir with
-                  | Some dir -> dir
+                  | Some dir ->
+                    if not (Sys.file_exists dir) then
+                      begin Sys.mkdir dir 0o755; dir end
+                    else dir
                   | None ->
                     let d = Filename.temp_dir "cn_" "" in
                     log_dir := Some d;
@@ -1134,10 +1137,46 @@ let logger lab =
     ; SMT.stop    = (fun _ -> ())
     }
 
+
+let solver_path  = ref (None : string option)
+let solver_type  = ref (None : SMT.solver_extensions option)
+let solver_flags = ref (None : (string list) option)
+
+
 (** Make a new solver instance *)
 let make globals =
-  let cfg = { SMT.z3 with log = logger "z3" } in
-  let s = { smt_solver  = SMT.new_solver cfg
+  let cfg = ref begin match !solver_type with
+            | Some t ->
+              begin match t with
+              | SMT.Z3 -> SMT.z3
+              | SMT.CVC5 -> SMT.cvc5
+              | SMT.Other -> failwith "Unsupported solver."
+              end
+            | None ->
+              begin match !solver_path with
+              | None -> SMT.z3
+              | Some path ->
+                match Filename.basename path with
+                | "z3"   -> SMT.z3
+                | "cvc5" -> SMT.cvc5
+                | _      -> failwith "Please specify solver type"
+                end
+            end
+  in
+  begin match !solver_path with
+  | Some path -> cfg := { !cfg with SMT.exe = path }
+  | None      -> ()
+  end;
+  begin match !solver_flags with
+  | Some opts -> cfg := { !cfg with SMT.opts = opts }
+  | None      -> ()
+  end;
+  cfg := { !cfg with log = logger begin match (!cfg).exts with
+                                  | SMT.Z3    -> "z3"
+                                  | SMT.CVC5  -> "cvc5"
+                                  | SMT.Other -> "other"
+                                  end };
+  let s = { smt_solver  = SMT.new_solver !cfg
           ; cur_frame   = ref (empty_solver_frame ())
           ; prev_frames = ref []
           ; name_seed   = ref 0
