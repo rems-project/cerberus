@@ -1101,6 +1101,7 @@ let log_results   = ref false                 (* Do we also want reposnses*)
 let log_dir       = ref (None : string option)(* Log to this dir *)
 let log_counter   = ref 0                     (* Names of SMT files *)
 
+(** Pick a logger based on the above settings *)
 let logger lab =
   let log_id = !log_counter in
   log_counter := log_id + 1;
@@ -1209,6 +1210,7 @@ let model () =
 
 
 
+(** The main way to query the solver. *)
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   let _ = loc in (* XXX: should we use this somehow? *)
   let s1 = { solver with globals = global } in
