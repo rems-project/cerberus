@@ -131,7 +131,7 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, owne
     }
 }
 
-void c_map_local_to_stack_depth(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth) {
+void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth) {
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = ptr_to_local + i;
@@ -140,7 +140,7 @@ void c_map_local_to_stack_depth(uintptr_t ptr_to_local, ownership_ghost_state *c
     }
 }
 
-void c_remove_local_footprint(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size) {
+void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size) {
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = ptr_to_local + i;
