@@ -1,6 +1,9 @@
 open Printf
 open Sexplib
 
+module StrSet = Set.Make(String)
+module StrMap = Map.Make(String)
+
 (** {1 SMT Basics } *)
 
 type sexp = Sexp.t
@@ -531,7 +534,7 @@ let () =
   Printexc.register_printer
     (function
       | UnexpectedSolverResponse s ->
-        Some (Printf.sprintf "UnexpectedSolverResponse(%s)" (Sexp.to_string s))
+        Some (Printf.sprintf "UnexpectedSolverResponse(%s)" (Sexp.to_string_hum s))
       | _ -> None
     )
 
@@ -561,7 +564,67 @@ let check s =
 
 (** Get all definitions currently in scope. Only valid after a [Sat] result.
 See also {!model_eval}. *)
-let get_model s = s.command (list [ atom "get-model" ])
+let get_model s =
+  let ans = s.command (list [ atom "get-model" ]) in
+  match s.config.exts with
+  | CVC5  -> ans
+  | Other -> ans
+
+  | Z3 ->
+      (* Workaround z3 bug #7270: remove `as-array` *)
+      let rec drop_as_array x =
+          match x with
+          | Sexp.List [ _; Sexp.Atom "as-array"; f ] -> f
+          | Sexp.List xs -> Sexp.List (List.map drop_as_array xs)
+          | _ -> x
+      in
+
+      (* Workaround for a z3 bug #7268: rearrange defs in dep. order *)
+      let rec free vars x =
+            match x with
+            | Sexp.Atom a  -> a :: vars
+            | Sexp.List xs -> List.fold_left free vars xs
+      in
+      let check_def x =
+            match x with
+            | Sexp.List [ _def_fun; Sexp.Atom name; _args; _ret; def ] ->
+                (name, free [] def, x)    (* XXX: args should be bound? *)
+            | _ -> raise (UnexpectedSolverResponse ans)
+      in
+      match ans with
+      | Sexp.Atom _ -> raise (UnexpectedSolverResponse ans)
+      | Sexp.List xs ->
+        let defs                = List.map check_def xs in
+        let add_dep mp (x,xs,e) = StrMap.add x (xs,e) mp in
+        let deps                = List.fold_left add_dep StrMap.empty defs in
+
+        let processing = ref StrSet.empty in
+        let processed  = ref StrSet.empty in
+        let decls      = ref [] in
+        let rec arrange todo =
+            match todo with
+            | x :: xs ->
+              if StrSet.mem x !processed
+                then arrange xs
+                else begin
+                  if StrSet.mem x !processing
+                    then raise (UnexpectedSolverResponse ans) (* recursive *)
+                    else
+                      begin match StrMap.find_opt x deps with
+                      | None -> arrange xs
+                      | Some (ds,e) ->
+                        processing := StrSet.add x !processing;
+                        arrange ds;
+                        processing := StrSet.remove x !processing;
+                        processed  := StrSet.add x !processed;
+                        decls      := drop_as_array e :: !decls;
+                        arrange xs
+                      end
+                end
+            | [] -> ()
+           in
+        arrange (List.map (fun (x,_,_) -> x) defs);
+        list (List.rev !decls)
 
 (** Get the values of some s-expressions. Only valid after a [Sat] result.
     Throws {!UnexpectedSolverResponse}. *)
@@ -691,11 +754,11 @@ let new_solver (cfg: solver_config): solver =
         fprintf out_chan "%s\n%!" s in
 
   let send_command c =
-        send_string (Sexp.to_string c);
+        send_string (Sexp.to_string_hum c);
         let ans = match Sexp.scan_sexp_opt in_buf with
                     | Some x -> x
                     | None -> Sexp.Atom (In_channel.input_all in_err_chan)
-        in cfg.log.receive (Sexp.to_string ans); ans
+        in cfg.log.receive (Sexp.to_string_hum ans); ans
   in
 
   let stop_command () =
