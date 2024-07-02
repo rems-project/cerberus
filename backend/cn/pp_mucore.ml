@@ -203,6 +203,7 @@ module Make (Config: CONFIG) = struct
     | IOpAdd -> P.plus
     | IOpSub -> P.minus
     | IOpMul -> P.star
+    | IOpDiv -> P.slash
     | IOpShl -> P.langle ^^ P.langle
     | IOpShr -> P.rangle ^^ P.rangle
 

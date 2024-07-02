@@ -302,6 +302,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
       | IOpAdd -> IT.add_ (x, y) loc
       | IOpSub -> IT.sub_ (x, y) loc
       | IOpMul -> IT.mul_ (x, y) loc
+      | IOpDiv -> IT.div_ (x, y) loc
       | IOpShl -> IT.arith_binop Terms.ShiftLeft (x, IT.cast_ (IT.bt x) y here) loc
       | IOpShr -> IT.arith_binop Terms.ShiftRight (x, IT.cast_ (IT.bt x) y here) loc
     in

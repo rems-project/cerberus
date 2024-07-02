@@ -273,7 +273,6 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
 
 (*** pure expression inference ************************************************)
 
-
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
 let is_representable_integer arg ity =
   let here = Locations.other __FUNCTION__ in
@@ -531,6 +530,26 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        | ty -> fail (fun _ -> {loc; msg = Mismatch {has = BT.pp ty; expect = !^"comparable type"}})
      in
      begin match op with
+     | OpAdd ->
+      let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+         check_pexpr pe1 (fun v1 ->
+         check_pexpr pe2 (fun v2 ->
+         k (add_ (v1, v2) loc)))
+     | OpSub ->
+         let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+         check_pexpr pe1 (fun v1 ->
+         check_pexpr pe2 (fun v2 ->
+         k (sub_ (v1, v2) loc)))
+     | OpMul ->
+         let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+         check_pexpr pe1 (fun v1 ->
+         check_pexpr pe2 (fun v2 ->
+         k (mul_ (v1, v2) loc)))
+     | OpDiv ->
+         let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+         check_pexpr pe1 (fun v1 ->
+         check_pexpr pe2 (fun v2 ->
+         k (div_ (v1, v2) loc)))
      | OpEq ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
         let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
@@ -666,6 +685,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        | IOpAdd -> add_ (arg1, arg2) loc
        | IOpSub -> sub_ (arg1, arg2) loc
        | IOpMul -> mul_ (arg1, arg2) loc
+       | IOpDiv -> div_ (arg1, arg2) loc
        | IOpShl -> ite_ (arg2_bits_lost, IT.int_lit_ 0 expect loc,
                arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2 loc) loc) loc
        | IOpShr -> ite_ (arg2_bits_lost, IT.int_lit_ 0 expect loc,
@@ -696,6 +716,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        | IOpAdd -> (add_ (arg1, arg2) loc, add_ (large arg1, large arg2) loc, bool_ true here)
        | IOpSub -> (sub_ (arg1, arg2) loc, sub_ (large arg1, large arg2) loc, bool_ true here)
        | IOpMul -> (mul_ (arg1, arg2) loc, mul_ (large arg1, large arg2) loc, bool_ true here)
+       | IOpDiv -> (div_ (arg1, arg2) loc, div_ (large arg1, large arg2) loc, bool_ true here)
        | IOpShl ->
          ( arith_binop Terms.ShiftLeft (arg1, cast_ (IT.bt arg1) arg2 loc) loc
          , arith_binop Terms.ShiftLeft (large arg1, large arg2) loc

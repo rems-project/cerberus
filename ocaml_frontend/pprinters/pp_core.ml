@@ -424,6 +424,7 @@ let pp_bounded_integer_pexpr pp_pexpr pe =
     | IOpAdd -> "_add"
     | IOpSub -> "_sub"
     | IOpMul -> "_mul"
+    | IOpDiv -> "_div"
     | IOpShl -> "_shl"
     | IOpShr -> "_shr" in
   let (ity, kw, pe1, pe2) = match pe with
