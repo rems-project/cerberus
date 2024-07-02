@@ -511,6 +511,7 @@ let assume e = app_ "assert" [e]
 type solver_log =
   { send:    string -> unit   (** We sent this to the solver. *)
   ; receive: string -> unit   (** We got this from the solver. *)
+  ; stop:    unit   -> unit   (** Do this when done, (close files, etc.) *)
   }
 
 type solver_config =
@@ -523,8 +524,8 @@ type solver_config =
 (** A connection to a solver *)
 type solver =
   { command:    sexp -> sexp
-  ; stop:       unit -> Unix.process_status
-  ; force_stop: unit -> Unix.process_status
+  ; stop:       unit -> unit
+  ; force_stop: unit -> unit
   ; config:     solver_config
   }
 
@@ -763,11 +764,13 @@ let new_solver (cfg: solver_config): solver =
 
   let stop_command () =
         send_string "(exit)";
-        Unix.close_process_full proc
+        let _ = Unix.close_process_full proc in
+        cfg.log.stop ()
   in
   let force_stop_command () =
         Unix.kill pid 9;
-        Unix.close_process_full proc
+        let _ = Unix.close_process_full proc in
+        cfg.log.stop ()
   in
   let s =
     { command = send_command
@@ -778,7 +781,7 @@ let new_solver (cfg: solver_config): solver =
   in
     ack_command s (set_option ":print-success" "true");
     ack_command s (set_option ":produce-models" "true");
-    Gc.finalise (fun me -> let _ = me.stop () in ()) s;
+    Gc.finalise (fun me -> me.stop ()) s;
     s
 
 (** A connection to a solver,
@@ -786,8 +789,8 @@ let new_solver (cfg: solver_config): solver =
 type model_evaluator =
   { eval:       (string * (string*sexp) list * sexp * sexp) list -> sexp -> sexp
 (** First define some local variables, then evaluate the expression *)
-  ; stop:       unit -> Unix.process_status
-  ; force_stop: unit -> Unix.process_status
+  ; stop:       unit -> unit
+  ; force_stop: unit -> unit
   }
 
 
@@ -839,11 +842,13 @@ let model_eval (cfg: solver_config) (m: sexp) =
 let quiet_log =
   { send    = (fun _ -> ())
   ; receive = (fun _ -> ())
+  ; stop    = (fun _ -> ())
   }
 
 let printf_log =
   { send    = (fun s -> printf "[->] %s\n%!" s)
   ; receive = (fun s -> printf "[<-] %s\n%!" s)
+  ; stop    = (fun _ -> ())
   }
 
 let cvc5 : solver_config =

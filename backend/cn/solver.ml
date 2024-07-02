@@ -1093,17 +1093,49 @@ let declare_solver_basics s =
   List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
-(** Augment a logger with an additional label. *)
-let logger base lab =
-  { SMT.send    = (fun s -> base.SMT.send (lab ^ s))
-  ; SMT.receive = (fun s -> base.SMT.receive (lab ^ s))
-  }
 
+(** Logging *)
+
+let log_to_temp   = ref false                 (* Should we log to file *)
+let log_results   = ref false                 (* Do we also want reposnses*)
+let log_dir       = ref (None : string option)(* Log to this dir *)
+let log_counter   = ref 0                     (* Names of SMT files *)
+
+let logger lab =
+  let log_id = !log_counter in
+  log_counter := log_id + 1;
+  let get_file suf =
+        let dir = match !log_dir with
+                  | Some dir -> dir
+                  | None ->
+                    let d = Filename.temp_dir "cn_" "" in
+                    log_dir := Some d;
+                    d
+        in
+        open_out (Filename.concat dir
+                          (lab ^ suf ^ string_of_int log_id ^ ".smt"))
+  in
+  if !log_to_temp then
+    let out = get_file "_send_" in
+    if !log_results then
+      { SMT.send    = Printf.fprintf out "[->] %s\n%!"
+      ; SMT.receive = Printf.fprintf out "[<-] %s\n%!"
+      ; SMT.stop    = (fun _ -> close_out out)
+      }
+    else
+      { SMT.send    = Printf.fprintf out "%s\n%!"
+      ; SMT.receive = (fun _ -> ())
+      ; SMT.stop    = (fun _ -> close_out out)
+      }
+  else
+    { SMT.send    = (fun _ -> ())
+    ; SMT.receive = (fun _ -> ())
+    ; SMT.stop    = (fun _ -> ())
+    }
 
 (** Make a new solver instance *)
 let make globals =
-  let name = Printf.sprintf "z3(%.3f): " (Unix.gettimeofday ()) in
-  let cfg = { SMT.z3 with log = logger SMT.quiet_log name } in
+  let cfg = { SMT.z3 with log = logger "z3" } in
   let s = { smt_solver  = SMT.new_solver cfg
           ; cur_frame   = ref (empty_solver_frame ())
           ; prev_frames = ref []
@@ -1124,8 +1156,7 @@ let model_evaluator solver mo =
   | None -> failwith "model is an atom"
   | Some defs ->
     let scfg = solver.smt_solver.config in
-    let name = Printf.sprintf ":model:%.3f: " (Unix.gettimeofday ()) in
-    let cfg = { scfg with log = logger scfg.log name } in
+    let cfg = { scfg with log = logger "model" } in
     let s = SMT.new_solver cfg in
     let gs = solver.globals in
     let evaluator = { smt_solver = s
@@ -1239,7 +1270,6 @@ let eval _globs mo t = mo t
 
 (* Dummy implementations *)
 let random_seed = ref 0
-let log_to_temp = ref false
 let set_slow_smt_settings _ _ = ()
 let debug_solver_to_string _ = ()
 let debug_solver_query _ _ _ _ _ = ()
