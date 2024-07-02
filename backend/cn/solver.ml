@@ -17,6 +17,10 @@ module LCSet = Set.Make(LC)
 open Global
 open Pp
 
+
+
+
+
 (** Functions that pick names for things. *)
 module CN_Names = struct
   let var_name x            = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
@@ -1098,7 +1102,8 @@ let logger base lab =
 
 (** Make a new solver instance *)
 let make globals =
-  let cfg = { SMT.z3 with log = logger SMT.quiet_log "z3: " } in
+  let name = Printf.sprintf "z3(%.3f): " (Unix.gettimeofday ()) in
+  let cfg = { SMT.z3 with log = logger SMT.quiet_log name } in
   let s = { smt_solver  = SMT.new_solver cfg
           ; cur_frame   = ref (empty_solver_frame ())
           ; prev_frames = ref []
@@ -1119,7 +1124,8 @@ let model_evaluator solver mo =
   | None -> failwith "model is an atom"
   | Some defs ->
     let scfg = solver.smt_solver.config in
-    let cfg = { scfg with log = logger scfg.log ":model: " } in
+    let name = Printf.sprintf ":model:%.3f: " (Unix.gettimeofday ()) in
+    let cfg = { scfg with log = logger scfg.log name } in
     let s = SMT.new_solver cfg in
     let gs = solver.globals in
     let evaluator = { smt_solver = s
