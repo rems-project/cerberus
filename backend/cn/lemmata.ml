@@ -340,7 +340,7 @@ let it_adjust (global : Global.t) it =
             let x = f x in
             let y = f y in
             if IT.equal x y then IT.bool_ true loc else IT.eq__ x y loc
-        | IT.Binop (Impl, x, y) ->
+        | IT.Binop (Implies, x, y) ->
             let x = f x in
             let y = f y in
             if IT.is_false x || IT.is_true y then IT.bool_ true loc else IT.impl_ (x, y) loc
@@ -788,7 +788,7 @@ let it_to_coq loc global list_mono it =
        | LTPointer -> abinop (if enc_prop then "<" else "<?") x y
        | And -> abinop (if enc_prop then "/\\" else "&&") x y
        | Or -> abinop (if enc_prop then "\\/" else "||") x y
-       | Impl -> abinop (if enc_prop then "->" else "implb") x y
+       | Implies -> abinop (if enc_prop then "->" else "implb") x y
        | _ -> do_fail "arith op"
        end
     | IT.Match (x, cases) ->

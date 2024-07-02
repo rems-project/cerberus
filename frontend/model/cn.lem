@@ -53,6 +53,7 @@ type cn_binop =
   | CN_ge
   | CN_or
   | CN_and
+  | CN_implies
   | CN_map_get
 
 

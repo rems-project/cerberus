@@ -112,6 +112,7 @@ type token =
   | PIPE_EQ
   | COMMA
   | LBRACK_LBRACK
+  | EQ_EQ_GT
   (* | RBRACK_RBRACK *)
 
   (* NON-STD *)
@@ -182,6 +183,7 @@ type token =
   | CN_TRUSTED
   | CN_UNCHANGED
   | CN_WILD
+  | CN_IMPLIES
 
 
 let string_of_token = function
@@ -281,6 +283,7 @@ let string_of_token = function
   | MINUS_EQ -> "MINUS_EQ"
   | LT_LT_EQ -> "LT_LT_EQ"
   | GT_GT_EQ -> "GT_GT_EQ"
+  | EQ_EQ_GT -> "EQ_EQ_GT"
   | AMPERSAND_EQ -> "AMPERSAND_EQ"
   | CARET_EQ -> "CARET_EQ"
   | PIPE_EQ -> "PIPE_EQ"
@@ -348,4 +351,5 @@ let string_of_token = function
   | CN_TRUSTED -> "CN_TRUSTED"
   | CN_UNCHANGED -> "CN_UNCHANGED"
   | CN_WILD -> "CN_WILD"
+  | CN_IMPLIES -> "CN_IMPLIES"
 

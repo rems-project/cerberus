@@ -122,7 +122,7 @@ type asm_qualifier =
 %token LBRACK RBRACK LPAREN RPAREN (*LBRACE RBRACE*) DOT MINUS_GT
   PLUS_PLUS MINUS_MINUS AMPERSAND STAR PLUS MINUS TILDE BANG
   SLASH PERCENT LT_LT GT_GT LT GT LT_EQ GT_EQ EQ_EQ BANG_EQ CARET PIPE
-  AMPERSAND_AMPERSAND PIPE_PIPE
+  AMPERSAND_AMPERSAND PIPE_PIPE EQ_EQ_GT
   QUESTION COLON (*SEMICOLON*) ELLIPSIS EQ STAR_EQ SLASH_EQ PERCENT_EQ COLON_COLON
   PLUS_EQ MINUS_EQ LT_LT_EQ GT_GT_EQ AMPERSAND_EQ CARET_EQ PIPE_EQ COMMA
   LBRACK_LBRACK (*RBRACK_RBRACK*)
@@ -153,6 +153,7 @@ type asm_qualifier =
 %token CN_UNCHANGED CN_WILD CN_MATCH
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 %token <string * [`U|`I] * int> CN_CONSTANT
+%token CN_IMPLIES
 
 %token EOF
 
@@ -1978,10 +1979,18 @@ bool_and_expr:
 | e1= bool_and_expr AMPERSAND_AMPERSAND e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
-bool_or_expr:
+
+bool_implies_expr:
 | e = bool_and_expr
     { e }
-| e1= bool_or_expr PIPE_PIPE e2= bool_and_expr
+| e1= bool_and_expr CN_IMPLIES e2= bool_implies_expr (* implication arrow ==> *)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_implies, e1, e2))) }
+
+bool_or_expr:
+| e = bool_implies_expr
+    { e }
+| e1= bool_or_expr PIPE_PIPE e2= bool_implies_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
@@ -2071,6 +2080,9 @@ expr_without_let:
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
+| e1= list_expr EQ_EQ_GT e2= list_expr (* implication arrow ==> *)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_implies, e1, e2))) }
 | IF e1= delimited(LPAREN, expr, RPAREN) e2= delimited(LBRACE, expr, RBRACE) ELSE e3= delimited(LBRACE,expr,RBRACE)
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_ite (e1, e2, e3))) }
