@@ -273,23 +273,6 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
 
 (*** pure expression inference ************************************************)
 
-(*Determines if number is constant or not, used in check_pexpr on case | M_PEop (op, pe1, pe2) *)
-let rec is_const_num = function
-  | IT.IT (IT.Const _, _, _) -> true
-  | IT.IT (IT.Binop (binop, x, y), _, _) -> is_const_num x && is_const_num y &&
-    begin match binop with
-    | IT.Add 
-    | IT.Sub
-    | IT.Mul
-    | IT.Div
-    | IT.Exp
-    | IT.Rem
-    | IT.Mod
-    -> true
-    | _ -> false
-    end
-  | _ -> false
-
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
 let is_representable_integer arg ity =
   let here = Locations.other __FUNCTION__ in
@@ -551,22 +534,22 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
       let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
          check_pexpr pe1 (fun v1 ->
          check_pexpr pe2 (fun v2 ->
-         k (IT.add_ (v1, v2) loc)))
+         k (add_ (v1, v2) loc)))
      | OpSub ->
          let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
          check_pexpr pe1 (fun v1 ->
          check_pexpr pe2 (fun v2 ->
-         k (IT.sub_ (v1, v2) loc)))
+         k (sub_ (v1, v2) loc)))
      | OpMul ->
          let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
          check_pexpr pe1 (fun v1 ->
          check_pexpr pe2 (fun v2 ->
-         k (if is_const_num v1 || is_const_num v2 then IT.mul_ (v1, v2) loc else IT.mul_no_smt_ (v1, v2) loc)))
+         k (mul_ (v1, v2) loc)))
      | OpDiv ->
          let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
          check_pexpr pe1 (fun v1 ->
          check_pexpr pe2 (fun v2 ->
-         k (if is_const_num v2 then IT.div_ (v1, v2) loc else IT.div_no_smt_ (v1, v2) loc)))
+         k (div_ (v1, v2) loc)))
      | OpEq ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
         let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
