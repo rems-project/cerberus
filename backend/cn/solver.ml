@@ -29,11 +29,11 @@ module CN_Names = struct
 
   let struct_name x         = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
   let struct_con_name x     = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
-  let struct_field_name x   = Id.pp_string x ^ "_fld"
+  let struct_field_name x   = Id.pp_string x ^ "struct_fld"
 
   let datatype_name x       = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
   let datatype_con_name x   = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
-  let datatype_field_name x = Id.pp_string x ^ "_fld"
+  let datatype_field_name x = Id.pp_string x ^ "data_fld"
 end
 
 
