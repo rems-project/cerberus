@@ -15,7 +15,7 @@ module StringSet = Set.Make(String)
 
 let random_seed = ref 1
 let log_to_temp = ref false
-let log_dir     = ref (string option)
+let log_dir     = ref (None : string option)
 let trace_all_queries = ref false
 let solver_path = ref (None : string option)
 let solver_type = ref (None : Simple_smt.solver_extensions option)
