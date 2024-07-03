@@ -581,15 +581,28 @@ let get_model s =
       in
 
       (* Workaround for a z3 bug #7268: rearrange defs in dep. order *)
-      let rec free vars x =
+      let add_binder bound x =
             match x with
-            | Sexp.Atom a  -> a :: vars
-            | Sexp.List xs -> List.fold_left free vars xs
+            | Sexp.List [Sexp.Atom v; _ty_or_term ] -> StrSet.add v bound
+            | _ -> raise (UnexpectedSolverResponse x)
+      in
+      let add_bound = List.fold_left add_binder in
+
+      let rec free bound vars x =
+            match x with
+            | Sexp.Atom a  -> if StrSet.mem a bound then vars else a :: vars
+            | Sexp.List [ Sexp.Atom q; Sexp.List vs; body ]
+              when String.equal q "forall"
+                || String.equal q "exist"
+                || String.equal q "let" -> free (add_bound bound vs) vars body
+            | Sexp.List xs -> List.fold_left (free bound) vars xs
       in
       let check_def x =
             match x with
-            | Sexp.List [ _def_fun; Sexp.Atom name; _args; _ret; def ] ->
-                (name, free [] def, x)    (* XXX: args should be bound? *)
+            | Sexp.List
+                [ _def_fun; Sexp.Atom name; Sexp.List args; _ret; def ] ->
+                let bound = add_bound StrSet.empty args in
+                (name, free bound [] def, x)
             | _ -> raise (UnexpectedSolverResponse ans)
       in
       match ans with
