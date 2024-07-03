@@ -791,7 +791,7 @@ module Translate = struct
          | LEPointer -> adj ()
          | And -> Z3.Boolean.mk_and context (map term [t1;t2])
          | Or -> Z3.Boolean.mk_or context (map term [t1;t2])
-         | Impl -> Z3.Boolean.mk_implies context (term t1) (term t2)
+         | Implies -> Z3.Boolean.mk_implies context (term t1) (term t2)
          end
       | ITE (t1, t2, t3) -> Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EachI _ -> adj ()

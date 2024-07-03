@@ -59,7 +59,7 @@ let term_with_model_name nm cfg x =
 let bool_subterms1 t = match IT.term t with
   | IT.Binop (And, it,it') -> [it;it']
   | IT.Binop (Or, it,it') -> [it;it']
-  | IT.Binop (Impl, x, y) -> [x; y]
+  | IT.Binop (Implies, x, y) -> [x; y]
   | IT.Unop (Not, x) -> [x]
   | IT.Binop (EQ, x, y) -> if BT.equal (IT.bt x) BT.Bool
       then [x; y] else []

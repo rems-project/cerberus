@@ -551,10 +551,10 @@ module WIT = struct
             let@ t = check loc Bool t in
             let@ t' = check loc Bool t' in
             return (IT (Binop (Or, t, t'), Bool, loc))
-         | Impl ->
+         | Implies ->
             let@ t = check loc Bool t in
             let@ t' = check loc Bool t' in
-            return (IT (Binop (Impl, t, t'), Bool, loc))
+            return (IT (Binop (Implies, t, t'), Bool, loc))
          end
       | ITE (t,t',t'') ->
          let@ t = check loc Bool t in

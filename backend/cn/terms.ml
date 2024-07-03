@@ -28,7 +28,7 @@ type unop =
 type binop =
   | And
   | Or
-  | Impl
+  | Implies
   | Add
   | Sub
   | Mul
@@ -189,8 +189,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.document -> Pp.document) -> 
           mparens (flow (break_op (ampersand ^^ ampersand)) [aux true it1; aux true it2])
        | Or ->
           mparens (flow (break_op (bar ^^ bar)) [aux true it1; aux true it2])
-       | Impl ->
-          mparens (flow (break_op (minus ^^ rangle ())) [aux true it1; aux true it2])
+       | Implies ->
+         c_app !^"implies" [aux true it1; aux true it2]
        | Add ->
           mparens (flow (break_op plus) [aux true it1; aux true it2])
        | Sub ->
@@ -393,7 +393,7 @@ let rec dtree (IT (it_, bt, loc)) =
   | Binop (op, t1, t2) ->
      Dnode (pp_ctor (show_binop op), [dtree t1; dtree t2])
   | ITE (t1, t2, t3) ->
-     Dnode (pp_ctor "Impl", [dtree t1; dtree t2; dtree t3])
+     Dnode (pp_ctor "Implies", [dtree t1; dtree t2; dtree t3])
   | EachI ((starti,(i,_),endi), body) ->
      Dnode (pp_ctor "EachI", [
            Dleaf !^(string_of_int starti);
