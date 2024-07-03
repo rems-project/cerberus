@@ -14,6 +14,7 @@ module IntWithHash = struct  (* For compatability with older ocamls *)
 end
 module Int_Table = Hashtbl.Make(IntWithHash)
 module LCSet = Set.Make(LC)
+module CTypeMap = Map.Make(Sctypes)
 open Global
 open Pp
 
@@ -60,12 +61,16 @@ type solver_frame =
 
   ; bt_uninterpreted: (SMT.sexp BT_Table.t) Int_Table.t
     (** Uninterpreted constants, indexed by base type. *)
+
+  ; mutable ctypes: int CTypeMap.t
+    (** Declarations for C types. Each C type is assigned a unique integer. *)
   }
 
 let empty_solver_frame () =
   { commands          = []
   ; uninterpreted     = SymMap.empty
   ; bt_uninterpreted  = Int_Table.create 50
+  ; ctypes            = CTypeMap.empty
   }
 
 let copy_solver_frame f = { f with commands = f.commands }
@@ -101,6 +106,31 @@ end
 
 (** Lookup something in one of the existing frames *)
 let search_frames s f = List.find_map f (!(s.cur_frame) :: !(s.prev_frames))
+
+(** Lookup the `int` corresponding to a C type in the current stack.
+    If it is not found, add it to the current frame, and return the new int. *)
+let find_c_type s ty =
+  let rec search count frames =
+            match frames with
+            | f :: more ->
+              begin match CTypeMap.find_opt ty f.ctypes with
+              | Some n -> n
+              | None   -> search (CTypeMap.cardinal f.ctypes + count) more
+              end
+            | [] ->
+              let f = !(s.cur_frame) in
+              f.ctypes <- CTypeMap.add ty count f.ctypes;
+              count
+  in search 0 (!(s.cur_frame) :: !(s.prev_frames))
+
+(** Compute a table mapping ints to C types.  We use this to map SMT results
+    back to terms. *)
+let get_ctype_table s =
+  let table         = Int_Table.create 50 in
+  let add_entry t n = Int_Table.add table n t in
+  let do_frame f    = CTypeMap.iter add_entry f.ctypes in
+  List.iter do_frame (!(s.cur_frame) :: !(s.prev_frames));
+  table
 
 
 (** Start a new scope. *)
@@ -302,7 +332,7 @@ let rec translate_base_type = function
   | Real            -> SMT.t_real
   | Loc             -> CN_Pointer.t
   | Alloc_id        -> CN_AllocId.t
-  | CType           -> CN_Tuple.t []
+  | CType           -> SMT.t_int
   | List bt         -> CN_List.t (translate_base_type bt)
   | Set bt          -> SMT.t_set (translate_base_type bt)
   | Map (k, v)      -> SMT.t_array (translate_base_type k)
@@ -321,9 +351,10 @@ let rec translate_base_type = function
 
 (** Translate an SMT value to a CN term *)
 let rec
-  get_ivalue gs bt sexp = IT (get_value gs bt sexp, bt, Cerb_location.unknown)
+  get_ivalue gs ctys bt sexp =
+    IT (get_value gs ctys bt sexp, bt, Cerb_location.unknown)
 and
-  get_value gs bt (sexp: SMT.sexp) =
+  get_value gs ctys bt (sexp: SMT.sexp) =
   match bt with
   | Unit            -> Const Unit
   | Bool            -> Const (Bool (SMT.to_bool sexp))
@@ -339,7 +370,7 @@ and
       begin match SMT.to_con sexp with
       | (_con, [sbase;saddr]) ->
         let base = CN_AllocId.from_sexp sbase in
-        let addr = match get_value gs Memory.intptr_bt saddr with
+        let addr = match get_value gs ctys Memory.intptr_bt saddr with
                    | Const (Bits (_,z)) -> z
                    | _ -> failwith "Pointer value is not bits"
         in Const (if Z.equal base Z.zero && Z.equal addr Z.zero
@@ -351,13 +382,17 @@ and
 
   | Alloc_id        -> Const (Alloc_id (CN_AllocId.from_sexp sexp))
 
-  | CType           -> Const (Default CType)
+  | CType ->
+      begin
+        try Const (CType_const (Int_Table.find ctys (Z.to_int (SMT.to_z sexp))))
+        with _ -> Const (Default bt)
+      end
 
   | List elT ->
     begin match SMT.to_con sexp with
     | (con,[])    when String.equal con CN_List.nil_name -> Nil elT
     | (con,[h;t]) when String.equal con CN_List.cons_name ->
-        Cons (get_ivalue gs elT h, get_ivalue gs bt t)
+        Cons (get_ivalue gs ctys elT h, get_ivalue gs ctys bt t)
     | _ -> failwith "List"
     end
 
@@ -365,22 +400,22 @@ and
 
   | Map (kt, vt) ->
     let (els,dflt) = SMT.to_array sexp in
-    let base = MapConst (kt, get_ivalue gs vt dflt) in
+    let base = MapConst (kt, get_ivalue gs ctys vt dflt) in
     let add_el (k,v) a = MapSet ( IT (a, bt, Cerb_location.unknown)
-                                , get_ivalue gs kt k
-                                , get_ivalue gs vt v
+                                , get_ivalue gs ctys kt k
+                                , get_ivalue gs ctys vt v
                                 ) in
     List.fold_right add_el els base
 
   | Tuple bts ->
     let (_con,vals) = SMT.to_con sexp in
-    Tuple (List.map2 (get_ivalue gs) bts vals)
+    Tuple (List.map2 (get_ivalue gs ctys) bts vals)
 
   | Struct tag ->
     let (_con,vals) = SMT.to_con sexp in
     let decl = SymMap.find tag gs.struct_decls in
     let fields = List.filter_map (fun x -> x.Memory.member_or_padding) decl in
-    let mk_field (l,t) v = (l,get_ivalue gs (Memory.bt_of_sct t) v) in
+    let mk_field (l,t) v = (l,get_ivalue gs ctys (Memory.bt_of_sct t) v) in
     Struct (tag, List.map2 mk_field fields vals)
 
   | Datatype tag ->
@@ -388,7 +423,7 @@ and
     let cons = (SymMap.find tag gs.datatypes).dt_constrs in
     let do_con c =
           let fields = (SymMap.find c gs.datatype_constrs).c_params in
-          let mk_field (l,t) v = (l, get_ivalue gs t v) in
+          let mk_field (l,t) v = (l, get_ivalue gs ctys t v) in
           Constructor (c, List.map2 mk_field fields vals) in
     let try_con c =
           if con == CN_Names.datatype_con_name c then Some (do_con c) else None
@@ -400,7 +435,7 @@ and
 
   | Record members  ->
     let (_con,vals) = SMT.to_con sexp in
-    let mk_field (l,bt) e = (l, get_ivalue gs bt e) in
+    let mk_field (l,bt) e = (l, get_ivalue gs ctys bt e) in
     Record (List.map2 mk_field members vals)
 
 
@@ -428,7 +463,7 @@ let rec translate_const s co =
   | Null ->
     translate_const s (Pointer { alloc_id = Z.of_int 0; addr = Z.of_int 0 })
 
-  | CType_const _ -> SMT.atom (CN_Tuple.name 0)
+  | CType_const ct -> SMT.int_k (find_c_type s ct)
 
   | Default t ->
     declare_bt_uninterpreted s CN_Constant.default t [] (translate_base_type t)
@@ -1204,8 +1239,9 @@ let model_evaluator solver mo =
                     ; prev_frames = ref (List.map copy_solver_frame
                                          ( (!(solver.cur_frame) ::
                                            !(solver.prev_frames)) ))
-                      (* we keep the prev_frames because things that were
+                      (* We keep the prev_frames because things that were
                          declared, would now be defined by the model.
+                         Also, we need the infromation about the C type mapping.
                        *)
                     ; name_seed = solver.name_seed
                     ; globals = gs
@@ -1220,7 +1256,8 @@ let model_evaluator solver mo =
       | SMT.Sat ->
           let res = SMT.get_expr s inp in
           pop evaluator 1;
-          Some (get_ivalue gs (basetype e) res)
+          let ctys = get_ctype_table evaluator in
+          Some (get_ivalue gs ctys (basetype e) res)
       | _ ->
           pop evaluator 1;
           None
