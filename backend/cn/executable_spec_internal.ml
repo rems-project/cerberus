@@ -94,6 +94,7 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
 
   let in_stmt = List.map (fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
   let block_ownership_stmts = List.map (fun (loc, ss) -> (loc, generate_ail_stat_strs ~with_newline:true ([], ss))) block_ownership_injs in 
+  let block_ownership_stmts = List.map (fun (loc, strs) -> (loc, [String.concat "\n" strs])) block_ownership_stmts in 
   ([(instrumentation.fn, (pre_str, post_str))], in_stmt @ block_ownership_stmts, ail_executable_spec.ownership_ctypes)
 
 
@@ -179,7 +180,7 @@ let generate_cn_versions_of_structs c_structs =
   "\n/* CN VERSIONS OF C STRUCTS */\n\n" ^ generate_str_from_ail_structs (List.concat ail_structs)
 
 let generate_struct_injs (sigm: CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
-  let generate_struct_inj (((sym, (loc, _, tag_def)) as def) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) =
+  let generate_struct_inj (((_, (loc, _, tag_def)) as def) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) =
     match tag_def with
     | C.StructDef _ ->
       let c_struct_str = generate_str_from_ail_struct def in
@@ -197,7 +198,7 @@ let generate_struct_injs (sigm: CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) 
       in
       let str_list = [c_struct_str; cn_struct_str; prototypes_str] in
       (* let filename = Cerb_location.get_filename loc in  *)
-      [(loc, (sym, str_list))]
+      [(loc, str_list)]
     | C.UnionDef _ -> []
   in
   let struct_injs = List.map generate_struct_inj sigm.tag_definitions in

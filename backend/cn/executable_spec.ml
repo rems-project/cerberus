@@ -14,6 +14,51 @@ let rec group_toplevel_defs new_list = function
         ) new_list in
         group_toplevel_defs ((loc, toplevel_strs @ strs) :: non_matching_elems) xs
 
+let rec open_auxilliary_files source_filename prefix included_filenames already_opened_list = match included_filenames with
+| [] -> []
+| fn :: fns ->
+    begin match fn with
+    | Some fn' ->
+      if String.equal fn' source_filename || List.mem String.equal fn' already_opened_list then [] else
+      let fn_list = String.split_on_char '/' fn' in
+      let output_fn = List.nth fn_list (List.length fn_list - 1) in
+      let output_fn_with_prefix = prefix ^ output_fn in
+      if Sys.file_exists output_fn_with_prefix then
+        (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;
+        open_auxilliary_files source_filename prefix fns (fn' :: already_opened_list))
+      else
+        (Printf.printf "REACHED FILENAME: %s\n" output_fn_with_prefix;
+        let output_channel = Stdlib.open_out output_fn_with_prefix in
+        (fn', output_channel) :: open_auxilliary_files source_filename prefix fns (fn' :: already_opened_list))
+    | None -> []
+    end
+
+let filter_injs_by_filename inj_pairs fn =
+  List.filter (fun (loc, _) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) inj_pairs
+
+let rec inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog injs_with_filenames = function
+  | [] -> ()
+  | (fn', oc') :: xs ->
+    let injs_with_syms = filter_injs_by_filename injs_with_filenames fn' in
+    let injs_for_fn' = injs_with_syms in 
+    (* let injs_for_fn' = List.map (fun (loc, (_, strs)) -> (loc, strs)) injs_with_syms in *)
+    Stdlib.output_string oc' cn_utils_header;
+    begin match
+      Source_injection.(output_injections oc'
+        { filename=fn'; program= ail_prog
+        ; pre_post=[]
+        ; in_stmt=injs_for_fn'}
+      )
+    with
+    | Ok () ->
+        ()
+    | Error str ->
+        (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+        prerr_endline str
+    end;
+    Stdlib.close_out oc';
+    inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog injs_with_filenames xs
+
 open Executable_spec_internal
 
 let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
@@ -92,66 +137,25 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   Stdlib.output_string oc ownership_function_decls;
   Stdlib.output_string oc "\n";
 
-  let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
-
-  let filter_injs_by_filename struct_inj_pairs fn =
-    List.filter (fun (loc, _inj) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) struct_inj_pairs
-  in
-  let source_file_struct_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames filename in
-  let source_file_struct_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) source_file_struct_injs_with_syms in
-
-  let included_filenames = List.map (fun (loc, _inj) -> Cerb_location.get_filename loc) struct_injs_with_filenames in
-  let rec open_auxilliary_files included_filenames already_opened_list = match included_filenames with
-    | [] -> []
-    | fn :: fns ->
-        begin match fn with
-        | Some fn' ->
-          if String.equal fn' filename || List.mem String.equal fn' already_opened_list then [] else
-          let fn_list = String.split_on_char '/' fn' in
-          let output_fn = List.nth fn_list (List.length fn_list - 1) in
-          let output_fn_with_prefix = prefix ^ output_fn in
-          if Sys.file_exists output_fn_with_prefix then
-            (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;
-            open_auxilliary_files fns (fn' :: already_opened_list))
-          else
-            (Printf.printf "REACHED FILENAME: %s\n" output_fn_with_prefix;
-            let output_channel = Stdlib.open_out output_fn_with_prefix in
-            (fn', output_channel) :: open_auxilliary_files fns (fn' :: already_opened_list))
-        | None -> []
-        end
-  in
-
-
-
-  let fns_and_ocs = open_auxilliary_files included_filenames [] in
-  let rec inject_structs_in_header_files = function
-  | [] -> ()
-  | (fn', oc') :: xs ->
-    let header_file_injs_with_syms = filter_injs_by_filename struct_injs_with_filenames fn' in
-    let header_file_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) header_file_injs_with_syms in
-    Stdlib.output_string oc' cn_utils_header;
-    begin match
-      Source_injection.(output_injections oc'
-        { filename=fn'; program= ail_prog
-        ; pre_post=[]
-        ; in_stmt=header_file_injs}
-      )
-    with
-    | Ok () ->
-        ()
-    | Error str ->
-        (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
-        prerr_endline str
-    end;
-    Stdlib.close_out oc';
-    inject_structs_in_header_files xs
-  in
-
+  
+  
   let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
   let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
-
+  
   
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
+  
+  let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
+
+  let in_stmt_injs_with_filenames = toplevel_locs_and_defs @ struct_injs_with_filenames in 
+  (* Treat source file separately from header files *)
+  let source_file_in_stmt_injs_with_syms = filter_injs_by_filename in_stmt_injs_with_filenames filename in
+  (* let source_file_in_stmt_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) source_file_in_stmt_injs_with_syms in *)
+  let source_file_in_stmt_injs = source_file_in_stmt_injs_with_syms in
+
+  let included_filenames = List.map (fun (loc, _) -> Cerb_location.get_filename loc) in_stmt_injs_with_filenames in
+
+  let fns_and_ocs = open_auxilliary_files filename prefix included_filenames [] in
 
   let pre_post_pairs = if with_ownership_checking then 
     let global_ownership_init_pair = generate_ownership_global_assignments sigm in 
@@ -165,7 +169,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
     { filename; program= ail_prog
     ; pre_post=pre_post_pairs
     (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
-    ; in_stmt=(executable_spec.in_stmt @ source_file_struct_injs @ toplevel_locs_and_defs)}
+    ; in_stmt=(executable_spec.in_stmt @ source_file_in_stmt_injs)}
   )
 with
 | Ok () ->
@@ -174,4 +178,4 @@ with
     (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
     prerr_endline str
 end;
-inject_structs_in_header_files fns_and_ocs
+inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog in_stmt_injs_with_filenames fns_and_ocs
