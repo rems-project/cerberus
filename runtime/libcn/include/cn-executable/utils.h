@@ -389,7 +389,8 @@ CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer)
 cn_pointer *convert_to_cn_pointer(void *ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
 
-// Ownership
+/* OWNERSHIP */
+
 enum OWNERSHIP {
     GET,
     PUT
@@ -405,6 +406,15 @@ void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownersh
 void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
 
 /* C ownership checking */
-void c_map_local_to_stack_depth(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
-void c_remove_local_footprint(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);
+void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
+void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);
+
+#define c_concat_with_mapping_stat(STAT, CTYPE, VAR_NAME, GHOST_STATE, STACK_DEPTH)\
+    STAT; c_add_local_to_ghost_state((uintptr_t) &VAR_NAME, GHOST_STATE, sizeof(CTYPE), STACK_DEPTH);
+
+#define c_declare_and_map_local(CTYPE, VAR_NAME)\
+    c_concat_with_mapping_stat(CTYPE VAR_NAME, CTYPE, VAR_NAME)
+
+#define c_declare_init_and_map_local(CTYPE, VAR_NAME, EXPR)\
+    c_concat_with_mapping_stat(CTYPE VAR_NAME = EXPR, CTYPE, VAR_NAME)
 

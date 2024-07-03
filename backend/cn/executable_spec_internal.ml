@@ -15,7 +15,7 @@ type executable_spec = {
     ownership_ctypes: CF.Ctype.ctype list;
 }
 
-let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list)) =
+let generate_ail_stat_strs ?(with_newline=false) (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list)) =
   let is_assert_true = function
     | A.(AilSexpr (AnnotatedExpression (_, _, _, AilEassert expr))) ->
       (match (rm_expr expr) with
@@ -27,7 +27,9 @@ let generate_ail_stat_strs (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.stat
 
   let ail_stats_ = List.filter (fun s -> not (is_assert_true s)) ail_stats_ in
   let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true ~bs (mk_stmt s)) ail_stats_ in
-  let doc = List.map (fun d -> d ^^ PPrint.hardline) doc in
+  let doc = List.map (fun d ->
+    let newline = if with_newline then PPrint.hardline else PPrint.empty in
+    newline ^^ d ^^ PPrint.hardline) doc in
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
@@ -68,17 +70,18 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
 
   (* C ownership checking *)
-  let (pre_str, post_str) = 
+  let ((pre_str, post_str), block_ownership_injs) = 
   if with_ownership_checking then 
-    (let fn_ownership_stats_opt = Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm in
+    (let (fn_ownership_stats_opt, block_ownership_injs) = Ownership_exec.get_c_fn_local_ownership_checking_injs instrumentation.fn sigm in
     match fn_ownership_stats_opt with 
       | Some (entry_ownership_stats, exit_ownership_stats) -> 
          let entry_ownership_str = generate_ail_stat_strs ([], entry_ownership_stats) in 
          let exit_ownership_str = generate_ail_stat_strs ([], exit_ownership_stats) in 
-         (pre_str @ ("\n\t/* C OWNERSHIP */\n\n" :: entry_ownership_str), post_str @ ("\n\t/* C OWNERSHIP */\n\n" :: exit_ownership_str))
-      | None -> (pre_str, post_str))
+         let pre_post_pair = (pre_str @ ("\n\t/* C OWNERSHIP */\n\n" :: entry_ownership_str), post_str @ ("\n\t/* C OWNERSHIP */\n\n" :: exit_ownership_str)) in 
+         (pre_post_pair, block_ownership_injs)
+      | None -> ((pre_str, post_str), []))
   else 
-    (pre_str, post_str)
+    ((pre_str, post_str), [])
   in 
 
   (* Needed for extracting correct location for CN statement injection *)
@@ -90,7 +93,8 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
 
 
   let in_stmt = List.map (fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
-  ([(instrumentation.fn, (pre_str, post_str))], in_stmt, ail_executable_spec.ownership_ctypes)
+  let block_ownership_stmts = List.map (fun (loc, ss) -> (loc, generate_ail_stat_strs ~with_newline:true ([], ss))) block_ownership_injs in 
+  ([(instrumentation.fn, (pre_str, post_str))], in_stmt @ block_ownership_stmts, ail_executable_spec.ownership_ctypes)
 
 
 

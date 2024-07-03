@@ -104,6 +104,10 @@ let str_of_it_ = function
 let create_binding sym ctype = 
     A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
 
+let find_ctype_from_bindings bindings sym = 
+  let (_, (_, _, _, ctype)) = List.find (fun (sym', _) -> Sym.equal sym sym') bindings in 
+  ctype
+
 (* Decl_object  of (storageDuration * bool) * maybe alignment * qualifiers * ctype*)
 let create_decl_object ctype = 
   A.(Decl_object ((Automatic, false), None, empty_qualifiers, ctype))
