@@ -1106,18 +1106,18 @@ let logger lab =
   let log_id = !log_counter in
   log_counter := log_id + 1;
   let get_file suf =
-        let dir = match !log_dir with
-                  | Some dir ->
-                    if not (Sys.file_exists dir) then
-                      begin Sys.mkdir dir 0o755; dir end
-                    else dir
-                  | None ->
-                    let d = Filename.temp_dir "cn_" "" in
-                    log_dir := Some d;
-                    d
+        let dir =
+              match !log_dir with
+              | Some dir -> dir
+              | None ->
+                let nm = Printf.sprintf "cn_%.3f" (Unix.gettimeofday ()) in
+                let d  = Filename.concat (Filename.get_temp_dir_name ()) nm in
+                log_dir := Some d;
+                d
         in
+        if not (Sys.file_exists dir) then Sys.mkdir dir 0o700 else ();
         open_out (Filename.concat dir
-                          (lab ^ suf ^ string_of_int log_id ^ ".smt"))
+                                  (lab ^ suf ^ string_of_int log_id ^ ".smt"))
   in
   if !log_to_temp then
     let out = get_file "_send_" in
