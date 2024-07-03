@@ -255,7 +255,7 @@ module CN_Pointer = struct
     )
 
   (** Make a pointer value *)
-  let con base offset = SMT.app_ name [base;offset]
+  let con alloc addr  = SMT.app_ name [alloc;addr]
 
   (** Get the allocation id of a pointer *)
   let get_alloc pt    = SMT.app_ alloc_name [pt]
