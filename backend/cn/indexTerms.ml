@@ -453,6 +453,10 @@ let is_or = function
   | IT (Binop (Or, it, it'), _, _) -> Some (it, it')
   | _ -> None
 
+let is_implies = function
+  | IT (Binop (Implies, it, it'), _, _) -> Some (it, it')
+  | _ -> None
+
 let is_not = function
   | IT (Unop (Not, it), _, _) -> Some it
   | _ -> None
@@ -533,7 +537,7 @@ let and2_ (it, it') loc = IT (Binop (And, it, it'), BT.Bool, loc)
 let or2_ (it, it') loc = IT (Binop (Or, it, it'), BT.Bool, loc)
 let and_ its loc = vargs_binop (bool_ true loc) (Tools.curry (fun p -> and2_ p loc)) its
 let or_ its loc = vargs_binop (bool_ false loc) (Tools.curry (fun p -> or2_ p loc)) its
-let impl_ (it, it') loc = IT (Binop (Impl, it, it'), BT.Bool, loc)
+let impl_ (it, it') loc = IT (Binop (Implies, it, it'), BT.Bool, loc)
 let not_ it loc = IT (Unop (Not, it), bt it, loc)
 let ite_ (it, it', it'') loc = IT (ITE (it, it', it''), bt it', loc)
 let eq_ (it, it') loc =
@@ -558,7 +562,7 @@ let let_ ((nm, x), y) loc = IT (Let ((nm, x), y), basetype y, loc)
 (*   match term it with *)
 (*   | And xs -> or_ (List.map not_ xs) *)
 (*   | Or xs -> and_ (List.map not_ xs) *)
-(*   | Impl (x, y) -> and_ [x; not_ y] *)
+(*   | Implies (x, y) -> and_ [x; not_ y] *)
 (*   | _ -> not_ it *)
 
 

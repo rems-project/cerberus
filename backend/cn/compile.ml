@@ -568,6 +568,8 @@ module EffectfulTranslation = struct
         return (IT (Binop (Or, e1, e2), SBT.Bool, loc))
     | CN_and, SBT.Bool ->
         return (IT (Binop (And, e1, e2), SBT.Bool, loc))
+    | CN_implies, SBT.Bool ->
+        return (IT (Binop (Implies, e1, e2), SBT.Bool, loc))
     | CN_map_get, _ ->
        let@ rbt = match IT.bt e1 with
          | Map (_, rbt) -> return rbt
