@@ -323,7 +323,7 @@ let cn_to_ail_binop_internal bt1 bt2 =
   | SetDifference -> failwith "TODO cn_to_ail_binop: SetDifference"
   | SetMember -> failwith "TODO cn_to_ail_binop: SetMember"
   | Subset  -> failwith "TODO cn_to_ail_binop: Subset"
-  | Impl -> failwith "TODO cn_to_ail_binop: Impl"
+  | Implies -> failwith "TODO cn_to_ail_binop: Impl"
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
 
@@ -1449,7 +1449,7 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> (
           cn_to_ail_expr_internal dts globals it d
         | LogicalConstraints.Forall ((sym, bt), it) -> 
           let (cond_it, t) = match IT.term it with 
-            | Binop (Impl, it, it') -> (it, it')
+            | Binop (Implies, it, it') -> (it, it')
             | _ -> failwith "Incorrect form of forall logical constraint term"
         in
 

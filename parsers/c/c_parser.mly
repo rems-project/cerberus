@@ -151,7 +151,7 @@ type asm_qualifier =
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
 %token CN_UNCHANGED CN_WILD CN_MATCH
-%token CN_GOOD CN_NULL CN_TRUE CN_FALSE
+%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES
 %token <string * [`U|`I] * int> CN_CONSTANT
 
 %token EOF
@@ -1978,10 +1978,18 @@ bool_and_expr:
 | e1= bool_and_expr AMPERSAND_AMPERSAND e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
-bool_or_expr:
+
+bool_implies_expr:
 | e = bool_and_expr
     { e }
-| e1= bool_or_expr PIPE_PIPE e2= bool_and_expr
+| e1= bool_and_expr CN_IMPLIES e2= bool_implies_expr (* implication arrow ==> *)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_implies, e1, e2))) }
+
+bool_or_expr:
+| e = bool_implies_expr
+    { e }
+| e1= bool_or_expr PIPE_PIPE e2= bool_implies_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 

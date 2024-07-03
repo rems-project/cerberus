@@ -103,6 +103,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_ge -> P.rangle ^^ P.equals
     | CN_or -> P.bar ^^ P.bar
     | CN_and -> P.ampersand ^^ P.ampersand
+    | CN_implies -> P.equals ^^ P.equals ^^ P.rangle
     | CN_map_get -> P.string "CN_map_get"
 
   let pp_cn_c_kind = function

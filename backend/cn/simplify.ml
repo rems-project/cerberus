@@ -378,7 +378,7 @@ module IndexTerms = struct
       | _ when IT.equal it1 it2 -> it1
       | _ -> IT (Binop (Or, it1, it2), the_bt, the_loc)
       end
-    | Binop (Impl, a, b) ->
+    | Binop (Implies, a, b) ->
        let a = aux a in
        let b = aux b in
        if IT.equal a b then IT (Const (Bool true), the_bt, the_loc)
@@ -393,7 +393,7 @@ module IndexTerms = struct
        | _, IT (Const (Bool false), _, _) ->
           not_ a the_loc
        | _ ->
-          IT (Binop (Impl, a, b), the_bt, the_loc)
+          IT (Binop (Implies, a, b), the_bt, the_loc)
        end
     | Unop (op, a) ->
        let a = aux a in
