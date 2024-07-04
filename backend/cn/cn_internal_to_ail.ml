@@ -833,9 +833,12 @@ let rec cn_to_ail_expr_aux_internal
     dest d ((List.concat bs) @ [res_binding], [ail_decl; tag_assign] @ (List.concat ss) @ constr_allocation_stat @ assign_stats, mk_expr res_ident)
 
 
-  | MemberShift (_, tag, member) -> 
-    let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
-    dest d ([], [], mk_expr ail_expr_)
+  | MemberShift (it, tag, member) -> 
+    let membershift_macro_sym = Sym.fresh_pretty "cn_member_shift" in 
+    let (bs, ss, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack in 
+    let ail_fcall = A.(AilEcall (mk_expr (AilEident membershift_macro_sym), [e; mk_expr (AilEident tag); mk_expr (AilEident (create_sym_from_id member))])) in
+    (* let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in *)
+    dest d (bs, ss, mk_expr ail_fcall)
 
   | ArrayShift params ->
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals params.base PassBack in

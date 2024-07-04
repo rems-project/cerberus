@@ -276,6 +276,18 @@ static inline int ipow(int base, int exp)
         return res;\
     }
 
+/* 
+
+member_shift<hyp_pool>(pool_pointer, free_area);
+
+pool_pointer
+
+*/
+
+#define cn_member_shift(cn_ptr, tag, member_name)\
+  convert_to_cn_pointer(&(((struct tag *) cn_ptr->ptr)->member_name))
+
+
 #define CN_GEN_INCREMENT(CNTYPE)\
     static inline CNTYPE *CNTYPE##_increment(CNTYPE *i) {\
         *(i->val) = *(i->val) + 1;\
@@ -315,6 +327,8 @@ static inline int ipow(int base, int exp)
         *(res->val) = (CTYPE2) *(i->val);\
         return res;\
     }
+
+
 
 #define CN_GEN_CASTS_INNER(CTYPE, CNTYPE)\
     CN_GEN_CAST_INT_TYPES(cn_bits_i8, CTYPE, CNTYPE)\
@@ -358,6 +372,7 @@ static inline int ipow(int base, int exp)
    CN_GEN_MIN(CNTYPE)\
    CN_GEN_MAX(CNTYPE)\
    CN_GEN_MOD(CTYPE, CNTYPE)\
+   CN_GEN_XOR(CTYPE, CNTYPE)\
    CN_GEN_POW(CTYPE, CNTYPE)\
    CN_GEN_INCREMENT(CNTYPE)\
    CN_GEN_PTR_ADD(CNTYPE)\
@@ -388,6 +403,7 @@ CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer)
 
 cn_pointer *convert_to_cn_pointer(void *ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
+cn_pointer *cast_cn_pointer_to_cn_pointer(cn_pointer *p);
 
 /* OWNERSHIP */
 

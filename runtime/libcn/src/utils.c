@@ -34,9 +34,13 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 
 void cn_assert(cn_bool *cn_b, struct cn_error_message_info *error_msg_info) {
     if (!(cn_b->val)) {
-        printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info->function_name, error_msg_info->file_name, error_msg_info->line_number);
-        if (error_msg_info->cn_source_loc) {
-            printf("CN source location: \n%s\n", error_msg_info->cn_source_loc);
+        if (error_msg_info) {
+            printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info->function_name, error_msg_info->file_name, error_msg_info->line_number);
+            if (error_msg_info->cn_source_loc) {
+                printf("CN source location: \n%s\n", error_msg_info->cn_source_loc);
+            }
+        } else {
+            printf("Assertion failed: C memory access");
         }
         cn_exit();
     }
@@ -192,6 +196,10 @@ cn_bool *cn_pointer_lt(cn_pointer *p1, cn_pointer *p2) {
 
 cn_bool *cn_pointer_le(cn_pointer *p1, cn_pointer *p2) {
     return convert_to_cn_bool(p1->ptr <= p2->ptr);
+}
+
+cn_pointer *cast_cn_pointer_to_cn_pointer(cn_pointer *p) {\
+        return p;
 }
 
 
