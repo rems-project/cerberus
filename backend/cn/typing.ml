@@ -363,8 +363,10 @@ let bound sym   = inspect_typing_context (fun s -> Context.bound sym s)
 let get_a sym = inspect_typing_context (fun s -> Context.get_a sym s)
 let get_l sym = inspect_typing_context (fun s -> Context.get_l sym s)
 
+
 let add_a sym bt info = 
   modify_typing_context (fun s -> Context.add_a sym bt info s)
+
 let add_a_value sym value info =
   modify_typing_context (fun s -> (Context.add_a_value sym value info s))
 

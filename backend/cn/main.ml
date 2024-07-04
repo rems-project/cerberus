@@ -147,6 +147,9 @@ let main
       log_times
       random_seed
       solver_logging
+      solver_flags
+      solver_path
+      solver_type
       output_decorated_dir
       output_decorated
       with_ownership_checking
@@ -172,7 +175,15 @@ let main
     Pp.print_timestamps := not no_timestamps;
     Solver.set_slow_smt_settings slow_smt_threshold slow_smt_dir;
     Solver.random_seed := random_seed;
-    Solver.log_to_temp := solver_logging;
+    begin match solver_logging with
+    | Some d ->
+        Solver.log_to_temp := true;
+        Solver.log_dir := if String.equal d "" then None else Some d
+    | _ -> ()
+    end;
+    Solver.solver_path := solver_path;
+    Solver.solver_type := solver_type;
+    Solver.solver_flags := solver_flags;
     Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
     IndexTerms.use_vip := use_vip;
     Check.batch := batch;
@@ -308,8 +319,13 @@ let random_seed =
   Arg.(value & opt int 0 & info ["r"; "random-seed"] ~docv:"I" ~doc)
 
 let solver_logging =
-  let doc = "Have Z3 log in SMT2 format to a file in a temporary directory." in
-  Arg.(value & flag & info ["solver-logging"] ~doc)
+  let doc = "Log solver queries in SMT2 format to a directory." in
+  Arg.(value & opt (some string) None & info ["solver-logging"] ~docv:"DIR" ~doc)
+
+let solver_flags =
+  let doc = "Ovewrite default solver flags. Note that flags should enable at least incremental checking." in
+  Arg.(value & opt (some (list string)) None
+             & info ["solver-flags"] ~docv:"X,Y,Z" ~doc)
 
 let only =
   let doc = "only type-check this function (or comma-separated names)" in
@@ -363,6 +379,24 @@ let magic_comment_char_dollar =
   let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
   Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
 
+let solver_path =
+  let doc = "Path to SMT solver executable" in
+  Arg.(value & opt (some string) None & info ["solver-path"] ~docv:"FILE" ~doc)
+
+let solver_type =
+  let doc = "Specify the SMT solver interface" in
+  Arg.( value
+      & opt (some (enum [ "z3",   Simple_smt.Z3
+                        ; "cvc5", Simple_smt.CVC5
+                        ]))
+        None
+      & info ["solver-type"] ~docv:"z3|cvc5" ~doc
+      )
+
+
+
+
+
 (* copied from cerberus' executable (backend/driver/main.ml) *)
 let macros =
     let macro_pair =
@@ -412,6 +446,9 @@ let () =
       log_times $
       random_seed $
       solver_logging $
+      solver_flags $
+      solver_path $
+      solver_type $
       output_decorated_dir $
       output_decorated $
       with_ownership_checking $
