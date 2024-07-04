@@ -57,6 +57,19 @@ let get_c_local_ownership_checking params =
   (entry_ownership_stats, exit_ownership_stats)
 
 
+let get_start_loc ?(offset=0) = function 
+  | Cerb_location.Loc_region (start_pos, _, cursor) ->
+    let new_start_pos = {start_pos with pos_cnum=start_pos.pos_cnum + offset} in 
+    Cerb_location.region (new_start_pos, new_start_pos) cursor 
+  | Loc_regions (pos_list, cursor) -> (match List.last pos_list with 
+      | Some (_, start_pos) -> 
+        let new_start_pos = {start_pos with pos_cnum=start_pos.pos_cnum + offset} in 
+        Cerb_location.region (new_start_pos, new_start_pos) cursor 
+      | None -> failwith "modify_decl_loc: Loc_regions has empty list of positions (should be non-empty)")
+  | Loc_unknown
+  | Loc_other _ 
+  | Loc_point _ -> failwith "modify_decl_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
+
 
 let get_end_loc ?(offset=0) = function 
   | Cerb_location.Loc_region (_, end_pos, cursor) ->
@@ -71,20 +84,126 @@ let get_end_loc ?(offset=0) = function
   | Loc_other _ 
   | Loc_point _ -> failwith "modify_decl_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
 
+(* type collect_visibles_state = {
+  visible_syms: (Sym.sym * C.ctype) list;
+  label_visibles_: (Sym.sym, ((Sym.sym * C.ctype) list)) Pmap.map;
+}
 
+(* internal block depth counter? *)
+let rec ownership_collect_visibles (A.AnnotatedStatement (loc, _, stmt)) visibles map =
+  match stmt with
+    | A.AilSskip ->
+        map
+    | A.AilSexpr _ ->
+        map
+    | A.AilSblock binds ss ->
+        St.get >>= fun st ->
+        let saved_syms = st.visible_syms in
+        St.update (fun st ->
+          <| st with visible_syms= List.map (fun (sym, (_, _, _, ty)) -> (sym ,ty)) binds ++ st.visible_syms |>
+        ) >>
+        St.mapM_ collect_visibles_ ss >>
+        St.update (fun st ->
+          <| st with visible_syms= saved_syms |>
+        )
+    | A.AilSif _ s1 s2 ->
+        collect_visibles_ s1 >> collect_visibles_ s2
+    | A.AilSwhile _ s _ ->
+        collect_visibles_ s
+    | A.AilSdo s _ _ ->
+        collect_visibles_ s
+    | A.AilSbreak ->
+        St.return ()
+    | A.AilScontinue ->
+        St.return ()
+    | A.AilSreturnVoid ->
+        St.return ()
+    | A.AilSreturn _ ->
+        St.return ()
+    | A.AilSswitch _ s ->
+        collect_visibles_ s
+    | A.AilScase _ s ->
+        collect_visibles_ s
+    | A.AilScase_rangeGNU _ _ s ->
+        collect_visibles_ s
+    | A.AilSdefault s ->
+        collect_visibles_ s
+    | A.AilSlabel label s _ ->
+        St.update (fun st -> <| st with
+          label_visibles_= Map.insert label st.visible_syms st.label_visibles_
+        |>) >>
+        collect_visibles_ s
+    | A.AilSgoto label ->
+        St.return ()
+    | A.AilSdeclaration _ ->
+        St.return ()
+    | A.AilSpar ss ->
+        St.mapM_ collect_visibles_ ss
+    | A.AilSreg_store _ _ ->
+        St.return ()
+    | A.AilSmarker _ s ->
+        collect_visibles_ s *)
+
+let rec get_c_block_unmaps_for_return vars A.(AnnotatedStatement (block_loc, attrs, block)) = 
+  match block with 
+    | (A.AilSblock (bindings, statements)) ->
+      (* let end_of_block_loc = get_end_loc ~offset:(-1) block_loc in *)
+      (match statements with 
+      | [] -> []
+      (* TODO: Use bindings and locations, not AilSDeclaration. Unitialised vars are not being mapped/unmapped under the current scheme *)
+      | A.(AnnotatedStatement (stat_loc, _, s_) as stat) :: ss -> 
+        let (vars', stat_injs) = (match s_ with 
+          | A.(AilSdeclaration decls) -> 
+            let decl_syms = List.map fst decls in 
+            let decl_syms_and_ctypes = List.map (fun sym -> (sym, find_ctype_from_bindings bindings sym)) decl_syms in
+            (decl_syms_and_ctypes @ vars, [])  
+          | (AilSblock _) ->
+            (vars, get_c_block_unmaps_for_return vars stat)
+          | (AilSif (_, s1, s2)) -> 
+            let injs = get_c_block_unmaps_for_return vars s1 in 
+            let injs' = get_c_block_unmaps_for_return vars s2  in 
+            (vars, injs @ injs')
+          | AilSwhile (_, s, _) 
+          | AilSdo (s, _, _) 
+          | AilSswitch (_, s) 
+          | AilScase (_, s) 
+          | AilScase_rangeGNU (_, _, s) 
+          | AilSdefault s
+          | AilSlabel (_, s, _) -> (vars, get_c_block_unmaps_for_return vars s)
+          (* | AilSlabel (label_sym, (AnnotatedStatement (s_loc, _, _) as s), _) ->  *)
+            (* let visible_syms_and_ctypes = Pmap.find label_sym label_visibles_map in 
+            let visible_var_entry_fcalls = List.map generate_c_local_ownership_entry visible_syms_and_ctypes in 
+            let start_of_block_loc = get_start_loc ~offset:1 s_loc in  *)
+            (* TODO (!!): Turn label body into block if it isn't already *)
+            (* (start_of_block_loc, visible_var_entry_fcalls) :: get_c_block_local_ownership_checking_injs_aux s label_visibles_map *)
+          | AilSgoto _ -> (vars, []) (* TODO *)
+          | AilSreturn _ -> 
+            let loc_before_return_stmt = get_start_loc stat_loc in 
+            let fcalls = List.map generate_c_local_ownership_exit vars in 
+            (vars, [(loc_before_return_stmt, fcalls)])
+          | AilSbreak -> (vars, []) (* TODO - can be out of loop or switch statement *)
+          | _ -> (vars, [])
+        ) in 
+        stat_injs @ (get_c_block_unmaps_for_return vars' A.(AnnotatedStatement (block_loc, attrs, (A.AilSblock (bindings, ss))))))
+    | _ -> []
 
 (* Ghost state tracking for block declarations *)
-let rec get_c_block_local_ownership_checking_injs_aux A.(AnnotatedStatement (block_loc, attrs, block)) = 
+let rec get_c_block_local_ownership_checking_injs_aux A.(AnnotatedStatement (block_loc, attrs, block)) label_visibles_map = 
   match block with 
     | (A.AilSblock (bindings, statements)) ->
       let end_of_block_loc = get_end_loc ~offset:(-1) block_loc in
       (match statements with 
       | [] -> [] 
-      | A.(AnnotatedStatement (stat_loc, attrs', s_)) :: ss -> 
+      (* TODO: Use bindings and locations, not AilSDeclaration. Unitialised vars are not being mapped/unmapped under the current scheme *)
+      | A.(AnnotatedStatement (stat_loc, _, s_) as stat) :: ss -> 
         let stat_injs = (match s_ with 
           | A.(AilSdeclaration decls) -> 
+            Printf.printf ("Bindings: ");
+            let _ = List.map (fun (sym, _) -> Printf.printf "%s," (Sym.pp_string sym)) bindings in 
+            Printf.printf "\n";
             let end_of_line_loc = get_end_loc stat_loc in 
             let decl_ownership_fcalls = List.map (fun (sym, _) -> 
+              Printf.printf "sym: %s\n" (Sym.pp_string sym);
               let ctype = find_ctype_from_bindings bindings sym in 
               (generate_c_local_ownership_entry (sym, ctype), generate_c_local_ownership_exit (sym, ctype))) 
             decls in
@@ -92,21 +211,30 @@ let rec get_c_block_local_ownership_checking_injs_aux A.(AnnotatedStatement (blo
             let entry_injs = [(end_of_line_loc, decl_ownership_entry_fcalls)] in 
             let exit_injs = [(end_of_block_loc, decl_ownership_exit_fcalls)] in 
             entry_injs @ exit_injs
-          | (AilSblock _ as block_stat) -> get_c_block_local_ownership_checking_injs_aux A.(AnnotatedStatement (stat_loc, attrs', block_stat))
+          | (AilSblock _) -> get_c_block_local_ownership_checking_injs_aux stat label_visibles_map
           | (AilSif (_, s1, s2)) -> 
-            let injs = get_c_block_local_ownership_checking_injs_aux s1 in 
-            let injs' = get_c_block_local_ownership_checking_injs_aux s2 in 
+            let injs = get_c_block_local_ownership_checking_injs_aux s1 label_visibles_map in 
+            let injs' = get_c_block_local_ownership_checking_injs_aux s2 label_visibles_map in 
             injs @ injs'
           | AilSwhile (_, s, _) 
           | AilSdo (s, _, _) 
           | AilSswitch (_, s) 
           | AilScase (_, s) 
           | AilScase_rangeGNU (_, _, s) 
-          | AilSdefault s 
-          | AilSlabel (_, s, _) -> get_c_block_local_ownership_checking_injs_aux s
+          | AilSdefault s
+          | AilSlabel (_, s, _) -> get_c_block_local_ownership_checking_injs_aux s label_visibles_map
+          (* | AilSlabel (label_sym, (AnnotatedStatement (s_loc, _, _) as s), _) ->  *)
+            (* let visible_syms_and_ctypes = Pmap.find label_sym label_visibles_map in 
+            let visible_var_entry_fcalls = List.map generate_c_local_ownership_entry visible_syms_and_ctypes in 
+            let start_of_block_loc = get_start_loc ~offset:1 s_loc in  *)
+            (* TODO (!!): Turn label body into block if it isn't already *)
+            (* (start_of_block_loc, visible_var_entry_fcalls) :: get_c_block_local_ownership_checking_injs_aux s label_visibles_map *)
+          | AilSgoto _ -> [] (* TODO *)
+          | AilSreturn _ -> [] (* TODO *)
+          | AilSbreak -> [] (* TODO - can be out of loop or switch statement *)
           | _ -> []
         ) in 
-        stat_injs @ (get_c_block_local_ownership_checking_injs_aux A.(AnnotatedStatement (block_loc, attrs, (A.AilSblock (bindings, ss))))))
+        stat_injs @ (get_c_block_local_ownership_checking_injs_aux A.(AnnotatedStatement (block_loc, attrs, (A.AilSblock (bindings, ss)))) label_visibles_map))
     | _ -> []
 
 let rec combine_injs_over_location loc = function 
@@ -127,7 +255,10 @@ let rec remove_duplicates ds = function
 
 let get_c_block_local_ownership_checking_injs A.(AnnotatedStatement (_, _, fn_block) as statement) = match fn_block with 
   | A.(AilSblock _) -> 
-    let injs = get_c_block_local_ownership_checking_injs_aux statement in 
+    let visibles = CF.Translation.collect_visibles statement in 
+    let injs = get_c_block_local_ownership_checking_injs_aux statement visibles.label_visibles_ in 
+    let injs' = get_c_block_unmaps_for_return [] statement in
+    let injs = injs @ injs' in 
     let locs = List.map fst injs in 
     let locs = remove_duplicates [] locs in 
     let combined_injs = List.map (fun l -> 
