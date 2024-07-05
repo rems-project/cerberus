@@ -735,6 +735,76 @@ Module CheriMemoryImplWithProofs
         bool_to_prop_hyp;(exists tg,gs;split;auto).
   Qed.
 
+
+  (* Another spec for [capmeta_ghost_tags] *)
+  Lemma capmeta_ghost_tags_spec'
+    (addr: AddressValue.t)
+    (size: nat)
+    (SZ: (size>0)%nat)
+    (capmeta: AMap.M.t (bool*CapGhostState)):
+
+    forall a,
+      let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
+      let a0 := align_down (AddressValue.to_Z addr) alignment in
+      let a1 := align_down (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
+      let az := AddressValue.to_Z a in
+      (a0 <= az <= a1) ->
+      forall tg gs,
+        AMap.M.MapsTo a (tg,gs) (capmeta_ghost_tags addr size capmeta)
+        ->
+          tg=false \/ gs.(tag_unspecified) = true.
+  Proof.
+    intros a alignment a0 a1 az R tg gs M.
+    subst a0 a1 az alignment.
+    dependent destruction size.
+    -
+      lia.
+    -
+      cbn in *.
+      apply AMap.F.mapi_inv in M.
+      destruct M as [(tg',gs') [a' [E M]]].
+      subst a'.
+      break_match_hyp.
+      +
+        (* in range *)
+        destruct M.
+        tuple_inversion.
+        bool_to_prop_hyp.
+        subst.
+        rename gs' into gs.
+        right.
+        split;auto.
+      +
+        rename size0 into size.
+        destruct M.
+        tuple_inversion.
+        rename tg' into tg, gs' into gs.
+        bool_to_prop_hyp.
+        * (* unspecified *)
+          apply negb_false_iff in H.
+          auto.
+        *
+          (* untagged *)
+          auto.
+        *
+          (* az < a0 *)
+          exfalso.
+          unfold align_down in *.
+          pose proof MorelloImpl.alignof_pointer_pos as P.
+          zify.
+          subst.
+          lia.
+        *
+          (* a1 < az *)
+          exfalso.
+          unfold align_down in *.
+          pose proof MorelloImpl.alignof_pointer_pos as P.
+          zify.
+          subst.
+          rewrite Z.add_simpl_r in  *.
+          lia.
+  Qed.
+
   Definition memM_same_state
     {T: Type}
     (c: memM T) : Prop
@@ -4572,6 +4642,7 @@ Module CheriMemoryImplWithProofs
           cbn in *.
           admit.
       *
+        (* removing *)
         admit.
   Admitted.
 
