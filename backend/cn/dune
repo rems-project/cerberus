@@ -33,7 +33,7 @@
 ; So we add a CN specific version.
 (rule
  (targets cn_version.ml)
- (deps (source_tree .))
+ (deps (universe))
  (action
   (with-stdout-to cn_version.ml
     (run ocaml -I +unix unix.cma %{dep:../../tools/gen_version.ml}))))
