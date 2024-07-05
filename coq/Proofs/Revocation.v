@@ -2296,6 +2296,7 @@ Module CheriMemoryImplWithProofs
       (* All caps which are tagged according to capmeta must: *)
       (forall addr g,
           AMap.M.MapsTo addr (true,g) cm ->
+          g.(tag_unspecified) = false ->
           (forall bs, fetch_bytes bm addr (sizeof_pointer MorelloImpl.get) = bs ->
                  (exists c,
                      (* decode without error *)
@@ -2896,7 +2897,7 @@ Module CheriMemoryImplWithProofs
         apply I.
     -
       clear Bdead Bnooverlap Balign.
-      intros addr g H1 bs H0.
+      intros addr g H1 U bs H0.
       specialize (Scap addr g).
       specialize (R addr).
       cbn in *.
@@ -2908,7 +2909,7 @@ Module CheriMemoryImplWithProofs
         invc R.
         ++
           (* ghost states are same *)
-          specialize (Scap M1).
+          specialize (Scap M1 U).
           remember (fetch_bytes bytemap0 addr (sizeof_pointer MorelloImpl.get)) as bs.
           specialize (Scap bs).
           autospecialize Scap.
@@ -2916,7 +2917,7 @@ Module CheriMemoryImplWithProofs
           auto.
         ++
           (* revoked *)
-          specialize (Scap M1).
+          specialize (Scap M1 U).
           remember (fetch_bytes bytemap0 addr (sizeof_pointer MorelloImpl.get)) as bs.
           specialize (Scap bs).
           autospecialize Scap.
@@ -3056,8 +3057,8 @@ Module CheriMemoryImplWithProofs
         auto.
     -
       clear ISbase'.
-      intros addr g A bs F.
-      specialize (IScap' addr g A bs F).
+      intros addr g A U bs F.
+      specialize (IScap' addr g A U bs F).
       destruct IScap' as [c [IScap3' [alloc' [alloc_id' [IScap4' IScap5']]]]].
       exists c.
       split;auto.
@@ -3556,8 +3557,8 @@ Module CheriMemoryImplWithProofs
       rename c into ty, s0 into alloc_id.
       clear Bdead Bnooverlap Balign.
       cbn.
-      intros addr g H bs H0.
-      specialize (MIcap addr g H bs H0).
+      intros addr g H U bs H0.
+      specialize (MIcap addr g H U bs H0).
       destruct MIcap as [c [D [a' [alloc_id' [M B]]]]].
       exists c.
       split;[assumption|].
@@ -3802,7 +3803,7 @@ Module CheriMemoryImplWithProofs
           specialize (MIcap k g H bs H0).
           auto.
       +
-        intros k g H bs H0.
+        intros k g H U bs H0.
         cbn in *.
 
         destruct (AddressValue_as_OT.eq_dec k addr1) as [KE1|KNE1].
@@ -3815,7 +3816,7 @@ Module CheriMemoryImplWithProofs
             destruct H as [_ P].
             subst p.
             rewrite B in H0.
-            specialize (MIcap addr2 g F bs H0).
+            specialize (MIcap addr2 g F U bs H0).
             auto.
           --
             destruct H.
@@ -3831,10 +3832,10 @@ Module CheriMemoryImplWithProofs
               pose proof (AMap.F.MapsTo_fun F H) as E.
               subst p.
               clear H.
-              specialize (MIcap g F bs).
+              specialize (MIcap g F U bs).
               auto.
             ++
-              specialize (MIcap k g H bs H0).
+              specialize (MIcap k g H U bs H0).
               destruct MIcap as [c [M2 [a [alloc_id [M3 M4]]]]].
               exists c.
               split.
@@ -4840,7 +4841,7 @@ Module CheriMemoryImplWithProofs
         apply MorelloImpl.alignof_pointer_pos.
     -
       (* the rest of the invariant *)
-      intros a g E bs F.
+      intros a g E U bs F.
       simpl in *.
       apply capmeta_copy_tags_spec in E; try lia.
       2:{
@@ -4851,7 +4852,7 @@ Module CheriMemoryImplWithProofs
       +
         (* in copied meta range *)
         destruct E1 as [k [H1 [H2 H3]]].
-        specialize (MIcap (AddressValue.with_offset src (k * Z.of_nat step)) g H3 bs).
+        specialize (MIcap (AddressValue.with_offset src (k * Z.of_nat step)) g H3 U bs).
         autospecialize MIcap.
         {
           subst a bs.
@@ -4889,7 +4890,7 @@ Module CheriMemoryImplWithProofs
         eauto.
       +
         (* outside of copied meta range *)
-        specialize (MIcap a g E2 bs F).
+        specialize (MIcap a g E2 U bs F).
         destruct MIcap as [c [M2 [alloc [alloc_id [M3 M4]]]]].
         exists c.
         split;[apply M2|].
@@ -5217,10 +5218,10 @@ Module CheriMemoryImplWithProofs
         apply Balign.
         apply E1.
     -
-      intros a g E bs F.
+      intros a g E U bs F.
       simpl in *.
       apply capmeta_ghost_tags_spec in E.
-      destruct E as [tg' [gs' [E1 [[E2g E2u]|[E3g E3u]] ]]]; subst.
+      destruct E as [tg' [gs' [E1 [[E2g E2u]|[E3g [E3u [E4u E5u]]]] ]]]; subst.
       *
         eapply MIcap; eauto.
       *
