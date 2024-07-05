@@ -4587,58 +4587,6 @@ Module CheriMemoryImplWithProofs
     decide equality;subst.
   Qed.
 
-  (* Lemma capmeta_copy_tags_spec
-    (dst src: AddressValue.t)
-    (n: nat)
-    (step: nat)
-    (cm: AMap.M.t (bool * CapGhostState)):
-    (0<step)%nat ->
-    forall k, 0 <= k < Z.of_nat n ->
-         AMap.M.find (AddressValue.with_offset src (k * Z.of_nat step)) cm =
-         AMap.M.find (AddressValue.with_offset dst (k * Z.of_nat step)) (capmeta_copy_tags dst src n step cm).
-  Proof.
-    intros H_step k Hk.
-    induction n as [|n IH].
-    - (* Base case: n = 0 *)
-      lia.
-    - (* Inductive step: n = S n *)
-      simpl.
-      break_match_goal.
-      +
-        (* found in src. adding *)
-        destruct (Z.eq_dec k (Z.of_nat n)) as [E|NE].
-        *
-          subst k.
-          rewrite AMap.P.F.add_eq_o.
-          1,2: rewrite <- Nat2Z.inj_mul.
-          2:reflexivity.
-          rewrite Heqo.
-          reflexivity.
-        *
-          rewrite AMap.P.F.add_neq_o.
-          2:{
-            admit.
-          }
-          apply IH;lia.
-      +
-        (* not found in src. removeing *)
-        destruct (Z.eq_dec k (Z.of_nat n)) as [E|NE].
-        *
-          subst k.
-          rewrite AMap.P.F.remove_eq_o.
-          1,2: rewrite <- Nat2Z.inj_mul.
-          2:reflexivity.
-          rewrite Heqo.
-          reflexivity.
-        *
-          rewrite AMap.P.F.remove_neq_o.
-          2:{
-            admit.
-          }
-          apply IH;lia.
-  Admitted.
-  *)
-
   Lemma capmeta_copy_tags_spec
     (dst src: AddressValue.t)
     (n: nat)
