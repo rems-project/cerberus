@@ -460,7 +460,7 @@ let () =
       no_inherit_loc $
       magic_comment_char_dollar
   in
-  let version_str = "CN version: " ^ Cerb_frontend.Version.git_version in
+  let version_str = "CN version: " ^ Cn_version.git_version in
   let cn_info = Cmd.info "cn" ~version:version_str in
   Stdlib.exit @@ Cmd.(eval (v cn_info check_t))
 
