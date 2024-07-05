@@ -22,56 +22,38 @@ HERE=$(pwd)
 
 cd "$TUTORIAL_PATH"/src/example-archive/
 
-if [ -f ./check-all.sh ]; then
-    ./check-all.sh $CN
-    exit $?
-fi
-
 FAILURE=0
 
-cd dafny-tutorial
-../check.sh $CN
+# Check the example archive 
+./check-all.sh "$CN --solver-type=cvc5"
 if [ $? != 0 ] 
 then
    FAILURE=1
 fi
-cd ..
 
-cd SAW
-../check.sh $CN
+./check-all.sh "$CN --solver-type=z3"
 if [ $? != 0 ] 
 then
    FAILURE=1
 fi
-cd ..
-
-cd c-testsuite
-../check.sh $CN
-if [ $? != 0 ] 
-then
-   FAILURE=1
-fi
-cd ..
-
-cd simple-examples
-../check.sh $CN
-if [ $? != 0 ] 
-then
-   FAILURE=1
-fi
-cd ..
 
 
+# Check the tutorial examples 
 cd ../..
-./check.sh $CN
+
+./check.sh "$CN --solver-type=cvc5"
+if [ $? != 0 ] 
+then
+   FAILURE=1
+fi
+
+./check.sh "$CN --solver-type=z3"
 if [ $? != 0 ] 
 then
    FAILURE=1
 fi
 
 cd $HERE
-
-
 
 if [ $FAILURE == 0 ]
 then
