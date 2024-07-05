@@ -3,7 +3,6 @@ module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
 open Setup
-open Version 
 
 module A=CF.AilSyntax
 
@@ -461,7 +460,7 @@ let () =
       no_inherit_loc $
       magic_comment_char_dollar
   in
-  let version_str = "CN v." ^ git_hash ^ "\n(Computed automatically from git hash)" in 
+  let version_str = "CN version: " ^ Cerb_frontend.Version.version in 
   let cn_info = Cmd.info "cn" ~version:version_str in 
   Stdlib.exit @@ Cmd.(eval (v cn_info check_t))
 

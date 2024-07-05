@@ -23,15 +23,6 @@ else
     DUNEFLAGS=
 endif
 
-# Default hash in case git is not available
-DEFAULT_HASH := "unknown"
-GIT_HASH := $(shell if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git rev-parse --short HEAD; else echo $(DEFAULT_HASH); fi)
-CN_VERSION_FILE := backend/cn/version.ml
-
-.PHONY: cn-version
-cn-version: 
-	echo "let git_hash = \"$(GIT_HASH)\"" > $(CN_VERSION_FILE)
-
 .PHONY: normal
 normal: cerberus
 
@@ -83,7 +74,7 @@ rustic: prelude-src
 	$(Q)dune build $(DUNEFLAGS) cerberus.install rustic.install
 
 .PHONY: cn
-cn: prelude-src cn-version
+cn: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build $(DUNEFLAGS) cerberus.install cn.install
 	@echo "\nDONE"
