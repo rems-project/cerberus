@@ -73,6 +73,19 @@ jobs:
         cd tests; USE_OPAM='' ./run-ci.sh
         cd ..
 
+    - name: Download cvc5 release 
+      uses: robinraju/release-downloader@v1 
+      with: 
+        repository: cvc5/cvc5
+        tag: cvc5-1.1.2
+        fileName: cvc5-Linux-static.zip
+
+    - name: Unzip and install cvc5
+      run: |
+        unzip cvc5-Linux-static.zip
+        chmod +x cvc5-Linux-static/bin/cvc5
+        sudo cp cvc5-Linux-static/bin/cvc5 /usr/local/bin/
+
     - name: Install CN
       run: |
         opam switch ${{ matrix.version }}
@@ -85,9 +98,7 @@ jobs:
       with: 
         repository: rems-project/cn-tutorial
         path: cn-tutorial
-        # ref: fix-semicolon-syntax
 
-    # copying 'Run Cerberus CI tests'
     - name: Run CN CI tests
       run: |
         opam switch ${{ matrix.version }}
@@ -95,13 +106,11 @@ jobs:
         cd tests; USE_OPAM='' ./run-cn.sh
         cd ..
 
-    # copying 'Run Cerberus CI tests'
     - name: Run CN Tutorial CI tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
-
 
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
