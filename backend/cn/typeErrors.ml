@@ -424,17 +424,31 @@ type t = type_error
 
 
 (* stealing some logic from pp_errors *)
-let report ?state_file:to_ {loc; msg} =
+let report ?state_file:to_ ?output_dir:dir_ {loc; msg} =
   let report = pp_message msg in
   let consider = match report.state with
     | Some state ->
-       let state_error_file = match to_ with
-         | Some file -> file
-         | None -> Filename.temp_file "state_" ".html"
+       (* Decide where to write the state *) 
+       let state_error_file = match to_ with 
+         | Some file -> file 
+         | None -> match dir_ with 
+            | Some dir -> 
+            let full_output_dir = 
+               if Filename.is_relative dir then 
+                  let current_dir = Sys.getcwd () in 
+                  Filename.concat current_dir dir 
+               else 
+                  dir
+               in (try Filename.temp_file ~temp_dir:full_output_dir "state_" ".html"
+                  with 
+                  | Sys_error _ -> 
+                     Printf.eprintf "Warning: failed to create state file in the specified directory. Using the default output directory instead.\n";
+                     Filename.temp_file "state_" ".html"; )
+            | None -> Filename.temp_file "state_" ".html"
        in
        let link = Report.make state_error_file (Cerb_location.get_filename loc) state in
        (* let link = Report.make state_error_file state in *)
-       let msg = !^"Consider the state in" ^^^ !^("file://"^link) in
+       let msg = !^"State file:" ^^^ !^("file://"^link) in
        Some msg
     | None ->
        None
@@ -445,13 +459,27 @@ let report ?state_file:to_ {loc; msg} =
 
 
 (* stealing some logic from pp_errors *)
-let report_json ?state_file:to_ {loc; msg} =
+let report_json ?state_file:to_ ?output_dir:dir_ {loc; msg} =
   let report = pp_message msg in
   let state_error_file = match report.state with
     | Some state ->
+       (* Decide where to write the state *) 
        let file = match to_ with
          | Some file -> file
-         | None -> Filename.temp_file "" ".cn-state"
+         | None -> match dir_ with 
+            | Some dir -> 
+               let full_output_dir = 
+                  if Filename.is_relative dir then 
+                     let current_dir = Sys.getcwd () in 
+                     Filename.concat current_dir dir 
+                  else 
+                     dir
+                  in (try Filename.temp_file ~temp_dir:full_output_dir "" ".cn-state"
+                     with 
+                     | Sys_error _ -> 
+                        Printf.eprintf "Warning: failed to create state file in the specified directory. Using the default output directory instead.\n";
+                        Filename.temp_file "" ".cn-state") 
+            | None -> Filename.temp_file "" ".cn-state"
        in
        let link = Report.make file (Cerb_location.get_filename loc) state in
        `String link
