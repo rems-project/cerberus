@@ -199,6 +199,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs es
   | CNExpr_memberof (e, _id) ->
      free_in_expr e
+  | CNExpr_arrow (e, _id) ->
+     free_in_expr e
   | CNExpr_record members ->
      free_in_exprs (List.map snd members)
   | CNExpr_memberupdates (e, updates) ->
@@ -706,6 +708,9 @@ module EffectfulTranslation = struct
               IT (Nil (SBT.to_basetype item_bt), SBT.List item_bt, nil_loc) in
             return (List.fold_right cons es nil)
         | CNExpr_memberof (e, xs) ->
+           let@ e = self e in
+           translate_member_access loc env e xs
+        | CNExpr_arrow (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
         | CNExpr_record members ->
