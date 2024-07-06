@@ -139,6 +139,7 @@ let main
       no_timestamps
       json
       state_file
+      output_dir 
       diag
       lemmata
       only
@@ -203,8 +204,8 @@ let main
      | _ -> None);
   try
     let handle_error e =
-      if json then TypeErrors.report_json ?state_file e
-      else TypeErrors.report ?state_file e;
+      if json then TypeErrors.report_json ?state_file ?output_dir e
+      else TypeErrors.report ?state_file ?output_dir e;
       match e.msg with
       | TypeErrors.Unsupported _ -> exit 2
       | _ -> exit 1 in
@@ -240,7 +241,6 @@ let file =
   let doc = "Source C file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
-
 let incl_dirs =
   let doc = "Add the specified directory to the search path for the\
              C preprocessor." in
@@ -273,7 +273,6 @@ let batch =
   let doc = "Type check functions in batch/do not stop on first type error (unless `only` is used)" in
   Arg.(value & flag & info ["batch"] ~doc)
 
-
 let slow_smt_threshold =
   let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
   Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
@@ -282,17 +281,18 @@ let slow_smt_dir =
   let doc = "Set the destination dir for logging slow smt queries (default is in system temp-dir)." in
   Arg.(value & opt (some string) None & info ["slow-smt-dir"] ~docv:"FILE" ~doc)
 
-
 let no_timestamps =
   let doc = "Disable timestamps in print-level debug messages"
  in
   Arg.(value & flag & info ["no_timestamps"] ~doc)
 
-
 let json =
   let doc = "output in json format" in
   Arg.(value & flag & info["json"] ~doc)
 
+let output_dir =
+  let doc = "directory in which to output state files (overridden by --state-file)" in
+  Arg.(value & opt (some string) None & info ["output-dir"] ~docv:"FILE" ~doc)
 
 let state_file =
   let doc = "file in which to output the state" in
@@ -438,6 +438,7 @@ let () =
       no_timestamps $
       json $
       state_file $
+      output_dir $ 
       diag $
       lemmata $
       only $
