@@ -602,7 +602,7 @@ Module CheriMemoryImplWithProofs
         rewrite AddressValue.of_Z_roundtrip by auto.
         rewrite Z.mul_comm, Zdiv.Z_mod_plus_full.
         unfold AddressValue.ADDR_MIN in *.
-        apply align_bottow_correct;assumption.
+        apply align_bottom_correct;assumption.
       +
         rewrite AddressValue.of_Z_roundtrip by auto.
         unfold AddressValue.ADDR_MIN,
@@ -667,9 +667,9 @@ Module CheriMemoryImplWithProofs
               subst a1 a0.
 
               apply sub_mod_0.
-              apply align_bottow_correct.
+              apply align_bottom_correct.
               assumption.
-              apply align_bottow_correct.
+              apply align_bottom_correct.
               assumption.
             }
             replace (a0 + (a1 - a0)) with a1 by lia.

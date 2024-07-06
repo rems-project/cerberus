@@ -1648,7 +1648,7 @@ Section Z_arith.
       lia.
   Qed.
 
-  Lemma align_bottow_correct:
+  Lemma align_bottom_correct:
     forall ps addr : Z, 0 < ps -> (addr - addr mod ps) mod ps = 0.
   Proof.
     intros b a B.
