@@ -434,3 +434,19 @@ void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_sta
 #define c_declare_init_and_map_local(CTYPE, VAR_NAME, EXPR)\
     c_concat_with_mapping_stat(CTYPE VAR_NAME = EXPR, CTYPE, VAR_NAME)
 
+
+void cn_load(void *lvalue, size_t size);
+void cn_store(void *lvalue, size_t size);
+
+#define CN_LOAD(LV) \
+  ({ \
+    cn_load(&LV, sizeof(typeof(LV))); \
+    (LV); \
+  })
+#define CN_STORE(LV, X) \
+ ({ \
+    typeof(LV) *tmp; \
+    tmp = &(LV); \
+    cn_store(&LV, sizeof(typeof(LV))); \
+    *tmp = (X); \
+ })

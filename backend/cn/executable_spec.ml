@@ -59,6 +59,38 @@ let rec inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog injs_with
     Stdlib.close_out oc';
     inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog injs_with_filenames xs
 
+let memory_accesses_injections ail_prog =
+  let open Cerb_frontend in
+  let open Cerb_location in
+  let loc_of_expr (AilSyntax.AnnotatedExpression (_, _, loc, _)) = loc in
+  let pos_bbox loc =
+    match bbox [loc] with
+    | `Other _ -> assert false
+    | `Bbox (b, e) -> (b, e) in
+  let acc = ref [] in
+  let xs = Ail_analysis.collect_memory_accesses ail_prog in
+  List.iteri (fun i access ->
+    Printf.printf "[%d] " i;
+    match access with
+    | Ail_analysis.Load {loc; _} ->
+        (* Printf.printf "load -- loc: %s\n" (Locations.simple_location loc); *)
+        let b, e = pos_bbox loc in
+        acc := (point b, ["CN_LOAD("]) :: (point e, [")"]) :: !acc
+    | Store {lvalue; expr; _} ->
+        (* NOTE: we are not using the location of the access (the AilEassign), because
+            if in the source the assignment was surrounded by parens its location will contain
+            the parens, which will break the CN_STORE macro call *)
+        (* Printf.printf "TODO: store -- loc: %s\n" (Locations.simple_location loc); *)
+        let b, pos1 = pos_bbox (loc_of_expr lvalue) in
+        let pos2, e = pos_bbox (loc_of_expr expr) in
+        acc := (point b, ["CN_STORE("]) :: (region (pos1, pos2) NoCursor, [", "]) :: (point e, [")"]) :: !acc
+    | StoreOp {loc; _} ->
+          Printf.printf "TODO: compound assignment -- loc: %s\n" (Locations.simple_location loc)
+    | Postfix {loc; _} ->
+          Printf.printf "TODO: postfix -- loc: %s\n" (Locations.simple_location loc)
+  ) xs;
+  !acc
+
 open Executable_spec_internal
 
 let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
@@ -153,6 +185,9 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   (* let source_file_in_stmt_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) source_file_in_stmt_injs_with_syms in *)
   let source_file_in_stmt_injs = source_file_in_stmt_injs_with_syms in
 
+  (* Rini: uncomment me *)
+  let accesses_stmt_injs = [] (*memory_accesses_injections ail_prog*) in
+
   let included_filenames = List.map (fun (loc, _) -> Cerb_location.get_filename loc) in_stmt_injs_with_filenames in
 
   let fns_and_ocs = open_auxilliary_files filename prefix included_filenames [] in
@@ -169,7 +204,7 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
     { filename; program= ail_prog
     ; pre_post=pre_post_pairs
     (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
-    ; in_stmt=(executable_spec.in_stmt @ source_file_in_stmt_injs)}
+    ; in_stmt=(executable_spec.in_stmt @ source_file_in_stmt_injs @ accesses_stmt_injs)}
   )
 with
 | Ok () ->
