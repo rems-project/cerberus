@@ -27,8 +27,7 @@ let rec open_auxilliary_files source_filename prefix included_filenames already_
         (Printf.printf "Error in opening file %s as it already exists\n" output_fn_with_prefix;
         open_auxilliary_files source_filename prefix fns (fn' :: already_opened_list))
       else
-        (Printf.printf "REACHED FILENAME: %s\n" output_fn_with_prefix;
-        let output_channel = Stdlib.open_out output_fn_with_prefix in
+        (let output_channel = Stdlib.open_out output_fn_with_prefix in
         (fn', output_channel) :: open_auxilliary_files source_filename prefix fns (fn' :: already_opened_list))
     | None -> []
     end
@@ -36,13 +35,12 @@ let rec open_auxilliary_files source_filename prefix included_filenames already_
 let filter_injs_by_filename inj_pairs fn =
   List.filter (fun (loc, _) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) inj_pairs
 
-let rec inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog injs_with_filenames = function
+let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames = function
   | [] -> ()
   | (fn', oc') :: xs ->
     let injs_with_syms = filter_injs_by_filename injs_with_filenames fn' in
     let injs_for_fn' = injs_with_syms in 
     (* let injs_for_fn' = List.map (fun (loc, (_, strs)) -> (loc, strs)) injs_with_syms in *)
-    Stdlib.output_string oc' cn_utils_header;
     begin match
       Source_injection.(output_injections oc'
         { filename=fn'; program= ail_prog
@@ -57,7 +55,37 @@ let rec inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog injs_with
         prerr_endline str
     end;
     Stdlib.close_out oc';
-    inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog injs_with_filenames xs
+    inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames xs
+
+let copy_source_dir_files_into_output_dir filename already_opened_fns_and_ocs prefix = 
+  let source_files_already_opened = filename :: (List.map fst already_opened_fns_and_ocs) in 
+  Printf.printf "Source dir files already opened\n";
+  let _ = List.map (fun fn -> Printf.printf "%s\n" fn) source_files_already_opened in 
+  let split_str_list = String.split_on_char '/' filename in 
+  let rec remove_last_elem = function 
+    | [] -> []
+    | [_] -> []
+    | x :: xs -> x :: (remove_last_elem xs)
+  in
+  let source_dir_path = String.concat "/" (remove_last_elem split_str_list) in 
+  let source_dir_all_files_without_path = Array.to_list (Sys.readdir source_dir_path) in
+  let source_dir_all_files_with_path = List.map (fun fn -> String.concat "/" [source_dir_path; fn]) source_dir_all_files_without_path in 
+  let remaining_source_dir_files = List.filter (fun fn -> not (List.mem String.equal fn source_files_already_opened)) source_dir_all_files_with_path in
+  let remaining_source_dir_files = List.filter (fun fn -> List.mem String.equal (Filename.extension fn) [".c"; ".h"]) remaining_source_dir_files in
+  let remaining_source_dir_files_opt = List.map (fun str -> Some str) remaining_source_dir_files in
+  Printf.printf "Remaining source dir files\n";
+  let _ = List.map (fun fn -> Printf.printf "%s\n" fn) remaining_source_dir_files in 
+  let remaining_fns_and_ocs = open_auxilliary_files filename prefix remaining_source_dir_files_opt [] in 
+  let read_file file =
+    In_channel.with_open_bin file In_channel.input_all 
+  in 
+  let copy_file_contents_to_output_dir (input_fn, fn_oc) = 
+    let input_file_contents = read_file input_fn in 
+    Stdlib.output_string fn_oc input_file_contents;
+    ()
+  in
+  let _ = List.map copy_file_contents_to_output_dir remaining_fns_and_ocs in 
+  ()
 
 let memory_accesses_injections ail_prog =
   let open Cerb_frontend in
@@ -93,7 +121,7 @@ let memory_accesses_injections ail_prog =
 
 open Executable_spec_internal
 
-let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
+let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
   let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
   let oc = Stdlib.open_out (prefix ^ output_filename) in
   let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
@@ -210,4 +238,8 @@ with
     (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
     prerr_endline str
 end;
-inject_in_stmt_injs_to_multiple_files cn_utils_header ail_prog in_stmt_injs_with_filenames fns_and_ocs
+inject_in_stmt_injs_to_multiple_files ail_prog in_stmt_injs_with_filenames fns_and_ocs;
+if copy_source_dir then 
+  copy_source_dir_files_into_output_dir filename fns_and_ocs prefix;
+()
+

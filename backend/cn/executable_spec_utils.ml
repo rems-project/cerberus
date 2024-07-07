@@ -88,12 +88,14 @@ let generate_include_header (file_name, is_system_header) =
   in
   pre ^ incl ^ "\n"
 
+let get_ctype_without_ptr ctype = match rm_ctype ctype with
+  | C.(Pointer (_, ct)) -> ct
+  | _ -> ctype
+
+
 let str_of_ctype ctype =
   (* Make sure * doesn't get passed back with string *)
-  let ctype = match rm_ctype ctype with
-    | C.(Pointer (_, ct)) -> ct
-    | _ -> ctype
-  in
+  let ctype = get_ctype_without_ptr ctype in 
   let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
   CF.Pp_utils.to_plain_pretty_string doc
 

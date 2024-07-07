@@ -154,6 +154,7 @@ let main
       output_decorated_dir
       output_decorated
       with_ownership_checking
+      copy_source_dir
       astprints
       use_vip
       no_use_ity
@@ -220,7 +221,7 @@ let main
         Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
       | Some output_filename ->
           Cerb_colour.without_colour begin fun () ->
-            Executable_spec.main ~with_ownership_checking filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
+            Executable_spec.main ~with_ownership_checking ~copy_source_dir filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
             return ()
           end ()
       end in
@@ -350,6 +351,10 @@ let with_ownership_checking =
   let doc = "Enable ownership checking within CN runtime testing" in
   Arg.(value & flag & info ["with_ownership_checking"] ~doc)
 
+let copy_source_dir =
+  let doc = "Copy non-CN annotated files into output_decorated_dir for CN runtime testing" in
+  Arg.(value & flag & info ["copy_source_dir"] ~doc)
+
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
@@ -453,6 +458,7 @@ let () =
       output_decorated_dir $
       output_decorated $
       with_ownership_checking $
+      copy_source_dir $
       astprints $
       use_vip $
       no_use_ity $

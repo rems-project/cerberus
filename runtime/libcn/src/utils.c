@@ -40,7 +40,7 @@ void cn_assert(cn_bool *cn_b, struct cn_error_message_info *error_msg_info) {
                 printf("CN source location: \n%s\n", error_msg_info->cn_source_loc);
             }
         } else {
-            printf("Assertion failed: C memory access");
+            printf("Assertion failed: C memory access\n");
         }
         cn_exit();
     }
@@ -100,7 +100,7 @@ void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, 
 void cn_get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
-        printf("Getting ownership for: %lu\n", generic_c_ptr + i);
+        printf("CN: Getting ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info->function_name);
         *address_key = generic_c_ptr + i;
         int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
         cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1), error_msg_info);
@@ -112,7 +112,7 @@ void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownersh
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
-        printf("Putting back ownership for: %lu\n", generic_c_ptr + i);
+        printf("CN: Putting back ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info->function_name);
         int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
         cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth), error_msg_info);
         ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth - 1);
@@ -135,23 +135,23 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, owne
     }
 }
 
-void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth) {
-    for (int i = 0; i < size; i++) { 
-        signed long *address_key = alloc(sizeof(long));
-        *address_key = ptr_to_local + i;
-        printf("C ownership checking: mapping %lu\n", ptr_to_local + i);
-        ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
-    }
-}
+// void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth) {
+//     for (int i = 0; i < size; i++) { 
+//         signed long *address_key = alloc(sizeof(long));
+//         *address_key = ptr_to_local + i;
+//         printf("C ownership checking: mapping %lu\n", ptr_to_local + i);
+//         ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
+//     }
+// }
 
-void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size) {
-    for (int i = 0; i < size; i++) { 
-        signed long *address_key = alloc(sizeof(long));
-        *address_key = ptr_to_local + i;
-        printf("C ownership checking: removing %lu\n", ptr_to_local + i);
-        ghost_state_remove(cn_ownership_global_ghost_state, address_key);
-    }
-}
+// void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size) {
+//     for (int i = 0; i < size; i++) { 
+//         signed long *address_key = alloc(sizeof(long));
+//         *address_key = ptr_to_local + i;
+//         printf("C ownership checking: removing %lu\n", ptr_to_local + i);
+//         ghost_state_remove(cn_ownership_global_ghost_state, address_key);
+//     }
+// }
 
 /* TODO: Need address of and size of every stack-allocated variable - could store in struct and pass through. But this is an optimisation */
 // void c_map_locals_to_stack_depth(ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, ...) {

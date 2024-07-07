@@ -565,6 +565,7 @@ let empty_for_dest : type a. a dest -> a =
 
 let generate_ownership_function with_ownership_checking ctype = 
   let ctype_str = str_of_ctype ctype in
+  Printf.printf ("ctype_str: %s\n") ctype_str;
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in
@@ -705,7 +706,7 @@ let rec cn_to_ail_expr_aux_internal
     let ail_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_ite")), [e1; e2; e3])) in
     dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr ail_expr_)
 
-  | EachI ((r_start, (sym, bt), r_end), t) -> 
+  | EachI ((r_start, (sym, bt'), r_end), t) -> 
 
     (* 
     Input:
@@ -732,16 +733,19 @@ let rec cn_to_ail_expr_aux_internal
     *)
 
     let mk_int_const n = 
-      A.AilEconst (ConstantInteger (IConstant (Z.of_int n, Decimal, None)))
+      IT.(IT (Const (Z (Z.of_int n)), bt', Cerb_location.unknown)) 
     in
 
-    let incr_var = A.(AilEident sym) in
-    let start_int_const = mk_int_const r_start in
-    let end_int_const = mk_int_const r_end in
-    let while_cond = A.(AilEbinary (mk_expr incr_var, Lt, mk_expr end_int_const)) in
+    let start_const_it = mk_int_const r_start in 
+    let end_const_it = mk_int_const r_end in 
+
+    let incr_var = IT.(IT (Sym sym, bt', Cerb_location.unknown)) in
+    let (_, _, start_int_const) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals start_const_it PassBack in
+    let while_cond_it = IT.(IT (Binop (LT, incr_var, end_const_it), bt', Cerb_location.unknown)) in 
+    let (_, _, while_cond) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals while_cond_it PassBack in
     let translated_t = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
 
-    let (bs, ss, e) = gen_bool_while_loop sym bt start_int_const (mk_expr while_cond) translated_t in
+    let (bs, ss, e) = gen_bool_while_loop sym bt' (rm_expr start_int_const) while_cond translated_t in
     dest d (bs, ss, e)
 
   (* add Z3's Distinct for separation facts  *)

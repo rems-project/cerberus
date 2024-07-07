@@ -266,6 +266,16 @@ let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyn
   ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
 let generate_ownership_functions with_ownership_checking ctypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
+  let ctypes = List.map get_ctype_without_ptr ctypes in 
+  let rec remove_duplicates ret_list = function 
+    | [] -> ret_list
+    | x :: xs ->
+        if List.mem C.ctypeEqual x ret_list then 
+          remove_duplicates ret_list xs
+        else 
+          remove_duplicates (x :: ret_list) xs  
+  in 
+  let ctypes = remove_duplicates [] ctypes in 
   let ail_funs = List.map (fun ctype -> Cn_internal_to_ail.generate_ownership_function with_ownership_checking ctype) ctypes in
   let (decls, defs) = List.split ail_funs in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = decls; function_definitions = defs} in

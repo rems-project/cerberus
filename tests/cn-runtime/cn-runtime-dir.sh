@@ -35,15 +35,17 @@ do
   else 
     echo Generation succeeded!
     echo Compiling and linking...
-    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -pedantic -Wall -std=c11 -fno-lto -o $TEST_BASENAME-output $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c   
+    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -pedantic -std=c11 -o $TEST_BASENAME-output $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c  
     then
       echo Compiling/linking failed.
       NUM_COMPILATION_FAILED=$(( $NUM_COMPILATION_FAILED + 1 ))
       COMPILATION_FAILED="$COMPILATION_FAILED $EXEC_C_FILE"
     else 
       echo Compiling and linking succeeded!
+      cp $TEST_BASENAME-output $EXEC_C_DIRECTORY
+      rm $TEST_BASENAME-output
       echo Running the $TEST_BASENAME-output binary ...
-      if ! ./$TEST_BASENAME-output
+      if ! ./$EXEC_C_DIRECTORY/$TEST_BASENAME-output
       then 
           echo Running binary failed.
           NUM_RUNNING_BINARY_FAILED=$(( $NUM_RUNNING_BINARY_FAILED + 1 ))
