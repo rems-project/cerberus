@@ -126,9 +126,9 @@ let generate_c_records ail_structs =
   let struct_docs = List.map generate_doc_from_ail_struct ail_structs in
   CF.Pp_utils.to_plain_pretty_string (PPrint.concat struct_docs)
 
-let generate_record_strs sigm ail_records =
+let generate_record_strs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) ail_records =
   let records_str = generate_c_records ail_records in
-  let ail_record_equality_functions = List.map (fun r -> Cn_internal_to_ail.generate_struct_equality_function ~is_record:true r) ail_records in
+  let ail_record_equality_functions = List.map (fun r -> Cn_internal_to_ail.generate_struct_equality_function ~is_record:true sigm.cn_datatypes r) ail_records in
   let ail_record_equality_functions = List.concat ail_record_equality_functions in
   let (eq_decls, eq_defs) = List.split ail_record_equality_functions in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = eq_decls; function_definitions = eq_defs} in
@@ -186,7 +186,7 @@ let generate_struct_injs (sigm: CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) 
       let c_struct_str = generate_str_from_ail_struct def in
       let cn_struct_str = generate_str_from_ail_structs (Cn_internal_to_ail.cn_to_ail_struct def) in
       let xs = Cn_internal_to_ail.generate_struct_conversion_function def in
-      let ys = Cn_internal_to_ail.generate_struct_equality_function def in
+      let ys = Cn_internal_to_ail.generate_struct_equality_function sigm.cn_datatypes def in
       let prototypes_str = match (xs, ys) with
         | (((sym1, (loc1, attrs1, conversion_decl)), _) :: _, ((sym2, (loc2, attrs2, equality_decl)), _) :: _) ->
           let conversion_def = (sym1, (loc1, attrs1, conversion_decl)) in
@@ -277,7 +277,7 @@ let generate_ownership_functions with_ownership_checking ctypes (sigm : CF.GenTy
 
 let generate_conversion_and_equality_functions (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let ail_funs = List.map Cn_internal_to_ail.generate_struct_conversion_function sigm.tag_definitions in
-  let ail_funs' = List.map Cn_internal_to_ail.generate_struct_equality_function sigm.tag_definitions in
+  let ail_funs' = List.map (Cn_internal_to_ail.generate_struct_equality_function sigm.cn_datatypes) sigm.tag_definitions in
   let ail_funs'' = List.map Cn_internal_to_ail.generate_datatype_equality_function sigm.cn_datatypes in
   let ail_funs = List.concat ail_funs in
   let ail_funs = ail_funs @ List.concat ail_funs' @ List.concat ail_funs'' in

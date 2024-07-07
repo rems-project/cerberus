@@ -356,6 +356,36 @@ let add_conversion_fn ?num_elements ail_expr_ bt =
         ) in 
       A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), List.map mk_expr args))
     | None -> ail_expr_
+
+let get_equality_fn_call bt e1 e2 dts  =
+  match bt with 
+    | BT.Map (bt1, bt2) ->
+      let (_, val_bt) = map_basetypes bt in
+      let val_ctype = bt_to_ail_ctype val_bt in
+      let val_str = str_of_ctype val_ctype in
+      let val_str = String.concat "_" (String.split_on_char ' ' val_str) in
+      let val_equality_str =  val_str ^ "_equality" in
+      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
+    | _ -> 
+      let ctype = (bt_to_ail_ctype bt) in
+      (match get_typedef_string ctype with 
+        | Some str ->
+          (* Printf.printf "typedef string when producing equality function: %s\n" str; *)
+          let fn_name = str ^ "_equality" in 
+          A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
+        | None -> 
+          (match rm_ctype ctype with 
+            | C.(Pointer (_, Ctype (_, Struct sym))) -> 
+              let dt_names = List.map (fun dt -> Sym.pp_string dt.cn_dt_name) dts in 
+              (* List.iter (fun dt_str -> Printf.printf "%s\n" dt_str) dt_names; *)
+              let _is_datatype = List.mem String.equal (Sym.pp_string sym) dt_names in
+              (* let prefix = if is_datatype then "datatype_" else "struct_" in *)
+              let prefix = "struct_" in
+              let str = prefix ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
+              (* Printf.printf "str produced for record: %s\n" str; *)
+              let fn_name = str ^ "_equality" in 
+              A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
+            | _ -> failwith (Printf.sprintf "Could not construct equality function for type %s" (CF.Pp_utils.to_plain_pretty_string (BT.pp bt)))))
     
 
 let rearrange_start_inequality sym (IT.(IT (_, _, loc)) as e1) e2 = 
@@ -647,37 +677,7 @@ let rec cn_to_ail_expr_aux_internal
     
 
     let ail_expr_ = match ail_bop with 
-      | A.Eq -> 
-        (
-          match IT.bt t1 with 
-            | BT.Map (bt1, bt2) ->
-              let (_, val_bt) = map_basetypes (IT.bt t1) in
-              let val_ctype = bt_to_ail_ctype val_bt in
-              let val_str = str_of_ctype val_ctype in
-              let val_str = String.concat "_" (String.split_on_char ' ' val_str) in
-              let val_equality_str =  val_str ^ "_equality" in
-              A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_equality")), [e1; e2; mk_expr (AilEident (Sym.fresh_pretty val_equality_str))]))
-            | _ -> 
-              let ctype = (bt_to_ail_ctype (IT.bt t1)) in
-              (match get_typedef_string ctype with 
-                | Some str ->
-                  (* Printf.printf "typedef string when producing equality function: %s\n" str; *)
-                  let fn_name = str ^ "_equality" in 
-                  A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
-                | None -> 
-                  (match rm_ctype ctype with 
-                    | C.(Pointer (_, Ctype (_, Struct sym))) -> 
-                      let dt_names = List.map (fun dt -> Sym.pp_string dt.cn_dt_name) dts in 
-                      (* List.iter (fun dt_str -> Printf.printf "%s\n" dt_str) dt_names; *)
-                      let _is_datatype = List.mem String.equal (Sym.pp_string sym) dt_names in
-                      (* let prefix = if is_datatype then "datatype_" else "struct_" in *)
-                      let prefix = "struct_" in
-                      let str = prefix ^ (String.concat "_" (String.split_on_char ' ' (Sym.pp_string sym))) in 
-                      (* Printf.printf "str produced for record: %s\n" str; *)
-                      let fn_name = str ^ "_equality" in 
-                      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e1; e2]))
-                    | _ -> default_ail_binop))
-        )
+      | Eq -> get_equality_fn_call (IT.bt t1) e1 e2 dts
       | _ -> default_ail_binop
     in 
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_) 
@@ -1204,7 +1204,7 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
   let def = (fn_sym, (cn_datatype.cn_dt_loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], [mk_stmt tag_if_stmt])))) in
   [(decl, def)]
 
-let generate_struct_equality_function ?(is_record=false) ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
+let generate_struct_equality_function ?(is_record=false) dts ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
     | C.StructDef (members, _) -> 
       let cn_sym = if is_record then sym else generate_sym_with_suffix ~suffix:"_cn" sym in 
       let cn_struct_ctype = mk_ctype C.(Struct cn_sym) in
@@ -1227,15 +1227,11 @@ let generate_struct_equality_function ?(is_record=false) ((sym, (loc, attrs, tag
             failwith "Bad sctype"
         in
         let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
-        let typedef_str = match get_typedef_string (bt_to_ail_ctype bt) with 
-          | Some str -> String.concat "_" (String.split_on_char ' ' str)
-          | None -> match rm_ctype ctype with 
-            | C.Struct struct_sym -> "struct_" ^ (Sym.pp_string struct_sym)
-            | _ -> ""
-        in
-        let equality_fun_str = typedef_str ^ "_equality" in
         let args = List.map (fun cast_sym -> mk_expr (AilEmemberofptr (mk_expr (AilEident cast_sym), id))) cast_param_syms in 
-        mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty equality_fun_str)), args))
+        (* List length of args guaranteed to be 2 by construction *)
+        assert(List.length args == 2);
+        let equality_fn_call = get_equality_fn_call bt (List.nth args 0) (List.nth args 1) dts in 
+        mk_expr equality_fn_call
       in
       let member_equality_exprs = List.map generate_member_equality members in 
       let cn_bool_and_sym = Sym.fresh_pretty "cn_bool_and" in

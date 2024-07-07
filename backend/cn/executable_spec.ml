@@ -170,10 +170,8 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   Stdlib.output_string oc "\n";
 
   
-  
   let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
   let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
-  
   
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
   
@@ -182,7 +180,6 @@ let main ?(with_ownership_checking=false) filename ((_, sigm) as ail_prog) outpu
   let in_stmt_injs_with_filenames = toplevel_locs_and_defs @ struct_injs_with_filenames in 
   (* Treat source file separately from header files *)
   let source_file_in_stmt_injs_with_syms = filter_injs_by_filename in_stmt_injs_with_filenames filename in
-  (* let source_file_in_stmt_injs = List.map (fun (loc, (_sym, strs)) -> (loc, strs)) source_file_in_stmt_injs_with_syms in *)
   let source_file_in_stmt_injs = source_file_in_stmt_injs_with_syms in
 
   (* Rini: uncomment me *)
