@@ -100,6 +100,14 @@ void *cn_map_get(cn_map *m, cn_integer *key);
 void cn_map_set(cn_map *m, cn_integer *key, void *value);
 cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
 
+#define convert_to_cn_map(c_ptr, cntype_conversion_fn, num_elements)({\
+    cn_map *m = map_create();\
+    for (int i = 0; i < num_elements; i++) {\
+        cn_map_set(m, convert_to_cn_integer(i), cntype_conversion_fn(c_ptr[i]));\
+    }\
+    m;\
+})
+
 cn_bool *cn_pointer_equality(void *i1, void *i2);
 cn_bool *cn_pointer_is_null(cn_pointer *);
 
@@ -288,6 +296,7 @@ pool_pointer
   convert_to_cn_pointer(&(((struct tag *) cn_ptr->ptr)->member_name))
 
 
+
 #define CN_GEN_INCREMENT(CNTYPE)\
     static inline CNTYPE *CNTYPE##_increment(CNTYPE *i) {\
         *(i->val) = *(i->val) + 1;\
@@ -422,8 +431,8 @@ void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownersh
 void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
 
 /* C ownership checking */
-void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
-void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);
+// void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
+// void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);
 
 #define c_concat_with_mapping_stat(STAT, CTYPE, VAR_NAME, GHOST_STATE, STACK_DEPTH)\
     STAT; c_add_local_to_ghost_state((uintptr_t) &VAR_NAME, GHOST_STATE, sizeof(CTYPE), STACK_DEPTH);

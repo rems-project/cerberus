@@ -327,19 +327,35 @@ let cn_to_ail_binop_internal bt1 bt2 =
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
 
-let add_conversion_fn ail_expr_ bt = 
+let get_conversion_fn_str bt = 
   let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in 
   match typedef_name with 
   | Some str ->
     let str = String.concat "_" (String.split_on_char ' ' str) in
-    A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("convert_to_" ^ str))), [mk_expr ail_expr_]))
+    Some ("convert_to_" ^ str)
   | None -> (match bt with 
       | BT.Struct sym -> 
         let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
         let conversion_fn_str = "convert_to_struct_" ^ (Sym.pp_string cn_sym) in 
-        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), [mk_expr ail_expr_]))
-      | _ -> ail_expr_
+        Some conversion_fn_str
+      | _ -> None
     )
+
+let add_conversion_fn ?num_elements ail_expr_ bt = 
+  let conversion_fn_str_opt = get_conversion_fn_str bt in 
+  match conversion_fn_str_opt with 
+    | Some conversion_fn_str -> 
+      let args = (match bt with 
+        | BT.Map (bt1, bt2) -> 
+          let cntype_conversion_fn_str_opt = get_conversion_fn_str bt2 in 
+          let cntype_conversion_fn_str = match cntype_conversion_fn_str_opt with Some str -> str | None -> failwith "No conversion function for map values" in 
+          let num_elements' = match num_elements with Some num -> num | None -> failwith "Need number of array elements to create CN map" in 
+          let converted_num_elements = A.(AilEconst (ConstantInteger (IConstant (Z.of_int num_elements', Decimal, None)))) in 
+          A.[ail_expr_; AilEident (Sym.fresh_pretty cntype_conversion_fn_str); converted_num_elements]
+        | _ -> [ail_expr_]  
+        ) in 
+      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty conversion_fn_str)), List.map mk_expr args))
+    | None -> ail_expr_
     
 
 let rearrange_start_inequality sym (IT.(IT (_, _, loc)) as e1) e2 = 
@@ -1256,11 +1272,14 @@ let generate_struct_conversion_function ((sym, (loc, attrs, tag_def)) : (A.ail_i
       let rhs = A.(AilEmemberof (mk_expr (AilEident param_sym), id)) in
       let sct_opt = Sctypes.of_ctype ctype in 
       let sct = match sct_opt with 
-        | Some t -> t
-        | None -> failwith "Bad sctype"
+      | Some t -> t
+      | None -> failwith "Bad sctype"
       in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
-      let rhs = add_conversion_fn rhs bt in 
+      let rhs = match sct with 
+      | Sctypes.Array (_, Some num_elements) -> add_conversion_fn ~num_elements rhs bt
+      | _ -> add_conversion_fn rhs bt
+      in 
       let lhs = A.(AilEmemberofptr (mk_expr (AilEident res_sym), id)) in 
       A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr rhs))))
     in
