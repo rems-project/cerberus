@@ -736,7 +736,7 @@ Module CheriMemoryImplWithProofs
   Qed.
 
 
-  (* Another spec for [capmeta_ghost_tags] *)
+  (* Another spec for [capmeta_ghost_tags]. *)
   Lemma capmeta_ghost_tags_spec'
     (addr: AddressValue.t)
     (size: nat)
@@ -747,15 +747,14 @@ Module CheriMemoryImplWithProofs
       let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
       let a0 := align_down (AddressValue.to_Z addr) alignment in
       let a1 := align_down (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
-      let az := AddressValue.to_Z a in
-      (a0 <= az <= a1) ->
+      (a0 <= AddressValue.to_Z a <= a1) ->
       forall tg gs,
         AMap.M.MapsTo a (tg,gs) (capmeta_ghost_tags addr size capmeta)
         ->
           tg=false \/ gs.(tag_unspecified) = true.
   Proof.
-    intros a alignment a0 a1 az R tg gs M.
-    subst a0 a1 az alignment.
+    intros a alignment a0 a1 R tg gs M.
+    subst a0 a1 alignment.
     dependent destruction size.
     -
       lia.
@@ -803,6 +802,110 @@ Module CheriMemoryImplWithProofs
           subst.
           rewrite Z.add_simpl_r in  *.
           lia.
+  Qed.
+
+  Fact mod_le_mod
+    (a b c: Z)
+    (Cpos: 0 < c)
+    (Anneg: 0 <= a)
+    (Bnneg: 0 <= b)
+    (Hab: a <= b):
+    a - a mod c <= b - b mod c.
+  Proof.
+    remember (a mod c) as r_a.
+    remember (b mod c) as r_b.
+    remember (a / c) as q_a.
+    remember (b / c) as q_b.
+
+    assert (H_a: a = q_a * c + r_a).
+    {
+      subst.
+      rewrite Z.mul_comm.
+      apply Z.div_mod.
+      lia.
+    }
+    assert (H_b: b = q_b * c + r_b).
+    {
+      subst.
+      rewrite Z.mul_comm.
+      apply Z.div_mod.
+      lia.
+    }
+
+    destruct (Z.eq_dec q_a q_b).
+    +
+      subst.
+      lia.
+    +
+      pose proof (Z.mod_pos_bound a c Cpos).
+      pose proof (Z.mod_pos_bound b c Cpos).
+      subst a b.
+      nia.
+  Qed.
+
+
+  (* Yeat another spec for [capmeta_ghost_tags].
+     Unlike [capmeta_ghost_tags_spec'] this one is defined for unalinged address range
+     and more suitable to be applied when unaligned region is ghosted.
+   *)
+  Lemma capmeta_ghost_tags_spec''
+    (addr: AddressValue.t)
+    (size: nat)
+    (SZ: (size>0)%nat)
+    (capmeta: AMap.M.t (bool*CapGhostState)):
+
+    forall a,
+      (0 <= addr_offset a addr < Z.of_nat size) ->
+
+      let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
+      let ac := AddressValue.of_Z (align_down (AddressValue.to_Z a) alignment) in
+      forall tg gs,
+        AMap.M.MapsTo ac (tg,gs) (capmeta_ghost_tags addr size capmeta)
+        ->
+          tg=false \/ gs.(tag_unspecified) = true.
+  Proof.
+    intros a H alignment ac tg gs H0.
+    apply (capmeta_ghost_tags_spec' addr size SZ capmeta ac);
+      subst ac alignment.
+    2: auto.
+
+    (* cleanup *)
+    clear H0 capmeta tg gs.
+    destruct H.
+    unfold align_down, addr_offset in *.
+
+    (* generalize alignment *)
+    pose proof MorelloImpl.alignof_pointer_pos as P.
+    remember (Z.of_nat (alignof_pointer MorelloImpl.get)) as zalign.
+    assert (0<zalign) as ZP by lia.
+    clear Heqzalign P.
+    rename zalign into align.
+
+    (* generalize size *)
+    remember (Z.of_nat size) as zsz.
+    assert (zsz > 0) as ZSZ by lia.
+    clear size SZ Heqzsz.
+    rename zsz into sz.
+
+    (* some random useful facts *)
+    pose proof (AddressValue.to_Z_in_bounds addr).
+    pose proof (AddressValue.to_Z_in_bounds a).
+    unfold AddressValue.ADDR_MIN in *.
+    pose proof (Z.mod_pos_bound (AddressValue.to_Z addr) align ZP).
+    pose proof (Z.mod_pos_bound (AddressValue.to_Z a) align ZP).
+
+    (* need the following two for roundtrip simplification *)
+    pose proof (Z.mod_bound_pos_le (AddressValue.to_Z addr) align).
+    autospecialize H5;[lia|].
+    autospecialize H5;[lia|].
+    pose proof (Z.mod_bound_pos_le (AddressValue.to_Z a) align).
+    autospecialize H6;[lia|].
+    autospecialize H6;[lia|].
+
+    (* simplify *)
+    rewrite AddressValue.of_Z_roundtrip;[|unfold AddressValue.ADDR_MIN;lia].
+
+    split;apply mod_le_mod;lia.
   Qed.
 
   Definition memM_same_state
