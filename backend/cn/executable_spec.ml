@@ -224,12 +224,14 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
     executable_spec.pre_post
   in
 
+  (* TODO: Remove *)
+  let in_stmt = if copy_source_dir then [] else executable_spec.in_stmt @ source_file_in_stmt_injs @ accesses_stmt_injs in
+
   begin match
   Source_injection.(output_injections oc
     { filename; program= ail_prog
     ; pre_post=pre_post_pairs
-    (* ; in_stmt=(executable_spec.in_stmt @ c_datatypes_locs_and_strs @ locs_and_c_function_decls @ locs_and_c_predicate_decls @ source_file_struct_injs)} *)
-    ; in_stmt=(executable_spec.in_stmt @ source_file_in_stmt_injs @ accesses_stmt_injs)}
+    ; in_stmt=in_stmt}
   )
 with
 | Ok () ->
@@ -238,8 +240,7 @@ with
     (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
     prerr_endline str
 end;
+(if copy_source_dir then 
+  copy_source_dir_files_into_output_dir filename fns_and_ocs prefix);
 inject_in_stmt_injs_to_multiple_files ail_prog in_stmt_injs_with_filenames fns_and_ocs;
-if copy_source_dir then 
-  copy_source_dir_files_into_output_dir filename fns_and_ocs prefix;
-()
 
