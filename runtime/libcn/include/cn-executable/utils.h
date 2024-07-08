@@ -110,6 +110,13 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
 
 cn_bool *cn_pointer_equality(void *i1, void *i2);
 cn_bool *cn_pointer_is_null(cn_pointer *);
+cn_bool *cn_pointer_le(cn_pointer *i1, cn_pointer *i2);
+cn_bool *cn_pointer_lt(cn_pointer *i1, cn_pointer *i2);
+cn_bool *cn_pointer_ge(cn_pointer *i1, cn_pointer *i2);
+cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
+
+#define cn_pointer_deref(CN_PTR, CTYPE)\
+    *((CTYPE *) CN_PTR->ptr)
 
 /* CN integer type auxilliary functions */
 

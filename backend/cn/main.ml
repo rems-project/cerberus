@@ -190,7 +190,8 @@ let main
     IndexTerms.use_vip := use_vip;
     Check.batch := batch;
     Diagnostics.diag_string := diag;
-    WellTyped.use_ity := not no_use_ity
+    WellTyped.use_ity := not no_use_ity;
+    Sym.executable_spec_enabled := Option.is_some output_decorated;
   end;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =

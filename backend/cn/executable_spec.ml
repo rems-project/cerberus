@@ -59,8 +59,6 @@ let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames = fun
 
 let copy_source_dir_files_into_output_dir filename already_opened_fns_and_ocs prefix = 
   let source_files_already_opened = filename :: (List.map fst already_opened_fns_and_ocs) in 
-  Printf.printf "Source dir files already opened\n";
-  let _ = List.map (fun fn -> Printf.printf "%s\n" fn) source_files_already_opened in 
   let split_str_list = String.split_on_char '/' filename in 
   let rec remove_last_elem = function 
     | [] -> []
@@ -73,8 +71,6 @@ let copy_source_dir_files_into_output_dir filename already_opened_fns_and_ocs pr
   let remaining_source_dir_files = List.filter (fun fn -> not (List.mem String.equal fn source_files_already_opened)) source_dir_all_files_with_path in
   let remaining_source_dir_files = List.filter (fun fn -> List.mem String.equal (Filename.extension fn) [".c"; ".h"]) remaining_source_dir_files in
   let remaining_source_dir_files_opt = List.map (fun str -> Some str) remaining_source_dir_files in
-  Printf.printf "Remaining source dir files\n";
-  let _ = List.map (fun fn -> Printf.printf "%s\n" fn) remaining_source_dir_files in 
   let remaining_fns_and_ocs = open_auxilliary_files filename prefix remaining_source_dir_files_opt [] in 
   let read_file file =
     In_channel.with_open_bin file In_channel.input_all 
@@ -131,7 +127,7 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
   let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
   generate_c_functions_internal sigm prog5.mu_logical_predicates in
-  let (c_predicate_defs, locs_and_c_predicate_decls, c_records', ownership_ctypes) =
+  let (c_predicate_defs, locs_and_c_predicate_decls, c_records', _) =
   generate_c_predicates_internal sigm prog5.mu_resource_predicates executable_spec.ownership_ctypes in
   let (conversion_function_defs, _conversion_function_decls) =
   generate_conversion_and_equality_functions sigm in
@@ -149,7 +145,7 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
     )
   ;
 
-  let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking ownership_ctypes sigm in
+  let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking Cn_internal_to_ail.ownership_ctypes sigm in
   let c_structs = print_c_structs sigm.tag_definitions in
   let cn_converted_structs = generate_cn_versions_of_structs sigm.tag_definitions in
 

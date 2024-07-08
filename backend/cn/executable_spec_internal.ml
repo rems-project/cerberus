@@ -49,13 +49,13 @@ let populate_record_map (prog5: unit Mucore.mu_file) =
   ()
 
 
-
 let rec extract_global_variables = function
   | [] -> []
-  | (sym, (_, _, decl)) :: ds ->
-      (match decl with
-        | A.Decl_object (_, _, _, ctype) -> (sym, ctype) :: extract_global_variables ds
-        | A.Decl_function _ -> extract_global_variables ds)
+  | (sym, mu_globs) :: ds ->
+      (match mu_globs with
+        | Mucore.M_GlobalDef (ctype, _) -> (sym, Sctypes.to_ctype ctype) :: extract_global_variables ds
+        | M_GlobalDecl (ctype) -> (sym, Sctypes.to_ctype ctype) :: extract_global_variables ds)
+
 
 let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation : Core_to_mucore.instrumentation) _ (sigm: _ CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) =
   let dts = sigm.cn_datatypes in
@@ -64,7 +64,7 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
     | (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) -> ret_ty
     | _ -> failwith "TODO"
   in
-  let globals = extract_global_variables sigm.declarations in
+  let globals = extract_global_variables prog5.mu_globs in 
   let ail_executable_spec = Cn_internal_to_ail.cn_to_ail_pre_post_internal with_ownership_checking dts preds globals c_return_type instrumentation.internal in
   let pre_str = generate_ail_stat_strs ail_executable_spec.pre in
   let post_str = generate_ail_stat_strs ail_executable_spec.post in
@@ -265,16 +265,17 @@ let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyn
   let record_triple_str = generate_record_strs sigm (List.concat ail_records) in
   ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
 
-let generate_ownership_functions with_ownership_checking ctypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
-  let ctypes = List.map get_ctype_without_ptr ctypes in 
+let generate_ownership_functions with_ownership_checking ownership_ctypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
+  (* let ctypes = List.map get_ctype_without_ptr ctypes in  *)
   let rec remove_duplicates ret_list = function 
-    | [] -> ret_list
+    | [] -> []
     | x :: xs ->
-        if List.mem C.ctypeEqual x ret_list then 
-          remove_duplicates ret_list xs
+        if (List.mem execCtypeEqual x ret_list) then 
+          remove_duplicates (x :: ret_list) xs
         else 
-          remove_duplicates (x :: ret_list) xs  
+          x :: remove_duplicates (x :: ret_list) xs  
   in 
+  let ctypes = !ownership_ctypes in 
   let ctypes = remove_duplicates [] ctypes in 
   let ail_funs = List.map (fun ctype -> Cn_internal_to_ail.generate_ownership_function with_ownership_checking ctype) ctypes in
   let (decls, defs) = List.split ail_funs in

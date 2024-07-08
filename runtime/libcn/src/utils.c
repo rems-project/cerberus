@@ -198,6 +198,14 @@ cn_bool *cn_pointer_le(cn_pointer *p1, cn_pointer *p2) {
     return convert_to_cn_bool(p1->ptr <= p2->ptr);
 }
 
+cn_bool *cn_pointer_gt(cn_pointer *p1, cn_pointer *p2) {
+    return convert_to_cn_bool(p1->ptr > p2->ptr);
+}
+
+cn_bool *cn_pointer_ge(cn_pointer *p1, cn_pointer *p2) {
+    return convert_to_cn_bool(p1->ptr >= p2->ptr);
+}
+
 cn_pointer *cast_cn_pointer_to_cn_pointer(cn_pointer *p) {\
         return p;
 }
