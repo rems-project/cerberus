@@ -491,14 +491,12 @@ type ail_executable_spec = {
     pre: ail_bindings_and_statements;
     post: ail_bindings_and_statements;
     in_stmt: (Locations.t * ail_bindings_and_statements) list;
-    ownership_ctypes: CF.Ctype.ctype list;
 }
 
 let empty_ail_executable_spec = {
   pre = ([], []);
   post = ([], []);
   in_stmt = [];
-  ownership_ctypes = [];
 }
 
 type 'a dest =
@@ -1341,7 +1339,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
       | C.Void -> A.(AilSexpr rhs)
       | _ -> A.(AilSdeclaration [(sym, Some rhs)]) 
     in
-    (b @ bs, s @ ss @ [s_decl], owned_ctype)
+    (b @ bs, s @ ss @ [s_decl])
 
   | ResourceTypes.Q q -> 
     (* 
@@ -1446,7 +1444,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
         ([sym_binding], [sym_decl; ail_block])
     in
 
-    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss', owned_ctype)
+    (b1 @ b2 @ b3 @ [start_binding] @ bs' @ bs, s1 @ s2 @ s3 @ ss @ ss')
 
 let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> (C.union_tag * C.ctype) list -> a dest -> LC.logical_constraint -> a
   = fun dts globals d lc -> 
@@ -1538,22 +1536,18 @@ let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition))
 
 
   
-let rec cn_to_ail_lat_internal ?(is_toplevel=true) dts pred_sym_opt globals ownership_ctypes preds = function
+let rec cn_to_ail_lat_internal ?(is_toplevel=true) dts pred_sym_opt globals preds = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let binding = create_binding name ctype in
     let (b1, s1) = cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it (AssignVar name) in
-    let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals ownership_ctypes preds lat in
-    (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
+    let (b2, s2) = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
+    (b1 @ b2 @ [binding], s1 @ s2)
 
   | LAT.Resource ((name, (ret, bt)), (loc, str_opt), lat) -> 
-    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret in
-    let ct = match owned_ctype with 
-      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
-      | None -> []
-    in
-    let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals (ct @ ownership_ctypes) preds lat in
-    (b1 @ b2, s1 @ s2, ownership_ctypes')
+    let (b1, s1) = cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret in
+    let (b2, s2) = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
+    (b1 @ b2, s1 @ s2)
 
   | LAT.Constraint (lc, (loc, str_opt), lat) -> 
     let (b1, s, e) = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
@@ -1567,38 +1561,38 @@ let rec cn_to_ail_lat_internal ?(is_toplevel=true) dts pred_sym_opt globals owne
         let ail_stats_ = generate_cn_assert e in
         s @ ail_stats_
     in
-    let (b2, s2, ownership_ctypes') = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals ownership_ctypes preds lat in
-    (b1 @ b2, ss @ s2, ownership_ctypes')
+    let (b2, s2) = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals  preds lat in
+    (b1 @ b2, ss @ s2)
 
   | LAT.I it ->
     let (bs, ss) = cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it Return in 
-    (bs, ss, ownership_ctypes)
+    (bs, ss)
 
 
 
-let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definition)) dts globals ots preds cn_preds = 
+let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definition)) dts globals preds cn_preds = 
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some pred_sym) rp_def.oarg_bt in
 
-  let rec clause_translate (clauses : RP.clause list) ownership_ctypes = 
+  let rec clause_translate (clauses : RP.clause list) = 
     match clauses with
-      | [] -> ([], [], ownership_ctypes)
+      | [] -> ([], [])
       | c :: cs ->
-        let (bs, ss, ownership_ctypes') = cn_to_ail_lat_internal ~is_toplevel:false dts (Some pred_sym) globals ownership_ctypes preds c.packing_ft in
+        let (bs, ss) = cn_to_ail_lat_internal ~is_toplevel:false dts (Some pred_sym) globals preds c.packing_ft in
         match c.guard with 
           | IT (Const (Bool true), _, _) -> 
-            let (bs'', ss'', ownership_ctypes'') = clause_translate cs ownership_ctypes' in
-            (bs @ bs'', ss @ ss'', ownership_ctypes'')
+            let (bs'', ss'') = clause_translate cs in
+            (bs @ bs'', ss @ ss'')
           | _ -> 
             let (b1, s1, e) = cn_to_ail_expr_internal_with_pred_name (Some pred_sym) dts [] c.guard PassBack in
-            let (bs'', ss'', ownership_ctypes'') = clause_translate cs ownership_ctypes' in
+            let (bs'', ss'') = clause_translate cs in
             let conversion_from_cn_bool = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "convert_from_cn_bool")), [e])) in
             let ail_if_stat = A.(AilSif (mk_expr conversion_from_cn_bool, mk_stmt (AilSblock (bs, List.map mk_stmt ss)), mk_stmt (AilSblock (bs'', List.map mk_stmt ss'')))) in
-            ([], [ail_if_stat], ownership_ctypes'')
+            ([], [ail_if_stat])
   in
 
-  let (bs, ss, ownership_ctypes') = match rp_def.clauses with 
-    | Some clauses -> clause_translate clauses ots
-    | None -> ([], [], ots)
+  let (bs, ss) = match rp_def.clauses with 
+    | Some clauses -> clause_translate clauses
+    | None -> ([], [])
   in
 
   let pred_body = List.map mk_stmt ss in
@@ -1618,39 +1612,34 @@ let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definit
   let matched_cn_preds = List.filter (fun (cn_pred : (A.ail_identifier, C.ctype) Cn.cn_predicate) -> Sym.equal cn_pred.cn_pred_name pred_sym) cn_preds in
   (* Unsafe - check if list has an element *)
   let loc = (List.nth matched_cn_preds 0).cn_pred_magic_loc in 
-  (((loc, decl), def), ail_record_opt, ownership_ctypes')
+  (((loc, decl), def), ail_record_opt)
 
-let rec cn_to_ail_predicates_internal pred_def_list dts globals ots preds cn_preds = 
+let rec cn_to_ail_predicates_internal pred_def_list dts globals preds cn_preds = 
   match pred_def_list with 
-    | [] -> ([], [], ots)
+    | [] -> ([], [])
     | p :: ps ->
-      let (d, r, ots') = cn_to_ail_predicate_internal p dts globals ots preds cn_preds in 
-      let (ds, rs, ots'') = cn_to_ail_predicates_internal ps dts globals ots' preds cn_preds in 
-      (d :: ds, r :: rs, ots'')
+      let (d, r) = cn_to_ail_predicate_internal p dts globals preds cn_preds in 
+      let (ds, rs) = cn_to_ail_predicates_internal ps dts globals preds cn_preds in 
+      (d :: ds, r :: rs)
 
 
 (* TODO: Add destination passing? *)
-let rec cn_to_ail_post_aux_internal dts globals ownership_ctypes preds = function
+let rec cn_to_ail_post_aux_internal dts globals preds = function
   | LRT.Define ((name, it), (loc, _), t) ->
     (* Printf.printf "LRT.Define\n"; *)
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
     let new_lrt = Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, IT.bt it, new_name) t in 
     let binding = create_binding new_name (bt_to_ail_ctype (IT.bt it)) in
     let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
-    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals ownership_ctypes preds new_lrt in
-    (b1 @ b2 @ [binding], s1 @ s2, ownership_ctypes')
+    let (b2, s2) = cn_to_ail_post_aux_internal dts globals preds new_lrt in
+    (b1 @ b2 @ [binding], s1 @ s2)
 
   | LRT.Resource ((name, (re, bt)), (loc, str_opt), t)  ->
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
-    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal ~is_pre:false new_name dts globals preds loc re in
-    (* No duplicates *)
-    let ct = match owned_ctype with 
-      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
-      | None -> []
-    in
+    let (b1, s1) = cn_to_ail_resource_internal ~is_pre:false new_name dts globals preds loc re in
     let new_lrt = Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, bt, new_name) t in 
-    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals (ct @ ownership_ctypes) preds new_lrt in
-    (b1 @ b2, s1 @ s2, ownership_ctypes')
+    let (b2, s2) = cn_to_ail_post_aux_internal dts globals preds new_lrt in
+    (b1 @ b2, s1 @ s2)
 
   | LRT.Constraint (lc, (loc, str_opt), t) -> 
     let (b1, s, e) = cn_to_ail_logical_constraint_internal dts globals PassBack lc in
@@ -1662,16 +1651,16 @@ let rec cn_to_ail_post_aux_internal dts globals ownership_ctypes preds = functio
         let ail_stats_ = generate_cn_assert ~cn_source_loc_opt:(Some loc) e in
         s @ ail_stats_
     in
-    let (b2, s2, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals ownership_ctypes preds t in
+    let (b2, s2) = cn_to_ail_post_aux_internal dts globals preds t in
 
-    (b1 @ b2, ss @ s2, ownership_ctypes')
+    (b1 @ b2, ss @ s2)
 
-  | LRT.I -> ([], [], ownership_ctypes)
+  | LRT.I -> ([], [])
 
 
-let cn_to_ail_post_internal dts globals ownership_ctypes preds (RT.Computational (bound, oinfo, t)) = 
-  let (bs, ss, ownership_ctypes') = cn_to_ail_post_aux_internal dts globals ownership_ctypes preds t in 
-  (bs, List.map mk_stmt ss, ownership_ctypes')
+let cn_to_ail_post_internal dts globals preds (RT.Computational (bound, oinfo, t)) = 
+  let (bs, ss) = cn_to_ail_post_aux_internal dts globals preds t in 
+  (bs, List.map mk_stmt ss)
 
 (* TODO: Add destination passing *)
 let cn_to_ail_cnstatement_internal : type a. (_ Cn.cn_datatype) list -> (C.union_tag * C.ctype) list -> a dest -> Cnprog.cn_statement -> (a * bool)
@@ -1752,7 +1741,7 @@ let prepend_to_precondition ail_executable_spec (b1, s1) =
   {ail_executable_spec with pre = (b1 @ b2, s1 @ s2)}
 
 (* Precondition and postcondition translation - LAT.I case means precondition translation finished *)
-let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_ctypes preds c_return_type = function
+let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type = function
   | LAT.Define ((name, it), info, lat) -> 
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
@@ -1760,18 +1749,14 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_c
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding new_name ctype in
     let (b1, s1) = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_ctypes preds c_return_type new_lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (binding :: b1, s1)
 
   | LAT.Resource ((name, (ret, bt)), (loc, str_opt), lat) -> 
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in 
-    let (b1, s1, owned_ctype) = cn_to_ail_resource_internal ~is_pre:true new_name dts globals preds loc ret in
-    let ct = match owned_ctype with 
-      | Some t -> if List.mem C.ctypeEqual t ownership_ctypes then [] else [t]
-      | None -> []
-    in
+    let (b1, s1) = cn_to_ail_resource_internal ~is_pre:true new_name dts globals preds loc ret in
     let new_lat = Core_to_mucore.fn_spec_instrumentation_sym_subst_lat (name, bt, new_name) lat in 
-    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals (ct @ ownership_ctypes) preds c_return_type new_lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type new_lat in
     prepend_to_precondition ail_executable_spec (b1, s1)
 
   | LAT.Constraint (lc, (loc, str_opt), lat) -> 
@@ -1786,7 +1771,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_c
         let ail_stats_ = generate_cn_assert e in
         s @ ail_stats_
     in
-    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_ctypes preds c_return_type lat in
+    let ail_executable_spec = cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type lat in
     prepend_to_precondition ail_executable_spec (b1, ss)
 
   (* Postcondition *)
@@ -1822,7 +1807,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_c
     in
     let stats = remove_duplicates [] stats in
     let ail_statements = List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats in 
-    let (post_bs, post_ss, ownership_ctypes') = cn_to_ail_post_internal dts globals ownership_ctypes preds post in 
+    let (post_bs, post_ss) = cn_to_ail_post_internal dts globals preds post in 
     let ownership_stat_ = if with_ownership_checking then 
       (let cn_stack_depth_decr_stat = mk_stmt A.(AilSexpr (mk_expr (AilEunary (PostfixDecr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
       [cn_stack_depth_decr_stat])
@@ -1830,7 +1815,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals ownership_c
       []
     in
     let block = A.(AilSblock (return_cn_binding @ post_bs, return_cn_decl @ post_ss @ ownership_stat_)) in
-    {pre = ([], []); post = ([], [block]); in_stmt = ail_statements; ownership_ctypes = ownership_ctypes'}
+    {pre = ([], []); post = ([], [block]); in_stmt = ail_statements}
 
 
 let rec cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds globals c_return_type = function 
@@ -1844,7 +1829,7 @@ let rec cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds global
     let ail_executable_spec = cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds globals c_return_type subst_at in 
     prepend_to_precondition ail_executable_spec ([binding], [decl])
   | AT.L lat -> 
-    cn_to_ail_lat_internal_2 with_ownership_checking dts globals [] preds c_return_type lat
+    cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type lat
   
 let cn_to_ail_pre_post_internal with_ownership_checking dts preds globals c_return_type = function 
   | Some internal -> 

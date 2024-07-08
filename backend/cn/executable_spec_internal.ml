@@ -12,7 +12,6 @@ module A=CF.AilSyntax
 type executable_spec = {
     pre_post: (CF.Symbol.sym * (string list * string list)) list;
     in_stmt: (Cerb_location.t * string list) list;
-    ownership_ctypes: CF.Ctype.ctype list;
 }
 
 let generate_ail_stat_strs ?(with_newline=false) (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list)) =
@@ -95,7 +94,7 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
   let in_stmt = List.map (fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
   let block_ownership_stmts = List.map (fun (loc, ss) -> (loc, generate_ail_stat_strs ~with_newline:true ([], ss))) block_ownership_injs in 
   let block_ownership_stmts = List.map (fun (loc, strs) -> (loc, [String.concat "\n" strs])) block_ownership_stmts in 
-  ([(instrumentation.fn, (pre_str, post_str))], in_stmt @ block_ownership_stmts, ail_executable_spec.ownership_ctypes)
+  ([(instrumentation.fn, (pre_str, post_str))], in_stmt @ block_ownership_stmts)
 
 
 
@@ -106,12 +105,12 @@ let generate_c_specs_internal with_ownership_checking instrumentation_list type_
 (prog5: unit Mucore.mu_file)
 =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let (c_pres_and_posts, c_in_stmt, ownership_ctypes) = generate_c_pres_and_posts_internal with_ownership_checking instrumentation type_map sigm prog5 in
-    (c_pres_and_posts, c_in_stmt, ownership_ctypes)
+    let (c_pres_and_posts, c_in_stmt) = generate_c_pres_and_posts_internal with_ownership_checking instrumentation type_map sigm prog5 in
+    (c_pres_and_posts, c_in_stmt)
   in
   let specs = List.map generate_c_spec instrumentation_list in
-  let (pre_post, in_stmt, ownership_ctypes) = list_split_three specs in
-  let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt; ownership_ctypes = List.concat ownership_ctypes} in
+  let (pre_post, in_stmt) = List.split specs in
+  let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt} in
   executable_spec
 
 let concat_map_newline docs =
@@ -249,10 +248,10 @@ let rec remove_duplicates eq_fun = function
     else
       t :: (remove_duplicates eq_fun ts)
 
-let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) ownership_ctypes =
+let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (resource_predicates : Mucore.T.resource_predicates) =
   (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal cn_f sigm.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates in *)
   (* TODO: Remove passing of resource_predicates argument twice - could use counter? *)
-  let (ail_funs, ail_records_opt, ownership_ctypes') = Cn_internal_to_ail.cn_to_ail_predicates_internal resource_predicates sigm.cn_datatypes [] ownership_ctypes resource_predicates sigm.cn_predicates in
+  let (ail_funs, ail_records_opt) = Cn_internal_to_ail.cn_to_ail_predicates_internal resource_predicates sigm.cn_datatypes [] resource_predicates sigm.cn_predicates in
   let (locs_and_decls, defs) = List.split ail_funs in
   let (locs, decls) = List.split locs_and_decls in
   let modified_prog1 : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {sigm with declarations = decls; function_definitions = defs} in
@@ -263,7 +262,7 @@ let generate_c_predicates_internal (sigm : CF.GenTypes.genTypeCategory CF.AilSyn
      (loc, [CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl)])) (List.combine locs decls) in
   let ail_records = List.map (fun r -> match r with | Some record -> [record] | None -> []) ail_records_opt in
   let record_triple_str = generate_record_strs sigm (List.concat ail_records) in
-  ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str, remove_duplicates CF.Ctype.ctypeEqual ownership_ctypes')
+  ("\n/* CN PREDICATES */\n\n" ^ pred_defs_str, pred_locs_and_decls, record_triple_str)
 
 let generate_ownership_functions with_ownership_checking ownership_ctypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
   (* let ctypes = List.map get_ctype_without_ptr ctypes in  *)

@@ -127,8 +127,8 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
   let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
   generate_c_functions_internal sigm prog5.mu_logical_predicates in
-  let (c_predicate_defs, locs_and_c_predicate_decls, c_records', _) =
-  generate_c_predicates_internal sigm prog5.mu_resource_predicates executable_spec.ownership_ctypes in
+  let (c_predicate_defs, locs_and_c_predicate_decls, c_records') =
+  generate_c_predicates_internal sigm prog5.mu_resource_predicates in
   let (conversion_function_defs, _conversion_function_decls) =
   generate_conversion_and_equality_functions sigm in
   
