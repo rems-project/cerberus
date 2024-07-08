@@ -177,6 +177,7 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   Stdlib.output_string cn_oc ownership_function_defs;
   Stdlib.output_string cn_oc c_function_decls;
   Stdlib.output_string cn_oc c_function_defs;
+  Stdlib.output_string cn_oc (String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls)));
   Stdlib.output_string cn_oc c_predicate_defs;
 
   let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
