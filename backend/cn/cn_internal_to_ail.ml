@@ -756,11 +756,11 @@ let rec cn_to_ail_expr_aux_internal
   | RecordMember (t, m) ->
     (* Currently assuming records only exist  *)
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
-    let ail_expr_ = match pred_name with
+    (* let ail_expr_ = match pred_name with
       | Some sym -> A.(AilEmemberofptr (e, m))
-      | None -> A.(AilEmemberof (e, m))
-    in
-    dest d (b, s, mk_expr ail_expr_)
+      | None -> A.(AilEmemberofptr (e, m))
+    in *)
+    dest d (b, s, mk_expr A.(AilEmemberofptr (e, m)))
 
   | StructMember (t, m) -> 
     let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
@@ -770,7 +770,7 @@ let rec cn_to_ail_expr_aux_internal
   | StructUpdate ((struct_term, m), new_val) ->
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals struct_term PassBack in
     let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals new_val PassBack in
-    let ail_memberof = A.(AilEmemberof (e1, m)) in
+    let ail_memberof = A.(AilEmemberofptr (e1, m)) in
     let ail_assign = A.(AilSexpr (mk_expr (AilEassign ((mk_expr ail_memberof, e2))))) in
     dest d (b1 @ b2, s1 @ s2 @ [ail_assign], e1)
 
