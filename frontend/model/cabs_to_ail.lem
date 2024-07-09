@@ -4194,6 +4194,15 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
                         <*> (E.return ident_membr)
     | CNExpr_record members ->
       CNExpr_record <$> sort_record_members desugar_cn_expr members
+    | CNExpr_struct tag members ->
+      (* copying from CNExpr_membershift case *)
+      E.resolve_extraordinary_identifier tag E.Namespace_tag >>= function
+          | Just (_, (tag_sym, _)) ->
+             CNExpr_struct <$> (E.return tag_sym)
+                           <*> sort_record_members desugar_cn_expr members
+          | Nothing ->
+              E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
+      end
     | CNExpr_memberupdates e updates ->
         CNExpr_memberupdates <$> desugar_cn_expr e
                              <*> unique_record_members desugar_cn_expr updates

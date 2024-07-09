@@ -1881,6 +1881,9 @@ prim_expr:
 | LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($4)))
                                , CNExpr_at_env (a, l))) }
+| STRUCT tag=cn_variable LBRACE members=record_def RBRACE
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos,$endpos) NoCursor)
+                               , CNExpr_struct (tag, members))) }
 | LBRACE members=record_def RBRACE
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos,$endpos) NoCursor)
                                , CNExpr_record members)) }

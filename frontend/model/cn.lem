@@ -93,6 +93,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_list of list (cn_expr 'a 'ty)
   | CNExpr_memberof of cn_expr 'a 'ty * Symbol.identifier
   | CNExpr_record of list (Symbol.identifier * cn_expr 'a 'ty)
+  | CNExpr_struct of 'a * list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_memberupdates of cn_expr 'a 'ty * list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_arrayindexupdates of cn_expr 'a 'ty * list (cn_expr 'a 'ty * cn_expr 'a 'ty)
   | CNExpr_binop of cn_binop * cn_expr 'a 'ty * cn_expr 'a 'ty

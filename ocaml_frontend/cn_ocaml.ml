@@ -160,6 +160,16 @@ module MakePp (Conf: PP_CN) = struct
                 ])
              ) members
            )
+      | CNExpr_struct (tag, members) ->
+         Dnode (pp_ctor "CNExpr_struct", 
+             Dleaf (Conf.pp_ident tag) ::
+             List.map (fun (id, e) -> 
+                Dnode (pp_ctor "member", [
+                  Dleaf (pp_identifier id);
+                  dtree_of_cn_expr e
+                ])
+             ) members
+           )
       | CNExpr_memberupdates (e, updates) ->
          let updates = 
            List.map (fun (z,v) -> 
