@@ -891,8 +891,9 @@ Module CheriMemoryImplWithProofs
   Lemma capmeta_ghost_tags_spec_in_range
     (addr: AddressValue.t)
     (size: nat)
+    (capmeta: AMap.M.t (bool*CapGhostState))
     (SZ: (size>0)%nat)
-    (capmeta: AMap.M.t (bool*CapGhostState)):
+    :
 
     forall a,
       (0 <= addr_offset a addr < Z.of_nat size) ->
@@ -947,23 +948,6 @@ Module CheriMemoryImplWithProofs
 
     split;apply mod_le_mod;lia.
   Qed.
-
-  (* Shows that tags outside specified region left unchanged.  *)
-  Lemma capmeta_ghost_tags_spec_outside_range
-    (addr: AddressValue.t)
-    (size: nat)
-    (SZ: (size>0)%nat)
-    (capmeta: AMap.M.t (bool*CapGhostState)):
-
-    forall a,
-      not (0 <= addr_offset a addr < Z.of_nat size) ->
-
-      let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
-      let ac := AddressValue.of_Z (align_down (AddressValue.to_Z a) alignment) in
-
-      AMap.M.find ac capmeta = AMap.M.find ac (capmeta_ghost_tags addr size capmeta).
-  Proof.
-  Admitted.
 
   Definition memM_same_state
     {T: Type}
@@ -4776,32 +4760,39 @@ Module CheriMemoryImplWithProofs
     (ptrval1 ptrval2: AddressValue.t)
     (n: nat)
     :
-    forall s, PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 n).
+    forall s,
+
+      (* In *)
+      (forall a : AddressValue.t,
+          0 <= addr_offset a ptrval1 < Z.of_nat n ->
+          let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
+          let ac := AddressValue.of_Z (align_down (AddressValue.to_Z a) alignment)
+          in
+          forall (tg : bool) (gs : CapGhostState),
+            AMap.M.MapsTo ac (tg, gs) (capmeta s) ->
+            tg = false \/ tag_unspecified gs = true) ->
+
+      PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 n).
   Proof.
-    intros s.
     unfold memcpy_copy_data.
-    revert s.
-    induction n; intros.
-    + preserves_step.
+    induction n.
+    +
+      intros s _.
+      preserves_step.
       cbn.
       unfold mem_state_with_bytemap.
       destruct s.
       auto.
     +
-      pose proof (capmeta_ghost_tags_monotone ptrval1 (S n)) as CIN.
-      specialize (CIN (capmeta s)).
-
-      pose proof (capmeta_ghost_tags_spec_outside_range ptrval1 (S n)) as COUT.
-      autospecialize COUT;[lia|].
-      specialize (COUT (capmeta s)).
-
+      intros s CIN.
       preserves_steps.
+      rename H into M.
       *
         (* adding *)
         split.
         --
           (* base *)
-          apply H.
+          apply M.
         --
           remember (mem_state_with_bytemap
                       (AMap.M.add (AddressValue.with_offset ptrval1 (Z.of_nat n)) o
@@ -4813,10 +4804,22 @@ Module CheriMemoryImplWithProofs
             reflexivity.
           }
 
-          intros addr g H2 H3 bs H4.
-          exfalso.
-          (* prove contradiction in H with H2 *)
-          admit.
+          intros addr g H0 H1 bs H2.
+
+
+          assert(decidable (0 <= addr_offset addr ptrval1 < Z.of_nat (S n))) as AR
+            by (apply dec_and;[apply Z.le_decidable|apply Z.lt_decidable]).
+
+          destruct AR as [R|NR].
+          ++
+            (* in range *)
+            exfalso.
+            (* Caps in range are untagged. H0/H1 is false *)
+            admit.
+          ++
+            (* outside range *)
+            (* TODO: prove via M *)
+            admit.
       *
         (* removing *)
         admit.
@@ -5478,7 +5481,30 @@ Module CheriMemoryImplWithProofs
       destruct x.
       split.
       +
-        pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s' H2) as P.
+        pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s') as P.
+        autospecialize P.
+        {
+          intros a H4 alignment ac tg gs H5.
+          apply capmeta_ghost_tags_spec_in_range
+            with (a:=a) (addr:=a1) (size:=(Z.to_nat size))
+                 (capmeta := (capmeta s)).
+          lia.
+          lia.
+
+          replace (capmeta_ghost_tags a1 (Z.to_nat size) (capmeta s))
+            with (capmeta s').
+          apply H5.
+
+          clear - H0.
+          unfold ghost_tags in H0.
+          apply update_mem_state_spec in H0.
+          destruct s', s.
+          cbn in *.
+          invc H0.
+          reflexivity.
+        }
+        specialize (P H2).
+
         unfold post_exec_invariant, lift_sum_p, execErrS in P.
         break_let.
         repeat break_match_hyp.
