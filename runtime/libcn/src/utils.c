@@ -149,21 +149,23 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size
 #define FMT_PTR "\x1b[33m%#lx\x1b[0m"
 
 void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
-    for (int i = 0; i < size; i++) { 
-        signed long *address_key = alloc(sizeof(long));
-        *address_key = ptr_to_local + i;
-        printf("C ownership checking: mapping %lu\n", ptr_to_local + i);
-        ownership_ghost_state_set(address_key, cn_stack_depth);
-    }
+  printf("C ownership checking: add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
+  for (int i = 0; i < size; i++) { 
+      signed long *address_key = alloc(sizeof(long));
+      *address_key = ptr_to_local + i;
+      printf(" off: %d [" FMT_PTR "]\n", i, *address_key);
+      ownership_ghost_state_set(address_key, cn_stack_depth);
+  }
 }
 
 void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
-    for (int i = 0; i < size; i++) { 
-        signed long *address_key = alloc(sizeof(long));
-        *address_key = ptr_to_local + i;
-        printf("C ownership checking: unmapping %lu\n", ptr_to_local + i);
-        ownership_ghost_state_remove(address_key);
-    }
+  printf("C ownership checking: remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
+  for (int i = 0; i < size; i++) { 
+      signed long *address_key = alloc(sizeof(long));
+      *address_key = ptr_to_local + i;
+      printf(" off: %d [" FMT_PTR "]\n", i, *address_key);
+      ownership_ghost_state_remove(address_key);
+  }
 }
 
 void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
