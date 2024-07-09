@@ -51,7 +51,6 @@ let collect_memory_accesses (_, sigm) =
            to have an expression with VLA type here (?) *)
       | AilEsizeof_expr _
       | AilEalignof _
-      | AilEprint_type _ (* the sub-expr is never evaluated *)
       | AilEreg_load _ ->
           ()
       | AilEunary (_, e)
@@ -65,6 +64,7 @@ let collect_memory_accesses (_, sigm) =
       | AilEva_start (e, _)
       | AilEva_arg (e, _)
       | AilEva_end e
+      | AilEprint_type e
       | AilEbmc_assume e
       | AilEarray_decay e
       | AilEfunction_decay e

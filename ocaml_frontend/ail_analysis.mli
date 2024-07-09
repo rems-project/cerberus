@@ -18,6 +18,6 @@ type 'a memory_access =
       ; op: [ `Incr | `Decr ]
       ; lvalue: 'a expression }
 
-(* Collect the location and operands of all syntaxic occurence memory accesses,
-   regardless of their accessibility in the control-flow. *)
+(* Collect the location and operands of all syntactic occurence of
+   memory accesses, regardless of their accessibility in the control-flow. *)
 val collect_memory_accesses: 'a ail_program -> 'a memory_access list
