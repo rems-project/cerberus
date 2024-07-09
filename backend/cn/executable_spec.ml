@@ -221,8 +221,10 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
     executable_spec.pre_post
   in
 
-  (* TODO: Remove *)
-  let in_stmt = if copy_source_dir then [] else executable_spec.in_stmt @ source_file_in_stmt_injs @ accesses_stmt_injs in
+  (* TODO: Fix *)
+  let in_stmt = 
+    if copy_source_dir then [] else 
+    executable_spec.in_stmt @ source_file_in_stmt_injs @ accesses_stmt_injs in
 
   begin match
   Source_injection.(output_injections oc

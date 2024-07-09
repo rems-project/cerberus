@@ -329,7 +329,7 @@ let get_conversion_fn_str bt =
       | _ -> None
     )
 
-let add_conversion_fn ?num_elements ail_expr_ bt = 
+let add_conversion_fn ?sct ail_expr_ bt = 
   let conversion_fn_str_opt = get_conversion_fn_str bt in 
   match conversion_fn_str_opt with 
     | Some conversion_fn_str -> 
@@ -337,7 +337,9 @@ let add_conversion_fn ?num_elements ail_expr_ bt =
         | BT.Map (bt1, bt2) -> 
           let cntype_conversion_fn_str_opt = get_conversion_fn_str bt2 in 
           let cntype_conversion_fn_str = match cntype_conversion_fn_str_opt with Some str -> str | None -> failwith "No conversion function for map values" in 
-          let num_elements' = match num_elements with Some num -> num | None -> failwith "Need number of array elements to create CN map" in 
+          let num_elements' = match sct with
+            | Some (Sctypes.Array (_, Some num_elements)) -> num_elements 
+            | _ -> failwith "Need number of array elements to create CN map" in 
           let converted_num_elements = A.(AilEconst (ConstantInteger (IConstant (Z.of_int num_elements', Decimal, None)))) in 
           A.[ail_expr_; AilEident (Sym.fresh_pretty cntype_conversion_fn_str); converted_num_elements]
         | _ -> [ail_expr_]  
@@ -582,7 +584,7 @@ let generate_ownership_function with_ownership_checking ctype =
   in
   let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
   let ret_type = bt_to_ail_ctype bt in
-  let return_stmt = A.(AilSreturn (mk_expr (add_conversion_fn deref_expr_ bt))) in
+  let return_stmt = A.(AilSreturn (mk_expr (add_conversion_fn ~sct deref_expr_ bt))) in
   (* Generating function declaration *)
   let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), param_types, false, false, false)))) in
   (* Generating function definition *)
@@ -675,7 +677,7 @@ let rec cn_to_ail_expr_aux_internal
 
   | SizeOf sct ->
     let ail_expr_ = A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype sct)) in 
-    let ail_call_ = add_conversion_fn ail_expr_ basetype in 
+    let ail_call_ = add_conversion_fn ~sct ail_expr_ basetype in 
     dest d ([], [], mk_expr ail_call_)
   | OffsetOf _ -> failwith "TODO OffsetOf"
 
@@ -1256,10 +1258,7 @@ let generate_struct_conversion_function ((sym, (loc, attrs, tag_def)) : (A.ail_i
       | None -> failwith "Bad sctype"
       in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
-      let rhs = match sct with 
-      | Sctypes.Array (_, Some num_elements) -> add_conversion_fn ~num_elements rhs bt
-      | _ -> add_conversion_fn rhs bt
-      in 
+      let rhs = add_conversion_fn ~sct rhs bt in 
       let lhs = A.(AilEmemberofptr (mk_expr (AilEident res_sym), id)) in 
       A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr rhs))))
     in
@@ -1802,7 +1801,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
         let real_return_ctype = bt_to_ail_ctype bt in 
         let return_cn_binding = create_binding return_cn_sym real_return_ctype in 
         let cn_ret_ail_expr_ = A.(AilEident (Sym.fresh_pretty "__cn_ret")) in
-        let return_cn_decl = A.(AilSdeclaration [(return_cn_sym, Some (mk_expr (add_conversion_fn cn_ret_ail_expr_ bt)))]) in
+        let return_cn_decl = A.(AilSdeclaration [(return_cn_sym, Some (mk_expr (add_conversion_fn ~sct cn_ret_ail_expr_ bt)))]) in
         ([return_cn_binding], [mk_stmt return_cn_decl])
     in
     let stats = remove_duplicates [] stats in
