@@ -568,7 +568,20 @@ let rec translate_term s iterm =
         )
 
     | BWFLSNoSMT -> 
-       failwith "todo: SMT translation for FLS"
+      (* copying and adjusting BWFFSNoSMT rule *)
+      (* XXX: This desugaring duplicates e1 *)
+      let sz = match IT.bt e1 with
+        | Bits (_sign, n) -> n
+        | _ -> assert false
+      in
+      let intl i = int_lit_ i (IT.bt e1) here in
+      translate_term s
+        (ite_ ( eq_ (e1, intl 0) here
+              , intl 0
+              , sub_ (intl sz, arith_unop BWCLZNoSMT e1 here) here
+              ) here
+        )
+
 
     | Not        -> SMT.bool_not (translate_term s e1)
 
