@@ -146,6 +146,8 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size
     }
 }
 
+#define FMT_PTR "\x1b[33m%#lx\x1b[0m"
+
 void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
@@ -165,17 +167,19 @@ void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
 }
 
 void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
-    signed long *address_key = alloc(sizeof(long));
-    printf("C: Checking ownership for %lu\n", generic_c_ptr + offset);
-    *address_key = generic_c_ptr + offset;
-    int curr_depth = ownership_ghost_state_get(address_key);
-    printf("curr_depth: %d\n", curr_depth);
-    printf("cn_stack_depth: %ld\n", cn_stack_depth);
-    if (cn_stack_depth > 0) {
-        printf("cn_stack_depth: inside a function\n");
+    signed long address_key = 0;
+    printf("C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " [\n", generic_c_ptr, generic_c_ptr + offset);
+    for (int i = 0; i<offset; i++) {
+      address_key = generic_c_ptr + i;
+      int curr_depth = ownership_ghost_state_get(&address_key);
+      // printf("curr_depth: %d\n", curr_depth);
+      // printf("cn_stack_depth: %ld\n", cn_stack_depth);
+      // if (cn_stack_depth > 0) {
+      //     printf("cn_stack_depth: inside a function\n");
+      // }
+      error_msg_info.is_c_memory_access = 1;
+      cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
-    error_msg_info.is_c_memory_access = 1;
-    cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
 }
 
 /* TODO: Need address of and size of every stack-allocated variable - could store in struct and pass through. But this is an optimisation */
