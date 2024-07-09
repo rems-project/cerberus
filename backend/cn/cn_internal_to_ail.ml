@@ -232,19 +232,29 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
 
 let bt_to_ail_ctype ?(pred_sym=None) t = cn_to_ail_base_type ~pred_sym (bt_to_cn_base_type t)
 
-let cn_to_ail_unop_internal bt = function 
+let cn_to_ail_unop_internal bt =
+  let typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in function
   | Terms.Not -> (A.Bnot, Some "cn_bool_not")
   | Negate -> 
-    let typedef_str_opt = get_typedef_string (bt_to_ail_ctype bt) in
-    let typedef_str = match typedef_str_opt with 
-      | Some str -> str
-      | None -> failwith "Negate unop translation: typedef string not found"
-    in
-    (A.Minus, Some (typedef_str ^ "_negate"))
+    (match typedef_str_opt with 
+      | Some typedef_str -> (A.Bnot, Some (typedef_str ^ "_negate")) 
+      | None -> failwith "BWFLSNoSMT unop translation: typedef string not found")
+  | BWFLSNoSMT -> 
+    let failure_msg = Printf.sprintf "FLS cannot be applied to index term of type %s" (Pp.plain (BT.pp bt)) in 
+    (match bt with 
+      | Bits (Unsigned, n) -> 
+        (if (n == 64) then 
+          (A.Bnot, Some ("cn_bits_u64_flsl")) 
+        else
+          (if (n == 32) then 
+            (A.Bnot, Some "cn_bits_u32_fls")
+          else
+            failwith failure_msg
+          ))
+      | _ -> failwith failure_msg)
   | BWCLZNoSMT
   | BWCTZNoSMT
-  | BWFFSNoSMT
-  | BWFLSNoSMT -> 
+  | BWFFSNoSMT ->
      failwith "Failure: Trying to translate SMT-only unop from C source"
 
 
@@ -733,7 +743,27 @@ let rec cn_to_ail_expr_aux_internal
   (* add Z3's Distinct for separation facts  *)
   | Tuple ts -> failwith "TODO1"
   | NthTuple (i, t) -> failwith "TODO2"
-  | Struct (tag, ms) -> failwith "TODO3"
+  | Struct (tag, ms) ->
+    let res_sym = Sym.fresh () in
+    let res_ident = A.(AilEident res_sym) in
+
+    let generate_ail_stat (id, it) = 
+      let (b, s, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack in
+      let ail_memberof = A.(AilEmemberofptr (mk_expr res_ident, id)) in
+      let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
+      (b, s, assign_stat)
+    in
+
+
+    let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct tag)))) in
+    let res_binding = create_binding res_sym (mk_ctype ctype_) in
+    let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct tag)))])) in
+    let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
+    
+    let (b, s) = ([res_binding], [alloc_stat]) in
+    
+    let (bs, ss, assign_stats) = list_split_three (List.map generate_ail_stat ms) in
+    dest d (List.concat bs @ b, List.concat ss @ s @ assign_stats, mk_expr res_ident)
 
   | RecordMember (t, m) ->
     (* Currently assuming records only exist  *)

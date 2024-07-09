@@ -313,3 +313,28 @@ void initialise_error_msg_info_(const char *function_name, char *file_name, int 
 
     cn_assert(convert_to_cn_bool(cast_cn_pointer_to_bitvector(ptr1_cn) == cast_cn_pointer_to_bitvector(ptr2_cn)));
 */
+
+static uint32_t cn_fls(uint32_t x)
+{
+    return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
+}
+
+static uint64_t cn_flsl(uint64_t x)
+{
+    return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
+}
+
+
+cn_bits_u32 *cn_bits_u32_fls(cn_bits_u32 *i1) {
+        cn_bits_u32 *res = (cn_bits_u32 *) alloc(sizeof(cn_bits_u32));
+        res->val = (uint32_t *) alloc(sizeof(uint32_t));
+        *(res->val) = cn_fls(*(i1->val));
+        return res;
+    }
+
+cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1) {
+        cn_bits_u64 *res = (cn_bits_u64 *) alloc(sizeof(cn_bits_u64));
+        res->val = (uint64_t *) alloc(sizeof(uint64_t));
+        *(res->val) = cn_flsl(*(i1->val));
+        return res;
+    }

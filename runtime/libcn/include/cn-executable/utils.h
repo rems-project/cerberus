@@ -39,37 +39,37 @@ void update_error_message_info_(const char *function_name, char *file_name, int 
 /* Signed bitvectors */
 
 typedef struct cn_bits_i8 {
-    signed char *val;
+    int8_t *val;
 } cn_bits_i8;
 
 typedef struct cn_bits_i16 {
-    signed short *val;
+    int16_t *val;
 } cn_bits_i16;
 
 typedef struct cn_bits_i32 {
-    signed long *val;
+    int32_t *val;
 } cn_bits_i32;
 
 typedef struct cn_bits_i64 {
-    signed long long *val;
+    int64_t *val;
 } cn_bits_i64;
 
 /* Unsigned bitvectors */
 
 typedef struct cn_bits_u8 {
-    unsigned char *val;
+    uint8_t *val;
 } cn_bits_u8;
 
 typedef struct cn_bits_u16 {
-    unsigned short *val;
+    uint16_t *val;
 } cn_bits_u16;
 
 typedef struct cn_bits_u32 {
-    unsigned long *val;
+    uint32_t *val;
 } cn_bits_u32;
 
 typedef struct cn_bits_u64 {
-    unsigned long long *val;
+    uint64_t *val;
 } cn_bits_u64;
 
 
@@ -129,6 +129,7 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
     *((CTYPE *) CN_PTR->ptr)
 
 /* CN integer type auxilliary functions */
+
 
 #define CN_GEN_EQUALITY(CNTYPE)\
     CN_GEN_EQUALITY_(CNTYPE)
@@ -269,6 +270,9 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
         return res;\
     }
 
+cn_bits_u32 *cn_bits_u32_fls(cn_bits_u32 *i1);
+cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1);
+
 static inline int ipow(int base, int exp)
 {
     int result = 1;
@@ -399,31 +403,33 @@ pool_pointer
    CN_GEN_MAX(CNTYPE)\
    CN_GEN_MOD(CTYPE, CNTYPE)\
    CN_GEN_XOR(CTYPE, CNTYPE)\
+   CN_GEN_BWAND(CTYPE, CNTYPE)\
+   CN_GEN_BWOR(CTYPE, CNTYPE)\
    CN_GEN_POW(CTYPE, CNTYPE)\
    CN_GEN_INCREMENT(CNTYPE)\
    CN_GEN_PTR_ADD(CNTYPE)\
    CN_GEN_CASTS_INNER(CTYPE, CNTYPE)\
    CN_GEN_ARRAY_SHIFT(CTYPE, CNTYPE)\
 
-CN_GEN_ALL(signed char, cn_bits_i8)
-CN_GEN_ALL(signed short, cn_bits_i16)
-CN_GEN_ALL(signed long, cn_bits_i32)
-CN_GEN_ALL(signed long long, cn_bits_i64)
-CN_GEN_ALL(unsigned char, cn_bits_u8)
-CN_GEN_ALL(unsigned short, cn_bits_u16)
-CN_GEN_ALL(unsigned long, cn_bits_u32)
-CN_GEN_ALL(unsigned long long, cn_bits_u64)
+CN_GEN_ALL(int8_t, cn_bits_i8)
+CN_GEN_ALL(int16_t, cn_bits_i16)
+CN_GEN_ALL(int32_t, cn_bits_i32)
+CN_GEN_ALL(int64_t, cn_bits_i64)
+CN_GEN_ALL(uint8_t, cn_bits_u8)
+CN_GEN_ALL(uint16_t, cn_bits_u16)
+CN_GEN_ALL(uint32_t, cn_bits_u32)
+CN_GEN_ALL(uint64_t, cn_bits_u64)
 CN_GEN_ALL(signed long, cn_integer)
 
 
-CN_GEN_PTR_CASTS_SIGNED(signed char, cn_bits_i8)
-CN_GEN_PTR_CASTS_SIGNED(signed short, cn_bits_i16)
-CN_GEN_PTR_CASTS_SIGNED(signed long, cn_bits_i32)
-CN_GEN_PTR_CASTS_SIGNED(signed long long, cn_bits_i64)
-CN_GEN_PTR_CASTS_UNSIGNED(unsigned char, cn_bits_u8)
-CN_GEN_PTR_CASTS_UNSIGNED(unsigned short, cn_bits_u16)
-CN_GEN_PTR_CASTS_UNSIGNED(unsigned long, cn_bits_u32)
-CN_GEN_PTR_CASTS_UNSIGNED(unsigned long long, cn_bits_u64)
+CN_GEN_PTR_CASTS_SIGNED(int8_t, cn_bits_i8)
+CN_GEN_PTR_CASTS_SIGNED(int16_t, cn_bits_i16)
+CN_GEN_PTR_CASTS_SIGNED(int32_t, cn_bits_i32)
+CN_GEN_PTR_CASTS_SIGNED(int64_t, cn_bits_i64)
+CN_GEN_PTR_CASTS_UNSIGNED(uint8_t, cn_bits_u8)
+CN_GEN_PTR_CASTS_UNSIGNED(uint16_t, cn_bits_u16)
+CN_GEN_PTR_CASTS_UNSIGNED(uint32_t, cn_bits_u32)
+CN_GEN_PTR_CASTS_UNSIGNED(uint64_t, cn_bits_u64)
 CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer)
 
 
