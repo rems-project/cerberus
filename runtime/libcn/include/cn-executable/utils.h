@@ -464,20 +464,42 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset);
 // /Unused
 
 
-void cn_load(void *lvalue, size_t size);
-void cn_store(void *lvalue, size_t size);
+static inline void cn_load(void *ptr, size_t size)
+{
+  printf("\x1b[31mLOAD\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+}
+static inline void cn_store(void *ptr, size_t size)
+{
+  printf("\x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+}
 
-#define CN_LOAD(LV) \
-  ({ \
-    c_ownership_check((uintptr_t) &LV, sizeof(typeof(LV)));\
-    cn_load(&LV, sizeof(typeof(LV))); \
-    (LV); \
+// use this macro to wrap an argument to another macro that contains commas 
+#define CN_IGNORE_COMMA(...) __VA_ARGS__
+
+#define CN_LOAD(LV)                                         \
+  ({                                                        \
+    typeof(LV) *tmp = &(LV);                                \
+    c_ownership_check((uintptr_t) tmp, sizeof(typeof(LV))); \
+    cn_load(tmp, sizeof(typeof(LV)));                       \
+    *tmp;                                                   \
   })
-#define CN_STORE(LV, X) \
- ({ \
-    c_ownership_check((uintptr_t) &LV, sizeof(typeof(LV)));\
-    typeof(LV) *tmp; \
-    tmp = &(LV); \
-    cn_store(&LV, sizeof(typeof(LV))); \
-    *tmp = (X); \
+
+#define CN_STORE_OP(LV, op, X)                              \
+ ({                                                         \
+    typeof(LV) *tmp;                                        \
+    tmp = &(LV);                                            \
+    c_ownership_check((uintptr_t) tmp, sizeof(typeof(LV))); \
+    cn_store(tmp, sizeof(typeof(LV)));                      \
+    *tmp op##= (X);                                         \
+ })
+
+#define CN_STORE(LV, X) CN_STORE_OP(LV,,X)
+
+#define CN_POSTFIX(LV, OP)             \
+ ({                                    \
+    typeof(LV) *tmp;                   \
+    tmp = &(LV);                       \
+    cn_load(tmp, sizeof(typeof(LV)));  \
+    cn_store(tmp, sizeof(typeof(LV))); \
+    (*tmp) OP;                         \
  })

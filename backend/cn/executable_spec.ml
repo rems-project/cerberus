@@ -98,21 +98,39 @@ let memory_accesses_injections ail_prog =
     Printf.printf "[%d] " i;
     match access with
     | Ail_analysis.Load {loc; _} ->
-        (* Printf.printf "load -- loc: %s\n" (Locations.simple_location loc); *)
         let b, e = pos_bbox loc in
         acc := (point b, ["CN_LOAD("]) :: (point e, [")"]) :: !acc
     | Store {lvalue; expr; _} ->
         (* NOTE: we are not using the location of the access (the AilEassign), because
             if in the source the assignment was surrounded by parens its location will contain
             the parens, which will break the CN_STORE macro call *)
-        (* Printf.printf "TODO: store -- loc: %s\n" (Locations.simple_location loc); *)
         let b, pos1 = pos_bbox (loc_of_expr lvalue) in
         let pos2, e = pos_bbox (loc_of_expr expr) in
         acc := (point b, ["CN_STORE("]) :: (region (pos1, pos2) NoCursor, [", "]) :: (point e, [")"]) :: !acc
-    | StoreOp {loc; _} ->
-          Printf.printf "TODO: compound assignment -- loc: %s\n" (Locations.simple_location loc)
-    | Postfix {loc; _} ->
-          Printf.printf "TODO: postfix -- loc: %s\n" (Locations.simple_location loc)
+    | StoreOp {lvalue; aop; expr; _} ->
+        let b, pos1 = pos_bbox (loc_of_expr lvalue) in
+        let pos2, e = pos_bbox (loc_of_expr expr) in
+        let op_str = match aop with
+          | Mul -> "*"
+          | Div -> "/"
+          | Mod -> "%"
+          | Add -> "+"
+          | Sub -> "-"
+          | Shl -> "<<"
+          | Shr -> ">>"
+          | Band -> "&"
+          | Bxor -> "^"
+          | Bor -> "|" in
+        acc := (point b, ["CN_STORE_OP("]) :: (region (pos1, pos2) NoCursor, ["," ^ op_str ^ ","]) :: (point e, [")"]) :: !acc
+    | Postfix {loc; op; lvalue} ->
+        let op_str = match op with
+          | `Incr -> "++"
+          | `Decr -> "--" in
+        let b, e = pos_bbox loc in
+        let pos1, pos2 = pos_bbox (loc_of_expr lvalue) in
+        (* E++ *)
+        acc := (region (b, pos1) NoCursor, ["CN_POSTFIX("]) ::
+          (region (pos2, e) NoCursor, [", " ^ op_str ^ ")"]) :: !acc
   ) xs;
   !acc
 
