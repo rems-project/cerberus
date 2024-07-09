@@ -141,7 +141,7 @@ let push s =
 
 (** Return to the previous scope.  Assumes that there is a previous scope. *)
 let pop s n =
-  if n == 0
+  if n = 0
     then ()
     else begin
       SMT.ack_command s.smt_solver (SMT.pop n);
@@ -426,7 +426,7 @@ and
           let mk_field (l,t) v = (l, get_ivalue gs ctys t v) in
           Constructor (c, List.map2 mk_field fields vals) in
     let try_con c =
-          if con == CN_Names.datatype_con_name c then Some (do_con c) else None
+          if String.equal con (CN_Names.datatype_con_name c) then Some (do_con c) else None
     in
     begin match List.find_map try_con cons with
     | Some yes -> yes
@@ -477,7 +477,7 @@ let bv_cast to_bt from_bt x =
   let (_to_signed,   to_sz) = bits_info to_bt in
   let (from_signed, from_sz) = bits_info from_bt in
   match () with
-  | _ when to_sz == from_sz -> x
+  | _ when to_sz = from_sz -> x
   | _ when to_sz < from_sz  -> SMT.bv_extract (to_sz - 1) 0 x
   | _ when from_signed      -> SMT.bv_sign_extend (to_sz - from_sz) x
   | _                       -> SMT.bv_zero_extend (to_sz - from_sz) x
@@ -491,7 +491,7 @@ let bv_clz result_w =
   let eq_0 w e  = SMT.eq e (SMT.bv_k w Z.zero) in
 
   let rec count w e =
-    if w == 1
+    if w = 1
     then SMT.ite (eq_0 w e) (result Z.one) (result Z.zero)
     else
       let top_w = w / 2 in
@@ -512,7 +512,7 @@ let bv_ctz result_w =
   let eq_0 w e  = SMT.eq e (SMT.bv_k w Z.zero) in
 
   let rec count w e =
-    if w == 1
+    if w = 1
       then SMT.ite (eq_0 w e) (result Z.one) (result Z.zero)
       else
         let top_w = w / 2 in
@@ -763,7 +763,7 @@ let rec translate_term s iterm =
            then
              let su = make_subst [(x, num_lit_ (Z.of_int i) bt here)] in
              let t1 = IT.subst su t in
-             if i == i2
+             if i = i2
               then t1
               else IT.and2_ (t1, aux (i + 1)) here
            else failwith "EachI"
