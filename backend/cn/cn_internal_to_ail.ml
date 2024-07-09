@@ -242,7 +242,9 @@ let cn_to_ail_unop_internal bt = function
     (A.Minus, Some (typedef_str ^ "_negate"))
   | BWCLZNoSMT
   | BWCTZNoSMT
-  | BWFFSNoSMT -> failwith "Failure: Trying to translate SMT-only unop from C source"
+  | BWFFSNoSMT
+  | BWFLSNoSMT -> 
+     failwith "Failure: Trying to translate SMT-only unop from C source"
 
 
 (* TODO: Finish *)

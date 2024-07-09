@@ -392,7 +392,8 @@ module WIT = struct
            return (t, IT.bt t)
          | BWCLZNoSMT
          | BWCTZNoSMT
-         | BWFFSNoSMT ->
+         | BWFFSNoSMT
+         | BWFLSNoSMT ->
            let@ t = infer t in
            let@ () = ensure_bits_type (IT.loc t) (IT.bt t) in
            return (t, IT.bt t)

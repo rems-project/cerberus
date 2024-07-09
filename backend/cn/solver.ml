@@ -567,6 +567,9 @@ let rec translate_term s iterm =
               ) here
         )
 
+    | BWFLSNoSMT -> 
+       failwith "todo: SMT translation for FLS"
+
     | Not        -> SMT.bool_not (translate_term s e1)
 
     | Negate ->

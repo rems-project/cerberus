@@ -23,6 +23,7 @@ type unop =
   | BWCLZNoSMT
   | BWCTZNoSMT
   | BWFFSNoSMT
+  | BWFLSNoSMT
 [@@deriving eq, ord, show]
 
 type binop =
@@ -178,6 +179,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.document -> Pp.document) -> 
           c_app !^"bw_ctz_uf" [aux false it1]
        | BWFFSNoSMT ->
           c_app !^"bw_ffs_uf" [aux false it1]
+       | BWFLSNoSMT ->
+          c_app !^"bw_fls_uf" [aux false it1]
        | Not ->
           mparens (!^"!" ^^ parens (aux false it1))
        | Negate ->
