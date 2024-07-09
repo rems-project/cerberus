@@ -7,6 +7,8 @@ let cn_ghost_state_sym = Sym.fresh_pretty "cn_ownership_global_ghost_state"
 let cn_ghost_state_struct_type = mk_ctype ~annots:[CF.Annot.Atypedef (Sym.fresh_pretty "ownership_ghost_state")] C.Void
 let cn_stack_depth_sym = Sym.fresh_pretty "cn_stack_depth"
 let cn_stack_depth_ctype = C.mk_ctype_integer (Signed Long)
+let cn_stack_depth_incr_sym = Sym.fresh_pretty "ghost_stack_depth_incr"
+let cn_stack_depth_decr_sym = Sym.fresh_pretty "ghost_stack_depth_decr"
 
 let c_map_local_ownership_fn_sym = Sym.fresh_pretty "c_add_local_to_ghost_state"
 let c_remove_local_ownership_fn_sym = Sym.fresh_pretty "c_remove_local_from_ghost_state"
@@ -21,9 +23,8 @@ let create_ail_ownership_global_decls () =
 
 let get_ownership_global_init_stats () = 
   let cn_ghost_state_init_fcall = mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "initialise_ownership_ghost_state")), [])) in
-  let cn_ghost_state_init_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_ghost_state_sym), cn_ghost_state_init_fcall)))) in
-  let cn_stack_depth_init_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_stack_depth_sym), (mk_expr (A.AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))))) in
-  [cn_ghost_state_init_assign; cn_stack_depth_init_assign]
+  let cn_ghost_stack_depth_init_fcall = mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "initialise_ghost_stack_depth")), [])) in
+  List.map (fun e -> A.(AilSexpr e)) [cn_ghost_state_init_fcall; cn_ghost_stack_depth_init_fcall]
   
 
 (*   
@@ -54,13 +55,13 @@ let get_c_local_ownership_checking params =
 
 
 let get_start_loc ?(offset=0) = function 
-  | Cerb_location.Loc_region (start_pos, _, cursor) ->
+  | Cerb_location.Loc_region (start_pos, _, _) ->
     let new_start_pos = {start_pos with pos_cnum=start_pos.pos_cnum + offset} in 
-    Cerb_location.region (new_start_pos, new_start_pos) cursor 
-  | Loc_regions (pos_list, cursor) -> (match List.last pos_list with 
+    Cerb_location.point new_start_pos 
+  | Loc_regions (pos_list, _) -> (match List.last pos_list with 
       | Some (_, start_pos) -> 
         let new_start_pos = {start_pos with pos_cnum=start_pos.pos_cnum + offset} in 
-        Cerb_location.region (new_start_pos, new_start_pos) cursor 
+        Cerb_location.point new_start_pos 
       | None -> failwith "modify_decl_loc: Loc_regions has empty list of positions (should be non-empty)")
   | Loc_unknown
   | Loc_other _ 
@@ -68,13 +69,13 @@ let get_start_loc ?(offset=0) = function
 
 
 let get_end_loc ?(offset=0) = function 
-  | Cerb_location.Loc_region (_, end_pos, cursor) ->
+  | Cerb_location.Loc_region (_, end_pos, _) ->
     let new_end_pos = {end_pos with pos_cnum=end_pos.pos_cnum + offset} in 
-    Cerb_location.region (new_end_pos, new_end_pos) cursor 
-  | Loc_regions (pos_list, cursor) -> (match List.last pos_list with 
+    Cerb_location.point new_end_pos 
+  | Loc_regions (pos_list, _) -> (match List.last pos_list with 
       | Some (_, end_pos) -> 
         let new_end_pos = {end_pos with pos_cnum=end_pos.pos_cnum + offset} in 
-        Cerb_location.region (new_end_pos, new_end_pos) cursor 
+        Cerb_location.point new_end_pos 
       | None -> failwith "modify_decl_loc: Loc_regions has empty list of positions (should be non-empty)")
   | Loc_unknown
   | Loc_other _ 

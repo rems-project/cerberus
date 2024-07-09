@@ -38,6 +38,7 @@ let filter_injs_by_filename inj_pairs fn =
 let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames = function
   | [] -> ()
   | (fn', oc') :: xs ->
+
     let injs_with_syms = filter_injs_by_filename injs_with_filenames fn' in
     let injs_for_fn' = injs_with_syms in 
     (* let injs_for_fn' = List.map (fun (loc, (_, strs)) -> (loc, strs)) injs_with_syms in *)
@@ -201,11 +202,13 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
   
   let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
-
-  let in_stmt_injs_with_filenames = toplevel_locs_and_defs @ struct_injs_with_filenames in 
+  Printf.printf "Locations for injection of CN statements:\n";
+  let _ = List.map (fun (loc, _) -> Printf.printf "%s: %s\n" (Option.get (Cerb_location.get_filename loc)) (Cerb_location.simple_location loc)) executable_spec.in_stmt in 
+  let in_stmt_injs_with_filenames = 
+    executable_spec.in_stmt @
+     toplevel_locs_and_defs @ struct_injs_with_filenames in 
   (* Treat source file separately from header files *)
-  let source_file_in_stmt_injs_with_syms = filter_injs_by_filename in_stmt_injs_with_filenames filename in
-  let source_file_in_stmt_injs = source_file_in_stmt_injs_with_syms in
+  let source_file_in_stmt_injs = filter_injs_by_filename in_stmt_injs_with_filenames filename in
 
   (* Rini: uncomment me *)
   let accesses_stmt_injs = [] (*memory_accesses_injections ail_prog*) in
@@ -223,8 +226,11 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
 
   (* TODO: Fix *)
   let in_stmt = 
-    if copy_source_dir then [] else 
-    executable_spec.in_stmt @ source_file_in_stmt_injs @ accesses_stmt_injs in
+    (* if copy_source_dir then [] else  *)
+    (* executable_spec.in_stmt  *)
+    source_file_in_stmt_injs 
+    @ accesses_stmt_injs 
+  in
 
   begin match
   Source_injection.(output_injections oc
@@ -241,5 +247,5 @@ with
 end;
 (if copy_source_dir then 
   copy_source_dir_files_into_output_dir filename fns_and_ocs prefix);
-inject_in_stmt_injs_to_multiple_files ail_prog in_stmt_injs_with_filenames fns_and_ocs;
+inject_in_stmt_injs_to_multiple_files ail_prog in_stmt_injs_with_filenames fns_and_ocs
 

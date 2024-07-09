@@ -2,9 +2,12 @@
 #include <signal.h> // for SIGABRT
 
 
-// ownership_ghost_state* cn_ownership_global_ghost_state;
-// signed long cn_stack_depth;
-// struct cn_error_message_info error_msg_info;
+typedef hash_table ownership_ghost_state;
+
+/* Ownership globals */
+ownership_ghost_state* cn_ownership_global_ghost_state;
+signed long cn_stack_depth;
+struct cn_error_message_info error_msg_info;
 
 
 void cn_exit_aux(void) {
@@ -74,23 +77,35 @@ cn_map *map_create(void) {
     return ht_create();
 }
 
-ownership_ghost_state *initialise_ownership_ghost_state(void) {
-    return ht_create();
+void initialise_ownership_ghost_state(void) {
+    cn_ownership_global_ghost_state = ht_create();
 }
 
-int ghost_state_get(ownership_ghost_state *cn_ownership_global_ghost_state, signed long *address_key) {
+void initialise_ghost_stack_depth(void) {
+    cn_stack_depth = 0;
+}
+
+void ghost_stack_depth_incr(void) {
+    cn_stack_depth++;
+}
+
+void ghost_stack_depth_decr(void) {
+    cn_stack_depth--;
+}
+
+int ownership_ghost_state_get(signed long *address_key) {
     int *curr_depth_maybe = (int *) ht_get(cn_ownership_global_ghost_state, address_key);
     return curr_depth_maybe ? *curr_depth_maybe : -1;
 }
 
-void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key, int stack_depth_val) {
+void ownership_ghost_state_set(signed long* address_key, int stack_depth_val) {
     int *new_depth = alloc(sizeof(int));
     *new_depth = stack_depth_val;
     ht_set(cn_ownership_global_ghost_state, address_key, new_depth);
 }
 
-void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key) {
-    ghost_state_set(cn_ownership_global_ghost_state, address_key, -1);
+void ownership_ghost_state_remove(signed long* address_key) {
+    ownership_ghost_state_set(address_key, -1);
 }
 
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
@@ -98,9 +113,9 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
         signed long *address_key = alloc(sizeof(long));
         printf("CN: Getting ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
         *address_key = generic_c_ptr + i;
-        int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
+        int curr_depth = ownership_ghost_state_get(address_key);
         cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1));
-        ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
+        ownership_ghost_state_set(address_key, cn_stack_depth);
     }
 }
 
@@ -109,9 +124,9 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
         printf("CN: Putting back ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
-        int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
+        int curr_depth = ownership_ghost_state_get(address_key);
         cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
-        ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth - 1);
+        ownership_ghost_state_set(address_key, cn_stack_depth - 1);
     }
 }
 
@@ -136,7 +151,7 @@ void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
         signed long *address_key = alloc(sizeof(long));
         *address_key = ptr_to_local + i;
         printf("C ownership checking: mapping %lu\n", ptr_to_local + i);
-        ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
+        ownership_ghost_state_set(address_key, cn_stack_depth);
     }
 }
 
@@ -145,7 +160,7 @@ void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
         signed long *address_key = alloc(sizeof(long));
         *address_key = ptr_to_local + i;
         printf("C ownership checking: unmapping %lu\n", ptr_to_local + i);
-        ghost_state_remove(cn_ownership_global_ghost_state, address_key);
+        ownership_ghost_state_remove(address_key);
     }
 }
 
@@ -153,7 +168,7 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
     signed long *address_key = alloc(sizeof(long));
     printf("C: Checking ownership for %lu\n", generic_c_ptr + offset);
     *address_key = generic_c_ptr + offset;
-    int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
+    int curr_depth = ownership_ghost_state_get(address_key);
     printf("curr_depth: %d\n", curr_depth);
     printf("cn_stack_depth: %ld\n", cn_stack_depth);
     if (cn_stack_depth > 0) {

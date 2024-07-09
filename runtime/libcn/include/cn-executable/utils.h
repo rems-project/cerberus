@@ -87,14 +87,11 @@ typedef struct cn_bool {
 
 
 typedef hash_table cn_map;
-typedef hash_table ownership_ghost_state;
 
-ownership_ghost_state *initialise_ownership_ghost_state(void);
-
-/* Ownership globals */
-ownership_ghost_state* cn_ownership_global_ghost_state;
-signed long cn_stack_depth;
-struct cn_error_message_info error_msg_info;
+void initialise_ownership_ghost_state(void);
+void initialise_ghost_stack_depth(void);
+void ghost_stack_depth_incr(void);
+void ghost_stack_depth_decr(void);
 
 
 /* Conversion functions */
@@ -441,9 +438,9 @@ enum OWNERSHIP {
     PUT
 };
 
-int ghost_state_get(ownership_ghost_state *cn_ownership_global_ghost_state, signed long *address_key);
-void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key, int stack_depth_val);
-void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key);
+int ownership_ghost_state_get(signed long *address_key);
+void ownership_ghost_state_set(signed long* address_key, int stack_depth_val);
+void ownership_ghost_state_remove(signed long* address_key);
 
 /* CN ownership checking */
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size);

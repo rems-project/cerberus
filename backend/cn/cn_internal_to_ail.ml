@@ -118,6 +118,7 @@ let generate_error_msg_info_update_stats ?(cn_source_loc_opt=None) () =
       let loc_str = Cerb_location.location_to_string loc in
       let (_, loc_str_2) = Cerb_location.head_pos_of_location loc in
       let loc_str_2_escaped = Str.global_replace (Str.regexp_string "\n") "\\n" loc_str_2 in
+      let loc_str_2_escaped = Str.global_replace (Str.regexp_string "\"") "\'" loc_str_2_escaped in
       let cn_source_loc_str = mk_expr A.(AilEstr (None, [(Cerb_location.unknown, [loc_str_2_escaped ^ loc_str])])) in
       cn_source_loc_str
     | None -> mk_expr A.(AilEconst (ConstantNull)))
@@ -1804,8 +1805,8 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
     let ail_statements = List.map (fun stat_pair -> cn_to_ail_statements dts globals stat_pair) stats in 
     let (post_bs, post_ss) = cn_to_ail_post_internal dts globals preds post in 
     let ownership_stat_ = if with_ownership_checking then 
-      (let cn_stack_depth_decr_stat = mk_stmt A.(AilSexpr (mk_expr (AilEunary (PostfixDecr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
-      [cn_stack_depth_decr_stat])
+      (let cn_stack_depth_decr_stat_ = mk_stmt (A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_decr_sym), [])))) in 
+      [cn_stack_depth_decr_stat_])
     else 
       []
     in
@@ -1830,7 +1831,7 @@ let cn_to_ail_pre_post_internal with_ownership_checking dts preds globals c_retu
   | Some internal -> 
     let ail_executable_spec = cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds globals c_return_type internal in
     let extra_stats_ = if with_ownership_checking then 
-      (let cn_stack_depth_incr_stat_ = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
+      (let cn_stack_depth_incr_stat_ = A.AilSexpr (mk_expr (AilEcall (mk_expr (AilEident OE.cn_stack_depth_incr_sym), []))) in 
       [cn_stack_depth_incr_stat_])
     else 
       [] 
