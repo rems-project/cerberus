@@ -16,28 +16,25 @@ Mirrors C+CN input slightly less since we replace declarations with a call to on
 let c_declare_and_map_local_sym = Sym.fresh_pretty "c_declare_and_map_local"
 let c_declare_init_and_map_local_sym = Sym.fresh_pretty "c_declare_init_and_map_local"
 
-
 let create_ail_ownership_global_decls () = 
   [(cn_ghost_state_sym, C.mk_ctype_pointer empty_qualifiers cn_ghost_state_struct_type); (cn_stack_depth_sym, cn_stack_depth_ctype)]
 
 let get_ownership_global_init_stats () = 
   let cn_ghost_state_init_fcall = mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "initialise_ownership_ghost_state")), [])) in
   let cn_ghost_state_init_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_ghost_state_sym), cn_ghost_state_init_fcall)))) in
-  let cn_stack_depth_init_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_stack_depth_sym), (mk_expr (A.AilEconst (ConstantInteger (IConstant (Z.of_int (-1), Decimal, None))))))))) in
+  let cn_stack_depth_init_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident cn_stack_depth_sym), (mk_expr (A.AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))))))) in
   [cn_ghost_state_init_assign; cn_stack_depth_init_assign]
   
 
 (*   
-   c_map_local_to_stack_depth((uintptr_t) &xs, cn_ownership_global_ghost_state, sizeof(struct node * ), cn_stack_depth) 
+   c_map_local_to_stack_depth((uintptr_t) &xs, sizeof(struct node * )) 
 *)
 
 let generate_c_local_ownership_entry (local_sym, local_ctype) = 
   let local_ident = mk_expr A.(AilEident local_sym) in
   let arg1 = A.(AilEcast (empty_qualifiers, C.uintptr_t, mk_expr (AilEunary (Address, local_ident)))) in 
-  let arg2 = A.(AilEident cn_ghost_state_sym) in
-  let arg3 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in 
-  let arg4 = A.(AilEident cn_stack_depth_sym) in 
-  A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident c_map_local_ownership_fn_sym), List.map mk_expr [arg1; arg2; arg3; arg4]))))
+  let arg2 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in 
+  A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident c_map_local_ownership_fn_sym), List.map mk_expr [arg1; arg2]))))
 
 
 (*
@@ -46,9 +43,8 @@ let generate_c_local_ownership_entry (local_sym, local_ctype) =
 let generate_c_local_ownership_exit (local_sym, local_ctype) = 
   let local_ident = mk_expr A.(AilEident local_sym) in
   let arg1 = A.(AilEcast (empty_qualifiers, C.uintptr_t, mk_expr (AilEunary (Address, local_ident)))) in 
-  let arg2 = A.(AilEident cn_ghost_state_sym) in
-  let arg3 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in 
-  A.(AilSexpr (mk_expr A.(AilEcall (mk_expr (AilEident c_remove_local_ownership_fn_sym), List.map mk_expr [arg1; arg2; arg3]))))
+  let arg2 = A.(AilEsizeof (empty_qualifiers, local_ctype)) in 
+  A.(AilSexpr (mk_expr A.(AilEcall (mk_expr (AilEident c_remove_local_ownership_fn_sym), List.map mk_expr [arg1; arg2]))))
 
 
 let get_c_local_ownership_checking params = 

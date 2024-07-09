@@ -109,7 +109,6 @@ let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=fal
 
 
 let generate_error_msg_info_update_stats ?(cn_source_loc_opt=None) () = 
-  let error_msg_info_ident = mk_expr A.(AilEident error_msg_info_sym) in
   (* let line_number_member_lhs = mk_expr A.(AilEmemberofptr (error_msg_info_ident, Id.id "line_number")) in
   let curr_line_number = mk_expr A.(AilEident (Sym.fresh_pretty "__LINE__")) in
   let addition_expr = mk_expr A.(AilEbinary (curr_line_number, Arithmetic Add, mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None)))))) in
@@ -124,13 +123,12 @@ let generate_error_msg_info_update_stats ?(cn_source_loc_opt=None) () =
     | None -> mk_expr A.(AilEconst (ConstantNull)))
   in 
   let update_fn_sym = Sym.fresh_pretty "update_cn_error_message_info" in
-  [A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident update_fn_sym), [error_msg_info_ident; cn_source_loc_arg]))))]
+  [A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident update_fn_sym), [cn_source_loc_arg]))))]
 
 let cn_assert_sym = Sym.fresh_pretty "cn_assert"
 
 let generate_cn_assert ?(cn_source_loc_opt=None) ail_expr = 
-  let error_msg_info_ident = mk_expr A.(AilEident error_msg_info_sym) in
-  let assertion_expr_ = A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr; error_msg_info_ident])) in
+  let assertion_expr_ = A.(AilEcall (mk_expr (AilEident cn_assert_sym), [ail_expr])) in
   let assertion_stat = A.(AilSexpr (mk_expr assertion_expr_)) in
   let error_msg_update_stats_ = generate_error_msg_info_update_stats ~cn_source_loc_opt () in
   error_msg_update_stats_ @ [assertion_stat]
@@ -413,8 +411,8 @@ let generate_start_expr start_cond sym =
       | LE -> 
         start_expr
       | LT ->
-        let one = IT.(IT (Const (Terms.Z (Z.of_int 1)), BT.Integer, Cerb_location.unknown)) in
-        IT.(IT (Apply (Sym.fresh_pretty "cn_integer_add", [start_expr; one]), BT.Integer, Cerb_location.unknown)) 
+        let one = IT.(IT (Const (Terms.Z (Z.of_int 1)), IT.bt start_expr, Cerb_location.unknown)) in
+        IT.(IT (Binop (Add, start_expr, one), IT.bt start_expr, Cerb_location.unknown)) 
       | _ -> failwith "Not of correct form: not Le or Lt"
 
 
@@ -565,13 +563,12 @@ let generate_ownership_function with_ownership_checking ctype =
   let param2_sym = Sym.fresh_pretty "owned_enum" in
   let param1 = (param1_sym, bt_to_ail_ctype BT.Loc) in
   let param2 = (param2_sym, mk_ctype (C.(Basic (Integer (Enum (Sym.fresh_pretty "OWNERSHIP")))))) in
-  let param3 = (error_msg_info_sym, C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype) in
-  let (param_syms, param_types) = List.split [param1; param2; param3] in
+  let (param_syms, param_types) = List.split [param1; param2] in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let ownership_fcall_maybe = 
   if with_ownership_checking then 
     (let ownership_fn_sym = Sym.fresh_pretty "cn_check_ownership" in 
-    let ownership_fn_args = A.[AilEident param2_sym; AilEident generic_c_ptr_sym; AilEident OE.cn_ghost_state_sym; AilEsizeof (empty_qualifiers, ctype); AilEident OE.cn_stack_depth_sym; AilEident error_msg_info_sym] in
+    let ownership_fn_args = A.[AilEident param2_sym; AilEident generic_c_ptr_sym; AilEsizeof (empty_qualifiers, ctype)] in
     [A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident ownership_fn_sym), List.map mk_expr ownership_fn_args))))])
   else  
     []
@@ -896,8 +893,7 @@ let rec cn_to_ail_expr_aux_internal
       let bs_ss_es = List.map (fun e -> cn_to_ail_expr_aux_internal const_prop pred_name dts globals e PassBack) ts in
       let (bs, ss, es) = list_split_three bs_ss_es in 
       let f = (mk_expr A.(AilEident sym)) in
-      let error_msg_expr = [mk_expr (AilEident error_msg_info_sym)] in
-      let ail_expr_ = A.AilEcall (f, es @ error_msg_expr) in 
+      let ail_expr_ = A.AilEcall (f, es) in 
       let error_msg_update_stats_ = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
       dest d (List.concat bs, List.concat ss @ error_msg_update_stats_, mk_expr ail_expr_)
       
@@ -1330,7 +1326,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) p.iargs) in
         let error_msg_update_stats_ = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
-        let fcall = A.(AilEcall (mk_expr (AilEident pname), e :: es @ [mk_expr (AilEident error_msg_info_sym); mk_expr (AilEident enum_sym)])) in
+        let fcall = A.(AilEcall (mk_expr (AilEident pname), e :: es @ [mk_expr (AilEident enum_sym)])) in
         let binding = create_binding sym (bt_to_ail_ctype ~pred_sym:(Some pname) bt) in
         (mk_expr fcall, binding :: (List.concat bs), List.concat ss @ error_msg_update_stats_, None)
     in
@@ -1407,7 +1403,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
       | PName pname -> 
         let (bs, ss, es) = list_split_three (List.map (fun it -> cn_to_ail_expr_internal dts globals it PassBack) q.iargs) in
         let error_msg_update_stats_ = generate_error_msg_info_update_stats ~cn_source_loc_opt:(Some loc) () in
-        let fcall = A.(AilEcall (mk_expr (AilEident pname), (mk_expr (AilEident ptr_add_sym)) :: es @ [mk_expr (AilEident error_msg_info_sym); mk_expr (AilEident enum_sym)])) in
+        let fcall = A.(AilEcall (mk_expr (AilEident pname), (mk_expr (AilEident ptr_add_sym)) :: es @ [mk_expr (AilEident enum_sym)])) in
         (mk_expr fcall, List.concat bs, List.concat ss @ error_msg_update_stats_, None)
     in
 
@@ -1518,7 +1514,6 @@ let cn_to_ail_function_internal (fn_sym, (lf_def : LogicalFunctions.definition))
   in
   let ail_record_opt = generate_record_opt fn_sym lf_def.return_bt in
   let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) lf_def.args in
-  let params = params @ [(error_msg_info_sym, C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype)] in
   let (param_syms, param_types) = List.split params in
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let matched_cn_functions = List.filter (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) -> Sym.equal cn_fun.cn_func_name fn_sym) cn_functions in
@@ -1598,7 +1593,6 @@ let cn_to_ail_predicate_internal (pred_sym, (rp_def : ResourcePredicates.definit
 
   let ail_record_opt = generate_record_opt pred_sym rp_def.oarg_bt in
   let params = List.map (fun (sym, bt) -> (sym, (bt_to_ail_ctype bt))) ((rp_def.pointer, BT.Loc) :: rp_def.iargs) in
-  let params = params @ [(error_msg_info_sym, C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype)] in
   let enum_param_sym = Sym.fresh_pretty "owned_enum" in
   let params = params @ [(enum_param_sym, mk_ctype (C.(Basic (Integer (Enum (Sym.fresh_pretty "OWNERSHIP"))))))] in
   let (param_syms, param_types) = List.split params in
@@ -1832,19 +1826,12 @@ let rec cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds global
   
 let cn_to_ail_pre_post_internal with_ownership_checking dts preds globals c_return_type = function 
   | Some internal -> 
-    let error_msg_info_binding = create_binding error_msg_info_sym (C.mk_ctype_pointer empty_qualifiers error_msg_info_ctype) in
-    let struct_members = [("function_name", "__func__"); ("file_name", "__FILE__"); ("line_number", "__LINE__")] in
-    let struct_members = List.map (fun (arg_str, value_str) -> (Id.id arg_str, Some (mk_expr A.(AilEident (Sym.fresh_pretty value_str))))) struct_members in
-    let struct_members = struct_members @ [(Id.id "cn_source_loc", Some (mk_expr A.(AilEconst (ConstantNull))))] in
-    let struct_init = A.(AilEstruct (error_msg_struct_tag, struct_members)) in
-    let addr_struct_init = A.(AilEunary (Address, mk_expr struct_init)) in
-    let error_msg_info_decl = A.(AilSdeclaration [(error_msg_info_sym, Some (mk_expr addr_struct_init))]) in
     let ail_executable_spec = cn_to_ail_pre_post_aux_internal with_ownership_checking dts preds globals c_return_type internal in
     let extra_stats_ = if with_ownership_checking then 
       (let cn_stack_depth_incr_stat_ = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr (AilEident Ownership_exec.cn_stack_depth_sym))))) in 
-      [error_msg_info_decl; cn_stack_depth_incr_stat_])
+      [cn_stack_depth_incr_stat_])
     else 
-      [error_msg_info_decl] 
+      [] 
     in 
-    prepend_to_precondition ail_executable_spec ([error_msg_info_binding], extra_stats_)
+    prepend_to_precondition ail_executable_spec ([], extra_stats_)
   | None -> empty_ail_executable_spec

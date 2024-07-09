@@ -9,12 +9,19 @@
 #include <cn-executable/alloc.h>
 #include <cn-executable/hash_table.h>
 
+
 struct cn_error_message_info {
     const char *function_name;
     char *file_name;
     int line_number;
     char *cn_source_loc;
+    bool is_c_memory_access;
 };
+
+void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number);
+
+#define initialise_error_msg_info() initialise_error_msg_info_(__func__, __FILE__, __LINE__)
+
 
 /* TODO: Implement */
 struct cn_error_messages {
@@ -22,10 +29,10 @@ struct cn_error_messages {
     struct cn_error_message_info *nested_error_msg_info;
 };
 
-void update_error_message_info_(struct cn_error_message_info *error_msg_info, const char *function_name, char *file_name, int line_number, char *cn_source_loc);
+void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc);
 
-#define update_cn_error_message_info(x, y)\
-    update_error_message_info_(x, __func__, __FILE__, __LINE__ + 1, y)
+#define update_cn_error_message_info(x)\
+    update_error_message_info_(__func__, __FILE__, __LINE__ + 1, x)
 
 /* Wrappers for C types */
 
@@ -84,11 +91,17 @@ typedef hash_table ownership_ghost_state;
 
 ownership_ghost_state *initialise_ownership_ghost_state(void);
 
+/* Ownership globals */
+ownership_ghost_state* cn_ownership_global_ghost_state;
+signed long cn_stack_depth;
+struct cn_error_message_info error_msg_info;
+
+
 /* Conversion functions */
 
 cn_bool *convert_to_cn_bool(_Bool b);
 _Bool convert_from_cn_bool(cn_bool *b);
-void cn_assert(cn_bool *cn_b, struct cn_error_message_info *error_msg_info);
+void cn_assert(cn_bool *cn_b);
 cn_bool *cn_bool_and(cn_bool *b1, cn_bool *b2);
 cn_bool *cn_bool_or(cn_bool *b1, cn_bool *b2);
 cn_bool *cn_bool_not(cn_bool *b);
@@ -433,14 +446,16 @@ void ghost_state_set(ownership_ghost_state *cn_ownership_global_ghost_state, sig
 void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, signed long* address_key);
 
 /* CN ownership checking */
-void cn_get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
-void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
-void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info);
+void cn_get_ownership(uintptr_t generic_c_ptr, size_t size);
+void cn_put_ownership(uintptr_t generic_c_ptr, size_t size);
+void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size);
 
 /* C ownership checking */
-// void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth);
-// void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size);
+void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size);
+void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size);
+void c_ownership_check(uintptr_t generic_c_ptr, int offset);
 
+// Unused 
 #define c_concat_with_mapping_stat(STAT, CTYPE, VAR_NAME, GHOST_STATE, STACK_DEPTH)\
     STAT; c_add_local_to_ghost_state((uintptr_t) &VAR_NAME, GHOST_STATE, sizeof(CTYPE), STACK_DEPTH);
 
@@ -449,6 +464,7 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, owne
 
 #define c_declare_init_and_map_local(CTYPE, VAR_NAME, EXPR)\
     c_concat_with_mapping_stat(CTYPE VAR_NAME = EXPR, CTYPE, VAR_NAME)
+// /Unused
 
 
 void cn_load(void *lvalue, size_t size);
@@ -456,11 +472,13 @@ void cn_store(void *lvalue, size_t size);
 
 #define CN_LOAD(LV) \
   ({ \
+    c_ownership_check((uintptr_t) &LV, sizeof(typeof(LV)));\
     cn_load(&LV, sizeof(typeof(LV))); \
     (LV); \
   })
 #define CN_STORE(LV, X) \
  ({ \
+    c_ownership_check((uintptr_t) &LV, sizeof(typeof(LV)));\
     typeof(LV) *tmp; \
     tmp = &(LV); \
     cn_store(&LV, sizeof(typeof(LV))); \

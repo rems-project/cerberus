@@ -136,14 +136,14 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
 
   (* Ownership checking *)
-  if with_ownership_checking then 
+  (* if with_ownership_checking then 
     (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.c") in 
     let ownership_globals = generate_ownership_globals ~is_extern:false () in 
     Stdlib.output_string ownership_oc cn_utils_header;
     Stdlib.output_string ownership_oc "\n";
     Stdlib.output_string ownership_oc ownership_globals;
     )
-  ;
+  ; *)
 
   let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking Cn_internal_to_ail.ownership_ctypes sigm in
   let c_structs = print_c_structs sigm.tag_definitions in
@@ -155,15 +155,15 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
   let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
 
-  let extern_ownership_globals = 
+  (* let extern_ownership_globals = 
     if with_ownership_checking then 
       "\n" ^ generate_ownership_globals ~is_extern:true ()
     else "" 
-  in
+  in *)
 
   (* TODO: Topological sort *)
   Stdlib.output_string cn_oc cn_utils_header;
-  Stdlib.output_string cn_oc extern_ownership_globals;
+  (* Stdlib.output_string cn_oc extern_ownership_globals; *)
   Stdlib.output_string cn_oc c_structs;
   Stdlib.output_string cn_oc cn_converted_structs;
   Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
@@ -184,7 +184,7 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let headers = List.map Executable_spec_utils.generate_include_header incls in
   Stdlib.output_string oc (List.fold_left (^) "" headers);
   Stdlib.output_string oc "\n";
-  Stdlib.output_string oc extern_ownership_globals;
+  (* Stdlib.output_string oc extern_ownership_globals; *)
   Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
   Stdlib.output_string oc records_str;
   Stdlib.output_string oc records_str';

@@ -1,15 +1,10 @@
-
-// #include "alloc.c"
 #include <cn-executable/utils.h>
 #include <signal.h> // for SIGABRT
 
-/*
 
-typedef struct cn_bool {
-    _Bool val;
-} cn_bool;
-
-*/
+// ownership_ghost_state* cn_ownership_global_ghost_state;
+// signed long cn_stack_depth;
+// struct cn_error_message_info error_msg_info;
 
 
 void cn_exit_aux(void) {
@@ -32,15 +27,16 @@ _Bool convert_from_cn_bool(cn_bool *b) {
     return b->val;
 }
 
-void cn_assert(cn_bool *cn_b, struct cn_error_message_info *error_msg_info) {
+void cn_assert(cn_bool *cn_b) {
     if (!(cn_b->val)) {
-        if (error_msg_info) {
-            printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info->function_name, error_msg_info->file_name, error_msg_info->line_number);
-            if (error_msg_info->cn_source_loc) {
-                printf("CN source location: \n%s\n", error_msg_info->cn_source_loc);
+        if (!error_msg_info.is_c_memory_access) {
+            printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+            if (error_msg_info.cn_source_loc) {
+                printf("CN source location: \n%s\n", error_msg_info.cn_source_loc);
             }
         } else {
             printf("Assertion failed: C memory access\n");
+            error_msg_info.is_c_memory_access = 0;
         }
         cn_exit();
     }
@@ -97,61 +93,75 @@ void ghost_state_remove(ownership_ghost_state *cn_ownership_global_ghost_state, 
     ghost_state_set(cn_ownership_global_ghost_state, address_key, -1);
 }
 
-void cn_get_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
+void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
-        printf("CN: Getting ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info->function_name);
+        printf("CN: Getting ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
         *address_key = generic_c_ptr + i;
         int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
-        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1), error_msg_info);
+        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1));
         ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
     }
 }
 
-void cn_put_ownership(uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
+void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
-        printf("CN: Putting back ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info->function_name);
+        printf("CN: Putting back ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
         int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
-        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth), error_msg_info);
+        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
         ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth - 1);
     }
 }
 
-void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, struct cn_error_message_info *error_msg_info) {
+void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size) {
   switch (owned_enum)
     {
       case GET:
       {
-        cn_get_ownership(generic_c_ptr, cn_ownership_global_ghost_state, size, cn_stack_depth, error_msg_info);
+        cn_get_ownership(generic_c_ptr, size);
         break;
       }
       case PUT:
       {
-        cn_put_ownership(generic_c_ptr, cn_ownership_global_ghost_state, size, cn_stack_depth, error_msg_info);
+        cn_put_ownership(generic_c_ptr, size);
         break;
       }
     }
 }
 
-// void c_add_local_to_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth) {
-//     for (int i = 0; i < size; i++) { 
-//         signed long *address_key = alloc(sizeof(long));
-//         *address_key = ptr_to_local + i;
-//         printf("C ownership checking: mapping %lu\n", ptr_to_local + i);
-//         ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
-//     }
-// }
+void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
+    for (int i = 0; i < size; i++) { 
+        signed long *address_key = alloc(sizeof(long));
+        *address_key = ptr_to_local + i;
+        printf("C ownership checking: mapping %lu\n", ptr_to_local + i);
+        ghost_state_set(cn_ownership_global_ghost_state, address_key, cn_stack_depth);
+    }
+}
 
-// void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, ownership_ghost_state *cn_ownership_global_ghost_state, size_t size) {
-//     for (int i = 0; i < size; i++) { 
-//         signed long *address_key = alloc(sizeof(long));
-//         *address_key = ptr_to_local + i;
-//         printf("C ownership checking: removing %lu\n", ptr_to_local + i);
-//         ghost_state_remove(cn_ownership_global_ghost_state, address_key);
-//     }
-// }
+void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
+    for (int i = 0; i < size; i++) { 
+        signed long *address_key = alloc(sizeof(long));
+        *address_key = ptr_to_local + i;
+        printf("C ownership checking: unmapping %lu\n", ptr_to_local + i);
+        ghost_state_remove(cn_ownership_global_ghost_state, address_key);
+    }
+}
+
+void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
+    signed long *address_key = alloc(sizeof(long));
+    printf("C: Checking ownership for %lu\n", generic_c_ptr + offset);
+    *address_key = generic_c_ptr + offset;
+    int curr_depth = ghost_state_get(cn_ownership_global_ghost_state, address_key);
+    printf("curr_depth: %d\n", curr_depth);
+    printf("cn_stack_depth: %ld\n", cn_stack_depth);
+    if (cn_stack_depth > 0) {
+        printf("cn_stack_depth: inside a function\n");
+    }
+    error_msg_info.is_c_memory_access = 1;
+    cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
+}
 
 /* TODO: Need address of and size of every stack-allocated variable - could store in struct and pass through. But this is an optimisation */
 // void c_map_locals_to_stack_depth(ownership_ghost_state *cn_ownership_global_ghost_state, size_t size, int cn_stack_depth, ...) {
@@ -256,11 +266,20 @@ struct cn_error_message_info {
 };
 */
 
-void update_error_message_info_(struct cn_error_message_info *error_msg_info, const char *function_name, char *file_name, int line_number, char *cn_source_loc) {
-    error_msg_info->function_name = function_name;
-    error_msg_info->file_name = file_name;
-    error_msg_info->line_number = line_number;
-    error_msg_info->cn_source_loc = cn_source_loc;
+void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc) {
+    error_msg_info.function_name = function_name;
+    error_msg_info.file_name = file_name;
+    error_msg_info.line_number = line_number;
+    error_msg_info.cn_source_loc = cn_source_loc;
+}
+
+void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number) {
+  printf("Initialising error message info\n");
+  error_msg_info.function_name = function_name;
+  error_msg_info.file_name = file_name;
+  error_msg_info.line_number = line_number;
+  error_msg_info.cn_source_loc = 0;
+  error_msg_info.is_c_memory_access = 0;
 }
 
 
