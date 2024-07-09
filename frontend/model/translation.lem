@@ -2351,7 +2351,17 @@ end
           end
       
       | A.AilEcompoundAssign e1 aop e2 ->
-          error "Translation ==> AilEcompoundAssign" (* currently the desugaring translates E1 op= E2 into E1 = E1 op E2 *)
+          (* TODO: this elaboration is wrong because it duplicates any side-effect in E1 *)
+          let e1_rvalue = match e1 with
+            | A.AnnotatedExpression (GenTypes.GenLValueType _ ty _) std_annots loc _ ->
+                let rvalue_ty = Ctype.Ctype [] (Ctype.unatomic_ ty) in
+                A.AnnotatedExpression (GenTypes.GenRValueType (GenTypes.inject_type rvalue_ty)) std_annots loc (A.AilErvalue e1)
+            | _ ->
+                illTypedAil loc "AilEcompoundAssign"
+          end in
+          self begin
+            A.AnnotatedExpression annot [] loc (A.AilEassign e1 (A.AnnotatedExpression annot [] loc (A.AilEbinary e1_rvalue (A.Arithmetic aop) e2)))
+          end
       
       | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBatomic A.AilBAstore))) es ->
           translate_atomic_explicit loc self AtomicStoreExplicit es
