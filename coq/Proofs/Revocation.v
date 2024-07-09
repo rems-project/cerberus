@@ -682,12 +682,11 @@ Module CheriMemoryImplWithProofs
             lia.
   Qed.
 
-  (* This is a loose specificaton not taking into account address range check.
-     The primary purpose is to show:
+  (* It shows show:
      1. No new keys introduced to [capmeta]
      2. Tag change monotonicity
    *)
-  Lemma capmeta_ghost_tags_spec
+  Lemma capmeta_ghost_tags_monotone
     (addr: AddressValue.t)
     (size: nat)
     (capmeta: AMap.M.t (bool*CapGhostState)):
@@ -736,8 +735,8 @@ Module CheriMemoryImplWithProofs
   Qed.
 
 
-  (* Another spec for [capmeta_ghost_tags]. *)
-  Lemma capmeta_ghost_tags_spec'
+  (* Another spec for [capmeta_ghost_tags]. Affected range expressed in aligned addresses *)
+  Fact capmeta_ghost_tags_spec_range_aligned
     (addr: AddressValue.t)
     (size: nat)
     (SZ: (size>0)%nat)
@@ -844,11 +843,52 @@ Module CheriMemoryImplWithProofs
   Qed.
 
 
-  (* Yeat another spec for [capmeta_ghost_tags].
-     Unlike [capmeta_ghost_tags_spec'] this one is defined for unalinged address range
-     and more suitable to be applied when unaligned region is ghosted.
-   *)
-  Lemma capmeta_ghost_tags_spec''
+  Fact mod_le_mod_inv
+    (a b c: Z)
+    (Cpos: 0 < c)
+    (Anneg: 0 <= a)
+    (Bnneg: 0 <= b):
+    (a - a mod c < b - b mod c) ->
+    a < b.
+  Proof.
+    intros H.
+
+    pose proof (Z.mod_pos_bound a c Cpos) as Ba.
+    pose proof (Z.mod_pos_bound b c Cpos) as Bb.
+
+    remember (a mod c) as r_a.
+    remember (b mod c) as r_b.
+    remember (a / c) as q_a.
+    remember (b / c) as q_b.
+
+    assert (H_a: a = q_a * c + r_a).
+    {
+      subst.
+      rewrite Z.mul_comm.
+      apply Z.div_mod.
+      lia.
+    }
+    assert (H_b: b = q_b * c + r_b).
+    {
+      subst.
+      rewrite Z.mul_comm.
+      apply Z.div_mod.
+      lia.
+    }
+    destruct (Z.eq_dec q_a q_b) as [E|NE].
+    +
+      subst q_b.
+      rename q_a into q.
+      nia.
+    +
+      nia.
+  Qed.
+
+
+  (* Yet another spec for [capmeta_ghost_tags].  It is defined for
+     unalinged address range and more suitable to be applied when
+     unaligned region is ghosted.  *)
+  Lemma capmeta_ghost_tags_spec_in_range
     (addr: AddressValue.t)
     (size: nat)
     (SZ: (size>0)%nat)
@@ -865,7 +905,7 @@ Module CheriMemoryImplWithProofs
           tg=false \/ gs.(tag_unspecified) = true.
   Proof.
     intros a H alignment ac tg gs H0.
-    apply (capmeta_ghost_tags_spec' addr size SZ capmeta ac);
+    apply (capmeta_ghost_tags_spec_range_aligned addr size SZ capmeta ac);
       subst ac alignment.
     2: auto.
 
@@ -907,6 +947,23 @@ Module CheriMemoryImplWithProofs
 
     split;apply mod_le_mod;lia.
   Qed.
+
+  (* Shows that tags outside specified region left unchanged.  *)
+  Lemma capmeta_ghost_tags_spec_outside_range
+    (addr: AddressValue.t)
+    (size: nat)
+    (SZ: (size>0)%nat)
+    (capmeta: AMap.M.t (bool*CapGhostState)):
+
+    forall a,
+      not (0 <= addr_offset a addr < Z.of_nat size) ->
+
+      let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
+      let ac := AddressValue.of_Z (align_down (AddressValue.to_Z a) alignment) in
+
+      AMap.M.find ac capmeta = AMap.M.find ac (capmeta_ghost_tags addr size capmeta).
+  Proof.
+  Admitted.
 
   Definition memM_same_state
     {T: Type}
@@ -4731,6 +4788,13 @@ Module CheriMemoryImplWithProofs
       destruct s.
       auto.
     +
+      pose proof (capmeta_ghost_tags_monotone ptrval1 (S n)) as CIN.
+      specialize (CIN (capmeta s)).
+
+      pose proof (capmeta_ghost_tags_spec_outside_range ptrval1 (S n)) as COUT.
+      autospecialize COUT;[lia|].
+      specialize (COUT (capmeta s)).
+
       preserves_steps.
       *
         (* adding *)
@@ -4739,16 +4803,25 @@ Module CheriMemoryImplWithProofs
           (* base *)
           apply H.
         --
-          destruct H.
-          destruct_base_mem_invariant H.
-          intros addr g H bs H1.
-          specialize (H0 addr g H bs).
-          cbn in *.
+          remember (mem_state_with_bytemap
+                      (AMap.M.add (AddressValue.with_offset ptrval1 (Z.of_nat n)) o
+                         (bytemap_copy_data ptrval1 ptrval2 n (bytemap s))) s) as s'.
+          assert(capmeta s' = capmeta s).
+          {
+            destruct s', s.
+            invc Heqs'.
+            reflexivity.
+          }
+
+          intros addr g H2 H3 bs H4.
+          exfalso.
+          (* prove contradiction in H with H2 *)
           admit.
       *
         (* removing *)
         admit.
   Admitted.
+
 
   (* TODO: move *)
   Lemma CapGhostState_eq_dec:
@@ -5314,7 +5387,7 @@ Module CheriMemoryImplWithProofs
       unfold mem_state_with_capmeta in E.
       simpl in E.
       destruct tg as (tg,gs).
-      apply capmeta_ghost_tags_spec in E.
+      apply capmeta_ghost_tags_monotone in E.
       +
         destruct E as [tg' [gs' [E1 _]]].
         apply AMapProofs.map_mapsto_in in E1.
@@ -5323,7 +5396,7 @@ Module CheriMemoryImplWithProofs
     -
       intros a g E U bs F.
       simpl in *.
-      apply capmeta_ghost_tags_spec in E.
+      apply capmeta_ghost_tags_monotone in E.
       destruct E as [tg' [gs' [E1 [[E2g E2u]|[E3g [E3u [E4u E5u]]]] ]]]; subst.
       *
         eapply MIcap; eauto.
