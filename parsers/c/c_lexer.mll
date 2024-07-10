@@ -242,6 +242,18 @@ let integer_constant =
   | hexadecimal_constant
   | binary_constant (* since C2x *)
 
+(* Separate parsing for CN numeric constants *)
+
+let cn_decimal_constant     = nonzero_digit ( digit | '_' )*
+let cn_octal_constant       = '0' (octal_digit | '_')*
+let cn_hexadecimal_constant = hexadecimal_prefix (hexadecimal_digit | '_')+
+let cn_binary_constant      = binary_prefix (binary_digit | '_')+
+
+let cn_integer_constant = 
+    cn_decimal_constant
+  | cn_octal_constant
+  | cn_hexadecimal_constant
+  | cn_binary_constant (* since C2x *)
 
 (* STD §6.4.3#1 *)
 let hex_quad = hexadecimal_digit hexadecimal_digit
@@ -440,9 +452,9 @@ and initial flags = parse
   | (integer_constant as str) long_long_suffix unsigned_suffix
       { CONSTANT (Cabs.CabsInteger_const (str, Some Cabs.CabsSuffix_ULL)) }
     (* For CN. Copying and adjusting Kayvan's code from above. *)
-  | (integer_constant as str) 'u' (cn_integer_width as n)
+  | (cn_integer_constant as str) 'u' (cn_integer_width as n)
       { CN_CONSTANT (str, `U, int_of_string n) }
-  | (integer_constant as str) 'i' (cn_integer_width as n)
+  | (cn_integer_constant as str) 'i' (cn_integer_width as n)
       { CN_CONSTANT (str, `I, int_of_string n) }
     (* /For CN. *)
   | (integer_constant as str)

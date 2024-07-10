@@ -1840,7 +1840,8 @@ prim_expr:
         let sign = match sign with
          | `U -> Cerb_frontend.Cn.CN_unsigned
          | `I -> Cerb_frontend.Cn.CN_signed in
-         let v = Z.of_string str in
+         let str_clean = String.concat "" (String.split_on_char '_' str) in 
+         let v = Z.of_string str_clean in
          Cerb_frontend.Cn.(CNExpr (Cerb_location.point $startpos, CNExpr_const (CNConst_bits ((sign,n),v))))
     }
 | ident= cn_variable
