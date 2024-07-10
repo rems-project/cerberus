@@ -4827,8 +4827,26 @@ Module CheriMemoryImplWithProofs
 
           intros addr g H0 H1 bs H2.
 
-          assert(decidable (0 <= addr_offset addr ptrval1 < Z.of_nat (S n))) as AR
-            by (apply dec_and;[apply Z.le_decidable|apply Z.lt_decidable]).
+          assert(decidable (0 <= addr_offset
+                                  (AddressValue.of_Z (align_down (AddressValue.to_Z addr) (Z.of_nat (alignof_pointer MorelloImpl.get))))
+                                  ptrval1
+                            /\
+                              addr_offset addr ptrval1 < Z.of_nat (S n))
+                ) as AR
+              by (apply dec_and;[apply Z.le_decidable|apply Z.lt_decidable]).
+
+          assert(AA: addr_ptr_aligned addr).
+          {
+            destruct M as [MIbase MIcap].
+            destruct_base_mem_invariant MIbase.
+            (* only need Balign *)
+            clear Bfit Bnextallocid Bnooverlap Blastaddr Bdead.
+            rewrite H in *.
+            specialize (Balign addr).
+            autospecialize Balign.
+            apply (AMapProofs.map_mapsto_in _ _ _ H0).
+            auto.
+          }
 
           destruct AR as [R|NR].
           ++
@@ -4836,22 +4854,20 @@ Module CheriMemoryImplWithProofs
             exfalso.
             (* Caps in range are untagged. H0/H1 is false *)
             clear IHn Heqo H2 bs.
+
             specialize (CIN addr).
             autospecialize CIN.
-            lia.
+            {
+              destruct R as [Rl Ru].
+              split.
+              - rewrite already_aligned in Rl;auto.
+              - apply Ru.
+            }
             specialize (CIN true g).
 
             autospecialize CIN.
             {
-              destruct M as [MIbase MIcap].
-              destruct_base_mem_invariant MIbase.
-              (* only need Balign *)
-              clear Bfit Bnextallocid Bnooverlap Blastaddr Bdead.
-              rewrite H in *.
-              specialize (Balign addr).
-              autospecialize Balign.
-              apply (AMapProofs.map_mapsto_in _ _ _ H0).
-              rewrite already_aligned; auto.
+              rewrite already_aligned, <- H; auto.
             }
             destruct CIN;congruence.
           ++
@@ -4879,8 +4895,30 @@ Module CheriMemoryImplWithProofs
             rewrite 2!bytemap_mem_state_with_bytemap.
             clear Heqo.
 
+            (*
+              [bm] and [bm'] differ at [ptrval1+n].
 
-            admit.
+              We reading [alignment_size] at [addr].
+             *)
+            destruct NR as [Nl|Nu].
+            **
+              rewrite already_aligned in Nl by auto.
+              (* addr < ptrval1 ,
+                 addr is aligned
+               *)
+              admit.
+            **
+              assert(AddressValue.to_Z addr >= AddressValue.to_Z ptrval1 + Z.of_nat (S n)) as Nu'.
+              {
+                clear - Nu.
+                unfold addr_offset in Nu.
+                lia.
+              }
+              (* addr >= prtval+n+1
+                 no overlap.
+                 the goal could be proven.
+               *)
+              admit.
       *
         (* removing *)
         admit.
