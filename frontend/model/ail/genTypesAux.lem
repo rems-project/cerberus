@@ -132,7 +132,10 @@ let rvalue_coercion gty : genType =
 val is_pointer_to_complete_object: forall 'a. sigma 'a -> genType -> bool
 let is_pointer_to_complete_object sigm = function
   | GenPointer _ ty ->
-      AilTypesAux.is_complete sigm ty
+      if AilTypesAux.is_function ty then
+        false
+      else
+        AilTypesAux.is_complete sigm ty
   | _ ->
       false
 end
