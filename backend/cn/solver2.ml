@@ -499,6 +499,16 @@ module Translate = struct
          | BWFFSNoSMT ->
             let intl i = int_lit_ i (IT.bt t1) here in
             Some (ite_ (eq_ (t1, intl 0) here, intl 0, add_ (arith_unop BWCTZNoSMT t1 here, intl 1) here) here)
+         | BWFLSNoSMT ->
+            let sz = match IT.bt t1 with
+              | Bits (_sign, n) -> n
+              | _ -> assert false
+            in
+            let intl i = int_lit_ i (IT.bt t1) here in
+            Some (ite_ (eq_ (t1, intl 0) here, 
+                        intl 0, 
+                        sub_ (intl sz,
+                              arith_unop BWCLZNoSMT t1 here) here) here)
          | _ -> None
       end
       | Binop (op, t1, t2) -> begin match op with
@@ -714,6 +724,7 @@ module Translate = struct
              | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)")
              end
            | BWFFSNoSMT -> adj ()
+           | BWFLSNoSMT -> adj ()
            | BWCLZNoSMT -> begin match IT.bt t with
                | BT.Bits (BT.Unsigned, sz) -> mk_clz context sz sz (term t)
                | BT.Bits (BT.Signed, sz) -> via_unsigned1 context (IT.bt t)
