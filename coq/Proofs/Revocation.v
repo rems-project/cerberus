@@ -4755,6 +4755,27 @@ Module CheriMemoryImplWithProofs
     reflexivity.
   Qed.
 
+  Fact already_aligned
+    (addr: AddressValue.t):
+    addr_ptr_aligned addr ->
+    AddressValue.of_Z (align_down (AddressValue.to_Z addr) (Z.of_nat (alignof_pointer MorelloImpl.get))) = addr.
+  Proof.
+    intros A.
+    unfold addr_ptr_aligned in A.
+    unfold align_down.
+    rewrite A.
+    rewrite Z.sub_0_r.
+    apply AddressValue_of_Z_to_Z.
+  Qed.
+
+
+  Fact bytemap_mem_state_with_bytemap:
+    forall s bm, (bytemap (mem_state_with_bytemap bm s)) = bm.
+  Proof.
+    intros s bm.
+    reflexivity.
+  Qed.
+
   Instance memcpy_copy_data_PreservesInvariant
     (loc: location_ocaml)
     (ptrval1 ptrval2: AddressValue.t)
@@ -4806,7 +4827,6 @@ Module CheriMemoryImplWithProofs
 
           intros addr g H0 H1 bs H2.
 
-
           assert(decidable (0 <= addr_offset addr ptrval1 < Z.of_nat (S n))) as AR
             by (apply dec_and;[apply Z.le_decidable|apply Z.lt_decidable]).
 
@@ -4815,10 +4835,51 @@ Module CheriMemoryImplWithProofs
             (* in range *)
             exfalso.
             (* Caps in range are untagged. H0/H1 is false *)
-            admit.
+            clear IHn Heqo H2 bs.
+            specialize (CIN addr).
+            autospecialize CIN.
+            lia.
+            specialize (CIN true g).
+
+            autospecialize CIN.
+            {
+              destruct M as [MIbase MIcap].
+              destruct_base_mem_invariant MIbase.
+              (* only need Balign *)
+              clear Bfit Bnextallocid Bnooverlap Blastaddr Bdead.
+              rewrite H in *.
+              specialize (Balign addr).
+              autospecialize Balign.
+              apply (AMapProofs.map_mapsto_in _ _ _ H0).
+              rewrite already_aligned; auto.
+            }
+            destruct CIN;congruence.
           ++
             (* outside range *)
-            (* TODO: prove via M *)
+            specialize (IHn s).
+            autospecialize IHn.
+            {
+              intros ca CR ctg cgs CM.
+              apply (CIN ca).
+              lia.
+              auto.
+            }
+            specialize (IHn M).
+            invc IHn.
+            rename H3 into MIbase, H4 into MIcap.
+            clear CIN.
+
+            eapply MIcap;eauto. clear MIcap.
+
+            remember (bytemap_copy_data ptrval1 ptrval2 n (bytemap s)) as bm.
+            remember (AMap.M.add (AddressValue.with_offset ptrval1 (Z.of_nat n)) o bm) as bm'.
+
+            apply not_and in NR;[|apply Z.le_decidable].
+            rewrite Z.nle_gt, <- Z.le_ngt, <- Z.ge_le_iff in NR.
+            rewrite 2!bytemap_mem_state_with_bytemap.
+            clear Heqo.
+
+
             admit.
       *
         (* removing *)
