@@ -3562,10 +3562,7 @@ and desugar_declaration_base attrs specifs idecltors =
                                 else
                                   E.return (cty, acc)
                             | Automatic ->
-                                if Global.backend_name () = "Cn" then
-                                  E.return (cty, acc)
-                                else
-                                  E.return (cty, (sym, Nothing) :: acc)
+                                E.return (cty, (sym, Nothing) :: acc)
                             | Thread ->
                                 (* TODO check *)
                                 E.return (cty, acc)

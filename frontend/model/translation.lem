@@ -3805,6 +3805,10 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
               loc (Caux.mk_ail_ctype_pe ty) ptr_sym_e in
           match e_opt with
             | Nothing ->
+                if Global.backend_name () = "Cn" then
+                  (* CN does not support unspecified values *)
+                  E.return Caux.mk_skip_e
+                else
                 E.return begin
                   Caux.add_std "§6.2.4#6"
                     (mk_store (Caux.mk_unspecified_pe ty) Cmm.NA)
