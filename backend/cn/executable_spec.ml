@@ -134,23 +134,30 @@ let memory_accesses_injections ail_prog =
   ) xs;
   !acc
 
+let output_to_oc oc str_list =
+  List.iter (Stdlib.output_string oc) str_list 
+
 open Executable_spec_internal
 
 let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_, sigm) as ail_prog) output_decorated_dir output_filename prog5 statement_locs =
   let prefix = match output_decorated_dir with | Some dir_name -> dir_name | None -> "" in
   let oc = Stdlib.open_out (prefix ^ output_filename) in
   let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
+  let cn_header_oc = Stdlib.open_out (prefix ^ "cn.h") in 
   populate_record_map prog5;
   let (instrumentation, symbol_table) = Core_to_mucore.collect_instrumentation prog5 in
   let executable_spec = generate_c_specs_internal with_ownership_checking instrumentation symbol_table statement_locs sigm prog5 in
-  let (c_datatypes, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
+  let (c_datatype_defs, _c_datatype_decls, c_datatype_equality_fun_decls) = generate_c_datatypes sigm in
   let (c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records) =
   generate_c_functions_internal sigm prog5.mu_logical_predicates in
   let (c_predicate_defs, locs_and_c_predicate_decls, c_records') =
   generate_c_predicates_internal sigm prog5.mu_resource_predicates in
-  let (conversion_function_defs, _conversion_function_decls) =
+  let (conversion_function_defs, conversion_function_decls) =
   generate_conversion_and_equality_functions sigm in
-  
+
+  let cn_header_pair = ("cn.h", false) in
+  let cn_header = Executable_spec_utils.generate_include_header cn_header_pair in
+
   let cn_utils_header_pair = ("cn-executable/utils.h", true) in
   let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
 
@@ -165,68 +172,88 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   ; *)
 
   let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking Cn_internal_to_ail.ownership_ctypes sigm in
-  let c_structs = print_c_structs sigm.tag_definitions in
-  let cn_converted_structs = generate_cn_versions_of_structs sigm.tag_definitions in
+  let (c_struct_defs, _c_struct_decls) = print_c_structs sigm.tag_definitions in
+  let (cn_converted_struct_defs, _cn_converted_struct_decls) = generate_cn_versions_of_structs sigm.tag_definitions in
 
   
 
   (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs sigm in *)
-  let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
-  let (records_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
+  let (record_defs_str, _record_decls_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
+  let (record_defs_str', _record_decls_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
 
   (* let extern_ownership_globals = 
     if with_ownership_checking then 
       "\n" ^ generate_ownership_globals ~is_extern:true ()
     else "" 
   in *)
+  let datatype_strs = String.concat "\n" (List.map snd c_datatype_defs) in 
+  let predicate_decls = String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls)) in
+
+  let cn_header_decls_list = 
+    [cn_utils_header;
+    "\n";
+    c_struct_defs;
+    cn_converted_struct_defs;
+    if String.equal record_defs_str "" then "\n/* CN RECORDS */\n\n" else "";
+    record_defs_str;
+    record_defs_str';
+    if String.equal datatype_strs "" then "\n/* CN DATATYPES */\n\n" else "";
+    datatype_strs;
+    "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
+    ownership_function_decls;
+    conversion_function_decls;
+    record_equality_fun_prot_strs;
+    record_equality_fun_prot_strs';
+    c_function_decls;
+    "\n";
+    predicate_decls;
+    ]
+  in
+
+  output_to_oc cn_header_oc cn_header_decls_list;
 
   (* TODO: Topological sort *)
-  Stdlib.output_string cn_oc cn_utils_header;
-  (* Stdlib.output_string cn_oc extern_ownership_globals; *)
-  Stdlib.output_string cn_oc c_structs;
-  Stdlib.output_string cn_oc cn_converted_structs;
-  Stdlib.output_string cn_oc "\n/* CN RECORDS */\n\n";
-  Stdlib.output_string cn_oc records_str;
-  Stdlib.output_string cn_oc records_str';
-  Stdlib.output_string cn_oc "\n/* CN DATATYPES */\n\n";
-  Stdlib.output_string cn_oc (String.concat "\n" (List.map snd c_datatypes));
-  Stdlib.output_string cn_oc record_equality_fun_strs;
-  Stdlib.output_string cn_oc record_equality_fun_strs';
-  Stdlib.output_string cn_oc conversion_function_defs;
-  Stdlib.output_string cn_oc ownership_function_defs;
-  Stdlib.output_string cn_oc c_function_decls;
-  Stdlib.output_string cn_oc c_function_defs;
-  Stdlib.output_string cn_oc (String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls)));
-  Stdlib.output_string cn_oc c_predicate_defs;
+  let cn_defs_list = 
+    [cn_header;
+    record_equality_fun_strs;
+    record_equality_fun_strs';
+    conversion_function_defs;
+    ownership_function_defs;
+    c_function_defs;
+    "\n";
+    c_predicate_defs;]
+  in
 
-  let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true); cn_utils_header_pair;] in
+  output_to_oc cn_oc cn_defs_list;
+
+  let incls = [("assert.h", true); ("stdlib.h", true); ("stdbool.h", true); ("math.h", true);] in
   let headers = List.map Executable_spec_utils.generate_include_header incls in
-  Stdlib.output_string oc (List.fold_left (^) "" headers);
-  Stdlib.output_string oc "\n";
-  (* Stdlib.output_string oc (String.concat "\n" (List.concat (List.map snd locs_and_c_predicate_decls))); *)
-  (* Stdlib.output_string oc extern_ownership_globals; *)
-  Stdlib.output_string oc "\n/* CN RECORDS */\n\n";
-  Stdlib.output_string oc records_str;
-  Stdlib.output_string oc records_str';
-  Stdlib.output_string oc record_equality_fun_prot_strs;
-  Stdlib.output_string oc record_equality_fun_prot_strs';
-  Stdlib.output_string oc "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
-  Stdlib.output_string oc ownership_function_decls;
-  Stdlib.output_string oc "\n";
 
+  let source_file_strs_list =
+    [cn_header;
+    (List.fold_left (^) "" headers);
+    "\n";]
+  in
+
+  output_to_oc oc source_file_strs_list;
   
-  let c_datatypes_with_fn_prots = List.combine c_datatypes c_datatype_equality_fun_decls in
+  let c_datatypes_with_fn_prots = List.combine c_datatype_defs c_datatype_equality_fun_decls in
   let c_datatypes_locs_and_strs = List.map (fun ((loc, dt_str), eq_prot_str) -> (loc, [String.concat "\n" [dt_str; eq_prot_str]])) c_datatypes_with_fn_prots in
   
   let toplevel_locs_and_defs = group_toplevel_defs [] (c_datatypes_locs_and_strs @ locs_and_c_extern_function_decls @ locs_and_c_predicate_decls) in
-  
-  let accesses_stmt_injs = [] (* memory_accesses_injections ail_prog *) in
+  let toplevel_locs_and_defs = List.map (fun (loc, _) -> (loc, [""])) toplevel_locs_and_defs in 
+
+  let accesses_stmt_injs = if with_ownership_checking then memory_accesses_injections ail_prog else [] in
   let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
+  let struct_injs_with_filenames = List.map (fun (loc, _) -> (loc, [""])) struct_injs_with_filenames in 
+
+
   Printf.printf "Locations for injection of CN statements:\n";
   let _ = List.map (fun (loc, _) -> Printf.printf "%s: %s\n" (Option.get (Cerb_location.get_filename loc)) (Cerb_location.simple_location loc)) executable_spec.in_stmt in 
   let in_stmt_injs_with_filenames = 
     executable_spec.in_stmt @
-     toplevel_locs_and_defs @ struct_injs_with_filenames @ accesses_stmt_injs in 
+     accesses_stmt_injs 
+     @ toplevel_locs_and_defs @ struct_injs_with_filenames in
   (* Treat source file separately from header files *)
   let source_file_in_stmt_injs = filter_injs_by_filename in_stmt_injs_with_filenames filename in
 

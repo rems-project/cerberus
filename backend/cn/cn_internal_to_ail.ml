@@ -744,6 +744,7 @@ let rec cn_to_ail_expr_aux_internal
   | Tuple ts -> failwith "TODO1"
   | NthTuple (i, t) -> failwith "TODO2"
   | Struct (tag, ms) ->
+    Printf.printf "Translation of struct %s\n" (Sym.pp_string tag);
     let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
 

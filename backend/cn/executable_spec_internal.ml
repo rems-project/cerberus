@@ -104,14 +104,14 @@ let generate_c_specs_internal with_ownership_checking instrumentation_list type_
 (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
 (prog5: unit Mucore.mu_file)
 =
-  let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let (c_pres_and_posts, c_in_stmt) = generate_c_pres_and_posts_internal with_ownership_checking instrumentation type_map sigm prog5 in
-    (c_pres_and_posts, c_in_stmt)
-  in
-  let specs = List.map generate_c_spec instrumentation_list in
-  let (pre_post, in_stmt) = List.split specs in
-  let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt} in
-  executable_spec
+let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
+  let (c_pres_and_posts, c_in_stmt) = generate_c_pres_and_posts_internal with_ownership_checking instrumentation type_map sigm prog5 in
+  (c_pres_and_posts, c_in_stmt)
+in
+let specs = List.map generate_c_spec instrumentation_list in
+let (pre_post, in_stmt) = List.split specs in
+let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt} in
+executable_spec
 
 let concat_map_newline docs =
   PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs
@@ -119,14 +119,18 @@ let concat_map_newline docs =
 let generate_doc_from_ail_struct ail_struct =
   CF.Pp_ail.pp_tag_definition ~executable_spec:true ail_struct ^^ PPrint.hardline
 
-
-
+let generate_struct_decl_str (tag, (_, _, def)) = match def with 
+  | C.StructDef _ -> Printf.sprintf "struct %s;\n" (Sym.pp_string tag)
+  | UnionDef _ -> ""
+    
+    
+    
 let generate_c_records ail_structs =
   let struct_docs = List.map generate_doc_from_ail_struct ail_structs in
-  CF.Pp_utils.to_plain_pretty_string (PPrint.concat struct_docs)
+  (CF.Pp_utils.to_plain_pretty_string (PPrint.concat struct_docs), (String.concat "" (List.map generate_struct_decl_str ail_structs)))
 
 let generate_record_strs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) ail_records =
-  let records_str = generate_c_records ail_records in
+  let (record_def_strs, record_decl_strs) = generate_c_records ail_records in
   let ail_record_equality_functions = List.map (fun r -> Cn_internal_to_ail.generate_struct_equality_function ~is_record:true sigm.cn_datatypes r) ail_records in
   let ail_record_equality_functions = List.concat ail_record_equality_functions in
   let (eq_decls, eq_defs) = List.split ail_record_equality_functions in
@@ -135,10 +139,17 @@ let generate_record_strs (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   let decl_docs = List.map (fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) eq_decls in
   let equality_fun_prot_strs = List.map (fun doc -> [CF.Pp_utils.to_plain_pretty_string doc]) decl_docs in
   let equality_fun_prot_strs = String.concat "\n" (List.concat equality_fun_prot_strs) in
-  (records_str, CF.Pp_utils.to_plain_pretty_string equality_fun_strs, equality_fun_prot_strs)
+  (record_def_strs, record_decl_strs, CF.Pp_utils.to_plain_pretty_string equality_fun_strs, equality_fun_prot_strs)
 
 let generate_all_record_strs sigm =
   generate_record_strs sigm (Cn_internal_to_ail.cn_to_ail_pred_records (Cn_internal_to_ail.RecordMap.bindings !(Cn_internal_to_ail.records)))
+
+let generate_str_from_ail_struct ail_struct =
+  CF.Pp_utils.to_plain_pretty_string (generate_doc_from_ail_struct ail_struct)
+
+let generate_str_from_ail_structs ail_structs =
+  let docs = List.map generate_doc_from_ail_struct ail_structs in
+  CF.Pp_utils.to_plain_pretty_string (concat_map_newline docs)
 
 (* TODO: Use Mucore datatypes instead of CN datatypes from Ail program *)
 let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
@@ -148,8 +159,9 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
         let ail_dt1 = Cn_internal_to_ail.cn_to_ail_datatype ~first:true d in
         let ail_dts = List.map Cn_internal_to_ail.cn_to_ail_datatype ds in
         ail_dt1 :: ail_dts
-  in
+      in
 
+  let ail_datatype_decls = List.map generate_struct_decl_str (List.concat (List.map snd ail_datatypes)) in 
   let locs_and_structs = List.map (fun (loc, structs) -> (loc, List.map generate_doc_from_ail_struct structs)) ail_datatypes in
   let locs_and_struct_strs = List.map (fun (loc, ail_structs) -> (loc, CF.Pp_utils.to_plain_pretty_string (concat_map_newline ail_structs))) locs_and_structs in
   (* let structs = List.map generate_doc_from_ail_struct ail_datatypes in *)
@@ -162,21 +174,18 @@ let generate_c_datatypes (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
   let (dt_eq_decls, _) = List.split datatype_equality_funs in
   let decl_docs = List.map (fun (sym, (_, _, decl)) -> CF.Pp_ail.pp_function_prototype ~executable_spec:true sym decl) dt_eq_decls in
   let decl_strs = List.map (fun doc -> CF.Pp_utils.to_plain_pretty_string doc) decl_docs in
-  (locs_and_struct_strs, decl_strs)
+  (locs_and_struct_strs, String.concat "\n" ail_datatype_decls, decl_strs)
 
-let generate_str_from_ail_struct ail_struct =
-  CF.Pp_utils.to_plain_pretty_string (generate_doc_from_ail_struct ail_struct)
-
-let generate_str_from_ail_structs ail_structs =
-  let docs = List.map generate_doc_from_ail_struct ail_structs in
-  CF.Pp_utils.to_plain_pretty_string (concat_map_newline docs)
 
 let print_c_structs c_structs =
-  "\n/* ORIGINAL C STRUCTS */\n\n" ^ generate_str_from_ail_structs c_structs
+  let struct_defs_str = generate_str_from_ail_structs c_structs in 
+  let struct_decls_str = List.map generate_struct_decl_str c_structs in 
+  ("\n/* ORIGINAL C STRUCTS */\n\n" ^ struct_defs_str, String.concat "" struct_decls_str)
 
 let generate_cn_versions_of_structs c_structs =
-  let ail_structs = List.map Cn_internal_to_ail.cn_to_ail_struct c_structs in
-  "\n/* CN VERSIONS OF C STRUCTS */\n\n" ^ generate_str_from_ail_structs (List.concat ail_structs)
+  let ail_structs = List.concat (List.map Cn_internal_to_ail.cn_to_ail_struct c_structs) in
+  let struct_decls = List.map generate_struct_decl_str ail_structs in
+  ("\n/* CN VERSIONS OF C STRUCTS */\n\n" ^ generate_str_from_ail_structs ail_structs, String.concat "" struct_decls)
 
 let generate_struct_injs (sigm: CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)  =
   let generate_struct_inj (((_, (loc, _, tag_def)) as def) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) =

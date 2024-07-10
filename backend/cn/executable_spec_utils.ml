@@ -137,6 +137,10 @@ let rec execCtypeEqual (C.Ctype (_, ty1)) (C.Ctype (_, ty2)) =
     | _ ->
         false
 
+let map_struct_def_to_decl (tag, (loc, attrs, def)) = match def with 
+  | C.StructDef _ -> [(tag, (loc, attrs, C.StructDef ([], None)))]
+  | UnionDef _ -> []
+
 
 let str_of_it_ = function
   | Terms.Sym sym -> Sym.pp_string sym
