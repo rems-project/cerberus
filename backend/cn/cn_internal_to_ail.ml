@@ -744,7 +744,6 @@ let rec cn_to_ail_expr_aux_internal
   | Tuple ts -> failwith "TODO1"
   | NthTuple (i, t) -> failwith "TODO2"
   | Struct (tag, ms) ->
-    Printf.printf "Translation of struct %s\n" (Sym.pp_string tag);
     let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
 
@@ -756,7 +755,6 @@ let rec cn_to_ail_expr_aux_internal
       let assign_stat = A.(AilSexpr (mk_expr (AilEassign (mk_expr ail_memberof, e)))) in
       (b, s, assign_stat)
     in
-
 
     let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct cn_struct_tag)))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
