@@ -130,6 +130,17 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
     }
 }
 
+void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
+    for (int i = 0; i < size; i++) { 
+        signed long *address_key = alloc(sizeof(long));
+        *address_key = ((uintptr_t) generic_c_ptr) + i;
+        printf("CN: Assuming ownership for %lu (function: %s)\n", 
+               ((uintptr_t) generic_c_ptr) + i, fun);
+        ownership_ghost_state_set(address_key, cn_stack_depth);
+    }
+}
+
+
 void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size) {
   switch (owned_enum)
     {
