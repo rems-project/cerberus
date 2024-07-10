@@ -454,6 +454,7 @@ void ownership_ghost_state_remove(signed long* address_key);
 /* CN ownership checking */
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size);
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size);
+void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun);
 void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size_t size);
 
 /* C ownership checking */
