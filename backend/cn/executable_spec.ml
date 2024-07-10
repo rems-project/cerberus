@@ -35,9 +35,11 @@ let rec open_auxilliary_files source_filename prefix included_filenames already_
 let filter_injs_by_filename inj_pairs fn =
   List.filter (fun (loc, _) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) inj_pairs
 
-let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames = function
+let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames cn_header = function
   | [] -> ()
   | (fn', oc') :: xs ->
+
+    Stdlib.output_string oc' (cn_header ^ "\n");
 
     let injs_with_syms = filter_injs_by_filename injs_with_filenames fn' in
     let injs_for_fn' = injs_with_syms in 
@@ -56,7 +58,7 @@ let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames = fun
         prerr_endline str
     end;
     Stdlib.close_out oc';
-    inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames xs
+    inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames cn_header xs
 
 let copy_source_dir_files_into_output_dir filename already_opened_fns_and_ocs prefix = 
   let source_files_already_opened = filename :: (List.map fst already_opened_fns_and_ocs) in 
@@ -210,7 +212,8 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
     ]
   in
 
-  output_to_oc cn_header_oc cn_header_decls_list;
+  let cn_header_oc_str = Executable_spec_utils.ifndef_wrap "CN_HEADER" (String.concat "\n" cn_header_decls_list) in 
+  output_to_oc cn_header_oc [cn_header_oc_str];
 
   (* TODO: Topological sort *)
   let cn_defs_list = 
@@ -290,5 +293,5 @@ with
 end;
 (if copy_source_dir then 
   copy_source_dir_files_into_output_dir filename fns_and_ocs prefix);
-inject_in_stmt_injs_to_multiple_files ail_prog in_stmt_injs_with_filenames fns_and_ocs
+inject_in_stmt_injs_to_multiple_files ail_prog in_stmt_injs_with_filenames cn_header fns_and_ocs
 

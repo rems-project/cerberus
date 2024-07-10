@@ -748,6 +748,8 @@ let rec cn_to_ail_expr_aux_internal
     let res_sym = Sym.fresh () in
     let res_ident = A.(AilEident res_sym) in
 
+    let cn_struct_tag = generate_sym_with_suffix ~suffix:"_cn" tag in 
+
     let generate_ail_stat (id, it) = 
       let (b, s, e) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals it PassBack in
       let ail_memberof = A.(AilEmemberofptr (mk_expr res_ident, id)) in
@@ -756,9 +758,9 @@ let rec cn_to_ail_expr_aux_internal
     in
 
 
-    let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct tag)))) in
+    let ctype_ = C.(Pointer (empty_qualifiers, (mk_ctype (Struct cn_struct_tag)))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
-    let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct tag)))])) in
+    let fn_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct cn_struct_tag)))])) in
     let alloc_stat = A.(AilSdeclaration [(res_sym, Some (mk_expr fn_call))]) in
     
     let (b, s) = ([res_binding], [alloc_stat]) in

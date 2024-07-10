@@ -1,3 +1,6 @@
+#ifndef CN_UTILS
+#define CN_UTILS 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -509,3 +512,6 @@ static inline void cn_store(void *ptr, size_t size)
     cn_store(tmp, sizeof(typeof(LV))); \
     (*tmp) OP;                         \
  })
+
+
+#endif

@@ -76,7 +76,9 @@ type cn_dependency_graph = {
 let compute_cn_dependencies ail_prog =
   ail_prog
 
-
+let ifndef_wrap ifndef_str str =
+  "#ifndef " ^ ifndef_str ^ "\n#define " ^ ifndef_str ^ "\n" ^ str ^ "\n#endif"  
+  
 
 let generate_include_header (file_name, is_system_header) =
   let pre = "#include " in
@@ -86,7 +88,7 @@ let generate_include_header (file_name, is_system_header) =
     else
       "\"" ^ file_name ^ "\""
   in
-  pre ^ incl ^ "\n"
+  pre ^ incl ^ "\n" 
 
 let get_ctype_without_ptr ctype = match rm_ctype ctype with
   | C.(Pointer (_, ct)) -> ct
@@ -137,9 +139,6 @@ let rec execCtypeEqual (C.Ctype (_, ty1)) (C.Ctype (_, ty2)) =
     | _ ->
         false
 
-let map_struct_def_to_decl (tag, (loc, attrs, def)) = match def with 
-  | C.StructDef _ -> [(tag, (loc, attrs, C.StructDef ([], None)))]
-  | UnionDef _ -> []
 
 
 let str_of_it_ = function
