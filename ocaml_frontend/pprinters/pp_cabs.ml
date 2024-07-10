@@ -726,8 +726,8 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
 and dtree_of_for_clause = function
  | FC_expr e ->
      Dnode (pp_stmt_ctor "FC_expr", [dtree_of_cabs_expression e])
- | FC_decl decl ->
-     Dnode (pp_stmt_ctor "FC_decl", [dtree_of_cabs_declaration decl])
+ | FC_decl (loc, decl) ->
+     Dnode (pp_stmt_ctor "FC_decl" ^^^ pp_location ~clever:true loc, [dtree_of_cabs_declaration decl])
 
 
 let dtree_of_function_definition (FunDef (_, attrs, specifs, decltor, stmt)) =

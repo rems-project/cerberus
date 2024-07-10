@@ -1431,7 +1431,7 @@ iteration_statement:
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , magic_to_attrs(List.rev magic)
-        , CabsSfor (Some (FC_decl xs_decl), expr2_opt, expr3_opt, stmt) ) }
+        , CabsSfor (Some (FC_decl (Cerb_location.(region $loc(xs_decl) NoCursor), xs_decl)), expr2_opt, expr3_opt, stmt) ) }
 ;
 
 (* §6.8.6 Jump statements *)
