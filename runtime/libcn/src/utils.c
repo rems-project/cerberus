@@ -226,7 +226,7 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
 void *cn_map_get(cn_map *m, cn_integer *key) {
     // const char key_arr[1] = {key};
     void *res = ht_get(m, key->val);
-    // if (!res) printf("NULL being returned for key %d\n", *(key->val));
+    if (!res) { printf("NULL being returned for key %ld\n", *(key->val)); exit (1); }
     return res;
 }
 
@@ -324,7 +324,7 @@ static uint32_t cn_fls(uint32_t x)
 
 static uint64_t cn_flsl(uint64_t x)
 {
-    return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
+    return x ? sizeof(x) * 8 - __builtin_clzl(x) : 0;
 }
 
 
@@ -384,3 +384,15 @@ void *cn_calloc(size_t num, size_t size)
     return p;
   }
 }
+
+
+void cn_print_u64(const char *str, unsigned long u)
+{
+  printf("\n\nprint %s: %20lx,  %20lu\n\n", str, u, u);
+}
+
+void cn_print_nr_u64(int i, unsigned long u)
+{
+  printf("\n\nprint %d: %20lx,  %20lu\n", i, u, u);
+}
+

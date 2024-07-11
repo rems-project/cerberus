@@ -100,7 +100,8 @@ void ghost_stack_depth_decr(void);
 void *cn_aligned_alloc(size_t align, size_t size) ;
 void *cn_malloc(unsigned long size) ;
 void *cn_calloc(size_t num, size_t size) ;
-
+void cn_print_nr_u64(int i, unsigned long u) ;
+void cn_print_u64(const char *str, unsigned long u) ;
 
 /* Conversion functions */
 
