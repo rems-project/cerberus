@@ -559,7 +559,7 @@ let empty_for_dest : type a. a dest -> a =
 
 let generate_ownership_function with_ownership_checking ctype = 
   let ctype_str = str_of_ctype ctype in
-  Printf.printf ("ctype_str: %s\n") ctype_str;
+  (* Printf.printf ("ctype_str: %s\n") ctype_str; *)
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
   let fn_sym = Sym.fresh_pretty ("owned_" ^ ctype_str) in
   let param1_sym = Sym.fresh_pretty "cn_ptr" in

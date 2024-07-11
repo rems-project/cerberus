@@ -12,6 +12,7 @@ module A=CF.AilSyntax
 type executable_spec = {
     pre_post: (CF.Symbol.sym * (string list * string list)) list;
     in_stmt: (Cerb_location.t * string list) list;
+    returns: (Cerb_location.t * (CF.GenTypes.genTypeCategory A.expression) option * string list) list;
 }
 
 let generate_ail_stat_strs ?(with_newline=false) (bs, (ail_stats_ : CF.GenTypes.genTypeCategory A.statement_ list)) =
@@ -92,9 +93,13 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
 
 
   let in_stmt = List.map (fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
-  let block_ownership_stmts = List.map (fun (loc, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss))) block_ownership_injs in 
+  let return_injs = List.filter (fun (_, e_opt, _, _) -> Option.is_some e_opt) block_ownership_injs in 
+  let non_return_injs = List.filter (fun (_, e_opt, _, _) -> Option.is_none e_opt) block_ownership_injs in 
+  let block_ownership_stmts = List.map (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss))) non_return_injs in 
   let block_ownership_stmts = List.map (fun (loc, strs) -> (loc, [String.concat "\n" strs])) block_ownership_stmts in 
-  ([(instrumentation.fn, (pre_str, post_str))], in_stmt @ block_ownership_stmts)
+  let return_ownership_stmts = List.map (fun (loc, e_opt, bs, ss) -> (loc, e_opt, generate_ail_stat_strs ~with_newline:true (bs, ss))) return_injs in 
+  let return_ownership_stmts = List.map (fun (loc, e_opt, strs) -> (loc, e_opt, [String.concat "\n" strs])) return_ownership_stmts in 
+  ([(instrumentation.fn, (pre_str, post_str))], in_stmt @ block_ownership_stmts, return_ownership_stmts)
 
 
 
@@ -105,12 +110,11 @@ let generate_c_specs_internal with_ownership_checking instrumentation_list type_
 (prog5: unit Mucore.mu_file)
 =
 let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-  let (c_pres_and_posts, c_in_stmt) = generate_c_pres_and_posts_internal with_ownership_checking instrumentation type_map sigm prog5 in
-  (c_pres_and_posts, c_in_stmt)
+  generate_c_pres_and_posts_internal with_ownership_checking instrumentation type_map sigm prog5
 in
 let specs = List.map generate_c_spec instrumentation_list in
-let (pre_post, in_stmt) = List.split specs in
-let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt} in
+let (pre_post, in_stmt, returns) = Executable_spec_utils.list_split_three specs in
+let executable_spec = {pre_post = List.concat pre_post; in_stmt = List.concat in_stmt; returns = List.concat returns} in
 executable_spec
 
 let concat_map_newline docs =

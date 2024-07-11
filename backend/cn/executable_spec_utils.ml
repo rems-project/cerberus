@@ -98,12 +98,20 @@ let is_pointer ctype = match rm_ctype ctype with
   | C.(Pointer _) -> true
   | _ -> false
 
+let rec _transform_ctype_for_ptr (C.(Ctype (annots, ctype)) as original_ctype) = 
+  let mk_pointer_from_ctype ctype' = C.(Ctype (annots, Pointer (empty_qualifiers, ctype'))) in 
+  match ctype with 
+  | Array (ctype', _) 
+  | Pointer (_, ctype') -> mk_pointer_from_ctype (_transform_ctype_for_ptr ctype') 
+  | _ -> original_ctype
+
 
 let rec str_of_ctype ctype = match rm_ctype ctype with 
     | C.(Pointer (_, ctype')) ->
       str_of_ctype ctype' ^ " pointer"
     | C.(Array (ctype, num_elements_opt)) -> (match num_elements_opt with 
-      | Some num_elements -> str_of_ctype ctype ^ " " ^ string_of_int (Z.to_int num_elements)
+      | Some num_elements -> 
+        str_of_ctype ctype ^ " " ^ string_of_int (Z.to_int num_elements)
       | None -> str_of_ctype (mk_ctype C.(Pointer (empty_qualifiers, ctype))))
     | _ -> 
       let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
