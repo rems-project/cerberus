@@ -142,7 +142,7 @@ let rec bt_to_cn_base_type = function
 | BT.Integer -> CN_integer
 | BT.Bits (sign, size) -> CN_bits ((match sign with BT.Unsigned -> CN_unsigned  | BT.Signed -> CN_signed), size)
 | BT.Real -> CN_real
-| BT.Alloc_id  -> CN_loc
+| BT.Alloc_id  -> CN_alloc_id
 | BT.CType -> failwith "TODO BT.Ctype"
 | BT.Loc -> CN_loc
 | BT.Struct tag -> CN_struct tag
@@ -197,7 +197,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
   | CN_bits (sign, size) -> C.(Basic (Integer (Signed Long))) 
   | CN_real -> failwith "TODO CN_real"
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
-  | CN_alloc_id -> failwith "TODO CN_alloc_id"
+  | CN_alloc_id -> C.(Basic (Integer (Signed Long))) (* gets replaced with typedef anyway (TODO: clean up) *)
   | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
   | CN_record members -> 
     let sym = generate_record_sym pred_sym members in
@@ -222,6 +222,7 @@ let rec cn_to_ail_base_type ?(pred_sym=None) cn_typ =
     | CN_bool -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_bool")]
     | CN_map _ -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_map")]
     | CN_loc -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_pointer")]
+    | CN_alloc_id -> [CF.Annot.Atypedef (Sym.fresh_pretty "cn_alloc_id")]
     | _ -> []
   in
   let ret = mk_ctype ~annots typ in
@@ -1065,14 +1066,22 @@ let rec cn_to_ail_expr_aux_internal
       translate_real [t] ps' d
 
   | Cast (bt, t) -> 
-    let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
+    let (ail_expr_, b, s) = match bt with 
+      | BT.Alloc_id -> 
+        (let ail_const_expr_ = A.AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))) in 
+        (add_conversion_fn ail_const_expr_ BT.Alloc_id, [], []))
+      | _ ->
+        (let b, s, e = cn_to_ail_expr_aux_internal const_prop pred_name dts globals t PassBack in
 
-    let ail_expr_ = match ((get_typedef_string (bt_to_ail_ctype bt)), get_typedef_string (bt_to_ail_ctype (IT.bt t))) with 
-      | Some cast_type_str, Some original_type_str -> 
-        let fn_name = "cast_" ^ original_type_str ^ "_to_" ^ cast_type_str in 
-        A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e]))
-      | _, _ ->
-      A.(AilEcast (empty_qualifiers, (bt_to_ail_ctype bt), e)) in 
+        let ail_expr_ = match ((get_typedef_string (bt_to_ail_ctype bt)), get_typedef_string (bt_to_ail_ctype (IT.bt t))) with 
+          | Some cast_type_str, Some original_type_str -> 
+            let fn_name = "cast_" ^ original_type_str ^ "_to_" ^ cast_type_str in 
+            A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty fn_name)), [e]))
+          | _, _ ->
+            A.(AilEcast (empty_qualifiers, (bt_to_ail_ctype bt), e))
+        in 
+        (ail_expr_, b, s))
+    in 
     dest d (b, s, mk_expr ail_expr_)
 
 
