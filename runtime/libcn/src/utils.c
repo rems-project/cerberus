@@ -108,11 +108,17 @@ void ownership_ghost_state_remove(signed long* address_key) {
     ownership_ghost_state_set(address_key, -1);
 }
 
+// #define KMAG  "\x1B[35m"
+#define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
+
+
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
+    printf("CN ownership checking: getting ownership:" FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
-        printf("CN: Getting ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
+        // printf("CN: Getting ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
         *address_key = generic_c_ptr + i;
+        printf(" off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name);
         int curr_depth = ownership_ghost_state_get(address_key);
         cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1));
         ownership_ghost_state_set(address_key, cn_stack_depth);
@@ -120,10 +126,12 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
+    printf("CN ownership checking: putting back ownership:" FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
-        printf("CN: Putting back ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
+        printf(" off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name);
+        // printf("CN: Putting back ownership for %lu (function: %s)\n", generic_c_ptr + i, error_msg_info.function_name);
         int curr_depth = ownership_ghost_state_get(address_key);
         cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
         ownership_ghost_state_set(address_key, cn_stack_depth - 1);
