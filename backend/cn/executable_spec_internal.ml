@@ -318,5 +318,7 @@ let generate_ownership_global_assignments (sigm : CF.GenTypes.genTypeCategory CF
       let global_map_fcalls = List.map Ownership_exec.generate_c_local_ownership_entry_fcall globals in 
       let global_map_stmts_ = List.map (fun e -> A.AilSexpr e) global_map_fcalls in 
       let assignments = Ownership_exec.get_ownership_global_init_stats () in
-      let init_and_mapping_str = generate_ail_stat_strs ([], assignments @ global_map_stmts_) in
-      [(main_sym, (init_and_mapping_str, []))]
+      let init_and_global_mapping_str = generate_ail_stat_strs ([], assignments @ global_map_stmts_) in
+      let global_unmapping_stmts_ = List.map Ownership_exec.generate_c_local_ownership_exit globals in 
+      let global_unmapping_str = generate_ail_stat_strs ([], global_unmapping_stmts_) in
+      [(main_sym, (init_and_global_mapping_str, global_unmapping_str))]
