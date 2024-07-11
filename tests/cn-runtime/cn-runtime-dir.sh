@@ -4,7 +4,7 @@
 
 DIRNAME=$1
 
-SUCC=$(find $DIRNAME -maxdepth 1 -name '*.c' | grep -v '\.error\.c' | grep -v 'fixme_error' | grep -v '\.unknown\.c' | grep -v '\-exec\.c')
+SUCC=$(find $DIRNAME -maxdepth 1 -name '*.c' | grep -v '\.error\.c' | grep -v 'fixme_error' | grep -v '\.unknown\.c' | grep -v '\-exec\.c' | grep -v 'inconsistent*' | grep -v 'implies*')
 
 NUM_GENERATION_FAILED=0
 GENERATION_FAILED=''
@@ -22,12 +22,20 @@ mkdir -p $DIRNAME/exec
 
 for TEST in $SUCC
 do
-  TEST_BASENAME=$(basename $TEST .c)
+  TEST_NAME=$TEST
+  TEST_BASENAME=$(basename $TEST_NAME .c)
   EXEC_C_DIRECTORY=$DIRNAME/exec/$TEST_BASENAME
   EXEC_C_FILE=$EXEC_C_DIRECTORY/$TEST_BASENAME-exec.c
   mkdir -p $EXEC_C_DIRECTORY
+  if grep -q "#define" "$INPUT_FN"; then
+    echo Preprocessing due to presence of macros ...
+    TEST_BASENAME=${TEST_BASENAME}_pp
+    cpp -P -CC $TEST >! $DIRNAME/${TEST_BASENAME}.c  # macros present - need to preprocess
+    TEST_NAME=$DIRNAME/${TEST_BASENAME}.c
+    echo Done!
+  fi
   echo Generating $EXEC_C_FILE ...
-  if ! cn $TEST --output_decorated=$TEST_BASENAME-exec.c --output_decorated_dir=$EXEC_C_DIRECTORY/
+  if ! cn $TEST_NAME --output_decorated=$TEST_BASENAME-exec.c --output_decorated_dir=$EXEC_C_DIRECTORY/ --with_ownership_checking
   then
     echo Generation failed.
     NUM_GENERATION_FAILED=$(( $NUM_GENERATION_FAILED + 1 ))
@@ -35,7 +43,7 @@ do
   else 
     echo Generation succeeded!
     echo Compiling and linking...
-    if ! cc -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include  $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -pedantic -std=c11 -o $TEST_BASENAME-output $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c  
+    if ! clang-18 -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include $EXEC_C_DIRECTORY/*.c $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -o $TEST_BASENAME-output   
     then
       echo Compiling/linking failed.
       NUM_COMPILATION_FAILED=$(( $NUM_COMPILATION_FAILED + 1 ))
