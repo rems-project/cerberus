@@ -159,8 +159,7 @@ let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars
     | AilSlabel (_, s, _) -> get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s
     | AilSgoto _ -> [] (* TODO *)
     | AilSreturn e -> 
-      let loc_before_return_stmt = get_start_loc loc in 
-      [(loc_before_return_stmt, Some e, [], List.map generate_c_local_ownership_exit return_vars)]
+      [(loc, Some e, [], List.map generate_c_local_ownership_exit return_vars)]
     | AilScontinue ->
       let loc_before_continue = get_start_loc loc in 
       [(loc_before_continue, None, [], List.map generate_c_local_ownership_exit continue_vars)]
