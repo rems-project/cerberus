@@ -371,3 +371,16 @@ void *cn_malloc(size_t size)
     return p;
   }
 }
+
+void *cn_calloc(size_t num, size_t size) 
+{
+  void *p = calloc(num, size);
+  char str[] = "cn_calloc";
+  if (p) {
+    cn_assume_ownership((void*) p, num*size, str);
+    return p;
+  } else {
+    printf("calloc failed\n");
+    return p;
+  }
+}
