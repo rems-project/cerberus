@@ -359,7 +359,7 @@ void *cn_aligned_alloc(size_t align, size_t size)
   }
 }
 
-void *cn_malloc(size_t size) 
+void *cn_malloc(unsigned long size) 
 {
   void *p = malloc(size);
   char str[] = "cn_malloc";
