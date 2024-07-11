@@ -376,6 +376,8 @@ pool_pointer
     static inline CNTYPE *default_##CNTYPE(void) {  \
         return convert_to_##CNTYPE(0);              \
     }
+    
+cn_map *default_cn_map(void);
 
 #define CN_GEN_MAP_GET(CNTYPE)\
     static inline void *cn_map_get_##CNTYPE(cn_map *m, cn_integer *key) {   \
@@ -383,8 +385,6 @@ pool_pointer
         if (!res) { return (void *) default_##CNTYPE(); }                   \
         return res;                                                         \
     }
-
-void *cn_map_get_cn_map(void);
 
 
 #define CN_GEN_CASTS_INNER(CTYPE, CNTYPE)               \
@@ -471,6 +471,7 @@ CN_GEN_CONVERT(uint8_t, cn_alloc_id)
 CN_GEN_EQUALITY(cn_alloc_id)
 CN_GEN_DEFAULT(cn_pointer)               
 CN_GEN_MAP_GET(cn_pointer)              
+CN_GEN_MAP_GET(cn_map)              
 
 
 /* OWNERSHIP */

@@ -234,10 +234,9 @@ void cn_map_set(cn_map *m, cn_integer *key, void *value) {
     ht_set(m, key->val, value);
 }
 
-void *cn_map_get_cn_map(void) {
+cn_map *default_cn_map(void) {
     return map_create();
 }
-
 
 cn_bool *cn_pointer_equality(void *i1, void *i2) {
     return convert_to_cn_bool((((cn_pointer *) i1)->ptr) == (((cn_pointer *) i2)->ptr));
