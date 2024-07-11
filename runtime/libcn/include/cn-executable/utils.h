@@ -479,15 +479,15 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset);
 
 static inline void cn_load(void *ptr, size_t size)
 {
-  printf("\x1b[31mLOAD\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+  printf("  \x1b[31mLOAD\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 static inline void cn_store(void *ptr, size_t size)
 {
-  printf("\x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+  printf("  \x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 static inline void cn_postfix(void *ptr, size_t size)
 {
-  printf("\x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+  printf("  \x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 
 // use this macro to wrap an argument to another macro that contains commas 
