@@ -1330,6 +1330,7 @@ let generate_struct_default_function ?(is_record=false) dts ((sym, (loc, attrs, 
     let ret_ident = A.(AilEident ret_sym) in 
     (* Function body *)
     let generate_member_default_assign (id, (_, _, _, ctype)) = 
+      let ctype = if is_record then get_ctype_without_ptr ctype else ctype in 
       let lhs = A.(AilEmemberofptr (mk_expr ret_ident, id)) in 
       let sct_opt = Sctypes.of_ctype ctype in 
       let sct = match sct_opt with 
