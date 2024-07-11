@@ -327,7 +327,7 @@ let cn_to_ail_binop_internal bt1 bt2 =
 
 (* Assume a specific shape, where sym appears on the RHS (i.e. in e2) *)
 
-let get_underscored_typedef_string_from_bt bt = 
+let get_underscored_typedef_string_from_bt ?(is_record=false) bt = 
   let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in 
   match typedef_name with 
   | Some str ->
@@ -335,7 +335,8 @@ let get_underscored_typedef_string_from_bt bt =
     Some str
   | None -> (match bt with 
       | BT.Struct sym -> 
-        let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in 
+        let suffix = if is_record then "" else "_cn" in 
+        let cn_sym = generate_sym_with_suffix ~suffix sym in 
         Some ("struct_" ^ (Sym.pp_string cn_sym))
       | _ -> None
     )
@@ -951,7 +952,8 @@ let rec cn_to_ail_expr_aux_internal
     let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals m PassBack in
     let key_term = if (IT.bt key == BT.Integer) then key else (IT.IT (Cast (BT.Integer, key), BT.Integer, Cerb_location.unknown)) in
     let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals key_term PassBack in
-    let cntype_str_opt = get_underscored_typedef_string_from_bt basetype in 
+    let is_record = match (BT.map_bt (IT.bt m)) with | (_, Record _) -> true | _ -> false in 
+    let cntype_str_opt = get_underscored_typedef_string_from_bt ~is_record basetype in 
     let map_get_str = match cntype_str_opt with 
       | Some str -> "cn_map_get_" ^ str 
       | None -> failwith "could not get cntype string in MapGet"
@@ -1338,7 +1340,7 @@ let generate_struct_default_function ?(is_record=false) dts ((sym, (loc, attrs, 
       | None -> failwith "Bad sctype"
       in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in 
-      let member_ctype_str_opt = get_underscored_typedef_string_from_bt bt in 
+      let member_ctype_str_opt = get_underscored_typedef_string_from_bt ~is_record bt in 
       let default_fun_str = match member_ctype_str_opt with 
         | Some member_ctype_str -> "default_" ^ member_ctype_str
         | None -> failwith "no underscored typedef string found"
