@@ -172,10 +172,10 @@ type injection = {
   kind: injection_kind;
 }
 
-let string_of_footprint {start_pos; end_pos} =
+(* let string_of_footprint {start_pos; end_pos} =
       Printf.sprintf "%s - %s"
         (Pos.to_string start_pos)
-        (Pos.to_string end_pos)
+        (Pos.to_string end_pos) *)
 
 (* start (1, 1) and end (1, 1) for include headers *)
 let inject st inj =
