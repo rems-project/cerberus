@@ -34,7 +34,7 @@ naive_memcpy (char *dst, char *src, int n)
 int main(void)
 /*@ trusted; @*/
 {
-  char *src = "hello";
+  char src[5] = "hello";
   char dst[5];
   naive_memcpy(dst, src, 5);
 }
