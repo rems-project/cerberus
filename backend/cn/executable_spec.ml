@@ -163,21 +163,10 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let cn_utils_header_pair = ("cn-executable/utils.h", true) in
   let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
 
-  (* Ownership checking *)
-  (* if with_ownership_checking then 
-    (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.c") in 
-    let ownership_globals = generate_ownership_globals ~is_extern:false () in 
-    Stdlib.output_string ownership_oc cn_utils_header;
-    Stdlib.output_string ownership_oc "\n";
-    Stdlib.output_string ownership_oc ownership_globals;
-    )
-  ; *)
-
   let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking Cn_internal_to_ail.ownership_ctypes sigm in
   let (c_struct_defs, _c_struct_decls) = print_c_structs sigm.tag_definitions in
   let (cn_converted_struct_defs, _cn_converted_struct_decls) = generate_cn_versions_of_structs sigm.tag_definitions in
 
-  
 
   (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs sigm in *)
   let (record_defs_str, _record_decls_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
@@ -265,7 +254,7 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let fns_and_ocs = open_auxilliary_files filename prefix included_filenames [] in
 
   let pre_post_pairs = if with_ownership_checking then 
-    let global_ownership_init_pair = generate_ownership_global_assignments sigm in 
+    let global_ownership_init_pair = generate_ownership_global_assignments sigm prog5 in 
     global_ownership_init_pair @ executable_spec.pre_post
   else 
     executable_spec.pre_post

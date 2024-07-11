@@ -309,23 +309,14 @@ let generate_conversion_and_equality_functions (sigm : CF.GenTypes.genTypeCatego
   (comment ^ CF.Pp_utils.to_plain_pretty_string doc1, comment ^ CF.Pp_utils.to_plain_pretty_string doc2)
 
 
-(* Ownership *)
-
-let generate_ownership_globals ?(is_extern=false) () = 
-  let ownership_decls = Ownership_exec.create_ail_ownership_global_decls () in 
-  let docs = List.map (fun (sym, ty) ->
-     let maybe_extern = if is_extern then PPrint.(!^) "extern " else PPrint.empty in
-     maybe_extern ^^ 
-     CF.Pp_ail.pp_ctype_declaration ~executable_spec:true (CF.Pp_ail.pp_id_obj sym) empty_qualifiers ty) ownership_decls 
-  in
-  let doc = PPrint.concat_map (fun d -> d ^^ PPrint.semi ^^ PPrint.hardline) docs in
-  CF.Pp_utils.to_plain_pretty_string doc
-
-let generate_ownership_global_assignments (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
+let generate_ownership_global_assignments (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) (prog5: unit Mucore.mu_file) = 
   let main_fn_sym_list = List.filter (fun (fn_sym, _) -> String.equal "main" (Sym.pp_string fn_sym)) sigm.function_definitions in 
   match main_fn_sym_list with 
     | [] -> failwith "CN-exec: No main function so ownership globals cannot be initialised"
     | (main_sym, _) :: _ ->
+      let globals = extract_global_variables prog5.mu_globs in 
+      let global_map_fcalls = List.map Ownership_exec.generate_c_local_ownership_entry_fcall globals in 
+      let global_map_stmts_ = List.map (fun e -> A.AilSexpr e) global_map_fcalls in 
       let assignments = Ownership_exec.get_ownership_global_init_stats () in
-      let assignments_str = generate_ail_stat_strs ([], assignments) in
-      [(main_sym, (assignments_str, []))]
+      let init_and_mapping_str = generate_ail_stat_strs ([], assignments @ global_map_stmts_) in
+      [(main_sym, (init_and_mapping_str, []))]

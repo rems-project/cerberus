@@ -141,14 +141,11 @@ let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars
   match s_ with 
     | A.(AilSdeclaration _) -> []
     | (AilSblock (bs, ss)) ->
-      (* let injs = [] in  *)
       let injs = List.mapi (fun i s ->
         let ss_ = take (i + 1) ss in 
         let visibles = collect_visibles (bs @ bindings) ss_ in 
         get_c_control_flow_block_unmaps_aux (visibles @ break_vars) (visibles @ continue_vars) (visibles @ return_vars) (bs @ bindings) s 
       ) ss in 
-      (* let vars_and_injs = List.map (get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bs) ss in  *)
-      (* let (_, injs) = List.split vars_and_injs in  *)
       List.concat injs
     | (AilSif (_, s1, s2)) -> 
       let injs = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s1 in 
