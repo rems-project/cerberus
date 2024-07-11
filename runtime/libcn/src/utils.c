@@ -96,10 +96,26 @@ void ghost_stack_depth_incr(void) {
     print_error_msg_info();
 }
 
+
+#define FMT_PTR "\x1b[33m%#lx\x1b[0m"
+// #define KMAG  "\x1B[35m"
+#define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
+
 void ghost_stack_depth_decr(void) {
     cn_stack_depth--;
     // update_error_message_info(0);
     print_error_msg_info();
+    // TODO - revisit this Dhruv over-confident change
+    hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
+    printf("CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
+    while (ht_next(&it)) {
+        uintptr_t *key = it.key;
+        int *depth = it.value;
+        _Bool fine = *depth <= cn_stack_depth;
+        if (!fine) printf(FMT_PTR_2 " (%d),", *key, *depth);
+        // c_ghost_assert(convert_to_cn_bool(fine));
+    }
+    printf("\n");
 }
 
 int ownership_ghost_state_get(signed long *address_key) {
@@ -117,7 +133,6 @@ void ownership_ghost_state_remove(signed long* address_key) {
     ownership_ghost_state_set(address_key, -1);
 }
 
-
 #define FMT_PTR "\x1b[33m%#lx\x1b[0m"
 // #define KMAG  "\x1B[35m"
 #define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
@@ -132,7 +147,6 @@ void dump_ownership_state()
   }
   printf("END\n");
 }
-
 
 
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
@@ -428,6 +442,19 @@ void *cn_calloc(size_t num, size_t size)
   }
 }
 
+// TODO - revisit this Dhruv over-confident change *)
+void cn_free_sized(void* malloced_ptr, size_t size)
+{
+  printf("[CN: freeing ownership] " FMT_PTR ", size: %lu\n", (uintptr_t) malloced_ptr, size);
+  for (int i = 0; i < size; i++) {
+      signed long *address_key = alloc(sizeof(long));
+      *address_key = (uintptr_t) malloced_ptr + i;
+      /* printf(" off: %d [" FMT_PTR "]\n", i, *address_key); */
+      int curr_depth = ownership_ghost_state_get(address_key);
+      c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
+      ownership_ghost_state_remove(address_key);
+  }
+}
 
 void cn_print_u64(const char *str, unsigned long u)
 {
