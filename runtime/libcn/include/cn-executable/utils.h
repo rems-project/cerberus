@@ -485,37 +485,40 @@ static inline void cn_store(void *ptr, size_t size)
 {
   printf("\x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
+static inline void cn_postfix(void *ptr, size_t size)
+{
+  printf("\x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+}
 
 // use this macro to wrap an argument to another macro that contains commas 
 #define CN_IGNORE_COMMA(...) __VA_ARGS__
 
-#define CN_LOAD(LV)                                         \
-  ({                                                        \
-    typeof(LV) *tmp = &(LV);                                \
-    c_ownership_check((uintptr_t) tmp, sizeof(typeof(LV))); \
-    cn_load(tmp, sizeof(typeof(LV)));                       \
-    *tmp;                                                   \
+#define CN_LOAD(LV)                                           \
+  ({                                                          \
+    typeof(LV) *__tmp = &(LV);                                \
+    c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
+    cn_load(__tmp, sizeof(typeof(LV)));                       \
+    *__tmp;                                                   \
   })
 
-#define CN_STORE_OP(LV, op, X)                              \
- ({                                                         \
-    typeof(LV) *tmp;                                        \
-    tmp = &(LV);                                            \
-    c_ownership_check((uintptr_t) tmp, sizeof(typeof(LV))); \
-    cn_store(tmp, sizeof(typeof(LV)));                      \
-    *tmp op##= (X);                                         \
+#define CN_STORE_OP(LV, op, X)                                \
+ ({                                                           \
+    typeof(LV) *__tmp;                                        \
+    __tmp = &(LV);                                            \
+    c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
+    cn_store(__tmp, sizeof(typeof(LV)));                      \
+    *__tmp op##= (X);                                         \
  })
 
 #define CN_STORE(LV, X) CN_STORE_OP(LV,,X)
 
-#define CN_POSTFIX(LV, OP)             \
- ({                                    \
-    typeof(LV) *tmp;                   \
-    tmp = &(LV);                       \
-    cn_load(tmp, sizeof(typeof(LV)));  \
-    cn_store(tmp, sizeof(typeof(LV))); \
-    (*tmp) OP;                         \
+#define CN_POSTFIX(LV, OP)                                    \
+ ({                                                           \
+    typeof(LV) *__tmp;                                        \
+    __tmp = &(LV);                                            \
+    c_ownership_check((uintptr_t) __tmp, sizeof(typeof(LV))); \
+    cn_postfix(__tmp, sizeof(typeof(LV)));                    \
+    (*__tmp) OP;                                              \
  })
-
 
 #endif
