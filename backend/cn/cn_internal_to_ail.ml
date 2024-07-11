@@ -430,22 +430,37 @@ let generate_start_expr start_cond sym =
       | _ -> failwith "Not of correct form: not Le or Lt"
 
 
-let rec get_leftmost_and_expr = function
-    | IT.IT (Terms.(Binop (And, lhs, rhs)), _, _) -> get_leftmost_and_expr lhs 
+let rec get_leftmost_of_and_expr = function
+    | IT.IT (Terms.(Binop (And, lhs, rhs)), _, _) -> get_leftmost_of_and_expr lhs 
     | lhs -> lhs
 
-let rec get_rest_of_expr_r it = match IT.term it with 
+
+let rec get_rest_of_expr_r_aux it = match IT.term it with 
   | Terms.(Binop (And, lhs, rhs)) ->
-    let r = get_rest_of_expr_r lhs in
+    let r = get_rest_of_expr_r_aux lhs in
     (match IT.term r with
       | Const (Bool true) -> rhs
-      | _ -> IT.IT (Terms.(Binop (And, r, rhs)), BT.Bool, Cerb_location.unknown)
+      | _ -> IT.IT (Terms.(Binop (And, r, rhs)), BT.Bool, IT.loc it)
     )
-  | lhs -> IT.IT (Const (Bool true), BT.Bool, Cerb_location.unknown)
+  | lhs -> IT.IT (Const (Bool true), BT.Bool, IT.loc it)
   
+let get_rest_of_expr_r it = match IT.term it with 
+    | Terms.(Binop (And, lhs, rhs)) -> 
+      let is_simple = match IT.term lhs, IT.term rhs with 
+      | Binop (And, _, _), _
+      | _, Binop (And, _, _) -> false
+      | _, _ -> true 
+      in  
+      if is_simple then rhs else get_rest_of_expr_r_aux it 
+    | _ -> IT.IT (Const (Bool true), BT.Bool, IT.loc it)
 
+let convert_from_cn_bool_sym = Sym.fresh_pretty "convert_from_cn_bool"
 
-let gen_bool_while_loop sym bt start_expr while_cond (bs, ss, e) = 
+let wrap_with_convert_from_cn_bool expr = 
+  let convert_from_cn_bool_ident = mk_expr A.(AilEident convert_from_cn_bool_sym) in
+  mk_expr A.(AilEcall (convert_from_cn_bool_ident, [expr])) 
+
+let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt=None) (bs, ss, e) = 
   (* 
      Input:
      each (bt sym; start_expr <= sym && while_cond) {t}
@@ -470,9 +485,15 @@ let gen_bool_while_loop sym bt start_expr while_cond (bs, ss, e) =
   let b_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr b_ident, mk_expr rhs_and_expr_)))) in
   (* let incr_stat = A.(AilSexpr (mk_expr (AilEunary (PostfixIncr, mk_expr incr_var)))) in *)
   let incr_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident (Sym.fresh_pretty incr_func_name)), [mk_expr incr_var])))) in
-  let convert_from_cn_bool_ident = mk_expr A.(AilEident (Sym.fresh_pretty "convert_from_cn_bool")) in
-  let while_cond_with_conversion = mk_expr A.(AilEcall (convert_from_cn_bool_ident, [while_cond])) in
-  let while_loop = A.(AilSwhile (while_cond_with_conversion, mk_stmt (AilSblock (bs, List.map mk_stmt (ss @ [b_assign; incr_stat]))), 0)) in
+  let while_cond_with_conversion = wrap_with_convert_from_cn_bool while_cond in 
+
+  let loop_body = match if_cond_opt with 
+    | Some if_cond_expr -> 
+      [mk_stmt A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock ([], List.map mk_stmt (ss @ [b_assign; incr_stat]))), mk_stmt (AilSblock ([], [mk_stmt AilScontinue]))))]
+    | None -> 
+      List.map mk_stmt (ss @ [b_assign; incr_stat])
+  in
+  let while_loop = A.(AilSwhile (while_cond_with_conversion, mk_stmt (AilSblock (bs, loop_body)), 0)) in
 
   let block = A.(AilSblock ([incr_var_binding], List.map mk_stmt [start_decl; while_loop])) in
   ([b_binding], [b_decl; block], mk_expr b_ident)
@@ -1396,9 +1417,21 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
     *)
       
     let (i_sym, i_bt) = q.q in
-    let start_expr = generate_start_expr (get_leftmost_and_expr q.permission) (fst q.q) in
+
+    let start_cond = get_leftmost_of_and_expr q.permission in 
+    let start_expr = generate_start_expr start_cond (fst q.q) in
     let (_, _, e_start) = cn_to_ail_expr_internal dts globals start_expr PassBack in 
-    (* let (b_end, s_end, e_end) = cn_to_ail_expr_internal dts q.permission PassBack in *)
+
+    let end_cond = get_leftmost_of_and_expr (get_rest_of_expr_r q.permission) in 
+    let if_stat_cond = get_rest_of_expr_r (get_rest_of_expr_r q.permission) in 
+
+    let while_loop_cond = IT.IT (Binop (And, start_cond, end_cond), BT.Bool, Cerb_location.unknown) in 
+    let (_, _, while_cond_expr) = cn_to_ail_expr_internal dts globals while_loop_cond PassBack in 
+    let (_, _, if_cond_expr) = cn_to_ail_expr_internal dts globals if_stat_cond PassBack in 
+
+
+
+
     let cn_integer_ptr_ctype = bt_to_ail_ctype i_bt in 
     (* let convert_to_cn_integer_sym = Sym.fresh_pretty "convert_to_cn_integer" in  *)
     
@@ -1455,13 +1488,12 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
     let increment_fn_sym = Sym.fresh_pretty incr_func_name in
     let increment_stat = A.(AilSexpr (mk_expr (AilEcall (mk_expr (AilEident increment_fn_sym), [mk_expr (AilEident i_sym)])))) in 
 
-    let convert_from_cn_bool_ident = mk_expr A.(AilEident (Sym.fresh_pretty "convert_from_cn_bool")) in
-    let e2_with_conversion = mk_expr A.(AilEcall (convert_from_cn_bool_ident, [e2])) in
 
     let (bs', ss') = match rm_ctype return_ctype with 
       | C.Void -> 
         let void_pred_call = A.(AilSexpr rhs) in
-        let while_loop = A.(AilSwhile (e2_with_conversion, mk_stmt (AilSblock ([ptr_add_binding], List.map mk_stmt [ptr_add_stat; void_pred_call; increment_stat])), 0)) in
+        let if_stat = A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock ([ptr_add_binding], List.map mk_stmt [ptr_add_stat; void_pred_call; increment_stat])), mk_stmt (AilSblock ([], [mk_stmt AilScontinue])))) in 
+        let while_loop = A.(AilSwhile (wrap_with_convert_from_cn_bool while_cond_expr, mk_stmt (AilSblock ([], [mk_stmt if_stat])), 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([], [ail_block])
       | _ -> 
@@ -1477,7 +1509,8 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
         in
         let i_expr = if i_bt == BT.Integer then i_ident_expr else A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("cast_" ^ i_bt_str ^ "_to_cn_integer"))), [mk_expr i_ident_expr])) in
         let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), (List.map mk_expr [AilEident sym; i_expr]) @ [rhs])) in
-        let while_loop = A.(AilSwhile (e2_with_conversion, mk_stmt (AilSblock (ptr_add_binding :: b4, List.map mk_stmt (s4 @ [ptr_add_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat]))), 0)) in
+        let if_stat = mk_stmt A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock (ptr_add_binding :: b4, List.map mk_stmt (s4 @ [ptr_add_stat; (AilSexpr (mk_expr map_set_expr_)); increment_stat]))), mk_stmt (AilSblock ([], [mk_stmt AilScontinue])))) in 
+        let while_loop = A.(AilSwhile (wrap_with_convert_from_cn_bool while_cond_expr, if_stat, 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([sym_binding], [sym_decl; ail_block])
     in
@@ -1522,13 +1555,21 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> (
 
           *)
 
-          let start_expr = generate_start_expr (get_leftmost_and_expr cond_it) sym in
-          let while_cond = get_rest_of_expr_r cond_it in
-          let (b1, s1, e1) = cn_to_ail_expr_internal dts globals start_expr PassBack in
-          let (b2, s2, e2) = cn_to_ail_expr_internal dts globals while_cond PassBack in
+          let start_cond = get_leftmost_of_and_expr cond_it in 
+          let start_expr = generate_start_expr start_cond sym in
+          let (_, _, e_start) = cn_to_ail_expr_internal dts globals start_expr PassBack in 
+
+          let end_cond = get_leftmost_of_and_expr (get_rest_of_expr_r cond_it) in 
+          let if_stat_cond = get_rest_of_expr_r (get_rest_of_expr_r cond_it) in 
+
+          let while_loop_cond = IT.IT (Binop (And, start_cond, end_cond), BT.Bool, Cerb_location.unknown) in 
+          let (_, _, while_cond_expr) = cn_to_ail_expr_internal dts globals while_loop_cond PassBack in 
+          let (_, _, if_cond_expr) = cn_to_ail_expr_internal dts globals if_stat_cond PassBack in 
+
           
+
           let t_translated = cn_to_ail_expr_internal dts globals t PassBack in
-          let (bs, ss, e) = gen_bool_while_loop sym bt (rm_expr e1) e2 t_translated in
+          let (bs, ss, e) = gen_bool_while_loop sym bt (rm_expr e_start) while_cond_expr ~if_cond_opt:(Some if_cond_expr) t_translated in
           dest d (bs, ss, e)
           
     
