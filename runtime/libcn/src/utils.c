@@ -343,7 +343,6 @@ cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1) {
     }
 
 
-
 /* void *aligned_alloc(size_t align, size_t size); */
 
 void *cn_aligned_alloc(size_t align, size_t size) 

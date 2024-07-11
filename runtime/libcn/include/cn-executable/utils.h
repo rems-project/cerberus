@@ -87,6 +87,10 @@ typedef struct cn_bool {
     _Bool val;
 } cn_bool;
 
+typedef struct cn_alloc_id {
+    uint8_t *val;
+} cn_alloc_id;
+
 
 typedef hash_table cn_map;
 
@@ -133,6 +137,7 @@ cn_bool *cn_pointer_le(cn_pointer *i1, cn_pointer *i2);
 cn_bool *cn_pointer_lt(cn_pointer *i1, cn_pointer *i2);
 cn_bool *cn_pointer_ge(cn_pointer *i1, cn_pointer *i2);
 cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
+
 
 #define cn_pointer_deref(CN_PTR, CTYPE)\
     *((CTYPE *) CN_PTR->ptr)
@@ -440,6 +445,10 @@ CN_GEN_PTR_CASTS_UNSIGNED(uint16_t, cn_bits_u16)
 CN_GEN_PTR_CASTS_UNSIGNED(uint32_t, cn_bits_u32)
 CN_GEN_PTR_CASTS_UNSIGNED(uint64_t, cn_bits_u64)
 CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer)
+
+
+CN_GEN_CONVERT(uint8_t, cn_alloc_id)
+CN_GEN_EQUALITY(cn_alloc_id)
 
 
 cn_pointer *convert_to_cn_pointer(void *ptr);
