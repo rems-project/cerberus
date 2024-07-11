@@ -48,7 +48,8 @@ let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames cn_he
       Source_injection.(output_injections oc'
         { filename=fn'; program= ail_prog
         ; pre_post=[]
-        ; in_stmt=injs_for_fn'}
+        ; in_stmt=injs_for_fn'
+        ; returns= [(*TODO(Rini)*)] }
       )
     with
     | Ok () ->
@@ -271,7 +272,8 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   Source_injection.(output_injections oc
     { filename; program= ail_prog
     ; pre_post=pre_post_pairs
-    ; in_stmt=in_stmt}
+    ; in_stmt=in_stmt
+    ; returns= [(*TODO(Rini)*)] }
   )
 with
 | Ok () ->

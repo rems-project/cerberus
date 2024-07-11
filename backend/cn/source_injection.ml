@@ -429,6 +429,7 @@ type 'a cn_injection = {
   program: 'a A.ail_program;
   pre_post: (Symbol.sym * (string list * string list)) list;
   in_stmt: (Cerb_location.t * string list) list;
+  returns: (Cerb_location.t * ('a AilSyntax.expression) option * string list) list;
 }
 
 let output_injections oc cn_inj =
