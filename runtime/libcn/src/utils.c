@@ -223,15 +223,19 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
 // }
 
 
-void *cn_map_get(cn_map *m, cn_integer *key) {
-    // const char key_arr[1] = {key};
-    void *res = ht_get(m, key->val);
-    if (!res) { printf("NULL being returned for key %ld\n", *(key->val)); exit (1); }
-    return res;
-}
+// void *cn_map_get(cn_map *m, cn_integer *key) {
+//     // const char key_arr[1] = {key};
+//     void *res = ht_get(m, key->val);
+//     if (!res) { printf("NULL being returned for key %ld\n", *(key->val)); exit (1); }
+//     return res;
+// }
 
 void cn_map_set(cn_map *m, cn_integer *key, void *value) {
     ht_set(m, key->val, value);
+}
+
+void *cn_map_get_cn_map(void) {
+    return map_create();
 }
 
 

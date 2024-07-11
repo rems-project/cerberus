@@ -119,7 +119,6 @@ cn_bool *cn_bool_equality(cn_bool *b1, cn_bool *b2);
 void *cn_ite(cn_bool *b, void *e1, void *e2);
 
 cn_map *map_create(void);
-void *cn_map_get(cn_map *m, cn_integer *key);
 void cn_map_set(cn_map *m, cn_integer *key, void *value);
 cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
 
@@ -130,6 +129,7 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
     }\
     m;\
 })
+
 
 cn_bool *cn_pointer_equality(void *i1, void *i2);
 cn_bool *cn_pointer_is_null(cn_pointer *);
@@ -372,6 +372,19 @@ pool_pointer
         return res;\
     }
 
+#define CN_GEN_DEFAULT(CNTYPE)                      \
+    static inline CNTYPE *default_##CNTYPE(void) {  \
+        return convert_to_##CNTYPE(0);              \
+    }
+
+#define CN_GEN_MAP_GET(CNTYPE)\
+    static inline void *cn_map_get_##CNTYPE(cn_map *m, cn_integer *key) {   \
+        void *res = ht_get(m, key->val);                                    \
+        if (!res) { return (void *) default_##CNTYPE(); }                   \
+        return res;                                                         \
+    }
+
+void *cn_map_get_cn_map(void);
 
 
 #define CN_GEN_CASTS_INNER(CTYPE, CNTYPE)               \
@@ -424,6 +437,9 @@ pool_pointer
    CN_GEN_PTR_ADD(CNTYPE)               \
    CN_GEN_CASTS_INNER(CTYPE, CNTYPE)    \
    CN_GEN_ARRAY_SHIFT(CTYPE, CNTYPE)    \
+   CN_GEN_DEFAULT(CNTYPE)               \
+   CN_GEN_MAP_GET(CNTYPE)               \
+
 
 CN_GEN_ALL(int8_t, cn_bits_i8)
 CN_GEN_ALL(int16_t, cn_bits_i16)
@@ -447,13 +463,15 @@ CN_GEN_PTR_CASTS_UNSIGNED(uint64_t, cn_bits_u64)
 CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer)
 
 
-CN_GEN_CONVERT(uint8_t, cn_alloc_id)
-CN_GEN_EQUALITY(cn_alloc_id)
-
-
 cn_pointer *convert_to_cn_pointer(void *ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
 cn_pointer *cast_cn_pointer_to_cn_pointer(cn_pointer *p);
+
+CN_GEN_CONVERT(uint8_t, cn_alloc_id)
+CN_GEN_EQUALITY(cn_alloc_id)
+CN_GEN_DEFAULT(cn_pointer)               
+CN_GEN_MAP_GET(cn_pointer)              
+
 
 /* OWNERSHIP */
 
