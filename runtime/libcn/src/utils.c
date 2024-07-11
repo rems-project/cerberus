@@ -349,3 +349,16 @@ cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1) {
         *(res->val) = cn_flsl(*(i1->val));
         return res;
     }
+
+
+
+
+void *aligned_alloc(size_t align, size_t size);
+
+void *cn_aligned_alloc(size_t align, size_t size) 
+{
+  void *p = aligned_alloc(align, size);
+  char str[] = "cn_aligned_malloc";
+  cn_assume_ownership((void*) p, size, str);
+  return p;
+}
