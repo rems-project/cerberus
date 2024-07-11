@@ -118,15 +118,15 @@ let get_c_local_ownership_checking params =
   let exit_ownership_stats = List.map generate_c_local_ownership_exit params in 
   (entry_ownership_stats, exit_ownership_stats)
 
-
-
-
 let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars A.(AnnotatedStatement (loc, _, s_)) = 
   match s_ with 
     | A.(AilSdeclaration _) -> []
-    | (AilSblock (bs, ss)) ->
-      let block_binding_syms_and_ctypes = List.map (fun (sym, (_, _, _, ctype)) -> (sym, ctype)) bs in
-      let injs = List.map (fun s -> get_c_control_flow_block_unmaps_aux (block_binding_syms_and_ctypes @ break_vars) (block_binding_syms_and_ctypes @ continue_vars) (block_binding_syms_and_ctypes @ return_vars) s) ss in 
+    | (AilSblock (bs, A.(AnnotatedStatement (_, _, AilSdeclaration decls)) :: ss)) ->
+      let decl_syms_and_ctypes = List.map (fun (sym, _) -> (sym, find_ctype_from_bindings bs sym)) decls in 
+      let injs = List.map (get_c_control_flow_block_unmaps_aux (decl_syms_and_ctypes @ break_vars) (decl_syms_and_ctypes @ continue_vars) (decl_syms_and_ctypes @ return_vars)) ss in 
+      List.concat injs
+    | (AilSblock (_, ss)) ->
+      let injs = List.map (get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars) ss in 
       List.concat injs
     | (AilSif (_, s1, s2)) -> 
       let injs = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars s1 in 
