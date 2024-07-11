@@ -87,6 +87,7 @@ let decorate_injection str =
     str
 
 (* TODO: why isn't no_ident used? *)
+(*
 let [@warning "-27"] move_to_line ?(print=true) ?(no_ident=false) st line =
   assert (line > 0);
   assert (line >= st.current_pos.line);
@@ -105,6 +106,7 @@ let [@warning "-27"] move_to_line ?(print=true) ?(no_ident=false) st line =
           failwith "end of file"
     end in
   aux st (line - st.current_pos.line)
+*)
 
 
 let move_to ?(print=true) ?(no_ident=false) st pos =
@@ -156,55 +158,33 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
 type injection_kind =
   | InStmt of int * string
   (* | Return of (Pos.t * Pos.t) option *)
-  | Return of Pos.t option
+  (* | Return of Pos.t option *)
   | Pre of string list * Cerb_frontend.Ctype.ctype * bool (* flag for whether injection is for main function *)
   | Post of string list * Cerb_frontend.Ctype.ctype
 
-type injection_footprint =
-  | InLine of {
+type injection_footprint = {
       start_pos: Pos.t;
       end_pos: Pos.t;
     }
-  | WholeLine of int
 
 type injection = {
   footprint: injection_footprint;
   kind: injection_kind;
 }
 
-(* let string_of_footprint = function
-  | InLine { start_pos; end_pos} ->
+let string_of_footprint {start_pos; end_pos} =
       Printf.sprintf "%s - %s"
         (Pos.to_string start_pos)
         (Pos.to_string end_pos)
-  | WholeLine n ->
-      Printf.sprintf "line: %dn" n *)
 
 (* start (1, 1) and end (1, 1) for include headers *)
 let inject st inj =
   let do_output st str = Stdlib.output_string st.output (decorate_injection str); st in
-  let (st, _) =
-    match inj.footprint with
-      | InLine {start_pos; _} -> move_to st start_pos
-      | WholeLine line     -> (move_to_line st line, "") in
+  let (st, _) = move_to st inj.footprint.start_pos in
   let st = begin match inj.kind with
     | InStmt (_, str) ->
-        let (st, _) =
-          match inj.footprint with
-            | InLine {end_pos; _} -> move_to ~no_ident:true ~print:false st end_pos
-            | WholeLine line      -> (move_to_line ~no_ident:true ~print:false st (line+1), "") in
+        let (st, _) = move_to ~no_ident:true ~print:false st inj.footprint.end_pos in
         do_output st str
-    | Return None ->
-        do_output st "goto __cn_epilogue;\n"
-    | Return (Some start_pos) ->
-        let indent = String.make st.last_indent ' ' in
-        let st = do_output st (indent ^ "{\n" ^ indent ^ "  __cn_ret = ") in
-        let (st, _) = move_to ~print:false st start_pos in
-        let st = begin match inj.footprint with
-          | WholeLine line -> move_to_line ~print:true st (line+1)
-          | _ -> assert false
-        end in
-        do_output st (indent ^ "  goto __cn_epilogue;\n" ^ indent ^ "}\n")
     | Pre (strs, ret_ty, is_main) ->
         let indent = String.make (st.last_indent + 2) ' ' in
         let indented_strs = List.map (fun str -> str ^ indent) strs in
@@ -242,27 +222,16 @@ let inject st inj =
           end 
         end
   end in
-  fst begin match inj.footprint with
-    | InLine { end_pos; _ } -> move_to ~print:false st end_pos
-    | WholeLine line -> (move_to_line ~print:false st (line+1), "")
-  end
+  fst (move_to ~print:false st inj.footprint.end_pos)
 
 let sort_injects xs =
   let cmp inj1 inj2 =
-    match inj1.footprint, inj2.footprint with
-      | WholeLine n1, WholeLine n2 ->
-          Int.compare n1 n2
-      | InLine fp1, InLine fp2 ->
-          let c = Pos.compare fp1.start_pos fp2.start_pos in
-          if c = 0 then
-            Pos.compare fp1.end_pos fp2.end_pos
-          else
-            c
-      | WholeLine n, InLine {start_pos; _} ->
-          Int.compare n start_pos.line
-      | InLine {start_pos; _}, WholeLine n ->
-          Int.compare start_pos.line n
-    in
+    let c = Pos.compare inj1.footprint.start_pos inj2.footprint.start_pos in
+    if c = 0 then
+      Pos.compare inj1.footprint.end_pos inj2.footprint.end_pos
+    else
+      c
+  in
   let xs = List.sort cmp xs in
   (* List.iteri (fun i inj ->
     Printf.fprintf stderr "\x1b[35m[%d] -> %s @ %s\x1b[0\n"
@@ -270,11 +239,7 @@ let sort_injects xs =
       begin match inj.kind with
         | InStmt (n,  str) ->
             "InStmt["^ string_of_int n ^ "] ==> '" ^ String.escaped str ^ "'"
-        | Return None ->
-            "Return[None]"
-        | Return (Some _) ->
-            "Return[Some]"
-        | Pre (strs, _) ->
+        | Pre (strs, _, _) ->
             "Pre ==> [" ^ String.concat "," (List.map (fun s -> "\"" ^ String.escaped s ^ "\"" ) strs) ^ "]"
         | Post _ ->
             "Post"
@@ -309,36 +274,6 @@ let inject_all oc filename xs =
 open Cerb_frontend
 module A = AilSyntax
 
-let collect_return_locations stmt =
-  let rec aux acc (A.AnnotatedStatement (loc, _, stmt_)) =
-    match stmt_ with
-      | AilSskip
-      | AilSexpr _
-      | AilSbreak
-      | AilScontinue
-      | AilSgoto _
-      | AilSdeclaration _
-      | AilSreg_store _ ->
-          acc
-      | AilSreturnVoid ->
-          (loc, None) :: acc
-      | AilSreturn e ->
-          (loc, Some e) :: acc
-      | AilSblock (_, ss)
-      | AilSpar ss ->
-        List.fold_left aux acc ss
-      | AilSif (_, s1, s2) ->
-          aux (aux acc s1) s2
-      | AilSwhile (_, s, _)
-      | AilSdo (s, _, _)
-      | AilSswitch (_, s)
-      | AilScase (_, s)
-      | AilScase_rangeGNU (_, _, s)
-      | AilSdefault s
-      | AilSlabel (_, s, _)
-      | AilSmarker (_, s) ->
-          aux acc s in
-  aux [] stmt
 
 let (let*) = Result.bind
 let rec mapM f xs =
@@ -349,10 +284,6 @@ let rec mapM f xs =
      let* ys = mapM f xs in
      Ok (y :: ys)
 
-let posOf_expr expr =
-  let loc = A.instance_Loc_Located_AilSyntax_expression_dict.locOf_method expr in
-  let* (pos, _) = Pos.of_location loc in
-  Ok pos
 
 let _posOf_stmt stmt =
   let loc = A.instance_Loc_Located_AilSyntax_statement_dict.locOf_method stmt in
@@ -367,10 +298,9 @@ let in_stmt_injs xs num_headers =
       (Pos.to_string start_pos) (Pos.to_string end_pos)
       (String.concat "; " (List.map (fun str -> "'" ^ String.escaped str ^ "'") strs)); *)
     Ok
-      { footprint= InLine {
-          start_pos= Pos.increment_line start_pos num_headers;
-          end_pos= Pos.v (end_pos.line + num_headers) end_pos.col;
-      }
+      { footprint=
+          { start_pos= Pos.increment_line start_pos num_headers
+          ; end_pos= Pos.v (end_pos.line + num_headers) end_pos.col }
       ; kind= InStmt (List.length strs, String.concat "\n" strs) }
   )
   xs
@@ -401,27 +331,31 @@ let pre_post_injs pre_post is_void is_main (A.AnnotatedStatement (loc, _, _)) =
     (Cerb_location.location_to_string loc)
     (Pos.to_string post_pos); *)
   Ok
-    ( { footprint= InLine { start_pos= pre_pos; end_pos= pre_pos }
+    ( { footprint= { start_pos= pre_pos; end_pos= pre_pos }
       ; kind= Pre (fst pre_post, is_void, is_main) }
-    , { footprint= InLine { start_pos= post_pos; end_pos= post_pos }
+    , { footprint= { start_pos= post_pos; end_pos= post_pos }
       ; kind= Post (snd pre_post, is_void) } )
 
-(* build the injections decorating the return statements in a statement (typically a function body) *)
-let return_injs stmt =
-  mapM (fun (loc, e_opt) ->
-  let* (first_line, last_line) =
-    Option.fold ~none:(Error (__FUNCTION__ ^ ": failed to line numbers"))
-                ~some:Result.ok (Cerb_location.line_numbers loc) in
-  if first_line <> last_line then
-    Error (Printf.sprintf "%s : found a return spanning multiple lines (%d - %d)" __FUNCTION__ first_line last_line)
-  else
-    let* pos_opt =
-    match e_opt with
-      | Some e -> let* z = posOf_expr e in Ok (Some z)
-      | None -> Ok None in
-    Ok { footprint= WholeLine first_line; kind= Return pos_opt }
-  ) (collect_return_locations stmt)
-
+(* build the injections decorating for all return statements *)
+let return_injs xs =
+  let rec aux acc = function
+    | [] -> acc
+    | (loc, e_opt, inj_strs) :: xs ->
+        match acc with
+          | Error _ -> acc
+          | Ok acc ->
+              let* (start_pos, end_pos) = Pos.of_location loc in
+              let* acc' = match e_opt with
+                | None -> Ok ({ footprint= {start_pos; end_pos}; kind= InStmt (1, "goto __cn_epilogue;\n") } :: acc)
+                | Some e ->
+                  let loc = A.instance_Loc_Located_AilSyntax_expression_dict.locOf_method e in
+                  let* (e_start_pos, e_end_pos) = Pos.of_location loc in
+                  Ok begin
+                    { footprint= {start_pos; end_pos= e_start_pos}; kind= InStmt (1, "{ __cn_ret = ") } ::
+                    { footprint= {start_pos=e_end_pos; end_pos}; kind= InStmt (1, "; " ^ String.concat "" inj_strs ^ "goto __cn_epilogue; }") } :: acc
+                  end
+              in aux (Ok acc') xs
+  in aux (Ok []) xs
 
 (* EXTERNAL *)
 type 'a cn_injection = {
@@ -447,8 +381,7 @@ let output_injections oc cn_inj =
                     | Some main_sym when Symbol.equal_sym main_sym fun_sym -> true
                     | _ -> false in
                   let* (pre, post) = pre_post_injs pre_post_strs ret_ty is_main stmt in
-                  let* rets = return_injs stmt in
-                  Ok (pre :: post ::  rets @ acc)
+                  Ok (pre :: post :: acc)
               | _ ->
                   assert false
             end
@@ -457,7 +390,8 @@ let output_injections oc cn_inj =
     ) (Ok []) (snd cn_inj.program).A.function_definitions in
 
     let* in_stmt = in_stmt_injs cn_inj.in_stmt 0 in
-    let injs = in_stmt @ injs in
+    let* rets = return_injs cn_inj.returns in
+    let injs = in_stmt @ rets @ injs in
     ignore (inject_all oc cn_inj.filename injs);
     Ok ()
   end ()
