@@ -1374,7 +1374,7 @@ let generate_struct_map_get ?(is_record=false) dts ((sym, (loc, attrs, tag_def))
     let ret_decl = A.(AilSdeclaration [(ret_sym, Some (ht_get_fcall))]) in  
     let ret_ident = A.(AilEident ret_sym) in 
     (* Function body *)
-    let if_cond = mk_expr A.(AilEunary (Bnot, mk_expr ret_ident)) in 
+    let if_cond = mk_expr A.(AilEbinary (mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None))))), Eq, mk_expr ret_ident)) in 
     let default_fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("default_" ^ ctype_str))), [])) in 
     let cast_expr = A.(AilEcast (empty_qualifiers, void_ptr_type, mk_expr default_fcall)) in 
     let if_stmt = A.(AilSif (if_cond, mk_stmt (AilSreturn (mk_expr cast_expr)), mk_stmt (AilSreturn (mk_expr ret_ident)))) in 
