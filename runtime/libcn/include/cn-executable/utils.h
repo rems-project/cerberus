@@ -18,7 +18,6 @@ struct cn_error_message_info {
     char *file_name;
     int line_number;
     char *cn_source_loc;
-    bool is_c_memory_access;
 };
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number);

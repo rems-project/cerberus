@@ -32,18 +32,19 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 
 void cn_assert(cn_bool *cn_b) {
     if (!(cn_b->val)) {
-        if (!error_msg_info.is_c_memory_access) {
-            printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            if (error_msg_info.cn_source_loc) {
-                printf("CN source location: \n%s\n", error_msg_info.cn_source_loc);
-            }
-        } else {
-            printf("Assertion failed: C memory access\n");
-            error_msg_info.is_c_memory_access = 0;
+        printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        if (error_msg_info.cn_source_loc) {
+            printf("CN source location: \n%s\n", error_msg_info.cn_source_loc);
         }
         cn_exit();
     }
-    // assert(cn_b->val);
+}
+
+void c_ghost_assert(cn_bool *cn_b) {
+    if (!(cn_b->val)) {
+        printf("C memory access failed: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        cn_exit();
+    }
 }
 
 cn_bool *cn_bool_and(cn_bool *b1, cn_bool *b2) {
@@ -137,7 +138,7 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
-    printf("CN ownership checking: assuming ownership:" FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    printf("CN ownership checking: assuming ownership:" FMT_PTR_2 ", size: %lu\n", (uintptr_t) generic_c_ptr, size);
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = ((uintptr_t) generic_c_ptr) + i;
@@ -192,13 +193,7 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
     for (int i = 0; i<offset; i++) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
-      // printf("curr_depth: %d\n", curr_depth);
-      // printf("cn_stack_depth: %ld\n", cn_stack_depth);
-      // if (cn_stack_depth > 0) {
-      //     printf("cn_stack_depth: inside a function\n");
-      // }
-      error_msg_info.is_c_memory_access = 1;
-      cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
+      c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
 }
 
@@ -296,14 +291,6 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
     return res;
 }
 
-/*
-struct cn_error_message_info {
-    const char *function_name;
-    char *file_name;
-    int line_number;
-    char *cn_source_loc;
-};
-*/
 
 void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc) {
     error_msg_info.function_name = function_name;
@@ -318,19 +305,8 @@ void initialise_error_msg_info_(const char *function_name, char *file_name, int 
   error_msg_info.file_name = file_name;
   error_msg_info.line_number = line_number;
   error_msg_info.cn_source_loc = 0;
-  error_msg_info.is_c_memory_access = 0;
 }
 
-
-
-/* CN: addr_eq(ptr1: cn_pointer, ptr2: cn_pointer) */
-/* Internal CN: cn_pointer_to_bitvector_cast(ptr1) == cn_pointer_to_bitvector_cast(ptr2) */
-/* C: 
-    cn_pointer *ptr1_cn = convert_to_cn_pointer(ptr1);
-    cn_pointer *ptr2_cn = convert_to_cn_pointer(ptr2);
-
-    cn_assert(convert_to_cn_bool(cast_cn_pointer_to_bitvector(ptr1_cn) == cast_cn_pointer_to_bitvector(ptr2_cn)));
-*/
 
 static uint32_t cn_fls(uint32_t x)
 {
