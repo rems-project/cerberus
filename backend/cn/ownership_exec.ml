@@ -118,27 +118,48 @@ let get_c_local_ownership_checking params =
   let exit_ownership_stats = List.map generate_c_local_ownership_exit params in 
   (entry_ownership_stats, exit_ownership_stats)
 
-let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars A.(AnnotatedStatement (loc, _, s_)) = 
+
+let rec collect_visibles bindings = function 
+  | [] -> []
+  | A.(AnnotatedStatement (_, _, AilSdeclaration decls)) :: ss -> 
+    (* Printf.printf "Bindings: \n" ;
+    List.iter (fun (b_sym, _) -> Printf.printf "%s\n" (Sym.pp_string b_sym)) bindings;
+    Printf.printf "Decl syms: \n" ;
+    List.iter (fun (decl_sym, _) -> Printf.printf "%s\n" (Sym.pp_string decl_sym)) decls; *)
+    let decl_syms_and_ctypes = List.map (fun (sym, _) -> (sym, find_ctype_from_bindings bindings sym)) decls in 
+    decl_syms_and_ctypes @ collect_visibles bindings ss
+  | _ :: ss -> collect_visibles bindings ss
+
+let rec take n = function 
+  | [] -> []
+  | x :: xs -> 
+    if n = 0 then [] else
+    x :: (take (n - 1) xs)
+
+let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings A.(AnnotatedStatement (loc, _, s_)) = 
   match s_ with 
     | A.(AilSdeclaration _) -> []
-    | (AilSblock (bs, A.(AnnotatedStatement (_, _, AilSdeclaration decls)) :: ss)) ->
-      let decl_syms_and_ctypes = List.map (fun (sym, _) -> (sym, find_ctype_from_bindings bs sym)) decls in 
-      let injs = List.map (get_c_control_flow_block_unmaps_aux (decl_syms_and_ctypes @ break_vars) (decl_syms_and_ctypes @ continue_vars) (decl_syms_and_ctypes @ return_vars)) ss in 
-      List.concat injs
-    | (AilSblock (_, ss)) ->
-      let injs = List.map (get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars) ss in 
+    | (AilSblock (bs, ss)) ->
+      (* let injs = [] in  *)
+      let injs = List.mapi (fun i s ->
+        let ss_ = take (i + 1) ss in 
+        let visibles = collect_visibles (bs @ bindings) ss_ in 
+        get_c_control_flow_block_unmaps_aux (visibles @ break_vars) (visibles @ continue_vars) (visibles @ return_vars) (bs @ bindings) s 
+      ) ss in 
+      (* let vars_and_injs = List.map (get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bs) ss in  *)
+      (* let (_, injs) = List.split vars_and_injs in  *)
       List.concat injs
     | (AilSif (_, s1, s2)) -> 
-      let injs = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars s1 in 
-      let injs' = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars s2  in 
+      let injs = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s1 in 
+      let injs' = get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s2  in 
       injs @ injs'
     | AilSwhile (_, s, _)
-    | AilSdo (s, _, _)  -> get_c_control_flow_block_unmaps_aux [] [] return_vars s (* For while and do-while loops *)
-    | AilSswitch (_, s) -> get_c_control_flow_block_unmaps_aux [] continue_vars return_vars s
+    | AilSdo (s, _, _)  -> get_c_control_flow_block_unmaps_aux [] [] return_vars bindings s (* For while and do-while loops *)
+    | AilSswitch (_, s) -> get_c_control_flow_block_unmaps_aux [] continue_vars return_vars bindings s
     | AilScase (_, s) 
     | AilScase_rangeGNU (_, _, s) 
     | AilSdefault s
-    | AilSlabel (_, s, _) -> get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars s
+    | AilSlabel (_, s, _) -> get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars bindings s
     | AilSgoto _ -> [] (* TODO *)
     | AilSreturn _ -> 
       let loc_before_return_stmt = get_start_loc loc in 
@@ -156,7 +177,7 @@ let rec get_c_control_flow_block_unmaps_aux break_vars continue_vars return_vars
     | AilSreg_store _
     | AilSmarker _ -> []
     
-let get_c_control_flow_block_unmaps stat = get_c_control_flow_block_unmaps_aux [] [] [] stat
+let get_c_control_flow_block_unmaps stat = get_c_control_flow_block_unmaps_aux [] [] [] [] stat
     
 (* Ghost state tracking for block declarations *)
 let rec get_c_block_entry_exit_injs_aux bindings A.(AnnotatedStatement (loc, _, s_)) = 
