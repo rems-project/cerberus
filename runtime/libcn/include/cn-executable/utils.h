@@ -98,6 +98,7 @@ void ghost_stack_depth_decr(void);
 
 /* malloc, free (eventually) */
 void *cn_aligned_alloc(size_t align, size_t size) ;
+void *cn_malloc(size_t size) ;
 
 
 /* Conversion functions */

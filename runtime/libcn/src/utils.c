@@ -113,8 +113,15 @@ void ownership_ghost_state_remove(signed long* address_key) {
 #define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
 
 
+
+void print_error_msg_info(void) {
+  printf("Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+}
+
+
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
     printf("CN ownership checking: getting ownership:" FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    print_error_msg_info();
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
@@ -127,6 +134,7 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
 
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
     printf("CN ownership checking: putting back ownership:" FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
@@ -139,6 +147,7 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
 
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
     printf("CN ownership checking: assuming ownership:" FMT_PTR_2 ", size: %lu\n", (uintptr_t) generic_c_ptr, size);
+    print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = ((uintptr_t) generic_c_ptr) + i;
@@ -335,13 +344,30 @@ cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1) {
 
 
 
-
-void *aligned_alloc(size_t align, size_t size);
+/* void *aligned_alloc(size_t align, size_t size); */
 
 void *cn_aligned_alloc(size_t align, size_t size) 
 {
   void *p = aligned_alloc(align, size);
   char str[] = "cn_aligned_malloc";
-  cn_assume_ownership((void*) p, size, str);
-  return p;
+  if (p) {
+    cn_assume_ownership((void*) p, size, str);
+    return p;
+  } else {
+    printf("aligned_alloc failed\n");
+    return p;
+  }
+}
+
+void *cn_malloc(size_t size) 
+{
+  void *p = malloc(size);
+  char str[] = "cn_malloc";
+  if (p) {
+    cn_assume_ownership((void*) p, size, str);
+    return p;
+  } else {
+    printf("malloc failed\n");
+    return p;
+  }
 }
