@@ -130,6 +130,7 @@ let rec collect_visibles bindings = function
     decl_syms_and_ctypes @ collect_visibles bindings ss
   | _ :: ss -> collect_visibles bindings ss
 
+(* TODO replace with Base.List: https://github.com/rems-project/cerberus/pull/347 *)
 let rec take n = function 
   | [] -> []
   | x :: xs -> 
@@ -229,6 +230,7 @@ let rec combine_injs_over_location loc = function
     [(bs, inj_stmt)] else [] in 
     stmt @ (combine_injs_over_location loc injs')
 
+(* TODO replace with Base.List: https://github.com/rems-project/cerberus/pull/347 *)
 let rec remove_duplicates ds = function 
   | [] -> []
   | l :: ls -> 
