@@ -334,6 +334,9 @@ let get_underscored_typedef_string_from_bt ?(is_record=false) bt =
     let str = String.concat "_" (String.split_on_char ' ' str) in
     Some str
   | None -> (match bt with 
+      | BT.Datatype sym -> 
+        let cn_sym = generate_sym_with_suffix ~suffix:"" sym in 
+        Some ("struct_" ^ (Sym.pp_string cn_sym))
       | BT.Struct sym -> 
         let suffix = if is_record then "" else "_cn" in 
         let cn_sym = generate_sym_with_suffix ~suffix sym in 
@@ -817,11 +820,33 @@ let rec cn_to_ail_expr_aux_internal
     dest d (b, s, mk_expr ail_expr_)
 
   | StructUpdate ((struct_term, m), new_val) ->
-    let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals struct_term PassBack in
-    let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals new_val PassBack in
-    let ail_memberof = A.(AilEmemberofptr (e1, m)) in
-    let ail_assign = A.(AilSexpr (mk_expr (AilEassign ((mk_expr ail_memberof, e2))))) in
-    dest d (b1 @ b2, s1 @ s2 @ [ail_assign], e1)
+    let struct_tag = match IT.bt struct_term with | BT.Struct tag -> tag | _ -> failwith "Cannot do StructUpdate on non-struct term" in 
+    let tag_defs = Pmap.bindings_list (CF.Tags.tagDefs ()) in 
+    let matching_tag_defs = List.filter (fun (sym, (_, def)) -> Sym.equal struct_tag sym) tag_defs in 
+    let (_, (_, tag_def)) = if List.is_empty matching_tag_defs then failwith "Struct not found in tagDefs" else List.nth matching_tag_defs 0 in 
+    (match tag_def with 
+      | C.StructDef (members, _) -> 
+        let (b1, s1, e1) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals struct_term PassBack in
+        let (b2, s2, e2) = cn_to_ail_expr_aux_internal const_prop pred_name dts globals new_val PassBack in
+        let res_sym = Sym.fresh () in 
+        let res_ident = mk_expr A.(AilEident res_sym) in 
+        let cn_struct_tag = generate_sym_with_suffix ~suffix:"_cn" struct_tag in 
+        let res_binding = create_binding res_sym C.(mk_ctype_pointer empty_qualifiers (mk_ctype (Struct cn_struct_tag))) in 
+        let alloc_call = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct struct_tag)))])) in
+        let res_decl = A.(AilSdeclaration [(res_sym, Some (mk_expr alloc_call))]) in 
+        let generate_member_assignment m (member_id, _) = 
+          let lhs_memberof_expr_ = mk_expr A.(AilEmemberofptr (res_ident, member_id)) in 
+          let rhs = if Id.equal member_id m then 
+            e2
+          else
+            mk_expr (AilEmemberofptr (e1, member_id))
+          in
+          A.(AilSexpr (mk_expr (AilEassign (lhs_memberof_expr_, rhs))))
+        in 
+        let member_assignments = List.map (generate_member_assignment m) members in 
+
+        dest d (b1 @ b2 @ [res_binding], s1 @ s2 @ (res_decl :: member_assignments), res_ident)
+      | UnionDef _ -> failwith "Can't apply StructUpdate to a C union")
 
     (* Allocation *)
   | Record ms -> 
@@ -1343,7 +1368,9 @@ let generate_struct_default_function ?(is_record=false) dts ((sym, (loc, attrs, 
       let member_ctype_str_opt = get_underscored_typedef_string_from_bt ~is_record bt in 
       let default_fun_str = match member_ctype_str_opt with 
         | Some member_ctype_str -> "default_" ^ member_ctype_str
-        | None -> failwith "no underscored typedef string found"
+        | None -> 
+          Printf.printf "%s\n" (Pp.plain (BT.pp bt));
+          failwith "no underscored typedef string found"
       in
       let fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), [])) in 
       A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr fcall))))
@@ -1478,7 +1505,9 @@ let generate_record_default_function dts (sym, (members: BT.member_types)) =
       let member_ctype_str_opt = get_underscored_typedef_string_from_bt bt in 
       let default_fun_str = match member_ctype_str_opt with 
         | Some member_ctype_str -> "default_" ^ member_ctype_str
-        | None -> failwith "no underscored typedef string found"
+        | None -> 
+          Printf.printf "%s\n" (Pp.plain (BT.pp bt));
+          failwith "no underscored typedef string found"
       in
       let fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), [])) in 
       A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr fcall))))
