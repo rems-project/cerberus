@@ -114,7 +114,16 @@ void ownership_ghost_state_remove(signed long* address_key) {
 // #define KMAG  "\x1B[35m"
 #define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
 
-
+void dump_ownership_state()
+{
+  hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
+  printf("BEGIN ownership state\n");
+  while (ht_next(&it)) {
+    int depth = it.value ? *(int*)it.value : -1;
+    printf("[%#lx] => depth: %d\n", *it.key, depth);
+  }
+  printf("END\n");
+}
 
 void print_error_msg_info(void) {
   printf("Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
@@ -122,7 +131,7 @@ void print_error_msg_info(void) {
 
 
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
-    printf("CN ownership checking: getting ownership:" FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    printf("CN ownership checking: getting ownership:" FMT_PTR_2 ", size: %lu -- ", generic_c_ptr, size);
     print_error_msg_info();
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
@@ -131,8 +140,9 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth - 1) {
             printf("CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            printf("  ==> curr_depth: %d\n", curr_depth);
+            printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            printf("  ==> owned at level : %d\n", curr_depth);
+            //dump_ownership_state();
             cn_exit();
         }
         // cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1));
@@ -141,7 +151,7 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
-    printf("CN ownership checking: putting back ownership:" FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    printf("CN ownership checking: putting back ownership:" FMT_PTR_2 ", size: %lu -- ", generic_c_ptr, size);
     print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
@@ -150,8 +160,9 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth) {
             printf("CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-            printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
-            printf("  ==> curr_depth: %d\n", curr_depth);
+            printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- currently at level: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            printf("  ==> owned at level: %d\n", curr_depth);
+            //dump_ownership_state();
             cn_exit();
         }
         // cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
@@ -211,7 +222,7 @@ void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
 
 void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
     signed long address_key = 0;
-    printf("C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " [\n", generic_c_ptr, generic_c_ptr + offset);
+    printf("C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " [ -- ", generic_c_ptr, generic_c_ptr + offset);
     for (int i = 0; i<offset; i++) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
