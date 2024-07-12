@@ -202,7 +202,14 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
     for (int i = 0; i<offset; i++) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
-      c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
+      if (curr_depth != cn_stack_depth) {
+        printf("C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+        printf("  ==> curr_depth: %d\n", curr_depth);
+        while(1) {}
+        cn_exit();
+      }
+    //   c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
 }
 
@@ -313,6 +320,7 @@ void update_error_message_info_(const char *function_name, char *file_name, int 
     error_msg_info.file_name = file_name;
     error_msg_info.line_number = line_number;
     error_msg_info.cn_source_loc = cn_source_loc;
+
 }
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number) {
