@@ -93,7 +93,7 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
 
 
   let in_stmt = List.map (fun (loc, bs_and_ss) -> (modify_magic_comment_loc loc, generate_ail_stat_strs bs_and_ss)) ail_executable_spec.in_stmt in
-  let return_injs = List.filter (fun (_, e_opt, _, _) -> Option.is_some e_opt) block_ownership_injs in 
+  let return_injs = List.filter_map (fun (loc, e_opt, bs, ss) -> match e_opt with | Some e_opt' -> Some (loc, e_opt', bs, ss) | None -> None ) block_ownership_injs in 
   let non_return_injs = List.filter (fun (_, e_opt, _, _) -> Option.is_none e_opt) block_ownership_injs in 
   let block_ownership_stmts = List.map (fun (loc, _, bs, ss) -> (loc, generate_ail_stat_strs ~with_newline:true (bs, ss))) non_return_injs in 
   let block_ownership_stmts = List.map (fun (loc, strs) -> (loc, [String.concat "\n" strs])) block_ownership_stmts in 

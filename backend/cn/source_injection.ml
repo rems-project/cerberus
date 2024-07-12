@@ -346,7 +346,7 @@ let return_injs xs =
           | Ok acc ->
               let* (start_pos, end_pos) = Pos.of_location loc in
               let* acc' = match e_opt with
-                | None -> Ok ({ footprint= {start_pos; end_pos}; kind= InStmt (1, "goto __cn_epilogue;\n") } :: acc)
+                | None -> Ok ({ footprint= {start_pos; end_pos}; kind= InStmt (1, String.concat "" inj_strs ^ "goto __cn_epilogue;\n") } :: acc)
                 | Some e ->
                   let loc = A.instance_Loc_Located_AilSyntax_expression_dict.locOf_method e in
                   let* (e_start_pos, e_end_pos) = Pos.of_location loc in
