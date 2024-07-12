@@ -2371,14 +2371,14 @@ STD_ "§6.5.3.1#3" $
               AilEassign <$> desugar_expression e1
                          <*> desugar_expression e2
           | Just aop ->
-(*
               desugar_expression e1 >>= fun d_e1 ->
               desugar_expression e2 >>= fun d_e2 ->
               E.return (AilEcompoundAssign d_e1 aop d_e2)
-*)
+(*
               desugar_expression e1 >>= fun d_e1 ->
               desugar_expression e2 >>= fun d_e2 ->
               E.return $ AilEassign d_e1 (AnnotatedExpression () [] loc (AilEbinary d_e1 (Arithmetic aop) d_e2))
+*)
         end 
     | CabsEcomma e1 e2 ->
         AilEbinary <$> desugar_expression e1
@@ -3562,10 +3562,7 @@ and desugar_declaration_base attrs specifs idecltors =
                                 else
                                   E.return (cty, acc)
                             | Automatic ->
-                                if Global.backend_name () = "Cn" then
-                                  E.return (cty, acc)
-                                else
-                                  E.return (cty, (sym, Nothing) :: acc)
+                                E.return (cty, (sym, Nothing) :: acc)
                             | Thread ->
                                 (* TODO check *)
                                 E.return (cty, acc)
@@ -3766,7 +3763,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           else
             E.return (AilSdo d_s d_e loop_id)
       
-      | CabsSfor (Just (FC_decl ((Declaration_base attrs specifs idecltors)))) e2_opt e3_opt s ->
+      | CabsSfor (Just (FC_decl decl_loc ((Declaration_base attrs specifs idecltors)))) e2_opt e3_opt s ->
           E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
@@ -3867,7 +3864,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             (* TODO: this seems to put the attributes not on the while loop but the declaration part *)
               E.return begin
                 AilSblock bindings [
-                  AnnotatedStatement loc Annot.no_attributes (AilSdeclaration sym_d_es);
+                  AnnotatedStatement decl_loc Annot.no_attributes (AilSdeclaration sym_d_es);
                   AnnotatedStatement loc Annot.no_attributes (AilSwhile d_e2 d_s_body loop_id)
                 ]
               end
@@ -3905,9 +3902,9 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                       AilSblock [] [ d_s_e1
                                    ; AnnotatedStatement loc Annot.no_attributes (AilSwhile d_e2 (mk_d_s_body d_s_e3 d_s) loop_id) ]
                   end
-              | Just (FC_decl (Declaration_base _ _ _)) ->
+              | Just (FC_decl _ (Declaration_base _ _ _)) ->
                   error "desugar_statement_aux: Just (FC_decl (Declaration_base _ _ _)), _)"
-              | Just (FC_decl (Declaration_static_assert sa_decl)) ->
+              | Just (FC_decl _ (Declaration_static_assert sa_decl)) ->
                   (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
                   (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
                   desugar_and_register_static_assert_declaration sa_decl >>
@@ -4194,6 +4191,15 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
                         <*> (E.return ident_membr)
     | CNExpr_record members ->
       CNExpr_record <$> sort_record_members desugar_cn_expr members
+    | CNExpr_struct tag members ->
+      (* copying from CNExpr_membershift case *)
+      E.resolve_extraordinary_identifier tag E.Namespace_tag >>= function
+          | Just (_, (tag_sym, _)) ->
+             CNExpr_struct <$> (E.return tag_sym)
+                           <*> sort_record_members desugar_cn_expr members
+          | Nothing ->
+              E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
+      end
     | CNExpr_memberupdates e updates ->
         CNExpr_memberupdates <$> desugar_cn_expr e
                              <*> unique_record_members desugar_cn_expr updates

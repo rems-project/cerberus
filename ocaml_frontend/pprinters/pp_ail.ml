@@ -378,7 +378,6 @@ let pp_binaryOperator = function
   | Eq             -> P.equals ^^ P.equals
   | Ne             -> P.bang   ^^ P.equals
 
-
 let pp_unaryOperator = function
   | Plus        -> P.plus
   | Minus       -> P.minus

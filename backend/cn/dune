@@ -27,3 +27,13 @@
    ppx_deriving.map
    ppx_deriving.ord
    ppx_deriving.show)))
+
+; There is already a Version in Cerb_frontend, but if new commits only require
+; rebuilding the CN backend that module will be out of date.
+; So we add a CN specific version.
+(rule
+ (targets cn_version.ml)
+ (deps (universe))
+ (action
+  (with-stdout-to cn_version.ml
+    (run ocaml -I +unix unix.cma %{dep:../../tools/gen_version.ml}))))

@@ -4,6 +4,10 @@ type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
 val random_seed : int ref
 val log_to_temp : bool ref
+val log_dir     : (string option) ref
+val solver_path : (string option) ref
+val solver_flags : ((string list) option) ref
+val solver_type : (Simple_smt.solver_extensions option) ref
 
 val make : Global.t -> solver
 

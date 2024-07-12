@@ -11,6 +11,7 @@
 
 (rule
  (targets version.ml)
+ (deps (universe))
  (action
   (with-stdout-to version.ml
     (run ocaml -I +unix unix.cma %{dep:../tools/gen_version.ml})))

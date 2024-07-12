@@ -1,0 +1,3 @@
+ci/0339-invalid-string-character.error.c:2:6: error: invalid string character
+    "\e";
+     ^

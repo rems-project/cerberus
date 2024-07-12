@@ -24,10 +24,10 @@ let get_typedef_string (C.(Ctype (_, ctype_))) =
     | _ -> None
 
 
-let mk_expr expr_ =
+let mk_expr ?(loc=Cerb_location.unknown) expr_ =
   A.AnnotatedExpression (
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
-     [], Cerb_location.unknown, expr_)
+     [], loc, expr_)
 
 let get_expr_strs = function
   | (A.AnnotatedExpression (CF.GenTypes.GenLValueType (_, _, _), strs, _, _)) -> strs
@@ -76,7 +76,9 @@ type cn_dependency_graph = {
 let compute_cn_dependencies ail_prog =
   ail_prog
 
-
+let ifndef_wrap ifndef_str str =
+  "#ifndef " ^ ifndef_str ^ "\n#define " ^ ifndef_str ^ "\n" ^ str ^ "\n#endif"  
+  
 
 let generate_include_header (file_name, is_system_header) =
   let pre = "#include " in
@@ -86,16 +88,66 @@ let generate_include_header (file_name, is_system_header) =
     else
       "\"" ^ file_name ^ "\""
   in
-  pre ^ incl ^ "\n"
+  pre ^ incl ^ "\n" 
 
-let str_of_ctype ctype =
-  (* Make sure * doesn't get passed back with string *)
-  let ctype = match rm_ctype ctype with
-    | C.(Pointer (_, ct)) -> ct
-    | _ -> ctype
+let get_ctype_without_ptr ctype = match rm_ctype ctype with
+  | C.(Pointer (_, ct)) -> ct
+  | _ -> ctype
+
+let is_pointer ctype = match rm_ctype ctype with 
+  | C.(Pointer _) -> true
+  | _ -> false
+
+let rec _transform_ctype_for_ptr (C.(Ctype (annots, ctype)) as original_ctype) = 
+  let mk_pointer_from_ctype ctype' = C.(Ctype (annots, Pointer (empty_qualifiers, ctype'))) in 
+  match ctype with 
+  | Array (ctype', _) 
+  | Pointer (_, ctype') -> mk_pointer_from_ctype (_transform_ctype_for_ptr ctype') 
+  | _ -> original_ctype
+
+
+let rec str_of_ctype ctype = match rm_ctype ctype with 
+    | C.(Pointer (_, ctype')) ->
+      str_of_ctype ctype' ^ " pointer"
+    | C.(Array (ctype, num_elements_opt)) -> (match num_elements_opt with 
+      | Some num_elements -> 
+        str_of_ctype ctype ^ " " ^ string_of_int (Z.to_int num_elements)
+      | None -> str_of_ctype (mk_ctype C.(Pointer (empty_qualifiers, ctype))))
+    | _ -> 
+      let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
+      CF.Pp_utils.to_plain_pretty_string doc
+  
+
+let rec execCtypeEqual (C.Ctype (_, ty1)) (C.Ctype (_, ty2)) =
+  let paramsEqual ((qs1, ty1, b1), (qs2, ty2, b2)) =
+    (C.qualifiersEqual qs1 qs2 && execCtypeEqual ty1 ty2 && b1 == b2) 
   in
-  let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
-  CF.Pp_utils.to_plain_pretty_string doc
+  match (ty1, ty2) with
+    | (Void, Void) -> true
+    | (Basic bty1, Basic bty2) ->
+        C.basicTypeEqual bty1 bty2
+    | (Array (ty1, n1_opt), Array (ty2, n2_opt)) ->
+      execCtypeEqual ty1 ty2 && n1_opt == n2_opt
+    | (Function ((qs1, ty1), params1, b1),
+        Function ((qs2, ty2), params2, b2)) ->
+        let bools = List.map paramsEqual (List.combine params1 params2) in 
+        C.qualifiersEqual qs1 qs2 && execCtypeEqual ty1 ty2 &&
+        List.fold_left (&&) true bools && b1 == b2
+    | (FunctionNoParams (qs1, ty1),
+        FunctionNoParams (qs2, ty2)) ->
+        C.qualifiersEqual qs1 qs2 && execCtypeEqual ty1 ty2
+    | (Pointer (qs1, ty1), Pointer (qs2, ty2)) ->
+        C.qualifiersEqual qs1 qs2 && execCtypeEqual ty1 ty2
+    | (Atomic ty1, Atomic ty2) ->
+        execCtypeEqual ty1 ty2
+    | (Struct id1, Struct id2) ->
+        id1 == id2
+    | (Union id1, Union id2) ->
+        id1 == id2
+    | _ ->
+        false
+
+
 
 let str_of_it_ = function
   | Terms.Sym sym -> Sym.pp_string sym
@@ -103,6 +155,10 @@ let str_of_it_ = function
 
 let create_binding sym ctype = 
     A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
+
+let find_ctype_from_bindings bindings sym = 
+  let (_, (_, _, _, ctype)) = List.find (fun (sym', _) -> Sym.equal sym sym') bindings in 
+  ctype
 
 (* Decl_object  of (storageDuration * bool) * maybe alignment * qualifiers * ctype*)
 let create_decl_object ctype = 

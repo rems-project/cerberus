@@ -17,7 +17,7 @@
 //     foo(CN_POINTER),
 // };
 
-#define MEM_SIZE (64 * 1024 * 1024)
+#define MEM_SIZE (1024 * 1024 * 1024)
 char buf[MEM_SIZE];
 static void *curr = buf;
 
@@ -43,13 +43,14 @@ void *alloc_(long nbytes, const char *str, int line) {
     static unsigned long count;
     // printf("Alloc called: %s:%d\n", str, line);
     void *res = curr;
-    if ((char *) (curr + nbytes) - buf > MEM_SIZE) {
+    if ((char *) curr + nbytes - buf > MEM_SIZE) {
         printf("Out of memory! %lu\n", count);
         exit(1);
     }
     count++;
     curr += nbytes;
     return res;
+    //return malloc(nbytes);
 }
 
 

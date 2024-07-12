@@ -117,9 +117,9 @@ let outer_bbox xs =
   ) (b0, e0) xs
 
 
-let bbox_location = function
+let bbox = function
   | [] ->
-      Loc_unknown
+      `Other Loc_unknown
   | xs ->
       match begin
         List.fold_left (fun (def_loc, acc) loc ->
@@ -138,10 +138,15 @@ let bbox_location = function
         ) (Loc_unknown, []) xs
       end with
         | (loc, []) ->
-            loc
+            `Other loc
         | (_, xs') ->
             let (b, e) = outer_bbox xs' in
-            Loc_region (b, e, NoCursor)
+            `Bbox (b, e)
+
+let bbox_location xs =
+  match (bbox xs) with
+    | `Other loc -> loc
+    | `Bbox (b, e) -> Loc_region (b, e, NoCursor)
 
 
 let with_regions_and_cursor locs loc_opt =

@@ -201,6 +201,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_expr e
   | CNExpr_record members ->
      free_in_exprs (List.map snd members)
+  | CNExpr_struct (_tag, members) ->
+     free_in_exprs (List.map snd members)
   | CNExpr_memberupdates (e, updates) ->
      free_in_exprs (e :: List.map snd updates)
   | CNExpr_arrayindexupdates (e, updates) ->
@@ -568,6 +570,8 @@ module EffectfulTranslation = struct
         return (IT (Binop (Or, e1, e2), SBT.Bool, loc))
     | CN_and, SBT.Bool ->
         return (IT (Binop (And, e1, e2), SBT.Bool, loc))
+    | CN_implies, SBT.Bool ->
+        return (IT (Binop (Implies, e1, e2), SBT.Bool, loc))
     | CN_map_get, _ ->
        let@ rbt = match IT.bt e1 with
          | Map (_, rbt) -> return rbt
@@ -710,6 +714,9 @@ module EffectfulTranslation = struct
            let@ members = ListM.mapsndM self members in
            let bts = List.map_snd IT.bt members in
            return (IT (IT.Record members, SBT.Record bts, loc))
+        | CNExpr_struct (tag, members) ->
+           let@ members = ListM.mapsndM self members in
+           return (IT (IT.Struct (tag, members), SBT.Struct tag, loc))
         | CNExpr_memberupdates (e, updates) ->
            let@ e = self e in
            let bt = IT.bt e in

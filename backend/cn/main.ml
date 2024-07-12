@@ -139,6 +139,7 @@ let main
       no_timestamps
       json
       state_file
+      output_dir 
       diag
       lemmata
       only
@@ -147,9 +148,13 @@ let main
       log_times
       random_seed
       solver_logging
+      solver_flags
+      solver_path
+      solver_type
       output_decorated_dir
       output_decorated
       with_ownership_checking
+      copy_source_dir
       astprints
       use_vip
       no_use_ity
@@ -172,12 +177,21 @@ let main
     Pp.print_timestamps := not no_timestamps;
     Solver.set_slow_smt_settings slow_smt_threshold slow_smt_dir;
     Solver.random_seed := random_seed;
-    Solver.log_to_temp := solver_logging;
+    begin match solver_logging with
+    | Some d ->
+        Solver.log_to_temp := true;
+        Solver.log_dir := if String.equal d "" then None else Some d
+    | _ -> ()
+    end;
+    Solver.solver_path := solver_path;
+    Solver.solver_type := solver_type;
+    Solver.solver_flags := solver_flags;
     Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
     IndexTerms.use_vip := use_vip;
     Check.batch := batch;
     Diagnostics.diag_string := diag;
-    WellTyped.use_ity := not no_use_ity
+    WellTyped.use_ity := not no_use_ity;
+    Sym.executable_spec_enabled := Option.is_some output_decorated;
   end;
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) =
@@ -192,8 +206,8 @@ let main
      | _ -> None);
   try
     let handle_error e =
-      if json then TypeErrors.report_json ?state_file e
-      else TypeErrors.report ?state_file e;
+      if json then TypeErrors.report_json ?state_file ?output_dir e
+      else TypeErrors.report ?state_file ?output_dir e;
       match e.msg with
       | TypeErrors.Unsupported _ -> exit 2
       | _ -> exit 1 in
@@ -208,7 +222,7 @@ let main
         Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
       | Some output_filename ->
           Cerb_colour.without_colour begin fun () ->
-            Executable_spec.main ~with_ownership_checking filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
+            Executable_spec.main ~with_ownership_checking ~copy_source_dir filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
             return ()
           end ()
       end in
@@ -228,7 +242,6 @@ open Cmdliner
 let file =
   let doc = "Source C file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
-
 
 let incl_dirs =
   let doc = "Add the specified directory to the search path for the\
@@ -262,7 +275,6 @@ let batch =
   let doc = "Type check functions in batch/do not stop on first type error (unless `only` is used)" in
   Arg.(value & flag & info ["batch"] ~doc)
 
-
 let slow_smt_threshold =
   let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
   Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
@@ -271,17 +283,18 @@ let slow_smt_dir =
   let doc = "Set the destination dir for logging slow smt queries (default is in system temp-dir)." in
   Arg.(value & opt (some string) None & info ["slow-smt-dir"] ~docv:"FILE" ~doc)
 
-
 let no_timestamps =
   let doc = "Disable timestamps in print-level debug messages"
  in
   Arg.(value & flag & info ["no_timestamps"] ~doc)
 
-
 let json =
   let doc = "output in json format" in
   Arg.(value & flag & info["json"] ~doc)
 
+let output_dir =
+  let doc = "directory in which to output state files (overridden by --state-file)" in
+  Arg.(value & opt (some string) None & info ["output-dir"] ~docv:"FILE" ~doc)
 
 let state_file =
   let doc = "file in which to output the state" in
@@ -308,8 +321,13 @@ let random_seed =
   Arg.(value & opt int 0 & info ["r"; "random-seed"] ~docv:"I" ~doc)
 
 let solver_logging =
-  let doc = "Have Z3 log in SMT2 format to a file in a temporary directory." in
-  Arg.(value & flag & info ["solver-logging"] ~doc)
+  let doc = "Log solver queries in SMT2 format to a directory." in
+  Arg.(value & opt (some string) None & info ["solver-logging"] ~docv:"DIR" ~doc)
+
+let solver_flags =
+  let doc = "Ovewrite default solver flags. Note that flags should enable at least incremental checking." in
+  Arg.(value & opt (some (list string)) None
+             & info ["solver-flags"] ~docv:"X,Y,Z" ~doc)
 
 let only =
   let doc = "only type-check this function (or comma-separated names)" in
@@ -333,6 +351,10 @@ let output_decorated =
 let with_ownership_checking =
   let doc = "Enable ownership checking within CN runtime testing" in
   Arg.(value & flag & info ["with_ownership_checking"] ~doc)
+
+let copy_source_dir =
+  let doc = "Copy non-CN annotated files into output_decorated_dir for CN runtime testing" in
+  Arg.(value & flag & info ["copy_source_dir"] ~doc)
 
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
@@ -362,6 +384,24 @@ let no_inherit_loc =
 let magic_comment_char_dollar =
   let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
   Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
+
+let solver_path =
+  let doc = "Path to SMT solver executable" in
+  Arg.(value & opt (some string) None & info ["solver-path"] ~docv:"FILE" ~doc)
+
+let solver_type =
+  let doc = "Specify the SMT solver interface" in
+  Arg.( value
+      & opt (some (enum [ "z3",   Simple_smt.Z3
+                        ; "cvc5", Simple_smt.CVC5
+                        ]))
+        None
+      & info ["solver-type"] ~docv:"z3|cvc5" ~doc
+      )
+
+
+
+
 
 (* copied from cerberus' executable (backend/driver/main.ml) *)
 let macros =
@@ -404,6 +444,7 @@ let () =
       no_timestamps $
       json $
       state_file $
+      output_dir $ 
       diag $
       lemmata $
       only $
@@ -412,9 +453,13 @@ let () =
       log_times $
       random_seed $
       solver_logging $
+      solver_flags $
+      solver_path $
+      solver_type $
       output_decorated_dir $
       output_decorated $
       with_ownership_checking $
+      copy_source_dir $
       astprints $
       use_vip $
       no_use_ity $
@@ -423,5 +468,7 @@ let () =
       no_inherit_loc $
       magic_comment_char_dollar
   in
-  Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
+  let version_str = "CN version: " ^ Cn_version.git_version in
+  let cn_info = Cmd.info "cn" ~version:version_str in
+  Stdlib.exit @@ Cmd.(eval (v cn_info check_t))
 

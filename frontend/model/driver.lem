@@ -760,6 +760,11 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
     
     | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
+        begin if ity = Ctype.Bool then
+          ND.print_debug 0 [Debug.DB_driver] (fun () -> "IntFromPtr called on _Bool --> this is probably a bug in the elaboration")
+        else
+          ND.return ()
+        end >>= fun () -> (* DEBUG *)
         liftMem (Mem.intfromptr loc ref_ty ity ptr_val) >>= fun ival ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
     

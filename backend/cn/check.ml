@@ -1501,19 +1501,13 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                in
                let@ it = WellTyped.WIT.infer it in
                let@ (original_rs, _) = all_resources_tagged loc in
-               let verbose = List.exists (Id.is_str "verbose") attrs in
+               (* let verbose = List.exists (Id.is_str "verbose") attrs in *)
                let quiet = List.exists (Id.is_str "quiet") attrs in
-               (* if verbose *)
-               (* then Pp.print stdout (Pp.loc_headline loc (!^ "processing extract[verbose]")) *)
-               (* else (); *)
                let@ () = add_movable_index loc (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
-               let msg1 = "extract: index added, no resources (yet) extracted." in
-               let msg2 = "(consider extract[verbose] or extract[quiet])" in
                if (List.equal Int.equal (List.map snd original_rs) (List.map snd upd_rs)
                    && not quiet)
-               then warn loc (if verbose then (!^ msg1)
-                   else ((!^ msg1) ^^ Pp.hardline ^^ (!^ "    ") ^^ (!^ msg2)))
+               then warn loc (!^ "extract: index added, no resources (yet) extracted.")
                else ();
                return ()
             | M_CN_unfold (f, args) ->

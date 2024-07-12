@@ -61,6 +61,7 @@ let bw_or_uf_def = ("bw_or_uf", Sym.fresh_named "bw_or_uf", mk_arg2 (arith_binop
 let bw_clz_uf_def = ("bw_clz_uf", Sym.fresh_named "bw_clz_uf", mk_arg1 (arith_unop BWCLZNoSMT))
 let bw_ctz_uf_def = ("bw_ctz_uf", Sym.fresh_named "bw_ctz_uf", mk_arg1 (arith_unop BWCTZNoSMT))
 let bw_ffs_uf_def = ("bw_ffs_uf", Sym.fresh_named "bw_ffs_uf", mk_arg1 (arith_unop BWFFSNoSMT))
+let bw_fls_uf_def = ("bw_fls_uf", Sym.fresh_named "bw_fls_uf", mk_arg1 (arith_unop BWFLSNoSMT))
 
 let shift_left_def = ("shift_left", Sym.fresh_named "shift_left", mk_arg2 (arith_binop ShiftLeft))
 let shift_right_def = ("shift_right",
@@ -167,6 +168,7 @@ let builtin_funs = max_min_bits @ [
   bw_clz_uf_def;
   bw_ctz_uf_def;
   bw_ffs_uf_def;
+  bw_fls_uf_def;
 
   shift_left_def;
   shift_right_def;

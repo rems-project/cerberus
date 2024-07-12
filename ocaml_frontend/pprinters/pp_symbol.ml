@@ -30,7 +30,9 @@ let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
         else
           "__cerbty_unnamed_tag_" ^ string_of_int n
     | SD_CN_Id str ->
+        (* (Printf.printf "SD_CN_Id: %s\n" str; *)
         str
+        (* ) *)
     | _ ->
         "a_" ^ string_of_int n
 
