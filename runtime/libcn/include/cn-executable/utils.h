@@ -376,8 +376,9 @@ pool_pointer
     static inline CNTYPE *default_##CNTYPE(void) {  \
         return convert_to_##CNTYPE(0);              \
     }
-    
+
 cn_map *default_cn_map(void);
+cn_bool *default_cn_bool(void);
 
 #define CN_GEN_MAP_GET(CNTYPE)\
     static inline void *cn_map_get_##CNTYPE(cn_map *m, cn_integer *key) {   \
