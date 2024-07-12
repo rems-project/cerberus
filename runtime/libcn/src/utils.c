@@ -16,6 +16,9 @@ void cn_exit_aux(void) {
 
 void (*cn_exit)(void) = &cn_exit_aux;
 
+void print_error_msg_info(void) {
+  printf("Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+}
 
 cn_bool *convert_to_cn_bool(_Bool b) {
     cn_bool *res = alloc(sizeof(cn_bool));
@@ -31,6 +34,7 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 }
 
 void cn_assert(cn_bool *cn_b) {
+    printf("Checking CN assertion: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
     if (!(cn_b->val)) {
         printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         if (error_msg_info.cn_source_loc) {
@@ -88,10 +92,14 @@ void initialise_ghost_stack_depth(void) {
 
 void ghost_stack_depth_incr(void) {
     cn_stack_depth++;
+    // update_error_message_info(0);
+    print_error_msg_info();
 }
 
 void ghost_stack_depth_decr(void) {
     cn_stack_depth--;
+    // update_error_message_info(0);
+    print_error_msg_info();
 }
 
 int ownership_ghost_state_get(signed long *address_key) {
@@ -125,9 +133,6 @@ void dump_ownership_state()
   printf("END\n");
 }
 
-void print_error_msg_info(void) {
-  printf("Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
-}
 
 
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
@@ -343,7 +348,7 @@ void update_error_message_info_(const char *function_name, char *file_name, int 
     error_msg_info.file_name = file_name;
     error_msg_info.line_number = line_number;
     error_msg_info.cn_source_loc = cn_source_loc;
-
+    print_error_msg_info();
 }
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number) {
