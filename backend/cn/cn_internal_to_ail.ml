@@ -1683,6 +1683,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
     let ptr_add_stat = A.(AilSdeclaration [(ptr_add_sym, Some e4)]) in
 
     let enum_str = if is_pre then "GET" else "PUT" in
+    let enum_str = if not is_toplevel then "owned_enum" else enum_str in
     let enum_sym = Sym.fresh_pretty enum_str in
     let (rhs, bs, ss, owned_ctype) = match q.name with 
       | Owned (sct, _) -> 
