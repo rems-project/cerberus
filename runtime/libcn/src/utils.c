@@ -265,8 +265,9 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
 //     return res;
 // }
 
-void cn_map_set(cn_map *m, cn_integer *key, void *value) {
+cn_map *cn_map_set(cn_map *m, cn_integer *key, void *value) {
     ht_set(m, key->val, value);
+    return m;
 }
 
 cn_map *default_cn_map(void) {

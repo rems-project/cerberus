@@ -1294,6 +1294,79 @@ let generate_datatype_equality_function (cn_datatype : cn_datatype) =
   let def = (fn_sym, (cn_datatype.cn_dt_loc, 0, empty_attributes, param_syms, mk_stmt A.(AilSblock ([], [mk_stmt tag_if_stmt])))) in
   [(decl, def)]
 
+let generate_datatype_default_function (cn_datatype : cn_datatype) = 
+  let cn_sym = cn_datatype.cn_dt_name in
+  let fn_str = "default_struct_" ^ (Sym.pp_string cn_sym) in 
+  let cn_struct_ctype = mk_ctype C.(Struct cn_sym) in
+  let cn_struct_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, cn_struct_ctype)) in
+  let fn_sym = Sym.fresh_pretty fn_str in
+  let generate_alloc_assign ctype = 
+    mk_expr A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "alloc")), [mk_expr (AilEsizeof (empty_qualifiers, ctype))])) in 
+  let alloc_fcall = generate_alloc_assign cn_struct_ctype in 
+  let res_sym = Sym.fresh_pretty "res" in 
+  let res_ident = mk_expr A.(AilEident res_sym) in 
+  let res_binding = create_binding res_sym cn_struct_ptr_ctype in 
+  let res_decl = A.(AilSdeclaration [(res_sym, Some alloc_fcall)]) in
+
+  let rec get_constrs_and_ms = function 
+  | [] -> failwith "Datatype default generation failure: datatype has no constructors"
+  | ((_, members) as x) :: xs -> 
+    let (ids, basetypes) = List.split members in 
+    if List.mem BT.equal (Datatype cn_sym) (List.map cn_base_type_to_bt basetypes) then 
+      get_constrs_and_ms xs 
+    else 
+      x
+    in 
+    (*
+      datatype Tree {
+        Tree_Empty {i32 k (* for working out what to do with constructor members *)},
+        Tree_Node {i32 k, datatype tree l, datatype tree r}
+      }
+
+      ->
+
+      struct tree * default_struct_tree(void) {
+        struct tree *res = alloc(sizeof(struct tree));
+        res->tag = TREE_EMPTY;
+        res->u.tree_empty = alloc(sizeof(struct tree_empty));
+        res->u.tree_empty->k = default_cn_bits_i32();
+        return res;
+      }
+  *)
+  let (constructor, members) = get_constrs_and_ms cn_datatype.cn_dt_cases in 
+  let enum_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constructor in 
+  let enum_str = Sym.pp_string enum_sym in
+  let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, enum_str); attr_args = []} in 
+  let enum_ident = mk_expr A.(AilEident enum_sym) in 
+  let res_tag_assign = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEmemberofptr (res_ident, Id.id "tag")), enum_ident)))) in
+  let res_tag_assign_stat = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], res_tag_assign)) in 
+  let lc_constr_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constructor in
+  let res_u = A.(AilEmemberofptr (res_ident, Id.id "u")) in 
+  let res_u_constr = mk_expr (AilEmemberof (mk_expr res_u, create_id_from_sym lc_constr_sym)) in 
+  let constr_alloc_assign_ = A.(AilSexpr (mk_expr (AilEassign (res_u_constr, generate_alloc_assign (mk_ctype C.(Struct lc_constr_sym)))))) in 
+  let member_assign_info = List.map (fun (id, cn_bt) -> 
+    let bt = cn_base_type_to_bt cn_bt in
+    let member_ctype_str_opt = get_underscored_typedef_string_from_bt bt in 
+    let default_fun_str = match member_ctype_str_opt with 
+      | Some member_ctype_str -> "default_" ^ member_ctype_str
+      | None -> 
+        Printf.printf "%s\n" (Pp.plain (BT.pp bt));
+        failwith "no underscored typedef string found"
+    in
+    let fcall = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty default_fun_str)), [])) in 
+    (id, mk_expr fcall)
+    ) members in 
+  let member_assign_stats = List.map (fun (id, rhs) -> A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEmemberofptr (res_u_constr, id)), rhs))))) member_assign_info in 
+  
+  (* Function body *)
+  let return_stmt = A.(AilSreturn res_ident) in 
+  let ret_type = cn_struct_ptr_ctype in
+  (* Generating function declaration *)
+  let decl = (fn_sym, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, ret_type), [], false, false, false)))) in
+  (* Generating function definition *)
+  let def = (fn_sym, (Cerb_location.unknown, 0, empty_attributes, [], mk_stmt A.(AilSblock ([res_binding], (mk_stmt res_decl) :: res_tag_assign_stat :: (List.map mk_stmt (constr_alloc_assign_ :: member_assign_stats @ [return_stmt])))))) in
+  [(decl, def)]
+
 (* STRUCTS *)
 let generate_struct_equality_function ?(is_record=false) dts ((sym, (loc, attrs, tag_def)) : (A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))) = match tag_def with 
     | C.StructDef (members, _) -> 

@@ -99,8 +99,7 @@ let memory_accesses_injections ail_prog =
     | `Bbox (b, e) -> (b, e) in
   let acc = ref [] in
   let xs = Ail_analysis.collect_memory_accesses ail_prog in
-  List.iteri (fun i access ->
-    Printf.printf "[%d] " i;
+  List.iter (fun access ->
     match access with
     | Ail_analysis.Load {loc; _} ->
         let b, e = pos_bbox loc in
