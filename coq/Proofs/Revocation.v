@@ -70,6 +70,15 @@ Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer M
 (* TODO: move *)
 Section AddressValue_Lemmas.
 
+  (* Algines given value up.
+   *)
+  Definition align_up addr alignment: Z
+    :=
+    let align := addr mod alignment in
+    if align =? 0
+    then addr (* already aligned *)
+    else addr+(alignment - align).
+
   (** Predicate to check if address is pointer-aligned *)
   Definition addr_ptr_aligned (a:AddressValue.t) :=
     Z.modulo (AddressValue.to_Z a) (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
@@ -948,6 +957,85 @@ Module CheriMemoryImplWithProofs
 
     split;apply mod_le_mod;lia.
   Qed.
+
+
+  (* Yet another spec for [capmeta_ghost_tags]. It is defined for
+     address range whose capabilites are affected.  *)
+  Lemma capmeta_ghost_tags_spec_in_extended
+    (addr: AddressValue.t)
+    (size: nat)
+    (SZ: (size>0)%nat)
+    (capmeta: AMap.M.t (bool*CapGhostState)):
+
+    forall a,
+      let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
+      let a0 := align_down (AddressValue.to_Z addr) alignment in
+      let a1 := align_up (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
+      (a0 <= AddressValue.to_Z a <= a1) ->
+      forall tg gs,
+        AMap.M.MapsTo a (tg,gs) (capmeta_ghost_tags addr size capmeta)
+        ->
+          tg=false \/ gs.(tag_unspecified) = true.
+  Proof.
+    intros a alignment a0 a1 R tg gs M.
+    assert(AddressValue.to_Z a mod alignment = 0) as AA. admit. (* from MapsTo *)
+    subst a0 a1 alignment.
+    dependent destruction size.
+    -
+      lia.
+    -
+      cbn in *.
+      apply AMap.F.mapi_inv in M.
+      destruct M as [(tg',gs') [a' [E M]]].
+      subst a'.
+      break_match_hyp.
+      +
+        (* in range *)
+        destruct M.
+        tuple_inversion.
+        bool_to_prop_hyp.
+        subst.
+        rename gs' into gs.
+        right.
+        split;auto.
+      +
+        rename size0 into size.
+        destruct M.
+        tuple_inversion.
+        rename tg' into tg, gs' into gs.
+        bool_to_prop_hyp.
+        * (* unspecified *)
+          apply negb_false_iff in H.
+          auto.
+        *
+          (* untagged *)
+          auto.
+        *
+          (* az < a0 *)
+          exfalso.
+          unfold align_down in *.
+          pose proof MorelloImpl.alignof_pointer_pos as P.
+          zify.
+          subst.
+          lia.
+        *
+          (* a1 < az *)
+          exfalso.
+          unfold align_down in *.
+          pose proof MorelloImpl.alignof_pointer_pos as P.
+          zify.
+          subst.
+
+          unfold align_up in *.
+          break_if;bool_to_prop_hyp.
+          --
+            clear H0 tg gs capmeta0 SZ cstr0 cstr.
+            replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
+            lia.
+          --
+            clear H0 tg gs capmeta0 SZ cstr0 cstr.
+            replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
+  Admitted.
 
   Definition memM_same_state
     {T: Type}
@@ -4768,6 +4856,17 @@ Module CheriMemoryImplWithProofs
     apply AddressValue_of_Z_to_Z.
   Qed.
 
+  Fact align_down_le:
+    forall v a,
+      0<a ->
+      align_down v a <= v.
+  Proof.
+    intros v a H0.
+    unfold align_down.
+    apply Z.le_sub_nonneg.
+    apply numbers.Z.mod_pos.
+    apply H0.
+  Qed.
 
   Fact bytemap_mem_state_with_bytemap:
     forall s bm, (bytemap (mem_state_with_bytemap bm s)) = bm.
@@ -4778,22 +4877,22 @@ Module CheriMemoryImplWithProofs
 
   Instance memcpy_copy_data_PreservesInvariant
     (loc: location_ocaml)
-    (ptrval1 ptrval2: AddressValue.t)
+    (dst_a src_a: AddressValue.t)
     (n: nat)
     :
     forall s,
 
       (* In *)
       (forall a : AddressValue.t,
-          0 <= addr_offset a ptrval1 < Z.of_nat n ->
           let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
-          let ac := AddressValue.of_Z (align_down (AddressValue.to_Z a) alignment)
-          in
+          let a0 := align_down (AddressValue.to_Z dst_a) alignment in
+          let a1 := align_up (AddressValue.to_Z dst_a + ((Z.of_nat n) - 1)) alignment in
+          (a0 <= AddressValue.to_Z a <= a1) ->
           forall (tg : bool) (gs : CapGhostState),
-            AMap.M.MapsTo ac (tg, gs) (capmeta s) ->
+            AMap.M.MapsTo a (tg, gs) (capmeta s) ->
             tg = false \/ tag_unspecified gs = true) ->
 
-      PreservesInvariant mem_invariant s (memcpy_copy_data loc ptrval1 ptrval2 n).
+      PreservesInvariant mem_invariant s (memcpy_copy_data loc dst_a src_a n).
   Proof.
     unfold memcpy_copy_data.
     induction n.
@@ -4816,8 +4915,8 @@ Module CheriMemoryImplWithProofs
           apply M.
         --
           remember (mem_state_with_bytemap
-                      (AMap.M.add (AddressValue.with_offset ptrval1 (Z.of_nat n)) o
-                         (bytemap_copy_data ptrval1 ptrval2 n (bytemap s))) s) as s'.
+                      (AMap.M.add (AddressValue.with_offset dst_a (Z.of_nat n)) o
+                         (bytemap_copy_data dst_a src_a n (bytemap s))) s) as s'.
           assert(capmeta s' = capmeta s).
           {
             destruct s', s.
@@ -4827,13 +4926,18 @@ Module CheriMemoryImplWithProofs
 
           intros addr g H0 H1 bs H2.
 
-          assert(decidable (0 <= addr_offset
-                                  (AddressValue.of_Z (align_down (AddressValue.to_Z addr) (Z.of_nat (alignof_pointer MorelloImpl.get))))
-                                  ptrval1
-                            /\
-                              addr_offset addr ptrval1 < Z.of_nat (S n))
-                ) as AR
-              by (apply dec_and;[apply Z.le_decidable|apply Z.lt_decidable]).
+          (* We expand the lower bound to the previous aligned address.
+             The upper bound stays unaligned: [dst_a + (S n) -1] *)
+          assert(decidable
+                   (
+                     (align_down (AddressValue.to_Z dst_a) (Z.of_nat (alignof_pointer MorelloImpl.get)))
+                     <= (AddressValue.to_Z addr)
+                     <=
+                       align_up (AddressValue.to_Z dst_a + (Z.of_nat (S n) - 1)) (Z.of_nat (alignof_pointer MorelloImpl.get))
+                ))
+            as AR
+              by
+              (apply dec_and; apply Z.le_decidable).
 
           assert(AA: addr_ptr_aligned addr).
           {
@@ -4855,30 +4959,32 @@ Module CheriMemoryImplWithProofs
             (* Caps in range are untagged. H0/H1 is false *)
             clear IHn Heqo H2 bs.
 
-            specialize (CIN addr).
+            specialize (CIN addr R true g).
             autospecialize CIN.
             {
-              destruct R as [Rl Ru].
-              split.
-              - rewrite already_aligned in Rl;auto.
-              - apply Ru.
-            }
-            specialize (CIN true g).
-
-            autospecialize CIN.
-            {
-              rewrite already_aligned, <- H; auto.
+              rewrite <- H; auto.
             }
             destruct CIN;congruence.
           ++
             (* outside range *)
             specialize (IHn s).
+
+            (*
+            TODO: case anlysis on n/Sn
+
             autospecialize IHn.
             {
               intros ca CR ctg cgs CM.
-              apply (CIN ca).
-              lia.
-              auto.
+              apply (CIN ca);[|auto].
+              split;[lia|].
+
+              replace (Z.of_nat (S n) - 1) with (Z.of_nat n) in * by lia.
+              assert(CAA: addr_ptr_aligned ca). admit.
+              unfold addr_ptr_aligned in CAA.
+              unfold align_down in *.
+              clear - CR CAA.
+              destruct CR.
+              nope!
             }
             specialize (IHn M).
             invc IHn.
@@ -4919,6 +5025,8 @@ Module CheriMemoryImplWithProofs
                  the goal could be proven.
                *)
               admit.
+             *)
+            admit.
       *
         (* removing *)
         admit.
@@ -5573,61 +5681,88 @@ Module CheriMemoryImplWithProofs
         tuple_inversion.
         auto.
     -
-      pose proof (ghost_tags_preserves_allocations _ _ _ _ H0).
-      rewrite H1 in AC.
-      apply bind_PreservesInvariant_value.
-      intros H2 s'' x H3.
-      destruct x.
-      split.
+      destruct (Z.eq_dec size 0) as [S0|SN0].
       +
-        pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s') as P.
-        autospecialize P.
-        {
-          intros a H4 alignment ac tg gs H5.
-          apply capmeta_ghost_tags_spec_in_range
-            with (a:=a) (addr:=a1) (size:=(Z.to_nat size))
-                 (capmeta := (capmeta s)).
-          lia.
-          lia.
-
-          replace (capmeta_ghost_tags a1 (Z.to_nat size) (capmeta s))
-            with (capmeta s').
-          apply H5.
-
-          clear - H0.
-          unfold ghost_tags in H0.
-          apply update_mem_state_spec in H0.
-          destruct s', s.
-          cbn in *.
-          invc H0.
-          reflexivity.
-        }
-        specialize (P H2).
-
-        unfold post_exec_invariant, lift_sum_p, execErrS in P.
-        break_let.
-        repeat break_match_hyp.
-        2,3: inv Heqs1.
+        destruct size.
+        2,3: inv S0.
+        clear S0.
+        Opaque ret.
+        preserves_steps.
         *
-          tuple_inversion.
-        *
-          apply ret_inr in Heqs1.
-          invc Heqs1.
-          tuple_inversion.
+          unfold memcpy_copy_data.
+          replace (Z.to_nat 0) with O by lia.
+          preserves_step.
           auto.
+        *
+          unfold memcpy_copy_tags.
+          preserves_steps;bool_to_prop_hyp;try lia.
+          exfalso.
+          clear - Heqb0.
+          pose proof MorelloImpl.alignof_pointer_pos.
+          pose proof Z.mod_pos_bound (AddressValue.to_Z a1) (Z.of_nat (alignof_pointer MorelloImpl.get)).
+          autospecialize H0. lia.
+          zify.
+          lia.
       +
-        pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H3).
-        destruct M.
-        epose proof (memcpy_copy_data_fetch_bytes_spec _ AC) as DS.
-        preserves_step.
-        eapply memcpy_copy_tags_PreservesInvariant
-          with (ptrval1:=ptrval1) (ptrval2:=ptrval2)
-        ; eauto.
-        rewrite H4 in AC.
-        apply AC.
-        preserves_step.
-        Unshelve.
-        apply H2.
+
+        pose proof (ghost_tags_preserves_allocations _ _ _ _ H0).
+        rewrite H1 in AC.
+        apply bind_PreservesInvariant_value.
+        intros H2 s'' x H3.
+        destruct x.
+        split.
+        *
+          pose proof (memcpy_copy_data_PreservesInvariant loc a1 a2 (Z.to_nat size) s') as P.
+          autospecialize P.
+          {
+            intros a alignment aL aH H4 tg gs H5.
+            apply capmeta_ghost_tags_spec_in_extended
+              with (a:=a) (addr:=a1) (size:=(Z.to_nat size))
+                   (capmeta := (capmeta s)).
+            -
+              inv AC.
+              lia.
+            -
+              auto.
+            -
+              replace (capmeta_ghost_tags a1 (Z.to_nat size) (capmeta s))
+                with (capmeta s').
+              apply H5.
+
+              clear - H0.
+              unfold ghost_tags in H0.
+              apply update_mem_state_spec in H0.
+              destruct s', s.
+              cbn in *.
+              invc H0.
+              reflexivity.
+          }
+          specialize (P H2).
+
+          unfold post_exec_invariant, lift_sum_p, execErrS in P.
+          break_let.
+          repeat break_match_hyp.
+          2,3: inv Heqs1.
+          --
+            tuple_inversion.
+          --
+            apply ret_inr in Heqs1.
+            invc Heqs1.
+            tuple_inversion.
+            auto.
+        *
+          pose proof (memcpy_copy_data_preserves_allocations _ _ _ _ _ _ H3).
+          destruct M.
+          epose proof (memcpy_copy_data_fetch_bytes_spec _ AC) as DS.
+          preserves_step.
+          eapply memcpy_copy_tags_PreservesInvariant
+            with (ptrval1:=ptrval1) (ptrval2:=ptrval2)
+          ; eauto.
+          rewrite H4 in AC.
+          apply AC.
+          preserves_step.
+          Unshelve.
+          apply H2.
   Qed.
 
   Instance realloc_PreservesInvariant
