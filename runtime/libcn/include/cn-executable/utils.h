@@ -319,8 +319,8 @@ static inline int ipow(int base, int exp)
 //         return res;\
 //     }
 
-#define cn_array_shift(cn_ptr, ctype, index)\
-    convert_to_cn_pointer((ctype *) cn_ptr->ptr + *(index->val)) 
+#define cn_array_shift(cn_ptr, size, index)\
+    convert_to_cn_pointer((char *) cn_ptr->ptr + (*(index->val) * size)) 
 
 
 /* 

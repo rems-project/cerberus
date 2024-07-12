@@ -912,8 +912,8 @@ let rec cn_to_ail_expr_aux_internal
   | ArrayShift { base; ct; index } ->
     let b1, s1, e1 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals base PassBack in
     let b2, s2, e2 = cn_to_ail_expr_aux_internal const_prop pred_name dts globals index PassBack in
-    let ctype_sym = Sym.fresh_pretty (Pp.plain (CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers (Sctypes.to_ctype ct))) in 
-    let ail_expr_ = A.(AilEcall ((mk_expr (AilEident (Sym.fresh_pretty ("cn_array_shift")))), [e1; mk_expr (AilEident ctype_sym); e2])) in
+    let sizeof_expr = mk_expr A.(AilEsizeof (empty_qualifiers, Sctypes.to_ctype ct)) in  
+    let ail_expr_ = A.(AilEcall ((mk_expr (AilEident (Sym.fresh_pretty ("cn_array_shift")))), [e1; sizeof_expr; e2])) in
     dest d (b1 @ b2, s1 @ s2, mk_expr ail_expr_)
 
   | CopyAllocId _ -> failwith "TODO CopyAllocId"
