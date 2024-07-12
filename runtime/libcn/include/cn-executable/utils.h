@@ -312,12 +312,16 @@ static inline int ipow(int base, int exp)
     }
 
 
-#define CN_GEN_ARRAY_SHIFT(CTYPE, CNTYPE)\
-    static inline cn_pointer *cn_array_shift_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
-        cn_pointer *res = alloc(sizeof(cn_pointer));\
-        res->ptr = (CTYPE *) ptr->ptr + (*(i->val) * sizeof(CTYPE));\
-        return res;\
-    }
+// #define CN_GEN_ARRAY_SHIFT(CNTYPE)\
+//     static inline cn_pointer *cn_array_shift_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
+//         cn_pointer *res = alloc(sizeof(cn_pointer));\
+//         res->ptr = (CTYPE *) ptr->ptr + *(i->val);\
+//         return res;\
+//     }
+
+#define cn_array_shift(cn_ptr, ctype, index)\
+    convert_to_cn_pointer((ctype *) cn_ptr->ptr + *(index->val)) 
+
 
 /* 
 
@@ -437,7 +441,6 @@ cn_bool *default_cn_bool(void);
    CN_GEN_INCREMENT(CNTYPE)             \
    CN_GEN_PTR_ADD(CNTYPE)               \
    CN_GEN_CASTS_INNER(CTYPE, CNTYPE)    \
-   CN_GEN_ARRAY_SHIFT(CTYPE, CNTYPE)    \
    CN_GEN_DEFAULT(CNTYPE)               \
    CN_GEN_MAP_GET(CNTYPE)               \
 

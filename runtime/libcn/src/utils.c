@@ -239,7 +239,7 @@ cn_map *default_cn_map(void) {
 }
 
 cn_bool *default_cn_bool(void) {
-    convert_to_cn_bool(false);
+    return convert_to_cn_bool(false);
 }
 
 cn_bool *cn_pointer_equality(void *i1, void *i2) {
