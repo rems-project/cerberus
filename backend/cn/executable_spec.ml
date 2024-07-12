@@ -172,8 +172,10 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
 
 
   (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs sigm in *)
-  let (record_defs_str, _record_decls_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
-  let (record_defs_str', _record_decls_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
+  let (record_defs_str, _record_decls_str) = c_records in
+  let (record_defs_str', _record_decls_str) = c_records' in
+
+  let (record_fun_defs, record_fun_decls) = Executable_spec_internal.generate_c_record_funs sigm prog5.mu_logical_predicates prog5.mu_resource_predicates in 
 
   (* let extern_ownership_globals = 
     if with_ownership_checking then 
@@ -196,8 +198,9 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
     "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
     ownership_function_decls;
     conversion_function_decls;
-    record_equality_fun_prot_strs;
-    record_equality_fun_prot_strs';
+    record_fun_decls;
+    (* record_equality_fun_prot_strs; *)
+    (* record_equality_fun_prot_strs'; *)
     c_function_decls;
     "\n";
     predicate_decls;
@@ -210,8 +213,9 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   (* TODO: Topological sort *)
   let cn_defs_list = 
     [cn_header;
-    record_equality_fun_strs;
-    record_equality_fun_strs';
+    (* record_equality_fun_strs; *)
+    (* record_equality_fun_strs'; *)
+    record_fun_defs;
     conversion_function_defs;
     ownership_function_defs;
     c_function_defs;
