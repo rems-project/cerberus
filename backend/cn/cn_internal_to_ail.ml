@@ -506,7 +506,7 @@ let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt=None) (bs, ss
 
   let loop_body = match if_cond_opt with 
     | Some if_cond_expr -> 
-      List.map mk_stmt [A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock ([], List.map mk_stmt (ss @ [b_assign; incr_stat]))), mk_stmt (AilSblock ([], [mk_stmt AilScontinue])))); incr_stat]
+      List.map mk_stmt [A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock ([], List.map mk_stmt (ss @ [b_assign; incr_stat]))), mk_stmt (AilSblock ([], [mk_stmt AilSskip])))); incr_stat]
     | None -> 
       List.map mk_stmt (ss @ [b_assign; incr_stat])
   in
@@ -1712,7 +1712,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
     let (bs', ss') = match rm_ctype return_ctype with 
       | C.Void -> 
         let void_pred_call = A.(AilSexpr rhs) in
-        let if_stat = A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock ([ptr_add_binding], List.map mk_stmt [ptr_add_stat; void_pred_call])), mk_stmt (AilSblock ([], [mk_stmt AilScontinue])))) in 
+        let if_stat = A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock ([ptr_add_binding], List.map mk_stmt [ptr_add_stat; void_pred_call])), mk_stmt (AilSblock ([], [mk_stmt AilSskip])))) in 
         let while_loop = A.(AilSwhile (wrap_with_convert_from_cn_bool while_cond_expr, mk_stmt (AilSblock ([], List.map mk_stmt [if_stat; increment_stat])), 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([], [ail_block])
@@ -1729,7 +1729,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
         in
         let i_expr = if i_bt == BT.Integer then i_ident_expr else A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("cast_" ^ i_bt_str ^ "_to_cn_integer"))), [mk_expr i_ident_expr])) in
         let map_set_expr_ = A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), (List.map mk_expr [AilEident sym; i_expr]) @ [rhs])) in
-        let if_stat = A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock (ptr_add_binding :: b4, List.map mk_stmt (s4 @ [ptr_add_stat; (AilSexpr (mk_expr map_set_expr_))]))), mk_stmt (AilSblock ([], [mk_stmt AilScontinue])))) in 
+        let if_stat = A.(AilSif (wrap_with_convert_from_cn_bool if_cond_expr, mk_stmt (AilSblock (ptr_add_binding :: b4, List.map mk_stmt (s4 @ [ptr_add_stat; (AilSexpr (mk_expr map_set_expr_))]))), mk_stmt (AilSblock ([], [mk_stmt AilSskip])))) in 
         let while_loop = A.(AilSwhile (wrap_with_convert_from_cn_bool while_cond_expr, mk_stmt A.(AilSblock ([], List.map mk_stmt [if_stat; increment_stat])), 0)) in
         let ail_block = A.(AilSblock ([], List.map mk_stmt ([start_assign; while_loop]))) in
         ([sym_binding], [sym_decl; ail_block])
