@@ -109,6 +109,8 @@ void ownership_ghost_state_remove(signed long* address_key) {
     ownership_ghost_state_set(address_key, -1);
 }
 
+
+#define FMT_PTR "\x1b[33m%#lx\x1b[0m"
 // #define KMAG  "\x1B[35m"
 #define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
 
@@ -127,7 +129,13 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
         *address_key = generic_c_ptr + i;
         /* printf(" off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
         int curr_depth = ownership_ghost_state_get(address_key);
-        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1));
+        if (curr_depth != cn_stack_depth - 1) {
+            printf("CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+            printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            printf("  ==> curr_depth: %d\n", curr_depth);
+            cn_exit();
+        }
+        // cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth - 1));
         ownership_ghost_state_set(address_key, cn_stack_depth);
     }
 }
@@ -140,7 +148,13 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
         *address_key = generic_c_ptr + i;
         /* printf(" off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
         int curr_depth = ownership_ghost_state_get(address_key);
-        cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
+        if (curr_depth != cn_stack_depth) {
+            printf("CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+            printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
+            printf("  ==> curr_depth: %d\n", curr_depth);
+            cn_exit();
+        }
+        // cn_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
         ownership_ghost_state_set(address_key, cn_stack_depth - 1);
     }
 }
@@ -174,7 +188,6 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size
     }
 }
 
-#define FMT_PTR "\x1b[33m%#lx\x1b[0m"
 
 void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
   printf("C ownership checking: add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
@@ -206,7 +219,6 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
         printf("C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         printf("  ==> "FMT_PTR"[%d] ("FMT_PTR") -- cn_stack_depth: %ld\n", generic_c_ptr, i, (uintptr_t)((char*)generic_c_ptr + i), cn_stack_depth);
         printf("  ==> curr_depth: %d\n", curr_depth);
-        while(1) {}
         cn_exit();
       }
     //   c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
