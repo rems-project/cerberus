@@ -1639,6 +1639,7 @@ let cn_to_ail_resource_internal ?(is_pre=true) ?(is_toplevel=true) sym dts globa
 
     let start_cond = get_leftmost_of_and_expr q.permission in 
     let start_expr = generate_start_expr start_cond (fst q.q) in
+    let start_expr = IT.IT (Terms.Cast (IT.bt start_expr, start_expr), IT.bt start_expr, Cerb_location.unknown) in 
     let (_, _, e_start) = cn_to_ail_expr_internal dts globals start_expr PassBack in 
 
     let end_cond = get_leftmost_of_and_expr (get_rest_of_expr_r q.permission) in 
@@ -1776,6 +1777,7 @@ let cn_to_ail_logical_constraint_internal : type a. (_ Cn.cn_datatype) list -> (
 
           let start_cond = get_leftmost_of_and_expr cond_it in 
           let start_expr = generate_start_expr start_cond sym in
+          let start_expr = IT.IT (Terms.Cast (IT.bt start_expr, start_expr), IT.bt start_expr, Cerb_location.unknown) in 
           let (_, _, e_start) = cn_to_ail_expr_internal dts globals start_expr PassBack in 
 
           let end_cond = get_leftmost_of_and_expr (get_rest_of_expr_r cond_it) in 
