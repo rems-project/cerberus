@@ -420,7 +420,7 @@ th {
 
 let script = {|
 var current_page = 1
-const menu = document.getElementById("menu1").children
+const menu = document.getElementById("menu1").getElementsByTagName("li")
 const pageinfo = document.getElementById("pageinfo")
 const pages = document.getElementById("pages").children
 const cn_code = document.getElementById("cn_code")
