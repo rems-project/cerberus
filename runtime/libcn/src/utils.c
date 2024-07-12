@@ -108,14 +108,18 @@ void ghost_stack_depth_decr(void) {
     // TODO - revisit this Dhruv over-confident change
     hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
     printf("CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
+    _Bool leaked = false;
     while (ht_next(&it)) {
         uintptr_t *key = it.key;
         int *depth = it.value;
         _Bool fine = *depth <= cn_stack_depth;
-        if (!fine) printf(FMT_PTR_2 " (%d),", *key, *depth);
-        // c_ghost_assert(convert_to_cn_bool(fine));
+        if (!fine) {
+            leaked = true;
+            printf(FMT_PTR_2 " (%d),", *key, *depth);
+        }
     }
     printf("\n");
+    c_ghost_assert(convert_to_cn_bool(!leaked));
 }
 
 int ownership_ghost_state_get(signed long *address_key) {
@@ -175,7 +179,6 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
-        /* printf(" off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth) {
             printf("CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
@@ -253,6 +256,7 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
       }
     //   c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
+    printf("\n");
 }
 
 /* TODO: Need address of and size of every stack-allocated variable - could store in struct and pass through. But this is an optimisation */

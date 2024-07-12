@@ -65,7 +65,7 @@ else
   cd $EXEC_DIR
   echo -n "Compiling... "
 
-  if ! clang-18 -c -I$RUNTIME_PREFIX/include/ *.c $OWNERSHIP_C_FILE_OPT $RUNTIME_PREFIX/libcn.a
+  if ! clang-18 -g -c -I$RUNTIME_PREFIX/include/ *.c $OWNERSHIP_C_FILE_OPT $RUNTIME_PREFIX/libcn.a
   then
     echo "compiling failed."
   else 
