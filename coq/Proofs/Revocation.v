@@ -79,6 +79,25 @@ Section AddressValue_Lemmas.
     then addr (* already aligned *)
     else addr+(alignment - align).
 
+
+  Lemma align_up_correct:
+    forall ps addr : Z, 0 < ps -> (align_up addr ps) mod ps = 0.
+  Proof.
+    intros b a B.
+    unfold align_up.
+    break_match_goal; bool_to_prop_hyp.
+    -
+      assumption.
+    -
+      rewrite Zdiv.Zplus_mod.
+      rewrite Zdiv.Zminus_mod.
+      rewrite Zdiv.Zmod_mod.
+      rewrite Zdiv.Z_mod_same_full.
+      rewrite Z.sub_0_l.
+      rewrite <- Zdiv.Zplus_mod.
+      (* TODO: prove *)
+  Admitted.
+
   (** Predicate to check if address is pointer-aligned *)
   Definition addr_ptr_aligned (a:AddressValue.t) :=
     Z.modulo (AddressValue.to_Z a) (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
@@ -999,6 +1018,7 @@ Module CheriMemoryImplWithProofs
         right.
         split;auto.
       +
+        (* outside range *)
         rename size0 into size.
         destruct M.
         tuple_inversion.
@@ -1021,20 +1041,74 @@ Module CheriMemoryImplWithProofs
         *
           (* a1 < az *)
           exfalso.
+          clear H0 tg gs capmeta0 SZ.
+
+          destruct R2 as [R1 R2].
+
+          (* genralization *)
+          remember (Z.of_nat (alignof_pointer MorelloImpl.get)) as alignment.
+          assert(0 < alignment).
+          {
+            pose proof MorelloImpl.alignof_pointer_pos.
+            lia.
+          }
+          clear Heqalignment.
+
+
           unfold align_down in *.
-          pose proof MorelloImpl.alignof_pointer_pos as P.
           zify.
           subst.
 
           unfold align_up in *.
           break_if;bool_to_prop_hyp.
           --
-            clear H0 tg gs capmeta0 SZ cstr0 cstr.
+            clear R1 AA.
             replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
+            rewrite Heqb in H.
             lia.
           --
-            clear H0 tg gs capmeta0 SZ cstr0 cstr.
             replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
+
+            pose proof (AddressValue.to_Z_in_bounds addr).
+            pose proof (AddressValue.to_Z_in_bounds a).
+            unfold AddressValue.ADDR_MIN in *.
+
+            (* generalization *)
+            remember (AddressValue.to_Z a) as az.
+            clear Heqaz a.
+            rename az into a.
+
+            (* generalization *)
+            remember (AddressValue.to_Z addr) as addrz.
+            clear Heqaddrz addr.
+            rename addrz into addr.
+
+            (* size to Z *)
+            remember (Z.of_nat size) as sz.
+            assert (0<=sz) by lia.
+            clear Heqsz size.
+
+            remember (addr + sz) as a1.
+
+            pose proof (Z.mod_pos_bound a1 alignment H0).
+            pose proof (Z.mod_pos_bound a alignment H0).
+
+            pose proof (Z.mod_bound_pos_le a1 alignment).
+            autospecialize H6;[lia|].
+            autospecialize H6;[lia|].
+            pose proof (Z.mod_bound_pos_le a alignment).
+            autospecialize H7;[lia|].
+            autospecialize H7;[lia|].
+
+            remember (a1 mod alignment) as r_a1.
+
+            (* R2 vs H *)
+            clear cstr.
+            assert(0 <= a1) by lia.
+            clear Heqa1 addr R1 sz H1 H3.
+
+            (* TODO: use [align_up_correct] contradiction with [Heqb] *)
+
   Admitted.
 
   Definition memM_same_state
