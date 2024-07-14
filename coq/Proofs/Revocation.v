@@ -79,24 +79,22 @@ Section AddressValue_Lemmas.
     then addr (* already aligned *)
     else addr+(alignment - align).
 
-
   Lemma align_up_correct:
     forall ps addr : Z, 0 < ps -> (align_up addr ps) mod ps = 0.
   Proof.
-    intros b a B.
+    intros a b B.
     unfold align_up.
     break_match_goal; bool_to_prop_hyp.
     -
       assumption.
     -
-      rewrite Zdiv.Zplus_mod.
+      rewrite Z.add_sub_assoc.
       rewrite Zdiv.Zminus_mod.
       rewrite Zdiv.Zmod_mod.
-      rewrite Zdiv.Z_mod_same_full.
-      rewrite Z.sub_0_l.
-      rewrite <- Zdiv.Zplus_mod.
-      (* TODO: prove *)
-  Admitted.
+      rewrite mod_add_r by lia.
+      rewrite Z.sub_diag.
+      apply Zdiv.Zmod_0_l.
+  Qed.
 
   (** Predicate to check if address is pointer-aligned *)
   Definition addr_ptr_aligned (a:AddressValue.t) :=
@@ -1059,6 +1057,7 @@ Module CheriMemoryImplWithProofs
           zify.
           subst.
 
+          pose proof (align_up_correct alignment (AddressValue.to_Z addr + (Z.of_nat (S size) - 1)) ) as AC1.
           unfold align_up in *.
           break_if;bool_to_prop_hyp.
           --
@@ -1067,6 +1066,7 @@ Module CheriMemoryImplWithProofs
             rewrite Heqb in H.
             lia.
           --
+            specialize (AC1 H0).
             replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
 
             pose proof (AddressValue.to_Z_in_bounds addr).
@@ -1106,8 +1106,6 @@ Module CheriMemoryImplWithProofs
             clear cstr.
             assert(0 <= a1) by lia.
             clear Heqa1 addr R1 sz H1 H3.
-
-            (* TODO: use [align_up_correct] contradiction with [Heqb] *)
 
   Admitted.
 
