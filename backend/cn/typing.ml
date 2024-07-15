@@ -153,7 +153,6 @@ let simp_ctxt () =
 let make_provable loc =
   fun ({typing_context = s; solver; _} as c) ->
   let simp_ctxt = make_simp_ctxt c in
-  let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
   let f lc =
     Solver.provable
       ~loc
@@ -161,7 +160,6 @@ let make_provable loc =
       ~global:s.global
       ~assumptions:s.constraints
       ~simp_ctxt
-      ~pointer_facts
       lc
   in
   f
