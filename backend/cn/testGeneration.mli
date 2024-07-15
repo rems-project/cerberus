@@ -6,7 +6,7 @@ val main
   :  string
   -> string
   -> int
-  -> _ CF.AilSyntax.sigma
+  -> CF.GenTypes.genTypeCategory CF.AilSyntax.sigma
   -> unit Mucore.mu_file
   -> test_framework
   -> unit

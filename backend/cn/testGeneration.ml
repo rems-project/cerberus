@@ -89,7 +89,7 @@ let string_of_constraints (cs : constraints) : string =
 
 type goal = variables * members * locations * constraints
 
-let _string_of_goal ((vars, ms, locs, cs) : goal) : string =
+let string_of_goal ((vars, ms, locs, cs) : goal) : string =
   "Vars: "
   ^ string_of_variables vars
   ^ "\n"
@@ -252,7 +252,7 @@ and collect_lat_it
   | I it -> return (it, vars, ms, [], [])
 ;;
 
-let rec _collect_lat
+let rec collect_lat
   (max_depth : int)
   (sigma : _ AilSyntax.sigma)
   (prog5 : unit Mucore.mu_file)
@@ -264,16 +264,16 @@ let rec _collect_lat
   let lat_subst x v e = LAT.subst (fun _ x -> x) (IT.make_subst [ x, v ]) e in
   match lat with
   | Define ((x, tm), _, lat') ->
-    _collect_lat max_depth sigma prog5 vars ms (lat_subst x tm lat')
+    collect_lat max_depth sigma prog5 vars ms (lat_subst x tm lat')
   | Resource ((x, (ret, _)), _, lat') ->
     collect_ret max_depth sigma prog5 vars ms ret
     >>= fun (v, vars, ms, locs, cs) ->
-    _collect_lat max_depth sigma prog5 vars ms (lat_subst x v lat')
+    collect_lat max_depth sigma prog5 vars ms (lat_subst x v lat')
     >>= fun (vars, ms, locs', cs') -> return (vars, ms, locs @ locs', cs @ cs')
   | Constraint (lc, _, lat') ->
     collect_lc vars ms lc
     >>= fun (vars, ms, locs, cs) ->
-    _collect_lat max_depth sigma prog5 vars ms lat'
+    collect_lat max_depth sigma prog5 vars ms lat'
     >>= fun (vars, ms, locs', cs') -> return (vars, ms, locs @ locs', cs @ cs')
   | I _ -> return (vars, ms, [], [])
 ;;
@@ -486,7 +486,7 @@ let remove_good (cs : constraints) : constraints =
     cs
 ;;
 
-let _simplify (g : goal) : goal =
+let simplify (g : goal) : goal =
   let g = indirect_members g in
   let vars, ms, locs, cs = g in
   let g = vars, ms, locs, List.map cnf cs in
@@ -557,7 +557,7 @@ let rec string_of_gen (g : gen) : string =
 
 type gen_context = (Symbol.sym * gen) list
 
-let _string_of_gen_context (gtx : gen_context) : string =
+let string_of_gen_context (gtx : gen_context) : string =
   "{ "
   ^ String.concat
       "; "
@@ -704,7 +704,7 @@ let rec compile_structs
   if List.non_empty ms then compile_structs gtx vars ms locs else gtx
 ;;
 
-let _compile ((vars, ms, locs, cs) : goal) : gen_context =
+let compile ((vars, ms, locs, cs) : goal) : gen_context =
   (* Not owned *)
   let vars' =
     List.filter
@@ -817,7 +817,6 @@ let rec codify_gen' (g : gen) : string =
     ^ "})"
 ;;
 
-
 let codify_gen (x : Sym.sym) (g : gen) : string =
   "/* "
   ^ string_of_gen g
@@ -849,7 +848,7 @@ let codify_pbt_header
       ("\nRC_GTEST_PROP(Test" ^ String.capitalize_ascii suite ^ ", " ^ test ^ ", ()){\n")
 ;;
 
-let _codify_pbt
+let codify_pbt
   (tf : test_framework)
   (instrumentation : Core_to_mucore.instrumentation)
   (args : (Symbol.sym * Ctype.ctype) list)
@@ -874,14 +873,85 @@ let _codify_pbt
   | GTest -> output_string oc "}\n\n"
 ;;
 
-let main
-  (_output_dir : string)
-  (_filename : string)
-  (_max_depth : int)
-  (_sigma : _ AilSyntax.sigma)
-  (_prog5 : unit Mucore.mu_file)
-  (_tf : test_framework)
+let get_args (sigma : _ AilSyntax.sigma) (fun_name : Sym.sym)
+  : (Sym.sym * Ctype.ctype) list
+  =
+  let lookup_fn (x, _) = weak_sym_equal x fun_name in
+  let fn_decl = List.filter lookup_fn sigma.declarations in
+  let fn_def = List.filter lookup_fn sigma.function_definitions in
+  let arg_types, arg_syms =
+    match fn_decl, fn_def with
+    | ( (_, (_, _, Decl_function (_, _, arg_types, _, _, _))) :: _
+      , (_, (_, _, _, arg_syms, _)) :: _ ) ->
+      let arg_types = List.map (fun (_, ctype, _) -> ctype) arg_types in
+      arg_types, arg_syms
+    | _ -> [], []
+  in
+  List.combine arg_syms arg_types
+;;
+
+let rec get_lat_from_at (at : _ AT.t) : _ LAT.t =
+  match at with
+  | AT.Computational (_, _, at') -> get_lat_from_at at'
+  | AT.L lat -> lat
+;;
+
+let generate_pbt
+  (max_depth : int)
+  (sigma : _ AilSyntax.sigma)
+  (prog5 : unit Mucore.mu_file)
+  (tf : test_framework)
+  (oc : out_channel)
+  (instrumentation : Core_to_mucore.instrumentation)
   : unit
   =
-  ()
+  let args = get_args sigma instrumentation.fn in
+  let vars, ms =
+    List.fold_left
+      (fun (vars, ms) (x, ty) -> add_to_vars_ms sigma x ty vars ms)
+      ([], [])
+      args
+  in
+  output_string oc ("/* Begin:\n" ^ string_of_goal (vars, ms, [], []) ^ "*/\n\n");
+  let lat =
+    Option.get instrumentation.internal |> get_lat_from_at |> LAT.map (fun _ -> ())
+  in
+  List.iteri
+    (fun i g ->
+      output_string oc ("/* Collected:\n" ^ string_of_goal g ^ "*/\n\n");
+      let g = simplify g in
+      output_string oc ("/* Simplified:\n" ^ string_of_goal g ^ "*/\n\n");
+      let gtx = compile g in
+      output_string oc ("/* Compiled: " ^ string_of_gen_context gtx ^ "*/\n");
+      codify_pbt tf instrumentation args i oc gtx)
+    (collect_lat max_depth sigma prog5 vars ms lat)
+;;
+
+let main
+  (output_dir : string)
+  (filename : string)
+  (max_depth : int)
+  (sigma : _ AilSyntax.sigma)
+  (prog5 : unit Mucore.mu_file)
+  (tf : test_framework)
+  : unit
+  =
+  let instrumentation_list, _symbol_table =
+    Core_to_mucore.collect_instrumentation prog5
+  in
+  let instrumentation_list =
+    instrumentation_list
+    |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
+      match Cerb_location.get_filename inst.fn_loc with
+      | Some filename' -> String.equal filename filename'
+      | None -> false)
+  in
+  let oc =
+    Stdlib.open_out
+      (output_dir
+       ^ "test_"
+       ^ (filename |> Filename.basename |> Filename.chop_extension)
+       ^ ".cpp")
+  in
+  List.iter (generate_pbt max_depth sigma prog5 tf oc) instrumentation_list
 ;;
