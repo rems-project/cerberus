@@ -1285,6 +1285,8 @@ let model_evaluator solver mo =
 type model = IT.t -> IT.t option
 type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
+let empty_model = (fun it -> Some it)
+
 type model_state =
   | Model of model_with_q
   | No_model

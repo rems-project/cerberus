@@ -2,6 +2,7 @@ type solver
 type model
 type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
+val empty_model : model
 val random_seed : int ref
 val log_to_temp : bool ref
 val log_dir     : (string option) ref
