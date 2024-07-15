@@ -26,7 +26,6 @@ val provable :
   global:Global.t ->
   assumptions:Context.LCSet.t ->
   simp_ctxt:Simplify.simp_ctxt ->
-  pointer_facts:IndexTerms.t list ->
   LogicalConstraints.t ->
   [> `True | `False ]
 

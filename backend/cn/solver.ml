@@ -1039,7 +1039,7 @@ type reduction = {
 }
 
 
-let translate_goal solver assumptions _pointer_facts lc =
+let translate_goal solver assumptions lc =
   let here =  Locations.other __FUNCTION__ in
 
   let instantiated =
@@ -1305,7 +1305,7 @@ let model () =
 
 
 (** The main way to query the solver. *)
-let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
+let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
   let _ = loc in (* XXX: should we use this somehow? *)
   let s1 = { solver with globals = global } in
   let rtrue () = model_state := No_model; `True in
@@ -1313,7 +1313,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   | `True -> rtrue ()
 
   | `No_shortcut lc ->
-     let {expr; qs; extra} = translate_goal s1 assumptions pointer_facts lc
+     let {expr; qs; extra} = translate_goal s1 assumptions lc
      in
      let model_from sol =
            let defs = SMT.get_model sol in
