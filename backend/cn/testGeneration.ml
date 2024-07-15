@@ -504,6 +504,85 @@ let _simplify (g : goal) : goal =
   loop g
 ;;
 
+type gen =
+  | Arbitrary of Ctype.ctype
+  | Return of Ctype.ctype * IT.t
+  | Filter of Sym.sym * Ctype.ctype * IT.t * gen
+  | Map of Sym.sym * Ctype.ctype * IT.t * gen
+  | Alloc of Ctype.ctype * Sym.sym
+  | Struct of Ctype.ctype * (string * Sym.sym) list
+
+let rec string_of_gen (g : gen) : string =
+  match g with
+  | Arbitrary ty -> "arbitrary<" ^ string_of_ctype ty ^ ">"
+  | Return (ty, e) ->
+    "return<"
+    ^ string_of_ctype ty
+    ^ ">("
+    ^ Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ ")"
+  | Filter (x, ty, e, g') ->
+    "filter("
+    ^ "|"
+    ^ Pp_symbol.to_string_pretty x
+    ^ ": "
+    ^ string_of_ctype ty
+    ^ "| "
+    ^ Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ ", "
+    ^ string_of_gen g'
+    ^ ")"
+  | Map (x, ty, e, g') ->
+    "map("
+    ^ "|"
+    ^ Pp_symbol.to_string_pretty x
+    ^ ": "
+    ^ string_of_ctype ty
+    ^ "| "
+    ^ Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ ", "
+    ^ string_of_gen g'
+    ^ ")"
+  | Alloc (ty, x) ->
+    "alloc<" ^ string_of_ctype ty ^ ">(" ^ Pp_symbol.to_string_pretty x ^ ")"
+  | Struct (ty, ms) ->
+    "struct<"
+    ^ string_of_ctype ty
+    ^ ">("
+    ^ String.concat
+        ", "
+        (List.map (fun (x, g') -> "." ^ x ^ ": " ^ Pp_symbol.to_string_pretty g') ms)
+    ^ ")"
+;;
+
+type gen_context = (Symbol.sym * gen) list
+
+let _string_of_gen_context (gtx : gen_context) : string =
+  "{ "
+  ^ String.concat
+      "; "
+      (List.map
+         (fun (x, g) ->
+           "\"" ^ Pp_symbol.to_string_pretty x ^ "\" <- \"" ^ string_of_gen g ^ "\"")
+         gtx)
+  ^ " }"
+;;
+
+let _filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
+  match cs with
+  | c :: cs' ->
+    Filter
+      ( x
+      , ty
+      , List.fold_left
+          (fun acc c' ->
+            IT.IT (Binop (And, acc, c'), BT.Bool, Cerb_location.other __FUNCTION__))
+          c
+          cs'
+      , Arbitrary ty )
+  | [] -> Arbitrary ty
+;;
+
 type test_framework = GTest
 
 let main
