@@ -1107,7 +1107,7 @@ Module CheriMemoryImplWithProofs
             assert(0 <= a1) by lia.
             clear Heqa1 addr R1 sz H1 H3.
 
-  Admitted.
+  Admitted. (* TODO: postponed. Only needed by [memcpy_copy_data_PreservesInvariant] *)
 
   Definition memM_same_state
     {T: Type}
@@ -2703,30 +2703,102 @@ Module CheriMemoryImplWithProofs
         apply L.
   Qed.
 
-  (*
-      TODO: re-state and re-prove
+  Instance allocator_PreservesInvariant
+    (size: nat)
+    (align: Z)
 
-    Instance allocator_PreservesInvariant (size align : Z):
-      forall s,
-        PreservesInvariant mem_invariant s (allocator size align).
-    Proof.
-      intros s.
-      unfold allocator.
-      preserves_step.
-      apply bind_PreservesInvariant_same_state.
-      -
-        break_let.
-        break_match_goal; same_state_steps.
-      -
-        intros x.
-        apply put_PreservesInvariant'.
-        intros I.
-        apply mem_state_with_next_alloc_id_preserves,
-          mem_state_with_last_address_preserves,
-          mem_state_after_ghost_tags_preserves,I.
-    Qed.
-    Opaque allocator.
-   *)
+    (is_dynamic: bool)
+    (pref: CoqSymbol.prefix)
+    (ty: option CoqCtype.ctype)
+    (ro_status: readonly_status):
+
+    (0<align) ->
+    forall s,
+      PreservesInvariant mem_invariant s (allocator size align is_dynamic pref ty ro_status).
+  Proof.
+    intros AP s.
+    unfold allocator.
+    preserves_step.
+    break_if.
+    preserves_step.
+    break_if.
+    preserves_step.
+    preserves_step.
+    2: preserves_step.
+
+    apply put_PreservesInvariant'.
+    intros H.
+
+    bool_to_prop_hyp.
+
+    destruct H as [MIbase MIcap].
+    destruct_base_mem_invariant MIbase.
+    split.
+    -
+      (* base *)
+      repeat split;cbn.
+      +
+        apply ZMapProofs.map_forall_add;auto.
+      +
+        intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
+        specialize (Bnooverlap alloc_id1 alloc_id2 a1 a2 H).
+
+        apply ZMap.F.add_mapsto_iff in H0,H1.
+
+        destruct H0 as [[H0k H0v]|[H0n H0m]], H1 as [[H1k H1v]|[H1n H1m]].
+        *
+          congruence.
+        *
+          (* [a1] is new, [a2] exists *)
+          subst a1.
+          specialize (Blastaddr alloc_id2 a2 H1m). cbn in Blastaddr.
+          specialize (Bfit alloc_id2 a2 H1m). cbn in Bfit.
+          constructor.
+          cbn.
+          rewrite AddressValue.of_Z_roundtrip.
+          --
+            pose proof (AddressValue.to_Z_in_bounds (last_address s)).
+            unfold AddressValue.ADDR_MIN in *.
+            pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as H3.
+            autospecialize H3. lia.
+            admit.
+          --
+            pose proof (AddressValue.to_Z_in_bounds (last_address s)).
+            unfold AddressValue.ADDR_MIN in *.
+            pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as H3.
+            lia.
+        *
+          (* [a2] is new, [a1] exists *)
+          admit.
+        *
+          auto.
+      +
+        apply ZMapProofs.map_forall_add;auto.
+        cbn.
+        admit.
+      +
+        apply mem_state_after_ghost_tags_preserves.
+        admit.
+        split;auto.
+        split;auto.
+      +
+        apply ZMapProofs.map_forall_keys_add;[|lia].
+        intros k H.
+        specialize (Bnextallocid k H). cbn in Bnextallocid.
+        lia.
+      +
+        apply ZMapProofs.map_forall_add;cbn.
+        *
+          intros k v H.
+          admit.
+        *
+          lia.
+    -
+      cbn.
+      intros addr g H U bs F.
+      admit.
+  Admitted.
+  Opaque allocator.
 
   Instance find_live_allocation_PreservesInvariant:
     forall s a, PreservesInvariant mem_invariant s
@@ -5102,7 +5174,7 @@ Module CheriMemoryImplWithProofs
       *
         (* removing *)
         admit.
-  Admitted.
+  Admitted. (* TODO: postponed *)
 
 
   (* TODO: move *)
