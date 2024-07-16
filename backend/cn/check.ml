@@ -531,6 +531,21 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        | ty -> fail (fun _ -> {loc; msg = Mismatch {has = BT.pp ty; expect = !^"comparable type"}})
      in
      begin match op with
+     | OpRem_t ->
+        let@ () = WellTyped.ensure_base_type loc ~expect: (bt_of_pexpr pe1) (bt_of_pexpr pe2) in
+        let@ () = WellTyped.ensure_bits_type loc expect in
+        let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        let@ provable = provable loc in
+        let v2_bt = bt_of_pexpr pe2 in  
+        match provable (t_ (ne_ (v2, int_lit_ 0 v2_bt loc) loc)) with
+          | `True -> k (mod_ (v1, v2) loc)
+          | `False -> 
+            let@ model = model () in
+            let ub = CF.Undefined.UB045b_modulo_by_zero in
+            fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+          ))
      | OpEq ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
         let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
