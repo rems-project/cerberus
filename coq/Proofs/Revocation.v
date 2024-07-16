@@ -507,7 +507,7 @@ Module CheriMemoryImplWithProofs
       ZMapProofs.map_forall_keys (fun alloc_id => alloc_id < m.(next_alloc_id)) am
     (* [last_address] is sane *)
     /\
-      ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) <= AddressValue.to_Z m.(last_address)) am.
+      ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) >= AddressValue.to_Z m.(last_address)) am.
 
   Ltac destruct_base_mem_invariant H
     :=
