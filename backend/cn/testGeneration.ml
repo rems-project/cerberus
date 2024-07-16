@@ -730,54 +730,59 @@ let compile ((vars, ms, locs, cs) : goal) : gen_context =
 
 type test_framework = GTest
 
-let rec codify_it_ (e : BT.t IT.term_) : string =
-  match e with
-  | Const Null -> "nullptr"
-  | Const (Bits ((Signed, bits), n)) when bits <= 16 -> Int64.to_string (Z.to_int64 n)
-  | Const (Bits ((Unsigned, bits), n)) when bits <= 16 ->
-    Int64.to_string (Z.to_int64 n) ^ "U"
-  | Const (Bits ((Signed, bits), n)) when bits <= 32 ->
-    Int64.to_string (Z.to_int64 n) ^ "L"
-  | Const (Bits ((Unsigned, bits), n)) when bits <= 32 ->
-    string_of_int (Z.to_int n) ^ "UL"
-  | Const (Bits ((Signed, bits), n)) when bits <= 64 ->
-    Int64.to_string (Z.to_int64 n) ^ "LL"
-  | Const (Bits ((Unsigned, bits), n)) when bits <= 64 ->
-    Int64.to_string (Z.to_int64 n) ^ "ULL"
-  | Const (Bool b) -> string_of_bool b
-  | Sym x -> Sym.pp_string x
-  | Unop (Not, e') -> "(!" ^ codify_it e' ^ ")"
-  | Unop (Negate, e') -> "(-" ^ codify_it e' ^ ")"
-  | Binop (And, e1, e2) -> "(" ^ codify_it e1 ^ " && " ^ codify_it e2 ^ ")"
-  | Binop (Or, e1, e2) -> codify_it e1 ^ " || " ^ codify_it e2 ^ ")"
-  | Binop (Implies, e1, e2) -> "((!" ^ codify_it e1 ^ ") || " ^ codify_it e2 ^ ")"
-  | Binop (Add, e1, e2) -> "(" ^ codify_it e1 ^ " + " ^ codify_it e2 ^ ")"
-  | Binop (Sub, e1, e2) -> "(" ^ codify_it e1 ^ " - " ^ codify_it e2 ^ ")"
-  | Binop (Mul, e1, e2) | Binop (MulNoSMT, e1, e2) ->
-    "(" ^ codify_it e1 ^ " * " ^ codify_it e2 ^ ")"
-  | Binop (Div, e1, e2) | Binop (DivNoSMT, e1, e2) ->
-    "(" ^ codify_it e1 ^ " / " ^ codify_it e2 ^ ")"
-  | Binop (XORNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " ^ " ^ codify_it e2 ^ ")"
-  | Binop (BWAndNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " & " ^ codify_it e2 ^ ")"
-  | Binop (BWOrNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " | " ^ codify_it e2 ^ ")"
-  | Binop (ShiftLeft, e1, e2) -> "(" ^ codify_it e1 ^ " << " ^ codify_it e2 ^ ")"
-  | Binop (ShiftRight, e1, e2) -> "(" ^ codify_it e1 ^ " >> " ^ codify_it e2 ^ ")"
-  | Binop (LT, e1, e2) | Binop (LTPointer, e1, e2) ->
-    "(" ^ codify_it e1 ^ " < " ^ codify_it e2 ^ ")"
-  | Binop (LE, e1, e2) | Binop (LEPointer, e1, e2) ->
-    "(" ^ codify_it e1 ^ " <= " ^ codify_it e2 ^ ")"
-  | Binop (EQ, e1, e2) -> "(" ^ codify_it e1 ^ " == " ^ codify_it e2 ^ ")"
-  | Binop (Mod, e1, e2) -> "(" ^ codify_it e1 ^ " % " ^ codify_it e2 ^ ")"
-  | ITE (e1, e2, e3) ->
-    "(" ^ codify_it e1 ^ " ? " ^ codify_it e2 ^ " : " ^ codify_it e3 ^ ")"
-  (* *)
-  | _ -> failwith "unsupported operation"
+let rec codify_it_ (e : BT.t IT.term_) : string option =
+  try
+    Some
+      (match e with
+       | Const Null -> "nullptr"
+       | Const (Bits ((Signed, bits), n)) when bits <= 16 ->
+         Int64.to_string (Z.to_int64 n)
+       | Const (Bits ((Unsigned, bits), n)) when bits <= 16 ->
+         Int64.to_string (Z.to_int64 n) ^ "U"
+       | Const (Bits ((Signed, bits), n)) when bits <= 32 ->
+         Int64.to_string (Z.to_int64 n) ^ "L"
+       | Const (Bits ((Unsigned, bits), n)) when bits <= 32 ->
+         string_of_int (Z.to_int n) ^ "UL"
+       | Const (Bits ((Signed, bits), n)) when bits <= 64 ->
+         Int64.to_string (Z.to_int64 n) ^ "LL"
+       | Const (Bits ((Unsigned, bits), n)) when bits <= 64 ->
+         Int64.to_string (Z.to_int64 n) ^ "ULL"
+       | Const (Bool b) -> string_of_bool b
+       | Sym x -> Sym.pp_string x
+       | Unop (Not, e') -> "(!" ^ codify_it e' ^ ")"
+       | Unop (Negate, e') -> "(-" ^ codify_it e' ^ ")"
+       | Binop (And, e1, e2) -> "(" ^ codify_it e1 ^ " && " ^ codify_it e2 ^ ")"
+       | Binop (Or, e1, e2) -> codify_it e1 ^ " || " ^ codify_it e2 ^ ")"
+       | Binop (Implies, e1, e2) -> "((!" ^ codify_it e1 ^ ") || " ^ codify_it e2 ^ ")"
+       | Binop (Add, e1, e2) -> "(" ^ codify_it e1 ^ " + " ^ codify_it e2 ^ ")"
+       | Binop (Sub, e1, e2) -> "(" ^ codify_it e1 ^ " - " ^ codify_it e2 ^ ")"
+       | Binop (Mul, e1, e2) | Binop (MulNoSMT, e1, e2) ->
+         "(" ^ codify_it e1 ^ " * " ^ codify_it e2 ^ ")"
+       | Binop (Div, e1, e2) | Binop (DivNoSMT, e1, e2) ->
+         "(" ^ codify_it e1 ^ " / " ^ codify_it e2 ^ ")"
+       | Binop (XORNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " ^ " ^ codify_it e2 ^ ")"
+       | Binop (BWAndNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " & " ^ codify_it e2 ^ ")"
+       | Binop (BWOrNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " | " ^ codify_it e2 ^ ")"
+       | Binop (ShiftLeft, e1, e2) -> "(" ^ codify_it e1 ^ " << " ^ codify_it e2 ^ ")"
+       | Binop (ShiftRight, e1, e2) -> "(" ^ codify_it e1 ^ " >> " ^ codify_it e2 ^ ")"
+       | Binop (LT, e1, e2) | Binop (LTPointer, e1, e2) ->
+         "(" ^ codify_it e1 ^ " < " ^ codify_it e2 ^ ")"
+       | Binop (LE, e1, e2) | Binop (LEPointer, e1, e2) ->
+         "(" ^ codify_it e1 ^ " <= " ^ codify_it e2 ^ ")"
+       | Binop (EQ, e1, e2) -> "(" ^ codify_it e1 ^ " == " ^ codify_it e2 ^ ")"
+       | Binop (Mod, e1, e2) -> "(" ^ codify_it e1 ^ " % " ^ codify_it e2 ^ ")"
+       | ITE (e1, e2, e3) ->
+         "(" ^ codify_it e1 ^ " ? " ^ codify_it e2 ^ " : " ^ codify_it e3 ^ ")"
+       (* *)
+       | _ -> failwith __FUNCTION__)
+  with
+  | Failure str when String.equal __FUNCTION__ str -> None
 
 and codify_it (e : IT.t) : string =
   let (IT (e_, _, _)) = e in
-  try codify_it_ e_ with
-  | Failure _ ->
-    failwith ("unsupported operation" ^ Pp_utils.to_plain_pretty_string (IT.pp e))
+  match codify_it_ e_ with
+  | Some str -> str
+  | None -> failwith ("unsupported operation " ^ Pp_utils.to_plain_pretty_string (IT.pp e))
 ;;
 
 let rec codify_gen' (g : gen) : string =
