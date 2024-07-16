@@ -40,6 +40,7 @@
 <mul_expr> ::= <unary_expr>
              | <mul_expr> STAR <unary_expr>
              | <mul_expr> SLASH <unary_expr>
+             | <mul_expr> PERCENT <unary_expr>
 
 <add_expr> ::= <mul_expr>
              | <add_expr> PLUS <mul_expr>
