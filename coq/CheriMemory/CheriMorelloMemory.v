@@ -852,14 +852,17 @@ Module Type CheriMemoryImpl
     then raise (InternalErr "negative size passed to allocate_region")
     else
       let align_n := num_of_int align_int in
-      let mask := C.representable_alignment_mask size_n in
-      let size_n' := C.representable_length size_n in
-      let align_n' :=
-        Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
+      if align_n <=? 0
+      then raise (InternalErr "non-positive aligment passed to allocate_region")
+      else
+        let mask := C.representable_alignment_mask size_n in
+        let size_n' := C.representable_length size_n in
+        let align_n' :=
+          Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
-      '(alloc_id, addr) <- allocator (Z.to_nat size_n') align_n' true CoqSymbol.PrefMalloc None IsWritable ;;
-      let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
-      ret (PVconcrete c_value).
+        '(alloc_id, addr) <- allocator (Z.to_nat size_n') align_n' true CoqSymbol.PrefMalloc None IsWritable ;;
+        let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
+        ret (PVconcrete c_value).
 
   Definition allocate_object
     (tid: MC.thread_id)

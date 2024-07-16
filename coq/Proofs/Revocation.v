@@ -4129,8 +4129,11 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros s.
     unfold allocate_region.
-    (* TODO: postponed until I re-prove `allocator` *)
-  Admitted.
+    preserves_steps.
+    apply allocator_PreservesInvariant.
+    bool_to_prop_hyp.
+    lia.
+  Qed.
 
   Instance store_PreservesInvariant
     (loc : location_ocaml)
