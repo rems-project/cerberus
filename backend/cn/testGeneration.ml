@@ -15,8 +15,17 @@ module LAT = LogicalArgumentTypes
 module CF = Cerb_frontend
 open CF
 
-let weak_sym_equal s1 s2 =
-  String.equal (Pp_symbol.to_string_pretty s1) (Pp_symbol.to_string_pretty s2)
+let codify_sym (s : Sym.sym) : string =
+  let (Symbol (_, n, sd)) = s in
+  match sd with
+  | SD_Id x | SD_CN_Id x | SD_ObjectAddress x | SD_FunArgValue x -> x
+  | SD_None -> "fresh_" ^ string_of_int n
+  | _ -> failwith ("Symbol `" ^ Sym.show_raw s ^ "` cannot be codified")
+;;
+
+(** Only cares what their names in generated code will be *)
+let sym_codified_equal (s1 : Sym.sym) (s2 : Sym.sym) =
+  String.equal (codify_sym s1) (codify_sym s2)
 ;;
 
 let string_of_ctype (ty : Ctype.ctype) : string =
@@ -34,7 +43,7 @@ let string_of_variables (vars : variables) : string =
       "; "
       (List.map
          (fun (x, (ty, e)) ->
-           Pp_symbol.to_string_pretty x
+           codify_sym x
            ^ " -> ("
            ^ string_of_ctype ty
            ^ ", "
@@ -52,10 +61,7 @@ let string_of_locations (locs : locations) : string =
       "; "
       (List.map
          (fun (e, x) ->
-           "(*"
-           ^ Pp_utils.to_plain_pretty_string (IT.pp e)
-           ^ ") -> "
-           ^ Pp_symbol.to_string_pretty x)
+           "(*" ^ Pp_utils.to_plain_pretty_string (IT.pp e) ^ ") -> " ^ codify_sym x)
          locs)
   ^ " }"
 ;;
@@ -70,7 +76,7 @@ type member =
   }
 
 let string_of_member (m : member) : string =
-  "." ^ m.name ^ ": " ^ string_of_ctype m.cty ^ " = " ^ Pp_symbol.to_string_pretty m.car
+  "." ^ m.name ^ ": " ^ string_of_ctype m.cty ^ " = " ^ codify_sym m.car
 ;;
 
 type members = (Symbol.sym * member list) list
@@ -81,9 +87,7 @@ let string_of_members (ms : members) : string =
       "; "
       (List.map
          (fun (x, ms) ->
-           Pp_symbol.to_string_pretty x
-           ^ " -> {"
-           ^ String.concat ", " (List.map string_of_member ms))
+           codify_sym x ^ " -> {" ^ String.concat ", " (List.map string_of_member ms))
          ms)
   ^ " }"
 ;;
@@ -130,7 +134,7 @@ let add_to_vars_ms
   =
   match ty with
   | Ctype (_, Struct n) ->
-    (match List.assoc weak_sym_equal n sigma.tag_definitions with
+    (match List.assoc sym_codified_equal n sigma.tag_definitions with
      | _, _, StructDef (membs, _) ->
        let f (Symbol.Identifier (_, id), (_, _, _, cty)) =
          let sym' = Symbol.fresh () in
@@ -152,13 +156,13 @@ let add_to_vars_ms
           :: vars)
          @ vars'
        , (sym, member_data) :: ms )
-     | _ -> failwith ("No struct '" ^ Pp_symbol.to_string_pretty n ^ "' defined"))
+     | _ -> failwith ("No struct '" ^ codify_sym n ^ "' defined"))
   | _ ->
     ( ( sym
       , ( ty
         , IT.fresh_named
             (bt_of_ctype (Cerb_location.other __FUNCTION__) ty)
-            (Pp_symbol.to_string_pretty sym)
+            (codify_sym sym)
             (Cerb_location.other __FUNCTION__)
           |> snd ) )
       :: vars
@@ -218,7 +222,7 @@ and collect_ret
     if max_unfolds <= 0
     then []
     else (
-      let pred = List.assoc weak_sym_equal psym prog5.mu_resource_predicates in
+      let pred = List.assoc sym_codified_equal psym prog5.mu_resource_predicates in
       let args = List.combine (List.map fst pred.iargs) iargs in
       let clauses =
         Option.get pred.clauses
@@ -318,7 +322,7 @@ let eval_term (it : IT.t) : IT.const option =
 let rec remove_tautologies ((vars, ms, locs, cs) : goal) : goal =
   match cs with
   | IT (Binop (EQ, IT (Sym x, _, _), IT (Sym y, _, _)), _, _) :: cs
-    when weak_sym_equal x y -> remove_tautologies (vars, ms, locs, cs)
+    when sym_codified_equal x y -> remove_tautologies (vars, ms, locs, cs)
   | c :: cs ->
     (match eval_term c with
      | Some (Bool b) ->
@@ -361,8 +365,8 @@ let rec inline_aliasing' (g : goal) (iter : constraints) : goal =
     ->
     let vars, _, _, _ = g in
     let g =
-      match List.assoc weak_sym_equal x vars with
-      | _, IT (Sym x', _, _) when weak_sym_equal x x' ->
+      match List.assoc sym_codified_equal x vars with
+      | _, IT (Sym x', _, _) when sym_codified_equal x x' ->
         subst_goal x (IT (Sym y, info_y, loc_y)) g
       | _ -> subst_goal y (IT (Sym x, info_x, loc_x)) g
     in
@@ -394,7 +398,8 @@ let rec indirect_members_expr_ (ms : members) (e : BT.t IT.term_) : BT.t IT.term
   match e with
   | StructMember (IT (Sym x, _, _), Symbol.Identifier (_, y)) ->
     let new_sym =
-      (List.assoc weak_sym_equal x ms |> List.find (fun m -> String.equal m.name y)).car
+      (List.assoc sym_codified_equal x ms |> List.find (fun m -> String.equal m.name y))
+        .car
     in
     Sym new_sym
   | Unop (op, e') -> Unop (op, indirect_members_expr ms e')
@@ -531,7 +536,7 @@ let rec string_of_gen (g : gen) : string =
   | Filter (x, ty, e, g') ->
     "filter("
     ^ "|"
-    ^ Pp_symbol.to_string_pretty x
+    ^ codify_sym x
     ^ ": "
     ^ string_of_ctype ty
     ^ "| "
@@ -542,7 +547,7 @@ let rec string_of_gen (g : gen) : string =
   | Map (x, ty, e, g') ->
     "map("
     ^ "|"
-    ^ Pp_symbol.to_string_pretty x
+    ^ codify_sym x
     ^ ": "
     ^ string_of_ctype ty
     ^ "| "
@@ -550,15 +555,12 @@ let rec string_of_gen (g : gen) : string =
     ^ ", "
     ^ string_of_gen g'
     ^ ")"
-  | Alloc (ty, x) ->
-    "alloc<" ^ string_of_ctype ty ^ ">(" ^ Pp_symbol.to_string_pretty x ^ ")"
+  | Alloc (ty, x) -> "alloc<" ^ string_of_ctype ty ^ ">(" ^ codify_sym x ^ ")"
   | Struct (ty, ms) ->
     "struct<"
     ^ string_of_ctype ty
     ^ ">("
-    ^ String.concat
-        ", "
-        (List.map (fun (x, g') -> "." ^ x ^ ": " ^ Pp_symbol.to_string_pretty g') ms)
+    ^ String.concat ", " (List.map (fun (x, g') -> "." ^ x ^ ": " ^ codify_sym g') ms)
     ^ ")"
 ;;
 
@@ -569,8 +571,7 @@ let string_of_gen_context (gtx : gen_context) : string =
   ^ String.concat
       "; "
       (List.map
-         (fun (x, g) ->
-           "\"" ^ Pp_symbol.to_string_pretty x ^ "\" <- \"" ^ string_of_gen g ^ "\"")
+         (fun (x, g) -> "\"" ^ codify_sym x ^ "\" <- \"" ^ string_of_gen g ^ "\"")
          gtx)
   ^ " }"
 ;;
@@ -583,7 +584,7 @@ let filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
 
 let compile_gen (x : Symbol.sym) (ty : Ctype.ctype) (e : IT.t) (cs : constraints) : gen =
   match e with
-  | IT (Sym x', _, _) when weak_sym_equal x x' -> filter_gen x ty cs
+  | IT (Sym x', _, _) when sym_codified_equal x x' -> filter_gen x ty cs
   | _ -> Return (ty, e)
 ;;
 
@@ -597,7 +598,7 @@ let rec compile_singles'
   let get_loc x =
     List.find_map
       (fun (e, y) ->
-        if weak_sym_equal x y
+        if sym_codified_equal x y
         then (
           match e with
           | IT.IT (Sym z, _, _) -> Some z
@@ -608,13 +609,13 @@ let rec compile_singles'
   match iter with
   | (x, (ty, e)) :: iter' ->
     let var_in_gtx y =
-      List.find_opt (fun (z, _) -> weak_sym_equal y z) gtx |> Option.is_some
+      List.find_opt (fun (z, _) -> sym_codified_equal y z) gtx |> Option.is_some
     in
     let relevant_cs =
       List.filter
         (fun c ->
           List.exists
-            (weak_sym_equal x)
+            (sym_codified_equal x)
             (c |> IT.free_vars |> IT.SymSet.to_seq |> List.of_seq))
         cs
     in
@@ -622,7 +623,7 @@ let rec compile_singles'
       List.for_all
         (fun c ->
           List.for_all
-            (fun y -> weak_sym_equal x y || var_in_gtx y)
+            (fun y -> sym_codified_equal x y || var_in_gtx y)
             (c |> IT.free_vars |> IT.SymSet.to_seq |> List.of_seq))
         relevant_cs
     in
@@ -660,7 +661,7 @@ let rec compile_structs'
   let get_loc x =
     List.find_map
       (fun (e, y) ->
-        if weak_sym_equal x y
+        if sym_codified_equal x y
         then (
           match e with
           | IT.IT (Sym z, _, _) -> Some z
@@ -674,13 +675,13 @@ let rec compile_structs'
     let free_vars =
       not
         (List.for_all
-           (fun m -> List.assoc_opt weak_sym_equal m.car gtx |> Option.is_some)
+           (fun m -> List.assoc_opt sym_codified_equal m.car gtx |> Option.is_some)
            syms)
     in
     if free_vars
     then gtx, (x, syms) :: ms'
     else (
-      let _, (ty, _) = List.find (fun (y, _) -> weak_sym_equal x y) vars in
+      let _, (ty, _) = List.find (fun (y, _) -> sym_codified_equal x y) vars in
       let mems = List.map (fun m -> m.name, m.car) syms in
       match get_loc x with
       | Some loc ->
@@ -710,7 +711,7 @@ let compile ((vars, ms, locs, cs) : goal) : gen_context =
         List.for_all
           (fun (e, _) ->
             match e with
-            | IT.IT (Sym y, _, _) -> not (weak_sym_equal x y)
+            | IT.IT (Sym y, _, _) -> not (sym_codified_equal x y)
             | _ -> true)
           locs)
       vars
@@ -718,7 +719,7 @@ let compile ((vars, ms, locs, cs) : goal) : gen_context =
   (* Not a struct *)
   let vars' =
     List.filter
-      (fun (x, _) -> List.for_all (fun (y, _) -> not (weak_sym_equal x y)) ms)
+      (fun (x, _) -> List.for_all (fun (y, _) -> not (sym_codified_equal x y)) ms)
       vars'
   in
   let gtx = compile_singles [] vars' locs cs in
@@ -788,7 +789,7 @@ let rec codify_gen' (g : gen) : string =
     ^ ", [=]("
     ^ string_of_ctype ty
     ^ " "
-    ^ Pp_symbol.to_string_pretty x'
+    ^ codify_sym x'
     ^ "){ return "
     ^ codify_it e
     ^ "; })"
@@ -799,19 +800,16 @@ let rec codify_gen' (g : gen) : string =
     ^ ", [=]("
     ^ string_of_ctype ty
     ^ " "
-    ^ Pp_symbol.to_string_pretty x'
+    ^ codify_sym x'
     ^ "){ return "
     ^ codify_it e
     ^ "; })"
-  | Alloc (ty, x) ->
-    "rc::gen::just<" ^ string_of_ctype ty ^ ">(&" ^ Pp_symbol.to_string_pretty x ^ ")"
+  | Alloc (ty, x) -> "rc::gen::just<" ^ string_of_ctype ty ^ ">(&" ^ codify_sym x ^ ")"
   | Struct (ty, ms) ->
     "rc::gen::just<"
     ^ string_of_ctype ty
     ^ ">({ "
-    ^ String.concat
-        ", "
-        (List.map (fun (x, y) -> "." ^ x ^ " = " ^ Pp_symbol.to_string_pretty y) ms)
+    ^ String.concat ", " (List.map (fun (x, y) -> "." ^ x ^ " = " ^ codify_sym y) ms)
     ^ "})"
 ;;
 
@@ -820,7 +818,7 @@ let codify_gen (x : Sym.sym) (g : gen) : string =
   ^ string_of_gen g
   ^ " */\n"
   ^ "auto "
-  ^ Pp_symbol.to_string_pretty x
+  ^ codify_sym x
   ^ " = *"
   ^ codify_gen' g
   ^ ";\n"
@@ -855,17 +853,11 @@ let codify_pbt
   (gtx : gen_context)
   : unit
   =
-  codify_pbt_header
-    tf
-    (Pp_symbol.to_string_pretty instrumentation.fn)
-    ("Test" ^ string_of_int index)
-    oc;
+  codify_pbt_header tf (codify_sym instrumentation.fn) ("Test" ^ string_of_int index) oc;
   output_string oc (codify_gen_context gtx);
-  output_string oc (Pp_symbol.to_string_pretty instrumentation.fn);
+  output_string oc (codify_sym instrumentation.fn);
   output_string oc "(";
-  output_string
-    oc
-    (args |> List.map fst |> List.map Pp_symbol.to_string_pretty |> String.concat ", ");
+  output_string oc (args |> List.map fst |> List.map codify_sym |> String.concat ", ");
   output_string oc ");\n";
   match tf with
   | GTest -> output_string oc "}\n\n"
@@ -874,7 +866,7 @@ let codify_pbt
 let get_args (sigma : _ AilSyntax.sigma) (fun_name : Sym.sym)
   : (Sym.sym * Ctype.ctype) list
   =
-  let lookup_fn (x, _) = weak_sym_equal x fun_name in
+  let lookup_fn (x, _) = sym_codified_equal x fun_name in
   let fn_decl = List.filter lookup_fn sigma.declarations in
   let fn_def = List.filter lookup_fn sigma.function_definitions in
   let arg_types, arg_syms =
