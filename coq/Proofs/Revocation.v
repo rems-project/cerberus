@@ -2832,8 +2832,34 @@ Module CheriMemoryImplWithProofs
     -
       cbn.
       intros addr g H U bs F.
-      admit.
-  Admitted.
+      apply init_ghost_tags_spec in H.
+      destruct H.
+      +
+        (* existing *)
+        specialize (MIcap addr g H U bs F).
+        destruct MIcap as [c [M1 [a [alloc_id [M2 M3]]]]].
+        exists c.
+        split;[assumption|].
+        exists a, alloc_id.
+        split;[|assumption].
+        eapply ZMap.M.add_2.
+        specialize (Bnextallocid alloc_id).
+        autospecialize Bnextallocid.
+        {
+          eapply ZMapProofs.map_mapsto_in.
+          eauto.
+        }
+        cbn in Bnextallocid.
+        lia.
+        apply M2.
+      +
+        inv H.
+        inv H1.
+      +
+        rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                lia).
+        lia.
+  Qed.
   Opaque allocator.
 
   Instance find_live_allocation_PreservesInvariant:
