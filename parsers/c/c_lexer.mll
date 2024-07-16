@@ -444,6 +444,10 @@ and initial flags = parse
       { CN_CONSTANT (str, `U, int_of_string n) }
   | (integer_constant as str) 'i' (cn_integer_width as n)
       { CN_CONSTANT (str, `I, int_of_string n) }
+  | (integer_constant as str) "'" 'u' (cn_integer_width as n)
+      { CN_CONSTANT (str, `U, int_of_string n) }
+  | (integer_constant as str) "'" 'i' (cn_integer_width as n)
+      { CN_CONSTANT (str, `I, int_of_string n) }
     (* /For CN. *)
   | (integer_constant as str)
       { CONSTANT (Cabs.CabsInteger_const (str, None)) }
