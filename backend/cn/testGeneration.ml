@@ -1,7 +1,7 @@
 (** Test Generation
-    Handles all parts of test generation from
-    gathering constraints to building
-    generators and finally exporting C++ code.
+    Generates RapidCheck tests for functions
+    with CN specifications, where inputs are
+    guaranteed to satisfy the CN precondition.
 **)
 
 module AT = ArgumentTypes
@@ -67,16 +67,16 @@ let string_of_locations (locs : locations) : string =
 ;;
 
 (** Tracks indirection for a struct's member [name],
-    where [car] carries its value of type [cty].
+    where [carrier] carries its value of type [cty].
     **)
 type member =
   { name : string (** The name of the member *)
-  ; car : Sym.sym (** The name of the carrier*)
+  ; carrier : Sym.sym (** The name of the carrier*)
   ; cty : Ctype.ctype (** The type of the member *)
   }
 
 let string_of_member (m : member) : string =
-  "." ^ m.name ^ ": " ^ string_of_ctype m.cty ^ " = " ^ codify_sym m.car
+  "." ^ m.name ^ ": " ^ string_of_ctype m.cty ^ " = " ^ codify_sym m.carrier
 ;;
 
 type members = (Symbol.sym * member list) list
@@ -144,7 +144,7 @@ let add_to_vars_ms
                  ( sym'
                  , bt_of_ctype (Cerb_location.other __FUNCTION__) cty
                  , Cerb_location.other __FUNCTION__ ) ) )
-         , { name = id; car = sym'; cty } )
+         , { name = id; carrier = sym'; cty } )
        in
        let vars', member_data = List.split (List.map f membs) in
        ( (( sym
@@ -401,7 +401,7 @@ let rec indirect_members_expr_ (ms : members) (e : BT.t IT.term_) : BT.t IT.term
   | StructMember (IT (Sym x, _, _), Symbol.Identifier (_, y)) ->
     let new_sym =
       (List.assoc sym_codified_equal x ms |> List.find (fun m -> String.equal m.name y))
-        .car
+        .carrier
     in
     Sym new_sym
   | Unop (op, e') -> Unop (op, indirect_members_expr ms e')
@@ -677,14 +677,14 @@ let rec compile_structs'
     let free_vars =
       not
         (List.for_all
-           (fun m -> List.assoc_opt sym_codified_equal m.car gtx |> Option.is_some)
+           (fun m -> List.assoc_opt sym_codified_equal m.carrier gtx |> Option.is_some)
            syms)
     in
     if free_vars
     then gtx, (x, syms) :: ms'
     else (
       let _, (ty, _) = List.find (fun (y, _) -> sym_codified_equal x y) vars in
-      let mems = List.map (fun m -> m.name, m.car) syms in
+      let mems = List.map (fun m -> m.name, m.carrier) syms in
       match get_loc x with
       | Some loc ->
         let gen = Struct (ty, mems) in
