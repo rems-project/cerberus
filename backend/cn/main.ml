@@ -125,11 +125,11 @@ let check_input_file filename =
     if not (ext ".c" || ext ".h") then
       CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
-let maybe_generate_tests output_test_dir filename test_max_depth testing_framework ail_prog prog5 =
+let maybe_generate_tests output_test_dir filename max_unfolds testing_framework ail_prog prog5 =
   Option.iter (fun output_dir ->
     let (_, sigma) = ail_prog in
     Cerb_colour.without_colour (fun () ->
-      TestGeneration.main output_dir filename test_max_depth sigma prog5 testing_framework)
+      TestGeneration.main ~output_dir ~filename ~max_unfolds sigma prog5 testing_framework)
     ())
     output_test_dir
 
@@ -171,7 +171,7 @@ let main
       no_inherit_loc
       magic_comment_char_dollar
       output_test_dir
-      test_max_depth
+      test_max_unfolds
       testing_framework
   =
   if json then begin
@@ -228,7 +228,7 @@ let main
       print_log_file ("mucore", MUCORE prog5);
       let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
       Result.iter_error handle_error (Typing.pause_to_result paused);
-      maybe_generate_tests output_test_dir filename test_max_depth testing_framework ail_prog prog5;
+      maybe_generate_tests output_test_dir filename test_max_unfolds testing_framework ail_prog prog5;
       begin match output_decorated with
       | None ->
         Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
@@ -445,14 +445,14 @@ let lemmata =
 
 end
 
-module TestGenerationFlags = struct
+module Test_Generation_Flags = struct
 let output_test_dir =
   let doc = "[Experimental] Generate test suites and place them in the provided directory" in
   Arg.(value & opt (some string) None & info ["output-test-dir"] ~docv:"FILE" ~doc)
 
-let test_max_depth =
-  let doc = "[Experimental] Set the maximum depth of test suite generation" in
-  Arg.(value & opt int 5 & info ["test-max-depth"] ~docv:"FILE" ~doc)
+let test_max_unfolds =
+  let doc = "[Experimental] Set the maximum number of unfolds for test suite generation" in
+  Arg.(value & opt int 5 & info ["test-max-unfolds"] ~docv:"FILE" ~doc)
 
 let testing_framework =
   let doc = "[Experimental] Specify the testing framework for test suite generation " in
@@ -500,9 +500,9 @@ let () =
       Verify_flags.batch $
       Common_flags.no_inherit_loc $
       Common_flags.magic_comment_char_dollar $
-      TestGenerationFlags.output_test_dir $
-      TestGenerationFlags.test_max_depth $
-      TestGenerationFlags.testing_framework
+      Test_Generation_Flags.output_test_dir $
+      Test_Generation_Flags.test_max_unfolds $
+      Test_Generation_Flags.testing_framework
   in
   let version_str = "CN version: " ^ Cn_version.git_version in
   let cn_info = Cmd.info "cn" ~version:version_str in

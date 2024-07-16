@@ -1,3 +1,9 @@
+(** Test Generation
+    Handles all parts of test generation from
+    gathering constraints to building
+    generators and finally exporting C++ code.
+**)
+
 module AT = ArgumentTypes
 module BT = BaseTypes
 module RP = ResourcePredicates
@@ -54,7 +60,20 @@ let string_of_locations (locs : locations) : string =
   ^ " }"
 ;;
 
-type members = (Symbol.sym * (string * (Ctype.ctype * Symbol.sym)) list) list
+(** Tracks indirection for a struct's member [name],
+    where [car] carries its value of type [cty].
+    **)
+type member =
+  { name : string (** The name of the member *)
+  ; car : Sym.sym (** The name of the carrier*)
+  ; cty : Ctype.ctype (** The type of the member *)
+  }
+
+let string_of_member (m : member) : string =
+  "." ^ m.name ^ ": " ^ string_of_ctype m.cty ^ " = " ^ Pp_symbol.to_string_pretty m.car
+;;
+
+type members = (Symbol.sym * member list) list
 
 let string_of_members (ms : members) : string =
   "{ "
@@ -64,17 +83,7 @@ let string_of_members (ms : members) : string =
          (fun (x, ms) ->
            Pp_symbol.to_string_pretty x
            ^ " -> {"
-           ^ String.concat
-               ", "
-               (List.map
-                  (fun (y, (ty, z)) ->
-                    "."
-                    ^ y
-                    ^ ": "
-                    ^ string_of_ctype ty
-                    ^ " = "
-                    ^ Pp_symbol.to_string_pretty z)
-                  ms))
+           ^ String.concat ", " (List.map string_of_member ms))
          ms)
   ^ " }"
 ;;
@@ -123,21 +132,21 @@ let add_to_vars_ms
   | Ctype (_, Struct n) ->
     (match List.assoc weak_sym_equal n sigma.tag_definitions with
      | _, _, StructDef (membs, _) ->
-       let f (Symbol.Identifier (_, id), (_, _, _, ty)) =
+       let f (Symbol.Identifier (_, id), (_, _, _, cty)) =
          let sym' = Symbol.fresh () in
          ( ( sym'
-           , ( ty
-             , IT.IT
-                 ( Sym sym'
-                 , bt_of_ctype (Cerb_location.other __FUNCTION__) ty
+           , ( cty
+             , IT.sym_
+                 ( sym'
+                 , bt_of_ctype (Cerb_location.other __FUNCTION__) cty
                  , Cerb_location.other __FUNCTION__ ) ) )
-         , (id, (ty, sym')) )
+         , { name = id; car = sym'; cty } )
        in
        let vars', member_data = List.split (List.map f membs) in
        ( (( sym
           , ( ty
-            , IT.IT
-                ( Sym sym
+            , IT.sym_
+                ( sym
                 , bt_of_ctype (Cerb_location.other __FUNCTION__) ty
                 , Cerb_location.other __FUNCTION__ ) ) )
           :: vars)
@@ -168,7 +177,7 @@ let collect_lc (vars : variables) (ms : members) (lc : LC.t)
 ;;
 
 let rec collect_clauses
-  (max_depth : int)
+  (max_unfolds : int)
   (sigma : _ AilSyntax.sigma)
   (prog5 : unit Mucore.mu_file)
   (vars : variables)
@@ -177,23 +186,19 @@ let rec collect_clauses
   : (IT.t * variables * members * locations * constraints) list
   =
   match cs with
-  | c :: cs' ->
+  | cl :: cls' ->
     let rest =
       List.map
         (fun (v, vars, ms, locs, cs) ->
-          ( v
-          , vars
-          , ms
-          , locs
-          , IT.IT (Unop (Not, c.guard), BT.Bool, Cerb_location.other __FUNCTION__) :: cs ))
-        (collect_clauses max_depth sigma prog5 vars ms cs')
+          v, vars, ms, locs, IT.not_ cl.guard (Cerb_location.other __FUNCTION__) :: cs)
+        (collect_clauses max_unfolds sigma prog5 vars ms cls')
     in
-    collect_lat_it max_depth sigma prog5 vars ms c.packing_ft
-    >>= fun (v, vars, ms, locs, cs) -> (v, vars, ms, locs, c.guard :: cs) :: rest
+    collect_lat_it max_unfolds sigma prog5 vars ms cl.packing_ft
+    >>= fun (v, vars, ms, locs, cs) -> (v, vars, ms, locs, cl.guard :: cs) :: rest
   | [] -> []
 
 and collect_ret
-  (max_depth : int)
+  (max_unfolds : int)
   (sigma : _ AilSyntax.sigma)
   (prog5 : unit Mucore.mu_file)
   (vars : variables)
@@ -207,10 +212,10 @@ and collect_ret
     let ty = Sctypes.to_ctype ty in
     let vars, ms = add_to_vars_ms sigma sym ty vars ms in
     let l = Cerb_location.other __FUNCTION__ in
-    return (IT.IT (Sym sym, bt_of_ctype l ty, l), vars, ms, [ pointer, sym ], [])
+    return (IT.sym_ (sym, bt_of_ctype l ty, l), vars, ms, [ pointer, sym ], [])
   | P { name = Owned (_, _); _ } -> failwith "Incorrect number of arguments for `Owned`"
   | P { name = PName psym; pointer; iargs } ->
-    if max_depth <= 0
+    if max_unfolds <= 0
     then []
     else (
       let pred = List.assoc weak_sym_equal psym prog5.mu_resource_predicates in
@@ -223,11 +228,11 @@ and collect_ret
                 (fun (x, v) acc -> RP.subst_clause (IT.make_subst [ x, v ]) acc)
                 args)
       in
-      collect_clauses (max_depth - 1) sigma prog5 vars ms clauses)
+      collect_clauses (max_unfolds - 1) sigma prog5 vars ms clauses)
   | Q _ -> failwith "`each` not supported"
 
 and collect_lat_it
-  (max_depth : int)
+  (max_unfolds : int)
   (sigma : _ AilSyntax.sigma)
   (prog5 : unit Mucore.mu_file)
   (vars : variables)
@@ -238,22 +243,22 @@ and collect_lat_it
   let lat_subst x v e = LAT.subst IT.subst (IT.make_subst [ x, v ]) e in
   match lat with
   | Define ((x, tm), _, lat') ->
-    collect_lat_it max_depth sigma prog5 vars ms (lat_subst x tm lat')
+    collect_lat_it max_unfolds sigma prog5 vars ms (lat_subst x tm lat')
   | Resource ((x, (ret, _)), _, lat') ->
-    collect_ret max_depth sigma prog5 vars ms ret
+    collect_ret max_unfolds sigma prog5 vars ms ret
     >>= fun (v, vars, ms, locs, cs) ->
-    collect_lat_it max_depth sigma prog5 vars ms (lat_subst x v lat')
+    collect_lat_it max_unfolds sigma prog5 vars ms (lat_subst x v lat')
     >>= fun (v', vars, ms, locs', cs') -> return (v', vars, ms, locs @ locs', cs @ cs')
   | Constraint (lc, _, lat') ->
     collect_lc vars ms lc
     >>= fun (vars, ms, locs, cs) ->
-    collect_lat_it max_depth sigma prog5 vars ms lat'
+    collect_lat_it max_unfolds sigma prog5 vars ms lat'
     >>= fun (v, vars, ms, locs', cs') -> return (v, vars, ms, locs @ locs', cs @ cs')
   | I it -> return (it, vars, ms, [], [])
 ;;
 
 let rec collect_lat
-  (max_depth : int)
+  (max_unfolds : int)
   (sigma : _ AilSyntax.sigma)
   (prog5 : unit Mucore.mu_file)
   (vars : variables)
@@ -264,16 +269,16 @@ let rec collect_lat
   let lat_subst x v e = LAT.subst (fun _ x -> x) (IT.make_subst [ x, v ]) e in
   match lat with
   | Define ((x, tm), _, lat') ->
-    collect_lat max_depth sigma prog5 vars ms (lat_subst x tm lat')
+    collect_lat max_unfolds sigma prog5 vars ms (lat_subst x tm lat')
   | Resource ((x, (ret, _)), _, lat') ->
-    collect_ret max_depth sigma prog5 vars ms ret
+    collect_ret max_unfolds sigma prog5 vars ms ret
     >>= fun (v, vars, ms, locs, cs) ->
-    collect_lat max_depth sigma prog5 vars ms (lat_subst x v lat')
+    collect_lat max_unfolds sigma prog5 vars ms (lat_subst x v lat')
     >>= fun (vars, ms, locs', cs') -> return (vars, ms, locs @ locs', cs @ cs')
   | Constraint (lc, _, lat') ->
     collect_lc vars ms lc
     >>= fun (vars, ms, locs, cs) ->
-    collect_lat max_depth sigma prog5 vars ms lat'
+    collect_lat max_unfolds sigma prog5 vars ms lat'
     >>= fun (vars, ms, locs', cs') -> return (vars, ms, locs @ locs', cs @ cs')
   | I _ -> return (vars, ms, [], [])
 ;;
@@ -388,7 +393,9 @@ let rec remove_nonnull_for_locs ((vars, ms, locs, cs) : goal) : goal =
 let rec indirect_members_expr_ (ms : members) (e : BT.t IT.term_) : BT.t IT.term_ =
   match e with
   | StructMember (IT (Sym x, _, _), Symbol.Identifier (_, y)) ->
-    let new_sym = List.assoc weak_sym_equal x ms |> List.assoc String.equal y |> snd in
+    let new_sym =
+      (List.assoc weak_sym_equal x ms |> List.find (fun m -> String.equal m.name y)).car
+    in
     Sym new_sym
   | Unop (op, e') -> Unop (op, indirect_members_expr ms e')
   | Binop (op, e1, e2) ->
@@ -570,16 +577,7 @@ let string_of_gen_context (gtx : gen_context) : string =
 
 let filter_gen (x : Symbol.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
   match cs with
-  | c :: cs' ->
-    Filter
-      ( x
-      , ty
-      , List.fold_left
-          (fun acc c' ->
-            IT.IT (Binop (And, acc, c'), BT.Bool, Cerb_location.other __FUNCTION__))
-          c
-          cs'
-      , Arbitrary ty )
+  | _ :: _ -> Filter (x, ty, IT.and_ cs (Cerb_location.other __FUNCTION__), Arbitrary ty)
   | [] -> Arbitrary ty
 ;;
 
@@ -676,14 +674,14 @@ let rec compile_structs'
     let free_vars =
       not
         (List.for_all
-           (fun (_, (_, sym)) -> List.assoc_opt weak_sym_equal sym gtx |> Option.is_some)
+           (fun m -> List.assoc_opt weak_sym_equal m.car gtx |> Option.is_some)
            syms)
     in
     if free_vars
     then gtx, (x, syms) :: ms'
     else (
       let _, (ty, _) = List.find (fun (y, _) -> weak_sym_equal x y) vars in
-      let mems = List.map (fun (id, (_, sym)) -> id, sym) syms in
+      let mems = List.map (fun m -> m.name, m.car) syms in
       match get_loc x with
       | Some loc ->
         let gen = Struct (ty, mems) in
@@ -897,7 +895,7 @@ let rec get_lat_from_at (at : _ AT.t) : _ LAT.t =
 ;;
 
 let generate_pbt
-  (max_depth : int)
+  (max_unfolds : int)
   (sigma : _ AilSyntax.sigma)
   (prog5 : unit Mucore.mu_file)
   (tf : test_framework)
@@ -924,13 +922,13 @@ let generate_pbt
       let gtx = compile g in
       output_string oc ("/* Compiled: " ^ string_of_gen_context gtx ^ "*/\n");
       codify_pbt tf instrumentation args i oc gtx)
-    (collect_lat max_depth sigma prog5 vars ms lat)
+    (collect_lat max_unfolds sigma prog5 vars ms lat)
 ;;
 
 let main
-  (output_dir : string)
-  (filename : string)
-  (max_depth : int)
+  ~(output_dir : string)
+  ~(filename : string)
+  ~(max_unfolds : int)
   (sigma : _ AilSyntax.sigma)
   (prog5 : unit Mucore.mu_file)
   (tf : test_framework)
@@ -953,5 +951,5 @@ let main
        ^ (filename |> Filename.basename |> Filename.chop_extension)
        ^ ".cpp")
   in
-  List.iter (generate_pbt max_depth sigma prog5 tf oc) instrumentation_list
+  List.iter (generate_pbt max_unfolds sigma prog5 tf oc) instrumentation_list
 ;;
