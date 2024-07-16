@@ -2731,66 +2731,102 @@ Module CheriMemoryImplWithProofs
 
     bool_to_prop_hyp.
 
+    (* These are used in different proof branches below *)
+    pose proof (AddressValue.to_Z_in_bounds (last_address s)) as LB.
+
+    pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as LM.
+    autospecialize LM. lia.
+
+
     destruct H as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
     split.
     -
       (* base *)
       repeat split;cbn.
-      +
+      + (* Bdead *)
         apply ZMapProofs.map_forall_add;auto.
-      +
+      + (* Bnooverlap *)
         intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
         specialize (Bnooverlap alloc_id1 alloc_id2 a1 a2 H).
 
         apply ZMap.F.add_mapsto_iff in H0,H1.
-
         destruct H0 as [[H0k H0v]|[H0n H0m]], H1 as [[H1k H1v]|[H1n H1m]].
-        *
+        * (* next_alloc_id s = alloc_id1 = alloc_id2 *)
           congruence.
         *
           (* [a1] is new, [a2] exists *)
+          clear MIcap Bnooverlap.
           subst a1.
           specialize (Blastaddr alloc_id2 a2 H1m). cbn in Blastaddr.
           specialize (Bfit alloc_id2 a2 H1m). cbn in Bfit.
-          constructor.
+          specialize (Bnextallocid alloc_id2).
+          autospecialize Bnextallocid.
+          {
+            eapply ZMapProofs.map_mapsto_in.
+            eauto.
+          }
+          cbn in Bnextallocid.
+
+          unfold allocations_do_no_overlap.
           cbn.
-          rewrite AddressValue.of_Z_roundtrip.
-          --
-            pose proof (AddressValue.to_Z_in_bounds (last_address s)).
-            unfold AddressValue.ADDR_MIN in *.
-            pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as H3.
-            autospecialize H3. lia.
-            admit.
-          --
-            pose proof (AddressValue.to_Z_in_bounds (last_address s)).
-            unfold AddressValue.ADDR_MIN in *.
-            pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as H3.
-            lia.
+          left.
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+            lia).
+          lia.
         *
           (* [a2] is new, [a1] exists *)
-          admit.
-        *
+          clear MIcap Bnooverlap.
+          subst a2.
+          specialize (Blastaddr alloc_id1 a1 H0m). cbn in Blastaddr.
+          specialize (Bfit alloc_id1 a1 H0m). cbn in Bfit.
+          specialize (Bnextallocid alloc_id1).
+          autospecialize Bnextallocid.
+          {
+            eapply ZMapProofs.map_mapsto_in.
+            eauto.
+          }
+          cbn in Bnextallocid.
+
+          unfold allocations_do_no_overlap.
+          cbn.
+          right.
+          left.
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                  lia).
+          lia.
+        * (* both allocations already exist *)
           auto.
-      +
+      + (* Bfit *)
+        clear MIcap.
         apply ZMapProofs.map_forall_add;auto.
         cbn.
-        admit.
-      +
+        rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                lia).
+        lia.
+      + (* Balign *)
         apply mem_state_after_ghost_tags_preserves.
-        admit.
-        split;auto.
-        split;auto.
-      +
+        --
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                  lia).
+          lia.
+        --
+          repeat split;auto.
+      + (* Bnextallocid *)
         apply ZMapProofs.map_forall_keys_add;[|lia].
         intros k H.
         specialize (Bnextallocid k H). cbn in Bnextallocid.
         lia.
-      +
+      + (* Blastaddr *)
+        clear MIcap.
         apply ZMapProofs.map_forall_add;cbn.
         *
           intros k v H.
-          admit.
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+            lia).
+          specialize (Blastaddr k v H).
+          cbn in Blastaddr.
+          lia.
         *
           lia.
     -
