@@ -20,7 +20,7 @@ let opt_key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 let continue_with (opts : opt list) cfg =
   assert (List.length opts <= String.length opt_key);
-  let xs = List.mapi (fun i opt ->
+  let xs = List.mapi ~f:(fun i opt ->
     let c = String.get opt_key i in
     let s = String.make 1 c in
     Pp.print stdout (Pp.string (s ^ " to continue with:"));
@@ -28,7 +28,7 @@ let continue_with (opts : opt list) cfg =
     (c, opt.continue)) opts in
   let next = if cfg.arc_index >= String.length cfg.arc
     then None
-    else List.find_opt (fun (c, _) -> Char.equal c (String.get cfg.arc cfg.arc_index)) xs
+    else List.find ~f:(fun (c, _) -> Char.equal c (String.get cfg.arc cfg.arc_index)) xs
   in
   match next with
   | None -> return ()
@@ -66,11 +66,11 @@ let bool_subterms1 t = match IT.term t with
   | _ -> []
 
 let rec bool_subterms_of t =
-  t :: List.concat (List.map bool_subterms_of (bool_subterms1 t))
+  t :: List.concat (List.map ~f:bool_subterms_of (bool_subterms1 t))
 
 let constraint_ts () =
   let@ cs = get_cs () in
-  let ts = List.filter_map (function
+  let ts = List.filter_map ~f:(function
     | LC.T t -> Some t
     | _ -> None) (LCSet.elements cs)
   in
@@ -87,11 +87,11 @@ let pred_args t = match IT.term t with
 let split_eq x y = match (IT.term x, IT.term y) with
   | (IT.MapGet (m1, x1), IT.MapGet (m2, x2)) -> Some [(m1, m2); (x1, x2)]
   | (IT.Apply (nm, xs), IT.Apply (nm2, ys)) when Sym.equal nm nm2 ->
-    Some (List.map2 (fun x y -> (x, y)) xs ys)
+    Some (List.map2_exn ~f:(fun x y -> (x, y)) xs ys)
   | (IT.Constructor (nm, xs), IT.Constructor (nm2, ys)) when Sym.equal nm nm2 ->
-    let xs = List.sort WellTyped.compare_by_fst_id xs in
-    let ys = List.sort WellTyped.compare_by_fst_id ys in
-    Some (List.map2 (fun (_, x) (_, y) -> (x, y)) xs ys)
+    let xs = List.Old.sort WellTyped.compare_by_fst_id xs in
+    let ys = List.Old.sort WellTyped.compare_by_fst_id ys in
+    Some (List.map2_exn ~f:(fun (_, x) (_, y) -> (x, y)) xs ys)
   | _ -> None
 
 (* investigate the provability of a term *)
@@ -136,7 +136,7 @@ let rec investigate_term cfg t =
 
 and investigate_eq_side _cfg (side_nm, t, t2) =
   let@ eq_group = value_eq_group None t in
-  let xs = ITSet.elements eq_group |> List.filter (fun x -> not (IT.equal t x)) in
+  let xs = ITSet.elements eq_group |> List.filter ~f:(fun x -> not (IT.equal t x)) in
   let open Pp in
   let clique_opts = match xs with
     | [] ->
@@ -146,7 +146,7 @@ and investigate_eq_side _cfg (side_nm, t, t2) =
     print stdout (string side_nm ^^^ string "is in an equality group of size"
       ^^^ int (List.length xs + 1) ^^^ string "with:" ^^^ brackets (list IT.pp xs));
     [{doc = string "switch with another from" ^^^ string side_nm ^^^ string "eq-group";
-      continue = continue_with (List.map (fun t ->
+      continue = continue_with (List.map ~f:(fun t ->
           {doc = IT.pp t; continue = fun cfg ->
               let eq = IT.eq_ (t, t2) @@ Locations.other __FUNCTION__ in
               print stdout (bold "investigating eq:" ^^^ IT.pp eq);
@@ -163,7 +163,7 @@ and investigate_trans_eq t cfg =
     | Some (x, y) -> if BT.equal (IT.bt x) (IT.bt t) then [x; y] @ acc else acc
   ) [] [] cs in
   let opt_xs = eq_xs
-    |> List.filter (fun x -> Option.is_some (split_eq t x))
+    |> List.filter ~f:(fun x -> Option.is_some (split_eq t x))
     |> ITSet.of_list |> ITSet.elements in
   let opt_of x =
     let eq = (IT.eq_ (t, x)) @@ Locations.other __FUNCTION__ in

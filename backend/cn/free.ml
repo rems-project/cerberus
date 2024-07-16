@@ -6,7 +6,7 @@ module SymSet = Set.Make(Sym)
 
 
 let union_map (f : 'a -> SymSet.t) (xs : 'a list) =
-  List.fold_left (fun acc x ->
+  List.Old.fold_left (fun acc x ->
       SymSet.union (f x) acc
     ) SymSet.empty xs
 

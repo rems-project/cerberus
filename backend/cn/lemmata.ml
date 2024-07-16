@@ -18,8 +18,8 @@ module SymMap = Map.Make(Sym)
 
 module StringList = struct
   type t = string list
-  let compare = List.compare String.compare
-  let equal = List.equal String.equal
+  let compare = List.Old.compare String.compare
+  let equal = List.Old.equal String.equal
 end
 module StringListMap = Map.Make(StringList)
 module IntMap = Map.Make(Int)
@@ -59,7 +59,7 @@ module PrevDefs = struct
     {st with dt_params = x :: st.dt_params})
 
   let get_dt_param it m_nm = bind get (fun st ->
-    return (List.find_opt (fun (it2, m2, _sym) -> IT.equal it it2 && Id.equal m_nm m2)
+    return (List.find ~f:(fun (it2, m2, _sym) -> IT.equal it it2 && Id.equal m_nm m2)
         st.dt_params |> Option.map (fun (_, _, sym) -> sym)))
 
   let debug_dt_params i = bind get (fun st ->
@@ -119,7 +119,7 @@ let release_failures () =
   let@ st = get in
   match st.failures with
   | [] -> return ()
-  | fs -> (fun _ -> Result.Error (List.hd (List.rev fs)))
+  | fs -> (fun _ -> Result.Error (List.hd_exn (List.rev fs)))
 
 (* set of functions with boolean return type that we want to use
    as toplevel propositions, i.e. return Prop rather than bool
@@ -224,11 +224,11 @@ let scan (ftyp : AT.lemmat) =
 
 let struct_layout_field_bts xs =
   let open Memory in
-  let xs2 = List.filter (fun x -> Option.is_some x.member_or_padding) xs
-    |> List.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
-    |> List.filter_map (fun x -> x.member_or_padding)
+  let xs2 = List.filter ~f:(fun x -> Option.is_some x.member_or_padding) xs
+    |> List.Old.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
+    |> List.filter_map ~f:(fun x -> x.member_or_padding)
   in
-  (List.map fst xs2, List.map (fun x -> Memory.bt_of_sct (snd x)) xs2)
+  (List.map ~f:fst xs2, List.map ~f:(fun x -> Memory.bt_of_sct (snd x)) xs2)
 
 let get_struct_xs struct_decls tag = match SymMap.find_opt tag struct_decls with
   | Some def -> struct_layout_field_bts def
@@ -281,7 +281,7 @@ let add_list_mono_datatype (bt, nm) global =
 
 let mono_list_bt list_mono bt = Option.bind (BT.is_list_bt bt)
   (fun arg_bt -> Option.bind
-    (List.find_opt (fun (bt2, _) -> BT.equal arg_bt bt2) list_mono)
+    (List.find ~f:(fun (bt2, _) -> BT.equal arg_bt bt2) list_mono)
     (fun (_, dt_sym) -> Some (BT.Datatype dt_sym)))
 
 let monomorphise_dt_lists global =
@@ -290,15 +290,15 @@ let monomorphise_dt_lists global =
     | _ -> None
   in
   let all_dt_types = SymMap.fold (fun _ dt_info ss ->
-        List.filter_map dt_lists (List.map snd dt_info.BT.dt_all_params) @ ss)
+        List.filter_map ~f:dt_lists (List.map ~f:snd dt_info.BT.dt_all_params) @ ss)
     global.Global.datatypes [] in
   let uniq_dt_types = SymSet.elements (SymSet.of_list all_dt_types) in
   let new_sym sym = (sym, Sym.fresh_named ("list_of_" ^ Sym.pp_string sym)) in
-  let new_syms = List.map new_sym uniq_dt_types in
-  let list_mono = List.map (fun (s1, s2) -> (BT.Datatype s1, s2)) new_syms in
-  let global = List.fold_right add_list_mono_datatype list_mono global in
+  let new_syms = List.map ~f:new_sym uniq_dt_types in
+  let list_mono = List.map ~f:(fun (s1, s2) -> (BT.Datatype s1, s2)) new_syms in
+  let global = List.Old.fold_right add_list_mono_datatype list_mono global in
   let map_bt bt = Option.value ~default:bt (mono_list_bt list_mono bt) in
-  let map_mems = List.map (fun (nm, bt) -> (nm, map_bt bt)) in
+  let map_mems = List.map ~f:(fun (nm, bt) -> (nm, map_bt bt)) in
   let datatypes = SymMap.map (fun info ->
     BT.{info with dt_all_params = map_mems info.dt_all_params}) global.Global.datatypes in
   let datatype_constrs = SymMap.map (fun info ->
@@ -308,15 +308,15 @@ let monomorphise_dt_lists global =
 
 let rec new_nm s nms i =
   let s2 = s ^ "_" ^ Int.to_string i in
-  if List.exists (String.equal s2) nms
+  if List.exists ~f:(String.equal s2) nms
   then new_nm s nms (i + 1)
   else s2
 
 let alpha_rename_if_pp_same s body =
   let vs = IT.free_vars body in
-  let other_nms = List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
-    |> List.map Sym.pp_string in
-  if List.exists (String.equal (Sym.pp_string s)) other_nms
+  let other_nms = List.filter ~f:(fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
+    |> List.map ~f:Sym.pp_string in
+  if List.exists ~f:(String.equal (Sym.pp_string s)) other_nms
   then begin
     Pp.debug 6 (lazy (Pp.item "doing rename"
         (Pp.typ (Sym.pp s) (Pp.braces (Pp.list Pp.string other_nms)))));
@@ -331,10 +331,10 @@ let it_adjust (global : Global.t) it =
     let loc = IT.loc t in
     match IT.term t with
         | IT.Binop (And, x1, x2) ->
-            let xs = List.map f [x1; x2] |> List.partition IT.is_true |> snd in
+            let xs = List.map ~f:f [x1; x2] |> List.partition_tf ~f:IT.is_true |> snd in
             IT.and_ xs loc
         | IT.Binop (Or, x1, x2) ->
-            let xs = List.map f [x1; x2] |> List.partition IT.is_false |> snd in
+            let xs = List.map ~f:f [x1; x2] |> List.partition_tf ~f:IT.is_false |> snd in
             IT.or_ xs loc
         | IT.Binop (EQ, x, y) ->
             let x = f x in
@@ -392,22 +392,22 @@ let tuple_syn xs =
   parens (flow (comma ^^^ !^ "") xs)
 
 let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.document) (ys : 'a list) =
-  let n_ys = List.mapi (fun i y -> (i, y)) ys in
-  match List.find_opt (fun (_i, y) -> eq x y) n_ys with
+  let n_ys = List.mapi ~f:(fun i y -> (i, y)) ys in
+  match List.find ~f:(fun (_i, y) -> eq x y) n_ys with
     | None -> fail "tuple element not found" (pp x)
     | Some (i, _) -> (i, List.length ys)
 
 let tuple_element t (i, len) =
   let open Pp in
   let nm i = string ("x_t_" ^ Int.to_string i) in
-  let lhs = string "'" ^^ tuple_syn (List.init len nm) in
+  let lhs = string "'" ^^ tuple_syn (List.Old.init len nm) in
   parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^ break 1 ^^ nm i)
 
 let tuple_upd_element t (i, len) y =
   let open Pp in
   let nm i = string ("x_t_" ^ Int.to_string i) in
-  let lhs = string "'" ^^ tuple_syn (List.init len nm) in
-  let rhs = tuple_syn (List.init len (fun j -> if j = i then y else nm j)) in
+  let lhs = string "'" ^^ tuple_syn (List.Old.init len nm) in
+  let rhs = tuple_syn (List.Old.init len (fun j -> if j = i then y else nm j)) in
   parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^ break 1 ^^ rhs)
 
 let rets s = return (Pp.string s)
@@ -431,7 +431,7 @@ let defn nm args opt_ty rhs =
   ^^ hardline ^^ !^"    " ^^ rhs ^^ !^ "." ^^ hardline
 
 let fun_upd_def =
-  defn "fun_upd" (List.map Pp.string ["{A B : Type}"; "(eq : A -> A -> bool)";
+  defn "fun_upd" (List.map ~f:Pp.string ["{A B : Type}"; "(eq : A -> A -> bool)";
         "(f : A -> B)"; "x"; "y"; "z"]) None
     (Pp.string "if eq x z then y else f z")
 
@@ -447,7 +447,7 @@ let gen_ensure section k doc xs =
     let st = add_to_section section fin_doc st in
     set {st with present = StringListMap.add k xs st.present}
   | Some ys ->
-    if List.equal Sym.equal xs ys
+    if List.Old.equal Sym.equal xs ys
     then return ()
     else fail "gen_ensure: mismatch/redef" (Pp.list Pp.string k)
 
@@ -473,7 +473,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
     let@ enc_fld_bts = ListM.mapM f fld_bts in
     return (tuple_coq_ty (Sym.pp tag) enc_fld_bts)
   | BaseTypes.Record mems ->
-    let@ enc_mem_bts = ListM.mapM f (List.map snd mems) in
+    let@ enc_mem_bts = ListM.mapM f (List.map ~f:snd mems) in
     return (tuple_coq_ty (!^ "record") enc_mem_bts)
   | BaseTypes.Loc -> return (!^ "CN_Lib.Loc")
   | BaseTypes.Datatype tag ->
@@ -489,10 +489,10 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
 
 and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
   let family = Global.mutual_datatypes global dt_tag in
-  let dt_tag = List.hd family in
+  let dt_tag = List.hd_exn family in
   let inf = (loc, Pp.typ (Pp.string "datatype") (Sym.pp dt_tag)) in
   let bt_to_coq2 bt = match BT.is_datatype_bt bt with
-    | Some dt_tag2 -> if List.exists (Sym.equal dt_tag2) family
+    | Some dt_tag2 -> if List.exists ~f:(Sym.equal dt_tag2) family
       then return (Sym.pp dt_tag2)
       else bt_to_coq global list_mono inf bt
     | _ -> bt_to_coq global list_mono inf bt
@@ -513,7 +513,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
               hardline ^^ flow hardline c_lines)
       ) family in
       return (flow hardline
-          (List.mapi (fun i doc -> !^ (if i = 0 then "  Inductive" else "    with") ^^
+          (List.mapi ~f:(fun i doc -> !^ (if i = 0 then "  Inductive" else "    with") ^^
               hardline ^^ doc) dt_eqs) ^^ !^ "." ^^ hardline)
   )) [dt_tag]
 
@@ -526,7 +526,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
   let cons_line c =
     let c_info = SymMap.find c global.Global.datatype_constrs in
     let pats =
-      List.map (fun (m2, _) ->
+      List.map ~f:(fun (m2, _) ->
         if Id.equal mem_tag m2
         then Id.pp mem_tag
         else Pp.string "_"
@@ -534,7 +534,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
     in
     let open Pp in
     !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^
-    if List.exists (Id.equal mem_tag) (List.map fst c_info.c_params)
+    if List.exists ~f:(Id.equal mem_tag) (List.map ~f:fst c_info.c_params)
     then Id.pp mem_tag
     else !^"default"
   in
@@ -544,7 +544,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
       let open Pp in
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag)); !^ "default"] (Some bt_doc)
-      (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
+      (flow hardline (!^ "match dt with" :: List.map ~f:cons_line dt_info.dt_constrs @ eline)))
     )) [dt_tag]
   in
   return op_nm
@@ -555,7 +555,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
   let dt_info = SymMap.find dt_tag global.Global.datatypes in
   let cons_line c =
     let c_info = SymMap.find c global.Global.datatype_constrs in
-    let pats = List.map (fun (m2, _) -> if Id.equal mem_tag m2
+    let pats = List.map ~f:(fun (m2, _) -> if Id.equal mem_tag m2
         then Id.pp mem_tag else Pp.string "_") c_info.c_params in
     let open Pp in
     !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^ Id.pp mem_tag
@@ -568,7 +568,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
       let open Pp in
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag))] (Some bt_doc)
-          (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
+          (flow hardline (!^ "match dt with" :: List.map ~f:cons_line dt_info.dt_constrs @ eline)))
   )) [dt_tag]
   in
   return op_nm
@@ -606,10 +606,10 @@ let ensure_tuple_op is_upd nm (ix, l) =
   let doc = lazy (
     let open Pp in
     let ty i = !^ ("T_" ^ Int.to_string i) in
-    let t_ty = tuple_coq_ty (!^ op_nm) (List.init l ty) in
+    let t_ty = tuple_coq_ty (!^ op_nm) (List.Old.init l ty) in
     let t = parens (typ (!^ "t") t_ty) in
     let x = parens (typ (!^ "x") (ty ix)) in
-    let infer = !^"{" ^^ flow (!^ " ") (List.init l ty) ^^ colon ^^^ !^"Type}" in
+    let infer = !^"{" ^^ flow (!^ " ") (List.Old.init l ty) ^^ colon ^^^ !^"Type}" in
     return (if is_upd then defn op_nm [infer; t; x]
              None (tuple_upd_element t (ix, l) x)
         else defn op_nm [infer; t] None (tuple_element t (ix, l)))
@@ -629,7 +629,7 @@ let ensure_pred global list_mono loc name aux =
       let open Pp in
       let@ ret_ty = if fun_prop_ret global name then return (!^ "Prop")
         else bt_to_coq global list_mono inf def.return_bt in
-      let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
+      let ty = List.Old.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
       return (!^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline)
     )) []
   | Def body ->
@@ -705,7 +705,7 @@ let rec pat_to_coq = function
   | Terms.Pat (Terms.PWild, _, _) -> rets "_"
   | Terms.Pat (Terms.PConstructor (c_nm, id_ps), _, _) ->
     (* assuming here that the id's are in canonical order *)
-    parensM (build ([return (Sym.pp c_nm)] @ List.map pat_to_coq (List.map snd id_ps)))
+    parensM (build ([return (Sym.pp c_nm)] @ List.map ~f:pat_to_coq (List.map ~f:snd id_ps)))
 
 let enc_z z = if Z.leq Z.zero z then rets (Z.to_string z)
   else parensM (rets (Z.to_string z))
@@ -795,7 +795,7 @@ let it_to_coq loc global list_mono it =
         let comp = Some (t, "case-discriminant") in
         let br (pat, rhs) = build ([rets "|"; pat_to_coq pat; rets "=>"; aux rhs]) in
         parensM (build ([rets "match"; f comp x; rets "with"]
-            @ List.map br cases @ [rets "end"]))
+            @ List.map ~f:br cases @ [rets "end"]))
     | IT.ITE (sw, x, y) ->
         let comp = Some (t, "if-condition") in
         parensM (build [rets "if"; f comp sw; rets "then"; aux x; rets "else"; aux y])
@@ -817,7 +817,7 @@ let it_to_coq loc global list_mono it =
         if List.length flds == 1
         then aux t
         else
-        let ix = find_tuple_element Id.equal m Id.pp (List.map fst flds) in
+        let ix = find_tuple_element Id.equal m Id.pp (List.map ~f:fst flds) in
         let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
         parensM (build [rets op_nm; aux t])
     | IT.RecordUpdate ((t, m), x) ->
@@ -825,11 +825,11 @@ let it_to_coq loc global list_mono it =
         if List.length flds == 1
         then aux x
         else
-        let ix = find_tuple_element Id.equal m Id.pp (List.map fst flds) in
+        let ix = find_tuple_element Id.equal m Id.pp (List.map ~f:fst flds) in
         let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
         parensM (build [rets op_nm; aux t; aux x])
     | IT.Record mems ->
-        let@ xs = ListM.mapM aux (List.map snd mems) in
+        let@ xs = ListM.mapM aux (List.map ~f:snd mems) in
         parensM (return (flow (comma ^^ break 1) xs))
     | IT.StructMember (t, m) ->
         let tag = BaseTypes.struct_bt (IT.bt t) in
@@ -862,7 +862,7 @@ let it_to_coq loc global list_mono it =
         let prop_ret = fun_prop_ret global name in
         let body_aux = f (if prop_ret then None else Some (t, "fun-arg")) in
         let@ () = ensure_pred global list_mono loc name body_aux in
-        let@ r = parensM (build ([return (Sym.pp name)] @ List.map body_aux args)) in
+        let@ r = parensM (build ([return (Sym.pp name)] @ List.map ~f:body_aux args)) in
         if prop_ret then return r else with_is_true (return r)
     | IT.Good (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
         let@ () = fail_on_prop () in
@@ -878,7 +878,7 @@ let it_to_coq loc global list_mono it =
        let comp = Some (t, "datatype contents") in
        let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in
        (* assuming here that the id's are in canonical order *)
-       parensM (build ([return (Sym.pp nm)] @ List.map (f comp) (List.map snd id_args)))
+       parensM (build ([return (Sym.pp nm)] @ List.map ~f:(f comp) (List.map ~f:snd id_args)))
     | IT.NthList (n, xs, d) ->
        let@ (_, _, dest) = ensure_list global list_mono loc (IT.bt xs) in
        parensM (build [rets "CN_Lib.nth_list_z"; return dest;
@@ -914,7 +914,7 @@ let lc_to_coq_check_triv loc global list_mono = function
       let@ enc = mk_forall global list_mono loc sym bt v in
       return (Some (Pp.parens enc))
 
-let nth_str_eq n s ss = Option.equal String.equal (List.nth_opt ss n) (Some s)
+let nth_str_eq n s ss = Option.equal String.equal (List.nth ss n) (Some s)
 
 let types_spec types =
   let open Pp in
@@ -1034,7 +1034,7 @@ let mod_spec lemma_nms =
   ^^ hardline ^^ hardline
   ^^ !^"  Module D := Defs(P)." ^^ hardline
   ^^ !^"  Import D." ^^ hardline ^^ hardline
-  ^^ flow hardline (List.map lemma lemma_nms)
+  ^^ flow hardline (List.map ~f:lemma lemma_nms)
   ^^ hardline
   ^^ !^"End Lemma_Spec."
   ^^ hardline ^^ hardline
@@ -1045,7 +1045,7 @@ let convert_and_print channel global list_mono conv =
   Pp.print channel (types_spec types);
   Pp.print channel (param_spec params);
   Pp.print channel (defs_module defs conv_defs);
-  Pp.print channel (mod_spec (List.map (fun (nm, _, _, _) -> nm) conv));
+  Pp.print channel (mod_spec (List.map ~f:(fun (nm, _, _, _) -> nm) conv));
   return ()
 
 let cmp_line_numbers = function
@@ -1092,28 +1092,28 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
   let channel = open_out filename in
   Pp.print channel (header filename);
   Pp.debug 1 (lazy (Pp.item "lemmata generation"
-    (Pp.braces (Pp.list Sym.pp (List.map fst lemmata)))));
+    (Pp.braces (Pp.list Sym.pp (List.map ~f:fst lemmata)))));
   let scan_lemmata =
-    List.map (fun (sym, (loc, typ)) ->
+    List.map ~f:(fun (sym, (loc, typ)) ->
         {sym; loc; typ; scan_res = scan typ}
       ) lemmata
-    |> List.sort (fun x (y : scanned) -> cmp_loc_line_numbers x.loc y.loc)
+    |> List.Old.sort (fun x (y : scanned) -> cmp_loc_line_numbers x.loc y.loc)
   in
-  let (impure, pure) = List.partition (fun x -> Option.is_some x.scan_res.res) scan_lemmata in
-  let (coerce, skip) = List.partition
-        (fun x -> Option.is_some x.scan_res.res_coerce) impure in
-  List.iter (fun x ->
+  let (impure, pure) = List.partition_tf ~f:(fun x -> Option.is_some x.scan_res.res) scan_lemmata in
+  let (coerce, skip) = List.partition_tf
+        ~f:(fun x -> Option.is_some x.scan_res.res_coerce) impure in
+  List.iter ~f:(fun x ->
     Pp.progress_simple "skipping trusted fun with resource"
         (Sym.pp_string x.sym ^ ": " ^ (Option.get x.scan_res.res))
   ) skip;
-  (* let fun_info = List.fold_right (fun (s, def) m -> SymMap.add s def m) *)
+  (* let fun_info = List.Old.fold_right (fun (s, def) m -> SymMap.add s def m) *)
   (*       mu_file.mu_logical_predicates SymMap.empty in *)
   (* let struct_decls = get_struct_decls mu_file in *)
   (* let global = Global.{ctxt.Context.global with struct_decls} in *)
   let (list_mono, global) = monomorphise_dt_lists global in
   (* let ci = {global; fun_info; list_mono} in *)
-  let conv = List.map (fun x -> (x.sym, x.typ, x.loc, "pure")) pure
-    @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, x.loc, "coerced")) coerce in
+  let conv = List.map ~f:(fun x -> (x.sym, x.typ, x.loc, "pure")) pure
+    @ List.map ~f:(fun x -> (x.sym, Option.get x.scan_res.res_coerce, x.loc, "coerced")) coerce in
   match convert_and_print channel global list_mono conv init_t with
   | Result.Ok _ -> Result.Ok ()
   | Result.Error e -> Result.Error e

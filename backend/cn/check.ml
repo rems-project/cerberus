@@ -31,7 +31,6 @@ open Resources
 open ResourceTypes
 open ResourcePredicates
 open LogicalConstraints
-open List
 open Typing
 open Effectful.Make(Typing)
 
@@ -78,7 +77,7 @@ let rec check_and_match_pattern (M_Pattern (loc, _, bty, pattern)) it =
          let@ () = add_c loc (LC.t_ (ne_ (it, nil_ ~item_bt loc) loc)) in
          return (a1 @ a2)
       | M_Ctuple, pats ->
-         let@ () = ensure_base_type loc ~expect:bty (Tuple (List.map bt_of_pattern pats)) in
+         let@ () = ensure_base_type loc ~expect:bty (Tuple (List.map ~f:bt_of_pattern pats)) in
          let@ all_as =
            ListM.mapiM (fun i p ->
                let ith = Simplify.IndexTerms.tuple_nth_reduce it i (bt_of_pattern p) in
@@ -168,7 +167,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : IT.t m =
     ( fun tag mvals ->
       let@ () = WellTyped.WCT.is_ct loc (Struct tag) in
       let@ () = WellTyped.ensure_base_type loc ~expect (Struct tag) in
-      let mvals = List.map (fun (id,ct,mv) -> (id, Sctypes.of_ctype_unsafe loc ct, mv)) mvals in
+      let mvals = List.map ~f:(fun (id,ct,mv) -> (id, Sctypes.of_ctype_unsafe loc ct, mv)) mvals in
       check_struct loc tag mvals )
     ( fun tag id mv ->
       check_union loc tag id mv )
@@ -178,7 +177,7 @@ and check_struct (loc : loc)
                  (member_values : (Id.t * Sctypes.t * mem_value) list) : IT.t m =
   let@ layout = get_struct_decl loc tag in
   let member_types = Memory.member_types layout in
-  assert (List.for_all2 (fun (id,ct) (id',ct',_mv') -> Id.equal id id' && Sctypes.equal ct ct')
+  assert (List.for_all2_exn ~f:(fun (id,ct) (id',ct',_mv') -> Id.equal id id' && Sctypes.equal ct ct')
             member_types member_values);
   let@ member_its =
     ListM.mapM (fun (member, sct, mv) ->
@@ -257,13 +256,13 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
      let@ _ = get_fun_decl loc sym in
      return (IT.sym_ (sym, Loc, loc))
   | M_Vlist (_item_cbt, vals) ->
-     let item_bt = bt_of_value (List.hd vals) in
+     let item_bt = bt_of_value (List.hd_exn vals) in
      let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
      let@ () = ListM.iterM (fun i -> ensure_base_type loc ~expect:item_bt (bt_of_value i)) vals in
      let@ values = ListM.mapM (check_value loc) vals in
      return (list_ ~item_bt values ~nil_loc:loc)
   | M_Vtuple vals ->
-     let item_bts = List.map bt_of_value vals in
+     let item_bts = List.map ~f:bt_of_value vals in
      let@ () = ensure_base_type loc ~expect (Tuple item_bts) in
      let@ values = ListM.mapM (check_value loc) vals in
      return (tuple_ values loc)
@@ -290,7 +289,7 @@ let eq_value_with f expr = match f expr with
   | Some y -> return (Some (expr, y))
   | None -> begin
     let@ group = value_eq_group None expr in
-    match List.find_opt (fun t -> Option.is_some (f t)) (EqTable.ITSet.elements group) with
+    match List.find ~f:(fun t -> Option.is_some (f t)) (EqTable.ITSet.elements group) with
     | Some x ->
       let y = Option.get (f x) in
       return (Some (x, y))
@@ -353,7 +352,7 @@ let known_function_pointer loc p =
     | Some _ -> (* no need to find more eqs *) return ()
     | None ->
       let global_funs = SymMap.bindings global.Global.fun_decls in
-      let fun_addrs = List.map (fun (sym, (loc, _, _)) -> IT.sym_ (sym, BT.Loc, loc)) global_funs in
+      let fun_addrs = List.map ~f:(fun (sym, (loc, _, _)) -> IT.sym_ (sym, BT.Loc, loc)) global_funs in
       test_value_eqs loc None p fun_addrs
   in
   let@ now_known = eq_value_with (is_fun_addr global) p in
@@ -450,7 +449,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
   | M_PEctor (ctor, pes) ->
      begin match ctor, pes with
      | M_Ctuple, _ ->
-        let@ () = ensure_base_type loc ~expect (Tuple (List.map bt_of_pexpr pes)) in
+        let@ () = ensure_base_type loc ~expect (Tuple (List.map ~f:bt_of_pexpr pes)) in
         check_pexprs pes (fun values -> k (tuple_ values loc))
      | M_Carray, _ ->
         let@ index_bt, item_bt = expect_must_be_map_bt loc ~expect in
@@ -617,8 +616,8 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
            ensure_base_type loc ~expect:(Memory.bt_of_sct ct) (bt_of_pexpr pe')
          ) member_types xs
      in
-     check_pexprs (List.map snd xs) (fun vs ->
-     let members = List.map2 (fun (nm, _) v -> (nm, v)) xs vs in
+     check_pexprs (List.map ~f:snd xs) (fun vs ->
+     let members = List.map2_exn ~f:(fun (nm, _) v -> (nm, v)) xs vs in
      k (struct_ (tag, members) loc))
   | M_PEunion _ ->
      Cerb_debug.error "todo: PEunion"
@@ -965,10 +964,10 @@ let all_empty loc _original_resources =
 
 
 let compute_used loc (prev_rs, prev_ix) (post_rs, _) =
-  let post_ixs = IntSet.of_list (List.map snd post_rs) in
+  let post_ixs = IntSet.of_list (List.map ~f:snd post_rs) in
   (* restore previous resources that have disappeared from the context, since they
      might participate in a race *)
-  let all_rs = post_rs @ List.filter (fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
+  let all_rs = post_rs @ List.filter ~f:(fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
   ListM.fold_leftM (fun (rs, ws) (r, i) ->
     let@ h = res_history loc i in
     if h.last_written_id >= prev_ix
@@ -995,7 +994,7 @@ let _check_used_distinct loc used =
           (RE.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
     end
   in
-  let@ w_map = check_ws IntMap.empty (List.concat (List.map snd used)) in
+  let@ w_map = check_ws IntMap.empty (List.concat (List.map ~f:snd used)) in
   let check_rd (r, h, i) = match IntMap.find_opt i w_map with
     | None -> return ()
     | Some h2 ->
@@ -1003,7 +1002,7 @@ let _check_used_distinct loc used =
       fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
         (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
   in
-  ListM.iterM check_rd (List.concat (List.map fst used))
+  ListM.iterM check_rd (List.concat (List.map ~f:fst used))
 
 (*type labels = (AT.lt * label_kind) SymMap.t*)
 
@@ -1028,17 +1027,17 @@ let instantiate loc filter arg =
   let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
   let@ () = add_c loc (LC.t_ (eq__ arg_it arg loc)) in
   let@ constraints = get_cs () in
-  let extra_assumptions1 = List.filter_map (function
+  let extra_assumptions1 = List.filter_map ~f:(function
         | Forall ((s, bt), t) when filter t -> Some ((s, bt), t)
         | _ -> None) (LCSet.elements constraints) in
-  let extra_assumptions2, type_mismatch = List.partition (fun ((_, bt), _) ->
+  let extra_assumptions2, type_mismatch = List.partition_tf ~f:(fun ((_, bt), _) ->
         BT.equal bt (IT.bt arg_it)) extra_assumptions1 in
-  let extra_assumptions = List.map (fun ((s, _), t) ->
+  let extra_assumptions = List.map ~f:(fun ((s, _), t) ->
         LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t)) extra_assumptions2
   in
   if List.length extra_assumptions == 0 then Pp.warn loc (!^ "nothing instantiated")
   else ();
-  List.iteri (fun i ((_, bt), _) -> if i < 2
+  List.Old.iteri (fun i ((_, bt), _) -> if i < 2
     then Pp.warn loc (!^ "did not instantiate on basetype mismatch:" ^^^
         (Pp.list BT.pp [bt; IT.bt arg_it]))) type_mismatch;
   add_cs loc extra_assumptions
@@ -1049,11 +1048,11 @@ let add_trace_information _labels annots =
   let open Where in
   let open CF.Annot in
   let inlined_labels =
-    List.filter_map (function Ainlined_label l -> Some l | _ -> None) annots in
+    List.filter_map ~f:(function Ainlined_label l -> Some l | _ -> None) annots in
   let locs =
-    List.filter_map (function Aloc l -> Some l | _ -> None) annots in
-  let is_stmt = List.exists (function Astmt -> true | _ -> false) annots in
-  let is_expr = List.exists (function Aexpr -> true | _ -> false) annots in
+    List.filter_map ~f:(function Aloc l -> Some l | _ -> None) annots in
+  let is_stmt = List.exists ~f:(function Astmt -> true | _ -> false) annots in
+  let is_expr = List.exists ~f:(function Aexpr -> true | _ -> false) annots in
   let@ () = match inlined_labels with
     | [] -> return ()
     | [(lloc,_lsym,lannot)] ->
@@ -1391,7 +1390,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
      (* let@ (_ret_ct, _arg_cts) = match act.ct with *)
      (*     | Pointer (Function (ret_v_ct, arg_r_cts, is_variadic)) -> *)
      (*         assert (not is_variadic); *)
-     (*         return (snd ret_v_ct, List.map fst arg_r_cts) *)
+     (*         return (snd ret_v_ct, List.map ~f:fst arg_r_cts) *)
      (*     | _ -> fail (fun _ -> {loc; msg = Generic (Pp.item "not a function pointer at call-site" *)
      (*                                                  (Sctypes.pp act.ct))}) *)
      (* in *)
@@ -1441,7 +1440,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
          k rt
      ))
   | M_Eunseq es ->
-     let@ () = ensure_base_type loc ~expect (Tuple (List.map bt_of_expr es)) in
+     let@ () = ensure_base_type loc ~expect (Tuple (List.map ~f:bt_of_expr es)) in
      let rec aux es vs prev_used =
        match es with
        | e :: es' ->
@@ -1501,11 +1500,11 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                in
                let@ it = WellTyped.WIT.infer it in
                let@ (original_rs, _) = all_resources_tagged loc in
-               (* let verbose = List.exists (Id.is_str "verbose") attrs in *)
-               let quiet = List.exists (Id.is_str "quiet") attrs in
+               (* let verbose = List.exists ~f:(Id.is_str "verbose") attrs in *)
+               let quiet = List.exists ~f:(Id.is_str "quiet") attrs in
                let@ () = add_movable_index loc (predicate_name, it) in
                let@ (upd_rs, _) = all_resources_tagged loc in
-               if (List.equal Int.equal (List.map snd original_rs) (List.map snd upd_rs)
+               if (List.Old.equal Int.equal (List.map ~f:snd original_rs) (List.map ~f:snd upd_rs)
                    && not quiet)
                then warn loc (!^ "extract: index added, no resources (yet) extracted.")
                else ();
@@ -1531,7 +1530,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                end
             | M_CN_apply (lemma, args) ->
                let@ (_loc, lemma_typ) = get_lemma loc lemma in
-               let args = List.map (fun arg -> (loc, arg)) args in
+               let args = List.map ~f:(fun arg -> (loc, arg)) args in
                Spine.calltype_lemma loc ~lemma args lemma_typ (fun lrt ->
                    let@ _, members = make_return_record loc (TypeErrors.call_prefix (LemmaApplication lemma)) (LRT.binders lrt) in
                    let@ () = bind_logical_return loc members lrt in
@@ -1787,7 +1786,7 @@ let check_tagdefs tagDefs =
 let record_and_check_logical_functions funs =
 
   let recursive, _nonrecursive =
-    List.partition (fun (_, def) ->
+    List.partition_tf ~f:(fun (_, def) ->
         LogicalFunctions.is_recursive def
       ) funs
   in
@@ -1896,20 +1895,20 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
 
 let check_c_functions funs =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
-  let str_fsyms s = match List.filter (matches_str s) (List.map fst funs) with
+  let str_fsyms s = match List.filter ~f:(matches_str s) (List.map ~f:fst funs) with
     | [] ->
       Pp.warn_noloc (!^"function" ^^^ !^s ^^^ !^"not found");
       []
     | ss -> ss
   in
-  let strs_fsyms ss = SymSet.of_list (List.concat_map str_fsyms ss) in
+  let strs_fsyms ss = SymSet.of_list (List.concat_map ~f:str_fsyms ss) in
   let skip = strs_fsyms (fst (! skip_and_only)) in
   let only = strs_fsyms (snd (! skip_and_only)) in
   let only_funs = match (snd (! skip_and_only)) with
     | [] -> funs
-    | _ss -> List.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
+    | _ss -> List.filter ~f:(fun (fsym, _) -> SymSet.mem fsym only) funs
   in
-  let selected_funs = List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs in
+  let selected_funs = List.filter ~f:(fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs in
   let number_entries = List.length selected_funs in
   match !batch with
   | false ->
@@ -2014,8 +2013,8 @@ let record_and_check_datatypes datatypes =
   ListM.iterM (fun (s, {loc=_; cases}) ->
       let@ () =
         add_datatype s {
-            dt_constrs = List.map fst cases;
-            dt_all_params = List.concat_map snd cases
+            dt_constrs = List.map ~f:fst cases;
+            dt_all_params = List.concat_map ~f:snd cases
           }
       in
       ListM.iterM (fun (c,c_params) ->

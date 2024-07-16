@@ -1,7 +1,9 @@
-(* This file re-exports the standard List library functions together
-   with a bunch of other useful list utilities. *)
-(* TODO: BCP: Probably not worth bothering with an mli file for this one... *)
+(* This file is in a state of transition from the old re-exports of the
+   standard List library functions plus extras to Base. *)
 
+include Base.List
+
+module Old = struct
 include Stdlib.List
 
 let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list =
@@ -104,3 +106,47 @@ let find_index pred xs =
     | [] -> None
     | x::xs -> if pred x then Some idx else aux (idx+1) xs in
   aux 0 xs
+
+let map [@deprecated "Use List.map xs ~f"] = map
+
+let length [@deprecated "Use List.length"] = length
+
+let nth [@deprecated "Use List.nth_exn"] = nth
+
+let concat [@deprecated "Use List.concat"] = concat
+
+let filter_map [@deprecated "Use List.filter_map xs ~f"] = filter_map
+
+let filter [@deprecated "Use List.filter xs ~f"] = filter
+
+let hd [@deprecated "Use List.hd_exn"] = hd
+
+let split [@deprecated "Use List.unzip"] = split
+
+let rev [@deprecated "Use List.rev"] = rev
+
+let combine [@deprecated "Use List.zip_exn"] = combine
+
+let exists [@deprecated "Use List.exists xs ~f"] = exists
+
+let concat_map [@deprecated "Use List.concat_map xs ~f"] = concat_map
+
+let map2 [@deprecated "Use List.map2_exn xs ~f"] = map2
+
+let partition [@deprecated "Use List.partition_tf xs ~f"] = partition
+
+let find_opt [@deprecated "Use List.find xs ~f"] = find_opt
+
+let mapi [@deprecated "Use List.mapi xs ~f"] = mapi
+
+let iter [@deprecated "Use List.iter xs ~f"] = iter
+
+let for_all2 [@deprecated "Use List.for_all2_exn xs ys ~f"] = for_all2
+
+let nth_opt [@deprecated "Use List.nth xs"] = nth_opt
+
+let for_all [@deprecated "Use List.for_all xs ~f"] = for_all
+
+let tl [@deprecated "Use List.tl_ex"] = tl
+
+end

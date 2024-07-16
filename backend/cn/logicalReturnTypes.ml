@@ -23,9 +23,9 @@ let mResource (bound, info) t =
 let mConstraint (bound, info) t =
   Constraint (bound, info, t)
 
-let mDefines = List.fold_right mDefine
-let mResources = List.fold_right mResource
-let mConstraints = List.fold_right mConstraint
+let mDefines = List.Old.fold_right mDefine
+let mResources = List.Old.fold_right mResource
+let mConstraints = List.Old.fold_right mConstraint
 
 
 let rec subst (substitution: _ Subst.t) lrt =
