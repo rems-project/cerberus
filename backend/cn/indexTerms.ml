@@ -607,7 +607,7 @@ let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
 let (%*) t t' = mul_ (t, t')
 let (%/) t t' = div_ (t, t')
-
+let (%%) t t' = mod_ (t, t')
 let (%==) t t' = eq_ (t, t')
 let (%!=) t t' = ne_ (t, t')
 let (%<) t t' = lt_ (t, t')
