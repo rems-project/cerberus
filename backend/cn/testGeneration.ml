@@ -169,7 +169,7 @@ let add_to_vars_ms
     , ms )
 ;;
 
-let ( >>= ) (x : 'a list) (f : 'a -> 'b list) : 'b list = List.flatten (List.map f x)
+let ( let@ ) (x : 'a list) (f : 'a -> 'b list) : 'b list = List.flatten (List.map f x)
 let return (x : 'a) : 'a list = [ x ]
 
 let collect_lc (vars : variables) (ms : members) (lc : LC.t)
@@ -197,8 +197,10 @@ let rec collect_clauses
           v, vars, ms, locs, IT.not_ cl.guard (Cerb_location.other __FUNCTION__) :: cs)
         (collect_clauses max_unfolds sigma prog5 vars ms cls')
     in
-    collect_lat_it max_unfolds sigma prog5 vars ms cl.packing_ft
-    >>= fun (v, vars, ms, locs, cs) -> (v, vars, ms, locs, cl.guard :: cs) :: rest
+    let@ v, vars, ms, locs, cs =
+      collect_lat_it max_unfolds sigma prog5 vars ms cl.packing_ft
+    in
+    (v, vars, ms, locs, cl.guard :: cs) :: rest
   | [] -> []
 
 and collect_ret
@@ -249,15 +251,15 @@ and collect_lat_it
   | Define ((x, tm), _, lat') ->
     collect_lat_it max_unfolds sigma prog5 vars ms (lat_subst x tm lat')
   | Resource ((x, (ret, _)), _, lat') ->
-    collect_ret max_unfolds sigma prog5 vars ms ret
-    >>= fun (v, vars, ms, locs, cs) ->
-    collect_lat_it max_unfolds sigma prog5 vars ms (lat_subst x v lat')
-    >>= fun (v', vars, ms, locs', cs') -> return (v', vars, ms, locs @ locs', cs @ cs')
+    let@ v, vars, ms, locs, cs = collect_ret max_unfolds sigma prog5 vars ms ret in
+    let@ v', vars, ms, locs', cs' =
+      collect_lat_it max_unfolds sigma prog5 vars ms (lat_subst x v lat')
+    in
+    return (v', vars, ms, locs @ locs', cs @ cs')
   | Constraint (lc, _, lat') ->
-    collect_lc vars ms lc
-    >>= fun (vars, ms, locs, cs) ->
-    collect_lat_it max_unfolds sigma prog5 vars ms lat'
-    >>= fun (v, vars, ms, locs', cs') -> return (v, vars, ms, locs @ locs', cs @ cs')
+    let@ vars, ms, locs, cs = collect_lc vars ms lc in
+    let@ v, vars, ms, locs', cs' = collect_lat_it max_unfolds sigma prog5 vars ms lat' in
+    return (v, vars, ms, locs @ locs', cs @ cs')
   | I it -> return (it, vars, ms, [], [])
 ;;
 
@@ -275,15 +277,15 @@ let rec collect_lat
   | Define ((x, tm), _, lat') ->
     collect_lat max_unfolds sigma prog5 vars ms (lat_subst x tm lat')
   | Resource ((x, (ret, _)), _, lat') ->
-    collect_ret max_unfolds sigma prog5 vars ms ret
-    >>= fun (v, vars, ms, locs, cs) ->
-    collect_lat max_unfolds sigma prog5 vars ms (lat_subst x v lat')
-    >>= fun (vars, ms, locs', cs') -> return (vars, ms, locs @ locs', cs @ cs')
+    let@ v, vars, ms, locs, cs = collect_ret max_unfolds sigma prog5 vars ms ret in
+    let@ vars, ms, locs', cs' =
+      collect_lat max_unfolds sigma prog5 vars ms (lat_subst x v lat')
+    in
+    return (vars, ms, locs @ locs', cs @ cs')
   | Constraint (lc, _, lat') ->
-    collect_lc vars ms lc
-    >>= fun (vars, ms, locs, cs) ->
-    collect_lat max_unfolds sigma prog5 vars ms lat'
-    >>= fun (vars, ms, locs', cs') -> return (vars, ms, locs @ locs', cs @ cs')
+    let@ vars, ms, locs, cs = collect_lc vars ms lc in
+    let@ vars, ms, locs', cs' = collect_lat max_unfolds sigma prog5 vars ms lat' in
+    return (vars, ms, locs @ locs', cs @ cs')
   | I _ -> return (vars, ms, [], [])
 ;;
 
