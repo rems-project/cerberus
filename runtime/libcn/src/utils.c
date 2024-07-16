@@ -34,9 +34,9 @@ _Bool convert_from_cn_bool(cn_bool *b) {
 }
 
 void cn_assert(cn_bool *cn_b) {
-    printf("Checking CN assertion: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+    printf("[CN: assertion] function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
     if (!(cn_b->val)) {
-        printf("CN assertion failed: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        printf("CN assertion failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         if (error_msg_info.cn_source_loc) {
             printf("CN source location: \n%s\n", error_msg_info.cn_source_loc);
         }
@@ -46,7 +46,7 @@ void cn_assert(cn_bool *cn_b) {
 
 void c_ghost_assert(cn_bool *cn_b) {
     if (!(cn_b->val)) {
-        printf("C memory access failed: function %s, file %s, line %d\n.", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
+        printf("C memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
         cn_exit();
     }
 }
@@ -136,8 +136,8 @@ void dump_ownership_state()
 
 
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
-    printf("CN ownership checking: getting ownership:" FMT_PTR_2 ", size: %lu -- ", generic_c_ptr, size);
-    print_error_msg_info();
+    printf("[CN: getting ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    //print_error_msg_info();
     for (int i = 0; i < size; i++) {
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
@@ -156,8 +156,8 @@ void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
-    printf("CN ownership checking: putting back ownership:" FMT_PTR_2 ", size: %lu -- ", generic_c_ptr, size);
-    print_error_msg_info();
+    printf("[CN: returning ownership] " FMT_PTR_2 ", size: %lu\n", generic_c_ptr, size);
+    //print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
@@ -176,8 +176,8 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
-    printf("CN ownership checking: assuming ownership:" FMT_PTR_2 ", size: %lu\n", (uintptr_t) generic_c_ptr, size);
-    print_error_msg_info();
+    printf("[CN: assuming ownership] " FMT_PTR_2 ", size: %lu\n", (uintptr_t) generic_c_ptr, size);
+    //print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = ((uintptr_t) generic_c_ptr) + i;
@@ -206,7 +206,7 @@ void cn_check_ownership(enum OWNERSHIP owned_enum, uintptr_t generic_c_ptr, size
 
 
 void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
-  printf("C ownership checking: add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
+  printf("[C access checking] add local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
       signed long *address_key = alloc(sizeof(long));
       *address_key = ptr_to_local + i;
@@ -216,7 +216,7 @@ void c_add_local_to_ghost_state(uintptr_t ptr_to_local, size_t size) {
 }
 
 void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
-  printf("C ownership checking: remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
+  printf("[C access checking] remove local:" FMT_PTR ", size: %lu\n", ptr_to_local, size);
   for (int i = 0; i < size; i++) { 
       signed long *address_key = alloc(sizeof(long));
       *address_key = ptr_to_local + i;
@@ -349,7 +349,7 @@ void update_error_message_info_(const char *function_name, char *file_name, int 
     error_msg_info.file_name = file_name;
     error_msg_info.line_number = line_number;
     error_msg_info.cn_source_loc = cn_source_loc;
-    print_error_msg_info();
+    //print_error_msg_info();
 }
 
 void initialise_error_msg_info_(const char *function_name, char *file_name, int line_number) {
