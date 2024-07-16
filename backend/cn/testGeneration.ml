@@ -731,6 +731,7 @@ let compile ((vars, ms, locs, cs) : goal) : gen_context =
 type test_framework = GTest
 
 let rec codify_it_ (e : BT.t IT.term_) : string option =
+  let exception Unsupported_codify_it in
   try
     Some
       (match e with
@@ -774,9 +775,9 @@ let rec codify_it_ (e : BT.t IT.term_) : string option =
        | ITE (e1, e2, e3) ->
          "(" ^ codify_it e1 ^ " ? " ^ codify_it e2 ^ " : " ^ codify_it e3 ^ ")"
        (* *)
-       | _ -> failwith __FUNCTION__)
+       | _ -> raise Unsupported_codify_it)
   with
-  | Failure str when String.equal __FUNCTION__ str -> None
+  | Unsupported_codify_it -> None
 
 and codify_it (e : IT.t) : string =
   let (IT (e_, _, _)) = e in
