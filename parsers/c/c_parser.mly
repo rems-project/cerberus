@@ -1852,6 +1852,17 @@ prim_expr:
 | e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_memberof (e, member))) }
+// Desired behavior: x -> y  -->  (*x).y 
+| e= prim_expr MINUS_GT member=cn_variable
+    { 
+    let loc = Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2))) in 
+    let mk_expr x = CNExpr (loc, x) in 
+    Cerb_frontend.Cn.(
+        mk_expr ( CNExpr_memberof 
+            ( mk_expr (CNExpr_deref e), member ) 
+        )
+    )
+    }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 | CN_ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
