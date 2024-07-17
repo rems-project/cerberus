@@ -4123,6 +4123,7 @@ Module CheriMemoryImplWithProofs
     -
       break_match_goal; repeat break_let.
       +
+        (* with init *)
         apply bind_PreservesInvariant_value.
         intros H s'0 x0 H0.
 
@@ -4178,8 +4179,12 @@ Module CheriMemoryImplWithProofs
              similar to `init_ghost_tags_spec`
            *)
 
+          (* TODO: this whole branch maybe unecessary in view of this pending change:
+             https://github.com/rems-project/cerberus/issues/229
+           *)
           admit.
       +
+        (* No init *)
         preserves_step.
         apply allocator_PreservesInvariant.
         lia.
@@ -6078,9 +6083,6 @@ intrinsic_revoke loc
 intrinsic_bounds_set loc args
 intrinsic_strfcap loc args
 intrinsic_perms_and loc args
-
-Preserve:
-realloc
 
 Misc:
 va_*
