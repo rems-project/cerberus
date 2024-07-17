@@ -105,12 +105,12 @@ void ghost_stack_depth_decr(void) {
     cn_stack_depth--;
     // update_error_message_info(0);
     print_error_msg_info();
-    // TODO - revisit this Dhruv over-confident change
+    // leak checking
     hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
     printf("CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
     _Bool leaked = false;
     while (ht_next(&it)) {
-        uintptr_t *key = it.key;
+        intptr_t *key = it.key;
         int *depth = it.value;
         _Bool fine = *depth <= cn_stack_depth;
         if (!fine) {
@@ -193,7 +193,7 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
-    printf("[CN: assuming ownership] " FMT_PTR_2 ", size: %lu\n", (uintptr_t) generic_c_ptr, size);
+    printf("[CN: assuming ownership (%s)] " FMT_PTR_2 ", size: %lu\n", fun, (uintptr_t) generic_c_ptr, size);
     //print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
@@ -244,7 +244,7 @@ void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
 
 void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
     signed long address_key = 0;
-    printf("C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " [ -- ", generic_c_ptr, generic_c_ptr + offset);
+    printf("C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " ] -- ", generic_c_ptr, generic_c_ptr + offset);
     for (int i = 0; i<offset; i++) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
@@ -446,7 +446,6 @@ void *cn_calloc(size_t num, size_t size)
   }
 }
 
-// TODO - revisit this Dhruv over-confident change *)
 void cn_free_sized(void* malloced_ptr, size_t size)
 {
   printf("[CN: freeing ownership] " FMT_PTR ", size: %lu\n", (uintptr_t) malloced_ptr, size);

@@ -78,7 +78,7 @@ let generate_c_pres_and_posts_internal with_ownership_checking (instrumentation 
          let entry_ownership_str = generate_ail_stat_strs ([], entry_ownership_stats) in 
          let exit_ownership_str = generate_ail_stat_strs ([], exit_ownership_stats) in 
          let pre_post_pair = (pre_str @ ("\n\t/* C OWNERSHIP */\n\n" :: entry_ownership_str),
-                              (* TODO - revisit this Dhruv over-confident change *)
+                              (* NOTE - the nesting pre - entry - exit - post *)
                               ("\n\t/* C OWNERSHIP */\n\n" :: exit_ownership_str) @ post_str) in
          (pre_post_pair, block_ownership_injs)
       | None -> ((pre_str, post_str), []))

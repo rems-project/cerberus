@@ -100,11 +100,10 @@ void ghost_stack_depth_incr(void);
 void ghost_stack_depth_decr(void);
 
 
-/* malloc, free (eventually) */
+/* malloc, free */
 void *cn_aligned_alloc(size_t align, size_t size) ;
 void *cn_malloc(unsigned long size) ;
 void *cn_calloc(size_t num, size_t size) ;
-// TODO - revisit this Dhruv over-confident change
 void cn_free_sized(void*, size_t len);
 
 void cn_print_nr_u64(int i, unsigned long u) ;
