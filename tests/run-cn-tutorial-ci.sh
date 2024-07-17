@@ -22,10 +22,10 @@ cd "$TUTORIAL_PATH"
 FAILURE=0
 
 make check CN_PATH="$CN --solver-type=cvc5"
-FAILURE+=$?
+((FAILURE+=$?))
 
 make check CN_PATH="$CN --solver-type=z3"
-FAILURE+=$?
+((FAILURE+=$?))
 
 cd $HERE
 
