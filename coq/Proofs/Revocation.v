@@ -4211,17 +4211,6 @@ Module CheriMemoryImplWithProofs
     lia.
   Qed.
 
-  Instance store_PreservesInvariant
-    (loc : location_ocaml)
-    (cty : CoqCtype.ctype)
-    (is_locking : bool)
-    (ptr : pointer_value)
-    (mval : mem_value):
-    forall s, PreservesInvariant mem_invariant s (store loc cty is_locking ptr mval).
-  Proof.
-    (* TODO: postponed until I figure out `is_locking` logic*)
-  Admitted.
-
   Definition memcpy_alloc_bounds_check_p
     (c1 c2: Capability_GS.t)
     (alloc1 alloc2: allocation)
@@ -4796,6 +4785,115 @@ Module CheriMemoryImplWithProofs
     subst.
     apply (bytemap_copy_data_spec L).
   Qed.
+
+  Instance store_PreservesInvariant
+    (loc : location_ocaml)
+    (cty : CoqCtype.ctype)
+    (is_locking : bool)
+    (ptr : pointer_value)
+    (mval : mem_value):
+    forall s, PreservesInvariant mem_invariant s (store loc cty is_locking ptr mval).
+  Proof.
+    intros s.
+    unfold store.
+    preserves_step.
+    preserves_step.
+    break_if;[preserves_step|].
+    break_match_goal;[preserves_step|].
+    preserves_step.
+    apply SameStatePreserves, find_cap_allocation_SameState.
+    break_match_goal;[|preserves_step].
+    break_let.
+    break_if;[preserves_step|].
+    preserves_step.
+    apply SameStatePreserves, is_within_bound_SameState.
+    break_if;[|preserves_step].
+    preserves_step.
+    apply SameStatePreserves, get_allocation_SameState.
+    break_match_goal;[|preserves_step].
+    preserves_step.
+    apply SameStatePreserves, is_atomic_member_access_SameState.
+    break_if;[preserves_step|].
+    preserves_step.
+    -
+      preserves_step;[preserves_step|].
+      preserves_step;[apply SameStatePreserves, cap_check_SameState|].
+
+      preserves_step.
+      preserves_step.
+      preserves_step.
+      repeat break_let.
+      preserves_step;[|preserves_step].
+      preserves_step.
+      admit.
+    -
+      (* handling `is_locking` *)
+      break_if;[|preserves_step].
+      preserves_steps.
+      (* TODO: updating allocation r/o flag. Should be provable *)
+      {
+        subst.
+        clear - H.
+        rename s'4 into s.
+        destruct H as [MIbase MIcap].
+        destruct_base_mem_invariant MIbase.
+        unfold mem_state_with_allocations.
+
+        Transparent ret bind.
+        unfold Monad_option, ret, bind.
+        Opaque ret bind.
+        unfold allocation_with_is_readonly.
+        cbn.
+
+        split.
+        -
+          (* base *)
+          clear MIcap.
+          repeat split;cbn.
+          1,3,6:
+            apply ZMapProofs.map_forall_update;[assumption|];
+          unfold ZMapProofs.option_pred;
+          intros oa;
+          destruct oa;auto.
+          2:auto.
+          +
+            (* Bnooverlap *)
+            intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
+            admit.
+          +
+            (* Bnextallocid *)
+            intros k M.
+            apply ZMapProofs.map_in_mapsto in M.
+            destruct M as [v M].
+            rename s0 into k'.
+            destruct (ZMap.M.E.eq_dec k' k) as [E|NE].
+            *
+              subst k'.
+              destruct (ZMap.F.In_dec (allocations s) k) as [IN|OUT].
+              --
+                apply ZMapProofs.map_in_mapsto in IN.
+                destruct IN as [v' IN].
+                pose proof (ZMapProofs.map_update_MapsTo_update_at_k IN M) as U.
+                clear M.
+                cbn in U.
+                invc U.
+                apply Bnextallocid.
+                apply ZMapProofs.map_mapsto_in in IN.
+                assumption.
+              --
+                pose proof (ZMapProofs.map_update_MapsTo_new_at_k OUT M) as U.
+                cbn in U.
+                inversion U.
+            *
+              apply (ZMapProofs.map_update_MapsTo_not_at_k (allocations s)) in M;auto.
+              apply Bnextallocid.
+              apply ZMapProofs.map_mapsto_in in M.
+              assumption.
+        -
+          (* main invariant *)
+          admit.
+      }
+  Admitted.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}

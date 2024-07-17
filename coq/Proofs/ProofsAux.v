@@ -1412,6 +1412,52 @@ Module FMapExtProofs
         apply H, M2.
   Qed.
 
+
+  (** Successful application of `f` must preserve `p` *)
+  Definition option_pred {A:Type} (f: option A -> option A) (p:A -> Prop) : Prop
+    :=
+    forall oa,
+      match f oa with
+      | None => True
+      | Some a' =>
+          match oa with
+          | None => p a'
+          | Some a => p a -> p a'
+          end
+      end.
+
+  Lemma map_forall_update {A:Type} (pred: A -> Prop) (m:FM.M.t A) :
+    forall k f, map_forall pred m ->
+           option_pred f pred ->
+           map_forall pred (FM.map_update k f m).
+  Proof.
+    intros k' f H FP k v M.
+    destruct (OT.eq_dec k' k) as [E|NE]; unfold OT.eq in *.
+    -
+      subst k'.
+      destruct (FM.F.In_dec m k) as [IN|OUT].
+      +
+        apply map_in_mapsto in IN.
+        destruct IN as [v' IN].
+        pose proof (map_update_MapsTo_update_at_k IN M) as U.
+        specialize (FP (Some v')).
+        break_match_hyp;invc U.
+        apply FP.
+        eapply H.
+        eauto.
+      +
+        pose proof (map_update_MapsTo_new_at_k OUT M) as U.
+        specialize (FP None).
+        break_match_hyp;invc U.
+        assumption.
+    -
+      assert(k<>k') as NE' by auto.
+      pose proof (map_update_MapsTo_not_at_k m f v k k' NE').
+      apply H0 in M.
+      specialize (H k v M).
+      assumption.
+  Qed.
+
   Lemma map_forall_keys_remove {A:Type} (pred: FM.M.key -> Prop) (m:FM.M.t A):
     forall k, map_forall_keys pred m ->
          map_forall_keys pred (FM.M.remove k m).
