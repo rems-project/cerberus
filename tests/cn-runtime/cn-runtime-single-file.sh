@@ -9,7 +9,7 @@ while getopts "o:" flag; do
  case $flag in
    o) 
    echo "Ownership checking enabled"
-   OWNERSHIP_CLI_FLAG="--with_ownership_checking"
+   OWNERSHIP_CLI_FLAG="--with-ownership-checking"
    OWNERSHIP_C_FILE="ownership.c"
    OWNERSHIP_OBJECT_FILE="ownership.o"
    ;;
@@ -57,7 +57,7 @@ fi
 
 
 echo -n "Generating C files from CN-annotated source... "
-if ! cn $INPUT_FN --output_decorated=$INPUT_BASENAME-exec.c --output_decorated_dir=$EXEC_DIR/ --with_ownership_checking
+if ! cn verify $INPUT_FN --output-decorated=$INPUT_BASENAME-exec.c --output-decorated-dir=$EXEC_DIR/ --with-ownership-checking
 then
   echo generation failed.
 else 

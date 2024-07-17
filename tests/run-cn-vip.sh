@@ -15,10 +15,10 @@ SUCC=$(
         \! -name '*.error.c' \
         \! -name '*.unprovable.c' \
 )
-FAIL=$(find $DIRNAME/cn -name '*.error.c')
-ANNOT=$(find $DIRNAME/cn -name '*.annot.c')
+FAIL=$(find $DIRNAME/cn verify -name '*.error.c')
+ANNOT=$(find $DIRNAME/cn verify -name '*.annot.c')
 UNPROV=$(
-    find $DIRNAME/cn -name '*.unprovable.c' \
+    find $DIRNAME/cn verify -name '*.unprovable.c' \
         \! -name 'pointer_copy_user_ctrlflow_bytewise.unprovable.c'
 )
 
@@ -28,7 +28,7 @@ FAILED=''
 
 for TEST in $SUCC $ANNOT
 do
-  $CN -DVIP -DANNOT $TEST
+  $CN verify -DVIP -DANNOT $TEST
   RET=$?
   if [[ "$RET" = 0 ]]
   then
@@ -48,7 +48,7 @@ done
 
 for TEST in $FAIL $ANNOT $UNPROV
 do
-  $CN $TEST
+  $CN verify $TEST
   RET=$?
   if [[ "$RET" = 1 || "$RET" = 2 ]]
   then

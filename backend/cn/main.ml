@@ -125,15 +125,7 @@ let check_input_file filename =
     if not (ext ".c" || ext ".h") then
       CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
-let maybe_generate_tests output_test_dir filename max_unfolds testing_framework ail_prog prog5 =
-  Option.iter (fun output_dir ->
-    let (_, sigma) = ail_prog in
-    Cerb_colour.without_colour (fun () ->
-      TestGeneration.main ~output_dir ~filename ~max_unfolds sigma prog5 testing_framework)
-    ())
-    output_test_dir
-
-let main
+let verify
       filename
       macros
       incl_dirs
@@ -170,9 +162,6 @@ let main
       batch
       no_inherit_loc
       magic_comment_char_dollar
-      output_test_dir
-      test_max_unfolds
-      testing_framework
   =
   if json then begin
       if debug_level > 0 then
@@ -228,7 +217,6 @@ let main
       print_log_file ("mucore", MUCORE prog5);
       let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
       Result.iter_error handle_error (Typing.pause_to_result paused);
-      maybe_generate_tests output_test_dir filename test_max_unfolds testing_framework ail_prog prog5;
       begin match output_decorated with
       | None ->
         Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
@@ -246,6 +234,54 @@ let main
       Cerb_debug.maybe_close_csv_timing_file_no_err ();
       Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
 
+let generate_tests
+      (* Common *)
+      filename
+      macros
+      incl_dirs
+      incl_files
+      astprints
+      use_peval
+      no_inherit_loc
+      magic_comment_char_dollar
+      (* Test Generation *)
+      output_dir
+      max_unfolds
+      testing_framework
+  =
+  check_input_file filename;
+  let (prog4, (markers_env, ail_prog), _) =
+    handle_frontend_error
+      (frontend ~macros ~incl_dirs ~incl_files astprints ~do_peval:use_peval ~filename ~magic_comment_char_dollar)
+  in
+  let (_, sigma) = ail_prog in
+  try
+    let handle_error (e : TypeErrors.type_error) =
+      let report = TypeErrors.pp_message e.msg in
+      Pp.error e.loc report.short (Option.to_list report.descr);
+      print_string ("\nRun `cn verify " ^ filename ^ "` for more details\n");
+      match e.msg with
+      | TypeErrors.Unsupported _ -> exit 2
+      | _ -> exit 1
+    in
+    let result =
+      let open Resultat in
+      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
+      print_log_file ("mucore", MUCORE prog5);
+      let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
+      Result.iter_error handle_error (Typing.pause_to_result paused);
+      Cerb_colour.without_colour (fun () ->
+        TestGeneration.main ~output_dir ~filename ~max_unfolds sigma prog5 testing_framework)
+      ();
+      return ()
+    in
+    Pp.maybe_close_times_channel ();
+    Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
+  with
+  | exc ->
+    Pp.maybe_close_times_channel ();
+    Cerb_debug.maybe_close_csv_timing_file_no_err ();
+    Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
 
 open Cmdliner
 
@@ -319,6 +355,10 @@ let no_use_ity =
   integer type annotations placed by the Core elaboration" in
   Arg.(value & flag & info["no-use-ity"] ~doc)
 
+let use_peval =
+  let doc = "(this switch should go away) run the Core partial evaluation phase" in
+  Arg.(value & flag & info["use-peval"] ~doc)
+
 let no_inherit_loc =
   let doc = "debugging: stop mucore terms inheriting location information from parents" in
   Arg.(value & flag & info["no-inherit-loc"] ~doc)
@@ -361,7 +401,7 @@ let csv_times =
 
 let log_times =
   let doc = "file in which to output hierarchical timing information" in
-  Arg.(value & opt (some string) None & info ["log_times"] ~docv:"FILE" ~doc)
+  Arg.(value & opt (some string) None & info ["log-times"] ~docv:"FILE" ~doc)
 
 let random_seed =
   let doc = "Set the SMT solver random seed (default 1)." in
@@ -403,10 +443,6 @@ let use_vip =
   let doc = "use experimental VIP rules" in
   Arg.(value & flag & info["vip"] ~doc)
 
-let use_peval =
-  let doc = "(this switch should go away) run the Core partial evaluation phase" in
-  Arg.(value & flag & info["use-peval"] ~doc)
-
 let json =
   let doc = "output in json format" in
   Arg.(value & flag & info["json"] ~doc)
@@ -421,90 +457,139 @@ module Executable_spec_flags = struct
 let output_decorated_dir =
   let doc = "output a version of the translation unit decorated with C runtime
   translations of the CN annotations to the provided directory" in
-  Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
+  Arg.(value & opt (some string) None & info ["output-decorated-dir"] ~docv:"FILE" ~doc)
 
 let output_decorated =
   let doc = "output a version of the translation unit decorated with C runtime
   translations of the CN annotations." in
-  Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
+  Arg.(value & opt (some string) None & info ["output-decorated"] ~docv:"FILE" ~doc)
 
 let with_ownership_checking =
   let doc = "Enable ownership checking within CN runtime testing" in
-  Arg.(value & flag & info ["with_ownership_checking"] ~doc)
+  Arg.(value & flag & info ["with-ownership-checking"] ~doc)
 
 let copy_source_dir =
   let doc = "Copy non-CN annotated files into output_decorated_dir for CN runtime testing" in
-  Arg.(value & flag & info ["copy_source_dir"] ~doc)
+  Arg.(value & flag & info ["copy-source-dir"] ~doc)
 
 end
 
-module Lemma = struct
+module Lemma_flags = struct
 let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
 
 end
 
-module Test_Generation_Flags = struct
+let verify_t : unit Term.t =
+  let open Term in
+  const verify $
+    Common_flags.file $
+    Common_flags.macros $
+    Common_flags.incl_dirs $
+    Common_flags.incl_files $
+    Verify_flags.loc_pp $
+    Common_flags.debug_level $
+    Common_flags.print_level $
+    Common_flags.print_sym_nums $
+    Verify_flags.slow_smt_threshold $
+    Verify_flags.slow_smt_dir $
+    Common_flags.no_timestamps $
+    Verify_flags.json $
+    Verify_flags.state_file $
+    Verify_flags.output_dir $
+    Verify_flags.diag $
+    Lemma_flags.lemmata $
+    Verify_flags.only $
+    Verify_flags.skip $
+    Verify_flags.csv_times $
+    Verify_flags.log_times $
+    Verify_flags.random_seed $
+    Verify_flags.solver_logging $
+    Verify_flags.solver_flags $
+    Verify_flags.solver_path $
+    Verify_flags.solver_type $
+    Executable_spec_flags.output_decorated_dir $
+    Executable_spec_flags.output_decorated $
+    Executable_spec_flags.with_ownership_checking $
+    Executable_spec_flags.copy_source_dir $
+    Common_flags.astprints $
+    Verify_flags.use_vip $
+    Common_flags.no_use_ity $
+    Common_flags.use_peval $
+    Verify_flags.batch $
+    Common_flags.no_inherit_loc $
+    Common_flags.magic_comment_char_dollar
+
+let verify_cmd =
+  let info = Cmd.info "verify" in
+  Cmd.v info verify_t
+
+module Test_generation_flags = struct
 let output_test_dir =
-  let doc = "[Experimental] Generate test suites and place them in the provided directory" in
-  Arg.(value & opt (some string) None & info ["output-test-dir"] ~docv:"FILE" ~doc)
+  let doc = "[Experimental] Place generated test suites in the provided directory" in
+  Arg.(required & opt (some string) None & info ["output-dir"] ~docv:"FILE" ~doc)
 
 let test_max_unfolds =
-  let doc = "[Experimental] Set the maximum number of unfolds for test suite generation" in
-  Arg.(value & opt int 5 & info ["test-max-unfolds"] ~docv:"FILE" ~doc)
+  let doc = "[Experimental] Set the maximum number of unfolds for recursive predicates" in
+  Arg.(value & opt int 5 & info ["max-unfolds"] ~doc)
 
 let testing_framework =
-  let doc = "[Experimental] Specify the testing framework for test suite generation " in
-  Arg.(value & opt (enum ["gtest", TestGeneration.GTest]) GTest & info ["testing-framework"] ~doc)
+  let doc = "[Experimental] Specify the testing framework used by generated tests" in
+  Arg.(value & opt (enum ["gtest", TestGeneration.GTest]) GTest & info ["framework"] ~doc)
 
 end
 
-let () =
+let generate_tests_cmd =
   let open Term in
-  let check_t =
-    const main $
-      Common_flags.file $
-      Common_flags.macros $
-      Common_flags.incl_dirs $
-      Common_flags.incl_files $
-      Verify_flags.loc_pp $
-      Common_flags.debug_level $
-      Common_flags.print_level $
-      Common_flags.print_sym_nums $
-      Verify_flags.slow_smt_threshold $
-      Verify_flags.slow_smt_dir $
-      Common_flags.no_timestamps $
-      Verify_flags.json $
-      Verify_flags.state_file $
-      Verify_flags.output_dir $
-      Verify_flags.diag $
-      Lemma.lemmata $
-      Verify_flags.only $
-      Verify_flags.skip $
-      Verify_flags.csv_times $
-      Verify_flags.log_times $
-      Verify_flags.random_seed $
-      Verify_flags.solver_logging $
-      Verify_flags.solver_flags $
-      Verify_flags.solver_path $
-      Verify_flags.solver_type $
-      Executable_spec_flags.output_decorated_dir $
-      Executable_spec_flags.output_decorated $
-      Executable_spec_flags.with_ownership_checking $
-      Executable_spec_flags.copy_source_dir $
-      Common_flags.astprints $
-      Verify_flags.use_vip $
-      Common_flags.no_use_ity $
-      Verify_flags.use_peval $
-      Verify_flags.batch $
-      Common_flags.no_inherit_loc $
-      Common_flags.magic_comment_char_dollar $
-      Test_Generation_Flags.output_test_dir $
-      Test_Generation_Flags.test_max_unfolds $
-      Test_Generation_Flags.testing_framework
+  let generate_tests_t =
+    const generate_tests $
+    Common_flags.file $
+    Common_flags.macros $
+    Common_flags.incl_dirs $
+    Common_flags.incl_files $
+    Common_flags.astprints $
+    Common_flags.use_peval $
+    Common_flags.no_inherit_loc $
+    Common_flags.magic_comment_char_dollar $
+    Test_generation_flags.output_test_dir $
+    Test_generation_flags.test_max_unfolds $
+    Test_generation_flags.testing_framework
+  in
+  let doc =
+    "\
+    Generates RapidCheck tests for all functions in [FILE] with CN specifications.
+    The tests use randomized inputs, which are guaranteed to satisfy the CN precondition.
+    A [.cpp] file containing the test harnesses will be placed in [output-dir].\
+    "
+  in
+  let info = Cmd.info "generate-tests" ~doc:doc in
+  Cmd.v info generate_tests_t
+
+let subcommands = [
+  verify_cmd;
+  generate_tests_cmd;
+]
+
+let () =
+  (** Minor hack, as Cmdliner [default] doesn't work with positional arguments *)
+  let using_subcommands =
+    if Array.length Sys.argv >= 2
+    then
+      let first_arg = Sys.argv.(1) in
+      String.equal first_arg "--help"
+      || List.exists
+          (fun cmd -> String.equal (Cmd.name cmd) first_arg)
+          subcommands
+    else
+      false
   in
   let version_str = "CN version: " ^ Cn_version.git_version in
-  let cn_info = Cmd.info "cn" ~version:version_str in
-  Stdlib.exit @@ Cmd.(eval (v cn_info check_t))
-
+  if using_subcommands
+  then
+    let cn_info = Cmd.info "cn" ~version:version_str in
+    Stdlib.exit @@ Cmd.(eval (group cn_info subcommands))
+  else
+    let deprecated = "(Deprecated) Use `cn verify` subcommand instead" in
+    let cn_info = Cmd.info "cn" ~deprecated ~version:version_str in
+    Stdlib.exit @@ Cmd.(eval (v cn_info verify_t))
