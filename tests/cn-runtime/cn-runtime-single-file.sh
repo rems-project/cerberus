@@ -65,13 +65,13 @@ else
   cd $EXEC_DIR
   echo -n "Compiling... "
 
-  if ! clang-18 -c -I$RUNTIME_PREFIX/include/ *.c $OWNERSHIP_C_FILE_OPT $RUNTIME_PREFIX/libcn.a
+  if ! cc -g -c -I$RUNTIME_PREFIX/include/ *.c $OWNERSHIP_C_FILE_OPT $RUNTIME_PREFIX/libcn.a
   then
     echo "compiling failed."
   else 
     echo "done!"
     echo "Linking..."
-    if ! clang-18 -I$RUNTIME_PREFIX/include/ -o $INPUT_BASENAME-exec-output.bin *.o $OWNERSHIP_OBJECT_FILE_OPT $RUNTIME_PREFIX/libcn.a
+    if ! cc -I$RUNTIME_PREFIX/include/ -o $INPUT_BASENAME-exec-output.bin *.o $OWNERSHIP_OBJECT_FILE_OPT $RUNTIME_PREFIX/libcn.a
     then 
       echo "linking failed."
     else 
