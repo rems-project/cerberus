@@ -749,7 +749,7 @@ let rec codify_it_ (e : BT.t IT.term_) : string option =
        | Const (Bits ((Unsigned, bits), n)) when bits <= 64 ->
          Int64.to_string (Z.to_int64 n) ^ "ULL"
        | Const (Bool b) -> string_of_bool b
-       | Sym x -> Sym.pp_string x
+       | Sym x -> codify_sym x
        | Unop (Not, e') -> "(!" ^ codify_it e' ^ ")"
        | Unop (Negate, e') -> "(-" ^ codify_it e' ^ ")"
        | Binop (And, e1, e2) -> "(" ^ codify_it e1 ^ " && " ^ codify_it e2 ^ ")"
