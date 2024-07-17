@@ -125,6 +125,96 @@ let check_input_file filename =
     if not (ext ".c" || ext ".h") then
       CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
+let with_well_formedness_check
+      (* CLI arguments *)
+      ~filename
+      ~macros
+      ~incl_dirs
+      ~incl_files
+      ~csv_times
+      ~log_times
+      ~astprints
+      ~use_peval
+      ~no_inherit_loc
+      ~magic_comment_char_dollar
+      (* Callbacks *)
+      ~handle_error
+      ~(f :
+        prog5 : unit Mucore.mu_file ->
+        ail_prog : CF.GenTypes.genTypeCategory A.ail_program ->
+        statement_locs : Cerb_location.t CStatements.LocMap.t ->
+        paused : _ Typing.pause ->
+        unit Resultat.t)
+  =
+  check_input_file filename;
+  let (prog4, (markers_env, ail_prog), statement_locs) =
+    handle_frontend_error
+      (frontend ~macros ~incl_dirs ~incl_files astprints ~do_peval:use_peval ~filename ~magic_comment_char_dollar)
+  in
+  Cerb_debug.maybe_open_csv_timing_file ();
+  Pp.maybe_open_times_channel
+    (match (csv_times, log_times) with
+     | (Some times, _) -> Some (times, "csv")
+     | (_, Some times) -> Some (times, "log")
+     | _ -> None);
+  try
+    let result =
+      let open Resultat in
+      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
+      print_log_file ("mucore", MUCORE prog5);
+      let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
+      Result.iter_error handle_error (Typing.pause_to_result paused);
+      f ~prog5 ~ail_prog ~statement_locs ~paused
+    in
+    Pp.maybe_close_times_channel ();
+    Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
+  with
+  | exc ->
+    Pp.maybe_close_times_channel ();
+    Cerb_debug.maybe_close_csv_timing_file_no_err ();
+    Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
+
+let handle_type_error ~json ~state_file ~output_dir e =
+  if json then TypeErrors.report_json ?state_file ?output_dir e
+  else TypeErrors.report ?state_file ?output_dir e;
+  match e.msg with
+  | TypeErrors.Unsupported _ -> exit 2
+  | _ -> exit 1
+
+let well_formed
+      filename
+      macros
+      incl_dirs
+      incl_files
+      json
+      state_file
+      output_dir 
+      csv_times
+      log_times
+      astprints
+      use_peval
+      no_inherit_loc
+      magic_comment_char_dollar
+  =
+  with_well_formedness_check
+    ~filename
+    ~macros
+    ~incl_dirs
+    ~incl_files
+    ~csv_times
+    ~log_times
+    ~astprints
+    ~use_peval
+    ~no_inherit_loc
+    ~magic_comment_char_dollar
+    ~handle_error:(handle_type_error ~json ~state_file ~output_dir)
+    ~f:(fun
+        ~prog5:_
+        ~ail_prog:_
+        ~statement_locs:_
+        ~paused:_
+        -> Resultat.return ())
+
 let verify
       filename
       macros
@@ -139,7 +229,7 @@ let verify
       no_timestamps
       json
       state_file
-      output_dir 
+      output_dir
       diag
       lemmata
       only
@@ -168,7 +258,7 @@ let verify
         CF.Pp_errors.fatal ("debug level must be 0 for json output");
       if print_level > 0 then
         CF.Pp_errors.fatal ("print level must be 0 for json output");
-    end;
+  end;
   begin (*flags *)
     Cerb_debug.debug_level := debug_level;
     Pp.loc_pp := loc_pp;
@@ -193,46 +283,30 @@ let verify
     WellTyped.use_ity := not no_use_ity;
     Sym.executable_spec_enabled := Option.is_some output_decorated;
   end;
-  check_input_file filename;
-  let (prog4, (markers_env, ail_prog), statement_locs) =
-    handle_frontend_error
-      (frontend ~macros ~incl_dirs ~incl_files astprints ~do_peval:use_peval ~filename ~magic_comment_char_dollar)
-  in
-  Cerb_debug.maybe_open_csv_timing_file ();
-  Pp.maybe_open_times_channel
-    (match (csv_times, log_times) with
-     | (Some times, _) -> Some (times, "csv")
-     | (_, Some times) -> Some (times, "log")
-     | _ -> None);
-  try
-    let handle_error e =
-      if json then TypeErrors.report_json ?state_file ?output_dir e
-      else TypeErrors.report ?state_file ?output_dir e;
-      match e.msg with
-      | TypeErrors.Unsupported _ -> exit 2
-      | _ -> exit 1 in
-    let result =
-      let open Resultat in
-      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
-      print_log_file ("mucore", MUCORE prog5);
-      let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
-      Result.iter_error handle_error (Typing.pause_to_result paused);
+  with_well_formedness_check
+    (* CLI arguments *)
+    ~filename
+    ~macros
+    ~incl_dirs
+    ~incl_files
+    ~csv_times
+    ~log_times
+    ~astprints
+    ~use_peval
+    ~no_inherit_loc
+    ~magic_comment_char_dollar
+    (* Callbacks *)
+    ~handle_error:(handle_type_error ~json ~state_file ~output_dir)
+    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused ->
       begin match output_decorated with
-      | None ->
-        Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
-      | Some output_filename ->
-          Cerb_colour.without_colour begin fun () ->
-            Executable_spec.main ~with_ownership_checking ~copy_source_dir filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
-            return ()
-          end ()
-      end in
-      Pp.maybe_close_times_channel ();
-    Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
-  with
-  | exc ->
-      Pp.maybe_close_times_channel ();
-      Cerb_debug.maybe_close_csv_timing_file_no_err ();
-      Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
+        | None ->
+          Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
+        | Some output_filename ->
+            Cerb_colour.without_colour begin fun () ->
+              Executable_spec.main ~with_ownership_checking ~copy_source_dir filename ail_prog output_decorated_dir output_filename prog5 statement_locs;
+            Resultat.return ()
+            end ()
+        end)
 
 let generate_tests
       (* Common *)
@@ -240,6 +314,8 @@ let generate_tests
       macros
       incl_dirs
       incl_files
+      csv_times
+      log_times
       astprints
       use_peval
       no_inherit_loc
@@ -249,39 +325,33 @@ let generate_tests
       max_unfolds
       testing_framework
   =
-  check_input_file filename;
-  let (prog4, (markers_env, ail_prog), _) =
-    handle_frontend_error
-      (frontend ~macros ~incl_dirs ~incl_files astprints ~do_peval:use_peval ~filename ~magic_comment_char_dollar)
+  let handle_error (e : TypeErrors.type_error) =
+    let report = TypeErrors.pp_message e.msg in
+    Pp.error e.loc report.short (Option.to_list report.descr);
+    match e.msg with
+    | TypeErrors.Unsupported _ -> exit 2
+    | _ -> exit 1
   in
-  let (_, sigma) = ail_prog in
-  try
-    let handle_error (e : TypeErrors.type_error) =
-      let report = TypeErrors.pp_message e.msg in
-      Pp.error e.loc report.short (Option.to_list report.descr);
-      print_string ("\nRun `cn verify " ^ filename ^ "` for more details\n");
-      match e.msg with
-      | TypeErrors.Unsupported _ -> exit 2
-      | _ -> exit 1
-    in
-    let result =
-      let open Resultat in
-      let@ prog5 = Core_to_mucore.normalise_file ~inherit_loc:(not(no_inherit_loc)) (markers_env, snd ail_prog) prog4 in
-      print_log_file ("mucore", MUCORE prog5);
-      let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
-      Result.iter_error handle_error (Typing.pause_to_result paused);
+  with_well_formedness_check
+    (* CLI arguments *)
+    ~filename
+    ~macros
+    ~incl_dirs
+    ~incl_files
+    ~csv_times
+    ~log_times
+    ~astprints
+    ~use_peval
+    ~no_inherit_loc
+    ~magic_comment_char_dollar
+    (* Callbacks *)
+    ~handle_error
+    ~f:(fun ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
+      let (_, sigma) = ail_prog in
       Cerb_colour.without_colour (fun () ->
         TestGeneration.main ~output_dir ~filename ~max_unfolds sigma prog5 testing_framework)
       ();
-      return ()
-    in
-    Pp.maybe_close_times_channel ();
-    Result.fold ~ok:(fun () -> exit 0) ~error:handle_error result
-  with
-  | exc ->
-    Pp.maybe_close_times_channel ();
-    Cerb_debug.maybe_close_csv_timing_file_no_err ();
-    Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
+      Resultat.return ())
 
 open Cmdliner
 
@@ -343,6 +413,14 @@ let no_timestamps =
   let doc = "Disable timestamps in print-level debug messages" in
   Arg.(value & flag & info ["no_timestamps"] ~doc)
 
+let csv_times =
+  let doc = "file in which to output csv timing information" in
+  Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
+
+let log_times =
+  let doc = "file in which to output hierarchical timing information" in
+  Arg.(value & opt (some string) None & info ["log-times"] ~docv:"FILE" ~doc)
+
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
@@ -394,14 +472,6 @@ let state_file =
 let diag =
   let doc = "explore branching diagnostics with key string" in
   Arg.(value & opt (some string) None & info ["diag"] ~doc)
-
-let csv_times =
-  let doc = "file in which to output csv timing information" in
-  Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
-
-let log_times =
-  let doc = "file in which to output hierarchical timing information" in
-  Arg.(value & opt (some string) None & info ["log-times"] ~docv:"FILE" ~doc)
 
 let random_seed =
   let doc = "Set the SMT solver random seed (default 1)." in
@@ -481,6 +551,37 @@ let lemmata =
 
 end
 
+let wf_cmd =
+  let open Term in
+  let wf_t =
+    const well_formed $
+    Common_flags.file $
+    Common_flags.macros $
+    Common_flags.incl_dirs $
+    Common_flags.incl_files $
+    Verify_flags.json $
+    Verify_flags.state_file $
+    Verify_flags.output_dir $
+    Common_flags.csv_times $
+    Common_flags.log_times $
+    Common_flags.astprints $
+    Common_flags.use_peval $
+    Common_flags.no_inherit_loc $
+    Common_flags.magic_comment_char_dollar
+  in
+  let doc =
+    "\
+    Runs CN's well-formedness check
+    which finds errors such as
+    ill-typing CN definitions
+    (predicates, specifications, lemmas)
+    and ill-formed recursion in datatypes.
+    It DOES NOT verify C functions,
+    which `cn verify` does.\
+    " in
+  let info = Cmd.info "wf" ~doc in
+  Cmd.v info wf_t
+
 let verify_t : unit Term.t =
   let open Term in
   const verify $
@@ -502,8 +603,8 @@ let verify_t : unit Term.t =
     Lemma_flags.lemmata $
     Verify_flags.only $
     Verify_flags.skip $
-    Verify_flags.csv_times $
-    Verify_flags.log_times $
+    Common_flags.csv_times $
+    Common_flags.log_times $
     Verify_flags.random_seed $
     Verify_flags.solver_logging $
     Verify_flags.solver_flags $
@@ -522,7 +623,12 @@ let verify_t : unit Term.t =
     Common_flags.magic_comment_char_dollar
 
 let verify_cmd =
-  let info = Cmd.info "verify" in
+  let doc = "\
+    Verifies that functions meet
+    their CN specifications and the
+    absence of undefined behavior.\
+    " in
+  let info = Cmd.info "verify" ~doc in
   Cmd.v info verify_t
 
 module Test_generation_flags = struct
@@ -548,6 +654,8 @@ let generate_tests_cmd =
     Common_flags.macros $
     Common_flags.incl_dirs $
     Common_flags.incl_files $
+    Common_flags.csv_times $
+    Common_flags.log_times $
     Common_flags.astprints $
     Common_flags.use_peval $
     Common_flags.no_inherit_loc $
@@ -567,6 +675,7 @@ let generate_tests_cmd =
   Cmd.v info generate_tests_t
 
 let subcommands = [
+  wf_cmd;
   verify_cmd;
   generate_tests_cmd;
 ]
