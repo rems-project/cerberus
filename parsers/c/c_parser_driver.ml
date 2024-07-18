@@ -54,9 +54,10 @@ let diagnostic_get_tokens ~inside_cn loc string =
   (* `C_lexer.magic_token' ensures `loc` is a region *)
   let start_pos = Option.get @@ start_pos loc in
   let lexbuf = Lexing.from_string string in
+  let `LEXER lexer = C_lexer.create_lexer ~inside_cn in
   let rec relex (toks, pos) =
     try
-      match C_lexer.lexer ~inside_cn lexbuf with
+      match lexer lexbuf with
       | Tokens.EOF -> (List.rev ("EOF" :: toks), List.rev pos)
       | t ->
         let Lexing.{ pos_lnum; pos_bol; pos_cnum; _ } = lexbuf.lex_start_p in
@@ -77,9 +78,10 @@ let parse_loc_string parse (loc, str) =
   let start_pos = Option.get @@ start_pos loc in
   Lexing.set_position lexbuf start_pos;
   Lexing.set_filename lexbuf (Option.value ~default:"<none>" (Cerb_location.get_filename loc));
+  let `LEXER cn_lexer = C_lexer.create_lexer ~inside_cn:true in
   handle
     parse
-    (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:true))
+    (MenhirLib.ErrorReports.wrap cn_lexer)
     ~offset:start_pos.pos_cnum
     lexbuf
 
@@ -123,9 +125,10 @@ let magic_comments_to_cn_toplevel (Cabs.TUnit decls) =
   |> Exception.except_fmap (fun decls -> Cabs.TUnit (List.concat decls))
 
 let parse_with_magic_comments lexbuf =
+  let `LEXER c_lexer = C_lexer.create_lexer ~inside_cn:false in
   handle
     C_parser.translation_unit
-    (MenhirLib.ErrorReports.wrap (C_lexer.lexer ~inside_cn:false))
+    (MenhirLib.ErrorReports.wrap c_lexer)
     ~offset:0
     lexbuf
 
