@@ -536,6 +536,8 @@ module EffectfulTranslation = struct
         return (IT (Binop (Mul, e1, e2), IT.bt e1, loc))
     | CN_div, _ ->
         return (IT (Binop (Div, e1, e2), IT.bt e1, loc))
+    | CN_mod, _ ->
+        return (IT (Binop (Mod, e1, e2), IT.bt e1, loc))
     | CN_equal, _ ->
       (match IT.bt e1, IT.bt e2, !pointer_eq_warned with
        | Loc _, Loc _, false ->

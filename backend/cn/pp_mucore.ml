@@ -188,7 +188,7 @@ module Make (Config: CONFIG) = struct
     | OpSub -> P.minus
     | OpMul -> P.star
     | OpDiv -> P.slash
-    | OpRem_t -> pp_keyword "rem_t"
+    | OpRem_t -> P.percent
     | OpRem_f -> pp_keyword "rem_f"
     | OpExp -> P.caret
     | OpEq  -> P.equals
