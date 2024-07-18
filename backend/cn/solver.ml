@@ -1273,7 +1273,7 @@ let model_evaluator solver mo =
           let res = SMT.get_expr s inp in
           pop evaluator 1;
           let ctys = get_ctype_table evaluator in
-          Some (get_ivalue gs ctys (basetype e) res)
+          Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
       | _ ->
           pop evaluator 1;
           None
