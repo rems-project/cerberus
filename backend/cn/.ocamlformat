@@ -22,5 +22,4 @@ nested-match=wrap
 parens-tuple=always
 sequence-style=terminator
 type-decl=sparse
-wrap-comments=true
 space-around-records=true
