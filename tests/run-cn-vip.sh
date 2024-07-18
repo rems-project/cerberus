@@ -15,10 +15,10 @@ SUCC=$(
         \! -name '*.error.c' \
         \! -name '*.unprovable.c' \
 )
-FAIL=$(find $DIRNAME/cn verify -name '*.error.c')
-ANNOT=$(find $DIRNAME/cn verify -name '*.annot.c')
+FAIL=$(find $DIRNAME/cn -name '*.error.c')
+ANNOT=$(find $DIRNAME/cn -name '*.annot.c')
 UNPROV=$(
-    find $DIRNAME/cn verify -name '*.unprovable.c' \
+    find $DIRNAME/cn -name '*.unprovable.c' \
         \! -name 'pointer_copy_user_ctrlflow_bytewise.unprovable.c'
 )
 

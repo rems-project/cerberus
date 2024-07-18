@@ -8,9 +8,9 @@ CN=$OPAM_SWITCH_PREFIX/bin/cn
 
 DIRNAME=$(dirname $0)
 
-SUCC=$(find $DIRNAME/verify -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c')
-FAIL=$(find $DIRNAME/cn verify -name '*.error.c')
-UNKNOWN=$(find $DIRNAME/cn verify -name '*.unknown.c')
+SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c' | grep -v '\.unknown\.c')
+FAIL=$(find $DIRNAME/cn -name '*.error.c')
+UNKNOWN=$(find $DIRNAME/cn -name '*.unknown.c')
 
 NUM_FAILED=0
 FAILED=''
@@ -52,7 +52,7 @@ done
 
 echo $UNKNOWN | xargs -n 1 cn
 
-COQ_LEMMAS=$(find $DIRNAME/cn verify -name 'coq_lemmas' -type d)
+COQ_LEMMAS=$(find $DIRNAME/cn -name 'coq_lemmas' -type d)
 
 for TEST in $COQ_LEMMAS
 do
