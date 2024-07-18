@@ -1852,7 +1852,7 @@ prim_expr:
 | e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_memberof (e, member))) }
-// Desired behavior: x -> y  -->  (*x).y 
+(* Desugars arrow expressions `x -> y` to dereference/member-of ( *x).y *)
 | e= prim_expr MINUS_GT member=cn_variable
     { 
     let loc = Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2))) in 
