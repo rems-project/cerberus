@@ -522,8 +522,9 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
         check_pexpr pe1 (fun v1 ->
         check_pexpr pe2 (fun v2 ->
         let@ provable = provable loc in
-        let v2_bt = bt_of_pexpr pe2 in  
-        match provable (t_ (ne_ (v2, int_lit_ 0 v2_bt loc) loc)) with
+        let v2_bt = bt_of_pexpr pe2 in
+        let here = Locations.other __FUNCTION__ in
+        match provable (t_ (ne_ (v2, int_lit_ 0 v2_bt here) here)) with
           | `True -> k (div_ (v1, v2) loc)
           | `False -> 
             let@ model = model () in
