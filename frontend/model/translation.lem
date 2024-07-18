@@ -2352,15 +2352,31 @@ end
       
       | A.AilEcompoundAssign e1 aop e2 ->
           (* TODO: this elaboration is wrong because it duplicates any side-effect in E1 *)
-          let e1_rvalue = match e1 with
-            | A.AnnotatedExpression (GenTypes.GenLValueType _ ty _) std_annots loc _ ->
-                let rvalue_ty = Ctype.Ctype [] (Ctype.unatomic_ ty) in
-                A.AnnotatedExpression (GenTypes.GenRValueType (GenTypes.inject_type rvalue_ty)) std_annots loc (A.AilErvalue e1)
+          (* TODO: and this is duplicating facts about the typing of Ail arithmetic binary operators *)
+          let (e1_rvalue, arith_gty) = match (e1, e2) with
+            | (A.AnnotatedExpression (GenTypes.GenLValueType _ ty _) std_annots loc _, A.AnnotatedExpression (GenTypes.GenRValueType gty2) _ _ _) ->
+                let gty1 = GenTypes.inject_type (Ctype.unatomic ty) in
+                let gtc1 = GenTypes.GenRValueType gty1 in
+                ( A.AnnotatedExpression gtc1 std_annots loc (A.AilErvalue e1)
+                , match aop with
+                    | A.Add ->
+                        if GenTypesAux.is_pointer gty1 then
+                          gty1
+                        else
+                          GenTypesAux.usual_arithmetic gty1 gty2
+                    | A.Sub ->
+                        if GenTypesAux.is_pointer gty1 then
+                          gty1
+                        else
+                          GenTypesAux.usual_arithmetic gty1 gty2
+                    | _ ->
+                        GenTypesAux.usual_arithmetic gty1 gty2
+                  end )
             | _ ->
                 illTypedAil loc "AilEcompoundAssign"
           end in
           self begin
-            A.AnnotatedExpression annot [] loc (A.AilEassign e1 (A.AnnotatedExpression annot [] loc (A.AilEbinary e1_rvalue (A.Arithmetic aop) e2)))
+            A.AnnotatedExpression annot [] loc (A.AilEassign e1 (A.AnnotatedExpression (GenTypes.GenRValueType arith_gty) [] loc (A.AilEbinary e1_rvalue (A.Arithmetic aop) e2)))
           end
       
       | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBatomic A.AilBAstore))) es ->
@@ -3789,6 +3805,10 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
               loc (Caux.mk_ail_ctype_pe ty) ptr_sym_e in
           match e_opt with
             | Nothing ->
+                if Global.backend_name () = "Cn" then
+                  (* CN does not support unspecified values *)
+                  E.return Caux.mk_skip_e
+                else
                 E.return begin
                   Caux.add_std "§6.2.4#6"
                     (mk_store (Caux.mk_unspecified_pe ty) Cmm.NA)

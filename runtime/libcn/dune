@@ -5,7 +5,7 @@
        (:src (glob_files src/*.c)))
  (action
   (progn
-   (run cc -Iinclude/ -c %{src})
+   (run cc -Iinclude/ -c -g %{src})
    (run ar -rcs %{target} alloc.o hash_table.o utils.o))))
 
 (install

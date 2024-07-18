@@ -1375,14 +1375,41 @@ Module FMapExtProofs
     intros k' H k v M.
     specialize (H k v).
     destruct (OT.eq_dec k' k) as [E|NE].
-    *
+    -
       unfold OT.eq in *.
       apply map_mapsto_in in M.
       apply (FM.M.remove_1 E) in M.
       inversion M.
-    *
+    -
       apply FM.M.remove_3 in M.
       auto.
+  Qed.
+
+  Lemma map_forall_add {A:Type} (pred: A -> Prop) (m:FM.M.t A) :
+    forall k v, map_forall pred m ->
+           pred v ->
+           map_forall pred (FM.M.add k v m).
+  Proof.
+    intros k' v' H H0 k v M.
+    destruct (OT.eq_dec k' k) as [E|NE]; unfold OT.eq in *.
+    -
+      subst k'.
+      apply FM.F.add_mapsto_iff in M.
+      destruct M as [[M1 M2]| [M1 _]].
+      +
+        subst v.
+        assumption.
+      +
+        congruence.
+    -
+      specialize (H k v).
+      apply FM.F.add_mapsto_iff in M.
+      destruct M as [[M1 M2]| [M1 M2]].
+      +
+        congruence.
+      +
+        subst.
+        apply H, M2.
   Qed.
 
   Lemma map_forall_keys_remove {A:Type} (pred: FM.M.key -> Prop) (m:FM.M.t A):
@@ -1401,6 +1428,24 @@ Module FMapExtProofs
     -
       rewrite (FM.F.remove_neq_in_iff _ NE) in M.
       auto.
+  Qed.
+
+  Lemma map_forall_keys_add {A:Type} (pred: FM.M.key -> Prop) (m:FM.M.t A):
+    forall k v, map_forall_keys pred m ->
+           pred k ->
+           map_forall_keys pred (FM.M.add k v m).
+  Proof.
+    intros k' v' H  H0 k M.
+    specialize (H k).
+    destruct (OT.eq_dec k' k) as [E|NE];unfold OT.eq in *.
+    -
+      subst k'.
+      assumption.
+    -
+      apply FM.F.add_neq_in_iff in M.
+      apply H.
+      assumption.
+      assumption.
   Qed.
 
   (* Could be generlized to arbitrary length *)

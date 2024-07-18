@@ -24,10 +24,10 @@ let get_typedef_string (C.(Ctype (_, ctype_))) =
     | _ -> None
 
 
-let mk_expr expr_ =
+let mk_expr ?(loc=Cerb_location.unknown) expr_ =
   A.AnnotatedExpression (
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
-     [], Cerb_location.unknown, expr_)
+     [], loc, expr_)
 
 let get_expr_strs = function
   | (A.AnnotatedExpression (CF.GenTypes.GenLValueType (_, _, _), strs, _, _)) -> strs
@@ -76,7 +76,9 @@ type cn_dependency_graph = {
 let compute_cn_dependencies ail_prog =
   ail_prog
 
-
+let ifndef_wrap ifndef_str str =
+  "#ifndef " ^ ifndef_str ^ "\n#define " ^ ifndef_str ^ "\n" ^ str ^ "\n#endif"  
+  
 
 let generate_include_header (file_name, is_system_header) =
   let pre = "#include " in
@@ -86,7 +88,7 @@ let generate_include_header (file_name, is_system_header) =
     else
       "\"" ^ file_name ^ "\""
   in
-  pre ^ incl ^ "\n"
+  pre ^ incl ^ "\n" 
 
 let get_ctype_without_ptr ctype = match rm_ctype ctype with
   | C.(Pointer (_, ct)) -> ct
@@ -96,12 +98,20 @@ let is_pointer ctype = match rm_ctype ctype with
   | C.(Pointer _) -> true
   | _ -> false
 
+let rec _transform_ctype_for_ptr (C.(Ctype (annots, ctype)) as original_ctype) = 
+  let mk_pointer_from_ctype ctype' = C.(Ctype (annots, Pointer (empty_qualifiers, ctype'))) in 
+  match ctype with 
+  | Array (ctype', _) 
+  | Pointer (_, ctype') -> mk_pointer_from_ctype (_transform_ctype_for_ptr ctype') 
+  | _ -> original_ctype
+
 
 let rec str_of_ctype ctype = match rm_ctype ctype with 
     | C.(Pointer (_, ctype')) ->
       str_of_ctype ctype' ^ " pointer"
     | C.(Array (ctype, num_elements_opt)) -> (match num_elements_opt with 
-      | Some num_elements -> str_of_ctype ctype ^ " " ^ string_of_int (Z.to_int num_elements)
+      | Some num_elements -> 
+        str_of_ctype ctype ^ " " ^ string_of_int (Z.to_int num_elements)
       | None -> str_of_ctype (mk_ctype C.(Pointer (empty_qualifiers, ctype))))
     | _ -> 
       let doc = CF.Pp_ail.pp_ctype ~executable_spec:true empty_qualifiers ctype in
@@ -137,9 +147,6 @@ let rec execCtypeEqual (C.Ctype (_, ty1)) (C.Ctype (_, ty2)) =
     | _ ->
         false
 
-let map_struct_def_to_decl (tag, (loc, attrs, def)) = match def with 
-  | C.StructDef _ -> [(tag, (loc, attrs, C.StructDef ([], None)))]
-  | UnionDef _ -> []
 
 
 let str_of_it_ = function

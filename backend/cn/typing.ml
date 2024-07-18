@@ -153,7 +153,6 @@ let simp_ctxt () =
 let make_provable loc =
   fun ({typing_context = s; solver; _} as c) ->
   let simp_ctxt = make_simp_ctxt c in
-  let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
   let f lc =
     Solver.provable
       ~loc
@@ -161,7 +160,6 @@ let make_provable loc =
       ~global:s.global
       ~assumptions:s.constraints
       ~simp_ctxt
-      ~pointer_facts
       lc
   in
   f
@@ -446,7 +444,9 @@ let add_r_internal loc (r, RE.O oargs) =
   let@ simp_ctxt = simp_ctxt () in
   let r = Simplify.ResourceTypes.simp simp_ctxt r in
   let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
-  set_typing_context (Context.add_r loc (r, O oargs) s)
+  let pointer_facts = Resources.pointer_facts ((r, RE.O oargs) :: Context.get_rs s) in
+  let@ () = set_typing_context (Context.add_r loc (r, O oargs) s) in
+  iterM (fun x -> add_c_internal (LC.T x)) pointer_facts
 
 
 

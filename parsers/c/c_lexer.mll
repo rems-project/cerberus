@@ -350,6 +350,8 @@ rule s_char_sequence = parse
         x :: xs }
   | '"'
       { [] }
+  | _
+      { raise (Error Errors.Cparser_invalid_string_character) }
 
 and magic flags start_of_comment = parse
   (* End of the magic comment *)
