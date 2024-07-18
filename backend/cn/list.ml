@@ -4,17 +4,6 @@
 
 include Stdlib.List
 
-let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list =
-    concat (map f xs)
-
-let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
-  match xs with
-  | [] -> []
-  | x :: xs ->
-     match f x with
-     | None -> filter_map f xs
-     | Some y -> y :: filter_map f xs
-
 let rec equal (equality : 'a -> 'a -> bool) (xs : 'a list) (xs' : 'a list) : bool =
   match xs, xs' with
   | [], [] -> true
@@ -64,20 +53,6 @@ let map_fst (f : 'a -> 'c) (xs : ('a * 'b) list) : ('c * 'b) list =
 
 let map_snd (f : 'b -> 'c) (xs : ('a * 'b) list) : ('a * 'c) list =
   map (fun (a, b) -> (a, f b)) xs
-
-let rec separate_and_group (by : 'b -> 'a option) : 'b list -> ('a option * 'b list) list =
-  function
-  | [] -> []
-  | b :: bs ->
-    match by b, separate_and_group by bs with
-    | Some a, ((None, bs') :: abs) ->
-        (Some a, bs') :: abs
-    | Some a, abs ->
-        (Some a, []) :: abs
-    | None, ((None, bs') :: abs) ->
-        (None, b :: bs') :: abs
-    | None, abs ->
-        (None, [b]) :: abs
 
 (* NOTE: this exists in Stdlib since 5.1 *)
 let is_empty = function
