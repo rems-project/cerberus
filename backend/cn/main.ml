@@ -693,7 +693,7 @@ let () =
     else
       false
   in
-  let version_str = "CN version: " ^ Cn_version.git_version in
+  let version_str = "CN version: " ^ Cn_version.git_version ^ " (" ^ Cn_version.git_version_date ^ ")" in
   if using_subcommands
   then
     let cn_info = Cmd.info "cn" ~version:version_str in
