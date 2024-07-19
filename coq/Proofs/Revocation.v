@@ -4786,6 +4786,114 @@ Module CheriMemoryImplWithProofs
     apply (bytemap_copy_data_spec L).
   Qed.
 
+  Fact store_lock_preserves
+    (s0 : storage_instance_id)
+    (s : mem_state_r):
+    mem_invariant s ->
+    mem_invariant
+      (mem_state_with_allocations
+         (ZMap.map_update s0
+            (fun oa : option allocation =>
+               a <- oa;;
+               ret
+                 (allocation_with_is_readonly a
+                    (IsReadOnly
+                       match prefix a with
+                       | PrefStringLiteral _ _ => MemCommonExe.ReadonlyStringLiteral
+                       | PrefTemporaryLifetime _ _ => MemCommonExe.ReadonlyTemporaryLifetime
+                       | _ => MemCommonExe.ReadonlyConstQualified
+                       end))) (allocations s)) s).
+  Proof.
+    intros H.
+
+    destruct H as [MIbase MIcap].
+    destruct_base_mem_invariant MIbase.
+    unfold mem_state_with_allocations.
+
+    Transparent ret bind.
+    unfold Monad_option, ret, bind.
+    Opaque ret bind.
+    unfold allocation_with_is_readonly.
+    cbn.
+
+    split.
+    -
+      (* base *)
+      clear MIcap.
+      repeat split;cbn.
+      1,3,6:
+        apply ZMapProofs.map_forall_update;[assumption|];
+      unfold ZMapProofs.option_pred;
+      intros oa;
+      destruct oa;auto.
+      2:auto.
+      +
+        (* Bnooverlap *)
+        intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
+        destruct (ZMap.M.E.eq_dec alloc_id1 s0) as [E1|NE1], (ZMap.M.E.eq_dec alloc_id2 s0) as [E2|NE2].
+        *
+          congruence.
+        *
+          subst s0.
+          apply ZMapProofs.map_update_MapsTo_not_at_k in H1;auto.
+          apply ZMapProofs.map_update_at_k_cases in H0.
+          destruct H0 as [[a [M IN]]|[OUT M]];[|inversion M].
+          invc IN.
+          specialize (Bnooverlap _ _ _ _ H M H1).
+          clear - Bnooverlap.
+          destruct a2,a.
+          unfold allocations_do_no_overlap in *.
+          cbn in *.
+          lia.
+        *
+          subst s0.
+          apply ZMapProofs.map_update_MapsTo_not_at_k in H0;auto.
+          apply ZMapProofs.map_update_at_k_cases in H1.
+          destruct H1 as [[a [M IN]]|[OUT M]];[|inversion M].
+          invc IN.
+          specialize (Bnooverlap _ _ _ _ H H0 M).
+          clear - Bnooverlap.
+          destruct a1,a.
+          unfold allocations_do_no_overlap in *.
+          cbn in *.
+          lia.
+        *
+          apply ZMapProofs.map_update_MapsTo_not_at_k in H0,H1;auto.
+          apply (Bnooverlap _ _ _ _ H H0 H1).
+      +
+        (* Bnextallocid *)
+        intros k M.
+        apply ZMapProofs.map_in_mapsto in M.
+        destruct M as [v M].
+        rename s0 into k'.
+        destruct (ZMap.M.E.eq_dec k' k) as [E|NE].
+        *
+          subst k'.
+          destruct (ZMap.F.In_dec (allocations s) k) as [IN|OUT].
+          --
+            apply ZMapProofs.map_in_mapsto in IN.
+            destruct IN as [v' IN].
+            pose proof (ZMapProofs.map_update_MapsTo_update_at_k IN M) as U.
+            clear M.
+            cbn in U.
+            invc U.
+            apply Bnextallocid.
+            apply ZMapProofs.map_mapsto_in in IN.
+            assumption.
+          --
+            pose proof (ZMapProofs.map_update_MapsTo_new_at_k OUT M) as U.
+            cbn in U.
+            inversion U.
+        *
+          apply (ZMapProofs.map_update_MapsTo_not_at_k (allocations s)) in M;auto.
+          apply Bnextallocid.
+          apply ZMapProofs.map_mapsto_in in M.
+          assumption.
+    -
+      (* main invariant *)
+      admit.
+  Admitted.
+
   Instance store_PreservesInvariant
     (loc : location_ocaml)
     (cty : CoqCtype.ctype)
@@ -4825,103 +4933,17 @@ Module CheriMemoryImplWithProofs
       repeat break_let.
       preserves_step;[|preserves_step].
       preserves_step.
+
+      destruct x5.
+      apply negb_false_iff in Heqb.
+      subst.
+
       admit.
     -
       (* handling `is_locking` *)
       break_if;[|preserves_step].
       preserves_steps.
-      (* TODO: updating allocation r/o flag. Should be provable *)
-      {
-        subst.
-        clear - H.
-        rename s'4 into s.
-        destruct H as [MIbase MIcap].
-        destruct_base_mem_invariant MIbase.
-        unfold mem_state_with_allocations.
-
-        Transparent ret bind.
-        unfold Monad_option, ret, bind.
-        Opaque ret bind.
-        unfold allocation_with_is_readonly.
-        cbn.
-
-        split.
-        -
-          (* base *)
-          clear MIcap.
-          repeat split;cbn.
-          1,3,6:
-            apply ZMapProofs.map_forall_update;[assumption|];
-          unfold ZMapProofs.option_pred;
-          intros oa;
-          destruct oa;auto.
-          2:auto.
-          +
-            (* Bnooverlap *)
-            intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
-            destruct (ZMap.M.E.eq_dec alloc_id1 s0) as [E1|NE1], (ZMap.M.E.eq_dec alloc_id2 s0) as [E2|NE2].
-            *
-              congruence.
-            *
-              subst s0.
-              apply ZMapProofs.map_update_MapsTo_not_at_k in H1;auto.
-              apply ZMapProofs.map_update_at_k_cases in H0.
-              destruct H0 as [[a [M IN]]|[OUT M]];[|inversion M].
-              invc IN.
-              specialize (Bnooverlap _ _ _ _ H M H1).
-              clear - Bnooverlap.
-              destruct a2,a.
-              unfold allocations_do_no_overlap in *.
-              cbn in *.
-              lia.
-            *
-              subst s0.
-              apply ZMapProofs.map_update_MapsTo_not_at_k in H0;auto.
-              apply ZMapProofs.map_update_at_k_cases in H1.
-              destruct H1 as [[a [M IN]]|[OUT M]];[|inversion M].
-              invc IN.
-              specialize (Bnooverlap _ _ _ _ H H0 M).
-              clear - Bnooverlap.
-              destruct a1,a.
-              unfold allocations_do_no_overlap in *.
-              cbn in *.
-              lia.
-            *
-              apply ZMapProofs.map_update_MapsTo_not_at_k in H0,H1;auto.
-              apply (Bnooverlap _ _ _ _ H H0 H1).
-          +
-            (* Bnextallocid *)
-            intros k M.
-            apply ZMapProofs.map_in_mapsto in M.
-            destruct M as [v M].
-            rename s0 into k'.
-            destruct (ZMap.M.E.eq_dec k' k) as [E|NE].
-            *
-              subst k'.
-              destruct (ZMap.F.In_dec (allocations s) k) as [IN|OUT].
-              --
-                apply ZMapProofs.map_in_mapsto in IN.
-                destruct IN as [v' IN].
-                pose proof (ZMapProofs.map_update_MapsTo_update_at_k IN M) as U.
-                clear M.
-                cbn in U.
-                invc U.
-                apply Bnextallocid.
-                apply ZMapProofs.map_mapsto_in in IN.
-                assumption.
-              --
-                pose proof (ZMapProofs.map_update_MapsTo_new_at_k OUT M) as U.
-                cbn in U.
-                inversion U.
-            *
-              apply (ZMapProofs.map_update_MapsTo_not_at_k (allocations s)) in M;auto.
-              apply Bnextallocid.
-              apply ZMapProofs.map_mapsto_in in M.
-              assumption.
-        -
-          (* main invariant *)
-          admit.
-      }
+      apply store_lock_preserves, H.
   Admitted.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
