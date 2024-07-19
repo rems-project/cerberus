@@ -4859,7 +4859,36 @@ Module CheriMemoryImplWithProofs
           +
             (* Bnooverlap *)
             intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
-            admit.
+            destruct (ZMap.M.E.eq_dec alloc_id1 s0) as [E1|NE1], (ZMap.M.E.eq_dec alloc_id2 s0) as [E2|NE2].
+            *
+              congruence.
+            *
+              subst s0.
+              apply ZMapProofs.map_update_MapsTo_not_at_k in H1;auto.
+              apply ZMapProofs.map_update_at_k_cases in H0.
+              destruct H0 as [[a [M IN]]|[OUT M]];[|inversion M].
+              invc IN.
+              specialize (Bnooverlap _ _ _ _ H M H1).
+              clear - Bnooverlap.
+              destruct a2,a.
+              unfold allocations_do_no_overlap in *.
+              cbn in *.
+              lia.
+            *
+              subst s0.
+              apply ZMapProofs.map_update_MapsTo_not_at_k in H0;auto.
+              apply ZMapProofs.map_update_at_k_cases in H1.
+              destruct H1 as [[a [M IN]]|[OUT M]];[|inversion M].
+              invc IN.
+              specialize (Bnooverlap _ _ _ _ H H0 M).
+              clear - Bnooverlap.
+              destruct a1,a.
+              unfold allocations_do_no_overlap in *.
+              cbn in *.
+              lia.
+            *
+              apply ZMapProofs.map_update_MapsTo_not_at_k in H0,H1;auto.
+              apply (Bnooverlap _ _ _ _ H H0 H1).
           +
             (* Bnextallocid *)
             intros k M.

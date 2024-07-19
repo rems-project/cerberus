@@ -1282,6 +1282,33 @@ Module FMapExtProofs
       congruence.
   Qed.
 
+  Lemma map_update_at_k_cases
+    {A: Type}
+    {m: FM.M.t A}
+    {f: option A -> option A}
+    {v': A}
+    {k: FM.M.key}
+    :
+    FM.M.MapsTo k v' (FM.map_update k f m) ->
+    (exists v, FM.M.MapsTo k v m /\ f (Some v) = Some v') \/
+      (~ FM.M.In k m /\ f None = Some v').
+  Proof.
+    intros H.
+
+    destruct (FM.F.In_dec m k) as [IN|OUT].
+    -
+      apply map_in_mapsto in IN.
+      destruct IN as [v IN].
+      left.
+      apply (map_update_MapsTo_update_at_k IN) in H.
+      exists v.
+      split;auto.
+    -
+      apply (map_update_MapsTo_new_at_k OUT) in H.
+      right.
+      split;auto.
+  Qed.
+
   Lemma map_find_first_exists
     {A:Type}
     (f:FM.M.key -> A -> bool)
