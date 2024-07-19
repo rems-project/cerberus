@@ -142,7 +142,3 @@ codept backend/cn/*.ml > cn-modules.dot
 dot -Tpdf -o cn-modules.pdf # -x optionally to "simplify"
 ```
 
-### Pending 
-
-* Polishing pp.mli
-

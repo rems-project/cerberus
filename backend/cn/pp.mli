@@ -1,6 +1,10 @@
 (* Module Pp -- Pretty printing *)
 
 (* TODO: BCP: This file could still use some thinning and reorganization! *)
+(* TODO: DCM: I suspect one way to proceed might be to have pp.ml be
+   just include PPrint (or delete it and get users to rename it
+   wherever it is used). Everything else that's currently in pp.ml
+   could be turned into pp_utils.ml *)
 
 type document = PPrint.document
 

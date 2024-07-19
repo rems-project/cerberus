@@ -4,6 +4,14 @@
    ones already provided by Cerberus. *)
 
 (* TODO: BCP: I'm a bit surprised that some of these are not already provided by Cerberus! *)
+(* TODO: DCM:
+    Id.s should IMO be to_string
+    Id.pp_string should be deleted or deprecated
+    Id.parse would be clearer as Id.make
+    Id.id should really be deprecated/deleted since the location info is not useful
+       unless used at the call site.
+    Id.is_str can maybe stay as is or be renamed to Id.equal_string
+*)
 
 type t = Cerb_frontend.Symbol.identifier
 

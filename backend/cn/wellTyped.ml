@@ -14,7 +14,6 @@ open Context
 open Global
 open TE
 open Pp
-open Locations
 
 
 open Typing
@@ -26,7 +25,7 @@ let use_ity = ref false
 
 let ensure_base_type = Typing.ensure_base_type
 
-let illtyped_index_term (loc: loc) it has ~expected ~reason (_ctxt,_log) =
+let illtyped_index_term (loc: Locations.t) it has ~expected ~reason (_ctxt,_log) =
   let reason =
     match reason with
     | Either.Left reason ->
@@ -37,7 +36,7 @@ let illtyped_index_term (loc: loc) it has ~expected ~reason (_ctxt,_log) =
   {loc; msg = TypeErrors.Illtyped_it {it = IT.pp it; has = BT.pp has; expected; reason }}
 
 
-let ensure_bits_type (loc : loc) (has : BT.t) =
+let ensure_bits_type (loc : Loc.t) (has : BT.t) =
   match has with
   | BT.Bits (_sign,_n) -> return ()
   | has ->
@@ -1052,8 +1051,8 @@ module WLRT = struct
   type t = LogicalReturnTypes.t
 
   let welltyped _loc lrt =
-    let rec aux = 
-      let here = Locations.other __FUNCTION__ in 
+    let rec aux =
+      let here = Locations.other __FUNCTION__ in
       function
       | Define ((s, it), ((loc, _) as info), lrt) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -1597,16 +1596,16 @@ let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
         let@ pes = ListM.mapM infer_pexpr pes in
         let@ bt = match ctor with
         | M_Cnil _ -> todo ()
-        | M_Ccons -> 
+        | M_Ccons ->
            begin match pes with
-           | [x; xs] -> 
+           | [x; xs] ->
               let ibt = bt_of_pexpr x in
               let@ () = ensure_base_type loc ~expect:(List ibt) (bt_of_pexpr xs) in
               return (bt_of_pexpr xs)
            | _ -> fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
            end
         | M_Ctuple -> return (BT.Tuple (List.map bt_of_pexpr pes))
-        | M_Carray -> 
+        | M_Carray ->
            let ibt = bt_of_pexpr (List.hd pes) in
            let@ () = ListM.iterM (fun pe -> ensure_base_type loc ~expect:ibt (bt_of_pexpr pe)) pes in
            return (Map (Memory.uintptr_bt, ibt))

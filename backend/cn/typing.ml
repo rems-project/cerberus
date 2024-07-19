@@ -121,7 +121,7 @@ let embed_resultat (m : ('a) Resultat.t) : ('a) m =
   | Ok r -> Ok (r , s)
   | Error e -> Error e
 
-  
+
 (* end basic functions *)
 
 
@@ -156,7 +156,7 @@ let make_provable loc =
   let f lc =
     Solver.provable
       ~loc
-      ~solver:(Option.get solver) 
+      ~solver:(Option.get solver)
       ~global:s.global
       ~assumptions:s.constraints
       ~simp_ctxt
@@ -320,7 +320,7 @@ let add_datatype_constr name entry =
   let@ global = get_global () in
   set_global { global with datatype_constrs = SymMap.add name entry global.datatype_constrs }
 
-let set_datatype_order datatype_order = 
+let set_datatype_order datatype_order =
   let@ g = get_global () in
   set_global { g with datatype_order }
 
@@ -362,7 +362,7 @@ let get_a sym = inspect_typing_context (fun s -> Context.get_a sym s)
 let get_l sym = inspect_typing_context (fun s -> Context.get_l sym s)
 
 
-let add_a sym bt info = 
+let add_a sym bt info =
   modify_typing_context (fun s -> Context.add_a sym bt info s)
 
 let add_a_value sym value info =
@@ -566,12 +566,12 @@ let model_with_internal loc prop =
 
 (* functions for binding return types and associated auxiliary functions *)
 
-let ensure_logical_sort (loc : Loc.loc) ~(expect : LS.t) (has : LS.t) : (unit) m =
+let ensure_logical_sort (loc : Loc.t) ~(expect : LS.t) (has : LS.t) : (unit) m =
   if LS.equal has expect
   then return ()
   else fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = BT.pp expect}})
 
-let ensure_base_type (loc : Loc.loc) ~(expect : BT.t) (has : BT.t) : (unit) m =
+let ensure_base_type (loc : Loc.t) ~(expect : BT.t) (has : BT.t) : (unit) m =
   ensure_logical_sort loc ~expect has
 
 
@@ -824,5 +824,3 @@ let test_value_eqs loc guard x ys =
   let@ group = value_eq_group guard x in
   let@ ms = prev_models_with loc guard_it in
   loop group ms ys
-
-
