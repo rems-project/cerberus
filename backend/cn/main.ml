@@ -681,7 +681,7 @@ let subcommands = [
 ]
 
 let () =
-  (** Minor hack, as Cmdliner [default] doesn't work with positional arguments *)
+  (* Minor hack, as Cmdliner [default] doesn't work with positional arguments *)
   let using_subcommands =
     if Array.length Sys.argv >= 2
     then
