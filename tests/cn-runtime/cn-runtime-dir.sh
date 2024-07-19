@@ -37,7 +37,7 @@ do
   fi
   EXEC_C_FILE=$EXEC_C_DIRECTORY/$TEST_BASENAME-exec.c
   echo Generating $EXEC_C_FILE ...
-  if ! cn $TEST_NAME --output_decorated=$TEST_BASENAME-exec.c --output_decorated_dir=$EXEC_C_DIRECTORY/ --with_ownership_checking
+  if ! cn verify $TEST_NAME --output-decorated=$TEST_BASENAME-exec.c --output-decorated-dir=$EXEC_C_DIRECTORY/ --with-ownership-checking
   then
     echo Generation failed.
     NUM_GENERATION_FAILED=$(( $NUM_GENERATION_FAILED + 1 ))

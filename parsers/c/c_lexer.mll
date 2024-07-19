@@ -586,9 +586,10 @@ type lexer_state =
   | LSRegular
   | LSIdentifier of string
 
-let lexer_state = ref LSRegular
 
-let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
+let create_lexer ~(inside_cn:bool) : [ `LEXER of lexbuf -> token ] =
+  let lexer_state = ref LSRegular in
+  `LEXER (fun lexbuf ->
   match !lexer_state with
   | LSRegular ->
       let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
@@ -604,5 +605,5 @@ let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
       end
   | LSIdentifier i ->
       lexer_state := LSRegular;
-      if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
+      if Lexer_feedback.is_typedefname i then TYPE else VARIABLE)
 }

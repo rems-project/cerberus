@@ -6,6 +6,8 @@ type model
    solver found -- is that right?) *)
 type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
+val empty_model : model
+
 (* Global flags to pass to the solver (TODO BCP: Could use a bit more documentation, maybe) *)
 val random_seed : int ref
 val log_to_temp : bool ref
@@ -32,10 +34,9 @@ val num_scopes : solver -> int
 val provable :
   loc:Locations.t ->
   solver:solver ->                    (* Current solver, from the typing context *)
-  global:Global.t ->                  (* Global typing context  (TODO BCP: ?? *) *)
+  global:Global.t ->                  (* Global typing context  (TODO BCP: ??)   *)
   assumptions:Context.LCSet.t ->
-  simp_ctxt:Simplify.simp_ctxt ->     (* will go away? *)
-  pointer_facts:IndexTerms.t list ->  (* will go away? *)
+  simp_ctxt:Simplify.simp_ctxt ->
   LogicalConstraints.t ->
   [> `True | `False ]
 

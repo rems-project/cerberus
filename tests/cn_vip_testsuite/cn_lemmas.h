@@ -6,7 +6,7 @@ requires
     take P = Block<int*>(addr_p);
 
 ensures
-    return == addr_p;
+    ptr_eq(return, addr_p);
     take B = Block<unsigned char[sizeof(int*)]>(return);
 @*/
 {
@@ -20,7 +20,7 @@ requires
     take P = Owned<int*>(addr_p);
 
 ensures
-    return == addr_p;
+    ptr_eq(return, addr_p);
     take B = Owned<unsigned char[(sizeof(int*))]>(return);
     (u64) P == shift_left((u64)B[7u64], 56u64)
                 + shift_left((u64)B[6u64], 48u64)
@@ -43,7 +43,7 @@ requires
     take P = Owned<uintptr_t>(addr_p);
 
 ensures
-    return == addr_p;
+    ptr_eq(return, addr_p);
     take B = Owned<unsigned char[(sizeof(uintptr_t))]>(return);
     (u64) P == shift_left((u64)B[7u64], 56u64)
                 + shift_left((u64)B[6u64], 48u64)

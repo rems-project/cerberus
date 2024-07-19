@@ -20,9 +20,6 @@ int main()
   int *q = (int *)i4;
 #endif
   //CN_VIP printf("Addresses: p=%p\n",(void*)p);
-  /*CN_VIP*/if (&i1 == &i4) return 0;                                         // CN used to derive disjointness and non-null
-  /*CN_VIP*/if ((uintptr_t)&i1 + sizeof(uintptr_t) < (uintptr_t)&i1) return 0;// constraints from resource ownership, but this
-  /*CN_VIP*/if ((uintptr_t)&i4 + sizeof(uintptr_t) < (uintptr_t)&i4) return 0;// was removed for performance reasons.
   /*CN_VIP*/unsigned char* i1_bytes = owned_uintptr_t_to_owned_uchar_arr(&i1);
   /*CN_VIP*/unsigned char* i4_bytes = owned_uintptr_t_to_owned_uchar_arr(&i4);
   /*CN_VIP*/int result = _memcmp(i1_bytes, i4_bytes, sizeof(i1));

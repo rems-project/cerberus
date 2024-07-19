@@ -9,7 +9,7 @@ while getopts "o:" flag; do
  case $flag in
    o) 
    echo "Ownership checking enabled"
-   OWNERSHIP_CLI_FLAG="--with_ownership_checking"
+   OWNERSHIP_CLI_FLAG="--with-ownership-checking"
    OWNERSHIP_C_FILE="ownership.c"
    OWNERSHIP_OBJECT_FILE="ownership.o"
    ;;
@@ -57,7 +57,7 @@ fi
 
 
 echo -n "Generating C files from CN-annotated source... "
-if ! cn $INPUT_FN --output_decorated=$INPUT_BASENAME-exec.c --output_decorated_dir=$EXEC_DIR/ --with_ownership_checking
+if ! cn verify $INPUT_FN --output-decorated=$INPUT_BASENAME-exec.c --output-decorated-dir=$EXEC_DIR/ --with-ownership-checking
 then
   echo generation failed.
 else 
@@ -65,13 +65,13 @@ else
   cd $EXEC_DIR
   echo -n "Compiling... "
 
-  if ! clang-18 -c -I$RUNTIME_PREFIX/include/ *.c $OWNERSHIP_C_FILE_OPT $RUNTIME_PREFIX/libcn.a
+  if ! cc -g -c -I$RUNTIME_PREFIX/include/ *.c $OWNERSHIP_C_FILE_OPT $RUNTIME_PREFIX/libcn.a
   then
     echo "compiling failed."
   else 
     echo "done!"
     echo "Linking..."
-    if ! clang-18 -I$RUNTIME_PREFIX/include/ -o $INPUT_BASENAME-exec-output.bin *.o $OWNERSHIP_OBJECT_FILE_OPT $RUNTIME_PREFIX/libcn.a
+    if ! cc -I$RUNTIME_PREFIX/include/ -o $INPUT_BASENAME-exec-output.bin *.o $OWNERSHIP_OBJECT_FILE_OPT $RUNTIME_PREFIX/libcn.a
     then 
       echo "linking failed."
     else 

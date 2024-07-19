@@ -28,7 +28,7 @@ FAILED=''
 
 for TEST in $SUCC $ANNOT
 do
-  $CN -DVIP -DANNOT $TEST
+  $CN verify -DVIP -DANNOT $TEST
   RET=$?
   if [[ "$RET" = 0 ]]
   then
@@ -48,7 +48,7 @@ done
 
 for TEST in $FAIL $ANNOT $UNPROV
 do
-  $CN $TEST
+  $CN verify $TEST
   RET=$?
   if [[ "$RET" = 1 || "$RET" = 2 ]]
   then

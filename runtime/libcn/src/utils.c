@@ -96,10 +96,30 @@ void ghost_stack_depth_incr(void) {
     print_error_msg_info();
 }
 
+
+#define FMT_PTR "\x1b[33m%#lx\x1b[0m"
+// #define KMAG  "\x1B[35m"
+#define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
+
 void ghost_stack_depth_decr(void) {
     cn_stack_depth--;
     // update_error_message_info(0);
     print_error_msg_info();
+    // leak checking
+    hash_table_iterator it = ht_iterator(cn_ownership_global_ghost_state);
+    printf("CN pointers leaked at (%ld) stack-depth: ", cn_stack_depth);
+    _Bool leaked = false;
+    while (ht_next(&it)) {
+        intptr_t *key = it.key;
+        int *depth = it.value;
+        _Bool fine = *depth <= cn_stack_depth;
+        if (!fine) {
+            leaked = true;
+            printf(FMT_PTR_2 " (%d),", *key, *depth);
+        }
+    }
+    printf("\n");
+    c_ghost_assert(convert_to_cn_bool(!leaked));
 }
 
 int ownership_ghost_state_get(signed long *address_key) {
@@ -117,7 +137,6 @@ void ownership_ghost_state_remove(signed long* address_key) {
     ownership_ghost_state_set(address_key, -1);
 }
 
-
 #define FMT_PTR "\x1b[33m%#lx\x1b[0m"
 // #define KMAG  "\x1B[35m"
 #define FMT_PTR_2 "\x1B[35m%#lx\x1B[0m"
@@ -132,7 +151,6 @@ void dump_ownership_state()
   }
   printf("END\n");
 }
-
 
 
 void cn_get_ownership(uintptr_t generic_c_ptr, size_t size) {
@@ -161,7 +179,6 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
         *address_key = generic_c_ptr + i;
-        /* printf(" off: %d [" FMT_PTR_2 "] (function: %s)\n", i, *address_key, error_msg_info.function_name); */
         int curr_depth = ownership_ghost_state_get(address_key);
         if (curr_depth != cn_stack_depth) {
             printf("CN memory access failed: function %s, file %s, line %d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
@@ -176,7 +193,7 @@ void cn_put_ownership(uintptr_t generic_c_ptr, size_t size) {
 }
 
 void cn_assume_ownership(void *generic_c_ptr, unsigned long size, char *fun) {
-    printf("[CN: assuming ownership] " FMT_PTR_2 ", size: %lu\n", (uintptr_t) generic_c_ptr, size);
+    printf("[CN: assuming ownership (%s)] " FMT_PTR_2 ", size: %lu\n", fun, (uintptr_t) generic_c_ptr, size);
     //print_error_msg_info();
     for (int i = 0; i < size; i++) { 
         signed long *address_key = alloc(sizeof(long));
@@ -227,7 +244,7 @@ void c_remove_local_from_ghost_state(uintptr_t ptr_to_local, size_t size) {
 
 void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
     signed long address_key = 0;
-    printf("C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " [ -- ", generic_c_ptr, generic_c_ptr + offset);
+    printf("C: Checking ownership for [ " FMT_PTR " .. " FMT_PTR " ] -- ", generic_c_ptr, generic_c_ptr + offset);
     for (int i = 0; i<offset; i++) {
       address_key = generic_c_ptr + i;
       int curr_depth = ownership_ghost_state_get(&address_key);
@@ -239,6 +256,7 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
       }
     //   c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
     }
+    printf("\n");
 }
 
 /* TODO: Need address of and size of every stack-allocated variable - could store in struct and pass through. But this is an optimisation */
@@ -428,6 +446,18 @@ void *cn_calloc(size_t num, size_t size)
   }
 }
 
+void cn_free_sized(void* malloced_ptr, size_t size)
+{
+  printf("[CN: freeing ownership] " FMT_PTR ", size: %lu\n", (uintptr_t) malloced_ptr, size);
+  for (int i = 0; i < size; i++) {
+      signed long *address_key = alloc(sizeof(long));
+      *address_key = (uintptr_t) malloced_ptr + i;
+      /* printf(" off: %d [" FMT_PTR "]\n", i, *address_key); */
+      int curr_depth = ownership_ghost_state_get(address_key);
+      c_ghost_assert(convert_to_cn_bool(curr_depth == cn_stack_depth));
+      ownership_ghost_state_remove(address_key);
+  }
+}
 
 void cn_print_u64(const char *str, unsigned long u)
 {

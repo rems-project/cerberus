@@ -1,37 +1,22 @@
-module CF=Cerb_frontend
-module RE = Resources
-module RET = ResourceTypes
+module CF = Cerb_frontend
 module IT = IndexTerms
 module BT = BaseTypes
-module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
-module TE = TypeErrors
 module IdSet = Set.Make(Id)
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
-module S = Solver
 module Loc = Locations
-module LF = LogicalFunctions
-module Mu = Mucore
 module RI = ResourceInference
-module IntSet = Set.Make(Int)
-module IntMap = Map.Make(Int)
 
-open Sctypes
-open Context
 open IT
 open TypeErrors
 open Mucore
 open Pp
 open BT
-open Resources
-open ResourceTypes
-open ResourcePredicates
 open LogicalConstraints
-open List
 open Typing
 open Effectful.Make(Typing)
 
@@ -272,7 +257,6 @@ let rec check_value (loc : loc) (M_V (expect,v)) : IT.t m =
 
 
 (*** pure expression inference ************************************************)
-
 
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
 let is_representable_integer arg ity =
@@ -531,6 +515,22 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        | ty -> fail (fun _ -> {loc; msg = Mismatch {has = BT.pp ty; expect = !^"comparable type"}})
      in
      begin match op with
+     | OpDiv ->
+        let@ () = WellTyped.ensure_base_type loc ~expect (bt_of_pexpr pe1) in
+        let@ () = WellTyped.ensure_bits_type loc expect in
+        let@ () = WellTyped.ensure_bits_type loc (bt_of_pexpr pe2) in
+        check_pexpr pe1 (fun v1 ->
+        check_pexpr pe2 (fun v2 ->
+        let@ provable = provable loc in
+        let v2_bt = bt_of_pexpr pe2 in
+        let here = Locations.other __FUNCTION__ in
+        match provable (t_ (ne_ (v2, int_lit_ 0 v2_bt here) here)) with
+          | `True -> k (div_ (v1, v2) loc)
+          | `False -> 
+            let@ model = model () in
+            let ub = CF.Undefined.UB045a_division_by_zero in
+            fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+          ))
      | OpEq ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
         let@ () = WellTyped.ensure_base_type loc ~expect:(bt_of_pexpr pe1) (bt_of_pexpr pe2) in
@@ -648,7 +648,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
      (* in integers, perform this op and round. in bitvector types, just perform
         the op (for all the ops where wrapping is consistent) *)
      let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-     assert (match act.ct with Integer ity when is_unsigned_integer_type ity -> true | _ -> false);
+     assert (match act.ct with Integer ity when Sctypes.is_unsigned_integer_type ity -> true | _ -> false);
      let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
      let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
      let@ () = WellTyped.ensure_bits_type loc expect in
@@ -907,7 +907,7 @@ end = struct
     let@ () = ensure_base_type (loc_of_pexpr pe) ~expect (bt_of_pexpr pe) in
     check_pexpr pe k
 
-  let check_arg_it (loc, it_arg) ~(expect:LS.t) k =
+  let check_arg_it (loc, it_arg) ~(expect:LogicalSorts.t) k =
     let@ it_arg = WellTyped.WIT.check loc expect it_arg in
     k it_arg
 
@@ -965,6 +965,7 @@ let all_empty loc _original_resources =
 
 
 let compute_used loc (prev_rs, prev_ix) (post_rs, _) =
+  let module IntSet = Set.Make(Int) in
   let post_ixs = IntSet.of_list (List.map snd post_rs) in
   (* restore previous resources that have disappeared from the context, since they
      might participate in a race *)
@@ -979,11 +980,12 @@ let compute_used loc (prev_rs, prev_ix) (post_rs, _) =
   ) ([], []) all_rs
 
 let _check_used_distinct loc used =
+  let module IntMap = Map.Make(Int) in
   let render_upd h =
-    !^ "resource" ^^^ !^ (h.reason_written) ^^^ !^ "at" ^^^ Locations.pp h.last_written
+    !^ "resource" ^^^ !^ (h.Context.reason_written) ^^^ !^ "at" ^^^ Locations.pp h.Context.last_written
   in
   let render_read h =
-    !^ "resource read at " ^^^ Locations.pp h.last_read
+    !^ "resource read at " ^^^ Locations.pp h.Context.last_read
   in
   let rec check_ws m = function
     | [] -> return m
@@ -992,7 +994,7 @@ let _check_used_distinct loc used =
       | Some h2 ->
         Pp.debug 3 (lazy (Pp.typ (!^ "concurrent upds on") (Pp.int i)));
         fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent update"
-          (RE.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
+          (Resources.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
     end
   in
   let@ w_map = check_ws IntMap.empty (List.concat (List.map snd used)) in
@@ -1001,7 +1003,7 @@ let _check_used_distinct loc used =
     | Some h2 ->
       Pp.debug 3 (lazy (Pp.typ (!^ "concurrent accs on") (Pp.int i)));
       fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
-        (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
+        (Resources.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
   in
   ListM.iterM check_rd (List.concat (List.map fst used))
 
@@ -1030,7 +1032,7 @@ let instantiate loc filter arg =
   let@ constraints = get_cs () in
   let extra_assumptions1 = List.filter_map (function
         | Forall ((s, bt), t) when filter t -> Some ((s, bt), t)
-        | _ -> None) (LCSet.elements constraints) in
+        | _ -> None) (ResourceTypes.LCSet.elements constraints) in
   let extra_assumptions2, type_mismatch = List.partition (fun ((_, bt), _) ->
         BT.equal bt (IT.bt arg_it)) extra_assumptions1 in
   let extra_assumptions = List.map (fun ((s, _), t) ->
@@ -1491,13 +1493,13 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                     fail (fun _ -> {loc; msg = Generic !^msg})
                 | E_Pred (CN_owned (Some ct)) ->
                     let@ () = WellTyped.WCT.is_ct loc ct in
-                    return (Owned (ct, Init))
+                    return (ResourceTypes.Owned (ct, Init))
                 | E_Pred (CN_block ct) ->
                     let@ () = WellTyped.WCT.is_ct loc ct in
-                    return (Owned (ct, Uninit))
+                    return (ResourceTypes.Owned (ct, Uninit))
                 | E_Pred (CN_named pn) ->
                     let@ _ = get_resource_predicate_def loc pn in
-                    return (PName pn)
+                    return (ResourceTypes.PName pn)
                in
                let@ it = WellTyped.WIT.infer it in
                let@ (original_rs, _) = all_resources_tagged loc in
@@ -1519,7 +1521,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k: IT.t -> unit m) : unit m =
                      WellTyped.WIT.check loc def_arg_bt has_arg
                    ) args def.args
                in
-               begin match LF.unroll_once def args with
+               begin match LogicalFunctions.unroll_once def args with
                | None ->
                   let msg =
                     !^"Cannot unfold definition of uninterpreted function"
@@ -1671,7 +1673,7 @@ let bind_arguments (_loc : Loc.t) (full_args : _ mu_arguments) =
        aux_l resources args
     | M_Resource ((s, (re, bt)), ((loc, _) as info), args) ->
        let@ () = add_l s bt (fst info, lazy (Sym.pp s)) in
-       aux_l (resources @ [(re, O (sym_ (s, bt, loc)))]) args
+       aux_l (resources @ [(re, Resources.O (sym_ (s, bt, loc)))]) args
     | M_I i ->
        return (i, resources)
   in
@@ -1735,7 +1737,7 @@ let check_procedure
           | M_Return _loc ->
              return ()
           | M_Label (loc, label_args_and_body, _annots, _) ->
-             debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym ^ " " ^ Loc.to_string loc)));
+             debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym ^ " " ^ Locations.to_string loc)));
              let@ (label_body, label_resources) = bind_arguments loc label_args_and_body in
              let@ () = add_rs loc label_resources in
              let (_,label_kind,loc) = SymMap.find lsym label_context in

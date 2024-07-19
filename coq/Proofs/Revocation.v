@@ -507,7 +507,7 @@ Module CheriMemoryImplWithProofs
       ZMapProofs.map_forall_keys (fun alloc_id => alloc_id < m.(next_alloc_id)) am
     (* [last_address] is sane *)
     /\
-      ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) <= AddressValue.to_Z m.(last_address)) am.
+      ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) >= AddressValue.to_Z m.(last_address)) am.
 
   Ltac destruct_base_mem_invariant H
     :=
@@ -2731,73 +2731,135 @@ Module CheriMemoryImplWithProofs
 
     bool_to_prop_hyp.
 
+    (* These are used in different proof branches below *)
+    pose proof (AddressValue.to_Z_in_bounds (last_address s)) as LB.
+
+    pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as LM.
+    autospecialize LM. lia.
+
+
     destruct H as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
     split.
     -
       (* base *)
       repeat split;cbn.
-      +
+      + (* Bdead *)
         apply ZMapProofs.map_forall_add;auto.
-      +
+      + (* Bnooverlap *)
         intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
         specialize (Bnooverlap alloc_id1 alloc_id2 a1 a2 H).
 
         apply ZMap.F.add_mapsto_iff in H0,H1.
-
         destruct H0 as [[H0k H0v]|[H0n H0m]], H1 as [[H1k H1v]|[H1n H1m]].
-        *
+        * (* next_alloc_id s = alloc_id1 = alloc_id2 *)
           congruence.
         *
           (* [a1] is new, [a2] exists *)
+          clear MIcap Bnooverlap.
           subst a1.
           specialize (Blastaddr alloc_id2 a2 H1m). cbn in Blastaddr.
           specialize (Bfit alloc_id2 a2 H1m). cbn in Bfit.
-          constructor.
+          specialize (Bnextallocid alloc_id2).
+          autospecialize Bnextallocid.
+          {
+            eapply ZMapProofs.map_mapsto_in.
+            eauto.
+          }
+          cbn in Bnextallocid.
+
+          unfold allocations_do_no_overlap.
           cbn.
-          rewrite AddressValue.of_Z_roundtrip.
-          --
-            pose proof (AddressValue.to_Z_in_bounds (last_address s)).
-            unfold AddressValue.ADDR_MIN in *.
-            pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as H3.
-            autospecialize H3. lia.
-            admit.
-          --
-            pose proof (AddressValue.to_Z_in_bounds (last_address s)).
-            unfold AddressValue.ADDR_MIN in *.
-            pose proof (Zdiv.Z_mod_lt (AddressValue.to_Z (last_address s) - Z.of_nat size) align) as H3.
-            lia.
+          left.
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+            lia).
+          lia.
         *
           (* [a2] is new, [a1] exists *)
-          admit.
-        *
+          clear MIcap Bnooverlap.
+          subst a2.
+          specialize (Blastaddr alloc_id1 a1 H0m). cbn in Blastaddr.
+          specialize (Bfit alloc_id1 a1 H0m). cbn in Bfit.
+          specialize (Bnextallocid alloc_id1).
+          autospecialize Bnextallocid.
+          {
+            eapply ZMapProofs.map_mapsto_in.
+            eauto.
+          }
+          cbn in Bnextallocid.
+
+          unfold allocations_do_no_overlap.
+          cbn.
+          right.
+          left.
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                  lia).
+          lia.
+        * (* both allocations already exist *)
           auto.
-      +
+      + (* Bfit *)
+        clear MIcap.
         apply ZMapProofs.map_forall_add;auto.
         cbn.
-        admit.
-      +
+        rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                lia).
+        lia.
+      + (* Balign *)
         apply mem_state_after_ghost_tags_preserves.
-        admit.
-        split;auto.
-        split;auto.
-      +
+        --
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                  lia).
+          lia.
+        --
+          repeat split;auto.
+      + (* Bnextallocid *)
         apply ZMapProofs.map_forall_keys_add;[|lia].
         intros k H.
         specialize (Bnextallocid k H). cbn in Bnextallocid.
         lia.
-      +
+      + (* Blastaddr *)
+        clear MIcap.
         apply ZMapProofs.map_forall_add;cbn.
         *
           intros k v H.
-          admit.
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+            lia).
+          specialize (Blastaddr k v H).
+          cbn in Blastaddr.
+          lia.
         *
           lia.
     -
       cbn.
       intros addr g H U bs F.
-      admit.
-  Admitted.
+      apply init_ghost_tags_spec in H.
+      destruct H.
+      +
+        (* existing *)
+        specialize (MIcap addr g H U bs F).
+        destruct MIcap as [c [M1 [a [alloc_id [M2 M3]]]]].
+        exists c.
+        split;[assumption|].
+        exists a, alloc_id.
+        split;[|assumption].
+        eapply ZMap.M.add_2.
+        specialize (Bnextallocid alloc_id).
+        autospecialize Bnextallocid.
+        {
+          eapply ZMapProofs.map_mapsto_in.
+          eauto.
+        }
+        cbn in Bnextallocid.
+        lia.
+        apply M2.
+      +
+        inv H.
+        inv H1.
+      +
+        rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *;
+                                                lia).
+        lia.
+  Qed.
   Opaque allocator.
 
   Instance find_live_allocation_PreservesInvariant:
@@ -4043,7 +4105,7 @@ Module CheriMemoryImplWithProofs
     same_state_steps.
   Qed.
 
-  Instance allocate_object_PreservesInvariant
+  Instance allocate_object_PreservesInvariantg
     (tid:MemCommonExe.thread_id)
     (pref:CoqSymbol.prefix)
     (int_val:integer_value)
@@ -4054,7 +4116,83 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros s.
     unfold allocate_object.
-    (* TODO: postponed until I figure out readonly logic and re-prove `allocator` *)
+    break_if;[preserves_step|].
+    preserves_step.
+    preserves_step.
+    preserves_step.
+    -
+      break_match_goal; repeat break_let.
+      +
+        (* with init *)
+        apply bind_PreservesInvariant_value.
+        intros H s'0 x0 H0.
+
+
+        assert(mem_invariant s'0) as S0.
+        {
+          pose proof (allocator_PreservesInvariant (Z.to_nat (Capability_GS.representable_length (Z.of_nat x)))
+                        (Z.max (num_of_int int_val)
+                           (1 +
+                              AddressValue.to_Z
+                                (AddressValue.bitwise_complement
+                                   (AddressValue.of_Z
+                                      (Capability_GS.representable_alignment_mask (Z.of_nat x))))))
+                        false pref (Some ty) r
+            ) as A.
+          autospecialize A.
+          lia.
+          specialize (A s' H).
+          unfold post_exec_invariant, lift_sum_p in A.
+          clear Heqp.
+          break_match_hyp.
+          --
+            unfold execErrS in Heqs0.
+            break_let.
+            tuple_inversion.
+            invc Heqs0.
+          --
+            unfold execErrS in Heqs0.
+            break_let.
+            tuple_inversion.
+            apply ret_inr in Heqs0.
+            invc Heqs0.
+            assumption.
+        }
+
+        split.
+        *
+          apply S0.
+        *
+          repeat break_let.
+          preserves_step.
+          preserves_step.
+          preserves_step.
+          repeat break_let.
+          preserves_step;[|preserves_step].
+          preserves_step.
+
+          bool_to_prop_hyp.
+          destruct x1, p0.
+          tuple_inversion.
+
+          (* TODO: need `allocator_capmeta_spec`
+             similar to `init_ghost_tags_spec`
+           *)
+
+          (* TODO: this whole branch maybe unecessary in view of this pending change:
+             https://github.com/rems-project/cerberus/issues/229
+           *)
+          admit.
+      +
+        (* No init *)
+        preserves_step.
+        apply allocator_PreservesInvariant.
+        lia.
+        break_let.
+        preserves_step.
+    -
+      repeat break_let.
+      preserves_step.
   Admitted.
 
   Instance allocate_region_PreservesInvariant
@@ -4067,19 +4205,11 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros s.
     unfold allocate_region.
-    (* TODO: postponed until I re-prove `allocator` *)
-  Admitted.
-
-  Instance store_PreservesInvariant
-    (loc : location_ocaml)
-    (cty : CoqCtype.ctype)
-    (is_locking : bool)
-    (ptr : pointer_value)
-    (mval : mem_value):
-    forall s, PreservesInvariant mem_invariant s (store loc cty is_locking ptr mval).
-  Proof.
-    (* TODO: postponed until I figure out `is_locking` logic*)
-  Admitted.
+    preserves_steps.
+    apply allocator_PreservesInvariant.
+    bool_to_prop_hyp.
+    lia.
+  Qed.
 
   Definition memcpy_alloc_bounds_check_p
     (c1 c2: Capability_GS.t)
@@ -4655,6 +4785,115 @@ Module CheriMemoryImplWithProofs
     subst.
     apply (bytemap_copy_data_spec L).
   Qed.
+
+  Instance store_PreservesInvariant
+    (loc : location_ocaml)
+    (cty : CoqCtype.ctype)
+    (is_locking : bool)
+    (ptr : pointer_value)
+    (mval : mem_value):
+    forall s, PreservesInvariant mem_invariant s (store loc cty is_locking ptr mval).
+  Proof.
+    intros s.
+    unfold store.
+    preserves_step.
+    preserves_step.
+    break_if;[preserves_step|].
+    break_match_goal;[preserves_step|].
+    preserves_step.
+    apply SameStatePreserves, find_cap_allocation_SameState.
+    break_match_goal;[|preserves_step].
+    break_let.
+    break_if;[preserves_step|].
+    preserves_step.
+    apply SameStatePreserves, is_within_bound_SameState.
+    break_if;[|preserves_step].
+    preserves_step.
+    apply SameStatePreserves, get_allocation_SameState.
+    break_match_goal;[|preserves_step].
+    preserves_step.
+    apply SameStatePreserves, is_atomic_member_access_SameState.
+    break_if;[preserves_step|].
+    preserves_step.
+    -
+      preserves_step;[preserves_step|].
+      preserves_step;[apply SameStatePreserves, cap_check_SameState|].
+
+      preserves_step.
+      preserves_step.
+      preserves_step.
+      repeat break_let.
+      preserves_step;[|preserves_step].
+      preserves_step.
+      admit.
+    -
+      (* handling `is_locking` *)
+      break_if;[|preserves_step].
+      preserves_steps.
+      (* TODO: updating allocation r/o flag. Should be provable *)
+      {
+        subst.
+        clear - H.
+        rename s'4 into s.
+        destruct H as [MIbase MIcap].
+        destruct_base_mem_invariant MIbase.
+        unfold mem_state_with_allocations.
+
+        Transparent ret bind.
+        unfold Monad_option, ret, bind.
+        Opaque ret bind.
+        unfold allocation_with_is_readonly.
+        cbn.
+
+        split.
+        -
+          (* base *)
+          clear MIcap.
+          repeat split;cbn.
+          1,3,6:
+            apply ZMapProofs.map_forall_update;[assumption|];
+          unfold ZMapProofs.option_pred;
+          intros oa;
+          destruct oa;auto.
+          2:auto.
+          +
+            (* Bnooverlap *)
+            intros alloc_id1 alloc_id2 a1 a2 H H0 H1.
+            admit.
+          +
+            (* Bnextallocid *)
+            intros k M.
+            apply ZMapProofs.map_in_mapsto in M.
+            destruct M as [v M].
+            rename s0 into k'.
+            destruct (ZMap.M.E.eq_dec k' k) as [E|NE].
+            *
+              subst k'.
+              destruct (ZMap.F.In_dec (allocations s) k) as [IN|OUT].
+              --
+                apply ZMapProofs.map_in_mapsto in IN.
+                destruct IN as [v' IN].
+                pose proof (ZMapProofs.map_update_MapsTo_update_at_k IN M) as U.
+                clear M.
+                cbn in U.
+                invc U.
+                apply Bnextallocid.
+                apply ZMapProofs.map_mapsto_in in IN.
+                assumption.
+              --
+                pose proof (ZMapProofs.map_update_MapsTo_new_at_k OUT M) as U.
+                cbn in U.
+                inversion U.
+            *
+              apply (ZMapProofs.map_update_MapsTo_not_at_k (allocations s)) in M;auto.
+              apply Bnextallocid.
+              apply ZMapProofs.map_mapsto_in in M.
+              assumption.
+        -
+          (* main invariant *)
+          admit.
+      }
+  Admitted.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
@@ -5942,9 +6181,6 @@ intrinsic_revoke loc
 intrinsic_bounds_set loc args
 intrinsic_strfcap loc args
 intrinsic_perms_and loc args
-
-Preserve:
-realloc
 
 Misc:
 va_*

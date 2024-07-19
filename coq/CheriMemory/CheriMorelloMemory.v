@@ -852,14 +852,17 @@ Module Type CheriMemoryImpl
     then raise (InternalErr "negative size passed to allocate_region")
     else
       let align_n := num_of_int align_int in
-      let mask := C.representable_alignment_mask size_n in
-      let size_n' := C.representable_length size_n in
-      let align_n' :=
-        Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
+      if align_n <=? 0
+      then raise (InternalErr "non-positive aligment passed to allocate_region")
+      else
+        let mask := C.representable_alignment_mask size_n in
+        let size_n' := C.representable_length size_n in
+        let align_n' :=
+          Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
-      '(alloc_id, addr) <- allocator (Z.to_nat size_n') align_n' true CoqSymbol.PrefMalloc None IsWritable ;;
-      let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
-      ret (PVconcrete c_value).
+        '(alloc_id, addr) <- allocator (Z.to_nat size_n') align_n' true CoqSymbol.PrefMalloc None IsWritable ;;
+        let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
+        ret (PVconcrete c_value).
 
   Definition allocate_object
     (tid: MC.thread_id)
@@ -870,14 +873,17 @@ Module Type CheriMemoryImpl
     : memM pointer_value
     :=
     let align_n := num_of_int int_val in
-    size_n <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
-    let size_z := Z.of_nat size_n in
-    let mask := C.representable_alignment_mask size_z in
-    let size_z' := C.representable_length size_z in
-    let size_n' := Z.to_nat size_z' in
-    let align_n' := Z.max align_n (1 + (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
+    if align_n <=? 0
+      then raise (InternalErr "non-positive aligment passed to allocate_object")
+    else
+      size_n <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
+      let size_z := Z.of_nat size_n in
+      let mask := C.representable_alignment_mask size_z in
+      let size_z' := C.representable_length size_z in
+      let size_n' := Z.to_nat size_z' in
+      let align_n' := Z.max align_n (1 + (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
-    (*
+      (*
     (if (negb ((size_n =? size_n') && (align_n =? align_n')))
     then
       mprint_msg
@@ -888,60 +894,60 @@ Module Type CheriMemoryImpl
                   ", size= " ++ String.dec_str size_n' ++
                     ", align= " ++ String.dec_str align_n')
     else ret tt) ;;
-     *)
+       *)
 
-    (match init_opt with
-     | None =>
-         '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) IsWritable ;;
-         ret (alloc_id, addr, false)
-     | Some mval =>  (* here we allocate an object with initiliazer *)
-         let (ro,readonly_status) :=
-           match pref with
-           | CoqSymbol.PrefStringLiteral _ _ => (true, IsReadOnly ReadonlyStringLiteral)
-           | CoqSymbol.PrefTemporaryLifetime _ _ =>
-               (true, IsReadOnly ReadonlyTemporaryLifetime)
-           | _ =>
-               (true, IsReadOnly ReadonlyConstQualified)
-                 (* | _ => (false,IsWritable) *)
-           end
-         in
-         '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) readonly_status ;;
-         (* We should be careful not to introduce a state change here
+      (match init_opt with
+       | None =>
+           '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) IsWritable ;;
+           ret (alloc_id, addr, false)
+       | Some mval =>  (* here we allocate an object with initiliazer *)
+           let (ro,readonly_status) :=
+             match pref with
+             | CoqSymbol.PrefStringLiteral _ _ => (true, IsReadOnly ReadonlyStringLiteral)
+             | CoqSymbol.PrefTemporaryLifetime _ _ =>
+                 (true, IsReadOnly ReadonlyTemporaryLifetime)
+             | _ =>
+                 (true, IsReadOnly ReadonlyConstQualified)
+                   (* | _ => (false,IsWritable) *)
+             end
+           in
+           '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) readonly_status ;;
+           (* We should be careful not to introduce a state change here
          in case of error which happens after the [allocator]
          invocation, as [allocator] modifies state. In the current
          implementation, this is not happening, as errors are handled
          as [InternalErr] which supposedly should terminate program
          evaluation.  *)
-         st <- get ;;
-         '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval) ;;
-         let bs := mapi (fun i b => (AddressValue.with_offset addr (Z.of_nat i), b)) pre_bs in
-         let bytemap := List.fold_left (fun acc '(addr, b) => AMap.M.add addr b acc) bs st.(bytemap) in
-         put {|
-             next_alloc_id    := st.(next_alloc_id);
-             last_address     := st.(last_address) ;
-             allocations      := st.(allocations);
-             funptrmap        := funptrmap;
-             varargs          := st.(varargs);
-             next_varargs_id  := st.(next_varargs_id);
-             bytemap          := bytemap;
-             capmeta          := capmeta;
-           |}
-         ;;
-         ret (alloc_id, addr, ro)
-     end)
-      >>=
-      fun '(alloc_id, addr, ro)  =>
-        let c := C.alloc_cap addr (AddressValue.of_Z size_z') in
-        let c :=
-          if ro then
-            let p := C.cap_get_perms c in
-            let p := Permissions.perm_clear_store p in
-            let p := Permissions.perm_clear_store_cap p in
-            let p := Permissions.perm_clear_store_local_cap p in
-            C.cap_narrow_perms c p
-          else c
-        in
-        ret (PVconcrete c).
+           st <- get ;;
+           '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval) ;;
+           let bs := mapi (fun i b => (AddressValue.with_offset addr (Z.of_nat i), b)) pre_bs in
+           let bytemap := List.fold_left (fun acc '(addr, b) => AMap.M.add addr b acc) bs st.(bytemap) in
+           put {|
+               next_alloc_id    := st.(next_alloc_id);
+               last_address     := st.(last_address) ;
+               allocations      := st.(allocations);
+               funptrmap        := funptrmap;
+               varargs          := st.(varargs);
+               next_varargs_id  := st.(next_varargs_id);
+               bytemap          := bytemap;
+               capmeta          := capmeta;
+             |}
+           ;;
+           ret (alloc_id, addr, ro)
+       end)
+        >>=
+        fun '(alloc_id, addr, ro)  =>
+          let c := C.alloc_cap addr (AddressValue.of_Z size_z') in
+          let c :=
+            if ro then
+              let p := C.cap_get_perms c in
+              let p := Permissions.perm_clear_store p in
+              let p := Permissions.perm_clear_store_cap p in
+              let p := Permissions.perm_clear_store_local_cap p in
+              C.cap_narrow_perms c p
+            else c
+          in
+          ret (PVconcrete c).
 
 
   Definition cap_is_null  (c : C.t) : bool :=
