@@ -6,15 +6,9 @@
 (* taking things from ocaml_locations *)
 (* TODO: BCP: What does that mean? *)
 
-(* TODO: BCP: I think this type could be made abstract with only a little
-   work -- its identity seems to be used in just a few places in other
-   modules. *)
 type t = Cerb_location.t
 
-(* TODO: BCP: It's a bit hideous to to export two different names for the same (morally abstract) type. *)
-type loc = t
-
-type info = loc * string option
+type info = t * string option
 
 type path = t list
 

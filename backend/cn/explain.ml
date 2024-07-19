@@ -8,7 +8,6 @@ module LS = LogicalSorts
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module StringMap = Map.Make(String)
-module SymPairMap = Map.Make(SymRel.SymPair)
 module C = Context
 module Loc = Locations
 module S = Solver
@@ -22,15 +21,15 @@ open Resources
 
 
 (* perhaps somehow unify with above *)
-type action = 
+type action =
   | Read of IndexTerms.t * IndexTerms.t
   | Write of IndexTerms.t * IndexTerms.t
-  | Create of IndexTerms.t 
+  | Create of IndexTerms.t
   | Kill of IndexTerms.t
   | Call of Sym.t * IndexTerms.t list
   | Return of IndexTerms.t
 
-type log_entry = 
+type log_entry =
   | Action of action * Locations.t
   | State of Context.t
 
@@ -61,7 +60,7 @@ let relevant_predicate_clauses global name req =
         | None -> []
       ) defs
   in
-  List.filter (fun (nm, c) -> 
+  List.filter (fun (nm, c) ->
       Sym.equal nm name
       || clause_has_resource req c
     ) clauses
@@ -74,7 +73,7 @@ type state_extras = {
 let no_ex = {request = None; unproven_constraint = None}
 
 
-module ITSet = struct 
+module ITSet = struct
   include Simplify.ITSet
 
   let rec bigunion_map f = function
@@ -83,30 +82,30 @@ module ITSet = struct
 
 end
 
-  
 
 
-let subterms_without_bound_variables bindings = 
+
+let subterms_without_bound_variables bindings =
   fold_subterms ~bindings (fun bindings acc t ->
       let pats = List.map fst bindings in
       let bound = List.concat_map bound_by_pattern pats in
       let bound = SymSet.of_list (List.map fst bound) in
-      if SymSet.(is_empty (inter bound (IT.free_vars t))) 
+      if SymSet.(is_empty (inter bound (IT.free_vars t)))
       then ITSet.add t acc
       else acc
     ) ITSet.empty
 
 
-let state ctxt model_with_q extras = 
+let state ctxt model_with_q extras =
 
-  let where = 
+  let where =
     let cur_colour = !Cerb_colour.do_colour in
     Cerb_colour.do_colour := false;
-    let head_pos prfx loc = 
+    let head_pos prfx loc =
       let head,pos = Loc.head_pos_of_location loc in
       ((prfx^" "^head), pos)
     in
-    let loc_cartesian, (loc_head, _loc_pos) = 
+    let loc_cartesian, (loc_head, _loc_pos) =
       match ctxt.where.statement, ctxt.where.expression with
       | _, Some loc -> Cerb_location.to_cartesian loc, head_pos "expr" loc
       | Some loc, None -> Cerb_location.to_cartesian loc, head_pos "stmt" loc
@@ -131,13 +130,13 @@ let state ctxt model_with_q extras =
 
 
 
-  let terms = 
+  let terms =
 
     let variables =
       let make s ls = sym_ (s, ls, Locations.other __FUNCTION__) in
-      let basetype_binding (s, (binding, _)) = 
-        match binding with 
-        | Value _ -> None 
+      let basetype_binding (s, (binding, _)) =
+        match binding with
+        | Value _ -> None
         | BaseType ls -> Some (make s ls)
       in
       ITSet.of_list
@@ -147,18 +146,18 @@ let state ctxt model_with_q extras =
     in
 
     let unproven = match extras.unproven_constraint with
-      | Some (T lc) -> 
+      | Some (T lc) ->
          subterms_without_bound_variables [] lc
       | Some (Forall ((s,bt), lc)) ->
          let binder = (Pat (PSym s, bt, Loc.other __FUNCTION__), None) in
          subterms_without_bound_variables [binder] lc
-      | None -> 
+      | None ->
          ITSet.empty
     in
 
     let request = match extras.request with
       | Some (P ret) ->
-         ITSet.bigunion_map (subterms_without_bound_variables []) 
+         ITSet.bigunion_map (subterms_without_bound_variables [])
            (ret.pointer :: ret.iargs)
       | Some (Q ret) ->
          let binder = (Pat (PSym (fst ret.q), snd ret.q, Loc.other __FUNCTION__), None) in
@@ -167,29 +166,29 @@ let state ctxt model_with_q extras =
               [ret.pointer; ret.step])
            (ITSet.bigunion_map (subterms_without_bound_variables [binder])
               (ret.permission :: ret.iargs))
-      | None -> 
+      | None ->
          ITSet.empty
     in
 
-    let subterms = 
-      List.fold_left ITSet.union ITSet.empty 
-        [variables; unproven; request] 
+    let subterms =
+      List.fold_left ITSet.union ITSet.empty
+        [variables; unproven; request]
     in
 
 
-    let filtered = 
-      List.filter_map (fun it -> 
+    let filtered =
+      List.filter_map (fun it ->
           match evaluate it with
           | Some value when not (IT.equal value it) ->
              Some (it, {term = IT.pp it; value = IT.pp value})
-          | Some _ -> 
+          | Some _ ->
              None
-          | None -> 
+          | None ->
              None
         ) (ITSet.elements subterms)
     in
 
-    let interesting, uninteresting = 
+    let interesting, uninteresting =
       List.partition (fun (it, _entry) ->
           match IT.bt it with
           | BT.Unit -> false
@@ -198,13 +197,13 @@ let state ctxt model_with_q extras =
         ) filtered
     in
 
-    (List.map snd interesting, 
+    (List.map snd interesting,
      List.map snd uninteresting)
 
   in
 
   let constraints =
-    let interesting, uninteresting = 
+    let interesting, uninteresting =
       List.partition (fun lc ->
           match lc with
           (* | LC.T (IT (Aligned _, _, _)) -> false *)
@@ -213,7 +212,7 @@ let state ctxt model_with_q extras =
           | _ -> true
         ) (LCSet.elements ctxt.constraints)
     in
-    (List.map LC.pp interesting, 
+    (List.map LC.pp interesting,
      List.map LC.pp uninteresting)
   in
 
@@ -222,7 +221,7 @@ let state ctxt model_with_q extras =
       | None -> ([], get_rs ctxt)
       | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
     in
-    let interesting_diff_res, uninteresting_diff_res = 
+    let interesting_diff_res, uninteresting_diff_res =
       List.partition (fun (ret, _o) ->
           match ret with
           | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
@@ -230,11 +229,11 @@ let state ctxt model_with_q extras =
         ) diff_res
     in
 
-    let interesting = 
-      List.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res 
+    let interesting =
+      List.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res
       @ List.map RE.pp interesting_diff_res
     in
-    let uninteresting = 
+    let uninteresting =
       List.map RE.pp uninteresting_diff_res
     in
     (interesting, uninteresting)
@@ -269,7 +268,7 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
 
   let req_entry ret = RET.pp ret in
 
-  let trace = 
+  let trace =
     let statef ctxt = state ctxt model_with_q extras in
     List.rev (statef ctxt :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
@@ -292,14 +291,14 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
   let requested = Option.map req_entry extras.request in
 
   let unproven = match extras.unproven_constraint with
-    | Some lc -> 
-       let lc_simp = Simplify.LogicalConstraints.simp (Simplify.default ctxt.global) lc in 
+    | Some lc ->
+       let lc_simp = Simplify.LogicalConstraints.simp (Simplify.default ctxt.global) lc in
        Some (LC.pp lc_simp)
     | None ->
        None
   in
 
-    
+
 
   Pp.html_escapes := prev;
 
@@ -308,10 +307,3 @@ let trace (ctxt,log) (model_with_q : Solver.model_with_q) (extras : state_extras
     unproven;
     predicate_hints;
     trace }
-
-
-
-
-
-
-

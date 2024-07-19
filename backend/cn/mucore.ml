@@ -1,3 +1,8 @@
+(* Module Mucore - A more specialized version of Cerberus's Core module
+
+   This is what CN actually uses.  Core can pass around C types as
+   values, while CN is more restrictive, for simplicity. *)
+
 open Pp
 module CF=Cerb_frontend
 open Cerb_frontend
