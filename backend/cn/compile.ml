@@ -199,6 +199,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs es
   | CNExpr_memberof (e, _id) ->
      free_in_expr e
+  | CNExpr_arrow (e, _id) ->
+     free_in_expr e
   | CNExpr_record members ->
      free_in_exprs (List.map snd members)
   | CNExpr_struct (_tag, members) ->
@@ -625,10 +627,6 @@ module EffectfulTranslation = struct
 
 
 
-
-
-
-
   let rec translate_cn_pat env locally_bound (CNPat (loc, pat_), bt) =
     match pat_ with
     | CNPat_wild ->
@@ -710,6 +708,9 @@ module EffectfulTranslation = struct
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
+        | CNExpr_arrow (e, xs) ->   (* Desugar  a->b  as  ( *a).b *)
+           let@ e = self (CNExpr (loc, CNExpr_deref e)) in
+           translate_member_access loc env e xs 
         | CNExpr_record members ->
            let@ members = ListM.mapsndM self members in
            let bts = List.map_snd IT.bt members in

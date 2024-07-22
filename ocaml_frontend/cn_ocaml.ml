@@ -148,7 +148,11 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
       | CNExpr_memberof (e, z) ->
-          Dnode (pp_ctor "CNExpr_member",
+          Dnode (pp_ctor "CNExpr_memberof",
+                [dtree_of_cn_expr e;
+                 Dleaf (pp_identifier z)])
+      | CNExpr_arrow (e, z) ->
+          Dnode (pp_ctor "CNExpr_arrow",
                 [dtree_of_cn_expr e;
                  Dleaf (pp_identifier z)])
       | CNExpr_record members ->
