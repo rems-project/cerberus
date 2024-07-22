@@ -45,6 +45,7 @@ type cn_binop =
   | CN_sub
   | CN_mul
   | CN_div
+  | CN_mod
   | CN_equal
   | CN_inequal
   | CN_lt

@@ -1949,6 +1949,9 @@ mul_expr:
 | e1= mul_expr SLASH e2= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_div, e1, e2))) }
+| e1= mul_expr PERCENT e2= unary_expr
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_mod, e1, e2))) }
 
 add_expr:
 | e= mul_expr
