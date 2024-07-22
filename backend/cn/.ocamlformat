@@ -1,8 +1,9 @@
 profile=janestreet
-ocaml-version=5.2.0
+ocaml-version=4.14.1
+version=0.26.2
 
 break-before-in=fit-or-vertical
-break-cases=vertical
+break-cases=fit
 break-colon=before
 break-collection-expressions=fit-or-vertical
 break-fun-decl=fit-or-vertical

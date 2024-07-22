@@ -1,14 +1,12 @@
-module Loc=Locations
-module SymSet = Set.Make(Sym)
-
+module Loc = Locations
+module SymSet = Set.Make (Sym)
 
 type t = BaseTypes.t
+
 type sort = t
 
 let pp bt = BaseTypes.pp bt
 
-let json bt : Yojson.Safe.t =
-  BaseTypes.json bt
+let json bt : Yojson.Safe.t = BaseTypes.json bt
 
 let equal t1 t2 = BaseTypes.equal t1 t2
-
