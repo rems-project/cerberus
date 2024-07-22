@@ -1,7 +1,7 @@
 (* Module Locations -- Utility functions for Cerberus locations
 
-   This module adds a number of useful functions on locations to the
-   ones already provided by Cerberus. *)
+   This module adds a number of useful functions on locations to the ones already provided
+   by Cerberus. *)
 
 (* taking things from ocaml_locations *)
 (* TODO: BCP: What does that mean? *)
@@ -37,14 +37,16 @@ val unpack : t -> Cerb_location.t
 (* TODO: BCP: What's to do? *)
 (* todo *)
 val json_loc : t -> Yojson.Safe.t
+
 val json_path : path -> Yojson.Safe.t
 
 type region = Lexing.position * Lexing.position
 
-val point: Lexing.position -> t
-val region: region -> Cerb_location.cursor -> t
-val regions: region list -> Cerb_location.cursor -> t
+val point : Lexing.position -> t
 
+val region : region -> Cerb_location.cursor -> t
+
+val regions : region list -> Cerb_location.cursor -> t
 
 val simple_location : t -> string
 
