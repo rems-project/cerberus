@@ -4,15 +4,9 @@ open CF
 let codify_sym (s : Sym.sym) : string =
   let (Symbol (_, n, sd)) = s in
   match sd with
-  | SD_Id x
-  | SD_CN_Id x
-  | SD_ObjectAddress x
-  | SD_FunArgValue x ->
-    x
-  | SD_None ->
-    "fresh_" ^ string_of_int n
-  | _ ->
-    failwith ("Symbol `" ^ Sym.show_raw s ^ "` cannot be codified")
+  | SD_Id x | SD_CN_Id x | SD_ObjectAddress x | SD_FunArgValue x -> x
+  | SD_None -> "fresh_" ^ string_of_int n
+  | _ -> failwith ("Symbol `" ^ Sym.show_raw s ^ "` cannot be codified")
 
 
 (** Only cares what their names in generated code will be *)

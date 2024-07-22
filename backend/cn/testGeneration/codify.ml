@@ -8,10 +8,17 @@ open Dsl
 type test_framework = GTest
 
 module type TF_Codify = sig
+  val codify_header_files : out_channel -> unit
+
   val codify_header : string -> string -> string
 end
 
 module GTest_Codify = struct
+  let codify_header_files (oc : out_channel) : unit =
+    output_string oc "#include <gtest/gtest.h>\n";
+    output_string oc "#include <rapidcheck/gtest.h>\n"
+
+
   let codify_header (suite : string) (test : string) : string =
     "RC_GTEST_PROP(Test" ^ String.capitalize_ascii suite ^ ", " ^ test ^ ", ())\n"
 end
@@ -123,26 +130,68 @@ let rec codify_gen_context (gtx : gen_context) : string =
   match gtx with (x, g) :: gtx' -> codify_gen x g ^ codify_gen_context gtx' | [] -> ""
 
 
-let codify_header (tf : test_framework) (suite : string) (test : string) : string =
-  match tf with GTest -> GTest_Codify.codify_header suite test
+module Impl (C : TF_Codify) = struct
+  open C
+
+  let codify_function_signature
+    (sigma : _ CF.AilSyntax.sigma)
+    (instrumentation : Core_to_mucore.instrumentation)
+    : string
+    =
+    let lookup_fn (x, _) = sym_codified_equal x instrumentation.fn in
+    let fsym, (_, _, fdecl) = List.nth (List.filter lookup_fn sigma.declarations) 0 in
+    Pp_utils.to_plain_pretty_string (Pp_ail.pp_function_prototype fsym fdecl)
+
+
+  let codify_pbt
+    (sigma : _ CF.AilSyntax.sigma)
+    (instrumentation : Core_to_mucore.instrumentation)
+    (args : (Sym.sym * Ctype.ctype) list)
+    (index : int)
+    (oc : out_channel)
+    (gtx : gen_context)
+    : unit
+    =
+    output_string oc (codify_function_signature sigma instrumentation);
+    output_string oc "\n\n";
+    output_string
+      oc
+      (codify_header (codify_sym instrumentation.fn) ("Test" ^ string_of_int index));
+    output_string oc "{\n";
+    output_string oc (codify_gen_context gtx);
+    output_string oc (codify_sym instrumentation.fn);
+    output_string oc "(";
+    output_string oc (args |> List.map fst |> List.map codify_sym |> String.concat ", ");
+    output_string oc ");\n";
+    output_string oc "}\n\n"
+
+
+  let codify_prelude (oc : out_channel) : unit =
+    output_string oc "#include <cstdlib>\n";
+    output_string oc "#include <cstdint>\n";
+    output_string oc "#include <rapidcheck.h>\n";
+    codify_header_files oc;
+    output_string oc "\n"
+end
+
+let codify_prelude (tf : test_framework) (oc : out_channel) : unit =
+  match tf with
+  | GTest ->
+    let open Impl (GTest_Codify) in
+    codify_prelude oc
 
 
 let codify_pbt
   (tf : test_framework)
+  (sigma : _ CF.AilSyntax.sigma)
   (instrumentation : Core_to_mucore.instrumentation)
-  (args : (Symbol.sym * Ctype.ctype) list)
+  (args : (Sym.sym * Ctype.ctype) list)
   (index : int)
   (oc : out_channel)
   (gtx : gen_context)
   : unit
   =
-  output_string
-    oc
-    (codify_header tf (codify_sym instrumentation.fn) ("Test" ^ string_of_int index));
-  output_string oc "{\n";
-  output_string oc (codify_gen_context gtx);
-  output_string oc (codify_sym instrumentation.fn);
-  output_string oc "(";
-  output_string oc (args |> List.map fst |> List.map codify_sym |> String.concat ", ");
-  output_string oc ");\n";
-  output_string oc "}\n\n"
+  match tf with
+  | GTest ->
+    let open Impl (GTest_Codify) in
+    codify_pbt sigma instrumentation args index oc gtx
