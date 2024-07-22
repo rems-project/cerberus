@@ -1,17 +1,17 @@
-module CF = Cerb_frontend
+type test_framework = Codify.test_framework
 
-type test_framework = GTest
+val test_frameworks : (string * test_framework) list
 
 (** The entrypoint into test generation.
     @param output_dir Directory to place generated test files
     @param filename File with specifications to generate tests for
     @param max_unfolds The maximum number of times that predicates will be unfolded
                        **)
-val main
+val run
   :  output_dir:string ->
   filename:string ->
   max_unfolds:int ->
-  CF.GenTypes.genTypeCategory CF.AilSyntax.sigma ->
+  Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
   unit Mucore.mu_file ->
-  test_framework ->
+  Codify.test_framework ->
   unit
