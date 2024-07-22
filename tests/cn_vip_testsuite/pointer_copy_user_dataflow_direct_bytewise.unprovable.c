@@ -8,9 +8,6 @@ void user_memcpy(unsigned char *dest,
                  unsigned char *src, size_t n)
 /*@
 requires
-    (u64) src + n <= (u64) dest || (u64) dest + n <= (u64) src;
-    (u64) src <= (u64) src + n;
-    (u64) dest <= (u64) dest + n;
     take Src = each (u64 i; 0u64 <= i && i < n ) { Owned(array_shift(src, i)) };
     take Dest = each (u64 i; 0u64 <= i && i < n ) { Block<unsigned char>(array_shift(dest, i)) };
 
