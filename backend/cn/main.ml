@@ -358,17 +358,10 @@ let generate_tests
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
     ~f:(fun ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
-      let _, sigma = ail_prog in
-      Cerb_colour.without_colour
-        (fun () ->
-          TestGeneration.main
-            ~output_dir
-            ~filename
-            ~max_unfolds
-            sigma
-            prog5
-            testing_framework)
-        ();
+      let (_, sigma) = ail_prog in
+      Cerb_colour.without_colour (fun () ->
+        TestGeneration.run ~output_dir ~filename ~max_unfolds sigma prog5 testing_framework)
+      ();
       Resultat.return ())
 
 
@@ -732,7 +725,7 @@ module Test_generation_flags = struct
     let doc = "[Experimental] Specify the testing framework used by generated tests" in
     Arg.(
       value
-      & opt (enum [ ("gtest", TestGeneration.GTest) ]) GTest
+      & opt (enum TestGeneration.test_frameworks) GTest
       & info [ "framework" ] ~doc)
 end
 
