@@ -95,6 +95,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_sub -> P.minus
     | CN_mul -> P.star
     | CN_div -> P.slash
+    | CN_mod -> P.percent
     | CN_equal -> P.equals ^^ P.equals
     | CN_inequal -> P.backslash ^^ P.equals
     | CN_lt -> P.langle
