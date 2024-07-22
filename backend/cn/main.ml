@@ -125,6 +125,14 @@ let check_input_file filename =
     if not (ext ".c" || ext ".h") then
       CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
 
+let maybe_generate_tests output_test_dir filename max_unfolds testing_framework ail_prog prog5 =
+  Option.iter (fun output_dir ->
+    let (_, sigma) = ail_prog in
+    Cerb_colour.without_colour (fun () ->
+      TestGeneration.main ~output_dir ~filename ~max_unfolds sigma prog5 testing_framework)
+    ())
+    output_test_dir
+
 let main
       filename
       macros
@@ -162,6 +170,9 @@ let main
       batch
       no_inherit_loc
       magic_comment_char_dollar
+      output_test_dir
+      test_max_unfolds
+      testing_framework
   =
   if json then begin
       if debug_level > 0 then
@@ -217,6 +228,7 @@ let main
       print_log_file ("mucore", MUCORE prog5);
       let paused = Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) in
       Result.iter_error handle_error (Typing.pause_to_result paused);
+      maybe_generate_tests output_test_dir filename test_max_unfolds testing_framework ail_prog prog5;
       begin match output_decorated with
       | None ->
         Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
@@ -239,169 +251,10 @@ open Cmdliner
 
 
 (* some of these stolen from backend/driver *)
+module Common_flags = struct
 let file =
   let doc = "Source C file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
-
-let incl_dirs =
-  let doc = "Add the specified directory to the search path for the\
-             C preprocessor." in
-  Arg.(value & opt_all string [] & info ["I"; "include-directory"]
-         ~docv:"DIR" ~doc)
-
-let incl_files =
-  let doc = "Adds  an  implicit  #include into the predefines buffer which is \
-             read before the source file is preprocessed." in
-  Arg.(value & opt_all string [] & info ["include"] ~doc)
-
-let loc_pp =
-  let doc = "Print pointer values as hexadecimal or as decimal values (hex | dec)" in
-  Arg.(value & opt (enum ["hex", Pp.Hex; "dec", Pp.Dec]) !Pp.loc_pp &
-       info ["locs"] ~docv:"HEX" ~doc)
-
-let debug_level =
-  let doc = "Set the debug message level for cerberus to $(docv) (should range over [0-3])." in
-  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
-
-let print_level =
-  let doc = "Set the debug message level for the type system to $(docv) (should range over [0-15])." in
-  Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
-
-let print_sym_nums =
-  let doc = "Print numeric IDs of Cerberus symbols (variable names)." in
-  Arg.(value & flag & info ["n"; "print-sym-nums"] ~doc)
-
-let batch =
-  let doc = "Type check functions in batch/do not stop on first type error (unless `only` is used)" in
-  Arg.(value & flag & info ["batch"] ~doc)
-
-let slow_smt_threshold =
-  let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
-  Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
-
-let slow_smt_dir =
-  let doc = "Set the destination dir for logging slow smt queries (default is in system temp-dir)." in
-  Arg.(value & opt (some string) None & info ["slow-smt-dir"] ~docv:"FILE" ~doc)
-
-let no_timestamps =
-  let doc = "Disable timestamps in print-level debug messages"
- in
-  Arg.(value & flag & info ["no_timestamps"] ~doc)
-
-let json =
-  let doc = "output in json format" in
-  Arg.(value & flag & info["json"] ~doc)
-
-let output_dir =
-  let doc = "directory in which to output state files (overridden by --state-file)" in
-  Arg.(value & opt (some string) None & info ["output-dir"] ~docv:"FILE" ~doc)
-
-let state_file =
-  let doc = "file in which to output the state" in
-  Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
-
-let diag =
-  let doc = "explore branching diagnostics with key string" in
-  Arg.(value & opt (some string) None & info ["diag"] ~doc)
-
-let lemmata =
-  let doc = "lemmata generation mode (target filename)" in
-  Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
-
-let csv_times =
-  let doc = "file in which to output csv timing information" in
-  Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
-
-let log_times =
-  let doc = "file in which to output hierarchical timing information" in
-  Arg.(value & opt (some string) None & info ["log_times"] ~docv:"FILE" ~doc)
-
-let random_seed =
-  let doc = "Set the SMT solver random seed (default 1)." in
-  Arg.(value & opt int 0 & info ["r"; "random-seed"] ~docv:"I" ~doc)
-
-let solver_logging =
-  let doc = "Log solver queries in SMT2 format to a directory." in
-  Arg.(value & opt (some string) None & info ["solver-logging"] ~docv:"DIR" ~doc)
-
-let solver_flags =
-  let doc = "Ovewrite default solver flags. Note that flags should enable at least incremental checking." in
-  Arg.(value & opt (some (list string)) None
-             & info ["solver-flags"] ~docv:"X,Y,Z" ~doc)
-
-let only =
-  let doc = "only type-check this function (or comma-separated names)" in
-  Arg.(value & opt (some string) None & info ["only"] ~doc)
-
-let skip =
-  let doc = "skip type-checking of this function (or comma-separated names)" in
-  Arg.(value & opt (some string) None & info ["skip"] ~doc)
-
-
-let output_decorated_dir =
-  let doc = "output a version of the translation unit decorated with C runtime
-  translations of the CN annotations to the provided directory" in
-  Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
-
-let output_decorated =
-  let doc = "output a version of the translation unit decorated with C runtime
-  translations of the CN annotations." in
-  Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
-
-let with_ownership_checking =
-  let doc = "Enable ownership checking within CN runtime testing" in
-  Arg.(value & flag & info ["with_ownership_checking"] ~doc)
-
-let copy_source_dir =
-  let doc = "Copy non-CN annotated files into output_decorated_dir for CN runtime testing" in
-  Arg.(value & flag & info ["copy_source_dir"] ~doc)
-
-(* copy-pasting from backend/driver/main.ml *)
-let astprints =
-  let doc = "Pretty print the intermediate syntax tree for the listed languages \
-             (ranging over {cabs, ail, core, types})." in
-  Arg.(value & opt (list (enum [("cabs", Cabs); ("ail", Ail); ("core", Core); ("types", Types)])) [] &
-       info ["ast"] ~docv:"LANG1,..." ~doc)
-
-(* TODO remove this when VIP impl complete *)
-let use_vip =
-  let doc = "use experimental VIP rules" in
-  Arg.(value & flag & info["vip"] ~doc)
-
-let no_use_ity =
-  let doc = "(this switch should go away) in WellTyped.BaseTyping, do not use
-  integer type annotations placed by the Core elaboration" in
-  Arg.(value & flag & info["no-use-ity"] ~doc)
-
-let use_peval =
-  let doc = "(this switch should go away) run the Core partial evaluation phase" in
-  Arg.(value & flag & info["use-peval"] ~doc)
-
-let no_inherit_loc =
-  let doc = "debugging: stop mucore terms inheriting location information from parents" in
-  Arg.(value & flag & info["no-inherit-loc"] ~doc)
-
-let magic_comment_char_dollar =
-  let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
-  Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
-
-let solver_path =
-  let doc = "Path to SMT solver executable" in
-  Arg.(value & opt (some string) None & info ["solver-path"] ~docv:"FILE" ~doc)
-
-let solver_type =
-  let doc = "Specify the SMT solver interface" in
-  Arg.( value
-      & opt (some (enum [ "z3",   Simple_smt.Z3
-                        ; "cvc5", Simple_smt.CVC5
-                        ]))
-        None
-      & info ["solver-type"] ~docv:"z3|cvc5" ~doc
-      )
-
-
-
-
 
 (* copied from cerberus' executable (backend/driver/main.ml) *)
 let macros =
@@ -427,46 +280,229 @@ let macros =
   Arg.(value & opt_all macro_pair [] & info ["D"; "define-macro"]
          ~docv:"NAME[=VALUE]" ~doc)
 
+let incl_dirs =
+  let doc = "Add the specified directory to the search path for the\
+             C preprocessor." in
+  Arg.(value & opt_all string [] & info ["I"; "include-directory"]
+         ~docv:"DIR" ~doc)
+
+let incl_files =
+  let doc = "Adds  an  implicit  #include into the predefines buffer which is \
+             read before the source file is preprocessed." in
+  Arg.(value & opt_all string [] & info ["include"] ~doc)
+
+let debug_level =
+  let doc = "Set the debug message level for cerberus to $(docv) (should range over [0-3])." in
+  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
+
+let print_level =
+  let doc = "Set the debug message level for the type system to $(docv) (should range over [0-15])." in
+  Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
+
+let print_sym_nums =
+  let doc = "Print numeric IDs of Cerberus symbols (variable names)." in
+  Arg.(value & flag & info ["n"; "print-sym-nums"] ~doc)
+
+let no_timestamps =
+  let doc = "Disable timestamps in print-level debug messages" in
+  Arg.(value & flag & info ["no_timestamps"] ~doc)
+
+(* copy-pasting from backend/driver/main.ml *)
+let astprints =
+  let doc = "Pretty print the intermediate syntax tree for the listed languages \
+             (ranging over {cabs, ail, core, types})." in
+  Arg.(value & opt (list (enum [("cabs", Cabs); ("ail", Ail); ("core", Core); ("types", Types)])) [] &
+       info ["ast"] ~docv:"LANG1,..." ~doc)
+
+let no_use_ity =
+  let doc = "(this switch should go away) in WellTyped.BaseTyping, do not use
+  integer type annotations placed by the Core elaboration" in
+  Arg.(value & flag & info["no-use-ity"] ~doc)
+
+let no_inherit_loc =
+  let doc = "debugging: stop mucore terms inheriting location information from parents" in
+  Arg.(value & flag & info["no-inherit-loc"] ~doc)
+
+let magic_comment_char_dollar =
+  let doc = "Override CN's default magic comment syntax to be \"/*\\$ ... \\$*/\"" in
+  Arg.(value & flag & info ["magic-comment-char-dollar"] ~doc)
+
+end
+
+module Verify_flags = struct
+let loc_pp =
+  let doc = "Print pointer values as hexadecimal or as decimal values (hex | dec)" in
+  Arg.(value & opt (enum ["hex", Pp.Hex; "dec", Pp.Dec]) !Pp.loc_pp &
+       info ["locs"] ~docv:"HEX" ~doc)
+
+let batch =
+  let doc = "Type check functions in batch/do not stop on first type error (unless `only` is used)" in
+  Arg.(value & flag & info ["batch"] ~doc)
+
+let slow_smt_threshold =
+  let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
+  Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
+
+let slow_smt_dir =
+  let doc = "Set the destination dir for logging slow smt queries (default is in system temp-dir)." in
+  Arg.(value & opt (some string) None & info ["slow-smt-dir"] ~docv:"FILE" ~doc)
+
+let state_file =
+  let doc = "file in which to output the state" in
+  Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
+
+let diag =
+  let doc = "explore branching diagnostics with key string" in
+  Arg.(value & opt (some string) None & info ["diag"] ~doc)
+
+let csv_times =
+  let doc = "file in which to output csv timing information" in
+  Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
+
+let log_times =
+  let doc = "file in which to output hierarchical timing information" in
+  Arg.(value & opt (some string) None & info ["log_times"] ~docv:"FILE" ~doc)
+
+let random_seed =
+  let doc = "Set the SMT solver random seed (default 1)." in
+  Arg.(value & opt int 0 & info ["r"; "random-seed"] ~docv:"I" ~doc)
+
+let solver_logging =
+  let doc = "Log solver queries in SMT2 format to a directory." in
+  Arg.(value & opt (some string) None & info ["solver-logging"] ~docv:"DIR" ~doc)
+
+let solver_flags =
+  let doc = "Ovewrite default solver flags. Note that flags should enable at least incremental checking." in
+  Arg.(value & opt (some (list string)) None
+             & info ["solver-flags"] ~docv:"X,Y,Z" ~doc)
+
+let solver_path =
+  let doc = "Path to SMT solver executable" in
+  Arg.(value & opt (some string) None & info ["solver-path"] ~docv:"FILE" ~doc)
+
+let solver_type =
+  let doc = "Specify the SMT solver interface" in
+  Arg.( value
+      & opt (some (enum [ "z3",   Simple_smt.Z3
+                        ; "cvc5", Simple_smt.CVC5
+                        ]))
+        None
+      & info ["solver-type"] ~docv:"z3|cvc5" ~doc
+      )
+
+let only =
+  let doc = "only type-check this function (or comma-separated names)" in
+  Arg.(value & opt (some string) None & info ["only"] ~doc)
+
+let skip =
+  let doc = "skip type-checking of this function (or comma-separated names)" in
+  Arg.(value & opt (some string) None & info ["skip"] ~doc)
+
+(* TODO remove this when VIP impl complete *)
+let use_vip =
+  let doc = "use experimental VIP rules" in
+  Arg.(value & flag & info["vip"] ~doc)
+
+let use_peval =
+  let doc = "(this switch should go away) run the Core partial evaluation phase" in
+  Arg.(value & flag & info["use-peval"] ~doc)
+
+let json =
+  let doc = "output in json format" in
+  Arg.(value & flag & info["json"] ~doc)
+
+let output_dir =
+  let doc = "directory in which to output state files (overridden by --state-file)" in
+  Arg.(value & opt (some string) None & info ["output-dir"] ~docv:"FILE" ~doc)
+
+end
+
+module Executable_spec_flags = struct
+let output_decorated_dir =
+  let doc = "output a version of the translation unit decorated with C runtime
+  translations of the CN annotations to the provided directory" in
+  Arg.(value & opt (some string) None & info ["output_decorated_dir"] ~docv:"FILE" ~doc)
+
+let output_decorated =
+  let doc = "output a version of the translation unit decorated with C runtime
+  translations of the CN annotations." in
+  Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
+
+let with_ownership_checking =
+  let doc = "Enable ownership checking within CN runtime testing" in
+  Arg.(value & flag & info ["with_ownership_checking"] ~doc)
+
+let copy_source_dir =
+  let doc = "Copy non-CN annotated files into output_decorated_dir for CN runtime testing" in
+  Arg.(value & flag & info ["copy_source_dir"] ~doc)
+
+end
+
+module Lemma = struct
+let lemmata =
+  let doc = "lemmata generation mode (target filename)" in
+  Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
+
+end
+
+module Test_Generation_Flags = struct
+let output_test_dir =
+  let doc = "[Experimental] Generate test suites and place them in the provided directory" in
+  Arg.(value & opt (some string) None & info ["output-test-dir"] ~docv:"FILE" ~doc)
+
+let test_max_unfolds =
+  let doc = "[Experimental] Set the maximum number of unfolds for test suite generation" in
+  Arg.(value & opt int 5 & info ["test-max-unfolds"] ~docv:"FILE" ~doc)
+
+let testing_framework =
+  let doc = "[Experimental] Specify the testing framework for test suite generation " in
+  Arg.(value & opt (enum ["gtest", TestGeneration.GTest]) GTest & info ["testing-framework"] ~doc)
+
+end
+
 let () =
   let open Term in
   let check_t =
     const main $
-      file $
-      macros $
-      incl_dirs $
-      incl_files $
-      loc_pp $
-      debug_level $
-      print_level $
-      print_sym_nums $
-      slow_smt_threshold $
-      slow_smt_dir $
-      no_timestamps $
-      json $
-      state_file $
-      output_dir $ 
-      diag $
-      lemmata $
-      only $
-      skip $
-      csv_times $
-      log_times $
-      random_seed $
-      solver_logging $
-      solver_flags $
-      solver_path $
-      solver_type $
-      output_decorated_dir $
-      output_decorated $
-      with_ownership_checking $
-      copy_source_dir $
-      astprints $
-      use_vip $
-      no_use_ity $
-      use_peval $
-      batch $
-      no_inherit_loc $
-      magic_comment_char_dollar
+      Common_flags.file $
+      Common_flags.macros $
+      Common_flags.incl_dirs $
+      Common_flags.incl_files $
+      Verify_flags.loc_pp $
+      Common_flags.debug_level $
+      Common_flags.print_level $
+      Common_flags.print_sym_nums $
+      Verify_flags.slow_smt_threshold $
+      Verify_flags.slow_smt_dir $
+      Common_flags.no_timestamps $
+      Verify_flags.json $
+      Verify_flags.state_file $
+      Verify_flags.output_dir $
+      Verify_flags.diag $
+      Lemma.lemmata $
+      Verify_flags.only $
+      Verify_flags.skip $
+      Verify_flags.csv_times $
+      Verify_flags.log_times $
+      Verify_flags.random_seed $
+      Verify_flags.solver_logging $
+      Verify_flags.solver_flags $
+      Verify_flags.solver_path $
+      Verify_flags.solver_type $
+      Executable_spec_flags.output_decorated_dir $
+      Executable_spec_flags.output_decorated $
+      Executable_spec_flags.with_ownership_checking $
+      Executable_spec_flags.copy_source_dir $
+      Common_flags.astprints $
+      Verify_flags.use_vip $
+      Common_flags.no_use_ity $
+      Verify_flags.use_peval $
+      Verify_flags.batch $
+      Common_flags.no_inherit_loc $
+      Common_flags.magic_comment_char_dollar $
+      Test_Generation_Flags.output_test_dir $
+      Test_Generation_Flags.test_max_unfolds $
+      Test_Generation_Flags.testing_framework
   in
   let version_str = "CN version: " ^ Cn_version.git_version in
   let cn_info = Cmd.info "cn" ~version:version_str in

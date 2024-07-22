@@ -330,7 +330,7 @@ and cabs_statement =
 
 and for_clause =
  | FC_expr of cabs_expression
- | FC_decl of cabs_declaration
+ | FC_decl of Loc.t * cabs_declaration
 
 
 (* §6.7.2.2 Enumeration specifiers, Syntax *)

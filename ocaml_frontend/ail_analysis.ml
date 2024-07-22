@@ -106,13 +106,10 @@ let collect_memory_accesses (_, sigm) =
       | AilSbreak
       | AilScontinue
       | AilSreturnVoid
-      | AilSreturn _
       | AilSgoto _ ->
           ()
       | AilSexpr e
-      (* TODO: temporary, while source_injection doesn't work for ownership
-         annotations inside return expressions *)
-      (* | AilSreturn e *)
+      | AilSreturn e
       | AilSreg_store (_, e) ->
           aux_expr e
       | AilSblock (_, ss)

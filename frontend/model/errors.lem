@@ -59,6 +59,7 @@ type extra_semi_context =
 
 type cparser_cause =
   | Cparser_invalid_symbol
+  | Cparser_invalid_string_character
   | Cparser_invalid_line_number of string
   | Cparser_unexpected_eof
   | Cparser_unexpected_token of string

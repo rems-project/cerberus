@@ -35,18 +35,23 @@ let rec open_auxilliary_files source_filename prefix included_filenames already_
 let filter_injs_by_filename inj_pairs fn =
   List.filter (fun (loc, _) -> match Cerb_location.get_filename loc with | Some name -> (String.equal name fn) | None -> false) inj_pairs
 
-let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames = function
+let rec inject_injs_to_multiple_files ail_prog in_stmt_injs block_return_injs cn_header = function
   | [] -> ()
   | (fn', oc') :: xs ->
 
-    let injs_with_syms = filter_injs_by_filename injs_with_filenames fn' in
-    let injs_for_fn' = injs_with_syms in 
+    Stdlib.output_string oc' (cn_header ^ "\n");
+
+    let in_stmt_injs_for_fn' = filter_injs_by_filename in_stmt_injs fn' in
+    let squashed_return_injs_for_fn' = filter_injs_by_filename block_return_injs fn' in 
+    let return_injs_for_fn' = List.map (fun (loc, (e_opt, strs)) -> (loc, e_opt, strs)) squashed_return_injs_for_fn' in 
+
     (* let injs_for_fn' = List.map (fun (loc, (_, strs)) -> (loc, strs)) injs_with_syms in *)
     begin match
       Source_injection.(output_injections oc'
         { filename=fn'; program= ail_prog
         ; pre_post=[]
-        ; in_stmt=injs_for_fn'}
+        ; in_stmt=in_stmt_injs_for_fn'
+        ; returns=return_injs_for_fn'}
       )
     with
     | Ok () ->
@@ -56,7 +61,7 @@ let rec inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames = fun
         prerr_endline str
     end;
     Stdlib.close_out oc';
-    inject_in_stmt_injs_to_multiple_files ail_prog injs_with_filenames xs
+    inject_injs_to_multiple_files ail_prog in_stmt_injs block_return_injs cn_header xs
 
 let copy_source_dir_files_into_output_dir filename already_opened_fns_and_ocs prefix = 
   let source_files_already_opened = filename :: (List.map fst already_opened_fns_and_ocs) in 
@@ -94,8 +99,7 @@ let memory_accesses_injections ail_prog =
     | `Bbox (b, e) -> (b, e) in
   let acc = ref [] in
   let xs = Ail_analysis.collect_memory_accesses ail_prog in
-  List.iteri (fun i access ->
-    Printf.printf "[%d] " i;
+  List.iter (fun access ->
     match access with
     | Ail_analysis.Load {loc; _} ->
         let b, e = pos_bbox loc in
@@ -161,25 +165,16 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let cn_utils_header_pair = ("cn-executable/utils.h", true) in
   let cn_utils_header = Executable_spec_utils.generate_include_header cn_utils_header_pair in
 
-  (* Ownership checking *)
-  (* if with_ownership_checking then 
-    (let ownership_oc = Stdlib.open_out (prefix ^ "ownership.c") in 
-    let ownership_globals = generate_ownership_globals ~is_extern:false () in 
-    Stdlib.output_string ownership_oc cn_utils_header;
-    Stdlib.output_string ownership_oc "\n";
-    Stdlib.output_string ownership_oc ownership_globals;
-    )
-  ; *)
-
   let ownership_function_defs, ownership_function_decls = generate_ownership_functions with_ownership_checking Cn_internal_to_ail.ownership_ctypes sigm in
   let (c_struct_defs, _c_struct_decls) = print_c_structs sigm.tag_definitions in
   let (cn_converted_struct_defs, _cn_converted_struct_decls) = generate_cn_versions_of_structs sigm.tag_definitions in
 
-  
 
   (* let (records_str, record_equality_fun_strs, record_equality_fun_prot_strs) = generate_all_record_strs sigm in *)
-  let (record_defs_str, _record_decls_str, record_equality_fun_strs, record_equality_fun_prot_strs) = c_records in
-  let (record_defs_str', _record_decls_str', record_equality_fun_strs', record_equality_fun_prot_strs') = c_records' in
+  let (record_defs_str, _record_decls_str) = c_records in
+  let (record_defs_str', _record_decls_str) = c_records' in
+
+  let (record_fun_defs, record_fun_decls) = Executable_spec_internal.generate_c_record_funs sigm prog5.mu_logical_predicates prog5.mu_resource_predicates in 
 
   (* let extern_ownership_globals = 
     if with_ownership_checking then 
@@ -202,21 +197,24 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
     "\n\n/* OWNERSHIP FUNCTIONS */\n\n";
     ownership_function_decls;
     conversion_function_decls;
-    record_equality_fun_prot_strs;
-    record_equality_fun_prot_strs';
+    record_fun_decls;
+    (* record_equality_fun_prot_strs; *)
+    (* record_equality_fun_prot_strs'; *)
     c_function_decls;
     "\n";
     predicate_decls;
     ]
   in
 
-  output_to_oc cn_header_oc cn_header_decls_list;
+  let cn_header_oc_str = Executable_spec_utils.ifndef_wrap "CN_HEADER" (String.concat "\n" cn_header_decls_list) in 
+  output_to_oc cn_header_oc [cn_header_oc_str];
 
   (* TODO: Topological sort *)
   let cn_defs_list = 
     [cn_header;
-    record_equality_fun_strs;
-    record_equality_fun_strs';
+    (* record_equality_fun_strs; *)
+    (* record_equality_fun_strs'; *)
+    record_fun_defs;
     conversion_function_defs;
     ownership_function_defs;
     c_function_defs;
@@ -247,39 +245,40 @@ let main ?(with_ownership_checking=false) ?(copy_source_dir=false) filename ((_,
   let struct_injs_with_filenames = Executable_spec_internal.generate_struct_injs sigm in
   let struct_injs_with_filenames = List.map (fun (loc, _) -> (loc, [""])) struct_injs_with_filenames in 
 
-
-  Printf.printf "Locations for injection of CN statements:\n";
-  let _ = List.map (fun (loc, _) -> Printf.printf "%s: %s\n" (Option.get (Cerb_location.get_filename loc)) (Cerb_location.simple_location loc)) executable_spec.in_stmt in 
-  let in_stmt_injs_with_filenames = 
+  
+  (* Printf.printf "Locations for injection of CN statements:\n";
+  let _ = List.map (fun (loc, _) -> Printf.printf "%s: %s\n" (Option.get (Cerb_location.get_filename loc)) (Cerb_location.simple_location loc)) executable_spec.in_stmt in  *)
+  let in_stmt_injs = 
     executable_spec.in_stmt @
-     accesses_stmt_injs 
-     @ toplevel_locs_and_defs @ struct_injs_with_filenames in
-  (* Treat source file separately from header files *)
-  let source_file_in_stmt_injs = filter_injs_by_filename in_stmt_injs_with_filenames filename in
+    accesses_stmt_injs 
+    @ toplevel_locs_and_defs @ struct_injs_with_filenames in
+    (* Treat source file separately from header files *)
+  let source_file_in_stmt_injs = filter_injs_by_filename in_stmt_injs filename in
 
-  let included_filenames = List.map (fun (loc, _) -> Cerb_location.get_filename loc) in_stmt_injs_with_filenames in
+  (* Return injections *)
+  let block_return_injs = executable_spec.returns in 
+  let squashed_block_return_injs = List.map (fun (l, e_opt, strs) -> (l, (e_opt, strs))) block_return_injs in 
+  let source_file_return_injs_squashed = filter_injs_by_filename squashed_block_return_injs filename in 
+  let source_file_return_injs = List.map (fun (l, (e_opt, strs)) -> (l, e_opt, strs)) source_file_return_injs_squashed in 
+    
+  let included_filenames = List.map (fun (loc, _) -> Cerb_location.get_filename loc) in_stmt_injs in
+  let included_filenames' = included_filenames @ List.map (fun (loc, _) -> Cerb_location.get_filename loc) squashed_block_return_injs in 
 
-  let fns_and_ocs = open_auxilliary_files filename prefix included_filenames [] in
+  let remaining_fns_and_ocs = open_auxilliary_files filename prefix included_filenames' [] in
 
   let pre_post_pairs = if with_ownership_checking then 
-    let global_ownership_init_pair = generate_ownership_global_assignments sigm in 
+    let global_ownership_init_pair = generate_ownership_global_assignments sigm prog5 in 
     global_ownership_init_pair @ executable_spec.pre_post
   else 
     executable_spec.pre_post
-  in
-
-  (* TODO: Fix *)
-  let in_stmt = 
-    (* if copy_source_dir then [] else  *)
-    (* executable_spec.in_stmt  *)
-    source_file_in_stmt_injs 
   in
 
   begin match
   Source_injection.(output_injections oc
     { filename; program= ail_prog
     ; pre_post=pre_post_pairs
-    ; in_stmt=in_stmt}
+    ; in_stmt=source_file_in_stmt_injs
+    ; returns= source_file_return_injs }
   )
 with
 | Ok () ->
@@ -289,6 +288,5 @@ with
     prerr_endline str
 end;
 (if copy_source_dir then 
-  copy_source_dir_files_into_output_dir filename fns_and_ocs prefix);
-inject_in_stmt_injs_to_multiple_files ail_prog in_stmt_injs_with_filenames fns_and_ocs
-
+  copy_source_dir_files_into_output_dir filename remaining_fns_and_ocs prefix);
+inject_injs_to_multiple_files ail_prog in_stmt_injs squashed_block_return_injs cn_header remaining_fns_and_ocs
