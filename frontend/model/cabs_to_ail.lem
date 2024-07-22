@@ -4189,6 +4189,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_memberof e ident_membr ->
         CNExpr_memberof <$> desugar_cn_expr e
                         <*> (E.return ident_membr)
+    | CNExpr_arrow e ident_membr ->
+        CNExpr_arrow <$> desugar_cn_expr e
+                     <*> (E.return ident_membr)
     | CNExpr_record members ->
       CNExpr_record <$> sort_record_members desugar_cn_expr members
     | CNExpr_struct tag members ->
