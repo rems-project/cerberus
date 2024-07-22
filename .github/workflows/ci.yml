@@ -91,7 +91,7 @@ jobs:
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         opam pin --yes --no-action add cn .
-        opam install --yes cn
+        opam install --yes cn ocamlformat.0.26.2
 
     - name: Checkout cn-tutorial
       uses: actions/checkout@v4
@@ -112,6 +112,12 @@ jobs:
         eval $(opam env --switch=${{ matrix.version }})
         USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
 
+    - name: Check CN code formatting
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        USE_OPAM='' cd backend/cn && dune build @fmt
+
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
       run: |
@@ -128,5 +134,3 @@ jobs:
         eval $(opam env --switch=with_coq)
         cd tests; USE_OPAM='' ./run-cheri.sh
         cd ..
-
-
