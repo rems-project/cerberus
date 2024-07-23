@@ -28,6 +28,7 @@ type unop =
   | BW_CTZ_NoSMT
   | BW_FFS_NoSMT
   | BW_FLS_NoSMT
+  | BW_Compl
 [@@deriving eq, ord, show]
 
 type binop =
@@ -200,7 +201,8 @@ let pp
        | BW_FFS_NoSMT -> c_app !^"bw_ffs_uf" [ aux false it1 ]
        | BW_FLS_NoSMT -> c_app !^"bw_fls_uf" [ aux false it1 ]
        | Not -> mparens (!^"!" ^^ parens (aux false it1))
-       | Negate -> mparens (!^"-" ^^ parens (aux false it1)))
+       | Negate -> mparens (!^"-" ^^ parens (aux false it1))
+       | BW_Compl -> mparens (!^"~" ^^ parens (aux false it1)))
     | Binop (bop, it1, it2) ->
       (match bop with
        | And ->

@@ -498,7 +498,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
            match unop with
            | M_BW_FFS -> BW_FFS_NoSMT
            | M_BW_CTZ -> BW_CTZ_NoSMT
-           | M_BW_COMPL -> Cerb_debug.error "todo: M_BW_COMPL"
+           | M_BW_COMPL -> BW_Compl
          in
          let value = arith_unop unop vt1 loc in
          k value)
