@@ -325,13 +325,19 @@ let collect = Collect.collect
 
 module Simplify = struct
   let subst_goal (x : Sym.sym) (v : IT.t) ((vars, ms, locs, cs) : goal) : goal =
-    let vars =
-      List.map
-        (fun (x', (ty, e)) -> (x', (ty, IT.subst (IT.make_subst [ (x, v) ]) e)))
-        vars
+    let subst (it : IT.t) : IT.t =
+      (IT.free_vars it
+       |> LAT.SymSet.filter (sym_codified_equal x)
+       |> LAT.SymSet.to_seq
+       |> List.of_seq
+       |> List.map (fun x' -> (x', v))
+       |> IT.make_subst
+       |> IT.subst)
+        it
     in
-    let locs = List.map (fun (e, y) -> (IT.subst (IT.make_subst [ (x, v) ]) e, y)) locs in
-    let cs = List.map (fun e -> IT.subst (IT.make_subst [ (x, v) ]) e) cs in
+    let vars = List.map (fun (x', (ty, e)) -> (x', (ty, subst e))) vars in
+    let locs = List.map (fun (e, y) -> (subst e, y)) locs in
+    let cs = List.map (fun e -> subst e) cs in
     (vars, ms, locs, cs)
 
 
