@@ -242,7 +242,7 @@ val print : PPrint.ToChannel.channel -> document -> unit
 
 val print_file : string -> document -> unit
 
-val plain : PPrint.ToBuffer.document -> string
+val plain : ?rfrac:float -> ?width:int -> PPrint.ToBuffer.document -> string
 
 val ( ^^^ )
   :  Cerb_pp_prelude.P.document ->
