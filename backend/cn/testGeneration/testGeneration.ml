@@ -58,30 +58,22 @@ let generate_pbt
       if debug then
         output_string
           oc
-          ("/* Collected:\n"
-           ^ CF.Pp_utils.to_plain_pretty_string (Constraints.pp_goal g)
-           ^ "\n*/\n\n");
+          ("/* Collected:\n" ^ Pp.plain ~width:90 (Constraints.pp_goal g) ^ "\n*/\n\n");
       let g = Constraints.simplify g in
       if debug then
         output_string
           oc
-          ("/* Simplified:\n"
-           ^ CF.Pp_utils.to_plain_pretty_string (Constraints.pp_goal g)
-           ^ "\n*/\n\n");
+          ("/* Simplified:\n" ^ Pp.plain ~width:90 (Constraints.pp_goal g) ^ "\n*/\n\n");
       let gtx = Dsl.compile g in
       if debug then
         output_string
           oc
-          ("/* Compiled:\n"
-           ^ CF.Pp_utils.to_plain_pretty_string (Dsl.pp_gen_context gtx)
-           ^ "\n*/\n\n");
+          ("/* Compiled:\n" ^ Pp.plain ~width:90 (Dsl.pp_gen_context gtx) ^ "\n*/\n\n");
       let gtx = Dsl.optimize gtx in
       if debug then
         output_string
           oc
-          ("/* Optimized:\n"
-           ^ CF.Pp_utils.to_plain_pretty_string (Dsl.pp_gen_context gtx)
-           ^ "\n*/\n\n");
+          ("/* Optimized:\n" ^ Pp.plain ~width:90 (Dsl.pp_gen_context gtx) ^ "\n*/\n\n");
       Codify.codify_pbt tf instrumentation args i oc gtx)
     (Constraints.collect ~max_unfolds sigma prog5 args lat)
 
