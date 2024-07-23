@@ -167,19 +167,26 @@ module Impl (C : TF_Codify) = struct
     output_string oc "}\n\n"
 
 
-  let codify_prelude (oc : out_channel) : unit =
+  let codify_prelude (sigma : _ CF.AilSyntax.sigma) (oc : out_channel) : unit =
     output_string oc "#include <cstdlib>\n";
     output_string oc "#include <cstdint>\n";
     output_string oc "#include <rapidcheck.h>\n";
     codify_header_files oc;
-    output_string oc "\n"
+    output_string oc "\n";
+    List.iter
+      (fun d ->
+        output_string oc (Pp_utils.to_plain_pretty_string (Pp_ail.pp_tag_definition d));
+        output_string oc "\n\n")
+      sigma.tag_definitions
 end
 
-let codify_prelude (tf : test_framework) (oc : out_channel) : unit =
+let codify_prelude (tf : test_framework) (sigma : _ CF.AilSyntax.sigma) (oc : out_channel)
+  : unit
+  =
   match tf with
   | GTest ->
     let open Impl (GTest_Codify) in
-    codify_prelude oc
+    codify_prelude sigma oc
 
 
 let codify_pbt
