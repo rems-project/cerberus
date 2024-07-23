@@ -286,8 +286,8 @@ let cn_to_ail_unop_internal bt =
   | Negate ->
     (match typedef_str_opt with
      | Some typedef_str -> (A.Bnot, Some (typedef_str ^ "_negate"))
-     | None -> failwith "BWFLSNoSMT unop translation: typedef string not found")
-  | BWFLSNoSMT ->
+     | None -> failwith "BW_FLS_NoSMT unop translation: typedef string not found")
+  | BW_FLS_NoSMT ->
     let failure_msg =
       Printf.sprintf
         "FLS cannot be applied to index term of type %s"
