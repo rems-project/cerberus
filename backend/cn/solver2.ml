@@ -551,7 +551,7 @@ module Translate = struct
       | Const Null -> Some (pointer_ ~alloc_id:Z.zero ~addr:Z.zero here)
       | Unop (op, t1) ->
         (match op with
-         | BWFFSNoSMT ->
+         | BW_FFS_NoSMT ->
            let intl i = int_lit_ i (IT.bt t1) here in
            Some
              (ite_
@@ -774,7 +774,7 @@ module Translate = struct
               via_unsigned1 context (IT.bt t) (Z3.BitVector.mk_neg context) (term t)
             | BT.Integer | BT.Real -> Z3.Arithmetic.mk_unary_minus context (term t)
             | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)"))
-         | BWFFSNoSMT -> adj ()
+         | BW_FFS_NoSMT -> adj ()
          | BWFLSNoSMT -> adj ()
          | BW_CLZ_NoSMT ->
            (match IT.bt t with

@@ -391,12 +391,12 @@ module IndexTerms = struct
            (match do_ctz_z (BT.normalise_to_range bits z) with
             | None -> IT (Unop (op, a), the_bt, the_loc)
             | Some i -> int_lit_ i the_bt the_loc)
-         | BWFFSNoSMT, Const (Z z) ->
+         | BW_FFS_NoSMT, Const (Z z) ->
            if Z.equal z Z.zero then
              int_ 0 the_loc
            else
              int_ (Option.get (do_ctz_z z) + 1) the_loc
-         | BWFFSNoSMT, Const (Bits (bits, z)) ->
+         | BW_FFS_NoSMT, Const (Bits (bits, z)) ->
            let z = BT.normalise_to_range bits z in
            if Z.equal z Z.zero then
              int_lit_ 0 the_bt the_loc

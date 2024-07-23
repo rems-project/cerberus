@@ -963,7 +963,7 @@ let it_to_coq loc global list_mono it =
         (IT.bt t)
         (match op with
          | IT.Not -> f_appM (if enc_prop then "~" else "negb") [ aux x ]
-         | IT.BWFFSNoSMT -> f_appM "CN_Lib.find_first_set_z" [ aux x ]
+         | IT.BW_FFS_NoSMT -> f_appM "CN_Lib.find_first_set_z" [ aux x ]
          | IT.BW_CTZ_NoSMT -> f_appM "CN_Lib.count_trailing_zeroes_z" [ aux x ]
          | _ -> do_fail "unary op")
     | IT.Binop (op, x, y) ->
