@@ -30,10 +30,12 @@
                | SIZEOF LT <ctype> GT
                | OFFSETOF LPAREN <cn_variable> COMMA <cn_variable> RPAREN
                | LBRACE <expr> RBRACE CN_UNCHANGED
-               | BANG <prim_expr>
+               | MINUS <unary_expr>
+               | BANG <unary_expr>
+               | DEFAULT LT <base_type> GT
                | AMPERSAND LPAREN <prim_expr> MINUS_GT <cn_variable> RPAREN
                | AMPERSAND <cn_variable>
-               | LPAREN <base_type_explicit> RPAREN <prim_expr>
+               | LPAREN <base_type_explicit> RPAREN <unary_expr>
 
 <mul_expr> ::= <unary_expr>
              | <mul_expr> STAR <unary_expr>
@@ -51,11 +53,13 @@
              | <rel_expr> LT_EQ <add_expr>
              | <rel_expr> GT_EQ <add_expr>
 
-<bool_bin_expr> ::= <rel_expr>
-                  | <bool_bin_expr> AMPERSAND_AMPERSAND <rel_expr>
-                  | <bool_bin_expr> PIPE_PIPE <rel_expr>
+<bool_and_expr> ::= <rel_expr> (AMPERSAND_AMPERSAND <rel_expr>)*
 
-<list_expr> ::= <bool_bin_expr>
+<bool_implies_expr> ::= <bool_and_expr> (CN_IMPLIES <bool_and_expr>)*
+
+<bool_or_expr> ::= <bool_implies_expr> (PIPE_PIPE <bool_implies_expr>)*
+
+<list_expr> ::= <bool_or_expr>
               | LBRACK <rel_expr> (COMMA <rel_expr>)* RBRACK
 
 <int_range> ::= CONSTANT COMMA CONSTANT
@@ -103,7 +107,7 @@
                        | CN_REAL
                        | CN_POINTER
                        | CN_ALLOC_ID
-                       | LBRACE <nonempty_args> RBRACE
+                       | LBRACE <nonempty_cn_params> RBRACE
                        | STRUCT <cn_variable>
                        | CN_DATATYPE <cn_variable>
                        | CN_MAP LT <base_type> COMMA <base_type> GT
@@ -118,27 +122,25 @@
 
 <cn_option_pred_clauses> ::= [LBRACE <clauses> RBRACE]
 
-<cn_cons_case> ::= <cn_variable> LBRACE <args> RBRACE
+<cn_cons_case> ::= <cn_variable> LBRACE <cn_args> RBRACE
 
 <cn_cons_cases> ::= [<cn_cons_case> (COMMA <cn_cons_case>)*]
 
 <cn_attrs> ::= [LBRACK [<cn_variable> (COMMA <cn_variable>)*] RBRACK]
 
 <cn_function> ::= CN_FUNCTION <cn_attrs> LPAREN <base_type> RPAREN
-                  <cn_variable> LPAREN <args> RPAREN <cn_option_func_body>
+                  <cn_variable> LPAREN <cn_args> RPAREN <cn_option_func_body>
 
 <cn_predicate> ::= CN_PREDICATE <cn_attrs> <cn_pred_output> UNAME VARIABLE
-                   LPAREN <args> RPAREN <cn_option_pred_clauses>
+                   LPAREN <cn_args> RPAREN <cn_option_pred_clauses>
 
-<cn_lemma> ::= CN_LEMMA <cn_variable> LPAREN <args> RPAREN CN_REQUIRES
-               <condition> (SEMICOLON <condition>)* CN_ENSURES <condition>
-               (SEMICOLON <condition>)*
+<cn_lemma> ::= CN_LEMMA <cn_variable> LPAREN <cn_args> RPAREN CN_REQUIRES
+               <condition>+ CN_ENSURES <condition>+
 
 <cn_datatype> ::= CN_DATATYPE <cn_variable> LBRACE <cn_cons_cases> RBRACE
 
-<cn_fun_spec> ::= CN_SPEC <cn_variable> LPAREN <args> RPAREN CN_REQUIRES
-                  <condition> (SEMICOLON <condition>)* CN_ENSURES <condition>
-                  (SEMICOLON <condition>)*
+<cn_fun_spec> ::= CN_SPEC <cn_variable> LPAREN <cn_args> RPAREN SEMICOLON
+                  CN_REQUIRES <condition>+ CN_ENSURES <condition>+
 
 <cn_type_synonym> ::= CN_TYPE_SYNONYM <cn_variable> EQ
                       <opt_paren(<base_type>)>
@@ -146,10 +148,12 @@
 <cn_variable> ::= <NAME> VARIABLE
                 | <NAME> TYPE
 
-<args> ::= [<base_type> <cn_variable> (COMMA <base_type> <cn_variable>)*]
+<base_type_cn_variable> ::= <base_type> <cn_variable>
 
-<nonempty_args> ::= (<base_type> <cn_variable> (COMMA <base_type>
-                    <cn_variable>)*)
+<cn_args> ::= [<base_type_cn_variable> (COMMA <base_type_cn_variable>)*]
+
+<nonempty_cn_params> ::= <base_type_cn_variable> (COMMA
+                         <base_type_cn_variable>)*
 
 <opt_paren(A)> ::= A
                  | LPAREN A RPAREN
@@ -188,20 +192,19 @@
 
 <ctype> ::= <type_name>
 
-<condition> ::= CN_TAKE <cn_variable> EQ <resource>
-              | CN_LET <cn_variable> EQ <expr>
-              | <assert_expr>
+<condition> ::= CN_TAKE <cn_variable> EQ <resource> SEMICOLON
+              | CN_LET <cn_variable> EQ <expr> SEMICOLON
+              | <assert_expr> SEMICOLON
 
-<function_spec_item> ::= CN_TRUSTED
-                       | CN_ACCESSES [<cn_variable> (SEMICOLON
-                         <cn_variable>)*]
-                       | CN_REQUIRES [<condition> (SEMICOLON <condition>)*]
-                       | CN_ENSURES [<condition> (SEMICOLON <condition>)*]
-                       | CN_FUNCTION <cn_variable>
+<function_spec_item> ::= CN_TRUSTED SEMICOLON
+                       | CN_ACCESSES (<cn_variable> SEMICOLON)+
+                       | CN_REQUIRES <condition>+
+                       | CN_ENSURES <condition>+
+                       | CN_FUNCTION <cn_variable> SEMICOLON
 
 <function_spec> ::= <function_spec_item>* EOF
 
-<loop_spec> ::= CN_INV [<condition> (SEMICOLON <condition>)*] EOF
+<loop_spec> ::= CN_INV <condition>+ EOF
 
 <to_be_instantiated> ::= epsilon
                        | <cn_variable> COMMA
@@ -225,6 +228,8 @@
                  | INLINE [<cn_variable> (COMMA <cn_variable>)*] SEMICOLON
                  | CN_PRINT LPAREN <expr> RPAREN SEMICOLON
 
+<cn_statements> ::= <cn_statement>+ EOF
+
 <cn_toplevel_elem> ::= <cn_predicate>
                      | <cn_function>
                      | <cn_lemma>
@@ -232,8 +237,7 @@
                      | <cn_type_synonym>
                      | <cn_fun_spec>
 
-<cn_toplevel> ::= EOF
-                | <cn_toplevel_elem> <cn_toplevel>
+<cn_toplevel> ::= <cn_toplevel_elem>* EOF
 
 
 ```

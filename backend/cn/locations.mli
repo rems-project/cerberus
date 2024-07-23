@@ -1,20 +1,14 @@
 (* Module Locations -- Utility functions for Cerberus locations
 
-   This module adds a number of useful functions on locations to the
-   ones already provided by Cerberus. *)
+   This module adds a number of useful functions on locations to the ones already provided
+   by Cerberus. *)
 
 (* taking things from ocaml_locations *)
 (* TODO: BCP: What does that mean? *)
 
-(* TODO: BCP: I think this type could be made abstract with only a little
-   work -- its identity seems to be used in just a few places in other
-   modules. *)
 type t = Cerb_location.t
 
-(* TODO: BCP: It's a bit hideous to to export two different names for the same (morally abstract) type. *)
-type loc = t
-
-type info = loc * string option
+type info = t * string option
 
 type path = t list
 
@@ -43,14 +37,16 @@ val unpack : t -> Cerb_location.t
 (* TODO: BCP: What's to do? *)
 (* todo *)
 val json_loc : t -> Yojson.Safe.t
+
 val json_path : path -> Yojson.Safe.t
 
 type region = Lexing.position * Lexing.position
 
-val point: Lexing.position -> t
-val region: region -> Cerb_location.cursor -> t
-val regions: region list -> Cerb_location.cursor -> t
+val point : Lexing.position -> t
 
+val region : region -> Cerb_location.cursor -> t
+
+val regions : region list -> Cerb_location.cursor -> t
 
 val simple_location : t -> string
 

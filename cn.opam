@@ -5,6 +5,7 @@ maintainer: ["Christopher Pulte <cp526@cl.cam.ac.uk>"]
 depends: [
   "cerberus-lib"
   "monomorphic"
+  "ocaml" {>= "4.14.0"}
   "ppx_deriving"
   "z3" {>= "4.8.14"}
   "cmdliner"

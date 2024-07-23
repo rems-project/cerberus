@@ -103,6 +103,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_ge -> P.rangle ^^ P.equals
     | CN_or -> P.bar ^^ P.bar
     | CN_and -> P.ampersand ^^ P.ampersand
+    | CN_implies -> P.equals ^^ P.equals ^^ P.rangle
     | CN_map_get -> P.string "CN_map_get"
 
   let pp_cn_c_kind = function
@@ -147,11 +148,25 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
       | CNExpr_memberof (e, z) ->
-          Dnode (pp_ctor "CNExpr_member",
+          Dnode (pp_ctor "CNExpr_memberof",
+                [dtree_of_cn_expr e;
+                 Dleaf (pp_identifier z)])
+      | CNExpr_arrow (e, z) ->
+          Dnode (pp_ctor "CNExpr_arrow",
                 [dtree_of_cn_expr e;
                  Dleaf (pp_identifier z)])
       | CNExpr_record members ->
          Dnode (pp_ctor "CNExpr_record", 
+             List.map (fun (id, e) -> 
+                Dnode (pp_ctor "member", [
+                  Dleaf (pp_identifier id);
+                  dtree_of_cn_expr e
+                ])
+             ) members
+           )
+      | CNExpr_struct (tag, members) ->
+         Dnode (pp_ctor "CNExpr_struct", 
+             Dleaf (Conf.pp_ident tag) ::
              List.map (fun (id, e) -> 
                 Dnode (pp_ctor "member", [
                   Dleaf (pp_identifier id);

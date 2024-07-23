@@ -1,169 +1,133 @@
-let style = "
-* {
-    font-size: 11pt
-}
-
-html {
-    font-family: sans-serif;
-    padding: 0;
-    margin: 0;
-    /* font-size: 8pt; */
-}
-
-body {
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-bottom: 10px;
-    margin: 0;
-    max-width: 800px;
-}
-
-table {
-    width: 100%;
-    border: 1px solid;
-    border-collapse: collapse;
-    /* max-width: 1400px; */
-    /* table-layout: fixed; */
-}
-
-h1 {
-    font-size: 11pt;
-    margin-top: 16pt;
-}
-
-tr {
-    padding : 0;
-    margin : 0;
-}
-
-th, td {
-    text-align: left;
-    vertical-align: top;
-    border-left: 1px solid;
-    border-right: 1px solid;
-    padding-left: 5px;
-    padding-right: 5px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-}
-
-th {
-    padding-top: 5px;
-    padding-bottom: 5px;
-}
-
-th {
-    font-weight: normal;
-    font-style: italic;
-}
-
-.pagelinks {
-    padding-top: 10px;
-    padding-bottom: 30px;
-}
-
-#pages .page { display: none }
-#pages .page:target { display: block }
-
-#pages .pagelinks .button,
-#pages .pagelinks .inactive_button {
-  padding-top: 5px;
-  padding-bottom: 5px;
-  padding-left: 10px;
-  padding-right: 10px;
-  display: inline-block;
-}
-
-
-
-@media (prefers-color-scheme: dark) {
-
-    html {
-        background-color: black;
-        color: lightgray;
-    }
-
-    table, th, td {
-        border-color: #303030;
-    }
-
-    tr {
-        background-color: #181818;
-    }
-
-    th {
-        background-color: #252525;
-        border-bottom: 1px solid #303030;
-    }
-
-    tr:hover {
-        background-color: #101044;
-    }
-
-    #pages .pagelinks .button,
-    #pages .pagelinks .inactive_button {
-        background-color: white;
-        border: 1px solid #EEEEEE;
-    }
-
-    #pages .pagelinks .button:hover {
-        background-color: #BBBBBB;
-    }
-
-    #pages .pagelinks .button a {
-        color: black;
-        text-decoration: none;
-    }
-
-    .pagelinks .inactive_button {
-        color: #AAAAAA;
-    }
-
-}
-
-
-
-@media (prefers-color-scheme: light) {
-
-    html {
-        background-color: white;
-        color: black;
-    }
-
-    table, th, td {
-        border-color: #E9E9E9;
-    }
-
-    tr {
-        background-color: #F8F8F8;
-    }
-
-    th {
-        background-color: #F0F0F0;
-        border-bottom: 1px solid #E9E9E9;
-    }
-
-    tr:hover {
-        background-color: #E2F0FF;
-    }
-
-    #pages .pagelinks .button,
-    #pages .pagelinks .inactive_button {
-        background-color: black;
-        border: 1px solid #111111;
-    }
-
-    #pages .pagelinks .button:hover {
-        background-color: #444444;
-    }
-
-    #pages .pagelinks .button a {
-        color: white;
-        text-decoration: none;
-    }
-
-    .pagelinks .inactive_button {
-        color: #555555;
-    }
-}
-"
+let style =
+  "\n\
+   * {\n\
+  \    font-size: 11pt\n\
+   }\n\n\
+   html {\n\
+  \    font-family: sans-serif;\n\
+  \    padding: 0;\n\
+  \    margin: 0;\n\
+  \    /* font-size: 8pt; */\n\
+   }\n\n\
+   body {\n\
+  \    padding-left: 10px;\n\
+  \    padding-right: 10px;\n\
+  \    padding-bottom: 10px;\n\
+  \    margin: 0;\n\
+  \    max-width: 800px;\n\
+   }\n\n\
+   table {\n\
+  \    width: 100%;\n\
+  \    border: 1px solid;\n\
+  \    border-collapse: collapse;\n\
+  \    /* max-width: 1400px; */\n\
+  \    /* table-layout: fixed; */\n\
+   }\n\n\
+   h1 {\n\
+  \    font-size: 11pt;\n\
+  \    margin-top: 16pt;\n\
+   }\n\n\
+   tr {\n\
+  \    padding : 0;\n\
+  \    margin : 0;\n\
+   }\n\n\
+   th, td {\n\
+  \    text-align: left;\n\
+  \    vertical-align: top;\n\
+  \    border-left: 1px solid;\n\
+  \    border-right: 1px solid;\n\
+  \    padding-left: 5px;\n\
+  \    padding-right: 5px;\n\
+  \    padding-top: 3px;\n\
+  \    padding-bottom: 3px;\n\
+   }\n\n\
+   th {\n\
+  \    padding-top: 5px;\n\
+  \    padding-bottom: 5px;\n\
+   }\n\n\
+   th {\n\
+  \    font-weight: normal;\n\
+  \    font-style: italic;\n\
+   }\n\n\
+   .pagelinks {\n\
+  \    padding-top: 10px;\n\
+  \    padding-bottom: 30px;\n\
+   }\n\n\
+   #pages .page { display: none }\n\
+   #pages .page:target { display: block }\n\n\
+   #pages .pagelinks .button,\n\
+   #pages .pagelinks .inactive_button {\n\
+  \  padding-top: 5px;\n\
+  \  padding-bottom: 5px;\n\
+  \  padding-left: 10px;\n\
+  \  padding-right: 10px;\n\
+  \  display: inline-block;\n\
+   }\n\n\n\n\
+   @media (prefers-color-scheme: dark) {\n\n\
+  \    html {\n\
+  \        background-color: black;\n\
+  \        color: lightgray;\n\
+  \    }\n\n\
+  \    table, th, td {\n\
+  \        border-color: #303030;\n\
+  \    }\n\n\
+  \    tr {\n\
+  \        background-color: #181818;\n\
+  \    }\n\n\
+  \    th {\n\
+  \        background-color: #252525;\n\
+  \        border-bottom: 1px solid #303030;\n\
+  \    }\n\n\
+  \    tr:hover {\n\
+  \        background-color: #101044;\n\
+  \    }\n\n\
+  \    #pages .pagelinks .button,\n\
+  \    #pages .pagelinks .inactive_button {\n\
+  \        background-color: white;\n\
+  \        border: 1px solid #EEEEEE;\n\
+  \    }\n\n\
+  \    #pages .pagelinks .button:hover {\n\
+  \        background-color: #BBBBBB;\n\
+  \    }\n\n\
+  \    #pages .pagelinks .button a {\n\
+  \        color: black;\n\
+  \        text-decoration: none;\n\
+  \    }\n\n\
+  \    .pagelinks .inactive_button {\n\
+  \        color: #AAAAAA;\n\
+  \    }\n\n\
+   }\n\n\n\n\
+   @media (prefers-color-scheme: light) {\n\n\
+  \    html {\n\
+  \        background-color: white;\n\
+  \        color: black;\n\
+  \    }\n\n\
+  \    table, th, td {\n\
+  \        border-color: #E9E9E9;\n\
+  \    }\n\n\
+  \    tr {\n\
+  \        background-color: #F8F8F8;\n\
+  \    }\n\n\
+  \    th {\n\
+  \        background-color: #F0F0F0;\n\
+  \        border-bottom: 1px solid #E9E9E9;\n\
+  \    }\n\n\
+  \    tr:hover {\n\
+  \        background-color: #E2F0FF;\n\
+  \    }\n\n\
+  \    #pages .pagelinks .button,\n\
+  \    #pages .pagelinks .inactive_button {\n\
+  \        background-color: black;\n\
+  \        border: 1px solid #111111;\n\
+  \    }\n\n\
+  \    #pages .pagelinks .button:hover {\n\
+  \        background-color: #444444;\n\
+  \    }\n\n\
+  \    #pages .pagelinks .button a {\n\
+  \        color: white;\n\
+  \        text-decoration: none;\n\
+  \    }\n\n\
+  \    .pagelinks .inactive_button {\n\
+  \        color: #555555;\n\
+  \    }\n\
+   }\n"

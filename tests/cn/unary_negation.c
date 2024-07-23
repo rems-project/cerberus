@@ -21,4 +21,5 @@ int main(void)
 /*@ trusted; @*/
 {
     check_simplify();
+    return 0;
 }

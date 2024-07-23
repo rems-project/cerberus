@@ -32,6 +32,8 @@ let string_of_gentype = String_ail.string_of_genType
 let string_of_cparser_cause = function
   | Cparser_invalid_symbol ->
       "invalid symbol"
+  | Cparser_invalid_string_character ->
+      "invalid string character"
   | Cparser_invalid_line_number n ->
       "invalid line directive:" ^ n
   | Cparser_unexpected_eof ->

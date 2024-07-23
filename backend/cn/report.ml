@@ -1,79 +1,84 @@
-type state_entry = {
-    loc_e : Pp.document option;
+type state_entry =
+  { loc_e : Pp.document option;
     loc_v : Pp.document option;
-    state : Pp.document option;
+    state : Pp.document option
   }
 
-type term_entry = {
-    term : Pp.document;
-    value : Pp.document;
+type term_entry =
+  { term : Pp.document;
+    value : Pp.document
   }
 
-type predicate_clause_entry = {
-    cond : Pp.document;
-    clause : Pp.document;
+type predicate_clause_entry =
+  { cond : Pp.document;
+    clause : Pp.document
   }
 
-type resource_entry = {
-    res : Pp.document;
-    res_span : Pp.document;
+type resource_entry =
+  { res : Pp.document;
+    res_span : Pp.document
   }
 
-type where_report = {
-    fnction: string option;
-    section: string option;
-    loc_cartesian: ((int * int) * (int * int)) option;
-    loc_head: string;
-    (* loc_pos: string; *)
+type where_report =
+  { fnction : string option;
+    section : string option;
+    loc_cartesian : ((int * int) * (int * int)) option;
+    loc_head : string (* loc_pos: string; *)
   }
 
-type state_report = {
-    where: where_report;
+type state_report =
+  { where : where_report;
     (* variables : var_entry list; *)
-    resources : (Pp.document list * Pp.document list);
-    constraints: (Pp.document list * Pp.document list); (* interesting/uninteresting *)
-    terms : (term_entry list * term_entry list);
+    resources : Pp.document list * Pp.document list;
+    constraints : Pp.document list * Pp.document list; (* interesting/uninteresting *)
+    terms : term_entry list * term_entry list
   }
 
-type report = {
-    trace : state_report list;
+type report =
+  { trace : state_report list;
     requested : Pp.document option;
-    unproven : (Pp.document (* * Pp.document *)) option;
-    predicate_hints : predicate_clause_entry list;
+    unproven : Pp.document (* * Pp.document *) option;
+    predicate_hints : predicate_clause_entry list
   }
-
 
 let list elements = String.concat "" elements
-let enclose tag what = "<"^tag^">" ^ what ^ "</"^tag^">"
+
+let enclose tag what = "<" ^ tag ^ ">" ^ what ^ "</" ^ tag ^ ">"
+
 (* let html elements = enclose "html" (list elements) *)
 (* let head = enclose "head" *)
 (* let style = enclose "style" *)
-let _link ~url ~text = "<a href=\""^url^"\">"^text^"</a>"
+let _link ~url ~text = "<a href=\"" ^ url ^ "\">" ^ text ^ "</a>"
+
 let div ?clss ?id elements =
-  let clss = match clss with
-    | Some clss -> " class=\""^clss^"\""
-    | None -> ""
-  in
-  let id = match id with
-    | Some id -> " id=\""^id^"\""
-    | None -> ""
-  in
+  let clss = match clss with Some clss -> " class=\"" ^ clss ^ "\"" | None -> "" in
+  let id = match id with Some id -> " id=\"" ^ id ^ "\"" | None -> "" in
   let opent = "<div" ^ clss ^ id ^ ">" in
   let closet = "</div>" in
-  opent ^ (list elements) ^ closet
+  opent ^ list elements ^ closet
+
+
 (* let pre code = enclose "pre" code *)
 (* let body elements = enclose "body" (list elements) *)
-let h i title body = list [enclose ("h"^string_of_int i) title; body]
-let table_row cols = enclose "tr" (list (List.map (enclose "td") cols))
-let table_head_row cols = enclose "tr" (list (List.map (enclose "th") cols))
-let table_head cols = enclose "thead" (table_head_row cols)
-let table_body rows = enclose "tbody" (list (List.map table_row rows))
-let table head rows = enclose "table" (list [table_head head; table_body rows])
-let table_without_head rows = enclose "table" (list [table_body rows])
-let details summary more = enclose "details" (list [enclose "summary" summary; more])
-let oguard o f = match o with None -> "" | Some x -> f x
-let lguard l f = match l with [] -> "" | _ -> f l
+let h i title body = list [ enclose ("h" ^ string_of_int i) title; body ]
 
+let table_row cols = enclose "tr" (list (List.map (enclose "td") cols))
+
+let table_head_row cols = enclose "tr" (list (List.map (enclose "th") cols))
+
+let table_head cols = enclose "thead" (table_head_row cols)
+
+let table_body rows = enclose "tbody" (list (List.map table_row rows))
+
+let table head rows = enclose "table" (list [ table_head head; table_body rows ])
+
+let table_without_head rows = enclose "table" (list [ table_body rows ])
+
+let details summary more = enclose "details" (list [ enclose "summary" summary; more ])
+
+let oguard o f = match o with None -> "" | Some x -> f x
+
+let lguard l f = match l with [] -> "" | _ -> f l
 
 (* let make_requested requested =  *)
 (*   oguard requested (fun re -> *)
@@ -86,45 +91,50 @@ let lguard l f = match l with [] -> "" | _ -> f l
 let cartesian_to_string = function
   | None -> ""
   | Some ((start_line, start_col), (end_line, end_col)) ->
-      Printf.sprintf "%d:%d-%d:%d" start_line start_col end_line end_col
+    Printf.sprintf "%d:%d-%d:%d" start_line start_col end_line end_col
+
 
 let make_where where =
+  let or_empty = function Some s -> s | None -> "" in
+  table
+    [ "function"; "section"; "location" ]
+    [ [ div ~clss:"loc_function" [ or_empty where.fnction ];
+        div ~clss:"loc_section" [ or_empty where.section ];
+        div ~clss:"loc" [ cartesian_to_string where.loc_cartesian ]
+        (* pre (where.loc_pos) *)
+      ]
+    ]
 
-  let or_empty = function
-    | Some s -> s
-    | None -> ""
-  in
-
-  table ["function"; "section"; "location"]
-    [[div ~clss:"loc_function" [or_empty where.fnction];
-      div ~clss:"loc_section" [or_empty where.section];
-      div ~clss:"loc" [cartesian_to_string where.loc_cartesian];
-      (* pre (where.loc_pos) *)
-    ]]
 
 let make_requested requested =
   oguard requested (fun re ->
-    h 1 "Requested resource" (
-      table_without_head (* ["requested"; (\* "byte span" *\)] *)
-        [[Pp.plain re; (* Pp.plain re.res_span *)]]
-    )
-  )
+    h
+      1
+      "Requested resource"
+      (table_without_head (* ["requested"; (\* "byte span" *\)] *)
+         [ [ Pp.plain re (* Pp.plain re.res_span *) ] ]))
+
 
 let make_unproven unproven =
   oguard unproven (fun c ->
-    h 1 "Unproven constraint (simplified)" (
-      table_without_head (* ["constraint"; "simplified constraint"] *)
-        [[Pp.plain c; (* Pp.plain (snd c) *)]]
-    )
-  )
+    h
+      1
+      "Unproven constraint (simplified)"
+      (table_without_head (* ["constraint"; "simplified constraint"] *)
+         [ [ Pp.plain c (* Pp.plain (snd c) *) ] ]))
+
 
 let make_predicate_hints predicate_hints =
   lguard predicate_hints (fun predicate_hints ->
-    h 1 "Possibly relevant predicate clauses" (
-      table ["condition"; "clause"]
-        (List.map (fun pce -> [Pp.plain pce.cond; Pp.plain pce.clause]) predicate_hints)
-    )
-  )
+    h
+      1
+      "Possibly relevant predicate clauses"
+      (table
+         [ "condition"; "clause" ]
+         (List.map
+            (fun pce -> [ Pp.plain pce.cond; Pp.plain pce.clause ])
+            predicate_hints)))
+
 
 (* let make_resources resources =  *)
 (*   h 1 "Available resources" ( *)
@@ -135,57 +145,55 @@ let make_predicate_hints predicate_hints =
 (*         (List.map (fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources) *)
 (*   ) *)
 
-
-
-
 let interesting_uninteresting
-      (interesting_table, interesting_data)
-      (uninteresting_table, uninteresting_data)
+  (interesting_table, interesting_data)
+  (uninteresting_table, uninteresting_data)
   =
-  match interesting_data, uninteresting_data with
+  match (interesting_data, uninteresting_data) with
   | [], [] -> "(none)"
-  | _ , [] -> interesting_table
-  | [], _  -> details "more" uninteresting_table
-  | _ , _  -> interesting_table ^ details "more" uninteresting_table
+  | _, [] -> interesting_table
+  | [], _ -> details "more" uninteresting_table
+  | _, _ -> interesting_table ^ details "more" uninteresting_table
 
 
 let make_resources (interesting, uninteresting) =
-  let make = List.map (fun re -> [Pp.plain re; (* Pp.plain re.res_span *)]) in
+  let make = List.map (fun re -> [ Pp.plain re (* Pp.plain re.res_span *) ]) in
   let interesting_table = table_without_head (make interesting) in
   let uninteresting_table = table_without_head (make uninteresting) in
-  h 1 "Available resources" (
-      interesting_uninteresting
-        (interesting_table, interesting)
-        (uninteresting_table, uninteresting)
-  )
-
-
-
-let make_terms (interesting, uninteresting) =
-  let make = List.map (fun v -> [Pp.plain v.term; Pp.plain v.value]) in
-  let interesting_table = table ["term"; "value"] (make interesting) in
-  let uninteresting_table = table ["term"; "value"] (make uninteresting) in
-  h 1 "Terms" 
-    (interesting_uninteresting 
-       (interesting_table, interesting) 
-       (uninteresting_table, uninteresting))
-
-let make_constraints (interesting, uninteresting) =
-  let make = List.map (fun c -> [Pp.plain c]) in
-  let interesting_table = table_without_head (make interesting) in
-  let uninteresting_table = table_without_head (make uninteresting) in
-  h 1 "Constraints"
+  h
+    1
+    "Available resources"
     (interesting_uninteresting
        (interesting_table, interesting)
        (uninteresting_table, uninteresting))
 
 
+let make_terms (interesting, uninteresting) =
+  let make = List.map (fun v -> [ Pp.plain v.term; Pp.plain v.value ]) in
+  let interesting_table = table [ "term"; "value" ] (make interesting) in
+  let uninteresting_table = table [ "term"; "value" ] (make uninteresting) in
+  h
+    1
+    "Terms"
+    (interesting_uninteresting
+       (interesting_table, interesting)
+       (uninteresting_table, uninteresting))
 
 
+let make_constraints (interesting, uninteresting) =
+  let make = List.map (fun c -> [ Pp.plain c ]) in
+  let interesting_table = table_without_head (make interesting) in
+  let uninteresting_table = table_without_head (make uninteresting) in
+  h
+    1
+    "Constraints"
+    (interesting_uninteresting
+       (interesting_table, interesting)
+       (uninteresting_table, uninteresting))
 
 
-
-let css = {|
+let css =
+  {|
 html {
   font-family: sans-serif;
   font-size: 11pt
@@ -418,9 +426,11 @@ th {
 }
 |}
 
-let script = {|
+
+let script =
+  {|
 var current_page = 1
-const menu = document.getElementById("menu1").children
+const menu = document.getElementById("menu1").getElementsByTagName("li")
 const pageinfo = document.getElementById("pageinfo")
 const pages = document.getElementById("pages").children
 const cn_code = document.getElementById("cn_code")
@@ -595,25 +605,31 @@ init()
 |}
 
 
-let make_state (report: state_report) requested unproven predicate_hints =
-  div ~clss:"page" [
-    div ~clss:"hidden" [make_where report.where];
-    make_requested requested;
-    make_unproven unproven;
-    make_predicate_hints predicate_hints;
-    make_resources report.resources;
-    make_terms report.terms;
-    make_constraints report.constraints;
-  ]
+let make_state (report : state_report) requested unproven predicate_hints =
+  div
+    ~clss:"page"
+    [ div ~clss:"hidden" [ make_where report.where ];
+      make_requested requested;
+      make_unproven unproven;
+      make_predicate_hints predicate_hints;
+      make_resources report.resources;
+      make_terms report.terms;
+      make_constraints report.constraints
+    ]
 
 
-let mk_html ~title ~pages ~file_content ~n_pages= {|
+let mk_html ~title ~pages ~file_content ~n_pages =
+  {|
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>|} ^ title ^ {|</title>
-<style>|} ^ css ^ {|</style>
+<title>|}
+  ^ title
+  ^ {|</title>
+<style>|}
+  ^ css
+  ^ {|</style>
 </head>
 
 <div id="root">
@@ -623,63 +639,77 @@ let mk_html ~title ~pages ~file_content ~n_pages= {|
     <li><button onclick="goto_page(1)"/>first</button></li>
     <li><button onclick="goto_prev()"/>prev</button></li>
     <li><button onclick="goto_next()"/>next</button></li>
-    <li><button onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>last</button></li>
+    <li><button onclick="goto_page(|}
+  ^ string_of_int n_pages
+  ^ {|)"/>last</button></li>
     </ul>
     <div id="pageinfo"></div>
   </div>
-  |} ^ pages ^ {|
+  |}
+  ^ pages
+  ^ {|
   </div>
 <div id="cn_code_display">
 <div class="menu" id="menu2">
   <div id="sectioninfo"></div>
 </div>
-|} ^ file_content ^ {|
+|}
+  ^ file_content
+  ^ {|
 </div>
 </div>
 
-<script defer>|} ^ script ^ {|</script>
+<script defer>|}
+  ^ script
+  ^ {|</script>
 </html>
 |}
+
 
 let read_file filename =
   try
     let ic = open_in filename in
     Some (In_channel.input_all ic)
   with
-    | _ -> None
+  | _ -> None
 
-let make filename source_filename_opt (report: report) =
+
+let make filename source_filename_opt (report : report) =
   let n_pages = List.length report.trace in
   assert (n_pages > 0);
-
-  let _menu = div ~id:"menu"
-    [ {|<input type="button" value="first" onclick="goto_page(|} ^ string_of_int 1 ^ {|)"/>|}
-    ; {|<input type="button" value="prev" onclick="goto_prev()"/>|}
-    ; {|<input type="button" value="next" onclick="goto_next()"/>|}
-    ; {|<input type="button" value="last" onclick="goto_page(|} ^ string_of_int n_pages ^ {|)"/>|} ] in
-
-  let pages = div ~id:"pages" begin
-    List.map (fun state ->
-      make_state
-        state
-        report.requested
-        report.unproven
-        report.predicate_hints
-    ) report.trace
-  end in
-
-  let file_content = match Option.bind source_filename_opt read_file with
+  let _menu =
+    div
+      ~id:"menu"
+      [ {|<input type="button" value="first" onclick="goto_page(|}
+        ^ string_of_int 1
+        ^ {|)"/>|};
+        {|<input type="button" value="prev" onclick="goto_prev()"/>|};
+        {|<input type="button" value="next" onclick="goto_next()"/>|};
+        {|<input type="button" value="last" onclick="goto_page(|}
+        ^ string_of_int n_pages
+        ^ {|)"/>|}
+      ]
+  in
+  let pages =
+    div
+      ~id:"pages"
+      (List.map
+         (fun state ->
+           make_state state report.requested report.unproven report.predicate_hints)
+         report.trace)
+  in
+  let file_content =
+    match Option.bind source_filename_opt read_file with
     | None -> "NO FILE CONTENT FOUND"
-    | Some str -> str in
+    | Some str -> str
+  in
   let oc = open_out filename in
-  output_string oc begin
-    mk_html ~title:"CN state explorer"
-      ~pages
-      ~file_content:(div ~id:"cn_code" [file_content])
-      ~n_pages
-  end;
+  output_string
+    oc
+    (mk_html
+       ~title:"CN state explorer"
+       ~pages
+       ~file_content:(div ~id:"cn_code" [ file_content ])
+       ~n_pages);
   close_out oc;
   filename
-
-
-

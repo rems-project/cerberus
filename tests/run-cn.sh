@@ -18,7 +18,7 @@ FAILED=''
 
 for TEST in $SUCC
 do
-  $CN $TEST
+  $CN verify $TEST
   RET=$?
   if [[ "$RET" = 0 ]]
   then
@@ -33,7 +33,7 @@ done
 
 for TEST in $FAIL
 do
-  $CN $TEST
+  $CN verify $TEST
   RET=$?
   if [[ "$RET" = 1 || "$RET" = 2 ]]
   then

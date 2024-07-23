@@ -34,7 +34,7 @@ We are following [Trunk Based Development](https://trunkbaseddevelopment.com/)
 methodology. Here's the development workflow.
 
 1. [Create an issue](#create-an-issue)
-1. [Create a branch](#create-a-branch)
+1. [Fork the repo](#fork-the-repo)
 1. [Write your code](#write-your-code)
 1. [Create a PR and get it reviewed](#create-a-pr-and-get-it-reviewed)
 1. [Merge your PR](#merge-your-pr)
@@ -58,15 +58,16 @@ Tying issues to development work (and PRs) also makes it easier to answer questi
 in the future, like "What went into the release we sent to the user study last
 year?" or "What exactly did we fix from the red team's report?"
 
-### Create a branch
+### Fork the repo
 
-Create a topic branch named `XX-issue-name` where XX is the issue number.
+Fork the repo to make changes. This is standard practice for many projects (e.g. 
+OCaml itself) and means contributors do not need write access to the repo.
 
-Naming branches this way makes it clear which branch corresponds to which issue
-and makes it easier to keep the repo clear of unused or outdated branches. An
-easy way to create a branch following this convention is to click the _"create a
-branch"_ button on the issue page and then check out the newly created branch
-locally.
+**It is important to stay up-to-date with the original repository. 
+Execute the following command at least daily:**
+```
+git pull --rebase upstream master
+```
 
 ### Write your code
 
@@ -77,9 +78,11 @@ Here are some things to consider as you develop on your branch:
 
 - Write unit and integration tests.
 
-- Rebase regularly from the main branch (`git pull -r origin main`).
+- Rebase regularly from upstream branch (`git pull -r upstream master`).
 
-- Push regularly to your remote branch. This saves your work and runs CI tests.
+- Open a pull-request with your work (even in draft state). This runs CI tests.
+  
+- Push regularly to your remote branch. This backs-up your work.
 
 When you're done...
 

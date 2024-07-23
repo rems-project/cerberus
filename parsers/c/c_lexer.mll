@@ -83,7 +83,6 @@ let keywords: (string * Tokens.token) list = [
     "__volatile__", ASM_VOLATILE;
     "__builtin_types_compatible_p", BUILTIN_TYPES_COMPATIBLE_P;
     "__builtin_choose_expr", BUILTIN_CHOOSE_EXPR;
-
   ]
 
 let lexicon: (string, token) Hashtbl.t =
@@ -150,6 +149,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "datatype"      , CN_DATATYPE;
     "type_synonym"  , CN_TYPE_SYNONYM;
     "_"             , CN_WILD;
+    "implies"       , CN_IMPLIES;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =
@@ -350,6 +350,8 @@ rule s_char_sequence = parse
         x :: xs }
   | '"'
       { [] }
+  | _
+      { raise (Error Errors.Cparser_invalid_string_character) }
 
 and magic flags start_of_comment = parse
   (* End of the magic comment *)
@@ -584,9 +586,10 @@ type lexer_state =
   | LSRegular
   | LSIdentifier of string
 
-let lexer_state = ref LSRegular
 
-let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
+let create_lexer ~(inside_cn:bool) : [ `LEXER of lexbuf -> token ] =
+  let lexer_state = ref LSRegular in
+  `LEXER (fun lexbuf ->
   match !lexer_state with
   | LSRegular ->
       let at_magic_comments = Switches.(has_switch SW_at_magic_comments) in
@@ -602,5 +605,5 @@ let lexer : inside_cn:bool -> lexbuf -> token = fun ~inside_cn lexbuf ->
       end
   | LSIdentifier i ->
       lexer_state := LSRegular;
-      if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
+      if Lexer_feedback.is_typedefname i then TYPE else VARIABLE)
 }

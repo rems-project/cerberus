@@ -1282,6 +1282,33 @@ Module FMapExtProofs
       congruence.
   Qed.
 
+  Lemma map_update_at_k_cases
+    {A: Type}
+    {m: FM.M.t A}
+    {f: option A -> option A}
+    {v': A}
+    {k: FM.M.key}
+    :
+    FM.M.MapsTo k v' (FM.map_update k f m) ->
+    (exists v, FM.M.MapsTo k v m /\ f (Some v) = Some v') \/
+      (~ FM.M.In k m /\ f None = Some v').
+  Proof.
+    intros H.
+
+    destruct (FM.F.In_dec m k) as [IN|OUT].
+    -
+      apply map_in_mapsto in IN.
+      destruct IN as [v IN].
+      left.
+      apply (map_update_MapsTo_update_at_k IN) in H.
+      exists v.
+      split;auto.
+    -
+      apply (map_update_MapsTo_new_at_k OUT) in H.
+      right.
+      split;auto.
+  Qed.
+
   Lemma map_find_first_exists
     {A:Type}
     (f:FM.M.key -> A -> bool)
@@ -1375,14 +1402,87 @@ Module FMapExtProofs
     intros k' H k v M.
     specialize (H k v).
     destruct (OT.eq_dec k' k) as [E|NE].
-    *
+    -
       unfold OT.eq in *.
       apply map_mapsto_in in M.
       apply (FM.M.remove_1 E) in M.
       inversion M.
-    *
+    -
       apply FM.M.remove_3 in M.
       auto.
+  Qed.
+
+  Lemma map_forall_add {A:Type} (pred: A -> Prop) (m:FM.M.t A) :
+    forall k v, map_forall pred m ->
+           pred v ->
+           map_forall pred (FM.M.add k v m).
+  Proof.
+    intros k' v' H H0 k v M.
+    destruct (OT.eq_dec k' k) as [E|NE]; unfold OT.eq in *.
+    -
+      subst k'.
+      apply FM.F.add_mapsto_iff in M.
+      destruct M as [[M1 M2]| [M1 _]].
+      +
+        subst v.
+        assumption.
+      +
+        congruence.
+    -
+      specialize (H k v).
+      apply FM.F.add_mapsto_iff in M.
+      destruct M as [[M1 M2]| [M1 M2]].
+      +
+        congruence.
+      +
+        subst.
+        apply H, M2.
+  Qed.
+
+
+  (** Successful application of `f` must preserve `p` *)
+  Definition option_pred {A:Type} (f: option A -> option A) (p:A -> Prop) : Prop
+    :=
+    forall oa,
+      match f oa with
+      | None => True
+      | Some a' =>
+          match oa with
+          | None => p a'
+          | Some a => p a -> p a'
+          end
+      end.
+
+  Lemma map_forall_update {A:Type} (pred: A -> Prop) (m:FM.M.t A) :
+    forall k f, map_forall pred m ->
+           option_pred f pred ->
+           map_forall pred (FM.map_update k f m).
+  Proof.
+    intros k' f H FP k v M.
+    destruct (OT.eq_dec k' k) as [E|NE]; unfold OT.eq in *.
+    -
+      subst k'.
+      destruct (FM.F.In_dec m k) as [IN|OUT].
+      +
+        apply map_in_mapsto in IN.
+        destruct IN as [v' IN].
+        pose proof (map_update_MapsTo_update_at_k IN M) as U.
+        specialize (FP (Some v')).
+        break_match_hyp;invc U.
+        apply FP.
+        eapply H.
+        eauto.
+      +
+        pose proof (map_update_MapsTo_new_at_k OUT M) as U.
+        specialize (FP None).
+        break_match_hyp;invc U.
+        assumption.
+    -
+      assert(k<>k') as NE' by auto.
+      pose proof (map_update_MapsTo_not_at_k m f v k k' NE').
+      apply H0 in M.
+      specialize (H k v M).
+      assumption.
   Qed.
 
   Lemma map_forall_keys_remove {A:Type} (pred: FM.M.key -> Prop) (m:FM.M.t A):
@@ -1401,6 +1501,24 @@ Module FMapExtProofs
     -
       rewrite (FM.F.remove_neq_in_iff _ NE) in M.
       auto.
+  Qed.
+
+  Lemma map_forall_keys_add {A:Type} (pred: FM.M.key -> Prop) (m:FM.M.t A):
+    forall k v, map_forall_keys pred m ->
+           pred k ->
+           map_forall_keys pred (FM.M.add k v m).
+  Proof.
+    intros k' v' H  H0 k M.
+    specialize (H k).
+    destruct (OT.eq_dec k' k) as [E|NE];unfold OT.eq in *.
+    -
+      subst k'.
+      assumption.
+    -
+      apply FM.F.add_neq_in_iff in M.
+      apply H.
+      assumption.
+      assumption.
   Qed.
 
   (* Could be generlized to arbitrary length *)
@@ -1648,7 +1766,7 @@ Section Z_arith.
       lia.
   Qed.
 
-  Lemma align_bottow_correct:
+  Lemma align_bottom_correct:
     forall ps addr : Z, 0 < ps -> (addr - addr mod ps) mod ps = 0.
   Proof.
     intros b a B.

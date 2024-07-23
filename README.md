@@ -177,7 +177,7 @@ $ make all
 
 Building CN
 ---
-See https://github.com/rems-project/cerberus/blob/master/backend/cn/INSTALL.md
+See https://github.com/rems-project/cerberus/blob/master/backend/cn/README.md
 
 
 Docker image

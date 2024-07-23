@@ -28,10 +28,10 @@ below](#cn-pipeline-entry)).
 
 General principles:
 
-* Make commits atomic (if it has an "and", probably split it up).
+* [Fork the repo and keep it up to date.](https://github.com/rems-project/cerberus/blob/master/backend/cn/CONTRIBUTING.md#fork-the-repo)
+* [Open PRs (even in draft state) to keep the build and CI is working.](https://github.com/rems-project/cerberus/blob/master/backend/cn/CONTRIBUTING.md#create-a-pr-and-get-it-reviewed)
+* Make commits atomic (if it has an "and", usually split it up).
 * Make PRs logically coherent (refactoring vs new features separate).
-* Keep the build and CI working.
-* Rebase on master frequently (daily: `git pull --rebase master`).
 * As much as possible, break-up features to be reviewed piecemeal.
 * Gate big features behind a flag.
 
@@ -141,8 +141,4 @@ opam install codept
 codept backend/cn/*.ml > cn-modules.dot
 dot -Tpdf -o cn-modules.pdf # -x optionally to "simplify"
 ```
-
-### Pending 
-
-* Polishing pp.mli
 

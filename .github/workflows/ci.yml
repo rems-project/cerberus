@@ -30,11 +30,11 @@ jobs:
 
     - name: System dependencies (ubuntu)
       run: |
-        sudo apt install build-essential libgmp-dev z3 opam
+        sudo apt install build-essential libgmp-dev z3 opam cmake
     
     - name: Restore cached opam
       id: cache-opam-restore
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       with:
         path: ~/.opam
         key: ${{ matrix.version }}
@@ -56,7 +56,7 @@ jobs:
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       id: cache-opam-save
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       with:
         path: ~/.opam
         key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
@@ -76,21 +76,32 @@ jobs:
         cd tests; USE_OPAM='' ./run-ci.sh
         cd ..
 
+    - name: Download cvc5 release 
+      uses: robinraju/release-downloader@v1 
+      with: 
+        repository: cvc5/cvc5
+        tag: cvc5-1.1.2
+        fileName: cvc5-Linux-static.zip
+
+    - name: Unzip and install cvc5
+      run: |
+        unzip cvc5-Linux-static.zip
+        chmod +x cvc5-Linux-static/bin/cvc5
+        sudo cp cvc5-Linux-static/bin/cvc5 /usr/local/bin/
+
     - name: Install CN
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         opam pin --yes --no-action add cn .
-        opam install --yes cn
+        opam install --yes cn ocamlformat.0.26.2
 
     - name: Checkout cn-tutorial
       uses: actions/checkout@v4
       with: 
         repository: rems-project/cn-tutorial
         path: cn-tutorial
-        # ref: fix-semicolon-syntax
 
-    # copying 'Run Cerberus CI tests'
     - name: Run CN CI tests
       run: |
         opam switch ${{ matrix.version }}
@@ -98,13 +109,23 @@ jobs:
         cd tests; USE_OPAM='' ./run-cn.sh
         cd ..
 
-    # copying 'Run Cerberus CI tests'
     - name: Run CN Tutorial CI tests
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
 
+    - name: Run CN-Test-Gen CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
+        cd ..
+
+    - name: Check CN code formatting
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
 
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
@@ -122,6 +143,7 @@ jobs:
         eval $(opam env --switch=with_coq)
         cd tests; USE_OPAM='' ./run-cheri.sh
         cd ..
+
 
   deploy-docker:
     runs-on: ubuntu-latest

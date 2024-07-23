@@ -151,7 +151,7 @@ type asm_qualifier =
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
 %token CN_UNCHANGED CN_WILD CN_MATCH
-%token CN_GOOD CN_NULL CN_TRUE CN_FALSE
+%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES
 %token <string * [`U|`I] * int> CN_CONSTANT
 
 %token EOF
@@ -1431,7 +1431,7 @@ iteration_statement:
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , magic_to_attrs(List.rev magic)
-        , CabsSfor (Some (FC_decl xs_decl), expr2_opt, expr3_opt, stmt) ) }
+        , CabsSfor (Some (FC_decl (Cerb_location.(region $loc(xs_decl) NoCursor), xs_decl)), expr2_opt, expr3_opt, stmt) ) }
 ;
 
 (* §6.8.6 Jump statements *)
@@ -1852,6 +1852,9 @@ prim_expr:
 | e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_memberof (e, member))) }
+| e= prim_expr MINUS_GT member=cn_variable
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_arrow (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 | CN_ARRAY_SHIFT LT ty=ctype GT LPAREN base=expr COMMA index=expr RPAREN
@@ -1881,6 +1884,9 @@ prim_expr:
 | LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($4)))
                                , CNExpr_at_env (a, l))) }
+| STRUCT tag=cn_variable LBRACE members=record_def RBRACE
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos,$endpos) NoCursor)
+                               , CNExpr_struct (tag, members))) }
 | LBRACE members=record_def RBRACE
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos,$endpos) NoCursor)
                                , CNExpr_record members)) }
@@ -1978,10 +1984,18 @@ bool_and_expr:
 | e1= bool_and_expr AMPERSAND_AMPERSAND e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
-bool_or_expr:
+
+bool_implies_expr:
 | e = bool_and_expr
     { e }
-| e1= bool_or_expr PIPE_PIPE e2= bool_and_expr
+| e1= bool_and_expr CN_IMPLIES e2= bool_implies_expr (* implication arrow ==> *)
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_implies, e1, e2))) }
+
+bool_or_expr:
+| e = bool_implies_expr
+    { e }
+| e1= bool_or_expr PIPE_PIPE e2= bool_implies_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 

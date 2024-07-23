@@ -1,17 +1,18 @@
 type label = Cerb_frontend.Annot.label_annot
 
 type section =
-  | Label of { loc : Locations.t; label : label }
+  | Label of
+      { loc : Locations.t;
+        label : label
+      }
   | Body
 
 type t = private
-  {
-    fnction: Sym.t option;
-    section: section option;
-    statement: Locations.t option;
-    expression: Locations.t option;
+  { fnction : Sym.t option;
+    section : section option;
+    statement : Locations.t option;
+    expression : Locations.t option
   }
-
 
 val empty : t
 
