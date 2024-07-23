@@ -775,22 +775,6 @@ let generate_tests_cmd =
 let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd ]
 
 let () =
-  (* Minor hack, as Cmdliner [default] doesn't work with positional arguments *)
-  let using_subcommands =
-    if Array.length Sys.argv >= 2 then (
-      let first_arg = Sys.argv.(1) in
-      String.equal first_arg "--help"
-      || List.exists (fun cmd -> String.equal (Cmd.name cmd) first_arg) subcommands)
-    else
-      false
-  in
-  let version_str =
-    "CN version: " ^ Cn_version.git_version ^ " (" ^ Cn_version.git_version_date ^ ")"
-  in
-  if using_subcommands then (
-    let cn_info = Cmd.info "cn" ~version:version_str in
-    Stdlib.exit @@ Cmd.(eval (group cn_info subcommands)))
-  else (
-    let deprecated = "(Deprecated) Use `cn verify` subcommand instead" in
-    let cn_info = Cmd.info "cn" ~deprecated ~version:version_str in
-    Stdlib.exit @@ Cmd.(eval (v cn_info verify_t)))
+  let version_str = Cn_version.git_version ^ " [" ^ Cn_version.git_version_date ^ "]" in
+  let cn_info = Cmd.info "cn" ~version:version_str in
+  Stdlib.exit @@ Cmd.(eval (group cn_info subcommands))
