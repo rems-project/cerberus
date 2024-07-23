@@ -329,6 +329,7 @@ let generate_tests
   macros
   incl_dirs
   incl_files
+  debug_level
   csv_times
   log_times
   astprints
@@ -340,6 +341,8 @@ let generate_tests
   max_unfolds
   testing_framework
   =
+  (* flags *)
+  Cerb_debug.debug_level := debug_level;
   let handle_error (e : TypeErrors.type_error) =
     let report = TypeErrors.pp_message e.msg in
     Pp.error e.loc report.short (Option.to_list report.descr);
@@ -358,10 +361,17 @@ let generate_tests
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
     ~f:(fun ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
-      let (_, sigma) = ail_prog in
-      Cerb_colour.without_colour (fun () ->
-        TestGeneration.run ~output_dir ~filename ~max_unfolds sigma prog5 testing_framework)
-      ();
+      let _, sigma = ail_prog in
+      Cerb_colour.without_colour
+        (fun () ->
+          TestGeneration.run
+            ~output_dir
+            ~filename
+            ~max_unfolds
+            sigma
+            prog5
+            testing_framework)
+        ();
       Resultat.return ())
 
 
@@ -724,9 +734,7 @@ module Test_generation_flags = struct
   let testing_framework =
     let doc = "[Experimental] Specify the testing framework used by generated tests" in
     Arg.(
-      value
-      & opt (enum TestGeneration.test_frameworks) GTest
-      & info [ "framework" ] ~doc)
+      value & opt (enum TestGeneration.test_frameworks) GTest & info [ "framework" ] ~doc)
 end
 
 let generate_tests_cmd =
@@ -737,6 +745,7 @@ let generate_tests_cmd =
     $ Common_flags.macros
     $ Common_flags.incl_dirs
     $ Common_flags.incl_files
+    $ Common_flags.debug_level
     $ Common_flags.csv_times
     $ Common_flags.log_times
     $ Common_flags.astprints

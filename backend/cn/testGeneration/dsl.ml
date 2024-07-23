@@ -2,24 +2,23 @@ module IT = IndexTerms
 open Constraints
 open Utils
 module CF = Cerb_frontend
-open CF
 
 type gen =
-  | Arbitrary of Ctype.ctype
-  | Return of Ctype.ctype * IT.t
-  | Filter of Sym.sym * Ctype.ctype * IT.t * gen
-  | Map of Sym.sym * Ctype.ctype * IT.t * gen
-  | Alloc of Ctype.ctype * Sym.sym
-  | Struct of Ctype.ctype * (string * Sym.sym) list
+  | Arbitrary of CF.Ctype.ctype
+  | Return of CF.Ctype.ctype * IT.t
+  | Filter of Sym.sym * CF.Ctype.ctype * IT.t * gen
+  | Map of Sym.sym * CF.Ctype.ctype * IT.t * gen
+  | Alloc of CF.Ctype.ctype * Sym.sym
+  | Struct of CF.Ctype.ctype * (string * Sym.sym) list
 
 let rec string_of_gen (g : gen) : string =
   match g with
-  | Arbitrary ty -> "arbitrary<" ^ string_of_ctype ty ^ ">"
+  | Arbitrary ty -> "arbitrary<" ^ string_of_ctype ty ^ ">()"
   | Return (ty, e) ->
     "return<"
     ^ string_of_ctype ty
     ^ ">("
-    ^ Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ CF.Pp_utils.to_plain_pretty_string (IT.pp e)
     ^ ")"
   | Filter (x, ty, e, g') ->
     "filter("
@@ -28,7 +27,7 @@ let rec string_of_gen (g : gen) : string =
     ^ ": "
     ^ string_of_ctype ty
     ^ "| "
-    ^ Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ CF.Pp_utils.to_plain_pretty_string (IT.pp e)
     ^ ", "
     ^ string_of_gen g'
     ^ ")"
@@ -39,7 +38,7 @@ let rec string_of_gen (g : gen) : string =
     ^ ": "
     ^ string_of_ctype ty
     ^ "| "
-    ^ Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ CF.Pp_utils.to_plain_pretty_string (IT.pp e)
     ^ ", "
     ^ string_of_gen g'
     ^ ")"
@@ -54,14 +53,18 @@ let rec string_of_gen (g : gen) : string =
 
 type gen_context = (Sym.sym * gen) list
 
-let string_of_gen_context (gtx : gen_context) : string =
-  "{ "
-  ^ String.concat
-      "; "
-      (List.map
-         (fun (x, g) -> "\"" ^ codify_sym x ^ "\" <- \"" ^ string_of_gen g ^ "\"")
-         gtx)
-  ^ " }"
+let pp_gen_context (gtx : gen_context) : Pp.document =
+  let open Pp in
+  group
+    (separate_map
+       (break 1)
+       (fun (x, g) ->
+         string "let "
+         ^^ string (codify_sym x)
+         ^^ string " = "
+         ^^ string (string_of_gen g)
+         ^^ string ";")
+       gtx)
 
 
 module Optimize = struct
@@ -71,13 +74,13 @@ end
 let optimize = Optimize.optimize
 
 module Compile = struct
-  let filter_gen (x : Sym.sym) (ty : Ctype.ctype) (cs : constraints) : gen =
+  let filter_gen (x : Sym.sym) (ty : CF.Ctype.ctype) (cs : constraints) : gen =
     match cs with
     | _ :: _ -> Filter (x, ty, IT.and_ cs (Cerb_location.other __FUNCTION__), Arbitrary ty)
     | [] -> Arbitrary ty
 
 
-  let compile_gen (x : Sym.sym) (ty : Ctype.ctype) (e : IT.t) (cs : constraints) : gen =
+  let compile_gen (x : Sym.sym) (ty : CF.Ctype.ctype) (e : IT.t) (cs : constraints) : gen =
     match e with
     | IT (Sym x', _, _) when sym_codified_equal x x' -> filter_gen x ty cs
     | _ -> Return (ty, e)
@@ -122,7 +125,9 @@ module Compile = struct
       in
       if no_free_vars then (
         let gen = compile_gen x ty e relevant_cs in
-        let gen_loc = Alloc (Ctype.Ctype ([], Pointer (Ctype.no_qualifiers, ty)), x) in
+        let gen_loc =
+          Alloc (CF.Ctype.Ctype ([], Pointer (CF.Ctype.no_qualifiers, ty)), x)
+        in
         match get_loc x with
         | Some x_loc ->
           compile_singles' ((x_loc, gen_loc) :: (x, gen) :: gtx) locs cs iter'
@@ -177,7 +182,9 @@ module Compile = struct
         match get_loc x with
         | Some loc ->
           let gen = Struct (ty, mems) in
-          let gen_loc = Alloc (Ctype.Ctype ([], Pointer (Ctype.no_qualifiers, ty)), x) in
+          let gen_loc =
+            Alloc (CF.Ctype.Ctype ([], Pointer (CF.Ctype.no_qualifiers, ty)), x)
+          in
           ((loc, gen_loc) :: (x, gen) :: gtx, ms')
         | None -> ((x, Struct (ty, mems)) :: gtx, ms'))
     | [] -> (gtx, [])
