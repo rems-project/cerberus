@@ -195,6 +195,9 @@ let bv_nat_hex w v = atom ("#x" ^ Z.format ("0" ^ string_of_int (w / 4) ^ "x") v
 (** Bit vector arithmetic negation. *)
 let bv_neg x = app_ "bvneg" [ x ]
 
+(** Bit vector bitwise complement. *)
+let bv_compl x = app_ "bvnot" [ x ]
+
 (** A bit-vector represented in binary.
     The number should fit in the given number of bits. *)
 let bv_bin w v =

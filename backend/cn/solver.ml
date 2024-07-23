@@ -580,6 +580,10 @@ let rec translate_term s iterm =
         | BT.Bits _ -> SMT.bv_neg (translate_term s e1)
         | BT.Integer | BT.Real -> SMT.num_neg (translate_term s e1)
         | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)"))
+     | BW_Compl ->
+       (match IT.basetype iterm with
+        | BT.Bits _ -> SMT.bv_compl (translate_term s e1)
+        | _ -> failwith (__FUNCTION__ ^ ":Unop (BW_Compl, _)"))
      | BW_CLZ_NoSMT ->
        (match IT.basetype iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_clz w w)
