@@ -116,9 +116,10 @@ let rec codify_gen' (g : gen) : string =
 
 
 let codify_gen (x : Sym.sym) (g : gen) : string =
-  "/* "
-  ^ string_of_gen g
-  ^ " */\n"
+  (if !Cerb_debug.debug_level > 0 then
+     "/* " ^ string_of_gen g ^ " */\n"
+   else
+     "")
   ^ "auto "
   ^ codify_sym x
   ^ " = *"

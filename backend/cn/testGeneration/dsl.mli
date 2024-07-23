@@ -13,7 +13,7 @@ val string_of_gen : gen -> string
 
 type gen_context = (Sym.sym * gen) list
 
-val string_of_gen_context : gen_context -> string
+val pp_gen_context : gen_context -> Pp.document
 
 val optimize : gen_context -> gen_context
 

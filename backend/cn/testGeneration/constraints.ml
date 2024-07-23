@@ -8,37 +8,46 @@ module LC = LogicalConstraints
 module LAT = LogicalArgumentTypes
 open Utils
 module CF = Cerb_frontend
-open CF
 
-type variables = (Sym.sym * (Ctype.ctype * IT.t)) list
+type variables = (Sym.sym * (CF.Ctype.ctype * IT.t)) list
 
-let string_of_variables (vars : variables) : string =
-  "{ "
-  ^ String.concat
-      "; "
-      (List.map
-         (fun (x, (ty, e)) ->
-           codify_sym x
-           ^ " -> ("
-           ^ string_of_ctype ty
-           ^ ", "
-           ^ Pp_utils.to_plain_pretty_string (IT.pp e)
-           ^ ")")
-         vars)
-  ^ " }"
+let pp_variables (vars : variables) : Pp.document =
+  let open Pp in
+  group
+    (lbrace
+     ^^ nest
+          2
+          (break 1
+           ^^ separate_map
+                (semi ^^ break 1)
+                (fun (x, (ty, it)) ->
+                  string (codify_sym x)
+                  ^^ string " -> ("
+                  ^^ CF.Pp_ail.pp_ctype CF.Ctype.no_qualifiers ty
+                  ^^ string ", "
+                  ^^ IT.pp it
+                  ^^ string ")")
+                vars)
+     ^^ break 1
+     ^^ rbrace)
 
 
 type locations = (IT.t * Sym.sym) list
 
-let string_of_locations (locs : locations) : string =
-  "{ "
-  ^ String.concat
-      "; "
-      (List.map
-         (fun (e, x) ->
-           "(*" ^ Pp_utils.to_plain_pretty_string (IT.pp e) ^ ") -> " ^ codify_sym x)
-         locs)
-  ^ " }"
+let pp_locations (locs : locations) : Pp.document =
+  let open Pp in
+  group
+    (lbrace
+     ^^ nest
+          2
+          (break 1
+           ^^ separate_map
+                (semi ^^ break 1)
+                (fun (it, x) ->
+                  string "(*" ^^ IT.pp it ^^ string ") -> " ^^ string (codify_sym x))
+                locs)
+     ^^ break 1
+     ^^ rbrace)
 
 
 (** Tracks indirection for a struct's member [name],
@@ -47,63 +56,87 @@ let string_of_locations (locs : locations) : string =
 type member =
   { name : string; (** The name of the member *)
     carrier : Sym.sym; (** The name of the carrier*)
-    cty : Ctype.ctype (** The type of the member *)
+    cty : CF.Ctype.ctype (** The type of the member *)
   }
 
-let string_of_member (m : member) : string =
-  "." ^ m.name ^ ": " ^ string_of_ctype m.cty ^ " = " ^ codify_sym m.carrier
+let pp_member (m : member) : Pp.document =
+  let open Pp in
+  dot
+  ^^ string m.name
+  ^^ string ": "
+  ^^ CF.Pp_ail.pp_ctype CF.Ctype.no_qualifiers m.cty
+  ^^ string " = "
+  ^^ string (codify_sym m.carrier)
 
 
 type members = (Sym.sym * member list) list
 
-let string_of_members (ms : members) : string =
-  "{ "
-  ^ String.concat
-      "; "
-      (List.map
-         (fun (x, ms) ->
-           codify_sym x ^ " -> {" ^ String.concat ", " (List.map string_of_member ms))
-         ms)
-  ^ " }"
+let pp_members (ms : members) : Pp.document =
+  let open Pp in
+  let pp_members' (ml : member list) : Pp.document =
+    nest 2 (break 1 ^^ separate_map (comma ^^ break 1) (fun m -> pp_member m) ml)
+    ^^ break 1
+  in
+  group
+    (lbrace
+     ^^ nest
+          2
+          (break 1
+           ^^ separate_map
+                (semi ^^ break 1)
+                (fun (x, m) ->
+                  string (codify_sym x)
+                  ^^ string " -> "
+                  ^^ lbrace
+                  ^^ pp_members' m
+                  ^^ string "}")
+                ms)
+     ^^ break 1
+     ^^ rbrace)
 
 
 type constraints = IT.t list
 
-let string_of_constraints (cs : constraints) : string =
-  "{ "
-  ^ String.concat "; " (List.map (fun e -> Pp_utils.to_plain_pretty_string (IT.pp e)) cs)
-  ^ " }"
+let pp_constraints (cs : constraints) : Pp.document =
+  let open Pp in
+  group
+    (lbrace
+     ^^ nest 2 (break 1 ^^ separate_map (semi ^^ break 1) IT.pp cs)
+     ^^ break 1
+     ^^ rbrace)
 
 
 type goal = variables * members * locations * constraints
 
-let string_of_goal ((vars, ms, locs, cs) : goal) : string =
-  "Vars: "
-  ^ string_of_variables vars
-  ^ "\n"
-  ^ "Ms: "
-  ^ string_of_members ms
-  ^ "\n"
-  ^ "Locs: "
-  ^ string_of_locations locs
-  ^ "\n"
-  ^ "Cs: "
-  ^ string_of_constraints cs
-  ^ "\n"
+let pp_goal ((vars, ms, locs, cs) : goal) : Pp.document =
+  let open Pp in
+  group
+    (string "Vars: "
+     ^^ pp_variables vars
+     ^^ semi
+     ^^ break 1
+     ^^ string "Ms: "
+     ^^ pp_members ms
+     ^^ break 1
+     ^^ string "Locs: "
+     ^^ pp_locations locs
+     ^^ break 1
+     ^^ string "Cs: "
+     ^^ pp_constraints cs)
 
 
 module Collect = struct
-  let bt_of_ctype (loc : Cerb_location.t) (ty : Ctype.ctype) : BT.t =
+  let bt_of_ctype (loc : Cerb_location.t) (ty : CF.Ctype.ctype) : BT.t =
     BT.of_sct
-      AilTypesAux.is_signed_ity
+      CF.AilTypesAux.is_signed_ity
       Memory.size_of_integer_type
       (Sctypes.of_ctype_unsafe loc ty)
 
 
   let add_to_vars_ms
-    (sigma : GenTypes.genTypeCategory AilSyntax.sigma)
+    (sigma : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
     (sym : Sym.sym)
-    (ty : Ctype.ctype)
+    (ty : CF.Ctype.ctype)
     (vars : variables)
     (ms : members)
     : variables * members
@@ -159,7 +192,7 @@ module Collect = struct
 
   let rec collect_clauses
     (max_unfolds : int)
-    (sigma : _ AilSyntax.sigma)
+    (sigma : _ CF.AilSyntax.sigma)
     (prog5 : unit Mucore.mu_file)
     (vars : variables)
     (ms : members)
@@ -183,7 +216,7 @@ module Collect = struct
 
   and collect_ret
     (max_unfolds : int)
-    (sigma : _ AilSyntax.sigma)
+    (sigma : _ CF.AilSyntax.sigma)
     (prog5 : unit Mucore.mu_file)
     (vars : variables)
     (ms : members)
@@ -219,7 +252,7 @@ module Collect = struct
 
   and collect_lat_it
     (max_unfolds : int)
-    (sigma : _ AilSyntax.sigma)
+    (sigma : _ CF.AilSyntax.sigma)
     (prog5 : unit Mucore.mu_file)
     (vars : variables)
     (ms : members)
@@ -247,7 +280,7 @@ module Collect = struct
 
   let rec collect_lat
     (max_unfolds : int)
-    (sigma : _ AilSyntax.sigma)
+    (sigma : _ CF.AilSyntax.sigma)
     (prog5 : unit Mucore.mu_file)
     (vars : variables)
     (ms : members)
@@ -273,9 +306,9 @@ module Collect = struct
 
   let collect
     ~(max_unfolds : int)
-    (sigma : _ AilSyntax.sigma)
+    (sigma : _ CF.AilSyntax.sigma)
     (prog5 : unit Mucore.mu_file)
-    (args : (Sym.sym * Ctype.ctype) list)
+    (args : (Sym.sym * CF.Ctype.ctype) list)
     (lat : unit LAT.t)
     : (variables * members * locations * constraints) list
     =

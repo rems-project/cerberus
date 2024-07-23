@@ -52,15 +52,36 @@ let generate_pbt
   let lat =
     Option.get instrumentation.internal |> get_lat_from_at |> LAT.map (fun _ -> ())
   in
+  let debug = !Cerb_debug.debug_level > 0 in
   List.iteri
     (fun i g ->
-      output_string oc ("/* Collected:\n" ^ Constraints.string_of_goal g ^ "*/\n\n");
+      if debug then
+        output_string
+          oc
+          ("/* Collected:\n"
+           ^ CF.Pp_utils.to_plain_pretty_string (Constraints.pp_goal g)
+           ^ "\n*/\n\n");
       let g = Constraints.simplify g in
-      output_string oc ("/* Simplified:\n" ^ Constraints.string_of_goal g ^ "*/\n\n");
+      if debug then
+        output_string
+          oc
+          ("/* Simplified:\n"
+           ^ CF.Pp_utils.to_plain_pretty_string (Constraints.pp_goal g)
+           ^ "\n*/\n\n");
       let gtx = Dsl.compile g in
-      output_string oc ("/* Compiled:\n" ^ Dsl.string_of_gen_context gtx ^ "\n*/\n\n");
+      if debug then
+        output_string
+          oc
+          ("/* Compiled:\n"
+           ^ CF.Pp_utils.to_plain_pretty_string (Dsl.pp_gen_context gtx)
+           ^ "\n*/\n\n");
       let gtx = Dsl.optimize gtx in
-      output_string oc ("/* Optimized:\n" ^ Dsl.string_of_gen_context gtx ^ "\n*/\n\n");
+      if debug then
+        output_string
+          oc
+          ("/* Optimized:\n"
+           ^ CF.Pp_utils.to_plain_pretty_string (Dsl.pp_gen_context gtx)
+           ^ "\n*/\n\n");
       Codify.codify_pbt tf sigma instrumentation args i oc gtx)
     (Constraints.collect ~max_unfolds sigma prog5 args lat)
 

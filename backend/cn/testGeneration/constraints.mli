@@ -5,11 +5,11 @@ module CF = Cerb_frontend
 
 type variables = (Sym.sym * (CF.Ctype.ctype * IT.t)) list
 
-val string_of_variables : variables -> string
+val pp_variables : variables -> Pp.document
 
 type locations = (IT.t * Sym.sym) list
 
-val string_of_locations : locations -> string
+val pp_locations : locations -> Pp.document
 
 (** Tracks indirection for a struct's member [name],
     where [carrier] carries its value of type [cty].
@@ -20,19 +20,19 @@ type member =
     cty : CF.Ctype.ctype (** The type of the member *)
   }
 
-val string_of_member : member -> string
+val pp_member : member -> Pp.document
 
 type members = (Sym.sym * member list) list
 
-val string_of_members : members -> string
+val pp_members : members -> Pp.document
 
 type constraints = IT.t list
 
-val string_of_constraints : constraints -> string
+val pp_constraints : constraints -> Pp.document
 
 type goal = variables * members * locations * constraints
 
-val string_of_goal : goal -> string
+val pp_goal : goal -> Pp.document
 
 (** Steps through the given [LAT.t] collecting a [goal] for our generator *)
 val collect
