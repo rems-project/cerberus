@@ -27,7 +27,7 @@ jobs:
 
     - name: System dependencies (ubuntu)
       run: |
-        sudo apt install build-essential libgmp-dev z3 opam
+        sudo apt install build-essential libgmp-dev z3 opam cmake
     
     - name: Restore cached opam
       id: cache-opam-restore
@@ -112,11 +112,17 @@ jobs:
         eval $(opam env --switch=${{ matrix.version }})
         USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
 
+    - name: Run CN-Test-Gen CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
+        cd ..
+
     - name: Check CN code formatting
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        USE_OPAM='' cd backend/cn && dune build @fmt
 
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
