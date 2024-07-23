@@ -5,9 +5,9 @@ let to_plain_string d =
   Buffer.clear buf;
   str
 
-let to_plain_pretty_string d =
+let to_plain_pretty_string ?(rfrac=1.0) ?(width=150) d =
   let buf = Buffer.create 50 in
-  PPrint.ToBuffer.pretty 1.0 150 buf d;
+  PPrint.ToBuffer.pretty rfrac width buf d;
   let str = Buffer.contents buf in
   Buffer.clear buf;
   str

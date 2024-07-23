@@ -14,12 +14,7 @@ type gen =
 let rec string_of_gen (g : gen) : string =
   match g with
   | Arbitrary ty -> "arbitrary<" ^ string_of_ctype ty ^ ">()"
-  | Return (ty, e) ->
-    "return<"
-    ^ string_of_ctype ty
-    ^ ">("
-    ^ CF.Pp_utils.to_plain_pretty_string (IT.pp e)
-    ^ ")"
+  | Return (ty, e) -> "return<" ^ string_of_ctype ty ^ ">(" ^ Pp.plain (IT.pp e) ^ ")"
   | Filter (x, ty, e, g') ->
     "filter("
     ^ "|"
@@ -27,7 +22,7 @@ let rec string_of_gen (g : gen) : string =
     ^ ": "
     ^ string_of_ctype ty
     ^ "| "
-    ^ CF.Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ Pp.plain (IT.pp e)
     ^ ", "
     ^ string_of_gen g'
     ^ ")"
@@ -38,7 +33,7 @@ let rec string_of_gen (g : gen) : string =
     ^ ": "
     ^ string_of_ctype ty
     ^ "| "
-    ^ CF.Pp_utils.to_plain_pretty_string (IT.pp e)
+    ^ Pp.plain (IT.pp e)
     ^ ", "
     ^ string_of_gen g'
     ^ ")"
