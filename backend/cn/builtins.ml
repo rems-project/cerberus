@@ -87,7 +87,7 @@ let bw_or_uf_def =
 
 
 let bw_clz_uf_def =
-  ("bw_clz_uf", Sym.fresh_named "bw_clz_uf", mk_arg1 (arith_unop BWCLZNoSMT))
+  ("bw_clz_uf", Sym.fresh_named "bw_clz_uf", mk_arg1 (arith_unop BW_CLZ_NoSMT))
 
 
 let bw_ctz_uf_def =

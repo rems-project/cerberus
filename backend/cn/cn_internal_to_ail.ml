@@ -302,7 +302,7 @@ let cn_to_ail_unop_internal bt =
        else
          failwith failure_msg
      | _ -> failwith failure_msg)
-  | BWCLZNoSMT | BWCTZNoSMT | BWFFSNoSMT ->
+  | BW_CLZ_NoSMT | BWCTZNoSMT | BWFFSNoSMT ->
     failwith "Failure: Trying to translate SMT-only unop from C source"
 
 

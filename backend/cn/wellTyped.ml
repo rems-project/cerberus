@@ -418,7 +418,7 @@ module WIT = struct
             let@ t = infer t in
             let@ () = ensure_arith_type ~reason:loc t in
             return (t, IT.bt t)
-          | BWCLZNoSMT | BWCTZNoSMT | BWFFSNoSMT | BWFLSNoSMT ->
+          | BW_CLZ_NoSMT | BWCTZNoSMT | BWFFSNoSMT | BWFLSNoSMT ->
             let@ t = infer t in
             let@ () = ensure_bits_type (IT.loc t) (IT.bt t) in
             return (t, IT.bt t)
