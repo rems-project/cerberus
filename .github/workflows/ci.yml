@@ -7,6 +7,9 @@ on:
       - master
       - cheri-tests
 
+env:
+  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus:release
+
 # cancel in-progress job when a new push is performed
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -140,3 +143,30 @@ jobs:
         eval $(opam env --switch=with_coq)
         cd tests; USE_OPAM='' ./run-cheri.sh
         cd ..
+
+
+  deploy-docker:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build the Docker image
+      run: |
+        echo "Building ${{env.CERBERUS_IMAGE_ID}}"
+        make -f Makefile_docker release
+        docker tag cerberus:release ${{env.CERBERUS_IMAGE_ID}}
+
+    - name: Push the Docker image
+      run: docker push ${{env.CERBERUS_IMAGE_ID}}
