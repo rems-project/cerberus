@@ -497,7 +497,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
          let unop =
            match unop with
            | M_BW_FFS -> BWFFSNoSMT
-           | M_BW_CTZ -> BWCTZNoSMT
+           | M_BW_CTZ -> BW_CTZ_NoSMT
            | M_BW_COMPL -> Cerb_debug.error "todo: M_BW_COMPL"
          in
          let value = arith_unop unop vt1 loc in
@@ -2076,7 +2076,9 @@ let ctz_proxy_ft =
   let neq_0 = LC.T (IT.not_ (IT.eq_ (n, IT.int_lit_ 0 (IT.bt n) here) here) here) in
   let eq_ctz =
     LC.T
-      (IT.eq_ (ret, cast_ (IT.bt ret) (IT.arith_unop Terms.BWCTZNoSMT n here) here) here)
+      (IT.eq_
+         (ret, cast_ (IT.bt ret) (IT.arith_unop Terms.BW_CTZ_NoSMT n here) here)
+         here)
   in
   let rt =
     RT.mComputational ((ret_sym, IT.bt ret), info) (LRT.mConstraint (eq_ctz, info) LRT.I)

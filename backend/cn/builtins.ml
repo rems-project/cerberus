@@ -91,7 +91,7 @@ let bw_clz_uf_def =
 
 
 let bw_ctz_uf_def =
-  ("bw_ctz_uf", Sym.fresh_named "bw_ctz_uf", mk_arg1 (arith_unop BWCTZNoSMT))
+  ("bw_ctz_uf", Sym.fresh_named "bw_ctz_uf", mk_arg1 (arith_unop BW_CTZ_NoSMT))
 
 
 let bw_ffs_uf_def =

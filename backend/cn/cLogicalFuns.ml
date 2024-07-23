@@ -324,7 +324,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     let@ x = self var_map pe1 in
     let@ unop =
       match unop with
-      | M_BW_CTZ -> return IT.BWCTZNoSMT
+      | M_BW_CTZ -> return IT.BW_CTZ_NoSMT
       | M_BW_FFS -> return IT.BWFFSNoSMT
       | _ -> unsupported "unary op" !^""
     in
@@ -553,7 +553,9 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
       let s = Option.get (Sym.has_id nm) in
       let wrap_int x = IT.wrapI_ (signed_int_ity, x) in
       if String.equal s "ctz_proxy" then
-        rcval (wrap_int (IT.arith_unop Terms.BWCTZNoSMT (List.hd args_its) loc) loc) state
+        rcval
+          (wrap_int (IT.arith_unop Terms.BW_CTZ_NoSMT (List.hd args_its) loc) loc)
+          state
       else if List.exists (String.equal s) [ "ffs_proxy"; "ffsl_proxy"; "ffsll_proxy" ]
       then
         rcval (wrap_int (IT.arith_unop Terms.BWFFSNoSMT (List.hd args_its) loc) loc) state
