@@ -4307,6 +4307,8 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
        CNExpr_at_env <$> desugar_cn_expr e <*> (E.return envname)
     | CNExpr_not e ->
        CNExpr_not <$> desugar_cn_expr e
+    | CNExpr_bnot e ->
+       CNExpr_bnot <$> desugar_cn_expr e
     | CNExpr_negate e ->
        CNExpr_negate <$> desugar_cn_expr e
     | CNExpr_default bt ->
