@@ -145,7 +145,6 @@ module Impl (C : TF_Codify) = struct
 
 
   let codify_pbt
-    (sigma : _ CF.AilSyntax.sigma)
     (instrumentation : Core_to_mucore.instrumentation)
     (args : (Sym.sym * Ctype.ctype) list)
     (index : int)
@@ -153,8 +152,6 @@ module Impl (C : TF_Codify) = struct
     (gtx : gen_context)
     : unit
     =
-    output_string oc (codify_function_signature sigma instrumentation);
-    output_string oc "\n\n";
     output_string
       oc
       (codify_header (codify_sym instrumentation.fn) ("Test" ^ string_of_int index));
@@ -167,7 +164,12 @@ module Impl (C : TF_Codify) = struct
     output_string oc "}\n\n"
 
 
-  let codify_prelude (sigma : _ CF.AilSyntax.sigma) (oc : out_channel) : unit =
+  let codify_prelude
+    (sigma : _ CF.AilSyntax.sigma)
+    (inst_list : Core_to_mucore.instrumentation list)
+    (oc : out_channel)
+    : unit
+    =
     output_string oc "#include <cstdlib>\n";
     output_string oc "#include <cstdint>\n";
     output_string oc "#include <rapidcheck.h>\n";
@@ -177,21 +179,29 @@ module Impl (C : TF_Codify) = struct
       (fun d ->
         output_string oc (Pp_utils.to_plain_pretty_string (Pp_ail.pp_tag_definition d));
         output_string oc "\n\n")
-      sigma.tag_definitions
+      sigma.tag_definitions;
+    List.iter
+      (fun inst ->
+        output_string oc (codify_function_signature sigma inst);
+        output_string oc "\n\n")
+      inst_list
 end
 
-let codify_prelude (tf : test_framework) (sigma : _ CF.AilSyntax.sigma) (oc : out_channel)
+let codify_prelude
+  (tf : test_framework)
+  (sigma : _ CF.AilSyntax.sigma)
+  (inst_list : Core_to_mucore.instrumentation list)
+  (oc : out_channel)
   : unit
   =
   match tf with
   | GTest ->
     let open Impl (GTest_Codify) in
-    codify_prelude sigma oc
+    codify_prelude sigma inst_list oc
 
 
 let codify_pbt
   (tf : test_framework)
-  (sigma : _ CF.AilSyntax.sigma)
   (instrumentation : Core_to_mucore.instrumentation)
   (args : (Sym.sym * Ctype.ctype) list)
   (index : int)
@@ -202,4 +212,4 @@ let codify_pbt
   match tf with
   | GTest ->
     let open Impl (GTest_Codify) in
-    codify_pbt sigma instrumentation args index oc gtx
+    codify_pbt instrumentation args index oc gtx

@@ -82,7 +82,7 @@ let generate_pbt
           ("/* Optimized:\n"
            ^ CF.Pp_utils.to_plain_pretty_string (Dsl.pp_gen_context gtx)
            ^ "\n*/\n\n");
-      Codify.codify_pbt tf sigma instrumentation args i oc gtx)
+      Codify.codify_pbt tf instrumentation args i oc gtx)
     (Constraints.collect ~max_unfolds sigma prog5 args lat)
 
 
@@ -112,5 +112,5 @@ let run
        ^ (filename |> Filename.basename |> Filename.chop_extension)
        ^ ".cpp")
   in
-  Codify.codify_prelude tf sigma oc;
+  Codify.codify_prelude tf sigma instrumentation_list oc;
   List.iter (generate_pbt max_unfolds sigma prog5 tf oc) instrumentation_list
