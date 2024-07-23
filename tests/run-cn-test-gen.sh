@@ -91,7 +91,7 @@ for TEST in $FILES; do
       eval "$CLEANUP"
       continue
     else
-      echo "$TEST -- Tests failed successfully"
+      echo "$TEST -- Tests passed successfully"
     fi
   fi
 
@@ -106,7 +106,7 @@ for TEST in $FILES; do
       eval "$CLEANUP"
       continue
     else
-      echo "$TEST -- Tests passed successfully"
+      echo "$TEST -- Tests failed successfully"
     fi
   fi
 
