@@ -383,11 +383,11 @@ module IndexTerms = struct
          | Negate, Const (Bits ((sign, width), z)) ->
            num_lit_ (Z.neg z) (BT.Bits (sign, width)) the_loc
          | Negate, Const (Q q) -> q1_ (Q.neg q) the_loc
-         | BWCTZNoSMT, Const (Z z) ->
+         | BW_CTZ_NoSMT, Const (Z z) ->
            (match do_ctz_z z with
             | None -> IT (Unop (op, a), the_bt, the_loc)
             | Some i -> int_ i the_loc)
-         | BWCTZNoSMT, Const (Bits (bits, z)) ->
+         | BW_CTZ_NoSMT, Const (Bits (bits, z)) ->
            (match do_ctz_z (BT.normalise_to_range bits z) with
             | None -> IT (Unop (op, a), the_bt, the_loc)
             | Some i -> int_lit_ i the_bt the_loc)

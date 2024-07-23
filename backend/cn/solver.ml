@@ -560,7 +560,7 @@ let rec translate_term s iterm =
          (ite_
             ( eq_ (e1, intl 0) here,
               intl 0,
-              add_ (arith_unop BWCTZNoSMT e1 here, intl 1) here )
+              add_ (arith_unop BW_CTZ_NoSMT e1 here, intl 1) here )
             here)
      | BWFLSNoSMT ->
        (* copying and adjusting BWFFSNoSMT rule *)
@@ -584,10 +584,10 @@ let rec translate_term s iterm =
        (match IT.basetype iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_clz w w)
         | _ -> failwith "solver: BW_CLZ_NoSMT: not a bitwise type")
-     | BWCTZNoSMT ->
+     | BW_CTZ_NoSMT ->
        (match IT.basetype iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_ctz w w)
-        | _ -> failwith "solver: BWCTZNoSMT: not a bitwise type"))
+        | _ -> failwith "solver: BW_CTZ_NoSMT: not a bitwise type"))
   | Binop (op, e1, e2) ->
     let s1 = translate_term s e1 in
     let s2 = translate_term s e2 in
