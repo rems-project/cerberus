@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set (RC_ENABLE_GTEST ON)
 
-file(GLOB_RECURSE SRC src/*.c test/*.cpp)
+file(GLOB_RECURSE SRC ../../runtime/libcn/src/*.c decorated/*.c test/*.cpp)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -32,6 +32,6 @@ add_executable(ci_tests ${SRC})
 
 target_link_libraries(ci_tests GTest::gtest_main rapidcheck rapidcheck_gtest)
 
-target_include_directories(ci_tests PRIVATE)
+target_include_directories(ci_tests PRIVATE ../../runtime/libcn/include)
 
 gtest_discover_tests(ci_tests)
