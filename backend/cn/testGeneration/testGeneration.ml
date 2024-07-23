@@ -112,5 +112,5 @@ let run
        ^ (filename |> Filename.basename |> Filename.chop_extension)
        ^ ".cpp")
   in
-  Codify.codify_prelude tf oc;
+  Codify.codify_prelude tf sigma oc;
   List.iter (generate_pbt max_unfolds sigma prog5 tf oc) instrumentation_list
