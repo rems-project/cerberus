@@ -562,7 +562,7 @@ let rec translate_term s iterm =
               intl 0,
               add_ (arith_unop BW_CTZ_NoSMT e1 here, intl 1) here )
             here)
-     | BWFLSNoSMT ->
+     | BW_FLS_NoSMT ->
        (* copying and adjusting BW_FFS_NoSMT rule *)
        (* XXX: This desugaring duplicates e1 *)
        let sz = match IT.bt e1 with Bits (_sign, n) -> n | _ -> assert false in

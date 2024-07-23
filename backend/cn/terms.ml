@@ -27,7 +27,7 @@ type unop =
   | BW_CLZ_NoSMT
   | BW_CTZ_NoSMT
   | BW_FFS_NoSMT
-  | BWFLSNoSMT
+  | BW_FLS_NoSMT
 [@@deriving eq, ord, show]
 
 type binop =
@@ -198,7 +198,7 @@ let pp
        | BW_CLZ_NoSMT -> c_app !^"bw_clz_uf" [ aux false it1 ]
        | BW_CTZ_NoSMT -> c_app !^"bw_ctz_uf" [ aux false it1 ]
        | BW_FFS_NoSMT -> c_app !^"bw_ffs_uf" [ aux false it1 ]
-       | BWFLSNoSMT -> c_app !^"bw_fls_uf" [ aux false it1 ]
+       | BW_FLS_NoSMT -> c_app !^"bw_fls_uf" [ aux false it1 ]
        | Not -> mparens (!^"!" ^^ parens (aux false it1))
        | Negate -> mparens (!^"-" ^^ parens (aux false it1)))
     | Binop (bop, it1, it2) ->

@@ -559,7 +559,7 @@ module Translate = struct
                   intl 0,
                   add_ (arith_unop BW_CTZ_NoSMT t1 here, intl 1) here )
                 here)
-         | BWFLSNoSMT ->
+         | BW_FLS_NoSMT ->
            let sz = match IT.bt t1 with Bits (_sign, n) -> n | _ -> assert false in
            let intl i = int_lit_ i (IT.bt t1) here in
            Some
@@ -775,7 +775,7 @@ module Translate = struct
             | BT.Integer | BT.Real -> Z3.Arithmetic.mk_unary_minus context (term t)
             | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)"))
          | BW_FFS_NoSMT -> adj ()
-         | BWFLSNoSMT -> adj ()
+         | BW_FLS_NoSMT -> adj ()
          | BW_CLZ_NoSMT ->
            (match IT.bt t with
             | BT.Bits (BT.Unsigned, sz) -> mk_clz context sz sz (term t)

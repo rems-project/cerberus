@@ -99,7 +99,7 @@ let bw_ffs_uf_def =
 
 
 let bw_fls_uf_def =
-  ("bw_fls_uf", Sym.fresh_named "bw_fls_uf", mk_arg1 (arith_unop BWFLSNoSMT))
+  ("bw_fls_uf", Sym.fresh_named "bw_fls_uf", mk_arg1 (arith_unop BW_FLS_NoSMT))
 
 
 let shift_left_def =
