@@ -212,6 +212,7 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
   | CNExpr_unchanged e -> free_in_expr e
   | CNExpr_at_env (e, _evaluation_scope) -> free_in_expr e
   | CNExpr_not e -> free_in_expr e
+  | CNExpr_bnot e -> free_in_expr e
   | CNExpr_negate e -> free_in_expr e
   | CNExpr_default _bt -> SymSet.empty
 
@@ -929,6 +930,9 @@ module EffectfulTranslation = struct
       | CNExpr_not e ->
         let@ e = self e in
         return (not_ e loc)
+      | CNExpr_bnot e ->
+        let@ e = self e in
+        return (bw_compl_ e loc)
       | CNExpr_negate e ->
         let@ e = self e in
         (match e with

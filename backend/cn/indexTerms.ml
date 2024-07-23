@@ -495,6 +495,8 @@ let impl_ (it, it') loc = IT (Binop (Implies, it, it'), BT.Bool, loc)
 
 let not_ it loc = IT (Unop (Not, it), bt it, loc)
 
+let bw_compl_ it loc = IT (Unop (BW_Compl, it), bt it, loc)
+
 let ite_ (it, it', it'') loc = IT (ITE (it, it', it''), bt it', loc)
 
 let eq_ (it, it') loc =

@@ -118,6 +118,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_not of cn_expr 'a 'ty
   | CNExpr_negate of cn_expr 'a 'ty
   | CNExpr_default of cn_base_type 'a
+  | CNExpr_bnot of cn_expr 'a 'ty
 
 and cn_expr 'a 'ty =
   | CNExpr of Loc.t * cn_expr_ 'a 'ty

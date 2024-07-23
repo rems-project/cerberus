@@ -1896,6 +1896,9 @@ prim_expr:
 | base_value=prim_expr LBRACK updates=separated_nonempty_list(COMMA, index_update) RBRACK
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_arrayindexupdates (base_value, updates))) }
+| DEFAULT LT bt= base_type GT
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
+                               , CNExpr_default bt )) }
 
 
 
@@ -1920,9 +1923,9 @@ unary_expr:
 | BANG e= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_not e )) }
-| DEFAULT LT bt= base_type GT
-    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-                               , CNExpr_default bt )) }
+| TILDE e= unary_expr
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_bnot e )) }
 | AMPERSAND LPAREN e= prim_expr MINUS_GT member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_membershift (e, None, member) )) }
