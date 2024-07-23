@@ -552,7 +552,7 @@ let rec translate_term s iterm =
   | Sym x -> translate_var s x (IT.basetype iterm)
   | Unop (op, e1) ->
     (match op with
-     | BWFFSNoSMT ->
+     | BW_FFS_NoSMT ->
        (* XXX: This desugaring duplicates e1 *)
        let intl i = int_lit_ i (IT.bt e1) here in
        translate_term
@@ -563,7 +563,7 @@ let rec translate_term s iterm =
               add_ (arith_unop BW_CTZ_NoSMT e1 here, intl 1) here )
             here)
      | BWFLSNoSMT ->
-       (* copying and adjusting BWFFSNoSMT rule *)
+       (* copying and adjusting BW_FFS_NoSMT rule *)
        (* XXX: This desugaring duplicates e1 *)
        let sz = match IT.bt e1 with Bits (_sign, n) -> n | _ -> assert false in
        let intl i = int_lit_ i (IT.bt e1) here in

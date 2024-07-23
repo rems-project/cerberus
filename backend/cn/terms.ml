@@ -26,7 +26,7 @@ type unop =
   | Negate
   | BW_CLZ_NoSMT
   | BW_CTZ_NoSMT
-  | BWFFSNoSMT
+  | BW_FFS_NoSMT
   | BWFLSNoSMT
 [@@deriving eq, ord, show]
 
@@ -197,7 +197,7 @@ let pp
       (match uop with
        | BW_CLZ_NoSMT -> c_app !^"bw_clz_uf" [ aux false it1 ]
        | BW_CTZ_NoSMT -> c_app !^"bw_ctz_uf" [ aux false it1 ]
-       | BWFFSNoSMT -> c_app !^"bw_ffs_uf" [ aux false it1 ]
+       | BW_FFS_NoSMT -> c_app !^"bw_ffs_uf" [ aux false it1 ]
        | BWFLSNoSMT -> c_app !^"bw_fls_uf" [ aux false it1 ]
        | Not -> mparens (!^"!" ^^ parens (aux false it1))
        | Negate -> mparens (!^"-" ^^ parens (aux false it1)))

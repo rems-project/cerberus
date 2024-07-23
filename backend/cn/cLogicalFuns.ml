@@ -325,7 +325,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     let@ unop =
       match unop with
       | M_BW_CTZ -> return IT.BW_CTZ_NoSMT
-      | M_BW_FFS -> return IT.BWFFSNoSMT
+      | M_BW_FFS -> return IT.BW_FFS_NoSMT
       | _ -> unsupported "unary op" !^""
     in
     simp_const_pe (IT.arith_unop unop x loc)
@@ -558,7 +558,9 @@ let rec symb_exec_mu_expr ctxt state_vars expr =
           state
       else if List.exists (String.equal s) [ "ffs_proxy"; "ffsl_proxy"; "ffsll_proxy" ]
       then
-        rcval (wrap_int (IT.arith_unop Terms.BWFFSNoSMT (List.hd args_its) loc) loc) state
+        rcval
+          (wrap_int (IT.arith_unop Terms.BW_FFS_NoSMT (List.hd args_its) loc) loc)
+          state
       else
         failwith ("unknown stdlib function: " ^ s))
     else
