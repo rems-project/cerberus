@@ -177,11 +177,13 @@ module Impl (C : TF_Codify) = struct
     output_string oc "\n";
     List.iter
       (fun d ->
+        output_string oc "extern \"C\" ";
         output_string oc (Pp_utils.to_plain_pretty_string (Pp_ail.pp_tag_definition d));
         output_string oc "\n\n")
       sigma.tag_definitions;
     List.iter
       (fun inst ->
+        output_string oc "extern \"C\" ";
         output_string oc (codify_function_signature sigma inst);
         output_string oc "\n\n")
       inst_list
