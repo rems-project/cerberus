@@ -24,7 +24,7 @@ type const =
 type unop =
   | Not
   | Negate
-  | BWCLZNoSMT
+  | BW_CLZ_NoSMT
   | BWCTZNoSMT
   | BWFFSNoSMT
   | BWFLSNoSMT
@@ -195,7 +195,7 @@ let pp
     | Sym sym -> Sym.pp sym
     | Unop (uop, it1) ->
       (match uop with
-       | BWCLZNoSMT -> c_app !^"bw_clz_uf" [ aux false it1 ]
+       | BW_CLZ_NoSMT -> c_app !^"bw_clz_uf" [ aux false it1 ]
        | BWCTZNoSMT -> c_app !^"bw_ctz_uf" [ aux false it1 ]
        | BWFFSNoSMT -> c_app !^"bw_ffs_uf" [ aux false it1 ]
        | BWFLSNoSMT -> c_app !^"bw_fls_uf" [ aux false it1 ]

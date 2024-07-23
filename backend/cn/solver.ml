@@ -572,7 +572,7 @@ let rec translate_term s iterm =
          (ite_
             ( eq_ (e1, intl 0) here,
               intl 0,
-              sub_ (intl sz, arith_unop BWCLZNoSMT e1 here) here )
+              sub_ (intl sz, arith_unop BW_CLZ_NoSMT e1 here) here )
             here)
      | Not -> SMT.bool_not (translate_term s e1)
      | Negate ->
@@ -580,10 +580,10 @@ let rec translate_term s iterm =
         | BT.Bits _ -> SMT.bv_neg (translate_term s e1)
         | BT.Integer | BT.Real -> SMT.num_neg (translate_term s e1)
         | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)"))
-     | BWCLZNoSMT ->
+     | BW_CLZ_NoSMT ->
        (match IT.basetype iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_clz w w)
-        | _ -> failwith "solver: BWCLZNoSMT: not a bitwise type")
+        | _ -> failwith "solver: BW_CLZ_NoSMT: not a bitwise type")
      | BWCTZNoSMT ->
        (match IT.basetype iterm with
         | BT.Bits (_, w) -> maybe_name (translate_term s e1) (bv_ctz w w)

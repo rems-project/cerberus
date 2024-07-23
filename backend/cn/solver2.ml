@@ -566,7 +566,7 @@ module Translate = struct
              (ite_
                 ( eq_ (t1, intl 0) here,
                   intl 0,
-                  sub_ (intl sz, arith_unop BWCLZNoSMT t1 here) here )
+                  sub_ (intl sz, arith_unop BW_CLZ_NoSMT t1 here) here )
                 here)
          | _ -> None)
       | Binop (op, t1, t2) ->
@@ -776,12 +776,12 @@ module Translate = struct
             | _ -> failwith (__FUNCTION__ ^ ":Unop (Negate, _)"))
          | BWFFSNoSMT -> adj ()
          | BWFLSNoSMT -> adj ()
-         | BWCLZNoSMT ->
+         | BW_CLZ_NoSMT ->
            (match IT.bt t with
             | BT.Bits (BT.Unsigned, sz) -> mk_clz context sz sz (term t)
             | BT.Bits (BT.Signed, sz) ->
               via_unsigned1 context (IT.bt t) (mk_clz context sz sz) (term t)
-            | _ -> failwith "solver: BWCLZNoSMT: not a bitwise type")
+            | _ -> failwith "solver: BW_CLZ_NoSMT: not a bitwise type")
          | BWCTZNoSMT ->
            (match IT.bt t with
             | BT.Bits (BT.Unsigned, sz) -> mk_ctz context sz sz (term t)
