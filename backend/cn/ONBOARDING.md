@@ -48,7 +48,7 @@ General principles:
 * Core adjustments: if you run CN with `-d N` for `N = {1,2,3}` then it will
   produce `/tmp/0__original.core`, `/tmp/1__without_unspec.core`,
   `/tmp/2__after_peval.core`, `/tmp/3__mucore.mucore`. Some of these are referred to as 'milicore'.
-* Core to mucore: `backend/cn/core_to_mucore.ml`
+* Core to mucore: `backend/cn/lib/core_to_mucore.ml`
 * Mucore: This is the thing that CN typechecks.
 
 ### CN Pipeline Entry
@@ -66,30 +66,30 @@ with a different entry point from which a parser can be started:
   inserted as string annotations (attributes).
 4. Cabs is desugared, then elaborated into Core (including the CN toplevel declarations).
 5. Core is turned into mucore, during which process the remaining magic
-  comments are parsed and desugared into mucore as well (`backend/cn/parse.ml`).
+  comments are parsed and desugared into mucore as well (`backend/cn/lib/parse.ml`).
 
 ## Key Files
 
-* Entry point to the executable: `backend/cn/main.ml`
-* Specification well-formedness checking: `backend/cn/wellTyped.ml`
-* Actual C code type checking: `backend/cn/check.ml`
-* Type checking mondad: `backend/cn/typing.ml{i}`
-* SMT solver interface: `backend/cn/solver.ml`
-* CN errors: `backend/cn/typeErrors.ml`
-* HTML report generation: `backend/cn/report.ml`
+* Entry point to the executable: `backend/cn/bin/main.ml`
+* Specification well-formedness checking: `backend/cn/lib/wellTyped.ml`
+* Actual C code type checking: `backend/cn/lib/check.ml`
+* Type checking mondad: `backend/cn/lib/typing.ml{i}`
+* SMT solver interface: `backend/cn/lib/solver.ml`
+* CN errors: `backend/cn/lib/typeErrors.ml`
+* HTML report generation: `backend/cn/lib/report.ml`
 
 ## Key Types
 
-* Basetypes: `backend/cn/baseTypes.ml`
-* Terms: `backend/cn/terms.ml`
-* Logical Argument Types: `backend/cn/logicalArgumentTypes.ml`
+* Basetypes: `backend/cn/lib/baseTypes.ml`
+* Terms: `backend/cn/lib/terms.ml`
+* Logical Argument Types: `backend/cn/lib/logicalArgumentTypes.ml`
     ```
     let x = 5 + 5;      // Define
     take X = Pred(..);  // Resource
     assert (expr);      // Constraint
     ```
-* Resource Types: the "signatures" of predicates, in `backend/cn/resourceTypes.ml`
-* Resource Predicates: the defintion of predicates, in `backend/cn/resourcePredicates.ml`
+* Resource Types: the "signatures" of predicates, in `backend/cn/lib/resourceTypes.ml`
+* Resource Predicates: the defintion of predicates, in `backend/cn/lib/resourcePredicates.ml`
 
 ## Code Cleanup
 
@@ -100,7 +100,7 @@ You can generate them using the below **from the root of the repo** and **on a w
 [ ! -d backend/cn ] && echo "DO NOT PROCEED: Go to cerberus repo root" 
 make && make install && make install_cn
 opam install ocaml-print-intf
-dune exec -- ocaml-print-intf backend/cn/XXXXX.ml | sed 's/Dune__exe.//g' > XXXXX.mli
+dune exec -- ocaml-print-intf backend/cn/lib/XXXXX.ml | sed 's/Dune__exe.//g' > XXXXX.mli
 # edit it
 make && make install && make install_cn
 ```
@@ -112,7 +112,7 @@ make && make install && make install_cn
      ... enormous amount of stuff
     end
   ```
-  replace it with something like the below (see `backend/cn/setup.mli`).
+  replace it with something like the below (see `backend/cn/lib/setup.mli`).
   ```
   module StringSet : Set.S with type elt = string
   ```
@@ -138,7 +138,7 @@ make && make install && make install_cn
 
 ```
 opam install codept
-codept backend/cn/*.ml > cn-modules.dot
+codept backend/cn/lib/*.ml > cn-modules.dot
 dot -Tpdf -o cn-modules.pdf # -x optionally to "simplify"
 ```
 
