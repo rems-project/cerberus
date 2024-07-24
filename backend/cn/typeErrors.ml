@@ -156,18 +156,21 @@ type message =
       { has : document;
         expect : document
       }
-  | Illtyped_it :
+  | Illtyped_it of
       { it : Pp.document;
-        has : Pp.document;
+        has : Pp.document; (* 'expected' and 'has' as in Kayvan's Core type checker *)
         expected : string;
         reason : string
       }
-      -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
-  | NIA :
+  | Illtyped_binary_it of
+      { left : SurfaceBaseTypes.t Terms.term;
+        right : SurfaceBaseTypes.t Terms.term;
+        binop : CF.Cn.cn_binop
+      }
+  | NIA of
       { it : IT.t;
         hint : string
       }
-      -> message
   | TooBigExponent : { it : IT.t } -> message
   | NegativeExponent : { it : IT.t } -> message
   | Write_value_unrepresentable of
@@ -515,6 +518,24 @@ let pp_message te =
   | Empty_provenance ->
     let short = !^"Empty provenance" in
     { short; descr = None; state = None }
+  | Illtyped_binary_it { left; right; binop } ->
+    let short =
+      !^"Ill-typed application of binary operation"
+      ^^^ squotes (CF.Cn_ocaml.PpAil.pp_cn_binop binop)
+      ^^^ dot
+    in
+    let descr =
+      Some
+        (squotes (IT.pp left)
+         ^^^ !^"has type"
+         ^^^ squotes (SurfaceBaseTypes.pp (IT.bt left))
+         ^^ comma
+         ^^^ squotes (IT.pp right)
+         ^^^ !^"has type"
+         ^^^ squotes (SurfaceBaseTypes.pp (IT.bt right))
+         ^^ dot)
+    in
+    { short; descr; state = None }
 
 
 type t = type_error
