@@ -8,7 +8,7 @@ on:
       - cheri-tests
 
 env:
-  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus:release
+  CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus_cn:release
 
 # cancel in-progress job when a new push is performed
 concurrency:
@@ -166,7 +166,7 @@ jobs:
       run: |
         echo "Building ${{env.CERBERUS_IMAGE_ID}}"
         make -f Makefile_docker release
-        docker tag cerberus:release ${{env.CERBERUS_IMAGE_ID}}
+        docker tag cerberus_cn:release ${{env.CERBERUS_IMAGE_ID}}
 
     - name: Push the Docker image
       run: docker push ${{env.CERBERUS_IMAGE_ID}}
