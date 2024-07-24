@@ -4891,8 +4891,38 @@ Module CheriMemoryImplWithProofs
           assumption.
     -
       (* main invariant *)
-      admit.
-  Admitted.
+      intros addr g M U bs F.
+      cbn in *.
+      specialize (MIcap addr g M U bs F).
+      destruct MIcap as [c [D [a [alloc_id [M1 B]]]]].
+      exists c.
+      split;[assumption|].
+
+      destruct (ZMap.M.E.eq_dec alloc_id s0) as [E|NE].
+      +
+        subst s0.
+        exists {|
+            prefix := prefix a;
+            base := base a;
+            size := size a;
+            ty := ty a;
+            is_readonly :=
+              IsReadOnly
+                match prefix a with
+                | PrefStringLiteral _ _ => MemCommonExe.ReadonlyStringLiteral
+                | PrefTemporaryLifetime _ _ => MemCommonExe.ReadonlyTemporaryLifetime
+                | _ => MemCommonExe.ReadonlyConstQualified
+                end;
+            is_dynamic := is_dynamic a;
+            is_dead := is_dead a
+          |}, alloc_id.
+        split;[|assumption].
+        eapply ZMapProofs.map_update_MapsTo_update_at_k';eauto.
+      +
+        exists a, alloc_id.
+        split;auto.
+        apply ZMapProofs.map_update_MapsTo_not_at_k;auto.
+  Qed.
 
   Instance store_PreservesInvariant
     (loc : location_ocaml)
