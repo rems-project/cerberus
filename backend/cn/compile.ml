@@ -453,6 +453,8 @@ module EffectfulTranslation = struct
     fail { loc; msg = Generic msg }
 
 
+  (* TODO: type checks and disambiguation at this stage seems ill-advised,
+     ideally would be integrated into wellTyped.ml *)
   let mk_translate_binop loc' bop (e1, e2) =
     let open IndexTerms in
     let loc = loc' in
@@ -534,24 +536,8 @@ module EffectfulTranslation = struct
             }
       in
       return (IT (MapGet (e1, e2), rbt, loc))
-    | _ ->
-      let open Pp in
-      let msg =
-        !^"Ill-typed application of binary operation"
-        ^^^ squotes (CF.Cn_ocaml.PpAil.pp_cn_binop bop)
-        ^^^ dot
-        ^/^ !^"Left-hand-side:"
-        ^^^ squotes (IT.pp e1)
-        ^^^ !^"of type"
-        ^^^ squotes (SBT.pp (IT.bt e1))
-        ^^ comma
-        ^/^ !^"right-hand-side:"
-        ^^^ squotes (IT.pp e2)
-        ^^^ !^"of type"
-        ^^^ squotes (SBT.pp (IT.bt e2))
-        ^^ dot
-      in
-      fail { loc; msg = Generic msg }
+    | CN_band, (SBT.Bits _ as bt) -> return (IT (Binop (BW_And, e1, e2), bt, loc))
+    | _ -> fail { loc; msg = Illtyped_binary_it { left = e1; right = e2; binop = bop } }
 
 
   (* just copy-pasting and adapting Kayvan's older version of this code *)

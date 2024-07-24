@@ -1938,9 +1938,11 @@ unary_expr:
 
 
 mul_expr:
-(* TODO *)
 | e= unary_expr
      { e }
+| e1= mul_expr AMPERSAND e2= unary_expr
+    { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_band, e1, e2))) }
 | e1= mul_expr STAR e2= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_mul, e1, e2))) }

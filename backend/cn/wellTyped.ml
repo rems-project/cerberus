@@ -373,6 +373,9 @@ module WIT = struct
     | IT (Cons (it, _), _, _) | it -> return @@ IT.loc it
 
 
+  (* NOTE: This cannot _check_ what the root type of term is (the type is
+     universally quantified) and so is not suitable for catching incorrect
+     type annotations. *)
   let rec infer : 'bt. 'bt term -> BT.t term m =
     fun it ->
     Pp.debug 22 (lazy (Pp.item "Welltyped.WIT.infer" (IT.pp it)));
