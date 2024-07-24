@@ -165,7 +165,7 @@ jobs:
     - name: Build the Docker image
       run: |
         echo "Building ${{env.CERBERUS_IMAGE_ID}}"
-        make -f Makefile_docker release
+        make -f Makefile_docker release_cn
         docker tag cn:release ${{env.CERBERUS_IMAGE_ID}}
 
     - name: Push the Docker image
