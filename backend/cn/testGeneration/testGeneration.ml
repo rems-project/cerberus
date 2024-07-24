@@ -99,10 +99,9 @@ let run
   in
   let oc =
     Stdlib.open_out
-      (output_dir
-       ^ "test_"
-       ^ (filename |> Filename.basename |> Filename.chop_extension)
-       ^ ".cpp")
+      (Filename.concat
+         output_dir
+         ("test_" ^ (filename |> Filename.basename |> Filename.chop_extension) ^ ".cpp"))
   in
   Codify.codify_prelude tf sigma instrumentation_list oc;
   List.iter (generate_pbt max_unfolds sigma prog5 tf oc) instrumentation_list

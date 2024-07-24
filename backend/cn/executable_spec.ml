@@ -33,7 +33,7 @@ let rec open_auxilliary_files
        else (
          let fn_list = String.split_on_char '/' fn' in
          let output_fn = List.nth fn_list (List.length fn_list - 1) in
-         let output_fn_with_prefix = prefix ^ output_fn in
+         let output_fn_with_prefix = Filename.concat prefix output_fn in
          if Sys.file_exists output_fn_with_prefix then (
            Printf.printf
              "Error in opening file %s as it already exists\n"
@@ -204,9 +204,9 @@ let main
   statement_locs
   =
   let prefix = match output_decorated_dir with Some dir_name -> dir_name | None -> "" in
-  let oc = Stdlib.open_out (prefix ^ output_filename) in
-  let cn_oc = Stdlib.open_out (prefix ^ "cn.c") in
-  let cn_header_oc = Stdlib.open_out (prefix ^ "cn.h") in
+  let oc = Stdlib.open_out (Filename.concat prefix output_filename) in
+  let cn_oc = Stdlib.open_out (Filename.concat prefix "cn.c") in
+  let cn_header_oc = Stdlib.open_out (Filename.concat prefix "cn.h") in
   populate_record_map prog5;
   let instrumentation, symbol_table = Core_to_mucore.collect_instrumentation prog5 in
   let executable_spec =

@@ -33,11 +33,9 @@ end = struct
       Cerb_colour.do_colour := false;
       let count = !print_count in
       let file_path =
-        Filename.get_temp_dir_name ()
-        ^ Filename.dir_sep
-        ^ string_of_int count
-        ^ "__"
-        ^ filename
+        Filename.concat
+          (Filename.get_temp_dir_name ())
+          (string_of_int count ^ "__" ^ filename)
       in
       print_file file_path file;
       print_count := 1 + !print_count;
@@ -343,12 +341,6 @@ let generate_tests
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
-  let output_dir =
-    if String.ends_with ~suffix:Filename.dir_sep output_dir then
-      output_dir
-    else
-      output_dir ^ Filename.dir_sep
-  in
   let handle_error (e : TypeErrors.type_error) =
     let report = TypeErrors.pp_message e.msg in
     Pp.error e.loc report.short (Option.to_list report.descr);
