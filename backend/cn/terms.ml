@@ -48,7 +48,7 @@ type binop =
   | Mod
   | ModNoSMT
   | XORNoSMT
-  | BWAndNoSMT
+  | BW_And
   | BWOrNoSMT
   | ShiftLeft
   | ShiftRight
@@ -232,7 +232,7 @@ let pp
        | Min -> c_app !^"min" [ aux false it1; aux false it2 ]
        | Max -> c_app !^"max" [ aux false it1; aux false it2 ]
        | XORNoSMT -> c_app !^"xor_uf" [ aux false it1; aux false it2 ]
-       | BWAndNoSMT -> c_app !^"bw_and_uf" [ aux false it1; aux false it2 ]
+       | BW_And -> c_app !^"bw_and_uf" [ aux false it1; aux false it2 ]
        | BWOrNoSMT -> c_app !^"bw_or_uf" [ aux false it1; aux false it2 ]
        | ShiftLeft -> c_app !^"shift_left" [ aux false it1; aux false it2 ]
        | ShiftRight -> c_app !^"shift_right" [ aux false it1; aux false it2 ]

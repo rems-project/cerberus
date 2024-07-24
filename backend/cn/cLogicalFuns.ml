@@ -334,7 +334,7 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     let@ y = self var_map pe2 in
     let binop =
       match binop with
-      | M_BW_AND -> IT.BWAndNoSMT
+      | M_BW_AND -> IT.BW_And
       | M_BW_OR -> IT.BWOrNoSMT
       | M_BW_XOR -> IT.XORNoSMT
     in
