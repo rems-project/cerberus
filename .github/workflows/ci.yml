@@ -16,133 +16,133 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # build:
-  #   strategy:
-  #     matrix:
-  #       # version: [4.12.0, 4.14.1]
-  #       version: [4.14.1]
+  build:
+    strategy:
+      matrix:
+        # version: [4.12.0, 4.14.1]
+        version: [4.14.1]
 
-    
-  #   runs-on: ubuntu-22.04
 
-  #   steps:
-  #   - uses: actions/checkout@v3
+    runs-on: ubuntu-22.04
 
-  #   - name: System dependencies (ubuntu)
-  #     run: |
-  #       sudo apt install build-essential libgmp-dev z3 opam cmake
-    
-  #   - name: Restore cached opam
-  #     id: cache-opam-restore
-  #     uses: actions/cache/restore@v4
-  #     with:
-  #       path: ~/.opam
-  #       key: ${{ matrix.version }}
+    steps:
+    - uses: actions/checkout@v3
 
-  #   - name: Setup opam
-  #     if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-  #     run: |
-  #       opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-  #       opam install --deps-only --yes ./cerberus-lib.opam
-  #       opam switch create with_coq ${{ matrix.version }}
-  #       eval $(opam env --switch=with_coq)
-  #       opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
-  #       opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
-  #       opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
-  #       opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
-  #       opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
-  #       opam install --deps-only --yes ./cerberus-lib.opam ./cerberus-cheri.opam
-    
-  #   - name: Save cached opam
-  #     if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-  #     id: cache-opam-save
-  #     uses: actions/cache/save@v4
-  #     with:
-  #       path: ~/.opam
-  #       key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+    - name: System dependencies (ubuntu)
+      run: |
+        sudo apt install build-essential libgmp-dev z3 opam cmake
 
-  #   - name: Install Cerberus
-  #     run: |
-  #       opam switch ${{ matrix.version }}
-  #       eval $(opam env --switch=${{ matrix.version }})
-  #       opam pin --yes --no-action add cerberus-lib .
-  #       opam pin --yes --no-action add cerberus .
-  #       opam install --yes cerberus
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: ${{ matrix.version }}
 
-  #   - name: Run Cerberus CI tests
-  #     run: |
-  #       opam switch ${{ matrix.version }}
-  #       eval $(opam env --switch=${{ matrix.version }})
-  #       cd tests; USE_OPAM='' ./run-ci.sh
-  #       cd ..
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+        opam install --deps-only --yes ./cerberus-lib.opam
+        opam switch create with_coq ${{ matrix.version }}
+        eval $(opam env --switch=with_coq)
+        opam repo add --yes --this-switch coq-released https://coq.inria.fr/opam/released
+        opam pin --yes -n coq-struct-tact https://github.com/uwplse/StructTact.git
+        opam repo add --yes --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
+        opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
+        opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
+        opam install --deps-only --yes ./cerberus-lib.opam ./cerberus-cheri.opam
 
-  #   - name: Download cvc5 release 
-  #     uses: robinraju/release-downloader@v1 
-  #     with: 
-  #       repository: cvc5/cvc5
-  #       tag: cvc5-1.1.2
-  #       fileName: cvc5-Linux-static.zip
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
 
-  #   - name: Unzip and install cvc5
-  #     run: |
-  #       unzip cvc5-Linux-static.zip
-  #       chmod +x cvc5-Linux-static/bin/cvc5
-  #       sudo cp cvc5-Linux-static/bin/cvc5 /usr/local/bin/
+    - name: Install Cerberus
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        opam pin --yes --no-action add cerberus-lib .
+        opam pin --yes --no-action add cerberus .
+        opam install --yes cerberus
 
-  #   - name: Install CN
-  #     run: |
-  #       opam switch ${{ matrix.version }}
-  #       eval $(opam env --switch=${{ matrix.version }})
-  #       opam pin --yes --no-action add cn .
-  #       opam install --yes cn ocamlformat.0.26.2
+    - name: Run Cerberus CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-ci.sh
+        cd ..
 
-  #   - name: Checkout cn-tutorial
-  #     uses: actions/checkout@v4
-  #     with: 
-  #       repository: rems-project/cn-tutorial
-  #       path: cn-tutorial
+    - name: Download cvc5 release
+      uses: robinraju/release-downloader@v1
+      with:
+        repository: cvc5/cvc5
+        tag: cvc5-1.1.2
+        fileName: cvc5-Linux-static.zip
 
-  #   - name: Run CN CI tests
-  #     run: |
-  #       opam switch ${{ matrix.version }}
-  #       eval $(opam env --switch=${{ matrix.version }})
-  #       cd tests; USE_OPAM='' ./run-cn.sh
-  #       cd ..
+    - name: Unzip and install cvc5
+      run: |
+        unzip cvc5-Linux-static.zip
+        chmod +x cvc5-Linux-static/bin/cvc5
+        sudo cp cvc5-Linux-static/bin/cvc5 /usr/local/bin/
 
-  #   - name: Run CN Tutorial CI tests
-  #     run: |
-  #       opam switch ${{ matrix.version }}
-  #       eval $(opam env --switch=${{ matrix.version }})
-  #       USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
+    - name: Install CN
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        opam pin --yes --no-action add cn .
+        opam install --yes cn ocamlformat.0.26.2
 
-  #   - name: Run CN-Test-Gen CI tests
-  #     run: |
-  #       opam switch ${{ matrix.version }}
-  #       eval $(opam env --switch=${{ matrix.version }})
-  #       cd tests; USE_OPAM='' ./run-cn-test-gen.sh
-  #       cd ..
+    - name: Checkout cn-tutorial
+      uses: actions/checkout@v4
+      with:
+        repository: rems-project/cn-tutorial
+        path: cn-tutorial
 
-  #   - name: Check CN code formatting
-  #     run: |
-  #       opam switch ${{ matrix.version }}
-  #       eval $(opam env --switch=${{ matrix.version }})
+    - name: Run CN CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-cn.sh
+        cd ..
 
-  #   - name: Install Cerberus-CHERI
-  #     if: ${{ matrix.version == '4.14.1' }}
-  #     run: |
-  #       opam switch with_coq
-  #       eval $(opam env --switch=with_coq)
-  #       opam pin --yes --no-action add cerberus-lib .
-  #       opam pin --yes --no-action add cerberus-cheri .
-  #       opam install --yes cerberus-cheri
+    - name: Run CN Tutorial CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
 
-  #   - name: Run Cerberus-CHERI CI tests
-  #     if: ${{ matrix.version == '4.14.1' }}
-  #     run: |
-  #       opam switch with_coq
-  #       eval $(opam env --switch=with_coq)
-  #       cd tests; USE_OPAM='' ./run-cheri.sh
-  #       cd ..
+    - name: Run CN-Test-Gen CI tests
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
+        cd ..
+
+    - name: Check CN code formatting
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+
+    - name: Install Cerberus-CHERI
+      if: ${{ matrix.version == '4.14.1' }}
+      run: |
+        opam switch with_coq
+        eval $(opam env --switch=with_coq)
+        opam pin --yes --no-action add cerberus-lib .
+        opam pin --yes --no-action add cerberus-cheri .
+        opam install --yes cerberus-cheri
+
+    - name: Run Cerberus-CHERI CI tests
+      if: ${{ matrix.version == '4.14.1' }}
+      run: |
+        opam switch with_coq
+        eval $(opam env --switch=with_coq)
+        cd tests; USE_OPAM='' ./run-cheri.sh
+        cd ..
 
 
   deploy-docker:
@@ -158,12 +158,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # - name: Login to GitHub Container Registry
-    #   uses: docker/login-action@v3
-    #   with:
-    #     registry: ghcr.io
-    #     username: ${{ github.actor }}
-    #     password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
@@ -175,5 +175,5 @@ jobs:
         PLATFORM=${{ matrix.platform }} make -f Makefile_docker release_cn
         docker tag cn:release ${{env.CERBERUS_IMAGE_ID}}
 
-    # - name: Push the Docker image
-    #   run: docker push ${{env.CERBERUS_IMAGE_ID}}
+    - name: Push the Docker image
+      run: docker push ${{env.CERBERUS_IMAGE_ID}}
