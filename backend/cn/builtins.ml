@@ -79,7 +79,7 @@ let mod_uf_def = ("mod_uf", Sym.fresh_named "mod_uf", mk_arg2 mod_no_smt_)
 let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 (arith_binop XORNoSMT))
 
 let bw_and_uf_def =
-  ("bw_and_uf", Sym.fresh_named "bw_and_uf", mk_arg2 (arith_binop BWAndNoSMT))
+  ("bw_and_uf", Sym.fresh_named "bw_and_uf", mk_arg2 (arith_binop BW_And))
 
 
 let bw_or_uf_def =

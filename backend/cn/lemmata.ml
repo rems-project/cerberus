@@ -987,7 +987,7 @@ let it_to_coq loc global list_mono it =
          | Exp -> abinop "^" x y
          | ExpNoSMT -> abinop "^" x y
          | XORNoSMT -> f_appM "Z.lxor" [ aux x; aux y ]
-         | BWAndNoSMT -> f_appM "Z.land" [ aux x; aux y ]
+         | BW_And -> f_appM "Z.land" [ aux x; aux y ]
          | BWOrNoSMT -> f_appM "Z.lor" [ aux x; aux y ]
          | EQ ->
            let comp = Some (t, "argument of equality") in

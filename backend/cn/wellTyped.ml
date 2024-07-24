@@ -498,7 +498,7 @@ module WIT = struct
            in
            warn loc msg;
            return (IT (Binop (ExpNoSMT, t, t'), IT.bt t, loc))
-         | ExpNoSMT | RemNoSMT | ModNoSMT | XORNoSMT | BWAndNoSMT | BWOrNoSMT | ShiftLeft
+         | ExpNoSMT | RemNoSMT | ModNoSMT | XORNoSMT | BW_And | BWOrNoSMT | ShiftLeft
          | ShiftRight | Rem | Mod ->
            let@ t = infer t in
            let@ () = ensure_bits_type loc (IT.bt t) in

@@ -343,7 +343,7 @@ let cn_to_ail_binop_internal bt1 bt2 =
   | Rem | RemNoSMT -> failwith "TODO cn_to_ail_binop: rem"
   | Mod | ModNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_mod"))
   | XORNoSMT -> (A.(Arithmetic Bxor), Some (get_cn_int_type_str bt1 bt2 ^ "_xor"))
-  | BWAndNoSMT -> (A.(Arithmetic Band), Some (get_cn_int_type_str bt1 bt2 ^ "_bwand"))
+  | BW_And -> (A.(Arithmetic Band), Some (get_cn_int_type_str bt1 bt2 ^ "_bwand"))
   | BWOrNoSMT -> (A.(Arithmetic Bor), Some (get_cn_int_type_str bt1 bt2 ^ "_bwor"))
   | ShiftLeft -> (A.(Arithmetic Shl), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_left"))
   | ShiftRight -> (A.(Arithmetic Shr), Some (get_cn_int_type_str bt1 bt2 ^ "_shift_right"))

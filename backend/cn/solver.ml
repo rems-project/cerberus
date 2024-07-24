@@ -654,11 +654,10 @@ let rec translate_term s iterm =
        (match IT.basetype iterm with
         | BT.Bits _ -> SMT.bv_xor s1 s2
         | _ -> failwith "XORNoSMT")
-     (* XXX: Why no SMT? *)
-     | BWAndNoSMT ->
+     | BW_And ->
        (match IT.basetype iterm with
         | BT.Bits _ -> SMT.bv_and s1 s2
-        | _ -> failwith "BWAndNoSMT")
+        | _ -> failwith "BW_And")
      (* XXX: Why no SMT? *)
      | BWOrNoSMT ->
        (match IT.basetype iterm with
