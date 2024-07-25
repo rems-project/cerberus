@@ -817,7 +817,7 @@ let rec cn_to_ail_expr_aux_internal
   : type a.
     _ option ->
     _ option ->
-    _ Cn.cn_datatype list ->
+    _ CF.Cn.cn_datatype list ->
     (C.union_tag * C.ctype) list ->
     IT.t ->
     a dest ->
@@ -1490,7 +1490,8 @@ let rec cn_to_ail_expr_aux_internal
 
 
 let cn_to_ail_expr_internal
-  : type a. _ Cn.cn_datatype list -> (C.union_tag * C.ctype) list -> IT.t -> a dest -> a
+  : type a.
+    _ CF.Cn.cn_datatype list -> (C.union_tag * C.ctype) list -> IT.t -> a dest -> a
   =
   fun dts globals cn_expr d -> cn_to_ail_expr_aux_internal None None dts globals cn_expr d
 
@@ -1498,7 +1499,7 @@ let cn_to_ail_expr_internal
 let cn_to_ail_expr_internal_with_pred_name
   : type a.
     Sym.sym option ->
-    _ Cn.cn_datatype list ->
+    _ CF.Cn.cn_datatype list ->
     (C.union_tag * C.ctype) list ->
     IT.t ->
     a dest ->
@@ -2732,7 +2733,7 @@ let cn_to_ail_resource_internal
 
 let cn_to_ail_logical_constraint_internal
   : type a.
-    _ Cn.cn_datatype list ->
+    _ CF.Cn.cn_datatype list ->
     (C.union_tag * C.ctype) list ->
     a dest ->
     LC.logical_constraint ->
@@ -2837,7 +2838,7 @@ let cn_to_ail_function_internal
   let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
   let matched_cn_functions =
     List.filter
-      (fun (cn_fun : (A.ail_identifier, C.ctype) Cn.cn_function) ->
+      (fun (cn_fun : (A.ail_identifier, C.ctype) CF.Cn.cn_function) ->
         Sym.equal cn_fun.cn_func_name fn_sym)
       cn_functions
   in
@@ -2986,7 +2987,7 @@ let cn_to_ail_predicate_internal
   in
   let matched_cn_preds =
     List.filter
-      (fun (cn_pred : (A.ail_identifier, C.ctype) Cn.cn_predicate) ->
+      (fun (cn_pred : (A.ail_identifier, C.ctype) CF.Cn.cn_predicate) ->
         Sym.equal cn_pred.cn_pred_name pred_sym)
       cn_preds
   in
@@ -3049,7 +3050,7 @@ let cn_to_ail_post_internal dts globals preds (RT.Computational (bound, oinfo, t
 (* TODO: Add destination passing *)
 let cn_to_ail_cnstatement_internal
   : type a.
-    _ Cn.cn_datatype list ->
+    _ CF.Cn.cn_datatype list ->
     (C.union_tag * C.ctype) list ->
     a dest ->
     Cnprog.cn_statement ->

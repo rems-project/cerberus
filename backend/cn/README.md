@@ -50,7 +50,8 @@ via `opam init` after the installation of opam.)
    make install_cn
    ```
 
-   which installs Cerberus, CN, and dependencies.
+   which installs Cerberus, CN (as both a library and an executable), and
+   dependencies.
 
 ## Contributing
 

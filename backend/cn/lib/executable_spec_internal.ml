@@ -43,7 +43,7 @@ let generate_ail_stat_strs
 
 let populate_record_map_aux (sym, bt_ret_type) =
   match Cn_internal_to_ail.bt_to_cn_base_type bt_ret_type with
-  | Cn.CN_record members ->
+  | CF.Cn.CN_record members ->
     let sym' = Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym in
     Cn_internal_to_ail.records
     := Cn_internal_to_ail.RecordMap.add members sym' !Cn_internal_to_ail.records

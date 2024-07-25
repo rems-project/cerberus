@@ -270,7 +270,7 @@ type 'TY mu_expr_ =
   | M_End of 'TY mu_expr list (* nondeterministic choice *)
   (* | M_Edone of 'TY mu_expr *)
   | M_Erun of symbol * 'TY mu_pexpr list (* run from label *)
-  | M_CN_progs of (Sym.t, Ctype.ctype) Cn.cn_statement list * Cnprog.cn_prog list
+  | M_CN_progs of (Sym.t, Ctype.ctype) CF.Cn.cn_statement list * Cnprog.cn_prog list
 
 and 'TY mu_expr = M_Expr of loc * annot list * 'TY * 'TY mu_expr_
 
@@ -458,7 +458,7 @@ let evaluate_fun mu_fun args =
      | _ -> None)
 
 
-type parse_ast_label_spec = { label_spec : (Sym.t, Ctype.ctype) Cn.cn_condition list }
+type parse_ast_label_spec = { label_spec : (Sym.t, Ctype.ctype) CF.Cn.cn_condition list }
 
 type 'TY mu_label_def =
   | M_Return of loc
@@ -489,8 +489,8 @@ type 'TY mu_proc_args_and_body = ('TY mu_expr * 'TY mu_label_defs * T.rt) mu_arg
 
 type parse_ast_function_specification =
   { accesses : (Sym.t * Ctype.ctype) list;
-    requires : (Sym.t, Ctype.ctype) Cn.cn_condition list;
-    ensures : (Sym.t, Ctype.ctype) Cn.cn_condition list
+    requires : (Sym.t, Ctype.ctype) CF.Cn.cn_condition list;
+    ensures : (Sym.t, Ctype.ctype) CF.Cn.cn_condition list
   }
 
 type 'TY mu_fun_map_decl =
