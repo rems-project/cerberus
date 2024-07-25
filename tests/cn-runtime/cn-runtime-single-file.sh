@@ -86,4 +86,5 @@ else
       fi
     fi
   fi
+  echo "Generated files are in: $EXEC_DIR"
 fi
