@@ -41,12 +41,6 @@ via `opam init` after the installation of opam.)
 6. then run
 
    ```
-   make install
-   ```
-
-   and finally
-
-   ```
    make install_cn
    ```
 

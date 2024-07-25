@@ -299,7 +299,7 @@ install-cheri:
 	$(Q)dune install cerberus-cheri
 
 .PHONY: install_cn
-install_cn: cn
+install_cn: install cn
 	@echo "[DUNE] install cn"
 	$(Q)dune install cn
 

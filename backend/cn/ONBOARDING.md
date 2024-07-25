@@ -98,11 +98,11 @@ with a different entry point from which a parser can be started:
 You can generate them using the below **from the root of the repo** and **on a working build**:
 ``` 
 [ ! -d backend/cn ] && echo "DO NOT PROCEED: Go to cerberus repo root" 
-make && make install && make install_cn
+make && make install_cn
 opam install ocaml-print-intf
 dune exec -- ocaml-print-intf backend/cn/lib/XXXXX.ml | sed 's/Dune__exe.//g' > XXXXX.mli
 # edit it
-make && make install && make install_cn
+make && make install_cn
 ```
 
 * If you see something like
