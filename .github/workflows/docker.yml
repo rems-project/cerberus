@@ -1,4 +1,4 @@
-name: CI
+name: docker
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
 
 # cancel in-progress job when a new push is performed
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: docker-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
