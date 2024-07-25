@@ -1,50 +1,46 @@
-module Print = Pp
-open Cerb_frontend
-open Lem_pervasives
-open Ctype
-open Milicore
+(* Frontend *)
 module CF = Cerb_frontend
-module CA = Cabs_to_ail
-module CAE = Cabs_to_ail_effect
-open Cerb_frontend.Pp_ast
+module CAE = CF.Cabs_to_ail_effect
+module Cn = CF.Cn
+module Ctype = CF.Ctype
 
-module Pmap = struct
-  include Pmap
+(* CN specific *)
+module BT = BaseTypes
+module C = Compile
+module IT = IndexTerms
+module IdMap = Map.Make (Id)
+module SBT = SurfaceBaseTypes
+module SymMap = Map.Make (Sym)
+module SymSet = Set.Make (Sym)
 
-  let filter_map compare f map =
-    Pmap.fold
-      (fun key value acc ->
-        match f key value with Some value' -> Pmap.add key value' acc | None -> acc)
-      map
-      (Pmap.empty compare)
+(* Short forms *)
+module Desugar = struct
+  let cn_statement = CF.Cabs_to_ail.desugar_cn_statement
+
+  let cn_resource = CF.Cabs_to_ail.desugar_cn_resource
+
+  let cn_assertion = CF.Cabs_to_ail.desugar_cn_assertion
+
+  let cn_expr = CF.Cabs_to_ail.desugar_cn_expr
 end
 
-open TypeErrors
-open Core
-open Annot
-module BT = BaseTypes
-module SBT = SurfaceBaseTypes
-module Mu = Mucore
-open Mu
-module Loc = Locations
-module C = Compile
-module SymSet = Set.Make (Sym)
-module SymMap = Map.Make (Sym)
-module IdMap = Map.Make (Id)
-open Print
-open Cn
-open Resultat
+let get_loc = CF.Annot.get_loc
+
+let get_loc_ = CF.Annot.get_loc_
+
+open CF.Core
+open Pp
+open Mucore
 
 open Effectful.Make (Resultat)
 
-open AilSyntax
-module IT = IndexTerms
+let fail = Resultat.fail
 
 let do_ail_desugar_op desugar_state f =
   match f desugar_state with
-  | Exception.Result (x, st2) -> return (x, st2)
-  | Exception.Exception (loc, msg) ->
-    fail { loc; msg = Generic !^(Pp_errors.short_message msg) }
+  | CF.Exception.Result (x, st2) -> return (x, st2)
+  | CF.Exception.Exception (loc, msg) ->
+    fail { loc; msg = Generic !^(CF.Pp_errors.short_message msg) }
 
 
 let do_ail_desugar_rdonly desugar_state f =
@@ -53,97 +49,40 @@ let do_ail_desugar_rdonly desugar_state f =
 
 
 let register_new_cn_local id d_st =
-  do_ail_desugar_op d_st (CA.register_additional_cn_var id)
+  do_ail_desugar_op d_st (CF.Cabs_to_ail.register_additional_cn_var id)
 
 
-(* This rewrite should happen after some partial evaluation and rewrites that remove
-   expressions passing ctypes and function pointers as values. The embedding into mucore
-   then is partial in those places. *)
-
-(* type bty = core_base_type *)
-(* type 'bty pexpr = ('bty, Symbol.sym) generic_pexpr *)
-(* type 'bty pexprs = ('bty pexpr) list *)
-(* type ('a, 'bty) expr = ('a, 'bty, Symbol.sym) generic_expr *)
-(* type annot = Annot.annot *)
-(* type annots = annot list *)
-
-type symbol = Symbol.sym
-
-type mu_pexpr = unit Mu.mu_pexpr
-
-type mu_pexprs = mu_pexpr list
-
-type mu_expr = unit Mu.mu_expr
+(* This rewrite should happen after some partial evaluation and rewrites that
+   remove expressions passing ctypes and function pointers as values. The
+   embedding into mucore then is partial in those places. Based on
+   http://matt.might.net/articles/a-normalization/ *)
 
 exception ConversionFailed
 
 let assert_error loc msg =
-  Print.error loc msg [];
+  error loc msg [];
   if !Cerb_debug.debug_level > 0 then
     assert false
   else
     raise ConversionFailed
 
 
-let assertl loc b msg extra =
-  if b then
-    ()
-  else
-    assert_error loc (msg ^^ Print.hardline ^^ Lazy.force extra)
-
-
 let convert_ct loc ct = Sctypes.of_ctype_unsafe loc ct
-
-let convert_core_bt_for_list loc =
-  let rec bt_of_core_base_type = function
-    | BTy_unit -> BT.Unit
-    | BTy_boolean -> BT.Bool
-    | BTy_list bt -> BT.List (bt_of_core_base_type bt)
-    | BTy_tuple bts -> BT.Tuple (List.map bt_of_core_base_type bts)
-    | BTy_ctype -> BT.CType
-    | cbt ->
-      assert_error
-        loc
-        (Print.item "convert_core_bt_for_list" (Pp_mucore.pp_core_base_type cbt))
-  in
-  fun cbt -> bt_of_core_base_type cbt
-
 
 let ensure_pexpr_ctype loc err pe : act =
   match pe with
   | Pexpr (annot, _bty, PEval (Vctype ct)) ->
     { loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct }
-  | _ -> assert_error loc (err ^^ P.colon ^^^ Pp_core.Basic.pp_pexpr pe)
+  | _ -> assert_error loc (err ^^ colon ^^^ CF.Pp_core.Basic.pp_pexpr pe)
 
-
-(* ... (originally) adapting the algorithm from
-   http://matt.might.net/articles/a-normalization/ for core *)
-
-(* let ensure_ctype__pexpr loc = function *)
-(*   | Core.Pexpr (annot, bty, Core.PEval (Core.Vctype ct)) ->  *)
-(*      Some ({loc; annot; type_annot = bty; ct = convert_ct loc ct}) *)
-(*   | _ -> None *)
-
-(* let loc_error loc msg =  *)
-(*   Print.error loc !^msg [];  *)
-(*   assert false *)
-
-(* let loc_error_pp loc msg =  *)
-(*   Print.error loc msg []; *)
-(*   assert false *)
-
-(* let fensure_ctype__pexpr loc err pe : 'TY act =  *)
-(*   match ensure_ctype__pexpr loc pe with *)
-(*   | Some ctype -> ctype *)
-(*   | None -> loc_error loc err *)
 
 let rec core_to_mu__pattern ~inherit_loc loc (Pattern (annots, pat_)) =
-  let loc = (if inherit_loc then Loc.update loc else Fun.id) (get_loc_ annots) in
+  let loc = (if inherit_loc then Locations.update loc else Fun.id) (get_loc_ annots) in
   let wrap pat_ = M_Pattern (loc, annots, (), pat_) in
   match pat_ with
   | CaseBase (msym, cbt1) -> wrap (M_CaseBase (msym, cbt1))
   | CaseCtor (ctor, pats) ->
-    let pats = map (core_to_mu__pattern ~inherit_loc loc) pats in
+    let pats = Lem_pervasives.map (core_to_mu__pattern ~inherit_loc loc) pats in
     (match ctor with
      | Cnil cbt1 -> wrap (M_CaseCtor (M_Cnil cbt1, pats))
      | Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
@@ -188,8 +127,6 @@ and n_val loc v =
   M_V ((), v)
 
 
-let unit_pat loc annots = M_Pattern (loc, annots, (), M_CaseBase (None, Core.BTy_unit))
-
 let function_ids =
   [ ("params_length", M_F_params_length);
     ("params_nth", M_F_params_nth);
@@ -200,8 +137,8 @@ let function_ids =
 let ity_act loc ity = { loc; annot = []; (* type_annot = (); *)
                                          ct = Sctypes.Integer ity }
 
-let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
-  let loc = (if inherit_loc then Loc.update loc else Fun.id) (get_loc_ annots) in
+let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexpr =
+  let loc = (if inherit_loc then Locations.update loc else Fun.id) (get_loc_ annots) in
   let n_pexpr = n_pexpr ~inherit_loc in
   let annotate pe = M_Pexpr (loc, annots, bty, pe) in
   match pe with
@@ -217,76 +154,76 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
     let argnum_err () =
       assert_error
         loc
-        (Print.item
+        (item
            "PEctor wrong number of arguments"
-           (Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe))))
+           (CF.Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe))))
     in
     (match (ctor, args) with
-     | Core.CivCOMPL, [ ct; arg1 ] ->
+     | CivCOMPL, [ ct; arg1 ] ->
        let ct =
          ensure_pexpr_ctype loc !^"CivCOMPL: first argument not a constant ctype" ct
        in
        let arg1 = n_pexpr loc arg1 in
        annotate (M_PEwrapI (ct, annotate (M_PEbitwise_unop (M_BW_COMPL, arg1))))
-     | Core.CivCOMPL, _ -> argnum_err ()
-     | Core.CivAND, [ ct; arg1; arg2 ] ->
+     | CivCOMPL, _ -> argnum_err ()
+     | CivAND, [ ct; arg1; arg2 ] ->
        let ct =
          ensure_pexpr_ctype loc !^"CivAND: first argument not a constant ctype" ct
        in
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
        annotate (M_PEwrapI (ct, annotate (M_PEbitwise_binop (M_BW_AND, arg1, arg2))))
-     | Core.CivAND, _ -> argnum_err ()
-     | Core.CivOR, [ ct; arg1; arg2 ] ->
+     | CivAND, _ -> argnum_err ()
+     | CivOR, [ ct; arg1; arg2 ] ->
        let ct =
          ensure_pexpr_ctype loc !^"CivOR: first argument not a constant ctype" ct
        in
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
        annotate (M_PEwrapI (ct, annotate (M_PEbitwise_binop (M_BW_OR, arg1, arg2))))
-     | Core.CivOR, _ -> argnum_err ()
-     | Core.CivXOR, [ ct; arg1; arg2 ] ->
+     | CivOR, _ -> argnum_err ()
+     | CivXOR, [ ct; arg1; arg2 ] ->
        let ct =
          ensure_pexpr_ctype loc !^"CivXOR: first argument not a constant ctype" ct
        in
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
        annotate (M_PEwrapI (ct, annotate (M_PEbitwise_binop (M_BW_XOR, arg1, arg2))))
-     | Core.CivXOR, _ -> argnum_err ()
-     | Core.Cfvfromint, [ arg1 ] ->
+     | CivXOR, _ -> argnum_err ()
+     | Cfvfromint, [ arg1 ] ->
        let arg1 = n_pexpr loc arg1 in
        annotate (M_Cfvfromint arg1)
-     | Core.Cfvfromint, _ -> argnum_err ()
-     | Core.Civfromfloat, [ ct; arg1 ] ->
+     | Cfvfromint, _ -> argnum_err ()
+     | Civfromfloat, [ ct; arg1 ] ->
        let ct =
          ensure_pexpr_ctype loc !^"Civfromfloat: first argument not a constant ctype" ct
        in
        let arg1 = n_pexpr loc arg1 in
        annotate (M_Civfromfloat (ct, arg1))
-     | Core.Civfromfloat, _ -> argnum_err ()
-     | Core.Cnil bt1, _ -> annotate (M_PEctor (M_Cnil bt1, List.map (n_pexpr loc) args))
-     | Core.Ccons, _ -> annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
-     | Core.Ctuple, _ -> annotate (M_PEctor (M_Ctuple, List.map (n_pexpr loc) args))
-     | Core.Carray, _ -> annotate (M_PEctor (M_Carray, List.map (n_pexpr loc) args))
-     | Core.Cspecified, _ -> n_pexpr loc (List.hd args)
-     | Core.Civsizeof, [ ct_expr ] ->
+     | Civfromfloat, _ -> argnum_err ()
+     | Cnil bt1, _ -> annotate (M_PEctor (M_Cnil bt1, List.map (n_pexpr loc) args))
+     | Ccons, _ -> annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
+     | Ctuple, _ -> annotate (M_PEctor (M_Ctuple, List.map (n_pexpr loc) args))
+     | Carray, _ -> annotate (M_PEctor (M_Carray, List.map (n_pexpr loc) args))
+     | Cspecified, _ -> n_pexpr loc (List.hd args)
+     | Civsizeof, [ ct_expr ] ->
        annotate (M_PEapply_fun (M_F_size_of, [ n_pexpr loc ct_expr ]))
-     | Core.Civsizeof, _ -> argnum_err ()
-     | Core.Civalignof, [ ct_expr ] ->
+     | Civsizeof, _ -> argnum_err ()
+     | Civalignof, [ ct_expr ] ->
        annotate (M_PEapply_fun (M_F_align_of, [ n_pexpr loc ct_expr ]))
-     | Core.Civalignof, _ -> argnum_err ()
-     | Core.Civmax, [ ct_expr ] ->
+     | Civalignof, _ -> argnum_err ()
+     | Civmax, [ ct_expr ] ->
        annotate (M_PEapply_fun (M_F_max_int, [ n_pexpr loc ct_expr ]))
-     | Core.Civmax, _ -> argnum_err ()
-     | Core.Civmin, [ ct_expr ] ->
+     | Civmax, _ -> argnum_err ()
+     | Civmin, [ ct_expr ] ->
        annotate (M_PEapply_fun (M_F_min_int, [ n_pexpr loc ct_expr ]))
-     | Core.Civmin, _ -> argnum_err ()
+     | Civmin, _ -> argnum_err ()
      | _ ->
        assert_error
          loc
-         (Print.item
+         (item
             "core_to_mucore: unsupported ctor application"
-            (Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe)))))
+            (CF.Pp_core.Basic.pp_pexpr (Pexpr (annots, bty, pe)))))
   | PEcase (_e', _pats_pes) -> assert_error loc !^"PEcase"
   | PEarray_shift (e', ct, e'') ->
     let e' = n_pexpr loc e' in
@@ -315,8 +252,6 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEcfunction e' ->
     let e' = n_pexpr loc e' in
     annotate (M_PEcfunction e')
-    (* let err = Errors.UNSUPPORTED "function pointers" in *)
-    (*   Pp_errors.fatal (Pp_errors.to_string (loc, err));  *)
   | PEmemberof (sym1, id1, e') ->
     let e' = n_pexpr loc e' in
     annotate (M_PEmemberof (sym1, id1, e'))
@@ -391,7 +326,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
           assert_error
             loc
             (!^"all_values_representable_in: not integer types:"
-             ^^^ Print.list Pp_core.Basic.pp_pexpr [ arg1; arg2 ]))
+             ^^^ list CF.Pp_core.Basic.pp_pexpr [ arg1; arg2 ]))
      | Sym (Symbol (_, _, SD_Id fun_id)), args ->
        (match List.assoc_opt String.equal fun_id function_ids with
         | Some fun_id ->
@@ -402,20 +337,20 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
             loc
             (!^"PEcall (SD_Id) not inlined: "
              ^^^ !^fun_id
-             ^^ Print.colon
-             ^^^ Print.list Pp_core.Basic.pp_pexpr args))
+             ^^ colon
+             ^^^ list CF.Pp_core.Basic.pp_pexpr args))
      | Sym sym, _ -> assert_error loc (!^"PEcall not inlined:" ^^^ Sym.pp sym)
      | Impl impl, _ ->
        assert_error
          loc
          (!^"PEcall to impl not inlined:"
-          ^^^ !^(Implementation.string_of_implementation_constant impl)))
+          ^^^ !^(CF.Implementation.string_of_implementation_constant impl)))
   | PElet (pat, e', e'') ->
     (match (pat, e') with
      | Pattern (_annots, CaseBase (Some sym, _)), Pexpr (annots2, _, PEsym sym2)
      | ( Pattern (_annots, CaseCtor (Cspecified, [ Pattern (_, CaseBase (Some sym, _)) ])),
          Pexpr (annots2, _, PEsym sym2) ) ->
-       let e'' = Core_peval.subst_sym_pexpr2 sym (get_loc annots2, `SYM sym2) e'' in
+       let e'' = CF.Core_peval.subst_sym_pexpr2 sym (get_loc annots2, `SYM sym2) e'' in
        n_pexpr loc e''
      | ( Pattern
            ( _annots,
@@ -443,8 +378,8 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
              PEctor (Ctuple, [ Pexpr (_, _, PEsym sym2); Pexpr (_, _, PEsym sym2') ]) ) )
      (* pairwise disjoint *)
        when List.length (List.sort_uniq Sym.compare [ sym; sym'; sym2; sym2' ]) = 4 ->
-       let e'' = Core_peval.subst_sym_pexpr2 sym (get_loc annots2, `SYM sym2) e'' in
-       let e'' = Core_peval.subst_sym_pexpr2 sym' (get_loc annots2, `SYM sym2') e'' in
+       let e'' = CF.Core_peval.subst_sym_pexpr2 sym (get_loc annots2, `SYM sym2) e'' in
+       let e'' = CF.Core_peval.subst_sym_pexpr2 sym' (get_loc annots2, `SYM sym2') e'' in
        n_pexpr loc e''
      | _ ->
        let pat = core_to_mu__pattern ~inherit_loc loc pat in
@@ -455,8 +390,8 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
     (match (e2, e3) with
      | ( Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))),
          Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2)))) )
-       when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one)
-            && Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero) ->
+       when Option.equal Z.equal (CF.Mem.eval_integer_value iv1) (Some Z.one)
+            && Option.equal Z.equal (CF.Mem.eval_integer_value iv2) (Some Z.zero) ->
        let e1 = n_pexpr loc e1 in
        annotate (M_PEbool_to_integer e1)
      | ( Pexpr
@@ -464,8 +399,8 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : mu_pexpr =
          Pexpr
            (_, _, PEctor (Cspecified, [ Pexpr (_, _, PEval (Vobject (OVinteger iv2))) ]))
        )
-       when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one)
-            && Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero) ->
+       when Option.equal Z.equal (CF.Mem.eval_integer_value iv1) (Some Z.one)
+            && Option.equal Z.equal (CF.Mem.eval_integer_value iv2) (Some Z.zero) ->
        let e1 = n_pexpr loc e1 in
        annotate (M_PEbool_to_integer e1)
      (* this should go away *)
@@ -496,7 +431,7 @@ let n_kill_kind loc = function
 
 let n_action ~inherit_loc loc action =
   let (Action (loc', _, a1)) = action in
-  let loc = (if inherit_loc then Loc.update loc else Fun.id) loc' in
+  let loc = (if inherit_loc then Locations.update loc else Fun.id) loc' in
   let n_pexpr = n_pexpr ~inherit_loc in
   let wrap a1 = M_Action (loc, a1) in
   match a1 with
@@ -574,97 +509,98 @@ let n_paction ~inherit_loc loc (Paction (pol, a)) =
 
 
 let show_n_memop =
-  Mem_common.(
+  CF.Mem_common.(
     instance_Show_Show_Mem_common_generic_memop_dict
-      Symbol.instance_Show_Show_Symbol_sym_dict)
+      CF.Symbol.instance_Show_Show_Symbol_sym_dict)
     .show_method
 
 
 let n_memop ~inherit_loc loc memop pexprs =
   let n_pexpr = n_pexpr ~inherit_loc in
+  let open CF.Mem_common in
   match (memop, pexprs) with
-  | Mem_common.PtrEq, [ pe1; pe2 ] ->
+  | PtrEq, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_PtrEq (pe1, pe2)
-  | Mem_common.PtrNe, [ pe1; pe2 ] ->
+  | PtrNe, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_PtrNe (pe1, pe2)
-  | Mem_common.PtrLt, [ pe1; pe2 ] ->
+  | PtrLt, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_PtrLt (pe1, pe2)
-  | Mem_common.PtrGt, [ pe1; pe2 ] ->
+  | PtrGt, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_PtrGt (pe1, pe2)
-  | Mem_common.PtrLe, [ pe1; pe2 ] ->
+  | PtrLe, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_PtrLe (pe1, pe2)
-  | Mem_common.PtrGe, [ pe1; pe2 ] ->
+  | PtrGe, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_PtrGe (pe1, pe2)
-  | Mem_common.Ptrdiff, [ ct1; pe1; pe2 ] ->
+  | Ptrdiff, [ ct1; pe1; pe2 ] ->
     let ct1 = ensure_pexpr_ctype loc !^"Ptrdiff: not a constant ctype" ct1 in
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_Ptrdiff (ct1, pe1, pe2)
-  | Mem_common.IntFromPtr, [ ct1; ct2; pe ] ->
+  | IntFromPtr, [ ct1; ct2; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"IntFromPtr: not a constant ctype" ct1 in
     let ct2 = ensure_pexpr_ctype loc !^"IntFromPtr: not a constant ctype" ct2 in
     let pe = n_pexpr loc pe in
     M_IntFromPtr (ct1, ct2, pe)
-  | Mem_common.PtrFromInt, [ ct1; ct2; pe ] ->
+  | PtrFromInt, [ ct1; ct2; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrFromInt: not a constant ctype" ct1 in
     let ct2 = ensure_pexpr_ctype loc !^"PtrFromInt: not a constant ctype" ct2 in
     let pe = n_pexpr loc pe in
     M_PtrFromInt (ct1, ct2, pe)
-  | Mem_common.PtrValidForDeref, [ ct1; pe ] ->
+  | PtrValidForDeref, [ ct1; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrValidForDeref: not a constant ctype" ct1 in
     let pe = n_pexpr loc pe in
     M_PtrValidForDeref (ct1, pe)
-  | Mem_common.PtrWellAligned, [ ct1; pe ] ->
+  | PtrWellAligned, [ ct1; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrWellAligned: not a constant ctype" ct1 in
     let pe = n_pexpr loc pe in
     M_PtrWellAligned (ct1, pe)
-  | Mem_common.PtrArrayShift, [ pe1; ct1; pe2 ] ->
+  | PtrArrayShift, [ pe1; ct1; pe2 ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrArrayShift: not a constant ctype" ct1 in
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_PtrArrayShift (pe1, ct1, pe2)
-  | Mem_common.Memcpy, [ pe1; pe2; pe3 ] ->
+  | Memcpy, [ pe1; pe2; pe3 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     let pe3 = n_pexpr loc pe3 in
     M_Memcpy (pe1, pe2, pe3)
-  | Mem_common.Memcmp, [ pe1; pe2; pe3 ] ->
+  | Memcmp, [ pe1; pe2; pe3 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     let pe3 = n_pexpr loc pe3 in
     M_Memcmp (pe1, pe2, pe3)
-  | Mem_common.Realloc, [ pe1; pe2; pe3 ] ->
+  | Realloc, [ pe1; pe2; pe3 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     let pe3 = n_pexpr loc pe3 in
     M_Realloc (pe1, pe2, pe3)
-  | Mem_common.Va_start, [ pe1; pe2 ] ->
+  | Va_start, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_Va_start (pe1, pe2)
-  | Mem_common.Va_copy, [ pe ] ->
+  | Va_copy, [ pe ] ->
     let pe = n_pexpr loc pe in
     M_Va_copy pe
-  | Mem_common.Va_arg, [ pe; ct1 ] ->
+  | Va_arg, [ pe; ct1 ] ->
     let ct1 = ensure_pexpr_ctype loc !^"Va_arg: not a constant ctype" ct1 in
     let pe = n_pexpr loc pe in
     M_Va_arg (pe, ct1)
-  | Mem_common.Va_end, [ pe ] ->
+  | Va_end, [ pe ] ->
     let pe = n_pexpr loc pe in
     M_Va_end pe
-  | Mem_common.Copy_alloc_id, [ pe1; pe2 ] ->
+  | Copy_alloc_id, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     M_CopyAllocId (pe1, pe2)
@@ -672,7 +608,7 @@ let n_memop ~inherit_loc loc memop pexprs =
     let err =
       !^(show_n_memop memop)
       ^^^ !^"applied to"
-      ^^^ Print.int (List.length pexprs1)
+      ^^^ int (List.length pexprs1)
       ^^^ !^"arguments"
     in
     assert_error loc err
@@ -686,11 +622,11 @@ let rec n_expr
   ((env, old_states), desugaring_things)
   (global_types, visible_objects_env)
   e
-  : mu_expr m
+  : unit Mucore.mu_expr Resultat.m
   =
   let markers_env, cn_desugaring_state = desugaring_things in
   let (Expr (annots, pe)) = e in
-  let loc = (if inherit_loc then Loc.update loc else Fun.id) (get_loc_ annots) in
+  let loc = (if inherit_loc then Locations.update loc else Fun.id) (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, (), pe) in
   let wrap_pure pe = wrap (M_Epure (M_Pexpr (loc, [], (), pe))) in
   let n_pexpr = n_pexpr ~inherit_loc loc in
@@ -713,7 +649,7 @@ let rec n_expr
      | Pattern (_annots, CaseBase (Some sym, _)), Pexpr (annots2, _, PEsym sym2)
      | ( Pattern (_annots, CaseCtor (Cspecified, [ Pattern (_, CaseBase (Some sym, _)) ])),
          Pexpr (annots2, _, PEsym sym2) ) ->
-       let e2 = Core_peval.subst_sym_expr2 sym (get_loc annots2, `SYM sym2) e2 in
+       let e2 = CF.Core_peval.subst_sym_expr2 sym (get_loc annots2, `SYM sym2) e2 in
        n_expr e2
      | ( Pattern
            ( _annots,
@@ -741,8 +677,8 @@ let rec n_expr
              PEctor (Ctuple, [ Pexpr (_, _, PEsym sym2); Pexpr (_, _, PEsym sym2') ]) ) )
      (* pairwise disjoint *)
        when List.length (List.sort_uniq Sym.compare [ sym; sym'; sym2; sym2' ]) = 4 ->
-       let e2 = Core_peval.subst_sym_expr2 sym (get_loc annots2, `SYM sym2) e2 in
-       let e2 = Core_peval.subst_sym_expr2 sym' (get_loc annots2, `SYM sym2') e2 in
+       let e2 = CF.Core_peval.subst_sym_expr2 sym (get_loc annots2, `SYM sym2) e2 in
+       let e2 = CF.Core_peval.subst_sym_expr2 sym' (get_loc annots2, `SYM sym2') e2 in
        n_expr e2
      | _ ->
        let e1 = n_pexpr e1 in
@@ -753,8 +689,8 @@ let rec n_expr
     (match (e2, e3) with
      | ( Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))),
          Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2)))))) )
-       when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one)
-            && Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero) ->
+       when Option.equal Z.equal (CF.Mem.eval_integer_value iv1) (Some Z.one)
+            && Option.equal Z.equal (CF.Mem.eval_integer_value iv2) (Some Z.zero) ->
        let e1 = n_pexpr e1 in
        return (wrap_pure (M_PEbool_to_integer e1))
      | ( Expr (_, Epure (Pexpr (_, _, PEval Vtrue))),
@@ -769,8 +705,10 @@ let rec n_expr
   | Eccall (_a, ct1, e2, es) ->
     let ct1 =
       match ct1 with
-      | Core.Pexpr (annot, _bty, Core.PEval (Core.Vctype ct1)) ->
-        let loc = (if inherit_loc then Loc.update loc else Fun.id) (get_loc_ annots) in
+      | Pexpr (annot, _bty, PEval (Vctype ct1)) ->
+        let loc =
+          (if inherit_loc then Locations.update loc else Fun.id) (get_loc_ annots)
+        in
         { loc; annot; (* type_annot = bty; *) ct = convert_ct loc ct1 }
       | _ ->
         assert_error loc !^"core_anormalisation: Eccall with non-ctype first argument"
@@ -778,11 +716,11 @@ let rec n_expr
     let@ e2 =
       let err () = unsupported loc !^"invalid function constant" in
       match e2 with
-      | Core.Pexpr (annots, bty, Core.PEval v) ->
+      | Pexpr (annots, bty, PEval v) ->
         let@ sym =
           match v with
           | Vobject (OVpointer ptrval) | Vloaded (LVspecified (OVpointer ptrval)) ->
-            Impl_mem.case_ptrval
+            CF.Impl_mem.case_ptrval
               ptrval
               (fun _ct -> err ())
               (function None -> (* FIXME(CHERI merge) *) err () | Some sym -> return sym)
@@ -801,7 +739,7 @@ let rec n_expr
        return (wrap_pure (M_PEbitwise_unop (M_BW_CTZ, arg1)))
      | Impl (BuiltinFunction "generic_ffs"), [ arg1 ] ->
        return (wrap_pure (M_PEbitwise_unop (M_BW_FFS, arg1)))
-     | _ -> assert_error loc (Print.item "Eproc" (CF.Pp_core_ast.pp_expr e)))
+     | _ -> assert_error loc (item "Eproc" (CF.Pp_core_ast.pp_expr e)))
   | Eunseq es ->
     let@ es = ListM.mapM n_expr es in
     return (wrap (M_Eunseq es))
@@ -811,10 +749,10 @@ let rec n_expr
     let@ e2 = n_expr e2 in
     return (wrap (M_Ewseq (pat, e1, e2)))
   | Esseq (pat, e1, e2) ->
-    (* let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:"
-       (CF.Pp_core_ast.pp_expr e1))) in let () = Print.debug 10 (lazy (Print.item
-       "core_to_mucore Esseq. e2:" (CF.Pp_core_ast.pp_expr e2))) in let () = Print.debug
-       10 (lazy (Print.item "core_to_mucore Esseq. p:" (CF.Pp_core.Basic.pp_pattern pat)))
+    (* let () = debug 10 (lazy (item "core_to_mucore Esseq. e1:"
+       (CF.Pp_core_ast.pp_expr e1))) in let () = debug 10 (lazy (item
+       "core_to_mucore Esseq. e2:" (CF.Pp_core_ast.pp_expr e2))) in let () = debug
+       10 (lazy (item "core_to_mucore Esseq. p:" (CF.Pp_core.Basic.pp_pattern pat)))
        in *)
     let@ e1 =
       match (pat, e1) with
@@ -823,8 +761,10 @@ let rec n_expr
         let@ parsed_stmts = Parse.cn_statements annots in
         (match parsed_stmts with
          | _ :: _ ->
-           let marker_id = Option.get (get_marker annots) in
-           let marker_id_object_types = Option.get (get_marker_object_types annots) in
+           let marker_id = Option.get (CF.Annot.get_marker annots) in
+           let marker_id_object_types =
+             Option.get (CF.Annot.get_marker_object_types annots)
+           in
            let@ desugared_stmts_and_stmts =
              ListM.mapM
                (fun parsed_stmt ->
@@ -837,13 +777,13 @@ let rec n_expr
                              cn_state = cn_desugaring_state
                            }
                        }
-                     (CA.desugar_cn_statement parsed_stmt)
+                     (Desugar.cn_statement parsed_stmt)
                  in
                  let visible_objects =
                    global_types @ Pmap.find marker_id_object_types visible_objects_env
                  in
                  (* debug 6 (lazy (!^"CN statement before translation")); debug 6 (lazy
-                    (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement
+                    (pp_doc_tree (CF.Cn_ocaml.PpAil.dtree_of_cn_statement
                     desugared_stmt))); *)
                  let get_c_obj sym =
                    match List.assoc_opt Sym.equal sym visible_objects with
@@ -917,8 +857,6 @@ let rec arguments_of_at f_i = function
 
 (* copying and adjusting variously compile.ml logic *)
 
-type identifier_env = Annot.identifier_env
-
 let make_largs f_i =
   let rec aux env st = function
     | Cn.CN_cletResource (loc, name, resource) :: conditions ->
@@ -929,17 +867,17 @@ let make_largs f_i =
       let st = C.LocalState.add_pointee_values pointee_values st in
       let@ lat = aux env st conditions in
       return
-        (Mu.mResource
+        (mResource
            ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None))
-           (Mu.mConstraints lcs lat))
+           (mConstraints lcs lat))
     | Cn.CN_cletExpr (loc, name, expr) :: conditions ->
       let@ expr = C.LocalState.handle st (C.ET.translate_cn_expr SymSet.empty env expr) in
       let@ lat = aux (C.add_logical name (IT.bt expr) env) st conditions in
-      return (Mu.mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
+      return (mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conditions ->
       let@ lc = C.LocalState.handle st (C.ET.translate_cn_assrt env (loc, constr)) in
       let@ lat = aux env st conditions in
-      return (Mu.mConstraint (lc, (loc, None)) lat)
+      return (mConstraint (lc, (loc, None)) lat)
     | [] ->
       let@ i = f_i env st in
       return (M_I i)
@@ -957,9 +895,9 @@ let rec make_largs_with_accesses f_i env st (accesses, conditions) =
     in
     let@ lat = make_largs_with_accesses f_i env st (accesses, conditions) in
     return
-      (Mu.mResource
+      (mResource
          ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None))
-         (Mu.mConstraints lcs lat))
+         (mConstraints lcs lat))
   | [] -> make_largs f_i env st conditions
 
 
@@ -996,10 +934,10 @@ let make_label_args f_i loc env st args (accesses, inv) =
           st
           rest
       in
-      return (Mu.mComputational ((s, Loc), (loc, None)) at)
+      return (mComputational ((s, Loc), (loc, None)) at)
     | [] ->
       let@ lat = make_largs_with_accesses f_i env st (accesses, inv) in
-      let at = Mu.mResources resources (Mu.mConstraints good_lcs lat) in
+      let at = mResources resources (mConstraints good_lcs lat) in
       return (M_L at)
   in
   aux ([], []) env st args
@@ -1024,10 +962,10 @@ let make_function_args f_i loc env args (accesses, requires) =
       let@ at =
         aux (arg_states @ [ (mut_arg, arg_state) ]) (* good_lc :: *) good_lcs env st rest
       in
-      return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
+      return (mComputational ((pure_arg, bt), (loc, None)) at)
     | [] ->
       let@ lat = make_largs_with_accesses (f_i arg_states) env st (accesses, requires) in
-      return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
+      return (M_L (mConstraints (List.rev good_lcs) lat))
   in
   aux [] [] env C.LocalState.init_st args
 
@@ -1049,7 +987,7 @@ let make_fun_with_spec_args f_i loc env args requires =
                 Generic
                   (!^"Argument-type mismatch between"
                    ^^^ BT.pp bt
-                   ^^^ Print.parens (!^"from" ^^^ Sctypes.pp ct)
+                   ^^^ parens (!^"from" ^^^ Sctypes.pp ct)
                    ^^^ !^"and"
                    ^^^ BT.pp (SBT.to_basetype sbt2))
             }
@@ -1061,10 +999,10 @@ let make_fun_with_spec_args f_i loc env args requires =
       (*   (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt, here)) here), info) *)
       (* in *)
       let@ at = aux (* good_lc :: *) good_lcs env st rest in
-      return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
+      return (mComputational ((pure_arg, bt), (loc, None)) at)
     | [] ->
       let@ lat = make_largs_with_accesses f_i env st ([], requires) in
-      return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
+      return (M_L (mConstraints (List.rev good_lcs) lat))
   in
   aux [] env C.LocalState.init_st args
 
@@ -1096,24 +1034,18 @@ let desugar_access d_st global_types (loc, id) =
 
 let desugar_cond d_st = function
   | Cn.CN_cletResource (loc, id, res) ->
-    Print.debug
-      6
-      (lazy (Print.typ (Print.string "desugaring a let-resource at") (Locations.pp loc)));
-    let@ res = do_ail_desugar_rdonly d_st (CA.desugar_cn_resource res) in
+    debug 6 (lazy (typ (string "desugaring a let-resource at") (Locations.pp loc)));
+    let@ res = do_ail_desugar_rdonly d_st (Desugar.cn_resource res) in
     let@ sym, d_st = register_new_cn_local id d_st in
     return (Cn.CN_cletResource (loc, sym, res), d_st)
   | Cn.CN_cletExpr (loc, id, expr) ->
-    Print.debug
-      6
-      (lazy (Print.typ (Print.string "desugaring a let-expr at") (Locations.pp loc)));
-    let@ expr = do_ail_desugar_rdonly d_st (CA.desugar_cn_expr expr) in
+    debug 6 (lazy (typ (string "desugaring a let-expr at") (Locations.pp loc)));
+    let@ expr = do_ail_desugar_rdonly d_st (Desugar.cn_expr expr) in
     let@ sym, d_st = register_new_cn_local id d_st in
     return (Cn.CN_cletExpr (loc, sym, expr), d_st)
   | Cn.CN_cconstr (loc, constr) ->
-    Print.debug
-      6
-      (lazy (Print.typ (Print.string "desugaring a constraint at") (Locations.pp loc)));
-    let@ constr = do_ail_desugar_rdonly d_st (CA.desugar_cn_assertion constr) in
+    debug 6 (lazy (typ (string "desugaring a constraint at") (Locations.pp loc)));
+    let@ constr = do_ail_desugar_rdonly d_st (Desugar.cn_assertion constr) in
     return (Cn.CN_cconstr (loc, constr), d_st)
 
 
@@ -1131,7 +1063,7 @@ let desugar_conds d_st conds =
 
 let fetch_enum d_st loc sym =
   let@ expr_ = do_ail_desugar_rdonly d_st (CAE.resolve_enum_constant sym) in
-  return (AnnotatedExpression ((), [], loc, expr_))
+  return (CF.AilSyntax.AnnotatedExpression ((), [], loc, expr_))
 
 
 let fetch_typedef d_st _loc sym =
@@ -1139,28 +1071,31 @@ let fetch_typedef d_st _loc sym =
   return cty
 
 
+let dtree_of_conds = List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition
+
 let dtree_of_inv conds =
-  Dnode
-    ( pp_ctor "LoopInvariantAnnotation",
-      List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds )
+  let open CF.Pp_ast in
+  Dnode (pp_ctor "LoopInvariantAnnotation", dtree_of_conds conds)
 
 
 let dtree_of_requires conds =
-  Dnode
-    (pp_ctor "RequiresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+  let open CF.Pp_ast in
+  Dnode (pp_ctor "RequiresAnnotation", dtree_of_conds conds)
 
 
 let dtree_of_ensures conds =
-  Dnode
-    (pp_ctor "EnsuresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+  let open CF.Pp_ast in
+  Dnode (pp_ctor "EnsuresAnnotation", dtree_of_conds conds)
 
 
 let dtree_of_accesses accesses =
+  let open CF.Pp_ast in
   Dnode
     ( pp_ctor "AccessesAnnotation",
       List.map
         (fun (_loc, (s, ct)) ->
-          Dnode (pp_ctor "Access", [ Dleaf (Sym.pp s); Dleaf (Pp_core_ctype.pp_ctype ct) ]))
+          Dnode
+            (pp_ctor "Access", [ Dleaf (Sym.pp s); Dleaf (CF.Pp_core_ctype.pp_ctype ct) ]))
         accesses )
 
 
@@ -1176,7 +1111,7 @@ let normalise_label
   label
   =
   match label with
-  | Mi_Return loc -> return (M_Return loc)
+  | CF.Milicore.Mi_Return loc -> return (M_Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
     (match CF.Annot.get_label_annot annots with
      | Some (LAloop loop_id) ->
@@ -1198,7 +1133,7 @@ let normalise_label
          | None -> return ([], precondition_cn_desugaring_state)
        in
        debug 6 (lazy (!^"invariant in function" ^^^ Sym.pp fsym));
-       debug 6 (lazy (pp_doc_tree (dtree_of_inv desugared_inv)));
+       debug 6 (lazy (CF.Pp_ast.pp_doc_tree (dtree_of_inv desugared_inv)));
        let@ label_args_and_body =
          make_label_args
            (fun env st ->
@@ -1238,7 +1173,7 @@ let add_spec_arg_renames
   loc
   args
   arg_cts
-  (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)
+  (spec : (CF.Symbol.sym, Ctype.ctype) Cn.cn_fun_spec)
   env
   =
   List.fold_right
@@ -1248,7 +1183,7 @@ let add_spec_arg_renames
         fun_sym
         (Memory.sbt_of_sct (convert_ct loc ct))
         env)
-    (List.combine args (List.combine arg_cts spec.cn_spec_args))
+    (List.combine args (List.combine arg_cts spec.Cn.cn_spec_args))
     env
 
 
@@ -1258,7 +1193,7 @@ let normalise_fun_map_decl
   (global_types, visible_objects_env)
   env
   fun_specs
-  (funinfo : mi_funinfo)
+  (funinfo : CF.Milicore.mi_funinfo)
   loop_attributes
   fname
   decl
@@ -1268,11 +1203,11 @@ let normalise_fun_map_decl
   | Some (loc, attrs, ret_ct, arg_cts, variadic, _) ->
     let@ () = if variadic then unsupported loc !^"variadic functions" else return () in
     (match decl with
-     | Mi_Fun (_bt, _args, _pe) -> assert false
+     | CF.Milicore.Mi_Fun (_bt, _args, _pe) -> assert false
      | Mi_Proc (loc, _mrk, _ret_bt, args, body, labels) ->
-       Print.debug 2 (lazy (Print.item "normalising procedure" (Sym.pp fname)));
+       debug 2 (lazy (item "normalising procedure" (Sym.pp fname)));
        let _, ail_marker, _, ail_args, _ =
-         List.assoc Sym.equal fname ail_prog.function_definitions
+         List.assoc Sym.equal fname ail_prog.CF.AilSyntax.function_definitions
        in
        (* let ail_env = Pmap.find ail_marker ail_prog.markers_env in *)
        (* let d_st = CAE.set_cn_c_identifier_env ail_env d_st in *)
@@ -1280,7 +1215,7 @@ let normalise_fun_map_decl
        let@ trusted, accesses, requires, ensures, mk_functions =
          Parse.function_spec attrs
        in
-       Print.debug 6 (lazy (Print.string "parsed spec attrs"));
+       debug 6 (lazy (string "parsed spec attrs"));
        let@ mk_functions =
          ListM.mapM
            (fun (loc, Make_Logical_Function id) ->
@@ -1296,13 +1231,10 @@ let normalise_fun_map_decl
        in
        let@ accesses = ListM.mapM (desugar_access d_st global_types) accesses in
        let@ requires, d_st = desugar_conds d_st (List.map snd requires) in
-       Print.debug 6 (lazy (Print.string "desugared requires conds"));
+       debug 6 (lazy (string "desugared requires conds"));
        let@ ret_s, ret_d_st = register_new_cn_local (Id.id "return") d_st in
-       (* let bt1 = convert_bt loc ret_bt in let bt2 = Memory.bt_of_sct (convert_ct loc
-          ret_ct) in assertl loc (BT.equal bt1 bt2) !^"function return type mismatch"
-          (lazy (Print.ineq (BT.pp bt1) (BT.pp bt2))); *)
        let@ ensures, _ret_d_st = desugar_conds ret_d_st (List.map snd ensures) in
-       Print.debug 6 (lazy (Print.string "desugared ensures conds"));
+       debug 6 (lazy (string "desugared ensures conds"));
        let@ spec_req, spec_ens, env =
          match SymMap.find_opt fname fun_specs with
          | Some (_, spec) ->
@@ -1315,16 +1247,16 @@ let normalise_fun_map_decl
                    msg =
                      Generic
                        (Sym.pp fname
-                        ^^ P.colon
+                        ^^ colon
                         ^^^ !^"re-specification of CN annotations from:"
-                        ^^ P.break 1
-                        ^^^ Locations.pp spec.cn_spec_loc)
+                        ^^ break 1
+                        ^^^ Locations.pp spec.Cn.cn_spec_loc)
                  }
            in
            let env = add_spec_arg_renames loc args (List.map snd arg_cts) spec env in
            let env =
              C.add_renamed_computational
-               spec.cn_spec_ret_name
+               spec.Cn.cn_spec_ret_name
                ret_s
                (Memory.sbt_of_sct (convert_ct loc ret_ct))
                env
@@ -1335,9 +1267,9 @@ let normalise_fun_map_decl
        let requires = requires @ spec_req in
        let ensures = ensures @ spec_ens in
        debug 6 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
-       debug 6 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
-       debug 6 (lazy (pp_doc_tree (dtree_of_requires requires)));
-       debug 6 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
+       debug 6 (lazy (CF.Pp_ast.pp_doc_tree (dtree_of_accesses accesses)));
+       debug 6 (lazy (CF.Pp_ast.pp_doc_tree (dtree_of_requires requires)));
+       debug 6 (lazy (CF.Pp_ast.pp_doc_tree (dtree_of_ensures ensures)));
        let@ args_and_body =
          make_function_args
            (fun arg_states env st ->
@@ -1382,7 +1314,7 @@ let normalise_fun_map_decl
        return (Some (M_Proc (loc, args_and_body, trusted, desugared_spec), mk_functions))
      | Mi_ProcDecl (loc, ret_bt, _bts) ->
        (match SymMap.find_opt fname fun_specs with
-        | Some (_ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
+        | Some (_ail_marker, (spec : (CF.Symbol.sym, Ctype.ctype) Cn.cn_fun_spec)) ->
           let@ () =
             check_against_core_bt loc ret_bt (Memory.bt_of_sct (convert_ct loc ret_ct))
           in
@@ -1528,7 +1460,8 @@ let make_struct_decl loc fields (tag : Sym.t) =
 
 let normalise_tag_definition tag (loc, def) =
   match def with
-  | StructDef (_fields, Some (FlexibleArrayMember (_, Identifier (loc, _), _, _))) ->
+  | Ctype.StructDef (_fields, Some (FlexibleArrayMember (_, Identifier (loc, _), _, _)))
+    ->
     unsupported loc !^"flexible array members"
   | StructDef (fields, None) -> return (M_StructDef (make_struct_decl loc fields tag))
   | UnionDef _l -> unsupported loc !^"union types"
@@ -1554,7 +1487,7 @@ let register_glob env (sym, glob) =
 
 (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
 
-let translate_datatype env { cn_dt_loc; cn_dt_name; cn_dt_cases; cn_dt_magic_loc = _ } =
+let translate_datatype env Cn.{ cn_dt_loc; cn_dt_name; cn_dt_cases; cn_dt_magic_loc = _ } =
   let translate_arg (id, bt) =
     (id, SBT.to_basetype (Compile.translate_cn_base_type env bt))
   in
@@ -1563,6 +1496,8 @@ let translate_datatype env { cn_dt_loc; cn_dt_name; cn_dt_cases; cn_dt_magic_loc
 
 
 let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_prog) file =
+  let open CF.AilSyntax in
+  let open CF.Milicore in
   let@ tagDefs = normalise_tag_definitions file.mi_tagDefs in
   let fin_marker, markers_env = fin_markers_env in
   let fin_d_st = CAE.{ inner = Pmap.find fin_marker markers_env; markers_env } in
@@ -1585,7 +1520,7 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
   let env = List.fold_left register_glob env globs in
   let fun_specs_map =
     List.fold_right
-      (fun (id, spec) acc -> SymMap.add spec.cn_spec_name (id, spec) acc)
+      (fun (id, spec) acc -> SymMap.add spec.Cn.cn_spec_name (id, spec) acc)
       ail_prog.cn_fun_specs
       SymMap.empty
   in
@@ -1628,7 +1563,7 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
       mu_call_funinfo
     }
   in
-  Print.debug 3 (lazy (Print.headline "done core_to_mucore normalising file"));
+  debug 3 (lazy (headline "done core_to_mucore normalising file"));
   return file
 
 
@@ -1738,11 +1673,12 @@ let stmts_in_labels labels =
     ([], [])
 
 
-let stmts_in_function args_and_body =
-  stmts_in_args
-    (fun (body, labels, _rt) -> concat2 (stmts_in_expr body) (stmts_in_labels labels))
-    args_and_body
-
+(*
+ * let stmts_in_function args_and_body =
+ *   stmts_in_args
+ *     (fun (body, labels, _rt) -> concat2 (stmts_in_expr body) (stmts_in_labels labels))
+ *     args_and_body
+ *)
 
 let collect_instrumentation (file : _ mu_file) =
   let instrs =

@@ -1,7 +1,5 @@
 (* comparisons between CN base types and Core base types *)
 
-open Resultat
-
 open Effectful.Make (Resultat)
 
 module BT = BaseTypes
