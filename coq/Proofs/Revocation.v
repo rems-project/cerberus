@@ -762,7 +762,7 @@ Module CheriMemoryImplWithProofs
 
 
   (* Another spec for [capmeta_ghost_tags]. Affected range expressed in aligned addresses *)
-  Fact capmeta_ghost_tags_spec_range_aligned
+  Fact capmeta_ghost_tags_spec_in_range_aligned
     (addr: AddressValue.t)
     (size: nat)
     (SZ: (size>0)%nat)
@@ -932,7 +932,7 @@ Module CheriMemoryImplWithProofs
           tg=false \/ gs.(tag_unspecified) = true.
   Proof.
     intros a H alignment ac tg gs H0.
-    apply (capmeta_ghost_tags_spec_range_aligned addr size SZ capmeta ac);
+    apply (capmeta_ghost_tags_spec_in_range_aligned addr size SZ capmeta ac);
       subst ac alignment.
     2: auto.
 
@@ -975,6 +975,24 @@ Module CheriMemoryImplWithProofs
     split;apply mod_le_mod;lia.
   Qed.
 
+  Fact capmeta_ghost_tags_spec_outside_range_aligned
+    (addr: AddressValue.t)
+    (size: nat)
+    (SZ: (size>0)%nat)
+    (capmeta: AMap.M.t (bool*CapGhostState)):
+
+    forall a,
+      let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
+      let a0 := align_down (AddressValue.to_Z addr) alignment in
+      let a1 := align_down (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
+      not (a0 <= AddressValue.to_Z a <= a1) ->
+      forall tg gs,
+        AMap.M.MapsTo a (tg,gs) (capmeta_ghost_tags addr size capmeta)
+        ->
+          AMap.M.MapsTo a (tg,gs) capmeta.
+  Proof.
+
+  Admitted.
 
   (* Yet another spec for [capmeta_ghost_tags]. It is defined for
      address range whose capabilites are affected.  *)
@@ -4786,6 +4804,47 @@ Module CheriMemoryImplWithProofs
     apply (bytemap_copy_data_spec L).
   Qed.
 
+
+  Lemma capmeta_ghost_tags_preserves:
+    forall m addr size,
+      mem_invariant m ->
+      mem_invariant (mem_state_with_capmeta
+                       (capmeta_ghost_tags addr size (capmeta m))
+                       m).
+  Proof.
+    intros m addr sz H.
+    destruct H as [MIbase MIcap].
+    destruct_base_mem_invariant MIbase.
+    split.
+    -
+      (* base invariant *)
+      clear MIcap.
+      repeat split;auto.
+      (* alignment proof *)
+      intros a E.
+      apply AMapProofs.map_in_mapsto in E.
+      destruct E as [tg E].
+      unfold mem_state_with_capmeta in E.
+      simpl in E.
+      destruct tg as (tg,gs).
+      apply capmeta_ghost_tags_monotone in E.
+      +
+        destruct E as [tg' [gs' [E1 _]]].
+        apply AMapProofs.map_mapsto_in in E1.
+        apply Balign.
+        apply E1.
+    -
+      intros a g E U bs F.
+      simpl in *.
+      apply capmeta_ghost_tags_monotone in E.
+      destruct E as [tg' [gs' [E1 [[E2g E2u]|[E3g [E3u [E4u E5u]]]] ]]]; subst.
+      *
+        eapply MIcap; eauto.
+      *
+        eapply MIcap; eauto.
+  Qed.
+
+
   Fact store_lock_preserves
     (s0 : storage_instance_id)
     (s : mem_state_r):
@@ -4924,6 +4983,135 @@ Module CheriMemoryImplWithProofs
         apply ZMapProofs.map_update_MapsTo_not_at_k;auto.
   Qed.
 
+
+  (* This is questionable. *)
+  Lemma sizeof_pos:
+    forall fuel szn maybe_tagDefs ty,
+      sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat.
+  Proof.
+    intros fuel szn maybe_tagDefs ty0 H.
+  Admitted.
+
+  Lemma repr_preserves
+    (fuel : nat)
+    (mval: mem_value)
+    (c : Capability_GS.t)
+    (s : mem_state_r)
+    (M: mem_invariant s)
+    (bs : list (option ascii))
+    (funptrmap0 : ZMap.M.t (digest * string * Capability_GS.t))
+    (capmeta0 : AMap.M.t (bool * CapGhostState)):
+
+    repr fuel (CheriMemoryImplWithProofs.funptrmap s) (CheriMemoryImplWithProofs.capmeta s)
+      (Capability_GS.cap_get_value c) mval = inr (funptrmap0, capmeta0, bs)
+
+    ->
+    mem_invariant
+      (mem_state_with_funptrmap_bytemap_capmeta funptrmap0
+         (AMap.map_add_list_at (bytemap s) bs (Capability_GS.cap_get_value c)) capmeta0 s).
+  Proof.
+    intros R.
+
+    unfold repr in R.
+    destruct fuel;[apply raise_serr_inr_inv in R;tauto|].
+
+    destruct M as [MIbase MIcap].
+    destruct_base_mem_invariant MIbase.
+    (* base *)
+    break_match_hyp.
+    - (* MVunspecified *)
+      (* [state_inv_step] should work here. TODO: investigate why it stucks *)
+      apply bind_serr_inv in R.
+      destruct R as [szn [R1 R2]].
+      rewrite ret_serr_inv in R2.
+      invc R2.
+
+      (*
+        generalize dependent DEFAULT_FUEL; intros sfuel R2.
+        unfold sizeof in R2.
+        destruct sfuel;[apply raise_serr_inr_inv in R2;tauto|].
+       *)
+
+      assert(0 < szn)%nat as SP.
+      {
+        apply sizeof_pos in R1.
+        apply R1.
+      }
+
+      generalize (Capability_GS.cap_get_value c) as start.
+      intros start.
+      clear c.
+
+      unfold mem_state_with_funptrmap_bytemap_capmeta.
+      repeat split;cbn;auto.
+      +
+        pose proof (capmeta_ghost_tags_preserves s start szn) as P.
+        autospecialize P.
+        repeat split;auto.
+        apply P.
+      +
+        intros addr g M U bs F.
+        remember (alignof_pointer MorelloImpl.get) as palignment.
+        remember(align_down (AddressValue.to_Z start) (Z.of_nat palignment)) as a0.
+        remember(align_down (AddressValue.to_Z start + (Z.of_nat szn - 1)) (Z.of_nat palignment)) as a1.
+
+        assert(decidable (a0 <= AddressValue.to_Z addr <= a1)) as AR
+            by (apply dec_and; apply Z.le_decidable).
+
+        destruct AR as [IN|OUT].
+        *
+          subst.
+          pose proof (capmeta_ghost_tags_spec_in_range_aligned start szn SP
+                        (capmeta s)
+                        addr
+                        IN
+                        true
+                        g
+                        M
+            )
+            as CA.
+          destruct CA;congruence.
+        *
+          subst.
+          pose proof (capmeta_ghost_tags_spec_outside_range_aligned start szn SP
+                        (capmeta s)
+                        addr
+                        OUT
+                        true
+                        g
+                        M
+            )
+            as CA.
+
+          remember (fetch_bytes (AMap.map_add_list_at (bytemap s) (repeat None szn) start) addr
+                      (sizeof_pointer MorelloImpl.get)) as bs.
+          specialize (MIcap addr g CA U bs).
+          apply MIcap.
+
+          (* prove bytes unchanged *)
+          subst bs.
+          clear - OUT.
+
+          apply list.list_eq_Forall2.
+          apply Forall2_nth_list with (default1:=None) (default2:=None).
+          setoid_rewrite fetch_bytes_len.
+          reflexivity.
+          intros i H.
+
+          remember (sizeof_pointer MorelloImpl.get) as psize.
+          unfold fetch_bytes.
+
+
+          remember (list_init psize (fun i0 : nat => AddressValue.with_offset addr (Z.of_nat i0))) as rl.
+          (*
+          rewrite map_nth.
+          list_init_nth
+           *)
+          admit.
+    -
+
+  Admitted.
+
   Instance store_PreservesInvariant
     (loc : location_ocaml)
     (cty : CoqCtype.ctype)
@@ -4956,25 +5144,31 @@ Module CheriMemoryImplWithProofs
     -
       preserves_step;[preserves_step|].
       preserves_step;[apply SameStatePreserves, cap_check_SameState|].
-
       preserves_step.
-      preserves_step.
-      preserves_step.
+      apply bind_PreservesInvariant_value_SameState.
+      typeclasses eauto.
+      intros H x6 H0.
       repeat break_let.
       preserves_step;[|preserves_step].
       preserves_step.
-
+      apply serr2InternalErr_inv in H0.
       destruct x5.
-      apply negb_false_iff in Heqb.
       subst.
-
-      admit.
+      clear - s'5 H H0.
+      rename
+        s'5 into s,
+        H into M,
+        H0 into R,
+        t1 into capmeta,
+        t0 into funptrmap,
+        l into bs.
+      eapply repr_preserves;eauto.
     -
       (* handling `is_locking` *)
       break_if;[|preserves_step].
       preserves_steps.
       apply store_lock_preserves, H.
-  Admitted.
+  Qed.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
@@ -6037,45 +6231,6 @@ Module CheriMemoryImplWithProofs
     cbn.
     invc H.
     reflexivity.
-  Qed.
-
-  Lemma capmeta_ghost_tags_preserves:
-    forall m addr size,
-      mem_invariant m ->
-      mem_invariant (mem_state_with_capmeta
-                       (capmeta_ghost_tags addr size (capmeta m))
-                       m).
-  Proof.
-    intros m addr sz H.
-    destruct H as [MIbase MIcap].
-    destruct_base_mem_invariant MIbase.
-    split.
-    -
-      (* base invariant *)
-      clear MIcap.
-      repeat split;auto.
-      (* alignment proof *)
-      intros a E.
-      apply AMapProofs.map_in_mapsto in E.
-      destruct E as [tg E].
-      unfold mem_state_with_capmeta in E.
-      simpl in E.
-      destruct tg as (tg,gs).
-      apply capmeta_ghost_tags_monotone in E.
-      +
-        destruct E as [tg' [gs' [E1 _]]].
-        apply AMapProofs.map_mapsto_in in E1.
-        apply Balign.
-        apply E1.
-    -
-      intros a g E U bs F.
-      simpl in *.
-      apply capmeta_ghost_tags_monotone in E.
-      destruct E as [tg' [gs' [E1 [[E2g E2u]|[E3g [E3u [E4u E5u]]]] ]]]; subst.
-      *
-        eapply MIcap; eauto.
-      *
-        eapply MIcap; eauto.
   Qed.
 
   Instance ghost_tags_PreservesInvariant
