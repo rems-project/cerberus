@@ -22,7 +22,7 @@ jobs:
         # version: [4.12.0, 4.14.1]
         version: [4.14.1]
 
-    
+
     runs-on: ubuntu-22.04
 
     steps:
@@ -31,7 +31,7 @@ jobs:
     - name: System dependencies (ubuntu)
       run: |
         sudo apt install build-essential libgmp-dev z3 opam cmake
-    
+
     - name: Restore cached opam
       id: cache-opam-restore
       uses: actions/cache/restore@v4
@@ -52,7 +52,7 @@ jobs:
         opam pin --yes -n coq-sail-stdpp https://github.com/rems-project/coq-sail.git#f319aad
         opam pin --yes -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
         opam install --deps-only --yes ./cerberus-lib.opam ./cerberus-cheri.opam
-    
+
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       id: cache-opam-save
@@ -76,9 +76,9 @@ jobs:
         cd tests; USE_OPAM='' ./run-ci.sh
         cd ..
 
-    - name: Download cvc5 release 
-      uses: robinraju/release-downloader@v1 
-      with: 
+    - name: Download cvc5 release
+      uses: robinraju/release-downloader@v1
+      with:
         repository: cvc5/cvc5
         tag: cvc5-1.1.2
         fileName: cvc5-Linux-static.zip
@@ -98,7 +98,7 @@ jobs:
 
     - name: Checkout cn-tutorial
       uses: actions/checkout@v4
-      with: 
+      with:
         repository: rems-project/cn-tutorial
         path: cn-tutorial
 
@@ -143,30 +143,3 @@ jobs:
         eval $(opam env --switch=with_coq)
         cd tests; USE_OPAM='' ./run-cheri.sh
         cd ..
-
-
-  deploy-docker:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
-      attestations: write
-      id-token: write
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build the Docker image
-      run: |
-        echo "Building ${{env.CERBERUS_IMAGE_ID}}"
-        make -f Makefile_docker release_cn
-        docker tag cn:release ${{env.CERBERUS_IMAGE_ID}}
-
-    - name: Push the Docker image
-      run: docker push ${{env.CERBERUS_IMAGE_ID}}
