@@ -7,7 +7,7 @@ module type S = sig
 end
 
 module Make (T : S) = struct
-  open T
+  include T
 
   let ( let@ ) = T.bind
 

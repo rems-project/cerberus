@@ -1589,8 +1589,7 @@ let translate_cn_statement
   UsingLoads.handle
     allocations
     old_states
-    (let open E in
-     let open Effectful.Make (E) in
+    (let open Effectful.Make (E) in
      match stmt_ with
      | CN_pack_unpack (pack_unpack, pred, args) ->
        let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
