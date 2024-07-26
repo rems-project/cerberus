@@ -45,7 +45,8 @@ let addr_of pointer =
 
 
 (* assumption: the resource is owned *)
-let derived_lc1 = function
+let derived_lc1 (resource, _) =
+  match resource with
   | P { name = Owned (ct, _); pointer; iargs = _ } ->
     let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
     let addr = addr_of pointer in
@@ -59,7 +60,7 @@ let derived_lc1 = function
 
 (* assumption: both resources are owned at the same *)
 (* todo, depending on how much we need *)
-let derived_lc2 resource (resource', _) =
+let derived_lc2 (resource, _) (resource', _) =
   match (resource, resource') with
   | ( P { name = Owned (ct1, _); pointer = p1; iargs = _ },
       P { name = Owned (ct2, _); pointer = p2; iargs = _ } ) ->
@@ -72,11 +73,14 @@ let derived_lc2 resource (resource', _) =
   | _ -> []
 
 
-let pointer_facts =
-  let rec aux acc = function
-    | [] -> acc
-    | (r, _) :: rs ->
-      let acc = derived_lc1 r @ List.concat_map (derived_lc2 r) rs @ acc in
-      aux acc rs
-  in
-  fun resources -> aux [] resources
+(* let pointer_facts = *)
+(*   let rec aux acc = function *)
+(*     | [] -> acc *)
+(*     | (r, _) :: rs -> *)
+(*       let acc = derived_lc1 r @ List.concat_map (derived_lc2 r) rs @ acc in *)
+(*       aux acc rs *)
+(*   in *)
+(*   fun resources -> aux [] resources *)
+
+let pointer_facts ~new_resource ~old_resources =
+  derived_lc1 new_resource @ List.concat_map (derived_lc2 new_resource) old_resources
