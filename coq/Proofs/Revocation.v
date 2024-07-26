@@ -991,8 +991,32 @@ Module CheriMemoryImplWithProofs
         ->
           AMap.M.MapsTo a (tg,gs) capmeta.
   Proof.
-
-  Admitted.
+    intros a alignment a0 a1 R tg gs M.
+    subst a0 a1 alignment.
+    destruct size.
+    -
+      lia.
+    -
+      cbn in *.
+      apply AMap.F.mapi_inv in M.
+      destruct M as [(tg',gs') [a' [E M]]].
+      subst a'.
+      break_match_hyp.
+      +
+        (* changed *)
+        contradict R.
+        pose proof MorelloImpl.alignof_pointer_pos as P.
+        zify.
+        subst.
+        split;try lia.
+        replace (Z.of_nat (S size0) - 1) with (Z.of_nat size0) by lia.
+        lia.
+      +
+        (* unchanged *)
+        destruct M.
+        tuple_inversion.
+        assumption.
+  Qed.
 
   (* Yet another spec for [capmeta_ghost_tags]. It is defined for
      address range whose capabilites are affected.  *)
