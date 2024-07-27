@@ -620,6 +620,7 @@ Module Type CheriMemoryImpl
     | S fuel =>
         match SymMap.find tag_sym tagDefs with
         | Some (CoqCtype.StructDef membrs_ flexible_opt) =>
+            sassert (Nat.ltb 0 (List.length membrs_)) "Empty struct encountered" ;;
             let membrs :=
               match flexible_opt with
               | None => membrs_
@@ -668,9 +669,10 @@ Module Type CheriMemoryImpl
                    option2serr "sizeof_ity not defined in Implementation" (IMP.get.(sizeof_ity) ity)
                | CoqCtype.Basic (CoqCtype.Floating fty) =>
                    option2serr "sizeof_fty not defined in Implementation" (IMP.get.(sizeof_fty) fty)
-               | CoqCtype.Array elem_ty (Some n_value) =>
+               | CoqCtype.Array elem_ty (Some asize) =>
+                   sassert (Nat.ltb 0 asize) "Zero array size encountered" ;;
                    sz <- sizeof fuel (Some tagDefs) elem_ty ;;
-                   ret (n_value * sz)%nat
+                   ret (asize * sz)%nat
                | CoqCtype.Pointer _ _ =>
                    ret (IMP.get.(sizeof_pointer))
                | CoqCtype.Atomic atom_ty =>
@@ -687,6 +689,7 @@ Module Type CheriMemoryImpl
                    | Some (CoqCtype.StructDef _ _) =>
                        raise "no alignment for struct with union tag"
                    | Some (CoqCtype.UnionDef membrs) =>
+                       sassert (Nat.ltb 0 (List.length membrs)) "Empty union encountered" ;;
                        '(max_size, max_align) <-
                          monadic_fold_left
                            (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
