@@ -34,11 +34,25 @@ Lemma raise_inl
   {e0 e1:E}:
   @raise E (sum E) (Exception_either E) T e0 = @inl E T e1 -> @inl E T e0 = @inl E T e1.
 Proof.
-  Transparent raise.
   intros H.
+  Transparent raise.
   unfold raise, Exception_either in H.
-  apply H.
   Opaque raise.
+  apply H.
+Qed.
+
+Lemma raise_serr_inl
+  {T:Type}
+  {e0 e1:String.string}
+  :
+  @raise String.string (sum String.string) (Exception_serr) T e0 = @inl String.string T e1 -> @inl _ T e0 = inl e1.
+Proof.
+  intros H.
+  Transparent raise.
+  unfold raise, Exception_serr in H.
+  Opaque raise.
+  inversion H.
+  reflexivity.
 Qed.
 
 Ltac inl_inr :=
@@ -73,10 +87,14 @@ Ltac inl_inr_inv :=
       apply ret_inr in H1;
       inversion H1;
       clear H1
-
   | [H1: @raise _ (sum _) (Exception_either _) _ _ =
            @inl _ _ _ |- _] =>
       apply raise_inl in H1;
+      inversion H1;
+      clear H1
+  | [H1: @raise String.string (sum String.string) (Exception_serr) _ ?e0 =
+           @inl _ _ ?e1 |- _] =>
+      apply raise_serr_inl in H1;
       inversion H1;
       clear H1
   | [H1: inl _ = raise _ |- _] => inversion H1; clear H1

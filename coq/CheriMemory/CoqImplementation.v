@@ -9,6 +9,7 @@ Require Import CoqCtype.
 
 Require Import AltBinNotations.
 
+Require Import StructTact.StructTactics.
 
 Record implementation := {
     name: string;
@@ -29,8 +30,12 @@ Module Type Implementation.
 
   (* -- Sanity properties for proofs -- *)
 
-  (* alignments start from 1 *)
+  (* basic types sizes positive *)
   Parameter alignof_pointer_pos: 0 < (alignof_pointer get).
+  Parameter sizeof_ity_pos: forall ty x, sizeof_ity get ty = Some x -> 0 < x.
+  Parameter sizeof_fty_pos: forall ty x, sizeof_fty get ty = Some x -> 0 < x.
+
+  (* alignments start from 1 *)
   Parameter alignof_ity_pos: forall ty, 0 < (alignof_ity get ty).
   Parameter alignof_fty_pos: forall ty, 0 < (alignof_fty get ty).
 
@@ -190,6 +195,20 @@ Module MorelloImpl : Implementation.
     intros ty.
     destruct ty; cbn;try lia.
     destruct r; lia.
+  Qed.
+
+  Lemma sizeof_ity_pos: forall ty x, sizeof_ity get ty = Some x -> 0 < x.
+  Proof.
+    intros ty x H.
+    destruct ty;
+      cbn in H; repeat break_match_hyp; inversion H; lia.
+  Qed.
+
+  Lemma sizeof_fty_pos: forall ty x, sizeof_fty get ty = Some x -> 0 < x.
+  Proof.
+    intros ty x H.
+    destruct ty;
+      cbn in H; repeat break_match_hyp; inversion H; lia.
   Qed.
 
 

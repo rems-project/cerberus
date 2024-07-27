@@ -1725,6 +1725,7 @@ Module CheriMemoryImplWithProofs
     break_match_hyp;discriminate.
   Qed.
 
+  (* TODO: add to [inv_step] *)
   Lemma raise_inr_inv
     {A E:Type}
     {e: E}
@@ -1740,7 +1741,7 @@ Module CheriMemoryImplWithProofs
     tuple_inversion.
   Qed.
 
-  Lemma raise_serr_inr_inv
+  Lemma raise_either_inr_inv
     {A:Type}
     {e: string}
     {a : A}:
@@ -1750,6 +1751,19 @@ Module CheriMemoryImplWithProofs
     intros H.
     Transparent raise.
     unfold raise, Exception_either in H.
+    inversion H.
+  Qed.
+
+  Lemma raise_serr_inr_inv
+    {A:Type}
+    {e: string}
+    {a : A}:
+    @raise string serr Exception_serr A e =
+      @inr string A a -> False.
+  Proof.
+    intros H.
+    Transparent raise.
+    unfold raise, Exception_serr in H.
     inversion H.
   Qed.
 
@@ -1897,11 +1911,49 @@ Module CheriMemoryImplWithProofs
     reflexivity.
   Qed.
 
+  Lemma bind_sassert_inv
+    {T: Type}
+    (msg: string)
+    (cond: bool)
+    {c: unit -> serr T}
+    {x: T}
+    :
+    (@bind (sum string) (Monad_either string) unit T (sassert cond msg) c) = inr x ->
+    cond = true /\  c tt = inr x.
+  Proof.
+    Transparent bind ret.
+    unfold bind, ret, memM_monad, Monad_errS, Monad_either.
+    Opaque bind ret.
+    unfold sassert.
+    repeat break_match.
+    -
+      inv Heqs.
+    -
+      apply raise_serr_inl in Heqs.
+      invc Heqs.
+      intros H.
+      inv H.
+    -
+      rewrite ret_serr_inv in Heqs.
+      invc Heqs.
+      intros H.
+      split;auto.
+    -
+      apply raise_serr_inr_inv in Heqs.
+      tauto.
+  Qed.
+
   Ltac htrim :=
     repeat break_match_hyp; repeat break_let; try subst; try tuple_inversion; cbn in *; try discriminate.
 
   Ltac state_inv_step :=
     repeat match goal with
+      (* bind sassert *)
+      |[H: (@bind (sum string) (Monad_either string) unit _ (sassert _ _) _) = inr _ |- _] =>
+          let H1 := fresh H in
+          let H2 := fresh H in
+          apply bind_sassert_inv in H;
+          destruct H as [H1 H2]
       (* memM bind with var name *)
       |[ H: (bind _ (fun x => _)) ?s = (_ ,inr _) |- _ ] =>
          tryif (apply bind_memM_inv_same_state in H)
@@ -1990,6 +2042,15 @@ Module CheriMemoryImplWithProofs
           ; htrim
       | [H: inl _ = inl _ |- _] => inversion H; clear H; htrim
       | [H: inr _ = inr _ |- _] => inversion H; clear H; htrim
+      | [H: @raise string _ Exception_serr unit _ = @inl string unit _ |- _] =>
+          apply raise_serr_inl in H;
+          inversion H;
+          clear H;
+          htrim
+      | [H: @raise string serr Exception_serr unit _ = @inr string unit _ |- _] =>
+          apply raise_serr_inr_inv in H; tauto
+      | [H: @raise string serr (Exception_either string) _ _ = @inr string _ _ |- _] =>
+          apply raise_either_inr_inv in H; tauto
       end.
 
   Section MemMwithInvariant.
@@ -4479,12 +4540,12 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros R.
     unfold repr in R.
-    destruct fuel;[apply raise_serr_inr_inv in R;tauto|].
+    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
     break_match_hyp.
     -
       state_inv_step.
       break_match_hyp.
-      apply raise_serr_inr_inv in R3; tauto.
+      apply raise_either_inr_inv in R3; tauto.
       rewrite MorelloImpl.uchar_size in R4.
       cbn in R4.
       apply ret_inr in R4.
@@ -4496,7 +4557,7 @@ Module CheriMemoryImplWithProofs
       state_inv_step.
       reflexivity.
     -
-      apply raise_serr_inr_inv in R; tauto.
+      apply raise_either_inr_inv in R; tauto.
   Qed.
 
   Fact repr_char_bytes_size_unspec_helper
@@ -4515,7 +4576,7 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros T P.
     unfold repr in P.
-    destruct fuel;[apply raise_serr_inr_inv in P;tauto|].
+    destruct fuel;[apply raise_either_inr_inv in P;tauto|].
     destruct T;
       (state_inv_step;
        rewrite MorelloImpl.uchar_size in P0;
@@ -5008,12 +5069,118 @@ Module CheriMemoryImplWithProofs
   Qed.
 
 
-  (* This is questionable. *)
+  (* TODO move to Proof Aux *)
+  Fact option2serr_inv {A:Type}:
+    forall msg (o:option A) v,
+    option2serr msg o = inr v -> o = Some v.
+  Proof.
+    intros msg o v H.
+    destruct o.
+    -
+      cbn in H.
+      apply ret_inr in H.
+      inv H.
+      reflexivity.
+    -
+      cbn in H.
+      apply raise_serr_inr_inv in H.
+      tauto.
+  Qed.
+    
+
+  Fact pointer_sizeof_pos:
+    (0 < sizeof_pointer MorelloImpl.get)%nat.
+  Proof.
+    rewrite pointer_sizeof_alignof.
+    apply MorelloImpl.alignof_pointer_pos.
+  Qed.
+
   Lemma sizeof_pos:
     forall fuel szn maybe_tagDefs ty,
       sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat.
   Proof.
-    intros fuel szn maybe_tagDefs ty0 H.
+
+    induction fuel as [| fuel' IHfuel] using nat_ind.
+    - (* Base case: fuel = 0 *)
+      intros szn maybe_tagDefs ty H.
+      simpl in H.
+      discriminate H.
+    - (* Inductive step: fuel = S fuel' *)
+      intros szn maybe_tagDefs ty H.
+      simpl in H.
+
+      destruct ty as [a cty].
+      destruct cty eqn:TY.
+      all: try inversion H.
+      +
+        destruct b.
+        *
+          apply option2serr_inv in H1.
+          apply MorelloImpl.sizeof_ity_pos in H1. assumption.
+        *
+          apply option2serr_inv in H1.
+          apply MorelloImpl.sizeof_fty_pos in H1. assumption.
+      +
+        destruct o.
+        *
+          state_inv_step;
+            apply IHfuel in H2;
+            lia.
+        *
+          state_inv_step.
+      +
+        pose proof pointer_sizeof_pos as P.
+        remember (sizeof_pointer MorelloImpl.get) as psize.
+        break_match_goal.
+        *
+          invc Heqs.
+        *
+          apply ret_inr in Heqs.
+          invc Heqs.
+          assumption.
+      +
+        apply IHfuel in H1.
+        assumption.
+      +
+        (* TODO: struct proof. requires offsetoff lemma *)
+        admit.
+      +
+        (* Union *)
+        generalize dependent (match maybe_tagDefs with
+                              | Some x => x
+                              | None => AbstTagDefs.tagDefs tt
+                              end); intros.
+
+        clear H1.
+        break_match_hyp;[|inv H].
+        break_match_hyp;[inv H|].
+        state_inv_step;
+          bool_to_prop_hyp.
+        *
+          rename szn into max_size, n0 into max_align.
+          clear - Heqn1 Heqb H2 IHfuel.
+
+          remember (S n1) as n.
+          assert(n <> O) as N by lia.
+          clear Heqn n1.
+
+          cut (max_size <> O);[lia|].
+
+
+          (* TODO: proof by induction on [l] *)
+          admit.
+        *
+          rename n into max_size, n0 into max_align.
+          clear - Heqn1 Heqb H2 IHfuel.
+
+          remember (S n1) as n.
+          assert(n <> O) as N by lia.
+          clear Heqn n1.
+
+          cut (max_size <> O);[lia|].
+
+          (* TODO: same as previous bullet *)
+          admit.
   Admitted.
 
   Lemma repr_preserves
@@ -5037,7 +5204,7 @@ Module CheriMemoryImplWithProofs
     intros R.
 
     unfold repr in R.
-    destruct fuel;[apply raise_serr_inr_inv in R;tauto|].
+    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
 
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
@@ -5053,7 +5220,7 @@ Module CheriMemoryImplWithProofs
       (*
         generalize dependent DEFAULT_FUEL; intros sfuel R2.
         unfold sizeof in R2.
-        destruct sfuel;[apply raise_serr_inr_inv in R2;tauto|].
+        destruct sfuel;[apply raise_either_inr_inv in R2;tauto|].
        *)
 
       assert(0 < szn)%nat as SP.
