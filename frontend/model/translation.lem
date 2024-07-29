@@ -1322,14 +1322,16 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
     | GenTypes.GenRValueType _ ->
         false
   end in
-  let integer_promotion_and_type (ty: Ctype.ctype) (e: C.pexpr) : C.pexpr * Ctype.integerType =
+  let integer_promotion_and_type (ty: Ctype.ctype) : (C.pexpr -> C.pexpr) * Ctype.integerType =
     let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion (Implementation.integerImpl ()) ty) in
     let promoted_ity = match promoted_ty with
       | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) -> ity
       | _ -> Assert_extra.failwith "impossible"
     end in
-    (stdlib.mkcall_conv_int promoted_ty e, promoted_ity) in
-  let integer_promotion ty e = fst (integer_promotion_and_type ty e) in
+    (stdlib.mkcall_conv_int promoted_ty, promoted_ity) in
+  let integer_promotion ty e = 
+    let (mk_conversion, promoted_type) = integer_promotion_and_type ty in
+    mk_conversion e in
   (* STD §6.3.1.8 *)
   let usual_arithmetic_conversion_aux is_TMP_new (ty1: Ctype.ctype) (ty2: Ctype.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
     match (AilTypesAux.corresponding_real_type ty1, AilTypesAux.corresponding_real_type ty2) with
@@ -1434,7 +1436,8 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
           (* STD §6.5.3.3#3 *)
           let (oTy, zero_pe, mk_conversion) =
             if AilTypesAux.is_integer result_ty then
-              (C.OTy_integer, Caux.mk_integer_pe 0, integer_promotion (ctype_of e))
+              let (mk_conversion, promoted_ty) = integer_promotion_and_type (ctype_of e) in
+              (C.OTy_integer, Caux.annotate_integer_type_pexpr promoted_ty (Caux.mk_integer_pe 0), mk_conversion)
             else
               (C.OTy_floating, Caux.mk_floating_value_pe Mem.zero_fval, fun z -> z) in
           E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun obj_wrp ->
@@ -1594,7 +1597,8 @@ else
 end
                       )
                     ; ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
-                      , let (promoted2_def, promoted2_ity) = integer_promotion_and_type (ctype_of e2) obj2_wrp.E.sym_pe in
+                      , let (mk_promoted2_def, promoted2_ity) = integer_promotion_and_type (ctype_of e2) in
+                        let promoted2_def = mk_promoted2_def obj2_wrp.E.sym_pe in
                         Caux.mk_let_pe promoted1_wrp.E.sym_pat
                           (Caux.mk_std_pe "§6.5.7#3, sentence 1" (integer_promotion (ctype_of e1) obj1_wrp.E.sym_pe))
                         (Caux.mk_let_pe promoted2_wrp.E.sym_pat
@@ -1684,7 +1688,8 @@ end
                       , Caux.mk_unspecified_pe (result_ty) )
                     ; ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat
                                           ; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
-                      , let (promoted2_def, promoted2_ity) = integer_promotion_and_type (ctype_of e2) obj2_wrp.E.sym_pe in
+                      , let (mk_promoted2_def, promoted2_ity) = integer_promotion_and_type (ctype_of e2) in
+                        let promoted2_def = mk_promoted2_def obj2_wrp.E.sym_pe in
                         Caux.mk_let_pe promoted1_wrp.E.sym_pat (integer_promotion (ctype_of e1) obj1_wrp.E.sym_pe)
                         (Caux.mk_let_pe promoted2_wrp.E.sym_pat promoted2_def
                         (* (§6.5.7#2) if promoted2 < 0 then undef *)
