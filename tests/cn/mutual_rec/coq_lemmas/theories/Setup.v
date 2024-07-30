@@ -155,7 +155,7 @@ Lemma merge_flip: forall xs ys,
 Proof.
   intros.
   unfold merge.
-  rewrite plus_comm.
+  rewrite PeanoNat.Nat.add_comm.
   apply merge_w_flip.
   auto.
 Qed.
