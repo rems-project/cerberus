@@ -5087,7 +5087,6 @@ Module CheriMemoryImplWithProofs
       tauto.
   Qed.
     
-
   Fact pointer_sizeof_pos:
     (0 < sizeof_pointer MorelloImpl.get)%nat.
   Proof.
@@ -5095,183 +5094,187 @@ Module CheriMemoryImplWithProofs
     apply MorelloImpl.alignof_pointer_pos.
   Qed.
 
-  Lemma offsetof_max_offset_pos
-    (fuel : nat)
-    (szn : nat)
-    (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition)) (ty : CoqCtype.ctype)
-    (s : sym)
-    (t : SymMap.t CoqCtype.tag_definition)
-    (l : list (identifier * CoqCtype.ctype * nat))
-    (max_offset : nat):
-    (sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat)
-    ->
-      offsetsof fuel t s = inr (l, max_offset) -> (0 < max_offset)%nat.
-  Proof.
-    intros SP OF.
-    revert SP.
-    destruct fuel.
-    -
-      simpl in OF.
-      discriminate OF.
-    -
-      intros SP.
-      cbn in OF.
-
-      break_match_hyp;[|discriminate OF].
-      break_match_hyp.
-      *
-        (* struct *)
-        apply bind_sassert_inv in OF.
-        destruct OF as [L OF].
-        destruct (Datatypes.length l0) eqn:L0.
-        inv L.
-        clear L.
-
-        apply bind_serr_inv in OF.
-        destruct OF as [x [H1 H2]].
-        break_let.
-        inl_inr_inv.
-        subst.
-
-        remember (match o with
-                  | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) => l0 ++ [(ident, (attrs, None, qs, ty))]
-                  | None => l0
-                  end) as l0'.
-        assert(0 < length l0')%nat.
-        {
-          destruct o.
-          -
-            destruct f.
-            subst l0'.
-            pose proof (app_length l0 [(i, (a, None, q, c))]).
-            rewrite H.
-            lia.
-          -
-            subst.
-            lia.
-        }
-        clear Heql0' l0 L0 Heqo.
-        rename l0' into l0.
-
-        revert H.
-        induction l0;intros.
-        --
-          setoid_rewrite list.nil_length in H.
-          lia.
-        --
-          cbn in H1.
-
-          apply bind_serr_inv in H1.
-          destruct H1 as [a' [H2 H3]].
-          repeat break_let.
-          apply IHl0.
-          admit.
-          admit.
-      *
-        (* union *)
-        admit. (* TODO: this could not be proven. Need to narrow down to struct *)
-  Admitted.
-
-
   Lemma sizeof_pos:
     forall fuel szn maybe_tagDefs ty,
-      sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat.
+      sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat
+
+  with
+  offsetof_struct_max_offset_pos:
+    forall fuel t s l max_offset,
+      offsetsof_struct fuel t s = inr (l, max_offset) -> (0 < max_offset)%nat.
   Proof.
+    -
+      clear sizeof_pos.
+      induction fuel as [| fuel' IHfuel] using nat_ind.
+      + (* Base case: fuel = 0 *)
+        intros szn maybe_tagDefs ty H.
+        simpl in H.
+        discriminate.
+      +
+        intros szn maybe_tagDefs ty H.
+        simpl in H.
 
-    induction fuel as [| fuel' IHfuel] using nat_ind.
-    - (* Base case: fuel = 0 *)
-      intros szn maybe_tagDefs ty H.
-      simpl in H.
-      discriminate H.
-    - (* Inductive step: fuel = S fuel' *)
-      intros szn maybe_tagDefs ty H.
-      simpl in H.
-
-      destruct ty as [a cty].
-      destruct cty eqn:TY.
-      all: try inversion H.
-      +
-        destruct b.
+        destruct ty as [a cty].
+        destruct cty eqn:TY.
+        all: try inversion H.
         *
-          apply option2serr_inv in H1.
-          apply MorelloImpl.sizeof_ity_pos in H1. assumption.
+          destruct b.
+          --
+            apply option2serr_inv in H1.
+            apply MorelloImpl.sizeof_ity_pos in H1. assumption.
+          --
+            apply option2serr_inv in H1.
+            apply MorelloImpl.sizeof_fty_pos in H1. assumption.
         *
-          apply option2serr_inv in H1.
-          apply MorelloImpl.sizeof_fty_pos in H1. assumption.
-      +
-        destruct o.
+          destruct o.
+          --
+            state_inv_step;
+              apply IHfuel in H2;
+              lia.
+          --
+            state_inv_step.
         *
-          state_inv_step;
-            apply IHfuel in H2;
-            lia.
+          pose proof pointer_sizeof_pos as P.
+          remember (sizeof_pointer MorelloImpl.get) as psize.
+          break_match_goal.
+          --
+            invc Heqs.
+          --
+            apply ret_inr in Heqs.
+            invc Heqs.
+            assumption.
         *
-          state_inv_step.
-      +
-        pose proof pointer_sizeof_pos as P.
-        remember (sizeof_pointer MorelloImpl.get) as psize.
-        break_match_goal.
-        *
-          invc Heqs.
-        *
-          apply ret_inr in Heqs.
-          invc Heqs.
+          apply IHfuel in H1.
           assumption.
-      +
-        apply IHfuel in H1.
-        assumption.
-      +
-        (* struct *)
-        generalize dependent (match maybe_tagDefs with
-                              | Some x => x
-                              | None => AbstTagDefs.tagDefs tt
-                              end); intros.
-
-        clear H1.
-
-        apply bind_serr_inv in H.
-        destruct H as [x [H1 H2]].
-        break_let.
-        clear Heqp x.
-        rename n into max_offset.
-        eapply offsetof_max_offset_pos in H1;[|eauto].
-        state_inv_step;bool_to_prop_hyp; try congruence;lia.
-      +
-        (* Union *)
-        generalize dependent (match maybe_tagDefs with
-                              | Some x => x
-                              | None => AbstTagDefs.tagDefs tt
-                              end); intros.
-
-        clear H1.
-        break_match_hyp;[|inv H].
-        break_match_hyp;[inv H|].
-        state_inv_step;
-          bool_to_prop_hyp.
         *
-          rename szn into max_size, n0 into max_align.
-          clear - Heqn1 Heqb H2 IHfuel.
+          (* struct *)
+          generalize dependent (match maybe_tagDefs with
+                                | Some x => x
+                                | None => AbstTagDefs.tagDefs tt
+                                end); intros.
 
-          remember (S n1) as n.
-          assert(n <> O) as N by lia.
-          clear Heqn n1.
+          clear H1.
 
-          cut (max_size <> O);[lia|].
-
-
-          (* TODO: proof by induction on [l] *)
-          admit.
+          apply bind_serr_inv in H.
+          destruct H as [x [H1 H2]].
+          break_let.
+          clear Heqp x.
+          rename n into max_offset.
+          eapply offsetof_struct_max_offset_pos in H1.
+          state_inv_step;bool_to_prop_hyp; try congruence;lia.
         *
-          rename n into max_size, n0 into max_align.
-          clear - Heqn1 Heqb H2 IHfuel.
+          (* Union *)
+          generalize dependent (match maybe_tagDefs with
+                                | Some x => x
+                                | None => AbstTagDefs.tagDefs tt
+                                end); intros.
 
-          remember (S n1) as n.
-          assert(n <> O) as N by lia.
-          clear Heqn n1.
+          clear H1.
+          break_match_hyp;[|inv H].
+          break_match_hyp;[inv H|].
+          state_inv_step;
+            bool_to_prop_hyp.
+          --
+            rename szn into max_size, n0 into max_align.
+            clear - Heqn1 Heqb H2 IHfuel.
 
-          cut (max_size <> O);[lia|].
+            remember (S n1) as n.
+            assert(n <> O) as N by lia.
+            clear Heqn n1.
+            cut (max_size <> O);[lia|].
 
-          (* TODO: same as previous bullet *)
-          admit.
+            (* TODO: proof by induction on [l] *)
+            admit.
+          --
+            rename n into max_size, n0 into max_align.
+            clear - Heqn1 Heqb H2 IHfuel.
+
+            remember (S n1) as n.
+            assert(n <> O) as N by lia.
+            clear Heqn n1.
+
+            cut (max_size <> O);[lia|].
+
+            (* TODO: same as previous bullet *)
+            admit.
+    -
+      clear offsetof_struct_max_offset_pos.
+      intros fuel t s l max_offset OF.
+      induction fuel; intros.
+      +
+        simpl in OF.
+        discriminate OF.
+      +
+        cbn in OF.
+
+        break_match_hyp;[|discriminate OF].
+        break_match_hyp.
+        *
+          (* struct *)
+          apply bind_sassert_inv in OF.
+          destruct OF as [L OF].
+          destruct (Datatypes.length l0) eqn:L0.
+          inv L.
+          clear L.
+
+          apply bind_serr_inv in OF.
+          destruct OF as [x [H1 H2]].
+          break_let.
+          inl_inr_inv.
+          subst.
+
+          remember (match o with
+                    | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) => l0 ++ [(ident, (attrs, None, qs, ty))]
+                    | None => l0
+                    end) as l0'.
+
+          assert(0 < length l0')%nat.
+          {
+            destruct o.
+            -
+              destruct f.
+              subst l0'.
+              pose proof (app_length l0 [(i, (a, None, q, c))]).
+              rewrite H.
+              lia.
+            -
+              subst.
+              lia.
+          }
+          clear Heql0' l0 L0 Heqo.
+          rename l0' into l0.
+
+          revert H.
+          induction l0;intros.
+          --
+            setoid_rewrite list.nil_length in H.
+            lia.
+          --
+            cbn in H1.
+
+            apply bind_serr_inv in H1.
+            destruct H1 as [a' [H2 H3]].
+            repeat break_let.
+
+            destruct a'.
+            rename n0 into max_offset'.
+
+            apply bind_serr_inv in H2.
+            destruct H2 as [size [H2 H4]].
+
+            apply bind_serr_inv in H4.
+            destruct H4 as [align [H4 H5]].
+            inl_inr_inv.
+
+            assert(0<max_offset')%nat.
+            {
+              cut (0<size)%nat.
+              intros H0.
+              lia.
+              clear - sizeof_pos H2.
+              eapply sizeof_pos.
+              eauto.
+            }
   Admitted.
 
   Lemma repr_preserves

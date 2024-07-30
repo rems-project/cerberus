@@ -609,24 +609,24 @@ Module Type CheriMemoryImpl
       end
     in alignof_ fuel ty.
 
-  Fixpoint offsetsof
+  Fixpoint offsetsof_struct
     (fuel: nat)
     (tagDefs : SymMap.t CoqCtype.tag_definition)
     (tag_sym : CoqSymbol.sym)
-    : serr (list (CoqSymbol.identifier * CoqCtype.ctype * nat) * nat)
     :=
     match fuel with
     | O => raise "offsetof out of fuel"
     | S fuel =>
         match SymMap.find tag_sym tagDefs with
-        | Some (CoqCtype.StructDef membrs_ flexible_opt) =>
-            sassert (Nat.ltb 0 (List.length membrs_)) "Empty struct encountered" ;;
-            let membrs :=
+        | Some (CoqCtype.StructDef members flexible_opt) =>
+            sassert (Nat.ltb 0 (List.length members)) "Empty struct encountered" ;;
+            let members :=
               match flexible_opt with
-              | None => membrs_
+              | None => members
               | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) =>
-                  membrs_ ++ [ (ident, (attrs, None, qs, ty)) ]
-              end in
+                  members ++ [ (ident, (attrs, None, qs, ty)) ]
+              end
+            in
             '(xs, maxoffset) <-
               monadic_fold_left
                 (fun '(xs, last_offset) '(membr, (_, _, _, ty))  =>
@@ -638,11 +638,9 @@ Module Type CheriMemoryImpl
                      then O
                      else (align - x_value)%nat in
                    ret ((membr, ty, (last_offset + pad)%nat)::xs, (last_offset+pad+size)%nat)
-                ) membrs ([], O) ;;
+                ) members ([], O) ;;
             ret (List.rev xs, maxoffset)
-        | Some (CoqCtype.UnionDef membrs) =>
-            ret ((List.map (fun '(ident, (_, _, _, ty)) => (ident, ty, O)) membrs), O)
-        | None => raise "could not find tag"
+        | _ => raise "struct tagdefs mismatch"
         end
     end
   with sizeof
@@ -678,7 +676,7 @@ Module Type CheriMemoryImpl
                | CoqCtype.Atomic atom_ty =>
                    sizeof fuel (Some tagDefs) atom_ty
                | CoqCtype.Struct tag_sym =>
-                   '(_, max_offset) <- offsetsof fuel tagDefs tag_sym ;;
+                   '(_, max_offset) <- offsetsof_struct fuel tagDefs tag_sym ;;
                    align <- alignof fuel (Some tagDefs) cty ;;
                    let x_value := Nat.modulo max_offset align in
                    ret (if Nat.eqb x_value 0%nat
@@ -688,8 +686,8 @@ Module Type CheriMemoryImpl
                    match SymMap.find tag_sym tagDefs with
                    | Some (CoqCtype.StructDef _ _) =>
                        raise "no alignment for struct with union tag"
-                   | Some (CoqCtype.UnionDef membrs) =>
-                       sassert (Nat.ltb 0 (List.length membrs)) "Empty union encountered" ;;
+                   | Some (CoqCtype.UnionDef members) =>
+                       sassert (Nat.ltb 0 (List.length members)) "Empty union encountered" ;;
                        '(max_size, max_align) <-
                          monadic_fold_left
                            (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
@@ -697,7 +695,7 @@ Module Type CheriMemoryImpl
                               al <- alignof fuel (Some tagDefs) ty ;;
                               ret (Nat.max acc_size sz, Nat.max acc_align al)
                            )
-                           membrs (0%nat, 0%nat) ;;
+                           members (0%nat, 0%nat) ;;
                        let x_value := Nat.modulo max_size max_align in
                        ret (if Nat.eqb x_value 0%nat
                             then max_size
@@ -706,6 +704,27 @@ Module Type CheriMemoryImpl
                    end
                end
          end.
+
+  Definition offsetof_union
+    (members: list
+                (identifier * (CoqAnnot.attributes * option CoqCtype.alignment * CoqCtype.qualifiers * CoqCtype.ctype)))
+    : serr (list (CoqSymbol.identifier * CoqCtype.ctype * nat) * nat)
+    :=
+    ret ((List.map (fun '(ident, (_, _, _, ty)) => (ident, ty, O)) members), O).
+
+  Fixpoint offsetsof
+    (fuel: nat)
+    (tagDefs : SymMap.t CoqCtype.tag_definition)
+    (tag_sym : CoqSymbol.sym)
+    : serr (list (CoqSymbol.identifier * CoqCtype.ctype * nat) * nat)
+    :=
+    match SymMap.find tag_sym tagDefs with
+    | Some (CoqCtype.StructDef members flexible_opt) =>
+        offsetsof_struct fuel tagDefs tag_sym
+    | Some (CoqCtype.UnionDef members) =>
+        offsetof_union members
+    | None => raise "could not find tag"
+    end.
 
   Definition resolve_function_pointer
     (funptrmap : ZMap.M.t (digest * string * C.t))
