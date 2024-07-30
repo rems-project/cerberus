@@ -126,6 +126,7 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
+        USE_OPAM='' cd backend/cn && dune build @fmt
 
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
