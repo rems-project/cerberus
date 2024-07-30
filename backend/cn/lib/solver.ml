@@ -988,12 +988,16 @@ let rec declare_struct s done_struct name decl =
   else (
     done_struct := SymSet.add name mp;
     let mk_field (l, t) =
+      let rec declare_nested ty =
+            match ty with
+             | Struct name' ->
+               let decl = SymMap.find name' s.globals.struct_decls in
+               declare_struct s done_struct name' decl
+             | Map (_,el) -> declare_nested el
+             | _ -> ()
+      in
       let ty = Memory.bt_of_sct t in
-      (match ty with
-       | Struct name' ->
-         let decl = SymMap.find name' s.globals.struct_decls in
-         declare_struct s done_struct name' decl
-       | _ -> ());
+      declare_nested ty;
       (CN_Names.struct_field_name l, translate_base_type ty)
     in
     let mk_piece (x : Memory.struct_piece) = Option.map mk_field x.member_or_padding in
@@ -1003,7 +1007,6 @@ let rec declare_struct s done_struct name decl =
          (CN_Names.struct_name name)
          []
          [ (CN_Names.struct_con_name name, List.filter_map mk_piece decl) ]))
-
 
 (** Declare various types always available to the solver. *)
 let declare_solver_basics s =
