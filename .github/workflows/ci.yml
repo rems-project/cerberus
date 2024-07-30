@@ -107,7 +107,6 @@ jobs:
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
         cd tests; USE_OPAM='' ./run-cn.sh
-        cd ..
 
     - name: Run CN Tutorial CI tests
       run: |
