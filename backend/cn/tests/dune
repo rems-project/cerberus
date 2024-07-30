@@ -17,8 +17,6 @@
   monomorphic
   ocamlgraph
   ounit2
-  qcheck
-  qcheck-ounit
   result
   str
   unix

@@ -10,6 +10,7 @@ depends: [
   "z3" {>= "4.8.14"}
   "cmdliner"
   "ocamlgraph"
+  "ounit2"
 ]
 build: [
   ["dune" "subst"] {pinned}
