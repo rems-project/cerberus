@@ -5236,11 +5236,13 @@ Module CheriMemoryImplWithProofs
       unfold mem_state_with_funptrmap_bytemap_capmeta.
       repeat split;cbn;auto.
       +
+        (* Balign *)
         pose proof (capmeta_ghost_tags_preserves s start szn) as P.
         autospecialize P.
         repeat split;auto.
         apply P.
       +
+        (* MIcap *)
         intros addr g M U bs F.
         remember (alignof_pointer MorelloImpl.get) as palignment.
         remember(align_down (AddressValue.to_Z start) (Z.of_nat palignment)) as a0.
@@ -5251,6 +5253,7 @@ Module CheriMemoryImplWithProofs
 
         destruct AR as [IN|OUT].
         *
+          (* a0 <= AddressValue.to_Z addr <= a1 *)
           subst.
           pose proof (capmeta_ghost_tags_spec_in_range_aligned start szn SP
                         (capmeta s)
@@ -5263,6 +5266,7 @@ Module CheriMemoryImplWithProofs
             as CA.
           destruct CA;congruence.
         *
+          (* ~ a0 <= AddressValue.to_Z addr <= a1 *)
           subst.
           pose proof (capmeta_ghost_tags_spec_outside_range_aligned start szn SP
                         (capmeta s)
@@ -5283,21 +5287,41 @@ Module CheriMemoryImplWithProofs
           subst bs.
           clear - OUT.
 
-          apply list.list_eq_Forall2.
-          apply Forall2_nth_list with (default1:=None) (default2:=None).
-          setoid_rewrite fetch_bytes_len.
-          reflexivity.
-          intros i H.
-
+          (* prep *)
           remember (sizeof_pointer MorelloImpl.get) as psize.
-          unfold fetch_bytes.
-
+          remember (alignof_pointer MorelloImpl.get) as palign.
 
           remember (list_init psize (fun i0 : nat => AddressValue.with_offset addr (Z.of_nat i0))) as rl.
-          (*
-          rewrite map_nth.
-          list_init_nth
-           *)
+          assert(length rl = psize).
+          {
+            subst rl.
+            apply list_init_len.
+          }
+
+
+          (* meat *)
+          unfold fetch_bytes.
+          apply map_ext_in.
+
+          intros a IN.
+          apply In_nth_error in IN.
+          destruct IN as [off IN].
+          assert(off < psize)%nat.
+          {
+            cut(nth_error (list_init psize (fun i : nat => AddressValue.with_offset addr (Z.of_nat i))) off <> None).
+            intros H0.
+            apply nth_error_Some in H0.
+            rewrite list_init_len in H0.
+            auto.
+            rewrite IN.
+            discriminate.
+          }
+          rewrite list_init_nth in IN;[|auto].
+          invc IN.
+          clear H.
+
+          (* TODO: need [AMap.map_add_list_at] spec *)
+
           admit.
     -
 
