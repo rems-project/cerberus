@@ -5095,6 +5095,84 @@ Module CheriMemoryImplWithProofs
     apply MorelloImpl.alignof_pointer_pos.
   Qed.
 
+  Lemma offsetof_max_offset_pos
+    (fuel : nat)
+    (szn : nat)
+    (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition)) (ty : CoqCtype.ctype)
+    (s : sym)
+    (t : SymMap.t CoqCtype.tag_definition)
+    (l : list (identifier * CoqCtype.ctype * nat))
+    (max_offset : nat):
+    (sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat)
+    ->
+      offsetsof fuel t s = inr (l, max_offset) -> (0 < max_offset)%nat.
+  Proof.
+    intros SP OF.
+    revert SP.
+    destruct fuel.
+    -
+      simpl in OF.
+      discriminate OF.
+    -
+      intros SP.
+      cbn in OF.
+
+      break_match_hyp;[|discriminate OF].
+      break_match_hyp.
+      *
+        (* struct *)
+        apply bind_sassert_inv in OF.
+        destruct OF as [L OF].
+        destruct (Datatypes.length l0) eqn:L0.
+        inv L.
+        clear L.
+
+        apply bind_serr_inv in OF.
+        destruct OF as [x [H1 H2]].
+        break_let.
+        inl_inr_inv.
+        subst.
+
+        remember (match o with
+                  | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) => l0 ++ [(ident, (attrs, None, qs, ty))]
+                  | None => l0
+                  end) as l0'.
+        assert(0 < length l0')%nat.
+        {
+          destruct o.
+          -
+            destruct f.
+            subst l0'.
+            pose proof (app_length l0 [(i, (a, None, q, c))]).
+            rewrite H.
+            lia.
+          -
+            subst.
+            lia.
+        }
+        clear Heql0' l0 L0 Heqo.
+        rename l0' into l0.
+
+        revert H.
+        induction l0;intros.
+        --
+          setoid_rewrite list.nil_length in H.
+          lia.
+        --
+          cbn in H1.
+
+          apply bind_serr_inv in H1.
+          destruct H1 as [a' [H2 H3]].
+          repeat break_let.
+          apply IHl0.
+          admit.
+          admit.
+      *
+        (* union *)
+        admit. (* TODO: this could not be proven. Need to narrow down to struct *)
+  Admitted.
+
+
   Lemma sizeof_pos:
     forall fuel szn maybe_tagDefs ty,
       sizeof fuel maybe_tagDefs ty = inr szn -> (0 < szn)%nat.
@@ -5142,8 +5220,21 @@ Module CheriMemoryImplWithProofs
         apply IHfuel in H1.
         assumption.
       +
-        (* TODO: struct proof. requires offsetoff lemma *)
-        admit.
+        (* struct *)
+        generalize dependent (match maybe_tagDefs with
+                              | Some x => x
+                              | None => AbstTagDefs.tagDefs tt
+                              end); intros.
+
+        clear H1.
+
+        apply bind_serr_inv in H.
+        destruct H as [x [H1 H2]].
+        break_let.
+        clear Heqp x.
+        rename n into max_offset.
+        eapply offsetof_max_offset_pos in H1;[|eauto].
+        state_inv_step;bool_to_prop_hyp; try congruence;lia.
       +
         (* Union *)
         generalize dependent (match maybe_tagDefs with
