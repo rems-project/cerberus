@@ -5172,31 +5172,41 @@ Module CheriMemoryImplWithProofs
           clear H1.
           break_match_hyp;[|inv H].
           break_match_hyp;[inv H|].
-          state_inv_step;
-            bool_to_prop_hyp.
+          apply bind_sassert_inv in H.
+          destruct H.
+          bool_to_prop_hyp.
+
+          apply bind_serr_inv in H0.
+          destruct H0 as [[max_size max_align] [H0 H1]].
           --
-            rename szn into max_size, n0 into max_align.
-            clear - Heqn1 Heqb H2 IHfuel.
 
-            remember (S n1) as n.
-            assert(n <> O) as N by lia.
-            clear Heqn n1.
-            cut (max_size <> O);[lia|].
+            inl_inr_inv.
+            cut(0<max_size)%nat.
+            {
+              intros.
+              break_match_goal;lia.
+            }
+            clear H3.
 
-            (* TODO: proof by induction on [l] *)
-            admit.
-          --
-            rename n into max_size, n0 into max_align.
-            clear - Heqn1 Heqb H2 IHfuel.
+            (* proof by induction on [l] *)
+            revert t0 Heqt1.
+            induction l;intros.
+            ++
+              cbn in H0.
+              inl_inr_inv.
+              setoid_rewrite list.nil_length in H.
+              lia.
+            ++
+              cbn in *.
+              clear H.
+              repeat break_let.
 
-            remember (S n1) as n.
-            assert(n <> O) as N by lia.
-            clear Heqn n1.
-
-            cut (max_size <> O);[lia|].
-
-            (* TODO: same as previous bullet *)
-            admit.
+              apply bind_serr_inv in H0.
+              destruct H0 as [a1 [H0 H2]].
+              apply bind_serr_inv in H0.
+              destruct H0 as [sz [H3 H4]].
+              apply IHfuel in H3.
+              admit.
     -
       clear offsetof_struct_max_offset_pos.
       intros fuel t s l max_offset OF.
