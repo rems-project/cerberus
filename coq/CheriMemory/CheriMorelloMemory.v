@@ -1905,8 +1905,6 @@ Module Type CheriMemoryImpl
     (ptrval1 ptrval2 : pointer_value)
     : memM integer_value
     :=
-
-    (* TODO: this check may be uncessary under strict pointer arith *)
     let precond (alloc: allocation) (addr1 addr2: Z): bool
       :=
       let asize := Z.of_nat alloc.(size) in
