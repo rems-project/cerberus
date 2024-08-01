@@ -1522,7 +1522,7 @@ Module FMapExtProofs
   Qed.
 
   (* Could be generlized to arbitrary length *)
-  Fact map_add_list_not_at
+  Fact map_add_list_not_at_1
     {T: Type}
     (addr' addr : FM.M.key)
     (bytemap0 : FM.M.t T)

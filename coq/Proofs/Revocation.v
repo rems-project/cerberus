@@ -4688,7 +4688,7 @@ Module CheriMemoryImplWithProofs
     state_inv_step.
 
     assert(length l = 1%nat) as L by (eapply repr_char_bytes_size;eauto).
-    apply AMapProofs.map_add_list_not_at; auto.
+    apply AMapProofs.map_add_list_not_at_1; auto.
   Qed.
 
   (* Non-locking store does not change allocations.
