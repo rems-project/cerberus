@@ -28,6 +28,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: 
+        repository: dc-mak/cerberus # FIXME: remove once the branch is merged 
         ref: cn-runtime-testing # FIXME: remove once the branch is merged 
 
     - name: System dependencies (ubuntu)
