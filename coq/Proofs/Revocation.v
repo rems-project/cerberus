@@ -150,6 +150,37 @@ Section AddressValue_Lemmas.
     reflexivity.
   Qed.
 
+  Lemma AddressValue_leb_Z_leb:
+    forall a b,
+      AddressValue.leb a b = Z.leb (AddressValue.to_Z a) (AddressValue.to_Z b).
+  Proof.
+    (* This should not be so tedious! *)
+    intros a b.
+    unfold AddressValue.leb, leb, Z.leb.
+    rewrite orb_lazy_alt.
+    repeat break_match_goal;auto.
+    -
+      rewrite AddressValue_ltb_Z_ltb in Heqb0.
+      rewrite Z.ltb_compare in Heqb0.
+      break_match_hyp; discriminate.
+    -
+      unfold eqb.
+      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
+      pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
+      break_match_hyp ; try discriminate.
+      auto.
+    -
+      rewrite AddressValue_ltb_Z_ltb in Heqb0.
+      rewrite Z.ltb_compare in Heqb0.
+      break_match_hyp; discriminate.
+    -
+      unfold eqb.
+      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
+      pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
+      break_match_hyp ; try discriminate.
+      auto.
+  Qed.
+
   Lemma AddressValue_eq_via_to_Z:
     forall a b,
       AddressValue.to_Z a = AddressValue.to_Z b <-> (a=b).
@@ -5287,6 +5318,33 @@ Module CheriMemoryImplWithProofs
             }
   Admitted.
 
+  Fact amap_add_list_not_at
+    {T: Type}
+    (x addr : AddressValue.t)
+    (bm : AMap.M.t T)
+    (l : list T):
+    ((AddressValue.ltb x addr = true)
+    \/ (AddressValue.leb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l))) x = true)) ->
+
+    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
+      AMap.M.find (elt:=T) x bm.
+  Proof.
+    intros NE.
+  Admitted. (* TODO. *)
+
+
+  Fact align_down_le:
+    forall v a,
+      0<a ->
+      align_down v a <= v.
+  Proof.
+    intros v a H0.
+    unfold align_down.
+    apply Z.le_sub_nonneg.
+    apply numbers.Z.mod_pos.
+    apply H0.
+  Qed.
+
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
@@ -5319,6 +5377,8 @@ Module CheriMemoryImplWithProofs
       apply bind_serr_inv in R.
       destruct R as [szn [R1 R2]].
       rewrite ret_serr_inv in R2.
+      apply bind_sassert_inv in R2.
+      destruct R2 as [RSZ R2].
       invc R2.
 
       (*
@@ -5333,8 +5393,8 @@ Module CheriMemoryImplWithProofs
         apply R1.
       }
 
-      generalize (Capability_GS.cap_get_value c) as start.
-      intros start.
+      generalize dependent (Capability_GS.cap_get_value c).
+      intros start RSZ.
       clear c.
 
       unfold mem_state_with_funptrmap_bytemap_capmeta.
@@ -5352,8 +5412,107 @@ Module CheriMemoryImplWithProofs
         remember(align_down (AddressValue.to_Z start) (Z.of_nat palignment)) as a0.
         remember(align_down (AddressValue.to_Z start + (Z.of_nat szn - 1)) (Z.of_nat palignment)) as a1.
 
+(*
+        assert(decidable (AddressValue.to_Z start <= AddressValue.to_Z addr < (AddressValue.to_Z start + (Z.of_nat szn)))) as AR.
+        {
+          apply dec_and.
+          apply Z.le_decidable.
+          apply Z.lt_decidable.
+        }
+
+        destruct AR as [IN|OUT].
+        *
+          (* In range *)
+          subst.
+          pose proof (capmeta_ghost_tags_spec_in_range start szn
+                        (capmeta s)
+                        SP
+                        addr) as CA.
+          autospecialize CA.
+          {
+            unfold addr_offset in *.
+            lia.
+          }
+          specialize (CA true g).
+
+          autospecialize CA.
+          {
+            replace (AddressValue.of_Z (align_down (AddressValue.to_Z addr) (Z.of_nat (alignof_pointer MorelloImpl.get)))) with addr.
+            apply M.
+            (* already aligned *)
+            pose proof (capmeta_ghost_tags_preserves s start szn) as P.
+            autospecialize P.
+            repeat split;auto.
+            destruct P as [Pbase _].
+            destruct_base_mem_invariant Pbase.
+            specialize (Balign0 addr).
+            autospecialize Balign0.
+            eapply AMapProofs.map_mapsto_in.
+            apply M.
+
+            clear - Balign0.
+            unfold addr_ptr_aligned in *.
+            unfold align_down.
+            rewrite Balign0.
+            rewrite Z.sub_0_r.
+            symmetry.
+            apply AddressValue_of_Z_to_Z.
+          }
+          destruct CA;congruence.
+        *
+          subst.
+          assert(~
+                   align_down (AddressValue.to_Z start) (Z.of_nat (alignof_pointer MorelloImpl.get)) <=
+                   AddressValue.to_Z addr <=
+                   align_down (AddressValue.to_Z start + (Z.of_nat szn - 1)) (Z.of_nat (alignof_pointer MorelloImpl.get))) as OUTa.
+          {
+            apply not_and in OUT.
+            2: admit.
+
+            replace (AddressValue.of_Z (align_down (AddressValue.to_Z addr) (Z.of_nat (alignof_pointer MorelloImpl.get)))) with addr.
+            apply M.
+            (* already aligned *)
+            pose proof (capmeta_ghost_tags_preserves s start szn) as P.
+            autospecialize P.
+            repeat split;auto.
+            destruct P as [Pbase _].
+            destruct_base_mem_invariant Pbase.
+            specialize (Balign0 addr).
+            autospecialize Balign0.
+            eapply AMapProofs.map_mapsto_in.
+            apply M.
+
+            clear - Balign0.
+            unfold addr_ptr_aligned in *.
+            unfold align_down.
+            rewrite Balign0.
+            rewrite Z.sub_0_r.
+            symmetry.
+            apply AddressValue_of_Z_to_Z.
+
+
+
+          }
+          pose proof (capmeta_ghost_tags_spec_outside_range_aligned start szn SP
+                        (capmeta s)
+                        addr
+                        OUTa
+                        true
+                        g
+                        M
+            ) as CA.
+
+
+
+
+
+
+ *)
+
+        (* TODO: need to destruct on exact bounds and expand after *)
         assert(decidable (a0 <= AddressValue.to_Z addr <= a1)) as AR
             by (apply dec_and; apply Z.le_decidable).
+
 
         destruct AR as [IN|OUT].
         *
@@ -5387,9 +5546,15 @@ Module CheriMemoryImplWithProofs
           specialize (MIcap addr g CA U bs).
           apply MIcap.
 
+          (* prove [addr] is aligned *)
+          specialize (Balign addr).
+          autospecialize Balign.
+          eapply AMapProofs.map_mapsto_in.
+          apply CA.
+
           (* prove bytes unchanged *)
           subst bs.
-          clear - OUT.
+          clear - RSZ OUT Balign.
 
           (* prep *)
           remember (sizeof_pointer MorelloImpl.get) as psize.
@@ -5424,9 +5589,60 @@ Module CheriMemoryImplWithProofs
           invc IN.
           clear H.
 
-          (* TODO: need [AMap.map_add_list_at] spec *)
+          rewrite amap_add_list_not_at.
+          reflexivity.
 
-          admit.
+          clear s.
+          unfold addr_ptr_aligned in Balign.
+          rewrite pointer_sizeof_alignof in H0.
+          pose proof MorelloImpl.alignof_pointer_pos as AP.
+          remember (alignof_pointer MorelloImpl.get) as palign.
+          clear Heqpalign.
+
+          rewrite repeat_length in *.
+
+          apply not_and in OUT.
+          2:admit.
+          destruct OUT.
+          --
+            (* on the left (axis-wise) *)
+            apply Z.nle_gt in H.
+            left.
+            rewrite AddressValue_ltb_Z_ltb.
+            apply Z.ltb_lt.
+            pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat palign)) as AD.
+            autospecialize AD. lia.
+            unfold AddressValue.with_offset.
+            unfold align_down in *.
+            pose proof (AddressValue.to_Z_in_bounds addr) as AB.
+            pose proof (AddressValue.to_Z_in_bounds start) as SB.
+            rewrite AddressValue.of_Z_roundtrip.
+            remember (AddressValue.to_Z addr) as zaddr. clear Heqzaddr addr.
+            remember (AddressValue.to_Z start) as zstart.
+            zify.
+            admit.
+            admit.
+          --
+            (* on the right (axis-wise) *)
+            apply Z.nle_gt in H.
+            right.
+            rewrite AddressValue_leb_Z_leb.
+            apply Z.leb_le.
+            pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat palign)) as AD.
+            autospecialize AD. lia.
+            unfold AddressValue.with_offset.
+            unfold align_down in *.
+            rewrite AddressValue.of_Z_roundtrip.
+
+            remember (AddressValue.to_Z addr) as zaddr. clear Heqzaddr addr.
+            remember (AddressValue.to_Z start) as zstart. clear Heqzstart start.
+            zify.
+
+
+            admit.
+            admit.
+
+
     -
 
   Admitted.
@@ -5831,18 +6047,6 @@ Module CheriMemoryImplWithProofs
     rewrite A.
     rewrite Z.sub_0_r.
     apply AddressValue_of_Z_to_Z.
-  Qed.
-
-  Fact align_down_le:
-    forall v a,
-      0<a ->
-      align_down v a <= v.
-  Proof.
-    intros v a H0.
-    unfold align_down.
-    apply Z.le_sub_nonneg.
-    apply numbers.Z.mod_pos.
-    apply H0.
   Qed.
 
   Fact bytemap_mem_state_with_bytemap:
