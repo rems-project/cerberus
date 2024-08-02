@@ -58,6 +58,7 @@ val provable
   [> `True | `False ]
 
 (* Ask the solver for the model that it found in a call to [provable] *)
+(* TODO: BCP: This should be renamed (confusing) *)
 val model : unit -> model_with_q
 
 (* Ask the solver to evaluate a CN term in the context of a
