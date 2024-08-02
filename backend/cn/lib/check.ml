@@ -2060,21 +2060,25 @@ let check_c_function ((fsym, (loc, args_and_body)) : c_function) : unit m =
   check_procedure loc fsym args_and_body
 
 
+(** Check the provided C functions. Failure of any check will short-circuit the
+    remainder of the checks. *)
+let check_c_functions_fast (funs : c_function list) : unit m =
+  let total = List.length funs in
+  let@ _ =
+    ListM.mapiM
+      (fun counter c_fn ->
+        let () = progress_simple (of_total (counter + 1) total) (c_function_name c_fn) in
+        check_c_function c_fn)
+      funs
+  in
+  return ()
+
+
 let check_c_functions funs =
   let selected_funs = select_functions funs in
   let number_entries = List.length selected_funs in
   match !batch with
-  | false ->
-    let@ _ =
-      ListM.mapiM
-        (fun counter c_fn ->
-          let () =
-            progress_simple (of_total (counter + 1) number_entries) (c_function_name c_fn)
-          in
-          check_c_function c_fn)
-        selected_funs
-    in
-    return ()
+  | false -> check_c_functions_fast selected_funs
   | true ->
     let@ _, pass, fail =
       ListM.fold_leftM
