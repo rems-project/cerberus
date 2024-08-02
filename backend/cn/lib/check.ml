@@ -2027,7 +2027,11 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
     ([], [])
 
 
-let check_c_functions funs =
+type c_function = symbol * (loc * basetype mu_proc_args_and_body)
+
+(** Filter functions according to [skip_and_only]: first according to "only",
+    then according to "skip" *)
+let select_functions (funs : c_function list) : c_function list =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
   let str_fsyms s =
     match List.filter (matches_str s) (List.map fst funs) with
@@ -2044,9 +2048,11 @@ let check_c_functions funs =
     | [] -> funs
     | _ss -> List.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
   in
-  let selected_funs =
-    List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs
-  in
+  List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs
+
+
+let check_c_functions funs =
+  let selected_funs = select_functions funs in
   let number_entries = List.length selected_funs in
   match !batch with
   | false ->
