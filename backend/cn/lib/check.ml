@@ -2029,6 +2029,10 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
 
 type c_function = symbol * (loc * basetype mu_proc_args_and_body)
 
+let c_function_name ((fsym, (_loc, _args_and_body)) : c_function) : string =
+  Sym.pp_string fsym
+
+
 (** Filter functions according to [skip_and_only]: first according to "only",
     then according to "skip" *)
 let select_functions (funs : c_function list) : c_function list =
@@ -2049,6 +2053,11 @@ let select_functions (funs : c_function list) : c_function list =
     | _ss -> List.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
   in
   List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs
+
+
+(** Check a single C function. Failure of the check is encoded monadically. *)
+let check_c_function ((fsym, (loc, args_and_body)) : c_function) : unit m =
+  check_procedure loc fsym args_and_body
 
 
 let check_c_functions funs =
