@@ -2074,24 +2074,28 @@ let check_c_functions_fast (funs : c_function list) : unit m =
   return ()
 
 
-(** Check the provided C functions, each in an isolated context, capturing and
-    counting failures. The result represents [(num_passed, num_failed)]. *)
-let check_c_functions_all (funs : c_function list) : (int * int) m =
+(** Check the provided C functions, each in an isolated context, capturing any
+    (monadic) check failures and returning them. All checks will be performed
+    regardless of intermediate failures. The result's order is determined by
+    the input's order: if function [f] appears before function [g], then
+    function [f]'s error (if any) will appear before function [g]'s error (if
+    any). *)
+let check_c_functions_all (funs : c_function list) : TypeErrors.t list m =
   let total = List.length funs in
-  let check_and_count (num_checked, pass, fail) c_fn =
+  let check_and_record (num_checked, errors) c_fn =
     let fn_name = c_function_name c_fn in
     let@ outcome = sandbox (check_c_function c_fn) in
     let checked = num_checked + 1 in
     match outcome with
     | Ok () ->
       progress_simple (of_total checked total) (fn_name ^ " -- pass");
-      return (checked, pass + 1, fail)
-    | Error _ ->
+      return (checked, errors)
+    | Error err ->
       progress_simple (of_total checked total) (fn_name ^ " -- fail");
-      return (checked, pass, fail + 1)
+      return (checked, err :: errors)
   in
-  let@ _, pass, fail = ListM.fold_leftM check_and_count (0, 0, 0) funs in
-  return (pass, fail)
+  let@ _num_checked, errors = ListM.fold_leftM check_and_record (0, []) funs in
+  return (List.rev errors)
 
 
 let check_c_functions funs =
@@ -2099,7 +2103,9 @@ let check_c_functions funs =
   match !batch with
   | false -> check_c_functions_fast selected_funs
   | true ->
-    let@ pass, fail = check_c_functions_all selected_funs in
+    let@ errors = check_c_functions_all selected_funs in
+    let fail = List.length errors in
+    let pass = List.length selected_funs - fail in
     print
       stdout
       (item "summary" (int pass ^^^ !^"pass" ^^ comma ^^^ int fail ^^^ !^"fail"));
