@@ -171,7 +171,14 @@ let rec of_ctype (Ctype.Ctype (_, ct_)) =
     in
     let@ ret_ct = of_ctype ret_ct in
     return (Function ((ret_q, ret_ct), args, variadic))
-  | Ctype.FunctionNoParams _ -> fail
+
+  (* The meaning of a function with no parameters depends on the version of C,
+     but here we treat it as if it really has no parameter (i.e., like `void`)
+     which is what more recent versions of the standard do. *)
+  | Ctype.FunctionNoParams (ret_q, ret_ct) ->
+    let@ ret_ct = of_ctype ret_ct in
+    return (Function ((ret_q, ret_ct), [], false))
+
   | Ctype.Pointer (_qualifiers, ctype) ->
     let@ t = of_ctype ctype in
     return (Pointer t)
@@ -184,7 +191,7 @@ let of_ctype_unsafe loc ct =
   let open Cerb_pp_prelude in
   match of_ctype ct with
   | Some ct -> ct
-  | None -> Tools.unsupported loc (!^"C-type" ^^^ Cerb_frontend.Pp_core_ctype.pp_ctype ct)
+  | None -> Tools.unsupported loc (!^"YAV C-type" ^^^ Cerb_frontend.Pp_core_ctype.pp_ctype ct)
 
 
 let pp t = Pp_core_ctype.pp_ctype (to_ctype t)
