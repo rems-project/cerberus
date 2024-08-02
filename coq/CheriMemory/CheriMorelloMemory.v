@@ -781,12 +781,14 @@ Module Type CheriMemoryImpl
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
             let bs := List.repeat None sz in
+            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
             ret (funptrmap, (capmeta_ghost_tags addr sz capmeta), bs)
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss sz n_value ;;
             let bs := List.map (Some) bs' in
+            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
             ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
         | MVinteger ity (IC _ c_value)
           =>
@@ -796,6 +798,7 @@ Module Type CheriMemoryImpl
               =>
                 '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
                 let capmeta := update_capmeta c_value addr capmeta in
+                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
                 ret (funptrmap, capmeta, List.map (Some) cb)
             | _ =>
                 raise "invalid integer value (capability for non-(u)intptr_t"
@@ -804,6 +807,7 @@ Module Type CheriMemoryImpl
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
             bs' <- bytes_of_Z true sz (bits_of_float fval) ;;
             let bs := List.map (Some) bs' in
+            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
             ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
         | MVpointer ref_ty ptrval_ =>
             match ptrval_ with
@@ -813,10 +817,12 @@ Module Type CheriMemoryImpl
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
                 '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
                 let capmeta := update_capmeta c_value addr capmeta in
+                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
                 ret (funptrmap, capmeta, List.map (Some) cb)
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
                 let capmeta := update_capmeta c_value addr capmeta in
+                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
                 ret (funptrmap, capmeta, List.map (Some) cb)
             end
         | MVarray mvals =>
@@ -827,7 +833,10 @@ Module Type CheriMemoryImpl
                    let addr := AddressValue.with_offset addr (Z.of_nat (List.length bs')) in
                    ret (funptrmap, capmeta, addr, bs'::bs))
                 mvals (funptrmap, capmeta, addr, []) ;;
-            ret (funptrmap, capmeta, (List.concat (List.rev bs_s)))
+
+            let bs := List.concat (List.rev bs_s) in
+            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+            ret (funptrmap, capmeta, bs)
         | MVstruct tag_sym xs =>
             let padding_byte := None in
             '(offs, last_offn) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
@@ -850,14 +859,16 @@ Module Type CheriMemoryImpl
                        (acc ++
                           (List.repeat padding_byte (Z.to_nat pad)) ++ bs)))
                 (funptrmap, capmeta, 0, []) offs xs ;;
-            ret (funptrmap, capmeta,
-                bs ++ (List.repeat padding_byte (Z.to_nat final_pad)))
+
+            let bs := bs ++ (List.repeat padding_byte (Z.to_nat final_pad)) in
+            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+            ret (funptrmap, capmeta, bs)
         | MVunion tag_sym memb_ident mval =>
             size <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
             '(funptrmap', capmeta', bs) <- repr fuel funptrmap capmeta addr mval ;;
-            ret (funptrmap', capmeta',
-                bs ++
-                  (List.repeat None (Nat.sub size (List.length bs))))
+            let bs := bs ++ (List.repeat None (Nat.sub size (List.length bs))) in
+            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+            ret (funptrmap', capmeta', bs)
         end
     end.
 
