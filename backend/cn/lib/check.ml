@@ -2070,29 +2070,26 @@ let check_c_functions funs =
   | false ->
     let@ _ =
       ListM.mapiM
-        (fun counter (fsym, (loc, args_and_body)) ->
+        (fun counter c_fn ->
           let () =
-            progress_simple (of_total (counter + 1) number_entries) (Sym.pp_string fsym)
+            progress_simple (of_total (counter + 1) number_entries) (c_function_name c_fn)
           in
-          check_procedure loc fsym args_and_body)
+          check_c_function c_fn)
         selected_funs
     in
     return ()
   | true ->
     let@ _, pass, fail =
       ListM.fold_leftM
-        (fun (counter, pass, fail) (fsym, (loc, args_and_body)) ->
-          let@ outcome = sandbox (check_procedure loc fsym args_and_body) in
+        (fun (counter, pass, fail) c_fn ->
+          let fn_name = c_function_name c_fn in
+          let@ outcome = sandbox (check_c_function c_fn) in
           match outcome with
-          | Ok _ ->
-            progress_simple
-              (of_total (counter + 1) number_entries)
-              (Sym.pp_string fsym ^ " -- pass");
+          | Ok () ->
+            progress_simple (of_total (counter + 1) number_entries) (fn_name ^ " -- pass");
             return (counter + 1, pass + 1, fail)
-          | Error _ ->
-            progress_simple
-              (of_total (counter + 1) number_entries)
-              (Sym.pp_string fsym ^ " -- fail");
+          | Error _err ->
+            progress_simple (of_total (counter + 1) number_entries) (fn_name ^ " -- fail");
             return (counter + 1, pass, fail + 1))
         (0, 0, 0)
         selected_funs
