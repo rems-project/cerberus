@@ -2077,27 +2077,32 @@ let check_c_functions_fast (funs : c_function list) : unit m =
   return ()
 
 
+(** Check the provided C functions, each in an isolated context, capturing and
+    counting failures. The result represents [(num_passed, num_failed)]. *)
+let check_c_functions_all (funs : c_function list) : (int * int) m =
+  let total = List.length funs in
+  let check_and_count (num_checked, pass, fail) c_fn =
+    let fn_name = c_function_name c_fn in
+    let@ outcome = sandbox (check_c_function c_fn) in
+    let checked = num_checked + 1 in
+    match outcome with
+    | Ok () ->
+      progress_simple (of_total checked total) (fn_name ^ " -- pass");
+      return (checked, pass + 1, fail)
+    | Error _ ->
+      progress_simple (of_total checked total) (fn_name ^ " -- fail");
+      return (checked, pass, fail + 1)
+  in
+  let@ _, pass, fail = ListM.fold_leftM check_and_count (0, 0, 0) funs in
+  return (pass, fail)
+
+
 let check_c_functions funs =
   let selected_funs = select_functions funs in
-  let number_entries = List.length selected_funs in
   match !batch with
   | false -> check_c_functions_fast selected_funs
   | true ->
-    let@ _, pass, fail =
-      ListM.fold_leftM
-        (fun (counter, pass, fail) c_fn ->
-          let fn_name = c_function_name c_fn in
-          let@ outcome = sandbox (check_c_function c_fn) in
-          match outcome with
-          | Ok () ->
-            progress_simple (of_total (counter + 1) number_entries) (fn_name ^ " -- pass");
-            return (counter + 1, pass + 1, fail)
-          | Error _err ->
-            progress_simple (of_total (counter + 1) number_entries) (fn_name ^ " -- fail");
-            return (counter + 1, pass, fail + 1))
-        (0, 0, 0)
-        selected_funs
-    in
+    let@ pass, fail = check_c_functions_all selected_funs in
     print
       stdout
       (item "summary" (int pass ^^^ !^"pass" ^^ comma ^^^ int fail ^^^ !^"fail"));
