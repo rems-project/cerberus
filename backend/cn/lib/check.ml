@@ -2101,7 +2101,9 @@ let check_c_functions_all (funs : c_function list) : TypeErrors.t list m =
   return (List.rev errors)
 
 
-let check_c_functions funs =
+(** Downselect from the provided functions with [select_functions] and check the
+    results. When [batch] is set, report summary statistics of all errors. *)
+let check_c_functions (funs : c_function list) : unit m =
   let selected_funs = select_functions funs in
   match !batch with
   | false -> check_c_functions_fast selected_funs
