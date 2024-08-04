@@ -737,7 +737,15 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
            k x))
      | M_PEbounded_binop (M_Bound_Except act, iop, pe1, pe2) ->
        let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-       let ity = match act.ct with Integer ity -> ity | _ -> assert false in
+       let@ ity =
+         match act.ct with
+         | Integer ity -> return ity
+         | _ ->
+           fail (fun _ ->
+             { loc;
+               msg = Generic !^"M_PEbounded_binop: unsupported on non-integer types"
+             })
+       in
        let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
        let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
        let@ () = WellTyped.ensure_bits_type loc expect in
