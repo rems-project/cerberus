@@ -2392,7 +2392,9 @@ pred:
 | CN_OWNED
     { Cerb_frontend.Cn.CN_owned None }
 | CN_BLOCK ty= delimited(LT, ctype, GT)
-    { Cerb_frontend.Cn.CN_block ty }
+    { Cerb_frontend.Cn.CN_block (Some ty) }
+| CN_BLOCK
+    { Cerb_frontend.Cn.CN_block None }
 | str= UNAME VARIABLE
     { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Cerb_location.point $startpos(str), str)) }
 ;

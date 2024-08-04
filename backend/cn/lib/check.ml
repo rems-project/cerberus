@@ -1594,7 +1594,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
              | E_Pred (CN_owned (Some ct)) ->
                let@ () = WellTyped.WCT.is_ct loc ct in
                return (ResourceTypes.Owned (ct, Init))
-             | E_Pred (CN_block ct) ->
+             | E_Pred (CN_block None) ->
+               let msg = "'extract' requires a C-type annotation for 'Block'" in
+               fail (fun _ -> { loc; msg = Generic !^msg })
+             | E_Pred (CN_block (Some ct)) ->
                let@ () = WellTyped.WCT.is_ct loc ct in
                return (ResourceTypes.Owned (ct, Uninit))
              | E_Pred (CN_named pn) ->

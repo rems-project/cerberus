@@ -93,7 +93,7 @@ let dtree_of_to_extract = function
     let pred =
       match pred with
       | CN_owned oct -> CN_owned (Option.map Sctypes.to_ctype oct)
-      | CN_block ct -> CN_block (Sctypes.to_ctype ct)
+      | CN_block ct -> CN_block (Option.map Sctypes.to_ctype ct)
       | CN_named p -> CN_named p
     in
     Dnode (pp_ctor "[CN]pred", [ Cerb_frontend.Cn_ocaml.PpAil.dtree_of_cn_pred pred ])

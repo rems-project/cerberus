@@ -267,8 +267,10 @@ module MakePp (Conf: PP_CN) = struct
       Dleaf (pp_stmt_ctor "CN_owned" ^^^ Conf.pp_ty ty)
     | CN_owned None ->
       Dleaf (pp_stmt_ctor "CN_owned" ^^^ P.parens !^"no C-type")
-    | CN_block ty ->
+    | CN_block (Some ty) ->
       Dleaf (pp_stmt_ctor "CN_block" ^^^ Conf.pp_ty ty)
+    | CN_block None ->
+      Dleaf (pp_stmt_ctor "CN_block" ^^^ P.parens !^"no C-type")
     | CN_named ident ->
         Dleaf (pp_stmt_ctor "CN_named" ^^^ P.squotes (Conf.pp_ident ident))
 

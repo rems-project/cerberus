@@ -131,7 +131,7 @@ let mk_bool b = CNExpr Loc.unknown (CNExpr_const (CNConst_bool b))
 
 type cn_pred 'a 'ty =
   | CN_owned of maybe 'ty
-  | CN_block of 'ty
+  | CN_block of maybe 'ty
   | CN_named of 'a
 
 type cn_resource 'a 'ty =

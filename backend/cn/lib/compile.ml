@@ -1061,9 +1061,15 @@ module EffectfulTranslation = struct
            information *)
         let oargs_ty = Memory.sbt_of_sct scty in
         return (Owned (scty, Init), oargs_ty)
-      | CN_block ty ->
-        let scty = Sctypes.of_ctype_unsafe res_loc ty in
-        return (Owned (scty, Uninit), Memory.sbt_of_sct scty)
+      | CN_block oty ->
+          (match oty with 
+          | None -> 
+            fail { loc; msg = Generic
+                       !^"Cannot tell C-type of pointer. Please use Block with an \
+                          annotation: \'Block<CTYPE>'." }
+          | Some ty -> 
+            let scty = Sctypes.of_ctype_unsafe res_loc ty in
+            return (Owned (scty, Uninit), Memory.sbt_of_sct scty))
       | CN_named pred ->
         let@ pred_sig =
           match lookup_predicate pred env with
@@ -1630,7 +1636,8 @@ let translate_cn_statement
          | E_Everything -> E_Everything
          | E_Pred (CN_owned oty) ->
            E_Pred (CN_owned (Option.map (Sctypes.of_ctype_unsafe loc) oty))
-         | E_Pred (CN_block ty) -> E_Pred (CN_block (Sctypes.of_ctype_unsafe loc ty))
+         | E_Pred (CN_block oty) -> 
+            E_Pred (CN_block (Option.map (Sctypes.of_ctype_unsafe loc) oty))
          | E_Pred (CN_named pn) -> E_Pred (CN_named pn)
        in
        return (M_CN_statement (loc, M_CN_extract (attrs, to_extract, expr)))

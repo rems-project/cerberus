@@ -4322,9 +4322,11 @@ let desugar_cn_pred = function
       E.return (CN_owned (Just ty))
   | CN_owned Nothing ->
       E.return (CN_owned Nothing)
-  | CN_block tyname ->
+  | CN_block (Just tyname) ->
       desugar_type_name tyname >>= fun (_, ty) ->
-      E.return (CN_block ty)
+      E.return (CN_block (Just ty))
+  | CN_block Nothing ->
+      E.return (CN_block Nothing)
   | CN_named ident ->
       E.resolve_cn_ident CN_predicate ident >>= fun sym_resolved ->
       let sym = Cn.ensure_not_c_variable sym_resolved in
