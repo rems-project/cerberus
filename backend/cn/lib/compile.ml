@@ -1031,64 +1031,45 @@ module EffectfulTranslation = struct
       | x :: xs -> return (x, xs)
     in
     let@ pname, oargs_ty =
+      let infer_scty cname oty = 
+        match oty with
+        | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
+        | None ->
+          (match IT.bt ptr_expr with
+           | SBT.Loc (Some ty) -> return ty
+           | Loc None ->
+             fail
+               { loc;
+                 msg =
+                   Generic
+                     ( !^"Cannot tell C-type of pointer. Please use " 
+                       ^^^
+                       !^cname 
+                       ^^^ 
+                       !^" with an annotation: \'"
+                       ^^^ 
+                       !^cname 
+                       ^^^
+                       !^"<CTYPE>'." )
+               }
+           | has ->
+             let expected = "pointer" in
+             let reason = cname ^ "<_> predicate" in
+             fail
+               { loc;
+                 msg =
+                   Illtyped_it
+                     { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason }
+               }) in 
       match res with
       | CN_owned oty ->
-        let@ scty =
-          match oty with
-          | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
-          | None ->
-            (match IT.bt ptr_expr with
-             | SBT.Loc (Some ty) -> return ty
-             | Loc None ->
-               fail
-                 { loc;
-                   msg =
-                     Generic
-                       !^"Cannot tell C-type of pointer. Please use Owned with an \
-                          annotation: \'Owned<CTYPE>'."
-                 }
-             | has ->
-               let expected = "pointer" in
-               let reason = "Owned<_> predicate" in
-               fail
-                 { loc;
-                   msg =
-                     Illtyped_it
-                       { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason }
-                 })
-        in
+        let@ scty = infer_scty "Owned" oty in
         (* we don't take Resources.owned_oargs here because we want to maintain the C-type
            information *)
         let oargs_ty = Memory.sbt_of_sct scty in
         return (Owned (scty, Init), oargs_ty)
       | CN_block oty ->
-        (* TODO: deduplicate wrt CN_owned above *)
-        let@ scty =
-          match oty with
-          | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
-          | None ->
-            (match IT.bt ptr_expr with
-             | SBT.Loc (Some ty) -> return ty
-             | Loc None ->
-               fail
-                 { loc;
-                   msg =
-                     Generic
-                       !^"Cannot tell C-type of pointer. Please use Block with an \
-                          annotation: \'Block<CTYPE>'."
-                 }
-             | has ->
-               let expected = "pointer" in
-               let reason = "Block<_> predicate" in
-               fail
-                 { loc;
-                   msg =
-                     Illtyped_it
-                       { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason }
-                 })
-        in
-        (* we don't take Resources.owned_oargs here because we want to maintain the C-type
-           information *)
+        let@ scty = infer_scty "Block" oty in
         let oargs_ty = Memory.sbt_of_sct scty in
         return (Owned (scty, Uninit), oargs_ty)
       | CN_named pred ->
