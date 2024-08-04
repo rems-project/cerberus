@@ -1031,7 +1031,7 @@ module EffectfulTranslation = struct
       | x :: xs -> return (x, xs)
     in
     let@ pname, oargs_ty =
-      let infer_scty cname oty = 
+      let infer_scty cname oty =
         match oty with
         | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
         | None ->
@@ -1042,15 +1042,11 @@ module EffectfulTranslation = struct
                { loc;
                  msg =
                    Generic
-                     ( !^"Cannot tell C-type of pointer. Please use " 
-                       ^^^
-                       !^cname 
-                       ^^^ 
-                       !^" with an annotation: \'"
-                       ^^^ 
-                       !^cname 
-                       ^^^
-                       !^"<CTYPE>'." )
+                     (!^"Cannot tell C-type of pointer. Please use "
+                      ^^^ !^cname
+                      ^^^ !^" with an annotation: \'"
+                      ^^^ !^cname
+                      ^^^ !^"<CTYPE>'.")
                }
            | has ->
              let expected = "pointer" in
@@ -1060,7 +1056,8 @@ module EffectfulTranslation = struct
                  msg =
                    Illtyped_it
                      { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason }
-               }) in 
+               })
+      in
       match res with
       | CN_owned oty ->
         let@ scty = infer_scty "Owned" oty in
@@ -1638,8 +1635,8 @@ let translate_cn_statement
          | E_Everything -> E_Everything
          | E_Pred (CN_owned oty) ->
            E_Pred (CN_owned (Option.map (Sctypes.of_ctype_unsafe loc) oty))
-         | E_Pred (CN_block oty) -> 
-            E_Pred (CN_block (Option.map (Sctypes.of_ctype_unsafe loc) oty))
+         | E_Pred (CN_block oty) ->
+           E_Pred (CN_block (Option.map (Sctypes.of_ctype_unsafe loc) oty))
          | E_Pred (CN_named pn) -> E_Pred (CN_named pn)
        in
        return (M_CN_statement (loc, M_CN_extract (attrs, to_extract, expr)))
