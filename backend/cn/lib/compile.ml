@@ -1062,14 +1062,35 @@ module EffectfulTranslation = struct
         let oargs_ty = Memory.sbt_of_sct scty in
         return (Owned (scty, Init), oargs_ty)
       | CN_block oty ->
-          (match oty with 
-          | None -> 
-            fail { loc; msg = Generic
+        (* TODO: deduplicate wrt CN_owned above *)
+        let@ scty =
+          match oty with
+          | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
+          | None ->
+            (match IT.bt ptr_expr with
+             | SBT.Loc (Some ty) -> return ty
+             | Loc None ->
+               fail
+                 { loc;
+                   msg =
+                     Generic
                        !^"Cannot tell C-type of pointer. Please use Block with an \
-                          annotation: \'Block<CTYPE>'." }
-          | Some ty -> 
-            let scty = Sctypes.of_ctype_unsafe res_loc ty in
-            return (Owned (scty, Uninit), Memory.sbt_of_sct scty))
+                          annotation: \'Block<CTYPE>'."
+                 }
+             | has ->
+               let expected = "pointer" in
+               let reason = "Block<_> predicate" in
+               fail
+                 { loc;
+                   msg =
+                     Illtyped_it
+                       { it = Terms.pp ptr_expr; has = SBT.pp has; expected; reason }
+                 })
+        in
+        (* we don't take Resources.owned_oargs here because we want to maintain the C-type
+           information *)
+        let oargs_ty = Memory.sbt_of_sct scty in
+        return (Owned (scty, Uninit), oargs_ty)
       | CN_named pred ->
         let@ pred_sig =
           match lookup_predicate pred env with
