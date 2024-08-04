@@ -693,10 +693,15 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        (* in integers, perform this op and round. in bitvector types, just perform
           the op (for all the ops where wrapping is consistent) *)
        let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-       assert (
+       let@ () =
          match act.ct with
-         | Integer ity when Sctypes.is_unsigned_integer_type ity -> true
-         | _ -> false);
+         | Integer ity when Sctypes.is_unsigned_integer_type ity -> return ()
+         | _ ->
+           fail (fun _ ->
+             { loc;
+               msg = Generic !^"M_PEbounded_binop: unsupported on non-integer types"
+             })
+       in
        let@ () = ensure_base_type loc ~expect (Memory.bt_of_sct act.ct) in
        let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
        let@ () = WellTyped.ensure_bits_type loc expect in
