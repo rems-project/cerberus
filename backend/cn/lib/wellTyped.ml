@@ -1782,7 +1782,8 @@ module BaseTyping = struct
         match to_extract with
         | E_Pred (CN_owned None) -> return ()
         | E_Pred (CN_owned (Some ct)) -> WCT.is_ct loc ct
-        | E_Pred (CN_block ct) -> WCT.is_ct loc ct
+        | E_Pred (CN_block None) -> return ()
+        | E_Pred (CN_block (Some ct)) -> WCT.is_ct loc ct
         | E_Pred (CN_named p) ->
           let@ _ = get_resource_predicate_def loc p in
           return ()
