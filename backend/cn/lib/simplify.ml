@@ -379,6 +379,8 @@ module IndexTerms = struct
         let a = aux a in
         (match (op, IT.term a) with
          | Not, Const (Bool b) -> bool_ (not b) the_loc
+         | Not, Unop (Not, x) -> x
+         | Negate, Unop (Negate,x)  -> x
          | Negate, Const (Z z) -> z_ (Z.neg z) the_loc
          | Negate, Const (Bits ((sign, width), z)) ->
            num_lit_ (Z.neg z) (BT.Bits (sign, width)) the_loc
