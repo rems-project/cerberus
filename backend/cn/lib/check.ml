@@ -2247,7 +2247,7 @@ let check_decls_lemmata_fun_specs (mu_file : unit mu_file) =
   in
   Pp.debug 3 (lazy (Pp.headline "type-checked C functions and specifications."));
   Cerb_debug.end_csv_timing "decl, lemmata, function specification checking";
-  return (checked, lemmata)
+  return (List.rev checked, lemmata)
 
 
 let check (checked, lemmata) o_lemma_mode =
