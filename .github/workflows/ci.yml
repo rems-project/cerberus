@@ -96,6 +96,12 @@ jobs:
         opam pin --yes --no-action add cn .
         opam install --yes cn ocamlformat.0.26.2
 
+    - name: Check CN code formatting
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        USE_OPAM='' cd backend/cn && dune build @fmt
+
     - name: Checkout cn-tutorial
       uses: actions/checkout@v4
       with:
@@ -120,12 +126,6 @@ jobs:
         eval $(opam env --switch=${{ matrix.version }})
         cd tests; USE_OPAM='' ./run-cn-test-gen.sh
         cd ..
-
-    - name: Check CN code formatting
-      run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        USE_OPAM='' cd backend/cn && dune build @fmt
 
     - name: Install Cerberus-CHERI
       if: ${{ matrix.version == '4.14.1' }}
