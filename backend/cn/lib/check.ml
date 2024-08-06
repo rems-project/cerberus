@@ -2060,18 +2060,28 @@ let check_c_function ((fsym, (loc, args_and_body)) : c_function) : unit m =
   check_procedure loc fsym args_and_body
 
 
-(** Check the provided C functions. Failure of any check will short-circuit the
-    remainder of the checks. *)
-let check_c_functions_fast (funs : c_function list) : unit m =
+(** Check the provided C functions. The first failed check will short-circuit
+    the remainder of the checks, and the associated error will be returned as
+    [Some]. *)
+let check_c_functions_fast (funs : c_function list) : TypeErrors.t option m =
   let total = List.length funs in
-  let@ _ =
-    ListM.mapiM
-      (fun counter c_fn ->
-        let () = progress_simple (of_total (counter + 1) total) (c_function_name c_fn) in
-        check_c_function c_fn)
-      funs
+  let check_and_record (num_checked, prev_error) c_fn =
+    match prev_error with
+    | Some _ -> return (num_checked, prev_error)
+    | None ->
+      let fn_name = c_function_name c_fn in
+      let@ outcome = sandbox (check_c_function c_fn) in
+      let checked = num_checked + 1 in
+      (match outcome with
+       | Ok () ->
+         progress_simple (of_total checked total) (fn_name ^ " -- pass");
+         return (checked, None)
+       | Error err ->
+         progress_simple (of_total checked total) (fn_name ^ " -- fail");
+         return (checked, Some err))
   in
-  return ()
+  let@ _num_checked, error = ListM.fold_leftM check_and_record (0, None) funs in
+  return error
 
 
 (** Check the provided C functions, each in an isolated context, capturing any
@@ -2103,7 +2113,9 @@ let check_c_functions_all (funs : c_function list) : TypeErrors.t list m =
 let check_c_functions (funs : c_function list) : unit m =
   let selected_funs = select_functions funs in
   match !batch with
-  | false -> check_c_functions_fast selected_funs
+  | false ->
+    let@ _ = check_c_functions_fast selected_funs in
+    return ()
   | true ->
     let@ errors = check_c_functions_all selected_funs in
     let fail = List.length errors in
