@@ -1860,7 +1860,9 @@ let check_procedure (loc : loc) (fsym : Sym.t) (args_and_body : _ mu_proc_args_a
 
 let skip_and_only = ref (([] : string list), ([] : string list))
 
-let batch = ref false
+(** When set, causes verification of multiple functions to abort as soon as a
+    single function fails to verify. *)
+let fail_fast = ref false
 
 let record_tagdefs tagDefs =
   PmapM.iterM
@@ -2109,21 +2111,15 @@ let check_c_functions_all (funs : c_function list) : TypeErrors.t list m =
 
 
 (** Downselect from the provided functions with [select_functions] and check the
-    results. When [batch] is set, report summary statistics of all errors. *)
-let check_c_functions (funs : c_function list) : unit m =
+    results. Errors in checking are captured, collected, and returned. When
+    [fail_fast] is set, the first error encountered will halt checking. *)
+let check_c_functions (funs : c_function list) : TypeErrors.t list m =
   let selected_funs = select_functions funs in
-  match !batch with
-  | false ->
-    let@ _ = check_c_functions_fast selected_funs in
-    return ()
+  match !fail_fast with
   | true ->
-    let@ errors = check_c_functions_all selected_funs in
-    let fail = List.length errors in
-    let pass = List.length selected_funs - fail in
-    print
-      stdout
-      (item "summary" (int pass ^^^ !^"pass" ^^ comma ^^^ int fail ^^^ !^"fail"));
-    return ()
+    let@ error_opt = check_c_functions_fast selected_funs in
+    return (Option.to_list error_opt)
+  | false -> check_c_functions_all selected_funs
 
 
 (* (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list *)
@@ -2264,7 +2260,7 @@ let check_decls_lemmata_fun_specs (mu_file : unit mu_file) =
 
 let check (checked, lemmata) o_lemma_mode =
   Cerb_debug.begin_csv_timing () (*type checking functions*);
-  let@ () = check_c_functions checked in
+  let@ _ = check_c_functions checked in
   Cerb_debug.end_csv_timing "type checking functions";
   let@ global = get_global () in
   match o_lemma_mode with
