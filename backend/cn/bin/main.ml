@@ -261,7 +261,7 @@ let verify
   use_vip
   no_use_ity
   use_peval
-  batch
+  fail_fast
   no_inherit_loc
   magic_comment_char_dollar
   =
@@ -288,7 +288,7 @@ let verify
   Solver.solver_flags := solver_flags;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   IndexTerms.use_vip := use_vip;
-  Check.batch := batch;
+  Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
   Sym.executable_spec_enabled := Option.is_some output_decorated;
@@ -515,12 +515,11 @@ module Verify_flags = struct
       & info [ "locs" ] ~docv:"HEX" ~doc)
 
 
-  let batch =
-    let doc =
-      "Type check functions in batch/do not stop on first type error (unless `only` is \
-       used)"
-    in
-    Arg.(value & flag & info [ "batch" ] ~doc)
+  let fail_fast =
+    let doc = "Abort immediately after encountering a verification error" in
+    Arg.(value & flag & info [ "fail-fast" ] ~doc)
+
+
 
 
   let slow_smt_threshold =
@@ -716,7 +715,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.use_vip
   $ Common_flags.no_use_ity
   $ Common_flags.use_peval
-  $ Verify_flags.batch
+  $ Verify_flags.fail_fast
   $ Common_flags.no_inherit_loc
   $ Common_flags.magic_comment_char_dollar
 
