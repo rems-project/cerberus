@@ -234,6 +234,7 @@ th, td {
   padding-right: 5px;
   padding-top: 3px;
   padding-bottom: 3px;
+  white-space: pre;
 }
 
 th {
@@ -342,6 +343,10 @@ th {
 
   tr {
     background-color: #181818;
+  }
+
+  tr:nth-child(even) {
+    background-color: #222222;
   }
 
   th {
