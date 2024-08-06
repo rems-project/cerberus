@@ -67,6 +67,10 @@ End AbstTagDefs.
 (* This is a Morello-specific requirement. *)
 Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
 
+(* TODO: this should be moved to [AddressValue] module *)
+Axiom ADDR_LIMIT_aligned:
+  AddressValue.ADDR_LIMIT mod (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
+
 (* TODO: move *)
 Section AddressValue_Lemmas.
 
@@ -5457,7 +5461,7 @@ Module CheriMemoryImplWithProofs
 
           (* prove bytes unchanged *)
           subst bs.
-          clear - SP RSZ OUT Balign.
+          clear - RSZ SP OUT Balign.
 
           (* prep *)
           pose proof MorelloImpl.alignof_pointer_pos as AP.
@@ -5477,7 +5481,7 @@ Module CheriMemoryImplWithProofs
           intros a IN.
           apply In_nth_error in IN.
           destruct IN as [off IN].
-          assert(off < psize)%nat.
+          assert(off < psize)%nat as POFF.
           {
             cut(nth_error (list_init psize (fun i : nat => AddressValue.with_offset addr (Z.of_nat i))) off <> None).
             intros H0.
@@ -5496,12 +5500,13 @@ Module CheriMemoryImplWithProofs
 
           clear s.
           unfold addr_ptr_aligned in Balign.
-          rewrite pointer_sizeof_alignof in H0.
+          rewrite pointer_sizeof_alignof in POFF.
 
           rewrite repeat_length in *.
 
           apply not_and in OUT;[|apply Z.le_decidable].
 
+          pose proof ADDR_LIMIT_aligned as ALA.
           remember (alignof_pointer MorelloImpl.get) as palign; clear Heqpalign.
           pose proof (AddressValue.to_Z_in_bounds addr) as AB.
           pose proof (AddressValue.to_Z_in_bounds start) as SB.
@@ -5520,44 +5525,56 @@ Module CheriMemoryImplWithProofs
             unfold AddressValue.with_offset.
             unfold align_down in *.
             rewrite AddressValue.of_Z_roundtrip.
-            remember (AddressValue.to_Z addr) as zaddr;clear Heqzaddr addr.
-            remember (AddressValue.to_Z start) as zstart; clear Heqzstart.
+            ++
+              remember (AddressValue.to_Z addr) as zaddr;clear Heqzaddr addr.
+              remember (AddressValue.to_Z start) as zstart; clear Heqzstart.
 
-            (* Do not need size in this branch *)
-            clear RSZ szn SP.
+              pose proof (Z.mod_pos_bound zstart (Z.of_nat palign)).
+              autospecialize H0. lia.
+              unfold AddressValue.ADDR_MIN in *.
+              zify.
+              clear cstr. (* overlaps with AP *)
+              remember (Z.of_nat palign) as zalign; clear palign Heqzalign.
+              remember (Z.of_nat off) as zoff; clear off Heqzoff.
 
-            pose proof (Z.mod_pos_bound zstart (Z.of_nat palign)).
-            autospecialize H1. lia.
-            unfold AddressValue.ADDR_MIN in *.
-            zify.
-            clear cstr. (* overlaps with AP *)
-            remember (Z.of_nat palign) as zalign; clear palign Heqzalign.
-            remember (Z.of_nat off) as zoff; clear off Heqzoff.
+              remember (zstart - (zstart mod zalign)) as lzstart.
+              assert(lzstart mod zalign = 0).
+              {
+                subst.
+                apply align_bottom_correct, AP.
+              }
 
-            remember (zstart - (zstart mod zalign)) as lzstart.
-            assert(lzstart mod zalign = 0).
-            {
-              subst.
-              apply align_bottom_correct, AP.
-            }
-
-            (* zaddr - aligned.
+              (* zaddr - aligned.
                lzstart - aligned
                zaddr < lzstart
-             *)
-            assert(lzstart - zaddr >= zalign).
-            {
+               *)
+              assert(lzstart - zaddr >= zalign).
+              {
+                apply Zdiv.Zmod_divides in Balign; [|lia].
+                destruct Balign as [naddr Balign].
+                apply Zdiv.Zmod_divides in H1; [|lia].
+                destruct H1 as [nstart H1].
+                clear Heqlzstart.
+                subst.
+                apply Z.mul_lt_mono_pos_l in H;[|lia].
+                nia.
+              }
+              nia.
+            ++
+              split;[lia|].
               apply Zdiv.Zmod_divides in Balign; [|lia].
               destruct Balign as [naddr Balign].
-              apply Zdiv.Zmod_divides in H2; [|lia].
-              destruct H2 as [nstart H2].
-              clear Heqlzstart.
-              subst.
-              apply Z.mul_lt_mono_pos_l in H;[|lia].
+              apply Zdiv.Zmod_divides in ALA; [|lia].
+              destruct ALA as [nmax ALA].
+              rewrite Balign,ALA.
+
+              cut(naddr<nmax).
+              {
+                intros.
+                subst.
+                nia.
+              }
               nia.
-            }
-            nia.
-            admit.
           --
             (* on the right (axis-wise) *)
             apply Z.nle_gt in H.
@@ -5568,6 +5585,7 @@ Module CheriMemoryImplWithProofs
             autospecialize AD. lia.
             unfold AddressValue.with_offset.
             unfold align_down in *.
+
             rewrite AddressValue.of_Z_roundtrip.
             2:{
               split.
@@ -5575,7 +5593,7 @@ Module CheriMemoryImplWithProofs
                 unfold AddressValue.ADDR_MIN in *.
                 lia.
               -
-                (* Need assumption that szn fits in address space *)
+                (* TODO: RSZ ? *)
                 admit.
             }
 
@@ -5599,15 +5617,25 @@ Module CheriMemoryImplWithProofs
                 unfold AddressValue.ADDR_MIN in *.
                 lia.
               -
-                (* [off < szn] so that follows form assumption that
-                   szn fits in address space
-                 *)
-                admit.
+                unfold AddressValue.ADDR_MIN in *.
+
+                apply Zdiv.Zmod_divides in Balign; [|lia].
+                destruct Balign as [naddr Balign].
+                apply Zdiv.Zmod_divides in ALA; [|lia].
+                destruct ALA as [nmax ALA].
+
+                cut(naddr<nmax).
+                {
+                  intros.
+                  subst.
+                  nia.
+                }
+                nia.
             }
             unfold AddressValue.ADDR_MIN in *.
 
             pose proof (Zdiv.Zmod_le (zstart + (zszn - 1)) zalign AP).
-            autospecialize H1.
+            autospecialize H0.
             lia.
 
             pose proof (Z.mod_pos_bound (zstart + (zszn - 1)) zalign AP).
@@ -5626,11 +5654,10 @@ Module CheriMemoryImplWithProofs
 
             assert(zlast < zaddr).
             {
-              clear zoff H0 cstr0.
               apply Zdiv.Zmod_divides in Balign; [|lia].
               destruct Balign as [naddr Balign].
-              apply Zdiv.Zmod_divides in H3; [|lia].
-              destruct H3 as [nlast H3].
+              apply Zdiv.Zmod_divides in H2; [|lia].
+              destruct H2 as [nlast H2].
 
               cut(nlast<naddr).
               {
