@@ -2258,15 +2258,20 @@ let check_decls_lemmata_fun_specs (mu_file : unit mu_file) =
   return (List.rev checked, lemmata)
 
 
-let check (checked, lemmata) o_lemma_mode =
+(** With CSV timing enabled, check the provided functions with
+    [check_c_functions]. See that function for more information on the
+    semantics of checking. *)
+let time_check_c_functions (checked : c_function list) : TypeErrors.t list m =
   Cerb_debug.begin_csv_timing () (*type checking functions*);
-  let@ _ = check_c_functions checked in
+  let@ errors = check_c_functions checked in
   Cerb_debug.end_csv_timing "type checking functions";
+  return errors
+
+
+let generate_lemmas lemmata o_lemma_mode =
   let@ global = get_global () in
   match o_lemma_mode with
-  | Some mode ->
-    let@ _ = embed_resultat (Lemmata.generate global mode lemmata) in
-    return ()
+  | Some mode -> embed_resultat (Lemmata.generate global mode lemmata)
   | None -> return ()
 
 (* TODO:
