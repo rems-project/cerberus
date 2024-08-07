@@ -150,7 +150,7 @@ let rec pp_pattern (Pat (pat_, _bt, _)) =
 
 (* Precedences:
    Reference: https://en.cppreference.com/w/c/language/operator_precedence
-   The number we use are `16 - p` where `p` is the reference in the table.
+   The number we use are `16 - p` where `p` is the precedence in the table.
    We do this so bigger numbers are higher precedence.
 
    Highest
@@ -296,12 +296,7 @@ let pp
       ^^^ rbrace
     | StructMember (t, member) -> wrap_after 15 (aux 15 t ^^ dot ^^ Id.pp member)
     | StructUpdate ((t, member), v) ->
-      braces
-        (!^"..."
-         ^^ aux 0 t
-         ^^ comma
-         ^^^ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
-         ^^^ align (aux 0 v))
+      braces (dot ^^ Id.pp member ^^ colon ^^^ aux 0 v ^^ comma ^^^ !^".." ^^ aux 0 t)
     | Record members ->
       align
       @@ lbrace
@@ -315,12 +310,7 @@ let pp
       ^^^ rbrace
     | RecordMember (t, member) -> wrap_after 15 (aux 15 t ^^ dot ^^ Id.pp member)
     | RecordUpdate ((t, member), v) ->
-      braces
-        (!^"..."
-         ^^ aux 0 t
-         ^^ comma
-         ^^^ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
-         ^^^ align (aux 0 v))
+      braces (dot ^^ Id.pp member ^^ colon ^^^ aux 0 v ^^ comma ^^^ !^".." ^^ aux 0 t)
     | Cast (cbt, t) -> wrap_after 14 (align @@ parens (BaseTypes.pp cbt) ^^ aux 14 t)
     | MemberShift (t, _tag, member) ->
       wrap_after 14 (ampersand ^^ aux 15 t ^^ (!^"-" ^^ rangle ()) ^^ Id.pp member)
