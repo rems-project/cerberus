@@ -285,6 +285,7 @@ let verify
   no_use_ity
   use_peval
   fail_fast
+  quiet
   no_inherit_loc
   magic_comment_char_dollar
   =
@@ -333,7 +334,8 @@ let verify
         let check (functions, lemmas) =
           let open Typing in
           let@ errors = Check.time_check_c_functions functions in
-          List.iter (report_type_error ~json ?state_file ?output_dir) errors;
+          if not quiet then
+            List.iter (report_type_error ~json ?state_file ?output_dir) errors;
           Check.generate_lemmas lemmas lemmata
         in
         Typing.run_from_pause check paused
@@ -550,6 +552,11 @@ module Verify_flags = struct
     Arg.(value & flag & info [ "fail-fast" ] ~doc)
 
 
+  let quiet =
+    let doc = "Only report success and failure, rather than rich errors" in
+    Arg.(value & flag & info [ "quiet" ] ~doc)
+
+
   let slow_smt_threshold =
     let doc = "Set the time threshold (in seconds) for logging slow smt queries." in
     Arg.(value & opt (some float) None & info [ "slow-smt" ] ~docv:"TIMEOUT" ~doc)
@@ -744,6 +751,7 @@ let verify_t : unit Term.t =
   $ Common_flags.no_use_ity
   $ Common_flags.use_peval
   $ Verify_flags.fail_fast
+  $ Verify_flags.quiet
   $ Common_flags.no_inherit_loc
   $ Common_flags.magic_comment_char_dollar
 
