@@ -192,7 +192,7 @@ let handle_type_error ~json ~state_file ~output_dir e =
   if json then
     TypeErrors.report_json ?state_file ?output_dir e
   else
-    TypeErrors.report ?state_file ?output_dir e;
+    TypeErrors.report_pretty ?state_file ?output_dir e;
   match e.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
 
 
