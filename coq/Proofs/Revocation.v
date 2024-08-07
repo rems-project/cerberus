@@ -71,6 +71,18 @@ Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer M
 Axiom ADDR_LIMIT_aligned:
   AddressValue.ADDR_LIMIT mod (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
 
+(* Morello-specific *)
+Fact ADDR_LIMIT_to_Z:
+  AddressValue.to_Z (AddressValue.of_Z AddressValue.ADDR_LIMIT) = 0.
+Proof.
+  unfold AddressValue.ADDR_LIMIT, AddressValue.of_Z, AddressValue.to_Z.
+  Transparent bv_to_Z_unsigned.
+  unfold bv_to_Z_unsigned.
+  rewrite bitvector.Z_to_bv_unsigned.
+  replace (bitvector.bv_modulus AddressValue.len) with (0 + (bitvector.bv_modulus AddressValue.len)) by lia.
+  apply bitvector.bv_wrap_add_modulus_1.
+Qed.
+
 (* TODO: move *)
 Section AddressValue_Lemmas.
 
@@ -5586,17 +5598,17 @@ Module CheriMemoryImplWithProofs
             unfold AddressValue.with_offset.
             unfold align_down in *.
 
-            rewrite AddressValue.of_Z_roundtrip.
-            2:{
-              split.
-              -
-                unfold AddressValue.ADDR_MIN in *.
-                lia.
-              -
-                (* TODO: RSZ ? *)
-                admit.
+            destruct (Z.eq_dec (AddressValue.to_Z start + Z.of_nat szn) AddressValue.ADDR_LIMIT)
+              as [E|NE].
+            {
+              rewrite E in *.
+              rewrite ADDR_LIMIT_to_Z.
+              remember (AddressValue.of_Z (AddressValue.to_Z addr + Z.of_nat off)) as x.
+              pose proof (AddressValue.to_Z_in_bounds x).
+              unfold AddressValue.ADDR_MIN in H0.
+              lia.
             }
-
+            rewrite AddressValue.of_Z_roundtrip;[|lia].
             remember (AddressValue.to_Z addr) as zaddr. clear Heqzaddr addr.
             remember (AddressValue.to_Z start) as zstart. clear Heqzstart start.
 
