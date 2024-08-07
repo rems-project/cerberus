@@ -276,7 +276,7 @@ module CN_Pointer = struct
 
   (** Bit-width of pointers *)
   let width =
-    match Memory.intptr_bt with Bits (_, w) -> w | _ -> failwith "Ponter is not bits"
+    match Memory.uintptr_bt with Bits (_, w) -> w | _ -> failwith "Pointer is not bits"
 
 
   (** The name of the pointer type *)
@@ -381,7 +381,7 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
      | _con, [ sbase; saddr ] ->
        let base = CN_AllocId.from_sexp sbase in
        let addr =
-         match get_value gs ctys Memory.intptr_bt saddr with
+         match get_value gs ctys Memory.uintptr_bt saddr with
          | Const (Bits (_, z)) -> z
          | _ -> failwith "Pointer value is not bits"
        in
@@ -450,9 +450,7 @@ let rec translate_const s co =
   | Bits ((_, w), z) -> SMT.bv_k w z
   | Q q -> SMT.real_k q
   | Pointer p ->
-    (match Memory.intptr_bt with
-     | Bits (_, w) -> CN_Pointer.con (CN_AllocId.to_sexp p.alloc_id) (SMT.bv_k w p.addr)
-     | _ -> failwith "translate_const: Pointer is not Bits.")
+    CN_Pointer.con (CN_AllocId.to_sexp p.alloc_id) (SMT.bv_k CN_Pointer.width p.addr)
   | Alloc_id z -> CN_AllocId.to_sexp z
   | Bool b -> SMT.bool_k b
   | Unit -> SMT.atom (CN_Tuple.name 0)
@@ -694,10 +692,10 @@ let rec translate_term s iterm =
      | Max -> translate_term s (ite_ (ge_ (e1, e2) here, e1, e2) here)
      | EQ -> SMT.eq s1 s2
      | LTPointer ->
-       let intptr_cast = cast_ Memory.intptr_bt in
+       let intptr_cast = cast_ Memory.uintptr_bt in
        translate_term s (lt_ (intptr_cast e1 here, intptr_cast e2 here) here)
      | LEPointer ->
-       let intptr_cast = cast_ Memory.intptr_bt in
+       let intptr_cast = cast_ Memory.uintptr_bt in
        translate_term s (le_ (intptr_cast e1 here, intptr_cast e2 here) here)
      | SetUnion -> SMT.set_union s.smt_solver.config.exts s1 s2
      | SetIntersection -> SMT.set_intersection s.smt_solver.config.exts s1 s2
@@ -792,7 +790,7 @@ let rec translate_term s iterm =
     let x = SMT.atom x in
     let alloc = CN_Pointer.get_alloc x in
     let addr = CN_Pointer.get_addr x in
-    let off = translate_term s (IT (OffsetOf (tag, member), Memory.intptr_bt, here)) in
+    let off = translate_term s (IT (OffsetOf (tag, member), Memory.uintptr_bt, here)) in
     CN_Pointer.con alloc (SMT.bv_add addr off)
   (* Offset of an array element *)
   | ArrayShift { base; ct; index } ->
@@ -801,8 +799,8 @@ let rec translate_term s iterm =
     let x = SMT.atom x in
     let alloc = CN_Pointer.get_alloc x in
     let addr = CN_Pointer.get_addr x in
-    let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.intptr_bt here in
-    let ix = cast_ Memory.intptr_bt index here in
+    let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt here in
+    let ix = cast_ Memory.uintptr_bt index here in
     let off = translate_term s (mul_ (el_size, ix) here) in
     CN_Pointer.con alloc (SMT.bv_add addr off)
   (* Change the offset of a pointer *)
@@ -908,8 +906,8 @@ let rec translate_term s iterm =
      | Bits _, Loc ->
        CN_Pointer.con
          (CN_AllocId.to_sexp Z.zero)
-         (bv_cast Memory.intptr_bt (IT.bt t) smt_term)
-     | Loc, Bits _ -> bv_cast cbt Memory.intptr_bt (CN_Pointer.get_addr smt_term)
+         (bv_cast Memory.uintptr_bt (IT.bt t) smt_term)
+     | Loc, Bits _ -> bv_cast cbt Memory.uintptr_bt (CN_Pointer.get_addr smt_term)
      | Loc, Alloc_id -> CN_Pointer.get_alloc smt_term
      | Real, Integer -> SMT.real_to_int smt_term
      | Integer, Real -> SMT.int_to_real smt_term

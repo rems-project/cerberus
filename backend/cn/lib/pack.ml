@@ -28,10 +28,10 @@ let unfolded_array loc init (ict, olength) pointer =
       pointer;
       q = (q_s, Memory.uintptr_bt);
       q_loc = loc;
-      step = intptr_int_ (Memory.size_of_ctype ict) loc;
+      step = uintptr_int_ (Memory.size_of_ctype ict) loc;
       iargs = [];
       permission =
-        and_ [ (intptr_int_ 0 loc %<= q) loc; (q %< intptr_int_ length loc) loc ] loc
+        and_ [ (uintptr_int_ 0 loc %<= q) loc; (q %< uintptr_int_ length loc) loc ] loc
     }
 
 
@@ -69,7 +69,7 @@ let packing_ft loc global provable ret =
                let request =
                  P
                    { name = Owned (padding_ct, Uninit);
-                     pointer = pointer_offset_ (ret.pointer, intptr_int_ offset loc) loc;
+                     pointer = pointer_offset_ (ret.pointer, uintptr_int_ offset loc) loc;
                      iargs = []
                    }
                in
@@ -117,7 +117,7 @@ let unpack_owned loc global (ct, init) pointer (O o) =
             let mresource =
               ( P
                   { name = Owned (padding_ct, Uninit);
-                    pointer = pointer_offset_ (pointer, intptr_int_ offset loc) loc;
+                    pointer = pointer_offset_ (pointer, uintptr_int_ offset loc) loc;
                     iargs = []
                   },
                 O (default_ (Memory.bt_of_sct padding_ct) loc) )

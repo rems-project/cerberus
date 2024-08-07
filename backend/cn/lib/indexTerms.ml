@@ -667,9 +667,9 @@ let cast_ bt it loc = IT (Cast (bt, it), bt, loc)
 
 let integerToPointerCast_ it loc = cast_ Loc it loc
 
-let intptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
+let uintptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
 
-let intptr_int_ n loc = intptr_const_ (Z.of_int n) loc
+let uintptr_int_ n loc = uintptr_const_ (Z.of_int n) loc
 (* for integer-mode: z_ n *)
 
 let pointerToIntegerCast_ it loc = cast_ Memory.uintptr_bt it loc

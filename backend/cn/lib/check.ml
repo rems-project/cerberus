@@ -1265,7 +1265,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
               in
               let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
               let value =
-                (* TODO: confirm that the cast from intptr_t to ptrdiff_t
+                (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
                    yields the expected result. *)
                 div_
                   ( cast_
