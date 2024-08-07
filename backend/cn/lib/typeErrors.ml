@@ -572,18 +572,13 @@ let mk_state_file_name ?(output_dir : string option) (loc : Cerb_location.t) : s
     error contains enough information to create an HTML state report, generate
     one in [output_dir] (or, failing that, the system temporary directory) and
     print a link to it. *)
-let report_pretty ?state_file:to_ ?output_dir:dir_ { loc; msg } =
+let report_pretty ?output_dir:dir_ { loc; msg } =
   (* stealing some logic from pp_errors *)
   let report = pp_message msg in
   let consider =
     match report.state with
     | Some state ->
-      (* Decide where to write the state *)
-      let state_error_file =
-        match to_ with
-        | Some file -> file
-        | None -> mk_state_file_name ?output_dir:dir_ loc
-      in
+      let state_error_file = mk_state_file_name ?output_dir:dir_ loc in
       let link = Report.make state_error_file (Cerb_location.get_filename loc) state in
       let msg = !^"State file:" ^^^ !^("file://" ^ link) in
       Some msg
@@ -593,17 +588,12 @@ let report_pretty ?state_file:to_ ?output_dir:dir_ { loc; msg } =
 
 
 (* stealing some logic from pp_errors *)
-let report_json ?state_file:to_ ?output_dir:dir_ { loc; msg } =
+let report_json ?output_dir:dir_ { loc; msg } =
   let report = pp_message msg in
   let state_error_file =
     match report.state with
     | Some state ->
-      (* Decide where to write the state *)
-      let file =
-        match to_ with
-        | Some file -> file
-        | None -> mk_state_file_name ?output_dir:dir_ loc
-      in
+      let file = mk_state_file_name ?output_dir:dir_ loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
       `String link
     | None -> `Null

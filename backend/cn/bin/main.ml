@@ -190,17 +190,13 @@ let with_well_formedness_check
 
 (** Report an error on [stderr] in an appropriate format: JSON if [json] is
     true, or human-readable if not. *)
-let report_type_error
-  ~(json : bool)
-  ?(state_file : string option)
-  ?(output_dir : string option)
-  (error : TypeErrors.t)
+let report_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t)
   : unit
   =
   if json then
-    TypeErrors.report_json ?state_file ?output_dir error
+    TypeErrors.report_json ?output_dir error
   else
-    TypeErrors.report_pretty ?state_file ?output_dir error
+    TypeErrors.report_pretty ?output_dir error
 
 
 (** Exit with a code appropriate to the provided error. *)
@@ -209,13 +205,8 @@ let exit_on_type_error (error : TypeErrors.t) : 'a =
 
 
 (** Report the provided error, then exit. *)
-let handle_type_error
-  ~(json : bool)
-  ?(state_file : string option)
-  ?(output_dir : string option)
-  (error : TypeErrors.t)
-  =
-  report_type_error ~json ?state_file ?output_dir error;
+let handle_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t) =
+  report_type_error ~json ?output_dir error;
   exit_on_type_error error
 
 
@@ -225,7 +216,6 @@ let well_formed
   incl_dirs
   incl_files
   json
-  state_file
   output_dir
   csv_times
   log_times
@@ -245,7 +235,7 @@ let well_formed
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar
-    ~handle_error:(handle_type_error ~json ?state_file ?output_dir)
+    ~handle_error:(handle_type_error ~json ?output_dir)
     ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Resultat.return ())
 
 
@@ -262,7 +252,6 @@ let verify
   slow_smt_dir
   no_timestamps
   json
-  state_file
   output_dir
   diag
   lemmata
@@ -327,7 +316,7 @@ let verify
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
-    ~handle_error:(handle_type_error ~json ?state_file ?output_dir)
+    ~handle_error:(handle_type_error ~json ?output_dir)
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused ->
       match output_decorated with
       | None ->
@@ -335,7 +324,7 @@ let verify
           let open Typing in
           let@ errors = Check.time_check_c_functions functions in
           if not quiet then
-            List.iter (report_type_error ~json ?state_file ?output_dir) errors;
+            List.iter (report_type_error ~json ?output_dir) errors;
           Check.generate_lemmas lemmas lemmata
         in
         Typing.run_from_pause check paused
@@ -570,11 +559,6 @@ module Verify_flags = struct
     Arg.(value & opt (some string) None & info [ "slow-smt-dir" ] ~docv:"FILE" ~doc)
 
 
-  let state_file =
-    let doc = "file in which to output the state" in
-    Arg.(value & opt (some string) None & info [ "state-file" ] ~docv:"FILE" ~doc)
-
-
   let diag =
     let doc = "explore branching diagnostics with key string" in
     Arg.(value & opt (some string) None & info [ "diag" ] ~doc)
@@ -634,7 +618,7 @@ module Verify_flags = struct
 
 
   let output_dir =
-    let doc = "directory in which to output state files (overridden by --state-file)" in
+    let doc = "directory in which to output state files" in
     Arg.(value & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
 end
 
@@ -691,7 +675,6 @@ let wf_cmd =
     $ Common_flags.incl_dirs
     $ Common_flags.incl_files
     $ Verify_flags.json
-    $ Verify_flags.state_file
     $ Verify_flags.output_dir
     $ Common_flags.csv_times
     $ Common_flags.log_times
@@ -728,7 +711,6 @@ let verify_t : unit Term.t =
   $ Verify_flags.slow_smt_dir
   $ Common_flags.no_timestamps
   $ Verify_flags.json
-  $ Verify_flags.state_file
   $ Verify_flags.output_dir
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
