@@ -332,7 +332,8 @@ let verify
       | None ->
         let check (functions, lemmas) =
           let open Typing in
-          let@ _errors = Check.time_check_c_functions functions in
+          let@ errors = Check.time_check_c_functions functions in
+          List.iter (report_type_error ~json ?state_file ?output_dir) errors;
           Check.generate_lemmas lemmas lemmata
         in
         Typing.run_from_pause check paused
