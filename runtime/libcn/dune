@@ -16,3 +16,9 @@
   (libcn.a as runtime/libcn.a))
  (section lib)
  (package cn))
+
+(install
+ (files
+  (libexec/cn-runtime-single-file.sh as runtime/libexec/cn-runtime-single-file.sh))
+ (section libexec)
+ (package cn))
