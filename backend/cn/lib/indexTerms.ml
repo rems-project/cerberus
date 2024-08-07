@@ -28,7 +28,7 @@ let term_of_sterm : sterm -> typed = Terms.map_term SurfaceBaseTypes.to_basetype
 
 let sterm_of_term : typed -> sterm = Terms.map_term SurfaceBaseTypes.of_basetype
 
-let pp ?(atomic = false) = Terms.pp ~atomic
+let pp ?(prec = 0) = Terms.pp ~prec
 
 let pp_with_typf f it = Pp.typ (pp it) (f (bt it))
 

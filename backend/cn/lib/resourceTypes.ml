@@ -71,6 +71,13 @@ let pp_predicate_type_aux (p : predicate_type) oargs =
 
 
 let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
+  (* XXX: this is `p + i * step` but that's "wrong" in a couple of ways:
+     - we are not using the correct precedences for `p` and `step`
+     - in C pointer arithmetic takes account of the types, but here
+       we seem to be doing it at the byte level.  Would `step` ever
+       differ from the size of elements that `p` points to?
+     - perhaps print as `&p[i]` or `&p[j + i]`
+  *)
   let pointer = IT.pp p.pointer ^^^ plus ^^^ Sym.pp (fst p.q) ^^^ star ^^^ IT.pp p.step in
   let args = pointer :: List.map IT.pp p.iargs in
   !^"each"

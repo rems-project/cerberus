@@ -148,13 +148,36 @@ let rec pp_pattern (Pat (pat_, _bt, _)) =
              args)
 
 
+(* Precedences:
+   Reference: https://en.cppreference.com/w/c/language/operator_precedence
+   The number we use are `16 - p` where `p` is the reference in the table.
+   We do this so bigger numbers are higher precedence.
+
+   Highest
+
+   15: . [] ->         selectors
+   14: ! - ~ & cast    unary
+   13: * / %
+   12: + -
+   10: < <= > >=
+   9: == !=
+   8: &
+   7: ^
+   6: |
+   5: &&
+   4: ||
+   3: ? :              ternary
+
+   Lowest
+*)
+
 let pp
   : 'bt 'a.
-  ?atomic:bool -> ?f:('bt term -> Pp.document -> Pp.document) -> 'bt term -> Pp.document
+  ?prec:int -> ?f:('bt term -> Pp.document -> Pp.document) -> 'bt term -> Pp.document
   =
-  fun ?(atomic = false) ?(f = fun _ x -> x) ->
-  let rec aux atomic (IT (it, _, _)) =
-    let aux b x = f x (aux b x) in
+  fun ?(prec = 0) ?(f = fun _ x -> x) ->
+  let rec aux prec (IT (it, _, _)) =
+    let aux prec x = f x (aux prec x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented by 2 (wrt to
        the lparen). I don't quite understand it, but it works. *)
     let parens pped =
@@ -163,7 +186,7 @@ let pp
     let braces pped =
       Pp.group ((nest 2 @@ lbrace ^^ break 0 ^^ pped) ^^ break 0 ^^ rbrace)
     in
-    let mparens pped = if atomic then parens pped else Pp.group pped in
+    let wrap_after tgt doc = if prec > tgt then parens doc else doc in
     let break_op x = break 1 ^^ x ^^ space in
     let alloc_id i = !^("@" ^ Z.to_string i) in
     match it with
@@ -173,7 +196,7 @@ let pp
        | Bits ((sign, n), v) ->
          let dec =
            !^(Z.to_string v)
-           ^^ (match sign with Unsigned -> !^"u" | Signed -> !^"i")
+           ^^ (match sign with Unsigned -> !^"'u" | Signed -> !^"'i")
            ^^ !^(string_of_int n)
          in
          if Z.lt v (Z.of_int 16) then
@@ -185,89 +208,100 @@ let pp
            ^^^ !^"*/"
        | Q q -> !^(Q.to_string q)
        | Pointer { alloc_id = id; addr } ->
-         braces (alloc_id id ^^ Pp.semi ^^ Pp.space ^^ !^(Z.to_string addr))
+         braces (alloc_id id ^^ Pp.semi ^^ Pp.space ^^ !^("0x" ^ Z.format "%x" addr))
        | Alloc_id i -> !^("@" ^ Z.to_string i)
        | Bool true -> !^"true"
        | Bool false -> !^"false"
        | Unit -> !^"void"
        | Default bt -> c_app !^"default" [ BaseTypes.pp bt ]
-       | Null -> !^"null"
+       | Null -> !^"NULL"
        | CType_const ct -> Pp.squotes (Sctypes.pp ct))
     | Sym sym -> Sym.pp sym
     | Unop (uop, it1) ->
+      let prefix x op p = wrap_after x (!^op ^^ aux p it1) in
       (match uop with
-       | BW_CLZ_NoSMT -> c_app !^"bw_clz_uf" [ aux false it1 ]
-       | BW_CTZ_NoSMT -> c_app !^"bw_ctz_uf" [ aux false it1 ]
-       | BW_FFS_NoSMT -> c_app !^"bw_ffs_uf" [ aux false it1 ]
-       | BW_FLS_NoSMT -> c_app !^"bw_fls_uf" [ aux false it1 ]
-       | Not -> mparens (!^"!" ^^ parens (aux false it1))
-       | Negate -> mparens (!^"-" ^^ parens (aux false it1))
-       | BW_Compl -> mparens (!^"~" ^^ parens (aux false it1)))
+       | BW_CLZ_NoSMT -> c_app !^"bw_clz_uf" [ aux 0 it1 ]
+       | BW_CTZ_NoSMT -> c_app !^"bw_ctz_uf" [ aux 0 it1 ]
+       | BW_FFS_NoSMT -> c_app !^"bw_ffs_uf" [ aux 0 it1 ]
+       | BW_FLS_NoSMT -> c_app !^"bw_fls_uf" [ aux 0 it1 ]
+       | Not ->
+         let infix p op l r =
+           wrap_after p (flow (break 1 ^^ op ^^ space) [ aux p l; aux p r ])
+         in
+         (match it1 with
+          | IT (Binop (EQ, l, r), _, _) -> infix 9 (!^"!" ^^ equals) l r
+          | IT (Binop (LT, l, r), _, _) -> infix 10 (rangle () ^^ equals) l r
+          | IT (Binop (LE, l, r), _, _) -> infix 10 (rangle ()) l r
+          | IT (Binop (LTPointer, l, r), _, _) -> infix 10 (rangle () ^^ equals) l r
+          | IT (Binop (LEPointer, l, r), _, _) -> infix 10 (rangle ()) l r
+          | _ -> prefix 14 "!" 14)
+       | Negate -> prefix 14 "-" 14
+       | BW_Compl -> prefix 14 "~" 14)
     | Binop (bop, it1, it2) ->
+      let infix x op l r = wrap_after x (flow (break_op op) [ aux l it1; aux r it2 ]) in
+      let prefix x = c_app !^x [ aux 0 it1; aux 0 it2 ] in
       (match bop with
-       | And ->
-         mparens (flow (break_op (ampersand ^^ ampersand)) [ aux true it1; aux true it2 ])
-       | Or -> mparens (flow (break_op (bar ^^ bar)) [ aux true it1; aux true it2 ])
-       | Implies -> c_app !^"implies" [ aux true it1; aux true it2 ]
-       | Add -> mparens (flow (break_op plus) [ aux true it1; aux true it2 ])
-       | Sub -> mparens (flow (break_op minus) [ aux true it1; aux true it2 ])
-       | Mul -> mparens (flow (break_op star) [ aux true it1; aux true it2 ])
-       | MulNoSMT -> mparens (c_app !^"mul_uf" [ aux true it1; aux true it2 ])
-       | Div -> mparens (flow (break_op slash) [ aux true it1; aux true it2 ])
-       | DivNoSMT -> mparens (c_app !^"div_uf" [ aux true it1; aux true it2 ])
-       | Exp -> c_app !^"power" [ aux true it1; aux true it2 ]
-       | ExpNoSMT -> c_app !^"power_uf" [ aux true it1; aux true it2 ]
-       | Rem -> c_app !^"rem" [ aux true it1; aux true it2 ]
-       | RemNoSMT -> mparens (c_app !^"rem_uf" [ aux true it1; aux true it2 ])
-       | Mod -> c_app !^"mod" [ aux true it1; aux true it2 ]
-       | ModNoSMT -> mparens (c_app !^"mod_uf" [ aux true it1; aux true it2 ])
-       | EQ -> mparens (flow (break_op (equals ^^ equals)) [ aux true it1; aux true it2 ])
-       | LT -> mparens (flow (break_op @@ langle ()) [ aux true it1; aux true it2 ])
-       | LE ->
-         mparens (flow (break_op @@ langle () ^^ equals) [ aux true it1; aux true it2 ])
-       | LTPointer ->
-         mparens (flow (break_op @@ langle ()) [ aux true it1; aux true it2 ])
-       | LEPointer ->
-         mparens (flow (break_op @@ langle () ^^ equals) [ aux true it1; aux true it2 ])
-       | Min -> c_app !^"min" [ aux false it1; aux false it2 ]
-       | Max -> c_app !^"max" [ aux false it1; aux false it2 ]
-       | XORNoSMT -> c_app !^"xor_uf" [ aux false it1; aux false it2 ]
-       | BW_And -> c_app !^"bw_and_uf" [ aux false it1; aux false it2 ]
-       | BWOrNoSMT -> c_app !^"bw_or_uf" [ aux false it1; aux false it2 ]
-       | ShiftLeft -> c_app !^"shift_left" [ aux false it1; aux false it2 ]
-       | ShiftRight -> c_app !^"shift_right" [ aux false it1; aux false it2 ]
-       | SetMember -> c_app !^"member" [ aux false it1; aux false it2 ]
-       | SetUnion -> c_app !^"union" [ aux false it1; aux false it2 ]
-       | SetIntersection -> c_app !^"inter" [ aux false it1; aux false it2 ]
-       | SetDifference -> c_app !^"difference" [ aux false it1; aux false it2 ]
-       | Subset -> c_app !^"subset" [ aux false it1; aux false it2 ])
+       | And -> infix 5 (ampersand ^^ ampersand) 5 5
+       | Or -> infix 4 (bar ^^ bar) 4 4
+       | Implies -> prefix "implies"
+       | Add -> infix 12 !^"+" 12 12
+       | Sub -> infix 12 !^"-" 12 13
+       | Mul -> infix 13 !^"*" 13 13
+       | MulNoSMT -> prefix "mul_uf"
+       | Div -> infix 13 slash 14 14
+       | DivNoSMT -> prefix "div_uf"
+       | Exp -> prefix "power"
+       | ExpNoSMT -> prefix "power_uf"
+       | Rem -> infix 13 !^"%" 14 14
+       | RemNoSMT -> prefix "rem_uf"
+       | Mod -> prefix "mod"
+       | ModNoSMT -> prefix "mod_uf"
+       | EQ -> infix 9 (equals ^^ equals) 9 9
+       | LT -> infix 10 (langle ()) 10 10
+       | LE -> infix 10 (langle () ^^ equals) 10 10
+       | LTPointer -> infix 10 (langle ()) 10 10
+       | LEPointer -> infix 10 (langle () ^^ equals) 10 10
+       | Min -> prefix "min"
+       | Max -> prefix "max"
+       | XORNoSMT -> infix 7 !^"^" 7 7
+       | BW_And -> infix 8 ampersand 8 8
+       | BWOrNoSMT -> infix 6 bar 6 6
+       | ShiftLeft ->
+         infix 0 (langle () ^^ langle ()) 1 1 (* easier to read with parens *)
+       | ShiftRight ->
+         infix 0 (rangle () ^^ rangle ()) 1 1 (* easier to read with parens *)
+       | SetMember -> prefix "member"
+       | SetUnion -> prefix "union"
+       | SetIntersection -> prefix "inter"
+       | SetDifference -> prefix "difference"
+       | Subset -> prefix "subset")
     | ITE (o1, o2, o3) ->
-      parens (flow (break 1) [ aux true o1; !^"?"; aux true o2; colon; aux true o3 ])
+      wrap_after 2 (flow (break 1) [ aux 3 o1; !^"?"; aux 3 o2; colon; aux 3 o3 ])
     | EachI ((i1, (s, _), i2), t) ->
       Pp.(
         group
         @@ group (c_app !^"for" [ int i1; Sym.pp s; int i2 ])
-        ^/^ group ((nest 2 @@ lbrace ^^ break 0 ^^ aux false t) ^^ break 0 ^^ rbrace))
-    | NthTuple (n, it2) -> mparens (aux true it2 ^^ dot ^^ !^("member" ^ string_of_int n))
-    | Tuple its -> braces (separate_map (semi ^^ space) (aux false) its)
+        ^/^ group ((nest 2 @@ lbrace ^^ break 0 ^^ aux 0 t) ^^ break 0 ^^ rbrace))
+    | NthTuple (n, it2) ->
+      wrap_after 15 (aux 15 it2 ^^ dot ^^ !^("member" ^ string_of_int n))
+    | Tuple its -> braces (separate_map (semi ^^ space) (aux 0) its)
     | Struct (_tag, members) ->
       lbrace
       ^^ hardline
       ^^ flow_map
            (comma ^^ hardline)
            (fun (member, it) ->
-             Pp.group
-             @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
-             ^^^ align (aux false it))
+             Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux 0 it))
            members
       ^^^ rbrace
-    | StructMember (t, member) -> prefix 0 0 (aux true t) (dot ^^ Id.pp member)
+    | StructMember (t, member) -> wrap_after 15 (aux 15 t ^^ dot ^^ Id.pp member)
     | StructUpdate ((t, member), v) ->
-      mparens
-        (aux true t
-         ^^ braces
-         @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
-         ^^^ align (aux true v))
+      braces
+        (!^"..."
+         ^^ aux 0 t
+         ^^ comma
+         ^^^ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
+         ^^^ align (aux 0 v))
     | Record members ->
       align
       @@ lbrace
@@ -276,61 +310,47 @@ let pp
             (fun (member, it) ->
               Pp.group
               @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
-              ^^^ align (aux false it))
+              ^^^ align (aux 0 it))
             members
       ^^^ rbrace
-    | RecordMember (t, member) -> prefix 0 0 (aux true t) (dot ^^ Id.pp member)
+    | RecordMember (t, member) -> wrap_after 15 (aux 15 t ^^ dot ^^ Id.pp member)
     | RecordUpdate ((t, member), v) ->
-      mparens
-        (aux true t
-         ^^ braces
-         @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
-         ^^^ align (aux true v))
-    | Cast (cbt, t) ->
-      mparens (align @@ parens (BaseTypes.pp cbt) ^^ break 0 ^^ aux true t)
-    | MemberShift (t, tag, member) ->
-      mparens
-        (c_app (!^"member_shift" ^^ angles (Sym.pp tag)) [ aux false t; Id.pp member ])
-    | ArrayShift { base; ct; index } ->
-      mparens
-        (c_app
-           (!^"array_shift" ^^ angles (Sctypes.pp ct))
-           [ aux false base; aux false index ])
-    | CopyAllocId { addr; loc } ->
-      mparens (c_app !^"copy_alloc_id" [ aux false addr; aux false loc ])
-    | SizeOf t -> mparens (c_app !^"sizeof" [ Sctypes.pp t ])
-    | OffsetOf (tag, member) -> mparens (c_app !^"offsetof" [ Sym.pp tag; Id.pp member ])
-    | Aligned t -> mparens (c_app !^"aligned" [ aux false t.t; aux false t.align ])
-    | Representable (rt, t) ->
-      mparens (c_app (!^"repr" ^^ angles (CT.pp rt)) [ aux false t ])
-    | Good (rt, t) -> mparens (c_app (!^"good" ^^ angles (CT.pp rt)) [ aux false t ])
-    | WrapI (ity, t) ->
-      mparens (c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [ aux false t ])
-    | Head o1 -> mparens (c_app !^"hd" [ aux false o1 ])
-    | Tail o1 -> mparens (c_app !^"tl" [ aux false o1 ])
+      braces
+        (!^"..."
+         ^^ aux 0 t
+         ^^ comma
+         ^^^ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
+         ^^^ align (aux 0 v))
+    | Cast (cbt, t) -> wrap_after 14 (align @@ parens (BaseTypes.pp cbt) ^^ aux 14 t)
+    | MemberShift (t, _tag, member) ->
+      wrap_after 14 (ampersand ^^ aux 15 t ^^ (!^"-" ^^ rangle ()) ^^ Id.pp member)
+    | ArrayShift { base; ct = _ct; index } ->
+      wrap_after 14 (ampersand ^^ aux 15 base ^^ brackets (aux 0 index))
+    | CopyAllocId { addr; loc } -> c_app !^"copy_alloc_id" [ aux 0 addr; aux 0 loc ]
+    | SizeOf t -> c_app !^"sizeof" [ Sctypes.pp t ]
+    | OffsetOf (tag, member) -> c_app !^"offsetof" [ Sym.pp tag; Id.pp member ]
+    | Aligned t -> c_app !^"aligned" [ aux 0 t.t; aux 0 t.align ]
+    | Representable (rt, t) -> c_app (!^"repr" ^^ angles (CT.pp rt)) [ aux 0 t ]
+    | Good (rt, t) -> c_app (!^"good" ^^ angles (CT.pp rt)) [ aux 0 t ]
+    | WrapI (ity, t) -> c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [ aux 0 t ]
+    | Head o1 -> c_app !^"hd" [ aux 0 o1 ]
+    | Tail o1 -> c_app !^"tl" [ aux 0 o1 ]
     | Nil bt -> !^"nil" ^^ angles (BaseTypes.pp bt)
-    | Cons (t1, t2) -> mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
-    | NthList (n, xs, d) ->
-      mparens (c_app !^"nth_list" [ aux false n; aux false xs; aux false d ])
+    | Cons (t1, t2) -> c_app !^"cons" [ aux 0 t1; aux 0 t2 ]
+    | NthList (n, xs, d) -> c_app !^"nth_list" [ aux 0 n; aux 0 xs; aux 0 d ]
     | ArrayToList (arr, i, len) ->
-      mparens (c_app !^"array_to_list" [ aux false arr; aux false i; aux false len ])
-    | MapConst (_bt, t) -> mparens (c_app !^"const" [ aux false t ])
-    | MapGet (t1, t2) -> mparens (aux true t1 ^^ brackets (aux false t2))
+      c_app !^"array_to_list" [ aux 0 arr; aux 0 i; aux 0 len ]
+    | MapConst (_bt, t) -> c_app !^"const" [ aux 0 t ]
+    | MapGet (t1, t2) -> wrap_after 15 (aux 15 t1 ^^ brackets (aux 0 t2))
     | MapSet (t1, t2, t3) ->
-      mparens (aux true t1 ^^ brackets (aux false t2 ^^^ equals ^^^ aux false t3))
-    | MapDef ((s, _), t) -> brackets (Sym.pp s ^^^ !^"->" ^^^ aux false t)
-    | Apply (name, args) -> c_app (Sym.pp name) (List.map (aux false) args)
+      wrap_after 15 (aux 15 t1 ^^ brackets (aux 0 t2 ^^^ equals ^^^ aux 0 t3))
+    | MapDef ((s, _), t) -> brackets (Sym.pp s ^^^ (!^"-" ^^ rangle ()) ^^^ aux 0 t)
+    | Apply (name, args) -> c_app (Sym.pp name) (List.map (aux 0) args)
     | Let ((name, x1), x2) ->
-      parens
-        (!^"let"
-         ^^^ Sym.pp name
-         ^^^ Pp.equals
-         ^^^ aux false x1
-         ^^^ !^"in"
-         ^^^ aux false x2)
+      parens (!^"let" ^^^ Sym.pp name ^^^ Pp.equals ^^^ aux 0 x1 ^^^ !^"in" ^^^ aux 0 x2)
     | Match (e, cases) ->
       !^"match"
-      ^^^ aux false e
+      ^^^ aux 0 e
       ^^^ braces
             ((* copying from mparens *)
              Pp.group
@@ -338,17 +358,17 @@ let pp
                 @@ separate_map
                      (break 0)
                      (fun (pattern, body) ->
-                       pp_pattern pattern ^^^ !^"=>" ^^^ braces (aux false body))
+                       pp_pattern pattern ^^^ !^"=>" ^^^ braces (aux 0 body))
                      cases))
     | Constructor (s, args) ->
       Sym.pp s
       ^^^ braces
             (separate_map
                (comma ^^ space)
-               (fun (id, e) -> Id.pp id ^^ colon ^^^ aux false e)
+               (fun (id, e) -> Id.pp id ^^ colon ^^^ aux 0 e)
                args)
   in
-  fun (it : 'bt term) -> aux atomic it
+  fun (it : 'bt term) -> aux prec it
 
 
 open Cerb_pp_prelude
