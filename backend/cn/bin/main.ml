@@ -188,12 +188,35 @@ let with_well_formedness_check
     Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
 
 
-let handle_type_error ~json ~state_file ~output_dir e =
+(** Report an error on [stderr] in an appropriate format: JSON if [json] is
+    true, or human-readable if not. *)
+let report_type_error
+  ~(json : bool)
+  ?(state_file : string option)
+  ?(output_dir : string option)
+  (error : TypeErrors.t)
+  : unit
+  =
   if json then
-    TypeErrors.report_json ?state_file ?output_dir e
+    TypeErrors.report_json ?state_file ?output_dir error
   else
-    TypeErrors.report_pretty ?state_file ?output_dir e;
-  match e.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
+    TypeErrors.report_pretty ?state_file ?output_dir error
+
+
+(** Exit with a code appropriate to the provided error. *)
+let exit_on_type_error (error : TypeErrors.t) : 'a =
+  match error.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
+
+
+(** Report the provided error, then exit. *)
+let handle_type_error
+  ~(json : bool)
+  ?(state_file : string option)
+  ?(output_dir : string option)
+  (error : TypeErrors.t)
+  =
+  report_type_error ~json ?state_file ?output_dir error;
+  exit_on_type_error error
 
 
 let well_formed
@@ -222,7 +245,7 @@ let well_formed
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar
-    ~handle_error:(handle_type_error ~json ~state_file ~output_dir)
+    ~handle_error:(handle_type_error ~json ?state_file ?output_dir)
     ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Resultat.return ())
 
 
@@ -303,7 +326,7 @@ let verify
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
-    ~handle_error:(handle_type_error ~json ~state_file ~output_dir)
+    ~handle_error:(handle_type_error ~json ?state_file ?output_dir)
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused ->
       match output_decorated with
       | None ->
@@ -524,8 +547,6 @@ module Verify_flags = struct
   let fail_fast =
     let doc = "Abort immediately after encountering a verification error" in
     Arg.(value & flag & info [ "fail-fast" ] ~doc)
-
-
 
 
   let slow_smt_threshold =
