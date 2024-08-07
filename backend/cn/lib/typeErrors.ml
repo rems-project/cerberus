@@ -540,36 +540,44 @@ let pp_message te =
 
 type t = type_error
 
-(* stealing some logic from pp_errors *)
-let report ?state_file:to_ ?output_dir:dir_ { loc; msg } =
+(** Convert a possibly-relative filepath into an absolute one. *)
+let canonicalize (path : string) : string =
+  if Filename.is_relative path then (
+    let current_dir = Sys.getcwd () in
+    Filename.concat current_dir path)
+  else
+    path
+
+
+(** Create a .html file, with a random name, in [output_dir], which must already
+    exist. If no directory is provided, the file is created in the system
+    temporary directory instead. *)
+let mk_state_file_name ~(output_dir : string option) : string =
+  let prefix = "state_" in
+  let canonical_output_dir = Option.map canonicalize output_dir in
+  try Filename.temp_file ?temp_dir:canonical_output_dir prefix ".html" with
+  | Sys_error _ ->
+    Printf.eprintf
+      "Warning: failed to create state file in the specified directory. Using the \
+       default output directory instead.\n";
+    Filename.temp_file prefix ".html"
+
+
+(** Format the error for human readability and print it to [stderr]. if the
+    error contains enough information to create an HTML state report, generate
+    one in [output_dir] (or, failing that, the system temporary directory) and
+    print a link to it. *)
+let report_pretty ?state_file:to_ ?output_dir:dir_ { loc; msg } =
+  (* stealing some logic from pp_errors *)
   let report = pp_message msg in
   let consider =
     match report.state with
     | Some state ->
       (* Decide where to write the state *)
       let state_error_file =
-        match to_ with
-        | Some file -> file
-        | None ->
-          (match dir_ with
-           | Some dir ->
-             let full_output_dir =
-               if Filename.is_relative dir then (
-                 let current_dir = Sys.getcwd () in
-                 Filename.concat current_dir dir)
-               else
-                 dir
-             in
-             (try Filename.temp_file ~temp_dir:full_output_dir "state_" ".html" with
-              | Sys_error _ ->
-                Printf.eprintf
-                  "Warning: failed to create state file in the specified directory. \
-                   Using the default output directory instead.\n";
-                Filename.temp_file "state_" ".html")
-           | None -> Filename.temp_file "state_" ".html")
+        match to_ with Some file -> file | None -> mk_state_file_name ~output_dir:dir_
       in
       let link = Report.make state_error_file (Cerb_location.get_filename loc) state in
-      (* let link = Report.make state_error_file state in *)
       let msg = !^"State file:" ^^^ !^("file://" ^ link) in
       Some msg
     | None -> None
@@ -585,25 +593,7 @@ let report_json ?state_file:to_ ?output_dir:dir_ { loc; msg } =
     | Some state ->
       (* Decide where to write the state *)
       let file =
-        match to_ with
-        | Some file -> file
-        | None ->
-          (match dir_ with
-           | Some dir ->
-             let full_output_dir =
-               if Filename.is_relative dir then (
-                 let current_dir = Sys.getcwd () in
-                 Filename.concat current_dir dir)
-               else
-                 dir
-             in
-             (try Filename.temp_file ~temp_dir:full_output_dir "" ".cn-state" with
-              | Sys_error _ ->
-                Printf.eprintf
-                  "Warning: failed to create state file in the specified directory. \
-                   Using the default output directory instead.\n";
-                Filename.temp_file "" ".cn-state")
-           | None -> Filename.temp_file "" ".cn-state")
+        match to_ with Some file -> file | None -> mk_state_file_name ~output_dir:dir_
       in
       let link = Report.make file (Cerb_location.get_filename loc) state in
       `String link
