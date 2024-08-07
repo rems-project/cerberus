@@ -306,7 +306,13 @@ let verify
     ~handle_error:(handle_type_error ~json ~state_file ~output_dir)
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused ->
       match output_decorated with
-      | None -> Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
+      | None ->
+        let check (functions, lemmas) =
+          let open Typing in
+          let@ _errors = Check.time_check_c_functions functions in
+          Check.generate_lemmas lemmas lemmata
+        in
+        Typing.run_from_pause check paused
       | Some output_filename ->
         Cerb_colour.without_colour
           (fun () ->
