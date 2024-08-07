@@ -4831,7 +4831,6 @@ Module CheriMemoryImplWithProofs
     cbn in H6. apply ret_inr in H6. invc H6.
     cbn in H11. apply ret_inr in H11. invc H11.
     cbn.
-    rewrite AddressValue_as_ExtOT.with_offset_0.
     apply AMap.M.add_1.
     reflexivity.
   Qed.
@@ -5339,13 +5338,67 @@ Module CheriMemoryImplWithProofs
     (x addr : AddressValue.t)
     (bm : AMap.M.t T)
     (l : list T):
+
+    (AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
+
     ((AddressValue.ltb x addr = true)
-    \/ (AddressValue.leb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l))) x = true)) ->
+     \/ (AddressValue.leb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l))) x = true)) ->
 
     AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
       AMap.M.find (elt:=T) x bm.
   Proof.
-    intros NE.
+    revert bm x addr.
+    induction l as [| x0 l].
+    -
+      reflexivity.
+    -
+      intros bm x addr RSZ N.
+      cbn.
+      rewrite IHl;clear IHl;cbn in *.
+      +
+        apply AMap.F.add_neq_o.
+        destruct N;bool_to_prop_hyp.
+        *
+          (* AddressValue.ltb_irref *)
+          admit.
+        *
+          cbn in *.
+          (* add+1 <= x *)
+          admit.
+      +
+        clear - RSZ.
+        pose proof (AddressValue.to_Z_in_bounds addr).
+        unfold AddressValue.ADDR_MIN in *.
+        unfold AddressValue_as_ExtOT.with_offset.
+        rewrite AddressValue.with_offset_no_wrap.
+        *
+          lia.
+        *
+          unfold AddressValue.ADDR_MIN.
+          split;[lia|].
+          admit. (* tricky *)
+      +
+        destruct N;bool_to_prop_hyp.
+        *
+          left.
+          pose proof (AddressValue.to_Z_in_bounds addr).
+          unfold AddressValue.ADDR_MIN in *.
+          unfold AddressValue_as_ExtOT.with_offset.
+          rewrite AddressValue_ltb_Z_ltb.
+          apply Z.ltb_lt.
+          rewrite AddressValue.with_offset_no_wrap.
+          --
+            rewrite AddressValue_ltb_Z_ltb in H.
+            apply Z.ltb_lt in H.
+            lia.
+          --
+            unfold AddressValue.ADDR_MIN.
+            split;[lia|].
+            admit. (* tricky *)
+        *
+          (* add+1 <= x *)
+          right.
+          (* TODO *)
   Admitted. (* TODO. *)
 
 
@@ -5508,6 +5561,11 @@ Module CheriMemoryImplWithProofs
           clear H.
 
           rewrite amap_add_list_not_at.
+          2:{
+            bool_to_prop_hyp.
+            rewrite repeat_length in *.
+            apply RSZ.
+          }
           reflexivity.
 
           clear s.

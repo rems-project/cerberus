@@ -1539,7 +1539,6 @@ Module FMapExtProofs
     destruct l;[|discriminate].
     cbn - [FM.M.add].
     apply FM.F.add_neq_o.
-    rewrite Znat.Nat2Z.inj_0, OT.with_offset_0.
     auto.
   Qed.
 

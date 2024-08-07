@@ -90,21 +90,23 @@ Module Type FMapExt
     vl' <- sequence (F:=m) (T:=list) vl ;;
     ret (of_list (combine kl vl')).
 
-  (** Adds elements of given [list] to a [map] starting at [addr]. *)
-  Definition map_add_list_at
-    {T:Type}
-    (map: M.t T)
-    (list: list T)
-    (addr: M.key)
+  (** Adds elements of given [list] to a [map] starting at [addr].
+      (alt. version)
+   *)
+  Fixpoint map_add_list_at
+    {T: Type}
+    (m: M.t T)
+    (l: list T)
+    (a: M.key)
     : M.t T
     :=
-    let ilist :=
-      Utils.mapi
-        (fun (i: nat) (v: T) =>
-           ((OT.with_offset addr (Z.of_nat i)), v)
-        )
-        list in
-    List.fold_left (fun acc '(k, v) =>  M.add k v acc) ilist map.
+    match l with
+    | nil => m
+    | (x::xs) => map_add_list_at
+                 (M.add a x m)
+                 xs
+                 (OT.with_offset a 1)
+    end.
 
   (* Monadic mapi *)
   Definition map_mmapi
