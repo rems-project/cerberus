@@ -557,7 +557,7 @@ Module CheriMemoryImplWithProofs
       ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) >= AddressValue.to_Z m.(last_address)) am.
 
   (* Global flag which controls if Ltac debug messages will be printed *)
-  Ltac ltac_debug_flag := constr:(true).
+  Ltac ltac_debug_flag := constr:(false).
 
   (* Custom printing tactic *)
   Ltac ltac_debug msg :=
@@ -5643,6 +5643,325 @@ Module CheriMemoryImplWithProofs
     apply H0.
   Qed.
 
+  Fact mem_state_with_funptrmap_bytemap_capmeta_preserves:
+    forall s : mem_state_r,
+      ZMapProofs.map_forall (fun a : allocation => is_dead a = false) (allocations s) ->
+      (forall (alloc_id1 alloc_id2 : ZMap.M.key) (a1 a2 : allocation),
+          alloc_id1 <> alloc_id2 ->
+          ZMap.M.MapsTo alloc_id1 a1 (allocations s) ->
+          ZMap.M.MapsTo alloc_id2 a2 (allocations s) -> allocations_do_no_overlap a1 a2) ->
+      ZMapProofs.map_forall
+        (fun a : allocation => AddressValue.to_Z (base a) + Z.of_nat (size a) <= AddressValue.ADDR_LIMIT)
+        (allocations s) ->
+      AMapProofs.map_forall_keys addr_ptr_aligned (capmeta s) ->
+      ZMapProofs.map_forall_keys (fun alloc_id : ZMap.M.key => alloc_id < next_alloc_id s) (allocations s) ->
+      ZMapProofs.map_forall
+        (fun a : allocation => AddressValue.to_Z (base a) >= AddressValue.to_Z (last_address s))
+        (allocations s) ->
+      (forall (addr : AMap.M.key) (g : CapGhostState),
+          AMap.M.MapsTo addr (true, g) (capmeta s) ->
+          tag_unspecified g = false ->
+          forall bs : list (option ascii),
+            fetch_bytes (bytemap s) addr (sizeof_pointer MorelloImpl.get) = bs ->
+            exists c : Capability_GS.t,
+              decode_cap bs true c /\
+                (exists (a : allocation) (alloc_id : ZMap.M.key),
+                    ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc c a)) ->
+      forall (bs : list (option ascii)) (capmeta0 : AMap.M.t (bool * CapGhostState)) (szn : nat),
+        (0 < szn)%nat ->
+        Datatypes.length bs = szn ->
+        forall start : AddressValue.t,
+          AddressValue.to_Z start + Z.of_nat szn <= AddressValue.ADDR_LIMIT ->
+          capmeta_ghost_tags start szn (capmeta s) = capmeta0 ->
+          mem_invariant
+            (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start)
+               (capmeta_ghost_tags start szn (capmeta s)) s).
+  Proof.
+    intros s Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr MIcap bs capmeta0 szn SP BL start RSZ H1.
+
+    (* The following part should be same for most types.
+         We just write some stuff to memory and ghost some tags *)
+
+    unfold mem_state_with_funptrmap_bytemap_capmeta.
+    repeat split;cbn;auto.
+    +
+      (* Balign *)
+      pose proof (capmeta_ghost_tags_preserves s start szn) as P.
+      autospecialize P.
+      repeat split;auto.
+      apply P.
+    +
+      (* MIcap *)
+      intros addr g M U bs' F.
+
+      rewrite pointer_sizeof_alignof in *.
+      pose proof MorelloImpl.alignof_pointer_pos as AP.
+      remember (alignof_pointer MorelloImpl.get) as psize.
+
+      remember(align_down (AddressValue.to_Z start) (Z.of_nat psize)) as a0.
+      remember(align_down (AddressValue.to_Z start + (Z.of_nat szn - 1)) (Z.of_nat psize)) as a1.
+
+      (* TODO: need to destruct on exact bounds and expand after *)
+      assert(decidable (a0 <= AddressValue.to_Z addr <= a1)) as AR
+          by (apply dec_and; apply Z.le_decidable).
+
+
+      destruct AR as [IN|OUT]; subst a0 a1 psize.
+      *
+        (* a0 <= AddressValue.to_Z addr <= a1 *)
+        pose proof (capmeta_ghost_tags_spec_in_range_aligned start szn SP
+                      (capmeta s)
+                      addr
+                      IN
+                      true
+                      g
+                      M
+          )
+          as CA.
+        destruct CA;congruence.
+      *
+        (* ~ a0 <= AddressValue.to_Z addr <= a1 *)
+        pose proof (capmeta_ghost_tags_spec_outside_range_aligned start szn SP
+                      (capmeta s)
+                      addr
+                      OUT
+                      true
+                      g
+                      M
+          )
+          as CA.
+        apply (MIcap addr g CA U bs'); clear MIcap.
+
+        (* prove [addr] is aligned *)
+        specialize (Balign addr).
+        autospecialize Balign.
+        eapply AMapProofs.map_mapsto_in.
+        apply CA.
+
+        (* prove bytes unchanged *)
+        subst bs'.
+        clear - AP BL RSZ SP OUT Balign.
+
+        (* prep *)
+        remember (alignof_pointer MorelloImpl.get) as psize.
+
+        remember (list_init psize (fun i0 : nat => AddressValue.with_offset addr (Z.of_nat i0))) as rl.
+        assert(length rl = psize).
+        {
+          subst rl.
+          apply list_init_len.
+        }
+
+        (* meat *)
+        unfold fetch_bytes.
+        rewrite <- Heqrl.
+        apply map_ext_in.
+
+        intros a IN.
+        apply In_nth_error in IN.
+        destruct IN as [off IN].
+        assert(off < psize)%nat as POFF.
+        {
+          cut(nth_error rl off <> None).
+          subst rl.
+          intros H0.
+          apply nth_error_Some in H0.
+          lia.
+          rewrite IN.
+          discriminate.
+        }
+        rewrite Heqrl in IN.
+        rewrite list_init_nth in IN;[|auto].
+        some_inv.
+        clear H Heqrl.
+
+        rewrite amap_add_list_not_at.
+        2:{
+          subst.
+          apply RSZ.
+        }
+        reflexivity.
+
+        clear s.
+        unfold addr_ptr_aligned in Balign.
+        rewrite BL in *.
+
+        apply not_and in OUT;[|apply Z.le_decidable].
+
+        pose proof ADDR_LIMIT_aligned as ALA.
+        rewrite <- Heqpsize in *; clear Heqpsize.
+        pose proof (AddressValue.to_Z_in_bounds addr) as AB.
+        pose proof (AddressValue.to_Z_in_bounds start) as SB.
+        subst a.
+        destruct OUT; bool_to_prop_hyp.
+        --
+          (* on the left (axis-wise) *)
+          apply Z.nle_gt in H.
+          left.
+          rewrite AddressValue_ltb_Z_ltb.
+          apply Z.ltb_lt.
+
+          pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat psize)) as AD.
+          autospecialize AD. lia. (* my not need this *)
+          unfold AddressValue.with_offset.
+          unfold align_down in *.
+          rewrite AddressValue.of_Z_roundtrip.
+          ++
+            remember (AddressValue.to_Z addr) as zaddr;clear Heqzaddr addr.
+            remember (AddressValue.to_Z start) as zstart; clear Heqzstart.
+
+            pose proof (Z.mod_pos_bound zstart (Z.of_nat psize)).
+            autospecialize H0. lia.
+            unfold AddressValue.ADDR_MIN in *.
+            zify.
+            clear cstr. (* overlaps with AP *)
+            remember (Z.of_nat psize) as zalign; clear psize Heqzalign.
+            remember (Z.of_nat off) as zoff; clear off Heqzoff.
+
+            remember (zstart - (zstart mod zalign)) as lzstart.
+            assert(lzstart mod zalign = 0).
+            {
+              subst.
+              apply align_bottom_correct, AP.
+            }
+
+            (* zaddr - aligned.
+               lzstart - aligned
+               zaddr < lzstart
+             *)
+            assert(lzstart - zaddr >= zalign).
+            {
+              apply Zdiv.Zmod_divides in Balign; [|lia].
+              destruct Balign as [naddr Balign].
+              apply Zdiv.Zmod_divides in H1; [|lia].
+              destruct H1 as [nstart H1].
+              clear Heqlzstart.
+              subst.
+              apply Z.mul_lt_mono_pos_l in H;[|lia].
+              nia.
+            }
+            nia.
+          ++
+            split;[lia|].
+            apply Zdiv.Zmod_divides in Balign; [|lia].
+            destruct Balign as [naddr Balign].
+            apply Zdiv.Zmod_divides in ALA; [|lia].
+            destruct ALA as [nmax ALA].
+            rewrite Balign,ALA.
+
+            cut(naddr<nmax).
+            {
+              intros.
+              subst.
+              nia.
+            }
+            nia.
+        --
+          (* on the right (axis-wise) *)
+          apply Z.nle_gt in H.
+          right.
+          rewrite AddressValue_leb_Z_leb.
+          apply Z.leb_le.
+          pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat psize)) as AD.
+          autospecialize AD. lia.
+          unfold AddressValue.with_offset.
+          unfold align_down in *.
+
+          destruct (Z.eq_dec (AddressValue.to_Z start + Z.of_nat szn) AddressValue.ADDR_LIMIT)
+            as [E|NE].
+          {
+            rewrite E in *.
+            rewrite ADDR_LIMIT_to_Z.
+            remember (AddressValue.of_Z (AddressValue.to_Z addr + Z.of_nat off)) as x.
+            pose proof (AddressValue.to_Z_in_bounds x).
+            unfold AddressValue.ADDR_MIN in H0.
+            lia.
+          }
+          rewrite AddressValue.of_Z_roundtrip;[|lia].
+          remember (AddressValue.to_Z addr) as zaddr. clear Heqzaddr addr.
+          remember (AddressValue.to_Z start) as zstart. clear Heqzstart start.
+
+          zify.
+          clear cstr1. (* overlaps with AP *)
+          clear cstr2. (* overlaps with SP *)
+
+          remember (Z.of_nat psize) as zalign; clear psize Heqzalign.
+          remember (Z.of_nat off) as zoff; clear off Heqzoff.
+          remember (Z.of_nat szn) as zszn; clear szn Heqzszn.
+
+          rewrite AddressValue.of_Z_roundtrip.
+          2:{
+
+            subst.
+            split.
+            -
+              unfold AddressValue.ADDR_MIN in *.
+              lia.
+            -
+              unfold AddressValue.ADDR_MIN in *.
+
+              apply Zdiv.Zmod_divides in Balign; [|lia].
+              destruct Balign as [naddr Balign].
+              apply Zdiv.Zmod_divides in ALA; [|lia].
+              destruct ALA as [nmax ALA].
+
+              cut(naddr<nmax).
+              {
+                intros.
+                subst.
+                nia.
+              }
+              nia.
+          }
+          unfold AddressValue.ADDR_MIN in *.
+
+          pose proof (Zdiv.Zmod_le (zstart + (zszn - 1)) zalign AP).
+          autospecialize H0.
+          lia.
+
+          pose proof (Z.mod_pos_bound (zstart + (zszn - 1)) zalign AP).
+
+          remember (zstart + (zszn - 1)) as zlast.
+          remember (zlast mod zalign) as soff.
+          remember (zlast - soff) as lzlast.
+
+          assert(lzlast mod zalign = 0).
+          {
+            subst.
+            apply align_bottom_correct, AP.
+          }
+
+          assert(zlast = lzlast + soff) by lia.
+
+          assert(zlast < zaddr).
+          {
+            apply Zdiv.Zmod_divides in Balign; [|lia].
+            destruct Balign as [naddr Balign].
+            apply Zdiv.Zmod_divides in H2; [|lia].
+            destruct H2 as [nlast H2].
+
+            cut(nlast<naddr).
+            {
+              intros.
+              subst.
+              nia.
+            }
+            nia.
+          }
+          lia.
+  Qed.
+
+
+  (* TODO: We can get away with just proving [0<l] but this is more precise formulation *)
+  Fact Capability_GS_encode_length
+    (isexact : bool)
+    (c : Capability_GS.t)
+    (l: list ascii)
+    (t: bool):
+    Capability_GS.encode isexact c = Some (l, t) -> Datatypes.length l =  sizeof_pointer MorelloImpl.get.
+  Proof.
+  Admitted.
+
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
@@ -5655,17 +5974,15 @@ Module CheriMemoryImplWithProofs
 
     repr fuel (CheriMemoryImplWithProofs.funptrmap s) (CheriMemoryImplWithProofs.capmeta s)
       (Capability_GS.cap_get_value c) mval = inr (funptrmap0, capmeta0, bs)
-
     ->
     mem_invariant
       (mem_state_with_funptrmap_bytemap_capmeta funptrmap0
          (AMap.map_add_list_at (bytemap s) bs (Capability_GS.cap_get_value c)) capmeta0 s).
   Proof.
     intros R.
+    induction fuel;[apply raise_either_inr_inv in R;tauto|].
 
     unfold repr in R.
-    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
-
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
     (* base *)
@@ -5673,306 +5990,82 @@ Module CheriMemoryImplWithProofs
     - (* MVunspecified *)
       state_inv_steps_quick.
       rename sz into szn.
-      subst bs.
+      assert(length bs = szn) as BL by (subst bs; apply repeat_length).
+      rewrite H2 in *; clear H2.
+      rewrite BL in R4.
 
-      assert(0 < szn)%nat as SP.
-      {
-        apply sizeof_pos in R2.
-        apply R2.
-      }
-
+      apply sizeof_pos in R2; rename R2 into SP.
       generalize dependent (Capability_GS.cap_get_value c).
-      intros start RSZ.
-      clear c.
+      intros start RSZ H1.
+      bool_to_prop_hyp.
 
-      unfold mem_state_with_funptrmap_bytemap_capmeta.
-      repeat split;cbn;auto.
-      +
-        (* Balign *)
-        pose proof (capmeta_ghost_tags_preserves s start szn) as P.
-        autospecialize P.
-        repeat split;auto.
-        apply P.
-      +
-        (* MIcap *)
-        intros addr g M U bs F.
-        remember (alignof_pointer MorelloImpl.get) as palignment.
-        remember(align_down (AddressValue.to_Z start) (Z.of_nat palignment)) as a0.
-        remember(align_down (AddressValue.to_Z start + (Z.of_nat szn - 1)) (Z.of_nat palignment)) as a1.
-
-        (* TODO: need to destruct on exact bounds and expand after *)
-        assert(decidable (a0 <= AddressValue.to_Z addr <= a1)) as AR
-            by (apply dec_and; apply Z.le_decidable).
-
-
-        destruct AR as [IN|OUT].
-        *
-          (* a0 <= AddressValue.to_Z addr <= a1 *)
-          subst.
-          pose proof (capmeta_ghost_tags_spec_in_range_aligned start szn SP
-                        (capmeta s)
-                        addr
-                        IN
-                        true
-                        g
-                        M
-            )
-            as CA.
-          destruct CA;congruence.
-        *
-          (* ~ a0 <= AddressValue.to_Z addr <= a1 *)
-          subst.
-          pose proof (capmeta_ghost_tags_spec_outside_range_aligned start szn SP
-                        (capmeta s)
-                        addr
-                        OUT
-                        true
-                        g
-                        M
-            )
-            as CA.
-
-          remember (fetch_bytes (AMap.map_add_list_at (bytemap s) (repeat None szn) start) addr
-                      (sizeof_pointer MorelloImpl.get)) as bs.
-          specialize (MIcap addr g CA U bs).
-          apply MIcap.
-
-          (* prove [addr] is aligned *)
-          specialize (Balign addr).
-          autospecialize Balign.
-          eapply AMapProofs.map_mapsto_in.
-          apply CA.
-
-          (* prove bytes unchanged *)
-          subst bs.
-          clear - RSZ SP OUT Balign.
-
-          (* prep *)
-          pose proof MorelloImpl.alignof_pointer_pos as AP.
-          remember (sizeof_pointer MorelloImpl.get) as psize.
-
-          remember (list_init psize (fun i0 : nat => AddressValue.with_offset addr (Z.of_nat i0))) as rl.
-          assert(length rl = psize).
-          {
-            subst rl.
-            apply list_init_len.
-          }
-
-          (* meat *)
-          unfold fetch_bytes.
-          apply map_ext_in.
-
-          intros a IN.
-          apply In_nth_error in IN.
-          destruct IN as [off IN].
-          assert(off < psize)%nat as POFF.
-          {
-            cut(nth_error (list_init psize (fun i : nat => AddressValue.with_offset addr (Z.of_nat i))) off <> None).
-            intros H0.
-            apply nth_error_Some in H0.
-            rewrite list_init_len in H0.
-            auto.
-            rewrite IN.
-            discriminate.
-          }
-          rewrite list_init_nth in IN;[|auto].
-          invc IN.
-          clear H.
-
-          rewrite amap_add_list_not_at.
-          2:{
-            bool_to_prop_hyp.
-            rewrite repeat_length in *.
-            apply RSZ.
-          }
-          reflexivity.
-
-          clear s.
-          unfold addr_ptr_aligned in Balign.
-          rewrite pointer_sizeof_alignof in POFF.
-
-          rewrite repeat_length in *.
-
-          apply not_and in OUT;[|apply Z.le_decidable].
-
-          pose proof ADDR_LIMIT_aligned as ALA.
-          remember (alignof_pointer MorelloImpl.get) as palign; clear Heqpalign.
-          pose proof (AddressValue.to_Z_in_bounds addr) as AB.
-          pose proof (AddressValue.to_Z_in_bounds start) as SB.
-
-          destruct OUT; bool_to_prop_hyp.
-          --
-            (* on the left (axis-wise) *)
-            apply Z.nle_gt in H.
-            left.
-            rewrite AddressValue_ltb_Z_ltb.
-            apply Z.ltb_lt.
-
-
-            pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat palign)) as AD.
-            autospecialize AD. lia. (* my not need this *)
-            unfold AddressValue.with_offset.
-            unfold align_down in *.
-            rewrite AddressValue.of_Z_roundtrip.
-            ++
-              remember (AddressValue.to_Z addr) as zaddr;clear Heqzaddr addr.
-              remember (AddressValue.to_Z start) as zstart; clear Heqzstart.
-
-              pose proof (Z.mod_pos_bound zstart (Z.of_nat palign)).
-              autospecialize H0. lia.
-              unfold AddressValue.ADDR_MIN in *.
-              zify.
-              clear cstr. (* overlaps with AP *)
-              remember (Z.of_nat palign) as zalign; clear palign Heqzalign.
-              remember (Z.of_nat off) as zoff; clear off Heqzoff.
-
-              remember (zstart - (zstart mod zalign)) as lzstart.
-              assert(lzstart mod zalign = 0).
-              {
-                subst.
-                apply align_bottom_correct, AP.
-              }
-
-              (* zaddr - aligned.
-               lzstart - aligned
-               zaddr < lzstart
-               *)
-              assert(lzstart - zaddr >= zalign).
-              {
-                apply Zdiv.Zmod_divides in Balign; [|lia].
-                destruct Balign as [naddr Balign].
-                apply Zdiv.Zmod_divides in H1; [|lia].
-                destruct H1 as [nstart H1].
-                clear Heqlzstart.
-                subst.
-                apply Z.mul_lt_mono_pos_l in H;[|lia].
-                nia.
-              }
-              nia.
-            ++
-              split;[lia|].
-              apply Zdiv.Zmod_divides in Balign; [|lia].
-              destruct Balign as [naddr Balign].
-              apply Zdiv.Zmod_divides in ALA; [|lia].
-              destruct ALA as [nmax ALA].
-              rewrite Balign,ALA.
-
-              cut(naddr<nmax).
-              {
-                intros.
-                subst.
-                nia.
-              }
-              nia.
-          --
-            (* on the right (axis-wise) *)
-            apply Z.nle_gt in H.
-            right.
-            rewrite AddressValue_leb_Z_leb.
-            apply Z.leb_le.
-            pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat palign)) as AD.
-            autospecialize AD. lia.
-            unfold AddressValue.with_offset.
-            unfold align_down in *.
-
-            destruct (Z.eq_dec (AddressValue.to_Z start + Z.of_nat szn) AddressValue.ADDR_LIMIT)
-              as [E|NE].
-            {
-              rewrite E in *.
-              rewrite ADDR_LIMIT_to_Z.
-              remember (AddressValue.of_Z (AddressValue.to_Z addr + Z.of_nat off)) as x.
-              pose proof (AddressValue.to_Z_in_bounds x).
-              unfold AddressValue.ADDR_MIN in H0.
-              lia.
-            }
-            rewrite AddressValue.of_Z_roundtrip;[|lia].
-            remember (AddressValue.to_Z addr) as zaddr. clear Heqzaddr addr.
-            remember (AddressValue.to_Z start) as zstart. clear Heqzstart start.
-
-            zify.
-            clear cstr. (* overlaps with AP *)
-            clear cstr1. (* overlaps with SP *)
-
-            remember (Z.of_nat palign) as zalign; clear palign Heqzalign.
-            remember (Z.of_nat off) as zoff; clear off Heqzoff.
-            remember (Z.of_nat szn) as zszn; clear szn Heqzszn.
-
-            rewrite AddressValue.of_Z_roundtrip.
-            2:{
-
-              subst.
-              split.
-              -
-                unfold AddressValue.ADDR_MIN in *.
-                lia.
-              -
-                unfold AddressValue.ADDR_MIN in *.
-
-                apply Zdiv.Zmod_divides in Balign; [|lia].
-                destruct Balign as [naddr Balign].
-                apply Zdiv.Zmod_divides in ALA; [|lia].
-                destruct ALA as [nmax ALA].
-
-                cut(naddr<nmax).
-                {
-                  intros.
-                  subst.
-                  nia.
-                }
-                nia.
-            }
-            unfold AddressValue.ADDR_MIN in *.
-
-            pose proof (Zdiv.Zmod_le (zstart + (zszn - 1)) zalign AP).
-            autospecialize H0.
-            lia.
-
-            pose proof (Z.mod_pos_bound (zstart + (zszn - 1)) zalign AP).
-
-            remember (zstart + (zszn - 1)) as zlast.
-            remember (zlast mod zalign) as soff.
-            remember (zlast - soff) as lzlast.
-
-            assert(lzlast mod zalign = 0).
-            {
-              subst.
-              apply align_bottom_correct, AP.
-            }
-
-            assert(zlast = lzlast + soff) by lia.
-
-            assert(zlast < zaddr).
-            {
-              apply Zdiv.Zmod_divides in Balign; [|lia].
-              destruct Balign as [naddr Balign].
-              apply Zdiv.Zmod_divides in H2; [|lia].
-              destruct H2 as [nlast H2].
-
-              cut(nlast<naddr).
-              {
-                intros.
-                subst.
-                nia.
-              }
-              nia.
-            }
-            lia.
+      eapply mem_state_with_funptrmap_bytemap_capmeta_preserves;eauto.
     -
       (* MVinteger *)
       break_match_hyp.
       +
         (* IV *)
-        admit.
+        state_inv_steps_quick.
+        rename sz into szn.
+        apply bytes_of_Z_len in R3.
+        repeat rewrite map_length, R3 in *.
+
+        apply sizeof_pos in R4.
+        generalize dependent (Capability_GS.cap_get_value c).
+        intros start RSZ IHfuel.
+        bool_to_prop_hyp.
+
+        eapply mem_state_with_funptrmap_bytemap_capmeta_preserves;eauto.
+        rewrite map_length.
+        auto.
       +
         (* IC *)
-        admit.
+        repeat break_match_hyp; state_inv_steps.
+        *
+          apply Capability_GS_encode_length in R2.
+          pose proof pointer_sizeof_pos as SP.
+          remember (sizeof_pointer MorelloImpl.get) as szn.
+          clear Heqszn.
+          generalize dependent (Capability_GS.cap_get_value c).
+          intros start RSZ IHfuel.
+          bool_to_prop_hyp.
+          remember (map Some l) as bs.
+          (* TODO: deal with [update_capmeta] in the goal *)
+          admit.
+        *
+          (* TODO: Same as above *)
+          admit.
     -
       (* MVfloating *)
-      (* [state_inv_steps] should work here. TODO: investigate why it stucks *)
+      state_inv_steps.
+      rename sz into szn.
+      apply monadic_list_init_serr_len in R4.
+      repeat rewrite map_length, R4 in *.
 
+      apply MorelloImpl.sizeof_fty_pos in R2.
+      generalize dependent (Capability_GS.cap_get_value c).
+      intros start RSZ IHfuel.
+      bool_to_prop_hyp.
 
-
-
+      eapply mem_state_with_funptrmap_bytemap_capmeta_preserves;eauto.
+      rewrite map_length.
+      auto.
+    -
+      (* MVpointer *)
+      (* TODO: This should be similar to [IC] branch above *)
+      admit.
+    -
+      (* MVarray *)
+      (* TODO: prove using IHfuel *)
+      admit.
+    -
+      (* MVstruct *)
+      (* TODO: prove using IHfuel *)
+      admit.
+    -
+      (* MVunion *)
+      (* TODO: prove using IHfuel *)
+      admit.
   Admitted.
 
   Instance store_PreservesInvariant

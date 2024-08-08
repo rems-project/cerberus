@@ -279,6 +279,25 @@ Section ListAux.
     apply seq_length.
   Qed.
 
+  Fact monadic_list_init_serr_len
+    {A: Type}
+    (n: nat)
+    (f: nat -> serr A)
+    (l: list A):
+    monadic_list_init n f = inr l ->  Datatypes.length l = n.
+  Proof.
+  Admitted.
+
+  Fact bytes_of_Z_len
+    (is_signed: bool)
+    (size: nat)
+    (z: Z)
+    (l: list ascii)
+    :
+    bytes_of_Z is_signed size z = inr l -> Datatypes.length l = size.
+  Proof.
+  Admitted.
+
   Lemma list_split_cons
     {A B: Type}:
     forall ab abss a0 ass b0 bs,
