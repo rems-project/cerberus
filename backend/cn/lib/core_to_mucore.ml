@@ -341,23 +341,34 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
              ^^^ list CF.Pp_core.Basic.pp_pexpr args))
      | Sym sym, _ -> assert_error loc (!^"PEcall not inlined:" ^^^ Sym.pp sym)
      | Impl impl, args ->
-      (match impl, args with
-       | CF.Implementation.SHR_signed_negative, [Pexpr (_,_,PEval (Vctype ct)) ;arg1;arg2] ->
-         let arg1 = n_pexpr loc arg1 in
-         let arg2 = n_pexpr loc arg2 in
-         let ity = match Sctypes.is_integer_type (convert_ct loc ct) with
-                   | Some i -> i
-                   | None -> failwith "Non-integer type in shift" in
-         let act = ity_act loc ity in
-         let op = CF.Core.IOpShr in
-         let bound = M_Bound_Except act in
-         let shift = annotate (M_PEbounded_binop (bound,op,arg1,arg2)) in
-         annotate (M_PEerror ("Shifting a negative number to the right is implementation-dependant.",shift))
-       | _ -> assert_error
-         loc
-         (!^"PEcall to impl not inlined:"
-          ^^^ !^(CF.Implementation.string_of_implementation_constant impl))))
-
+       (match (impl, args) with
+        | ( CF.Implementation.SHR_signed_negative,
+            [ Pexpr (_, _, PEval (Vctype ct)); arg1; arg2 ] ) ->
+          let arg1 = n_pexpr loc arg1 in
+          let arg2 = n_pexpr loc arg2 in
+          let ity =
+            match Sctypes.is_integer_type (convert_ct loc ct) with
+            | Some i -> i
+            | None -> failwith "Non-integer type in shift"
+          in
+          let act = ity_act loc ity in
+          let op = CF.Core.IOpShr in
+          let bound = M_Bound_Except act in
+          let shift = annotate (M_PEbounded_binop (bound, op, arg1, arg2)) in
+          let impl_ok = true (* XXX: parameterize *) in
+          if impl_ok then
+            shift
+          else
+            annotate
+              (M_PEerror
+                 ( "Shifting a negative number to the right is implementation-dependant.",
+                   shift ))
+          (* XXX: Make a type for reporting implementation defined behavior? *)
+        | _ ->
+          assert_error
+            loc
+            (!^"PEcall to impl not inlined:"
+             ^^^ !^(CF.Implementation.string_of_implementation_constant impl))))
   | PElet (pat, e', e'') ->
     (match (pat, e') with
      | Pattern (_annots, CaseBase (Some sym, _)), Pexpr (annots2, _, PEsym sym2)
