@@ -1034,7 +1034,7 @@ let rec cn_to_ail_expr_aux_internal
          A.(
            AilEcall
              ( mk_expr (AilEident (Sym.fresh_pretty "alloc")),
-               [ mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct struct_tag))) ]
+               [ mk_expr (AilEsizeof (empty_qualifiers, mk_ctype C.(Struct cn_struct_tag))) ]
              ))
        in
        let res_decl = A.(AilSdeclaration [ (res_sym, Some (mk_expr alloc_call)) ]) in
