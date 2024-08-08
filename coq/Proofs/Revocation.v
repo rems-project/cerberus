@@ -556,6 +556,16 @@ Module CheriMemoryImplWithProofs
     /\
       ZMapProofs.map_forall (fun a => AddressValue.to_Z a.(base) >= AddressValue.to_Z m.(last_address)) am.
 
+  (* Global flag which controls if Ltac debug messages will be printed *)
+  Ltac ltac_debug_flag := constr:(true).
+
+  (* Custom printing tactic *)
+  Ltac ltac_debug msg :=
+    match ltac_debug_flag with
+    | true => idtac msg
+    | false => idtac
+    end.
+
   Ltac destruct_base_mem_invariant H
     :=
     let Bdead := fresh "Bdead" in
@@ -1993,112 +2003,173 @@ Module CheriMemoryImplWithProofs
   Ltac htrim :=
     repeat break_match_hyp; repeat break_let; try subst; try tuple_inversion; cbn in *; try discriminate.
 
-  Ltac state_inv_step :=
+  Ltac state_inv_step' htrim_flag :=
     repeat match goal with
-      (* bind sassert *)
       |[H: (@bind (sum string) (Monad_either string) unit _ (sassert _ _) _) = inr _ |- _] =>
-          let H1 := fresh H in
-          let H2 := fresh H in
-          apply bind_sassert_inv in H;
-          destruct H as [H1 H2]
-      (* memM bind with var name *)
+         ltac_debug "bind sassert";
+         let H1 := fresh H in
+         let H2 := fresh H in
+         apply bind_sassert_inv in H;
+         destruct H as [H1 H2];
+         match htrim_flag with
+         | true => htrim
+         | false => idtac
+         end
       |[ H: (bind _ (fun x => _)) ?s = (_ ,inr _) |- _ ] =>
+         ltac_debug "bind (memM)";
          tryif (apply bind_memM_inv_same_state in H)
          then
-           ((* idtac H "bind (memM, same state)" x; *)
+           ( ltac_debug "  bind (memM, same state)";
              let H1 := fresh H in
              let H2 := fresh H in
              let x' := fresh x in
-             destruct H as [x' [H1 H2]]
-             ; htrim)
+             destruct H as [x' [H1 H2]];
+             match htrim_flag with
+             | true => htrim
+             | false => idtac
+             end)
          else
-           ((*idtac H "bind (memM)" x; *)
-             let H1 := fresh H in
-             let H2 := fresh H in
-             let x' := fresh x in
-             let s' := fresh s in
-             apply bind_memM_inv in H;
-             destruct H as [s' [x [H1 H2]]]
-             ; htrim)
-      (* anonymous memM bind *)
+           (ltac_debug "  bind (memM)";
+            let H1 := fresh H in
+            let H2 := fresh H in
+            let x' := fresh x in
+            let s' := fresh s in
+            apply bind_memM_inv in H;
+            destruct H as [s' [x [H1 H2]]];
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end)
       |[ H: (bind _ (fun _ => _)) ?s = (_ ,inr _) |- _ ] =>
+         ltac_debug "anonymous memM bind";
          tryif (apply bind_memM_inv_same_state in H)
          then
-           ((*idtac H "bind (memM, same_state, anon)"; *)
+           ( ltac_debug "  bind (memM, same_state, anon)";
              let H1 := fresh H in
              let H2 := fresh H in
              let u := fresh "u" in
-             destruct H as [u [H1 H2]]
-             ; htrim)
+             destruct H as [u [H1 H2]];
+             match htrim_flag with
+             | true => htrim
+             | false => idtac
+             end)
          else
-           ((*idtac H "bind (memM, anon)"; *)
-             let H1 := fresh H in
-             let H2 := fresh H in
-             let u := fresh "u" in
-             let s' := fresh s in
-             apply bind_memM_inv in H;
-             destruct H as [s' [u [H1 H2]]]
-             ; htrim)
-      (* serr bind with var name *)
+           (ltac_debug "  bind (memM, anon)";
+            let H1 := fresh H in
+            let H2 := fresh H in
+            let u := fresh "u" in
+            let s' := fresh s in
+            apply bind_memM_inv in H;
+            destruct H as [s' [u [H1 H2]]];
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end)
       | [ H: bind _ (fun x => _) = inr _ |- _]
         =>
-          (* idtac H "bind (serr)" x; *)
+          ltac_debug "bind (serr)" ;
           apply bind_serr_inv in H;
           let H1 := fresh H in
           let H2 := fresh H in
           let x' := fresh x in
-          destruct H as [x' [H1 H2]]
-          ; htrim
+          destruct H as [x' [H1 H2]];
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       (* anonymous serr bind *)
       | [ H: bind _ (fun _ => _) = inr _ |- _]
         =>
-          (* idtac H "bind (serr, anon)"; *)
+          ltac_debug "bind (serr, anon)";
           apply bind_serr_inv in H;
           let H1 := fresh H in
           let H2 := fresh H in
           let u := fresh "u" in
-          destruct H as [u [H1 H2]]
-          ; htrim
+          destruct H as [u [H1 H2]];
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: fail _ _ _ = (_, inr _) |- _] =>
-          (* idtac H "fail"; *)
-          apply fail_inr_inv in H; tauto
-          ; htrim
+          ltac_debug "fail";
+          apply fail_inr_inv in H; tauto;
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: serr2InternalErr _ _ = (_, inr _) |- _] =>
-          (* idtac H "serr2InternalErr"; *)
-          apply serr2InternalErr_inv in H
-          ; htrim
+          ltac_debug "serr2InternalErr";
+          apply serr2InternalErr_inv in H;
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: ret _ _ = (_, inr _) |- _] =>
-          (* idtac H "ret (memM)"; *)
-          rewrite ret_memM_inv in H
-          ; htrim
+          ltac_debug "ret (memM)";
+          rewrite ret_memM_inv in H;
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: @ret serr (Monad_either string) _ ?x = inr _ |- _] =>
-          (* idtac H "ret (serr)"; *)
-          rewrite ret_serr_inv in H
-          ; htrim
+          ltac_debug "ret (serr)";
+          rewrite ret_serr_inv in H;
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: get _ = (_, inr _) |- _] =>
-          (* idtac H "get"; *)
-          rewrite get_inv in H
-          ; htrim
+          ltac_debug "get";
+          rewrite get_inv in H;
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: put _ _ = (_, inr _) |- _] =>
-          (* idtac H "put"; *)
-          apply put_inv in H
-          ; htrim
+          ltac_debug "put";
+          apply put_inv in H;
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: sassert _ _ = inr _ |- _] =>
-          (* idtac H "sassert"; *)
-          apply sassert_inv in H
-          ; htrim
-      | [H: inl _ = inl _ |- _] => inversion H; clear H; htrim
-      | [H: inr _ = inr _ |- _] => inversion H; clear H; htrim
+          ltac_debug "sassert";
+          apply sassert_inv in H;
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
+      | [H: inl _ = inl _ |- _] => inversion H; clear H; match htrim_flag with
+                                                       | true => htrim
+                                                       | false => idtac
+                                                       end
+      | [H: inr _ = inr _ |- _] => inversion H; clear H; match htrim_flag with
+                                                       | true => htrim
+                                                       | false => idtac
+                                                       end
       | [H: @raise string _ Exception_serr unit _ = @inl string unit _ |- _] =>
+          ltac_debug "raise _ = inl _";
           apply raise_serr_inl in H;
           inversion H;
           clear H;
-          htrim
+          match htrim_flag with
+          | true => htrim
+          | false => idtac
+          end
       | [H: @raise string serr Exception_serr unit _ = @inr string unit _ |- _] =>
+          ltac_debug "raise _ = inr _";
           apply raise_serr_inr_inv in H; tauto
       | [H: @raise string serr (Exception_either string) _ _ = @inr string _ _ |- _] =>
+          ltac_debug "raise' _ = inr _";
           apply raise_either_inr_inv in H; tauto
       end.
+
+
+  Ltac state_inv_step :=
+    state_inv_step' true.
+
+  Ltac state_inv_step_quick :=
+    state_inv_step' false.
 
   Section MemMwithInvariant.
     Variable invr: mem_state_r -> Prop.
@@ -5442,24 +5513,14 @@ Module CheriMemoryImplWithProofs
     (* base *)
     break_match_hyp.
     - (* MVunspecified *)
-      (* [state_inv_step] should work here. TODO: investigate why it stucks *)
-      apply bind_serr_inv in R.
-      destruct R as [szn [R1 R2]].
-      rewrite ret_serr_inv in R2.
-      apply bind_sassert_inv in R2.
-      destruct R2 as [RSZ R2].
-      invc R2.
-
-      (*
-        generalize dependent DEFAULT_FUEL; intros sfuel R2.
-        unfold sizeof in R2.
-        destruct sfuel;[apply raise_either_inr_inv in R2;tauto|].
-       *)
+      state_inv_step_quick.
+      rename sz into szn.
+      subst bs.
 
       assert(0 < szn)%nat as SP.
       {
-        apply sizeof_pos in R1.
-        apply R1.
+        apply sizeof_pos in R2.
+        apply R2.
       }
 
       generalize dependent (Capability_GS.cap_get_value c).
@@ -5739,7 +5800,20 @@ Module CheriMemoryImplWithProofs
             }
             lia.
     -
-      (* TODO: other types *)
+      (* MVinteger *)
+      break_match_hyp.
+      +
+        (* IV *)
+        admit.
+      +
+        (* IC *)
+        admit.
+    -
+      (* MVfloating *)
+      (* [state_inv_step] should work here. TODO: investigate why it stucks *)
+
+
+
 
   Admitted.
 
