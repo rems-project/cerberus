@@ -549,11 +549,16 @@ let canonicalize (path : string) : string =
     path
 
 
-(** Create a .html file, with a random name, in [output_dir], which must already
-    exist. If no directory is provided, the file is created in the system
-    temporary directory instead. *)
-let mk_state_file_name ~(output_dir : string option) : string =
-  let prefix = "state_" in
+(** Create a filename derived from the given error location, and create a file
+    with that name in [output_dir], which must already exist. If no directory
+    is provided, the file is created in the system temporary directory
+    instead. *)
+let mk_state_file_name ?(output_dir : string option) (loc : Cerb_location.t) : string =
+  let prefix =
+    match Cerb_location.get_filename loc with
+    | None -> "state_"
+    | Some filename -> "state_" ^ Filename.basename filename ^ "_"
+  in
   let canonical_output_dir = Option.map canonicalize output_dir in
   try Filename.temp_file ?temp_dir:canonical_output_dir prefix ".html" with
   | Sys_error _ ->
@@ -575,7 +580,9 @@ let report_pretty ?state_file:to_ ?output_dir:dir_ { loc; msg } =
     | Some state ->
       (* Decide where to write the state *)
       let state_error_file =
-        match to_ with Some file -> file | None -> mk_state_file_name ~output_dir:dir_
+        match to_ with
+        | Some file -> file
+        | None -> mk_state_file_name ?output_dir:dir_ loc
       in
       let link = Report.make state_error_file (Cerb_location.get_filename loc) state in
       let msg = !^"State file:" ^^^ !^("file://" ^ link) in
@@ -593,7 +600,9 @@ let report_json ?state_file:to_ ?output_dir:dir_ { loc; msg } =
     | Some state ->
       (* Decide where to write the state *)
       let file =
-        match to_ with Some file -> file | None -> mk_state_file_name ~output_dir:dir_
+        match to_ with
+        | Some file -> file
+        | None -> mk_state_file_name ?output_dir:dir_ loc
       in
       let link = Report.make file (Cerb_location.get_filename loc) state in
       `String link
