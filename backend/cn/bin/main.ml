@@ -324,6 +324,11 @@ let verify
           let@ errors = Check.time_check_c_functions functions in
           if not quiet then
             List.iter (report_type_error ~json ?output_dir) errors;
+          (* Code 3 is chosen to be different from any existing codes associated
+             with single errors, but is otherwise arbitrary *)
+          let () =
+            match errors with [] -> () | [ e ] -> exit_on_type_error e | _ -> exit 3
+          in
           Check.generate_lemmas lemmas lemmata
         in
         Typing.run_from_pause check paused
