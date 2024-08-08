@@ -148,6 +148,8 @@ Ltac bool_inv :=
 
 Ltac bool_to_prop_hyp :=
   repeat match goal with
+    | [H: negb _ = false |- _] => apply negb_false_iff in H
+    | [H: negb _ = true |- _] => apply negb_true_iff in H
     | [H: orb _ _ = false |- _] => apply orb_false_elim in H; destruct H
     | [H: orb _ _ = true |- _] =>  apply orb_prop in H; destruct H
     | [H: andb _ _ = true |- _] => apply andb_prop in H; destruct H

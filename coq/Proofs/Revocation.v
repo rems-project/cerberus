@@ -805,12 +805,6 @@ Module CheriMemoryImplWithProofs
         subst.
         exists true, gs.
         split;auto.
-        right.
-        split;auto.
-        split.
-        apply negb_true_iff in H.
-        apply H.
-        split;tauto.
       +
         destruct H.
         tuple_inversion.
@@ -862,7 +856,6 @@ Module CheriMemoryImplWithProofs
         rename tg' into tg, gs' into gs.
         bool_to_prop_hyp.
         * (* unspecified *)
-          apply negb_false_iff in H.
           auto.
         *
           (* untagged *)
@@ -1122,7 +1115,6 @@ Module CheriMemoryImplWithProofs
         rename tg' into tg, gs' into gs.
         bool_to_prop_hyp.
         * (* unspecified *)
-          apply negb_false_iff in H.
           auto.
         *
           (* untagged *)
@@ -2000,176 +1992,368 @@ Module CheriMemoryImplWithProofs
       tauto.
   Qed.
 
+  Fact option2serr_inv {A:Type}:
+    forall msg (o:option A) v,
+    option2serr msg o = inr v -> o = Some v.
+  Proof.
+    intros msg o v H.
+    destruct o.
+    -
+      cbn in H.
+      apply ret_inr in H.
+      inv H.
+      reflexivity.
+    -
+      cbn in H.
+      apply raise_serr_inr_inv in H.
+      tauto.
+  Qed.
+
   Ltac htrim :=
     repeat break_match_hyp; repeat break_let; try subst; try tuple_inversion; cbn in *; try discriminate.
 
-  Ltac state_inv_step' htrim_flag :=
-    repeat match goal with
-      |[H: (@bind (sum string) (Monad_either string) unit _ (sassert _ _) _) = inr _ |- _] =>
-         ltac_debug "bind sassert";
-         let H1 := fresh H in
-         let H2 := fresh H in
-         apply bind_sassert_inv in H;
-         destruct H as [H1 H2];
-         match htrim_flag with
-         | true => htrim
-         | false => idtac
-         end
-      |[ H: (bind _ (fun x => _)) ?s = (_ ,inr _) |- _ ] =>
-         ltac_debug "bind (memM)";
-         tryif (apply bind_memM_inv_same_state in H)
-         then
-           ( ltac_debug "  bind (memM, same state)";
+  (* TODO: Terrible code duplication here. Refactor *)
+  Ltac state_inv_step' htrim_flag repeat_flag :=
+    match repeat_flag with
+    | true =>
+        repeat match goal with
+          | [H: option2serr _ _ = inr _ |- _] =>
+             ltac_debug "option2serr _ _ = inr _";
+              apply option2serr_inv in H
+          |[H: (@bind (sum string) (Monad_either string) unit _ (sassert _ _) _) = inr _ |- _] =>
+             ltac_debug "bind sassert";
              let H1 := fresh H in
              let H2 := fresh H in
-             let x' := fresh x in
-             destruct H as [x' [H1 H2]];
+             apply bind_sassert_inv in H;
+             destruct H as [H1 H2];
              match htrim_flag with
              | true => htrim
              | false => idtac
-             end)
-         else
-           (ltac_debug "  bind (memM)";
+             end
+          |[ H: (bind _ (fun x => _)) ?s = (_ ,inr _) |- _ ] =>
+             ltac_debug "bind (memM)";
+             tryif (apply bind_memM_inv_same_state in H)
+             then
+               ( ltac_debug "  bind (memM, same state)";
+                 let H1 := fresh H in
+                 let H2 := fresh H in
+                 let x' := fresh x in
+                 destruct H as [x' [H1 H2]];
+                 match htrim_flag with
+                 | true => htrim
+                 | false => idtac
+                 end)
+             else
+               (ltac_debug "  bind (memM)";
+                let H1 := fresh H in
+                let H2 := fresh H in
+                let x' := fresh x in
+                let s' := fresh s in
+                apply bind_memM_inv in H;
+                destruct H as [s' [x [H1 H2]]];
+                match htrim_flag with
+                | true => htrim
+                | false => idtac
+                end)
+          |[ H: (bind _ (fun _ => _)) ?s = (_ ,inr _) |- _ ] =>
+             ltac_debug "anonymous memM bind";
+             tryif (apply bind_memM_inv_same_state in H)
+             then
+               ( ltac_debug "  bind (memM, same_state, anon)";
+                 let H1 := fresh H in
+                 let H2 := fresh H in
+                 let u := fresh "u" in
+                 destruct H as [u [H1 H2]];
+                 match htrim_flag with
+                 | true => htrim
+                 | false => idtac
+                 end)
+             else
+               (ltac_debug "  bind (memM, anon)";
+                let H1 := fresh H in
+                let H2 := fresh H in
+                let u := fresh "u" in
+                let s' := fresh s in
+                apply bind_memM_inv in H;
+                destruct H as [s' [u [H1 H2]]];
+                match htrim_flag with
+                | true => htrim
+                | false => idtac
+                end)
+          | [ H: bind _ (fun x => _) = inr _ |- _]
+            =>
+              ltac_debug "bind (serr)" ;
+              apply bind_serr_inv in H;
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let x' := fresh x in
+              destruct H as [x' [H1 H2]];
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          (* anonymous serr bind *)
+          | [ H: bind _ (fun _ => _) = inr _ |- _]
+            =>
+              ltac_debug "bind (serr, anon)";
+              apply bind_serr_inv in H;
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let u := fresh "u" in
+              destruct H as [u [H1 H2]];
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: fail _ _ _ = (_, inr _) |- _] =>
+              ltac_debug "fail";
+              apply fail_inr_inv in H; tauto;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: serr2InternalErr _ _ = (_, inr _) |- _] =>
+              ltac_debug "serr2InternalErr";
+              apply serr2InternalErr_inv in H;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: ret _ _ = (_, inr _) |- _] =>
+              ltac_debug "ret (memM)";
+              rewrite ret_memM_inv in H;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: @ret serr (Monad_either string) _ ?x = inr _ |- _] =>
+              ltac_debug "ret (serr)";
+              rewrite ret_serr_inv in H;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: get _ = (_, inr _) |- _] =>
+              ltac_debug "get";
+              rewrite get_inv in H;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: put _ _ = (_, inr _) |- _] =>
+              ltac_debug "put";
+              apply put_inv in H;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: sassert _ _ = inr _ |- _] =>
+              ltac_debug "sassert";
+              apply sassert_inv in H;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: inl _ = inl _ |- _] => inversion H; clear H; match htrim_flag with
+                                                           | true => htrim
+                                                           | false => idtac
+                                                           end
+          | [H: inr _ = inr _ |- _] => inversion H; clear H; match htrim_flag with
+                                                           | true => htrim
+                                                           | false => idtac
+                                                           end
+          | [H: @raise string _ Exception_serr unit _ = @inl string unit _ |- _] =>
+              ltac_debug "raise _ = inl _";
+              apply raise_serr_inl in H;
+              inversion H;
+              clear H;
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end
+          | [H: @raise string serr Exception_serr unit _ = @inr string unit _ |- _] =>
+              ltac_debug "raise _ = inr _";
+              apply raise_serr_inr_inv in H; tauto
+          | [H: @raise string serr (Exception_either string) _ _ = @inr string _ _ |- _] =>
+              ltac_debug "raise' _ = inr _";
+              apply raise_either_inr_inv in H; tauto
+          end
+    | false =>
+        match goal with
+        | [H: option2serr _ _ = inr _ |- _] =>
+            ltac_debug "option2serr _ _ = inr _";
+            apply option2serr_inv in H
+        |[H: (@bind (sum string) (Monad_either string) unit _ (sassert _ _) _) = inr _ |- _] =>
+           ltac_debug "bind sassert";
+           let H1 := fresh H in
+           let H2 := fresh H in
+           apply bind_sassert_inv in H;
+           destruct H as [H1 H2];
+           match htrim_flag with
+           | true => htrim
+           | false => idtac
+           end
+        |[ H: (bind _ (fun x => _)) ?s = (_ ,inr _) |- _ ] =>
+           ltac_debug "bind (memM)";
+           tryif (apply bind_memM_inv_same_state in H)
+           then
+             ( ltac_debug "  bind (memM, same state)";
+               let H1 := fresh H in
+               let H2 := fresh H in
+               let x' := fresh x in
+               destruct H as [x' [H1 H2]];
+               match htrim_flag with
+               | true => htrim
+               | false => idtac
+               end)
+           else
+             (ltac_debug "  bind (memM)";
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let x' := fresh x in
+              let s' := fresh s in
+              apply bind_memM_inv in H;
+              destruct H as [s' [x [H1 H2]]];
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end)
+        |[ H: (bind _ (fun _ => _)) ?s = (_ ,inr _) |- _ ] =>
+           ltac_debug "anonymous memM bind";
+           tryif (apply bind_memM_inv_same_state in H)
+           then
+             ( ltac_debug "  bind (memM, same_state, anon)";
+               let H1 := fresh H in
+               let H2 := fresh H in
+               let u := fresh "u" in
+               destruct H as [u [H1 H2]];
+               match htrim_flag with
+               | true => htrim
+               | false => idtac
+               end)
+           else
+             (ltac_debug "  bind (memM, anon)";
+              let H1 := fresh H in
+              let H2 := fresh H in
+              let u := fresh "u" in
+              let s' := fresh s in
+              apply bind_memM_inv in H;
+              destruct H as [s' [u [H1 H2]]];
+              match htrim_flag with
+              | true => htrim
+              | false => idtac
+              end)
+        | [ H: bind _ (fun x => _) = inr _ |- _]
+          =>
+            ltac_debug "bind (serr)" ;
+            apply bind_serr_inv in H;
             let H1 := fresh H in
             let H2 := fresh H in
             let x' := fresh x in
-            let s' := fresh s in
-            apply bind_memM_inv in H;
-            destruct H as [s' [x [H1 H2]]];
+            destruct H as [x' [H1 H2]];
             match htrim_flag with
             | true => htrim
             | false => idtac
-            end)
-      |[ H: (bind _ (fun _ => _)) ?s = (_ ,inr _) |- _ ] =>
-         ltac_debug "anonymous memM bind";
-         tryif (apply bind_memM_inv_same_state in H)
-         then
-           ( ltac_debug "  bind (memM, same_state, anon)";
-             let H1 := fresh H in
-             let H2 := fresh H in
-             let u := fresh "u" in
-             destruct H as [u [H1 H2]];
-             match htrim_flag with
-             | true => htrim
-             | false => idtac
-             end)
-         else
-           (ltac_debug "  bind (memM, anon)";
+            end
+        (* anonymous serr bind *)
+        | [ H: bind _ (fun _ => _) = inr _ |- _]
+          =>
+            ltac_debug "bind (serr, anon)";
+            apply bind_serr_inv in H;
             let H1 := fresh H in
             let H2 := fresh H in
             let u := fresh "u" in
-            let s' := fresh s in
-            apply bind_memM_inv in H;
-            destruct H as [s' [u [H1 H2]]];
+            destruct H as [u [H1 H2]];
             match htrim_flag with
             | true => htrim
             | false => idtac
-            end)
-      | [ H: bind _ (fun x => _) = inr _ |- _]
-        =>
-          ltac_debug "bind (serr)" ;
-          apply bind_serr_inv in H;
-          let H1 := fresh H in
-          let H2 := fresh H in
-          let x' := fresh x in
-          destruct H as [x' [H1 H2]];
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      (* anonymous serr bind *)
-      | [ H: bind _ (fun _ => _) = inr _ |- _]
-        =>
-          ltac_debug "bind (serr, anon)";
-          apply bind_serr_inv in H;
-          let H1 := fresh H in
-          let H2 := fresh H in
-          let u := fresh "u" in
-          destruct H as [u [H1 H2]];
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: fail _ _ _ = (_, inr _) |- _] =>
-          ltac_debug "fail";
-          apply fail_inr_inv in H; tauto;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: serr2InternalErr _ _ = (_, inr _) |- _] =>
-          ltac_debug "serr2InternalErr";
-          apply serr2InternalErr_inv in H;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: ret _ _ = (_, inr _) |- _] =>
-          ltac_debug "ret (memM)";
-          rewrite ret_memM_inv in H;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: @ret serr (Monad_either string) _ ?x = inr _ |- _] =>
-          ltac_debug "ret (serr)";
-          rewrite ret_serr_inv in H;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: get _ = (_, inr _) |- _] =>
-          ltac_debug "get";
-          rewrite get_inv in H;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: put _ _ = (_, inr _) |- _] =>
-          ltac_debug "put";
-          apply put_inv in H;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: sassert _ _ = inr _ |- _] =>
-          ltac_debug "sassert";
-          apply sassert_inv in H;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: inl _ = inl _ |- _] => inversion H; clear H; match htrim_flag with
-                                                       | true => htrim
-                                                       | false => idtac
-                                                       end
-      | [H: inr _ = inr _ |- _] => inversion H; clear H; match htrim_flag with
-                                                       | true => htrim
-                                                       | false => idtac
-                                                       end
-      | [H: @raise string _ Exception_serr unit _ = @inl string unit _ |- _] =>
-          ltac_debug "raise _ = inl _";
-          apply raise_serr_inl in H;
-          inversion H;
-          clear H;
-          match htrim_flag with
-          | true => htrim
-          | false => idtac
-          end
-      | [H: @raise string serr Exception_serr unit _ = @inr string unit _ |- _] =>
-          ltac_debug "raise _ = inr _";
-          apply raise_serr_inr_inv in H; tauto
-      | [H: @raise string serr (Exception_either string) _ _ = @inr string _ _ |- _] =>
-          ltac_debug "raise' _ = inr _";
-          apply raise_either_inr_inv in H; tauto
-      end.
+            end
+        | [H: fail _ _ _ = (_, inr _) |- _] =>
+            ltac_debug "fail";
+            apply fail_inr_inv in H; tauto;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: serr2InternalErr _ _ = (_, inr _) |- _] =>
+            ltac_debug "serr2InternalErr";
+            apply serr2InternalErr_inv in H;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: ret _ _ = (_, inr _) |- _] =>
+            ltac_debug "ret (memM)";
+            rewrite ret_memM_inv in H;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: @ret serr (Monad_either string) _ ?x = inr _ |- _] =>
+            ltac_debug "ret (serr)";
+            rewrite ret_serr_inv in H;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: get _ = (_, inr _) |- _] =>
+            ltac_debug "get";
+            rewrite get_inv in H;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: put _ _ = (_, inr _) |- _] =>
+            ltac_debug "put";
+            apply put_inv in H;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: sassert _ _ = inr _ |- _] =>
+            ltac_debug "sassert";
+            apply sassert_inv in H;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: inl _ = inl _ |- _] => inversion H; clear H; match htrim_flag with
+                                                         | true => htrim
+                                                         | false => idtac
+                                                         end
+        | [H: inr _ = inr _ |- _] => inversion H; clear H; match htrim_flag with
+                                                         | true => htrim
+                                                         | false => idtac
+                                                         end
+        | [H: @raise string _ Exception_serr unit _ = @inl string unit _ |- _] =>
+            ltac_debug "raise _ = inl _";
+            apply raise_serr_inl in H;
+            inversion H;
+            clear H;
+            match htrim_flag with
+            | true => htrim
+            | false => idtac
+            end
+        | [H: @raise string serr Exception_serr unit _ = @inr string unit _ |- _] =>
+            ltac_debug "raise _ = inr _";
+            apply raise_serr_inr_inv in H; tauto
+        | [H: @raise string serr (Exception_either string) _ _ = @inr string _ _ |- _] =>
+            ltac_debug "raise' _ = inr _";
+            apply raise_either_inr_inv in H; tauto
+        end
+    end.
 
+  Ltac state_inv_steps :=
+    state_inv_step' true true.
+
+  Ltac state_inv_steps_quick :=
+    state_inv_step' false true.
 
   Ltac state_inv_step :=
-    state_inv_step' true.
+    state_inv_step' true false.
 
   Ltac state_inv_step_quick :=
-    state_inv_step' false.
+    state_inv_step' false false.
 
   Section MemMwithInvariant.
     Variable invr: mem_state_r -> Prop.
@@ -4604,7 +4788,6 @@ Module CheriMemoryImplWithProofs
     - assumption.
     -
       bool_to_prop_hyp.
-      apply negb_true_iff.
       auto.
     -
       bool_to_prop_hyp.
@@ -4661,18 +4844,16 @@ Module CheriMemoryImplWithProofs
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
     break_match_hyp.
     -
-      state_inv_step.
+      state_inv_steps.
       break_match_hyp.
       apply raise_either_inr_inv in R3; tauto.
       rewrite MorelloImpl.uchar_size in R4.
-      cbn in R4.
-      apply ret_inr in R4.
       invc R4.
       match goal with
       | [H: monadic_list_init _ ?f = _ |- _] => generalize dependent f;intros
       end.
       cbn in R3.
-      state_inv_step.
+      state_inv_steps.
       reflexivity.
     -
       apply raise_either_inr_inv in R; tauto.
@@ -4696,10 +4877,9 @@ Module CheriMemoryImplWithProofs
     unfold repr in P.
     destruct fuel;[apply raise_either_inr_inv in P;tauto|].
     destruct T;
-      (state_inv_step;
+      (state_inv_steps;
        rewrite MorelloImpl.uchar_size in P0;
        cbn in P0;
-       apply ret_inr in P0;
        invc P0;
        apply repeat_length).
   Qed.
@@ -4752,10 +4932,10 @@ Module CheriMemoryImplWithProofs
         *
           Transparent raise.
           unfold raise, Exception_either in T.
-          state_inv_step.
+          state_inv_steps.
           Opaque raise.
         *
-          state_inv_step.
+          state_inv_steps.
     -
       destruct m;
         try
@@ -4779,10 +4959,10 @@ Module CheriMemoryImplWithProofs
         *
           Transparent raise.
           unfold raise, Exception_either in T.
-          state_inv_step.
+          state_inv_steps.
           Opaque raise.
         *
-          state_inv_step.
+          state_inv_steps.
   Qed.
 
   Lemma store_other_spec
@@ -4803,7 +4983,7 @@ Module CheriMemoryImplWithProofs
     cbn in ST.
     rewrite MorelloImpl.uchar_size in ST.
     cbn in ST.
-    state_inv_step.
+    state_inv_steps.
 
     assert(length l = 1%nat) as L by (eapply repr_char_bytes_size;eauto).
     apply AMapProofs.map_add_list_not_at_1; auto.
@@ -4828,7 +5008,7 @@ Module CheriMemoryImplWithProofs
     cbn in ST.
     rewrite MorelloImpl.uchar_size in ST.
     cbn in ST.
-    state_inv_step; reflexivity.
+    state_inv_steps; reflexivity.
     Transparent repr.
   Qed.
 
@@ -4896,11 +5076,11 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros H.
     unfold store in H.
-    state_inv_step.
+    state_inv_steps.
 
     rewrite MorelloImpl.uchar_size in H6, H11.
-    cbn in H6. apply ret_inr in H6. invc H6.
-    cbn in H11. apply ret_inr in H11. invc H11.
+    invc H6.
+    invc H11.
     cbn.
     apply AMap.M.add_1.
     reflexivity.
@@ -5186,24 +5366,6 @@ Module CheriMemoryImplWithProofs
   Qed.
 
 
-  (* TODO move to Proof Aux *)
-  Fact option2serr_inv {A:Type}:
-    forall msg (o:option A) v,
-    option2serr msg o = inr v -> o = Some v.
-  Proof.
-    intros msg o v H.
-    destruct o.
-    -
-      cbn in H.
-      apply ret_inr in H.
-      inv H.
-      reflexivity.
-    -
-      cbn in H.
-      apply raise_serr_inr_inv in H.
-      tauto.
-  Qed.
-    
   Fact pointer_sizeof_pos:
     (0 < sizeof_pointer MorelloImpl.get)%nat.
   Proof.
@@ -5237,19 +5399,19 @@ Module CheriMemoryImplWithProofs
         *
           destruct b.
           --
-            apply option2serr_inv in H1.
+            state_inv_steps.
             apply MorelloImpl.sizeof_ity_pos in H1. assumption.
           --
-            apply option2serr_inv in H1.
+            state_inv_steps.
             apply MorelloImpl.sizeof_fty_pos in H1. assumption.
         *
           destruct o.
           --
-            state_inv_step;
+            state_inv_steps;
               apply IHfuel in H2;
               lia.
           --
-            state_inv_step.
+            state_inv_steps.
         *
           pose proof pointer_sizeof_pos as P.
           remember (sizeof_pointer MorelloImpl.get) as psize.
@@ -5272,13 +5434,14 @@ Module CheriMemoryImplWithProofs
 
           clear H1.
 
+
           apply bind_serr_inv in H.
           destruct H as [x [H1 H2]].
           break_let.
           clear Heqp x.
           rename n into max_offset.
           eapply offsetof_struct_max_offset_pos in H1.
-          state_inv_step;bool_to_prop_hyp; try congruence;lia.
+          state_inv_steps;bool_to_prop_hyp; try congruence;lia.
         *
           (* Union *)
           generalize dependent (match maybe_tagDefs with
@@ -5292,7 +5455,6 @@ Module CheriMemoryImplWithProofs
           apply bind_sassert_inv in H.
           destruct H.
           bool_to_prop_hyp.
-
           apply bind_serr_inv in H0.
           destruct H0 as [[max_size max_align] [H0 H1]].
           --
@@ -5317,12 +5479,8 @@ Module CheriMemoryImplWithProofs
               cbn in *.
               clear H.
               repeat break_let.
-
-              apply bind_serr_inv in H0.
-              destruct H0 as [a1 [H0 H2]].
-              apply bind_serr_inv in H0.
-              destruct H0 as [sz [H3 H4]].
-              apply IHfuel in H3.
+              state_inv_steps.
+              apply IHfuel in H0.
               admit.
     -
       clear offsetof_struct_max_offset_pos.
@@ -5513,7 +5671,7 @@ Module CheriMemoryImplWithProofs
     (* base *)
     break_match_hyp.
     - (* MVunspecified *)
-      state_inv_step_quick.
+      state_inv_steps_quick.
       rename sz into szn.
       subst bs.
 
@@ -5810,7 +5968,7 @@ Module CheriMemoryImplWithProofs
         admit.
     -
       (* MVfloating *)
-      (* [state_inv_step] should work here. TODO: investigate why it stucks *)
+      (* [state_inv_steps] should work here. TODO: investigate why it stucks *)
 
 
 
@@ -6060,10 +6218,10 @@ Module CheriMemoryImplWithProofs
     unfold fail, raise, ret, Monad_either, Exception_either, Exception_errS, memM_monad, Monad_errS in H.
     cbn in H.
     repeat break_match; try tuple_inversion; try inl_inr.
-    repeat state_inv_step.
+    repeat state_inv_steps.
 
     unfold find_cap_allocation in *.
-    repeat state_inv_step.
+    repeat state_inv_steps.
     tuple_inversion.
     apply find_cap_allocation_st_spec in H0, H1.
     destruct H0 as [H0 [D0 B0]].
@@ -6074,8 +6232,8 @@ Module CheriMemoryImplWithProofs
     destruct Heqb0.
 
     unfold memcpy_alloc_bounds_check in H3.
-    break_match_hyp. state_inv_step.
-    break_match_hyp; state_inv_step.
+    break_match_hyp. state_inv_steps.
+    break_match_hyp; state_inv_steps.
     bool_to_prop_hyp.
 
     econstructor.
