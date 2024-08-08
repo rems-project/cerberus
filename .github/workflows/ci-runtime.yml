@@ -29,9 +29,6 @@ jobs:
 
     - name: Checkout cerberus 
       uses: actions/checkout@v4
-      with: 
-        repository: dc-mak/cerberus # FIXME: remove once the branch is merged 
-        ref: upgrade-runtime-single-file-script # FIXME: remove once the branch is merged 
 
     - name: System dependencies (ubuntu)
       run: |
