@@ -199,15 +199,28 @@ let report_type_error ~(json : bool) ?(output_dir : string option) (error : Type
     TypeErrors.report_pretty ?output_dir error
 
 
-(** Exit with a code appropriate to the provided error. *)
-let exit_on_type_error (error : TypeErrors.t) : 'a =
-  match error.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
+(** Generate an appropriate exit code for the provided error. *)
+let exit_code_of_error (error : TypeErrors.t) : int =
+  match error.msg with TypeErrors.Unsupported _ -> 2 | _ -> 1
+
+
+(** In the presence of nonempty errors, generate an appropriate exit code for
+    them. *)
+let exit_code_of_errors (errors : TypeErrors.t list) : int option =
+  (* We arbitrarily choose to make any `Unsupported` message dominate all other
+     messages. *)
+  let is_unsupported (err : TypeErrors.t) =
+    match err.msg with TypeErrors.Unsupported _ -> true | _ -> false
+  in
+  match errors with
+  | [] -> None
+  | _ -> Some (if List.exists is_unsupported errors then 2 else 1)
 
 
 (** Report the provided error, then exit. *)
 let handle_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t) =
   report_type_error ~json ?output_dir error;
-  exit_on_type_error error
+  exit (exit_code_of_error error)
 
 
 let well_formed
@@ -325,6 +338,7 @@ let verify
           let@ errors = Check.time_check_c_functions functions in
           if not quiet then
             List.iter (report_type_error ~json ?output_dir) errors;
+          Option.fold ~none:() ~some:exit (exit_code_of_errors errors);
           Check.generate_lemmas lemmas lemmata
         in
         Typing.run_from_pause check paused
