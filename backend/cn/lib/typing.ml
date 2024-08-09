@@ -440,15 +440,18 @@ let add_c_internal lc =
   return ()
 
 
-let add_r_internal loc (r, RE.O oargs) =
+let add_r_internal ?(derive_constraints = true) loc (r, RE.O oargs) =
   let@ s = get_typing_context () in
   let@ simp_ctxt = simp_ctxt () in
   let r = Simplify.ResourceTypes.simp simp_ctxt r in
   let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
   let pointer_facts =
-    Resources.pointer_facts
-      ~new_resource:(r, RE.O oargs)
-      ~old_resources:(Context.get_rs s)
+    if derive_constraints then
+      Resources.pointer_facts
+        ~new_resource:(r, RE.O oargs)
+        ~old_resources:(Context.get_rs s)
+    else
+      []
   in
   let@ () = set_typing_context (Context.add_r loc (r, O oargs) s) in
   iterM (fun x -> add_c_internal (LC.T x)) pointer_facts
@@ -701,7 +704,7 @@ let do_unfold_resources loc =
           (fun (re, i) (keep, unpack, extract) ->
             match Pack.unpack loc s.global provable_f2 re with
             | Some unpackable ->
-              let pname = RET.pp_predicate_name (RET.predicate_name (fst re)) in
+              let pname = RET.predicate_name (fst re) in
               (keep, (i, pname, unpackable) :: unpack, extract)
             | None ->
               let re_reduced, extracted =
@@ -725,11 +728,13 @@ let do_unfold_resources loc =
           let@ _, members =
             make_return_record
               loc
-              ("unpack_" ^ Pp.plain pname)
+              ("unpack_" ^ Pp.plain (RET.pp_predicate_name pname))
               (LogicalReturnTypes.binders lrt)
           in
           bind_logical_return_internal loc members lrt
-        | _i, _pname, `RES res -> iterM (add_r_internal loc) res
+        | _i, pname, `RES res ->
+          let is_owned = match pname with Owned _ -> true | _ -> false in
+          iterM (add_r_internal ~derive_constraints:(not is_owned) loc) res
       in
       let@ () = iterM do_unpack unpack in
       let@ () = iterM (add_r_internal loc) extract in
