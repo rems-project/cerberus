@@ -1853,7 +1853,9 @@ let check_procedure (loc : loc) (fsym : Sym.t) (args_and_body : _ mu_proc_args_a
 
 let skip_and_only = ref (([] : string list), ([] : string list))
 
-let batch = ref false
+(** When set, causes verification of multiple functions to abort as soon as a
+    single function fails to verify. *)
+let fail_fast = ref false
 
 let record_tagdefs tagDefs =
   PmapM.iterM
@@ -2020,7 +2022,15 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
     ([], [])
 
 
-let check_c_functions funs =
+type c_function = symbol * (loc * basetype mu_proc_args_and_body)
+
+let c_function_name ((fsym, (_loc, _args_and_body)) : c_function) : string =
+  Sym.pp_string fsym
+
+
+(** Filter functions according to [skip_and_only]: first according to "only",
+    then according to "skip" *)
+let select_functions (funs : c_function list) : c_function list =
   let matches_str s fsym = String.equal s (Sym.pp_string fsym) in
   let str_fsyms s =
     match List.filter (matches_str s) (List.map fst funs) with
@@ -2037,45 +2047,72 @@ let check_c_functions funs =
     | [] -> funs
     | _ss -> List.filter (fun (fsym, _) -> SymSet.mem fsym only) funs
   in
-  let selected_funs =
-    List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs
+  List.filter (fun (fsym, _) -> not (SymSet.mem fsym skip)) only_funs
+
+
+(** Check a single C function. Failure of the check is encoded monadically. *)
+let check_c_function ((fsym, (loc, args_and_body)) : c_function) : unit m =
+  check_procedure loc fsym args_and_body
+
+
+(** Check the provided C functions. The first failed check will short-circuit
+    the remainder of the checks, and the associated error will be returned as
+    [Some]. *)
+let check_c_functions_fast (funs : c_function list) : TypeErrors.t option m =
+  let total = List.length funs in
+  let check_and_record (num_checked, prev_error) c_fn =
+    match prev_error with
+    | Some _ -> return (num_checked, prev_error)
+    | None ->
+      let fn_name = c_function_name c_fn in
+      let@ outcome = sandbox (check_c_function c_fn) in
+      let checked = num_checked + 1 in
+      (match outcome with
+       | Ok () ->
+         progress_simple (of_total checked total) (fn_name ^ " -- pass");
+         return (checked, None)
+       | Error err ->
+         progress_simple (of_total checked total) (fn_name ^ " -- fail");
+         return (checked, Some err))
   in
-  let number_entries = List.length selected_funs in
-  match !batch with
-  | false ->
-    let@ _ =
-      ListM.mapiM
-        (fun counter (fsym, (loc, args_and_body)) ->
-          let () =
-            progress_simple (of_total (counter + 1) number_entries) (Sym.pp_string fsym)
-          in
-          check_procedure loc fsym args_and_body)
-        selected_funs
-    in
-    return ()
+  let@ _num_checked, error = ListM.fold_leftM check_and_record (0, None) funs in
+  return error
+
+
+(** Check the provided C functions, each in an isolated context, capturing any
+    (monadic) check failures and returning them. All checks will be performed
+    regardless of intermediate failures. The result's order is determined by
+    the input's order: if function [f] appears before function [g], then
+    function [f]'s error (if any) will appear before function [g]'s error (if
+    any). *)
+let check_c_functions_all (funs : c_function list) : TypeErrors.t list m =
+  let total = List.length funs in
+  let check_and_record (num_checked, errors) c_fn =
+    let fn_name = c_function_name c_fn in
+    let@ outcome = sandbox (check_c_function c_fn) in
+    let checked = num_checked + 1 in
+    match outcome with
+    | Ok () ->
+      progress_simple (of_total checked total) (fn_name ^ " -- pass");
+      return (checked, errors)
+    | Error err ->
+      progress_simple (of_total checked total) (fn_name ^ " -- fail");
+      return (checked, err :: errors)
+  in
+  let@ _num_checked, errors = ListM.fold_leftM check_and_record (0, []) funs in
+  return (List.rev errors)
+
+
+(** Downselect from the provided functions with [select_functions] and check the
+    results. Errors in checking are captured, collected, and returned. When
+    [fail_fast] is set, the first error encountered will halt checking. *)
+let check_c_functions (funs : c_function list) : TypeErrors.t list m =
+  let selected_funs = select_functions funs in
+  match !fail_fast with
   | true ->
-    let@ _, pass, fail =
-      ListM.fold_leftM
-        (fun (counter, pass, fail) (fsym, (loc, args_and_body)) ->
-          let@ outcome = sandbox (check_procedure loc fsym args_and_body) in
-          match outcome with
-          | Ok _ ->
-            progress_simple
-              (of_total (counter + 1) number_entries)
-              (Sym.pp_string fsym ^ " -- pass");
-            return (counter + 1, pass + 1, fail)
-          | Error _ ->
-            progress_simple
-              (of_total (counter + 1) number_entries)
-              (Sym.pp_string fsym ^ " -- fail");
-            return (counter + 1, pass, fail + 1))
-        (0, 0, 0)
-        selected_funs
-    in
-    print
-      stdout
-      (item "summary" (int pass ^^^ !^"pass" ^^ comma ^^^ int fail ^^^ !^"fail"));
-    return ()
+    let@ error_opt = check_c_functions_fast selected_funs in
+    return (Option.to_list error_opt)
+  | false -> check_c_functions_all selected_funs
 
 
 (* (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list *)
@@ -2211,18 +2248,23 @@ let check_decls_lemmata_fun_specs (mu_file : unit mu_file) =
   in
   Pp.debug 3 (lazy (Pp.headline "type-checked C functions and specifications."));
   Cerb_debug.end_csv_timing "decl, lemmata, function specification checking";
-  return (checked, lemmata)
+  return (List.rev checked, lemmata)
 
 
-let check (checked, lemmata) o_lemma_mode =
+(** With CSV timing enabled, check the provided functions with
+    [check_c_functions]. See that function for more information on the
+    semantics of checking. *)
+let time_check_c_functions (checked : c_function list) : TypeErrors.t list m =
   Cerb_debug.begin_csv_timing () (*type checking functions*);
-  let@ () = check_c_functions checked in
+  let@ errors = check_c_functions checked in
   Cerb_debug.end_csv_timing "type checking functions";
+  return errors
+
+
+let generate_lemmas lemmata o_lemma_mode =
   let@ global = get_global () in
   match o_lemma_mode with
-  | Some mode ->
-    let@ _ = embed_resultat (Lemmata.generate global mode lemmata) in
-    return ()
+  | Some mode -> embed_resultat (Lemmata.generate global mode lemmata)
   | None -> return ()
 
 (* TODO:

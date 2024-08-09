@@ -188,12 +188,26 @@ let with_well_formedness_check
     Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
 
 
-let handle_type_error ~json ~state_file ~output_dir e =
+(** Report an error on [stderr] in an appropriate format: JSON if [json] is
+    true, or human-readable if not. *)
+let report_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t)
+  : unit
+  =
   if json then
-    TypeErrors.report_json ?state_file ?output_dir e
+    TypeErrors.report_json ?output_dir error
   else
-    TypeErrors.report ?state_file ?output_dir e;
-  match e.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
+    TypeErrors.report_pretty ?output_dir error
+
+
+(** Exit with a code appropriate to the provided error. *)
+let exit_on_type_error (error : TypeErrors.t) : 'a =
+  match error.msg with TypeErrors.Unsupported _ -> exit 2 | _ -> exit 1
+
+
+(** Report the provided error, then exit. *)
+let handle_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t) =
+  report_type_error ~json ?output_dir error;
+  exit_on_type_error error
 
 
 let well_formed
@@ -202,7 +216,6 @@ let well_formed
   incl_dirs
   incl_files
   json
-  state_file
   output_dir
   csv_times
   log_times
@@ -222,7 +235,7 @@ let well_formed
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar
-    ~handle_error:(handle_type_error ~json ~state_file ~output_dir)
+    ~handle_error:(handle_type_error ~json ?output_dir)
     ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused:_ -> Resultat.return ())
 
 
@@ -239,7 +252,6 @@ let verify
   slow_smt_dir
   no_timestamps
   json
-  state_file
   output_dir
   diag
   lemmata
@@ -260,7 +272,8 @@ let verify
   use_vip
   no_use_ity
   use_peval
-  batch
+  fail_fast
+  quiet
   no_inherit_loc
   magic_comment_char_dollar
   =
@@ -287,7 +300,7 @@ let verify
   Solver.solver_flags := solver_flags;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
   IndexTerms.use_vip := use_vip;
-  Check.batch := batch;
+  Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
   Sym.executable_spec_enabled := Option.is_some output_decorated;
@@ -302,10 +315,23 @@ let verify
     ~use_peval
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
-    ~handle_error:(handle_type_error ~json ~state_file ~output_dir)
+    ~handle_error:(handle_type_error ~json ?output_dir)
     ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused ->
       match output_decorated with
-      | None -> Typing.run_from_pause (fun paused -> Check.check paused lemmata) paused
+      | None ->
+        let check (functions, lemmas) =
+          let open Typing in
+          let@ errors = Check.time_check_c_functions functions in
+          if not quiet then
+            List.iter (report_type_error ~json ?output_dir) errors;
+          (* Code 3 is chosen to be different from any existing codes associated
+             with single errors, but is otherwise arbitrary *)
+          let () =
+            match errors with [] -> () | [ e ] -> exit_on_type_error e | _ -> exit 3
+          in
+          Check.generate_lemmas lemmas lemmata
+        in
+        Typing.run_from_pause check paused
       | Some output_filename ->
         Cerb_colour.without_colour
           (fun () ->
@@ -510,12 +536,14 @@ module Verify_flags = struct
       & info [ "locs" ] ~docv:"HEX" ~doc)
 
 
-  let batch =
-    let doc =
-      "Type check functions in batch/do not stop on first type error (unless `only` is \
-       used)"
-    in
-    Arg.(value & flag & info [ "batch" ] ~doc)
+  let fail_fast =
+    let doc = "Abort immediately after encountering a verification error" in
+    Arg.(value & flag & info [ "fail-fast" ] ~doc)
+
+
+  let quiet =
+    let doc = "Only report success and failure, rather than rich errors" in
+    Arg.(value & flag & info [ "quiet" ] ~doc)
 
 
   let slow_smt_threshold =
@@ -529,11 +557,6 @@ module Verify_flags = struct
        temp-dir)."
     in
     Arg.(value & opt (some string) None & info [ "slow-smt-dir" ] ~docv:"FILE" ~doc)
-
-
-  let state_file =
-    let doc = "file in which to output the state" in
-    Arg.(value & opt (some string) None & info [ "state-file" ] ~docv:"FILE" ~doc)
 
 
   let diag =
@@ -595,7 +618,7 @@ module Verify_flags = struct
 
 
   let output_dir =
-    let doc = "directory in which to output state files (overridden by --state-file)" in
+    let doc = "directory in which to output state files" in
     Arg.(value & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
 end
 
@@ -644,7 +667,6 @@ let wf_cmd =
     $ Common_flags.incl_dirs
     $ Common_flags.incl_files
     $ Verify_flags.json
-    $ Verify_flags.state_file
     $ Verify_flags.output_dir
     $ Common_flags.csv_times
     $ Common_flags.log_times
@@ -681,7 +703,6 @@ let verify_t : unit Term.t =
   $ Verify_flags.slow_smt_dir
   $ Common_flags.no_timestamps
   $ Verify_flags.json
-  $ Verify_flags.state_file
   $ Verify_flags.output_dir
   $ Verify_flags.diag
   $ Lemma_flags.lemmata
@@ -702,7 +723,8 @@ let verify_t : unit Term.t =
   $ Verify_flags.use_vip
   $ Common_flags.no_use_ity
   $ Common_flags.use_peval
-  $ Verify_flags.batch
+  $ Verify_flags.fail_fast
+  $ Verify_flags.quiet
   $ Common_flags.no_inherit_loc
   $ Common_flags.magic_comment_char_dollar
 
