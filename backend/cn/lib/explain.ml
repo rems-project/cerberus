@@ -4,6 +4,7 @@ module BT = BaseTypes
 module RE = Resources
 module RET = ResourceTypes
 module LC = LogicalConstraints
+module LAT = LogicalArgumentTypes
 module LS = LogicalSorts
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
@@ -114,6 +115,25 @@ let simp_constraint eval lct =
     | _ -> [ mk term ]
   in
   match lct with LC.Forall _ -> [ lct ] | LC.T ct -> List.map (fun x -> LC.T x) (go ct)
+
+
+(** Simplify a resource clause in the context of a model. *)
+let rec simp_resource eval r =
+  match r with
+  | LAT.Constraint (ct, info, more) ->
+    let is_true =
+      match ct with
+      | LC.T ct ->
+        (match eval ct with Some (IT (Const (Bool b), _, _)) -> b | _ -> false)
+      | _ -> false
+    in
+    if is_true then
+      simp_resource eval more
+    else
+      LAT.Constraint (ct, info, simp_resource eval more)
+  | LAT.Define (x, i, more) -> LAT.Define (x, i, simp_resource eval more)
+  | LAT.Resource (x, i, more) -> LAT.Resource (x, i, simp_resource eval more)
+  | I i -> I i
 
 
 let state ctxt model_with_q extras =
@@ -261,6 +281,8 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
       (statef ctxt
        :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
+  let model, _quantifier_counter_model = model_with_q in
+  let evaluate it = Solver.eval ctxt.global model it in
   let predicate_hints =
     match extras.request with
     | None -> []
@@ -270,7 +292,9 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
        | Owned _ -> []
        | PName pname ->
          let doc_clause (_name, c) =
-           { cond = IT.pp c.guard; clause = LogicalArgumentTypes.pp IT.pp c.packing_ft }
+           { cond = IT.pp c.guard;
+             clause = LogicalArgumentTypes.pp IT.pp (simp_resource evaluate c.packing_ft)
+           }
          in
          List.map doc_clause (relevant_predicate_clauses ctxt.global pname req))
   in
