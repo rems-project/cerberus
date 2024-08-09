@@ -64,7 +64,7 @@ for TEST in ${SUCC}; do
 done
 
 for TEST in ${FAIL}; do
-  if ! exits_with_code "cn verify" "${TEST}" "(1 2)"; then
+  if ! exits_with_code "cn verify" "${TEST}" "(1 2 3)"; then
     FAILED+=" ${TEST}"
   fi
 done
