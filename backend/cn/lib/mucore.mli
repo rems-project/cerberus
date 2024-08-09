@@ -144,10 +144,12 @@ end
 
 type symbol = Cerb_frontend.Symbol.sym
 
+(** Annotated C type.  The annotations are typically an explanation of
+    something that might go wrong (e.g., overflow on an integer type). *)
 type act =
-  { loc : loc;
-    annot : Cerb_frontend.Annot.annot list;
-    ct : T.ct
+  { loc : loc; (** Source location *)
+    annot : Cerb_frontend.Annot.annot list; (** Annotations *)
+    ct : T.ct (** Affected type *)
   }
 
 type 'TY mu_object_value_ =
@@ -208,9 +210,11 @@ type bw_unop =
   | M_BW_CTZ
   | M_BW_FFS
 
+(** What to do on out of bounds.
+    The annotated C type is the result type of the operation. *)
 type bound_kind =
-  | M_Bound_Wrap of act
-  | M_Bound_Except of act
+  | M_Bound_Wrap of act (** Wrap around (used for unsigned types) *)
+  | M_Bound_Except of act (** Report an exception, for signed types *)
 
 val bound_kind_act : bound_kind -> act
 

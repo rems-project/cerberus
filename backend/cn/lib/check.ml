@@ -543,6 +543,10 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
            fail (fun _ ->
              { loc; msg = Mismatch { has = BT.pp ty; expect = !^"comparable type" } })
        in
+       let not_yet x =
+         Pp.debug 1 (lazy (Pp.item "not yet restored" (Pp_mucore_ast.pp_pexpr orig_pe)));
+         failwith ("todo: " ^ x)
+       in
        (match op with
         | OpDiv ->
           let@ () = WellTyped.ensure_base_type loc ~expect (bt_of_pexpr pe1) in
@@ -618,9 +622,11 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
           let@ () = WellTyped.ensure_base_type loc ~expect:Bool (bt_of_pexpr pe1) in
           let@ () = WellTyped.ensure_base_type loc ~expect:Bool (bt_of_pexpr pe2) in
           check_pexpr pe1 (fun v1 -> check_pexpr pe2 (fun v2 -> k (or_ [ v1; v2 ] loc)))
-        | _ ->
-          Pp.debug 1 (lazy (Pp.item "not yet restored" (Pp_mucore_ast.pp_pexpr orig_pe)));
-          failwith ("todo: " ^ __FUNCTION__))
+        | OpAdd -> not_yet "OpAdd"
+        | OpSub -> not_yet "OpSub"
+        | OpMul -> not_yet "OpMul"
+        | OpRem_f -> not_yet "OpRem_f"
+        | OpExp -> not_yet "OpExp")
      | M_PEapply_fun (fun_id, args) ->
        let@ () =
          match mu_fun_return_type fun_id args with
