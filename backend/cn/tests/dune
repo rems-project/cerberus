@@ -1,0 +1,23 @@
+(include_subdirs qualified)
+
+(executable
+ (name main)
+ (public_name cn_tests)
+ (package cn)
+ (modes exe)
+ (flags
+  (:standard -w -37 -open Monomorphic.Int))
+ (libraries
+  cerb_backend
+  cerb_frontend
+  cerb_util
+  cn
+  mem_concrete
+  menhirLib
+  monomorphic
+  ocamlgraph
+  ounit2
+  result
+  str
+  unix
+  z3))
