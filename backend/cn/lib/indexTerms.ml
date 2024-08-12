@@ -56,59 +56,97 @@ let rec bound_by_pattern (Pat (pat_, bt, _)) =
     List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
 
-let rec free_vars_ : 'a. 'a term_ -> SymSet.t = function
-  | Const _ -> SymSet.empty
-  | Sym s -> SymSet.singleton s
-  | Unop (_uop, t1) -> free_vars t1
-  | Binop (_bop, t1, t2) -> free_vars_list [ t1; t2 ]
-  | ITE (t1, t2, t3) -> free_vars_list [ t1; t2; t3 ]
-  | EachI ((_, (s, _), _), t) -> SymSet.remove s (free_vars t)
-  | Tuple ts -> free_vars_list ts
-  | NthTuple (_, t) -> free_vars t
-  | Struct (_tag, members) -> free_vars_list (List.map snd members)
-  | StructMember (t, _member) -> free_vars t
-  | StructUpdate ((t1, _member), t2) -> free_vars_list [ t1; t2 ]
-  | Record members -> free_vars_list (List.map snd members)
-  | RecordMember (t, _member) -> free_vars t
-  | RecordUpdate ((t1, _member), t2) -> free_vars_list [ t1; t2 ]
-  | Cast (_cbt, t) -> free_vars t
-  | MemberShift (t, _tag, _id) -> free_vars t
-  | ArrayShift { base; ct = _; index } -> free_vars_list [ base; index ]
-  | CopyAllocId { addr; loc } -> free_vars_list [ addr; loc ]
-  | SizeOf _t -> SymSet.empty
-  | OffsetOf (_tag, _member) -> SymSet.empty
-  | Nil _bt -> SymSet.empty
-  | Cons (t1, t2) -> free_vars_list [ t1; t2 ]
-  | Head t -> free_vars t
-  | Tail t -> free_vars t
-  | NthList (i, xs, d) -> free_vars_list [ i; xs; d ]
-  | ArrayToList (arr, i, len) -> free_vars_list [ arr; i; len ]
-  | Representable (_sct, t) -> free_vars t
-  | Good (_sct, t) -> free_vars t
-  | WrapI (_ity, t) -> free_vars t
-  | Aligned { t; align } -> free_vars_list [ t; align ]
-  | MapConst (_bt, t) -> free_vars t
-  | MapSet (t1, t2, t3) -> free_vars_list [ t1; t2; t3 ]
-  | MapGet (t1, t2) -> free_vars_list [ t1; t2 ]
-  | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
-  | Apply (_pred, ts) -> free_vars_list ts
-  | Let ((nm, t1), t2) -> SymSet.union (free_vars t1) (SymSet.remove nm (free_vars t2))
+let rec free_vars_bts (it : 'a term) : BT.t SymMap.t =
+  match term it with
+  | Const _ -> SymMap.empty
+  | Sym s -> SymMap.singleton s (bt it)
+  | Unop (_uop, t1) -> free_vars_bts t1
+  | Binop (_bop, t1, t2) -> free_vars_bts_list [ t1; t2 ]
+  | ITE (t1, t2, t3) -> free_vars_bts_list [ t1; t2; t3 ]
+  | EachI ((_, (s, _), _), t) -> SymMap.remove s (free_vars_bts t)
+  | Tuple ts -> free_vars_bts_list ts
+  | NthTuple (_, t) -> free_vars_bts t
+  | Struct (_tag, members) -> free_vars_bts_list (List.map snd members)
+  | StructMember (t, _member) -> free_vars_bts t
+  | StructUpdate ((t1, _member), t2) -> free_vars_bts_list [ t1; t2 ]
+  | Record members -> free_vars_bts_list (List.map snd members)
+  | RecordMember (t, _member) -> free_vars_bts t
+  | RecordUpdate ((t1, _member), t2) -> free_vars_bts_list [ t1; t2 ]
+  | Cast (_cbt, t) -> free_vars_bts t
+  | MemberShift (t, _tag, _id) -> free_vars_bts t
+  | ArrayShift { base; ct = _; index } -> free_vars_bts_list [ base; index ]
+  | CopyAllocId { addr; loc } -> free_vars_bts_list [ addr; loc ]
+  | SizeOf _t -> SymMap.empty
+  | OffsetOf (_tag, _member) -> SymMap.empty
+  | Nil _bt -> SymMap.empty
+  | Cons (t1, t2) -> free_vars_bts_list [ t1; t2 ]
+  | Head t -> free_vars_bts t
+  | Tail t -> free_vars_bts t
+  | NthList (i, xs, d) -> free_vars_bts_list [ i; xs; d ]
+  | ArrayToList (arr, i, len) -> free_vars_bts_list [ arr; i; len ]
+  | Representable (_sct, t) -> free_vars_bts t
+  | Good (_sct, t) -> free_vars_bts t
+  | WrapI (_ity, t) -> free_vars_bts t
+  | Aligned { t; align } -> free_vars_bts_list [ t; align ]
+  | MapConst (_bt, t) -> free_vars_bts t
+  | MapSet (t1, t2, t3) -> free_vars_bts_list [ t1; t2; t3 ]
+  | MapGet (t1, t2) -> free_vars_bts_list [ t1; t2 ]
+  | MapDef ((s, _bt), t) -> SymMap.remove s (free_vars_bts t)
+  | Apply (_pred, ts) -> free_vars_bts_list ts
+  | Let ((nm, t1), t2) ->
+    SymMap.union
+      (fun _ bt1 bt2 ->
+        assert (BT.equal bt1 bt2);
+        Some bt1)
+      (free_vars_bts t1)
+      (SymMap.remove nm (free_vars_bts t2))
   | Match (e, cases) ->
     let rec aux acc = function
       | [] -> acc
       | (pat, body) :: cases ->
         let bound = SymSet.of_list (List.map fst (bound_by_pattern pat)) in
-        let more = SymSet.diff (free_vars body) bound in
-        aux (SymSet.union more acc) cases
+        let more = SymMap.filter (fun x _ -> SymSet.mem x bound) (free_vars_bts body) in
+        aux
+          (SymMap.union
+             (fun _ bt1 bt2 ->
+               assert (BT.equal bt1 bt2);
+               Some bt1)
+             more
+             acc)
+          cases
     in
-    aux (free_vars e) cases
-  | Constructor (_s, args) -> free_vars_list (List.map snd args)
+    aux (free_vars_bts e) cases
+  | Constructor (_s, args) -> free_vars_bts_list (List.map snd args)
 
 
-and free_vars : 'a term -> SymSet.t = fun (IT (term_, _bt, _)) -> free_vars_ term_
+and free_vars_bts_list : 'a term list -> BT.t SymMap.t =
+  fun xs ->
+  List.fold_left
+    (fun ss t ->
+      SymMap.union
+        (fun _ bt1 bt2 ->
+          assert (BT.equal bt1 bt2);
+          Some bt1)
+        ss
+        (free_vars_bts t))
+    SymMap.empty
+    xs
 
-and free_vars_list : 'a term list -> SymSet.t =
-  fun xs -> List.fold_left (fun ss t -> SymSet.union ss (free_vars t)) SymSet.empty xs
+
+let free_vars (it : 'a term) : SymSet.t =
+  it |> free_vars_bts |> SymMap.bindings |> List.map fst |> SymSet.of_list
+
+
+let free_vars_ (t_ : 'a term_) : SymSet.t =
+  IT (t_, Unit, Locations.other "")
+  |> free_vars_bts
+  |> SymMap.bindings
+  |> List.map fst
+  |> SymSet.of_list
+
+
+let free_vars_list (its : 'a term list) : SymSet.t =
+  its |> free_vars_bts_list |> SymMap.bindings |> List.map fst |> SymSet.of_list
 
 
 type 'bt bindings = ('bt pattern * 'bt term option) list

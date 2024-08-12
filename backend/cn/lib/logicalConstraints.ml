@@ -1,6 +1,7 @@
 module IT = IndexTerms
 module BT = BaseTypes
 module SymSet = Set.Make (Sym)
+module SymMap = Map.Make (Sym)
 open Pp
 
 type logical_constraint =
@@ -30,6 +31,11 @@ let subst su c =
 
 
 let subst_ su c = subst (IT.make_subst su) c
+
+let free_vars_bts = function
+  | T c -> IT.free_vars_bts c
+  | Forall ((s, _), body) -> SymMap.remove s (IT.free_vars_bts body)
+
 
 let free_vars = function
   | T c -> IT.free_vars c
