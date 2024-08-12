@@ -1087,7 +1087,10 @@ Module CheriMemoryImplWithProofs
           tg=false \/ gs.(tag_unspecified) = true.
   Proof.
     intros a alignment a0 a1 R tg gs M.
-    assert(AddressValue.to_Z a mod alignment = 0) as AA. admit. (* from MapsTo *)
+    assert(AddressValue.to_Z a mod alignment = 0) as AA.
+    { (* from MapsTo *)
+      admit.
+    }
     subst a0 a1 alignment.
     dependent destruction size.
     -
@@ -5481,7 +5484,41 @@ Module CheriMemoryImplWithProofs
               repeat break_let.
               state_inv_steps.
               apply IHfuel in H0.
-              admit.
+              clear - H0 H2.
+              remember (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+                          sz <- sizeof fuel' (Some t) ty;;
+                          al <- alignof fuel' (Some t) ty;; ret (Nat.max acc_size sz, Nat.max acc_align al))
+                         as f.
+              assert (f_mon : forall sz sz' al al' a,
+                         f (sz, al) a = inr (sz', al') ->
+                         (sz <= sz')%nat).
+              {
+                clear - Heqf.
+                subst.
+                intros.
+                repeat break_let.
+                apply bind_serr_inv in H.
+                do 2 destruct H.
+                cbv [bind] in H0; cbn in H0.
+                break_match; try discriminate.
+                apply ret_inr in H0.
+                invc H0.
+                lia.
+              }
+              clear Heqf.
+              generalize dependent sz.
+              generalize dependent al.
+              induction l; intros; cbn in H2.
+              **
+                apply ret_inr in H2.
+                now invc H2.
+              **
+                apply bind_serr_inv in H2.
+                destruct H2 as ((sz' & al') & FA & H).
+                apply IHl in H.
+                easy.
+                apply f_mon in FA.
+                lia.
     -
       clear offsetof_struct_max_offset_pos.
       intros fuel t s l max_offset OF.
@@ -5493,7 +5530,7 @@ Module CheriMemoryImplWithProofs
         cbn in OF.
 
         break_match_hyp;[|discriminate OF].
-        break_match_hyp.
+        break_match_hyp;[| discriminate OF].
         *
           (* struct *)
           apply bind_sassert_inv in OF.
@@ -5560,6 +5597,9 @@ Module CheriMemoryImplWithProofs
               eapply sizeof_pos.
               eauto.
             }
+            admit.
+        *
+          invc OF.
   Admitted.
 
   Fact amap_add_list_not_at
@@ -5588,11 +5628,20 @@ Module CheriMemoryImplWithProofs
         apply AMap.F.add_neq_o.
         destruct N;bool_to_prop_hyp.
         *
-          (* AddressValue.ltb_irref *)
-          admit.
+          intros C.
+          now rewrite <-C, AddressValue.ltb_irref in H.
         *
-          cbn in *.
-          (* add+1 <= x *)
+          intros C; subst addr.
+          rewrite AddressValue_leb_Z_leb in H.
+          apply Z.leb_le in H.
+          rewrite AddressValue.with_offset_no_wrap in H.
+          2: {
+            split.
+            admit.
+            clear - RSZ.
+            (* can't prove *)
+            admit.
+          }
           admit.
       +
         clear - RSZ.
@@ -5951,6 +6000,24 @@ Module CheriMemoryImplWithProofs
           lia.
   Qed.
 
+  Lemma Capability_try_map_length
+    {A B : Type}
+    (f : A -> option B)
+    (l : list A)
+    (l' : list B):
+    Capability.try_map f l = Some l' ->
+    length l' = length l.
+  Proof.
+    generalize dependent l'.
+    induction l; intros; cbn in *.
+    -
+      now invc H.
+    -
+      repeat break_match; try discriminate.
+      invc H.
+      specialize (IHl l0 eq_refl).
+      now rewrite <-IHl.
+  Qed.
 
   (* TODO: We can get away with just proving [0<l] but this is more precise formulation *)
   Fact Capability_GS_encode_length
@@ -5960,6 +6027,13 @@ Module CheriMemoryImplWithProofs
     (t: bool):
     Capability_GS.encode isexact c = Some (l, t) -> Datatypes.length l =  sizeof_pointer MorelloImpl.get.
   Proof.
+    unfold Capability_GS.encode, Capability.encode.
+    intros.
+    repeat break_match; try discriminate.
+    invc H.
+    apply Capability_try_map_length in Heqo0;
+      rewrite Heqo0; clear Heqo0 l; rename l0 into l.
+    (* TODO: HELP *)
   Admitted.
 
   Lemma repr_preserves
