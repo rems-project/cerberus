@@ -5786,6 +5786,7 @@ Module CheriMemoryImplWithProofs
           lia.
   Qed.
 
+  (* TODO: move ? *)
   Lemma Capability_try_map_length
     {A B : Type}
     (f : A -> option B)
