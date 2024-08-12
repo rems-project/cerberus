@@ -242,6 +242,7 @@ Section ListAux.
 
   (* Proper for [monadic_fold_left2], postulating that `f` must be proper only for elements from the list.
    *)
+  (* UNUSED
   Lemma monadic_fold_left2_proper
     {A B C:Type}
     (Eb : relation B)
@@ -266,10 +267,7 @@ Section ListAux.
                                                    EMa (f a b c) (f' a' b' c')) l2 l2') l1 l1')
     :
     EMa (monadic_fold_left2 f x l1 l2) (monadic_fold_left2 f' x' l1' l2').
-  Proof.
-  Admitted.
-
-
+  *)
 
   Lemma list_init_len {A : Type} (n : nat) (f : nat -> A):
     List.length (list_init n f) = n.
@@ -279,6 +277,28 @@ Section ListAux.
     apply seq_length.
   Qed.
 
+  Fact monadic_list_init_rec_serr_tail
+    {A: Type}
+    (n: nat)
+    (f: nat -> serr A)
+    (acc l: list A):
+    monadic_list_init_rec n f acc = inr l ->
+    exists l', l = l' ++ acc.
+  Proof.
+    generalize dependent l.
+    generalize dependent acc.
+    induction n; intros; cbn in H.
+    -
+      exists [].
+      now invc H.
+    -
+      break_match; try inl_inr.
+      apply IHn in H.
+      destruct H as [l' L]; rewrite L in *; clear L.
+      exists (l' ++ [a]).
+      now rewrite <-app_assoc.
+  Qed.
+
   Fact monadic_list_init_serr_len
     {A: Type}
     (n: nat)
@@ -286,7 +306,31 @@ Section ListAux.
     (l: list A):
     monadic_list_init n f = inr l ->  Datatypes.length l = n.
   Proof.
-  Admitted.
+    unfold monadic_list_init.
+    replace l with (l ++ []) by apply app_nil_r.
+    replace n with (n + @length A []) at 2 by auto.
+    generalize dependent l.
+    generalize (@nil A) as acc.
+    induction n; intros; cbn in H.
+    -
+      invc H.
+      enough (l = []).
+      now subst.
+      destruct l; [reflexivity |].
+      apply f_equal with (f:=length) in H1.
+      contradict H1.
+      rewrite app_length.
+      cbn.
+      lia.
+    -
+      break_match; try inl_inr.
+      pose proof H as L; apply monadic_list_init_rec_serr_tail in L.
+      destruct L as [l' L]; rewrite L in *; clear L.
+      apply IHn in H.
+      rewrite H.
+      cbn.
+      lia.
+  Qed.
 
   Fact bytes_of_Z_len
     (is_signed: bool)
@@ -296,7 +340,11 @@ Section ListAux.
     :
     bytes_of_Z is_signed size z = inr l -> Datatypes.length l = size.
   Proof.
-  Admitted.
+    intros.
+    unfold bytes_of_Z in *.
+    repeat break_match; try solve [inv H].
+    all: now apply monadic_list_init_serr_len in H.
+  Qed.
 
   Lemma list_split_cons
     {A B: Type}:
@@ -1004,6 +1052,7 @@ Module FMapExtProofs
         apply Em2 with (k:=k0);assumption.
   Qed.
 
+  (* UNUSED
   #[global] Instance map_fold_proper
     {A elt : Type}
     (Ae: relation A)
@@ -1011,7 +1060,8 @@ Module FMapExtProofs
     :
     Proper (((eq) ==> Eelt ==> Ae ==> Ae) ==> FM.M.Equal ==> Ae ==> Ae) (@FM.M.fold elt A).
   Proof.
-  Admitted.
+    intros f1 f2 FP m1 m2 ME a1 a2 AE.
+  *)
 
   Lemma map_mapsto_in {T:Type} (k:FM.M.key) (m:FM.M.t T) (v:T):
     FM.M.MapsTo k v m -> FM.M.In k m.
