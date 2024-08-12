@@ -16,6 +16,8 @@ Require Import ExtLib.Data.List.
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
 
+Require Import bbv.ZLib.
+
 Require Import Lia.
 
 Require Import Common.SimpleError.
@@ -25,6 +27,7 @@ Require Import Common.FMapExt.
 Require Import Common.Utils.
 
 From CheriCaps.Morello Require Import Capabilities. (* For AMap-related lemmas *)
+From CheriMemory Require Import CoqImplementation.
 
 Require Import ExtLib.Structures.Monads.
 Require Import ExtLib.Structures.Monad.
@@ -242,6 +245,7 @@ Section ListAux.
 
   (* Proper for [monadic_fold_left2], postulating that `f` must be proper only for elements from the list.
    *)
+  (* UNUSED
   Lemma monadic_fold_left2_proper
     {A B C:Type}
     (Eb : relation B)
@@ -266,10 +270,7 @@ Section ListAux.
                                                    EMa (f a b c) (f' a' b' c')) l2 l2') l1 l1')
     :
     EMa (monadic_fold_left2 f x l1 l2) (monadic_fold_left2 f' x' l1' l2').
-  Proof.
-  Admitted.
-
-
+  *)
 
   Lemma list_init_len {A : Type} (n : nat) (f : nat -> A):
     List.length (list_init n f) = n.
@@ -279,6 +280,28 @@ Section ListAux.
     apply seq_length.
   Qed.
 
+  Fact monadic_list_init_rec_serr_tail
+    {A: Type}
+    (n: nat)
+    (f: nat -> serr A)
+    (acc l: list A):
+    monadic_list_init_rec n f acc = inr l ->
+    exists l', l = l' ++ acc.
+  Proof.
+    generalize dependent l.
+    generalize dependent acc.
+    induction n; intros; cbn in H.
+    -
+      exists [].
+      now invc H.
+    -
+      break_match; try inl_inr.
+      apply IHn in H.
+      destruct H as [l' L]; rewrite L in *; clear L.
+      exists (l' ++ [a]).
+      now rewrite <-app_assoc.
+  Qed.
+
   Fact monadic_list_init_serr_len
     {A: Type}
     (n: nat)
@@ -286,7 +309,31 @@ Section ListAux.
     (l: list A):
     monadic_list_init n f = inr l ->  Datatypes.length l = n.
   Proof.
-  Admitted.
+    unfold monadic_list_init.
+    replace l with (l ++ []) by apply app_nil_r.
+    replace n with (n + @length A []) at 2 by auto.
+    generalize dependent l.
+    generalize (@nil A) as acc.
+    induction n; intros; cbn in H.
+    -
+      invc H.
+      enough (l = []).
+      now subst.
+      destruct l; [reflexivity |].
+      apply f_equal with (f:=length) in H1.
+      contradict H1.
+      rewrite app_length.
+      cbn.
+      lia.
+    -
+      break_match; try inl_inr.
+      pose proof H as L; apply monadic_list_init_rec_serr_tail in L.
+      destruct L as [l' L]; rewrite L in *; clear L.
+      apply IHn in H.
+      rewrite H.
+      cbn.
+      lia.
+  Qed.
 
   Fact bytes_of_Z_len
     (is_signed: bool)
@@ -296,7 +343,11 @@ Section ListAux.
     :
     bytes_of_Z is_signed size z = inr l -> Datatypes.length l = size.
   Proof.
-  Admitted.
+    intros.
+    unfold bytes_of_Z in *.
+    repeat break_match; try solve [inv H].
+    all: now apply monadic_list_init_serr_len in H.
+  Qed.
 
   Lemma list_split_cons
     {A B: Type}:
@@ -1004,6 +1055,7 @@ Module FMapExtProofs
         apply Em2 with (k:=k0);assumption.
   Qed.
 
+  (* UNUSED
   #[global] Instance map_fold_proper
     {A elt : Type}
     (Ae: relation A)
@@ -1011,7 +1063,8 @@ Module FMapExtProofs
     :
     Proper (((eq) ==> Eelt ==> Ae ==> Ae) ==> FM.M.Equal ==> Ae ==> Ae) (@FM.M.fold elt A).
   Proof.
-  Admitted.
+    intros f1 f2 FP m1 m2 ME a1 a2 AE.
+  *)
 
   Lemma map_mapsto_in {T:Type} (k:FM.M.key) (m:FM.M.t T) (v:T):
     FM.M.MapsTo k v m -> FM.M.In k m.
@@ -1563,10 +1616,232 @@ Module FMapExtProofs
 
 End FMapExtProofs.
 
+Section AddressValue_Lemmas.
+
+  Local Open Scope Z.
+
+  (* Algines given value up.
+   *)
+  Definition align_up addr alignment: Z
+    :=
+    let align := addr mod alignment in
+    if align =? 0
+    then addr (* already aligned *)
+    else addr+(alignment - align).
+
+  Lemma align_up_correct:
+    forall ps addr : Z, 0 < ps -> (align_up addr ps) mod ps = 0.
+  Proof.
+    intros a b B.
+    unfold align_up.
+    break_match_goal; bool_to_prop_hyp.
+    -
+      assumption.
+    -
+      rewrite Z.add_sub_assoc.
+      rewrite Zdiv.Zminus_mod.
+      rewrite Zdiv.Zmod_mod.
+      rewrite mod_add_r by lia.
+      rewrite Z.sub_diag.
+      apply Zdiv.Zmod_0_l.
+  Qed.
+
+  (** Predicate to check if address is pointer-aligned *)
+  Definition addr_ptr_aligned (a:AddressValue.t) :=
+    Z.modulo (AddressValue.to_Z a) (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
+
+  (** [a1] - [a2] for addresses *)
+  Definition addr_offset (a1 a2:AddressValue.t) : Z
+    := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
+
+  (* TODO: move *)
+  Lemma AdddressValue_eqb_eq:
+    forall (a b: AddressValue.t),
+      eqb a b = true <-> a = b.
+  Proof.
+    intros a b.
+    split.
+    -
+      intros H.
+      unfold eqb in H.
+      bool_to_prop_hyp.
+      apply bitvector.bv_eq.
+      assumption.
+    -
+      intros H.
+      unfold eqb.
+      subst.
+      lia.
+  Qed.
+
+  Lemma AdddressValue_eqb_neq:
+    forall (a b: AddressValue.t),
+      eqb a b = false <-> a <> b.
+  Proof.
+    intros a b.
+    split.
+    -
+      intros H.
+      unfold eqb in H.
+      bool_to_prop_hyp.
+      apply bitvector.bv_neq.
+      assumption.
+    -
+      intros H.
+      unfold eqb.
+      apply bitvector.bv_neq in H.
+      lia.
+  Qed.
+
+  Lemma AddressValue_ltb_Z_ltb:
+    forall a b,
+      AddressValue.ltb a b = Z.ltb (AddressValue.to_Z a) (AddressValue.to_Z b).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma AddressValue_leb_Z_leb:
+    forall a b,
+      AddressValue.leb a b = Z.leb (AddressValue.to_Z a) (AddressValue.to_Z b).
+  Proof.
+    (* This should not be so tedious! *)
+    intros a b.
+    unfold AddressValue.leb, leb, Z.leb.
+    rewrite orb_lazy_alt.
+    repeat break_match_goal;auto.
+    -
+      rewrite AddressValue_ltb_Z_ltb in Heqb0.
+      rewrite Z.ltb_compare in Heqb0.
+      break_match_hyp; discriminate.
+    -
+      unfold eqb.
+      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
+      pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
+      break_match_hyp ; try discriminate.
+      auto.
+    -
+      rewrite AddressValue_ltb_Z_ltb in Heqb0.
+      rewrite Z.ltb_compare in Heqb0.
+      break_match_hyp; discriminate.
+    -
+      unfold eqb.
+      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
+      pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
+      break_match_hyp ; try discriminate.
+      auto.
+  Qed.
+
+  Lemma AddressValue_eq_via_to_Z:
+    forall a b,
+      AddressValue.to_Z a = AddressValue.to_Z b <-> (a=b).
+  Proof.
+    split ; intros H.
+    -
+      unfold AddressValue.to_Z, bv_to_Z_unsigned in H.
+      apply bitvector.bv_unsigned_inj.
+      assumption.
+    -
+      subst.
+      reflexivity.
+  Qed.
+
+  Lemma AddressValue_neq_via_to_Z:
+    forall a b,
+      AddressValue.to_Z a <> AddressValue.to_Z b <-> (a<>b).
+  Proof.
+    split ; intros; apply bitvector.bv_neq; assumption.
+  Qed.
+
+  Lemma AddressValue_of_Z_to_Z:
+    forall a,
+      AddressValue.of_Z (AddressValue.to_Z a) = a.
+  Proof.
+    intros a.
+    unfold AddressValue.of_Z, AddressValue.to_Z.
+    unfold bv_to_Z_unsigned.
+    apply bitvector.Z_to_bv_bv_unsigned.
+  Qed.
+
+  Lemma with_offset_0:
+    forall a,
+      AddressValue.with_offset a (Z.of_nat 0) = a.
+  Proof.
+    intros a.
+    unfold AddressValue.with_offset.
+    replace (Z.of_nat O) with 0 by lia.
+    rewrite Z.add_0_r.
+    apply AddressValue_of_Z_to_Z.
+  Qed.
+
+  Lemma with_pos_offset_assoc:
+    forall v a b,
+      (0 <= a) ->
+      (0 <= b) ->
+      (0 <= (AddressValue.to_Z v) + (a + b) < AddressValue.ADDR_LIMIT) ->
+      AddressValue.with_offset (AddressValue.with_offset v a) b = AddressValue.with_offset v (a + b).
+  Proof.
+    intros v a b A B [H1 H2].
+
+    pose proof (AddressValue.to_Z_in_bounds v) as [V1 V2].
+    apply AddressValue_eq_via_to_Z.
+    rewrite 3!AddressValue.with_offset_no_wrap.
+    lia.
+    all: unfold AddressValue.ADDR_MIN in *; try lia.
+    split.
+    -
+      rewrite AddressValue.with_offset_no_wrap;[lia|].
+      unfold AddressValue.ADDR_MIN.
+      lia.
+    -
+      rewrite AddressValue.with_offset_no_wrap;[lia|].
+      unfold AddressValue.ADDR_MIN.
+      lia.
+  Qed.
+
+  Lemma addr_offset_with_offset
+    (a:AddressValue.t)
+    (x:Z)
+    (H: AddressValue.ADDR_MIN <= AddressValue.to_Z a + x < AddressValue.ADDR_LIMIT):
+
+    addr_offset (AddressValue.with_offset a x) a = x.
+  Proof.
+    unfold addr_offset.
+    rewrite AddressValue.with_offset_no_wrap.
+    lia.
+    apply H.
+  Qed.
+
+  Lemma with_offset_addr_offset:
+    forall a1 a2,
+      (AddressValue.with_offset a1 (addr_offset a2 a1)) = a2.
+  Proof.
+    intros a1 a2.
+    unfold addr_offset.
+    unfold AddressValue.with_offset.
+    replace (AddressValue.to_Z a1 + (AddressValue.to_Z a2 - AddressValue.to_Z a1))
+      with (AddressValue.to_Z a2) by lia.
+    rewrite AddressValue_of_Z_to_Z.
+    reflexivity.
+  Qed.
+
+  Lemma addr_offset_bounds:
+    forall a b,
+      (AddressValue.ADDR_MIN - AddressValue.ADDR_LIMIT + 1) <= (addr_offset a b) <= (AddressValue.ADDR_LIMIT - AddressValue.ADDR_MIN - 1).
+  Proof.
+    intros a b.
+    pose proof (AddressValue.to_Z_in_bounds a).
+    pose proof (AddressValue.to_Z_in_bounds b).
+    unfold addr_offset.
+    lia.
+  Qed.
+
+End AddressValue_Lemmas.
 
 (* This sections contains proofs which could not be generalized between
    [ZMap] and [AMap] and could only be proven for [AMap]. *)
 Section AMapProofs.
+
+  Local Open Scope Z.
 
   Lemma amap_range_init_spec
     {T:Type}
@@ -1643,6 +1918,83 @@ Section AMapProofs.
           exists i. split; [lia|]. assumption.
           auto.
   Qed.
+
+  Fact amap_add_list_not_at
+    {T: Type}
+    (x addr : AddressValue.t)
+    (bm : AMap.M.t T)
+    (l : list T):
+
+    (AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
+
+    ((AddressValue.ltb x addr = true)
+     \/ (AddressValue.leb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l))) x = true)) ->
+
+    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
+      AMap.M.find (elt:=T) x bm.
+  Proof.
+    revert bm x addr.
+    induction l as [| x0 l].
+    -
+      reflexivity.
+    -
+      intros bm x addr RSZ N.
+      cbn.
+      rewrite IHl;clear IHl;cbn in *.
+      +
+        apply AMap.F.add_neq_o.
+        destruct N;bool_to_prop_hyp.
+        *
+          intros C.
+          now rewrite <-C, AddressValue.ltb_irref in H.
+        *
+          intros C; subst addr.
+          rewrite AddressValue_leb_Z_leb in H.
+          apply Z.leb_le in H.
+          rewrite AddressValue.with_offset_no_wrap in H.
+          2: {
+            split.
+            admit.
+            clear - RSZ.
+            (* can't prove *)
+            admit.
+          }
+          admit.
+      +
+        clear - RSZ.
+        pose proof (AddressValue.to_Z_in_bounds addr).
+        unfold AddressValue.ADDR_MIN in *.
+        unfold AddressValue_as_ExtOT.with_offset.
+        rewrite AddressValue.with_offset_no_wrap.
+        *
+          lia.
+        *
+          unfold AddressValue.ADDR_MIN.
+          split;[lia|].
+          admit. (* tricky *)
+      +
+        destruct N;bool_to_prop_hyp.
+        *
+          left.
+          pose proof (AddressValue.to_Z_in_bounds addr).
+          unfold AddressValue.ADDR_MIN in *.
+          unfold AddressValue_as_ExtOT.with_offset.
+          rewrite AddressValue_ltb_Z_ltb.
+          apply Z.ltb_lt.
+          rewrite AddressValue.with_offset_no_wrap.
+          --
+            rewrite AddressValue_ltb_Z_ltb in H.
+            apply Z.ltb_lt in H.
+            lia.
+          --
+            unfold AddressValue.ADDR_MIN.
+            split;[lia|].
+            admit. (* tricky *)
+        *
+          (* add+1 <= x *)
+          right.
+          (* TODO *)
+  Admitted. (* TODO. *)
 
 End AMapProofs.
 

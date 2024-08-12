@@ -83,226 +83,6 @@ Proof.
   apply bitvector.bv_wrap_add_modulus_1.
 Qed.
 
-(* TODO: move *)
-Section AddressValue_Lemmas.
-
-  (* Algines given value up.
-   *)
-  Definition align_up addr alignment: Z
-    :=
-    let align := addr mod alignment in
-    if align =? 0
-    then addr (* already aligned *)
-    else addr+(alignment - align).
-
-  Lemma align_up_correct:
-    forall ps addr : Z, 0 < ps -> (align_up addr ps) mod ps = 0.
-  Proof.
-    intros a b B.
-    unfold align_up.
-    break_match_goal; bool_to_prop_hyp.
-    -
-      assumption.
-    -
-      rewrite Z.add_sub_assoc.
-      rewrite Zdiv.Zminus_mod.
-      rewrite Zdiv.Zmod_mod.
-      rewrite mod_add_r by lia.
-      rewrite Z.sub_diag.
-      apply Zdiv.Zmod_0_l.
-  Qed.
-
-  (** Predicate to check if address is pointer-aligned *)
-  Definition addr_ptr_aligned (a:AddressValue.t) :=
-    Z.modulo (AddressValue.to_Z a) (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
-
-  (** [a1] - [a2] for addresses *)
-  Definition addr_offset (a1 a2:AddressValue.t) : Z
-    := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
-
-  (* TODO: move *)
-  Lemma AdddressValue_eqb_eq:
-    forall (a b: AddressValue.t),
-      eqb a b = true <-> a = b.
-  Proof.
-    intros a b.
-    split.
-    -
-      intros H.
-      unfold eqb in H.
-      bool_to_prop_hyp.
-      apply bitvector.bv_eq.
-      assumption.
-    -
-      intros H.
-      unfold eqb.
-      subst.
-      lia.
-  Qed.
-
-  Lemma AdddressValue_eqb_neq:
-    forall (a b: AddressValue.t),
-      eqb a b = false <-> a <> b.
-  Proof.
-    intros a b.
-    split.
-    -
-      intros H.
-      unfold eqb in H.
-      bool_to_prop_hyp.
-      apply bitvector.bv_neq.
-      assumption.
-    -
-      intros H.
-      unfold eqb.
-      apply bitvector.bv_neq in H.
-      lia.
-  Qed.
-
-  Lemma AddressValue_ltb_Z_ltb:
-    forall a b,
-      AddressValue.ltb a b = Z.ltb (AddressValue.to_Z a) (AddressValue.to_Z b).
-  Proof.
-    reflexivity.
-  Qed.
-
-  Lemma AddressValue_leb_Z_leb:
-    forall a b,
-      AddressValue.leb a b = Z.leb (AddressValue.to_Z a) (AddressValue.to_Z b).
-  Proof.
-    (* This should not be so tedious! *)
-    intros a b.
-    unfold AddressValue.leb, leb, Z.leb.
-    rewrite orb_lazy_alt.
-    repeat break_match_goal;auto.
-    -
-      rewrite AddressValue_ltb_Z_ltb in Heqb0.
-      rewrite Z.ltb_compare in Heqb0.
-      break_match_hyp; discriminate.
-    -
-      unfold eqb.
-      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
-      pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
-      break_match_hyp ; try discriminate.
-      auto.
-    -
-      rewrite AddressValue_ltb_Z_ltb in Heqb0.
-      rewrite Z.ltb_compare in Heqb0.
-      break_match_hyp; discriminate.
-    -
-      unfold eqb.
-      unfold AddressValue.to_Z, bv_to_Z_unsigned in *.
-      pose proof (Z.eqb_compare (bitvector.bv_unsigned a) (bitvector.bv_unsigned b)) as ZC.
-      break_match_hyp ; try discriminate.
-      auto.
-  Qed.
-
-  Lemma AddressValue_eq_via_to_Z:
-    forall a b,
-      AddressValue.to_Z a = AddressValue.to_Z b <-> (a=b).
-  Proof.
-    split ; intros H.
-    -
-      unfold AddressValue.to_Z, bv_to_Z_unsigned in H.
-      apply bitvector.bv_unsigned_inj.
-      assumption.
-    -
-      subst.
-      reflexivity.
-  Qed.
-
-  Lemma AddressValue_neq_via_to_Z:
-    forall a b,
-      AddressValue.to_Z a <> AddressValue.to_Z b <-> (a<>b).
-  Proof.
-    split ; intros; apply bitvector.bv_neq; assumption.
-  Qed.
-
-  Lemma AddressValue_of_Z_to_Z:
-    forall a,
-      AddressValue.of_Z (AddressValue.to_Z a) = a.
-  Proof.
-    intros a.
-    unfold AddressValue.of_Z, AddressValue.to_Z.
-    unfold bv_to_Z_unsigned.
-    apply bitvector.Z_to_bv_bv_unsigned.
-  Qed.
-
-  Lemma with_offset_0:
-    forall a,
-      AddressValue.with_offset a (Z.of_nat 0) = a.
-  Proof.
-    intros a.
-    unfold AddressValue.with_offset.
-    replace (Z.of_nat O) with 0 by lia.
-    rewrite Z.add_0_r.
-    apply AddressValue_of_Z_to_Z.
-  Qed.
-
-  Lemma with_pos_offset_assoc:
-    forall v a b,
-      (0 <= a) ->
-      (0 <= b) ->
-      (0 <= (AddressValue.to_Z v) + (a + b) < AddressValue.ADDR_LIMIT) ->
-      AddressValue.with_offset (AddressValue.with_offset v a) b = AddressValue.with_offset v (a + b).
-  Proof.
-    intros v a b A B [H1 H2].
-
-    pose proof (AddressValue.to_Z_in_bounds v) as [V1 V2].
-    apply AddressValue_eq_via_to_Z.
-    rewrite 3!AddressValue.with_offset_no_wrap.
-    lia.
-    all: unfold AddressValue.ADDR_MIN in *; try lia.
-    split.
-    -
-      rewrite AddressValue.with_offset_no_wrap;[lia|].
-      unfold AddressValue.ADDR_MIN.
-      lia.
-    -
-      rewrite AddressValue.with_offset_no_wrap;[lia|].
-      unfold AddressValue.ADDR_MIN.
-      lia.
-  Qed.
-
-  Lemma addr_offset_with_offset
-    (a:AddressValue.t)
-    (x:Z)
-    (H: AddressValue.ADDR_MIN <= AddressValue.to_Z a + x < AddressValue.ADDR_LIMIT):
-
-    addr_offset (AddressValue.with_offset a x) a = x.
-  Proof.
-    unfold addr_offset.
-    rewrite AddressValue.with_offset_no_wrap.
-    lia.
-    apply H.
-  Qed.
-
-  Lemma with_offset_addr_offset:
-    forall a1 a2,
-      (AddressValue.with_offset a1 (addr_offset a2 a1)) = a2.
-  Proof.
-    intros a1 a2.
-    unfold addr_offset.
-    unfold AddressValue.with_offset.
-    replace (AddressValue.to_Z a1 + (AddressValue.to_Z a2 - AddressValue.to_Z a1))
-      with (AddressValue.to_Z a2) by lia.
-    rewrite AddressValue_of_Z_to_Z.
-    reflexivity.
-  Qed.
-
-  Lemma addr_offset_bounds:
-    forall a b,
-      (AddressValue.ADDR_MIN - AddressValue.ADDR_LIMIT + 1) <= (addr_offset a b) <= (AddressValue.ADDR_LIMIT - AddressValue.ADDR_MIN - 1).
-  Proof.
-    intros a b.
-    pose proof (AddressValue.to_Z_in_bounds a).
-    pose proof (AddressValue.to_Z_in_bounds b).
-    unfold addr_offset.
-    lia.
-  Qed.
-
-End AddressValue_Lemmas.
-
 Lemma sequence_len_errS
   {S E A:Type}
   (s s': S)
@@ -1087,7 +867,10 @@ Module CheriMemoryImplWithProofs
           tg=false \/ gs.(tag_unspecified) = true.
   Proof.
     intros a alignment a0 a1 R tg gs M.
-    assert(AddressValue.to_Z a mod alignment = 0) as AA. admit. (* from MapsTo *)
+    assert(AddressValue.to_Z a mod alignment = 0) as AA.
+    { (* from MapsTo *)
+      admit.
+    }
     subst a0 a1 alignment.
     dependent destruction size.
     -
@@ -5481,7 +5264,41 @@ Module CheriMemoryImplWithProofs
               repeat break_let.
               state_inv_steps.
               apply IHfuel in H0.
-              admit.
+              clear - H0 H2.
+              remember (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+                          sz <- sizeof fuel' (Some t) ty;;
+                          al <- alignof fuel' (Some t) ty;; ret (Nat.max acc_size sz, Nat.max acc_align al))
+                         as f.
+              assert (f_mon : forall sz sz' al al' a,
+                         f (sz, al) a = inr (sz', al') ->
+                         (sz <= sz')%nat).
+              {
+                clear - Heqf.
+                subst.
+                intros.
+                repeat break_let.
+                apply bind_serr_inv in H.
+                do 2 destruct H.
+                cbv [bind] in H0; cbn in H0.
+                break_match; try discriminate.
+                apply ret_inr in H0.
+                invc H0.
+                lia.
+              }
+              clear Heqf.
+              generalize dependent sz.
+              generalize dependent al.
+              induction l; intros; cbn in H2.
+              **
+                apply ret_inr in H2.
+                now invc H2.
+              **
+                apply bind_serr_inv in H2.
+                destruct H2 as ((sz' & al') & FA & H).
+                apply IHl in H.
+                easy.
+                apply f_mon in FA.
+                lia.
     -
       clear offsetof_struct_max_offset_pos.
       intros fuel t s l max_offset OF.
@@ -5493,7 +5310,7 @@ Module CheriMemoryImplWithProofs
         cbn in OF.
 
         break_match_hyp;[|discriminate OF].
-        break_match_hyp.
+        break_match_hyp;[| discriminate OF].
         *
           (* struct *)
           apply bind_sassert_inv in OF.
@@ -5560,6 +5377,7 @@ Module CheriMemoryImplWithProofs
               eapply sizeof_pos.
               eauto.
             }
+            admit.
   Admitted.
 
   Fact amap_add_list_not_at
@@ -5588,11 +5406,20 @@ Module CheriMemoryImplWithProofs
         apply AMap.F.add_neq_o.
         destruct N;bool_to_prop_hyp.
         *
-          (* AddressValue.ltb_irref *)
-          admit.
+          intros C.
+          now rewrite <-C, AddressValue.ltb_irref in H.
         *
-          cbn in *.
-          (* add+1 <= x *)
+          intros C; subst addr.
+          rewrite AddressValue_leb_Z_leb in H.
+          apply Z.leb_le in H.
+          rewrite AddressValue.with_offset_no_wrap in H.
+          2: {
+            split.
+            admit.
+            clear - RSZ.
+            (* can't prove *)
+            admit.
+          }
           admit.
       +
         clear - RSZ.
@@ -5959,6 +5786,25 @@ Module CheriMemoryImplWithProofs
           lia.
   Qed.
 
+  Lemma Capability_try_map_length
+    {A B : Type}
+    (f : A -> option B)
+    (l : list A)
+    (l' : list B):
+    Capability.try_map f l = Some l' ->
+    length l' = length l.
+  Proof.
+    generalize dependent l'.
+    induction l; intros; cbn in *.
+    -
+      now invc H.
+    -
+      repeat break_match; try discriminate.
+      invc H.
+      specialize (IHl l0 eq_refl).
+      now rewrite <-IHl.
+  Qed.
+
   (** Storing a capability bytes into memory and and addit it to capmeta preserves invariant *)
   Fact mem_state_with_cap_preserves:
     forall s : mem_state_r,
@@ -5977,7 +5823,6 @@ Module CheriMemoryImplWithProofs
             exists c : Capability_GS.t,
               decode_cap bs true c /\ (exists (a : allocation) (alloc_id : ZMap.M.key), ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc c a)) ->
       forall (c : Capability_GS.t) (cb : list ascii) (b:bool),
-
         Capability_GS.encode true c = Some (cb, b) ->
         forall start : AddressValue.t,
           AddressValue.to_Z start + Z.of_nat (Datatypes.length cb) <= AddressValue.ADDR_LIMIT ->
