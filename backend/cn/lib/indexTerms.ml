@@ -453,6 +453,8 @@ let rec is_const_val = function
 
 let is_pred_ = function IT (Apply (name, args), _, _) -> Some (name, args) | _ -> None
 
+let is_member = function IT (StructMember (it, id), _, _) -> Some (it, id) | _ -> None
+
 (* shorthands *)
 
 let use_vip = ref false
