@@ -329,6 +329,7 @@ let generate_tests
   incl_dirs
   incl_files
   debug_level
+  print_level
   csv_times
   log_times
   astprints
@@ -342,6 +343,7 @@ let generate_tests
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
+  Pp.print_level := print_level;
   let handle_error (e : TypeErrors.type_error) =
     let report = TypeErrors.pp_message e.msg in
     Pp.error e.loc report.short (Option.to_list report.descr);
@@ -745,6 +747,7 @@ let generate_tests_cmd =
     $ Common_flags.incl_dirs
     $ Common_flags.incl_files
     $ Common_flags.debug_level
+    $ Common_flags.print_level
     $ Common_flags.csv_times
     $ Common_flags.log_times
     $ Common_flags.astprints
