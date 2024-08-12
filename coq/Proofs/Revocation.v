@@ -5826,12 +5826,16 @@ Module CheriMemoryImplWithProofs
       forall (c : Capability_GS.t) (cb : list ascii) (b:bool),
         Capability_GS.encode true c = Some (cb, b) ->
         forall start : AddressValue.t,
+          is_pointer_algined start = true ->
           AddressValue.to_Z start + Z.of_nat (Datatypes.length cb) <= AddressValue.ADDR_LIMIT ->
           forall bs : list (option ascii),
             bs = map Some cb ->
             mem_invariant (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start) (update_capmeta c start (capmeta s)) s).
   Proof.
-    intros s Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr MIcap c cb ct start RSZ bs Heqbs.
+    intros s Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr MIcap c cb ct E start SA RSZ bs Heqbs.
+
+
+    (* TODO: this proof must be substantionally similar to [mem_state_with_bytes_preserves] *)
   Admitted.
 
   Lemma repr_preserves
@@ -5895,13 +5899,13 @@ Module CheriMemoryImplWithProofs
         repeat break_match_hyp; state_inv_steps.
         *
           generalize dependent (Capability_GS.cap_get_value c); clear c.
-          intros start RSZ IHfuel.
+          intros start R4 RSZ IHfuel.
           bool_to_prop_hyp.
           remember (map Some l) as bs.
           eapply mem_state_with_cap_preserves;eauto.
         *
           generalize dependent (Capability_GS.cap_get_value c); clear c.
-          intros start RSZ IHfuel.
+          intros start R4 RSZ IHfuel.
           bool_to_prop_hyp.
           remember (map Some l) as bs.
           eapply mem_state_with_cap_preserves;eauto.
@@ -5934,8 +5938,9 @@ Module CheriMemoryImplWithProofs
           state_inv_step_quick.
           break_let.
           state_inv_step_quick.
-          apply ret_inr in R5.
-          inversion R5; clear R5.
+          state_inv_step_quick.
+          apply ret_inr in R6.
+          inversion R6; clear R6.
           bool_to_prop_hyp.
           eapply mem_state_with_cap_preserves;eauto.
         *
@@ -5943,14 +5948,15 @@ Module CheriMemoryImplWithProofs
           break_let.
           state_inv_step_quick.
           state_inv_step_quick.
-          apply ret_inr in R5.
-          inversion R5; clear R5.
+          state_inv_step_quick.
+          apply ret_inr in R6.
+          inversion R6; clear R6.
           bool_to_prop_hyp.
           eapply mem_state_with_cap_preserves;eauto.
       +
         state_inv_steps.
         generalize dependent (Capability_GS.cap_get_value c); clear c.
-        intros start RSZ.
+        intros start R4 RSZ.
         bool_to_prop_hyp.
         remember (map Some l) as bs.
         eapply mem_state_with_cap_preserves;eauto.

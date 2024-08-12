@@ -750,19 +750,14 @@ Module Type CheriMemoryImpl
     let align := IMP.get.(alignof_pointer) in
     (AddressValue.to_Z addr) mod (Z.of_nat align) =? 0.
 
-  (** Update [capmeta] dictionary for capability [c] stored at [addr].
-      If address is capability-aligned, then the tag and ghost state
-      is stored. Otherwise capmeta is left unchanged.  *)
+  (** Update [capmeta] dictionary for capability [c] stored at [addr]. *)
   Definition update_capmeta
     (c: C.t)
     (addr: AddressValue.t)
     (capmeta : AMap.M.t (bool*CapGhostState))
     : AMap.M.t (bool*CapGhostState)
     :=
-    if is_pointer_algined addr
-    then AMap.M.add addr (C.cap_is_valid c, C.get_ghost_state c) capmeta
-    else capmeta.
-
+    AMap.M.add addr (C.cap_is_valid c, C.get_ghost_state c) capmeta.
 
   Fixpoint repr
     (fuel: nat)
@@ -797,6 +792,7 @@ Module Type CheriMemoryImpl
             | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
               =>
                 '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
+                sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let capmeta := update_capmeta c_value addr capmeta in
                 sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
                 ret (funptrmap, capmeta, List.map (Some) cb)
@@ -816,11 +812,13 @@ Module Type CheriMemoryImpl
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
                 '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
+                sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let capmeta := update_capmeta c_value addr capmeta in
                 sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
                 ret (funptrmap, capmeta, List.map (Some) cb)
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
+                sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let capmeta := update_capmeta c_value addr capmeta in
                 sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
                 ret (funptrmap, capmeta, List.map (Some) cb)
