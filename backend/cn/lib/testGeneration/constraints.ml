@@ -126,11 +126,8 @@ let pp_goal ((vars, ms, locs, cs) : goal) : Pp.document =
 
 
 module Collect = struct
-  let bt_of_ctype (loc : Cerb_location.t) (ty : CF.Ctype.ctype) : BT.t =
-    BT.of_sct
-      CF.AilTypesAux.is_signed_ity
-      Memory.size_of_integer_type
-      (Sctypes.of_ctype_unsafe loc ty)
+  let bt_of_ctype (loc : Locations.t) (ty : CF.Ctype.ctype) : BT.t =
+    Memory.bt_of_sct (Sctypes.of_ctype_unsafe loc ty)
 
 
   let add_to_vars_ms
@@ -151,8 +148,8 @@ module Collect = struct
                ( cty,
                  IT.sym_
                    ( sym',
-                     bt_of_ctype (Cerb_location.other __FUNCTION__) cty,
-                     Cerb_location.other __FUNCTION__ ) ) ),
+                     bt_of_ctype (Locations.other __FUNCTION__) cty,
+                     Locations.other __FUNCTION__ ) ) ),
              { name = id; carrier = sym'; cty } )
          in
          let vars', member_data = List.split (List.map f membs) in
@@ -160,8 +157,8 @@ module Collect = struct
               ( ty,
                 IT.sym_
                   ( sym,
-                    bt_of_ctype (Cerb_location.other __FUNCTION__) ty,
-                    Cerb_location.other __FUNCTION__ ) ) )
+                    bt_of_ctype (Locations.other __FUNCTION__) ty,
+                    Locations.other __FUNCTION__ ) ) )
             :: vars)
            @ vars',
            (sym, member_data) :: ms )
@@ -170,9 +167,9 @@ module Collect = struct
       ( ( sym,
           ( ty,
             IT.fresh_named
-              (bt_of_ctype (Cerb_location.other __FUNCTION__) ty)
+              (bt_of_ctype (Locations.other __FUNCTION__) ty)
               (codify_sym sym)
-              (Cerb_location.other __FUNCTION__)
+              (Locations.other __FUNCTION__)
             |> snd ) )
         :: vars,
         ms )
@@ -204,7 +201,7 @@ module Collect = struct
       let rest =
         List.map
           (fun (v, vars, ms, locs, cs) ->
-            (v, vars, ms, locs, IT.not_ cl.guard (Cerb_location.other __FUNCTION__) :: cs))
+            (v, vars, ms, locs, IT.not_ cl.guard (Locations.other __FUNCTION__) :: cs))
           (collect_clauses max_unfolds sigma prog5 vars ms cls')
       in
       let@ v, vars, ms, locs, cs =
@@ -228,7 +225,7 @@ module Collect = struct
       let sym = Sym.fresh () in
       let ty = Sctypes.to_ctype ty in
       let vars, ms = add_to_vars_ms sigma sym ty vars ms in
-      let l = Cerb_location.other __FUNCTION__ in
+      let l = Locations.other __FUNCTION__ in
       return (IT.sym_ (sym, bt_of_ctype l ty, l), vars, ms, [ (pointer, sym) ], [])
     | P { name = Owned (_, _); _ } ->
       failwith "unreachable: Incorrect number of arguments for `Owned`"

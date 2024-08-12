@@ -2,7 +2,6 @@ module BT = BaseTypes
 module IT = IndexTerms
 open Utils
 module CF = Cerb_frontend
-open CF
 open Dsl
 
 type test_framework = GTest
@@ -77,7 +76,7 @@ and codify_it (e : IT.t) : string =
   let (IT (e_, _, _)) = e in
   match codify_it_ e_ with
   | Some str -> str
-  | None -> failwith ("unsupported operation " ^ Pp_utils.to_plain_pretty_string (IT.pp e))
+  | None -> failwith ("unsupported operation " ^ Pp.plain (IT.pp e))
 
 
 let rec codify_gen' (g : gen) : string =
@@ -141,12 +140,12 @@ module Impl (C : TF_Codify) = struct
     =
     let lookup_fn (x, _) = sym_codified_equal x instrumentation.fn in
     let fsym, (_, _, fdecl) = List.nth (List.filter lookup_fn sigma.declarations) 0 in
-    Pp_utils.to_plain_pretty_string (Pp_ail.pp_function_prototype fsym fdecl)
+    Pp.plain (CF.Pp_ail.pp_function_prototype fsym fdecl)
 
 
   let codify_pbt
     (instrumentation : Core_to_mucore.instrumentation)
-    (args : (Sym.sym * Ctype.ctype) list)
+    (args : (Sym.sym * CF.Ctype.ctype) list)
     (index : int)
     (oc : out_channel)
     (gtx : gen_context)
@@ -178,7 +177,7 @@ module Impl (C : TF_Codify) = struct
     List.iter
       (fun d ->
         output_string oc "extern \"C\" ";
-        output_string oc (Pp_utils.to_plain_pretty_string (Pp_ail.pp_tag_definition d));
+        output_string oc (Pp.plain (CF.Pp_ail.pp_tag_definition d));
         output_string oc "\n\n")
       sigma.tag_definitions;
     List.iter
@@ -205,7 +204,7 @@ let codify_prelude
 let codify_pbt
   (tf : test_framework)
   (instrumentation : Core_to_mucore.instrumentation)
-  (args : (Sym.sym * Ctype.ctype) list)
+  (args : (Sym.sym * CF.Ctype.ctype) list)
   (index : int)
   (oc : out_channel)
   (gtx : gen_context)
