@@ -712,7 +712,7 @@ Module Type CheriMemoryImpl
     :=
     ret ((List.map (fun '(ident, (_, _, _, ty)) => (ident, ty, O)) members), O).
 
-  Fixpoint offsetsof
+  Definition offsetsof
     (fuel: nat)
     (tagDefs : SymMap.t CoqCtype.tag_definition)
     (tag_sym : CoqSymbol.sym)
