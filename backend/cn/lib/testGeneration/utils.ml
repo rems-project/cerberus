@@ -1,5 +1,4 @@
 module CF = Cerb_frontend
-open CF
 
 let codify_sym (s : Sym.sym) : string =
   let (Symbol (_, n, sd)) = s in
@@ -14,5 +13,5 @@ let sym_codified_equal (s1 : Sym.sym) (s2 : Sym.sym) =
   String.equal (codify_sym s1) (codify_sym s2)
 
 
-let string_of_ctype (ty : Ctype.ctype) : string =
-  String_ail.string_of_ctype ~is_human:true Ctype.no_qualifiers ty ^ " "
+let string_of_ctype (ty : CF.Ctype.ctype) : string =
+  CF.String_ail.string_of_ctype ~is_human:true CF.Ctype.no_qualifiers ty ^ " "

@@ -71,7 +71,7 @@ let optimize = Optimize.optimize
 module Compile = struct
   let filter_gen (x : Sym.sym) (ty : CF.Ctype.ctype) (cs : constraints) : gen =
     match cs with
-    | _ :: _ -> Filter (x, ty, IT.and_ cs (Cerb_location.other __FUNCTION__), Arbitrary ty)
+    | _ :: _ -> Filter (x, ty, IT.and_ cs (Locations.other __FUNCTION__), Arbitrary ty)
     | [] -> Arbitrary ty
 
 
