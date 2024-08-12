@@ -1728,7 +1728,11 @@ if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
 else
                                Caux.mk_std_pe "6.5.7#5, sentence 3" begin
                                 Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpGe promoted1_wrp.E.sym_pe (Caux.mk_integer_pe 0))
+  begin if Global.backend_name () = "Cn" then
+                                  Caux.mk_catch_exceptional_condition_pe result_ity C.IOpShr promoted1_wrp.E.sym_pe promoted2_wrp.E.sym_pe
+  else
                                   expr
+  end
                                   (Caux.mk_call_pe (C.Impl Implementation.SHR_signed_negative)
                                     [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_wrp.E.sym_pe; promoted2_wrp.E.sym_pe])
                                end

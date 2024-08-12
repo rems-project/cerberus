@@ -4,6 +4,7 @@ module BT = BaseTypes
 module RE = Resources
 module RET = ResourceTypes
 module LC = LogicalConstraints
+module LAT = LogicalArgumentTypes
 module LS = LogicalSorts
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
@@ -86,6 +87,53 @@ let subterms_without_bound_variables bindings =
       else
         acc)
     ITSet.empty
+
+
+(** Simplify a constraint in the context of a model. *)
+let simp_constraint eval lct =
+  let eval_to_bool it =
+    match eval it with Some (IT (Const (Bool b1), _, _)) -> Some b1 | _ -> None
+  in
+  let is b it = match eval_to_bool it with Some b1 -> Bool.equal b b1 | _ -> false in
+  let rec go (IT (term, bt, loc)) =
+    let mk x = IT (x, bt, loc) in
+    let ands xs = IT.and_ xs loc in
+    let go1 t = ands (go t) in
+    match term with
+    | Const (Bool true) -> []
+    | Binop (Or, lhs, rhs) when is false lhs -> go rhs
+    | Binop (Or, lhs, rhs) when is false rhs -> go lhs
+    | Binop (And, lhs, rhs) -> List.append (go lhs) (go rhs)
+    | Binop (Implies, lhs, rhs) ->
+      (match eval_to_bool lhs with
+       | Some b -> if b then go rhs else []
+       | None -> [ mk (Binop (Implies, go1 lhs, go1 rhs)) ])
+    | ITE (cond, ifT, ifF) ->
+      (match eval_to_bool cond with
+       | Some b -> if b then go ifT else go ifF
+       | None -> [ mk (ITE (go1 cond, go1 ifT, go1 ifF)) ])
+    | _ -> [ mk term ]
+  in
+  match lct with LC.Forall _ -> [ lct ] | LC.T ct -> List.map (fun x -> LC.T x) (go ct)
+
+
+(** Simplify a resource clause in the context of a model. *)
+let rec simp_resource eval r =
+  match r with
+  | LAT.Constraint (ct, info, more) ->
+    let is_true =
+      match ct with
+      | LC.T ct ->
+        (match eval ct with Some (IT (Const (Bool b), _, _)) -> b | _ -> false)
+      | _ -> false
+    in
+    if is_true then
+      simp_resource eval more
+    else
+      LAT.Constraint (ct, info, simp_resource eval more)
+  | LAT.Define (x, i, more) -> LAT.Define (x, i, simp_resource eval more)
+  | LAT.Resource (x, i, more) -> LAT.Resource (x, i, simp_resource eval more)
+  | I i -> I i
 
 
 let state ctxt model_with_q extras =
@@ -181,7 +229,7 @@ let state ctxt model_with_q extras =
           | LC.T (IT (Representable _, _, _)) -> false
           | LC.T (IT (Good _, _, _)) -> false
           | _ -> true)
-        (LCSet.elements ctxt.constraints)
+        (List.concat_map (simp_constraint evaluate) (LCSet.elements ctxt.constraints))
     in
     (List.map LC.pp interesting, List.map LC.pp uninteresting)
   in
@@ -233,6 +281,8 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
       (statef ctxt
        :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
   in
+  let model, _quantifier_counter_model = model_with_q in
+  let evaluate it = Solver.eval ctxt.global model it in
   let predicate_hints =
     match extras.request with
     | None -> []
@@ -242,7 +292,9 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
        | Owned _ -> []
        | PName pname ->
          let doc_clause (_name, c) =
-           { cond = IT.pp c.guard; clause = LogicalArgumentTypes.pp IT.pp c.packing_ft }
+           { cond = IT.pp c.guard;
+             clause = LogicalArgumentTypes.pp IT.pp (simp_resource evaluate c.packing_ft)
+           }
          in
          List.map doc_clause (relevant_predicate_clauses ctxt.global pname req))
   in

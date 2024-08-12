@@ -5378,8 +5378,6 @@ Module CheriMemoryImplWithProofs
               eauto.
             }
             admit.
-        *
-          invc OF.
   Admitted.
 
   Fact amap_add_list_not_at
@@ -5472,7 +5470,18 @@ Module CheriMemoryImplWithProofs
     apply H0.
   Qed.
 
-  Fact mem_state_with_funptrmap_bytemap_capmeta_preserves:
+  (* TODO: We can get away with just proving [0<l] but this is more precise formulation *)
+  Fact Capability_GS_encode_length
+    (isexact : bool)
+    (c : Capability_GS.t)
+    (l: list ascii)
+    (t: bool):
+    Capability_GS.encode isexact c = Some (l, t) -> Datatypes.length l =  sizeof_pointer MorelloImpl.get.
+  Proof.
+  Admitted.
+
+  (** Storing some bytes into memory and ghosting the tags for corresponding region preserves invariant *)
+  Fact mem_state_with_bytes_preserves:
     forall s : mem_state_r,
       ZMapProofs.map_forall (fun a : allocation => is_dead a = false) (allocations s) ->
       (forall (alloc_id1 alloc_id2 : ZMap.M.key) (a1 a2 : allocation),
@@ -5507,9 +5516,6 @@ Module CheriMemoryImplWithProofs
                (capmeta_ghost_tags start szn (capmeta s)) s).
   Proof.
     intros s Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr MIcap bs capmeta0 szn SP BL start RSZ H1.
-
-    (* The following part should be same for most types.
-         We just write some stuff to memory and ghost some tags *)
 
     unfold mem_state_with_funptrmap_bytemap_capmeta.
     repeat split;cbn;auto.
@@ -5799,21 +5805,32 @@ Module CheriMemoryImplWithProofs
       now rewrite <-IHl.
   Qed.
 
-  (* TODO: We can get away with just proving [0<l] but this is more precise formulation *)
-  Fact Capability_GS_encode_length
-    (isexact : bool)
-    (c : Capability_GS.t)
-    (l: list ascii)
-    (t: bool):
-    Capability_GS.encode isexact c = Some (l, t) -> Datatypes.length l =  sizeof_pointer MorelloImpl.get.
+  (** Storing a capability bytes into memory and and addit it to capmeta preserves invariant *)
+  Fact mem_state_with_cap_preserves:
+    forall s : mem_state_r,
+      ZMapProofs.map_forall (fun a : allocation => is_dead a = false) (allocations s) ->
+      (forall (alloc_id1 alloc_id2 : ZMap.M.key) (a1 a2 : allocation),
+          alloc_id1 <> alloc_id2 -> ZMap.M.MapsTo alloc_id1 a1 (allocations s) -> ZMap.M.MapsTo alloc_id2 a2 (allocations s) -> allocations_do_no_overlap a1 a2) ->
+      ZMapProofs.map_forall (fun a : allocation => AddressValue.to_Z (base a) + Z.of_nat (size a) <= AddressValue.ADDR_LIMIT) (allocations s) ->
+      AMapProofs.map_forall_keys addr_ptr_aligned (capmeta s) ->
+      ZMapProofs.map_forall_keys (fun alloc_id : ZMap.M.key => alloc_id < next_alloc_id s) (allocations s) ->
+      ZMapProofs.map_forall (fun a : allocation => AddressValue.to_Z (base a) >= AddressValue.to_Z (last_address s)) (allocations s) ->
+      (forall (addr : AMap.M.key) (g : CapGhostState),
+          AMap.M.MapsTo addr (true, g) (capmeta s) ->
+          tag_unspecified g = false ->
+          forall bs : list (option ascii),
+            fetch_bytes (bytemap s) addr (sizeof_pointer MorelloImpl.get) = bs ->
+            exists c : Capability_GS.t,
+              decode_cap bs true c /\ (exists (a : allocation) (alloc_id : ZMap.M.key), ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc c a)) ->
+      forall (c : Capability_GS.t) (cb : list ascii) (b:bool),
+        Capability_GS.encode true c = Some (cb, b) ->
+        forall start : AddressValue.t,
+          AddressValue.to_Z start + Z.of_nat (Datatypes.length cb) <= AddressValue.ADDR_LIMIT ->
+          forall bs : list (option ascii),
+            bs = map Some cb ->
+            mem_invariant (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start) (update_capmeta c start (capmeta s)) s).
   Proof.
-    unfold Capability_GS.encode, Capability.encode.
-    intros.
-    repeat break_match; try discriminate.
-    invc H.
-    apply Capability_try_map_length in Heqo0;
-      rewrite Heqo0; clear Heqo0 l; rename l0 into l.
-    (* TODO: HELP *)
+    intros s Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr MIcap c cb ct start RSZ bs Heqbs.
   Admitted.
 
   Lemma repr_preserves
@@ -5853,7 +5870,7 @@ Module CheriMemoryImplWithProofs
       intros start RSZ H1.
       bool_to_prop_hyp.
 
-      eapply mem_state_with_funptrmap_bytemap_capmeta_preserves;eauto.
+      eapply mem_state_with_bytes_preserves;eauto.
     -
       (* MVinteger *)
       break_match_hyp.
@@ -5869,26 +5886,24 @@ Module CheriMemoryImplWithProofs
         intros start RSZ IHfuel.
         bool_to_prop_hyp.
 
-        eapply mem_state_with_funptrmap_bytemap_capmeta_preserves;eauto.
+        eapply mem_state_with_bytes_preserves;eauto.
         rewrite map_length.
         auto.
       +
         (* IC *)
         repeat break_match_hyp; state_inv_steps.
         *
-          apply Capability_GS_encode_length in R2.
-          pose proof pointer_sizeof_pos as SP.
-          remember (sizeof_pointer MorelloImpl.get) as szn.
-          clear Heqszn.
-          generalize dependent (Capability_GS.cap_get_value c).
+          generalize dependent (Capability_GS.cap_get_value c); clear c.
           intros start RSZ IHfuel.
           bool_to_prop_hyp.
           remember (map Some l) as bs.
-          (* TODO: deal with [update_capmeta] in the goal *)
-          admit.
+          eapply mem_state_with_cap_preserves;eauto.
         *
-          (* TODO: Same as above *)
-          admit.
+          generalize dependent (Capability_GS.cap_get_value c); clear c.
+          intros start RSZ IHfuel.
+          bool_to_prop_hyp.
+          remember (map Some l) as bs.
+          eapply mem_state_with_cap_preserves;eauto.
     -
       (* MVfloating *)
       state_inv_steps.
@@ -5901,13 +5916,43 @@ Module CheriMemoryImplWithProofs
       intros start RSZ IHfuel.
       bool_to_prop_hyp.
 
-      eapply mem_state_with_funptrmap_bytemap_capmeta_preserves;eauto.
+      eapply mem_state_with_bytes_preserves;eauto.
       rewrite map_length.
       auto.
     -
       (* MVpointer *)
-      (* TODO: This should be similar to [IC] branch above *)
-      admit.
+      clear fuel IHfuel.
+      break_match_hyp.
+      +
+        (* PVfunction *)
+        break_match_hyp.
+        *
+          break_match_hyp.
+          break_let.
+          state_inv_step_quick.
+          state_inv_step_quick.
+          break_let.
+          state_inv_step_quick.
+          apply ret_inr in R5.
+          inversion R5; clear R5.
+          bool_to_prop_hyp.
+          eapply mem_state_with_cap_preserves;eauto.
+        *
+          state_inv_step_quick.
+          break_let.
+          state_inv_step_quick.
+          state_inv_step_quick.
+          apply ret_inr in R5.
+          inversion R5; clear R5.
+          bool_to_prop_hyp.
+          eapply mem_state_with_cap_preserves;eauto.
+      +
+        state_inv_steps.
+        generalize dependent (Capability_GS.cap_get_value c); clear c.
+        intros start RSZ.
+        bool_to_prop_hyp.
+        remember (map Some l) as bs.
+        eapply mem_state_with_cap_preserves;eauto.
     -
       (* MVarray *)
       (* TODO: prove using IHfuel *)

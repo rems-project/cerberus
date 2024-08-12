@@ -1,9 +1,3 @@
-type state_entry =
-  { loc_e : Pp.document option;
-    loc_v : Pp.document option;
-    state : Pp.document option
-  }
-
 type term_entry =
   { term : Pp.document;
     value : Pp.document
