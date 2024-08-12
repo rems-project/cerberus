@@ -205,6 +205,7 @@ citests=(
   0337-scalar-init-with_braces.undef.c
   0338-cast-pointer-to-_Bool.c
   0339-invalid-string-character.error.c
+  0340-shl_promotion_to_signed.undef.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

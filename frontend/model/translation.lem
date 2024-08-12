@@ -1579,6 +1579,10 @@ end
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun res_wrp       ->
           self e1                                             >>= fun core_e1       ->
           self e2                                             >>= fun core_e2       ->
+          (* (STD §6.5.7#3 and #4) the PROMOTED type of the left operand is used as the result
+             type of the left shift, and decides whether the shift has signed semantics
+             (overflow is undefined) or unsigned (overflow is defined as wrapping). *)
+          let is_unsigned_shift = AilTypesAux.is_unsigned_integer_type result_ty in
           E.return begin
             Caux.add_std "§6.5.7" begin
               Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) begin
@@ -1590,7 +1594,7 @@ end
                     ; ( Caux.mk_tuple_pat [ Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                                           ; Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer) ]
                       ,
-begin if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+begin if is_unsigned_shift then
                         Caux.mk_unspecified_pe result_ty
 else
                         Caux.mk_undef_exceptional_condition loc
@@ -1616,7 +1620,7 @@ let result_ity = match result_ty with
   | Cty.Ctype _ (Cty.Basic (Cty.Integer ity)) -> ity
   | _ -> illTypedAil loc "A.Shl result type should be an integer type"
 end in
-if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+if is_unsigned_shift then
       let core_shl =
         Caux.mk_std_pe "§6.5.7#4, sentence 2" begin
           Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpMul promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe))
@@ -1718,7 +1722,7 @@ let result_ity = match result_ty with
   | Cty.Ctype _ (Cty.Basic (Cty.Integer ity)) -> ity
   | _ -> illTypedAil loc "A.Shr result type should be an integer type"
 end in
-if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+if AilTypesAux.is_unsigned_integer_type result_ty then
                               Caux.mk_std_pe "6.5.7#5, sentence 2"
   begin if Global.backend_name () = "Cn" then
                                 Caux.mk_wrapI_pe result_ity C.IOpShr promoted1_wrp.E.sym_pe promoted2_wrp.E.sym_pe
@@ -1734,7 +1738,7 @@ else
                                   expr
   end
                                   (Caux.mk_call_pe (C.Impl Implementation.SHR_signed_negative)
-                                    [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_wrp.E.sym_pe; promoted2_wrp.E.sym_pe])
+                                    [Caux.mk_ail_ctype_pe result_ty; promoted1_wrp.E.sym_pe; promoted2_wrp.E.sym_pe])
                                end
 end
 end                       end))) ) ]
