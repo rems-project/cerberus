@@ -5475,16 +5475,6 @@ Module CheriMemoryImplWithProofs
     apply H0.
   Qed.
 
-  (* TODO: We can get away with just proving [0<l] but this is more precise formulation *)
-  Fact Capability_GS_encode_length
-    (isexact : bool)
-    (c : Capability_GS.t)
-    (l: list ascii)
-    (t: bool):
-    Capability_GS.encode isexact c = Some (l, t) -> Datatypes.length l =  sizeof_pointer MorelloImpl.get.
-  Proof.
-  Admitted.
-
   (** Storing some bytes into memory and ghosting the tags for corresponding region preserves invariant *)
   Fact mem_state_with_bytes_preserves:
     forall s : mem_state_r,
