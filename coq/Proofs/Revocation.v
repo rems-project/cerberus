@@ -6044,7 +6044,7 @@ Module CheriMemoryImplWithProofs
       apply store_lock_preserves, H.
 
   Qed.
-  Transpaent sizeof.
+  Transparent sizeof.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
