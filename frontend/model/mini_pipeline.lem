@@ -104,14 +104,18 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
     | Right a_expr ->
         (* applies the provided typing guard *)
         typing_guard (GenTypes.genTypeCategoryOf a_expr) >>= fun () ->
+
+        let callconv =
+          if Global.has_switch Global.SW_inner_arg_temps then Core.Inner_arg_callconv else Core.Normal_callconv in
         
         (* elaborate the typed expression into Core *)
-        let (core_expr, translate_final_st) = TranslateEff.runStateM (toCore a_expr) (TranslateEff.elab_init ()) in
+        let (core_expr, translate_final_st) = TranslateEff.runStateM (toCore a_expr) (TranslateEff.elab_init callconv) in
         
         let dr_st =
           (* this just builds the shell of the driver state *)
           let dummy_core_file = Core_run_aux.convert_file
             <| C.main= Nothing
+             ; C.calling_convention= callconv
              ; C.stdlib= stdlib_fun_map
              ; C.impl= impl
              ; C.globs= []

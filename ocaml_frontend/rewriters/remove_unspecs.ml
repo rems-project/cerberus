@@ -102,6 +102,7 @@ let rewrite_file file =
         decl in
   
   { main = file.main
+  ; calling_convention = file.calling_convention
   ; tagDefs = file.tagDefs
   ; stdlib = Pmap.map rewrite_fun_map_decl file.stdlib
   ; impl = Pmap.map rewrite_impl_decl file.impl

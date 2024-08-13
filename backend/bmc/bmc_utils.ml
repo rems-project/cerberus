@@ -408,6 +408,7 @@ let set_uid_globs (gname, glb) =
 let set_uid file1 =
  ({
   main=    (file1.main);
+  calling_convention= (file1.calling_convention);
   tagDefs= (file1.tagDefs);
   stdlib=  (file1.stdlib);
   impl=    (file1.impl);

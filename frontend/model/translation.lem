@@ -824,6 +824,9 @@ val translate_function_call:
   list (A.expression GenTypes.genTypeCategory) ->
   E.elabM (C.expr unit)
 let translate_function_call loc is_used translate_expr stdlib e es =
+  (* TODO: is_used_pe is commented out because it requires some changes to CN to support it.
+      But as a result currently a non-void function missing a return statement is deemed UB even when
+      the value of the function call is NOT used by the caller. (which is explicitly excluded from the UB by the STD) *)
   (* let is_used_pe = Caux.mk_boolean_pe is_used in *)
   let (expect_ret_ty, expect_params, expect_is_variadic) =
     match ctype_of e with
@@ -839,6 +842,7 @@ let translate_function_call loc is_used translate_expr stdlib e es =
       | Nothing ->
           false
     end in
+  E.get_calling_convention >>= fun callconv ->
   (* TODO: This is ignoring has_proto, §6.5.2.2#6 is not being considered! *)
   (* STD §6.5.2.2 *)
   E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun fun_wrp         ->
@@ -924,8 +928,9 @@ let translate_function_call loc is_used translate_expr stdlib e es =
           end
         )) :: rev_core_creates )
   ) (0,[]) (List.zip expect_params args_info) >>= fun (_, rev_core_creates) ->
-  (* standard arguments (CN elaboration switch) *)
-  begin if Global.has_switch Global.SW_inner_arg_temps then
+  match callconv with
+  | C.Inner_arg_callconv ->
+    (* standard arguments (CN elaboration switch) *)
     E.foldlM (fun (n, cn_core_args) ((_, expect_param_ty, _), (arg_ty, arg_is_null, arg_sym_pe)) ->
       E.wrapped_fresh_symbol C.BTy_ctype                  >>= fun param_ty_wrp ->
       E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun arg_ptr_wrp ->
@@ -956,7 +961,7 @@ let translate_function_call loc is_used translate_expr stdlib e es =
             end
           )) :: cn_core_args )
     ) (0,[]) (List.zip expect_params args_info)
-  else
+  | C.Normal_callconv ->
     (* dummy empty list we are not using *)
     E.return (0, [])
   end >>= fun (_, rev_cn_core_args) ->
@@ -1017,6 +1022,43 @@ begin if expect_is_variadic then
           (Caux.mk_op_pe C.OpOr (Caux.mk_not_pe is_variadic_wrp.E.sym_pe)
                           (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_wrp.E.sym_pe)))
           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
+match callconv with
+| C.Inner_arg_callconv ->
+    let (_, varg_ptr_sym_pats) = List.splitAt (List.length expect_params) arg_ptr_sym_pats in
+          (Caux.mk_sseqs
+            (* create temporary object for the additional arguments *)
+            (List.zip varg_ptr_sym_pats (List.reverse rev_variadic_core_creates))
+            (Caux.mk_sseq_e call_ret_wrp.E.sym_pat
+              (* do the function call *)
+              (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
+                (let (_, varg_ptr_sym_pes) = List.splitAt (List.length expect_params) arg_ptr_sym_pes in
+                  let varargs_ty_pes =
+                    List.map (fun (ty_pe, pe) -> Caux.mk_tuple_pe [ty_pe; pe])
+                      (List.zip (List.reverse rev_arg_ty_pes) varg_ptr_sym_pes) in
+                  let varargs_ty_pes_type = 
+                    C.BTy_tuple [C.BTy_ctype; (C.BTy_object C.OTy_pointer)] in
+                  (*is_used_pe :: *) List.reverse rev_cn_core_args ++ [Caux.mk_list_pe varargs_ty_pes_type varargs_ty_pes]
+                )
+              )
+              (
+                let arg_ptr_syms_tys =
+                  List.zip (snd (List.splitAt (List.length expect_params) arg_ptr_syms))
+                    ((*List.map (fun (_, ty, _) -> ty) expect_params ++ *) List.reverse rev_arg_tys) in
+                let killall_pat =
+                  let len = List.length arg_ptr_syms_tys in
+                  if len < 2 then
+                    Caux.mk_empty_pat C.BTy_unit
+                  else
+                    Caux.mk_empty_pat (C.BTy_tuple (List.replicate len C.BTy_unit)) in
+                Caux.mk_sseq_e killall_pat
+                  (* kill temporary objects *)
+                  (Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
+                  (* return function call result *)
+                  (Caux.mk_pure_e call_ret_wrp.E.sym_pe)
+              )
+            )
+          )
+| C.Normal_callconv ->
           (Caux.mk_sseqs
             (* create temporary object *)
             (List.zip arg_ptr_sym_pats (List.reverse rev_core_creates ++ List.reverse rev_variadic_core_creates))
@@ -1043,6 +1085,7 @@ begin if expect_is_variadic then
               )
             )
           )
+end
         )
       )
 else
@@ -1056,14 +1099,30 @@ else
           (Caux.mk_op_pe C.OpOr is_variadic_wrp.E.sym_pe
                           (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_wrp.E.sym_pe)))
           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
-begin if Global.has_switch Global.SW_inner_arg_temps then
+match callconv with
+| C.Inner_arg_callconv ->
           (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe ((*is_used_pe :: *)List.reverse rev_cn_core_args))
-else
+| C.Normal_callconv ->
             (* create temporary object *)
             (Caux.mk_sseqs (List.zip arg_ptr_sym_pats (List.reverse rev_core_creates))
             (Caux.mk_sseq_e call_ret_wrp.E.sym_pat
               (* do the function call *)
-              (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe ((*is_used_pe :: *)arg_ptr_sym_pes))
+              (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_wrp.E.sym_pe
+              
+              
+            (
+              let (arg_pes, vararg_pes) = List.splitAt (List.length expect_params) arg_ptr_sym_pes in
+              let varargs_ty_pes =
+                List.map (fun (ty_pe, pe) -> Caux.mk_tuple_pe [ty_pe; pe])
+                  (List.zip (List.reverse rev_arg_ty_pes) vararg_pes) in
+              let varargs_ty_pes_type =
+                C.BTy_tuple [C.BTy_ctype; (C.BTy_object C.OTy_pointer)] in
+              if expect_is_variadic then
+                (*is_used_pe :: *) arg_pes ++ [Caux.mk_list_pe varargs_ty_pes_type varargs_ty_pes]
+              else
+                (*is_used_pe :: *) arg_pes
+            )
+              )
               (Caux.mk_sseq_e killall_pat
                 (* kill temporary objects *)
                 (let arg_ptr_syms_tys = List.map (fun (sym, (_, ty, _)) -> (sym, ty)) (List.zip arg_ptr_syms expect_params) in
@@ -4025,7 +4084,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           let is_using_inner_arg_temps =
             (* NOTE: we exclude main because the driver allocates the objects for argc and argvs *)
             (* with this switch the argument temporary objects are allocated in the function *)
-            Global.has_switch Global.SW_inner_arg_temps && startup_sym_opt <> Just sym in
+            Global.has_switch Global.SW_inner_arg_temps in
           (* elaboration of a function *)
           let ret_bTy =
             if AilTypesAux.is_void return_ty then
@@ -4215,15 +4274,17 @@ let translate_extern_map (_, sigm) =
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
+    C.calling_convention ->
     C.impl -> 
     A.ail_program GenTypes.genTypeCategory ->
     C.file unit
-let translate (ailnames, stdlib_fun_map) impl prog =
+let translate (ailnames, stdlib_fun_map) callconv impl prog =
   let translation_stdlib = mk_translation_stdlib (ailnames, stdlib_fun_map) in
   let ((core_tagDefs, cglobs, (*cdecls, *) cfuns, funinfo), st) =
-    E.runStateM_errors (translate_program translation_stdlib prog) (E.elab_init ())
+    E.runStateM_errors (translate_program translation_stdlib prog) (E.elab_init callconv)
   in
   <| C.main= fst prog;
+     C.calling_convention= callconv;
      C.tagDefs= core_tagDefs;
      C.stdlib= stdlib_fun_map;
      C.impl= impl;

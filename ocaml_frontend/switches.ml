@@ -96,13 +96,43 @@ let set strs =
         Some (SW_magic_comment_char_dollar)
     | _ ->
         None in
+  let pred x = function
+    | SW_pointer_arith _ ->
+        begin match x with
+          | SW_pointer_arith _ -> true
+          | _ -> false
+        end
+    | SW_PNVI _ ->
+        begin match x with
+          | SW_PNVI _ -> true
+          | _ -> false
+        end
+    | SW_revocation _ ->
+        begin match x with
+          | SW_revocation _ -> true
+          | _ -> false
+        end
+    | SW_strict_reads
+    | SW_forbid_nullptr_free
+    | SW_zap_dead_pointers
+    | SW_strict_pointer_equality
+    | SW_strict_pointer_relationals
+    | SW_CHERI
+    | SW_inner_arg_temps
+    | SW_permissive_printf
+    | SW_zero_initialised
+    | SW_at_magic_comments
+    | SW_magic_comment_char_dollar as y ->
+        x = y in
   List.iter (fun str ->
     match read_switch str with
       | Some sw ->
-          if not (has_switch sw) then
+          if None = has_switch_pred (pred sw) then
             internal_ref := sw :: !internal_ref
+          else
+            prerr_endline ("switch '" ^ String.escaped str ^ "' would override a previous switch --> ignoring.")
       | None ->
-          prerr_endline ("failed to parse switch `" ^ String.escaped str ^ "' --> ignoring.")
+          prerr_endline ("failed to parse switch '" ^ String.escaped str ^ "' --> ignoring.")
   ) strs
 
 let set_iso_switches () =

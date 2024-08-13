@@ -281,10 +281,14 @@ val link_aux: forall 'a 'b. generic_file 'a 'b ->
                            generic_file 'a 'b ->
                            exceptM (generic_file 'a 'b) (Loc.t * cause)
 let link_aux f1 f2 =
+  if f1.calling_convention <> f2.calling_convention then
+    link_fail Loc.unknown IncompatibleCallingConvention
+  else
   link_extern f2.extern f1.extern >>= fun (extern, reduntant_globs) ->
   link_main f1.main f2.main >>= fun main ->
   return
     <| main=    main;
+       calling_convention= f1.calling_convention;
        tagDefs= f1.tagDefs union f2.tagDefs;
        stdlib=  f1.stdlib;
        impl=    f1.impl;

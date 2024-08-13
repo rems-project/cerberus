@@ -284,8 +284,7 @@ builtin vsnprintf (pointer, integer, [integer], integer) : eff loaded integer
 builtin rename    ([integer], [integer]) : eff loaded integer
 
 -- int printf(const char * restrict format, ...);
-proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
-  let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
+proc [ailname = "printf"] printf_proxy(frmt_ptr_: loaded pointer, args: [(ctype, pointer)]) : eff loaded integer :=
   case frmt_ptr_ of
     | Specified(frmt_ptr: pointer) =>
         let strong xs: [integer] = pcall(listFromStr, frmt_ptr) in
@@ -296,10 +295,7 @@ proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctyp
   end
 
 -- int vprintf (int fd, char * restrict format, va_list ap)
-proc [ailname = "__builtin_vprintf"] vprintf_proxy (fd_ptr: pointer, fmt_ptr: pointer, ap_ptr: pointer) : eff loaded integer :=
-  let strong fd_ptr_: loaded integer = load('signed int', fd_ptr) in
-  let strong fmt_ptr_: loaded pointer = load('char*', fmt_ptr) in
-  let strong ap_ptr_: loaded integer = load('signed int', ap_ptr) in
+proc [ailname = "__builtin_vprintf"] vprintf_proxy (fd_ptr_: loaded integer, fmt_ptr_: loaded pointer, ap_ptr_: loaded integer) : eff loaded integer :=
   case (fd_ptr_, fmt_ptr_, ap_ptr_) of
     | (Specified (fd: integer), Specified (fmt: pointer), Specified(ap: integer)) =>
         let strong xs: [integer] = pcall(listFromStr, fmt) in
@@ -309,11 +305,7 @@ proc [ailname = "__builtin_vprintf"] vprintf_proxy (fd_ptr: pointer, fmt_ptr: po
   end
 
 -- int vsnprintf(int fd, size_t n, const char * restrict fmt, va_list arg);
-proc [ailname = "__builtin_vsnprintf"] vsnprintf_proxy (s_ptr: pointer, size_ptr: pointer, fmt_ptr: pointer, ap_ptr: pointer) : eff loaded integer :=
-  let strong s_ptr_: loaded pointer = load('char*', s_ptr) in
-  let strong size_ptr_: loaded integer = load('size_t', size_ptr) in
-  let strong fmt_ptr_: loaded pointer = load('char*', fmt_ptr) in
-  let strong ap_ptr_: loaded integer = load('signed int', ap_ptr) in
+proc [ailname = "__builtin_vsnprintf"] vsnprintf_proxy (s_ptr_: loaded pointer, size_ptr_: loaded integer, fmt_ptr_: loaded pointer, ap_ptr_: loaded integer) : eff loaded integer :=
   case (s_ptr_, size_ptr_, fmt_ptr_, ap_ptr_) of
     | (Specified (s: pointer), Specified (size: integer), Specified (fmt: pointer), Specified(ap: integer)) =>
         let strong xs: [integer] = pcall(listFromStr, fmt) in
@@ -323,9 +315,7 @@ proc [ailname = "__builtin_vsnprintf"] vsnprintf_proxy (s_ptr: pointer, size_ptr
   end
 
 -- int rename(const char *oldpath, const char *newpath);
-proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: pointer): eff loaded integer :=
-  let strong oldpath_loaded: loaded pointer = load('char*', oldpath_ptr) in
-  let strong newpath_loaded: loaded pointer = load('char*', newpath_ptr) in
+proc [ailname = "rename"] rename_proxy (oldpath_loaded: loaded pointer, newpath_loaded: loaded pointer): eff loaded integer :=
   case (oldpath_loaded, newpath_loaded) of
     | (Specified (oldpath: pointer), Specified (newpath: pointer)) =>
       let strong cs1: [integer] = pcall(listFromStr, oldpath) in
@@ -353,9 +343,7 @@ proc [ailname = "malloc"] malloc_proxy (size_: loaded integer) : eff loaded poin
         pure(error(<<<malloc_proxy>>>, False))
   end
 
-proc [ailname = "realloc"] realloc_proxy (old_ptrptr: pointer, size_ptr: pointer) : eff loaded pointer :=
-  let strong size_: loaded integer = load('size_t', size_ptr) in
-  let strong old_ptrptr_: loaded pointer = load('void *', old_ptrptr) in
+proc [ailname = "realloc"] realloc_proxy (old_ptrptr_: loaded pointer, size_: loaded integer) : eff loaded pointer :=
   case (size_, old_ptrptr_) of
     | (Specified(size: integer), Specified(old_ptr: pointer)) =>
         let strong ptr: pointer = memop(Realloc, IvMaxAlignment, old_ptr, size) in
@@ -372,9 +360,7 @@ proc [ailname = "free"] free_proxy (p_: loaded pointer) : eff unit :=
         pure(undef(<<DUMMY(kill_proxy_1)>>)) -- TODO check that
   end
 
-proc [ailname = "aligned_alloc"] aligned_alloc_proxy (align_ptr: pointer, size_ptr: pointer) : eff loaded pointer :=
-  let strong align_: loaded integer = load('size_t', align_ptr) in
-  let strong size_: loaded integer = load('size_t', size_ptr) in
+proc [ailname = "aligned_alloc"] aligned_alloc_proxy (align_: loaded integer, size_: loaded integer) : eff loaded pointer :=
   case (align_, size_) of
     | (Specified(align: integer), Specified(size: integer)) =>
         if size rem_t align = 0 then
@@ -568,9 +554,7 @@ proc [ailname = "closedir"] closedir_proxy (dirp_: loaded pointer): eff loaded i
 builtin open ([integer], integer): eff loaded pointer
 
 -- int open(const char *path, int oflag, ...);
-proc [ailname = "open"] open_proxy (path_ptr: pointer, oflag_ptr: pointer, args: [(ctype, pointer)]): eff loaded pointer :=
-  let strong path_loaded: loaded pointer = load('char*', path_ptr) in
-  let strong oflag_loaded: loaded integer = load('signed int', oflag_ptr) in
+proc [ailname = "open"] open_proxy (path_loaded: loaded pointer, oflag_loaded: loaded integer, args: [(ctype, pointer)]): eff loaded pointer :=
   -- TODO: i'm ignoring the args!!
   case (path_loaded, oflag_loaded) of
     | (Specified (path: pointer), Specified (oflag: integer)) =>
