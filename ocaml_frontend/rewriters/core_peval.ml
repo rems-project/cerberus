@@ -861,6 +861,7 @@ let rewrite_file file =
   in
 
   { main = file.main
+  ; calling_convention = file.calling_convention
   ; tagDefs = file.tagDefs
   ; stdlib = rewrite_fun_map file.stdlib
   ; impl = rewrite_impl file.impl

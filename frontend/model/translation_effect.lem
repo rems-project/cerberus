@@ -30,14 +30,16 @@ type elab_state = <|
   temporary_objects: list (wrapped_symbol * Ctype.ctype);
   visible_objects_types_markers_env: map nat (list (Symbol.sym * Ctype.ctype));
 
-  errors: list string
+  errors: list string;
   
+  (* readonly *)
+  calling_convention: C.calling_convention;
 |>
 
 type elabM 'a = stateM 'a elab_state
 
-val elab_init: unit -> elab_state
-let elab_init () = <|
+val elab_init: C.calling_convention -> elab_state
+let elab_init callconv = <|
   visible_objects_types= Map.empty;
   visible_objects= [[]];
   string_literals= [];
@@ -45,7 +47,12 @@ let elab_init () = <|
   temporary_objects= [];
   visible_objects_types_markers_env = Map.empty;
   errors = [];
+  calling_convention= callconv;
 |>
+
+val get_calling_convention: elabM C.calling_convention
+let get_calling_convention =
+  fun st -> (st.calling_convention, st)
 
 
 (* TODO: this does not need to be in the monad, but it is useful to unsure

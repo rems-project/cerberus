@@ -1630,9 +1630,21 @@ let rec collect_labels env (Expr _ expr_) =
 
 
 (* val     typecheck_expr: Loc.t -> typing_env -> core_base_type -> Core.expr unit -> E.eff (typed_expr unit) *)
-and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
-  let typecheck_expr env expected_bTy expr = typecheck_expr tagDefs env expected_bTy expr in
+and typecheck_expr callconv tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
+  let typecheck_expr env expected_bTy expr = typecheck_expr callconv tagDefs env expected_bTy expr in
   let loc = Annot.get_loc_ annot in
+  let typecheck_ccall_argument =
+    match callconv with
+      | Normal_callconv ->
+          fun _ pe -> typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
+      | Inner_arg_callconv ->
+          fun ty pe -> match Core_aux.core_object_type_of_ctype ty with
+            | Just oTy ->
+                typecheck_export_pexpr tagDefs env (BTy_loaded oTy) pe
+            | Nothing ->
+                E.fail loc (CoreTyping_TODO "the first operand of ccall() has a C function type with a non object parameter type")
+          end
+    end in
   Expr annot <$> match expr_ with
     | Epure pe ->
         Epure <$> typecheck_export_pexpr tagDefs env expected_bTy pe
@@ -1676,43 +1688,46 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         Eif <$> typecheck_export_pexpr tagDefs env BTy_boolean pe1
             <*> typecheck_expr env expected_bTy e2
             <*> typecheck_expr env expected_bTy e3
-    | Eccall annot pe_ty pe pes ->
-        infer_pexpr tagDefs env pe_ty >>= export_pexpr >>= fun pe_ty' ->
+    | Eccall annot ty_pe pe pes ->
+        infer_pexpr tagDefs env ty_pe >>= export_pexpr >>= fun ty_pe' ->
         infer_pexpr tagDefs env pe    >>= export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
-        match (pe_ty, bTy) with
-          | (Pexpr _ _ (PEval (Vctype (Cty.Ctype _ (Cty.Pointer _ (Cty.Ctype _ (Cty.Function (qs, ty) params isVariadic))))))
-            , BTy_loaded OTy_pointer) ->
+        match (ty_pe, bTy) with
+          | ( Pexpr _ _ (PEval (Vctype (Cty.Ctype _ (Cty.Pointer _ (Cty.Ctype _ (Cty.Function (qs, ty) params isVariadic))))))
+            , BTy_loaded OTy_pointer ) ->
               begin
                 if isVariadic then
                   match List.dest_init pes with
                     | Nothing ->
                         E.fail loc (CoreTyping_TODO "ccall to a variadic C procedure must at least have a list of pointers as last argument")
-                    | Just (first_pes, last_pe) ->
-                        E.mapM (fun pe ->
-                          typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
-                        ) first_pes >>= fun first_pes' ->
+                    | Just (xs, last_pe) ->
+                        E.mapM (fun ((_, ty, _), pe) ->
+                          typecheck_ccall_argument ty pe
+                        ) (List.zip params pes) >>= fun pes' ->
                         typecheck_export_pexpr tagDefs env
                           (BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])) last_pe >>= fun last_pe' ->
-                        E.return (first_pes' ++ [last_pe'])
+                        E.return (pes' ++ [last_pe'])
                   end
                 else
-                  if Global.has_switch Global.SW_inner_arg_temps then
-                    E.mapM (fun ((_, ty, _), pe) ->
-                      match Core_aux.core_object_type_of_ctype ty with
-                        | Just oTy ->
-                            typecheck_export_pexpr tagDefs env (BTy_loaded oTy) pe
-                        | Nothing ->
-                            E.fail loc (CoreTyping_TODO "the first operand of ccall() has a C function type with a non object parameter type")
-                      end
-                    ) (List.zip params pes)
-                  else
-                    E.mapM (fun pe ->
-                      typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
-                    ) pes
+                  E.mapM (fun ((_, ty, _), pe) -> typecheck_ccall_argument ty pe) (List.zip params pes)
+                (* else match callconv with
+                  | Normal_callconv ->
+                      E.mapM (fun pe ->
+                        typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
+                      ) pes
+                  | Inner_arg_callconv ->
+                      E.mapM (fun ((_, ty, _), pe) ->
+                        match Core_aux.core_object_type_of_ctype ty with
+                          | Just oTy ->
+                              typecheck_export_pexpr tagDefs env (BTy_loaded oTy) pe
+                          | Nothing ->
+                              E.fail loc (CoreTyping_TODO "the first operand of ccall() has a C function type with a non object parameter type")
+                        end
+                      ) (List.zip params pes)
+                end *)
               end >>= fun pes' ->
               let ret_oTy_opt = Core_aux.core_object_type_of_ctype ty in
               guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >>
-              E.return (Eccall annot pe_ty' pe' pes')
+              E.return (Eccall annot ty_pe' pe' pes')
           | (_, _) ->
               E.fail loc (CoreTyping_TODO "the first operand of ccall() should have a C function type")
         end
@@ -1819,6 +1834,8 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
 (* TODO: add a check for the existence of main *)
 val typecheck_program: forall 'bty 'a. Core.generic_file 'bty 'a -> Exception.exceptM (Core.typed_file 'a) Errors.error
 let typecheck_program file =
+  let typecheck_expr env expected_bTy expr =
+    typecheck_expr file.calling_convention file.tagDefs env expected_bTy expr in
   let aux =
     (* The startup function/procedure must be defined *)
     match file.main with
@@ -1866,7 +1883,7 @@ let typecheck_program file =
         | Proc loc mrk bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc loc mrk bTy sym_bTys <$> typecheck_expr file.tagDefs env' bTy e
+            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
       end) file.stdlib >>= fun stdlib' ->
     
     (* Typechecking of the impl constants *)
@@ -1884,7 +1901,7 @@ let typecheck_program file =
       match decl with
         | GlobalDef (bTy, ct) e ->
             collect_labels env_acc e >>= fun env_acc' ->
-            typecheck_expr file.tagDefs env_acc' bTy e >>= fun te ->
+            typecheck_expr env_acc' bTy e >>= fun te ->
             E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, GlobalDef (bTy, ct) te) :: acc)
         | GlobalDecl (bTy, ct) ->
             E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc, (sym, GlobalDecl (bTy, ct)) :: acc)
@@ -1919,11 +1936,12 @@ let typecheck_program file =
         | Proc loc mrk bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc loc mrk bTy sym_bTys <$> typecheck_expr file.tagDefs env' bTy e
+            Proc loc mrk bTy sym_bTys <$> typecheck_expr env' bTy e
       end) file.funs >>= fun funs' ->
     
     E.return <|
       main= file.main;
+      calling_convention = file.calling_convention;
       tagDefs= file.tagDefs;
       stdlib= stdlib';
       impl= impl';

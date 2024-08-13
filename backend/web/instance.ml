@@ -328,6 +328,7 @@ let set_uid file =
     )
   in
   { main=    file.main;
+    calling_convention= file.calling_convention;
     tagDefs= file.tagDefs;
     stdlib=  file.stdlib;
     impl=    file.impl;

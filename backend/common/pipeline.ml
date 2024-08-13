@@ -240,7 +240,9 @@ let c_frontend_and_elaboration ?(cnnames=[]) (conf, io) (core_stdlib, core_impl)
      used more than once, we need to do reset here *)
   (* TODO(someday): find a better way *)
   Tags.reset_tagDefs ();
-  let core_file = Translation.translate core_stdlib core_impl ailtau_prog in
+  let calling_convention =
+    Core.(if Switches.has_switch SW_inner_arg_temps then Inner_arg_callconv else Normal_callconv) in
+  let core_file = Translation.translate core_stdlib calling_convention core_impl ailtau_prog in
   io.set_progress "ELABO" >>= fun () ->
   io.pass_message "Translation to Core completed!" >>= fun () ->
   return (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
@@ -253,6 +255,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
         (* Tags.set_tagDefs "Pipeline.core_frontend" tagDefs; *)
         return {
            Core.main=   Some sym_main;
+           Core.calling_convention= Core.Normal_callconv; (* TODO *)
            Core.tagDefs= tagDefs;
            Core.stdlib= snd core_stdlib;
            Core.impl=   core_impl;
@@ -481,6 +484,7 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
     | GlobalDecl _ as glob ->
         glob in
   { main= file.main
+  ; calling_convention= file.calling_convention
   ; tagDefs= file.tagDefs
   ; stdlib= Pmap.map untype_generic_fun_map_decl file.stdlib
   ; impl= Pmap.map untype_generic_impl_decl file.impl
@@ -599,13 +603,14 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
  * program, with exactly the same compiled code. *)
 type 'a core_dump =
   { dump_main: Symbol.sym option;
+    dump_calling_convention: Core.calling_convention;
     dump_tagDefs: (Symbol.sym * (Cerb_location.t * Ctype.tag_definition)) list;
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
     dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
     dump_funinfo: (Symbol.sym * (Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
-    dump_loop_attributes: (int * Annot.attributes) list;
-  } [@@warning "-unused-field"]
+    (* dump_loop_attributes: (int * Annot.attributes) list; *)
+  }
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
   if d1 = d2 then compare n1 n2
@@ -630,9 +635,10 @@ let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filenam
   if v <> version_info
   then
     Cerb_debug.warn [] (fun () -> "read core_object file produced with a different version of Cerberus => " ^ v);
-  let dump = Marshal.from_channel ic in
+  let dump: 'a core_dump = Marshal.from_channel ic in
   close_in ic;
-  let core_file = { main=    dump.main;
+  let core_file = { main=    dump.dump_main;
+    calling_convention= dump.dump_calling_convention;
     tagDefs= map_from_assoc sym_compare dump.dump_tagDefs;
     stdlib=  snd core_stdlib;
     impl=    core_impl;
@@ -650,14 +656,15 @@ let read_core_object (conf, io) ?(is_lib=false) (core_stdlib, core_impl) filenam
 
 let write_core_object core_file fname =
   let open Core in
-  let dump =
+  let dump: 'a core_dump =
     { dump_main = core_file.main;
+      dump_calling_convention = core_file.calling_convention;
       dump_tagDefs = Pmap.bindings_list core_file.tagDefs;
       dump_globs = core_file.globs;
       dump_funs = Pmap.bindings_list core_file.funs;
       dump_extern = Pmap.bindings_list core_file.extern;
       dump_funinfo = Pmap.bindings_list core_file.funinfo;
-      dump_loop_attributes = [] (*Pmap.bindings_list core_file.loop_attributes0*);
+(*      dump_loop_attributes = [] (*Pmap.bindings_list core_file.loop_attributes0*); *)
     }
   in
   let oc = open_out_bin fname in

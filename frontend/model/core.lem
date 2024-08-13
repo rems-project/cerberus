@@ -403,18 +403,27 @@ type core_tag_definitions =
 
 type visible_objects_env = map nat (list (Symbol.sym * Ctype.ctype))
 
+type calling_convention =
+  | Normal_callconv
+  | Inner_arg_callconv
+
+instance (Eq calling_convention)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
 (* a Core file is just a set of named functions *)
 type generic_file 'bty 'a = <|
-  main    : maybe Symbol.sym;
-  tagDefs : core_tag_definitions;
-  stdlib  : generic_fun_map 'bty 'a;
-  impl    : generic_impl 'bty;
-  globs   : list (Symbol.sym * generic_globs 'a 'bty);
-  funs    : generic_fun_map 'bty 'a;
-  extern  : extern_map;
-  funinfo : map Symbol.sym (Loc.t * Annot.attributes * ctype * list (maybe Symbol.sym * ctype) * bool * bool);
-  loop_attributes : Annot.loop_attributes;
+  main: maybe Symbol.sym;
+  calling_convention: calling_convention;
+  tagDefs: core_tag_definitions;
+  stdlib: generic_fun_map 'bty 'a;
+  impl: generic_impl 'bty;
+  globs: list (Symbol.sym * generic_globs 'a 'bty);
+  funs: generic_fun_map 'bty 'a;
+  extern: extern_map;
+  funinfo: map Symbol.sym (Loc.t * Annot.attributes * ctype * list (maybe Symbol.sym * ctype) * bool * bool);
+  loop_attributes: Annot.loop_attributes;
   visible_objects_env: visible_objects_env;
 |>
 

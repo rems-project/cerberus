@@ -462,9 +462,11 @@ let string_of_core_typing_cause = function
 
 let string_of_core_linking_cause = function
   | DuplicateExternalName (Symbol.Identifier (_, name)) ->
-    "duplicate external symbol: " ^ name
+      "duplicate external symbol: " ^ name
   | DuplicateMain ->
-    "duplicate main function"
+      "duplicate main function"
+  | IncompatibleCallingConvention ->
+      "incompatible calling conventions"
 
 
 let string_of_core_run_cause = function

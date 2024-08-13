@@ -43,6 +43,7 @@ type core_typing_cause =
 type core_linking_cause =
   | DuplicateExternalName of Symbol.identifier
   | DuplicateMain
+  | IncompatibleCallingConvention
 
 type core_run_cause =
   | Illformed_program of string (* typing or name-scope error *)

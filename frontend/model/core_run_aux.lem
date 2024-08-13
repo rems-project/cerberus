@@ -693,6 +693,7 @@ let convert_file file =
 
  <|
   main=    file.main;
+  calling_convention= file.calling_convention;
   tagDefs= file.tagDefs;
   stdlib=  Map.map convert_fun_map_decl file.stdlib;
   impl=    Map.map convert_impl_decl file.impl;

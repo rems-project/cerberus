@@ -381,6 +381,10 @@ val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
 
+val pointer_to_char: ctype
+let pointer_to_char =
+  Ctype [] (Pointer no_qualifiers char)
+
 import Global
 val ptraddr_t: unit -> ctype
 let ptraddr_t _ =

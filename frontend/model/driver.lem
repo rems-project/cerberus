@@ -910,8 +910,8 @@ let can_advance = function
       not is_unseq_with_ccall (* false *)
   | Core_reduction.Step_blocked2 ->
       false
-  | Core_reduction.Step_error2 _ ->
-      error "can_advance: Step_error2"
+  | Core_reduction.Step_error2 str ->
+      error ("can_advance: Step_error2 ==> " ^ str)
   | Core_reduction.Step_thread_done2 _ _ ->
       true
   | Core_reduction.Step_done2 _ ->
@@ -1624,6 +1624,81 @@ declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
 
 
 
+let prepare_main_args loc callconv tid0 main_sym arg_strs argc_sym argv_sym =
+  (* memory_values to be stored in memory objects pointed to by the element of main.argv *)
+  let args_mem_val_tys =
+    List.map (fun arg_str ->
+      let mem_vals =
+        List.map (fun c ->
+          (* TODO: fixing impl choice here (ASCII) *)
+          Mem.integer_mval Ctype.Char (Decode.decode_character_constant (String.toString [c]))
+        ) (String.toCharList arg_str) in
+      (* NOTE: adding a null termination to the char array *)
+      ( Mem.array_mval (mem_vals ++ [Mem.integer_mval Ctype.Char 0])
+      , Ctype.Ctype [] (Ctype.Array Ctype.char (Just ((integerFromNat (List.length mem_vals)) + 1))) )
+    ) arg_strs in
+
+  let number_of_args = integerFromNat (List.length args_mem_val_tys) in
+
+  (* allocating and initialising the objects pointed to by the elements of argv *)
+  ND.foldlM (fun ptr_vals (arg_mem_val, arg_ty) ->
+    liftMem (
+      Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty Nothing Nothing) (fun ptr_val ->
+        Mem.bind (Mem.store (Loc.other "argv refs init") arg_ty false ptr_val arg_mem_val) (fun _ ->
+          Mem.return (ptr_val :: ptr_vals)
+        )
+      )
+    )
+  ) [] args_mem_val_tys >>= fun ptr_vals_rev ->
+
+  (* allocating and initialising an object for main.argv *)
+  (* NOTE: the element argv[argc] is required to be a null pointer
+      by the STD, hence argv has one more element than the number
+      of supplied arguments *)
+ liftMem begin
+    let pref = Symbol.PrefSource loc [main_sym; argv_sym(*TODO: change the sym?*)] in
+    let argv_array_ty = Ctype.Ctype [] (Ctype.Array Ctype.pointer_to_char (Just (1 + (integerFromNat (List.length ptr_vals_rev))))) in
+    let argv_array_mem_val = Mem.array_mval (
+      List.map (Mem.pointer_mval Ctype.char) (List.reverse (Mem.null_ptrval Ctype.char :: ptr_vals_rev))
+    ) in
+    Mem.bind
+      (Mem.allocate_object tid0 pref (Mem.alignof_ival argv_array_ty) argv_array_ty Nothing Nothing) (fun ptr_val ->
+    Mem.bind
+      (Mem.store (Loc.other "argv array init") argv_array_ty false ptr_val argv_array_mem_val) (fun _ ->
+      ND.return ptr_val
+    ))
+  end >>= fun argv_array_ptr_val ->
+    
+  match callconv with
+    | Core.Normal_callconv ->
+        let argc_mem_val = Mem.integer_mval (Ctype.Signed Ctype.Int_) number_of_args in
+        liftMem begin
+          let pref = Symbol.PrefSource loc [main_sym; argc_sym] in
+          Mem.bind (Mem.allocate_object tid0 pref (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing Nothing) (fun argc_ptr_val ->
+          Mem.bind (Mem.store (Loc.other "argc init") Ctype.signed_int false argc_ptr_val argc_mem_val) (fun _ ->
+
+          (* NOTE: because of argument promotions, the char *argv[] is turned into a char **argv
+              so two objects are allocated: an array and a pointer to that array (which is what argv designate) *)
+          let pref = Symbol.PrefSource loc [main_sym; argv_sym] in
+          let argv_ty = Ctype.mk_ctype_pointer Ctype.no_qualifiers Ctype.pointer_to_char in
+          Mem.bind
+            (Mem.allocate_object tid0 pref (Mem.alignof_ival argv_ty) argv_ty Nothing Nothing) (fun argv_ptr_val ->
+          Mem.bind
+            (Mem.store (Loc.other "argv init") argv_ty false argv_ptr_val (Mem.pointer_mval Ctype.pointer_to_char argv_array_ptr_val)) ( fun _ ->
+
+            Mem.return
+              ( Core.Vobject (Core.OVpointer argc_ptr_val)
+              , Core.Vobject (Core.OVpointer argv_ptr_val) )
+          ))))
+        end
+    | Core.Inner_arg_callconv ->
+        let argc_cval = Core.Vloaded (Core.LVspecified (Core.OVinteger (Mem.integer_ival number_of_args))) in
+        let argv_cval = Core.Vloaded (Core.LVspecified (Core.OVpointer argv_array_ptr_val)) in
+        ND.return (argc_cval, argv_cval)
+  end
+
+
+
 
 val drive: bool -> Core.file Core_run.core_run_annotation -> list string -> driverM driver_result
 let drive (with_concurrency: bool) file (arg_strs: list string) =
@@ -1660,6 +1735,8 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
         
         match params with
           | [(argc_sym, _); (argv_sym, _)] ->
+
+(*
               (* memory_values to be stored in memory objects pointed to by
                  the element of main.argv  *)
               let args_mem_val_tys =
@@ -1672,7 +1749,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                   (* NOTE: adding a null termination to the char array *)
                   (
                     Mem.array_mval $ mem_vals ++ [Mem.integer_mval Ctype.Char 0],
-                    Ctype.Ctype [] (Ctype.Array Ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1))
+                    Ctype.Ctype [] (Ctype.Array Ctype.char (Just ((integerFromNat (List.length mem_vals)) + 1)))
                   )
                 ) arg_strs in
               
@@ -1731,6 +1808,9 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                 Mem.return (Core.Vobject (Core.OVpointer argv_ptr_val))
                 ))))
               ) >>= fun argv_cval ->
+*)
+              prepare_main_args loc file.Core.calling_convention tid0 main_sym arg_strs argc_sym argv_sym >>= fun (argc_cval, argv_cval) ->
+
               (* Adding the values of argc and argv to the Core symbol environment *)
               get_thread_states >>= function
                 | [(_, (_, th_st))] ->
