@@ -5845,23 +5845,23 @@ Module CheriMemoryImplWithProofs
     (s : mem_state_r)
     (M: mem_invariant s)
     (bs : list (option ascii))
-    (funptrmap0 : ZMap.M.t (digest * string * Capability_GS.t))
-    (capmeta0 : AMap.M.t (bool * CapGhostState)):
+    (funptrmap : ZMap.M.t (digest * string * Capability_GS.t))
+    (capmeta : AMap.M.t (bool * CapGhostState)):
 
     repr fuel (CheriMemoryImplWithProofs.funptrmap s) (CheriMemoryImplWithProofs.capmeta s)
-      (Capability_GS.cap_get_value c) mval = inr (funptrmap0, capmeta0, bs)
+      (Capability_GS.cap_get_value c) mval = inr (funptrmap, capmeta, bs)
     ->
     mem_invariant
-      (mem_state_with_funptrmap_bytemap_capmeta funptrmap0
-         (AMap.map_add_list_at (bytemap s) bs (Capability_GS.cap_get_value c)) capmeta0 s).
+      (mem_state_with_funptrmap_bytemap_capmeta funptrmap
+         (AMap.map_add_list_at (bytemap s) bs (Capability_GS.cap_get_value c)) capmeta s).
   Proof.
+    Opaque sizeof.
     intros R.
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
-
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
-    revert R.
-    induction mval; intros R.
+    revert fuel R.
+    induction mval; intros fuel R.
     - (* MVunspecified *)
       unfold repr in R.
       state_inv_steps_quick.
@@ -5917,8 +5917,7 @@ Module CheriMemoryImplWithProofs
       rename sz into szn.
       apply monadic_list_init_serr_len in R4.
       repeat rewrite map_length, R4 in *.
-
-      apply MorelloImpl.sizeof_fty_pos in R2.
+      apply sizeof_pos in R2.
       generalize dependent (Capability_GS.cap_get_value c).
       intros start RSZ.
       bool_to_prop_hyp.
@@ -5928,7 +5927,6 @@ Module CheriMemoryImplWithProofs
       auto.
     -
       (* MVpointer *)
-      Opaque sizeof.
       unfold repr in R.
       break_match_hyp.
       +
@@ -5958,18 +5956,36 @@ Module CheriMemoryImplWithProofs
     -
       (* MVarray *)
       cbn in R.
-      revert H.
+      Opaque repr.
+      generalize dependent (Capability_GS.cap_get_value c); clear c.
+      intros addr H R.
+      state_inv_steps_quick.
+      repeat break_let.
+      state_inv_steps_quick.
+      subst.
+      rename t into addr'.
+      rename l0 into bs'.
+
       induction l; intros.
       +
-        cbn in R.
+        cbn in R2.
         state_inv_steps.
         constructor;auto.
         constructor;auto.
       +
-        cbn in R.
+        apply Forall_cons_iff in H.
+        destruct H as [H1 H2].
+        cbn in R2.
+
+        state_inv_steps_quick.
+        repeat break_let.
+        state_inv_steps_quick.
+        subst.
+
+        apply (IHl H2).
+        clear IHl H2.
         admit.
     -
-      Opaque sizeof.
       cbn in R.
       Opaque repr.
       state_inv_steps.
@@ -5977,7 +5993,6 @@ Module CheriMemoryImplWithProofs
       admit.
     -
       (* MVunion *)
-      Opaque sizeof.
       cbn in R.
       Opaque repr.
       state_inv_steps.
