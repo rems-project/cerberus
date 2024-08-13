@@ -854,7 +854,8 @@ Module CheriMemoryImplWithProofs
     (addr: AddressValue.t)
     (size: nat)
     (SZ: (size>0)%nat)
-    (capmeta: AMap.M.t (bool*CapGhostState)):
+    (capmeta: AMap.M.t (bool*CapGhostState))
+    (Balign : AMapProofs.map_forall_keys addr_ptr_aligned capmeta):
 
     forall a,
       let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
@@ -868,8 +869,12 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros a alignment a0 a1 R tg gs M.
     assert(AddressValue.to_Z a mod alignment = 0) as AA.
-    { (* from MapsTo *)
-      admit.
+    {
+      apply Balign.
+      apply capmeta_ghost_tags_monotone in M.
+      destruct M as [tg' [gs' [M _]]].
+      apply AMapProofs.map_mapsto_in in M.
+      apply M.
     }
     subst a0 a1 alignment.
     dependent destruction size.
@@ -913,7 +918,7 @@ Module CheriMemoryImplWithProofs
         *
           (* a1 < az *)
           exfalso.
-          clear H0 tg gs capmeta0 SZ.
+          clear Balign H0 tg gs capmeta0 SZ.
 
           destruct R2 as [R1 R2].
 
@@ -981,7 +986,7 @@ Module CheriMemoryImplWithProofs
             assert(0 <= a1) by lia.
             clear Heqa1 addr R1 sz H1 H3.
 
-  Admitted. (* TODO: postponed. Only needed by [memcpy_copy_data_PreservesInvariant] *)
+  Admitted.
 
   Definition memM_same_state
     {T: Type}
@@ -7220,6 +7225,8 @@ Module CheriMemoryImplWithProofs
             -
               inv AC.
               lia.
+            -
+              apply M.
             -
               auto.
             -
