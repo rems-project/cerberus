@@ -5259,10 +5259,7 @@ Module CheriMemoryImplWithProofs
             revert t0 Heqt1.
             induction l;intros.
             ++
-              cbn in H0.
-              inl_inr_inv.
-              setoid_rewrite list.nil_length in H.
-              lia.
+              invc H.
             ++
               cbn in *.
               clear H.
@@ -5295,7 +5292,6 @@ Module CheriMemoryImplWithProofs
               generalize dependent al.
               induction l; intros; cbn in H2.
               **
-                apply ret_inr in H2.
                 now invc H2.
               **
                 apply bind_serr_inv in H2.
@@ -5307,83 +5303,80 @@ Module CheriMemoryImplWithProofs
     -
       clear offsetof_struct_max_offset_pos.
       intros fuel t s l max_offset OF.
-      induction fuel; intros.
+      destruct fuel; [ invc OF |].
+      cbn in OF.
+
+      break_match_hyp;[|discriminate OF].
+      break_match_hyp;[|discriminate OF].
+
+      (* struct *)
+      apply bind_sassert_inv in OF.
+      destruct OF as [L OF].
+      destruct (Datatypes.length l0) eqn:L0; invc L.
+
+      apply bind_serr_inv in OF.
+      destruct OF as [x [H1 H2]].
+      break_let.
+      inl_inr_inv.
+      subst.
+
+      remember (match o with
+                | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) =>
+                    l0 ++ [(ident, (attrs, None, qs, ty))]
+                | None => l0
+                end) as l'.
+      assert (exists x l, l' = x::l).
+      {
+        repeat break_match.
+        all: subst.
+        all: destruct l0; [invc L0 |].
+        all: repeat eexists.
+      }
+      clear Heql'.
+      destruct H as (x & l & L').
+      subst l'.
+
+      match goal with
+      | [_ : context[monadic_fold_left ?f'] |- _] => remember f' as f
+      end.
+      assert (f_mon : forall x x' off off' a,
+                 f (x, off) a = inr (x', off') ->
+                 (off < off')%nat).
+      {
+        clear - Heqf sizeof_pos.
+        subst.
+        intros.
+        repeat break_let.
+        apply bind_serr_inv in H.
+        do 2 destruct H.
+        cbv [bind] in H0; cbn in H0.
+        break_match; try discriminate.
+        apply ret_inr in H0.
+        invc H0.
+        apply  sizeof_pos in H.
+        lia.
+      }
+      clear - f_mon H1; rename H1 into F.
+
+      cbn in F.
+      apply bind_serr_inv in F.
+      destruct F as ((x0, off0) & F0 & F).
+      apply f_mon in F0.
+
+      generalize dependent x0.
+      generalize dependent off0.
+      induction l; intros.
       +
-        simpl in OF.
-        discriminate OF.
+        now invc F.
       +
-        cbn in OF.
-
-        break_match_hyp;[|discriminate OF].
-        break_match_hyp;[| discriminate OF].
-        *
-          (* struct *)
-          apply bind_sassert_inv in OF.
-          destruct OF as [L OF].
-          destruct (Datatypes.length l0) eqn:L0.
-          inv L.
-          clear L.
-
-          apply bind_serr_inv in OF.
-          destruct OF as [x [H1 H2]].
-          break_let.
-          inl_inr_inv.
-          subst.
-
-          remember (match o with
-                    | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) => l0 ++ [(ident, (attrs, None, qs, ty))]
-                    | None => l0
-                    end) as l0'.
-
-          assert(0 < length l0')%nat.
-          {
-            destruct o.
-            -
-              destruct f.
-              subst l0'.
-              pose proof (app_length l0 [(i, (a, None, q, c))]).
-              rewrite H.
-              lia.
-            -
-              subst.
-              lia.
-          }
-          clear Heql0' l0 L0 Heqo.
-          rename l0' into l0.
-
-          revert H.
-          induction l0;intros.
-          --
-            setoid_rewrite list.nil_length in H.
-            lia.
-          --
-            cbn in H1.
-
-            apply bind_serr_inv in H1.
-            destruct H1 as [a' [H2 H3]].
-            repeat break_let.
-
-            destruct a'.
-            rename n0 into max_offset'.
-
-            apply bind_serr_inv in H2.
-            destruct H2 as [size [H2 H4]].
-
-            apply bind_serr_inv in H4.
-            destruct H4 as [align [H4 H5]].
-            inl_inr_inv.
-
-            assert(0<max_offset')%nat.
-            {
-              cut (0<size)%nat.
-              intros H0.
-              lia.
-              clear - sizeof_pos H2.
-              eapply sizeof_pos.
-              eauto.
-            }
-            admit.
-  Admitted.
+        cbn in F.
+        apply bind_serr_inv in F.
+        destruct F as ((x1 & off1) & F1 & F).
+        apply IHl in F.
+        easy.
+        apply f_mon in F1.
+        lia.
+  Qed.
 
   Fact amap_add_list_not_at
     {T: Type}
