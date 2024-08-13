@@ -5856,14 +5856,14 @@ Module CheriMemoryImplWithProofs
          (AMap.map_add_list_at (bytemap s) bs (Capability_GS.cap_get_value c)) capmeta0 s).
   Proof.
     intros R.
-    induction fuel;[apply raise_either_inr_inv in R;tauto|].
+    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
 
-    unfold repr in R.
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
-    (* base *)
-    break_match_hyp.
+    revert R.
+    induction mval; intros R.
     - (* MVunspecified *)
+      unfold repr in R.
       state_inv_steps_quick.
       rename sz into szn.
       assert(length bs = szn) as BL by (subst bs; apply repeat_length).
@@ -5878,6 +5878,7 @@ Module CheriMemoryImplWithProofs
       eapply mem_state_with_bytes_preserves;eauto.
     -
       (* MVinteger *)
+      unfold repr in R.
       break_match_hyp.
       +
         (* IV *)
@@ -5899,18 +5900,19 @@ Module CheriMemoryImplWithProofs
         repeat break_match_hyp; state_inv_steps.
         *
           generalize dependent (Capability_GS.cap_get_value c); clear c.
-          intros start R4 RSZ IHfuel.
+          intros start R4 RSZ.
           bool_to_prop_hyp.
           remember (map Some l) as bs.
           eapply mem_state_with_cap_preserves;eauto.
         *
           generalize dependent (Capability_GS.cap_get_value c); clear c.
-          intros start R4 RSZ IHfuel.
+          intros start R4 RSZ.
           bool_to_prop_hyp.
           remember (map Some l) as bs.
           eapply mem_state_with_cap_preserves;eauto.
     -
       (* MVfloating *)
+      unfold repr in R.
       state_inv_steps.
       rename sz into szn.
       apply monadic_list_init_serr_len in R4.
@@ -5918,7 +5920,7 @@ Module CheriMemoryImplWithProofs
 
       apply MorelloImpl.sizeof_fty_pos in R2.
       generalize dependent (Capability_GS.cap_get_value c).
-      intros start RSZ IHfuel.
+      intros start RSZ.
       bool_to_prop_hyp.
 
       eapply mem_state_with_bytes_preserves;eauto.
@@ -5926,7 +5928,8 @@ Module CheriMemoryImplWithProofs
       auto.
     -
       (* MVpointer *)
-      clear fuel IHfuel.
+      Opaque sizeof.
+      unfold repr in R.
       break_match_hyp.
       +
         (* PVfunction *)
@@ -5934,23 +5937,15 @@ Module CheriMemoryImplWithProofs
         *
           break_match_hyp.
           break_let.
-          state_inv_step_quick.
-          state_inv_step_quick.
+          state_inv_steps_quick.
           break_let.
-          state_inv_step_quick.
-          state_inv_step_quick.
-          apply ret_inr in R6.
-          inversion R6; clear R6.
+          state_inv_steps_quick.
           bool_to_prop_hyp.
           eapply mem_state_with_cap_preserves;eauto.
         *
-          state_inv_step_quick.
+          state_inv_steps_quick.
           break_let.
-          state_inv_step_quick.
-          state_inv_step_quick.
-          state_inv_step_quick.
-          apply ret_inr in R6.
-          inversion R6; clear R6.
+          state_inv_steps_quick.
           bool_to_prop_hyp.
           eapply mem_state_with_cap_preserves;eauto.
       +
@@ -5962,17 +5957,34 @@ Module CheriMemoryImplWithProofs
         eapply mem_state_with_cap_preserves;eauto.
     -
       (* MVarray *)
-      (* TODO: prove using IHfuel *)
-      admit.
+      cbn in R.
+      revert H.
+      induction l; intros.
+      +
+        cbn in R.
+        state_inv_steps.
+        constructor;auto.
+        constructor;auto.
+      +
+        cbn in R.
+        admit.
     -
-      (* MVstruct *)
-      (* TODO: prove using IHfuel *)
+      Opaque sizeof.
+      cbn in R.
+      Opaque repr.
+      state_inv_steps.
+      Transparent repr.
       admit.
     -
       (* MVunion *)
-      (* TODO: prove using IHfuel *)
+      Opaque sizeof.
+      cbn in R.
+      Opaque repr.
+      state_inv_steps.
+      Transparent repr.
       admit.
   Admitted.
+  Transparent sizeof repr.
 
   Instance store_PreservesInvariant
     (loc : location_ocaml)
@@ -6030,7 +6042,9 @@ Module CheriMemoryImplWithProofs
       break_if;[|preserves_step].
       preserves_steps.
       apply store_lock_preserves, H.
+
   Qed.
+  Transpaent sizeof.
 
   Lemma memcpy_copy_data_fetch_bytes_spec
     {loc:location_ocaml}
