@@ -4616,7 +4616,6 @@ Module CheriMemoryImplWithProofs
       repeat break_let; repeat tuple_inversion; try rewrite Z.mul_1_l; reflexivity.
   Qed.
 
-
   Fact repr_char_bytes_size_helper
     (fuel : nat)
     (funptrmap0 funptrmap' : ZMap.M.t (digest * string * Capability_GS.t))
@@ -5798,41 +5797,38 @@ Module CheriMemoryImplWithProofs
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
-    (c : Capability_GS.t)
     (s : mem_state_r)
     (M: mem_invariant s)
+    (addr: AddressValue.t)
     (bs : list (option ascii))
     (funptrmap : ZMap.M.t (digest * string * Capability_GS.t))
     (capmeta : AMap.M.t (bool * CapGhostState)):
 
     repr fuel (CheriMemoryImplWithProofs.funptrmap s) (CheriMemoryImplWithProofs.capmeta s)
-      (Capability_GS.cap_get_value c) mval = inr (funptrmap, capmeta, bs)
+      addr mval = inr (funptrmap, capmeta, bs)
     ->
     mem_invariant
       (mem_state_with_funptrmap_bytemap_capmeta funptrmap
-         (AMap.map_add_list_at (bytemap s) bs (Capability_GS.cap_get_value c)) capmeta s).
+         (AMap.map_add_list_at (bytemap s) bs addr) capmeta s).
   Proof.
     Opaque sizeof.
-    intros R.
-    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
-    revert fuel R.
+
+    revert fuel.
     induction mval; intros fuel R.
     - (* MVunspecified *)
+      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       unfold repr in R.
       state_inv_steps_quick.
       rename sz into szn.
       assert(length bs = szn) as BL by (subst bs; apply repeat_length).
       rewrite H2 in *; clear H2.
       rewrite BL in R4.
-
       apply sizeof_pos in R2; rename R2 into SP.
-      generalize dependent (Capability_GS.cap_get_value c).
-      intros start RSZ H1.
       bool_to_prop_hyp.
-
       eapply mem_state_with_bytes_preserves;eauto.
     -
       (* MVinteger *)
+      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       unfold repr in R.
       break_match_hyp.
       +
@@ -5843,8 +5839,6 @@ Module CheriMemoryImplWithProofs
         repeat rewrite map_length, R3 in *.
 
         apply sizeof_pos in R4.
-        generalize dependent (Capability_GS.cap_get_value c).
-        intros start RSZ IHfuel.
         bool_to_prop_hyp.
 
         eapply mem_state_with_bytes_preserves;eauto.
@@ -5852,29 +5846,19 @@ Module CheriMemoryImplWithProofs
         auto.
       +
         (* IC *)
-        repeat break_match_hyp; state_inv_steps.
-        *
-          generalize dependent (Capability_GS.cap_get_value c); clear c.
-          intros start R4 RSZ.
-          bool_to_prop_hyp.
-          remember (map Some l) as bs.
-          eapply mem_state_with_cap_preserves;eauto.
-        *
-          generalize dependent (Capability_GS.cap_get_value c); clear c.
-          intros start R4 RSZ.
-          bool_to_prop_hyp.
-          remember (map Some l) as bs.
+        repeat break_match_hyp; state_inv_steps;
+          bool_to_prop_hyp;
+          remember (map Some l) as bs;
           eapply mem_state_with_cap_preserves;eauto.
     -
       (* MVfloating *)
+      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       unfold repr in R.
       state_inv_steps.
       rename sz into szn.
       apply monadic_list_init_serr_len in R4.
       repeat rewrite map_length, R4 in *.
       apply sizeof_pos in R2.
-      generalize dependent (Capability_GS.cap_get_value c).
-      intros start RSZ.
       bool_to_prop_hyp.
 
       eapply mem_state_with_bytes_preserves;eauto.
@@ -5882,6 +5866,7 @@ Module CheriMemoryImplWithProofs
       auto.
     -
       (* MVpointer *)
+      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       unfold repr in R.
       break_match_hyp.
       +
@@ -5903,17 +5888,14 @@ Module CheriMemoryImplWithProofs
           eapply mem_state_with_cap_preserves;eauto.
       +
         state_inv_steps.
-        generalize dependent (Capability_GS.cap_get_value c); clear c.
-        intros start R4 RSZ.
         bool_to_prop_hyp.
         remember (map Some l) as bs.
         eapply mem_state_with_cap_preserves;eauto.
     -
       (* MVarray *)
+      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       cbn in R.
       Opaque repr.
-      generalize dependent (Capability_GS.cap_get_value c); clear c.
-      intros addr H R.
       state_inv_steps_quick.
       repeat break_let.
       state_inv_steps_quick.
@@ -5954,10 +5936,6 @@ Module CheriMemoryImplWithProofs
         repeat break_let.
         state_inv_steps_quick.
         subst.
-
-        specialize (H1 fuel).
-        Fail apply H1 in R2.
-
         admit.
     -
       cbn in R.
@@ -6018,20 +5996,12 @@ Module CheriMemoryImplWithProofs
       destruct x5.
       subst.
       clear - s'5 H H0.
-      rename
-        s'5 into s,
-        H into M,
-        H0 into R,
-        t1 into capmeta,
-        t0 into funptrmap,
-        l into bs.
       eapply repr_preserves;eauto.
     -
       (* handling `is_locking` *)
       break_if;[|preserves_step].
       preserves_steps.
       apply store_lock_preserves, H.
-
   Qed.
   Transparent sizeof.
 
