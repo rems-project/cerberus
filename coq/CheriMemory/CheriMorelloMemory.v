@@ -750,6 +750,28 @@ Module Type CheriMemoryImpl
     let align := IMP.get.(alignof_pointer) in
     (AddressValue.to_Z addr) mod (Z.of_nat align) =? 0.
 
+  Fixpoint typeof (mval : mem_value)
+    : serr CoqCtype.ctype :=
+    ct <-
+      match mval with
+      | MVunspecified (CoqCtype.Ctype _ ty) => ret ty
+      | MVinteger ity _ =>
+          ret (CoqCtype.Basic (CoqCtype.Integer ity))
+      | MVfloating fty _ =>
+          ret (CoqCtype.Basic (CoqCtype.Floating fty))
+      | MVpointer ref_ty _ =>
+          ret (CoqCtype.Pointer CoqCtype.no_qualifiers ref_ty)
+      | MVarray [] =>
+          raise "ill-formed value"
+      | MVarray ((mval::_) as mvals) =>
+          mt <- typeof mval ;;
+          ret (CoqCtype.Array mt (Some (List.length mvals)))
+      | MVstruct tag_sym _ => ret (CoqCtype.Struct tag_sym)
+      | MVunion tag_sym _ _ => ret (CoqCtype.Union tag_sym)
+      end ;;
+    ret (CoqCtype.Ctype [] ct).
+
+
   (** Update [capmeta] dictionary for capability [c] stored at [addr]. *)
   Definition update_capmeta
     (c: C.t)
@@ -824,16 +846,21 @@ Module Type CheriMemoryImpl
                 ret (funptrmap, capmeta, List.map (Some) cb)
             end
         | MVarray mvals =>
-            '(funptrmap, capmeta, _, bs_s) <-
+            (*
+              This check is redundant since if `monadic_fold_left` succeeds it means all elements
+              fit the address space. But we can opt to add it back later, if needed by proofs.
+
+              ct <- typeof (MVarray mvals) ;;
+              sz <- sizeof DEFAULT_FUEL None ct ;;
+              sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "array object does not fit in address space" ;;
+             *)
+            '(_, funptrmap, capmeta, bs) <-
               monadic_fold_left
-                (fun '(funptrmap, captmeta, addr, bs) (mval : mem_value) =>
+                (fun '(addr, funptrmap, captmeta, bs) (mval : mem_value) =>
                    '(funptrmap, capmeta, bs') <- repr fuel funptrmap capmeta addr mval ;;
                    let addr := AddressValue.with_offset addr (Z.of_nat (List.length bs')) in
-                   ret (funptrmap, capmeta, addr, bs'::bs))
-                mvals (funptrmap, capmeta, addr, []) ;;
-
-            let bs := List.concat (List.rev bs_s) in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+                   ret (addr, funptrmap, capmeta, (bs ++ bs')))
+                mvals (addr, funptrmap, capmeta, []) ;;
             ret (funptrmap, capmeta, bs)
         | MVstruct tag_sym xs =>
             let padding_byte := None in
@@ -869,7 +896,6 @@ Module Type CheriMemoryImpl
             ret (funptrmap', capmeta', bs)
         end
     end.
-
 
   Definition allocate_region
     (tid : MC.thread_id)
@@ -1613,27 +1639,6 @@ Module Type CheriMemoryImpl
         | Some (alloc_id,_) => load_concrete alloc_id c
         end
     end.
-
-  Fixpoint typeof (mval : mem_value)
-    : serr CoqCtype.ctype :=
-    ct <-
-      match mval with
-      | MVunspecified (CoqCtype.Ctype _ ty) => ret ty
-      | MVinteger ity _ =>
-          ret (CoqCtype.Basic (CoqCtype.Integer ity))
-      | MVfloating fty _ =>
-          ret (CoqCtype.Basic (CoqCtype.Floating fty))
-      | MVpointer ref_ty _ =>
-          ret (CoqCtype.Pointer CoqCtype.no_qualifiers ref_ty)
-      | MVarray [] =>
-          raise "ill-formed value"
-      | MVarray ((mval::_) as mvals) =>
-          mt <- typeof mval ;;
-          ret (CoqCtype.Array mt (Some (List.length mvals)))
-      | MVstruct tag_sym _ => ret (CoqCtype.Struct tag_sym)
-      | MVunion tag_sym _ _ => ret (CoqCtype.Union tag_sym)
-      end ;;
-    ret (CoqCtype.Ctype [] ct).
 
   Definition store
     (loc : location_ocaml)

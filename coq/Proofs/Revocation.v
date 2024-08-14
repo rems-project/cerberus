@@ -5471,28 +5471,7 @@ Module CheriMemoryImplWithProofs
   (** Storing some bytes into memory and ghosting the tags for corresponding region preserves invariant *)
   Fact mem_state_with_bytes_preserves:
     forall s : mem_state_r,
-      ZMapProofs.map_forall (fun a : allocation => is_dead a = false) (allocations s) ->
-      (forall (alloc_id1 alloc_id2 : ZMap.M.key) (a1 a2 : allocation),
-          alloc_id1 <> alloc_id2 ->
-          ZMap.M.MapsTo alloc_id1 a1 (allocations s) ->
-          ZMap.M.MapsTo alloc_id2 a2 (allocations s) -> allocations_do_no_overlap a1 a2) ->
-      ZMapProofs.map_forall
-        (fun a : allocation => AddressValue.to_Z (base a) + Z.of_nat (size a) <= AddressValue.ADDR_LIMIT)
-        (allocations s) ->
-      AMapProofs.map_forall_keys addr_ptr_aligned (capmeta s) ->
-      ZMapProofs.map_forall_keys (fun alloc_id : ZMap.M.key => alloc_id < next_alloc_id s) (allocations s) ->
-      ZMapProofs.map_forall
-        (fun a : allocation => AddressValue.to_Z (base a) >= AddressValue.to_Z (last_address s))
-        (allocations s) ->
-      (forall (addr : AMap.M.key) (g : CapGhostState),
-          AMap.M.MapsTo addr (true, g) (capmeta s) ->
-          tag_unspecified g = false ->
-          forall bs : list (option ascii),
-            fetch_bytes (bytemap s) addr (sizeof_pointer MorelloImpl.get) = bs ->
-            exists c : Capability_GS.t,
-              decode_cap bs true c /\
-                (exists (a : allocation) (alloc_id : ZMap.M.key),
-                    ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc c a)) ->
+      mem_invariant s ->
       forall (bs : list (option ascii)) (capmeta0 : AMap.M.t (bool * CapGhostState)) (szn : nat),
         (0 < szn)%nat ->
         Datatypes.length bs = szn ->
@@ -5503,7 +5482,10 @@ Module CheriMemoryImplWithProofs
             (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start)
                (capmeta_ghost_tags start szn (capmeta s)) s).
   Proof.
-    intros s Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr MIcap bs capmeta0 szn SP BL start RSZ H1.
+    intros s M bs capmeta0 szn SP BL start RSZ H1.
+    destruct M as [MIbase MIcap].
+    destruct_base_mem_invariant MIbase.
+
 
     unfold mem_state_with_funptrmap_bytemap_capmeta.
     repeat split;cbn;auto.
@@ -5797,20 +5779,7 @@ Module CheriMemoryImplWithProofs
   (** Storing a capability bytes into memory and and addit it to capmeta preserves invariant *)
   Fact mem_state_with_cap_preserves:
     forall s : mem_state_r,
-      ZMapProofs.map_forall (fun a : allocation => is_dead a = false) (allocations s) ->
-      (forall (alloc_id1 alloc_id2 : ZMap.M.key) (a1 a2 : allocation),
-          alloc_id1 <> alloc_id2 -> ZMap.M.MapsTo alloc_id1 a1 (allocations s) -> ZMap.M.MapsTo alloc_id2 a2 (allocations s) -> allocations_do_no_overlap a1 a2) ->
-      ZMapProofs.map_forall (fun a : allocation => AddressValue.to_Z (base a) + Z.of_nat (size a) <= AddressValue.ADDR_LIMIT) (allocations s) ->
-      AMapProofs.map_forall_keys addr_ptr_aligned (capmeta s) ->
-      ZMapProofs.map_forall_keys (fun alloc_id : ZMap.M.key => alloc_id < next_alloc_id s) (allocations s) ->
-      ZMapProofs.map_forall (fun a : allocation => AddressValue.to_Z (base a) >= AddressValue.to_Z (last_address s)) (allocations s) ->
-      (forall (addr : AMap.M.key) (g : CapGhostState),
-          AMap.M.MapsTo addr (true, g) (capmeta s) ->
-          tag_unspecified g = false ->
-          forall bs : list (option ascii),
-            fetch_bytes (bytemap s) addr (sizeof_pointer MorelloImpl.get) = bs ->
-            exists c : Capability_GS.t,
-              decode_cap bs true c /\ (exists (a : allocation) (alloc_id : ZMap.M.key), ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc c a)) ->
+      mem_invariant s ->
       forall (c : Capability_GS.t) (cb : list ascii) (b:bool),
         Capability_GS.encode true c = Some (cb, b) ->
         forall start : AddressValue.t,
@@ -5820,7 +5789,7 @@ Module CheriMemoryImplWithProofs
             bs = map Some cb ->
             mem_invariant (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start) (update_capmeta c start (capmeta s)) s).
   Proof.
-    intros s Bdead Bnooverlap Bfit Balign Bnextallocid Blastaddr MIcap c cb ct E start SA RSZ bs Heqbs.
+    intros s M c cb ct E start SA RSZ bs Heqbs.
 
 
     (* TODO: this proof must be substantionally similar to [mem_state_with_bytes_preserves] *)
@@ -5846,8 +5815,6 @@ Module CheriMemoryImplWithProofs
     Opaque sizeof.
     intros R.
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
-    destruct M as [MIbase MIcap].
-    destruct_base_mem_invariant MIbase.
     revert fuel R.
     induction mval; intros fuel R.
     - (* MVunspecified *)
@@ -5951,16 +5918,34 @@ Module CheriMemoryImplWithProofs
       repeat break_let.
       state_inv_steps_quick.
       subst.
-      rename t into addr'.
-      rename l0 into bs'.
+      rename t0 into addr'.
 
-      induction l; intros.
+      remember [] as b0.
+      assert(mem_invariant
+               (mem_state_with_funptrmap_bytemap_capmeta
+                  (CheriMemoryImplWithProofs.funptrmap s)
+                  (AMap.map_add_list_at (bytemap s) b0 addr)
+                  (CheriMemoryImplWithProofs.capmeta s)
+                  s
+               )
+            ) as M'.
+      {
+        subst b0.
+        clear - M.
+        cbn.
+        apply M.
+      }
+      clear M Heqb0.
+      rename M' into M.
+
+      revert fuel R2.
+      dependent induction l;intros.
       +
         cbn in R2.
         state_inv_steps.
-        constructor;auto.
-        constructor;auto.
+        apply M.
       +
+        rename a into m.
         apply Forall_cons_iff in H.
         destruct H as [H1 H2].
         cbn in R2.
@@ -5970,8 +5955,9 @@ Module CheriMemoryImplWithProofs
         state_inv_steps_quick.
         subst.
 
-        apply (IHl H2).
-        clear IHl H2.
+        specialize (H1 fuel).
+        Fail apply H1 in R2.
+
         admit.
     -
       cbn in R.
