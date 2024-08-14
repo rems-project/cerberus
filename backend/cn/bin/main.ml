@@ -255,6 +255,7 @@ let verify
   output_decorated_dir
   output_decorated
   with_ownership_checking
+  with_test_gen
   copy_source_dir
   astprints
   use_vip
@@ -311,6 +312,7 @@ let verify
           (fun () ->
             Executable_spec.main
               ~with_ownership_checking
+              ~with_test_gen
               ~copy_source_dir
               filename
               ail_prog
@@ -625,6 +627,14 @@ module Executable_spec_flags = struct
     Arg.(value & flag & info [ "with-ownership-checking" ] ~doc)
 
 
+  let with_test_gen =
+    let doc =
+      "Generate CN executable specifications in the correct format for feeding into \n\
+      \  the CN test generation tool."
+    in
+    Arg.(value & flag & info [ "with-test-gen" ] ~doc)
+
+
   let copy_source_dir =
     let doc =
       "Copy non-CN annotated files into output_decorated_dir for CN runtime testing"
@@ -700,6 +710,7 @@ let verify_t : unit Term.t =
   $ Executable_spec_flags.output_decorated_dir
   $ Executable_spec_flags.output_decorated
   $ Executable_spec_flags.with_ownership_checking
+  $ Executable_spec_flags.with_test_gen
   $ Executable_spec_flags.copy_source_dir
   $ Common_flags.astprints
   $ Verify_flags.use_vip
