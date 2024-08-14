@@ -1,17 +1,19 @@
 name: docker
 
 on:
-  push:
-    branches:
-      - master
+  schedule:
+    - cron '30 18 * * *'
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
 
-# cancel in-progress job when a new push is performed
+# Cancelling an in-progress job when a new push is performed causes the CI to
+# show up as failed: https://github.com/orgs/community/discussions/8336
+# This is noisy. If we want to enable that, we should consider:
+# https://github.com/MercuryTechnologies/delete-cancelled-runs
 concurrency:
   group: docker-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy-docker:
