@@ -112,7 +112,6 @@ let cn_keywords: (string * Tokens.token) list = [
     "pointer"       , CN_POINTER;
     "alloc_id"      , CN_ALLOC_ID;
     "map"           , CN_MAP;
-    "tuple"         , CN_TUPLE;
     "set"           , CN_SET;
     "let"           , CN_LET;
     "take"          , CN_TAKE;
@@ -130,8 +129,6 @@ let cn_keywords: (string * Tokens.token) list = [
     "cn_function"   , CN_FUNCTION;
     "spec"          , CN_SPEC;
     "unchanged"     , CN_UNCHANGED;
-    "pack"          , CN_PACK;
-    "unpack"        , CN_UNPACK;
     "instantiate"   , CN_INSTANTIATE;
     "print"         , CN_PRINT;
     "split_case"    , CN_SPLIT_CASE;
@@ -151,10 +148,22 @@ let cn_keywords: (string * Tokens.token) list = [
     "implies"       , CN_IMPLIES;
   ]
 
-let cn_lexicon: (string, token) Hashtbl.t =
-  let cn_lexicon = Hashtbl.create 0 in
-  let add (key, builder) = Hashtbl.add cn_lexicon key builder in
-  List.iter add cn_keywords; cn_lexicon
+let cn_lex_builder kw_list : (string, token) Hashtbl.t  = 
+  let cn_lex = Hashtbl.create 0 in
+  let add (key, builder) = Hashtbl.add cn_lex key builder in
+  List.iter add kw_list; cn_lex
+
+let cn_lexicon: (string, token) Hashtbl.t = 
+  cn_lex_builder cn_keywords
+
+let cn_keywords_deprecated: (string * Tokens.token) list = [
+    "tuple"         , CN_TUPLE;
+    "pack"          , CN_PACK;
+    "unpack"        , CN_UNPACK;
+  ]
+
+let cn_lexicon_deprecated: (string, token) Hashtbl.t = 
+  cn_lex_builder cn_keywords_deprecated
 (* END CN *)
 
 
@@ -556,8 +565,12 @@ and initial flags = parse
       {
         if flags.inside_cn then
           try Hashtbl.find cn_lexicon id
-          with Not_found ->
-            UNAME id
+          with Not_found -> 
+            try 
+              let _ = Hashtbl.find cn_lexicon_deprecated id in 
+              raise (Error (Errors.Cparser_deprecated_keyword id))
+            with Not_found ->
+              UNAME id
         else
           UNAME id
       }
@@ -569,7 +582,11 @@ and initial flags = parse
         if flags.inside_cn then
           try Hashtbl.find cn_lexicon id
           with Not_found ->
-            LNAME id
+            try 
+              let _ = Hashtbl.find cn_lexicon_deprecated id in 
+              raise (Error (Errors.Cparser_deprecated_keyword id))
+            with Not_found ->
+              UNAME id
         else
           LNAME id
     }
