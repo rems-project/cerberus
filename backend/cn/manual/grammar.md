@@ -111,7 +111,6 @@
                        | STRUCT <cn_variable>
                        | CN_DATATYPE <cn_variable>
                        | CN_MAP LT <base_type> COMMA <base_type> GT
-                       | CN_LIST LT <base_type> GT
                        | CN_TUPLE LT [<base_type> (COMMA <base_type>)*] GT
                        | CN_SET LT <base_type> GT
 
