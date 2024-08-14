@@ -34,13 +34,13 @@ module CN_Names = struct
 
   let struct_con_name x = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
 
-  let struct_field_name x = Id.pp_string x ^ "struct_fld"
+  let struct_field_name x = Id.pp_string x ^ "_struct_fld"
 
   let datatype_name x = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
 
   let datatype_con_name x = Sym.pp_string x ^ "_" ^ string_of_int (Sym.num x)
 
-  let datatype_field_name x = Id.pp_string x ^ "data_fld"
+  let datatype_field_name x = Id.pp_string x ^ "_data_fld"
 end
 
 (** Names for constants that may be uninterpreted.  See [bt_uninterpreted] *)
@@ -88,7 +88,7 @@ type solver =
     prev_frames : solver_frame list ref;
     (** Push/pop model. Current frame, and previous frames. *)
     name_seed : int ref; (** Used to generate names. *)
-    (* XXX: This could, perhaps, go in the frame. Then when we pop frames, we'd go back to
+    (* ISD: This could, perhaps, go in the frame. Then when we pop frames, we'd go back to
        the old numbers, which should be OK, I think? *)
     globals : Global.t
   }
@@ -401,7 +401,7 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
      | con, [ h; t ] when String.equal con CN_List.cons_name ->
        Cons (get_ivalue gs ctys elT h, get_ivalue gs ctys bt t)
      | _ -> failwith "List")
-  | Set _bt -> Const (Default bt) (* XXX *)
+  | Set _bt -> Const (Default bt) (* FIXME *)
   | Map (kt, vt) ->
     let els, dflt = SMT.to_array sexp in
     let base = MapConst (kt, get_ivalue gs ctys vt dflt) in
@@ -536,7 +536,7 @@ let translate_var s name bt =
 
 (** Translate a CN term to SMT *)
 let rec translate_term s iterm =
-  let here = IT.loc iterm in
+  let loc = IT.loc iterm in
   let struct_decls = s.globals.struct_decls in
   let maybe_name e k =
     if SMT.is_atom e then
@@ -551,27 +551,27 @@ let rec translate_term s iterm =
   | Unop (op, e1) ->
     (match op with
      | BW_FFS_NoSMT ->
-       (* XXX: This desugaring duplicates e1 *)
-       let intl i = int_lit_ i (IT.bt e1) here in
+       (* NOTE: This desugaring duplicates e1 *)
+       let intl i = int_lit_ i (IT.bt e1) loc in
        translate_term
          s
          (ite_
-            ( eq_ (e1, intl 0) here,
+            ( eq_ (e1, intl 0) loc,
               intl 0,
-              add_ (arith_unop BW_CTZ_NoSMT e1 here, intl 1) here )
-            here)
+              add_ (arith_unop BW_CTZ_NoSMT e1 loc, intl 1) loc )
+            loc)
      | BW_FLS_NoSMT ->
        (* copying and adjusting BW_FFS_NoSMT rule *)
-       (* XXX: This desugaring duplicates e1 *)
+       (* NOTE: This desugaring duplicates e1 *)
        let sz = match IT.bt e1 with Bits (_sign, n) -> n | _ -> assert false in
-       let intl i = int_lit_ i (IT.bt e1) here in
+       let intl i = int_lit_ i (IT.bt e1) loc in
        translate_term
          s
          (ite_
-            ( eq_ (e1, intl 0) here,
+            ( eq_ (e1, intl 0) loc,
               intl 0,
-              sub_ (intl sz, arith_unop BW_CLZ_NoSMT e1 here) here )
-            here)
+              sub_ (intl sz, arith_unop BW_CLZ_NoSMT e1 loc) loc )
+            loc)
      | Not -> SMT.bool_not (translate_term s e1)
      | Negate ->
        (match IT.basetype iterm with
@@ -630,7 +630,7 @@ let rec translate_term s iterm =
      | Exp ->
        (match (get_num_z e1, get_num_z e2) with
         | Some z1, Some z2 when Z.fits_int z2 ->
-          translate_term s (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.bt e1) here)
+          translate_term s (num_lit_ (Z.pow z1 (Z.to_int z2)) (IT.bt e1) loc)
         | _, _ -> failwith "Exp")
      | ExpNoSMT -> uninterp_same_type CN_Constant.exp
      | Rem ->
@@ -647,20 +647,18 @@ let rec translate_term s iterm =
         | BT.Integer -> SMT.num_mod s1 s2
         | _ -> failwith "Mod")
      | ModNoSMT -> uninterp_same_type CN_Constant.mod'
-     (* XXX: Should this be names BWXor instead? *)
-     | XORNoSMT ->
+     | BW_Xor ->
        (match IT.basetype iterm with
         | BT.Bits _ -> SMT.bv_xor s1 s2
-        | _ -> failwith "XORNoSMT")
+        | _ -> failwith "BW_Xor")
      | BW_And ->
        (match IT.basetype iterm with
         | BT.Bits _ -> SMT.bv_and s1 s2
         | _ -> failwith "BW_And")
-     (* XXX: Why no SMT? *)
-     | BWOrNoSMT ->
+     | BW_Or ->
        (match IT.basetype iterm with
         | BT.Bits _ -> SMT.bv_or s1 s2
-        | _ -> failwith "BWOrNoSMT")
+        | _ -> failwith "BW_Or")
      (* Shift amount should be positive? *)
      | ShiftLeft ->
        (match IT.basetype iterm with
@@ -686,17 +684,17 @@ let rec translate_term s iterm =
         | ty ->
           Pp.print stdout (!^"LE" ^^^ BT.pp ty);
           failwith "LE")
-     (* XXX: duplicates terms *)
-     | Min -> translate_term s (ite_ (le_ (e1, e2) here, e1, e2) here)
-     (* XXX: duplicates terms *)
-     | Max -> translate_term s (ite_ (ge_ (e1, e2) here, e1, e2) here)
+     (* NOTE: duplicates terms *)
+     | Min -> translate_term s (ite_ (le_ (e1, e2) loc, e1, e2) loc)
+     (* NOTE: duplicates terms *)
+     | Max -> translate_term s (ite_ (ge_ (e1, e2) loc, e1, e2) loc)
      | EQ -> SMT.eq s1 s2
      | LTPointer ->
-       let intptr_cast = cast_ Memory.uintptr_bt in
-       translate_term s (lt_ (intptr_cast e1 here, intptr_cast e2 here) here)
+       let uintptr_cast = cast_ Memory.uintptr_bt in
+       translate_term s (lt_ (uintptr_cast e1 loc, uintptr_cast e2 loc) loc)
      | LEPointer ->
-       let intptr_cast = cast_ Memory.uintptr_bt in
-       translate_term s (le_ (intptr_cast e1 here, intptr_cast e2 here) here)
+       let uintptr_cast = cast_ Memory.uintptr_bt in
+       translate_term s (le_ (uintptr_cast e1 loc, uintptr_cast e2 loc) loc)
      | SetUnion -> SMT.set_union s.smt_solver.config.exts s1 s2
      | SetIntersection -> SMT.set_intersection s.smt_solver.config.exts s1 s2
      | SetDifference -> SMT.set_difference s.smt_solver.config.exts s1 s2
@@ -707,17 +705,17 @@ let rec translate_term s iterm =
   | EachI ((i1, (x, bt), i2), t) ->
     let rec aux i =
       if i <= i2 then (
-        let su = make_subst [ (x, num_lit_ (Z.of_int i) bt here) ] in
+        let su = make_subst [ (x, num_lit_ (Z.of_int i) bt loc) ] in
         let t1 = IT.subst su t in
         if i = i2 then
           t1
         else
-          IT.and2_ (t1, aux (i + 1)) here)
+          IT.and2_ (t1, aux (i + 1)) loc)
       else
         failwith "EachI"
     in
     if i1 > i2 then
-      translate_term s (IT.bool_ true here)
+      translate_term s (IT.bool_ true loc)
     else
       translate_term s (aux i1)
   (* Tuples *)
@@ -745,16 +743,16 @@ let rec translate_term s iterm =
             if Id.equal member member' then
               v
             else
-              member_ ~member_bt:(Memory.bt_of_sct sct) (t, member') here
+              member_ ~member_bt:(Memory.bt_of_sct sct) (t, member') loc
           in
           (member', value))
         members
     in
-    translate_term s (struct_ (tag, str) here)
+    translate_term s (struct_ (tag, str) loc)
   | OffsetOf (tag, member) ->
     let decl = SymMap.find tag struct_decls in
     let v = Option.get (Memory.member_offset decl member) in
-    translate_term s (int_lit_ v (IT.basetype iterm) here)
+    translate_term s (int_lit_ v (IT.basetype iterm) loc)
   (* Records *)
   | Record members ->
     let field (_, e) = translate_term s e in
@@ -777,12 +775,12 @@ let rec translate_term s iterm =
             if Id.equal member member' then
               v
             else
-              IT (RecordMember (t, member'), bt, here)
+              IT (RecordMember (t, member'), bt, loc)
           in
           (member', value))
         members
     in
-    translate_term s (IT (Record str, IT.bt t, here))
+    translate_term s (IT (Record str, IT.bt t, loc))
   (* Offset of a field in a struct *)
   | MemberShift (t, tag, member) ->
     let x = fresh_name s "cn_member_ptr" in
@@ -790,7 +788,7 @@ let rec translate_term s iterm =
     let x = SMT.atom x in
     let alloc = CN_Pointer.get_alloc x in
     let addr = CN_Pointer.get_addr x in
-    let off = translate_term s (IT (OffsetOf (tag, member), Memory.uintptr_bt, here)) in
+    let off = translate_term s (IT (OffsetOf (tag, member), Memory.uintptr_bt, loc)) in
     CN_Pointer.con alloc (SMT.bv_add addr off)
   (* Offset of an array element *)
   | ArrayShift { base; ct; index } ->
@@ -799,9 +797,9 @@ let rec translate_term s iterm =
     let x = SMT.atom x in
     let alloc = CN_Pointer.get_alloc x in
     let addr = CN_Pointer.get_addr x in
-    let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt here in
-    let ix = cast_ Memory.uintptr_bt index here in
-    let off = translate_term s (mul_ (el_size, ix) here) in
+    let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt loc in
+    let ix = cast_ Memory.uintptr_bt index loc in
+    let off = translate_term s (mul_ (el_size, ix) loc) in
     CN_Pointer.con alloc (SMT.bv_add addr off)
   (* Change the offset of a pointer *)
   | CopyAllocId { addr; loc } ->
@@ -813,10 +811,10 @@ let rec translate_term s iterm =
   | Cons (e1, e2) -> CN_List.cons (translate_term s e1) (translate_term s e2)
   | Head e1 ->
     maybe_name (translate_term s e1) (fun xs ->
-      CN_List.head xs (translate_term s (default_ (IT.basetype iterm) here)))
+      CN_List.head xs (translate_term s (default_ (IT.basetype iterm) loc)))
   | Tail e1 ->
     maybe_name (translate_term s e1) (fun xs ->
-      CN_List.tail xs (translate_term s (default_ (IT.basetype iterm) here)))
+      CN_List.tail xs (translate_term s (default_ (IT.basetype iterm) loc)))
   | NthList (x, y, z) ->
     let arg x = (translate_base_type (IT.basetype x), translate_term s x) in
     let arg_ts, args = List.split (List.map arg [ x; y; z ]) in
@@ -832,13 +830,13 @@ let rec translate_term s iterm =
     let f = declare_bt_uninterpreted s CN_Constant.array_to_list bt arg_ts res_t in
     SMT.app f args
   | SizeOf ct ->
-    translate_term s (IT.int_lit_ (Memory.size_of_ctype ct) (IT.basetype iterm) here)
-  | Representable (ct, t) -> translate_term s (representable struct_decls ct t here)
-  | Good (ct, t) -> translate_term s (good_value struct_decls ct t here)
+    translate_term s (IT.int_lit_ (Memory.size_of_ctype ct) (IT.basetype iterm) loc)
+  | Representable (ct, t) -> translate_term s (representable struct_decls ct t loc)
+  | Good (ct, t) -> translate_term s (good_value struct_decls ct t loc)
   | Aligned t ->
-    let addr = pointerToIntegerCast_ t.t here in
+    let addr = pointerToIntegerCast_ t.t loc in
     assert (BT.equal (IT.bt addr) (IT.bt t.align));
-    translate_term s (divisible_ (addr, t.align) here)
+    translate_term s (divisible_ (addr, t.align) loc)
   (* Maps *)
   | MapConst (bt, e1) ->
     let kt = translate_base_type bt in
@@ -889,7 +887,7 @@ let rec translate_term s iterm =
     in
     let rec do_alts v alts =
       match alts with
-      | [] -> translate_term s (default_ (IT.basetype iterm) here)
+      | [] -> translate_term s (default_ (IT.basetype iterm) loc)
       | (pat, rhs) :: more ->
         let mb_cond, binds = match_pat v pat in
         let k = SMT.let_ binds (translate_term s rhs) in
@@ -1016,8 +1014,8 @@ let declare_solver_basics s =
   CN_Pointer.declare s;
   (* structs may depend only on other structs. datatypes may depend on other datatypes and
      structs. *)
-  let done_strcuts = ref SymSet.empty in
-  SymMap.iter (declare_struct s done_strcuts) s.globals.struct_decls;
+  let done_structs = ref SymSet.empty in
+  SymMap.iter (declare_struct s done_structs) s.globals.struct_decls;
   List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
@@ -1173,7 +1171,7 @@ let model () = match !model_state with No_model -> assert false | Model mo -> mo
 (** The main way to query the solver. *)
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
   let _ = loc in
-  (* XXX: should we use this somehow? *)
+  (* ISD: should we use this somehow? *)
   let s1 = { solver with globals = global } in
   let rtrue () =
     model_state := No_model;
@@ -1216,7 +1214,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
    solver.non_incremental in failwith ("SMT solver returned 'unknown'; reason: " ^
    reason) *)
 
-(* XXX: Could these globs be different from the saved ones? *)
+(* ISD: Could these globs be different from the saved ones? *)
 let eval _globs mo t = mo t
 
 (* Dummy implementations *)

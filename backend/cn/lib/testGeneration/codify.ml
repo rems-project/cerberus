@@ -53,9 +53,9 @@ let rec codify_it_ (e : BT.t IT.term_) : string option =
          "(" ^ codify_it e1 ^ " * " ^ codify_it e2 ^ ")"
        | Binop (Div, e1, e2) | Binop (DivNoSMT, e1, e2) ->
          "(" ^ codify_it e1 ^ " / " ^ codify_it e2 ^ ")"
-       | Binop (XORNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " ^ " ^ codify_it e2 ^ ")"
+       | Binop (BW_Xor, e1, e2) -> "(" ^ codify_it e1 ^ " ^ " ^ codify_it e2 ^ ")"
        | Binop (BW_And, e1, e2) -> "(" ^ codify_it e1 ^ " & " ^ codify_it e2 ^ ")"
-       | Binop (BWOrNoSMT, e1, e2) -> "(" ^ codify_it e1 ^ " | " ^ codify_it e2 ^ ")"
+       | Binop (BW_Or, e1, e2) -> "(" ^ codify_it e1 ^ " | " ^ codify_it e2 ^ ")"
        | Binop (ShiftLeft, e1, e2) -> "(" ^ codify_it e1 ^ " << " ^ codify_it e2 ^ ")"
        | Binop (ShiftRight, e1, e2) -> "(" ^ codify_it e1 ^ " >> " ^ codify_it e2 ^ ")"
        | Binop (LT, e1, e2) | Binop (LTPointer, e1, e2) ->

@@ -76,15 +76,13 @@ let rem_uf_def = ("rem_uf", Sym.fresh_named "rem_uf", mk_arg2 rem_no_smt_)
 
 let mod_uf_def = ("mod_uf", Sym.fresh_named "mod_uf", mk_arg2 mod_no_smt_)
 
-let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 (arith_binop XORNoSMT))
+let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 (arith_binop BW_Xor))
 
 let bw_and_uf_def =
   ("bw_and_uf", Sym.fresh_named "bw_and_uf", mk_arg2 (arith_binop BW_And))
 
 
-let bw_or_uf_def =
-  ("bw_or_uf", Sym.fresh_named "bw_or_uf", mk_arg2 (arith_binop BWOrNoSMT))
-
+let bw_or_uf_def = ("bw_or_uf", Sym.fresh_named "bw_or_uf", mk_arg2 (arith_binop BW_Or))
 
 let bw_clz_uf_def =
   ("bw_clz_uf", Sym.fresh_named "bw_clz_uf", mk_arg1 (arith_unop BW_CLZ_NoSMT))
