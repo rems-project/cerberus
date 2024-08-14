@@ -661,7 +661,8 @@ let generate_conversion_and_equality_functions
   ( comment ^ CF.Pp_utils.to_plain_pretty_string doc1,
     comment ^ CF.Pp_utils.to_plain_pretty_string doc2 )
 
-let has_main (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) = 
+
+let has_main (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let main_fn_sym_list =
     List.filter
       (fun (fn_sym, _) -> String.equal "main" (Sym.pp_string fn_sym))

@@ -369,19 +369,19 @@ let main
     open_auxilliary_files filename prefix included_filenames' []
   in
   let pre_post_pairs =
-    if with_test_gen then 
-      (if not (has_main sigm) then 
+    if with_test_gen then
+      if not (has_main sigm) then
         executable_spec.pre_post
-      else 
-        failwith "Input file cannot have predefined main function when passing to CN test-gen tooling"
-      )
-    else 
-      (if with_ownership_checking then (
-        (* Inject ownership init function calls and mapping and unmapping of globals into provided main function *)
-        let global_ownership_init_pair = generate_ownership_global_assignments sigm prog5 in
-        global_ownership_init_pair @ executable_spec.pre_post)
       else
-        executable_spec.pre_post)
+        failwith
+          "Input file cannot have predefined main function when passing to CN test-gen \
+           tooling"
+    else if with_ownership_checking then (
+      (* Inject ownership init function calls and mapping and unmapping of globals into provided main function *)
+      let global_ownership_init_pair = generate_ownership_global_assignments sigm prog5 in
+      global_ownership_init_pair @ executable_spec.pre_post)
+    else
+      executable_spec.pre_post
   in
   (match
      Source_injection.(
