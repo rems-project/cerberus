@@ -986,9 +986,9 @@ let it_to_coq loc global list_mono it =
          | LE -> abinop (if enc_prop then "<=" else "<=?") x y
          | Exp -> abinop "^" x y
          | ExpNoSMT -> abinop "^" x y
-         | XORNoSMT -> f_appM "Z.lxor" [ aux x; aux y ]
+         | BW_Xor -> f_appM "Z.lxor" [ aux x; aux y ]
          | BW_And -> f_appM "Z.land" [ aux x; aux y ]
-         | BWOrNoSMT -> f_appM "Z.lor" [ aux x; aux y ]
+         | BW_Or -> f_appM "Z.lor" [ aux x; aux y ]
          | EQ ->
            let comp = Some (t, "argument of equality") in
            parensM (build [ f comp x; rets (if enc_prop then "=" else "=?"); f comp y ])

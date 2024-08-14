@@ -335,8 +335,8 @@ let rec symb_exec_mu_pexpr ctxt var_map pexpr =
     let binop =
       match binop with
       | M_BW_AND -> IT.BW_And
-      | M_BW_OR -> IT.BWOrNoSMT
-      | M_BW_XOR -> IT.XORNoSMT
+      | M_BW_OR -> IT.BW_Or
+      | M_BW_XOR -> IT.BW_Xor
     in
     simp_const_pe (IT.arith_binop binop (x, y) loc)
   | M_PEbool_to_integer pe ->

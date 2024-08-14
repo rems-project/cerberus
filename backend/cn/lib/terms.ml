@@ -47,9 +47,9 @@ type binop =
   | RemNoSMT
   | Mod
   | ModNoSMT
-  | XORNoSMT
+  | BW_Xor
   | BW_And
-  | BWOrNoSMT
+  | BW_Or
   | ShiftLeft
   | ShiftRight
   | LT
@@ -263,9 +263,9 @@ let pp
        | LEPointer -> infix 10 (langle () ^^ equals) 10 10
        | Min -> prefix "min"
        | Max -> prefix "max"
-       | XORNoSMT -> infix 7 !^"^" 7 7
+       | BW_Xor -> infix 7 !^"^" 7 7
        | BW_And -> infix 8 ampersand 8 8
-       | BWOrNoSMT -> infix 6 bar 6 6
+       | BW_Or -> infix 6 bar 6 6
        | ShiftLeft ->
          infix 0 (langle () ^^ langle ()) 1 1 (* easier to read with parens *)
        | ShiftRight ->

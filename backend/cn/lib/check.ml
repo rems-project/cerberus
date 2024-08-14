@@ -507,10 +507,7 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
        let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe1) in
        let@ () = ensure_base_type loc ~expect (bt_of_pexpr pe2) in
        let binop =
-         match binop with
-         | M_BW_AND -> BW_And
-         | M_BW_OR -> BWOrNoSMT
-         | M_BW_XOR -> XORNoSMT
+         match binop with M_BW_AND -> BW_And | M_BW_OR -> BW_Or | M_BW_XOR -> BW_Xor
        in
        check_pexpr pe1 (fun vt1 ->
          check_pexpr pe2 (fun vt2 ->
