@@ -25,11 +25,11 @@ datatype tree_list {
   Cons_List {datatype tree t, datatype tree_list tail}
 }
 
-function (datatype tree_list) array_to_tree_list (map<i32, datatype tree> arr, i32 len)
+function (datatype tree_list) array_to_tree_list (cn_map<i32, datatype tree> arr, i32 len)
 
-function (map <i32, datatype tree>) default_children ()
+function (cn_map <i32, datatype tree>) default_children ()
 
-predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
+predicate {datatype tree t, i32 v, cn_map <i32, datatype tree> children}
   Tree (pointer p)
 {
   if (is_null(p)) {
@@ -52,7 +52,7 @@ predicate (datatype tree) Indirect_Tree (pointer p) {
   return T.t;
 }
 
-type_synonym arc_in_array = ({map <i32, i32> arr, i32 i, i32 len})
+type_synonym arc_in_array = ({cn_map <i32, i32> arr, i32 i, i32 len})
 
 function (boolean) in_tree (datatype tree t, arc_in_array arc)
 function (i32) tree_v (datatype tree t, arc_in_array arc)
@@ -90,7 +90,7 @@ function [coq_unfold] (boolean) in_tree_step (datatype tree t, arc_in_array arc)
 }
 
 lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
-    map <i32, datatype tree> t_children)
+    cn_map <i32, datatype tree> t_children)
   requires
     0i32 <= arc.i;
     arc.len <= LEN_LIMIT;

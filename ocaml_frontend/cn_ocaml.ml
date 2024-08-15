@@ -78,13 +78,13 @@ module MakePp (Conf: PP_CN) = struct
     | CN_datatype ident ->
         pp_type_keyword "datatype" ^^^ P.squotes (Conf.pp_ident ident)
     | CN_map (bTy1, bTy2) ->
-        pp_type_keyword "map" ^^ P.angles (pp_base_type bTy1 ^^ P.comma ^^^ pp_base_type bTy2)
+        pp_type_keyword "cn_map" ^^ P.angles (pp_base_type bTy1 ^^ P.comma ^^^ pp_base_type bTy2)
     | CN_list bTy ->
-        pp_type_keyword "list" ^^ P.angles (pp_base_type bTy)
+        pp_type_keyword "cn_list" ^^ P.angles (pp_base_type bTy)
     | CN_tuple bTys ->
-        pp_type_keyword "tuple" ^^ P.angles (comma_list pp_base_type bTys)
+        pp_type_keyword "cn_tuple" ^^ P.angles (comma_list pp_base_type bTys)
     | CN_set bTy ->
-        pp_type_keyword "set" ^^ P.angles (pp_base_type bTy)
+        pp_type_keyword "cn_set" ^^ P.angles (pp_base_type bTy)
     | CN_user_type_name ident ->
         P.squotes (Conf.pp_ident ident)
     | CN_c_typedef_name ident ->
