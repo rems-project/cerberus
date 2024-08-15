@@ -168,32 +168,29 @@ let cn_lex_builder kw_list : (string, token) Hashtbl.t  =
   let add (key, builder) = Hashtbl.add cn_lex key builder in
   List.iter add kw_list; cn_lex
 
-let cn_lexicon: (string, token) Hashtbl.t = 
-  cn_lex_builder cn_keywords
-
-let cn_lexicon_experimental: (string, token) Hashtbl.t = 
-  cn_lex_builder cn_keywords_experimental
-
-let cn_lexicon_unimplemented: (string, token) Hashtbl.t = 
-  cn_lex_builder cn_keywords_unimplemented
-
+(* 
+Attempt to lex a CN keyword. These may be: 
+  * 'production' - well-supported and suitable for general use
+  * 'experimental' - functional in some cases but not recommended for general use 
+  * 'unimplemented' - non-functional, but the keyword is reserved  
+*)
 let cn_lex_keyword id start_pos = 
   (* Try to lex CN production keywords *)
-  try Hashtbl.find cn_lexicon id
+  try Hashtbl.find (cn_lex_builder cn_keywords) id
   with Not_found ->
     (* Try to lex CN experimental keywords - warn on success *)
     try 
-      let kw = Hashtbl.find cn_lexicon_experimental id in 
+      let kw = Hashtbl.find (cn_lex_builder cn_keywords_experimental) id in 
       prerr_endline       
         (Pp_errors.make_message
          (Cerb_location.point start_pos)
-         Errors.(CPARSER (Cparser_experimental_keyword id))
+         Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
          Warning);
       kw 
     with Not_found ->
       try 
         (* Try to lex CN unimplemented keywords - throw an error on success *)
-        let _ = Hashtbl.find cn_lexicon_unimplemented id in 
+        let _ = Hashtbl.find (cn_lex_builder cn_keywords_unimplemented) id in 
         raise (Error (Errors.Cparser_unimplemented_keyword id))
       with Not_found ->
         UNAME id
