@@ -70,7 +70,8 @@ type cparser_cause =
   | Cparser_nested_comment
   | Cparser_unterminated_comment of string
   | Cparser_mismatched_magic_comment
-  | Cparser_deprecated_keyword of string 
+  | Cparser_experimental_keyword of string 
+  | Cparser_unimplemented_keyword of string 
 
 type core_lexer_cause =
   | Core_lexer_invalid_symbol of char

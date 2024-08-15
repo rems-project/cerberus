@@ -164,6 +164,7 @@ type token =
   | CN_POINTER
   | CN_ALLOC_ID
   | CN_MAP
+  | CN_LIST
   | CN_TUPLE
   | CN_SET
   | CN_LET
@@ -324,6 +325,7 @@ let string_of_token = function
   | CN_POINTER -> "CN_POINTER"
   | CN_ALLOC_ID -> "CN_ALLOC_ID"
   | CN_MAP -> "CN_MAP"
+  | CN_LIST -> "CN_LIST"
   | CN_TUPLE -> "CN_TUPLE"
   | CN_SET -> "CN_SET"
   | CN_LET -> "CN_LET"
