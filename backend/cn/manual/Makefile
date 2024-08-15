@@ -95,7 +95,7 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#CN_UNFOLD#unfold#g" \
 	  | sed "s#CN_APPLY#apply#g" \
 	  | sed "s#INLINE#inline#g" \
-	  | sed "s#CN_PRINT#print#g" \
+	  | sed "s#CN_PRINT#cn_print#g" \
 	  | sed "s#CN_OWNED#Owned#g" \
 	  | sed "s#CN_BLOCK#Block#g" \
 	  | sed "s#ASSERT#assert#g" \

@@ -126,11 +126,9 @@ let cn_keywords: (string * Tokens.token) list = [
     "inv"           , CN_INV;
     "accesses"      , CN_ACCESSES;
     "trusted"       , CN_TRUSTED;
-    "cn_function"   , CN_FUNCTION;
     "spec"          , CN_SPEC;
     "unchanged"     , CN_UNCHANGED;
     "instantiate"   , CN_INSTANTIATE;
-    "print"         , CN_PRINT;
     "split_case"    , CN_SPLIT_CASE;
     "extract"       , CN_EXTRACT;
     "array_shift"   , CN_ARRAY_SHIFT;
@@ -155,6 +153,8 @@ let cn_keywords_experimental: (string * Tokens.token) list = [
     "cn_map"        , CN_MAP;
     "cn_set"        , CN_SET;
     "cn_have"       , CN_HAVE;
+    "cn_function"   , CN_FUNCTION;
+    "cn_print"      , CN_PRINT;
   ] 
 
 (* CN keywords that are non-functional, but reserved for possible future use *)
