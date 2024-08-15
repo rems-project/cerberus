@@ -156,6 +156,7 @@ let cn_lex_builder kw_list : (string, token) Hashtbl.t  =
 let cn_lexicon: (string, token) Hashtbl.t = 
   cn_lex_builder cn_keywords
 
+(* CN keywords that are non-functional, but reserved for future use *)
 let cn_keywords_deprecated: (string * Tokens.token) list = [
     "tuple"         , CN_TUPLE;
     "pack"          , CN_PACK;
@@ -567,6 +568,7 @@ and initial flags = parse
           try Hashtbl.find cn_lexicon id
           with Not_found -> 
             try 
+              (* Try to lex deprecated keywords - throw an error on success *)
               let _ = Hashtbl.find cn_lexicon_deprecated id in 
               raise (Error (Errors.Cparser_deprecated_keyword id))
             with Not_found ->
@@ -583,6 +585,7 @@ and initial flags = parse
           try Hashtbl.find cn_lexicon id
           with Not_found ->
             try 
+              (* Try to lex deprecated keywords - throw an error on success *)
               let _ = Hashtbl.find cn_lexicon_deprecated id in 
               raise (Error (Errors.Cparser_deprecated_keyword id))
             with Not_found ->
