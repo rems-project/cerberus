@@ -544,17 +544,20 @@ let get_model s =
   | CVC5 -> ans
   | Other -> ans
   | Z3 ->
-    (* Workaround z3 bug #7270: remove `as-array` *)
+    (* Workaround for https://github.com/Z3Prover/z3/issues/7270:
+       remove `as-array` *)
     let rec drop_as_array x =
       match x with
       | Sexp.List [ _; Sexp.Atom "as-array"; f ] -> f
       | Sexp.List xs -> Sexp.List (List.map drop_as_array xs)
       | _ -> x
     in
-    (* Workaround for a z3 bug #7268: rearrange defs in dep. order *)
-    let add_binder bound x =
+    (* Workaround for https://github.com/Z3Prover/z3/issues/7268:
+       rearrange defs in dep. order *)
+    let add_binder (bound, sort_or_terms) x =
       match x with
-      | Sexp.List [ Sexp.Atom v; _ty_or_term ] -> StrSet.add v bound
+      | Sexp.List [ Sexp.Atom v; sort_or_term ] ->
+        (StrSet.add v bound, sort_or_term :: sort_or_terms)
       | _ -> raise (UnexpectedSolverResponse x)
     in
     let add_bound = List.fold_left add_binder in
@@ -562,14 +565,22 @@ let get_model s =
       match x with
       | Sexp.Atom a -> if StrSet.mem a bound then vars else a :: vars
       | Sexp.List [ Sexp.Atom q; Sexp.List vs; body ]
-        when String.equal q "forall" || String.equal q "exist" || String.equal q "let" ->
-        free (add_bound bound vs) vars body
+        when String.equal q "forall" || String.equal q "exist" ->
+        let bound, _sorts = add_bound (bound, []) vs in
+        free bound vars body
+      | Sexp.List [ Sexp.Atom q; Sexp.List vs; body ] when String.equal q "let" ->
+        let bound_and_let_vars, terms = add_bound (bound, []) vs in
+        (* According to SMTLib spec, scoping for lets is parallel by default,
+         * so we use [bound] instead of [bound_and_let_vars] when gathering the
+         * free variables of the expressions they bind*)
+        let vars = List.fold_left (free bound) vars terms in
+        free bound_and_let_vars vars body
       | Sexp.List xs -> List.fold_left (free bound) vars xs
     in
     let check_def x =
       match x with
       | Sexp.List [ _def_fun; Sexp.Atom name; Sexp.List args; _ret; def ] ->
-        let bound = add_bound StrSet.empty args in
+        let bound, _sorts = add_bound (StrSet.empty, []) args in
         (name, free bound [] def, x)
       | _ -> raise (UnexpectedSolverResponse ans)
     in
@@ -602,7 +613,7 @@ let get_model s =
          | [] -> ()
        in
        arrange (List.map (fun (x, _, _) -> x) defs);
-       list (List.rev !decls))
+       list @@ List.rev !decls)
 
 
 (** Get the values of some s-expressions. Only valid after a [Sat] result.
@@ -819,7 +830,7 @@ type model_evaluator =
    solver, the [command] field expects an expression to evaluate, and gives the value of
    the expression in the context of the model.
 
-   XXX: This does not work correctly with data declarations, because the model does not
+   NOTE: This does not work correctly with data declarations, because the model does not
    contain those. We need to explicitly add them. *)
 let model_eval (cfg : solver_config) (m : sexp) =
   let bad () = raise (UnexpectedSolverResponse m) in

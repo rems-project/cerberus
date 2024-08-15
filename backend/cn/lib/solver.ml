@@ -95,16 +95,24 @@ type solver =
 
 module Debug = struct
   let dump_frame (f : solver_frame) =
-    let dump k _v = Printf.printf "| %s\n%!" (Sym.pp_string k) in
-    SymMap.iter dump f.uninterpreted;
-    Printf.printf "+--------------------\n%!"
+    let to_string = Sexplib.Sexp.to_string_hum in
+    let append str doc = doc ^/^ !^str in
+    let dump_sym k v rest = rest ^/^ bar ^^^ Sym.pp k ^^^ !^"|->" ^^^ !^(to_string v) in
+    let dump_bts _k v =
+      let dump k v rest = rest ^/^ bar ^^^ BT.pp k ^^^ !^"|->" ^^^ !^(to_string v) in
+      BT_Table.fold dump v
+    in
+    !^"# Symbols"
+    |> SymMap.fold dump_sym f.uninterpreted
+    |> append "# Basetypes "
+    |> Int_Table.fold dump_bts f.bt_uninterpreted
+    |> append "+---------------------------------"
 
 
-  let _dump_solver solver =
-    Printf.printf "| Start Solver Dump\n%!";
-    dump_frame !(solver.cur_frame);
-    List.iter dump_frame !(solver.prev_frames);
-    Printf.printf "| End Solver Dump\n%!"
+  let dump_solver solver =
+    !^"\n|~~~~~~ Start Solver Dump ~~~~~~~|"
+    ^/^ separate_map hardline dump_frame (!(solver.cur_frame) :: !(solver.prev_frames))
+    ^/^ !^"|~~~~~~ End Solver Dump ~~~~~~~~~|"
 end
 
 (** Lookup something in one of the existing frames *)
@@ -137,9 +145,17 @@ let get_ctype_table s =
   table
 
 
+let debug_ack_command s cmd =
+  try SMT.ack_command s.smt_solver cmd with
+  | SMT.UnexpectedSolverResponse r ->
+    debug 10 (lazy (!^"failed to ack:" ^/^ !^(Sexplib.Sexp.to_string_hum cmd)));
+    debug 10 (lazy (Debug.dump_solver s));
+    raise (SMT.UnexpectedSolverResponse r)
+
+
 (** Start a new scope. *)
 let push s =
-  SMT.ack_command s.smt_solver (SMT.push 1);
+  debug_ack_command s (SMT.push 1);
   s.prev_frames := !(s.cur_frame) :: !(s.prev_frames);
   s.cur_frame := empty_solver_frame ()
 
@@ -149,7 +165,7 @@ let pop s n =
   if n = 0 then
     ()
   else (
-    SMT.ack_command s.smt_solver (SMT.pop n);
+    debug_ack_command s (SMT.pop n);
     let rec drop count xs =
       match xs with
       | new_cur :: new_rest ->
@@ -167,7 +183,7 @@ let num_scopes s = List.length !(s.prev_frames)
 
 (** Do an ack_style command. These are logged. *)
 let ack_command s cmd =
-  SMT.ack_command s.smt_solver cmd;
+  debug_ack_command s cmd;
   let f = !(s.cur_frame) in
   f.commands <- cmd :: f.commands
 
@@ -394,7 +410,7 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
   | Alloc_id -> Const (Alloc_id (CN_AllocId.from_sexp sexp))
   | CType ->
     (try Const (CType_const (Int_Table.find ctys (Z.to_int (SMT.to_z sexp)))) with
-     | _ -> Const (Default bt))
+     | Not_found -> Const (Default bt))
   | List elT ->
     (match SMT.to_con sexp with
      | con, [] when String.equal con CN_List.nil_name -> Nil elT
@@ -1019,48 +1035,50 @@ let declare_solver_basics s =
   List.iter (declare_datatype_group s) (Option.get s.globals.datatype_order)
 
 
-(** Logging *)
+(* Logging *)
 
-let log_to_temp = ref false (* Should we log to file *)
+module Logger = struct
+  let to_file = ref false
 
-let log_results = ref false (* Do we also want reposnses*)
+  (** NOTE: this interferes with line numbers *)
+  let include_solver_responses = ref false
 
-let log_dir = ref (None : string option) (* Log to this dir *)
+  let dir = ref (None : string option)
 
-let log_counter = ref 0 (* Names of SMT files *)
+  let log_counter = ref 0 (* Names of SMT files *)
 
-(** Pick a logger based on the above settings *)
-let logger lab =
-  let log_id = !log_counter in
-  log_counter := log_id + 1;
-  let get_file suf =
-    let dir =
-      match !log_dir with
-      | Some dir -> dir
-      | None ->
-        let nm = Printf.sprintf "cn_%.3f" (Unix.gettimeofday ()) in
-        let d = Filename.concat (Filename.get_temp_dir_name ()) nm in
-        log_dir := Some d;
-        d
+  (** Pick a logger based on the above settings *)
+  let make prefix =
+    let log_id = !log_counter in
+    log_counter := log_id + 1;
+    let get_file suf =
+      let dir =
+        match !dir with
+        | Some dir -> dir
+        | None ->
+          let nm = Printf.sprintf "cn_%.3f" (Unix.gettimeofday ()) in
+          let d = Filename.concat (Filename.get_temp_dir_name ()) nm in
+          dir := Some d;
+          d
+      in
+      if not (Sys.file_exists dir) then Sys.mkdir dir 0o700 else ();
+      open_out (Filename.concat dir (prefix ^ suf ^ string_of_int log_id ^ ".smt"))
     in
-    if not (Sys.file_exists dir) then Sys.mkdir dir 0o700 else ();
-    open_out (Filename.concat dir (lab ^ suf ^ string_of_int log_id ^ ".smt"))
-  in
-  if !log_to_temp then (
-    let out = get_file "_send_" in
-    if !log_results then
-      { SMT.send = Printf.fprintf out "[->] %s\n%!";
-        SMT.receive = Printf.fprintf out "[<-] %s\n%!";
-        SMT.stop = (fun _ -> close_out out)
-      }
+    if !to_file then (
+      let out = get_file "_send_" in
+      if !include_solver_responses then
+        { SMT.send = Printf.fprintf out "[->] %s\n%!";
+          SMT.receive = Printf.fprintf out "[<-] %s\n%!";
+          SMT.stop = (fun _ -> close_out out)
+        }
+      else
+        { SMT.send = Printf.fprintf out "%s\n%!";
+          SMT.receive = (fun _ -> ());
+          SMT.stop = (fun _ -> close_out out)
+        })
     else
-      { SMT.send = Printf.fprintf out "%s\n%!";
-        SMT.receive = (fun _ -> ());
-        SMT.stop = (fun _ -> close_out out)
-      })
-  else
-    { SMT.send = (fun _ -> ()); SMT.receive = (fun _ -> ()); SMT.stop = (fun _ -> ()) }
-
+      { SMT.send = (fun _ -> ()); SMT.receive = (fun _ -> ()); SMT.stop = (fun _ -> ()) }
+end
 
 let solver_path = ref (None : string option)
 
@@ -1092,7 +1110,7 @@ let make globals =
   cfg
   := { !cfg with
        log =
-         logger
+         Logger.make
            (match !cfg.exts with
             | SMT.Z3 -> "z3"
             | SMT.CVC5 -> "cvc5"
@@ -1112,12 +1130,11 @@ let make globals =
 
 (** Evaluate terms in the context of a model computed by the solver. *)
 let model_evaluator solver mo =
-  (* match None with | None -> fun _ -> None | _ -> *)
   match SMT.to_list mo with
   | None -> failwith "model is an atom"
   | Some defs ->
     let scfg = solver.smt_solver.config in
-    let cfg = { scfg with log = logger "model" } in
+    let cfg = { scfg with log = Logger.make "model" } in
     let s = SMT.new_solver cfg in
     let gs = solver.globals in
     let evaluator =
@@ -1133,7 +1150,7 @@ let model_evaluator solver mo =
       }
     in
     declare_solver_basics evaluator;
-    List.iter (SMT.ack_command s) defs;
+    List.iter (debug_ack_command evaluator) defs;
     fun e ->
       push evaluator;
       let inp = translate_term evaluator e in
@@ -1188,19 +1205,19 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
     in
     let nlc = SMT.bool_not expr in
     let inc = s1.smt_solver in
-    SMT.ack_command inc (SMT.push 1);
-    SMT.ack_command inc (SMT.assume (SMT.bool_ands (nlc :: extra)));
+    debug_ack_command s1 (SMT.push 1);
+    debug_ack_command s1 (SMT.assume (SMT.bool_ands (nlc :: extra)));
     let res = SMT.check inc in
     (match res with
      | SMT.Unsat ->
-       SMT.ack_command inc (SMT.pop 1);
+       debug_ack_command s1 (SMT.pop 1);
        rtrue ()
      | SMT.Sat ->
        model_from inc;
-       SMT.ack_command inc (SMT.pop 1);
+       debug_ack_command s1 (SMT.pop 1);
        `False
      | SMT.Unknown ->
-       SMT.ack_command inc (SMT.pop 1);
+       debug_ack_command s1 (SMT.pop 1);
        failwith "Unknown")
 
 

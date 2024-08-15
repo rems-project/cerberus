@@ -306,8 +306,8 @@ let verify
   Solver.random_seed := random_seed;
   (match solver_logging with
    | Some d ->
-     Solver.log_to_temp := true;
-     Solver.log_dir := if String.equal d "" then None else Some d
+     Solver.Logger.to_file := true;
+     Solver.Logger.dir := if String.equal d "" then None else Some d
    | _ -> ());
   Solver.solver_path := solver_path;
   Solver.solver_type := solver_type;
