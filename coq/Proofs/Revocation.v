@@ -5377,11 +5377,11 @@ Module CheriMemoryImplWithProofs
         lia.
   Qed.
 
-  Fact amap_add_list_not_at
-    {T: Type}
-    (x addr : AddressValue.t)
-    (bm : AMap.M.t T)
-    (l : list T):
+  Definition amap_add_list_not_at_ORIG :=
+    forall {T: Type}
+      (x addr : AddressValue.t)
+      (bm : AMap.M.t T)
+      (l : list T),
 
     (AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
 
@@ -5390,70 +5390,89 @@ Module CheriMemoryImplWithProofs
 
     AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
       AMap.M.find (elt:=T) x bm.
+
+  Fact contra :
+    not amap_add_list_not_at_ORIG.
+  Proof.
+    unfold amap_add_list_not_at_ORIG.
+    intros C.
+    remember (AddressValue.of_Z (AddressValue.ADDR_LIMIT - 1)) as lim.
+    specialize (C unit lim lim (AMap.M.empty unit) [tt]).
+    pose proof (AddressValue.to_Z_in_bounds lim) as BOUNDS.
+    full_autospecialize C.
+    -
+      subst.
+      rewrite AddressValue.of_Z_roundtrip by lia.
+      cbn.
+      lia.
+    -
+      right.
+      cbn.
+      rewrite !AddressValue_leb_Z_leb, !Z.leb_le.
+      unfold AddressValue.with_offset.
+      replace (AddressValue.to_Z lim + Z.of_nat 1) with AddressValue.ADDR_LIMIT.
+      rewrite ADDR_LIMIT_to_Z. now unfold AddressValue.ADDR_MIN in BOUNDS.
+      subst.
+      rewrite AddressValue.of_Z_roundtrip by lia.
+      lia.
+    -
+      clear - C.
+      cbn in *.
+      pose proof (@AMap.M.Raw.Proofs.MX.elim_compare_eq lim lim eq_refl) as [REFL H].
+      now rewrite H in C.
+  Qed.
+
+  Fact amap_add_list_not_at
+    {T: Type}
+    (x addr : AddressValue.t)
+    (bm : AMap.M.t T)
+    (l : list T):
+
+    (AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
+
+    (* "x outside of range written to"
+       NOTE: when l is nil, "outside of range written to" reduces to "any" *)
+    ((AddressValue.ltb x addr = true)
+     \/ (AddressValue.ltb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l) - 1)) x = true)) ->
+
+    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
+      AMap.M.find (elt:=T) x bm.
   Proof.
     revert bm x addr.
-    induction l as [| x0 l].
+    induction l as [| hd l].
     -
       reflexivity.
     -
       intros bm x addr RSZ N.
-      cbn.
-      rewrite IHl;clear IHl;cbn in *.
-      +
-        apply AMap.F.add_neq_o.
-        destruct N;bool_to_prop_hyp.
-        *
-          intros C.
-          now rewrite <-C, AddressValue.ltb_irref in H.
-        *
-          intros C; subst addr.
-          rewrite AddressValue_leb_Z_leb in H.
-          apply Z.leb_le in H.
-          rewrite AddressValue.with_offset_no_wrap in H.
-          2: {
-            split.
-            admit.
-            clear - RSZ.
-            (* can't prove *)
-            admit.
-          }
-          admit.
-      +
-        clear - RSZ.
-        pose proof (AddressValue.to_Z_in_bounds addr).
-        unfold AddressValue.ADDR_MIN in *.
-        unfold AddressValue_as_ExtOT.with_offset.
-        rewrite AddressValue.with_offset_no_wrap.
-        *
-          lia.
-        *
-          unfold AddressValue.ADDR_MIN.
-          split;[lia|].
-          admit. (* tricky *)
-      +
-        destruct N;bool_to_prop_hyp.
-        *
-          left.
-          pose proof (AddressValue.to_Z_in_bounds addr).
-          unfold AddressValue.ADDR_MIN in *.
-          unfold AddressValue_as_ExtOT.with_offset.
-          rewrite AddressValue_ltb_Z_ltb.
-          apply Z.ltb_lt.
-          rewrite AddressValue.with_offset_no_wrap.
-          --
-            rewrite AddressValue_ltb_Z_ltb in H.
-            apply Z.ltb_lt in H.
-            lia.
-          --
-            unfold AddressValue.ADDR_MIN.
-            split;[lia|].
-            admit. (* tricky *)
-        *
-          (* add+1 <= x *)
-          right.
-          (* TODO *)
-  Admitted. (* TODO. *)
+      cbn in *.
+      replace (Z.of_nat (S (Datatypes.length l)) - 1)
+        with (Z.of_nat (Datatypes.length l))
+        in *
+        by lia.
+      pose proof (AddressValue.to_Z_in_bounds addr) as ABOUNDS.
+      pose proof (AddressValue.to_Z_in_bounds x) as XBOUNDS.
 
+      destruct l.
+      +
+        cbn in *.
+        clear RSZ IHl.
+        rewrite with_offset_0 in N.
+        rewrite !AddressValue_ltb_Z_ltb, !Z.ltb_lt in *.
+        destruct N.
+        all: apply AMap.F.add_neq_o.
+        all: intros C; subst.
+        all: lia.
+      +
+        assert (NZ : (0 < Datatypes.length (t :: l))%nat) by (cbn; lia).
+        generalize dependent (t :: l); clear t l.
+        intros.
+        rewrite IHl.
+        all: rewrite !AddressValue_ltb_Z_ltb, !Z.ltb_lt in *.
+        all: repeat (rewrite AddressValue.with_offset_no_wrap in *; try lia).
+        destruct N as [N | N].
+        all: apply AMap.F.add_neq_o.
+        all: intros C; subst; lia.
+  Qed.
 
   Fact align_down_le:
     forall v a,
