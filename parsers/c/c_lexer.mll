@@ -174,7 +174,7 @@ Attempt to lex a CN keyword. These may be:
   * 'experimental' - functional in some cases but not recommended for general use 
   * 'unimplemented' - non-functional, but the keyword is reserved  
 *)
-let cn_lex_keyword id start_pos = 
+let cn_lex_keyword id start_pos end_pos = 
   (* Try to lex CN production keywords *)
   try Hashtbl.find (cn_lex_builder cn_keywords) id
   with Not_found ->
@@ -183,7 +183,7 @@ let cn_lex_keyword id start_pos =
       let kw = Hashtbl.find (cn_lex_builder cn_keywords_experimental) id in 
       prerr_endline       
         (Pp_errors.make_message
-         (Cerb_location.point start_pos)
+         Cerb_location.(region (start_pos, end_pos) NoCursor)
          Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
          Warning);
       kw 
@@ -595,7 +595,7 @@ and initial flags = parse
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
       {
         if flags.inside_cn then
-          cn_lex_keyword id lexbuf.lex_start_p  
+          cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p  
         else
           UNAME id
       }
@@ -605,7 +605,7 @@ and initial flags = parse
         Hashtbl.find lexicon id
       with Not_found ->
         if flags.inside_cn then
-          cn_lex_keyword id lexbuf.lex_start_p 
+          cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p 
         else
           LNAME id
     }
