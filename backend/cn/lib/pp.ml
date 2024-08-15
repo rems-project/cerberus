@@ -199,7 +199,7 @@ let debug l pp =
     let pp2 =
       if !print_timestamps then (
         let time = Sys.time () in
-        format [ Green ] ("[" ^ Float.to_string time ^ "] ") ^^ pp1)
+        format [ Green ] ("[" ^ Printf.sprintf "%.6f" time ^ "] ") ^^ pp1)
       else
         pp1
     in

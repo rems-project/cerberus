@@ -13,9 +13,11 @@ val empty_model : model
    maybe) *)
 val random_seed : int ref
 
-val log_to_temp : bool ref
+module Logger : sig
+  val to_file : bool ref
 
-val log_dir : string option ref
+  val dir : string option ref
+end
 
 val solver_path : string option ref
 
