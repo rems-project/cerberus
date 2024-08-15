@@ -38,11 +38,11 @@ let get_start_loc ?(offset = 0) = function
        Cerb_location.point new_start_pos
      | None ->
        failwith
-         "modify_decl_loc: Loc_regions has empty list of positions (should be non-empty)")
+         "get_start_loc: Loc_regions has empty list of positions (should be non-empty)")
   | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
   | Loc_unknown | Loc_other _ ->
     failwith
-      "modify_decl_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
+      "get_start_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
 
 
 let get_end_loc ?(offset = 0) = function
@@ -56,11 +56,11 @@ let get_end_loc ?(offset = 0) = function
        Cerb_location.point new_end_pos
      | None ->
        failwith
-         "modify_decl_loc: Loc_regions has empty list of positions (should be non-empty)")
+         "get_end_loc: Loc_regions has empty list of positions (should be non-empty)")
   | Loc_point pos -> Cerb_location.point { pos with pos_cnum = pos.pos_cnum + offset }
   | Loc_unknown | Loc_other _ ->
     failwith
-      "modify_decl_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
+      "get_end_loc: Location of AilSdeclaration should be Loc_region or Loc_regions"
 
 
 let create_ail_ownership_global_decls () =
@@ -381,6 +381,7 @@ let get_c_fn_local_ownership_checking_injs
     let param_types = List.map (fun (_, ctype, _) -> ctype) param_types in
     let params = List.combine param_syms param_types in
     let ownership_stats_pair = get_c_local_ownership_checking params in
+    (* TODO: Separate return injections here since they are now done differently *)
     let block_ownership_injs = get_c_block_local_ownership_checking_injs fn_body in
     (Some ownership_stats_pair, block_ownership_injs)
   | _, _ -> (None, [])

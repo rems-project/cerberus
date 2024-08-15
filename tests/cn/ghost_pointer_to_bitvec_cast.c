@@ -13,6 +13,6 @@ test_cast_loc_to_various (int *p)
 int main(void)
 /*@ trusted; @*/
 {
-  int p[1];
+  int p[1] = {0};
   test_cast_loc_to_various(p);
 }
