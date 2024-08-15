@@ -64,7 +64,7 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#CN_MATCH#match#g" \
 	  | sed "s#CN_LET#let#g" \
 	  | sed "s#VOID#void#g" \
-	  | sed "s#CN_BOOL#bool#g" \
+	  | sed "s#CN_BOOL#boolean#g" \
 	  | sed "s#CN_INTEGER#integer#g" \
 	  | sed "s#CN_BITS#bits#g" \
 	  | sed "s#CN_REAL#real#g" \
@@ -72,10 +72,10 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#CN_ALLOC_ID#alloc_id#g" \
 	  | sed "s#STRUCT#struct#g" \
 	  | sed "s#CN_DATATYPE#datatype#g" \
-	  | sed "s#CN_MAP#map#g" \
-	  | sed "s#CN_LIST#list#g" \
-	  | sed "s#CN_TUPLE#tuple#g" \
-	  | sed "s#CN_set#set#g" \
+	  | sed "s#CN_MAP#cn_map#g" \
+	  | sed "s#CN_LIST#cn_list#g" \
+	  | sed "s#CN_TUPLE#cn_tuple#g" \
+	  | sed "s#CN_set#cn_set#g" \
 	  | sed "s#CN_GOOD#good#g" \
 	  | sed "s#CN_FUNCTION#function#g" \
 	  | sed "s#CN_LEMMA#lemma#g" \
@@ -89,7 +89,7 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#CN_PACK#pack#g" \
 	  | sed "s#CN_UNPACK#unpack#g" \
 	  | sed "s#CN_EXTRACT#extract#g" \
-	  | sed "s#CN_HAVE#have#g" \
+	  | sed "s#CN_HAVE#cn_have#g" \
 	  | sed "s#CN_INSTANTIATE#instantiate#g" \
 	  | sed "s#CN_SPLIT_CASE#split_case#g" \
 	  | sed "s#CN_UNFOLD#unfold#g" \

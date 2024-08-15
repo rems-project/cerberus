@@ -92,11 +92,13 @@ let lexicon: (string, token) Hashtbl.t =
 
 
 (* BEGIN CN *)
+
+(* CN keywords that are safe for use by all users *)
 let cn_keywords: (string * Tokens.token) list = [
     "good"          , CN_GOOD;
-    "bool"          , CN_BOOL;
+    (* "bool"          , CN_BOOL; *) 
     "boolean"       , CN_BOOL;
-    "CN_bool"       , CN_BOOL;
+    (* "CN_bool"       , CN_BOOL; *)
     "integer"       , CN_INTEGER;
     "u8"           , CN_BITS (`U,8);
     "u16"           , CN_BITS (`U,16);
@@ -111,8 +113,6 @@ let cn_keywords: (string * Tokens.token) list = [
     "real"          , CN_REAL;
     "pointer"       , CN_POINTER;
     "alloc_id"      , CN_ALLOC_ID;
-    "map"           , CN_MAP;
-    "set"           , CN_SET;
     "let"           , CN_LET;
     "take"          , CN_TAKE;
     "Owned"         , CN_OWNED;
@@ -135,7 +135,6 @@ let cn_keywords: (string * Tokens.token) list = [
     "extract"       , CN_EXTRACT;
     "array_shift"   , CN_ARRAY_SHIFT;
     "member_shift"  , CN_MEMBER_SHIFT;
-    "have"          , CN_HAVE;
     "unfold"        , CN_UNFOLD;
     "apply"         , CN_APPLY;
     "match"         , CN_MATCH;
@@ -148,6 +147,22 @@ let cn_keywords: (string * Tokens.token) list = [
     "implies"       , CN_IMPLIES;
   ]
 
+(* CN keywords that are functional, but have limitations that make them
+unsuitable for non-experts *)
+let cn_keywords_experimental: (string * Tokens.token) list = [
+    "cn_list"       , CN_LIST; 
+    "cn_tuple"      , CN_TUPLE;
+    "cn_map"        , CN_MAP;
+    "cn_set"        , CN_SET;
+    "cn_have"       , CN_HAVE;
+  ] 
+
+(* CN keywords that are non-functional, but reserved for possible future use *)
+let cn_keywords_unimplemented: (string * Tokens.token) list = [
+    "pack"          , CN_PACK;
+    "unpack"        , CN_UNPACK;
+  ]
+
 let cn_lex_builder kw_list : (string, token) Hashtbl.t  = 
   let cn_lex = Hashtbl.create 0 in
   let add (key, builder) = Hashtbl.add cn_lex key builder in
@@ -156,15 +171,33 @@ let cn_lex_builder kw_list : (string, token) Hashtbl.t  =
 let cn_lexicon: (string, token) Hashtbl.t = 
   cn_lex_builder cn_keywords
 
-(* CN keywords that are non-functional, but reserved for future use *)
-let cn_keywords_deprecated: (string * Tokens.token) list = [
-    "tuple"         , CN_TUPLE;
-    "pack"          , CN_PACK;
-    "unpack"        , CN_UNPACK;
-  ]
+let cn_lexicon_experimental: (string, token) Hashtbl.t = 
+  cn_lex_builder cn_keywords_experimental
 
-let cn_lexicon_deprecated: (string, token) Hashtbl.t = 
-  cn_lex_builder cn_keywords_deprecated
+let cn_lexicon_unimplemented: (string, token) Hashtbl.t = 
+  cn_lex_builder cn_keywords_unimplemented
+
+let cn_lex_keyword id start_pos = 
+  (* Try to lex CN production keywords *)
+  try Hashtbl.find cn_lexicon id
+  with Not_found ->
+    (* Try to lex CN experimental keywords - warn on success *)
+    try 
+      let kw = Hashtbl.find cn_lexicon_experimental id in 
+      prerr_endline       
+        (Pp_errors.make_message
+         (Cerb_location.point start_pos)
+         Errors.(CPARSER (Cparser_experimental_keyword id))
+         Warning);
+      kw 
+    with Not_found ->
+      try 
+        (* Try to lex CN unimplemented keywords - throw an error on success *)
+        let _ = Hashtbl.find cn_lexicon_unimplemented id in 
+        raise (Error (Errors.Cparser_unimplemented_keyword id))
+      with Not_found ->
+        UNAME id
+
 (* END CN *)
 
 
@@ -565,14 +598,7 @@ and initial flags = parse
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
       {
         if flags.inside_cn then
-          try Hashtbl.find cn_lexicon id
-          with Not_found -> 
-            try 
-              (* Try to lex deprecated keywords - throw an error on success *)
-              let _ = Hashtbl.find cn_lexicon_deprecated id in 
-              raise (Error (Errors.Cparser_deprecated_keyword id))
-            with Not_found ->
-              UNAME id
+          cn_lex_keyword id lexbuf.lex_start_p  
         else
           UNAME id
       }
@@ -582,14 +608,7 @@ and initial flags = parse
         Hashtbl.find lexicon id
       with Not_found ->
         if flags.inside_cn then
-          try Hashtbl.find cn_lexicon id
-          with Not_found ->
-            try 
-              (* Try to lex deprecated keywords - throw an error on success *)
-              let _ = Hashtbl.find cn_lexicon_deprecated id in 
-              raise (Error (Errors.Cparser_deprecated_keyword id))
-            with Not_found ->
-              UNAME id
+          cn_lex_keyword id lexbuf.lex_start_p 
         else
           LNAME id
     }

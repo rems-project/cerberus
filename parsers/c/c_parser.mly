@@ -146,7 +146,7 @@ type asm_qualifier =
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_SPLIT_CASE CN_UNFOLD CN_APPLY CN_PRINT
-%token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_TUPLE CN_SET
+%token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_ALLOC_ID CN_MAP CN_LIST CN_TUPLE CN_SET
 %token <[`U|`I] * int>CN_BITS
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
@@ -2147,6 +2147,8 @@ base_type_explicit:
     { Cerb_frontend.Cn.CN_datatype id }
 | CN_MAP LT bTy1= base_type COMMA bTy2= base_type GT
     { Cerb_frontend.Cn.CN_map (bTy1, bTy2) }
+| CN_LIST LT bTy= base_type GT
+     { Cerb_frontend.Cn.CN_list bTy }
 | CN_TUPLE LT bTys= separated_list(COMMA, base_type) GT
     { Cerb_frontend.Cn.CN_tuple bTys }
 | CN_SET LT bTy= base_type GT
