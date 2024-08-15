@@ -1,5 +1,5 @@
 /*@
-function (bool) bw_compl_expr() {
+function (boolean) bw_compl_expr() {
     let x = 2i32;
     ~x+x == -1i32
 }

@@ -1,6 +1,6 @@
 /*@
 
-datatype bad { Bad { map<u8, datatype bad> b } }
+datatype bad { Bad { cn_map<u8, datatype bad> b } }
 
 
 @*/

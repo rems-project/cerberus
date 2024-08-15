@@ -105,7 +105,7 @@ struct int_list_pair split(struct int_list *xs)
       xs->tail = p.fst;
       cdr->tail = p.snd;
       struct int_list_pair r = {.fst = xs, .snd = cdr};
-      /*@ print(r); @*/
+      /*@ cn_print(r); @*/
       return r;
     }
   }

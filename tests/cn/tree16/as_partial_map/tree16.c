@@ -35,14 +35,14 @@ datatype tree_node_option {
   Node {i32 v}
 }
 
-function (map<datatype tree_arc, datatype tree_node_option>) empty ()
-function (map<datatype tree_arc, datatype tree_node_option>) construct
-    (i32 v, map<i32, map<datatype tree_arc, datatype tree_node_option> > ts)
+function (cn_map<datatype tree_arc, datatype tree_node_option>) empty ()
+function (cn_map<datatype tree_arc, datatype tree_node_option>) construct
+    (i32 v, cn_map<i32, cn_map<datatype tree_arc, datatype tree_node_option> > ts)
 
-function (map<i32, map<datatype tree_arc, datatype tree_node_option> >) default_ns ()
+function (cn_map<i32, cn_map<datatype tree_arc, datatype tree_node_option> >) default_ns ()
 
-predicate {map<datatype tree_arc, datatype tree_node_option> t,
-        i32 v, map<i32, map<datatype tree_arc, datatype tree_node_option> > ns}
+predicate {cn_map<datatype tree_arc, datatype tree_node_option> t,
+        i32 v, cn_map<i32, cn_map<datatype tree_arc, datatype tree_node_option> > ns}
   Tree (pointer p)
 {
   if (is_null(p)) {
@@ -58,16 +58,16 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
   }
 }
 
-predicate (map <datatype tree_arc, datatype tree_node_option>) Indirect_Tree (pointer p) {
+predicate (cn_map <datatype tree_arc, datatype tree_node_option>) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
   assert (is_null(V) || ((u64) V != 0u64));
   take T = Tree(V);
   return T.t;
 }
 
-function (datatype tree_arc) mk_arc (map <i32, i32> m, i32 i, i32 len)
+function (datatype tree_arc) mk_arc (cn_map <i32, i32> m, i32 i, i32 len)
 
-predicate {datatype tree_arc arc, map<i32, i32> xs}
+predicate {datatype tree_arc arc, cn_map<i32, i32> xs}
         Arc (pointer p, i32 i, i32 len) {
   assert (0i32 <= len);
   assert (i <= len);
@@ -79,7 +79,7 @@ predicate {datatype tree_arc arc, map<i32, i32> xs}
   return {arc: mk_arc(Xs, i, len), xs: Xs};
 }
 
-lemma mk_arc_lemma (map <i32, i32> m, i32 i, i32 len)
+lemma mk_arc_lemma (cn_map <i32, i32> m, i32 i, i32 len)
   requires
     ((0i32 <= len) && (0i32 <= i) && (i <= len));
     len <= LEN_LIMIT;
@@ -93,7 +93,7 @@ lemma empty_lemma (datatype tree_arc arc)
   ensures ((empty ())[arc]) == Node_None {};
 
 function (datatype tree_node_option) construct_app_rhs (i32 v,
-        map<i32, map<datatype tree_arc, datatype tree_node_option> > ns,
+        cn_map<i32, cn_map<datatype tree_arc, datatype tree_node_option> > ns,
         datatype tree_arc arc)
 {
   match arc {
@@ -120,7 +120,7 @@ function (boolean) arc_first_idx_valid (datatype tree_arc arc)
 
 
 lemma construct_lemma (i32 v,
-        map<i32, map<datatype tree_arc, datatype tree_node_option> > ns,
+        cn_map<i32, cn_map<datatype tree_arc, datatype tree_node_option> > ns,
         datatype tree_arc arc)
   requires
     arc_first_idx_valid(arc);
