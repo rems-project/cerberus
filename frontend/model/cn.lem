@@ -57,6 +57,7 @@ type cn_binop =
   | CN_implies
   | CN_map_get
   | CN_band
+  | CN_bxor
 
 
 (*
