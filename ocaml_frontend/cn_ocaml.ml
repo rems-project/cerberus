@@ -107,6 +107,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_implies -> P.equals ^^ P.equals ^^ P.rangle
     | CN_map_get -> P.string "CN_map_get"
     | CN_band -> P.ampersand
+    | CN_bxor -> P.caret
 
   let pp_cn_c_kind = function
     | C_kind_var -> !^ "c_var"
