@@ -48,7 +48,7 @@ let cons_dom_rng info = (Record info.c_params, Datatype info.c_datatype_tag)
 
 let rec pp = function
   | Unit -> !^"void"
-  | Bool -> !^"bool"
+  | Bool -> !^"boolean"
   | Integer -> !^"integer"
   | Bits (Signed, n) -> !^("i" ^ string_of_int n)
   | Bits (Unsigned, n) -> !^("u" ^ string_of_int n)
@@ -59,10 +59,10 @@ let rec pp = function
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
   | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
-  | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
-  | List bt -> !^"list" ^^ angles (pp bt)
-  | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
-  | Set t -> !^"set" ^^ angles (pp t)
+  | Map (abt, rbt) -> !^"cn_map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
+  | List bt -> !^"cn_list" ^^ angles (pp bt)
+  | Tuple nbts -> !^"cn_tuple" ^^ angles (flow_map comma pp nbts)
+  | Set t -> !^"cn_set" ^^ angles (pp t)
 
 
 (* | Option t -> !^"option" ^^ angles (pp t) *)
