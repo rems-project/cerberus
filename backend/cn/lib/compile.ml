@@ -538,6 +538,7 @@ module EffectfulTranslation = struct
       in
       return (IT (MapGet (e1, e2), rbt, loc))
     | CN_band, (SBT.Bits _ as bt) -> return (IT (Binop (BW_And, e1, e2), bt, loc))
+    | CN_bor, (SBT.Bits _ as bt) -> return (IT (Binop (BW_Or, e1, e2), bt, loc))
     | CN_bxor, (SBT.Bits _ as bt) -> return (IT (Binop (BW_Xor, e1, e2), bt, loc))
     | _ -> fail { loc; msg = Illtyped_binary_it { left = e1; right = e2; binop = bop } }
 
