@@ -903,27 +903,25 @@ Module Type CheriMemoryImpl
             let sz := Z.of_nat szn in
             sassert ((AddressValue.to_Z addr + sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             let padding_byte := None in
-            '(offs, last_offn) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
-            let last_off := Z.of_nat last_offn in
-            let final_pad_size := sz - last_off in
+            '(offs, final_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
+            let final_pad_size := sz - (Z.of_nat final_off) in
 
             '(s', final_pad_addr) <-
               monadic_fold_left2
-                (fun '(s0, addr0)
-                   '(ident, ty, offn)
-                   '(_, _, mval) =>
-                   let off := Z.of_nat offn in
-                   let pad_size := off - last_off in
-                   (* TODO: we fill up padding after but not offset bytes before! *)
+                (fun '(s0, addr0) '(ident, ty, off) '(_, _, mval) =>
+                   (*  off - offset of this field from the start of struct, *after* padding *)
+                   let value_a := AddressValue.with_offset addr (Z.of_nat off) in
+                   let pad_size := AddressValue.to_Z value_a - AddressValue.to_Z addr0 in
+                   (* write padding *)
                    (* TODO: What if padding/offsets big enough to fit a capability? should we ghost/clear tags? *)
-                   '(s1, pad_addr) <- repr fuel (AddressValue.with_offset addr0 off) mval s0 ;;
-                   szn <- sizeof DEFAULT_FUEL None ty ;;
-                   let sz := Z.of_nat szn in
                    let pad_bs := List.repeat padding_byte (Z.to_nat pad_size) in
-                   let s2 := mem_state_with_bytemap
-                               (AMap.map_add_list_at s1.(bytemap) pad_bs pad_addr)
-                               s1 in
-                   ret (s2, AddressValue.with_offset pad_addr pad_size))
+                   let s1 := mem_state_with_bytemap
+                               (AMap.map_add_list_at s0.(bytemap) pad_bs addr0)
+                               s0 in
+                   (* write the value *)
+                   '(s2, end_addr) <- repr fuel value_a mval s1 ;;
+                   szn <- sizeof DEFAULT_FUEL None ty ;;
+                   ret (s2, AddressValue.with_offset value_a (Z.of_nat szn)))
 
                 (s, addr) offs xs ;;
 
