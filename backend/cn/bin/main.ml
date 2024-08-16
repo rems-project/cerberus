@@ -190,13 +190,17 @@ let with_well_formedness_check
 
 (** Report an error on [stderr] in an appropriate format: JSON if [json] is
     true, or human-readable if not. *)
-let report_type_error ~(json : bool) ?(output_dir : string option) (error : TypeErrors.t)
+let report_type_error
+  ~(json : bool)
+  ?(output_dir : string option)
+  ?(fn_name : string option)
+  (error : TypeErrors.t)
   : unit
   =
   if json then
-    TypeErrors.report_json ?output_dir error
+    TypeErrors.report_json ?output_dir ?fn_name error
   else
-    TypeErrors.report_pretty ?output_dir error
+    TypeErrors.report_pretty ?output_dir ?fn_name error
 
 
 (** Generate an appropriate exit code for the provided error. *)
@@ -337,8 +341,10 @@ let verify
           let open Typing in
           let@ errors = Check.time_check_c_functions functions in
           if not quiet then
-            List.iter (report_type_error ~json ?output_dir) errors;
-          Option.fold ~none:() ~some:exit (exit_code_of_errors errors);
+            List.iter
+              (fun (fn, err) -> report_type_error ~json ?output_dir ~fn_name:fn err)
+              errors;
+          Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
           Check.generate_lemmas lemmas lemmata
         in
         Typing.run_from_pause check paused
