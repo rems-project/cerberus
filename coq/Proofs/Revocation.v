@@ -5377,51 +5377,6 @@ Module CheriMemoryImplWithProofs
         lia.
   Qed.
 
-  Definition amap_add_list_not_at_ORIG :=
-    forall {T: Type}
-      (x addr : AddressValue.t)
-      (bm : AMap.M.t T)
-      (l : list T),
-
-    (AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
-
-    ((AddressValue.ltb x addr = true)
-     \/ (AddressValue.leb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l))) x = true)) ->
-
-    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
-      AMap.M.find (elt:=T) x bm.
-
-  Fact contra :
-    not amap_add_list_not_at_ORIG.
-  Proof.
-    unfold amap_add_list_not_at_ORIG.
-    intros C.
-    remember (AddressValue.of_Z (AddressValue.ADDR_LIMIT - 1)) as lim.
-    specialize (C unit lim lim (AMap.M.empty unit) [tt]).
-    pose proof (AddressValue.to_Z_in_bounds lim) as BOUNDS.
-    full_autospecialize C.
-    -
-      subst.
-      rewrite AddressValue.of_Z_roundtrip by lia.
-      cbn.
-      lia.
-    -
-      right.
-      cbn.
-      rewrite !AddressValue_leb_Z_leb, !Z.leb_le.
-      unfold AddressValue.with_offset.
-      replace (AddressValue.to_Z lim + Z.of_nat 1) with AddressValue.ADDR_LIMIT.
-      rewrite ADDR_LIMIT_to_Z. now unfold AddressValue.ADDR_MIN in BOUNDS.
-      subst.
-      rewrite AddressValue.of_Z_roundtrip by lia.
-      lia.
-    -
-      clear - C.
-      cbn in *.
-      pose proof (@AMap.M.Raw.Proofs.MX.elim_compare_eq lim lim eq_refl) as [REFL H].
-      now rewrite H in C.
-  Qed.
-
   Fact amap_add_list_not_at
     {T: Type}
     (x addr : AddressValue.t)
