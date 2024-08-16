@@ -336,6 +336,9 @@ Module Type CheriMemoryImpl
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta).
 
+  Definition mem_state_with_bytemap_capmeta bytemap capmeta (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap capmeta.
+
   Definition mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) bytemap capmeta.
 
@@ -783,13 +786,10 @@ Module Type CheriMemoryImpl
 
   Fixpoint repr
     (fuel: nat)
-    (funptrmap: ZMap.M.t (digest * string * C.t))
-    (capmeta : AMap.M.t (bool*CapGhostState))
     (addr : AddressValue.t)
     (mval : mem_value)
-    : serr ((ZMap.M.t (digest * string * C.t))
-            * (AMap.M.t (bool*CapGhostState))
-            * (list (option ascii)))
+    (s: mem_state)
+    : serr (mem_state * AddressValue.t)
     :=
     match fuel with
     | O => raise "out of fuel in repr"
@@ -797,72 +797,109 @@ Module Type CheriMemoryImpl
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
+            sassert ((AddressValue.to_Z addr + (Z.of_nat sz)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
             let bs := List.repeat None sz in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap, (capmeta_ghost_tags addr sz capmeta), bs)
-        | MVinteger ity (IV n_value) =>
+            ret (mem_state_with_bytemap_capmeta
+                   (AMap.map_add_list_at s.(bytemap) bs addr)
+                   (capmeta_ghost_tags addr sz (capmeta s))
+                   s
+                ,
+                AddressValue.with_offset addr (Z.of_nat sz))
+        | MVinteger ity (IV ivalue) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
-            bs' <- bytes_of_Z iss sz n_value ;;
+            bs' <- bytes_of_Z iss sz ivalue ;;
             let bs := List.map (Some) bs' in
             sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
-        | MVinteger ity (IC _ c_value)
+
+            ret (mem_state_with_bytemap_capmeta
+                   (AMap.map_add_list_at s.(bytemap) bs addr)
+                   (capmeta_ghost_tags addr (List.length bs) (capmeta s))
+                   s
+                ,
+                AddressValue.with_offset addr (Z.of_nat sz))
+        | MVinteger ity (IC _ c)
           =>
             match ity with
             | CoqIntegerType.Signed CoqIntegerType.Intptr_t
             | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
               =>
-                '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
+                '(cb, ct) <- option2serr "int encoding error" (C.encode true c) ;;
+                let sz := length cb in
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
-                let capmeta := update_capmeta c_value addr capmeta in
-                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-                ret (funptrmap, capmeta, List.map (Some) cb)
+                sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+
+                let cm := update_capmeta c addr (capmeta s) in
+                let bs := List.map (Some) cb in
+                ret (mem_state_with_bytemap_capmeta
+                       (AMap.map_add_list_at s.(bytemap) bs addr)
+                       cm
+                       s
+                    ,
+                    AddressValue.with_offset addr (Z.of_nat sz))
             | _ =>
                 raise "invalid integer value (capability for non-(u)intptr_t"
             end
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
+            sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
             bs' <- bytes_of_Z true sz (bits_of_float fval) ;;
             let bs := List.map (Some) bs' in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
+            ret (mem_state_with_bytemap_capmeta
+                   (AMap.map_add_list_at s.(bytemap) bs addr)
+                   (capmeta_ghost_tags addr sz (capmeta s))
+                   s
+                ,
+                AddressValue.with_offset addr (Z.of_nat sz))
         | MVpointer ref_ty ptrval_ =>
             match ptrval_ with
             | PVfunction
                 ((FP_valid (CoqSymbol.Symbol file_dig n_value opt_name)) as
                   fp) =>
-                let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
+                let '(fm, c_value) := resolve_function_pointer (funptrmap s) fp in
                 '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
-                let capmeta := update_capmeta c_value addr capmeta in
-                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-                ret (funptrmap, capmeta, List.map (Some) cb)
-            | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
-                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
+                let sz := length cb in
+                sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+                let cm := update_capmeta c_value addr (capmeta s) in
+                let bs := List.map (Some) cb in
+                ret (mem_state_with_funptrmap_bytemap_capmeta
+                       fm
+                       (AMap.map_add_list_at s.(bytemap) bs addr)
+                       cm
+                       s
+                    ,
+                    AddressValue.with_offset addr (Z.of_nat sz))
+            | (PVfunction (FP_invalid c) | PVconcrete c) =>
+                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
-                let capmeta := update_capmeta c_value addr capmeta in
-                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-                ret (funptrmap, capmeta, List.map (Some) cb)
+                let sz := length cb in
+                sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+                let cm := update_capmeta c addr (capmeta s) in
+                let bs := List.map (Some) cb in
+                ret (mem_state_with_bytemap_capmeta
+                       (AMap.map_add_list_at s.(bytemap) bs addr)
+                       cm
+                       s
+                    ,
+                    AddressValue.with_offset addr (Z.of_nat sz))
             end
         | MVarray mvals =>
-            (*
-              This check is redundant since if `monadic_fold_left` succeeds it means all elements
-              fit the address space. But we can opt to add it back later, if needed by proofs.
-
-              ct <- typeof (MVarray mvals) ;;
-              sz <- sizeof DEFAULT_FUEL None ct ;;
-              sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "array object does not fit in address space" ;;
-             *)
-            '(_, funptrmap, capmeta, bs) <-
-              monadic_fold_left
-                (fun '(addr, funptrmap, captmeta, bs) (mval : mem_value) =>
-                   '(funptrmap, capmeta, bs') <- repr fuel funptrmap capmeta addr mval ;;
-                   let addr := AddressValue.with_offset addr (Z.of_nat (List.length bs')) in
-                   ret (addr, funptrmap, capmeta, (bs ++ bs')))
-                mvals (addr, funptrmap, capmeta, []) ;;
-            ret (funptrmap, capmeta, bs)
+            monadic_fold_left
+              (fun '(s', addr') (mval': mem_value) => repr fuel addr' mval' s')
+              mvals (s, addr)
+        | MVunion tag_sym memb_ident mval =>
+            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
+            sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
+            '(s', pad_addr) <- repr fuel addr mval s ;;
+            let pad_size := Nat.sub sz (Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr)) in
+            let pad_bs := List.repeat None pad_size in
+            let s'' := mem_state_with_bytemap
+                         (AMap.map_add_list_at s'.(bytemap) pad_bs pad_addr)
+                         s' in
+            ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
+            (*
             let padding_byte := None in
             '(offs, last_offn) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             let last_off := Z.of_nat last_offn in
@@ -888,12 +925,8 @@ Module Type CheriMemoryImpl
             let bs := bs ++ (List.repeat padding_byte (Z.to_nat final_pad)) in
             sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
             ret (funptrmap, capmeta, bs)
-        | MVunion tag_sym memb_ident mval =>
-            size <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
-            '(funptrmap', capmeta', bs) <- repr fuel funptrmap capmeta addr mval ;;
-            let bs := bs ++ (List.repeat None (Nat.sub size (List.length bs))) in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap', capmeta', bs)
+             *)
+            raise "TODO:"
         end
     end.
 
@@ -970,26 +1003,14 @@ Module Type CheriMemoryImpl
            in
            '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) readonly_status ;;
            (* We should be careful not to introduce a state change here
-         in case of error which happens after the [allocator]
-         invocation, as [allocator] modifies state. In the current
-         implementation, this is not happening, as errors are handled
-         as [InternalErr] which supposedly should terminate program
-         evaluation.  *)
-           st <- get ;;
-           '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval) ;;
-           let bs := mapi (fun i b => (AddressValue.with_offset addr (Z.of_nat i), b)) pre_bs in
-           let bytemap := List.fold_left (fun acc '(addr, b) => AMap.M.add addr b acc) bs st.(bytemap) in
-           put {|
-               next_alloc_id    := st.(next_alloc_id);
-               last_address     := st.(last_address) ;
-               allocations      := st.(allocations);
-               funptrmap        := funptrmap;
-               varargs          := st.(varargs);
-               next_varargs_id  := st.(next_varargs_id);
-               bytemap          := bytemap;
-               capmeta          := capmeta;
-             |}
-           ;;
+              in case of error which happens after the [allocator]
+              invocation, as [allocator] modifies state. In the current
+              implementation, this is not happening, as errors are handled
+              as [InternalErr] which supposedly should terminate program
+              evaluation.  *)
+           s <- get ;;
+           '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL addr mval s) ;;
+           put s' ;;
            ret (alloc_id, addr, ro)
        end)
         >>=
@@ -1673,14 +1694,9 @@ Module Type CheriMemoryImpl
         cap_check loc c_value 0 WriteIntent szn ;;
         let addr := C.cap_get_value c_value in
 
-        st <- get ;;
-        '(funptrmap, capmeta, pre_bs) <-
-          serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
-        ;;
-
-        let bytemap := AMap.map_add_list_at st.(bytemap) pre_bs addr in
-        put (mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta st)
-        ;;
+        s <- get ;;
+        '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL addr mval s) ;;
+        put s' ;;
         ret (FP Write addr szn)
       in
 
