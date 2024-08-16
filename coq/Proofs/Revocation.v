@@ -5638,94 +5638,73 @@ Module CheriMemoryImplWithProofs
           (* on the right (axis-wise) *)
           apply Z.nle_gt in H.
           right.
-          rewrite AddressValue_leb_Z_leb.
-          apply Z.leb_le.
+          rewrite AddressValue_ltb_Z_ltb, Z.ltb_lt.
           pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat psize)) as AD.
-          autospecialize AD. lia.
+          autospecialize AD; [lia |].
           unfold AddressValue.with_offset.
           unfold align_down in *.
+          clear AP BL bs rl.
 
-          destruct (Z.eq_dec (AddressValue.to_Z start + Z.of_nat szn) AddressValue.ADDR_LIMIT)
-            as [E|NE].
+          (* general cleanup *)
+          generalize dependent (AddressValue.to_Z addr).
+          clear addr; intro addr; intros.
+          generalize dependent (AddressValue.to_Z start).
+          clear start; intro start; intros.
+          unfold AddressValue.ADDR_MIN in *.
+          assert (RSZ' : start + (Z.of_nat szn - 1) < AddressValue.ADDR_LIMIT) by lia;
+            clear RSZ; rename RSZ' into RSZ.
+          assert (SP' : 0 <= Z.of_nat szn - 1) by lia;
+            clear SP; rename SP' into SP.
+          generalize dependent (Z.of_nat szn - 1).
+          clear szn; intro szn; intros.
+          zify.
+          generalize dependent (Z.of_nat psize).
+          clear psize; intro psize; intros.
+          generalize dependent (Z.of_nat off).
+          clear off; intro off; intros.
+          (* /cleanup *)
+
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *; lia).
+          rewrite AddressValue.of_Z_roundtrip.
+          2: {
+            split; [unfold AddressValue.ADDR_MIN; lia |].
+            apply Zdiv.Zmod_divides in Balign; [|lia].
+            destruct Balign as [naddr Balign].
+            apply Zdiv.Zmod_divides in ALA; [|lia].
+            destruct ALA as [nmax ALA].
+            enough (naddr < nmax) by nia.
+            nia.
+          }
+
+          pose proof (Zdiv.Zmod_le (start + szn) psize).
+          full_autospecialize H0; try lia.
+
+          pose proof (Z.mod_pos_bound (start + szn) psize).
+          full_autospecialize H1; try lia.
+
+          remember (start + szn) as fin.
+          remember (fin mod psize) as soff.
+          remember (fin - soff) as ofin.
+
+          assert(ofin mod psize = 0).
           {
-            rewrite E in *.
-            rewrite ADDR_LIMIT_to_Z.
-            remember (AddressValue.of_Z (AddressValue.to_Z addr + Z.of_nat off)) as x.
-            pose proof (AddressValue.to_Z_in_bounds x).
-            unfold AddressValue.ADDR_MIN in H0.
+            subst.
+            apply align_bottom_correct.
             lia.
           }
-          rewrite AddressValue.of_Z_roundtrip;[|lia].
-          remember (AddressValue.to_Z addr) as zaddr. clear Heqzaddr addr.
-          remember (AddressValue.to_Z start) as zstart. clear Heqzstart start.
 
-          zify.
-          clear cstr1. (* overlaps with AP *)
-          clear cstr2. (* overlaps with SP *)
+          assert(fin = ofin + soff) by lia.
 
-          remember (Z.of_nat psize) as zalign; clear psize Heqzalign.
-          remember (Z.of_nat off) as zoff; clear off Heqzoff.
-          remember (Z.of_nat szn) as zszn; clear szn Heqzszn.
-
-          rewrite AddressValue.of_Z_roundtrip.
-          2:{
-
-            subst.
-            split.
-            -
-              unfold AddressValue.ADDR_MIN in *.
-              lia.
-            -
-              unfold AddressValue.ADDR_MIN in *.
-
-              apply Zdiv.Zmod_divides in Balign; [|lia].
-              destruct Balign as [naddr Balign].
-              apply Zdiv.Zmod_divides in ALA; [|lia].
-              destruct ALA as [nmax ALA].
-
-              cut(naddr<nmax).
-              {
-                intros.
-                subst.
-                nia.
-              }
-              nia.
-          }
-          unfold AddressValue.ADDR_MIN in *.
-
-          pose proof (Zdiv.Zmod_le (zstart + (zszn - 1)) zalign AP).
-          autospecialize H0.
-          lia.
-
-          pose proof (Z.mod_pos_bound (zstart + (zszn - 1)) zalign AP).
-
-          remember (zstart + (zszn - 1)) as zlast.
-          remember (zlast mod zalign) as soff.
-          remember (zlast - soff) as lzlast.
-
-          assert(lzlast mod zalign = 0).
-          {
-            subst.
-            apply align_bottom_correct, AP.
-          }
-
-          assert(zlast = lzlast + soff) by lia.
-
-          assert(zlast < zaddr).
+          assert(fin < addr).
           {
             apply Zdiv.Zmod_divides in Balign; [|lia].
             destruct Balign as [naddr Balign].
             apply Zdiv.Zmod_divides in H2; [|lia].
-            destruct H2 as [nlast H2].
-
-            cut(nlast<naddr).
-            {
-              intros.
-              subst.
-              nia.
-            }
+            destruct H2 as [nfin H2].
+            enough (nfin < naddr) by nia.
             nia.
           }
+
           lia.
   Qed.
 
