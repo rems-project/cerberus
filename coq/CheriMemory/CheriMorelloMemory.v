@@ -899,34 +899,39 @@ Module Type CheriMemoryImpl
                          s' in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
-            (*
+            szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
+            let sz := Z.of_nat szn in
+            sassert ((AddressValue.to_Z addr + sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             let padding_byte := None in
             '(offs, last_offn) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             let last_off := Z.of_nat last_offn in
-            szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
-            let sz := Z.of_nat szn in
-            let final_pad := sz - last_off in
-            '(funptrmap, capmeta, _, bs) <-
+            let final_pad_size := sz - last_off in
+
+            '(s', final_pad_addr) <-
               monadic_fold_left2
-                (fun '(funptrmap, capmeta, last_off, acc)
+                (fun '(s0, addr0)
                    '(ident, ty, offn)
                    '(_, _, mval) =>
                    let off := Z.of_nat offn in
-                   let pad := off - last_off in
-                   '(funptrmap, capmeta, bs) <-
-                     repr fuel funptrmap capmeta (AddressValue.with_offset addr off) mval ;;
+                   let pad_size := off - last_off in
+                   (* TODO: we fill up padding after but not offset bytes before! *)
+                   (* TODO: What if padding/offsets big enough to fit a capability? should we ghost/clear tags? *)
+                   '(s1, pad_addr) <- repr fuel (AddressValue.with_offset addr0 off) mval s0 ;;
                    szn <- sizeof DEFAULT_FUEL None ty ;;
                    let sz := Z.of_nat szn in
-                   ret (funptrmap, capmeta, off + sz,
-                       (acc ++
-                          (List.repeat padding_byte (Z.to_nat pad)) ++ bs)))
-                (funptrmap, capmeta, 0, []) offs xs ;;
+                   let pad_bs := List.repeat padding_byte (Z.to_nat pad_size) in
+                   let s2 := mem_state_with_bytemap
+                               (AMap.map_add_list_at s1.(bytemap) pad_bs pad_addr)
+                               s1 in
+                   ret (s2, AddressValue.with_offset pad_addr pad_size))
 
-            let bs := bs ++ (List.repeat padding_byte (Z.to_nat final_pad)) in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
-            ret (funptrmap, capmeta, bs)
-             *)
-            raise "TODO:"
+                (s, addr) offs xs ;;
+
+            let final_pad_bs := List.repeat padding_byte (Z.to_nat final_pad_size) in
+            let s'' := mem_state_with_bytemap
+                         (AMap.map_add_list_at s'.(bytemap) final_pad_bs final_pad_addr)
+                         s' in
+            ret (s'', AddressValue.with_offset final_pad_addr final_pad_size)
         end
     end.
 
