@@ -5755,7 +5755,7 @@ Module CheriMemoryImplWithProofs
           lia.
   Qed.
 
-  (* TODO: move ? *)
+  (* TODO: unsued ? *)
   Lemma Capability_try_map_length
     {A B : Type}
     (f : A -> option B)
@@ -5794,6 +5794,121 @@ Module CheriMemoryImplWithProofs
     (* TODO: this proof must be substantionally similar to [mem_state_with_bytes_preserves] *)
   Admitted.
 
+  Fact repr_array_preserves
+    (l : list mem_value_indt)
+    (H: Forall
+          (fun mval : mem_value_indt =>
+             forall s : mem_state_r,
+               mem_invariant s ->
+               forall (addr : AddressValue.t) (bs : list (option ascii))
+                 (funptrmap0 : ZMap.M.t (digest * string * Capability_GS.t)) (capmeta0 : AMap.M.t (bool * CapGhostState))
+                 (fuel : nat),
+                 repr fuel (funptrmap s) (capmeta s) addr mval = inr (funptrmap0, capmeta0, bs) ->
+                 mem_invariant
+                   (mem_state_with_funptrmap_bytemap_capmeta funptrmap0 (AMap.map_add_list_at (bytemap s) bs addr) capmeta0
+                      s)) l)
+
+    (s: mem_state_r)
+    (M: mem_invariant s)
+    (addr: AddressValue.t)
+    (bs_res: list (option ascii))
+    (funptrmap_res: ZMap.M.t (digest * string * Capability_GS.t))
+    (capmeta_res: AMap.M.t (bool * CapGhostState))
+    (fuel: nat)
+    (R: repr fuel (funptrmap s) (capmeta s) addr (MVarray l) = inr (funptrmap_res, capmeta_res, bs_res)):
+
+    mem_invariant
+      (mem_state_with_funptrmap_bytemap_capmeta funptrmap_res (AMap.map_add_list_at (bytemap s) bs_res addr)
+         capmeta_res s).
+  Proof.
+    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
+    cbn in R.
+    Opaque repr.
+    state_inv_steps_quick.
+    repeat break_let.
+    state_inv_steps_quick.
+    subst.
+    rename t0 into addr'.
+
+    remember [] as b0.
+    remember (mem_state_with_funptrmap_bytemap_capmeta
+                (CheriMemoryImplWithProofs.funptrmap s)
+                (AMap.map_add_list_at (bytemap s) b0 addr)
+                (CheriMemoryImplWithProofs.capmeta s)
+                s
+             ) as s'.
+
+   assert(mem_invariant s') as M'.
+    {
+      subst b0.
+      clear - M Heqs'.
+      subst s'.
+      cbn.
+      apply M.
+    }
+
+    (*
+    assert(bytemap s = bytemap s') as Hb by (subst s' b0;cbn;reflexivity).
+    assert(funptrmap s = funptrmap s') as Hf by (subst s';reflexivity).
+    assert(capmeta s = capmeta s') as Hs by (subst s';reflexivity).
+    rewrite Hb in *. clear Hb.
+    rewrite Hf in *. clear Hf.
+    rewrite Hs in *. clear Hs.
+    *)
+
+    clear Heqb0 .
+
+
+    (*
+      (* lift quantifiers *)
+      assert(
+          forall s addr bs funptrmap0 capmeta0 fuel,
+            mem_invariant s ->
+            Forall
+              (fun mval : mem_value_indt =>
+                 repr fuel (funptrmap s) (capmeta s) addr mval = inr (funptrmap0, capmeta0, bs) ->
+                 mem_invariant
+                   (mem_state_with_funptrmap_bytemap_capmeta funptrmap0 (AMap.map_add_list_at (bytemap s) bs addr)
+                      capmeta0 s)) l) as F.
+      {
+        intros.
+        apply Forall_forall. intros.
+        eapply Forall_forall in H; eauto.
+      }
+      clear H.
+     *)
+
+    revert fuel R2.
+    dependent induction l;intros.
+    +
+      cbn in R2.
+      state_inv_steps.
+      apply M'.
+    +
+      rename a into mval.
+      apply Forall_cons_iff in H.
+      destruct H as [H1 H2].
+      cbn in R2.
+      state_inv_steps_quick.
+      repeat break_let.
+      state_inv_steps_quick.
+      subst.
+      rename t into funptrmap',
+        l0 into bs',
+        t0 into capmeta'.
+
+      specialize (H1 _ M _ _ _ _ _ R2); clear R2 M.
+
+      specialize (IHl H2)
+        with
+        (addr' := addr')
+        (b0 := b0 ++ bs')
+        (fuel := fuel)
+      .
+      clear H2.
+  Admitted.
+  Transparent repr.
+
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
@@ -5814,7 +5929,7 @@ Module CheriMemoryImplWithProofs
     Opaque sizeof.
 
     revert fuel.
-    induction mval; intros fuel R.
+    dependent induction mval;intros fuel R.
     - (* MVunspecified *)
       destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       unfold repr in R.
@@ -5893,50 +6008,7 @@ Module CheriMemoryImplWithProofs
         eapply mem_state_with_cap_preserves;eauto.
     -
       (* MVarray *)
-      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
-      cbn in R.
-      Opaque repr.
-      state_inv_steps_quick.
-      repeat break_let.
-      state_inv_steps_quick.
-      subst.
-      rename t0 into addr'.
-
-      remember [] as b0.
-      assert(mem_invariant
-               (mem_state_with_funptrmap_bytemap_capmeta
-                  (CheriMemoryImplWithProofs.funptrmap s)
-                  (AMap.map_add_list_at (bytemap s) b0 addr)
-                  (CheriMemoryImplWithProofs.capmeta s)
-                  s
-               )
-            ) as M'.
-      {
-        subst b0.
-        clear - M.
-        cbn.
-        apply M.
-      }
-      clear M Heqb0.
-      rename M' into M.
-
-      revert fuel R2.
-      dependent induction l;intros.
-      +
-        cbn in R2.
-        state_inv_steps.
-        apply M.
-      +
-        rename a into m.
-        apply Forall_cons_iff in H.
-        destruct H as [H1 H2].
-        cbn in R2.
-
-        state_inv_steps_quick.
-        repeat break_let.
-        state_inv_steps_quick.
-        subst.
-        admit.
+      eapply repr_array_preserves;eauto.
     -
       cbn in R.
       Opaque repr.
