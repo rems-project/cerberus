@@ -24,7 +24,7 @@ type state_report =
   { where : where_report;
     (* variables : var_entry list; *)
     resources : Pp.document list * Pp.document list;
-    constraints : Pp.document list * Pp.document list; (* interesting/uninteresting *)
+    constraints : Pp.document list * Pp.document list * Pp.document list; (* unsatisfied/interesting/uninteresting *)
     terms : term_entry list * term_entry list
   }
 
@@ -150,6 +150,14 @@ let interesting_uninteresting
   | _, _ -> interesting_table ^ details "more" uninteresting_table
 
 
+let unsatisfied_interesting_uninteresting
+  unsatisfied_table
+  interesting_table
+  uninteresting_table
+  = 
+  unsatisfied_table ^ details "Constraints satisfied by model" interesting_table 
+  ^ details "more satisfied constraints" uninteresting_table
+
 let make_resources (interesting, uninteresting) =
   let make = List.map (fun re -> [ Pp.plain re (* Pp.plain re.res_span *) ]) in
   let interesting_table = table_without_head (make interesting) in
@@ -174,16 +182,27 @@ let make_terms (interesting, uninteresting) =
        (uninteresting_table, uninteresting))
 
 
-let make_constraints (interesting, uninteresting) =
+let make_constraints (unsatisfied, interesting, uninteresting) =
   let make = List.map (fun c -> [ Pp.plain c ]) in
+  let unsatisfied_table = table_without_head (make unsatisfied) in
   let interesting_table = table_without_head (make interesting) in
   let uninteresting_table = table_without_head (make uninteresting) in
-  h
+  match unsatisfied with
+  | [] ->
+    h
+      1
+      "Constraints"
+      (interesting_uninteresting
+        (interesting_table, interesting)
+        (uninteresting_table, uninteresting))
+  | _ ->
+    h
     1
-    "Constraints"
-    (interesting_uninteresting
-       (interesting_table, interesting)
-       (uninteresting_table, uninteresting))
+    "Constraints not satisfied by model"
+    (unsatisfied_interesting_uninteresting
+      unsatisfied_table
+      interesting_table
+      uninteresting_table)
 
 
 let css =

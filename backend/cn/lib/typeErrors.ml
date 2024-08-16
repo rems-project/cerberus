@@ -186,6 +186,10 @@ type message =
         ctxt : Context.t * log;
         model : Solver.model_with_q
       }
+  | Undecidable_constraints of (* open to other names for the spurious countermodel scenario. *)
+      { ctxt : Context.t * log; (* <- TODO: Context.t has constraints in it. all of them? *)
+        model : Solver.model_with_q
+      }
   | Unproven_constraint of
       { constr : LC.t;
         requests : request_chain;
@@ -451,6 +455,12 @@ let pp_message te =
     let descr = !^"Value" ^^ colon ^^^ value in
     let state = trace ctxt model Explain.no_ex in
     { short; descr = Some descr; state = Some state }
+  | Undecidable_constraints { ctxt; model } ->
+      let short = !^"Undecidable constraints" in
+      let state =
+        trace ctxt model Explain.no_ex
+      in
+      { short; descr = Some !^""; state = Some state } (* TODO *)
   | Unproven_constraint { constr; requests; info; ctxt; model } ->
     let short = !^"Unprovable constraint" in
     let state =

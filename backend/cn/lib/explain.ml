@@ -134,7 +134,24 @@ let rec simp_resource eval r =
   | LAT.Define (x, i, more) -> LAT.Define (x, i, simp_resource eval more)
   | LAT.Resource (x, i, more) -> LAT.Resource (x, i, simp_resource eval more)
   | I i -> I i
+(* 
+let partial_eval
+  ?(mode = Strict)
+  ?(prog5 : unit Mucore.mu_file = empty_mufile)
+  (it : IT.t)
+  : IT.t = Unit *)
 
+(* Check if a logical constraint is satisfied by a model *)
+let lc_satisfied_by_model model_with_q lc = 
+  match model_with_q with
+  | (_, _) -> match lc with
+    | _ -> false (*TODO*)
+
+(* Check if a resource constraint is satisfied by a model *)
+(* let rc_satisfied_by_model model_with_q rc = 
+  match model_with_q with
+  | (_, _) -> match rc with
+    | (_, _) -> true (* TODO *) *)
 
 let state ctxt model_with_q extras =
   let where =
@@ -221,6 +238,7 @@ let state ctxt model_with_q extras =
     (List.map snd interesting, List.map snd uninteresting)
   in
   let constraints =
+    let satisfied, unsatisfied = List.partition (lc_satisfied_by_model model_with_q) (LCSet.elements ctxt.constraints) in
     let interesting, uninteresting =
       List.partition
         (fun lc ->
@@ -229,9 +247,9 @@ let state ctxt model_with_q extras =
           | LC.T (IT (Representable _, _, _)) -> false
           | LC.T (IT (Good _, _, _)) -> false
           | _ -> true)
-        (List.concat_map (simp_constraint evaluate) (LCSet.elements ctxt.constraints))
+        (List.concat_map (simp_constraint evaluate) satisfied)
     in
-    (List.map LC.pp interesting, List.map LC.pp uninteresting)
+    (List.map LC.pp unsatisfied, List.map LC.pp interesting, List.map LC.pp uninteresting)
   in
   let resources =
     let same_res, diff_res =
