@@ -93,12 +93,10 @@ let lexicon: (string, token) Hashtbl.t =
 
 (* BEGIN CN *)
 
-(* CN keywords that are safe for use by all users *)
+(* CN 'production' keywords: well-supported and suitable for general use *)
 let cn_keywords: (string * Tokens.token) list = [
     "good"          , CN_GOOD;
-    (* "bool"          , CN_BOOL; *) 
     "boolean"       , CN_BOOL;
-    (* "CN_bool"       , CN_BOOL; *)
     "integer"       , CN_INTEGER;
     "u8"           , CN_BITS (`U,8);
     "u16"           , CN_BITS (`U,16);
@@ -146,8 +144,8 @@ let cn_keywords: (string * Tokens.token) list = [
     "implies"       , CN_IMPLIES;
   ]
 
-(* CN keywords that are functional, but have limitations that make them
-unsuitable for non-experts *)
+(* CN 'experimental' keywords - functional in some cases but not recommended for
+general use *)
 let cn_keywords_experimental: (string * Tokens.token) list = [
     "cn_list"       , CN_LIST; 
     "cn_tuple"      , CN_TUPLE;
@@ -157,7 +155,7 @@ let cn_keywords_experimental: (string * Tokens.token) list = [
     "cn_print"      , CN_PRINT;
   ] 
 
-(* CN keywords that are non-functional, but reserved for possible future use *)
+(* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
 let cn_keywords_unimplemented: (string * Tokens.token) list = [
     "pack"          , CN_PACK;
     "unpack"        , CN_UNPACK;
@@ -168,12 +166,12 @@ let cn_lex_builder kw_list : (string, token) Hashtbl.t  =
   let add (key, builder) = Hashtbl.add cn_lex key builder in
   List.iter add kw_list; cn_lex
 
-(* 
-Attempt to lex a CN keyword. These may be: 
+(* Attempt to lex a CN keyword. These may be: 
   * 'production' - well-supported and suitable for general use
   * 'experimental' - functional in some cases but not recommended for general use 
-  * 'unimplemented' - non-functional, but the keyword is reserved  
-*)
+  * 'unimplemented' - non-functional, but the keyword is reserved 
+
+May raise `Not_found`, indicating `id` is not a recognized CN keyword. *)
 let cn_lex_keyword id start_pos end_pos = 
   (* Try to lex CN production keywords *)
   try Hashtbl.find (cn_lex_builder cn_keywords) id
