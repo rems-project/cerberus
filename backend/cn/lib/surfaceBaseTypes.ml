@@ -54,7 +54,7 @@ let rec pp = function
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
   | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
-  | Map (abt, rbt) -> !^"cn_map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
+  | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
   | List bt -> !^"cn_list" ^^ angles (pp bt)
   | Tuple nbts -> !^"cn_tuple" ^^ angles (flow_map comma pp nbts)
   | Set t -> !^"cn_set" ^^ angles (pp t)
