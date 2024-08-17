@@ -93,78 +93,74 @@ let lexicon: (string, token) Hashtbl.t =
 
 (* BEGIN CN *)
 
-(* CN 'production' keywords: well-supported and suitable for general use *)
-let cn_keywords: (string * Tokens.token) list = [
-    "good"          , CN_GOOD;
-    "boolean"       , CN_BOOL;
-    "integer"       , CN_INTEGER;
-    "u8"           , CN_BITS (`U,8);
-    "u16"           , CN_BITS (`U,16);
-    "u32"           , CN_BITS (`U,32);
-    "u64"           , CN_BITS (`U,64);
-    "u128"           , CN_BITS (`U,128);
-    "i8"           , CN_BITS (`I,8);
-    "i16"           , CN_BITS (`I,16);
-    "i32"           , CN_BITS (`I,32);
-    "i64"           , CN_BITS (`I,64);
-    "i128"           , CN_BITS (`I,128);
-    "real"          , CN_REAL;
-    "pointer"       , CN_POINTER;
-    "alloc_id"      , CN_ALLOC_ID;
-    "map"           , CN_MAP;
-    "let"           , CN_LET;
-    "take"          , CN_TAKE;
-    "Owned"         , CN_OWNED;
-    "Block"         , CN_BLOCK;
-    "each"          , CN_EACH;
-    "NULL"          , CN_NULL;
-    "true"          , CN_TRUE;
-    "false"         , CN_FALSE;
-    "requires"      , CN_REQUIRES;
-    "ensures"       , CN_ENSURES;
-    "inv"           , CN_INV;
-    "accesses"      , CN_ACCESSES;
-    "trusted"       , CN_TRUSTED;
-    "spec"          , CN_SPEC;
-    "unchanged"     , CN_UNCHANGED;
-    "instantiate"   , CN_INSTANTIATE;
-    "split_case"    , CN_SPLIT_CASE;
-    "extract"       , CN_EXTRACT;
-    "array_shift"   , CN_ARRAY_SHIFT;
-    "member_shift"  , CN_MEMBER_SHIFT;
-    "unfold"        , CN_UNFOLD;
-    "apply"         , CN_APPLY;
-    "match"         , CN_MATCH;
-    "predicate"     , CN_PREDICATE;
-    "function"      , CN_FUNCTION;
-    "lemma"         , CN_LEMMA;
-    "datatype"      , CN_DATATYPE;
-    "type_synonym"  , CN_TYPE_SYNONYM;
-    "_"             , CN_WILD;
-    "implies"       , CN_IMPLIES;
-  ]
+type kw_kind = 
+ | Production 
+ | Experimental 
+ | Unimplemented 
 
-(* CN 'experimental' keywords - functional in some cases but not recommended for
-general use *)
-let cn_keywords_experimental: (string * Tokens.token) list = [
-    "cn_list"       , CN_LIST; 
-    "cn_tuple"      , CN_TUPLE;
-    "cn_set"        , CN_SET;
-    "cn_have"       , CN_HAVE;
-    "cn_function"   , CN_FUNCTION;
-    "cn_print"      , CN_PRINT;
+let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
+    (* CN 'production' keywords: well-supported and suitable for general use *)
+    "good"          , (Production, CN_GOOD); 
+    "boolean"       , (Production, CN_BOOL);
+    "integer"       , (Production, CN_INTEGER);
+    "u8"            , (Production, CN_BITS (`U,8));
+    "u16"           , (Production, CN_BITS (`U,16));
+    "u32"           , (Production, CN_BITS (`U,32));
+    "u64"           , (Production, CN_BITS (`U,64));
+    "u128"          , (Production, CN_BITS (`U,128));
+    "i8"            , (Production, CN_BITS (`I,8));
+    "i16"           , (Production, CN_BITS (`I,16));
+    "i32"           , (Production, CN_BITS (`I,32));
+    "i64"           , (Production, CN_BITS (`I,64));
+    "i128"          , (Production, CN_BITS (`I,128));
+    "real"          , (Production, CN_REAL);
+    "pointer"       , (Production, CN_POINTER);
+    "alloc_id"      , (Production, CN_ALLOC_ID);
+    "map"           , (Production, CN_MAP);
+    "let"           , (Production, CN_LET);
+    "take"          , (Production, CN_TAKE);
+    "Owned"         , (Production, CN_OWNED);
+    "Block"         , (Production, CN_BLOCK);
+    "each"          , (Production, CN_EACH);
+    "NULL"          , (Production, CN_NULL);
+    "true"          , (Production, CN_TRUE);
+    "false"         , (Production, CN_FALSE);
+    "requires"      , (Production, CN_REQUIRES);
+    "ensures"       , (Production, CN_ENSURES);
+    "inv"           , (Production, CN_INV);
+    "accesses"      , (Production, CN_ACCESSES);
+    "trusted"       , (Production, CN_TRUSTED);
+    "spec"          , (Production, CN_SPEC);
+    "unchanged"     , (Production, CN_UNCHANGED);
+    "instantiate"   , (Production, CN_INSTANTIATE);
+    "split_case"    , (Production, CN_SPLIT_CASE);
+    "extract"       , (Production, CN_EXTRACT);
+    "array_shift"   , (Production, CN_ARRAY_SHIFT);
+    "member_shift"  , (Production, CN_MEMBER_SHIFT);
+    "unfold"        , (Production, CN_UNFOLD);
+    "apply"         , (Production, CN_APPLY);
+    "match"         , (Production, CN_MATCH);
+    "predicate"     , (Production, CN_PREDICATE);
+    "function"      , (Production, CN_FUNCTION);
+    "lemma"         , (Production, CN_LEMMA);
+    "datatype"      , (Production, CN_DATATYPE);
+    "type_synonym"  , (Production, CN_TYPE_SYNONYM);
+    "_"             , (Production, CN_WILD);
+    "implies"       , (Production, CN_IMPLIES);
+
+    (* CN 'experimental' keywords - functional in some cases but not recommended for
+    general use *)
+    "cn_list"       , (Experimental, CN_LIST); 
+    "cn_tuple"      , (Experimental, CN_TUPLE);
+    "cn_set"        , (Experimental, CN_SET);
+    "cn_have"       , (Experimental, CN_HAVE);
+    "cn_function"   , (Experimental, CN_FUNCTION);
+    "cn_print"      , (Experimental, CN_PRINT);
+
+    (* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
+    "pack"          , (Unimplemented, CN_PACK);
+    "unpack"        , (Unimplemented, CN_UNPACK);
   ] 
-
-(* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
-let cn_keywords_unimplemented: (string * Tokens.token) list = [
-    "pack"          , CN_PACK;
-    "unpack"        , CN_UNPACK;
-  ]
-
-let cn_lex_builder kw_list : (string, token) Hashtbl.t  = 
-  let cn_lex = Hashtbl.create 0 in
-  let add (key, builder) = Hashtbl.add cn_lex key builder in
-  List.iter add kw_list; cn_lex
 
 (* Attempt to lex a CN keyword. These may be: 
   * 'production' - well-supported and suitable for general use
@@ -174,21 +170,19 @@ let cn_lex_builder kw_list : (string, token) Hashtbl.t  =
 May raise `Not_found`, indicating `id` is not a recognized CN keyword. *)
 let cn_lex_keyword id start_pos end_pos = 
   (* Try to lex CN production keywords *)
-  try Hashtbl.find (cn_lex_builder cn_keywords) id
-  with Not_found ->
-    (* Try to lex CN experimental keywords - warn on success *)
-    try 
-      let kw = Hashtbl.find (cn_lex_builder cn_keywords_experimental) id in 
-      prerr_endline       
-        (Pp_errors.make_message
-         Cerb_location.(region (start_pos, end_pos) NoCursor)
-         Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
-         Warning);
-      kw 
-    with Not_found ->
-      (* Try to lex CN unimplemented keywords - throw an error on success *)
-      let _ = Hashtbl.find (cn_lex_builder cn_keywords_unimplemented) id in 
-      raise (Error (Errors.Cparser_unimplemented_keyword id))
+  let cn_lex = Hashtbl.create 0 in
+  let add (key, builder) = Hashtbl.add cn_lex key builder in
+  List.iter add cn_keywords; 
+  match Hashtbl.find cn_lex id with 
+  | (Production, kw) -> kw 
+  | (Experimental, kw) -> 
+    prerr_endline       
+      (Pp_errors.make_message
+        Cerb_location.(region (start_pos, end_pos) NoCursor)
+        Errors.(CPARSER (Errors.Cparser_experimental_keyword id))
+        Warning);
+    kw 
+  | (Unimplemented, _) -> raise (Error (Errors.Cparser_unimplemented_keyword id))
 
 (* END CN *)
 
