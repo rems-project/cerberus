@@ -37,7 +37,7 @@ int_binop g1 = f2;
 
 /*@
 predicate (void) Is_Binop (pointer f) {
-  assert (in_loc_list (f, [&f1, &f2, &f3]));
+  assert (ptr_eq(f, &f1) || ptr_eq(f, &f2) || ptr_eq (f, &f3));
   return;
 }
 @*/
