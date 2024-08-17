@@ -7439,6 +7439,42 @@ cn_statements: CN_EXTRACT CN_CONSTANT AMPERSAND WHILE
 
 parsing "mul_expr": seen "mul_expr AMPERSAND", expecting "unary_expr"
 
+cn_toplevel: CN_PREDICATE CN_LIST WHILE
+##
+## Ends in an error in state: 981.
+##
+## base_type_explicit -> CN_LIST . LT base_type GT [ UNAME RPAREN LNAME GT EOF COMMA CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
+##
+## The known suffix of the stack is as follows:
+## CN_LIST
+##
+
+parsing "base_type_explicit": seen "CN_LIST", expecting "LT base_type GT"
+
+cn_toplevel: CN_PREDICATE CN_LIST LT WHILE
+##
+## Ends in an error in state: 982.
+##
+## base_type_explicit -> CN_LIST LT . base_type GT [ UNAME RPAREN LNAME GT EOF COMMA CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
+##
+## The known suffix of the stack is as follows:
+## CN_LIST LT
+##
+
+parsing "base_type_explicit": seen "CN_LIST LT", expecting "base_type GT"
+
+cn_toplevel: CN_PREDICATE CN_LIST LT CN_ALLOC_ID WHILE
+##
+## Ends in an error in state: 995.
+##
+## base_type_explicit -> CN_LIST LT base_type . GT [ UNAME RPAREN LNAME GT EOF COMMA CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
+##
+## The known suffix of the stack is as follows:
+## CN_LIST LT base_type
+##
+
+parsing "base_type_explicit": seen "CN_LIST LT base_type", expecting "GT"
+
 cn_statements: INLINE UNAME WHILE
 ##
 ## Ends in an error in state: 2.
@@ -13262,30 +13298,6 @@ cn_toplevel: CN_PREDICATE LNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-cn_toplevel: CN_PREDICATE CN_LIST WHILE
-##
-## Ends in an error in state: 981.
-##
-## base_type_explicit -> CN_LIST . LT base_type GT [ UNAME RPAREN LNAME GT EOF COMMA CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
-##
-## The known suffix of the stack is as follows:
-## CN_LIST
-##
-
-parsing "base_type_explicit": seen "CN_LIST", expecting "LT base_type GT"
-
-cn_toplevel: CN_PREDICATE CN_LIST LT WHILE
-##
-## Ends in an error in state: 982.
-##
-## base_type_explicit -> CN_LIST LT . base_type GT [ UNAME RPAREN LNAME GT EOF COMMA CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
-##
-## The known suffix of the stack is as follows:
-## CN_LIST LT
-##
-
-parsing "base_type_explicit": seen "CN_LIST LT", expecting "base_type GT"
-
 cn_toplevel: CN_PREDICATE CN_DATATYPE WHILE
 ##
 ## Ends in an error in state: 984.
@@ -13326,18 +13338,6 @@ cn_toplevel: CN_PREDICATE CN_DATATYPE LNAME WHILE
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
-
-cn_toplevel: CN_PREDICATE CN_LIST LT CN_ALLOC_ID WHILE
-##
-## Ends in an error in state: 995.
-##
-## base_type_explicit -> CN_LIST LT base_type . GT [ UNAME RPAREN LNAME GT EOF COMMA CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
-##
-## The known suffix of the stack is as follows:
-## CN_LIST LT base_type
-##
-
-parsing "base_type_explicit": seen "CN_LIST LT base_type", expecting "GT"
 
 cn_toplevel: CN_PREDICATE CN_TUPLE LT CN_ALLOC_ID WHILE
 ##

@@ -57,7 +57,7 @@ let string_of_cparser_cause = function
   | Cparser_mismatched_magic_comment ->
       "magic comment syntax at open but not close"
   | Cparser_experimental_keyword str -> 
-      "experimental keyword '" ^ str ^ "'. Use of experimental features is discouraged"
+      "experimental keyword '" ^ str ^ "' (use of experimental features is discouraged)"
   | Cparser_unimplemented_keyword str -> 
       "unimplemented keyword '" ^ str ^ "'"
 

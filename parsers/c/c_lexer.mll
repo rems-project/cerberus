@@ -113,6 +113,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "real"          , CN_REAL;
     "pointer"       , CN_POINTER;
     "alloc_id"      , CN_ALLOC_ID;
+    "map"           , CN_MAP;
     "let"           , CN_LET;
     "take"          , CN_TAKE;
     "Owned"         , CN_OWNED;
@@ -150,7 +151,6 @@ unsuitable for non-experts *)
 let cn_keywords_experimental: (string * Tokens.token) list = [
     "cn_list"       , CN_LIST; 
     "cn_tuple"      , CN_TUPLE;
-    "cn_map"        , CN_MAP;
     "cn_set"        , CN_SET;
     "cn_have"       , CN_HAVE;
     "cn_function"   , CN_FUNCTION;
@@ -188,12 +188,9 @@ let cn_lex_keyword id start_pos end_pos =
          Warning);
       kw 
     with Not_found ->
-      try 
-        (* Try to lex CN unimplemented keywords - throw an error on success *)
-        let _ = Hashtbl.find (cn_lex_builder cn_keywords_unimplemented) id in 
-        raise (Error (Errors.Cparser_unimplemented_keyword id))
-      with Not_found ->
-        UNAME id
+      (* Try to lex CN unimplemented keywords - throw an error on success *)
+      let _ = Hashtbl.find (cn_lex_builder cn_keywords_unimplemented) id in 
+      raise (Error (Errors.Cparser_unimplemented_keyword id))
 
 (* END CN *)
 
@@ -595,7 +592,10 @@ and initial flags = parse
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
       {
         if flags.inside_cn then
-          cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p  
+          try 
+            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p  
+          with Not_found ->
+            UNAME id 
         else
           UNAME id
       }
@@ -605,7 +605,10 @@ and initial flags = parse
         Hashtbl.find lexicon id
       with Not_found ->
         if flags.inside_cn then
-          cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p 
+          try 
+            cn_lex_keyword id lexbuf.lex_start_p lexbuf.lex_curr_p 
+          with Not_found ->
+            LNAME id 
         else
           LNAME id
     }
