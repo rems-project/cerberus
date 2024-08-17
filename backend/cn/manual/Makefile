@@ -72,7 +72,7 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#CN_ALLOC_ID#alloc_id#g" \
 	  | sed "s#STRUCT#struct#g" \
 	  | sed "s#CN_DATATYPE#datatype#g" \
-	  | sed "s#CN_MAP#cn_map#g" \
+	  | sed "s#CN_MAP#map#g" \
 	  | sed "s#CN_LIST#cn_list#g" \
 	  | sed "s#CN_TUPLE#cn_tuple#g" \
 	  | sed "s#CN_set#cn_set#g" \

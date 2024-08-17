@@ -2148,7 +2148,7 @@ base_type_explicit:
 | CN_MAP LT bTy1= base_type COMMA bTy2= base_type GT
     { Cerb_frontend.Cn.CN_map (bTy1, bTy2) }
 | CN_LIST LT bTy= base_type GT
-     { Cerb_frontend.Cn.CN_list bTy }
+    { Cerb_frontend.Cn.CN_list bTy }
 | CN_TUPLE LT bTys= separated_list(COMMA, base_type) GT
     { Cerb_frontend.Cn.CN_tuple bTys }
 | CN_SET LT bTy= base_type GT
