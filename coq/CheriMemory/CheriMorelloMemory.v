@@ -541,7 +541,7 @@ Module Type CheriMemoryImpl
         (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
         ret (alloc_id, (AddressValue.of_Z addr)).
 
-  Definition alignof
+  Fixpoint alignof
     (fuel: nat)
     (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
     (ty: CoqCtype.ctype): serr nat
@@ -583,8 +583,12 @@ Module Type CheriMemoryImpl
                         alignof_ fuel (CoqCtype.Ctype [] (CoqCtype.Array elem_ty None))
                     end ;;
                   monadic_fold_left
-                    (fun acc '(_, (_, _, _, ty)) =>
-                       al <- alignof_ fuel ty ;;
+                    (fun acc '(_, (_, align_opt, _, ty)) =>
+                       al <- match align_opt with
+                            | None => alignof fuel (Some tagDefs) ty
+                            | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                            end ;;
                        ret (Nat.max al acc)
                     )
                     membrs
@@ -597,8 +601,12 @@ Module Type CheriMemoryImpl
                   raise "no alignment for union with struct tag"
               | Some (CoqCtype.UnionDef membrs) =>
                   monadic_fold_left
-                    (fun acc '(_, (_, _, ty)) =>
-                       al <- alignof_ fuel ty ;;
+                    (fun acc '(_, (_, align_opt, _, ty)) =>
+                       al <- match align_opt with
+                            | None => alignof fuel (Some tagDefs) ty
+                            | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                            end ;;
                        ret (Nat.max al acc)
                     )
                     membrs
@@ -629,9 +637,14 @@ Module Type CheriMemoryImpl
             in
             '(xs, maxoffset) <-
               monadic_fold_left
-                (fun '(xs, last_offset) '(membr, (_, _, _, ty))  =>
+                (fun '(xs, last_offset) '(membr, (_, align_opt, _, ty))  =>
                    size  <- sizeof fuel (Some tagDefs) ty ;;
-                   align <- alignof fuel (Some tagDefs) ty ;;
+                   align <-
+                     match align_opt with
+                     | None => alignof fuel (Some tagDefs) ty
+                     | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                     | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                     end ;;
                    let x_value := Nat.modulo last_offset align in
                    let pad :=
                      if Nat.eqb x_value O
@@ -690,9 +703,13 @@ Module Type CheriMemoryImpl
                        sassert (Nat.ltb 0 (List.length members)) "Empty union encountered" ;;
                        '(max_size, max_align) <-
                          monadic_fold_left
-                           (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+                           (fun '(acc_size, acc_align) '(_, (_, align_opt, _, ty)) =>
                               sz <- sizeof fuel (Some tagDefs) ty ;;
-                              al <- alignof fuel (Some tagDefs) ty ;;
+                              al <- match align_opt with
+                              | None => alignof fuel (Some tagDefs) ty
+                              | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                              | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                              end ;;
                               ret (Nat.max acc_size sz, Nat.max acc_align al)
                            )
                            members (0%nat, 0%nat) ;;
