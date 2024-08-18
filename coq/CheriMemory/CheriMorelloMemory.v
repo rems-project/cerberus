@@ -808,6 +808,14 @@ Module Type CheriMemoryImpl
     (s: mem_state)
     : serr (mem_state * AddressValue.t)
     :=
+
+    let do_pad s a n :=
+      let pad_bs := List.repeat None n in
+      mem_state_with_bytemap_capmeta
+        (AMap.map_add_list_at s.(bytemap) pad_bs a)
+        (capmeta_ghost_tags a n (capmeta s))
+        s in
+
     match fuel with
     | O => raise "out of fuel in repr"
     | S fuel =>
@@ -910,31 +918,20 @@ Module Type CheriMemoryImpl
             sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             '(s', pad_addr) <- repr fuel addr mval s ;;
             let pad_size := Nat.sub sz (Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr)) in
-            let pad_bs := List.repeat None pad_size in
-            let s'' := mem_state_with_bytemap
-                         (AMap.map_add_list_at s'.(bytemap) pad_bs pad_addr)
-                         s' in
+            let s'' := do_pad s' pad_addr pad_size in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
             szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
             let sz := Z.of_nat szn in
             sassert ((AddressValue.to_Z addr + sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
-            let padding_byte := None in
             '(offs, final_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
-            let final_pad_size := sz - (Z.of_nat final_off) in
-
             '(s', final_pad_addr) <-
               monadic_fold_left2
                 (fun '(s0, addr0) '(ident, ty, off) '(_, _, mval) =>
                    (*  off - offset of this field from the start of struct, *after* padding *)
                    let value_a := AddressValue.with_offset addr (Z.of_nat off) in
                    let pad_size := AddressValue.to_Z value_a - AddressValue.to_Z addr0 in
-                   (* write padding *)
-                   (* TODO: What if padding/offsets big enough to fit a capability? should we ghost/clear tags? *)
-                   let pad_bs := List.repeat padding_byte (Z.to_nat pad_size) in
-                   let s1 := mem_state_with_bytemap
-                               (AMap.map_add_list_at s0.(bytemap) pad_bs addr0)
-                               s0 in
+                   let s1 := do_pad s0 addr0 (Z.to_nat pad_size) in
                    (* write the value *)
                    '(s2, end_addr) <- repr fuel value_a mval s1 ;;
                    szn <- sizeof DEFAULT_FUEL None ty ;;
@@ -942,10 +939,8 @@ Module Type CheriMemoryImpl
 
                 (s, addr) offs xs ;;
 
-            let final_pad_bs := List.repeat padding_byte (Z.to_nat final_pad_size) in
-            let s'' := mem_state_with_bytemap
-                         (AMap.map_add_list_at s'.(bytemap) final_pad_bs final_pad_addr)
-                         s' in
+            let final_pad_size := sz - (Z.of_nat final_off) in
+            let s'' := do_pad s' final_pad_addr (Z.to_nat final_pad_size) in
             ret (s'', AddressValue.with_offset final_pad_addr final_pad_size)
         end
     end.
