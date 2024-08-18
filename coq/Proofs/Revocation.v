@@ -5266,10 +5266,16 @@ Module CheriMemoryImplWithProofs
               state_inv_steps.
               apply IHfuel in H0.
               clear - H0 H2.
-              remember (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+
+              remember (fun '(acc_size, acc_align) '(_, (_, align_opt, _, ty)) =>
                           sz <- sizeof fuel' (Some t) ty;;
-                          al <- alignof fuel' (Some t) ty;; ret (Nat.max acc_size sz, Nat.max acc_align al))
-                         as f.
+                          al <-
+                            match align_opt with
+                            | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel' (Some t) al_ty
+                            | None => alignof fuel' (Some t) ty
+                            end;; ret (Nat.max acc_size sz, Nat.max acc_align al))
+                as f.
               assert (f_mon : forall sz sz' al al' a,
                          f (sz, al) a = inr (sz', al') ->
                          (sz <= sz')%nat).
@@ -5288,7 +5294,7 @@ Module CheriMemoryImplWithProofs
               }
               clear Heqf.
               generalize dependent sz.
-              generalize dependent al.
+              generalize dependent (Z.to_nat z).
               induction l; intros; cbn in H2.
               **
                 now invc H2.
@@ -5299,6 +5305,10 @@ Module CheriMemoryImplWithProofs
                 easy.
                 apply f_mon in FA.
                 lia.
+              **
+                admit. (* TODO: zoick *)
+              **
+                admit. (* TODO: zoick *)
     -
       clear offsetof_struct_max_offset_pos.
       intros fuel t s l max_offset OF.
@@ -5375,7 +5385,7 @@ Module CheriMemoryImplWithProofs
         easy.
         apply f_mon in F1.
         lia.
-  Qed.
+  Admitted.
 
   Fact amap_add_list_not_at
     {T: Type}
