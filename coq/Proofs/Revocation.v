@@ -64,9 +64,11 @@ Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
 
+(* TODO: try proving this *)
 (* This is a Morello-specific requirement. *)
 Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
 
+(* TODO: try proving this *)
 (* TODO: this should be moved to [AddressValue] module *)
 Axiom ADDR_LIMIT_aligned:
   AddressValue.ADDR_LIMIT mod (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
@@ -4237,96 +4239,6 @@ Module CheriMemoryImplWithProofs
     same_state_steps.
   Qed.
 
-  Instance allocate_object_PreservesInvariantg
-    (tid:MemCommonExe.thread_id)
-    (pref:CoqSymbol.prefix)
-    (int_val:integer_value)
-    (ty:CoqCtype.ctype)
-    (init_opt:option mem_value)
-    :
-    forall s, PreservesInvariant mem_invariant s (allocate_object tid pref int_val ty init_opt).
-  Proof.
-    intros s.
-    unfold allocate_object.
-    break_if;[preserves_step|].
-    preserves_step.
-    preserves_step.
-    preserves_step.
-    -
-      break_match_goal; repeat break_let.
-      +
-        (* with init *)
-        apply bind_PreservesInvariant_value.
-        intros H s'0 x0 H0.
-
-
-        assert(mem_invariant s'0) as S0.
-        {
-          pose proof (allocator_PreservesInvariant (Z.to_nat (Capability_GS.representable_length (Z.of_nat x)))
-                        (Z.max (num_of_int int_val)
-                           (1 +
-                              AddressValue.to_Z
-                                (AddressValue.bitwise_complement
-                                   (AddressValue.of_Z
-                                      (Capability_GS.representable_alignment_mask (Z.of_nat x))))))
-                        false pref (Some ty) r
-            ) as A.
-          autospecialize A.
-          lia.
-          specialize (A s' H).
-          unfold post_exec_invariant, lift_sum_p in A.
-          clear Heqp.
-          break_match_hyp.
-          --
-            unfold execErrS in Heqs0.
-            break_let.
-            tuple_inversion.
-            invc Heqs0.
-          --
-            unfold execErrS in Heqs0.
-            break_let.
-            tuple_inversion.
-            apply ret_inr in Heqs0.
-            invc Heqs0.
-            assumption.
-        }
-
-        split.
-        *
-          apply S0.
-        *
-          repeat break_let.
-          preserves_step.
-          preserves_step.
-          preserves_step.
-          repeat break_let.
-          preserves_step;[|preserves_step].
-          preserves_step.
-
-          bool_to_prop_hyp.
-          destruct x1, p0.
-          tuple_inversion.
-
-          (* TODO: need `allocator_capmeta_spec`
-             similar to `init_ghost_tags_spec`
-           *)
-
-          (* TODO: this whole branch maybe unecessary in view of this pending change:
-             https://github.com/rems-project/cerberus/issues/229
-           *)
-          admit.
-      +
-        (* No init *)
-        preserves_step.
-        apply allocator_PreservesInvariant.
-        lia.
-        break_let.
-        preserves_step.
-    -
-      repeat break_let.
-      preserves_step.
-  Admitted.
-
   Instance allocate_region_PreservesInvariant
     (tid : MemCommonExe.thread_id)
     (pref : CoqSymbol.prefix)
@@ -5322,58 +5234,6 @@ Module CheriMemoryImplWithProofs
         lia.
   Qed.
 
-  Fact amap_add_list_not_at
-    {T: Type}
-    (x addr : AddressValue.t)
-    (bm : AMap.M.t T)
-    (l : list T):
-
-    (AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
-
-    (* "x outside of range written to"
-       NOTE: when l is nil, "outside of range written to" reduces to "any" *)
-    ((AddressValue.ltb x addr = true)
-     \/ (AddressValue.ltb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l) - 1)) x = true)) ->
-
-    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
-      AMap.M.find (elt:=T) x bm.
-  Proof.
-    revert bm x addr.
-    induction l as [| hd l].
-    -
-      reflexivity.
-    -
-      intros bm x addr RSZ N.
-      cbn in *.
-      replace (Z.of_nat (S (Datatypes.length l)) - 1)
-        with (Z.of_nat (Datatypes.length l))
-        in *
-        by lia.
-      pose proof (AddressValue.to_Z_in_bounds addr) as ABOUNDS.
-      pose proof (AddressValue.to_Z_in_bounds x) as XBOUNDS.
-
-      destruct l.
-      +
-        cbn in *.
-        clear RSZ IHl.
-        rewrite with_offset_0 in N.
-        rewrite !AddressValue_ltb_Z_ltb, !Z.ltb_lt in *.
-        destruct N.
-        all: apply AMap.F.add_neq_o.
-        all: intros C; subst.
-        all: lia.
-      +
-        assert (NZ : (0 < Datatypes.length (t :: l))%nat) by (cbn; lia).
-        generalize dependent (t :: l); clear t l.
-        intros.
-        rewrite IHl.
-        all: rewrite !AddressValue_ltb_Z_ltb, !Z.ltb_lt in *.
-        all: repeat (rewrite AddressValue.with_offset_no_wrap in *; try lia).
-        destruct N as [N | N].
-        all: apply AMap.F.add_neq_o.
-        all: intros C; subst; lia.
-  Qed.
-
   Fact align_down_le:
     forall v a,
       0<a ->
@@ -5687,8 +5547,6 @@ Module CheriMemoryImplWithProofs
             mem_invariant (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start) (update_capmeta c start (capmeta s)) s).
   Proof.
     intros s M c cb ct E start SA RSZ bs Heqbs.
-
-
     (* TODO: this proof must be substantionally similar to [mem_state_with_bytes_preserves] *)
   Admitted.
 
@@ -5805,6 +5663,7 @@ Module CheriMemoryImplWithProofs
       .
       clear H2.
   Admitted.
+
   Transparent repr.
 
   Lemma repr_preserves
@@ -6482,7 +6341,7 @@ Module CheriMemoryImplWithProofs
   Admitted.
 
   (* TODO: move *)
-  Lemma CapGhostState_eq_dec:
+  Fact CapGhostState_eq_dec:
     forall x y : bool * CapGhostState, {x = y} + {x <> y}.
   Proof.
     intros x y.
