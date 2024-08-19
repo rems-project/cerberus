@@ -5263,10 +5263,6 @@ Module CheriMemoryImplWithProofs
               cbn in *.
               clear H.
               repeat break_let.
-              state_inv_steps.
-              apply IHfuel in H0.
-              clear - H0 H2.
-
               remember (fun '(acc_size, acc_align) '(_, (_, align_opt, _, ty)) =>
                           sz <- sizeof fuel' (Some t) ty;;
                           al <-
@@ -5284,31 +5280,31 @@ Module CheriMemoryImplWithProofs
                 subst.
                 intros.
                 repeat break_let.
-                apply bind_serr_inv in H.
-                do 2 destruct H.
-                cbv [bind] in H0; cbn in H0.
-                break_match; try discriminate.
-                apply ret_inr in H0.
-                invc H0.
+                do 2 apply bind_serr_inv in H as [? [? H]].
+                apply ret_inr in H.
+                invc H.
                 lia.
               }
               clear Heqf.
-              generalize dependent sz.
-              generalize dependent (Z.to_nat z).
-              induction l; intros; cbn in H2.
-              **
-                now invc H2.
-              **
-                apply bind_serr_inv in H2.
-                destruct H2 as ((sz' & al') & FA & H).
-                apply IHl in H.
-                easy.
-                apply f_mon in FA.
-                lia.
-              **
-                admit. (* TODO: zoick *)
-              **
-                admit. (* TODO: zoick *)
+              state_inv_steps.
+              (* this generates 3 very similar subgoals with the same proof *)
+              all: apply IHfuel in H0.
+              all: clear - H0 H2 f_mon.
+
+              1: generalize dependent (Z.to_nat z).
+              2,3: generalize dependent al.
+              all: generalize dependent sz.
+              all: induction l; intros; cbn in H2.
+
+              (* induction base for 3 cases *)
+              1,3,5: now invc H2.
+
+              (* induction step for 3 cases *)
+              all: apply bind_serr_inv in H2.
+              all: destruct H2 as ((sz' & al') & FA & H).
+              all: apply IHl in H.
+              all: apply f_mon in FA.
+              all: lia.
     -
       clear offsetof_struct_max_offset_pos.
       intros fuel t s l max_offset OF.
@@ -5385,7 +5381,7 @@ Module CheriMemoryImplWithProofs
         easy.
         apply f_mon in F1.
         lia.
-  Admitted.
+  Qed.
 
   Fact amap_add_list_not_at
     {T: Type}
