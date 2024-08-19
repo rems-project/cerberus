@@ -162,6 +162,11 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     "unpack"        , (Unimplemented, CN_UNPACK);
   ] 
 
+let cn_kw_table = 
+  let kw_table = Hashtbl.create 0 in
+  List.iter (fun (key, builder) -> Hashtbl.add kw_table key builder) cn_keywords; 
+  kw_table 
+
 (* Attempt to lex a CN keyword. These may be: 
   * 'production' - well-supported and suitable for general use
   * 'experimental' - functional in some cases but not recommended for general use 
@@ -170,10 +175,7 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
 May raise `Not_found`, indicating `id` is not a recognized CN keyword. *)
 let cn_lex_keyword id start_pos end_pos = 
   (* Try to lex CN production keywords *)
-  let cn_lex = Hashtbl.create 0 in
-  let add (key, builder) = Hashtbl.add cn_lex key builder in
-  List.iter add cn_keywords; 
-  match Hashtbl.find cn_lex id with 
+  match Hashtbl.find cn_kw_table id with 
   | (Production, kw) -> kw 
   | (Experimental, kw) -> 
     prerr_endline       
