@@ -5391,7 +5391,6 @@ Module CheriMemoryImplWithProofs
     (fuel: nat):
     repr fuel addr (MVarray l) s = inr (s', addr') -> mem_invariant s'.
   Proof.
-
     intros R.
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
     cbn in R.
@@ -5411,6 +5410,19 @@ Module CheriMemoryImplWithProofs
       eapply IHl;eauto.
   Qed.
 
+  Fact do_pad_preserves
+    (a:AddressValue.t)
+    (n:nat)
+    (s:mem_state_r):
+    AddressValue.to_Z a + Z.of_nat n <= AddressValue.ADDR_LIMIT ->
+    mem_invariant s ->  mem_invariant (do_pad a n s).
+  Proof.
+    intros L M.
+    unfold do_pad.
+    eapply mem_state_with_bytes_preserves;eauto.
+    apply repeat_length.
+  Qed.
+
   Fact repr_struct_preserves
     (sym: sym)
     (l : list (identifier * CoqCtype.ctype * mem_value_indt))
@@ -5427,20 +5439,22 @@ Module CheriMemoryImplWithProofs
     repr fuel addr (MVstruct sym l) s = inr (s', addr') ->  mem_invariant s'.
   Proof.
     intros R.
+    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
+    Opaque sizeof.
+    cbn in R.
+    state_inv_steps.
+    apply do_pad_preserves.
+    +
+      bool_to_prop_hyp.
+      rename t into addr'.
+      apply sizeof_pos in R2.
+      admit.
+    +
+      revert fuel R5.
+      (* TODO: need to link [l0] and [l] and proceed by induction on both.
+         It seems that there is a hidden invariant for `MVstruct` *)
   Admitted.
-
-  Fact do_pad_preserves
-    (a:AddressValue.t)
-    (n:nat)
-    (s:mem_state_r):
-    AddressValue.to_Z a + Z.of_nat n <= AddressValue.ADDR_LIMIT ->
-    mem_invariant s ->  mem_invariant (do_pad a n s).
-  Proof.
-    intros L M.
-    unfold do_pad.
-    eapply mem_state_with_bytes_preserves;eauto.
-    apply repeat_length.
-  Qed.
+  Transparent sizeof.
 
   Lemma repr_preserves
     (fuel : nat)
