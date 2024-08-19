@@ -860,7 +860,7 @@ Module CheriMemoryImplWithProofs
     forall a,
       let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
       let a0 := align_down (AddressValue.to_Z addr) alignment in
-      let a1 := align_up (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
+      let a1 := align_down (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
       (a0 <= AddressValue.to_Z a <= a1) ->
       forall tg gs,
         AMap.M.MapsTo a (tg,gs) (capmeta_ghost_tags addr size capmeta)
@@ -918,75 +918,14 @@ Module CheriMemoryImplWithProofs
         *
           (* a1 < az *)
           exfalso.
-          clear Balign H0 tg gs capmeta0 SZ.
-
-          destruct R2 as [R1 R2].
-
-          (* genralization *)
-          remember (Z.of_nat (alignof_pointer MorelloImpl.get)) as alignment.
-          assert(0 < alignment).
-          {
-            pose proof MorelloImpl.alignof_pointer_pos.
-            lia.
-          }
-          clear Heqalignment.
-
-
+          replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
+          destruct R2 as [_ R2].
           unfold align_down in *.
+          pose proof MorelloImpl.alignof_pointer_pos as P.
           zify.
           subst.
-
-          pose proof (align_up_correct alignment (AddressValue.to_Z addr + (Z.of_nat (S size) - 1)) ) as AC1.
-          unfold align_up in *.
-          break_if;bool_to_prop_hyp.
-          --
-            clear R1 AA.
-            replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
-            rewrite Heqb in H.
-            lia.
-          --
-            specialize (AC1 H0).
-            replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
-
-            pose proof (AddressValue.to_Z_in_bounds addr).
-            pose proof (AddressValue.to_Z_in_bounds a).
-            unfold AddressValue.ADDR_MIN in *.
-
-            (* generalization *)
-            remember (AddressValue.to_Z a) as az.
-            clear Heqaz a.
-            rename az into a.
-
-            (* generalization *)
-            remember (AddressValue.to_Z addr) as addrz.
-            clear Heqaddrz addr.
-            rename addrz into addr.
-
-            (* size to Z *)
-            remember (Z.of_nat size) as sz.
-            assert (0<=sz) by lia.
-            clear Heqsz size.
-
-            remember (addr + sz) as a1.
-
-            pose proof (Z.mod_pos_bound a1 alignment H0).
-            pose proof (Z.mod_pos_bound a alignment H0).
-
-            pose proof (Z.mod_bound_pos_le a1 alignment).
-            autospecialize H6;[lia|].
-            autospecialize H6;[lia|].
-            pose proof (Z.mod_bound_pos_le a alignment).
-            autospecialize H7;[lia|].
-            autospecialize H7;[lia|].
-
-            remember (a1 mod alignment) as r_a1.
-
-            (* R2 vs H *)
-            clear cstr.
-            assert(0 <= a1) by lia.
-            clear Heqa1 addr R1 sz H1 H3.
-
-  Admitted.
+          lia.
+  Qed.
 
   Definition memM_same_state
     {T: Type}
@@ -6398,7 +6337,7 @@ Module CheriMemoryImplWithProofs
       (forall a : AddressValue.t,
           let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
           let a0 := align_down (AddressValue.to_Z dst_a) alignment in
-          let a1 := align_up (AddressValue.to_Z dst_a + ((Z.of_nat n) - 1)) alignment in
+          let a1 := align_down (AddressValue.to_Z dst_a + ((Z.of_nat n) - 1)) alignment in
           (a0 <= AddressValue.to_Z a <= a1) ->
           forall (tg : bool) (gs : CapGhostState),
             AMap.M.MapsTo a (tg, gs) (capmeta s) ->
@@ -6471,6 +6410,7 @@ Module CheriMemoryImplWithProofs
             (* Caps in range are untagged. H0/H1 is false *)
             clear IHn Heqo H2 bs.
 
+            (*
             specialize (CIN addr R true g).
             autospecialize CIN.
             {
@@ -6483,6 +6423,7 @@ Module CheriMemoryImplWithProofs
 
             (*
             TODO: case anlysis on n/Sn
+            *)
 
             autospecialize IHn.
             {
@@ -6538,12 +6479,7 @@ Module CheriMemoryImplWithProofs
                *)
               admit.
              *)
-            admit.
-      *
-        (* removing *)
-        admit.
-  Admitted. (* TODO: postponed *)
-
+  Admitted.
 
   (* TODO: move *)
   Lemma CapGhostState_eq_dec:
