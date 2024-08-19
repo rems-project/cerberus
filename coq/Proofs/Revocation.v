@@ -5454,8 +5454,9 @@ Module CheriMemoryImplWithProofs
       (* TODO: need to link [l0] and [l] and proceed by induction on both.
          It seems that there is a hidden invariant for `MVstruct` *)
   Admitted.
+  
   Transparent sizeof.
-
+  Transparent repr.
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
