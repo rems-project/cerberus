@@ -5380,9 +5380,27 @@ Module CheriMemoryImplWithProofs
     (M: mem_invariant s)
     (addr addr': AddressValue.t)
     (fuel: nat):
-    mem_invariant s'.
+    repr fuel addr (MVarray l) s = inr (s', addr') -> mem_invariant s'.
   Proof.
-  Admitted.
+
+    intros R.
+    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
+    cbn in R.
+    revert fuel R.
+    dependent induction l; intros.
+    -
+      cbn in R2.
+      state_inv_steps.
+      assumption.
+    -
+      cbn in R2.
+      state_inv_steps.
+      destruct a' as [addr'' s''].
+      apply Forall_cons_iff in F.
+      destruct F as [F1 F2].
+      apply F1 in R3;auto.
+      eapply IHl;eauto.
+  Qed.
 
   Lemma repr_preserves
     (fuel : nat)
@@ -5395,9 +5413,7 @@ Module CheriMemoryImplWithProofs
     ->
       mem_invariant s'.
   Proof.
-
     Opaque sizeof.
-
     revert fuel.
     dependent induction mval;intros fuel R.
     - (* MVunspecified *)
