@@ -5068,7 +5068,6 @@ Module CheriMemoryImplWithProofs
     forall s : mem_state_r,
       mem_invariant s ->
       forall (bs : list (option ascii)) (capmeta0 : AMap.M.t (bool * CapGhostState)) (szn : nat),
-        (0 < szn)%nat ->
         Datatypes.length bs = szn ->
         forall start : AddressValue.t,
           AddressValue.to_Z start + Z.of_nat szn <= AddressValue.ADDR_LIMIT ->
@@ -5077,10 +5076,20 @@ Module CheriMemoryImplWithProofs
             (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start)
                (capmeta_ghost_tags start szn (capmeta s)) s).
   Proof.
-    intros s M bs capmeta0 szn SP BL start RSZ H1.
+    intros s M bs capmeta0 szn BL start RSZ H1.
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
 
+    destruct (lt_dec 0 szn) as [SP | SN].
+    2:{
+      assert(szn = O) by lia.
+      subst szn.
+      destruct bs;[|discriminate H].
+      cbn in *.
+      constructor.
+      constructor; eauto.
+      eauto.
+    }
 
     unfold mem_state_with_funptrmap_bytemap_capmeta.
     repeat split;cbn;auto.
