@@ -5411,6 +5411,37 @@ Module CheriMemoryImplWithProofs
       eapply IHl;eauto.
   Qed.
 
+  Fact repr_struct_preserves
+    (sym: sym)
+    (l : list (identifier * CoqCtype.ctype * mem_value_indt))
+    (F: Forall
+          (fun '(_, _, b) =>
+             forall s s' : mem_state_r,
+               mem_invariant s ->
+               forall (addr addr' : AddressValue.t) (fuel : nat),
+                 repr fuel addr b s = inr (s', addr') -> mem_invariant s') l)
+    (s s' : mem_state_r)
+    (M: mem_invariant s)
+    (addr addr': AddressValue.t)
+    (fuel: nat):
+    repr fuel addr (MVstruct sym l) s = inr (s', addr') ->  mem_invariant s'.
+  Proof.
+    intros R.
+  Admitted.
+
+  Fact do_pad_preserves
+    (a:AddressValue.t)
+    (n:nat)
+    (s:mem_state_r):
+    AddressValue.to_Z a + Z.of_nat n <= AddressValue.ADDR_LIMIT ->
+    mem_invariant s ->  mem_invariant (do_pad a n s).
+  Proof.
+    intros L M.
+    unfold do_pad.
+    eapply mem_state_with_bytes_preserves;eauto.
+    apply repeat_length.
+  Qed.
+
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
@@ -5503,18 +5534,26 @@ Module CheriMemoryImplWithProofs
       (* MVarray *)
       eapply repr_array_preserves;eauto.
     -
-      cbn in R.
-      Opaque repr.
-      state_inv_steps.
-      Transparent repr.
-      admit.
+      (* MVstruct *)
+      eapply repr_struct_preserves;eauto.
     -
       (* MVunion *)
+      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       cbn in R.
-      Opaque repr.
       state_inv_steps.
-      Transparent repr.
-      admit.
+      apply do_pad_preserves.
+      +
+        clear IHmval.
+        bool_to_prop_hyp.
+        rename t into addr'.
+        apply sizeof_pos in R2.
+        (* May need `repl` monotonicity fact showing that addr'>addr,
+           or even stronger one, showing that it [addr'-addr = sizeof mval]
+         *)
+        clear - R3 R2 R4.
+        admit.
+      +
+        eapply IHmval;eauto.
   Admitted.
   Transparent sizeof repr.
 

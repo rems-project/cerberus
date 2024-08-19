@@ -801,6 +801,18 @@ Module Type CheriMemoryImpl
     :=
     AMap.M.add addr (C.cap_is_valid c, C.get_ghost_state c) capmeta.
 
+  Definition do_pad
+    (a:AddressValue.t)
+    (n:nat)
+    (s:mem_state_r):
+    mem_state_r
+    :=
+    let pad_bs := List.repeat None n in
+    mem_state_with_bytemap_capmeta
+      (AMap.map_add_list_at s.(bytemap) pad_bs a)
+      (capmeta_ghost_tags a n (capmeta s))
+      s.
+
   Fixpoint repr
     (fuel: nat)
     (addr : AddressValue.t)
@@ -808,14 +820,6 @@ Module Type CheriMemoryImpl
     (s: mem_state)
     : serr (mem_state * AddressValue.t)
     :=
-
-    let do_pad s a n :=
-      let pad_bs := List.repeat None n in
-      mem_state_with_bytemap_capmeta
-        (AMap.map_add_list_at s.(bytemap) pad_bs a)
-        (capmeta_ghost_tags a n (capmeta s))
-        s in
-
     match fuel with
     | O => raise "out of fuel in repr"
     | S fuel =>
@@ -918,7 +922,7 @@ Module Type CheriMemoryImpl
             sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             '(s', pad_addr) <- repr fuel addr mval s ;;
             let pad_size := Nat.sub sz (Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr)) in
-            let s'' := do_pad s' pad_addr pad_size in
+            let s'' := do_pad pad_addr pad_size s' in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
             szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
@@ -931,7 +935,7 @@ Module Type CheriMemoryImpl
                    (*  off - offset of this field from the start of struct, *after* padding *)
                    let value_a := AddressValue.with_offset addr (Z.of_nat off) in
                    let pad_size := AddressValue.to_Z value_a - AddressValue.to_Z addr0 in
-                   let s1 := do_pad s0 addr0 (Z.to_nat pad_size) in
+                   let s1 := do_pad addr0 (Z.to_nat pad_size) s0 in
                    (* write the value *)
                    '(s2, end_addr) <- repr fuel value_a mval s1 ;;
                    szn <- sizeof DEFAULT_FUEL None ty ;;
@@ -940,7 +944,7 @@ Module Type CheriMemoryImpl
                 (s, addr) offs xs ;;
 
             let final_pad_size := sz - (Z.of_nat final_off) in
-            let s'' := do_pad s' final_pad_addr (Z.to_nat final_pad_size) in
+            let s'' := do_pad final_pad_addr (Z.to_nat final_pad_size) s' in
             ret (s'', AddressValue.with_offset final_pad_addr final_pad_size)
         end
     end.
