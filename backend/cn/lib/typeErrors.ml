@@ -218,6 +218,7 @@ type message =
   | Redundant_pattern of Pp.document
   | Duplicate_pattern
   | Empty_provenance
+  | Inconsistent_assumptions of string * (Context.t * log)
 
 type type_error =
   { loc : Locations.t;
@@ -536,6 +537,10 @@ let pp_message te =
          ^^ dot)
     in
     { short; descr; state = None }
+  | Inconsistent_assumptions (kind, ctxt_log) ->
+    let short = !^kind ^^ !^" makes inconsistent assumptions" in
+    let state = Some (trace ctxt_log (Solver.empty_model, []) Explain.no_ex) in
+    { short; descr = None; state }
 
 
 type t = type_error
