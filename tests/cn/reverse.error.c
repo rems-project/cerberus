@@ -120,6 +120,6 @@ int main(void) {
   struct node n1 = {.head = 1, .tail = &n2};
 
   struct node *rev_n1 = reverse(&n1);
-  
+
   return 0;
 }
