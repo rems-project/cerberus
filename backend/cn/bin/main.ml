@@ -818,8 +818,58 @@ let generate_tests_cmd =
   let info = Cmd.info "generate-tests" ~doc in
   Cmd.v info generate_tests_t
 
+let generate_executable_specs 
+(* Common *)
+_filename
+_macros
+_incl_dirs
+_incl_files
+_debug_level
+_print_level
+_csv_times
+_log_times
+_astprints
+_use_peval
+_no_inherit_loc
+_magic_comment_char_dollar
+(* Executable spec *)
+_output_decorated
+_output_decorated_dir
+_with_ownership_checking
+_with_test_gen
+_copy_source_dir
+= ()
 
-let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd ]
+let runtime_testing_cmd =
+  let open Term in
+  let runtime_testing_t =
+    const generate_executable_specs
+    $ Common_flags.file
+    $ Common_flags.macros
+    $ Common_flags.incl_dirs
+    $ Common_flags.incl_files
+    $ Common_flags.debug_level
+    $ Common_flags.print_level
+    $ Common_flags.csv_times
+    $ Common_flags.log_times
+    $ Common_flags.astprints
+    $ Common_flags.use_peval
+    $ Common_flags.no_inherit_loc
+    $ Common_flags.magic_comment_char_dollar
+    $ Executable_spec_flags.output_decorated
+    $ Executable_spec_flags.output_decorated_dir
+    $ Executable_spec_flags.with_ownership_checking
+    $ Executable_spec_flags.with_test_gen
+    $ Executable_spec_flags.copy_source_dir
+  in
+  let doc =
+    "Instruments [FILE] with runtime C assertions that check the properties provided in CN specifications.\n"
+  in
+  let info = Cmd.info "runtime-test" ~doc in
+  Cmd.v info runtime_testing_t
+
+
+let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd; runtime_testing_cmd ]
 
 let () =
   let version_str = Cn_version.git_version ^ " [" ^ Cn_version.git_version_date ^ "]" in
