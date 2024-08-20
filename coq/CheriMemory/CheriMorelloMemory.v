@@ -813,6 +813,33 @@ Module Type CheriMemoryImpl
       (capmeta_ghost_tags a n (capmeta s))
       s.
 
+  Definition struct_typecheck
+    (tag_sym: sym)
+    (tagdefs: SymMap.t CoqCtype.tag_definition)
+    (values: list (identifier * CoqCtype.ctype * mem_value_indt))
+    : serr unit
+    :=
+    match SymMap.find tag_sym tagdefs with
+    | Some (CoqCtype.StructDef members flexible_opt) =>
+        sassert (Nat.ltb 0 (List.length members)) "Empty struct encountered" ;;
+        let members :=
+          match flexible_opt with
+          | None => members
+          | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) =>
+              members ++ [ (ident, (attrs, None, qs, ty)) ]
+          end
+        in
+        sassert (Nat.eqb (List.length members) (List.length values)) "Wrong of number struct fields" ;;
+        monadic_fold_left2
+          (fun _ '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
+             sassert (ident_equal s_id v_id) "struct field identifiers mismatch" ;;
+             same <- CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty ;;
+             sassert same "struct field types mismatch" ;;
+             ret tt
+          ) tt values members
+    | _ => raise "struct tagdefs mismatch"
+    end.
+
   Fixpoint repr
     (fuel: nat)
     (addr : AddressValue.t)
@@ -925,10 +952,11 @@ Module Type CheriMemoryImpl
             let s'' := do_pad pad_addr pad_size s' in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
+            struct_typecheck tag_sym (TD.tagDefs tt) xs ;;
             szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
             let sz := Z.of_nat szn in
             sassert ((AddressValue.to_Z addr + sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
-            '(offs, final_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
+            '(offs, final_off) <- offsetsof_struct DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             '(s', final_pad_addr) <-
               monadic_fold_left2
                 (fun '(s0, addr0) '(ident, ty, off) '(_, _, mval) =>

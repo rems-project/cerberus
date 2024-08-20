@@ -5440,23 +5440,21 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros R.
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
-    Opaque sizeof.
+    Opaque sizeof offsetsof_struct struct_typecheck.
     cbn in R.
     state_inv_steps.
     apply do_pad_preserves.
     +
       bool_to_prop_hyp.
       rename t into addr'.
-      apply sizeof_pos in R2.
+      apply sizeof_pos in R4.
       admit.
     +
-      revert fuel R5.
       (* TODO: need to link [l0] and [l] and proceed by induction on both.
          It seems that there is a hidden invariant for `MVstruct` *)
   Admitted.
-  
-  Transparent sizeof.
-  Transparent repr.
+  Transparent sizeof offsetsof_struct struct_typecheck.
+
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
@@ -5570,7 +5568,7 @@ Module CheriMemoryImplWithProofs
       +
         eapply IHmval;eauto.
   Admitted.
-  Transparent sizeof repr.
+  Transparent sizeof.
 
   Instance store_PreservesInvariant
     (loc : location_ocaml)
