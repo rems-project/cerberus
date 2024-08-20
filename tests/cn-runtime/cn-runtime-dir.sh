@@ -41,7 +41,6 @@ SUCCESS=$(find tests/cn -name '*.c' \
 BUGGY=("")
 
 SHOULD_FAIL=$(find tests/cn -name '*.error.c')
-# SHOULD_FAIL=("src/examples/read.broken.c" "src/examples/slf14_basic_succ_using_incr_attempt.broken.c")
 
 FAILED=""
 
