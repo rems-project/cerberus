@@ -5423,6 +5423,58 @@ Module CheriMemoryImplWithProofs
     apply repeat_length.
   Qed.
 
+  Lemma struct_typecheck_inv
+    (tag_sym: sym)
+    (tagdefs: SymMap.t CoqCtype.tag_definition)
+    (values: list (identifier * CoqCtype.ctype * mem_value_indt)):
+
+    struct_typecheck tag_sym tagdefs values  = inr tt ->
+
+    (exists members flexible_opt,
+      SymMap.find tag_sym tagdefs = Some (CoqCtype.StructDef members flexible_opt)
+      /\
+        forall members',
+          ((flexible_opt = None /\ members' = members)
+           \/
+             (exists attrs ident qs ty, flexible_opt = Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) /\ members' = members ++ [ (ident, (attrs, None, qs, ty)) ])) ->
+          Forall2
+            (fun '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
+               ident_equal s_id v_id = true
+               /\
+                 CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty = inr true)
+            values members').
+  Proof.
+    intros H.
+    unfold struct_typecheck in H.
+    break_match_hyp;[|inl_inr].
+    break_match_hyp;[|inl_inr].
+    rename l into members, o into flexible_opt.
+    exists members, flexible_opt.
+    split;[reflexivity|].
+    intros members' H0.
+    Opaque ident_equal CoqCtype.ctypeEqual.
+    state_inv_steps.
+    -
+      destruct H0 as [[H5 H6] | H6];[some_none|].
+      destruct H6 as [a' [i' [q' [c' [H6 H7]]]]].
+      some_inv.
+      subst.
+      clear H1.
+      admit.
+    -
+      destruct H0 as [[H5 H6] | H6].
+      +
+        clear H1 H5.
+        break_match_hyp;[congruence|].
+        bool_to_prop_hyp.
+        subst n0.
+        subst.
+        admit.
+      +
+        destruct H6 as [a' [i' [q' [c' [H6 H7]]]]].
+        some_none.
+  Admitted.
+
   Fact repr_struct_preserves
     (sym: sym)
     (l : list (identifier * CoqCtype.ctype * mem_value_indt))
@@ -5443,15 +5495,56 @@ Module CheriMemoryImplWithProofs
     Opaque sizeof offsetsof_struct struct_typecheck.
     cbn in R.
     state_inv_steps.
+    destruct x.
+    apply struct_typecheck_inv in R2.
     apply do_pad_preserves.
     +
       bool_to_prop_hyp.
       rename t into addr'.
       apply sizeof_pos in R4.
+      (* TODO: *)
       admit.
     +
-      (* TODO: need to link [l0] and [l] and proceed by induction on both.
-         It seems that there is a hidden invariant for `MVstruct` *)
+      destruct R2 as [members [flexible_opt [FT R2]]].
+      Transparent offsetsof_struct.
+      destruct DEFAULT_FUEL eqn:DF;[inv DF|].
+      cbn in R5.
+      Opaque offsetsof_struct.
+      rewrite FT in R5.
+      state_inv_step_quick.
+      destruct (Datatypes.length members);[congruence|].
+      state_inv_step_quick.
+      destruct flexible_opt.
+      *
+        (* some *)
+        repeat break_let.
+        apply ret_inr in R9.
+        invc R9.
+        rename t into addr'.
+        rename c into t.
+        specialize (R2 (members ++ [(i, (a, None, q, t))])).
+        autospecialize R2.
+        {
+          right.
+          exists a, i, q, t.
+          auto.
+        }
+        admit.
+      *
+        (* none *)
+        repeat break_let.
+        apply ret_inr in R9.
+        invc R9.
+        cbn in *.
+        specialize (R2 members).
+        autospecialize R2.
+        {
+          left.
+          auto.
+        }
+        clear R7.
+        rename l into values.
+        admit.
   Admitted.
   Transparent sizeof offsetsof_struct struct_typecheck.
 
