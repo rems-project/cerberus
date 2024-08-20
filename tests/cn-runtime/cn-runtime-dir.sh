@@ -1,97 +1,72 @@
-#! /bin/bash
+#!/usr/bin/env bash
+set -euo pipefail -o noclobber
 
-# tests for the CN executable spec tool attached to cerberus
+function echo_and_err() {
+    printf "$1\n"
+    exit 1
+}
 
-DIRNAME=$1
+[ $# -eq 0 ] || echo_and_err "USAGE: $0"
 
-SUCC=$(find $DIRNAME -maxdepth 1 -name '*.c' | grep -v '\.error\.c' | grep -v 'fixme_error' | grep -v '\.unknown\.c' | grep -v '\-exec\.c' | grep -v 'inconsistent*' | grep -v 'implies*')
-# SUCC=$(find $DIRNAME -maxdepth 1 -name '*tree_rev01.c')
+RUNTIME_PREFIX="$OPAM_SWITCH_PREFIX/lib/cn/runtime"
+[ -d "${RUNTIME_PREFIX}" ] || echo_and_err "Could not find CN's runtime directory (looked at: '${RUNTIME_PREFIX}')"
 
-NUM_GENERATION_FAILED=0
-GENERATION_FAILED=''
+CHECK_SCRIPT="${RUNTIME_PREFIX}/libexec/cn-runtime-single-file.sh"
 
-NUM_COMPILATION_FAILED=0
-COMPILATION_FAILED=''
+[ -f "${CHECK_SCRIPT}" ] || echo_and_err "Could not find single file helper script: ${CHECK_SCRIPT}"
 
-NUM_RUNNING_BINARY_FAILED=0
-RUNNING_BINARY_FAILED=''
+SCRIPT_OPT="-oq"
 
-NUM_SUCC=0
-SUCC_FILES=''
+function exits_with_code() {
+  local file=$1
+  local expected_exit_code=$2
 
-mkdir -p $DIRNAME/exec
+  printf "[$file]... "
+  timeout 20 "${CHECK_SCRIPT}" "${SCRIPT_OPT}" "$file" &> /dev/null
+  local result=$?
 
-for TEST in $SUCC
-do
-  TEST_NAME=$TEST
-  TEST_BASENAME=$(basename $TEST_NAME .c)
-  EXEC_C_DIRECTORY=$DIRNAME/exec/$TEST_BASENAME
-  mkdir -p $EXEC_C_DIRECTORY
-  if grep -q "#define" "$TEST"; then
-    echo Preprocessing due to presence of macros ...
-    TEST_BASENAME=${TEST_BASENAME}_pp
-    cpp -P -CC $TEST >! $EXEC_C_DIRECTORY/${TEST_BASENAME}.c  # macros present - need to preprocess
-    TEST_NAME=$EXEC_C_DIRECTORY/${TEST_BASENAME}.c
-    echo $TEST_NAME
-    echo Done!
+  if [ $result -eq $expected_exit_code ]; then
+    printf "\033[32mPASS\033[0m\n"
+    return 0
+  else
+    printf "\033[31mFAIL\033[0m (Unexpected return code: $result)\n"
+    return 1
   fi
-  EXEC_C_FILE=$EXEC_C_DIRECTORY/$TEST_BASENAME-exec.c
-  echo Generating $EXEC_C_FILE ...
-  if ! cn verify $TEST_NAME --output-decorated=$TEST_BASENAME-exec.c --output-decorated-dir=$EXEC_C_DIRECTORY/ --with-ownership-checking
-  then
-    echo Generation failed.
-    NUM_GENERATION_FAILED=$(( $NUM_GENERATION_FAILED + 1 ))
-    GENERATION_FAILED="$GENERATION_FAILED $TEST"
-  else 
-    echo Generation succeeded!
-    echo Compiling and linking...
-    if ! clang-18 -I$OPAM_SWITCH_PREFIX/lib/cn/runtime/include $EXEC_C_FILE $EXEC_C_DIRECTORY/cn.c $OPAM_SWITCH_PREFIX/lib/cn/runtime/libcn.a -o $TEST_BASENAME-output   
-    then
-      echo Compiling/linking failed.
-      NUM_COMPILATION_FAILED=$(( $NUM_COMPILATION_FAILED + 1 ))
-      COMPILATION_FAILED="$COMPILATION_FAILED $EXEC_C_FILE"
-    else 
-      echo Compiling and linking succeeded!
-      cp $TEST_BASENAME-output $EXEC_C_DIRECTORY
-      rm $TEST_BASENAME-output
-      echo Running the $TEST_BASENAME-output binary ...
-      if ! ./$EXEC_C_DIRECTORY/$TEST_BASENAME-output
-      then 
-          echo Running binary failed.
-          NUM_RUNNING_BINARY_FAILED=$(( $NUM_RUNNING_BINARY_FAILED + 1 ))
-          RUNNING_BINARY_FAILED="$RUNNING_BINARY_FAILED $EXEC_C_FILE"
-      else 
-          echo Running binary succeeded!
-          NUM_SUCC=$(( $NUM_SUCC + 1 ))
-          SUCC_FILES="$SUCC_FILES $EXEC_C_FILE"
-      fi
-    fi
+}
+
+SUCCESS=$(find tests/cn -name '*.c' \
+    ! -name "*.error.c" \
+)
+
+BUGGY=("")
+
+SHOULD_FAIL=$(find tests/cn -name '*.error.c')
+# SHOULD_FAIL=("src/examples/read.broken.c" "src/examples/slf14_basic_succ_using_incr_attempt.broken.c")
+
+FAILED=""
+
+for FILE in ${SUCCESS}; do
+  if ! exits_with_code "${FILE}" 0; then
+    FAILED+=" ${FILE}"
   fi
-  
 done
 
+for FILE in ${SHOULD_FAIL}; do
+  if ! exits_with_code "${FILE}" 1; then
+    FAILED+=" ${FILE}"
+  fi
+done
 
-echo
-echo 'Done running tests.'
-echo
+for FILE in ${BUGGY}; do
+  if ! exits_with_code "${FILE}" 1; then
+    FAILED+=" ${FILE}"
+  fi
+done
 
-if [ -z "$GENERATION_FAILED$COMPILATION_FAILED$LINKING_FAILED$RUNNING_BINARY_FAILED" ]
-then
-  echo "All tests passed."
+if [ -z "${FAILED}" ]; then
   exit 0
 else
-  echo "$NUM_GENERATION_FAILED tests failed to have executable specs generated:"
-  echo "  $GENERATION_FAILED"
-  echo " "
-  echo "$NUM_COMPILATION_FAILED tests failed to be compiled/linked:"
-  echo "  $COMPILATION_FAILED"
-  echo " "
-  echo "$NUM_RUNNING_BINARY_FAILED tests failed to be run as binaries:"
-  echo "  $RUNNING_BINARY_FAILED"
-  echo " "
-  echo "$NUM_SUCC tests passed:"
-  echo "  $SUCC_FILES"
+  printf "\033[31mFAILED: ${FAILED}\033[0m\n"
   exit 1
 fi
-
 
