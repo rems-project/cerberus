@@ -64,9 +64,11 @@ Module AbstTagDefs: TagDefs.
   Definition tagDefs := abst_tagDefs.
 End AbstTagDefs.
 
+(* TODO: try proving this *)
 (* This is a Morello-specific requirement. *)
 Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
 
+(* TODO: try proving this *)
 (* TODO: this should be moved to [AddressValue] module *)
 Axiom ADDR_LIMIT_aligned:
   AddressValue.ADDR_LIMIT mod (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
@@ -860,7 +862,7 @@ Module CheriMemoryImplWithProofs
     forall a,
       let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
       let a0 := align_down (AddressValue.to_Z addr) alignment in
-      let a1 := align_up (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
+      let a1 := align_down (AddressValue.to_Z addr + ((Z.of_nat size) - 1)) alignment in
       (a0 <= AddressValue.to_Z a <= a1) ->
       forall tg gs,
         AMap.M.MapsTo a (tg,gs) (capmeta_ghost_tags addr size capmeta)
@@ -918,75 +920,14 @@ Module CheriMemoryImplWithProofs
         *
           (* a1 < az *)
           exfalso.
-          clear Balign H0 tg gs capmeta0 SZ.
-
-          destruct R2 as [R1 R2].
-
-          (* genralization *)
-          remember (Z.of_nat (alignof_pointer MorelloImpl.get)) as alignment.
-          assert(0 < alignment).
-          {
-            pose proof MorelloImpl.alignof_pointer_pos.
-            lia.
-          }
-          clear Heqalignment.
-
-
+          replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
+          destruct R2 as [_ R2].
           unfold align_down in *.
+          pose proof MorelloImpl.alignof_pointer_pos as P.
           zify.
           subst.
-
-          pose proof (align_up_correct alignment (AddressValue.to_Z addr + (Z.of_nat (S size) - 1)) ) as AC1.
-          unfold align_up in *.
-          break_if;bool_to_prop_hyp.
-          --
-            clear R1 AA.
-            replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
-            rewrite Heqb in H.
-            lia.
-          --
-            specialize (AC1 H0).
-            replace (Z.of_nat (S size) - 1) with (Z.of_nat size) in * by lia.
-
-            pose proof (AddressValue.to_Z_in_bounds addr).
-            pose proof (AddressValue.to_Z_in_bounds a).
-            unfold AddressValue.ADDR_MIN in *.
-
-            (* generalization *)
-            remember (AddressValue.to_Z a) as az.
-            clear Heqaz a.
-            rename az into a.
-
-            (* generalization *)
-            remember (AddressValue.to_Z addr) as addrz.
-            clear Heqaddrz addr.
-            rename addrz into addr.
-
-            (* size to Z *)
-            remember (Z.of_nat size) as sz.
-            assert (0<=sz) by lia.
-            clear Heqsz size.
-
-            remember (addr + sz) as a1.
-
-            pose proof (Z.mod_pos_bound a1 alignment H0).
-            pose proof (Z.mod_pos_bound a alignment H0).
-
-            pose proof (Z.mod_bound_pos_le a1 alignment).
-            autospecialize H6;[lia|].
-            autospecialize H6;[lia|].
-            pose proof (Z.mod_bound_pos_le a alignment).
-            autospecialize H7;[lia|].
-            autospecialize H7;[lia|].
-
-            remember (a1 mod alignment) as r_a1.
-
-            (* R2 vs H *)
-            clear cstr.
-            assert(0 <= a1) by lia.
-            clear Heqa1 addr R1 sz H1 H3.
-
-  Admitted.
+          lia.
+  Qed.
 
   Definition memM_same_state
     {T: Type}
@@ -4298,96 +4239,6 @@ Module CheriMemoryImplWithProofs
     same_state_steps.
   Qed.
 
-  Instance allocate_object_PreservesInvariantg
-    (tid:MemCommonExe.thread_id)
-    (pref:CoqSymbol.prefix)
-    (int_val:integer_value)
-    (ty:CoqCtype.ctype)
-    (init_opt:option mem_value)
-    :
-    forall s, PreservesInvariant mem_invariant s (allocate_object tid pref int_val ty init_opt).
-  Proof.
-    intros s.
-    unfold allocate_object.
-    break_if;[preserves_step|].
-    preserves_step.
-    preserves_step.
-    preserves_step.
-    -
-      break_match_goal; repeat break_let.
-      +
-        (* with init *)
-        apply bind_PreservesInvariant_value.
-        intros H s'0 x0 H0.
-
-
-        assert(mem_invariant s'0) as S0.
-        {
-          pose proof (allocator_PreservesInvariant (Z.to_nat (Capability_GS.representable_length (Z.of_nat x)))
-                        (Z.max (num_of_int int_val)
-                           (1 +
-                              AddressValue.to_Z
-                                (AddressValue.bitwise_complement
-                                   (AddressValue.of_Z
-                                      (Capability_GS.representable_alignment_mask (Z.of_nat x))))))
-                        false pref (Some ty) r
-            ) as A.
-          autospecialize A.
-          lia.
-          specialize (A s' H).
-          unfold post_exec_invariant, lift_sum_p in A.
-          clear Heqp.
-          break_match_hyp.
-          --
-            unfold execErrS in Heqs0.
-            break_let.
-            tuple_inversion.
-            invc Heqs0.
-          --
-            unfold execErrS in Heqs0.
-            break_let.
-            tuple_inversion.
-            apply ret_inr in Heqs0.
-            invc Heqs0.
-            assumption.
-        }
-
-        split.
-        *
-          apply S0.
-        *
-          repeat break_let.
-          preserves_step.
-          preserves_step.
-          preserves_step.
-          repeat break_let.
-          preserves_step;[|preserves_step].
-          preserves_step.
-
-          bool_to_prop_hyp.
-          destruct x1, p0.
-          tuple_inversion.
-
-          (* TODO: need `allocator_capmeta_spec`
-             similar to `init_ghost_tags_spec`
-           *)
-
-          (* TODO: this whole branch maybe unecessary in view of this pending change:
-             https://github.com/rems-project/cerberus/issues/229
-           *)
-          admit.
-      +
-        (* No init *)
-        preserves_step.
-        apply allocator_PreservesInvariant.
-        lia.
-        break_let.
-        preserves_step.
-    -
-      repeat break_let.
-      preserves_step.
-  Admitted.
-
   Instance allocate_region_PreservesInvariant
     (tid : MemCommonExe.thread_id)
     (pref : CoqSymbol.prefix)
@@ -4614,189 +4465,6 @@ Module CheriMemoryImplWithProofs
     cbn in H.
     repeat break_match_hyp;
       repeat break_let; repeat tuple_inversion; try rewrite Z.mul_1_l; reflexivity.
-  Qed.
-
-  Fact repr_char_bytes_size_helper
-    (fuel : nat)
-    (funptrmap0 funptrmap' : ZMap.M.t (digest * string * Capability_GS.t))
-    (capmeta0 capmeta' : AMap.M.t (bool * CapGhostState))
-    (addr : AddressValue.t)
-    (iv: integer_value_indt)
-    (bs : list (option ascii)):
-    repr fuel funptrmap0 capmeta0 addr (MVinteger (CoqIntegerType.Unsigned CoqIntegerType.Ichar) iv) =
-      inr (funptrmap', capmeta', bs) -> Datatypes.length bs = 1%nat.
-  Proof.
-    intros R.
-    unfold repr in R.
-    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
-    break_match_hyp.
-    -
-      state_inv_steps.
-      break_match_hyp.
-      apply raise_either_inr_inv in R3; tauto.
-      rewrite MorelloImpl.uchar_size in R4.
-      invc R4.
-      match goal with
-      | [H: monadic_list_init _ ?f = _ |- _] => generalize dependent f;intros
-      end.
-      cbn in R3.
-      state_inv_steps.
-      reflexivity.
-    -
-      apply raise_either_inr_inv in R; tauto.
-  Qed.
-
-  Fact repr_char_bytes_size_unspec_helper
-    (fuel : nat)
-    (funptrmap0 funptrmap' : ZMap.M.t (digest * string * Capability_GS.t))
-    (capmeta0 capmeta' : AMap.M.t (bool * CapGhostState))
-    (addr : AddressValue.t)
-    (l an: list CoqAnnot.annot)
-    (bs : list (option ascii))
-    (ty: CoqCtype.ctype):
-
-    (ty = (CoqCtype.Ctype l (CoqCtype.Atomic (CoqCtype.Ctype an (CoqCtype.Basic (CoqCtype.Integer (CoqIntegerType.Unsigned CoqIntegerType.Ichar))))))
-     \/ ty = (CoqCtype.Ctype l (CoqCtype.Basic (CoqCtype.Integer (CoqIntegerType.Unsigned CoqIntegerType.Ichar)))))
-    ->
-      repr fuel funptrmap0 capmeta0 addr (MVunspecified ty) = inr (funptrmap', capmeta', bs) -> Datatypes.length bs = 1%nat.
-  Proof.
-    intros T P.
-    unfold repr in P.
-    destruct fuel;[apply raise_either_inr_inv in P;tauto|].
-    destruct T;
-      (state_inv_steps;
-       rewrite MorelloImpl.uchar_size in P0;
-       cbn in P0;
-       invc P0;
-       apply repeat_length).
-  Qed.
-
-  (* Probably need to generalize in future for all types via `sizeof` *)
-  Lemma repr_char_bytes_size
-    (fuel: nat)
-    (funptrmap funptrmap': ZMap.M.t (digest * string * Capability_GS.t))
-    (capmeta capmeta': AMap.M.t (bool*CapGhostState))
-    (addr : AddressValue.t)
-    (m : mem_value)
-    (bs: list (option ascii))
-    (mt : CoqCtype.ctype)
-    (an: list CoqAnnot.annot):
-    typeof m = inr mt ->
-    CoqCtype.unatomic mt =
-      CoqCtype.Ctype an (CoqCtype.Basic (CoqCtype.Integer (CoqIntegerType.Unsigned CoqIntegerType.Ichar))) ->
-    repr fuel funptrmap capmeta addr m = inr (funptrmap', capmeta', bs) ->
-    length bs = 1%nat.
-  Proof.
-    intros T U R.
-    unfold CoqCtype.unatomic in U.
-    destruct mt.
-
-    destruct c; try discriminate.
-    -
-      invc U.
-      destruct m;
-        try
-          (cbn in T;
-           rewrite bind_of_return in T;[|typeclasses eauto];
-           apply ret_inr in T;
-           inl_inr_inv).
-      +
-        cbn in T.
-        destruct c.
-        rewrite bind_of_return in T;[|typeclasses eauto].
-        apply ret_inr in T.
-        inl_inr_inv.
-        subst.
-        revert R.
-        apply repr_char_bytes_size_unspec_helper with (l:=l) (an:=l).
-        auto.
-      +
-        subst.
-        eapply repr_char_bytes_size_helper;eauto.
-      +
-        cbn in T.
-        destruct l.
-        *
-          Transparent raise.
-          unfold raise, Exception_either in T.
-          state_inv_steps.
-          Opaque raise.
-        *
-          state_inv_steps.
-    -
-      destruct m;
-        try
-          (cbn in T;
-           rewrite bind_of_return in T;[|typeclasses eauto];
-           apply ret_inr in T;
-           inl_inr_inv).
-      +
-        cbn in T.
-        destruct c0.
-        rewrite bind_of_return in T;[|typeclasses eauto].
-        apply ret_inr in T.
-        inl_inr_inv.
-        subst.
-        revert R.
-        apply repr_char_bytes_size_unspec_helper with (l:=l0) (an:=an).
-        auto.
-      +
-        cbn in T.
-        destruct l0.
-        *
-          Transparent raise.
-          unfold raise, Exception_either in T.
-          state_inv_steps.
-          Opaque raise.
-        *
-          state_inv_steps.
-  Qed.
-
-  Lemma store_other_spec
-    (loc : location_ocaml)
-    (c : Capability_GS.t)
-    (s s' : mem_state)
-    (m : mem_value)
-    (fp : footprint)
-    (addr : AddressValue.t):
-    Capability_GS.cap_get_value c = addr ->
-    store loc CoqCtype.unsigned_char false (PVconcrete c) m s = (s', inr fp) ->
-    forall addr' : AMap.M.key, addr' <> addr -> AMap.M.find (elt:=(option ascii)) addr' (bytemap s') = AMap.M.find (elt:=(option ascii)) addr' (bytemap s).
-  Proof.
-    intros CV ST addr' NE.
-    Opaque repr.
-    unfold store in ST.
-    unfold sizeof in ST.
-    cbn in ST.
-    rewrite MorelloImpl.uchar_size in ST.
-    cbn in ST.
-    state_inv_steps.
-
-    assert(length l = 1%nat) as L by (eapply repr_char_bytes_size;eauto).
-    apply AMapProofs.map_add_list_not_at_1; auto.
-  Qed.
-
-  (* Non-locking store does not change allocations.
-
-     Probably could be generalized for other types, this is all we
-     need for now.  *)
-  Fact store_char_preserves_allocations:
-    forall (loc : location_ocaml) (p1:pointer_value)
-           (s0 : mem_state) (s : mem_state_r) (v1 : mem_value) (fp : footprint),
-      store loc CoqCtype.unsigned_char false
-        p1 v1 s =
-        (s0, inr fp)
-      -> allocations s0 = allocations s.
-  Proof.
-    intros loc p1 s0 s v1 fp ST.
-    Opaque repr.
-    unfold store in ST.
-    unfold sizeof in ST.
-    cbn in ST.
-    rewrite MorelloImpl.uchar_size in ST.
-    cbn in ST.
-    state_inv_steps; reflexivity.
-    Transparent repr.
   Qed.
 
   Fact memcpy_alloc_bounds_check_p_c_bounds
@@ -5263,13 +4931,15 @@ Module CheriMemoryImplWithProofs
               cbn in *.
               clear H.
               repeat break_let.
-              state_inv_steps.
-              apply IHfuel in H0.
-              clear - H0 H2.
-              remember (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+              remember (fun '(acc_size, acc_align) '(_, (_, align_opt, _, ty)) =>
                           sz <- sizeof fuel' (Some t) ty;;
-                          al <- alignof fuel' (Some t) ty;; ret (Nat.max acc_size sz, Nat.max acc_align al))
-                         as f.
+                          al <-
+                            match align_opt with
+                            | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel' (Some t) al_ty
+                            | None => alignof fuel' (Some t) ty
+                            end;; ret (Nat.max acc_size sz, Nat.max acc_align al))
+                as f.
               assert (f_mon : forall sz sz' al al' a,
                          f (sz, al) a = inr (sz', al') ->
                          (sz <= sz')%nat).
@@ -5278,27 +4948,31 @@ Module CheriMemoryImplWithProofs
                 subst.
                 intros.
                 repeat break_let.
-                apply bind_serr_inv in H.
-                do 2 destruct H.
-                cbv [bind] in H0; cbn in H0.
-                break_match; try discriminate.
-                apply ret_inr in H0.
-                invc H0.
+                do 2 apply bind_serr_inv in H as [? [? H]].
+                apply ret_inr in H.
+                invc H.
                 lia.
               }
               clear Heqf.
-              generalize dependent sz.
-              generalize dependent al.
-              induction l; intros; cbn in H2.
-              **
-                now invc H2.
-              **
-                apply bind_serr_inv in H2.
-                destruct H2 as ((sz' & al') & FA & H).
-                apply IHl in H.
-                easy.
-                apply f_mon in FA.
-                lia.
+              state_inv_steps.
+              (* this generates 3 very similar subgoals with the same proof *)
+              all: apply IHfuel in H0.
+              all: clear - H0 H2 f_mon.
+
+              1: generalize dependent (Z.to_nat z).
+              2,3: generalize dependent al.
+              all: generalize dependent sz.
+              all: induction l; intros; cbn in H2.
+
+              (* induction base for 3 cases *)
+              1,3,5: now invc H2.
+
+              (* induction step for 3 cases *)
+              all: apply bind_serr_inv in H2.
+              all: destruct H2 as ((sz' & al') & FA & H).
+              all: apply IHl in H.
+              all: apply f_mon in FA.
+              all: lia.
     -
       clear offsetof_struct_max_offset_pos.
       intros fuel t s l max_offset OF.
@@ -5377,84 +5051,6 @@ Module CheriMemoryImplWithProofs
         lia.
   Qed.
 
-  Fact amap_add_list_not_at
-    {T: Type}
-    (x addr : AddressValue.t)
-    (bm : AMap.M.t T)
-    (l : list T):
-
-    (AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
-
-    ((AddressValue.ltb x addr = true)
-     \/ (AddressValue.leb (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l))) x = true)) ->
-
-    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
-      AMap.M.find (elt:=T) x bm.
-  Proof.
-    revert bm x addr.
-    induction l as [| x0 l].
-    -
-      reflexivity.
-    -
-      intros bm x addr RSZ N.
-      cbn.
-      rewrite IHl;clear IHl;cbn in *.
-      +
-        apply AMap.F.add_neq_o.
-        destruct N;bool_to_prop_hyp.
-        *
-          intros C.
-          now rewrite <-C, AddressValue.ltb_irref in H.
-        *
-          intros C; subst addr.
-          rewrite AddressValue_leb_Z_leb in H.
-          apply Z.leb_le in H.
-          rewrite AddressValue.with_offset_no_wrap in H.
-          2: {
-            split.
-            admit.
-            clear - RSZ.
-            (* can't prove *)
-            admit.
-          }
-          admit.
-      +
-        clear - RSZ.
-        pose proof (AddressValue.to_Z_in_bounds addr).
-        unfold AddressValue.ADDR_MIN in *.
-        unfold AddressValue_as_ExtOT.with_offset.
-        rewrite AddressValue.with_offset_no_wrap.
-        *
-          lia.
-        *
-          unfold AddressValue.ADDR_MIN.
-          split;[lia|].
-          admit. (* tricky *)
-      +
-        destruct N;bool_to_prop_hyp.
-        *
-          left.
-          pose proof (AddressValue.to_Z_in_bounds addr).
-          unfold AddressValue.ADDR_MIN in *.
-          unfold AddressValue_as_ExtOT.with_offset.
-          rewrite AddressValue_ltb_Z_ltb.
-          apply Z.ltb_lt.
-          rewrite AddressValue.with_offset_no_wrap.
-          --
-            rewrite AddressValue_ltb_Z_ltb in H.
-            apply Z.ltb_lt in H.
-            lia.
-          --
-            unfold AddressValue.ADDR_MIN.
-            split;[lia|].
-            admit. (* tricky *)
-        *
-          (* add+1 <= x *)
-          right.
-          (* TODO *)
-  Admitted. (* TODO. *)
-
-
   Fact align_down_le:
     forall v a,
       0<a ->
@@ -5472,7 +5068,6 @@ Module CheriMemoryImplWithProofs
     forall s : mem_state_r,
       mem_invariant s ->
       forall (bs : list (option ascii)) (capmeta0 : AMap.M.t (bool * CapGhostState)) (szn : nat),
-        (0 < szn)%nat ->
         Datatypes.length bs = szn ->
         forall start : AddressValue.t,
           AddressValue.to_Z start + Z.of_nat szn <= AddressValue.ADDR_LIMIT ->
@@ -5481,10 +5076,20 @@ Module CheriMemoryImplWithProofs
             (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start)
                (capmeta_ghost_tags start szn (capmeta s)) s).
   Proof.
-    intros s M bs capmeta0 szn SP BL start RSZ H1.
+    intros s M bs capmeta0 szn BL start RSZ H1.
     destruct M as [MIbase MIcap].
     destruct_base_mem_invariant MIbase.
 
+    destruct (lt_dec 0 szn) as [SP | SN].
+    2:{
+      assert(szn = O) by lia.
+      subst szn.
+      destruct bs;[|discriminate H].
+      cbn in *.
+      constructor.
+      constructor; eauto.
+      eauto.
+    }
 
     unfold mem_state_with_funptrmap_bytemap_capmeta.
     repeat split;cbn;auto.
@@ -5664,94 +5269,73 @@ Module CheriMemoryImplWithProofs
           (* on the right (axis-wise) *)
           apply Z.nle_gt in H.
           right.
-          rewrite AddressValue_leb_Z_leb.
-          apply Z.leb_le.
+          rewrite AddressValue_ltb_Z_ltb, Z.ltb_lt.
           pose proof (align_down_le (AddressValue.to_Z start) (Z.of_nat psize)) as AD.
-          autospecialize AD. lia.
+          autospecialize AD; [lia |].
           unfold AddressValue.with_offset.
           unfold align_down in *.
+          clear AP BL bs rl.
 
-          destruct (Z.eq_dec (AddressValue.to_Z start + Z.of_nat szn) AddressValue.ADDR_LIMIT)
-            as [E|NE].
+          (* general cleanup *)
+          generalize dependent (AddressValue.to_Z addr).
+          clear addr; intro addr; intros.
+          generalize dependent (AddressValue.to_Z start).
+          clear start; intro start; intros.
+          unfold AddressValue.ADDR_MIN in *.
+          assert (RSZ' : start + (Z.of_nat szn - 1) < AddressValue.ADDR_LIMIT) by lia;
+            clear RSZ; rename RSZ' into RSZ.
+          assert (SP' : 0 <= Z.of_nat szn - 1) by lia;
+            clear SP; rename SP' into SP.
+          generalize dependent (Z.of_nat szn - 1).
+          clear szn; intro szn; intros.
+          zify.
+          generalize dependent (Z.of_nat psize).
+          clear psize; intro psize; intros.
+          generalize dependent (Z.of_nat off).
+          clear off; intro off; intros.
+          (* /cleanup *)
+
+          rewrite AddressValue.of_Z_roundtrip by (unfold AddressValue.ADDR_MIN in *; lia).
+          rewrite AddressValue.of_Z_roundtrip.
+          2: {
+            split; [unfold AddressValue.ADDR_MIN; lia |].
+            apply Zdiv.Zmod_divides in Balign; [|lia].
+            destruct Balign as [naddr Balign].
+            apply Zdiv.Zmod_divides in ALA; [|lia].
+            destruct ALA as [nmax ALA].
+            enough (naddr < nmax) by nia.
+            nia.
+          }
+
+          pose proof (Zdiv.Zmod_le (start + szn) psize).
+          full_autospecialize H0; try lia.
+
+          pose proof (Z.mod_pos_bound (start + szn) psize).
+          full_autospecialize H1; try lia.
+
+          remember (start + szn) as fin.
+          remember (fin mod psize) as soff.
+          remember (fin - soff) as ofin.
+
+          assert(ofin mod psize = 0).
           {
-            rewrite E in *.
-            rewrite ADDR_LIMIT_to_Z.
-            remember (AddressValue.of_Z (AddressValue.to_Z addr + Z.of_nat off)) as x.
-            pose proof (AddressValue.to_Z_in_bounds x).
-            unfold AddressValue.ADDR_MIN in H0.
+            subst.
+            apply align_bottom_correct.
             lia.
           }
-          rewrite AddressValue.of_Z_roundtrip;[|lia].
-          remember (AddressValue.to_Z addr) as zaddr. clear Heqzaddr addr.
-          remember (AddressValue.to_Z start) as zstart. clear Heqzstart start.
 
-          zify.
-          clear cstr1. (* overlaps with AP *)
-          clear cstr2. (* overlaps with SP *)
+          assert(fin = ofin + soff) by lia.
 
-          remember (Z.of_nat psize) as zalign; clear psize Heqzalign.
-          remember (Z.of_nat off) as zoff; clear off Heqzoff.
-          remember (Z.of_nat szn) as zszn; clear szn Heqzszn.
-
-          rewrite AddressValue.of_Z_roundtrip.
-          2:{
-
-            subst.
-            split.
-            -
-              unfold AddressValue.ADDR_MIN in *.
-              lia.
-            -
-              unfold AddressValue.ADDR_MIN in *.
-
-              apply Zdiv.Zmod_divides in Balign; [|lia].
-              destruct Balign as [naddr Balign].
-              apply Zdiv.Zmod_divides in ALA; [|lia].
-              destruct ALA as [nmax ALA].
-
-              cut(naddr<nmax).
-              {
-                intros.
-                subst.
-                nia.
-              }
-              nia.
-          }
-          unfold AddressValue.ADDR_MIN in *.
-
-          pose proof (Zdiv.Zmod_le (zstart + (zszn - 1)) zalign AP).
-          autospecialize H0.
-          lia.
-
-          pose proof (Z.mod_pos_bound (zstart + (zszn - 1)) zalign AP).
-
-          remember (zstart + (zszn - 1)) as zlast.
-          remember (zlast mod zalign) as soff.
-          remember (zlast - soff) as lzlast.
-
-          assert(lzlast mod zalign = 0).
-          {
-            subst.
-            apply align_bottom_correct, AP.
-          }
-
-          assert(zlast = lzlast + soff) by lia.
-
-          assert(zlast < zaddr).
+          assert(fin < addr).
           {
             apply Zdiv.Zmod_divides in Balign; [|lia].
             destruct Balign as [naddr Balign].
             apply Zdiv.Zmod_divides in H2; [|lia].
-            destruct H2 as [nlast H2].
-
-            cut(nlast<naddr).
-            {
-              intros.
-              subst.
-              nia.
-            }
+            destruct H2 as [nfin H2].
+            enough (nfin < naddr) by nia.
             nia.
           }
+
           lia.
   Qed.
 
@@ -5789,145 +5373,193 @@ Module CheriMemoryImplWithProofs
             mem_invariant (mem_state_with_funptrmap_bytemap_capmeta (funptrmap s) (AMap.map_add_list_at (bytemap s) bs start) (update_capmeta c start (capmeta s)) s).
   Proof.
     intros s M c cb ct E start SA RSZ bs Heqbs.
-
-
     (* TODO: this proof must be substantionally similar to [mem_state_with_bytes_preserves] *)
   Admitted.
 
   Fact repr_array_preserves
     (l : list mem_value_indt)
-    (H: Forall
+    (F: Forall
           (fun mval : mem_value_indt =>
-             forall s : mem_state_r,
+             forall s s' : mem_state_r,
                mem_invariant s ->
-               forall (addr : AddressValue.t) (bs : list (option ascii))
-                 (funptrmap0 : ZMap.M.t (digest * string * Capability_GS.t)) (capmeta0 : AMap.M.t (bool * CapGhostState))
-                 (fuel : nat),
-                 repr fuel (funptrmap s) (capmeta s) addr mval = inr (funptrmap0, capmeta0, bs) ->
-                 mem_invariant
-                   (mem_state_with_funptrmap_bytemap_capmeta funptrmap0 (AMap.map_add_list_at (bytemap s) bs addr) capmeta0
-                      s)) l)
+               forall (addr addr' : AddressValue.t) (fuel : nat),
+                 repr fuel addr mval s = inr (s', addr') -> mem_invariant s') l)
 
-    (s: mem_state_r)
+    (s s' : mem_state_r)
     (M: mem_invariant s)
-    (addr: AddressValue.t)
-    (bs_res: list (option ascii))
-    (funptrmap_res: ZMap.M.t (digest * string * Capability_GS.t))
-    (capmeta_res: AMap.M.t (bool * CapGhostState))
-    (fuel: nat)
-    (R: repr fuel (funptrmap s) (capmeta s) addr (MVarray l) = inr (funptrmap_res, capmeta_res, bs_res)):
-
-    mem_invariant
-      (mem_state_with_funptrmap_bytemap_capmeta funptrmap_res (AMap.map_add_list_at (bytemap s) bs_res addr)
-         capmeta_res s).
+    (addr addr': AddressValue.t)
+    (fuel: nat):
+    repr fuel addr (MVarray l) s = inr (s', addr') -> mem_invariant s'.
   Proof.
+    intros R.
     destruct fuel;[apply raise_either_inr_inv in R;tauto|].
     cbn in R.
-    Opaque repr.
-    state_inv_steps_quick.
-    repeat break_let.
-    state_inv_steps_quick.
-    subst.
-    rename t0 into addr'.
-
-    remember [] as b0.
-    remember (mem_state_with_funptrmap_bytemap_capmeta
-                (CheriMemoryImplWithProofs.funptrmap s)
-                (AMap.map_add_list_at (bytemap s) b0 addr)
-                (CheriMemoryImplWithProofs.capmeta s)
-                s
-             ) as s'.
-
-   assert(mem_invariant s') as M'.
-    {
-      subst b0.
-      clear - M Heqs'.
-      subst s'.
-      cbn.
-      apply M.
-    }
-
-    (*
-    assert(bytemap s = bytemap s') as Hb by (subst s' b0;cbn;reflexivity).
-    assert(funptrmap s = funptrmap s') as Hf by (subst s';reflexivity).
-    assert(capmeta s = capmeta s') as Hs by (subst s';reflexivity).
-    rewrite Hb in *. clear Hb.
-    rewrite Hf in *. clear Hf.
-    rewrite Hs in *. clear Hs.
-    *)
-
-    clear Heqb0 .
-
-
-    (*
-      (* lift quantifiers *)
-      assert(
-          forall s addr bs funptrmap0 capmeta0 fuel,
-            mem_invariant s ->
-            Forall
-              (fun mval : mem_value_indt =>
-                 repr fuel (funptrmap s) (capmeta s) addr mval = inr (funptrmap0, capmeta0, bs) ->
-                 mem_invariant
-                   (mem_state_with_funptrmap_bytemap_capmeta funptrmap0 (AMap.map_add_list_at (bytemap s) bs addr)
-                      capmeta0 s)) l) as F.
-      {
-        intros.
-        apply Forall_forall. intros.
-        eapply Forall_forall in H; eauto.
-      }
-      clear H.
-     *)
-
-    revert fuel R2.
-    dependent induction l;intros.
-    +
+    revert fuel R.
+    dependent induction l; intros.
+    -
       cbn in R2.
       state_inv_steps.
-      apply M'.
-    +
-      rename a into mval.
-      apply Forall_cons_iff in H.
-      destruct H as [H1 H2].
+      assumption.
+    -
       cbn in R2.
-      state_inv_steps_quick.
-      repeat break_let.
-      state_inv_steps_quick.
+      state_inv_steps.
+      destruct a' as [addr'' s''].
+      apply Forall_cons_iff in F.
+      destruct F as [F1 F2].
+      apply F1 in R3;auto.
+      eapply IHl;eauto.
+  Qed.
+
+  Fact do_pad_preserves
+    (a:AddressValue.t)
+    (n:nat)
+    (s:mem_state_r):
+    AddressValue.to_Z a + Z.of_nat n <= AddressValue.ADDR_LIMIT ->
+    mem_invariant s ->  mem_invariant (do_pad a n s).
+  Proof.
+    intros L M.
+    unfold do_pad.
+    eapply mem_state_with_bytes_preserves;eauto.
+    apply repeat_length.
+  Qed.
+
+  Lemma struct_typecheck_inv
+    (tag_sym: sym)
+    (tagdefs: SymMap.t CoqCtype.tag_definition)
+    (values: list (identifier * CoqCtype.ctype * mem_value_indt)):
+
+    struct_typecheck tag_sym tagdefs values  = inr tt ->
+
+    (exists members flexible_opt,
+      SymMap.find tag_sym tagdefs = Some (CoqCtype.StructDef members flexible_opt)
+      /\
+        forall members',
+          ((flexible_opt = None /\ members' = members)
+           \/
+             (exists attrs ident qs ty, flexible_opt = Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) /\ members' = members ++ [ (ident, (attrs, None, qs, ty)) ])) ->
+          Forall2
+            (fun '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
+               ident_equal s_id v_id = true
+               /\
+                 CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty = inr true)
+            values members').
+  Proof.
+    intros H.
+    unfold struct_typecheck in H.
+    break_match_hyp;[|inl_inr].
+    break_match_hyp;[|inl_inr].
+    rename l into members, o into flexible_opt.
+    exists members, flexible_opt.
+    split;[reflexivity|].
+    intros members' H0.
+    Opaque ident_equal CoqCtype.ctypeEqual.
+    state_inv_steps.
+    -
+      destruct H0 as [[H5 H6] | H6];[some_none|].
+      destruct H6 as [a' [i' [q' [c' [H6 H7]]]]].
+      some_inv.
       subst.
-      rename t into funptrmap',
-        l0 into bs',
-        t0 into capmeta'.
-
-      specialize (H1 _ M _ _ _ _ _ R2); clear R2 M.
-
-      specialize (IHl H2)
-        with
-        (addr' := addr')
-        (b0 := b0 ++ bs')
-        (fuel := fuel)
-      .
-      clear H2.
+      clear H1.
+      admit.
+    -
+      destruct H0 as [[H5 H6] | H6].
+      +
+        clear H1 H5.
+        break_match_hyp;[congruence|].
+        bool_to_prop_hyp.
+        subst n0.
+        subst.
+        admit.
+      +
+        destruct H6 as [a' [i' [q' [c' [H6 H7]]]]].
+        some_none.
   Admitted.
-  Transparent repr.
+
+  Fact repr_struct_preserves
+    (sym: sym)
+    (l : list (identifier * CoqCtype.ctype * mem_value_indt))
+    (F: Forall
+          (fun '(_, _, b) =>
+             forall s s' : mem_state_r,
+               mem_invariant s ->
+               forall (addr addr' : AddressValue.t) (fuel : nat),
+                 repr fuel addr b s = inr (s', addr') -> mem_invariant s') l)
+    (s s' : mem_state_r)
+    (M: mem_invariant s)
+    (addr addr': AddressValue.t)
+    (fuel: nat):
+    repr fuel addr (MVstruct sym l) s = inr (s', addr') ->  mem_invariant s'.
+  Proof.
+    intros R.
+    destruct fuel;[apply raise_either_inr_inv in R;tauto|].
+    Opaque sizeof offsetsof_struct struct_typecheck.
+    cbn in R.
+    state_inv_steps.
+    destruct x.
+    apply struct_typecheck_inv in R2.
+    apply do_pad_preserves.
+    +
+      bool_to_prop_hyp.
+      rename t into addr'.
+      apply sizeof_pos in R4.
+      (* TODO: *)
+      admit.
+    +
+      destruct R2 as [members [flexible_opt [FT R2]]].
+      Transparent offsetsof_struct.
+      destruct DEFAULT_FUEL eqn:DF;[inv DF|].
+      cbn in R5.
+      Opaque offsetsof_struct.
+      rewrite FT in R5.
+      state_inv_step_quick.
+      destruct (Datatypes.length members);[congruence|].
+      state_inv_step_quick.
+      destruct flexible_opt.
+      *
+        (* some *)
+        repeat break_let.
+        apply ret_inr in R9.
+        invc R9.
+        rename t into addr'.
+        rename c into t.
+        specialize (R2 (members ++ [(i, (a, None, q, t))])).
+        autospecialize R2.
+        {
+          right.
+          exists a, i, q, t.
+          auto.
+        }
+        admit.
+      *
+        (* none *)
+        repeat break_let.
+        apply ret_inr in R9.
+        invc R9.
+        cbn in *.
+        specialize (R2 members).
+        autospecialize R2.
+        {
+          left.
+          auto.
+        }
+        clear R7.
+        rename l into values.
+        admit.
+  Admitted.
+  Transparent sizeof offsetsof_struct struct_typecheck.
 
   Lemma repr_preserves
     (fuel : nat)
     (mval: mem_value)
-    (s : mem_state_r)
+    (s s': mem_state_r)
     (M: mem_invariant s)
-    (addr: AddressValue.t)
-    (bs : list (option ascii))
-    (funptrmap : ZMap.M.t (digest * string * Capability_GS.t))
-    (capmeta : AMap.M.t (bool * CapGhostState)):
+    (addr addr': AddressValue.t):
 
-    repr fuel (CheriMemoryImplWithProofs.funptrmap s) (CheriMemoryImplWithProofs.capmeta s)
-      addr mval = inr (funptrmap, capmeta, bs)
+    repr fuel addr mval s = inr (s', addr')
     ->
-    mem_invariant
-      (mem_state_with_funptrmap_bytemap_capmeta funptrmap
-         (AMap.map_add_list_at (bytemap s) bs addr) capmeta s).
+      mem_invariant s'.
   Proof.
     Opaque sizeof.
-
     revert fuel.
     dependent induction mval;intros fuel R.
     - (* MVunspecified *)
@@ -5935,12 +5567,10 @@ Module CheriMemoryImplWithProofs
       unfold repr in R.
       state_inv_steps_quick.
       rename sz into szn.
-      assert(length bs = szn) as BL by (subst bs; apply repeat_length).
-      rewrite H2 in *; clear H2.
-      rewrite BL in R4.
       apply sizeof_pos in R2; rename R2 into SP.
       bool_to_prop_hyp.
       eapply mem_state_with_bytes_preserves;eauto.
+      apply repeat_length.
     -
       (* MVinteger *)
       destruct fuel;[apply raise_either_inr_inv in R;tauto|].
@@ -5971,8 +5601,8 @@ Module CheriMemoryImplWithProofs
       unfold repr in R.
       state_inv_steps.
       rename sz into szn.
-      apply monadic_list_init_serr_len in R4.
-      repeat rewrite map_length, R4 in *.
+      apply monadic_list_init_serr_len in R3.
+      repeat rewrite map_length, R3 in *.
       apply sizeof_pos in R2.
       bool_to_prop_hyp.
 
@@ -6010,20 +5640,28 @@ Module CheriMemoryImplWithProofs
       (* MVarray *)
       eapply repr_array_preserves;eauto.
     -
-      cbn in R.
-      Opaque repr.
-      state_inv_steps.
-      Transparent repr.
-      admit.
+      (* MVstruct *)
+      eapply repr_struct_preserves;eauto.
     -
       (* MVunion *)
+      destruct fuel;[apply raise_either_inr_inv in R;tauto|].
       cbn in R.
-      Opaque repr.
       state_inv_steps.
-      Transparent repr.
-      admit.
+      apply do_pad_preserves.
+      +
+        clear IHmval.
+        bool_to_prop_hyp.
+        rename t into addr'.
+        apply sizeof_pos in R2.
+        (* May need `repl` monotonicity fact showing that addr'>addr,
+           or even stronger one, showing that it [addr'-addr = sizeof mval]
+         *)
+        clear - R3 R2 R4.
+        admit.
+      +
+        eapply IHmval;eauto.
   Admitted.
-  Transparent sizeof repr.
+  Transparent sizeof.
 
   Instance store_PreservesInvariant
     (loc : location_ocaml)
@@ -6067,8 +5705,7 @@ Module CheriMemoryImplWithProofs
       apply serr2InternalErr_inv in H0.
       destruct x5.
       subst.
-      clear - s'5 H H0.
-      eapply repr_preserves;eauto.
+      apply repr_preserves in H0;eauto.
     -
       (* handling `is_locking` *)
       break_if;[|preserves_step].
@@ -6439,7 +6076,7 @@ Module CheriMemoryImplWithProofs
       (forall a : AddressValue.t,
           let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
           let a0 := align_down (AddressValue.to_Z dst_a) alignment in
-          let a1 := align_up (AddressValue.to_Z dst_a + ((Z.of_nat n) - 1)) alignment in
+          let a1 := align_down (AddressValue.to_Z dst_a + ((Z.of_nat n) - 1)) alignment in
           (a0 <= AddressValue.to_Z a <= a1) ->
           forall (tg : bool) (gs : CapGhostState),
             AMap.M.MapsTo a (tg, gs) (capmeta s) ->
@@ -6512,6 +6149,7 @@ Module CheriMemoryImplWithProofs
             (* Caps in range are untagged. H0/H1 is false *)
             clear IHn Heqo H2 bs.
 
+            (*
             specialize (CIN addr R true g).
             autospecialize CIN.
             {
@@ -6524,6 +6162,7 @@ Module CheriMemoryImplWithProofs
 
             (*
             TODO: case anlysis on n/Sn
+            *)
 
             autospecialize IHn.
             {
@@ -6579,15 +6218,10 @@ Module CheriMemoryImplWithProofs
                *)
               admit.
              *)
-            admit.
-      *
-        (* removing *)
-        admit.
-  Admitted. (* TODO: postponed *)
-
+  Admitted.
 
   (* TODO: move *)
-  Lemma CapGhostState_eq_dec:
+  Fact CapGhostState_eq_dec:
     forall x y : bool * CapGhostState, {x = y} + {x <> y}.
   Proof.
     intros x y.

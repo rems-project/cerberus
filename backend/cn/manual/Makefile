@@ -64,7 +64,7 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#CN_MATCH#match#g" \
 	  | sed "s#CN_LET#let#g" \
 	  | sed "s#VOID#void#g" \
-	  | sed "s#CN_BOOL#bool#g" \
+	  | sed "s#CN_BOOL#boolean#g" \
 	  | sed "s#CN_INTEGER#integer#g" \
 	  | sed "s#CN_BITS#bits#g" \
 	  | sed "s#CN_REAL#real#g" \
@@ -73,9 +73,9 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#STRUCT#struct#g" \
 	  | sed "s#CN_DATATYPE#datatype#g" \
 	  | sed "s#CN_MAP#map#g" \
-	  | sed "s#CN_LIST#list#g" \
-	  | sed "s#CN_TUPLE#tuple#g" \
-	  | sed "s#CN_set#set#g" \
+	  | sed "s#CN_LIST#cn_list#g" \
+	  | sed "s#CN_TUPLE#cn_tuple#g" \
+	  | sed "s#CN_set#cn_set#g" \
 	  | sed "s#CN_GOOD#good#g" \
 	  | sed "s#CN_FUNCTION#function#g" \
 	  | sed "s#CN_LEMMA#lemma#g" \
@@ -89,13 +89,13 @@ more_readable_grammar.md: grammar.md
 	  | sed "s#CN_PACK#pack#g" \
 	  | sed "s#CN_UNPACK#unpack#g" \
 	  | sed "s#CN_EXTRACT#extract#g" \
-	  | sed "s#CN_HAVE#have#g" \
+	  | sed "s#CN_HAVE#cn_have#g" \
 	  | sed "s#CN_INSTANTIATE#instantiate#g" \
 	  | sed "s#CN_SPLIT_CASE#split_case#g" \
 	  | sed "s#CN_UNFOLD#unfold#g" \
 	  | sed "s#CN_APPLY#apply#g" \
 	  | sed "s#INLINE#inline#g" \
-	  | sed "s#CN_PRINT#print#g" \
+	  | sed "s#CN_PRINT#cn_print#g" \
 	  | sed "s#CN_OWNED#Owned#g" \
 	  | sed "s#CN_BLOCK#Block#g" \
 	  | sed "s#ASSERT#assert#g" \

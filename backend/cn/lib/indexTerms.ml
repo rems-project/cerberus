@@ -737,37 +737,6 @@ let pointer_offset_ (base, offset) loc =
   arrayShift_ ~base (Sctypes.Integer Char) ~index:offset loc
 
 
-let array_index_to_pointer ~base ~item_ct ~index loc =
-  arrayShift_ ~base ~index item_ct loc
-
-
-let array_offset_of_pointer ~base ~pointer loc =
-  sub_ (pointerToIntegerCast_ pointer loc, pointerToIntegerCast_ base loc) loc
-
-
-let array_pointer_to_index ~base ~item_size ~pointer loc =
-  (match is_z item_size with None -> assert false | Some z -> assert (Z.lt Z.zero z));
-  div_ (array_offset_of_pointer ~base ~pointer loc, item_size)
-
-
-let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer loc =
-  let offset = array_offset_of_pointer ~base ~pointer:qpointer loc in
-  and_
-    [ lePointer_
-        (pointer_offset_ (base, mul_ (item_size, from_index) loc) loc, qpointer)
-        loc;
-      ltPointer_
-        (qpointer, pointer_offset_ (base, mul_ (item_size, to_index) loc) loc)
-        loc;
-      divisible_ (offset, item_size) loc
-    ]
-    loc
-
-
-let cellPointer_ ~base ~step ~starti ~endi ~p =
-  subarray_condition ~base ~item_size:step ~from_index:starti ~to_index:endi ~qpointer:p
-
-
 (* list_op *)
 let nil_ ~item_bt loc = IT (Nil item_bt, BT.List item_bt, loc)
 
@@ -795,16 +764,6 @@ let rec dest_list it =
   | Cons (x, xs) -> Option.map (fun ys -> x :: ys) (dest_list xs)
   (* TODO: maybe include Tail, if we ever actually use it? *)
   | _ -> None
-
-
-let mk_in_loc_list (ptr, opts) loc =
-  match dest_list opts with
-  | Some xs -> or_sterm_ (List.map (fun x -> eq_sterm_ (ptr, x) loc) xs) loc
-  | None ->
-    Pp.warn
-      loc
-      (Pp.item "cannot enumerate in_loc_list arg, treating as unspecified" (pp opts));
-    sym_ (Sym.fresh_named "unspecified_in_loc_list", SurfaceBaseTypes.Bool, loc)
 
 
 (* set_op *)

@@ -56,6 +56,10 @@ let string_of_cparser_cause = function
       "unterminated " ^ str ^ " comment"
   | Cparser_mismatched_magic_comment ->
       "magic comment syntax at open but not close"
+  | Cparser_experimental_keyword str -> 
+      "experimental keyword '" ^ str ^ "' (use of experimental features is discouraged)"
+  | Cparser_unimplemented_keyword str -> 
+      "unimplemented keyword '" ^ str ^ "'"
 
 
 let string_of_constraint_violation = function

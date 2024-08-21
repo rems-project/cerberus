@@ -1,5 +1,5 @@
 /*@
-function (bool) bw_and_precedence() {
+function (boolean) bw_and_precedence() {
     let x = 0i32;
     ~x & 0i32 == 0i32
 }

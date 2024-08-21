@@ -134,24 +134,6 @@ let array_to_list_def =
       | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt loc)) )
 
 
-let in_loc_list_def =
-  ( "in_loc_list",
-    Sym.fresh_named "in_loc_list",
-    mk_arg2_err (fun tup loc -> return (IT.mk_in_loc_list tup loc)) )
-
-
-let cellpointer_def =
-  ( "cellPointer",
-    Sym.fresh_named "cellPointer",
-    mk_arg5 (fun (base, step, starti, endi, p) loc ->
-      let base = IT.term_of_sterm base in
-      let step = IT.term_of_sterm step in
-      let starti = IT.term_of_sterm starti in
-      let endi = IT.term_of_sterm endi in
-      let p = IT.term_of_sterm p in
-      IT.sterm_of_term (IT.cellPointer_ ~base ~step ~starti ~endi ~p loc)) )
-
-
 let is_null_def =
   ( "is_null",
     Sym.fresh_named "is_null",
@@ -225,8 +207,6 @@ let builtin_funs =
       not_def;
       nth_list_def;
       array_to_list_def;
-      in_loc_list_def;
-      cellpointer_def;
       is_null_def;
       prov_eq_def;
       ptr_eq_def;
