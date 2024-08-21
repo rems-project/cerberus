@@ -456,11 +456,11 @@ let pp_message te =
     let state = trace ctxt model Explain.no_ex in
     { short; descr = Some descr; state = Some state }
   | Undecidable_constraints { ctxt; model } ->
-      let short = !^"Undecidable constraints" in
-      let state =
-        trace ctxt model Explain.no_ex
-      in
-      { short; descr = Some !^""; state = Some state } (* TODO *)
+    let short = !^"Undecidable constraints" in
+    let state =
+      trace ctxt model Explain.no_ex
+    in
+    { short; descr = Some !^""; state = Some state } (* TODO *)
   | Unproven_constraint { constr; requests; info; ctxt; model } ->
     let short = !^"Unprovable constraint" in
     let state =

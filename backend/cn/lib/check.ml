@@ -1675,7 +1675,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
               fail (fun ctxt ->
                 { loc;
                   msg =
-                    Unproven_constraint
+                    Unproven_constraint (* CHT: TODO *)
                       { constr = lc; info = (loc, None); requests = []; ctxt; model }
                 }))
          | M_CN_inline _nms -> return ()

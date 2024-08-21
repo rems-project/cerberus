@@ -149,7 +149,6 @@ let interesting_uninteresting
   | [], _ -> details "more" uninteresting_table
   | _, _ -> interesting_table ^ details "more" uninteresting_table
 
-
 let unsatisfied_interesting_uninteresting
   unsatisfied_table
   interesting_table
