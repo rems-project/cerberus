@@ -7,5 +7,5 @@ int* f(int *p)
 int main(void)
 {
     int arr = 0;
-    f(&arr + 1); 
+    f(&arr + 1);
 }

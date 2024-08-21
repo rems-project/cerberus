@@ -28,6 +28,11 @@ Wondering if the juice is worth the squeeze? Jump to [Why this process?](#why-th
 We currently don't have any specific environment setup, but will add information
 here as we progress in the project.
 
+Mac OS X users should install the coreutils package with the following to run the `timeout` command which is used in test scripts (like `tests/run-cn.sh`).
+```
+brew install coreutils
+```
+
 ## Contributing code
 
 We are following [Trunk Based Development](https://trunkbaseddevelopment.com/)

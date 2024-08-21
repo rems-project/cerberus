@@ -336,6 +336,9 @@ Module Type CheriMemoryImpl
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta).
 
+  Definition mem_state_with_bytemap_capmeta bytemap capmeta (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap capmeta.
+
   Definition mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(last_address) r.(allocations) funptrmap r.(varargs) r.(next_varargs_id) bytemap capmeta.
 
@@ -541,7 +544,7 @@ Module Type CheriMemoryImpl
         (* mprint_msg ("Alloc: " ++ String.hex_str addr ++ " (" ++ String.dec_str size ++ ")" ) ;; *)
         ret (alloc_id, (AddressValue.of_Z addr)).
 
-  Definition alignof
+  Fixpoint alignof
     (fuel: nat)
     (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
     (ty: CoqCtype.ctype): serr nat
@@ -583,8 +586,12 @@ Module Type CheriMemoryImpl
                         alignof_ fuel (CoqCtype.Ctype [] (CoqCtype.Array elem_ty None))
                     end ;;
                   monadic_fold_left
-                    (fun acc '(_, (_, _, _, ty)) =>
-                       al <- alignof_ fuel ty ;;
+                    (fun acc '(_, (_, align_opt, _, ty)) =>
+                       al <- match align_opt with
+                            | None => alignof fuel (Some tagDefs) ty
+                            | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                            end ;;
                        ret (Nat.max al acc)
                     )
                     membrs
@@ -597,8 +604,12 @@ Module Type CheriMemoryImpl
                   raise "no alignment for union with struct tag"
               | Some (CoqCtype.UnionDef membrs) =>
                   monadic_fold_left
-                    (fun acc '(_, (_, _, ty)) =>
-                       al <- alignof_ fuel ty ;;
+                    (fun acc '(_, (_, align_opt, _, ty)) =>
+                       al <- match align_opt with
+                            | None => alignof fuel (Some tagDefs) ty
+                            | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                            | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                            end ;;
                        ret (Nat.max al acc)
                     )
                     membrs
@@ -629,9 +640,14 @@ Module Type CheriMemoryImpl
             in
             '(xs, maxoffset) <-
               monadic_fold_left
-                (fun '(xs, last_offset) '(membr, (_, _, _, ty))  =>
+                (fun '(xs, last_offset) '(membr, (_, align_opt, _, ty))  =>
                    size  <- sizeof fuel (Some tagDefs) ty ;;
-                   align <- alignof fuel (Some tagDefs) ty ;;
+                   align <-
+                     match align_opt with
+                     | None => alignof fuel (Some tagDefs) ty
+                     | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                     | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                     end ;;
                    let x_value := Nat.modulo last_offset align in
                    let pad :=
                      if Nat.eqb x_value O
@@ -690,9 +706,13 @@ Module Type CheriMemoryImpl
                        sassert (Nat.ltb 0 (List.length members)) "Empty union encountered" ;;
                        '(max_size, max_align) <-
                          monadic_fold_left
-                           (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+                           (fun '(acc_size, acc_align) '(_, (_, align_opt, _, ty)) =>
                               sz <- sizeof fuel (Some tagDefs) ty ;;
-                              al <- alignof fuel (Some tagDefs) ty ;;
+                              al <- match align_opt with
+                              | None => alignof fuel (Some tagDefs) ty
+                              | Some (CoqCtype.AlignInteger al_n) => ret (Z.to_nat al_n)
+                              | Some (CoqCtype.AlignType al_ty) => alignof fuel (Some tagDefs) al_ty
+                              end ;;
                               ret (Nat.max acc_size sz, Nat.max acc_align al)
                            )
                            members (0%nat, 0%nat) ;;
@@ -781,15 +801,51 @@ Module Type CheriMemoryImpl
     :=
     AMap.M.add addr (C.cap_is_valid c, C.get_ghost_state c) capmeta.
 
+  Definition do_pad
+    (a:AddressValue.t)
+    (n:nat)
+    (s:mem_state_r):
+    mem_state_r
+    :=
+    let pad_bs := List.repeat None n in
+    mem_state_with_bytemap_capmeta
+      (AMap.map_add_list_at s.(bytemap) pad_bs a)
+      (capmeta_ghost_tags a n (capmeta s))
+      s.
+
+  Definition struct_typecheck
+    (tag_sym: sym)
+    (tagdefs: SymMap.t CoqCtype.tag_definition)
+    (values: list (identifier * CoqCtype.ctype * mem_value_indt))
+    : serr unit
+    :=
+    match SymMap.find tag_sym tagdefs with
+    | Some (CoqCtype.StructDef members flexible_opt) =>
+        sassert (Nat.ltb 0 (List.length members)) "Empty struct encountered" ;;
+        let members :=
+          match flexible_opt with
+          | None => members
+          | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) =>
+              members ++ [ (ident, (attrs, None, qs, ty)) ]
+          end
+        in
+        sassert (Nat.eqb (List.length members) (List.length values)) "Wrong of number struct fields" ;;
+        monadic_fold_left2
+          (fun _ '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
+             sassert (ident_equal s_id v_id) "struct field identifiers mismatch" ;;
+             same <- CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty ;;
+             sassert same "struct field types mismatch" ;;
+             ret tt
+          ) tt values members
+    | _ => raise "struct tagdefs mismatch"
+    end.
+
   Fixpoint repr
     (fuel: nat)
-    (funptrmap: ZMap.M.t (digest * string * C.t))
-    (capmeta : AMap.M.t (bool*CapGhostState))
     (addr : AddressValue.t)
     (mval : mem_value)
-    : serr ((ZMap.M.t (digest * string * C.t))
-            * (AMap.M.t (bool*CapGhostState))
-            * (list (option ascii)))
+    (s: mem_state)
+    : serr (mem_state * AddressValue.t)
     :=
     match fuel with
     | O => raise "out of fuel in repr"
@@ -797,103 +853,127 @@ Module Type CheriMemoryImpl
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
+            sassert ((AddressValue.to_Z addr + (Z.of_nat sz)) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             let bs := List.repeat None sz in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap, (capmeta_ghost_tags addr sz capmeta), bs)
-        | MVinteger ity (IV n_value) =>
+            ret (mem_state_with_bytemap_capmeta
+                   (AMap.map_add_list_at s.(bytemap) bs addr)
+                   (capmeta_ghost_tags addr sz (capmeta s))
+                   s
+                ,
+                AddressValue.with_offset addr (Z.of_nat sz))
+        | MVinteger ity (IV ivalue) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
-            bs' <- bytes_of_Z iss sz n_value ;;
+            bs' <- bytes_of_Z iss sz ivalue ;;
             let bs := List.map (Some) bs' in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
-        | MVinteger ity (IC _ c_value)
+            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+
+            ret (mem_state_with_bytemap_capmeta
+                   (AMap.map_add_list_at s.(bytemap) bs addr)
+                   (capmeta_ghost_tags addr (List.length bs) (capmeta s))
+                   s
+                ,
+                AddressValue.with_offset addr (Z.of_nat sz))
+        | MVinteger ity (IC _ c)
           =>
             match ity with
             | CoqIntegerType.Signed CoqIntegerType.Intptr_t
             | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
               =>
-                '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
+                '(cb, ct) <- option2serr "int encoding error" (C.encode true c) ;;
+                let sz := length cb in
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
-                let capmeta := update_capmeta c_value addr capmeta in
-                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-                ret (funptrmap, capmeta, List.map (Some) cb)
+                sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+
+                let cm := update_capmeta c addr (capmeta s) in
+                let bs := List.map (Some) cb in
+                ret (mem_state_with_bytemap_capmeta
+                       (AMap.map_add_list_at s.(bytemap) bs addr)
+                       cm
+                       s
+                    ,
+                    AddressValue.with_offset addr (Z.of_nat sz))
             | _ =>
                 raise "invalid integer value (capability for non-(u)intptr_t"
             end
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
+            sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             bs' <- bytes_of_Z true sz (bits_of_float fval) ;;
             let bs := List.map (Some) bs' in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap, (capmeta_ghost_tags addr (List.length bs) capmeta), bs)
+            ret (mem_state_with_bytemap_capmeta
+                   (AMap.map_add_list_at s.(bytemap) bs addr)
+                   (capmeta_ghost_tags addr sz (capmeta s))
+                   s
+                ,
+                AddressValue.with_offset addr (Z.of_nat sz))
         | MVpointer ref_ty ptrval_ =>
             match ptrval_ with
             | PVfunction
                 ((FP_valid (CoqSymbol.Symbol file_dig n_value opt_name)) as
                   fp) =>
-                let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
+                let '(fm, c_value) := resolve_function_pointer (funptrmap s) fp in
                 '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
-                let capmeta := update_capmeta c_value addr capmeta in
-                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-                ret (funptrmap, capmeta, List.map (Some) cb)
-            | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
-                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
+                let sz := length cb in
+                sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+                let cm := update_capmeta c_value addr (capmeta s) in
+                let bs := List.map (Some) cb in
+                ret (mem_state_with_funptrmap_bytemap_capmeta
+                       fm
+                       (AMap.map_add_list_at s.(bytemap) bs addr)
+                       cm
+                       s
+                    ,
+                    AddressValue.with_offset addr (Z.of_nat sz))
+            | (PVfunction (FP_invalid c) | PVconcrete c) =>
+                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
-                let capmeta := update_capmeta c_value addr capmeta in
-                sassert (AddressValue.to_Z addr + (Z.of_nat (length cb)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-                ret (funptrmap, capmeta, List.map (Some) cb)
+                let sz := length cb in
+                sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+                let cm := update_capmeta c addr (capmeta s) in
+                let bs := List.map (Some) cb in
+                ret (mem_state_with_bytemap_capmeta
+                       (AMap.map_add_list_at s.(bytemap) bs addr)
+                       cm
+                       s
+                    ,
+                    AddressValue.with_offset addr (Z.of_nat sz))
             end
         | MVarray mvals =>
-            (*
-              This check is redundant since if `monadic_fold_left` succeeds it means all elements
-              fit the address space. But we can opt to add it back later, if needed by proofs.
-
-              ct <- typeof (MVarray mvals) ;;
-              sz <- sizeof DEFAULT_FUEL None ct ;;
-              sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "array object does not fit in address space" ;;
-             *)
-            '(_, funptrmap, capmeta, bs) <-
-              monadic_fold_left
-                (fun '(addr, funptrmap, captmeta, bs) (mval : mem_value) =>
-                   '(funptrmap, capmeta, bs') <- repr fuel funptrmap capmeta addr mval ;;
-                   let addr := AddressValue.with_offset addr (Z.of_nat (List.length bs')) in
-                   ret (addr, funptrmap, capmeta, (bs ++ bs')))
-                mvals (addr, funptrmap, capmeta, []) ;;
-            ret (funptrmap, capmeta, bs)
+            monadic_fold_left
+              (fun '(s', addr') (mval': mem_value) => repr fuel addr' mval' s')
+              mvals (s, addr)
+        | MVunion tag_sym memb_ident mval =>
+            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
+            sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+            '(s', pad_addr) <- repr fuel addr mval s ;;
+            let pad_size := Nat.sub sz (Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr)) in
+            let s'' := do_pad pad_addr pad_size s' in
+            ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
-            let padding_byte := None in
-            '(offs, last_offn) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
-            let last_off := Z.of_nat last_offn in
+            struct_typecheck tag_sym (TD.tagDefs tt) xs ;;
             szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
             let sz := Z.of_nat szn in
-            let final_pad := sz - last_off in
-            '(funptrmap, capmeta, _, bs) <-
+            sassert ((AddressValue.to_Z addr + sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+            '(offs, final_off) <- offsetsof_struct DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
+            '(s', final_pad_addr) <-
               monadic_fold_left2
-                (fun '(funptrmap, capmeta, last_off, acc)
-                   '(ident, ty, offn)
-                   '(_, _, mval) =>
-                   let off := Z.of_nat offn in
-                   let pad := off - last_off in
-                   '(funptrmap, capmeta, bs) <-
-                     repr fuel funptrmap capmeta (AddressValue.with_offset addr off) mval ;;
+                (fun '(s0, addr0) '(ident, ty, off) '(_, _, mval) =>
+                   (*  off - offset of this field from the start of struct, *after* padding *)
+                   let value_a := AddressValue.with_offset addr (Z.of_nat off) in
+                   let pad_size := AddressValue.to_Z value_a - AddressValue.to_Z addr0 in
+                   let s1 := do_pad addr0 (Z.to_nat pad_size) s0 in
+                   (* write the value *)
+                   '(s2, end_addr) <- repr fuel value_a mval s1 ;;
                    szn <- sizeof DEFAULT_FUEL None ty ;;
-                   let sz := Z.of_nat szn in
-                   ret (funptrmap, capmeta, off + sz,
-                       (acc ++
-                          (List.repeat padding_byte (Z.to_nat pad)) ++ bs)))
-                (funptrmap, capmeta, 0, []) offs xs ;;
+                   ret (s2, AddressValue.with_offset value_a (Z.of_nat szn)))
 
-            let bs := bs ++ (List.repeat padding_byte (Z.to_nat final_pad)) in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap, capmeta, bs)
-        | MVunion tag_sym memb_ident mval =>
-            size <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
-            '(funptrmap', capmeta', bs) <- repr fuel funptrmap capmeta addr mval ;;
-            let bs := bs ++ (List.repeat None (Nat.sub size (List.length bs))) in
-            sassert (AddressValue.to_Z addr + (Z.of_nat (length bs)) <=? AddressValue.ADDR_LIMIT) "object does not fit in address space" ;;
-            ret (funptrmap', capmeta', bs)
+                (s, addr) offs xs ;;
+
+            let final_pad_size := sz - (Z.of_nat final_off) in
+            let s'' := do_pad final_pad_addr (Z.to_nat final_pad_size) s' in
+            ret (s'', AddressValue.with_offset final_pad_addr final_pad_size)
         end
     end.
 
@@ -970,26 +1050,14 @@ Module Type CheriMemoryImpl
            in
            '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) readonly_status ;;
            (* We should be careful not to introduce a state change here
-         in case of error which happens after the [allocator]
-         invocation, as [allocator] modifies state. In the current
-         implementation, this is not happening, as errors are handled
-         as [InternalErr] which supposedly should terminate program
-         evaluation.  *)
-           st <- get ;;
-           '(funptrmap, capmeta, pre_bs) <- serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval) ;;
-           let bs := mapi (fun i b => (AddressValue.with_offset addr (Z.of_nat i), b)) pre_bs in
-           let bytemap := List.fold_left (fun acc '(addr, b) => AMap.M.add addr b acc) bs st.(bytemap) in
-           put {|
-               next_alloc_id    := st.(next_alloc_id);
-               last_address     := st.(last_address) ;
-               allocations      := st.(allocations);
-               funptrmap        := funptrmap;
-               varargs          := st.(varargs);
-               next_varargs_id  := st.(next_varargs_id);
-               bytemap          := bytemap;
-               capmeta          := capmeta;
-             |}
-           ;;
+              in case of error which happens after the [allocator]
+              invocation, as [allocator] modifies state. In the current
+              implementation, this is not happening, as errors are handled
+              as [InternalErr] which supposedly should terminate program
+              evaluation.  *)
+           s <- get ;;
+           '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL addr mval s) ;;
+           put s' ;;
            ret (alloc_id, addr, ro)
        end)
         >>=
@@ -1015,7 +1083,7 @@ Module Type CheriMemoryImpl
      allocations may correspond to given address.
    *)
   Definition find_live_allocation (addr:AddressValue.t) : memM (option (storage_instance_id*allocation)) :=
-    get >>= fun st =>
+    st <- get ;;
         ret
           (ZMap.M.fold (fun alloc_id alloc acc =>
                         match acc with
@@ -1074,26 +1142,24 @@ Module Type CheriMemoryImpl
               |}).
 
   Definition get_allocation_opt (alloc_id : Z) : memM (option allocation) :=
-    get >>= fun st => ret (ZMap.M.find alloc_id st.(allocations)).
+    st <- get ;; ret (ZMap.M.find alloc_id st.(allocations)).
 
   Definition get_allocation (alloc_id : Z) : memM allocation :=
-    get >>=
-      fun st =>
-        match ZMap.M.find alloc_id st.(allocations) with
-        | Some v => ret v
-        | None =>
-            fail_noloc (MerrOutsideLifetime
-                          (String.append "get_allocation, alloc_id="
-                             (of_Z alloc_id)))
-        end.
+    st <- get ;;
+    match ZMap.M.find alloc_id st.(allocations) with
+    | Some v => ret v
+    | None =>
+        fail_noloc (MerrOutsideLifetime
+                      (String.append "get_allocation, alloc_id="
+                         (of_Z alloc_id)))
+    end.
 
   Definition is_dead_allocation (alloc_id : storage_instance_id) : memM bool :=
-    get >>=
-      fun st =>
-        match ZMap.M.find alloc_id st.(allocations) with
-        | Some a => ret a.(is_dead)
-        | None => ret true
-        end.
+    st <- get ;;
+    match ZMap.M.find alloc_id st.(allocations) with
+    | Some a => ret a.(is_dead)
+    | None => ret true
+    end.
 
   (** Convert an arbitrary integer value to unsinged cap value *)
   Definition wrap_cap_value (n_value : Z) : Z :=
@@ -1673,14 +1739,9 @@ Module Type CheriMemoryImpl
         cap_check loc c_value 0 WriteIntent szn ;;
         let addr := C.cap_get_value c_value in
 
-        st <- get ;;
-        '(funptrmap, capmeta, pre_bs) <-
-          serr2InternalErr (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
-        ;;
-
-        let bytemap := AMap.map_add_list_at st.(bytemap) pre_bs addr in
-        put (mem_state_with_funptrmap_bytemap_capmeta funptrmap bytemap capmeta st)
-        ;;
+        s <- get ;;
+        '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL addr mval s) ;;
+        put s' ;;
         ret (FP Write addr szn)
       in
 
@@ -1821,19 +1882,18 @@ Module Type CheriMemoryImpl
         ret (AddressValue.eqb (C.cap_get_value c1) (C.cap_get_value c2))
     | PVfunction (FP_valid sym), PVfunction (FP_invalid c_value)
     | PVfunction (FP_invalid c_value), PVfunction (FP_valid sym) =>
-        get >>=
-          (fun (st : mem_state) =>
-             let n_value :=
-               cap_to_Z c_value - (AddressValue.to_Z initial_address)
-             in
-             match ZMap.M.find n_value st.(funptrmap) with
-             | Some (file_dig, name, _) =>
-                 let sym2 := CoqSymbol.Symbol file_dig n_value (CoqSymbol.SD_Id name) in
-                 ret (CoqSymbol.symbolEquality sym sym2)
-             | None =>
-                 raise (InternalErr
-                          "eq_ptrval ==> FP_valid failed to resolve function symbol")
-             end)
+        st <- get ;;
+        let n_value :=
+          cap_to_Z c_value - (AddressValue.to_Z initial_address)
+        in
+        match ZMap.M.find n_value st.(funptrmap) with
+        | Some (file_dig, name, _) =>
+            let sym2 := CoqSymbol.Symbol file_dig n_value (CoqSymbol.SD_Id name) in
+            ret (CoqSymbol.symbolEquality sym sym2)
+        | None =>
+            raise (InternalErr
+                     "eq_ptrval ==> FP_valid failed to resolve function symbol")
+        end
     | PVfunction _, _
     | _, PVfunction _ =>
         ret false
@@ -2254,21 +2314,20 @@ Module Type CheriMemoryImpl
     |
       PVfunction
         (FP_valid ((CoqSymbol.Symbol _ n_value _) as fp)) =>
-        get >>=
-          (fun (st : mem_state) =>
-             match ity with
-             |
-               (CoqIntegerType.Signed CoqIntegerType.Intptr_t |
-                 CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) =>
-                 match ZMap.M.find n_value st.(funptrmap) with
-                 | Some (file_dig, name, c_value) =>
-                     wrap_intcast ity (IC false c_value)
-                 | None =>
-                     raise (InternalErr "intfromptr: Unknown function")
-                 end
-             | _ =>
-                 ret (IV (AddressValue.to_Z initial_address + n_value))
-             end)
+        st <- get ;;
+        match ity with
+        |
+          (CoqIntegerType.Signed CoqIntegerType.Intptr_t |
+            CoqIntegerType.Unsigned CoqIntegerType.Intptr_t) =>
+            match ZMap.M.find n_value st.(funptrmap) with
+            | Some (file_dig, name, c_value) =>
+                wrap_intcast ity (IC false c_value)
+            | None =>
+                raise (InternalErr "intfromptr: Unknown function")
+            end
+        | _ =>
+            ret (IV (AddressValue.to_Z initial_address + n_value))
+        end
     | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
         if cap_is_null c_value then
           match ity with
@@ -2754,85 +2813,81 @@ Module Type CheriMemoryImpl
     end.
 
   Definition va_start (args:  list (CoqCtype.ctype * pointer_value)) : memM integer_value :=
-    get >>= fun st =>
-        let id := st.(next_varargs_id) in
-        update (fun st => mem_state_with_varargs_next_varargs_id (ZMap.M.add id (0, args) st.(varargs)) (Z.succ st.(next_varargs_id)) st) ;;
-        ret (IV id).
+    st <- get ;;
+    let id := st.(next_varargs_id) in
+    update (fun st => mem_state_with_varargs_next_varargs_id (ZMap.M.add id (0, args) st.(varargs)) (Z.succ st.(next_varargs_id)) st) ;;
+    ret (IV id).
 
   Definition va_copy (va : integer_value) : memM integer_value :=
     match va with
     | IV id =>
-        get >>=
-          fun st =>
-            match ZMap.M.find id st.(varargs) with
-            | Some args =>
-                let id := st.(next_varargs_id) in
-                update
-                  (fun st =>
-                     mem_state_with_varargs_next_varargs_id
-                       (ZMap.M.add id args st.(varargs))
-                       (Z.succ st.(next_varargs_id))
-                       st) ;;
-                ret (IV id)
-            | None =>
-                fail_noloc (MerrWIP "va_copy: not initiliased")
-            end
+        st <- get ;;
+        match ZMap.M.find id st.(varargs) with
+        | Some args =>
+            let id := st.(next_varargs_id) in
+            update
+              (fun st =>
+                 mem_state_with_varargs_next_varargs_id
+                   (ZMap.M.add id args st.(varargs))
+                   (Z.succ st.(next_varargs_id))
+                   st) ;;
+            ret (IV id)
+        | None =>
+            fail_noloc (MerrWIP "va_copy: not initiliased")
+        end
     | _ => fail_noloc (MerrWIP "va_copy: invalid va_list")
     end.
 
   Definition va_arg (va: integer_value) (ty: CoqCtype.ctype): memM pointer_value :=
     match va with
     | IV id =>
-        get >>=
-          fun st =>
-            match ZMap.M.find id st.(varargs) with
-            | Some (i_value, args) =>
-                match Lists.List.nth_error args (Z.to_nat i_value) with
-                | Some (_, ptr) =>
-                    update
-                      (fun st =>
-                         mem_state_with_varargs_next_varargs_id
-                           (ZMap.M.add id (i_value + 1, args) st.(varargs))
-                           st.(next_varargs_id) (* unchanged *)
-                                st) ;;
-                    ret ptr
-                | None =>
-                    fail_noloc
-                      (MerrWIP
-                         "va_arg: invalid number of arguments")
-                end
+        st <- get ;;
+        match ZMap.M.find id st.(varargs) with
+        | Some (i_value, args) =>
+            match Lists.List.nth_error args (Z.to_nat i_value) with
+            | Some (_, ptr) =>
+                update
+                  (fun st =>
+                     mem_state_with_varargs_next_varargs_id
+                       (ZMap.M.add id (i_value + 1, args) st.(varargs))
+                       st.(next_varargs_id) (* unchanged *)
+                            st) ;;
+                ret ptr
             | None =>
-                fail_noloc (MerrWIP "va_arg: not initiliased")
+                fail_noloc
+                  (MerrWIP
+                     "va_arg: invalid number of arguments")
             end
+        | None =>
+            fail_noloc (MerrWIP "va_arg: not initiliased")
+        end
     | _ => fail_noloc (MerrWIP "va_arg: invalid va_list")
     end.
 
   Definition va_end (va : integer_value): memM unit :=
     match va with
     | IV id =>
-        get >>=
-          fun st =>
-            match ZMap.M.find id st.(varargs) with
-            | Some _ =>
-                update
-                  (fun (st : mem_state) =>
-                     mem_state_with_varargs_next_varargs_id
-                       (ZMap.M.remove id st.(varargs))
-                       st.(next_varargs_id) (* unchanged *)
-                            st)
-            | None =>
-                fail_noloc (MerrWIP "va_end: not initiliased")
-            end
+        st <- get ;;
+        match ZMap.M.find id st.(varargs) with
+        | Some _ =>
+            update
+              (fun (st : mem_state) =>
+                 mem_state_with_varargs_next_varargs_id
+                   (ZMap.M.remove id st.(varargs))
+                   st.(next_varargs_id) (* unchanged *)
+                        st)
+        | None =>
+            fail_noloc (MerrWIP "va_end: not initiliased")
+        end
     | _ => fail_noloc (MerrWIP "va_end: invalid va_list")
     end.
 
   Definition va_list (va_idx:Z) : memM (list (CoqCtype.ctype * pointer_value)) :=
-    get >>=
-      fun st=>
-        match ZMap.M.find va_idx st.(varargs) with
-        | Some (n_value, args) => ret args
-        | None => fail_noloc (MerrWIP "va_list")
-        end.
+    st <- get ;;
+    match ZMap.M.find va_idx st.(varargs) with
+    | Some (n_value, args) => ret args
+    | None => fail_noloc (MerrWIP "va_list")
+    end.
 
   Definition copy_alloc_id
     (ival : integer_value) (ptrval : pointer_value)
@@ -3058,19 +3113,18 @@ Module Type CheriMemoryImpl
       | S max_len =>
           cap_check loc c offset ReadIntent 1%nat ;;
           let addr := AddressValue.with_offset (C.cap_get_value c) (Z.of_nat offset) in
-          get >>=
-            (fun st =>
-               let bs := fetch_bytes st.(bytemap) addr 1 in
-               ohd <- option2memM "fetch of 1 byte failed" (List.hd_error bs) ;;
-               match ohd with
-               | None => fail loc MerrReadUninit
-               | Some c_value =>
-                   if Ascii.eqb c_value zero
-                   then ret acc
-                   else
-                     let s_value := String.append acc (String c_value "")
-                     in loop max_len s_value (S offset)
-               end)
+          st <- get;;
+          let bs := fetch_bytes st.(bytemap) addr 1 in
+          ohd <- option2memM "fetch of 1 byte failed" (List.hd_error bs) ;;
+          match ohd with
+          | None => fail loc MerrReadUninit
+          | Some c_value =>
+              if Ascii.eqb c_value zero
+              then ret acc
+              else
+                let s_value := String.append acc (String c_value "")
+                in loop max_len s_value (S offset)
+          end
       end
     in
     loop max_len "" O.
@@ -3117,58 +3171,57 @@ Module Type CheriMemoryImpl
     maxsize_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
     format_val <- option2memM "missing argument"  (List.nth_error args 2%nat) ;;
     cap_val <- option2memM "missing argument"  (List.nth_error args 3%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (funptrmap, c_value) =>
-             (update
-                (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st))
-             ;;
-             match (buf_val, maxsize_val, format_val) with
-             |
-               (MVpointer _ (PVconcrete buf_cap),
-                 MVinteger _ (IV maxsize_n),
-                 MVpointer _ (PVconcrete format_cap)) =>
-                 load_string loc format_cap MAX_STRFCAP_FORMAT_LEN >>=
-                   (fun (format : string) =>
-                      match C.strfcap format c_value with
-                      | None =>
-                          ret
-                            (Some
-                               (MVinteger
-                                  (CoqIntegerType.Signed CoqIntegerType.Long)
-                                  (IV (-1))))
-                      | Some res =>
-                          let res_size := String.length res in
-                          let res_size_n := Z.of_nat res_size in
-                          if Z.geb res_size_n maxsize_n then
-                            ret
-                              (Some
-                                 (MVinteger
-                                    (CoqIntegerType.Signed
-                                       CoqIntegerType.Long)
-                                    (IV (-1))))
-                          else
-                            store_string loc res (Z.to_nat maxsize_n) buf_cap ;;
-                            (ret
-                               (Some
-                                  (MVinteger
-                                     (CoqIntegerType.Signed
-                                        CoqIntegerType.Long) (IV res_size_n))))
-                      end)
-             | (_, _, _) =>
-                 fail loc
-                   (MerrOther
-                      (String.append "call_intrinsic: wrong types in: '"
-                         (String.append name "'")))
-             end
-         end).
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (funptrmap, c_value) =>
+        (update
+           (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st))
+        ;;
+        match (buf_val, maxsize_val, format_val) with
+        |
+          (MVpointer _ (PVconcrete buf_cap),
+            MVinteger _ (IV maxsize_n),
+            MVpointer _ (PVconcrete format_cap)) =>
+            load_string loc format_cap MAX_STRFCAP_FORMAT_LEN >>=
+              (fun (format : string) =>
+                 match C.strfcap format c_value with
+                 | None =>
+                     ret
+                       (Some
+                          (MVinteger
+                             (CoqIntegerType.Signed CoqIntegerType.Long)
+                             (IV (-1))))
+                 | Some res =>
+                     let res_size := String.length res in
+                     let res_size_n := Z.of_nat res_size in
+                     if Z.geb res_size_n maxsize_n then
+                       ret
+                         (Some
+                            (MVinteger
+                               (CoqIntegerType.Signed
+                                  CoqIntegerType.Long)
+                               (IV (-1))))
+                     else
+                       store_string loc res (Z.to_nat maxsize_n) buf_cap ;;
+                       (ret
+                          (Some
+                             (MVinteger
+                                (CoqIntegerType.Signed
+                                   CoqIntegerType.Long) (IV res_size_n))))
+                 end)
+        | (_, _, _) =>
+            fail loc
+              (MerrOther
+                 (String.append "call_intrinsic: wrong types in: '"
+                    (String.append name "'")))
+        end
+    end.
 
   Definition intrinsic_bounds_set
     (loc : location_ocaml) (args : list mem_value)
@@ -3176,31 +3229,30 @@ Module Type CheriMemoryImpl
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
     upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (funptrmap, c_value) =>
-             update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
-             ;;
-             match upper_val with
-             | MVinteger CoqIntegerType.Size_t (IV n_value) =>
-                 let x' := (cap_to_Z c_value) in
-                 let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
-                 in ret (Some (update_cap_in_mem_value cap_val c_value))
-             | _ =>
-                 fail loc
-                   (MerrOther
-                      (String.append
-                         "call_intrinsic: 2nd argument's type is not size_t in: '"
-                         (String.append name "'")))
-             end
-         end).
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (funptrmap, c_value) =>
+        update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
+        ;;
+        match upper_val with
+        | MVinteger CoqIntegerType.Size_t (IV n_value) =>
+            let x' := (cap_to_Z c_value) in
+            let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
+            in ret (Some (update_cap_in_mem_value cap_val c_value))
+        | _ =>
+            fail loc
+              (MerrOther
+                 (String.append
+                    "call_intrinsic: 2nd argument's type is not size_t in: '"
+                    (String.append name "'")))
+        end
+    end.
 
   Definition intrinsic_perms_and
     (loc : location_ocaml) (args : list mem_value)
@@ -3208,188 +3260,181 @@ Module Type CheriMemoryImpl
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
     mask_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (funptrmap, c_value) =>
-             (update
-                (fun (st : mem_state) =>
-                   mem_state_with_funptrmap funptrmap st))
-             ;;
-             match mask_val with
-             | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
-               =>
-                 iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
-                 sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
-                 bytes_value <- serr2InternalErr (bytes_of_Z iss sz n_value) ;;
-                 let bits := bool_bits_of_bytes bytes_value in
-                 match Permissions.of_list bits with
-                 | None =>
-                     fail loc
-                       (MerrOther
-                          (String.append
-                             "call_intrinsic: error decoding permission bits: '"
-                             (String.append name "'")))
-                 | Some pmask =>
-                     let c_value := C.cap_narrow_perms c_value pmask
-                     in ret (Some (update_cap_in_mem_value cap_val c_value))
-                 end
-             | _ =>
-                 fail loc
-                   (MerrOther
-                      (String.append
-                         "call_intrinsic: 2nd argument's type is not size_t in: '"
-                         (String.append name "'")))
-             end
-         end).
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (funptrmap, c_value) =>
+        (update
+           (fun (st : mem_state) =>
+              mem_state_with_funptrmap funptrmap st))
+        ;;
+        match mask_val with
+        | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
+          =>
+            iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
+            sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
+            bytes_value <- serr2InternalErr (bytes_of_Z iss sz n_value) ;;
+            let bits := bool_bits_of_bytes bytes_value in
+            match Permissions.of_list bits with
+            | None =>
+                fail loc
+                  (MerrOther
+                     (String.append
+                        "call_intrinsic: error decoding permission bits: '"
+                        (String.append name "'")))
+            | Some pmask =>
+                let c_value := C.cap_narrow_perms c_value pmask
+                in ret (Some (update_cap_in_mem_value cap_val c_value))
+            end
+        | _ =>
+            fail loc
+              (MerrOther
+                 (String.append
+                    "call_intrinsic: 2nd argument's type is not size_t in: '"
+                    (String.append name "'")))
+        end
+    end.
 
   Definition intrinsic_offset_get
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (_, c_value) =>
-             if (C.get_ghost_state c_value).(bounds_unspecified)
-             then ret (Some (MVunspecified CoqCtype.size_t))
-             else
-               let v_value := C.cap_get_offset c_value in
-               ret (Some (MVinteger CoqIntegerType.Size_t (IV v_value)))
-         end).
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (_, c_value) =>
+        if (C.get_ghost_state c_value).(bounds_unspecified)
+        then ret (Some (MVunspecified CoqCtype.size_t))
+        else
+          let v_value := C.cap_get_offset c_value in
+          ret (Some (MVinteger CoqIntegerType.Size_t (IV v_value)))
+    end.
 
   Definition intrinsic_address_get
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (_, c_value) =>
-             let v_value := (cap_to_Z c_value) in
-             ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
-         end).
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (_, c_value) =>
+        let v_value := (cap_to_Z c_value) in
+        ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
+    end.
 
   Definition intrinsic_base_get
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (_, c_value) =>
-             if (C.get_ghost_state c_value).(bounds_unspecified)
-             then ret (Some (MVunspecified (CoqCtype.ptraddr_t tt)))
-             else
-               let v_value := fst (Bounds.to_Zs (C.cap_get_bounds c_value))
-               in ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
-         end).
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (_, c_value) =>
+        if (C.get_ghost_state c_value).(bounds_unspecified)
+        then ret (Some (MVunspecified (CoqCtype.ptraddr_t tt)))
+        else
+          let v_value := fst (Bounds.to_Zs (C.cap_get_bounds c_value))
+          in ret (Some (MVinteger CoqIntegerType.Ptraddr_t (IV v_value)))
+    end.
 
   Definition intrinsic_length_get
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val
-         with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (_, c_value) =>
-             if (C.get_ghost_state c_value).(bounds_unspecified)
-             then ret (Some (MVunspecified CoqCtype.size_t))
-             else
-               let '(base, limit) := Bounds.to_Zs (C.cap_get_bounds c_value) in
-               (* length, as computed from the internal
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val
+    with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (_, c_value) =>
+        if (C.get_ghost_state c_value).(bounds_unspecified)
+        then ret (Some (MVunspecified CoqCtype.size_t))
+        else
+          let '(base, limit) := Bounds.to_Zs (C.cap_get_bounds c_value) in
+          (* length, as computed from the internal
                                 representation of bounds, could exceed
                                 the width of the return type. To avoid
                                 that we cap it here *)
-               max_size_t <- serr2InternalErr (max_ival CoqIntegerType.Size_t) ;;
-               let length := Z.min (limit - base) (num_of_int max_size_t) in
-               ret (Some (MVinteger CoqIntegerType.Size_t (IV length)))
-         end).
+          max_size_t <- serr2InternalErr (max_ival CoqIntegerType.Size_t) ;;
+          let length := Z.min (limit - base) (num_of_int max_size_t) in
+          ret (Some (MVinteger CoqIntegerType.Size_t (IV length)))
+    end.
 
   Definition intrinsic_tag_get
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match cap_of_mem_value st.(funptrmap) cap_val
-         with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (_, c) =>
-             if (C.get_ghost_state c).(tag_unspecified) then
-               ret (Some (MVunspecified
-                            (CoqCtype.Ctype []
-                               (CoqCtype.Basic
-                                  (CoqCtype.Integer
-                                     CoqIntegerType.Bool)))))
-             else
-               let b_value := if C.cap_is_valid c then 1 else 0
-               in ret (Some (MVinteger CoqIntegerType.Bool (IV b_value)))
-         end).
+    st <- get ;;
+    match cap_of_mem_value st.(funptrmap) cap_val
+    with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (_, c) =>
+        if (C.get_ghost_state c).(tag_unspecified) then
+          ret (Some (MVunspecified
+                       (CoqCtype.Ctype []
+                          (CoqCtype.Basic
+                             (CoqCtype.Integer
+                                CoqIntegerType.Bool)))))
+        else
+          let b_value := if C.cap_is_valid c then 1 else 0
+          in ret (Some (MVinteger CoqIntegerType.Bool (IV b_value)))
+    end.
 
   Definition intrinsic_tag_clear
     (loc : location_ocaml) (args : list mem_value)
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match
-           cap_of_mem_value st.(funptrmap) cap_val
-         with
-         | None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | Some (funptrmap, c_value) =>
-             update (fun st => mem_state_with_funptrmap funptrmap st)
-             ;;
-             let c_value := C.cap_invalidate c_value in
-             ret (Some (update_cap_in_mem_value cap_val c_value))
-         end).
+    st <- get ;;
+    match
+      cap_of_mem_value st.(funptrmap) cap_val
+    with
+    | None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | Some (funptrmap, c_value) =>
+        update (fun st => mem_state_with_funptrmap funptrmap st)
+        ;;
+        let c_value := C.cap_invalidate c_value in
+        ret (Some (update_cap_in_mem_value cap_val c_value))
+    end.
 
   Definition intrinsic_is_equal_exact
     (loc : location_ocaml) (args : list mem_value)
@@ -3397,41 +3442,40 @@ Module Type CheriMemoryImpl
     :=
     cap_val0 <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
     cap_val1 <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
-    get >>=
-      (fun (st : mem_state) =>
-         match
-           (cap_of_mem_value st.(funptrmap) cap_val0),
-           (cap_of_mem_value st.(funptrmap) cap_val1) with
-         | None, _ =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 1st argument in: '"
-                     (String.append name "'")))
-         | _, None =>
-             fail loc
-               (MerrOther
-                  (String.append
-                     "call_intrinsic: non-cap 2nd argument in: '"
-                     (String.append name "'")))
-         | Some (_, c0), Some (_, c1) =>
-             let gs0 := C.get_ghost_state c0 in
-             let gs1 := C.get_ghost_state c1 in
-             if gs0.(tag_unspecified) || gs1.(tag_unspecified)
-                || gs0.(bounds_unspecified) || gs1.(bounds_unspecified)
-             then
-               ret (Some (MVunspecified
-                            (CoqCtype.Ctype []
-                               (CoqCtype.Basic
-                                  (CoqCtype.Integer
-                                     CoqIntegerType.Bool)))))
-             else
-               let v_value := if C.eqb c0 c1 then 1 else 0 in
-               ret
-                 (Some
-                    (MVinteger CoqIntegerType.Bool
-                       (IV v_value)))
-         end).
+    st <- get ;;
+    match
+      (cap_of_mem_value st.(funptrmap) cap_val0),
+      (cap_of_mem_value st.(funptrmap) cap_val1) with
+    | None, _ =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 1st argument in: '"
+                (String.append name "'")))
+    | _, None =>
+        fail loc
+          (MerrOther
+             (String.append
+                "call_intrinsic: non-cap 2nd argument in: '"
+                (String.append name "'")))
+    | Some (_, c0), Some (_, c1) =>
+        let gs0 := C.get_ghost_state c0 in
+        let gs1 := C.get_ghost_state c1 in
+        if gs0.(tag_unspecified) || gs1.(tag_unspecified)
+           || gs0.(bounds_unspecified) || gs1.(bounds_unspecified)
+        then
+          ret (Some (MVunspecified
+                       (CoqCtype.Ctype []
+                          (CoqCtype.Basic
+                             (CoqCtype.Integer
+                                CoqIntegerType.Bool)))))
+        else
+          let v_value := if C.eqb c0 c1 then 1 else 0 in
+          ret
+            (Some
+               (MVinteger CoqIntegerType.Bool
+                  (IV v_value)))
+    end.
 
   Definition intrinsic_representable_length
     (loc : location_ocaml) (args : list mem_value)

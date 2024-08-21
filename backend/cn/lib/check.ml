@@ -2064,8 +2064,8 @@ let check_c_function ((fsym, (loc, args_and_body)) : c_function) : unit m =
 
 (** Check the provided C functions. The first failed check will short-circuit
     the remainder of the checks, and the associated error will be returned as
-    [Some]. *)
-let check_c_functions_fast (funs : c_function list) : TypeErrors.t option m =
+    [Some], along with the name of the function in which it occurred. *)
+let check_c_functions_fast (funs : c_function list) : (string * TypeErrors.t) option m =
   let total = List.length funs in
   let check_and_record (num_checked, prev_error) c_fn =
     match prev_error with
@@ -2080,7 +2080,7 @@ let check_c_functions_fast (funs : c_function list) : TypeErrors.t option m =
          return (checked, None)
        | Error err ->
          progress_simple (of_total checked total) (fn_name ^ " -- fail");
-         return (checked, Some err))
+         return (checked, Some (fn_name, err)))
   in
   let@ _num_checked, error = ListM.fold_leftM check_and_record (0, None) funs in
   return error
@@ -2088,11 +2088,13 @@ let check_c_functions_fast (funs : c_function list) : TypeErrors.t option m =
 
 (** Check the provided C functions, each in an isolated context, capturing any
     (monadic) check failures and returning them. All checks will be performed
-    regardless of intermediate failures. The result's order is determined by
-    the input's order: if function [f] appears before function [g], then
-    function [f]'s error (if any) will appear before function [g]'s error (if
-    any). *)
-let check_c_functions_all (funs : c_function list) : TypeErrors.t list m =
+    regardless of intermediate failures. Errors are paired with the name of
+    the function in which they occurred.
+
+    The result's order is determined by the input's order: if function [f]
+    appears before function [g], then function [f]'s error (if any) will appear
+    before function [g]'s error (if any). *)
+let check_c_functions_all (funs : c_function list) : (string * TypeErrors.t) list m =
   let total = List.length funs in
   let check_and_record (num_checked, errors) c_fn =
     let fn_name = c_function_name c_fn in
@@ -2104,16 +2106,17 @@ let check_c_functions_all (funs : c_function list) : TypeErrors.t list m =
       return (checked, errors)
     | Error err ->
       progress_simple (of_total checked total) (fn_name ^ " -- fail");
-      return (checked, err :: errors)
+      return (checked, (fn_name, err) :: errors)
   in
   let@ _num_checked, errors = ListM.fold_leftM check_and_record (0, []) funs in
   return (List.rev errors)
 
 
 (** Downselect from the provided functions with [select_functions] and check the
-    results. Errors in checking are captured, collected, and returned. When
-    [fail_fast] is set, the first error encountered will halt checking. *)
-let check_c_functions (funs : c_function list) : TypeErrors.t list m =
+    results. Errors in checking are captured, collected, and returned, along
+    with the name of the function in which they occurred. When [fail_fast] is
+    set, the first error encountered will halt checking. *)
+let check_c_functions (funs : c_function list) : (string * TypeErrors.t) list m =
   let selected_funs = select_functions funs in
   match !fail_fast with
   | true ->
@@ -2261,7 +2264,7 @@ let check_decls_lemmata_fun_specs (mu_file : unit mu_file) =
 (** With CSV timing enabled, check the provided functions with
     [check_c_functions]. See that function for more information on the
     semantics of checking. *)
-let time_check_c_functions (checked : c_function list) : TypeErrors.t list m =
+let time_check_c_functions (checked : c_function list) : (string * TypeErrors.t) list m =
   Cerb_debug.begin_csv_timing () (*type checking functions*);
   let@ errors = check_c_functions checked in
   Cerb_debug.end_csv_timing "type checking functions";

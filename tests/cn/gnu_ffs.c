@@ -1,4 +1,4 @@
-int ffs(int x) 
+int ffs(int x)
 /*@ ensures (x == 0i32) ? (return == 0i32) : true;
             (x == 1i32) ? (return == 1i32) : true;
             (x == 2i32) ? (return == 2i32) : true;

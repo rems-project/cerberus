@@ -1188,10 +1188,8 @@ module WLAT = struct
         let@ () =
           match provable (LC.t_ (IT.bool_ false here)) with
           | `True ->
-            fail (fun _ ->
-              { loc;
-                msg = Generic !^("this " ^ kind ^ " makes inconsistent assumptions")
-              })
+            fail (fun ctxt_log ->
+              { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
           | `False -> return ()
         in
         let@ i = i_welltyped loc i in
@@ -1266,10 +1264,8 @@ module WLArgs = struct
         let@ () =
           match provable (LC.t_ (IT.bool_ false here)) with
           | `True ->
-            fail (fun _ ->
-              { loc;
-                msg = Generic !^("this " ^ kind ^ " makes inconsistent assumptions")
-              })
+            fail (fun ctxt_log ->
+              { loc; msg = Inconsistent_assumptions (kind, ctxt_log) })
           | `False -> return ()
         in
         let@ i = i_welltyped loc i in

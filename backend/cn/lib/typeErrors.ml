@@ -222,6 +222,7 @@ type message =
   | Redundant_pattern of Pp.document
   | Duplicate_pattern
   | Empty_provenance
+  | Inconsistent_assumptions of string * (Context.t * log)
 
 type type_error =
   { loc : Locations.t;
@@ -546,6 +547,10 @@ let pp_message te =
          ^^ dot)
     in
     { short; descr; state = None }
+  | Inconsistent_assumptions (kind, ctxt_log) ->
+    let short = !^kind ^^ !^" makes inconsistent assumptions" in
+    let state = Some (trace ctxt_log (Solver.empty_model, []) Explain.no_ex) in
+    { short; descr = None; state }
 
 
 type t = type_error
@@ -560,36 +565,51 @@ let canonicalize (path : string) : string =
 
 
 (** Create a filename derived from the given error location, and create a file
-    with that name in [output_dir], which must already exist. If no directory
-    is provided, the file is created in the system temporary directory
-    instead. *)
-let mk_state_file_name ?(output_dir : string option) (loc : Cerb_location.t) : string =
-  let prefix =
-    match Cerb_location.get_filename loc with
-    | None -> "state_"
-    | Some filename -> "state_" ^ Filename.basename filename ^ "_"
+    with that name in [output_dir], which will be created if it doesn't exist.
+    If no directory is provided, or if the provided directory name is
+    unusable, the file is created in the system temporary directory instead. *)
+let mk_state_file_name
+  ?(output_dir : string option)
+  ?(fn_name : string option)
+  (loc : Cerb_location.t)
+  : string
+  =
+  let dir =
+    match output_dir with
+    | None -> Filename.get_temp_dir_name ()
+    | Some d ->
+      let dir = canonicalize d in
+      if not (Sys.file_exists dir) then (
+        (* 0o700 == r+w+x permissions for current user *)
+        Sys.mkdir dir 0o700;
+        dir)
+      else if Sys.is_directory dir then
+        dir
+      else
+        Filename.get_temp_dir_name ()
   in
-  let canonical_output_dir = Option.map canonicalize output_dir in
-  try Filename.temp_file ?temp_dir:canonical_output_dir prefix ".html" with
-  | Sys_error _ ->
-    Printf.eprintf
-      "Warning: failed to create state file in the specified directory. Using the \
-       default output directory instead.\n";
-    Filename.temp_file prefix ".html"
+  let file_tag =
+    match Cerb_location.get_filename loc with
+    | None -> ""
+    | Some filename -> "__" ^ Filename.basename filename
+  in
+  let function_tag = match fn_name with None -> "" | Some fn -> "__" ^ fn in
+  let filename = "state" ^ file_tag ^ function_tag ^ ".html" in
+  Filename.concat dir filename
 
 
 (** Format the error for human readability and print it to [stderr]. if the
     error contains enough information to create an HTML state report, generate
     one in [output_dir] (or, failing that, the system temporary directory) and
     print a link to it. *)
-let report_pretty ?output_dir:dir_ { loc; msg } =
+let report_pretty ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
   (* stealing some logic from pp_errors *)
   let report = pp_message msg in
   let consider =
     match report.state with
     | Some state ->
-      let state_error_file = mk_state_file_name ?output_dir:dir_ loc in
-      let link = Report.make state_error_file (Cerb_location.get_filename loc) state in
+      let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
+      let link = Report.make file (Cerb_location.get_filename loc) state in
       let msg = !^"State file:" ^^^ !^("file://" ^ link) in
       Some msg
     | None -> None
@@ -598,12 +618,12 @@ let report_pretty ?output_dir:dir_ { loc; msg } =
 
 
 (* stealing some logic from pp_errors *)
-let report_json ?output_dir:dir_ { loc; msg } =
+let report_json ?output_dir:dir_ ?(fn_name : string option) { loc; msg } =
   let report = pp_message msg in
   let state_error_file =
     match report.state with
     | Some state ->
-      let file = mk_state_file_name ?output_dir:dir_ loc in
+      let file = mk_state_file_name ?output_dir:dir_ ?fn_name loc in
       let link = Report.make file (Cerb_location.get_filename loc) state in
       `String link
     | None -> `Null

@@ -27,7 +27,7 @@ type undefined_behaviour =
 
   | UB_std_omission of undefined_by_omission
 
-  (* A ‘‘shall’’ or ‘‘shall not’’ requirement that appears outside of a constraint is violated
+  (* A "shall" or "shall not" requirement that appears outside of a constraint is violated
      (clause 4). *)
   | UB001
   (* A nonempty source file does not end in a new-line character which is not immediately preceded
