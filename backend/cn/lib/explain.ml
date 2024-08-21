@@ -147,6 +147,8 @@ let lc_satisfied_by_model model_with_q lc =
   | (_, _) -> match lc with
     | _ -> false (*TODO*)
 
+
+
 (* Check if a resource constraint is satisfied by a model *)
 (* let rc_satisfied_by_model model_with_q rc = 
   match model_with_q with
@@ -238,7 +240,8 @@ let state ctxt model_with_q extras =
     (List.map snd interesting, List.map snd uninteresting)
   in
   let constraints =
-    let satisfied, unsatisfied = List.partition (lc_satisfied_by_model model_with_q) (LCSet.elements ctxt.constraints) in
+    let in_solver, not_in_solver = List.partition LogicalConstraints.is_forall (LCSet.elements ctxt.constraints) in 
+    let satisfied, unsatisfied = List.partition (lc_satisfied_by_model model_with_q) not_in_solver in
     let interesting, uninteresting =
       List.partition
         (fun lc ->
@@ -247,7 +250,7 @@ let state ctxt model_with_q extras =
           | LC.T (IT (Representable _, _, _)) -> false
           | LC.T (IT (Good _, _, _)) -> false
           | _ -> true)
-        (List.concat_map (simp_constraint evaluate) satisfied)
+        (List.concat_map (simp_constraint evaluate) (List.append satisfied in_solver))
     in
     (List.map LC.pp unsatisfied, List.map LC.pp interesting, List.map LC.pp uninteresting)
   in

@@ -94,3 +94,11 @@ let identify_right_clause provable def pointer iargs =
               None))
     in
     try_clauses clauses
+
+(* determines if a resource predicate will be given to the solver
+  TODO: right now this is an overapproximation *)
+let given_to_solver def = match def.clauses with
+  | None -> true
+  | Some [] -> true
+  | Some [_] -> true
+  | _ -> false
