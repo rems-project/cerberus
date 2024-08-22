@@ -5423,6 +5423,31 @@ Module CheriMemoryImplWithProofs
     apply repeat_length.
   Qed.
 
+  (*
+  Lemma offsetsof_struct_inv
+    (fuel: nat)
+    (tagDefs : SymMap.t CoqCtype.tag_definition)
+    (tag_sym : CoqSymbol.sym)
+    (l: list (identifier * CoqCtype.ctype * nat))
+    (max_offset: nat):
+
+    offsetsof_struct fuel tagDefs tag_sym = inr (l, max_offset) ->
+
+    (exists members flexible_opt,
+        SymMap.find tag_sym tagdefs = Some (CoqCtype.StructDef members flexible_opt)
+        /\
+          forall members',
+            ((flexible_opt = None /\ members' = members)
+             \/
+               (exists attrs ident qs ty, flexible_opt = Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) /\ members' = members ++ [ (ident, (attrs, None, qs, ty)) ])) ->
+            Forall2
+              (fun '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
+                 ident_equal s_id v_id = true
+                 /\
+                   CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty = inr true)
+              values members').
+   *)
+
   Lemma struct_typecheck_inv
     (tag_sym: sym)
     (tagdefs: SymMap.t CoqCtype.tag_definition)
@@ -5475,6 +5500,7 @@ Module CheriMemoryImplWithProofs
         some_none.
   Admitted.
 
+
   Fact repr_struct_preserves
     (sym: sym)
     (l : list (identifier * CoqCtype.ctype * mem_value_indt))
@@ -5502,7 +5528,7 @@ Module CheriMemoryImplWithProofs
       bool_to_prop_hyp.
       rename t into addr'.
       apply sizeof_pos in R4.
-      (* TODO: *)
+      (* TODO: bounds checks *)
       admit.
     +
       destruct R2 as [members [flexible_opt [FT R2]]].
@@ -5529,6 +5555,8 @@ Module CheriMemoryImplWithProofs
           exists a, i, q, t.
           auto.
         }
+        remember (rev l1) as offs.
+        (* Temporary:  *) clear l1 Heqoffs R5.
         admit.
       *
         (* none *)
@@ -5544,6 +5572,44 @@ Module CheriMemoryImplWithProofs
         }
         clear R7.
         rename l into values.
+        remember (rev l1) as offs.
+
+        assert(length offs = length values) as L.
+        {
+          admit. (* TODO *)
+        }
+
+        bool_to_prop_hyp.
+        clear l1 Heqoffs R5 R2 n1 n sym FT R4 R3 szn members n0 DF.
+
+        rename t into addr', m into s'.
+        revert offs fuel addr addr' s s' R6 M F L.
+        induction values; intros.
+        --
+          destruct offs.
+          cbn in *.
+          inl_inr_inv;subst;assumption.
+          cbn in L.
+          lia.
+        --
+          destruct offs.
+          ++
+            cbn in *.
+            state_inv_steps.
+          ++
+            cbn in *.
+            state_inv_steps.
+            apply list.Forall_cons in F.
+            destruct F as [F1 F2].
+            apply F1 in R4.
+            2:{
+              apply do_pad_preserves.
+              admit. (* TODO: overflow checks *)
+              auto.
+            }
+            clear s M F1.
+            eapply IHvalues with (fuel:=fuel); eauto.
+            (* TODO: !!! *)
         admit.
   Admitted.
   Transparent sizeof offsetsof_struct struct_typecheck.

@@ -966,8 +966,7 @@ Module Type CheriMemoryImpl
                    let s1 := do_pad addr0 (Z.to_nat pad_size) s0 in
                    (* write the value *)
                    '(s2, end_addr) <- repr fuel value_a mval s1 ;;
-                   szn <- sizeof DEFAULT_FUEL None ty ;;
-                   ret (s2, AddressValue.with_offset value_a (Z.of_nat szn)))
+                   ret (s2, end_addr))
 
                 (s, addr) offs xs ;;
 
