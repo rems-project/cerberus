@@ -131,19 +131,6 @@ BUGGY="tests/cn/division_casting.c \
        tests/cn/b_xor.c \
        "
 
-# # https://stackoverflow.com/questions/16860877/remove-an-element-from-a-bash-array
-# for i in "${!SUCCESS[@]}"; do
-#     for FILE in "${BUGGY[@]}"; do
-#       if [ "${FILE}" = "${SUCCESS[$i]}" ]; then
-#         unset 'SUCCESS[i]'
-#       fi
-#         # [ "${FILE}" = "${SUCCESS[$i]}" ] && unset 'SUCCESS[i]' && break
-#     done
-# done
-
-# Make array continguous again
-# SUCCESS=("${SUCCESS[@]}")
-
 
 SHOULD_FAIL=$(find tests/cn -name '*.error.c')
 
