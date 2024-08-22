@@ -76,13 +76,6 @@ jobs:
         opam pin --yes --no-action add cerberus .
         opam install --yes cerberus
 
-    - name: Run Cerberus CI tests
-      run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci.sh
-        cd ..
-
     - name: Download cvc5 release
       uses: robinraju/release-downloader@v1
       with:
@@ -115,7 +108,7 @@ jobs:
       with:
         name: CN Benchmarks
         tool: 'customSmallerIsBetter'
-        output-file-path: output.txt
+        output-file-path: tests/output.txt
         # Access token to deploy GitHub Pages branch
         github-token: ${{ secrets.GITHUB_TOKEN }}
         # Push and deploy GitHub pages branch automatically
