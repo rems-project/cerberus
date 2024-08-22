@@ -98,7 +98,7 @@ jobs:
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh | tee output.txt
+        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh
         cd ..
 
     - name: Store benchmark result
@@ -106,7 +106,7 @@ jobs:
       with:
         name: CN Benchmarks
         tool: 'customSmallerIsBetter'
-        output-file-path: tests/output.txt
+        output-file-path: tests/benchmark-data.json
         comment-on-alert: true
         # Access token to deploy GitHub Pages branch
         github-token: ${{ secrets.GITHUB_TOKEN }}
