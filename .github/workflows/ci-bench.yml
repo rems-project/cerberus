@@ -1,11 +1,9 @@
 name: CI Benchmarks
 
 on:
-  pull_request:
   push:
     branches:
       - master
-      - cheri-tests
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
@@ -109,6 +107,7 @@ jobs:
         name: CN Benchmarks
         tool: 'customSmallerIsBetter'
         output-file-path: tests/output.txt
+        comment-on-alert: true
         # Access token to deploy GitHub Pages branch
         github-token: ${{ secrets.GITHUB_TOKEN }}
         # Push and deploy GitHub pages branch automatically
