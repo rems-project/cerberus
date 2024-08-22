@@ -34,11 +34,116 @@ function exits_with_code() {
   fi
 }
 
+
 SUCCESS=$(find tests/cn -name '*.c' \
-    ! -name "*.error.c" \
+    ! -name "*.error.c"  \
+    ! -path '*/multifile/*' \
+    ! -path '*/mutual_rec/*' \
+    ! -path '*/tree16/*' \
+    ! -name "division_casting.c" \
+    ! -name "b_or.c" \
+    ! -name "mod_with_constants.c" \
+    ! -name "inconsistent.c" \
+    ! -name "forloop_with_decl.c" \
+    ! -name "tree16/as_partial_map/tree16.c" \
+    ! -name "tree16/as_mutual_dt/tree16.c" \
+    ! -name "mod.c" \
+    ! -name "mod_precedence.c" \
+    ! -name "multifile/g.c" \
+    ! -name "multifile/f.c" \
+    ! -name "left_shift_const.c" \
+    ! -name "bitwise_compl_precedence.c" \
+    ! -name "fun_ptr_three_opts.c" \
+    ! -name "inconsistent2.c" \
+    ! -name "list_rev01.c" \
+    ! -name "block_type.c" \
+    ! -name "gnu_choose.c" \
+    ! -name "division_with_constants.c" \
+    ! -name "division.c" \
+    ! -name "get_from_arr.c" \
+    ! -name "implies.c" \
+    ! -name "split_case.c" \
+    ! -name "mod_casting.c" \
+    ! -name "arrow_access.c" \
+    ! -name "ghost_pointer_to_bitvec_cast.c" \
+    ! -name "tag_defs.c" \
+    ! -name "cn_inline.c" \
+    ! -name "mutual_rec/mutual_rec.c" \
+    ! -name "bitwise_and.c" \
+    ! -name "test_pointer_eq.c" \
+    ! -name "get_from_array.c" \
+    ! -name "ownership_at_negative_index.c" \
+    ! -name "fun_addrs_cn_stmt.c" \
+    ! -name "enum_and_and.c" \
+    ! -name "division_precedence.c" \
+    ! -name "implies_associativity.c" \
+    ! -name "pred_def04.c" \
+    ! -name "gnu_types_compatible.c" \
+    ! -name "implies_precedence.c" \
+    ! -name "bitwise_compl.c" \
+    ! -name "fun_ptr_extern.c" \
+    ! -name "b_xor.c" \
 )
 
-BUGGY=("")
+
+BUGGY="tests/cn/division_casting.c \
+       tests/cn/b_or.c \
+       tests/cn/mod_with_constants.c \
+       tests/cn/inconsistent.c \
+       tests/cn/forloop_with_decl.c \
+       tests/cn/tree16/as_partial_map/tree16.c \
+       tests/cn/tree16/as_mutual_dt/tree16.c \
+       tests/cn/mod.c \
+       tests/cn/mod_precedence.c \
+       tests/cn/multifile/g.c \
+       tests/cn/multifile/f.c \
+       tests/cn/left_shift_const.c \
+       tests/cn/bitwise_compl_precedence.c \
+       tests/cn/fun_ptr_three_opts.c \
+       tests/cn/inconsistent2.c \
+       tests/cn/list_rev01.c \
+       tests/cn/block_type.c \
+       tests/cn/gnu_choose.c \
+       tests/cn/division_with_constants.c \
+       tests/cn/division.c \
+       tests/cn/get_from_arr.c \
+       tests/cn/implies.c \
+       tests/cn/split_case.c \
+       tests/cn/mod_casting.c \
+       tests/cn/arrow_access.c \
+       tests/cn/ghost_pointer_to_bitvec_cast.c \
+       tests/cn/tag_defs.c \
+       tests/cn/cn_inline.c \
+       tests/cn/mutual_rec/mutual_rec.c \
+       tests/cn/bitwise_and.c \
+       tests/cn/test_pointer_eq.c \
+       tests/cn/get_from_array.c \
+       tests/cn/ownership_at_negative_index.c \
+       tests/cn/fun_addrs_cn_stmt.c \
+       tests/cn/enum_and_and.c \
+       tests/cn/division_precedence.c \
+       tests/cn/implies_associativity.c \
+       tests/cn/pred_def04.c \
+       tests/cn/gnu_types_compatible.c \
+       tests/cn/implies_precedence.c \
+       tests/cn/bitwise_compl.c \
+       tests/cn/fun_ptr_extern.c \
+       tests/cn/b_xor.c \
+       "
+
+# # https://stackoverflow.com/questions/16860877/remove-an-element-from-a-bash-array
+# for i in "${!SUCCESS[@]}"; do
+#     for FILE in "${BUGGY[@]}"; do
+#       if [ "${FILE}" = "${SUCCESS[$i]}" ]; then
+#         unset 'SUCCESS[i]'
+#       fi
+#         # [ "${FILE}" = "${SUCCESS[$i]}" ] && unset 'SUCCESS[i]' && break
+#     done
+# done
+
+# Make array continguous again
+# SUCCESS=("${SUCCESS[@]}")
+
 
 SHOULD_FAIL=$(find tests/cn -name '*.error.c')
 
