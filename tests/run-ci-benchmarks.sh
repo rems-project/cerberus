@@ -5,7 +5,7 @@ cat << EOF
     {
         "name": "My Custom Smaller Is Better Benchmark - CPU Load",
         "unit": "Seconds",
-        "value": 50
+        "value": 500
     },
     {
         "name": "My Custom Smaller Is Better Benchmark - Memory Used",
