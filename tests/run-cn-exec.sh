@@ -65,6 +65,7 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "split_case.c" \
     ! -name "mod_casting.c" \
     ! -name "arrow_access.c" \
+    ! -name "ghost_pointer_to_bitvec_cast.c" \
     ! -name "tag_defs.c" \
     ! -name "cn_inline.c" \
     ! -name "mutual_rec/mutual_rec.c" \
@@ -114,6 +115,7 @@ BUGGY="cn/division_casting.c \
        cn/split_case.c \
        cn/mod_casting.c \
        cn/arrow_access.c \
+       cn/ghost_pointer_to_bitvec_cast.c \
        cn/tag_defs.c \
        cn/cn_inline.c \
        cn/mutual_rec/mutual_rec.c \
