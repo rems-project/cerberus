@@ -1835,6 +1835,26 @@ Section AddressValue_Lemmas.
     lia.
   Qed.
 
+  Fact AddressValue_to_Z_inj (x y : AddressValue.t) :
+    AddressValue.to_Z x = AddressValue.to_Z y ->
+    x = y.
+  Proof.
+    intro EQ.
+    destruct x, y.
+    cbv in EQ.
+    subst.
+    f_equal.
+    apply ProofIrrelevance.proof_irrelevance.
+  Qed.
+
+  Fact AddressValue_to_Z_inj' (x y : AddressValue.t) :
+    x <> y ->
+    AddressValue.to_Z x <> AddressValue.to_Z y.
+  Proof.
+    intros EQ C.
+    now apply AddressValue_to_Z_inj in C.
+  Qed.
+
 End AddressValue_Lemmas.
 
 (* This sections contains proofs which could not be generalized between
@@ -1969,6 +1989,101 @@ Section AMapProofs.
         destruct N as [N | N].
         all: apply AMap.F.add_neq_o.
         all: intros C; subst; lia.
+  Qed.
+
+  (* complement of [amap_add_list_not_at] *)
+  Fact amap_add_list_at
+    {T: Type}
+    (x addr : AddressValue.t)
+    (bm : AMap.M.t T)
+    (l : list T):
+
+    (0 < Datatypes.length l)%nat ->
+
+    (AddressValue.ADDR_MIN <= AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
+
+    (* "x in range written to" *)
+    ((AddressValue.leb addr x = true)
+     /\ (AddressValue.leb x (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l) - 1)) = true)) ->
+
+    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
+      nth_error l (Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)).
+  Proof.
+    intro L.
+    revert bm x addr.
+    induction l as [| h l].
+    -
+      invc L.
+    -
+      clear L.
+      destruct l.
+      +
+        clear IHl.
+        intros * RSZ [LO  HI].
+        assert (EQ : x = addr).
+        {
+          apply AddressValue_to_Z_inj.
+          cbn in *.
+          rewrite AddressValue_leb_Z_leb in *; bool_to_prop_hyp.
+          rewrite AddressValue.with_offset_no_wrap in HI
+              by (pose proof (AddressValue.to_Z_in_bounds addr); lia).
+          lia.
+        }
+        subst x; clear.
+        replace (Z.to_nat (AddressValue.to_Z addr - AddressValue.to_Z addr)) with 0%nat by lia.
+        cbn [AMap.map_add_list_at].
+        now rewrite AMap.F.add_eq_o by reflexivity.
+      +
+        intros * RSZ [LO  HI].
+        assert (LL : (0 < Datatypes.length (t :: l))%nat) by (cbn; lia).
+        autospecialize IHl; [assumption |].
+        generalize dependent (t :: l); clear t l.
+        intros.
+        pose proof AddressValue.to_Z_in_bounds addr as AB.
+        destruct (AMap.M.Raw.Proofs.L.MX.eq_dec x addr) as [EQ | NEQ].
+        {
+          subst.
+          replace (Z.to_nat (AddressValue.to_Z addr - AddressValue.to_Z addr))
+            with 0%nat
+            by lia.
+          cbn in *.
+          rewrite amap_add_list_not_at.
+          1: now rewrite AMap.F.add_eq_o by reflexivity.
+          all: rewrite ?AddressValue_ltb_Z_ltb, ?Z.ltb_lt in *.
+          all: rewrite ?AddressValue.with_offset_no_wrap in * by lia.
+          all: lia.
+        }
+        cbn in *.
+        rewrite IHl; clear IHl.
+        all: rewrite ?AddressValue_leb_Z_leb, ?Z.leb_le in *.
+        all: rewrite !AddressValue.with_offset_no_wrap in * by 
+          (pose proof (AddressValue.to_Z_in_bounds addr); lia).
+        *
+          replace (Z.to_nat (AddressValue.to_Z x - (AddressValue.to_Z addr + 1)))
+            with ((Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)) - 1)%nat
+            by lia.
+          remember (Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)) as n.
+          destruct n;
+            [exfalso; apply AddressValue_to_Z_inj' in NEQ; lia |].
+          cbn.
+          f_equal.
+          lia.
+        *
+          lia.
+        *
+          rewrite AddressValue.with_offset_no_wrap.
+          2: {
+            pose proof (AddressValue.to_Z_in_bounds addr).
+            rewrite AddressValue.with_offset_no_wrap.
+            lia.
+            lia.
+          }
+          rewrite AddressValue.with_offset_no_wrap.
+          2: {
+            pose proof (AddressValue.to_Z_in_bounds addr); lia.
+          }
+          apply AddressValue_to_Z_inj' in NEQ.
+          lia.
   Qed.
 
 End AMapProofs.
