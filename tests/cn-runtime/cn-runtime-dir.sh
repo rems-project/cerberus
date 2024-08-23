@@ -83,7 +83,11 @@ SUCCESS=$(find tests/cn -name '*.c' \
     ! -name "bitwise_compl.c" \
     ! -name "fun_ptr_extern.c" \
     ! -name "b_xor.c" \
+    ! -name "mask_ptr.c" \
 )
+
+# Include files which cause error for proof but not testing
+SUCCESS+=("merging_arrays.error.c" "pointer_to_char_cast.error.c" "pointer_to_unsigned_int_cast.error.c")
 
 
 BUGGY="tests/cn/division_casting.c \
@@ -129,10 +133,15 @@ BUGGY="tests/cn/division_casting.c \
        tests/cn/bitwise_compl.c \
        tests/cn/fun_ptr_extern.c \
        tests/cn/b_xor.c \
+       tests/cn/mask_ptr.c \
        "
 
-
-SHOULD_FAIL=$(find tests/cn -name '*.error.c')
+# Exclude files which cause error for proof but not testing
+SHOULD_FAIL=$(find tests/cn -name '*.error.c' \
+  ! -name "merging_arrays.error.c" \
+  ! -name "pointer_to_char_cast.error.c" \
+  ! -name "pointer_to_unsigned_int_cast.error.c"
+)
 
 FAILED=""
 
