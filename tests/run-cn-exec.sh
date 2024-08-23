@@ -35,7 +35,7 @@ function exits_with_code() {
 }
 
 
-SUCCESS=$(find tests/cn -name '*.c' \
+SUCCESS=$(find cn -name '*.c' \
     ! -name "*.error.c"  \
     ! -path '*/multifile/*' \
     ! -path '*/mutual_rec/*' \
@@ -90,54 +90,54 @@ SUCCESS=$(find tests/cn -name '*.c' \
 SUCCESS+=("merging_arrays.error.c" "pointer_to_char_cast.error.c" "pointer_to_unsigned_int_cast.error.c")
 
 
-BUGGY="tests/cn/division_casting.c \
-       tests/cn/b_or.c \
-       tests/cn/mod_with_constants.c \
-       tests/cn/inconsistent.c \
-       tests/cn/forloop_with_decl.c \
-       tests/cn/tree16/as_partial_map/tree16.c \
-       tests/cn/tree16/as_mutual_dt/tree16.c \
-       tests/cn/mod.c \
-       tests/cn/mod_precedence.c \
-       tests/cn/multifile/g.c \
-       tests/cn/multifile/f.c \
-       tests/cn/left_shift_const.c \
-       tests/cn/bitwise_compl_precedence.c \
-       tests/cn/fun_ptr_three_opts.c \
-       tests/cn/inconsistent2.c \
-       tests/cn/list_rev01.c \
-       tests/cn/block_type.c \
-       tests/cn/gnu_choose.c \
-       tests/cn/division_with_constants.c \
-       tests/cn/division.c \
-       tests/cn/get_from_arr.c \
-       tests/cn/implies.c \
-       tests/cn/split_case.c \
-       tests/cn/mod_casting.c \
-       tests/cn/arrow_access.c \
-       tests/cn/ghost_pointer_to_bitvec_cast.c \
-       tests/cn/tag_defs.c \
-       tests/cn/cn_inline.c \
-       tests/cn/mutual_rec/mutual_rec.c \
-       tests/cn/bitwise_and.c \
-       tests/cn/test_pointer_eq.c \
-       tests/cn/get_from_array.c \
-       tests/cn/ownership_at_negative_index.c \
-       tests/cn/fun_addrs_cn_stmt.c \
-       tests/cn/enum_and_and.c \
-       tests/cn/division_precedence.c \
-       tests/cn/implies_associativity.c \
-       tests/cn/pred_def04.c \
-       tests/cn/gnu_types_compatible.c \
-       tests/cn/implies_precedence.c \
-       tests/cn/bitwise_compl.c \
-       tests/cn/fun_ptr_extern.c \
-       tests/cn/b_xor.c \
-       tests/cn/mask_ptr.c \
+BUGGY="cn/division_casting.c \
+       cn/b_or.c \
+       cn/mod_with_constants.c \
+       cn/inconsistent.c \
+       cn/forloop_with_decl.c \
+       cn/tree16/as_partial_map/tree16.c \
+       cn/tree16/as_mutual_dt/tree16.c \
+       cn/mod.c \
+       cn/mod_precedence.c \
+       cn/multifile/g.c \
+       cn/multifile/f.c \
+       cn/left_shift_const.c \
+       cn/bitwise_compl_precedence.c \
+       cn/fun_ptr_three_opts.c \
+       cn/inconsistent2.c \
+       cn/list_rev01.c \
+       cn/block_type.c \
+       cn/gnu_choose.c \
+       cn/division_with_constants.c \
+       cn/division.c \
+       cn/get_from_arr.c \
+       cn/implies.c \
+       cn/split_case.c \
+       cn/mod_casting.c \
+       cn/arrow_access.c \
+       cn/ghost_pointer_to_bitvec_cast.c \
+       cn/tag_defs.c \
+       cn/cn_inline.c \
+       cn/mutual_rec/mutual_rec.c \
+       cn/bitwise_and.c \
+       cn/test_pointer_eq.c \
+       cn/get_from_array.c \
+       cn/ownership_at_negative_index.c \
+       cn/fun_addrs_cn_stmt.c \
+       cn/enum_and_and.c \
+       cn/division_precedence.c \
+       cn/implies_associativity.c \
+       cn/pred_def04.c \
+       cn/gnu_types_compatible.c \
+       cn/implies_precedence.c \
+       cn/bitwise_compl.c \
+       cn/fun_ptr_extern.c \
+       cn/b_xor.c \
+       cn/mask_ptr.c \
        "
 
 # Exclude files which cause error for proof but not testing
-SHOULD_FAIL=$(find tests/cn -name '*.error.c' \
+SHOULD_FAIL=$(find cn -name '*.error.c' \
   ! -name "merging_arrays.error.c" \
   ! -name "pointer_to_char_cast.error.c" \
   ! -name "pointer_to_unsigned_int_cast.error.c"
