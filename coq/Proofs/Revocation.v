@@ -5505,16 +5505,17 @@ Module CheriMemoryImplWithProofs
     destruct x.
     rename l0 into offs, l into values.
 
-    assert(length offs = length values) as L by (eapply offsetsof_struct_length;eauto).
-    clear R2.
-    clear R5. (* we might need this later for bounds calculations. *)
+    apply (offsetsof_struct_length _ _ _ _ _ R2) in R3.
+    clear R2. rename R3 into L.
 
     apply do_pad_preserves.
     +
       bool_to_prop_hyp.
       rename t into addr'.
       apply sizeof_pos in R4.
-      admit. (* TODO: overflow checks *)
+      pose proof (AddressValue.to_Z_in_bounds addr') as B0.
+      unfold AddressValue.ADDR_MIN in *.
+      lia.
     +
       match goal with
       | [H: monadic_fold_left2 ?fn _ _ _ =  _ |- _] =>
@@ -5530,10 +5531,9 @@ Module CheriMemoryImplWithProofs
       subst f.
 
       bool_to_prop_hyp.
-      clear n sym  R4 R3 szn.
       rename t into addr', m into s'.
 
-      revert offs fuel addr addr' s s' R6 M F L.
+      revert offs fuel addr addr' s s' R5 R6 M F L.
       induction values; intros.
       --
         destruct offs.
@@ -5549,17 +5549,21 @@ Module CheriMemoryImplWithProofs
         ++
           cbn in *.
           state_inv_steps.
+          rename n into off.
           apply list.Forall_cons in F.
           destruct F as [F1 F2].
-          apply F1 in R4.
-          2:{
+          apply F1 in R2.
+          **
+            eapply IHvalues with (fuel:=fuel); eauto.
+          **
             apply do_pad_preserves;[|assumption].
-            clear.
-            admit. (* TODO: overflow checks *)
-          }
-          clear s M F1.
-          eapply IHvalues with (fuel:=fuel); eauto.
-  Admitted.
+            bool_to_prop_hyp.
+            clear - R4.
+            pose proof (AddressValue.to_Z_in_bounds addr) as B0.
+            pose proof (AddressValue.to_Z_in_bounds (AddressValue.with_offset base (Z.of_nat n0))) as B1.
+            unfold AddressValue.ADDR_MIN in *.
+            lia.
+  Qed.
   Transparent sizeof offsetsof_struct struct_typecheck.
 
   Lemma repr_preserves

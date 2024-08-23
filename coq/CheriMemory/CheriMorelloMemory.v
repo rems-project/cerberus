@@ -953,9 +953,7 @@ Module Type CheriMemoryImpl
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
             struct_typecheck tag_sym (TD.tagDefs tt) xs ;;
-            szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
-            let sz := Z.of_nat szn in
-            sassert ((AddressValue.to_Z addr + sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
             '(offs, final_off) <- offsetsof_struct DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             '(s', final_pad_addr) <-
               monadic_fold_left2
@@ -963,6 +961,7 @@ Module Type CheriMemoryImpl
                    (*  off - offset of this field from the start of struct, *after* padding *)
                    let value_a := AddressValue.with_offset addr (Z.of_nat off) in
                    let pad_size := AddressValue.to_Z value_a - AddressValue.to_Z addr0 in
+                   sassert ((AddressValue.to_Z addr0 + pad_size) <=? AddressValue.ADDR_LIMIT) "struct member padding does not fit in the address space" ;;
                    let s1 := do_pad addr0 (Z.to_nat pad_size) s0 in
                    (* write the value *)
                    '(s2, end_addr) <- repr fuel value_a mval s1 ;;
@@ -970,7 +969,8 @@ Module Type CheriMemoryImpl
 
                 (s, addr) offs xs ;;
 
-            let final_pad_size := sz - (Z.of_nat final_off) in
+            let final_pad_size := (Z.of_nat sz) - (Z.of_nat final_off) in
+            sassert ((AddressValue.to_Z final_pad_addr + final_pad_size) <=? AddressValue.ADDR_LIMIT) "struct final padding does not fit in the address space" ;;
             let s'' := do_pad final_pad_addr (Z.to_nat final_pad_size) s' in
             ret (s'', AddressValue.with_offset final_pad_addr final_pad_size)
         end
