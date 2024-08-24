@@ -5423,53 +5423,7 @@ Module CheriMemoryImplWithProofs
     apply repeat_length.
   Qed.
 
-  (* TODO: Currently unused but may be needed for [offsetsof_struct_length] *)
-  Lemma struct_typecheck_inv
-    (tag_sym: sym)
-    (tagdefs: SymMap.t CoqCtype.tag_definition)
-    (values: list (identifier * CoqCtype.ctype * mem_value_indt)):
-
-    struct_typecheck tag_sym tagdefs values  = inr tt ->
-
-    (exists members flexible_opt,
-        SymMap.find tag_sym tagdefs = Some (CoqCtype.StructDef members flexible_opt)
-        /\ (0 < List.length members)%nat
-        /\ Forall2
-            (fun '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
-               ident_equal s_id v_id = true
-               /\
-                 CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty = inr true)
-            values
-            match flexible_opt with
-            | None => members
-            | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) =>
-                members ++ [ (ident, (attrs, None, qs, ty)) ]
-            end
-    ).
-  Proof.
-    intros H.
-    unfold struct_typecheck in H.
-    break_match_hyp;[|inl_inr].
-    break_match_hyp;[|inl_inr].
-    rename l into members, o into flexible_opt.
-    exists members, flexible_opt.
-    split;[reflexivity|].
-    Opaque ident_equal CoqCtype.ctypeEqual.
-    state_inv_steps.
-    -
-      split;[lia|].
-      clear H0.
-      bool_to_prop_hyp.
-      admit.
-    -
-      split;[lia|].
-      clear H0.
-      break_match_hyp;[congruence|].
-      bool_to_prop_hyp.
-      subst n0.
-      admit.
-  Admitted.
-
+  Opaque ident_equal CoqCtype.ctypeEqual.
   Fact offsetsof_struct_length
     (values : list (identifier * CoqCtype.ctype * mem_value_indt))
     (offs : list (identifier * CoqCtype.ctype * nat))
@@ -5480,7 +5434,67 @@ Module CheriMemoryImplWithProofs
     offsetsof_struct fuel (AbstTagDefs.tagDefs tt) sym = inr (offs, max_offset) ->
     Datatypes.length offs = Datatypes.length values.
   Proof.
+    intros HT HO.
+    destruct fuel;[cbn in HO;state_inv_step|].
+    unfold struct_typecheck in HT.
+    cbn in HO.
+    break_match_hyp;[|state_inv_step].
+    break_match_hyp;[|state_inv_step].
+    state_inv_steps.
+    +
+      (* with [flexible_opt] *)
+      admit.
+    +
+      (* without [flexible_opt] *)
+      rename l into members, l0 into offs.
+      bool_to_prop_hyp.
+      subst n1.
+      clear - Heqn HO2.
+      rewrite rev_length.
+      rewrite <- Heqn.
+      clear Heqn n.
+
+      remember (@nil (prod (prod identifier CoqCtype.ctype) nat)) as offs0.
+      assert(List.length offs0 = O) by (subst; reflexivity).
+      replace (Datatypes.length members) with
+        (Datatypes.length members + Datatypes.length offs0)%nat.
+      2: {
+        subst offs0.
+        cbn.
+        auto.
+      }
+      clear Heqoffs0 H.
+      generalize dependent (0%nat).
+      intros max_offset0 H.
+
+      revert max_offset max_offset0 offs offs0 fuel H.
+
+      induction members;intros.
+      *
+        cbn in *.
+        inl_inr_inv.
+        reflexivity.
+      *
+        cbn in *.
+        state_inv_steps_quick.
+        destruct a' as [offs' max_offset'].
+        assert(Datatypes.length offs' = S (Datatypes.length offs0)).
+        {
+          clear - H0.
+          repeat break_let.
+          state_inv_steps;auto.
+        }
+        assert(exists off, offs' = off::offs0).
+        {
+          clear - H0.
+          repeat break_let.
+          state_inv_steps; eauto.
+        }
+        clear H0.
+        destruct H2 as [off H2].
+        (* specialize (IHmembers max_offset max_offset0 offs offs' fuel). *)
   Admitted.
+  Transparent ident_equal CoqCtype.ctypeEqual.
 
   Fact repr_struct_preserves
     (sym: sym)
