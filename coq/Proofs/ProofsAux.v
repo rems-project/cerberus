@@ -1654,7 +1654,15 @@ Section AddressValue_Lemmas.
   Definition addr_offset (a1 a2:AddressValue.t) : Z
     := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
 
-  (* TODO: move *)
+  (* TODO: try proving this *)
+  (* This is a Morello-specific requirement. *)
+  Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
+
+  (* TODO: try proving this *)
+  (* TODO: this should be moved to [AddressValue] module *)
+  Axiom ADDR_LIMIT_aligned:
+    AddressValue.ADDR_LIMIT mod (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
+
   Lemma AdddressValue_eqb_eq:
     forall (a b: AddressValue.t),
       eqb a b = true <-> a = b.
@@ -1853,6 +1861,55 @@ Section AddressValue_Lemmas.
   Proof.
     intros EQ C.
     now apply AddressValue_to_Z_inj in C.
+  Qed.
+
+  Fact aligned_addr_neq_space :
+    forall addr addr' psize,
+      psize = alignof_pointer MorelloImpl.get ->
+      addr_ptr_aligned addr ->
+      addr_ptr_aligned addr' ->
+      addr <> addr' ->
+      (AddressValue.to_Z addr + Z.of_nat psize <= AddressValue.to_Z addr')
+      \/
+      (AddressValue.to_Z addr' + Z.of_nat psize <= AddressValue.to_Z addr).
+  Proof.
+    intros * SZ A A' NEQ.
+    unfold addr_ptr_aligned in *.
+    apply AddressValue_to_Z_inj' in NEQ.
+    subst.
+    assert (0 < Z.of_nat (alignof_pointer MorelloImpl.get))
+      by (pose proof MorelloImpl.alignof_pointer_pos; lia).
+    generalize dependent (AddressValue.to_Z addr).
+    generalize dependent (AddressValue.to_Z addr').
+    generalize dependent (Z.of_nat (alignof_pointer MorelloImpl.get)).
+    clear.
+    intros sz SZ a2' A2 a1' A1 NEQ.
+    apply Zdiv.Zmod_divides in A1 as [a1 A1]; [| lia].
+    apply Zdiv.Zmod_divides in A2 as [a2 A2]; [| lia].
+    subst.
+    enough ((a1 + 1) <= a2 \/ (a2 + 1) <= a1) by nia.
+    nia.
+  Qed.
+
+  Fact max_aligned (addr : AddressValue.t) :
+    addr_ptr_aligned addr ->
+    AddressValue.to_Z addr + Z.of_nat (alignof_pointer MorelloImpl.get)
+    <= AddressValue.ADDR_LIMIT.
+  Proof.
+    intros AA.
+    unfold addr_ptr_aligned in AA.
+    pose proof AddressValue.to_Z_in_bounds addr as AB.
+    pose proof ADDR_LIMIT_aligned as LA.
+    pose proof MorelloImpl.alignof_pointer_pos as LP; apply Znat.inj_lt in LP.
+    generalize dependent (AddressValue.to_Z addr).
+    generalize dependent (Z.of_nat (alignof_pointer MorelloImpl.get)).
+    clear.
+    intros align LA NZ addr AA [_ B].
+    apply Zdiv.Zmod_divides in AA as [am AM]; [| lia].
+    apply Zdiv.Zmod_divides in LA as [lm LM]; [| lia].
+    rewrite AM, LM in *; clear AM LM.
+    assert (am < lm) by nia; clear B.
+    nia.
   Qed.
 
 End AddressValue_Lemmas.
@@ -2149,6 +2206,17 @@ Definition is_None {A:Type} (x:option A) : Prop
      | Some _ => False
      | None => True
      end.
+
+Fact option_map_None
+  {A B : Type}
+  (f : A -> B)
+  (x : option A) :
+  x = None ->
+  option_map f x = None.
+Proof.
+  intros.
+  now subst.
+Qed.
 
 Lemma Z_of_bytes_bytes_of_Z:
   forall (a : ascii) (z : Z), Z_of_bytes false (cons a nil) = inr z -> byte_of_Z z = a.
