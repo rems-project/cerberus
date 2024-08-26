@@ -839,6 +839,33 @@ Module Type CheriMemoryImpl
     | _ => raise "struct tagdefs mismatch"
     end.
 
+  (** Find the first live allocation which fully contains the bounds of the given capability. *)
+  Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
+    :=
+    let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
+    let csize := climit - cbase in
+
+    ZMap.map_find_first
+      (fun alloc_id alloc =>
+         let abase := AddressValue.to_Z alloc.(base) in
+         let asize := Z.of_nat alloc.(size) in
+         let alimit := abase + asize in
+
+         (negb alloc.(is_dead))
+         && ((abase <=? cbase) && (cbase <? alimit))
+      ) st.(allocations).
+
+  (** Find the first live allocation which fully contains the bounds of the given capability. *)
+  Definition find_cap_allocation c : memM (option (storage_instance_id * allocation))
+    :=  st <- get ;; ret (find_cap_allocation_st st c).
+
+
+  (* If given capablity is valid, check if it corresponds to some live allocaiton. *)
+  Definition cap_liveness_check (c: C.t) (s:mem_state): bool :=
+    if C.cap_is_valid c && (negb (C.get_ghost_state c).(tag_unspecified))
+    then CapFns.is_some (find_cap_allocation_st s c)
+    else true.
+
   Fixpoint repr
     (fuel: nat)
     (addr : AddressValue.t)
@@ -879,6 +906,7 @@ Module Type CheriMemoryImpl
             | CoqIntegerType.Signed CoqIntegerType.Intptr_t
             | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
               =>
+                sassert (cap_liveness_check c s) "capability is pointing to dead allocation" ;;
                 '(cb, ct) <- option2serr "int encoding error" (C.encode true c) ;;
                 let sz := length cb in
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
@@ -912,6 +940,7 @@ Module Type CheriMemoryImpl
                 ((FP_valid (CoqSymbol.Symbol file_dig n_value opt_name)) as
                   fp) =>
                 let '(fm, c_value) := resolve_function_pointer (funptrmap s) fp in
+                sassert (cap_liveness_check c_value s) "capability is pointing to dead allocation" ;;
                 '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let sz := length cb in
@@ -926,6 +955,7 @@ Module Type CheriMemoryImpl
                     ,
                     AddressValue.with_offset addr (Z.of_nat sz))
             | (PVfunction (FP_invalid c) | PVconcrete c) =>
+                sassert (cap_liveness_check c s) "capability is pointing to dead allocation" ;;
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let sz := length cb in
@@ -1351,26 +1381,6 @@ Module Type CheriMemoryImpl
           (fun (z' : mem_value) => ret (MVunion x_value y_value z'))
     | MVErr err => fail loc err
     end.
-
-  (** Find the first live allocation which fully contains the bounds of the given capability. *)
-  Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
-    :=
-    let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
-    let csize := climit - cbase in
-
-    ZMap.map_find_first
-      (fun alloc_id alloc =>
-         let abase := AddressValue.to_Z alloc.(base) in
-         let asize := Z.of_nat alloc.(size) in
-         let alimit := abase + asize in
-
-         (negb alloc.(is_dead))
-         && ((abase <=? cbase) && (cbase <? alimit))
-      ) st.(allocations).
-
-  (** Find the first live allocation which fully contains the bounds of the given capability. *)
-  Definition find_cap_allocation c : memM (option (storage_instance_id * allocation))
-    :=  st <- get ;; ret (find_cap_allocation_st st c).
 
   (* Check whether this cap base address is within allocation *)
   Definition cap_bounds_within_alloc_bool (c:C.t) a : bool
