@@ -834,8 +834,7 @@ Module Type CheriMemoryImpl
           (fun _ '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
              sassert (ident_equal s_id v_id) "struct field identifiers mismatch" ;;
              same <- CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty ;;
-             sassert same "struct field types mismatch" ;;
-             ret tt
+             sassert same "struct field types mismatch"
           ) tt values members
     | _ => raise "struct tagdefs mismatch"
     end.
@@ -944,11 +943,13 @@ Module Type CheriMemoryImpl
             monadic_fold_left
               (fun '(s', addr') (mval': mem_value) => repr fuel addr' mval' s')
               mvals (s, addr)
-        | MVunion tag_sym memb_ident mval =>
+        | MVunion tag_sym _ mval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
             sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             '(s', pad_addr) <- repr fuel addr mval s ;;
-            let pad_size := Nat.sub sz (Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr)) in
+            let obj_sz := Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr) in
+            sassert (sz <? obj_sz)%nat "Union member is larger that the union" ;;
+            let pad_size := Nat.sub sz obj_sz in
             let s'' := do_pad pad_addr pad_size s' in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>

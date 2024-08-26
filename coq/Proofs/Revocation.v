@@ -5681,18 +5681,17 @@ Module CheriMemoryImplWithProofs
       state_inv_steps.
       apply do_pad_preserves.
       +
-        clear IHmval.
-        bool_to_prop_hyp.
+        clear IHmval R3.
         rename t into addr'.
         apply sizeof_pos in R2.
-        (* May need `repl` monotonicity fact showing that addr'>addr,
-           or even stronger one, showing that it [addr'-addr = sizeof mval]
-         *)
-        clear - R3 R2 R4.
-        admit.
+        bool_to_prop_hyp.
+        clear - R2 R4 R5 Heqn.
+        pose proof (AddressValue.to_Z_in_bounds addr).
+        pose proof (AddressValue.to_Z_in_bounds addr').
+        lia.
       +
         eapply IHmval;eauto.
-  Admitted.
+  Qed.
   Transparent sizeof.
 
   Instance store_PreservesInvariant
