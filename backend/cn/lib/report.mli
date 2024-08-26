@@ -32,8 +32,9 @@ type where_report =
     interesting and uninteresting *)
 type state_report =
   { where : where_report; (** Location information *)
+    not_given_to_solver : Pp.document list * Pp.document list * Pp.document list; (* Definitions and constraints not given to solver *)
     resources : Pp.document list * Pp.document list; (** Resources *)
-    constraints : Pp.document list * Pp.document list * Pp.document list; (** Constraints *)
+    constraints : Pp.document list * Pp.document list; (** Constraints *)
     terms : term_entry list * term_entry list (** Term values *)
   }
 

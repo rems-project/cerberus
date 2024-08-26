@@ -23,9 +23,10 @@ type where_report =
 type state_report =
   { where : where_report;
     (* variables : var_entry list; *)
-    resources : Pp.document list * Pp.document list;
-    constraints : Pp.document list * Pp.document list * Pp.document list; (* unsatisfied/interesting/uninteresting *)
-    terms : term_entry list * term_entry list
+    not_given_to_solver : Pp.document list * Pp.document list * Pp.document list; (*unsatisfied/(satisfied) interesting/(satisfied) uninteresting*)
+    resources : Pp.document list * Pp.document list; (* interesting/uninteresting*)
+    constraints : Pp.document list * Pp.document list; (* interesting/uninteresting *)
+    terms : term_entry list * term_entry list (* interesting/uninteresting*)
   }
 
 type report =
@@ -149,13 +150,27 @@ let interesting_uninteresting
   | [], _ -> details "more" uninteresting_table
   | _, _ -> interesting_table ^ details "more" uninteresting_table
 
-let unsatisfied_interesting_uninteresting
-  unsatisfied_table
-  interesting_table
-  uninteresting_table
-  = 
-  unsatisfied_table ^ details "Constraints satisfied by model" interesting_table 
-  ^ details "more satisfied constraints" uninteresting_table
+let make_not_given_to_solver (unsatisfied, interesting, uninteresting) =
+  let make = List.map (fun elem -> [Pp.plain elem]) in
+  let unsatisfied_table = table_without_head (make unsatisfied) in
+  let interesting_table = table_without_head (make interesting) in
+  let uninteresting_table = table_without_head (make uninteresting) in
+  match unsatisfied with
+  | [] -> 
+    h
+      1
+        "Definitions and constraints not given to solver"
+        (interesting_uninteresting
+        (interesting_table, interesting)
+        (uninteresting_table, uninteresting))
+  | _ -> 
+    h
+      1
+        "Constraints not satisfied by solver" unsatisfied_table ^
+        details "other constraints and definitions not given to sovler"
+        (interesting_uninteresting
+        (interesting_table, interesting)
+        (uninteresting_table, uninteresting))
 
 let make_resources (interesting, uninteresting) =
   let make = List.map (fun re -> [ Pp.plain re (* Pp.plain re.res_span *) ]) in
@@ -163,10 +178,10 @@ let make_resources (interesting, uninteresting) =
   let uninteresting_table = table_without_head (make uninteresting) in
   h
     1
-    "Available resources"
-    (interesting_uninteresting
-       (interesting_table, interesting)
-       (uninteresting_table, uninteresting))
+      "Available resources"
+      (interesting_uninteresting
+      (interesting_table, interesting)
+      (uninteresting_table, uninteresting))
 
 
 let make_terms (interesting, uninteresting) =
@@ -175,34 +190,22 @@ let make_terms (interesting, uninteresting) =
   let uninteresting_table = table [ "term"; "value" ] (make uninteresting) in
   h
     1
-    "Terms"
-    (interesting_uninteresting
-       (interesting_table, interesting)
-       (uninteresting_table, uninteresting))
+      "Terms"
+      (interesting_uninteresting
+      (interesting_table, interesting)
+      (uninteresting_table, uninteresting))
 
 
-let make_constraints (unsatisfied, interesting, uninteresting) =
+let make_constraints (interesting, uninteresting) =
   let make = List.map (fun c -> [ Pp.plain c ]) in
-  let unsatisfied_table = table_without_head (make unsatisfied) in
   let interesting_table = table_without_head (make interesting) in
   let uninteresting_table = table_without_head (make uninteresting) in
-  match unsatisfied with
-  | [] ->
-    h
-      1
+  h
+    1
       "Constraints"
       (interesting_uninteresting
-        (interesting_table, interesting)
-        (uninteresting_table, uninteresting))
-  | _ ->
-    h
-    1
-    "Constraints not satisfied by model"
-    (unsatisfied_interesting_uninteresting
-      unsatisfied_table
-      interesting_table
-      uninteresting_table)
-
+      (interesting_table, interesting)
+      (uninteresting_table, uninteresting))
 
 let css =
   {|
@@ -629,6 +632,7 @@ let make_state (report : state_report) requested unproven predicate_hints =
       make_requested requested;
       make_unproven unproven;
       make_predicate_hints predicate_hints;
+      make_not_given_to_solver report.not_given_to_solver;
       make_resources report.resources;
       make_terms report.terms;
       make_constraints report.constraints

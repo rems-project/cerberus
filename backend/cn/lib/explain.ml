@@ -179,11 +179,23 @@ let state ctxt model_with_q extras =
   in
   let model, quantifier_counter_model = model_with_q in
   let evaluate it = Solver.eval ctxt.global model it in
-  (* let _mevaluate it = *)
+  (* let _mevaluate it = *) 
   (*   match evaluate it with *)
   (*   | Some v -> IT.pp v *)
   (*   | None -> parens !^"not evaluated" *)
   (* in *)
+  let not_given_to_solver = 
+    let (forall_constraints, recursive_funs, branched_preds) = not_given_to_solver ctxt in 
+    let satisfied, unsatisfied = List.partition (lc_satisfied_by_model model_with_q) forall_constraints in
+    let interesting_constraints, uninteresting_constraints = List.partition LC.is_interesting satisfied in
+    let interesting_funs, uninteresting_funs = recursive_funs, [] in (*TODO*)
+    let interesting_preds, uninteresting_preds = branched_preds, [] in (*TODO*)
+    let make_constraints = List.map LC.pp in
+    let make_funs = List.map (fun (k,_) -> Sym.pp k) in
+    let make_preds = List.map (fun (k,_) -> Sym.pp k) in
+      (List.map LC.pp unsatisfied, 
+        List.concat [make_constraints interesting_constraints; make_funs interesting_funs; make_preds interesting_preds],
+        List.concat [make_constraints uninteresting_constraints; make_funs uninteresting_funs; make_preds uninteresting_preds]) in
   let terms =
     let variables =
       let make s ls = sym_ (s, ls, Locations.other __FUNCTION__) in
@@ -240,19 +252,13 @@ let state ctxt model_with_q extras =
     (List.map snd interesting, List.map snd uninteresting)
   in
   let constraints =
-    let in_solver, not_in_solver = List.partition LogicalConstraints.is_forall (LCSet.elements ctxt.constraints) in 
-    let satisfied, unsatisfied = List.partition (lc_satisfied_by_model model_with_q) not_in_solver in
+    let in_solver = List.filter (fun c -> not (LC.is_forall c)) (LCSet.elements ctxt.constraints) in 
     let interesting, uninteresting =
       List.partition
-        (fun lc ->
-          match lc with
-          (* | LC.T (IT (Aligned _, _, _)) -> false *)
-          | LC.T (IT (Representable _, _, _)) -> false
-          | LC.T (IT (Good _, _, _)) -> false
-          | _ -> true)
-        (List.concat_map (simp_constraint evaluate) (List.append satisfied in_solver))
+        LC.is_interesting 
+        (List.concat_map (simp_constraint evaluate) in_solver)
     in
-    (List.map LC.pp unsatisfied, List.map LC.pp interesting, List.map LC.pp uninteresting)
+    (List.map LC.pp interesting, List.map LC.pp uninteresting)
   in
   let resources =
     let same_res, diff_res =
@@ -276,7 +282,7 @@ let state ctxt model_with_q extras =
     let uninteresting = List.map RE.pp uninteresting_diff_res in
     (interesting, uninteresting)
   in
-  { where; terms; resources; constraints }
+  { where; not_given_to_solver; terms; resources; constraints }
 
 
 let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extras) =
