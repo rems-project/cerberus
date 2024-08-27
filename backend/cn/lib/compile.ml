@@ -47,9 +47,10 @@ type env =
   }
 
 let init_env tagDefs fetch_enum_expr fetch_typedef =
+  let alloc_sig = { pred_iargs = []; pred_output = Alloc.Predicate.def.oarg_bt } in
   { computationals = SymMap.empty;
-    logicals = SymMap.empty;
-    predicates = SymMap.empty;
+    logicals = SymMap.(empty |> add Alloc.History.sym Alloc.History.sbt);
+    predicates = SymMap.(empty |> add Alloc.Predicate.sym alloc_sig);
     functions = SymMap.empty;
     datatypes = SymMap.empty;
     datatype_constrs = SymMap.empty;
@@ -61,7 +62,8 @@ let init_env tagDefs fetch_enum_expr fetch_typedef =
 
 let pointer_eq_warned = ref false
 
-(* TODO: ugly hack to get started *)
+(* FIXME: this is an ugly hack used by Core_to_mucore.collect_instrumentation
+ * which in turn is used by Executable_spec.main and TestGeneration.run *)
 module SymTable = Hashtbl.Make (Sym)
 
 let symtable = SymTable.create 10000
@@ -1272,8 +1274,8 @@ let allocation_token loc addr_s =
     | SD_ObjectAddress obj_name -> Sym.fresh_make_uniq ("A_" ^ obj_name)
     | _ -> assert false
   in
-  let alloc_ret = Global.mk_alloc (IT.sym_ (addr_s, BT.Loc, loc)) in
-  ((name, (ResourceTypes.P alloc_ret, BT.Unit)), (loc, None))
+  let alloc_ret = Alloc.Predicate.make (IT.sym_ (addr_s, BT.Loc, loc)) in
+  ((name, (ResourceTypes.P alloc_ret, Alloc.History.value_bt)), (loc, None))
 
 
 module LocalState = struct

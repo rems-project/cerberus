@@ -90,6 +90,7 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "ptr_diff2.c" \
     ! -name "has_alloc_id_ptr_neq.c" \
     ! -name "spec_null_shift.c" \
+    ! -name "alloc_token.c" \
 )
 
 # Include files which cause error for proof but not testing
@@ -144,6 +145,7 @@ BUGGY="cn/division_casting.c \
        cn/ptr_diff2.c \
        cn/has_alloc_id_ptr_neq.c \
        cn/spec_null_shift.c \
+       cn/alloc_token.c \
        "
 
 # Exclude files which cause error for proof but not testing

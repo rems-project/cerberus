@@ -16,29 +16,13 @@ type t =
     lemmata : (Locations.t * AT.lemmat) SymMap.t
   }
 
-let mk_alloc : IndexTerms.t -> ResourceTypes.predicate_type =
-  fun pointer -> { name = ResourceTypes.alloc_name; pointer; iargs = [] }
-
-
 let empty =
-  let[@ocaml.warning "-8"] { name = PName alloc; _ } : ResourceTypes.predicate_type =
-    mk_alloc (IndexTerms.null_ @@ Cerb_location.other __FUNCTION__)
-  in
-  let def : ResourcePredicates.definition =
-    { loc = Locations.other (__FILE__ ^ ":" ^ string_of_int __LINE__);
-      pointer = Sym.fresh_named "__cn_alloc_ptr";
-      iargs = [];
-      oarg_bt = Unit;
-      clauses = None
-    }
-  in
-  let resource_predicates = SymMap.(empty |> add alloc def) in
   { struct_decls = SymMap.empty;
     datatypes = SymMap.empty;
     datatype_constrs = SymMap.empty;
     datatype_order = None;
     fun_decls = SymMap.empty;
-    resource_predicates;
+    resource_predicates = SymMap.(empty |> add Alloc.Predicate.sym Alloc.Predicate.def);
     logical_functions = SymMap.empty;
     lemmata = SymMap.empty
   }

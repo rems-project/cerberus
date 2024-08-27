@@ -1075,6 +1075,7 @@ let oarg_bt loc = function
 
 module WRS = struct
   let welltyped loc (resource, bt) =
+    Pp.(debug 6 (lazy !^__FUNCTION__));
     let@ resource = WRET.welltyped loc resource in
     let@ bt = WBT.is_bt loc bt in
     let@ oarg_bt = oarg_bt loc resource in
@@ -1141,6 +1142,7 @@ module WRT = struct
   let pp = ReturnTypes.pp
 
   let welltyped loc rt =
+    Pp.(debug 6 (lazy !^__FUNCTION__));
     pure
       (match rt with
        | RT.Computational ((name, bt), info, lrt) ->
@@ -1241,6 +1243,7 @@ module WLArgs = struct
     =
     let rec aux =
       let here = Locations.other __FUNCTION__ in
+      Pp.(debug 6 (lazy !^__FUNCTION__));
       function
       | Mu.M_Define ((s, it), ((loc, _) as info), at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -1288,6 +1291,7 @@ module WArgs = struct
     (Loc.t -> 'i -> 'j m) -> string -> Loc.t -> 'i Mu.mu_arguments -> 'j Mu.mu_arguments m
     =
     fun (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.mu_arguments) ->
+    Pp.(debug 6 (lazy !^__FUNCTION__));
     let rec aux = function
       | Mu.M_Computational ((name, bt), info, at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -2096,91 +2100,6 @@ module BaseTyping = struct
        | _ -> ());
       let@ () = ensure_base_type (loc_of_expr expr) ~expect (bt_of_expr expr) in
       return expr
-
-  (* let infer_glob = function *)
-  (*   | M_GlobalDef (ct, expr) -> *)
-  (*     let@ expr = check_expr ((Memory.bt_of_sct ct)) expr in *)
-  (*     return (M_GlobalDef (ct, expr)) *)
-  (*   | M_GlobalDecl ct -> *)
-  (*     return (M_GlobalDecl ct) *)
-
-  (* let infer_globs gs = ListM.mapM (fun (nm, glob) -> *)
-  (*     let@ glob = infer_glob glob in *)
-  (*     return (nm, glob) *)
-  (*   ) gs *)
-
-  (* let rec infer_mu_args_l (f : 'i -> 'j m) (x : 'i mu_arguments_l) = *)
-  (*   match x with *)
-  (*   | M_Define ((nm, rhs), info, args) -> *)
-  (*     pure begin *)
-  (*     let@ () = add_l nm (IT.bt rhs) (fst info, lazy (Pp.string "defined-var")) in *)
-  (*     let@ args = infer_mu_args_l f args in *)
-  (*     return (M_Define ((nm, rhs), info, args)) *)
-  (*     end *)
-  (*   | M_Resource ((nm, (ret, bt)), info, args) -> *)
-  (*     pure begin *)
-  (*     let@ () = add_l nm bt (fst info, lazy (Pp.string "resource-var")) in *)
-  (*     let@ args = infer_mu_args_l f args in *)
-  (*     return (M_Resource ((nm, (ret, bt)), info, args)) *)
-  (*     end *)
-  (*   | M_Constraint (lc, info, args) -> *)
-  (*     let@ args = infer_mu_args_l f args in *)
-  (*     return (M_Constraint (lc, info, args)) *)
-  (*   | M_I y -> *)
-  (*     let@ y = f y in *)
-  (*     return (M_I y) *)
-
-  (* let rec infer_mu_args (f : 'i -> 'j m) (x : 'i mu_arguments) = *)
-  (*   match x with *)
-  (*   | M_Computational ((nm, bt), info, args) -> *)
-  (*     pure begin *)
-  (*     let@ () = add_l nm bt (fst info, lazy (Pp.string "argument")) in *)
-  (*     let@ args = infer_mu_args f args in *)
-  (*     return (M_Computational ((nm, bt), info, args)) *)
-  (*     end *)
-  (*   | M_L args_l -> *)
-  (*     let@ args_l = infer_mu_args_l f args_l in *)
-  (*     return (M_L args_l) *)
-
-  (* let infer_label_def = function *)
-  (*   | M_Return loc -> return (M_Return loc) *)
-  (*   | M_Label (loc, args, annots, spec) -> *)
-  (*     let@ args = infer_mu_args infer_expr args in *)
-  (*     return (M_Label (loc, args, annots, spec)) *)
-
-  (* let infer_fun_map_decl = function *)
-  (*   | M_Proc (loc, args_and_body, trusted, spec) -> *)
-  (*     let f (expr, label_defs, rt) = *)
-  (*       let@ expr = infer_expr expr in *)
-  (*       let@ label_defs = PmapM.mapM (fun sym label_def -> infer_label_def label_def) *)
-  (*           label_defs Sym.compare in *)
-  (*       return (expr, label_defs, rt) *)
-  (*     in *)
-  (*     let@ args_and_body = infer_mu_args f args_and_body in *)
-  (*     return (M_Proc (loc, args_and_body, trusted, spec)) *)
-  (*   | M_ProcDecl (loc, spec_opt) -> *)
-  (*     return (M_ProcDecl (loc, spec_opt)) *)
-
-  (* let infer_funs funs = PmapM.mapM (fun sym decl -> infer_fun_map_decl decl) funs
-     Sym.compare *)
-
-  (* let infer_types_file : 'bt. 'bt mu_file -> BT.t mu_file m = *)
-  (*   fun file -> *)
-  (*   let@ globs = infer_globs file.mu_globs in *)
-  (*   let@ funs = infer_funs file.mu_funs in *)
-  (*   return { *)
-  (*     mu_main = file.mu_main; *)
-  (*     mu_tagDefs = file.mu_tagDefs; *)
-  (*     mu_globs = globs; *)
-  (*     mu_funs = funs; *)
-  (*     mu_extern = file.mu_extern; *)
-  (*     mu_stdlib_syms = file.mu_stdlib_syms; *)
-  (*     mu_resource_predicates = file.mu_resource_predicates; *)
-  (*     mu_logical_predicates = file.mu_logical_predicates; *)
-  (*     mu_datatypes = file.mu_datatypes; *)
-  (*     mu_lemmata = file.mu_lemmata; *)
-  (*     mu_call_funinfo = file.mu_call_funinfo; *)
-  (*   } *)
 end
 
 module WLabel = struct
@@ -2221,6 +2140,7 @@ module WProc = struct
     _ (*BT.t*) Mu.mu_proc_args_and_body m
     =
     fun (loc : Loc.t) (at : 'TY1 Mu.mu_proc_args_and_body) ->
+    Pp.(debug 6 (lazy !^__FUNCTION__));
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
         let@ rt = pure (WRT.welltyped loc rt) in

@@ -25,8 +25,6 @@ let pp_predicate_name = function
   | PName pn -> Sym.pp pn
 
 
-let alloc_name : predicate_name = PName (Sym.fresh_named "__CN_Alloc")
-
 type predicate_type =
   { name : predicate_name;
     pointer : IT.t; (* I *)
