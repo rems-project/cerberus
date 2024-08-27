@@ -19,7 +19,7 @@ INDEX=0
 for TEST in ${TESTS}; do
 
   # Record wall clock time in seconds
-  /usr/bin/time -f "%e" -o /tmp/time cn verify "${TEST}" || true
+  /usr/bin/time --quiet -f "%e" -o /tmp/time cn verify "${TEST}" || true
   TIME=$(cat /tmp/time)
 
   # If we're last, don't print a trailing comma.
