@@ -5685,7 +5685,7 @@ Module CheriMemoryImplWithProofs
         rename t into addr'.
         apply sizeof_pos in R2.
         bool_to_prop_hyp.
-        clear - R2 R4 R5 Heqn.
+        clear - R2 R4 R5.
         pose proof (AddressValue.to_Z_in_bounds addr).
         pose proof (AddressValue.to_Z_in_bounds addr').
         lia.

@@ -979,7 +979,7 @@ Module Type CheriMemoryImpl
             sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             '(s', pad_addr) <- repr fuel addr mval s ;;
             let obj_sz := Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr) in
-            sassert (sz <? obj_sz)%nat "Union member is larger that the union" ;;
+            sassert (obj_sz <=? sz)%nat "Union member is larger that the union" ;;
             let pad_size := Nat.sub sz obj_sz in
             let s'' := do_pad pad_addr pad_size s' in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
