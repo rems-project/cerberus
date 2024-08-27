@@ -5443,32 +5443,28 @@ Module CheriMemoryImplWithProofs
     state_inv_steps.
     +
       (* with [flexible_opt] *)
-      admit.
-    +
-      (* without [flexible_opt] *)
-      rename l into members, l0 into offs.
+      remember (l ++ [(i, (a, None, q, c))]) as members.
+      rename l0 into offs.
       bool_to_prop_hyp.
-      subst n1.
-      clear - Heqn HO2.
+      clear - Heqn HO2 HT2.
       rewrite rev_length.
-      rewrite <- Heqn.
-      clear Heqn n.
+      rewrite <- HT2.
+      clear Heqn l HT2.
 
-      remember (@nil (prod (prod identifier CoqCtype.ctype) nat)) as offs0.
-      assert(List.length offs0 = O) by (subst; reflexivity).
+      remember
+        ((@nil (prod (prod identifier CoqCtype.ctype) nat))
+          , 0%nat) as p.
+      destruct p as [offs0 max_offset0].
+      assert(List.length offs0 = O) by (tuple_inversion; subst; reflexivity).
       replace (Datatypes.length members) with
         (Datatypes.length members + Datatypes.length offs0)%nat.
       2: {
-        subst offs0.
+        tuple_inversion.
         cbn.
-        auto.
+        lia.
       }
-      clear Heqoffs0 H.
-      generalize dependent (0%nat).
-      intros max_offset0 H.
-
-      revert max_offset max_offset0 offs offs0 fuel H.
-
+      clear Heqp H.
+      revert max_offset max_offset0 offs offs0 fuel HO2.
       induction members;intros.
       *
         cbn in *.
@@ -5480,20 +5476,66 @@ Module CheriMemoryImplWithProofs
         destruct a' as [offs' max_offset'].
         assert(Datatypes.length offs' = S (Datatypes.length offs0)).
         {
-          clear - H0.
           repeat break_let.
           state_inv_steps;auto.
         }
         assert(exists off, offs' = off::offs0).
         {
-          clear - H0.
           repeat break_let.
           state_inv_steps; eauto.
         }
-        clear H0.
-        destruct H2 as [off H2].
-        (* specialize (IHmembers max_offset max_offset0 offs offs' fuel). *)
-  Admitted.
+        clear HO0.
+        destruct H0 as [off H2].
+        specialize (IHmembers _ _ _ _ _ HO1).
+        lia.
+    +
+      (* without [flexible_opt] *)
+      rename l into members, l0 into offs.
+      bool_to_prop_hyp.
+      subst n1.
+      clear - Heqn HO2.
+      rewrite rev_length.
+      rewrite <- Heqn.
+      clear Heqn n.
+
+      remember
+        ((@nil (prod (prod identifier CoqCtype.ctype) nat))
+          , 0%nat) as p.
+      destruct p as [offs0 max_offset0].
+      assert(List.length offs0 = O) by (tuple_inversion; subst; reflexivity).
+      replace (Datatypes.length members) with
+        (Datatypes.length members + Datatypes.length offs0)%nat.
+      2: {
+        tuple_inversion.
+        cbn.
+        lia.
+      }
+      clear Heqp H.
+      revert max_offset max_offset0 offs offs0 fuel HO2.
+      induction members;intros.
+      *
+        cbn in *.
+        inl_inr_inv.
+        reflexivity.
+      *
+        cbn in *.
+        state_inv_steps_quick.
+        destruct a' as [offs' max_offset'].
+        assert(Datatypes.length offs' = S (Datatypes.length offs0)).
+        {
+          repeat break_let.
+          state_inv_steps;auto.
+        }
+        assert(exists off, offs' = off::offs0).
+        {
+          repeat break_let.
+          state_inv_steps; eauto.
+        }
+        clear HO0.
+        destruct H0 as [off H2].
+        specialize (IHmembers _ _ _ _ _ HO1).
+        lia.
+  Qed.
   Transparent ident_equal CoqCtype.ctypeEqual.
 
   Fact repr_struct_preserves
