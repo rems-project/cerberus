@@ -1427,7 +1427,8 @@ let normalise_globs ~inherit_loc env _sym g =
         ~inherit_loc
         loc
         ( (env, C.LocalState.init_st.old_states),
-          (Pmap.empty Int.compare, CF.Cn_desugaring.initial_cn_desugaring_state []) )
+          ( Pmap.empty Int.compare,
+            CF.Cn_desugaring.(initial_cn_desugaring_state empty_init) ) )
         ([], Pmap.empty Int.compare)
         e
     in

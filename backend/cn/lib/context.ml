@@ -46,13 +46,11 @@ type t =
   }
 
 let empty =
-  let alloc_id = Sym.fresh_named "__cn_alloc_history" in
-  let loc_str = __FILE__ ^ ":" ^ string_of_int __LINE__ in
-  let l_info = (Locations.other loc_str, lazy (Pp.string loc_str)) in
-  let bt =
-    BT.Map (Alloc_id, Record [ (Id.id "base", Integer); (Id.id "len", Integer) ])
+  let logical =
+    let loc_str = __FILE__ ^ ":" ^ string_of_int __LINE__ in
+    let l_info = (Locations.other loc_str, lazy (Pp.string loc_str)) in
+    SymMap.(empty |> add Alloc.History.sym (BaseType Alloc.History.bt, l_info))
   in
-  let logical = SymMap.(empty |> add alloc_id (BaseType bt, l_info)) in
   { computational = SymMap.empty;
     logical;
     resources = ([], 0);

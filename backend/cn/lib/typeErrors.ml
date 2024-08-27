@@ -376,7 +376,7 @@ let pp_message te =
     in
     { short; descr = Some descr; state = None }
   | Mismatch { has; expect } ->
-    let short = !^"Type error" in
+    let short = !^"Mismatched types." in
     let descr =
       !^"Expected value of type"
       ^^^ squotes expect
@@ -400,7 +400,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | NIA { it; hint } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Non-linear integer arithmetic." in
     let descr =
       !^"Illtyped expression"
       ^^^ squotes it
@@ -413,7 +413,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | TooBigExponent { it } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Exponent too big" in
     let descr =
       !^"Illtyped expression"
       ^^^ squotes it
@@ -426,7 +426,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | NegativeExponent { it } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Negative exponent" in
     let descr =
       !^"Illtyped expression"
       ^^ squotes it

@@ -1451,7 +1451,12 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 ( P { name = Owned (act.ct, Uninit); pointer = ret; iargs = [] },
                   O (default_ (Memory.bt_of_sct act.ct) loc) )
             in
-            let@ () = add_r loc (P (Global.mk_alloc ret), O (IT.unit_ loc)) in
+            (* FIXME add a constraint to the history and point the output argument to that *)
+            let@ () =
+              add_r
+                loc
+                (P (Alloc.Predicate.make ret), O (IT.default_ Alloc.History.value_bt loc))
+            in
             let@ () = record_action (Create ret, loc) in
             k ret)
         | M_CreateReadOnly (_sym1, _ct, _sym2, _prefix) ->
@@ -1470,7 +1475,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 ({ name = Owned (ct, Uninit); pointer = arg; iargs = [] }, None)
             in
             let@ _ =
-              RI.Special.predicate_request loc (Access Kill) (Global.mk_alloc arg, None)
+              RI.Special.predicate_request
+                loc
+                (Access Kill)
+                (Alloc.Predicate.make arg, None)
             in
             let@ () = record_action (Kill arg, loc) in
             k (unit_ loc))

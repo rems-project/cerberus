@@ -73,12 +73,14 @@ let frontend
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
   let conf = Setup.conf macros incl_dirs incl_files astprints in
+  let cn_init_scope : Cn_desugaring.init_scope =
+    { predicates = [ Alloc.Predicate.(str, sym, Some loc) ];
+      functions = List.map (fun (str, sym) -> (str, sym, None)) cn_builtin_fun_names;
+      idents = [ Alloc.History.(str, sym, Some loc) ]
+    }
+  in
   let@ _, ail_prog_opt, prog0 =
-    c_frontend_and_elaboration
-      ~cnnames:cn_builtin_fun_names
-      (conf, io)
-      (stdlib, impl)
-      ~filename
+    c_frontend_and_elaboration ~cn_init_scope (conf, io) (stdlib, impl) ~filename
   in
   let@ () =
     if conf.typecheck_core then
