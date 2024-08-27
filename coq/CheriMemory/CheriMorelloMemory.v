@@ -862,7 +862,8 @@ Module Type CheriMemoryImpl
 
   (* If given capablity is valid, check if it corresponds to some live allocaiton. *)
   Definition cap_liveness_check (c: C.t) (s:mem_state): bool :=
-    if C.cap_is_valid c && (negb (C.get_ghost_state c).(tag_unspecified))
+    if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT) &&
+         C.cap_is_valid c && (negb (C.get_ghost_state c).(tag_unspecified))
     then CapFns.is_some (find_cap_allocation_st s c)
     else true.
 
