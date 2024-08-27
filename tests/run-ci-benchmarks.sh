@@ -8,15 +8,15 @@ echo "[" >> "${JSON_FILE}"
 
 DIRNAME=$(dirname "$0")
 
-SUCC=$(find "${DIRNAME}"/cn -name '*.c' | grep -v '\.error\.c')
+TESTS=$(find "${DIRNAME}"/cn -name '*.c')
 
 COUNT=0
-for TEST in ${SUCC}; do
+for TEST in ${TESTS}; do
   let COUNT=${COUNT}+1
 done
 
 INDEX=0
-for TEST in ${SUCC}; do
+for TEST in ${TESTS}; do
 
   # Record wall clock time in seconds
   /usr/bin/time -f "%e" -o /tmp/time cn verify "${TEST}"
