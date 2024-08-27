@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail -o noclobber
+# set -xv # uncomment to debug variables
 
 JSON_FILE="benchmark-data.json"
 
-cat << EOF >> ${JSON_FILE}
-[
-EOF
+echo "[" >> "${JSON_FILE}"
 
 DIRNAME=$(dirname "$0")
 
@@ -16,13 +16,10 @@ for TEST in ${SUCC}; do
 done
 
 INDEX=0
-echo $SUCC
-echo $COUNT
 for TEST in ${SUCC}; do
-  echo ${INDEX}
 
   # Record wall clock time in seconds
-  /usr/bin/time -f "%e" -o /tmp/time cn verify ${TEST}
+  /usr/bin/time -f "%e" -o /tmp/time cn verify "${TEST}"
   TIME=$(cat /tmp/time)
 
   # If we're last, don't print a trailing comma.
@@ -48,8 +45,6 @@ EOF
   let INDEX=${INDEX}+1
 done
 
-cat << EOF >> ${JSON_FILE}
-]
-EOF
+echo "]" >> "${JSON_FILE}"
 
-cat ${JSON_FILE}
+jq . "${JSON_FILE}"

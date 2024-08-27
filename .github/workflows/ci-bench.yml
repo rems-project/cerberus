@@ -16,7 +16,7 @@ permissions:
 
 # cancel in-progress job when a new push is performed
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-bench-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
 
     - name: System dependencies (ubuntu)
       run: |
-        sudo apt install build-essential libgmp-dev z3 opam cmake
+        sudo apt install build-essential libgmp-dev z3 opam cmake jq
 
     - name: Restore cached opam
       id: cache-opam-restore
