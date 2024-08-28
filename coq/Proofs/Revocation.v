@@ -5562,8 +5562,10 @@ Module CheriMemoryImplWithProofs
       mem_invariant s ->
       forall (c : Capability_GS.t) (cb : list ascii) (b:bool),
         Capability_GS.encode true c = Some (cb, b) ->
-        (exists (a : allocation) (alloc_id : ZMap.M.key),
-          ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc c a) ->
+        (Capability_GS.cap_is_valid c = true ->
+         tag_unspecified (Capability_GS.get_ghost_state c) = false ->
+         exists (a : allocation) (alloc_id : ZMap.M.key),
+           ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc c a) ->
         forall start : AddressValue.t,
           is_pointer_algined start = true ->
           AddressValue.to_Z start + Z.of_nat (Datatypes.length cb) <= AddressValue.ADDR_LIMIT ->
@@ -5610,13 +5612,18 @@ Module CheriMemoryImplWithProofs
       +
         subst start.
         exists cap.
-        split; [| assumption].
-        subst bs'.
-        rewrite fetch_bytes_add_eq_o by lia.
-        subst.
-        clear - E.
-        eapply cap_encode_decode.
-        eassumption.
+        split.
+        --
+          subst bs'.
+          rewrite fetch_bytes_add_eq_o by lia.
+          subst.
+          clear - E.
+          eapply cap_encode_decode.
+          eassumption.
+        --
+          apply AMap.P.F.add_mapsto_iff in M as [[_ M] | M]; [| tauto].
+          invc M.
+          now apply CAPA.
       +
         eapply MIcap.
         *
@@ -5651,6 +5658,40 @@ Module CheriMemoryImplWithProofs
           pose proof AddressValue.to_Z_in_bounds start.
           rewrite AddressValue.with_offset_no_wrap by lia.
           lia.
+  Qed.
+
+  Lemma cap_liveness_check_valid_cap (s : mem_state_r) (t : Capability_GS.t) :
+    cap_liveness_check t s = true ->
+    Capability_GS.cap_is_valid t = true ->
+    tag_unspecified (Capability_GS.get_ghost_state t) = false ->
+    exists (a : allocation) (alloc_id : ZMap.M.key),
+      ZMap.M.MapsTo alloc_id a (allocations s) /\ cap_bounds_within_alloc t a.
+  Proof.
+    intros L.
+    unfold cap_liveness_check in *.
+    break_if.
+    -
+      intros _ _.
+      clear Heqb.
+      destruct find_cap_allocation_st eqn:SA in L; invc L.
+      unfold find_cap_allocation_st in SA.
+      break_let.
+      rename Heqp0 into B, z into blo, z0 into bhi.
+      destruct p as (si, a).
+      apply ZMapProofs.map_find_first_exists in SA as [F B'].
+      apply ZMap.M.find_2 in F.
+      do 2 eexists.
+      split; [eassumption |].
+      unfold cap_bounds_within_alloc.
+      rewrite B; cbn.
+      bool_to_prop_hyp.
+      lia.
+    -
+      intros V U.
+      exfalso.
+      rewrite V, U in *.
+      rewrite resolve_has_INSTANT in *.
+      discriminate Heqb.
   Qed.
 
   Fact repr_array_preserves
@@ -5942,11 +5983,11 @@ Module CheriMemoryImplWithProofs
         auto.
       +
         (* IC *)
+        pose proof cap_liveness_check_valid_cap.
         repeat break_match_hyp; state_inv_steps;
           bool_to_prop_hyp;
           remember (map Some l) as bs;
-          eapply mem_state_with_cap_preserves;eauto.
-        1,2: admit.
+          eapply mem_state_with_cap_preserves; eauto.
     -
       (* MVfloating *)
       destruct fuel;[apply raise_either_inr_inv in R;tauto|].
@@ -5977,20 +6018,20 @@ Module CheriMemoryImplWithProofs
           state_inv_steps_quick.
           bool_to_prop_hyp.
           eapply mem_state_with_cap_preserves;eauto.
-          admit.
+          now apply cap_liveness_check_valid_cap.
         *
           state_inv_steps_quick.
           break_let.
           state_inv_steps_quick.
           bool_to_prop_hyp.
           eapply mem_state_with_cap_preserves;eauto.
-          admit.
+          now apply cap_liveness_check_valid_cap.
       +
         state_inv_steps.
         bool_to_prop_hyp.
         remember (map Some l) as bs.
         eapply mem_state_with_cap_preserves;eauto.
-        admit.
+        now apply cap_liveness_check_valid_cap.
     -
       (* MVarray *)
       eapply repr_array_preserves;eauto.
