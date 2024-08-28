@@ -1238,6 +1238,8 @@ let make globals =
   s
 
 
+let model_evaluator_solver = ref None
+
 (** Evaluate terms in the context of a model computed by the solver. *)
 let model_evaluator solver mo =
   match SMT.to_list mo with
@@ -1245,10 +1247,17 @@ let model_evaluator solver mo =
   | Some defs ->
     let scfg = solver.smt_solver.config in
     let cfg = { scfg with log = Logger.make "model" } in
-    let s = SMT.new_solver cfg in
+    let smt_solver, new_solver =
+      match !model_evaluator_solver with
+      | Some smt_solver -> (smt_solver, false)
+      | None ->
+        let s = SMT.new_solver cfg in
+        model_evaluator_solver := Some s;
+        (s, true)
+    in
     let gs = solver.globals in
     let evaluator =
-      { smt_solver = s;
+      { smt_solver;
         cur_frame = ref (empty_solver_frame ());
         prev_frames =
           ref (List.map copy_solver_frame (!(solver.cur_frame) :: !(solver.prev_frames)))
@@ -1259,17 +1268,17 @@ let model_evaluator solver mo =
         globals = gs
       }
     in
-    declare_solver_basics evaluator;
-    List.iter (debug_ack_command evaluator) defs;
+    if new_solver then declare_solver_basics evaluator;
     fun e ->
       push evaluator;
+      List.iter (debug_ack_command evaluator) defs;
       let inp = translate_term evaluator e in
-      (match SMT.check s with
+      (match SMT.check evaluator.smt_solver with
        | SMT.Sat ->
-         let res = SMT.get_expr s inp in
+         let res = SMT.get_expr evaluator.smt_solver inp in
          pop evaluator 1;
          let ctys = get_ctype_table evaluator in
-         Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
+         Some (get_ivalue solver.globals ctys (basetype e) (SMT.no_let res))
        | _ ->
          pop evaluator 1;
          None)
