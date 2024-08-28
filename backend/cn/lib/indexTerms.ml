@@ -628,7 +628,9 @@ let intToReal_ it loc = IT (Cast (Real, it), BT.Real, loc)
 
 let realToInt_ it loc = IT (Cast (Integer, it), BT.Integer, loc)
 
-let arith_binop op (it, it') loc = IT (Binop (op, it, it'), bt it, loc)
+let binop op (it, it') loc ret = IT (Binop (op, it, it'), ret, loc)
+
+let arith_binop op (it, it') loc = bt it |> binop op (it, it') loc
 
 let arith_unop op it loc = IT (Unop (op, it), bt it, loc)
 

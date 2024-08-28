@@ -47,10 +47,18 @@ type env =
   }
 
 let init_env tagDefs fetch_enum_expr fetch_typedef =
+  let builtins =
+    List.fold_left
+      (fun acc ((_, sym, def) : Builtins.builtin_fn_def) ->
+        let fsig = { args = def.args; return_bty = def.return_bt } in
+        SymMap.add sym fsig acc)
+      SymMap.empty
+      Builtins.builtin_fun_defs
+  in
   { computationals = SymMap.empty;
     logicals = SymMap.empty;
     predicates = SymMap.empty;
-    functions = SymMap.empty;
+    functions = builtins;
     datatypes = SymMap.empty;
     datatype_constrs = SymMap.empty;
     tagDefs;
