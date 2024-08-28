@@ -14,7 +14,7 @@ void cn_exit_aux(void) {
     exit(SIGABRT);
 }
 
-void (*cn_exit)(void) = &cn_exit_aux;
+void static (*cn_exit)(void) = &cn_exit_aux;
 
 void set_cn_exit_cb(void (*callback)(void)) {
     cn_exit = callback;
