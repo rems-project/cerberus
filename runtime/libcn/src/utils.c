@@ -16,6 +16,14 @@ void cn_exit_aux(void) {
 
 void (*cn_exit)(void) = &cn_exit_aux;
 
+void set_cn_exit_cb(void (*callback)(void)) {
+    cn_exit = callback;
+}
+
+void reset_cn_exit_cb(void) {
+    cn_exit = &cn_exit_aux;
+}
+
 void print_error_msg_info(void) {
   printf("Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
 }

@@ -112,6 +112,9 @@ void cn_free_sized(void*, size_t len);
 void cn_print_nr_u64(int i, unsigned long u) ;
 void cn_print_u64(const char *str, unsigned long u) ;
 
+/* cn_exit callbacks */
+void set_cn_exit_cb(void (*callback)(void));
+void reset_cn_exit_cb(void);
 
 /* Conversion functions */
 
