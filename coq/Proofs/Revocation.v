@@ -5443,17 +5443,6 @@ Module CheriMemoryImplWithProofs
     apply Z.eqb_eq.
   Qed.
 
-  Fact AddressValue_ltb_Z_lt:
-    forall a b,
-      AddressValue.ltb a b = true
-      <->
-      AddressValue.to_Z a < AddressValue.to_Z b.
-  Proof.
-    intros.
-    rewrite AddressValue_ltb_Z_ltb.
-    apply Z.ltb_lt.
-  Qed.
-
   Fact fetch_bytes_add_eq_o
     (bm : AMap.M.t (option ascii))
     (bs : list (option ascii))
@@ -5529,7 +5518,7 @@ Module CheriMemoryImplWithProofs
         lia.
     }
     clear AOFF; rename AOFF' into AOFF.
-    rewrite !AddressValue_ltb_Z_lt.
+    rewrite !AddressValue_ltb_Z_ltb, !Z.ltb_lt.
     lia.
   Qed.
 

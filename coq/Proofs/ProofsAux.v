@@ -1855,14 +1855,6 @@ Section AddressValue_Lemmas.
     apply ProofIrrelevance.proof_irrelevance.
   Qed.
 
-  Fact AddressValue_to_Z_inj' (x y : AddressValue.t) :
-    x <> y ->
-    AddressValue.to_Z x <> AddressValue.to_Z y.
-  Proof.
-    intros EQ C.
-    now apply AddressValue_to_Z_inj in C.
-  Qed.
-
   Fact aligned_addr_neq_space :
     forall addr addr' psize,
       psize = alignof_pointer MorelloImpl.get ->
@@ -1875,7 +1867,7 @@ Section AddressValue_Lemmas.
   Proof.
     intros * SZ A A' NEQ.
     unfold addr_ptr_aligned in *.
-    apply AddressValue_to_Z_inj' in NEQ.
+    apply AddressValue_neq_via_to_Z in NEQ.
     subst.
     assert (0 < Z.of_nat (alignof_pointer MorelloImpl.get))
       by (pose proof MorelloImpl.alignof_pointer_pos; lia).
@@ -2120,11 +2112,15 @@ Section AMapProofs.
             with ((Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)) - 1)%nat
             by lia.
           remember (Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)) as n.
-          destruct n;
-            [exfalso; apply AddressValue_to_Z_inj' in NEQ; lia |].
-          cbn.
-          f_equal.
-          lia.
+          destruct n.
+          --
+            exfalso.
+            apply AddressValue_neq_via_to_Z in NEQ.
+            lia.
+          --
+            cbn.
+            f_equal.
+            lia.
         *
           lia.
         *
@@ -2139,7 +2135,7 @@ Section AMapProofs.
           2: {
             pose proof (AddressValue.to_Z_in_bounds addr); lia.
           }
-          apply AddressValue_to_Z_inj' in NEQ.
+          apply AddressValue_neq_via_to_Z in NEQ.
           lia.
   Qed.
 
