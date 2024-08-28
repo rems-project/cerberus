@@ -1,6 +1,10 @@
 #ifndef CN_ALLOC
 #define CN_ALLOC
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // enum CNTYPE {
 //     NODE_CN,
 //     SEQ,
@@ -19,5 +23,9 @@ void *alloc_(long nbytes, const char *, int);
 
 
 // void *alloc_zeros(long nbytes);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // CN_ALLOC

@@ -12,6 +12,9 @@
 #include <cn-executable/alloc.h>
 #include <cn-executable/hash_table.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct cn_error_message_info {
     const char *function_name;
@@ -558,5 +561,9 @@ static inline void cn_postfix(void *ptr, size_t size)
     cn_postfix(__tmp, sizeof(typeof(LV)));                    \
     (*__tmp) OP;                                              \
  })
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // CN_UTILS

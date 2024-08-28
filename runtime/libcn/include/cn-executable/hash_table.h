@@ -30,6 +30,10 @@ SOFTWARE.
 #include <stdbool.h>
 #include <cn-executable/alloc.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Hash table entry (slot may be filled or empty).
 typedef struct {
     signed long *key;  // key is NULL if this slot is empty
@@ -68,5 +72,9 @@ typedef struct {
 hash_table_iterator ht_iterator(hash_table* table);
 
 _Bool ht_next(hash_table_iterator* it);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // CN_HASH_TABLE
