@@ -1,3 +1,6 @@
+#ifndef CN_HASH_TABLE
+#define CN_HASH_TABLE
+
 /*
 
 MIT License
@@ -65,3 +68,5 @@ typedef struct {
 hash_table_iterator ht_iterator(hash_table* table);
 
 _Bool ht_next(hash_table_iterator* it);
+
+#endif // CN_HASH_TABLE

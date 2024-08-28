@@ -559,4 +559,4 @@ static inline void cn_postfix(void *ptr, size_t size)
     (*__tmp) OP;                                              \
  })
 
-#endif
+#endif // CN_UTILS

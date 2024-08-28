@@ -1,3 +1,6 @@
+#ifndef CN_ALLOC
+#define CN_ALLOC
+
 // enum CNTYPE {
 //     NODE_CN,
 //     SEQ,
@@ -16,3 +19,5 @@ void *alloc_(long nbytes, const char *, int);
 
 
 // void *alloc_zeros(long nbytes);
+
+#endif // CN_ALLOC
