@@ -11,6 +11,7 @@ env:
 permissions:
   # Allow commenting on the PR
   pull-requests: write
+  issues: write
 
 # cancel in-progress job when a new push is performed
 concurrency:
