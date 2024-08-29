@@ -14,7 +14,12 @@ struct int_queueCell {
   int first;
   struct int_queueCell* next;
 };
+
 /*@
+function (boolean) eq_testable(pointer x, pointer y) {
+    ptr_eq(x,y) || !addr_eq(x,y)
+}
+
 predicate (void) Test(pointer f, pointer b) {
   if (ptr_eq(f,b)) {
     take F = Owned<struct int_queueCell>(b);
@@ -38,6 +43,7 @@ void IntQueue_pop (struct int_queue *q)
 requires
     take Q = Owned<struct int_queue>(q);
     !is_null(Q.front) && !is_null(Q.back);
+    eq_testable(Q.front, Q.back);
     take B = Test(Q.front, Q.back);
 ensures
     take Q2 = Block<struct int_queue>(q);

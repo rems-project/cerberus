@@ -10,8 +10,9 @@ function echo_and_err() {
 
 QUIET=""
 CHECK_OWNERSHIP=""
+VIP=""
 
-while getopts "hoq" flag; do
+while getopts "hovq" flag; do
  case "$flag" in
    h)
    printf "${USAGE}"
@@ -19,6 +20,9 @@ while getopts "hoq" flag; do
    ;;
    o)
    CHECK_OWNERSHIP="--with-ownership-checking"
+   ;;
+   v)
+   VIP="--vip"
    ;;
    q)
    QUIET=1
@@ -54,7 +58,7 @@ EXEC_DIR=$(mktemp -d -t 'cn-exec.XXXX')
 # INPUT_FN="${EXEC_DIR}/${INPUT_BASENAME}.pp.c"
 
 # Instrument code with CN
-if cn verify "${INPUT_FN}" \
+if cn verify "${VIP}" "${INPUT_FN}" \
     --output-decorated="${INPUT_BASENAME}-exec.c" \
     --output-decorated-dir="${EXEC_DIR}" \
     ${CHECK_OWNERSHIP}; then
