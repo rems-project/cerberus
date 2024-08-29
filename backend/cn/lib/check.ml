@@ -432,17 +432,17 @@ let rec check_pexpr (pe : BT.t mu_pexpr) (k : IT.t -> unit m) : unit m =
   let orig_pe = pe in
   let (M_Pexpr (loc, _, expect, pe_)) = pe in
   let@ omodel = model_with loc (bool_ true @@ Locations.other __FUNCTION__) in
+  let@ () =
+    print_with_ctxt (fun ctxt ->
+      debug 3 (lazy (action "inferring pure expression"));
+      debug 3 (lazy (item "expr" (Pp_mucore.pp_pexpr pe)));
+      debug 3 (lazy (item "ctxt" (Context.pp ctxt))))
+  in
   match omodel with
   | None ->
     warn loc !^"Completed type-checking early along this path due to inconsistent facts.";
     return ()
   | Some _ ->
-    let@ () =
-      print_with_ctxt (fun ctxt ->
-        debug 3 (lazy (action "inferring pure expression"));
-        debug 3 (lazy (item "expr" (Pp_mucore.pp_pexpr pe)));
-        debug 3 (lazy (item "ctxt" (Context.pp ctxt))))
-    in
     (match pe_ with
      | M_PEsym sym ->
        let@ () = check_computational_bound loc sym in
@@ -1361,16 +1361,16 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
           in
           let@ _bt_info = ensure_bitvector_type loc ~expect:(bt_of_pexpr pe) in
           check_pexpr pe (fun arg ->
-            (* TODO: what about unrepresentable values? If that's possible
+            (* TODO (DCM, VIP): what about unrepresentable values? If that's possible
                we to make sure our cast semantics correctly matches C's *)
             let value = integerToPointerCast_ arg loc in
             k value)
         | M_PtrValidForDeref (act, pe) ->
-          (* TODO: provenance things? *)
+          (* TODO (DCM, VIP) *)
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ () = WellTyped.ensure_base_type loc ~expect Bool in
           let@ () = WellTyped.ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
-          (* TODO: check. Also: this is the same as PtrWellAligned *)
+          (* TODO (DCM, VIP): check. Also: this is the same as PtrWellAligned *)
           check_pexpr pe (fun arg ->
             let value = aligned_ (arg, act.ct) loc in
             k value)
@@ -1378,7 +1378,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ () = WellTyped.ensure_base_type loc ~expect Bool in
           let@ () = WellTyped.ensure_base_type loc ~expect:Loc (bt_of_pexpr pe) in
-          (* TODO: check *)
+          (* TODO (DCM, VIP) check *)
           check_pexpr pe (fun arg ->
             let value = aligned_ (arg, act.ct) loc in
             k value)
@@ -1451,12 +1451,20 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 ( P { name = Owned (act.ct, Uninit); pointer = ret; iargs = [] },
                   O (default_ (Memory.bt_of_sct act.ct) loc) )
             in
-            (* FIXME add a constraint to the history and point the output argument to that *)
-            let@ () =
-              add_r
-                loc
-                (P (Alloc.Predicate.make ret), O (IT.default_ Alloc.History.value_bt loc))
+            let lookup = Alloc.History.lookup_ptr ret here in
+            let value =
+              let size = Memory.size_of_ctype act.ct in
+              Alloc.History.make_value ~base:(addr_ ret here) ~size here
             in
+            let@ () =
+              if !use_vip then
+                (* This is not backwards compatible because in the solver
+                 * Alloc_id maps to unit if not (!use_vip) *)
+                add_c loc (t_ (eq_ (lookup, value) here))
+              else
+                return ()
+            in
+            let@ () = add_r loc (P (Alloc.Predicate.make ret), O lookup) in
             let@ () = record_action (Create ret, loc) in
             k ret)
         | M_CreateReadOnly (_sym1, _ct, _sym2, _prefix) ->

@@ -17,7 +17,7 @@ CHECK_SCRIPT="${RUNTIME_PREFIX}/libexec/cn-runtime-single-file.sh"
 
 [ -f "${CHECK_SCRIPT}" ] || echo_and_err "Could not find single file helper script: ${CHECK_SCRIPT}"
 
-SCRIPT_OPT="-oq"
+SCRIPT_OPT="-ovq"
 
 function exits_with_code() {
   local file=$1
