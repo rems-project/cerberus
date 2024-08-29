@@ -8,8 +8,6 @@ on:
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
 
-permissions: write-all
-
 # cancel in-progress job when a new push is performed
 concurrency:
   group: ci-pr-bench-${{ github.workflow }}-${{ github.ref }}
