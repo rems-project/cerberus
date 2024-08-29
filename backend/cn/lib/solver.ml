@@ -1264,17 +1264,12 @@ type model_state =
 
 let model_state = ref No_model
 
-let model () =
-  match !model_state with
-  | No_model -> assert false
-  | Model mo ->
-    Printf.sprintf "fetching current model %d" (fst mo) |> print_endline;
-    mo
-
+let model () = match !model_state with No_model -> assert false | Model mo -> mo
 
 (** Evaluate terms in the context of a model computed by the solver. *)
 let model_evaluator =
   let model_evaluator_solver = ref None in
+  let currently_loaded_model = ref 0 in
   let new_model_id =
     let model_id = ref 0 in
     fun () ->
@@ -1282,7 +1277,7 @@ let model_evaluator =
       model_id := !model_id + 1;
       !model_id
   in
-  fun solver mo qs ->
+  fun solver mo ->
     match SMT.to_list mo with
     | None -> failwith "model is an atom"
     | Some defs ->
@@ -1311,35 +1306,22 @@ let model_evaluator =
           globals = gs
         }
       in
-      if new_solver then declare_solver_basics evaluator;
+      if new_solver then (
+        declare_solver_basics evaluator;
+        push evaluator);
       let model_fn e =
-        Printf.sprintf "in eval function for %d" model_id |> print_endline;
-        (match !model_state with
-         | Model (curr_id, _) when curr_id = model_id ->
-           Printf.sprintf "current model %d already loaded" curr_id |> print_endline;
-           ()
-         | mo ->
-           (match mo with
-            | No_model ->
-              Printf.sprintf "no model currently loaded" |> print_endline;
-              ()
-            | Model (curr_id, _) ->
-              Printf.sprintf "currently loaded model is %d" curr_id |> print_endline;
-              ());
-           Printf.sprintf "updating current model to %d" model_id |> print_endline;
-           model_state := Model (model_id, qs));
-        push evaluator;
-        List.iter (debug_ack_command evaluator) defs;
+        if not (!currently_loaded_model = model_id) then (
+          currently_loaded_model := model_id;
+          pop evaluator 1;
+          push evaluator;
+          List.iter (debug_ack_command evaluator) defs);
         let inp = translate_term evaluator e in
         match SMT.check smt_solver with
         | SMT.Sat ->
           let res = SMT.get_expr smt_solver inp in
           let ctys = get_ctype_table evaluator in
-          pop evaluator 1;
           Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
-        | _ ->
-          pop evaluator 1;
-          None
+        | _ -> None
       in
       Hashtbl.add models_tbl model_id model_fn;
       model_id
@@ -1353,7 +1335,6 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
   (* ISD: should we use this somehow? *)
   let s1 = { solver with globals = global } in
   let rtrue () =
-    Printf.sprintf "unloading model" |> print_endline;
     model_state := No_model;
     `True
   in
@@ -1363,7 +1344,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
     let { expr; qs; extra } = translate_goal s1 assumptions lc in
     let model_from sol =
       let defs = SMT.get_model sol in
-      let mo = model_evaluator s1 defs qs in
+      let mo = model_evaluator s1 defs in
       model_state := Model (mo, qs)
     in
     let nlc = SMT.bool_not expr in
@@ -1396,7 +1377,6 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
 
 (* ISD: Could these globs be different from the saved ones? *)
 let eval _globs mo t =
-  Printf.sprintf "evaluating model %d" mo |> print_endline;
   let model_fn = Hashtbl.find models_tbl mo in
   model_fn t
 
