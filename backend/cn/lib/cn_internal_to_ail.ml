@@ -2849,8 +2849,13 @@ let cn_to_ail_function_internal
         Sym.equal cn_fun.cn_func_name fn_sym)
       cn_functions
   in
-  (* Unsafe - check if list has an element *)
-  let loc = (List.nth matched_cn_functions 0).cn_func_magic_loc in
+  (* If the function is user defined, grab its location from the cn_function associated with it.
+     Otherwise, the location is builtin *)
+  let loc =
+    match List.nth_opt matched_cn_functions 0 with
+    | Some fn -> fn.cn_func_magic_loc
+    | None -> Builtins.loc
+  in
   (* Generating function declaration *)
   let decl =
     ( fn_sym,

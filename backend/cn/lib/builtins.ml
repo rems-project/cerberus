@@ -5,14 +5,13 @@ open Effectful.Make (Resultat)
 
 open TypeErrors
 open IndexTerms
+module CF = Cerb_frontend
+
+type builtin_fn_def = string * Sym.t * LogicalFunctions.definition
+
+let loc = Cerb_location.other "<builtin>"
 
 (* builtin function symbols *)
-let mk_arg0 mk args loc =
-  match args with
-  | [] -> return (mk loc)
-  | _ :: _ as xs ->
-    fail { loc; msg = Number_arguments { has = List.length xs; expect = 0 } }
-
 
 let mk_arg1 mk args loc =
   match args with
@@ -36,10 +35,28 @@ let mk_arg3_err mk args loc =
 
 let mk_arg3 mk = mk_arg3_err (fun tup loc -> return (mk tup loc))
 
-let mk_arg5 mk args loc =
-  match args with
-  | [ a; b; c; d; e ] -> return (mk (a, b, c, d, e) loc)
-  | xs -> fail { loc; msg = Number_arguments { has = List.length xs; expect = 5 } }
+let var_binop op ty ~left:(sym1, bt1) ~right:(sym2, bt2) =
+  binop op (sym_ (sym1, bt1, loc), sym_ (sym2, bt2, loc)) loc ty
+
+
+let definition name args body =
+  ( name,
+    Sym.fresh_named name,
+    LogicalFunctions.
+      { loc; emit_coq = false; args; definition = Def body; return_bt = bt body } )
+
+
+let mk_builtin_arg0 name = definition name []
+
+let mk_builtin_arg1 name bt mk : builtin_fn_def =
+  let arg = (Sym.fresh_named "arg", bt) in
+  mk arg |> definition name [ arg ]
+
+
+let mk_builtin_arg2 name (bt1, bt2) mk : builtin_fn_def =
+  let left = (Sym.fresh_named "arg1", bt1) in
+  let right = (Sym.fresh_named "arg2", bt2) in
+  mk ~left ~right |> definition name [ left; right ]
 
 
 let min_bits_def (sign, n) =
@@ -49,9 +66,7 @@ let min_bits_def (sign, n) =
     | Signed -> (Z.(neg @@ shift_left one (Int.sub n 1)), "i")
   in
   let name = "MIN" ^ letter ^ Int.to_string n in
-  ( name,
-    Sym.fresh_named name,
-    mk_arg0 (fun loc -> IT.sterm_of_term @@ num_lit_ num (BT.Bits (sign, n)) loc) )
+  num_lit_ num (BT.Bits (sign, n)) loc |> mk_builtin_arg0 name
 
 
 let max_bits_def (sign, n) =
@@ -61,11 +76,65 @@ let max_bits_def (sign, n) =
     | Signed -> (Z.(shift_left one (Int.sub n 1) - one), "i")
   in
   let name = "MAX" ^ letter ^ Int.to_string n in
-  ( name,
-    Sym.fresh_named name,
-    mk_arg0 (fun loc -> IT.sterm_of_term @@ num_lit_ num (BT.Bits (sign, n)) loc) )
+  num_lit_ num (BT.Bits (sign, n)) loc |> mk_builtin_arg0 name
 
 
+let max_min_bits =
+  let sizes = [ 8; 16; 32; 64 ] in
+  let signs = [ BT.Unsigned; Signed ] in
+  List.fold_left
+    (fun acc sign ->
+      List.fold_left
+        (fun acc size -> max_bits_def (sign, size) :: min_bits_def (sign, size) :: acc)
+        acc
+        sizes)
+    []
+    signs
+
+
+let not_def =
+  mk_builtin_arg1 "not" BT.Bool (fun (sym, bt) -> not_ (sym_ (sym, bt, loc)) loc)
+
+
+let is_null_def : builtin_fn_def =
+  mk_builtin_arg1 "is_null" BT.Loc (fun (sym, bt) ->
+    (eq__ (sym_ (sym, bt, loc)) (null_ loc)) loc)
+
+
+(* Cannot translate this to a logical function until the TODO in `cn_to_ail_expr_aux_internal` in `cn_internal_to_ail.ml` is resolved*)
+let has_alloc_id_def =
+  ( "has_alloc_id",
+    Sym.fresh_named "has_alloc_id",
+    mk_arg1 (fun p loc' -> IT.sterm_of_term @@ IT.hasAllocId_ (IT.term_of_sterm p) loc')
+  )
+
+
+let ptr_eq_def : builtin_fn_def =
+  var_binop EQ BT.Bool |> mk_builtin_arg2 "ptr_eq" (BT.Loc, BT.Loc)
+
+
+let prov_eq_def : builtin_fn_def =
+  let left = (Sym.fresh_named "arg1", BT.Loc) in
+  let right = (Sym.fresh_named "arg2", BT.Loc) in
+  let left_cast = allocId_ (sym_ (fst left, BT.Loc, loc)) loc in
+  let right_cast = allocId_ (sym_ (fst right, BT.Loc, loc)) loc in
+  let body = binop EQ (left_cast, right_cast) loc BT.Bool in
+  definition "prov_eq" [ left; right ] body
+
+
+let addr_eq_def : builtin_fn_def =
+  let left = (Sym.fresh_named "arg1", BT.Loc) in
+  let right = (Sym.fresh_named "arg2", BT.Loc) in
+  let left_cast = addr_ (sym_ (fst left, BT.Loc, loc)) loc in
+  let right_cast = addr_ (sym_ (fst right, BT.Loc, loc)) loc in
+  let body = binop EQ (left_cast, right_cast) loc BT.Bool in
+  definition "addr_eq" [ left; right ] body
+
+
+(* The remaining functions in this file, from here until array_to_list_def cannot yet be translated to
+   LogicalFunction.definition types because they implicitly require basetype polymorphism.
+   For example, the `mod` function allows inputs of any sign and size, but such a function cannot be defined
+   yet with an index term *)
 let mul_uf_def = ("mul_uf", Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
 
 let div_uf_def = ("div_uf", Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
@@ -114,8 +183,6 @@ let rem_def = ("rem", Sym.fresh_named "rem", mk_arg2 rem_)
 
 let mod_def = ("mod", Sym.fresh_named "mod", mk_arg2 mod_)
 
-let not_def = ("not", Sym.fresh_named "not", mk_arg1 not_)
-
 let nth_list_def = ("nth_list", Sym.fresh_named "nth_list", mk_arg3 nthList_)
 
 let array_to_list_def =
@@ -134,87 +201,32 @@ let array_to_list_def =
       | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt loc)) )
 
 
-let is_null_def =
-  ( "is_null",
-    Sym.fresh_named "is_null",
-    mk_arg1 (fun p loc' ->
-      IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_ loc') loc')) )
-
-
-let has_alloc_id_def =
-  ( "has_alloc_id",
-    Sym.fresh_named "has_alloc_id",
-    mk_arg1 (fun p loc' -> IT.sterm_of_term @@ IT.hasAllocId_ (IT.term_of_sterm p) loc')
-  )
-
-
-let ptr_eq_def =
-  ( "ptr_eq",
-    Sym.fresh_named "ptr_eq",
-    mk_arg2 (fun (p1, p2) loc' ->
-      IT.(sterm_of_term @@ eq_ (term_of_sterm p1, term_of_sterm p2) loc')) )
-
-
-let prov_eq_def =
-  ( "prov_eq",
-    Sym.fresh_named "prov_eq",
-    mk_arg2 (fun (p1, p2) loc' ->
-      IT.(
-        sterm_of_term
-        @@ eq_ (allocId_ (term_of_sterm p1) loc', allocId_ (term_of_sterm p2) loc') loc'))
-  )
-
-
-let addr_eq_def =
-  ( "addr_eq",
-    Sym.fresh_named "addr_eq",
-    mk_arg2 (fun (p1, p2) loc' ->
-      IT.(
-        sterm_of_term
-        @@ eq_ (addr_ (term_of_sterm p1) loc', addr_ (term_of_sterm p2) loc') loc')) )
-
-
-let max_min_bits =
-  let sizes = [ 8; 16; 32; 64 ] in
-  let signs = [ BT.Unsigned; Signed ] in
-  List.fold_left
-    (fun acc sign ->
-      List.fold_left
-        (fun acc size -> max_bits_def (sign, size) :: min_bits_def (sign, size) :: acc)
-        acc
-        sizes)
-    []
-    signs
-
-
 let builtin_funs =
-  max_min_bits
-  @ [ mul_uf_def;
-      div_uf_def;
-      power_uf_def;
-      rem_uf_def;
-      mod_uf_def;
-      xor_uf_def;
-      bw_and_uf_def;
-      bw_or_uf_def;
-      bw_clz_uf_def;
-      bw_ctz_uf_def;
-      bw_ffs_uf_def;
-      bw_fls_uf_def;
-      shift_left_def;
-      shift_right_def;
-      power_def;
-      rem_def;
-      mod_def;
-      not_def;
-      nth_list_def;
-      array_to_list_def;
-      is_null_def;
-      has_alloc_id_def;
-      prov_eq_def;
-      ptr_eq_def;
-      addr_eq_def
-    ]
+  [ mul_uf_def;
+    div_uf_def;
+    power_uf_def;
+    rem_uf_def;
+    mod_uf_def;
+    xor_uf_def;
+    bw_and_uf_def;
+    bw_or_uf_def;
+    bw_clz_uf_def;
+    bw_ctz_uf_def;
+    bw_ffs_uf_def;
+    bw_fls_uf_def;
+    shift_left_def;
+    shift_right_def;
+    power_def;
+    rem_def;
+    mod_def;
+    nth_list_def;
+    array_to_list_def;
+    has_alloc_id_def
+  ]
+
+
+let builtin_fun_defs =
+  max_min_bits @ [ not_def; is_null_def; ptr_eq_def; prov_eq_def; addr_eq_def ]
 
 
 let apply_builtin_funs fsym args loc =
@@ -225,4 +237,8 @@ let apply_builtin_funs fsym args loc =
     return (Some t)
 
 
-let cn_builtin_fun_names = List.map (fun (str, sym, _) -> (str, sym)) builtin_funs
+(* This list of names is later passed to the frontend in bin/main.ml so that these are available in the elaboration,
+   so it should include all builtin function names *)
+let cn_builtin_fun_names =
+  List.map (fun (str, sym, _) -> (str, sym)) builtin_funs
+  @ List.map (fun (str, sym, _) -> (str, sym)) builtin_fun_defs
