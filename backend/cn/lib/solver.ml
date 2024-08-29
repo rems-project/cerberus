@@ -1238,50 +1238,51 @@ let make globals =
   s
 
 
-let model_evaluator_solver = ref None
-
 (** Evaluate terms in the context of a model computed by the solver. *)
-let model_evaluator solver mo =
-  match SMT.to_list mo with
-  | None -> failwith "model is an atom"
-  | Some defs ->
-    let scfg = solver.smt_solver.config in
-    let cfg = { scfg with log = Logger.make "model" } in
-    let smt_solver, new_solver =
-      match !model_evaluator_solver with
-      | Some smt_solver -> (smt_solver, false)
-      | None ->
-        let s = SMT.new_solver cfg in
-        model_evaluator_solver := Some s;
-        (s, true)
-    in
-    let gs = solver.globals in
-    let evaluator =
-      { smt_solver;
-        cur_frame = ref (empty_solver_frame ());
-        prev_frames =
-          ref (List.map copy_solver_frame (!(solver.cur_frame) :: !(solver.prev_frames)))
-          (* We keep the prev_frames because things that were declared, would now be
-             defined by the model. Also, we need the infromation about the C type
-             mapping. *);
-        name_seed = solver.name_seed;
-        globals = gs
-      }
-    in
-    if new_solver then declare_solver_basics evaluator;
-    fun e ->
-      push evaluator;
-      List.iter (debug_ack_command evaluator) defs;
-      let inp = translate_term evaluator e in
-      (match SMT.check evaluator.smt_solver with
-       | SMT.Sat ->
-         let res = SMT.get_expr evaluator.smt_solver inp in
-         pop evaluator 1;
-         let ctys = get_ctype_table evaluator in
-         Some (get_ivalue solver.globals ctys (basetype e) (SMT.no_let res))
-       | _ ->
-         pop evaluator 1;
-         None)
+let model_evaluator =
+  let model_evaluator_solver = ref None in
+  fun solver mo ->
+    match SMT.to_list mo with
+    | None -> failwith "model is an atom"
+    | Some defs ->
+      let scfg = solver.smt_solver.config in
+      let cfg = { scfg with log = Logger.make "model" } in
+      let smt_solver, new_solver =
+        match !model_evaluator_solver with
+        | Some smt_solver -> (smt_solver, false)
+        | None ->
+          let s = SMT.new_solver cfg in
+          model_evaluator_solver := Some s;
+          (s, true)
+      in
+      let gs = solver.globals in
+      let evaluator =
+        { smt_solver;
+          cur_frame = ref (empty_solver_frame ());
+          prev_frames =
+            ref
+              (List.map copy_solver_frame (!(solver.cur_frame) :: !(solver.prev_frames)))
+            (* We keep the prev_frames because things that were declared, would now be
+               defined by the model. Also, we need the infromation about the C type
+               mapping. *);
+          name_seed = solver.name_seed;
+          globals = gs
+        }
+      in
+      if new_solver then declare_solver_basics evaluator;
+      fun e ->
+        push evaluator;
+        List.iter (debug_ack_command evaluator) defs;
+        let inp = translate_term evaluator e in
+        (match SMT.check smt_solver with
+         | SMT.Sat ->
+           let res = SMT.get_expr smt_solver inp in
+           pop evaluator 1;
+           let ctys = get_ctype_table evaluator in
+           Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
+         | _ ->
+           pop evaluator 1;
+           None)
 
 
 (* ---------------------------------------------------------------------------*)
