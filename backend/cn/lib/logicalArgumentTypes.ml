@@ -59,6 +59,25 @@ and suitably_alpha_rename i_subst syms s t =
     (s, t)
 
 
+let free_vars i_free_vars =
+  let rec aux = function
+    | Define ((s, it), _info, t) ->
+      let it_vars = IT.free_vars it in
+      let t_vars = SymSet.remove s (aux t) in
+      SymSet.union it_vars t_vars
+    | Resource ((s, (re, _bt)), _info, t) ->
+      let re_vars = RET.free_vars re in
+      let t_vars = SymSet.remove s (aux t) in
+      SymSet.union re_vars t_vars
+    | Constraint (lc, _info, t) ->
+      let lc_vars = LC.free_vars lc in
+      let t_vars = aux t in
+      SymSet.union lc_vars t_vars
+    | I i -> i_free_vars i
+  in
+  aux
+
+
 let simp i_subst simp_i simp_it simp_lc simp_re =
   let rec aux = function
     | Define ((s, it), info, t) ->
