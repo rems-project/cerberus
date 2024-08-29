@@ -1238,10 +1238,51 @@ let make globals =
   s
 
 
+(* ---------------------------------------------------------------------------*)
+(* GLOBAL STATE: Models *)
+(* ---------------------------------------------------------------------------*)
+
+type model = int
+
+type model_fn = IT.t -> IT.t option
+
+type model_with_q = model * (Sym.t * LogicalSorts.t) list
+
+type model_table = (model, model_fn) Hashtbl.t
+
+let models_tbl : model_table = Hashtbl.create 1
+
+let empty_model =
+  let model = Option.some in
+  Hashtbl.add models_tbl 0 model;
+  0
+
+
+type model_state =
+  | Model of model_with_q
+  | No_model
+
+let model_state = ref No_model
+
+let model () =
+  match !model_state with
+  | No_model -> assert false
+  | Model mo ->
+    Printf.sprintf "fetching current model %d" (fst mo) |> print_endline;
+    mo
+
+
 (** Evaluate terms in the context of a model computed by the solver. *)
 let model_evaluator =
   let model_evaluator_solver = ref None in
-  fun solver mo ->
+  let new_model_id =
+    let model_id = ref 0 in
+    fun () ->
+      (* Start with 1, as 0 is the id of the empty model *)
+      model_id := !model_id + 1;
+      !model_id
+  in
+  fun solver mo qs ->
     match SMT.to_list mo with
     | None -> failwith "model is an atom"
     | Some defs ->
@@ -1255,6 +1296,7 @@ let model_evaluator =
           model_evaluator_solver := Some s;
           (s, true)
       in
+      let model_id = new_model_id () in
       let gs = solver.globals in
       let evaluator =
         { smt_solver;
@@ -1270,38 +1312,38 @@ let model_evaluator =
         }
       in
       if new_solver then declare_solver_basics evaluator;
-      fun e ->
+      let model_fn e =
+        Printf.sprintf "in eval function for %d" model_id |> print_endline;
+        (match !model_state with
+         | Model (curr_id, _) when curr_id = model_id ->
+           Printf.sprintf "current model %d already loaded" curr_id |> print_endline;
+           ()
+         | mo ->
+           (match mo with
+            | No_model ->
+              Printf.sprintf "no model currently loaded" |> print_endline;
+              ()
+            | Model (curr_id, _) ->
+              Printf.sprintf "currently loaded model is %d" curr_id |> print_endline;
+              ());
+           Printf.sprintf "updating current model to %d" model_id |> print_endline;
+           model_state := Model (model_id, qs));
         push evaluator;
         List.iter (debug_ack_command evaluator) defs;
         let inp = translate_term evaluator e in
-        (match SMT.check smt_solver with
-         | SMT.Sat ->
-           let res = SMT.get_expr smt_solver inp in
-           pop evaluator 1;
-           let ctys = get_ctype_table evaluator in
-           Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
-         | _ ->
-           pop evaluator 1;
-           None)
+        match SMT.check smt_solver with
+        | SMT.Sat ->
+          let res = SMT.get_expr smt_solver inp in
+          let ctys = get_ctype_table evaluator in
+          pop evaluator 1;
+          Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
+        | _ ->
+          pop evaluator 1;
+          None
+      in
+      Hashtbl.add models_tbl model_id model_fn;
+      model_id
 
-
-(* ---------------------------------------------------------------------------*)
-(* GLOBAL STATE: Models *)
-(* ---------------------------------------------------------------------------*)
-
-type model = IT.t -> IT.t option
-
-type model_with_q = model * (Sym.t * LogicalSorts.t) list
-
-let empty_model it = Some it
-
-type model_state =
-  | Model of model_with_q
-  | No_model
-
-let model_state = ref No_model
-
-let model () = match !model_state with No_model -> assert false | Model mo -> mo
 
 (* ---------------------------------------------------------------------------*)
 
@@ -1311,6 +1353,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
   (* ISD: should we use this somehow? *)
   let s1 = { solver with globals = global } in
   let rtrue () =
+    Printf.sprintf "unloading model" |> print_endline;
     model_state := No_model;
     `True
   in
@@ -1320,7 +1363,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
     let { expr; qs; extra } = translate_goal s1 assumptions lc in
     let model_from sol =
       let defs = SMT.get_model sol in
-      let mo = model_evaluator s1 defs in
+      let mo = model_evaluator s1 defs qs in
       model_state := Model (mo, qs)
     in
     let nlc = SMT.bool_not expr in
@@ -1352,7 +1395,11 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
    reason) *)
 
 (* ISD: Could these globs be different from the saved ones? *)
-let eval _globs mo t = mo t
+let eval _globs mo t =
+  Printf.sprintf "evaluating model %d" mo |> print_endline;
+  let model_fn = Hashtbl.find models_tbl mo in
+  model_fn t
+
 
 (* Dummy implementations *)
 let random_seed = ref 0
