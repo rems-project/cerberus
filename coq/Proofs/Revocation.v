@@ -5139,6 +5139,75 @@ Module CheriMemoryImplWithProofs
     apply H0.
   Qed.
 
+  Fact align_down_mon (x y al : Z) :
+    0 < al ->
+    x <= y ->
+    align_down x al <= align_down y al.
+  Proof.
+    intros * AL LT.
+    unfold align_down.
+    apply Z.div_le_mono with (c:=al) in LT; [| assumption].
+    rewrite (Z.div_mod x al), (Z.div_mod y al) at 1 by lia.
+    nia.
+  Qed.
+
+  Fact align_down_aligned (addr : AddressValue.t) :
+    addr_ptr_aligned
+      (AddressValue.of_Z
+         (align_down (AddressValue.to_Z addr)
+            (Z.of_nat (alignof_pointer MorelloImpl.get)))).
+  Proof.
+    unfold align_down.
+    unfold addr_ptr_aligned.
+    pose proof MorelloImpl.alignof_pointer_pos as P.
+    pose proof AddressValue.to_Z_in_bounds addr as A.
+    rewrite MorelloCaps.AddressValue.of_Z_roundtrip.
+    -
+      apply align_bottom_correct; lia.
+    -
+      unfold MorelloCaps.AddressValue.ADDR_MIN in *.
+      generalize dependent (alignof_pointer MorelloImpl.get).
+      generalize dependent (AddressValue.to_Z addr).
+      intros.
+      assert (0 <= z mod Z.of_nat n <= z).
+      {
+        split.
+        apply numbers.Z.mod_pos; lia.
+        apply Z.mod_le; lia.
+      }
+      lia.
+  Qed.
+
+  Fact align_down_bounds
+    (addr : AddressValue.t)
+    (align : Z) :
+    0 < align ->
+    AddressValue.ADDR_MIN <= align_down (AddressValue.to_Z addr) align < AddressValue.ADDR_LIMIT.
+  Proof.
+    intros AP.
+    pose proof AddressValue.to_Z_in_bounds addr as B.
+    generalize dependent (AddressValue.to_Z addr).
+    intros a A.
+    split.
+    -
+      unfold align_down, AddressValue.ADDR_MIN in *.
+      pose proof Z.mod_bound_pos_le a align.
+      lia.
+    -
+      eapply Z.le_lt_trans.
+      now eapply align_down_le.
+      tauto.
+  Qed.
+
+  Fact align_down_up (a align : Z) :
+    0 < align ->
+    a < align_down a align + align.
+  Proof.
+    unfold align_down.
+    pose proof Z.mod_pos_bound a align.
+    lia.
+  Qed.
+
   (** Storing some bytes into memory and ghosting the tags for corresponding region preserves invariant *)
   Fact mem_state_with_bytes_preserves:
     forall s : mem_state_r,

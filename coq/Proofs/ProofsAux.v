@@ -1855,17 +1855,16 @@ Section AddressValue_Lemmas.
     apply ProofIrrelevance.proof_irrelevance.
   Qed.
 
-  Fact aligned_addr_neq_space :
-    forall addr addr' psize,
-      psize = alignof_pointer MorelloImpl.get ->
-      addr_ptr_aligned addr ->
-      addr_ptr_aligned addr' ->
-      addr <> addr' ->
-      (AddressValue.to_Z addr + Z.of_nat psize <= AddressValue.to_Z addr')
-      \/
-      (AddressValue.to_Z addr' + Z.of_nat psize <= AddressValue.to_Z addr).
+  Fact aligned_addr_neq_space (addr addr' : AddressValue.t) (psize : nat) :
+    psize = alignof_pointer MorelloImpl.get ->
+    addr_ptr_aligned addr ->
+    addr_ptr_aligned addr' ->
+    addr <> addr' ->
+    (AddressValue.to_Z addr + Z.of_nat psize <= AddressValue.to_Z addr')
+    \/
+    (AddressValue.to_Z addr' + Z.of_nat psize <= AddressValue.to_Z addr).
   Proof.
-    intros * SZ A A' NEQ.
+    intros SZ A A' NEQ.
     unfold addr_ptr_aligned in *.
     apply AddressValue_neq_via_to_Z in NEQ.
     subst.
@@ -1881,6 +1880,25 @@ Section AddressValue_Lemmas.
     subst.
     enough ((a1 + 1) <= a2 \/ (a2 + 1) <= a1) by nia.
     nia.
+  Qed.
+
+  Fact aligned_addr_lt_space (addr addr' : AddressValue.t) (psize : nat) :
+    psize = alignof_pointer MorelloImpl.get ->
+    addr_ptr_aligned addr ->
+    addr_ptr_aligned addr' ->
+    AddressValue.ltb addr addr' = true ->
+    AddressValue.to_Z addr + Z.of_nat psize <= AddressValue.to_Z addr'.
+  Proof.
+    intros SZ A A' LT.
+    rewrite AddressValue_ltb_Z_ltb, Z.ltb_lt in LT.
+    pose proof aligned_addr_neq_space addr addr' psize as SPC.
+    full_autospecialize SPC; auto.
+    -
+      clear - LT.
+      intros C; subst addr'.
+      lia.
+    -
+      lia.
   Qed.
 
   Fact max_aligned (addr : AddressValue.t) :
