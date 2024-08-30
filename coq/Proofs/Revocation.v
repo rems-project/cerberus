@@ -6537,9 +6537,6 @@ Module CheriMemoryImplWithProofs
     (n: nat)
     :
     forall s,
-
-      (* TODO: assume input to copy_data is output of ghost_tags *)
-
       (* In *)
       (forall a : AddressValue.t,
           let alignment := Z.of_nat (alignof_pointer MorelloImpl.get) in
@@ -6549,7 +6546,7 @@ Module CheriMemoryImplWithProofs
           forall (tg : bool) (gs : CapGhostState),
             AMap.M.MapsTo a (tg, gs) (capmeta s) ->
             tg = false \/ tag_unspecified gs = true) ->
-
+      AddressValue.to_Z dst_a + Z.of_nat n <= AddressValue.ADDR_LIMIT ->
       PreservesInvariant mem_invariant s (memcpy_copy_data loc dst_a src_a n).
   Proof.
     unfold memcpy_copy_data.
