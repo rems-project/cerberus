@@ -4244,76 +4244,13 @@ Module CheriMemoryImplWithProofs
     break_if;[preserves_step|].
     preserves_step.
     preserves_step.
+    break_match_goal;[preserves_step|].
     preserves_step.
-    -
-      break_match_goal; repeat break_let.
-      +
-        (* with init *)
-        apply bind_PreservesInvariant_value.
-        intros H s'0 x0 H0.
-
-
-        assert(mem_invariant s'0) as S0.
-        {
-          pose proof (allocator_PreservesInvariant (Z.to_nat (Capability_GS.representable_length (Z.of_nat x)))
-                        (Z.max (num_of_int int_val)
-                           (1 +
-                              AddressValue.to_Z
-                                (AddressValue.bitwise_complement
-                                   (AddressValue.of_Z
-                                      (Capability_GS.representable_alignment_mask (Z.of_nat x))))))
-                        false pref (Some ty) r
-            ) as A.
-          autospecialize A.
-          lia.
-          specialize (A s' H).
-          unfold post_exec_invariant, lift_sum_p in A.
-          clear Heqp.
-          break_match_hyp.
-          --
-            unfold execErrS in Heqs0.
-            break_let.
-            tuple_inversion.
-            invc Heqs0.
-          --
-            unfold execErrS in Heqs0.
-            break_let.
-            tuple_inversion.
-            apply ret_inr in Heqs0.
-            invc Heqs0.
-            assumption.
-        }
-
-        split.
-        *
-          apply S0.
-        *
-          repeat break_let.
-          preserves_step.
-          preserves_step.
-          preserves_step.
-          repeat break_let.
-          preserves_step;[|preserves_step].
-          preserves_step.
-
-          bool_to_prop_hyp.
-          destruct x0, x1.
-          repeat tuple_inversion.
-          (* TODO: this whole branch maybe unecessary in view of this pending change:
-             https://github.com/rems-project/cerberus/issues/229
-           *)
-          admit.
-      +
-        (* No init *)
-        preserves_step.
-        apply allocator_PreservesInvariant.
-        lia.
-        break_let.
-        preserves_step.
-    -
-      repeat break_let.
-      preserves_step.
-  Admitted.
+    apply allocator_PreservesInvariant.
+    lia.
+    break_let.
+    preserves_step.
+  Qed.
 
   Instance allocate_region_PreservesInvariant
     (tid : MemCommonExe.thread_id)

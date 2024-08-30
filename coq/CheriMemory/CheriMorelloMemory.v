@@ -1035,12 +1035,12 @@ Module Type CheriMemoryImpl
   Definition allocate_object
     (tid: MC.thread_id)
     (pref: CoqSymbol.prefix)
-    (int_val: integer_value)
+    (align: integer_value)
     (ty: CoqCtype.ctype)
     (init_opt: option mem_value)
     : memM pointer_value
     :=
-    let align_n := num_of_int int_val in
+    let align_n := num_of_int align in
     if align_n <=? 0
       then raise (InternalErr "non-positive aligment passed to allocate_object")
     else
@@ -1051,60 +1051,14 @@ Module Type CheriMemoryImpl
       let size_n' := Z.to_nat size_z' in
       let align_n' := Z.max align_n (1 + (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
-      (*
-    (if (negb ((size_n =? size_n') && (align_n =? align_n')))
-    then
-      mprint_msg
-          ("allocate_object CHERI size/alignment adusted. WAS: " ++
-            ", size= " ++ String.dec_str size_n ++
-              ", align= " ++ String.dec_str align_n ++
-                "BECOME: " ++
-                  ", size= " ++ String.dec_str size_n' ++
-                    ", align= " ++ String.dec_str align_n')
-    else ret tt) ;;
-       *)
-
-      (match init_opt with
-       | None =>
-           '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) IsWritable ;;
-           ret (alloc_id, addr, false)
-       | Some mval =>  (* here we allocate an object with initiliazer *)
-           let (ro,readonly_status) :=
-             match pref with
-             | CoqSymbol.PrefStringLiteral _ _ => (true, IsReadOnly ReadonlyStringLiteral)
-             | CoqSymbol.PrefTemporaryLifetime _ _ =>
-                 (true, IsReadOnly ReadonlyTemporaryLifetime)
-             | _ =>
-                 (true, IsReadOnly ReadonlyConstQualified)
-                   (* | _ => (false,IsWritable) *)
-             end
-           in
-           '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) readonly_status ;;
-           (* We should be careful not to introduce a state change here
-              in case of error which happens after the [allocator]
-              invocation, as [allocator] modifies state. In the current
-              implementation, this is not happening, as errors are handled
-              as [InternalErr] which supposedly should terminate program
-              evaluation.  *)
-           s <- get ;;
-           '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL addr mval s) ;;
-           put s' ;;
-           ret (alloc_id, addr, ro)
-       end)
-        >>=
-        fun '(alloc_id, addr, ro)  =>
+      match init_opt with
+      | None =>
+          '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) IsWritable ;;
           let c := C.alloc_cap addr (AddressValue.of_Z size_z') in
-          let c :=
-            if ro then
-              let p := C.cap_get_perms c in
-              let p := Permissions.perm_clear_store p in
-              let p := Permissions.perm_clear_store_cap p in
-              let p := Permissions.perm_clear_store_local_cap p in
-              C.cap_narrow_perms c p
-            else c
-          in
-          ret (PVconcrete c).
-
+          ret (PVconcrete c)
+      | Some mval =>  (* here we allocate an object with initiliazer *)
+          raise (InternalErr "invalid init_opt passed to allocate_object")
+      end.
 
   Definition cap_is_null  (c : C.t) : bool :=
     cap_to_Z c =? 0.
