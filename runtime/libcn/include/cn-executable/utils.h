@@ -12,6 +12,9 @@
 #include <cn-executable/alloc.h>
 #include <cn-executable/hash_table.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct cn_error_message_info {
     const char *function_name;
@@ -109,6 +112,9 @@ void cn_free_sized(void*, size_t len);
 void cn_print_nr_u64(int i, unsigned long u) ;
 void cn_print_u64(const char *str, unsigned long u) ;
 
+/* cn_exit callbacks */
+void set_cn_exit_cb(void (*callback)(void));
+void reset_cn_exit_cb(void);
 
 /* Conversion functions */
 
@@ -559,4 +565,8 @@ static inline void cn_postfix(void *ptr, size_t size)
     (*__tmp) OP;                                              \
  })
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif // CN_UTILS
