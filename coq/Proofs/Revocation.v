@@ -6552,16 +6552,16 @@ Module CheriMemoryImplWithProofs
     unfold memcpy_copy_data.
     induction n.
     -
-      intros s _.
+      intros s _ _.
       preserves_step.
       cbn.
       unfold mem_state_with_bytemap.
       destruct s.
       auto.
     -
-      intros s CIN.
-      preserves_steps.
-      rename H into M.
+      intros s CIN LIM.
+      preserves_steps;
+        rename H into M.
       +
         (* adding *)
         split.
@@ -7377,6 +7377,20 @@ Module CheriMemoryImplWithProofs
               invc H0.
               reflexivity.
           }
+          autospecialize P.
+          {
+            subst.
+            destruct H2 as [MIbase MIcap].
+            destruct_base_mem_invariant MIbase.
+            clear - AC Bfit.
+            invc AC.
+            clear H3 H5 H8.
+            apply Bfit in H2.
+            invc H9.
+            unfold cap_to_Z in *.
+            lia.
+          }
+          
           specialize (P H2).
 
           unfold post_exec_invariant, lift_sum_p, execErrS in P.
