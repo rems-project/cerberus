@@ -5488,15 +5488,16 @@ Module CheriMemoryImplWithProofs
     (bm : AMap.M.t (option ascii))
     (bs : list (option ascii))
     (szn : nat) :
-    szn = Datatypes.length bs ->
+    let len := Datatypes.length bs in
+    AddressValue.to_Z start + Z.of_nat len <= AddressValue.ADDR_LIMIT ->
     AddressValue.to_Z addr + Z.of_nat szn <= AddressValue.ADDR_LIMIT ->
-    AddressValue.to_Z start + Z.of_nat szn <= AddressValue.ADDR_LIMIT ->
     (AddressValue.to_Z addr + Z.of_nat szn <= AddressValue.to_Z start \/
-       AddressValue.to_Z (AddressValue.with_offset start (Z.of_nat (Datatypes.length bs) - 1)) <
+       AddressValue.to_Z (AddressValue.with_offset start (Z.of_nat len - 1)) <
          AddressValue.to_Z addr) ->
     fetch_bytes (AMap.map_add_list_at bm bs start) addr szn = fetch_bytes bm addr szn.
   Proof.
-    intros SZN AL SL NE.
+    intros len LL AL NE.
+    subst len.
     unfold fetch_bytes.
     apply map_ext_in; intros aoff AOFF.
     enough (T : AMap.M.find (elt:=option ascii) aoff bm
@@ -5519,6 +5520,7 @@ Module CheriMemoryImplWithProofs
     }
     clear AOFF; rename AOFF' into AOFF.
     rewrite !AddressValue_ltb_Z_ltb, !Z.ltb_lt.
+    subst.
     lia.
   Qed.
 
