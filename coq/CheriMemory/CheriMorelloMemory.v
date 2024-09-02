@@ -1154,7 +1154,6 @@ Module Type CheriMemoryImpl
 
   Fixpoint abst
     (fuel: nat)
-    (find_allocation : C.t -> option (storage_instance_id * allocation))
     (funptrmap : ZMap.M.t (digest * string * C.t))
     (tag_query_f : AddressValue.t -> (bool* CapGhostState))
     (addr : AddressValue.t)
@@ -1166,7 +1165,7 @@ Module Type CheriMemoryImpl
     | O => raise "abst out of fuel"
     | S fuel =>
         let '(CoqCtype.Ctype _ ty) := cty in
-        let self f := abst f find_allocation funptrmap tag_query_f in
+        let self f := abst f funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
         sassert (negb (Nat.ltb (List.length bs) sz)) "abst, |bs| < sizeof(ty)" ;;
         match ty with
@@ -1611,7 +1610,7 @@ Module Type CheriMemoryImpl
               bounds_unspecified := false |})
       in
       '(mval, bs') <-
-        serr2InternalErr (abst DEFAULT_FUEL (find_cap_allocation_st st) st.(funptrmap) tag_query addr ty bs)
+        serr2InternalErr (abst DEFAULT_FUEL st.(funptrmap) tag_query addr ty bs)
       ;;
       mval <- mem_value_strip_err loc mval ;;
       szn <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
