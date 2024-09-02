@@ -283,7 +283,6 @@ let verify
   solver_flags
   solver_path
   solver_type
-  output_decorated
   astprints
   use_vip
   no_use_ity
@@ -319,7 +318,6 @@ let verify
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
-  Sym.executable_spec_enabled := Option.is_some output_decorated;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -393,7 +391,7 @@ let generate_executable_specs
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
-  Sym.executable_spec_enabled := Option.is_some output_decorated;
+  Sym.executable_spec_enabled := true;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -801,7 +799,6 @@ let verify_t : unit Term.t =
   $ Verify_flags.solver_flags
   $ Verify_flags.solver_path
   $ Verify_flags.solver_type
-  $ Executable_spec_flags.output_decorated
   $ Common_flags.astprints
   $ Verify_flags.use_vip
   $ Common_flags.no_use_ity
