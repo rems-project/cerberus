@@ -842,18 +842,21 @@ Module Type CheriMemoryImpl
   (** Find the first live allocation which fully contains the bounds of the given capability. *)
   Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
     :=
-    let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
-    let csize := climit - cbase in
+    if negb (C.cap_is_valid c)
+    then None (* revoked *)
+    else
+      let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
+      let csize := climit - cbase in
 
-    ZMap.map_find_first
-      (fun alloc_id alloc =>
-         let abase := AddressValue.to_Z alloc.(base) in
-         let asize := Z.of_nat alloc.(size) in
-         let alimit := abase + asize in
+      ZMap.map_find_first
+        (fun alloc_id alloc =>
+           let abase := AddressValue.to_Z alloc.(base) in
+           let asize := Z.of_nat alloc.(size) in
+           let alimit := abase + asize in
 
-         (negb alloc.(is_dead))
-         && ((abase <=? cbase) && (cbase <? alimit))
-      ) st.(allocations).
+           (negb alloc.(is_dead))
+           && ((abase <=? cbase) && (cbase <? alimit))
+        ) st.(allocations).
 
   (** Find the first live allocation which fully contains the bounds of the given capability. *)
   Definition find_cap_allocation c : memM (option (storage_instance_id * allocation))

@@ -4432,6 +4432,7 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros H.
     unfold find_cap_allocation_st in H.
+    break_if;[some_none|].
     break_let.
     repeat rewrite resolve_has_any_PNVI_flavour in H.
     apply ZMapProofs.map_find_first_exists in H.
@@ -5717,6 +5718,7 @@ Module CheriMemoryImplWithProofs
       clear Heqb.
       destruct find_cap_allocation_st eqn:SA in L; invc L.
       unfold find_cap_allocation_st in SA.
+      break_if;[some_none|].
       break_let.
       rename Heqp0 into B, z into blo, z0 into bhi.
       destruct p as (si, a).
