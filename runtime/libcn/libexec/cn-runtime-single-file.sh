@@ -58,7 +58,7 @@ EXEC_DIR=$(mktemp -d -t 'cn-exec.XXXX')
 # INPUT_FN="${EXEC_DIR}/${INPUT_BASENAME}.pp.c"
 
 # Instrument code with CN
-if cn verify "${VIP}" "${INPUT_FN}" \
+if cn runtime-test "${VIP}" "${INPUT_FN}" \
     --output-decorated="${INPUT_BASENAME}-exec.c" \
     --output-decorated-dir="${EXEC_DIR}" \
     ${CHECK_OWNERSHIP}; then

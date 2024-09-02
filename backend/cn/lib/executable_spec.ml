@@ -199,11 +199,20 @@ let main
   ?(copy_source_dir = false)
   filename
   ((_, sigm) as ail_prog)
+  output_decorated
   output_decorated_dir
-  output_filename
   prog5
   statement_locs
   =
+  let output_filename = match output_decorated with
+    | None -> 
+      let strs = String.split_on_char '/' filename in 
+      let last_str = List.nth strs (List.length strs - 1) in 
+      let last_str_basename_list = String.split_on_char '.' last_str in 
+      let last_str_basename = List.nth last_str_basename_list 0 in 
+      last_str_basename ^ "-exec.c"
+    | Some output_filename' -> output_filename' 
+  in 
   let prefix = match output_decorated_dir with Some dir_name -> dir_name | None -> "" in
   let oc = Stdlib.open_out (Filename.concat prefix output_filename) in
   let cn_oc = Stdlib.open_out (Filename.concat prefix "cn.c") in
