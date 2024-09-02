@@ -346,8 +346,7 @@ let verify
       Typing.run_from_pause check paused)
 
 
-let generate_executable_specs 
-  (* Common *)
+let generate_executable_specs
   filename
   macros
   incl_dirs
@@ -372,12 +371,12 @@ let generate_executable_specs
   no_inherit_loc
   magic_comment_char_dollar
   (* Executable spec *)
-  output_decorated
+    output_decorated
   output_decorated_dir
   with_ownership_checking
   with_test_gen
   copy_source_dir
-  = 
+  =
   if json then (
     if debug_level > 0 then
       CF.Pp_errors.fatal "debug level must be 0 for json output";
@@ -906,7 +905,8 @@ let runtime_testing_cmd =
     $ Executable_spec_flags.copy_source_dir
   in
   let doc =
-    "Instruments [FILE] with runtime C assertions that check the properties provided in CN specifications.\n"
+    "Instruments [FILE] with runtime C assertions that check the properties provided in \
+     CN specifications.\n"
   in
   let info = Cmd.info "runtime-test" ~doc in
   Cmd.v info runtime_testing_t
