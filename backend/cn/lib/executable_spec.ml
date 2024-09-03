@@ -206,8 +206,7 @@ let main
   =
   let output_filename =
     match output_decorated with
-    | None ->
-      Filename.remove_extension (Filename.basename filename) ^ "-exec.c"
+    | None -> Filename.remove_extension (Filename.basename filename) ^ "-exec.c"
     | Some output_filename' -> output_filename'
   in
   let prefix = match output_decorated_dir with Some dir_name -> dir_name | None -> "" in
