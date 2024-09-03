@@ -1,4 +1,24 @@
-int g(int *p, int *q)
+int live_owned_footprint(char *p, char *q)
+/*@
+ requires
+    take P = Owned<int[11]>(array_shift<char>(p, -2i64));
+    ptr_eq(q, array_shift<char>(p, 12i64));
+ensures
+    take P2 = Owned<int[11]>(array_shift<char>(p, -2i64));
+    P == P2;
+    return == 12i32;
+@*/
+{
+  /*@ extract Owned<int>, 7u64; @*/
+  // NOTE: neither argument needs to be in the footprint of the Owned
+  // The bounds check for the allocation are done separately to the resource
+  // lookup
+  return q - p;
+}
+
+// Here, only one ownership is required to establish the that the allocation is
+// live, but both are required to ensure that the bounds check succeeds
+int live_owned_both(int *p, int *q)
 /*@
  requires
     take P = Owned(p);
@@ -15,7 +35,24 @@ ensures
   return p - q;
 }
 
-int f(int *p, int *q)
+int live_owned_one(int *p, int *q)
+/*@
+ requires
+    take P = Owned(p);
+    ptr_eq(q, array_shift(p, 10i32));
+    let A = allocs[(alloc_id)p];
+    (u64) p <= (u64) q;
+    (u64) q <= A.base + A.size;
+ensures
+    take P2 = Owned(p);
+    P == P2;
+    return == -10i32;
+@*/
+{
+  return p - q;
+}
+
+int live_alloc(int *p, int *q)
 /*@
  requires
     !is_null(p);
@@ -37,8 +74,11 @@ ensures
 int main(void)
 {
     int arr[11] = { 0 };
-    f(&arr[0], &arr[10]);
+    live_alloc(&arr[0], &arr[10]);
     /*@ extract Owned<int>, 0u64; @*/
     /*@ extract Owned<int>, 10u64; @*/
-    g(&arr[0], &arr[10]);
+    live_owned_one(&arr[0], &arr[10]);
+    live_owned_both(&arr[0], &arr[10]);
+    char *p = (char*) arr;
+    live_owned_footprint(p + 2, p + 14);
 }

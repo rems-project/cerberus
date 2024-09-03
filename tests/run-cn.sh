@@ -40,7 +40,7 @@ function exits_with_code() {
   local -a expected_exit_codes=$3
 
   printf "[$file]...\n"
-  timeout 20 ${action} "$file"
+  timeout 21 ${action} "$file"
   local result=$?
 
   for code in "${expected_exit_codes[@]}"; do

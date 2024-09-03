@@ -206,14 +206,9 @@ module General = struct
               | PName name ->
                 assert (Sym.equal name Alloc.Predicate.sym);
                 (p'_oarg, [])
-              | Owned (ct, _) ->
+              | Owned _ ->
                 assert alloc_owned;
-                let p'_addr = addr_ p'.pointer here in
-                let req_addr = addr_ requested.pointer here in
-                ( O (Alloc.History.lookup_ptr requested.pointer here),
-                  [ le_ (p'_addr, req_addr) here;
-                    le_ (req_addr, RE.upper_bound p'_addr ct here) here
-                  ] ))
+                (O (Alloc.History.lookup_ptr requested.pointer here), []))
             else
               ( p'_oarg,
                 eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here
@@ -287,7 +282,7 @@ module General = struct
 
 
   and qpredicate_request_aux loc uiinfo (requested : RET.qpredicate_type) =
-    debug 7 (lazy (item "qpredicate request" (RET.pp (Q requested))));
+    debug 7 (lazy (item __FUNCTION__ (RET.pp (Q requested))));
     let@ provable = provable loc in
     let@ simp_ctxt = simp_ctxt () in
     let@ global = get_global () in
@@ -526,9 +521,12 @@ module Special = struct
     match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
 
 
-  let is_pointer_live loc situation pointer =
-    let request = RET.make_alloc pointer in
-    pure @@ predicate_request loc situation (request, None) ~alloc_or_owned:true
+  (** This function checks whether [ptr1] belongs to a live allocation. It
+      searches the context (without modification) for either an Alloc(p) or an
+      Owned(p) such that (alloc_id) p == (alloc_id) ptr. *)
+  let of_live_alloc loc situation ptr =
+    pure
+    @@ predicate_request loc situation (RET.make_alloc ptr, None) ~alloc_or_owned:true
 
 
   let predicate_request loc situation (request, oinfo) =
