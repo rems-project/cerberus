@@ -84,7 +84,6 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "bitwise_compl.c" \
     ! -name "fun_ptr_extern.c" \
     ! -name "b_xor.c" \
-    ! -name "mask_ptr.c" \
     ! -name "copy_alloc_id.c" \
     ! -name "has_alloc_id.c" \
     ! -name "ptr_diff2.c" \
@@ -141,7 +140,6 @@ BUGGY="cn/division_casting.c \
        cn/bitwise_compl.c \
        cn/fun_ptr_extern.c \
        cn/b_xor.c \
-       cn/mask_ptr.c \
        cn/copy_alloc_id.c \
        cn/has_alloc_id.c \
        cn/ptr_diff2.c \

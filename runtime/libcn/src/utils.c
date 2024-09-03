@@ -31,8 +31,6 @@ void print_error_msg_info(void) {
 cn_bool *convert_to_cn_bool(_Bool b) {
     cn_bool *res = alloc(sizeof(cn_bool));
     if (!res) exit(1);
-    // printf("%p\n", (void *) res);
-    // printf("%p\n", (void *) &(res->val));
     res->val = b;
     return res;
 }
@@ -292,7 +290,9 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
 // }
 
 cn_map *cn_map_set(cn_map *m, cn_integer *key, void *value) {
-    ht_set(m, key->val, value);
+    signed long *key_ptr = alloc(sizeof(signed long));
+    *key_ptr = key->val;
+    ht_set(m, key_ptr, value);
     return m;
 }
 
@@ -400,20 +400,16 @@ static uint64_t cn_flsl(uint64_t x)
 
 cn_bits_u32 *cn_bits_u32_fls(cn_bits_u32 *i1) {
         cn_bits_u32 *res = (cn_bits_u32 *) alloc(sizeof(cn_bits_u32));
-        res->val = (uint32_t *) alloc(sizeof(uint32_t));
-        *(res->val) = cn_fls(*(i1->val));
+        res->val = cn_fls(i1->val);
         return res;
     }
 
 cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1) {
         cn_bits_u64 *res = (cn_bits_u64 *) alloc(sizeof(cn_bits_u64));
-        res->val = (uint64_t *) alloc(sizeof(uint64_t));
-        *(res->val) = cn_flsl(*(i1->val));
+        res->val = cn_flsl(i1->val);
         return res;
     }
 
-
-/* void *aligned_alloc(size_t align, size_t size); */
 
 void *cn_aligned_alloc(size_t align, size_t size) 
 {

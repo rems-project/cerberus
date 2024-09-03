@@ -264,24 +264,21 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
 #define CN_GEN_XOR(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_xor(CNTYPE *i1, CNTYPE *i2) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
-        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
-        *(res->val) = *(i1->val) ^ *(i2->val);\
+        res->val = i1->val ^ i2->val;\
         return res;\
     }
 
 #define CN_GEN_BWAND(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_bwand(CNTYPE *i1, CNTYPE *i2) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
-        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
-        *(res->val) = *(i1->val) & *(i2->val);\
+        res->val = i1->val & i2->val;\
         return res;\
     }
 
 #define CN_GEN_BWOR(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_bwor(CNTYPE *i1, CNTYPE *i2) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
-        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
-        *(res->val) = *(i1->val) | *(i2->val);\
+        res->val = i1->val | i2->val;\
         return res;\
     }
 
@@ -307,30 +304,14 @@ static inline int ipow(int base, int exp)
 #define CN_GEN_POW(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_pow(CNTYPE *i1, CNTYPE *i2) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
-        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
-        *(res->val) = ipow(*(i1->val), *(i2->val));\
+        res->val = ipow(i1->val, i2->val);\
         return res;\
     }
 
 
-// #define CN_GEN_ARRAY_SHIFT(CNTYPE)\
-//     static inline cn_pointer *cn_array_shift_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
-//         cn_pointer *res = alloc(sizeof(cn_pointer));\
-//         res->ptr = (CTYPE *) ptr->ptr + *(i->val);\
-//         return res;\
-//     }
-
 #define cn_array_shift(cn_ptr, size, index)\
-    convert_to_cn_pointer((char *) cn_ptr->ptr + (*(index->val) * size)) 
+    convert_to_cn_pointer((char *) cn_ptr->ptr + (index->val * size)) 
 
-
-/* 
-
-member_shift<hyp_pool>(pool_pointer, free_area);
-
-pool_pointer
-
-*/
 
 #define cn_member_shift(cn_ptr, tag, member_name)\
   convert_to_cn_pointer(&(((struct tag *) cn_ptr->ptr)->member_name))
@@ -339,14 +320,14 @@ pool_pointer
 
 #define CN_GEN_INCREMENT(CNTYPE)\
     static inline CNTYPE *CNTYPE##_increment(CNTYPE *i) {\
-        *(i->val) = *(i->val) + 1;\
+        i->val = i->val + 1;\
         return i;\
     }
 
 #define CN_GEN_PTR_ADD(CNTYPE)\
     static inline cn_pointer *cn_pointer_add_##CNTYPE(cn_pointer *ptr, CNTYPE *i) {\
         cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));\
-        res->ptr = (char *) ptr->ptr + *(i->val);\
+        res->ptr = (char *) ptr->ptr + i->val;\
         return res;\
     }
 
@@ -356,15 +337,14 @@ pool_pointer
 #define CN_GEN_CAST_TO_PTR(CNTYPE, INTPTR_TYPE)\
     static inline cn_pointer *cast_##CNTYPE##_to_cn_pointer(CNTYPE *i) {\
         cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));\
-        res->ptr = (void *) (INTPTR_TYPE) *(i->val);\
+        res->ptr = (void *) (INTPTR_TYPE) i->val;\
         return res;\
     }
 
 #define CN_GEN_CAST_FROM_PTR(CTYPE, CNTYPE, INTPTR_TYPE)\
     static inline CNTYPE *cast_cn_pointer_to_##CNTYPE(cn_pointer *ptr) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
-        res->val = (CTYPE *) alloc(sizeof(CTYPE));\
-        *(res->val) = (CTYPE) (INTPTR_TYPE) (ptr->ptr);\
+        res->val = (CTYPE) (INTPTR_TYPE) (ptr->ptr);\
         return res;\
     }
 
@@ -372,8 +352,7 @@ pool_pointer
 #define CN_GEN_CAST_INT_TYPES(CNTYPE1, CTYPE2, CNTYPE2)\
     static inline CNTYPE2 *cast_##CNTYPE1##_to_##CNTYPE2(CNTYPE1 *i) {\
         CNTYPE2 *res = (CNTYPE2 *) alloc(sizeof(CNTYPE2));\
-        res->val = (CTYPE2 *) alloc(sizeof(CTYPE2));\
-        *(res->val) = (CTYPE2) *(i->val);\
+        res->val = (CTYPE2) i->val;\
         return res;\
     }
 
@@ -387,7 +366,9 @@ cn_bool *default_cn_bool(void);
 
 #define CN_GEN_MAP_GET(CNTYPE)\
     static inline void *cn_map_get_##CNTYPE(cn_map *m, cn_integer *key) {   \
-        void *res = ht_get(m, key->val);                                    \
+        signed long *key_ptr = alloc(sizeof(signed long));                  \
+        *key_ptr = key->val;                                                \
+        void *res = ht_get(m, key_ptr);                                     \
         if (!res) { return (void *) default_##CNTYPE(); }                   \
         return res;                                                         \
     }

@@ -406,7 +406,7 @@ let generate_c_record_funs
   let record_map_get_functions =
     List.concat
       (List.map
-         (Cn_internal_to_ail.generate_record_map_get sigm.cn_datatypes)
+         Cn_internal_to_ail.generate_record_map_get
          cn_record_info)
   in
   let eq_decls, eq_defs = List.split record_equality_functions in
