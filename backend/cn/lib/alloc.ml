@@ -29,6 +29,12 @@ module History = struct
     IndexTerms.(map_get_ it (allocId_ ptr loc') loc')
 
 
+  let get_base_size ptr loc' =
+    IndexTerms.
+      ( recordMember_ ~member_bt:base_bt (ptr, base_id) loc',
+        recordMember_ ~member_bt:size_bt (ptr, size_id) loc' )
+
+
   let sbt = SurfaceBaseTypes.of_basetype bt
 end
 
@@ -38,18 +44,4 @@ module Predicate = struct
   let loc = Locations.other __MODULE__
 
   let sym = Sym.fresh_named str
-
-  let pred_name = ResourceTypes.PName sym
-
-  let make pointer : ResourceTypes.predicate_type =
-    { name = pred_name; pointer; iargs = [] }
-
-
-  let def : ResourcePredicates.definition =
-    { loc = Locations.other (__FILE__ ^ ":" ^ string_of_int __LINE__);
-      pointer = Sym.fresh_named "ptr";
-      iargs = [];
-      oarg_bt = History.value_bt;
-      clauses = None
-    }
 end

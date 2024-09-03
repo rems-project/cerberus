@@ -22,7 +22,8 @@ let empty =
     datatype_constrs = SymMap.empty;
     datatype_order = None;
     fun_decls = SymMap.empty;
-    resource_predicates = SymMap.(empty |> add Alloc.Predicate.sym Alloc.Predicate.def);
+    resource_predicates =
+      SymMap.(empty |> add Alloc.Predicate.sym ResourcePredicates.alloc);
     logical_functions = SymMap.empty;
     lemmata = SymMap.empty
   }
