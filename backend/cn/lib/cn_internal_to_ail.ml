@@ -1563,7 +1563,8 @@ let generate_map_get sym =
       A.(
         AilEcall
           ( mk_expr (AilEident (Sym.fresh_pretty "ht_get")),
-            [ mk_expr (AilEident param1_sym); mk_expr (AilEunary (Address, key_val_mem)) ] ))
+            [ mk_expr (AilEident param1_sym); mk_expr (AilEunary (Address, key_val_mem)) ]
+          ))
   in
   let ret_decl = A.(AilSdeclaration [ (ret_sym, Some ht_get_fcall) ]) in
   let ret_ident = A.(AilEident ret_sym) in
@@ -2364,9 +2365,7 @@ let generate_record_default_function dts (sym, (members : BT.member_types)) =
   [ (decl, def) ]
 
 
-let generate_record_map_get (sym, _) =
-  generate_map_get sym
-
+let generate_record_map_get (sym, _) = generate_map_get sym
 
 let cn_to_ail_struct
   ((sym, (loc, attrs, tag_def)) :
