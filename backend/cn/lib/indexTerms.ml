@@ -728,7 +728,16 @@ let arrayShift_ ~base ~index ct loc = IT (ArrayShift { base; ct; index }, BT.Loc
 
 let copyAllocId_ ~addr ~loc:ptr loc = IT (CopyAllocId { addr; loc = ptr }, BT.Loc, loc)
 
-let hasAllocId_ ptr loc = IT (HasAllocId ptr, BT.Bool, loc)
+let hasAllocId_ ptr loc =
+  (* Futzing seems to be necessary because given the current SMT sovler mapping,
+     the solver can't conclude `has_alloc_id(&p[x]) ==> has_alloc_id(p)` and
+     similarly for &p->x. This may be avoidable with a different solver mapping. *)
+  let rec futz = function
+    | IT ((MemberShift (base, _, _) | ArrayShift { base; _ }), _, _) -> futz base
+    | it -> it
+  in
+  IT (HasAllocId (futz ptr), BT.Bool, loc)
+
 
 let sizeOf_ ct loc = IT (SizeOf ct, Memory.size_bt, loc)
 

@@ -501,7 +501,7 @@ module IndexTerms = struct
         let t = aux t in
         let v = aux v in
         IT (RecordUpdate ((t, m), v), the_bt, the_loc)
-      (* revisit when memory model changes *)
+      (* TODO (DCM, VIP) revisit *)
       | Binop (LTPointer, a, b) ->
         let a = aux a in
         let b = aux b in
@@ -540,6 +540,13 @@ module IndexTerms = struct
         IT (MemberShift (aux t, tag, member), the_bt, the_loc)
       | ArrayShift { base; ct; index } ->
         let base = aux base in
+        let base, index =
+          match base with
+          | IT (ArrayShift { base = base2; ct = ct2; index = i2 }, _, _)
+            when Sctypes.equal ct ct2 ->
+            (base2, IT.add_ (index, i2) the_loc)
+          | _ -> (base, index)
+        in
         let index = aux index in
         (match get_num_z index with
          | Some z when Z.equal Z.zero z -> base

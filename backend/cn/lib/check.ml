@@ -1323,7 +1323,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
               | `True ->
                 let@ (_alloc_or_owned, RE.O base_len), _ =
-                  RI.Special.is_pointer_live loc Ptr_diff arg1
+                  RI.Special.of_live_alloc loc Ptr_diff arg1
                 in
                 let@ () =
                   if !use_vip then (
