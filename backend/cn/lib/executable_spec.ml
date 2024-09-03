@@ -207,11 +207,7 @@ let main
   let output_filename =
     match output_decorated with
     | None ->
-      let strs = String.split_on_char '/' filename in
-      let last_str = List.nth strs (List.length strs - 1) in
-      let last_str_basename_list = String.split_on_char '.' last_str in
-      let last_str_basename = List.nth last_str_basename_list 0 in
-      last_str_basename ^ "-exec.c"
+      Filename.remove_extension (Filename.basename filename) ^ "-exec.c"
     | Some output_filename' -> output_filename'
   in
   let prefix = match output_decorated_dir with Some dir_name -> dir_name | None -> "" in
