@@ -1308,15 +1308,45 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 | ct -> Memory.size_of_ctype ct
               in
               let both_alloc =
-                and_ [ hasAllocId_ arg1 here; hasAllocId_ arg2 here ] here
+                and_
+                  [ hasAllocId_ arg1 here;
+                    hasAllocId_ arg2 here;
+                    eq_ (allocId_ arg1 here, allocId_ arg2 here) here
+                  ]
+                  here
               in
+              let ub = CF.Undefined.(UB_CERB004_unspecified UB_unspec_pointer_sub) in
               let@ provable = provable loc in
               match provable @@ t_ @@ both_alloc with
               | `False ->
                 let@ model = model () in
-                let ub = CF.Undefined.(UB_CERB004_unspecified UB_unspec_pointer_sub) in
                 fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
               | `True ->
+                let@ (_alloc_or_owned, RE.O base_len), _ =
+                  RI.Special.is_pointer_live loc Ptr_diff arg1
+                in
+                let@ () =
+                  if !use_vip then (
+                    let base, size = Alloc.History.get_base_size base_len here in
+                    let addr1, addr2 = (addr_ arg1 here, addr_ arg2 here) in
+                    let lower1, lower2 =
+                      (le_ (base, addr1) here, le_ (base, addr2) here)
+                    in
+                    let upper1, upper2 =
+                      ( le_ (addr1, add_ (base, size) here) here,
+                        le_ (addr2, add_ (base, size) here) here )
+                    in
+                    match
+                      provable @@ t_ (and_ [ lower1; lower2; upper1; upper2 ] here)
+                    with
+                    | `True -> return ()
+                    | `False ->
+                      let@ model = model () in
+                      fail (fun ctxt ->
+                        { loc; msg = Undefined_behaviour { ub; ctxt; model } }))
+                  else
+                    return ()
+                in
                 let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
                 let value =
                   (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
@@ -1464,7 +1494,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
               else
                 return ()
             in
-            let@ () = add_r loc (P (Alloc.Predicate.make ret), O lookup) in
+            let@ () = add_r loc (P (RET.make_alloc ret), O lookup) in
             let@ () = record_action (Create ret, loc) in
             k ret)
         | M_CreateReadOnly (_sym1, _ct, _sym2, _prefix) ->
@@ -1483,10 +1513,7 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 ({ name = Owned (ct, Uninit); pointer = arg; iargs = [] }, None)
             in
             let@ _ =
-              RI.Special.predicate_request
-                loc
-                (Access Kill)
-                (Alloc.Predicate.make arg, None)
+              RI.Special.predicate_request loc (Access Kill) (RET.make_alloc arg, None)
             in
             let@ () = record_action (Kill arg, loc) in
             k (unit_ loc))

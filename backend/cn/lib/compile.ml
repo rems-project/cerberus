@@ -47,7 +47,7 @@ type env =
   }
 
 let init_env tagDefs fetch_enum_expr fetch_typedef =
-  let alloc_sig = { pred_iargs = []; pred_output = Alloc.Predicate.def.oarg_bt } in
+  let alloc_sig = { pred_iargs = []; pred_output = ResourcePredicates.alloc.oarg_bt } in
   { computationals = SymMap.empty;
     logicals = SymMap.(empty |> add Alloc.History.sym Alloc.History.sbt);
     predicates = SymMap.(empty |> add Alloc.Predicate.sym alloc_sig);
@@ -1274,7 +1274,7 @@ let allocation_token loc addr_s =
     | SD_ObjectAddress obj_name -> Sym.fresh_make_uniq ("A_" ^ obj_name)
     | _ -> assert false
   in
-  let alloc_ret = Alloc.Predicate.make (IT.sym_ (addr_s, BT.Loc, loc)) in
+  let alloc_ret = ResourceTypes.make_alloc (IT.sym_ (addr_s, BT.Loc, loc)) in
   ((name, (ResourceTypes.P alloc_ret, Alloc.History.value_bt)), (loc, None))
 
 

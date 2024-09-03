@@ -23,6 +23,8 @@ module History : sig
 
   val lookup_ptr : IndexTerms.t -> Locations.t -> IndexTerms.t
 
+  val get_base_size : IndexTerms.t -> Cerb_location.t -> IndexTerms.t * IndexTerms.t
+
   val sbt : SurfaceBaseTypes.t
 end
 
@@ -32,10 +34,4 @@ module Predicate : sig
   val loc : Locations.t
 
   val sym : Sym.t
-
-  val pred_name : ResourceTypes.predicate_name
-
-  val make : IndexTerms.t -> ResourceTypes.predicate_type
-
-  val def : ResourcePredicates.definition
 end

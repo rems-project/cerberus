@@ -178,7 +178,11 @@ module General = struct
 
 
   (* TODO: check that oargs are in the same order? *)
-  let rec predicate_request loc (uiinfo : uiinfo) (requested : RET.predicate_type)
+  let rec predicate_request
+    loc
+    (uiinfo : uiinfo)
+    (requested : RET.predicate_type)
+    ~alloc_or_owned
     : ((predicate_type * oargs) * int list) option m
     =
     debug 7 (lazy (item "predicate request" (RET.pp (P requested))));
@@ -187,30 +191,45 @@ module General = struct
     let@ provable = provable loc in
     let@ global = get_global () in
     let@ simp_ctxt = simp_ctxt () in
-    let needed = true in
     let resource_scan re ((needed : bool), oargs) =
       let continue = (Unchanged, (needed, oargs)) in
       if not needed then
         continue
       else (
+        let alloc_owned = alloc_or_owned in
         match re with
-        | P p', p'_oarg when RET.subsumed requested.name p'.name ->
+        | P p', p'_oarg when RET.subsumed ~alloc_owned requested.name p'.name ->
           let here = Locations.other __FUNCTION__ in
-          let pmatch =
-            eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here
-            :: List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs
+          let p'_oarg, addr_iargs_eqs =
+            if RET.equal_predicate_name RET.alloc requested.name then (
+              match p'.name with
+              | PName name ->
+                assert (Sym.equal name Alloc.Predicate.sym);
+                (p'_oarg, [])
+              | Owned (ct, _) ->
+                assert alloc_owned;
+                let p'_addr = addr_ p'.pointer here in
+                let req_addr = addr_ requested.pointer here in
+                ( O (Alloc.History.lookup_ptr requested.pointer here),
+                  [ le_ (p'_addr, req_addr) here;
+                    le_ (req_addr, RE.upper_bound p'_addr ct here) here
+                  ] ))
+            else
+              ( p'_oarg,
+                eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here
+                :: List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs )
           in
-          let took = and_ pmatch here in
-          let prov =
+          let addr_iargs_match = and_ addr_iargs_eqs here in
+          let alloc_id_eq =
             eq_ (allocId_ requested.pointer here, allocId_ p'.pointer here) here
           in
           let debug_failure model msg term =
             Pp.debug 9 (lazy (Pp.item msg (RET.pp (fst re))));
             debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T term)
           in
-          (match provable (LC.T took) with
+          (match provable (LC.T addr_iargs_match) with
            | `True ->
-             (match provable (LC.T prov) with
+             (match provable (LC.T alloc_id_eq) with
               | `True ->
                 Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                 (Deleted, (false, p'_oarg))
@@ -218,68 +237,49 @@ module General = struct
                 debug_failure
                   (Solver.model ())
                   "couldn't use resource (matched address but not provenance)"
-                  prov;
+                  alloc_id_eq;
                 continue)
            | `False ->
              let model = Solver.model () in
-             (match provable (LC.T prov) with
+             (match provable (LC.T alloc_id_eq) with
               | `True ->
                 debug_failure
                   model
                   "couldn't use resource (matched provenance but not address)"
-                  took;
+                  addr_iargs_match;
                 continue
               | `False ->
                 debug_failure
                   (Solver.model ())
                   "couldn't use resource"
-                  (and_ (eq_ (requested.pointer, p'.pointer) here :: List.tl pmatch) here);
+                  (and_
+                     (eq_ (requested.pointer, p'.pointer) here :: List.tl addr_iargs_eqs)
+                     here);
                 continue))
         | _re -> continue)
     in
+    let needed = true in
     let here = Locations.other __FUNCTION__ in
     let@ (needed, oarg), changed_or_deleted =
-      let here = Locations.other __FUNCTION__ in
       map_and_fold_resources loc resource_scan (needed, O (default_ oarg_bt here))
     in
-    Pp.debug
-      9
-      (lazy (Pp.item "was resource found in context" (IT.pp (bool_ (not needed) here))));
+    let not_str = lazy (if needed then !^" not " else !^" ") in
+    Pp.debug 9 (Lazy.map (fun x -> !^"resource was" ^^ x ^^ !^"found in context") not_str);
     let@ res =
       match needed with
-      | false ->
-        let r =
-          ( ({ name = requested.name;
-               pointer = requested.pointer;
-               iargs = requested.iargs
-             }
-             : predicate_type),
-            oarg )
-        in
-        (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r
-           in *)
-        return (Some (r, changed_or_deleted))
+      | false -> return (Some ((requested, oarg), changed_or_deleted))
       | true ->
-        let here = Locations.other __FUNCTION__ in
         (match packing_ft here global provable (P requested) with
          | Some packing_ft ->
-           Pp.debug
-             9
-             (lazy
-               (Pp.item
-                  "attempting to pack compound resource"
-                  (LAT.pp (fun _ -> Pp.string "resource") packing_ft)));
+           let ft_pp = lazy (LAT.pp (fun _ -> Pp.string "resource") packing_ft) in
+           Pp.debug 9 (Lazy.map (Pp.item "attempting to pack compound resource") ft_pp);
            let@ o, changed_or_deleted =
              ftyp_args_request_for_pack loc uiinfo packing_ft
            in
            return (Some ((requested, O o), changed_or_deleted))
          | None ->
-           Pp.debug
-             9
-             (lazy
-               (Pp.item
-                  "no pack rule for resource, out of options"
-                  (RET.pp (P requested))));
+           let req_pp = lazy (RET.pp (P requested)) in
+           Pp.debug 9 (Lazy.map (Pp.item "no pack rule for resource, failing") req_pp);
            return None)
     in
     time_log_end start_timing;
@@ -318,7 +318,7 @@ module General = struct
           else (
             match re with
             | Q p', O p'_oarg
-              when subsumed requested.name p'.name
+              when subsumed ~alloc_owned:false requested.name p'.name
                    && IT.equal step p'.step
                    && BT.equal (snd requested.q) (snd p'.q) ->
               let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
@@ -376,7 +376,7 @@ module General = struct
           let continue = return (needed, oarg) in
           if
             (not (is_false needed))
-            && subsumed requested.name predicate_name
+            && subsumed ~alloc_owned:false requested.name predicate_name
             && BT.equal (snd requested.q) (IT.bt index)
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
@@ -399,6 +399,7 @@ module General = struct
                         here;
                     iargs = List.map (IT.subst su) requested.iargs
                   }
+                  ~alloc_or_owned:false
               in
               (match o_re_index with
                | None -> continue
@@ -455,7 +456,7 @@ module General = struct
       | _ ->
         let@ ftyp, rw_time =
           parametric_ftyp_args_request_step
-            resource_request
+            (resource_request ~alloc_or_owned:false)
             IT.subst
             loc
             uiinfo
@@ -468,10 +469,12 @@ module General = struct
     loop ftyp []
 
 
-  and resource_request loc uiinfo (request : RET.t) : (RE.t * int list) option m =
+  and resource_request loc uiinfo (request : RET.t) ~alloc_or_owned
+    : (RE.t * int list) option m
+    =
     match request with
     | P request ->
-      let@ result = predicate_request loc uiinfo request in
+      let@ result = predicate_request loc uiinfo request ~alloc_or_owned in
       return
         (Option.map
            (fun ((p, o), changed_or_deleted) -> ((P p, o), changed_or_deleted))
@@ -488,7 +491,7 @@ module General = struct
   let ftyp_args_request_step rt_subst loc situation original_resources ftyp =
     let@ rt, _rw_time =
       parametric_ftyp_args_request_step
-        resource_request
+        (resource_request ~alloc_or_owned:false)
         rt_subst
         loc
         situation
@@ -509,7 +512,7 @@ module Special = struct
       { loc; msg })
 
 
-  let predicate_request loc situation (request, oinfo) =
+  let predicate_request loc situation (request, oinfo) ~alloc_or_owned =
     let requests =
       [ TypeErrors.
           { resource = P request;
@@ -519,8 +522,17 @@ module Special = struct
       ]
     in
     let uiinfo = (situation, requests) in
-    let@ result = General.predicate_request loc uiinfo request in
+    let@ result = General.predicate_request loc uiinfo request ~alloc_or_owned in
     match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
+
+
+  let is_pointer_live loc situation pointer =
+    let request = RET.make_alloc pointer in
+    pure @@ predicate_request loc situation (request, None) ~alloc_or_owned:true
+
+
+  let predicate_request loc situation (request, oinfo) =
+    predicate_request loc situation (request, oinfo) ~alloc_or_owned:false
 
 
   let qpredicate_request loc situation (request, oinfo) =
