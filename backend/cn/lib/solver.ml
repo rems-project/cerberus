@@ -529,9 +529,9 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
     Struct (tag, List.map2 mk_field fields vals)
   | Datatype tag ->
     let con, vals = SMT.to_con sexp in
-    let cons = (SymMap.find tag gs.datatypes).dt_constrs in
+    let cons = (SymMap.find tag gs.datatypes).constrs in
     let do_con c =
-      let fields = (SymMap.find c gs.datatype_constrs).c_params in
+      let fields = (SymMap.find c gs.datatype_constrs).params in
       let mk_field (l, t) v = (l, get_ivalue gs ctys t v) in
       Constructor (c, List.map2 mk_field fields vals)
     in
@@ -1091,9 +1091,9 @@ let declare_datatype_group s names =
   let mk_con_field (l, t) = (CN_Names.datatype_field_name l, translate_base_type t) in
   let mk_con c =
     let ci = SymMap.find c s.globals.datatype_constrs in
-    (CN_Names.datatype_con_name c, List.map mk_con_field ci.c_params)
+    (CN_Names.datatype_con_name c, List.map mk_con_field ci.params)
   in
-  let cons info = List.map mk_con info.dt_constrs in
+  let cons (info : BT.Datatype.info) = List.map mk_con info.constrs in
   let to_smt (x : Sym.t) =
     let info = SymMap.find x s.globals.datatypes in
     (CN_Names.datatype_name x, [], cons info)

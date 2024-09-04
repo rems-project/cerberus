@@ -1,11 +1,9 @@
-open Pp
-
 type sign =
   | Signed
   | Unsigned
 [@@deriving eq, ord]
 
-type basetype =
+type t =
   | Unit
   | Bool
   | Integer
@@ -17,36 +15,36 @@ type basetype =
   | Struct of Sym.t
   | Datatype of Sym.t
   | Record of member_types
-  | Map of basetype * basetype
-  | List of basetype
-  | Tuple of basetype list
-  | Set of basetype (* | Option of basetype *)
+  | Map of t * t
+  | List of t
+  | Tuple of t list
+  | Set of t (* | Option of basetype *)
 [@@deriving eq, ord]
 
-and member_types = (Id.t * basetype) list
-
-type t = basetype
-
-let equal = equal_basetype
-
-let compare = compare_basetype
+and member_types = (Id.t * t) list
 
 (* This seems to require that variables aren't simply unique to the constructor, but to
    the entire datatype declaration. This is weird, and is probably an arbitrary
    restriction that should be lifted, but it will require effort. *)
-type datatype_info =
-  { dt_constrs : Sym.t list;
-    dt_all_params : member_types
-  }
+module Datatype = struct
+  type info =
+    { constrs : Sym.t list;
+      all_params : member_types
+    }
 
-type constr_info =
-  { c_params : member_types;
-    c_datatype_tag : Sym.t
-  }
+  type constr_info =
+    { params : member_types;
+      datatype_tag : Sym.t
+    }
+end
 
-let cons_dom_rng info = (Record info.c_params, Datatype info.c_datatype_tag)
+open Datatype
 
-let rec pp = function
+let cons_dom_rng info = (Record info.params, Datatype info.datatype_tag)
+
+let rec pp =
+  let open Pp in
+  function
   | Unit -> !^"void"
   | Bool -> !^"boolean"
   | Integer -> !^"integer"
@@ -67,7 +65,9 @@ let rec pp = function
 
 (* | Option t -> !^"option" ^^ angles (pp t) *)
 
-let rec contained : t -> t list = function
+let rec contained : t -> t list =
+  let containeds bts = List.concat_map contained bts in
+  function
   | Unit -> []
   | Bool -> []
   | Integer -> []
@@ -86,8 +86,6 @@ let rec contained : t -> t list = function
   | Tuple bts -> bts @ containeds bts
   | Set bt -> bt :: contained bt
 
-
-and containeds bts = List.concat_map contained bts
 
 let json bt : Yojson.Safe.t = `String (Pp.plain (pp bt))
 

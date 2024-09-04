@@ -2329,7 +2329,7 @@ let record_and_check_datatypes datatypes =
   let@ () =
     ListM.iterM
       (fun (s, Mu.{ loc = _; cases = _ }) ->
-        add_datatype s { dt_constrs = []; dt_all_params = [] })
+        add_datatype s { constrs = []; all_params = [] })
       datatypes
   in
   (* check and normalise datatypes *)
@@ -2342,10 +2342,10 @@ let record_and_check_datatypes datatypes =
       let@ () =
         add_datatype
           s
-          { dt_constrs = List.map fst cases; dt_all_params = List.concat_map snd cases }
+          { constrs = List.map fst cases; all_params = List.concat_map snd cases }
       in
       ListM.iterM
-        (fun (c, c_params) -> add_datatype_constr c { c_params; c_datatype_tag = s })
+        (fun (c, params) -> add_datatype_constr c { params; datatype_tag = s })
         cases)
     datatypes
 

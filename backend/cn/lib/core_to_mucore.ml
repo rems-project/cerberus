@@ -642,7 +642,7 @@ let unsupported loc doc = fail { loc; msg = Unsupported (!^"unsupported" ^^^ doc
 
 let rec n_expr
   ~inherit_loc
-  (loc : Loc.t)
+  (loc : Locations.t)
   ((env, old_states), desugaring_things)
   (global_types, visible_objects_env)
   e
@@ -1417,7 +1417,7 @@ let normalise_fun_map
 
 
 let normalise_globs ~inherit_loc env _sym g =
-  let loc = Loc.other __FUNCTION__ in
+  let loc = Locations.other __FUNCTION__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
     let@ () = check_against_core_bt loc bt BT.Loc in
@@ -1601,7 +1601,7 @@ type fn_spec_instrumentation = (ReturnTypes.t * statements) ArgumentTypes.t
 
 type instrumentation =
   { fn : Sym.t;
-    fn_loc : Loc.t;
+    fn_loc : Locations.t;
     internal : fn_spec_instrumentation option
   }
 

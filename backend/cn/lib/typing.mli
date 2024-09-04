@@ -105,9 +105,9 @@ val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> Sctypes.t m
 
 val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> Sctypes.t m
 
-val get_datatype : Locations.t -> Sym.t -> BaseTypes.datatype_info m
+val get_datatype : Locations.t -> Sym.t -> BaseTypes.Datatype.info m
 
-val get_datatype_constr : Locations.t -> Sym.t -> BaseTypes.constr_info m
+val get_datatype_constr : Locations.t -> Sym.t -> BaseTypes.Datatype.constr_info m
 
 val get_fun_decl
   :  Locations.t ->
@@ -133,9 +133,9 @@ val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> unit m
 
 val add_logical_function : Sym.t -> LogicalFunctions.definition -> unit m
 
-val add_datatype : Sym.t -> BaseTypes.datatype_info -> unit m
+val add_datatype : Sym.t -> BaseTypes.Datatype.info -> unit m
 
-val add_datatype_constr : Sym.t -> BaseTypes.constr_info -> unit m
+val add_datatype_constr : Sym.t -> BaseTypes.Datatype.constr_info -> unit m
 
 (* val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit) m *)
 

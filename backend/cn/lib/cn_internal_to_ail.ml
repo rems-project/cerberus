@@ -1317,8 +1317,7 @@ let rec cn_to_ail_expr_aux_internal
     (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
     (* Matrix algorithm for pattern compilation *)
     let rec translate
-      :  int -> BT.basetype Terms.term list ->
-      (BT.basetype Terms.pattern list * BT.basetype Terms.term) list ->
+      :  int -> IndexTerms.t list -> (BT.t Terms.pattern list * IndexTerms.t) list ->
       A.bindings * _ A.statement_ list
       =
       fun count vars cases ->
@@ -1449,10 +1448,7 @@ let rec cn_to_ail_expr_aux_internal
     in
     let translate_real
       : type a.
-        BT.basetype Terms.term list ->
-        (BT.basetype Terms.pattern list * BT.basetype Terms.term) list ->
-        a dest ->
-        a
+        IndexTerms.t list -> (BT.t Terms.pattern list * IndexTerms.t) list -> a dest -> a
       =
       fun vars cases d ->
       let bs, ss = translate 1 vars cases in

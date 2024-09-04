@@ -29,16 +29,16 @@ let equal = equal_basetype
 let compare = compare_basetype
 
 type datatype_info =
-  { dt_constrs : Sym.t list;
-    dt_all_params : member_types
+  { constrs : Sym.t list;
+    all_params : member_types
   }
 
 type constr_info =
-  { c_params : member_types;
-    c_datatype_tag : Sym.t
+  { params : member_types;
+    datatype_tag : Sym.t
   }
 
-let cons_dom_rng info = (Record info.c_params, Datatype info.c_datatype_tag)
+let cons_dom_rng info = (Record info.params, Datatype info.datatype_tag)
 
 let rec pp = function
   | Unit -> !^"void"

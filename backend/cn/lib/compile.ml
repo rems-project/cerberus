@@ -39,8 +39,8 @@ type env =
     logicals : SBT.t SymMap.t;
     predicates : predicate_sig SymMap.t;
     functions : function_sig SymMap.t;
-    datatypes : BaseTypes.datatype_info SymMap.t;
-    datatype_constrs : BaseTypes.constr_info SymMap.t;
+    datatypes : BaseTypes.Datatype.info SymMap.t;
+    datatype_constrs : BaseTypes.Datatype.constr_info SymMap.t;
     tagDefs : Mu.mu_tag_definitions;
     fetch_enum_expr : Locations.t -> Sym.t -> unit CF.AilSyntax.expression Resultat.t;
     fetch_typedef : Locations.t -> Sym.t -> CF.Ctype.ctype Resultat.t
@@ -361,18 +361,18 @@ let add_datatype_info env (dt : cn_datatype) =
     ListM.fold_leftM add_param StringMap.empty (List.concat_map snd dt.cn_dt_cases)
   in
   let add_constr env (cname, params) =
-    let c_params =
+    let params =
       List.map
         (fun (nm, ty) -> (nm, SBT.to_basetype (translate_cn_base_type env ty)))
         params
     in
-    let info = BT.{ c_params; c_datatype_tag = dt.cn_dt_name } in
+    let info = BT.Datatype.{ params; datatype_tag = dt.cn_dt_name } in
     add_datatype_constr cname info env
   in
   let env = List.fold_left add_constr env dt.cn_dt_cases in
-  let dt_all_params = List.map snd (StringMap.bindings all_params) in
-  let dt_constrs = List.map fst dt.cn_dt_cases in
-  return (add_datatype dt.cn_dt_name BT.{ dt_constrs; dt_all_params } env)
+  let all_params = List.map snd (StringMap.bindings all_params) in
+  let constrs = List.map fst dt.cn_dt_cases in
+  return (add_datatype dt.cn_dt_name BT.Datatype.{ constrs; all_params } env)
 
 
 let add_datatype_infos env dts = ListM.fold_leftM add_datatype_info env dts
@@ -562,7 +562,7 @@ module EffectfulTranslation = struct
       return (IT.IT (StructMember (t, member), member_bt, loc))
     (* | Datatype tag -> *)
     (*    let@ dt_info = lookup_datatype loc tag env in *)
-    (*    let@ bt = match List.assoc_opt Id.equal member dt_info.dt_all_params with *)
+    (*    let@ bt = match List.assoc_opt Id.equal member dt_info.all_params with *)
     (*      | None ->  *)
     (*          let msg = !^"Unknown member" ^^^ squotes (Id.pp member) *)
     (*                    ^^^ !^"of datatype" ^^^ squotes (Sym.pp tag) *)
@@ -594,9 +594,9 @@ module EffectfulTranslation = struct
       let@ env', locally_bound', args =
         ListM.fold_leftM
           (fun (env, locally_bound, acc) (m, pat') ->
-            match List.assoc_opt Id.equal m cons_info.c_params with
+            match List.assoc_opt Id.equal m cons_info.params with
             | None ->
-              fail { loc; msg = Unexpected_member (List.map fst cons_info.c_params, m) }
+              fail { loc; msg = Unexpected_member (List.map fst cons_info.params, m) }
             | Some mbt ->
               let@ env', locally_bound', pat' =
                 translate_cn_pat env locally_bound (pat', SBT.of_basetype mbt)
@@ -868,8 +868,7 @@ module EffectfulTranslation = struct
               return (nm, expr))
             exprs
         in
-        return
-          (IT (Constructor (c_nm, exprs), SBT.Datatype cons_info.c_datatype_tag, loc))
+        return (IT (Constructor (c_nm, exprs), SBT.Datatype cons_info.datatype_tag, loc))
       | CNExpr_each (sym, bt, r, e) ->
         let@ expr =
           trans
