@@ -868,9 +868,9 @@ let generate_tests_cmd =
   Cmd.v info generate_tests_t
 
 
-let runtime_test_cmd =
+let instrument_cmd =
   let open Term in
-  let runtime_test_t =
+  let instrument_t =
     const generate_executable_specs
     $ Common_flags.file
     $ Common_flags.macros
@@ -905,11 +905,11 @@ let runtime_test_cmd =
     "Instruments [FILE] with runtime C assertions that check the properties provided in \
      CN specifications.\n"
   in
-  let info = Cmd.info "runtime-test" ~doc in
-  Cmd.v info runtime_test_t
+  let info = Cmd.info "instrument" ~doc in
+  Cmd.v info instrument_t
 
 
-let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd; runtime_test_cmd ]
+let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd; instrument_cmd ]
 
 let () =
   let version_str = Cn_version.git_version ^ " [" ^ Cn_version.git_version_date ^ "]" in
