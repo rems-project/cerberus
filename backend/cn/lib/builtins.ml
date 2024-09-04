@@ -1,4 +1,4 @@
-module SBT = SurfaceBaseTypes
+module SBT = BaseTypes.Surface
 open Resultat
 
 open Effectful.Make (Resultat)

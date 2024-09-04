@@ -25,7 +25,7 @@ module History : sig
 
   val get_base_size : IndexTerms.t -> Cerb_location.t -> IndexTerms.t * IndexTerms.t
 
-  val sbt : SurfaceBaseTypes.t
+  val sbt : BaseTypes.Surface.t
 end
 
 module Predicate : sig

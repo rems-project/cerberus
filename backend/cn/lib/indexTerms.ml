@@ -13,15 +13,15 @@ type t' = BT.t term
 type t = BT.t annot
 
 module Surface = struct
-  type t' = SurfaceBaseTypes.t term
+  type t' = BaseTypes.Surface.t term
 
-  type t = SurfaceBaseTypes.t annot
+  type t = BaseTypes.Surface.t annot
 
-  let compare = Terms.compare_annot SurfaceBaseTypes.compare
+  let compare = Terms.compare_annot BaseTypes.Surface.compare
 
-  let proj = Terms.map_annot SurfaceBaseTypes.to_basetype
+  let proj = Terms.map_annot BaseTypes.Surface.proj
 
-  let inj = Terms.map_annot SurfaceBaseTypes.of_basetype
+  let inj x = Terms.map_annot BaseTypes.Surface.inj x
 end
 
 let basetype : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
@@ -567,17 +567,17 @@ let ne_ (it, it') loc = not_ (eq_ (it, it') loc) loc
 
 let ne__ it it' = ne_ (it, it')
 
-let eq_sterm_ (it, it') loc = IT (Binop (EQ, it, it'), SurfaceBaseTypes.Bool, loc)
+let eq_sterm_ (it, it') loc = IT (Binop (EQ, it, it'), BT.Bool, loc)
 
-let bool_sterm_ b loc = IT (Const (Bool b), SurfaceBaseTypes.Bool, loc)
+let bool_sterm_ b loc = IT (Const (Bool b), BT.Bool, loc)
 
-let and2_sterm_ (it, it') loc = IT (Binop (And, it, it'), SurfaceBaseTypes.Bool, loc)
+let and2_sterm_ (it, it') loc = IT (Binop (And, it, it'), BT.Bool, loc)
 
 let and_sterm_ its loc =
   vargs_binop (bool_sterm_ true loc) (Tools.curry (fun p -> and2_sterm_ p loc)) its
 
 
-let or2_sterm_ (it, it') loc = IT (Binop (Or, it, it'), SurfaceBaseTypes.Bool, loc)
+let or2_sterm_ (it, it') loc = IT (Binop (Or, it, it'), BT.Bool, loc)
 
 let or_sterm_ its loc =
   vargs_binop (bool_sterm_ true loc) (Tools.curry (fun p -> or2_sterm_ p loc)) its
