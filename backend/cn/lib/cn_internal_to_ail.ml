@@ -21,12 +21,6 @@ module OE = Ownership_exec
 
 let true_const = A.AilEconst (ConstantPredefined PConstantTrue)
 
-let error_msg_info_sym = Sym.fresh_pretty "error_msg_info"
-
-let error_msg_struct_tag = Sym.fresh_pretty "cn_error_message_info"
-
-let error_msg_info_ctype = mk_ctype (C.Struct error_msg_struct_tag)
-
 let ownership_ctypes = ref []
 
 let rec cn_base_type_to_bt = function
@@ -89,12 +83,6 @@ let members_equal ms ms' =
     let ids_eq = List.fold_left ( && ) true ids_eq in
     ctypes_eq && ids_eq)
 
-
-module SymKey = struct
-  type t = C.union_tag
-
-  let compare (x : t) y = Sym.compare_sym x y
-end
 
 module RecordMap = Map.Make (MembersKey)
 
