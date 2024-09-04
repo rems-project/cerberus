@@ -40,7 +40,7 @@ type qpredicate_type =
   { name : predicate_name;
     pointer : IT.t; (* I *)
     q : Sym.t * BT.t;
-    q_loc : loc; [@equal fun _ _ -> true] [@compare fun _ _ -> 0]
+    q_loc : Locations.t; [@equal fun _ _ -> true] [@compare fun _ _ -> 0]
     step : IT.t;
     permission : IT.t; (* I, function of q *)
     iargs : IT.t list (* I, function of q *)

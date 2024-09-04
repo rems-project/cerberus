@@ -1,8 +1,3 @@
-open Pp
-module CT = Sctypes
-
-type loc = Cerb_location.t
-
 type const =
   | Z of Z.t
   | Bits of (BaseTypes.sign * int) * Z.t
@@ -72,7 +67,8 @@ type 'bt pattern_ =
   | PConstructor of Sym.t * (Id.t * 'bt pattern) list
 
 and 'bt pattern =
-  | Pat of 'bt pattern_ * 'bt * (loc[@equal fun _ _ -> true] [@compare fun _ _ -> 0])
+  | Pat of
+      'bt pattern_ * 'bt * (Locations.t[@equal fun _ _ -> true] [@compare fun _ _ -> 0])
 [@@deriving eq, ord, map]
 
 (* over integers and reals *)
@@ -129,7 +125,7 @@ type 'bt term_ =
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
-  | IT of 'bt term_ * 'bt * (loc[@equal fun _ _ -> true] [@compare fun _ _ -> 0])
+  | IT of 'bt term_ * 'bt * (Locations.t[@equal fun _ _ -> true] [@compare fun _ _ -> 0])
 [@@deriving eq, ord, map]
 
 let equal = equal_term
@@ -139,8 +135,9 @@ let compare = compare_term
 let rec pp_pattern (Pat (pat_, _bt, _)) =
   match pat_ with
   | PSym s -> Sym.pp s
-  | PWild -> underscore
+  | PWild -> Pp.underscore
   | PConstructor (c, args) ->
+    let open Pp in
     Sym.pp c
     ^^^ braces
           (separate_map
@@ -179,13 +176,14 @@ let pp
   fun ?(prec = 0) ?(f = fun _ x -> x) ->
   let rec aux prec (IT (it, _, _)) =
     let aux prec x = f x (aux prec x) in
+    let open Pp in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented by 2 (wrt to
        the lparen). I don't quite understand it, but it works. *)
     let parens pped =
-      Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen)
+      group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen)
     in
     let braces pped =
-      Pp.group ((nest 2 @@ lbrace ^^ break 0 ^^ pped) ^^ break 0 ^^ rbrace)
+      group ((nest 2 @@ lbrace ^^ break 0 ^^ pped) ^^ break 0 ^^ rbrace)
     in
     let wrap_after tgt doc = if prec > tgt then parens doc else doc in
     let break_op x = break 1 ^^ x ^^ space in
@@ -209,14 +207,14 @@ let pp
            ^^^ !^"*/"
        | Q q -> !^(Q.to_string q)
        | Pointer { alloc_id = id; addr } ->
-         braces (alloc_id id ^^ Pp.semi ^^ Pp.space ^^ !^("0x" ^ Z.format "%x" addr))
+         braces (alloc_id id ^^ semi ^^ space ^^ !^("0x" ^ Z.format "%x" addr))
        | Alloc_id i -> !^("@" ^ Z.to_string i)
        | Bool true -> !^"true"
        | Bool false -> !^"false"
        | Unit -> !^"void"
        | Default bt -> c_app !^"default" [ BaseTypes.pp bt ]
        | Null -> !^"NULL"
-       | CType_const ct -> Pp.squotes (Sctypes.pp ct))
+       | CType_const ct -> squotes (Sctypes.pp ct))
     | Sym sym -> Sym.pp sym
     | Unop (uop, it1) ->
       let prefix x op p = wrap_after x (!^op ^^ aux p it1) in
@@ -279,10 +277,9 @@ let pp
     | ITE (o1, o2, o3) ->
       wrap_after 2 (flow (break 1) [ aux 3 o1; !^"?"; aux 3 o2; colon; aux 3 o3 ])
     | EachI ((i1, (s, _), i2), t) ->
-      Pp.(
-        group
-        @@ group (c_app !^"for" [ int i1; Sym.pp s; int i2 ])
-        ^/^ group ((nest 2 @@ lbrace ^^ break 0 ^^ aux 0 t) ^^ break 0 ^^ rbrace))
+      group
+      @@ group (c_app !^"for" [ int i1; Sym.pp s; int i2 ])
+      ^/^ group ((nest 2 @@ lbrace ^^ break 0 ^^ aux 0 t) ^^ break 0 ^^ rbrace)
     | NthTuple (n, it2) ->
       wrap_after 15 (aux 15 it2 ^^ dot ^^ !^("member" ^ string_of_int n))
     | Tuple its -> braces (separate_map (semi ^^ space) (aux 0) its)
@@ -292,7 +289,7 @@ let pp
       ^^ flow_map
            (comma ^^ hardline)
            (fun (member, it) ->
-             Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux 0 it))
+             group @@ (group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux 0 it))
            members
       ^^^ rbrace
     | StructMember (t, member) -> wrap_after 15 (aux 15 t ^^ dot ^^ Id.pp member)
@@ -304,9 +301,7 @@ let pp
       ^^^ flow_map
             (break 0 ^^ comma ^^ space)
             (fun (member, it) ->
-              Pp.group
-              @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals)
-              ^^^ align (aux 0 it))
+              group @@ (group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux 0 it))
             members
       ^^^ rbrace
     | RecordMember (t, member) -> wrap_after 15 (aux 15 t ^^ dot ^^ Id.pp member)
@@ -322,9 +317,9 @@ let pp
     | SizeOf t -> c_app !^"sizeof" [ Sctypes.pp t ]
     | OffsetOf (tag, member) -> c_app !^"offsetof" [ Sym.pp tag; Id.pp member ]
     | Aligned t -> c_app !^"aligned" [ aux 0 t.t; aux 0 t.align ]
-    | Representable (rt, t) -> c_app (!^"repr" ^^ angles (CT.pp rt)) [ aux 0 t ]
-    | Good (rt, t) -> c_app (!^"good" ^^ angles (CT.pp rt)) [ aux 0 t ]
-    | WrapI (ity, t) -> c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [ aux 0 t ]
+    | Representable (rt, t) -> c_app (!^"repr" ^^ angles (Sctypes.pp rt)) [ aux 0 t ]
+    | Good (rt, t) -> c_app (!^"good" ^^ angles (Sctypes.pp rt)) [ aux 0 t ]
+    | WrapI (ity, t) -> c_app (!^"wrapI" ^^ angles (Sctypes.pp (Integer ity))) [ aux 0 t ]
     | Head o1 -> c_app !^"hd" [ aux 0 o1 ]
     | Tail o1 -> c_app !^"tl" [ aux 0 o1 ]
     | Nil bt -> !^"nil" ^^ angles (BaseTypes.pp bt)
@@ -339,13 +334,13 @@ let pp
     | MapDef ((s, _), t) -> brackets (Sym.pp s ^^^ (!^"-" ^^ rangle ()) ^^^ aux 0 t)
     | Apply (name, args) -> c_app (Sym.pp name) (List.map (aux 0) args)
     | Let ((name, x1), x2) ->
-      parens (!^"let" ^^^ Sym.pp name ^^^ Pp.equals ^^^ aux 0 x1 ^^^ !^"in" ^^^ aux 0 x2)
+      parens (!^"let" ^^^ Sym.pp name ^^^ equals ^^^ aux 0 x1 ^^^ !^"in" ^^^ aux 0 x2)
     | Match (e, cases) ->
       !^"match"
       ^^^ aux 0 e
       ^^^ braces
             ((* copying from mparens *)
-             Pp.group
+             group
                (nest 2
                 @@ separate_map
                      (break 0)
@@ -363,10 +358,8 @@ let pp
   fun (it : 'bt term) -> aux prec it
 
 
-open Cerb_pp_prelude
-open Cerb_frontend.Pp_ast
-
 let rec dtree_of_pat (Pat (pat_, _bt, _)) =
+  let open Cerb_frontend.Pp_ast in
   match pat_ with
   | PSym s -> Dnode (pp_ctor "PSym", [ Dleaf (Sym.pp s) ])
   | PWild -> Dleaf (pp_ctor "PWild")
@@ -381,6 +374,8 @@ let rec dtree_of_pat (Pat (pat_, _bt, _)) =
 
 
 let rec dtree (IT (it_, bt, loc)) =
+  let open Cerb_frontend.Pp_ast in
+  let open Pp.Infix in
   let alloc_id z = Dnode (pp_ctor "alloc_id", [ Dleaf !^(Z.to_string z) ]) in
   let dtree =
     match it_ with
@@ -462,7 +457,7 @@ let rec dtree (IT (it_, bt, loc)) =
                (fun (pat, body) ->
                  Dnode (pp_ctor "Case", [ dtree_of_pat pat; dtree body ]))
                pats )
-    | Nil bt -> Dleaf (!^"Nil" ^^ angles (BaseTypes.pp bt))
+    | Nil bt -> Dleaf (!^"Nil" ^^ Pp.angles (BaseTypes.pp bt))
     | Cons (t1, t2) -> Dnode (pp_ctor "Cons", [ dtree t1; dtree t2 ])
     | Head t -> Dnode (pp_ctor "Head", [ dtree t ])
     | Tail t -> Dnode (pp_ctor "Tail", [ dtree t ])
@@ -476,7 +471,7 @@ let rec dtree (IT (it_, bt, loc)) =
       Dnode (pp_ctor "OffsetOf", [ Dleaf (Sym.pp tag); Dleaf (Id.pp member) ])
     | Let ((s, t1), t2) -> Dnode (pp_ctor "Let", [ Dleaf (Sym.pp s); dtree t1; dtree t2 ])
   in
-  let loc_doc = parens !^(Locations.to_string loc) in
+  let loc_doc = Pp.parens !^(Locations.to_string loc) in
   match dtree with
   | Dnode (doc, dtrees) -> Dnode (doc ^^^ loc_doc, dtrees)
   | Dleaf doc -> Dleaf (doc ^^^ loc_doc)

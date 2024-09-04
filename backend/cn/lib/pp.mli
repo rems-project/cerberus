@@ -7,6 +7,18 @@
 
 type document = PPrint.document
 
+module Infix : sig
+  val ( ^^ ) : document -> document -> document
+
+  val ( !^ ) : string -> document
+
+  val ( ^/^ ) : document -> document -> document
+
+  val ( ^//^ ) : document -> document -> document
+
+  val ( ^^^ ) : document -> document -> document
+end
+
 val empty : document
 
 val char : char -> document

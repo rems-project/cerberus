@@ -1,6 +1,20 @@
 module CF = Cerb_frontend
 include PPrint
 
+module Infix = struct
+  let ( ^^ ) = ( ^^ )
+
+  let ( !^ ) = ( !^ )
+
+  let ( ^/^ ) = ( ^/^ )
+
+  let ( ^//^ ) = ( ^//^ )
+
+  let ( ^^^ ) = Cerb_pp_prelude.( ^^^ )
+end
+
+include Infix
+
 (* copying from backend.ml *)
 let term_col =
   match Cerb_util.terminal_size () with Some (_, col) -> col - 1 | _ -> 80 - 1
