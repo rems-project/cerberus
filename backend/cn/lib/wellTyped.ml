@@ -245,8 +245,8 @@ module WIT = struct
     | PWild -> return (Pat (PWild, bt, loc))
     | PConstructor (s, args) ->
       let@ info = get_datatype_constr loc s in
-      let@ () = ensure_base_type loc ~expect:bt (Datatype info.c_datatype_tag) in
-      let@ args_annotated = correct_members_sorted_annotated loc info.c_params args in
+      let@ () = ensure_base_type loc ~expect:bt (Datatype info.datatype_tag) in
+      let@ args_annotated = correct_members_sorted_annotated loc info.params args in
       let@ args =
         ListM.mapM
           (fun (bt', (id', pat')) ->
@@ -263,13 +263,15 @@ module WIT = struct
       (match pat_ with PSym _ -> true | PWild -> true | PConstructor _ -> false)
 
 
-  let expand_constr (constr, constr_info) (case : BT.t pattern list) =
+  let expand_constr
+    (constr, (constr_info : BT.Datatype.constr_info))
+    (case : BT.t pattern list)
+    =
     match case with
     | Pat (PWild, _, loc) :: pats | Pat (PSym _, _, loc) :: pats ->
-      Some (List.map (fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.c_params @ pats)
+      Some (List.map (fun (_m, bt) -> Pat (PWild, bt, loc)) constr_info.params @ pats)
     | Pat (PConstructor (constr', args), _, _) :: pats when Sym.equal constr constr' ->
-      assert (
-        List.for_all2 (fun (m, _) (m', _) -> Id.equal m m') constr_info.c_params args);
+      assert (List.for_all2 (fun (m, _) (m', _) -> Id.equal m m') constr_info.params args);
       Some (List.map snd args @ pats)
     | Pat (PConstructor (_constr', _args), _, _) :: _pats -> None
     | [] -> assert false
@@ -301,9 +303,9 @@ module WIT = struct
               let relevant_cases =
                 List.filter_map (expand_constr (constr, constr_info)) cases
               in
-              let member_bts = List.map snd constr_info.c_params in
+              let member_bts = List.map snd constr_info.params in
               cases_complete loc (member_bts @ bts) relevant_cases)
-            dt_info.dt_constrs)
+            dt_info.constrs)
 
 
   let cases_necessary pats =
@@ -904,7 +906,7 @@ module WIT = struct
            return (IT (Let ((name, t1), t2), IT.bt t2, loc)))
       | Constructor (s, args) ->
         let@ info = get_datatype_constr loc s in
-        let@ args_annotated = correct_members_sorted_annotated loc info.c_params args in
+        let@ args_annotated = correct_members_sorted_annotated loc info.params args in
         let@ args =
           ListM.mapM
             (fun (bt', (id', t')) ->
@@ -913,7 +915,7 @@ module WIT = struct
               return (id', t'))
             args_annotated
         in
-        return (IT (Constructor (s, args), Datatype info.c_datatype_tag, loc))
+        return (IT (Constructor (s, args), Datatype info.datatype_tag, loc))
       | Match (e, cases) ->
         let@ e = infer e in
         let@ rbt, cases =

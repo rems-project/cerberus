@@ -1,9 +1,7 @@
-open List
 module BT = BaseTypes
 module CF = Cerb_frontend
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
-open Subst
 include Terms
 
 let equal = equal_term BT.equal
@@ -270,7 +268,7 @@ let make_subst assoc =
 
 let substitute_lets_flag = Sym.fresh_named "substitute_lets"
 
-let rec subst (su : [ `Term of typed | `Rename of Sym.t ] subst) (IT (it, bt, loc)) =
+let rec subst (su : [ `Term of typed | `Rename of Sym.t ] Subst.t) (IT (it, bt, loc)) =
   match it with
   | Sym sym ->
     (match List.assoc_opt Sym.equal sym su.replace with
@@ -291,12 +289,12 @@ let rec subst (su : [ `Term of typed | `Rename of Sym.t ] subst) (IT (it, bt, lo
   | EachI ((i1, (s, s_bt), i2), t) ->
     let s, t = suitably_alpha_rename su.relevant s t in
     IT (EachI ((i1, (s, s_bt), i2), subst su t), bt, loc)
-  | Tuple its -> IT (Tuple (map (subst su) its), bt, loc)
+  | Tuple its -> IT (Tuple (List.map (subst su) its), bt, loc)
   | NthTuple (n, it') -> IT (NthTuple (n, subst su it'), bt, loc)
-  | Struct (tag, members) -> IT (Struct (tag, map_snd (subst su) members), bt, loc)
+  | Struct (tag, members) -> IT (Struct (tag, List.map_snd (subst su) members), bt, loc)
   | StructMember (t, m) -> IT (StructMember (subst su t, m), bt, loc)
   | StructUpdate ((t, m), v) -> IT (StructUpdate ((subst su t, m), subst su v), bt, loc)
-  | Record members -> IT (Record (map_snd (subst su) members), bt, loc)
+  | Record members -> IT (Record (List.map_snd (subst su) members), bt, loc)
   | RecordMember (t, m) -> IT (RecordMember (subst su t, m), bt, loc)
   | RecordUpdate ((t, m), v) -> IT (RecordUpdate ((subst su t, m), subst su v), bt, loc)
   | Cast (cbt, t) -> IT (Cast (cbt, subst su t), bt, loc)
@@ -367,7 +365,7 @@ and suitably_alpha_rename_pattern su (Pat (pat_, bt, loc), body) =
   | PWild -> (Pat (PWild, bt, loc), body)
   | PConstructor (s, args) ->
     let body, args =
-      fold_left_map
+      List.fold_left_map
         (fun body (id, pat') ->
           let pat', body = suitably_alpha_rename_pattern su (pat', body) in
           (body, (id, pat')))

@@ -7,8 +7,8 @@ module AT = ArgumentTypes
 
 type t =
   { struct_decls : Memory.struct_decls;
-    datatypes : BaseTypes.datatype_info SymMap.t;
-    datatype_constrs : BaseTypes.constr_info SymMap.t;
+    datatypes : BaseTypes.Datatype.info SymMap.t;
+    datatype_constrs : BaseTypes.Datatype.constr_info SymMap.t;
     datatype_order : Sym.t list list option;
     fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
@@ -85,7 +85,7 @@ let pp global =
 let mutual_datatypes (global : t) tag =
   let deps tag =
     let info = SymMap.find tag global.datatypes in
-    info.dt_all_params |> List.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
+    info.all_params |> List.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
   in
   let rec seek tags = function
     | [] -> tags
