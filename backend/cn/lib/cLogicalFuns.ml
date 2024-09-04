@@ -31,10 +31,10 @@ let mu_val_to_it loc (M_V ((bt : BT.t), v)) =
     CF.Impl_mem.case_ptrval
       ptr_val
       (fun _ -> Some (IT.null_ loc))
-      (function None -> None | Some sym -> Some (IT.sym_ (sym, BT.Loc, loc)))
+      (function None -> None | Some sym -> Some (IT.sym_ (sym, BT.(Loc ()), loc)))
       (fun _prov _p -> (* how to correctly convert provenance? *) None)
   | M_Vctype ct -> Option.map (fun ct -> IT.const_ctype_ ct loc) (Sctypes.of_ctype ct)
-  | M_Vfunction_addr sym -> Some (IT.sym_ (sym, BT.Loc, loc))
+  | M_Vfunction_addr sym -> Some (IT.sym_ (sym, BT.(Loc ()), loc))
   | _ -> None
 
 
@@ -57,7 +57,7 @@ let init_state = { loc_map = IntMap.empty; next_loc = 1 }
 let mk_local_ptr state src_loc =
   let loc_ix = state.next_loc in
   let here = Locations.other __FUNCTION__ in
-  let ptr = IT.apply_ local_sym_ptr [ IT.int_ loc_ix here ] BT.Loc src_loc in
+  let ptr = IT.apply_ local_sym_ptr [ IT.int_ loc_ix here ] BT.(Loc ()) src_loc in
   let loc_map = IntMap.add loc_ix None state.loc_map in
   let state = { loc_map; next_loc = loc_ix + 1 } in
   (ptr, state)

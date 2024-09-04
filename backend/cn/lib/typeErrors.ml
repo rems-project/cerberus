@@ -166,8 +166,8 @@ type message =
         reason : string
       }
   | Illtyped_binary_it of
-      { left : SurfaceBaseTypes.t Terms.term;
-        right : SurfaceBaseTypes.t Terms.term;
+      { left : IT.Surface.t;
+        right : IT.Surface.t;
         binop : CF.Cn.cn_binop
       }
   | NIA of
@@ -304,7 +304,7 @@ let pp_message te =
       !^"the first input argument of predicate"
       ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname)
       ^^^ !^"must have type"
-      ^^^ Pp.squotes BaseTypes.(pp Loc)
+      ^^^ Pp.squotes BaseTypes.(pp (Loc ()))
       ^^^ !^"but was found with type"
       ^^^ Pp.squotes BaseTypes.(pp found_bty)
     in

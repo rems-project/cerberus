@@ -22,7 +22,7 @@ module GTest_Codify = struct
     "RC_GTEST_PROP(Test" ^ String.capitalize_ascii suite ^ ", " ^ test ^ ", ())\n"
 end
 
-let rec codify_it_ (e : BT.t IT.term_) : string option =
+let rec codify_it_ (e : IT.t') : string option =
   let exception Unsupported_codify_it in
   try
     Some

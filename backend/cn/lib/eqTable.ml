@@ -46,7 +46,7 @@ let add_eq_sym (guard, lhs, rhs) tab =
 let add_one_eq (tab : table) (it : IT.t) =
   match IT.term it with
   | IT.Binop (IT.EQ, x, y) -> add_eq_sym (None, x, y) tab
-  | IT.Binop (Implies, guard, x) ->
+  | Binop (Implies, guard, x) ->
     (match IT.is_eq x with Some (y, z) -> add_eq_sym (Some guard, y, z) tab | _ -> tab)
   | _ -> tab
 

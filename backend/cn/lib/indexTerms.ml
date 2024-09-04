@@ -4,17 +4,27 @@ module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
 include Terms
 
-let equal = equal_term BT.equal
+let equal = equal_annot BT.equal
 
-let compare = compare_term BT.compare
+let compare = compare_annot BT.compare
 
-type sterm = SurfaceBaseTypes.t term
+type t' = BT.t term
 
-type typed = BT.t term
+type t = BT.t annot
 
-type t = BT.t term
+module Surface = struct
+  type t' = SurfaceBaseTypes.t term
 
-let basetype : 'a. 'a Terms.term -> 'a = function IT (_, bt, _) -> bt
+  type t = SurfaceBaseTypes.t annot
+
+  let compare = Terms.compare_annot SurfaceBaseTypes.compare
+
+  let proj = Terms.map_annot SurfaceBaseTypes.to_basetype
+
+  let inj = Terms.map_annot SurfaceBaseTypes.of_basetype
+end
+
+let basetype : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
 
 (* TODO rename this get_bt *)
 let bt = basetype
@@ -24,10 +34,6 @@ let term (IT (t, _, _)) = t
 
 (* TODO rename this get_loc *)
 let loc (IT (_, _, l)) = l
-
-let term_of_sterm : sterm -> typed = Terms.map_term SurfaceBaseTypes.to_basetype
-
-let sterm_of_term : typed -> sterm = Terms.map_term SurfaceBaseTypes.of_basetype
 
 let pp ?(prec = 0) = Terms.pp ~prec
 
@@ -57,7 +63,7 @@ let rec bound_by_pattern (Pat (pat_, bt, _)) =
     List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
 
-let rec free_vars_bts (it : 'a term) : BT.t SymMap.t =
+let rec free_vars_bts (it : 'a annot) : BT.t SymMap.t =
   match term it with
   | Const _ -> SymMap.empty
   | Sym s -> SymMap.singleton s (bt it)
@@ -121,7 +127,7 @@ let rec free_vars_bts (it : 'a term) : BT.t SymMap.t =
   | Constructor (_s, args) -> free_vars_bts_list (List.map snd args)
 
 
-and free_vars_bts_list : 'a term list -> BT.t SymMap.t =
+and free_vars_bts_list : 'a annot list -> BT.t SymMap.t =
   fun xs ->
   List.fold_left
     (fun ss t ->
@@ -135,11 +141,11 @@ and free_vars_bts_list : 'a term list -> BT.t SymMap.t =
     xs
 
 
-let free_vars (it : 'a term) : SymSet.t =
+let free_vars (it : 'a annot) : SymSet.t =
   it |> free_vars_bts |> SymMap.bindings |> List.map fst |> SymSet.of_list
 
 
-let free_vars_ (t_ : 'a term_) : SymSet.t =
+let free_vars_ (t_ : 'a Terms.term) : SymSet.t =
   IT (t_, Unit, Locations.other "")
   |> free_vars_bts
   |> SymMap.bindings
@@ -147,11 +153,11 @@ let free_vars_ (t_ : 'a term_) : SymSet.t =
   |> SymSet.of_list
 
 
-let free_vars_list (its : 'a term list) : SymSet.t =
+let free_vars_list (its : 'a annot list) : SymSet.t =
   its |> free_vars_bts_list |> SymMap.bindings |> List.map fst |> SymSet.of_list
 
 
-type 'bt bindings = ('bt pattern * 'bt term option) list
+type 'bt bindings = ('bt pattern * 'bt annot option) list
 
 type t_bindings = BT.t bindings
 
@@ -231,7 +237,11 @@ and fold_list f binders acc xs =
 
 let fold_subterms
   : 'a.
-  ?bindings:'bt bindings -> ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a
+  ?bindings:'bt bindings ->
+  ('bt bindings -> 'a -> 'bt annot -> 'a) ->
+  'a ->
+  'bt annot ->
+  'a
   =
   fun ?(bindings = []) f acc t -> fold f bindings acc t
 
@@ -268,7 +278,7 @@ let make_subst assoc =
 
 let substitute_lets_flag = Sym.fresh_named "substitute_lets"
 
-let rec subst (su : [ `Term of typed | `Rename of Sym.t ] Subst.t) (IT (it, bt, loc)) =
+let rec subst (su : [ `Term of t | `Rename of Sym.t ] Subst.t) (IT (it, bt, loc)) =
   match it with
   | Sym sym ->
     (match List.assoc_opt Sym.equal sym su.replace with
@@ -485,7 +495,7 @@ let q1_ q loc = IT (Const (Q q), BT.Real, loc)
 
 let pointer_ ~alloc_id ~addr loc =
   let alloc_id = if !use_vip then alloc_id else Z.zero in
-  IT (Const (Pointer { alloc_id; addr }), BT.Loc, loc)
+  IT (Const (Pointer { alloc_id; addr }), BT.Loc (), loc)
 
 
 let bool_ b loc = IT (Const (Bool b), BT.Bool, loc)
@@ -697,7 +707,7 @@ let recordMember_ ~member_bt (t, member) loc =
 
 
 (* pointer_op *)
-let null_ loc = IT (Const Null, BT.Loc, loc)
+let null_ loc = IT (Const Null, BT.Loc (), loc)
 
 let ltPointer_ (it, it') loc = IT (Binop (LTPointer, it, it'), BT.Bool, loc)
 
@@ -709,7 +719,7 @@ let gePointer_ (it, it') loc = lePointer_ (it', it) loc
 
 let cast_ bt it loc = IT (Cast (bt, it), bt, loc)
 
-let integerToPointerCast_ it loc = cast_ Loc it loc
+let integerToPointerCast_ it loc = cast_ (Loc ()) it loc
 
 let uintptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
 
@@ -722,12 +732,12 @@ let addr_ it loc = cast_ Memory.uintptr_bt it loc
 let allocId_ it loc = cast_ Alloc_id it loc
 
 let memberShift_ (base, tag, member) loc =
-  IT (MemberShift (base, tag, member), BT.Loc, loc)
+  IT (MemberShift (base, tag, member), BT.Loc (), loc)
 
 
-let arrayShift_ ~base ~index ct loc = IT (ArrayShift { base; ct; index }, BT.Loc, loc)
+let arrayShift_ ~base ~index ct loc = IT (ArrayShift { base; ct; index }, BT.Loc (), loc)
 
-let copyAllocId_ ~addr ~loc:ptr loc = IT (CopyAllocId { addr; loc = ptr }, BT.Loc, loc)
+let copyAllocId_ ~addr ~loc:ptr loc = IT (CopyAllocId { addr; loc = ptr }, BT.Loc (), loc)
 
 let hasAllocId_ ptr loc =
   (* Futzing seems to be necessary because given the current SMT sovler mapping,
@@ -743,8 +753,8 @@ let hasAllocId_ ptr loc =
 let sizeOf_ ct loc = IT (SizeOf ct, Memory.size_bt, loc)
 
 let isIntegerToPointerCast = function
-  | IT (Cast (BT.Loc, IT (_, BT.Integer, _)), _, _) -> true
-  | IT (Cast (BT.Loc, IT (_, BT.Bits _, _)), _, _) -> true
+  | IT (Cast (BT.Loc (), IT (_, BT.Integer, _)), _, _) -> true
+  | IT (Cast (BT.Loc (), IT (_, BT.Bits _, _)), _, _) -> true
   | _ -> false
 
 
@@ -800,7 +810,7 @@ let wrapI_ (ity, arg) loc =
 
 
 let alignedI_ ~t ~align loc =
-  assert (BT.equal (bt t) Loc);
+  assert (BT.equal (bt t) (Loc ()));
   assert (BT.equal Memory.uintptr_bt (bt align));
   IT (Aligned { t; align }, BT.Bool, loc)
 
@@ -888,7 +898,7 @@ let rec in_z_range within (min_z, max_z) loc =
         bool_ false loc
     in
     and_ [ min_c; max_c ] loc
-  | Loc ->
+  | Loc () ->
     (* §6.3.2.3#6 allows converting pointers to any integer type so long as the value of
        the pointer fits. If uintptr_t and intptr_t exist, then they are guaranteed to be
        big enough to fit any valid pointer (to void). From there, it's just a matter of

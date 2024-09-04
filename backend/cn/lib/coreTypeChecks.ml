@@ -27,7 +27,7 @@ let check_against_core_bt fail_op core_bt cn_bt =
   let rec check_object_type = function
     | OTy_integer, BT.Integer -> return ()
     | OTy_integer, BT.Bits _ -> return ()
-    | OTy_pointer, BT.Loc -> return ()
+    | OTy_pointer, BT.Loc () -> return ()
     | OTy_array t, BT.Map (param_t, t2) ->
       let@ () = check_object_type (OTy_integer, param_t) in
       check_object_type (t, t2)

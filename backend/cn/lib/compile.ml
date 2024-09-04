@@ -14,13 +14,7 @@ open CF.Cn
 open TypeErrors
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
-
-module STermMap = Map.Make (struct
-    type t = IndexTerms.sterm
-
-    let compare = Terms.compare SBT.compare
-  end)
-
+module STermMap = Map.Make (IndexTerms.Surface)
 module StringMap = Map.Make (String)
 module StringSet = Set.Make (String)
 
@@ -39,8 +33,8 @@ type env =
     logicals : SBT.t SymMap.t;
     predicates : predicate_sig SymMap.t;
     functions : function_sig SymMap.t;
-    datatypes : BaseTypes.Datatype.info SymMap.t;
-    datatype_constrs : BaseTypes.Datatype.constr_info SymMap.t;
+    datatypes : BaseTypes.dt_info SymMap.t;
+    datatype_constrs : BaseTypes.constr_info SymMap.t;
     tagDefs : Mu.mu_tag_definitions;
     fetch_enum_expr : Locations.t -> Sym.t -> unit CF.AilSyntax.expression Resultat.t;
     fetch_typedef : Locations.t -> Sym.t -> CF.Ctype.ctype Resultat.t
@@ -286,7 +280,7 @@ let convert_enum_expr =
               msg = Generic (Pp.item "no standard encoding type for constant" (Pp.z z))
             }
       in
-      return (IT.sterm_of_term (IT.num_lit_ z bt loc))
+      return (IT.Surface.inj (IT.num_lit_ z bt loc))
     | c ->
       fail
         { loc;
@@ -385,8 +379,9 @@ module E = struct
     | Error of TypeErrors.t
     | ScopeExists of Loc.t * evaluation_scope * (bool -> 'a m)
     | Value_of_c_variable of
-        Loc.t * Sym.t * evaluation_scope option * (IT.sterm option -> 'a m)
-    | Deref of Loc.t * IT.sterm * evaluation_scope option * (IT.sterm option -> 'a m)
+        Loc.t * Sym.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
+    | Deref of
+        Loc.t * IT.Surface.t * evaluation_scope option * (IT.Surface.t option -> 'a m)
 
   let return x = Done x
 
@@ -467,8 +462,8 @@ module EffectfulTranslation = struct
       (match oct with
        | Some ct ->
          let (IT (it_, _, _)) =
-           sterm_of_term
-             (arrayShift_ ~base:(term_of_sterm e1) ct ~index:(term_of_sterm e2) loc)
+           Surface.inj
+             (arrayShift_ ~base:(Surface.proj e1) ct ~index:(Surface.proj e2) loc)
          in
          return (IT (it_, Loc oct, loc))
        | None -> cannot_tell_pointee_ctype loc e1)
@@ -479,11 +474,11 @@ module EffectfulTranslation = struct
        | Some ct ->
          let here = Locations.other __FUNCTION__ in
          let (IT (it_, _, _)) =
-           sterm_of_term
+           Surface.inj
              (arrayShift_
-                ~base:(term_of_sterm e1)
+                ~base:(Surface.proj e1)
                 ct
-                ~index:(sub_ (int_ 0 here, term_of_sterm e2) here)
+                ~index:(sub_ (int_ 0 here, Surface.proj e2) here)
                 loc)
          in
          return (IT (it_, Loc oct, loc))
@@ -546,7 +541,7 @@ module EffectfulTranslation = struct
 
 
   (* just copy-pasting and adapting Kayvan's older version of this code *)
-  let translate_member_access loc env (t : IT.sterm) member =
+  let translate_member_access loc env (t : IT.Surface.t) member =
     match IT.bt t with
     | SBT.Record members ->
       let@ member_bt =
@@ -812,9 +807,9 @@ module EffectfulTranslation = struct
           let@ struct_def = lookup_struct loc tag env in
           let@ member_ty = lookup_member loc (tag, struct_def) member in
           let (IT (it_, _, _)) =
-            IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member) loc)
+            Surface.inj (memberShift_ (Surface.proj e, tag, member) loc)
           in
-          (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on
+          (* Surface.inj will not have produced a C-type-annotated bt. So stick that on
              now. *)
           return (IT (it_, Loc (Some member_ty), loc))
         in
@@ -1085,12 +1080,12 @@ module EffectfulTranslation = struct
     return (pname, ptr_expr, iargs, oargs_ty)
 
 
-  let split_pointer_linear_step loc ((_q, bt, _) as sym_args) (ptr_expr : IT.sterm) =
+  let split_pointer_linear_step loc ((_q, bt, _) as sym_args) (ptr_expr : IT.Surface.t) =
     let open Pp in
     let qs = IT.sym_ sym_args in
     let msg_s = "Iterated predicate pointer must be array_shift<ctype>(ptr, q_var):" in
     match IT.term ptr_expr with
-    | ArrayShift { base = p; ct; index = x } when Terms.equal SBT.equal x qs ->
+    | ArrayShift { base = p; ct; index = x } when Terms.equal_annot SBT.equal x qs ->
       let here = Locations.other __FUNCTION__ in
       return (p, IT.cast_ (SBT.to_basetype bt) (IT.sizeOf_ ct here) here)
     | _ -> fail { loc; msg = Generic (!^msg_s ^^^ IT.pp ptr_expr) }
@@ -1118,8 +1113,8 @@ module EffectfulTranslation = struct
     let pt =
       ( RET.P
           { name = pname;
-            pointer = IT.term_of_sterm ptr_expr;
-            iargs = List.map IT.term_of_sterm iargs
+            pointer = IT.Surface.proj ptr_expr;
+            iargs = List.map IT.Surface.proj iargs
           },
         oargs_ty )
     in
@@ -1149,10 +1144,10 @@ module EffectfulTranslation = struct
           { name = pname;
             q = (q, SBT.to_basetype bt');
             q_loc = here;
-            pointer = IT.term_of_sterm ptr_base;
+            pointer = IT.Surface.proj ptr_base;
             step;
-            permission = IT.term_of_sterm guard_expr;
-            iargs = List.map IT.term_of_sterm iargs
+            permission = IT.Surface.proj guard_expr;
+            iargs = List.map IT.Surface.proj iargs
           },
         m_oargs_ty )
     in
@@ -1174,7 +1169,7 @@ module EffectfulTranslation = struct
     match assrt with
     | CN_assert_exp e_ ->
       let@ e = translate_cn_expr SymSet.empty env e_ in
-      return (LC.T (IT.term_of_sterm e))
+      return (LC.T (IT.Surface.proj e))
     | CN_assert_qexp (sym, bTy, e1_, e2_) ->
       let bt = translate_cn_base_type env bTy in
       let env_with_q = add_logical sym bt env in
@@ -1183,7 +1178,7 @@ module EffectfulTranslation = struct
       return
         (LC.Forall
            ( (sym, SBT.to_basetype bt),
-             IT.impl_ (IT.term_of_sterm e1, IT.term_of_sterm e2) loc ))
+             IT.impl_ (IT.Surface.proj e1, IT.Surface.proj e2) loc ))
 end
 
 module ET = EffectfulTranslation
@@ -1206,7 +1201,7 @@ end
 let translate_cn_func_body env body =
   let handle = Pure.handle "Function definitions" in
   let@ body = handle (ET.translate_cn_expr SymSet.empty env body) in
-  return (IT.term_of_sterm body)
+  return (IT.Surface.proj body)
 
 
 let known_attrs = [ "rec"; "coq_unfold" ]
@@ -1273,7 +1268,7 @@ let allocation_token loc addr_s =
     | SD_ObjectAddress obj_name -> Sym.fresh_make_uniq ("A_" ^ obj_name)
     | _ -> assert false
   in
-  let alloc_ret = ResourceTypes.make_alloc (IT.sym_ (addr_s, BT.Loc, loc)) in
+  let alloc_ret = ResourceTypes.make_alloc (IT.sym_ (addr_s, BT.Loc (), loc)) in
   ((name, (ResourceTypes.P alloc_ret, Alloc.History.value_bt)), (loc, None))
 
 
@@ -1281,12 +1276,12 @@ module LocalState = struct
   (* the expression that encodes the current value of this c variable *)
   type c_variable_state =
     | CVS_Value of Sym.t * SBT.t (* currently the variable is a pure value, this one *)
-    | CVS_Pointer_pointing_to of
-        IT.sterm (* currently the variable is a pointer to memory holding this value *)
+    | CVS_Pointer_pointing_to of IT.Surface.t
+  (* currently the variable is a pointer to memory holding this value *)
 
   type state =
     { c_variable_state : c_variable_state SymMap.t;
-      pointee_values : IT.sterm STermMap.t
+      pointee_values : IT.Surface.t STermMap.t
     }
 
   let empty_state = { c_variable_state = SymMap.empty; pointee_values = STermMap.empty }
@@ -1371,7 +1366,7 @@ let translate_cn_clause env clause =
       translate_cn_clause_aux env' st' acc' cl
     | CN_letExpr (loc, sym, e_, cl) ->
       let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
-      let acc' z = acc (LAT.mDefine (sym, IT.term_of_sterm e, (loc, None)) z) in
+      let acc' z = acc (LAT.mDefine (sym, IT.Surface.proj e, (loc, None)) z) in
       translate_cn_clause_aux (add_logical sym (IT.basetype e) env) st acc' cl
     | CN_assert (loc, assrt, cl) ->
       let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
@@ -1379,7 +1374,7 @@ let translate_cn_clause env clause =
       translate_cn_clause_aux env st acc' cl
     | CN_return (_loc, e_) ->
       let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
-      let e = IT.term_of_sterm e in
+      let e = IT.Surface.proj e in
       acc (LAT.I e)
   in
   translate_cn_clause_aux env init_st (fun z -> return z) clause
@@ -1396,7 +1391,7 @@ let translate_cn_clauses env clauses =
         Pure.handle "Predicate guards" (ET.translate_cn_expr SymSet.empty env e_)
       in
       let@ cl = translate_cn_clause env cl_ in
-      self (RP.{ loc; guard = IT.term_of_sterm e; packing_ft = cl } :: acc) clauses'
+      self (RP.{ loc; guard = IT.Surface.proj e; packing_ft = cl } :: acc) clauses'
   in
   let@ xs = self [] clauses in
   return (List.rev xs)
@@ -1425,7 +1420,7 @@ let translate_cn_predicate env (def : cn_predicate) =
   in
   let@ clauses = translate_option_cn_clauses env' def.cn_pred_clauses in
   match iargs with
-  | (iarg0, BaseTypes.Loc) :: iargs' ->
+  | (iarg0, BaseTypes.Loc ()) :: iargs' ->
     return
       ( def.cn_pred_name,
         { loc = def.cn_pred_loc;
@@ -1461,7 +1456,7 @@ let rec make_lrt_generic env st =
   | CN_cletExpr (loc, name, expr) :: ensures ->
     let@ expr = handle st (ET.translate_cn_expr SymSet.empty env expr) in
     let@ lrt, env, st = make_lrt_generic (add_logical name (IT.bt expr) env) st ensures in
-    return (LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt, env, st)
+    return (LRT.mDefine (name, IT.Surface.proj expr, (loc, None)) lrt, env, st)
   | CN_cconstr (loc, constr) :: ensures ->
     let@ lc = handle st (ET.translate_cn_assrt env (loc, constr)) in
     let@ lrt, env, st = make_lrt_generic env st ensures in
@@ -1582,7 +1577,7 @@ module UsingLoads = struct
       let value_bt = Memory.sbt_of_sct pointee_ct in
       let value = IT.sym_ (value_s, value_bt, value_loc) in
       let@ prog = aux (k (Some value)) in
-      let load = { ct = pointee_ct; pointer = IT.term_of_sterm pointer } in
+      let load = { ct = pointee_ct; pointer = IT.Surface.proj pointer } in
       return (M_CN_let (loc, (value_s, load), prog))
     in
     aux
@@ -1609,8 +1604,8 @@ let translate_cn_statement
          M_CN_pack_unpack
            ( pack_unpack,
              { name;
-               pointer = IT.term_of_sterm pointer;
-               iargs = List.map IT.term_of_sterm iargs
+               pointer = IT.Surface.proj pointer;
+               iargs = List.map IT.Surface.proj iargs
              } )
        in
        return (M_CN_statement (loc, stmt))
@@ -1619,7 +1614,7 @@ let translate_cn_statement
        return (M_CN_statement (loc, M_CN_have assrt))
      | CN_instantiate (to_instantiate, expr) ->
        let@ expr = ET.translate_cn_expr SymSet.empty env expr in
-       let expr = IT.term_of_sterm expr in
+       let expr = IT.Surface.proj expr in
        let to_instantiate =
          match to_instantiate with
          | I_Everything -> I_Everything
@@ -1632,7 +1627,7 @@ let translate_cn_statement
        return (M_CN_statement (loc, M_CN_split_case e))
      | CN_extract (attrs, to_extract, expr) ->
        let@ expr = ET.translate_cn_expr SymSet.empty env expr in
-       let expr = IT.term_of_sterm expr in
+       let expr = IT.Surface.proj expr in
        let to_extract =
          match to_extract with
          | E_Everything -> E_Everything
@@ -1645,17 +1640,17 @@ let translate_cn_statement
        return (M_CN_statement (loc, M_CN_extract (attrs, to_extract, expr)))
      | CN_unfold (s, args) ->
        let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
-       let args = List.map IT.term_of_sterm args in
+       let args = List.map IT.Surface.proj args in
        return (M_CN_statement (loc, M_CN_unfold (s, args)))
      | CN_assert_stmt e ->
        let@ e = ET.translate_cn_assrt env (loc, e) in
        return (M_CN_statement (loc, M_CN_assert e))
      | CN_apply (s, args) ->
        let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
-       let args = List.map IT.term_of_sterm args in
+       let args = List.map IT.Surface.proj args in
        return (M_CN_statement (loc, M_CN_apply (s, args)))
      | CN_inline nms -> return (M_CN_statement (loc, M_CN_inline nms))
      | CN_print expr ->
        let@ expr = ET.translate_cn_expr SymSet.empty env expr in
-       let expr = IT.term_of_sterm expr in
+       let expr = IT.Surface.proj expr in
        return (M_CN_statement (loc, M_CN_print expr)))
