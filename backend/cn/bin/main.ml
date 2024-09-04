@@ -283,11 +283,6 @@ let verify
   solver_flags
   solver_path
   solver_type
-  output_decorated_dir
-  output_decorated
-  with_ownership_checking
-  with_test_gen
-  copy_source_dir
   astprints
   use_vip
   no_use_ity
@@ -323,7 +318,6 @@ let verify
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
-  Sym.executable_spec_enabled := Option.is_some output_decorated;
   with_well_formedness_check (* CLI arguments *)
     ~filename
     ~macros
@@ -336,35 +330,95 @@ let verify
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error:(handle_type_error ~json ?output_dir)
-    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused ->
-      match output_decorated with
-      | None ->
-        let check (functions, lemmas) =
-          let open Typing in
-          let@ errors = Check.time_check_c_functions functions in
-          if not quiet then
-            List.iter
-              (fun (fn, err) -> report_type_error ~json ?output_dir ~fn_name:fn err)
-              errors;
-          Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
-          Check.generate_lemmas lemmas lemmata
-        in
-        Typing.run_from_pause check paused
-      | Some output_filename ->
-        Cerb_colour.without_colour
-          (fun () ->
-            Executable_spec.main
-              ~with_ownership_checking
-              ~with_test_gen
-              ~copy_source_dir
-              filename
-              ail_prog
-              output_decorated_dir
-              output_filename
-              prog5
-              statement_locs;
-            Resultat.return ())
-          ())
+    ~f:(fun ~prog5:_ ~ail_prog:_ ~statement_locs:_ ~paused ->
+      let check (functions, lemmas) =
+        let open Typing in
+        let@ errors = Check.time_check_c_functions functions in
+        if not quiet then
+          List.iter
+            (fun (fn, err) -> report_type_error ~json ?output_dir ~fn_name:fn err)
+            errors;
+        Option.fold ~none:() ~some:exit (exit_code_of_errors (List.map snd errors));
+        Check.generate_lemmas lemmas lemmata
+      in
+      Typing.run_from_pause check paused)
+
+
+let generate_executable_specs
+  filename
+  macros
+  incl_dirs
+  incl_files
+  loc_pp
+  debug_level
+  print_level
+  print_sym_nums
+  no_timestamps
+  json
+  output_dir
+  diag
+  only
+  skip
+  csv_times
+  log_times
+  astprints
+  use_vip
+  no_use_ity
+  use_peval
+  fail_fast
+  no_inherit_loc
+  magic_comment_char_dollar
+  (* Executable spec *)
+    output_decorated
+  output_decorated_dir
+  with_ownership_checking
+  with_test_gen
+  copy_source_dir
+  =
+  if json then (
+    if debug_level > 0 then
+      CF.Pp_errors.fatal "debug level must be 0 for json output";
+    if print_level > 0 then
+      CF.Pp_errors.fatal "print level must be 0 for json output");
+  (*flags *)
+  Cerb_debug.debug_level := debug_level;
+  Pp.loc_pp := loc_pp;
+  Pp.print_level := print_level;
+  CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
+  Pp.print_timestamps := not no_timestamps;
+  Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
+  IndexTerms.use_vip := use_vip;
+  Check.fail_fast := fail_fast;
+  Diagnostics.diag_string := diag;
+  WellTyped.use_ity := not no_use_ity;
+  Sym.executable_spec_enabled := true;
+  with_well_formedness_check (* CLI arguments *)
+    ~filename
+    ~macros
+    ~incl_dirs
+    ~incl_files
+    ~csv_times
+    ~log_times
+    ~astprints
+    ~use_peval
+    ~no_inherit_loc
+    ~magic_comment_char_dollar (* Callbacks *)
+    ~handle_error:(handle_type_error ~json ?output_dir)
+    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
+      Cerb_colour.without_colour
+        (fun () ->
+          Executable_spec.main
+            ~with_ownership_checking
+            ~with_test_gen
+            ~copy_source_dir
+            filename
+            ail_prog
+            output_decorated
+            output_decorated_dir
+            prog5
+            statement_locs;
+          Resultat.return ())
+        ())
 
 
 let generate_tests
@@ -745,11 +799,6 @@ let verify_t : unit Term.t =
   $ Verify_flags.solver_flags
   $ Verify_flags.solver_path
   $ Verify_flags.solver_type
-  $ Executable_spec_flags.output_decorated_dir
-  $ Executable_spec_flags.output_decorated
-  $ Executable_spec_flags.with_ownership_checking
-  $ Executable_spec_flags.with_test_gen
-  $ Executable_spec_flags.copy_source_dir
   $ Common_flags.astprints
   $ Verify_flags.use_vip
   $ Common_flags.no_use_ity
@@ -819,7 +868,48 @@ let generate_tests_cmd =
   Cmd.v info generate_tests_t
 
 
-let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd ]
+let instrument_cmd =
+  let open Term in
+  let instrument_t =
+    const generate_executable_specs
+    $ Common_flags.file
+    $ Common_flags.macros
+    $ Common_flags.incl_dirs
+    $ Common_flags.incl_files
+    $ Verify_flags.loc_pp
+    $ Common_flags.debug_level
+    $ Common_flags.print_level
+    $ Common_flags.print_sym_nums
+    $ Common_flags.no_timestamps
+    $ Verify_flags.json
+    $ Verify_flags.output_dir
+    $ Verify_flags.diag
+    $ Verify_flags.only
+    $ Verify_flags.skip
+    $ Common_flags.csv_times
+    $ Common_flags.log_times
+    $ Common_flags.astprints
+    $ Verify_flags.use_vip
+    $ Common_flags.no_use_ity
+    $ Common_flags.use_peval
+    $ Verify_flags.fail_fast
+    $ Common_flags.no_inherit_loc
+    $ Common_flags.magic_comment_char_dollar
+    $ Executable_spec_flags.output_decorated
+    $ Executable_spec_flags.output_decorated_dir
+    $ Executable_spec_flags.with_ownership_checking
+    $ Executable_spec_flags.with_test_gen
+    $ Executable_spec_flags.copy_source_dir
+  in
+  let doc =
+    "Instruments [FILE] with runtime C assertions that check the properties provided in \
+     CN specifications.\n"
+  in
+  let info = Cmd.info "instrument" ~doc in
+  Cmd.v info instrument_t
+
+
+let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd; instrument_cmd ]
 
 let () =
   let version_str = Cn_version.git_version ^ " [" ^ Cn_version.git_version_date ^ "]" in

@@ -199,11 +199,16 @@ let main
   ?(copy_source_dir = false)
   filename
   ((_, sigm) as ail_prog)
+  output_decorated
   output_decorated_dir
-  output_filename
   prog5
   statement_locs
   =
+  let output_filename =
+    match output_decorated with
+    | None -> Filename.(remove_extension (basename filename)) ^ "-exec.c"
+    | Some output_filename' -> output_filename'
+  in
   let prefix = match output_decorated_dir with Some dir_name -> dir_name | None -> "" in
   let oc = Stdlib.open_out (Filename.concat prefix output_filename) in
   let cn_oc = Stdlib.open_out (Filename.concat prefix "cn.c") in
