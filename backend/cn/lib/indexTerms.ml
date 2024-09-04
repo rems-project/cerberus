@@ -18,10 +18,13 @@ type t = BT.t term
 
 let basetype : 'a. 'a Terms.term -> 'a = function IT (_, bt, _) -> bt
 
+(* TODO rename this get_bt *)
 let bt = basetype
 
+(* TODO rename this get_term *)
 let term (IT (t, _, _)) = t
 
+(* TODO rename this get_loc *)
 let loc (IT (_, _, l)) = l
 
 let term_of_sterm : sterm -> typed = Terms.map_term SurfaceBaseTypes.to_basetype
