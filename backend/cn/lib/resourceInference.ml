@@ -1,20 +1,10 @@
-module BT = BaseTypes
 module IT = IndexTerms
-module TE = TypeErrors
 module LC = LogicalConstraints
-module LAT = LogicalArgumentTypes
 module RET = ResourceTypes
 
 type oargs = Resources.oargs = O of IT.t
 
 open Typing
-
-let unpack_def global name args =
-  Option.bind (Global.get_logical_function_def global name) (fun def ->
-    match def.definition with
-    | Def body -> Some (LogicalFunctions.open_fun def.args body args)
-    | _ -> None)
-
 
 let debug_constraint_failure_diagnostics
   lvl
@@ -67,13 +57,6 @@ module General = struct
     | One of one
     | Many of many
 
-  let pp_case = function
-    | One { one_index; value } ->
-      Pp.(!^"one" ^^ parens (IT.pp one_index ^^ colon ^^^ IT.pp value))
-    | Many { many_guard; value } ->
-      Pp.(!^"many" ^^ parens (IT.pp many_guard ^^ colon ^^^ IT.pp value))
-
-
   type cases = C of case list
 
   let add_case case (C cases) = C (cases @ [ case ])
@@ -90,6 +73,7 @@ module General = struct
       List.partition_map (function One c -> Left c | Many c -> Right c) cases
     in
     let@ base_value =
+      let module BT = BaseTypes in
       match (manys, item_bt) with
       | [ { many_guard = _; value } ], _ -> return value
       | [], _ | _, BT.Unit -> return (IT.default_ (BT.Map (a_bt, item_bt)) here)
@@ -97,8 +81,10 @@ module General = struct
         let term = IT.bool_ true here in
         let@ model = model_with here term in
         let model = Option.get model in
-        fail (fun ctxt ->
-          { loc; msg = TE.Merging_multiple_arrays { requests; situation; ctxt; model } })
+        let msg ctxt =
+          TypeErrors.Merging_multiple_arrays { requests; situation; ctxt; model }
+        in
+        fail (fun ctxt -> { loc; msg = msg ctxt })
     in
     return (update_with_ones base_value ones)
 
@@ -117,6 +103,7 @@ module General = struct
     (* take one step of the "spine" judgement, reducing a function-type by claiming an
        argument resource or otherwise reducing towards an instantiated return-type *)
     let@ simp_ctxt = simp_ctxt () in
+    let module LAT = LogicalArgumentTypes in
     match ftyp with
     | LAT.Resource ((s, (resource, _bt)), info, ftyp) ->
       let resource = Simplify.ResourceTypes.simp simp_ctxt resource in
@@ -136,7 +123,8 @@ module General = struct
          fail (fun ctxt ->
            (* let ctxt = { ctxt with resources = original_resources } in *)
            let msg =
-             TE.Missing_resource { requests = request_chain; situation; model; ctxt }
+             TypeErrors.Missing_resource
+               { requests = request_chain; situation; model; ctxt }
            in
            { loc; msg })
        | Some ((re, O oargs), changed_or_deleted') ->
@@ -165,7 +153,7 @@ module General = struct
            (* let ctxt = { ctxt with resources = original_resources } in *)
            { loc;
              msg =
-               TE.Unproven_constraint
+               TypeErrors.Unproven_constraint
                  { constr = c; info; requests = snd uiinfo; ctxt; model }
            }))
     | I _rt -> return (ftyp, changed_or_deleted)
@@ -261,7 +249,9 @@ module General = struct
       | true ->
         (match Pack.packing_ft here global provable (P requested) with
          | Some packing_ft ->
-           let ft_pp = lazy (LAT.pp (fun _ -> Pp.string "resource") packing_ft) in
+           let ft_pp =
+             lazy (LogicalArgumentTypes.pp (fun _ -> Pp.string "resource") packing_ft)
+           in
            Pp.debug 9 (Lazy.map (Pp.item "attempting to pack compound resource") ft_pp);
            let@ o, changed_or_deleted =
              ftyp_args_request_for_pack loc uiinfo packing_ft
@@ -294,7 +284,7 @@ module General = struct
             ^^ colon
             ^^^ IT.pp step)
         in
-        fail (fun _ -> { loc; msg = TE.Generic doc }))
+        fail (fun _ -> { loc; msg = TypeErrors.Generic doc }))
     in
     let@ (needed, oarg), rw_time =
       map_and_fold_resources
@@ -309,7 +299,7 @@ module General = struct
             | Q p', O p'_oarg
               when RET.subsumed ~alloc_owned:false requested.name p'.name
                    && IT.equal step p'.step
-                   && BT.equal (snd requested.q) (snd p'.q) ->
+                   && BaseTypes.equal (snd requested.q) (snd p'.q) ->
               let p' = RET.alpha_rename_qpredicate_type_ (fst requested.q) p' in
               let here = Locations.other __FUNCTION__ in
               let pmatch =
@@ -367,7 +357,7 @@ module General = struct
           if
             (not (IT.is_false needed))
             && RET.subsumed ~alloc_owned:false requested.name predicate_name
-            && BT.equal (snd requested.q) (IT.bt index)
+            && BaseTypes.equal (snd requested.q) (IT.bt index)
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
             let needed_at_index = IT.subst su needed in
@@ -446,7 +436,7 @@ module General = struct
     let@ original_resources = all_resources_tagged loc in
     let rec loop ftyp rw_time =
       match ftyp with
-      | LAT.I rt -> return (rt, rw_time)
+      | LogicalArgumentTypes.I rt -> return (rt, rw_time)
       | _ ->
         let@ ftyp, rw_time =
           parametric_ftyp_args_request_step
@@ -502,7 +492,7 @@ module Special = struct
     let@ model = model_with loc (IT.bool_ true here) in
     let model = Option.get model in
     fail (fun ctxt ->
-      let msg = TE.Missing_resource { requests; situation; model; ctxt } in
+      let msg = TypeErrors.Missing_resource { requests; situation; model; ctxt } in
       { loc; msg })
 
 
@@ -523,25 +513,14 @@ module Special = struct
   (** This function checks whether [ptr1] belongs to a live allocation. It
       searches the context (without modification) for either an Alloc(p) or an
       Owned(p) such that (alloc_id) p == (alloc_id) ptr. *)
-  let of_live_alloc loc situation ptr =
-    pure
-    @@ predicate_request loc situation (RET.make_alloc ptr, None) ~alloc_or_owned:true
+  let get_live_alloc loc situation ptr =
+    let@ (_alloc_or_owned, O base_size), _ =
+      pure
+      @@ predicate_request loc situation (RET.make_alloc ptr, None) ~alloc_or_owned:true
+    in
+    return base_size
 
 
   let predicate_request loc situation (request, oinfo) =
     predicate_request loc situation (request, oinfo) ~alloc_or_owned:false
-
-
-  let qpredicate_request loc situation (request, oinfo) =
-    let requests =
-      [ TypeErrors.
-          { resource = Q request;
-            loc = Option.map fst oinfo;
-            reason = Option.map snd oinfo
-          }
-      ]
-    in
-    let uiinfo = (situation, requests) in
-    let@ result = General.qpredicate_request loc uiinfo request in
-    match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
 end

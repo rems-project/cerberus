@@ -1322,12 +1322,10 @@ let rec check_expr labels (e : BT.t mu_expr) (k : IT.t -> unit m) : unit m =
                 let@ model = model () in
                 fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
               | `True ->
-                let@ (_alloc_or_owned, RE.O base_len), _ =
-                  RI.Special.of_live_alloc loc Ptr_diff arg1
-                in
+                let@ base_size = RI.Special.get_live_alloc loc Ptr_diff arg1 in
                 let@ () =
                   if !use_vip then (
-                    let base, size = Alloc.History.get_base_size base_len here in
+                    let base, size = Alloc.History.get_base_size base_size here in
                     let addr1, addr2 = (addr_ arg1 here, addr_ arg2 here) in
                     let lower1, lower2 =
                       (le_ (base, addr1) here, le_ (base, addr2) here)
