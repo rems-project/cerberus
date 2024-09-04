@@ -1537,8 +1537,8 @@ let cn_to_ail_pred_records map_bindings =
   List.map generate_struct_definition flipped_bindings
 
 
-(* Generic map get for structs and datatypes *)
-(* Used in generate_struct_map_get and generate_datatype_map_get *)
+(* Generic map get for structs, datatypes and records *)
+(* Used in generate_struct_map_get, generate_datatype_map_get and generate_record_map_get *)
 let generate_map_get sym =
   let ctype_str = "struct_" ^ Sym.pp_string sym in
   let fn_str = "cn_map_get_" ^ ctype_str in
@@ -1563,7 +1563,8 @@ let generate_map_get sym =
       A.(
         AilEcall
           ( mk_expr (AilEident (Sym.fresh_pretty "ht_get")),
-            [ mk_expr (AilEident param1_sym); key_val_mem ] ))
+            [ mk_expr (AilEident param1_sym); mk_expr (AilEunary (Address, key_val_mem)) ]
+          ))
   in
   let ret_decl = A.(AilSdeclaration [ (ret_sym, Some ht_get_fcall) ]) in
   let ret_ident = A.(AilEident ret_sym) in
@@ -2364,77 +2365,7 @@ let generate_record_default_function dts (sym, (members : BT.member_types)) =
   [ (decl, def) ]
 
 
-let generate_record_map_get dts (sym, (members : BT.member_types)) =
-  let cn_sym = sym in
-  let ctype_str = "struct_" ^ Sym.pp_string cn_sym in
-  let fn_str = "cn_map_get_" ^ ctype_str in
-  let void_ptr_type = C.(mk_ctype_pointer empty_qualifiers (mk_ctype Void)) in
-  let param1_sym = Sym.fresh_pretty "m" in
-  let param2_sym = Sym.fresh_pretty "key" in
-  let param_syms = [ param1_sym; param2_sym ] in
-  let param_types =
-    List.map bt_to_ail_ctype [ BT.Map (Integer, Struct cn_sym); BT.Integer ]
-  in
-  let param_types =
-    List.map (fun ctype -> (empty_qualifiers, ctype, false)) param_types
-  in
-  let fn_sym = Sym.fresh_pretty fn_str in
-  let ret_sym = Sym.fresh_pretty "ret" in
-  let ret_binding = create_binding ret_sym void_ptr_type in
-  let key_val_mem =
-    mk_expr A.(AilEmemberofptr (mk_expr (AilEident param2_sym), Id.id "val"))
-  in
-  let ht_get_fcall =
-    mk_expr
-      A.(
-        AilEcall
-          ( mk_expr (AilEident (Sym.fresh_pretty "ht_get")),
-            [ mk_expr (AilEident param1_sym); key_val_mem ] ))
-  in
-  let ret_decl = A.(AilSdeclaration [ (ret_sym, Some ht_get_fcall) ]) in
-  let ret_ident = A.(AilEident ret_sym) in
-  (* Function body *)
-  let if_cond =
-    mk_expr
-      A.(
-        AilEbinary
-          ( mk_expr A.(AilEconst (ConstantInteger (IConstant (Z.of_int 0, Decimal, None)))),
-            Eq,
-            mk_expr ret_ident ))
-  in
-  let default_fcall =
-    A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty ("default_" ^ ctype_str))), []))
-  in
-  let cast_expr = A.(AilEcast (empty_qualifiers, void_ptr_type, mk_expr default_fcall)) in
-  let if_stmt =
-    A.(
-      AilSif
-        ( if_cond,
-          mk_stmt (AilSreturn (mk_expr cast_expr)),
-          mk_stmt (AilSreturn (mk_expr ret_ident)) ))
-  in
-  let ret_type = void_ptr_type in
-  (* Generating function declaration *)
-  let decl =
-    ( fn_sym,
-      ( Cerb_location.unknown,
-        empty_attributes,
-        A.(
-          Decl_function
-            (false, (empty_qualifiers, ret_type), param_types, false, false, false)) ) )
-  in
-  (* Generating function definition *)
-  let def =
-    ( fn_sym,
-      ( Cerb_location.unknown,
-        0,
-        empty_attributes,
-        param_syms,
-        mk_stmt A.(AilSblock ([ ret_binding ], List.map mk_stmt [ ret_decl; if_stmt ])) )
-    )
-  in
-  [ (decl, def) ]
-
+let generate_record_map_get (sym, _) = generate_map_get sym
 
 let cn_to_ail_struct
   ((sym, (loc, attrs, tag_def)) :
