@@ -25,7 +25,7 @@ module History = struct
   let it = IndexTerms.sym_ (sym, bt, loc)
 
   let lookup_ptr ptr loc' =
-    assert (BaseTypes.(equal (IndexTerms.bt ptr) Loc));
+    assert (BaseTypes.(equal (IndexTerms.bt ptr) (Loc ())));
     IndexTerms.(map_get_ it (allocId_ ptr loc') loc')
 
 

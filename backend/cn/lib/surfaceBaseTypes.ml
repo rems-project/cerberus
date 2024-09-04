@@ -116,7 +116,7 @@ let rec of_basetype = function
   | BT.Real -> Real
   | BT.CType -> CType
   | BT.Alloc_id -> Alloc_id
-  | BT.Loc -> Loc None
+  | BT.Loc () -> Loc None
   | BT.Struct tag -> Struct tag
   | BT.Datatype tag -> Datatype tag
   | BT.Record member_types -> Record (List.map_snd of_basetype member_types)
@@ -134,7 +134,7 @@ let rec to_basetype = function
   | Real -> BT.Real
   | CType -> BT.CType
   | Alloc_id -> BT.Alloc_id
-  | Loc _ -> BT.Loc
+  | Loc _ -> BT.Loc ()
   | Struct tag -> BT.Struct tag
   | Datatype tag -> BT.Datatype tag
   | Record member_types -> BT.Record (List.map_snd to_basetype member_types)

@@ -378,7 +378,7 @@ module Simplify = struct
     | [] -> (vars, ms, locs, cs)
 
 
-  let rec cnf_ (e : BT.t IT.term_) : BT.t IT.term_ =
+  let rec cnf_ (e : IT.t') : IT.t' =
     match e with
     (* Double negation elimination *)
     | Unop (Not, IT (Unop (Not, IT (e, _, _)), _, _)) -> e
@@ -437,7 +437,7 @@ module Simplify = struct
     | [] -> (vars, ms, locs, [])
 
 
-  let rec indirect_members_expr_ (ms : members) (e : BT.t IT.term_) : BT.t IT.term_ =
+  let rec indirect_members_expr_ (ms : members) (e : IT.t') : IT.t' =
     match e with
     | StructMember (IT (Sym x, _, _), Sym.Identifier (_, y)) ->
       let new_sym =

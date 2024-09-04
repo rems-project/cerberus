@@ -897,7 +897,7 @@ let make_largs f_i =
     | Cn.CN_cletExpr (loc, name, expr) :: conditions ->
       let@ expr = C.LocalState.handle st (C.ET.translate_cn_expr SymSet.empty env expr) in
       let@ lat = aux (C.add_logical name (IT.bt expr) env) st conditions in
-      return (mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
+      return (mDefine ((name, IT.Surface.proj expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conditions ->
       let@ lc = C.LocalState.handle st (C.ET.translate_cn_assrt env (loc, constr)) in
       let@ lat = aux env st conditions in
@@ -935,7 +935,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
   let rec aux (resources, good_lcs) env st = function
     | ((o_s, (ct, pass_by_value_or_pointer)), (s, cbt)) :: rest ->
       assert (Option.equal Sym.equal o_s (Some s));
-      let@ () = check_against_core_bt loc cbt Loc in
+      let@ () = check_against_core_bt loc cbt (Loc ()) in
       assert (is_pass_by_pointer pass_by_value_or_pointer);
       (* now interesting only: s, ct, rest *)
       let sct = convert_ct loc ct in
@@ -958,7 +958,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
           st
           rest
       in
-      return (mComputational ((s, Loc), (loc, None)) at)
+      return (mComputational ((s, Loc ()), (loc, None)) at)
     | [] ->
       let@ lat = make_largs_with_accesses f_i env st (accesses, inv) in
       let at = mResources resources (mConstraints good_lcs lat) in
@@ -1420,7 +1420,7 @@ let normalise_globs ~inherit_loc env _sym g =
   let loc = Locations.other __FUNCTION__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
-    let@ () = check_against_core_bt loc bt BT.Loc in
+    let@ () = check_against_core_bt loc bt BT.(Loc ()) in
     (* this may have to change *)
     let@ e =
       n_expr
@@ -1434,7 +1434,7 @@ let normalise_globs ~inherit_loc env _sym g =
     in
     return (M_GlobalDef (convert_ct loc ct, e))
   | GlobalDecl (bt, ct) ->
-    let@ () = check_against_core_bt loc bt BT.Loc in
+    let@ () = check_against_core_bt loc bt BT.(Loc ()) in
     return (M_GlobalDecl (convert_ct loc ct))
 
 

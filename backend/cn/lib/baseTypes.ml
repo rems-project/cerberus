@@ -3,46 +3,42 @@ type sign =
   | Unsigned
 [@@deriving eq, ord]
 
-type t =
+type 'a t_gen =
   | Unit
   | Bool
   | Integer
   | Bits of sign * int
   | Real
   | Alloc_id
-  | Loc
+  | Loc of 'a
   | CType
   | Struct of Sym.t
   | Datatype of Sym.t
-  | Record of member_types
-  | Map of t * t
-  | List of t
-  | Tuple of t list
-  | Set of t (* | Option of basetype *)
-[@@deriving eq, ord]
+  | Record of 'a member_types_gen
+  | Map of 'a t_gen * 'a t_gen
+  | List of 'a t_gen
+  | Tuple of 'a t_gen list
+  | Set of 'a t_gen
+[@@deriving eq, ord, map]
 
-and member_types = (Id.t * t) list
+and 'a member_types_gen = (Id.t * 'a t_gen) list
 
 (* This seems to require that variables aren't simply unique to the constructor, but to
    the entire datatype declaration. This is weird, and is probably an arbitrary
    restriction that should be lifted, but it will require effort. *)
 module Datatype = struct
-  type info =
+  type 'a info =
     { constrs : Sym.t list;
-      all_params : member_types
+      all_params : 'a member_types_gen
     }
 
-  type constr_info =
-    { params : member_types;
+  type 'a constr_info =
+    { params : 'a member_types_gen;
       datatype_tag : Sym.t
     }
 end
 
-open Datatype
-
-let cons_dom_rng info = (Record info.params, Datatype info.datatype_tag)
-
-let rec pp =
+let rec pp pp_loc =
   let open Pp in
   function
   | Unit -> !^"void"
@@ -51,21 +47,22 @@ let rec pp =
   | Bits (Signed, n) -> !^("i" ^ string_of_int n)
   | Bits (Unsigned, n) -> !^("u" ^ string_of_int n)
   | Real -> !^"real"
-  | Loc -> !^"pointer"
+  | Loc x -> pp_loc x
   | Alloc_id -> !^"alloc_id"
   | CType -> !^"ctype"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
-  | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
-  | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
-  | List bt -> !^"cn_list" ^^ angles (pp bt)
-  | Tuple nbts -> !^"cn_tuple" ^^ angles (flow_map comma pp nbts)
-  | Set t -> !^"cn_set" ^^ angles (pp t)
+  | Record members ->
+    braces (flow_map comma (fun (s, bt) -> pp pp_loc bt ^^^ Id.pp s) members)
+  | Map (abt, rbt) -> !^"map" ^^ angles (pp pp_loc abt ^^ comma ^^^ pp pp_loc rbt)
+  | List bt -> !^"cn_list" ^^ angles (pp pp_loc bt)
+  | Tuple nbts -> !^"cn_tuple" ^^ angles (flow_map comma (pp pp_loc) nbts)
+  | Set t -> !^"cn_set" ^^ angles (pp pp_loc t)
 
 
 (* | Option t -> !^"option" ^^ angles (pp t) *)
 
-let rec contained : t -> t list =
+let rec contained =
   let containeds bts = List.concat_map contained bts in
   function
   | Unit -> []
@@ -74,7 +71,7 @@ let rec contained : t -> t list =
   | Bits _ -> []
   | Real -> []
   | Alloc_id -> []
-  | Loc -> []
+  | Loc _ -> []
   | CType -> []
   | Struct _ -> []
   | Datatype _ -> []
@@ -87,30 +84,34 @@ let rec contained : t -> t list =
   | Set bt -> bt :: contained bt
 
 
-let json bt : Yojson.Safe.t = `String (Pp.plain (pp bt))
+let json pp_loc bt = `String (Pp.plain (pp pp_loc bt))
 
-let struct_bt = function
+let struct_bt pp_loc = function
   | Struct tag -> tag
-  | bt -> Cerb_debug.error ("illtyped index term: not a struct type: " ^ Pp.plain (pp bt))
+  | bt ->
+    Cerb_debug.error ("illtyped index term: not a struct type: " ^ Pp.plain (pp pp_loc bt))
 
 
-let record_bt = function
+let record_bt pp_loc = function
   | Record members -> members
-  | bt -> Cerb_debug.error ("illtyped index term: not a member type: " ^ Pp.plain (pp bt))
+  | bt ->
+    Cerb_debug.error ("illtyped index term: not a member type: " ^ Pp.plain (pp pp_loc bt))
 
 
 let is_map_bt = function Map (abt, rbt) -> Some (abt, rbt) | _ -> None
 
-let map_bt = function
+let map_bt pp_loc = function
   | Map (abt, rbt) -> (abt, rbt)
-  | bt -> Cerb_debug.error ("illtyped index term: not a map type: " ^ Pp.plain (pp bt))
+  | bt ->
+    Cerb_debug.error ("illtyped index term: not a map type: " ^ Pp.plain (pp pp_loc bt))
 
 
 let is_datatype_bt = function Datatype sym -> Some sym | _ -> None
 
-let datatype_bt = function
+let datatype_bt pp_loc = function
   | Datatype sym -> sym
-  | bt -> Cerb_debug.error ("illtyped index term: not a datatype: " ^ Pp.plain (pp bt))
+  | bt ->
+    Cerb_debug.error ("illtyped index term: not a datatype: " ^ Pp.plain (pp pp_loc bt))
 
 
 let is_list_bt = function List bt -> Some bt | _ -> None
@@ -126,24 +127,25 @@ let make_map_bt abt rbt = Map (abt, rbt)
 (*   | bt -> Cerb_debug.error  *)
 (*            ("illtyped index term: not an option type: " ^ Pp.plain (pp bt)) *)
 
-let rec of_sct is_signed size_of = function
+let rec of_sct loc is_signed size_of = function
   | Sctypes.Void -> Unit
   | Integer ity -> Bits ((if is_signed ity then Signed else Unsigned), size_of ity * 8)
-  | Array (sct, _) -> Map (uintptr_bt is_signed size_of, of_sct is_signed size_of sct)
-  | Pointer _ -> Loc
+  | Array (sct, _) ->
+    Map (uintptr_bt loc is_signed size_of, of_sct loc is_signed size_of sct)
+  | Pointer sct -> Loc (loc sct)
   | Struct tag -> Struct tag
   | Function _ -> Cerb_debug.error "todo: function types"
 
 
-and uintptr_bt is_signed size_of =
-  of_sct is_signed size_of Sctypes.(Integer (Unsigned Intptr_t))
+and uintptr_bt loc is_signed size_of =
+  of_sct loc is_signed size_of Sctypes.(Integer (Unsigned Intptr_t))
 
 
-and intptr_bt is_signed size_of =
-  of_sct is_signed size_of Sctypes.(Integer (Signed Intptr_t))
+and intptr_bt loc is_signed size_of =
+  of_sct loc is_signed size_of Sctypes.(Integer (Signed Intptr_t))
 
 
-and size_bt is_signed size_of = of_sct is_signed size_of Sctypes.(Integer Size_t)
+and size_bt loc is_signed size_of = of_sct loc is_signed size_of Sctypes.(Integer Size_t)
 
 let rec hash = function
   | Unit -> 0
@@ -151,12 +153,11 @@ let rec hash = function
   | Integer -> 2
   | Real -> 3
   | Alloc_id -> 4
-  | Loc -> 5
+  | Loc () -> 5
   | CType -> 6
   | List _ -> 7
   | Tuple _ -> 8
   | Set _ -> 9
-  (* | Option _ -> 8 *)
   | Struct tag -> 1000 + Sym.num tag
   | Datatype tag -> 4000 + Sym.num tag
   | Record _ -> 3000
@@ -205,10 +206,10 @@ let normalise_to_range (sign, sz) z =
   z2
 
 
-let normalise_to_range_bt bt z =
+let normalise_to_range_bt pp_loc bt z =
   match is_bits_bt bt with
   | Some (sign, sz) -> normalise_to_range (sign, sz) z
-  | _ -> failwith ("normalise_to_range: not bits type: " ^ Pp.plain (pp bt))
+  | _ -> failwith ("normalise_to_range: not bits type: " ^ Pp.plain (pp pp_loc bt))
 
 
 let pick_integer_encoding_type z =
@@ -219,3 +220,92 @@ let pick_integer_encoding_type z =
   with
   | Some (sign, sz) -> Some (Bits (sign, sz))
   | _ -> None
+
+
+module Surface = struct
+  type loc_t = Sctypes.t option
+
+  type t = loc_t t_gen
+
+  type member_types = loc_t member_types_gen
+
+  let equal : t -> t -> _ = equal_t_gen (Option.equal Sctypes.equal)
+
+  let compare : t -> t -> _ = compare_t_gen (Option.compare Sctypes.compare)
+
+  type nonrec datatype_info = loc_t Datatype.info
+
+  type nonrec constr_info = loc_t Datatype.constr_info
+
+  let pp_loc =
+    Pp.(
+      Option.fold ~none:!^"pointer" ~some:(fun sct ->
+        !^"pointer" ^^ angles (Sctypes.pp sct)))
+
+
+  let pp : t -> _ = pp pp_loc
+
+  let json (bt : t) = json pp_loc bt
+
+  let is_map_bt = is_map_bt
+
+  let map_bt = map_bt pp_loc
+
+  let is_datatype_bt = is_datatype_bt
+
+  let is_bits_bt = is_bits_bt
+
+  let make_map_bt = make_map_bt
+
+  let of_sct = of_sct Option.some
+
+  let unintptr_bt = uintptr_bt Option.some
+
+  let intptr_bt = intptr_bt Option.some
+
+  let size_bt = size_bt Option.some
+
+  let inj x : t = map_t_gen (Fun.const None) x
+
+  let proj : t -> _ = map_t_gen (Fun.const ())
+end
+
+module Unit = struct
+  type nonrec t = unit t_gen
+
+  type member_types = unit member_types_gen
+
+  let equal : t -> t -> _ = equal_t_gen (fun () () -> true)
+
+  let compare : t -> t -> _ = compare_t_gen (fun () () -> 0)
+
+  type dt_info = unit Datatype.info
+
+  type constr_info = unit Datatype.constr_info
+
+  let pp_loc () = Pp.(!^"pointer")
+
+  let pp = pp pp_loc
+
+  let json = json pp_loc
+
+  let struct_bt = struct_bt pp_loc
+
+  let record_bt = record_bt pp_loc
+
+  let map_bt = map_bt pp_loc
+
+  let datatype_bt = datatype_bt pp_loc
+
+  let of_sct = of_sct (Fun.const ())
+
+  let uintptr_bt = uintptr_bt (Fun.const ())
+
+  let intptr_bt = intptr_bt (Fun.const ())
+
+  let size_bt = size_bt (Fun.const ())
+
+  let normalise_to_range_bt = normalise_to_range_bt pp_loc
+end
+
+include Unit

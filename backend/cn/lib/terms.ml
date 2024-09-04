@@ -72,65 +72,61 @@ and 'bt pattern =
 [@@deriving eq, ord, map]
 
 (* over integers and reals *)
-type 'bt term_ =
+type 'bt term =
   | Const of const
   | Sym of Sym.t
-  | Unop of unop * 'bt term
-  | Binop of binop * 'bt term * 'bt term
-  | ITE of 'bt term * 'bt term * 'bt term
-  | EachI of (int * (Sym.t * BaseTypes.t) * int) * 'bt term
+  | Unop of unop * 'bt annot
+  | Binop of binop * 'bt annot * 'bt annot
+  | ITE of 'bt annot * 'bt annot * 'bt annot
+  | EachI of (int * (Sym.t * BaseTypes.t) * int) * 'bt annot
   (* add Z3's Distinct for separation facts *)
-  | Tuple of 'bt term list
-  | NthTuple of int * 'bt term
-  | Struct of Sym.t * (Id.t * 'bt term) list
-  | StructMember of 'bt term * Id.t
-  | StructUpdate of ('bt term * Id.t) * 'bt term
-  | Record of (Id.t * 'bt term) list
-  | RecordMember of 'bt term * Id.t
-  | RecordUpdate of ('bt term * Id.t) * 'bt term (* this is currently unused *)
-  | Constructor of Sym.t * (Id.t * 'bt term) list
-  | MemberShift of 'bt term * Sym.t * Id.t
+  | Tuple of 'bt annot list
+  | NthTuple of int * 'bt annot
+  | Struct of Sym.t * (Id.t * 'bt annot) list
+  | StructMember of 'bt annot * Id.t
+  | StructUpdate of ('bt annot * Id.t) * 'bt annot
+  | Record of (Id.t * 'bt annot) list
+  | RecordMember of 'bt annot * Id.t
+  | RecordUpdate of ('bt annot * Id.t) * 'bt annot (* this is currently unused *)
+  | Constructor of Sym.t * (Id.t * 'bt annot) list
+  | MemberShift of 'bt annot * Sym.t * Id.t
   | ArrayShift of
-      { base : 'bt term;
+      { base : 'bt annot;
         ct : Sctypes.t;
-        index : 'bt term
+        index : 'bt annot
       }
   | CopyAllocId of
-      { addr : 'bt term;
-        loc : 'bt term
+      { addr : 'bt annot;
+        loc : 'bt annot
       }
-  | HasAllocId of 'bt term
+  | HasAllocId of 'bt annot
   | SizeOf of Sctypes.t
   | OffsetOf of Sym.t * Id.t
   | Nil of BaseTypes.t
-  | Cons of 'bt term * 'bt term
-  | Head of 'bt term
-  | Tail of 'bt term
-  | NthList of 'bt term * 'bt term * 'bt term
-  | ArrayToList of 'bt term * 'bt term * 'bt term
-  | Representable of Sctypes.t * 'bt term
-  | Good of Sctypes.t * 'bt term
+  | Cons of 'bt annot * 'bt annot
+  | Head of 'bt annot
+  | Tail of 'bt annot
+  | NthList of 'bt annot * 'bt annot * 'bt annot
+  | ArrayToList of 'bt annot * 'bt annot * 'bt annot
+  | Representable of Sctypes.t * 'bt annot
+  | Good of Sctypes.t * 'bt annot
   | Aligned of
-      { t : 'bt term;
-        align : 'bt term
+      { t : 'bt annot;
+        align : 'bt annot
       }
-  | WrapI of Sctypes.IntegerTypes.t * 'bt term
-  | MapConst of BaseTypes.t * 'bt term
-  | MapSet of 'bt term * 'bt term * 'bt term
-  | MapGet of 'bt term * 'bt term
-  | MapDef of (Sym.t * BaseTypes.t) * 'bt term
-  | Apply of Sym.t * 'bt term list
-  | Let of (Sym.t * 'bt term) * 'bt term
-  | Match of 'bt term * ('bt pattern * 'bt term) list
-  | Cast of BaseTypes.t * 'bt term
+  | WrapI of Sctypes.IntegerTypes.t * 'bt annot
+  | MapConst of BaseTypes.t * 'bt annot
+  | MapSet of 'bt annot * 'bt annot * 'bt annot
+  | MapGet of 'bt annot * 'bt annot
+  | MapDef of (Sym.t * BaseTypes.t) * 'bt annot
+  | Apply of Sym.t * 'bt annot list
+  | Let of (Sym.t * 'bt annot) * 'bt annot
+  | Match of 'bt annot * ('bt pattern * 'bt annot) list
+  | Cast of BaseTypes.t * 'bt annot
 
-and 'bt term =
-  | IT of 'bt term_ * 'bt * (Locations.t[@equal fun _ _ -> true] [@compare fun _ _ -> 0])
+and 'bt annot =
+  | IT of 'bt term * 'bt * (Locations.t[@equal fun _ _ -> true] [@compare fun _ _ -> 0])
 [@@deriving eq, ord, map]
-
-let equal = equal_term
-
-let compare = compare_term
 
 let rec pp_pattern (Pat (pat_, _bt, _)) =
   match pat_ with
@@ -171,7 +167,7 @@ let rec pp_pattern (Pat (pat_, _bt, _)) =
 
 let pp
   : 'bt 'a.
-  ?prec:int -> ?f:('bt term -> Pp.document -> Pp.document) -> 'bt term -> Pp.document
+  ?prec:int -> ?f:('bt annot -> Pp.document -> Pp.document) -> 'bt annot -> Pp.document
   =
   fun ?(prec = 0) ?(f = fun _ x -> x) ->
   let rec aux prec (IT (it, _, _)) =
@@ -355,7 +351,7 @@ let pp
                (fun (id, e) -> Id.pp id ^^ colon ^^^ aux 0 e)
                args)
   in
-  fun (it : 'bt term) -> aux prec it
+  fun (it : 'bt annot) -> aux prec it
 
 
 let rec dtree_of_pat (Pat (pat_, _bt, _)) =

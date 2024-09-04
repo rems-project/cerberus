@@ -569,7 +569,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
     | BaseTypes.Record mems ->
       let@ enc_mem_bts = ListM.mapM f (List.map snd mems) in
       return (tuple_coq_ty !^"record" enc_mem_bts)
-    | BaseTypes.Loc -> return !^"CN_Lib.Loc"
+    | BaseTypes.Loc () -> return !^"CN_Lib.Loc"
     | BaseTypes.Datatype tag ->
       let@ () = ensure_datatype global list_mono (fst loc_info) tag in
       return (Sym.pp tag)
@@ -1072,8 +1072,8 @@ let it_to_coq loc global list_mono it =
         parensM (build [ rets op_nm; aux t; aux x ])
     | IT.Cast (cbt, t) ->
       (match (IT.bt t, cbt) with
-       | Integer, Loc -> aux t
-       | Loc, Integer -> aux t
+       | Integer, Loc () -> aux t
+       | Loc (), Integer -> aux t
        | source, target ->
          let source = Pp.plain (BT.pp source) in
          let target = Pp.plain (BT.pp target) in
