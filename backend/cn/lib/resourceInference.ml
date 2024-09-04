@@ -1,15 +1,13 @@
+module BT = BaseTypes
 module IT = IndexTerms
+module TE = TypeErrors
+module LC = LogicalConstraints
+module LAT = LogicalArgumentTypes
+module RET = ResourceTypes
 
 type oargs = Resources.oargs = O of IT.t
 
 open Typing
-module TE = TypeErrors
-open LogicalConstraints
-module LAT = LogicalArgumentTypes
-module RET = ResourceTypes
-open ResourcePredicates
-open Memory
-open Pack
 
 let unpack_def global name args =
   Option.bind (Global.get_logical_function_def global name) (fun def ->
@@ -96,7 +94,7 @@ module General = struct
       | [ { many_guard = _; value } ], _ -> return value
       | [], _ | _, BT.Unit -> return (IT.default_ (BT.Map (a_bt, item_bt)) here)
       | _many, _ ->
-        let term = IndexTerms.bool_ true here in
+        let term = IT.bool_ true here in
         let@ model = model_with here term in
         let model = Option.get model in
         fail (fun ctxt ->
@@ -261,7 +259,7 @@ module General = struct
       match needed with
       | false -> return (Some ((requested, oarg), changed_or_deleted))
       | true ->
-        (match packing_ft here global provable (P requested) with
+        (match Pack.packing_ft here global provable (P requested) with
          | Some packing_ft ->
            let ft_pp = lazy (LAT.pp (fun _ -> Pp.string "resource") packing_ft) in
            Pp.debug 9 (Lazy.map (Pp.item "attempting to pack compound resource") ft_pp);
@@ -410,7 +408,7 @@ module General = struct
         movable_indices
         (needed, oarg)
     in
-    let nothing_more_needed = forall_ requested.q (IT.not_ needed here) in
+    let nothing_more_needed = LC.forall_ requested.q (IT.not_ needed here) in
     Pp.debug 9 (lazy (Pp.item "checking resource remainder" (LC.pp nothing_more_needed)));
     let holds = provable nothing_more_needed in
     match holds with
