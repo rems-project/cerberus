@@ -39,7 +39,7 @@ let max_pointer =
 
 let bt_of_sct = BT.of_sct is_signed_integer_type size_of_integer_type
 
-let sbt_of_sct = SurfaceBaseTypes.of_sct is_signed_integer_type size_of_integer_type
+let sbt_of_sct = BaseTypes.Surface.of_sct is_signed_integer_type size_of_integer_type
 
 let uintptr_bt = BT.uintptr_bt is_signed_integer_type size_of_integer_type
 
@@ -47,7 +47,7 @@ let intptr_bt = BT.intptr_bt is_signed_integer_type size_of_integer_type
 
 let size_bt = BT.size_bt is_signed_integer_type size_of_integer_type
 
-let size_sbt = SurfaceBaseTypes.size_bt is_signed_integer_type size_of_integer_type
+let size_sbt = BaseTypes.Surface.size_bt is_signed_integer_type size_of_integer_type
 
 let sint_bt = bt_of_sct Sctypes.(Integer (Signed Int_))
 

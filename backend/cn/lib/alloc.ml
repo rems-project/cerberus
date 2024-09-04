@@ -35,7 +35,7 @@ module History = struct
         recordMember_ ~member_bt:size_bt (ptr, size_id) loc' )
 
 
-  let sbt = SurfaceBaseTypes.of_basetype bt
+  let sbt = BaseTypes.Surface.inj bt
 end
 
 module Predicate = struct

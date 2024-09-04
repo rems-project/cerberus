@@ -37,4 +37,4 @@ type instrumentation =
 
 val collect_instrumentation
   :  'a Mucore.mu_file ->
-  instrumentation list * SurfaceBaseTypes.t Hashtbl.Make(Sym).t
+  instrumentation list * BaseTypes.Surface.t Hashtbl.Make(Sym).t
