@@ -1,11 +1,9 @@
 module IT = IndexTerms
-open ResourceTypes
-open Resources
+
+type oargs = Resources.oargs = O of IT.t
+
 open Typing
-
-open Effectful.Make (Typing)
-
-open TypeErrors
+module TE = TypeErrors
 open LogicalConstraints
 module LAT = LogicalArgumentTypes
 module RET = ResourceTypes
@@ -102,7 +100,7 @@ module General = struct
         let@ model = model_with here term in
         let model = Option.get model in
         fail (fun ctxt ->
-          { loc; msg = Merging_multiple_arrays { requests; situation; ctxt; model } })
+          { loc; msg = TE.Merging_multiple_arrays { requests; situation; ctxt; model } })
     in
     return (update_with_ones base_value ones)
 
@@ -140,7 +138,7 @@ module General = struct
          fail (fun ctxt ->
            (* let ctxt = { ctxt with resources = original_resources } in *)
            let msg =
-             Missing_resource { requests = request_chain; situation; model; ctxt }
+             TE.Missing_resource { requests = request_chain; situation; model; ctxt }
            in
            { loc; msg })
        | Some ((re, O oargs), changed_or_deleted') ->
@@ -169,7 +167,7 @@ module General = struct
            (* let ctxt = { ctxt with resources = original_resources } in *)
            { loc;
              msg =
-               Unproven_constraint
+               TE.Unproven_constraint
                  { constr = c; info; requests = snd uiinfo; ctxt; model }
            }))
     | I _rt -> return (ftyp, changed_or_deleted)
@@ -181,7 +179,7 @@ module General = struct
     (uiinfo : uiinfo)
     (requested : RET.predicate_type)
     ~alloc_or_owned
-    : ((predicate_type * oargs) * int list) option m
+    : ((RET.predicate_type * Resources.oargs) * int list) option m
     =
     Pp.(debug 7 (lazy (item __FUNCTION__ (RET.pp (P requested)))));
     let start_timing = Pp.time_log_start __FUNCTION__ "" in
@@ -196,7 +194,7 @@ module General = struct
       else (
         let alloc_owned = alloc_or_owned in
         match re with
-        | P p', p'_oarg when RET.subsumed ~alloc_owned requested.name p'.name ->
+        | RET.P p', p'_oarg when RET.subsumed ~alloc_owned requested.name p'.name ->
           let here = Locations.other __FUNCTION__ in
           let p'_oarg, addr_iargs_eqs =
             if RET.equal_predicate_name RET.alloc requested.name then (
@@ -298,7 +296,7 @@ module General = struct
             ^^ colon
             ^^^ IT.pp step)
         in
-        fail (fun _ -> { loc; msg = Generic doc }))
+        fail (fun _ -> { loc; msg = TE.Generic doc }))
     in
     let@ (needed, oarg), rw_time =
       map_and_fold_resources
@@ -311,10 +309,10 @@ module General = struct
           else (
             match re with
             | Q p', O p'_oarg
-              when subsumed ~alloc_owned:false requested.name p'.name
+              when RET.subsumed ~alloc_owned:false requested.name p'.name
                    && IT.equal step p'.step
                    && BT.equal (snd requested.q) (snd p'.q) ->
-              let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
+              let p' = RET.alpha_rename_qpredicate_type_ (fst requested.q) p' in
               let here = Locations.other __FUNCTION__ in
               let pmatch =
                 (* Work-around for https://github.com/Z3Prover/z3/issues/7352 *)
@@ -364,12 +362,13 @@ module General = struct
     let here = Locations.other __FUNCTION__ in
     let@ needed, oarg =
       let@ movable_indices = get_movable_indices () in
-      ListM.fold_rightM
+      let module Eff = Effectful.Make (Typing) in
+      Eff.ListM.fold_rightM
         (fun (predicate_name, index) (needed, oarg) ->
           let continue = return (needed, oarg) in
           if
             (not (IT.is_false needed))
-            && subsumed ~alloc_owned:false requested.name predicate_name
+            && RET.subsumed ~alloc_owned:false requested.name predicate_name
             && BT.equal (snd requested.q) (IT.bt index)
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
@@ -430,14 +429,15 @@ module General = struct
     | Some (oarg, rw_time) ->
       let@ oarg = cases_to_map loc uiinfo (snd requested.q) oarg_item_bt oarg in
       let r =
-        { name = requested.name;
-          pointer = requested.pointer;
-          q = requested.q;
-          q_loc = requested.q_loc;
-          step = requested.step;
-          permission = requested.permission;
-          iargs = requested.iargs
-        }
+        RET.
+          { name = requested.name;
+            pointer = requested.pointer;
+            q = requested.q;
+            q_loc = requested.q_loc;
+            step = requested.step;
+            permission = requested.permission;
+            iargs = requested.iargs
+          }
       in
       return (Some ((r, O oarg), rw_time))
 
@@ -466,20 +466,20 @@ module General = struct
 
 
   and resource_request loc uiinfo (request : RET.t) ~alloc_or_owned
-    : (RE.t * int list) option m
+    : (Resources.t * int list) option m
     =
     match request with
     | P request ->
       let@ result = predicate_request loc uiinfo request ~alloc_or_owned in
       return
         (Option.map
-           (fun ((p, o), changed_or_deleted) -> ((P p, o), changed_or_deleted))
+           (fun ((p, o), changed_or_deleted) -> ((RET.P p, o), changed_or_deleted))
            result)
     | Q request ->
       let@ result = qpredicate_request loc uiinfo request in
       return
         (Option.map
-           (fun ((q, o), changed_or_deleted) -> ((Q q, o), changed_or_deleted))
+           (fun ((q, o), changed_or_deleted) -> ((RET.Q q, o), changed_or_deleted))
            result)
 
 
@@ -504,7 +504,7 @@ module Special = struct
     let@ model = model_with loc (IT.bool_ true here) in
     let model = Option.get model in
     fail (fun ctxt ->
-      let msg = Missing_resource { requests; situation; model; ctxt } in
+      let msg = TE.Missing_resource { requests; situation; model; ctxt } in
       { loc; msg })
 
 
