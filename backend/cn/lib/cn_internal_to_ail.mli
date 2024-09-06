@@ -3,6 +3,7 @@ module A = CF.AilSyntax
 module C = CF.Ctype
 module BT = BaseTypes
 module AT = ArgumentTypes
+module IT = IndexTerms
 
 val ownership_ctypes : C.ctype list ref
 
@@ -17,6 +18,12 @@ module RecordMap : module type of Map.Make (MembersKey)
 val records : Sym.t RecordMap.t ref
 
 val bt_to_cn_base_type : BT.t -> Sym.t CF.Cn.cn_base_type
+
+val bt_to_ail_ctype : ?pred_sym:Sym.t option -> BT.t -> C.ctype
+
+val wrap_with_convert_from_cn_bool
+  :  CF.GenTypes.genTypeCategory A.expression ->
+  CF.GenTypes.genTypeCategory A.expression
 
 val generate_sym_with_suffix
   :  ?suffix:string ->
@@ -84,6 +91,14 @@ val generate_record_default_function
 val generate_record_map_get
   :  Sym.t * 'a ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
+
+val cn_to_ail_expr
+  :  A.sigma_cn_datatype list ->
+  (C.union_tag * C.ctype) list ->
+  IT.t ->
+  A.bindings
+  * CF.GenTypes.genTypeCategory A.statement_ list
+  * CF.GenTypes.genTypeCategory A.expression
 
 val cn_to_ail_struct : A.sigma_tag_definition -> A.sigma_tag_definition list
 

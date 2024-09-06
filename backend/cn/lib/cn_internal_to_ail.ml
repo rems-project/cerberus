@@ -13,6 +13,7 @@ open Mucore
 module A = CF.AilSyntax
 module C = CF.Ctype
 module BT = BaseTypes
+module IT = IndexTerms
 module T = Terms
 module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
@@ -1486,6 +1487,17 @@ let cn_to_ail_expr_internal
     _ CF.Cn.cn_datatype list -> (C.union_tag * C.ctype) list -> IT.t -> a dest -> a
   =
   fun dts globals cn_expr d -> cn_to_ail_expr_aux_internal None None dts globals cn_expr d
+
+
+let cn_to_ail_expr
+  (dts : _ CF.Cn.cn_datatype list)
+  (globals : (C.union_tag * C.ctype) list)
+  (it : IT.t)
+  : A.bindings
+    * CF.GenTypes.genTypeCategory A.statement_ list
+    * CF.GenTypes.genTypeCategory A.expression
+  =
+  cn_to_ail_expr_internal dts globals it PassBack
 
 
 let cn_to_ail_expr_internal_with_pred_name
