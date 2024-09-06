@@ -17,7 +17,7 @@ open Typing
 
 open Effectful.Make (Typing)
 
-let use_ity = ref false
+let use_ity = ref true
 
 let ensure_base_type = Typing.ensure_base_type
 
