@@ -33,14 +33,18 @@ def main():
     
     missing = set()
     degradation = set()
+    baseline_total = 0
+    new_total = 0
     
     output = []
     for benchmark in baseline:
         name = benchmark['name']
         baseline_value = benchmark['value']
+        baseline_total += baseline_value
     
         new_value_m = new_numbers.get(name)
         if new_value_m:
+            new_total += new_value_m
             (diff, percentage) = to_diff(new_value_m, baseline_value)
 
             if percentage > THRESHOLD:
@@ -54,6 +58,15 @@ def main():
             del new_numbers[name]
         else:
             missing.add(name)
+
+    for name in new_numbers:
+        new_value = new_numbers[name]
+        output.append([name, "-", new_value, "-"])
+
+        new_total += new_value
+
+    (total_diff, _) = to_diff(new_total, baseline_total)
+    output.append(["**Total runtime**", baseline_total, new_total, total_diff])
 
     print("")
     if len(degradation) != 0:
