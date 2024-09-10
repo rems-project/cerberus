@@ -1,3 +1,4 @@
+module CF = Cerb_frontend
 module LS = LogicalSorts
 module BT = BaseTypes
 module SymSet = Set.Make (Sym)
@@ -1164,7 +1165,8 @@ module WFalse = struct
 end
 
 module WLAT = struct
-  let welltyped _i_subst i_welltyped kind loc (at : 'i LAT.t) : 'i LAT.t m =
+  let welltyped i_welltyped i_pp kind loc (at : 'i LAT.t) : 'i LAT.t m =
+    debug 12 (lazy (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (LAT.pp i_pp at)));
     let rec aux =
       let here = Locations.other __FUNCTION__ in
       function
@@ -1204,7 +1206,8 @@ module WLAT = struct
 end
 
 module WAT = struct
-  let welltyped i_subst i_welltyped kind loc (at : 'i AT.t) : 'i AT.t m =
+  let welltyped i_welltyped i_pp kind loc (at : 'i AT.t) : 'i AT.t m =
+    debug 12 (lazy (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (AT.pp i_pp at)));
     let rec aux = function
       | AT.Computational ((name, bt), info, at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -1213,18 +1216,18 @@ module WAT = struct
         let@ at = aux at in
         return (AT.Computational ((name, bt), info, at))
       | AT.L at ->
-        let@ at = WLAT.welltyped i_subst i_welltyped kind loc at in
+        let@ at = WLAT.welltyped i_welltyped i_pp kind loc at in
         return (AT.L at)
     in
     pure (aux at)
 end
 
 module WFT = struct
-  let welltyped = WAT.welltyped WRT.subst WRT.welltyped
+  let welltyped = WAT.welltyped WRT.welltyped WRT.pp
 end
 
 module WLT = struct
-  let welltyped = WAT.welltyped WFalse.subst WFalse.welltyped
+  let welltyped = WAT.welltyped WFalse.welltyped WFalse.pp
 end
 
 (* module WPackingFT(struct let name_bts = pd.oargs end) = WLAT(WOutputDef.welltyped
@@ -1291,7 +1294,8 @@ module WArgs = struct
     (Loc.t -> 'i -> 'j m) -> string -> Loc.t -> 'i Mu.mu_arguments -> 'j Mu.mu_arguments m
     =
     fun (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.mu_arguments) ->
-    Pp.(debug 6 (lazy !^__FUNCTION__));
+    debug 6 (lazy !^__FUNCTION__);
+    debug 12 (lazy (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (CF.Pp_ast.pp_doc_tree (Mucore.dtree_of_mu_arguments (fun _i -> Dleaf !^"...") at))));
     let rec aux = function
       | Mu.M_Computational ((name, bt), info, at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -2217,8 +2221,8 @@ module WRPD = struct
                     let@ () = add_c loc (LC.t_ (IT.and_ negated_guards here)) in
                     let@ packing_ft =
                       WLAT.welltyped
-                        IT.subst
                         (fun loc it -> WIT.check loc oarg_bt it)
+                        IT.pp
                         "clause"
                         loc
                         packing_ft
@@ -2264,7 +2268,7 @@ end
 
 module WLemma = struct
   let welltyped loc _lemma_s lemma_typ =
-    WAT.welltyped LRT.subst WLRT.welltyped "lemma" loc lemma_typ
+    WAT.welltyped WLRT.welltyped LRT.pp "lemma" loc lemma_typ
 end
 
 module WDT = struct
