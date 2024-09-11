@@ -132,9 +132,9 @@ let rec simp_resource eval r =
     else
       LAT.Constraint (ct, info, simp_resource eval more)
   | LAT.Define (x, i, more) -> LAT.Define (x, i, simp_resource eval more)
-  | LAT.Resource ((x,(rt,bt)), i, more) ->
+  | LAT.Resource ((x, (rt, bt)), i, more) ->
     let rt1 = Interval.Solver.simp_rt eval rt in
-    LAT.Resource ((x,(rt1,bt)), i, simp_resource eval more)
+    LAT.Resource ((x, (rt1, bt)), i, simp_resource eval more)
   | I i -> I i
 
 
@@ -251,7 +251,7 @@ let state ctxt model_with_q extras =
         diff_res
     in
     let evaluate it = Solver.eval ctxt.global model it in
-    let pp_res (rt,args) = RE.pp (Interval.Solver.simp_rt evaluate rt, args) in
+    let pp_res (rt, args) = RE.pp (Interval.Solver.simp_rt evaluate rt, args) in
     let interesting =
       List.map (fun re -> pp_res re ^^^ parens !^"same type") same_res
       @ List.map pp_res interesting_diff_res
