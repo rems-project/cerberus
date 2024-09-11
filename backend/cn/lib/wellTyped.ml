@@ -2137,6 +2137,11 @@ module WLabel = struct
     WArgs.welltyped (fun _loc body -> return body) "loop/label" loc lt
 end
 
+let pure_and_no_initial_resources loc m =
+  pure
+    (let@ (), _ = map_and_fold_resources loc (fun _re () -> (Deleted, ())) () in
+     m)
+
 module WProc = struct
   open Mu
 
@@ -2167,14 +2172,9 @@ module WProc = struct
     =
     fun (loc : Loc.t) (at : 'TY1 Mu.mu_proc_args_and_body) ->
     Pp.(debug 6 (lazy !^__FUNCTION__));
-    let pure_and_no_initial_resources m =
-      pure
-        (let@ (), _ = map_and_fold_resources loc (fun _re () -> (Deleted, ())) () in
-         m)
-    in
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
-        let@ rt = pure_and_no_initial_resources (WRT.welltyped loc rt) in
+        let@ rt = pure_and_no_initial_resources loc (WRT.welltyped loc rt) in
         let@ labels =
           PmapM.mapM
             (fun _sym def ->
@@ -2182,7 +2182,7 @@ module WProc = struct
               | M_Return loc -> return (M_Return loc)
               | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
                 let@ label_args_and_body =
-                  pure_and_no_initial_resources (WLabel.welltyped loc label_args_and_body)
+                  pure_and_no_initial_resources loc (WLabel.welltyped loc label_args_and_body)
                 in
                 return (M_Label (loc, label_args_and_body, annots, parsed_spec)))
             labels
@@ -2196,7 +2196,7 @@ module WProc = struct
               | M_Return loc -> return (M_Return loc)
               | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
                 let@ label_args_and_body =
-                  pure_and_no_initial_resources
+                  pure_and_no_initial_resources loc
                     (WArgs.welltyped
                        (fun _loc label_body ->
                          BaseTyping.check_expr label_context Unit label_body)
@@ -2295,7 +2295,7 @@ end
 
 module WLemma = struct
   let welltyped loc _lemma_s lemma_typ =
-    WAT.welltyped WLRT.welltyped LRT.pp "lemma" loc lemma_typ
+    WAT.welltyped (fun loc lrt -> pure_and_no_initial_resources loc (WLRT.welltyped loc lrt)) LRT.pp "lemma" loc lemma_typ
 end
 
 module WDT = struct
