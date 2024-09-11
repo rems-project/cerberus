@@ -1,4 +1,4 @@
-/*@ https://github.com/rems-project/cerberus/issues/566 *@/
+/* https://github.com/rems-project/cerberus/issues/566 */
 
 struct in_addr {
     int s_addr;  // load with inet_aton()
