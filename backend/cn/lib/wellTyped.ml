@@ -1107,7 +1107,7 @@ module WLRT = struct
 
   type t = LogicalReturnTypes.t
 
-  let welltyped _loc lrt =
+  let welltyped loc lrt =
     let rec aux =
       let here = Locations.other __FUNCTION__ in
       function
@@ -1130,7 +1130,17 @@ module WLRT = struct
         let@ () = add_c (fst info) lc in
         let@ lrt = aux lrt in
         return (Constraint (lc, info, lrt))
-      | I -> return I
+      | I ->
+        let@ provable = provable loc in
+        let here = Locations.other __FUNCTION__ in
+        let@ () =
+          match provable (LC.t_ (IT.bool_ false here)) with
+          | `True ->
+            fail (fun ctxt_log ->
+              { loc; msg = Inconsistent_assumptions ("return type", ctxt_log) })
+          | `False -> return ()
+        in
+        return I
     in
     pure (aux lrt)
 end
@@ -1166,7 +1176,10 @@ end
 
 module WLAT = struct
   let welltyped i_welltyped i_pp kind loc (at : 'i LAT.t) : 'i LAT.t m =
-    debug 12 (lazy (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (LAT.pp i_pp at)));
+    debug
+      12
+      (lazy
+        (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (LAT.pp i_pp at)));
     let rec aux =
       let here = Locations.other __FUNCTION__ in
       function
@@ -1207,7 +1220,10 @@ end
 
 module WAT = struct
   let welltyped i_welltyped i_pp kind loc (at : 'i AT.t) : 'i AT.t m =
-    debug 12 (lazy (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (AT.pp i_pp at)));
+    debug
+      12
+      (lazy
+        (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (AT.pp i_pp at)));
     let rec aux = function
       | AT.Computational ((name, bt), info, at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -1295,7 +1311,13 @@ module WArgs = struct
     =
     fun (i_welltyped : Loc.t -> 'i -> 'j m) kind loc (at : 'i Mu.mu_arguments) ->
     debug 6 (lazy !^__FUNCTION__);
-    debug 12 (lazy (item ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc) (CF.Pp_ast.pp_doc_tree (Mucore.dtree_of_mu_arguments (fun _i -> Dleaf !^"...") at))));
+    debug
+      12
+      (lazy
+        (item
+           ("checking wf of " ^ kind ^ " at " ^ Loc.to_string loc)
+           (CF.Pp_ast.pp_doc_tree
+              (Mucore.dtree_of_mu_arguments (fun _i -> Dleaf !^"...") at))));
     let rec aux = function
       | Mu.M_Computational ((name, bt), info, at) ->
         (* no need to alpha-rename, because context.ml ensures there's no name clashes *)
@@ -2145,9 +2167,14 @@ module WProc = struct
     =
     fun (loc : Loc.t) (at : 'TY1 Mu.mu_proc_args_and_body) ->
     Pp.(debug 6 (lazy !^__FUNCTION__));
+    let pure_and_no_initial_resources m =
+      pure
+        (let@ (), _ = map_and_fold_resources loc (fun _re () -> (Deleted, ())) () in
+         m)
+    in
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
-        let@ rt = pure (WRT.welltyped loc rt) in
+        let@ rt = pure_and_no_initial_resources (WRT.welltyped loc rt) in
         let@ labels =
           PmapM.mapM
             (fun _sym def ->
@@ -2155,7 +2182,7 @@ module WProc = struct
               | M_Return loc -> return (M_Return loc)
               | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
                 let@ label_args_and_body =
-                  pure (WLabel.welltyped loc label_args_and_body)
+                  pure_and_no_initial_resources (WLabel.welltyped loc label_args_and_body)
                 in
                 return (M_Label (loc, label_args_and_body, annots, parsed_spec)))
             labels
@@ -2169,7 +2196,7 @@ module WProc = struct
               | M_Return loc -> return (M_Return loc)
               | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
                 let@ label_args_and_body =
-                  pure
+                  pure_and_no_initial_resources
                     (WArgs.welltyped
                        (fun _loc label_body ->
                          BaseTyping.check_expr label_context Unit label_body)
