@@ -188,8 +188,8 @@ module Solver = struct
       | _ -> None
     in
     let do_eq = var_k (fun _ -> Interval.const) in
-    let do_lt = var_k (fun swap -> if swap then Interval.geq else Interval.lt) in
-    let do_le = var_k (fun swap -> if swap then Interval.gt else Interval.leq) in
+    let do_lt = var_k (fun swap -> if swap then Interval.gt else Interval.lt) in
+    let do_le = var_k (fun swap -> if swap then Interval.geq else Interval.leq) in
     let do_compl i = mkI (Intervals.complement i) in
     let do_impl i j = Intervals.union (do_compl i) j in
     let rec interval p =
