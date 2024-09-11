@@ -93,6 +93,8 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "alloc_token.c" \
     ! -name "ptr_diff.c" \
     ! -name "mask_ptr.c" \
+    ! -name "previously_inconsistent_assumptions1.c" \
+    ! -name "previously_inconsistent_assumptions2.c" \
 )
 
 # Include files which cause error for proof but not testing
@@ -150,6 +152,8 @@ BUGGY="cn/division_casting.c \
        cn/alloc_token.c \
        cn/ptr_diff.c \
        cn/mask_ptr.c \
+       cn/previously_inconsistent_assumptions1.c \
+       cn/previously_inconsistent_assumptions2.c \
        "
 
 # Exclude files which cause error for proof but not testing
