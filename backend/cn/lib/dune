@@ -15,8 +15,7 @@
   ocamlgraph
   result
   str
-  unix
-  z3)
+  unix)
  (preprocess
   (pps
    ppx_deriving.eq
