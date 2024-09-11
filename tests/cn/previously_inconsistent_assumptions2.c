@@ -1,4 +1,4 @@
-/*@ https://github.com/rems-project/cerberus/issues/551 @*/
+/* https://github.com/rems-project/cerberus/issues/551 */
 
 int s; 
 void a() 
