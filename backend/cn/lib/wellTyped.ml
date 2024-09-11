@@ -1164,15 +1164,21 @@ module WRT = struct
          return (RT.Computational ((name, bt), info, lrt)))
 end
 
-module WFalse = struct
-  type t = False.t
+(* module WFalse = struct *)
+(*   type t = False.t *)
 
-  let subst = False.subst
+(*   let subst = False.subst *)
 
-  let pp = False.pp
+(*   let pp = False.pp *)
 
-  let welltyped _ False.False = return False.False
-end
+(*   let welltyped _ False.False = return False.False *)
+(* end *)
+
+let pure_and_no_initial_resources loc m =
+  pure
+    (let@ (), _ = map_and_fold_resources loc (fun _re () -> (Deleted, ())) () in
+     m)
+
 
 module WLAT = struct
   let welltyped i_welltyped i_pp kind loc (at : 'i LAT.t) : 'i LAT.t m =
@@ -1239,11 +1245,16 @@ module WAT = struct
 end
 
 module WFT = struct
-  let welltyped = WAT.welltyped WRT.welltyped WRT.pp
+  let welltyped =
+    WAT.welltyped
+      (fun loc rt -> pure_and_no_initial_resources loc (WRT.welltyped loc rt))
+      WRT.pp
 end
 
 module WLT = struct
-  let welltyped = WAT.welltyped WFalse.welltyped WFalse.pp
+  open False
+
+  let welltyped = WAT.welltyped (fun _loc False -> return False) False.pp
 end
 
 (* module WPackingFT(struct let name_bts = pd.oargs end) = WLAT(WOutputDef.welltyped
@@ -2136,12 +2147,6 @@ module WLabel = struct
   let welltyped (loc : Loc.t) (lt : _ mu_expr mu_arguments) : _ mu_expr mu_arguments m =
     WArgs.welltyped (fun _loc body -> return body) "loop/label" loc lt
 end
-
-let pure_and_no_initial_resources loc m =
-  pure
-    (let@ (), _ = map_and_fold_resources loc (fun _re () -> (Deleted, ())) () in
-     m)
-
 
 module WProc = struct
   open Mu
