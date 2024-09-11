@@ -240,22 +240,68 @@ type id_kind =
   | IK_tentative
   | IK_definition
 
+type sigma_declaration =
+  ail_identifier * (Loc.t * Annot.attributes * declaration)
+
+type sigma_object_definition 'a =
+  ail_identifier * (expression 'a)
+
+type sigma_function_definition 'a =
+  ail_identifier * (Loc.t * nat * Annot.attributes * list ail_identifier * statement 'a)
+
+type sigma_static_assertion 'a =
+  expression 'a * stringLiteral
+
+type sigma_tag_definition =
+  ail_identifier * (Loc.t * Annot.attributes * tag_definition)
+
+type sigma_extern_id = ail_identifier * id_kind
+
+type sigma_cn_function = Cn.cn_function Symbol.sym Ctype.ctype
+
+type sigma_cn_lemmata = Cn.cn_lemma Symbol.sym Ctype.ctype
+
+type sigma_cn_predicate = Cn.cn_predicate Symbol.sym Ctype.ctype
+
+type sigma_cn_datatype = Cn.cn_datatype Symbol.sym
+
+type sigma_cn_fun_spec  = nat * Cn.cn_fun_spec Symbol.sym Ctype.ctype
+
+type sigma_cn_ident = Cn.cn_namespace * Symbol.identifier
+
 type sigma 'a = <|
-  declarations: list (ail_identifier * (Loc.t * Annot.attributes * declaration));
-  object_definitions: list (ail_identifier * (expression 'a));
+  declarations: list sigma_declaration;
+  object_definitions: list (sigma_object_definition 'a);
   (* the list of identifiers are the parameter names used in the body *)
-  function_definitions: list (ail_identifier * (Loc.t * nat * Annot.attributes * list ail_identifier * statement 'a));
-  static_assertions: list (expression 'a * stringLiteral);
-  tag_definitions: list (ail_identifier * (Loc.t * Annot.attributes * tag_definition));
-  extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
+  function_definitions: list (sigma_function_definition 'a);
+  static_assertions: list (sigma_static_assertion 'a);
+  tag_definitions: list sigma_tag_definition;
+  extern_idmap: map Symbol.identifier sigma_extern_id;
   typedef_attributes: map ail_identifier Annot.attributes;
   loop_attributes: Annot.loop_attributes;
-  cn_functions: list (Cn.cn_function Symbol.sym Ctype.ctype);
-  cn_lemmata: list (Cn.cn_lemma Symbol.sym Ctype.ctype);
-  cn_predicates: list (Cn.cn_predicate Symbol.sym Ctype.ctype);
-  cn_datatypes: list (Cn.cn_datatype Symbol.sym);
-  cn_fun_specs: list (nat * Cn.cn_fun_spec Symbol.sym Ctype.ctype);
-  cn_idents: map (Cn.cn_namespace * Symbol.identifier) Symbol.sym;
+  cn_functions: list sigma_cn_function;
+  cn_lemmata: list sigma_cn_lemmata;
+  cn_predicates: list sigma_cn_predicate;
+  cn_datatypes: list sigma_cn_datatype;
+  cn_fun_specs: list sigma_cn_fun_spec;
+  cn_idents: map sigma_cn_ident Symbol.sym;
+|>
+
+let empty_sigma : sigma 'a = <|
+  declarations = [];
+  object_definitions = [];
+  function_definitions = [];
+  static_assertions = [];
+  tag_definitions = [];
+  extern_idmap = Map.empty;
+  typedef_attributes = Map.empty;
+  loop_attributes = Map.empty;
+  cn_functions = [];
+  cn_lemmata = [];
+  cn_predicates = [];
+  cn_datatypes = [];
+  cn_fun_specs = [];
+  cn_idents = Map.empty;
 |>
 
 

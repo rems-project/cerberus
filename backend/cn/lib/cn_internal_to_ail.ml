@@ -13,6 +13,7 @@ open Mucore
 module A = CF.AilSyntax
 module C = CF.Ctype
 module BT = BaseTypes
+module IT = IndexTerms
 module T = Terms
 module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
@@ -20,12 +21,6 @@ module AT = ArgumentTypes
 module OE = Ownership_exec
 
 let true_const = A.AilEconst (ConstantPredefined PConstantTrue)
-
-let error_msg_info_sym = Sym.fresh_pretty "error_msg_info"
-
-let error_msg_struct_tag = Sym.fresh_pretty "cn_error_message_info"
-
-let error_msg_info_ctype = mk_ctype (C.Struct error_msg_struct_tag)
 
 let ownership_ctypes = ref []
 
@@ -89,12 +84,6 @@ let members_equal ms ms' =
     let ids_eq = List.fold_left ( && ) true ids_eq in
     ctypes_eq && ids_eq)
 
-
-module SymKey = struct
-  type t = C.union_tag
-
-  let compare (x : t) y = Sym.compare_sym x y
-end
 
 module RecordMap = Map.Make (MembersKey)
 
@@ -713,7 +702,9 @@ let empty_for_dest : type a. a dest -> a =
   | PassBack -> ([], [], mk_expr empty_ail_expr)
 
 
-let generate_ownership_function with_ownership_checking ctype =
+let generate_ownership_function ~with_ownership_checking ctype
+  : A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition
+  =
   let ctype_str = str_of_ctype ctype in
   (* Printf.printf ("ctype_str: %s\n") ctype_str; *)
   let ctype_str = String.concat "_" (String.split_on_char ' ' ctype_str) in
@@ -1493,6 +1484,17 @@ let cn_to_ail_expr_internal
   fun dts globals cn_expr d -> cn_to_ail_expr_aux_internal None None dts globals cn_expr d
 
 
+let cn_to_ail_expr
+  (dts : _ CF.Cn.cn_datatype list)
+  (globals : (C.union_tag * C.ctype) list)
+  (it : IT.t)
+  : A.bindings
+    * CF.GenTypes.genTypeCategory A.statement_ list
+    * CF.GenTypes.genTypeCategory A.expression
+  =
+  cn_to_ail_expr_internal dts globals it PassBack
+
+
 let cn_to_ail_expr_internal_with_pred_name
   : type a.
     Sym.sym option ->
@@ -1606,7 +1608,9 @@ let generate_map_get sym =
   [ (decl, def) ]
 
 
-let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype) =
+let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype)
+  : Locations.t * A.sigma_tag_definition list
+  =
   let enum_sym = generate_sym_with_suffix cn_datatype.cn_dt_name in
   let constructor_syms = List.map fst cn_datatype.cn_dt_cases in
   let generate_enum_member sym =
@@ -1679,7 +1683,9 @@ let cn_to_ail_datatype ?(first = false) (cn_datatype : cn_datatype) =
   (cn_datatype.cn_dt_magic_loc, enum :: structs)
 
 
-let generate_datatype_equality_function (cn_datatype : cn_datatype) =
+let generate_datatype_equality_function (cn_datatype : cn_datatype)
+  : (A.sigma_declaration * 'a A.sigma_function_definition) list
+  =
   (*
      type cn_datatype 'a = <|
      cn_dt_loc: Loc.t;
@@ -1956,8 +1962,8 @@ let generate_datatype_default_function (cn_datatype : cn_datatype) =
 let generate_struct_equality_function
   ?(is_record = false)
   dts
-  ((sym, (loc, attrs, tag_def)) :
-    A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))
+  ((sym, (loc, attrs, tag_def)) : A.sigma_tag_definition)
+  : (A.sigma_declaration * 'a A.sigma_function_definition) list
   =
   match tag_def with
   | C.StructDef (members, _) ->
@@ -2066,8 +2072,8 @@ let generate_struct_equality_function
 let generate_struct_default_function
   ?(is_record = false)
   dts
-  ((sym, (loc, attrs, tag_def)) :
-    A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))
+  ((sym, (loc, attrs, tag_def)) : A.sigma_tag_definition)
+  : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
   match tag_def with
   | C.StructDef (members, _) ->
@@ -2135,9 +2141,8 @@ let generate_struct_default_function
   | C.UnionDef _ -> []
 
 
-let generate_struct_map_get
-  ((sym, (loc, attrs, tag_def)) :
-    A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))
+let generate_struct_map_get ((sym, (loc, attrs, tag_def)) : A.sigma_tag_definition)
+  : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
   =
   match tag_def with
   | C.StructDef _ ->
@@ -2147,8 +2152,8 @@ let generate_struct_map_get
 
 
 let generate_struct_conversion_function
-  ((sym, (loc, attrs, tag_def)) :
-    A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))
+  ((sym, (loc, attrs, tag_def)) : A.sigma_tag_definition)
+  : (A.sigma_declaration * 'a A.sigma_function_definition) list
   =
   match tag_def with
   | C.StructDef (members, _) ->
@@ -2210,7 +2215,9 @@ let generate_struct_conversion_function
 
 
 (* RECORDS *)
-let generate_record_equality_function dts (sym, (members : BT.member_types)) =
+let generate_record_equality_function dts (sym, (members : BT.member_types))
+  : (A.sigma_declaration * 'a A.sigma_function_definition) list
+  =
   let cn_sym = sym in
   let cn_struct_ctype = mk_ctype C.(Struct cn_sym) in
   let cn_struct_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, cn_struct_ctype)) in
@@ -2300,7 +2307,9 @@ let generate_record_equality_function dts (sym, (members : BT.member_types)) =
   [ (decl, def) ]
 
 
-let generate_record_default_function dts (sym, (members : BT.member_types)) =
+let generate_record_default_function dts (sym, (members : BT.member_types))
+  : (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
+  =
   let cn_sym = sym in
   let fn_str = "default_struct_" ^ Sym.pp_string cn_sym in
   let cn_struct_ctype = mk_ctype C.(Struct cn_sym) in
@@ -2362,9 +2371,8 @@ let generate_record_default_function dts (sym, (members : BT.member_types)) =
 
 let generate_record_map_get (sym, _) = generate_map_get sym
 
-let cn_to_ail_struct
-  ((sym, (loc, attrs, tag_def)) :
-    A.ail_identifier * (Cerb_location.t * CF.Annot.attributes * C.tag_definition))
+let cn_to_ail_struct ((sym, (loc, attrs, tag_def)) : A.sigma_tag_definition)
+  : A.sigma_tag_definition list
   =
   match tag_def with
   | C.StructDef (members, opt) ->
@@ -2749,8 +2757,11 @@ let rec generate_record_opt pred_sym = function
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function_internal
   (fn_sym, (lf_def : LogicalFunctions.definition))
-  cn_datatypes
-  cn_functions
+  (cn_datatypes : A.sigma_cn_datatype list)
+  (cn_functions : A.sigma_cn_function list)
+  : ((Locations.t * A.sigma_declaration)
+    * CF.GenTypes.genTypeCategory A.sigma_function_definition option)
+    * A.sigma_tag_definition option
   =
   let ret_type = bt_to_ail_ctype ~pred_sym:(Some fn_sym) lf_def.return_bt in
   (* let ret_type = mk_ctype C.(Pointer (empty_qualifiers, ret_type)) in *)
@@ -2927,7 +2938,12 @@ let cn_to_ail_predicate_internal
   (((loc, decl), def), ail_record_opt)
 
 
-let rec cn_to_ail_predicates_internal pred_def_list dts globals preds cn_preds =
+let rec cn_to_ail_predicates_internal pred_def_list dts globals preds cn_preds
+  : ((Locations.t * A.sigma_declaration)
+    * CF.GenTypes.genTypeCategory A.sigma_function_definition)
+      list
+    * A.sigma_tag_definition option list
+  =
   match pred_def_list with
   | [] -> ([], [])
   | p :: ps ->
@@ -3215,7 +3231,7 @@ let rec cn_to_ail_pre_post_aux_internal
     cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_return_type lat
 
 
-let cn_to_ail_pre_post_internal with_ownership_checking dts preds globals c_return_type
+let cn_to_ail_pre_post_internal ~with_ownership_checking dts preds globals c_return_type
   = function
   | Some internal ->
     let ail_executable_spec =

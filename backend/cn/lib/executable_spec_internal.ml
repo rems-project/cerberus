@@ -94,7 +94,7 @@ let generate_c_pres_and_posts_internal
   let globals = extract_global_variables prog5.mu_globs in
   let ail_executable_spec =
     Cn_internal_to_ail.cn_to_ail_pre_post_internal
-      with_ownership_checking
+      ~with_ownership_checking
       dts
       preds
       globals
@@ -564,7 +564,7 @@ let generate_ownership_functions
   let ail_funs =
     List.map
       (fun ctype ->
-        Cn_internal_to_ail.generate_ownership_function with_ownership_checking ctype)
+        Cn_internal_to_ail.generate_ownership_function ~with_ownership_checking ctype)
       ctypes
   in
   let decls, defs = List.split ail_funs in
