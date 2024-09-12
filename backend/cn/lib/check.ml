@@ -431,6 +431,22 @@ let check_has_alloc_id loc ptr ub_unspec =
     fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
 
 
+let check_live_alloc_bounds loc arg ub constr =
+  let@ base_size = RI.Special.get_live_alloc loc Ptr_diff arg in
+  let here = Locations.other __FUNCTION__ in
+  let base, size = Alloc.History.get_base_size base_size here in
+  if !use_vip then (
+    let constr = constr ~base ~size in
+    let@ provable = provable loc in
+    match provable @@ LC.T constr with
+    | `True -> return ()
+    | `False ->
+      let@ model = model () in
+      fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } }))
+  else
+    return ()
+
+
 let rec check_pexpr (pe : BT.t Mu.mu_pexpr) (k : IT.t -> unit m) : unit m =
   let orig_pe = pe in
   let (Mu.M_Pexpr (loc, _, expect, pe_)) = pe in
@@ -1342,10 +1358,8 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
                 let@ model = model () in
                 fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
               | `True ->
-                let@ base_size = RI.Special.get_live_alloc loc Ptr_diff arg1 in
                 let@ () =
-                  if !use_vip then (
-                    let base, size = Alloc.History.get_base_size base_size here in
+                  check_live_alloc_bounds loc arg1 ub (fun ~base ~size ->
                     let addr1, addr2 = (addr_ arg1 here, addr_ arg2 here) in
                     let lower1, lower2 =
                       (le_ (base, addr1) here, le_ (base, addr2) here)
@@ -1354,16 +1368,7 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
                       ( le_ (addr1, add_ (base, size) here) here,
                         le_ (addr2, add_ (base, size) here) here )
                     in
-                    match
-                      provable @@ LC.T (and_ [ lower1; lower2; upper1; upper2 ] here)
-                    with
-                    | `True -> return ()
-                    | `False ->
-                      let@ model = model () in
-                      fail (fun ctxt ->
-                        { loc; msg = Undefined_behaviour { ub; ctxt; model } }))
-                  else
-                    return ()
+                    and_ [ lower1; lower2; upper1; upper2 ] here)
                 in
                 let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
                 let value =
