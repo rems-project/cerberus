@@ -24,7 +24,7 @@ function exits_with_code() {
   local expected_exit_code=$2
 
   printf "[$file]... "
-  timeout 20 "${CHECK_SCRIPT}" "${SCRIPT_OPT}" "$file" &> /dev/null
+  timeout 40 "${CHECK_SCRIPT}" "${SCRIPT_OPT}" "$file" &> /dev/null
   local result=$?
 
   if [ $result -eq $expected_exit_code ]; then

@@ -1239,52 +1239,25 @@ let make globals =
   s
 
 
-(** Evaluate terms in the context of a model computed by the solver. *)
-let model_evaluator solver mo =
-  match SMT.to_list mo with
-  | None -> failwith "model is an atom"
-  | Some defs ->
-    let scfg = solver.smt_solver.config in
-    let cfg = { scfg with log = Logger.make "model" } in
-    let s = SMT.new_solver cfg in
-    let gs = solver.globals in
-    let evaluator =
-      { smt_solver = s;
-        cur_frame = ref (empty_solver_frame ());
-        prev_frames =
-          ref (List.map copy_solver_frame (!(solver.cur_frame) :: !(solver.prev_frames)))
-          (* We keep the prev_frames because things that were declared, would now be
-             defined by the model. Also, we need the infromation about the C type
-             mapping. *);
-        name_seed = solver.name_seed;
-        globals = gs
-      }
-    in
-    declare_solver_basics evaluator;
-    List.iter (debug_ack_command evaluator) defs;
-    fun e ->
-      push evaluator;
-      let inp = translate_term evaluator e in
-      (match SMT.check s with
-       | SMT.Sat ->
-         let res = SMT.get_expr s inp in
-         pop evaluator 1;
-         let ctys = get_ctype_table evaluator in
-         Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
-       | _ ->
-         pop evaluator 1;
-         None)
-
-
 (* ---------------------------------------------------------------------------*)
 (* GLOBAL STATE: Models *)
 (* ---------------------------------------------------------------------------*)
 
-type model = IT.t -> IT.t option
+type model = int
+
+type model_fn = IT.t -> IT.t option
 
 type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
-let empty_model it = Some it
+type model_table = (model, model_fn) Hashtbl.t
+
+let models_tbl : model_table = Hashtbl.create 1
+
+let empty_model =
+  let model = Option.some in
+  Hashtbl.add models_tbl 0 model;
+  0
+
 
 type model_state =
   | Model of model_with_q
@@ -1293,6 +1266,67 @@ type model_state =
 let model_state = ref No_model
 
 let model () = match !model_state with No_model -> assert false | Model mo -> mo
+
+(** Evaluate terms in the context of a model computed by the solver. *)
+let model_evaluator =
+  let model_evaluator_solver = ref None in
+  let currently_loaded_model = ref 0 in
+  let new_model_id =
+    let model_id = ref 0 in
+    fun () ->
+      (* Start with 1, as 0 is the id of the empty model *)
+      model_id := !model_id + 1;
+      !model_id
+  in
+  fun solver mo ->
+    match SMT.to_list mo with
+    | None -> failwith "model is an atom"
+    | Some defs ->
+      let scfg = solver.smt_solver.config in
+      let cfg = { scfg with log = Logger.make "model" } in
+      let smt_solver, new_solver =
+        match !model_evaluator_solver with
+        | Some smt_solver -> (smt_solver, false)
+        | None ->
+          let s = SMT.new_solver cfg in
+          model_evaluator_solver := Some s;
+          (s, true)
+      in
+      let model_id = new_model_id () in
+      let gs = solver.globals in
+      let evaluator =
+        { smt_solver;
+          cur_frame = ref (empty_solver_frame ());
+          prev_frames =
+            ref
+              (List.map copy_solver_frame (!(solver.cur_frame) :: !(solver.prev_frames)))
+            (* We keep the prev_frames because things that were declared, would now be
+               defined by the model. Also, we need the infromation about the C type
+               mapping. *);
+          name_seed = solver.name_seed;
+          globals = gs
+        }
+      in
+      if new_solver then (
+        declare_solver_basics evaluator;
+        push evaluator);
+      let model_fn e =
+        if not (!currently_loaded_model = model_id) then (
+          currently_loaded_model := model_id;
+          pop evaluator 1;
+          push evaluator;
+          List.iter (debug_ack_command evaluator) defs);
+        let inp = translate_term evaluator e in
+        match SMT.check smt_solver with
+        | SMT.Sat ->
+          let res = SMT.get_expr smt_solver inp in
+          let ctys = get_ctype_table evaluator in
+          Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
+        | _ -> None
+      in
+      Hashtbl.add models_tbl model_id model_fn;
+      model_id
+
 
 (* ---------------------------------------------------------------------------*)
 
@@ -1343,7 +1377,10 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
    reason) *)
 
 (* ISD: Could these globs be different from the saved ones? *)
-let eval _globs mo t = mo t
+let eval _globs mo t =
+  let model_fn = Hashtbl.find models_tbl mo in
+  model_fn t
+
 
 (* Dummy implementations *)
 let random_seed = ref 0
