@@ -37,6 +37,7 @@ let call_prefix = function
 
 
 type situation =
+  | Ptr_diff
   | Access of access
   | Call of call_situation
 
@@ -58,6 +59,7 @@ let call_situation = function
 
 let checking_situation = function
   | Access _ -> !^"checking access"
+  | Ptr_diff -> !^"checking pointer difference"
   | Call s -> call_situation s
 
 
@@ -71,6 +73,7 @@ let for_access = function
 
 let for_situation = function
   | Access access -> for_access access
+  | Ptr_diff -> !^"for subtracting pointers"
   | Call s ->
     (match s with
      | FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
@@ -163,8 +166,8 @@ type message =
         reason : string
       }
   | Illtyped_binary_it of
-      { left : SurfaceBaseTypes.t Terms.term;
-        right : SurfaceBaseTypes.t Terms.term;
+      { left : IT.Surface.t;
+        right : IT.Surface.t;
         binop : CF.Cn.cn_binop
       }
   | NIA of
@@ -301,7 +304,7 @@ let pp_message te =
       !^"the first input argument of predicate"
       ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname)
       ^^^ !^"must have type"
-      ^^^ Pp.squotes BaseTypes.(pp Loc)
+      ^^^ Pp.squotes BaseTypes.(pp (Loc ()))
       ^^^ !^"but was found with type"
       ^^^ Pp.squotes BaseTypes.(pp found_bty)
     in
@@ -376,7 +379,7 @@ let pp_message te =
     in
     { short; descr = Some descr; state = None }
   | Mismatch { has; expect } ->
-    let short = !^"Type error" in
+    let short = !^"Mismatched types." in
     let descr =
       !^"Expected value of type"
       ^^^ squotes expect
@@ -400,7 +403,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | NIA { it; hint } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Non-linear integer arithmetic." in
     let descr =
       !^"Illtyped expression"
       ^^^ squotes it
@@ -413,7 +416,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | TooBigExponent { it } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Exponent too big" in
     let descr =
       !^"Illtyped expression"
       ^^^ squotes it
@@ -426,7 +429,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | NegativeExponent { it } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Negative exponent" in
     let descr =
       !^"Illtyped expression"
       ^^ squotes it
@@ -529,11 +532,11 @@ let pp_message te =
       Some
         (squotes (IT.pp left)
          ^^^ !^"has type"
-         ^^^ squotes (SurfaceBaseTypes.pp (IT.bt left))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.bt left))
          ^^ comma
          ^^^ squotes (IT.pp right)
          ^^^ !^"has type"
-         ^^^ squotes (SurfaceBaseTypes.pp (IT.bt right))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.bt right))
          ^^ dot)
     in
     { short; descr; state = None }

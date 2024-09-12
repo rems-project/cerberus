@@ -166,7 +166,7 @@ let cpp (conf, io) ~filename =
         return @@ String.concat "\n" out
   end ()
 
-let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
+let c_frontend ?(cn_init_scope=Cn_desugaring.empty_init) (conf, io) (core_stdlib, core_impl) ~filename =
   Cerb_fresh.set_digest filename;
   let parse filename file_content =
     C_parser_driver.parse_from_string ~filename file_content >>= fun cabs_tunit ->
@@ -188,7 +188,7 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
     ret in
   let desugar cabs_tunit =
     let (ailnames, core_stdlib_fun_map) = core_stdlib in
-    Cabs_to_ail.desugar (ailnames, core_stdlib_fun_map, core_impl) cnnames
+    Cabs_to_ail.desugar (ailnames, core_stdlib_fun_map, core_impl) cn_init_scope
       "main" cabs_tunit >>= fun (markers_env, ail_prog) ->
           io.set_progress "DESUG"
       >|> io.pass_message "Cabs -> Ail completed!"
@@ -234,8 +234,8 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
   ail_typechecking ail_prog   >>= fun ailtau_prog             ->
   return (cabs_tunit, (markers_env, ailtau_prog))
 
-let c_frontend_and_elaboration ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
-  c_frontend ~cnnames (conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
+let c_frontend_and_elaboration ?(cn_init_scope=Cn_desugaring.empty_init) (conf, io) (core_stdlib, core_impl) ~filename =
+  c_frontend ~cn_init_scope (conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
   (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
      used more than once, we need to do reset here *)
   (* TODO(someday): find a better way *)

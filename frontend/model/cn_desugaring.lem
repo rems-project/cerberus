@@ -1,6 +1,6 @@
 (* Cabs to Ail desugaring auxiliary functions (included in Cabs_to_ail_effect) *)
 open import Pervasives
-import Symbol Loc Ctype State_exception Errors Map_extra String_extra
+import Symbol Loc Ctype State_exception Errors Map_extra Maybe String_extra
 
 open import Cn
 
@@ -17,14 +17,33 @@ type cn_desugaring_state = <|
   cn_type_synonyms: map Symbol.identifier (cn_base_type Symbol.sym);
 |>
 
-let initial_cn_desugaring_state cn_initial_function_identifiers = 
-  let cn_idents = 
-    List.foldl (fun acc (str, sym) ->
-        let entry = (CN_function, Symbol.Identifier Loc.unknown str) in
-        if Map.member entry acc 
+type init_scope = <|
+  functions: list (string * Symbol.sym * maybe Loc.t);
+  predicates: list (string * Symbol.sym * maybe Loc.t);
+  idents: list (string * Symbol.sym * maybe Loc.t);
+|>
+
+let empty_init = <|
+  functions = [];
+  predicates = [];
+  idents = [];
+|>
+
+let initial_cn_desugaring_state cn_desugaring_init =
+  let add (type_, names) acc =
+    List.foldl (fun acc (str, sym, loc) ->
+        let loc = match loc with | Just loc -> loc | Nothing -> Loc.unknown end in
+        let entry = (type_, Symbol.Identifier loc str) in
+        if Map.member entry acc
         then Assert_extra.failwith (str ^ " already registered as CN function name")
         else Map.insert entry sym acc
-      ) Map.empty cn_initial_function_identifiers
+      ) acc names
+  in
+  let cn_idents =
+    add (CN_function, cn_desugaring_init.functions)
+      (add (CN_predicate, cn_desugaring_init.predicates)
+        (add (CN_vars, cn_desugaring_init.idents)
+          Map.empty))
   in
 <|
   cn_idents= cn_idents;

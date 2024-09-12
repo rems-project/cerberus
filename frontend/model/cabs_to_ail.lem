@@ -4896,7 +4896,7 @@ let register_additional_cn_var id = E.register_cn_ident CN_vars id
 
 
 import Core
-val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> string -> translation_unit ->
+val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> string -> translation_unit ->
   Exception.exceptM (E.fin_markers_env * ail_program unit) Errors.error
 let desugar core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
 (*

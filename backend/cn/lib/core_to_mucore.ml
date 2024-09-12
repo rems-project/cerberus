@@ -9,7 +9,7 @@ module BT = BaseTypes
 module C = Compile
 module IT = IndexTerms
 module IdMap = Map.Make (Id)
-module SBT = SurfaceBaseTypes
+module SBT = BaseTypes.Surface
 module SymMap = Map.Make (Sym)
 module SymSet = Set.Make (Sym)
 
@@ -642,7 +642,7 @@ let unsupported loc doc = fail { loc; msg = Unsupported (!^"unsupported" ^^^ doc
 
 let rec n_expr
   ~inherit_loc
-  (loc : Loc.t)
+  (loc : Locations.t)
   ((env, old_states), desugaring_things)
   (global_types, visible_objects_env)
   e
@@ -891,13 +891,11 @@ let make_largs f_i =
       let st = C.LocalState.add_pointee_values pointee_values st in
       let@ lat = aux env st conditions in
       return
-        (mResource
-           ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None))
-           (mConstraints lcs lat))
+        (mResource ((name, (pt_ret, SBT.proj oa_bt)), (loc, None)) (mConstraints lcs lat))
     | Cn.CN_cletExpr (loc, name, expr) :: conditions ->
       let@ expr = C.LocalState.handle st (C.ET.translate_cn_expr SymSet.empty env expr) in
       let@ lat = aux (C.add_logical name (IT.bt expr) env) st conditions in
-      return (mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
+      return (mDefine ((name, IT.Surface.proj expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conditions ->
       let@ lc = C.LocalState.handle st (C.ET.translate_cn_assrt env (loc, constr)) in
       let@ lat = aux env st conditions in
@@ -919,9 +917,7 @@ let rec make_largs_with_accesses f_i env st (accesses, conditions) =
     in
     let@ lat = make_largs_with_accesses f_i env st (accesses, conditions) in
     return
-      (mResource
-         ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None))
-         (mConstraints lcs lat))
+      (mResource ((name, (pt_ret, SBT.proj oa_bt)), (loc, None)) (mConstraints lcs lat))
   | [] -> make_largs f_i env st conditions
 
 
@@ -935,11 +931,11 @@ let make_label_args f_i loc env st args (accesses, inv) =
   let rec aux (resources, good_lcs) env st = function
     | ((o_s, (ct, pass_by_value_or_pointer)), (s, cbt)) :: rest ->
       assert (Option.equal Sym.equal o_s (Some s));
-      let@ () = check_against_core_bt loc cbt Loc in
+      let@ () = check_against_core_bt loc cbt (Loc ()) in
       assert (is_pass_by_pointer pass_by_value_or_pointer);
       (* now interesting only: s, ct, rest *)
       let sct = convert_ct loc ct in
-      let p_sbt = SBT.Loc (Some sct) in
+      let p_sbt = BT.Loc (Some sct) in
       let env = C.add_computational s p_sbt env in
       (* let good_pointer_lc = *)
       (*   let info = (loc, Some (Sym.pp_string s ^ " good")) in *)
@@ -949,7 +945,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
       let@ oa_name, ((pt_ret, oa_bt), lcs), value = C.ownership (loc, (s, ct)) env in
       let env = C.add_logical oa_name oa_bt env in
       let st = C.LocalState.add_c_variable_state s (CVS_Pointer_pointing_to value) st in
-      let owned_res = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
+      let owned_res = ((oa_name, (pt_ret, SBT.proj oa_bt)), (loc, None)) in
       let alloc_res = C.allocation_token loc s in
       let@ at =
         aux
@@ -958,7 +954,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
           st
           rest
       in
-      return (mComputational ((s, Loc), (loc, None)) at)
+      return (mComputational ((s, Loc ()), (loc, None)) at)
     | [] ->
       let@ lat = make_largs_with_accesses f_i env st (accesses, inv) in
       let at = mResources resources (mConstraints good_lcs lat) in
@@ -973,7 +969,7 @@ let make_function_args f_i loc env args (accesses, requires) =
       assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
       let ct = convert_ct loc ct in
       let sbt = Memory.sbt_of_sct ct in
-      let bt = SBT.to_basetype sbt in
+      let bt = SBT.proj sbt in
       let@ () = check_against_core_bt loc cbt bt in
       let env = C.add_computational pure_arg sbt env in
       let arg_state = C.LocalState.CVS_Value (pure_arg, sbt) in
@@ -999,10 +995,10 @@ let make_fun_with_spec_args f_i loc env args requires =
     | ((pure_arg, cn_bt), ct_ct) :: rest ->
       let ct = convert_ct loc ct_ct in
       let sbt = Memory.sbt_of_sct ct in
-      let bt = SBT.to_basetype sbt in
+      let bt = SBT.proj sbt in
       let sbt2 = C.translate_cn_base_type env cn_bt in
       let@ () =
-        if BT.equal bt (SBT.to_basetype sbt2) then
+        if BT.equal bt (SBT.proj sbt2) then
           return ()
         else
           fail
@@ -1013,7 +1009,7 @@ let make_fun_with_spec_args f_i loc env args requires =
                    ^^^ BT.pp bt
                    ^^^ parens (!^"from" ^^^ Sctypes.pp ct)
                    ^^^ !^"and"
-                   ^^^ BT.pp (SBT.to_basetype sbt2))
+                   ^^^ BT.pp (SBT.proj sbt2))
             }
       in
       let env = C.add_computational pure_arg sbt env in
@@ -1417,23 +1413,24 @@ let normalise_fun_map
 
 
 let normalise_globs ~inherit_loc env _sym g =
-  let loc = Loc.other __FUNCTION__ in
+  let loc = Locations.other __FUNCTION__ in
   match g with
   | GlobalDef ((bt, ct), e) ->
-    let@ () = check_against_core_bt loc bt BT.Loc in
+    let@ () = check_against_core_bt loc bt BT.(Loc ()) in
     (* this may have to change *)
     let@ e =
       n_expr
         ~inherit_loc
         loc
         ( (env, C.LocalState.init_st.old_states),
-          (Pmap.empty Int.compare, CF.Cn_desugaring.initial_cn_desugaring_state []) )
+          ( Pmap.empty Int.compare,
+            CF.Cn_desugaring.(initial_cn_desugaring_state empty_init) ) )
         ([], Pmap.empty Int.compare)
         e
     in
     return (M_GlobalDef (convert_ct loc ct, e))
   | GlobalDecl (bt, ct) ->
-    let@ () = check_against_core_bt loc bt BT.Loc in
+    let@ () = check_against_core_bt loc bt BT.(Loc ()) in
     return (M_GlobalDecl (convert_ct loc ct))
 
 
@@ -1504,17 +1501,15 @@ let normalise_tag_definitions tagDefs =
 let register_glob env (sym, glob) =
   match glob with
   | M_GlobalDef (ct, _e) ->
-    C.add_computational sym (SBT.Loc (Some ct)) env
+    C.add_computational sym (BT.Loc (Some ct)) env
     (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
-  | M_GlobalDecl ct -> C.add_computational sym (SBT.Loc (Some ct)) env
+  | M_GlobalDecl ct -> C.add_computational sym (BT.Loc (Some ct)) env
 
 
 (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
 
 let translate_datatype env Cn.{ cn_dt_loc; cn_dt_name; cn_dt_cases; cn_dt_magic_loc = _ } =
-  let translate_arg (id, bt) =
-    (id, SBT.to_basetype (Compile.translate_cn_base_type env bt))
-  in
+  let translate_arg (id, bt) = (id, SBT.proj (Compile.translate_cn_base_type env bt)) in
   let cases = List.map (fun (c, args) -> (c, List.map translate_arg args)) cn_dt_cases in
   (cn_dt_name, { loc = cn_dt_loc; cases })
 
@@ -1600,7 +1595,7 @@ type fn_spec_instrumentation = (ReturnTypes.t * statements) ArgumentTypes.t
 
 type instrumentation =
   { fn : Sym.t;
-    fn_loc : Loc.t;
+    fn_loc : Locations.t;
     internal : fn_spec_instrumentation option
   }
 

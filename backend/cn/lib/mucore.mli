@@ -8,112 +8,8 @@
    enormous, but mostly types and small functions, and everything it defines is used
    elsewhere. *)
 
-module Loc = Cerb_location
-module IT = IndexTerms
-
-(* TODO: BCP: The following module type should be replaced by something like
-
-   module SymSet : Set.S with type elt = Sym.t
-
-   or
-
-   module SymSet : Set.S with type elt = Sym.t type t = Stdlib__Set.Make(Sym).t
-
-   but neither of these seem to work and I cannot find exactly the right incantation. *)
-module SymSet : sig
-  type elt = Sym.t
-
-  type t = Stdlib__Set.Make(Sym).t
-
-  val empty : t
-
-  val is_empty : t -> bool
-
-  val mem : elt -> t -> bool
-
-  val add : elt -> t -> t
-
-  val singleton : elt -> t
-
-  val remove : elt -> t -> t
-
-  val union : t -> t -> t
-
-  val inter : t -> t -> t
-
-  val disjoint : t -> t -> bool
-
-  val diff : t -> t -> t
-
-  val compare : t -> t -> int
-
-  val equal : t -> t -> bool
-
-  val subset : t -> t -> bool
-
-  val iter : (elt -> unit) -> t -> unit
-
-  val map : (elt -> elt) -> t -> t
-
-  val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
-
-  val for_all : (elt -> bool) -> t -> bool
-
-  val exists : (elt -> bool) -> t -> bool
-
-  val filter : (elt -> bool) -> t -> t
-
-  val filter_map : (elt -> elt option) -> t -> t
-
-  val partition : (elt -> bool) -> t -> t * t
-
-  val cardinal : t -> int
-
-  val elements : t -> elt list
-
-  val min_elt : t -> elt
-
-  val min_elt_opt : t -> elt option
-
-  val max_elt : t -> elt
-
-  val max_elt_opt : t -> elt option
-
-  val choose : t -> elt
-
-  val choose_opt : t -> elt option
-
-  val split : elt -> t -> t * bool * t
-
-  val find : elt -> t -> elt
-
-  val find_opt : elt -> t -> elt option
-
-  val find_first : (elt -> bool) -> t -> elt
-
-  val find_first_opt : (elt -> bool) -> t -> elt option
-
-  val find_last : (elt -> bool) -> t -> elt
-
-  val find_last_opt : (elt -> bool) -> t -> elt option
-
-  val of_list : elt list -> t
-
-  val to_seq_from : elt -> t -> elt Seq.t
-
-  val to_seq : t -> elt Seq.t
-
-  val to_rev_seq : t -> elt Seq.t
-
-  val add_seq : elt Seq.t -> t -> t
-
-  val of_seq : elt Seq.t -> t
-end
-
-type loc = Loc.t
-
 type trusted =
-  | Trusted of Cerb_location.t
+  | Trusted of Locations.t
   | Checked
 
 type make_logical_function = Make_Logical_Function of Id.t
@@ -147,7 +43,7 @@ type symbol = Cerb_frontend.Symbol.sym
 (** Annotated C type.  The annotations are typically an explanation of
     something that might go wrong (e.g., overflow on an integer type). *)
 type act =
-  { loc : loc; (** Source location *)
+  { loc : Locations.t; (** Source location *)
     annot : Cerb_frontend.Annot.annot list; (** Annotations *)
     ct : T.ct (** Affected type *)
   }
@@ -188,7 +84,7 @@ type 'TY mu_pattern_ =
   | M_CaseCtor of mu_ctor * 'TY mu_pattern list
 
 and 'TY mu_pattern =
-  | M_Pattern of loc * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_pattern_
+  | M_Pattern of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_pattern_
 
 type mu_function =
   | M_F_params_length
@@ -248,9 +144,10 @@ type 'TY mu_pexpr_ =
   | M_PElet of 'TY mu_pattern * 'TY mu_pexpr * 'TY mu_pexpr
   | M_PEif of 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr
 
-and 'TY mu_pexpr = M_Pexpr of loc * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_pexpr_
+and 'TY mu_pexpr =
+  | M_Pexpr of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_pexpr_
 
-val loc_of_pexpr : 'a mu_pexpr -> loc
+val loc_of_pexpr : 'a mu_pexpr -> Locations.t
 
 type m_kill_kind =
   | M_Dynamic
@@ -338,9 +235,10 @@ type 'TY mu_expr_ =
       (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_statement list
       * Cnprog.cn_prog list
 
-and 'TY mu_expr = M_Expr of loc * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_expr_
+and 'TY mu_expr =
+  | M_Expr of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_expr_
 
-val loc_of_expr : 'a mu_expr -> loc
+val loc_of_expr : 'a mu_expr -> Locations.t
 
 type info = Locations.info
 
@@ -387,14 +285,14 @@ val mResources
   'a mu_arguments_l ->
   'a mu_arguments_l
 
-val mu_fun_param_types : mu_function -> BaseTypes.basetype list
+val mu_fun_param_types : mu_function -> BaseTypes.t list
 
 val is_ctype_const : 'a mu_pexpr -> Cerb_frontend.Ctype.ctype option
 
 val mu_fun_return_type
   :  mu_function ->
   'a mu_pexpr list ->
-  [> `Returns_BT of Memory.BT.basetype | `Returns_Integer ] Option.t
+  [> `Returns_BT of BaseTypes.t | `Returns_Integer ] Option.t
 
 val pp_function : mu_function -> Pp.document
 
@@ -408,7 +306,7 @@ val bt_of_object_value : 'a mu_object_value -> 'a
 
 val bt_of_pattern : 'a mu_pattern -> 'a
 
-val loc_of_pattern : 'a mu_pattern -> loc
+val loc_of_pattern : 'a mu_pattern -> Locations.t
 
 val bt_of_expr : 'TY mu_expr -> 'TY
 
@@ -416,16 +314,16 @@ val bt_of_pexpr : 'TY mu_pexpr -> 'TY
 
 val evaluate_fun
   :  mu_function ->
-  IT.BT.basetype IT.term list ->
-  [> `Result_IT of IT.BT.basetype IT.term | `Result_Integer of Z.t ] Option.m
+  IndexTerms.t list ->
+  [> `Result_IT of IndexTerms.t | `Result_Integer of Z.t ] Option.m
 
 type parse_ast_label_spec =
   { label_spec : (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_condition list }
 
 type 'TY mu_label_def =
-  | M_Return of loc
+  | M_Return of Locations.t
   | M_Label of
-      loc
+      Locations.t
       * 'TY mu_expr mu_arguments
       * Cerb_frontend.Annot.annot list
       * parse_ast_label_spec
@@ -469,12 +367,12 @@ type mu_tag_definitions = (Cerb_frontend.Symbol.sym, mu_tag_definition) Pmap.map
 type 'TY mu_globs_list = (symbol * 'TY mu_globs) list
 
 type mu_datatype =
-  { loc : Loc.t;
+  { loc : Locations.t;
     cases : (Sym.t * (Id.t * T.bt) list) list
   }
 
 type mu_function_to_convert =
-  { loc : Loc.t;
+  { loc : Locations.t;
     c_fun_sym : Sym.t;
     l_fun_sym : Sym.t
   }
@@ -485,7 +383,7 @@ type 'TY mu_file =
     mu_globs : 'TY mu_globs_list;
     mu_funs : 'TY mu_fun_map;
     mu_extern : mu_extern_map;
-    mu_stdlib_syms : SymSet.t;
+    mu_stdlib_syms : Set.Make(Sym).t;
     mu_mk_functions : mu_function_to_convert list;
     mu_resource_predicates : T.resource_predicates;
     mu_logical_predicates : T.logical_predicates;

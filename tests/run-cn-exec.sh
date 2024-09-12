@@ -17,7 +17,7 @@ CHECK_SCRIPT="${RUNTIME_PREFIX}/libexec/cn-runtime-single-file.sh"
 
 [ -f "${CHECK_SCRIPT}" ] || echo_and_err "Could not find single file helper script: ${CHECK_SCRIPT}"
 
-SCRIPT_OPT="-oq"
+SCRIPT_OPT="-ovq"
 
 function exits_with_code() {
   local file=$1
@@ -84,12 +84,17 @@ SUCCESS=$(find cn -name '*.c' \
     ! -name "bitwise_compl.c" \
     ! -name "fun_ptr_extern.c" \
     ! -name "b_xor.c" \
-    ! -name "mask_ptr.c" \
     ! -name "copy_alloc_id.c" \
     ! -name "has_alloc_id.c" \
+    ! -name "has_alloc_id_shift.c" \
     ! -name "ptr_diff2.c" \
     ! -name "has_alloc_id_ptr_neq.c" \
     ! -name "spec_null_shift.c" \
+    ! -name "alloc_token.c" \
+    ! -name "ptr_diff.c" \
+    ! -name "mask_ptr.c" \
+    ! -name "previously_inconsistent_assumptions1.c" \
+    ! -name "previously_inconsistent_assumptions2.c" \
 )
 
 # Include files which cause error for proof but not testing
@@ -138,12 +143,17 @@ BUGGY="cn/division_casting.c \
        cn/bitwise_compl.c \
        cn/fun_ptr_extern.c \
        cn/b_xor.c \
-       cn/mask_ptr.c \
        cn/copy_alloc_id.c \
        cn/has_alloc_id.c \
+       cn/has_alloc_id_shift.c \
        cn/ptr_diff2.c \
        cn/has_alloc_id_ptr_neq.c \
        cn/spec_null_shift.c \
+       cn/alloc_token.c \
+       cn/ptr_diff.c \
+       cn/mask_ptr.c \
+       cn/previously_inconsistent_assumptions1.c \
+       cn/previously_inconsistent_assumptions2.c \
        "
 
 # Exclude files which cause error for proof but not testing

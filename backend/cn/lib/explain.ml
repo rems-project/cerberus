@@ -215,7 +215,7 @@ let state ctxt model_with_q extras =
     let interesting, uninteresting =
       List.partition
         (fun (it, _entry) ->
-          match IT.bt it with BT.Unit -> false | BT.Loc -> false | _ -> true)
+          match IT.bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
         filtered
     in
     (List.map snd interesting, List.map snd uninteresting)
@@ -244,7 +244,7 @@ let state ctxt model_with_q extras =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
+          | P ret when equal_predicate_name ret.name ResourceTypes.alloc -> false
           | _ -> true)
         diff_res
     in

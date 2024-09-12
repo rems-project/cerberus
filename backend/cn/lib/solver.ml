@@ -455,7 +455,7 @@ let rec translate_base_type = function
   | Integer -> SMT.t_int
   | Bits (_, n) -> SMT.t_bits n
   | Real -> SMT.t_real
-  | Loc -> CN_Pointer.t
+  | Loc () -> CN_Pointer.t
   | Alloc_id -> CN_AllocId.t ()
   | CType -> SMT.t_int
   | List bt -> CN_List.t (translate_base_type bt)
@@ -485,7 +485,7 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
     let signed = equal_sign sign Signed in
     Const (Bits ((sign, n), SMT.to_bits n signed sexp))
   | Real -> Const (Q (SMT.to_q sexp))
-  | Loc ->
+  | Loc () ->
     (match SMT.to_con sexp with
      | con, [] when String.equal con CN_Pointer.null_name -> Const Null
      | con, [ sbase; saddr ] when String.equal con CN_Pointer.alloc_id_addr_name ->
@@ -529,9 +529,9 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
     Struct (tag, List.map2 mk_field fields vals)
   | Datatype tag ->
     let con, vals = SMT.to_con sexp in
-    let cons = (SymMap.find tag gs.datatypes).dt_constrs in
+    let cons = (SymMap.find tag gs.datatypes).constrs in
     let do_con c =
-      let fields = (SymMap.find c gs.datatype_constrs).c_params in
+      let fields = (SymMap.find c gs.datatype_constrs).params in
       let mk_field (l, t) v = (l, get_ivalue gs ctys t v) in
       Constructor (c, List.map2 mk_field fields vals)
     in
@@ -896,12 +896,12 @@ let rec translate_term s iterm =
   | MemberShift (t, tag, member) ->
     CN_Pointer.ptr_shift
       ~ptr:(translate_term s t)
-      ~null_case:(default Loc)
+      ~null_case:(default (Loc ()))
       ~offset:(translate_term s (IT (OffsetOf (tag, member), Memory.uintptr_bt, loc)))
   | ArrayShift { base; ct; index } ->
     CN_Pointer.ptr_shift
       ~ptr:(translate_term s base)
-      ~null_case:(default Loc)
+      ~null_case:(default (Loc ()))
       ~offset:
         (let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt loc in
          (* locations don't matter here - we are translating straight away *)
@@ -915,7 +915,7 @@ let rec translate_term s iterm =
   | CopyAllocId { addr; loc } ->
     CN_Pointer.copy_alloc_id
       ~ptr:(translate_term s loc)
-      ~null_case:(default Loc)
+      ~null_case:(default (Loc ()))
       ~addr:(translate_term s addr)
   | HasAllocId loc -> SMT.is_con CN_Pointer.alloc_id_addr_name (translate_term s loc)
   (* Lists *)
@@ -1016,7 +1016,7 @@ let rec translate_term s iterm =
   | Cast (cbt, t) ->
     let smt_term = translate_term s t in
     (match (IT.bt t, cbt) with
-     | Bits _, Loc ->
+     | Bits _, Loc () ->
        let addr =
          if BT.equal (IT.bt t) Memory.uintptr_bt then
            smt_term
@@ -1024,7 +1024,7 @@ let rec translate_term s iterm =
            bv_cast ~to_:Memory.uintptr_bt ~from:(IT.bt t) smt_term
        in
        CN_Pointer.bits_to_ptr ~bits:addr ~alloc_id:(default Alloc_id)
-     | Loc, Bits _ ->
+     | Loc (), Bits _ ->
        let maybe_cast x =
          if BT.equal cbt Memory.uintptr_bt then
            x
@@ -1032,7 +1032,8 @@ let rec translate_term s iterm =
            bv_cast ~to_:cbt ~from:Memory.uintptr_bt x
        in
        maybe_cast (CN_Pointer.addr_of ~ptr:smt_term)
-     | Loc, Alloc_id -> CN_Pointer.alloc_id_of ~ptr:smt_term ~null_case:(default Alloc_id)
+     | Loc (), Alloc_id ->
+       CN_Pointer.alloc_id_of ~ptr:smt_term ~null_case:(default Alloc_id)
      | Real, Integer -> SMT.real_to_int smt_term
      | Integer, Real -> SMT.int_to_real smt_term
      | Bits _, Bits _ -> bv_cast ~to_:cbt ~from:(IT.bt t) smt_term
@@ -1091,9 +1092,9 @@ let declare_datatype_group s names =
   let mk_con_field (l, t) = (CN_Names.datatype_field_name l, translate_base_type t) in
   let mk_con c =
     let ci = SymMap.find c s.globals.datatype_constrs in
-    (CN_Names.datatype_con_name c, List.map mk_con_field ci.c_params)
+    (CN_Names.datatype_con_name c, List.map mk_con_field ci.params)
   in
-  let cons info = List.map mk_con info.dt_constrs in
+  let cons (info : BT.dt_info) = List.map mk_con info.constrs in
   let to_smt (x : Sym.t) =
     let info = SymMap.find x s.globals.datatypes in
     (CN_Names.datatype_name x, [], cons info)

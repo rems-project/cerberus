@@ -1,22 +1,27 @@
-name: CI
+name: CI Benchmarks
 
 on:
-  pull_request:
   push:
     branches:
       - master
-      - cheri-tests
 
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
 
+permissions:
+  # deployments permission to deploy GitHub pages website
+  deployments: write
+  # contents permission to update benchmark contents in gh-pages branch
+  contents: write
+
 # cancel in-progress job when a new push is performed
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-bench-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  benchmark:
+    name: Performance benchmarks
     strategy:
       matrix:
         # version: [4.12.0, 4.14.1]
@@ -30,7 +35,7 @@ jobs:
 
     - name: System dependencies (ubuntu)
       run: |
-        sudo apt install build-essential libgmp-dev z3 opam cmake
+        sudo apt install build-essential libgmp-dev z3 opam cmake jq
 
     - name: Restore cached opam
       id: cache-opam-restore
@@ -69,13 +74,6 @@ jobs:
         opam pin --yes --no-action add cerberus .
         opam install --yes cerberus
 
-    - name: Run Cerberus CI tests
-      run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci.sh
-        cd ..
-
     - name: Download cvc5 release
       uses: robinraju/release-downloader@v1
       with:
@@ -96,50 +94,20 @@ jobs:
         opam pin --yes --no-action add cn .
         opam install --yes cn ocamlformat.0.26.2
 
-    - name: Check CN code formatting
+    - name: Run benchmark
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        USE_OPAM='' cd backend/cn && dune build @fmt
+        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh
+        cd ..
 
-    - name: Checkout cn-tutorial
-      uses: actions/checkout@v4
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
       with:
-        repository: rems-project/cn-tutorial
-        path: cn-tutorial
-
-    - name: Run CN CI tests
-      run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-cn.sh -v
-
-    - name: Run CN Tutorial CI tests
-      run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        USE_OPAM='' tests/run-cn-tutorial-ci.sh cn-tutorial
-
-    - name: Run CN-Test-Gen CI tests
-      run: |
-        opam switch ${{ matrix.version }}
-        eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-cn-test-gen.sh
-        cd ..
-
-    - name: Install Cerberus-CHERI
-      if: ${{ matrix.version == '4.14.1' }}
-      run: |
-        opam switch with_coq
-        eval $(opam env --switch=with_coq)
-        opam pin --yes --no-action add cerberus-lib .
-        opam pin --yes --no-action add cerberus-cheri .
-        opam install --yes cerberus-cheri
-
-    - name: Run Cerberus-CHERI CI tests
-      if: ${{ matrix.version == '4.14.1' }}
-      run: |
-        opam switch with_coq
-        eval $(opam env --switch=with_coq)
-        cd tests; USE_OPAM='' ./run-cheri.sh
-        cd ..
+        name: CN Benchmarks
+        tool: 'customSmallerIsBetter'
+        output-file-path: tests/benchmark-data.json
+        # Access token to deploy GitHub Pages branch
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        # Push and deploy GitHub pages branch automatically
+        auto-push: true

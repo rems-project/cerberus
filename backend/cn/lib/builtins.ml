@@ -1,4 +1,4 @@
-module SBT = SurfaceBaseTypes
+module SBT = BaseTypes.Surface
 open Resultat
 
 open Effectful.Make (Resultat)
@@ -51,7 +51,7 @@ let min_bits_def (sign, n) =
   let name = "MIN" ^ letter ^ Int.to_string n in
   ( name,
     Sym.fresh_named name,
-    mk_arg0 (fun loc -> IT.sterm_of_term @@ num_lit_ num (BT.Bits (sign, n)) loc) )
+    mk_arg0 (fun loc -> IT.Surface.inj @@ num_lit_ num (BT.Bits (sign, n)) loc) )
 
 
 let max_bits_def (sign, n) =
@@ -63,7 +63,7 @@ let max_bits_def (sign, n) =
   let name = "MAX" ^ letter ^ Int.to_string n in
   ( name,
     Sym.fresh_named name,
-    mk_arg0 (fun loc -> IT.sterm_of_term @@ num_lit_ num (BT.Bits (sign, n)) loc) )
+    mk_arg0 (fun loc -> IT.Surface.inj @@ num_lit_ num (BT.Bits (sign, n)) loc) )
 
 
 let mul_uf_def = ("mul_uf", Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
@@ -137,22 +137,21 @@ let array_to_list_def =
 let is_null_def =
   ( "is_null",
     Sym.fresh_named "is_null",
-    mk_arg1 (fun p loc' ->
-      IT.sterm_of_term IT.(eq_ (IT.term_of_sterm p, null_ loc') loc')) )
+    mk_arg1 (fun p loc' -> IT.Surface.inj IT.(eq_ (IT.Surface.proj p, null_ loc') loc'))
+  )
 
 
 let has_alloc_id_def =
   ( "has_alloc_id",
     Sym.fresh_named "has_alloc_id",
-    mk_arg1 (fun p loc' -> IT.sterm_of_term @@ IT.hasAllocId_ (IT.term_of_sterm p) loc')
-  )
+    mk_arg1 (fun p loc' -> IT.Surface.inj @@ IT.hasAllocId_ (IT.Surface.proj p) loc') )
 
 
 let ptr_eq_def =
   ( "ptr_eq",
     Sym.fresh_named "ptr_eq",
     mk_arg2 (fun (p1, p2) loc' ->
-      IT.(sterm_of_term @@ eq_ (term_of_sterm p1, term_of_sterm p2) loc')) )
+      IT.(Surface.inj @@ eq_ (Surface.proj p1, Surface.proj p2) loc')) )
 
 
 let prov_eq_def =
@@ -160,8 +159,8 @@ let prov_eq_def =
     Sym.fresh_named "prov_eq",
     mk_arg2 (fun (p1, p2) loc' ->
       IT.(
-        sterm_of_term
-        @@ eq_ (allocId_ (term_of_sterm p1) loc', allocId_ (term_of_sterm p2) loc') loc'))
+        Surface.inj
+        @@ eq_ (allocId_ (Surface.proj p1) loc', allocId_ (Surface.proj p2) loc') loc'))
   )
 
 
@@ -170,8 +169,8 @@ let addr_eq_def =
     Sym.fresh_named "addr_eq",
     mk_arg2 (fun (p1, p2) loc' ->
       IT.(
-        sterm_of_term
-        @@ eq_ (addr_ (term_of_sterm p1) loc', addr_ (term_of_sterm p2) loc') loc')) )
+        Surface.inj
+        @@ eq_ (addr_ (Surface.proj p1) loc', addr_ (Surface.proj p2) loc') loc')) )
 
 
 let max_min_bits =
