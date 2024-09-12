@@ -421,10 +421,10 @@ let check_against_core_bt loc msg2 cbt bt =
        bt)
 
 
-let check_has_alloc_id loc k ~ptr ~result ub_unspec =
+let check_has_alloc_id loc ptr ub_unspec =
   let@ provable = provable loc in
   match provable (LC.T (hasAllocId_ ptr loc)) with
-  | `True -> k result
+  | `True -> return ()
   | `False ->
     let@ model = model () in
     let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
@@ -532,14 +532,16 @@ let rec check_pexpr (pe : BT.t Mu.mu_pexpr) (k : IT.t -> unit m) : unit m =
            let result =
              arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc
            in
-           check_has_alloc_id loc k ~ptr:vt1 ~result CF.Undefined.UB_unspec_pointer_add))
+           let@ () = check_has_alloc_id loc vt1 CF.Undefined.UB_unspec_pointer_add in
+           k result))
      | M_PEmember_shift (pe, tag, member) ->
        let@ () = WellTyped.ensure_base_type loc ~expect (Loc ()) in
        let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe) in
        check_pexpr pe (fun vt ->
          let@ _ = get_struct_member_type loc tag member in
          let result = memberShift_ (vt, tag, member) loc in
-         check_has_alloc_id loc k ~ptr:vt ~result CF.Undefined.UB_unspec_pointer_add)
+         let@ () = check_has_alloc_id loc vt CF.Undefined.UB_unspec_pointer_add in
+         k result)
      | M_PEnot pe ->
        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
        let@ () = ensure_base_type loc ~expect:Bool (Mu.bt_of_pexpr pe) in
@@ -1438,7 +1440,8 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
               let result =
                 arrayShift_ ~base:vt1 ~index:(cast_ Memory.uintptr_bt vt2 loc) act.ct loc
               in
-              check_has_alloc_id loc k ~ptr:vt1 ~result CF.Undefined.UB_unspec_pointer_add))
+              let@ () = check_has_alloc_id loc vt1 CF.Undefined.UB_unspec_pointer_add in
+              k result))
         | M_PtrMemberShift (_tag_sym, _memb_ident, _pe) ->
           (* FIXME(CHERI merge) *)
           (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
@@ -1453,12 +1456,8 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
           check_pexpr pe1 (fun vt1 ->
             check_pexpr pe2 (fun vt2 ->
               let result = copyAllocId_ ~addr:vt1 ~loc:vt2 loc in
-              check_has_alloc_id
-                loc
-                k
-                ~ptr:vt2
-                ~result
-                CF.Undefined.UB_unspec_copy_alloc_id))
+              let@ () = check_has_alloc_id loc vt2 CF.Undefined.UB_unspec_copy_alloc_id in
+              k result))
         | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Cerb_debug.error "todo: M_Memcpy"
         | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
