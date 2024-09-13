@@ -2,7 +2,16 @@ Require Import CoqImplementation.
 Require Import CoqIntegerType.
 Require Import CoqCtype.
 
-Module AilTypesAux(IMP: Implementation).
+From CheriCaps.Morello Require Import CapFns Capabilities.
+From Morello Require Import CapabilitiesGS MorelloCapsGS.
+Module AilTypesAux
+  (IMP:Implementation(AddressValue)
+         (Flags)
+         (ObjType)
+         (SealType)
+         (Bounds)
+         (Permissions)
+         Capability_GS).
 
   Fixpoint is_signed_ity (fuel:nat) (ity:integerType) : option bool
     :=
