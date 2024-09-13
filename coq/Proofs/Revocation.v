@@ -5569,9 +5569,10 @@ Module CheriMemoryImplWithProofs
     (cap : Capability_GS.t)
     (cb : list ascii)
     (b : bool) :
-    Capability_GS.encode true cap = Some (cb, b) ->
+    Capability_GS.encode cap = Some (cb, b) ->
     Datatypes.length cb = sizeof_pointer MorelloImpl.get.
   Proof.
+    (* TODO: use Capability_GS.cap_encode_length *)
     intros.
     unfold Capability_GS.encode, Capability.encode in H.
     repeat break_match; try discriminate.
@@ -5583,9 +5584,10 @@ Module CheriMemoryImplWithProofs
     (cap : Capability_GS.t)
     (cb : list ascii)
     (b : bool) :
-    Capability_GS.encode true cap = Some (cb, b) ->
+    Capability_GS.encode cap = Some (cb, b) ->
     decode_cap (map Some cb) true cap.
   Proof.
+    (* TODO: use Capability_GS.cap_exact_encode_decode *)
     intros ENC.
     unfold decode_cap.
     exists cb.
@@ -5604,7 +5606,7 @@ Module CheriMemoryImplWithProofs
     forall s : mem_state_r,
       mem_invariant s ->
       forall (c : Capability_GS.t) (cb : list ascii) (b:bool),
-        Capability_GS.encode true c = Some (cb, b) ->
+        Capability_GS.encode c = Some (cb, b) ->
         (Capability_GS.cap_is_valid c = true ->
          tag_unspecified (Capability_GS.get_ghost_state c) = false ->
          exists (a : allocation) (alloc_id : ZMap.M.key),
