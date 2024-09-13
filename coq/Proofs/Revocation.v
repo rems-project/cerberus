@@ -5574,15 +5574,8 @@ Module CheriMemoryImplWithProofs
   Proof.
     intros H.
     erewrite Capability_GS.cap_encode_length;eauto.
-    unfold Capability_GS.sizeof_cap.
-    (* unfold Capability.sizeof_cap. *)
-    (* TODO:
-       Expose:
-       Capability.sizeof_cap = sizeof_pointer MorelloImpl.get
-
-       To do so need parametrize `MorelloImpl` by `Capability`
-     *)
-  Admitted.
+    apply MorelloImpl.pointer_size_cap_size.
+  Qed.
 
   Fact cap_encode_decode
     (cap : Capability_GS.t)

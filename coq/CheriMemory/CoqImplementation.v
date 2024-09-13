@@ -25,7 +25,19 @@ Record implementation := {
     typeof_enum: CoqSymbol.sym -> integerType;
   }.
 
-Module Type Implementation.
+From CheriCaps.Common Require Import Addr Capabilities.
+
+Local Open Scope nat_scope.
+
+Module Type Implementation
+  (V:PTRADDR)
+  (F:FLAGS)
+  (OT:OTYPE)
+  (S:CAP_SEAL_T)
+  (I:PTRADDR_INTERVAL V)
+  (P:PERMISSIONS)
+  (C:CAPABILITY V F OT S I P).
+
   Parameter get: implementation.
 
   (* -- Sanity properties for proofs -- *)
@@ -44,9 +56,22 @@ Module Type Implementation.
      is 1." *)
   Parameter ichar_size:  (sizeof_ity get (CoqIntegerType.Signed CoqIntegerType.Ichar) = Some 1).
   Parameter uchar_size:  (sizeof_ity get (CoqIntegerType.Unsigned CoqIntegerType.Ichar) = Some 1).
+
+  Parameter pointer_size_cap_size: C.sizeof_cap = sizeof_pointer get.
 End Implementation.
 
-Module MorelloImpl : Implementation.
+From CheriCaps.Morello Require Import CapFns Capabilities.
+From Morello Require Import CapabilitiesGS MorelloCapsGS.
+
+Local Open Scope nat_scope.
+
+Module MorelloImpl : Implementation(AddressValue)
+                            (Flags)
+                            (ObjType)
+                            (SealType)
+                            (Bounds)
+                            (Permissions)
+                            Capability_GS.
 
   Definition is_signed_ity_impl ity :=
     match ity with
@@ -78,7 +103,7 @@ Module MorelloImpl : Implementation.
             | Int_leastN_t n
             | Int_fastN_t n => max 1 (Nat.div n 8)
             | Intmax_t
-            | Intptr_t => 16
+            | Intptr_t => Capability_GS.sizeof_cap
             end)
         | Enum ident => Some 4 (* TODO: we do not handle registered enums *)
         | Wchar_t
@@ -136,7 +161,7 @@ Module MorelloImpl : Implementation.
          | Int_leastN_t n
          | Int_fastN_t n => max 1 (Nat.div n 8)
          | Intmax_t
-         | Intptr_t => 16
+         | Intptr_t => Capability_GS.sizeof_cap
          end)
     | Enum ident => 4 (* TODO: we do not handle registered enums *)
     | Wchar_t
@@ -154,8 +179,8 @@ Module MorelloImpl : Implementation.
     {|
       name            := "clang11_aarch64-unknown-freebsd13";
       details         := "clang version 11.0.0\nTarget: Morello";
-      sizeof_pointer  := 16;
-      alignof_pointer := 16 ;
+      sizeof_pointer  := Capability_GS.sizeof_cap;
+      alignof_pointer := Capability_GS.sizeof_cap;
       is_signed_ity   := is_signed_ity_impl;
       sizeof_ity      := sizeof_ity_impl;
       precision_ity   := precision_ity_impl;
@@ -172,12 +197,17 @@ Module MorelloImpl : Implementation.
   Proof. reflexivity. Qed.
 
   Lemma alignof_pointer_pos: 0 < (alignof_pointer get).
-  Proof. cbn; lia. Qed.
+  Proof.
+    cbn.
+    unfold Capability_GS.sizeof_cap, Capability.sizeof_cap.
+    lia.
+  Qed.
 
   Lemma alignof_ity_pos: forall ty, 0< (alignof_ity get ty).
   Proof.
     intros ty.
     destruct ty; cbn;try lia.
+    all: unfold Capability_GS.sizeof_cap, Capability.sizeof_cap.
     1,2: destruct i; cbn;try lia.
 
     all: pose proof (Nat.divmod_spec n 7 0 7) as DM;
@@ -201,7 +231,7 @@ Module MorelloImpl : Implementation.
   Proof.
     intros ty x H.
     destruct ty;
-      cbn in H; repeat break_match_hyp; inversion H; lia.
+      cbn in H; repeat break_match_hyp; inversion H; unfold Capability_GS.sizeof_cap, Capability.sizeof_cap; lia.
   Qed.
 
   Lemma sizeof_fty_pos: forall ty x, sizeof_fty get ty = Some x -> 0 < x.
@@ -211,5 +241,7 @@ Module MorelloImpl : Implementation.
       cbn in H; repeat break_match_hyp; inversion H; lia.
   Qed.
 
+  Lemma pointer_size_cap_size: Capability_GS.sizeof_cap = sizeof_pointer get.
+  Proof. reflexivity. Qed.
 
 End MorelloImpl.
