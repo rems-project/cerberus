@@ -47,6 +47,7 @@ Module Type CAPABILITY_GS
   Parameter min_ptraddr : V.t.
   Parameter max_ptraddr : V.t.
   Parameter sizeof_ptraddr: nat.
+  Parameter sizeof_cap: nat.
 
   (** the number of user-defined flags *)
   
@@ -203,12 +204,9 @@ Module Type CAPABILITY_GS
   Parameter decode: list ascii -> bool -> option t.
 
   (** Encode capability as list of bytes.
-        boolean argument specifies if bounds need to be encoded
-        exactly. if exact encoding is requested but not possible, inParameterid
-        capability will be returned.
         Retuns memory-encoded capability and validity tag.
    *)
-  Parameter encode: bool -> t -> option ((list ascii) * bool).
+  Parameter encode: t -> option ((list ascii) * bool).
 
   (* --- Compression-related --- *)
 
@@ -258,4 +256,10 @@ Module Type CAPABILITY_GS
 
   Parameter cap_get_set_value: forall (c:t) (a:V.t), cap_get_value (cap_set_value c a) = a.
 
+  Parameter cap_encode_length:
+    forall c l t, encode c = Some (l, t) -> List.length l = sizeof_cap.
+
+  Parameter cap_exact_encode_decode:
+    forall c c' t l, encode c = Some (l, t) -> decode l t = Some c' -> eqb c
+c' = true.
 End CAPABILITY_GS.

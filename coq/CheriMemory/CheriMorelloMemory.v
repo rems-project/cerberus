@@ -911,7 +911,7 @@ Module Type CheriMemoryImpl
             | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
               =>
                 sassert (cap_liveness_check c s) "capability is pointing to dead allocation" ;;
-                '(cb, ct) <- option2serr "int encoding error" (C.encode true c) ;;
+                '(cb, ct) <- option2serr "int encoding error" (C.encode c) ;;
                 let sz := length cb in
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
@@ -945,7 +945,7 @@ Module Type CheriMemoryImpl
                   fp) =>
                 let '(fm, c_value) := resolve_function_pointer (funptrmap s) fp in
                 sassert (cap_liveness_check c_value s) "capability is pointing to dead allocation" ;;
-                '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
+                '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode c_value) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let sz := length cb in
                 sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
@@ -960,7 +960,7 @@ Module Type CheriMemoryImpl
                     AddressValue.with_offset addr (Z.of_nat sz))
             | (PVfunction (FP_invalid c) | PVconcrete c) =>
                 sassert (cap_liveness_check c s) "capability is pointing to dead allocation" ;;
-                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c) ;;
+                '(cb, ct) <- option2serr "pointer encoding error" (C.encode c) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let sz := length cb in
                 sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;

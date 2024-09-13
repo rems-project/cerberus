@@ -47,7 +47,8 @@ Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Fl
   Definition of_Z (z:Z) : t := cap_t_to_t (Capability.of_Z z) Default_CapGhostState.
      
   Definition sizeof_ptraddr := Capability.sizeof_ptraddr. (* in bytes *)
-  Definition min_ptraddr := Capability.min_ptraddr.  
+  Definition sizeof_cap := Capability.sizeof_cap. (* in bytes *)
+  Definition min_ptraddr := Capability.min_ptraddr.
   Definition max_ptraddr := Capability.max_ptraddr.
 
   Definition cap_c0 (u:unit) : t := 
@@ -153,8 +154,8 @@ Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Fl
   Definition cap_is_null_derived (c : t) : bool :=
     Capability.cap_is_null_derived c.(cap).
     
-  Definition encode (isexact : bool) (c : t) : option ((list ascii) * bool) :=
-    Capability.encode isexact c.(cap).
+  Definition encode (c : t) : option ((list ascii) * bool) :=
+    Capability.encode c.(cap).
 
   Definition decode (bytes : list ascii) (tag : bool) : option t :=
     match (Capability.decode bytes tag) with 
@@ -228,6 +229,25 @@ Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Fl
 
   Lemma cap_get_set_value: forall (c:t) (a:AddressValue.t), cap_get_value (cap_set_value c a) = a.
   Proof. intros. apply Capability.cap_get_set_value. Qed.
+
+  Lemma cap_encode_length:
+    forall c l t, encode c = Some (l, t) -> List.length l = sizeof_cap.
+  Proof.
+    intros.
+    eapply Capability.cap_encode_length.
+    apply H.
+  Qed.
+
+  Lemma cap_exact_encode_decode:
+    forall c c' t l, encode c = Some (l, t) -> decode l t = Some c' -> eqb c c' = true.
+  Proof.
+    intros.
+    apply Capability.cap_exact_encode_decode with (t:=t0) (l:=l).
+    auto.
+    unfold decode in H0.
+    destruct (Capability.decode l t0); inversion H0.
+    reflexivity.
+  Qed.
 
 End Capability_GS.  
 
