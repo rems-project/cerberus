@@ -5572,12 +5572,16 @@ Module CheriMemoryImplWithProofs
     Capability_GS.encode cap = Some (cb, b) ->
     Datatypes.length cb = sizeof_pointer MorelloImpl.get.
   Proof.
-    (* TODO: use Capability_GS.cap_encode_length *)
-    intros.
-    unfold Capability_GS.encode, Capability.encode in H.
-    repeat break_match; try discriminate.
-    invc H.
-    apply Capability_try_map_length in Heqo0.
+    intros H.
+    erewrite Capability_GS.cap_encode_length;eauto.
+    unfold Capability_GS.sizeof_cap.
+    (* unfold Capability.sizeof_cap. *)
+    (* TODO:
+       Expose:
+       Capability.sizeof_cap = sizeof_pointer MorelloImpl.get
+
+       To do so need parametrize `MorelloImpl` by `Capability`
+     *)
   Admitted.
 
   Fact cap_encode_decode
@@ -5587,7 +5591,6 @@ Module CheriMemoryImplWithProofs
     Capability_GS.encode cap = Some (cb, b) ->
     decode_cap (map Some cb) true cap.
   Proof.
-    (* TODO: use Capability_GS.cap_exact_encode_decode *)
     intros ENC.
     unfold decode_cap.
     exists cb.
@@ -5596,9 +5599,9 @@ Module CheriMemoryImplWithProofs
       clear.
       induction cb; cbn; constructor; tauto.
     -
-      unfold Capability_GS.encode, Capability_GS.decode in *.
-      unfold Capability.encode, Capability.decode in *.
-      repeat break_match_hyp; try discriminate; some_inv; subst.
+      pose proof Capability_GS.cap_exact_encode_decode as H.
+      specialize (H cap cap b cb ENC).
+
   Admitted.
 
   (** Storing a capability bytes into memory and and addit it to capmeta preserves invariant *)
