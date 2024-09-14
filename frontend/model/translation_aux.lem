@@ -438,3 +438,17 @@ let conv_arith stdlib ty_src ty_dst pe =
   else
     (* NOTE: this case will occurs in particular if ty_src is an atomic type *)
     error "Translation_aux.conv_arith, not (is_arithmetic ty_src)"
+
+
+(*
+  LET mask = [| ~(CAP_PERM_STORE || CAP_PERM_STORE_CAP || CAP_PERM_STORE_LOCAL_CAP) |] IN
+  memop(cheri_perms_and, ptr, mask)
+*)
+let cheri_readonly_perms ptr_ty ptr_pe =
+  (* TODO: the mask should be ~(BIT(16)|BIT(13)|BIT(12)) but there is
+      currently a mismatch in the Coq memory model between the mask u64 and
+      the Permission.t value. -- FIXME when the coq is updated *)
+  (* let mask_pe = Caux.mk_integer_pe 0xfffffffffffecfff in *)
+  let mask_pe = Caux.mk_integer_pe 0xffffffffff7fffff in
+  Caux.mk_memop_e (Mem_common.CHERI_intrinsic "cheri_perms_and" (ptr_ty, [ptr_ty; size_t]))
+    [ ptr_pe; mask_pe ]
