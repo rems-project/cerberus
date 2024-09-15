@@ -3201,7 +3201,7 @@ Module Type CheriMemoryImpl
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-    upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+    length_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
     st <- get ;;
     match cap_of_mem_value st.(funptrmap) cap_val with
     | None =>
@@ -3213,11 +3213,14 @@ Module Type CheriMemoryImpl
     | Some (funptrmap, c_value) =>
         update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
         ;;
-        match upper_val with
-        | MVinteger CoqIntegerType.Size_t (IV n_value) =>
-            let x' := (cap_to_Z c_value) in
-            let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
-            in ret (Some (update_cap_in_mem_value cap_val c_value))
+        match length_val with
+        | MVinteger CoqIntegerType.Size_t (IV n_length) =>
+            if Z.eqb n_length 0 then
+              fail loc (MerrCHERI CheriZeroLength)
+            else
+              let x' := (cap_to_Z c_value) in
+              let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_length))
+              in ret (Some (update_cap_in_mem_value cap_val c_value))
         | _ =>
             fail loc
               (MerrOther
