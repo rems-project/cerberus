@@ -369,6 +369,10 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
     return res;
 }
 
+void *convert_from_cn_pointer(cn_pointer *cn_ptr) {
+    return cn_ptr->ptr;
+}
+
 
 void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc) {
     error_msg_info.function_name = function_name;
