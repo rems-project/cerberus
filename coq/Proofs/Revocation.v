@@ -5577,25 +5577,54 @@ Module CheriMemoryImplWithProofs
     apply MorelloImpl.pointer_size_cap_size.
   Qed.
 
-  Fact cap_encode_decode
+
+  (* This one should be in the coq-cheri-capabilties *)
+  Lemma cap_encode_decode':
+    forall cap bytes t, Capability_GS.encode cap = Some (bytes, t) ->
+                   exists cap', Capability_GS.decode bytes t = Some cap' /\
+                             Capability_GS.cap cap = Capability_GS.cap cap'.
+  Proof.
+    intros cap bytes t H.
+    destruct cap.
+    unfold Capability_GS.decode.
+    cbn in *.
+  Admitted.
+
+  (* This one should be in the coq-cheri-capabilties *)
+  Fact cap_encode_valid
     (cap : Capability_GS.t)
     (cb : list ascii)
-    (b : bool) :
-    Capability_GS.encode cap = Some (cb, b) ->
-    decode_cap (map Some cb) true cap.
+    (b : bool):
+    Capability_GS.cap_is_valid cap = true ->
+    Capability_GS.encode cap = Some (cb, b) -> b = true.
   Proof.
-    intros ENC.
+    destruct cap.
+    unfold Capability_GS.cap_is_valid.
+    unfold Capability_GS.encode.
+    cbn.
+    intros V E.
+  Admitted.
+
+  Fact cap_encode_decode
+    (cap : Capability_GS.t)
+    (cb : list ascii):
+    Capability_GS.cap_is_valid cap = true ->
+    Capability_GS.encode cap = Some (cb, true) ->
+    exists cap' : Capability_GS.t,
+      decode_cap (map Some cb) true cap' /\
+        Capability_GS.cap cap = Capability_GS.cap cap'.
+  Proof.
+    intros V H.
+    apply cap_encode_decode' in H.
+    destruct H as [cap' [D E]].
+    exists cap'.
+    split;[|assumption].
     unfold decode_cap.
     exists cb.
-    split.
-    -
-      clear.
-      induction cb; cbn; constructor; tauto.
-    -
-      pose proof Capability_GS.cap_exact_encode_decode as H.
-      specialize (H cap cap b cb ENC).
-
-  Admitted.
+    split;[|assumption].
+    clear.
+    induction cb; cbn; constructor;auto.
+  Qed.
 
   (** Storing a capability bytes into memory and and addit it to capmeta preserves invariant *)
   Fact mem_state_with_cap_preserves:
@@ -5651,20 +5680,23 @@ Module CheriMemoryImplWithProofs
       destruct (MorelloCaps.AddressValue.morello_address_eq_dec start addr)
         as [EQ | NEQ].
       +
-        subst start.
-        exists cap.
+        apply AMap.P.F.add_mapsto_iff in M as [[_ M] | M]; [| tauto].
+        tuple_inversion.
+        pose proof (cap_encode_valid cap cb b H0 E) as B.
+        subst b.
+        apply cap_encode_decode in E.
+        destruct E as [cap' [DX EX]].
+        exists cap'.
         split.
         --
-          subst bs'.
           rewrite fetch_bytes_add_eq_o by lia.
-          subst.
-          clear - E.
-          eapply cap_encode_decode.
           eassumption.
         --
-          apply AMap.P.F.add_mapsto_iff in M as [[_ M] | M]; [| tauto].
-          invc M.
+          unfold cap_bounds_within_alloc, Capability_GS.cap_get_bounds in *.
+          rewrite <- EX.
           now apply CAPA.
+        --
+          assumption.
       +
         eapply MIcap.
         *
