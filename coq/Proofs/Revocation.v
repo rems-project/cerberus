@@ -5577,19 +5577,6 @@ Module CheriMemoryImplWithProofs
     apply MorelloImpl.pointer_size_cap_size.
   Qed.
 
-
-  (* This one should be in the coq-cheri-capabilties *)
-  Lemma cap_encode_decode':
-    forall cap bytes t, Capability_GS.encode cap = Some (bytes, t) ->
-                   exists cap', Capability_GS.decode bytes t = Some cap' /\
-                             Capability_GS.cap cap = Capability_GS.cap cap'.
-  Proof.
-    intros cap bytes t H.
-    destruct cap.
-    unfold Capability_GS.decode.
-    cbn in *.
-  Admitted.
-
   (* This one should be in the coq-cheri-capabilties *)
   Fact cap_encode_valid
     (cap : Capability_GS.t)
@@ -5605,17 +5592,31 @@ Module CheriMemoryImplWithProofs
     intros V E.
   Admitted.
 
-  Fact cap_encode_decode
+  (* This one should be in the coq-cheri-capabilties *)
+  Lemma cap_encode_decode_bounds':
+    forall cap bytes t,
+      Capability_GS.encode cap = Some (bytes, t) ->
+      exists cap', Capability_GS.decode bytes t = Some cap'
+              /\ Capability_GS.cap_get_bounds cap = Capability_GS.cap_get_bounds cap'.
+  Proof.
+    intros cap bytes t H.
+    destruct cap.
+    unfold Capability_GS.decode.
+    cbn in *.
+  Admitted.
+
+  Fact cap_encode_decode_bounds
     (cap : Capability_GS.t)
     (cb : list ascii):
     Capability_GS.cap_is_valid cap = true ->
     Capability_GS.encode cap = Some (cb, true) ->
     exists cap' : Capability_GS.t,
       decode_cap (map Some cb) true cap' /\
-        Capability_GS.cap cap = Capability_GS.cap cap'.
+        Capability_GS.cap_get_bounds cap =
+        Capability_GS.cap_get_bounds cap'.
   Proof.
     intros V H.
-    apply cap_encode_decode' in H.
+    apply cap_encode_decode_bounds' in H.
     destruct H as [cap' [D E]].
     exists cap'.
     split;[|assumption].
@@ -5684,7 +5685,7 @@ Module CheriMemoryImplWithProofs
         tuple_inversion.
         pose proof (cap_encode_valid cap cb b H0 E) as B.
         subst b.
-        apply cap_encode_decode in E.
+        apply cap_encode_decode_bounds in E.
         destruct E as [cap' [DX EX]].
         exists cap'.
         split.
@@ -5692,7 +5693,7 @@ Module CheriMemoryImplWithProofs
           rewrite fetch_bytes_add_eq_o by lia.
           eassumption.
         --
-          unfold cap_bounds_within_alloc, Capability_GS.cap_get_bounds in *.
+          unfold cap_bounds_within_alloc in *.
           rewrite <- EX.
           now apply CAPA.
         --
