@@ -5577,34 +5577,6 @@ Module CheriMemoryImplWithProofs
     apply MorelloImpl.pointer_size_cap_size.
   Qed.
 
-  (* This one should be in the coq-cheri-capabilties *)
-  Fact cap_encode_valid
-    (cap : Capability_GS.t)
-    (cb : list ascii)
-    (b : bool):
-    Capability_GS.cap_is_valid cap = true ->
-    Capability_GS.encode cap = Some (cb, b) -> b = true.
-  Proof.
-    destruct cap.
-    unfold Capability_GS.cap_is_valid.
-    unfold Capability_GS.encode.
-    cbn.
-    intros V E.
-  Admitted.
-
-  (* This one should be in the coq-cheri-capabilties *)
-  Lemma cap_encode_decode_bounds':
-    forall cap bytes t,
-      Capability_GS.encode cap = Some (bytes, t) ->
-      exists cap', Capability_GS.decode bytes t = Some cap'
-              /\ Capability_GS.cap_get_bounds cap = Capability_GS.cap_get_bounds cap'.
-  Proof.
-    intros cap bytes t H.
-    destruct cap.
-    unfold Capability_GS.decode.
-    cbn in *.
-  Admitted.
-
   Fact cap_encode_decode_bounds
     (cap : Capability_GS.t)
     (cb : list ascii):
@@ -5616,7 +5588,7 @@ Module CheriMemoryImplWithProofs
         Capability_GS.cap_get_bounds cap'.
   Proof.
     intros V H.
-    apply cap_encode_decode_bounds' in H.
+    apply Capability_GS.cap_encode_decode_bounds in H.
     destruct H as [cap' [D E]].
     exists cap'.
     split;[|assumption].
@@ -5683,7 +5655,7 @@ Module CheriMemoryImplWithProofs
       +
         apply AMap.P.F.add_mapsto_iff in M as [[_ M] | M]; [| tauto].
         tuple_inversion.
-        pose proof (cap_encode_valid cap cb b H0 E) as B.
+        pose proof (Capability_GS.cap_encode_valid cap cb b H0 E) as B.
         subst b.
         apply cap_encode_decode_bounds in E.
         destruct E as [cap' [DX EX]].

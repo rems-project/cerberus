@@ -238,15 +238,28 @@ Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Fl
     apply H.
   Qed.
 
-  Lemma cap_encode_decode:
-    forall cap bytes t, encode cap = Some (bytes, t) -> decode bytes t = Some cap.
-    intros.
-    apply Capability.cap_encode_decode in H.
+  Lemma cap_encode_valid:
+    forall cap cb b,
+      cap_is_valid cap = true -> encode cap = Some (cb, b) -> b = true.
+  Proof.
+    intros c cb b V E.
+    eapply Capability.cap_encode_valid; eauto.
+  Qed.
+
+  Lemma cap_encode_decode_bounds:
+    forall cap bytes t,
+      encode cap = Some (bytes, t) ->
+      exists cap', decode bytes t = Some cap'
+              /\ cap_get_bounds cap = cap_get_bounds cap'.
+  Proof.
+    intros cap0 bytes t E.
+    apply Capability.cap_encode_decode_bounds in E.
+    destruct E as [cap' [D E]].
     unfold decode.
-    destruct (Capability.decode bytes t0); inversion H.
-    clear.
-    (* This could not be proven as it does not preserve ghost state *)
-  Admitted.
+    exists (add_gs cap').
+    rewrite D.
+    split;auto.
+  Qed.
 
 End Capability_GS.  
 
