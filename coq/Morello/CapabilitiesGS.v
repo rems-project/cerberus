@@ -259,7 +259,14 @@ Module Type CAPABILITY_GS
   Parameter cap_encode_length:
     forall c l t, encode c = Some (l, t) -> List.length l = sizeof_cap.
 
-  Parameter cap_exact_encode_decode:
-    forall c c' t l, encode c = Some (l, t) -> decode l t = Some c' -> eqb c
-c' = true.
+  Parameter cap_encode_valid:
+    forall cap cb b,
+      cap_is_valid cap = true -> encode cap = Some (cb, b) -> b = true.
+
+  Parameter cap_encode_decode_bounds:
+    forall cap bytes t,
+      encode cap = Some (bytes, t) ->
+      exists cap', decode bytes t = Some cap'
+              /\ cap_get_bounds cap = cap_get_bounds cap'.
+
 End CAPABILITY_GS.
