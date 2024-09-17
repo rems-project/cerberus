@@ -1271,10 +1271,25 @@ let rec cn_to_ail_expr_aux_internal
     let b3, s3, e3 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals value PassBack
     in
-    let map_set_fcall =
-      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")), [ e1; e2; e3 ]))
+    let new_map_sym = Sym.fresh () in
+    let new_map_binding = create_binding new_map_sym (bt_to_ail_ctype (IT.bt m)) in
+    let map_deep_copy_fcall =
+      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_map_deep_copy")), [ e1 ]))
     in
-    dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr map_set_fcall)
+    let new_map_decl =
+      A.(AilSdeclaration [ (new_map_sym, Some (mk_expr map_deep_copy_fcall)) ])
+    in
+    let map_set_fcall =
+      A.(
+        AilEcall
+          ( mk_expr (AilEident (Sym.fresh_pretty "cn_map_set")),
+            [ mk_expr A.(AilEident new_map_sym); e2; e3 ] ))
+    in
+    dest
+      d
+      ( b1 @ b2 @ b3 @ [ new_map_binding ],
+        s1 @ s2 @ s3 @ [ new_map_decl ],
+        mk_expr map_set_fcall )
   | MapGet (m, key) ->
     (* Only works when index is a cn_integer *)
     let b1, s1, e1 =
