@@ -21,6 +21,22 @@ val bt_to_cn_base_type : BT.t -> Sym.t CF.Cn.cn_base_type
 
 val bt_to_ail_ctype : ?pred_sym:Sym.t option -> BT.t -> C.ctype
 
+val get_conversion_to_fn_str : BT.t -> string option
+
+val get_conversion_from_fn_str : BT.t -> string option
+
+val wrap_with_convert_to
+  :  ?sct:Sctypes.t ->
+  CF.GenTypes.genTypeCategory A.expression_ ->
+  BT.t ->
+  CF.GenTypes.genTypeCategory A.expression_
+
+val wrap_with_convert_from
+  :  ?sct:Sctypes.t ->
+  CF.GenTypes.genTypeCategory A.expression_ ->
+  BT.t ->
+  CF.GenTypes.genTypeCategory A.expression_
+
 val wrap_with_convert_from_cn_bool
   :  CF.GenTypes.genTypeCategory A.expression ->
   CF.GenTypes.genTypeCategory A.expression
@@ -58,7 +74,11 @@ val generate_datatype_default_function
   :  Compile.cn_datatype ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 
-val generate_struct_conversion_function
+val generate_struct_conversion_to_function
+  :  A.sigma_tag_definition ->
+  (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
+
+val generate_struct_conversion_from_function
   :  A.sigma_tag_definition ->
   (A.sigma_declaration * CF.GenTypes.genTypeCategory A.sigma_function_definition) list
 

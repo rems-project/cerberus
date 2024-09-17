@@ -282,19 +282,28 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
 // }
 
 
-// void *cn_map_get(cn_map *m, cn_integer *key) {
-//     // const char key_arr[1] = {key};
-//     void *res = ht_get(m, key->val);
-//     if (!res) { printf("NULL being returned for key %ld\n", *(key->val)); exit (1); }
-//     return res;
-// }
-
 cn_map *cn_map_set(cn_map *m, cn_integer *key, void *value) {
     signed long *key_ptr = alloc(sizeof(signed long));
     *key_ptr = key->val;
     ht_set(m, key_ptr, value);
     return m;
 }
+
+
+cn_map *cn_map_deep_copy(cn_map *m1) {
+    cn_map *m2 = map_create();
+
+    hash_table_iterator hti = ht_iterator(m1);
+
+    while (ht_next(&hti)) {
+        signed long* curr_key = hti.key;
+        void *val = ht_get(m1, curr_key);
+        ht_set(m2, curr_key, val);
+    }
+
+    return m2;
+}
+
 
 cn_map *default_cn_map(void) {
     return map_create();
@@ -367,6 +376,10 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
     cn_pointer *res = (cn_pointer *) alloc(sizeof(cn_pointer));
     res->ptr = ptr; // Carries around an address
     return res;
+}
+
+void *convert_from_cn_pointer(cn_pointer *cn_ptr) {
+    return cn_ptr->ptr;
 }
 
 

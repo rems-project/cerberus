@@ -129,6 +129,7 @@ void *cn_ite(cn_bool *b, void *e1, void *e2);
 
 cn_map *map_create(void);
 cn_map *cn_map_set(cn_map *m, cn_integer *key, void *value);
+cn_map *cn_map_deep_copy(cn_map *m1);
 cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(void *, void *));
 
 #define convert_to_cn_map(c_ptr, cntype_conversion_fn, num_elements)({\
@@ -450,6 +451,7 @@ CN_GEN_PTR_CASTS_SIGNED(signed long, cn_integer)
 
 
 cn_pointer *convert_to_cn_pointer(void *ptr);
+void *convert_from_cn_pointer(cn_pointer *cn_ptr);
 cn_pointer *cn_pointer_add(cn_pointer *ptr, cn_integer *i);
 cn_pointer *cast_cn_pointer_to_cn_pointer(cn_pointer *p);
 
