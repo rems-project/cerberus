@@ -213,8 +213,8 @@ let main
   let oc = Stdlib.open_out (Filename.concat prefix output_filename) in
   let cn_oc = Stdlib.open_out (Filename.concat prefix "cn.c") in
   let cn_header_oc = Stdlib.open_out (Filename.concat prefix "cn.h") in
-  populate_record_map prog5;
   let instrumentation, symbol_table = Core_to_mucore.collect_instrumentation prog5 in
+  populate_record_map instrumentation prog5;
   let executable_spec =
     generate_c_specs_internal
       with_ownership_checking

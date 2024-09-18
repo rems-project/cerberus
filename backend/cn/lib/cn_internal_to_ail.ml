@@ -108,15 +108,10 @@ let generate_sym_with_suffix
   let str = Sym.pp_string constructor ^ suffix in
   let str = if uppercase then String.uppercase_ascii str else str in
   let str = if lowercase then String.lowercase_ascii str else str in
-  (* Printf.printf "%s\n" str; *)
   Sym.fresh_pretty str
 
 
 let generate_error_msg_info_update_stats ?(cn_source_loc_opt = None) () =
-  (* let line_number_member_lhs = mk_expr A.(AilEmemberofptr (error_msg_info_ident, Id.id "line_number")) in
-     let curr_line_number = mk_expr A.(AilEident (Sym.fresh_pretty "__LINE__")) in
-     let addition_expr = mk_expr A.(AilEbinary (curr_line_number, Arithmetic Add, mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None)))))) in
-     let line_number_assign_stat_ = [A.(AilSexpr (mk_expr (AilEassign (line_number_member_lhs, addition_expr))))] in *)
   let cn_source_loc_arg =
     match cn_source_loc_opt with
     | Some loc ->
@@ -2922,6 +2917,7 @@ let cn_to_ail_function_internal
       in
       (bs, Some (List.map mk_stmt ss))
     | Uninterp -> ([], None)
+    (* TODO: Make this throw a clear error. Uninterpreted functions must not exist or be used for runtime checking to work *)
   in
   let ail_record_opt = generate_record_opt fn_sym lf_def.return_bt in
   let params = List.map (fun (sym, bt) -> (sym, bt_to_ail_ctype bt)) lf_def.args in

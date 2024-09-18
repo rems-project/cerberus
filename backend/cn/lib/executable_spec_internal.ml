@@ -4,6 +4,10 @@ open PPrint
 open Executable_spec_utils
 module BT = BaseTypes
 module A = CF.AilSyntax
+module IT = IndexTerms
+module LRT = LogicalReturnTypes
+module LAT = LogicalArgumentTypes
+module AT = ArgumentTypes
 (* Executable spec helper functions *)
 
 type executable_spec =
@@ -41,17 +45,95 @@ let generate_ail_stat_strs
   List.map CF.Pp_utils.to_plain_pretty_string doc
 
 
-let populate_record_map_aux (sym, bt_ret_type) =
-  match Cn_internal_to_ail.bt_to_cn_base_type bt_ret_type with
+let augment_record_map ?cn_sym bt =
+  let sym_prefix = match cn_sym with Some sym' -> sym' | None -> Sym.fresh () in
+  match Cn_internal_to_ail.bt_to_cn_base_type bt with
   | CF.Cn.CN_record members ->
-    let sym' = Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym in
-    Cn_internal_to_ail.records
-    := Cn_internal_to_ail.RecordMap.add members sym' !Cn_internal_to_ail.records
+    (* Augment records map if entry does not exist already *)
+    if not (Cn_internal_to_ail.RecordMap.mem members !Cn_internal_to_ail.records) then (
+      let sym' =
+        Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym_prefix
+      in
+      Cn_internal_to_ail.records
+      := Cn_internal_to_ail.RecordMap.add members sym' !Cn_internal_to_ail.records)
   | _ -> ()
 
 
-(* Populate record table with function and predicate record return types *)
-let populate_record_map (prog5 : unit Mucore.mu_file) =
+(* TODO: Make separate records module/file? *)
+let rec add_records_to_map_from_it it =
+  match IT.term it with
+  | IT.Sym _s -> ()
+  | Const _c -> ()
+  | Unop (_uop, t1) -> add_records_to_map_from_it t1
+  | Binop (_bop, t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
+  | ITE (t1, t2, t3) -> List.iter add_records_to_map_from_it [ t1; t2; t3 ]
+  | EachI ((_, (_, _), _), t) -> add_records_to_map_from_it t
+  | Tuple _ts -> failwith "TODO: Tuples not yet supported"
+  | NthTuple (_, _t) -> failwith "TODO: Tuples not yet supported"
+  | Struct (_tag, members) ->
+    List.iter (fun (_, it') -> add_records_to_map_from_it it') members
+  | StructMember (t, _member) -> add_records_to_map_from_it t
+  | StructUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
+  | Record members ->
+    (* Anonymous record instantiation -> add to records map *)
+    augment_record_map (IT.bt it);
+    List.iter (fun (_, it') -> add_records_to_map_from_it it') members
+  | RecordMember (t, _member) -> add_records_to_map_from_it t
+  | RecordUpdate ((t1, _member), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
+  | Cast (_cbt, t) -> add_records_to_map_from_it t
+  | MemberShift (t, _tag, _id) -> add_records_to_map_from_it t
+  | ArrayShift { base; ct = _; index = _ } -> add_records_to_map_from_it base
+  | CopyAllocId { addr; loc } -> List.iter add_records_to_map_from_it [ addr; loc ]
+  | HasAllocId loc -> add_records_to_map_from_it loc
+  | SizeOf _ct -> ()
+  | OffsetOf (_tag, _member) -> ()
+  | Nil _bt -> ()
+  | Cons (t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
+  | Head t -> add_records_to_map_from_it t
+  | Tail t -> add_records_to_map_from_it t
+  | NthList (i, xs, d) -> List.iter add_records_to_map_from_it [ i; xs; d ]
+  | ArrayToList (arr, i, len) -> List.iter add_records_to_map_from_it [ arr; i; len ]
+  | Representable (_sct, t) -> add_records_to_map_from_it t
+  | Good (_sct, t) -> add_records_to_map_from_it t
+  | WrapI (_ity, t) -> add_records_to_map_from_it t
+  | Aligned { t; align } ->
+    add_records_to_map_from_it t;
+    add_records_to_map_from_it align
+  | MapConst (_bt, t) -> add_records_to_map_from_it t
+  | MapSet (t1, t2, t3) ->
+    add_records_to_map_from_it t1;
+    add_records_to_map_from_it t2;
+    add_records_to_map_from_it t3
+  | MapGet (t1, t2) ->
+    add_records_to_map_from_it t1;
+    add_records_to_map_from_it t2
+  | MapDef ((_, _), t) -> add_records_to_map_from_it t
+  | Apply (_pred, ts) -> List.iter add_records_to_map_from_it ts
+  | Let ((_, t1), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
+  | Match (e, cases) -> List.iter add_records_to_map_from_it (e :: List.map snd cases)
+  | Constructor (_sym, args) -> List.iter add_records_to_map_from_it (List.map snd args)
+
+
+let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation) =
+  let rec aux_lat = function
+    | LAT.Define ((name, it), info, lat) -> ()
+    | LAT.Resource ((name, (ret, bt)), (loc, str_opt), lat) -> ()
+    | LAT.Constraint (lc, (loc, str_opt), lat) -> ()
+    (* Postcondition *)
+    | LAT.I (post, stats) -> ()
+  in
+  let rec aux_at = function
+    | AT.Computational ((_, _), _, at) -> aux_at at
+    | AT.L lat -> aux_lat lat
+  in
+  match i.internal with Some instr -> aux_at instr | None -> ()
+
+
+(* Populate record table *)
+let populate_record_map
+  (instrumentation : Core_to_mucore.instrumentation list)
+  (prog5 : unit Mucore.mu_file)
+  =
   let fun_syms_and_ret_types =
     List.map
       (fun (sym, (def : LogicalFunctions.definition)) -> (sym, def.return_bt))
@@ -62,10 +144,10 @@ let populate_record_map (prog5 : unit Mucore.mu_file) =
       (fun (sym, (def : ResourcePredicates.definition)) -> (sym, def.oarg_bt))
       prog5.mu_resource_predicates
   in
-  let _ =
-    List.map populate_record_map_aux (fun_syms_and_ret_types @ pred_syms_and_ret_types)
-  in
-  ()
+  List.iter
+    (fun (cn_sym, bt) -> augment_record_map ~cn_sym bt)
+    (fun_syms_and_ret_types @ pred_syms_and_ret_types);
+  List.iter add_records_to_map_from_instrumentation instrumentation
 
 
 let rec extract_global_variables = function
