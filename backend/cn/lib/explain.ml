@@ -135,12 +135,6 @@ let rec simp_resource eval r =
   | LAT.Resource (x, i, more) -> LAT.Resource (x, i, simp_resource eval more)
   | I i -> I i
 
-(* Check if a logical constraint is satisfied by a model *)
-let lc_satisfied_by_model model_with_q lc = 
-  match model_with_q with
-  | (_, _) -> match lc with
-    | _ -> false (*CHT: TODO - swap for one in logicalConstraints.ml*)
-
 let state ctxt model_with_q extras =
   let where =
     let cur_colour = !Cerb_colour.do_colour in
@@ -165,7 +159,7 @@ let state ctxt model_with_q extras =
   in
   let model, quantifier_counter_model = model_with_q in
   let evaluate it = Solver.eval ctxt.global model it in
-  (* let _mevaluate it = *) 
+  (* let _mevaluate it = *)
   (*   match evaluate it with *)
   (*   | Some v -> IT.pp v *)
   (*   | None -> parens !^"not evaluated" *)

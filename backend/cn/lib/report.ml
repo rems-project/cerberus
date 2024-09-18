@@ -178,10 +178,10 @@ let make_resources (interesting, uninteresting) =
   let uninteresting_table = table_without_head (make uninteresting) in
   h
     1
-      "Available resources"
-      (interesting_uninteresting
-      (interesting_table, interesting)
-      (uninteresting_table, uninteresting))
+    "Available resources"
+    (interesting_uninteresting
+       (interesting_table, interesting)
+       (uninteresting_table, uninteresting))
 
 
 let make_terms (interesting, uninteresting) =
@@ -190,10 +190,10 @@ let make_terms (interesting, uninteresting) =
   let uninteresting_table = table [ "term"; "value" ] (make uninteresting) in
   h
     1
-      "Terms"
-      (interesting_uninteresting
-      (interesting_table, interesting)
-      (uninteresting_table, uninteresting))
+    "Terms"
+    (interesting_uninteresting
+       (interesting_table, interesting)
+       (uninteresting_table, uninteresting))
 
 
 let make_constraints (interesting, uninteresting) =
@@ -202,10 +202,11 @@ let make_constraints (interesting, uninteresting) =
   let uninteresting_table = table_without_head (make uninteresting) in
   h
     1
-      "Constraints"
-      (interesting_uninteresting
-      (interesting_table, interesting)
-      (uninteresting_table, uninteresting))
+    "Constraints"
+    (interesting_uninteresting
+       (interesting_table, interesting)
+       (uninteresting_table, uninteresting))
+
 
 let css =
   {|

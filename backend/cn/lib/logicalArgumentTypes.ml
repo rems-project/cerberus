@@ -6,11 +6,10 @@ module RET = ResourceTypes
 module LC = LogicalConstraints
 module SymSet = Set.Make (Sym)
 
-(* CHT: relevant for top-level ifs *)
 type 'i t =
-  | Define of (Sym.t * IT.t) * info * 'i t (* CHT: let binding some index term to some symbol *)
-  | Resource of (Sym.t * (RET.t * BT.t)) * info * 'i t (* CHT: takes *)
-  | Constraint of LC.t * info * 'i t (* CHT: assert, etc. *)
+  | Define of (Sym.t * IT.t) * info * 'i t
+  | Resource of (Sym.t * (RET.t * BT.t)) * info * 'i t
+  | Constraint of LC.t * info * 'i t
   | I of 'i
 
 let mDefine (name, it, info) t = Define ((name, it), info, t)
