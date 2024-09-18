@@ -101,7 +101,6 @@ let dtree =
   | T it -> Dnode (pp_ctor "T", [ IT.dtree it ])
   | Forall ((s, _bt), t) -> Dnode (pp_ctor "Forall", [ Dleaf (Sym.pp s); IT.dtree t ])
 
-
 let is_forall : t -> bool = fun c ->
   match c with
   | T _ -> false

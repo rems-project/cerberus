@@ -101,5 +101,5 @@ let try_open_fun def args =
 (* in search SymSet.empty (List.map (fun (p, _) -> (p, Some [])) (SymMap.bindings
    defs)) *)
 
-(*Extensibility hook. For now, all functions should be displayed as "interesting" in error reporting*)
+(*Extensibility hook. For now, all functions are displayed as "interesting" in error reporting*)
 let is_interesting : definition -> bool = fun _ -> true

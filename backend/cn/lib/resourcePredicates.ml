@@ -103,5 +103,5 @@ let given_to_solver def = match def.clauses with
   | Some [_] -> true
   | _ -> false
 
-(*Extensibility hook. For now, all predicates should be displayed as "interesting" in error reporting*)
+(*Extensibility hook. For now, all predicates are displayed as "interesting" in error reporting*)
 let is_interesting : definition -> bool = fun _ -> true

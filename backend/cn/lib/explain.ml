@@ -135,6 +135,7 @@ let rec simp_resource eval r =
   | LAT.Resource (x, i, more) -> LAT.Resource (x, i, simp_resource eval more)
   | I i -> I i
 
+
 let state ctxt model_with_q extras =
   let where =
     let cur_colour = !Cerb_colour.do_colour in
