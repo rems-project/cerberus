@@ -1,1 +1,0 @@
-(*Comes after core_to_mucore.ml Turns pure terms into IndexTerms.*)

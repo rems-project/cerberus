@@ -24,12 +24,9 @@ type where_report =
   }
 
 (** Information about a specific state of the computation.
-    The resources and terms are pairs because they classify
+    The resources, constraints, and terms are pairs because they classify
     how relevant the thing might be:
-    the first component is "interesting", the second is not.
-    For constraints, the first component is constraints that 
-    were not satisfied by the countermodel, followed by
-    interesting and uninteresting *)
+    the first component is "interesting", the second is not. *)
 type state_report =
   { where : where_report; (** Location information *)
     not_given_to_solver : Pp.document list * Pp.document list * Pp.document list; (* Definitions and constraints not given to solver *)

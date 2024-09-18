@@ -1,5 +1,0 @@
-(*After compile.ml. "main part of the typechecker". "define the semantics of the construct that you want"
-" check.ml -> (*elided...*) -> solver.ml "*)
-(* sort translates base types into SMTLib sorts *)
-(* same with datatypes *)
-(* pexpr is pure expressions *)

@@ -155,7 +155,7 @@ let with_well_formedness_check
          astprints
          ~do_peval:use_peval
          ~filename
-         ~magic_comment_char_dollar) (* reporting errors of the lexing -> ... -> core stages *)
+         ~magic_comment_char_dollar)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel
@@ -167,14 +167,14 @@ let with_well_formedness_check
     let result =
       let open Resultat in
       let@ prog5 =
-        Core_to_mucore.normalise_file (* core -> mucore *)
+        Core_to_mucore.normalise_file
           ~inherit_loc:(not no_inherit_loc)
           (markers_env, snd ail_prog)
           prog4
       in
       print_log_file ("mucore", MUCORE prog5);
       let paused =
-        Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5) (* typechecking of mucore file *)
+        Typing.run_to_pause Context.empty (Check.check_decls_lemmata_fun_specs prog5)
       in
       Result.iter_error handle_error (Typing.pause_to_result paused);
       f ~prog5 ~ail_prog ~statement_locs ~paused
