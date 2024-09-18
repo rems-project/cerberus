@@ -96,17 +96,10 @@ let rec add_records_to_map_from_it it =
   | Representable (_sct, t) -> add_records_to_map_from_it t
   | Good (_sct, t) -> add_records_to_map_from_it t
   | WrapI (_ity, t) -> add_records_to_map_from_it t
-  | Aligned { t; align } ->
-    add_records_to_map_from_it t;
-    add_records_to_map_from_it align
+  | Aligned { t; align } -> List.iter add_records_to_map_from_it [ t; align ]
   | MapConst (_bt, t) -> add_records_to_map_from_it t
-  | MapSet (t1, t2, t3) ->
-    add_records_to_map_from_it t1;
-    add_records_to_map_from_it t2;
-    add_records_to_map_from_it t3
-  | MapGet (t1, t2) ->
-    add_records_to_map_from_it t1;
-    add_records_to_map_from_it t2
+  | MapSet (t1, t2, t3) -> List.iter add_records_to_map_from_it [ t1; t2; t3 ]
+  | MapGet (t1, t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
   | MapDef ((_, _), t) -> add_records_to_map_from_it t
   | Apply (_pred, ts) -> List.iter add_records_to_map_from_it ts
   | Let ((_, t1), t2) -> List.iter add_records_to_map_from_it [ t1; t2 ]
