@@ -167,15 +167,13 @@ let state ctxt model_with_q extras =
   (* in *)
   let not_given_to_solver = 
     let (forall_constraints, recursive_funs, branched_preds) = not_given_to_solver ctxt in 
-    let satisfied, unsatisfied = List.partition (lc_satisfied_by_model model_with_q) forall_constraints in
-    let interesting_constraints, uninteresting_constraints = List.partition LC.is_interesting satisfied in
+    let interesting_constraints, uninteresting_constraints = List.partition LC.is_interesting forall_constraints in
     let interesting_funs, uninteresting_funs = List.partition (fun (_,v) -> LogicalFunctions.is_interesting v) recursive_funs in
     let interesting_preds, uninteresting_preds = List.partition (fun (_,v) -> ResourcePredicates.is_interesting v) branched_preds in
     let make_constraints = List.map LC.pp in
     let make_funs = List.map (fun (k,_) -> Sym.pp k) in
     let make_preds = List.map (fun (k,_) -> Sym.pp k) in
-      (List.map LC.pp unsatisfied, 
-        List.concat [make_constraints interesting_constraints; make_funs interesting_funs; make_preds interesting_preds],
+      (List.concat [make_constraints interesting_constraints; make_funs interesting_funs; make_preds interesting_preds],
         List.concat [make_constraints uninteresting_constraints; make_funs uninteresting_funs; make_preds uninteresting_preds]) in
   let terms =
     let variables =
