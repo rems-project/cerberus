@@ -134,26 +134,12 @@ let rec simp_resource eval r =
   | LAT.Define (x, i, more) -> LAT.Define (x, i, simp_resource eval more)
   | LAT.Resource (x, i, more) -> LAT.Resource (x, i, simp_resource eval more)
   | I i -> I i
-(* 
-let partial_eval
-  ?(mode = Strict)
-  ?(prog5 : unit Mucore.mu_file = empty_mufile)
-  (it : IT.t)
-  : IT.t = Unit *)
 
 (* Check if a logical constraint is satisfied by a model *)
 let lc_satisfied_by_model model_with_q lc = 
   match model_with_q with
   | (_, _) -> match lc with
-    | _ -> false (*TODO*)
-
-
-
-(* Check if a resource constraint is satisfied by a model *)
-(* let rc_satisfied_by_model model_with_q rc = 
-  match model_with_q with
-  | (_, _) -> match rc with
-    | (_, _) -> true (* TODO *) *)
+    | _ -> false (*CHT: TODO - swap for one in logicalConstraints.ml*)
 
 let state ctxt model_with_q extras =
   let where =
@@ -188,8 +174,8 @@ let state ctxt model_with_q extras =
     let (forall_constraints, recursive_funs, branched_preds) = not_given_to_solver ctxt in 
     let satisfied, unsatisfied = List.partition (lc_satisfied_by_model model_with_q) forall_constraints in
     let interesting_constraints, uninteresting_constraints = List.partition LC.is_interesting satisfied in
-    let interesting_funs, uninteresting_funs = recursive_funs, [] in (*TODO*)
-    let interesting_preds, uninteresting_preds = branched_preds, [] in (*TODO*)
+    let interesting_funs, uninteresting_funs = List.partition (fun (_,v) -> LogicalFunctions.is_interesting v) recursive_funs in
+    let interesting_preds, uninteresting_preds = List.partition (fun (_,v) -> ResourcePredicates.is_interesting v) branched_preds in
     let make_constraints = List.map LC.pp in
     let make_funs = List.map (fun (k,_) -> Sym.pp k) in
     let make_preds = List.map (fun (k,_) -> Sym.pp k) in

@@ -171,7 +171,7 @@ module General = struct
            (* let ctxt = { ctxt with resources = original_resources } in *)
            { loc;
              msg =
-               Unproven_constraint
+               Unproven_constraint (* CHT: TODO - sometimes Undecidable_constraints *)
                  { constr = c; info; requests = snd uiinfo; ctxt; model }
            }))
     | I _rt -> return (ftyp, changed_or_deleted)

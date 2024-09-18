@@ -107,9 +107,13 @@ let is_forall : t -> bool = fun c ->
   | T _ -> false
   | Forall _ -> true
 
-let is_interesting  : t -> bool = fun c->
+let is_interesting : t -> bool = fun c->
   match c with
   (* | LC.T (IT (Aligned _, _, _)) -> false *)
   | T (IT (Representable _, _, _)) -> false
   | T (IT (Good _, _, _)) -> false
   | _ -> true
+
+(*let satisfied_by_model : (SymMap.key * BaseTypes.basetype Terms.term) list -> t -> bool = fun varVals raw_c  ->
+  let c = subst_ varVals raw_c in
+  Eval.partial_eval c*)

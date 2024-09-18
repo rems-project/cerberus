@@ -187,7 +187,10 @@ type message =
         model : Solver.model_with_q
       }
   | Undecidable_constraints of (* open to other names for the spurious countermodel scenario. *)
-      { ctxt : Context.t * log; (* <- TODO: Context.t has constraints in it. all of them? *)
+      { constr : LC.t;
+        requests : request_chain;
+        info : info;
+        ctxt : Context.t * log; (* <- TODO: Context.t has constraints in it. all of them? *)
         model : Solver.model_with_q
       }
   | Unproven_constraint of
@@ -456,12 +459,24 @@ let pp_message te =
     let descr = !^"Value" ^^ colon ^^^ value in
     let state = trace ctxt model Explain.no_ex in
     { short; descr = Some descr; state = Some state }
-  | Undecidable_constraints { ctxt; model } ->
-    let short = !^"Undecidable constraints" in
+  | Undecidable_constraints { constr; requests; info; ctxt; model } ->
+    let short = !^"Unproven constraint in undecidable context" in
     let state =
-      trace ctxt model Explain.no_ex
+      trace ctxt model Explain.{ no_ex with unproven_constraint = Some constr }
     in
-    { short; descr = Some !^""; state = Some state } (* TODO *)
+    let descr =
+      let spec_loc, odescr = info in
+      let head, pos = Locations.head_pos_of_location spec_loc in
+      let doc =
+        match odescr with
+        | None -> !^"Constraint from" ^^^ !^head ^/^ !^pos
+        | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ !^head ^/^ !^pos
+      in
+      match request_chain_description requests with
+      | Some doc2 -> doc ^^ hardline ^^ doc2
+      | None -> doc
+    in
+    { short; descr = Some descr; state = Some state }
   | Unproven_constraint { constr; requests; info; ctxt; model } ->
     let short = !^"Unprovable constraint" in
     let state =
