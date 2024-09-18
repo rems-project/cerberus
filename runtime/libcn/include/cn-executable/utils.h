@@ -139,6 +139,10 @@ cn_bool *cn_map_equality(cn_map *m1, cn_map *m2, cn_bool *(value_equality_fun)(v
     }\
     m;\
 })
+#define convert_from_cn_map(arr, m, cntype, num_elements)\
+    for (int i = 0; i < num_elements; i++) {\
+        arr[i] = convert_from_##cntype(cn_map_get_##cntype(m, convert_to_cn_integer(i)));\
+    }
 
 
 cn_bool *cn_pointer_equality(void *i1, void *i2);
