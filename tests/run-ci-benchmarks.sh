@@ -2,7 +2,13 @@
 set -euo pipefail -o noclobber
 # set -xv # uncomment to debug variables
 
-JSON_FILE="benchmark-data.json"
+if [[ -z "${SOLVER+x}" ]]; then
+  JSON_FILE="benchmark-data.json"
+  SOLVER_TYPE="--solver-type=z3"
+else
+  JSON_FILE="benchmark-data-${SOLVER}.json"
+  SOLVER_TYPE="--solver-type=${SOLVER}"
+fi
 TMP_FILE=$(mktemp)
 
 echo "[" >> "${JSON_FILE}"
@@ -21,14 +27,14 @@ TOTAL=0
 for TEST in ${TESTS}; do
 
   # Record wall clock time in seconds
-  /usr/bin/time --quiet -f "%e" -o /tmp/time cn verify "${TEST}" || true
+  /usr/bin/time --quiet -f "%e" -o /tmp/time cn verify "${SOLVER_TYPE}" "${TEST}" || true
   TIME=$(cat /tmp/time)
   TOTAL="$(echo "${TOTAL} + ${TIME}" | bc -l)"
 
   # If we're last, don't print a trailing comma.
   if [[ ${INDEX} -eq ${COUNT}-1 ]]; then
     # Hack to output JSON.
-    cat << EOF >> ${TMP_FILE}
+    cat << EOF >> "${TMP_FILE}"
     {
 	"name": "${TEST}",
         "unit": "Seconds",
@@ -36,7 +42,7 @@ for TEST in ${TESTS}; do
     }
 EOF
   else
-    cat << EOF >> ${TMP_FILE}
+    cat << EOF >> "${TMP_FILE}"
     {
 	"name": "${TEST}",
         "unit": "Seconds",
@@ -48,7 +54,7 @@ EOF
   let INDEX=${INDEX}+1
 done
 
-cat << EOF >> ${JSON_FILE}
+cat << EOF >> "${JSON_FILE}"
     {
         "name": "Total benchmark time",
         "unit": "Seconds",
@@ -56,7 +62,7 @@ cat << EOF >> ${JSON_FILE}
     },
 EOF
 
-cat ${TMP_FILE} >> ${JSON_FILE}
+cat "${TMP_FILE}" >> "${JSON_FILE}"
 
 echo "]" >> "${JSON_FILE}"
 
