@@ -272,7 +272,7 @@ let state ctxt model_with_q extras =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when equal_predicate_name ret.name RET.alloc_name -> false
+          | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
           | _ -> true)
         diff_res
     in
