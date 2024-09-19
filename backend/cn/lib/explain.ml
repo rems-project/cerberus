@@ -2,8 +2,10 @@ open Report
 module IT = IndexTerms
 module BT = BaseTypes
 module RE = Resources
+module REP = ResourcePredicates
 module RET = ResourceTypes
 module LC = LogicalConstraints
+module LF = LogicalFunctions
 module LAT = LogicalArgumentTypes
 module LS = LogicalSorts
 module SymSet = Set.Make (Sym)
@@ -166,23 +168,31 @@ let state ctxt model_with_q extras =
   (*   | None -> parens !^"not evaluated" *)
   (* in *)
   let not_given_to_solver = 
-    let (forall_constraints, recursive_funs, branched_preds) 
-      = not_given_to_solver ctxt in 
-    let interesting_constraints, uninteresting_constraints 
-      = List.partition LC.is_interesting forall_constraints in
-    let interesting_funs, uninteresting_funs 
-      = List.partition (fun (_,v) -> LogicalFunctions.is_interesting v) recursive_funs in
-    let interesting_preds, uninteresting_preds 
-      = List.partition (fun (_,v) -> ResourcePredicates.is_interesting v) branched_preds in
+    let (forall_constraints, recursive_funs, branched_preds) =
+      not_given_to_solver ctxt in 
+    let interesting_constraints, uninteresting_constraints =
+      List.partition LC.is_interesting forall_constraints
+    in
+    let interesting_funs, uninteresting_funs =
+      List.partition (fun (_,v) -> LF.is_interesting v) recursive_funs
+    in
+    let interesting_preds, uninteresting_preds =
+      List.partition (fun (_,v) -> REP.is_interesting v) branched_preds
+    in
     let make_constraints = List.map LC.pp in
     let make_funs = List.map (fun (k,_) -> Sym.pp k) in
     let make_preds = List.map (fun (k,_) -> Sym.pp k) in
-    (List.concat [make_constraints interesting_constraints; 
-                  make_funs interesting_funs;
-                  make_preds interesting_preds],
-     List.concat [make_constraints uninteresting_constraints;
-                  make_funs uninteresting_funs;
-                  make_preds uninteresting_preds]) in
+    (List.concat
+        [ make_constraints interesting_constraints; 
+          make_funs interesting_funs;
+          make_preds interesting_preds
+        ],
+     List.concat
+        [ make_constraints uninteresting_constraints;
+          make_funs uninteresting_funs;
+          make_preds uninteresting_preds
+        ] ) 
+  in
   let terms =
     let variables =
       let make s ls = sym_ (s, ls, Locations.other __FUNCTION__) in
@@ -239,10 +249,14 @@ let state ctxt model_with_q extras =
     (List.map snd interesting, List.map snd uninteresting)
   in
   let constraints =
-    let in_solver = List.filter (fun c -> not (LC.is_forall c)) (LCSet.elements ctxt.constraints) in 
+    let in_solver = 
+      List.filter 
+        (fun c -> not (LC.is_forall c))
+        (LCSet.elements ctxt.constraints)
+    in 
     let interesting, uninteresting =
       List.partition
-        LC.is_interesting 
+        LC.is_interesting
         (List.concat_map (simp_constraint evaluate) in_solver)
     in
     (List.map LC.pp interesting, List.map LC.pp uninteresting)
@@ -258,7 +272,7 @@ let state ctxt model_with_q extras =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
+          | P ret when equal_predicate_name ret.name RET.alloc_name -> false
           | _ -> true)
         diff_res
     in

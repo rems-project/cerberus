@@ -29,7 +29,8 @@ type where_report =
     the first component is "interesting", the second is not. *)
 type state_report =
   { where : where_report; (** Location information *)
-    not_given_to_solver : Pp.document list * Pp.document list; (* Interesting/uninteresting definitions and constraints not given to solver *)
+    not_given_to_solver : Pp.document list * Pp.document list;
+    (* Interesting/uninteresting definitions and constraints not given to solver *)
     resources : Pp.document list * Pp.document list; (** Resources *)
     constraints : Pp.document list * Pp.document list; (** Constraints *)
     terms : term_entry list * term_entry list (** Term values *)

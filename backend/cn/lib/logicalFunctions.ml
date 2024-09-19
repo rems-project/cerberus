@@ -69,6 +69,7 @@ let try_open_fun def args =
   | Rec_Def _ -> None
   | Uninterp -> None
 
+
 (* let try_open_fun_to_term def name args = Option.map (fun body -> Body.to_term
    def.return_bt body ) (try_open_fun def name args) *)
 

@@ -23,7 +23,8 @@ type where_report =
 type state_report =
   { where : where_report;
     (* variables : var_entry list; *)
-    not_given_to_solver : Pp.document list * Pp.document list; (*interesting/uninteresting*)
+    not_given_to_solver : Pp.document list * Pp.document list;
+    (*interesting/uninteresting*)
     resources : Pp.document list * Pp.document list; (* interesting/uninteresting*)
     constraints : Pp.document list * Pp.document list; (* interesting/uninteresting *)
     terms : term_entry list * term_entry list (* interesting/uninteresting*)
@@ -151,13 +152,13 @@ let interesting_uninteresting
   | _, _ -> interesting_table ^ details "more" uninteresting_table
 
 let make_not_given_to_solver (interesting, uninteresting) =
-  let make = List.map (fun elem -> [Pp.plain elem]) in
+  let make = List.map (fun elem -> [ Pp.plain elem ]) in
   let interesting_table = table_without_head (make interesting) in
   let uninteresting_table = table_without_head (make uninteresting) in
   h
     1
-      "Definitions and constraints not given to solver"
-      (interesting_uninteresting
+    "Definitions and constraints not given to solver"
+    (interesting_uninteresting
       (interesting_table, interesting)
       (uninteresting_table, uninteresting))
 
