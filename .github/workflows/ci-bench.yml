@@ -94,19 +94,23 @@ jobs:
         opam pin --yes --no-action add cn .
         opam install --yes cn ocamlformat.0.26.2
 
-    - name: Run benchmark
+    - name: Run benchmarks
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})
-        cd tests; USE_OPAM='' ./run-ci-benchmarks.sh
+        cd tests; SOLVER='z3' ./run-ci-benchmarks.sh; SOLVER='cvc5' ./run-ci-benchmarks.sh
         cd ..
 
     - name: Store benchmark result
-      uses: benchmark-action/github-action-benchmark@v1
+      uses: GaloisInc/github-action-benchmark@00bf34008c7b91a09ea7f1ef93330ccb7bf2d4ab
       with:
         name: CN Benchmarks
         tool: 'customSmallerIsBetter'
-        output-file-path: tests/benchmark-data.json
+        output-file-path: |
+          {
+            "z3": "tests/benchmark-data-z3.json",
+            "cvc5": "tests/benchmark-data-cvc5.json"
+          }
         # Access token to deploy GitHub Pages branch
         github-token: ${{ secrets.GITHUB_TOKEN }}
         # Push and deploy GitHub pages branch automatically
