@@ -274,11 +274,11 @@ let not_given_to_solver ctxt =
   let global = ctxt.global in
   let forall_constraints = 
     filter LogicalConstraints.is_forall (LCSet.elements ctxt.constraints) in
-  let recursive_funs = SymMap.to_list 
+  let recursive_funs = SymMap.bindings 
     (SymMap.filter 
       (fun _ v -> LogicalFunctions.is_recursive v) 
       (global.logical_functions)) in
-  let resource_preds = SymMap.to_list 
+  let resource_preds = SymMap.bindings 
     (SymMap.filter 
       (fun _ v -> not (ResourcePredicates.given_to_solver v)) 
       (global.resource_predicates)) in
