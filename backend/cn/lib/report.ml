@@ -151,6 +151,7 @@ let interesting_uninteresting
   | [], _ -> details "more" uninteresting_table
   | _, _ -> interesting_table ^ details "more" uninteresting_table
 
+
 let make_not_given_to_solver (interesting, uninteresting) =
   let make = List.map (fun elem -> [ Pp.plain elem ]) in
   let interesting_table = table_without_head (make interesting) in
@@ -159,8 +160,9 @@ let make_not_given_to_solver (interesting, uninteresting) =
     1
     "Definitions and constraints not given to solver"
     (interesting_uninteresting
-      (interesting_table, interesting)
-      (uninteresting_table, uninteresting))
+       (interesting_table, interesting)
+       (uninteresting_table, uninteresting))
+
 
 let make_resources (interesting, uninteresting) =
   let make = List.map (fun re -> [ Pp.plain re (* Pp.plain re.res_span *) ]) in

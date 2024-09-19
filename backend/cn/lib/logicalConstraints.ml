@@ -101,10 +101,11 @@ let dtree =
   | T it -> Dnode (pp_ctor "T", [ IT.dtree it ])
   | Forall ((s, _bt), t) -> Dnode (pp_ctor "Forall", [ Dleaf (Sym.pp s); IT.dtree t ])
 
+
 let is_forall : t -> bool = fun c -> match c with T _ -> false | Forall _ -> true
 
 let is_interesting : t -> bool =
-  fun c->
+  fun c ->
   match c with
   (* | LC.T (IT (Aligned _, _, _)) -> false *)
   | T (IT (Representable _, _, _)) -> false
