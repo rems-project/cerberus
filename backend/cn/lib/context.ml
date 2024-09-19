@@ -279,13 +279,13 @@ let not_given_to_solver ctxt =
   let recursive_funs =
     SymMap.bindings
       (SymMap.filter
-        (fun _ v -> LogicalFunctions.is_recursive v)
-        global.logical_functions)
+         (fun _ v -> LogicalFunctions.is_recursive v)
+         global.logical_functions)
   in
   let resource_preds =
     SymMap.bindings
       (SymMap.filter
-        (fun _ v -> not (ResourcePredicates.given_to_solver v))
-        global.resource_predicates)
+         (fun _ v -> not (ResourcePredicates.given_to_solver v))
+         global.resource_predicates)
   in
   (forall_constraints, recursive_funs, resource_preds)
