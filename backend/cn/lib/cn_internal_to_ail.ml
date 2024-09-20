@@ -57,12 +57,12 @@ module MembersKey = struct
     | (id, _) :: ms, (id', _) :: ms' ->
       let c = String.compare (Id.s id) (Id.s id') in
       if c == 0 then
-        0
-      else
         compare ms ms'
+      else
+        c
 end
 
-let members_equal ms ms' =
+(* let members_equal ms ms' =
   if List.length ms != List.length ms' then
     false
   else if List.length ms == 0 then
@@ -82,7 +82,7 @@ let members_equal ms ms' =
     let ctypes_eq = List.fold_left ( && ) true ctypes_eq in
     let ids_eq = List.map2 Id.equal ids ids' in
     let ids_eq = List.fold_left ( && ) true ids_eq in
-    ctypes_eq && ids_eq)
+    ctypes_eq && ids_eq) *)
 
 
 module RecordMap = Map.Make (MembersKey)
@@ -182,7 +182,11 @@ let str_of_bt_bitvector_type sign size =
 
 
 let lookup_records_map members =
-  let map_bindings = RecordMap.bindings !records in
+  match RecordMap.find_opt members !records with 
+    | Some sym -> sym 
+    | None -> failwith "Record not found in map"
+
+  (* let map_bindings = RecordMap.bindings !records in
   (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
   let eq_members_bindings =
     List.filter (fun (k, v) -> members_equal k members) map_bindings
@@ -190,7 +194,7 @@ let lookup_records_map members =
   (match eq_members_bindings with
     | [] ->
       failwith "Record not found in map"
-    | (_, sym) :: _ -> sym)
+    | (_, sym) :: _ -> sym) *)
 
 
 (* TODO: Complete *)
