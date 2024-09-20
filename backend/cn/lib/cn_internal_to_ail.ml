@@ -63,27 +63,26 @@ module MembersKey = struct
 end
 
 (* let members_equal ms ms' =
-  if List.length ms != List.length ms' then
-    false
-  else if List.length ms == 0 then
-    true
-  else (
-    let ids, cn_bts = List.split ms in
-    let ids', cn_bts' = List.split ms' in
-    let ctypes_eq =
-      List.map2
-        (fun cn_bt cn_bt' ->
-          let bt = cn_base_type_to_bt cn_bt in
-          let bt' = cn_base_type_to_bt cn_bt' in
-          BT.equal bt bt')
-        cn_bts
-        cn_bts'
-    in
-    let ctypes_eq = List.fold_left ( && ) true ctypes_eq in
-    let ids_eq = List.map2 Id.equal ids ids' in
-    let ids_eq = List.fold_left ( && ) true ids_eq in
-    ctypes_eq && ids_eq) *)
-
+   if List.length ms != List.length ms' then
+   false
+   else if List.length ms == 0 then
+   true
+   else (
+   let ids, cn_bts = List.split ms in
+   let ids', cn_bts' = List.split ms' in
+   let ctypes_eq =
+   List.map2
+   (fun cn_bt cn_bt' ->
+   let bt = cn_base_type_to_bt cn_bt in
+   let bt' = cn_base_type_to_bt cn_bt' in
+   BT.equal bt bt')
+   cn_bts
+   cn_bts'
+   in
+   let ctypes_eq = List.fold_left ( && ) true ctypes_eq in
+   let ids_eq = List.map2 Id.equal ids ids' in
+   let ids_eq = List.fold_left ( && ) true ids_eq in
+   ctypes_eq && ids_eq) *)
 
 module RecordMap = Map.Make (MembersKey)
 
@@ -182,20 +181,20 @@ let str_of_bt_bitvector_type sign size =
 
 
 let lookup_records_map members =
-  match RecordMap.find_opt members !records with 
-    | Some sym -> sym 
-    | None -> failwith "Record not found in map"
+  match RecordMap.find_opt members !records with
+  | Some sym -> sym
+  | None -> failwith "Record not found in map"
 
-  (* let map_bindings = RecordMap.bindings !records in
-  (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
-  let eq_members_bindings =
-    List.filter (fun (k, v) -> members_equal k members) map_bindings
-  in
-  (match eq_members_bindings with
-    | [] ->
-      failwith "Record not found in map"
-    | (_, sym) :: _ -> sym) *)
 
+(* let map_bindings = RecordMap.bindings !records in
+   (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
+   let eq_members_bindings =
+   List.filter (fun (k, v) -> members_equal k members) map_bindings
+   in
+   (match eq_members_bindings with
+   | [] ->
+   failwith "Record not found in map"
+   | (_, sym) :: _ -> sym) *)
 
 (* TODO: Complete *)
 let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =
@@ -228,9 +227,9 @@ let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =
       failwith "TODO"
       (* Printf.printf "Entered CN_tuple case\n"; *)
       (* let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
-      let members = List.map (fun t -> (some_id, t)) ts in
-      let sym = lookup_records_map members in
-      Struct sym *)
+         let members = List.map (fun t -> (some_id, t)) ts in
+         let sym = lookup_records_map members in
+         Struct sym *)
     | CN_set bt -> generate_ail_array bt
     | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
     | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"

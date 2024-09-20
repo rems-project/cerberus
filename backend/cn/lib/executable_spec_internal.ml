@@ -107,65 +107,59 @@ let rec add_records_to_map_from_it it =
   | Constructor (_sym, args) -> List.iter add_records_to_map_from_it (List.map snd args)
 
 
-
-let add_records_to_map_from_resource = function 
-  | ResourceTypes.P p -> 
-    List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
-  | Q q -> 
+let add_records_to_map_from_resource = function
+  | ResourceTypes.P p -> List.iter add_records_to_map_from_it (p.pointer :: p.iargs)
+  | Q q ->
     List.iter add_records_to_map_from_it (q.pointer :: q.step :: q.permission :: q.iargs)
 
-let add_records_to_map_from_lc = function 
-  | LogicalConstraints.T it
-  | Forall (_, it) -> add_records_to_map_from_it it
+
+let add_records_to_map_from_lc = function
+  | LogicalConstraints.T it | Forall (_, it) -> add_records_to_map_from_it it
+
 
 let add_records_to_map_from_cn_statement = function
   | Cnprog.M_CN_assert lc -> add_records_to_map_from_lc lc
   (* All other CN statements are (currently) no-ops at runtime *)
-  | M_CN_pack_unpack _
-  | M_CN_have _ 
-  | M_CN_instantiate _
-  | M_CN_split_case _ 
-  | M_CN_extract _
-  | M_CN_unfold _
-  | M_CN_apply _ 
-  | M_CN_inline _ 
-  | M_CN_print _ -> ()
+  | M_CN_pack_unpack _ | M_CN_have _ | M_CN_instantiate _ | M_CN_split_case _
+  | M_CN_extract _ | M_CN_unfold _ | M_CN_apply _ | M_CN_inline _ | M_CN_print _ ->
+    ()
 
-let add_records_to_map_from_cnprogs (_, cn_progs) = 
-  let rec aux = function 
+
+let add_records_to_map_from_cnprogs (_, cn_progs) =
+  let rec aux = function
     | Cnprog.M_CN_let (_, (_, { ct = _; pointer }), prog) ->
       add_records_to_map_from_it pointer;
       aux prog
     | M_CN_statement (_, stmt) -> add_records_to_map_from_cn_statement stmt
-  in 
+  in
   List.iter aux cn_progs
 
 
 let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation) =
-  let rec aux_lrt = function 
+  let rec aux_lrt = function
     | LRT.Define ((_, it), _, t) ->
-      add_records_to_map_from_it it; 
+      add_records_to_map_from_it it;
       aux_lrt t
     | Resource ((_, (re, _)), _, t) ->
       add_records_to_map_from_resource re;
       aux_lrt t
-    | Constraint (lc, _, t) -> 
+    | Constraint (lc, _, t) ->
       add_records_to_map_from_lc lc;
       aux_lrt t
     | I -> ()
   in
   let rec aux_lat = function
-    | LAT.Define ((_, it), _, lat) -> 
+    | LAT.Define ((_, it), _, lat) ->
       add_records_to_map_from_it it;
       aux_lat lat
-    | Resource ((_, (ret, _)), _, lat) -> 
+    | Resource ((_, (ret, _)), _, lat) ->
       add_records_to_map_from_resource ret;
       aux_lat lat
-    | Constraint (lc, _, lat) -> 
+    | Constraint (lc, _, lat) ->
       add_records_to_map_from_lc lc;
       aux_lat lat
     (* Postcondition *)
-    | I ((ReturnTypes.Computational (_, _, t)), stats) -> 
+    | I (ReturnTypes.Computational (_, _, t), stats) ->
       List.iter add_records_to_map_from_cnprogs stats;
       aux_lrt t
   in
