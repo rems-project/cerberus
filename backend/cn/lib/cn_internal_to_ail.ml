@@ -181,26 +181,16 @@ let str_of_bt_bitvector_type sign size =
   sign_str ^ size_str
 
 
-let generate_record_sym sym members =
-  match sym with
-  | Some sym' ->
-    let sym'' = generate_sym_with_suffix ~suffix:"_record" sym' in
-    records := RecordMap.add members sym'' !records;
-    sym''
-  | None ->
-    let map_bindings = RecordMap.bindings !records in
-    (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
-    let eq_members_bindings =
-      List.filter (fun (k, v) -> members_equal k members) map_bindings
-    in
-    (match eq_members_bindings with
-     | [] ->
-       (* First time reaching record of this type - add to map *)
-       let count = RecordMap.cardinal !records in
-       let sym' = Sym.fresh_pretty ("record_" ^ string_of_int count) in
-       records := RecordMap.add members sym' !records;
-       sym'
-     | (_, sym') :: _ -> sym')
+let lookup_records_map members =
+  let map_bindings = RecordMap.bindings !records in
+  (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
+  let eq_members_bindings =
+    List.filter (fun (k, v) -> members_equal k members) map_bindings
+  in
+  (match eq_members_bindings with
+    | [] ->
+      failwith "Record not found in map"
+    | (_, sym) :: _ -> sym)
 
 
 (* TODO: Complete *)
@@ -222,7 +212,7 @@ let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =
       (* gets replaced with typedef anyway (TODO: clean up) *)
     | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
     | CN_record members ->
-      let sym = generate_record_sym pred_sym members in
+      let sym = lookup_records_map members in
       Struct sym
     (* Every struct is converted into a struct pointer *)
     | CN_datatype sym -> Struct sym
@@ -231,11 +221,12 @@ let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =
       generate_ail_array bt
       (* TODO: What is the optional second pair element for? Have just put None for now *)
     | CN_tuple ts ->
+      failwith "TODO"
       (* Printf.printf "Entered CN_tuple case\n"; *)
-      let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
+      (* let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
       let members = List.map (fun t -> (some_id, t)) ts in
-      let sym = generate_record_sym pred_sym members in
-      Struct sym
+      let sym = lookup_records_map members in
+      Struct sym *)
     | CN_set bt -> generate_ail_array bt
     | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
     | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
@@ -1103,7 +1094,7 @@ let rec cn_to_ail_expr_aux_internal
     let transformed_ms =
       List.map (fun (id, it) -> (id, bt_to_cn_base_type (IT.bt it))) ms
     in
-    let sym_name = generate_record_sym pred_name transformed_ms in
+    let sym_name = lookup_records_map transformed_ms in
     let ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct sym_name))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
     let fn_call =
