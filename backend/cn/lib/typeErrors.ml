@@ -201,6 +201,18 @@ type message =
         ctxt : Context.t * log;
         model : Solver.model_with_q
       }
+  | Needs_alloc_id of
+      { ptr : IT.t;
+        ub : CF.Undefined.undefined_behaviour;
+        ctxt : Context.t * log;
+        model : Solver.model_with_q
+      }
+  | Alloc_out_of_bounds of
+      { ptr : IT.t;
+        ub : CF.Undefined.undefined_behaviour;
+        ctxt : Context.t * log;
+        model : Solver.model_with_q
+      }
   (* | Implementation_defined_behaviour of document * state_report *)
   | Unspecified of CF.Ctype.ctype
   | StaticError of
@@ -475,6 +487,24 @@ let pp_message te =
     { short; descr = Some descr; state = Some state }
   | Undefined_behaviour { ub; ctxt; model } ->
     let short = !^"Undefined behaviour" in
+    let state = trace ctxt model Explain.no_ex in
+    let descr =
+      match CF.Undefined.std_of_undefined_behaviour ub with
+      | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
+      | None -> !^(CF.Undefined.ub_short_string ub)
+    in
+    { short; descr = Some descr; state = Some state }
+  | Needs_alloc_id { ptr; ub; ctxt; model } ->
+    let short = !^"Pointer " ^^ bquotes (IT.pp ptr) ^^ !^" needs allocation ID" in
+    let state = trace ctxt model Explain.no_ex in
+    let descr =
+      match CF.Undefined.std_of_undefined_behaviour ub with
+      | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
+      | None -> !^(CF.Undefined.ub_short_string ub)
+    in
+    { short; descr = Some descr; state = Some state }
+  | Alloc_out_of_bounds { ptr; ub; ctxt; model } ->
+    let short = !^"Pointer " ^^ bquotes (IT.pp ptr) ^^ !^" out of bounds" in
     let state = trace ctxt model Explain.no_ex in
     let descr =
       match CF.Undefined.std_of_undefined_behaviour ub with

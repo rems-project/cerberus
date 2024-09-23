@@ -428,10 +428,30 @@ let check_has_alloc_id loc ptr ub_unspec =
   | `False ->
     let@ model = model () in
     let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-    fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
+    fail (fun ctxt -> { loc; msg = Needs_alloc_id { ptr; ub; ctxt; model } })
 
 
-let check_live_alloc_bounds loc arg ub constr =
+let check_alloc_bounds loc ~ptr ub_unspec =
+  if !use_vip then (
+    let here = Locations.other __FUNCTION__ in
+    let base_size = Alloc.History.lookup_ptr ptr here in
+    let base, size = Alloc.History.get_base_size base_size here in
+    let addr = addr_ ptr here in
+    let lower = le_ (base, addr) here in
+    let upper = le_ (addr, add_ (base, size) here) here in
+    let constr = and_ [ lower; upper ] here in
+    let@ provable = provable loc in
+    match provable @@ LC.T constr with
+    | `True -> return ()
+    | `False ->
+      let@ model = model () in
+      let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
+      fail (fun ctxt -> { loc; msg = Alloc_out_of_bounds { ptr; ub; ctxt; model } }))
+  else
+    return ()
+
+
+let check_live_alloc_bounds loc arg ub_unspec constr =
   let@ base_size = RI.Special.get_live_alloc loc Ptr_diff arg in
   let here = Locations.other __FUNCTION__ in
   let base, size = Alloc.History.get_base_size base_size here in
@@ -442,6 +462,7 @@ let check_live_alloc_bounds loc arg ub constr =
     | `True -> return ()
     | `False ->
       let@ model = model () in
+      let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
       fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } }))
   else
     return ()
@@ -548,7 +569,9 @@ let rec check_pexpr (pe : BT.t Mu.mu_pexpr) (k : IT.t -> unit m) : unit m =
            let result =
              arrayShift_ ~base:vt1 ct ~index:(cast_ Memory.uintptr_bt vt2 loc) loc
            in
-           let@ () = check_has_alloc_id loc vt1 CF.Undefined.UB_unspec_pointer_add in
+           let unspec = CF.Undefined.UB_unspec_pointer_add in
+           let@ () = check_has_alloc_id loc vt1 unspec in
+           let@ () = check_alloc_bounds loc ~ptr:result unspec in
            k result))
      | M_PEmember_shift (pe, tag, member) ->
        let@ () = WellTyped.ensure_base_type loc ~expect (Loc ()) in
@@ -557,6 +580,9 @@ let rec check_pexpr (pe : BT.t Mu.mu_pexpr) (k : IT.t -> unit m) : unit m =
          let@ _ = get_struct_member_type loc tag member in
          let result = memberShift_ (vt, tag, member) loc in
          let@ () = check_has_alloc_id loc vt CF.Undefined.UB_unspec_pointer_add in
+         let unspec = CF.Undefined.UB_unspec_pointer_add in
+         let@ () = check_has_alloc_id loc vt unspec in
+         let@ () = check_alloc_bounds loc ~ptr:result unspec in
          k result)
      | M_PEnot pe ->
        let@ () = WellTyped.ensure_base_type loc ~expect Bool in
@@ -1351,7 +1377,8 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
                   ]
                   here
               in
-              let ub = CF.Undefined.(UB_CERB004_unspecified UB_unspec_pointer_sub) in
+              let unspec = CF.Undefined.UB_unspec_pointer_sub in
+              let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
               let@ provable = provable loc in
               match provable @@ LC.T both_alloc with
               | `False ->
@@ -1359,7 +1386,7 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
                 fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
               | `True ->
                 let@ () =
-                  check_live_alloc_bounds loc arg1 ub (fun ~base ~size ->
+                  check_live_alloc_bounds loc arg1 unspec (fun ~base ~size ->
                     let addr1, addr2 = (addr_ arg1 here, addr_ arg2 here) in
                     let lower1, lower2 =
                       (le_ (base, addr1) here, le_ (base, addr2) here)
@@ -1445,7 +1472,16 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
               let result =
                 arrayShift_ ~base:vt1 ~index:(cast_ Memory.uintptr_bt vt2 loc) act.ct loc
               in
-              let@ () = check_has_alloc_id loc vt1 CF.Undefined.UB_unspec_pointer_add in
+              let unspec = CF.Undefined.UB_unspec_pointer_add in
+              let@ () = check_has_alloc_id loc vt1 unspec in
+              let here = Locations.other __FUNCTION__ in
+              let@ () =
+                check_live_alloc_bounds loc vt1 unspec (fun ~base ~size ->
+                  let addr = addr_ result here in
+                  let lower = le_ (base, addr) here in
+                  let upper = le_ (addr, add_ (base, size) here) here in
+                  and_ [ lower; upper ] here)
+              in
               k result))
         | M_PtrMemberShift (_tag_sym, _memb_ident, _pe) ->
           (* FIXME(CHERI merge) *)

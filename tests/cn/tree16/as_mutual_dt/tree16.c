@@ -36,7 +36,8 @@ predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
     return {t: Empty_Tree {}, v: 0i32, children: default_children ()};
   }
   else {
-    take V = Owned<int>(member_shift<node>(p,v));
+    take P = Owned<struct node>(p);
+    let V = P.v;
     let nodes_ptr = member_shift<node>(p,nodes);
     take Ns = each (i32 i; (0i32 <= i) && (i < NUM_NODES))
       {Indirect_Tree(array_shift<tree>(nodes_ptr, i))};
@@ -47,7 +48,6 @@ predicate {datatype tree t, i32 v, map <i32, datatype tree> children}
 
 predicate (datatype tree) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
-  assert (is_null(V) || ((u64) V != 0u64));
   take T = Tree(V);
   return T.t;
 }
@@ -105,7 +105,7 @@ lemma in_tree_tree_v_lemma (datatype tree t, arc_in_array arc,
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
-/*@ requires is_null(t) || ((u64) t != 0u64);
+/*@ requires
              path_len <= LEN_LIMIT;
              take T = Tree(t);
              take Xs = each (i32 j; (0i32 <= j) && (j < path_len))
