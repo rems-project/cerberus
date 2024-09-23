@@ -54,35 +54,14 @@ module MembersKey = struct
     | [], [] -> 0
     | _, [] -> 1
     | [], _ -> -1
-    | (id, _) :: ms, (id', _) :: ms' ->
+    | (id, cn_bt) :: ms, (id', cn_bt') :: ms' ->
       let c = String.compare (Id.s id) (Id.s id') in
-      if c == 0 then
+      let c' = BaseTypes.compare (cn_base_type_to_bt cn_bt) (cn_base_type_to_bt cn_bt') in
+      if c == 0 && c' == 0 then
         compare ms ms'
       else
         c
 end
-
-(* let members_equal ms ms' =
-   if List.length ms != List.length ms' then
-   false
-   else if List.length ms == 0 then
-   true
-   else (
-   let ids, cn_bts = List.split ms in
-   let ids', cn_bts' = List.split ms' in
-   let ctypes_eq =
-   List.map2
-   (fun cn_bt cn_bt' ->
-   let bt = cn_base_type_to_bt cn_bt in
-   let bt' = cn_base_type_to_bt cn_bt' in
-   BT.equal bt bt')
-   cn_bts
-   cn_bts'
-   in
-   let ctypes_eq = List.fold_left ( && ) true ctypes_eq in
-   let ids_eq = List.map2 Id.equal ids ids' in
-   let ids_eq = List.fold_left ( && ) true ids_eq in
-   ctypes_eq && ids_eq) *)
 
 module RecordMap = Map.Make (MembersKey)
 
