@@ -451,6 +451,25 @@ let check_alloc_bounds loc ~ptr ub_unspec =
     return ()
 
 
+let check_both_eq_alloc loc arg1 arg2 ub_unspec =
+  let here = Locations.other __FUNCTION__ in
+  let both_alloc =
+    and_
+      [ hasAllocId_ arg1 here;
+        hasAllocId_ arg2 here;
+        eq_ (allocId_ arg1 here, allocId_ arg2 here) here
+      ]
+      here
+  in
+  let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
+  let@ provable = provable loc in
+  match provable @@ LC.T both_alloc with
+  | `False ->
+    let@ model = model () in
+    fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
+  | `True -> return ()
+
+
 let check_live_alloc_bounds loc arg ub_unspec constr =
   let@ base_size = RI.Special.get_live_alloc loc Ptr_diff arg in
   let here = Locations.other __FUNCTION__ in
@@ -1343,6 +1362,15 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
                 here)
              *)))
        in
+       let both_in_bounds ~base ~size arg1 arg2 =
+         let addr1, addr2 = (addr_ arg1 here, addr_ arg2 here) in
+         let lower1, lower2 = (le_ (base, addr1) here, le_ (base, addr2) here) in
+         let upper1, upper2 =
+           ( le_ (addr1, add_ (base, size) here) here,
+             le_ (addr2, add_ (base, size) here) here )
+         in
+         and_ [ lower1; lower2; upper1; upper2 ] here
+       in
        let pointer_op op pe1 pe2 =
          let@ () = ensure_base_type loc ~expect Bool in
          let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe1) in
@@ -1369,44 +1397,21 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
                 | Array (item_ty, _) -> Memory.size_of_ctype item_ty
                 | ct -> Memory.size_of_ctype ct
               in
-              let both_alloc =
-                and_
-                  [ hasAllocId_ arg1 here;
-                    hasAllocId_ arg2 here;
-                    eq_ (allocId_ arg1 here, allocId_ arg2 here) here
-                  ]
-                  here
+              let ub_unspec = CF.Undefined.UB_unspec_pointer_sub in
+              let@ () = check_both_eq_alloc loc arg1 arg2 ub_unspec in
+              let@ () =
+                check_live_alloc_bounds loc arg1 ub_unspec (both_in_bounds arg1 arg2)
               in
-              let unspec = CF.Undefined.UB_unspec_pointer_sub in
-              let ub = CF.Undefined.(UB_CERB004_unspecified unspec) in
-              let@ provable = provable loc in
-              match provable @@ LC.T both_alloc with
-              | `False ->
-                let@ model = model () in
-                fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } })
-              | `True ->
-                let@ () =
-                  check_live_alloc_bounds loc arg1 unspec (fun ~base ~size ->
-                    let addr1, addr2 = (addr_ arg1 here, addr_ arg2 here) in
-                    let lower1, lower2 =
-                      (le_ (base, addr1) here, le_ (base, addr2) here)
-                    in
-                    let upper1, upper2 =
-                      ( le_ (addr1, add_ (base, size) here) here,
-                        le_ (addr2, add_ (base, size) here) here )
-                    in
-                    and_ [ lower1; lower2; upper1; upper2 ] here)
-                in
-                let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
-                let value =
-                  (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
-                     yields the expected result. *)
-                  div_
-                    ( cast_ ptr_diff_bt (sub_ (addr_ arg1 loc, addr_ arg2 loc) loc) loc,
-                      int_lit_ divisor ptr_diff_bt loc )
-                    loc
-                in
-                k value))
+              let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
+              let value =
+                (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
+                   yields the expected result. *)
+                div_
+                  ( cast_ ptr_diff_bt (sub_ (addr_ arg1 loc, addr_ arg2 loc) loc) loc,
+                    int_lit_ divisor ptr_diff_bt loc )
+                  loc
+              in
+              k value))
         | M_IntFromPtr (act_from, act_to, pe) ->
           let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
           let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
