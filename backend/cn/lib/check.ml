@@ -451,7 +451,7 @@ let check_alloc_bounds loc ~ptr ub_unspec =
     return ()
 
 
-let check_both_eq_alloc loc arg1 arg2 ub_unspec =
+let check_both_eq_alloc loc arg1 arg2 ub =
   let here = Locations.other __FUNCTION__ in
   let both_alloc =
     and_
@@ -461,7 +461,6 @@ let check_both_eq_alloc loc arg1 arg2 ub_unspec =
       ]
       here
   in
-  let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
   let@ provable = provable loc in
   match provable @@ LC.T both_alloc with
   | `False ->
@@ -470,8 +469,8 @@ let check_both_eq_alloc loc arg1 arg2 ub_unspec =
   | `True -> return ()
 
 
-let check_live_alloc_bounds loc arg ub_unspec constr =
-  let@ base_size = RI.Special.get_live_alloc loc Ptr_diff arg in
+let check_live_alloc_bounds loc arg ub constr =
+  let@ base_size = RI.Special.get_live_alloc loc Ptr_diff_or_compare arg in
   let here = Locations.other __FUNCTION__ in
   let base, size = Alloc.History.get_base_size base_size here in
   if !use_vip then (
@@ -481,7 +480,6 @@ let check_live_alloc_bounds loc arg ub_unspec constr =
     | `True -> return ()
     | `False ->
       let@ model = model () in
-      let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
       fail (fun ctxt -> { loc; msg = Undefined_behaviour { ub; ctxt; model } }))
   else
     return ()
@@ -1372,10 +1370,15 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
          and_ [ lower1; lower2; upper1; upper2 ] here
        in
        let pointer_op op pe1 pe2 =
+         let ub = CF.Undefined.UB053_distinct_aggregate_union_pointer_comparison in
          let@ () = ensure_base_type loc ~expect Bool in
          let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe1) in
          let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe2) in
-         check_pexpr pe1 (fun arg1 -> check_pexpr pe2 (fun arg2 -> k (op (arg1, arg2))))
+         check_pexpr pe1 (fun arg1 ->
+           check_pexpr pe2 (fun arg2 ->
+             let@ () = check_both_eq_alloc loc arg1 arg2 ub in
+             let@ () = check_live_alloc_bounds loc arg1 ub (both_in_bounds arg1 arg2) in
+             k (op (arg1, arg2))))
        in
        (match memop with
         | M_PtrEq (pe1, pe2) -> pointer_eq pe1 pe2
@@ -1398,10 +1401,9 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
                 | ct -> Memory.size_of_ctype ct
               in
               let ub_unspec = CF.Undefined.UB_unspec_pointer_sub in
-              let@ () = check_both_eq_alloc loc arg1 arg2 ub_unspec in
-              let@ () =
-                check_live_alloc_bounds loc arg1 ub_unspec (both_in_bounds arg1 arg2)
-              in
+              let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
+              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
+              let@ () = check_live_alloc_bounds loc arg1 ub (both_in_bounds arg1 arg2) in
               let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
               let value =
                 (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
@@ -1477,11 +1479,12 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
               let result =
                 arrayShift_ ~base:vt1 ~index:(cast_ Memory.uintptr_bt vt2 loc) act.ct loc
               in
-              let unspec = CF.Undefined.UB_unspec_pointer_add in
-              let@ () = check_has_alloc_id loc vt1 unspec in
+              let ub_unspec = CF.Undefined.UB_unspec_pointer_add in
+              let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
+              let@ () = check_has_alloc_id loc vt1 ub_unspec in
               let here = Locations.other __FUNCTION__ in
               let@ () =
-                check_live_alloc_bounds loc vt1 unspec (fun ~base ~size ->
+                check_live_alloc_bounds loc vt1 ub (fun ~base ~size ->
                   let addr = addr_ result here in
                   let lower = le_ (base, addr) here in
                   let upper = le_ (addr, add_ (base, size) here) here in

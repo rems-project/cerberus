@@ -37,7 +37,7 @@ let call_prefix = function
 
 
 type situation =
-  | Ptr_diff
+  | Ptr_diff_or_compare
   | Access of access
   | Call of call_situation
 
@@ -59,7 +59,7 @@ let call_situation = function
 
 let checking_situation = function
   | Access _ -> !^"checking access"
-  | Ptr_diff -> !^"checking pointer difference"
+  | Ptr_diff_or_compare -> !^"checking pointer difference or comparison"
   | Call s -> call_situation s
 
 
@@ -73,7 +73,7 @@ let for_access = function
 
 let for_situation = function
   | Access access -> for_access access
-  | Ptr_diff -> !^"for subtracting pointers"
+  | Ptr_diff_or_compare -> !^"for subtracting or comparing pointers"
   | Call s ->
     (match s with
      | FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
