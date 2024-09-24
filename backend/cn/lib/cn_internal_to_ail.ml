@@ -159,21 +159,22 @@ let str_of_bt_bitvector_type sign size =
   sign_str ^ size_str
 
 
+let augment_record_map ?cn_sym bt =
+  let sym_prefix = match cn_sym with Some sym' -> sym' | None -> Sym.fresh () in
+  match bt_to_cn_base_type bt with
+  | CN_record members ->
+    (* Augment records map if entry does not exist already *)
+    if not (RecordMap.mem members !records) then (
+      let sym' = generate_sym_with_suffix ~suffix:"_record" sym_prefix in
+      records := RecordMap.add members sym' !records)
+  | _ -> ()
+
+
 let lookup_records_map members =
   match RecordMap.find_opt members !records with
   | Some sym -> sym
   | None -> failwith "Record not found in map"
 
-
-(* let map_bindings = RecordMap.bindings !records in
-   (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
-   let eq_members_bindings =
-   List.filter (fun (k, v) -> members_equal k members) map_bindings
-   in
-   (match eq_members_bindings with
-   | [] ->
-   failwith "Record not found in map"
-   | (_, sym) :: _ -> sym) *)
 
 (* TODO: Complete *)
 let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =

@@ -17,6 +17,8 @@ module RecordMap : module type of Map.Make (MembersKey)
 
 val records : Sym.t RecordMap.t ref
 
+val augment_record_map : ?cn_sym:Sym.sym -> BT.t -> unit
+
 val bt_to_cn_base_type : BT.t -> Sym.t CF.Cn.cn_base_type
 
 val bt_to_ail_ctype : ?pred_sym:Sym.t option -> BT.t -> C.ctype
