@@ -1407,7 +1407,8 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
               let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
               let value =
                 (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
-                   yields the expected result. *)
+                   yields the expected result, or signal
+                   UB050_pointers_subtraction_not_representable *)
                 div_
                   ( cast_ ptr_diff_bt (sub_ (addr_ arg1 loc, addr_ arg2 loc) loc) loc,
                     int_lit_ divisor ptr_diff_bt loc )
@@ -1448,9 +1449,17 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
           in
           let@ _bt_info = ensure_bitvector_type loc ~expect:(Mu.bt_of_pexpr pe) in
           check_pexpr pe (fun arg ->
-            (* TODO (DCM, VIP): check for UB050_pointers_subtraction_not_representable *)
-            let value = integerToPointerCast_ arg loc in
-            k value)
+            let sym, result = IT.fresh_named (BT.Loc ()) "intToPtr" loc in
+            let@ _ = add_a sym (Loc ()) (here, lazy (Sym.pp sym)) in
+            let cond = eq_ (arg, int_lit_ 0 (bt arg) here) here in
+            let null_case = eq_ (result, null_ here) here in
+            (* NOTE: the allocation ID is intentionally left unconstrained *)
+            let alloc_case =
+              and_ [ hasAllocId_ result here; eq_ (arg, addr_ result here) here ] here
+            in
+            let constr = ite_ (cond, null_case, alloc_case) here in
+            let@ () = add_c loc (LC.T constr) in
+            k result)
         | M_PtrValidForDeref (act, pe) ->
           (* TODO (DCM, VIP) *)
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
