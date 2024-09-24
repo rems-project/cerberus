@@ -1448,8 +1448,7 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
           in
           let@ _bt_info = ensure_bitvector_type loc ~expect:(Mu.bt_of_pexpr pe) in
           check_pexpr pe (fun arg ->
-            (* TODO (DCM, VIP): what about unrepresentable values? If that's possible
-               we to make sure our cast semantics correctly matches C's *)
+            (* TODO (DCM, VIP): check for UB050_pointers_subtraction_not_representable *)
             let value = integerToPointerCast_ arg loc in
             k value)
         | M_PtrValidForDeref (act, pe) ->
@@ -1505,7 +1504,16 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
           check_pexpr pe1 (fun vt1 ->
             check_pexpr pe2 (fun vt2 ->
               let result = copyAllocId_ ~addr:vt1 ~loc:vt2 loc in
-              let@ () = check_has_alloc_id loc vt2 CF.Undefined.UB_unspec_copy_alloc_id in
+              let ub_unspec = CF.Undefined.UB_unspec_copy_alloc_id in
+              let@ () = check_has_alloc_id loc vt2 ub_unspec in
+              let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
+              let@ () =
+                check_live_alloc_bounds loc vt2 ub (fun ~base ~size ->
+                  let addr = vt1 in
+                  let lower = le_ (base, addr) here in
+                  let upper = le_ (addr, add_ (base, size) here) here in
+                  and_ [ lower; upper ] here)
+              in
               k result))
         | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Cerb_debug.error "todo: M_Memcpy"
