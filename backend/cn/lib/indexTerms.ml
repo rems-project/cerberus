@@ -719,8 +719,6 @@ let gePointer_ (it, it') loc = lePointer_ (it', it) loc
 
 let cast_ bt it loc = IT (Cast (bt, it), bt, loc)
 
-let integerToPointerCast_ it loc = cast_ (Loc ()) it loc
-
 let uintptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
 
 let uintptr_int_ n loc = uintptr_const_ (Z.of_int n) loc
