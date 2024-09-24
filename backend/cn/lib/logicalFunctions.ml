@@ -28,7 +28,6 @@ type definition =
     definition : def_or_uninterp
   }
 
-
 let is_recursive def =
   match def.definition with Rec_Def _ -> true | Def _ -> false | Uninterp -> false
 
