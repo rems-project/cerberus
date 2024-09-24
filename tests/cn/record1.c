@@ -19,8 +19,8 @@ signed int incr_one(signed int x, signed int y, int flag)
 }
 
 signed int decr_one(signed int x, signed int y, int flag) 
-/*@ requires x >= 0i32 && x < power(2i32, 31i32) - 1i32; 
-    requires y >= 0i32 && y < power(2i32, 31i32) - 1i32; @*/
+/*@ requires x >= 0i32; 
+    requires y >= 0i32; @*/
 /*@ ensures let pair_record = decrement(x, y);
     return == ((flag == 1i32) ? pair_record.x : pair_record.y); @*/
 {
