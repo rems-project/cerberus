@@ -21,6 +21,7 @@ void *alloc_(long nbytes, const char *, int);
 #define alloc(x)\
     alloc_(x, __FILE__, __LINE__)
 
+void free_all(void);
 
 // void *alloc_zeros(long nbytes);
 
