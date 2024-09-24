@@ -100,7 +100,7 @@ let identify_right_clause provable def pointer iargs =
    TODO: right now this is an overapproximation *)
 let given_to_solver def =
   match def.clauses with
-  | None -> true
+  | None -> false
   | Some [] -> true
   | Some [ _ ] -> true
   | _ -> false

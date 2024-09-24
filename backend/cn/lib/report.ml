@@ -158,7 +158,7 @@ let make_not_given_to_solver (interesting, uninteresting) =
   let uninteresting_table = table_without_head (make uninteresting) in
   h
     1
-    "Definitions and constraints not given to solver"
+    "Definitions and constraints not handled automatically"
     (interesting_uninteresting
        (interesting_table, interesting)
        (uninteresting_table, uninteresting))

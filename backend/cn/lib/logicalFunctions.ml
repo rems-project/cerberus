@@ -28,8 +28,8 @@ type definition =
     definition : def_or_uninterp
   }
 
-let is_recursive def =
-  match def.definition with Rec_Def _ -> true | Def _ -> false | Uninterp -> false
+let given_to_solver def =
+  match def.definition with Rec_Def _ -> false | Def _ -> true | Uninterp -> false
 
 
 let pp_args xs =
