@@ -377,34 +377,27 @@ let get_underscored_typedef_string_from_bt ?(is_record = false) bt =
      | _ -> None)
 
 
-let get_conversion_to_fn_str (bt : BT.t) : string option =
+let get_type_underscored_str (bt : BT.t) : string option =
   let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in
   match typedef_name with
-  | Some str ->
-    let str = String.concat "_" (String.split_on_char ' ' str) in
-    Some ("convert_to_" ^ str)
+  | Some str -> Some (String.concat "_" (String.split_on_char ' ' str))
   | None ->
     (match bt with
      | BT.Struct sym ->
-       let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
-       let conversion_fn_str = "convert_to_struct_" ^ Sym.pp_string cn_sym in
-       Some conversion_fn_str
+       Some ("struct_" ^ Sym.pp_string (generate_sym_with_suffix ~suffix:"_cn" sym))
      | _ -> None)
+
+
+let get_conversion_to_fn_str (bt : BT.t) : string option =
+  let open Option in
+  let@ ty_str = get_type_underscored_str bt in
+  return ("convert_to_" ^ ty_str)
 
 
 let get_conversion_from_fn_str (bt : BT.t) : string option =
-  let typedef_name = get_typedef_string (bt_to_ail_ctype bt) in
-  match typedef_name with
-  | Some str ->
-    let str = String.concat "_" (String.split_on_char ' ' str) in
-    Some ("convert_from_" ^ str)
-  | None ->
-    (match bt with
-     | BT.Struct sym ->
-       let cn_sym = generate_sym_with_suffix ~suffix:"_cn" sym in
-       let conversion_fn_str = "convert_from_struct_" ^ Sym.pp_string cn_sym in
-       Some conversion_fn_str
-     | _ -> None)
+  let open Option in
+  let@ ty_str = get_type_underscored_str bt in
+  return ("convert_from_" ^ ty_str)
 
 
 let wrap_with_convert_to ?sct ail_expr_ bt =
@@ -2310,9 +2303,29 @@ let generate_struct_conversion_from_function
       let sct_opt = Sctypes.of_ctype ctype in
       let sct = match sct_opt with Some t -> t | None -> failwith "Bad sctype" in
       let bt = BT.of_sct Memory.is_signed_integer_type Memory.size_of_integer_type sct in
-      let rhs = wrap_with_convert_from ~sct rhs bt in
       let lhs = A.(AilEmemberof (mk_expr (AilEident res_sym), id)) in
-      A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr rhs))))
+      match (bt, sct) with
+      | BT.Map (_k_bt, v_bt), Sctypes.Array (v_sct, Some sz) ->
+        A.(
+          AilSexpr
+            (mk_expr
+               (AilEcall
+                  ( mk_expr
+                      (AilEident
+                         (Sym.fresh_named (Option.get (get_conversion_from_fn_str bt)))),
+                    List.map
+                      mk_expr
+                      [ lhs;
+                        rhs;
+                        AilEident
+                          (Sym.fresh_named (Option.get (get_type_underscored_str v_bt)));
+                        AilEconst
+                          (ConstantInteger (IConstant (Z.of_int sz, Decimal, None)))
+                      ] ))))
+      | BT.Map _, _ -> failwith "unsupported map types"
+      | _ ->
+        let rhs = wrap_with_convert_from ~sct rhs bt in
+        A.(AilSexpr (mk_expr (AilEassign (mk_expr lhs, mk_expr rhs))))
     in
     let member_assignments = List.map generate_member_assignment members in
     let return_stmt = A.(AilSreturn (mk_expr (AilEident res_sym))) in
