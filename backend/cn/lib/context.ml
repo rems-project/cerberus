@@ -273,19 +273,19 @@ let json (ctxt : t) : Yojson.Safe.t =
    and resource predicates that will not be given to the solver *)
 let not_given_to_solver ctxt =
   let global = ctxt.global in
-  let forall_constraints =
+  let constraints =
     filter LogicalConstraints.is_forall (LCSet.elements ctxt.constraints)
   in
-  let recursive_funs =
+  let funs =
     SymMap.bindings
       (SymMap.filter
-         (fun _ v -> LogicalFunctions.is_recursive v)
+         (fun _ v -> not (LogicalFunctions.given_to_solver v))
          global.logical_functions)
   in
-  let resource_preds =
+  let preds =
     SymMap.bindings
       (SymMap.filter
          (fun _ v -> not (ResourcePredicates.given_to_solver v))
          global.resource_predicates)
   in
-  (forall_constraints, recursive_funs, resource_preds)
+  (constraints, funs, preds)

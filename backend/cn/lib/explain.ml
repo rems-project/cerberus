@@ -168,15 +168,15 @@ let state ctxt model_with_q extras =
   (*   | None -> parens !^"not evaluated" *)
   (* in *)
   let not_given_to_solver =
-    let forall_constraints, recursive_funs, branched_preds = not_given_to_solver ctxt in
+    let forall_constraints, funs, preds = not_given_to_solver ctxt in
     let interesting_constraints, uninteresting_constraints =
       List.partition LC.is_interesting forall_constraints
     in
     let interesting_funs, uninteresting_funs =
-      List.partition (fun (_, v) -> LF.is_interesting v) recursive_funs
+      List.partition (fun (_, v) -> LF.is_interesting v) funs
     in
     let interesting_preds, uninteresting_preds =
-      List.partition (fun (_, v) -> REP.is_interesting v) branched_preds
+      List.partition (fun (_, v) -> REP.is_interesting v) preds
     in
     let make_constraints = List.map LC.pp in
     let make_funs = List.map (fun (k, _) -> Sym.pp k) in
