@@ -54,36 +54,19 @@ module MembersKey = struct
     | [], [] -> 0
     | _, [] -> 1
     | [], _ -> -1
-    | (id, _) :: ms, (id', _) :: ms' ->
+    | (id, cn_bt) :: ms, (id', cn_bt') :: ms' ->
       let c = String.compare (Id.s id) (Id.s id') in
-      if c == 0 then
-        0
+      if c == 0 then (
+        let c' =
+          BaseTypes.compare (cn_base_type_to_bt cn_bt) (cn_base_type_to_bt cn_bt')
+        in
+        if c' == 0 then
+          compare ms ms'
+        else
+          c')
       else
-        compare ms ms'
+        c
 end
-
-let members_equal ms ms' =
-  if List.length ms != List.length ms' then
-    false
-  else if List.length ms == 0 then
-    true
-  else (
-    let ids, cn_bts = List.split ms in
-    let ids', cn_bts' = List.split ms' in
-    let ctypes_eq =
-      List.map2
-        (fun cn_bt cn_bt' ->
-          let bt = cn_base_type_to_bt cn_bt in
-          let bt' = cn_base_type_to_bt cn_bt' in
-          BT.equal bt bt')
-        cn_bts
-        cn_bts'
-    in
-    let ctypes_eq = List.fold_left ( && ) true ctypes_eq in
-    let ids_eq = List.map2 Id.equal ids ids' in
-    let ids_eq = List.fold_left ( && ) true ids_eq in
-    ctypes_eq && ids_eq)
-
 
 module RecordMap = Map.Make (MembersKey)
 
@@ -108,15 +91,10 @@ let generate_sym_with_suffix
   let str = Sym.pp_string constructor ^ suffix in
   let str = if uppercase then String.uppercase_ascii str else str in
   let str = if lowercase then String.lowercase_ascii str else str in
-  (* Printf.printf "%s\n" str; *)
   Sym.fresh_pretty str
 
 
 let generate_error_msg_info_update_stats ?(cn_source_loc_opt = None) () =
-  (* let line_number_member_lhs = mk_expr A.(AilEmemberofptr (error_msg_info_ident, Id.id "line_number")) in
-     let curr_line_number = mk_expr A.(AilEident (Sym.fresh_pretty "__LINE__")) in
-     let addition_expr = mk_expr A.(AilEbinary (curr_line_number, Arithmetic Add, mk_expr (AilEconst (ConstantInteger (IConstant (Z.of_int 1, Decimal, None)))))) in
-     let line_number_assign_stat_ = [A.(AilSexpr (mk_expr (AilEassign (line_number_member_lhs, addition_expr))))] in *)
   let cn_source_loc_arg =
     match cn_source_loc_opt with
     | Some loc ->
@@ -186,26 +164,21 @@ let str_of_bt_bitvector_type sign size =
   sign_str ^ size_str
 
 
-let generate_record_sym sym members =
-  match sym with
-  | Some sym' ->
-    let sym'' = generate_sym_with_suffix ~suffix:"_record" sym' in
-    records := RecordMap.add members sym'' !records;
-    sym''
-  | None ->
-    let map_bindings = RecordMap.bindings !records in
-    (* Printf.printf "Record table size: %d\n" (List.length map_bindings); *)
-    let eq_members_bindings =
-      List.filter (fun (k, v) -> members_equal k members) map_bindings
-    in
-    (match eq_members_bindings with
-     | [] ->
-       (* First time reaching record of this type - add to map *)
-       let count = RecordMap.cardinal !records in
-       let sym' = Sym.fresh_pretty ("record_" ^ string_of_int count) in
-       records := RecordMap.add members sym' !records;
-       sym'
-     | (_, sym') :: _ -> sym')
+let augment_record_map ?cn_sym bt =
+  let sym_prefix = match cn_sym with Some sym' -> sym' | None -> Sym.fresh () in
+  match bt_to_cn_base_type bt with
+  | CN_record members ->
+    (* Augment records map if entry does not exist already *)
+    if not (RecordMap.mem members !records) then (
+      let sym' = generate_sym_with_suffix ~suffix:"_record" sym_prefix in
+      records := RecordMap.add members sym' !records)
+  | _ -> ()
+
+
+let lookup_records_map members =
+  match RecordMap.find_opt members !records with
+  | Some sym -> sym
+  | None -> failwith "Record not found in map"
 
 
 (* TODO: Complete *)
@@ -227,7 +200,7 @@ let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =
       (* gets replaced with typedef anyway (TODO: clean up) *)
     | CN_struct sym -> C.(Struct (generate_sym_with_suffix ~suffix:"_cn" sym))
     | CN_record members ->
-      let sym = generate_record_sym pred_sym members in
+      let sym = lookup_records_map members in
       Struct sym
     (* Every struct is converted into a struct pointer *)
     | CN_datatype sym -> Struct sym
@@ -236,11 +209,12 @@ let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =
       generate_ail_array bt
       (* TODO: What is the optional second pair element for? Have just put None for now *)
     | CN_tuple ts ->
+      failwith (__FUNCTION__ ^ ":Tuples not yet supported")
       (* Printf.printf "Entered CN_tuple case\n"; *)
-      let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
-      let members = List.map (fun t -> (some_id, t)) ts in
-      let sym = generate_record_sym pred_sym members in
-      Struct sym
+      (* let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
+         let members = List.map (fun t -> (some_id, t)) ts in
+         let sym = lookup_records_map members in
+         Struct sym *)
     | CN_set bt -> generate_ail_array bt
     | CN_user_type_name _ -> failwith "TODO CN_user_type_name"
     | CN_c_typedef_name _ -> failwith "TODO CN_c_typedef_name"
@@ -1108,7 +1082,7 @@ let rec cn_to_ail_expr_aux_internal
     let transformed_ms =
       List.map (fun (id, it) -> (id, bt_to_cn_base_type (IT.bt it))) ms
     in
-    let sym_name = generate_record_sym pred_name transformed_ms in
+    let sym_name = lookup_records_map transformed_ms in
     let ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct sym_name))) in
     let res_binding = create_binding res_sym (mk_ctype ctype_) in
     let fn_call =
@@ -2921,7 +2895,10 @@ let cn_to_ail_function_internal
         cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return
       in
       (bs, Some (List.map mk_stmt ss))
-    | Uninterp -> ([], None)
+    | Uninterp ->
+      failwith
+        "Uninterpreted CN functions not supported at runtime. Please provide a concrete \
+         function definition"
   in
   let ail_record_opt = generate_record_opt fn_sym lf_def.return_bt in
   let params = List.map (fun (sym, bt) -> (sym, bt_to_ail_ctype bt)) lf_def.args in

@@ -4,6 +4,10 @@ open PPrint
 open Executable_spec_utils
 module BT = BaseTypes
 module A = CF.AilSyntax
+module IT = IndexTerms
+module LRT = LogicalReturnTypes
+module LAT = LogicalArgumentTypes
+module AT = ArgumentTypes
 (* Executable spec helper functions *)
 
 type executable_spec =
@@ -39,33 +43,6 @@ let generate_ail_stat_strs
       doc
   in
   List.map CF.Pp_utils.to_plain_pretty_string doc
-
-
-let populate_record_map_aux (sym, bt_ret_type) =
-  match Cn_internal_to_ail.bt_to_cn_base_type bt_ret_type with
-  | CF.Cn.CN_record members ->
-    let sym' = Cn_internal_to_ail.generate_sym_with_suffix ~suffix:"_record" sym in
-    Cn_internal_to_ail.records
-    := Cn_internal_to_ail.RecordMap.add members sym' !Cn_internal_to_ail.records
-  | _ -> ()
-
-
-(* Populate record table with function and predicate record return types *)
-let populate_record_map (prog5 : unit Mucore.mu_file) =
-  let fun_syms_and_ret_types =
-    List.map
-      (fun (sym, (def : LogicalFunctions.definition)) -> (sym, def.return_bt))
-      prog5.mu_logical_predicates
-  in
-  let pred_syms_and_ret_types =
-    List.map
-      (fun (sym, (def : ResourcePredicates.definition)) -> (sym, def.oarg_bt))
-      prog5.mu_resource_predicates
-  in
-  let _ =
-    List.map populate_record_map_aux (fun_syms_and_ret_types @ pred_syms_and_ret_types)
-  in
-  ()
 
 
 let rec extract_global_variables = function
