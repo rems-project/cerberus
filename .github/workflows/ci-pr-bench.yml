@@ -158,4 +158,3 @@ jobs:
             repo: context.repo.repo,
             body: require('fs').readFileSync('${{ env.COMMENT }}').toString()
           });
-
