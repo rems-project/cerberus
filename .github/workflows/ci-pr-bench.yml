@@ -5,6 +5,10 @@ on:
     branches:
       - master
 
+permissions:
+  pull-requests: write
+  issues: write
+
 env:
   CERBERUS_IMAGE_ID: ghcr.io/rems-project/cerberus/cn:release
 
