@@ -1,5 +1,11 @@
 name: CI Benchmarks
 
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+  pull-requests: write
+
 on:
   pull_request:
     branches:
