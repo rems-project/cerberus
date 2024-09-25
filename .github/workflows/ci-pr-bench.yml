@@ -1,11 +1,5 @@
 name: CI Benchmarks
 
-permissions:
-  id-token: write
-  contents: read
-  issues: write
-  pull-requests: write
-
 on:
   pull_request:
     branches:
@@ -148,11 +142,10 @@ jobs:
         tests/compare-benchmarks.py ${{ env.BASE_DATA }} ${{ env.PR_DATA }} >> ${{ env.COMMENT }}
 
     - name: 'Comment PR'
-      uses: actions/github-script@v4.0.2
+      uses: actions/github-script@v7
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          github.issues.createComment({
+          github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
