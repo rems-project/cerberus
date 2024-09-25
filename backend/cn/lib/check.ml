@@ -1423,7 +1423,12 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
           let@ () = ensure_base_type loc ~expect:(Loc ()) (Mu.bt_of_pexpr pe) in
           check_pexpr pe (fun arg ->
             let actual_value = cast_ (Memory.bt_of_sct act_to.ct) arg loc in
-            (* after discussing with Kavyan *)
+            (* NOTE: After discussing with Kavyan
+               (1) The pointer does NOT need to be live. The PNVI/VIP
+               formalisations are missing a rule for the dead pointer case.
+               The PNVI rules state that the pointer must be live so that
+               allocations are exposed.
+               (2) So, the only UB possible is unrepresentable results. *)
             let@ provable = provable loc in
             let here = Locations.other __FUNCTION__ in
             let lc = LC.T (representable_ (act_to.ct, arg) here) in
