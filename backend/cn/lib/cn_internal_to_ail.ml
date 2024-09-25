@@ -56,9 +56,14 @@ module MembersKey = struct
     | [], _ -> -1
     | (id, cn_bt) :: ms, (id', cn_bt') :: ms' ->
       let c = String.compare (Id.s id) (Id.s id') in
-      let c' = BaseTypes.compare (cn_base_type_to_bt cn_bt) (cn_base_type_to_bt cn_bt') in
-      if c == 0 && c' == 0 then
-        compare ms ms'
+      if c == 0 then (
+        let c' =
+          BaseTypes.compare (cn_base_type_to_bt cn_bt) (cn_base_type_to_bt cn_bt')
+        in
+        if c' == 0 then
+          compare ms ms'
+        else
+          c')
       else
         c
 end
@@ -204,7 +209,7 @@ let rec cn_to_ail_base_type ?(pred_sym = None) cn_typ =
       generate_ail_array bt
       (* TODO: What is the optional second pair element for? Have just put None for now *)
     | CN_tuple ts ->
-      failwith "TODO"
+      failwith (__FUNCTION__ ^ ":Tuples not yet supported")
       (* Printf.printf "Entered CN_tuple case\n"; *)
       (* let some_id = create_id_from_sym (Sym.fresh_pretty "some_sym") in
          let members = List.map (fun t -> (some_id, t)) ts in
@@ -2890,8 +2895,10 @@ let cn_to_ail_function_internal
         cn_to_ail_expr_internal_with_pred_name (Some fn_sym) cn_datatypes [] it Return
       in
       (bs, Some (List.map mk_stmt ss))
-    | Uninterp -> ([], None)
-    (* TODO: Make this throw a clear error. Uninterpreted functions must not exist or be used for runtime checking to work *)
+    | Uninterp ->
+      failwith
+        "Uninterpreted CN functions not supported at runtime. Please provide a concrete \
+         function definition"
   in
   let ail_record_opt = generate_record_opt fn_sym lf_def.return_bt in
   let params = List.map (fun (sym, bt) -> (sym, bt_to_ail_ctype bt)) lf_def.args in
