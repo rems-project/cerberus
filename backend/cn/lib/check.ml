@@ -446,7 +446,8 @@ let check_alloc_bounds loc ~ptr ub_unspec =
     | `False ->
       let@ model = model () in
       let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-      fail (fun ctxt -> { loc; msg = Alloc_out_of_bounds { ptr; ub; ctxt; model } }))
+      fail (fun ctxt ->
+        { loc; msg = Alloc_out_of_bounds { constr; ptr; ub; ctxt; model } }))
   else
     return ()
 
@@ -2167,7 +2168,26 @@ let record_globals : 'bty. (Sym.t * 'bty Mu.mu_globs) list -> unit m =
         let@ () =
           add_c here (LC.T (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt, here)) here))
         in
-        let@ () = add_c here (LC.T (IT.hasAllocId_ (sym_ (sym, bt, here)) here)) in
+        let ptr = sym_ (sym, bt, here) in
+        let@ () = add_c here (LC.T (IT.hasAllocId_ ptr here)) in
+        let@ () =
+          if !IT.use_vip then (
+            let base_size = Alloc.History.lookup_ptr ptr here in
+            let base, size = Alloc.History.get_base_size base_size here in
+            let addr = addr_ ptr here in
+            let upper = Resources.upper_bound addr ct here in
+            let bounds =
+              and_
+                [ le_ (base, addr) here;
+                  le_ (addr, upper) here;
+                  le_ (upper, add_ (base, size) here) here
+                ]
+                here
+            in
+            add_c here (LC.T bounds))
+          else
+            return ()
+        in
         return ())
     globs
 
