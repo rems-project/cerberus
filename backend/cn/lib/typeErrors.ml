@@ -209,6 +209,7 @@ type message =
       }
   | Alloc_out_of_bounds of
       { ptr : IT.t;
+        constr : IT.t;
         ub : CF.Undefined.undefined_behaviour;
         ctxt : Context.t * log;
         model : Solver.model_with_q
@@ -503,9 +504,11 @@ let pp_message te =
       | None -> !^(CF.Undefined.ub_short_string ub)
     in
     { short; descr = Some descr; state = Some state }
-  | Alloc_out_of_bounds { ptr; ub; ctxt; model } ->
+  | Alloc_out_of_bounds { constr; ptr; ub; ctxt; model } ->
     let short = !^"Pointer " ^^ bquotes (IT.pp ptr) ^^ !^" out of bounds" in
-    let state = trace ctxt model Explain.no_ex in
+    let state =
+      trace ctxt model Explain.{ no_ex with unproven_constraint = Some (LC.T constr) }
+    in
     let descr =
       match CF.Undefined.std_of_undefined_behaviour ub with
       | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
