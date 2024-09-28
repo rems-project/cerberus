@@ -422,13 +422,16 @@ let check_against_core_bt loc msg2 cbt bt =
 
 
 let check_has_alloc_id loc ptr ub_unspec =
-  let@ provable = provable loc in
-  match provable (LC.T (hasAllocId_ ptr loc)) with
-  | `True -> return ()
-  | `False ->
-    let@ model = model () in
-    let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
-    fail (fun ctxt -> { loc; msg = Needs_alloc_id { ptr; ub; ctxt; model } })
+  if !use_vip then
+    let@ provable = provable loc in
+    match provable (LC.T (hasAllocId_ ptr loc)) with
+    | `True -> return ()
+    | `False ->
+      let@ model = model () in
+      let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
+      fail (fun ctxt -> { loc; msg = Needs_alloc_id { ptr; ub; ctxt; model } })
+  else
+    return ()
 
 
 let check_alloc_bounds loc ~ptr ub_unspec =
