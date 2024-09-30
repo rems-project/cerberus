@@ -14,9 +14,8 @@ function echo_and_err() {
 }
 
 LEMMATA=0
-VIP=""
 
-while getopts "hlv" flag; do
+while getopts "hl" flag; do
  case "$flag" in
    h)
    printf "%s\n" "${USAGE}"
@@ -24,9 +23,6 @@ while getopts "hlv" flag; do
    ;;
    l)
    LEMMATA=1
-   ;;
-   v)
-   VIP="--vip"
    ;;
    \?)
    echo_and_err "${USAGE}"
@@ -62,13 +58,13 @@ FAIL=$(find "${DIRNAME}"/cn -name '*.error.c')
 FAILED=""
 
 for TEST in ${SUCC}; do
-  if ! exits_with_code "cn verify ${VIP}" "${TEST}" 0; then
+  if ! exits_with_code "cn verify" "${TEST}" 0; then
     FAILED+=" ${TEST}"
   fi
 done
 
 for TEST in ${FAIL}; do
-  if ! exits_with_code "cn verify ${VIP}" "${TEST}" "(1 2)"; then
+  if ! exits_with_code "cn verify" "${TEST}" "(1 2)"; then
     FAILED+=" ${TEST}"
   fi
 done

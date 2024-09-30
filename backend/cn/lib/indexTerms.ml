@@ -471,7 +471,7 @@ let is_member = function IT (StructMember (it, id), _, _) -> Some (it, id) | _ -
 
 (* shorthands *)
 
-let use_vip = ref false
+let use_vip = ref true
 
 (* lit *)
 let sym_ (sym, bt, loc) = IT (Sym sym, bt, loc)
