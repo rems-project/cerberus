@@ -284,7 +284,7 @@ let verify
   solver_path
   solver_type
   astprints
-  use_vip
+  dont_use_vip
   no_use_ity
   use_peval
   fail_fast
@@ -314,7 +314,7 @@ let verify
   Solver.solver_type := solver_type;
   Solver.solver_flags := solver_flags;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
-  IndexTerms.use_vip := use_vip;
+  IndexTerms.use_vip := not dont_use_vip;
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
@@ -362,7 +362,7 @@ let generate_executable_specs
   csv_times
   log_times
   astprints
-  use_vip
+  dont_use_vip
   no_use_ity
   use_peval
   fail_fast
@@ -387,7 +387,7 @@ let generate_executable_specs
   CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
   Check.skip_and_only := (opt_comma_split skip, opt_comma_split only);
-  IndexTerms.use_vip := use_vip;
+  IndexTerms.use_vip := not dont_use_vip;
   Check.fail_fast := fail_fast;
   Diagnostics.diag_string := diag;
   WellTyped.use_ity := not no_use_ity;
@@ -683,9 +683,9 @@ module Verify_flags = struct
 
 
   (* TODO remove this when VIP impl complete *)
-  let use_vip =
-    let doc = "use experimental VIP rules" in
-    Arg.(value & flag & info [ "vip" ] ~doc)
+  let dont_use_vip =
+    let doc = "(temporary) disable VIP rules" in
+    Arg.(value & flag & info [ "no-vip" ] ~doc)
 
 
   let json =
@@ -800,7 +800,7 @@ let verify_t : unit Term.t =
   $ Verify_flags.solver_path
   $ Verify_flags.solver_type
   $ Common_flags.astprints
-  $ Verify_flags.use_vip
+  $ Verify_flags.dont_use_vip
   $ Common_flags.no_use_ity
   $ Common_flags.use_peval
   $ Verify_flags.fail_fast
@@ -889,7 +889,7 @@ let instrument_cmd =
     $ Common_flags.csv_times
     $ Common_flags.log_times
     $ Common_flags.astprints
-    $ Verify_flags.use_vip
+    $ Verify_flags.dont_use_vip
     $ Common_flags.no_use_ity
     $ Common_flags.use_peval
     $ Verify_flags.fail_fast
