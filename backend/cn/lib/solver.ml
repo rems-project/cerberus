@@ -7,6 +7,18 @@ module LC = LogicalConstraints
 open LogicalConstraints
 module SymMap = Map.Make (Sym)
 module SymSet = Set.Make (Sym)
+
+module Int_BT_Table = Map.Make (struct
+    type t = int * BT.t
+
+    let compare (int1, bt1) (int2, bt2) =
+      let cmp = Int.compare int1 int2 in
+      if cmp != 0 then
+        cmp
+      else
+        BT.compare bt1 bt2
+  end)
+
 module BT_Table = Hashtbl.Make (BT)
 
 module IntWithHash = struct
@@ -66,7 +78,7 @@ type solver_frame =
   { mutable commands : SMT.sexp list; (** Ack-style SMT commands, most recent first. *)
     mutable uninterpreted : SMT.sexp SymMap.t;
     (** Uninterpreted functions and variables that we've declared. *)
-    bt_uninterpreted : SMT.sexp BT_Table.t Int_Table.t;
+    mutable bt_uninterpreted : SMT.sexp Int_BT_Table.t;
     (** Uninterpreted constants, indexed by base type. *)
     mutable ctypes : int CTypeMap.t
     (** Declarations for C types. Each C type is assigned a unique integer. *)
@@ -75,7 +87,7 @@ type solver_frame =
 let empty_solver_frame () =
   { commands = [];
     uninterpreted = SymMap.empty;
-    bt_uninterpreted = Int_Table.create 50;
+    bt_uninterpreted = Int_BT_Table.empty;
     ctypes = CTypeMap.empty
   }
 
@@ -98,14 +110,13 @@ module Debug = struct
     let to_string = Sexplib.Sexp.to_string_hum in
     let append str doc = doc ^/^ !^str in
     let dump_sym k v rest = rest ^/^ bar ^^^ Sym.pp k ^^^ !^"|->" ^^^ !^(to_string v) in
-    let dump_bts _k v =
-      let dump k v rest = rest ^/^ bar ^^^ BT.pp k ^^^ !^"|->" ^^^ !^(to_string v) in
-      BT_Table.fold dump v
+    let dump_bts (_, k) v rest =
+      rest ^/^ bar ^^^ BT.pp k ^^^ !^"|->" ^^^ !^(to_string v)
     in
     !^"# Symbols"
     |> SymMap.fold dump_sym f.uninterpreted
     |> append "# Basetypes "
-    |> Int_Table.fold dump_bts f.bt_uninterpreted
+    |> Int_BT_Table.fold dump_bts f.bt_uninterpreted
     |> append "+---------------------------------"
 
 
@@ -212,10 +223,7 @@ let declare_uninterpreted s name args_ts res_t =
 
 (** Declare an uninterpreted function, indexed by a base type. *)
 let declare_bt_uninterpreted s (name, k) bt args_ts res_t =
-  let check f =
-    Option.bind (Int_Table.find_opt f.bt_uninterpreted k) (fun m ->
-      BT_Table.find_opt m bt)
-  in
+  let check f = Int_BT_Table.find_opt (k, bt) f.bt_uninterpreted in
   match search_frames s check with
   | Some e -> e
   | None ->
@@ -223,15 +231,7 @@ let declare_bt_uninterpreted s (name, k) bt args_ts res_t =
     ack_command s (SMT.declare_fun sname args_ts res_t);
     let e = SMT.atom sname in
     let top_map = !(s.cur_frame).bt_uninterpreted in
-    let mp =
-      match Int_Table.find_opt top_map k with
-      | Some m -> m
-      | None ->
-        let m = BT_Table.create 20 in
-        Int_Table.add top_map k m;
-        m
-    in
-    BT_Table.add mp bt e;
+    !(s.cur_frame).bt_uninterpreted <- Int_BT_Table.add (k, bt) e top_map;
     e
 
 
@@ -628,7 +628,7 @@ let bv_ctz result_w =
   count
 
 
-(** Translate a vraible to SMT.  Declare if needed. *)
+(** Translate a variable to SMT.  Declare if needed. *)
 let translate_var s name bt =
   let check f = SymMap.find_opt name f.uninterpreted in
   match search_frames s check with
