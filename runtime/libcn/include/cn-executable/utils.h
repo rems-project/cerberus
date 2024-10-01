@@ -16,6 +16,22 @@
 extern "C" {
 #endif
 
+enum cn_logging_level {
+    CN_LOGGING_NONE = 0,
+    CN_LOGGING_ERROR = 1,
+    CN_LOGGING_INFO = 2
+};
+
+enum cn_logging_level get_cn_logging_level(void);
+
+/** Sets the logging level, returning the previous one */
+enum cn_logging_level set_cn_logging_level(enum cn_logging_level new_level);
+
+#define cn_printf(level, ...)\
+    if (get_cn_logging_level() >= level) {\
+        printf(__VA_ARGS__);\
+    }
+
 struct cn_error_message_info {
     const char *function_name;
     char *file_name;
@@ -515,15 +531,15 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset);
 
 static inline void cn_load(void *ptr, size_t size)
 {
-  printf("  \x1b[31mLOAD\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+  cn_printf(CN_LOGGING_INFO, "  \x1b[31mLOAD\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 static inline void cn_store(void *ptr, size_t size)
 {
-  printf("  \x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+  cn_printf(CN_LOGGING_INFO, "  \x1b[31mSTORE\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 static inline void cn_postfix(void *ptr, size_t size)
 {
-  printf("  \x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
+  cn_printf(CN_LOGGING_INFO, "  \x1b[31mPOSTFIX\x1b[0m[%lu] - ptr: %p\n", size, ptr);
 }
 
 // use this macro to wrap an argument to another macro that contains commas 
