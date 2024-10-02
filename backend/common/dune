@@ -5,4 +5,4 @@
  (flags (:standard -w -27))
  (modules :standard \ smt smt_wrapper boot_pprint2 tests cerbcore
    interactive_driver )
- (libraries cerb_frontend core_parser c_parser pprint cerb_util z3))
+ (libraries cerb_frontend core_parser c_parser pprint cerb_util))
