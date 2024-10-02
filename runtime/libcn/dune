@@ -2,7 +2,7 @@
 (rule
  (target libcn.a)
  (deps (:headers (glob_files include/cn-executable/*.h))
-       (:src (glob_files src/*.c)))
+       (:src (glob_files src/cn-executable/*.c)))
  (action
   (progn
    (run cc -Iinclude/ -c -g %{src})
