@@ -513,12 +513,59 @@ module Special = struct
   (** This function checks whether [ptr1] belongs to a live allocation. It
       searches the context (without modification) for either an Alloc(p) or an
       Owned(p) such that (alloc_id) p == (alloc_id) ptr. *)
-  let get_live_alloc loc situation ptr =
-    let@ (_alloc_or_owned, O base_size), _ =
-      pure
-      @@ predicate_request loc situation (RET.make_alloc ptr, None) ~alloc_or_owned:true
+  let get_live_alloc reason loc ptr =
+    let module Ans = struct
+      type t =
+        | Found
+        | No_res
+        | Model of (Solver.model_with_q * IT.t)
+    end
     in
-    return base_size
+    let here = Locations.other __FUNCTION__ in
+    let alloc_id_matches found res_ptr =
+      let@ found in
+      match found with
+      | Ans.Found -> return Ans.Found
+      | No_res | Model _ ->
+        let constr = IT.(eq_ (allocId_ ptr here, allocId_ res_ptr here) here) in
+        let@ provable = provable loc in
+        (match provable (LC.T constr) with
+         | `True -> return Ans.Found
+         | `False ->
+           let@ model = model () in
+           return (Ans.Model (model, constr)))
+    in
+    let f res found =
+      let found =
+        match res with
+        | RET.Q _, _ -> found
+        | RET.P { name = Owned _; pointer; iargs = _ }, _ ->
+          alloc_id_matches found pointer
+        | RET.P { name = PName name; pointer; iargs = _ }, _ ->
+          if Sym.equal name Alloc.Predicate.sym then
+            alloc_id_matches found pointer
+          else
+            found
+      in
+      (Unchanged, found)
+    in
+    let@ found, _ = map_and_fold_resources loc f (return Ans.No_res) in
+    let@ found in
+    match found with
+    | Ans.Found -> return (Alloc.History.lookup_ptr ptr here)
+    | No_res ->
+      fail (fun ctxt ->
+        let msg =
+          TypeErrors.Allocation_not_live { reason; ptr; model_constr = None; ctxt }
+        in
+        { loc; msg })
+    | Model (model, constr) ->
+      fail (fun ctxt ->
+        let msg =
+          TypeErrors.Allocation_not_live
+            { reason; ptr; model_constr = Some (model, constr); ctxt }
+        in
+        { loc; msg })
 
 
   let predicate_request loc situation (request, oinfo) =

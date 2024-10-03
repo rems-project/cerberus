@@ -37,7 +37,6 @@ let call_prefix = function
 
 
 type situation =
-  | Ptr_diff_or_compare
   | Access of access
   | Call of call_situation
 
@@ -59,7 +58,6 @@ let call_situation = function
 
 let checking_situation = function
   | Access _ -> !^"checking access"
-  | Ptr_diff_or_compare -> !^"checking pointer difference or comparison"
   | Call s -> call_situation s
 
 
@@ -73,7 +71,6 @@ let for_access = function
 
 let for_situation = function
   | Access access -> for_access access
-  | Ptr_diff_or_compare -> !^"for subtracting or comparing pointers"
   | Call s ->
     (match s with
      | FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
@@ -213,6 +210,12 @@ type message =
         ub : CF.Undefined.undefined_behaviour;
         ctxt : Context.t * log;
         model : Solver.model_with_q
+      }
+  | Allocation_not_live of
+      { reason : [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift ];
+        ptr : IT.t;
+        ctxt : Context.t * log;
+        model_constr : (Solver.model_with_q * IT.t) option
       }
   (* | Implementation_defined_behaviour of document * state_report *)
   | Unspecified of CF.Ctype.ctype
@@ -515,6 +518,25 @@ let pp_message te =
       | None -> !^(CF.Undefined.ub_short_string ub)
     in
     { short; descr = Some descr; state = Some state }
+  | Allocation_not_live { reason; ptr; ctxt; model_constr } ->
+    let reason =
+      match reason with
+      | `Copy_alloc_id -> "copy_alloc_id"
+      | `Ptr_diff -> "pointer difference"
+      | `Ptr_cmp -> "pointer comparison"
+      | `ISO_array_shift -> "array shift"
+    in
+    let short =
+      !^"Pointer " ^^ bquotes (IT.pp ptr) ^^^ !^"needs to be live for" ^^^ !^reason
+    in
+    let state =
+      Option.map
+        (fun (model, constr) ->
+          trace ctxt model Explain.{ no_ex with unproven_constraint = Some (LC.T constr) })
+        model_constr
+    in
+    let descr = !^"Need an Alloc or Owned in context with same allocation id" in
+    { short; descr = Some descr; state }
   (* | Implementation_defined_behaviour (impl, state) -> *)
   (*    let short = !^"Implementation defined behaviour" in *)
   (*    let descr = impl in *)
