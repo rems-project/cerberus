@@ -47,13 +47,12 @@ type qpredicate_type =
   }
 [@@deriving eq, ord]
 
-let subsumed ~alloc_owned p1 p2 =
+let subsumed p1 p2 =
   (* p1 subsumed by p2 *)
   equal_predicate_name p1 p2
   ||
   match (p1, p2) with
   | Owned (ct, Uninit), Owned (ct', Init) when Sctypes.equal ct ct' -> true
-  | _, Owned _ when alloc_owned && equal_predicate_name p1 alloc -> true
   | _ -> false
 
 
