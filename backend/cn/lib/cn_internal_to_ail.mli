@@ -2,8 +2,6 @@ module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
 module BT = BaseTypes
-module AT = ArgumentTypes
-module IT = IndexTerms
 
 val ownership_ctypes : C.ctype list ref
 
@@ -121,6 +119,14 @@ val cn_to_ail_expr
   (C.union_tag * C.ctype) list ->
   Sym.t option ->
   IndexTerms.t ->
+  A.bindings
+  * CF.GenTypes.genTypeCategory A.statement_ list
+  * CF.GenTypes.genTypeCategory A.expression
+
+val cn_to_ail_logical_constraint
+  :  A.sigma_cn_datatype list ->
+  (C.union_tag * C.ctype) list ->
+  LogicalConstraints.t ->
   A.bindings
   * CF.GenTypes.genTypeCategory A.statement_ list
   * CF.GenTypes.genTypeCategory A.expression
