@@ -174,7 +174,16 @@ let augment_record_map ?cn_sym bt =
 let lookup_records_map members =
   match RecordMap.find_opt members !records with
   | Some sym -> sym
-  | None -> failwith "Record not found in map"
+  | None ->
+    failwith
+      ("Record not found in map ("
+       ^ String.concat
+           ", "
+           (List.map
+              (fun (x, cbt) ->
+                Pp.(plain (BT.pp (cn_base_type_to_bt cbt) ^^ space ^^ Id.pp x)))
+              members)
+       ^ ")")
 
 
 (* TODO: Complete *)
