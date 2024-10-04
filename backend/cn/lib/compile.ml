@@ -1598,6 +1598,8 @@ let translate_cn_statement
              } )
        in
        return (M_CN_statement (loc, stmt))
+     | CN_to_from_bytes (_to_from, _pred, _args) ->
+       E.fail { loc; msg = Generic !^"TODO: to_from_bytes not implemented yet" }
      | CN_have assrt ->
        let@ assrt = ET.translate_cn_assrt env (loc, assrt) in
        return (M_CN_statement (loc, M_CN_have assrt))
