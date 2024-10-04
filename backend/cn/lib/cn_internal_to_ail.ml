@@ -3156,6 +3156,8 @@ let cn_to_ail_cnstatement_internal
   let default_res_for_dest = empty_for_dest d in
   match cnstatement with
   | Cnprog.M_CN_pack_unpack (pack_unpack, pt) -> (default_res_for_dest, true)
+  | Cnprog.M_CN_to_from_bytes (to_from, pt) ->
+    failwith ("TODO: M_CN_to_from_bytes, " ^ __FUNCTION__)
   | Cnprog.M_CN_have lc -> failwith "TODO M_CN_have"
   | Cnprog.M_CN_instantiate (to_instantiate, it) -> (default_res_for_dest, true)
   | Cnprog.M_CN_split_case _ -> (default_res_for_dest, true)

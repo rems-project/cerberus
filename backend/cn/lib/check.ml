@@ -1773,6 +1773,9 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
          | Cnprog.M_CN_pack_unpack (_pack_unpack, _pt) ->
            warn loc !^"Explicit pack/unpack unsupported.";
            return ()
+         | M_CN_to_from_bytes (_to_from, _pt) ->
+           warn loc !^"to_bytes/from_bytes being implemented";
+           return ()
          | M_CN_have lc ->
            let@ _lc = WellTyped.WLC.welltyped loc lc in
            fail (fun _ -> { loc; msg = Generic !^"todo: 'have' not implemented yet" })
