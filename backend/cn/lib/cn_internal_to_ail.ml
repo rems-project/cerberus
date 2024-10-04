@@ -2895,6 +2895,17 @@ let cn_to_ail_logical_constraint_internal
        dest d (bs, ss, e))
 
 
+let cn_to_ail_logical_constraint
+  (dts : _ CF.Cn.cn_datatype list)
+  (globals : (C.union_tag * C.ctype) list)
+  (lc : LC.t)
+  : A.bindings
+    * CF.GenTypes.genTypeCategory A.statement_ list
+    * CF.GenTypes.genTypeCategory A.expression
+  =
+  cn_to_ail_logical_constraint_internal dts globals PassBack lc
+
+
 let rec generate_record_opt pred_sym = function
   | BT.Record members ->
     let members' = List.map (fun (id, bt) -> (id, bt_to_cn_base_type bt)) members in
