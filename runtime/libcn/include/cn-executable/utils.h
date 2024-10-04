@@ -259,13 +259,17 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
         return CNTYPE##_gt(i1, i2) ? i1 : i2;\
     }
 
-/* TODO: Add case for negative numbers. For non-negative numbers mod and rem are the same */
+/* TODO: Account for UB: https://stackoverflow.com/a/20638659 */
 #define CN_GEN_MOD(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_mod(CNTYPE *i1, CNTYPE *i2) {\
         CNTYPE *res = (CNTYPE *) alloc(sizeof(CNTYPE));\
         res->val = i1->val % i2->val;\
+        if (res->val < 0) {\
+            res->val = (i2->val < 0) ? res->val - i2->val : res->val + i2->val;\
+        }\
         return res;\
     }
+
 
 #define CN_GEN_REM(CTYPE, CNTYPE)\
     static inline CNTYPE *CNTYPE##_rem(CNTYPE *i1, CNTYPE *i2) {\
