@@ -4427,7 +4427,7 @@ parsing "cn_statement": seen "CN_UNFOLD LNAME TYPE LPAREN loption(separated_none
 
 cn_statements: CN_SPLIT_CASE WHILE
 ##
-## Ends in an error in state: 1471.
+## Ends in an error in state: 1520.
 ##
 ## cn_statement -> CN_SPLIT_CASE . assert_expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4439,7 +4439,7 @@ parsing "cn_statement": seen "CN_SPLIT_CASE", expecting "assert_expr SEMICOLON"
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1477.
+## Ends in an error in state: 1526.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON . expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4451,7 +4451,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON",
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1479.
+## Ends in an error in state: 1528.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN . LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4463,7 +4463,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON e
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1480.
+## Ends in an error in state: 1529.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE . expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4475,7 +4475,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON e
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1484.
+## Ends in an error in state: 1533.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON . expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4487,7 +4487,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON", exp
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1486.
+## Ends in an error in state: 1535.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN . LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4499,7 +4499,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr 
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1487.
+## Ends in an error in state: 1536.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE . expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4511,7 +4511,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr 
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1492.
+## Ends in an error in state: 1541.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON . expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4523,7 +4523,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON",
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1494.
+## Ends in an error in state: 1543.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN . LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4535,7 +4535,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON e
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1495.
+## Ends in an error in state: 1544.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE . expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4547,7 +4547,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON e
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1499.
+## Ends in an error in state: 1548.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON . expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4559,7 +4559,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON", exp
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1501.
+## Ends in an error in state: 1550.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN . LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4571,7 +4571,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr 
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1502.
+## Ends in an error in state: 1551.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE . expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -4583,7 +4583,7 @@ parsing "assert_expr": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr 
 
 cn_statements: CN_PRINT WHILE
 ##
-## Ends in an error in state: 1508.
+## Ends in an error in state: 1557.
 ##
 ## cn_statement -> CN_PRINT . LPAREN expr RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4595,7 +4595,7 @@ parsing "cn_statement": seen "CN_PRINT", expecting "LPAREN expr RPAREN SEMICOLON
 
 cn_statements: CN_PRINT LPAREN WHILE
 ##
-## Ends in an error in state: 1509.
+## Ends in an error in state: 1558.
 ##
 ## cn_statement -> CN_PRINT LPAREN . expr RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4607,7 +4607,7 @@ parsing "cn_statement": seen "CN_PRINT LPAREN", expecting "expr RPAREN SEMICOLON
 
 cn_statements: CN_PRINT LPAREN CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1511.
+## Ends in an error in state: 1560.
 ##
 ## cn_statement -> CN_PRINT LPAREN expr RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4619,7 +4619,7 @@ parsing "cn_statement": seen "CN_PRINT LPAREN expr RPAREN", expecting "SEMICOLON
 
 cn_statements: CN_PACK WHILE
 ##
-## Ends in an error in state: 1513.
+## Ends in an error in state: 1562.
 ##
 ## cn_statement -> CN_PACK . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4631,7 +4631,7 @@ parsing "cn_statement": seen "CN_PACK", expecting "pred LPAREN loption(separated
 
 cn_statements: CN_PACK CN_OWNED LPAREN WHILE
 ##
-## Ends in an error in state: 1515.
+## Ends in an error in state: 1564.
 ##
 ## cn_statement -> CN_PACK pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4643,7 +4643,7 @@ parsing "cn_statement": seen "CN_PACK pred LPAREN", expecting "loption(separated
 
 cn_statements: CN_PACK CN_OWNED LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1517.
+## Ends in an error in state: 1566.
 ##
 ## cn_statement -> CN_PACK pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4655,7 +4655,7 @@ parsing "cn_statement": seen "CN_PACK pred LPAREN loption(separated_nonempty_lis
 
 cn_statements: CN_INSTANTIATE UNAME VARIABLE COMMA WHILE
 ##
-## Ends in an error in state: 1522.
+## Ends in an error in state: 1571.
 ##
 ## cn_statement -> CN_INSTANTIATE UNAME VARIABLE COMMA . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4667,7 +4667,7 @@ parsing "cn_statement": seen "CN_INSTANTIATE UNAME VARIABLE COMMA", expecting "e
 
 cn_statements: CN_INSTANTIATE UNAME TYPE COMMA WHILE
 ##
-## Ends in an error in state: 1526.
+## Ends in an error in state: 1575.
 ##
 ## cn_statement -> CN_INSTANTIATE UNAME TYPE COMMA . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4679,7 +4679,7 @@ parsing "cn_statement": seen "CN_INSTANTIATE UNAME TYPE COMMA", expecting "expr 
 
 cn_statements: CN_INSTANTIATE LNAME VARIABLE COMMA WHILE
 ##
-## Ends in an error in state: 1531.
+## Ends in an error in state: 1580.
 ##
 ## cn_statement -> CN_INSTANTIATE LNAME VARIABLE COMMA . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4691,7 +4691,7 @@ parsing "cn_statement": seen "CN_INSTANTIATE LNAME VARIABLE COMMA", expecting "e
 
 cn_statements: CN_INSTANTIATE LNAME TYPE COMMA WHILE
 ##
-## Ends in an error in state: 1535.
+## Ends in an error in state: 1584.
 ##
 ## cn_statement -> CN_INSTANTIATE LNAME TYPE COMMA . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4703,7 +4703,7 @@ parsing "cn_statement": seen "CN_INSTANTIATE LNAME TYPE COMMA", expecting "expr 
 
 cn_statements: CN_INSTANTIATE CN_GOOD LT BOOL GT COMMA WHILE
 ##
-## Ends in an error in state: 1541.
+## Ends in an error in state: 1590.
 ##
 ## cn_statement -> CN_INSTANTIATE cn_good COMMA . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4715,7 +4715,7 @@ parsing "cn_statement": seen "CN_INSTANTIATE cn_good COMMA", expecting "expr SEM
 
 cn_statements: CN_HAVE WHILE
 ##
-## Ends in an error in state: 1544.
+## Ends in an error in state: 1593.
 ##
 ## cn_statement -> CN_HAVE . assert_expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4727,7 +4727,7 @@ parsing "cn_statement": seen "CN_HAVE", expecting "assert_expr SEMICOLON"
 
 cn_statements: CN_EXTRACT CN_OWNED COMMA WHILE
 ##
-## Ends in an error in state: 1557.
+## Ends in an error in state: 1606.
 ##
 ## cn_statement -> CN_EXTRACT pred COMMA . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4739,7 +4739,7 @@ parsing "cn_statement": seen "CN_EXTRACT pred COMMA", expecting "expr SEMICOLON"
 
 cn_statements: CN_APPLY UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1564.
+## Ends in an error in state: 1613.
 ##
 ## cn_statement -> CN_APPLY UNAME VARIABLE . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4751,7 +4751,7 @@ parsing "cn_statement": seen "CN_APPLY UNAME VARIABLE", expecting "LPAREN loptio
 
 cn_statements: CN_APPLY UNAME VARIABLE LPAREN WHILE
 ##
-## Ends in an error in state: 1565.
+## Ends in an error in state: 1614.
 ##
 ## cn_statement -> CN_APPLY UNAME VARIABLE LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4763,7 +4763,7 @@ parsing "cn_statement": seen "CN_APPLY UNAME VARIABLE LPAREN", expecting "loptio
 
 cn_statements: CN_APPLY UNAME VARIABLE LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1567.
+## Ends in an error in state: 1616.
 ##
 ## cn_statement -> CN_APPLY UNAME VARIABLE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4775,7 +4775,7 @@ parsing "cn_statement": seen "CN_APPLY UNAME VARIABLE LPAREN loption(separated_n
 
 cn_statements: CN_APPLY UNAME TYPE WHILE
 ##
-## Ends in an error in state: 1569.
+## Ends in an error in state: 1618.
 ##
 ## cn_statement -> CN_APPLY UNAME TYPE . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4787,7 +4787,7 @@ parsing "cn_statement": seen "CN_APPLY UNAME TYPE", expecting "LPAREN loption(se
 
 cn_statements: CN_APPLY UNAME TYPE LPAREN WHILE
 ##
-## Ends in an error in state: 1570.
+## Ends in an error in state: 1619.
 ##
 ## cn_statement -> CN_APPLY UNAME TYPE LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4799,7 +4799,7 @@ parsing "cn_statement": seen "CN_APPLY UNAME TYPE LPAREN", expecting "loption(se
 
 cn_statements: CN_APPLY UNAME TYPE LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1572.
+## Ends in an error in state: 1621.
 ##
 ## cn_statement -> CN_APPLY UNAME TYPE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4811,7 +4811,7 @@ parsing "cn_statement": seen "CN_APPLY UNAME TYPE LPAREN loption(separated_nonem
 
 cn_statements: CN_APPLY LNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1575.
+## Ends in an error in state: 1624.
 ##
 ## cn_statement -> CN_APPLY LNAME VARIABLE . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4823,7 +4823,7 @@ parsing "cn_statement": seen "CN_APPLY LNAME VARIABLE", expecting "LPAREN loptio
 
 cn_statements: CN_APPLY LNAME VARIABLE LPAREN WHILE
 ##
-## Ends in an error in state: 1576.
+## Ends in an error in state: 1625.
 ##
 ## cn_statement -> CN_APPLY LNAME VARIABLE LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4835,7 +4835,7 @@ parsing "cn_statement": seen "CN_APPLY LNAME VARIABLE LPAREN", expecting "loptio
 
 cn_statements: CN_APPLY LNAME VARIABLE LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1578.
+## Ends in an error in state: 1627.
 ##
 ## cn_statement -> CN_APPLY LNAME VARIABLE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4847,7 +4847,7 @@ parsing "cn_statement": seen "CN_APPLY LNAME VARIABLE LPAREN loption(separated_n
 
 cn_statements: CN_APPLY LNAME TYPE WHILE
 ##
-## Ends in an error in state: 1580.
+## Ends in an error in state: 1629.
 ##
 ## cn_statement -> CN_APPLY LNAME TYPE . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4859,7 +4859,7 @@ parsing "cn_statement": seen "CN_APPLY LNAME TYPE", expecting "LPAREN loption(se
 
 cn_statements: CN_APPLY LNAME TYPE LPAREN WHILE
 ##
-## Ends in an error in state: 1581.
+## Ends in an error in state: 1630.
 ##
 ## cn_statement -> CN_APPLY LNAME TYPE LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4871,7 +4871,7 @@ parsing "cn_statement": seen "CN_APPLY LNAME TYPE LPAREN", expecting "loption(se
 
 cn_statements: CN_APPLY LNAME TYPE LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1583.
+## Ends in an error in state: 1632.
 ##
 ## cn_statement -> CN_APPLY LNAME TYPE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4883,7 +4883,7 @@ parsing "cn_statement": seen "CN_APPLY LNAME TYPE LPAREN loption(separated_nonem
 
 cn_statements: ASSERT WHILE
 ##
-## Ends in an error in state: 1585.
+## Ends in an error in state: 1634.
 ##
 ## cn_statement -> ASSERT . LPAREN assert_expr RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4895,7 +4895,7 @@ parsing "cn_statement": seen "ASSERT", expecting "LPAREN assert_expr RPAREN SEMI
 
 cn_statements: ASSERT LPAREN WHILE
 ##
-## Ends in an error in state: 1586.
+## Ends in an error in state: 1635.
 ##
 ## cn_statement -> ASSERT LPAREN . assert_expr RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4907,7 +4907,7 @@ parsing "cn_statement": seen "ASSERT LPAREN", expecting "assert_expr RPAREN SEMI
 
 cn_statements: ASSERT LPAREN CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1588.
+## Ends in an error in state: 1637.
 ##
 ## cn_statement -> ASSERT LPAREN assert_expr RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -4919,7 +4919,7 @@ parsing "cn_statement": seen "ASSERT LPAREN assert_expr RPAREN", expecting "SEMI
 
 cn_toplevel: WHILE
 ##
-## Ends in an error in state: 1595.
+## Ends in an error in state: 1644.
 ##
 ## cn_toplevel' -> . cn_toplevel [ # ]
 ##
@@ -4931,7 +4931,7 @@ parsing "cn_toplevel'": expected "cn_toplevel"
 
 cn_toplevel: CN_TYPE_SYNONYM UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1598.
+## Ends in an error in state: 1647.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM UNAME VARIABLE . EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -4943,7 +4943,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM UNAME VARIABLE", expecting "EQ 
 
 cn_toplevel: CN_TYPE_SYNONYM UNAME VARIABLE EQ WHILE
 ##
-## Ends in an error in state: 1599.
+## Ends in an error in state: 1648.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM UNAME VARIABLE EQ . opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -4955,7 +4955,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM UNAME VARIABLE EQ", expecting "
 
 cn_toplevel: CN_PREDICATE LPAREN WHILE
 ##
-## Ends in an error in state: 1600.
+## Ends in an error in state: 1649.
 ##
 ## opt_paren(base_type) -> LPAREN . base_type RPAREN [ UNAME EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -4967,7 +4967,7 @@ parsing "opt_paren(base_type)": seen "LPAREN", expecting "base_type RPAREN"
 
 cn_toplevel: CN_PREDICATE LPAREN CN_ALLOC_ID WHILE
 ##
-## Ends in an error in state: 1601.
+## Ends in an error in state: 1650.
 ##
 ## opt_paren(base_type) -> LPAREN base_type . RPAREN [ UNAME EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -4979,7 +4979,7 @@ parsing "opt_paren(base_type)": seen "LPAREN base_type", expecting "RPAREN"
 
 cn_toplevel: CN_TYPE_SYNONYM UNAME TYPE WHILE
 ##
-## Ends in an error in state: 1605.
+## Ends in an error in state: 1654.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM UNAME TYPE . EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -4991,7 +4991,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM UNAME TYPE", expecting "EQ opt_
 
 cn_toplevel: CN_TYPE_SYNONYM UNAME TYPE EQ WHILE
 ##
-## Ends in an error in state: 1606.
+## Ends in an error in state: 1655.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM UNAME TYPE EQ . opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5003,7 +5003,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM UNAME TYPE EQ", expecting "opt_
 
 cn_toplevel: CN_TYPE_SYNONYM LNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1609.
+## Ends in an error in state: 1658.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM LNAME VARIABLE . EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5015,7 +5015,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM LNAME VARIABLE", expecting "EQ 
 
 cn_toplevel: CN_TYPE_SYNONYM LNAME VARIABLE EQ WHILE
 ##
-## Ends in an error in state: 1610.
+## Ends in an error in state: 1659.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM LNAME VARIABLE EQ . opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5027,7 +5027,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM LNAME VARIABLE EQ", expecting "
 
 cn_toplevel: CN_TYPE_SYNONYM LNAME TYPE WHILE
 ##
-## Ends in an error in state: 1612.
+## Ends in an error in state: 1661.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM LNAME TYPE . EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5039,7 +5039,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM LNAME TYPE", expecting "EQ opt_
 
 cn_toplevel: CN_TYPE_SYNONYM LNAME TYPE EQ WHILE
 ##
-## Ends in an error in state: 1613.
+## Ends in an error in state: 1662.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM LNAME TYPE EQ . opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5051,7 +5051,7 @@ parsing "cn_type_synonym": seen "CN_TYPE_SYNONYM LNAME TYPE EQ", expecting "opt_
 
 cn_toplevel: CN_SPEC UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1617.
+## Ends in an error in state: 1666.
 ##
 ## cn_fun_spec -> CN_SPEC UNAME VARIABLE . LPAREN cn_args RPAREN SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5063,7 +5063,7 @@ parsing "cn_fun_spec": seen "CN_SPEC UNAME VARIABLE", expecting "LPAREN cn_args 
 
 cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN WHILE
 ##
-## Ends in an error in state: 1618.
+## Ends in an error in state: 1667.
 ##
 ## cn_fun_spec -> CN_SPEC UNAME VARIABLE LPAREN . cn_args RPAREN SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5075,7 +5075,7 @@ parsing "cn_fun_spec": seen "CN_SPEC UNAME VARIABLE LPAREN", expecting "cn_args 
 
 cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1622.
+## Ends in an error in state: 1671.
 ##
 ## cn_fun_spec -> CN_SPEC UNAME VARIABLE LPAREN cn_args RPAREN . SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5087,7 +5087,7 @@ parsing "cn_fun_spec": seen "CN_SPEC UNAME VARIABLE LPAREN cn_args RPAREN", expe
 
 cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN RPAREN SEMICOLON WHILE
 ##
-## Ends in an error in state: 1623.
+## Ends in an error in state: 1672.
 ##
 ## cn_fun_spec -> CN_SPEC UNAME VARIABLE LPAREN cn_args RPAREN SEMICOLON . CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5099,7 +5099,7 @@ parsing "cn_fun_spec": seen "CN_SPEC UNAME VARIABLE LPAREN cn_args RPAREN SEMICO
 
 cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN RPAREN SEMICOLON CN_REQUIRES WHILE
 ##
-## Ends in an error in state: 1624.
+## Ends in an error in state: 1673.
 ##
 ## cn_fun_spec -> CN_SPEC UNAME VARIABLE LPAREN cn_args RPAREN SEMICOLON CN_REQUIRES . nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -5111,7 +5111,7 @@ parsing "cn_fun_spec": seen "CN_SPEC UNAME VARIABLE LPAREN cn_args RPAREN SEMICO
 
 function_spec: CN_ENSURES CN_TAKE UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1627.
+## Ends in an error in state: 1676.
 ##
 ## condition -> CN_TAKE UNAME VARIABLE . EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
 ##
@@ -5123,7 +5123,7 @@ parsing "condition": seen "CN_TAKE UNAME VARIABLE", expecting "EQ resource SEMIC
 
 function_spec: CN_ENSURES CN_TAKE UNAME VARIABLE EQ WHILE
 ##
-## Ends in an error in state: 1628.
+## Ends in an error in state: 1677.
 ##
 ## condition -> CN_TAKE UNAME VARIABLE EQ . resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
 ##
@@ -5135,9 +5135,9 @@ parsing "condition": seen "CN_TAKE UNAME VARIABLE EQ", expecting "resource SEMIC
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1633.
+## Ends in an error in state: 1470.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME VARIABLE
@@ -5147,9 +5147,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE", expecting "S
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1634.
+## Ends in an error in state: 1471.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON
@@ -5159,9 +5159,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON", ex
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1636.
+## Ends in an error in state: 1473.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN
@@ -5171,9 +5171,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1637.
+## Ends in an error in state: 1474.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE
@@ -5183,9 +5183,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
 ##
-## Ends in an error in state: 1639.
+## Ends in an error in state: 1476.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN
@@ -5195,9 +5195,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1641.
+## Ends in an error in state: 1478.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
@@ -5207,9 +5207,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE WHILE
 ##
-## Ends in an error in state: 1643.
+## Ends in an error in state: 1480.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME TYPE
@@ -5219,9 +5219,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE", expecting "SEMIC
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1644.
+## Ends in an error in state: 1481.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON
@@ -5231,9 +5231,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON", expect
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1646.
+## Ends in an error in state: 1483.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN
@@ -5243,9 +5243,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1647.
+## Ends in an error in state: 1484.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE
@@ -5255,9 +5255,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
 ##
-## Ends in an error in state: 1649.
+## Ends in an error in state: 1486.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN
@@ -5267,9 +5267,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1651.
+## Ends in an error in state: 1488.
 ##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
@@ -5279,9 +5279,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1654.
+## Ends in an error in state: 1491.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME VARIABLE
@@ -5291,9 +5291,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE", expecting "S
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1655.
+## Ends in an error in state: 1492.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON
@@ -5303,9 +5303,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON", ex
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1657.
+## Ends in an error in state: 1494.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN
@@ -5315,9 +5315,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1658.
+## Ends in an error in state: 1495.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE
@@ -5327,9 +5327,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
 ##
-## Ends in an error in state: 1660.
+## Ends in an error in state: 1497.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN
@@ -5339,9 +5339,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1662.
+## Ends in an error in state: 1499.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
@@ -5351,9 +5351,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE WHILE
 ##
-## Ends in an error in state: 1664.
+## Ends in an error in state: 1501.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME TYPE . SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME TYPE
@@ -5363,9 +5363,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE", expecting "SEMIC
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1665.
+## Ends in an error in state: 1502.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON . expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON
@@ -5375,9 +5375,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON", expect
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN WHILE
 ##
-## Ends in an error in state: 1667.
+## Ends in an error in state: 1504.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN . LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN
@@ -5387,9 +5387,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE WHILE
 ##
-## Ends in an error in state: 1668.
+## Ends in an error in state: 1505.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE
@@ -5399,9 +5399,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN WHILE
 ##
-## Ends in an error in state: 1670.
+## Ends in an error in state: 1507.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN
@@ -5411,9 +5411,9 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_OWNED LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1672.
+## Ends in an error in state: 1509.
 ##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON ]
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
@@ -5423,7 +5423,7 @@ parsing "resource": seen "CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPA
 
 function_spec: CN_ENSURES CN_TAKE UNAME VARIABLE EQ CN_OWNED LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1674.
+## Ends in an error in state: 1678.
 ##
 ## condition -> CN_TAKE UNAME VARIABLE EQ resource . SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
 ##
@@ -5435,9 +5435,9 @@ parsing "condition": seen "CN_TAKE UNAME VARIABLE EQ resource", expecting "SEMIC
 
 function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_OWNED LPAREN WHILE
 ##
-## Ends in an error in state: 1677.
+## Ends in an error in state: 1517.
 ##
-## resource -> pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN [ SEMICOLON ]
+## resource -> pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
 ## pred LPAREN
@@ -7498,6 +7498,78 @@ cn_statements: CN_EXTRACT CN_CONSTANT PIPE WHILE
 ##
 
 parsing "add_expr": seen "add_expr PIPE", expecting "mul_expr"
+
+cn_statements: CN_TO_BYTES WHILE
+##
+## Ends in an error in state: 1465.
+##
+## cn_statement -> CN_TO_BYTES . resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+##
+## The known suffix of the stack is as follows:
+## CN_TO_BYTES
+##
+
+parsing "cn_statement": seen "CN_TO_BYTES", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
+
+cn_statements: CN_TO_BYTES CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1511.
+##
+## cn_statement -> CN_TO_BYTES resource . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+##
+## The known suffix of the stack is as follows:
+## CN_TO_BYTES resource
+##
+
+parsing "cn_statement": seen "CN_TO_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
+
+cn_statements: CN_FROM_BYTES WHILE
+##
+## Ends in an error in state: 1596.
+##
+## cn_statement -> CN_FROM_BYTES . resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+##
+## The known suffix of the stack is as follows:
+## CN_FROM_BYTES
+##
+
+parsing "cn_statement": seen "CN_FROM_BYTES", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
+
+cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1597.
+##
+## cn_statement -> CN_FROM_BYTES resource . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+##
+## The known suffix of the stack is as follows:
+## CN_FROM_BYTES resource
+##
+
+parsing "cn_statement": seen "CN_FROM_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
+
+cn_statements: CN_TO_BYTES CN_BLOCK LPAREN RPAREN LPAREN WHILE
+##
+## Ends in an error in state: 1512.
+##
+## cn_statement -> CN_TO_BYTES resource LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+##
+## The known suffix of the stack is as follows:
+## CN_TO_BYTES resource LPAREN
+##
+
+parsing "cn_statement": seen "CN_TO_BYTES resource LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
+
+cn_statements: CN_TO_BYTES CN_BLOCK LPAREN RPAREN LPAREN RPAREN WHILE
+##
+## Ends in an error in state: 1514.
+##
+## cn_statement -> CN_TO_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+##
+## The known suffix of the stack is as follows:
+## CN_TO_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
+##
+
+parsing "cn_statement": seen "CN_TO_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
 
 cn_statements: INLINE UNAME WHILE
 ##
@@ -16038,26 +16110,99 @@ cn_statements: CN_UNFOLD LNAME WHILE
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-cn_statements: CN_TO_BYTES WHILE
-##
-## Ends in an error in state: 1465.
-##
-## cn_statement -> CN_TO_BYTES . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_TO_BYTES
-##
-
-parsing "cn_statement": seen "CN_TO_BYTES", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
-
-cn_statements: CN_TO_BYTES CN_BLOCK COMMA
+cn_statements: CN_FROM_BYTES CN_EACH WHILE
 ##
 ## Ends in an error in state: 1466.
 ##
-## cn_statement -> CN_TO_BYTES pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+## resource -> CN_EACH . LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH . LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH . LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH . LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
-## CN_TO_BYTES pred
+## CN_EACH
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN WHILE
+##
+## Ends in an error in state: 1467.
+##
+## resource -> CN_EACH LPAREN . base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN . base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN . base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN . base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID WHILE
+##
+## Ends in an error in state: 1468.
+##
+## resource -> CN_EACH LPAREN base_type . UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN base_type . LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN base_type . UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN base_type . LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID UNAME WHILE
+##
+## Ends in an error in state: 1469.
+##
+## resource -> CN_EACH LPAREN base_type UNAME . VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN base_type UNAME . TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
+##
+## Ends in an error in state: 1472.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 1079, spurious reduction of production unary_expr -> prim_expr
+## In state 1076, spurious reduction of production mul_expr -> unary_expr
+## In state 1099, spurious reduction of production add_expr -> mul_expr
+## In state 1115, spurious reduction of production rel_expr -> add_expr
+## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
+## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
+## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
+## In state 1109, spurious reduction of production list_expr -> bool_or_expr
+## In state 1104, spurious reduction of production expr_without_let -> list_expr
+## In state 1143, spurious reduction of production expr -> expr_without_let
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+##
+## Ends in an error in state: 1475.
+##
+## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred
 ##
 ## WARNING: This example involves spurious reductions.
 ## This implies that, although the LR(1) items shown above provide an
@@ -16068,33 +16213,175 @@ cn_statements: CN_TO_BYTES CN_BLOCK COMMA
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-cn_statements: CN_TO_BYTES CN_BLOCK LPAREN WHILE
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT COMMA
 ##
-## Ends in an error in state: 1467.
+## Ends in an error in state: 1482.
 ##
-## cn_statement -> CN_TO_BYTES pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_TO_BYTES pred LPAREN
-##
-
-parsing "cn_statement": seen "CN_TO_BYTES pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
-
-cn_statements: CN_TO_BYTES CN_BLOCK LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1469.
-##
-## cn_statement -> CN_TO_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
 ##
 ## The known suffix of the stack is as follows:
-## CN_TO_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
+## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 1079, spurious reduction of production unary_expr -> prim_expr
+## In state 1076, spurious reduction of production mul_expr -> unary_expr
+## In state 1099, spurious reduction of production add_expr -> mul_expr
+## In state 1115, spurious reduction of production rel_expr -> add_expr
+## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
+## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
+## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
+## In state 1109, spurious reduction of production list_expr -> bool_or_expr
+## In state 1104, spurious reduction of production expr_without_let -> list_expr
+## In state 1143, spurious reduction of production expr -> expr_without_let
 ##
 
-parsing "cn_statement": seen "CN_TO_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+##
+## Ends in an error in state: 1485.
+##
+## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 852, spurious reduction of production pred -> CN_BLOCK
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID LNAME WHILE
+##
+## Ends in an error in state: 1490.
+##
+## resource -> CN_EACH LPAREN base_type LNAME . VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+## resource -> CN_EACH LPAREN base_type LNAME . TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
+##
+## Ends in an error in state: 1493.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 1079, spurious reduction of production unary_expr -> prim_expr
+## In state 1076, spurious reduction of production mul_expr -> unary_expr
+## In state 1099, spurious reduction of production add_expr -> mul_expr
+## In state 1115, spurious reduction of production rel_expr -> add_expr
+## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
+## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
+## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
+## In state 1109, spurious reduction of production list_expr -> bool_or_expr
+## In state 1104, spurious reduction of production expr_without_let -> list_expr
+## In state 1143, spurious reduction of production expr -> expr_without_let
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+##
+## Ends in an error in state: 1496.
+##
+## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 852, spurious reduction of production pred -> CN_BLOCK
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT COMMA
+##
+## Ends in an error in state: 1503.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 1079, spurious reduction of production unary_expr -> prim_expr
+## In state 1076, spurious reduction of production mul_expr -> unary_expr
+## In state 1099, spurious reduction of production add_expr -> mul_expr
+## In state 1115, spurious reduction of production rel_expr -> add_expr
+## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
+## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
+## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
+## In state 1109, spurious reduction of production list_expr -> bool_or_expr
+## In state 1104, spurious reduction of production expr_without_let -> list_expr
+## In state 1143, spurious reduction of production expr -> expr_without_let
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
+##
+## Ends in an error in state: 1506.
+##
+## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 852, spurious reduction of production pred -> CN_BLOCK
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
+
+cn_statements: CN_FROM_BYTES CN_BLOCK COMMA
+##
+## Ends in an error in state: 1516.
+##
+## resource -> pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN [ SEMICOLON LPAREN ]
+##
+## The known suffix of the stack is as follows:
+## pred
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 852, spurious reduction of production pred -> CN_BLOCK
+##
+
+<YOUR SYNTAX ERROR MESSAGE HERE>
 
 cn_statements: CN_HAVE CN_EACH WHILE
 ##
-## Ends in an error in state: 1472.
+## Ends in an error in state: 1521.
 ##
 ## assert_expr -> CN_EACH . LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## assert_expr -> CN_EACH . LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
@@ -16113,7 +16400,7 @@ cn_statements: CN_HAVE CN_EACH WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN WHILE
 ##
-## Ends in an error in state: 1473.
+## Ends in an error in state: 1522.
 ##
 ## assert_expr -> CN_EACH LPAREN . base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## assert_expr -> CN_EACH LPAREN . base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
@@ -16132,7 +16419,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID WHILE
 ##
-## Ends in an error in state: 1474.
+## Ends in an error in state: 1523.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type . UNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## assert_expr -> CN_EACH LPAREN base_type . LNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
@@ -16151,7 +16438,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME WHILE
 ##
-## Ends in an error in state: 1475.
+## Ends in an error in state: 1524.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME . VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## assert_expr -> CN_EACH LPAREN base_type UNAME . TYPE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
@@ -16166,7 +16453,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1476.
+## Ends in an error in state: 1525.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME VARIABLE . SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## expr_without_let -> CN_EACH LPAREN base_type UNAME VARIABLE . COLON int_range SEMICOLON expr RPAREN [ SEMICOLON RPAREN ]
@@ -16179,7 +16466,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
 ##
-## Ends in an error in state: 1478.
+## Ends in an error in state: 1527.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr . RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16206,7 +16493,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CO
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1481.
+## Ends in an error in state: 1530.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr . RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16233,7 +16520,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CO
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE WHILE
 ##
-## Ends in an error in state: 1483.
+## Ends in an error in state: 1532.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME TYPE . SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## expr_without_let -> CN_EACH LPAREN base_type UNAME TYPE . COLON int_range SEMICOLON expr RPAREN [ SEMICOLON RPAREN ]
@@ -16246,7 +16533,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT COMMA
 ##
-## Ends in an error in state: 1485.
+## Ends in an error in state: 1534.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr . RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16273,7 +16560,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTA
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1488.
+## Ends in an error in state: 1537.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE expr . RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16300,7 +16587,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTA
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME WHILE
 ##
-## Ends in an error in state: 1490.
+## Ends in an error in state: 1539.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME . VARIABLE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## assert_expr -> CN_EACH LPAREN base_type LNAME . TYPE SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
@@ -16315,7 +16602,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1491.
+## Ends in an error in state: 1540.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME VARIABLE . SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## expr_without_let -> CN_EACH LPAREN base_type LNAME VARIABLE . COLON int_range SEMICOLON expr RPAREN [ SEMICOLON RPAREN ]
@@ -16328,7 +16615,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
 ##
-## Ends in an error in state: 1493.
+## Ends in an error in state: 1542.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr . RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16355,7 +16642,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CO
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1496.
+## Ends in an error in state: 1545.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE expr . RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16382,7 +16669,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CO
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE WHILE
 ##
-## Ends in an error in state: 1498.
+## Ends in an error in state: 1547.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME TYPE . SEMICOLON expr RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ## expr_without_let -> CN_EACH LPAREN base_type LNAME TYPE . COLON int_range SEMICOLON expr RPAREN [ SEMICOLON RPAREN ]
@@ -16395,7 +16682,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE WHILE
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT COMMA
 ##
-## Ends in an error in state: 1500.
+## Ends in an error in state: 1549.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr . RPAREN LBRACE expr RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16422,7 +16709,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTA
 
 cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1503.
+## Ends in an error in state: 1552.
 ##
 ## assert_expr -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE expr . RBRACE [ SEMICOLON RPAREN ]
 ##
@@ -16449,7 +16736,7 @@ cn_statements: CN_HAVE CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTA
 
 cn_statements: CN_SPLIT_CASE CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1506.
+## Ends in an error in state: 1555.
 ##
 ## cn_statement -> CN_SPLIT_CASE assert_expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16469,14 +16756,14 @@ cn_statements: CN_SPLIT_CASE CN_CONSTANT RPAREN
 ## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
 ## In state 1109, spurious reduction of production list_expr -> bool_or_expr
 ## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1505, spurious reduction of production assert_expr -> expr_without_let
+## In state 1554, spurious reduction of production assert_expr -> expr_without_let
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 cn_statements: CN_PRINT LPAREN CN_CONSTANT COMMA
 ##
-## Ends in an error in state: 1510.
+## Ends in an error in state: 1559.
 ##
 ## cn_statement -> CN_PRINT LPAREN expr . RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16503,7 +16790,7 @@ cn_statements: CN_PRINT LPAREN CN_CONSTANT COMMA
 
 cn_statements: CN_PACK CN_BLOCK COMMA
 ##
-## Ends in an error in state: 1514.
+## Ends in an error in state: 1563.
 ##
 ## cn_statement -> CN_PACK pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16521,7 +16808,7 @@ cn_statements: CN_PACK CN_BLOCK COMMA
 
 cn_statements: CN_INSTANTIATE WHILE
 ##
-## Ends in an error in state: 1519.
+## Ends in an error in state: 1568.
 ##
 ## cn_statement -> CN_INSTANTIATE . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## cn_statement -> CN_INSTANTIATE . UNAME VARIABLE COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
@@ -16538,7 +16825,7 @@ cn_statements: CN_INSTANTIATE WHILE
 
 cn_statements: CN_INSTANTIATE UNAME WHILE
 ##
-## Ends in an error in state: 1520.
+## Ends in an error in state: 1569.
 ##
 ## cn_statement -> CN_INSTANTIATE UNAME . VARIABLE COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## cn_statement -> CN_INSTANTIATE UNAME . TYPE COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
@@ -16557,7 +16844,7 @@ cn_statements: CN_INSTANTIATE UNAME WHILE
 
 cn_statements: CN_INSTANTIATE UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1521.
+## Ends in an error in state: 1570.
 ##
 ## cn_statement -> CN_INSTANTIATE UNAME VARIABLE . COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## prim_expr -> UNAME VARIABLE . [ STAR SLASH SEMICOLON QUESTION PLUS PIPE_PIPE PIPE PERCENT MINUS_GT MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT CN_IMPLIES CARET BANG_EQ AMPERSAND_AMPERSAND AMPERSAND ]
@@ -16572,7 +16859,7 @@ cn_statements: CN_INSTANTIATE UNAME VARIABLE WHILE
 
 cn_statements: CN_INSTANTIATE UNAME VARIABLE COMMA CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1523.
+## Ends in an error in state: 1572.
 ##
 ## cn_statement -> CN_INSTANTIATE UNAME VARIABLE COMMA expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16599,7 +16886,7 @@ cn_statements: CN_INSTANTIATE UNAME VARIABLE COMMA CN_CONSTANT RPAREN
 
 cn_statements: CN_INSTANTIATE UNAME TYPE WHILE
 ##
-## Ends in an error in state: 1525.
+## Ends in an error in state: 1574.
 ##
 ## cn_statement -> CN_INSTANTIATE UNAME TYPE . COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## prim_expr -> UNAME TYPE . [ STAR SLASH SEMICOLON QUESTION PLUS PIPE_PIPE PIPE PERCENT MINUS_GT MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT CN_IMPLIES CARET BANG_EQ AMPERSAND_AMPERSAND AMPERSAND ]
@@ -16614,7 +16901,7 @@ cn_statements: CN_INSTANTIATE UNAME TYPE WHILE
 
 cn_statements: CN_INSTANTIATE UNAME TYPE COMMA CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1527.
+## Ends in an error in state: 1576.
 ##
 ## cn_statement -> CN_INSTANTIATE UNAME TYPE COMMA expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16641,7 +16928,7 @@ cn_statements: CN_INSTANTIATE UNAME TYPE COMMA CN_CONSTANT RPAREN
 
 cn_statements: CN_INSTANTIATE LNAME WHILE
 ##
-## Ends in an error in state: 1529.
+## Ends in an error in state: 1578.
 ##
 ## cn_statement -> CN_INSTANTIATE LNAME . VARIABLE COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## cn_statement -> CN_INSTANTIATE LNAME . TYPE COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
@@ -16660,7 +16947,7 @@ cn_statements: CN_INSTANTIATE LNAME WHILE
 
 cn_statements: CN_INSTANTIATE LNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1530.
+## Ends in an error in state: 1579.
 ##
 ## cn_statement -> CN_INSTANTIATE LNAME VARIABLE . COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## prim_expr -> LNAME VARIABLE . [ STAR SLASH SEMICOLON QUESTION PLUS PIPE_PIPE PIPE PERCENT MINUS_GT MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT CN_IMPLIES CARET BANG_EQ AMPERSAND_AMPERSAND AMPERSAND ]
@@ -16675,7 +16962,7 @@ cn_statements: CN_INSTANTIATE LNAME VARIABLE WHILE
 
 cn_statements: CN_INSTANTIATE LNAME VARIABLE COMMA CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1532.
+## Ends in an error in state: 1581.
 ##
 ## cn_statement -> CN_INSTANTIATE LNAME VARIABLE COMMA expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16702,7 +16989,7 @@ cn_statements: CN_INSTANTIATE LNAME VARIABLE COMMA CN_CONSTANT RPAREN
 
 cn_statements: CN_INSTANTIATE LNAME TYPE WHILE
 ##
-## Ends in an error in state: 1534.
+## Ends in an error in state: 1583.
 ##
 ## cn_statement -> CN_INSTANTIATE LNAME TYPE . COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## prim_expr -> LNAME TYPE . [ STAR SLASH SEMICOLON QUESTION PLUS PIPE_PIPE PIPE PERCENT MINUS_GT MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT CN_IMPLIES CARET BANG_EQ AMPERSAND_AMPERSAND AMPERSAND ]
@@ -16717,7 +17004,7 @@ cn_statements: CN_INSTANTIATE LNAME TYPE WHILE
 
 cn_statements: CN_INSTANTIATE LNAME TYPE COMMA CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1536.
+## Ends in an error in state: 1585.
 ##
 ## cn_statement -> CN_INSTANTIATE LNAME TYPE COMMA expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16744,7 +17031,7 @@ cn_statements: CN_INSTANTIATE LNAME TYPE COMMA CN_CONSTANT RPAREN
 
 cn_statements: CN_INSTANTIATE CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1538.
+## Ends in an error in state: 1587.
 ##
 ## cn_statement -> CN_INSTANTIATE expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16771,7 +17058,7 @@ cn_statements: CN_INSTANTIATE CN_CONSTANT RPAREN
 
 cn_statements: CN_INSTANTIATE CN_GOOD LT BOOL GT WHILE
 ##
-## Ends in an error in state: 1540.
+## Ends in an error in state: 1589.
 ##
 ## cn_statement -> CN_INSTANTIATE cn_good . COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## prim_expr -> cn_good . LPAREN expr RPAREN [ STAR SLASH SEMICOLON QUESTION PLUS PIPE_PIPE PIPE PERCENT MINUS_GT MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT CN_IMPLIES CARET BANG_EQ AMPERSAND_AMPERSAND AMPERSAND ]
@@ -16784,7 +17071,7 @@ cn_statements: CN_INSTANTIATE CN_GOOD LT BOOL GT WHILE
 
 cn_statements: CN_INSTANTIATE CN_GOOD LT BOOL GT COMMA CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1542.
+## Ends in an error in state: 1591.
 ##
 ## cn_statement -> CN_INSTANTIATE cn_good COMMA expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16811,7 +17098,7 @@ cn_statements: CN_INSTANTIATE CN_GOOD LT BOOL GT COMMA CN_CONSTANT RPAREN
 
 cn_statements: CN_HAVE CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1545.
+## Ends in an error in state: 1594.
 ##
 ## cn_statement -> CN_HAVE assert_expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16831,68 +17118,38 @@ cn_statements: CN_HAVE CN_CONSTANT RPAREN
 ## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
 ## In state 1109, spurious reduction of production list_expr -> bool_or_expr
 ## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1505, spurious reduction of production assert_expr -> expr_without_let
+## In state 1554, spurious reduction of production assert_expr -> expr_without_let
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
-cn_statements: CN_FROM_BYTES WHILE
+cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN RPAREN LPAREN WHILE
 ##
-## Ends in an error in state: 1547.
+## Ends in an error in state: 1598.
 ##
-## cn_statement -> CN_FROM_BYTES . pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_FROM_BYTES
-##
-
-parsing "cn_statement": seen "CN_FROM_BYTES", expecting "pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
-
-cn_statements: CN_FROM_BYTES CN_BLOCK COMMA
-##
-## Ends in an error in state: 1548.
-##
-## cn_statement -> CN_FROM_BYTES pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+## cn_statement -> CN_FROM_BYTES resource LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
 ## The known suffix of the stack is as follows:
-## CN_FROM_BYTES pred
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 852, spurious reduction of production pred -> CN_BLOCK
+## CN_FROM_BYTES resource LPAREN
 ##
 
-<YOUR SYNTAX ERROR MESSAGE HERE>
+parsing "cn_statement": seen "CN_FROM_BYTES resource LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
 
-cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN WHILE
+cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN RPAREN LPAREN RPAREN WHILE
 ##
-## Ends in an error in state: 1549.
+## Ends in an error in state: 1600.
 ##
-## cn_statement -> CN_FROM_BYTES pred LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
+## cn_statement -> CN_FROM_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
 ## The known suffix of the stack is as follows:
-## CN_FROM_BYTES pred LPAREN
+## CN_FROM_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
 ##
 
-parsing "cn_statement": seen "CN_FROM_BYTES pred LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
-
-cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1551.
-##
-## cn_statement -> CN_FROM_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_FROM_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
-##
-
-parsing "cn_statement": seen "CN_FROM_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
+parsing "cn_statement": seen "CN_FROM_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
 
 cn_statements: CN_EXTRACT WHILE
 ##
-## Ends in an error in state: 1553.
+## Ends in an error in state: 1602.
 ##
 ## cn_statement -> CN_EXTRACT . expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## cn_statement -> CN_EXTRACT . pred COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
@@ -16905,7 +17162,7 @@ cn_statements: CN_EXTRACT WHILE
 
 cn_statements: CN_EXTRACT UNAME WHILE
 ##
-## Ends in an error in state: 1554.
+## Ends in an error in state: 1603.
 ##
 ## pred -> UNAME . VARIABLE [ COMMA ]
 ## prim_expr -> UNAME . VARIABLE [ STAR SLASH SEMICOLON QUESTION PLUS PIPE_PIPE PIPE PERCENT MINUS_GT MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT CN_IMPLIES CARET BANG_EQ AMPERSAND_AMPERSAND AMPERSAND ]
@@ -16923,7 +17180,7 @@ cn_statements: CN_EXTRACT UNAME WHILE
 
 cn_statements: CN_EXTRACT UNAME VARIABLE WHILE
 ##
-## Ends in an error in state: 1555.
+## Ends in an error in state: 1604.
 ##
 ## pred -> UNAME VARIABLE . [ COMMA ]
 ## prim_expr -> UNAME VARIABLE . [ STAR SLASH SEMICOLON QUESTION PLUS PIPE_PIPE PIPE PERCENT MINUS_GT MINUS LT_EQ LT LBRACK GT_EQ GT EQ_EQ DOT CN_IMPLIES CARET BANG_EQ AMPERSAND_AMPERSAND AMPERSAND ]
@@ -16938,7 +17195,7 @@ cn_statements: CN_EXTRACT UNAME VARIABLE WHILE
 
 cn_statements: CN_EXTRACT CN_BLOCK LPAREN
 ##
-## Ends in an error in state: 1556.
+## Ends in an error in state: 1605.
 ##
 ## cn_statement -> CN_EXTRACT pred . COMMA expr SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16956,7 +17213,7 @@ cn_statements: CN_EXTRACT CN_BLOCK LPAREN
 
 cn_statements: CN_EXTRACT CN_BLOCK COMMA CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1558.
+## Ends in an error in state: 1607.
 ##
 ## cn_statement -> CN_EXTRACT pred COMMA expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -16983,7 +17240,7 @@ cn_statements: CN_EXTRACT CN_BLOCK COMMA CN_CONSTANT RPAREN
 
 cn_statements: CN_EXTRACT CN_CONSTANT RPAREN
 ##
-## Ends in an error in state: 1560.
+## Ends in an error in state: 1609.
 ##
 ## cn_statement -> CN_EXTRACT expr . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -17010,7 +17267,7 @@ cn_statements: CN_EXTRACT CN_CONSTANT RPAREN
 
 cn_statements: CN_APPLY WHILE
 ##
-## Ends in an error in state: 1562.
+## Ends in an error in state: 1611.
 ##
 ## cn_statement -> CN_APPLY . UNAME VARIABLE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## cn_statement -> CN_APPLY . LNAME VARIABLE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
@@ -17025,7 +17282,7 @@ cn_statements: CN_APPLY WHILE
 
 cn_statements: CN_APPLY UNAME WHILE
 ##
-## Ends in an error in state: 1563.
+## Ends in an error in state: 1612.
 ##
 ## cn_statement -> CN_APPLY UNAME . VARIABLE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## cn_statement -> CN_APPLY UNAME . TYPE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
@@ -17038,7 +17295,7 @@ cn_statements: CN_APPLY UNAME WHILE
 
 cn_statements: CN_APPLY LNAME WHILE
 ##
-## Ends in an error in state: 1574.
+## Ends in an error in state: 1623.
 ##
 ## cn_statement -> CN_APPLY LNAME . VARIABLE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ## cn_statement -> CN_APPLY LNAME . TYPE LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
@@ -17051,7 +17308,7 @@ cn_statements: CN_APPLY LNAME WHILE
 
 cn_statements: ASSERT LPAREN CN_CONSTANT COMMA
 ##
-## Ends in an error in state: 1587.
+## Ends in an error in state: 1636.
 ##
 ## cn_statement -> ASSERT LPAREN assert_expr . RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
 ##
@@ -17071,14 +17328,14 @@ cn_statements: ASSERT LPAREN CN_CONSTANT COMMA
 ## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
 ## In state 1109, spurious reduction of production list_expr -> bool_or_expr
 ## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1505, spurious reduction of production assert_expr -> expr_without_let
+## In state 1554, spurious reduction of production assert_expr -> expr_without_let
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 cn_statements: INLINE SEMICOLON WHILE
 ##
-## Ends in an error in state: 1593.
+## Ends in an error in state: 1642.
 ##
 ## nonempty_list(cn_statement) -> cn_statement . [ EOF ]
 ## nonempty_list(cn_statement) -> cn_statement . nonempty_list(cn_statement) [ EOF ]
@@ -17091,7 +17348,7 @@ cn_statements: INLINE SEMICOLON WHILE
 
 cn_toplevel: CN_TYPE_SYNONYM WHILE
 ##
-## Ends in an error in state: 1596.
+## Ends in an error in state: 1645.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM . UNAME VARIABLE EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ## cn_type_synonym -> CN_TYPE_SYNONYM . LNAME VARIABLE EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
@@ -17106,7 +17363,7 @@ cn_toplevel: CN_TYPE_SYNONYM WHILE
 
 cn_toplevel: CN_TYPE_SYNONYM UNAME WHILE
 ##
-## Ends in an error in state: 1597.
+## Ends in an error in state: 1646.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM UNAME . VARIABLE EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ## cn_type_synonym -> CN_TYPE_SYNONYM UNAME . TYPE EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
@@ -17119,7 +17376,7 @@ cn_toplevel: CN_TYPE_SYNONYM UNAME WHILE
 
 cn_toplevel: CN_TYPE_SYNONYM LNAME WHILE
 ##
-## Ends in an error in state: 1608.
+## Ends in an error in state: 1657.
 ##
 ## cn_type_synonym -> CN_TYPE_SYNONYM LNAME . VARIABLE EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ## cn_type_synonym -> CN_TYPE_SYNONYM LNAME . TYPE EQ opt_paren(base_type) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
@@ -17132,7 +17389,7 @@ cn_toplevel: CN_TYPE_SYNONYM LNAME WHILE
 
 cn_toplevel: CN_SPEC WHILE
 ##
-## Ends in an error in state: 1615.
+## Ends in an error in state: 1664.
 ##
 ## cn_fun_spec -> CN_SPEC . UNAME VARIABLE LPAREN cn_args RPAREN SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ## cn_fun_spec -> CN_SPEC . LNAME VARIABLE LPAREN cn_args RPAREN SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
@@ -17147,7 +17404,7 @@ cn_toplevel: CN_SPEC WHILE
 
 cn_toplevel: CN_SPEC UNAME WHILE
 ##
-## Ends in an error in state: 1616.
+## Ends in an error in state: 1665.
 ##
 ## cn_fun_spec -> CN_SPEC UNAME . VARIABLE LPAREN cn_args RPAREN SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ## cn_fun_spec -> CN_SPEC UNAME . TYPE LPAREN cn_args RPAREN SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
@@ -17160,7 +17417,7 @@ cn_toplevel: CN_SPEC UNAME WHILE
 
 cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ##
-## Ends in an error in state: 1621.
+## Ends in an error in state: 1670.
 ##
 ## cn_fun_spec -> CN_SPEC UNAME VARIABLE LPAREN cn_args . RPAREN SEMICOLON CN_REQUIRES nonempty_list(condition) CN_ENSURES nonempty_list(condition) [ EOF CN_TYPE_SYNONYM CN_SPEC CN_PREDICATE CN_LEMMA CN_FUNCTION CN_DATATYPE ]
 ##
@@ -17172,15 +17429,15 @@ cn_toplevel: CN_SPEC UNAME VARIABLE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
 
 function_spec: CN_ENSURES CN_TAKE WHILE
 ##
-## Ends in an error in state: 1625.
+## Ends in an error in state: 1674.
 ##
 ## condition -> CN_TAKE . UNAME VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
 ## condition -> CN_TAKE . LNAME VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
@@ -17195,282 +17452,13 @@ function_spec: CN_ENSURES CN_TAKE WHILE
 
 function_spec: CN_ENSURES CN_TAKE UNAME WHILE
 ##
-## Ends in an error in state: 1626.
+## Ends in an error in state: 1675.
 ##
 ## condition -> CN_TAKE UNAME . VARIABLE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
 ## condition -> CN_TAKE UNAME . TYPE EQ resource SEMICOLON [ UNAME TILDE STRUCT STAR SIZEOF RETURN OFFSETOF MINUS LPAREN LNAME LBRACK LBRACE IF EOF DEFAULT CONSTANT CN_TYPE_SYNONYM CN_TRUSTED CN_TRUE CN_TAKE CN_SPEC CN_REQUIRES CN_PREDICATE CN_NULL CN_MEMBER_SHIFT CN_MATCH CN_LET CN_LEMMA CN_GOOD CN_FUNCTION CN_FALSE CN_ENSURES CN_EACH CN_DATATYPE CN_CONSTANT CN_ARRAY_SHIFT CN_ACCESSES BANG AMPERSAND ]
 ##
 ## The known suffix of the stack is as follows:
 ## CN_TAKE UNAME
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH WHILE
-##
-## Ends in an error in state: 1629.
-##
-## resource -> CN_EACH . LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH . LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH . LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH . LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN WHILE
-##
-## Ends in an error in state: 1630.
-##
-## resource -> CN_EACH LPAREN . base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN . base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN . base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN . base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID WHILE
-##
-## Ends in an error in state: 1631.
-##
-## resource -> CN_EACH LPAREN base_type . UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN base_type . LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN base_type . UNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN base_type . LNAME TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME WHILE
-##
-## Ends in an error in state: 1632.
-##
-## resource -> CN_EACH LPAREN base_type UNAME . VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN base_type UNAME . TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
-##
-## Ends in an error in state: 1635.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 1079, spurious reduction of production unary_expr -> prim_expr
-## In state 1076, spurious reduction of production mul_expr -> unary_expr
-## In state 1099, spurious reduction of production add_expr -> mul_expr
-## In state 1115, spurious reduction of production rel_expr -> add_expr
-## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
-## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
-## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
-## In state 1109, spurious reduction of production list_expr -> bool_or_expr
-## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1143, spurious reduction of production expr -> expr_without_let
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
-##
-## Ends in an error in state: 1638.
-##
-## resource -> CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 852, spurious reduction of production pred -> CN_BLOCK
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT COMMA
-##
-## Ends in an error in state: 1645.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 1079, spurious reduction of production unary_expr -> prim_expr
-## In state 1076, spurious reduction of production mul_expr -> unary_expr
-## In state 1099, spurious reduction of production add_expr -> mul_expr
-## In state 1115, spurious reduction of production rel_expr -> add_expr
-## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
-## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
-## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
-## In state 1109, spurious reduction of production list_expr -> bool_or_expr
-## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1143, spurious reduction of production expr -> expr_without_let
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID UNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
-##
-## Ends in an error in state: 1648.
-##
-## resource -> CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type UNAME TYPE SEMICOLON expr RPAREN LBRACE pred
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 852, spurious reduction of production pred -> CN_BLOCK
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME WHILE
-##
-## Ends in an error in state: 1653.
-##
-## resource -> CN_EACH LPAREN base_type LNAME . VARIABLE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-## resource -> CN_EACH LPAREN base_type LNAME . TYPE SEMICOLON expr RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT COMMA
-##
-## Ends in an error in state: 1656.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 1079, spurious reduction of production unary_expr -> prim_expr
-## In state 1076, spurious reduction of production mul_expr -> unary_expr
-## In state 1099, spurious reduction of production add_expr -> mul_expr
-## In state 1115, spurious reduction of production rel_expr -> add_expr
-## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
-## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
-## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
-## In state 1109, spurious reduction of production list_expr -> bool_or_expr
-## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1143, spurious reduction of production expr -> expr_without_let
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME VARIABLE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
-##
-## Ends in an error in state: 1659.
-##
-## resource -> CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME VARIABLE SEMICOLON expr RPAREN LBRACE pred
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 852, spurious reduction of production pred -> CN_BLOCK
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT COMMA
-##
-## Ends in an error in state: 1666.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr . RPAREN LBRACE pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 1079, spurious reduction of production unary_expr -> prim_expr
-## In state 1076, spurious reduction of production mul_expr -> unary_expr
-## In state 1099, spurious reduction of production add_expr -> mul_expr
-## In state 1115, spurious reduction of production rel_expr -> add_expr
-## In state 1077, spurious reduction of production bool_and_expr -> rel_expr
-## In state 1112, spurious reduction of production bool_implies_expr -> bool_and_expr
-## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
-## In state 1109, spurious reduction of production list_expr -> bool_or_expr
-## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1143, spurious reduction of production expr -> expr_without_let
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_EACH LPAREN CN_ALLOC_ID LNAME TYPE SEMICOLON CN_CONSTANT RPAREN LBRACE CN_BLOCK COMMA
-##
-## Ends in an error in state: 1669.
-##
-## resource -> CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN RBRACE [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## CN_EACH LPAREN base_type LNAME TYPE SEMICOLON expr RPAREN LBRACE pred
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 852, spurious reduction of production pred -> CN_BLOCK
-##
-
-<YOUR SYNTAX ERROR MESSAGE HERE>
-
-function_spec: CN_ENSURES CN_TAKE LNAME TYPE EQ CN_BLOCK COMMA
-##
-## Ends in an error in state: 1676.
-##
-## resource -> pred . LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN [ SEMICOLON ]
-##
-## The known suffix of the stack is as follows:
-## pred
-##
-## WARNING: This example involves spurious reductions.
-## This implies that, although the LR(1) items shown above provide an
-## accurate view of the past (what has been recognized so far), they
-## may provide an INCOMPLETE view of the future (what was expected next).
-## In state 852, spurious reduction of production pred -> CN_BLOCK
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -17690,7 +17678,7 @@ function_spec: CN_ENSURES CN_CONSTANT RPAREN
 ## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
 ## In state 1109, spurious reduction of production list_expr -> bool_or_expr
 ## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1505, spurious reduction of production assert_expr -> expr_without_let
+## In state 1554, spurious reduction of production assert_expr -> expr_without_let
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -17709,8 +17697,8 @@ cn_toplevel: CN_SPEC UNAME TYPE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -17760,8 +17748,8 @@ cn_toplevel: CN_SPEC LNAME VARIABLE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -17798,8 +17786,8 @@ cn_toplevel: CN_SPEC LNAME TYPE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -17855,8 +17843,8 @@ cn_toplevel: CN_PREDICATE CN_ALLOC_ID UNAME VARIABLE LPAREN CN_ALLOC_ID LNAME TY
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18006,7 +17994,7 @@ cn_toplevel: CN_PREDICATE CN_ALLOC_ID UNAME VARIABLE LPAREN RPAREN LBRACE ASSERT
 ## In state 1142, spurious reduction of production bool_or_expr -> bool_implies_expr
 ## In state 1109, spurious reduction of production list_expr -> bool_or_expr
 ## In state 1104, spurious reduction of production expr_without_let -> list_expr
-## In state 1505, spurious reduction of production assert_expr -> expr_without_let
+## In state 1554, spurious reduction of production assert_expr -> expr_without_let
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18216,8 +18204,8 @@ cn_toplevel: CN_LEMMA UNAME VARIABLE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18254,8 +18242,8 @@ cn_toplevel: CN_LEMMA UNAME TYPE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18305,8 +18293,8 @@ cn_toplevel: CN_LEMMA LNAME VARIABLE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18343,8 +18331,8 @@ cn_toplevel: CN_LEMMA LNAME TYPE LPAREN CN_ALLOC_ID LNAME TYPE RBRACE
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18469,8 +18457,8 @@ cn_toplevel: CN_FUNCTION LPAREN CN_ALLOC_ID RPAREN UNAME VARIABLE LPAREN CN_ALLO
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18516,8 +18504,8 @@ cn_toplevel: CN_FUNCTION LPAREN CN_ALLOC_ID RPAREN UNAME TYPE LPAREN CN_ALLOC_ID
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18549,8 +18537,8 @@ cn_toplevel: CN_FUNCTION LPAREN CN_ALLOC_ID RPAREN LNAME VARIABLE LPAREN CN_ALLO
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18569,8 +18557,8 @@ cn_toplevel: CN_FUNCTION LPAREN CN_ALLOC_ID RPAREN LNAME TYPE LPAREN CN_ALLOC_ID
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18630,8 +18618,8 @@ cn_toplevel: CN_DATATYPE LNAME TYPE LBRACE UNAME VARIABLE LBRACE CN_ALLOC_ID LNA
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18650,8 +18638,8 @@ cn_toplevel: CN_DATATYPE LNAME TYPE LBRACE UNAME TYPE LBRACE CN_ALLOC_ID LNAME T
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18683,8 +18671,8 @@ cn_toplevel: CN_DATATYPE LNAME TYPE LBRACE LNAME VARIABLE LBRACE CN_ALLOC_ID LNA
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
@@ -18703,8 +18691,8 @@ cn_toplevel: CN_DATATYPE LNAME TYPE LBRACE LNAME TYPE LBRACE CN_ALLOC_ID LNAME T
 ## accurate view of the past (what has been recognized so far), they
 ## may provide an INCOMPLETE view of the future (what was expected next).
 ## In state 1024, spurious reduction of production separated_nonempty_list(COMMA,base_type_cn_variable) -> base_type LNAME TYPE
-## In state 1619, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
-## In state 1620, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
+## In state 1668, spurious reduction of production loption(separated_nonempty_list(COMMA,base_type_cn_variable)) -> separated_nonempty_list(COMMA,base_type_cn_variable)
+## In state 1669, spurious reduction of production cn_args -> loption(separated_nonempty_list(COMMA,base_type_cn_variable))
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
