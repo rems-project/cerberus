@@ -303,7 +303,7 @@ let cn_to_ail_binop_internal bt1 bt2 =
     (A.(Arithmetic Mul), Some (get_cn_int_type_str bt1 bt2 ^ "_multiply"))
   | Div | DivNoSMT -> (A.(Arithmetic Div), Some (get_cn_int_type_str bt1 bt2 ^ "_divide"))
   | Exp | ExpNoSMT -> (A.And, Some (get_cn_int_type_str bt1 bt2 ^ "_pow"))
-  | Rem | RemNoSMT -> failwith "TODO cn_to_ail_binop: rem"
+  | Rem | RemNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_rem"))
   | Mod | ModNoSMT -> (A.(Arithmetic Mod), Some (get_cn_int_type_str bt1 bt2 ^ "_mod"))
   | BW_Xor -> (A.(Arithmetic Bxor), Some (get_cn_int_type_str bt1 bt2 ^ "_xor"))
   | BW_And -> (A.(Arithmetic Band), Some (get_cn_int_type_str bt1 bt2 ^ "_bwand"))
@@ -686,7 +686,7 @@ let dest_with_unit_check
     let return_stmt = if is_unit then A.(AilSreturnVoid) else A.(AilSreturn e) in
     (b, s @ [ return_stmt ])
   | AssignVar x ->
-    let assign_stmt = A.(AilSdeclaration [ (x, Some e) ]) in
+    let assign_stmt = A.(AilSexpr (mk_expr (AilEassign (mk_expr (AilEident x), e)))) in
     (b, s @ [ assign_stmt ])
   | PassBack -> (b, s, e)
 
@@ -910,19 +910,42 @@ let rec cn_to_ail_expr_aux_internal
     dest d ([], [], mk_expr ail_call_)
   | OffsetOf _ -> failwith "TODO OffsetOf"
   | ITE (t1, t2, t3) ->
+    let result_sym = Sym.fresh () in
+    let result_ident = A.(AilEident result_sym) in
+    let result_binding = create_binding result_sym (bt_to_ail_ctype (IT.bt t2)) in
+    let result_decl = A.(AilSdeclaration [ (result_sym, None) ]) in
     let b1, s1, e1 =
       cn_to_ail_expr_aux_internal const_prop pred_name dts globals t1 PassBack
     in
-    let b2, s2, e2 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t2 PassBack
+    let wrapped_cond =
+      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "convert_from_cn_bool")), [ e1 ]))
     in
-    let b3, s3, e3 =
-      cn_to_ail_expr_aux_internal const_prop pred_name dts globals t3 PassBack
+    let b2, s2 =
+      cn_to_ail_expr_aux_internal
+        const_prop
+        pred_name
+        dts
+        globals
+        t2
+        (AssignVar result_sym)
     in
-    let ail_expr_ =
-      A.(AilEcall (mk_expr (AilEident (Sym.fresh_pretty "cn_ite")), [ e1; e2; e3 ]))
+    let b3, s3 =
+      cn_to_ail_expr_aux_internal
+        const_prop
+        pred_name
+        dts
+        globals
+        t3
+        (AssignVar result_sym)
     in
-    dest d (b1 @ b2 @ b3, s1 @ s2 @ s3, mk_expr ail_expr_)
+    let ite_stat =
+      A.(
+        AilSif
+          ( mk_expr wrapped_cond,
+            mk_stmt (AilSblock (b2, List.map mk_stmt s2)),
+            mk_stmt (AilSblock (b3, List.map mk_stmt s3)) ))
+    in
+    dest d (result_binding :: b1, (result_decl :: s1) @ [ ite_stat ], mk_expr result_ident)
   | EachI ((r_start, (sym, bt'), r_end), t) ->
     (*
        Input:
@@ -2942,11 +2965,12 @@ let rec cn_to_ail_lat_internal ?(is_toplevel = true) dts pred_sym_opt globals pr
   | LAT.Define ((name, it), info, lat) ->
     let ctype = bt_to_ail_ctype (IT.bt it) in
     let binding = create_binding name ctype in
+    let decl = A.(AilSdeclaration [ (name, None) ]) in
     let b1, s1 =
       cn_to_ail_expr_internal_with_pred_name pred_sym_opt dts globals it (AssignVar name)
     in
     let b2, s2 = cn_to_ail_lat_internal ~is_toplevel dts pred_sym_opt globals preds lat in
-    (b1 @ b2 @ [ binding ], s1 @ s2)
+    (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LAT.Resource ((name, (ret, bt)), (loc, str_opt), lat) ->
     let b1, s1 =
       cn_to_ail_resource_internal ~is_pre:true ~is_toplevel name dts globals preds loc ret
@@ -3085,9 +3109,10 @@ let rec cn_to_ail_post_aux_internal dts globals preds = function
       Core_to_mucore.fn_spec_instrumentation_sym_subst_lrt (name, IT.bt it, new_name) t
     in
     let binding = create_binding new_name (bt_to_ail_ctype (IT.bt it)) in
+    let decl = A.(AilSdeclaration [ (new_name, None) ]) in
     let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
     let b2, s2 = cn_to_ail_post_aux_internal dts globals preds new_lrt in
-    (b1 @ b2 @ [ binding ], s1 @ s2)
+    (b1 @ b2 @ [ binding ], (decl :: s1) @ s2)
   | LRT.Resource ((name, (re, bt)), (loc, str_opt), t) ->
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let b1, s1 =
@@ -3214,6 +3239,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
     in
     (* let ctype = mk_ctype C.(Pointer (empty_qualifiers, ctype)) in *)
     let binding = create_binding new_name ctype in
+    let decl = A.(AilSdeclaration [ (new_name, None) ]) in
     let b1, s1 = cn_to_ail_expr_internal dts globals it (AssignVar new_name) in
     let ail_executable_spec =
       cn_to_ail_lat_internal_2
@@ -3224,7 +3250,7 @@ let rec cn_to_ail_lat_internal_2 with_ownership_checking dts globals preds c_ret
         c_return_type
         new_lat
     in
-    prepend_to_precondition ail_executable_spec (binding :: b1, s1)
+    prepend_to_precondition ail_executable_spec (binding :: b1, decl :: s1)
   | LAT.Resource ((name, (ret, bt)), (loc, str_opt), lat) ->
     let new_name = generate_sym_with_suffix ~suffix:"_cn" name in
     let b1, s1 =
