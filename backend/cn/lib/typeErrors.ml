@@ -238,6 +238,8 @@ type message =
   | Duplicate_pattern
   | Empty_provenance
   | Inconsistent_assumptions of string * (Context.t * log)
+  | To_bytes_needs_owned
+  | From_bytes_needs_each_owned
 
 type type_error =
   { loc : Locations.t;
@@ -599,6 +601,12 @@ let pp_message te =
     let short = !^kind ^^ !^" makes inconsistent assumptions" in
     let state = Some (trace ctxt_log (Solver.empty_model, []) Explain.no_ex) in
     { short; descr = None; state }
+  | To_bytes_needs_owned ->
+    let short = !^"to_bytes only supports Owned/Block" in
+    { short; descr = None; state = None }
+  | From_bytes_needs_each_owned ->
+    let short = !^"from_bytes only supports each (u64; ..) { Owned/Block(..) }" in
+    { short; descr = None; state = None }
 
 
 type t = type_error
