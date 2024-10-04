@@ -1541,12 +1541,13 @@ let cn_to_ail_expr_internal
 let cn_to_ail_expr
   (dts : _ CF.Cn.cn_datatype list)
   (globals : (C.union_tag * C.ctype) list)
+  (pred_sym_opt : Sym.t option)
   (it : IT.t)
   : A.bindings
     * CF.GenTypes.genTypeCategory A.statement_ list
     * CF.GenTypes.genTypeCategory A.expression
   =
-  cn_to_ail_expr_internal dts globals it PassBack
+  cn_to_ail_expr_aux_internal None pred_sym_opt dts globals it PassBack
 
 
 let cn_to_ail_expr_internal_with_pred_name

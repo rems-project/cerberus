@@ -117,7 +117,8 @@ val generate_record_map_get
 val cn_to_ail_expr
   :  A.sigma_cn_datatype list ->
   (C.union_tag * C.ctype) list ->
-  IT.t ->
+  Sym.t option ->
+  IndexTerms.t ->
   A.bindings
   * CF.GenTypes.genTypeCategory A.statement_ list
   * CF.GenTypes.genTypeCategory A.expression
