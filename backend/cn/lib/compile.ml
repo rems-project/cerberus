@@ -868,6 +868,7 @@ module EffectfulTranslation = struct
             e
         in
         let@ bt = check_quantified_base_type env loc bt in
+        warn_when_not_u64 loc bt;
         return
           (IT
              ( EachI ((Z.to_int (fst r), (sym, SBT.proj bt), Z.to_int (snd r)), expr),
