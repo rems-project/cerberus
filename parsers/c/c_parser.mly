@@ -2475,12 +2475,12 @@ cn_statement:
 | CN_UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc , CN_pack_unpack (Unpack, p, es)) }
-| CN_TO_BYTES r=resource  es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+| CN_TO_BYTES r=resource SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
-      CN_statement (loc , CN_to_from_bytes (To, r, es)) }
-| CN_FROM_BYTES r= resource es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+      CN_statement (loc , CN_to_from_bytes (To, r)) }
+| CN_FROM_BYTES r= resource SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
-      CN_statement (loc , CN_to_from_bytes (From, r, es)) }
+      CN_statement (loc , CN_to_from_bytes (From, r)) }
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }

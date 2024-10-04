@@ -7547,30 +7547,6 @@ cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN RPAREN WHILE
 
 parsing "cn_statement": seen "CN_FROM_BYTES pred LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
 
-cn_statements: CN_TO_BYTES CN_BLOCK LPAREN RPAREN LPAREN WHILE
-##
-## Ends in an error in state: 1512.
-##
-## cn_statement -> CN_TO_BYTES resource LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_TO_BYTES resource LPAREN
-##
-
-parsing "cn_statement": seen "CN_TO_BYTES resource LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
-
-cn_statements: CN_TO_BYTES CN_BLOCK LPAREN RPAREN LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1514.
-##
-## cn_statement -> CN_TO_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_TO_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
-##
-
-parsing "cn_statement": seen "CN_TO_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
-
 cn_statements: INLINE UNAME WHILE
 ##
 ## Ends in an error in state: 2.
@@ -17122,30 +17098,6 @@ cn_statements: CN_HAVE CN_CONSTANT RPAREN
 ##
 
 <YOUR SYNTAX ERROR MESSAGE HERE>
-
-cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN RPAREN LPAREN WHILE
-##
-## Ends in an error in state: 1598.
-##
-## cn_statement -> CN_FROM_BYTES resource LPAREN . loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_FROM_BYTES resource LPAREN
-##
-
-parsing "cn_statement": seen "CN_FROM_BYTES resource LPAREN", expecting "loption(separated_nonempty_list(COMMA,expr)) RPAREN SEMICOLON"
-
-cn_statements: CN_FROM_BYTES CN_BLOCK LPAREN RPAREN LPAREN RPAREN WHILE
-##
-## Ends in an error in state: 1600.
-##
-## cn_statement -> CN_FROM_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN . SEMICOLON [ INLINE EOF CN_UNPACK CN_UNFOLD CN_TO_BYTES CN_SPLIT_CASE CN_PRINT CN_PACK CN_INSTANTIATE CN_HAVE CN_FROM_BYTES CN_EXTRACT CN_APPLY ASSERT ]
-##
-## The known suffix of the stack is as follows:
-## CN_FROM_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN
-##
-
-parsing "cn_statement": seen "CN_FROM_BYTES resource LPAREN loption(separated_nonempty_list(COMMA,expr)) RPAREN", expecting "SEMICOLON"
 
 cn_statements: CN_EXTRACT WHILE
 ##
