@@ -569,6 +569,10 @@ let wrap_with_convert_from_cn_bool expr =
   mk_expr (wrap_with_convert_from expr_ BT.Bool)
 
 
+let cn_bool_true_expr : CF.GenTypes.genTypeCategory A.expression =
+  mk_expr (wrap_with_convert_to true_const BT.Bool)
+
+
 let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt = None) (bs, ss, e) =
   (*
      Input:
@@ -579,9 +583,7 @@ let gen_bool_while_loop sym bt start_expr while_cond ?(if_cond_opt = None) (bs, 
   let b = Sym.fresh () in
   let b_ident = A.(AilEident b) in
   let b_binding = create_binding b (bt_to_ail_ctype BT.Bool) in
-  let b_decl =
-    A.(AilSdeclaration [ (b, Some (mk_expr (wrap_with_convert_to true_const BT.Bool))) ])
-  in
+  let b_decl = A.(AilSdeclaration [ (b, Some cn_bool_true_expr) ]) in
   let incr_var = A.(AilEident sym) in
   let incr_var_binding = create_binding sym (bt_to_ail_ctype bt) in
   let start_decl = A.(AilSdeclaration [ (sym, Some (mk_expr start_expr)) ]) in
@@ -1249,7 +1251,7 @@ let rec cn_to_ail_expr_aux_internal
   | ArrayToList (_t1, _t2, _t3) -> failwith "TODO13"
   | Representable (_ct, _t) -> failwith "TODO14"
   | Good (_ct, _t) ->
-    dest d ([], [], mk_expr true_const)
+    dest d ([], [], cn_bool_true_expr)
     (* cn_to_ail_expr_aux_internal const_prop pred_name dts globals t d *)
   | Aligned _t_and_align -> failwith "TODO16"
   | WrapI (_ct, t) -> cn_to_ail_expr_aux_internal const_prop pred_name dts globals t d
@@ -2087,7 +2089,7 @@ let generate_struct_equality_function
       List.fold_left
         (fun e1 e2 ->
           mk_expr A.(AilEcall (mk_expr (AilEident cn_bool_and_sym), [ e1; e2 ])))
-        (mk_expr (wrap_with_convert_to true_const BT.Bool))
+        cn_bool_true_expr
         member_equality_exprs
     in
     (* let rec remove_true_const ail_binop = match rm_expr ail_binop with
@@ -2407,7 +2409,7 @@ let generate_record_equality_function dts (sym, (members : BT.member_types))
     List.fold_left
       (fun e1 e2 ->
         mk_expr A.(AilEcall (mk_expr (AilEident cn_bool_and_sym), [ e1; e2 ])))
-      (mk_expr (wrap_with_convert_to true_const BT.Bool))
+      cn_bool_true_expr
       member_equality_exprs
   in
   (* let rec remove_true_const ail_binop = match rm_expr ail_binop with
@@ -2828,7 +2830,7 @@ let cn_to_ail_logical_constraint_internal
       | _ -> failwith "Incorrect form of forall logical constraint term"
     in
     (match IT.term t with
-     | Good _ -> dest d ([], [], mk_expr true_const)
+     | Good _ -> dest d ([], [], cn_bool_true_expr)
      | _ ->
        (* Assume cond_it is of a particular form *)
        (*
