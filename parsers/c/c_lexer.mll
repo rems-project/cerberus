@@ -160,7 +160,9 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     (* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
     "pack"          , (Unimplemented, CN_PACK);
     "unpack"        , (Unimplemented, CN_UNPACK);
-  ] 
+    "to_bytes"        , (Unimplemented, CN_TO_BYTES);
+    "from_bytes"        , (Unimplemented, CN_FROM_BYTES);
+  ]
 
 let cn_kw_table = 
   let kw_table = Hashtbl.create 0 in
