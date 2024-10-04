@@ -65,14 +65,14 @@ fi
 
 # Compile
 cd "${EXEC_DIR}"
-if clang -g -c "-I${RUNTIME_PREFIX}"/include/ ./"${INPUT_BASENAME}-exec.c" cn.c; then
+if cc -g -c "-I${RUNTIME_PREFIX}"/include/ ./"${INPUT_BASENAME}-exec.c" cn.c; then
     [ "${QUIET}" ] || echo "Compiled C files."
 else
     echo_and_err "Failed to compile C files in ${EXEC_DIR}."
 fi
 
 # Link
-if clang "-I${RUNTIME_PREFIX}/include" -o "${INPUT_BASENAME}-exec-output.bin" ./*.o "${RUNTIME_PREFIX}/libcn.a"; then
+if cc "-I${RUNTIME_PREFIX}/include" -o "${INPUT_BASENAME}-exec-output.bin" ./*.o "${RUNTIME_PREFIX}/libcn.a"; then
     [ "${QUIET}" ] || echo "Linked C .o files." 
 else
     echo_and_err "Failed to link .o files in ${EXEC_DIR}."
