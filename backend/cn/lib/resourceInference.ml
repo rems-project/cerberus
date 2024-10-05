@@ -160,11 +160,7 @@ module General = struct
 
 
   (* TODO: check that oargs are in the same order? *)
-  let rec predicate_request
-    loc
-    (uiinfo : uiinfo)
-    (requested : RET.predicate_type)
-    ~alloc_or_owned
+  let rec predicate_request loc (uiinfo : uiinfo) (requested : RET.predicate_type)
     : ((RET.predicate_type * Resources.oargs) * int list) option m
     =
     Pp.(debug 7 (lazy (item __FUNCTION__ (RET.pp (P requested)))));
@@ -178,23 +174,12 @@ module General = struct
       if not needed then
         continue
       else (
-        let alloc_owned = alloc_or_owned in
         match re with
-        | RET.P p', p'_oarg when RET.subsumed ~alloc_owned requested.name p'.name ->
+        | RET.P p', p'_oarg when RET.subsumed requested.name p'.name ->
           let here = Locations.other __FUNCTION__ in
-          let p'_oarg, addr_iargs_eqs =
-            if RET.equal_predicate_name RET.alloc requested.name then (
-              match p'.name with
-              | PName name ->
-                assert (Sym.equal name Alloc.Predicate.sym);
-                (p'_oarg, [])
-              | Owned _ ->
-                assert alloc_owned;
-                (O (Alloc.History.lookup_ptr requested.pointer here), []))
-            else
-              ( p'_oarg,
-                IT.(eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here)
-                :: List.map2 (fun x y -> IT.eq__ x y here) requested.iargs p'.iargs )
+          let addr_iargs_eqs =
+            IT.(eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here)
+            :: List.map2 (fun x y -> IT.eq__ x y here) requested.iargs p'.iargs
           in
           let addr_iargs_match = IT.and_ addr_iargs_eqs here in
           let alloc_id_eq =
@@ -297,7 +282,7 @@ module General = struct
           else (
             match re with
             | Q p', O p'_oarg
-              when RET.subsumed ~alloc_owned:false requested.name p'.name
+              when RET.subsumed requested.name p'.name
                    && IT.equal step p'.step
                    && BaseTypes.equal (snd requested.q) (snd p'.q) ->
               let p' = RET.alpha_rename_qpredicate_type_ (fst requested.q) p' in
@@ -356,7 +341,7 @@ module General = struct
           let continue = return (needed, oarg) in
           if
             (not (IT.is_false needed))
-            && RET.subsumed ~alloc_owned:false requested.name predicate_name
+            && RET.subsumed requested.name predicate_name
             && BaseTypes.equal (snd requested.q) (IT.bt index)
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
@@ -382,7 +367,6 @@ module General = struct
                     pointer;
                     iargs = List.map (IT.subst su) requested.iargs
                   }
-                  ~alloc_or_owned:false
               in
               (match o_re_index with
                | None -> continue
@@ -440,7 +424,7 @@ module General = struct
       | _ ->
         let@ ftyp, rw_time =
           parametric_ftyp_args_request_step
-            (resource_request ~alloc_or_owned:false)
+            resource_request
             IT.subst
             loc
             uiinfo
@@ -453,12 +437,10 @@ module General = struct
     loop ftyp []
 
 
-  and resource_request loc uiinfo (request : RET.t) ~alloc_or_owned
-    : (Resources.t * int list) option m
-    =
+  and resource_request loc uiinfo (request : RET.t) : (Resources.t * int list) option m =
     match request with
     | P request ->
-      let@ result = predicate_request loc uiinfo request ~alloc_or_owned in
+      let@ result = predicate_request loc uiinfo request in
       return
         (Option.map
            (fun ((p, o), changed_or_deleted) -> ((RET.P p, o), changed_or_deleted))
@@ -475,7 +457,7 @@ module General = struct
   let ftyp_args_request_step rt_subst loc situation original_resources ftyp =
     let@ rt, _rw_time =
       parametric_ftyp_args_request_step
-        (resource_request ~alloc_or_owned:false)
+        resource_request
         rt_subst
         loc
         situation
@@ -496,7 +478,7 @@ module Special = struct
       { loc; msg })
 
 
-  let predicate_request loc situation (request, oinfo) ~alloc_or_owned =
+  let predicate_request loc situation (request, oinfo) =
     let requests =
       [ TypeErrors.
           { resource = P request;
@@ -506,21 +488,68 @@ module Special = struct
       ]
     in
     let uiinfo = (situation, requests) in
-    let@ result = General.predicate_request loc uiinfo request ~alloc_or_owned in
+    let@ result = General.predicate_request loc uiinfo request in
     match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
 
 
   (** This function checks whether [ptr1] belongs to a live allocation. It
       searches the context (without modification) for either an Alloc(p) or an
       Owned(p) such that (alloc_id) p == (alloc_id) ptr. *)
-  let get_live_alloc loc situation ptr =
-    let@ (_alloc_or_owned, O base_size), _ =
-      pure
-      @@ predicate_request loc situation (RET.make_alloc ptr, None) ~alloc_or_owned:true
+  let get_live_alloc reason loc ptr =
+    let module Ans = struct
+      type t =
+        | Found
+        | No_res
+        | Model of (Solver.model_with_q * IT.t)
+    end
     in
-    return base_size
+    let here = Locations.other __FUNCTION__ in
+    let alloc_id_matches found res_ptr =
+      let@ found in
+      match found with
+      | Ans.Found -> return Ans.Found
+      | No_res | Model _ ->
+        let constr = IT.(eq_ (allocId_ ptr here, allocId_ res_ptr here) here) in
+        let@ provable = provable loc in
+        (match provable (LC.T constr) with
+         | `True -> return Ans.Found
+         | `False ->
+           let@ model = model () in
+           return (Ans.Model (model, constr)))
+    in
+    let f res found =
+      let found =
+        match res with
+        | RET.Q _, _ -> found
+        | RET.P { name = Owned _; pointer; iargs = _ }, _ ->
+          alloc_id_matches found pointer
+        | RET.P { name = PName name; pointer; iargs = _ }, _ ->
+          if Sym.equal name Alloc.Predicate.sym then
+            alloc_id_matches found pointer
+          else
+            found
+      in
+      (Unchanged, found)
+    in
+    let@ found, _ = map_and_fold_resources loc f (return Ans.No_res) in
+    let@ found in
+    match found with
+    | Ans.Found -> return (Alloc.History.lookup_ptr ptr here)
+    | No_res ->
+      fail (fun ctxt ->
+        let msg =
+          TypeErrors.Allocation_not_live { reason; ptr; model_constr = None; ctxt }
+        in
+        { loc; msg })
+    | Model (model, constr) ->
+      fail (fun ctxt ->
+        let msg =
+          TypeErrors.Allocation_not_live
+            { reason; ptr; model_constr = Some (model, constr); ctxt }
+        in
+        { loc; msg })
 
 
   let predicate_request loc situation (request, oinfo) =
-    predicate_request loc situation (request, oinfo) ~alloc_or_owned:false
+    predicate_request loc situation (request, oinfo)
 end

@@ -20,8 +20,8 @@ end
 
 module Special : sig
   val get_live_alloc
-    :  Locations.t ->
-    TypeErrors.situation ->
+    :  [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift ] ->
+    Locations.t ->
     IndexTerms.t ->
     IndexTerms.t Typing.m
 

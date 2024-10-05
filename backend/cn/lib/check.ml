@@ -473,8 +473,8 @@ let check_both_eq_alloc loc arg1 arg2 ub =
   | `True -> return ()
 
 
-let check_live_alloc_bounds loc arg ub constr =
-  let@ base_size = RI.Special.get_live_alloc loc Ptr_diff_or_compare arg in
+let check_live_alloc_bounds reason loc arg ub constr =
+  let@ base_size = RI.Special.get_live_alloc reason loc arg in
   let here = Locations.other __FUNCTION__ in
   let base, size = Alloc.History.get_base_size base_size here in
   if !use_vip then (
@@ -1381,7 +1381,9 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
          check_pexpr pe1 (fun arg1 ->
            check_pexpr pe2 (fun arg2 ->
              let@ () = check_both_eq_alloc loc arg1 arg2 ub in
-             let@ () = check_live_alloc_bounds loc arg1 ub (both_in_bounds arg1 arg2) in
+             let@ () =
+               check_live_alloc_bounds `Ptr_cmp loc arg1 ub (both_in_bounds arg1 arg2)
+             in
              k (op (arg1, arg2))))
        in
        (match memop with
@@ -1407,7 +1409,9 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
               let ub_unspec = CF.Undefined.UB_unspec_pointer_sub in
               let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
               let@ () = check_both_eq_alloc loc arg1 arg2 ub in
-              let@ () = check_live_alloc_bounds loc arg1 ub (both_in_bounds arg1 arg2) in
+              let@ () =
+                check_live_alloc_bounds `Ptr_diff loc arg1 ub (both_in_bounds arg1 arg2)
+              in
               let ptr_diff_bt = Memory.bt_of_sct (Integer Ptrdiff_t) in
               let value =
                 (* TODO: confirm that the cast from uintptr_t to ptrdiff_t
@@ -1501,7 +1505,7 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
               let@ () = check_has_alloc_id loc vt1 ub_unspec in
               let here = Locations.other __FUNCTION__ in
               let@ () =
-                check_live_alloc_bounds loc vt1 ub (fun ~base ~size ->
+                check_live_alloc_bounds `ISO_array_shift loc vt1 ub (fun ~base ~size ->
                   let addr = addr_ result here in
                   let lower = le_ (base, addr) here in
                   let upper = le_ (addr, add_ (base, size) here) here in
@@ -1526,7 +1530,7 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
               let@ () = check_has_alloc_id loc vt2 ub_unspec in
               let ub = CF.Undefined.(UB_CERB004_unspecified ub_unspec) in
               let@ () =
-                check_live_alloc_bounds loc vt2 ub (fun ~base ~size ->
+                check_live_alloc_bounds `Copy_alloc_id loc vt2 ub (fun ~base ~size ->
                   let addr = vt1 in
                   let lower = le_ (base, addr) here in
                   let upper = le_ (addr, add_ (base, size) here) here in
@@ -1769,6 +1773,20 @@ let rec check_expr labels (e : BT.t Mu.mu_expr) (k : IT.t -> unit m) : unit m =
          | Cnprog.M_CN_pack_unpack (_pack_unpack, _pt) ->
            warn loc !^"Explicit pack/unpack unsupported.";
            return ()
+         | M_CN_to_from_bytes (To, res) ->
+           (match res with
+            | Q _ | P { name = PName _; _ } ->
+              fail (fun _ -> { loc; msg = To_bytes_needs_owned })
+            | P { name = Owned _; _ } ->
+              warn loc !^"to_bytes being implemented - ignoring for now";
+              return ())
+         | M_CN_to_from_bytes (From, res) ->
+           (match res with
+            | P _ | Q { name = PName _; _ } ->
+              fail (fun _ -> { loc; msg = From_bytes_needs_each_owned })
+            | Q { name = Owned _; _ } ->
+              warn loc !^"from_bytes being implemented - ignoring for now";
+              return ())
          | M_CN_have lc ->
            let@ _lc = WellTyped.WLC.welltyped loc lc in
            fail (fun _ -> { loc; msg = Generic !^"todo: 'have' not implemented yet" })

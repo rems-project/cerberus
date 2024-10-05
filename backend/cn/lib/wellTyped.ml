@@ -1803,6 +1803,10 @@ module BaseTyping = struct
       let@ p_pt = WRET.welltyped loc (P pt) in
       let[@warning "-8"] (RET.P pt) = p_pt in
       return (M_CN_pack_unpack (pack_unpack, pt))
+    | M_CN_to_from_bytes (to_from, res) ->
+      let@ res = WRET.welltyped loc res in
+      (* This should also allow quantified predicates for from_bytes *)
+      return (M_CN_to_from_bytes (to_from, res))
     | M_CN_have lc ->
       let@ lc = WLC.welltyped loc lc in
       return (M_CN_have lc)

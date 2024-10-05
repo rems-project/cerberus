@@ -156,11 +156,13 @@ let cn_keywords: (string * (kw_kind * Tokens.token)) list = [
     "cn_have"       , (Experimental, CN_HAVE);
     "cn_function"   , (Experimental, CN_FUNCTION);
     "cn_print"      , (Experimental, CN_PRINT);
+    "to_bytes"      , (Experimental, CN_TO_BYTES);
+    "from_bytes"    , (Experimental, CN_FROM_BYTES);
 
     (* CN 'unimplemented' keywords - non-functional, but the keyword is reserved *)
     "pack"          , (Unimplemented, CN_PACK);
     "unpack"        , (Unimplemented, CN_UNPACK);
-  ] 
+  ]
 
 let cn_kw_table = 
   let kw_table = Hashtbl.create 0 in
