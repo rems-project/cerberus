@@ -220,15 +220,14 @@ let state ctxt model_with_q extras =
           match IT.bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
         filtered
     in
-    add_labeled lab_interesting (List.map snd interesting) (
-    add_labeled lab_uninteresting (List.map snd uninteresting) (
-    labeled_empty))
+    add_labeled
+      lab_interesting
+      (List.map snd interesting)
+      (add_labeled lab_uninteresting (List.map snd uninteresting) labeled_empty)
   in
   let constraints =
     let render c =
-          { original = LC.pp c;
-            simplified = List.map LC.pp (simp_constraint evaluate c)
-          }
+      { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
     in
     let interesting, uninteresting =
       List.partition
@@ -238,11 +237,12 @@ let state ctxt model_with_q extras =
           | LC.T (IT (Representable _, _, _)) -> false
           | LC.T (IT (Good _, _, _)) -> false
           | _ -> true)
-          (LCSet.elements ctxt.constraints)
+        (LCSet.elements ctxt.constraints)
     in
-    add_labeled lab_interesting (List.map render interesting) (
-      add_labeled lab_uninteresting (List.map render uninteresting) (
-        labeled_empty))
+    add_labeled
+      lab_interesting
+      (List.map render interesting)
+      (add_labeled lab_uninteresting (List.map render uninteresting) labeled_empty)
   in
   let resources =
     let same_res, diff_res =
@@ -260,24 +260,22 @@ let state ctxt model_with_q extras =
         diff_res
     in
     let evaluate it = Solver.eval ctxt.global model it in
-    let with_suff mb x =
-      match mb with
-      | None -> x
-      | Some d -> d ^^^ x
-    in
+    let with_suff mb x = match mb with None -> x | Some d -> d ^^^ x in
     let pp_res mb_suff (rt, args) =
-         { original = with_suff mb_suff (RE.pp (rt,args));
-           simplified = [with_suff mb_suff (RE.pp (Interval.Solver.simp_rt evaluate rt, args))]
-         } 
+      { original = with_suff mb_suff (RE.pp (rt, args));
+        simplified =
+          [ with_suff mb_suff (RE.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
+      }
     in
     let interesting =
       List.map (fun re -> pp_res (Some (parens !^"same type")) re) same_res
       @ List.map (pp_res None) interesting_diff_res
     in
     let uninteresting = List.map (pp_res None) uninteresting_diff_res in
-    add_labeled lab_interesting interesting (
-      add_labeled lab_uninteresting uninteresting (
-        labeled_empty))
+    add_labeled
+      lab_interesting
+      interesting
+      (add_labeled lab_uninteresting uninteresting labeled_empty)
   in
   { where; terms; resources; constraints }
 
