@@ -47,11 +47,11 @@ let generate_ail_stat_strs
 
 let rec extract_global_variables = function
   | [] -> []
-  | (sym, mu_globs) :: ds ->
-    (match mu_globs with
-     | Mucore.M_GlobalDef (ctype, _) ->
+  | (sym, globs) :: ds ->
+    (match globs with
+     | Mucore.GlobalDef (ctype, _) ->
        (sym, Sctypes.to_ctype ctype) :: extract_global_variables ds
-     | M_GlobalDecl ctype -> (sym, Sctypes.to_ctype ctype) :: extract_global_variables ds)
+     | GlobalDecl ctype -> (sym, Sctypes.to_ctype ctype) :: extract_global_variables ds)
 
 
 let generate_c_pres_and_posts_internal
@@ -59,16 +59,16 @@ let generate_c_pres_and_posts_internal
   (instrumentation : Core_to_mucore.instrumentation)
   _
   (sigm : _ CF.AilSyntax.sigma)
-  (prog5 : unit Mucore.mu_file)
+  (prog5 : unit Mucore.file)
   =
   let dts = sigm.cn_datatypes in
-  let preds = prog5.mu_resource_predicates in
+  let preds = prog5.resource_predicates in
   let c_return_type =
     match List.assoc CF.Symbol.equal_sym instrumentation.fn sigm.A.declarations with
     | _, _, A.Decl_function (_, (_, ret_ty), _, _, _, _) -> ret_ty
     | _ -> failwith "TODO"
   in
-  let globals = extract_global_variables prog5.mu_globs in
+  let globals = extract_global_variables prog5.globs in
   let ail_executable_spec =
     Cn_internal_to_ail.cn_to_ail_pre_post_internal
       ~with_ownership_checking
@@ -157,7 +157,7 @@ let generate_c_specs_internal
   type_map
   (_ : Cerb_location.t CStatements.LocMap.t)
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (prog5 : unit Mucore.mu_file)
+  (prog5 : unit Mucore.file)
   =
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     generate_c_pres_and_posts_internal
@@ -639,7 +639,7 @@ let has_main (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
 
 let generate_ownership_global_assignments
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (prog5 : unit Mucore.mu_file)
+  (prog5 : unit Mucore.file)
   =
   let main_fn_sym_list =
     List.filter
@@ -649,7 +649,7 @@ let generate_ownership_global_assignments
   match main_fn_sym_list with
   | [] -> failwith "CN-exec: No main function so ownership globals cannot be initialised"
   | (main_sym, _) :: _ ->
-    let globals = extract_global_variables prog5.mu_globs in
+    let globals = extract_global_variables prog5.globs in
     let global_map_fcalls =
       List.map Ownership_exec.generate_c_local_ownership_entry_fcall globals
     in

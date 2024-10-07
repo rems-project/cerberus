@@ -36,6 +36,6 @@ val run
   filename:string ->
   max_unfolds:int ->
   Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
-  unit Mucore.mu_file ->
+  unit Mucore.file ->
   Codify.test_framework ->
   unit

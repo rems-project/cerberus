@@ -12,11 +12,9 @@ let ( let@ ) = CF.Exception.except_bind
 
 type core_file = (unit, unit) CF.Core.generic_file
 
-type mu_file = unit Mucore.mu_file
-
 type file =
   | CORE of core_file
-  | MUCORE of mu_file
+  | MUCORE of unit Mucore.file
 
 let print_file filename file =
   match file with
@@ -141,7 +139,7 @@ let with_well_formedness_check
   ~(* Callbacks *)
    handle_error
   ~(f :
-     prog5:unit Mucore.mu_file ->
+     prog5:unit Mucore.file ->
      ail_prog:CF.GenTypes.genTypeCategory A.ail_program ->
      statement_locs:Cerb_location.t CStatements.LocMap.t ->
      paused:_ Typing.pause ->
