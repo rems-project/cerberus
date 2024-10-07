@@ -1,111 +1,114 @@
-(* Module Mucore - A more specialized version of Cerberus's Core module
+(* Module Mucore - CN-specific variant of Cerberus Core
 
-   This is what CN actually uses. Core can pass around C types as values, while CN is more
-   restrictive, for simplicity. *)
+   A more specialized version of Core – this is what CN actually uses. (Among a few other
+   differences, Core can pass around C types as values – CN is more restrictive, for
+   simplicity.) *)
 
-open Pp
-module CF = Cerb_frontend
-open Cerb_frontend
-open Annot
-open Pp_ast
-module Loc = Cerb_location
-module IT = IndexTerms
-module SymSet = Set.Make (Sym)
+(* TODO: BCP: Not actually clear to me that this module needs a signature -- it's
+   enormous, but mostly types and small functions, and everything it defines is used
+   elsewhere. *)
 
-type loc = Loc.t
+(*
+   module T : sig
+   type ct = Sctypes.t
 
-type trusted =
-  | Trusted of Cerb_location.t
-  | Checked
+   type bt = BaseTypes.t
 
-type make_logical_function = Make_Logical_Function of Id.t
+   type cbt = Cerb_frontend.Core.core_base_type
 
-module T = struct
-  type ct = Sctypes.t
+   type ft = ArgumentTypes.ft
 
-  type bt = BaseTypes.t
+   type lt = ArgumentTypes.lt
 
-  type cbt = Core.core_base_type
+   type rt = ReturnTypes.t
 
-  type ft = ArgumentTypes.ft
+   type st = Memory.struct_layout
 
-  type lt = ArgumentTypes.lt
+   type ut = unit
 
-  type rt = ReturnTypes.t
+   type logical_arguments = Sym.t * (Sym.t * BaseTypes.t) list
 
-  type st = Memory.struct_layout
+   type resource_predicates =
 
-  type ut = unit
+   type logical_predicates =
+   end
 
-  (* type mapping = Mapping.t *)
-  type logical_arguments = Sym.t * (Sym.t * BaseTypes.t) list
+   type Sym.t = Sym.t
 
-  type resource_predicates = (Sym.t * ResourcePredicates.definition) list
+   type info = Locations.info
 
-  type logical_predicates = (Sym.t * LogicalFunctions.definition) list
-end
+   val dtree_of_arguments_l
+   :  ('a -> Cerb_frontend.Pp_ast.doc_tree) ->
+   'a arguments_l ->
+   Cerb_frontend.Pp_ast.doc_tree
 
-type symbol = Symbol.sym
+   val count_computational : 'a arguments -> int
 
+   val is_ctype_const : 'a pexpr -> Cerb_frontend.Ctype.ctype option
+
+   val dtree_of_label_def : 'a label_def -> Cerb_frontend.Pp_ast.doc_tree
+
+   type 'TY label_defs =
+
+   type 'TY proc_args_and_body =
+
+   type extern_map =
+
+   type 'TY globs_map = (symbol, 'TY globs) Pmap.map
+*)
+
+(** Annotated C type.  The annotations are typically an explanation of
+    something that might go wrong (e.g., overflow on an integer type). *)
 type act =
-  { loc : loc;
-    annot : Annot.annot list;
-    (* type_annot : 'TY; *)
-    ct : T.ct
+  { loc : Locations.t; (** Source location *)
+    annot : Cerb_frontend.Annot.annot list; (** Annotations *)
+    ct : Sctypes.t (** Affected type *)
   }
 
 type 'TY object_value_ =
-  (* C object values *)
-  | OVinteger of Impl_mem.integer_value (* integer value *)
-  | OVfloating of Impl_mem.floating_value (* floating-point value *)
-  | OVpointer of Impl_mem.pointer_value (* pointer value *)
-  | OVarray of 'TY object_value list (* C array value *)
-  | OVstruct of
-      symbol * (Symbol.identifier * T.ct * Impl_mem.mem_value) list (* C struct value *)
-  | OVunion of symbol * Symbol.identifier * Impl_mem.mem_value (* C union value *)
+  | OVinteger of Cerb_frontend.Impl_mem.integer_value
+  | OVfloating of Cerb_frontend.Impl_mem.floating_value
+  | OVpointer of Cerb_frontend.Impl_mem.pointer_value
+  | OVarray of 'TY object_value list
+  | OVstruct of Sym.t * (Id.t * Sctypes.t * Cerb_frontend.Impl_mem.mem_value) list
+  | OVunion of Sym.t * Id.t * Cerb_frontend.Impl_mem.mem_value
 
 and 'TY object_value = OV of 'TY * 'TY object_value_
 
-(* and 'TY loaded_value =  (\* potentially unspecified C object values *\) *)
-(*  | LVspecified of 'TY object_value (\* non-unspecified loaded value *\) *)
 and 'TY value_ =
-  (* Core values *)
-  | Vobject of 'TY object_value (* C object value *)
-  (* | Vloaded of 'TY loaded_value (\* loaded C object value *\) *)
-  | Vctype of Ctype.ctype
-  | Vfunction_addr of Symbol.sym
+  | Vobject of 'TY object_value
+  | Vctype of Cerb_frontend.Ctype.ctype
+  | Vfunction_addr of Sym.t
   | Vunit
   | Vtrue
   | Vfalse
-  | Vlist of T.cbt * 'TY value list
-  | Vtuple of 'TY value list (* tuple *)
+  | Vlist of Cerb_frontend.Core.core_base_type * 'TY value list
+  | Vtuple of 'TY value list
 
 and 'TY value = V of 'TY * 'TY value_
 
-type ctor =
-  (* data constructors *)
-  | Cnil of T.cbt (* empty list *)
-  (* annotated with the type of the list items *)
-  | Ccons (* list cons *)
-  | Ctuple (* tuple *)
-  | Carray (* C array *)
+let bt_of_value (V (bty, _)) = bty
 
-(* | Cspecified (\* non-unspecified loaded value *\) *)
-(* | CivCOMPL (\* bitwise complement *\)
- * | CivAND (\* bitwise AND *\)
- * | CivOR (\* bitwise OR *\)
- * | CivXOR (\* bitwise XOR *\)
- * | Cfvfromint (\* cast integer to floating value *\)
- * | Civfromfloat (\* cast floating to integer value *\) *)
+let bt_of_object_value (OV (bty, _)) = bty
+
+type ctor =
+  | Cnil of Cerb_frontend.Core.core_base_type
+  | Ccons
+  | Ctuple
+  | Carray
 
 type 'TY pattern_ =
-  | CaseBase of (Symbol.sym option * T.cbt)
+  | CaseBase of (Sym.t option * Cerb_frontend.Core.core_base_type)
   | CaseCtor of ctor * 'TY pattern list
 
-and 'TY pattern = Pattern of loc * annot list * 'TY * 'TY pattern_
+and 'TY pattern =
+  | Pattern of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY pattern_
+
+let bt_of_pattern (Pattern (_, _, bty, _)) = bty
+
+let loc_of_pattern (Pattern (loc, _, _, _)) = loc
 
 type mu_function =
-  (* some functions that persist into mucore, not just (infix) binops *)
   | F_params_length
   | F_params_nth
   | F_are_compatible
@@ -115,218 +118,18 @@ type mu_function =
   | F_min_int
   | F_ctype_width
 
-type bw_binop =
-  | BW_OR
-  | BW_AND
-  | BW_XOR
+let pp_function =
+  let open Pp.Infix in
+  function
+  | F_params_length -> !^"params_length"
+  | F_params_nth -> !^"params_nth"
+  | F_are_compatible -> !^"are_compatible"
+  | F_align_of -> !^"align_of"
+  | F_size_of -> !^"size_of"
+  | F_max_int -> !^"max_int"
+  | F_min_int -> !^"min_int"
+  | F_ctype_width -> !^"ctype_width"
 
-type bw_unop =
-  | BW_COMPL
-  | BW_CTZ
-  | BW_FFS
-
-type bound_kind =
-  | Bound_Wrap of act
-  | Bound_Except of act
-
-let bound_kind_act = function Bound_Wrap act -> act | Bound_Except act -> act
-
-type 'TY pexpr_ =
-  (* Core pure expressions *)
-  | PEsym of symbol
-  (* | PEimpl of Implementation.implementation_constant (\* implementation-defined
-     constant *\) *)
-  | PEval of 'TY value
-  | PEconstrained of (Mem.mem_iv_constraint * 'TY pexpr) list (* constrained value *)
-  | PEctor of ctor * 'TY pexpr list (* data constructor application *)
-  | PEbitwise_unop of bw_unop * 'TY pexpr
-  | PEbitwise_binop of bw_binop * 'TY pexpr * 'TY pexpr
-  | Cfvfromint of 'TY pexpr (* cast integer to floating value *)
-  | Civfromfloat of act * 'TY pexpr (* cast floating to integer value *)
-  | PEarray_shift of 'TY pexpr * T.ct * 'TY pexpr (* pointer array shift *)
-  | PEmember_shift of
-      'TY pexpr * symbol * Symbol.identifier (* pointer struct/union member shift *)
-  | PEnot of 'TY pexpr (* boolean not *)
-  | PEop of Core.binop * 'TY pexpr * 'TY pexpr
-  | PEapply_fun of mu_function * 'TY pexpr list
-  | PEstruct of symbol * (Symbol.identifier * 'TY pexpr) list (* C struct expression *)
-  | PEunion of symbol * Symbol.identifier * 'TY pexpr (* C union expression *)
-  | PEcfunction of 'TY pexpr
-  | PEmemberof of
-      symbol * Symbol.identifier * 'TY pexpr (* C struct/union member access *)
-  (* | PEassert_undef of 'TY pexpr * Cerb_location.t *
-     Undefined.undefined_behaviour *)
-  | PEbool_to_integer of 'TY pexpr
-  | PEconv_int of 'TY pexpr * 'TY pexpr
-  | PEconv_loaded_int of 'TY pexpr * 'TY pexpr
-  | PEwrapI of act * 'TY pexpr
-  | PEcatch_exceptional_condition of act * 'TY pexpr
-  | PEbounded_binop of bound_kind * Core.iop * 'TY pexpr * 'TY pexpr
-  | PEis_representable_integer of 'TY pexpr * act
-  | PEundef of Cerb_location.t * Undefined.undefined_behaviour (* undefined behaviour *)
-  | PEerror of string * 'TY pexpr (* impl-defined static error *)
-  (* | PEcase of ('TY pexpr) * (pattern * 'TY tpexpr) list (\* pattern matching
-     *\) *)
-  | PElet of 'TY pattern * 'TY pexpr * 'TY pexpr (* pure let *)
-  | PEif of 'TY pexpr * 'TY pexpr * 'TY pexpr
-(* pure if *)
-
-and 'TY pexpr = Pexpr of loc * annot list * 'TY * 'TY pexpr_
-
-let loc_of_pexpr (Pexpr (loc, _, _, _)) = loc
-
-type m_kill_kind =
-  | Dynamic
-  | Static of T.ct
-
-type 'TY action_ =
-  (* memory actions *)
-  | Create of 'TY pexpr * act * Symbol.prefix
-  | CreateReadOnly of 'TY pexpr * act * 'TY pexpr * Symbol.prefix
-  | Alloc of 'TY pexpr * 'TY pexpr * Symbol.prefix
-  | Kill of m_kill_kind * 'TY pexpr
-    (* the boolean indicates whether the action is dynamic (i.e. free()) *)
-  | Store of
-      bool
-      * act
-      * 'TY pexpr
-      * 'TY pexpr
-      * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
-  | Load of act * 'TY pexpr * Cmm_csem.memory_order
-  | RMW of
-      act
-      * 'TY pexpr
-      * 'TY pexpr
-      * 'TY pexpr
-      * Cmm_csem.memory_order
-      * Cmm_csem.memory_order
-  | Fence of Cmm_csem.memory_order
-  | CompareExchangeStrong of
-      act
-      * 'TY pexpr
-      * 'TY pexpr
-      * 'TY pexpr
-      * Cmm_csem.memory_order
-      * Cmm_csem.memory_order
-  | CompareExchangeWeak of
-      act
-      * 'TY pexpr
-      * 'TY pexpr
-      * 'TY pexpr
-      * Cmm_csem.memory_order
-      * Cmm_csem.memory_order
-  | LinuxFence of Linux.linux_memory_order
-  | LinuxLoad of act * 'TY pexpr * Linux.linux_memory_order
-  | LinuxStore of act * 'TY pexpr * 'TY pexpr * Linux.linux_memory_order
-  | LinuxRMW of act * 'TY pexpr * 'TY pexpr * Linux.linux_memory_order
-
-type 'TY action = Action of Cerb_location.t * 'TY action_
-
-type 'TY paction =
-  (* memory actions with Core.polarity *)
-  | Paction of Core.polarity * 'TY action
-
-type 'TY memop =
-  | PtrEq of ('TY pexpr * 'TY pexpr)
-  | PtrNe of ('TY pexpr * 'TY pexpr)
-  | PtrLt of ('TY pexpr * 'TY pexpr)
-  | PtrGt of ('TY pexpr * 'TY pexpr)
-  | PtrLe of ('TY pexpr * 'TY pexpr)
-  | PtrGe of ('TY pexpr * 'TY pexpr)
-  | Ptrdiff of (act * 'TY pexpr * 'TY pexpr)
-  | IntFromPtr of (act * act * 'TY pexpr)
-  | PtrFromInt of (act * act * 'TY pexpr)
-  | PtrValidForDeref of (act * 'TY pexpr)
-  | PtrWellAligned of (act * 'TY pexpr)
-  | PtrArrayShift of ('TY pexpr * act * 'TY pexpr)
-  | PtrMemberShift of (symbol * Symbol.identifier * 'TY pexpr)
-  | Memcpy of ('TY pexpr * 'TY pexpr * 'TY pexpr)
-  | Memcmp of ('TY pexpr * 'TY pexpr * 'TY pexpr)
-  | Realloc of ('TY pexpr * 'TY pexpr * 'TY pexpr)
-  | Va_start of ('TY pexpr * 'TY pexpr)
-  | Va_copy of 'TY pexpr
-  | Va_arg of ('TY pexpr * act)
-  | Va_end of 'TY pexpr
-  | CopyAllocId of ('TY pexpr * 'TY pexpr)
-
-type 'TY expr_ =
-  (* (effectful) expression *)
-  | Epure of 'TY pexpr
-  | Ememop of 'TY memop
-  | Eaction of 'TY paction (* memory action *)
-  | Eskip
-  | Eccall of act * 'TY pexpr * 'TY pexpr list
-  (* C function call *)
-  (* | Eproc of name * ('TY pexpr) list (\* Core procedure call *\) *)
-  | Elet of 'TY pattern * 'TY pexpr * 'TY expr
-  | Eunseq of 'TY expr list (* unsequenced expressions *)
-  | Ewseq of 'TY pattern * 'TY expr * 'TY expr (* weak sequencing *)
-  | Esseq of 'TY pattern * 'TY expr * 'TY expr (* strong sequencing *)
-  (* | Ecase of 'TY pexpr * (pattern * ('TY texpr)) list (\* pattern matching
-     *\) *)
-  | Eif of 'TY pexpr * 'TY expr * 'TY expr
-  | Ebound of 'TY expr (* $\ldots$and boundary *)
-  | End of 'TY expr list (* nondeterministic choice *)
-  (* | Edone of 'TY expr *)
-  | Erun of symbol * 'TY pexpr list (* run from label *)
-  | CN_progs of (Sym.t, Ctype.ctype) CF.Cn.cn_statement list * Cnprog.cn_prog list
-
-and 'TY expr = Expr of loc * annot list * 'TY * 'TY expr_
-
-let loc_of_expr (Expr (loc, _, _, _)) = loc
-
-type info = Locations.info
-
-type 'i arguments_l =
-  | Define of (Sym.t * IndexTerms.t) * info * 'i arguments_l
-  | Resource of (Sym.t * (ResourceTypes.t * BaseTypes.t)) * info * 'i arguments_l
-  | Constraint of LogicalConstraints.t * info * 'i arguments_l
-  | I of 'i
-
-let dtree_of_arguments_l dtree_i =
-  let rec aux = function
-    | Define ((s, it), _, t) ->
-      Dnode (pp_ctor "Define", [ Dleaf (Sym.pp s); IT.dtree it; aux t ])
-    | Resource ((s, (rt, bt)), _, t) ->
-      Dnode
-        ( pp_ctor "Resource",
-          [ Dleaf (Sym.pp s); ResourceTypes.dtree rt; Dleaf (BaseTypes.pp bt); aux t ] )
-    | Constraint (lc, _, t) ->
-      Dnode (pp_ctor "Constraint", [ LogicalConstraints.dtree lc; aux t ])
-    | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
-  in
-  aux
-
-
-type 'i arguments =
-  | Computational of (Sym.t * T.bt) * info * 'i arguments
-  | L of 'i arguments_l
-
-let dtree_of_arguments dtree_i =
-  let rec aux = function
-    | Computational ((s, _bt), _, lat) ->
-      Dnode (pp_ctor "Computational", [ Dleaf (Sym.pp s); aux lat ])
-    | L l -> dtree_of_arguments_l dtree_i l
-  in
-  aux
-
-
-let rec count_computational = function
-  | Computational (_, _, args) -> count_computational args + 1
-  | L _ -> 0
-
-
-let mDefine (bound, info) t = Define (bound, info, t)
-
-let mResource (bound, info) t = Resource (bound, info, t)
-
-let mConstraint (lc, info) t = Constraint (lc, info, t)
-
-let mComputational (bound, info) t = Computational (bound, info, t)
-
-let mConstraints lcs t = List.fold_right mConstraint lcs t
-
-let mResources res t = List.fold_right mResource res t
 
 let fun_param_types mu_fun =
   let open BaseTypes in
@@ -342,64 +145,8 @@ let fun_param_types mu_fun =
   | F_ctype_width -> [ CType ]
 
 
-let is_ctype_const pe =
-  let (Pexpr (_loc, _, _, pe_)) = pe in
-  match pe_ with PEval (V (_, Vctype ct)) -> Some ct | _ -> None
-
-
-let fun_return_type mu_fun args =
-  let open BaseTypes in
-  match (mu_fun, args) with
-  | F_params_length, _ -> Some (`Returns_BT (Memory.bt_of_sct (Integer (Unsigned Short))))
-  | F_params_nth, _ -> Some (`Returns_BT CType)
-  | F_are_compatible, _ -> Some (`Returns_BT Bool)
-  | F_align_of, _ -> Some `Returns_Integer
-  | F_size_of, _ -> Some (`Returns_BT Memory.size_bt) (* TODO: Is that good? *)
-  | F_max_int, [ ct ] ->
-    Option.bind (is_ctype_const ct) Sctypes.of_ctype
-    |> Option.map (fun sct -> `Returns_BT (Memory.bt_of_sct sct))
-  | F_max_int, _ -> None
-  | F_min_int, [ ct ] ->
-    Option.bind (is_ctype_const ct) Sctypes.of_ctype
-    |> Option.map (fun sct -> `Returns_BT (Memory.bt_of_sct sct))
-  | F_min_int, _ -> None
-  | F_ctype_width, _ -> Some `Returns_Integer
-
-
-let pp_function = function
-  | F_params_length -> !^"params_length"
-  | F_params_nth -> !^"params_nth"
-  | F_are_compatible -> !^"are_compatible"
-  | F_align_of -> !^"align_of"
-  | F_size_of -> !^"size_of"
-  | F_max_int -> !^"max_int"
-  | F_min_int -> !^"min_int"
-  | F_ctype_width -> !^"ctype_width"
-
-
-let is_undef_or_error_pexpr pexpr =
-  let (Pexpr (_, _, _, pe)) = pexpr in
-  match pe with PEundef _ | PEerror _ -> true | _ -> false
-
-
-let is_undef_or_error_expr expr =
-  let (Expr (_, _, _, e)) = expr in
-  match e with Epure pe -> is_undef_or_error_pexpr pe | _ -> false
-
-
-let bt_of_value (V (bty, _)) = bty
-
-let bt_of_object_value (OV (bty, _)) = bty
-
-let bt_of_pattern (Pattern (_, _, bty, _)) = bty
-
-let loc_of_pattern (Pattern (loc, _, _, _)) = loc
-
-let bt_of_expr : 'TY. 'TY expr -> 'TY = fun (Expr (_loc, _annots, bty, _e)) -> bty
-
-let bt_of_pexpr : 'TY. 'TY pexpr -> 'TY = fun (Pexpr (_loc, _annots, bty, _e)) -> bty
-
 let evaluate_fun mu_fun args =
+  let module IT = IndexTerms in
   let here = Locations.other __FUNCTION__ in
   match mu_fun with
   | F_params_length ->
@@ -456,92 +203,293 @@ let evaluate_fun mu_fun args =
      | _ -> None)
 
 
-type parse_ast_label_spec = { label_spec : (Sym.t, Ctype.ctype) CF.Cn.cn_condition list }
+type bw_binop =
+  | BW_OR
+  | BW_AND
+  | BW_XOR
 
-type 'TY label_def =
-  | Return of loc
-  | Label of
-      loc
-      * 'TY expr arguments
-      * annot list
-      * (* for generating runtime assertions *)
-        parse_ast_label_spec
+type bw_unop =
+  | BW_COMPL
+  | BW_CTZ
+  | BW_FFS
 
-let dtree_of_label_def = function
-  | Return _ -> Dleaf !^"return label"
-  | Label (_, args_and_body, _, _) ->
-    dtree_of_arguments (fun _body -> Dleaf !^"(body)") args_and_body
+(** What to do on out of bounds.
+    The annotated C type is the result type of the operation. *)
+type bound_kind =
+  | Bound_Wrap of act (** Wrap around (used for unsigned types) *)
+  | Bound_Except of act (** Report an exception, for signed types *)
+
+let bound_kind_act = function Bound_Wrap act -> act | Bound_Except act -> act
+
+type 'TY pexpr_ =
+  | PEsym of Sym.t
+  | PEval of 'TY value
+  | PEconstrained of (Cerb_frontend.Mem.mem_iv_constraint * 'TY pexpr) list
+  | PEctor of ctor * 'TY pexpr list
+  | PEbitwise_unop of bw_unop * 'TY pexpr
+  | PEbitwise_binop of bw_binop * 'TY pexpr * 'TY pexpr
+  | Cfvfromint of 'TY pexpr
+  | Civfromfloat of act * 'TY pexpr
+  | PEarray_shift of 'TY pexpr * Sctypes.t * 'TY pexpr
+  | PEmember_shift of 'TY pexpr * Sym.t * Id.t
+  | PEnot of 'TY pexpr
+  | PEop of Cerb_frontend.Core.binop * 'TY pexpr * 'TY pexpr
+  | PEapply_fun of mu_function * 'TY pexpr list
+  | PEstruct of Sym.t * (Id.t * 'TY pexpr) list
+  | PEunion of Sym.t * Id.t * 'TY pexpr
+  | PEcfunction of 'TY pexpr
+  | PEmemberof of Sym.t * Id.t * 'TY pexpr
+  | PEbool_to_integer of 'TY pexpr
+  | PEconv_int of 'TY pexpr * 'TY pexpr
+  | PEconv_loaded_int of 'TY pexpr * 'TY pexpr
+  | PEwrapI of act * 'TY pexpr
+  | PEcatch_exceptional_condition of act * 'TY pexpr
+  | PEbounded_binop of bound_kind * Cerb_frontend.Core.iop * 'TY pexpr * 'TY pexpr
+  | PEis_representable_integer of 'TY pexpr * act
+  | PEundef of Locations.t * Cerb_frontend.Undefined.undefined_behaviour
+  | PEerror of string * 'TY pexpr
+  | PElet of 'TY pattern * 'TY pexpr * 'TY pexpr
+  | PEif of 'TY pexpr * 'TY pexpr * 'TY pexpr
+
+and 'TY pexpr = Pexpr of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY pexpr_
+
+let loc_of_pexpr (Pexpr (loc, _, _, _)) = loc
+
+let bt_of_pexpr : 'TY. 'TY pexpr -> 'TY = fun (Pexpr (_loc, _annots, bty, _e)) -> bty
+
+let is_undef_or_error_pexpr (Pexpr (_, _, _, pe)) =
+  match pe with PEundef _ | PEerror _ -> true | _ -> false
 
 
-type 'TY label_defs = (symbol, 'TY label_def) Pmap.map
+let is_ctype_const (Pexpr (_loc, _, _, pe)) =
+  match pe with PEval (V (_, Vctype ct)) -> Some ct | _ -> None
 
-type 'TY proc_args_and_body = ('TY expr * 'TY label_defs * T.rt) arguments
 
-(* let dtree_of_args_and_body a =  *)
-(*   dtree_of_arguments (fun (_body, labels, rt) -> *)
-(*       Dnode ("FunctionBodyLabelsReturn" [ *)
-(*                  Dleaf !^"(body)"; *)
-(*                  Dnode (pp_ctor "labels" *)
-(*         ]) *)
-(*     ) a *)
+let fun_return_type mu_fun args =
+  let open BaseTypes in
+  match (mu_fun, args) with
+  | F_params_length, _ -> Some (`Returns_BT (Memory.bt_of_sct (Integer (Unsigned Short))))
+  | F_params_nth, _ -> Some (`Returns_BT CType)
+  | F_are_compatible, _ -> Some (`Returns_BT Bool)
+  | F_align_of, _ -> Some `Returns_Integer
+  | F_size_of, _ -> Some (`Returns_BT Memory.size_bt) (* TODO: Is that good? *)
+  | F_max_int, [ ct ] ->
+    Option.bind (is_ctype_const ct) Sctypes.of_ctype
+    |> Option.map (fun sct -> `Returns_BT (Memory.bt_of_sct sct))
+  | F_max_int, _ -> None
+  | F_min_int, [ ct ] ->
+    Option.bind (is_ctype_const ct) Sctypes.of_ctype
+    |> Option.map (fun sct -> `Returns_BT (Memory.bt_of_sct sct))
+  | F_min_int, _ -> None
+  | F_ctype_width, _ -> Some `Returns_Integer
 
-type parse_ast_function_specification =
-  { accesses : (Sym.t * Ctype.ctype) list;
-    requires : (Sym.t, Ctype.ctype) CF.Cn.cn_condition list;
-    ensures : (Sym.t, Ctype.ctype) CF.Cn.cn_condition list
-  }
 
-type 'TY fun_map_decl =
-  (* | Fun of T.bt * (symbol * T.bt) list * 'TY pexpr *)
-  | Proc of
-      Cerb_location.t
-      * 'TY proc_args_and_body
-      * trusted
-      * parse_ast_function_specification
-    (* recording the desugared parse ast, for generating runtime checks *)
-  | ProcDecl of Cerb_location.t * T.ft option
-(* | BuiltinDecl of Cerb_location.t * T.bt * T.bt list *)
+type m_kill_kind =
+  | Dynamic
+  | Static of Sctypes.t
 
-type 'TY fun_map = (symbol, 'TY fun_map_decl) Pmap.map
+type 'TY action_ =
+  | Create of 'TY pexpr * act * Cerb_frontend.Symbol.prefix
+  | CreateReadOnly of 'TY pexpr * act * 'TY pexpr * Cerb_frontend.Symbol.prefix
+  | Alloc of 'TY pexpr * 'TY pexpr * Cerb_frontend.Symbol.prefix
+  | Kill of m_kill_kind * 'TY pexpr
+  | Store of bool * act * 'TY pexpr * 'TY pexpr * Cerb_frontend.Cmm_csem.memory_order
+  | Load of act * 'TY pexpr * Cerb_frontend.Cmm_csem.memory_order
+  | RMW of
+      act
+      * 'TY pexpr
+      * 'TY pexpr
+      * 'TY pexpr
+      * Cerb_frontend.Cmm_csem.memory_order
+      * Cerb_frontend.Cmm_csem.memory_order
+  | Fence of Cerb_frontend.Cmm_csem.memory_order
+  | CompareExchangeStrong of
+      act
+      * 'TY pexpr
+      * 'TY pexpr
+      * 'TY pexpr
+      * Cerb_frontend.Cmm_csem.memory_order
+      * Cerb_frontend.Cmm_csem.memory_order
+  | CompareExchangeWeak of
+      act
+      * 'TY pexpr
+      * 'TY pexpr
+      * 'TY pexpr
+      * Cerb_frontend.Cmm_csem.memory_order
+      * Cerb_frontend.Cmm_csem.memory_order
+  | LinuxFence of Cerb_frontend.Linux.linux_memory_order
+  | LinuxLoad of act * 'TY pexpr * Cerb_frontend.Linux.linux_memory_order
+  | LinuxStore of act * 'TY pexpr * 'TY pexpr * Cerb_frontend.Linux.linux_memory_order
+  | LinuxRMW of act * 'TY pexpr * 'TY pexpr * Cerb_frontend.Linux.linux_memory_order
 
-type extern_map = Core.extern_map
+type 'TY action = Action of Locations.t * 'TY action_
+
+type 'TY paction = Paction of Cerb_frontend.Core.polarity * 'TY action
+
+type 'TY memop =
+  | PtrEq of ('TY pexpr * 'TY pexpr)
+  | PtrNe of ('TY pexpr * 'TY pexpr)
+  | PtrLt of ('TY pexpr * 'TY pexpr)
+  | PtrGt of ('TY pexpr * 'TY pexpr)
+  | PtrLe of ('TY pexpr * 'TY pexpr)
+  | PtrGe of ('TY pexpr * 'TY pexpr)
+  | Ptrdiff of (act * 'TY pexpr * 'TY pexpr)
+  | IntFromPtr of (act * act * 'TY pexpr)
+  | PtrFromInt of (act * act * 'TY pexpr)
+  | PtrValidForDeref of (act * 'TY pexpr)
+  | PtrWellAligned of (act * 'TY pexpr)
+  | PtrArrayShift of ('TY pexpr * act * 'TY pexpr)
+  | PtrMemberShift of (Sym.t * Id.t * 'TY pexpr)
+  | Memcpy of ('TY pexpr * 'TY pexpr * 'TY pexpr)
+  | Memcmp of ('TY pexpr * 'TY pexpr * 'TY pexpr)
+  | Realloc of ('TY pexpr * 'TY pexpr * 'TY pexpr)
+  | Va_start of ('TY pexpr * 'TY pexpr)
+  | Va_copy of 'TY pexpr
+  | Va_arg of ('TY pexpr * act)
+  | Va_end of 'TY pexpr
+  | CopyAllocId of ('TY pexpr * 'TY pexpr)
+
+type 'TY expr_ =
+  | Epure of 'TY pexpr
+  | Ememop of 'TY memop
+  | Eaction of 'TY paction
+  | Eskip
+  | Eccall of act * 'TY pexpr * 'TY pexpr list
+  | Elet of 'TY pattern * 'TY pexpr * 'TY expr
+  | Eunseq of 'TY expr list
+  | Ewseq of 'TY pattern * 'TY expr * 'TY expr
+  | Esseq of 'TY pattern * 'TY expr * 'TY expr
+  | Eif of 'TY pexpr * 'TY expr * 'TY expr
+  | Ebound of 'TY expr
+  | End of 'TY expr list
+  | Erun of Sym.t * 'TY pexpr list
+  | CN_progs of
+      (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_statement list
+      * Cnprog.cn_prog list
+
+and 'TY expr = Expr of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY expr_
+
+let is_undef_or_error_expr (Expr (_, _, _, e)) =
+  match e with Epure pe -> is_undef_or_error_pexpr pe | _ -> false
+
+
+let bt_of_expr : 'TY. 'TY expr -> 'TY = fun (Expr (_loc, _annots, bty, _e)) -> bty
+
+let loc_of_expr (Expr (loc, _, _, _)) = loc
 
 type 'TY globs =
-  | GlobalDef of T.ct * 'TY expr
-  | GlobalDecl of T.ct
+  | GlobalDef of Sctypes.t * 'TY expr
+  | GlobalDecl of Sctypes.t
 
-type 'TY globs_map = (symbol, 'TY globs) Pmap.map
+type 'i arguments_l =
+  | Define of (Sym.t * IndexTerms.t) * Locations.info * 'i arguments_l
+  | Resource of
+      (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info * 'i arguments_l
+  | Constraint of LogicalConstraints.t * Locations.info * 'i arguments_l
+  | I of 'i
 
-type tag_definition =
-  | StructDef of T.st
-  | UnionDef of T.ut
+let mDefine (bound, info) t = Define (bound, info, t)
 
-type tag_definitions = (Symbol.sym, tag_definition) Pmap.map
+let mResource (bound, info) t = Resource (bound, info, t)
 
-type 'TY globs_list = (symbol * 'TY globs) list
+let mConstraint (lc, info) t = Constraint (lc, info, t)
 
-type datatype =
-  { loc : Loc.t;
-    cases : (Sym.t * (Id.t * T.bt) list) list
+let mConstraints lcs t = List.fold_right mConstraint lcs t
+
+let mResources res t = List.fold_right mResource res t
+
+type 'i arguments =
+  | Computational of (Sym.t * BaseTypes.t) * Locations.info * 'i arguments
+  | L of 'i arguments_l
+
+let mComputational (bound, info) t = Computational (bound, info, t)
+
+let dtree_of_arguments_l dtree_i =
+  let module IT = IndexTerms in
+  let open Cerb_frontend.Pp_ast in
+  let rec aux = function
+    | Define ((s, it), _, t) ->
+      Dnode (pp_ctor "Define", [ Dleaf (Sym.pp s); IT.dtree it; aux t ])
+    | Resource ((s, (rt, bt)), _, t) ->
+      Dnode
+        ( pp_ctor "Resource",
+          [ Dleaf (Sym.pp s); ResourceTypes.dtree rt; Dleaf (BaseTypes.pp bt); aux t ] )
+    | Constraint (lc, _, t) ->
+      Dnode (pp_ctor "Constraint", [ LogicalConstraints.dtree lc; aux t ])
+    | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
+  in
+  aux
+
+
+let dtree_of_arguments dtree_i =
+  let open Cerb_frontend.Pp_ast in
+  let rec aux = function
+    | Computational ((s, _bt), _, lat) ->
+      Dnode (pp_ctor "Computational", [ Dleaf (Sym.pp s); aux lat ])
+    | L l -> dtree_of_arguments_l dtree_i l
+  in
+  aux
+
+
+type parse_ast_label_spec =
+  { label_spec : (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_condition list }
+
+type 'TY label_def =
+  | Return of Locations.t
+  | Label of
+      Locations.t
+      * 'TY expr arguments
+      * Cerb_frontend.Annot.annot list
+      * parse_ast_label_spec
+
+type trusted =
+  | Trusted of Locations.t
+  | Checked
+
+type desugared_spec =
+  { accesses : (Sym.t * Cerb_frontend.Ctype.ctype) list;
+    requires : (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_condition list;
+    ensures : (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_condition list
   }
 
+type 'TY args_and_body =
+  ('TY expr * (Sym.t, 'TY label_def) Pmap.map * ReturnTypes.t) arguments
+
+type 'TY fun_map_decl =
+  | Proc of
+      { loc : Locations.t;
+        args_and_body : 'TY args_and_body;
+        trusted : trusted;
+        desugared_spec : desugared_spec
+      }
+  | ProcDecl of Locations.t * ArgumentTypes.ft option
+
+type tag_definition =
+  | StructDef of Memory.struct_layout
+  | UnionDef
+
 type function_to_convert =
-  { loc : Loc.t;
+  { loc : Locations.t;
     c_fun_sym : Sym.t;
     l_fun_sym : Sym.t
   }
 
+type datatype =
+  { loc : Locations.t;
+    cases : (Sym.t * (Id.t * BaseTypes.t) list) list
+  }
+
 type 'TY file =
-  { main : symbol option;
-    tagDefs : tag_definitions;
-    globs : 'TY globs_list;
-    funs : 'TY fun_map;
-    extern : extern_map;
-    stdlib_syms : SymSet.t;
+  { main : Sym.t option;
+    tagDefs : (Sym.t, tag_definition) Pmap.map;
+    globs : (Sym.t * 'TY globs) list;
+    funs : (Sym.t, 'TY fun_map_decl) Pmap.map;
+    extern : Cerb_frontend.Core.extern_map;
+    stdlib_syms : Set.Make(Sym).t;
     mk_functions : function_to_convert list;
-    resource_predicates : T.resource_predicates;
-    logical_predicates : T.logical_predicates;
+    resource_predicates : (Sym.t * ResourcePredicates.definition) list;
+    logical_predicates : (Sym.t * LogicalFunctions.definition) list;
     datatypes : (Sym.t * datatype) list;
     lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
-    call_funinfo : (symbol, Sctypes.c_concrete_sig) Pmap.map
+    call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
   }

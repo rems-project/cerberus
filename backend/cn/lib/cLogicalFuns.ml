@@ -45,10 +45,10 @@ type state =
   }
 
 type context =
-  { label_defs : unit Mu.label_defs;
+  { label_defs : (Sym.t, unit Mu.label_def) Pmap.map;
     (* map from c functions to logical functions which we are building *)
     c_fun_pred_map : (Locations.t * Sym.t) SymMap.t;
-    call_funinfo : (Mu.symbol, Sctypes.c_concrete_sig) Pmap.map
+    call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
   }
 
 let init_state = { loc_map = IntMap.empty; next_loc = 1 }
@@ -185,7 +185,7 @@ let bool_ite_1_0 bt b loc = IT.ite_ (b, IT.int_lit_ 1 bt loc, IT.int_lit_ 0 bt l
 (* FIXME: find a home for this, also needed in check, needs the Typing monad *)
 let eval_fun f args orig_pexpr =
   let (Mu.Pexpr (loc, _, bt, _pe)) = orig_pexpr in
-  match Mucore.evaluate_fun f args with
+  match Mu.evaluate_fun f args with
   | Some (`Result_IT it) -> return it
   | Some (`Result_Integer z) ->
     let@ () = WellTyped.ensure_bits_type loc bt in
@@ -633,7 +633,7 @@ let c_fun_to_it id_loc glob_context (id : Sym.t) fsym def (fn : 'bty Mu.fun_map_
          "cn_function converting C function to logical"
          (Pp.infix_arrow (Sym.pp fsym) (Sym.pp id))));
   match fn with
-  | Proc (loc, args_and_body, _trusted, _) ->
+  | Proc { loc; args_and_body; _ } ->
     let rec ignore_l = function
       | Mu.Define (_, _, l) -> ignore_l l
       | Resource (_, _, l) -> ignore_l l

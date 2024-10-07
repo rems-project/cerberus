@@ -145,7 +145,7 @@ val cn_to_ail_predicates_internal
   :  (Sym.t * ResourcePredicates.definition) list ->
   A.sigma_cn_datatype list ->
   (Sym.t * C.ctype) list ->
-  Mucore.T.resource_predicates ->
+  (Sym.t * ResourcePredicates.definition) list ->
   A.sigma_cn_predicate list ->
   ((Locations.t * A.sigma_declaration)
   * CF.GenTypes.genTypeCategory A.sigma_function_definition)
@@ -155,7 +155,7 @@ val cn_to_ail_predicates_internal
 val cn_to_ail_pre_post_internal
   :  with_ownership_checking:bool ->
   A.sigma_cn_datatype list ->
-  Mucore.T.resource_predicates ->
+  (Sym.t * ResourcePredicates.definition) list ->
   (Sym.t * C.ctype) list ->
   C.ctype ->
   Core_to_mucore.fn_spec_instrumentation option ->

@@ -346,8 +346,8 @@ let fns_and_preds_with_record_rt (funs, preds) =
 
 let generate_c_record_funs
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (logical_predicates : Mucore.T.logical_predicates)
-  (resource_predicates : Mucore.T.resource_predicates)
+  (logical_predicates : (Sym.t * LogicalFunctions.definition) list)
+  (resource_predicates : (Sym.t * ResourcePredicates.definition) list)
   =
   let cn_record_info =
     List.map
@@ -411,7 +411,7 @@ let generate_c_record_funs
 
 let generate_c_functions_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (logical_predicates : Mucore.T.logical_predicates)
+  (logical_predicates : (Sym.t * LogicalFunctions.definition) list)
   =
   let ail_funs_and_records =
     List.map
@@ -481,7 +481,7 @@ let rec remove_duplicates eq_fun = function
 
 let generate_c_predicates_internal
   (sigm : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma)
-  (resource_predicates : Mucore.T.resource_predicates)
+  (resource_predicates : (Sym.t * ResourcePredicates.definition) list)
   =
   (* let ail_info = List.map (fun cn_f -> Cn_internal_to_ail.cn_to_ail_predicate_internal
      cn_f sigm.cn_datatypes [] ownership_ctypes resource_predicates) resource_predicates
