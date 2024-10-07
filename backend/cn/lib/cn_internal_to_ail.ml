@@ -6,7 +6,6 @@ module CF = Cerb_frontend
 open CF.Cn
 open Compile
 open Executable_spec_utils
-open Mucore
 module A = CF.AilSyntax
 module C = CF.Ctype
 module BT = BaseTypes
@@ -44,7 +43,7 @@ let rec cn_base_type_to_bt = function
 
 
 module MembersKey = struct
-  type t = (Id.t * symbol cn_base_type) list
+  type t = (Id.t * Mucore.symbol cn_base_type) list
 
   let rec compare (ms : t) ms' =
     match (ms, ms') with
