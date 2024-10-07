@@ -1769,27 +1769,27 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        let aux loc stmt =
          (* copying bits of code from elsewhere in check.ml *)
          match stmt with
-         | Cnprog.M_CN_pack_unpack (_pack_unpack, _pt) ->
+         | Cnprog.CN_pack_unpack (_pack_unpack, _pt) ->
            warn loc !^"Explicit pack/unpack unsupported.";
            return ()
-         | M_CN_to_from_bytes (To, res) ->
+         | CN_to_from_bytes (To, res) ->
            (match res with
             | Q _ | P { name = PName _; _ } ->
               fail (fun _ -> { loc; msg = To_bytes_needs_owned })
             | P { name = Owned _; _ } ->
               warn loc !^"to_bytes being implemented - ignoring for now";
               return ())
-         | M_CN_to_from_bytes (From, res) ->
+         | CN_to_from_bytes (From, res) ->
            (match res with
             | P _ | Q { name = PName _; _ } ->
               fail (fun _ -> { loc; msg = From_bytes_needs_each_owned })
             | Q { name = Owned _; _ } ->
               warn loc !^"from_bytes being implemented - ignoring for now";
               return ())
-         | M_CN_have lc ->
+         | CN_have lc ->
            let@ _lc = WellTyped.WLC.welltyped loc lc in
            fail (fun _ -> { loc; msg = Generic !^"todo: 'have' not implemented yet" })
-         | M_CN_instantiate (to_instantiate, it) ->
+         | CN_instantiate (to_instantiate, it) ->
            let@ filter =
              match to_instantiate with
              | I_Everything -> return (fun _ -> true)
@@ -1802,8 +1802,8 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            in
            let@ it = WellTyped.WIT.infer it in
            instantiate loc filter it
-         | M_CN_split_case _ -> assert false
-         | M_CN_extract (attrs, to_extract, it) ->
+         | CN_split_case _ -> assert false
+         | CN_extract (attrs, to_extract, it) ->
            let@ predicate_name =
              match to_extract with
              | E_Everything ->
@@ -1839,7 +1839,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            else
              ();
            return ()
-         | M_CN_unfold (f, args) ->
+         | CN_unfold (f, args) ->
            let@ def = get_logical_function_def loc f in
            let has_args, expect_args = (List.length args, List.length def.args) in
            let@ () =
@@ -1863,7 +1863,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
               fail (fun _ -> { loc; msg = Generic msg })
             | Some body ->
               add_c loc (LC.T (eq_ (apply_ f args def.return_bt loc, body) loc)))
-         | M_CN_apply (lemma, args) ->
+         | CN_apply (lemma, args) ->
            let@ _loc, lemma_typ = get_lemma loc lemma in
            let args = List.map (fun arg -> (loc, arg)) args in
            Spine.calltype_lemma loc ~lemma args lemma_typ (fun lrt ->
@@ -1875,7 +1875,7 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
              in
              let@ () = bind_logical_return loc members lrt in
              return ())
-         | M_CN_assert lc ->
+         | CN_assert lc ->
            let@ lc = WellTyped.WLC.welltyped loc lc in
            let@ provable = provable loc in
            (match provable lc with
@@ -1892,8 +1892,8 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
                     Unproven_constraint
                       { constr = lc; info = (loc, None); requests = []; ctxt; model }
                 }))
-         | M_CN_inline _nms -> return ()
-         | M_CN_print it ->
+         | CN_inline _nms -> return ()
+         | CN_print it ->
            let@ it = WellTyped.WIT.infer it in
            let@ simp_ctxt = simp_ctxt () in
            let it = Simplify.IndexTerms.simp simp_ctxt it in
@@ -1902,15 +1902,15 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
        in
        let rec loop = function
          | [] -> k (unit_ loc)
-         | Cnprog.M_CN_let (loc, (sym, { ct; pointer }), cn_prog) :: cn_progs ->
+         | Cnprog.CN_let (loc, (sym, { ct; pointer }), cn_prog) :: cn_progs ->
            let@ pointer = WellTyped.WIT.check loc (Loc ()) pointer in
            let@ () = WellTyped.WCT.is_ct loc ct in
            let@ value = load loc pointer ct in
            let subbed = Cnprog.subst (IT.make_subst [ (sym, value) ]) cn_prog in
            loop (subbed :: cn_progs)
-         | Cnprog.M_CN_statement (loc, cn_statement) :: cn_progs ->
+         | Cnprog.CN_statement (loc, cn_statement) :: cn_progs ->
            (match cn_statement with
-            | Cnprog.M_CN_split_case lc ->
+            | Cnprog.CN_split_case lc ->
               Pp.debug 5 (lazy (Pp.headline "checking split_case"));
               let@ lc = WellTyped.WLC.welltyped loc lc in
               let@ it =

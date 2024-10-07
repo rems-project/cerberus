@@ -1567,7 +1567,7 @@ module UsingLoads = struct
       let value = IT.sym_ (value_s, value_bt, value_loc) in
       let@ prog = aux (k (Some value)) in
       let load = { ct = pointee_ct; pointer = IT.Surface.proj pointer } in
-      return (M_CN_let (loc, (value_s, load), prog))
+      return (CN_let (loc, (value_s, load), prog))
     in
     aux
 end
@@ -1590,20 +1590,20 @@ let translate_cn_statement
          ET.translate_cn_res_info loc loc env pred args
        in
        let stmt =
-         M_CN_pack_unpack
+         CN_pack_unpack
            ( pack_unpack,
              { name;
                pointer = IT.Surface.proj pointer;
                iargs = List.map IT.Surface.proj iargs
              } )
        in
-       return (M_CN_statement (loc, stmt))
+       return (CN_statement (loc, stmt))
      | CN_to_from_bytes (to_from, res) ->
        let@ (res, _), _, _ = ET.translate_cn_let_resource env (loc, Sym.fresh (), res) in
-       return (M_CN_statement (loc, M_CN_to_from_bytes (to_from, res)))
+       return (CN_statement (loc, CN_to_from_bytes (to_from, res)))
      | CN_have assrt ->
        let@ assrt = ET.translate_cn_assrt env (loc, assrt) in
-       return (M_CN_statement (loc, M_CN_have assrt))
+       return (CN_statement (loc, CN_have assrt))
      | CN_instantiate (to_instantiate, expr) ->
        let@ expr = ET.translate_cn_expr SymSet.empty env expr in
        let expr = IT.Surface.proj expr in
@@ -1613,10 +1613,10 @@ let translate_cn_statement
          | I_Function f -> I_Function f
          | I_Good ct -> I_Good (Sctypes.of_ctype_unsafe loc ct)
        in
-       return (M_CN_statement (loc, M_CN_instantiate (to_instantiate, expr)))
+       return (CN_statement (loc, CN_instantiate (to_instantiate, expr)))
      | CN_split_case e ->
        let@ e = ET.translate_cn_assrt env (loc, e) in
-       return (M_CN_statement (loc, M_CN_split_case e))
+       return (CN_statement (loc, CN_split_case e))
      | CN_extract (attrs, to_extract, expr) ->
        let@ expr = ET.translate_cn_expr SymSet.empty env expr in
        let expr = IT.Surface.proj expr in
@@ -1629,20 +1629,20 @@ let translate_cn_statement
            E_Pred (CN_block (Option.map (Sctypes.of_ctype_unsafe loc) oty))
          | E_Pred (CN_named pn) -> E_Pred (CN_named pn)
        in
-       return (M_CN_statement (loc, M_CN_extract (attrs, to_extract, expr)))
+       return (CN_statement (loc, CN_extract (attrs, to_extract, expr)))
      | CN_unfold (s, args) ->
        let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
        let args = List.map IT.Surface.proj args in
-       return (M_CN_statement (loc, M_CN_unfold (s, args)))
+       return (CN_statement (loc, CN_unfold (s, args)))
      | CN_assert_stmt e ->
        let@ e = ET.translate_cn_assrt env (loc, e) in
-       return (M_CN_statement (loc, M_CN_assert e))
+       return (CN_statement (loc, CN_assert e))
      | CN_apply (s, args) ->
        let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
        let args = List.map IT.Surface.proj args in
-       return (M_CN_statement (loc, M_CN_apply (s, args)))
-     | CN_inline nms -> return (M_CN_statement (loc, M_CN_inline nms))
+       return (CN_statement (loc, CN_apply (s, args)))
+     | CN_inline nms -> return (CN_statement (loc, CN_inline nms))
      | CN_print expr ->
        let@ expr = ET.translate_cn_expr SymSet.empty env expr in
        let expr = IT.Surface.proj expr in
-       return (M_CN_statement (loc, M_CN_print expr)))
+       return (CN_statement (loc, CN_print expr)))
