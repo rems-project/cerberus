@@ -254,7 +254,7 @@ module PP = struct
   let dtree_of_funs xs =
     let aux (sym, decl) =
       match decl with
-      | Proc (_loc, args_and_body, _, _) ->
+      | Proc { args_and_body; _ } ->
         Dnode
           ( pp_field "Proc" ^^^ pp_symbol sym,
             [ dtree_of_arguments

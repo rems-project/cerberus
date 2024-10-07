@@ -43,7 +43,7 @@ let rec cn_base_type_to_bt = function
 
 
 module MembersKey = struct
-  type t = (Id.t * Mucore.symbol cn_base_type) list
+  type t = (Id.t * Sym.t cn_base_type) list
 
   let rec compare (ms : t) ms' =
     match (ms, ms') with
@@ -2539,7 +2539,7 @@ let cn_to_ail_resource_internal
   sym
   dts
   globals
-  (preds : Mucore.T.resource_predicates)
+  (preds : (Sym.t * RP.definition) list)
   loc
   =
   let calculate_return_type = function

@@ -35,8 +35,6 @@ module Pp_typ = struct
 
   let pp_rt = ReturnTypes.pp
 
-  let pp_ut _ = Pp.string "todo: implement union type printer"
-
   let pp_st _ = Pp.string "todo: implement struct type printer"
 end
 
@@ -644,13 +642,7 @@ module Make (Config : CONFIG) = struct
         ^^^ P.colon
         ^^ P.equals
         ^^ pp_st sd
-      | UnionDef ut ->
-        pp_keyword "def"
-        ^^^ pp_keyword "union"
-        ^^^ pp_raw_symbol sym
-        ^^^ P.colon
-        ^^ P.equals
-        ^^ pp_ut ut
+      | UnionDef -> pp_keyword "def" ^^^ pp_keyword "union" ^^^ pp_raw_symbol sym
     in
     P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
 
@@ -689,7 +681,7 @@ module Make (Config : CONFIG) = struct
               ^^^ pp_symbol sym
               ^^ Pp.colon
               ^^^ Pp.option pp_ft "(no spec)" ft
-            | Proc (loc, args_and_body, _trusted, _) ->
+            | Proc { loc; args_and_body; _ } ->
               pp_cond loc
               @@ pp_keyword "proc"
               ^^^ pp_symbol sym

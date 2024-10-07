@@ -35,7 +35,7 @@ type env =
     functions : function_sig SymMap.t;
     datatypes : BaseTypes.dt_info SymMap.t;
     datatype_constrs : BaseTypes.constr_info SymMap.t;
-    tagDefs : Mu.tag_definitions;
+    tagDefs : (Cerb_frontend.Symbol.sym, Mu.tag_definition) Pmap.map;
     fetch_enum_expr : Locations.t -> Sym.t -> unit CF.AilSyntax.expression Resultat.t;
     fetch_typedef : Locations.t -> Sym.t -> CF.Ctype.ctype Resultat.t
   }
@@ -94,7 +94,7 @@ let lookup_function sym env = SymMap.find_opt sym env.functions
 let lookup_struct_opt sym env =
   match Pmap.lookup sym env.tagDefs with
   | Some (StructDef xs) -> Some xs
-  | Some (UnionDef _) | None -> None
+  | Some UnionDef | None -> None
 
 
 let add_datatype sym info env =

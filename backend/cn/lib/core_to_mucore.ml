@@ -1243,7 +1243,7 @@ let normalise_fun_map_decl
        debug 6 (lazy (string "parsed spec attrs"));
        let@ mk_functions =
          ListM.mapM
-           (fun (loc, Mu.Make_Logical_Function id) ->
+           (fun (loc, `Make_Logical_Function id) ->
              (* from Thomas's convert_c_logical_funs *)
              let@ logical_fun_sym =
                do_ail_desugar_rdonly d_st (CAE.lookup_cn_function id)
@@ -1336,7 +1336,8 @@ let normalise_fun_map_decl
        in
        (* let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in *)
        let desugared_spec = Mu.{ accesses = List.map snd accesses; requires; ensures } in
-       return (Some (Mu.Proc (loc, args_and_body, trusted, desugared_spec), mk_functions))
+       return
+         (Some (Mu.Proc { loc; args_and_body; trusted; desugared_spec }, mk_functions))
      | Mi_ProcDecl (loc, ret_bt, _bts) ->
        (match SymMap.find_opt fname fun_specs with
         | Some (_ail_marker, (spec : (CF.Symbol.sym, Ctype.ctype) Cn.cn_fun_spec)) ->
@@ -1710,7 +1711,7 @@ let collect_instrumentation (file : _ Mu.file) =
     List.map
       (fun (fn, decl) ->
         match decl with
-        | Mu.Proc (fn_loc, args_and_body, _trusted, _spec) ->
+        | Mu.Proc { loc = fn_loc; args_and_body; _ } ->
           let args_and_body = at_of_arguments Fun.id args_and_body in
           let internal =
             ArgumentTypes.map

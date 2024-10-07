@@ -2030,7 +2030,7 @@ let post_state_of_rt loc rt =
 let check_procedure
   (loc : Locations.t)
   (fsym : Sym.t)
-  (args_and_body : _ Mu.proc_args_and_body)
+  (args_and_body : _ Mu.args_and_body)
   : unit m
   =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
@@ -2088,7 +2088,7 @@ let record_tagdefs tagDefs =
   PmapM.iterM
     (fun tag def ->
       match def with
-      | Mu.UnionDef _ -> unsupported (Loc.other __FUNCTION__) !^"todo: union types"
+      | Mu.UnionDef -> unsupported (Loc.other __FUNCTION__) !^"todo: union types"
       | StructDef layout -> add_struct_decl tag layout)
     tagDefs
 
@@ -2098,7 +2098,7 @@ let check_tagdefs tagDefs =
     (fun _tag def ->
       let open Memory in
       match def with
-      | Mu.UnionDef _ -> unsupported (Loc.other __FUNCTION__) !^"todo: union types"
+      | Mu.UnionDef -> unsupported (Loc.other __FUNCTION__) !^"todo: union types"
       | StructDef layout ->
         let@ _ =
           ListM.fold_rightM
@@ -2224,7 +2224,7 @@ let register_fun_syms file =
   PmapM.iterM
     (fun fsym def ->
       match def with
-      | Mu.Proc (loc, _, _, _) -> add fsym loc
+      | Mu.Proc { loc; _ } -> add fsym loc
       | ProcDecl (loc, _) -> add fsym loc)
     file.Mu.funs
 
@@ -2244,7 +2244,7 @@ let wf_check_and_record_functions funs call_sigs =
   PmapM.foldiM
     (fun i fsym def (trusted, checked) ->
       match def with
-      | Mu.Proc (loc, args_and_body, tr, _parse_ast_things) ->
+      | Mu.Proc { loc; args_and_body; trusted = tr; _ } ->
         welltyped_ping i fsym;
         let@ args_and_body = WellTyped.WProc.welltyped loc args_and_body in
         let ft = WellTyped.WProc.typ args_and_body in
@@ -2269,7 +2269,7 @@ let wf_check_and_record_functions funs call_sigs =
     ([], [])
 
 
-type c_function = Sym.t * (Locations.t * BT.t Mu.proc_args_and_body)
+type c_function = Sym.t * (Locations.t * BT.t Mu.args_and_body)
 
 let c_function_name ((fsym, (_loc, _args_and_body)) : c_function) : string =
   Sym.pp_string fsym

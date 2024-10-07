@@ -2174,10 +2174,8 @@ module WProc = struct
 
   let typ p = WArgs.typ (fun (_body, _labels, rt) -> rt) p
 
-  let welltyped
-    : (*'TY.*) Loc.t -> 'TY Mu.proc_args_and_body -> _ (*BT.t*) Mu.proc_args_and_body m
-    =
-    fun (loc : Loc.t) (at : 'TY1 Mu.proc_args_and_body) ->
+  let welltyped : Loc.t -> _ Mu.args_and_body -> _ Mu.args_and_body m =
+    fun (loc : Loc.t) (at : 'TY1 Mu.args_and_body) ->
     Pp.(debug 6 (lazy !^__FUNCTION__));
     WArgs.welltyped
       (fun loc (body, labels, rt) ->
