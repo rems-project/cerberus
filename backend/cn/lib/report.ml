@@ -21,20 +21,25 @@ type where_report =
   }
 
 (* Different forms of a document. *)
-type simp_view = {
-  original:   Pp.document;        (* original view *)
-  simplified: Pp.document list;   (* simplified based on model *)
-}
+type simp_view =
+  { original : Pp.document; (* original view *)
+    simplified : Pp.document list (* simplified based on model *)
+  }
 
 type label = string
-let lab_interesting: label = "interesting"
-let lab_uninteresting: label = "uninteresting"
-module StrMap = Map.Make(String)
 
-(* Things classified in various ways. 
+let lab_interesting : label = "interesting"
+
+let lab_uninteresting : label = "uninteresting"
+
+module StrMap = Map.Make (String)
+
+(* Things classified in various ways.
    To start we just have "interesting" and "uninteresting", but we could add more *)
-type 'a labeled_view = ('a list) StrMap.t
+type 'a labeled_view = 'a list StrMap.t
+
 let labeled_empty = StrMap.empty
+
 let add_labeled lab view mp = StrMap.add lab view mp
 
 type state_report =
@@ -157,36 +162,41 @@ let make_predicate_hints predicate_hints =
 
 let interesting_uninteresting mk_table render data =
   let get_data lab =
-      match StrMap.find_opt lab data with
-      | None    -> ("", true)
-      | Some xs -> (mk_table (List.map render xs), List.is_empty xs)
+    match StrMap.find_opt lab data with
+    | None -> ("", true)
+    | Some xs -> (mk_table (List.map render xs), List.is_empty xs)
   in
-  let (interesting_table, no_interesting) = get_data lab_interesting in
-  let (uninteresting_table, no_uninteresting) = get_data lab_uninteresting in
+  let interesting_table, no_interesting = get_data lab_interesting in
+  let uninteresting_table, no_uninteresting = get_data lab_uninteresting in
   match (no_interesting, no_uninteresting) with
   | true, true -> "(none)"
-  | _, true    -> interesting_table
-  | true, _    -> details "more" uninteresting_table
-  | _, _       -> interesting_table ^ details "more" uninteresting_table
+  | _, true -> interesting_table
+  | true, _ -> details "more" uninteresting_table
+  | _, _ -> interesting_table ^ details "more" uninteresting_table
+
 
 let simp_view s =
-  let btn  = div ~clss:"toggle" [] in
+  let btn = div ~clss:"toggle" [] in
   let val_orig = Pp.plain s.original in
   let val_simp = Pp.plain (Pp.separate Pp.hardline s.simplified) in
-  if String.equal val_orig val_simp
-      then [val_orig] 
-      else [div [btn; div [val_simp]; div [val_orig]]]
+  if String.equal val_orig val_simp then
+    [ val_orig ]
+  else
+    [ div [ btn; div [ val_simp ]; div [ val_orig ] ] ]
 
 
 let make_resources rs =
   h 1 "Available resources" (interesting_uninteresting table_without_head simp_view rs)
 
+
 let make_terms ts =
   let render v = [ Pp.plain v.term; Pp.plain v.value ] in
-  h 1 "Terms" (interesting_uninteresting (table ["term"; "value"]) render ts)
+  h 1 "Terms" (interesting_uninteresting (table [ "term"; "value" ]) render ts)
+
 
 let make_constraints cs =
   h 1 "Constraints" (interesting_uninteresting table_without_head simp_view cs)
+
 
 let css =
   {|
