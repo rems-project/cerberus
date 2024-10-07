@@ -42,7 +42,7 @@ let get_args (sigma : _ CF.AilSyntax.sigma) (fun_name : Sym.sym)
 let generate_pbt
   (max_unfolds : int)
   (sigma : _ CF.AilSyntax.sigma)
-  (prog5 : unit Mucore.mu_file)
+  (prog5 : unit Mucore.file)
   (tf : Codify.test_framework)
   (oc : out_channel)
   (instrumentation : Core_to_mucore.instrumentation)
@@ -83,7 +83,7 @@ let run
   ~(filename : string)
   ~(max_unfolds : int)
   (sigma : _ CF.AilSyntax.sigma)
-  (prog5 : unit Mucore.mu_file)
+  (prog5 : unit Mucore.file)
   (tf : Codify.test_framework)
   : unit
   =

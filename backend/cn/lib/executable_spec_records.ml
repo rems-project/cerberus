@@ -67,7 +67,7 @@ let add_records_to_map_from_lc = function
 
 let add_records_to_map_from_cn_statement = function
   | Cnprog.M_CN_assert lc -> add_records_to_map_from_lc lc
-  (* All other CN statements are (currently) no-ops at runtime *)
+  (* All other M_CN statements are (currently) no-ops at runtime *)
   | M_CN_pack_unpack _ | M_CN_to_from_bytes _ | M_CN_have _ | M_CN_instantiate _
   | M_CN_split_case _ | M_CN_extract _ | M_CN_unfold _ | M_CN_apply _ | M_CN_inline _
   | M_CN_print _ ->
@@ -122,17 +122,17 @@ let add_records_to_map_from_instrumentation (i : Core_to_mucore.instrumentation)
 (* Populate record table *)
 let populate_record_map
   (instrumentation : Core_to_mucore.instrumentation list)
-  (prog5 : unit Mucore.mu_file)
+  (prog5 : unit Mucore.file)
   =
   let fun_syms_and_ret_types =
     List.map
       (fun (sym, (def : LogicalFunctions.definition)) -> (sym, def.return_bt))
-      prog5.mu_logical_predicates
+      prog5.logical_predicates
   in
   let pred_syms_and_ret_types =
     List.map
       (fun (sym, (def : ResourcePredicates.definition)) -> (sym, def.oarg_bt))
-      prog5.mu_resource_predicates
+      prog5.resource_predicates
   in
   List.iter
     (fun (cn_sym, bt) -> Cn_internal_to_ail.augment_record_map ~cn_sym bt)

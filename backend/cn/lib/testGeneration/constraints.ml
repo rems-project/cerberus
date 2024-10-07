@@ -190,7 +190,7 @@ module Collect = struct
   let rec collect_clauses
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (cs : RP.clause list)
@@ -214,7 +214,7 @@ module Collect = struct
   and collect_ret
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (ret : RET.t)
@@ -233,7 +233,7 @@ module Collect = struct
       if max_unfolds <= 0 then
         []
       else (
-        let pred = List.assoc sym_codified_equal psym prog5.mu_resource_predicates in
+        let pred = List.assoc sym_codified_equal psym prog5.resource_predicates in
         let args = List.combine (List.map fst pred.iargs) iargs in
         let clauses =
           Option.get pred.clauses
@@ -250,7 +250,7 @@ module Collect = struct
   and collect_lat_it
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (lat : IT.t LAT.t)
@@ -278,7 +278,7 @@ module Collect = struct
   let rec collect_lat
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (lat : unit LAT.t)
@@ -304,7 +304,7 @@ module Collect = struct
   let collect
     ~(max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (args : (Sym.sym * CF.Ctype.ctype) list)
     (lat : unit LAT.t)
     : (variables * members * locations * constraints) list

@@ -38,7 +38,7 @@ val pp_goal : goal -> Pp.document
 val collect
   :  max_unfolds:int ->
   Cerb_frontend.GenTypes.genTypeCategory Cerb_frontend.AilSyntax.sigma ->
-  unit Mucore.mu_file ->
+  unit Mucore.file ->
   (Sym.sym * CF.Ctype.ctype) list ->
   unit LAT.t ->
   goal list

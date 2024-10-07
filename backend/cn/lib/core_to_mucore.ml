@@ -76,18 +76,18 @@ let ensure_pexpr_ctype loc err pe : Mu.act =
   | _ -> assert_error loc (err ^^ colon ^^^ CF.Pp_core.Basic.pp_pexpr pe)
 
 
-let rec core_to_mu__pattern ~inherit_loc loc (Pattern (annots, pat_)) =
+let rec core_to__pattern ~inherit_loc loc (Pattern (annots, pat_)) =
   let loc = (if inherit_loc then Locations.update loc else Fun.id) (get_loc_ annots) in
-  let wrap pat_ = Mu.M_Pattern (loc, annots, (), pat_) in
+  let wrap pat_ = Mu.Pattern (loc, annots, (), pat_) in
   match pat_ with
-  | CaseBase (msym, cbt1) -> wrap (M_CaseBase (msym, cbt1))
+  | CaseBase (msym, cbt1) -> wrap (CaseBase (msym, cbt1))
   | CaseCtor (ctor, pats) ->
-    let pats = Lem_pervasives.map (core_to_mu__pattern ~inherit_loc loc) pats in
+    let pats = Lem_pervasives.map (core_to__pattern ~inherit_loc loc) pats in
     (match ctor with
-     | Cnil cbt1 -> wrap (M_CaseCtor (M_Cnil cbt1, pats))
-     | Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
-     | Ctuple -> wrap (M_CaseCtor (M_Ctuple, pats))
-     | Carray -> wrap (M_CaseCtor (M_Carray, pats))
+     | Cnil cbt1 -> wrap (CaseCtor (Cnil cbt1, pats))
+     | Ccons -> wrap (CaseCtor (Ccons, pats))
+     | Ctuple -> wrap (CaseCtor (Ctuple, pats))
+     | Carray -> wrap (CaseCtor (Carray, pats))
      | Cspecified -> List.hd pats
      | _ -> assert_error loc !^"core_to_mucore: unsupported pattern")
 
@@ -95,15 +95,15 @@ let rec core_to_mu__pattern ~inherit_loc loc (Pattern (annots, pat_)) =
 let rec n_ov loc ov =
   let ov =
     match ov with
-    | OVinteger iv -> Mu.M_OVinteger iv
-    | OVfloating fv -> M_OVfloating fv
-    | OVpointer pv -> M_OVpointer pv
-    | OVarray is -> M_OVarray (List.map (n_lv loc) is)
+    | OVinteger iv -> Mu.OVinteger iv
+    | OVfloating fv -> OVfloating fv
+    | OVpointer pv -> OVpointer pv
+    | OVarray is -> OVarray (List.map (n_lv loc) is)
     | OVstruct (sym1, is) ->
-      M_OVstruct (sym1, List.map (fun (id, ct, mv) -> (id, convert_ct loc ct, mv)) is)
-    | OVunion (sym1, id1, mv) -> M_OVunion (sym1, id1, mv)
+      OVstruct (sym1, List.map (fun (id, ct, mv) -> (id, convert_ct loc ct, mv)) is)
+    | OVunion (sym1, id1, mv) -> OVunion (sym1, id1, mv)
   in
-  Mu.M_OV ((), ov)
+  Mu.OV ((), ov)
 
 
 and n_lv loc v =
@@ -115,22 +115,22 @@ and n_lv loc v =
 and n_val loc v =
   let v =
     match v with
-    | Vobject ov -> Mu.M_Vobject (n_ov loc ov)
-    | Vloaded lv -> M_Vobject (n_lv loc lv)
-    | Vunit -> M_Vunit
-    | Vtrue -> M_Vtrue
-    | Vfalse -> M_Vfalse
-    | Vctype ct -> M_Vctype ct
-    | Vlist (cbt, vs) -> M_Vlist (cbt, List.map (n_val loc) vs)
-    | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
+    | Vobject ov -> Mu.Vobject (n_ov loc ov)
+    | Vloaded lv -> Vobject (n_lv loc lv)
+    | Vunit -> Vunit
+    | Vtrue -> Vtrue
+    | Vfalse -> Vfalse
+    | Vctype ct -> Vctype ct
+    | Vlist (cbt, vs) -> Vlist (cbt, List.map (n_val loc) vs)
+    | Vtuple vs -> Vtuple (List.map (n_val loc) vs)
   in
-  M_V ((), v)
+  V ((), v)
 
 
 let function_ids =
-  [ ("params_length", Mu.M_F_params_length);
-    ("params_nth", M_F_params_nth);
-    ("ctype_width", M_F_ctype_width)
+  [ ("params_length", Mu.F_params_length);
+    ("params_nth", F_params_nth);
+    ("ctype_width", F_ctype_width)
   ]
 
 
@@ -139,19 +139,19 @@ let ity_act loc ity =
                         ct = Sctypes.Integer ity }
 
 
-let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexpr =
+let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.pexpr =
   let loc = (if inherit_loc then Locations.update loc else Fun.id) (get_loc_ annots) in
   let n_pexpr = n_pexpr ~inherit_loc in
-  let annotate pe = Mu.M_Pexpr (loc, annots, bty, pe) in
+  let annotate pe = Mu.Pexpr (loc, annots, bty, pe) in
   match pe with
-  | PEsym sym1 -> annotate (M_PEsym sym1)
+  | PEsym sym1 -> annotate (PEsym sym1)
   | PEimpl _i -> assert_error loc !^"PEimpl not inlined"
-  | PEval v -> annotate (M_PEval (n_val loc v))
+  | PEval v -> annotate (PEval (n_val loc v))
   | PEconstrained l ->
     let l = List.map (fun (c, e) -> (c, n_pexpr loc e)) l in
-    annotate (M_PEconstrained l)
-  | PEundef (l, u) -> annotate (M_PEundef (l, u))
-  | PEerror (err, e') -> annotate (M_PEerror (err, n_pexpr loc e'))
+    annotate (PEconstrained l)
+  | PEundef (l, u) -> annotate (PEundef (l, u))
+  | PEerror (err, e') -> annotate (PEerror (err, n_pexpr loc e'))
   | PEctor (ctor, args) ->
     let argnum_err () =
       assert_error
@@ -166,7 +166,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
          ensure_pexpr_ctype loc !^"CivCOMPL: first argument not a constant ctype" ct
        in
        let arg1 = n_pexpr loc arg1 in
-       annotate (M_PEwrapI (ct, annotate (M_PEbitwise_unop (M_BW_COMPL, arg1))))
+       annotate (PEwrapI (ct, annotate (PEbitwise_unop (BW_COMPL, arg1))))
      | CivCOMPL, _ -> argnum_err ()
      | CivAND, [ ct; arg1; arg2 ] ->
        let ct =
@@ -174,7 +174,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        in
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
-       annotate (M_PEwrapI (ct, annotate (M_PEbitwise_binop (M_BW_AND, arg1, arg2))))
+       annotate (PEwrapI (ct, annotate (PEbitwise_binop (BW_AND, arg1, arg2))))
      | CivAND, _ -> argnum_err ()
      | CivOR, [ ct; arg1; arg2 ] ->
        let ct =
@@ -182,7 +182,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        in
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
-       annotate (M_PEwrapI (ct, annotate (M_PEbitwise_binop (M_BW_OR, arg1, arg2))))
+       annotate (PEwrapI (ct, annotate (PEbitwise_binop (BW_OR, arg1, arg2))))
      | CivOR, _ -> argnum_err ()
      | CivXOR, [ ct; arg1; arg2 ] ->
        let ct =
@@ -190,35 +190,33 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        in
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
-       annotate (M_PEwrapI (ct, annotate (M_PEbitwise_binop (M_BW_XOR, arg1, arg2))))
+       annotate (PEwrapI (ct, annotate (PEbitwise_binop (BW_XOR, arg1, arg2))))
      | CivXOR, _ -> argnum_err ()
      | Cfvfromint, [ arg1 ] ->
        let arg1 = n_pexpr loc arg1 in
-       annotate (M_Cfvfromint arg1)
+       annotate (Cfvfromint arg1)
      | Cfvfromint, _ -> argnum_err ()
      | Civfromfloat, [ ct; arg1 ] ->
        let ct =
          ensure_pexpr_ctype loc !^"Civfromfloat: first argument not a constant ctype" ct
        in
        let arg1 = n_pexpr loc arg1 in
-       annotate (M_Civfromfloat (ct, arg1))
+       annotate (Civfromfloat (ct, arg1))
      | Civfromfloat, _ -> argnum_err ()
-     | Cnil bt1, _ -> annotate (M_PEctor (M_Cnil bt1, List.map (n_pexpr loc) args))
-     | Ccons, _ -> annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
-     | Ctuple, _ -> annotate (M_PEctor (M_Ctuple, List.map (n_pexpr loc) args))
-     | Carray, _ -> annotate (M_PEctor (M_Carray, List.map (n_pexpr loc) args))
+     | Cnil bt1, _ -> annotate (PEctor (Cnil bt1, List.map (n_pexpr loc) args))
+     | Ccons, _ -> annotate (PEctor (Ccons, List.map (n_pexpr loc) args))
+     | Ctuple, _ -> annotate (PEctor (Ctuple, List.map (n_pexpr loc) args))
+     | Carray, _ -> annotate (PEctor (Carray, List.map (n_pexpr loc) args))
      | Cspecified, _ -> n_pexpr loc (List.hd args)
      | Civsizeof, [ ct_expr ] ->
-       annotate (M_PEapply_fun (M_F_size_of, [ n_pexpr loc ct_expr ]))
+       annotate (PEapply_fun (F_size_of, [ n_pexpr loc ct_expr ]))
      | Civsizeof, _ -> argnum_err ()
      | Civalignof, [ ct_expr ] ->
-       annotate (M_PEapply_fun (M_F_align_of, [ n_pexpr loc ct_expr ]))
+       annotate (PEapply_fun (F_align_of, [ n_pexpr loc ct_expr ]))
      | Civalignof, _ -> argnum_err ()
-     | Civmax, [ ct_expr ] ->
-       annotate (M_PEapply_fun (M_F_max_int, [ n_pexpr loc ct_expr ]))
+     | Civmax, [ ct_expr ] -> annotate (PEapply_fun (F_max_int, [ n_pexpr loc ct_expr ]))
      | Civmax, _ -> argnum_err ()
-     | Civmin, [ ct_expr ] ->
-       annotate (M_PEapply_fun (M_F_min_int, [ n_pexpr loc ct_expr ]))
+     | Civmin, [ ct_expr ] -> annotate (PEapply_fun (F_min_int, [ n_pexpr loc ct_expr ]))
      | Civmin, _ -> argnum_err ()
      | _ ->
        assert_error
@@ -230,63 +228,63 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
   | PEarray_shift (e', ct, e'') ->
     let e' = n_pexpr loc e' in
     let e'' = n_pexpr loc e'' in
-    annotate (M_PEarray_shift (e', convert_ct loc ct, e''))
+    annotate (PEarray_shift (e', convert_ct loc ct, e''))
   | PEmember_shift (e', sym1, id1) ->
     let e' = n_pexpr loc e' in
-    annotate (M_PEmember_shift (e', sym1, id1))
+    annotate (PEmember_shift (e', sym1, id1))
   | PEmemop (_mop, _pes) ->
     (* FIXME(CHERI merge) *)
     (* this construct is currently only used by the CHERI switch *)
     assert_error loc !^"PEmemop"
   | PEnot e' ->
     let e' = n_pexpr loc e' in
-    annotate (M_PEnot e')
+    annotate (PEnot e')
   | PEop (binop1, e', e'') ->
     let e' = n_pexpr loc e' in
     let e'' = n_pexpr loc e'' in
-    annotate (M_PEop (binop1, e', e''))
+    annotate (PEop (binop1, e', e''))
   | PEstruct (sym1, fields) ->
     let fields = List.map (fun (m, e) -> (m, n_pexpr loc e)) fields in
-    annotate (M_PEstruct (sym1, fields))
+    annotate (PEstruct (sym1, fields))
   | PEunion (sym1, id1, e') ->
     let e' = n_pexpr loc e' in
-    annotate (M_PEunion (sym1, id1, e'))
+    annotate (PEunion (sym1, id1, e'))
   | PEcfunction e' ->
     let e' = n_pexpr loc e' in
-    annotate (M_PEcfunction e')
+    annotate (PEcfunction e')
   | PEmemberof (sym1, id1, e') ->
     let e' = n_pexpr loc e' in
-    annotate (M_PEmemberof (sym1, id1, e'))
+    annotate (PEmemberof (sym1, id1, e'))
   | PEconv_int (ity, e') ->
     let e' = n_pexpr loc e' in
     let ity_e =
-      annotate (M_PEval (M_V ((), M_Vctype (Sctypes.to_ctype (Sctypes.Integer ity)))))
+      annotate (PEval (V ((), Vctype (Sctypes.to_ctype (Sctypes.Integer ity)))))
     in
-    annotate (M_PEconv_int (ity_e, e'))
+    annotate (PEconv_int (ity_e, e'))
   | PEwrapI (ity, iop, arg1, arg2) ->
     let act = ity_act loc ity in
     let arg1 = n_pexpr loc arg1 in
     let arg2 = n_pexpr loc arg2 in
-    annotate (M_PEbounded_binop (M_Bound_Wrap act, iop, arg1, arg2))
+    annotate (PEbounded_binop (Bound_Wrap act, iop, arg1, arg2))
   | PEcatch_exceptional_condition (ity, iop, arg1, arg2) ->
     let act = ity_act loc ity in
     let arg1 = n_pexpr loc arg1 in
     let arg2 = n_pexpr loc arg2 in
-    annotate (M_PEbounded_binop (M_Bound_Except act, iop, arg1, arg2))
+    annotate (PEbounded_binop (Bound_Except act, iop, arg1, arg2))
   | PEcall (sym1, args) ->
     (match (sym1, args) with
      | Sym (Symbol (_, _, SD_Id "conv_int")), [ arg1; arg2 ] ->
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
-       annotate (M_PEconv_int (arg1, arg2))
+       annotate (PEconv_int (arg1, arg2))
      | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), [ arg1; arg2 ] ->
        let arg1 = n_pexpr loc arg1 in
        let arg2 = n_pexpr loc arg2 in
-       annotate (M_PEconv_loaded_int (arg1, arg2))
+       annotate (PEconv_loaded_int (arg1, arg2))
      | Sym (Symbol (_, _, SD_Id "wrapI")), [ arg1; arg2 ] ->
        let ct = ensure_pexpr_ctype loc !^"PEcall(wrapI,_): not a constant ctype" arg1 in
        let arg2 = n_pexpr loc arg2 in
-       annotate (M_PEwrapI (ct, arg2))
+       annotate (PEwrapI (ct, arg2))
      | Sym (Symbol (_, _, SD_Id "catch_exceptional_condition")), [ arg1; arg2 ] ->
        let ct =
          ensure_pexpr_ctype
@@ -295,7 +293,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
            arg1
        in
        let arg2 = n_pexpr loc arg2 in
-       annotate (M_PEcatch_exceptional_condition (ct, arg2))
+       annotate (PEcatch_exceptional_condition (ct, arg2))
      | Sym (Symbol (_, _, SD_Id "is_representable_integer")), [ arg1; arg2 ] ->
        let arg1 = n_pexpr loc arg1 in
        let ct =
@@ -304,7 +302,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
            !^"PEcall(is_representable_integer,_): not a constant ctype"
            arg2
        in
-       annotate (M_PEis_representable_integer (arg1, ct))
+       annotate (PEis_representable_integer (arg1, ct))
      | Sym (Symbol (_, _, SD_Id "all_values_representable_in")), [ arg1; arg2 ] ->
        let ct1 =
          ensure_pexpr_ctype
@@ -321,9 +319,9 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        (match (Sctypes.is_integer_type ct1.ct, Sctypes.is_integer_type ct2.ct) with
         | Some ity1, Some ity2 ->
           if Memory.all_values_representable_in (ity1, ity2) then
-            annotate (M_PEval (M_V ((), M_Vtrue)))
+            annotate (PEval (V ((), Vtrue)))
           else
-            annotate (M_PEval (M_V ((), M_Vfalse)))
+            annotate (PEval (V ((), Vfalse)))
         | _ ->
           assert_error
             loc
@@ -333,7 +331,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        (match List.assoc_opt String.equal fun_id function_ids with
         | Some fun_id ->
           let args = List.map (n_pexpr loc) args in
-          annotate (M_PEapply_fun (fun_id, args))
+          annotate (PEapply_fun (fun_id, args))
         | None ->
           assert_error
             loc
@@ -355,14 +353,14 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
           in
           let act = ity_act loc ity in
           let op = CF.Core.IOpShr in
-          let bound = Mu.M_Bound_Except act in
-          let shift = annotate (M_PEbounded_binop (bound, op, arg1, arg2)) in
+          let bound = Mu.Bound_Except act in
+          let shift = annotate (PEbounded_binop (bound, op, arg1, arg2)) in
           let impl_ok = true (* XXX: parameterize *) in
           if impl_ok then
             shift
           else
             annotate
-              (M_PEerror
+              (PEerror
                  ( "Shifting a negative number to the right is implementation-dependant.",
                    shift ))
           (* XXX: Make a type for reporting implementation defined behavior? *)
@@ -408,10 +406,10 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        let e'' = CF.Core_peval.subst_sym_pexpr2 sym' (get_loc annots2, `SYM sym2') e'' in
        n_pexpr loc e''
      | _ ->
-       let pat = core_to_mu__pattern ~inherit_loc loc pat in
+       let pat = core_to__pattern ~inherit_loc loc pat in
        let e' = n_pexpr loc e' in
        let e'' = n_pexpr loc e'' in
-       annotate (M_PElet (pat, e', e'')))
+       annotate (PElet (pat, e', e'')))
   | PEif (e1, e2, e3) ->
     (match (e2, e3) with
      | ( Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))),
@@ -419,7 +417,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        when Option.equal Z.equal (CF.Mem.eval_integer_value iv1) (Some Z.one)
             && Option.equal Z.equal (CF.Mem.eval_integer_value iv2) (Some Z.zero) ->
        let e1 = n_pexpr loc e1 in
-       annotate (M_PEbool_to_integer e1)
+       annotate (PEbool_to_integer e1)
      | ( Pexpr
            (_, _, PEctor (Cspecified, [ Pexpr (_, _, PEval (Vobject (OVinteger iv1))) ])),
          Pexpr
@@ -428,7 +426,7 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        when Option.equal Z.equal (CF.Mem.eval_integer_value iv1) (Some Z.one)
             && Option.equal Z.equal (CF.Mem.eval_integer_value iv2) (Some Z.zero) ->
        let e1 = n_pexpr loc e1 in
-       annotate (M_PEbool_to_integer e1)
+       annotate (PEbool_to_integer e1)
      (* this should go away *)
      | Pexpr (_, _, PEval Vtrue), Pexpr (_, _, PEval Vfalse) -> n_pexpr loc e1
      | _ ->
@@ -436,9 +434,9 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
        let e2 = n_pexpr loc e2 in
        let e3 = n_pexpr loc e3 in
        (match e1 with
-        | M_Pexpr (_, _, _, M_PEval (M_V (_, M_Vtrue))) -> e2
-        | M_Pexpr (_, _, _, M_PEval (M_V (_, M_Vfalse))) -> e3
-        | _ -> annotate (M_PEif (e1, e2, e3))))
+        | Pexpr (_, _, _, PEval (V (_, Vtrue))) -> e2
+        | Pexpr (_, _, _, PEval (V (_, Vfalse))) -> e3
+        | _ -> annotate (PEif (e1, e2, e3))))
   | PEis_scalar _e' -> assert_error loc !^"core_anormalisation: PEis_scalar"
   | PEis_integer _e' -> assert_error loc !^"core_anormalisation: PEis_integer"
   | PEis_signed _e' -> assert_error loc !^"core_anormalisation: PEis_signed"
@@ -447,56 +445,56 @@ let rec n_pexpr ~inherit_loc loc (Pexpr (annots, bty, pe)) : unit Mucore.mu_pexp
   | PEare_compatible (e1, e2) ->
     let e1 = n_pexpr loc e1 in
     let e2 = n_pexpr loc e2 in
-    annotate (M_PEapply_fun (M_F_are_compatible, [ e1; e2 ]))
+    annotate (PEapply_fun (F_are_compatible, [ e1; e2 ]))
 
 
 let n_kill_kind loc = function
-  | Dynamic -> Mu.M_Dynamic
-  | Static0 ct -> M_Static (convert_ct loc ct)
+  | Dynamic -> Mu.Dynamic
+  | Static0 ct -> Static (convert_ct loc ct)
 
 
 let n_action ~inherit_loc loc action =
   let (Action (loc', _, a1)) = action in
   let loc = (if inherit_loc then Locations.update loc else Fun.id) loc' in
   let n_pexpr = n_pexpr ~inherit_loc in
-  let wrap a1 = Mu.M_Action (loc, a1) in
+  let wrap a1 = Mu.Action (loc, a1) in
   match a1 with
   | Create (e1, e2, sym1) ->
     let ctype1 = ensure_pexpr_ctype loc !^"Create: not a constant ctype" e2 in
     let e1 = n_pexpr loc e1 in
-    wrap (M_Create (e1, ctype1, sym1))
+    wrap (Create (e1, ctype1, sym1))
   | CreateReadOnly (e1, e2, e3, sym1) ->
     let ctype = ensure_pexpr_ctype loc !^"CreateReadOnly: not a constant ctype" e2 in
     let e1 = n_pexpr loc e1 in
     let e3 = n_pexpr loc e3 in
-    wrap (M_CreateReadOnly (e1, ctype, e3, sym1))
+    wrap (CreateReadOnly (e1, ctype, e3, sym1))
   | Alloc0 (e1, e2, sym1) ->
     let e1 = n_pexpr loc e1 in
     let e2 = n_pexpr loc e2 in
-    wrap (M_Alloc (e1, e2, sym1))
+    wrap (Alloc (e1, e2, sym1))
   | Kill (kind, e1) ->
     let e1 = n_pexpr loc e1 in
-    wrap (M_Kill (n_kill_kind loc kind, e1))
+    wrap (Kill (n_kill_kind loc kind, e1))
   | Store0 (b, e1, e2, e3, mo1) ->
     let ctype1 = ensure_pexpr_ctype loc !^"Store: not a constant ctype" e1 in
     let e2 = n_pexpr loc e2 in
     let e3 = n_pexpr loc e3 in
-    wrap (M_Store (b, ctype1, e2, e3, mo1))
+    wrap (Store (b, ctype1, e2, e3, mo1))
   | Load0 (e1, e2, mo1) ->
     let ctype1 = ensure_pexpr_ctype loc !^"Load: not a constant ctype" e1 in
     let e2 = n_pexpr loc e2 in
-    wrap (M_Load (ctype1, e2, mo1))
+    wrap (Load (ctype1, e2, mo1))
   | SeqRMW (_b, _e1, _e2, _sym, _e3) -> assert_error loc !^"TODO: SeqRMW"
   (* let ctype1 = (ensure_pexpr_ctype loc !^"SeqRMW: not a constant ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 -> n_pexpr_in_expr_name e3 (fun e3 -> k (wrap
-     (M_SeqRMW(ctype1, e2, sym, e3))))) *)
+     (SeqRMW(ctype1, e2, sym, e3))))) *)
   | RMW0 (e1, e2, e3, e4, mo1, mo2) ->
     let ctype1 = ensure_pexpr_ctype loc !^"RMW: not a constant ctype" e1 in
     let e2 = n_pexpr loc e2 in
     let e3 = n_pexpr loc e3 in
     let e4 = n_pexpr loc e4 in
-    wrap (M_RMW (ctype1, e2, e3, e4, mo1, mo2))
-  | Fence0 mo1 -> wrap (M_Fence mo1)
+    wrap (RMW (ctype1, e2, e3, e4, mo1, mo2))
+  | Fence0 mo1 -> wrap (Fence mo1)
   | CompareExchangeStrong (e1, e2, e3, e4, mo1, mo2) ->
     let ctype1 =
       ensure_pexpr_ctype loc !^"CompareExchangeStrong: not a constant ctype" e1
@@ -504,7 +502,7 @@ let n_action ~inherit_loc loc action =
     let e2 = n_pexpr loc e2 in
     let e3 = n_pexpr loc e3 in
     let e4 = n_pexpr loc e4 in
-    wrap (M_CompareExchangeStrong (ctype1, e2, e3, e4, mo1, mo2))
+    wrap (CompareExchangeStrong (ctype1, e2, e3, e4, mo1, mo2))
   | CompareExchangeWeak (e1, e2, e3, e4, mo1, mo2) ->
     let ctype1 =
       ensure_pexpr_ctype loc !^"CompareExchangeWeak: not a constant ctype" e1
@@ -512,26 +510,26 @@ let n_action ~inherit_loc loc action =
     let e2 = n_pexpr loc e2 in
     let e3 = n_pexpr loc e3 in
     let e4 = n_pexpr loc e4 in
-    wrap (M_CompareExchangeWeak (ctype1, e2, e3, e4, mo1, mo2))
-  | LinuxFence lmo -> wrap (M_LinuxFence lmo)
+    wrap (CompareExchangeWeak (ctype1, e2, e3, e4, mo1, mo2))
+  | LinuxFence lmo -> wrap (LinuxFence lmo)
   | LinuxLoad (e1, e2, lmo) ->
     let ctype1 = ensure_pexpr_ctype loc !^"LinuxLoad: not a constant ctype" e1 in
     let e2 = n_pexpr loc e2 in
-    wrap (M_LinuxLoad (ctype1, e2, lmo))
+    wrap (LinuxLoad (ctype1, e2, lmo))
   | LinuxStore (e1, e2, e3, lmo) ->
     let ctype1 = ensure_pexpr_ctype loc !^"LinuxStore: not a constant ctype" e1 in
     let e2 = n_pexpr loc e2 in
     let e3 = n_pexpr loc e3 in
-    wrap (M_LinuxStore (ctype1, e2, e3, lmo))
+    wrap (LinuxStore (ctype1, e2, e3, lmo))
   | LinuxRMW (e1, e2, e3, lmo) ->
     let ctype1 = ensure_pexpr_ctype loc !^"LinuxRMW: not a constant ctype" e1 in
     let e2 = n_pexpr loc e2 in
     let e3 = n_pexpr loc e3 in
-    wrap (M_LinuxRMW (ctype1, e2, e3, lmo))
+    wrap (LinuxRMW (ctype1, e2, e3, lmo))
 
 
 let n_paction ~inherit_loc loc (Paction (pol, a)) =
-  Mu.M_Paction (pol, n_action ~inherit_loc loc a)
+  Mu.Paction (pol, n_action ~inherit_loc loc a)
 
 
 let show_n_memop =
@@ -548,88 +546,88 @@ let n_memop ~inherit_loc loc memop pexprs =
   | PtrEq, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    Mu.M_PtrEq (pe1, pe2)
+    Mu.PtrEq (pe1, pe2)
   | PtrNe, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_PtrNe (pe1, pe2)
+    PtrNe (pe1, pe2)
   | PtrLt, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_PtrLt (pe1, pe2)
+    PtrLt (pe1, pe2)
   | PtrGt, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_PtrGt (pe1, pe2)
+    PtrGt (pe1, pe2)
   | PtrLe, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_PtrLe (pe1, pe2)
+    PtrLe (pe1, pe2)
   | PtrGe, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_PtrGe (pe1, pe2)
+    PtrGe (pe1, pe2)
   | Ptrdiff, [ ct1; pe1; pe2 ] ->
     let ct1 = ensure_pexpr_ctype loc !^"Ptrdiff: not a constant ctype" ct1 in
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_Ptrdiff (ct1, pe1, pe2)
+    Ptrdiff (ct1, pe1, pe2)
   | IntFromPtr, [ ct1; ct2; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"IntFromPtr: not a constant ctype" ct1 in
     let ct2 = ensure_pexpr_ctype loc !^"IntFromPtr: not a constant ctype" ct2 in
     let pe = n_pexpr loc pe in
-    M_IntFromPtr (ct1, ct2, pe)
+    IntFromPtr (ct1, ct2, pe)
   | PtrFromInt, [ ct1; ct2; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrFromInt: not a constant ctype" ct1 in
     let ct2 = ensure_pexpr_ctype loc !^"PtrFromInt: not a constant ctype" ct2 in
     let pe = n_pexpr loc pe in
-    M_PtrFromInt (ct1, ct2, pe)
+    PtrFromInt (ct1, ct2, pe)
   | PtrValidForDeref, [ ct1; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrValidForDeref: not a constant ctype" ct1 in
     let pe = n_pexpr loc pe in
-    M_PtrValidForDeref (ct1, pe)
+    PtrValidForDeref (ct1, pe)
   | PtrWellAligned, [ ct1; pe ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrWellAligned: not a constant ctype" ct1 in
     let pe = n_pexpr loc pe in
-    M_PtrWellAligned (ct1, pe)
+    PtrWellAligned (ct1, pe)
   | PtrArrayShift, [ pe1; ct1; pe2 ] ->
     let ct1 = ensure_pexpr_ctype loc !^"PtrArrayShift: not a constant ctype" ct1 in
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_PtrArrayShift (pe1, ct1, pe2)
+    PtrArrayShift (pe1, ct1, pe2)
   | Memcpy, [ pe1; pe2; pe3 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     let pe3 = n_pexpr loc pe3 in
-    M_Memcpy (pe1, pe2, pe3)
+    Memcpy (pe1, pe2, pe3)
   | Memcmp, [ pe1; pe2; pe3 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     let pe3 = n_pexpr loc pe3 in
-    M_Memcmp (pe1, pe2, pe3)
+    Memcmp (pe1, pe2, pe3)
   | Realloc, [ pe1; pe2; pe3 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
     let pe3 = n_pexpr loc pe3 in
-    M_Realloc (pe1, pe2, pe3)
+    Realloc (pe1, pe2, pe3)
   | Va_start, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_Va_start (pe1, pe2)
+    Va_start (pe1, pe2)
   | Va_copy, [ pe ] ->
     let pe = n_pexpr loc pe in
-    M_Va_copy pe
+    Va_copy pe
   | Va_arg, [ pe; ct1 ] ->
     let ct1 = ensure_pexpr_ctype loc !^"Va_arg: not a constant ctype" ct1 in
     let pe = n_pexpr loc pe in
-    M_Va_arg (pe, ct1)
+    Va_arg (pe, ct1)
   | Va_end, [ pe ] ->
     let pe = n_pexpr loc pe in
-    M_Va_end pe
+    Va_end pe
   | Copy_alloc_id, [ pe1; pe2 ] ->
     let pe1 = n_pexpr loc pe1 in
     let pe2 = n_pexpr loc pe2 in
-    M_CopyAllocId (pe1, pe2)
+    CopyAllocId (pe1, pe2)
   | memop, pexprs1 ->
     let err =
       !^(show_n_memop memop)
@@ -648,13 +646,13 @@ let rec n_expr
   ((env, old_states), desugaring_things)
   (global_types, visible_objects_env)
   e
-  : unit Mucore.mu_expr Resultat.m
+  : unit Mucore.expr Resultat.m
   =
   let markers_env, cn_desugaring_state = desugaring_things in
   let (Expr (annots, pe)) = e in
   let loc = (if inherit_loc then Locations.update loc else Fun.id) (get_loc_ annots) in
-  let wrap pe = Mu.M_Expr (loc, annots, (), pe) in
-  let wrap_pure pe = wrap (M_Epure (M_Pexpr (loc, [], (), pe))) in
+  let wrap pe = Mu.Expr (loc, annots, (), pe) in
+  let wrap_pure pe = wrap (Epure (Pexpr (loc, [], (), pe))) in
   let n_pexpr = n_pexpr ~inherit_loc loc in
   let n_paction = n_paction ~inherit_loc loc in
   let n_memop = n_memop ~inherit_loc loc in
@@ -666,9 +664,9 @@ let rec n_expr
       (global_types, visible_objects_env)
   in
   match pe with
-  | Epure pexpr2 -> return (wrap (M_Epure (n_pexpr pexpr2)))
-  | Ememop (memop1, pexprs1) -> return (wrap (M_Ememop (n_memop memop1 pexprs1)))
-  | Eaction paction2 -> return (wrap (M_Eaction (n_paction paction2)))
+  | Epure pexpr2 -> return (wrap (Epure (n_pexpr pexpr2)))
+  | Ememop (memop1, pexprs1) -> return (wrap (Ememop (n_memop memop1 pexprs1)))
+  | Eaction paction2 -> return (wrap (Eaction (n_paction paction2)))
   | Ecase (_pexpr, _pats_es) -> assert_error loc !^"Ecase"
   | Elet (pat, e1, e2) ->
     (match (pat, e1) with
@@ -708,9 +706,9 @@ let rec n_expr
        n_expr e2
      | _ ->
        let e1 = n_pexpr e1 in
-       let pat = core_to_mu__pattern ~inherit_loc loc pat in
+       let pat = core_to__pattern ~inherit_loc loc pat in
        let@ e2 = n_expr e2 in
-       return (wrap (M_Elet (pat, e1, e2))))
+       return (wrap (Elet (pat, e1, e2))))
   | Eif (e1, e2, e3) ->
     (match (e2, e3) with
      | ( Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))),
@@ -718,16 +716,16 @@ let rec n_expr
        when Option.equal Z.equal (CF.Mem.eval_integer_value iv1) (Some Z.one)
             && Option.equal Z.equal (CF.Mem.eval_integer_value iv2) (Some Z.zero) ->
        let e1 = n_pexpr e1 in
-       return (wrap_pure (M_PEbool_to_integer e1))
+       return (wrap_pure (PEbool_to_integer e1))
      | ( Expr (_, Epure (Pexpr (_, _, PEval Vtrue))),
          Expr (_, Epure (Pexpr (_, _, PEval Vfalse))) ) ->
        let e1 = n_pexpr e1 in
-       return (wrap (M_Epure e1))
+       return (wrap (Epure e1))
      | _ ->
        let e1 = n_pexpr e1 in
        let@ e2 = n_expr e2 in
        let@ e3 = n_expr e3 in
-       return (wrap (M_Eif (e1, e2, e3))))
+       return (wrap (Eif (e1, e2, e3))))
   | Eccall (_a, ct1, e2, es) ->
     let ct1 =
       match ct1 with
@@ -753,27 +751,27 @@ let rec n_expr
               (fun _prov _ -> err ())
           | _ -> err ()
         in
-        return (Mu.M_Pexpr (loc, annots, bty, M_PEval (M_V ((), M_Vfunction_addr sym))))
+        return (Mu.Pexpr (loc, annots, bty, PEval (V ((), Vfunction_addr sym))))
       | _ -> return @@ n_pexpr e2
     in
     let es = List.map n_pexpr es in
-    return (wrap (M_Eccall (ct1, e2, es)))
+    return (wrap (Eccall (ct1, e2, es)))
   | Eproc (_a, name, es) ->
     let es = List.map n_pexpr es in
     (match (name, es) with
      | Impl (BuiltinFunction "ctz"), [ arg1 ] ->
-       return (wrap_pure (M_PEbitwise_unop (M_BW_CTZ, arg1)))
+       return (wrap_pure (PEbitwise_unop (BW_CTZ, arg1)))
      | Impl (BuiltinFunction "generic_ffs"), [ arg1 ] ->
-       return (wrap_pure (M_PEbitwise_unop (M_BW_FFS, arg1)))
+       return (wrap_pure (PEbitwise_unop (BW_FFS, arg1)))
      | _ -> assert_error loc (item "Eproc" (CF.Pp_core_ast.pp_expr e)))
   | Eunseq es ->
     let@ es = ListM.mapM n_expr es in
-    return (wrap (M_Eunseq es))
+    return (wrap (Eunseq es))
   | Ewseq (pat, e1, e2) ->
     let@ e1 = n_expr e1 in
-    let pat = core_to_mu__pattern ~inherit_loc loc pat in
+    let pat = core_to__pattern ~inherit_loc loc pat in
     let@ e2 = n_expr e2 in
-    return (wrap (M_Ewseq (pat, e1, e2)))
+    return (wrap (Ewseq (pat, e1, e2)))
   | Esseq (pat, e1, e2) ->
     (* let () = debug 10 (lazy (item "core_to_mucore Esseq. e1:"
        (CF.Pp_core_ast.pp_expr e1))) in let () = debug 10 (lazy (item
@@ -826,24 +824,24 @@ let rec n_expr
                parsed_stmts
            in
            let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
-           return (Mu.M_Expr (loc, [], (), M_CN_progs (desugared_stmts, stmts)))
+           return (Mu.Expr (loc, [], (), CN_progs (desugared_stmts, stmts)))
          | [] -> n_expr e1)
       | _, _ -> n_expr e1
     in
-    let pat = core_to_mu__pattern ~inherit_loc loc pat in
+    let pat = core_to__pattern ~inherit_loc loc pat in
     let@ e2 = n_expr e2 in
-    return (wrap (M_Esseq (pat, e1, e2)))
+    return (wrap (Esseq (pat, e1, e2)))
   | Ebound e ->
     let@ e = n_expr e in
-    return (wrap (M_Ebound e))
+    return (wrap (Ebound e))
   | End es ->
     let@ es = ListM.mapM n_expr es in
-    return (wrap (M_End es))
+    return (wrap (End es))
   | Esave ((_sym1, _bt1), _syms_typs_pes, _e) ->
     assert_error loc !^"core_anormalisation: Esave"
   | Erun (_a, sym1, pes) ->
     let pes = List.map n_pexpr pes in
-    return (wrap (M_Erun (sym1, pes)))
+    return (wrap (Erun (sym1, pes)))
   | Epar _es -> assert_error loc !^"core_anormalisation: Epar"
   | Ewait _tid1 -> assert_error loc !^"core_anormalisation: Ewait"
   | Eannot _ -> assert_error loc !^"core_anormalisation: Eannot"
@@ -856,29 +854,29 @@ module LRT = LogicalReturnTypes
 module LAT = LogicalArgumentTypes
 
 let rec lat_of_arguments f_i = function
-  | Mu.M_Define (bound, info, l) -> LAT.Define (bound, info, lat_of_arguments f_i l)
-  | M_Resource (bound, info, l) -> LAT.Resource (bound, info, lat_of_arguments f_i l)
-  | M_Constraint (lc, info, l) -> LAT.Constraint (lc, info, lat_of_arguments f_i l)
-  | M_I i -> LAT.I (f_i i)
+  | Mu.Define (bound, info, l) -> LAT.Define (bound, info, lat_of_arguments f_i l)
+  | Resource (bound, info, l) -> LAT.Resource (bound, info, lat_of_arguments f_i l)
+  | Constraint (lc, info, l) -> LAT.Constraint (lc, info, lat_of_arguments f_i l)
+  | I i -> LAT.I (f_i i)
 
 
 let rec at_of_arguments f_i = function
-  | Mu.M_Computational (bound, info, a) ->
+  | Mu.Computational (bound, info, a) ->
     AT.Computational (bound, info, at_of_arguments f_i a)
-  | M_L l -> AT.L (lat_of_arguments f_i l)
+  | L l -> AT.L (lat_of_arguments f_i l)
 
 
 let rec arguments_of_lat f_i = function
-  | LAT.Define (def, info, lat) -> Mu.M_Define (def, info, arguments_of_lat f_i lat)
-  | LAT.Resource (bound, info, lat) -> M_Resource (bound, info, arguments_of_lat f_i lat)
-  | LAT.Constraint (c, info, lat) -> M_Constraint (c, info, arguments_of_lat f_i lat)
-  | LAT.I i -> M_I (f_i i)
+  | LAT.Define (def, info, lat) -> Mu.Define (def, info, arguments_of_lat f_i lat)
+  | LAT.Resource (bound, info, lat) -> Resource (bound, info, arguments_of_lat f_i lat)
+  | LAT.Constraint (c, info, lat) -> Constraint (c, info, arguments_of_lat f_i lat)
+  | LAT.I i -> I (f_i i)
 
 
 let rec arguments_of_at f_i = function
   | AT.Computational (bound, info, at) ->
-    Mu.M_Computational (bound, info, arguments_of_at f_i at)
-  | AT.L lat -> M_L (arguments_of_lat f_i lat)
+    Mu.Computational (bound, info, arguments_of_at f_i at)
+  | AT.L lat -> L (arguments_of_lat f_i lat)
 
 
 (* copying and adjusting variously compile.ml logic *)
@@ -906,7 +904,7 @@ let make_largs f_i =
       return (Mu.mConstraint (lc, (loc, None)) lat)
     | [] ->
       let@ i = f_i env st in
-      return (Mu.M_I i)
+      return (Mu.I i)
   in
   aux
 
@@ -964,7 +962,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
     | [] ->
       let@ lat = make_largs_with_accesses f_i env st (accesses, inv) in
       let at = Mu.mResources resources (Mu.mConstraints good_lcs lat) in
-      return (Mu.M_L at)
+      return (Mu.L at)
   in
   aux ([], []) env st args
 
@@ -991,7 +989,7 @@ let make_function_args f_i loc env args (accesses, requires) =
       return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] ->
       let@ lat = make_largs_with_accesses (f_i arg_states) env st (accesses, requires) in
-      return (Mu.M_L (Mu.mConstraints (List.rev good_lcs) lat))
+      return (Mu.L (Mu.mConstraints (List.rev good_lcs) lat))
   in
   aux [] [] env C.LocalState.init_st args
 
@@ -1028,7 +1026,7 @@ let make_fun_with_spec_args f_i loc env args requires =
       return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] ->
       let@ lat = make_largs_with_accesses f_i env st ([], requires) in
-      return (Mu.M_L (Mu.mConstraints (List.rev good_lcs) lat))
+      return (Mu.L (Mu.mConstraints (List.rev good_lcs) lat))
   in
   aux [] env C.LocalState.init_st args
 
@@ -1137,7 +1135,7 @@ let normalise_label
   label
   =
   match label with
-  | CF.Milicore.Mi_Return loc -> return (Mu.M_Return loc)
+  | CF.Milicore.Mi_Return loc -> return (Mu.Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
     (match CF.Annot.get_label_annot annots with
      | Some (LAloop loop_id) ->
@@ -1181,7 +1179,7 @@ let normalise_label
        (*     ) label_args_and_body  *)
        (* in *)
        return
-         (Mu.M_Label (loc, label_args_and_body, annots, { label_spec = desugared_inv }))
+         (Mu.Label (loc, label_args_and_body, annots, { label_spec = desugared_inv }))
      (* | Some (LAloop_body _loop_id) -> *)
      (*    assert_error loc !^"body label has not been inlined" *)
      | Some (LAloop_continue _loop_id) ->
@@ -1338,8 +1336,7 @@ let normalise_fun_map_decl
        in
        (* let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in *)
        let desugared_spec = Mu.{ accesses = List.map snd accesses; requires; ensures } in
-       return
-         (Some (Mu.M_Proc (loc, args_and_body, trusted, desugared_spec), mk_functions))
+       return (Some (Mu.Proc (loc, args_and_body, trusted, desugared_spec), mk_functions))
      | Mi_ProcDecl (loc, ret_bt, _bts) ->
        (match SymMap.find_opt fname fun_specs with
         | Some (_ail_marker, (spec : (CF.Symbol.sym, Ctype.ctype) Cn.cn_fun_spec)) ->
@@ -1367,12 +1364,12 @@ let normalise_fun_map_decl
               spec.cn_spec_requires
           in
           let ft = at_of_arguments Tools.id args_and_rt in
-          return (Some (Mu.M_ProcDecl (loc, Some ft), []))
-        | _ -> return (Some (Mu.M_ProcDecl (loc, None), [])))
+          return (Some (Mu.ProcDecl (loc, Some ft), []))
+        | _ -> return (Some (Mu.ProcDecl (loc, None), [])))
      | Mi_BuiltinDecl (_loc, _bt, _bts) -> assert false)
 
 
-(* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
+(* BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
 let normalise_fun_map
   ~inherit_loc
@@ -1436,10 +1433,10 @@ let normalise_globs ~inherit_loc env _sym g =
         ([], Pmap.empty Int.compare)
         e
     in
-    return (Mu.M_GlobalDef (convert_ct loc ct, e))
+    return (Mu.GlobalDef (convert_ct loc ct, e))
   | GlobalDecl (bt, ct) ->
     let@ () = check_against_core_bt loc bt BT.(Loc ()) in
-    return (Mu.M_GlobalDecl (convert_ct loc ct))
+    return (Mu.GlobalDecl (convert_ct loc ct))
 
 
 let normalise_globs_list ~inherit_loc env gs =
@@ -1492,7 +1489,7 @@ let normalise_tag_definition tag (loc, def) =
   | Ctype.StructDef (_fields, Some (FlexibleArrayMember (_, Identifier (loc, _), _, _)))
     ->
     unsupported loc !^"flexible array members"
-  | StructDef (fields, None) -> return (Mu.M_StructDef (make_struct_decl loc fields tag))
+  | StructDef (fields, None) -> return (Mu.StructDef (make_struct_decl loc fields tag))
   | UnionDef _l -> unsupported loc !^"union types"
 
 
@@ -1508,10 +1505,10 @@ let normalise_tag_definitions tagDefs =
 
 let register_glob env (sym, glob) =
   match glob with
-  | Mu.M_GlobalDef (ct, _e) ->
+  | Mu.GlobalDef (ct, _e) ->
     C.add_computational sym (BT.Loc (Some ct)) env
     (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
-  | M_GlobalDecl ct -> C.add_computational sym (BT.Loc (Some ct)) env
+  | GlobalDecl ct -> C.add_computational sym (BT.Loc (Some ct)) env
 
 
 (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
@@ -1562,7 +1559,7 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
       file.mi_loop_attributes
       file.mi_funs
   in
-  let mu_call_funinfo =
+  let call_funinfo =
     Pmap.mapi
       (fun _fsym (_, _, ret, args, variadic, has_proto) ->
         Sctypes.
@@ -1577,26 +1574,26 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
   let datatypes = List.map (translate_datatype env) ail_prog.cn_datatypes in
   let file =
     Mu.
-      { mu_main = file.mi_main;
-        mu_tagDefs = tagDefs;
-        mu_globs = globs;
-        mu_funs = funs;
-        mu_extern = file.mi_extern;
-        mu_stdlib_syms = stdlib_syms;
-        mu_mk_functions = mk_functions;
-        mu_resource_predicates = preds;
-        mu_logical_predicates = lfuns;
-        mu_datatypes = datatypes;
-        mu_lemmata = lemmata;
-        mu_call_funinfo
+      { main = file.mi_main;
+        tagDefs;
+        globs;
+        funs;
+        extern = file.mi_extern;
+        stdlib_syms;
+        mk_functions;
+        resource_predicates = preds;
+        logical_predicates = lfuns;
+        datatypes;
+        lemmata;
+        call_funinfo
       }
   in
   debug 3 (lazy (headline "done core_to_mucore normalising file"));
   return file
 
 
-(* type internal = { pre: unit mu_arguments; post: ReturnTypes.t; inv: (Loc.t * unit
-   mu_arguments); statements: (Locations.t * Cnprog.cn_prog list) list; } *)
+(* type internal = { pre: unit arguments; post: ReturnTypes.t; inv: (Loc.t * unit
+   arguments); statements: (Locations.t * Cnprog.cn_prog list) list; } *)
 
 type statements = (Locations.t * Cnprog.cn_prog list) list
 
@@ -1661,42 +1658,42 @@ let concat2_map (f : 'a -> 'b list * 'c list) (xs : 'a list) : 'b list * 'c list
   List.fold_right (fun x acc -> concat2 (f x) acc) xs ([], [])
 
 
-let rec stmts_in_expr (Mu.M_Expr (loc, _, _, e_)) =
+let rec stmts_in_expr (Mu.Expr (loc, _, _, e_)) =
   match e_ with
-  | M_Epure _ -> ([], [])
-  | M_Ememop _ -> ([], [])
-  | M_Eaction _ -> ([], [])
-  | M_Eskip -> ([], [])
-  | M_Eccall _ -> ([], [])
-  | M_Elet (_, _, e) -> stmts_in_expr e
-  | M_Eunseq es -> concat2_map stmts_in_expr es
-  | M_Ewseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | M_Esseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | M_Eif (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
-  | M_Ebound e -> stmts_in_expr e
-  | M_End es -> concat2_map stmts_in_expr es
-  | M_Erun _ -> ([], [])
-  | M_CN_progs (stmts_s, stmts_i) -> ([ (loc, stmts_s) ], [ (loc, stmts_i) ])
+  | Epure _ -> ([], [])
+  | Ememop _ -> ([], [])
+  | Eaction _ -> ([], [])
+  | Eskip -> ([], [])
+  | Eccall _ -> ([], [])
+  | Elet (_, _, e) -> stmts_in_expr e
+  | Eunseq es -> concat2_map stmts_in_expr es
+  | Ewseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | Esseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | Eif (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | Ebound e -> stmts_in_expr e
+  | End es -> concat2_map stmts_in_expr es
+  | Erun _ -> ([], [])
+  | CN_progs (stmts_s, stmts_i) -> ([ (loc, stmts_s) ], [ (loc, stmts_i) ])
 
 
 let rec stmts_in_largs f_i = function
-  | Mu.M_Define (_, _, a) -> stmts_in_largs f_i a
-  | M_Resource (_, _, a) -> stmts_in_largs f_i a
-  | M_Constraint (_, _, a) -> stmts_in_largs f_i a
-  | M_I i -> f_i i
+  | Mu.Define (_, _, a) -> stmts_in_largs f_i a
+  | Resource (_, _, a) -> stmts_in_largs f_i a
+  | Constraint (_, _, a) -> stmts_in_largs f_i a
+  | I i -> f_i i
 
 
 let rec stmts_in_args f_i = function
-  | Mu.M_Computational (_, _, a) -> stmts_in_args f_i a
-  | M_L a -> stmts_in_largs f_i a
+  | Mu.Computational (_, _, a) -> stmts_in_args f_i a
+  | L a -> stmts_in_largs f_i a
 
 
 let stmts_in_labels labels =
   Pmap.fold
     (fun _s def acc ->
       match def with
-      | Mu.M_Return _ -> acc
-      | M_Label (_, a, _, _) -> concat2 (stmts_in_args stmts_in_expr a) acc)
+      | Mu.Return _ -> acc
+      | Label (_, a, _, _) -> concat2 (stmts_in_args stmts_in_expr a) acc)
     labels
     ([], [])
 
@@ -1708,12 +1705,12 @@ let stmts_in_labels labels =
  *     args_and_body
  *)
 
-let collect_instrumentation (file : _ Mu.mu_file) =
+let collect_instrumentation (file : _ Mu.file) =
   let instrs =
     List.map
       (fun (fn, decl) ->
         match decl with
-        | Mu.M_Proc (fn_loc, args_and_body, _trusted, _spec) ->
+        | Mu.Proc (fn_loc, args_and_body, _trusted, _spec) ->
           let args_and_body = at_of_arguments Fun.id args_and_body in
           let internal =
             ArgumentTypes.map
@@ -1723,7 +1720,7 @@ let collect_instrumentation (file : _ Mu.mu_file) =
               args_and_body
           in
           { fn; fn_loc; internal = Some internal }
-        | M_ProcDecl (fn_loc, _fn) -> { fn; fn_loc; internal = None })
-      (Pmap.bindings_list file.mu_funs)
+        | ProcDecl (fn_loc, _fn) -> { fn; fn_loc; internal = None })
+      (Pmap.bindings_list file.funs)
   in
   (instrs, C.symtable)
