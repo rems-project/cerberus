@@ -1344,7 +1344,6 @@ module WArgs = struct
 end
 
 module BaseTyping = struct
-  open Mucore
   open Typing
   open TypeErrors
   module SymMap = Map.Make (Sym)
@@ -1364,9 +1363,9 @@ module BaseTyping = struct
 
 
   let rec check_and_bind_pattern bt = function
-    | M_Pattern (loc, anns, _, p_) ->
+    | Mu.M_Pattern (loc, anns, _, p_) ->
       let@ p_ = check_and_bind_pattern_ bt loc p_ in
-      return (M_Pattern (loc, anns, bt, p_))
+      return (Mu.M_Pattern (loc, anns, bt, p_))
 
 
   and check_and_bind_pattern_ bt loc = function
@@ -1382,7 +1381,7 @@ module BaseTyping = struct
           let@ () = check_against_core_bt loc !^"  checking _ pattern-var" cbt bt in
           return ()
       in
-      return (M_CaseBase (sym_opt, cbt))
+      return (Mu.M_CaseBase (sym_opt, cbt))
     | M_CaseCtor (ctor, pats) ->
       let get_item_bt bt =
         match BT.is_list_bt bt with
@@ -1395,7 +1394,7 @@ module BaseTyping = struct
         match (ctor, pats) with
         | M_Cnil cbt, [] ->
           let@ _item_bt = get_item_bt bt in
-          return (M_Cnil cbt, [])
+          return (Mu.M_Cnil cbt, [])
         | M_Cnil _, _ ->
           fail (fun _ ->
             { loc; msg = Number_arguments { has = List.length pats; expect = 0 } })
@@ -1403,7 +1402,7 @@ module BaseTyping = struct
           let@ item_bt = get_item_bt bt in
           let@ p1 = check_and_bind_pattern item_bt p1 in
           let@ p2 = check_and_bind_pattern bt p2 in
-          return (M_Ccons, [ p1; p2 ])
+          return (Mu.M_Ccons, [ p1; p2 ])
         | M_Ccons, _ ->
           fail (fun _ ->
             { loc; msg = Number_arguments { has = List.length pats; expect = 2 } })
@@ -1423,14 +1422,14 @@ module BaseTyping = struct
                 })
           in
           let@ pats = ListM.map2M check_and_bind_pattern bts pats in
-          return (M_Ctuple, pats)
+          return (Mu.M_Ctuple, pats)
         | M_Carray, _ -> Cerb_debug.error "todo: array types"
       in
-      return (M_CaseCtor (ctor, pats))
+      return (Mu.M_CaseCtor (ctor, pats))
 
 
   let rec infer_object_value
-    : 'TY. Locations.t -> 'TY mu_object_value -> BT.t mu_object_value m
+    : 'TY. Locations.t -> 'TY Mu.mu_object_value -> BT.t Mu.mu_object_value m
     =
     fun loc (M_OV (_, ov) as ov_original) ->
     let todo () =
@@ -1452,20 +1451,20 @@ module BaseTyping = struct
              ^^ colon
              ^^^ !^"no type-annotation for integer literal, picking"
              ^^^ squotes (BT.pp bt)));
-        return (bt, M_OVinteger iv)
-      | M_OVfloating fv -> return (Real, M_OVfloating fv)
-      | M_OVpointer pv -> return (Loc (), M_OVpointer pv)
+        return (bt, Mu.M_OVinteger iv)
+      | M_OVfloating fv -> return (Real, Mu.M_OVfloating fv)
+      | M_OVpointer pv -> return (Loc (), Mu.M_OVpointer pv)
       | M_OVarray xs ->
         let@ _bt_xs = ListM.mapM (infer_object_value loc) xs in
         todo ()
-      | M_OVstruct (nm, xs) -> return (Struct nm, M_OVstruct (nm, xs))
+      | M_OVstruct (nm, xs) -> return (Struct nm, Mu.M_OVstruct (nm, xs))
       | M_OVunion _ -> todo ()
     in
-    return (M_OV (bt, ov))
+    return (Mu.M_OV (bt, ov))
 
 
   let check_object_value
-    : 'TY. Locations.t -> BT.t -> 'TY mu_object_value -> BT.t mu_object_value m
+    : 'TY. Locations.t -> BT.t -> 'TY Mu.mu_object_value -> BT.t Mu.mu_object_value m
     =
     fun loc bt (M_OV (_, ov) as ov_original) ->
     match ov with
@@ -1473,7 +1472,7 @@ module BaseTyping = struct
       let z = Memory.z_of_ival iv in
       let@ () = ensure_bits_type loc bt in
       if BT.fits_range (Option.get (BT.is_bits_bt bt)) z then
-        return (M_OV (bt, M_OVinteger iv))
+        return (Mu.M_OV (bt, M_OVinteger iv))
       else
         fail (fun _ ->
           { loc;
@@ -1483,43 +1482,43 @@ module BaseTyping = struct
           })
     | _ ->
       let@ ov = infer_object_value loc ov_original in
-      let@ () = ensure_base_type loc ~expect:bt (bt_of_object_value ov) in
+      let@ () = ensure_base_type loc ~expect:bt (Mu.bt_of_object_value ov) in
       return ov
 
 
-  let rec infer_value : 'TY. Locations.t -> 'TY mu_value -> BT.t mu_value m =
+  let rec infer_value : 'TY. Locations.t -> 'TY Mu.mu_value -> BT.t Mu.mu_value m =
     fun loc (M_V (_, v)) ->
     let@ bt, v =
       match v with
-      | M_Vobject ov ->
+      | Mu.M_Vobject ov ->
         let@ ov = infer_object_value loc ov in
-        return (bt_of_object_value ov, M_Vobject ov)
-      | M_Vctype ct -> return (CType, M_Vctype ct)
-      | M_Vunit -> return (Unit, M_Vunit)
-      | M_Vtrue -> return (Bool, M_Vtrue)
-      | M_Vfalse -> return (Bool, M_Vfalse)
-      | M_Vfunction_addr sym -> return (Loc (), M_Vfunction_addr sym)
+        return (Mu.bt_of_object_value ov, Mu.M_Vobject ov)
+      | M_Vctype ct -> return (CType, Mu.M_Vctype ct)
+      | M_Vunit -> return (Unit, Mu.M_Vunit)
+      | M_Vtrue -> return (Bool, Mu.M_Vtrue)
+      | M_Vfalse -> return (Bool, Mu.M_Vfalse)
+      | M_Vfunction_addr sym -> return (Loc (), Mu.M_Vfunction_addr sym)
       | M_Vlist (item_cbt, vals) ->
         let@ vals = ListM.mapM (infer_value loc) vals in
-        let item_bt = bt_of_value (List.hd vals) in
-        return (List item_bt, M_Vlist (item_cbt, vals))
+        let item_bt = Mu.bt_of_value (List.hd vals) in
+        return (List item_bt, Mu.M_Vlist (item_cbt, vals))
       | M_Vtuple vals ->
         let@ vals = ListM.mapM (infer_value loc) vals in
-        let bt = Tuple (List.map bt_of_value vals) in
-        return (bt, M_Vtuple vals)
+        let bt = Tuple (List.map Mu.bt_of_value vals) in
+        return (bt, Mu.M_Vtuple vals)
     in
-    return (M_V (bt, v))
+    return (Mu.M_V (bt, v))
 
 
-  let check_value : 'TY. Locations.t -> BT.t -> 'TY mu_value -> BT.t mu_value m =
+  let check_value : 'TY. Locations.t -> BT.t -> 'TY Mu.mu_value -> BT.t Mu.mu_value m =
     fun loc expect (M_V (_, v) as orig_v) ->
     match v with
     | M_Vobject ov ->
       let@ ov = check_object_value loc expect ov in
-      return (M_V (expect, M_Vobject ov))
+      return (Mu.M_V (expect, M_Vobject ov))
     | _ ->
       let@ v = infer_value loc orig_v in
-      let@ () = ensure_base_type loc ~expect (bt_of_value v) in
+      let@ () = ensure_base_type loc ~expect (Mu.bt_of_value v) in
       return v
 
 
@@ -1540,16 +1539,17 @@ module BaseTyping = struct
     List.filter (fun a -> Option.is_none (is_integer_annot a)) annots
 
 
-  let remove_integer_annot_expr (M_Expr (loc, annots, bty, e_)) =
-    M_Expr (loc, remove_integer_annot annots, bty, e_)
+  let remove_integer_annot_expr (Mu.M_Expr (loc, annots, bty, e_)) =
+    Mu.M_Expr (loc, remove_integer_annot annots, bty, e_)
 
 
-  let remove_integer_annot_pexpr (M_Pexpr (loc, annots, bty, e_)) =
-    M_Pexpr (loc, remove_integer_annot annots, bty, e_)
+  let remove_integer_annot_pexpr (Mu.M_Pexpr (loc, annots, bty, e_)) =
+    Mu.M_Pexpr (loc, remove_integer_annot annots, bty, e_)
 
 
-  let rec infer_pexpr : 'TY. 'TY mu_pexpr -> BT.t mu_pexpr m =
+  let rec infer_pexpr : 'TY. 'TY Mu.mu_pexpr -> BT.t Mu.mu_pexpr m =
     fun pe ->
+    let open Mu in
     Pp.debug
       22
       (lazy (Pp.item "WellTyped.BaseTyping.infer_pexpr" (Pp_mucore_ast.pp_pexpr pe)));
@@ -1729,27 +1729,27 @@ module BaseTyping = struct
         ensure_base_type loc ~expect (Memory.bt_of_sct (Integer ity))
       | _ -> return ()
     in
-    let annot bt pe_ = M_Pexpr (loc, annots, bt, pe_) in
+    let annot bt pe_ = Mu.M_Pexpr (loc, annots, bt, pe_) in
     match pe_ with
-    | M_PEundef (a, b) -> return (annot expect (M_PEundef (a, b)))
+    | M_PEundef (a, b) -> return (annot expect (Mu.M_PEundef (a, b)))
     | M_PEerror (err, pe) ->
       let@ pe = infer_pexpr pe in
-      return (annot expect (M_PEerror (err, pe)))
+      return (annot expect (Mu.M_PEerror (err, pe)))
     | M_PEval v ->
       let@ v = check_value loc expect v in
-      return (annot expect (M_PEval v))
+      return (annot expect (Mu.M_PEval v))
     | M_PEapply_fun (fname, pes) ->
       let@ _bt, pes = check_infer_apply_fun (Some expect) fname pes expr in
-      return (annot expect (M_PEapply_fun (fname, pes)))
+      return (annot expect (Mu.M_PEapply_fun (fname, pes)))
     | _ ->
       let@ expr = infer_pexpr expr in
-      (match bt_of_pexpr expr with
+      (match Mu.bt_of_pexpr expr with
        | Integer ->
          Pp.debug
            1
            (lazy (Pp.item "warning: inferred integer bt" (Pp_mucore_ast.pp_pexpr expr)))
        | _ -> ());
-      let@ () = ensure_base_type (loc_of_pexpr expr) ~expect (bt_of_pexpr expr) in
+      let@ () = ensure_base_type (Mu.loc_of_pexpr expr) ~expect (Mu.bt_of_pexpr expr) in
       return expr
 
 
@@ -1902,8 +1902,9 @@ module BaseTyping = struct
 
   let signed_int_ty = Memory.bt_of_sct Sctypes.(Integer (Signed Int_))
 
-  let rec infer_expr : 'TY. label_context -> 'TY mu_expr -> BT.t mu_expr m =
+  let rec infer_expr : 'TY. label_context -> 'TY Mu.mu_expr -> BT.t Mu.mu_expr m =
     fun label_context e ->
+    let open Mu in
     Pp.debug
       22
       (lazy (Pp.item "WellTyped.BaseTyping.infer_expr" (Pp_mucore_ast.pp_expr e)));
@@ -2130,16 +2131,16 @@ module BaseTyping = struct
     match e_ with
     | M_Epure pe ->
       let@ pe = check_pexpr expect pe in
-      return (M_Expr (loc, annots, bt_of_pexpr pe, M_Epure pe))
+      return (Mu.M_Expr (loc, annots, Mu.bt_of_pexpr pe, M_Epure pe))
     | _ ->
       let@ expr = infer_expr label_context expr in
-      (match bt_of_expr expr with
+      (match Mu.bt_of_expr expr with
        | Integer ->
          Pp.debug
            1
            (lazy (Pp.item "warning: inferred integer bt" (Pp_mucore_ast.pp_expr expr)))
        | _ -> ());
-      let@ () = ensure_base_type (loc_of_expr expr) ~expect (bt_of_expr expr) in
+      let@ () = ensure_base_type (Mu.loc_of_expr expr) ~expect (Mu.bt_of_expr expr) in
       return expr
 end
 
