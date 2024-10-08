@@ -214,24 +214,24 @@ let state ctxt log model_with_q extras =
       List.partition (fun (_, v) -> REP.is_interesting v) preds
     in
     add_labeled
-      lab_interesting
-      (List.map render_sympair interesting_preds)
-      (add_labeled
-        lab_uninteresting
-        (List.map render_sympair uninteresting_preds)
-        (add_labeled
-          lab_interesting
-          (List.map render_sympair interesting_funs)
-          (add_labeled
-            lab_uninteresting
-            (List.map render_sympair uninteresting_funs)
-            (add_labeled
-              lab_interesting
-              (List.map render_constraints interesting_constraints)
+       lab_interesting
+       (List.map render_sympair interesting_preds)
+       (add_labeled
+         lab_uninteresting
+         (List.map render_sympair uninteresting_preds)
+         (add_labeled
+           lab_interesting
+           (List.map render_sympair interesting_funs)
+           (add_labeled
+              lab_uninteresting
+              (List.map render_sympair uninteresting_funs)
               (add_labeled
-                lab_uninteresting
-                (List.map render_constraints uninteresting_constraints)
-                labeled_empty)))))
+                 lab_interesting
+                 (List.map render_constraints interesting_constraints)
+                    (add_labeled
+                    lab_uninteresting
+                    (List.map render_constraints uninteresting_constraints)
+                    labeled_empty)))))
   in
   let terms =
     let variables =
@@ -293,12 +293,12 @@ let state ctxt log model_with_q extras =
   in
   let constraints =
     add_labeled
-      lab_interesting
-      (List.map render_constraints interesting)
-      (add_labeled
-        lab_uninteresting
-        (List.map render_constraints uninteresting) 
-        labeled_empty)
+       lab_interesting
+       (List.map render_constraints interesting)
+       (add_labeled
+         lab_uninteresting
+         (List.map render_constraints uninteresting) 
+         labeled_empty)
   in
   let resources =
     let same_res, diff_res =
