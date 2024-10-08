@@ -170,10 +170,12 @@ let state ctxt log model_with_q extras =
   let not_given_to_solver =
     (* get predicates from past steps of trace not given to solver *)
     let log_preds =
-      let log_comb acc entry = match entry with
-      | State ctxt -> let (_, _, ps) = not_given_to_solver ctxt in
-        List.append ps acc
-      | Action _ -> acc
+      let log_comb acc entry =
+        match entry with
+        | State ctxt ->
+          let (_, _, ps) = not_given_to_solver ctxt in
+          List.append ps acc
+        | Action _ -> acc
       in
       List.fold_left log_comb [] log
     in
