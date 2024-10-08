@@ -169,6 +169,23 @@ let state ctxt log model_with_q extras =
   (*   | Some v -> IT.pp v *)
   (*   | None -> parens !^"not evaluated" *)
   (* in *)
+  let render_constraints c =
+    { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
+  in
+  let render_sympair p =
+    { original = Sym.pp (fst p); simplified = [] } 
+    (*Symbols do not need simplification*)
+  in
+  let interesting, uninteresting =
+    List.partition
+      (fun lc ->
+        match lc with
+        (* | LC.T (IT (Aligned _, _, _)) -> false *)
+        | LC.T (IT (Representable _, _, _)) -> false
+        | LC.T (IT (Good _, _, _)) -> false
+        | _ -> true)
+      (LCSet.elements ctxt.constraints)
+  in
   let not_given_to_solver =
     (* get predicates from past steps of trace not given to solver *)
     let log_preds =
@@ -196,9 +213,9 @@ let state ctxt log model_with_q extras =
     let interesting_preds, uninteresting_preds =
       List.partition (fun (_, v) -> REP.is_interesting v) preds
     in
-    let make_constraints = List.map LC.pp in
-    let make_funs = List.map (fun (k, _) -> Sym.pp k) in
-    let make_preds = List.map (fun (k, _) -> Sym.pp k) in
+    (* let make_constraints = List.map render in
+    let make_funs = List.map fst in
+    let make_preds = List.map fst in
     ( List.concat
         [ make_constraints interesting_constraints;
           make_funs interesting_funs;
@@ -208,7 +225,13 @@ let state ctxt log model_with_q extras =
         [ make_constraints uninteresting_constraints;
           make_funs uninteresting_funs;
           make_preds uninteresting_preds
-        ] )
+        ] ) in *)
+      add_labeled lab_interesting (List.map render_sympair interesting_preds)
+      (add_labeled lab_uninteresting (List.map render_sympair uninteresting_preds)
+      (add_labeled lab_interesting (List.map render_sympair interesting_funs)
+      (add_labeled lab_uninteresting (List.map render_sympair uninteresting_funs)
+      (add_labeled lab_interesting (List.map render_constraints interesting_constraints)
+      (add_labeled lab_uninteresting (List.map render_constraints uninteresting_constraints) labeled_empty)))))
   in
   let terms =
     let variables =
@@ -269,23 +292,10 @@ let state ctxt log model_with_q extras =
       (add_labeled lab_uninteresting (List.map snd uninteresting) labeled_empty)
   in
   let constraints =
-    let render c =
-      { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
-    in
-    let interesting, uninteresting =
-      List.partition
-        (fun lc ->
-          match lc with
-          (* | LC.T (IT (Aligned _, _, _)) -> false *)
-          | LC.T (IT (Representable _, _, _)) -> false
-          | LC.T (IT (Good _, _, _)) -> false
-          | _ -> true)
-        (LCSet.elements ctxt.constraints)
-    in
     add_labeled
       lab_interesting
-      (List.map render interesting)
-      (add_labeled lab_uninteresting (List.map render uninteresting) labeled_empty)
+      (List.map render_constraints interesting)
+      (add_labeled lab_uninteresting (List.map render_constraints uninteresting) labeled_empty)
   in
   let resources =
     let same_res, diff_res =
@@ -302,7 +312,6 @@ let state ctxt log model_with_q extras =
           | _ -> true)
         diff_res
     in
-    let evaluate it = Solver.eval ctxt.global model it in
     let with_suff mb x = match mb with None -> x | Some d -> d ^^^ x in
     let pp_res mb_suff (rt, args) =
       { original = with_suff mb_suff (RE.pp (rt, args));
