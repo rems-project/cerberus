@@ -173,7 +173,7 @@ let state ctxt log model_with_q extras =
       let log_comb acc entry =
         match entry with
         | State ctxt ->
-          let (_, _, ps) = not_given_to_solver ctxt in
+          let _, _, ps = not_given_to_solver ctxt in
           List.append ps acc
         | Action _ -> acc
       in
