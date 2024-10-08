@@ -173,7 +173,7 @@ let state ctxt log model_with_q extras =
     { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
   in
   let render_sympair p =
-    { original = Sym.pp (fst p); simplified = [] }
+    { original = Sym.pp (fst p); simplified = [Sym.pp (fst p)] }
     (*Symbols do not need simplification*)
   in
   let interesting, uninteresting =
@@ -214,24 +214,24 @@ let state ctxt log model_with_q extras =
       List.partition (fun (_, v) -> REP.is_interesting v) preds
     in
     add_labeled
-      lab_interesting
-      (List.map render_sympair interesting_preds)
-      (add_labeled
-        lab_uninteresting
-        (List.map render_sympair uninteresting_preds)
-        (add_labeled
-          lab_interesting
-          (List.map render_sympair interesting_funs)
+       lab_interesting
+       (List.map render_sympair interesting_preds)
+       (add_labeled
+          lab_uninteresting
+          (List.map render_sympair uninteresting_preds)
           (add_labeled
-            lab_uninteresting
-            (List.map render_sympair uninteresting_funs)
-            (add_labeled
-              lab_interesting
-              (List.map render_constraints interesting_constraints)
-              (add_labeled
+             lab_interesting
+             (List.map render_sympair interesting_funs)
+             (add_labeled
                 lab_uninteresting
-                (List.map render_constraints uninteresting_constraints)
-                labeled_empty)))))
+                (List.map render_sympair uninteresting_funs)
+                (add_labeled
+                   lab_interesting
+                   (List.map render_constraints interesting_constraints)
+                   (add_labeled
+                      lab_uninteresting
+                      (List.map render_constraints uninteresting_constraints)
+                      labeled_empty)))))
   in
   let terms =
     let variables =
