@@ -185,9 +185,14 @@ let simp_view s =
   else
     [ div [ btn; div [ val_simp ]; div [ val_orig ] ] ]
 
+
 let make_not_given_to_solver ds =
-  h 1 "Definitions and constraints not handled automatically" (interesting_uninteresting table_without_head simp_view ds)
-       
+  h
+    1
+    "Definitions and constraints not handled automatically"
+    (interesting_uninteresting table_without_head simp_view ds)
+
+
 let make_resources rs =
   h 1 "Available resources" (interesting_uninteresting table_without_head simp_view rs)
 

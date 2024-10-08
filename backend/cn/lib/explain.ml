@@ -173,7 +173,7 @@ let state ctxt log model_with_q extras =
     { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
   in
   let render_sympair p =
-    { original = Sym.pp (fst p); simplified = [] } 
+    { original = Sym.pp (fst p); simplified = [] }
     (*Symbols do not need simplification*)
   in
   let interesting, uninteresting =
@@ -213,12 +213,25 @@ let state ctxt log model_with_q extras =
     let interesting_preds, uninteresting_preds =
       List.partition (fun (_, v) -> REP.is_interesting v) preds
     in
-    add_labeled lab_interesting (List.map render_sympair interesting_preds)
-      (add_labeled lab_uninteresting (List.map render_sympair uninteresting_preds)
-      (add_labeled lab_interesting (List.map render_sympair interesting_funs)
-      (add_labeled lab_uninteresting (List.map render_sympair uninteresting_funs)
-      (add_labeled lab_interesting (List.map render_constraints interesting_constraints)
-      (add_labeled lab_uninteresting (List.map render_constraints uninteresting_constraints) labeled_empty)))))
+    add_labeled
+      lab_interesting
+      (List.map render_sympair interesting_preds)
+      (add_labeled
+        lab_uninteresting
+        (List.map render_sympair uninteresting_preds)
+        (add_labeled
+          lab_interesting
+          (List.map render_sympair interesting_funs)
+          (add_labeled
+            lab_uninteresting
+            (List.map render_sympair uninteresting_funs)
+            (add_labeled
+              lab_interesting
+              (List.map render_constraints interesting_constraints)
+              (add_labeled
+                lab_uninteresting
+                (List.map render_constraints uninteresting_constraints)
+                labeled_empty)))))
   in
   let terms =
     let variables =
@@ -282,7 +295,10 @@ let state ctxt log model_with_q extras =
     add_labeled
       lab_interesting
       (List.map render_constraints interesting)
-      (add_labeled lab_uninteresting (List.map render_constraints uninteresting) labeled_empty)
+      (add_labeled
+        lab_uninteresting
+        (List.map render_constraints uninteresting) 
+        labeled_empty)
   in
   let resources =
     let same_res, diff_res =
