@@ -296,9 +296,9 @@ let state ctxt log model_with_q extras =
       lab_interesting
       (List.map render_constraints interesting)
       (add_labeled
-        lab_uninteresting
-        (List.map render_constraints uninteresting)
-        labeled_empty)
+         lab_uninteresting
+         (List.map render_constraints uninteresting)
+         labeled_empty)
   in
   let resources =
     let same_res, diff_res =
