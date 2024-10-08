@@ -173,7 +173,7 @@ let state ctxt log model_with_q extras =
     { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
   in
   let render_sympair p =
-    { original = Sym.pp (fst p); simplified = [Sym.pp (fst p)] }
+    { original = Sym.pp (fst p); simplified = [ Sym.pp (fst p) ] }
     (*Symbols do not need simplification*)
   in
   let interesting, uninteresting =
