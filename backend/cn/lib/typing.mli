@@ -184,3 +184,5 @@ val modify_where : (Where.t -> Where.t) -> unit m
 (* val add_trace_item_to_trace : Context.trace_item * Locations.t -> unit m *)
 
 val init_solver : unit -> unit m
+
+val warn_when_not_u64 : string -> Locations.t -> BaseTypes.t -> 'a Terms.annot option -> unit
