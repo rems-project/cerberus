@@ -53,6 +53,7 @@ val add_labeled : label -> 'a list -> 'a labeled_view -> 'a labeled_view
     the first component is "interesting", the second is not. *)
 type state_report =
   { where : where_report; (** Location information *)
+    not_given_to_solver : simp_view labeled_view;
     resources : simp_view labeled_view;
     constraints : simp_view labeled_view;
     terms : term_entry labeled_view

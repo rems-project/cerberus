@@ -2,8 +2,10 @@ open Report
 module IT = IndexTerms
 module BT = BaseTypes
 module RE = Resources
+module REP = ResourcePredicates
 module RET = ResourceTypes
 module LC = LogicalConstraints
+module LF = LogicalFunctions
 module LAT = LogicalArgumentTypes
 module LS = LogicalSorts
 module SymSet = Set.Make (Sym)
@@ -138,7 +140,7 @@ let rec simp_resource eval r =
   | I i -> I i
 
 
-let state ctxt model_with_q extras =
+let state ctxt log model_with_q extras =
   let where =
     let cur_colour = !Cerb_colour.do_colour in
     Cerb_colour.do_colour := false;
@@ -167,6 +169,66 @@ let state ctxt model_with_q extras =
   (*   | Some v -> IT.pp v *)
   (*   | None -> parens !^"not evaluated" *)
   (* in *)
+  let render_constraints c =
+    { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
+  in
+  let render_sympair p =
+    { original = Sym.pp (fst p); simplified = [ Sym.pp (fst p) ] }
+    (*Symbols do not need simplification*)
+  in
+  let interesting, uninteresting =
+    List.partition
+      (fun lc ->
+        match lc with
+        (* | LC.T (IT (Aligned _, _, _)) -> false *)
+        | LC.T (IT (Representable _, _, _)) -> false
+        | LC.T (IT (Good _, _, _)) -> false
+        | _ -> true)
+      (LCSet.elements ctxt.constraints)
+  in
+  let not_given_to_solver =
+    (* get predicates from past steps of trace not given to solver *)
+    let log_preds =
+      let log_comb acc entry =
+        match entry with
+        | State ctxt ->
+          let _, _, ps = not_given_to_solver ctxt in
+          List.append ps acc
+        | Action _ -> acc
+      in
+      List.fold_left log_comb [] log
+    in
+    let forall_constraints, funs, ctxt_preds = not_given_to_solver ctxt in
+    let preds =
+      let pred_compare (s1, _) (s2, _) = Sym.compare s1 s2 in
+      (*CHT TODO: deriving this would require changing a lot of files *)
+      Base.List.dedup_and_sort (List.append log_preds ctxt_preds) ~compare:pred_compare
+    in
+    let interesting_constraints, uninteresting_constraints =
+      List.partition LC.is_interesting forall_constraints
+    in
+    let interesting_funs, uninteresting_funs =
+      List.partition (fun (_, v) -> LF.is_interesting v) funs
+    in
+    let interesting_preds, uninteresting_preds =
+      List.partition (fun (_, v) -> REP.is_interesting v) preds
+    in
+    add_labeled
+      lab_interesting
+      (List.concat
+         [ List.map render_sympair interesting_preds;
+           List.map render_sympair interesting_funs;
+           List.map render_constraints interesting_constraints
+         ])
+      (add_labeled
+         lab_uninteresting
+         (List.concat
+            [ List.map render_sympair uninteresting_preds;
+              List.map render_sympair uninteresting_funs;
+              List.map render_constraints uninteresting_constraints
+            ])
+         labeled_empty)
+  in
   let terms =
     let variables =
       let make s ls = sym_ (s, ls, Locations.other __FUNCTION__) in
@@ -226,23 +288,13 @@ let state ctxt model_with_q extras =
       (add_labeled lab_uninteresting (List.map snd uninteresting) labeled_empty)
   in
   let constraints =
-    let render c =
-      { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
-    in
-    let interesting, uninteresting =
-      List.partition
-        (fun lc ->
-          match lc with
-          (* | LC.T (IT (Aligned _, _, _)) -> false *)
-          | LC.T (IT (Representable _, _, _)) -> false
-          | LC.T (IT (Good _, _, _)) -> false
-          | _ -> true)
-        (LCSet.elements ctxt.constraints)
-    in
     add_labeled
       lab_interesting
-      (List.map render interesting)
-      (add_labeled lab_uninteresting (List.map render uninteresting) labeled_empty)
+      (List.map render_constraints interesting)
+      (add_labeled
+         lab_uninteresting
+         (List.map render_constraints uninteresting)
+         labeled_empty)
   in
   let resources =
     let same_res, diff_res =
@@ -259,7 +311,6 @@ let state ctxt model_with_q extras =
           | _ -> true)
         diff_res
     in
-    let evaluate it = Solver.eval ctxt.global model it in
     let with_suff mb x = match mb with None -> x | Some d -> d ^^^ x in
     let pp_res mb_suff (rt, args) =
       { original = with_suff mb_suff (RE.pp (rt, args));
@@ -277,7 +328,7 @@ let state ctxt model_with_q extras =
       interesting
       (add_labeled lab_uninteresting uninteresting labeled_empty)
   in
-  { where; terms; resources; constraints }
+  { where; not_given_to_solver; terms; resources; constraints }
 
 
 let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extras) =
@@ -298,7 +349,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
   (* in *)
   let req_entry ret = RET.pp ret in
   let trace =
-    let statef ctxt = state ctxt model_with_q extras in
+    let statef ctxt = state ctxt log model_with_q extras in
     List.rev
       (statef ctxt
        :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
