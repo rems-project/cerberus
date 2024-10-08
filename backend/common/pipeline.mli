@@ -45,7 +45,7 @@ val load_core_impl:
 val cpp: (configuration * io_helpers) -> filename:string -> (string, Cerb_location.t * Errors.cause) Exception.exceptM
 
 val c_frontend:
-  ?cnnames: (string * Symbol.sym) list ->
+  ?cn_init_scope: Cn_desugaring.init_scope ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->
@@ -54,7 +54,7 @@ val c_frontend:
   , Cerb_location.t * Errors.cause) Exception.exceptM
 
 val c_frontend_and_elaboration:
-  ?cnnames: (string * Symbol.sym) list ->
+  ?cn_init_scope: Cn_desugaring.init_scope ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->

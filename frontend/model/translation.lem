@@ -1806,18 +1806,27 @@ end                       end))) ) ]
             end
           end
       
-      | A.AilEident id ->
-          let id_sym_pe =
+      | A.AilEident sym ->
+          E.cheri_const_alias_map >>= fun alias_map ->
+          let sym_alias_if_CHERI =
+            if Global.is_CHERI () then
+              match Map.lookup sym alias_map with
+                | Just cheri_sym -> cheri_sym
+                | Nothing        -> sym
+              end
+            else
+              sym in
+          let normalised_sym =
             match ctx with
               | ECTX_glob glob_sym sym' ->
-                  if id = glob_sym then
-                    Caux.mk_sym_pe sym'
+                  if sym = glob_sym then
+                    sym'
                   else
-                    Caux.mk_sym_pe id
+                    sym_alias_if_CHERI
               | _ (* ECTX_other *) ->
-                  Caux.mk_sym_pe id
+                  sym_alias_if_CHERI
             end in
-          E.return (Caux.mk_pure_e id_sym_pe)
+          E.return (Caux.mk_pure_e (Caux.mk_sym_pe normalised_sym))
       
       | A.AilEcast _ cast_ty e ->
           let e_ty = ctype_of e in
@@ -3518,7 +3527,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         let decls = List.map (fun (sym, _, (_, qs, ty)) -> (sym, (qs, ty))) decls_with_loc in
         E.with_block_objects decls begin
           E.mapM self ss
-        end >>= fun (compound_lits, core_ss) ->
+        end >>= fun (const_aliases, compound_lits, core_ss) ->
         let lit_pats_core_creates : list (C.pattern * C.expr unit) =
           List.map (fun (loc, prefix, sym, is_const, ty) ->
             let core_ty = Caux.mk_ail_ctype_pe ty in
@@ -3542,6 +3551,13 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
             , Caux.pcreate (Loc.with_cursor_from loc ident_loc) align_ival c_ty (Symbol.PrefSource ident_loc [f; sym]) )
           ) decls_with_loc in
+        let cheri_const_intrinsic = List.map (fun (sym, (qs, ty, sym')) ->
+          (* TODO: the partial pattern match in the lets is tasteless (even though the memop()
+              never evaluates to an unspecified value) *)
+          let ptr_ty = Ctype.mk_ctype_pointer qs ty in
+          ( Caux.mk_specified_pat (Caux.mk_sym_pat sym' (C.BTy_object C.OTy_pointer))
+          , cheri_readonly_perms ptr_ty (Caux.mk_sym_pe sym) )
+        ) const_aliases in
         let pat_core_kills : list (C.expr unit) =
           List.map (fun (loc, _, sym, _, ty) ->
             Caux.pkill (Loc.with_cursor_from loc loc) (C.Static ty) (Caux.mk_sym_pe sym)
@@ -3556,7 +3572,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
           ) decls_with_loc in
         E.return (
           (* NOTE: we sequence (left-to-right) the creates and kills of the block-scoped objects *)
-          Caux.mk_sseqs (lit_pats_core_creates ++ pats_core_creates) begin
+          Caux.mk_sseqs (lit_pats_core_creates ++ pats_core_creates ++ cheri_const_intrinsic) begin
             Caux.mk_unit_sseq (core_ss ++ core_kills ++ pat_core_kills)
               Caux.mk_skip_e
           end
@@ -4044,7 +4060,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     (* NOTE: we use `with_block_objects`, for the compound_literal tracking *)
                     E.with_block_objects [] begin
                       wrapped_translate_expression true (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr
-                    end >>= fun (compound_lits, core) ->
+                    end >>= fun (_, compound_lits, core) ->
                     let lit_pats_core_creates : list (C.pattern * C.expr unit) =
                       List.map (fun (loc, prefix, sym, is_const, ty) ->
                         let core_ty = Caux.mk_ail_ctype_pe ty in
@@ -4160,7 +4176,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 let (mk_body_wrapper, label_visibles) =
                   if is_using_inner_arg_temps then
                     let xs = List.map (fun (sym, (_, ty, _)) -> (sym, ty)) (List.zip param_syms params) in
-                    ( (fun z -> E.with_block_objects (List.map (fun (sym, ty) -> (sym, (Ctype.no_qualifiers, ty))) xs) z >>= fun (_, ret) -> E.return ret)
+                    ( (fun z -> E.with_block_objects (List.map (fun (sym, ty) -> (sym, (Ctype.no_qualifiers, ty))) xs) z >>= fun (_, _, ret) -> E.return ret)
                     , Map.map (fun z -> z ++ xs) visibles.label_visibles_ )
                   else
                     ((fun z -> z), visibles.label_visibles_) in
@@ -4250,15 +4266,49 @@ let translate_program stdlib (startup_sym_opt, sigm) =
   
   (* adding string literals as Core globals *)
   E.get_string_literals >>= fun xs ->
-  E.foldlM (fun acc (loc, sym, ty, e_init) ->
-    let expr =
-      Caux.pcreate_readonly loc
-        (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty))
-        (Caux.mk_ctype_pe ty)
-        e_init
-        (Symbol.PrefStringLiteral loc (Symbol.digest_of_sym sym)) in
-    E.return ((sym, C.GlobalDef (C.BTy_object C.OTy_pointer, ty) expr) :: acc)
-  ) globs (List.reverse xs) >>= fun globs' ->
+  E.foldlM begin if Global.is_CHERI () then
+    (* For CHERI we do not use create_readonly() *)
+    fun acc (loc, sym, ty, e_init) ->
+       let ptr_ty = AilTypesAux.array_coercion ty in
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun ptr_wrp ->
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun tmp_wrp ->
+        (*
+          lets ptr = create(Ivalignof([| ty |]), [| ty |]) in
+          lets _   = store_lock(TY, ptr, [| e_init |]) in
+          LET mask = [| ~(CAP_PERM_STORE || CAP_PERM_STORE_CAP || CAP_PERM_STORE_LOCAL_CAP) |] IN
+          lets tmp = memop(cheri_perms_and, ptr, mask) in
+          case tmp of
+            | Specifed(ptr) => pure(ptr)
+            | Unspecified(_) => pure(undef("Unspecified cheri_perms_and()"))
+          end
+        *)
+        let expr =
+          let ty_pe = Caux.mk_ctype_pe ty in
+          Caux.mk_sseqs [
+            ( ptr_wrp.E.sym_pat
+            , Caux.pcreate loc (Caux.mk_alignof_pe ty_pe) ty_pe
+                (Symbol.PrefStringLiteral loc (Symbol.digest_of_sym sym)) )
+          ; ( Caux.mk_empty_pat C.BTy_unit
+            , Caux.pstore_lock loc ty_pe ptr_wrp.E.sym_pe e_init Cmm.NA )
+          ] begin
+            Caux.mk_sseq_e tmp_wrp.E.sym_pat (cheri_readonly_perms ptr_ty ptr_wrp.E.sym_pe)
+              (Caux.mk_case_e tmp_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat ptr_wrp.E.sym_pat
+                  , Caux.mk_pure_e ptr_wrp.E.sym_pe )
+                ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                  , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Unspecified cheri_perms_and()")) ) ] )
+          end in
+        E.return ((sym, C.GlobalDef (C.BTy_object C.OTy_pointer, ty) expr) :: acc)
+  else
+    fun acc (loc, sym, ty, e_init) ->
+      let expr =
+        Caux.pcreate_readonly loc
+          (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty))
+          (Caux.mk_ctype_pe ty)
+          e_init
+          (Symbol.PrefStringLiteral loc (Symbol.digest_of_sym sym)) in
+      E.return ((sym, C.GlobalDef (C.BTy_object C.OTy_pointer, ty) expr) :: acc)
+  end globs (List.reverse xs) >>= fun globs' ->
   E.return (core_tagDefs, globs', cfuns, funinfo)
 
 

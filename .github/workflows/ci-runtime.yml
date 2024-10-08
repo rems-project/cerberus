@@ -78,6 +78,12 @@ jobs:
         opam pin --yes --no-action add cn .
         opam install --yes cn ocamlformat.0.26.2
 
+    - name: Run CN-runtime CI tests (Cerberus)
+      run: |
+        opam switch ${{ matrix.version }}
+        eval $(opam env --switch=${{ matrix.version }})
+        cd tests; ./run-cn-exec.sh
+
     - name: Checkout cn-tutorial
       uses: actions/checkout@v4
       with:
@@ -85,7 +91,7 @@ jobs:
         path: cn-tutorial
         ref: cn-runtime-testing # FIXME: remove once the branch is merged 
 
-    - name: Run CN-runtime CI tests 
+    - name: Run CN-runtime CI tests (CN tutorial)
       run: |
         opam switch ${{ matrix.version }}
         eval $(opam env --switch=${{ matrix.version }})

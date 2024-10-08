@@ -64,7 +64,13 @@ Module Type CheriMemoryImpl
        (Bounds)
        (Permissions)
   )
-  (IMP: Implementation)
+  (IMP:Implementation(AddressValue)
+         (Flags)
+         (ObjType)
+         (SealType)
+         (Bounds)
+         (Permissions)
+         Capability_GS)
   (TD: TagDefs)
   (SW: CerbSwitchesDefs)
 <: Memory(AddressValue)(Bounds)(MC).
@@ -834,11 +840,41 @@ Module Type CheriMemoryImpl
           (fun _ '(v_id, v_ty, _) '(s_id, (_, _, _, s_ty))  =>
              sassert (ident_equal s_id v_id) "struct field identifiers mismatch" ;;
              same <- CoqCtype.ctypeEqual DEFAULT_FUEL s_ty v_ty ;;
-             sassert same "struct field types mismatch" ;;
-             ret tt
+             sassert same "struct field types mismatch"
           ) tt values members
     | _ => raise "struct tagdefs mismatch"
     end.
+
+  (** Find the first live allocation which fully contains the bounds of the given capability. *)
+  Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
+    :=
+    if negb (C.cap_is_valid c)
+    then None (* revoked *)
+    else
+      let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
+      let csize := climit - cbase in
+
+      ZMap.map_find_first
+        (fun alloc_id alloc =>
+           let abase := AddressValue.to_Z alloc.(base) in
+           let asize := Z.of_nat alloc.(size) in
+           let alimit := abase + asize in
+
+           (negb alloc.(is_dead))
+           && ((abase <=? cbase) && (cbase <? alimit))
+        ) st.(allocations).
+
+  (** Find the first live allocation which fully contains the bounds of the given capability. *)
+  Definition find_cap_allocation c : memM (option (storage_instance_id * allocation))
+    :=  st <- get ;; ret (find_cap_allocation_st st c).
+
+
+  (* If given capablity is valid, check if it corresponds to some live allocaiton. *)
+  Definition cap_liveness_check (c: C.t) (s:mem_state): bool :=
+    if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT) &&
+         C.cap_is_valid c && (negb (C.get_ghost_state c).(tag_unspecified))
+    then CapFns.is_some (find_cap_allocation_st s c)
+    else true.
 
   Fixpoint repr
     (fuel: nat)
@@ -880,7 +916,8 @@ Module Type CheriMemoryImpl
             | CoqIntegerType.Signed CoqIntegerType.Intptr_t
             | CoqIntegerType.Unsigned CoqIntegerType.Intptr_t
               =>
-                '(cb, ct) <- option2serr "int encoding error" (C.encode true c) ;;
+                sassert (cap_liveness_check c s) "capability is pointing to dead allocation" ;;
+                '(cb, ct) <- option2serr "int encoding error" (C.encode c) ;;
                 let sz := length cb in
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
@@ -913,7 +950,8 @@ Module Type CheriMemoryImpl
                 ((FP_valid (CoqSymbol.Symbol file_dig n_value opt_name)) as
                   fp) =>
                 let '(fm, c_value) := resolve_function_pointer (funptrmap s) fp in
-                '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
+                sassert (cap_liveness_check c_value s) "capability is pointing to dead allocation" ;;
+                '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode c_value) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let sz := length cb in
                 sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
@@ -927,7 +965,8 @@ Module Type CheriMemoryImpl
                     ,
                     AddressValue.with_offset addr (Z.of_nat sz))
             | (PVfunction (FP_invalid c) | PVconcrete c) =>
-                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c) ;;
+                sassert (cap_liveness_check c s) "capability is pointing to dead allocation" ;;
+                '(cb, ct) <- option2serr "pointer encoding error" (C.encode c) ;;
                 sassert (is_pointer_algined addr) "unaligned pointer to cap" ;;
                 let sz := length cb in
                 sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
@@ -944,18 +983,18 @@ Module Type CheriMemoryImpl
             monadic_fold_left
               (fun '(s', addr') (mval': mem_value) => repr fuel addr' mval' s')
               mvals (s, addr)
-        | MVunion tag_sym memb_ident mval =>
+        | MVunion tag_sym _ mval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Union tag_sym)) ;;
             sassert (AddressValue.to_Z addr + (Z.of_nat sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
             '(s', pad_addr) <- repr fuel addr mval s ;;
-            let pad_size := Nat.sub sz (Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr)) in
+            let obj_sz := Z.to_nat (AddressValue.to_Z pad_addr - AddressValue.to_Z addr) in
+            sassert (obj_sz <=? sz)%nat "Union member is larger that the union" ;;
+            let pad_size := Nat.sub sz obj_sz in
             let s'' := do_pad pad_addr pad_size s' in
             ret (s'', AddressValue.with_offset pad_addr (Z.of_nat pad_size))
         | MVstruct tag_sym xs =>
             struct_typecheck tag_sym (TD.tagDefs tt) xs ;;
-            szn <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
-            let sz := Z.of_nat szn in
-            sassert ((AddressValue.to_Z addr + sz) <=? AddressValue.ADDR_LIMIT) "The object does not fit in the address space" ;;
+            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype [] (CoqCtype.Struct tag_sym)) ;;
             '(offs, final_off) <- offsetsof_struct DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             '(s', final_pad_addr) <-
               monadic_fold_left2
@@ -963,15 +1002,16 @@ Module Type CheriMemoryImpl
                    (*  off - offset of this field from the start of struct, *after* padding *)
                    let value_a := AddressValue.with_offset addr (Z.of_nat off) in
                    let pad_size := AddressValue.to_Z value_a - AddressValue.to_Z addr0 in
+                   sassert ((AddressValue.to_Z addr0 + pad_size) <=? AddressValue.ADDR_LIMIT) "struct member padding does not fit in the address space" ;;
                    let s1 := do_pad addr0 (Z.to_nat pad_size) s0 in
                    (* write the value *)
                    '(s2, end_addr) <- repr fuel value_a mval s1 ;;
-                   szn <- sizeof DEFAULT_FUEL None ty ;;
-                   ret (s2, AddressValue.with_offset value_a (Z.of_nat szn)))
+                   ret (s2, end_addr))
 
                 (s, addr) offs xs ;;
 
-            let final_pad_size := sz - (Z.of_nat final_off) in
+            let final_pad_size := (Z.of_nat sz) - (Z.of_nat final_off) in
+            sassert ((AddressValue.to_Z final_pad_addr + final_pad_size) <=? AddressValue.ADDR_LIMIT) "struct final padding does not fit in the address space" ;;
             let s'' := do_pad final_pad_addr (Z.to_nat final_pad_size) s' in
             ret (s'', AddressValue.with_offset final_pad_addr final_pad_size)
         end
@@ -1004,12 +1044,12 @@ Module Type CheriMemoryImpl
   Definition allocate_object
     (tid: MC.thread_id)
     (pref: CoqSymbol.prefix)
-    (int_val: integer_value)
+    (align: integer_value)
     (ty: CoqCtype.ctype)
     (init_opt: option mem_value)
     : memM pointer_value
     :=
-    let align_n := num_of_int int_val in
+    let align_n := num_of_int align in
     if align_n <=? 0
       then raise (InternalErr "non-positive aligment passed to allocate_object")
     else
@@ -1020,60 +1060,14 @@ Module Type CheriMemoryImpl
       let size_n' := Z.to_nat size_z' in
       let align_n' := Z.max align_n (1 + (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
-      (*
-    (if (negb ((size_n =? size_n') && (align_n =? align_n')))
-    then
-      mprint_msg
-          ("allocate_object CHERI size/alignment adusted. WAS: " ++
-            ", size= " ++ String.dec_str size_n ++
-              ", align= " ++ String.dec_str align_n ++
-                "BECOME: " ++
-                  ", size= " ++ String.dec_str size_n' ++
-                    ", align= " ++ String.dec_str align_n')
-    else ret tt) ;;
-       *)
-
-      (match init_opt with
-       | None =>
-           '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) IsWritable ;;
-           ret (alloc_id, addr, false)
-       | Some mval =>  (* here we allocate an object with initiliazer *)
-           let (ro,readonly_status) :=
-             match pref with
-             | CoqSymbol.PrefStringLiteral _ _ => (true, IsReadOnly ReadonlyStringLiteral)
-             | CoqSymbol.PrefTemporaryLifetime _ _ =>
-                 (true, IsReadOnly ReadonlyTemporaryLifetime)
-             | _ =>
-                 (true, IsReadOnly ReadonlyConstQualified)
-                   (* | _ => (false,IsWritable) *)
-             end
-           in
-           '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) readonly_status ;;
-           (* We should be careful not to introduce a state change here
-              in case of error which happens after the [allocator]
-              invocation, as [allocator] modifies state. In the current
-              implementation, this is not happening, as errors are handled
-              as [InternalErr] which supposedly should terminate program
-              evaluation.  *)
-           s <- get ;;
-           '(s',_) <- serr2InternalErr (repr DEFAULT_FUEL addr mval s) ;;
-           put s' ;;
-           ret (alloc_id, addr, ro)
-       end)
-        >>=
-        fun '(alloc_id, addr, ro)  =>
+      match init_opt with
+      | None =>
+          '(alloc_id, addr) <- allocator size_n' align_n' false pref (Some ty) IsWritable ;;
           let c := C.alloc_cap addr (AddressValue.of_Z size_z') in
-          let c :=
-            if ro then
-              let p := C.cap_get_perms c in
-              let p := Permissions.perm_clear_store p in
-              let p := Permissions.perm_clear_store_cap p in
-              let p := Permissions.perm_clear_store_local_cap p in
-              C.cap_narrow_perms c p
-            else c
-          in
-          ret (PVconcrete c).
-
+          ret (PVconcrete c)
+      | Some mval =>  (* here we allocate an object with initiliazer *)
+          raise (InternalErr "invalid init_opt passed to allocate_object")
+      end.
 
   Definition cap_is_null  (c : C.t) : bool :=
     cap_to_Z c =? 0.
@@ -1169,7 +1163,6 @@ Module Type CheriMemoryImpl
 
   Fixpoint abst
     (fuel: nat)
-    (find_allocation : C.t -> option (storage_instance_id * allocation))
     (funptrmap : ZMap.M.t (digest * string * C.t))
     (tag_query_f : AddressValue.t -> (bool* CapGhostState))
     (addr : AddressValue.t)
@@ -1181,7 +1174,7 @@ Module Type CheriMemoryImpl
     | O => raise "abst out of fuel"
     | S fuel =>
         let '(CoqCtype.Ctype _ ty) := cty in
-        let self f := abst f find_allocation funptrmap tag_query_f in
+        let self f := abst f funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
         sassert (negb (Nat.ltb (List.length bs) sz)) "abst, |bs| < sizeof(ty)" ;;
         match ty with
@@ -1351,26 +1344,6 @@ Module Type CheriMemoryImpl
           (fun (z' : mem_value) => ret (MVunion x_value y_value z'))
     | MVErr err => fail loc err
     end.
-
-  (** Find the first live allocation which fully contains the bounds of the given capability. *)
-  Definition find_cap_allocation_st st c : option (storage_instance_id * allocation)
-    :=
-    let (cbase,climit) := Bounds.to_Zs (C.cap_get_bounds c) in
-    let csize := climit - cbase in
-
-    ZMap.map_find_first
-      (fun alloc_id alloc =>
-         let abase := AddressValue.to_Z alloc.(base) in
-         let asize := Z.of_nat alloc.(size) in
-         let alimit := abase + asize in
-
-         (negb alloc.(is_dead))
-         && ((abase <=? cbase) && (cbase <? alimit))
-      ) st.(allocations).
-
-  (** Find the first live allocation which fully contains the bounds of the given capability. *)
-  Definition find_cap_allocation c : memM (option (storage_instance_id * allocation))
-    :=  st <- get ;; ret (find_cap_allocation_st st c).
 
   (* Check whether this cap base address is within allocation *)
   Definition cap_bounds_within_alloc_bool (c:C.t) a : bool
@@ -1646,7 +1619,7 @@ Module Type CheriMemoryImpl
               bounds_unspecified := false |})
       in
       '(mval, bs') <-
-        serr2InternalErr (abst DEFAULT_FUEL (find_cap_allocation_st st) st.(funptrmap) tag_query addr ty bs)
+        serr2InternalErr (abst DEFAULT_FUEL st.(funptrmap) tag_query addr ty bs)
       ;;
       mval <- mem_value_strip_err loc mval ;;
       szn <- serr2InternalErr (sizeof DEFAULT_FUEL None ty) ;;
@@ -3228,7 +3201,7 @@ Module Type CheriMemoryImpl
     : memM (option mem_value)
     :=
     cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
-    upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+    length_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
     st <- get ;;
     match cap_of_mem_value st.(funptrmap) cap_val with
     | None =>
@@ -3240,11 +3213,14 @@ Module Type CheriMemoryImpl
     | Some (funptrmap, c_value) =>
         update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
         ;;
-        match upper_val with
-        | MVinteger CoqIntegerType.Size_t (IV n_value) =>
-            let x' := (cap_to_Z c_value) in
-            let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_value))
-            in ret (Some (update_cap_in_mem_value cap_val c_value))
+        match length_val with
+        | MVinteger CoqIntegerType.Size_t (IV n_length) =>
+            if Z.eqb n_length 0 then
+              fail loc (MerrCHERI CheriZeroLength)
+            else
+              let x' := (cap_to_Z c_value) in
+              let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', x' + n_length))
+              in ret (Some (update_cap_in_mem_value cap_val c_value))
         | _ =>
             fail loc
               (MerrOther
@@ -3274,12 +3250,14 @@ Module Type CheriMemoryImpl
               mem_state_with_funptrmap funptrmap st))
         ;;
         match mask_val with
-        | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
+        | MVinteger (CoqIntegerType.Size_t as ity) (IV z_value)
           =>
             iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
-            bytes_value <- serr2InternalErr (bytes_of_Z iss sz n_value) ;;
-            let bits := bool_bits_of_bytes bytes_value in
+            bytes_value <- serr2InternalErr (bytes_of_Z iss sz z_value) ;;
+            let bits := List.rev (bool_bits_of_bytes bytes_value) in
+            let bits := list.take (BinNat.N.to_nat Permissions.len) bits in
+            let bits := List.map negb bits in
             match Permissions.of_list bits with
             | None =>
                 fail loc
@@ -3774,7 +3752,13 @@ Module CheriMemoryExe
        (Bounds)
        (Permissions)
   )
-  (IMP: Implementation)
+  (IMP:Implementation(AddressValue)
+         (Flags)
+         (ObjType)
+         (SealType)
+         (Bounds)
+         (Permissions)
+         Capability_GS)
   (TD: TagDefs)
   (SW: CerbSwitchesDefs)
 <: CheriMemoryImpl(MC)(C)(IMP)(TD)(SW).

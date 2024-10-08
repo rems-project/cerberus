@@ -427,6 +427,11 @@ module IndexTerms = struct
            let z1 = BT.normalise_to_range bits_info1 z1 in
            let z2 = BT.normalise_to_range bits_info2 z2 in
            bool_ (Z.equal z1 z2) the_loc
+         (* Work-around for https://github.com/Z3Prover/z3/issues/7352 *)
+         | ( IT (ArrayShift { base = base1; ct = ct1; index = index1 }, _, _),
+             IT (ArrayShift { base = base2; ct = ct2; index = index2 }, _, _) )
+           when Sctypes.equal ct1 ct2 && IT.equal index1 index2 ->
+           eq_ (base1, base2) the_loc
          (* (cond ? const-1 : const-2) == const-3 *)
          | IT (ITE (cond, t1, t2), _, _), t3 when (is_c t1 || is_c t2) && is_c t3 ->
            aux
@@ -456,7 +461,7 @@ module IndexTerms = struct
       | NthTuple (n, it) ->
         let it = aux it in
         tuple_nth_reduce it n the_bt
-      | IT.Struct (tag, members) ->
+      | Struct (tag, members) ->
         (match members with
          | (_, IT (StructMember (str, _), _, _)) :: _
            when BT.equal (Struct tag) (IT.bt str)
@@ -469,8 +474,8 @@ module IndexTerms = struct
            str
          | _ ->
            let members = List.map (fun (member, it) -> (member, aux it)) members in
-           IT (IT.Struct (tag, members), the_bt, the_loc))
-      | IT.StructMember (s_it, member) ->
+           IT (Struct (tag, members), the_bt, the_loc))
+      | StructMember (s_it, member) ->
         let s_it = aux s_it in
         let rec make t =
           match t with
@@ -479,30 +484,30 @@ module IndexTerms = struct
             (* (if cond then it1 else it2) . member --> (if cond then it1.member else
                it2.member) *)
             ite_ (cond, make it1, make it2) the_loc
-          | _ -> IT (IT.StructMember (t, member), the_bt, the_loc)
+          | _ -> IT (StructMember (t, member), the_bt, the_loc)
         in
         make s_it
-      | IT.StructUpdate ((t, m), v) ->
+      | StructUpdate ((t, m), v) ->
         let t = aux t in
         let v = aux v in
         IT (StructUpdate ((t, m), v), the_bt, the_loc)
-      | IT.Record members ->
+      | Record members ->
         let members = List.map (fun (member, it) -> (member, aux it)) members in
-        IT (IT.Record members, the_bt, the_loc)
-      | IT.RecordMember (it, member) ->
+        IT (Record members, the_bt, the_loc)
+      | RecordMember (it, member) ->
         let it = aux it in
         record_member_reduce it member
-      | IT.RecordUpdate ((t, m), v) ->
+      | RecordUpdate ((t, m), v) ->
         let t = aux t in
         let v = aux v in
         IT (RecordUpdate ((t, m), v), the_bt, the_loc)
-      (* revisit when memory model changes *)
+      (* TODO (DCM, VIP) revisit *)
       | Binop (LTPointer, a, b) ->
         let a = aux a in
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
           let loc = Cerb_location.other __FUNCTION__ in
-          aux (lt_ (pointerToIntegerCast_ a loc, pointerToIntegerCast_ b loc) the_loc))
+          aux (lt_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ false the_loc
         else
@@ -512,7 +517,7 @@ module IndexTerms = struct
         let b = aux b in
         if isIntegerToPointerCast a || isIntegerToPointerCast b then (
           let loc = Cerb_location.other __FUNCTION__ in
-          aux (le_ (pointerToIntegerCast_ a loc, pointerToIntegerCast_ b loc) the_loc))
+          aux (le_ (addr_ a loc, addr_ b loc) the_loc))
         else if IT.equal a b then
           bool_ true the_loc
         else
@@ -535,6 +540,13 @@ module IndexTerms = struct
         IT (MemberShift (aux t, tag, member), the_bt, the_loc)
       | ArrayShift { base; ct; index } ->
         let base = aux base in
+        let base, index =
+          match base with
+          | IT (ArrayShift { base = base2; ct = ct2; index = i2 }, _, _)
+            when Sctypes.equal ct ct2 ->
+            (base2, IT.add_ (index, i2) the_loc)
+          | _ -> (base, index)
+        in
         let index = aux index in
         (match get_num_z index with
          | Some z when Z.equal Z.zero z -> base

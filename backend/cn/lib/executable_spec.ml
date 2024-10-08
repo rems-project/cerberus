@@ -199,17 +199,22 @@ let main
   ?(copy_source_dir = false)
   filename
   ((_, sigm) as ail_prog)
+  output_decorated
   output_decorated_dir
-  output_filename
   prog5
   statement_locs
   =
+  let output_filename =
+    match output_decorated with
+    | None -> Filename.(remove_extension (basename filename)) ^ "-exec.c"
+    | Some output_filename' -> output_filename'
+  in
   let prefix = match output_decorated_dir with Some dir_name -> dir_name | None -> "" in
   let oc = Stdlib.open_out (Filename.concat prefix output_filename) in
   let cn_oc = Stdlib.open_out (Filename.concat prefix "cn.c") in
   let cn_header_oc = Stdlib.open_out (Filename.concat prefix "cn.h") in
-  populate_record_map prog5;
   let instrumentation, symbol_table = Core_to_mucore.collect_instrumentation prog5 in
+  Executable_spec_records.populate_record_map instrumentation prog5;
   let executable_spec =
     generate_c_specs_internal
       with_ownership_checking
@@ -223,10 +228,10 @@ let main
     generate_c_datatypes sigm
   in
   let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records =
-    generate_c_functions_internal sigm prog5.mu_logical_predicates
+    generate_c_functions_internal sigm prog5.logical_predicates
   in
   let c_predicate_defs, locs_and_c_predicate_decls, c_records' =
-    generate_c_predicates_internal sigm prog5.mu_resource_predicates
+    generate_c_predicates_internal sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
     generate_conversion_and_equality_functions sigm
@@ -254,8 +259,8 @@ let main
   let record_fun_defs, record_fun_decls =
     Executable_spec_internal.generate_c_record_funs
       sigm
-      prog5.mu_logical_predicates
-      prog5.mu_resource_predicates
+      prog5.logical_predicates
+      prog5.resource_predicates
   in
   (* let extern_ownership_globals = if with_ownership_checking then "\n" ^
      generate_ownership_globals ~is_extern:true () else "" in *)

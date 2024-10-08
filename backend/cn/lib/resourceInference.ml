@@ -1,26 +1,10 @@
 module IT = IndexTerms
-open IT
-open Pp
-open ResourceTypes
-open Resources
-open Typing
-
-open Effectful.Make (Typing)
-
-open TypeErrors
-open LogicalConstraints
-module LAT = LogicalArgumentTypes
+module LC = LogicalConstraints
 module RET = ResourceTypes
-open ResourcePredicates
-open Memory
-open Pack
 
-let unpack_def global name args =
-  Option.bind (Global.get_logical_function_def global name) (fun def ->
-    match def.definition with
-    | Def body -> Some (LogicalFunctions.open_fun def.args body args)
-    | _ -> None)
+type oargs = Resources.oargs = O of IT.t
 
+open Typing
 
 let debug_constraint_failure_diagnostics
   lvl
@@ -33,7 +17,7 @@ let debug_constraint_failure_diagnostics
   if !Pp.print_level == 0 then
     ()
   else (
-    let pp_f = pp_with_eval (Solver.eval global model) in
+    let pp_f = IT.pp_with_eval (Solver.eval global model) in
     let diag msg c =
       match (c, model_with_q) with
       | LC.T tm, _ ->
@@ -73,13 +57,6 @@ module General = struct
     | One of one
     | Many of many
 
-  let pp_case = function
-    | One { one_index; value } ->
-      !^"one" ^^ parens (IT.pp one_index ^^ colon ^^^ IT.pp value)
-    | Many { many_guard; value } ->
-      !^"many" ^^ parens (IT.pp many_guard ^^ colon ^^^ IT.pp value)
-
-
   type cases = C of case list
 
   let add_case case (C cases) = C (cases @ [ case ])
@@ -88,7 +65,7 @@ module General = struct
     let here = Locations.other __FUNCTION__ in
     let update_with_ones base_array ones =
       List.fold_left
-        (fun m { one_index; value } -> map_set_ m (one_index, value) here)
+        (fun m { one_index; value } -> IT.map_set_ m (one_index, value) here)
         base_array
         ones
     in
@@ -96,15 +73,18 @@ module General = struct
       List.partition_map (function One c -> Left c | Many c -> Right c) cases
     in
     let@ base_value =
+      let module BT = BaseTypes in
       match (manys, item_bt) with
       | [ { many_guard = _; value } ], _ -> return value
-      | [], _ | _, BT.Unit -> return (default_ (BT.Map (a_bt, item_bt)) here)
+      | [], _ | _, BT.Unit -> return (IT.default_ (BT.Map (a_bt, item_bt)) here)
       | _many, _ ->
-        let term = IndexTerms.bool_ true here in
+        let term = IT.bool_ true here in
         let@ model = model_with here term in
         let model = Option.get model in
-        fail (fun ctxt ->
-          { loc; msg = Merging_multiple_arrays { requests; situation; ctxt; model } })
+        let msg ctxt =
+          TypeErrors.Merging_multiple_arrays { requests; situation; ctxt; model }
+        in
+        fail (fun ctxt -> { loc; msg = msg ctxt })
     in
     return (update_with_ones base_value ones)
 
@@ -123,6 +103,7 @@ module General = struct
     (* take one step of the "spine" judgement, reducing a function-type by claiming an
        argument resource or otherwise reducing towards an instantiated return-type *)
     let@ simp_ctxt = simp_ctxt () in
+    let module LAT = LogicalArgumentTypes in
     match ftyp with
     | LAT.Resource ((s, (resource, _bt)), info, ftyp) ->
       let resource = Simplify.ResourceTypes.simp simp_ctxt resource in
@@ -137,12 +118,13 @@ module General = struct
       (match o_re_oarg with
        | None ->
          let here = Locations.other __FUNCTION__ in
-         let@ model = model_with loc (bool_ true here) in
+         let@ model = model_with loc (IT.bool_ true here) in
          let model = Option.get model in
          fail (fun ctxt ->
            (* let ctxt = { ctxt with resources = original_resources } in *)
            let msg =
-             Missing_resource { requests = request_chain; situation; model; ctxt }
+             TypeErrors.Missing_resource
+               { requests = request_chain; situation; model; ctxt }
            in
            { loc; msg })
        | Some ((re, O oargs), changed_or_deleted') ->
@@ -155,8 +137,8 @@ module General = struct
       let it = Simplify.IndexTerms.simp simp_ctxt it in
       return (LAT.subst rt_subst (IT.make_subst [ (s, it) ]) ftyp, changed_or_deleted)
     | Constraint (c, info, ftyp) ->
-      let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
       let@ provable = provable loc in
+      Pp.(debug 9 (lazy (item "checking constraint" (LC.pp c))));
       let res = provable c in
       (match res with
        | `True -> return (ftyp, changed_or_deleted)
@@ -171,7 +153,7 @@ module General = struct
            (* let ctxt = { ctxt with resources = original_resources } in *)
            { loc;
              msg =
-               Unproven_constraint
+               TypeErrors.Unproven_constraint
                  { constr = c; info; requests = snd uiinfo; ctxt; model }
            }))
     | I _rt -> return (ftyp, changed_or_deleted)
@@ -179,44 +161,37 @@ module General = struct
 
   (* TODO: check that oargs are in the same order? *)
   let rec predicate_request loc (uiinfo : uiinfo) (requested : RET.predicate_type)
-    : ((predicate_type * oargs) * int list) option m
+    : ((RET.predicate_type * Resources.oargs) * int list) option m
     =
-    debug 7 (lazy (item "predicate request" (RET.pp (P requested))));
-    let start_timing = time_log_start "predicate-request" "" in
+    Pp.(debug 7 (lazy (item __FUNCTION__ (RET.pp (P requested)))));
+    let start_timing = Pp.time_log_start __FUNCTION__ "" in
     let@ oarg_bt = WellTyped.oarg_bt_of_pred loc requested.name in
     let@ provable = provable loc in
     let@ global = get_global () in
     let@ simp_ctxt = simp_ctxt () in
-    let needed = true in
     let resource_scan re ((needed : bool), oargs) =
       let continue = (Unchanged, (needed, oargs)) in
       if not needed then
         continue
       else (
         match re with
-        | P p', p'_oarg when RET.subsumed requested.name p'.name ->
+        | RET.P p', p'_oarg when RET.subsumed requested.name p'.name ->
           let here = Locations.other __FUNCTION__ in
-          let pmatch =
-            eq_
-              ( (pointerToIntegerCast_ requested.pointer) here,
-                pointerToIntegerCast_ p'.pointer here )
-              here
-            :: List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs
+          let addr_iargs_eqs =
+            IT.(eq_ ((addr_ requested.pointer) here, addr_ p'.pointer here) here)
+            :: List.map2 (fun x y -> IT.eq__ x y here) requested.iargs p'.iargs
           in
-          let took = and_ pmatch here in
-          let prov =
-            eq_
-              ( pointerToAllocIdCast_ requested.pointer here,
-                pointerToAllocIdCast_ p'.pointer here )
-              here
+          let addr_iargs_match = IT.and_ addr_iargs_eqs here in
+          let alloc_id_eq =
+            IT.(eq_ (allocId_ requested.pointer here, allocId_ p'.pointer here) here)
           in
           let debug_failure model msg term =
             Pp.debug 9 (lazy (Pp.item msg (RET.pp (fst re))));
             debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T term)
           in
-          (match provable (LC.T took) with
+          (match provable (LC.T addr_iargs_match) with
            | `True ->
-             (match provable (LC.T prov) with
+             (match provable (LC.T alloc_id_eq) with
               | `True ->
                 Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                 (Deleted, (false, p'_oarg))
@@ -224,76 +199,60 @@ module General = struct
                 debug_failure
                   (Solver.model ())
                   "couldn't use resource (matched address but not provenance)"
-                  prov;
+                  alloc_id_eq;
                 continue)
            | `False ->
              let model = Solver.model () in
-             (match provable (LC.T prov) with
+             (match provable (LC.T alloc_id_eq) with
               | `True ->
                 debug_failure
                   model
                   "couldn't use resource (matched provenance but not address)"
-                  took;
+                  addr_iargs_match;
                 continue
               | `False ->
+                let patched =
+                  IT.eq_ (requested.pointer, p'.pointer) here :: List.tl addr_iargs_eqs
+                in
                 debug_failure
                   (Solver.model ())
                   "couldn't use resource"
-                  (and_ (eq_ (requested.pointer, p'.pointer) here :: List.tl pmatch) here);
+                  IT.(and_ patched here);
                 continue))
         | _re -> continue)
     in
+    let needed = true in
     let here = Locations.other __FUNCTION__ in
     let@ (needed, oarg), changed_or_deleted =
-      let here = Locations.other __FUNCTION__ in
-      map_and_fold_resources loc resource_scan (needed, O (default_ oarg_bt here))
+      map_and_fold_resources loc resource_scan (needed, O (IT.default_ oarg_bt here))
     in
-    Pp.debug
-      9
-      (lazy (Pp.item "was resource found in context" (IT.pp (bool_ (not needed) here))));
+    let not_str = lazy Pp.(if needed then !^" not " else !^" ") in
+    Pp.(debug 9 (Lazy.map (fun x -> !^"resource was" ^^ x ^^ !^"found") not_str));
     let@ res =
       match needed with
-      | false ->
-        let r =
-          ( ({ name = requested.name;
-               pointer = requested.pointer;
-               iargs = requested.iargs
-             }
-             : predicate_type),
-            oarg )
-        in
-        (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r
-           in *)
-        return (Some (r, changed_or_deleted))
+      | false -> return (Some ((requested, oarg), changed_or_deleted))
       | true ->
-        let here = Locations.other __FUNCTION__ in
-        (match packing_ft here global provable (P requested) with
+        (match Pack.packing_ft here global provable (P requested) with
          | Some packing_ft ->
-           Pp.debug
-             9
-             (lazy
-               (Pp.item
-                  "attempting to pack compound resource"
-                  (LAT.pp (fun _ -> Pp.string "resource") packing_ft)));
+           let ft_pp =
+             lazy (LogicalArgumentTypes.pp (fun _ -> Pp.string "resource") packing_ft)
+           in
+           Pp.debug 9 (Lazy.map (Pp.item "attempting to pack compound resource") ft_pp);
            let@ o, changed_or_deleted =
              ftyp_args_request_for_pack loc uiinfo packing_ft
            in
            return (Some ((requested, O o), changed_or_deleted))
          | None ->
-           Pp.debug
-             9
-             (lazy
-               (Pp.item
-                  "no pack rule for resource, out of options"
-                  (RET.pp (P requested))));
+           let req_pp = lazy (RET.pp (P requested)) in
+           Pp.debug 9 (Lazy.map (Pp.item "no pack rule for resource, failing") req_pp);
            return None)
     in
-    time_log_end start_timing;
+    Pp.time_log_end start_timing;
     return res
 
 
   and qpredicate_request_aux loc uiinfo (requested : RET.qpredicate_type) =
-    debug 7 (lazy (item "qpredicate request" (RET.pp (Q requested))));
+    Pp.(debug 7 (lazy (item __FUNCTION__ (RET.pp (Q requested)))));
     let@ provable = provable loc in
     let@ simp_ctxt = simp_ctxt () in
     let@ global = get_global () in
@@ -302,16 +261,15 @@ module General = struct
     let@ () =
       if Option.is_some (IT.is_const step) then
         return ()
-      else
-        fail (fun _ ->
-          { loc;
-            msg =
-              Generic
-                (!^"cannot simplify iter-step to constant:"
-                 ^^^ IT.pp requested.step
-                 ^^ colon
-                 ^^^ IT.pp step)
-          })
+      else (
+        let doc =
+          Pp.(
+            !^"cannot simplify iter-step to constant:"
+            ^^^ IT.pp requested.step
+            ^^ colon
+            ^^^ IT.pp step)
+        in
+        fail (fun _ -> { loc; msg = TypeErrors.Generic doc }))
     in
     let@ (needed, oarg), rw_time =
       map_and_fold_resources
@@ -319,42 +277,46 @@ module General = struct
         (fun re (needed, oarg) ->
           let continue = (Unchanged, (needed, oarg)) in
           assert (RET.steps_constant (fst re));
-          if is_false needed then
+          if IT.is_false needed then
             continue
           else (
             match re with
             | Q p', O p'_oarg
-              when subsumed requested.name p'.name
+              when RET.subsumed requested.name p'.name
                    && IT.equal step p'.step
-                   && BT.equal (snd requested.q) (snd p'.q) ->
-              let p' = alpha_rename_qpredicate_type_ (fst requested.q) p' in
+                   && BaseTypes.equal (snd requested.q) (snd p'.q) ->
+              let p' = RET.alpha_rename_qpredicate_type_ (fst requested.q) p' in
               let here = Locations.other __FUNCTION__ in
-              let pmatch = eq_ (requested.pointer, p'.pointer) here in
-              let iarg_match =
-                and_ (List.map2 (fun x y -> eq__ x y here) requested.iargs p'.iargs) here
+              let pmatch =
+                (* Work-around for https://github.com/Z3Prover/z3/issues/7352 *)
+                Simplify.IndexTerms.simp simp_ctxt
+                @@ IT.eq_ (requested.pointer, p'.pointer) here
               in
-              let took = and_ [ iarg_match; requested.permission; p'.permission ] here in
-              (match provable (LC.Forall (requested.q, not_ took here)) with
+              let iarg_match =
+                let eq_here x y = IT.eq_ (x, y) here in
+                IT.and_ (List.map2 eq_here requested.iargs p'.iargs) here
+              in
+              let took =
+                IT.and_ [ iarg_match; requested.permission; p'.permission ] here
+              in
+              (match provable (LC.Forall (requested.q, IT.not_ took here)) with
                | `True -> continue
                | `False ->
                  (match provable (LC.T pmatch) with
                   | `True ->
                     Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
+                    let open IT in
                     let needed' =
-                      and_
-                        [ needed; not_ (and_ [ iarg_match; p'.permission ] here) here ]
-                        here
+                      [ needed; not_ (and_ [ iarg_match; p'.permission ] here) here ]
                     in
                     let permission' =
-                      and_
-                        [ p'.permission; not_ (and_ [ iarg_match; needed ] here) here ]
-                        here
+                      [ p'.permission; not_ (and_ [ iarg_match; needed ] here) here ]
                     in
                     let oarg =
                       add_case (Many { many_guard = took; value = p'_oarg }) oarg
                     in
-                    ( Changed (Q { p' with permission = permission' }, O p'_oarg),
-                      (Simplify.IndexTerms.simp simp_ctxt needed', oarg) )
+                    ( Changed (Q { p' with permission = and_ permission' here }, O p'_oarg),
+                      (Simplify.IndexTerms.simp simp_ctxt (and_ needed' here), oarg) )
                   | `False ->
                     let model = Solver.model () in
                     Pp.debug
@@ -373,13 +335,14 @@ module General = struct
     let here = Locations.other __FUNCTION__ in
     let@ needed, oarg =
       let@ movable_indices = get_movable_indices () in
-      ListM.fold_rightM
+      let module Eff = Effectful.Make (Typing) in
+      Eff.ListM.fold_rightM
         (fun (predicate_name, index) (needed, oarg) ->
           let continue = return (needed, oarg) in
           if
-            (not (is_false needed))
-            && subsumed requested.name predicate_name
-            && BT.equal (snd requested.q) (IT.bt index)
+            (not (IT.is_false needed))
+            && RET.subsumed requested.name predicate_name
+            && BaseTypes.equal (snd requested.q) (IT.bt index)
           then (
             let su = IT.make_subst [ (fst requested.q, index) ] in
             let needed_at_index = IT.subst su needed in
@@ -387,18 +350,21 @@ module General = struct
             | `False -> continue
             | `True ->
               let@ o_re_index =
+                let pointer =
+                  IT.(
+                    pointer_offset_
+                      ( requested.pointer,
+                        mul_
+                          ( cast_ Memory.uintptr_bt requested.step here,
+                            cast_ Memory.uintptr_bt index here )
+                          here ))
+                    here
+                in
                 predicate_request
                   loc
                   uiinfo
                   { name = requested.name;
-                    pointer =
-                      pointer_offset_
-                        ( requested.pointer,
-                          mul_
-                            ( cast_ Memory.uintptr_bt requested.step here,
-                              cast_ Memory.uintptr_bt index here )
-                            here )
-                        here;
+                    pointer;
                     iargs = List.map (IT.subst su) requested.iargs
                   }
               in
@@ -406,9 +372,9 @@ module General = struct
                | None -> continue
                | Some ((_p', O p'_oarg), _) ->
                  let oarg = add_case (One { one_index = index; value = p'_oarg }) oarg in
-                 let sym, bt = requested.q in
+                 let sym, bt' = requested.q in
                  let needed' =
-                   and_ [ needed; ne__ (sym_ (sym, bt, here)) index here ] here
+                   IT.(and_ [ needed; ne__ (sym_ (sym, bt', here)) index here ] here)
                  in
                  return (needed', oarg)))
           else
@@ -416,7 +382,7 @@ module General = struct
         movable_indices
         (needed, oarg)
     in
-    let nothing_more_needed = forall_ requested.q (not_ needed here) in
+    let nothing_more_needed = LC.forall_ requested.q (IT.not_ needed here) in
     Pp.debug 9 (lazy (Pp.item "checking resource remainder" (LC.pp nothing_more_needed)));
     let holds = provable nothing_more_needed in
     match holds with
@@ -435,14 +401,15 @@ module General = struct
     | Some (oarg, rw_time) ->
       let@ oarg = cases_to_map loc uiinfo (snd requested.q) oarg_item_bt oarg in
       let r =
-        { name = requested.name;
-          pointer = requested.pointer;
-          q = requested.q;
-          q_loc = requested.q_loc;
-          step = requested.step;
-          permission = requested.permission;
-          iargs = requested.iargs
-        }
+        RET.
+          { name = requested.name;
+            pointer = requested.pointer;
+            q = requested.q;
+            q_loc = requested.q_loc;
+            step = requested.step;
+            permission = requested.permission;
+            iargs = requested.iargs
+          }
       in
       return (Some ((r, O oarg), rw_time))
 
@@ -453,7 +420,7 @@ module General = struct
     let@ original_resources = all_resources_tagged loc in
     let rec loop ftyp rw_time =
       match ftyp with
-      | LAT.I rt -> return (rt, rw_time)
+      | LogicalArgumentTypes.I rt -> return (rt, rw_time)
       | _ ->
         let@ ftyp, rw_time =
           parametric_ftyp_args_request_step
@@ -470,19 +437,19 @@ module General = struct
     loop ftyp []
 
 
-  and resource_request loc uiinfo (request : RET.t) : (RE.t * int list) option m =
+  and resource_request loc uiinfo (request : RET.t) : (Resources.t * int list) option m =
     match request with
     | P request ->
       let@ result = predicate_request loc uiinfo request in
       return
         (Option.map
-           (fun ((p, o), changed_or_deleted) -> ((P p, o), changed_or_deleted))
+           (fun ((p, o), changed_or_deleted) -> ((RET.P p, o), changed_or_deleted))
            result)
     | Q request ->
       let@ result = qpredicate_request loc uiinfo request in
       return
         (Option.map
-           (fun ((q, o), changed_or_deleted) -> ((Q q, o), changed_or_deleted))
+           (fun ((q, o), changed_or_deleted) -> ((RET.Q q, o), changed_or_deleted))
            result)
 
 
@@ -504,10 +471,10 @@ end
 module Special = struct
   let fail_missing_resource loc (situation, requests) =
     let here = Locations.other __FUNCTION__ in
-    let@ model = model_with loc (bool_ true here) in
+    let@ model = model_with loc (IT.bool_ true here) in
     let model = Option.get model in
     fail (fun ctxt ->
-      let msg = Missing_resource { requests; situation; model; ctxt } in
+      let msg = TypeErrors.Missing_resource { requests; situation; model; ctxt } in
       { loc; msg })
 
 
@@ -525,16 +492,64 @@ module Special = struct
     match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
 
 
-  let qpredicate_request loc situation (request, oinfo) =
-    let requests =
-      [ TypeErrors.
-          { resource = Q request;
-            loc = Option.map fst oinfo;
-            reason = Option.map snd oinfo
-          }
-      ]
+  (** This function checks whether [ptr1] belongs to a live allocation. It
+      searches the context (without modification) for either an Alloc(p) or an
+      Owned(p) such that (alloc_id) p == (alloc_id) ptr. *)
+  let get_live_alloc reason loc ptr =
+    let module Ans = struct
+      type t =
+        | Found
+        | No_res
+        | Model of (Solver.model_with_q * IT.t)
+    end
     in
-    let uiinfo = (situation, requests) in
-    let@ result = General.qpredicate_request loc uiinfo request in
-    match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
+    let here = Locations.other __FUNCTION__ in
+    let alloc_id_matches found res_ptr =
+      let@ found in
+      match found with
+      | Ans.Found -> return Ans.Found
+      | No_res | Model _ ->
+        let constr = IT.(eq_ (allocId_ ptr here, allocId_ res_ptr here) here) in
+        let@ provable = provable loc in
+        (match provable (LC.T constr) with
+         | `True -> return Ans.Found
+         | `False ->
+           let@ model = model () in
+           return (Ans.Model (model, constr)))
+    in
+    let f res found =
+      let found =
+        match res with
+        | RET.Q _, _ -> found
+        | RET.P { name = Owned _; pointer; iargs = _ }, _ ->
+          alloc_id_matches found pointer
+        | RET.P { name = PName name; pointer; iargs = _ }, _ ->
+          if Sym.equal name Alloc.Predicate.sym then
+            alloc_id_matches found pointer
+          else
+            found
+      in
+      (Unchanged, found)
+    in
+    let@ found, _ = map_and_fold_resources loc f (return Ans.No_res) in
+    let@ found in
+    match found with
+    | Ans.Found -> return (Alloc.History.lookup_ptr ptr here)
+    | No_res ->
+      fail (fun ctxt ->
+        let msg =
+          TypeErrors.Allocation_not_live { reason; ptr; model_constr = None; ctxt }
+        in
+        { loc; msg })
+    | Model (model, constr) ->
+      fail (fun ctxt ->
+        let msg =
+          TypeErrors.Allocation_not_live
+            { reason; ptr; model_constr = Some (model, constr); ctxt }
+        in
+        { loc; msg })
+
+
+  let predicate_request loc situation (request, oinfo) =
+    predicate_request loc situation (request, oinfo)
 end

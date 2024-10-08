@@ -438,3 +438,18 @@ let conv_arith stdlib ty_src ty_dst pe =
   else
     (* NOTE: this case will occurs in particular if ty_src is an atomic type *)
     error "Translation_aux.conv_arith, not (is_arithmetic ty_src)"
+
+
+(*
+  LET mask = [| ~(CAP_PERM_STORE || CAP_PERM_STORE_CAP || CAP_PERM_STORE_LOCAL_CAP) |] IN
+  memop(cheri_perms_and, ptr, mask)
+*)
+let cheri_readonly_perms ptr_ty ptr_pe =
+  (* C equivalent:
+     size_t mask = ~(CHERI_PERM_STORE|CHERI_PERM_STORE_CAP|CHERI_PERM_STORE_LOCAL_CAP);
+
+     for Morello, `mask` is 64-bit unsigned integer.
+   *)
+  let mask_pe = Caux.mk_integer_pe 0xfffffffffffecfff in
+  Caux.mk_memop_e (Mem_common.CHERI_intrinsic "cheri_perms_and" (ptr_ty, [ptr_ty; size_t]))
+    [ ptr_pe; mask_pe ]

@@ -134,7 +134,9 @@ let rec simp_resource eval r =
     else
       LAT.Constraint (ct, info, simp_resource eval more)
   | LAT.Define (x, i, more) -> LAT.Define (x, i, simp_resource eval more)
-  | LAT.Resource (x, i, more) -> LAT.Resource (x, i, simp_resource eval more)
+  | LAT.Resource ((x, (rt, bt)), i, more) ->
+    let rt1 = Interval.Solver.simp_rt eval rt in
+    LAT.Resource ((x, (rt1, bt)), i, simp_resource eval more)
   | I i -> I i
 
 
@@ -258,21 +260,32 @@ let state ctxt log model_with_q extras =
     let interesting, uninteresting =
       List.partition
         (fun (it, _entry) ->
-          match IT.bt it with BT.Unit -> false | BT.Loc -> false | _ -> true)
+          match IT.bt it with BT.Unit -> false | BT.Loc () -> false | _ -> true)
         filtered
     in
-    (List.map snd interesting, List.map snd uninteresting)
+    add_labeled
+      lab_interesting
+      (List.map snd interesting)
+      (add_labeled lab_uninteresting (List.map snd uninteresting) labeled_empty)
   in
   let constraints =
-    let in_solver =
-      List.filter (fun c -> not (LC.is_forall c)) (LCSet.elements ctxt.constraints)
+    let render c =
+      { original = LC.pp c; simplified = List.map LC.pp (simp_constraint evaluate c) }
     in
     let interesting, uninteresting =
       List.partition
-        LC.is_interesting
-        (List.concat_map (simp_constraint evaluate) in_solver)
+        (fun lc ->
+          match lc with
+          (* | LC.T (IT (Aligned _, _, _)) -> false *)
+          | LC.T (IT (Representable _, _, _)) -> false
+          | LC.T (IT (Good _, _, _)) -> false
+          | _ -> true)
+        (LCSet.elements ctxt.constraints)
     in
-    (List.map LC.pp interesting, List.map LC.pp uninteresting)
+    add_labeled
+      lab_interesting
+      (List.map render interesting)
+      (add_labeled lab_uninteresting (List.map render uninteresting) labeled_empty)
   in
   let resources =
     let same_res, diff_res =
@@ -285,16 +298,27 @@ let state ctxt log model_with_q extras =
       List.partition
         (fun (ret, _o) ->
           match ret with
-          | P ret when equal_predicate_name ret.name ResourceTypes.alloc_name -> false
+          | P ret when equal_predicate_name ret.name ResourceTypes.alloc -> false
           | _ -> true)
         diff_res
     in
-    let interesting =
-      List.map (fun re -> RE.pp re ^^^ parens !^"same type") same_res
-      @ List.map RE.pp interesting_diff_res
+    let evaluate it = Solver.eval ctxt.global model it in
+    let with_suff mb x = match mb with None -> x | Some d -> d ^^^ x in
+    let pp_res mb_suff (rt, args) =
+      { original = with_suff mb_suff (RE.pp (rt, args));
+        simplified =
+          [ with_suff mb_suff (RE.pp (Interval.Solver.simp_rt evaluate rt, args)) ]
+      }
     in
-    let uninteresting = List.map RE.pp uninteresting_diff_res in
-    (interesting, uninteresting)
+    let interesting =
+      List.map (fun re -> pp_res (Some (parens !^"same type")) re) same_res
+      @ List.map (pp_res None) interesting_diff_res
+    in
+    let uninteresting = List.map (pp_res None) uninteresting_diff_res in
+    add_labeled
+      lab_interesting
+      interesting
+      (add_labeled lab_uninteresting uninteresting labeled_empty)
   in
   { where; not_given_to_solver; terms; resources; constraints }
 

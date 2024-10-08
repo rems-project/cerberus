@@ -723,6 +723,7 @@ type undefined_behaviour =
   | UB_CHERI_InsufficientPermissions
   | UB_CHERI_BoundsViolation
   | UB_CHERI_UndefinedTag
+  | UB_CHERI_ZeroLength
 
   (* undefined behaviour resulting from applying an operator to an unspecified value *)
   | UB_CERB004_unspecified of unspecified_ub_context
@@ -1084,6 +1085,7 @@ let ub_str_bimap =
     ; (UB_CHERI_InsufficientPermissions,"UB_CHERI_InsufficientPermissions")
     ; (UB_CHERI_BoundsViolation,"UB_CHERI_BoundsViolation")
     ; (UB_CHERI_UndefinedTag,"UB_CHERI_UndefinedTag")
+    ; (UB_CHERI_ZeroLength,"UB_CHERI_ZeroLength")
     ]
 
 

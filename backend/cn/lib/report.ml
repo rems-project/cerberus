@@ -20,14 +20,34 @@ type where_report =
     loc_head : string (* loc_pos: string; *)
   }
 
+(* Different forms of a document. *)
+type simp_view =
+  { original : Pp.document; (* original view *)
+    simplified : Pp.document list (* simplified based on model *)
+  }
+
+type label = string
+
+let lab_interesting : label = "interesting"
+
+let lab_uninteresting : label = "uninteresting"
+
+module StrMap = Map.Make (String)
+
+(* Things classified in various ways.
+   To start we just have "interesting" and "uninteresting", but we could add more *)
+type 'a labeled_view = 'a list StrMap.t
+
+let labeled_empty = StrMap.empty
+
+let add_labeled lab view mp = StrMap.add lab view mp
+
 type state_report =
   { where : where_report;
-    (* variables : var_entry list; *)
-    not_given_to_solver : Pp.document list * Pp.document list;
-    (*interesting/uninteresting*)
-    resources : Pp.document list * Pp.document list; (* interesting/uninteresting*)
-    constraints : Pp.document list * Pp.document list; (* interesting/uninteresting *)
-    terms : term_entry list * term_entry list (* interesting/uninteresting*)
+    not_given_to_solver : simp_view labeled_view;
+    resources : simp_view labeled_view;
+    constraints : simp_view labeled_view;
+    terms : term_entry labeled_view
   }
 
 type report =
@@ -141,63 +161,44 @@ let make_predicate_hints predicate_hints =
 (*         (List.map (fun re -> [Pp.plain re.res; Pp.plain re.res_span]) resources) *)
 (*   ) *)
 
-let interesting_uninteresting
-  (interesting_table, interesting_data)
-  (uninteresting_table, uninteresting_data)
-  =
-  match (interesting_data, uninteresting_data) with
-  | [], [] -> "(none)"
-  | _, [] -> interesting_table
-  | [], _ -> details "more" uninteresting_table
+let interesting_uninteresting mk_table render data =
+  let get_data lab =
+    match StrMap.find_opt lab data with
+    | None -> ("", true)
+    | Some xs -> (mk_table (List.map render xs), List.is_empty xs)
+  in
+  let interesting_table, no_interesting = get_data lab_interesting in
+  let uninteresting_table, no_uninteresting = get_data lab_uninteresting in
+  match (no_interesting, no_uninteresting) with
+  | true, true -> "(none)"
+  | _, true -> interesting_table
+  | true, _ -> details "more" uninteresting_table
   | _, _ -> interesting_table ^ details "more" uninteresting_table
 
 
-let make_not_given_to_solver (interesting, uninteresting) =
-  let make = List.map (fun elem -> [ Pp.plain elem ]) in
-  let interesting_table = table_without_head (make interesting) in
-  let uninteresting_table = table_without_head (make uninteresting) in
-  h
-    1
-    "Definitions and constraints not handled automatically"
-    (interesting_uninteresting
-       (interesting_table, interesting)
-       (uninteresting_table, uninteresting))
+let simp_view s =
+  let btn = div ~clss:"toggle" [] in
+  let val_orig = Pp.plain s.original in
+  let val_simp = Pp.plain (Pp.separate Pp.hardline s.simplified) in
+  if String.equal val_orig val_simp then
+    [ val_orig ]
+  else
+    [ div [ btn; div [ val_simp ]; div [ val_orig ] ] ]
+
+let make_not_given_to_solver ds =
+  h 1 "Definitions and constraints not handled automatically" (interesting_uninteresting table_without_head simp_view ds)
+       
+let make_resources rs =
+  h 1 "Available resources" (interesting_uninteresting table_without_head simp_view rs)
 
 
-let make_resources (interesting, uninteresting) =
-  let make = List.map (fun re -> [ Pp.plain re (* Pp.plain re.res_span *) ]) in
-  let interesting_table = table_without_head (make interesting) in
-  let uninteresting_table = table_without_head (make uninteresting) in
-  h
-    1
-    "Available resources"
-    (interesting_uninteresting
-       (interesting_table, interesting)
-       (uninteresting_table, uninteresting))
+let make_terms ts =
+  let render v = [ Pp.plain v.term; Pp.plain v.value ] in
+  h 1 "Terms" (interesting_uninteresting (table [ "term"; "value" ]) render ts)
 
 
-let make_terms (interesting, uninteresting) =
-  let make = List.map (fun v -> [ Pp.plain v.term; Pp.plain v.value ]) in
-  let interesting_table = table [ "term"; "value" ] (make interesting) in
-  let uninteresting_table = table [ "term"; "value" ] (make uninteresting) in
-  h
-    1
-    "Terms"
-    (interesting_uninteresting
-       (interesting_table, interesting)
-       (uninteresting_table, uninteresting))
-
-
-let make_constraints (interesting, uninteresting) =
-  let make = List.map (fun c -> [ Pp.plain c ]) in
-  let interesting_table = table_without_head (make interesting) in
-  let uninteresting_table = table_without_head (make uninteresting) in
-  h
-    1
-    "Constraints"
-    (interesting_uninteresting
-       (interesting_table, interesting)
-       (uninteresting_table, uninteresting))
+let make_constraints cs =
+  h 1 "Constraints" (interesting_uninteresting table_without_head simp_view cs)
 
 
 let css =
@@ -285,6 +286,13 @@ th {
 .menu button {
   all: unset;
   padding: 7px;
+}
+
+.toggle {
+  border-radius: 2px;
+  display: inline-block;
+  font-size: small;
+  cursor: pointer;
 }
 
 #pageinfo {
@@ -388,6 +396,11 @@ th {
     color: rgb(150, 150, 150);
     background-color: rgb(50, 50, 50);
   }
+  
+  .toggle {
+    background-color: #CCCCCC;
+    color: black;
+  }
 }
 
 @media (prefers-color-scheme: light) {
@@ -435,6 +448,11 @@ th {
     width: 35px;
     color: rgb(150, 150, 150);
     background-color: rgb(230, 230, 230);
+  }
+
+  .toggle {
+    background-color: #333333;
+    color: white;
   }
 }
 |}
@@ -595,7 +613,32 @@ function create_line(n, str) {
   return ret
 }
 
+function make_toggles(className, labels) {     
+  for(const btn of document.getElementsByClassName(className)) {
+    const opts = []
+    for (let i = btn.nextSibling; i !== null; i = i.nextSibling) {
+      i.classList.add("hidden")
+      opts.push(i)
+    }
+    console.log(opts)
+    let cur = 0
+    function update() {
+      cur %= opts.length
+      const lab = labels && labels[cur] || ("Option " + (cur + 1))
+      btn.textContent = lab
+      opts[cur].classList.remove("hidden")
+    }
+    btn.addEventListener("click", () => {
+      opts[cur].classList.add("hidden")
+      ++cur
+      update()
+    })
+    update()
+  }
+}
+
 function init() {
+  make_toggles("toggle",["Simplified","Original"])
   lines = cn_code.textContent.split("\n")
   lines.forEach((e, n) => {
     if (n == 0) {

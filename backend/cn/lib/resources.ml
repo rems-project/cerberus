@@ -34,28 +34,30 @@ let range_size ct =
   IT.num_lit_ (Z.of_int size) Memory.uintptr_bt here
 
 
-let upper_bound addr ct =
-  let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
-  IT.add_ (addr, range_size ct) here
-
-
-let addr_of pointer =
-  let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
-  IT.cast_ Memory.uintptr_bt pointer here
-
+let upper_bound addr ct loc = IT.add_ (addr, range_size ct) loc
 
 (* assumption: the resource is owned *)
-let derived_lc1 (resource, _) =
+let derived_lc1 (resource, O oarg) =
+  let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
   match resource with
   | P { name = Owned (ct, _); pointer; iargs = _ } ->
-    let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
-    let addr = addr_of pointer in
-    (* TODO: change to specifying positive case rather than not null when a separate
-       constructor for function pointers are added *)
-    [ IT.(not_ (eq_ (pointer, null_ here) here) here);
-      IT.(lt_ (addr, upper_bound addr ct) here)
-    ]
-  | P { name = PName _; pointer = _; iargs = _ } | Q _ -> []
+    let addr = IT.addr_ pointer here in
+    let upper = upper_bound addr ct here in
+    let alloc_bounds =
+      if !IT.use_vip then (
+        let lookup = Alloc.History.lookup_ptr pointer here in
+        let base, size = Alloc.History.get_base_size lookup here in
+        [ IT.(le_ (base, addr) here); IT.(le_ (upper, add_ (base, size) here) here) ])
+      else
+        []
+    in
+    [ IT.hasAllocId_ pointer here; IT.(le_ (addr, upper) here) ] @ alloc_bounds
+  | P { name; pointer; iargs = [] } when !IT.use_vip && equal_predicate_name name alloc ->
+    let lookup = Alloc.History.lookup_ptr pointer here in
+    let base, size = Alloc.History.get_base_size lookup here in
+    [ IT.(eq_ (lookup, oarg) here); IT.(le_ (base, add_ (base, size) here) here) ]
+  | Q { name = Owned _; pointer; _ } -> [ IT.hasAllocId_ pointer here ]
+  | P { name = PName _; pointer = _; iargs = _ } | Q { name = PName _; _ } -> []
 
 
 (* assumption: both resources are owned at the same *)
@@ -65,22 +67,13 @@ let derived_lc2 (resource, _) (resource', _) =
   | ( P { name = Owned (ct1, _); pointer = p1; iargs = _ },
       P { name = Owned (ct2, _); pointer = p2; iargs = _ } ) ->
     let here = Locations.other (__FUNCTION__ ^ ":" ^ string_of_int __LINE__) in
-    let addr1 = addr_of p1 in
-    let addr2 = addr_of p2 in
-    let up1 = upper_bound addr1 ct1 in
-    let up2 = upper_bound addr2 ct2 in
+    let addr1 = IT.addr_ p1 here in
+    let addr2 = IT.addr_ p2 here in
+    let up1 = upper_bound addr1 ct1 here in
+    let up2 = upper_bound addr2 ct2 here in
     [ IT.(or2_ (le_ (up2, addr1) here, le_ (up1, addr2) here) here) ]
   | _ -> []
 
-
-(* let pointer_facts = *)
-(*   let rec aux acc = function *)
-(*     | [] -> acc *)
-(*     | (r, _) :: rs -> *)
-(*       let acc = derived_lc1 r @ List.concat_map (derived_lc2 r) rs @ acc in *)
-(*       aux acc rs *)
-(*   in *)
-(*   fun resources -> aux [] resources *)
 
 let pointer_facts ~new_resource ~old_resources =
   derived_lc1 new_resource @ List.concat_map (derived_lc2 new_resource) old_resources

@@ -190,7 +190,7 @@ module Collect = struct
   let rec collect_clauses
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (cs : RP.clause list)
@@ -214,7 +214,7 @@ module Collect = struct
   and collect_ret
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (ret : RET.t)
@@ -233,7 +233,7 @@ module Collect = struct
       if max_unfolds <= 0 then
         []
       else (
-        let pred = List.assoc sym_codified_equal psym prog5.mu_resource_predicates in
+        let pred = List.assoc sym_codified_equal psym prog5.resource_predicates in
         let args = List.combine (List.map fst pred.iargs) iargs in
         let clauses =
           Option.get pred.clauses
@@ -250,7 +250,7 @@ module Collect = struct
   and collect_lat_it
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (lat : IT.t LAT.t)
@@ -278,7 +278,7 @@ module Collect = struct
   let rec collect_lat
     (max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (vars : variables)
     (ms : members)
     (lat : unit LAT.t)
@@ -304,7 +304,7 @@ module Collect = struct
   let collect
     ~(max_unfolds : int)
     (sigma : _ CF.AilSyntax.sigma)
-    (prog5 : unit Mucore.mu_file)
+    (prog5 : unit Mucore.file)
     (args : (Sym.sym * CF.Ctype.ctype) list)
     (lat : unit LAT.t)
     : (variables * members * locations * constraints) list
@@ -378,7 +378,7 @@ module Simplify = struct
     | [] -> (vars, ms, locs, cs)
 
 
-  let rec cnf_ (e : BT.t IT.term_) : BT.t IT.term_ =
+  let rec cnf_ (e : IT.t') : IT.t' =
     match e with
     (* Double negation elimination *)
     | Unop (Not, IT (Unop (Not, IT (e, _, _)), _, _)) -> e
@@ -437,7 +437,7 @@ module Simplify = struct
     | [] -> (vars, ms, locs, [])
 
 
-  let rec indirect_members_expr_ (ms : members) (e : BT.t IT.term_) : BT.t IT.term_ =
+  let rec indirect_members_expr_ (ms : members) (e : IT.t') : IT.t' =
     match e with
     | StructMember (IT (Sym x, _, _), Sym.Identifier (_, y)) ->
       let new_sym =
@@ -479,6 +479,7 @@ module Simplify = struct
     | CopyAllocId { addr; loc } ->
       CopyAllocId
         { addr = indirect_members_expr ms addr; loc = indirect_members_expr ms loc }
+    | HasAllocId loc -> HasAllocId (indirect_members_expr ms loc)
     | Cons (e1, e2) -> Cons (indirect_members_expr ms e1, indirect_members_expr ms e2)
     | Head e' -> Head (indirect_members_expr ms e')
     | Tail e' -> Tail (indirect_members_expr ms e')

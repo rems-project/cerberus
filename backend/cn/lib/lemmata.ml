@@ -297,6 +297,7 @@ type list_mono = (BT.t * Sym.t) list
 
 let add_list_mono_datatype (bt, nm) global =
   let open Global in
+  let module Dt = BT.Datatype in
   let bt_name = Sym.pp_string (Option.get (BT.is_datatype_bt bt)) in
   let nil = Sym.fresh_named ("Nil_of_" ^ bt_name) in
   let cons = Sym.fresh_named ("Cons_of_" ^ bt_name) in
@@ -304,12 +305,12 @@ let add_list_mono_datatype (bt, nm) global =
   let tl = Id.id ("tl_of_" ^ bt_name) in
   let mems = [ (hd, bt); (tl, BT.Datatype nm) ] in
   let datatypes =
-    SymMap.add nm BT.{ dt_constrs = [ nil; cons ]; dt_all_params = mems } global.datatypes
+    SymMap.add nm Dt.{ constrs = [ nil; cons ]; all_params = mems } global.datatypes
   in
   let datatype_constrs =
     global.datatype_constrs
-    |> SymMap.add nil BT.{ c_params = []; c_datatype_tag = nm }
-    |> SymMap.add cons BT.{ c_params = mems; c_datatype_tag = nm }
+    |> SymMap.add nil Dt.{ params = []; datatype_tag = nm }
+    |> SymMap.add cons Dt.{ params = mems; datatype_tag = nm }
   in
   { global with datatypes; datatype_constrs }
 
@@ -323,10 +324,11 @@ let mono_list_bt list_mono bt =
 
 let monomorphise_dt_lists global =
   let dt_lists = function BT.List (BT.Datatype sym) -> Some sym | _ -> None in
+  let module Dt = BT.Datatype in
   let all_dt_types =
     SymMap.fold
       (fun _ dt_info ss ->
-        List.filter_map dt_lists (List.map snd dt_info.BT.dt_all_params) @ ss)
+        List.filter_map dt_lists (List.map snd dt_info.Dt.all_params) @ ss)
       global.Global.datatypes
       []
   in
@@ -339,12 +341,12 @@ let monomorphise_dt_lists global =
   let map_mems = List.map (fun (nm, bt) -> (nm, map_bt bt)) in
   let datatypes =
     SymMap.map
-      (fun info -> BT.{ info with dt_all_params = map_mems info.dt_all_params })
+      (fun info -> Dt.{ info with all_params = map_mems info.all_params })
       global.Global.datatypes
   in
   let datatype_constrs =
     SymMap.map
-      (fun info -> BT.{ info with c_params = map_mems info.c_params })
+      (fun info -> Dt.{ info with params = map_mems info.params })
       global.Global.datatype_constrs
   in
   let global = Global.{ global with datatypes; datatype_constrs } in
@@ -421,7 +423,7 @@ let it_adjust (global : Global.t) it =
         t
       else
         f (IT.representable global.struct_decls ct t2 loc)
-    | Aligned t -> f (IT.divisible_ (IT.pointerToIntegerCast_ t.t loc, t.align) loc)
+    | Aligned t -> f (IT.divisible_ (IT.addr_ t.t loc, t.align) loc)
     | IT.Let ((nm, x), y) ->
       let x = f x in
       let y = f y in
@@ -567,7 +569,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
     | BaseTypes.Record mems ->
       let@ enc_mem_bts = ListM.mapM f (List.map snd mems) in
       return (tuple_coq_ty !^"record" enc_mem_bts)
-    | BaseTypes.Loc -> return !^"CN_Lib.Loc"
+    | BaseTypes.Loc () -> return !^"CN_Lib.Loc"
     | BaseTypes.Datatype tag ->
       let@ () = ensure_datatype global list_mono (fst loc_info) tag in
       return (Sym.pp tag)
@@ -600,7 +602,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
       (let open Pp in
        let cons_line dt_tag c_tag =
          let info = SymMap.find c_tag global.datatype_constrs in
-         let@ argTs = ListM.mapM (fun (_, bt) -> bt_to_coq2 bt) info.c_params in
+         let@ argTs = ListM.mapM (fun (_, bt) -> bt_to_coq2 bt) info.params in
          return
            (!^"    | "
             ^^ Sym.pp c_tag
@@ -611,7 +613,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
          ListM.mapM
            (fun dt_tag ->
              let info = SymMap.find dt_tag global.datatypes in
-             let@ c_lines = ListM.mapM (cons_line dt_tag) info.dt_constrs in
+             let@ c_lines = ListM.mapM (cons_line dt_tag) info.constrs in
              return
                (!^"    "
                 ^^ Sym.pp dt_tag
@@ -648,14 +650,14 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
             Id.pp mem_tag
           else
             Pp.string "_")
-        c_info.c_params
+        c_info.params
     in
     let open Pp in
     !^"    |"
     ^^^ flow !^" " (Sym.pp c :: pats)
     ^^^ !^"=>"
     ^^^
-    if List.exists (Id.equal mem_tag) (List.map fst c_info.c_params) then
+    if List.exists (Id.equal mem_tag) (List.map fst c_info.params) then
       Id.pp mem_tag
     else
       !^"default"
@@ -674,7 +676,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) bt =
               (Some bt_doc)
               (flow
                  hardline
-                 ((!^"match dt with" :: List.map cons_line dt_info.dt_constrs) @ eline)))))
+                 ((!^"match dt with" :: List.map cons_line dt_info.constrs) @ eline)))))
       [ dt_tag ]
   in
   return op_nm
@@ -693,7 +695,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) b
             Id.pp mem_tag
           else
             Pp.string "_")
-        c_info.c_params
+        c_info.params
     in
     let open Pp in
     !^"    |" ^^^ flow !^" " (Sym.pp c :: pats) ^^^ !^"=>" ^^^ Id.pp mem_tag
@@ -714,7 +716,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag : Id.t) b
               (Some bt_doc)
               (flow
                  hardline
-                 ((!^"match dt with" :: List.map cons_line dt_info.dt_constrs) @ eline)))))
+                 ((!^"match dt with" :: List.map cons_line dt_info.constrs) @ eline)))))
       [ dt_tag ]
   in
   return op_nm
@@ -729,7 +731,7 @@ let ensure_list global list_mono _loc bt =
   let dt_sym = Option.get (BT.is_datatype_bt dt_bt) in
   let dt_info = SymMap.find dt_sym global.Global.datatypes in
   let nil_nm, cons_nm =
-    match dt_info.BT.dt_constrs with [ nil; cons ] -> (nil, cons) | _ -> assert false
+    match dt_info.constrs with [ nil; cons ] -> (nil, cons) | _ -> assert false
   in
   let open Pp in
   let cons = parens (!^"fun x ->" ^^^ Sym.pp cons_nm ^^^ !^"x") in
@@ -1070,8 +1072,8 @@ let it_to_coq loc global list_mono it =
         parensM (build [ rets op_nm; aux t; aux x ])
     | IT.Cast (cbt, t) ->
       (match (IT.bt t, cbt) with
-       | Integer, Loc -> aux t
-       | Loc, Integer -> aux t
+       | Integer, Loc () -> aux t
+       | Loc (), Integer -> aux t
        | source, target ->
          let source = Pp.plain (BT.pp source) in
          let target = Pp.plain (BT.pp target) in
@@ -1094,7 +1096,7 @@ let it_to_coq loc global list_mono it =
     | IT.Constructor (nm, id_args) ->
       let info = SymMap.find nm global.datatype_constrs in
       let comp = Some (t, "datatype contents") in
-      let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in
+      let@ () = ensure_datatype global list_mono loc info.datatype_tag in
       (* assuming here that the id's are in canonical order *)
       parensM (build ([ return (Sym.pp nm) ] @ List.map (f comp) (List.map snd id_args)))
     | IT.NthList (n, xs, d) ->

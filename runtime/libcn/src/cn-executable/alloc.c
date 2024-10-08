@@ -53,6 +53,17 @@ void *alloc_(long nbytes, const char *str, int line) {
     //return malloc(nbytes);
 }
 
+void *zalloc_(long nbytes, const char *str, int line) {
+    void *p = alloc_(nbytes, str, line);
+    if (p != NULL) {
+        memset(p, 0, nbytes);
+    }
+    return p;
+}
+
+void free_all(void) {
+    curr = buf;
+}
 
 // void *alloc_zeros(long nbytes) {
 //     void *res = alloc(nbytes);

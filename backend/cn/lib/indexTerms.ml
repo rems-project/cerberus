@@ -1,32 +1,39 @@
-open List
 module BT = BaseTypes
 module CF = Cerb_frontend
 module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
-open Subst
 include Terms
 
-let equal = equal_term BT.equal
+let equal = equal_annot BT.equal
 
-let compare = compare_term BT.compare
+let compare = compare_annot BT.compare
 
-type sterm = SurfaceBaseTypes.t term
+type t' = BT.t term
 
-type typed = BT.t term
+type t = BT.t annot
 
-type t = BT.t term
+module Surface = struct
+  type t' = BaseTypes.Surface.t term
 
-let basetype : 'a. 'a Terms.term -> 'a = function IT (_, bt, _) -> bt
+  type t = BaseTypes.Surface.t annot
 
+  let compare = Terms.compare_annot BaseTypes.Surface.compare
+
+  let proj = Terms.map_annot BaseTypes.Surface.proj
+
+  let inj x = Terms.map_annot BaseTypes.Surface.inj x
+end
+
+let basetype : 'a. 'a annot -> 'a = function IT (_, bt, _) -> bt
+
+(* TODO rename this get_bt *)
 let bt = basetype
 
+(* TODO rename this get_term *)
 let term (IT (t, _, _)) = t
 
+(* TODO rename this get_loc *)
 let loc (IT (_, _, l)) = l
-
-let term_of_sterm : sterm -> typed = Terms.map_term SurfaceBaseTypes.to_basetype
-
-let sterm_of_term : typed -> sterm = Terms.map_term SurfaceBaseTypes.of_basetype
 
 let pp ?(prec = 0) = Terms.pp ~prec
 
@@ -56,7 +63,7 @@ let rec bound_by_pattern (Pat (pat_, bt, _)) =
     List.concat_map (fun (_id, pat) -> bound_by_pattern pat) args
 
 
-let rec free_vars_bts (it : 'a term) : BT.t SymMap.t =
+let rec free_vars_bts (it : 'a annot) : BT.t SymMap.t =
   match term it with
   | Const _ -> SymMap.empty
   | Sym s -> SymMap.singleton s (bt it)
@@ -76,6 +83,7 @@ let rec free_vars_bts (it : 'a term) : BT.t SymMap.t =
   | MemberShift (t, _tag, _id) -> free_vars_bts t
   | ArrayShift { base; ct = _; index } -> free_vars_bts_list [ base; index ]
   | CopyAllocId { addr; loc } -> free_vars_bts_list [ addr; loc ]
+  | HasAllocId loc -> free_vars_bts_list [ loc ]
   | SizeOf _t -> SymMap.empty
   | OffsetOf (_tag, _member) -> SymMap.empty
   | Nil _bt -> SymMap.empty
@@ -119,7 +127,7 @@ let rec free_vars_bts (it : 'a term) : BT.t SymMap.t =
   | Constructor (_s, args) -> free_vars_bts_list (List.map snd args)
 
 
-and free_vars_bts_list : 'a term list -> BT.t SymMap.t =
+and free_vars_bts_list : 'a annot list -> BT.t SymMap.t =
   fun xs ->
   List.fold_left
     (fun ss t ->
@@ -133,11 +141,11 @@ and free_vars_bts_list : 'a term list -> BT.t SymMap.t =
     xs
 
 
-let free_vars (it : 'a term) : SymSet.t =
+let free_vars (it : 'a annot) : SymSet.t =
   it |> free_vars_bts |> SymMap.bindings |> List.map fst |> SymSet.of_list
 
 
-let free_vars_ (t_ : 'a term_) : SymSet.t =
+let free_vars_ (t_ : 'a Terms.term) : SymSet.t =
   IT (t_, Unit, Locations.other "")
   |> free_vars_bts
   |> SymMap.bindings
@@ -145,11 +153,11 @@ let free_vars_ (t_ : 'a term_) : SymSet.t =
   |> SymSet.of_list
 
 
-let free_vars_list (its : 'a term list) : SymSet.t =
+let free_vars_list (its : 'a annot list) : SymSet.t =
   its |> free_vars_bts_list |> SymMap.bindings |> List.map fst |> SymSet.of_list
 
 
-type 'bt bindings = ('bt pattern * 'bt term option) list
+type 'bt bindings = ('bt pattern * 'bt annot option) list
 
 type t_bindings = BT.t bindings
 
@@ -175,6 +183,7 @@ let rec fold_ f binders acc = function
   | MemberShift (t, _tag, _id) -> fold f binders acc t
   | ArrayShift { base; ct = _; index } -> fold_list f binders acc [ base; index ]
   | CopyAllocId { addr; loc } -> fold_list f binders acc [ addr; loc ]
+  | HasAllocId loc -> fold_list f binders acc [ loc ]
   | SizeOf _ct -> acc
   | OffsetOf (_tag, _member) -> acc
   | Nil _bt -> acc
@@ -228,7 +237,11 @@ and fold_list f binders acc xs =
 
 let fold_subterms
   : 'a.
-  ?bindings:'bt bindings -> ('bt bindings -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a
+  ?bindings:'bt bindings ->
+  ('bt bindings -> 'a -> 'bt annot -> 'a) ->
+  'a ->
+  'bt annot ->
+  'a
   =
   fun ?(bindings = []) f acc t -> fold f bindings acc t
 
@@ -265,7 +278,7 @@ let make_subst assoc =
 
 let substitute_lets_flag = Sym.fresh_named "substitute_lets"
 
-let rec subst (su : [ `Term of typed | `Rename of Sym.t ] subst) (IT (it, bt, loc)) =
+let rec subst (su : [ `Term of t | `Rename of Sym.t ] Subst.t) (IT (it, bt, loc)) =
   match it with
   | Sym sym ->
     (match List.assoc_opt Sym.equal sym su.replace with
@@ -286,12 +299,12 @@ let rec subst (su : [ `Term of typed | `Rename of Sym.t ] subst) (IT (it, bt, lo
   | EachI ((i1, (s, s_bt), i2), t) ->
     let s, t = suitably_alpha_rename su.relevant s t in
     IT (EachI ((i1, (s, s_bt), i2), subst su t), bt, loc)
-  | Tuple its -> IT (Tuple (map (subst su) its), bt, loc)
+  | Tuple its -> IT (Tuple (List.map (subst su) its), bt, loc)
   | NthTuple (n, it') -> IT (NthTuple (n, subst su it'), bt, loc)
-  | Struct (tag, members) -> IT (Struct (tag, map_snd (subst su) members), bt, loc)
+  | Struct (tag, members) -> IT (Struct (tag, List.map_snd (subst su) members), bt, loc)
   | StructMember (t, m) -> IT (StructMember (subst su t, m), bt, loc)
   | StructUpdate ((t, m), v) -> IT (StructUpdate ((subst su t, m), subst su v), bt, loc)
-  | Record members -> IT (Record (map_snd (subst su) members), bt, loc)
+  | Record members -> IT (Record (List.map_snd (subst su) members), bt, loc)
   | RecordMember (t, m) -> IT (RecordMember (subst su t, m), bt, loc)
   | RecordUpdate ((t, m), v) -> IT (RecordUpdate ((subst su t, m), subst su v), bt, loc)
   | Cast (cbt, t) -> IT (Cast (cbt, subst su t), bt, loc)
@@ -300,6 +313,7 @@ let rec subst (su : [ `Term of typed | `Rename of Sym.t ] subst) (IT (it, bt, lo
     IT (ArrayShift { base = subst su base; ct; index = subst su index }, bt, loc)
   | CopyAllocId { addr; loc = ptr } ->
     IT (CopyAllocId { addr = subst su addr; loc = subst su ptr }, bt, loc)
+  | HasAllocId ptr -> IT (HasAllocId (subst su ptr), bt, loc)
   | SizeOf t -> IT (SizeOf t, bt, loc)
   | OffsetOf (tag, member) -> IT (OffsetOf (tag, member), bt, loc)
   | Aligned t -> IT (Aligned { t = subst su t.t; align = subst su t.align }, bt, loc)
@@ -361,7 +375,7 @@ and suitably_alpha_rename_pattern su (Pat (pat_, bt, loc), body) =
   | PWild -> (Pat (PWild, bt, loc), body)
   | PConstructor (s, args) ->
     let body, args =
-      fold_left_map
+      List.fold_left_map
         (fun body (id, pat') ->
           let pat', body = suitably_alpha_rename_pattern su (pat', body) in
           (body, (id, pat')))
@@ -457,7 +471,7 @@ let is_member = function IT (StructMember (it, id), _, _) -> Some (it, id) | _ -
 
 (* shorthands *)
 
-let use_vip = ref false
+let use_vip = ref true
 
 (* lit *)
 let sym_ (sym, bt, loc) = IT (Sym sym, bt, loc)
@@ -481,7 +495,7 @@ let q1_ q loc = IT (Const (Q q), BT.Real, loc)
 
 let pointer_ ~alloc_id ~addr loc =
   let alloc_id = if !use_vip then alloc_id else Z.zero in
-  IT (Const (Pointer { alloc_id; addr }), BT.Loc, loc)
+  IT (Const (Pointer { alloc_id; addr }), BT.Loc (), loc)
 
 
 let bool_ b loc = IT (Const (Bool b), BT.Bool, loc)
@@ -553,17 +567,17 @@ let ne_ (it, it') loc = not_ (eq_ (it, it') loc) loc
 
 let ne__ it it' = ne_ (it, it')
 
-let eq_sterm_ (it, it') loc = IT (Binop (EQ, it, it'), SurfaceBaseTypes.Bool, loc)
+let eq_sterm_ (it, it') loc = IT (Binop (EQ, it, it'), BT.Bool, loc)
 
-let bool_sterm_ b loc = IT (Const (Bool b), SurfaceBaseTypes.Bool, loc)
+let bool_sterm_ b loc = IT (Const (Bool b), BT.Bool, loc)
 
-let and2_sterm_ (it, it') loc = IT (Binop (And, it, it'), SurfaceBaseTypes.Bool, loc)
+let and2_sterm_ (it, it') loc = IT (Binop (And, it, it'), BT.Bool, loc)
 
 let and_sterm_ its loc =
   vargs_binop (bool_sterm_ true loc) (Tools.curry (fun p -> and2_sterm_ p loc)) its
 
 
-let or2_sterm_ (it, it') loc = IT (Binop (Or, it, it'), SurfaceBaseTypes.Bool, loc)
+let or2_sterm_ (it, it') loc = IT (Binop (Or, it, it'), BT.Bool, loc)
 
 let or_sterm_ its loc =
   vargs_binop (bool_sterm_ true loc) (Tools.curry (fun p -> or2_sterm_ p loc)) its
@@ -693,7 +707,7 @@ let recordMember_ ~member_bt (t, member) loc =
 
 
 (* pointer_op *)
-let null_ loc = IT (Const Null, BT.Loc, loc)
+let null_ loc = IT (Const Null, BT.Loc (), loc)
 
 let ltPointer_ (it, it') loc = IT (Binop (LTPointer, it, it'), BT.Bool, loc)
 
@@ -705,31 +719,40 @@ let gePointer_ (it, it') loc = lePointer_ (it', it) loc
 
 let cast_ bt it loc = IT (Cast (bt, it), bt, loc)
 
-let integerToPointerCast_ it loc = cast_ Loc it loc
-
 let uintptr_const_ n loc = num_lit_ n Memory.uintptr_bt loc
 
 let uintptr_int_ n loc = uintptr_const_ (Z.of_int n) loc
 (* for integer-mode: z_ n *)
 
-let pointerToIntegerCast_ it loc = cast_ Memory.uintptr_bt it loc
+let addr_ it loc = cast_ Memory.uintptr_bt it loc
 (* for integer-mode: cast_ Integer it *)
 
-let pointerToAllocIdCast_ it loc = cast_ Alloc_id it loc
+let allocId_ it loc = cast_ Alloc_id it loc
 
 let memberShift_ (base, tag, member) loc =
-  IT (MemberShift (base, tag, member), BT.Loc, loc)
+  IT (MemberShift (base, tag, member), BT.Loc (), loc)
 
 
-let arrayShift_ ~base ~index ct loc = IT (ArrayShift { base; ct; index }, BT.Loc, loc)
+let arrayShift_ ~base ~index ct loc = IT (ArrayShift { base; ct; index }, BT.Loc (), loc)
 
-let copyAllocId_ ~addr ~loc:ptr loc = IT (CopyAllocId { addr; loc = ptr }, BT.Loc, loc)
+let copyAllocId_ ~addr ~loc:ptr loc = IT (CopyAllocId { addr; loc = ptr }, BT.Loc (), loc)
+
+let hasAllocId_ ptr loc =
+  (* Futzing seems to be necessary because given the current SMT sovler mapping,
+     the solver can't conclude `has_alloc_id(&p[x]) ==> has_alloc_id(p)` and
+     similarly for &p->x. This may be avoidable with a different solver mapping. *)
+  let rec futz = function
+    | IT ((MemberShift (base, _, _) | ArrayShift { base; _ }), _, _) -> futz base
+    | it -> it
+  in
+  IT (HasAllocId (futz ptr), BT.Bool, loc)
+
 
 let sizeOf_ ct loc = IT (SizeOf ct, Memory.size_bt, loc)
 
 let isIntegerToPointerCast = function
-  | IT (Cast (BT.Loc, IT (_, BT.Integer, _)), _, _) -> true
-  | IT (Cast (BT.Loc, IT (_, BT.Bits _, _)), _, _) -> true
+  | IT (Cast (BT.Loc (), IT (_, BT.Integer, _)), _, _) -> true
+  | IT (Cast (BT.Loc (), IT (_, BT.Bits _, _)), _, _) -> true
   | _ -> false
 
 
@@ -785,7 +808,7 @@ let wrapI_ (ity, arg) loc =
 
 
 let alignedI_ ~t ~align loc =
-  assert (BT.equal (bt t) Loc);
+  assert (BT.equal (bt t) (Loc ()));
   assert (BT.equal Memory.uintptr_bt (bt align));
   IT (Aligned { t; align }, BT.Bool, loc)
 
@@ -824,7 +847,7 @@ let make_array_ ~index_bt ~item_bt items (* assumed all of item_bt *) loc =
   value
 
 
-let pred_ name args rbt loc = IT (Apply (name, args), rbt, loc)
+let apply_ name args rbt loc = IT (Apply (name, args), rbt, loc)
 
 (* let let_ sym e body = *)
 (*   subst (make_subst [(sym, e)]) body *)
@@ -873,7 +896,7 @@ let rec in_z_range within (min_z, max_z) loc =
         bool_ false loc
     in
     and_ [ min_c; max_c ] loc
-  | Loc ->
+  | Loc () ->
     (* §6.3.2.3#6 allows converting pointers to any integer type so long as the value of
        the pointer fits. If uintptr_t and intptr_t exist, then they are guaranteed to be
        big enough to fit any valid pointer (to void). From there, it's just a matter of
@@ -904,7 +927,7 @@ let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) loc =
 
 
 (* let _non_vip_constraint about loc =  *)
-(*   eq_ (pointerToAllocIdCast_ about loc, alloc_id_ Z.zero loc) loc *)
+(*   eq_ (allocId_ about loc, alloc_id_ Z.zero loc) loc *)
 
 (* TODO: are the constraints `0<about` and `about+pointee_size-1 <= max-pointer`
    required? *)
@@ -912,7 +935,7 @@ let value_check_pointer mode ~pointee_ct about loc =
   match mode with
   | `Representable -> bool_ true loc
   | `Good ->
-    (* let about_int = pointerToIntegerCast_ about loc in *)
+    (* let about_int = addr_ about loc in *)
     (* let pointee_size = match pointee_ct with *)
     (*   | Sctypes.Void -> 1 *)
     (*   | Function _ -> 1 *)

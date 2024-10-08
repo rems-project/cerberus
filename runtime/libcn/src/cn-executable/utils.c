@@ -14,7 +14,15 @@ void cn_exit_aux(void) {
     exit(SIGABRT);
 }
 
-void (*cn_exit)(void) = &cn_exit_aux;
+void static (*cn_exit)(void) = &cn_exit_aux;
+
+void set_cn_exit_cb(void (*callback)(void)) {
+    cn_exit = callback;
+}
+
+void reset_cn_exit_cb(void) {
+    cn_exit = &cn_exit_aux;
+}
 
 void print_error_msg_info(void) {
   printf("Function: %s, %s:%d\n", error_msg_info.function_name, error_msg_info.file_name, error_msg_info.line_number);
@@ -23,8 +31,6 @@ void print_error_msg_info(void) {
 cn_bool *convert_to_cn_bool(_Bool b) {
     cn_bool *res = alloc(sizeof(cn_bool));
     if (!res) exit(1);
-    // printf("%p\n", (void *) res);
-    // printf("%p\n", (void *) &(res->val));
     res->val = b;
     return res;
 }
@@ -276,17 +282,28 @@ void c_ownership_check(uintptr_t generic_c_ptr, int offset) {
 // }
 
 
-// void *cn_map_get(cn_map *m, cn_integer *key) {
-//     // const char key_arr[1] = {key};
-//     void *res = ht_get(m, key->val);
-//     if (!res) { printf("NULL being returned for key %ld\n", *(key->val)); exit (1); }
-//     return res;
-// }
-
 cn_map *cn_map_set(cn_map *m, cn_integer *key, void *value) {
-    ht_set(m, key->val, value);
+    signed long *key_ptr = alloc(sizeof(signed long));
+    *key_ptr = key->val;
+    ht_set(m, key_ptr, value);
     return m;
 }
+
+
+cn_map *cn_map_deep_copy(cn_map *m1) {
+    cn_map *m2 = map_create();
+
+    hash_table_iterator hti = ht_iterator(m1);
+
+    while (ht_next(&hti)) {
+        signed long* curr_key = hti.key;
+        void *val = ht_get(m1, curr_key);
+        ht_set(m2, curr_key, val);
+    }
+
+    return m2;
+}
+
 
 cn_map *default_cn_map(void) {
     return map_create();
@@ -361,6 +378,10 @@ cn_pointer *convert_to_cn_pointer(void *ptr) {
     return res;
 }
 
+void *convert_from_cn_pointer(cn_pointer *cn_ptr) {
+    return cn_ptr->ptr;
+}
+
 
 void update_error_message_info_(const char *function_name, char *file_name, int line_number, char *cn_source_loc) {
     error_msg_info.function_name = function_name;
@@ -392,20 +413,16 @@ static uint64_t cn_flsl(uint64_t x)
 
 cn_bits_u32 *cn_bits_u32_fls(cn_bits_u32 *i1) {
         cn_bits_u32 *res = (cn_bits_u32 *) alloc(sizeof(cn_bits_u32));
-        res->val = (uint32_t *) alloc(sizeof(uint32_t));
-        *(res->val) = cn_fls(*(i1->val));
+        res->val = cn_fls(i1->val);
         return res;
     }
 
 cn_bits_u64 *cn_bits_u64_flsl(cn_bits_u64 *i1) {
         cn_bits_u64 *res = (cn_bits_u64 *) alloc(sizeof(cn_bits_u64));
-        res->val = (uint64_t *) alloc(sizeof(uint64_t));
-        *(res->val) = cn_flsl(*(i1->val));
+        res->val = cn_flsl(i1->val);
         return res;
     }
 
-
-/* void *aligned_alloc(size_t align, size_t size); */
 
 void *cn_aligned_alloc(size_t align, size_t size) 
 {

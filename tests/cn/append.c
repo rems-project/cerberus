@@ -25,7 +25,6 @@ predicate (datatype seq) IntList(pointer p) {
     return Seq_Nil{};
   } else {
     take H = Owned<struct int_list>(p);
-    assert (is_null(H.tail) || (u64)H.tail != 0u64);
     take tl = IntList(H.tail);
     return (Seq_Cons { head: H.head, tail: tl });
   }
@@ -33,11 +32,8 @@ predicate (datatype seq) IntList(pointer p) {
 @*/
 
 struct int_list* IntList_append(struct int_list* xs, struct int_list* ys)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
-/*@ requires is_null(ys) || !addr_eq(ys, NULL); @*/
 /*@ requires take L1 = IntList(xs); @*/
 /*@ requires take L2 = IntList(ys); @*/
-/*@ ensures is_null(return) || !addr_eq(return, NULL); @*/
 /*@ ensures take L3 = IntList(return); @*/
 /*@ ensures L3 == append(L1, L2); @*/
 {
@@ -85,10 +81,7 @@ struct int_list_pair {
 
 
 struct int_list_pair split(struct int_list *xs)
-/*@ requires is_null(xs) || !addr_eq(xs, NULL); @*/
 /*@ requires take Xs = IntList(xs); @*/
-/*@ ensures is_null(return.fst) || !addr_eq(return.fst, NULL); @*/
-/*@ ensures is_null(return.snd) || !addr_eq(return.snd, NULL); @*/
 /*@ ensures take Ys = IntList(return.fst); @*/
 /*@ ensures take Zs = IntList(return.snd); @*/
 {
@@ -105,7 +98,6 @@ struct int_list_pair split(struct int_list *xs)
       xs->tail = p.fst;
       cdr->tail = p.snd;
       struct int_list_pair r = {.fst = xs, .snd = cdr};
-      /*@ cn_print(r); @*/
       return r;
     }
   }

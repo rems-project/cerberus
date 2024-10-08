@@ -151,7 +151,7 @@ type asm_qualifier =
 %token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE
 %token CN_DATATYPE CN_TYPE_SYNONYM CN_SPEC CN_ARRAY_SHIFT CN_MEMBER_SHIFT
 %token CN_UNCHANGED CN_WILD CN_MATCH
-%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES
+%token CN_GOOD CN_NULL CN_TRUE CN_FALSE CN_IMPLIES CN_TO_BYTES CN_FROM_BYTES
 %token <string * [`U|`I] * int> CN_CONSTANT
 
 %token EOF
@@ -2475,6 +2475,12 @@ cn_statement:
 | CN_UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc , CN_pack_unpack (Unpack, p, es)) }
+| CN_TO_BYTES r=resource SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc , CN_to_from_bytes (To, r)) }
+| CN_FROM_BYTES r= resource SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc , CN_to_from_bytes (From, r)) }
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }

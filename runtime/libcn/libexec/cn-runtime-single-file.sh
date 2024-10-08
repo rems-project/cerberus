@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail -o noclobber
 
-USAGE="USAGE: $0 -h\n       $0 [-oq] FILE.c"
+USAGE="USAGE: $0 -h\n       $0 [-ovq] FILE.c"
 
 function echo_and_err() {
     printf "$1\n"
@@ -54,7 +54,7 @@ EXEC_DIR=$(mktemp -d -t 'cn-exec.XXXX')
 # INPUT_FN="${EXEC_DIR}/${INPUT_BASENAME}.pp.c"
 
 # Instrument code with CN
-if cn verify "${INPUT_FN}" \
+if cn instrument "${INPUT_FN}" \
     --output-decorated="${INPUT_BASENAME}-exec.c" \
     --output-decorated-dir="${EXEC_DIR}" \
     ${CHECK_OWNERSHIP}; then

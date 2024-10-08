@@ -383,6 +383,7 @@ module CHERIMorello : Memory = struct
     | CheriMerrInsufficientPermissions -> CheriMerrInsufficientPermissions
     | CheriBoundsErr (((b, s), a), l) -> CheriBoundsErr ((b, s), a, l)
     | CheriUndefinedTag -> CheriUndefinedTag
+    | CheriZeroLength -> CheriZeroLength
 
   let from_Coq_free_error: MemCommonExe.free_error -> free_error = function
     | Free_non_matching -> Free_non_matching
@@ -660,6 +661,7 @@ module CHERIMorello : Memory = struct
     | UB_CHERI_InsufficientPermissions                     -> UB_CHERI_InsufficientPermissions
     | UB_CHERI_BoundsViolation                             -> UB_CHERI_BoundsViolation
     | UB_CHERI_UndefinedTag                                -> UB_CHERI_UndefinedTag
+    | UB_CHERI_ZeroLength                                  -> UB_CHERI_ZeroLength
 
   let fromCoq_Symbol_description: CoqSymbol.symbol_description -> Symbol.symbol_description = function
     | SD_None -> SD_None

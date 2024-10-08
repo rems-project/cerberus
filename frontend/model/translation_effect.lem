@@ -30,6 +30,8 @@ type elab_state = <|
   temporary_objects: list (wrapped_symbol * Ctype.ctype);
   visible_objects_types_markers_env: map nat (list (Symbol.sym * Ctype.ctype));
 
+  cheri_const_alias: map Symbol.sym Symbol.sym;
+
   errors: list string;
   
   (* readonly *)
@@ -46,6 +48,7 @@ let elab_init callconv = <|
   compound_literals= [];
   temporary_objects= [];
   visible_objects_types_markers_env = Map.empty;
+  cheri_const_alias= Map.empty;
   errors = [];
   calling_convention= callconv;
 |>
@@ -91,15 +94,29 @@ let pop_block_objects = fun st ->
         | _       -> error "[Translation.E.pop_block_objects] found an ill-formed scope stack."
       end |>)
 
-val with_block_objects: forall 'a. list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM 'a -> elabM (list compound_literal_info * 'a)
+val cheri_const_alias_map: elabM (map Symbol.sym Symbol.sym)
+let cheri_const_alias_map = fun st ->
+  (st.cheri_const_alias, st)
+
+val with_block_objects: forall 'a. list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM 'a ->
+  elabM (list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype * Symbol.sym)) * list compound_literal_info * 'a)
 let with_block_objects binds ma = fun st ->
+  let (new_aliases, cheri_const_alias) = List.foldl (fun (xs_acc, map_acc) (sym, (qs, ty)) ->
+    (* TODO: fail if sym IN acc *)
+    if qs.Ctype.const then
+      let sym' = Symbol.fresh () in
+      ((sym, (qs, ty, sym')) :: xs_acc, Map.insert sym sym' map_acc)
+    else
+      (xs_acc, map_acc)
+  ) ([], st.cheri_const_alias) binds in
   let st' = <| st with
     visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
     visible_objects= (List.map fst binds) :: st.visible_objects;
     compound_literals= [];
+    cheri_const_alias = cheri_const_alias;
   |> in
   let (a, st'') = ma st' in
-  ((st''.compound_literals, a), <| st'' with
+  ((new_aliases, st''.compound_literals, a), <| st'' with
     visible_objects=
       match st''.visible_objects with
         | _ :: xs -> xs

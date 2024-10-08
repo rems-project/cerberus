@@ -7,6 +7,18 @@ module LC = LogicalConstraints
 open LogicalConstraints
 module SymMap = Map.Make (Sym)
 module SymSet = Set.Make (Sym)
+
+module Int_BT_Table = Map.Make (struct
+    type t = int * BT.t
+
+    let compare (int1, bt1) (int2, bt2) =
+      let cmp = Int.compare int1 int2 in
+      if cmp != 0 then
+        cmp
+      else
+        BT.compare bt1 bt2
+  end)
+
 module BT_Table = Hashtbl.Make (BT)
 
 module IntWithHash = struct
@@ -66,7 +78,7 @@ type solver_frame =
   { mutable commands : SMT.sexp list; (** Ack-style SMT commands, most recent first. *)
     mutable uninterpreted : SMT.sexp SymMap.t;
     (** Uninterpreted functions and variables that we've declared. *)
-    bt_uninterpreted : SMT.sexp BT_Table.t Int_Table.t;
+    mutable bt_uninterpreted : SMT.sexp Int_BT_Table.t;
     (** Uninterpreted constants, indexed by base type. *)
     mutable ctypes : int CTypeMap.t
     (** Declarations for C types. Each C type is assigned a unique integer. *)
@@ -75,7 +87,7 @@ type solver_frame =
 let empty_solver_frame () =
   { commands = [];
     uninterpreted = SymMap.empty;
-    bt_uninterpreted = Int_Table.create 50;
+    bt_uninterpreted = Int_BT_Table.empty;
     ctypes = CTypeMap.empty
   }
 
@@ -98,14 +110,13 @@ module Debug = struct
     let to_string = Sexplib.Sexp.to_string_hum in
     let append str doc = doc ^/^ !^str in
     let dump_sym k v rest = rest ^/^ bar ^^^ Sym.pp k ^^^ !^"|->" ^^^ !^(to_string v) in
-    let dump_bts _k v =
-      let dump k v rest = rest ^/^ bar ^^^ BT.pp k ^^^ !^"|->" ^^^ !^(to_string v) in
-      BT_Table.fold dump v
+    let dump_bts (_, k) v rest =
+      rest ^/^ bar ^^^ BT.pp k ^^^ !^"|->" ^^^ !^(to_string v)
     in
     !^"# Symbols"
     |> SymMap.fold dump_sym f.uninterpreted
     |> append "# Basetypes "
-    |> Int_Table.fold dump_bts f.bt_uninterpreted
+    |> Int_BT_Table.fold dump_bts f.bt_uninterpreted
     |> append "+---------------------------------"
 
 
@@ -212,10 +223,7 @@ let declare_uninterpreted s name args_ts res_t =
 
 (** Declare an uninterpreted function, indexed by a base type. *)
 let declare_bt_uninterpreted s (name, k) bt args_ts res_t =
-  let check f =
-    Option.bind (Int_Table.find_opt f.bt_uninterpreted k) (fun m ->
-      BT_Table.find_opt m bt)
-  in
+  let check f = Int_BT_Table.find_opt (k, bt) f.bt_uninterpreted in
   match search_frames s check with
   | Some e -> e
   | None ->
@@ -223,15 +231,7 @@ let declare_bt_uninterpreted s (name, k) bt args_ts res_t =
     ack_command s (SMT.declare_fun sname args_ts res_t);
     let e = SMT.atom sname in
     let top_map = !(s.cur_frame).bt_uninterpreted in
-    let mp =
-      match Int_Table.find_opt top_map k with
-      | Some m -> m
-      | None ->
-        let m = BT_Table.create 20 in
-        Int_Table.add top_map k m;
-        m
-    in
-    BT_Table.add mp bt e;
+    !(s.cur_frame).bt_uninterpreted <- Int_BT_Table.add (k, bt) e top_map;
     e
 
 
@@ -274,7 +274,7 @@ end
 
 module CN_AllocId = struct
   (** The type to use  for allocation ids *)
-  let t = if !use_vip then SMT.t_int else CN_Tuple.t []
+  let t () = if !use_vip then SMT.t_int else CN_Tuple.t []
 
   (** Parse an allocation id from an S-expression *)
   let from_sexp s = if !use_vip then SMT.to_z s else Z.zero
@@ -284,11 +284,15 @@ module CN_AllocId = struct
 end
 
 module CN_Pointer = struct
-  let name = "cn_pointer"
+  let name = "pointer"
 
-  let alloc_name = "cn_pointer_alloc"
+  let null_name = "NULL"
 
-  let addr_name = "cn_pointer_addr"
+  let alloc_id_addr_name = "AiA"
+
+  let alloc_id_name = "alloc_id"
+
+  let addr_name = "addr"
 
   (** Bit-width of pointers *)
   let width =
@@ -298,24 +302,113 @@ module CN_Pointer = struct
   (** The name of the pointer type *)
   let t = SMT.atom name
 
-  (** Add the declaration for the pointer type *)
+  (** Using a match is more robust to changes in the pointer representation,
+      i.e. adding a [functpr] constructor. *)
+  let match_ptr scrutinee ~null_case ~alloc_id_addr_case =
+    SMT.(
+      match_datatype
+        scrutinee
+        [ (PCon (null_name, []), null_case);
+          ( PCon (alloc_id_addr_name, [ alloc_id_name; addr_name ]),
+            alloc_id_addr_case
+              ~alloc_id:(SMT.atom alloc_id_name)
+              ~addr:(SMT.atom addr_name) )
+        ])
+
+
+  let ptr_shift_name = "ptr_shift"
+
+  let copy_alloc_id_name = "copy_alloc_id"
+
+  let alloc_id_of_name = "alloc_id_of"
+
+  let bits_to_ptr_name = "bits_to_ptr"
+
+  let addr_of_name = "addr_of"
+
+  (** Make a null pointer value *)
+  let con_null = SMT.app_ null_name []
+
+  (** Make a allocation ID & address pair pointer value *)
+  let con_aia ~alloc_id ~addr = SMT.app_ alloc_id_addr_name [ alloc_id; addr ]
+
   let declare s =
     ack_command
       s
       (SMT.declare_datatype
          name
          []
-         [ (name, [ (alloc_name, CN_AllocId.t); (addr_name, SMT.t_bits width) ]) ])
+         [ (null_name, []);
+           ( alloc_id_addr_name,
+             [ (alloc_id_name, CN_AllocId.t ()); (addr_name, SMT.t_bits width) ] )
+         ]);
+    ack_command
+      s
+      (SMT.define_fun
+         ptr_shift_name
+         [ ("p", t); ("offset", SMT.t_bits width); ("null_case", t) ]
+         t
+         (match_ptr
+            (SMT.atom "p")
+            ~null_case:(SMT.atom "null_case")
+            ~alloc_id_addr_case:(fun ~alloc_id ~addr ->
+              con_aia ~alloc_id ~addr:(SMT.bv_add addr (SMT.atom "offset")))));
+    ack_command
+      s
+      (SMT.define_fun
+         copy_alloc_id_name
+         [ ("p", t); ("new_addr", SMT.t_bits width); ("null_case", t) ]
+         t
+         (match_ptr
+            (SMT.atom "p")
+            ~null_case:(SMT.atom "null_case")
+            ~alloc_id_addr_case:(fun ~alloc_id ~addr:_ ->
+              con_aia ~alloc_id ~addr:(SMT.atom "new_addr"))));
+    ack_command
+      s
+      (SMT.define_fun
+         alloc_id_of_name
+         [ ("p", t); ("null_case", CN_AllocId.t ()) ]
+         (CN_AllocId.t ())
+         (match_ptr
+            (SMT.atom "p")
+            ~null_case:(SMT.atom "null_case")
+            ~alloc_id_addr_case:(fun ~alloc_id ~addr:_ -> alloc_id)));
+    ack_command
+      s
+      (SMT.define_fun
+         bits_to_ptr_name
+         [ ("bits", SMT.t_bits width); ("alloc_id", CN_AllocId.t ()) ]
+         t
+         (SMT.ite
+            (SMT.eq (SMT.atom "bits") (SMT.bv_k width Z.zero))
+            con_null
+            (con_aia ~addr:(SMT.atom "bits") ~alloc_id:(SMT.atom "alloc_id"))));
+    ack_command
+      s
+      (SMT.define_fun
+         addr_of_name
+         [ ("p", t) ]
+         (SMT.t_bits width)
+         (match_ptr
+            (SMT.atom "p")
+            ~null_case:(SMT.bv_k width Z.zero)
+            ~alloc_id_addr_case:(fun ~alloc_id:_ ~addr -> addr)))
 
 
-  (** Make a pointer value *)
-  let con alloc addr = SMT.app_ name [ alloc; addr ]
+  let ptr_shift ~ptr ~offset ~null_case =
+    SMT.app_ ptr_shift_name [ ptr; offset; null_case ]
 
-  (** Get the allocation id of a pointer *)
-  let get_alloc pt = SMT.app_ alloc_name [ pt ]
 
-  (** Get the adderss of a pointer *)
-  let get_addr pt = SMT.app_ addr_name [ pt ]
+  let copy_alloc_id ~ptr ~addr ~null_case =
+    SMT.app_ copy_alloc_id_name [ ptr; addr; null_case ]
+
+
+  let alloc_id_of ~ptr ~null_case = SMT.app_ alloc_id_of_name [ ptr; null_case ]
+
+  let bits_to_ptr ~bits ~alloc_id = SMT.app_ bits_to_ptr_name [ bits; alloc_id ]
+
+  let addr_of ~ptr = SMT.app_ addr_of_name [ ptr ]
 end
 
 module CN_List = struct
@@ -362,8 +455,8 @@ let rec translate_base_type = function
   | Integer -> SMT.t_int
   | Bits (_, n) -> SMT.t_bits n
   | Real -> SMT.t_real
-  | Loc -> CN_Pointer.t
-  | Alloc_id -> CN_AllocId.t
+  | Loc () -> CN_Pointer.t
+  | Alloc_id -> CN_AllocId.t ()
   | CType -> SMT.t_int
   | List bt -> CN_List.t (translate_base_type bt)
   | Set bt -> SMT.t_set (translate_base_type bt)
@@ -392,20 +485,17 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
     let signed = equal_sign sign Signed in
     Const (Bits ((sign, n), SMT.to_bits n signed sexp))
   | Real -> Const (Q (SMT.to_q sexp))
-  | Loc ->
+  | Loc () ->
     (match SMT.to_con sexp with
-     | _con, [ sbase; saddr ] ->
+     | con, [] when String.equal con CN_Pointer.null_name -> Const Null
+     | con, [ sbase; saddr ] when String.equal con CN_Pointer.alloc_id_addr_name ->
        let base = CN_AllocId.from_sexp sbase in
        let addr =
          match get_value gs ctys Memory.uintptr_bt saddr with
          | Const (Bits (_, z)) -> z
          | _ -> failwith "Pointer value is not bits"
        in
-       Const
-         (if Z.equal base Z.zero && Z.equal addr Z.zero then
-            Null
-          else
-            Pointer { alloc_id = base; addr })
+       Const (Pointer { alloc_id = base; addr })
      | _ -> failwith "Loc")
   | Alloc_id -> Const (Alloc_id (CN_AllocId.from_sexp sexp))
   | CType ->
@@ -439,9 +529,9 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
     Struct (tag, List.map2 mk_field fields vals)
   | Datatype tag ->
     let con, vals = SMT.to_con sexp in
-    let cons = (SymMap.find tag gs.datatypes).dt_constrs in
+    let cons = (SymMap.find tag gs.datatypes).constrs in
     let do_con c =
-      let fields = (SymMap.find c gs.datatype_constrs).c_params in
+      let fields = (SymMap.find c gs.datatype_constrs).params in
       let mk_field (l, t) v = (l, get_ivalue gs ctys t v) in
       Constructor (c, List.map2 mk_field fields vals)
     in
@@ -460,31 +550,33 @@ and get_value gs ctys bt (sexp : SMT.sexp) =
 (** {1 Term to SMT} *)
 
 (** Translate a constant to SMT *)
-let rec translate_const s co =
+let translate_const s co =
   match co with
   | Z z -> SMT.int_zk z
   | Bits ((_, w), z) -> SMT.bv_k w z
   | Q q -> SMT.real_k q
   | Pointer p ->
-    CN_Pointer.con (CN_AllocId.to_sexp p.alloc_id) (SMT.bv_k CN_Pointer.width p.addr)
+    CN_Pointer.con_aia
+      ~alloc_id:(CN_AllocId.to_sexp p.alloc_id)
+      ~addr:(SMT.bv_k CN_Pointer.width p.addr)
   | Alloc_id z -> CN_AllocId.to_sexp z
   | Bool b -> SMT.bool_k b
   | Unit -> SMT.atom (CN_Tuple.name 0)
-  | Null -> translate_const s (Pointer { alloc_id = Z.of_int 0; addr = Z.of_int 0 })
+  | Null -> CN_Pointer.con_null
   | CType_const ct -> SMT.int_k (find_c_type s ct)
   | Default t ->
     declare_bt_uninterpreted s CN_Constant.default t [] (translate_base_type t)
 
 
 (** Casting between bit-vector types *)
-let bv_cast to_bt from_bt x =
+let bv_cast ~to_ ~from x =
   let bits_info bt =
     match BT.is_bits_bt bt with
     | Some (sign, sz) -> (BT.equal_sign sign BT.Signed, sz)
     | None -> failwith ("mk_bv_cast: non-bv type: " ^ Pp.plain (BT.pp bt))
   in
-  let _to_signed, to_sz = bits_info to_bt in
-  let from_signed, from_sz = bits_info from_bt in
+  let _to_signed, to_sz = bits_info to_ in
+  let from_signed, from_sz = bits_info from in
   match () with
   | _ when to_sz = from_sz -> x
   | _ when to_sz < from_sz -> SMT.bv_extract (to_sz - 1) 0 x
@@ -536,7 +628,7 @@ let bv_ctz result_w =
   count
 
 
-(** Translate a vraible to SMT.  Declare if needed. *)
+(** Translate a variable to SMT.  Declare if needed. *)
 let translate_var s name bt =
   let check f = SymMap.find_opt name f.uninterpreted in
   match search_frames s check with
@@ -560,6 +652,10 @@ let rec translate_term s iterm =
     else (
       let x = fresh_name s CN_Names.named_expr_name in
       SMT.let_ [ (x, e) ] (k (SMT.atom x)))
+  in
+  let default bt =
+    let here = Locations.other (__FUNCTION__ ^ string_of_int __LINE__) in
+    translate_term s (IT.default_ bt here)
   in
   match IT.term iterm with
   | Const c -> translate_const s c
@@ -797,31 +893,31 @@ let rec translate_term s iterm =
         members
     in
     translate_term s (IT (Record str, IT.bt t, loc))
-  (* Offset of a field in a struct *)
   | MemberShift (t, tag, member) ->
-    let x = fresh_name s "cn_member_ptr" in
-    ack_command s (SMT.define x CN_Pointer.t (translate_term s t));
-    let x = SMT.atom x in
-    let alloc = CN_Pointer.get_alloc x in
-    let addr = CN_Pointer.get_addr x in
-    let off = translate_term s (IT (OffsetOf (tag, member), Memory.uintptr_bt, loc)) in
-    CN_Pointer.con alloc (SMT.bv_add addr off)
-  (* Offset of an array element *)
+    CN_Pointer.ptr_shift
+      ~ptr:(translate_term s t)
+      ~null_case:(default (Loc ()))
+      ~offset:(translate_term s (IT (OffsetOf (tag, member), Memory.uintptr_bt, loc)))
   | ArrayShift { base; ct; index } ->
-    let x = fresh_name s "cn_array_ptr" in
-    ack_command s (SMT.define x CN_Pointer.t (translate_term s base));
-    let x = SMT.atom x in
-    let alloc = CN_Pointer.get_alloc x in
-    let addr = CN_Pointer.get_addr x in
-    let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt loc in
-    let ix = cast_ Memory.uintptr_bt index loc in
-    let off = translate_term s (mul_ (el_size, ix) loc) in
-    CN_Pointer.con alloc (SMT.bv_add addr off)
-  (* Change the offset of a pointer *)
+    CN_Pointer.ptr_shift
+      ~ptr:(translate_term s base)
+      ~null_case:(default (Loc ()))
+      ~offset:
+        (let el_size = int_lit_ (Memory.size_of_ctype ct) Memory.uintptr_bt loc in
+         (* locations don't matter here - we are translating straight away *)
+         let ix =
+           if BT.equal (IT.bt index) Memory.uintptr_bt then
+             index
+           else
+             cast_ Memory.uintptr_bt index loc
+         in
+         translate_term s (mul_ (el_size, ix) loc))
   | CopyAllocId { addr; loc } ->
-    let smt_addr = translate_term s addr in
-    let smt_loc = translate_term s loc in
-    CN_Pointer.con (CN_Pointer.get_alloc smt_loc) smt_addr
+    CN_Pointer.copy_alloc_id
+      ~ptr:(translate_term s loc)
+      ~null_case:(default (Loc ()))
+      ~addr:(translate_term s addr)
+  | HasAllocId loc -> SMT.is_con CN_Pointer.alloc_id_addr_name (translate_term s loc)
   (* Lists *)
   | Nil bt -> CN_List.nil (translate_base_type bt)
   | Cons (e1, e2) -> CN_List.cons (translate_term s e1) (translate_term s e2)
@@ -850,7 +946,7 @@ let rec translate_term s iterm =
   | Representable (ct, t) -> translate_term s (representable struct_decls ct t loc)
   | Good (ct, t) -> translate_term s (good_value struct_decls ct t loc)
   | Aligned t ->
-    let addr = pointerToIntegerCast_ t.t loc in
+    let addr = addr_ t.t loc in
     assert (BT.equal (IT.bt addr) (IT.bt t.align));
     translate_term s (divisible_ (addr, t.align) loc)
   (* Maps *)
@@ -913,19 +1009,34 @@ let rec translate_term s iterm =
     SMT.let_ [ (x, translate_term s e1) ] (do_alts (SMT.atom x) alts)
   (* Casts *)
   | WrapI (ity, arg) ->
-    bv_cast (Memory.bt_of_sct (Sctypes.Integer ity)) (IT.bt arg) (translate_term s arg)
+    bv_cast
+      ~to_:(Memory.bt_of_sct (Sctypes.Integer ity))
+      ~from:(IT.bt arg)
+      (translate_term s arg)
   | Cast (cbt, t) ->
     let smt_term = translate_term s t in
     (match (IT.bt t, cbt) with
-     | Bits _, Loc ->
-       CN_Pointer.con
-         (CN_AllocId.to_sexp Z.zero)
-         (bv_cast Memory.uintptr_bt (IT.bt t) smt_term)
-     | Loc, Bits _ -> bv_cast cbt Memory.uintptr_bt (CN_Pointer.get_addr smt_term)
-     | Loc, Alloc_id -> CN_Pointer.get_alloc smt_term
+     | Bits _, Loc () ->
+       let addr =
+         if BT.equal (IT.bt t) Memory.uintptr_bt then
+           smt_term
+         else
+           bv_cast ~to_:Memory.uintptr_bt ~from:(IT.bt t) smt_term
+       in
+       CN_Pointer.bits_to_ptr ~bits:addr ~alloc_id:(default Alloc_id)
+     | Loc (), Bits _ ->
+       let maybe_cast x =
+         if BT.equal cbt Memory.uintptr_bt then
+           x
+         else
+           bv_cast ~to_:cbt ~from:Memory.uintptr_bt x
+       in
+       maybe_cast (CN_Pointer.addr_of ~ptr:smt_term)
+     | Loc (), Alloc_id ->
+       CN_Pointer.alloc_id_of ~ptr:smt_term ~null_case:(default Alloc_id)
      | Real, Integer -> SMT.real_to_int smt_term
      | Integer, Real -> SMT.int_to_real smt_term
-     | Bits _, Bits _ -> bv_cast cbt (IT.bt t) smt_term
+     | Bits _, Bits _ -> bv_cast ~to_:cbt ~from:(IT.bt t) smt_term
      | _ -> assert false)
 
 
@@ -981,9 +1092,9 @@ let declare_datatype_group s names =
   let mk_con_field (l, t) = (CN_Names.datatype_field_name l, translate_base_type t) in
   let mk_con c =
     let ci = SymMap.find c s.globals.datatype_constrs in
-    (CN_Names.datatype_con_name c, List.map mk_con_field ci.c_params)
+    (CN_Names.datatype_con_name c, List.map mk_con_field ci.params)
   in
-  let cons info = List.map mk_con info.dt_constrs in
+  let cons (info : BT.dt_info) = List.map mk_con info.constrs in
   let to_smt (x : Sym.t) =
     let info = SymMap.find x s.globals.datatypes in
     (CN_Names.datatype_name x, [], cons info)
@@ -1128,52 +1239,25 @@ let make globals =
   s
 
 
-(** Evaluate terms in the context of a model computed by the solver. *)
-let model_evaluator solver mo =
-  match SMT.to_list mo with
-  | None -> failwith "model is an atom"
-  | Some defs ->
-    let scfg = solver.smt_solver.config in
-    let cfg = { scfg with log = Logger.make "model" } in
-    let s = SMT.new_solver cfg in
-    let gs = solver.globals in
-    let evaluator =
-      { smt_solver = s;
-        cur_frame = ref (empty_solver_frame ());
-        prev_frames =
-          ref (List.map copy_solver_frame (!(solver.cur_frame) :: !(solver.prev_frames)))
-          (* We keep the prev_frames because things that were declared, would now be
-             defined by the model. Also, we need the infromation about the C type
-             mapping. *);
-        name_seed = solver.name_seed;
-        globals = gs
-      }
-    in
-    declare_solver_basics evaluator;
-    List.iter (debug_ack_command evaluator) defs;
-    fun e ->
-      push evaluator;
-      let inp = translate_term evaluator e in
-      (match SMT.check s with
-       | SMT.Sat ->
-         let res = SMT.get_expr s inp in
-         pop evaluator 1;
-         let ctys = get_ctype_table evaluator in
-         Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
-       | _ ->
-         pop evaluator 1;
-         None)
-
-
 (* ---------------------------------------------------------------------------*)
 (* GLOBAL STATE: Models *)
 (* ---------------------------------------------------------------------------*)
 
-type model = IT.t -> IT.t option
+type model = int
+
+type model_fn = IT.t -> IT.t option
 
 type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
-let empty_model it = Some it
+type model_table = (model, model_fn) Hashtbl.t
+
+let models_tbl : model_table = Hashtbl.create 1
+
+let empty_model =
+  let model = Option.some in
+  Hashtbl.add models_tbl 0 model;
+  0
+
 
 type model_state =
   | Model of model_with_q
@@ -1182,6 +1266,67 @@ type model_state =
 let model_state = ref No_model
 
 let model () = match !model_state with No_model -> assert false | Model mo -> mo
+
+(** Evaluate terms in the context of a model computed by the solver. *)
+let model_evaluator =
+  let model_evaluator_solver = ref None in
+  let currently_loaded_model = ref 0 in
+  let new_model_id =
+    let model_id = ref 0 in
+    fun () ->
+      (* Start with 1, as 0 is the id of the empty model *)
+      model_id := !model_id + 1;
+      !model_id
+  in
+  fun solver mo ->
+    match SMT.to_list mo with
+    | None -> failwith "model is an atom"
+    | Some defs ->
+      let scfg = solver.smt_solver.config in
+      let cfg = { scfg with log = Logger.make "model" } in
+      let smt_solver, new_solver =
+        match !model_evaluator_solver with
+        | Some smt_solver -> (smt_solver, false)
+        | None ->
+          let s = SMT.new_solver cfg in
+          model_evaluator_solver := Some s;
+          (s, true)
+      in
+      let model_id = new_model_id () in
+      let gs = solver.globals in
+      let evaluator =
+        { smt_solver;
+          cur_frame = ref (empty_solver_frame ());
+          prev_frames =
+            ref
+              (List.map copy_solver_frame (!(solver.cur_frame) :: !(solver.prev_frames)))
+            (* We keep the prev_frames because things that were declared, would now be
+               defined by the model. Also, we need the infromation about the C type
+               mapping. *);
+          name_seed = solver.name_seed;
+          globals = gs
+        }
+      in
+      if new_solver then (
+        declare_solver_basics evaluator;
+        push evaluator);
+      let model_fn e =
+        if not (!currently_loaded_model = model_id) then (
+          currently_loaded_model := model_id;
+          pop evaluator 1;
+          push evaluator;
+          List.iter (debug_ack_command evaluator) defs);
+        let inp = translate_term evaluator e in
+        match SMT.check smt_solver with
+        | SMT.Sat ->
+          let res = SMT.get_expr smt_solver inp in
+          let ctys = get_ctype_table evaluator in
+          Some (get_ivalue gs ctys (basetype e) (SMT.no_let res))
+        | _ -> None
+      in
+      Hashtbl.add models_tbl model_id model_fn;
+      model_id
+
 
 (* ---------------------------------------------------------------------------*)
 
@@ -1232,7 +1377,10 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt lc =
    reason) *)
 
 (* ISD: Could these globs be different from the saved ones? *)
-let eval _globs mo t = mo t
+let eval _globs mo t =
+  let model_fn = Hashtbl.find models_tbl mo in
+  model_fn t
+
 
 (* Dummy implementations *)
 let random_seed = ref 0

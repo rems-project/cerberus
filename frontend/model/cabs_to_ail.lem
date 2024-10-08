@@ -4528,6 +4528,9 @@ let desugar_cn_statement (CN_statement loc stmt_) =
      desugar_cn_pred pred >>= fun pred ->
      E.mapM desugar_cn_expr iargs >>= fun iargs ->
      E.return (CN_pack_unpack pack_unpack pred iargs)
+  | CN_to_from_bytes to_from res ->
+     desugar_cn_resource res >>= fun res ->
+     E.return (CN_to_from_bytes to_from res)
   | CN_have assrt ->
      desugar_cn_assertion assrt >>= fun assrt ->
      E.return (CN_have assrt)
@@ -4896,7 +4899,7 @@ let register_additional_cn_var id = E.register_cn_ident CN_vars id
 
 
 import Core
-val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> string -> translation_unit ->
+val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> string -> translation_unit ->
   Exception.exceptM (E.fin_markers_env * ail_program unit) Errors.error
 let desugar core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
 (*

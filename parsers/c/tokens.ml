@@ -183,6 +183,8 @@ type token =
   | CN_UNCHANGED
   | CN_WILD
   | CN_IMPLIES
+  | CN_TO_BYTES
+  | CN_FROM_BYTES
 
 
 let string_of_token = function
@@ -350,4 +352,6 @@ let string_of_token = function
   | CN_UNCHANGED -> "CN_UNCHANGED"
   | CN_WILD -> "CN_WILD"
   | CN_IMPLIES -> "CN_IMPLIES"
+  | CN_TO_BYTES -> "CN_TO_BYTES"
+  | CN_FROM_BYTES -> "CN_FROM_BYTES"
 

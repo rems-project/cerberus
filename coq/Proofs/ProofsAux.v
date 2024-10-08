@@ -1654,7 +1654,15 @@ Section AddressValue_Lemmas.
   Definition addr_offset (a1 a2:AddressValue.t) : Z
     := (AddressValue.to_Z a1) - (AddressValue.to_Z a2).
 
-  (* TODO: move *)
+  (* TODO: try proving this *)
+  (* This is a Morello-specific requirement. *)
+  Axiom pointer_sizeof_alignof: sizeof_pointer MorelloImpl.get = alignof_pointer MorelloImpl.get.
+
+  (* TODO: try proving this *)
+  (* TODO: this should be moved to [AddressValue] module *)
+  Axiom ADDR_LIMIT_aligned:
+    AddressValue.ADDR_LIMIT mod (Z.of_nat (alignof_pointer MorelloImpl.get)) = 0.
+
   Lemma AdddressValue_eqb_eq:
     forall (a b: AddressValue.t),
       eqb a b = true <-> a = b.
@@ -1835,6 +1843,85 @@ Section AddressValue_Lemmas.
     lia.
   Qed.
 
+  Fact AddressValue_to_Z_inj (x y : AddressValue.t) :
+    AddressValue.to_Z x = AddressValue.to_Z y ->
+    x = y.
+  Proof.
+    intro EQ.
+    destruct x, y.
+    cbv in EQ.
+    subst.
+    f_equal.
+    apply ProofIrrelevance.proof_irrelevance.
+  Qed.
+
+  Fact aligned_addr_neq_space (addr addr' : AddressValue.t) (psize : nat) :
+    psize = alignof_pointer MorelloImpl.get ->
+    addr_ptr_aligned addr ->
+    addr_ptr_aligned addr' ->
+    addr <> addr' ->
+    (AddressValue.to_Z addr + Z.of_nat psize <= AddressValue.to_Z addr')
+    \/
+    (AddressValue.to_Z addr' + Z.of_nat psize <= AddressValue.to_Z addr).
+  Proof.
+    intros SZ A A' NEQ.
+    unfold addr_ptr_aligned in *.
+    apply AddressValue_neq_via_to_Z in NEQ.
+    subst.
+    assert (0 < Z.of_nat (alignof_pointer MorelloImpl.get))
+      by (pose proof MorelloImpl.alignof_pointer_pos; lia).
+    generalize dependent (AddressValue.to_Z addr).
+    generalize dependent (AddressValue.to_Z addr').
+    generalize dependent (Z.of_nat (alignof_pointer MorelloImpl.get)).
+    clear.
+    intros sz SZ a2' A2 a1' A1 NEQ.
+    apply Zdiv.Zmod_divides in A1 as [a1 A1]; [| lia].
+    apply Zdiv.Zmod_divides in A2 as [a2 A2]; [| lia].
+    subst.
+    enough ((a1 + 1) <= a2 \/ (a2 + 1) <= a1) by nia.
+    nia.
+  Qed.
+
+  Fact aligned_addr_lt_space (addr addr' : AddressValue.t) (psize : nat) :
+    psize = alignof_pointer MorelloImpl.get ->
+    addr_ptr_aligned addr ->
+    addr_ptr_aligned addr' ->
+    AddressValue.ltb addr addr' = true ->
+    AddressValue.to_Z addr + Z.of_nat psize <= AddressValue.to_Z addr'.
+  Proof.
+    intros SZ A A' LT.
+    rewrite AddressValue_ltb_Z_ltb, Z.ltb_lt in LT.
+    pose proof aligned_addr_neq_space addr addr' psize as SPC.
+    full_autospecialize SPC; auto.
+    -
+      clear - LT.
+      intros C; subst addr'.
+      lia.
+    -
+      lia.
+  Qed.
+
+  Fact max_aligned (addr : AddressValue.t) :
+    addr_ptr_aligned addr ->
+    AddressValue.to_Z addr + Z.of_nat (alignof_pointer MorelloImpl.get)
+    <= AddressValue.ADDR_LIMIT.
+  Proof.
+    intros AA.
+    unfold addr_ptr_aligned in AA.
+    pose proof AddressValue.to_Z_in_bounds addr as AB.
+    pose proof ADDR_LIMIT_aligned as LA.
+    pose proof MorelloImpl.alignof_pointer_pos as LP; apply Znat.inj_lt in LP.
+    generalize dependent (AddressValue.to_Z addr).
+    generalize dependent (Z.of_nat (alignof_pointer MorelloImpl.get)).
+    clear.
+    intros align LA NZ addr AA [_ B].
+    apply Zdiv.Zmod_divides in AA as [am AM]; [| lia].
+    apply Zdiv.Zmod_divides in LA as [lm LM]; [| lia].
+    rewrite AM, LM in *; clear AM LM.
+    assert (am < lm) by nia; clear B.
+    nia.
+  Qed.
+
 End AddressValue_Lemmas.
 
 (* This sections contains proofs which could not be generalized between
@@ -1971,6 +2058,105 @@ Section AMapProofs.
         all: intros C; subst; lia.
   Qed.
 
+  (* complement of [amap_add_list_not_at] *)
+  Fact amap_add_list_at
+    {T: Type}
+    (x addr : AddressValue.t)
+    (bm : AMap.M.t T)
+    (l : list T):
+
+    (0 < Datatypes.length l)%nat ->
+
+    (AddressValue.ADDR_MIN <= AddressValue.to_Z addr + Z.of_nat (Datatypes.length l) <= AddressValue.ADDR_LIMIT) ->
+
+    (* "x in range written to" *)
+    ((AddressValue.leb addr x = true)
+     /\ (AddressValue.leb x (AddressValue.with_offset addr (Z.of_nat (Datatypes.length l) - 1)) = true)) ->
+
+    AMap.M.find (elt:=T) x (AMap.map_add_list_at bm l addr) =
+      nth_error l (Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)).
+  Proof.
+    intro L.
+    revert bm x addr.
+    induction l as [| h l].
+    -
+      invc L.
+    -
+      clear L.
+      destruct l.
+      +
+        clear IHl.
+        intros * RSZ [LO  HI].
+        assert (EQ : x = addr).
+        {
+          apply AddressValue_to_Z_inj.
+          cbn in *.
+          rewrite AddressValue_leb_Z_leb in *; bool_to_prop_hyp.
+          rewrite AddressValue.with_offset_no_wrap in HI
+              by (pose proof (AddressValue.to_Z_in_bounds addr); lia).
+          lia.
+        }
+        subst x; clear.
+        replace (Z.to_nat (AddressValue.to_Z addr - AddressValue.to_Z addr)) with 0%nat by lia.
+        cbn [AMap.map_add_list_at].
+        now rewrite AMap.F.add_eq_o by reflexivity.
+      +
+        intros * RSZ [LO  HI].
+        assert (LL : (0 < Datatypes.length (t :: l))%nat) by (cbn; lia).
+        autospecialize IHl; [assumption |].
+        generalize dependent (t :: l); clear t l.
+        intros.
+        pose proof AddressValue.to_Z_in_bounds addr as AB.
+        destruct (AMap.M.Raw.Proofs.L.MX.eq_dec x addr) as [EQ | NEQ].
+        {
+          subst.
+          replace (Z.to_nat (AddressValue.to_Z addr - AddressValue.to_Z addr))
+            with 0%nat
+            by lia.
+          cbn in *.
+          rewrite amap_add_list_not_at.
+          1: now rewrite AMap.F.add_eq_o by reflexivity.
+          all: rewrite ?AddressValue_ltb_Z_ltb, ?Z.ltb_lt in *.
+          all: rewrite ?AddressValue.with_offset_no_wrap in * by lia.
+          all: lia.
+        }
+        cbn in *.
+        rewrite IHl; clear IHl.
+        all: rewrite ?AddressValue_leb_Z_leb, ?Z.leb_le in *.
+        all: rewrite !AddressValue.with_offset_no_wrap in * by 
+          (pose proof (AddressValue.to_Z_in_bounds addr); lia).
+        *
+          replace (Z.to_nat (AddressValue.to_Z x - (AddressValue.to_Z addr + 1)))
+            with ((Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)) - 1)%nat
+            by lia.
+          remember (Z.to_nat (AddressValue.to_Z x - AddressValue.to_Z addr)) as n.
+          destruct n.
+          --
+            exfalso.
+            apply AddressValue_neq_via_to_Z in NEQ.
+            lia.
+          --
+            cbn.
+            f_equal.
+            lia.
+        *
+          lia.
+        *
+          rewrite AddressValue.with_offset_no_wrap.
+          2: {
+            pose proof (AddressValue.to_Z_in_bounds addr).
+            rewrite AddressValue.with_offset_no_wrap.
+            lia.
+            lia.
+          }
+          rewrite AddressValue.with_offset_no_wrap.
+          2: {
+            pose proof (AddressValue.to_Z_in_bounds addr); lia.
+          }
+          apply AddressValue_neq_via_to_Z in NEQ.
+          lia.
+  Qed.
+
 End AMapProofs.
 
 Section SimpleError.
@@ -2034,6 +2220,17 @@ Definition is_None {A:Type} (x:option A) : Prop
      | Some _ => False
      | None => True
      end.
+
+Fact option_map_None
+  {A B : Type}
+  (f : A -> B)
+  (x : option A) :
+  x = None ->
+  option_map f x = None.
+Proof.
+  intros.
+  now subst.
+Qed.
 
 Lemma Z_of_bytes_bytes_of_Z:
   forall (a : ascii) (z : Z), Z_of_bytes false (cons a nil) = inr z -> byte_of_Z z = a.

@@ -163,8 +163,8 @@ type message =
         reason : string
       }
   | Illtyped_binary_it of
-      { left : SurfaceBaseTypes.t Terms.term;
-        right : SurfaceBaseTypes.t Terms.term;
+      { left : IT.Surface.t;
+        right : IT.Surface.t;
         binop : CF.Cn.cn_binop
       }
   | NIA of
@@ -198,6 +198,25 @@ type message =
         ctxt : Context.t * log;
         model : Solver.model_with_q
       }
+  | Needs_alloc_id of
+      { ptr : IT.t;
+        ub : CF.Undefined.undefined_behaviour;
+        ctxt : Context.t * log;
+        model : Solver.model_with_q
+      }
+  | Alloc_out_of_bounds of
+      { ptr : IT.t;
+        constr : IT.t;
+        ub : CF.Undefined.undefined_behaviour;
+        ctxt : Context.t * log;
+        model : Solver.model_with_q
+      }
+  | Allocation_not_live of
+      { reason : [ `Copy_alloc_id | `Ptr_cmp | `Ptr_diff | `ISO_array_shift ];
+        ptr : IT.t;
+        ctxt : Context.t * log;
+        model_constr : (Solver.model_with_q * IT.t) option
+      }
   (* | Implementation_defined_behaviour of document * state_report *)
   | Unspecified of CF.Ctype.ctype
   | StaticError of
@@ -219,6 +238,8 @@ type message =
   | Duplicate_pattern
   | Empty_provenance
   | Inconsistent_assumptions of string * (Context.t * log)
+  | To_bytes_needs_owned
+  | From_bytes_needs_each_owned
 
 type type_error =
   { loc : Locations.t;
@@ -301,7 +322,7 @@ let pp_message te =
       !^"the first input argument of predicate"
       ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname)
       ^^^ !^"must have type"
-      ^^^ Pp.squotes BaseTypes.(pp Loc)
+      ^^^ Pp.squotes BaseTypes.(pp (Loc ()))
       ^^^ !^"but was found with type"
       ^^^ Pp.squotes BaseTypes.(pp found_bty)
     in
@@ -376,7 +397,7 @@ let pp_message te =
     in
     { short; descr = Some descr; state = None }
   | Mismatch { has; expect } ->
-    let short = !^"Type error" in
+    let short = !^"Mismatched types." in
     let descr =
       !^"Expected value of type"
       ^^^ squotes expect
@@ -400,7 +421,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | NIA { it; hint } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Non-linear integer arithmetic." in
     let descr =
       !^"Illtyped expression"
       ^^^ squotes it
@@ -413,7 +434,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | TooBigExponent { it } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Exponent too big" in
     let descr =
       !^"Illtyped expression"
       ^^^ squotes it
@@ -426,7 +447,7 @@ let pp_message te =
     { short; descr = Some descr; state = None }
   | NegativeExponent { it } ->
     let it = IT.pp it in
-    let short = !^"Type error" in
+    let short = !^"Negative exponent" in
     let descr =
       !^"Illtyped expression"
       ^^ squotes it
@@ -479,6 +500,45 @@ let pp_message te =
       | None -> !^(CF.Undefined.ub_short_string ub)
     in
     { short; descr = Some descr; state = Some state }
+  | Needs_alloc_id { ptr; ub; ctxt; model } ->
+    let short = !^"Pointer " ^^ bquotes (IT.pp ptr) ^^ !^" needs allocation ID" in
+    let state = trace ctxt model Explain.no_ex in
+    let descr =
+      match CF.Undefined.std_of_undefined_behaviour ub with
+      | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
+      | None -> !^(CF.Undefined.ub_short_string ub)
+    in
+    { short; descr = Some descr; state = Some state }
+  | Alloc_out_of_bounds { constr; ptr; ub; ctxt; model } ->
+    let short = !^"Pointer " ^^ bquotes (IT.pp ptr) ^^ !^" out of bounds" in
+    let state =
+      trace ctxt model Explain.{ no_ex with unproven_constraint = Some (LC.T constr) }
+    in
+    let descr =
+      match CF.Undefined.std_of_undefined_behaviour ub with
+      | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
+      | None -> !^(CF.Undefined.ub_short_string ub)
+    in
+    { short; descr = Some descr; state = Some state }
+  | Allocation_not_live { reason; ptr; ctxt; model_constr } ->
+    let reason =
+      match reason with
+      | `Copy_alloc_id -> "copy_alloc_id"
+      | `Ptr_diff -> "pointer difference"
+      | `Ptr_cmp -> "pointer comparison"
+      | `ISO_array_shift -> "array shift"
+    in
+    let short =
+      !^"Pointer " ^^ bquotes (IT.pp ptr) ^^^ !^"needs to be live for" ^^^ !^reason
+    in
+    let state =
+      Option.map
+        (fun (model, constr) ->
+          trace ctxt model Explain.{ no_ex with unproven_constraint = Some (LC.T constr) })
+        model_constr
+    in
+    let descr = !^"Need an Alloc or Owned in context with same allocation id" in
+    { short; descr = Some descr; state }
   (* | Implementation_defined_behaviour (impl, state) -> *)
   (*    let short = !^"Implementation defined behaviour" in *)
   (*    let descr = impl in *)
@@ -529,11 +589,11 @@ let pp_message te =
       Some
         (squotes (IT.pp left)
          ^^^ !^"has type"
-         ^^^ squotes (SurfaceBaseTypes.pp (IT.bt left))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.bt left))
          ^^ comma
          ^^^ squotes (IT.pp right)
          ^^^ !^"has type"
-         ^^^ squotes (SurfaceBaseTypes.pp (IT.bt right))
+         ^^^ squotes (BaseTypes.Surface.pp (IT.bt right))
          ^^ dot)
     in
     { short; descr; state = None }
@@ -541,6 +601,12 @@ let pp_message te =
     let short = !^kind ^^ !^" makes inconsistent assumptions" in
     let state = Some (trace ctxt_log (Solver.empty_model, []) Explain.no_ex) in
     { short; descr = None; state }
+  | To_bytes_needs_owned ->
+    let short = !^"to_bytes only supports Owned/Block" in
+    { short; descr = None; state = None }
+  | From_bytes_needs_each_owned ->
+    let short = !^"from_bytes only supports each (u64; ..) { Owned/Block(..) }" in
+    { short; descr = None; state = None }
 
 
 type t = type_error

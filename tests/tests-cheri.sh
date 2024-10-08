@@ -198,6 +198,10 @@ citests=(
   0332-rvalue-temporary-lifetime-pointer-zap.c
   0333-shifts_non_representable.undef.c
   0336-memcpy-ovelap.undef.c
+  0337-CHERI_const1.undef.c
+  0338-CHERI_const2.undef.c
+  0339-CHERI_const3.undef.c
+  0340-CHERI_string-literal.undef.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

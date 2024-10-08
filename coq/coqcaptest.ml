@@ -106,14 +106,14 @@ let tests = "coq_morello_caps" >::: [
                );
 
       "encode C0 tag" >:: (fun _ ->
-        match M.encode true (M.cap_c0 ()) with
+        match M.encode (M.cap_c0 ()) with
         | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->  assert_equal false tag
       );
 
       "encode C0 bytes" >:: (fun _ ->
         (* C0 does not M.encode to all zeros due to compresison limitations *)
-        match M.encode false (M.cap_c0 ()) with
+        match M.encode (M.cap_c0 ()) with
         | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->
            let b = List.map char_of_int [0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0] in
@@ -126,7 +126,7 @@ let tests = "coq_morello_caps" >::: [
       "encode C1 bytes" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
         let expected_bytes = M.cap_1_bytes in
-        match M.encode true M.cap_1 with
+        match M.encode M.cap_1 with
         | None -> assert_failure "encode failed"
         | Some (actual_bytes, t) ->
            assert_equal
@@ -204,7 +204,7 @@ let tests = "coq_morello_caps" >::: [
       
       "encode/decode C0" >:: (fun _ ->
         let c0 = M.cap_c0 () in
-        match M.encode true c0 with
+        match M.encode c0 with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -221,7 +221,7 @@ let tests = "coq_morello_caps" >::: [
       "encode/decode odd" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
 
-        match M.encode true c with
+        match M.encode c with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -237,7 +237,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode/decode even" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff4)) (Z.of_int 16) in
-        match M.encode true c with
+        match M.encode c with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -253,7 +253,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode/decode C1" >:: (fun _ ->
         let c = M.cap_1  in
-        match M.encode true c with
+        match M.encode c with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -269,7 +269,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode/decode/getFlags C1" >:: (fun _ ->
         let c = M.cap_1  in
-        match M.encode true c with
+        match M.encode c with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -285,7 +285,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode/decode/encode" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
-        match M.encode true c with
+        match M.encode c with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -293,7 +293,7 @@ let tests = "coq_morello_caps" >::: [
              | None -> assert_failure "decoding failed"
              | Some c' ->
                 begin
-                  match M.encode true c' with
+                  match M.encode c' with
                   | None -> assert_failure "2nd M.encode failed"
                   | Some (b', _) ->
                      assert_equal
@@ -327,7 +327,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode value and bounds" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int 0xfffffff7ff78) (Z.of_int 4) in
-        match M.encode true c with
+        match M.encode c with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -612,7 +612,7 @@ let tests = "coq_morello_caps" >::: [
                      bounds_unspecified=true
                    }
         in
-        match M.encode true c0 with
+        match M.encode c0 with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
@@ -639,7 +639,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode C2 bytes" >:: (fun _ ->
         let expected_bytes = M.c2_bytes in
-        match M.encode true M.cap_2 with
+        match M.encode M.cap_2 with
         | None -> assert_failure "encode failed"
         | Some (actual_bytes, t) ->
            assert_equal
@@ -715,7 +715,7 @@ let tests = "coq_morello_caps" >::: [
         | None -> assert_failure "decoding failed"
         | Some c ->
            begin
-             match M.encode true c with
+             match M.encode c with
              | None -> assert_failure "2nd M.encode failed"
              | Some (b', _) ->
                 assert_equal

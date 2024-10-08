@@ -8,488 +8,383 @@
    enormous, but mostly types and small functions, and everything it defines is used
    elsewhere. *)
 
-module Loc = Cerb_location
-module IT = IndexTerms
+(*
+   module T : sig
+   type ct = Sctypes.t
 
-(* TODO: BCP: The following module type should be replaced by something like
+   type bt = BaseTypes.t
 
-   module SymSet : Set.S with type elt = Sym.t
+   type cbt = Cerb_frontend.Core.core_base_type
 
-   or
+   type ft = ArgumentTypes.ft
 
-   module SymSet : Set.S with type elt = Sym.t type t = Stdlib__Set.Make(Sym).t
+   type lt = ArgumentTypes.lt
 
-   but neither of these seem to work and I cannot find exactly the right incantation. *)
-module SymSet : sig
-  type elt = Sym.t
+   type rt = ReturnTypes.t
 
-  type t = Stdlib__Set.Make(Sym).t
+   type st = Memory.struct_layout
 
-  val empty : t
+   type ut = unit
 
-  val is_empty : t -> bool
+   type logical_arguments = Sym.t * (Sym.t * BaseTypes.t) list
 
-  val mem : elt -> t -> bool
+   type resource_predicates =
 
-  val add : elt -> t -> t
+   type logical_predicates =
+   end
 
-  val singleton : elt -> t
+   type Sym.t = Sym.t
 
-  val remove : elt -> t -> t
+   type info = Locations.info
 
-  val union : t -> t -> t
+   val dtree_of_arguments_l
+   :  ('a -> Cerb_frontend.Pp_ast.doc_tree) ->
+   'a arguments_l ->
+   Cerb_frontend.Pp_ast.doc_tree
 
-  val inter : t -> t -> t
+   val count_computational : 'a arguments -> int
 
-  val disjoint : t -> t -> bool
+   val is_ctype_const : 'a pexpr -> Cerb_frontend.Ctype.ctype option
 
-  val diff : t -> t -> t
+   val dtree_of_label_def : 'a label_def -> Cerb_frontend.Pp_ast.doc_tree
 
-  val compare : t -> t -> int
+   type 'TY label_defs =
 
-  val equal : t -> t -> bool
+   type 'TY proc_args_and_body =
 
-  val subset : t -> t -> bool
+   type extern_map =
 
-  val iter : (elt -> unit) -> t -> unit
-
-  val map : (elt -> elt) -> t -> t
-
-  val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
-
-  val for_all : (elt -> bool) -> t -> bool
-
-  val exists : (elt -> bool) -> t -> bool
-
-  val filter : (elt -> bool) -> t -> t
-
-  val filter_map : (elt -> elt option) -> t -> t
-
-  val partition : (elt -> bool) -> t -> t * t
-
-  val cardinal : t -> int
-
-  val elements : t -> elt list
-
-  val min_elt : t -> elt
-
-  val min_elt_opt : t -> elt option
-
-  val max_elt : t -> elt
-
-  val max_elt_opt : t -> elt option
-
-  val choose : t -> elt
-
-  val choose_opt : t -> elt option
-
-  val split : elt -> t -> t * bool * t
-
-  val find : elt -> t -> elt
-
-  val find_opt : elt -> t -> elt option
-
-  val find_first : (elt -> bool) -> t -> elt
-
-  val find_first_opt : (elt -> bool) -> t -> elt option
-
-  val find_last : (elt -> bool) -> t -> elt
-
-  val find_last_opt : (elt -> bool) -> t -> elt option
-
-  val of_list : elt list -> t
-
-  val to_seq_from : elt -> t -> elt Seq.t
-
-  val to_seq : t -> elt Seq.t
-
-  val to_rev_seq : t -> elt Seq.t
-
-  val add_seq : elt Seq.t -> t -> t
-
-  val of_seq : elt Seq.t -> t
-end
-
-type loc = Loc.t
-
-type trusted =
-  | Trusted of Cerb_location.t
-  | Checked
-
-type make_logical_function = Make_Logical_Function of Id.t
-
-module T : sig
-  type ct = Sctypes.t
-
-  type bt = BaseTypes.t
-
-  type cbt = Cerb_frontend.Core.core_base_type
-
-  type ft = ArgumentTypes.ft
-
-  type lt = ArgumentTypes.lt
-
-  type rt = ReturnTypes.t
-
-  type st = Memory.struct_layout
-
-  type ut = unit
-
-  type logical_arguments = Sym.t * (Sym.t * BaseTypes.t) list
-
-  type resource_predicates = (Sym.t * ResourcePredicates.definition) list
-
-  type logical_predicates = (Sym.t * LogicalFunctions.definition) list
-end
-
-type symbol = Cerb_frontend.Symbol.sym
+   type 'TY globs_map = (symbol, 'TY globs) Pmap.map
+*)
 
 (** Annotated C type.  The annotations are typically an explanation of
     something that might go wrong (e.g., overflow on an integer type). *)
 type act =
-  { loc : loc; (** Source location *)
+  { loc : Locations.t; (** Source location *)
     annot : Cerb_frontend.Annot.annot list; (** Annotations *)
-    ct : T.ct (** Affected type *)
+    ct : Sctypes.t (** Affected type *)
   }
 
-type 'TY mu_object_value_ =
-  | M_OVinteger of Cerb_frontend.Impl_mem.integer_value
-  | M_OVfloating of Cerb_frontend.Impl_mem.floating_value
-  | M_OVpointer of Cerb_frontend.Impl_mem.pointer_value
-  | M_OVarray of 'TY mu_object_value list
-  | M_OVstruct of
-      symbol
-      * (Cerb_frontend.Symbol.identifier * T.ct * Cerb_frontend.Impl_mem.mem_value) list
-  | M_OVunion of
-      symbol * Cerb_frontend.Symbol.identifier * Cerb_frontend.Impl_mem.mem_value
+type 'TY object_value_ =
+  | OVinteger of Cerb_frontend.Impl_mem.integer_value
+  | OVfloating of Cerb_frontend.Impl_mem.floating_value
+  | OVpointer of Cerb_frontend.Impl_mem.pointer_value
+  | OVarray of 'TY object_value list
+  | OVstruct of Sym.t * (Id.t * Sctypes.t * Cerb_frontend.Impl_mem.mem_value) list
+  | OVunion of Sym.t * Id.t * Cerb_frontend.Impl_mem.mem_value
 
-and 'TY mu_object_value = M_OV of 'TY * 'TY mu_object_value_
+and 'TY object_value = OV of 'TY * 'TY object_value_
 
-and 'TY mu_value_ =
-  | M_Vobject of 'TY mu_object_value
-  | M_Vctype of Cerb_frontend.Ctype.ctype
-  | M_Vfunction_addr of Cerb_frontend.Symbol.sym
-  | M_Vunit
-  | M_Vtrue
-  | M_Vfalse
-  | M_Vlist of T.cbt * 'TY mu_value list
-  | M_Vtuple of 'TY mu_value list
+and 'TY value_ =
+  | Vobject of 'TY object_value
+  | Vctype of Cerb_frontend.Ctype.ctype
+  | Vfunction_addr of Sym.t
+  | Vunit
+  | Vtrue
+  | Vfalse
+  | Vlist of Cerb_frontend.Core.core_base_type * 'TY value list
+  | Vtuple of 'TY value list
 
-and 'TY mu_value = M_V of 'TY * 'TY mu_value_
+and 'TY value = V of 'TY * 'TY value_
 
-type mu_ctor =
-  | M_Cnil of T.cbt
-  | M_Ccons
-  | M_Ctuple
-  | M_Carray
+val bt_of_value : 'a value -> 'a
 
-type 'TY mu_pattern_ =
-  | M_CaseBase of (Cerb_frontend.Symbol.sym option * T.cbt)
-  | M_CaseCtor of mu_ctor * 'TY mu_pattern list
+val bt_of_object_value : 'a object_value -> 'a
 
-and 'TY mu_pattern =
-  | M_Pattern of loc * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_pattern_
+type ctor =
+  | Cnil of Cerb_frontend.Core.core_base_type
+  | Ccons
+  | Ctuple
+  | Carray
+
+type 'TY pattern_ =
+  | CaseBase of (Sym.t option * Cerb_frontend.Core.core_base_type)
+  | CaseCtor of ctor * 'TY pattern list
+
+and 'TY pattern =
+  | Pattern of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY pattern_
+
+val bt_of_pattern : 'a pattern -> 'a
+
+val loc_of_pattern : 'a pattern -> Locations.t
 
 type mu_function =
-  | M_F_params_length
-  | M_F_params_nth
-  | M_F_are_compatible
-  | M_F_size_of
-  | M_F_align_of
-  | M_F_max_int
-  | M_F_min_int
-  | M_F_ctype_width
+  | F_params_length
+  | F_params_nth
+  | F_are_compatible
+  | F_size_of
+  | F_align_of
+  | F_max_int
+  | F_min_int
+  | F_ctype_width
+
+val pp_function : mu_function -> Pp.document
+
+val fun_param_types : mu_function -> BaseTypes.t list
+
+val evaluate_fun
+  :  mu_function ->
+  IndexTerms.t list ->
+  [> `Result_IT of IndexTerms.t | `Result_Integer of Z.t ] Option.m
 
 type bw_binop =
-  | M_BW_OR
-  | M_BW_AND
-  | M_BW_XOR
+  | BW_OR
+  | BW_AND
+  | BW_XOR
 
 type bw_unop =
-  | M_BW_COMPL
-  | M_BW_CTZ
-  | M_BW_FFS
+  | BW_COMPL
+  | BW_CTZ
+  | BW_FFS
 
 (** What to do on out of bounds.
     The annotated C type is the result type of the operation. *)
 type bound_kind =
-  | M_Bound_Wrap of act (** Wrap around (used for unsigned types) *)
-  | M_Bound_Except of act (** Report an exception, for signed types *)
+  | Bound_Wrap of act (** Wrap around (used for unsigned types) *)
+  | Bound_Except of act (** Report an exception, for signed types *)
 
 val bound_kind_act : bound_kind -> act
 
-type 'TY mu_pexpr_ =
-  | M_PEsym of symbol
-  | M_PEval of 'TY mu_value
-  | M_PEconstrained of (Cerb_frontend.Mem.mem_iv_constraint * 'TY mu_pexpr) list
-  | M_PEctor of mu_ctor * 'TY mu_pexpr list
-  | M_PEbitwise_unop of bw_unop * 'TY mu_pexpr
-  | M_PEbitwise_binop of bw_binop * 'TY mu_pexpr * 'TY mu_pexpr
-  | M_Cfvfromint of 'TY mu_pexpr
-  | M_Civfromfloat of act * 'TY mu_pexpr
-  | M_PEarray_shift of 'TY mu_pexpr * T.ct * 'TY mu_pexpr
-  | M_PEmember_shift of 'TY mu_pexpr * symbol * Cerb_frontend.Symbol.identifier
-  | M_PEnot of 'TY mu_pexpr
-  | M_PEop of Cerb_frontend.Core.binop * 'TY mu_pexpr * 'TY mu_pexpr
-  | M_PEapply_fun of mu_function * 'TY mu_pexpr list
-  | M_PEstruct of symbol * (Cerb_frontend.Symbol.identifier * 'TY mu_pexpr) list
-  | M_PEunion of symbol * Cerb_frontend.Symbol.identifier * 'TY mu_pexpr
-  | M_PEcfunction of 'TY mu_pexpr
-  | M_PEmemberof of symbol * Cerb_frontend.Symbol.identifier * 'TY mu_pexpr
-  | M_PEbool_to_integer of 'TY mu_pexpr
-  | M_PEconv_int of 'TY mu_pexpr * 'TY mu_pexpr
-  | M_PEconv_loaded_int of 'TY mu_pexpr * 'TY mu_pexpr
-  | M_PEwrapI of act * 'TY mu_pexpr
-  | M_PEcatch_exceptional_condition of act * 'TY mu_pexpr
-  | M_PEbounded_binop of bound_kind * Cerb_frontend.Core.iop * 'TY mu_pexpr * 'TY mu_pexpr
-  | M_PEis_representable_integer of 'TY mu_pexpr * act
-  | M_PEundef of Cerb_location.t * Cerb_frontend.Undefined.undefined_behaviour
-  | M_PEerror of string * 'TY mu_pexpr
-  | M_PElet of 'TY mu_pattern * 'TY mu_pexpr * 'TY mu_pexpr
-  | M_PEif of 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr
+type 'TY pexpr_ =
+  | PEsym of Sym.t
+  | PEval of 'TY value
+  | PEconstrained of (Cerb_frontend.Mem.mem_iv_constraint * 'TY pexpr) list
+  | PEctor of ctor * 'TY pexpr list
+  | PEbitwise_unop of bw_unop * 'TY pexpr
+  | PEbitwise_binop of bw_binop * 'TY pexpr * 'TY pexpr
+  | Cfvfromint of 'TY pexpr
+  | Civfromfloat of act * 'TY pexpr
+  | PEarray_shift of 'TY pexpr * Sctypes.t * 'TY pexpr
+  | PEmember_shift of 'TY pexpr * Sym.t * Id.t
+  | PEnot of 'TY pexpr
+  | PEop of Cerb_frontend.Core.binop * 'TY pexpr * 'TY pexpr
+  | PEapply_fun of mu_function * 'TY pexpr list
+  | PEstruct of Sym.t * (Id.t * 'TY pexpr) list
+  | PEunion of Sym.t * Id.t * 'TY pexpr
+  | PEcfunction of 'TY pexpr
+  | PEmemberof of Sym.t * Id.t * 'TY pexpr
+  | PEbool_to_integer of 'TY pexpr
+  | PEconv_int of 'TY pexpr * 'TY pexpr
+  | PEconv_loaded_int of 'TY pexpr * 'TY pexpr
+  | PEwrapI of act * 'TY pexpr
+  | PEcatch_exceptional_condition of act * 'TY pexpr
+  | PEbounded_binop of bound_kind * Cerb_frontend.Core.iop * 'TY pexpr * 'TY pexpr
+  | PEis_representable_integer of 'TY pexpr * act
+  | PEundef of Locations.t * Cerb_frontend.Undefined.undefined_behaviour
+  | PEerror of string * 'TY pexpr
+  | PElet of 'TY pattern * 'TY pexpr * 'TY pexpr
+  | PEif of 'TY pexpr * 'TY pexpr * 'TY pexpr
 
-and 'TY mu_pexpr = M_Pexpr of loc * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_pexpr_
+and 'TY pexpr = Pexpr of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY pexpr_
 
-val loc_of_pexpr : 'a mu_pexpr -> loc
+val loc_of_pexpr : 'a pexpr -> Locations.t
+
+val bt_of_pexpr : 'TY pexpr -> 'TY
+
+val is_undef_or_error_pexpr : 'a pexpr -> bool
+
+val fun_return_type
+  :  mu_function ->
+  'a pexpr list ->
+  [> `Returns_BT of BaseTypes.t | `Returns_Integer ] Option.t
 
 type m_kill_kind =
-  | M_Dynamic
-  | M_Static of T.ct
+  | Dynamic
+  | Static of Sctypes.t
 
-type 'TY mu_action_ =
-  | M_Create of 'TY mu_pexpr * act * Cerb_frontend.Symbol.prefix
-  | M_CreateReadOnly of 'TY mu_pexpr * act * 'TY mu_pexpr * Cerb_frontend.Symbol.prefix
-  | M_Alloc of 'TY mu_pexpr * 'TY mu_pexpr * Cerb_frontend.Symbol.prefix
-  | M_Kill of m_kill_kind * 'TY mu_pexpr
-  | M_Store of
-      bool * act * 'TY mu_pexpr * 'TY mu_pexpr * Cerb_frontend.Cmm_csem.memory_order
-  | M_Load of act * 'TY mu_pexpr * Cerb_frontend.Cmm_csem.memory_order
-  | M_RMW of
+type 'TY action_ =
+  | Create of 'TY pexpr * act * Cerb_frontend.Symbol.prefix
+  | CreateReadOnly of 'TY pexpr * act * 'TY pexpr * Cerb_frontend.Symbol.prefix
+  | Alloc of 'TY pexpr * 'TY pexpr * Cerb_frontend.Symbol.prefix
+  | Kill of m_kill_kind * 'TY pexpr
+  | Store of bool * act * 'TY pexpr * 'TY pexpr * Cerb_frontend.Cmm_csem.memory_order
+  | Load of act * 'TY pexpr * Cerb_frontend.Cmm_csem.memory_order
+  | RMW of
       act
-      * 'TY mu_pexpr
-      * 'TY mu_pexpr
-      * 'TY mu_pexpr
+      * 'TY pexpr
+      * 'TY pexpr
+      * 'TY pexpr
       * Cerb_frontend.Cmm_csem.memory_order
       * Cerb_frontend.Cmm_csem.memory_order
-  | M_Fence of Cerb_frontend.Cmm_csem.memory_order
-  | M_CompareExchangeStrong of
+  | Fence of Cerb_frontend.Cmm_csem.memory_order
+  | CompareExchangeStrong of
       act
-      * 'TY mu_pexpr
-      * 'TY mu_pexpr
-      * 'TY mu_pexpr
+      * 'TY pexpr
+      * 'TY pexpr
+      * 'TY pexpr
       * Cerb_frontend.Cmm_csem.memory_order
       * Cerb_frontend.Cmm_csem.memory_order
-  | M_CompareExchangeWeak of
+  | CompareExchangeWeak of
       act
-      * 'TY mu_pexpr
-      * 'TY mu_pexpr
-      * 'TY mu_pexpr
+      * 'TY pexpr
+      * 'TY pexpr
+      * 'TY pexpr
       * Cerb_frontend.Cmm_csem.memory_order
       * Cerb_frontend.Cmm_csem.memory_order
-  | M_LinuxFence of Cerb_frontend.Linux.linux_memory_order
-  | M_LinuxLoad of act * 'TY mu_pexpr * Cerb_frontend.Linux.linux_memory_order
-  | M_LinuxStore of
-      act * 'TY mu_pexpr * 'TY mu_pexpr * Cerb_frontend.Linux.linux_memory_order
-  | M_LinuxRMW of
-      act * 'TY mu_pexpr * 'TY mu_pexpr * Cerb_frontend.Linux.linux_memory_order
+  | LinuxFence of Cerb_frontend.Linux.linux_memory_order
+  | LinuxLoad of act * 'TY pexpr * Cerb_frontend.Linux.linux_memory_order
+  | LinuxStore of act * 'TY pexpr * 'TY pexpr * Cerb_frontend.Linux.linux_memory_order
+  | LinuxRMW of act * 'TY pexpr * 'TY pexpr * Cerb_frontend.Linux.linux_memory_order
 
-type 'TY mu_action = M_Action of Cerb_location.t * 'TY mu_action_
+type 'TY action = Action of Locations.t * 'TY action_
 
-type 'TY mu_paction = M_Paction of Cerb_frontend.Core.polarity * 'TY mu_action
+type 'TY paction = Paction of Cerb_frontend.Core.polarity * 'TY action
 
-type 'TY mu_memop =
-  | M_PtrEq of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_PtrNe of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_PtrLt of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_PtrGt of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_PtrLe of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_PtrGe of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_Ptrdiff of (act * 'TY mu_pexpr * 'TY mu_pexpr)
-  | M_IntFromPtr of (act * act * 'TY mu_pexpr)
-  | M_PtrFromInt of (act * act * 'TY mu_pexpr)
-  | M_PtrValidForDeref of (act * 'TY mu_pexpr)
-  | M_PtrWellAligned of (act * 'TY mu_pexpr)
-  | M_PtrArrayShift of ('TY mu_pexpr * act * 'TY mu_pexpr)
-  | M_PtrMemberShift of (symbol * Cerb_frontend.Symbol.identifier * 'TY mu_pexpr)
-  | M_Memcpy of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
-  | M_Memcmp of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
-  | M_Realloc of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
-  | M_Va_start of ('TY mu_pexpr * 'TY mu_pexpr)
-  | M_Va_copy of 'TY mu_pexpr
-  | M_Va_arg of ('TY mu_pexpr * act)
-  | M_Va_end of 'TY mu_pexpr
-  | M_CopyAllocId of ('TY mu_pexpr * 'TY mu_pexpr)
+type 'TY memop =
+  | PtrEq of ('TY pexpr * 'TY pexpr)
+  | PtrNe of ('TY pexpr * 'TY pexpr)
+  | PtrLt of ('TY pexpr * 'TY pexpr)
+  | PtrGt of ('TY pexpr * 'TY pexpr)
+  | PtrLe of ('TY pexpr * 'TY pexpr)
+  | PtrGe of ('TY pexpr * 'TY pexpr)
+  | Ptrdiff of (act * 'TY pexpr * 'TY pexpr)
+  | IntFromPtr of (act * act * 'TY pexpr)
+  | PtrFromInt of (act * act * 'TY pexpr)
+  | PtrValidForDeref of (act * 'TY pexpr)
+  | PtrWellAligned of (act * 'TY pexpr)
+  | PtrArrayShift of ('TY pexpr * act * 'TY pexpr)
+  | PtrMemberShift of (Sym.t * Id.t * 'TY pexpr)
+  | Memcpy of ('TY pexpr * 'TY pexpr * 'TY pexpr)
+  | Memcmp of ('TY pexpr * 'TY pexpr * 'TY pexpr)
+  | Realloc of ('TY pexpr * 'TY pexpr * 'TY pexpr)
+  | Va_start of ('TY pexpr * 'TY pexpr)
+  | Va_copy of 'TY pexpr
+  | Va_arg of ('TY pexpr * act)
+  | Va_end of 'TY pexpr
+  | CopyAllocId of ('TY pexpr * 'TY pexpr)
 
-type 'TY mu_expr_ =
-  | M_Epure of 'TY mu_pexpr
-  | M_Ememop of 'TY mu_memop
-  | M_Eaction of 'TY mu_paction
-  | M_Eskip
-  | M_Eccall of act * 'TY mu_pexpr * 'TY mu_pexpr list
-  | M_Elet of 'TY mu_pattern * 'TY mu_pexpr * 'TY mu_expr
-  | M_Eunseq of 'TY mu_expr list
-  | M_Ewseq of 'TY mu_pattern * 'TY mu_expr * 'TY mu_expr
-  | M_Esseq of 'TY mu_pattern * 'TY mu_expr * 'TY mu_expr
-  | M_Eif of 'TY mu_pexpr * 'TY mu_expr * 'TY mu_expr
-  | M_Ebound of 'TY mu_expr
-  | M_End of 'TY mu_expr list
-  | M_Erun of symbol * 'TY mu_pexpr list
-  | M_CN_progs of
+type 'TY expr_ =
+  | Epure of 'TY pexpr
+  | Ememop of 'TY memop
+  | Eaction of 'TY paction
+  | Eskip
+  | Eccall of act * 'TY pexpr * 'TY pexpr list
+  | Elet of 'TY pattern * 'TY pexpr * 'TY expr
+  | Eunseq of 'TY expr list
+  | Ewseq of 'TY pattern * 'TY expr * 'TY expr
+  | Esseq of 'TY pattern * 'TY expr * 'TY expr
+  | Eif of 'TY pexpr * 'TY expr * 'TY expr
+  | Ebound of 'TY expr
+  | End of 'TY expr list
+  | Erun of Sym.t * 'TY pexpr list
+  | CN_progs of
       (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_statement list
       * Cnprog.cn_prog list
 
-and 'TY mu_expr = M_Expr of loc * Cerb_frontend.Annot.annot list * 'TY * 'TY mu_expr_
+and 'TY expr = Expr of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY expr_
 
-val loc_of_expr : 'a mu_expr -> loc
+val is_undef_or_error_expr : 'a expr -> bool
 
-type info = Locations.info
+val bt_of_expr : 'TY expr -> 'TY
 
-type 'i mu_arguments_l =
-  | M_Define of (Sym.t * IndexTerms.t) * info * 'i mu_arguments_l
-  | M_Resource of (Sym.t * (ResourceTypes.t * BaseTypes.t)) * info * 'i mu_arguments_l
-  | M_Constraint of LogicalConstraints.t * info * 'i mu_arguments_l
-  | M_I of 'i
+val loc_of_expr : 'a expr -> Locations.t
 
-val dtree_of_mu_arguments_l
-  :  ('a -> Cerb_frontend.Pp_ast.doc_tree) ->
-  'a mu_arguments_l ->
-  Cerb_frontend.Pp_ast.doc_tree
+type 'TY globs =
+  | GlobalDef of Sctypes.t * 'TY expr
+  | GlobalDecl of Sctypes.t
 
-type 'i mu_arguments =
-  | M_Computational of (Sym.t * T.bt) * info * 'i mu_arguments
-  | M_L of 'i mu_arguments_l
+type 'i arguments_l =
+  | Define of (Sym.t * IndexTerms.t) * Locations.info * 'i arguments_l
+  | Resource of
+      (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info * 'i arguments_l
+  | Constraint of LogicalConstraints.t * Locations.info * 'i arguments_l
+  | I of 'i
 
-val dtree_of_mu_arguments
-  :  ('a -> Cerb_frontend.Pp_ast.doc_tree) ->
-  'a mu_arguments ->
-  Cerb_frontend.Pp_ast.doc_tree
+val mDefine : (Sym.t * IndexTerms.t) * Locations.info -> 'a arguments_l -> 'a arguments_l
 
-val mu_count_computational : 'a mu_arguments -> int
-
-val mDefine : (Sym.t * IndexTerms.t) * info -> 'a mu_arguments_l -> 'a mu_arguments_l
-
-val mResource
-  :  (Sym.t * (ResourceTypes.t * BaseTypes.t)) * info ->
-  'a mu_arguments_l ->
-  'a mu_arguments_l
-
-val mConstraint : LogicalConstraints.t * info -> 'a mu_arguments_l -> 'a mu_arguments_l
-
-val mComputational : (Sym.t * T.bt) * info -> 'a mu_arguments -> 'a mu_arguments
+val mConstraint
+  :  LogicalConstraints.t * Locations.info ->
+  'a arguments_l ->
+  'a arguments_l
 
 val mConstraints
-  :  (LogicalConstraints.t * info) list ->
-  'a mu_arguments_l ->
-  'a mu_arguments_l
+  :  (LogicalConstraints.t * Locations.info) list ->
+  'a arguments_l ->
+  'a arguments_l
+
+val mResource
+  :  (Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info ->
+  'a arguments_l ->
+  'a arguments_l
 
 val mResources
-  :  ((Sym.t * (ResourceTypes.t * BaseTypes.t)) * info) list ->
-  'a mu_arguments_l ->
-  'a mu_arguments_l
+  :  ((Sym.t * (ResourceTypes.t * BaseTypes.t)) * Locations.info) list ->
+  'a arguments_l ->
+  'a arguments_l
 
-val mu_fun_param_types : mu_function -> BaseTypes.basetype list
+type 'i arguments =
+  | Computational of (Sym.t * BaseTypes.t) * Locations.info * 'i arguments
+  | L of 'i arguments_l
 
-val is_ctype_const : 'a mu_pexpr -> Cerb_frontend.Ctype.ctype option
+val mComputational
+  :  (Sym.t * BaseTypes.t) * Locations.info ->
+  'a arguments ->
+  'a arguments
 
-val mu_fun_return_type
-  :  mu_function ->
-  'a mu_pexpr list ->
-  [> `Returns_BT of Memory.BT.basetype | `Returns_Integer ] Option.t
-
-val pp_function : mu_function -> Pp.document
-
-val is_undef_or_error_pexpr : 'a mu_pexpr -> bool
-
-val is_undef_or_error_expr : 'a mu_expr -> bool
-
-val bt_of_value : 'a mu_value -> 'a
-
-val bt_of_object_value : 'a mu_object_value -> 'a
-
-val bt_of_pattern : 'a mu_pattern -> 'a
-
-val loc_of_pattern : 'a mu_pattern -> loc
-
-val bt_of_expr : 'TY mu_expr -> 'TY
-
-val bt_of_pexpr : 'TY mu_pexpr -> 'TY
-
-val evaluate_fun
-  :  mu_function ->
-  IT.BT.basetype IT.term list ->
-  [> `Result_IT of IT.BT.basetype IT.term | `Result_Integer of Z.t ] Option.m
+val dtree_of_arguments
+  :  ('a -> Cerb_frontend.Pp_ast.doc_tree) ->
+  'a arguments ->
+  Cerb_frontend.Pp_ast.doc_tree
 
 type parse_ast_label_spec =
   { label_spec : (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_condition list }
 
-type 'TY mu_label_def =
-  | M_Return of loc
-  | M_Label of
-      loc
-      * 'TY mu_expr mu_arguments
+type 'TY label_def =
+  | Return of Locations.t
+  | Label of
+      Locations.t
+      * 'TY expr arguments
       * Cerb_frontend.Annot.annot list
       * parse_ast_label_spec
 
-val dtree_of_label_def : 'a mu_label_def -> Cerb_frontend.Pp_ast.doc_tree
+type trusted =
+  | Trusted of Locations.t
+  | Checked
 
-type 'TY mu_label_defs = (symbol, 'TY mu_label_def) Pmap.map
-
-type 'TY mu_proc_args_and_body = ('TY mu_expr * 'TY mu_label_defs * T.rt) mu_arguments
-
-type parse_ast_function_specification =
+type desugared_spec =
   { accesses : (Sym.t * Cerb_frontend.Ctype.ctype) list;
     requires : (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_condition list;
     ensures : (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_condition list
   }
 
-type 'TY mu_fun_map_decl =
-  | M_Proc of
-      Cerb_location.t
-      * 'TY mu_proc_args_and_body
-      * trusted
-      * parse_ast_function_specification
-  | M_ProcDecl of Cerb_location.t * T.ft option
+type 'TY args_and_body =
+  ('TY expr * (Sym.t, 'TY label_def) Pmap.map * ReturnTypes.t) arguments
 
-type 'TY mu_fun_map = (symbol, 'TY mu_fun_map_decl) Pmap.map
+type 'TY fun_map_decl =
+  | Proc of
+      { loc : Locations.t;
+        args_and_body : 'TY args_and_body;
+        trusted : trusted;
+        desugared_spec : desugared_spec
+      }
+  | ProcDecl of Locations.t * ArgumentTypes.ft option
 
-type mu_extern_map = Cerb_frontend.Core.extern_map
+type tag_definition =
+  | StructDef of Memory.struct_layout
+  | UnionDef
 
-type 'TY mu_globs =
-  | M_GlobalDef of T.ct * 'TY mu_expr
-  | M_GlobalDecl of T.ct
-
-type 'TY mu_globs_map = (symbol, 'TY mu_globs) Pmap.map
-
-type mu_tag_definition =
-  | M_StructDef of T.st
-  | M_UnionDef of T.ut
-
-type mu_tag_definitions = (Cerb_frontend.Symbol.sym, mu_tag_definition) Pmap.map
-
-type 'TY mu_globs_list = (symbol * 'TY mu_globs) list
-
-type mu_datatype =
-  { loc : Loc.t;
-    cases : (Sym.t * (Id.t * T.bt) list) list
-  }
-
-type mu_function_to_convert =
-  { loc : Loc.t;
+type function_to_convert =
+  { loc : Locations.t;
     c_fun_sym : Sym.t;
     l_fun_sym : Sym.t
   }
 
-type 'TY mu_file =
-  { mu_main : symbol option;
-    mu_tagDefs : mu_tag_definitions;
-    mu_globs : 'TY mu_globs_list;
-    mu_funs : 'TY mu_fun_map;
-    mu_extern : mu_extern_map;
-    mu_stdlib_syms : SymSet.t;
-    mu_mk_functions : mu_function_to_convert list;
-    mu_resource_predicates : T.resource_predicates;
-    mu_logical_predicates : T.logical_predicates;
-    mu_datatypes : (Sym.t * mu_datatype) list;
-    mu_lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
-    mu_call_funinfo : (symbol, Sctypes.c_concrete_sig) Pmap.map
+type datatype =
+  { loc : Locations.t;
+    cases : (Sym.t * (Id.t * BaseTypes.t) list) list
+  }
+
+type 'TY file =
+  { main : Sym.t option;
+    tagDefs : (Sym.t, tag_definition) Pmap.map;
+    globs : (Sym.t * 'TY globs) list;
+    funs : (Sym.t, 'TY fun_map_decl) Pmap.map;
+    extern : Cerb_frontend.Core.extern_map;
+    stdlib_syms : Set.Make(Sym).t;
+    mk_functions : function_to_convert list;
+    resource_predicates : (Sym.t * ResourcePredicates.definition) list;
+    logical_predicates : (Sym.t * LogicalFunctions.definition) list;
+    datatypes : (Sym.t * datatype) list;
+    lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
+    call_funinfo : (Sym.t, Sctypes.c_concrete_sig) Pmap.map
   }

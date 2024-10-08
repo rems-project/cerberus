@@ -68,7 +68,8 @@ Module Type Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | CheriMerrInsufficientPermissions : mem_cheri_error
   | CheriBoundsErr : (* bounds,address,length *)
     B.t * A.t * nat -> mem_cheri_error
-  | CheriUndefinedTag: mem_cheri_error.
+  | CheriUndefinedTag: mem_cheri_error
+  | CheriZeroLength: mem_cheri_error.
 
   Variant readonly_kind : Set :=
   | ReadonlyStringLiteral: readonly_kind
@@ -300,6 +301,7 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
             Some UB_CHERI_InsufficientPermissions
         | CheriBoundsErr _ => Some UB_CHERI_BoundsViolation
         | CheriUndefinedTag => Some UB_CHERI_UndefinedTag
+        | CheriZeroLength => Some UB_CHERI_ZeroLength
         end
   | _ => None
   end.

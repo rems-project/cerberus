@@ -17,6 +17,8 @@ type predicate_name =
   | PName of Sym.t
 [@@deriving eq, ord]
 
+let alloc = PName Alloc.Predicate.sym
+
 let pp_init = function Init -> !^"Init" | Uninit -> !^"Uninit"
 
 let pp_predicate_name = function
@@ -25,8 +27,6 @@ let pp_predicate_name = function
   | PName pn -> Sym.pp pn
 
 
-let alloc_name : predicate_name = PName (Sym.fresh_named "__CN_Alloc")
-
 type predicate_type =
   { name : predicate_name;
     pointer : IT.t; (* I *)
@@ -34,11 +34,13 @@ type predicate_type =
   }
 [@@deriving eq, ord]
 
+let make_alloc pointer = { name = alloc; pointer; iargs = [] }
+
 type qpredicate_type =
   { name : predicate_name;
     pointer : IT.t; (* I *)
     q : Sym.t * BT.t;
-    q_loc : loc; [@equal fun _ _ -> true] [@compare fun _ _ -> 0]
+    q_loc : Locations.t; [@equal fun _ _ -> true] [@compare fun _ _ -> 0]
     step : IT.t;
     permission : IT.t; (* I, function of q *)
     iargs : IT.t list (* I, function of q *)

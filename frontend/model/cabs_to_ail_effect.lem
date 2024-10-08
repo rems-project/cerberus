@@ -543,7 +543,7 @@ let empty_switch_info =
 
 
 (* ========================================================================== *)
-val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> state_with_markers
+val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> state_with_markers
 let initial_state core_eval_stuff cn_eval_stuff = <|
   inner= <|
     aux_supply=      0;
@@ -610,7 +610,7 @@ let fin_markers_env () =
   State_exception.return (id, st.markers_env)
 
 
-val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
+val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> Cn_desugaring.init_scope -> desugM 'a -> Exception.exceptM (fin_markers_env * 'a) Errors.error
 let cabs_to_ail_effect_eval core_eval_stuff cn_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->

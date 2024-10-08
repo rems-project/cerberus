@@ -23,17 +23,40 @@ type where_report =
     loc_head : string (** Name of what we are currently processing *)
   }
 
+(** Different forms of a document. *)
+type simp_view =
+  { original : Pp.document; (* original view *)
+    simplified : Pp.document list (* simplified based on model *)
+  }
+
+(** Labels for classifying itesm in a view *)
+type label
+
+(** Interesting things that are shown by default *)
+val lab_interesting : label
+
+(** Uninteresting things that are hidden by default *)
+val lab_uninteresting : label
+
+(** A collection of labeled things *)
+type 'a labeled_view
+
+(** Empty collection of labeld things *)
+val labeled_empty : 'a labeled_view
+
+(** Set the entities assocaited with a lable *)
+val add_labeled : label -> 'a list -> 'a labeled_view -> 'a labeled_view
+
 (** Information about a specific state of the computation.
     The resources, constraints, and terms are pairs because they classify
     how relevant the thing might be:
     the first component is "interesting", the second is not. *)
 type state_report =
   { where : where_report; (** Location information *)
-    not_given_to_solver : Pp.document list * Pp.document list;
-    (* Interesting/uninteresting definitions and constraints not given to solver *)
-    resources : Pp.document list * Pp.document list; (** Resources *)
-    constraints : Pp.document list * Pp.document list; (** Constraints *)
-    terms : term_entry list * term_entry list (** Term values *)
+    not_given_to_solver : simp_view labeled_view;
+    resources : simp_view labeled_view;
+    constraints : simp_view labeled_view;
+    terms : term_entry labeled_view
   }
 
 (** Parts of an HTML rendering of an error. *)

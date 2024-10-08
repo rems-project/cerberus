@@ -7,7 +7,7 @@ module AT = ArgumentTypes
 
 type t =
   { struct_decls : Memory.struct_decls;
-    datatypes : BaseTypes.datatype_info SymMap.t;
+    datatypes : BaseTypes.dt_info SymMap.t;
     datatype_constrs : BaseTypes.constr_info SymMap.t;
     datatype_order : Sym.t list list option;
     fun_decls : (Locations.t * AT.ft option * Sctypes.c_concrete_sig) SymMap.t;
@@ -16,29 +16,14 @@ type t =
     lemmata : (Locations.t * AT.lemmat) SymMap.t
   }
 
-let mk_alloc : IndexTerms.t -> ResourceTypes.predicate_type =
-  fun pointer -> { name = ResourceTypes.alloc_name; pointer; iargs = [] }
-
-
 let empty =
-  let[@ocaml.warning "-8"] { name = PName alloc; _ } : ResourceTypes.predicate_type =
-    mk_alloc (IndexTerms.null_ @@ Cerb_location.other __FUNCTION__)
-  in
-  let def : ResourcePredicates.definition =
-    { loc = Locations.other (__FILE__ ^ ":" ^ string_of_int __LINE__);
-      pointer = Sym.fresh_named "__cn_alloc_ptr";
-      iargs = [];
-      oarg_bt = Unit;
-      clauses = None
-    }
-  in
-  let resource_predicates = SymMap.(empty |> add alloc def) in
   { struct_decls = SymMap.empty;
     datatypes = SymMap.empty;
     datatype_constrs = SymMap.empty;
     datatype_order = None;
     fun_decls = SymMap.empty;
-    resource_predicates;
+    resource_predicates =
+      SymMap.(empty |> add Alloc.Predicate.sym ResourcePredicates.alloc);
     logical_functions = SymMap.empty;
     lemmata = SymMap.empty
   }
@@ -100,7 +85,7 @@ let pp global =
 let mutual_datatypes (global : t) tag =
   let deps tag =
     let info = SymMap.find tag global.datatypes in
-    info.dt_all_params |> List.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
+    info.all_params |> List.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
   in
   let rec seek tags = function
     | [] -> tags
