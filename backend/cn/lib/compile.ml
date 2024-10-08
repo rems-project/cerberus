@@ -773,9 +773,10 @@ module EffectfulTranslation = struct
                        pointer"
               }
         in
+        let@ index = self index in
+        Typing.warn_when_not_u64 "array_shift" loc (BaseTypes.Surface.proj (IT.bt index)) (Some index);
         (match IT.bt base with
          | Loc _ ->
-           let@ index = self index in
            (match IT.bt index with
             | Integer | Bits _ ->
               return (IT (ArrayShift { base; ct; index }, Loc (Some ct), loc))
@@ -868,7 +869,6 @@ module EffectfulTranslation = struct
             e
         in
         let@ bt = check_quantified_base_type env loc bt in
-        warn_when_not_u64 loc bt;
         return
           (IT
              ( EachI ((Z.to_int (fst r), (sym, SBT.proj bt), Z.to_int (snd r)), expr),
