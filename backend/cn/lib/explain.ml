@@ -177,8 +177,9 @@ let state ctxt log model_with_q extras =
       in
       List.fold_left log_comb [] log in
     let forall_constraints, funs, ctxt_preds = not_given_to_solver ctxt in
-    let dedup_comb = fun acc elem -> if (List.exists (fun x -> x == elem) acc) then acc else elem :: acc in
-    let preds = List.fold_left dedup_comb [] (List.append log_preds ctxt_preds) in
+    let preds =
+      let pred_compare (s1, _) (s2, _) = Sym.compare s1 s2 in (*CHT TODO: deriving this would require changing a lot of files *)
+      Base.List.dedup_and_sort (List.append log_preds ctxt_preds) ~compare:pred_compare in
     let interesting_constraints, uninteresting_constraints =
       List.partition LC.is_interesting forall_constraints
     in
