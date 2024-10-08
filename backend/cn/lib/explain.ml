@@ -213,20 +213,7 @@ let state ctxt log model_with_q extras =
     let interesting_preds, uninteresting_preds =
       List.partition (fun (_, v) -> REP.is_interesting v) preds
     in
-    (* let make_constraints = List.map render in
-    let make_funs = List.map fst in
-    let make_preds = List.map fst in
-    ( List.concat
-        [ make_constraints interesting_constraints;
-          make_funs interesting_funs;
-          make_preds interesting_preds
-        ],
-      List.concat
-        [ make_constraints uninteresting_constraints;
-          make_funs uninteresting_funs;
-          make_preds uninteresting_preds
-        ] ) in *)
-      add_labeled lab_interesting (List.map render_sympair interesting_preds)
+    add_labeled lab_interesting (List.map render_sympair interesting_preds)
       (add_labeled lab_uninteresting (List.map render_sympair uninteresting_preds)
       (add_labeled lab_interesting (List.map render_sympair interesting_funs)
       (add_labeled lab_uninteresting (List.map render_sympair uninteresting_funs)
