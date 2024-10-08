@@ -138,7 +138,7 @@ let rec simp_resource eval r =
   | I i -> I i
 
 
-let state ctxt model_with_q extras =
+let state ctxt log model_with_q extras =
   let where =
     let cur_colour = !Cerb_colour.do_colour in
     Cerb_colour.do_colour := false;
@@ -168,7 +168,17 @@ let state ctxt model_with_q extras =
   (*   | None -> parens !^"not evaluated" *)
   (* in *)
   let not_given_to_solver =
-    let forall_constraints, funs, preds = not_given_to_solver ctxt in
+    (* get predicates from past steps of trace not given to solver *)
+    let log_preds = 
+      let log_comb acc entry = match entry with
+      | State ctxt -> let (_, _, ps) = not_given_to_solver ctxt in
+        List.append ps acc
+      | Action _ -> acc
+      in
+      List.fold_left log_comb [] log in
+    let forall_constraints, funs, ctxt_preds = not_given_to_solver ctxt in
+    let dedup_comb = fun acc elem -> if (List.exists (fun x -> x == elem) acc) then acc else elem :: acc in
+    let preds = List.fold_left dedup_comb [] (List.append log_preds ctxt_preds) in
     let interesting_constraints, uninteresting_constraints =
       List.partition LC.is_interesting forall_constraints
     in
@@ -301,7 +311,7 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
   (* in *)
   let req_entry ret = RET.pp ret in
   let trace =
-    let statef ctxt = state ctxt model_with_q extras in
+    let statef ctxt = state ctxt log model_with_q extras in
     List.rev
       (statef ctxt
        :: List.filter_map (function State ctxt -> Some (statef ctxt) | _ -> None) log)
