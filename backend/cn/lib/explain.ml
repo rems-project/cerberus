@@ -215,23 +215,17 @@ let state ctxt log model_with_q extras =
     in
     add_labeled
        lab_interesting
-       (List.map render_sympair interesting_preds)
+       (List.concat [
+          List.map render_sympair interesting_preds;
+          List.map render_sympair interesting_funs;
+          List.map render_constraints interesting_constraints])
        (add_labeled
           lab_uninteresting
-          (List.map render_sympair uninteresting_preds)
-          (add_labeled
-             lab_interesting
-             (List.map render_sympair interesting_funs)
-             (add_labeled
-                lab_uninteresting
-                (List.map render_sympair uninteresting_funs)
-                (add_labeled
-                   lab_interesting
-                   (List.map render_constraints interesting_constraints)
-                   (add_labeled
-                      lab_uninteresting
-                      (List.map render_constraints uninteresting_constraints)
-                      labeled_empty)))))
+          (List.concat [
+            List.map render_sympair uninteresting_preds;
+            List.map render_sympair uninteresting_funs;
+            List.map render_constraints uninteresting_constraints])
+          labeled_empty)
   in
   let terms =
     let variables =
