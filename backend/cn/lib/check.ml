@@ -1774,17 +1774,76 @@ let rec check_expr labels (e : BT.t Mu.expr) (k : IT.t -> unit m) : unit m =
            return ()
          | To_from_bytes (To, res) ->
            (match res with
-            | Q _ | P { name = PName _; _ } ->
-              fail (fun _ -> { loc; msg = To_bytes_needs_owned })
-            | P { name = Owned _; _ } ->
-              warn loc !^"to_bytes being implemented - ignoring for now";
+            | { name = PName _; _ } -> fail (fun _ -> { loc; msg = To_bytes_needs_owned })
+            | { name = Owned (ct, Uninit); pointer; _ } ->
+              let@ _ =
+                RI.Special.predicate_request
+                  loc
+                  (Access To_bytes)
+                  ({ name = Owned (ct, Uninit); pointer; iargs = [] }, None)
+              in
+              let bt = BT.Bits (Unsigned, 64) in
+              let q = (Sym.fresh_named "to_bytes", bt) in
+              let here = Locations.other __FUNCTION__ in
+              let step = IT.num_lit_ Z.one bt here in
+              let permission =
+                IT.(lt_ (sym_ (fst q, snd q, here), sizeOf_ ct here) here)
+              in
+              let@ () =
+                add_r
+                  loc
+                  ( Q
+                      { q;
+                        q_loc = here;
+                        step;
+                        permission;
+                        name = Owned (Sctypes.char_ct, Uninit);
+                        pointer;
+                        iargs = []
+                      },
+                    O (default_ (BT.Map (bt, Memory.bt_of_sct Sctypes.char_ct)) loc) )
+              in
+              return ()
+            | { name = Owned (_, Init); _ } ->
+              warn loc !^"byte conversion is being implemented - ignoring for now";
               return ())
          | To_from_bytes (From, res) ->
            (match res with
-            | P _ | Q { name = PName _; _ } ->
-              fail (fun _ -> { loc; msg = From_bytes_needs_each_owned })
-            | Q { name = Owned _; _ } ->
-              warn loc !^"from_bytes being implemented - ignoring for now";
+            | { name = PName _; _ } -> fail (fun _ -> { loc; msg = To_bytes_needs_owned })
+            | { name = Owned (ct, Uninit); pointer; _ } ->
+              (* TODO - how is the basetype of qpreds determined in the code base? *)
+              let bt = BT.Bits (Unsigned, 64) in
+              let q = (Sym.fresh_named "from_bytes", bt) in
+              let here = Locations.other __FUNCTION__ in
+              let step = IT.num_lit_ Z.one bt here in
+              let permission =
+                IT.(lt_ (sym_ (fst q, snd q, here), sizeOf_ ct here) here)
+              in
+              let@ _ =
+                RI.Special.qpredicate_request
+                  loc
+                  (Access From_bytes)
+                  ( { q;
+                      q_loc = here;
+                      step;
+                      permission;
+                      name = Owned (Sctypes.char_ct, Uninit);
+                      pointer;
+                      iargs = []
+                    },
+                    None )
+              in
+              let@ () =
+                add_r
+                  loc
+                  ( P { name = Owned (ct, Uninit); pointer; iargs = [] },
+                    O (default_ (Memory.bt_of_sct ct) loc) )
+              in
+              (* TODO - why is this constraint necessary here? *)
+              let@ () = add_c here (LC.T (IT.good_pointer ~pointee_ct:ct pointer here)) in
+              return ()
+            | { name = Owned (_, Init); _ } ->
+              warn loc !^"byte conversion is being implemented - ignoring for now";
               return ())
          | Have lc ->
            let@ _lc = WellTyped.WLC.welltyped loc lc in

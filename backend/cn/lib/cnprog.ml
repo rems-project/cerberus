@@ -13,7 +13,7 @@ type extract = Id.t list * (Sym.t, Sctypes.t) CF.Cn.cn_to_extract * IndexTerms.t
 
 type statement =
   | Pack_unpack of CF.Cn.pack_unpack * ResourceTypes.predicate_type
-  | To_from_bytes of CF.Cn.to_from * ResourceTypes.resource_type
+  | To_from_bytes of CF.Cn.to_from * ResourceTypes.predicate_type
   | Have of LogicalConstraints.t
   | Instantiate of (Sym.t, Sctypes.t) CF.Cn.cn_to_instantiate * IndexTerms.t
   | Split_case of LogicalConstraints.t
@@ -43,7 +43,8 @@ let rec subst substitution = function
       match stmt with
       | Pack_unpack (pack_unpack, pt) ->
         Pack_unpack (pack_unpack, RET.subst_predicate_type substitution pt)
-      | To_from_bytes (to_from, res) -> To_from_bytes (to_from, RET.subst substitution res)
+      | To_from_bytes (to_from, pt) ->
+        To_from_bytes (to_from, RET.subst_predicate_type substitution pt)
       | Have lc -> Have (LC.subst substitution lc)
       | Instantiate (o_s, it) ->
         (* o_s is not a (option) binder *)
@@ -107,8 +108,10 @@ let dtree_of_statement =
     Dnode (pp_ctor "Pack", [ ResourceTypes.dtree_of_predicate_type pred ])
   | Pack_unpack (Unpack, pred) ->
     Dnode (pp_ctor "Unpack", [ ResourceTypes.dtree_of_predicate_type pred ])
-  | To_from_bytes (To, res) -> Dnode (pp_ctor "To_bytes", [ ResourceTypes.dtree res ])
-  | To_from_bytes (From, res) -> Dnode (pp_ctor "From_bytes", [ ResourceTypes.dtree res ])
+  | To_from_bytes (To, pred) ->
+    Dnode (pp_ctor "To_bytes", [ ResourceTypes.dtree_of_predicate_type pred ])
+  | To_from_bytes (From, pred) ->
+    Dnode (pp_ctor "From_bytes", [ ResourceTypes.dtree_of_predicate_type pred ])
   | Have lc -> Dnode (pp_ctor "Have", [ LC.dtree lc ])
   | Instantiate (to_instantiate, it) ->
     Dnode (pp_ctor "Instantiate", [ dtree_of_to_instantiate to_instantiate; IT.dtree it ])

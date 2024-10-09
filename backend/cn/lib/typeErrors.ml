@@ -18,10 +18,8 @@ type access =
   | Deref
   | Kill
   | Free
-
-type automatic =
-  | Auto
-  | Manual
+  | To_bytes
+  | From_bytes
 
 type call_situation =
   | FunctionCall of Sym.t
@@ -67,6 +65,8 @@ let for_access = function
   | Load -> !^"for reading"
   | Store -> !^"for writing"
   | Free -> !^"for free-ing"
+  | To_bytes -> !^"for converting to bytes"
+  | From_bytes -> !^"for convering from bytes"
 
 
 let for_situation = function
