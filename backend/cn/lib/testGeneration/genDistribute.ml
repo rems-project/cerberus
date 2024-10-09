@@ -7,7 +7,9 @@ module GA = GenAnalysis
 module SymMap = Map.Make (Sym)
 module Config = TestGenConfig
 
-let generated_size (bt : BT.t) : int = match bt with Datatype _ -> 100 | _ -> 100
+let generated_size (bt : BT.t) : int =
+  match bt with Datatype _ -> failwith __LOC__ | _ -> 0
+
 
 let allocations (gt : GT.t) : GT.t =
   let aux (gt : GT.t) : GT.t =
