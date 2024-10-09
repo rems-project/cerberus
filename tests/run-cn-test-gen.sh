@@ -21,25 +21,10 @@ FAILED=''
 
 # Test each `*.c` file
 for TEST in $FILES; do
-  CLEANUP="rm -rf decorated/*"
-
-  # Instrument file
-  $CN instrument "$TEST" --output-decorated="$(basename "$TEST")" --output-decorated-dir=decorated/
-  RET=$?
-  if [[ "$RET" != 0 ]]; then
-    echo "$TEST -- Error during executable spec decoration"
-    NUM_FAILED=$(($NUM_FAILED + 1))
-    FAILED="$FAILED $TEST"
-    eval "$CLEANUP"
-    continue
-  else
-    echo "$TEST -- Executable spec decorated successfully"
-  fi
-
-  CLEANUP="rm -rf test/*;$CLEANUP"
+  CLEANUP="rm -rf test/* run_tests.sh;"
 
   # Generate tests
-  $CN generate-tests "$TEST" --output-dir="test"
+  $CN test "$TEST" --output-dir="test" --with-ownership-checking --no-run
   RET=$?
   if [[ "$RET" != 0 ]]; then
     echo "$TEST -- Error during test generation"
@@ -48,41 +33,12 @@ for TEST in $FILES; do
     eval "$CLEANUP"
     continue
   else
-    echo "$TEST -- Tests generated successfully"
-  fi
-
-  CLEANUP="cd ..;$CLEANUP"
-
-  # Run CMake
-  cd build || exit
-  cmake .. >/dev/null
-  RET=$?
-  if [[ "$RET" != 0 ]]; then
-    echo "$TEST -- Error while running CMake"
-    NUM_FAILED=$(($NUM_FAILED + 1))
-    FAILED="$FAILED $TEST"
-    eval "$CLEANUP"
-    continue
-  else
-    echo "$TEST -- CMake run successfully"
-  fi
-
-  # Build tests
-  make >/dev/null
-  RET=$?
-  if [[ "$RET" != 0 ]]; then
-    echo "$TEST -- Error while building tests"
-    NUM_FAILED=$(($NUM_FAILED + 1))
-    FAILED="$FAILED $TEST"
-    eval "$CLEANUP"
-    continue
-  else
-    echo "$TEST -- Tests built successfully"
+    echo "$TEST -- Test generated successfully"
   fi
 
   # Run passing tests
   if [[ $TEST == *.pass.c ]]; then
-    ./ci_tests >/dev/null
+    ./run_tests.sh
     RET=$?
     if [[ "$RET" != 0 ]]; then
       echo "$TEST -- Tests failed unexpectedly"
@@ -97,7 +53,7 @@ for TEST in $FILES; do
 
   # Run failing tests
   if [[ $TEST == *.fail.c ]]; then
-    ./ci_tests 2>/dev/null
+    ./run_tests.sh
     RET=$?
     if [[ "$RET" = 0 ]]; then
       echo "$TEST -- Tests passed unexpectedly"
