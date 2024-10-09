@@ -27,49 +27,6 @@ let allocations (gt : GT.t) : GT.t =
   GT.map_gen_pre aux gt
 
 
-let rec _implicit_contraints (gt : GT.t) : GT.t =
-  let names = ref SymMap.empty in
-  let rec aux (gt : GT.t) : GT.t =
-    let (GT (gt_, _, here)) = gt in
-    match gt_ with
-    | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
-    | Pick wgts -> GT.pick_ (List.map_snd aux wgts) here
-    | Asgn ((it_addr, sct), it_val, gt') ->
-      let gt = GT.asgn_ ((it_addr, sct), it_val, aux gt') here in
-      Option.value
-        ~default:gt
-        (let open Option in
-         let@ psym, it_offset = GA.get_addr_offset_opt it_addr in
-         let@ it_q = SymMap.find_opt psym !names in
-         let loc = Locations.other __LOC__ in
-         let it_size_of = IT.sizeOf_ sct loc in
-         let it_size =
-           IT.add_ (IT.cast_ (IT.bt it_size_of) it_offset loc, it_size_of) loc
-         in
-         return (GT.assert_ (LC.T (IT.gt_ (it_q, it_size) loc), gt) loc))
-    | Let (backtracks, (x, (GT (Alloc it, _, here') as gt_inner)), gt') ->
-      (match IT.is_sym it with
-       | Some (y, bt) ->
-         names := SymMap.add x (IT.sym_ (y, bt, here')) !names;
-         GT.let_ (backtracks, (x, _implicit_contraints gt_inner), aux gt') here
-       | None ->
-         let y = Sym.fresh () in
-         names := SymMap.add x (IT.sym_ (y, IT.bt it, here')) !names;
-         let loc = Locations.other __LOC__ in
-         GT.let_
-           ( backtracks,
-             (y, GT.arbitrary_ (IT.bt it) loc),
-             GT.let_ (0, (x, GT.alloc_ (IT.sym_ (y, IT.bt it, loc)) loc), aux gt') here )
-           loc)
-    | Let (backtracks, (x, gt_inner), gt') ->
-      GT.let_ (backtracks, (x, aux gt_inner), aux gt') here
-    | Assert (lc, gt') -> GT.assert_ (lc, aux gt') here
-    | ITE (it_if, gt_then, gt_else) -> GT.ite_ (it_if, aux gt_then, aux gt_else) here
-    | Map ((i, i_bt, it_perm), gt') -> GT.map_ ((i, i_bt, it_perm), aux gt') here
-  in
-  aux gt
-
-
 let apply_array_max_length (gt : GT.t) : GT.t =
   let rec aux (gt : GT.t) : GT.t =
     let (GT (gt_, _bt, here)) = gt in
