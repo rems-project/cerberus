@@ -8,6 +8,7 @@ module GD = GenDefinitions
 module GBT = GenBaseTypes
 module GA = GenAnalysis
 module SymSet = Set.Make (Sym)
+module StringMap = Map.Make (String)
 
 let bennet = Sym.fresh_named "bennet"
 
@@ -213,96 +214,147 @@ let rec pp_term (tm : term) : Pp.document =
     ^^ braces (c_comment (BT.pp bt) ^^ nest 2 (break 1 ^^ pp_term inner) ^^ break 1)
 
 
-let rec elaborate_gt (inputs : SymSet.t) (vars : Sym.t list) (gt : GT.t) : term =
-  let (GT (gt_, bt, loc)) = gt in
-  match gt_ with
-  | Arbitrary ->
-    failwith
-      Pp.(
-        plain (string "Value from " ^^ Locations.pp loc ^^ string " is still `arbitrary`"))
-  | Uniform sz -> Uniform { bt; sz }
-  | Pick wgts -> Pick { choices = List.map_snd (elaborate_gt inputs vars) wgts }
-  | Alloc bytes -> Alloc { bytes }
-  | Call (fsym, xits) ->
-    let (iargs : (Sym.t * Sym.t) list), (gt_lets : Sym.t -> term -> term) =
-      List.fold_right
-        (fun (y, it) (yzs, f) ->
-          let (IT.IT (it_, z_bt, _here)) = it in
-          match it_ with
-          | Sym z -> ((y, z) :: yzs, f)
-          | _ ->
-            let z = Sym.fresh () in
-            ( (y, z) :: yzs,
-              fun w gr ->
-                Let
-                  { backtracks = 0;
-                    x = z;
-                    x_bt = z_bt;
-                    value = Return { value = it };
-                    last_var = w;
-                    rest = f z gr
-                  } ))
-        xits
-        ([], fun _ gr -> gr)
-    in
-    gt_lets (match vars with v :: _ -> v | [] -> bennet) (Call { fsym; iargs })
-  | Asgn ((it_addr, sct), value, rest) ->
-    let pointer, offset = GA.get_addr_offset it_addr in
-    if not (SymSet.mem pointer inputs || List.exists (Sym.equal pointer) vars) then
+let nice_names (inputs : SymSet.t) (gt : GT.t) : GT.t =
+  let basename (sym : Sym.t) : string =
+    let open Sym in
+    match description sym with
+    | SD_Id name | SD_CN_Id name | SD_ObjectAddress name | SD_FunArgValue name -> name
+    | SD_None -> "fresh"
+    | _ -> failwith __LOC__
+  in
+  let rec aux (vars : int StringMap.t) (gt : GT.t) : int StringMap.t * GT.t =
+    let (GT (gt_, _, loc)) = gt in
+    match gt_ with
+    | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> (vars, gt)
+    | Pick wgts ->
+      let vars, wgts =
+        List.fold_left
+          (fun (vars', choices') (w, gr') ->
+            let vars'', gr'' = aux vars' gr' in
+            (vars'', (w, gr'') :: choices'))
+          (vars, [])
+          wgts
+      in
+      (vars, GT.pick_ wgts loc)
+    | Asgn ((it_addr, sct), it_val, gt') ->
+      let vars', gt' = aux vars gt' in
+      (vars', GT.asgn_ ((it_addr, sct), it_val, gt') loc)
+    | Let (backtracks, (x, gt_inner), gt') ->
+      let vars, gt_inner = aux vars gt_inner in
+      let name = basename x in
+      let vars, x, gt' =
+        if SymSet.mem x inputs then
+          (vars, x, gt')
+        else (
+          match StringMap.find_opt name vars with
+          | Some n ->
+            let name' = name ^ "_" ^ string_of_int n in
+            let y = Sym.fresh_named name' in
+            ( StringMap.add name (n + 1) vars,
+              y,
+              GT.subst
+                (IT.make_subst [ (x, IT.sym_ (y, GT.bt gt_inner, GT.loc gt_inner)) ])
+                gt' )
+          | None -> (StringMap.add name 1 vars, x, gt'))
+      in
+      let vars, gt' = aux vars gt' in
+      (vars, GT.let_ (backtracks, (x, gt_inner), gt') loc)
+    | Assert (lc, gt') ->
+      let vars, gt' = aux vars gt' in
+      (vars, GT.assert_ (lc, gt') loc)
+    | ITE (it_if, gt_then, gt_else) ->
+      let vars, gt_then = aux vars gt_then in
+      let vars, gt_else = aux vars gt_else in
+      (vars, GT.ite_ (it_if, gt_then, gt_else) loc)
+    | Map ((i_sym, i_bt, it_perm), gt_inner) ->
+      let vars, gt_inner = aux vars gt_inner in
+      (vars, GT.map_ ((i_sym, i_bt, it_perm), gt_inner) loc)
+  in
+  snd (aux StringMap.empty gt)
+
+
+let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
+  let rec aux (vars : Sym.t list) (gt : GT.t) : term =
+    let (GT (gt_, bt, loc)) = gt in
+    match gt_ with
+    | Arbitrary ->
       failwith
-        (Sym.pp_string pointer
-         ^ " not in ["
-         ^ String.concat "; " (List.map Sym.pp_string vars)
-         ^ "] from "
-         ^ Pp.plain (Locations.pp (IT.loc it_addr)));
-    Asgn
-      { pointer;
-        offset;
-        sct;
-        value;
-        last_var = (if SymSet.mem pointer inputs then bennet else pointer);
-        rest = elaborate_gt inputs vars rest
-      }
-  | Let (backtracks, (x, gt1), gt2) ->
-    Let
-      { backtracks;
-        x;
-        x_bt = GT.bt gt1;
-        value = elaborate_gt inputs vars gt1;
-        last_var = (match vars with v :: _ -> v | [] -> bennet);
-        rest = elaborate_gt inputs (x :: vars) gt2
-      }
-  | Return value -> Return { value }
-  | Assert (prop, rest) ->
-    Assert
-      { prop;
-        last_var =
-          (match List.find_opt (fun x -> SymSet.mem x (LC.free_vars prop)) vars with
-           | Some y -> y
-           | None ->
-             if SymSet.is_empty (SymSet.diff (LC.free_vars prop) inputs) then
-               bennet
-             else
-               failwith __LOC__);
-        rest = elaborate_gt inputs vars rest
-      }
-  | ITE (cond, gt_then, gt_else) ->
-    ITE
-      { bt;
-        cond;
-        t = elaborate_gt inputs vars gt_then;
-        f = elaborate_gt inputs vars gt_else
-      }
-  | Map ((i, i_bt, perm), inner) ->
-    let min, max = GenAnalysis.get_bounds (i, i_bt) perm in
-    Map
-      { i;
-        bt = Map (i_bt, GT.bt inner);
-        min;
-        max;
-        perm;
-        inner = elaborate_gt inputs vars inner
-      }
+        Pp.(
+          plain
+            (string "Value from " ^^ Locations.pp loc ^^ string " is still `arbitrary`"))
+    | Uniform sz -> Uniform { bt; sz }
+    | Pick wgts -> Pick { choices = List.map_snd (aux vars) wgts }
+    | Alloc bytes -> Alloc { bytes }
+    | Call (fsym, xits) ->
+      let (iargs : (Sym.t * Sym.t) list), (gt_lets : Sym.t -> term -> term) =
+        List.fold_right
+          (fun (y, it) (yzs, f) ->
+            let (IT.IT (it_, z_bt, _here)) = it in
+            match it_ with
+            | Sym z -> ((y, z) :: yzs, f)
+            | _ ->
+              let z = Sym.fresh () in
+              ( (y, z) :: yzs,
+                fun w gr ->
+                  Let
+                    { backtracks = 0;
+                      x = z;
+                      x_bt = z_bt;
+                      value = Return { value = it };
+                      last_var = w;
+                      rest = f z gr
+                    } ))
+          xits
+          ([], fun _ gr -> gr)
+      in
+      gt_lets (match vars with v :: _ -> v | [] -> bennet) (Call { fsym; iargs })
+    | Asgn ((it_addr, sct), value, rest) ->
+      let pointer, offset = GA.get_addr_offset it_addr in
+      if not (SymSet.mem pointer inputs || List.exists (Sym.equal pointer) vars) then
+        failwith
+          (Sym.pp_string pointer
+           ^ " not in ["
+           ^ String.concat "; " (List.map Sym.pp_string vars)
+           ^ "] from "
+           ^ Pp.plain (Locations.pp (IT.loc it_addr)));
+      Asgn
+        { pointer;
+          offset;
+          sct;
+          value;
+          last_var = (if SymSet.mem pointer inputs then bennet else pointer);
+          rest = aux vars rest
+        }
+    | Let (backtracks, (x, gt1), gt2) ->
+      Let
+        { backtracks;
+          x;
+          x_bt = GT.bt gt1;
+          value = aux vars gt1;
+          last_var = (match vars with v :: _ -> v | [] -> bennet);
+          rest = aux (x :: vars) gt2
+        }
+    | Return value -> Return { value }
+    | Assert (prop, rest) ->
+      Assert
+        { prop;
+          last_var =
+            (match List.find_opt (fun x -> SymSet.mem x (LC.free_vars prop)) vars with
+             | Some y -> y
+             | None ->
+               if SymSet.is_empty (SymSet.diff (LC.free_vars prop) inputs) then
+                 bennet
+               else
+                 failwith __LOC__);
+          rest = aux vars rest
+        }
+    | ITE (cond, gt_then, gt_else) ->
+      ITE { bt; cond; t = aux vars gt_then; f = aux vars gt_else }
+    | Map ((i, i_bt, perm), inner) ->
+      let min, max = GenAnalysis.get_bounds (i, i_bt) perm in
+      Map { i; bt = Map (i_bt, GT.bt inner); min; max; perm; inner = aux vars inner }
+  in
+  aux [] (nice_names inputs gt)
 
 
 type definition =
@@ -341,7 +393,7 @@ let elaborate_gd (gd : GD.t) : definition =
   { name = gd.name;
     iargs = List.map_snd GBT.bt gd.iargs;
     oargs = List.map_snd GBT.bt gd.oargs;
-    body = elaborate_gt (SymSet.of_list (List.map fst gd.iargs)) [] (Option.get gd.body)
+    body = elaborate_gt (SymSet.of_list (List.map fst gd.iargs)) (Option.get gd.body)
   }
 
 
