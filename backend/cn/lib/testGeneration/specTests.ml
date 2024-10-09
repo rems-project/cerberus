@@ -110,9 +110,9 @@ let compile_tests
                  [ string suite;
                    Sym.pp inst.fn;
                    (if AT.count_computational (Option.get inst.internal) = 0 then
-                      Pp.int 1
+                      int 1
                     else
-                      Pp.int 100);
+                      int 100);
                    separate_map
                      (comma ^^ space)
                      convert_from
