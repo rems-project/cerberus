@@ -325,11 +325,11 @@ let compile_gen_def
     BT.Record (List.map (fun (x, bt) -> (Id.id (Sym.pp_string x), bt)) gr.oargs)
   in
   let struct_def = CtA.generate_record_opt name bt_ret |> Option.get in
+  let ct_ret = C.(mk_ctype_pointer no_qualifiers (Ctype ([], Struct (fst struct_def)))) in
   let decl : A.declaration =
     A.Decl_function
       ( false,
-        ( C.no_qualifiers,
-          C.(mk_ctype_pointer no_qualifiers (Ctype ([], Struct (fst struct_def)))) ),
+        (C.no_qualifiers, ct_ret),
         List.map (fun (_, bt) -> (C.no_qualifiers, bt_to_ctype name bt, false)) gr.iargs,
         false,
         false,
@@ -348,8 +348,24 @@ let compile_gen_def
         0,
         CF.Annot.Attrs [],
         List.map fst gr.iargs,
-        mk_stmt (A.AilSblock (b2, List.map mk_stmt ([ s1 ] @ s2 @ A.[ AilSreturn e2 ])))
-      ) )
+        mk_stmt
+          (A.AilSblock
+             ( b2,
+               List.map
+                 mk_stmt
+                 ([ s1 ]
+                  @ s2
+                  @ A.
+                      [ AilSreturn
+                          (mk_expr
+                             (AilEcast
+                                ( C.no_qualifiers,
+                                  C.(
+                                    mk_ctype_pointer
+                                      no_qualifiers
+                                      (Ctype ([], Struct (fst struct_def)))),
+                                  e2 )))
+                      ]) )) ) )
   in
   (struct_def, (sigma_decl, sigma_def))
 
