@@ -17,7 +17,7 @@ let gen_syms_bits (name : string) : (BT.t * Sym.t) list =
                name;
                Option.get (Utils.get_typedef_string (CtA.bt_to_ail_ctype bt))
              ]) )
-    | None -> failwith __LOC__
+    | None -> failwith Pp.(plain (BT.pp bt ^^ space ^^ at ^^ space ^^ string __LOC__))
   in
   [ aux (BT.Bits (Unsigned, 8));
     aux (BT.Bits (Signed, 8));

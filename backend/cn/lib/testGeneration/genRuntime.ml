@@ -220,7 +220,8 @@ let nice_names (inputs : SymSet.t) (gt : GT.t) : GT.t =
     match description sym with
     | SD_Id name | SD_CN_Id name | SD_ObjectAddress name | SD_FunArgValue name -> name
     | SD_None -> "fresh"
-    | _ -> failwith __LOC__
+    | _ ->
+      failwith Pp.(plain (Sym.pp_debug sym ^^ space ^^ at ^^ space ^^ string __LOC__))
   in
   let rec aux (vars : int StringMap.t) (gt : GT.t) : int StringMap.t * GT.t =
     let (GT (gt_, _, loc)) = gt in
@@ -345,7 +346,8 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
                if SymSet.is_empty (SymSet.diff (LC.free_vars prop) inputs) then
                  bennet
                else
-                 failwith __LOC__);
+                 failwith
+                   Pp.(plain (LC.pp prop ^^ space ^^ at ^^ space ^^ string __LOC__)));
           rest = aux vars rest
         }
     | ITE (cond, gt_then, gt_else) ->

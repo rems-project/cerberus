@@ -8,7 +8,9 @@ module SymMap = Map.Make (Sym)
 module Config = TestGenConfig
 
 let generated_size (bt : BT.t) : int =
-  match bt with Datatype _ -> failwith __LOC__ | _ -> 0
+  match bt with
+  | Datatype _ -> failwith Pp.(plain (BT.pp bt ^^ space ^^ at ^^ space ^^ string __LOC__))
+  | _ -> 0
 
 
 let allocations (gt : GT.t) : GT.t =
@@ -64,8 +66,8 @@ let default_weights (gt : GT.t) : GT.t =
       match gt_ with
       | Arbitrary ->
         (match bt with
-         | Map (_k_bt, _v_bt) -> failwith __LOC__
-         | Loc () -> failwith __LOC__
+         | Map _ | Loc () ->
+           failwith Pp.(plain (BT.pp bt ^^ space ^^ at ^^ space ^^ string __LOC__))
          | _ -> GT.Uniform (generated_size bt))
       | _ -> gt_
     in
