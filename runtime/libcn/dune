@@ -1,24 +1,53 @@
 ; (include_subdirs unqualified)
+
 (rule
  (target libcn.a)
- (deps (:headers (glob_files include/cn-executable/*.h))
-       (:src (glob_files src/cn-executable/*.c)))
+ (deps
+  (:headers
+   (glob_files include/cn-executable/*.h)
+   (glob_files include/cn-testing/*.h))
+  (:src
+   (glob_files src/cn-executable/*.c)
+   (glob_files src/cn-testing/*.c)))
  (action
   (progn
    (run cc -Iinclude/ -c -g %{src})
-   (run ar -rcs %{target} alloc.o hash_table.o utils.o))))
+   (run
+    ar
+    -rcs
+    %{target}
+    alloc.o
+    hash_table.o
+    utils.o
+    gen_alloc.o
+    backtrack.o
+    uniform.o
+    rand.o
+    test.o))))
 
 (install
  (files
   (include/cn-executable/alloc.h as runtime/include/cn-executable/alloc.h)
-  (include/cn-executable/hash_table.h as runtime/include/cn-executable/hash_table.h)
+  (include/cn-executable/hash_table.h
+   as
+   runtime/include/cn-executable/hash_table.h)
   (include/cn-executable/utils.h as runtime/include/cn-executable/utils.h)
+  (include/cn-testing/alloc.h as runtime/include/cn-testing/alloc.h)
+  (include/cn-testing/backtrack.h as runtime/include/cn-testing/backtrack.h)
+  (include/cn-testing/uniform.h as runtime/include/cn-testing/uniform.h)
+  (include/cn-testing/rand.h as runtime/include/cn-testing/rand.h)
+  (include/cn-testing/dsl.h as runtime/include/cn-testing/dsl.h)
+  (include/cn-testing/result.h as runtime/include/cn-testing/result.h)
+  (include/cn-testing/test.h as runtime/include/cn-testing/test.h)
+  (include/cn-testing/prelude.h as runtime/include/cn-testing/prelude.h)
   (libcn.a as runtime/libcn.a))
  (section lib)
  (package cn))
 
 (install
  (files
-  (libexec/cn-runtime-single-file.sh as runtime/libexec/cn-runtime-single-file.sh))
+  (libexec/cn-runtime-single-file.sh
+   as
+   runtime/libexec/cn-runtime-single-file.sh))
  (section libexec)
  (package cn))
