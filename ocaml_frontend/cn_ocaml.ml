@@ -403,10 +403,10 @@ module MakePp (Conf: PP_CN) = struct
        Dnode (pp_ctor "[CN]pack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
     | CN_pack_unpack (Unpack, pred, args) ->
        Dnode (pp_ctor "[CN]unpack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
-    | CN_to_from_bytes (To, res) ->
-       Dnode (pp_ctor "[CN]to_bytes", [dtree_of_cn_resource res])
-    | CN_to_from_bytes (From, res) ->
-       Dnode (pp_ctor "[CN]from_bytes", [dtree_of_cn_resource res])
+    | CN_to_from_bytes (To, pred, args) ->
+       Dnode (pp_ctor "[CN]to_bytes", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
+    | CN_to_from_bytes (From, pred, args) ->
+       Dnode (pp_ctor "[CN]from_bytes", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
     | CN_have assrt ->
        Dnode (pp_ctor "[CN]have", [dtree_of_cn_assertion assrt])
     | CN_instantiate (to_instantiate, arg) ->

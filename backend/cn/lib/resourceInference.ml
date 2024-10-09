@@ -552,4 +552,18 @@ module Special = struct
 
   let predicate_request loc situation (request, oinfo) =
     predicate_request loc situation (request, oinfo)
+
+
+  let qpredicate_request loc situation (request, oinfo) =
+    let requests =
+      [ TypeErrors.
+          { resource = Q request;
+            loc = Option.map fst oinfo;
+            reason = Option.map snd oinfo
+          }
+      ]
+    in
+    let uiinfo = (situation, requests) in
+    let@ result = General.qpredicate_request loc uiinfo request in
+    match result with Some r -> return r | None -> fail_missing_resource loc uiinfo
 end

@@ -248,7 +248,7 @@ type cn_to_extract 'a 'ty =
 
 type cn_statement_ 'a 'ty =
   | CN_pack_unpack of pack_unpack * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
-  | CN_to_from_bytes of to_from * cn_resource 'a 'ty
+  | CN_to_from_bytes of to_from * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_have of cn_assertion 'a 'ty
   | CN_instantiate of cn_to_instantiate 'a 'ty * (cn_expr 'a 'ty)
   | CN_split_case of cn_assertion 'a 'ty

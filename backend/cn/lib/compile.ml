@@ -1596,9 +1596,20 @@ let translate_cn_statement
              } )
        in
        return (Statement (loc, stmt))
-     | CN_to_from_bytes (to_from, res) ->
-       let@ (res, _), _, _ = ET.translate_cn_let_resource env (loc, Sym.fresh (), res) in
-       return (Statement (loc, To_from_bytes (to_from, res)))
+     | CN_to_from_bytes (to_from, pred, args) ->
+       let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
+       let@ name, pointer, iargs, _oargs_ty =
+         ET.translate_cn_res_info loc loc env pred args
+       in
+       return
+         (Statement
+            ( loc,
+              To_from_bytes
+                ( to_from,
+                  { name;
+                    pointer = IT.Surface.proj pointer;
+                    iargs = List.map IT.Surface.proj iargs
+                  } ) ))
      | CN_have assrt ->
        let@ assrt = ET.translate_cn_assrt env (loc, assrt) in
        return (Statement (loc, Have assrt))
