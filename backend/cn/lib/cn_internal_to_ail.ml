@@ -3156,28 +3156,27 @@ let cn_to_ail_cnstatement_internal
     _ CF.Cn.cn_datatype list ->
     (C.union_tag * C.ctype) list ->
     a dest ->
-    Cnprog.cn_statement ->
+    Cnprog.statement ->
     a * bool
   =
   fun dts globals d cnstatement ->
   let default_res_for_dest = empty_for_dest d in
   match cnstatement with
-  | Cnprog.CN_pack_unpack (_pack_unpack, _pt) -> (default_res_for_dest, true)
-  | CN_to_from_bytes (_to_from, _res) -> (default_res_for_dest, true)
-  | CN_have _lc -> failwith "TODO CN_have"
-  | CN_instantiate (_to_instantiate, _it) -> (default_res_for_dest, true)
-  | CN_split_case _ -> (default_res_for_dest, true)
-  | CN_extract (_, _, _it) -> (default_res_for_dest, true)
-  | CN_unfold (_fsym, _args) ->
-    (default_res_for_dest, true) (* fsym is a function symbol *)
-  | CN_apply (_fsym, _args) -> (default_res_for_dest, true) (* fsym is a lemma symbol *)
-  | CN_assert lc -> (cn_to_ail_logical_constraint_internal dts globals d lc, false)
-  | CN_inline _ -> failwith "TODO CN_inline"
-  | CN_print _t -> (default_res_for_dest, true)
+  | Cnprog.Pack_unpack (_pack_unpack, _pt) -> (default_res_for_dest, true)
+  | To_from_bytes (_to_from, _res) -> (default_res_for_dest, true)
+  | Have _lc -> failwith "TODO Have"
+  | Instantiate (_to_instantiate, _it) -> (default_res_for_dest, true)
+  | Split_case _ -> (default_res_for_dest, true)
+  | Extract (_, _, _it) -> (default_res_for_dest, true)
+  | Unfold (_fsym, _args) -> (default_res_for_dest, true) (* fsym is a function symbol *)
+  | Apply (_fsym, _args) -> (default_res_for_dest, true) (* fsym is a lemma symbol *)
+  | Assert lc -> (cn_to_ail_logical_constraint_internal dts globals d lc, false)
+  | Inline _ -> failwith "TODO Inline"
+  | Print _t -> (default_res_for_dest, true)
 
 
 let rec cn_to_ail_cnprog_internal_aux dts globals = function
-  | Cnprog.CN_let (_loc, (name, { ct; pointer }), prog) ->
+  | Cnprog.Let (_loc, (name, { ct; pointer }), prog) ->
     let b1, s, e = cn_to_ail_expr_internal dts globals pointer PassBack in
     let cn_ptr_deref_sym = Sym.fresh_pretty "cn_pointer_deref" in
     let ctype_sym =
@@ -3211,7 +3210,7 @@ let rec cn_to_ail_cnprog_internal_aux dts globals = function
     ((loc', [], []), true)
   else
     ((loc', b1 @ b2 @ [binding], s @ ail_stat_ :: ss), false) *)
-  | Cnprog.CN_statement (_loc, stmt) ->
+  | Statement (_loc, stmt) ->
     let (bs, ss), no_op = cn_to_ail_cnstatement_internal dts globals Assert stmt in
     ((bs, ss), no_op)
 
