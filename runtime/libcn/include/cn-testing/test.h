@@ -40,6 +40,7 @@ int cn_test_main(int argc, char* argv[]);
     free_all();                                                                         \
     initialise_ownership_ghost_state();                                                 \
     initialise_ghost_stack_depth();                                                     \
+    cn_gen_backtrack_reset();                                                           \
     cn_gen_alloc_reset();
 
 #define CN_TEST_GENERATE(name) ({                                                       \
