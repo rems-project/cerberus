@@ -218,7 +218,7 @@ end
 module InferAllocationSize = struct
   let name = "infer_alloc_size"
 
-  let infer_size (x : Sym.t) (gt : GT.t) : IT.t option =
+  let infer_size (vars : SymSet.t) (x : Sym.t) (gt : GT.t) : IT.t option =
     let merge loc oa ob =
       match (oa, ob) with
       | Some a, Some b -> Some (IT.max_ (a, b) loc)
@@ -239,7 +239,7 @@ module InferAllocationSize = struct
           let (IT (_, _, loc)) = it_addr in
           let open Option in
           let@ psym, it_offset = GA.get_addr_offset_opt it_addr in
-          if Sym.equal x psym then
+          if Sym.equal x psym && SymSet.subset (IT.free_vars it_offset) vars then
             return (IT.add_ (it_offset, IT.sizeOf_ sct loc) loc)
           else
             None
@@ -267,23 +267,41 @@ module InferAllocationSize = struct
     aux gt
 
 
-  let transform (gt : GT.t) : GT.t =
-    let aux (gt : GT.t) : GT.t =
-      let (GT (gt_, _bt, loc_let)) = gt in
+  let transform (gd : GD.t) : GD.t =
+    let rec aux (vars : SymSet.t) (gt : GT.t) : GT.t =
+      let (GT (gt_, _bt, loc)) = gt in
       match gt_ with
-      | Let (backtracks, (x, GT (Alloc it_size, _bt, loc_alloc)), gt_rest) ->
-        (match infer_size x gt_rest with
+      | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+      | Pick wgts -> GT.pick_ (List.map_snd (aux vars) wgts) loc
+      | Asgn ((it_addr, sct), it_val, gt_rest) ->
+        GT.asgn_ ((it_addr, sct), it_val, aux vars gt_rest) loc
+      | Let (backtracks, (x, (GT (Alloc it_size, _bt, loc_alloc) as gt_inner)), gt_rest)
+        ->
+        let gt_rest = aux (SymSet.add x vars) gt_rest in
+        (match infer_size vars x gt_rest with
          | Some it_size' ->
-           let loc = Locations.other __LOC__ in
+           let here = Locations.other __LOC__ in
            GT.let_
              ( backtracks,
-               (x, GT.alloc_ (IT.max_ (it_size, it_size') loc) loc_alloc),
+               (x, GT.alloc_ (IT.max_ (it_size, it_size') here) loc_alloc),
                gt_rest )
-             loc_let
-         | None -> gt)
-      | _ -> gt
+             loc
+         | None ->
+           GT.let_
+             (backtracks, (x, aux vars gt_inner), aux (SymSet.add x vars) gt_rest)
+             loc)
+      | Let (backtracks, (x, gt_inner), gt_rest) ->
+        GT.let_ (backtracks, (x, aux vars gt_inner), aux (SymSet.add x vars) gt_rest) loc
+      | Assert (lc, gt_rest) -> GT.assert_ (lc, aux vars gt_rest) loc
+      | ITE (it_if, gt_then, gt_else) ->
+        GT.ite_ (it_if, aux vars gt_then, aux vars gt_else) loc
+      | Map ((i_sym, i_bt, it_perm), gt_inner) ->
+        GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym vars) gt_inner) loc
     in
-    GT.map_gen_pre aux gt
+    let body =
+      Some (aux (gd.iargs |> List.map fst |> SymSet.of_list) (Option.get gd.body))
+    in
+    { gd with body }
 end
 
 (** This pass uses [Simplify] to rewrite [IndexTerms.t] *)
@@ -364,7 +382,7 @@ let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) :
       let new_gt = opt gt in
       if GT.equal old_gt new_gt then new_gt else loop (fuel - 1) new_gt)
   in
-  gt |> loop 5 |> InferAllocationSize.transform
+  gt |> loop 5
 
 
 let optimize_gen_def
@@ -374,6 +392,7 @@ let optimize_gen_def
   : GD.t
   =
   { name; iargs; oargs; body = Option.map (optimize_gen prog5 passes) body }
+  |> InferAllocationSize.transform
 
 
 let optimize
