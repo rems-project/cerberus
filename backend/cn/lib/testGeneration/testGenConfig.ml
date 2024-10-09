@@ -4,7 +4,9 @@ type t =
     max_array_length : int
   }
 
-let instance = ref { max_backtracks = 10; max_unfolds = 10; max_array_length = 50 }
+let default = { max_backtracks = 10; max_unfolds = 10; max_array_length = 50 }
+
+let instance = ref default
 
 let initialize (cfg : t) = instance := cfg
 
