@@ -1,5 +1,7 @@
 type config = TestGenConfig.t
 
+val default_cfg : config
+
 val run
   :  output_dir:string ->
   filename:string ->

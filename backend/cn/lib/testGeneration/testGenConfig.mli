@@ -4,6 +4,8 @@ type t =
     max_array_length : int
   }
 
+val default : t
+
 val initialize : t -> unit
 
 val get_max_backtracks : unit -> int

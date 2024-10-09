@@ -2,6 +2,8 @@ module Config = TestGenConfig
 
 type config = Config.t
 
+let default_cfg : config = Config.default
+
 let run
   ~output_dir
   ~filename

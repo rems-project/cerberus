@@ -847,21 +847,28 @@ module Testing_flags = struct
     Arg.(value & flag & info [ "no-run" ] ~doc)
 
 
-  let gen_max_unfolds =
-    let doc = "Set the maximum number of unfolds for recursive predicates" in
-    Arg.(value & opt int 5 & info [ "max-unfolds" ] ~doc)
-
-
-  let test_max_array_length =
-    let doc = "Set the maximum length for an array generated" in
-    Arg.(value & opt int 5 & info [ "max-array-length" ] ~doc)
-
-
   let gen_backtrack_attempts =
     let doc =
       "Set the maximum attempts to satisfy a constraint before backtracking further"
     in
-    Arg.(value & opt int 5 & info [ "backtrack-attempts" ] ~doc)
+    Arg.(
+      value
+      & opt int TestGeneration.default_cfg.max_backtracks
+      & info [ "backtrack-attempts" ] ~doc)
+
+
+  let gen_max_unfolds =
+    let doc = "Set the maximum number of unfolds for recursive predicates" in
+    Arg.(
+      value & opt int TestGeneration.default_cfg.max_unfolds & info [ "max-unfolds" ] ~doc)
+
+
+  let test_max_array_length =
+    let doc = "Set the maximum length for an array generated" in
+    Arg.(
+      value
+      & opt int TestGeneration.default_cfg.max_array_length
+      & info [ "max-array-length" ] ~doc)
 end
 
 let testing_cmd =
