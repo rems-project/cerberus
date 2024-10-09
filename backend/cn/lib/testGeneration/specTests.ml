@@ -74,7 +74,15 @@ let compile_tests
           match List.assoc Sym.equal inst.fn declarations with
           | _, _, Decl_function (_, _, cts, _, _, _) ->
             List.combine xs (List.map (fun (_, ct, _) -> ct) cts)
-          | _ -> failwith __LOC__ ))
+          | _ ->
+            failwith
+              (String.concat
+                 " "
+                 [ "Function declaration not found for";
+                   Sym.pp_string inst.fn;
+                   "@";
+                   __LOC__
+                 ]) ))
       insts
   in
   let convert_from ((x, ct) : Sym.t * C.ctype) =
