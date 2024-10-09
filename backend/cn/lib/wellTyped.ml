@@ -1797,19 +1797,19 @@ module BaseTyping = struct
       (lazy
         (Pp.item
            "WellTyped.check_cn_statement"
-           (CF.Pp_ast.pp_doc_tree (dtree_of_cn_statement stmt))));
+           (CF.Pp_ast.pp_doc_tree (dtree_of_statement stmt))));
     match stmt with
-    | CN_pack_unpack (pack_unpack, pt) ->
+    | Pack_unpack (pack_unpack, pt) ->
       let@ p_pt = WRET.welltyped loc (P pt) in
       let[@warning "-8"] (RET.P pt) = p_pt in
-      return (CN_pack_unpack (pack_unpack, pt))
-    | CN_to_from_bytes (to_from, res) ->
+      return (Pack_unpack (pack_unpack, pt))
+    | To_from_bytes (to_from, res) ->
       let@ res = WRET.welltyped loc res in
-      return (CN_to_from_bytes (to_from, res))
-    | CN_have lc ->
+      return (To_from_bytes (to_from, res))
+    | Have lc ->
       let@ lc = WLC.welltyped loc lc in
-      return (CN_have lc)
-    | CN_instantiate (to_instantiate, it) ->
+      return (Have lc)
+    | Instantiate (to_instantiate, it) ->
       let@ () =
         match to_instantiate with
         | I_Function f ->
@@ -1819,8 +1819,8 @@ module BaseTyping = struct
         | I_Everything -> return ()
       in
       let@ it = WIT.infer it in
-      return (CN_instantiate (to_instantiate, it))
-    | CN_extract (attrs, to_extract, it) ->
+      return (Instantiate (to_instantiate, it))
+    | Extract (attrs, to_extract, it) ->
       let@ () =
         match to_extract with
         | E_Pred (CN_owned None) -> return ()
@@ -1833,8 +1833,8 @@ module BaseTyping = struct
         | E_Everything -> return ()
       in
       let@ it = WIT.infer it in
-      return (CN_extract (attrs, to_extract, it))
-    | CN_unfold (f, its) ->
+      return (Extract (attrs, to_extract, it))
+    | Unfold (f, its) ->
       let@ def = get_logical_function_def loc f in
       if LogicalFunctions.is_recursive def then
         ()
@@ -1848,8 +1848,8 @@ module BaseTyping = struct
           ~expect:(List.length def.args)
       in
       let@ its = ListM.map2M (fun (_, bt) it -> WIT.check loc bt it) def.args its in
-      return (CN_unfold (f, its))
-    | CN_apply (l, its) ->
+      return (Unfold (f, its))
+    | Apply (l, its) ->
       let@ _lemma_loc, lemma_typ = get_lemma loc l in
       let@ its =
         let wrong_number_arguments () =
@@ -1868,33 +1868,33 @@ module BaseTyping = struct
         in
         check_args lemma_typ its
       in
-      return (CN_apply (l, its))
-    | CN_assert lc ->
+      return (Apply (l, its))
+    | Assert lc ->
       let@ lc = WLC.welltyped loc lc in
-      return (CN_assert lc)
-    | CN_inline fs ->
+      return (Assert lc)
+    | Inline fs ->
       let@ _ = ListM.mapM (get_fun_decl loc) fs in
-      return (CN_inline fs)
-    | CN_print it ->
+      return (Inline fs)
+    | Print it ->
       let@ it = WIT.infer it in
-      return (CN_print it)
-    | CN_split_case lc ->
+      return (Print it)
+    | Split_case lc ->
       let@ lc = WLC.welltyped loc lc in
-      return (CN_split_case lc)
+      return (Split_case lc)
 
 
   let check_cnprog p =
     let open Cnprog in
     let rec aux = function
-      | CN_let (loc, (s, { ct; pointer }), p') ->
+      | Let (loc, (s, { ct; pointer }), p') ->
         let@ () = WCT.is_ct loc ct in
         let@ pointer = WIT.check loc (Loc ()) pointer in
         let@ () = add_l s (Memory.bt_of_sct ct) (loc, lazy (Sym.pp s)) in
         let@ p' = aux p' in
-        return (CN_let (loc, (s, { ct; pointer }), p'))
-      | CN_statement (loc, stmt) ->
+        return (Let (loc, (s, { ct; pointer }), p'))
+      | Statement (loc, stmt) ->
         let@ stmt = check_cn_statement loc stmt in
-        return (CN_statement (loc, stmt))
+        return (Statement (loc, stmt))
     in
     pure (aux p)
 

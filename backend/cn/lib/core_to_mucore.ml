@@ -1596,7 +1596,7 @@ let normalise_file ~inherit_loc ((fin_markers_env : CAE.fin_markers_env), ail_pr
 (* type internal = { pre: unit arguments; post: ReturnTypes.t; inv: (Loc.t * unit
    arguments); statements: (Locations.t * Cnprog.cn_prog list) list; } *)
 
-type statements = (Locations.t * Cnprog.cn_prog list) list
+type statements = (Locations.t * Cnprog.t list) list
 
 type fn_spec_instrumentation = (ReturnTypes.t * statements) ArgumentTypes.t
 

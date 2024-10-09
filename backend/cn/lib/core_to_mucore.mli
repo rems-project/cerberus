@@ -8,7 +8,7 @@ val normalise_file
   unit Mucore.file Resultat.m
 
 (* TODO(RB) - Do these belong here? Looks like they can/should be factored out *)
-type statements = (Locations.t * Cnprog.cn_prog list) list
+type statements = (Locations.t * Cnprog.t list) list
 
 type fn_spec_instrumentation = (ReturnTypes.t * statements) ArgumentTypes.t
 

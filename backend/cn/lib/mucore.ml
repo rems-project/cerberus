@@ -1,68 +1,7 @@
-(* Module Mucore - CN-specific variant of Cerberus Core
-
-   A more specialized version of Core – this is what CN actually uses. (Among a few other
-   differences, Core can pass around C types as values – CN is more restrictive, for
-   simplicity.) *)
-
-(* TODO: BCP: Not actually clear to me that this module needs a signature -- it's
-   enormous, but mostly types and small functions, and everything it defines is used
-   elsewhere. *)
-
-(*
-   module T : sig
-   type ct = Sctypes.t
-
-   type bt = BaseTypes.t
-
-   type cbt = Cerb_frontend.Core.core_base_type
-
-   type ft = ArgumentTypes.ft
-
-   type lt = ArgumentTypes.lt
-
-   type rt = ReturnTypes.t
-
-   type st = Memory.struct_layout
-
-   type ut = unit
-
-   type logical_arguments = Sym.t * (Sym.t * BaseTypes.t) list
-
-   type resource_predicates =
-
-   type logical_predicates =
-   end
-
-   type Sym.t = Sym.t
-
-   type info = Locations.info
-
-   val dtree_of_arguments_l
-   :  ('a -> Cerb_frontend.Pp_ast.doc_tree) ->
-   'a arguments_l ->
-   Cerb_frontend.Pp_ast.doc_tree
-
-   val count_computational : 'a arguments -> int
-
-   val is_ctype_const : 'a pexpr -> Cerb_frontend.Ctype.ctype option
-
-   val dtree_of_label_def : 'a label_def -> Cerb_frontend.Pp_ast.doc_tree
-
-   type 'TY label_defs =
-
-   type 'TY proc_args_and_body =
-
-   type extern_map =
-
-   type 'TY globs_map = (symbol, 'TY globs) Pmap.map
-*)
-
-(** Annotated C type.  The annotations are typically an explanation of
-    something that might go wrong (e.g., overflow on an integer type). *)
 type act =
-  { loc : Locations.t; (** Source location *)
-    annot : Cerb_frontend.Annot.annot list; (** Annotations *)
-    ct : Sctypes.t (** Affected type *)
+  { loc : Locations.t;
+    annot : Cerb_frontend.Annot.annot list;
+    ct : Sctypes.t
   }
 
 type 'TY object_value_ =
@@ -365,7 +304,7 @@ type 'TY expr_ =
   | Erun of Sym.t * 'TY pexpr list
   | CN_progs of
       (Sym.t, Cerb_frontend.Ctype.ctype) Cerb_frontend.Cn.cn_statement list
-      * Cnprog.cn_prog list
+      * Cnprog.t list
 
 and 'TY expr = Expr of Locations.t * Cerb_frontend.Annot.annot list * 'TY * 'TY expr_
 
