@@ -16,6 +16,10 @@
 
 #define CN_GEN_RANGE(ty, min, max) cn_gen_range_##ty(min, max)
 
+#define CN_GEN_MULT_RANGE(ty, mul, min, max) cn_gen_mult_range_##ty(mul, min, max)
+
+#define CN_GEN_MULT(ty, mul) cn_gen_mult_##ty(mul)
+
 #define CN_GEN_ASSIGN(p, offset, addr_ty, value, tmp, gen_name, last_var)               \
     cn_bits_u64* __##p##_size = cn_bits_u64_add(                                        \
                 offset,  \
