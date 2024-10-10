@@ -7,8 +7,6 @@
 extern "C" {
 #endif
 
-    void cn_gen_set_rand_inject(uint8_t inject);
-
     void cn_gen_srand(uint64_t seed);
 
     uint64_t cn_gen_rand(void);
@@ -20,6 +18,8 @@ extern "C" {
     cn_gen_rand_checkpoint cn_gen_rand_save(void);
 
     void cn_gen_rand_restore(cn_gen_rand_checkpoint checkpoint);
+
+    void cn_gen_rand_replace(cn_gen_rand_checkpoint checkpoint);
 
 #ifdef __cplusplus
 }
