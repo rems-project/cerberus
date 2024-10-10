@@ -227,10 +227,10 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
   ^^ string "# Run"
   ^^ hardline
   ^^ separate_map space string [ "if"; "./tests.out"; ";"; "then" ]
-  ^^ nest 4 (hardline ^^ string "echo \"Tests passed\"")
+  ^^ nest 4 (hardline ^^ string "exit 0")
   ^^ hardline
   ^^ string "else"
-  ^^ nest 4 (hardline ^^ string "echo \"Tests failed\"; exit 1")
+  ^^ nest 4 (hardline ^^ string "exit 1")
   ^^ hardline
   ^^ string "fi"
   ^^ hardline

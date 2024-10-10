@@ -41,11 +41,16 @@ int cn_test_main(int argc, char* argv[]) {
 
     cn_gen_srand(time(NULL));
     uint64_t seed = cn_gen_rand();
+    enum cn_logging_level logging_level = CN_LOGGING_ERROR;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
 
         if (strcmp("-S", arg) == 0 || strcmp("--seed", arg) == 0) {
             seed = strtoull(argv[i + 1], NULL, 16);
+            i++;
+        }
+        else if (strcmp("--logging-level", arg) == 0) {
+            logging_level = strtol(argv[i + 1], NULL, 10);
             i++;
         }
     }
@@ -74,7 +79,7 @@ int cn_test_main(int argc, char* argv[]) {
         case CN_TEST_FAIL:
             failed++;
             printf("FAILED\n");
-            set_cn_logging_level(CN_LOGGING_ERROR);
+            set_cn_logging_level(logging_level);
             cn_gen_rand_restore(checkpoints[i]);
             test_case->func();
             set_cn_logging_level(CN_LOGGING_NONE);
