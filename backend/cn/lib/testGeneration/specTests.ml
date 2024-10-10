@@ -1,10 +1,11 @@
 module CF = Cerb_frontend
 module A = CF.AilSyntax
 module C = CF.Ctype
+module BT = BaseTypes
 module AT = ArgumentTypes
 module CtA = Cn_internal_to_ail
 module Utils = Executable_spec_utils
-module BT = BaseTypes
+module Config = TestGenConfig
 
 let debug_log_file : out_channel option ref = ref None
 
@@ -238,7 +239,32 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
   ^^ twice hardline
   ^^ string "# Run"
   ^^ hardline
-  ^^ separate_map space string [ "if"; "./tests.out"; ";"; "then" ]
+  ^^
+  let cmd =
+    separate_map
+      space
+      string
+      ([ "./tests.out" ]
+       @ (Config.has_seed ()
+          |> Option.map (fun seed -> [ "--seed"; string_of_int seed ])
+          |> Option.to_list
+          |> List.flatten)
+       @ (Config.has_logging_level ()
+          |> Option.map (fun level -> [ "--logging-level"; string_of_int level ])
+          |> Option.to_list
+          |> List.flatten)
+       @
+       if Config.is_interactive () then
+         [ "--interactive" ]
+       else
+         [])
+  in
+  string "if"
+  ^^ space
+  ^^ cmd
+  ^^ semi
+  ^^ space
+  ^^ string "then"
   ^^ nest 4 (hardline ^^ string "exit 0")
   ^^ hardline
   ^^ string "else"
