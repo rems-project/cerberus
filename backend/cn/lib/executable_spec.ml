@@ -410,4 +410,7 @@ let main
     in_stmt_injs
     squashed_block_return_injs
     cn_header
-    remaining_fns_and_ocs
+    remaining_fns_and_ocs;
+  close_out oc;
+  close_out cn_oc;
+  close_out cn_header_oc
