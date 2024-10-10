@@ -14,6 +14,14 @@
 
 #define CN_GEN_UNIFORM(ty, sz) cn_gen_uniform_##ty(sz)
 
+#define CN_GEN_LT_(ty, max) cn_gen_lt_##ty(max)
+
+#define CN_GEN_GT_(ty, min) cn_gen_gt_##ty(min)
+
+#define CN_GEN_LE_(ty, max) cn_gen_max_##ty(max)
+
+#define CN_GEN_GE_(ty, min) cn_gen_min_##ty(min)
+
 #define CN_GEN_RANGE(ty, min, max) cn_gen_range_##ty(min, max)
 
 #define CN_GEN_MULT_RANGE(ty, mul, min, max) cn_gen_mult_range_##ty(mul, min, max)
