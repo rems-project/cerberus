@@ -245,7 +245,8 @@ let save ?(perm = 0o666) (output_dir : string) (filename : string) (doc : Pp.doc
       perm
       (Filename.concat output_dir filename)
   in
-  output_string oc (Pp.plain ~width:80 doc)
+  output_string oc (Pp.plain ~width:80 doc);
+  close_out oc
 
 
 let generate
