@@ -37,6 +37,8 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func) {
 }
 
 int cn_test_main(int argc, char* argv[]) {
+    set_cn_logging_level(CN_LOGGING_NONE);
+
     cn_gen_srand(time(NULL));
     uint64_t seed = cn_gen_rand();
     for (int i = 0; i < argc; i++) {
@@ -67,22 +69,25 @@ int cn_test_main(int argc, char* argv[]) {
         switch (results[i]) {
         case CN_TEST_PASS:
             passed++;
-            printf("PASSED");
+            printf("PASSED\n");
             break;
         case CN_TEST_FAIL:
             failed++;
-            printf("FAILED");
+            printf("FAILED\n");
+            set_cn_logging_level(CN_LOGGING_ERROR);
+            cn_gen_rand_restore(checkpoints[i]);
+            test_case->func();
+            set_cn_logging_level(CN_LOGGING_NONE);
             break;
         case CN_TEST_GEN_FAIL:
             errored++;
-            printf("FAILED TO GENERATE VALID INPUT");
+            printf("FAILED TO GENERATE VALID INPUT\n");
             break;
         case CN_TEST_SKIP:
             skipped++;
-            printf("SKIPPED");
+            printf("SKIPPED\n");
             break;
         }
-        printf("\n");
     }
 
     printf("\nTesting Summary:\n");
