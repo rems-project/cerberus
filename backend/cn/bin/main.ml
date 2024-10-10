@@ -441,6 +441,9 @@ let run_tests
   max_backtracks
   max_unfolds
   max_array_length
+  seed
+  logging_level
+  interactive
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -483,7 +486,13 @@ let run_tests
             prog5
             statement_locs;
           let config : TestGeneration.config =
-            { max_backtracks; max_unfolds; max_array_length }
+            { max_backtracks;
+              max_unfolds;
+              max_array_length;
+              seed;
+              logging_level;
+              interactive
+            }
           in
           TestGeneration.run ~output_dir ~filename config sigma prog5;
           if not dont_run then
@@ -868,6 +877,24 @@ module Testing_flags = struct
       value
       & opt int TestGeneration.default_cfg.max_array_length
       & info [ "max-array-length" ] ~doc)
+
+
+  let test_seed =
+    let doc = "Set the seed for random testing" in
+    Arg.(value & opt (some int) TestGeneration.default_cfg.seed & info [ "seed" ] ~doc)
+
+
+  let test_logging_level =
+    let doc = "Set the logging level for failing inputs" in
+    Arg.(
+      value
+      & opt (some int) TestGeneration.default_cfg.logging_level
+      & info [ "logging-level" ] ~doc)
+
+
+  let interactive_testing =
+    let doc = "Enable interactive features, such as requesting more detailed logs" in
+    Arg.(value & flag & info [ "interactive" ] ~doc)
 end
 
 let testing_cmd =
@@ -892,6 +919,9 @@ let testing_cmd =
     $ Testing_flags.gen_backtrack_attempts
     $ Testing_flags.gen_max_unfolds
     $ Testing_flags.test_max_array_length
+    $ Testing_flags.test_seed
+    $ Testing_flags.test_logging_level
+    $ Testing_flags.interactive_testing
   in
   let doc =
     "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\

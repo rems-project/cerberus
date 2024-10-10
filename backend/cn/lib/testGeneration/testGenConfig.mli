@@ -1,7 +1,12 @@
 type t =
-  { max_backtracks : int;
+  { (* Compile time *)
+    max_backtracks : int;
     max_unfolds : int;
-    max_array_length : int
+    max_array_length : int;
+    (* Run time *)
+    seed : int option;
+    logging_level : int option;
+    interactive : bool
   }
 
 val default : t
@@ -13,3 +18,9 @@ val get_max_backtracks : unit -> int
 val get_max_unfolds : unit -> int
 
 val get_max_array_length : unit -> int
+
+val has_seed : unit -> int option
+
+val has_logging_level : unit -> int option
+
+val is_interactive : unit -> bool
