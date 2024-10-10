@@ -19,7 +19,7 @@ cn_pointer* cn_gen_alloc(cn_bits_u64* sz) {
 
     if (bytes == 0) {
         void* p;
-        uint64_t rnd = convert_from_cn_bits_u64(cn_gen_uniform_cn_bits_u64(-1));
+        uint64_t rnd = convert_from_cn_bits_u64(cn_gen_uniform_cn_bits_u64(0));
         if ((rnd % 2) == 0) {
             p = NULL;
         }

@@ -22,6 +22,7 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
         }                                                                               \
         set_cn_exit_cb(&cn_test_##Suite##_##Name##_fail);                               \
                                                                                         \
+        cn_gen_rand_checkpoint checkpoint = cn_gen_rand_save();                         \
         for (int i = 0; i < Samples; i++) {                                             \
             CN_TEST_INIT();                                                             \
             struct cn_gen_##Name##_record *res = cn_gen_##Name();                       \
@@ -29,6 +30,7 @@ void cn_register_test_case(char* suite, char* name, cn_test_case_fn* func);
                 return CN_TEST_GEN_FAIL;                                                \
             }                                                                           \
             Name(__VA_ARGS__);                                                          \
+            cn_gen_rand_replace(checkpoint);                                            \
         }                                                                               \
                                                                                         \
         return CN_TEST_PASS;                                                            \

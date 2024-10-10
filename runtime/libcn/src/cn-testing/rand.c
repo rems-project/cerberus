@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 
 #include <cn-testing/rand.h>
@@ -111,13 +112,7 @@ void cn_gen_srand(uint64_t seed) {
     }
 }
 
-static uint8_t cn_gen_rand_inject = 0;
-
-void cn_gen_set_rand_inject(uint8_t inject) {
-    cn_gen_rand_inject = inject;
-}
-
-uint64_t rand_normal(void) {
+uint64_t cn_gen_rand(void) {
     if (choice_history != 0 && choice_history->next != 0)
     {
         choice_history = choice_history->next;
@@ -142,33 +137,6 @@ uint64_t rand_normal(void) {
         choice_history = new_node;
 
         return choice;
-    }
-}
-
-uint64_t rand_inject() {
-    uint64_t choice = genrand();
-
-    struct choice_list* next = (choice_history != 0) ? choice_history->next : 0;
-
-    struct choice_list* new_node = malloc(sizeof(struct choice_list));
-    *new_node = (struct choice_list){
-        .choice = choice,
-        .next = next,
-        .prev = choice_history
-    };
-
-    choice_history = new_node;
-
-    return choice;
-}
-
-uint64_t cn_gen_rand() {
-    if (cn_gen_rand_inject) {
-        return rand_inject();
-    }
-    else
-    {
-        return rand_normal();
     }
 }
 
@@ -197,4 +165,9 @@ cn_gen_rand_checkpoint cn_gen_rand_save(void) {
 
 void cn_gen_rand_restore(cn_gen_rand_checkpoint checkpoint) {
     choice_history = checkpoint;
+}
+
+void cn_gen_rand_replace(cn_gen_rand_checkpoint checkpoint) {
+    cn_gen_rand_restore(checkpoint);
+    choice_history->next = 0;
 }
