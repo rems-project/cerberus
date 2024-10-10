@@ -23,22 +23,9 @@ FAILED=''
 for TEST in $FILES; do
   CLEANUP="rm -rf test/* run_tests.sh;"
 
-  # Generate tests
-  $CN test "$TEST" --output-dir="test" --with-ownership-checking --no-run
-  RET=$?
-  if [[ "$RET" != 0 ]]; then
-    echo "$TEST -- Error during test generation"
-    NUM_FAILED=$(($NUM_FAILED + 1))
-    FAILED="$FAILED $TEST"
-    eval "$CLEANUP"
-    continue
-  else
-    echo "$TEST -- Test generated successfully"
-  fi
-
   # Run passing tests
   if [[ $TEST == *.pass.c ]]; then
-    ./run_tests.sh
+    $CN test "$TEST" --output-dir="test" --with-ownership-checking
     RET=$?
     if [[ "$RET" != 0 ]]; then
       echo "$TEST -- Tests failed unexpectedly"
@@ -53,7 +40,7 @@ for TEST in $FILES; do
 
   # Run failing tests
   if [[ $TEST == *.fail.c ]]; then
-    ./run_tests.sh
+    $CN test "$TEST" --output-dir="test" --with-ownership-checking
     RET=$?
     if [[ "$RET" = 0 ]]; then
       echo "$TEST -- Tests passed unexpectedly"
