@@ -41,6 +41,7 @@ int cn_test_main(int argc, char* argv[]) {
 
     cn_gen_srand(time(NULL));
     uint64_t seed = cn_gen_rand();
+    int interactive = 0;
     enum cn_logging_level logging_level = CN_LOGGING_ERROR;
     for (int i = 0; i < argc; i++) {
         char* arg = argv[i];
@@ -49,10 +50,17 @@ int cn_test_main(int argc, char* argv[]) {
             seed = strtoull(argv[i + 1], NULL, 16);
             i++;
         }
+        else if (strcmp("-I", arg) == 0 || strcmp("--interactive", arg) == 0) {
+            interactive = 1;
+        }
         else if (strcmp("--logging-level", arg) == 0) {
             logging_level = strtol(argv[i + 1], NULL, 10);
             i++;
         }
+    }
+
+    if (interactive) {
+        printf("Running in interactive mode\n");
     }
 
     printf("Using seed: %016llx\n", seed);
@@ -99,6 +107,52 @@ int cn_test_main(int argc, char* argv[]) {
     printf(
         "cases: %d, passed: %d, failed: %d, errored: %d, skipped: %d\n",
         num_test_cases, passed, failed, errored, skipped);
+
+    if (interactive && failed != 0) {
+        printf("\nWould you like to replay a failure? [y/n] ");
+        char resp[10];
+        scanf("%s", resp);
+
+        while (strcasecmp("y", resp) != 0 && strcasecmp("n", resp) != 0) {
+            printf("Invalid choice\n");
+            printf("Would you like to replay a failure? [y/n] ");
+            scanf("%s", resp);
+        }
+
+        if (strcasecmp("n", resp) == 0) { return 0; }
+
+        printf("\nWhich case would you like to rerun?\n");
+
+        int j = 1;
+        int mapToCase[failed];
+        for (int i = 0; i < num_test_cases; i++) {
+            if (results[i] == CN_TEST_FAIL) {
+                struct cn_test_case* test_case = &test_cases[i];
+                mapToCase[j - 1] = i;
+                printf("%d. %s::%s\n", j, test_case->suite, test_case->name);
+                j += 1;
+            }
+        }
+
+        printf("> ");
+
+        int testcase = 0;
+        scanf("%d", &testcase);
+
+        while (!(0 < testcase && testcase <= failed)) {
+            printf("Invalid choice\n");
+            printf("> ");
+            scanf("%d", &testcase);
+        }
+
+        printf("\n");
+
+        cn_gen_rand_restore(checkpoints[mapToCase[testcase - 1]]);
+        set_cn_logging_level(CN_LOGGING_INFO);
+        reset_cn_exit_cb();
+        // raise(SIGTRAP); // Trigger breakpoint
+        test_cases[mapToCase[testcase - 1]].func();
+    }
 
     return !(failed == 0 && errored == 0);
 }
