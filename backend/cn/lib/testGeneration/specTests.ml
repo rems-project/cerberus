@@ -158,18 +158,26 @@ let compile_tests
 
 let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
   let open Pp in
-  string "# copied from cn-runtime-single-file.sh"
+  string "#!/bin/bash"
+  ^^ twice hardline
+  ^^ string "# copied from cn-runtime-single-file.sh"
   ^^ hardline
   ^^ string "RUNTIME_PREFIX=\"$OPAM_SWITCH_PREFIX/lib/cn/runtime\""
   ^^ hardline
-  ^^ separate_map
-       space
-       string
-       [ "[ -d \"${RUNTIME_PREFIX}\" ]";
-         "||";
-         "(printf \"Could not find CN's runtime directory (looked at: \
-          '${RUNTIME_PREFIX}')\"; exit 1)"
-       ]
+  ^^ string "[ -d \"${RUNTIME_PREFIX}\" ]"
+  ^^ space
+  ^^ twice bar
+  ^^ space
+  ^^ parens
+       (nest
+          4
+          (hardline
+           ^^ string
+                "printf \"Could not find CN's runtime directory (looked at: \
+                 '${RUNTIME_PREFIX}')\""
+           ^^ hardline
+           ^^ string "exit 1")
+        ^^ hardline)
   ^^ twice hardline
   ^^ string "TEST_DIR="
   ^^ string output_dir
@@ -188,8 +196,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "-g";
          "-c";
          "\"-I${RUNTIME_PREFIX}/include/\"";
-         test_file;
-         ";";
+         test_file ^ ";";
          "then"
        ]
   ^^ nest 4 (hardline ^^ string "echo \"Compiled C files.\"")
@@ -197,7 +204,10 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
   ^^ string "else"
   ^^ nest
        4
-       (hardline ^^ string "printf \"Failed to compile C files in ${TEST_DIR}.\"; exit 1")
+       (hardline
+        ^^ string "printf \"Failed to compile C files in ${TEST_DIR}.\""
+        ^^ hardline
+        ^^ string "exit 1")
   ^^ hardline
   ^^ string "fi"
   ^^ twice hardline
@@ -211,8 +221,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "\"-I${RUNTIME_PREFIX}/include\"";
          "-o \"tests.out\"";
          "./*.o";
-         "\"${RUNTIME_PREFIX}/libcn.a\"";
-         ";";
+         "\"${RUNTIME_PREFIX}/libcn.a\";";
          "then"
        ]
   ^^ nest 4 (hardline ^^ string "echo \"Linked C .o files.\"")
@@ -220,7 +229,10 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
   ^^ string "else"
   ^^ nest
        4
-       (hardline ^^ string "printf \"Failed to link *.o files in ${TEST_DIR}.\"; exit 1")
+       (hardline
+        ^^ string "printf \"Failed to link *.o files in ${TEST_DIR}.\""
+        ^^ hardline
+        ^^ string "exit 1")
   ^^ hardline
   ^^ string "fi"
   ^^ twice hardline
