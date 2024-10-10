@@ -12,11 +12,9 @@ let ( let@ ) = CF.Exception.except_bind
 
 type core_file = (unit, unit) CF.Core.generic_file
 
-type mu_file = unit Mucore.mu_file
-
 type file =
   | CORE of core_file
-  | MUCORE of mu_file
+  | MUCORE of unit Mucore.file
 
 let print_file filename file =
   match file with
@@ -141,7 +139,7 @@ let with_well_formedness_check
   ~(* Callbacks *)
    handle_error
   ~(f :
-     prog5:unit Mucore.mu_file ->
+     prog5:unit Mucore.file ->
      ail_prog:CF.GenTypes.genTypeCategory A.ail_program ->
      statement_locs:Cerb_location.t CStatements.LocMap.t ->
      paused:_ Typing.pause ->
@@ -421,7 +419,7 @@ let generate_executable_specs
         ())
 
 
-let generate_tests
+let run_tests
   (* Common *)
     filename
   macros
@@ -435,10 +433,14 @@ let generate_tests
   use_peval
   no_inherit_loc
   magic_comment_char_dollar
+  (* Executable spec *)
+    with_ownership_checking
   (* Test Generation *)
     output_dir
+  dont_run
+  max_backtracks
   max_unfolds
-  testing_framework
+  max_array_length
   =
   (* flags *)
   Cerb_debug.debug_level := debug_level;
@@ -461,18 +463,33 @@ let generate_tests
     ~no_inherit_loc
     ~magic_comment_char_dollar (* Callbacks *)
     ~handle_error
-    ~f:(fun ~prog5 ~ail_prog ~statement_locs:_ ~paused:_ ->
-      let _, sigma = ail_prog in
+    ~f:(fun ~prog5 ~ail_prog ~statement_locs ~paused:_ ->
       Cerb_colour.without_colour
         (fun () ->
-          TestGeneration.run
-            ~output_dir
-            ~filename
-            ~max_unfolds
-            sigma
+          if not (Sys.file_exists output_dir) then (
+            print_endline ("Directory \"" ^ output_dir ^ "\" does not exist.");
+            Sys.mkdir output_dir 0o777;
+            print_endline
+              ("Created directory \"" ^ output_dir ^ "\" with full permissions."));
+          let _, sigma = ail_prog in
+          Executable_spec.main
+            ~with_ownership_checking
+            ~with_test_gen:true
+            ~copy_source_dir:false
+            filename
+            ail_prog
+            None
+            (Some output_dir)
             prog5
-            testing_framework)
+            statement_locs;
+          let config : TestGeneration.config =
+            { max_backtracks; max_unfolds; max_array_length }
+          in
+          TestGeneration.run ~output_dir ~filename config sigma prog5)
         ();
+      if not dont_run then (
+        print_endline "Running tests is currently not supported.";
+        print_endline "You can run \"./run_tests.sh\" to perform testing.");
       Resultat.return ())
 
 
@@ -819,29 +836,45 @@ let verify_cmd =
   Cmd.v info verify_t
 
 
-module Test_generation_flags = struct
+module Testing_flags = struct
   let output_test_dir =
-    let doc = "[Experimental] Place generated test suites in the provided directory" in
+    let doc = "Place generated tests in the provided directory" in
     Arg.(required & opt (some string) None & info [ "output-dir" ] ~docv:"FILE" ~doc)
 
 
-  let test_max_unfolds =
+  let dont_run_tests =
+    let doc = "Do not run tests, only generate them" in
+    Arg.(value & flag & info [ "no-run" ] ~doc)
+
+
+  let gen_backtrack_attempts =
     let doc =
-      "[Experimental] Set the maximum number of unfolds for recursive predicates"
+      "Set the maximum attempts to satisfy a constraint before backtracking further"
     in
-    Arg.(value & opt int 5 & info [ "max-unfolds" ] ~doc)
-
-
-  let testing_framework =
-    let doc = "[Experimental] Specify the testing framework used by generated tests" in
     Arg.(
-      value & opt (enum TestGeneration.test_frameworks) GTest & info [ "framework" ] ~doc)
+      value
+      & opt int TestGeneration.default_cfg.max_backtracks
+      & info [ "backtrack-attempts" ] ~doc)
+
+
+  let gen_max_unfolds =
+    let doc = "Set the maximum number of unfolds for recursive predicates" in
+    Arg.(
+      value & opt int TestGeneration.default_cfg.max_unfolds & info [ "max-unfolds" ] ~doc)
+
+
+  let test_max_array_length =
+    let doc = "Set the maximum length for an array generated" in
+    Arg.(
+      value
+      & opt int TestGeneration.default_cfg.max_array_length
+      & info [ "max-array-length" ] ~doc)
 end
 
-let generate_tests_cmd =
+let testing_cmd =
   let open Term in
-  let generate_tests_t =
-    const generate_tests
+  let test_t =
+    const run_tests
     $ Common_flags.file
     $ Common_flags.macros
     $ Common_flags.incl_dirs
@@ -854,9 +887,12 @@ let generate_tests_cmd =
     $ Common_flags.use_peval
     $ Common_flags.no_inherit_loc
     $ Common_flags.magic_comment_char_dollar
-    $ Test_generation_flags.output_test_dir
-    $ Test_generation_flags.test_max_unfolds
-    $ Test_generation_flags.testing_framework
+    $ Executable_spec_flags.with_ownership_checking
+    $ Testing_flags.output_test_dir
+    $ Testing_flags.dont_run_tests
+    $ Testing_flags.gen_backtrack_attempts
+    $ Testing_flags.gen_max_unfolds
+    $ Testing_flags.test_max_array_length
   in
   let doc =
     "Generates RapidCheck tests for all functions in [FILE] with CN specifications.\n\
@@ -864,8 +900,8 @@ let generate_tests_cmd =
      precondition.\n\
     \    A [.cpp] file containing the test harnesses will be placed in [output-dir]."
   in
-  let info = Cmd.info "generate-tests" ~doc in
-  Cmd.v info generate_tests_t
+  let info = Cmd.info "test" ~doc in
+  Cmd.v info test_t
 
 
 let instrument_cmd =
@@ -909,7 +945,7 @@ let instrument_cmd =
   Cmd.v info instrument_t
 
 
-let subcommands = [ wf_cmd; verify_cmd; generate_tests_cmd; instrument_cmd ]
+let subcommands = [ wf_cmd; verify_cmd; testing_cmd; instrument_cmd ]
 
 let () =
   let version_str = Cn_version.git_version ^ " [" ^ Cn_version.git_version_date ^ "]" in

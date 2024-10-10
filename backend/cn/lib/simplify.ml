@@ -619,12 +619,12 @@ end
 module LogicalConstraints = struct
   open IndexTerms
 
-  let simp simp_ctxt lc =
+  let simp ?(inline_functions = false) simp_ctxt lc =
     match lc with
-    | LC.T it -> LC.T (simp simp_ctxt it)
+    | LC.T it -> LC.T (simp ~inline_functions simp_ctxt it)
     | LC.Forall ((q, qbt), body) ->
       let q, body = IT.alpha_rename q body in
-      let body = simp simp_ctxt body in
+      let body = simp ~inline_functions simp_ctxt body in
       (match body with
        | IT (Const (Bool true), _, _) -> LC.T (bool_ true (IT.loc body))
        | _ -> LC.Forall ((q, qbt), body))

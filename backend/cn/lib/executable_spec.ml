@@ -228,10 +228,10 @@ let main
     generate_c_datatypes sigm
   in
   let c_function_defs, c_function_decls, locs_and_c_extern_function_decls, c_records =
-    generate_c_functions_internal sigm prog5.mu_logical_predicates
+    generate_c_functions_internal sigm prog5.logical_predicates
   in
   let c_predicate_defs, locs_and_c_predicate_decls, c_records' =
-    generate_c_predicates_internal sigm prog5.mu_resource_predicates
+    generate_c_predicates_internal sigm prog5.resource_predicates
   in
   let conversion_function_defs, conversion_function_decls =
     generate_conversion_and_equality_functions sigm
@@ -259,8 +259,8 @@ let main
   let record_fun_defs, record_fun_decls =
     Executable_spec_internal.generate_c_record_funs
       sigm
-      prog5.mu_logical_predicates
-      prog5.mu_resource_predicates
+      prog5.logical_predicates
+      prog5.resource_predicates
   in
   (* let extern_ownership_globals = if with_ownership_checking then "\n" ^
      generate_ownership_globals ~is_extern:true () else "" in *)

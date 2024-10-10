@@ -3250,12 +3250,14 @@ Module Type CheriMemoryImpl
               mem_state_with_funptrmap funptrmap st))
         ;;
         match mask_val with
-        | MVinteger (CoqIntegerType.Size_t as ity) (IV n_value)
+        | MVinteger (CoqIntegerType.Size_t as ity) (IV z_value)
           =>
             iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- serr2InternalErr (sizeof DEFAULT_FUEL None (CoqCtype.Ctype [](CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
-            bytes_value <- serr2InternalErr (bytes_of_Z iss sz n_value) ;;
-            let bits := bool_bits_of_bytes bytes_value in
+            bytes_value <- serr2InternalErr (bytes_of_Z iss sz z_value) ;;
+            let bits := List.rev (bool_bits_of_bytes bytes_value) in
+            let bits := list.take (BinNat.N.to_nat Permissions.len) bits in
+            let bits := List.map negb bits in
             match Permissions.of_list bits with
             | None =>
                 fail loc

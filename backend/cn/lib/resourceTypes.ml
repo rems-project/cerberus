@@ -149,6 +149,17 @@ let subst (substitution : _ Subst.t) = function
   | Q qp -> Q (subst_qpredicate_type substitution qp)
 
 
+let free_vars_bts = function
+  | P p -> IT.free_vars_bts_list (p.pointer :: p.iargs)
+  | Q p ->
+    SymMap.union
+      (fun _ bt1 bt2 ->
+        assert (BT.equal bt1 bt2);
+        Some bt1)
+      (IT.free_vars_bts_list [ p.pointer; p.step ])
+      (SymMap.remove (fst p.q) (IT.free_vars_bts_list (p.permission :: p.iargs)))
+
+
 let free_vars = function
   | P p -> IT.free_vars_list (p.pointer :: p.iargs)
   | Q p ->

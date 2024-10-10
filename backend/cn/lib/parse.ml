@@ -88,7 +88,7 @@ let function_spec (Attrs attributes) =
       | CN_ensures (loc, cond), (trusted, accs, reqs, enss, ex) ->
         return (trusted, accs, reqs, enss @ List.map (fun c -> (loc, c)) cond, ex)
       | CN_mk_function (loc, nm), (trusted, accs, reqs, enss, ex) ->
-        return (trusted, accs, reqs, enss, ex @ [ (loc, Mucore.Make_Logical_Function nm) ]))
+        return (trusted, accs, reqs, enss, ex @ [ (loc, `Make_Logical_Function nm) ]))
     (Mucore.Checked, [], [], [], [])
     conditions
 
