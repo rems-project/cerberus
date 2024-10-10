@@ -485,11 +485,10 @@ let run_tests
           let config : TestGeneration.config =
             { max_backtracks; max_unfolds; max_array_length }
           in
-          TestGeneration.run ~output_dir ~filename config sigma prog5)
+          TestGeneration.run ~output_dir ~filename config sigma prog5;
+          if not dont_run then
+            Unix.execv "./run_tests.sh" (Array.of_list []))
         ();
-      if not dont_run then (
-        print_endline "Running tests is currently not supported.";
-        print_endline "You can run \"./run_tests.sh\" to perform testing.");
       Resultat.return ())
 
 
