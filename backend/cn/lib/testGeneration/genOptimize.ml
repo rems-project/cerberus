@@ -30,7 +30,9 @@ module Inline = struct
           let (IT (t_, _, _)) = it in
           (match t_ with
            (* Terms to inline *)
-           | Const _ | Sym _ -> GT.subst (IT.make_subst [ (x, it) ]) gt'
+           | Const _ | Sym _ | Cast (_, IT (Const _, _, _)) | Cast (_, IT (Sym _, _, _))
+             ->
+             GT.subst (IT.make_subst [ (x, it) ]) gt'
            (* Otherwise, at least avoid pointless backtracking *)
            | _ -> GT.let_ (0, (x, GT.return_ it loc_ret), gt') here)
         | _ -> gt
