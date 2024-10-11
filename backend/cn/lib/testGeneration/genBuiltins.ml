@@ -32,10 +32,10 @@ let gen_syms_bits (name : string) : (BT.t * Sym.t) list =
 
 let min_sym = Sym.fresh_named "min"
 
-let gt_gen_sym_db = gen_syms_bits "gt"
+let ge_gen_sym_db = gen_syms_bits "ge"
 
-let gt_gen (it_min : IT.t) (bt : BT.t) loc : GT.t =
-  let fsym = List.assoc BT.equal bt gt_gen_sym_db in
+let ge_gen (it_min : IT.t) (bt : BT.t) loc : GT.t =
+  let fsym = List.assoc BT.equal bt ge_gen_sym_db in
   GT.call_ (fsym, [ (min_sym, it_min) ]) bt loc
 
 
@@ -64,9 +64,34 @@ let mult_gen (it_mult : IT.t) (bt : BT.t) loc : GT.t =
   GT.call_ (fsym, [ (mult_sym, it_mult) ]) bt loc
 
 
+let mult_ge_gen_sym_db = gen_syms_bits "mult_ge"
+
+let mult_ge_gen (it_mult : IT.t) (it_min : IT.t) (bt : BT.t) loc : GT.t =
+  let fsym = List.assoc BT.equal bt mult_ge_gen_sym_db in
+  GT.call_ (fsym, [ (mult_sym, it_mult); (min_sym, it_min) ]) bt loc
+
+
+let mult_lt_gen_sym_db = gen_syms_bits "mult_lt"
+
+let mult_lt_gen (it_mult : IT.t) (it_max : IT.t) (bt : BT.t) loc : GT.t =
+  let fsym = List.assoc BT.equal bt mult_lt_gen_sym_db in
+  GT.call_ (fsym, [ (mult_sym, it_mult); (max_sym, it_max) ]) bt loc
+
+
 let mult_range_gen_sym_db = gen_syms_bits "mult_range"
 
 let mult_range_gen (it_mult : IT.t) (it_min : IT.t) (it_max : IT.t) (bt : BT.t) loc : GT.t
   =
   let fsym = List.assoc BT.equal bt mult_range_gen_sym_db in
   GT.call_ (fsym, [ (mult_sym, it_mult); (min_sym, it_min); (max_sym, it_max) ]) bt loc
+
+
+let is_builtin (sym : Sym.t) : bool =
+  [ ge_gen_sym_db;
+    lt_gen_sym_db;
+    range_gen_sym_db;
+    mult_gen_sym_db;
+    mult_range_gen_sym_db
+  ]
+  |> List.map (List.map snd)
+  |> List.exists (List.mem Sym.equal sym)
