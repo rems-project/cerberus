@@ -5,7 +5,7 @@
  (wrapped false)
  (modules :standard \ main)
  (c_library_flags -lstdc++)
- (libraries angstrom cerb_frontend cerb_backend))
+ (libraries angstrom cerb_frontend cerb_backend z3))
 
 (executable
  (name main)
