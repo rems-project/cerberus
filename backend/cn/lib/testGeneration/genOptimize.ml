@@ -569,10 +569,13 @@ module ConstraintPropagation = struct
            of_it (IT.arith_binop op (it', IT.num_lit_ (Z.sub n m) bt loc) loc)
          | _ -> None)
         (* END Simplify stuff*)
-      | Unop (Not, IT (Binop (EQ, IT (Sym x, _, _), IT (Const (Bits (_, n)), _, _)), _, _))
-      | Unop (Not, IT (Binop (EQ, IT (Const (Bits (_, n)), _, _), IT (Sym x, _, _)), _, _))
+      | Unop
+          (Not, IT (Binop (EQ, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _))
+      | Unop
+          (Not, IT (Binop (EQ, IT (Const (Bits (_, n)), _, _), IT (Sym x, x_bt, _)), _, _))
         ->
-        Some (true, (x, Int (IntRep.ne n)))
+        let@ bt_rep = IntRep.of_bt x_bt in
+        Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.ne n))))
       | Binop
           ( EQ,
             IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _),
