@@ -100,11 +100,11 @@ uint##sm##_t lt_u##sm(uint##sm##_t max) {                                       
 int##sm##_t lt_i##sm(int##sm##_t max) {                                                 \
     return range_i##sm(INT##sm##_MIN, max);                                             \
 }                                                                                       \
-uint##sm##_t le_u##sm(uint##sm##_t max) {                                               \
-    return lt_u##sm(max);                                                               \
+cn_bits_u##sm* cn_gen_lt_cn_bits_u##sm(cn_bits_u##sm* max) {                            \
+    return convert_to_cn_bits_u##sm(lt_u##sm(max->val));                                \
 }                                                                                       \
-int##sm##_t le_i##sm(int##sm##_t max) {                                                 \
-    return lt_i##sm((uint##sm##_t)max + 1);                                             \
+cn_bits_i##sm* cn_gen_lt_cn_bits_i##sm(cn_bits_i##sm* max) {                            \
+    return convert_to_cn_bits_i##sm(lt_i##sm(max->val));                                \
 }                                                                                       \
 uint##sm##_t ge_u##sm(uint##sm##_t min) {                                               \
     return range_u##sm(min, 0);                                                         \
@@ -112,11 +112,11 @@ uint##sm##_t ge_u##sm(uint##sm##_t min) {                                       
 int##sm##_t ge_i##sm(int##sm##_t min) {                                                 \
     return range_i##sm(min, INT##sm##_MIN);                                             \
 }                                                                                       \
-uint##sm##_t gt_u##sm(uint##sm##_t min) {                                               \
-    return ge_u##sm(min + 1);                                                           \
+cn_bits_u##sm* cn_gen_ge_cn_bits_u##sm(cn_bits_u##sm* min) {                            \
+    return convert_to_cn_bits_u##sm(ge_u##sm(min->val));                                \
 }                                                                                       \
-int##sm##_t gt_i##sm(int##sm##_t min) {                                                 \
-    return ge_i##sm(min + 1);                                                           \
+cn_bits_i##sm* cn_gen_ge_cn_bits_i##sm(cn_bits_i##sm* min) {                            \
+    return convert_to_cn_bits_i##sm(ge_i##sm(min->val));                                \
 }
 
 INEQ_GEN(8);
