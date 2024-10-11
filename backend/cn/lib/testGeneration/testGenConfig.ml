@@ -4,7 +4,7 @@ type t =
     max_unfolds : int;
     max_array_length : int;
     (* Run time *)
-    seed : int option;
+    seed : string option;
     logging_level : int option;
     interactive : bool
   }
