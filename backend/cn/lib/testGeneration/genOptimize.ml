@@ -3,6 +3,7 @@ module BT = BaseTypes
 module IT = IndexTerms
 module LC = LogicalConstraints
 module GT = GenTerms
+module GS = GenStatements
 module GD = GenDefinitions
 module GA = GenAnalysis
 module SymSet = Set.Make (Sym)
@@ -374,6 +375,546 @@ module RemoveUnused = struct
   let passes = [ { name; transform } ]
 end
 
+module ConstraintPropagation = struct
+  open Interval
+
+  module IntRep = struct
+    type t =
+      { mult : Z.t;
+        intervals : Intervals.t
+      }
+    [@@deriving eq, ord]
+
+    let of_ (mult : Z.t) (intervals : Intervals.t) : t =
+      let intervals =
+        let open Z in
+        let min = Option.get (Intervals.minimum intervals) in
+        let min' = min / mult * mult in
+        let max' = Z.succ (Option.get (Intervals.maximum intervals)) in
+        let max =
+          ((max' / mult) + if Z.equal (max' mod mult) Z.zero then Z.zero else Z.one)
+          * mult
+        in
+        let mult_interval = Interval.range (Z.max min min') (Z.min max max') in
+        Intervals.intersect (Intervals.of_interval mult_interval) intervals
+      in
+      { mult; intervals }
+
+
+    let of_bt (bt : BT.t) : t option =
+      match BT.is_bits_bt bt with
+      | Some (sgn, bits) ->
+        let to_interval =
+          match sgn with Signed -> Interval.sint | Unsigned -> Interval.uint
+        in
+        let interval = to_interval bits in
+        Some (of_ Z.one (Intervals.of_interval interval))
+      | None -> None
+
+
+    let of_mult (mult : Z.t) : t =
+      { mult; intervals = Intervals.of_interval Interval.int }
+
+
+    let of_intervals (intervals : Intervals.t) : t = { mult = Z.one; intervals }
+
+    let of_interval (interval : Interval.t) : t =
+      of_intervals (Intervals.of_interval interval)
+
+
+    let const (n : Z.t) : t = of_interval (Interval.const n)
+
+    let ne (n : Z.t) : t =
+      of_intervals (Intervals.complement (Intervals.of_interval (Interval.const n)))
+
+
+    let lt (n : Z.t) : t = of_interval (Interval.lt n)
+
+    let leq (n : Z.t) : t = of_interval (Interval.leq n)
+
+    let gt (n : Z.t) : t = of_interval (Interval.gt n)
+
+    let geq (n : Z.t) : t = of_interval (Interval.geq n)
+
+    let intersect ({ mult = m1; intervals = i1 } : t) ({ mult = m2; intervals = i2 } : t)
+      : t
+      =
+      let mult = Z.lcm m1 m2 in
+      let intervals = Intervals.intersect i1 i2 in
+      of_ mult intervals
+
+
+    let is_const (r : t) : Z.t option = Intervals.is_const r.intervals
+
+    let minimum (r : t) : Z.t = Option.get (Intervals.minimum r.intervals)
+
+    let maximum (r : t) : Z.t = Option.get (Intervals.maximum r.intervals)
+  end
+
+  module Domain = struct
+    type t = Int of IntRep.t [@@deriving eq, ord]
+
+    let hash = Hashtbl.hash
+
+    let rec of_it (it : IT.t) : (bool * (Sym.t * t)) option =
+      let (IT (it_, _, _)) = it in
+      let open Option in
+      match it_ with
+      | Binop (op, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)) ->
+        let@ bt_rep = IntRep.of_bt x_bt in
+        (match op with
+         | EQ -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.const n))))
+         | LT -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.lt n))))
+         | LE -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.leq n))))
+         | _ -> None)
+      | Binop (op, IT (Const (Bits (_, n)), _, _), IT (Sym x, x_bt, _)) ->
+        let@ bt_rep = IntRep.of_bt x_bt in
+        (match op with
+         | EQ -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.const n))))
+         | LT -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.gt n))))
+         | LE -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.geq n))))
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Const (Bits (_, n)), _, _),
+            IT (Binop (Add, IT (Sym x, x_bt, _), IT (Const (Bits (_, m)), _, _)), _, _) )
+      | Binop
+          ( op,
+            IT (Const (Bits (_, n)), _, _),
+            IT (Binop (Add, IT (Const (Bits (_, m)), _, _), IT (Sym x, x_bt, _)), _, _) )
+        when Z.equal m Z.one ->
+        let@ bt_rep = IntRep.of_bt x_bt in
+        (match op with
+         | LT -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.geq n))))
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Binop (Sub, IT (Sym x, x_bt, _), IT (Const (Bits (_, m)), _, _)), _, _),
+            IT (Const (Bits (_, n)), _, _) )
+        when Z.equal m Z.one ->
+        let@ bt_rep = IntRep.of_bt x_bt in
+        (match op with
+         | LT -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.leq n))))
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Const (Bits (_, n)), _, _),
+            IT (Binop (Sub, IT (Sym x, x_bt, _), IT (Const (Bits (_, m)), _, _)), _, _) )
+        when Z.equal m Z.one ->
+        let@ bt_rep = IntRep.of_bt x_bt in
+        (match op with
+         | LE -> Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.gt n))))
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Binop (Add, IT (Sym x, bt, _), IT (Sym y, _, _)), _, _),
+            IT (Const (Bits (_, n)), _, _) )
+      | Binop
+          ( op,
+            IT
+              ( Binop
+                  ( Add,
+                    IT (Cast (_, IT (Sym x, bt, _)), _, _),
+                    IT (Cast (_, IT (Sym y, _, _)), _, _) ),
+                _,
+                _ ),
+            IT (Const (Bits (_, n)), _, _) )
+        when Sym.equal x y ->
+        let loc = Locations.other __LOC__ in
+        (match op with
+         | EQ | LT | LE ->
+           of_it
+             (IT.arith_binop
+                op
+                (IT.sym_ (x, bt, loc), IT.num_lit_ (Z.div n (Z.of_int 2)) bt loc)
+                loc)
+         | _ -> None)
+        (* START FIXME: Simplify should do this *)
+      | Binop
+          ( op,
+            IT (Const (Bits (_, n)), bt, _),
+            IT (Binop (Sub, it', IT (Const (Bits (_, m)), _, _)), _, _) ) ->
+        let loc = Locations.other __LOC__ in
+        (match op with
+         | EQ | LT | LE ->
+           of_it (IT.arith_binop op (IT.num_lit_ (Z.add n m) bt loc, it') loc)
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Const (Bits (_, n)), bt, _),
+            IT (Binop (Add, it', IT (Const (Bits (_, m)), _, _)), _, _) ) ->
+        let loc = Locations.other __LOC__ in
+        (match op with
+         | EQ | LT | LE ->
+           of_it (IT.arith_binop op (IT.num_lit_ (Z.sub n m) bt loc, it') loc)
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Binop (Sub, it', IT (Const (Bits (_, m)), _, _)), _, _),
+            IT (Const (Bits (_, n)), bt, _) ) ->
+        let loc = Locations.other __LOC__ in
+        (match op with
+         | EQ | LT | LE ->
+           of_it (IT.arith_binop op (it', IT.num_lit_ (Z.add n m) bt loc) loc)
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Binop (Add, it', IT (Const (Bits (_, m)), _, _)), _, _),
+            IT (Const (Bits (_, n)), bt, _) ) ->
+        let loc = Locations.other __LOC__ in
+        (match op with
+         | EQ | LT | LE ->
+           of_it (IT.arith_binop op (it', IT.num_lit_ (Z.sub n m) bt loc) loc)
+         | _ -> None)
+        (* END Simplify stuff*)
+      | Unop (Not, IT (Binop (EQ, IT (Sym x, _, _), IT (Const (Bits (_, n)), _, _)), _, _))
+      | Unop (Not, IT (Binop (EQ, IT (Const (Bits (_, n)), _, _), IT (Sym x, _, _)), _, _))
+        ->
+        Some (true, (x, Int (IntRep.ne n)))
+      | Binop
+          ( EQ,
+            IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _),
+            IT (Const (Bits (_, m)), _, _) )
+      | Binop
+          ( EQ,
+            IT (Const (Bits (_, m)), _, _),
+            IT (Binop (Mod, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _) )
+        when Z.equal m Z.zero ->
+        let@ bt_rep = IntRep.of_bt x_bt in
+        Some (true, (x, Int (IntRep.intersect bt_rep (IntRep.of_mult n))))
+      | _ -> None
+
+
+    let intersect (Int r1) (Int r2) : t = Int (IntRep.intersect r1 r2)
+
+    let is_const (Int r) = IntRep.is_const r
+
+    let to_stmts (x : Sym.t) (bt : BT.t) (Int r : t) : GS.t list =
+      match bt with
+      | Bits (sgn, sz) ->
+        let loc = Locations.other __LOC__ in
+        let min_bt, max_bt = BT.bits_range (sgn, sz) in
+        let min, max = (IntRep.minimum r, IntRep.maximum r) in
+        let stmt_min =
+          if Z.lt min_bt min then
+            [ GS.Assert (LC.T (IT.le_ (IT.num_lit_ min bt loc, IT.sym_ (x, bt, loc)) loc))
+            ]
+          else
+            []
+        in
+        let stmt_max =
+          if Z.lt max max_bt then
+            [ GS.Assert (LC.T (IT.le_ (IT.sym_ (x, bt, loc), IT.num_lit_ max bt loc) loc))
+            ]
+          else
+            []
+        in
+        let stmt_mult =
+          if Z.equal r.mult Z.one then
+            []
+          else
+            [ GS.Assert
+                (LC.T
+                   (IT.eq_
+                      ( IT.mod_ (IT.sym_ (x, bt, loc), IT.num_lit_ r.mult bt loc) loc,
+                        IT.num_lit_ Z.zero bt loc )
+                      loc))
+            ]
+        in
+        stmt_min @ stmt_max @ stmt_mult
+      | _ -> failwith __LOC__
+  end
+
+  module Constraint = struct
+    type t =
+      | Eq
+      | Ne
+      | Lt
+      | Le
+      | Invalid
+    [@@deriving eq, ord]
+
+    let default = Invalid
+
+    let of_it (it : IT.t) : (Sym.t * t * Sym.t) option =
+      let (IT (it_, _, _)) = it in
+      match it_ with
+      | Binop (op, IT (Sym x, _, _), IT (Sym y, _, _)) ->
+        (match op with
+         | EQ -> Some (x, Eq, y)
+         | LT -> Some (x, Lt, y)
+         | LE -> Some (x, Le, y)
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Sym x, _, _),
+            IT (Binop (Add, IT (Sym y, _, _), IT (Const (Bits (_, n)), _, _)), _, _) )
+      | Binop
+          ( op,
+            IT (Sym x, _, _),
+            IT (Binop (Add, IT (Const (Bits (_, n)), _, _), IT (Sym y, _, _)), _, _) ) ->
+        (match op with
+         | LT -> if Z.equal n Z.one then Some (x, Le, y) else None
+         | _ -> None)
+      | Binop
+          ( op,
+            IT (Binop (Sub, IT (Sym x, _, _), IT (Const (Bits (_, n)), _, _)), _, _),
+            IT (Sym y, _, _) ) ->
+        (match op with
+         | LT -> if Z.equal n Z.one then Some (x, Le, y) else None
+         | _ -> None)
+      | Unop (Not, IT (Binop (EQ, IT (Sym x, _, _), IT (Sym y, _, _)), _, _)) ->
+        Some (x, Ne, y)
+      | _ -> None
+
+
+    let intersect (c1 : t) (c2 : t) : t option =
+      match (c1, c2) with
+      | Eq, Eq | Ne, Ne | Lt, Lt | Le, Le -> Some c1
+      | Eq, Le | Le, Eq -> Some Eq
+      | Lt, Le | Le, Lt | Lt, Ne | Ne, Lt -> Some Lt
+      | Eq, Ne | Ne, Eq | Eq, Lt | Lt, Eq | Le, Ne | Ne, Le | Invalid, _ | _, Invalid ->
+        None
+  end
+
+  module ConstraintNetwork = struct
+    open struct
+      module G = Graph.Persistent.Digraph.ConcreteLabeled (Sym) (Constraint)
+    end
+
+    type t = Domain.t SymMap.t * G.t
+
+    let empty = (SymMap.empty, G.empty)
+
+    let variables ((ds, _) : t) : Domain.t SymMap.t = ds
+
+    let constraints ((_, g) : t) : (Sym.t * Constraint.t * Sym.t) list =
+      G.fold_edges_e (fun edge edges -> edge :: edges) g []
+
+
+    let add_variable (x : Sym.t) (d : Domain.t) ((ds, g) : t) : t =
+      ( SymMap.update
+          x
+          (fun od ->
+            match od with Some d' -> Some (Domain.intersect d d') | None -> Some d)
+          ds,
+        G.add_vertex g x )
+
+
+    let add_constraint (c : Constraint.t) (x : Sym.t) (y : Sym.t) ((ds, g) : t) : t =
+      let g =
+        match G.find_all_edges g x y with
+        | [ (x', c', y') ] ->
+          G.add_edge_e
+            (G.remove_edge_e g (x', c', y'))
+            (x, Option.get (Constraint.intersect c c'), y)
+        | [] -> G.add_edge_e g (x, c, y)
+        | _ -> failwith __LOC__
+      in
+      (ds, g)
+
+
+    let domain (x : Sym.t) ((ds, _) : t) : Domain.t = SymMap.find x ds
+
+    let domain_opt (x : Sym.t) ((ds, _) : t) : Domain.t option = SymMap.find_opt x ds
+
+    let related_constraints ((_, g) : t) (x : Sym.t) : (Sym.t * Constraint.t * Sym.t) list
+      =
+      G.fold_edges_e
+        (fun (y, c, z) acc ->
+          if Sym.equal x y || Sym.equal x z then (y, c, z) :: acc else acc)
+        g
+        []
+  end
+
+  let construct_network (stmts : GS.t list) : GS.t list * ConstraintNetwork.t =
+    let rec aux (stmts : GS.t list) : GS.t list * ConstraintNetwork.t =
+      match stmts with
+      | (Asgn _ as stmt) :: stmts'
+      | (Let _ as stmt) :: stmts'
+      | (Assert (Forall _) as stmt) :: stmts' ->
+        let stmts', network = aux stmts' in
+        (stmt :: stmts', network)
+      | (Assert (T it) as stmt) :: stmts' ->
+        let stmts', network = aux stmts' in
+        (match (Domain.of_it it, Constraint.of_it it) with
+         | Some (redundant, (x, d)), None ->
+           (* We don't include these constraints, as we will add refined ones later *)
+           if redundant then
+             (stmts', ConstraintNetwork.add_variable x d network)
+           else
+             (stmt :: stmts', ConstraintNetwork.add_variable x d network)
+         | None, Some (x, c, y) ->
+           let xbts = IT.free_vars_bts it in
+           let network =
+             ConstraintNetwork.add_variable
+               x
+               (Int (Option.get (IntRep.of_bt (SymMap.find x xbts))))
+               network
+           in
+           let network =
+             ConstraintNetwork.add_variable
+               y
+               (Int (Option.get (IntRep.of_bt (SymMap.find y xbts))))
+               network
+           in
+           (stmt :: stmts', ConstraintNetwork.add_constraint c x y network)
+         | None, None -> (stmt :: stmts', network)
+         | Some _, Some _ -> failwith __LOC__)
+      | [] -> ([], ConstraintNetwork.empty)
+    in
+    aux stmts
+
+
+  let revise (c : Constraint.t) (Int r1 : Domain.t) (Int r2 : Domain.t)
+    : Domain.t * Domain.t
+    =
+    match c with
+    | Eq ->
+      let r : Domain.t = Int (IntRep.intersect r1 r2) in
+      (r, r)
+    | Ne ->
+      let r1' : Domain.t =
+        match IntRep.is_const r2 with
+        | Some n ->
+          Int
+            (IntRep.of_
+               r1.mult
+               (Intervals.intersect
+                  r1.intervals
+                  (Intervals.complement (Intervals.of_interval (Interval.const n)))))
+        | None -> Int r1
+      in
+      let r2' : Domain.t =
+        match IntRep.is_const r1 with
+        | Some n ->
+          Int
+            (IntRep.of_
+               r2.mult
+               (Intervals.intersect
+                  r2.intervals
+                  (Intervals.complement (Intervals.of_interval (Interval.const n)))))
+        | None -> Int r2
+      in
+      (r1', r2')
+    | Lt ->
+      let r1' : Domain.t = Int (IntRep.intersect r1 (IntRep.lt (IntRep.maximum r2))) in
+      let r2' : Domain.t = Int (IntRep.intersect r2 (IntRep.geq (IntRep.minimum r1))) in
+      (r1', r2')
+    | Le ->
+      let r1' : Domain.t = Int (IntRep.intersect r1 (IntRep.leq (IntRep.maximum r2))) in
+      let r2' : Domain.t = Int (IntRep.intersect r2 (IntRep.gt (IntRep.minimum r1))) in
+      (r1', r2')
+    | Invalid -> failwith __LOC__
+
+
+  (** AC-3 from https://doi.org/10.1016/0004-3702(77)90007-8 *)
+  let ac3 (network : ConstraintNetwork.t) : ConstraintNetwork.t =
+    let rec aux
+      (network : ConstraintNetwork.t)
+      (worklist : (Sym.t * Constraint.t * Sym.t) list)
+      : ConstraintNetwork.t
+      =
+      match worklist with
+      | (x, c, y) :: worklist' ->
+        let d1 = ConstraintNetwork.domain x network in
+        let d2 = ConstraintNetwork.domain y network in
+        let d1', d2' = revise c d1 d2 in
+        let queue1 =
+          if Domain.equal d1 d1' then
+            []
+          else
+            x
+            |> ConstraintNetwork.related_constraints network
+            |> List.filter (fun (a, _, b) -> not (Sym.equal a y || Sym.equal b y))
+        in
+        let queue2 =
+          if Domain.equal d2 d2' then
+            []
+          else
+            y
+            |> ConstraintNetwork.related_constraints network
+            |> List.filter (fun (a, _, b) -> not (Sym.equal a y || Sym.equal b y))
+        in
+        aux
+          (ConstraintNetwork.add_variable
+             x
+             d1'
+             (ConstraintNetwork.add_variable y d2' network))
+          (queue1 @ queue2 @ worklist')
+      | [] -> network
+    in
+    aux network (ConstraintNetwork.constraints network)
+
+
+  (** Adds new asserts encoding the domain information *)
+  let add_refined_asserts
+    (iargs : BT.t SymMap.t)
+    (network : ConstraintNetwork.t)
+    (stmts : GS.t list)
+    : GS.t list
+    =
+    let rec aux (ds : Domain.t SymMap.t) (stmts : GS.t list) : GS.t list =
+      match stmts with
+      | (Let (_, (x, gt)) as stmt) :: stmts' when SymMap.mem x ds ->
+        (stmt :: Domain.to_stmts x (GT.bt gt) (SymMap.find x ds)) @ aux ds stmts'
+      | (Asgn _ as stmt) :: stmts'
+      | (Let _ as stmt) :: stmts'
+      | (Assert _ as stmt) :: stmts' ->
+        stmt :: aux ds stmts'
+      | [] -> []
+    in
+    let ds = ConstraintNetwork.variables network in
+    let ds_iargs, ds_rest = SymMap.partition (fun x _ -> SymMap.mem x iargs) ds in
+    let stmts_iargs =
+      SymMap.fold
+        (fun x d acc -> Domain.to_stmts x (SymMap.find x iargs) d @ acc)
+        ds_iargs
+        []
+    in
+    stmts_iargs @ aux ds_rest stmts
+
+
+  let propagate_constraints (iargs : BT.t SymMap.t) (gt : GT.t) : GT.t =
+    let stmts, gt_last = GS.stmts_of_gt gt in
+    let stmts, network = construct_network stmts in
+    let network = ac3 network in
+    let stmts = add_refined_asserts iargs network stmts in
+    GS.gt_of_stmts stmts gt_last
+
+
+  let transform (gd : GD.t) : GD.t =
+    let rec aux (iargs : BT.t SymMap.t) (gt : GT.t) : GT.t =
+      let rec loop (iargs : BT.t SymMap.t) (gt : GT.t) : GT.t =
+        let (GT (gt_, _bt, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+        | Pick wgts -> GT.pick_ (List.map_snd (aux iargs) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, loop iargs gt_rest) loc
+        | Let (backtracks, (x, gt'), gt_rest) ->
+          GT.let_
+            ( backtracks,
+              (x, (aux iargs) gt'),
+              loop (SymMap.add x (GT.bt gt') iargs) gt_rest )
+            loc
+        | Assert (lc, gt_rest) -> GT.assert_ (lc, loop iargs gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, aux iargs gt_then, aux iargs gt_else) loc
+        | Map ((i_sym, i_bt, it_perm), gt_inner) ->
+          GT.map_ ((i_sym, i_bt, it_perm), aux (SymMap.add i_sym i_bt iargs) gt_inner) loc
+      in
+      gt |> propagate_constraints iargs |> loop iargs
+    in
+    let iargs =
+      gd.iargs
+      |> List.map (fun (x, gbt) -> (x, GenBaseTypes.bt gbt))
+      |> List.to_seq
+      |> SymMap.of_seq
+    in
+    { gd with body = Some (aux iargs (Option.get gd.body)) }
+end
+
 let all_passes (prog5 : unit Mucore.file) =
   Inline.passes
   @ RemoveUnused.passes
@@ -406,6 +947,7 @@ let optimize_gen_def
   : GD.t
   =
   { name; iargs; oargs; body = Option.map (optimize_gen prog5 passes) body }
+  |> ConstraintPropagation.transform
   |> InferAllocationSize.transform
 
 
