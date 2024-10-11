@@ -46,7 +46,7 @@ let apply_array_max_length (gt : GT.t) : GT.t =
       let loc = Locations.other __LOC__ in
       GT.assert_
         ( LC.T
-            (IT.le_
+            (IT.lt_
                ( it_max,
                  IT.num_lit_
                    (Z.of_int (Config.get_max_array_length ()))
