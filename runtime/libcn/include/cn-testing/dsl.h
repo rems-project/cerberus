@@ -29,17 +29,17 @@
 #define CN_GEN_MULT(ty, mul) cn_gen_mult_##ty(mul)
 
 #define CN_GEN_ASSIGN(p, offset, addr_ty, value, tmp, gen_name, last_var)               \
-    cn_bits_u64* __##p##_size = cn_bits_u64_add(                                        \
-                offset,  \
+    cn_bits_u64* tmp##_size = cn_bits_u64_add(                                          \
+                offset,                                                                 \
                 convert_to_cn_bits_u64(sizeof(addr_ty)));                               \
-    if (!convert_from_cn_bool(cn_bits_u64_le(__##p##_size, cn_gen_alloc_size(p)))) {    \
+    if (!convert_from_cn_bool(cn_bits_u64_le(tmp##_size, cn_gen_alloc_size(p)))) {      \
         cn_gen_backtrack_relevant_add((char*)#p);                                       \
-        cn_gen_backtrack_alloc_set(convert_from_cn_bits_u64(__##p##_size));             \
+        cn_gen_backtrack_alloc_set(convert_from_cn_bits_u64(tmp##_size));               \
         goto cn_label_##last_var##_backtrack;                                           \
     }                                                                                   \
-    void *tmp = convert_from_cn_pointer(cn_pointer_add_cn_bits_u64(p, offset));         \
-    *(addr_ty*)tmp = value;                                                             \
-    cn_assume_ownership(tmp, sizeof(addr_ty), (char*)gen_name);
+    void *tmp##_ptr = convert_from_cn_pointer(cn_pointer_add_cn_bits_u64(p, offset));   \
+    *(addr_ty*)tmp##_ptr = value;                                                       \
+    cn_assume_ownership(tmp##_ptr, sizeof(addr_ty), (char*)gen_name);
 
 #define CN_GEN_LET_BEGIN(backtracks, var)                                               \
     int var##_backtracks = backtracks;                                                  \
