@@ -131,7 +131,7 @@ uint##sm##_t mult_range_u##sm(                                                  
     uint##sm##_t max                                                                    \
 ) {                                                                                     \
     assert(mul != 0);                                                                   \
-    uint##sm##_t x = range_u##sm(min / mul, max / mul);                                 \
+    uint##sm##_t x = range_u##sm(min / mul, max / mul + (max % mul != 0));              \
     return x * mul;                                                                     \
 }                                                                                       \
 int##sm##_t mult_range_i##sm(                                                           \
@@ -140,7 +140,7 @@ int##sm##_t mult_range_i##sm(                                                   
     int##sm##_t max                                                                     \
 ) {                                                                                     \
     assert(mul != 0);                                                                   \
-    int##sm##_t x = range_i##sm(min / mul, max / mul);                                  \
+    int##sm##_t x = range_i##sm(min / mul, max / mul + (max % mul != 0));               \
     return x * mul;                                                                     \
 }                                                                                       \
 cn_bits_u##sm* cn_gen_mult_range_cn_bits_u##sm(                                         \
