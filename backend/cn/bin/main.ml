@@ -857,7 +857,8 @@ module Testing_flags = struct
 
   let gen_backtrack_attempts =
     let doc =
-      "Set the maximum attempts to satisfy a constraint before backtracking further"
+      "Set the maximum attempts to satisfy a constraint before backtracking further, \
+       during input generation"
     in
     Arg.(
       value
@@ -866,7 +867,7 @@ module Testing_flags = struct
 
 
   let gen_max_unfolds =
-    let doc = "Set the maximum number of unfolds for recursive predicates" in
+    let doc = "Set the maximum number of unfolds for recursive generators" in
     Arg.(
       value & opt int TestGeneration.default_cfg.max_unfolds & info [ "max-unfolds" ] ~doc)
 
@@ -885,7 +886,7 @@ module Testing_flags = struct
 
 
   let test_logging_level =
-    let doc = "Set the logging level for failing inputs" in
+    let doc = "Set the logging level for failing inputs from tests" in
     Arg.(
       value
       & opt (some int) TestGeneration.default_cfg.logging_level
@@ -893,7 +894,9 @@ module Testing_flags = struct
 
 
   let interactive_testing =
-    let doc = "Enable interactive features, such as requesting more detailed logs" in
+    let doc =
+      "Enable interactive features for testing, such as requesting more detailed logs"
+    in
     Arg.(value & flag & info [ "interactive" ] ~doc)
 end
 
