@@ -19,9 +19,17 @@ FILES=$(find "$DIRNAME"/src -name '*.c')
 NUM_FAILED=0
 FAILED=''
 
+function separator() {
+  printf '\n'
+  for i in {1..60}; do
+    printf "="
+  done
+  printf '\n\n'
+}
+
 # Test each `*.c` file
 for TEST in $FILES; do
-  CLEANUP="rm -rf test/* run_tests.sh;"
+  CLEANUP="rm -rf test/* run_tests.sh;separator"
 
   # Run passing tests
   if [[ $TEST == *.pass.c ]]; then
@@ -56,7 +64,6 @@ for TEST in $FILES; do
   eval "$CLEANUP"
 done
 
-echo
 echo 'Done running tests.'
 echo
 
