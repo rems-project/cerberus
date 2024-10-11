@@ -11,6 +11,7 @@ module Interval = struct
     { lower : Z.t option;
       upper : Z.t option
     }
+  [@@deriving eq, ord]
 
   let empty = { lower = Some Z.zero; upper = Some Z.zero }
 
@@ -84,11 +85,17 @@ module Interval = struct
   let leq i = { lower = None; upper = Some (Z.succ i) }
 
   let geq i = { lower = Some i; upper = None }
+
+  let range i j = { lower = Some i; upper = Some j }
+
+  let minimum i : Z.t option = i.lower
+
+  let maximum i : Z.t option = Option.map (fun n -> Z.sub n Z.one) i.upper
 end
 
 module Intervals = struct
   (* Separated, non-empty, sorted from smallest integers to largest. *)
-  type t = Interval.t list
+  type t = Interval.t list [@@deriving eq, ord]
 
   let to_intervals t = t
 
@@ -159,6 +166,23 @@ module Intervals = struct
         (match i.lower with None -> rest | l -> { lower = from; upper = l } :: rest)
     in
     loop None is
+
+
+  let is_const (is : t) : Z.t option =
+    match is with [ i ] -> Interval.is_const i | _ -> None
+
+
+  let minimum (is : t) : Z.t option =
+    match is with
+    | i :: _ -> Interval.minimum i
+    | [] -> failwith "Intervals should be non-empty"
+
+
+  let rec maximum (is : t) : Z.t option =
+    match is with
+    | [ i ] -> Interval.maximum i
+    | _ :: is' -> maximum is'
+    | [] -> failwith "Intervals should be non-empty"
 end
 
 module Solver = struct
