@@ -1395,6 +1395,10 @@ let rec cn_to_ail_expr_aux_internal
       A.bindings * _ A.statement_ list
       =
       fun count vars cases ->
+      let result_sym = Sym.fresh () in
+      let _result_ident = A.(AilEident result_sym) in
+      let _result_binding = create_binding result_sym (bt_to_ail_ctype basetype) in
+      let _result_decl = A.(AilSdeclaration [ (result_sym, None) ]) in
       match vars with
       | [] ->
         (match cases with
