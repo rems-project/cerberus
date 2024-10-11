@@ -177,6 +177,20 @@ module SplitConstraints = struct
           |> cnf
           |> listify_constraints
           |> List.fold_left (fun gt_rest it' -> GT.assert_ (LC.T it', gt_rest) loc) gt'
+        | Assert (Forall ((i_sym, i_bt), it), gt') ->
+          let its_in, its_out =
+            it
+            |> cnf
+            |> listify_constraints
+            |> List.partition (fun it' -> SymSet.mem i_sym (IT.free_vars it'))
+          in
+          let gt_forall =
+            GT.assert_ (LC.Forall ((i_sym, i_bt), IT.and_ its_in loc), gt') loc
+          in
+          List.fold_left
+            (fun gt_rest it' -> GT.assert_ (LC.T it', gt_rest) loc)
+            gt_forall
+            its_out
         | _ -> gt
       in
       GT.map_gen_pre aux gt
