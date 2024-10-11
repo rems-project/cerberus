@@ -882,7 +882,7 @@ module Testing_flags = struct
 
   let test_seed =
     let doc = "Set the seed for random testing" in
-    Arg.(value & opt (some int) TestGeneration.default_cfg.seed & info [ "seed" ] ~doc)
+    Arg.(value & opt (some string) TestGeneration.default_cfg.seed & info [ "seed" ] ~doc)
 
 
   let test_logging_level =

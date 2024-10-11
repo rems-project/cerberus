@@ -258,7 +258,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
       string
       ([ "./tests.out" ]
        @ (Config.has_seed ()
-          |> Option.map (fun seed -> [ "--seed"; string_of_int seed ])
+          |> Option.map (fun seed -> [ "--seed"; seed ])
           |> Option.to_list
           |> List.flatten)
        @ (Config.has_logging_level ()

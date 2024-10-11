@@ -4,7 +4,7 @@ type t =
     max_unfolds : int;
     max_array_length : int;
     (* Run time *)
-    seed : int option;
+    seed : string option;
     logging_level : int option;
     interactive : bool
   }
@@ -19,7 +19,7 @@ val get_max_unfolds : unit -> int
 
 val get_max_array_length : unit -> int
 
-val has_seed : unit -> int option
+val has_seed : unit -> string option
 
 val has_logging_level : unit -> int option
 
