@@ -233,7 +233,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "cc";
          "\"-I${RUNTIME_PREFIX}/include\"";
          "-o \"tests.out\"";
-         "./*.o";
+         Filename.chop_extension test_file ^ ".o";
          "\"${RUNTIME_PREFIX}/libcn.a\";";
          "then"
        ]
