@@ -317,10 +317,6 @@ let generate
     |> fst
     |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
       Option.is_some inst.internal)
-    |> List.filter (fun (inst : Core_to_mucore.instrumentation) ->
-      match List.assoc Sym.equal inst.fn sigma.declarations with
-      | _, _, A.Decl_function (_, _, _, _, inline, _) -> not inline
-      | _ -> true)
   in
   if List.is_empty insts then failwith "No testable functions";
   let filename_base = filename |> Filename.basename |> Filename.chop_extension in
