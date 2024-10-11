@@ -27,17 +27,29 @@ let compile_generators
   (prog5 : unit Mucore.file)
   (insts : Core_to_mucore.instrumentation list)
   =
+  Cerb_debug.begin_csv_timing ();
   let ctx = GenCompile.compile prog5.resource_predicates insts in
+  Cerb_debug.end_csv_timing "predicate to generator compilation";
   debug_stage "Compile" (ctx |> GenDefinitions.pp_context |> Pp.plain ~width:80);
+  Cerb_debug.begin_csv_timing ();
   let ctx = ctx |> GenNormalize.normalize prog5 in
+  Cerb_debug.end_csv_timing "generator normalization";
   debug_stage "Normalize" (ctx |> GenDefinitions.pp_context |> Pp.plain ~width:80);
+  Cerb_debug.begin_csv_timing ();
   let ctx = ctx |> GenDistribute.distribute in
+  Cerb_debug.end_csv_timing "generator distribution";
   debug_stage "Distribute" (ctx |> GenDefinitions.pp_context |> Pp.plain ~width:80);
+  Cerb_debug.begin_csv_timing ();
   let ctx = ctx |> GenOptimize.optimize prog5 in
+  Cerb_debug.end_csv_timing "generator optimization";
   debug_stage "Optimize" (ctx |> GenDefinitions.pp_context |> Pp.plain ~width:80);
+  Cerb_debug.begin_csv_timing ();
   let ctx = ctx |> GenRuntime.elaborate in
+  Cerb_debug.end_csv_timing "generator elaboration";
   debug_stage "Elaborated" (ctx |> GenRuntime.pp |> Pp.plain ~width:80);
+  Cerb_debug.begin_csv_timing ();
   let doc = ctx |> GenCodeGen.compile sigma in
+  Cerb_debug.end_csv_timing "generator C codegen";
   debug_stage "CodeGen" (Pp.plain ~width:80 doc);
   doc
 
