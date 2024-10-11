@@ -1,6 +1,6 @@
 module Interval : sig
   (** A interval on integers *)
-  type t
+  type t [@@deriving eq, ord]
 
   (** Empty interval *)
   val empty : t
@@ -32,6 +32,9 @@ module Interval : sig
   (** Integers greater-than or equal-to the given one *)
   val geq : Z.t -> t
 
+  (** [range x y] gives an interval [\[x, y)] *)
+  val range : Z.t -> Z.t -> t
+
   (** [combine i j] is a triple [(below,common,above)] where
       [common] is the values in both intervals, [below] is the smaller values
       that are only in one of intervals, and [above] are the larger values
@@ -50,11 +53,17 @@ module Interval : sig
 
   (** String rendition of an interval *)
   val to_string : t -> string
+
+  (** Minimum value in interval if it exists *)
+  val minimum : t -> Z.t option
+
+  (** Maximum value in interval if it exists *)
+  val maximum : t -> Z.t option
 end
 
 module Intervals : sig
   (** A subset of the integers *)
-  type t
+  type t [@@deriving eq, ord]
 
   (** A single interval *)
   val of_interval : Interval.t -> t
@@ -74,6 +83,15 @@ module Intervals : sig
 
   (** Convert to string *)
   val to_string : t -> string
+
+  (** Is this a singleton subset. *)
+  val is_const : t -> Z.t option
+
+  (** Minimum value in subset if it exists *)
+  val minimum : t -> Z.t option
+
+  (** Maximum value in subset if it exists *)
+  val maximum : t -> Z.t option
 end
 
 module Solver : sig
