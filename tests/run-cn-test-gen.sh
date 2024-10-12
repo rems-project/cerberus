@@ -36,12 +36,14 @@ for TEST in $FILES; do
     $CN test "$TEST" --output-dir="test" --with-ownership-checking
     RET=$?
     if [[ "$RET" != 0 ]]; then
+      echo
       echo "$TEST -- Tests failed unexpectedly"
       NUM_FAILED=$(($NUM_FAILED + 1))
       FAILED="$FAILED $TEST"
       eval "$CLEANUP"
       continue
     else
+      echo
       echo "$TEST -- Tests passed successfully"
     fi
   fi
@@ -51,12 +53,14 @@ for TEST in $FILES; do
     $CN test "$TEST" --output-dir="test" --with-ownership-checking
     RET=$?
     if [[ "$RET" = 0 ]]; then
+      echo
       echo "$TEST -- Tests passed unexpectedly"
       NUM_FAILED=$(($NUM_FAILED + 1))
       FAILED="$FAILED $TEST"
       eval "$CLEANUP"
       continue
     else
+      echo
       echo "$TEST -- Tests failed successfully"
     fi
   fi
