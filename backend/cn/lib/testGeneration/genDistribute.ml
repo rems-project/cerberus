@@ -136,8 +136,8 @@ let distribute_gen (gt : GT.t) : GT.t =
   |> pull_out_inner_generators
 
 
-let distribute_gen_def ({ name; iargs; oargs; body } : GD.t) : GD.t =
-  { name; iargs; oargs; body = Option.map distribute_gen body }
+let distribute_gen_def ({ filename; name; iargs; oargs; body } : GD.t) : GD.t =
+  { filename; name; iargs; oargs; body = Option.map distribute_gen body }
 
 
 let distribute (ctx : GD.context) : GD.context =

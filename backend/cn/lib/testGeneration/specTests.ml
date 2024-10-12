@@ -108,7 +108,6 @@ let compile_tests
                   Sym.Identifier (Locations.other __LOC__, Sym.pp_string x) ))
             (Memory.bt_of_sct (Sctypes.of_ctype_unsafe (Locations.other __LOC__) ct))))
   in
-  let suite = List.hd (String.split_on_char '.' filename) in
   let open Pp in
   string "#include "
   ^^ dquotes (string filename)
@@ -128,8 +127,7 @@ let compile_tests
          ^^ parens
               (separate
                  (comma ^^ space)
-                 [ string suite;
-                   Sym.pp inst.fn;
+                 [ Sym.pp inst.fn;
                    (if AT.count_computational (Option.get inst.internal) = 0 then
                       int 1
                     else
@@ -149,21 +147,27 @@ let compile_tests
           2
           (hardline
            ^^ concat_map
-                (fun fn ->
+                (fun decl ->
+                  let fn, (loc, _, _) = decl in
+                  let suite =
+                    loc
+                    |> Cerb_location.get_filename
+                    |> Option.get
+                    |> Filename.basename
+                    |> String.split_on_char '.'
+                    |> List.hd
+                  in
                   string "cn_register_test_case"
                   ^^ parens
                        (separate
                           (comma ^^ space)
                           [ string "(char*)" ^^ dquotes (string suite);
                             string "(char*)" ^^ dquotes (Sym.pp fn);
-                            separate_map
-                              underscore
-                              string
-                              [ "&cn_test"; suite; Sym.pp_string fn ]
+                            string "&cn_test" ^^ underscore ^^ Sym.pp fn
                           ])
                   ^^ semi
                   ^^ hardline)
-                (List.map fst declarations)
+                declarations
            ^^ string "return cn_test_main(argc, argv);")
         ^^ hardline)
   ^^ hardline

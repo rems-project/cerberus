@@ -63,7 +63,8 @@ val free_vars_term_list : term list -> SymSet.t
 val pp_term : term -> Pp.document
 
 type definition =
-  { name : Sym.t;
+  { filename : string;
+    name : Sym.t;
     iargs : (Sym.t * BT.t) list;
     oargs : (Sym.t * BT.t) list;
     body : term
