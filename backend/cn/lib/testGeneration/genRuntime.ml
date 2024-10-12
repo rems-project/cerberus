@@ -360,7 +360,8 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
 
 
 type definition =
-  { name : Sym.t;
+  { filename : string;
+    name : Sym.t;
     iargs : (Sym.t * BT.t) list;
     oargs : (Sym.t * BT.t) list;
     body : term
@@ -391,11 +392,12 @@ let pp_definition (def : definition) : Pp.document =
      ^^ rbrace)
 
 
-let elaborate_gd (gd : GD.t) : definition =
-  { name = gd.name;
-    iargs = List.map_snd GBT.bt gd.iargs;
-    oargs = List.map_snd GBT.bt gd.oargs;
-    body = elaborate_gt (SymSet.of_list (List.map fst gd.iargs)) (Option.get gd.body)
+let elaborate_gd ({ filename; name; iargs; oargs; body } : GD.t) : definition =
+  { filename;
+    name;
+    iargs = List.map_snd GBT.bt iargs;
+    oargs = List.map_snd GBT.bt oargs;
+    body = elaborate_gt (SymSet.of_list (List.map fst iargs)) (Option.get body)
   }
 
 

@@ -77,6 +77,7 @@ let compile_vars (generated : SymSet.t) (oargs : (Sym.t * GBT.t) list) (lat : IT
 
 
 let rec compile_it_lat
+  (filename : string)
   (preds : (Sym.t * RP.definition) list)
   (name : Sym.t)
   (generated : SymSet.t)
@@ -91,11 +92,11 @@ let rec compile_it_lat
   let@ gt =
     match lat with
     | Define ((x, it), (loc, _), lat') ->
-      let@ gt' = compile_it_lat preds name generated oargs lat' in
+      let@ gt' = compile_it_lat filename preds name generated oargs lat' in
       return (GT.let_ (backtrack_num, (x, GT.return_ it (IT.loc it)), gt') loc)
     | Resource ((x, (P { name = Owned (ct, _); pointer; iargs = _ }, bt)), (loc, _), lat')
       ->
-      let@ gt' = compile_it_lat preds name generated oargs lat' in
+      let@ gt' = compile_it_lat filename preds name generated oargs lat' in
       let gt_asgn = GT.asgn_ ((pointer, ct), IT.sym_ (x, bt, loc), gt') loc in
       let gt_val =
         if SymSet.mem x generated then
@@ -112,6 +113,7 @@ let rec compile_it_lat
       (* Recurse *)
       let@ gt' =
         compile_it_lat
+          filename
           preds
           name
           generated
@@ -135,7 +137,8 @@ let rec compile_it_lat
       (* Add request *)
       let desired_iargs = List.map fst args in
       let gd : GD.t =
-        { name = fsym;
+        { filename;
+          name = fsym;
           iargs =
             (pred.pointer, BT.Loc ()) :: pred.iargs
             |> List.filter (fun (x, _) -> List.mem Sym.equal x desired_iargs)
@@ -167,7 +170,7 @@ let rec compile_it_lat
               bt ) ),
           (loc, _),
           lat' ) ->
-      let@ gt' = compile_it_lat preds name generated oargs lat' in
+      let@ gt' = compile_it_lat filename preds name generated oargs lat' in
       let k_bt, v_bt = BT.map_bt bt in
       let gt_body =
         let sym_val = Sym.fresh () in
@@ -200,7 +203,7 @@ let rec compile_it_lat
           (loc, _),
           lat' ) ->
       (* Recurse *)
-      let@ gt' = compile_it_lat preds name generated oargs lat' in
+      let@ gt' = compile_it_lat filename preds name generated oargs lat' in
       (* Get arguments *)
       let pred = List.assoc Sym.equal fsym preds in
       let arg_syms = pred.pointer :: fst (List.split pred.iargs) in
@@ -211,7 +214,8 @@ let rec compile_it_lat
       (* Add request *)
       let desired_iargs = List.map fst args in
       let gd : GD.t =
-        { name = fsym;
+        { filename = Option.get (Cerb_location.get_filename pred.loc);
+          name = fsym;
           iargs =
             (pred.pointer, BT.Loc ()) :: pred.iargs
             |> List.filter (fun (x, _) -> List.mem Sym.equal x desired_iargs)
@@ -231,7 +235,7 @@ let rec compile_it_lat
       let gt_let = GT.let_ (backtrack_num, (x, gt_map), gt') loc in
       fun s -> (gt_let, GD.add_context gd s)
     | Constraint (lc, (loc, _), lat') ->
-      let@ gt' = compile_it_lat preds name generated oargs lat' in
+      let@ gt' = compile_it_lat filename preds name generated oargs lat' in
       return (GT.assert_ (lc, gt') loc)
     | I it ->
       let here = Locations.other __LOC__ in
@@ -251,6 +255,7 @@ let rec compile_it_lat
 
 
 let rec compile_clauses
+  (filename : string)
   (preds : (Sym.t * RP.definition) list)
   (name : Sym.t)
   (iargs : SymSet.t)
@@ -261,35 +266,40 @@ let rec compile_clauses
   match cls with
   | [ cl ] ->
     assert (IT.is_true cl.guard);
-    compile_it_lat preds name iargs oargs cl.packing_ft
+    compile_it_lat filename preds name iargs oargs cl.packing_ft
   | cl :: cls' ->
     let it_if = cl.guard in
-    let@ gt_then = compile_it_lat preds name iargs oargs cl.packing_ft in
-    let@ gt_else = compile_clauses preds name iargs oargs cls' in
+    let@ gt_then = compile_it_lat filename preds name iargs oargs cl.packing_ft in
+    let@ gt_else = compile_clauses filename preds name iargs oargs cls' in
     return (GT.ite_ (it_if, gt_then, gt_else) cl.loc)
   | [] -> failwith "unreachable"
 
 
 let compile_pred
   (preds : (Sym.t * RP.definition) list)
-  ({ name; iargs; oargs; body } : GD.t)
+  ({ filename; name; iargs; oargs; body } : GD.t)
   : unit m
   =
   assert (Option.is_none body);
   let pred = List.assoc Sym.equal name preds in
   let@ gt =
     compile_clauses
+      filename
       preds
       name
       (SymSet.of_list (List.map fst iargs))
       oargs
       (Option.get pred.clauses)
   in
-  let gd : GD.t = { name; iargs; oargs; body = Some gt } in
+  let gd : GD.t = { filename; name; iargs; oargs; body = Some gt } in
   fun s -> ((), GD.add_context gd s)
 
 
-let compile_spec (preds : (Sym.t * RP.definition) list) (name : Sym.t) (at : 'a AT.t)
+let compile_spec
+  (filename : string)
+  (preds : (Sym.t * RP.definition) list)
+  (name : Sym.t)
+  (at : 'a AT.t)
   : unit m
   =
   let rec aux (at : 'a AT.t) =
@@ -303,9 +313,15 @@ let compile_spec (preds : (Sym.t * RP.definition) list) (name : Sym.t) (at : 'a 
   let here = Locations.other __FUNCTION__ in
   let oargs = List.map_snd (fun (bt, _) -> GBT.of_bt bt) args in
   let@ gt =
-    compile_it_lat preds name SymSet.empty oargs (LAT.map (fun _ -> IT.unit_ here) lat)
+    compile_it_lat
+      filename
+      preds
+      name
+      SymSet.empty
+      oargs
+      (LAT.map (fun _ -> IT.unit_ here) lat)
   in
-  let gd : GD.t = { name; iargs = []; oargs; body = Some gt } in
+  let gd : GD.t = { filename; name; iargs = []; oargs; body = Some gt } in
   fun s -> ((), GD.add_context gd s)
 
 
@@ -318,7 +334,11 @@ let compile
   let context_specs =
     insts
     |> List.map (fun (inst : Core_to_mucore.instrumentation) ->
-      compile_spec preds inst.fn (Option.get inst.internal))
+      compile_spec
+        (Option.get (Cerb_location.get_filename inst.fn_loc))
+        preds
+        inst.fn
+        (Option.get inst.internal))
     |> List.fold_left
          (fun ctx f ->
            let (), ctx' = f ctx in
