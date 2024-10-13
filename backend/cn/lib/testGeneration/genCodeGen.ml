@@ -406,6 +406,12 @@ let compile (sigma : CF.GenTypes.genTypeCategory A.sigma) (ctx : GR.context) : P
        (CF.Pp_ail.pp_tag_definition ~executable_spec:true)
        tag_definitions
   ^^ twice hardline
+  ^^ separate_map
+       (twice hardline)
+       (fun (tag, (_, _, decl)) ->
+         CF.Pp_ail.pp_function_prototype ~executable_spec:true tag decl)
+       declarations
+  ^^ twice hardline
   ^^ CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, sigma)
   ^^ hardline
   ^^ string "#endif // CN_GEN_H"
