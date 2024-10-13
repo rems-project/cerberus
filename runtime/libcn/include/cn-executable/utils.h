@@ -267,12 +267,12 @@ cn_bool *cn_pointer_gt(cn_pointer *i1, cn_pointer *i2);
 
 #define CN_GEN_MIN(CNTYPE)\
     static inline CNTYPE *CNTYPE##_min(CNTYPE *i1, CNTYPE *i2) {\
-        return CNTYPE##_lt(i1, i2) ? i1 : i2;\
+        return convert_from_cn_bool(CNTYPE##_lt(i1, i2)) ? i1 : i2;\
     }
 
 #define CN_GEN_MAX(CNTYPE)\
     static inline CNTYPE *CNTYPE##_max(CNTYPE *i1, CNTYPE *i2) {\
-        return CNTYPE##_gt(i1, i2) ? i1 : i2;\
+        return convert_from_cn_bool(CNTYPE##_gt(i1, i2)) ? i1 : i2;\
     }
 
 /* TODO: Account for UB: https://stackoverflow.com/a/20638659 */
