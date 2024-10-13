@@ -121,6 +121,16 @@ let pull_out_inner_generators (gt : GT.t) : GT.t =
            loc_let'
        | GT (Assert (lc, gt3), _, loc_assert) ->
          GT.assert_ (lc, GT.let_ (x_backtracks, (x, gt3), gt2) loc_let) loc_assert
+       | GT (ITE (it_if, gt_then, gt_else), _, loc_ite) ->
+         GT.ite_
+           ( it_if,
+             GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
+             GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
+           loc_ite
+       | GT (Pick wgts, _, loc_pick) ->
+         GT.pick_
+           (List.map_snd (fun gt' -> GT.let_ (x_backtracks, (x, gt'), gt2) loc_let) wgts)
+           loc_pick
        | _ -> gt)
     | _ -> gt
   in
