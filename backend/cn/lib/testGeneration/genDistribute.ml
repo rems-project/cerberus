@@ -124,7 +124,7 @@ let pull_out_inner_generators (gt : GT.t) : GT.t =
        | _ -> gt)
     | _ -> gt
   in
-  GT.map_gen_pre aux gt
+  GT.map_gen_post aux gt
 
 
 let distribute_gen (gt : GT.t) : GT.t =
