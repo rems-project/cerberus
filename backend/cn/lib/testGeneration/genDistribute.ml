@@ -124,7 +124,12 @@ let pull_out_inner_generators (gt : GT.t) : GT.t =
        | _ -> gt)
     | _ -> gt
   in
-  GT.map_gen_post aux gt
+  let rec loop (gt : GT.t) : GT.t =
+    let old_gt = gt in
+    let new_gt = GT.map_gen_post aux gt in
+    if GT.equal old_gt new_gt then new_gt else loop new_gt
+  in
+  loop gt
 
 
 let distribute_gen (gt : GT.t) : GT.t =
