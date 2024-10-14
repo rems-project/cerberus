@@ -57,7 +57,8 @@ type term =
         min : IT.t;
         max : IT.t;
         perm : IT.t;
-        inner : term
+        inner : term;
+        last_var : Sym.t
       }
 [@@deriving eq, ord]
 
@@ -84,7 +85,7 @@ let rec free_vars_term (tm : term) : SymSet.t =
     SymSet.union (LC.free_vars prop) (free_vars_term rest)
   | ITE { bt = _; cond; t; f } ->
     SymSet.union (IT.free_vars cond) (free_vars_term_list [ t; f ])
-  | Map { i; bt = _; min; max; perm; inner } ->
+  | Map { i; bt = _; min; max; perm; inner; last_var = _ } ->
     SymSet.remove
       i
       (SymSet.union (IT.free_vars_list [ min; max; perm ]) (free_vars_term inner))
@@ -198,7 +199,7 @@ let rec pp_term (tm : term) : Pp.document =
     ^^ string "else"
     ^^ space
     ^^ braces (nest 2 (break 1 ^^ pp_term f) ^^ break 1)
-  | Map { i : Sym.t; bt : BT.t; min : IT.t; max : IT.t; perm : IT.t; inner : term } ->
+  | Map { i; bt; min; max; perm; inner; last_var } ->
     let i_bt, _ = BT.map_bt bt in
     string "map"
     ^^ space
@@ -210,7 +211,8 @@ let rec pp_term (tm : term) : Pp.document =
           ^^ space
           ^^ IT.pp perm
           ^^ c_comment
-               (IT.pp min ^^ string " <= " ^^ Sym.pp i ^^ string " <= " ^^ IT.pp max))
+               (IT.pp min ^^ string " <= " ^^ Sym.pp i ^^ string " <= " ^^ IT.pp max)
+          ^^ c_comment (string "backtracks to" ^^ space ^^ Sym.pp last_var))
     ^^ braces (c_comment (BT.pp bt) ^^ nest 2 (break 1 ^^ pp_term inner) ^^ break 1)
 
 
@@ -244,19 +246,16 @@ let nice_names (inputs : SymSet.t) (gt : GT.t) : GT.t =
       let vars, gt_inner = aux vars gt_inner in
       let name = basename x in
       let vars, x, gt' =
-        if SymSet.mem x inputs then
-          (vars, x, gt')
-        else (
-          match StringMap.find_opt name vars with
-          | Some n ->
-            let name' = name ^ "_" ^ string_of_int n in
-            let y = Sym.fresh_named name' in
-            ( StringMap.add name (n + 1) vars,
-              y,
-              GT.subst
-                (IT.make_subst [ (x, IT.sym_ (y, GT.bt gt_inner, GT.loc gt_inner)) ])
-                gt' )
-          | None -> (StringMap.add name 1 vars, x, gt'))
+        match StringMap.find_opt name vars with
+        | Some n ->
+          let name' = name ^ "_" ^ string_of_int n in
+          let y = Sym.fresh_named name' in
+          ( StringMap.add name (n + 1) vars,
+            y,
+            GT.subst
+              (IT.make_subst [ (x, IT.sym_ (y, GT.bt gt_inner, GT.loc gt_inner)) ])
+              gt' )
+        | None -> (StringMap.add name 1 vars, x, gt')
       in
       let vars, gt' = aux vars gt' in
       (vars, GT.let_ (backtracks, (x, gt_inner), gt') loc)
@@ -269,9 +268,22 @@ let nice_names (inputs : SymSet.t) (gt : GT.t) : GT.t =
       (vars, GT.ite_ (it_if, gt_then, gt_else) loc)
     | Map ((i_sym, i_bt, it_perm), gt_inner) ->
       let vars, gt_inner = aux vars gt_inner in
+      let name = basename i_sym in
+      let vars, i_sym, it_perm, gt_inner =
+        match StringMap.find_opt name vars with
+        | Some n ->
+          let name' = name ^ "_" ^ string_of_int n in
+          let j = Sym.fresh_named name' in
+          let su = IT.make_subst [ (i_sym, IT.sym_ (j, i_bt, loc)) ] in
+          (StringMap.add name (n + 1) vars, j, IT.subst su it_perm, GT.subst su gt_inner)
+        | None -> (StringMap.add name 1 vars, i_sym, it_perm, gt_inner)
+      in
       (vars, GT.map_ ((i_sym, i_bt, it_perm), gt_inner) loc)
   in
-  snd (aux StringMap.empty gt)
+  snd
+    (aux
+       (inputs |> SymSet.to_seq |> Seq.map (fun x -> (basename x, 1)) |> StringMap.of_seq)
+       gt)
 
 
 let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
@@ -354,7 +366,15 @@ let elaborate_gt (inputs : SymSet.t) (gt : GT.t) : term =
       ITE { bt; cond; t = aux vars gt_then; f = aux vars gt_else }
     | Map ((i, i_bt, perm), inner) ->
       let min, max = GenAnalysis.get_bounds (i, i_bt) perm in
-      Map { i; bt = Map (i_bt, GT.bt inner); min; max; perm; inner = aux vars inner }
+      Map
+        { i;
+          bt = Map (i_bt, GT.bt inner);
+          min;
+          max;
+          perm;
+          inner = aux (i :: vars) inner;
+          last_var = (match vars with v :: _ -> v | [] -> bennet)
+        }
   in
   aux [] (nice_names inputs gt)
 
