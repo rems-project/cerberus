@@ -1189,10 +1189,16 @@ let optimize_gen (prog5 : unit Mucore.file) (passes : StringSet.t) (gt : GT.t) :
 let optimize_gen_def
   (prog5 : unit Mucore.file)
   (passes : StringSet.t)
-  ({ filename; name; iargs; oargs; body } : GD.t)
+  ({ filename; recursive; name; iargs; oargs; body } : GD.t)
   : GD.t
   =
-  { filename; name; iargs; oargs; body = Option.map (optimize_gen prog5 passes) body }
+  { filename;
+    recursive;
+    name;
+    iargs;
+    oargs;
+    body = Option.map (optimize_gen prog5 passes) body
+  }
   |> ConstraintPropagation.transform
   |> Specialization.transform
   |> InferAllocationSize.transform
