@@ -30,7 +30,7 @@ let return (x : 'a) : 'a m = fun s -> (x, s)
 let cn_return = Sym.fresh_named "cn_return"
 
 let compile_oargs (ret_bt : BT.t) (iargs : (Sym.t * BT.t) list) : (Sym.t * BT.t) list =
-  (cn_return, ret_bt) :: iargs
+  match ret_bt with Unit -> [] | _ -> (cn_return, ret_bt) :: iargs
 
 
 let compile_vars (generated : SymSet.t) (oargs : (Sym.t * GBT.t) list) (lat : IT.t LAT.t)
@@ -109,7 +109,9 @@ let rec compile_it_lat
         ((x, (P { name = PName fsym; pointer; iargs = args_its' }, bt)), (loc, _), lat')
       ->
       let here = Locations.other __LOC__ in
-      let ret_bt = BT.Record [ (Identifier (here, "cn_return"), bt) ] in
+      let ret_bt =
+        BT.Record (compile_oargs bt [] |> List.map_fst (fun x -> Id.id (Sym.pp_string x)))
+      in
       (* Recurse *)
       let@ gt' =
         compile_it_lat
