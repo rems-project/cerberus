@@ -4,6 +4,7 @@
 #include <string.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <inttypes.h>
 
 #include <cn-executable/utils.h>
 
@@ -63,7 +64,7 @@ int cn_test_main(int argc, char* argv[]) {
         printf("Running in interactive mode\n");
     }
 
-    printf("Using seed: %016llx\n", seed);
+    printf("Using seed: %016" PRIx64 "\n", seed);
     cn_gen_srand(seed);
     cn_gen_rand(); // Junk to get something to make a checkpoint from
 
