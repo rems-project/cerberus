@@ -46,6 +46,10 @@ cn_bits_u64* cn_gen_alloc_size(cn_pointer* p) {
         return convert_to_cn_bits_u64(0);
     }
 
-    uint64_t value = *(uint64_t*)ht_get(pointer_size_map, (signed long*)&ptr);
-    return convert_to_cn_bits_u64(value);
+    uint64_t* value = (uint64_t*)ht_get(pointer_size_map, (signed long*)&ptr);
+    if (value == NULL) {
+        return convert_to_cn_bits_u64(0);
+    }
+
+    return convert_to_cn_bits_u64(*value);
 }
