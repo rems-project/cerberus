@@ -52,7 +52,8 @@ type term =
         min : IT.t;
         max : IT.t;
         perm : IT.t;
-        inner : term
+        inner : term;
+        last_var : Sym.t
       }
 [@@deriving eq, ord]
 

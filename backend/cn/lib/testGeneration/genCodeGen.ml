@@ -264,7 +264,7 @@ let rec compile_term
                )
            ]),
       res_expr )
-  | Map { i; bt; min; max; perm; inner } ->
+  | Map { i; bt; min; max; perm; inner; last_var } ->
     let sym_map = Sym.fresh () in
     let b_map = Utils.create_binding sym_map (bt_to_ctype name bt) in
     let i_bt, _ = BT.map_bt bt in
@@ -286,7 +286,21 @@ let rec compile_term
               (mk_expr
                  (AilEcall
                     ( mk_expr (AilEident (Sym.fresh_named "CN_GEN_MAP_BEGIN")),
-                      e_args @ [ e_min; e_max ] )))
+                      e_args
+                      @ [ e_min; e_max; mk_expr (AilEident last_var) ]
+                      @ List.map
+                          (fun x ->
+                            mk_expr
+                              (AilEcast
+                                 ( C.no_qualifiers,
+                                   C.pointer_to_char,
+                                   mk_expr
+                                     (AilEstr
+                                        ( None,
+                                          [ (Locations.other __LOC__, [ Sym.pp_string x ])
+                                          ] )) )))
+                          (List.of_seq
+                             (SymSet.to_seq (SymSet.remove i (IT.free_vars perm)))) )))
           ])
     in
     let b_perm, s_perm, e_perm = compile_it sigma name perm in
