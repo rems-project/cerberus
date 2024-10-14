@@ -993,7 +993,7 @@ module ConstraintPropagation = struct
 end
 
 module Specialization = struct
-  module IntRep = struct
+  module Rep = struct
     type t =
       { mult : IT.t option;
         min : IT.t option;
@@ -1056,60 +1056,50 @@ module Specialization = struct
       { mult; min; max }
   end
 
-  module ValueRep = struct
-    type t = Int of IntRep.t
-
-    let of_it (x : Sym.t) (bt : BT.t) (it : IT.t) : t option =
-      match bt with
-      | Bits _ -> Option.map (fun r -> Int r) (IntRep.of_it x it)
-      | _ -> None
-
-
-    let intersect (v1 : t) (v2 : t) : t =
-      match (v1, v2) with Int r1, Int r2 -> Int (IntRep.intersect r1 r2)
-  end
-
   let collect_constraints (vars : SymSet.t) (x : Sym.t) (bt : BT.t) (stmts : GS.t list)
-    : GS.t list * ValueRep.t
+    : GS.t list * Rep.t
     =
-    let rec aux (stmts : GS.t list) : GS.t list * ValueRep.t =
+    let rec aux (stmts : GS.t list) : GS.t list * Rep.t =
       match stmts with
       | (Assert (T it) as stmt) :: stmts' when SymSet.subset (IT.free_vars it) vars ->
         let stmts', r = aux stmts' in
-        (match ValueRep.of_it x bt it with
-         | Some r' -> (stmts', ValueRep.intersect r r')
+        (match Rep.of_it x it with
+         | Some r' -> (stmts', Rep.intersect r r')
          | None -> (stmt :: stmts', r))
       | stmt :: stmts' ->
         let stmts', v = aux stmts' in
         (stmt :: stmts', v)
       | [] ->
         (match bt with
-         | Bits _ -> ([], Int { mult = None; min = None; max = None })
+         | Bits _ -> ([], { mult = None; min = None; max = None })
          | _ -> failwith __LOC__)
     in
     aux stmts
 
 
-  let compile_constraints (v : ValueRep.t) (gt : GT.t) : GT.t =
+  let compile_constraints (v : Rep.t) (gt : GT.t) : GT.t =
     match gt with
     | GT (Uniform _, _, _) ->
       let loc = Locations.other __LOC__ in
       (match v with
-       | Int { mult = None; min = None; max = None } -> gt
-       | Int { mult = Some n; min = None; max = None } ->
+       | { mult = None; min = None; max = None } -> gt
+       | { mult = Some n; min = None; max = None } ->
          GenBuiltins.mult_gen n (GT.bt gt) loc
-       | Int { mult = None; min = Some n; max = None } ->
-         GenBuiltins.ge_gen n (GT.bt gt) loc
-       | Int { mult = None; min = None; max = Some n } ->
-         GenBuiltins.lt_gen n (GT.bt gt) loc
-       | Int { mult = None; min = Some n1; max = Some n2 } ->
+       | { mult = None; min = Some n; max = None } -> GenBuiltins.ge_gen n (GT.bt gt) loc
+       | { mult = None; min = None; max = Some n } -> GenBuiltins.lt_gen n (GT.bt gt) loc
+       | { mult = None; min = Some n1; max = Some n2 } ->
          GenBuiltins.range_gen n1 n2 (GT.bt gt) loc
-       | Int { mult = Some n1; min = Some n2; max = None } ->
+       | { mult = Some n1; min = Some n2; max = None } ->
          GenBuiltins.mult_ge_gen n1 n2 (GT.bt gt) loc
-       | Int { mult = Some n1; min = None; max = Some n2 } ->
+       | { mult = Some n1; min = None; max = Some n2 } ->
          GenBuiltins.mult_lt_gen n1 n2 (GT.bt gt) loc
-       | Int { mult = Some n1; min = Some n2; max = Some n3 } ->
+       | { mult = Some n1; min = Some n2; max = Some n3 } ->
          GenBuiltins.mult_range_gen n1 n2 n3 (GT.bt gt) loc)
+    | GT (Alloc sz, _, _) ->
+      let loc = Locations.other __LOC__ in
+      (match v with
+       | { mult = None; min = _; max = _ } -> gt
+       | { mult = Some n; min = _; max = _ } -> GenBuiltins.aligned_alloc_gen n sz loc)
     | _ -> gt
 
 
