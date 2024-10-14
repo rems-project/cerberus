@@ -1,3 +1,4 @@
+module BT = BaseTypes
 module IT = IndexTerms
 module LC = LogicalConstraints
 module GT = GenTerms
@@ -39,3 +40,30 @@ let gt_of_stmts (stmts : t list) (gt_end : GT.t) : GT.t =
       | Assert lc -> GT.assert_ (lc, gt_rest) loc)
     stmts
     gt_end
+
+
+let pp (stmt : t) : Pp.document =
+  let open Pp in
+  match stmt with
+  | Asgn ((it_addr, ty), it_val) ->
+    Sctypes.pp ty
+    ^^ space
+    ^^ IT.pp it_addr
+    ^^ space
+    ^^ string ":="
+    ^^ space
+    ^^ IT.pp it_val
+  | Let (backtracks, (x, gt)) ->
+    string "let"
+    ^^ (if backtracks <> 0 then parens (int backtracks) else empty)
+    ^^ (if GT.is_return gt then empty else star)
+    ^^ space
+    ^^ Sym.pp x
+    ^^ space
+    ^^ colon
+    ^^ space
+    ^^ BT.pp (GT.basetype gt)
+    ^^ space
+    ^^ equals
+    ^^ nest 2 (break 1 ^^ GT.pp gt)
+  | Assert lc -> string "assert" ^^ parens (nest 2 (break 1 ^^ LC.pp lc) ^^ break 1)
