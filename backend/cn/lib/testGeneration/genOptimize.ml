@@ -403,15 +403,16 @@ module ConstraintPropagation = struct
       { mult; intervals }
 
 
-    let of_bt (bt : BT.t) : t option =
-      match BT.is_bits_bt bt with
-      | Some (sgn, bits) ->
+    let rec of_bt (bt : BT.t) : t option =
+      match bt with
+      | Loc () -> of_bt Memory.uintptr_bt
+      | Bits (sgn, bits) ->
         let to_interval =
           match sgn with Signed -> Interval.sint | Unsigned -> Interval.uint
         in
         let interval = to_interval bits in
         Some (of_ Z.one (Intervals.of_interval interval))
-      | None -> None
+      | _ -> None
 
 
     let of_mult (mult : Z.t) : t =
@@ -595,8 +596,7 @@ module ConstraintPropagation = struct
     let is_const (Int r) = IntRep.is_const r
 
     let to_stmts (x : Sym.t) (bt : BT.t) (Int r : t) : GS.t list =
-      match bt with
-      | Bits (sgn, sz) ->
+      let aux (sgn : BT.sign) (sz : int) : GS.t list =
         let loc = Locations.other __LOC__ in
         let min_bt, max_bt = BT.bits_range (sgn, sz) in
         let min, max = (IntRep.minimum r, IntRep.maximum r) in
@@ -627,7 +627,13 @@ module ConstraintPropagation = struct
             ]
         in
         stmt_min @ stmt_max @ stmt_mult
-      | _ -> failwith __LOC__
+      in
+      match bt with
+      | Loc () ->
+        let sgn, sz = Option.get (BT.is_bits_bt Memory.uintptr_bt) in
+        aux sgn sz
+      | Bits (sgn, sz) -> aux sgn sz
+      | _ -> failwith (Pp.plain (BT.pp bt) ^ " @ " ^ __LOC__)
   end
 
   module Constraint = struct
@@ -985,8 +991,7 @@ module Specialization = struct
   end
 
   module ValueRep = struct
-    type t = (* | Unknown *)
-      | Int of IntRep.t
+    type t = Int of IntRep.t
 
     let of_it (x : Sym.t) (bt : BT.t) (it : IT.t) : t option =
       match bt with
@@ -996,8 +1001,6 @@ module Specialization = struct
 
     let intersect (v1 : t) (v2 : t) : t =
       match (v1, v2) with Int r1, Int r2 -> Int (IntRep.intersect r1 r2)
-    (* | Int r, Unknown | Unknown, Int r -> Int r
-       | Unknown, Unknown -> Unknown *)
   end
 
   let collect_constraints (vars : SymSet.t) (x : Sym.t) (bt : BT.t) (stmts : GS.t list)
