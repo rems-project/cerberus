@@ -32,6 +32,10 @@ let is_recursive def =
   match def.definition with Rec_Def _ -> true | Def _ -> false | Uninterp -> false
 
 
+let given_to_solver def =
+  match def.definition with Rec_Def _ -> false | Def _ -> true | Uninterp -> false
+
+
 let pp_args xs =
   Pp.flow_map
     (Pp.break 1)
@@ -69,6 +73,7 @@ let try_open_fun def args =
   | Rec_Def _ -> None
   | Uninterp -> None
 
+
 (* let try_open_fun_to_term def name args = Option.map (fun body -> Body.to_term
    def.return_bt body ) (try_open_fun def name args) *)
 
@@ -100,3 +105,6 @@ let try_open_fun def args =
 (*     | (nm, None) :: q -> search (SymSet.add nm known_ok) q *)
 (* in search SymSet.empty (List.map (fun (p, _) -> (p, Some [])) (SymMap.bindings
    defs)) *)
+
+(*Extensibility hook. For now, all functions are displayed as "interesting" in error reporting*)
+let is_interesting : definition -> bool = fun _ -> true

@@ -44,6 +44,7 @@ let add_labeled lab view mp = StrMap.add lab view mp
 
 type state_report =
   { where : where_report;
+    not_given_to_solver : simp_view labeled_view;
     resources : simp_view labeled_view;
     constraints : simp_view labeled_view;
     terms : term_entry labeled_view
@@ -183,6 +184,13 @@ let simp_view s =
     [ val_orig ]
   else
     [ div [ btn; div [ val_simp ]; div [ val_orig ] ] ]
+
+
+let make_not_given_to_solver ds =
+  h
+    1
+    "Definitions and constraints not handled automatically"
+    (interesting_uninteresting table_without_head simp_view ds)
 
 
 let make_resources rs =
@@ -665,6 +673,7 @@ let make_state (report : state_report) requested unproven predicate_hints =
       make_requested requested;
       make_unproven unproven;
       make_predicate_hints predicate_hints;
+      make_not_given_to_solver report.not_given_to_solver;
       make_resources report.resources;
       make_terms report.terms;
       make_constraints report.constraints
