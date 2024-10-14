@@ -412,7 +412,9 @@ let pp_definition (def : definition) : Pp.document =
      ^^ rbrace)
 
 
-let elaborate_gd ({ filename; name; iargs; oargs; body } : GD.t) : definition =
+let elaborate_gd ({ filename; recursive = _; name; iargs; oargs; body } : GD.t)
+  : definition
+  =
   { filename;
     name;
     iargs = List.map_snd GBT.bt iargs;
