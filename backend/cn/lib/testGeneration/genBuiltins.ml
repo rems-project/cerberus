@@ -120,6 +120,31 @@ let mult_range_gen (it_mult : IT.t) (it_min : IT.t) (it_max : IT.t) (bt : BT.t) 
     loc
 
 
+let align_sym = Sym.fresh_named "align"
+
+let size_sym = Sym.fresh_named "size"
+
+let aligned_alloc_gen_sym = Sym.fresh_named "cn_gen_aligned_alloc"
+
+let aligned_alloc_gen (it_align : IT.t) (it_size : IT.t) loc : GT.t =
+  let it_align =
+    if BT.equal (IT.bt it_align) Memory.size_bt then
+      it_align
+    else
+      IT.cast_ Memory.size_bt it_align loc
+  in
+  let it_size =
+    if BT.equal (IT.bt it_size) Memory.size_bt then
+      it_size
+    else
+      IT.cast_ Memory.size_bt it_align loc
+  in
+  GT.call_
+    (aligned_alloc_gen_sym, [ (align_sym, it_align); (size_sym, it_size) ])
+    (BT.Loc ())
+    loc
+
+
 let is_builtin (sym : Sym.t) : bool =
   [ ge_gen_sym_db;
     lt_gen_sym_db;
@@ -128,4 +153,6 @@ let is_builtin (sym : Sym.t) : bool =
     mult_range_gen_sym_db
   ]
   |> List.map (List.map snd)
-  |> List.exists (List.mem Sym.equal sym)
+  |> List.flatten
+  |> List.cons aligned_alloc_gen_sym
+  |> List.mem Sym.equal sym
