@@ -230,7 +230,24 @@ let rec compile_it_lat
         }
       in
       (* Build [GT.t] *)
-      let gt_body = GT.call_ (fsym, args) bt loc in
+      let _, v_bt = BT.map_bt bt in
+      let gt_body =
+        let ret_bt =
+          BT.Record
+            (compile_oargs v_bt [] |> List.map_fst (fun x -> Id.id (Sym.pp_string x)))
+        in
+        let y = Sym.fresh () in
+        if BT.equal (BT.Record []) ret_bt then
+          GT.call_ (fsym, args) ret_bt loc
+        else (
+          let it_ret =
+            IT.recordMember_
+              ~member_bt:v_bt
+              (IT.sym_ (y, ret_bt, loc), Id.id "cn_return")
+              loc
+          in
+          GT.let_ (0, (y, GT.call_ (fsym, args) ret_bt loc), GT.return_ it_ret loc) loc)
+      in
       let gt_map = GT.map_ ((q_sym, q_bt, permission), gt_body) loc in
       let gt_let = GT.let_ (backtrack_num, (x, gt_map), gt') loc in
       fun s -> (gt_let, GD.add_context gd s)
