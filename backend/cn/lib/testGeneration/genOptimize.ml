@@ -377,6 +377,72 @@ module RemoveUnused = struct
   let passes = [ { name; transform } ]
 end
 
+(** This pass pulls asserts and assignments
+    closer to the relevant variables *)
+module Reordering = struct
+  let name = "reordering"
+
+  let get_statement_ordering (iargs : SymSet.t) (stmts : GS.t list) : GS.t list =
+    let rec loop ((vars, res, stmts) : SymSet.t * GS.t list * GS.t list)
+      : SymSet.t * GS.t list
+      =
+      if List.is_empty stmts then
+        (vars, res)
+      else (
+        let res', stmts =
+          List.partition
+            (fun (stmt : GS.t) ->
+              match stmt with
+              | Asgn ((it_addr, _sct), it_val) ->
+                SymSet.subset (IT.free_vars_list [ it_addr; it_val ]) vars
+              | Assert lc -> SymSet.subset (LC.free_vars lc) vars
+              | _ -> false)
+            stmts
+        in
+        let res = res @ res' in
+        let vars, res, stmts =
+          match stmts with
+          | (Let (_, (var, _)) as stmt) :: stmts' ->
+            (SymSet.add var vars, res @ [ stmt ], stmts')
+          | stmt :: _ -> failwith (Pp.plain (GS.pp stmt) ^ " @ " ^ __LOC__)
+          | [] -> (vars, res, [])
+        in
+        loop (vars, res, stmts))
+    in
+    let _, res = loop (iargs, [], stmts) in
+    res
+
+
+  let reorder (iargs : SymSet.t) (gt : GT.t) : GT.t =
+    let stmts, gt_last = GS.stmts_of_gt gt in
+    let stmts = get_statement_ordering iargs stmts in
+    GS.gt_of_stmts stmts gt_last
+
+
+  let transform (gd : GD.t) : GD.t =
+    let rec aux (iargs : SymSet.t) (gt : GT.t) : GT.t =
+      let rec loop (iargs : SymSet.t) (gt : GT.t) : GT.t =
+        let (GT (gt_, _bt, loc)) = gt in
+        match gt_ with
+        | Arbitrary | Uniform _ | Alloc _ | Call _ | Return _ -> gt
+        | Pick wgts -> GT.pick_ (List.map_snd (aux iargs) wgts) loc
+        | Asgn ((it_addr, sct), it_val, gt_rest) ->
+          GT.asgn_ ((it_addr, sct), it_val, loop iargs gt_rest) loc
+        | Let (backtracks, (x, gt'), gt_rest) ->
+          let iargs = SymSet.add x iargs in
+          GT.let_ (backtracks, (x, (aux iargs) gt'), loop iargs gt_rest) loc
+        | Assert (lc, gt_rest) -> GT.assert_ (lc, loop iargs gt_rest) loc
+        | ITE (it_if, gt_then, gt_else) ->
+          GT.ite_ (it_if, aux iargs gt_then, aux iargs gt_else) loc
+        | Map ((i_sym, i_bt, it_perm), gt_inner) ->
+          GT.map_ ((i_sym, i_bt, it_perm), aux (SymSet.add i_sym iargs) gt_inner) loc
+      in
+      gt |> reorder iargs |> loop iargs
+    in
+    let iargs = gd.iargs |> List.map fst |> SymSet.of_list in
+    { gd with body = Some (aux iargs (Option.get gd.body)) }
+end
+
 module ConstraintPropagation = struct
   open Interval
 
