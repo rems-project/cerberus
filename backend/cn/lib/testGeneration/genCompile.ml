@@ -33,6 +33,21 @@ let compile_oargs (ret_bt : BT.t) (iargs : (Sym.t * BT.t) list) : (Sym.t * BT.t)
   match ret_bt with Unit -> [] | _ -> (cn_return, ret_bt) :: iargs
 
 
+let add_request (preds : (SymMap.key * RP.definition) list) (fsym : Sym.t) : unit m =
+  let pred = List.assoc Sym.equal fsym preds in
+  let gd : GD.t =
+    { filename = Option.get (Cerb_location.get_filename pred.loc);
+      name = fsym;
+      iargs =
+        (pred.pointer, BT.Loc ()) :: pred.iargs
+        |> List.map (fun (x, bt) -> (x, GBT.of_bt bt));
+      oargs = compile_oargs pred.oarg_bt [] |> List.map (fun (x, bt) -> (x, GBT.of_bt bt));
+      body = None
+    }
+  in
+  fun s -> ((), GD.add_context gd s)
+
+
 let compile_vars (generated : SymSet.t) (oargs : (Sym.t * GBT.t) list) (lat : IT.t LAT.t)
   : SymSet.t * (GT.t -> GT.t)
   =
@@ -131,33 +146,17 @@ let rec compile_it_lat
                 ])
              lat')
       in
+      (* Add request *)
+      let@ () = add_request preds fsym in
       (* Get arguments *)
       let pred = List.assoc Sym.equal fsym preds in
       let arg_syms = pred.pointer :: fst (List.split pred.iargs) in
       let arg_its = pointer :: args_its' in
       let args = List.combine arg_syms arg_its in
-      (* Add request *)
-      let desired_iargs = List.map fst args in
-      let gd : GD.t =
-        { filename;
-          name = fsym;
-          iargs =
-            (pred.pointer, BT.Loc ()) :: pred.iargs
-            |> List.filter (fun (x, _) -> List.mem Sym.equal x desired_iargs)
-            |> List.map (fun (x, bt) -> (x, GBT.of_bt bt));
-          oargs =
-            compile_oargs
-              pred.oarg_bt
-              (pred.iargs
-               |> List.filter (fun (x, _) -> not (List.mem Sym.equal x desired_iargs)))
-            |> List.map (fun (x, bt) -> (x, GBT.of_bt bt));
-          body = None
-        }
-      in
       (* Build [GT.t] *)
       let gt_call = GT.call_ (fsym, args) ret_bt loc in
       let gt_let = GT.let_ (backtrack_num, (x, gt_call), gt') loc in
-      fun s -> (gt_let, GD.add_context gd s)
+      return gt_let
     | Resource
         ( ( x,
             ( Q
@@ -206,6 +205,8 @@ let rec compile_it_lat
           lat' ) ->
       (* Recurse *)
       let@ gt' = compile_it_lat filename preds name generated oargs lat' in
+      (* Add request *)
+      let@ () = add_request preds fsym in
       (* Get arguments *)
       let pred = List.assoc Sym.equal fsym preds in
       let arg_syms = pred.pointer :: fst (List.split pred.iargs) in
@@ -213,24 +214,6 @@ let rec compile_it_lat
       let it_p = IT.add_ (pointer, IT.mul_ (it_q, step) (IT.loc step)) loc in
       let arg_its = it_p :: iargs in
       let args = List.combine arg_syms arg_its in
-      (* Add request *)
-      let desired_iargs = List.map fst args in
-      let gd : GD.t =
-        { filename = Option.get (Cerb_location.get_filename pred.loc);
-          name = fsym;
-          iargs =
-            (pred.pointer, BT.Loc ()) :: pred.iargs
-            |> List.filter (fun (x, _) -> List.mem Sym.equal x desired_iargs)
-            |> List.map (fun (x, bt) -> (x, GBT.of_bt bt));
-          oargs =
-            compile_oargs
-              pred.oarg_bt
-              (pred.iargs
-               |> List.filter (fun (x, _) -> not (List.mem Sym.equal x desired_iargs)))
-            |> List.map (fun (x, bt) -> (x, GBT.of_bt bt));
-          body = None
-        }
-      in
       (* Build [GT.t] *)
       let _, v_bt = BT.map_bt bt in
       let gt_body =
@@ -252,7 +235,7 @@ let rec compile_it_lat
       in
       let gt_map = GT.map_ ((q_sym, q_bt, permission), gt_body) loc in
       let gt_let = GT.let_ (backtrack_num, (x, gt_map), gt') loc in
-      fun s -> (gt_let, GD.add_context gd s)
+      return gt_let
     | Constraint (lc, (loc, _), lat') ->
       let@ gt' = compile_it_lat filename preds name generated oargs lat' in
       return (GT.assert_ (lc, gt') loc)
