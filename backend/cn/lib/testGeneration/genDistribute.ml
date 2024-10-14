@@ -4,6 +4,7 @@ module LC = LogicalConstraints
 module GT = GenTerms
 module GD = GenDefinitions
 module GA = GenAnalysis
+module SymSet = Set.Make (Sym)
 module SymMap = Map.Make (Sym)
 module Config = TestGenConfig
 
@@ -133,9 +134,55 @@ let pull_out_inner_generators (gt : GT.t) : GT.t =
        | _ -> gt)
     | _ -> gt
   in
+  GT.map_gen_post aux gt
+
+
+let push_in_outer_generators (gt : GT.t) : GT.t =
+  let aux (gt : GT.t) : GT.t =
+    match gt with
+    | GT
+        ( Asgn ((it_addr, sct), it_val, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
+          _,
+          loc_asgn )
+      when SymSet.is_empty (SymSet.inter (IT.free_vars it_addr) (IT.free_vars it_if)) ->
+      GT.ite_
+        ( it_if,
+          GT.asgn_ ((it_addr, sct), it_val, gt_then) loc_asgn,
+          GT.asgn_ ((it_addr, sct), it_val, gt_else) loc_asgn )
+        loc_ite
+    | GT
+        ( Let (x_backtracks, (x, gt1), GT (ITE (it_if, gt_then, gt_else), _, loc_ite)),
+          _,
+          loc_let )
+      when not (SymSet.mem x (IT.free_vars it_if)) ->
+      GT.ite_
+        ( it_if,
+          GT.let_ (x_backtracks, (x, gt1), gt_then) loc_let,
+          GT.let_ (x_backtracks, (x, gt1), gt_else) loc_let )
+        loc_ite
+    | GT
+        ( Let (x_backtracks, (x, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), gt2),
+          _,
+          loc_let ) ->
+      GT.ite_
+        ( it_if,
+          GT.let_ (x_backtracks, (x, gt_then), gt2) loc_let,
+          GT.let_ (x_backtracks, (x, gt_else), gt2) loc_let )
+        loc_ite
+    | GT (Assert (lc, GT (ITE (it_if, gt_then, gt_else), _, loc_ite)), _, loc_assert)
+      when SymSet.is_empty (SymSet.inter (LC.free_vars lc) (IT.free_vars it_if)) ->
+      GT.ite_
+        (it_if, GT.assert_ (lc, gt_then) loc_assert, GT.assert_ (lc, gt_else) loc_assert)
+        loc_ite
+    | _ -> gt
+  in
+  GT.map_gen_pre aux gt
+
+
+let push_and_pull (gt : GT.t) : GT.t =
   let rec loop (gt : GT.t) : GT.t =
     let old_gt = gt in
-    let new_gt = GT.map_gen_post aux gt in
+    let new_gt = gt |> pull_out_inner_generators |> push_in_outer_generators in
     if GT.equal old_gt new_gt then new_gt else loop new_gt
   in
   loop gt
@@ -147,7 +194,7 @@ let distribute_gen (gt : GT.t) : GT.t =
   |> apply_array_max_length
   |> default_weights
   |> confirm_distribution
-  |> pull_out_inner_generators
+  |> push_and_pull
 
 
 let distribute_gen_def ({ filename; name; iargs; oargs; body } : GD.t) : GD.t =
