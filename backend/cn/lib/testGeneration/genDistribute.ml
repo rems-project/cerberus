@@ -110,14 +110,13 @@ let pull_out_inner_generators (gt : GT.t) : GT.t =
            loc_asgn
        | GT (Let (y_backtracks', (y, gt3), gt4), _, loc_let') ->
          let z = Sym.fresh () in
-         let rename =
+         let gt4 =
            GT.subst
              (IT.make_subst [ (y, IT.sym_ (z, GT.bt gt3, Locations.other __LOC__)) ])
+             gt4
          in
          GT.let_
-           ( y_backtracks',
-             (z, gt3),
-             rename (GT.let_ (x_backtracks, (x, gt4), gt2) loc_let) )
+           (y_backtracks', (z, gt3), GT.let_ (x_backtracks, (x, gt4), gt2) loc_let)
            loc_let'
        | GT (Assert (lc, gt3), _, loc_assert) ->
          GT.assert_ (lc, GT.let_ (x_backtracks, (x, gt3), gt2) loc_let) loc_assert
