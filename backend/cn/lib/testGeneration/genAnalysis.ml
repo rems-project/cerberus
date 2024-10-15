@@ -152,9 +152,21 @@ let get_addr_offset_opt (it : IT.t) : (Sym.t * IT.t) option =
   let (IT (it_, _, loc)) = it in
   match it_ with
   | ArrayShift { base = IT (Sym p_sym, _, _); ct; index = it_offset } ->
-    Some (p_sym, IT.mul_ (IT.sizeOf_ ct loc, IT.cast_ Memory.size_bt it_offset loc) loc)
+    let it_offset =
+      if BT.equal (IT.bt it_offset) Memory.size_bt then
+        it_offset
+      else
+        IT.cast_ Memory.size_bt it_offset loc
+    in
+    Some (p_sym, IT.mul_ (IT.sizeOf_ ct loc, it_offset) loc)
   | Binop (Add, IT (Sym p_sym, _, _), it_offset) ->
-    Some (p_sym, IT.cast_ Memory.size_bt it_offset loc)
+    let it_offset =
+      if BT.equal (IT.bt it_offset) Memory.size_bt then
+        it_offset
+      else
+        IT.cast_ Memory.size_bt it_offset loc
+    in
+    Some (p_sym, it_offset)
   | Sym p_sym -> Some (p_sym, IT.num_lit_ Z.zero Memory.size_bt loc)
   | _ -> None
 

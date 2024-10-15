@@ -81,12 +81,14 @@ let rec compile_term
     ([], [], mk_expr (AilEcall (mk_expr (AilEident sym), es)))
   | Asgn { pointer; offset; sct; value; last_var; rest } ->
     let tmp_sym = Sym.fresh () in
-    let b1, s1, e1 =
-      compile_it
-        sigma
-        name
-        (IT.cast_ (BT.Bits (Unsigned, 64)) offset (Locations.other __LOC__))
+    let bt = BT.Bits (Unsigned, 64) in
+    let offset =
+      if BT.equal (IT.bt offset) bt then
+        offset
+      else
+        IT.cast_ bt offset (Locations.other __LOC__)
     in
+    let b1, s1, e1 = compile_it sigma name offset in
     let b2, s2, AnnotatedExpression (_, _, _, e2_) = compile_it sigma name value in
     let b3 = [ Utils.create_binding tmp_sym C.(mk_ctype_pointer no_qualifiers void) ] in
     let s3 =
