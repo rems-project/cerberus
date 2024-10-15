@@ -189,9 +189,6 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
   ^^ string "TEST_DIR="
   ^^ string output_dir
   ^^ hardline
-  ^^ string "cd"
-  ^^ space
-  ^^ string "${TEST_DIR}"
   ^^ twice hardline
   ^^ string "# Compile"
   ^^ hardline
@@ -203,7 +200,9 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
          "-g";
          "-c";
          "\"-I${RUNTIME_PREFIX}/include/\"";
-         test_file ^ ";";
+         "-o";
+         "\"${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o\"";
+         "\"${TEST_DIR}/" ^ test_file ^ "\";";
          "then"
        ]
   ^^ nest 4 (hardline ^^ string "echo \"Compiled C files.\"")
@@ -226,8 +225,8 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
        [ "if";
          "cc";
          "\"-I${RUNTIME_PREFIX}/include\"";
-         "-o \"tests.out\"";
-         Filename.chop_extension test_file ^ ".o";
+         "-o \"${TEST_DIR}/tests.out\"";
+         "${TEST_DIR}/" ^ Filename.chop_extension test_file ^ ".o";
          "\"${RUNTIME_PREFIX}/libcn.a\";";
          "then"
        ]
@@ -250,7 +249,7 @@ let compile_script ~(output_dir : string) ~(test_file : string) : Pp.document =
     separate_map
       space
       string
-      ([ "./tests.out" ]
+      ([ "./${TEST_DIR}/tests.out" ]
        @ (Config.has_seed ()
           |> Option.map (fun seed -> [ "--seed"; seed ])
           |> Option.to_list
