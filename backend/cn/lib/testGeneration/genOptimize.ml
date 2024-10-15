@@ -16,6 +16,41 @@ type opt_pass =
     transform : GT.t -> GT.t
   }
 
+(** This pass performs makes pointer offsets consistent *)
+module PointerOffsets = struct
+  let transform (gt : GT.t) : GT.t =
+    let aux (gt : GT.t) : GT.t =
+      match gt with
+      | GT (Asgn ((it_addr, sct), it_val, gt'), _, loc) ->
+        let it_addr =
+          match it_addr with
+          | IT
+              ( Binop (Add, IT (ArrayShift { base; ct; index }, _, loc_shift), it_offset),
+                _,
+                loc_add ) ->
+            IT.add_
+              ( base,
+                IT.add_
+                  (IT.mul_ (index, IT.sizeOf_ ct loc_shift) loc_shift, it_offset)
+                  loc_add )
+              loc_shift
+          | IT
+              ( Binop
+                  (Add, IT (Binop (Add, it_base, it_offset_1), _, loc_shift), it_offset_2),
+                _,
+                loc_add ) ->
+            IT.add_ (it_base, IT.add_ (it_offset_1, it_offset_2) loc_add) loc_shift
+          | _ -> it_addr
+        in
+        GT.asgn_ ((it_addr, sct), it_val, gt') loc
+      | _ -> gt
+    in
+    GT.map_gen_post aux gt
+
+
+  let pass = { name = "rewrite"; transform }
+end
+
 (** This pass performs various inlinings *)
 module Inline = struct
   (** This pass inlines generators that just return a constant or symbol *)
@@ -1154,7 +1189,7 @@ end
 let all_passes (prog5 : unit Mucore.file) =
   Inline.passes
   @ RemoveUnused.passes
-  @ [ TermSimplification.pass prog5 ]
+  @ [ TermSimplification.pass prog5; PointerOffsets.pass ]
   @ SplitConstraints.passes
 
 
