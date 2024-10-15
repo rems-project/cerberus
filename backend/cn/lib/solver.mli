@@ -78,3 +78,6 @@ val debug_solver_query
   IndexTerms.t list ->
   LogicalConstraints.t ->
   unit
+
+(* CHT *)
+val ask_solver : Global.t -> LogicalConstraints.logical_constraint list -> Simple_smt.result

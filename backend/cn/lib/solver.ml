@@ -1390,3 +1390,25 @@ let set_slow_smt_settings _ _ = ()
 let debug_solver_to_string _ = ()
 
 let debug_solver_query _ _ _ _ _ = ()
+
+(*CHT*)
+let and_bool_constraints (constraints : LC.logical_constraint list) : BaseTypes.t annot =
+  (* assumes all constraints are bools*)
+  let not_forall acc lc = match lc with
+  | LC.T it -> it :: acc
+  | _ -> acc
+  in
+  let no_foralls = List.fold_left not_forall [] constraints in
+  let it_true = IT (Const (Bool true), BT.Bool, Cerb_location.unknown) in
+  let it_and acc lc = IT (Binop (And, acc, lc), BT.Bool, Cerb_location.unknown) in
+  List.fold_left it_and it_true no_foralls
+
+let ask_solver (g : Global.t) (lcs : LC.logical_constraint list) : Simple_smt.result =
+  let solver = make g in
+  let smt_term = translate_term solver (and_bool_constraints lcs) in
+  let simp_solver = solver.smt_solver in
+  debug_ack_command solver (SMT.push 1);
+  debug_ack_command solver (SMT.assume smt_term);
+  let res = SMT.check simp_solver in
+  debug_ack_command solver (SMT.pop 1);
+  res

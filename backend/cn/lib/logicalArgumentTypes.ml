@@ -204,3 +204,190 @@ let dtree dtree_i =
     | I i -> Dnode (pp_ctor "I", [ dtree_i i ])
   in
   aux
+
+(*CHT*)
+
+module SymMap = Map.Make(Sym)
+
+(* Type of nonterminal lines in a predicate clause.
+  Corresponds to packing_ft *)
+type line =
+  | DefineL of (Sym.t * IT.t) * info
+  | ResourceL of (Sym.t * (RET.t * BT.t)) * info
+  | ConstraintL of LC.t * info
+
+(* Variable-assignment dependency graph for predicate clauses *)
+(*CHT: this is really a DAG, but shouldn't matter here *)
+type dep_tree =
+  | UndefinedLT
+  | NodeLT of line * dep_tree IT.SymMap.t
+
+(* Match an expression with free variables against a candidate returned by the solver to
+  get an assignment for those free variables *)
+(*CHT TODO: this assumes candidate and exp have *exactly* the same structure *)
+let rec get_assignment (exp : IT.t) (candidate : IT.t) : IT.t SymMap.t option =
+  let arrange l = List.map snd ( List.sort (fun p1 p2 -> Id.compare (fst p1) (fst p2)) l) in
+  let merge = (fun k v1 v2 -> let _ = k in if v1 == v2 then Some v1 else None) in
+  let match_lists exps exps' = (
+    let rec zip (l1 : 'a list) (l2 : 'b list) : ('a * 'b) list option = match l1, l2 with
+    | [], [] -> Some []
+    | h1 :: tl1, h2 :: tl2 -> (match zip tl1 tl2 with
+      | Some zs -> Some ((h1, h2) :: zs)
+      | None -> None)
+    | _, _ -> None
+    in
+    let comb acc (exp1, exp1') = match acc, get_assignment exp1 exp1' with
+    | None, _ -> None
+    | _, None -> None
+    | Some acc', Some m -> Some (SymMap.union merge acc' m)
+    in
+    (match (zip exps exps') with
+    | Some zs -> List.fold_left comb (Some SymMap.empty) zs
+    | None -> None)) in
+  match IT.term exp, IT.term candidate with
+  | Const c, Const c' -> if (c == c') then Some SymMap.empty else None
+  | Sym v, _' -> Some (SymMap.add v candidate SymMap.empty)
+  | Unop (op, exp1), Unop (op', exp1') ->
+    if (op == op') then get_assignment exp1 exp1' else None
+  | Binop (op, exp1, exp2), Binop (op', exp1', exp2') ->
+    if (op == op')
+      then match_lists [exp1; exp2] [exp1'; exp2']
+    else None
+  | ITE (exp1, exp2, exp3), ITE (exp1', exp2', exp3') ->
+    match_lists [exp1; exp2; exp3] [exp1'; exp2'; exp3']
+  | EachI ((z1, (v, ty), z2), exp1), EachI ((z1', (v', ty'), z2'), exp1') ->
+    let _ = (((z1, (v, ty), z2), exp1), ((z1', (v', ty'), z2'), exp1')) in
+    failwith "CHT - out of scope"
+  (* add Z3's Distinct for separation facts *)
+  | Tuple exps, Tuple exps' -> match_lists exps exps'
+  | NthTuple (n, exp1), NthTuple (n', exp1') ->
+    let _ = (n, exp1, n', exp1') in
+    failwith "CHT - out of scope"
+  | Struct (name, fields), Struct (name', fields') -> if (name == name')
+    then match_lists (arrange fields) (arrange fields')
+    else None
+  | StructMember (exp1, id), StructMember (exp1', id') ->
+    let _ = (id, exp1, id', exp1') in
+    failwith "CHT - out of scope"
+  | StructUpdate ((exp1, id), exp2), StructUpdate ((exp1', id'), exp2') ->
+    let _ = (((exp1, id), exp2), ((exp1', id'), exp2')) in
+    failwith "CHT - out of scope"
+  | Record fields, Record fields' ->
+    let _ = (fields, fields') in
+    failwith "CHT - out of scope"
+  | RecordMember (exp1, id), RecordMember (exp1', id') ->
+    let _ = (id, exp1, id', exp1') in
+    failwith "CHT - out of scope"
+  | RecordUpdate ((exp1, id), exp2), RecordUpdate ((exp1', id'), exp2') ->
+    let _ = (((exp1, id), exp2), ((exp1', id'), exp2')) in
+    failwith "CHT - out of scope"
+  | Constructor (name, args), Constructor (name', args') -> if (name == name')
+    then
+      let arrange l = List.map snd ( List.sort (fun p1 p2 -> Id.compare (fst p1) (fst p2)) l) in
+      match_lists (arrange args) (arrange args')
+    else None
+  | MemberShift (ba, v, id), MemberShift (ba', v', id') ->
+    let _ = ((ba, v, id), (ba', v', id')) in
+    failwith "CHT - out of scope"
+  | ArrayShift {base; ct; index}, ArrayShift {base=base'; ct=ct'; index=index'} ->
+      if (ct == ct')
+        then match_lists [base; index] [base'; index']
+        else None
+  | CopyAllocId {addr; loc}, CopyAllocId {addr=addr'; loc=loc'} ->
+    let _ = ((addr, loc), (addr', loc')) in
+    failwith "CHT - out of scope"
+  | HasAllocId ba, HasAllocId ba' ->
+    let _ = (ba, ba') in
+    failwith "CHT - out of scope"
+  | SizeOf cty, SizeOf cty' ->
+    let _ = (cty, cty') in
+    failwith "CHT - out of scope"
+  | OffsetOf (v, id), OffsetOf (v', id') ->
+    let _ = ((v, id), (v', id')) in
+    failwith "CHT - out of scope"
+  | Nil ty, Nil ty' ->
+    let _ = (ty, ty') in
+    failwith "CHT - out of scope"
+  | Cons (h, tl), Cons (h', tl') ->
+    let _ = ((h, tl), (h', tl')) in
+    failwith "CHT - out of scope"
+  | Head l, Head l' ->
+    let _ = (l, l') in
+    failwith "CHT - out of scope"
+  | Tail l, Tail l' ->
+    let _ = (l, l') in
+    failwith "CHT - out of scope"
+  | NthList (exp1, exp2, exp3),  NthList (exp1', exp2', exp3') ->
+    let _ = ((exp1, exp2, exp3), (exp1', exp2', exp3')) in
+    failwith "CHT - out of scope"
+  | ArrayToList (exp1, exp2, exp3), ArrayToList (exp1', exp2', exp3') ->
+    let _ = ((exp1, exp2, exp3), (exp1', exp2', exp3')) in
+    failwith "CHT - out of scope"
+  | Representable (cty, exp1), Representable (cty', exp1') ->
+    let _ = ((cty, exp1), (cty', exp1')) in
+    failwith "CHT - out of scope"
+  | Good (cty, exp1), Good (cty', exp1') ->
+    let _ = ((cty, exp1), (cty', exp1')) in
+    failwith "CHT - out of scope"
+  | Aligned { t; align}, Aligned { t=t'; align=align'} ->
+    let _ = ((t, align), (t', align')) in
+    failwith "CHT - out of scope"
+  | WrapI (cty, exp1), WrapI (cty', exp1') ->
+    let _ = ((cty, exp1), (cty', exp1')) in
+    failwith "CHT - out of scope"
+  | MapConst (ty, exp1), MapConst (ty', exp1') ->
+    let _ = ((ty, exp1), (ty', exp1')) in
+    failwith "CHT - out of scope"
+  | MapSet (exp1, exp2, exp3), MapSet (exp1', exp2', exp3') ->
+    let _ = ((exp1, exp2, exp3), (exp1', exp2', exp3')) in
+    failwith "CHT - out of scope"
+  | MapGet (exp1, exp2), MapGet (exp1', exp2') ->
+    let _ = ((exp1, exp2), (exp1', exp2')) in
+    failwith "CHT - out of scope"
+  | MapDef ((v, ty), exp1), MapDef ((v', ty'), exp1') ->
+    let _ = ((v, ty, exp1), (v', ty', exp1')) in
+    failwith "CHT - out of scope"
+  | Apply (v, exps), Apply (v', exps') ->
+    let _ = ((v, exps), (v', exps')) in
+    failwith "CHT - out of scope"
+  | Let ((v, exp1), exp2), Let ((v', exp1'), exp2') ->
+    let _ = ((v, exp1, exp2), (v', exp1', exp2')) in
+    failwith "CHT - out of scope"
+  | Match (exp1, pats), Match (exp1', pats') ->
+    let _ = ((exp1, pats), (exp1', pats')) in
+    failwith "CHT - out of scope"
+  | Cast (bt, exp1), Cast (bt', exp1') ->
+    let _ = ((bt, exp1), (bt', exp1')) in
+    failwith "CHT - out of scope"
+  | _, _ -> None
+
+(* Get the free variables from an expression *)
+let get_fvs (exp : IT.t) : Sym.t list = SymSet.to_list (IT.free_vars exp)
+
+let rec to_tree_aux (lines : packing_ft) (defs : dep_tree SymMap.t) : IT.t * dep_tree IT.SymMap.t =
+  let get_children v' = match (SymMap.find_opt v' defs) with
+  | Some t -> t
+  | None -> UndefinedLT
+  in
+  let convert_children vs =
+    (List.fold_left (fun acc v -> SymMap.add v (get_children v) acc) SymMap.empty vs) in
+  match lines with
+  | Define ((v, it), i, next) ->
+    let vs = get_fvs it in
+    let ln = DefineL ((v, it), i) in
+    let root = NodeLT (ln, convert_children vs) in
+    let new_defs = SymMap.add v root defs in
+    to_tree_aux next new_defs
+  | Resource ((v, (rt, bt)), i, next) ->
+    let vs = match rt with
+    | P {name=_; pointer; iargs} -> List.concat_map get_fvs (pointer :: iargs)
+    | Q _ -> failwith "CHT - out of scope" in
+    let ln = ResourceL ((v, (rt, bt)), i) in
+    let root = NodeLT (ln, convert_children vs) in
+    let new_defs = SymMap.add v root defs in
+    to_tree_aux next new_defs
+  | Constraint (lc, i, next) -> let _ = (lc, i, next) in failwith "CHT - out of scope for now"
+  | I it -> (it, defs)
+
+(* Convert the body of a predicate clause into a variable-assignment dependency tree *)
+let to_tree (lines : packing_ft) : IT.t * dep_tree IT.SymMap.t = to_tree_aux lines SymMap.empty

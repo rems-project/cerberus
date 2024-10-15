@@ -381,3 +381,119 @@ let trace (ctxt, log) (model_with_q : Solver.model_with_q) (extras : state_extra
   in
   Pp.html_escapes := prev;
   { requested; unproven; predicate_hints; trace }
+
+
+(** CHT: Infrastructure for checking if a countermodel satisfies a predicate **)
+
+  type ('a, 'b) result =
+  | Yes of 'a
+  | No
+  | Timeout
+  | Error of 'b
+
+  type check_result = (LC.logical_constraint list, Pp.document) result
+
+  (* Condenses list into "No" or a list of successes/timeouts/errors *)
+  let condense_results (results : check_result list) :
+    check_result list =
+    let filtered = List.filter (fun r -> r != No) results in
+    if filtered == [] then [No] else filtered
+
+  (* Gives a single canonical result *)
+  let combine_results (results : check_result list)
+    : check_result =
+    let combine = fun acc res -> match acc, res with
+      | Error s, _ -> Error s
+      | No, _ -> res
+      | Timeout, No -> Timeout
+      | Timeout, _ -> res
+      | Yes l, _ -> Yes l
+    in
+    List.fold_left combine (Error !^"Empty result list.") results
+  let ask_solver g lcs = match (Solver.ask_solver g lcs) with
+  | Unsat -> No
+  | Unknown -> Timeout
+  | Sat -> Yes lcs
+
+  let convert_symmap_to_lc (m : IT.t SymMap.t) : LogicalConstraints.t list =
+    let kvs = SymMap.bindings m in
+    let to_lc (k, v) =
+      LC.T (IT.IT (Binop (EQ, IT.IT (IT.Sym k, basetype v, Cerb_location.unknown) , v), BT.Bool, Cerb_location.unknown)) in
+    List.map to_lc kvs
+
+  let rec check_clause (g : Global.t) (c : ResourcePredicates.clause) (candidate : IT.t) =
+    let graph = LAT.to_tree c.packing_ft in
+    (*TODO: how to convert guard to LC to add in line below?*)
+    let cs, vs = (getClauseConstraints graph candidate g) in
+    let cs' = List.concat [cs; convert_symmap_to_lc vs; [LC.t_ c.guard]] in
+    ask_solver g cs'
+  and check_pred
+    (* (c : Simplify.simp_ctxt)  *)
+    (def : ResourcePredicates.definition) (candidate : IT.t) (g : Global.t) : check_result list =
+    (* ensure candidate type matches output type of predicate *)
+    if (basetype candidate != def.oarg_bt)
+    then
+      [Error (!^"Candidate " ^/^ IT.pp candidate ^/^ !^" has different type from
+        predicate output: " ^/^ BT.pp def.oarg_bt )]
+    else
+      match def.clauses with
+      | None -> [Error (!^"No clauses in definition of predicate " ^/^
+          ResourcePredicates.pp_definition def)]
+      | Some clauses ->
+          (* for each clause, check if candidate could have been its output *)
+          let checked = List.map (fun c -> check_clause g c candidate) clauses
+          in
+          (* return either [No] or a list of positive/ambiguous results *)
+          condense_results checked
+  and getClauseConstraints graph candidate globals =
+    match graph with
+    | (exp, subgraphs) ->
+      let ovs_ = LAT.get_assignment exp candidate in
+      match ovs_ with
+      | None -> failwith "CHT style"
+      | Some vs_ ->
+      (*TODO: stateful*)
+      (*TODO - shortcut: guard could be var equality*)
+      let foreachvar x vs = match (SymMap.find_opt x subgraphs) with
+      | None -> failwith "CHT - could be known globally? out of scope for now"
+      | Some UndefinedLT -> failwith "CHT style - impossible"
+      | Some (NodeLT (line, subgraphs')) -> match line with
+        | DefineL ((x, t), _) ->
+          (match (SymMap.find_opt x vs) with
+          | None -> failwith "CHT style - impossible case, just rearrange"
+          | Some v -> getClauseConstraints (t, subgraphs') v globals
+          )
+        | ResourceL ((x, (p, _)), _) ->
+          (match (SymMap.find_opt x vs) with
+          | None -> failwith "CHT style - impossible"
+          | Some v -> match p with
+            | P psig ->
+              (match psig.name with
+              | Owned (_, _) ->
+                let eq = IT (Binop (EQ, psig.pointer, null_ Cerb_location.unknown), BT.Bool, Cerb_location.unknown) in
+                let neq = IT.IT (Unop (Not, eq), BT.Bool, Cerb_location.unknown) in
+                 ([LC.t_ neq], vs)
+              | PName name -> let opdef = SymMap.find_opt name globals.resource_predicates in
+                match opdef with
+                | Some pdef ->
+                  (*CHT TODO: this doesn't account for looking up args of the predicate further up in the graph*)
+                  (match combine_results (check_pred pdef v globals) with
+                  | Yes cs -> (cs, vs)
+                  | _ -> failwith "CHT style - should separate checking and getting constraints")
+                | None -> failwith "CHT style - monad bind"
+              )
+            | Q qsig -> let _ = qsig in failwith "CHT - out of scope for now"
+          )
+        | ConstraintL (c, _) -> let _ = c in failwith "CHT - out of scope for now"
+       in
+      let comb (acc : LC.logical_constraint list * IT.t SymMap.t) (elem : Sym.t * IT.t) =
+        let lcs, vs = acc in
+        let k, _ = elem in
+        let lcs', vs' = foreachvar k vs in
+        (List.append lcs' lcs, vs') in
+      List.fold_left comb ([], vs_) (SymMap.bindings vs_)
+
+  let _ = fun g d c r ->
+    let _ = combine_results r in
+    let _ = check_pred g d c in
+    true
