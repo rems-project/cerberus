@@ -633,7 +633,7 @@ module ConstraintPropagation = struct
                 (IT.sym_ (x, bt, loc), IT.num_lit_ (Z.div n (Z.of_int 2)) bt loc)
                 loc)
          | _ -> None)
-        (* START FIXME: Simplify should do this *)
+      (* START FIXME: Simplify should do this *)
       | Binop
           ( op,
             IT (Const (Bits (_, n)), bt, _),
@@ -670,7 +670,7 @@ module ConstraintPropagation = struct
          | EQ | LT | LE ->
            of_it (IT.arith_binop op (it', IT.num_lit_ (Z.sub n m) bt loc) loc)
          | _ -> None)
-        (* END Simplify stuff*)
+      (* END Simplify stuff*)
       | Unop
           (Not, IT (Binop (EQ, IT (Sym x, x_bt, _), IT (Const (Bits (_, n)), _, _)), _, _))
       | Unop
@@ -1112,30 +1112,59 @@ module Specialization = struct
     aux stmts
 
 
-  let compile_constraints (v : Rep.t) (gt : GT.t) : GT.t =
+  let compile_constraints (x : Sym.t) (v : Rep.t) (gt : GT.t) : GT.t * GS.t list =
+    let mult_to_stmt (mult : IT.t option) : GS.t list =
+      let loc = Locations.other __LOC__ in
+      match mult with
+      | Some it ->
+        [ Assert
+            (LC.T
+               (IT.eq_
+                  ( IT.mod_ (IT.sym_ (x, GT.bt gt, loc), it) loc,
+                    IT.num_lit_ Z.zero (GT.bt gt) loc )
+                  loc))
+        ]
+      | None -> []
+    in
+    let min_to_stmt (min : IT.t option) : GS.t list =
+      let loc = Locations.other __LOC__ in
+      match min with
+      | Some it -> [ Assert (LC.T (IT.ge_ (IT.sym_ (x, GT.bt gt, loc), it) loc)) ]
+      | None -> []
+    in
+    let max_to_stmt (max : IT.t option) : GS.t list =
+      let loc = Locations.other __LOC__ in
+      match max with
+      | Some it -> [ Assert (LC.T (IT.lt_ (IT.sym_ (x, GT.bt gt, loc), it) loc)) ]
+      | None -> []
+    in
     match gt with
     | GT (Uniform _, _, _) ->
       let loc = Locations.other __LOC__ in
-      (match v with
-       | { mult = None; min = None; max = None } -> gt
-       | { mult = Some n; min = None; max = None } ->
-         GenBuiltins.mult_gen n (GT.bt gt) loc
-       | { mult = None; min = Some n; max = None } -> GenBuiltins.ge_gen n (GT.bt gt) loc
-       | { mult = None; min = None; max = Some n } -> GenBuiltins.lt_gen n (GT.bt gt) loc
-       | { mult = None; min = Some n1; max = Some n2 } ->
-         GenBuiltins.range_gen n1 n2 (GT.bt gt) loc
-       | { mult = Some n1; min = Some n2; max = None } ->
-         GenBuiltins.mult_ge_gen n1 n2 (GT.bt gt) loc
-       | { mult = Some n1; min = None; max = Some n2 } ->
-         GenBuiltins.mult_lt_gen n1 n2 (GT.bt gt) loc
-       | { mult = Some n1; min = Some n2; max = Some n3 } ->
-         GenBuiltins.mult_range_gen n1 n2 n3 (GT.bt gt) loc)
-    | GT (Alloc sz, _, _) ->
+      ( (match v with
+         | { mult = None; min = None; max = None } -> gt
+         | { mult = Some n; min = None; max = None } ->
+           GenBuiltins.mult_gen n (GT.bt gt) loc
+         | { mult = None; min = Some n; max = None } ->
+           GenBuiltins.ge_gen n (GT.bt gt) loc
+         | { mult = None; min = None; max = Some n } ->
+           GenBuiltins.lt_gen n (GT.bt gt) loc
+         | { mult = None; min = Some n1; max = Some n2 } ->
+           GenBuiltins.range_gen n1 n2 (GT.bt gt) loc
+         | { mult = Some n1; min = Some n2; max = None } ->
+           GenBuiltins.mult_ge_gen n1 n2 (GT.bt gt) loc
+         | { mult = Some n1; min = None; max = Some n2 } ->
+           GenBuiltins.mult_lt_gen n1 n2 (GT.bt gt) loc
+         | { mult = Some n1; min = Some n2; max = Some n3 } ->
+           GenBuiltins.mult_range_gen n1 n2 n3 (GT.bt gt) loc),
+        [] )
+    | GT (Alloc sz, _, _) when Option.is_some v.mult ->
       let loc = Locations.other __LOC__ in
       (match v with
-       | { mult = None; min = _; max = _ } -> gt
-       | { mult = Some n; min = _; max = _ } -> GenBuiltins.aligned_alloc_gen n sz loc)
-    | _ -> gt
+       | { mult = Some n; min; max } ->
+         (GenBuiltins.aligned_alloc_gen n sz loc, min_to_stmt min @ max_to_stmt max)
+       | _ -> failwith ("unreachable @ " ^ __LOC__))
+    | _ -> (gt, mult_to_stmt v.mult @ min_to_stmt v.min @ max_to_stmt v.max)
 
 
   let specialize_stmts (vars : SymSet.t) (stmts : GS.t list) : GS.t list =
@@ -1143,14 +1172,14 @@ module Specialization = struct
       match stmts with
       | Let (backtracks, (x, gt)) :: stmts' ->
         let vars = SymSet.add x vars in
-        let stmts', gt =
+        let stmts', (gt, stmts'') =
           if Option.is_some (BT.is_bits_bt (GT.bt gt)) then (
             let stmts', v = collect_constraints vars x (GT.bt gt) stmts' in
-            (stmts', compile_constraints v gt))
+            (stmts', compile_constraints x v gt))
           else
-            (stmts', gt)
+            (stmts', (gt, []))
         in
-        Let (backtracks, (x, gt)) :: aux vars stmts'
+        (GS.Let (backtracks, (x, gt)) :: stmts'') @ aux vars stmts'
       | stmt :: stmts' -> stmt :: aux vars stmts'
       | [] -> []
     in
